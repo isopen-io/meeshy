@@ -13,7 +13,7 @@
  *
  * Et les NOMS choisis ne sont pas des synonymes : ce sont les ROLES que la
  * charte assigne deja a chaque jeton (regle 2 pour le texte, regle 9 pour les
- * rayons). `rounded-carte`, `text-corps` : l'utilitaire DIT son metier, donc
+ * rayons). `rounded-card`, `text-body` : l'utilitaire DIT son metier, donc
  * un mesusage se voit en revue au lieu de se cacher derriere `rounded-lg`.
  */
 @import 'tailwindcss';
@@ -27,23 +27,23 @@
 
 @theme inline {
   /* ---- PLANS (echelle strictement croissante en luminance) ---- */
-  --color-fond: var(--color-bg);
-  --color-fond-creux: var(--color-bg-sunken);
-  --color-plan: var(--color-surface);
-  --color-plan-haut: var(--color-surface-raised);
+  --color-canvas: var(--color-bg);
+  --color-canvas-sunken: var(--color-bg-sunken);
+  --color-panel: var(--color-surface);
+  --color-panel-raised: var(--color-surface-raised);
 
   /* ---- ENCRES (regle 18 : le gris est reserve a ce qu'on peut ne pas lire) ---- */
-  --color-encre: var(--color-text);
-  --color-encre-douce: var(--color-text-muted);
-  --color-encre-tenue: var(--color-text-subtle);
+  --color-ink: var(--color-text);
+  --color-ink-muted: var(--color-text-muted);
+  --color-ink-subtle: var(--color-text-subtle);
 
   /* ---- MARQUE ---- */
-  --color-primaire: var(--color-primary);
-  --color-primaire-fort: var(--color-primary-strong);
-  --color-primaire-doux: var(--color-primary-soft);
-  --color-primaire-tenu: var(--color-primary-softer);
-  --color-sur-primaire: var(--color-on-primary);
-  --color-teinte-primaire: var(--color-tint-primary);
+  --color-brand: var(--color-primary);
+  --color-brand-strong: var(--color-primary-strong);
+  --color-brand-soft: var(--color-primary-soft);
+  --color-brand-softer: var(--color-primary-softer);
+  --color-on-brand: var(--color-on-primary);
+  --color-tint-brand: var(--color-tint-primary);
 
   /* ---- ETATS ----
      `erreur` et non `danger`, `anneau` et non `focus`, `av-N` et non
@@ -52,60 +52,60 @@
      et la variable devient invalide au calcul — sans erreur de build, sans
      avertissement, avec juste une couleur qui disparait. Tout alias doit donc
      porter un nom DIFFERENT de sa source. */
-  --color-succes: var(--color-success);
-  --color-succes-doux: var(--color-success-soft);
-  --color-alerte: var(--color-warning);
-  --color-erreur: var(--color-danger);
-  --color-erreur-douce: var(--color-danger-soft);
-  --color-sur-etat: var(--color-on-status);
-  --color-teinte-succes: var(--color-tint-success);
-  --color-teinte-alerte: var(--color-tint-warning);
-  --color-teinte-erreur: var(--color-tint-danger);
+  --color-ok: var(--color-success);
+  --color-ok-soft: var(--color-success-soft);
+  --color-warn: var(--color-warning);
+  --color-error: var(--color-danger);
+  --color-error-soft: var(--color-danger-soft);
+  --color-on-state: var(--color-on-status);
+  --color-tint-ok: var(--color-tint-success);
+  --color-tint-warn: var(--color-tint-warning);
+  --color-tint-error: var(--color-tint-danger);
 
   /* ---- TRAITS (regle 16 : filet != contour ; --color-border est BANNI, 1,28:1) ---- */
-  --color-filet: var(--color-border-strong);
-  --color-contour: var(--color-border-interactive);
-  --color-anneau: var(--color-focus);
-  --color-anneau-contra: var(--color-focus-contra);
-  --color-voile: var(--color-overlay);
+  --color-hairline: var(--color-border-strong);
+  --color-outline: var(--color-border-interactive);
+  --color-ring: var(--color-focus);
+  --color-ring-contra: var(--color-focus-contra);
+  --color-veil: var(--color-overlay);
 
   /* ---- PRESENCE (regle produit 1/3/5) ---- */
-  --color-presence-en-ligne: var(--color-presence-online);
-  --color-presence-absent: var(--color-presence-away);
-  --color-presence-inactif: var(--color-presence-idle);
+  --color-online: var(--color-presence-online);
+  --color-away: var(--color-presence-away);
+  --color-idle: var(--color-presence-idle);
 
   /* ---- AVATARS (palette categorielle, hors schema) ---- */
   --color-av-1: var(--color-avatar-1);
   --color-av-2: var(--color-avatar-2);
   --color-av-3: var(--color-avatar-3);
   --color-av-4: var(--color-avatar-4);
-  --color-sur-av: var(--color-on-avatar);
+  --color-on-av: var(--color-on-avatar);
 
   /* ---- TYPOGRAPHIE : un jeton = un METIER (charte regle 2) ---- */
-  --font-pile: var(--font-native);
+  --font-stack: var(--font-native);
   --font-code: var(--font-mono);
-  --text-accroche: var(--text-4xl);
-  --text-ecran: var(--text-3xl);
+  --text-hero: var(--text-4xl);
+  --text-screen: var(--text-3xl);
   --text-section: var(--text-2xl);
-  --text-fil: var(--text-xl);
-  --text-marque: var(--text-lg);
-  --text-corps: var(--text-md);
-  --text-second: var(--text-base);
+  --text-thread: var(--text-xl);
+  --text-brand: var(--text-lg);
+  --text-body: var(--text-md);
+  --text-secondary: var(--text-base);
   --text-meta: var(--text-sm);
-  --text-pastille: var(--text-xs);
+  --text-chip: var(--text-xs);
 
   /* ---- RAYONS : cinq roles, pas cinq tailles (charte regle 9) ---- */
   --radius-menu: var(--radius-xs);
-  --radius-champ: var(--radius-sm);
-  --radius-carte: var(--radius-lg);
-  --radius-heros: var(--radius-xl);
-  --radius-feuille: var(--radius-2xl);
-  --radius-pastille: var(--radius-pill);
+  --radius-field: var(--radius-sm);
+  --radius-card: var(--radius-lg);
+  --radius-hero: var(--radius-xl);
+  --radius-sheet: var(--radius-2xl);
+  --radius-chip: var(--radius-pill);
 
   /* ---- OMBRES ---- */
-  --shadow-douce: var(--shadow-sm);
-  --shadow-portee: var(--shadow-lg);
-  --shadow-primaire: var(--shadow-primary);
+  --shadow-soft: var(--shadow-sm);
+  --shadow-cast: var(--shadow-lg);
+  --shadow-brand: var(--shadow-primary);
 
   /* ---- ESPACE : l'echelle FERMEE de la charte (regle 10).
      `--spacing: 4px` fait tomber les 9 pas exactement sur les multiplicateurs
@@ -116,21 +116,21 @@
   --spacing: 4px;
 
   /* ---- GEOMETRIE (cibles, avatars, glyphes) ---- */
-  --size-cible: var(--target-min);
+  --size-target: var(--target-min);
   --size-action: var(--action-height);
   --size-action-2: var(--action-height-secondary);
-  --size-champ: var(--field-height);
-  --size-ligne: var(--row-height);
+  --size-field: var(--field-height);
+  --size-row: var(--row-height);
   --size-avatar: var(--avatar);
-  --size-avatar-petit: var(--avatar-small);
-  --size-glyphe: var(--glyph);
-  --size-glyphe-inline: var(--glyph-inline);
-  --size-glyphe-grand: var(--glyph-large);
-  --size-pastille-presence: var(--presence-dot);
+  --size-avatar-small: var(--avatar-small);
+  --size-glyph: var(--glyph);
+  --size-glyph-inline: var(--glyph-inline);
+  --size-glyph-large: var(--glyph-large);
+  --size-presence-dot: var(--presence-dot);
 
   /* ---- LARGEURS DE COQUILLE ---- */
-  --container-coquille: var(--shell-width);
-  --container-mesure: var(--measure);
+  --container-shell: var(--shell-width);
+  --container-measure: var(--measure);
 }
 
 @layer base {
@@ -147,8 +147,8 @@
   body {
     /* Les plans de l'interface iOS, pas ceux de la v3 web : la directive du
        porteur est « la PWA reprend l'interface iOS ». Voir ios.css. */
-    background-color: var(--ios-plan-fond);
-    color: var(--ios-encre);
+    background-color: var(--ios-surface);
+    color: var(--ios-ink);
     /* Les encoches. `viewport-fit=cover` dans l'index les expose ; sans ces
        quatre lignes, l'en-tete passe SOUS l'encoche sur iPhone et sous la
        barre de gestes Android. */
@@ -181,7 +181,7 @@
    La charte v3 en autorise une au plus (regle 32) ; elle n'anime que
    `opacity`/`scale`, jamais la geometrie, et `prefers-reduced-motion` la coupe
    par la regle generale de @layer base. */
-@keyframes pointFrappe {
+@keyframes typingDot {
   0%,
   100% {
     opacity: 0.4;
@@ -197,7 +197,7 @@
    Il ne peut pas s'ecrire en utilitaires seuls, parce que `clip-path` doit
    etre annule sous `:focus-visible` UNIQUEMENT — pose en style inline il
    annulerait aussi l'etat de repos, et le lien flotterait en permanence. */
-.lien-evitement {
+.skip-link {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -206,7 +206,7 @@
   white-space: nowrap;
 }
 
-.lien-evitement:focus-visible {
+.skip-link:focus-visible {
   position: fixed;
   inset-block-start: var(--space-2);
   inset-inline-start: var(--space-2);
@@ -225,7 +225,7 @@
   border-radius: var(--radius-pill);
 }
 
-@utility hors-ecran {
+@utility offscreen {
   position: absolute;
   width: 1px;
   height: 1px;

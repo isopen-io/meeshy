@@ -8,18 +8,26 @@
  * `**​/*.d.*`, et une négation le rattrape dans `.gitignore`. Il a manqué au
  * dépôt depuis la création de l'application, ce qui n'est apparu qu'à la
  * première exécution CI qui type-checkait cette application (TS2307 ×3).
- * `scripts/verifie-suivi-git.mjs` garde désormais la classe entière.
+ * `scripts/check-git-tracking.mjs` garde désormais la classe entière.
  */
 declare module 'bun:test' {
-  export function describe(nom: string, corps: () => void): void;
-  export function test(nom: string, corps: () => void | Promise<void>): void;
+  export function describe(name: string, body: () => void): void;
+  export function test(name: string, body: () => void | Promise<void>): void;
 
-  type Attentes = {
-    toBe(attendu: unknown): void;
-    toEqual(attendu: unknown): void;
+  type Expectations = {
+    toBe(expected: unknown): void;
+    toEqual(expected: unknown): void;
     toBeNull(): void;
-    toBeCloseTo(attendu: number, decimales?: number): void;
+    toBeCloseTo(expected: number, decimals?: number): void;
   };
 
-  export function expect(valeur: unknown): Attentes & { readonly not: Attentes };
+  export function expect(value: unknown): Expectations & { readonly not: Expectations };
 }
+
+/**
+ * `__BENCH__` — le nombre de messages que la fixture fabrique en plus, posé en
+ * littéral par `vite.config.ts`. Vaut `0` partout sauf dans la variante de banc
+ * (`MEESHY_BENCH=500 bun run build`), que seul le témoin de virtualisation
+ * construit.
+ */
+declare const __BENCH__: number;

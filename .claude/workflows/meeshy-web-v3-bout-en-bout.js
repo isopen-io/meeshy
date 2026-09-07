@@ -89,15 +89,8 @@ const BASE = typeof A.base === 'string' && A.base ? A.base : 'dev'
 const SOCLE = `
 TU TRAVAILLES SUR LA V3.1 WEB DE MEESHY (\`apps/web-v3\` — Vite + Preact via preact/compat +
 Tailwind 4 + TanStack Query + zustand + routeur maison, empaquetable Android/iOS par Capacitor 8),
-monorepo ${REPO}, sur ${NOM_DE_BRANCHE}. Date : ${DATE}.
-
-TON REPERTOIRE DE TRAVAIL EST ${REPO} — et le shell REINITIALISE le cwd entre deux appels Bash :
-PREFIXE CHAQUE commande, SANS EXCEPTION, par \`cd ${REPO} && \` (ou le sous-dossier vise, p.ex.
-\`cd ${V3} && \`). Une commande sans ce prefixe s'execute dans le cwd de session, qui peut etre un
-AUTRE clone/worktree du meme depot, occupe par une autre session — c'est le MAUVAIS depot : ce que
-tu y lirais est faux, ce que tu y ecrirais detruirait le travail d'un autre. Premiere commande de
-ta mission, litteralement : \`cd ${REPO} && git branch --show-current\` — elle doit rendre la
-branche attendue. NE CHANGE JAMAIS DE BRANCHE, ne cree pas de worktree.
+monorepo ${REPO}, sur ${NOM_DE_BRANCHE} (verifie avec \`git branch --show-current\` ; NE CHANGE
+JAMAIS DE BRANCHE, ne cree pas de worktree). Date : ${DATE}.
 
 LA DIRECTIVE DU PORTEUR (2026-09-07 soir), qui gouverne ce chantier :
 « developper dans apps/web-v3 une application similaire a la version iOS (apps/ios) pour le web ET
@@ -276,15 +269,6 @@ DECISIONS DU PORTEUR EN VIGUEUR — ne les rediscute pas : applique-les.
 6. LE BON MODELE AU BON MOMENT (2026-09-04) : fable DECRIT, sonnet et haiku DEVELOPPENT, opus
    RELIT ET CORRIGE — un agent ne choisit pas son modele, il fait le travail de son role. Le
    SPECIFICATEUR dit si l'implementation est PETITE (haiku) ou non (sonnet), et pourquoi.
-
-7. QUALITE ET OPTIMISATION DES LA PREMIERE ITERATION (directive porteur 2026-09-07 soir). On ne
-   livre pas un brouillon qu'on ameliorera plus tard : la PREMIERE forme est deja la bonne —
-   mesuree (poids, requetes, re-rendus), maintenable, et pensee pour les 40+ surfaces iOS qui
-   restent a porter. La REVUE est TRES POINTILLEUSE et porte une vision GLOBALE et MOYEN/LONG
-   TERME : elle juge le diff ET la trajectoire — cette forme tiendra-t-elle quand toutes les
-   surfaces seront la ? ce motif sera-t-il copie par trente ecrans (alors il doit etre juste
-   MAINTENANT) ? cette commodite d'aujourd'hui est-elle la jumelle de demain ? Un « ca marche »
-   qui rame, re-rend pour rien ou fige une mauvaise forme n'est PAS livrable.
 `
 
 // ---------------------------------------------------------------------------
@@ -548,11 +532,11 @@ TA MISSION — REINTEGRER \`${DEPUIS}\` DANS ${NOM_DE_BRANCHE}, PUIS RELEVER CE 
 Tu ne modifies AUCUN fichier de production autrement que par la fusion elle-meme.
 
 A. LA REINTEGRATION
-1. \`cd ${REPO} && git branch --show-current\` — tu DOIS etre sur ${NOM_DE_BRANCHE}.${BRANCHE === '(courante)' ? " Si la commande ne rend rien (HEAD detache), arrete-toi et dis-le : reintegre=false." : ` Si elle rend une
-   AUTRE branche, tu es dans le mauvais depot : verifie ton prefixe \`cd ${REPO} && \` AVANT de
-   conclure quoi que ce soit. Si la branche n'existe pas encore localement dans ${REPO}, cree-la
-   depuis \`origin/${DEPUIS}\` (\`cd ${REPO} && git fetch origin ${DEPUIS} && git checkout -B ${BRANCHE} origin/${DEPUIS}\`).`}
-   NE CHANGE JAMAIS pour une autre branche de travail, ne cree pas de worktree.
+1. \`git branch --show-current\` — tu DOIS etre sur ${NOM_DE_BRANCHE}.${BRANCHE === '(courante)' ? " Si la commande ne rend rien (HEAD detache), arrete-toi et dis-le : reintegre=false." : ` Si la branche n'existe pas encore
+   localement, cree-la depuis \`origin/${DEPUIS}\` (\`git fetch origin ${DEPUIS} && git checkout -B ${BRANCHE} origin/${DEPUIS}\`).`}
+   NE CHANGE JAMAIS pour une autre branche de travail, ne cree pas de worktree. Si l'arbre est sur
+   une AUTRE branche avec du travail sale qui n'est pas le tien, ARRETE-TOI et dis-le
+   (reintegre=false) : une autre session tient l'arbre.
    Si \`${V3}/node_modules\` est vide ou absent, \`cd ${REPO} && bun install --ignore-scripts\` d'abord ;
    si \`${REPO}/packages/shared/dist\` est absent, \`cd ${REPO}/packages/shared && npx prisma generate --generator client && bun run build\`.
 2. \`git status --short\` : si l'arbre est sale DE TON FAIT, commite un point d'etape d'abord (jamais de stash).
@@ -772,9 +756,7 @@ TA MISSION — RESYNCHRONISER l'arbre ${moment}. Un tour dure des heures : \`${D
 distante avancent pendant ce temps, et ce qui se specifie, se code, se juge ou se livre ici doit
 l'etre sur l'arbre FUSIONNE.
 
-1. \`cd ${REPO} && git branch --show-current\` — tu dois etre sur ${NOM_DE_BRANCHE} (sinon, ton prefixe
-   \`cd ${REPO} && \` manque : corrige-le, ne conclus rien depuis un autre depot).
-   \`cd ${REPO} && git status --short\` : si l'arbre
+1. \`git branch --show-current\` — tu dois etre sur ${NOM_DE_BRANCHE}. \`git status --short\` : si l'arbre
    porte du travail non commite, c'est un POINT D'ETAPE — commite-le D'ABORD, tel quel (\`git add -A\`
    apres avoir retire les artefacts generes : ${V3}/rendu/, ${V3}/dist/, ${V3}/ios/App/Build/,
    ${V3}/android/app/build/, .cache/), message \`wip(web-v3): point d'etape — <ce que l'arbre porte> (Refs #n)\`,
@@ -853,9 +835,7 @@ CE QUE LA SPECIFICATION CONTIENT, dans cet ordre :
 9. LES QUESTIONS que tu ne peux pas trancher seul, chacune avec la reponse RETENUE par defaut.
 
 Sois PRECIS et VERIFIABLE : chaque affirmation sur le code cite fichier:ligne. Une specification
-qui devine est pire qu'aucune. Et c'est ICI que la DIRECTIVE 7 se joue : la forme que tu specifies
-est celle que trente ecrans copieront — choisis celle qui tient a l'echelle des 40+ surfaces iOS,
-pas la plus rapide a coder ; nomme ce qui devra etre extrait, partage ou memoise DES MAINTENANT.`,
+qui devine est pire qu'aucune.`,
       { label: `specifier:${t.cle}`, phase: 'Specifier', schema: SPEC, model: MODELE.decrire, effort: 'high' })
 
     const SPEC_TEXTE = spec && spec.specification
@@ -945,9 +925,7 @@ A. PRENDRE EN DEFAUT — LA SURFACE (git diff, git status, fichiers) :
 - si le travail touche dist/assets/routeur/coques : la coherence des COQUES a-t-elle ete rejouee
   (QEMU + simulateur, captures) ? Rejoue-la toi-meme si le rapport ne la prouve pas.
 
-B. PRENDRE EN DEFAUT — LA CONCEPTION, en ingenieur staff hostile, avec la vision GLOBALE et
-MOYEN/LONG TERME de la DIRECTIVE 7 (tu juges le diff ET la trajectoire — ce que cette forme
-deviendra quand les 40+ surfaces iOS seront portees, ce que trente ecrans copieront d'elle) :
+B. PRENDRE EN DEFAUT — LA CONCEPTION, en ingenieur staff hostile :
 - le POIDS : \`bun run build && node scripts/check-curve.mjs && node scripts/measure-weight.mjs\` —
   un chiffre non mesure ne compte pas ; la courbe est un gate, pas une intention ;
 - le PRISME : bon rang elu ? qui AFFICHE ce qu'il elit ? que transporte-t-on A COTE ? (cycles
@@ -974,7 +952,7 @@ ${SANS_COMMIT}
 Rends : verdict (l'etat APRES tes corrections), defauts_trouves (tous, avec preuve), corriges
 (nombre), restants (bloquant/majeur seulement), rapport, gates_rejoues (sorties tronquees),
 dimensions_mures, dimensions_restantes.`,
-      { label: `revue-correction:${t.cle}`, phase: 'Revue', schema: REVUE_CORRIGEE, model: MODELE.relire, effort: 'xhigh' })
+      { label: `revue-correction:${t.cle}`, phase: 'Revue', schema: REVUE_CORRIGEE, model: MODELE.relire, effort: 'high' })
 
     log(`${t.cle} : revue-correction — verdict ${revue ? revue.verdict : '(aucun)'}, ${revue ? revue.corriges : 0} corriges, ${revue && revue.restants ? revue.restants.length : 0} rendus au developpeur`)
 

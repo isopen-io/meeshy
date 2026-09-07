@@ -5,7 +5,7 @@ import tailwind from '@tailwindcss/vite';
 import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-import { MOTIF_INSTITUTIONNEL } from './scripts/lib/routes-institutionnelles.mjs';
+import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
 
 /**
  * DEUX runtimes, UN code source.
@@ -14,7 +14,7 @@ import { MOTIF_INSTITUTIONNEL } from './scripts/lib/routes-institutionnelles.mjs
  * Preact via `preact/compat`. Le code applicatif est IDENTIQUE dans les deux
  * cas — c'est tout l'interet de compat, et c'est ce qui rend la comparaison de
  * poids honnete : le meme arbre, le meme Tailwind, le meme routeur, seul le
- * runtime change. Le POC mesure les deux (scripts/mesure-poids.mjs).
+ * runtime change. Le POC mesure les deux (scripts/measure-weight.mjs).
  */
 const runtime = process.env.MEESHY_RUNTIME === 'react' ? 'react' : 'preact';
 
@@ -41,7 +41,24 @@ const aliasPreact = [
  * de fichiers, jamais depuis une origine http. Les chemins absolus casseraient
  * — d'ou la base relative. `MEESHY_CIBLE=capacitor` bascule la construction.
  */
-const pourCapacitor = process.env.MEESHY_CIBLE === 'capacitor';
+const forCapacitor = process.env.MEESHY_TARGET === 'capacitor';
+
+/**
+ * LE BANC DE FIL LONG — une constante de CONSTRUCTION, jamais un paramètre d'URL.
+ *
+ * La virtualisation ne se prouve pas sur sept messages ; il en faut cinq cents.
+ * Les fabriquer à la demande depuis l'application aurait fait entrer du code de
+ * banc d'essai dans le bundle servi aux utilisateurs — pour mesurer la légèreté,
+ * on l'aurait dégradée.
+ *
+ * `__BENCH__` est remplacé par un LITTÉRAL à la construction. Dans le build
+ * normal il vaut `0`, la branche qui rembourre la fixture devient
+ * `if (0 > 0)`, et rolldown l'élimine : le coût est nul, et le gate de poids
+ * le prouve plutôt que ce commentaire. `MEESHY_BENCH=500 bun run build` produit
+ * la variante que le témoin mesure — même mécanique que `MEESHY_RUNTIME` et
+ * `MEESHY_TARGET`, déjà en place.
+ */
+const bench = Number.parseInt(process.env.MEESHY_BENCH ?? '0', 10) || 0;
 
 /**
  * LE PRÉCHAUFFAGE ENTRE DANS LA CONSTRUCTION, et il n'y est pas par commodité.
@@ -66,13 +83,13 @@ const pourCapacitor = process.env.MEESHY_CIBLE === 'capacitor';
  * preact et lit des `.tsx`, ce que ce fichier de configuration — chargé par
  * Node — ne sait pas faire.
  */
-const prechauffeLesPagesInstitutionnelles = (): Plugin => ({
-  name: 'meeshy-prechauffe-institutionnel',
+const prerenderInstitutionalPages = (): Plugin => ({
+  name: 'meeshy-prerender-institutional',
   apply: 'build',
   closeBundle: {
     sequential: true,
     handler() {
-      const r = spawnSync('bun', ['run', 'scripts/prerend-institutionnel.tsx'], {
+      const r = spawnSync('bun', ['run', 'scripts/prerender-institutional.tsx'], {
         cwd: fileURLToPath(new URL('.', import.meta.url)),
         stdio: 'inherit',
       });
@@ -89,7 +106,8 @@ const prechauffeLesPagesInstitutionnelles = (): Plugin => ({
 });
 
 export default defineConfig({
-  base: pourCapacitor ? './' : '/',
+  base: forCapacitor ? './' : '/',
+  define: { __BENCH__: JSON.stringify(bench) },
   resolve: {
     alias: [
       ...(runtime === 'preact' ? aliasPreact : []),
@@ -98,13 +116,13 @@ export default defineConfig({
   },
   plugins: [
     tailwind(),
-    prechauffeLesPagesInstitutionnelles(),
+    prerenderInstitutionalPages(),
     /**
      * VARIANTE A (PWA). Desactivee sous Capacitor : la coque native gere
      * elle-meme son cycle de vie, et un service worker par-dessus ferait deux
      * caches concurrents sur le meme bundle.
      */
-    ...(pourCapacitor
+    ...(forCapacitor
       ? []
       : [
           VitePWA({
@@ -122,9 +140,9 @@ export default defineConfig({
               background_color: '#0b0c14',
               theme_color: '#0b0c14',
               icons: [
-                { src: '/icone-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-                { src: '/icone-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-                { src: '/icone-512-masque.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+                { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+                { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+                { src: '/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
               ],
             },
             workbox: {
@@ -140,7 +158,7 @@ export default defineConfig({
                * peinture entière de l'application.
                *
                * Seule la forme canonique entre donc au précache ; `/about/`
-               * est ramenée sur `/about` par `sw-institutionnel.js`. Le motif
+               * est ramenée sur `/about` par `sw-institutional.js`. Le motif
                * ne croise pas les `/`, donc l'`index.html` de la racine — la
                * coquille de l'application — n'est PAS exclu.
                */
@@ -149,7 +167,7 @@ export default defineConfig({
                * Chargé EN TÊTE du service worker généré, donc son écouteur
                * `fetch` passe avant ceux de Workbox.
                */
-              importScripts: ['sw-institutionnel.js'],
+              importScripts: ['sw-institutional.js'],
               /**
                * LA CEINTURE, le précache étant les bretelles.
                *
@@ -162,10 +180,10 @@ export default defineConfig({
                * l'application — n'est pas exclu par erreur.
                *
                * Sa source est partagée avec le préchauffage
-               * (`scripts/lib/routes-institutionnelles.mjs`) : deux listes
+               * (`scripts/lib/institutional-routes.mjs`) : deux listes
                * tenues à la main auraient divergé au premier ajout de page.
                */
-              navigateFallbackDenylist: [MOTIF_INSTITUTIONNEL],
+              navigateFallbackDenylist: [INSTITUTIONAL_PATTERN],
               /**
                * La zone rurale est la raison d'etre de ce cache : le shell est
                * precache une fois, puis JAMAIS retelecharge tant que son hash
@@ -205,11 +223,11 @@ export default defineConfig({
        * DEUX entrées CSS : celle de l'application, et celle — beaucoup plus
        * maigre — des pages institutionnelles préchauffées, dont la détection
        * Tailwind est limitée à leurs propres fichiers (`source(none)` +
-       * `@source`). Voir src/styles/institutionnel.css.
+       * `@source`). Voir src/styles/institutional.css.
        */
       input: {
         index: fileURLToPath(new URL('./index.html', import.meta.url)),
-        institutionnel: fileURLToPath(new URL('./src/styles/institutionnel.css', import.meta.url)),
+        institutional: fileURLToPath(new URL('./src/styles/institutional.css', import.meta.url)),
       },
       output: {
         /**
@@ -217,10 +235,29 @@ export default defineConfig({
          * coupable quand un poids monte (§ 8.4 de la conception v3), et pour
          * qu'un ecran neuf ne renchérisse pas la premiere peinture.
          */
+        /**
+         * `core` est le SOCLE : ce que le document référence lui-même, donc ce
+         * que le lecteur paie AVANT le premier pixel. Une dépendance n'y entre
+         * que si plusieurs routes la lisent.
+         *
+         * Le règle par défaut — « node_modules ⇒ core » — est fausse dès qu'une
+         * dépendance ne sert qu'à un écran, et elle l'est en silence : mesuré,
+         * `@tanstack/react-virtual` y a fait passer la première peinture de
+         * 26,33 à 31,44 Ko pour un module que seul le fil monte. On NOMME donc
+         * les dépendances mono-écran, et le gate de poids garde la porte.
+         */
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
-            if (id.includes('@tanstack/react-query')) return 'donnees';
-            return 'socle';
+            if (id.includes('@tanstack/react-query')) return 'data';
+            // Le virtualiseur ne sert qu'au fil : son propre morceau, chargé
+            // par la route qui l'importe et par personne d'autre.
+            // `virtual-core` porte l'essentiel du calcul : le nommer AUSSI est
+            // le point qui compte — nommer le seul paquet React laissait 6 Ko
+            // de son moteur dans le socle, et la mesure l'a dit avant moi.
+            if (id.includes('@tanstack/react-virtual') || id.includes('@tanstack/virtual-core')) {
+              return 'virtual';
+            }
+            return 'core';
           }
           return undefined;
         },
