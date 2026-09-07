@@ -65,7 +65,10 @@ function makeTranslationService() {
 }
 
 function makeEngagementService() {
-  return { recordConversationActivity: jest.fn<any>().mockResolvedValue(undefined) };
+  return {
+    recordConversationActivity: jest.fn<any>().mockResolvedValue(undefined),
+    recordActivity: jest.fn<any>().mockResolvedValue(undefined),
+  };
 }
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -404,6 +407,7 @@ describe('runMessagePostSaveEffects — axe d\'engagement des conversations', ()
     const translationService = makeTranslationService();
     const engagementService = {
       recordConversationActivity: jest.fn<any>().mockRejectedValue(new Error('engagement down')),
+      recordActivity: jest.fn<any>().mockResolvedValue(undefined),
     };
     const onError = jest.fn();
 
@@ -421,6 +425,119 @@ describe('runMessagePostSaveEffects — axe d\'engagement des conversations', ()
     expect(translationService.handleNewMessage).toHaveBeenCalled();
     expect(mockOnNewMessage).toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith('engagement', expect.any(Error));
+  });
+});
+
+describe('runMessagePostSaveEffects — axe d\'engagement des messages texte (#5532)', () => {
+  it('crédite content.text_message pour un message texte sans pièce jointe', async () => {
+    const prisma = makePrisma();
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage(),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message');
+  });
+
+  it('crédite content.text_message quand la pièce jointe n\'est pas audio', async () => {
+    const prisma = makePrisma();
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage({ attachmentMimeTypes: ['image/png'] }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message');
+  });
+
+  it('ne crédite PAS content.text_message quand une pièce jointe audio est présente — distinct de content.audio_message', async () => {
+    const prisma = makePrisma();
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage({ attachmentMimeTypes: ['audio/mpeg'] }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordActivity).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'content.text_message'
+    );
+  });
+
+  it('ne crédite rien pour un expéditeur anonyme', async () => {
+    const prisma = makePrisma();
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage({ senderUserId: null }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordActivity).not.toHaveBeenCalled();
+  });
+
+  it('ne rejette jamais quand aucun service d\'engagement n\'est câblé', async () => {
+    const prisma = makePrisma();
+    const onError = jest.fn();
+
+    expect(() =>
+      runMessagePostSaveEffects({
+        prisma,
+        translationService: makeTranslationService(),
+        engagementService: undefined,
+        message: makeMessage(),
+        originalLanguage: 'fr',
+        onError,
+      })
+    ).not.toThrow();
+    await flush();
+
+    expect(onError).not.toHaveBeenCalledWith('contentEngagement', expect.anything());
+  });
+
+  it('signale la panne sans toucher aux autres effets', async () => {
+    const prisma = makePrisma();
+    const translationService = makeTranslationService();
+    const engagementService = {
+      recordConversationActivity: jest.fn<any>().mockResolvedValue(undefined),
+      recordActivity: jest.fn<any>().mockRejectedValue(new Error('content engagement down')),
+    };
+    const onError = jest.fn();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService,
+      engagementService,
+      message: makeMessage(),
+      originalLanguage: 'fr',
+      onError,
+    });
+    await flush();
+
+    expect(prisma.conversation.update).toHaveBeenCalled();
+    expect(translationService.handleNewMessage).toHaveBeenCalled();
+    expect(mockOnNewMessage).toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith('contentEngagement', expect.any(Error));
   });
 });
 
