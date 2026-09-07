@@ -28,7 +28,7 @@ import { FEUILLE_DES_PREFS } from '@/app/connecte/prefs-feuille';
 import { FEUILLE_DU_PROFIL } from '@/app/connecte/profil-feuille';
 import { FEUILLE_DU_FIL_SOCIAL } from '@/app/connecte/social-feuille';
 import { FEUILLE_DES_REGLAGES } from '@/app/connecte/reglages-feuille';
-import { FEUILLE_DU_CHROME } from '@/app/enveloppe/feuille';
+import { compacte, FEUILLE_DU_CHROME } from '@/app/enveloppe/feuille';
 import { SOCLE_DU_DOCUMENT } from '@/app/socle';
 import { FEUILLE_DE_LA_VITRINE } from '@/app/vitrine/feuille';
 
@@ -201,6 +201,27 @@ describe('règle 1 — une table, zéro valeur ailleurs', () => {
     expect(pixelsLitteraux('.hors-ecran{width:1px;margin:-1px}')).toEqual([]);
     expect(pixelsLitteraux('@media (min-width:600px){.a{gap:var(--space-3)}}')).toEqual([]);
     expect(pixelsLitteraux('@media (min-width:600px){.a{gap:12px}}')).toEqual(['12px']);
+  });
+});
+
+/**
+ * `compacte()` repliait l'espace mais laissait passer les commentaires
+ * `/* … *\/` : un commentaire écrit DANS un gabarit voyageait sur le réseau
+ * dans chaque document qui compose cette feuille (#5204 — mesuré sur
+ * `fil-feuille.ts` et `liste-feuille.ts`, seules feuilles qui en portaient
+ * encore un à ce jour).
+ */
+describe('compacte() ne sert aucun commentaire CSS (#5204)', () => {
+  it.each(FEUILLES)('ne porte aucun commentaire ($nom)', ({ source }) => {
+    expect(source).not.toMatch(/\/\*/);
+  });
+
+  it('retire un commentaire posé dans le gabarit', () => {
+    expect(compacte('/* note */\n.a{color:red}')).toBe('.a{color:red}');
+  });
+
+  it('ne corrompt pas un sélecteur qui porte un `*` isolé, sans `/*…*/`', () => {
+    expect(compacte('*{box-sizing:border-box}\n[class*="x"]{color:red}')).toBe('*{box-sizing:border-box}[class*="x"]{color:red}');
   });
 });
 
