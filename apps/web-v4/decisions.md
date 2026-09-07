@@ -110,8 +110,16 @@ indisponible n'est jamais un écran vide ».
 
 ## D-9 · La lentille est la SEULE peau de liste, activée par défaut — 2026-09-07 (#5567)
 
-Pas de drapeau, pas de peau alternative, pas de coexistence : la v4 n'implémente
-que la lentille.
+Pas de drapeau, pas de peau alternative, pas de coexistence. Formulation du
+porteur : *« il n'est prévu que d'implémenter la lentille sur la V4,
+correctement »* — c'est le PLAN, et il ne comporte qu'une peau.
+
+Le « correctement » n'est pas un adverbe de politesse : il porte une exigence.
+Une lentille à moitié faite — la rangée plate sans la perspective, ou la
+perspective sans le double `frame(height:)` — rend une liste qui SAUTE au
+défilement. Elle serait alors pire que la peau en cartes qu'elle remplace, qui
+au moins ne bouge pas. **Cette feature n'a pas de demi-livraison** : soit le
+flux ne bouge jamais, soit on garde les cartes.
 
 Conséquence sur le POC : `src/components/ligne-conversation.tsx` rend
 aujourd'hui la peau en CARTES (`ThemedConversationRow`) — **elle est à
@@ -119,11 +127,6 @@ remplacer**, pas à conserver à côté.
 
 Écart assumé avec iOS, où le drapeau `lentille_list` est désactivé par défaut :
 les utilisateurs iOS ne voient pas la lentille, les utilisateurs web la verront.
-
-> *Interprétation à confirmer* : « il n'y a que ça d'implémenté sur la v4 » est
-> lu comme « une seule peau, la lentille ». Si la phrase décrivait l'état
-> actuel du POC, elle est inexacte — le POC rend des cartes — et la décision
-> reste à prendre.
 
 ## D-10 · La v4 écrit le mode de lecture vers le serveur — 2026-09-07 (#5566)
 
