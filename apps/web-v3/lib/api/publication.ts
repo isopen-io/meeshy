@@ -127,7 +127,19 @@ const CHEMIN_DES_STORIES = '/api/v1/social/posts?scope=stories&projection=tray&l
 
 const DELAI_MS = DELAI_DE_REPONSE_MS;
 
-/** EXPORTÉE — `lib/api/social.ts` fait le MÊME appel (Bearer, délai, catch réseau) pour le fil et le rail de stories. */
+/**
+ * EXPORTÉE — `lib/api/social.ts` fait le MÊME appel (Bearer, délai, catch
+ * réseau) pour le fil et le rail de stories.
+ *
+ * `x-canvas-caps: 0` (#5195) — web-v3 ne rend AUCUN canvas (`storyEffects`,
+ * 0 occurrence dans tout `apps/web-v3`) ; c'est une décision d'architecture,
+ * jamais un retard de mise à jour. `0` le DÉCLARE à la passerelle, qui sait
+ * alors OMETTRE `storyEffects` sur une story sans média plutôt que servir la
+ * sentinelle « Mets à jour Meeshy pour voir ce contenu » — un conseil FAUX
+ * pour ce client (`services/gateway/src/services/posts/storyEffectsV3.ts`,
+ * règle 5 bis). Un en-tête ABSENT n'aurait pas dit la même chose : il vaut
+ * « client qui n'a rien déclaré », traité comme un legacy présumé.
+ */
 export const demande = (
   url: string,
   jeton: string,
@@ -136,7 +148,12 @@ export const demande = (
 ): Promise<Response | null> =>
   (recuperer ?? ((u, o) => fetch(u, o)))(url, {
     ...options,
-    headers: { accept: 'application/json', authorization: `Bearer ${jeton}`, ...options.headers },
+    headers: {
+      accept: 'application/json',
+      authorization: `Bearer ${jeton}`,
+      'x-canvas-caps': '0',
+      ...options.headers,
+    },
     cache: 'no-store',
     signal: AbortSignal.timeout(DELAI_MS),
   }).catch(() => null);
