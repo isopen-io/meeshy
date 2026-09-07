@@ -1,4 +1,6 @@
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
+import { resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
+import type { LastMessagePreviewAttachment } from '@meeshy/shared/types/socketio-events/conversation';
 import {
   buildLastMessagePreviewTranslations,
   truncateMessagePreview,
@@ -142,5 +144,138 @@ export function resolveLastMessagePreviewPrism(
       originalLanguage: message?.originalLanguage,
       viewerLanguages,
     }),
+  };
+}
+
+/**
+ * Le `select` Prisma minimal de l'AUTEUR d'un message, pour le sous-groupe
+ * MÉDIA de l'aperçu (#3737). Miroir de `PREVIEW_PRISM_PARTICIPANT_SELECT`
+ * pour une autre question : celle-ci résout la langue du LECTEUR, celle-ci
+ * résout le NOM de l'auteur — même schéma minimal (local → compte lié) que
+ * `resolveParticipantDisplayName`.
+ */
+export const PREVIEW_MEDIA_SENDER_SELECT = {
+  displayName: true,
+  user: { select: { displayName: true } },
+} as const;
+
+/**
+ * Le `select` Prisma d'une pièce jointe d'aperçu — identique aux champs de
+ * `conversationLastMessagePreviewSelect.attachments.select`
+ * (`routes/conversations/core-selects.ts`), délibérément sans `fileUrl` : une
+ * ligne de liste ne rend jamais le fichier, seulement sa vignette. Les deux
+ * `select` ne peuvent pas s'importer l'un l'autre (l'un vit sous `routes/`,
+ * l'autre sous `socketio/`) ; un témoin de parité les confronte champ par
+ * champ plutôt que de les fusionner en une dépendance croisée.
+ */
+export const PREVIEW_MEDIA_ATTACHMENT_SELECT = {
+  id: true,
+  mimeType: true,
+  thumbnailUrl: true,
+  originalName: true,
+  fileSize: true,
+  duration: true,
+  width: true,
+  height: true,
+} as const;
+
+export interface PreviewMediaSender {
+  readonly displayName?: string | null;
+  readonly user?: { readonly displayName?: string | null } | null;
+}
+
+/**
+ * Forme d'ENTRÉE d'une pièce jointe — délibérément plus permissive que
+ * `LastMessagePreviewAttachment` (le contrat de SORTIE) : le site Prisma
+ * capé (`emitConversationPreviewUpdate`, `select: { take: 1, … }`) rend des
+ * `string | null` ; le `Message` partagé que portent les deux autres
+ * émetteurs (`MessageHandler`, `postMessageSyncFanOut` — chargé par
+ * `attachments: true`, NI capé NI `select`-restreint) rend des
+ * `string | undefined` sur une liste complète. Une seule fonction accepte
+ * les deux plutôt que d'exiger de chaque appelant qu'il normalise avant
+ * d'appeler — c'est cette normalisation-là, oubliée à un site, qui a laissé
+ * `location` manquer sur un seul émetteur (#3122).
+ */
+export interface PreviewMediaAttachmentInput {
+  readonly id: string;
+  readonly mimeType: string;
+  readonly thumbnailUrl?: string | null;
+  readonly originalName?: string | null;
+  readonly fileSize?: number | null;
+  readonly duration?: number | null;
+  readonly width?: number | null;
+  readonly height?: number | null;
+}
+
+export interface PreviewMediaMessage {
+  readonly sender?: PreviewMediaSender | null;
+  /**
+   * PAS nécessairement plafonnée à l'entrée — `resolvePreviewMediaFields` la
+   * plafonne lui-même à la première, pour que le plafond soit un fait de CETTE
+   * fonction et non une convention que chaque appelant doit respecter de son
+   * côté. `_count`, quand il est fourni, reste la source du COMPTE ; sinon le
+   * compte se lit sur cette liste avant plafonnage.
+   */
+  readonly attachments?: readonly PreviewMediaAttachmentInput[];
+  readonly _count?: { readonly attachments?: number } | null;
+  readonly isBlurred?: boolean | null;
+  readonly isViewOnce?: boolean | null;
+  readonly expiresAt?: Date | string | null;
+}
+
+export interface PreviewMediaFields {
+  readonly lastMessageSenderName: string | null;
+  readonly lastMessageAttachments: readonly LastMessagePreviewAttachment[];
+  readonly lastMessageAttachmentCount: number;
+  readonly lastMessageIsBlurred: boolean;
+  readonly lastMessageIsViewOnce: boolean;
+  readonly lastMessageExpiresAt: string | null;
+}
+
+/**
+ * Le sous-groupe MÉDIA du groupe d'aperçu (#3737) : auteur, première pièce
+ * jointe + compte total, drapeaux éphémères — voir le doc-comment du champ
+ * `lastMessageSenderName` sur `ConversationUpdatedEventData` pour la règle de
+ * groupe complète.
+ *
+ * Séparée de `resolveLastMessagePreviewPrism` plutôt qu'ajoutée dedans : ces
+ * six champs décrivent le MESSAGE lui-même, identiques pour toute la room —
+ * contrairement à la carte du Prisme, filtrée aux langues de CHAQUE lecteur.
+ * Une fonction par-viewer qui rendrait aussi ce sous-groupe le recalculerait
+ * une fois par destinataire pour une valeur qui ne change jamais entre eux.
+ *
+ * `null` / valeurs par défaut plutôt qu'omission de clé : même convention que
+ * `location`, posé par le même appelant que `lastMessageId` — l'absence sur
+ * ce groupe dit « rien à signaler », jamais « je ne sais pas ».
+ */
+export function resolvePreviewMediaFields(
+  message: PreviewMediaMessage | null | undefined,
+): PreviewMediaFields {
+  const attachments = message?.attachments ?? [];
+  return {
+    lastMessageSenderName: resolveParticipantDisplayName(message?.sender ?? null),
+    // Plafonnée ICI, à la sortie — pas une convention que chaque appelant
+    // doit respecter à l'entrée. `emitConversationPreviewUpdate` capait déjà
+    // sa requête Prisma à `take: 1` (optimisation légitime, conservée) ; les
+    // deux autres émetteurs chargent le `Message` partagé, dont
+    // `attachments` porte la liste COMPLÈTE.
+    lastMessageAttachments: attachments.slice(0, 1).map(normalizePreviewAttachment),
+    lastMessageAttachmentCount: Math.max(message?._count?.attachments ?? 0, attachments.length),
+    lastMessageIsBlurred: message?.isBlurred ?? false,
+    lastMessageIsViewOnce: message?.isViewOnce ?? false,
+    lastMessageExpiresAt: toIsoOrNull(message?.expiresAt ?? null),
+  };
+}
+
+function normalizePreviewAttachment(attachment: PreviewMediaAttachmentInput): LastMessagePreviewAttachment {
+  return {
+    id: attachment.id,
+    mimeType: attachment.mimeType,
+    thumbnailUrl: attachment.thumbnailUrl ?? null,
+    originalName: attachment.originalName ?? null,
+    fileSize: attachment.fileSize ?? null,
+    duration: attachment.duration ?? null,
+    width: attachment.width ?? null,
+    height: attachment.height ?? null,
   };
 }
