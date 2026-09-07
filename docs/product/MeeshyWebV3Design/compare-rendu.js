@@ -78,6 +78,9 @@ const JSON_OUT = arg('--json', path.join(HERE, 'rapport-conformite.json'));
 // Gates. Le seuil structurel est volontairement large : il attrape un bloc
 // deplace, absent ou de la mauvaise hauteur, pas une nuance de gris.
 const SEUIL_STRUCTURE = Number(arg('--seuil', '0.15'));
+// La classe (role-premier vs defaut) se lit dans budgets.json via
+// `estRolePremier` (scripts/lib/budget-de-vue.mjs, #4764) — jamais une regex
+// ecrite ici, qui divergerait de la zone declaree au premier ecran ajoute.
 const BUDGET = {
   'role-premier': { octets: 120 * 1024, requetes: 12 },
   defaut: { octets: 300 * 1024, requetes: 30 },
@@ -146,6 +149,9 @@ function ecartStructurel(a, b) {
     pathToFileURL(path.join(ROOT, 'apps/web-v3/scripts/lib/vues-comparables.mjs')).href);
   const { litLesVues } = await import(
     pathToFileURL(path.join(ROOT, 'apps/web-v3/scripts/lib/index-des-vues.mjs')).href);
+  const { estRolePremier } = await import(
+    pathToFileURL(path.join(ROOT, 'apps/web-v3/scripts/lib/budget-de-vue.mjs')).href);
+  const BUDGETS_JSON = JSON.parse(fs.readFileSync(path.join(ROOT, 'apps/web-v3/budgets.json'), 'utf8'));
 
   // Un index qu'on ne sait pas LIRE se dit avant tout le reste, et par le meme
   // code de sortie : une annexe absente ou un jeton declare au mauvais endroit
@@ -245,7 +251,7 @@ function ecartStructurel(a, b) {
         entree.conforme = false;
       }
 
-      const budget = /^\/(l\/|stories\/|post\/|feed$)/.test(v.route) ? BUDGET['role-premier'] : BUDGET.defaut;
+      const budget = estRolePremier(v.route, BUDGETS_JSON) ? BUDGET['role-premier'] : BUDGET.defaut;
       entree.octets = octets;
       entree.requetes = requetes;
       entree.budget_octets = budget.octets;
