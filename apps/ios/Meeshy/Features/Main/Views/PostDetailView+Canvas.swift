@@ -81,11 +81,21 @@ extension PostDetailView {
                 // mono-scène juste en dessous.** Il n'y a qu'une publication à
                 // l'écran, donc aucune élection à arbitrer : ce qui gouverne
                 // est la visibilité et l'appel en cours, comme pour le reader.
-                // C'est ce qui fait que le son de fond s'active à l'ouverture
-                // du détail — la directive du 2026-09-05, tenue aussi pour un
-                // post à plusieurs scènes.
                 isActive: !StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible,
                                                               callActive: isCallActive),
+                // **L'hôte DIT qu'il est le détail, et c'est ce qui ouvre le
+                // son** (#5593). `isActive` ne gouverne que la PAUSE : la
+                // mosaïque montait son player en `mode: .card`, dont
+                // `ScenePlayerConfig` VERROUILLE le muet (#4084). Le son de
+                // fond d'un post à plusieurs scènes ne se jouait donc jamais
+                // dans le détail, et le bouton muet de la barre d'actions
+                // n'atteignait aucun lecteur sur ce chemin — pendant que les
+                // deux autres (mono-scène ci-dessous, republication) passaient
+                // bien `mute: isCanvasMuted`. Le commentaire qui vivait ici
+                // AFFIRMAIT que le son s'activait : il décrivait l'intention,
+                // pas le câblage.
+                host: .detail,
+                isMuted: isCanvasMuted,
                 onTapScene: { index in
                     detailSceneIndex = index
                     fullscreenMediaId = nil
