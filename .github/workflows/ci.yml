@@ -184,6 +184,12 @@ jobs:
           cd packages/shared
           pnpm run build
 
+      # #5442 : cette étape passe par le cache Turborepo (`bun run lint` sans
+      # filtre), donc son verdict dépend de la température du cache — un run à
+      # cache chaud rejoue d'anciens logs sans jamais relinter. Elle reste
+      # informative (`continue-on-error`) ; le verdict qui COMPTE pour
+      # `apps/web` est l'étape « debt ratchet » plus bas, qui invoque `eslint`
+      # directement et ne dépend d'aucun cache.
       - name: Lint
         run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} lint
         continue-on-error: true
@@ -194,6 +200,15 @@ jobs:
       # aucun. Elle rougit donc pour elle seule, sans toucher au reste.
       - name: Lint (apps/web-v3 — blocking)
         run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} lint --filter=@meeshy/web-v3
+
+      # Lint (apps/web — debt ratchet), jumeau de #5442 pour ESLint : la même
+      # amnistie de cache qui rend `bun run lint` illisible touche `apps/web`,
+      # dont la dette réelle (4034 erreurs) n'apparaît que sur un cache froid.
+      # Comme le ratchet de types ci-dessous, ce script appelle `eslint`
+      # directement, sans passer par Turborepo — son verdict ne dépend donc
+      # jamais d'un cache.
+      - name: Lint (apps/web — debt ratchet)
+        run: bash scripts/check-lint-debt.sh --self-test && bash scripts/check-lint-debt.sh
 
       # Type-check, en DEUX étapes plutôt qu'une amnistie.
       #
