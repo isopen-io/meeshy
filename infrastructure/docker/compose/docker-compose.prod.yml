@@ -443,8 +443,10 @@ services:
   # chemin PUBLIC prioritaire sur le legacy ne se publie pas avant que la zone
   # ait de quoi y répondre.
   #
-  # `scripts/check-v3-pipeline.mjs` garde les deux sens : un actif servi hors
-  # de cette règle, et un chemin de cette règle que la zone ne sert pas.
+  # `scripts/check-v3-pipeline.mjs` gardait les deux sens (un actif servi hors
+  # de cette règle, et un chemin de cette règle que la zone ne sert pas) ; ce
+  # garde n'était câblé à aucune étape de CI et a été retiré (#5623) — les deux
+  # sens restent vrais sur ce fichier mais aucun gate automatisé ne les tient.
   #
   # CE QUE LA ZONE LIT DE SON ENVIRONNEMENT, ET POURQUOI C'EST ICI
   #
@@ -460,8 +462,9 @@ services:
   # L'appel de la passerelle est SERVEUR à serveur : il passe par le réseau
   # interne (`gateway:3000`) et n'a pas à ressortir par Traefik. L'URL publique,
   # elle, est celle que les plateformes mettent en cache — donc le domaine.
-  # `scripts/check-v3-pipeline.mjs` garde ce contrat : toute variable lue par
-  # `apps/web-old-version3/app` ou `apps/web-old-version3/lib` est déclarée ici.
+  # `scripts/check-v3-pipeline.mjs` gardait ce contrat (toute variable lue par
+  # `apps/web-old-version3/app` ou `apps/web-old-version3/lib` déclarée ici) ;
+  # ce garde n'était câblé à aucune étape de CI et a été retiré (#5623).
   frontend-v3:
     image: ${FRONTEND_V3_IMAGE:-isopen/meeshy-web-v3:latest}
     container_name: meeshy-frontend-v3

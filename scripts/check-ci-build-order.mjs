@@ -64,9 +64,9 @@
 // L'invariant porte sur `.github/workflows/ci.yml`, sur `turbo.json` et sur les
 // manifestes des workspaces que la racine déclare : des fichiers de la RACINE.
 // Il est donc appelé par le job `quality` de `ci.yml`, à côté de
-// `check-type-debt.sh`, `check-lockfile-alignment.mjs`,
-// `check-makefile-workspaces.mjs` et `check-v3-pipeline.mjs`, et son témoin est
-// son propre `--self-test` — même forme que ses quatre voisins. Un garde de la
+// `check-type-debt.sh`, `check-lockfile-alignment.mjs` et
+// `check-makefile-workspaces.mjs`, et son témoin est son propre `--self-test`
+// — même forme que ses trois voisins. Un garde de la
 // CI écrit dans les tests d'un paquet que la CI porte est un garde qui remonte
 // de trois crans pour atteindre sa surface : c'est exactement le défaut que
 // `check-makefile-workspaces.mjs` documente en tête, et il a déjà coûté un
