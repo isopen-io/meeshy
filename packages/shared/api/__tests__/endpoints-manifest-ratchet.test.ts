@@ -47,6 +47,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { buildApiEndpointsCatalog, type ManifestRouteInput } from '../build-catalog.js';
+import { filterOutOpsOnlyRoutes } from '../ops-only-routes.js';
 import { API_ENDPOINTS, API_PATH_TEMPLATES } from '../endpoints.js';
 
 const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -62,7 +63,11 @@ interface RawManifestFile {
 function readFreshManifestRoutes(): readonly ManifestRouteInput[] {
   const raw = readFileSync(MANIFEST_PATH, 'utf8');
   const parsed = JSON.parse(raw) as RawManifestFile;
-  return parsed.routes;
+  // #5424 — même filtre que `scripts/generate-api-endpoints.ts` : sans lui,
+  // ce cliquet comparerait un catalogue NON filtré (toutes les routes du
+  // manifeste) à l'artefact commité, filtré — et rougirait pour la mauvaise
+  // raison à chaque régénération.
+  return filterOutOpsOnlyRoutes(parsed.routes);
 }
 
 /** Aplatit `API_ENDPOINTS` en un ensemble de chemins RÉSOLUS — fonctions appelées avec un jeton neutre. */

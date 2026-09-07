@@ -5,9 +5,12 @@
  * Trois familles peuplent légitimement cette liste, et une seule d'elles
  * doit tendre vers zéro :
  *
- *  - PERMANENT   : sondes de disponibilité (`/health`, `/info`) — jamais
- *                  versionnées par convention HTTP, déclarées directement
- *                  dans `route-registration.ts` (hors territoire de #4277).
+ *  - PERMANENT   : sonde de disponibilité (`/health`) — jamais versionnée
+ *                  par convention HTTP, déclarée directement dans
+ *                  `route-registration.ts` (hors territoire de #4277).
+ *                  (`/info` y a figuré jusqu'à #5424 : retirée du gateway,
+ *                  périmée et sans appelant mesuré — pas seulement filtrée
+ *                  des catalogues client.)
  *  - DEPRECATED  : alias RACINE dépréciés — répondent encore, avec les
  *                  trois en-têtes `Deprecation`/`Sunset`/`Link` (#4274), et
  *                  ont une date de retrait gouvernée par le compteur
@@ -50,11 +53,6 @@ export const ALLOWED_OUTSIDE_API_V1: readonly AllowedOutsideApiV1[] = [
     path: '/health',
     family: 'permanent',
     reason: 'Sonde de disponibilité S0, sans jeton — un orchestrateur ne connaît pas de version d\'API.',
-  },
-  {
-    path: '/info',
-    family: 'permanent',
-    reason: 'Point de diagnostic non versionné, déclaré à côté de /health dans registerAllRoutes.',
   },
   {
     path: '/api/attachments/file/*',
