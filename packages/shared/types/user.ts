@@ -3,7 +3,7 @@
  * Harmonisation Gateway - Frontend
  */
 
-import type { PaginationMeta } from './api-responses.js';
+import type { PaginationMeta } from './pagination.js';
 
 /**
  * Rôles utilisateur globaux (aligné avec Prisma enum UserRole)

@@ -131,6 +131,15 @@ export class PostService {
     visibilityUserIds?: string[];
     content?: string;
     originalLanguage?: string;
+    /**
+     * Langue MESURÉE on-device (tinyld) sur le texte réellement tapé au composer
+     * web (#5349) — jamais une préférence d'interface. Persistée pour que
+     * `PostTranslationService.translateOnDemand` (#5422) puisse la relire plus
+     * tard, au même rang qu'à la création : sans elle, une traduction demandée
+     * après coup retombait sur la détection regex du serveur, strictement
+     * moins bonne qu'une mesure réelle déjà faite.
+     */
+    detectedLanguage?: string;
     communityId?: string;
     storyEffects?: Record<string, unknown>;
     moodEmoji?: string;
@@ -165,6 +174,14 @@ export class PostService {
     const originalLanguage = data.originalLanguage
       ? (normalizeLanguageCode(data.originalLanguage) ?? data.originalLanguage)
       : (data.content ? detectLanguage(data.content) : undefined);
+
+    // `detectedLanguage` (#5349/#5422) est déjà de l'ISO 639-1 mesuré
+    // (`detectMeasuredLanguage`, tinyld) — normalisée par sûreté, comme la
+    // revendication ci-dessus, jamais recalculée : c'est une MESURE, pas une
+    // détection à refaire ici.
+    const detectedLanguage = data.detectedLanguage
+      ? (normalizeLanguageCode(data.detectedLanguage) ?? data.detectedLanguage)
+      : undefined;
 
     // Lieu partagé : validation stricte des coordonnées côté serveur (bornes,
     // rejet NaN/Infinity, bornage des chaînes). Chiffrement : stockage EN
@@ -288,6 +305,7 @@ export class PostService {
         visibilityUserIds: data.visibilityUserIds ?? [],
         content: data.content,
         originalLanguage,
+        detectedLanguage,
         communityId: data.communityId,
         storyEffects: (data.storyEffects as any) ?? undefined,
         allowSoundExtraction: data.allowSoundExtraction ?? false,

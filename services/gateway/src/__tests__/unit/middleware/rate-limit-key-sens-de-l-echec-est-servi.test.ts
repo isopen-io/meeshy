@@ -40,6 +40,7 @@ import { meCategoriesRoutes } from '../../../routes/me/categories';
 import { createPreferenceRateLimitConfig } from '../../../routes/me/preferences/preference-rate-limit';
 
 jest.mock('../../../utils/logger', () => ({
+  ...(jest.requireActual('../../../utils/logger') as object),
   logError: jest.fn(),
   logger: { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() },
 }));

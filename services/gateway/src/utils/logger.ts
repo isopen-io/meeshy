@@ -106,20 +106,44 @@ export function logError(loggerOrMessage: any, message?: string | unknown, error
   }
 }
 
-export function logWarn(logger: any, message: string, error: unknown | any): void {
-  try {
-    if (logger && typeof logger.warn === 'function') {
-      logger.warn(message);
-      if (error instanceof Error) {
-        logger.warn(error.message);
-      } else {
-        logger.warn(String(error));
+/**
+ * Trace un avertissement — et le fait SORTIR.
+ *
+ * Même défaut que `logError` avant #3617, jamais corrigé pour ce niveau
+ * (#5415) : la fonction ne servait QUE le `logger` reçu, en appelant
+ * `logger.warn(...)` sur le PARAMÈTRE — jamais sur le singleton `logger` de
+ * ce module, malgré le nom identique. Sous `logger: false`, `fastify.log`
+ * (et `request.log`, le même objet) est le no-op d'`abstract-logging` : ses
+ * méthodes existent, ne rejettent pas, et n'écrivent rien. La branche
+ * `else`/`catch` qui écrivait réellement en console n'était donc jamais
+ * atteinte pour les 32 sites du dépôt qui lui passent `fastify.log` /
+ * `request.log`.
+ *
+ * La ligne part donc TOUJOURS par le `logger` de ce module, qui écrit sur la
+ * console — le logger reçu (`sink`) est servi EN PLUS quand il sait émettre.
+ */
+export function logWarn(sink: any, message: string, error?: unknown): void {
+  const hasCause = error !== undefined;
+  const detail = hasCause
+    ? (error instanceof Error ? `${error.message}${error.stack ? `\n${error.stack}` : ''}` : String(error))
+    : undefined;
+
+  if (detail !== undefined) {
+    logger.warn(message, detail);
+  } else {
+    logger.warn(message);
+  }
+
+  if (sink && typeof sink.warn === 'function') {
+    try {
+      sink.warn(message);
+      if (hasCause) {
+        sink.warn(error instanceof Error ? error.message : String(error));
       }
-    } else {
-      console.warn(message, error);
+    } catch {
+      // Un logger d'appelant qui casse ne doit pas emporter la trace : la
+      // ligne est déjà partie par `logger.warn` ci-dessus.
     }
-  } catch (e) {
-    console.warn(message, error);
   }
 }
 

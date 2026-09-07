@@ -10,24 +10,16 @@
 
 import type { ConversationStats } from './conversation.js';
 import type { MentionedUser } from './mention.js';
+import type { PaginationMeta } from './pagination.js';
 
 /**
- * Standard pagination metadata - SINGLE SOURCE OF TRUTH
- * All pagination across the application should use this interface.
- *
- * @example Gateway response:
- * {
- *   success: true,
- *   data: [...],
- *   pagination: { total: 100, offset: 0, limit: 20, hasMore: true }
- * }
+ * Ré-exportée depuis `pagination.ts` (#4683) : la primitive vit dans un
+ * fichier sans dépendance pour que `user.ts` puisse l'importer sans repasser
+ * par `api-responses.ts` → `conversation.ts` → `user.ts` → (ici), qui formait
+ * un cycle. Aucun importeur de `PaginationMeta` depuis `api-responses.ts`
+ * n'a besoin de changer d'adresse.
  */
-export interface PaginationMeta {
-  total: number;
-  offset: number;
-  limit: number;
-  hasMore: boolean;
-}
+export type { PaginationMeta } from './pagination.js';
 
 export interface CursorPaginationMeta {
   limit: number;

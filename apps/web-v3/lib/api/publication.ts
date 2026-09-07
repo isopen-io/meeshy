@@ -789,6 +789,8 @@ export const publie = async ({
   visibility = 'PUBLIC',
   emoji = null,
   langue = null,
+  mediaIds = [],
+  mediaAlt = {},
   cmid = null,
   base,
   recuperer,
@@ -808,6 +810,24 @@ export const publie = async ({
   readonly emoji?: string | null;
   /** `originalLanguage` — la revendication du client. `null` : rien à revendiquer, la passerelle devine. */
   readonly langue?: string | null;
+  /**
+   * `mediaIds` — `CreatePostSchema.mediaIds`, `z.array(z.string()).max(MAX_POST_MEDIA)`
+   * (`routes/posts/types.ts:258`) : les identifiants `PostMedia` déjà
+   * TÉLÉVERSÉS (`televerseMediaDePost`, `lib/api/medias-de-post.ts`) et
+   * réclamables par CE lecteur (`claimableMediaWhere`). Tableau vide : aucune
+   * clé posée dans le corps — un post sans média ne change rien à la charge
+   * qu'il envoyait avant #5390.
+   */
+  readonly mediaIds?: readonly string[];
+  /**
+   * `mediaAlt` — `CreatePostSchema.mediaAlt`, `z.record(z.string(), z.string().max(1000))`
+   * (`routes/posts/types.ts:263`) : le texte alternatif appliqué à
+   * `PostMedia.alt` (`applyMediaAlt`, `PostService.ts:901-919`), CLÉ = un id
+   * de `mediaIds` (les autres clés sont IGNORÉES par la passerelle — jamais
+   * une seconde validation ici). Objet vide : aucune clé posée dans le
+   * corps, comme `mediaIds` ci-dessus.
+   */
+  readonly mediaAlt?: Readonly<Record<string, string>>;
   /**
    * `X-Client-Mutation-Id` — `cmid_<uuid v4 minuscule>`
    * (`services/gateway/src/middleware/clientMutationId.ts:29`). Un rejeu
@@ -833,6 +853,8 @@ export const publie = async ({
       visibility,
       ...(emoji === null ? {} : { moodEmoji: emoji }),
       ...(langue === null ? {} : { originalLanguage: langue }),
+      ...(mediaIds.length === 0 ? {} : { mediaIds }),
+      ...(Object.keys(mediaAlt).length === 0 ? {} : { mediaAlt }),
     }),
   });
 

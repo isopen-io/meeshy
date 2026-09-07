@@ -142,6 +142,20 @@ final class ShareLinkServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "DELETE")
     }
 
+    // MARK: - leaveAnonymousSession
+
+    func test_leaveAnonymousSession_callsGuestSessionsMeWithSessionTokenHeader() async throws {
+        let response = APIResponse<[String: String]>(success: true, data: ["message": "Session fermée avec succès"], error: nil)
+        mock.stub("/guest-sessions/me", result: response)
+
+        try await service.leaveAnonymousSession(sessionToken: "anon_abc123")
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/guest-sessions/me")
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertEqual(mock.lastRequest?.headers?["X-Session-Token"], "anon_abc123")
+        XCTAssertNil(mock.lastRequest?.bodyJSON)
+    }
+
     // MARK: - Error handling
 
     func test_listMyLinks_networkError_propagates() async {

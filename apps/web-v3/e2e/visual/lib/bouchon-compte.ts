@@ -137,6 +137,15 @@ export type EtatDuCompteDeBouchon = {
    * audience se vérifie sur la charge envoyée, jamais sur le `<select>` rendu.
    */
   readonly publicationsRecues: Record<string, unknown>[];
+  /**
+   * LES MÉDIAS DE POST TÉLÉVERSÉS PAR TUS (#5390, `bouchon-uploads.ts`) — ce
+   * bloc RÉCLAME les entrées de `mediaIds` pour composer le post servi par
+   * `GET /api/v1/social/posts` (`filSocial`), la MÊME table que le bouchon
+   * TUS écrit et que `DELETE /api/v1/posts/media/:id` efface.
+   */
+  readonly mediasDePostEnAttente?: Map<string, { readonly id: string; readonly uploaderId: string; reclame: boolean }>;
+  /** Les octets des pièces téléversées — pour résoudre `fileUrl`/`mimeType` d'un `PostMedia` réclamé. */
+  readonly pieces?: Map<string, { readonly fileUrl: string; readonly mimeType: string }>;
   /** La boîte de notifications du lecteur — servie par `GET /notifications`, mutée par `read-all`. */
   readonly boite: BoiteDeNotifsDeBouchon;
   /** Le fil de commentaires d'une publication — écrit par le POST, relu par le GET (#5091). */
@@ -820,16 +829,57 @@ export const routesDuCompte =
      * client qui n'envoie rien.
      */
     if (chemin === '/api/v1/posts' && requete.method === 'POST') {
-      etat.publicationsRecues.push(
-        ((): Record<string, unknown> => {
-          try {
-            return JSON.parse(corps.toString('utf8')) as Record<string, unknown>;
-          } catch {
-            return {};
-          }
-        })(),
-      );
-      json({ success: true, data: { id: 'p-neuf' } }, 201);
+      const recu = ((): Record<string, unknown> => {
+        try {
+          return JSON.parse(corps.toString('utf8')) as Record<string, unknown>;
+        } catch {
+          return {};
+        }
+      })();
+      etat.publicationsRecues.push(recu);
+
+      /**
+       * MÉDIAS (#5390) — `mediaIds` est réclamé EXACTEMENT comme
+       * `claimableMediaWhere` le ferait : chaque id encore EN ATTENTE dans
+       * `mediasDePostEnAttente` (posé par le bouchon TUS,
+       * `bouchon-uploads.ts`) devient un média du post SERVI, et sort de
+       * l'attente — un second `POST /posts` avec le même id ne le
+       * retrouverait plus, comme la passerelle réelle.
+       */
+      const idsDemandes = Array.isArray(recu.mediaIds)
+        ? recu.mediaIds.filter((id): id is string => typeof id === 'string')
+        : [];
+      const media = idsDemandes
+        .map((id) => {
+          const attente = etat.mediasDePostEnAttente?.get(id);
+          const piece = etat.pieces?.get(id);
+          if (attente === undefined || piece === undefined) return null;
+          attente.reclame = true;
+          return { fileUrl: piece.fileUrl, mimeType: piece.mimeType, width: null, height: null };
+        })
+        .filter((m): m is { fileUrl: string; mimeType: string; width: null; height: null } => m !== null);
+
+      const id = `p-neuf-${etat.publicationsRecues.length}`;
+      etat.filSocial.posts = [
+        {
+          id,
+          type: typeof recu.type === 'string' ? recu.type : 'POST',
+          content: typeof recu.content === 'string' ? recu.content : '',
+          originalLanguage: typeof recu.originalLanguage === 'string' ? recu.originalLanguage : null,
+          translations: {},
+          createdAt: new Date().toISOString(),
+          author: { id: MEMBRE.id, username: 'amina', displayName: MEMBRE.nom },
+          likeCount: 0,
+          commentCount: 0,
+          repostCount: 0,
+          isLikedByMe: false,
+          isRepostedByMe: false,
+          media,
+        },
+        ...etat.filSocial.posts,
+      ];
+
+      json({ success: true, data: { id } }, 201);
       return true;
     }
 

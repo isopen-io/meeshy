@@ -47,33 +47,51 @@ class SensitiveBodyLoggingGuard(
 
     companion object {
         /**
-         * Routes dont le corps de requete porte un mot de passe en clair.
-         * `/auth/login` et `/auth/register` (le mot de passe choisi) ;
-         * `/auth/2fa/disable` (confirmation par mot de passe) ;
+         * Routes dont le corps de requete porte un mot de passe ou un code de
+         * second facteur en clair. `/auth/login` et `/auth/register` (le mot
+         * de passe choisi) ; `/auth/login/2fa` (le code de second facteur,
+         * #4843) ; `/auth/2fa/disable` (confirmation par mot de passe) ;
          * `/users/me/password` (l'ancien ET le nouveau) ; `/me/account/deletion`
          * (#4811 — le site qui a declenche cette garde).
          */
-        // api-path: ces cinq chemins ne sont PAS des appels — ce garde n'en emet
+        // api-path: ces six chemins ne sont PAS des appels — ce garde n'en emet
         // aucun. Il INSPECTE le chemin d'une requete deja formee, comme
         // `RefreshAuthenticator` compare son `apiPathPrefix` pour reconnaitre
         // les siennes. Les declarer ici est le seul moyen de decider par route ;
         // les derver d'une interface `*Api.kt` demanderait de lire une
         // annotation a l'execution, ce que la JVM ne rend pas ici.
         internal val SENSITIVE_PATHS = setOf(
-            // api-path: inspection, pas emission — la marque couvre les cinq.
+            // api-path: inspection, pas emission — la marque couvre les six.
             "/auth/login",
+            "/auth/login/2fa",
             "/auth/register",
             "/auth/2fa/disable",
             "/users/me/password",
             "/me/account/deletion",
         )
 
-        /** Le garde arme avec ses deux niveaux fixes — le seul montage correct. */
+        /**
+         * Le garde arme avec ses deux niveaux fixes — le seul montage correct.
+         *
+         * L'EN-TETE `Authorization` (le jeton porteur) et `Cookie` (la session
+         * anonyme) sont redigés SUR LES DEUX loggers, sans condition de route
+         * (#4843) : contrairement au corps, un jeton d'authentification part
+         * sur TOUTE requete authentifiee — une liste de routes serait fausse
+         * des la premiere route protegee ajoutee demain. `redactHeader` est la
+         * seule redaction native d'`HttpLoggingInterceptor` ; c'est le mecanisme
+         * prevu pour cet usage exact.
+         */
         fun atLevel(full: HttpLoggingInterceptor.Level): SensitiveBodyLoggingGuard =
             SensitiveBodyLoggingGuard(
-                full = HttpLoggingInterceptor().apply { level = full },
+                full = HttpLoggingInterceptor().apply {
+                    level = full
+                    redactHeader("Authorization")
+                    redactHeader("Cookie")
+                },
                 sensitive = HttpLoggingInterceptor().apply {
                     level = HttpLoggingInterceptor.Level.BASIC
+                    redactHeader("Authorization")
+                    redactHeader("Cookie")
                 },
             )
     }
