@@ -243,11 +243,21 @@ test('chaque format tient SON brouillon, et ne déborde pas sur l’autre', asyn
 });
 
 /**
- * PUBLIER FERME LE BROUILLON. Sans cet effacement, revenir au composer après
+ * LA PUBLICATION PARTIE EFFACE LE BROUILLON — jamais la SOUMISSION elle-même
+ * (#5390, RÈGLE 3 réécrite). Sans cet effacement, revenir au composer après
  * avoir publié reposerait le texte qu'on vient d'envoyer au monde — et le
  * geste suivant serait de le republier.
+ *
+ * CE TÉMOIN GAGEAIT « `submit` efface » — le nom disait le VIEUX contrat.
+ * `submit` n'efface plus : un échec réseau à la soumission doit CONSERVER le
+ * brouillon (`v3-composer-medias.spec.ts`, témoin E3) — c'est le document
+ * `?publie=1` lui-même, servi par le SERVEUR une fois la publication
+ * confirmée, qui porte `data-publie="1"` et déclenche l'effacement. Il faut
+ * donc attendre que CE document ait fini de tourner (son propre
+ * `data-brouillon="arme"`) avant de partir : sans cette attente, la
+ * navigation suivante peut couper le script avant qu'il n'ait effacé.
  */
-test('publier efface le brouillon', async ({ browser }) => {
+test('la publication PARTIE efface le brouillon, pas la soumission', async ({ browser }) => {
   const ctx = await contexte(browser);
   const page = await ctx.newPage();
 
@@ -256,6 +266,7 @@ test('publier efface le brouillon', async ({ browser }) => {
   await page.locator('#c-texte').fill('ceci part au monde');
   await page.locator('button[type="submit"]').click();
   await page.waitForURL(/publie=1/);
+  await attendsLeModule(page);
 
   await page.goto(`${v3.base}/composer`, { waitUntil: 'domcontentloaded' });
   await attendsLeModule(page);

@@ -128,7 +128,7 @@ export class PostTranslationService {
     const force = options.force === true;
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { content: true, originalLanguage: true, translations: true, storyEffects: true },
+      select: { content: true, originalLanguage: true, detectedLanguage: true, translations: true, storyEffects: true },
     });
 
     if (!post) {
@@ -165,7 +165,11 @@ export class PostTranslationService {
       return;
     }
 
-    const sourceLang = post.originalLanguage ?? detectLanguage(post.content);
+    // Même priorité qu'à la création (`translatePost`, #5349/#5422) : la
+    // revendication de l'auteur d'abord, puis la mesure on-device PERSISTÉE
+    // (jamais recalculée), et seulement en dernier recours la détection regex
+    // — une supposition, pas une mesure.
+    const sourceLang = post.originalLanguage ?? post.detectedLanguage ?? detectLanguage(post.content);
 
     if (sourceLang === targetLanguage) {
       log.info('PostTranslation: target same as source, skipping', { postId, targetLanguage });

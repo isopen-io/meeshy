@@ -24,7 +24,7 @@ import {
 import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types';
 import { disconnectRevokedSessions } from '../socketio/disconnectRevokedSessions';
 import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
-import { logError } from '../utils/logger.js';
+import { logError, logWarn } from '../utils/logger.js';
 
 // Zod schemas for request validation
 // Note: captchaToken is now optional as we use built-in bot protection instead
@@ -320,7 +320,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           io: fastify.socketIOHandler?.getManager?.()?.getIO(),
           userId: result.userId ?? '',
           reason: 'password_changed',
-          onError: (err) => fastify.log.warn({ err }, '[PasswordReset] socket fanout failed after reset'),
+          onError: (err) => logWarn(fastify.log, '[PasswordReset] socket fanout failed after reset', err),
         });
         return sendSuccess(reply, { message: result.message });
       } else {

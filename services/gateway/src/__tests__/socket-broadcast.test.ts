@@ -83,10 +83,14 @@ describe('broadcastToUser', () => {
       userId: 'u',
       categoryId: 'cat-1',
     })).toBe(false);
+    // `logWarn` (utils/logger.ts) — jamais `fastify.log.warn` directement
+    // (#5415) — sert le message en un seul appel puisqu'aucune cause n'est
+    // fournie ici.
     expect((fastify.log.warn as jest.Mock)).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'u', event: SERVER_EVENTS.CATEGORY_DELETED }),
       expect.stringContaining('Socket.IO layer unavailable'),
     );
+    expect((fastify.log.warn as jest.Mock).mock.calls[0][0]).toContain('u');
+    expect((fastify.log.warn as jest.Mock).mock.calls[0][0]).toContain(SERVER_EVENTS.CATEGORY_DELETED);
   });
 
   test('swallows emit errors, returns false, and logs the failure', () => {
@@ -102,10 +106,11 @@ describe('broadcastToUser', () => {
       }),
     });
     expect(broadcastToUser(fastify, 'u', 'x', {})).toBe(false);
+    // `logWarn` sert le message d'abord, puis la cause dans un second appel.
     expect((fastify.log.warn as jest.Mock)).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'u', event: 'x', err: expect.any(Error) }),
       expect.stringContaining('emit failed'),
     );
+    expect((fastify.log.warn as jest.Mock)).toHaveBeenCalledWith('boom');
   });
 
   test('resolveSocketIO returns null without handler', () => {

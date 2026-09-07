@@ -49,7 +49,7 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
 import { WIRE_BROADCAST, isCanvasV3, unclaimedCanvasMediaIds } from '../../services/posts/storyEffectsV3';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
-import { logError } from '../../utils/logger.js';
+import { logError, logWarn } from '../../utils/logger.js';
 
 /**
  * Écriture stricte de `storyEffects` (spec §C3, O15) — DERRIÈRE
@@ -402,15 +402,14 @@ export function registerCoreRoutes(
         // supprimé qui ressuscite), d'où le 410 rendu par le catch de la route.
         replayCost: 'diverges',
         op: () => {
-          // `detectedLanguage` n'est PAS une entrée de `PostService.createPost`
-          // (§ Prisme, #5349) : elle ne se persiste jamais sur `Post`, elle ne
-          // sert qu'à `runPublicationEffects` ci-dessous, sur le pipeline de
-          // traduction. La séparer ici, plutôt que de la laisser traverser par
-          // le spread, empêche qu'elle ne devienne un jour un champ Prisma
-          // implicite au premier renommage voisin.
-          const { detectedLanguage: _detectedLanguage, ...postServiceData } = parsed.data;
+          // `detectedLanguage` (#5349) EST désormais une entrée de
+          // `PostService.createPost`, persistée sur `Post` (#5422) : sans elle,
+          // une traduction demandée après coup (`translateOnDemand`) retombait
+          // sur la détection regex du serveur au lieu de la mesure on-device
+          // déjà faite à la création. Elle traverse donc par le spread comme le
+          // reste de `parsed.data`, au même titre qu'`originalLanguage`.
           return postService.createPost({
-            ...postServiceData,
+            ...parsed.data,
             content: parsed.data.content !== undefined ? SecuritySanitizer.sanitizeText(parsed.data.content) : undefined,
             type: parsed.data.type ?? 'POST',
             visibility: parsed.data.visibility ?? (parsed.data.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
@@ -634,11 +633,11 @@ export function registerCoreRoutes(
           // peuvent pas diverger sur un même payload.
           socialEvents.broadcastStoryUpdated(broadcastPost, authContext.registeredUser.id, {
             engagementReset: storyContentEditRequested(parsed.data),
-          }).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast story updated failed'));
+          }).catch((err) => logWarn(fastify.log, '[PUT /posts/:postId]: broadcast story updated failed', err));
         } else if (updatedPostType === 'STATUS') {
-          socialEvents.broadcastStatusUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast status updated failed'));
+          socialEvents.broadcastStatusUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => logWarn(fastify.log, '[PUT /posts/:postId]: broadcast status updated failed', err));
         } else {
-          socialEvents.broadcastPostUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast post updated failed'));
+          socialEvents.broadcastPostUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => logWarn(fastify.log, '[PUT /posts/:postId]: broadcast post updated failed', err));
         }
       }
 
@@ -688,7 +687,7 @@ export function registerCoreRoutes(
       broadcastPostRemoval(
         fastify.socialEvents,
         result,
-        (err) => fastify.log.warn({ err }, '[DELETE /posts/:postId]: broadcast deletion failed')
+        (err) => logWarn(fastify.log, '[DELETE /posts/:postId]: broadcast deletion failed', err)
       );
 
       return sendSuccess(reply, { deleted: true });

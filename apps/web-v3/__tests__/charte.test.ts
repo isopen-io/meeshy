@@ -23,6 +23,7 @@ import { FEUILLE_DE_L_ESPACE } from '@/app/connecte/espace-feuille';
 import { FEUILLE_DES_NOTIFS } from '@/app/connecte/notifs-feuille';
 import { FEUILLE_DES_APPELS } from '@/app/connecte/appels-feuille';
 import { FEUILLE_DES_COMMUNAUTES } from '@/app/connecte/communautes-feuille';
+import { FEUILLE_DU_COMPOSER } from '@/app/connecte/composer-feuille';
 import { FEUILLE_DES_PREFS } from '@/app/connecte/prefs-feuille';
 import { FEUILLE_DU_PROFIL } from '@/app/connecte/profil-feuille';
 import { FEUILLE_DU_FIL_SOCIAL } from '@/app/connecte/social-feuille';
@@ -91,6 +92,13 @@ const FEUILLES: readonly Feuille[] = [
   { nom: 'app/connecte/prefs-feuille.ts', source: FEUILLE_DES_PREFS },
   { nom: 'app/connecte/appels-feuille.ts', source: FEUILLE_DES_APPELS },
   { nom: 'app/connecte/communautes-feuille.ts', source: FEUILLE_DES_COMMUNAUTES },
+  // `/composer` (#4966, médias #5390) — la feuille d'un écran LIVRÉ qui
+  // n'était portée par AUCUNE règle de la charte : ni pixel, ni rayon, ni
+  // couleur littérale, ni hauteur d'action ne l'opposaient. Trouvée en
+  // relisant #5390, qui l'a fait GROSSIR (grille d'aperçus, tuile d'ajout).
+  // Une feuille absente de cette liste est une feuille hors charte, et rien
+  // ne le disait.
+  { nom: 'app/connecte/composer-feuille.ts', source: FEUILLE_DU_COMPOSER },
 ];
 
 const TOUTES = FEUILLES.map((feuille) => feuille.source).join('');
@@ -174,6 +182,7 @@ describe('la liste des feuilles portées à la charte', () => {
       'app/connecte/prefs-feuille.ts',
       'app/connecte/appels-feuille.ts',
       'app/connecte/communautes-feuille.ts',
+      'app/connecte/composer-feuille.ts',
     ]);
     expect(TOUTES.length).toBeGreaterThan(0);
   });
@@ -761,6 +770,16 @@ describe('règle 13 — un accent, cinq emplois', () => {
     // (manqué, répondu) restent sur `--color-danger`/`--color-success`, hors
     // de cette liste — règle 13 ne gouverne que l'ACCENT.
     '.appel .tuile.video',
+    // `/composer` (#4966) — DEUX contrôles SÉLECTIONNÉS, l'accent en fond ou
+    // en trait : l'onglet COURANT du format, même emploi que
+    // `.source[aria-current]` des commentaires et `.puces.filtres
+    // .puce[aria-current]` de la galerie ; et l'humeur COCHÉE, même emploi que
+    // `.prisme-multi … :checked` du fil social. Le titre, le champ de texte,
+    // l'aide, la grille des médias et la tuile « + Ajouter » (#5390) restent
+    // sur l'encre et sur `--color-border-interactive` — la tuile pointillée
+    // est un cliquable NEUTRE, pas une action primaire.
+    '.composer .onglets a[aria-current="page"]',
+    '.composer .humeurs label:has(input:checked)',
   ];
 
   it('ne peint avec l’accent que les sélecteurs de la liste nommée', () => {

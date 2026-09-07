@@ -47,6 +47,7 @@ jest.mock('../../../utils/response', () => ({
 }));
 
 jest.mock('../../../utils/logger', () => ({
+  ...(jest.requireActual('../../../utils/logger') as object),
   logger: {
     info: jest.fn(),
     debug: jest.fn(),
