@@ -39,7 +39,7 @@ const aliasPreact = [
 /**
  * VARIANTE B (Capacitor) : la coque native charge le bundle depuis le systeme
  * de fichiers, jamais depuis une origine http. Les chemins absolus casseraient
- * — d'ou la base relative. `MEESHY_CIBLE=capacitor` bascule la construction.
+ * — d'ou la base relative. `MEESHY_TARGET=capacitor` bascule la construction.
  */
 const forCapacitor = process.env.MEESHY_TARGET === 'capacitor';
 
