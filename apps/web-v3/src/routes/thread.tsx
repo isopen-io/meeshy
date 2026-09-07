@@ -5,7 +5,7 @@ import { Avatar } from '@/components/avatar';
 import { Bubble } from '@/components/bubble';
 import { Composer } from '@/components/composer';
 import { Glyph } from '@/components/glyph';
-import { CONVERSATIONS, PARTICIPANTS, THREAD_MESSAGES, VIEWER_ID } from '@/lib/api/fixtures';
+import { CONVERSATIONS, PARTICIPANTS, VIEWER_ID, messagesOf } from '@/lib/api/fixtures';
 import type { Message } from '@/lib/api/types';
 import { accentOf, withAccent } from '@/lib/accent';
 import { initialsOf, isGroup, peerOf, presenceOf, titleOf, unreadOf } from '@/lib/view/conversation';
@@ -13,6 +13,8 @@ import { useParams } from '@/lib/router';
 import { dayLabel, place } from '@/lib/grouping';
 import { Link } from '@/routes/route-table';
 import { READER_LANGUAGES } from '@/lib/reader';
+import { useOnline } from '@/lib/net/online';
+import type { LocalDelivery } from '@/lib/view/message';
 
 /**
  * LE FIL.
@@ -29,8 +31,22 @@ export default function ThreadScreen() {
   const { conversation: id } = useParams<'/c/$conversation'>();
   const conversation = CONVERSATIONS.find((c) => c.id === id) ?? CONVERSATIONS[0]!;
   const [expanded, setExpanded] = useState(false);
-  const [messages, setMessages] = useState<readonly Message[]>(THREAD_MESSAGES);
+  const [messages, setMessages] = useState<readonly Message[]>(() => messagesOf(id));
   const [typing] = useState(true);
+  const online = useOnline();
+
+  /**
+   * L'ÉTAT LOCAL D'UN ENVOI — à CÔTÉ du domaine, jamais dedans.
+   *
+   * « en attente » et « échoué » ne sont pas des champs de `Message` : le
+   * serveur ne les sert pas, il ne les connaît même pas. Ce sont des états de
+   * CE client, pour CE message, jusqu'à ce que le transport tranche. Les
+   * graver dans la charge en ferait des données, et une charge remise à un
+   * autre lecteur porterait un « échec » qui n'est pas le sien.
+   */
+  const [localDelivery, setLocalDelivery] = useState<ReadonlyMap<string, LocalDelivery>>(new Map());
+  const setDelivery = (messageId: string, state: LocalDelivery) =>
+    setLocalDelivery((previous) => new Map(previous).set(messageId, state));
 
   const otherUnread = CONVERSATIONS.filter((c) => c.id !== conversation.id).reduce(
     (total, c) => total + unreadOf(c),
@@ -125,10 +141,23 @@ export default function ThreadScreen() {
      * pendant deux secondes.
      */
     const now = new Date();
+    const localId = `local-${now.getTime()}`;
+    /**
+     * `navigator.onLine === false` est FIABLE : le système sait qu'aucune
+     * interface n'est disponible. On marque donc l'échec TOUT DE SUITE plutôt
+     * que de laisser une horloge tourner sur un envoi qui ne partira pas —
+     * c'est la différence entre une application qui dit la vérité et une qui
+     * fait semblant, et sur le réseau visé c'est le cas nominal.
+     *
+     * En ligne, l'état reste « en attente » : sans transport (#5493), aucune
+     * confirmation n'existe, et peindre « remis » serait un mensonge. Le
+     * manque se VOIT plutôt que de se cacher.
+     */
+    setDelivery(localId, online ? 'pending' : 'failed');
     setMessages((previous) => [
       ...previous,
       {
-        id: `local-${now.getTime()}`,
+        id: localId,
         conversationId: conversation.id,
         senderId: VIEWER_ID,
         ...(viewer === undefined ? {} : { sender: viewer }),
@@ -152,6 +181,14 @@ export default function ThreadScreen() {
       },
     ]);
   };
+
+  /**
+   * LA REPRISE. Elle ne PROMET rien : elle remet le message en attente si le
+   * réseau est revenu, et le laisse en échec sinon. Un bouton « Réessayer »
+   * qui repasse en « en attente » alors que l'appareil est toujours coupé
+   * ferait tourner une horloge pour rien — l'utilisateur croirait que ça part.
+   */
+  const retry = (messageId: string) => setDelivery(messageId, online ? 'pending' : 'failed');
 
   return (
     /* `h-dvh` + `overflow-hidden`, et NON `min-h-dvh` : c'est ce qui fait la
@@ -240,6 +277,26 @@ export default function ThreadScreen() {
             />
           </button>
         </div>
+        {/*
+          LE BANDEAU DE COUPURE. Discret et NON bloquant : l'application lit
+          parfaitement hors ligne (précache), donc annoncer la coupure par un
+          voile ou une modale punirait l'utilisateur pour un état où tout ce
+          qu'il veut lire est déjà là. Ce qu'il doit savoir tient en une
+          phrase : ce qu'il ÉCRIT ne partira pas maintenant.
+        */}
+        {online ? null : (
+          <p
+            role="status"
+            className="flex items-center justify-center gap-1.5 px-4 py-1 text-check font-semibold"
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--color-warn) 22%, transparent)',
+              color: 'var(--color-ios-ink)',
+            }}
+          >
+            <Glyph name="warningCircle" size={11} />
+            Hors ligne — vos messages partiront à la reconnexion
+          </p>
+        )}
       </header>
 
       <main
@@ -268,6 +325,25 @@ export default function ThreadScreen() {
           payé sur ses rangées ; il est venu deux fois parce qu'il ne se voit
           ni au type-check ni à l'œil, seulement à la mesure.
         */}
+        {placed.length === 0 ? (
+          /*
+            L'ÉTAT VIDE EST UN ÉTAT, pas une absence d'écran. Un fil sans
+            historique qui rend du blanc laisse croire à un chargement qui ne
+            finit pas — sur un réseau lent, c'est l'interprétation la plus
+            naturelle et la plus fausse.
+          */
+          <div className="grid flex-1 place-items-center px-8 text-center">
+            <div className="grid gap-2">
+              <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+                Aucun message pour l’instant
+              </p>
+              <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
+                Écrivez le premier — il sera traduit dans la langue de chacun.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         <ol
           style={{
             position: 'relative',
@@ -307,7 +383,18 @@ export default function ThreadScreen() {
                   </span>
                 </div>
               ) : null}
-              <Bubble place={p} languages={READER_LANGUAGES} isGrouped={group} viewerId={VIEWER_ID} />
+              <Bubble
+                place={p}
+                languages={READER_LANGUAGES}
+                isGrouped={group}
+                viewerId={VIEWER_ID}
+                {...(localDelivery.has(p.message.id)
+                  ? {
+                      localDelivery: localDelivery.get(p.message.id) as LocalDelivery,
+                      onRetry: () => retry(p.message.id),
+                    }
+                  : {})}
+              />
             </li>
             );
           })}

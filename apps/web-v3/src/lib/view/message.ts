@@ -19,6 +19,16 @@ import type { Attachment, Message } from '@/lib/api/types';
 /** La coche du pied de bulle — quatre paliers, dans l'ordre. */
 export type Delivery = 'pending' | 'sent' | 'delivered' | 'read';
 
+/**
+ * L'état d'un envoi DE CE CLIENT, tant que le transport n'a pas tranché.
+ *
+ * Il ne vit pas sur `Message` et n'y vivra jamais : le serveur ne sert pas
+ * « échoué », il ne le connaît pas. C'est une opinion locale sur une charge
+ * qui, elle, est partageable — les confondre ferait voyager l'échec d'un
+ * appareil jusqu'à l'écran d'un autre.
+ */
+export type LocalDelivery = 'pending' | 'failed';
+
 export const isMineOf = (message: Message, viewerId: string): boolean => message.senderId === viewerId;
 
 /**
