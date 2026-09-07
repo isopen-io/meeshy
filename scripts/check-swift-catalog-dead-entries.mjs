@@ -142,7 +142,14 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // (écran de parrainage, partage du code) sont portés par les issues sœurs du
 // même milestone, pas par celle-ci, qui ne livre que la route serveur et son
 // exposition dans les catalogues générés.
-const BASELINE_DEAD_ENTRIES = 250;
+//
+// 250 → 251 (#3600) : `PostsEndpoint.byPostIdMediaByMediaIdExport` (nouvelle
+// route `GET /posts/:postId/media/:mediaId/export`, export watermarké côté
+// serveur) — morte à la naissance PAR CONSTRUCTION : cette issue ne livre que
+// la route serveur (watermark sharp/ffmpeg, cache) et son exposition dans les
+// catalogues générés. L'appel iOS (bouton d'export sur un média) est un
+// travail client à part, à ouvrir en issue de suivi le jour où l'écran existe.
+const BASELINE_DEAD_ENTRIES = 251;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

@@ -195,7 +195,15 @@ export const parseCatalogBlock = (blockLines) => {
 // et les équivalents iOS/Android). Le catalogue déclare la route avant que
 // la première surface ne l'appelle — à retirer de ce compte le jour où l'une
 // de ces issues câble un premier appelant.
-const BASELINE_DEAD_ENTRIES = 270;
+//
+// 270 → 271 (#3600) : `posts.byPostIdMediaByMediaIdExport`
+// (`GET /posts/:postId/media/:mediaId/export`, export watermarké côté
+// serveur) — morte à la naissance PAR CONSTRUCTION, même forme que
+// `users.meReferralCode` ci-dessus : cette issue livre la route serveur
+// (watermark sharp/ffmpeg, cache) et son exposition dans les catalogues
+// générés ; l'appelant web (bouton d'export sur un média de post) est un
+// travail d'écran séparé, à ouvrir en issue de suivi.
+const BASELINE_DEAD_ENTRIES = 271;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

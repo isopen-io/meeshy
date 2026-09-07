@@ -187,10 +187,15 @@ ENV NODE_ENV=production \
     BUILD_DATE=${BUILD_DATE}
 
 # Runtime dependencies only (no build tools!)
+# fonts-dejavu-core : police du watermark serveur (#3600, drawtext ffmpeg +
+# overlay SVG sharp) — sans elle, drawtext échoue faute de `fontfile` et sharp
+# rend le texte de l'overlay avec la police de substitution de fontconfig
+# (jamais celle attendue par `WATERMARK_FONT_FILE`, `services/media/mediaWatermark.ts`).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tini \
     curl \
     ffmpeg \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -g 1001 nodejs \
     && useradd -u 1001 -g nodejs -m gateway \
