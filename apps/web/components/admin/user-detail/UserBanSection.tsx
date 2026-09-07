@@ -77,6 +77,10 @@ export function UserBanSection({ userId, onUpdate }: UserBanSectionProps) {
   }, [userId, t]);
 
   useEffect(() => {
+    // Même patron que `UserReportsSection.tsx` (chargement initial d'une
+    // section admin) : pas de donnée à synchroniser depuis les props,
+    // l'effet DÉCLENCHE la requête au montage.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
