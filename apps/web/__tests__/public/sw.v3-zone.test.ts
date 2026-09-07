@@ -4,7 +4,7 @@
  * `apps/web` enregistre son Service Worker sur `scope: '/'` — DEUX sites, même
  * script, même portée (`utils/service-worker.ts:28-31`, monté sans condition
  * par `app/layout.tsx:93` ; `utils/service-worker-registration.ts:95-97`, pour
- * FCM) : il voit donc TOUTE l'origine, la zone `/__v3` de `apps/web-v3`
+ * FCM) : il voit donc TOUTE l'origine, la zone `/__v3` de `apps/web-old-version3`
  * comprise. Sa branche « App Shell » est un cache-first qui attrape les
  * navigations, le JS, le CSS, les polices et les images. Traefik n'est donc pas
  * le seul aiguilleur de `meeshy.me` — ce worker en est un SECOND, non déclaré,

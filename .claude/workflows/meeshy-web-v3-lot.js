@@ -1,7 +1,7 @@
 export const meta = {
   name: 'meeshy-web-v3-lot',
-  description: 'Avancer la v3 web d un lot : cadrer, ouvrir les issues, implementer, revue croisee sonnet puis opus, gates, pousser sur dev',
-  whenToUse: "Reveille par la routine planifiee « Meeshy web v3 », ou lance a la main pour avancer d'un lot.",
+  description: '[GELÉ 2026-09-07 — la v3 en développement est annulée, voir apps/web-v3] Avancer la v3 web d un lot : cadrer, ouvrir les issues, implementer, revue croisee sonnet puis opus, gates, pousser sur dev',
+  whenToUse: "NE PAS INVOQUER — gelé le 2026-09-07 : apps/web-old-version3 est ANNULÉE ; le chantier est apps/web-v3 (ex web-v4) (voir #5491). Historiquement : reveille par la routine planifiee « Meeshy web v3 », ou lance a la main pour avancer d'un lot.",
   phases: [
     { title: 'Cadrer', detail: "lire l'ordre calcule, mesurer ce qui est fait, choisir le lot suivant" },
     { title: 'Ouvrir', detail: 'une issue GitHub par ecran, AVANT la premiere ligne de code' },
@@ -12,11 +12,33 @@ export const meta = {
   ],
 }
 
+/**
+ * GELÉ — directive porteur du 2026-09-07.
+ *
+ * `apps/web-v3` ne reçoit plus aucun développement : elle sera décommissionnée
+ * au profit de `apps/web-v3` (ex `web-v4`). Ce workflow existait pour la faire avancer ; le
+ * laisser exécutable le rendrait capable de rouvrir un chantier que la
+ * direction a fermé — et il est déclenchable par une routine, donc sans qu'un
+ * humain le relise au moment où il part.
+ *
+ * Il n'est pas SUPPRIMÉ : il porte l'histoire de la méthode (ordre des écrans,
+ * revue croisée, gates) dont la v4 hérite. Il refuse simplement de tourner.
+ *
+ * Ce qui le remplace : le milestone « La v4 remplace la v3 en production ».
+ */
+throw new Error(
+  "meeshy-web-v3 est GELÉ (directive porteur 2026-09-07) : apps/web-old-version3 ne reçoit plus " +
+    "de développement et est annulée au profit de apps/web-v3 (ex web-v4). " +
+    "Voir le milestone « La v4 remplace la v3 en production » et le § GEL DE LA V3 du CLAUDE.md racine. " +
+    "Seule exception, hors de ce workflow : un incident de production ou une faille de sécurité sur la v3.",
+)
+
+
 const REPO = '/home/user/meeshy'
 const D = `${REPO}/docs/product/MeeshyWebV3Design`
 
 const SOCLE = `
-TU TRAVAILLES SUR LA V3 WEB DE MEESHY, dans le monorepo ${REPO}, sur la branche dev.
+TU TRAVAILLES SUR L'ANCIENNE V3 WEB (apps/web-old-version3), ANNULEE, dans le monorepo ${REPO}, sur la branche dev.
 
 LIS CECI AVANT TOUT — ce sont les sources de verite, dans cet ordre :
 1. ${D}/conception-web-v3.md   la conception ARRETEE : stack, architecture, regle de placement,
@@ -101,7 +123,7 @@ TA MISSION — CADRER le prochain lot. Tu ne modifies AUCUN fichier de productio
 
 1. Lis ${D}/ordre.md et ${D}/matrice.json.
 2. MESURE ce qui existe deja : \`ls apps/web-v3\` (le paquet existe-t-il ?), quelles routes sont
-   presentes sous apps/web-v3/app/, quels paquets packages/design-tokens et packages/icons
+   presentes sous apps/web-old-version3/app/, quels paquets packages/design-tokens et packages/icons
    existent, si \`node ${D}/ordre-des-ecrans.js\` passe, et l'etat de git (\`git log --oneline -15\`,
    \`git status --short\`).
 3. Regarde les issues GitHub deja ouvertes pour la v3 (outils mcp__github__, label "web",
@@ -360,8 +382,8 @@ TA MISSION — FAIRE PASSER LES GATES, et CORRIGER ce qui est rouge.
 
 Dans cet ordre, en t'arretant pour corriger des qu'un gate est rouge :
 1. \`node ${D}/ordre-des-ecrans.js\`   (rc doit etre 0 ; il regenere ordre.md)
-2. type-check strict du paquet touche : \`cd apps/web-v3 && npx tsc --noEmit\`
-   (si apps/web-v3 n'existe pas encore, dis non-applicable et passe)
+2. type-check strict du paquet touche : \`cd apps/web-old-version3 && npx tsc --noEmit\`
+   (si apps/web-old-version3 n'existe pas encore, dis non-applicable et passe)
 3. lint du paquet touche
 4. tests unitaires du paquet touche
 5. conformite visuelle : \`node ${D}/compare-rendu.js --base http://127.0.0.1:3300 --vues <les vues de ce lot>\`

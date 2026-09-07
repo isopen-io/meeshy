@@ -21,7 +21,7 @@
 <sc-if value="{{ canBack }}" hint-placeholder-val="{{ true }}"><span onClick="{{ back }}" style="color:var(--meeshy-p);display:flex;cursor:pointer;padding:4px" style-hover="opacity:.7"><i class="ph ph-caret-left" style="font-size:26px;line-height:1"></i></span></sc-if>
 <div style="flex:1;min-width:0"><div style="font:700 22px var(--font-body);color:var(--color-text);letter-spacing:-.01em">{{ title }}</div><div style="font:400 12.5px var(--font-body);color:var(--color-neutral-600)">{{ subtitle }}</div></div>
 <sc-if value="{{ hasHeaderAction }}" hint-placeholder-val="{{ true }}"><span onClick="{{ headerAction }}" style="font:600 15px var(--font-body);color:var(--meeshy-p);cursor:pointer">{{ headerActionLabel }}</span></sc-if>
-<!-- `raccourcisEntete` (`apps/web-v3/app/connecte/espace-vue.ts`) — DANS LE
+<!-- `raccourcisEntete` (`apps/web-old-version3/app/connecte/espace-vue.ts`) — DANS LE
      FLUX, en fin d'en-tête, jamais un rail flottant (#5164). Deux cibles au
      MÊME gabarit tertiaire (44 px, contour), jamais un rond primaire plein :
      l'espace membre n'est pas l'action principale de l'écran qui l'ouvre. -->
@@ -37,7 +37,7 @@
 <div style="flex:1;min-height:0;overflow-y:auto;position:relative">
 
 <!-- LA VITRINE — `/` pour un visiteur (directive 2026-09-01). Contenu du legacy repris mot pour
-     mot (apps/web-v3/app/vitrine/contenu.ts) ; forme de la charte retenue au 2026-09-02
+     mot (apps/web-old-version3/app/vitrine/contenu.ts) ; forme de la charte retenue au 2026-09-02
      (« app-moderne », conception § 12.5) : héros à gros CTA (56 / 52 px), atouts en cartes,
      mission, appel final, pied. Le héros porte l'UNIQUE dégradé du produit (règle 31 : deux
      jetons voisins, un seul sélecteur) ; ailleurs, aucun. Aucune image, aucune police web,
@@ -602,7 +602,7 @@
      le contenu dépassait un écran (le repli « bande réservée » ne protège que
      le défilement TOUT EN BAS). Les deux cibles sont désormais posées DANS LE
      FLUX, en tête de document — `raccourcisEntete`
-     (`apps/web-v3/app/connecte/espace-vue.ts`) — et seuls les QUATRE écrans qui
+     (`apps/web-old-version3/app/connecte/espace-vue.ts`) — et seuls les QUATRE écrans qui
      l'appellent réellement les montrent : le tableau de bord et `/chats`
      (site historique), rejoints par `/communities` et `/search` quand leur
      cible a montré les deux ronds sans que la classification d'origine ne
@@ -1071,7 +1071,7 @@ class Component extends DCLogic {
       // d'énumération que le refus 404 existe pour fermer. « 24 h » était faux
       // de surcroît (20 h, EPHEMERAL_POST_TTL_HOURS.STORY, #5033) : le corps
       // reprend désormais mot pour mot STORY.indisponible.corps
-      // (apps/web-v3/lib/contenu/story.ts), source unique de cette phrase.
+      // (apps/web-old-version3/lib/contenu/story.ts), source unique de cette phrase.
       storyFail: {
         icon: 'ph-sparkle', iconBg: 'rgba(148,151,171,.12)', iconFg: '#9397ab',
         title: 'Story indisponible',
@@ -1389,7 +1389,7 @@ class Component extends DCLogic {
       showComposerBar: isThread || isRights || isProfilMembre || isLienDepuisLeFil || screen === 'rich',
       // Les QUATRE écrans qui appellent réellement `raccourcisEntete` (jamais
       // une liste d'exclusion à large maille comme l'ancien `showFabs`) :
-      // `apps/web-v3/app/connecte/{vue,liste-vue,communautes-vue,recherche-vue}.ts`.
+      // `apps/web-old-version3/app/connecte/{vue,liste-vue,communautes-vue,recherche-vue}.ts`.
       showHeaderShortcuts: screen === 'home' || screen === 'chats' || screen === 'communities' || screen === 'search',
       memberIcon: s.sheet === 'member' ? 'ph-x' : 'ph-user-circle',
       tapFeeds: () => this.go('feed'),

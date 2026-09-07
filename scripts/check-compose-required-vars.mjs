@@ -25,7 +25,7 @@
 // La surface de l'invariant est le DÉPÔT — quatre fichiers de composition et
 // deux modèles d'environnement — pas une app. Et surtout : la matrice `test:`
 // de `.github/workflows/ci.yml` ne porte que `shared`, `web`, `gateway`,
-// `agent`. Un témoin écrit dans `apps/web-v3/__tests__/` ne tournerait dans
+// `agent`. Un témoin écrit dans `apps/web-old-version3/__tests__/` ne tournerait dans
 // AUCUN job : ce serait un contrôle INERTE, qui laisserait rouvrir au commit
 // suivant la régression qu'il prétend fermer. C'est exactement le chemin
 // qu'a déjà fait `check-makefile-workspaces.mjs`, dont l'en-tête le raconte.

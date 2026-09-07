@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <!-- `viewport-fit=cover` expose les encoches a env(safe-area-inset-*) : sans
+         lui, la coque Capacitor rend l'en-tete SOUS l'encoche. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0c14" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f1f3f9" media="(prefers-color-scheme: light)" />
+    <meta name="description" content="Messagerie multilingue temps reel" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Meeshy</title>
+    <!--
+      LE SEUL SCRIPT BLOQUANT DU DOCUMENT, et il tient en huit lignes.
+      Sans lui, le premier rendu se fait dans le schema du HTML (`dark`) puis
+      bascule quand l'application demarre : un eclair blanc sur chaque
+      demarrage a froid, c'est-a-dire exactement le cas de la 3G rurale, ou
+      l'application met plusieurs secondes a arriver. Il est INLINE parce
+      qu'une requete de plus le rendrait inutile.
+    -->
+    <script>
+      (function () {
+        try {
+          var choisi = localStorage.getItem('meeshy.schema');
+          var clair = choisi ? choisi === 'clair' : window.matchMedia('(prefers-color-scheme: light)').matches;
+          document.documentElement.classList.toggle('light', clair);
+          document.documentElement.classList.toggle('dark', !clair);
+        } catch (e) {
+          /* Mode privé, stockage refusé : le schema sombre du HTML reste. */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="racine"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

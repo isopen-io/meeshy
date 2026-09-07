@@ -1,0 +1,124 @@
+/* GÉNÉRÉ — ne pas éditer à la main.
+ *
+ * Produit par packages/design-tokens/scripts/genere-depuis-ios.mjs depuis
+ * MeeshyColors.swift et DesignTokens.swift, qui sont la SOURCE.
+ * Régénérer : cd packages/design-tokens && node scripts/genere-depuis-ios.mjs
+ * Vérifier  : … --verifie   (le gate de CI ; échoue si ce fichier a dérivé)
+ *
+ * POURQUOI CE FICHIER EXISTE (#5445) : la v4 web reprend l'interface iOS, donc
+ * elle a besoin des valeurs iOS. Elle les recopiait à la main — une seconde
+ * table, que la charte interdit. Elles sont désormais DÉRIVÉES.
+ *
+ * CE FICHIER NE REMPLACE PAS tokens.css, qui reste la table de la v3 : les deux
+ * assignent les mêmes couleurs à des RÔLES DIFFÉRENTS (design-tokens fait de
+ * indigo400 sa primaire, iOS de indigo500 ; les neutres de la v3 sont violacés,
+ * ceux d'iOS sont des gris vrais). Unifier ces rôles changerait le rendu de
+ * web-v3, ce qu'aucune décision n'a demandé — c'est le reste de #5445.
+ */
+
+:root,
+:root.dark {
+  /* La rampe indigo — la marque, identique dans les deux schémas. */
+  --ios-indigo-50: #eef2ff;
+  --ios-indigo-100: #e0e7ff;
+  --ios-indigo-200: #c7d2fe;
+  --ios-indigo-300: #a5b4fc;
+  --ios-indigo-400: #818cf8;
+  --ios-indigo-500: #6366f1;
+  --ios-indigo-600: #4f46e5;
+  --ios-indigo-700: #4338ca;
+  --ios-indigo-800: #3730a3;
+  --ios-indigo-900: #312e81;
+  --ios-indigo-950: #1e1b4b;
+
+  /* Les couleurs sémantiques et les neutres — hors schéma également. */
+  --ios-succes: #34d399;
+  --ios-erreur: #f87171;
+  --ios-erreur-forte: #ef4444;
+  --ios-erreur-sombre: #991b1b;
+  --ios-alerte: #fbbf24;
+  --ios-info: #60a5fa;
+  --ios-epingle: #3b82f6;
+  --ios-succes-profond: #10b981;
+  --ios-neutre-400: #9ca3af;
+  --ios-neutre-500: #6b7280;
+  --ios-neutre-600: #4b5563;
+
+  /* Les plans et les encres, schéma SOMBRE. */
+  --ios-plan-fond: #09090b;
+  --ios-plan-carte: #13111c;
+  --ios-encre: #eef2ff;
+  --ios-encre-2: #a5b4fc;
+  --ios-encre-3: color-mix(in srgb, #a5b4fc 70%, transparent);
+
+  /* L'échelle d'espace (MeeshySpacing). */
+  --ios-space-xs: 4px;
+  --ios-space-sm: 8px;
+  --ios-space-md: 12px;
+  --ios-space-lg: 16px;
+  --ios-space-xl: 20px;
+  --ios-space-xxl: 24px;
+  --ios-space-xxxl: 32px;
+
+  /* Les rayons déclarés (MeeshyRadius). « full » est une capsule côté CSS. */
+  --ios-radius-sm: 10px;
+  --ios-radius-md: 14px;
+  --ios-radius-lg: 16px;
+  --ios-radius-xl: 20px;
+  --ios-radius-xxl: 24px;
+  --ios-radius-full: 9999px;
+
+  /* Les tailles de police déclarées (MeeshyFont). */
+  --ios-font-caption: 10px;
+  --ios-font-footnote: 11px;
+  --ios-font-subhead: 13px;
+  --ios-font-body: 15px;
+  --ios-font-headline: 17px;
+  --ios-font-title: 22px;
+  --ios-font-largeTitle: 34px;
+
+  /* Ce que Swift porte en LITTÉRAL dans ses vues, hors de ses tables — voir
+     le tableau HORS_TABLE_IOS du générateur, qui vaut inventaire de ce que
+     iOS doit remonter chez lui. */
+  --ios-radius-bulle: 18px; /* Bubble/BubbleBackground.swift — cornerRadius: 18, littéral */
+  --ios-radius-champ: 22px; /* UniversalComposerBar+Recording.swift — RoundedRectangle(cornerRadius: 22) */
+  --ios-radius-citation: 12px; /* Bubble/BubbleQuotedReply.swift — style .card */
+  --ios-text-heure: 12px; /* BubbleFooter.swift — .caption de SwiftUI, hors MeeshyFont */
+  --ios-text-saisie: 16px; /* UniversalComposerBar — .callout de SwiftUI */
+  --ios-text-grand-titre: 28px; /* ConversationListView+Overlays.swift — .system(size: 28, weight: .bold) */
+  --ios-avatar-ligne: 52px; /* MeeshyAvatar.swift — contexte .conversationList */
+  --ios-avatar-entete: 44px; /* MeeshyAvatar.swift — contexte .conversationHeaderCollapsed */
+  --ios-avatar-bulle: 32px; /* MeeshyAvatar.swift — contexte .messageBubble */
+  --ios-avatar-empile: 28px; /* MeeshyAvatar.swift — contexte .conversationHeaderStacked */
+  --ios-avatar-frappe: 18px; /* MessageListViewController.swift — TypingIndicatorBubble, tenue bulle */
+  --ios-rond-entete: 28px; /* ConversationView+Header.swift — cercle visuel des actions (cible 44) */
+  --ios-bulle-moi: var(--ios-indigo-500); /* BubbleBackground.swift — brandPrimary, le MÊME dans toutes les conversations */
+  --ios-bulle-meta-moi: color-mix(in srgb, white 70%, transparent); /* BubbleFooter.swift:283 — metaColor quand isMe */
+  --ios-bulle-recue-opacite: 28%; /* BubbleBackground.swift — other.opacity(isDark ? 0.28 : 0.16) */
+  --ios-bulle-recue-filet-opacite: 34%; /* BubbleBackground.swift — strokeBorder(isDark ? 0.34 : 0.26) */
+  --ios-bulle-meta: color-mix(in srgb, white 55%, transparent); /* BubbleFooter.swift:283-285 — metaColor hors isMe */
+  --ios-accuse-lu: var(--ios-indigo-400); /* BubbleDeliveryCheck.swift — readTint */
+  --ios-citation-fond: color-mix(in srgb, white 8%, transparent); /* BubbleQuotedReply.swift — style .card, hôte non-isMe */
+  --ios-citation-fond-moi: color-mix(in srgb, white 15%, transparent); /* BubbleQuotedReply.swift — style .card, hôte isMe */
+  --ios-lisere: color-mix(in srgb, white 6%, transparent); /* ThemedConversationRow.swift:202-241 — strokeBorder de la carte, 0,5 px */
+  --ios-jour-encre: var(--ios-indigo-200); /* MessageDaySeparator.swift */
+  --ios-jour-filet: var(--ios-indigo-900); /* MessageDaySeparator.swift — strokeBorder */
+}
+
+:root.light {
+  --ios-plan-fond: #ffffff;
+  --ios-plan-carte: #f8f7ff;
+  --ios-encre: #1e1b4b;
+  --ios-encre-2: color-mix(in srgb, #4338ca 60%, transparent);
+  --ios-encre-3: color-mix(in srgb, #4338ca 80%, transparent);
+
+  --ios-bulle-recue-opacite: 16%;
+  --ios-bulle-recue-filet-opacite: 26%;
+  --ios-bulle-meta: color-mix(in srgb, black 50%, transparent);
+  --ios-accuse-lu: var(--ios-indigo-600);
+  --ios-citation-fond: color-mix(in srgb, black 5%, transparent);
+  --ios-citation-fond-moi: color-mix(in srgb, white 15%, transparent);
+  --ios-lisere: color-mix(in srgb, black 6%, transparent);
+  --ios-jour-encre: var(--ios-indigo-700);
+  --ios-jour-filet: var(--ios-indigo-200);
+}
