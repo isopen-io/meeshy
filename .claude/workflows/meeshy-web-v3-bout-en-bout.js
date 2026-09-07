@@ -20,6 +20,28 @@ export const meta = {
   ],
 }
 
+/**
+ * GELÉ — directive porteur du 2026-09-07.
+ *
+ * `apps/web-v3` ne reçoit plus aucun développement : elle sera décommissionnée
+ * au profit de `apps/web-v4`. Ce workflow existait pour la faire avancer ; le
+ * laisser exécutable le rendrait capable de rouvrir un chantier que la
+ * direction a fermé — et il est déclenchable par une routine, donc sans qu'un
+ * humain le relise au moment où il part.
+ *
+ * Il n'est pas SUPPRIMÉ : il porte l'histoire de la méthode (ordre des écrans,
+ * revue croisée, gates) dont la v4 hérite. Il refuse simplement de tourner.
+ *
+ * Ce qui le remplace : le milestone « La v4 remplace la v3 en production ».
+ */
+throw new Error(
+  "meeshy-web-v3 est GELÉ (directive porteur 2026-09-07) : apps/web-v3 ne reçoit plus " +
+    "de développement et sera décommissionnée au profit de apps/web-v4. " +
+    "Voir le milestone « La v4 remplace la v3 en production » et le § GEL DE LA V3 du CLAUDE.md racine. " +
+    "Seule exception, hors de ce workflow : un incident de production ou une faille de sécurité sur la v3.",
+)
+
+
 // ---------------------------------------------------------------------------
 // PARAMETRES
 // ---------------------------------------------------------------------------

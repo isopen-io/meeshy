@@ -3,6 +3,15 @@
 > ## ⛔ Aucune feature sans issue — règle de démarrage (directive 2026-08-26)
 > **Avant d'écrire la première ligne d'une feature, d'une amélioration ou d'un correctif non trivial**, ouvrir (ou retrouver) son **issue** dans `isopen-io/meeshy`, la placer dans un **milestone précis** (nommé par le résultat attendu, avec échéance) et l'inscrire au projet « Meeshy — pilotage » (https://github.com/orgs/isopen-io/projects/1) avec `Status = In Progress`. Le commit qui livre la ferme (`Closes #n`) avec sa preuve (gate, mesure, PR). **Une tâche sans issue n'existe pas ; un travail sans milestone n'est pas planifié.** Ce qu'on découvre en chemin (dette, dimension non mûre, suivi) devient une issue à son tour — jamais une ligne dans un fichier ou une page. Détail : § « Pilotage du développement » du `CLAUDE.md` racine.
 
+> ## 🛑 GEL DE LA V3 — toute l'activité web va à la V4 (directive porteur 2026-09-07)
+> **`apps/web-v3` est GELÉE.** Elle sera **décommissionnée** au profit de `apps/web-v4`, qui devient le SEUL chantier web. Aucune feature, aucune amélioration, aucun portage d'écran ne s'ouvre plus sur la v3 — y compris si une issue ouverte avant ce jour le demande, y compris si `ordre.md` ou la matrice des 31 vues le prévoit : **ces plans sont périmés, ils ne se rejouent pas.** Les skills `meeshy-web-v3-lot` et `meeshy-web-v3-bout-en-bout` ne s'invoquent plus.
+>
+> **L'UNIQUE exception : la v3 est ce qui SERT les utilisateurs jusqu'à la bascule.** Un incident de production, une faille de sécurité ou une régression bloquante s'y corrige — au minimum, et sans rien ajouter d'autre. Tout le reste attend la v4.
+>
+> **La v4 suit l'interface iOS**, pas la planche web : `apps/ios` et `packages/MeeshySDK` sont la référence de disposition, de hiérarchie, d'états et de gestes. La palette est DÉRIVÉE de `MeeshyColors.swift` (`packages/design-tokens/ios.css`, généré — voir #5445) ; `tokens.css` reste la table de la v3 et **mourra avec elle**, ce qui solde la coexistence des deux tables sans avoir à unifier leurs rôles.
+>
+> **Ce que la bascule coûte, mesuré, pour que personne ne le découvre en chemin** : la v3 sert **48 routes** (487 fichiers, 109 196 lignes) ; la v4 en sert **2** (2 256 lignes, sur fixtures, sans API ni temps réel). La parité est un chantier, pas une formalité — elle se pilote par le milestone « La v4 remplace la v3 en production » et ses issues, jamais par ce fichier.
+
 ## Project Overview
 Meeshy is a high-performance real-time messaging platform with multi-language translation, voice cloning, and end-to-end encryption. It supports 100k+ messages/second with simultaneous multi-language translation.
 
