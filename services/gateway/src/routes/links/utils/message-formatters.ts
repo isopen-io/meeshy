@@ -1,6 +1,7 @@
 import { transformTranslationsToArray } from '../../../utils/translation-transformer';
 import { resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
 import { mapMessageProtectionFields } from '../../conversations/messages-list-query';
+import { servedQuotedMessage } from '../../../services/messaging/servedQuotedMessage';
 
 /**
  * Extracts sender info from unified Participant model
@@ -133,14 +134,30 @@ export function formatLinkMessageWithDetails(message: any) {
  *
  * Ne recopie ni les pièces jointes ni les réactions du message cité — une
  * citation ne rend que son texte et son auteur.
+ *
+ * #4952 — `getConversationMessagesWithDetails` charge la ligne CITÉE en
+ * entier (`include`, pas `select`) : `replyTo.content` d'un message à vue
+ * unique / flouté / chiffré partait donc EN CLAIR vers la population la plus
+ * exposée d'un lien de partage — les visiteurs sans compte. `servedQuotedMessage`
+ * (site UNIQUE partagé avec la liste REST et `message:new` socket, cf.
+ * `services/messaging/servedQuotedMessage.ts`) remplace le texte par le
+ * placeholder et sert les quatre drapeaux dont la protection se DÉCLARE — les
+ * autres routes du dépôt les affichent déjà pour le message RACINE
+ * (`mapMessageProtectionFields`, `#4885`), la citation n'a aucune raison d'en
+ * savoir moins.
  */
 function formatReplyToMessage(replyTo: any) {
+  const guarded = servedQuotedMessage(replyTo, { includeTranslations: false });
   return {
     id: replyTo.id,
-    content: replyTo.content,
+    content: guarded['content'] !== undefined ? guarded['content'] : replyTo.content,
     originalLanguage: replyTo.originalLanguage || 'fr',
     messageType: replyTo.messageType,
     createdAt: replyTo.createdAt,
-    sender: extractSenderInfo(replyTo.sender)
+    sender: extractSenderInfo(replyTo.sender),
+    isViewOnce: Boolean(replyTo.isViewOnce),
+    isBlurred: Boolean(replyTo.isBlurred),
+    isEncrypted: Boolean(replyTo.isEncrypted),
+    effectFlags: replyTo.effectFlags ?? 0
   };
 }
