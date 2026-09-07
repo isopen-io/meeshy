@@ -59,6 +59,7 @@ backend/node_modules/
 # fichier ignoré n'y figurant pas. `apps/web-v3/scripts/check-git-tracking.mjs`
 # le fige désormais, pour la classe entière et pas seulement les `.d.*`.
 !apps/web-v3/src/*.d.ts
+!apps/web-v3/src/lib/*.d.ts
 !apps/web-v3/scripts/*.d.mts
 !apps/web-v3/scripts/lib/*.d.mts
 # `scripts/lib/navigateur.d.cts` type `scripts/lib/navigateur.cjs` — le site UNIQUE de

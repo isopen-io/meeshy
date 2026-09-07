@@ -35,6 +35,7 @@ import { PAGE_PARTNERS } from '../src/institutional/partners';
 import { PAGE_PRIVACY } from '../src/institutional/privacy';
 import { PAGE_TERMS } from '../src/institutional/terms';
 import type { ContentPage } from '../src/institutional/type';
+import { INLINE_SCHEME_BOOTSTRAP } from '../src/lib/inline-scheme-bootstrap.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DIST = join(HERE, '../dist');
@@ -85,15 +86,6 @@ function producedSheet(): string {
 const escape = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-/**
- * Le script de thème, INLINE et bloquant — le seul de ces pages.
- *
- * Sans lui, le premier rendu se fait dans le schéma du HTML puis bascule : un
- * éclair blanc à chaque démarrage à froid, c'est-à-dire exactement le cas du
- * réseau lent. Huit lignes valent mieux qu'un éclair.
- */
-const THEME_SCRIPT = `(function(){try{var c=localStorage.getItem('meeshy.scheme');var l=c?c==='light':window.matchMedia('(prefers-color-scheme: light)').matches;document.documentElement.classList.toggle('light',l);document.documentElement.classList.toggle('dark',!l);}catch(e){}})();`;
-
 function document(route: string, page: ContentPage, sheet: string): string {
   const body = render(<InstitutionalPage page={page} />);
   const url = `${ORIGIN}/${route}`;
@@ -120,7 +112,7 @@ function document(route: string, page: ContentPage, sheet: string): string {
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>${sheet}</style>
-<script>${THEME_SCRIPT}</script>
+<script>${INLINE_SCHEME_BOOTSTRAP}</script>
 </head>
 <body>${body}</body>
 </html>
@@ -153,6 +145,12 @@ function check(route: string, html: string, page: ContentPage): void {
   }
   if (!html.includes(`<link rel="canonical" href="${ORIGIN}/${route}">`)) failures.push('canonical absent ou faux');
   if (!html.includes('property="og:url"')) failures.push('og:url absent');
+  // Mesuré sur le fichier ÉCRIT, pas sur la constante importée : un gabarit
+  // qui échapperait mal `INLINE_SCHEME_BOOTSTRAP` produirait un script tronqué
+  // sans qu'aucun des invariants ci-dessus ne le voie (#5588).
+  if (!html.includes(`<script>${INLINE_SCHEME_BOOTSTRAP}</script>`)) {
+    failures.push("le script d'amorçage du schéma est absent ou altéré");
+  }
   if (!html.includes('property="og:description"')) failures.push('og:description absent');
   // ZÉRO script externe : c'est la promesse de ces pages. Le seul `<script>`
   // toléré est le thème, inline.
