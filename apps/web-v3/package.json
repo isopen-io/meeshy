@@ -13,12 +13,13 @@
     "mesure": "node scripts/mesure-poids.mjs",
     "cap:sync": "cap sync",
     "test": "bun test",
-    "gate": "bun run check:jetons && bun run type-check && bun test && bun run build && node scripts/mesure-poids.mjs && node scripts/verifie-institutionnel.mjs && node scripts/verifie-contexte-docker.mjs",
+    "gate": "bun run check:jetons && bun run type-check && bun test && bun run build && node scripts/mesure-poids.mjs && node scripts/verifie-institutionnel.mjs && node scripts/verifie-contexte-docker.mjs && node scripts/verifie-suivi-git.mjs",
     "check:jetons": "node ../../packages/design-tokens/scripts/genere-depuis-ios.mjs --verifie",
     "verifie:jetons": "node scripts/verifie-jetons.mjs",
     "test:coverage": "bun test --coverage",
     "verifie:institutionnel": "node scripts/verifie-institutionnel.mjs",
-    "verifie:contexte": "node scripts/verifie-contexte-docker.mjs"
+    "verifie:contexte": "node scripts/verifie-contexte-docker.mjs",
+    "verifie:suivi": "node scripts/verifie-suivi-git.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "5.102.8",

@@ -264,6 +264,7 @@ jobs:
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
           node scripts/mesure-poids.mjs
           node scripts/verifie-contexte-docker.mjs
+          node scripts/verifie-suivi-git.mjs
 
       - name: Type-check (apps/web — debt ratchet)
         run: bash scripts/check-type-debt.sh --self-test && bash scripts/check-type-debt.sh
