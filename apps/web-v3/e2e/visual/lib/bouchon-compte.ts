@@ -20,6 +20,7 @@ import {
   type EtatDeSuppressionDeBouchon,
 } from './bouchon-preferences';
 import { routesDuPush } from './bouchon-push';
+import { HEURES_DE_VIE_D_UNE_STORY } from '../../../lib/contenu/story-neuve';
 
 // Réexportées : `bouchon-preferences.ts` PORTE désormais ces cinq noms (§ son
 // propre en-tête) ; ce fichier les relaie pour que ses appelants existants
@@ -146,6 +147,14 @@ export type EtatDuCompteDeBouchon = {
   readonly mediasDePostEnAttente?: Map<string, { readonly id: string; readonly uploaderId: string; reclame: boolean }>;
   /** Les octets des pièces téléversées — pour résoudre `fileUrl`/`mimeType` d'un `PostMedia` réclamé. */
   readonly pieces?: Map<string, { readonly fileUrl: string; readonly mimeType: string }>;
+  /**
+   * LES POSTS CRÉÉS PAR `POST /api/v1/posts`, RELUS PAR `GET /api/v1/posts/:postId`
+   * (#5389) — sans cette table, `GET /:postId` sert TOUJOURS
+   * `PUBLICATION_DU_BOUCHON` (générique, sans média) : le témoin de bout en
+   * bout d'une story avec média ne peut alors jamais prouver que l'écran de
+   * LECTURE rend ce que l'écran d'ÉCRITURE vient d'envoyer.
+   */
+  readonly postsCrees?: Map<string, Record<string, unknown>>;
   /** La boîte de notifications du lecteur — servie par `GET /notifications`, mutée par `read-all`. */
   readonly boite: BoiteDeNotifsDeBouchon;
   /** Le fil de commentaires d'une publication — écrit par le POST, relu par le GET (#5091). */
@@ -860,24 +869,34 @@ export const routesDuCompte =
         .filter((m): m is { fileUrl: string; mimeType: string; width: null; height: null } => m !== null);
 
       const id = `p-neuf-${etat.publicationsRecues.length}`;
-      etat.filSocial.posts = [
-        {
-          id,
-          type: typeof recu.type === 'string' ? recu.type : 'POST',
-          content: typeof recu.content === 'string' ? recu.content : '',
-          originalLanguage: typeof recu.originalLanguage === 'string' ? recu.originalLanguage : null,
-          translations: {},
-          createdAt: new Date().toISOString(),
-          author: { id: MEMBRE.id, username: 'amina', displayName: MEMBRE.nom },
-          likeCount: 0,
-          commentCount: 0,
-          repostCount: 0,
-          isLikedByMe: false,
-          isRepostedByMe: false,
-          media,
-        },
-        ...etat.filSocial.posts,
-      ];
+      const genre = typeof recu.type === 'string' ? recu.type : 'POST';
+      const nouvelle = {
+        id,
+        type: genre,
+        content: typeof recu.content === 'string' ? recu.content : '',
+        originalLanguage: typeof recu.originalLanguage === 'string' ? recu.originalLanguage : null,
+        translations: {},
+        createdAt: new Date().toISOString(),
+        // UNE STORY EXPIRE (#5389) — `ephemeralExpiresAt`
+        // (`services/posts/ephemeralPosts.ts:90`) : la passerelle réelle pose
+        // TOUJOURS une échéance à la création d'une STORY, jamais un POST. Un
+        // bouchon qui l'omettrait servirait une forme qu'aucune story créée
+        // ne prend jamais côté serveur.
+        expiresAt: genre === 'STORY' ? new Date(Date.now() + HEURES_DE_VIE_D_UNE_STORY * 3_600_000).toISOString() : null,
+        author: { id: MEMBRE.id, username: 'amina', displayName: MEMBRE.nom },
+        likeCount: 0,
+        commentCount: 0,
+        repostCount: 0,
+        isLikedByMe: false,
+        isRepostedByMe: false,
+        media,
+      };
+      etat.filSocial.posts = [nouvelle, ...etat.filSocial.posts];
+      // RELUE PAR `GET /api/v1/posts/:postId` (#5389) — voir plus bas : un
+      // post créé dans CE test doit se relire, pas retomber sur
+      // `PUBLICATION_DU_BOUCHON`, sans quoi le témoin de bout en bout ne peut
+      // pas prouver que `/stories/:id` rend le média qu'il vient de recevoir.
+      etat.postsCrees?.set(id, nouvelle);
 
       json({ success: true, data: { id } }, 201);
       return true;
@@ -954,8 +973,17 @@ export const routesDuCompte =
       return true;
     }
 
+    /**
+     * `GET /api/v1/posts/:postId` (`routes/posts/core.ts:472`, `requiredAuth`)
+     * — SERT D'ABORD un post créé PAR CE test (#5389) : le critère de fin
+     * d'une story avec média se prouve de bout en bout, `POST` puis `GET` sur
+     * le MÊME id, exactement ce que `PostService.getPostById` fait de tout id
+     * réel. Seul un id INCONNU du bouchon retombe sur `PUBLICATION_DU_BOUCHON`.
+     */
     if (/^\/api\/v1\/posts\/[^/]+$/.test(chemin)) {
-      json({ success: true, data: PUBLICATION_DU_BOUCHON });
+      const idDemande = chemin.split('/').pop() ?? '';
+      const cree = etat.postsCrees?.get(idDemande);
+      json({ success: true, data: cree ?? PUBLICATION_DU_BOUCHON });
       return true;
     }
 

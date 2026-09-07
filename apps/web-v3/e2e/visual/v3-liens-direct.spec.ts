@@ -1,5 +1,6 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
+import { attendsLeModuleArme } from './lib/attente-de-module';
 import { passerelleDeBouchon, serveurDeLaV3, type PasserelleDeBouchon, type ServeurV3 } from './lib/serveurs';
 
 /**
@@ -25,8 +26,7 @@ const ouvreLaFeuille = async (browser: Browser): Promise<Page> => {
   const page = await contexte.newPage();
   const reponse = await page.goto(`${v3.base}/links?nouveau`, { waitUntil: 'domcontentloaded' });
   expect(reponse?.status()).toBe(200);
-  await page.waitForFunction(() => document.querySelector('main[data-participation="liens"]') !== null);
-  await page.waitForTimeout(1_200);
+  await attendsLeModuleArme(page, 'liens');
   await page.evaluate(() => {
     (window as unknown as Record<string, unknown>).__sentinelle = 1;
   });

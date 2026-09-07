@@ -1,4 +1,5 @@
 import { svgDuSprite } from '@/app/actifs-inlines';
+import { TYPES_ACCEPTES } from '@/app/connecte/composer-vue';
 import { documentPleinEcran } from '@/app/connecte/fil-vue';
 import { echappe } from '@/app/socle';
 
@@ -34,6 +35,10 @@ export type EtatDeLaStoryNeuve = {
   readonly langue: string | null;
   readonly publie: boolean;
   readonly erreur: string | null;
+  /** DISTINCT d'`erreur` (#5389, même idiome que `EtatDuComposer.refusDesMedias`) : le refus qui concerne le CHAMP fichier, pas la publication. */
+  readonly refusDuMedia: string | null;
+  /** La légende saisie, REPOSÉE telle quelle après un refus (revue #5389) — le fichier, lui, est à resélectionner : aucun navigateur ne repose un `<input type="file">`. */
+  readonly alt: string;
 };
 
 const enTete = (): string =>
@@ -50,8 +55,67 @@ const champDuTexte = (texte: string): string =>
   `<label for="s-texte">${echappe(STORY_NEUVE.texte)}</label>` +
   `<textarea id="s-texte" name="${CHAMPS_DU_COMPOSER.texte}" rows="6" maxlength="${LONGUEUR_MAX_DU_CONTENU}" ` +
   `placeholder="${echappe(STORY_NEUVE.textePlaceholder)}" autocomplete="off">${echappe(texte)}</textarea>` +
-  `<span class="aide">${echappe(STORY_NEUVE.sansMedia)}</span>` +
   '</p>';
+
+/**
+ * LE CHAMP MÉDIA (#5389) — UN `<input type="file">` VISIBLE, jamais
+ * `.hors-ecran` comme celui du composer : cet écran ne charge AUCUN module
+ * (§ 12.4, `/composer` seul charge `previsualiseMedias`), donc rien ne peint
+ * le nom du fichier choisi à la place du navigateur — le masquer laisserait
+ * la sélection AVEUGLE. Il se style nativement par `::file-selector-button`
+ * (`composer-feuille.ts`).
+ *
+ * LE COÛT ASSUMÉ (revue #5389, défaut 2) : le bouton et le statut natifs de
+ * l'input (« Choisir un fichier » / « Aucun fichier choisi », ou équivalent)
+ * s'affichent dans la LANGUE DU NAVIGATEUR, jamais dans celle du document —
+ * `lang="fr"` sur `<html>` ne les gouverne pas, à la différence du `<label>`
+ * ci-dessous (`STORY_NEUVE.mediaImporter`), lui bien français. Détail et
+ * arbitrage : `composer-feuille.ts`, règle 11.
+ *
+ * PAS DE `multiple`, PAS DE `capture` : une story ne porte qu'UN média
+ * (`STORY_NEUVE.mediaUnSeul`), et l'absence de `capture` laisse l'OS mobile
+ * offrir CAMÉRA et GALERIE — c'est ce que « Prendre » / « Importer » de la
+ * cible deviennent en HTML sans script.
+ *
+ * LE CONTENEUR EST UN `<div>`, PAS UN `<p>` (revue #5389) — comme
+ * `champDesMedias` du composer, et pour la même raison MESURÉE : le refus est
+ * un `<p class="alerte">`, et un `<p>` DANS un `<p>` n'existe pas. L'analyseur
+ * HTML referme le premier avant le second, sort l'alerte de la colonne
+ * `.champ` (son `gap` et son alignement avec le champ) et insère un `<p></p>`
+ * VIDE là où traînait le `</p>` orphelin. Le témoin qui l'attrape ne cherche
+ * pas la balise : il refuse tout `<p>` imbriqué dans le document rendu.
+ *
+ * LA LÉGENDE SE REPOSE (revue #5389) — un refus de type ou de poids fait
+ * revenir le texte de la story (`etat.texte`) ; la légende partait avec le
+ * fichier, que le navigateur ne peut de toute façon pas restituer. La perdre
+ * en plus ferait payer deux fois le même refus.
+ */
+const ID_DE_L_AIDE_MEDIA = 's-media-aide';
+const ID_DU_REFUS_MEDIA = 's-media-refus';
+
+const champDuMedia = (refusDuMedia: string | null, alt: string): string =>
+  '<section>' +
+  `<h2>${echappe(STORY_NEUVE.media)}</h2>` +
+  '<div class="champ media-de-story">' +
+  `<label for="s-media">${echappe(STORY_NEUVE.mediaImporter)}</label>` +
+  `<input id="s-media" type="file" name="${CHAMPS_DU_COMPOSER.medias}" accept="${TYPES_ACCEPTES}" ` +
+  `${refusDuMedia === null ? '' : 'aria-invalid="true" '}` +
+  `aria-describedby="${ID_DE_L_AIDE_MEDIA}${refusDuMedia === null ? '' : ` ${ID_DU_REFUS_MEDIA}`}">` +
+  `<span class="aide" id="${ID_DE_L_AIDE_MEDIA}">${echappe(STORY_NEUVE.mediaAide)}</span>` +
+  (refusDuMedia === null
+    ? ''
+    : `<p class="alerte" role="alert" id="${ID_DU_REFUS_MEDIA}">${echappe(refusDuMedia)}</p>`) +
+  '</div>' +
+  '<details class="medias-alt">' +
+  `<summary>${echappe(STORY_NEUVE.mediaAlt)}</summary>` +
+  `<p class="phrase">${echappe(STORY_NEUVE.mediaAltPhrase)}</p>` +
+  '<p class="champ">' +
+  `<label for="s-media-alt">${echappe(STORY_NEUVE.mediaAltChamp)}</label>` +
+  `<input type="text" id="s-media-alt" name="${CHAMPS_DU_COMPOSER.mediasAlt}" maxlength="1000" ` +
+  `value="${echappe(alt)}">` +
+  '</p>' +
+  '</details>' +
+  '</section>';
 
 const champDeLAudience = (courante: Audience): string =>
   '<p class="champ">' +
@@ -99,7 +163,8 @@ export const documentDeLaStoryNeuve = (etat: EtatDeLaStoryNeuve): string =>
       (etat.erreur === null
         ? ''
         : `<p class="alerte" role="alert"><b>${echappe(STORY_NEUVE.refuse)}</b> ${echappe(etat.erreur)}</p>`) +
-      '<form method="post">' +
+      '<form method="post" enctype="multipart/form-data">' +
+      champDuMedia(etat.refusDuMedia, etat.alt) +
       `<section><h2>${echappe(STORY_NEUVE.texte)}</h2>${champDuTexte(etat.texte)}</section>` +
       '<section>' +
       `<h2>${echappe(STORY_NEUVE.audience)}</h2>` +
