@@ -229,7 +229,7 @@ NC='\033[0m'
 # ait ete abaissee — il refuse qu'une marge regagnee redevienne depensable. Mais
 # une amelioration s'enregistre a sa valeur MESUREE, jamais a zero : ecrire zero
 # n'enregistre pas un progres, il affirme une fin.
-readonly WEB_BASELINE=1180
+readonly WEB_BASELINE=1144
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #

@@ -113,7 +113,11 @@ export default function UserDetailPage() {
         loadUserData();
       }
     } catch (error: unknown) {
-      toast.error(error.message || t('usersDetail.roleUpdateError'));
+      toast.error(
+        error instanceof Error && error.message !== ''
+          ? error.message
+          : t('usersDetail.roleUpdateError'),
+      );
     } finally {
       setSaving(false);
     }
@@ -131,7 +135,11 @@ export default function UserDetailPage() {
         loadUserData();
       }
     } catch (error: unknown) {
-      toast.error(error.message || t('usersDetail.statusChangeError'));
+      toast.error(
+        error instanceof Error && error.message !== ''
+          ? error.message
+          : t('usersDetail.statusChangeError'),
+      );
     }
   };
 
@@ -153,7 +161,11 @@ export default function UserDetailPage() {
         setPasswordReset({ open: false, newPassword: '', confirmPassword: '', reason: '' });
       }
     } catch (error: unknown) {
-      toast.error(error.message || t('usersDetail.passwordResetError'));
+      toast.error(
+        error instanceof Error && error.message !== ''
+          ? error.message
+          : t('usersDetail.passwordResetError'),
+      );
     } finally {
       setSaving(false);
     }
@@ -169,7 +181,11 @@ export default function UserDetailPage() {
         router.push('/admin/users');
       }
     } catch (error: unknown) {
-      toast.error(error.message || t('usersDetail.deleteError'));
+      toast.error(
+        error instanceof Error && error.message !== ''
+          ? error.message
+          : t('usersDetail.deleteError'),
+      );
     } finally {
       setSaving(false);
     }
