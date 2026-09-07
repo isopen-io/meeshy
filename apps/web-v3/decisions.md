@@ -249,3 +249,58 @@ jetons déclarés (il faudrait alors tenir à la main les utilitaires natifs de
 Tailwind, qui dérivent à chaque version) mais **à la feuille produite** :
 Tailwind n'émet que ce qu'il a reconnu. Vérifié par mutation (rc=1 sur une
 classe falsifiée).
+
+## D-14 · Les types ET trois lois viennent de `@meeshy/shared` — 2026-09-07 (#5493)
+
+**Ce qui disparaît.** `src/lib/api/model.ts` (la projection locale du domaine) et
+la copie de `resolvePrismTranslation()` qui vivait dans `prism.ts`. Les deux
+étaient documentées comme provisoires ; elles ont vécu le temps du POC.
+
+**Ce qui les remplace.**
+
+| ce que la v3.1 réutilise | d'où | ce qu'elle réécrivait |
+|---|---|---|
+| `Conversation`, `Message`, `Participant`, `Attachment`, `MessageTranslation` | `@meeshy/shared/types/*` | une projection à d'autres noms (`sentAt`, `author`, `unread`) |
+| `resolvePrismTranslation`, `buildTranslationRecord` | `utils/conversation-helpers` | une copie de la descente du Prisme |
+| `resolveUserLanguagesOrdered` | idem | `[...new Set(['fr', locale])]` — un prisme sans normalisation |
+| `getUserPresenceStatus`, `PRESENCE_HEX` | `utils/user-presence` | une union de présence et trois couleurs recopiées |
+| `conversationAccentPalette` | `utils/conversation-colors` | une palette de QUATRE teintes, inventée |
+| `messageTypeFromMimeTypes` | `utils/attachment-message-type` | un `kind` porté par la fixture |
+
+**Le coût, mesuré — et il tombe au bon endroit.**
+
+| | avant | après |
+|---|---|---|
+| première peinture | 26,43 Ko | **26,33 Ko** |
+| à la demande | 26,68 Ko | **30,24 Ko** |
+
+Le code partagé atterrit ENTIÈREMENT dans les morceaux de route. C'est
+exactement ce que le découpage par route achète, et c'est pourquoi le plafond
+de `budgets.json` porte sur la première peinture et non sur le total : payer
+3,6 Ko pour ne plus tenir six jumelles est un bon échange ; les payer avant le
+premier pixel n'en aurait pas été un.
+
+**Ce que l'accent a changé de visible.** La palette de quatre teintes a disparu
+au profit de `primary = blend(langue × 0,30, type × 0,30, thème × 0,40)`. Les
+captures changent : deux plateformes affichaient deux accents pour un même fil,
+elles n'en affichent plus qu'un.
+
+**Ce qui reste dérivé, et pourquoi ce n'est pas une jumelle.** `isMine`,
+`unreadCount`, les initiales, le titre d'une conversation directe et l'état de
+coche ne sont pas des champs du domaine : ce sont des LECTURES. `isMine` dépend
+de qui regarde — le graver rendrait la charge fausse dès qu'un second lecteur
+la lit. La coche n'est pas un état mais une conclusion tirée de
+`deliveredCount` / `readCount` / `recipientCount`, en TOUT OU RIEN comme iOS :
+annoncer « lu » sur un groupe de dix parce qu'une personne a ouvert le fil
+serait un mensonge d'interface. Ces dérivations vivent dans `src/lib/view/`.
+
+**Ce que la chaîne de construction a dû apprendre.** `@meeshy/shared` sert son
+`dist/`, donc il se CONSTRUIT avant la v3.1 — dans le `Dockerfile` (qui le
+copie désormais) et dans les deux travaux de CI qui bâtissent la v3.1 hors
+turbo. Le garde `check-ci-build-order.mjs` du dépôt n'est pas aveugle à ce
+lien : retirer l'étape lui fait nommer le job, le scénario et la ligne.
+
+**Ce qui n'a PAS changé.** La seconde moitié de #5493 — le transport réel — n'est
+pas faite : les données restent des fixtures. Mais elles sont désormais écrites
+dans la FORME que la passerelle rend, donc le jour où le transport arrive,
+`fixtures.ts` disparaît sans qu'aucun composant ne bouge.

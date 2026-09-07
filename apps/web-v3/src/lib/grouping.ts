@@ -1,4 +1,4 @@
-import type { Message } from './api/model';
+import type { Message } from './api/types';
 
 /**
  * LE REGROUPEMENT DES MESSAGES — la meme loi que iOS
@@ -13,13 +13,20 @@ import type { Message } from './api/model';
  * different d'iOS sur exactement les conversations lentes — celles d'une zone
  * ou le reseau coupe, c'est-a-dire la cible.
  */
+/**
+ * Une horloge de message voyage en `Date` depuis la passerelle et en chaîne
+ * ISO depuis une charge JSON non désérialisée. Les deux entrent ici : c'est
+ * `new Date(x)` qui tranche, pas l'appelant.
+ */
+type Clock = Date | string;
+
 export function continues(previous: Message | undefined, next: Message | undefined): boolean {
   if (!previous || !next) return false;
-  if (previous.author.id === '' || previous.author.id !== next.author.id) return false;
-  return sameLocalDay(previous.sentAt, next.sentAt);
+  if (previous.senderId === '' || previous.senderId !== next.senderId) return false;
+  return sameLocalDay(previous.createdAt, next.createdAt);
 }
 
-export function sameLocalDay(a: string, b: string): boolean {
+export function sameLocalDay(a: Clock, b: Clock): boolean {
   const da = new Date(a);
   const db = new Date(b);
   return (
@@ -46,12 +53,12 @@ export function place(messages: readonly Message[]): readonly PlacedMessage[] {
       head: !continues(previous, message),
       tail: !continues(message, next),
       opensDay:
-        previous && sameLocalDay(previous.sentAt, message.sentAt) ? null : dayLabel(message.sentAt),
+        previous && sameLocalDay(previous.createdAt, message.createdAt) ? null : dayLabel(message.createdAt),
     };
   });
 }
 
-export function dayLabel(iso: string, now: Date = new Date()): string {
+export function dayLabel(iso: Clock, now: Date = new Date()): string {
   const d = new Date(iso);
   const days = Math.round(
     (new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() -
@@ -64,6 +71,6 @@ export function dayLabel(iso: string, now: Date = new Date()): string {
   return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
 }
 
-export function time(iso: string): string {
+export function time(iso: Clock): string {
   return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }

@@ -1,18 +1,33 @@
 import { expect, test } from 'bun:test';
 
-import type { Message } from './api/model';
+import type { Message } from './api/types';
 import { continues, place } from './grouping';
 
-const author = (id: string) => ({ id, name: id, initials: 'XX', tint: 1 as const, presence: 'online' as const });
-const msg = (id: string, authorId: string, sentAt: string): Message => ({
+/**
+ * Un `Message` du domaine porte une quinzaine de champs d'état dont le
+ * groupage ne lit RIEN — il ne regarde que l'expéditeur et l'horloge. Les
+ * poser ici garde les cas lisibles sans mentir sur la forme : c'est bien la
+ * charge que la passerelle rend.
+ */
+const msg = (id: string, senderId: string, createdAt: string): Message => ({
   id,
-  author: author(authorId),
-  isMine: false,
+  conversationId: 'c1',
+  senderId,
   content: id,
   originalLanguage: 'fr',
+  messageType: 'text',
+  messageSource: 'user',
+  isEdited: false,
+  isViewOnce: false,
+  viewOnceCount: 0,
+  isBlurred: false,
+  deliveredCount: 0,
+  readCount: 0,
+  reactionCount: 0,
+  isEncrypted: false,
   translations: [],
-  sentAt,
-  status: 'read',
+  createdAt: new Date(createdAt),
+  timestamp: new Date(createdAt),
 });
 
 test('deux messages du meme auteur le meme jour se groupent, meme a six heures d ecart', () => {

@@ -71,8 +71,13 @@ let offlineTitle = null;
 try {
   await p3.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 10_000 });
   offlineTitle = await p3.locator('h1').first().textContent({ timeout: 5000 });
-  // Le fil aussi doit s'ouvrir : une navigation interne ne doit toucher aucun reseau.
-  await p3.getByRole('link', { name: /Equipe produit/ }).first().click();
+  /* Le fil aussi doit s'ouvrir : une navigation interne ne doit toucher aucun
+     reseau. On clique la PREMIERE ligne, pas une conversation NOMMEE — la
+     version precedente cherchait « Equipe produit » et est tombee le jour ou
+     la fixture a change de titres (#5493), en signalant « le fil ne s'ouvre
+     pas hors ligne » alors que le hors-ligne etait intact. Un temoin doit
+     tomber sur ce qu'il MESURE, jamais sur le decor. */
+  await p3.locator('[data-row] a').first().click();
   await p3.waitForTimeout(400);
   /* On verifie le COMPOSEUR, pas le separateur de jour : ce dernier depend
      de la date du jour, et le temoin tombait a minuit sans qu'une ligne de

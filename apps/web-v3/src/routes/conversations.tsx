@@ -4,8 +4,10 @@ import { Avatar } from '@/components/avatar';
 import { Glyph } from '@/components/glyph';
 import { LensRow } from '@/components/lens-row';
 import { useScene } from '@/lib/lens/scene';
-import { CONVERSATIONS } from '@/lib/api/fixtures';
+import { CONVERSATIONS, VIEWER_ID } from '@/lib/api/fixtures';
+import { accentOf } from '@/lib/accent';
 import { READER_LANGUAGES } from '@/lib/reader';
+import { initialsOf, isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
 
 /**
  * L'ECRAN DE LISTE.
@@ -27,10 +29,10 @@ export default function ConversationsScreen() {
   const { focus } = useScene(frame);
 
   const visible = CONVERSATIONS.filter((c) => {
-    if (filter === 'Non lus' && c.unread === 0) return false;
-    if (filter === 'Groupes' && !c.isGrouped) return false;
-    if (filter === 'Directs' && c.isGrouped) return false;
-    if (search && !c.title.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filter === 'Non lus' && unreadOf(c) === 0) return false;
+    if (filter === 'Groupes' && !isGroup(c)) return false;
+    if (filter === 'Directs' && isGroup(c)) return false;
+    if (search && !titleOf(c, VIEWER_ID).toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
@@ -67,24 +69,27 @@ export default function ConversationsScreen() {
       {/* Le rail de stories : avatars 88 px, anneau de marque quand non vues. */}
       <section aria-label="Stories" className="shrink-0 overflow-x-auto pb-1">
         <ul className="flex gap-3 px-4 py-2">
-          {CONVERSATIONS.map((c) => (
-            <li key={c.id} className="flex w-[88px] shrink-0 flex-col items-center gap-1.5">
-              <span
-                className="grid place-items-center rounded-chip p-[2.5px]"
-                style={{
-                  background:
-                    c.unread > 0
-                      ? 'var(--color-ios-brand)'
-                      : 'color-mix(in srgb, var(--color-ios-ink-3) 40%, transparent)',
-                }}
-              >
-                <Avatar initials={c.initials} tint={c.tint} size={72} name={c.title} />
-              </span>
-              <span className="w-full truncate text-center text-check" style={{ color: 'var(--color-ios-ink-2)' }}>
-                {c.title}
-              </span>
-            </li>
-          ))}
+          {CONVERSATIONS.map((c) => {
+            const title = titleOf(c, VIEWER_ID);
+            return (
+              <li key={c.id} className="flex w-[88px] shrink-0 flex-col items-center gap-1.5">
+                <span
+                  className="grid place-items-center rounded-chip p-[2.5px]"
+                  style={{
+                    background:
+                      unreadOf(c) > 0
+                        ? 'var(--color-ios-brand)'
+                        : 'color-mix(in srgb, var(--color-ios-ink-3) 40%, transparent)',
+                  }}
+                >
+                  <Avatar initials={initialsOf(title)} color={accentOf(c)} size={72} name={title} />
+                </span>
+                <span className="w-full truncate text-center text-check" style={{ color: 'var(--color-ios-ink-2)' }}>
+                  {title}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       </section>
 
@@ -128,6 +133,7 @@ export default function ConversationsScreen() {
             key={c.id}
             conversation={c}
             languages={READER_LANGUAGES}
+            viewerId={VIEWER_ID}
             status={{
               magnified: focus === c.id,
               /* La perspective est écrite par la scène directement dans le

@@ -1,4 +1,6 @@
-import type { Author } from '@/lib/api/model';
+import { PRESENCE_HEX, presenceTone } from '@meeshy/shared/utils/user-presence';
+
+import type { UserPresenceStatus } from '@/lib/api/types';
 
 /**
  * L'AVATAR, avec sa geometrie derivee — les memes formules que
@@ -15,33 +17,26 @@ import type { Author } from '@/lib/api/model';
  * Et `hors-ligne` ne rend AUCUNE pastille : c'est une regle produit du depot
  * (« offline = pas de pastille sur les avatars »), pas un oubli.
  */
-const TINTS: Record<1 | 2 | 3 | 4, string> = {
-  1: 'var(--color-av-1)',
-  2: 'var(--color-av-2)',
-  3: 'var(--color-av-3)',
-  4: 'var(--color-av-4)',
-};
-
-const PRESENCE: Record<Exclude<Author['presence'], 'offline'>, string> = {
-  online: 'var(--color-online)',
-  away: 'var(--color-away)',
-  idle: 'var(--color-idle)',
-};
+/**
+ * Les couleurs de présence viennent de `@meeshy/shared` (`PRESENCE_HEX`), qui
+ * les déclare identiques sur les trois plateformes. Les recopier en variables
+ * CSS locales aurait fait une quatrième table — celle qui dérive en silence.
+ */
 
 export function Avatar({
   initials,
-  tint,
+  color,
   size,
   presence,
   name,
 }: {
   initials: string;
-  tint: 1 | 2 | 3 | 4;
+  /** L'accent de la conversation — jamais une couleur codée en dur ici. */
+  color: string;
   size: number;
-  presence?: Author['presence'];
+  presence?: UserPresenceStatus;
   name?: string;
 }) {
-  const color = TINTS[tint];
   const dot = size * 0.26;
   // 0.8536 = (1 + cos(pi/4)) / 2 — le point a 45 deg sur le cercle, en fraction
   // du diametre. On retranche la moitie de la pastille pour la CENTRER dessus.
@@ -70,7 +65,7 @@ export function Avatar({
             height: dot,
             left: offset,
             top: offset,
-            backgroundColor: PRESENCE[presence],
+            backgroundColor: PRESENCE_HEX[presenceTone(presence)],
             boxShadow: '0 0 0 2px var(--ios-surface)',
           }}
           aria-hidden

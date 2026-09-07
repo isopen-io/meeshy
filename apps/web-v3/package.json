@@ -25,6 +25,7 @@
     "check:utilities": "node scripts/check-utilities.mjs"
   },
   "dependencies": {
+    "@meeshy/shared": "workspace:*",
     "@tanstack/react-query": "5.102.8",
     "preact": "10.29.8",
     "zustand": "5.0.15"

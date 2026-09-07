@@ -1,6 +1,9 @@
 import { useState } from 'react';
 
-import type { Status, Message, Attachment } from '@/lib/api/model';
+import type { Message, Attachment } from '@/lib/api/types';
+import { deliveryOf, isMineOf, kindOf, translationsOf, waveformOf } from '@/lib/view/message';
+import { initialsOf } from '@/lib/view/conversation';
+import type { Delivery } from '@/lib/view/message';
 import { served } from '@/lib/api/prism';
 import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
@@ -27,21 +30,21 @@ import type { GlyphName } from './glyphs';
  *    conversations ; seule la bulle RECUE porte l'accent de la conversation.
  */
 
-const CHECKS: Record<Status, { name: GlyphName; size: number; read: boolean } | null> = {
+const CHECKS: Record<Delivery, { name: GlyphName; size: number; read: boolean } | null> = {
   pending: { name: 'clock', size: 10, read: false },
   sent: { name: 'check', size: 10, read: false },
   delivered: { name: 'checks', size: 10, read: false },
   read: { name: 'checks', size: 11, read: true },
 };
 
-const STATUS_LABEL: Record<Status, string> = {
+const STATUS_LABEL: Record<Delivery, string> = {
   pending: 'en cours d’envoi',
   sent: 'envoyé',
   delivered: 'remis',
   read: 'lu',
 };
 
-function Check({ status, isMine }: { status: Status; isMine: boolean }) {
+function Check({ status, isMine }: { status: Delivery; isMine: boolean }) {
   if (!isMine) return null;
   const check = CHECKS[status];
   if (!check) return null;
@@ -129,13 +132,13 @@ function SecondaryText({ code, text, isMine }: { code: string; text: string; isM
   );
 }
 
-function Quote({ quote, isMine }: { quote: NonNullable<Message['repliesTo']>; isMine: boolean }) {
+function Quote({ quote, isMine }: { quote: NonNullable<Message['replyTo']>; isMine: boolean }) {
   return (
     <button
       type="button"
       className="mb-1.5 flex w-full rounded-quote text-left"
       style={{ backgroundColor: isMine ? 'var(--color-quote-mine)' : 'var(--color-quote)' }}
-      aria-label={`Aller au message de ${quote.author}`}
+      aria-label={`Aller au message de ${quote.sender?.displayName ?? 'l’expéditeur'}`}
     >
       <span
         className="w-1 shrink-0 rounded-full"
@@ -149,18 +152,21 @@ function Quote({ quote, isMine }: { quote: NonNullable<Message['repliesTo']>; is
           aussi haut que le message, et c'est le message qu'on vient lire. */}
       <span className="min-w-0 py-2 pr-2.5 pl-2 text-title">
         <span className="font-semibold" style={{ color: isMine ? 'white' : 'var(--accent)' }}>
-          {quote.author}{' '}
+          {quote.sender?.displayName ?? ''}{' '}
         </span>
         <span className="line-clamp-2" style={{ color: isMine ? 'var(--color-meta-mine)' : 'var(--color-ios-ink-2)' }}>
-          {quote.excerpt}
+          {quote.content}
         </span>
       </span>
     </button>
   );
 }
 
-function Voice({ attachment }: { attachment: Extract<Attachment, { kind: 'voice' }> }) {
+function Voice({ attachment }: { attachment: Attachment }) {
   const [playing, setPlaying] = useState(false);
+  const waves = waveformOf(attachment);
+  // `duration` voyage en MILLISECONDES sur la charge du dépôt.
+  const seconds = Math.round((attachment.duration ?? 0) / 1000);
   return (
     <div className="flex items-center gap-2.5 py-1">
       <button
@@ -172,23 +178,25 @@ function Voice({ attachment }: { attachment: Extract<Attachment, { kind: 'voice'
       >
         <Glyph name="fillPlay" size={13} className="text-white" />
       </button>
-      {/* La forme d'onde est REELLE (48 barres cote iOS), jamais decorative :
-          sa silhouette est ce qui permet de reperer un passage a l'oreille. */}
+      {/* La forme d'onde est DÉRIVÉE de l'identifiant de la pièce, donc stable
+          et honnête : la passerelle n'en sert pas encore. Côté iOS elle est
+          réelle (48 barres) et sa silhouette sert à repérer un passage à
+          l'oreille — c'est ce qu'il faudra servir ici aussi. */}
       <span className="flex h-6 flex-1 items-center gap-px" aria-hidden>
-        {attachment.waves.map((h, i) => (
+        {waves.map((h, i) => (
           <span
             key={i}
             className="flex-1 rounded-full"
             style={{
-              height: `${Math.max(12, h * 100)}%`,
+              height: `${Math.max(12, h * 4)}%`,
               backgroundColor: 'currentColor',
-              opacity: playing && i < attachment.waves.length / 3 ? 1 : 0.45,
+              opacity: playing && i < waves.length / 3 ? 1 : 0.45,
             }}
           />
         ))}
       </span>
       <span className="shrink-0 text-time tabular-nums">
-        {Math.floor(attachment.duration / 60)}:{String(attachment.duration % 60).padStart(2, '0')}
+        {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
       </span>
     </div>
   );
@@ -198,8 +206,9 @@ function Attachments({ attachments }: { attachments: readonly Attachment[] }) {
   return (
     <>
       {attachments.map((attachment, i) => {
-        if (attachment.kind === 'voice') return <Voice key={i} attachment={attachment} />;
-        if (attachment.kind === 'image') {
+        const kind = kindOf(attachment);
+        if (kind === 'audio') return <Voice key={i} attachment={attachment} />;
+        if (kind === 'image') {
           return (
             <div
               key={i}
@@ -209,18 +218,18 @@ function Attachments({ attachments }: { attachments: readonly Attachment[] }) {
               className="grid max-w-[300px] place-items-center overflow-hidden rounded-card bg-black/40"
               style={{ aspectRatio: '300 / 240' }}
               role="img"
-              aria-label={attachment.description}
+              aria-label={attachment.alt ?? attachment.originalName}
             >
               <Glyph name="image" size={40} className="opacity-40" />
             </div>
           );
         }
-        if (attachment.kind === 'file') {
+        if (kind === 'file') {
           return (
             <div key={i} className="flex items-center gap-2 py-1">
               <Glyph name="file" size={24} />
-              <span className="min-w-0 flex-1 truncate text-title">{attachment.name}</span>
-              <span className="text-time opacity-70">{Math.round(attachment.bytes / 1024)} Ko</span>
+              <span className="min-w-0 flex-1 truncate text-title">{attachment.originalName}</span>
+              <span className="text-time opacity-70">{Math.round(attachment.fileSize / 1024)} Ko</span>
             </div>
           );
         }
@@ -234,16 +243,24 @@ export function Bubble({
   place,
   languages,
   isGrouped,
+  viewerId,
 }: {
   place: PlacedMessage;
   languages: readonly string[];
   isGrouped: boolean;
+  viewerId: string;
 }) {
   const { message, tail } = place;
-  const isMine = message.isMine;
+  const isMine = isMineOf(message, viewerId);
   const [openLanguage, setOpenLanguage] = useState<string | null>(null);
 
-  const rendu = served(languages, message.originalLanguage, message.translations, message.content);
+  const translations = translationsOf(message);
+  const rendered = served({
+    preferredLanguages: languages,
+    originalLanguage: message.originalLanguage,
+    translations: message.translations,
+    original: message.content,
+  });
 
   /**
    * L'identite ne se montre QUE : en groupe, en reception, et sur la QUEUE
@@ -253,13 +270,19 @@ export function Bubble({
    */
   const showsIdentity = isGrouped && !isMine && tail;
 
-  const footerLanguages = [...new Set([message.originalLanguage, ...message.translations.map((t) => t.language)])];
+  const footerLanguages = [...new Set([message.originalLanguage, ...translations.map((t) => t.language)])];
   const secondary =
     openLanguage === null
       ? null
       : openLanguage === message.originalLanguage
         ? message.content
-        : (message.translations.find((t) => t.language === openLanguage)?.text ?? null);
+        : (translations.find((t) => t.language === openLanguage)?.text ?? null);
+
+  /**
+   * `reactionSummary` est la forme DÉNORMALISÉE du serveur (`{ emoji: n }`).
+   * Le POC portait une liste d'objets qu'aucune route ne rend.
+   */
+  const reactions = Object.entries(message.reactionSummary ?? {});
 
   const receivedBg = 'color-mix(in srgb, var(--accent) var(--ios-bubble-other-opacity), transparent)';
   const receivedHairline = 'color-mix(in srgb, var(--accent) var(--ios-bubble-other-hairline-opacity), transparent)';
@@ -284,16 +307,16 @@ export function Bubble({
               : { backgroundColor: receivedBg, border: `1px solid ${receivedHairline}`, color: 'var(--color-ios-ink)' }
           }
         >
-          {message.repliesTo ? <Quote quote={message.repliesTo} isMine={isMine} /> : null}
+          {message.replyTo ? <Quote quote={message.replyTo} isMine={isMine} /> : null}
           {message.attachments ? <Attachments attachments={message.attachments} /> : null}
-          {rendu.text ? (
+          {rendered.text ? (
             /* Le contenu AFFICHE est deja la traduction preferee, rendu
                exactement comme du contenu natif — ni encadre, ni italique, ni
                annonce. C'est le Prisme : la traduction ne se signale que par
                la pastille du pied. `lang` porte la langue REELLEMENT servie,
                pour que la synthese vocale la prononce juste. */
-            <p className="text-bubble leading-[1.35] whitespace-pre-wrap" lang={rendu.language}>
-              {rendu.text}
+            <p className="text-bubble leading-[1.35] whitespace-pre-wrap" lang={rendered.language}>
+              {rendered.text}
             </p>
           ) : null}
 
@@ -307,16 +330,16 @@ export function Bubble({
           >
             {showsIdentity ? (
               <Avatar
-                initials={message.author.initials}
-                tint={message.author.tint}
+                initials={initialsOf(message.sender?.displayName ?? '')}
+                color="var(--accent)"
                 size={32}
-                name={message.author.name}
+                name={message.sender?.displayName ?? ''}
               />
             ) : null}
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               {showsIdentity ? (
                 <span className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-                  {message.author.name}
+                  {message.sender?.displayName ?? ''}
                 </span>
               ) : null}
               <div className="flex items-center gap-1">
@@ -334,16 +357,19 @@ export function Bubble({
                   onPick={(code) => setOpenLanguage((v) => (v === code ? null : code))}
                 />
                 <span className="flex-1" />
-                <time className="text-time font-medium tabular-nums" dateTime={message.sentAt}>
-                  {time(message.sentAt)}
+                <time
+                  className="text-time font-medium tabular-nums"
+                  dateTime={new Date(message.createdAt).toISOString()}
+                >
+                  {time(message.createdAt)}
                 </time>
-                <Check status={message.status} isMine={isMine} />
+                <Check status={deliveryOf(message)} isMine={isMine} />
               </div>
             </div>
           </div>
         </div>
 
-        {message.reactions?.length ? (
+        {reactions.length > 0 ? (
           /* Les reactions se posent en DEBORD du coin bas, du cote OPPOSE au
              bord d'ecran : a moitie sous la bulle, a moitie dehors. Les
              centrer sous la bulle les ferait passer pour un contenu. */
@@ -351,18 +377,20 @@ export function Bubble({
             className={`absolute flex gap-1 ${isMine ? 'left-0 -translate-x-1' : 'right-0 translate-x-1'}`}
             style={{ bottom: -8 }}
           >
-            {message.reactions.map((r) => (
+            {reactions.map(([glyph, count]) => (
               <span
-                key={r.glyph}
+                key={glyph}
                 className="flex items-center gap-0.5 rounded-chip px-1.5 py-0.5 text-check"
                 style={{
                   backgroundColor: 'var(--color-ios-card)',
                   border: '1px solid var(--color-edge)',
                 }}
               >
-                <span aria-hidden>{r.glyph}</span>
-                <span className="tabular-nums opacity-70">{r.count}</span>
-                <span className="offscreen">{r.count} réaction{r.count > 1 ? 's' : ''} {r.glyph}</span>
+                <span aria-hidden>{glyph}</span>
+                <span className="tabular-nums opacity-70">{count}</span>
+                <span className="offscreen">
+                  {count} réaction{count > 1 ? 's' : ''} {glyph}
+                </span>
               </span>
             ))}
           </div>

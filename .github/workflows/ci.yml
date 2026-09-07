@@ -259,8 +259,14 @@ jobs:
       # un budget que personne ne vérifie. Le build est mesuré à ~200 ms, le
       # coût d'étape est négligeable.
       - name: Gates web-v3 (jetons dérivés + poids de la première peinture)
-        working-directory: apps/web-v3
         run: |
+          # `@meeshy/shared` sert son `dist/` : le type-check et le build de la
+          # v3.1 s'y résolvent depuis #5493. Étape EXPLICITE plutôt que filtre
+          # turbo, pour rester alignée sur les trois autres travaux navigateur
+          # qui la portent déjà.
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+          cd ../../apps/web-v3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} check:tokens
           node scripts/check-curve.mjs
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
@@ -642,6 +648,11 @@ jobs:
       # Le préchauffage des cinq documents fait partie de CE build depuis
       # qu'il est un greffon de `vite.config.ts` : le témoin mesure donc
       # exactement ce qu'un déploiement servirait.
+      - name: Build packages/shared (la v3.1 en importe depuis #5493)
+        run: |
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
       - name: Build apps/web-v3
         run: |
           cd apps/web-v3

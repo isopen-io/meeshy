@@ -100,6 +100,21 @@ const REQUIRED = [
   'packages/design-tokens/ios.css',
   'packages/design-tokens/dark.css',
   'packages/design-tokens/light.css',
+  // `@meeshy/shared` : le Dockerfile le COPIE puis le CONSTRUIT (`tsc`), donc
+  // son manifeste, son tsconfig et les entrées de son `include` doivent entrer.
+  // Les quatre modules cités sont ceux que l'application importe vraiment —
+  // les nommer un par un est ce qui fait qu'un `.dockerignore` trop large se
+  // voit ici plutôt qu'au bout de six minutes de construction en CI.
+  'packages/shared/package.json',
+  'packages/shared/tsconfig.json',
+  'packages/shared/types/conversation.ts',
+  'packages/shared/types/participant.ts',
+  'packages/shared/types/attachment.ts',
+  'packages/shared/types/message-types.ts',
+  'packages/shared/utils/conversation-helpers.ts',
+  'packages/shared/utils/conversation-colors.ts',
+  'packages/shared/utils/user-presence.ts',
+  'packages/shared/utils/attachment-message-type.ts',
 ];
 
 const filters = REQUIRED.filter(excluded);

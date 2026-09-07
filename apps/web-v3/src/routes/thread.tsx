@@ -4,9 +4,10 @@ import { Avatar } from '@/components/avatar';
 import { Bubble } from '@/components/bubble';
 import { Composer } from '@/components/composer';
 import { Glyph } from '@/components/glyph';
-import { CONVERSATIONS, MESSAGES } from '@/lib/api/fixtures';
-import type { Message } from '@/lib/api/model';
-import { withAccent } from '@/lib/accent';
+import { CONVERSATIONS, MESSAGES, PARTICIPANTS, VIEWER_ID } from '@/lib/api/fixtures';
+import type { Message } from '@/lib/api/types';
+import { accentOf, withAccent } from '@/lib/accent';
+import { initialsOf, isGroup, peerOf, presenceOf, titleOf, unreadOf } from '@/lib/view/conversation';
 import { useParams } from '@/lib/router';
 import { dayLabel, place } from '@/lib/grouping';
 import { Link } from '@/routes/route-table';
@@ -30,8 +31,15 @@ export default function ThreadScreen() {
   const [messages, setMessages] = useState<readonly Message[]>(MESSAGES);
   const [typing] = useState(true);
 
-  const otherUnread = CONVERSATIONS.filter((c) => c.id !== conversation.id).reduce((s, c) => s + c.unread, 0);
+  const otherUnread = CONVERSATIONS.filter((c) => c.id !== conversation.id).reduce(
+    (total, c) => total + unreadOf(c),
+    0,
+  );
   const placed = place(messages);
+  const group = isGroup(conversation);
+  const title = titleOf(conversation, VIEWER_ID);
+  const accent = accentOf(conversation);
+  const viewer = PARTICIPANTS.find((p) => p.userId === VIEWER_ID);
 
   const send = (text: string) => {
     /**
@@ -40,17 +48,31 @@ export default function ThreadScreen() {
      * du serveur avant de peindre ferait un composeur qui semble ne rien faire
      * pendant deux secondes.
      */
+    const now = new Date();
     setMessages((previous) => [
       ...previous,
       {
-        id: `local-${Date.now()}`,
-        author: { id: 'u-moi', name: 'Vous', initials: 'VO', tint: 1, presence: 'online' },
-        isMine: true,
+        id: `local-${now.getTime()}`,
+        conversationId: conversation.id,
+        senderId: VIEWER_ID,
+        ...(viewer === undefined ? {} : { sender: viewer }),
         content: text,
         originalLanguage: 'fr',
+        messageType: 'text',
+        messageSource: 'user',
+        isEdited: false,
+        isViewOnce: false,
+        viewOnceCount: 0,
+        isBlurred: false,
+        // Rien n'est encore parti : `deliveredCount` à 0 est ce que
+        // `deliveryOf` lit comme « en attente », sans champ inventé.
+        deliveredCount: 0,
+        readCount: 0,
+        reactionCount: 0,
+        isEncrypted: false,
         translations: [],
-        sentAt: new Date().toISOString(),
-        status: 'pending',
+        createdAt: now,
+        timestamp: now,
       },
     ]);
   };
@@ -61,7 +83,7 @@ export default function ThreadScreen() {
        et une APPLICATION (seule la zone des messages defile, l'en-tete et le
        composeur sont des bords fixes). Avec `min-h-dvh` le composeur recouvrait
        les derniers messages — le defaut le plus visible du premier rendu. */
-    <div className="flex h-dvh flex-col overflow-hidden" style={withAccent(conversation.tint)}>
+    <div className="flex h-dvh flex-col overflow-hidden" style={withAccent(accent)}>
       <header
         className="z-10 shrink-0 backdrop-blur-xl"
         style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-surface) 80%, transparent)' }}
@@ -88,11 +110,11 @@ export default function ThreadScreen() {
           {expanded ? (
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <h1 className="truncate text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-                {conversation.title}
+                {title}
               </h1>
               <p className="flex items-center gap-1 text-mini" style={{ color: 'var(--color-ios-ink-2)' }}>
                 <Glyph name="lock" size={9} style={{ color: 'var(--color-ok)' }} />
-                {conversation.isGrouped ? `${conversation.participants} participants` : 'Chiffré de bout en bout'}
+                {group ? `${conversation.memberCount} participants` : 'Chiffré de bout en bout'}
               </p>
             </div>
           ) : (
@@ -135,10 +157,10 @@ export default function ThreadScreen() {
             className="shrink-0"
           >
             <Avatar
-              initials={conversation.initials}
-              tint={conversation.tint}
+              initials={initialsOf(title)}
+              color={accent}
               size={44}
-              {...(conversation.isGrouped ? {} : { presence: conversation.presence })}
+              {...(group ? {} : { presence: presenceOf(peerOf(conversation, VIEWER_ID)) })}
             />
           </button>
         </div>
@@ -158,11 +180,11 @@ export default function ThreadScreen() {
                       backgroundColor: 'color-mix(in srgb, var(--color-ios-card) 70%, transparent)',
                     }}
                   >
-                    {dayLabel(p.message.sentAt)}
+                    {dayLabel(p.message.createdAt)}
                   </span>
                 </div>
               ) : null}
-              <Bubble place={p} languages={READER_LANGUAGES} isGrouped={conversation.isGrouped} />
+              <Bubble place={p} languages={READER_LANGUAGES} isGrouped={group} viewerId={VIEWER_ID} />
             </li>
           ))}
         </ol>
@@ -172,7 +194,7 @@ export default function ThreadScreen() {
              pas un overlay : il pousse le fil comme le ferait un message, donc
              l'arrivee du vrai message ne fait sauter aucune ligne. */
           <div className="flex items-end gap-1.5 py-1">
-            <Avatar initials="AD" tint={2} size={18} />
+            <Avatar initials="AD" color={accent} size={18} />
             <span
               className="flex items-center gap-1.5 rounded-chip px-3 py-2"
               style={{ backgroundColor: 'var(--color-ios-card)' }}

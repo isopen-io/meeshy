@@ -1,7 +1,8 @@
-import type { Conversation } from '@/lib/api/model';
+import type { Conversation } from '@/lib/api/types';
 import { served } from '@/lib/api/prism';
-import { withAccent } from '@/lib/accent';
+import { accentOf, withAccent } from '@/lib/accent';
 import { time } from '@/lib/grouping';
+import { initialsOf, isGroup, peerOf, presenceOf, titleOf, unreadOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
 
 import { Avatar } from './avatar';
@@ -62,19 +63,35 @@ const AT_REST: RowState = { magnified: false, alpha: 1, scale: 1, breathing: 0 }
 export function LensRow({
   conversation,
   languages,
+  viewerId,
   status = AT_REST,
 }: {
   conversation: Conversation;
   languages: readonly string[];
+  viewerId: string;
   status?: RowState;
 }) {
-  const unread = conversation.unread > 0;
-  const preview = served(
-    languages,
-    conversation.lastMessage.originalLanguage,
-    conversation.lastMessage.translations,
-    conversation.lastMessage.content,
-  );
+  const unreadCount = unreadOf(conversation);
+  const unread = unreadCount > 0;
+  const group = isGroup(conversation);
+  const title = titleOf(conversation, viewerId);
+  const accent = accentOf(conversation);
+  const at = conversation.lastMessageAt ?? conversation.lastMessage?.createdAt;
+
+  /**
+   * LA LIGNE DESCEND LA CARTE PRÉCALCULÉE PAR LE SERVEUR
+   * (`lastMessageTranslations`), pas les traductions du message. C'est ce que
+   * sert `GET /conversations`, déjà restreint aux langues du lecteur et tronqué
+   * au plafond d'aperçu : lire `lastMessage.translations` ferait descendre une
+   * carte que la liste n'a pas reçue, donc servir l'original en croyant servir
+   * le Prisme.
+   */
+  const preview = served({
+    preferredLanguages: languages,
+    originalLanguage: conversation.lastMessageOriginalLanguage,
+    translations: conversation.lastMessageTranslations,
+    original: conversation.lastMessage?.content ?? '',
+  });
 
   return (
     <li
@@ -93,7 +110,7 @@ export function LensRow({
         to="thread"
         params={{ conversation: conversation.id }}
         className="lens-row absolute inset-x-0 flex items-center gap-3 px-3"
-        style={withAccent(conversation.tint, {
+        style={withAccent(accent, {
           top: -OVERHANG,
           height: VISUAL_HEIGHT,
           /**
@@ -108,11 +125,11 @@ export function LensRow({
         })}
       >
         <Avatar
-          initials={conversation.initials}
-          tint={conversation.tint}
+          initials={initialsOf(title)}
+          color={accent}
           size={44}
-          name={conversation.title}
-          {...(conversation.isGrouped ? {} : { presence: conversation.presence })}
+          name={title}
+          {...(group ? {} : { presence: presenceOf(peerOf(conversation, viewerId)) })}
         />
 
         <span className="flex min-w-0 flex-1 flex-col justify-center">
@@ -137,10 +154,10 @@ export function LensRow({
               className="rounded-chip px-1.5 text-check font-semibold whitespace-nowrap"
               style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 18%, transparent)', color: 'var(--accent)' }}
             >
-              {conversation.isGrouped ? 'Groupe' : 'Direct'}
+              {group ? 'Groupe' : 'Direct'}
             </span>
-            {conversation.muted ? (
-              <Glyph name="x" size={11} title="En sourdine" style={{ color: 'var(--color-ios-ink-3)' }} />
+            {conversation.isArchived === true ? (
+              <Glyph name="x" size={11} title="Archivée" style={{ color: 'var(--color-ios-ink-3)' }} />
             ) : null}
           </span>
 
@@ -149,13 +166,13 @@ export function LensRow({
               className={`min-w-0 flex-1 truncate text-title ${unread ? 'font-black' : 'font-bold'}`}
               style={{ color: 'var(--color-ios-ink)' }}
             >
-              {conversation.title}
+              {title}
             </span>
             <span
               className="shrink-0 text-check font-bold tabular-nums"
               style={{ color: unread ? 'var(--accent)' : 'var(--color-ios-ink-3)' }}
             >
-              {time(conversation.lastMessage.at)}
+              {at === undefined ? '' : time(at)}
             </span>
           </span>
 
@@ -168,7 +185,7 @@ export function LensRow({
             className={`text-body ${status.magnified ? 'line-clamp-2' : 'truncate'}`}
             style={{ color: 'var(--color-ios-ink-2)' }}
           >
-            {conversation.isGrouped ? `${conversation.lastMessage.author} : ` : ''}
+            {group && conversation.lastMessage?.sender ? `${conversation.lastMessage.sender.displayName} : ` : ''}
             {/* `lang` porte la langue SERVIE par le Prisme, pas celle du
                 document : un lecteur d'écran doit prononcer un aperçu traduit
                 avec la voix de sa langue, jamais avec celle de l'expéditeur. */}
@@ -186,8 +203,8 @@ export function LensRow({
               color: 'var(--color-ios-ink-3)',
             }}
           >
-            <span>{conversation.lastMessage.at.slice(0, 10)}</span>
-            {conversation.isGrouped ? <span>· {conversation.participants} members</span> : null}
+            <span>{at === undefined ? '' : new Date(at).toISOString().slice(0, 10)}</span>
+            {group ? <span>· {conversation.memberCount} membres</span> : null}
           </span>
         </span>
 
@@ -196,7 +213,7 @@ export function LensRow({
             className="grid min-w-[20px] shrink-0 place-items-center rounded-chip px-1.5 text-check font-bold text-white"
             style={{ backgroundColor: 'var(--accent)', height: 20 }}
           >
-            {conversation.unread}
+            {unreadCount}
           </span>
         ) : null}
       </Link>
