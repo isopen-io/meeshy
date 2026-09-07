@@ -4414,3 +4414,44 @@ model PostHashtag {
   @@index([hashtagId])
   @@index([postId])
 }
+
+/// Compteur d'engagement par (utilisateur, axe) — #5530,
+/// docs/product/streaks-badges-modele.md § 3. Un document par axe, jamais
+/// une colonne par axe sur `User` : ajouter un axe n'ajoute aucune migration
+/// de schéma. Incrémenté UNIQUEMENT par `EngagementService.recordActivity`
+/// (`services/gateway/src/services/engagement/EngagementService.ts`) — aucune
+/// route ni handler socket n'écrit ce modèle directement.
+model EngagementCounter {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  /// Clé stable du catalogue, ex. "content.audio_message" — voir
+  /// `EngagementAxisKey` (@meeshy/shared/types/engagement).
+  axisKey   String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, axisKey])
+  @@index([userId])
+}
+
+/// Garde anti-rejeu — #5530, docs/product/streaks-badges-modele.md § 4. Un
+/// palier déjà écrit ici ne se re-notifie jamais, même si le compteur source
+/// est recalculé : la mémoire de ce qui a déjà été notifié est CETTE table,
+/// pas la valeur courante du compteur. La contrainte unique est la garde
+/// (un `create` en conflit = palier déjà servi, no-op silencieux), jamais une
+/// relecture avant écriture — ça évite la course entre deux écritures
+/// concurrentes du même utilisateur.
+model EngagementMilestone {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String   @db.ObjectId
+  /// "badge" | "streak" | "level" | "achievement" — voir
+  /// `EngagementMilestoneType` (@meeshy/shared/types/engagement).
+  milestoneType String
+  /// ex. "content.audio_message:10", "streak:7", "level:3",
+  /// "achievement.first_post" — unique par (userId, milestoneType, clé).
+  milestoneKey  String
+  reachedAt     DateTime @default(now())
+
+  @@unique([userId, milestoneType, milestoneKey])
+  @@index([userId, milestoneType])
+}

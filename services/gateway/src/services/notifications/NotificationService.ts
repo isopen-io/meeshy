@@ -3740,6 +3740,43 @@ export class NotificationService {
   }
 
   // ==============================================
+  // BADGE_EARNED (#5530 — EngagementService.recordActivity est l'unique appelant)
+  // ==============================================
+
+  /**
+   * Un palier d'axe d'engagement vient d'être franchi
+   * (docs/product/streaks-badges-modele.md § 1/§ 3/§ 4). `axisKey` reste la
+   * clé stable du catalogue (`EngagementAxisKey`) — l'habillage humain
+   * (icône, libellé traduit par axe) est une dimension UX différée à
+   * l'écran de consultation (§ 9, issue #5547).
+   */
+  async createBadgeEarnedNotification(params: {
+    userId: string;
+    axisKey: string;
+    threshold: number;
+  }): Promise<Notification | null> {
+    const lang = await this.resolveRecipientLang(params.userId);
+
+    return this.createNotification({
+      userId: params.userId,
+      type: 'badge_earned',
+      priority: 'normal',
+      content: notificationString(lang, 'engagement.badgeEarned', {
+        title: params.axisKey,
+        count: params.threshold,
+      }),
+
+      context: {},
+
+      metadata: {
+        action: 'view_details',
+        axisKey: params.axisKey,
+        threshold: params.threshold,
+      },
+    });
+  }
+
+  // ==============================================
   // FRIEND_REQUEST_CANCELLED (realtime-only, no persisted Notification)
   // ==============================================
 
