@@ -281,6 +281,25 @@ export const armeLAbonnementPush = (main: HTMLElement): void => {
   });
 };
 
+/**
+ * LA CACHE DE ROTATION EXISTE-T-ELLE DÉJÀ ? — `caches.open()` CRÉE le nom
+ * qu'on lui passe, MÊME SANS aucun `.put()` derrière : la spec Cache Storage
+ * crée l'entrée d'index à l'OUVERTURE, pas à l'écriture (même constat que le
+ * doc-comment de `lib/sw/travailleur.js` sur la fenêtre de suppression du
+ * worker). `rejoueSiRotation` et `rejoueSiRotationEnArrierePlan` ne font
+ * qu'une LECTURE d'un drapeau qui, la plupart du temps, n'a jamais été posé
+ * (aucune rotation n'est jamais survenue sur cet appareil) : appeler
+ * `caches.open()` pour ce simple test d'existence RESSUSCITE un cache que la
+ * DÉCONNEXION vient de purger, si l'ouverture arrive après la purge — la
+ * course mesurée par `e2e/visual/v3-deconnexion.spec.ts`
+ * (« plus AUCUN cache… ») : `rejoueSiRotationEnArrierePlan` tourne EN
+ * ARRIÈRE-PLAN à CHAQUE chargement de `/chats` (`lib/realtime/liste.ts:565`,
+ * `void`, sans attendre), la surface même que « Mon espace » ouvre pour
+ * sortir. `caches.keys()` D'ABORD ferme cette course à la source, pour les
+ * deux lecteurs : rien à ouvrir tant que rien n'a jamais existé.
+ */
+const laCacheDeRotationExiste = async (): Promise<boolean> => (await caches.keys()).includes(CACHE_DE_ROTATION_PUSH);
+
 const effaceLeDrapeauDeRotation = async (): Promise<void> => {
   try {
     const cache = await caches.open(CACHE_DE_ROTATION_PUSH);
@@ -320,6 +339,7 @@ export const rejoueSiRotation = async (main: HTMLElement): Promise<void> => {
 
   let drapeau: unknown;
   try {
+    if (!(await laCacheDeRotationExiste())) return;
     const cache = await caches.open(CACHE_DE_ROTATION_PUSH);
     drapeau = await cache.match(CLE_DE_ROTATION_PUSH);
   } catch {
@@ -399,6 +419,7 @@ export const rejoueSiRotationEnArrierePlan = async (): Promise<void> => {
   let drapeauPose: boolean;
   let brut: unknown;
   try {
+    if (!(await laCacheDeRotationExiste())) return;
     const cache = await caches.open(CACHE_DE_ROTATION_PUSH);
     drapeauPose = (await cache.match(CLE_DE_ROTATION_PUSH)) !== undefined;
     if (!drapeauPose) return;

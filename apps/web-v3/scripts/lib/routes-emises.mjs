@@ -52,6 +52,12 @@ export const lireEntrees = (manifestSource) => {
 // distinguer `(public)/page` de `(connected)/page`, que la normalisation confond en `/page`.
 const cibleDe = (route) => (motif) => (motif.includes('(') ? route : normaliseRoute(route));
 
+/**
+ * Classe une route dans un groupe de `budgets.json` [utilisée aussi par
+ * `compare-rendu.js` via `budget-reseau.mjs` (#5473) sur un CHEMIN d'URL,
+ * jamais seulement une clé de manifeste `next build` — les deux ignorent tout
+ * segment `(groupe)`, donc la même loi les classe l'une comme l'autre].
+ */
 export const groupeDe = (route, groupes) => {
   const { choix, ambigu } = plusPrecis(groupes, cibleDe(route));
   return { groupe: choix ? choix.id : null, ambigu: ambigu.map((g) => g.id) };

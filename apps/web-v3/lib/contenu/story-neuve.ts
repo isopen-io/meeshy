@@ -1,4 +1,5 @@
 import { OCTETS_MAX_PAR_MEDIA } from './composer';
+import { HEURES_DE_VIE_D_UNE_STORY, HEURES_DE_VIE_D_UNE_HUMEUR } from './story-ttl';
 
 /**
  * LA COPIE DE `/stories/new` (#5033, médias #5389) — publier une story
@@ -31,23 +32,12 @@ import { OCTETS_MAX_PAR_MEDIA } from './composer';
  */
 
 /**
- * `EPHEMERAL_POST_TTL_HOURS.STORY` — RECOPIÉE, et il faut dire pourquoi c'est
- * accepté ici alors que le § 3.2 interdit les secondes tables.
- *
- * La constante vit dans `services/gateway/src/services/posts/ephemeralPosts.ts`
- * et n'est PAS exportée par `@meeshy/shared` (vérifié : aucune occurrence). La
- * v3 n'a pas le droit d'importer depuis le gateway — c'est la contrainte de
- * séparation de ce chantier. Il reste donc deux formes possibles : une valeur
- * citée avec sa source, ou une phrase vague (« quelques heures ») qui n'apprend
- * rien. La première est choisie, et son coût est nommé : le jour où le gateway
- * change ce nombre, CETTE ligne doit changer aussi. Le remède durable est de
- * remonter la constante dans `@meeshy/shared` — hors du territoire de ce lot,
- * qui ne touche pas au serveur.
+ * Réexportées depuis `./story-ttl` (#5479) — cet écran de CRÉATION les
+ * consomme, mais leur définition vit hors de la copie qu'il porte pour que
+ * `lib/contenu/story.ts` (donc `/feed`, en transitif) puisse importer la
+ * seule durée de vie sans embarquer cette copie entière dans son bundle.
  */
-export const HEURES_DE_VIE_D_UNE_STORY = 20;
-
-/** `EPHEMERAL_POST_TTL_HOURS.STATUS` — même source, même réserve. */
-export const HEURES_DE_VIE_D_UNE_HUMEUR = 1;
+export { HEURES_DE_VIE_D_UNE_STORY, HEURES_DE_VIE_D_UNE_HUMEUR };
 
 export const STORY_NEUVE = {
   titre: 'Nouvelle story',
