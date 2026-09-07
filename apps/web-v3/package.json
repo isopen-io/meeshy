@@ -3,20 +3,21 @@
   "version": "3.1.0",
   "private": true,
   "type": "module",
-  "description": "La v3.1 web \u2014 une application TypeScript unique, servie en web, installable en PWA, empaquetable Android/iOS par Capacitor. Interface reprise de l'app iOS.",
+  "description": "La v3.1 web — une application TypeScript unique, servie en web, installable en PWA, empaquetable Android/iOS par Capacitor. Interface reprise de l'app iOS.",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && bun run scripts/prerend-institutionnel.tsx",
-    "build:react": "MEESHY_RUNTIME=react vite build && bun run scripts/prerend-institutionnel.tsx",
+    "build": "vite build",
+    "build:react": "MEESHY_RUNTIME=react vite build",
     "preview": "vite preview --port 4173",
     "type-check": "tsc --noEmit",
     "mesure": "node scripts/mesure-poids.mjs",
     "cap:sync": "cap sync",
     "test": "bun test",
-    "gate": "bun run check:jetons && bun run type-check && bun test && bun run build && node scripts/mesure-poids.mjs",
+    "gate": "bun run check:jetons && bun run type-check && bun test && bun run build && node scripts/mesure-poids.mjs && node scripts/verifie-institutionnel.mjs",
     "check:jetons": "node ../../packages/design-tokens/scripts/genere-depuis-ios.mjs --verifie",
     "verifie:jetons": "node scripts/verifie-jetons.mjs",
-    "test:coverage": "bun test --coverage"
+    "test:coverage": "bun test --coverage",
+    "verifie:institutionnel": "node scripts/verifie-institutionnel.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "5.102.8",

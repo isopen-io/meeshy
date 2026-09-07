@@ -81,5 +81,40 @@
       "statut": "FRANCHI ET DÉCLARÉ",
       "raison": "La charte v3 fixe 9 Ko par document. /about porte 248 lignes de contenu — c'est la page la plus longue des cinq, et son dépassement est de 2,8 %. Sa feuille (4,52 Ko) est déjà la version réduite ; le reste est du CONTENU, qui ne se comprime pas davantage sans le couper. Déclaré plutôt que caché, conformément au ratchet du § 8.3 : le franchir davantage demandera un diff relu."
     }
+  },
+  "cache_institutionnel": {
+    "quoi": "Ce que l'INSTALLATION du service worker télécharge pour les cinq pages institutionnelles, et ce qu'une visite ultérieure leur coûte. Le porteur a demandé qu'elles soient « entièrement cachées, elles ne changent que très rarement » (2026-09-07) ; la demande a révélé qu'elles n'étaient pas seulement hors cache, mais MASQUÉES — la NavigationRoute du service worker servait la coquille de l'application à leur place dès la deuxième visite.",
+    "produit_par": "cd apps/web-v3 && bun run build && node scripts/verifie-institutionnel.mjs",
+    "date": "2026-09-07",
+    "avant_le_correctif": {
+      "entrees_de_precache": 16,
+      "pages_institutionnelles_precachees": 0,
+      "titre_de_about_visite_1": "À propos de Meeshy",
+      "titre_de_about_visite_2": "Meeshy",
+      "scripts_externes_visite_2": 2,
+      "h1_visite_2": null,
+      "ouvre_hors_ligne": false,
+      "cause": "Le préchauffage était enchaîné APRÈS `vite build` dans le script `build` : quand vite-plugin-pwa parcourait dist/ pour composer son manifeste, les cinq documents n'existaient pas encore."
+    },
+    "doublon_supprime": {
+      "quoi": "Chaque page est écrite dans DEUX formes — `about.html` et `about/index.html` — identiques octet pour octet mais distinctes comme ADRESSES : Workbox précachait les deux.",
+      "avant_requetes": 10,
+      "avant_brut_octets": 286515,
+      "apres_requetes": 5,
+      "apres_brut_octets": 143258,
+      "comment": "globIgnores: ['*/index.html'] ne garde que la forme canonique ; public/sw-institutionnel.js ramène `/about/` sur `/about` en 302, donc les deux formes restent servies, hors ligne comprises.",
+      "pourquoi_ca_comptait": "Le doublon seul (~37 Ko gzip) pesait plus lourd que la première peinture entière de l'application (25,13 Ko)."
+    },
+    "apres": {
+      "entrees_de_precache": 22,
+      "precache_total_ko_brut": 269.1,
+      "installation_institutionnel_brut_octets": 143258,
+      "installation_institutionnel_requetes": 5,
+      "requetes_reseau_visite_2": 0,
+      "scripts_externes": 0,
+      "formes_servies": 10,
+      "ouvre_hors_ligne": true
+    },
+    "temoin": "scripts/verifie-institutionnel.mjs — un navigateur RÉEL et une DEUXIÈME visite. Aucun test de construction ne pouvait voir ce défaut : les fichiers étaient bien sur le disque. Vérifié par mutation : l'état d'avant le correctif rend rc=1 sur 35 invariants rompus."
   }
 }

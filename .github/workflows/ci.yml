@@ -571,6 +571,86 @@ jobs:
           retention-days: 7
 
   # ===========================================================================
+  # CACHE INSTITUTIONNEL: les cinq pages restent ELLES-MÊMES à la deuxième visite
+  # ===========================================================================
+  # Un job À PART de « Gates web-v3 » (job `quality`), et pour une raison de
+  # coût : celui-ci lève un navigateur, donc télécharge Chromium. `quality` est
+  # la dépendance de presque tout le workflow — l'y ajouter retarderait chaque
+  # autre job d'une minute pour une preuve qui n'intéresse que cinq documents.
+  #
+  # CE QU'IL ATTRAPE, et que rien d'autre ne pouvait voir. #5554 a livré les
+  # cinq pages institutionnelles en HTML statique — une requête, zéro script —
+  # et l'a mesuré sur une visite FROIDE. À la deuxième, la `NavigationRoute` du
+  # service worker servait la coquille de l'application à leur place : « À
+  # propos de Meeshy », un h1, 0 script en visite 1 ; « Meeshy », aucun h1,
+  # 2 scripts en visite 2 — et la coquille n'a pas de route `/about`, donc page
+  # blanche. Ni un test de construction (les fichiers étaient sur le disque), ni
+  # la mesure de première peinture (elle n'installe le service worker qu'à la
+  # fin) ne pouvaient le voir. Il faut un navigateur RÉEL et une DEUXIÈME
+  # visite : c'est exactement ce que ce job fait.
+  institutionnel-v3:
+    name: Cache institutionnel web-v3 (5 pages, 2 formes, 0 requête)
+    runs-on: ubuntu-latest
+    needs: quality
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache bun dependencies
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install dependencies (bun with retry)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
+
+      - name: Install dependencies (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
+        run: pnpm install --no-frozen-lockfile
+
+      # Le préchauffage des cinq documents fait partie de CE build depuis
+      # qu'il est un greffon de `vite.config.ts` : le témoin mesure donc
+      # exactement ce qu'un déploiement servirait.
+      - name: Build apps/web-v3
+        run: |
+          cd apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Gate cache institutionnel
+        run: |
+          cd apps/web-v3
+          node scripts/verifie-institutionnel.mjs
+
+  # ===========================================================================
   # LIFECYCLE: le gate de cycle de vie du § 8.5 de la conception v3 — SON PORTEUR
   # ===========================================================================
   # « 0 requête pendant que l'onglet est hidden ; 1 seule requête de battement

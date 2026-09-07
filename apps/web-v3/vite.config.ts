@@ -1,8 +1,11 @@
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import tailwind from '@tailwindcss/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+import { MOTIF_INSTITUTIONNEL } from './scripts/lib/routes-institutionnelles.mjs';
 
 /**
  * DEUX runtimes, UN code source.
@@ -40,6 +43,51 @@ const aliasPreact = [
  */
 const pourCapacitor = process.env.MEESHY_CIBLE === 'capacitor';
 
+/**
+ * LE PRÉCHAUFFAGE ENTRE DANS LA CONSTRUCTION, et il n'y est pas par commodité.
+ *
+ * Il était enchaîné APRÈS `vite build` dans le script `build` du manifeste, et
+ * cet ordre-là avait un coût invisible : quand `vite-plugin-pwa` parcourait
+ * `dist/` pour composer son manifeste de précache, les cinq documents
+ * n'existaient pas encore. Le service worker ne les connaissait donc pas — et,
+ * pire que de ne pas les mettre en cache, sa `NavigationRoute` servait la
+ * COQUILLE de l'application à leur place dès la deuxième visite. Mesuré :
+ * `/about` rendait « À propos de Meeshy », zéro script, en visite 1 ; puis
+ * « Meeshy », aucun `<h1>`, deux scripts, en visite 2.
+ *
+ * `closeBundle` d'un greffon ORDINAIRE s'exécute avant celui de
+ * `vite-plugin-pwa`, qui se déclare `enforce: 'post'`. Les documents sont donc
+ * sur le disque quand le manifeste se scelle, et ils y entrent avec leur
+ * empreinte — ce qui règle du même coup leur invalidation : une page qui change
+ * change son empreinte, et le déploiement suivant la remplace. C'est ce que le
+ * cache d'exécution ne sait pas faire.
+ *
+ * Le préchauffage reste un PROCESSUS séparé : il rend du JSX avec la pragma
+ * preact et lit des `.tsx`, ce que ce fichier de configuration — chargé par
+ * Node — ne sait pas faire.
+ */
+const prechauffeLesPagesInstitutionnelles = (): Plugin => ({
+  name: 'meeshy-prechauffe-institutionnel',
+  apply: 'build',
+  closeBundle: {
+    sequential: true,
+    handler() {
+      const r = spawnSync('bun', ['run', 'scripts/prerend-institutionnel.tsx'], {
+        cwd: fileURLToPath(new URL('.', import.meta.url)),
+        stdio: 'inherit',
+      });
+      if (r.status !== 0) {
+        throw new Error(
+          `Le préchauffage des pages institutionnelles a échoué (code ${r.status}). ` +
+            'La construction s\'arrête : un `dist` sans ces documents produirait un ' +
+            'service worker qui sert la coquille de l\'application sur /about, /privacy, ' +
+            'etc. — un défaut SILENCIEUX, que seule une deuxième visite révèle.',
+        );
+      }
+    },
+  },
+});
+
 export default defineConfig({
   base: pourCapacitor ? './' : '/',
   resolve: {
@@ -50,6 +98,7 @@ export default defineConfig({
   },
   plugins: [
     tailwind(),
+    prechauffeLesPagesInstitutionnelles(),
     /**
      * VARIANTE A (PWA). Desactivee sous Capacitor : la coque native gere
      * elle-meme son cycle de vie, et un service worker par-dessus ferait deux
@@ -80,6 +129,43 @@ export default defineConfig({
             },
             workbox: {
               globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+              /**
+               * Chaque page institutionnelle est écrite dans DEUX formes —
+               * `about.html` et `about/index.html` — parce qu'un serveur
+               * statique ne résout pas forcément les deux (#5554). Elles sont
+               * identiques octet pour octet, mais ce sont deux ADRESSES :
+               * Workbox les précachait toutes les deux. Mesuré sur navigateur
+               * réel — 10 requêtes, 279,8 Ko bruts à l'installation, dont la
+               * moitié en pur doublon (~37 Ko gzip), soit PLUS que la première
+               * peinture entière de l'application.
+               *
+               * Seule la forme canonique entre donc au précache ; `/about/`
+               * est ramenée sur `/about` par `sw-institutionnel.js`. Le motif
+               * ne croise pas les `/`, donc l'`index.html` de la racine — la
+               * coquille de l'application — n'est PAS exclu.
+               */
+              globIgnores: ['*/index.html'],
+              /**
+               * Chargé EN TÊTE du service worker généré, donc son écouteur
+               * `fetch` passe avant ceux de Workbox.
+               */
+              importScripts: ['sw-institutionnel.js'],
+              /**
+               * LA CEINTURE, le précache étant les bretelles.
+               *
+               * Sans cette liste, `NavigationRoute` répond à TOUTE navigation
+               * par `index.html` — la coquille de l'application. Les cinq
+               * documents institutionnels avaient beau être sur le disque, un
+               * visiteur qui revenait recevait la coquille, qui n'a pas de
+               * route `/about` : page blanche. Le motif est ancré aux deux
+               * bouts, donc `/about-nous` — qui appartient bien à
+               * l'application — n'est pas exclu par erreur.
+               *
+               * Sa source est partagée avec le préchauffage
+               * (`scripts/lib/routes-institutionnelles.mjs`) : deux listes
+               * tenues à la main auraient divergé au premier ajout de page.
+               */
+              navigateFallbackDenylist: [MOTIF_INSTITUTIONNEL],
               /**
                * La zone rurale est la raison d'etre de ce cache : le shell est
                * precache une fois, puis JAMAIS retelecharge tant que son hash
