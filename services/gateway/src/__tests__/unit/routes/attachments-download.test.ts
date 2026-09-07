@@ -620,6 +620,54 @@ describe('GET /attachments/file/*', () => {
       expect(res.headers['content-security-policy']).toContain('frame-ancestors');
     });
   });
+
+  // #3627 — TOUTES les `fileUrl` persistées en base pointent vers CETTE
+  // route (pas `/attachments/:attachmentId`, qui a déjà sa propre garde
+  // depuis longtemps) : un SVG uploadé et retrouvé par son chemin était servi
+  // `inline`, sans CSP restrictive ni `Content-Disposition: attachment` — le
+  // vecteur de XSS stocké visé par la route jumelle restait ouvert ici.
+  describe('SVG servi par chemin force le téléchargement', () => {
+    let app: FastifyInstance;
+    beforeAll(async () => {
+      mockStat.mockResolvedValue({ size: 256, mtimeMs: 1700000004000 });
+      app = await buildApp();
+    });
+    afterAll(async () => { await app.close(); });
+
+    it('sert Content-Disposition: attachment pour un SVG', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/image.svg',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-disposition']).toContain('attachment');
+    });
+
+    it('pose la CSP sandbox restrictive pour un SVG', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/image.svg',
+      });
+      expect(res.headers['content-security-policy']).toContain('sandbox');
+    });
+
+    it("n'accorde PAS le laissez-passer d'iframe universel à un SVG", async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/image.svg',
+      });
+      expect(res.headers['content-security-policy']).not.toContain('frame-ancestors');
+    });
+
+    it('laisse un PDF inline avec le laissez-passer iframe (comportement inchangé)', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/doc.pdf',
+      });
+      expect(res.headers['content-disposition']).toBe('inline');
+      expect(res.headers['content-security-policy']).toContain('frame-ancestors');
+    });
+  });
 });
 
 // ═════════════════════════════════════════════════════════════════════════════

@@ -9,7 +9,7 @@ import { thumbnailContentType } from '../../services/attachments/thumbnail';
 import { resolveAttachmentReadVerdict, denyAttachmentRead } from '../../services/attachments/attachmentReadVerdict';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
-import { resolve as pathResolve, sep as pathSep } from 'path';
+import { resolve as pathResolve, sep as pathSep, basename } from 'path';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendError, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
@@ -264,6 +264,19 @@ export async function registerDownloadRoutes(
  * Fonction et non plugin : les DEUX montages appellent le MÊME site, sans copie
  * de handler ni encapsulation supplémentaire.
  */
+
+/**
+ * #3627 — communique au hook `onSend` (qui pose `frame-ancestors *`
+ * inconditionnellement pour l'embarquement PDF) qu'UNE réponse donnée sert un
+ * SVG et ne doit pas recevoir ce laissez-passer d'iframe universel. Un SVG
+ * peut embarquer du JavaScript ; servi `inline` sous n'importe quel cadre, il
+ * s'exécute dans l'origine de la passerelle (XSS stocké). Un `WeakSet` clé
+ * par `FastifyReply` — jamais une propriété posée sur `reply`, qui élargirait
+ * un type public partagé par toutes les routes — porte cette décision du
+ * handler jusqu'au hook, sans survivre à la requête.
+ */
+const SVG_SANDBOXED_RESPONSES = new WeakSet<FastifyReply>();
+
 export function registerFileStreamRoute(fastify: FastifyInstance): void {
   /**
    * GET /attachments/file/*
@@ -316,8 +329,13 @@ export function registerFileStreamRoute(fastify: FastifyInstance): void {
       // on missing avatars). Keeping this hook synchronous leaves cgo as the
       // only async onSend hook — the proven-safe state every other route has.
       onSend: (request, reply, payload, done) => {
-        reply.removeHeader('X-Frame-Options');
-        reply.header('Content-Security-Policy', "frame-ancestors *");
+        // #3627 — un SVG ne reçoit PAS le laissez-passer d'iframe universel :
+        // le handler a déjà posé sa propre CSP restrictive (voir plus bas) et
+        // l'écraser ici rouvrirait le vecteur que cette CSP ferme.
+        if (!SVG_SANDBOXED_RESPONSES.has(reply)) {
+          reply.removeHeader('X-Frame-Options');
+          reply.header('Content-Security-Policy', "frame-ancestors *");
+        }
         crossOriginMediaHeaders(request, reply, payload, done);
       }
     },
@@ -446,8 +464,23 @@ export function registerFileStreamRoute(fastify: FastifyInstance): void {
         reply.header('Content-Type', mimeType);
         reply.header('Content-Length', fileSize);
         reply.header('ETag', etag);
-        reply.header('Content-Disposition', 'inline');
         reply.header('Cache-Control', cacheControl);
+
+        // #3627 — même traitement que `GET /attachments/:attachmentId` : un
+        // SVG peut contenir du JavaScript, et cette route (celle où pointent
+        // TOUTES les `fileUrl` persistées en base) le servait `inline` sans
+        // aucune garde. `X-Content-Type-Options` est posé pour CE type ici
+        // (pas pour tous, contrairement à la route par id) afin de ne rien
+        // changer au comportement observé des autres types de fichiers.
+        if (mimeType === 'image/svg+xml') {
+          const safeFilename = sanitizeAsciiFilename(basename(decodedPath));
+          reply.header('Content-Disposition', `attachment; filename="${safeFilename}"`);
+          reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
+          reply.header('X-Content-Type-Options', 'nosniff');
+          SVG_SANDBOXED_RESPONSES.add(reply);
+        } else {
+          reply.header('Content-Disposition', 'inline');
+        }
 
         const stream = createReadStream(filePath);
         return reply.send(stream);

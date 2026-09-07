@@ -25,6 +25,7 @@ import {
 } from '../AttachmentEncryptionService';
 import { MetadataManager } from './MetadataManager';
 import { planVideoTranscode, buildVideoTranscodeArgs } from './video-transcode-plan.js';
+import { shouldStripImageMetadata, stripImageMetadata } from './imageMetadataStrip.js';
 
 export interface FileToUpload {
   buffer: Buffer;
@@ -349,6 +350,11 @@ export class UploadProcessor {
     if (mimeType && mimeType.startsWith('audio/')) {
       logger.debug('Amplification audio avant sauvegarde');
       finalBuffer = await this.amplifyAudio(buffer, mimeType);
+    } else if (shouldStripImageMetadata(mimeType)) {
+      // #3627 — retire EXIF/GPS d'une photo JPEG/PNG avant qu'elle ne touche
+      // le disque : aucun appelant de `saveFile` n'a besoin des octets
+      // originaux après ce point.
+      finalBuffer = await stripImageMetadata(buffer);
     }
 
     await fs.writeFile(fullPath, finalBuffer);
@@ -428,6 +434,18 @@ export class UploadProcessor {
     let thumbnailPath: string | null = null;
     let imageVariants: Array<{ width: number; height: number; url: string; size: number; format: 'webp' }> | undefined;
     if (attachmentType === 'image') {
+      // #3627 — `saveFile()` peut avoir réencodé le fichier (EXIF/GPS
+      // retirés pour JPEG/PNG), changeant sa taille en octets : la taille
+      // PERSISTÉE doit refléter ce qui est réellement sur disque, pas la
+      // taille de l'upload d'origine. Sans condition sur le mimeType : un
+      // format non concerné par le retrait (PNG animé mis à part, WEBP, GIF)
+      // mesure alors sa taille réelle, déjà identique à `file.size`.
+      try {
+        const savedStat = await fs.stat(path.join(this.uploadBasePath, filePath));
+        storedFileSize = savedStat.size;
+      } catch (error) {
+        logger.error('Impossible de remesurer le fichier image sauvegardé', error as Error);
+      }
       thumbnailPath = await this.metadataManager.generateThumbnail(filePath);
       // D4: responsive WebP variants for srcset — plaintext images only.
       const variants = await this.metadataManager.generateImageVariants(filePath);
