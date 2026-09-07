@@ -350,6 +350,7 @@ export function registerCoreRoutes(
         submittedContent: parsed.data.content,
         storyEffects: undefined,
         declaredMentions: undefined,
+        editedInApp: parsed.data.editedInApp,
         porte: 'POST /posts/from-attachment',
       });
 
@@ -452,6 +453,7 @@ export function registerCoreRoutes(
         // Langue MESURÉE côté composer web (#5349) — voir la note d'en-tête
         // de `runPublicationEffects` pour son rang face à `originalLanguage`.
         detectedLanguage: parsed.data.detectedLanguage,
+        editedInApp: parsed.data.editedInApp,
         porte: 'POST /posts',
       });
 

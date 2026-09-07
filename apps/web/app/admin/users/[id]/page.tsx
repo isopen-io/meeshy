@@ -34,6 +34,7 @@ import { UserPersonalInfoSection } from '@/components/admin/user-detail/UserPers
 import { UserContactInfoSection } from '@/components/admin/user-detail/UserContactInfoSection';
 import { UserLanguageSection } from '@/components/admin/user-detail/UserLanguageSection';
 import { UserSecuritySection } from '@/components/admin/user-detail/UserSecuritySection';
+import { UserBanSection } from '@/components/admin/user-detail/UserBanSection';
 import { UserGeolocationSection } from '@/components/admin/user-detail/UserGeolocationSection';
 import { UserActivitySection } from '@/components/admin/user-detail/UserActivitySection';
 import { UserConversationsSection } from '@/components/admin/user-detail/UserConversationsSection';
@@ -308,6 +309,8 @@ export default function UserDetailPage() {
               onUpdate={loadUserData}
               onResetPassword={() => setPasswordReset({ ...passwordReset, open: true })}
             />
+
+            <UserBanSection userId={userId} onUpdate={loadUserData} />
 
             <UserGeolocationSection user={user} />
 

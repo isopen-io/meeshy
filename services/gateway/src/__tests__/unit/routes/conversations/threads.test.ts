@@ -278,6 +278,121 @@ describe('GET threads — position hoist', () => {
   });
 });
 
+// ─── #4952 : la citation applique la protection du message CITÉ ──────────────
+// `threadMessageSelect.replyTo` charge la ligne citée en entier (content,
+// pièces jointes) sans filtre ; sans masquage, un message à vue unique /
+// flouté ouvert par son fil de réponses servait son texte et ses pièces
+// jointes en clair dans la citation — alors que le message RACINE porte déjà
+// ses drapeaux depuis #4885.
+
+describe('GET threads — la citation masque un message CITÉ protégé', () => {
+  it('remplace le texte du replyTo par un placeholder quand le message cité est à vue unique', async () => {
+    const protectedParent = {
+      ...mockParentMessage,
+      replyTo: {
+        id: 'quoted-secret',
+        content: 'Le secret à ne jamais répéter',
+        originalLanguage: 'en',
+        createdAt: new Date(),
+        senderId: 'part-2',
+        validatedMentions: [],
+        metadata: null,
+        isViewOnce: true,
+        isBlurred: false,
+        isEncrypted: false,
+        effectFlags: 0,
+        sender: null,
+        attachments: [],
+      },
+    };
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(protectedParent),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const body = res.json();
+
+    expect(body.data.parent.replyTo.content).not.toBe('Le secret à ne jamais répéter');
+    expect(JSON.stringify(body)).not.toContain('Le secret à ne jamais répéter');
+    expect(body.data.parent.replyTo.isViewOnce).toBe(true);
+    await app.close();
+  });
+
+  it('masque les pièces jointes du message cité quand il est flouté', async () => {
+    const protectedParent = {
+      ...mockParentMessage,
+      replyTo: {
+        id: 'quoted-blurred',
+        content: 'Un contenu flouté',
+        originalLanguage: 'en',
+        createdAt: new Date(),
+        senderId: 'part-2',
+        validatedMentions: [],
+        metadata: null,
+        isViewOnce: false,
+        isBlurred: true,
+        isEncrypted: false,
+        effectFlags: 0,
+        sender: null,
+        attachments: [
+          { id: 'att-1', fileUrl: '/uploads/secret.png', thumbnailUrl: '/uploads/secret-thumb.png', thumbHash: 'hash', mimeType: 'image/png' },
+        ],
+      },
+    };
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(protectedParent),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const body = res.json();
+
+    expect(body.data.parent.replyTo.content).not.toBe('Un contenu flouté');
+    expect(body.data.parent.replyTo.attachments[0]).not.toHaveProperty('fileUrl');
+    expect(body.data.parent.replyTo.attachments[0]).not.toHaveProperty('thumbnailUrl');
+    expect(body.data.parent.replyTo.attachments[0]).not.toHaveProperty('thumbHash');
+    await app.close();
+  });
+
+  it("laisse passer le texte d'une citation ordinaire, non protégée", async () => {
+    const parentWithQuote = {
+      ...mockParentMessage,
+      replyTo: {
+        id: 'quoted-plain',
+        content: 'Un message tout à fait ordinaire',
+        originalLanguage: 'en',
+        createdAt: new Date(),
+        senderId: 'part-2',
+        validatedMentions: [],
+        metadata: null,
+        isViewOnce: false,
+        isBlurred: false,
+        isEncrypted: false,
+        effectFlags: 0,
+        sender: null,
+        attachments: [],
+      },
+    };
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(parentWithQuote),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const body = res.json();
+
+    expect(body.data.parent.replyTo.content).toBe('Un message tout à fait ordinaire');
+    await app.close();
+  });
+});
+
 // ─── Cycle 67 : le fil sert le MÊME format de traductions que les autres routes ─
 //
 // `threadMessageSelect` sélectionne `translations` et la route renvoyait le
