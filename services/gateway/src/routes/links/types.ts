@@ -329,20 +329,30 @@ const messageTranslationsSchema = {
 } as const;
 
 /**
- * Message cité, tel que `formatReplyToMessage` le produit : son texte et son
- * auteur, rien de plus.
+ * Message cité, tel que `formatReplyToMessage` le produit : son texte
+ * (masqué par `servedQuotedMessage` quand le message cité est protégé), son
+ * auteur, et les quatre drapeaux qui déclarent cette protection (#4952).
+ *
+ * Ne PAS déclarer `translations` ni `attachments` ici : `formatReplyToMessage`
+ * ne les sert jamais pour la citation (voir son propre commentaire) — les
+ * ajouter au schéma sans producteur reproduirait le piège du `default` sur un
+ * champ absent (§ CLAUDE.md « Un `default` … est une ÉCRITURE »).
  */
 const replyToMessageSchema = {
   type: 'object',
   nullable: true,
-  description: 'Quoted message (reply target) — text and author only',
+  description: 'Quoted message (reply target) — text, author, and protection flags',
   properties: {
     id: { type: 'string', description: 'Quoted message identifier' },
-    content: { type: 'string', description: 'Quoted message content' },
+    content: { type: 'string', description: 'Quoted message content (masked placeholder when protected)' },
     originalLanguage: { type: 'string', description: 'Quoted message original language' },
     messageType: { type: 'string', description: 'Quoted message type' },
     createdAt: { type: 'string', format: 'date-time', description: 'Quoted message creation timestamp' },
-    sender: { ...messageSenderSchema, nullable: true, description: 'Author of the quoted message (registered or anonymous)' }
+    sender: { ...messageSenderSchema, nullable: true, description: 'Author of the quoted message (registered or anonymous)' },
+    isViewOnce: { type: 'boolean', description: 'Quoted message is view-once' },
+    isBlurred: { type: 'boolean', description: 'Quoted message content is blurred until tap to reveal' },
+    isEncrypted: { type: 'boolean', description: 'Quoted message is end-to-end encrypted' },
+    effectFlags: { type: 'number', description: 'Bitfield for the quoted message effects (blurred / ephemeral / view-once)' }
   }
 } as const;
 
