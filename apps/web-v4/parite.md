@@ -154,9 +154,14 @@ difficile à diagnostiquer. La décision est prise ; le point se rouvrira au
 décommissionnement (#5496), où ces quatre adresses devront enfin trouver une
 cible.
 
-**`/chat/:id` du legacy et `/chat/:share_link` de la v4 partagent le préfixe.**
-Le routage Traefik les sépare donc sur la FORME du segment, pas sur le préfixe :
-c'est un point d'attention pour #5561, pas un détail de configuration.
+**`/chat/:id` du legacy et `/chat/:share_link` de la v4 sont la MÊME route.**
+Vérifié : `apps/web/app/chat/[id]/page.tsx:21` lit son paramètre comme un
+`linkId`, et `ConversationShareLink.linkId` / `.identifier` sont préfixés
+`mshy_` (`schema.prisma:609-613`). Le legacy sert donc déjà l'adresse d'un lien
+de partage ; la V4.0.0 la nomme mieux, elle n'en crée pas une seconde. **`/chat/*`
+passe en bloc à la v4**, sans que le routage ait à distinguer une forme de
+segment. Le préfixe `mshy_` reste utile à `/c/:conversation`, qui peut refuser
+d'emblée un segment qui n'est pas un ObjectId.
 
 ## Ce qui se passe quand on atterrit sur une conversation — arrêté par le porteur
 
@@ -229,7 +234,7 @@ dans une version ultérieure ·
 | `/conversation/:conversationId` | `legacy` | **conservée sans redirection** (porteur 2026-09-07) |
 | `/conversations/[[...id]]` | `legacy` | idem |
 | `/conversations/new` | `legacy` | création d'une conversation |
-| `/chat/:id` | `legacy` | conservée ; la v4 ajoute `/chat/:share_link` à côté |
+| `/chat/:id` | **V4.0.0** | c'est DÉJÀ l'adresse d'un lien de partage — `/chat/*` passe en bloc à la v4 |
 | `/groups`, `/groups/:identifier` | `legacy` | idem |
 | `/c/:conversation` | **V4.0.0** | **adresse neuve** — le fil du membre |
 | `/chat/:share_link` | **V4.0.0** | **adresse neuve** — rejoindre par lien public |
