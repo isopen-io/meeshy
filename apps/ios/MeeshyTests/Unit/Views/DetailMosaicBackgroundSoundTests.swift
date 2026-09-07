@@ -30,6 +30,7 @@ import MeeshySDK
 /// Ces témoins montent la mosaïque et lisent le muet SERVI à l'hôte canvas —
 /// la même lecture que `ScenePlayerModeTests.test_cardMode_mountsTheHostMuted`
 /// côté SDK.
+@MainActor
 final class DetailMosaicBackgroundSoundTests: XCTestCase {
 
     // MARK: - Fabriques

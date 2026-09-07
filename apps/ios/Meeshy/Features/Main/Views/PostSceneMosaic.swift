@@ -55,7 +55,7 @@ import MeeshyUI
 ///
 /// > **Un mode de lecture n'appartient pas à ce qui est rendu, mais à l'endroit
 /// > où on le rend.** Nommer l'hôte le rend impossible à hériter par accident.
-enum PostSceneMosaicHost: Equatable {
+nonisolated enum PostSceneMosaicHost: Equatable {
     /// Le fil — muet PAR CONSTRUCTION.
     case feed
     /// La fiche détail — le son de fond joue, le viewer peut le couper.
