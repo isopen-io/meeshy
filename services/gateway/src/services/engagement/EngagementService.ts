@@ -54,6 +54,36 @@ export class EngagementService {
   }
 
   /**
+   * Incrémente un axe « conversation distincte » (`conversation.private`,
+   * `conversation.public`, `conversation.community`) au PREMIER message
+   * envoyé dans CETTE conversation par CET utilisateur — jamais aux
+   * suivants (docs/product/streaks-badges-modele.md § 2).
+   *
+   * La déduplication est portée par la contrainte unique
+   * `EngagementConversationCredit(userId, axisKey, conversationId)`, jamais
+   * par une relecture avant écriture — même garde anti-course que
+   * `tryAwardBadge`. Un conflit signifie « cette conversation a déjà
+   * crédité cet axe » : no-op silencieux, `recordActivity` n'est pas
+   * appelée une seconde fois.
+   */
+  async recordConversationActivity(
+    userId: string,
+    axisKey: EngagementAxisKey,
+    conversationId: string,
+  ): Promise<void> {
+    try {
+      await this.prisma.engagementConversationCredit.create({
+        data: { userId, axisKey, conversationId },
+      });
+    } catch (err) {
+      if (isP2002(err)) return;
+      throw err;
+    }
+
+    await this.recordActivity(userId, axisKey);
+  }
+
+  /**
    * Garde anti-rejeu portée par la BASE (contrainte unique
    * `EngagementMilestone`), jamais par une relecture avant écriture — ça
    * évite la course entre deux écritures concurrentes du même utilisateur
