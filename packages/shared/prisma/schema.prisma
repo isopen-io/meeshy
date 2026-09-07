@@ -305,6 +305,7 @@ model User {
   createdAffiliateTokens AffiliateToken[]              @relation("AffiliateTokenCreator")
   affiliateRelations     AffiliateRelation[]           @relation("AffiliateUser")
   referredRelations      AffiliateRelation[]           @relation("ReferredUser")
+  sentEmailInvitations   EmailInvitation[]              @relation("EmailInvitationSender")
   createdTrackingLinks   TrackingLink[]                @relation("TrackingLinkCreator")
   initiatedCalls         CallSession[]                 @relation("CallInitiator")
   conversationPrefs      UserConversationPreferences[]
@@ -1785,8 +1786,9 @@ model AffiliateToken {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  creator      User                @relation("AffiliateTokenCreator", fields: [createdBy], references: [id])
-  affiliations AffiliateRelation[]
+  creator          User                @relation("AffiliateTokenCreator", fields: [createdBy], references: [id])
+  affiliations     AffiliateRelation[]
+  emailInvitations EmailInvitation[]
 }
 
 /// Relation d'affiliation entre utilisateurs
@@ -1802,6 +1804,27 @@ model AffiliateRelation {
   affiliateToken AffiliateToken @relation(fields: [affiliateTokenId], references: [id])
   affiliateUser  User           @relation("AffiliateUser", fields: [affiliateUserId], references: [id])
   referredUser   User           @relation("ReferredUser", fields: [referredUserId], references: [id])
+}
+
+/// Relation d'invitation par e-mail persistée (#3691) — QUI a invité QUI, par
+/// quelle adresse, distincte de l'`AffiliateRelation` (qui ne s'écrit qu'APRÈS
+/// inscription). Le lien tracé et la page d'atterrissage réutilisent
+/// l'`AffiliateToken` existant (`/signup/affiliate/:token`) plutôt qu'un
+/// second système : `affiliateTokenId` pointe un jeton dédié à CETTE
+/// invitation (`maxUses: 1`), et son nom reste générique (jamais l'email du
+/// destinataire, public via `GET /affiliate/validate/:token`).
+model EmailInvitation {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  senderId         String   @db.ObjectId
+  email            String
+  affiliateTokenId String   @db.ObjectId
+  sentAt           DateTime @default(now())
+
+  sender         User           @relation("EmailInvitationSender", fields: [senderId], references: [id])
+  affiliateToken AffiliateToken @relation(fields: [affiliateTokenId], references: [id])
+
+  @@index([senderId])
+  @@index([email])
 }
 
 /// Lien de tracking pour compter les clics sur les liens partagés

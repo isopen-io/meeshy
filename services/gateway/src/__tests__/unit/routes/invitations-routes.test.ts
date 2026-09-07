@@ -39,6 +39,14 @@ function makePrisma(overrides: PrismaOverrides = {}) {
       findUnique: jest.fn().mockResolvedValue(user),
       findFirst: jest.fn().mockResolvedValue(existingUser),
     },
+    affiliateToken: {
+      // Jamais pris — laisse `generateUniqueAffiliateToken` aboutir au premier essai.
+      findUnique: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({ id: 'affiliate-token-id', token: 'aff_test1234' }),
+    },
+    emailInvitation: {
+      create: jest.fn().mockResolvedValue({ id: 'email-invitation-id' }),
+    },
   };
 }
 
@@ -99,6 +107,41 @@ describe('POST /invitations/email', () => {
     expect(body.success).toBe(true);
     expect(body.data.email).toBe('friend@example.com');
     expect(body.data.sentAt).toBeDefined();
+    expect(body.data.invitationUrl).toMatch(/^http:\/\/localhost:3100\/signup\/affiliate\/aff_[A-Za-z0-9]+$/);
+  });
+
+  it('persists a dedicated single-use affiliate token and the invitation relation (#3691)', async () => {
+    const prisma = makePrisma();
+    const appTracked = Fastify({ logger: false });
+    appTracked.decorate('prisma', prisma as unknown);
+    appTracked.decorate('authenticate', async (req: Parameters<typeof app.authenticate>[0]) => {
+      (req as unknown as Record<string, unknown>).user = { userId: USER_ID };
+    });
+    await appTracked.register(invitationRoutes);
+    await appTracked.ready();
+
+    const res = await appTracked.inject({
+      method: 'POST',
+      url: '/invitations/email',
+      headers: AUTH_HEADER,
+      payload: { email: 'friend@example.com' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(prisma.affiliateToken.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ createdBy: USER_ID, maxUses: 1 }),
+    });
+    // Jamais l'adresse du destinataire dans le nom — public via /affiliate/validate/:token.
+    const affiliateTokenCall = prisma.affiliateToken.create.mock.calls[0][0];
+    expect(affiliateTokenCall.data.name).not.toContain('friend@example.com');
+    expect(prisma.emailInvitation.create).toHaveBeenCalledWith({
+      data: {
+        senderId: USER_ID,
+        email: 'friend@example.com',
+        affiliateTokenId: 'affiliate-token-id',
+      },
+    });
+    await appTracked.close();
   });
 
   it('returns 201 and logs warn when emailService is not available', async () => {
