@@ -155,6 +155,12 @@ export class PostService {
     repostOfId?: string;
     /** Opt-in auteur : extraction de la bande-son des VIDÉOS vers la bibliothèque de sons. */
     allowSoundExtraction?: boolean;
+    /**
+     * Réglage AUTEUR posé à la publication (#3959) — désactive TOUT
+     * commentaire sur ce post (`POST /posts/:postId/comments`, création et
+     * réponses). `undefined`/`false` = comportement historique (ouvert).
+     */
+    commentsDisabled?: boolean;
     /** Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par `parseSharedPlace`. */
     location?: unknown;
     /**
@@ -335,6 +341,7 @@ export class PostService {
         communityId: data.communityId,
         storyEffects: (data.storyEffects as any) ?? undefined,
         allowSoundExtraction: data.allowSoundExtraction ?? false,
+        commentsDisabled: data.commentsDisabled ?? false,
         moodEmoji: data.moodEmoji,
         audioUrl: data.audioUrl,
         audioDuration: data.audioDuration,

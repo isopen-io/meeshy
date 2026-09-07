@@ -242,6 +242,9 @@ export const CreatePostSchema = z.object({
   // vers la bibliothèque de sons (Sound crédité à l'auteur). Ne gouverne que
   // le démuxage vidéo — les pistes audio suivent `feedsSoundLibrary`.
   allowSoundExtraction: z.boolean().optional(),
+  // Réglage AUTEUR posé à la publication (#3959) — désactive TOUT commentaire
+  // sur ce post (`POST /posts/:postId/comments`, création et réponses).
+  commentsDisabled: z.boolean().optional(),
   // Status/mood-specific
   moodEmoji: z.string().max(10).optional(),
   audioUrl: z.url().optional(),

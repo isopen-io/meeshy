@@ -194,6 +194,13 @@ export function registerCommentRoutes(
       }
       const targetPostId = target.id;
 
+      // #3959 — réglage AUTEUR posé à la publication : désactivé bloque TOUT
+      // commentaire (création ET réponse, même endpoint via `parentId`),
+      // auteur compris — fail-closed, pas d'exception qui rouvrirait le fil.
+      if (target.commentsDisabled) {
+        return sendForbidden(reply, 'Comments are disabled on this post', { code: 'COMMENTS_DISABLED' });
+      }
+
       // Idempotent via clientMutationId — replays return the same comment.
       type CommentResult = NonNullable<Awaited<ReturnType<typeof commentService.addComment>>>;
       const comment = await withMutationLog<CommentResult>({

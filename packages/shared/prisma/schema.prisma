@@ -3263,6 +3263,17 @@ model Post {
   allowSoundExtraction Boolean @default(false)
 
   // ============================================
+  // MODÉRATION DE LA PUBLICATION
+  // ============================================
+  /// Réglage AUTEUR posé à la publication (#3959) — un drapeau de ce qui
+  /// PART, jamais une propriété d'une slide/objet de storyEffects. `false`
+  /// par défaut (commentaires ouverts, comportement historique). Gouverne
+  /// `POST /posts/:postId/comments` (création ET réponses, même endpoint) —
+  /// fail-closed : désactivé bloque TOUT commentaire, auteur compris, comme
+  /// la fermeture de discussion des plateformes de référence.
+  commentsDisabled Boolean @default(false)
+
+  // ============================================
   // STATUS/MOOD-SPECIFIC
   // ============================================
   /// Emoji mood (ex: "😴", "🎉", "💪", "☕")
