@@ -44,6 +44,23 @@ const aliasPreact = [
 const forCapacitor = process.env.MEESHY_TARGET === 'capacitor';
 
 /**
+ * LE BANC DE FIL LONG — une constante de CONSTRUCTION, jamais un paramètre d'URL.
+ *
+ * La virtualisation ne se prouve pas sur sept messages ; il en faut cinq cents.
+ * Les fabriquer à la demande depuis l'application aurait fait entrer du code de
+ * banc d'essai dans le bundle servi aux utilisateurs — pour mesurer la légèreté,
+ * on l'aurait dégradée.
+ *
+ * `__BENCH__` est remplacé par un LITTÉRAL à la construction. Dans le build
+ * normal il vaut `0`, la branche qui rembourre la fixture devient
+ * `if (0 > 0)`, et rolldown l'élimine : le coût est nul, et le gate de poids
+ * le prouve plutôt que ce commentaire. `MEESHY_BENCH=500 bun run build` produit
+ * la variante que le témoin mesure — même mécanique que `MEESHY_RUNTIME` et
+ * `MEESHY_TARGET`, déjà en place.
+ */
+const bench = Number.parseInt(process.env.MEESHY_BENCH ?? '0', 10) || 0;
+
+/**
  * LE PRÉCHAUFFAGE ENTRE DANS LA CONSTRUCTION, et il n'y est pas par commodité.
  *
  * Il était enchaîné APRÈS `vite build` dans le script `build` du manifeste, et
@@ -90,6 +107,7 @@ const prerenderInstitutionalPages = (): Plugin => ({
 
 export default defineConfig({
   base: forCapacitor ? './' : '/',
+  define: { __BENCH__: JSON.stringify(bench) },
   resolve: {
     alias: [
       ...(runtime === 'preact' ? aliasPreact : []),
@@ -217,9 +235,28 @@ export default defineConfig({
          * coupable quand un poids monte (§ 8.4 de la conception v3), et pour
          * qu'un ecran neuf ne renchérisse pas la premiere peinture.
          */
+        /**
+         * `core` est le SOCLE : ce que le document référence lui-même, donc ce
+         * que le lecteur paie AVANT le premier pixel. Une dépendance n'y entre
+         * que si plusieurs routes la lisent.
+         *
+         * Le règle par défaut — « node_modules ⇒ core » — est fausse dès qu'une
+         * dépendance ne sert qu'à un écran, et elle l'est en silence : mesuré,
+         * `@tanstack/react-virtual` y a fait passer la première peinture de
+         * 26,33 à 31,44 Ko pour un module que seul le fil monte. On NOMME donc
+         * les dépendances mono-écran, et le gate de poids garde la porte.
+         */
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
             if (id.includes('@tanstack/react-query')) return 'data';
+            // Le virtualiseur ne sert qu'au fil : son propre morceau, chargé
+            // par la route qui l'importe et par personne d'autre.
+            // `virtual-core` porte l'essentiel du calcul : le nommer AUSSI est
+            // le point qui compte — nommer le seul paquet React laissait 6 Ko
+            // de son moteur dans le socle, et la mesure l'a dit avant moi.
+            if (id.includes('@tanstack/react-virtual') || id.includes('@tanstack/virtual-core')) {
+              return 'virtual';
+            }
             return 'core';
           }
           return undefined;

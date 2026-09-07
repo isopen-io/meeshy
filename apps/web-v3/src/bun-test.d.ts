@@ -23,3 +23,11 @@ declare module 'bun:test' {
 
   export function expect(value: unknown): Expectations & { readonly not: Expectations };
 }
+
+/**
+ * `__BENCH__` — le nombre de messages que la fixture fabrique en plus, posé en
+ * littéral par `vite.config.ts`. Vaut `0` partout sauf dans la variante de banc
+ * (`MEESHY_BENCH=500 bun run build`), que seul le témoin de virtualisation
+ * construit.
+ */
+declare const __BENCH__: number;

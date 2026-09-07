@@ -8,12 +8,10 @@
  * ce que coute la premiere visite, ce que coute la seconde, et si la troisieme
  * fonctionne reseau COUPE.
  */
-import { chromium } from '@playwright/test';
+import { launchChromium } from './lib/browser.mjs';
 
 const BASE = process.env.BASE ?? 'http://localhost:4173';
-const browser = await chromium.launch({
-  executablePath: process.env.CHROMIUM ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-});
+const browser = await launchChromium();
 const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
 
 /**

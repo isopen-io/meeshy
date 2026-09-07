@@ -253,6 +253,38 @@ export const MESSAGES: readonly Message[] = [
   }),
 ];
 
+/**
+ * LE FIL DU BANC — cinq cents messages, uniquement dans la variante de banc.
+ *
+ * `__BENCH__` est un LITTÉRAL posé à la construction (voir `vite.config.ts`).
+ * Dans le build normal il vaut `0`, cette fonction n'est jamais appelée et
+ * rolldown la retire : le gate de poids le prouve, et c'est la raison pour
+ * laquelle le banc n'est pas un paramètre d'URL — mesurer la légèreté avec du
+ * code de mesure embarqué aurait mesuré autre chose.
+ *
+ * Les longueurs VARIENT délibérément (le modulo sur l'index) : une
+ * virtualisation à hauteur fixe passe un banc de bulles identiques et échoue
+ * sur un vrai fil, où un message d'un mot voisine un paragraphe.
+ */
+const benchMessages = (count: number): readonly Message[] =>
+  Array.from({ length: count }, (_, i) => {
+    const people = [amina, kwame, viewer] as const;
+    const author = people[i % 3] as Participant;
+    const words = 3 + ((i * 7) % 40);
+    return message({
+      id: `bench-${i}`,
+      senderId: author.userId ?? VIEWER_ID,
+      sender: author,
+      content: `Message ${i} — ${'mesure '.repeat(words).trim()}.`,
+      originalLanguage: 'fr',
+      translations: [],
+      createdAt: minutesAgo(600 - i),
+    });
+  });
+
+export const THREAD_MESSAGES: readonly Message[] =
+  __BENCH__ > 0 ? [...benchMessages(__BENCH__), ...MESSAGES] : MESSAGES;
+
 const lastMessage = MESSAGES[MESSAGES.length - 1] as Message;
 
 /** Les champs qu'une `Conversation` exige et que la vue ne consulte pas. */
