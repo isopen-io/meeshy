@@ -1033,7 +1033,12 @@ class FeedViewModel: ObservableObject {
         /// Sans défaut : ce cœur est le point de passage des DEUX entrées, et
         /// c'est ici qu'un champ oublié se perdrait pour les deux à la fois.
         mediaAlts: [String?]?,
-        mediaObjectIds: [String?]?
+        mediaObjectIds: [String?]?,
+        /// L'autorisation d'extraction du son (#3996) — même discipline que
+        /// `mediaAlts`/`mediaObjectIds` juste au-dessus : ce cœur est le point
+        /// de passage des DEUX entrées, et c'est ici qu'un champ oublié se
+        /// perdrait pour les deux à la fois.
+        allowSoundExtraction: Bool?
     ) async {
         let currentUser = AuthManager.shared.currentUser
         var optimistic = FeedPost(
