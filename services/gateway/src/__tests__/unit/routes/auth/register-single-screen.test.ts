@@ -143,7 +143,7 @@ const monter = async (options: Parameters<typeof passerelle>[0] = {}) => {
 const CORPS = {
   displayName: 'Lena Vogel',
   email: 'lena@example.com',
-  password: 'motdepasse',
+  password: 'Xk9$mQ2vLp8#nR4wZ',
 };
 
 const inscrire = (app: FastifyInstance, corps: Record<string, unknown> = CORPS, headers: Record<string, string> = {}) =>
@@ -229,7 +229,7 @@ describe('POST /register — trois champs suffisent, le serveur DÉRIVE le reste
       firstName: 'Lena',
       lastName: 'Vogel',
       email: 'lena@example.com',
-      password: 'motdepasse',
+      password: 'Xk9$mQ2vLp8#nR4wZ',
     });
 
     expect(res.statusCode).toBe(200);
@@ -245,7 +245,7 @@ describe('POST /register — trois champs suffisent, le serveur DÉRIVE le reste
       firstName: 'Lena',
       lastName: 'Vogel',
       email: 'lena@example.com',
-      password: 'motdepasse',
+      password: 'Xk9$mQ2vLp8#nR4wZ',
     });
 
     expect(res.statusCode).toBe(409);

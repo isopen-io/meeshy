@@ -220,7 +220,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
    */
   fastify.post('/reset-password', {
     schema: {
-      description: 'Complete password reset using the token received via email. The new password must be at least 6 characters and include uppercase, lowercase, digit, and special character. If 2FA is enabled, a valid 2FA code must be provided.',
+      description: 'Complete password reset using the token received via email. The new password must be at least PASSWORD_MIN_LENGTH characters and include uppercase, lowercase, digit, and special character. If 2FA is enabled, a valid 2FA code must be provided.',
       tags: ['auth'],
       summary: 'Complete password reset',
       body: {
@@ -235,14 +235,14 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           },
           newPassword: {
             type: 'string',
-            minLength: 6,
+            minLength: PASSWORD_MIN_LENGTH,
             maxLength: 128,
-            description: 'New password (minimum 6 characters — PASSWORD_MIN_LENGTH)',
+            description: 'New password (minimum PASSWORD_MIN_LENGTH characters)',
             example: 'MyS3cur3P@ssw0rd!'
           },
           confirmPassword: {
             type: 'string',
-            minLength: 6,
+            minLength: PASSWORD_MIN_LENGTH,
             maxLength: 128,
             description: 'Password confirmation - must match newPassword exactly',
             example: 'MyS3cur3P@ssw0rd!'
