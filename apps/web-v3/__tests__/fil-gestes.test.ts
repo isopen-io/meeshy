@@ -564,7 +564,9 @@ describe('le menu d’une ligne (§ 12.10.1, issue #5163)', () => {
 
   it('mes lignes portent répondre, modifier ET retirer', () => {
     const html = SANS_GABARIT(ETAT_DOC(MIEN_RECENT));
-    expect(html).toContain('<details class="actions">');
+    // `ouvre-bas` (#5386) : seule ligne de la tranche, donc la plus ancienne —
+    // son panneau s'ouvre vers le bas par défaut, sans JavaScript.
+    expect(html).toContain('<details class="actions ouvre-bas">');
     expect(html).toContain(`name="repondre" value="m1"`);
     expect(html).toContain(`name="modifier" value="m1"`);
     expect(html).toContain(`name="retirer" value="m1" formmethod="post" class="grave"`);
@@ -699,13 +701,14 @@ describe('la vue du retrait sans JavaScript — ?retirer=<id> (#5387)', () => {
     const html = SANS_GABARIT(ETAT_DOC(MIEN));
     expect(html).not.toContain('<div class="retrait-servie">');
     expect(html).not.toMatch(/<li class="[^"]*retrait-en-attente/);
-    expect(html).toContain('<details class="actions">');
+    // `ouvre-bas` (#5386) : seule ligne de la tranche, donc la plus ancienne.
+    expect(html).toContain('<details class="actions ouvre-bas">');
   });
 
   it('une cible que la porte n’a pas résolue (retrait: null) rend le fil NOMINAL', () => {
     const html = SANS_GABARIT(ETAT_DOC(MIEN, { retrait: null }));
     expect(html).not.toMatch(/<li class="[^"]*retrait-en-attente/);
-    expect(html).toContain('<details class="actions">');
+    expect(html).toContain('<details class="actions ouvre-bas">');
   });
 });
 

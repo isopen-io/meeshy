@@ -515,14 +515,19 @@ const refermeLesMenus = (ctx: Contexte, sauf: HTMLDetailsElement | null): void =
 
 /**
  * PAS ASSEZ DE PLACE AU-DESSUS — une ESTIMATION de la hauteur du panneau (le
- * plus grand des trois formulaires possibles, mesuré une fois), pas une
- * mesure du panneau lui-même : `getBoundingClientRect` d'un `<details>` tout
- * juste ouvert peut encore rendre une hauteur nulle sur certains moteurs
- * avant le prochain paint. Trop proche du haut de la liste ⇒ le panneau
- * bascule et s'ouvre vers le BAS (`.ouvre-bas`, `fil-feuille.ts`), plutôt que
- * de sortir de la zone visible (défaut #5163 §4).
+ * plus grand des QUATRE formulaires possibles depuis #5386 — Répondre,
+ * Transférer, Modifier, Retirer, tous admis à la fois sur son propre message
+ * quand le composeur est ouvert —, mesuré une fois), pas une mesure du
+ * panneau lui-même : `getBoundingClientRect` d'un `<details>` tout juste
+ * ouvert peut encore rendre une hauteur nulle sur certains moteurs avant le
+ * prochain paint. Trop proche du haut de la liste ⇒ le panneau bascule et
+ * s'ouvre vers le BAS (`.ouvre-bas`, `fil-feuille.ts`), plutôt que de sortir
+ * de la zone visible (défaut #5163 §4). 168 (trois boutons) sous-estimait
+ * désormais la hauteur réelle à quatre — remesuré à 216 (quatre boutons de
+ * `--target-min`, padding et bordure du panneau compris, marge de sécurité
+ * gardée).
  */
-const HAUTEUR_DU_PANNEAU_ESTIMEE_PX = 168;
+const HAUTEUR_DU_PANNEAU_ESTIMEE_PX = 216;
 
 const positionneLePanneau = (ctx: Contexte, details: HTMLDetailsElement): void => {
   const ligne = details.closest<HTMLElement>('li.ligne');

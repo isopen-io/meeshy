@@ -540,11 +540,32 @@ const retraitServi = (message: Message, adresse: string): string =>
  * différent selon le bouton cliqué — le comportement natif d'un formulaire
  * GET) ; « Retirer » y bascule en POST par `formmethod`, exactement le
  * patron de `/chats` (`liste-vue.ts` › `menu`).
+ *
+ * `ouvreVersLeBas` SERT LE MÊME RENVERSEMENT QUE `.ouvre-bas`
+ * (`fil-gestes.ts` › `positionneLePanneau`), mais SERVI — pour LA LIGNE LA
+ * PLUS ANCIENNE de la tranche (#5386, revue) : sans JavaScript, rien ne
+ * mesure jamais la place au-dessus, et le panneau — quatre boutons possibles
+ * désormais, jamais trois — s'ouvrant par défaut vers le HAUT (`fil-feuille.ts`,
+ * ancré au `.ligne` ENTIER) déborde sur l'en-tête du fil dès que la ligne est
+ * la première de la liste, mesuré : le bouton « Répondre » se peint alors
+ * SOUS `.puces`, qui intercepte le clic (défaut trouvé en CI, `gestes-webkit`,
+ * `v3-fil-gestes.spec.ts:100`). La ligne la plus ancienne n'a JAMAIS de place
+ * au-dessus d'elle dans `.messages` — qu'elle soit visible au repos (fil
+ * court) ou remontée par le lecteur (fil long) — ouvrir son panneau vers le
+ * BAS est donc TOUJOURS correct, pas une estimation. Le module de
+ * participation, qui MESURE la place réelle, peut encore retirer la classe
+ * pour toute AUTRE ligne remontée près du haut ; il ne la retire jamais pour
+ * celle-ci puisqu'aucune mesure ne peut la contredire.
  */
 export const menuDeLigne = (
   message: Message,
   adresse: string,
-  { composeurOuvert, maintenant, estInvite }: { readonly composeurOuvert: boolean; readonly maintenant: number; readonly estInvite: boolean },
+  {
+    composeurOuvert,
+    maintenant,
+    estInvite,
+    ouvreVersLeBas = false,
+  }: { readonly composeurOuvert: boolean; readonly maintenant: number; readonly estInvite: boolean; readonly ouvreVersLeBas?: boolean },
 ): string => {
   if (message.systeme || message.supprime || message.protege) return '';
   const admetRepondre = composeurOuvert;
@@ -561,7 +582,7 @@ export const menuDeLigne = (
   if (!admetRepondre && !admetTransferer && !admetModifier && !admetRetirer) return '';
   const nomDuMenu = message.deMoi ? FIL.actionsSurMonMessage : FIL.actionsSurLeMessage(message.auteur);
   return (
-    '<details class="actions">' +
+    `<details class="actions${ouvreVersLeBas ? ' ouvre-bas' : ''}">` +
     `<summary>${svgDuSprite('ph-caret-down')}<span class="hors-ecran">${echappe(nomDuMenu)}</span></summary>` +
     `<form method="get" action="${echappe(adresse)}">` +
     (admetRepondre
@@ -746,7 +767,9 @@ export const ligne = ({
     // se rend à cette place tant qu'`enAttenteDeRetrait` tient — un
     // `details.actions` posé ici EN PLUS aurait offert un second « Retirer »
     // par-dessus la fenêtre déjà servie (défaut MAJEUR de revue).
-    (enAttenteDeRetrait ? '' : menuDeLigne(message, adresse, { composeurOuvert, maintenant, estInvite })) +
+    (enAttenteDeRetrait
+      ? ''
+      : menuDeLigne(message, adresse, { composeurOuvert, maintenant, estInvite, ouvreVersLeBas: precedent === null })) +
     '</div>' +
     '</li>'
   );
