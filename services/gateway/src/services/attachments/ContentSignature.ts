@@ -228,6 +228,28 @@ export function matchesImageSignature(buffer: Buffer): boolean {
   return false;
 }
 
+// ─── Vérification universelle (#3627) ──────────────────────────────────────
+
+/**
+ * Le déclaré mérite-t-il d'être cru, pour TOUT appelant — registered ou
+ * anonyme, jamais seulement pour arbitrer un droit de lien de partage.
+ *
+ * Couvre ce que `matchesImageSignature`/`matchesAudioSignature` savent
+ * vérifier (voir leur portée exacte en tête de ce module). Un type déclaré
+ * hors de ces deux familles (vidéo, PDF, texte…) est encore accepté sur la
+ * seule foi de sa déclaration — dette documentée, pas une garantie tue.
+ */
+export function matchesDeclaredSignature(declaredMimeType: string, buffer: Buffer): boolean {
+  const normalized = declaredMimeType.toLowerCase();
+  // XML texte, hors du périmètre binaire de `matchesImageSignature` — et hors
+  // de `ACCEPTED_MIME_TYPES.IMAGE` (packages/shared/types/attachment.ts), donc
+  // jamais classé « image » par `getAttachmentType` malgré son préfixe.
+  if (normalized === 'image/svg+xml') return true;
+  if (normalized.startsWith('image/')) return matchesImageSignature(buffer);
+  if (normalized.startsWith('audio/')) return matchesAudioSignature(buffer);
+  return true;
+}
+
 // ─── Décision d'autorisation anonyme ───────────────────────────────────────
 
 export type ShareLinkAnonymousFlags = {

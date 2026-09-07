@@ -21,7 +21,8 @@ import {
   fetchShareLinkAnonymousFlags,
   readFilePrefix,
 } from '../../services/attachments/AnonymousUploadIdentity';
-import { classifyAnonymousAttachment, RECOMMENDED_SIGNATURE_PREFIX_BYTES } from '../../services/attachments/ContentSignature';
+import { classifyAnonymousAttachment, matchesDeclaredSignature, RECOMMENDED_SIGNATURE_PREFIX_BYTES } from '../../services/attachments/ContentSignature';
+import { isExifStrippable, stripExifFromImageBuffer } from '../../services/attachments/ExifStrip';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { originIsAllowed } from '../../config/cors-origins';
 
@@ -380,7 +381,35 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         await fs.unlink(sourcePath).catch((err) => logger.debug('tus: temp file unlink failed after copy', { sourcePath, err }));
       }
 
-      const fileSize = upload.size || 0;
+      // #3627 — le `filetype` TUS est déclaré par le CLIENT, jamais vérifié
+      // avant ce lot pour un appelant REGISTERED, ni pour un envoi de
+      // PostMedia quel que soit l'appelant (seul le chemin MESSAGE anonyme,
+      // plus bas, méritait la classification par octets). Appliqué ici, au
+      // point commun aux deux branches, avant tout traitement : un fichier
+      // qui déclare `image/*`/`audio/*` sans en porter la signature est
+      // détruit et refusé pour TOUT appelant.
+      const signaturePrefix = await readFilePrefix(destPath, RECOMMENDED_SIGNATURE_PREFIX_BYTES);
+      if (!matchesDeclaredSignature(mimeType, signaturePrefix)) {
+        await fs.unlink(destPath).catch((err) =>
+          logger.debug('[TUS] Mismatched-signature upload cleanup failed', { destPath, err }));
+        logger.warn('[TUS] Declared MIME type does not match file signature — rejected', { mimeType, filename });
+        throw { status_code: 400, body: 'File content does not match the declared type\n' };
+      }
+
+      let fileSize = upload.size || 0;
+      const attachmentType = getAttachmentType(mimeType, filename);
+      // #3627 — EXIF/GPS retiré des photos AVANT toute persistance : c'est le
+      // fichier `destPath` qui est servi tel quel par `GET /attachments/:id`.
+      if (attachmentType === 'image' && isExifStrippable(mimeType)) {
+        try {
+          const original = await fs.readFile(destPath);
+          const stripped = await stripExifFromImageBuffer(original, mimeType);
+          await fs.writeFile(destPath, stripped);
+          fileSize = stripped.length;
+        } catch (err) {
+          logger.warn('[TUS] EXIF strip failed, keeping original bytes', { err });
+        }
+      }
       const relPath = path.join(year, month, userId, storedName);
       // #4324 — ce qui se PERSISTE est la clé de stockage, jamais une adresse : ni
       // hôte, ni préfixe d'API, ni version. Ce sont des décisions de déploiement,
@@ -390,7 +419,6 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       // (Android).
       const fileUrl = relPath;
 
-      const attachmentType = getAttachmentType(mimeType, filename);
       let metadata: Record<string, any> = {};
       try {
         metadata = await metadataManager.extractMetadata(

@@ -22,7 +22,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { UploadedFile, UploadTextBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { classifyAnonymousAttachment } from '../../services/attachments/ContentSignature.js';
+import { classifyAnonymousAttachment, matchesDeclaredSignature } from '../../services/attachments/ContentSignature.js';
 
 /**
  * Plafond RÉEL, en OCTETS, du champ `content` de `POST /attachments/upload-
@@ -155,6 +155,17 @@ export async function registerUploadRoutes(
 
         if (files.length === 0) {
           return sendBadRequest(reply, 'No files provided');
+        }
+
+        // #3627 — le `Content-Type` multipart est déclaré par le CLIENT,
+        // jamais vérifié avant ce lot pour un appelant REGISTERED (seul le
+        // chemin anonyme, plus bas, méritait la classification par octets).
+        // Un fichier qui déclare `image/*`/`audio/*` sans en porter la
+        // signature est refusé pour TOUT appelant, avant tout traitement.
+        for (const file of files) {
+          if (!matchesDeclaredSignature(file.mimeType, file.buffer)) {
+            return sendBadRequest(reply, 'File content does not match the declared type');
+          }
         }
 
         if (isAnonymous && authContext.participantId) {
