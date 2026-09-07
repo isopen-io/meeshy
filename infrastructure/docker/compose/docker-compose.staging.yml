@@ -278,7 +278,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=meeshy_meeshy-network"
       - "traefik.http.routers.gateway-staging.rule=Host(`gate.staging.${DOMAIN:-meeshy.me}`)"
-      - "traefik.http.routers.gateway-staging.middlewares=compress@file"
+      - "traefik.http.routers.gateway-staging.middlewares=rate-limit@file,compress@file"
       - "traefik.http.routers.gateway-staging.entrypoints=websecure"
       - "traefik.http.routers.gateway-staging.tls.certresolver=letsencrypt"
       - "traefik.http.services.gateway-staging.loadbalancer.server.port=3000"
@@ -415,6 +415,17 @@ services:
       # le défaut que `scripts/check-v3-pipeline.mjs` ne pouvait pas voir tant
       # que son `ENV_CHAIN` ignorait la notation `process.env['NOM']`.
       - V3_SW_PORTEES=/l/,/chats,/chat/
+      # LA CONFIGURATION FCM DU MODULE DE PRÉFÉRENCES (#5391) — lue par
+      # `apps/web-v3/app/connecte/prefs-porte.ts` dans CE processus Next :
+      # même loi que V3_SW_PORTEES ci-dessus, déclarer ces clés sur le legacy
+      # serait inerte. Les quatre premières viennent de l'environnement (les
+      # mêmes que le legacy) ; les deux bases gardent le défaut du code.
+      - NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY}
+      - NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID:-meeshy-me}
+      - NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID}
+      - NEXT_PUBLIC_FIREBASE_VAPID_KEY=${NEXT_PUBLIC_FIREBASE_VAPID_KEY}
+      - NEXT_PUBLIC_FCM_INSTALLATIONS_BASE=${NEXT_PUBLIC_FCM_INSTALLATIONS_BASE:-https://firebaseinstallations.googleapis.com}
+      - NEXT_PUBLIC_FCM_REGISTRATIONS_BASE=${NEXT_PUBLIC_FCM_REGISTRATIONS_BASE:-https://fcmregistrations.googleapis.com}
       # Le périmètre NAVIGABLE du navigateur de zone (#5106) — les chemins
       # entre lesquels la navigation douce échange les documents. Même loi que
       # V3_SW_PORTEES : chaque entrée capturée par la règle du routeur

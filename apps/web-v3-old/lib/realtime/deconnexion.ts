@@ -1,4 +1,5 @@
 import { effaceToutesLesPlaces } from '@/lib/api/guest-session';
+import { lisLAppareilPush } from '@/lib/api/push-appareil';
 import { effaceLaSessionLegacy, lisLeJetonDeSession } from '@/lib/api/session-legacy';
 import { SIGNAL_DE_DECONNEXION } from '@/lib/sw/signal';
 
@@ -38,8 +39,19 @@ import { SIGNAL_DE_DECONNEXION } from '@/lib/sw/signal';
 /** L'adresse de la sortie, telle que `formulaireDeSortie()` l'écrit. */
 const ACTION_DE_SORTIE = '/deconnexion';
 
-/** Le marqueur d'idempotence — porté par le DOCUMENT, seul terrain que deux modules ES partagent. */
-const MARQUEUR = 'meeshyDeconnexionArmee';
+/**
+ * Le marqueur d'idempotence — porté par le DOCUMENT, seul terrain que deux
+ * modules ES partagent. EXPORTÉ : c'est aussi le seul signal, côté
+ * navigateur, qu'un test peut attendre pour savoir que le clic sur
+ * « Déconnecter » traversera l'amélioration progressive (purge du travailleur
+ * de zone, session legacy, places invitées) plutôt que le seul POST natif —
+ * `document.documentElement.dataset[MARQUEUR_DECONNEXION_ARMEE] === '1'`.
+ * Sans l'attendre, un clic assez précoce (avant que ce module ait fini de se
+ * charger) soumet le formulaire nu : le serveur retire bien les cookies,
+ * mais aucun signal n'atteint le travailleur de zone.
+ */
+export const MARQUEUR_DECONNEXION_ARMEE = 'meeshyDeconnexionArmee';
+const MARQUEUR = MARQUEUR_DECONNEXION_ARMEE;
 
 const essaie = (etape: () => void): void => {
   try {
@@ -54,6 +66,23 @@ const remplitLeChampDeSession = (formulaire: HTMLFormElement): void => {
   const champ = formulaire.elements.namedItem('session');
   if (!(champ instanceof HTMLInputElement)) return;
   champ.value = lisLeJetonDeSession() ?? '';
+};
+
+/**
+ * LE CHAMP CACHÉ `pushAppareil` (#5391, § 3.5 de la spécification) — le
+ * pendant push du champ `session` ci-dessus : le SERVEUR ne peut retirer le
+ * TOKEN de CET appareil que si le NAVIGATEUR le lui remet, le cookie
+ * `meeshy_v3_push_appareil` n'étant lu QUE côté serveur depuis l'en-tête
+ * `Cookie` — et `POST /deconnexion` porte déjà ce cookie dans sa requête.
+ * Le remplir ici est donc redondant avec ce que la porte peut lire toute
+ * seule ; il est fait quand même, dans le MÊME style que `session`, pour que
+ * la porte n'ait qu'UN patron de lecture (un champ de formulaire) plutôt que
+ * deux (un champ ET un cookie) — best-effort, comme chaque étape ici.
+ */
+const remplitLeChampDePushAppareil = (formulaire: HTMLFormElement): void => {
+  const champ = formulaire.elements.namedItem('pushAppareil');
+  if (!(champ instanceof HTMLInputElement)) return;
+  champ.value = lisLAppareilPush(document.cookie) ?? '';
 };
 
 /**
@@ -107,6 +136,7 @@ export const armeLaDeconnexion = (racine: Document = document): void => {
     if (formulaire.getAttribute('action') !== ACTION_DE_SORTIE) return;
 
     essaie(() => remplitLeChampDeSession(formulaire));
+    essaie(() => remplitLeChampDePushAppareil(formulaire));
     essaie(effaceLaSessionLegacy);
     essaie(effaceToutesLesPlaces);
     essaie(previensLeTravailleur);

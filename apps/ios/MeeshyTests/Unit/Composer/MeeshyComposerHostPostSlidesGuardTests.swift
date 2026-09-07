@@ -125,6 +125,57 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
                 + "document ouvre une page.")
     }
 
+    // MARK: - Le cap de dix slides est un REFUS, jamais une pose sur la dixième (#4059)
+
+    /// **`addSlide()` au cap est un no-op silencieux — le consulter APRÈS
+    /// l'appel lit `currentSlide.id` comme si l'ajout avait eu lieu.**
+    ///
+    /// C'était exactement le défaut : le onzième média entrait dans la même
+    /// branche que le dixième, `addSlide()` ne faisait rien, et
+    /// `viewModel.currentSlide.id` restait celui de la DIXIÈME slide — deux
+    /// médias, un seul id dans `slideIdByMediaURL`. La garde exige que
+    /// `canAddSlide` soit consulté AVANT `addSlide()`, jamais après.
+    func test_sync_asksCanAddSlide_beforeCallingAddSlide() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(
+            compacted.contains(
+                "elseifviewModel.canAddSlide{viewModel.addSlide()target=viewModel.currentSlide.id}else{"),
+            "`addSlide()` doit être derrière un `canAddSlide` consulté d'ABORD — sinon un onzième média "
+                + "lit l'id de la DIXIÈME slide comme si sa propre slide avait été créée."
+        )
+    }
+
+    /// **Un média refusé ne fabrique AUCUNE entrée de `slideIdByMediaURL`.**
+    ///
+    /// La ligne `slideIdByMediaURL[media.sourceURL] = target` vit APRÈS le
+    /// bloc `if/else` de ciblage, partagée par les branches qui aboutissent.
+    /// La branche de refus doit `continue` en DERNIÈRE instruction pour que
+    /// cette ligne — et la pose du média — ne s'exécute jamais pour lui.
+    /// Sans ce `continue` terminal, le média refusé se poserait quand même
+    /// sur `target` (resté à la dernière slide résolue), reproduisant
+    /// exactement le bug d'origine.
+    func test_sync_refusedMedia_neverReachesThePlacementOrTheIndex() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(
+            compacted.contains(
+                "FeedbackToastManager.shared.showError(ComposerDocumentCopy.mediaCapReached)continue}"
+                    + "documentMediaObjectIdBySource.merge("),
+            "Le refus doit `continue` en dernière instruction de sa branche, immédiatement suivi — hors "
+                + "du `if/else` — par la pose partagée : c'est ce qui prouve qu'un média refusé n'atteint "
+                + "ni `applyContentMedia` ni `slideIdByMediaURL`."
+        )
+    }
+
+    /// **Le refus doit se VOIR** (dimension 8 — un geste sans effet doit être
+    /// visible) : un média qui n'entre nulle part sans un mot est avalé, pas
+    /// refusé.
+    func test_sync_refusedMedia_isAnnouncedToTheAuthor() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("ComposerDocumentCopy.mediaCapReached"),
+            "Le onzième média doit être annoncé comme refusé — sinon il disparaît en silence, ce que "
+                + "cette issue interdit précisément.")
+    }
+
     /// **Le prédicat « cette slide a déjà un fond » doit être celui du MODÈLE,
     /// mot pour mot.** `addMediaObject` refuse le rôle de fond à un média posé
     /// sur une slide qui porte une image de fond au niveau de la SLIDE — pas

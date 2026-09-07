@@ -112,7 +112,7 @@ export const sondesDuGarde = ({ constantes, replaceIn }) => {
     ],
     [
       'le glob de la v3 retiré des paths de docker.yml',
-      (world) => replaceIn(world, 'docker', "      - 'apps/web-v3/**'\n", ''),
+      (world) => replaceIn(world, 'docker', "      - 'apps/web-v3-old/**'\n", ''),
       'le filtre paths de docker.yml ne couvre pas la v3',
     ],
     [
@@ -143,7 +143,7 @@ export const sondesDuGarde = ({ constantes, replaceIn }) => {
     [
       'le détecteur de push aveugle à la v3',
       (world) => replaceIn(world, 'docker', /\*"apps\/web-v3\/"\*/g, '*"apps/zz-absent/"*'),
-      'un push ne touchant que apps/web-v3/',
+      'un push ne touchant que apps/web-v3-old/',
     ],
     [
       'la sélection du dispatch revenue à la sous-chaîne',
@@ -354,7 +354,7 @@ export const sondesDuGarde = ({ constantes, replaceIn }) => {
       // STAGING ROUTE DÉJÀ DES ÉCRANS CONNECTÉS (`Path('/')`, `/chats`, `/chat/`…,
       // hors « actifs seulement ») : c'est précisément la condition qui rend
       // `V3_NAVIGABLE` et `V3_SW_PORTEES` nécessaires (doc-comment de
-      // `blocDuNavigateur`, `apps/web-v3/app/connecte/fil-vue.ts`). Les retirer
+      // `blocDuNavigateur`, `apps/web-v3-old/app/connecte/fil-vue.ts`). Les retirer
       // du service doit rougir — sinon une déconnexion depuis le tableau de bord
       // expirerait les cookies sans vider ni la session legacy, ni les places
       // invitées, ni les caches de zone du navigateur.

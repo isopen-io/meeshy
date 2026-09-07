@@ -45,6 +45,16 @@ Corollaires :
 - Une session qui démarre un chantier commence par lire ses issues (`gh issue list --milestone "<nom>" --state open`, `gh project item-list 1 --owner isopen-io`) et pose `Status = In Progress` ; une session qui livre ferme ses issues et dit, dans le commentaire de clôture, ce qui est mûr et ce qui reste (voir les treize dimensions ci-dessous). Le scope `project` du token est requis pour les champs (`gh auth refresh -s project,read:project`).
 - Les documents de design du dépôt (`docs/product/*.html`, `docs/product/*.md`) gardent leur rendu publié en artifact — c'est du design, autorisé — mais l'ÉTAT des tâches qu'ils décrivent vit dans les issues, jamais dans le document.
 
+### La branche poussée tôt, complément de « aucune feature sans issue » (directive 2026-09-06, #5243)
+
+**L'issue dit QUOI ; la branche poussée dit QUI, MAINTENANT.** `Status = In Progress` vit dans Projects v2 (GraphQL) : une session distante ne peut ni le lire de façon fiable ni le poser en continu, et le tableau ne dit que ce que les autres ont *annoncé*. **Git est le seul substrat que toutes les sessions partagent, voient, et peuvent écrire** — c'est donc lui qui porte la réservation, jamais une convention non actionnable par tout le monde.
+
+1. **Pousser le squelette dans les quinze minutes**, avant d'écrire la logique — un commit poussé (squelette, témoin rouge, ou même le seul fichier de spécification) est visible de toute session en un `fetch` ; c'est gratuit, la branche existe de toute façon.
+2. **Corollaire d'asymétrie — la règle de tranchage, pas un conseil : quand deux lots se disputent un fichier, celui qui n'a rien écrit cède.** Un lot arrêté avant sa première écriture ne coûte que de la lecture ; l'autre a déjà payé. Aucune négociation n'est nécessaire — la décision se lit depuis ce que git montre.
+3. Une session qui découvre, au relevé, qu'une branche vivante écrit déjà ses chemins cède ce travail et en prend un autre — elle ne négocie pas, ne fusionne pas en avance, ne double pas.
+
+Cette doctrine réduit la FENÊTRE de collision (le seul facteur à forte dynamique — sessions actives et surface de travail ne baissent pas) ; elle ne prétend pas supprimer la collision. Les collisions d'**espace de noms partagé** (numéros de leçon, cliquets mesurés, registres générés) relèvent d'une règle différente : un identifiant qui ne s'alloue pas ne collisionne pas (#5102).
+
 ## Roadmap — un produit très optimisé, hyper fluide, mûr sur treize dimensions (directive 2026-08-26)
 
 La roadmap (milestones + champ `Horizon` du projet ; analyse dans `docs/product/roadmap-produit-2026-08.md`) ne suit pas une liste de features : elle suit la réalisation d'un produit **TRÈS optimisé — sans aucune lenteur —, HYPER fluide, aéré, agréable visuellement ET fonctionnellement**. Chaque feature, existante ou à venir, est portée à MATURITÉ sur les treize dimensions ci-dessous. Une feature « qui marche » mais qui rame, à qui il manque un état, qu'on ne trouve pas ou qu'on n'ose pas modifier n'est pas livrée.

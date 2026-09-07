@@ -9,11 +9,13 @@ import {
   type GesteDeLigne,
 } from '@/lib/contenu/liste';
 
+import { signaleArme } from './arme';
 import { brancheLaBanniere } from './banniere';
 import { prendsLeBalayage } from './balayage';
 import { armeLaDeconnexion } from './deconnexion';
 import { observeCycleDeVie, unSeulMontageParEcran, type TransitionDeCycle } from './lifecycle';
 import { prendsLePleinEcran } from './plein-ecran';
+import { rejoueSiRotationEnArrierePlan } from './push-abonnement';
 import * as L from './liste-etat';
 import { CHAMPS_DU_RATTRAPAGE } from './liste-etat';
 import { etatDuDocument, montreLeTrou, peins, peintre, type Peintre } from './liste-peinture';
@@ -422,6 +424,11 @@ const branche = (ctx: Contexte, socket: Socket): void => {
     const rattraper = doitRattraper({ deconnecteDepuis: ctx.deconnecteDepuis, maintenant: Date.now() });
     ctx.deconnecteDepuis = null;
     if (rattraper) void rattrape(ctx);
+    // ARMÉ ICI (#5139), jamais avant : avant `authenticated`, le socket n'a pas
+    // encore rejoint ses rooms (`_joinUserConversations`) — un événement poussé
+    // plus tôt n'atteindrait personne. Voir `point()` de `participate.ts`, qui
+    // pose son marqueur `.etat` au même instant, pour la même raison.
+    signaleArme(ctx.main);
   });
 
   socket.on('conversation:updated', (charge: unknown) => {
@@ -468,7 +475,14 @@ const connecte = async (ctx: Contexte): Promise<void> => {
   // aucune connexion. La région est cherchée une fois ; absente (un document
   // servi sans temps réel), la porte ne fait rien.
   brancheLaBanniere({ socket, region: document.querySelector<HTMLElement>('.banniere') });
-  if (!ctx.cache && ctx.enLigne) socket.connect();
+  if (ctx.cache || !ctx.enLigne) {
+    // HORS LIGNE AU MONTAGE : aucune connexion ne s'ouvre, donc `authenticated`
+    // ne viendra jamais — le module est déjà interactif (gestes, préférences),
+    // et l'armer ici évite d'attendre un réseau qui n'arrivera pas.
+    signaleArme(ctx.main);
+    return;
+  }
+  socket.connect();
 };
 
 /** Voir `participate.ts` : `connect()` seul ne fait rien tant qu'une reconnexion est armée. */
@@ -556,6 +570,12 @@ const demarre = async (): Promise<void> => {
   // pu attendre dans le cache du navigateur, et « à l'instant » y aurait vieilli.
   peins(p, ctx.etat, Date.now());
   prendsLesGestes(ctx);
+
+  // LE REJEU DE ROTATION PUSH EN ARRIÈRE-PLAN (#5391, suivi de revue défaut
+  // 3) — `/chats` est la surface que le lecteur RÉOUVRE ; best-effort, sans
+  // rapport avec le fil de participation ci-dessous — voir le doc-comment de
+  // `rejoueSiRotationEnArrierePlan`.
+  void rejoueSiRotationEnArrierePlan();
 
   observeCycleDeVie({ cleDuJeton: 'meeshy-liste', sur: surTransition(ctx) });
 

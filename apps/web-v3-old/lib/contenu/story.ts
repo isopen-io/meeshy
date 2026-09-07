@@ -1,5 +1,5 @@
 import { deLaLangue } from './langues';
-import { HEURES_DE_VIE_D_UNE_STORY } from './story-neuve';
+import { HEURES_DE_VIE_D_UNE_STORY } from './story-ttl';
 
 /**
  * LA DURÉE DE VIE SERVIE À UN LECTEUR VENAIT D'UN LITTÉRAL FAUX (#5033). Cette

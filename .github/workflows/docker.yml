@@ -345,6 +345,7 @@ jobs:
             VCS_REF=${{ github.sha }}
             VERSION=${{ matrix.version }}
             PACKAGE_MANAGER=${{ env.PACKAGE_MANAGER }}
+            BUN_VERSION=${{ env.BUN_VERSION }}
             TORCH_BACKEND=${{ matrix.torch_backend || 'cpu' }}
 
       - name: Build summary

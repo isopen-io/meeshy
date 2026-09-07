@@ -63,7 +63,7 @@ import {
 import type { ExtractedHashtag } from '../../services/HashtagService';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
 import { WIRE_BROADCAST, wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
-import { logError } from '../../utils/logger.js';
+import { logError, logWarn } from '../../utils/logger.js';
 
 /**
  * La ligne écrite, telle que le noyau a besoin de la LIRE.
@@ -305,7 +305,7 @@ export async function runPublicationEffects(
         // Second recours (#5349), UNIQUEMENT si aucune revendication n'a été
         // persistée : une détection on-device réelle, jamais une préférence.
         detectedLanguage,
-      ).catch((err) => fastify.log.warn({ err }, `[${porte}]: translate post failed`));
+      ).catch((err) => logWarn(fastify.log, `[${porte}]: translate post failed`, err));
     } catch {
       // PostTranslationService not initialized — skip silently
     }
@@ -370,7 +370,7 @@ export async function runPublicationEffects(
       : postType === 'STATUS'
         ? socialEvents.broadcastStatusCreated(audiencePost, authorId, cmid)
         : socialEvents.broadcastPostCreated(audiencePost, authorId, cmid);
-    broadcast.catch((err: unknown) => fastify.log.warn({ err }, `[${porte}]: broadcast created failed`));
+    broadcast.catch((err: unknown) => logWarn(fastify.log, `[${porte}]: broadcast created failed`, err));
   }
 
   // Un `#voyage` posé sur la SCÈNE reste indexé : sans la dérivation il

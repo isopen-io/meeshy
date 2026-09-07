@@ -60,7 +60,8 @@ final class PublishIntentTests: XCTestCase {
         storyEffects: StoryEffects? = nil,
         mediaCaptions: ComposerMediaCaptions = [:],
         mediaAlts: ComposerMediaCaptions = [:],
-        mediaObjectIds: ComposerMediaCaptions = [:]
+        mediaObjectIds: ComposerMediaCaptions = [:],
+        allowSoundExtraction: Bool? = nil
     ) -> PublishIntent {
         PublishIntent.document(
             localMedia: localMedia,
@@ -86,7 +87,8 @@ final class PublishIntentTests: XCTestCase {
             // > raison.
             mediaCaptions: mediaCaptions,
             mediaAlts: mediaAlts,
-            mediaObjectIds: mediaObjectIds
+            mediaObjectIds: mediaObjectIds,
+            allowSoundExtraction: allowSoundExtraction
         )
     }
 
@@ -239,6 +241,20 @@ final class PublishIntentTests: XCTestCase {
         XCTAssertEqual(
             intent.mobileTranscription?.language, "wo",
             "Le MÉDIA garde SA propre langue (la transcription), distincte du texte, résolue à part."
+        )
+    }
+
+    // MARK: - #3996 — l'autorisation d'extraction du son voyage avec l'intention
+
+    /// **Round-trip pur** : ce que la fabrique reçoit, l'intention le rend tel
+    /// quel — les trois valeurs possibles (`true`, `false`, `nil` = « l'auteur
+    /// n'a rien décidé »), aucune ne se confondant avec les deux autres.
+    func test_lAutorisationDExtractionDuSon_voyageTelleQuelleJusquALIntention() {
+        XCTAssertEqual(intentionDocument(allowSoundExtraction: true).allowSoundExtraction, true)
+        XCTAssertEqual(intentionDocument(allowSoundExtraction: false).allowSoundExtraction, false)
+        XCTAssertNil(
+            intentionDocument(allowSoundExtraction: nil).allowSoundExtraction,
+            "`nil` doit rester `nil` — c'est « l'auteur n'a rien décidé », distinct d'un refus explicite."
         )
     }
 

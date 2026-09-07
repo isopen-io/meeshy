@@ -77,7 +77,10 @@ enum ComposerDocumentDurablePublisher {
             storyEffects: draft.storyEffects,
             mediaCaptions: draft.mediaCaptions,
             mediaAlts: draft.mediaAlts,
-            mediaObjectIds: draft.mediaObjectIds
+            mediaObjectIds: draft.mediaObjectIds,
+            // **L'autorisation d'extraction du son** (#3996) — même valeur,
+            // même rang que la porte jumelle (`DocumentComposerDoor`).
+            allowSoundExtraction: draft.allowSoundExtraction
         )
 
         do {
@@ -102,7 +105,11 @@ enum ComposerDocumentDurablePublisher {
                 storyEffects: intent.storyEffects,
                 mediaCaptions: intent.mediaCaptions,
                 mediaAlts: intent.mediaAlts,
-                mediaObjectIds: intent.mediaObjectIds
+                mediaObjectIds: intent.mediaObjectIds,
+                // Même raison que le canvas juste au-dessus : cette porte
+                // enfile DIRECTEMENT, sans passer par `FeedViewModel.publish`
+                // (#3996).
+                allowSoundExtraction: intent.allowSoundExtraction
             )
         } catch {
             return refuse()

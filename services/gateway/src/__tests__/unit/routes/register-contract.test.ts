@@ -35,7 +35,7 @@ import { registerRequestSchema } from '@meeshy/shared/types';
 const TROIS_CHAMPS = {
   displayName: 'Lena Vogel',
   email: 'lena@example.com',
-  password: 'motdepasse',
+  password: 'Xk9$mQ2vLp8#nR4wZ',
 };
 
 const HERITE = {
@@ -43,7 +43,7 @@ const HERITE = {
   firstName: 'Lena',
   lastName: 'Vogel',
   email: 'lena@example.com',
-  password: 'motdepasse',
+  password: 'Xk9$mQ2vLp8#nR4wZ',
 };
 
 describe("contrat d'entrée de POST /register — couche Ajv RÉELLE", () => {
@@ -95,13 +95,13 @@ describe("contrat d'entrée de POST /register — couche Ajv RÉELLE", () => {
     });
 
     it('refuse une charge SANS aucune identité', async () => {
-      const res = await poster({ email: 'lena@example.com', password: 'motdepasse' });
+      const res = await poster({ email: 'lena@example.com', password: 'Xk9$mQ2vLp8#nR4wZ' });
 
       expect(res.statusCode).toBe(400);
     });
 
     it('refuse un firstName SEUL — la moitié du couple ne vaut pas identité', async () => {
-      const res = await poster({ email: 'lena@example.com', password: 'motdepasse', firstName: 'Lena' });
+      const res = await poster({ email: 'lena@example.com', password: 'Xk9$mQ2vLp8#nR4wZ', firstName: 'Lena' });
 
       expect(res.statusCode).toBe(400);
     });

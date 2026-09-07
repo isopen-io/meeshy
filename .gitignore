@@ -203,6 +203,8 @@ post-*
 # individually rather than narrowing the pattern blind, since its original intent
 # (likely a stray root-level artifact) is undocumented.
 !packages/shared/types/post-reference.ts
+!services/gateway/src/__tests__/unit/post-service-mocks.ts
+!services/gateway/src/__tests__/unit/post-service-geo-discoverability.test.ts
 !packages/shared/fixtures/canvas-v3/post-carousel-sound-library.json
 !packages/shared/fixtures/canvas-v3/post-sound-original.json
 !apps/web/__tests__/components/post-card-repost-attribution.test.tsx

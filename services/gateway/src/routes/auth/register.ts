@@ -20,6 +20,7 @@ import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendError, sendBadRequest, sendInternalError } from '../../utils/response.js';
 import { candidatsDePseudo } from '../../utils/username-candidates';
+import { validatePasswordStrength } from '../../utils/password-strength';
 import { apiPath } from '@meeshy/shared/api/prefix';
 
 const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
@@ -246,6 +247,17 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       const validatedData = validateSchema(AuthSchemas.register, request.body, 'register') as RegisterData & {
         skipPhoneConflictCheck?: boolean;
       };
+
+      // #3629 — `AuthSchemas.register` (Zod) ne borne que la LONGUEUR
+      // (`PASSWORD_MIN_LENGTH`) ; `zxcvbn` et les classes de caractères
+      // n'étaient consultés qu'au reset de mot de passe, jamais à la création
+      // du compte. Même discipline que le reste de cette route : une même
+      // budget de tentative que n'importe quelle autre entrée invalide, pas de
+      // remboursement.
+      const strength = validatePasswordStrength(validatedData.password);
+      if (!strength.isValid) {
+        return sendBadRequest(reply, `Password requirements: ${strength.errors.join(', ')}`);
+      }
 
       // Le rang 4 du Prisme entre ICI, avec la requête — c'est la seule couche
       // qui voit les en-têtes. Le service, lui, ne le consulte que si

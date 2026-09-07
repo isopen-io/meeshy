@@ -13,7 +13,10 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
+jest.mock('../../../../utils/logger', () => ({
+  ...(jest.requireActual('../../../../utils/logger') as object),
+  logError: jest.fn(),
+}));
 
 const mockResolveForTargets = jest.fn<any>();
 jest.mock('../../../../services/PresenceVisibilityService', () => ({

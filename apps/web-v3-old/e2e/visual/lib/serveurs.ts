@@ -40,6 +40,7 @@ import {
 import { routesDeLaGalerie } from './bouchon-galerie';
 import { creanceSelonLaPasserelle, lienParDefaut, routesDuLien, type LienDeBouchon } from './bouchon-lien';
 import { routesDeLaStory } from './bouchon-story';
+import { routesDesMediasDePost, routesDesUploads, type MediaDePostDeBouchon } from './bouchon-uploads';
 import {
   AUTRE_CONVERSATION,
   CONVERSATION_DU_LECTEUR,
@@ -316,6 +317,10 @@ export const passerelleDeBouchon = async (options?: {
   const sync = { curseur: 0, conversations: [] as Readonly<Record<string, unknown>>[] };
   const reactions = magasinDeReactions(REACTIONS_INITIALES);
   const pieces = new Map<string, PieceDeBouchon>();
+  /** Les `PostMedia` téléversés par TUS (#5390) — `bouchon-uploads.ts` écrit, `duCompte` réclame sur `mediaIds`. */
+  const mediasDePostEnAttente = new Map<string, MediaDePostDeBouchon>();
+  /** Les posts créés PENDANT le test, relus par `GET /api/v1/posts/:postId` (#5389). */
+  const postsCrees = new Map<string, Record<string, unknown>>();
   const presences = Object.assign(new Map<string, boolean>(PRESENCES_INITIALES), {
     reinitialise: (): void => {
       presences.clear();
@@ -455,6 +460,9 @@ export const passerelleDeBouchon = async (options?: {
     appareils,
     conversationsCreees,
     publicationsRecues,
+    mediasDePostEnAttente,
+    postsCrees,
+    pieces,
     boite,
     filDeCommentaires,
     filSocial,
@@ -477,6 +485,9 @@ export const passerelleDeBouchon = async (options?: {
   const desCommunautes = routesDesCommunautes(creanceDe, communautesCreees, {
     vide: () => options?.communautesVides ?? false,
   });
+  const etatDesUploads = { creanceDe, pieces, mediasDePostEnAttente };
+  const desUploads = routesDesUploads(etatDesUploads);
+  const desMediasDePost = routesDesMediasDePost(etatDesUploads);
 
   const serveur = createServer(async (requete, reponse) => {
     const chemin = requete.url ?? '';
@@ -536,6 +547,25 @@ export const passerelleDeBouchon = async (options?: {
       reponse.end(JSON.stringify({ success: false, error: code, message, ...extra }));
     };
 
+    /**
+     * LES DEUX ENDPOINTS FCM (#5391, § 2.5 de la spécification) — le
+     * protocole REST du SDK `firebase/messaging` que
+     * `lib/realtime/push-abonnement.ts` réécrit à la main, jamais le SDK
+     * lui-même. Sous un chemin LOCAL (`/bouchon-fcm/…`), jamais
+     * `firebaseinstallations.googleapis.com` / `fcmregistrations.
+     * googleapis.com` en dur : un témoin CI n'atteint jamais un service
+     * externe, et le module pointe ces DEUX bases par ses attributs `data-`
+     * (§ 3.4), réécrites vers ce bouchon dans les specs e2e.
+     */
+    if (url.pathname === '/bouchon-fcm/installations' && requete.method === 'POST') {
+      json({ authToken: { token: 'jeton-installation-bouchon', expiresIn: '604800s' }, fid: 'fid-bouchon', name: 'installations/fid-bouchon', refreshToken: 'refresh-bouchon' });
+      return;
+    }
+    if (url.pathname === '/bouchon-fcm/registrations' && requete.method === 'POST') {
+      json({ token: 'fcm-token-bouchon' });
+      return;
+    }
+
     // L'ORDRE est celui des chemins les plus PRÉCIS d'abord : le fil (`/conversations/:id…`) avant
     // le compte (`/conversations` nu), le lien (`/links/:key/members`, `/links/:identifier`) avant
     // le compte (`/links` nu) — comme Fastify les distingue par leur route, pas par un préfixe.
@@ -546,6 +576,16 @@ export const passerelleDeBouchon = async (options?: {
     // requête d'une fixture de `messagesRiches` (chemins ABSOLUS, pas des clés de
     // stockage) ne l'atteindrait jamais.
     if (deLaGalerie({ requete, url, reponse })) return;
+    // LE TÉLÉVERSEMENT TUS (#5390) — `/api/v1/uploads`, un préfixe qu'aucune
+    // autre famille ne réclame ; AVANT `duCompte` parce qu'il a besoin du
+    // `reponse` BRUT (en-têtes `Location`/`Upload-Offset`, corps texte sur un
+    // refus) que la forme `json()` de `duCompte` ne porte pas.
+    if (desUploads({ requete, url, corps: octets, reponse })) return;
+    // `/api/v1/posts/media/:id` AVANT `duCompte` : ce dernier admet déjà tout
+    // `/api/v1/posts/…` mais n'a AUCUN handler pour ce chemin précis — sans
+    // cette ligne, la requête tomberait dans le repli générique du bas et
+    // rendrait un faux succès.
+    if (desMediasDePost({ requete, url, json })) return;
     if (await duFil({ requete, reponse, url, corps: octets, json, erreur })) return;
     if (await duLien({ requete, url, corps: octets, json, erreur })) return;
     // `/api/v1/posts/:postId` AVANT le compte : la story indisponible

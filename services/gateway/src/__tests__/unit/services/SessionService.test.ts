@@ -44,7 +44,6 @@ import {
   cleanupExpiredSessions,
   markSessionTrusted,
   extendSessionExpiry,
-  rotateRefreshToken,
   getSessionConfig,
   SessionData,
   CreateSessionInput,
@@ -1104,98 +1103,9 @@ describe('SessionService', () => {
       });
     });
 
-    describe('rotateRefreshToken', () => {
-      it('should generate a new refresh token', async () => {
-        const sessionWithRefresh = {
-          ...mockSession,
-          refreshToken: 'old-refresh-hash'
-        };
-        mockPrisma.userSession.findFirst.mockResolvedValueOnce(sessionWithRefresh);
-        mockPrisma.userSession.update.mockResolvedValueOnce(sessionWithRefresh);
-
-        const result = await rotateRefreshToken('old-refresh-token');
-
-        expect(result).not.toBeNull();
-        expect(result?.newRefreshToken).toBeDefined();
-        expect(result?.expiresAt).toBeInstanceOf(Date);
-      });
-
-      it('should return null if refresh token not found', async () => {
-        mockPrisma.userSession.findFirst.mockResolvedValueOnce(null);
-
-        const result = await rotateRefreshToken('invalid-refresh-token');
-
-        expect(result).toBeNull();
-      });
-
-      it('should update session with new refresh token hash', async () => {
-        const sessionWithRefresh = {
-          ...mockSession,
-          refreshToken: 'old-refresh-hash',
-          isMobile: false
-        };
-        mockPrisma.userSession.findFirst.mockResolvedValueOnce(sessionWithRefresh);
-        mockPrisma.userSession.update.mockResolvedValueOnce(sessionWithRefresh);
-
-        await rotateRefreshToken('old-refresh-token');
-
-        expect(mockPrisma.userSession.update).toHaveBeenCalledWith({
-          where: { id: mockSessionId },
-          data: {
-            refreshToken: expect.any(String),
-            expiresAt: expect.any(Date),
-            lastActivityAt: expect.any(Date)
-          }
-        });
-      });
-
-      it('should extend expiry based on device type (mobile: 365 days)', async () => {
-        const mobileSessionWithRefresh = {
-          ...mockSession,
-          refreshToken: 'old-refresh-hash',
-          isMobile: true
-        };
-        mockPrisma.userSession.findFirst.mockResolvedValueOnce(mobileSessionWithRefresh);
-        mockPrisma.userSession.update.mockResolvedValueOnce(mobileSessionWithRefresh);
-
-        const result = await rotateRefreshToken('old-refresh-token');
-
-        const expectedDate = new Date('2025-01-15T10:00:00Z');
-        expectedDate.setDate(expectedDate.getDate() + 365);
-
-        expect(result?.expiresAt.getTime()).toBe(expectedDate.getTime());
-      });
-
-      it('should extend expiry based on device type (desktop: 30 days)', async () => {
-        const desktopSessionWithRefresh = {
-          ...mockSession,
-          refreshToken: 'old-refresh-hash',
-          isMobile: false
-        };
-        mockPrisma.userSession.findFirst.mockResolvedValueOnce(desktopSessionWithRefresh);
-        mockPrisma.userSession.update.mockResolvedValueOnce(desktopSessionWithRefresh);
-
-        const result = await rotateRefreshToken('old-refresh-token');
-
-        const expectedDate = new Date('2025-01-15T10:00:00Z');
-        expectedDate.setDate(expectedDate.getDate() + 30);
-
-        expect(result?.expiresAt.getTime()).toBe(expectedDate.getTime());
-      });
-
-      it('should handle database errors gracefully', async () => {
-        const sessionWithRefresh = {
-          ...mockSession,
-          refreshToken: 'old-refresh-hash'
-        };
-        mockPrisma.userSession.findFirst.mockResolvedValueOnce(sessionWithRefresh);
-        mockPrisma.userSession.update.mockRejectedValueOnce(new Error('DB error'));
-
-        const result = await rotateRefreshToken('old-refresh-token');
-
-        expect(result).toBeNull();
-      });
-    });
+    // `rotateRefreshToken` a été retiré (#3621) : dead code, jamais appelé par
+    // aucune route, et son `where: { refreshToken }` ne pouvait matcher aucune
+    // ligne réelle puisque `createSession` ne pose jamais cette colonne.
   });
 
   // ============================================================

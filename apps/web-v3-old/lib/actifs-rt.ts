@@ -16,12 +16,14 @@ import { lisLActif, memo } from './actifs';
  * `commentaires.<hash>.js` (`/post/:id`, #5091), `plein.<hash>.js`
  * (`/chats/:cle/medias`, #4525), `navigateur.<hash>.js` (la navigation de
  * zone, § 12.11), `composer.<hash>.js` (`/composer`, #4966 — le seul qui ne
- * parle à personne : il tient un BROUILLON dans `sessionStorage`) et
+ * parle à personne : il tient un BROUILLON dans `sessionStorage`),
  * `prefs.<hash>.js` (`/notifications/preferences`, #4899 — une bascule est un
- * ALLER SIMPLE, comme `feed` : ni composeur, ni socket) sont les DOUZE
+ * ALLER SIMPLE, comme `feed` : ni composeur, ni socket) et `reels.<hash>.js`
+ * (`/feed/reels`, #5388 — il joue/arrête la vidéo servie et ACTIVE des liens
+ * déjà composés, aucun appel à la passerelle non plus) sont les TREIZE
  * modules de participation
  * compilés par `scripts/build-participate.mjs` (bun build, AVANT `next
- * build`) — douze fichiers parce qu'un écran ne doit télécharger que ce qu'il
+ * build`) — treize fichiers parce qu'un écran ne doit télécharger que ce qu'il
  * exécute (la liste n'a ni composeur, ni réserve, ni plein écran ; le fil
  * social n'a ni l'un ni l'autre, et pas de socket non plus — aimer et
  * reposter sont des allers simples, § `lib/realtime/feed.ts` ; la galerie n'a
@@ -70,6 +72,7 @@ export type ActifsTempsReel = {
   readonly navigateur: ActifTempsReel;
   readonly composer: ActifTempsReel;
   readonly prefs: ActifTempsReel;
+  readonly reels: ActifTempsReel;
   readonly socket: ActifTempsReel;
 };
 
@@ -116,6 +119,7 @@ export const actifsTempsReel = memo(
     navigateur: actif('navigateur', lisLeModule('navigateur')),
     composer: actif('composer', lisLeModule('composer')),
     prefs: actif('prefs', lisLeModule('prefs')),
+    reels: actif('reels', lisLeModule('reels')),
     socket: actif(
       'socket.io',
       lisFichier(join(process.cwd(), 'node_modules', 'socket.io-client', 'dist', 'socket.io.esm.min.js')),

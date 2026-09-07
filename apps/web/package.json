@@ -1,10 +1,10 @@
 {
   "name": "@meeshy/web",
-  "version": "1.37.0",
+  "version": "1.38.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3100 --experimental-https",
-    "dev:https": "next dev -p 3100 --experimental-https",
+    "dev:https": "node scripts/dev-https.mjs -p 3100",
     "build": "next build",
     "analyze": "ANALYZE=true npm run build",
     "start": "next start -p 3100 -H 0.0.0.0",

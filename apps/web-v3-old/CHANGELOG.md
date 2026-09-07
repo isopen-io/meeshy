@@ -1,5 +1,12 @@
 # @meeshy/web-v3
 
+## 0.0.3
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.17.0
+
 ## 0.0.2
 
 ### Patch Changes

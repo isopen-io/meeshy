@@ -1997,3 +1997,118 @@ partiel se relance sans dommage), **aucune résurrection** après purge,
 `dataPurged` qui ne passe à `true` qu'une fois la purge effective — le champ
 existe précisément pour ne pas mentir pendant l'intervalle —, et un témoin par
 entité vérifiant le verdict ci-dessus.
+
+## 2026-09-06: Rate limiting Traefik — attacher `rate-limit@file` au routeur gateway (#3622)
+
+**Statut** : Accepté
+
+**Contexte** : `infrastructure/docker/compose/config/dynamic.yaml` déclare le
+middleware Traefik `rate-limit` (100 req/s, burst 50) depuis #4137, mais aucun
+routeur ne le référençait — `traefik.http.routers.gateway.middlewares` (et son
+jumeau `gateway-staging`) ne portait que `compress@file`. Les deux autres
+volets de #3622 (`trustProxy` restreint à l'IP de Traefik ; clé de débit
+`user:` quand authentifié) étaient déjà résolus par #4137, #4184 et #4347 —
+`config/trust-proxy.ts` borne la confiance à un maillon par défaut
+(`resolveTrustProxy`, fonction `hop < n`, jamais `trustProxy: true`), et la
+quasi-totalité des fabriques de `middleware/rate-limiter.ts` posent
+`hook: 'preHandler'` + `keyGenerator` sur `authContext.userId` (gardé par
+`account-keyed-rate-limit-sweep.test.ts` et
+`rate-limit-key-reaches-account.test.ts`).
+
+**Décision** : Attacher `rate-limit@file` sur les routeurs `gateway` (prod) et
+`gateway-staging` — les deux partagent la même instance Traefik et le même
+provider `file`, `docker-compose.staging.yml` ne déclarant pas son propre
+service Traefik et rejoignant le réseau externe `meeshy-network` publié par la
+stack prod. Ordre `rate-limit@file,compress@file` : la limite de débit
+s'applique avant la compression, pour ne pas dépenser de CPU à compresser une
+réponse 429.
+
+Cette limite est une couche de **défense en profondeur au niveau du reverse
+proxy**, distincte du plafond applicatif (`registerGlobalRateLimiter`, 300
+req/min par `request.ip`, dans le hook Fastify `onRequest`) : elle absorbe un
+flot avant même qu'une connexion TCP n'ouvre le processus Node, protection que
+la couche applicative ne peut pas offrir par construction.
+
+**Alternatives rejetées** : ne router que sur le plafond applicatif Fastify
+(rejeté — sollicite le processus Node pour chaque requête surnuméraire, y
+compris pendant un pic qui sature aussi Redis, dont dépend ce même limiteur) ;
+attacher `rate-limit@file` à TOUS les routeurs (`frontend`, `static`) — hors
+scope de #3622, qui ne nomme que la porte API ; laissé à une issue distincte si
+le besoin est mesuré sur ces surfaces.
+
+**Preuve** : `infrastructure/docker/compose/test_gateway_rate_limit_middleware.py`
+— garde que les deux routeurs référencent `rate-limit@file` sans perdre
+`compress@file`, et que le middleware qu'ils référencent est bien déclaré dans
+`config/dynamic.yaml`.
+
+**Conséquences** : un burst légitime et bref (rechargement de flux médias,
+plusieurs onglets d'un même utilisateur) peut désormais recevoir un 429 de
+Traefik avant d'atteindre l'application si le débit à l'adresse dépasse 100
+req/s en moyenne (burst 50) — seuil choisi pour #4137, non révisé ici. Aucun
+changement de comportement pour un trafic sous ce seuil.
+
+## 2026-09-07 : Agent ✦ — le service et sa surface d'administration sont conservés (#3727)
+
+**Statut** : Accepté
+
+**Contexte** : #3727 posait la question fermée « garder ou retirer l'agent ✦ ? »
+sur `services/agent/` (agents Impersonator/Animator/Support/FAQ, ~16 k lignes) et
+sa surface d'administration gateway, alors 1977 lignes en un seul fichier
+(`routes/admin/agent.ts`). #4284 a d'abord levé le blocage OPÉRATOIRE — le
+fichier était trop gros pour qu'on y ajoute quoi que ce soit sans dépasser le
+budget de taille — en le scindant en 8 modules (`agent-shared.ts`,
+`agent-configs.ts`, `agent-observability.ts`, `agent-reset.ts`, `agent-llm.ts`,
+`agent-roles.ts`, `agent-delivery-queue.ts`, plus `agent.ts` réduit à 85 lignes
+comme compositeur), sans déplacer une seule route (`route-manifest.json`
+identique octet pour octet avant/après). Cela a donné à la décision produit sa
+mesure : 2172 lignes réparties sur 8 fichiers et 29 routes, plus
+`agent-topics.ts` (327 lignes, inchangé) — relisibles une par une plutôt qu'en
+bloc. Le porteur a tranché le 2026-09-02 (commentaire de #3727) : **on garde**,
+sans retrait ni dépréciation.
+
+Recheck du contexte à la clôture (2026-09-07), la formule d'origine
+(« désactivé en produit ») décrivant un CONTRÔLE D'ACCÈS, pas un interrupteur
+global :
+- Aucun kill-switch : `services/agent/src/env.ts` ne porte aucun
+  `AGENT_ENABLED`/équivalent — seules des clés LLM, ports et réglages de
+  fenêtre. `AgentConfig.enabled` (`packages/shared/prisma/schema.prisma:3781`)
+  est un bouton PAR CONVERSATION, `@default(true)`.
+- Le seul gate réel est un CONTRÔLE DE RÔLE : `requireAgentAdmin` =
+  `requirePermission('canManageAgent')` (ADMIN), et deux routes destructrices
+  (`PUT /llm`, `DELETE /reset`) exigent en plus `requireSovereign()` (BIGBOSS)
+  — `routes/admin/agent-shared.ts:26-46`.
+- Les 8+1 modules sont montés (`routes/index.ts`, préfixe
+  `/api/v1/admin/agent`) et servis en production.
+- Il existe une UI admin complète (`apps/web/app/admin/agent/page.tsx`, ~19
+  composants sous `apps/web/components/admin/agent/`) — pas seulement une API
+  interne sans consommateur.
+
+**Décision** : Le service `services/agent/` et sa surface d'administration
+restent en production, sans retrait ni dépréciation. Ce qui reste à en faire —
+notamment les 55 findings de `docs/agent-bugs-consolidated.md` (dont 5
+CRITIQUE : écrasement silencieux du profil observé par un tableau vide du LLM,
+corruption du résumé sur un JSON invalide, verrou Redis plus court que la durée
+de scan, conversations éligibles par défaut faute d'`AgentConfig`, l'agent qui
+se compte lui-même et s'auto-supprime) — redevient du travail ORDINAIRE, à
+tracer par ses propres issues (le porteur, #3727).
+
+**Alternatives rejetées** : retirer service + routes + modèles (`AgentConfig`,
+`AgentUserRole`, le rôle `AGENT`) — écarté par le porteur ; le gate ADMIN-only
+n'est pas, mesuré, un signe d'abandon technique, seulement un contrôle d'accès
+attendu pour une surface d'administration.
+
+**Preuve** : `routes/admin/agent.ts` (85 lignes, compositeur) + les 7 modules
+qu'il assemble ; `route-manifest.json` (routes `/api/v1/admin/agent/*`
+inchangées avant/après #4284) ; `packages/shared/prisma/schema.prisma:3777-3886`
+(`AgentConfig`), `:3888+` (`AgentUserRole`), `:25` (`UserRole.AGENT`) ;
+`docs/agent-bugs-consolidated.md` (55 findings, 5 CRITIQUE) ; commentaire de
+clôture #3727 (2026-09-02).
+
+**Conséquences** : aucun changement de comportement — cette ADR documente une
+décision déjà en vigueur (l'agent n'a jamais cessé d'être servi). Les 55
+findings documentés restent de la dette RÉELLE sur du code qui reste en
+production ; cette ADR ne les corrige pas, elle acte seulement que le service
+n'est pas retiré. Toute nouvelle route ou modèle sous `routes/admin/agent-*.ts`
+suit désormais le budget de taille standard (1000-1200 lignes) — la
+justification « fichier trop gros pour être touché » ne s'applique plus,
+`agent.ts` étant passé de 1977 à 85 lignes.

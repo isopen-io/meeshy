@@ -83,6 +83,12 @@ const BUDGET = {
   defaut: { octets: 300 * 1024, requetes: 30 },
 };
 
+// Le GROUPE qui vaut ce budget est lu dans budgets.json (groupe `(public)`,
+// via la meme loi de motif que le reste de l'outillage) — jamais une regex
+// locale : voir apps/web-v3-old/scripts/lib/budget-reseau.mjs (#5473).
+const BUDGETS_JSON = JSON.parse(
+  fs.readFileSync(path.join(ROOT, 'apps/web-v3-old/budgets.json'), 'utf8'));
+
 /**
  * Profil d'ENCRE : par ligne, la fraction de pixels qui s'ecartent du fond de
  * l'image. Le fond est le mode de l'histogramme de luminance, donc le profil
@@ -146,6 +152,8 @@ function ecartStructurel(a, b) {
     pathToFileURL(path.join(ROOT, 'apps/web-v3-old/scripts/lib/vues-comparables.mjs')).href);
   const { litLesVues } = await import(
     pathToFileURL(path.join(ROOT, 'apps/web-v3-old/scripts/lib/index-des-vues.mjs')).href);
+  const { cleDeBudget } = await import(
+    pathToFileURL(path.join(ROOT, 'apps/web-v3-old/scripts/lib/budget-reseau.mjs')).href);
 
   // Un index qu'on ne sait pas LIRE se dit avant tout le reste, et par le meme
   // code de sortie : une annexe absente ou un jeton declare au mauvais endroit
@@ -245,7 +253,7 @@ function ecartStructurel(a, b) {
         entree.conforme = false;
       }
 
-      const budget = /^\/(l\/|stories\/|post\/|feed$)/.test(v.route) ? BUDGET['role-premier'] : BUDGET.defaut;
+      const budget = BUDGET[cleDeBudget(v.route, BUDGETS_JSON.groupes)];
       entree.octets = octets;
       entree.requetes = requetes;
       entree.budget_octets = budget.octets;

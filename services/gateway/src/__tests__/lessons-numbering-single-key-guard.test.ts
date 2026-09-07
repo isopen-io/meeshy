@@ -69,7 +69,6 @@ type FrozenDuplicate = {
  * une. `288` n'y figure plus : voir le doc-comment de tête.
  */
 const FROZEN_DUPLICATE_LESSON_NUMBERS: readonly FrozenDuplicate[] = [
-  { identifier: '162', occurrences: 2 },
   { identifier: '215', occurrences: 2 },
   { identifier: '221', occurrences: 2 },
   { identifier: '243', occurrences: 2 },

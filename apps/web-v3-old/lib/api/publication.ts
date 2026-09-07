@@ -127,7 +127,19 @@ const CHEMIN_DES_STORIES = '/api/v1/social/posts?scope=stories&projection=tray&l
 
 const DELAI_MS = DELAI_DE_REPONSE_MS;
 
-/** EXPORTÉE — `lib/api/social.ts` fait le MÊME appel (Bearer, délai, catch réseau) pour le fil et le rail de stories. */
+/**
+ * EXPORTÉE — `lib/api/social.ts` fait le MÊME appel (Bearer, délai, catch
+ * réseau) pour le fil et le rail de stories.
+ *
+ * `x-canvas-caps: 0` (#5195) — web-v3 ne rend AUCUN canvas (`storyEffects`,
+ * 0 occurrence dans tout `apps/web-v3`) ; c'est une décision d'architecture,
+ * jamais un retard de mise à jour. `0` le DÉCLARE à la passerelle, qui sait
+ * alors OMETTRE `storyEffects` sur une story sans média plutôt que servir la
+ * sentinelle « Mets à jour Meeshy pour voir ce contenu » — un conseil FAUX
+ * pour ce client (`services/gateway/src/services/posts/storyEffectsV3.ts`,
+ * règle 5 bis). Un en-tête ABSENT n'aurait pas dit la même chose : il vaut
+ * « client qui n'a rien déclaré », traité comme un legacy présumé.
+ */
 export const demande = (
   url: string,
   jeton: string,
@@ -136,7 +148,12 @@ export const demande = (
 ): Promise<Response | null> =>
   (recuperer ?? ((u, o) => fetch(u, o)))(url, {
     ...options,
-    headers: { accept: 'application/json', authorization: `Bearer ${jeton}`, ...options.headers },
+    headers: {
+      accept: 'application/json',
+      authorization: `Bearer ${jeton}`,
+      'x-canvas-caps': '0',
+      ...options.headers,
+    },
     cache: 'no-store',
     signal: AbortSignal.timeout(DELAI_MS),
   }).catch(() => null);
@@ -789,6 +806,8 @@ export const publie = async ({
   visibility = 'PUBLIC',
   emoji = null,
   langue = null,
+  mediaIds = [],
+  mediaAlt = {},
   cmid = null,
   base,
   recuperer,
@@ -808,6 +827,24 @@ export const publie = async ({
   readonly emoji?: string | null;
   /** `originalLanguage` — la revendication du client. `null` : rien à revendiquer, la passerelle devine. */
   readonly langue?: string | null;
+  /**
+   * `mediaIds` — `CreatePostSchema.mediaIds`, `z.array(z.string()).max(MAX_POST_MEDIA)`
+   * (`routes/posts/types.ts:258`) : les identifiants `PostMedia` déjà
+   * TÉLÉVERSÉS (`televerseMediaDePost`, `lib/api/medias-de-post.ts`) et
+   * réclamables par CE lecteur (`claimableMediaWhere`). Tableau vide : aucune
+   * clé posée dans le corps — un post sans média ne change rien à la charge
+   * qu'il envoyait avant #5390.
+   */
+  readonly mediaIds?: readonly string[];
+  /**
+   * `mediaAlt` — `CreatePostSchema.mediaAlt`, `z.record(z.string(), z.string().max(1000))`
+   * (`routes/posts/types.ts:263`) : le texte alternatif appliqué à
+   * `PostMedia.alt` (`applyMediaAlt`, `PostService.ts:901-919`), CLÉ = un id
+   * de `mediaIds` (les autres clés sont IGNORÉES par la passerelle — jamais
+   * une seconde validation ici). Objet vide : aucune clé posée dans le
+   * corps, comme `mediaIds` ci-dessus.
+   */
+  readonly mediaAlt?: Readonly<Record<string, string>>;
   /**
    * `X-Client-Mutation-Id` — `cmid_<uuid v4 minuscule>`
    * (`services/gateway/src/middleware/clientMutationId.ts:29`). Un rejeu
@@ -833,6 +870,8 @@ export const publie = async ({
       visibility,
       ...(emoji === null ? {} : { moodEmoji: emoji }),
       ...(langue === null ? {} : { originalLanguage: langue }),
+      ...(mediaIds.length === 0 ? {} : { mediaIds }),
+      ...(Object.keys(mediaAlt).length === 0 ? {} : { mediaAlt }),
     }),
   });
 

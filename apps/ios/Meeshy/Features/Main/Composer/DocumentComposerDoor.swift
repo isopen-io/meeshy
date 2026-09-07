@@ -370,7 +370,11 @@ struct DocumentComposerDoor: View {
             storyEffects: draft.storyEffects,
             mediaCaptions: draft.mediaCaptions,
             mediaAlts: draft.mediaAlts,
-            mediaObjectIds: draft.mediaObjectIds
+            mediaObjectIds: draft.mediaObjectIds,
+            // **L'autorisation d'extraction du son** (#3996). Même discipline
+            // que le canvas juste au-dessus : la porte jumelle passe la même
+            // valeur au même rang.
+            allowSoundExtraction: draft.allowSoundExtraction
         ))
 
         let issue = ComposerDocumentSendOutcome.reported(

@@ -197,7 +197,17 @@ const demarre = (): void => {
         document as Document & { startViewTransition?: (rappel: () => void) => ViewTransition }
       ).startViewTransition;
       if (typeof transitionne === 'function') {
-        await transitionne.call(document, applique).updateCallbackDone.catch(() => undefined);
+        const transition = transitionne.call(document, applique);
+        // `ready` ET `finished` REJETTENT avec `InvalidStateError` quand une
+        // transition plus récente sur ce MÊME document abandonne celle-ci
+        // avant qu'elles ne se règlent (#5440) — exactement la fenêtre qu'une
+        // seconde navigation ouvre ici, la génération ayant déjà tranché plus
+        // haut. Le code ne LIT ni l'une ni l'autre : sans ces deux `.catch`,
+        // leur rejet est un « Uncaught (in promise) » que rien n'attrape,
+        // observé sur staging /feed.
+        transition.ready.catch(() => undefined);
+        transition.finished.catch(() => undefined);
+        await transition.updateCallbackDone.catch(() => undefined);
       } else {
         applique();
       }

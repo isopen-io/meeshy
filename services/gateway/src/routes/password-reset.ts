@@ -24,7 +24,7 @@ import {
 import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types';
 import { disconnectRevokedSessions } from '../socketio/disconnectRevokedSessions';
 import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
-import { logError } from '../utils/logger.js';
+import { logError, logWarn } from '../utils/logger.js';
 
 // Zod schemas for request validation
 // Note: captchaToken is now optional as we use built-in bot protection instead
@@ -220,7 +220,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
    */
   fastify.post('/reset-password', {
     schema: {
-      description: 'Complete password reset using the token received via email. The new password must be at least 6 characters and include uppercase, lowercase, digit, and special character. If 2FA is enabled, a valid 2FA code must be provided.',
+      description: 'Complete password reset using the token received via email. The new password must be at least PASSWORD_MIN_LENGTH characters and include uppercase, lowercase, digit, and special character. If 2FA is enabled, a valid 2FA code must be provided.',
       tags: ['auth'],
       summary: 'Complete password reset',
       body: {
@@ -235,14 +235,14 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           },
           newPassword: {
             type: 'string',
-            minLength: 6,
+            minLength: PASSWORD_MIN_LENGTH,
             maxLength: 128,
-            description: 'New password (minimum 6 characters — PASSWORD_MIN_LENGTH)',
+            description: 'New password (minimum PASSWORD_MIN_LENGTH characters)',
             example: 'MyS3cur3P@ssw0rd!'
           },
           confirmPassword: {
             type: 'string',
-            minLength: 6,
+            minLength: PASSWORD_MIN_LENGTH,
             maxLength: 128,
             description: 'Password confirmation - must match newPassword exactly',
             example: 'MyS3cur3P@ssw0rd!'
@@ -320,7 +320,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           io: fastify.socketIOHandler?.getManager?.()?.getIO(),
           userId: result.userId ?? '',
           reason: 'password_changed',
-          onError: (err) => fastify.log.warn({ err }, '[PasswordReset] socket fanout failed after reset'),
+          onError: (err) => logWarn(fastify.log, '[PasswordReset] socket fanout failed after reset', err),
         });
         return sendSuccess(reply, { message: result.message });
       } else {

@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
 import { FENETRE_REVERSIBLE_MS } from '../../lib/contenu/liste';
+import { attendsLeModuleArme } from './lib/attente-de-module';
 import { passerelleDeBouchon, serveurDeLaV3, type PasserelleDeBouchon, type ServeurV3 } from './lib/serveurs';
 
 /**
@@ -31,10 +32,7 @@ const ouvre = async (browser: Browser, javaScriptEnabled = true): Promise<Page> 
   return page;
 };
 
-const attendsLeModule = async (page: Page): Promise<void> => {
-  await page.waitForFunction(() => document.querySelector('main[data-participation="contacts"]') !== null);
-  await page.waitForTimeout(1_200);
-};
+const attendsLeModule = (page: Page): Promise<void> => attendsLeModuleArme(page, 'contacts');
 
 const reponses = (): number =>
   passerelle.journal.filter(

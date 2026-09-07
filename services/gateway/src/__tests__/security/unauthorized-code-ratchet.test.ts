@@ -28,8 +28,14 @@ const FIXTURES = join(__dirname, 'fixtures', 'unauthorized-code');
  * identifiants, second facteur). Reste 117. Cette borne ne descend qu'en
  * nommant un site de plus dans `utils/auth-error-codes.ts` — jamais en la
  * relevant pour faire de la place à un nouveau site non classé.
+ *
+ * 117 → 118 (#3690) : `GET /users/me/referral-code` — refus générique
+ * (« Authentification requise »), exactement le même sens que les sites déjà
+ * comptés de `contacts-directory.ts`/`devices.ts` (aucune créance JWT). Le
+ * défaut reste le choix juste pour ce sens ; relevé plutôt que d'inventer un
+ * code spécifique qui ne nommerait rien de plus précis.
  */
-const DETTE_MAXIMALE = 117;
+const DETTE_MAXIMALE = 118;
 
 describe('sendUnauthorized — cliquet de dette des sens non nommés', () => {
   it('le nombre de sites qui se reposent sur le défaut ne dépasse pas la dette mesurée', () => {

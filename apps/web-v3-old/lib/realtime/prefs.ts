@@ -2,8 +2,11 @@ import { basculeUnePreference } from '@/lib/api/preferences';
 import { COOKIE_DE_JETON, valeurDuCookie } from '@/lib/api/cookies';
 import { estUneCleDePrefs, PREFS, type CleDePreference } from '@/lib/contenu/prefs-de-notif';
 
-import { montreLeBandeau } from './bandeau';
+import { signaleArme } from './arme';
 import { annule, bascule, reconcilie, type EtatDePrefs } from './prefs-etat';
+import { montreLaReussite as reussite, montreLaSessionExpiree as sessionExpiree, montreLEchec as echec } from './prefs-fentes';
+import { peinsLaRangee as peinsUneRangee } from './prefs-peinture';
+import { armeLAbonnementPush, memoriseLeContextePush, rejoueSiRotation } from './push-abonnement';
 
 /**
  * LE MODULE DE PARTICIPATION DE `/notifications/preferences` (§ 12.4, #4899)
@@ -60,51 +63,26 @@ const cleDuFormulaire = (formulaire: HTMLFormElement): CleDePreference | null =>
   return valeur === undefined || !estUneCleDePrefs(valeur) ? null : valeur;
 };
 
-const champDeLaValeur = (formulaire: HTMLFormElement): HTMLInputElement | null =>
-  formulaire.querySelector<HTMLInputElement>('input[name="valeur"]');
-
 const boutonDuFormulaire = (formulaire: HTMLFormElement): HTMLButtonElement | null =>
   formulaire.querySelector<HTMLButtonElement>('button[role="switch"]');
 
 const etatDuBouton = (bouton: HTMLButtonElement): boolean => bouton.getAttribute('aria-checked') === 'true';
 
 /**
- * LA PEINTURE D'UNE RANGÉE — `aria-checked` gouverne la piste (feuille) ET le
- * mot annoncé.
- *
- * ET LE FORMULAIRE SUIT. Le champ caché `valeur` porte l'INVERSE de l'état
- * affiché : c'est LUI que le chemin sans JavaScript enverrait. Le laisser sur
- * la valeur calculée AU RENDU ferait diverger le contrôle de ce qu'il montre
- * dès la première bascule optimiste — une rangée peinte « Désactivé » qui,
- * soumise par le navigateur (module en échec, script coupé en cours de
- * session), redemanderait « Désactivé ». Les deux moitiés d'une même rangée
- * ne peuvent pas dire deux choses.
+ * LA PEINTURE D'UNE RANGÉE — déléguée à `prefs-peinture.ts` (site UNIQUE,
+ * partagé avec la rangée push, restante FLUIDITÉ de #5391), avec les
+ * libellés propres aux treize bascules.
  */
-const peinsLaRangee = (formulaire: HTMLFormElement, bouton: HTMLButtonElement, valeur: boolean): void => {
-  bouton.setAttribute('aria-checked', valeur ? 'true' : 'false');
-  const horsEcran = bouton.querySelector<HTMLElement>('.hors-ecran');
-  if (horsEcran !== null) horsEcran.textContent = valeur ? PREFS.activee : PREFS.desactivee;
-  const champ = champDeLaValeur(formulaire);
-  if (champ !== null) champ.value = valeur ? 'false' : 'true';
-};
+const peinsLaRangee = (formulaire: HTMLFormElement, bouton: HTMLButtonElement, valeur: boolean): void =>
+  peinsUneRangee({ formulaire, bouton, valeur, libelleActif: PREFS.activee, libelleInactif: PREFS.desactivee });
 
-const montreLaReussite = (ctx: Contexte, libelle: string): void => {
-  const avis = ctx.main.querySelector<HTMLElement>('.avis');
-  const echec = ctx.main.querySelector<HTMLElement>('.echec');
-  if (echec !== null) echec.hidden = true;
-  if (avis === null) return;
-  avis.hidden = false;
-  avis.textContent = PREFS.regle(libelle);
-};
+/**
+ * LES TROIS FENTES DE STATUT — déléguées à `prefs-fentes.ts` (site UNIQUE,
+ * partagé avec la rangée push), avec les textes propres aux treize bascules.
+ */
+const montreLaReussite = (ctx: Contexte, libelle: string): void => reussite(ctx.main, PREFS.regle(libelle));
 
-const montreLEchec = (ctx: Contexte): void => {
-  const avis = ctx.main.querySelector<HTMLElement>('.avis');
-  const echec = ctx.main.querySelector<HTMLElement>('.echec');
-  if (avis !== null) avis.hidden = true;
-  if (echec === null) return;
-  echec.hidden = false;
-  echec.textContent = PREFS.echec;
-};
+const montreLEchec = (ctx: Contexte): void => echec(ctx.main, PREFS.echec);
 
 /**
  * UN 401 N'EST PAS UN ÉCHEC RÉSEAU (défaut relevé en revue, #4899) : le
@@ -114,15 +92,12 @@ const montreLEchec = (ctx: Contexte): void => {
  * Le bandeau et son geste de révélation sont ceux du fil, PARTAGÉS
  * (`app/connecte/bandeau-vue.ts`, `lib/realtime/bandeau.ts`) — un second
  * mécanisme écrit ici aurait divergé du jour où l'un des deux aurait changé
- * de forme.
+ * de forme. La RÈGLE elle-même (masquer les deux autres fentes avant de
+ * lever le bandeau) vit désormais dans `prefs-fentes.ts` : la rangée push
+ * l'avait recopiée SANS cette moitié, et le lecteur y lisait « réessayez »
+ * sous le bandeau de reconnexion.
  */
-const montreLaSessionExpiree = (ctx: Contexte): void => {
-  const avis = ctx.main.querySelector<HTMLElement>('.avis');
-  const echec = ctx.main.querySelector<HTMLElement>('.echec');
-  if (avis !== null) avis.hidden = true;
-  if (echec !== null) echec.hidden = true;
-  montreLeBandeau(ctx.main, 'bandeau-session-expiree', true);
-};
+const montreLaSessionExpiree = (ctx: Contexte): void => sessionExpiree(ctx.main);
 
 /**
  * LA VALEUR D'UNE CLÉ, LUE DANS UN ÉTAT PARTIEL — jamais un index nu :
@@ -200,6 +175,23 @@ const demarre = (): void => {
   if (jeton === null) return;
 
   prendsLesGestes({ main, passerelle: config.passerelle, jeton });
+  // LE PUSH WEB (#5391) — armé SÉPARÉMENT : contrairement aux treize
+  // bascules, la rangée push n'appelle jamais `basculeUnePreference` mais
+  // reçoit le MÊME contexte (`passerelle`, `jeton`) — le désabonnement
+  // (restante FLUIDITÉ) appelle la passerelle directement, comme les treize
+  // bascules — voir le doc-comment de tête de `push-abonnement.ts`.
+  armeLAbonnementPush(main, { passerelle: config.passerelle, jeton });
+  // LE CONTEXTE DURABLE (#5391, suivi de revue défaut 3) — écrit à CHAQUE
+  // chargement, y compris celui qui suit immédiatement un abonnement : c'est
+  // ce que `/chats` relit en arrière-plan pour un lecteur qui ne revient
+  // jamais ici (`rejoueSiRotationEnArrierePlan`, `lib/realtime/liste.ts`).
+  void memoriseLeContextePush(main);
+  // LA ROTATION (#5391, suivi de revue) — best-effort, à CHAQUE chargement :
+  // un drapeau posé par le worker depuis la dernière visite rejoue
+  // l'abonnement sans geste du lecteur — voir le doc-comment de
+  // `rejoueSiRotation`.
+  void rejoueSiRotation(main);
+  signaleArme(main);
 };
 
 demarre();

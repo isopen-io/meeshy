@@ -655,7 +655,13 @@ struct OutboxDispatcher: OutboxDispatching {
             // gateway ; côté client, la carte s'arrêtait au meuble. Un média
             // partait donc muet pour un lecteur d'écran, alors que l'auteur
             // avait rempli le champ « Décrire » et l'avait relu.
-            mediaAlt: altsServeur.isEmpty ? nil : altsServeur
+            mediaAlt: altsServeur.isEmpty ? nil : altsServeur,
+            // **Le toggle « autoriser l'extraction du son » atteint enfin le
+            // serveur** (#3996). Il était déclaré (`ComposerMediaAccessibility`,
+            // `PublishIntent`), et mourait ici : ni `CreatePostPayload` ni ce
+            // corps ne le portaient, si bien que l'auteur croyait décider et
+            // le serveur ne l'apprenait jamais.
+            allowSoundExtraction: payload.allowSoundExtraction
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             PostsEndpoint.root,
@@ -1001,6 +1007,14 @@ nonisolated struct CreatePostBody: Encodable {
     /// la légende dans `CreatePostSchema`, et jamais son repli.
     let mediaAlt: [String: String]?
 
+    /// **L'autorisation d'extraction du son** (#3996) — même clé top-level
+    /// `allowSoundExtraction` que le chemin direct (`CreatePostRequest`,
+    /// `PostService.create`). Sans elle ICI, le choix de l'auteur survivait
+    /// jusqu'au décodage de `CreatePostPayload` puis était jeté en silence à
+    /// l'ultime saut réseau — exactement le défaut que `storyEffects` a payé
+    /// avant lui, sur le chemin que prend tout post/réel du meuble.
+    let allowSoundExtraction: Bool?
+
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         if let content, !content.isEmpty { try container.encode(content, forKey: .content) }
@@ -1042,6 +1056,12 @@ nonisolated struct CreatePostBody: Encodable {
         if let mediaAlt, !mediaAlt.isEmpty {
             try container.encode(mediaAlt, forKey: .mediaAlt)
         }
+        // Encodé seulement quand présent : `CreatePostSchema.allowSoundExtraction`
+        // est optionnel, et un `null` explicite serait une affirmation
+        // (« l'auteur a refusé ») là où il n'a rien décidé.
+        if let allowSoundExtraction {
+            try container.encode(allowSoundExtraction, forKey: .allowSoundExtraction)
+        }
     }
 
     enum CodingKeys: String, CodingKey {
@@ -1050,5 +1070,6 @@ nonisolated struct CreatePostBody: Encodable {
         case discoverabilityPrecision, repostOfId, mobileTranscription, storyEffects
         case mediaCaption
         case mediaAlt
+        case allowSoundExtraction
     }
 }

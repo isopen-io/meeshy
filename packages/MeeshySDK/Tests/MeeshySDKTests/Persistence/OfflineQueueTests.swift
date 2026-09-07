@@ -557,7 +557,8 @@ final class OfflineQueueTests: XCTestCase {
             // `mediaCaptions` est SANS défaut pour la même raison que ses deux
             // voisins : un appelant qui n'a pas de légende l'écrit. Ces témoins
             // portent sur les CHEMINS et les MIMES, jamais sur le texte.
-            mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil
+            mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil,
+            allowSoundExtraction: nil
         )
 
         XCTAssertEqual(result.localMediaPaths.count, 2)
@@ -622,7 +623,8 @@ final class OfflineQueueTests: XCTestCase {
             // `mediaCaptions` est SANS défaut pour la même raison que ses deux
             // voisins : un appelant qui n'a pas de légende l'écrit. Ces témoins
             // portent sur les CHEMINS et les MIMES, jamais sur le texte.
-            mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil
+            mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil,
+            allowSoundExtraction: nil
         )
 
         let maybePool = await queue.outboxPoolForTesting
@@ -663,7 +665,8 @@ final class OfflineQueueTests: XCTestCase {
             // `mediaCaptions` est SANS défaut pour la même raison que ses deux
             // voisins : un appelant qui n'a pas de légende l'écrit. Ces témoins
             // portent sur les CHEMINS et les MIMES, jamais sur le texte.
-            mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil
+            mediaCaptions: nil, mediaAlts: nil, mediaObjectIds: nil,
+            allowSoundExtraction: nil
         )
 
         // The durable row must carry the REEL type so the dispatcher creates the

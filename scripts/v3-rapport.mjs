@@ -10,7 +10,7 @@
 //
 // Il invoque SIX outils qui ne vivent pas ensemble : deux dans
 // `docs/product/MeeshyWebV3Design/` (le gate d'ordre, le diff par région) et quatre
-// dans `apps/web-v3/` (le budget de bundle, le poids réseau CDP, le gate axe, le
+// dans `apps/web-v3-old/` (le budget de bundle, le poids réseau CDP, le gate axe, le
 // gate de cycle de vie). Sa surface est le dépôt — règle de placement (B) de la
 // conception, le même motif que `scripts/check-v3-pipeline.mjs`.
 //
@@ -50,7 +50,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CIBLES_PRODUCTION, verdictDeLigneDeBase } from '../apps/web-v3/scripts/baseline.mjs';
+import { CIBLES_PRODUCTION, verdictDeLigneDeBase } from '../apps/web-v3-old/scripts/baseline.mjs';
 
 const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -63,7 +63,7 @@ const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
  * « navigateur absent » (`NAVIGATEUR_ABSENT`) alors que le navigateur EST là,
  * une révision plus bas. `navigateur.cjs` sait déjà lire ce cas ; `mesureSpec`
  * le lui demande avant de lancer chaque spec, exactement comme `e2e:run` et
- * `test:a11y`/`test:lifecycle` (`apps/web-v3/package.json`) le font déjà.
+ * `test:a11y`/`test:lifecycle` (`apps/web-v3-old/package.json`) le font déjà.
  */
 const cheminDeChromium = () => {
   try {
@@ -182,9 +182,9 @@ const mesureOrdre = () => {
 };
 
 const mesureBudget = () => {
-  const script = 'apps/web-v3/scripts/check-bundle-budget.mjs';
+  const script = 'apps/web-v3-old/scripts/check-bundle-budget.mjs';
   const commande = `node ${script}`;
-  if (!existsSync(join(RACINE, 'apps/web-v3/.next/app-build-manifest.json'))) {
+  if (!existsSync(join(RACINE, 'apps/web-v3-old/.next/app-build-manifest.json'))) {
     return mesure('budget de bundle', commande, ABSENTE, null, 'prérequis : bun run build dans apps/web-v3');
   }
   const resultat = lance('node', [script, '--json']);
@@ -254,7 +254,7 @@ const mesureRendu = (base) => {
 // joindre, et n'a plus de chemin par défaut : mesurer un point de santé pour
 // afficher « vert » est pire que ne rien mesurer.
 const mesureReseau = (base, chemins) => {
-  const script = 'apps/web-v3/scripts/mesure-reseau.mjs';
+  const script = 'apps/web-v3-old/scripts/mesure-reseau.mjs';
   const urls = chemins.map((c) => `${base ?? ''}${c}`);
   const commande = `node ${script} --json ${urls.join(' ') || '<url…>'}`;
   if (!base) {
@@ -357,7 +357,7 @@ const mesureSpec = ({ nom, fichier }) => {
       commande,
       ABSENTE,
       null,
-      'prérequis : bun install dans apps/web-v3 (@playwright/test absent)',
+      'prérequis : bun install dans apps/web-v3-old (@playwright/test absent)',
     );
   }
 
@@ -410,14 +410,14 @@ const mesureCycleDeVie = () =>
 // regardée.
 //
 // Elle n'invoque aucun outil : elle LIT le fichier commité. Le verdict, lui,
-// vit dans `apps/web-v3/scripts/baseline.mjs`, avec la donnée qu'il juge — une
+// vit dans `apps/web-v3-old/scripts/baseline.mjs`, avec la donnée qu'il juge — une
 // seconde lecture de `etablie` ici serait la jumelle que le § 9.2 interdit.
 const NOM_LIGNE_DE_BASE = 'ligne de base (prod)';
 
-const CHEMIN_LIGNE_DE_BASE = join(RACINE, 'apps/web-v3/e2e/visual/baseline.json');
+const CHEMIN_LIGNE_DE_BASE = join(RACINE, 'apps/web-v3-old/e2e/visual/baseline.json');
 
 const mesureLigneDeBase = () => {
-  const commande = 'node apps/web-v3/scripts/baseline.mjs <les 6 urls de production>';
+  const commande = 'node apps/web-v3-old/scripts/baseline.mjs <les 6 urls de production>';
   const lu = (() => {
     try {
       return JSON.parse(readFileSync(CHEMIN_LIGNE_DE_BASE, 'utf8'));
@@ -545,7 +545,7 @@ const MUTATIONS_A11Y = [
 // laissaient passer la moitié du fichier : l'INVOCATION. Un outil qui échoue
 // proprement — rc≠0, message sur stderr, stdout vide — faisait crasher
 // l'agrégateur sur `JSON.parse('')`, exactement dans le scénario que le critère
-// de fin nomme (« échoue proprement si apps/web-v3 n'a pas encore de route »).
+// de fin nomme (« échoue proprement si apps/web-v3-old n'a pas encore de route »).
 const MUTATIONS_INVOCATION = [
   ['un outil rend rc≠0 avec une sortie VIDE', { code: 1, stdout: '', stderr: 'manifeste absent\ndétail' }, ROUGE, 'manifeste absent'],
   ['un outil rend un JSON TRONQUÉ', { code: 0, stdout: '{"pages":1', stderr: '' }, ROUGE, 'sortie illisible'],

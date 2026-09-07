@@ -1,5 +1,6 @@
 import { FERMETURE } from '@/lib/contenu/liens';
 
+import { signaleArme } from './arme';
 import { armeLaFeuilleDeLien, corpsDuFormulaire } from './feuille-de-lien';
 
 /**
@@ -252,6 +253,8 @@ const demarre = (): void => {
     details.open = false;
     details.querySelector<HTMLElement>(':scope > summary')?.focus();
   });
+
+  signaleArme(main);
 };
 
 demarre();

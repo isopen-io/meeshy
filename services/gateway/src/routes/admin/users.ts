@@ -37,8 +37,9 @@ import { registerUserWriteRoutes } from './users-write';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
+import { validatePasswordStrength } from '../../utils/password-strength';
 import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
-import { logError } from '../../utils/logger.js';
+import { logError, logWarn } from '../../utils/logger.js';
 
 // Utilisation des schemas de validation renforces
 const createUserSchema = createUserValidationSchema;
@@ -87,7 +88,7 @@ function deactivatedUserSessionRevoker(fastify: FastifyInstance): SessionRevoker
     io: fastify.socketIOHandler?.getManager?.()?.getIO(),
     userId,
     reason: 'admin_revoke',
-    onError: (err) => fastify.log.warn({ err, userId }, '[ADMIN] socket fanout failed on user deactivation'),
+    onError: (err) => logWarn(fastify.log, `[ADMIN] socket fanout failed on user deactivation (userId=${userId})`, err),
   });
 }
 
@@ -235,6 +236,16 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Valider les donnees
       const validatedData = createUserSchema.parse(request.body);
 
+      // #3629 — `createUserValidationSchema.password` (Zod) ne borne que la
+      // LONGUEUR ; `zxcvbn` et les classes de caractères n'étaient consultés
+      // qu'au reset de mot de passe. Un admin pouvait donc créer un compte
+      // avec un mot de passe trivial.
+      const strength = validatePasswordStrength(validatedData.password);
+      if (!strength.isValid) {
+        sendBadRequest(reply, `Password requirements: ${strength.errors.join(', ')}`);
+        return;
+      }
+
       // La garde porte sur le role EFFECTIF, pas sur le role DEMANDE (#4144).
       //
       // Elle etait ecrite `if (validatedData.role) { … }` : une garde
@@ -300,6 +311,14 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
       // Valider les donnees
       const validatedData = resetPasswordSchema.parse(request.body);
+
+      // #3629 — même raison que la création : la longueur seule ne suffit
+      // pas, et cette voie n'appelait jamais `zxcvbn`.
+      const strength = validatePasswordStrength(validatedData.newPassword);
+      if (!strength.isValid) {
+        sendBadRequest(reply, `Password requirements: ${strength.errors.join(', ')}`);
+        return;
+      }
 
       // Recuperer l'utilisateur cible
       const targetUser = await userManagementService.getUserById(request.params.userId);

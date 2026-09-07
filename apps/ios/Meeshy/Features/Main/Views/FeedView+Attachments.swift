@@ -361,7 +361,9 @@ extension FeedView {
                 // adopter. Écrit plutôt qu'omis — un défaut aurait couvert ce
                 // site en silence, et rien n'aurait dit le jour où cette
                 // feuille gagnerait un champ « Décrire ».
-                mediaAlts: nil, mediaObjectIds: nil
+                mediaAlts: nil, mediaObjectIds: nil,
+                // Même raison : aucun toggle de son sur cette feuille (#3996).
+                allowSoundExtraction: nil
                 )
             }
             return
@@ -1788,7 +1790,9 @@ struct FeedComposerSheet: View {
                 // adopter. Écrit plutôt qu'omis — un défaut aurait couvert ce
                 // site en silence, et rien n'aurait dit le jour où cette
                 // feuille gagnerait un champ « Décrire ».
-                mediaAlts: nil, mediaObjectIds: nil
+                mediaAlts: nil, mediaObjectIds: nil,
+                // Même raison : aucun toggle de son sur cette feuille (#3996).
+                allowSoundExtraction: nil
                 )
             }
             return

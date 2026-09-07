@@ -1,6 +1,7 @@
 
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { choixDeLangue } from '@/app/choix-de-langue';
+import { CHARGEUR_DE_PARTICIPATION } from '@/app/connecte/chargeur';
 import { FEUILLE_CONNECTEE } from '@/app/connecte/feuille';
 import { documentPleinEcran } from '@/app/connecte/fil-vue';
 import { langAttribut } from '@/app/connecte/transcrit';
@@ -89,6 +90,18 @@ export type EtatDeLaStory = {
   readonly confirmation: boolean;
   readonly erreur: string | null;
   readonly brouillon: string;
+  /**
+   * LE MODULE DE LECTURE (#5388) — servi UNIQUEMENT par `/feed/reels`
+   * (`reels-porte.ts`) : jouer/arrêter la vidéo visible, le geste vertical, la
+   * non-rétention au changement d'écran. Absent (`/stories/:id`, `/reels/:id`,
+   * `/moods/:id`) : zéro octet de script, comme avant #5388 — ces trois
+   * adresses restent la lecture PARTAGÉE, sans aucun temps réel.
+   *
+   * PAS DE `passerelle` ICI, et ce n'est pas un oubli : contrairement à
+   * `feed`, `notifs` ou `contacts`, ce module n'appelle AUCUNE route de la
+   * passerelle — il clique des liens que le serveur a déjà composés.
+   */
+  readonly lecture?: { readonly module: string } | null;
 };
 
 export const CHAMP_DE_LA_REPONSE = 'reponse';
@@ -261,10 +274,20 @@ const repondre = (etat: EtatDeLaStory): string => {
   );
 };
 
+/**
+ * L'ARMEMENT DU DOCUMENT (#5388) — servi UNIQUEMENT quand `etat.lecture` est
+ * posé. `/feed/reels` est la SEULE adresse qui la sert (`reels-porte.ts`) ;
+ * les trois lectures partagées (`/stories/:id`, `/reels/:id`, `/moods/:id`)
+ * n'ont pas de module, donc pas cet attribut — zéro octet de script, comme
+ * avant ce lot.
+ */
+const attributDeParticipation = (etat: EtatDeLaStory): string =>
+  etat.lecture == null ? '' : ` data-participation="reels" data-module="${echappe(etat.lecture.module)}"`;
+
 const corps = (etat: EtatDeLaStory): string => {
   const { copie } = etat.genre;
   return (
-  '<main id="main-content" class="story-ecran">' +
+  `<main id="main-content" class="story-ecran"${attributDeParticipation(etat)}>` +
   // La barre de segments n'existe QUE pour un genre qui se parcourt. Un réel
   // et une humeur se lisent seuls : une barre à un seul segment serait un
   // repère qui n'oriente vers rien (charte règle 7).
@@ -286,6 +309,9 @@ export const documentDuPartage = (etat: EtatDeLaStory): string =>
     description: etat.story.texte === '' ? etat.genre.copie.titre : etat.story.texte,
     corps: corps(etat),
     feuille: FEUILLE,
+    // LE CHARGEUR DIFFÉRÉ (§ 12.4) — SEULEMENT quand `lecture` est posée
+    // (`/feed/reels`) : les trois lectures partagées ne servent aucun script.
+    script: etat.lecture == null ? '' : CHARGEUR_DE_PARTICIPATION,
   });
 
 /** Le document d'une STORY — la projection que la porte de `/stories/:id` lit. */

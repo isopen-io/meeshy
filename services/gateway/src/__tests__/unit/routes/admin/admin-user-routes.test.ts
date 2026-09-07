@@ -363,7 +363,7 @@ describe('GET /admin/users/:userId', () => {
 // ── POST /admin/users ────────────────────────────────────────────────────────
 describe('POST /admin/users', () => {
   let app: FastifyInstance;
-  const validBody = { username: 'newuser', email: 'new@example.com', password: 'Pass1234!' };
+  const validBody = { username: 'newuser', email: 'new@example.com', password: 'Xk9$mQ2vLp8#nR4wZ' };
 
   beforeAll(async () => {
     resetMocks();
@@ -590,7 +590,7 @@ describe('PATCH /admin/users/:userId/status', () => {
 // ── POST /admin/users/:userId/reset-password ─────────────────────────────────
 describe('POST /admin/users/:userId/reset-password', () => {
   let app: FastifyInstance;
-  const validBody = { newPassword: 'NewPass123!' };
+  const validBody = { newPassword: 'Xk9$mQ2vLp8#nR4wZ' };
 
   beforeAll(async () => {
     resetMocks();
