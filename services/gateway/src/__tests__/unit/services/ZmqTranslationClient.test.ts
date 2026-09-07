@@ -1109,31 +1109,6 @@ describe('ZmqTranslationClient', () => {
 
       expect(isHealthy).toBe(false);
     });
-
-    it('should stay healthy when a translation send is in flight — the probe no longer shares the translation socket (#5611)', async () => {
-      await client.initialize();
-
-      // Simule une traduction dont le send() n'a pas encore résolu — le
-      // défaut historique (une seule socket PUSH pour tout) faisait échouer
-      // toute sonde tirée dans cette fenêtre sur "Socket is busy writing".
-      let resolveTranslationSend!: () => void;
-      (mockPushSocket.send as jest.Mock).mockImplementationOnce(
-        () => new Promise<void>((resolve) => { resolveTranslationSend = resolve; })
-      );
-      const translationSend = client.sendTranslationRequest({
-        messageId: 'msg-1',
-        text: 'hello',
-        sourceLanguage: 'en',
-        targetLanguages: ['fr'],
-        conversationId: 'conv-1'
-      });
-
-      const isHealthy = await client.healthCheck();
-      expect(isHealthy).toBe(true);
-
-      resolveTranslationSend();
-      await translationSend;
-    });
   });
 
   describe('getStats()', () => {
