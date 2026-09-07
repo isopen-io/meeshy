@@ -142,6 +142,27 @@ export interface ConversationRestoredEventData {
   readonly conversationId: string;
 }
 
+/**
+ * Une pièce jointe d'aperçu — la forme MINIMALE qu'un client peut rendre dans
+ * une ligne de liste (icône/miniature, dimensions ou durée, taille), pas
+ * l'objet complet d'un message ouvert. Mêmes champs que
+ * `conversationLastMessagePreviewSelect` (`routes/conversations/core-selects.ts`,
+ * la sélection Prisma que `GET /conversations` utilise déjà pour ce même
+ * groupe) — délibérément sans `fileUrl` : ce que la ligne de liste montre
+ * n'est jamais le fichier, seulement sa vignette.
+ */
+export interface LastMessagePreviewAttachment {
+  readonly id: string;
+  readonly mimeType: string;
+  readonly thumbnailUrl: string | null;
+  readonly originalName: string | null;
+  readonly fileSize: number | null;
+  /** Millisecondes — voir `MessageAttachment.duration` (`schema.prisma`). */
+  readonly duration: number | null;
+  readonly width: number | null;
+  readonly height: number | null;
+}
+
 export interface ConversationUpdatedEventData {
   readonly conversationId: string;
   readonly updatedBy: { readonly id: string };
@@ -244,6 +265,37 @@ export interface ConversationUpdatedEventData {
    * ici la ferait diverger.
    */
   readonly location?: unknown;
+  /**
+   * Sous-groupe MÉDIA du groupe d'aperçu — même règle que `location`
+   * ci-dessus, et suivi n°2 de la PR #3096 (#3737) : même classe de défaut
+   * que l'épingle de position, jamais pris. **Clé ABSENTE = un FAIT, pas une
+   * ignorance** — `lastMessageAttachments` absent (ou vide) dit « ce message
+   * n'a pas de pièce jointe », `lastMessageIsBlurred` absent dit « ce
+   * message n'est pas flouté ». Corollaire opposable, identique à celui de
+   * `location` : **qui porte `lastMessageId` porte les six champs de ce
+   * sous-groupe pour le message qu'il nomme, ou aucun.**
+   *
+   * Ces valeurs sont calculées pour `GET /conversations` depuis toujours
+   * (`conversationLastMessagePreviewSelect`,
+   * `routes/conversations/core-selects.ts`) — seulement jamais posées sur CE
+   * fil : un message édité, un floutage qui expire ou une pièce jointe qui
+   * arrive après coup ne remettait à jour la ligne de liste qu'à la
+   * prochaine relecture complète (`GET /conversations`), jamais par la
+   * diffusion temps réel.
+   */
+  readonly lastMessageSenderName?: string | null;
+  /** Plafonnée à la première pièce jointe — même plafond que `GET /conversations`. */
+  readonly lastMessageAttachments?: readonly LastMessagePreviewAttachment[];
+  /**
+   * Nombre TOTAL de pièces jointes du message. `lastMessageAttachments` ne
+   * porte que la première : un client compose son « +N » depuis CE champ,
+   * jamais depuis la longueur du tableau.
+   */
+  readonly lastMessageAttachmentCount?: number;
+  readonly lastMessageIsBlurred?: boolean;
+  readonly lastMessageIsViewOnce?: boolean;
+  /** Chaîne ISO — voir `lastMessageAt`, son jumeau de forme dans ce même contrat. */
+  readonly lastMessageExpiresAt?: string | null;
   /**
    * `true` quand le serveur a RECALCULÉ l'aperçu depuis l'état courant de la
    * base, par opposition à une poussée de message (`bump-to-top`) qui ne fait

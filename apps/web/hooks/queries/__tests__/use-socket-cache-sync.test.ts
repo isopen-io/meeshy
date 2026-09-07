@@ -1532,6 +1532,100 @@ describe('useSocketCacheSync — la carte du Prisme suit le message que la ligne
 });
 
 /**
+ * Le sous-groupe MÉDIA de `conversation:updated` (#3737) — auteur, pièce
+ * jointe, drapeaux éphémères. Suivi n°2 de la PR #3096, jamais pris : un
+ * floutage qui expire, une pièce jointe qui arrive après coup ne changent
+ * jamais `lastMessagePreview`, et la ligne restait donc figée jusqu'à une
+ * relecture complète (`GET /conversations`).
+ */
+describe('useSocketCacheSync — le sous-groupe MÉDIA suit `conversation:updated` (#3737)', () => {
+  it('un NOUVEAU message compose sa ligne avec auteur, pièce jointe et drapeaux', () => {
+    const conversation = { id: 'conv-1' } as Conversation;
+
+    const merged = mergeConversationUpdate(conversation, {
+      conversationId: 'conv-1',
+      lastMessageId: 'm-new',
+      lastMessageAt: '2026-08-22T10:00:00.000Z',
+      lastMessagePreview: '',
+      lastMessageSenderName: 'Alice',
+      lastMessageIsBlurred: true,
+      lastMessageIsViewOnce: true,
+      lastMessageExpiresAt: '2026-08-22T11:00:00.000Z',
+      lastMessageAttachments: [
+        { id: 'att-1', mimeType: 'image/jpeg', thumbnailUrl: 'https://cdn.example/t.jpg', originalName: 'p.jpg', fileSize: 111, duration: null, width: 800, height: 600 },
+      ],
+    });
+
+    expect(merged.lastMessage?.sender?.displayName).toBe('Alice');
+    expect(merged.lastMessage?.isBlurred).toBe(true);
+    expect(merged.lastMessage?.isViewOnce).toBe(true);
+    expect(merged.lastMessage?.expiresAt).toEqual(new Date('2026-08-22T11:00:00.000Z'));
+    expect(merged.lastMessage?.attachments).toHaveLength(1);
+    expect(merged.lastMessage?.attachments?.[0]).toMatchObject({
+      id: 'att-1',
+      mimeType: 'image/jpeg',
+      thumbnailUrl: 'https://cdn.example/t.jpg',
+      width: 800,
+      height: 600,
+    });
+  });
+
+  it('le MÊME message applique le sous-groupe MÉDIA sans que le texte ait bougé', () => {
+    const previous = makeMessage({
+      id: 'm-same',
+      conversationId: 'conv-1',
+      content: 'hello',
+      isBlurred: false,
+      isViewOnce: false,
+      attachments: [],
+    });
+    const conversation = { id: 'conv-1', lastMessage: previous } as unknown as Conversation;
+
+    // Le texte NE bouge PAS — c'est précisément le cas que la panne #3737
+    // laissait échapper : `lastMessagePreview` inchangé faisait rendre
+    // `{ decided: false }` avant même de regarder le reste du payload.
+    const merged = mergeConversationUpdate(conversation, {
+      conversationId: 'conv-1',
+      lastMessageId: 'm-same',
+      lastMessagePreview: 'hello',
+      lastMessageIsBlurred: true,
+      lastMessageAttachments: [
+        { id: 'att-1', mimeType: 'audio/mpeg', thumbnailUrl: null, originalName: 'memo.mp3', fileSize: 4096, duration: 12000, width: null, height: null },
+      ],
+    });
+
+    expect(merged.lastMessage?.content).toBe('hello');
+    expect(merged.lastMessage?.isBlurred).toBe(true);
+    expect(merged.lastMessage?.attachments).toHaveLength(1);
+    expect(merged.lastMessage?.attachments?.[0]).toMatchObject({ id: 'att-1', mimeType: 'audio/mpeg' });
+  });
+
+  it('un champ ABSENT du payload laisse le champ correspondant du message intact', () => {
+    const previous = makeMessage({
+      id: 'm-same',
+      conversationId: 'conv-1',
+      content: 'hello',
+      isBlurred: true,
+      isViewOnce: true,
+      attachments: [{ id: 'att-existing' } as any],
+    });
+    const conversation = { id: 'conv-1', lastMessage: previous } as unknown as Conversation;
+
+    // Payload SANS le sous-groupe média du tout — un renommage, par exemple.
+    const merged = mergeConversationUpdate(conversation, {
+      conversationId: 'conv-1',
+      lastMessageId: 'm-same',
+      lastMessagePreview: 'hello there',
+    });
+
+    expect(merged.lastMessage?.content).toBe('hello there');
+    expect(merged.lastMessage?.isBlurred).toBe(true);
+    expect(merged.lastMessage?.isViewOnce).toBe(true);
+    expect(merged.lastMessage?.attachments).toEqual([{ id: 'att-existing' }]);
+  });
+});
+
+/**
  * La ligne de liste ne recule pas — le chemin `message:new`.
  *
  * Le témoin de la règle vit dans `preview-monotonicity.test.ts` ; celui-ci
