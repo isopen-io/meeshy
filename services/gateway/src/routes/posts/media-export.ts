@@ -50,6 +50,14 @@ const EXTENSION_BY_MIME: Record<string, string> = {
  * requêtes arrivant avant la première écriture n'invoquent sharp/ffmpeg
  * qu'une fois. Clé = chemin de destination, donc borné par le nombre de
  * médias EN COURS de watermarkage, jamais par le trafic total.
+ *
+ * La réservation (`get`/`set` ci-dessous) doit rester SYNCHRONE — aucun
+ * `await` entre les deux. `fs.stat` (#5583) est un appel I/O réel dont la
+ * latence varie sous charge ; le placer AVANT la réservation ouvre une
+ * fenêtre où deux requêtes concurrentes le trouvent toutes deux vide et
+ * lancent chacune leur propre génération pour le même fichier. Le déplacer
+ * DANS la promesse réservée (`generateWatermarkedVariant`) ferme la fenêtre :
+ * la réservation elle-même ne dépend plus d'aucune I/O.
  */
 const generationsInFlight = new Map<string, Promise<void>>();
 
@@ -62,7 +70,7 @@ async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
-async function ensureWatermarkedVariant(params: {
+async function generateWatermarkedVariant(params: {
   destPath: string;
   sourcePath: string;
   mimeType: string;
@@ -71,14 +79,22 @@ async function ensureWatermarkedVariant(params: {
 }): Promise<void> {
   const { destPath, sourcePath, mimeType, handle, mediaId } = params;
   if (await fileExists(destPath)) return;
+  await (mimeType.startsWith('video/')
+    ? applyVideoWatermark({ sourcePath, destPath, handle, mediaId })
+    : applyImageWatermark({ sourcePath, destPath, handle, mediaId }));
+}
 
+async function ensureWatermarkedVariant(params: {
+  destPath: string;
+  sourcePath: string;
+  mimeType: string;
+  handle: string;
+  mediaId: string;
+}): Promise<void> {
+  const { destPath } = params;
   let generation = generationsInFlight.get(destPath);
   if (!generation) {
-    generation = (
-      mimeType.startsWith('video/')
-        ? applyVideoWatermark({ sourcePath, destPath, handle, mediaId })
-        : applyImageWatermark({ sourcePath, destPath, handle, mediaId })
-    ).finally(() => generationsInFlight.delete(destPath));
+    generation = generateWatermarkedVariant(params).finally(() => generationsInFlight.delete(destPath));
     generationsInFlight.set(destPath, generation);
   }
   await generation;
