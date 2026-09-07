@@ -6,8 +6,8 @@
   "description": "La v3.1 web \u2014 une application TypeScript unique, servie en web, installable en PWA, empaquetable Android/iOS par Capacitor. Interface reprise de l'app iOS.",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "build:react": "MEESHY_RUNTIME=react vite build",
+    "build": "vite build && bun run scripts/prerend-institutionnel.tsx",
+    "build:react": "MEESHY_RUNTIME=react vite build && bun run scripts/prerend-institutionnel.tsx",
     "preview": "vite preview --port 4173",
     "type-check": "tsc --noEmit",
     "mesure": "node scripts/mesure-poids.mjs",
@@ -28,6 +28,7 @@
     "@tailwindcss/vite": "4.3.3",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
+    "preact-render-to-string": "6.7.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "tailwindcss": "4.3.3",

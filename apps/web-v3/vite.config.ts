@@ -115,6 +115,16 @@ export default defineConfig({
     cssCodeSplit: true,
     reportCompressedSize: true,
     rollupOptions: {
+      /**
+       * DEUX entrées CSS : celle de l'application, et celle — beaucoup plus
+       * maigre — des pages institutionnelles préchauffées, dont la détection
+       * Tailwind est limitée à leurs propres fichiers (`source(none)` +
+       * `@source`). Voir src/styles/institutionnel.css.
+       */
+      input: {
+        index: fileURLToPath(new URL('./index.html', import.meta.url)),
+        institutionnel: fileURLToPath(new URL('./src/styles/institutionnel.css', import.meta.url)),
+      },
       output: {
         /**
          * Le socle et les ecrans sont separes pour que le gate DESIGNE un

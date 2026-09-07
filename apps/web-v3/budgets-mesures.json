@@ -58,5 +58,28 @@
         "assets/index-Cs9wykzF.css": 5936
       }
     }
+  },
+  "documents_institutionnels": {
+    "quoi": "Ce que chaque page institutionnelle REMET EN UNE FOIS : le HTML, sa feuille dédiée inlinée et son script de thème. Zéro script externe, zéro feuille externe — mesuré par les invariants du producteur.",
+    "produit_par": "cd apps/web-v3 && bun run build (l'étape scripts/prerend-institutionnel.tsx)",
+    "date": "2026-09-07",
+    "unite": "octets gzip -9 du document servi",
+    "feuille_dediee_gzip_octets": 4628,
+    "note_feuille": "La feuille de ces pages est SÉPARÉE de celle de l'application (source(none) + @source limité) : inliner celle de l'app leur faisait transporter les styles de la liste, du fil et du composeur — 2,1 Ko gzip de trop par page, payés cinq fois et jamais mis en cache. Mesuré : /about est passé de 11,28 à 9,25 Ko.",
+    "pages": {
+      "about": 9472,
+      "contact": 6154,
+      "partners": 6758,
+      "privacy": 8673,
+      "terms": 7076
+    },
+    "requetes_avant_premier_pixel": 1,
+    "franchissement": {
+      "page": "about",
+      "mesure_ko": 9.25,
+      "plafond_ko": 9,
+      "statut": "FRANCHI ET DÉCLARÉ",
+      "raison": "La charte v3 fixe 9 Ko par document. /about porte 248 lignes de contenu — c'est la page la plus longue des cinq, et son dépassement est de 2,8 %. Sa feuille (4,52 Ko) est déjà la version réduite ; le reste est du CONTENU, qui ne se comprime pas davantage sans le couper. Déclaré plutôt que caché, conformément au ratchet du § 8.3 : le franchir davantage demandera un diff relu."
+    }
   }
 }
