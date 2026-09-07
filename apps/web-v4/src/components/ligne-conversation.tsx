@@ -34,7 +34,7 @@ export function LigneDeConversation({ conversation, langues }: { conversation: C
       className="flex items-start gap-3 rounded-[14px] p-3 transition-colors"
       style={avecAccent(conversation.teinte, {
         backgroundColor: 'var(--color-ios-carte)',
-        border: '0.5px solid var(--color-liseré)',
+        border: '0.5px solid var(--color-lisere)',
       })}
     >
       <Avatar

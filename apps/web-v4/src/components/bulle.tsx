@@ -357,7 +357,7 @@ export function Bulle({
                 className="flex items-center gap-0.5 rounded-pastille px-1.5 py-0.5 text-coche"
                 style={{
                   backgroundColor: 'var(--color-ios-carte)',
-                  border: '1px solid var(--color-liseré)',
+                  border: '1px solid var(--color-lisere)',
                 }}
               >
                 <span aria-hidden>{r.glyphe}</span>

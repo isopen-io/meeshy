@@ -102,7 +102,7 @@ export default function EcranListe() {
                       : {
                           backgroundColor: 'var(--color-ios-carte)',
                           color: 'var(--color-ios-encre-2)',
-                          border: '0.5px solid var(--color-liseré)',
+                          border: '0.5px solid var(--color-lisere)',
                         }
                   }
                 >
@@ -156,7 +156,7 @@ export default function EcranListe() {
           style={{
             borderRadius: 22,
             backgroundColor: 'color-mix(in srgb, var(--color-ios-carte) 85%, transparent)',
-            border: '1px solid var(--color-liseré)',
+            border: '1px solid var(--color-lisere)',
           }}
         >
           <Glyphe nom="magnifyingGlass" taille={16} style={{ color: 'var(--color-ios-encre-2)' }} />

@@ -1,81 +1,26 @@
-/* LA PARITE iOS — les roles de couleur que l'interface iOS emploie et que
- * packages/design-tokens ne porte pas.
+/* LE PONT vers la palette iOS.
  *
- * ATTENTION, DETTE DECLAREE : c'est une SECONDE TABLE, ce que la charte du
- * depot interdit (§ 12.5 regle 1, « une table, zero valeur ailleurs »). Elle
- * existe ici parce que les deux tables sont REELLEMENT differentes — la v3 a
- * derive sa palette de la planche web, iOS tient la sienne dans
- * `MeeshyColors.swift`, et « reprendre l'interface iOS » veut dire suivre la
- * SECONDE. Modifier design-tokens depuis un POC ferait regresser web-v3 en
- * silence, ce qui serait pire.
+ * Ce fichier ne porte AUCUNE valeur. Les valeurs vivent dans
+ * `@meeshy/design-tokens/ios.css`, GÉNÉRÉ depuis MeeshyColors.swift et
+ * DesignTokens.swift par `packages/design-tokens/scripts/genere-depuis-ios.mjs`.
+ * Ce qui reste ici est un NOMMAGE : donner aux jetons iOS des noms
+ * d'utilitaires Tailwind. C'est le travail de l'application, pas de la table.
  *
- * Ce que ce fichier doit devenir, et qui est une decision, pas une tache :
- * soit design-tokens absorbe la rampe indigo et les roles de bulle et iOS s'y
- * branche, soit l'inverse. Tant que les deux vivent, une couleur corrigee d'un
- * cote derive de l'autre — c'est exactement le defaut que la charte nomme.
+ * Avant #5445, ce fichier recopiait la palette à la main — une seconde table,
+ * que la charte interdit (§ 12.5 règle 1), et dont le défaut n'est pas
+ * l'effort de recopie mais la DÉRIVE SILENCIEUSE : chaque table restant
+ * cohérente avec elle-même, une couleur corrigée d'un côté ne fait rougir
+ * aucun témoin de l'autre. Le gate `bun run check` de design-tokens l'interdit
+ * désormais : il régénère et refuse toute différence.
  *
- * Source unique des valeurs ci-dessous :
- * packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift
+ * CE QUI RESTE OUVERT (#5445) : `tokens.css` (la table de la v3) et cette
+ * palette-ci assignent les mêmes couleurs à des RÔLES différents — la v3 fait
+ * de indigo400 sa primaire, iOS de indigo500 ; les neutres de la v3 sont
+ * violacés, ceux d'iOS des gris vrais. Unifier ces rôles changerait le rendu
+ * d'une application en service : c'est une décision du porteur, pas un
+ * refactor.
  */
-
-:root,
-:root.dark {
-  /* La rampe indigo — la marque, identique dans les deux schemas. */
-  --ios-indigo-50: #eef2ff;
-  --ios-indigo-100: #e0e7ff;
-  --ios-indigo-200: #c7d2fe;
-  --ios-indigo-300: #a5b4fc;
-  --ios-indigo-400: #818cf8;
-  --ios-indigo-500: #6366f1;
-  --ios-indigo-600: #4f46e5;
-  --ios-indigo-700: #4338ca;
-  --ios-indigo-800: #3730a3;
-  --ios-indigo-900: #312e81;
-  --ios-indigo-950: #1e1b4b;
-
-  /* Les plans, schema SOMBRE (MeeshyColors.backgroundPrimary/Secondary). */
-  --ios-plan-fond: #09090b;
-  --ios-plan-carte: #13111c;
-
-  /* Les encres, schema SOMBRE. `textMuted` porte les valeurs corrigees pour
-     WCAG AA (5,13:1), verrouillees cote iOS par TextMutedContrastAATests. */
-  --ios-encre: var(--ios-indigo-50);
-  --ios-encre-2: var(--ios-indigo-300);
-  --ios-encre-3: color-mix(in srgb, var(--ios-indigo-300) 70%, transparent);
-
-  /* La BULLE. Le message ENVOYE est l'indigo de marque, le meme dans toutes
-     les conversations ; le message RECU est teinte par l'accent de la
-     conversation, a 28 % en sombre et 16 % en clair. */
-  --ios-bulle-moi: var(--ios-indigo-500);
-  --ios-bulle-recue-opacite: 28%;
-  --ios-bulle-recue-filet-opacite: 34%;
-  --ios-bulle-meta-moi: color-mix(in srgb, white 70%, transparent);
-  --ios-bulle-meta: color-mix(in srgb, white 55%, transparent);
-  --ios-accuse-lu: var(--ios-indigo-400);
-  --ios-citation-fond-moi: color-mix(in srgb, white 15%, transparent);
-  --ios-citation-fond: color-mix(in srgb, white 8%, transparent);
-  --ios-liseré: color-mix(in srgb, white 6%, transparent);
-  --ios-jour-encre: var(--ios-indigo-200);
-  --ios-jour-filet: var(--ios-indigo-900);
-}
-
-:root.light {
-  --ios-plan-fond: #ffffff;
-  --ios-plan-carte: #f8f7ff;
-
-  --ios-encre: var(--ios-indigo-950);
-  --ios-encre-2: color-mix(in srgb, var(--ios-indigo-700) 60%, transparent);
-  --ios-encre-3: color-mix(in srgb, var(--ios-indigo-700) 80%, transparent);
-
-  --ios-bulle-recue-opacite: 16%;
-  --ios-bulle-recue-filet-opacite: 26%;
-  --ios-bulle-meta: color-mix(in srgb, black 50%, transparent);
-  --ios-accuse-lu: var(--ios-indigo-600);
-  --ios-citation-fond: color-mix(in srgb, black 5%, transparent);
-  --ios-liseré: color-mix(in srgb, black 6%, transparent);
-  --ios-jour-encre: var(--ios-indigo-700);
-  --ios-jour-filet: var(--ios-indigo-200);
-}
+@import '@meeshy/design-tokens/ios.css';
 
 @theme inline {
   --color-marque: var(--ios-indigo-500);
@@ -98,30 +43,27 @@
   --color-meta: var(--ios-bulle-meta);
   --color-citation-moi: var(--ios-citation-fond-moi);
   --color-citation: var(--ios-citation-fond);
-  --color-liseré: var(--ios-liseré);
+  --color-lisere: var(--ios-lisere);
   --color-jour-encre: var(--ios-jour-encre);
   --color-jour-filet: var(--ios-jour-filet);
 
-  /* L'ECHELLE TYPOGRAPHIQUE d'iOS (MeeshyFont, DesignTokens.swift). Elle
-     descend plus bas que celle de la v3 web, qui s'arrete a 13 px : une bulle
-     iOS porte son heure a 12 et ses coches a 10. Les nommer par leur METIER
-     plutot que par leur taille, comme la charte l'exige de --text-*. */
-  --text-coche: 10px;
-  --text-mini: 11px;
-  --text-heure: 12px;
-  --text-titre: 13px;
-  --text-bulle: 15px;
-  --text-saisie: 16px;
-  --text-grand-titre: 28px;
+  /* Les géométries : celles que Swift DÉCLARE, et celles qu'il porte en
+     littéral — le générateur distingue les deux et cite le site de chacune. */
+  --radius-bulle: var(--ios-radius-bulle);
+  --radius-champ-ios: var(--ios-radius-champ);
+  --radius-citation: var(--ios-radius-citation);
+  --radius-ligne-ios: var(--ios-radius-md);
+  --size-avatar-ligne: var(--ios-avatar-ligne);
+  --size-avatar-bulle: var(--ios-avatar-bulle);
+  --size-avatar-entete: var(--ios-avatar-entete);
+  --size-avatar-frappe: var(--ios-avatar-frappe);
+  --size-rond-entete: var(--ios-rond-entete);
 
-  /* Les GEOMETRIES relevees sur iOS et absentes de la table v3. */
-  --radius-bulle: 18px;
-  --radius-champ-ios: 22px;
-  --radius-citation: 12px;
-  --radius-ligne-ios: 14px;
-  --size-avatar-ligne: 52px;
-  --size-avatar-bulle: 32px;
-  --size-avatar-entete: 44px;
-  --size-avatar-frappe: 18px;
-  --size-rond-entete: 28px;
+  --text-coche: var(--ios-font-caption);
+  --text-mini: var(--ios-font-footnote);
+  --text-heure: var(--ios-text-heure);
+  --text-titre: var(--ios-font-subhead);
+  --text-bulle: var(--ios-font-body);
+  --text-saisie: var(--ios-text-saisie);
+  --text-grand-titre: var(--ios-text-grand-titre);
 }

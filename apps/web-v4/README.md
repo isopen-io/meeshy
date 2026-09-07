@@ -61,6 +61,10 @@ change (base relative, service worker retiré). C'est la condition pour que
 Rejouer : `bun run gate`, `node scripts/verifie-hors-ligne.mjs`,
 `node scripts/capture.mjs` (captures dans `rendu/`, non versionnées).
 
+Les captures figent l'horloge de la page (`page.clock.setFixedTime`) : sans
+ça, deux captures du même code diffèrent par leurs horodatages et comparer un
+rendu avant/après devient impossible.
+
 Les fixtures sont **ancrées sur maintenant** (`aM(90)` = il y a 90 minutes) et
 non sur des dates écrites en dur : une fixture du 6 septembre affichait
 « Aujourd'hui » le 6 et « Hier » le 7, donc les captures changeaient de sens
@@ -112,18 +116,45 @@ stories complet, listes virtualisées. Aucun n'est bloquant pour l'arbitrage ;
 la virtualisation, en revanche, est **obligatoire** avant toute mesure de
 fluidité sérieuse sur Android d'entrée de gamme.
 
-## Les deux dettes déclarées
+## Les jetons — d'où viennent les valeurs (#5445)
 
-1. **`src/styles/ios.css` est une SECONDE TABLE de jetons**, ce que la charte
-   du dépôt interdit (§ 12.5 règle 1). Elle existe parce que `design-tokens`
-   (dérivée de la planche web) et `MeeshyColors.swift` sont réellement
-   différentes, et que la directive est de suivre la seconde. **À trancher :
-   l'une doit absorber l'autre.** Tant que les deux vivent, une couleur
-   corrigée d'un côté dérive de l'autre.
-2. **La géométrie iOS emploie des demi-pas** (10, 14, 18, 22 px) que l'échelle
-   fermée de la charte v3 (4, 8, 12, 16, 24…) ne contient pas. Le POC les
-   utilise pour la fidélité. Soit l'échelle s'ouvre à ces pas, soit la fidélité
-   cède d'un pixel par endroit.
+**Aucune valeur de couleur ou de géométrie iOS n'est écrite à la main ici.**
+`packages/design-tokens/ios.css` est **généré** depuis `MeeshyColors.swift` et
+`DesignTokens.swift` par `packages/design-tokens/scripts/genere-depuis-ios.mjs`.
+`src/styles/ios.css` ne fait plus que **nommer** ces jetons en utilitaires
+Tailwind.
+
+Deux gates, qui vérifient deux choses différentes :
+
+| gate | ce qu'il prouve |
+|---|---|
+| `bun run check:jetons` | le CSS généré n'a pas dérivé de ses sources Swift |
+| `bun run verifie:jetons` | **le navigateur peint bien ces valeurs-là**, dans les deux schémas |
+
+Le second n'est pas redondant : entre le fichier généré et le pixel il y a un
+import, un `@theme inline`, la cascade et deux classes de schéma, et n'importe
+lequel peut avaler un jeton sans rien casser de visible — un nom mal
+orthographié rend une couleur **vide**, pas une erreur. Les deux gates ont été
+vus rougir sur une valeur falsifiée.
+
+### Ce que la fusion a révélé, et qui reste ouvert
+
+1. **Les deux tables n'ont jamais divergé sur les couleurs, mais sur les
+   RÔLES.** `design-tokens` fait de `indigo400` sa primaire, iOS de
+   `indigo500` ; les neutres de la v3 sont violacés (`#b9bcd0`), ceux d'iOS
+   sont des gris vrais (`#9CA3AF`). Les unifier changerait le rendu de
+   `web-v3`, une application en service : c'est une décision du porteur, pas un
+   refactor. `tokens.css` est donc **intact** — vérifié.
+2. **iOS porte lui-même des valeurs hors de ses propres tables.** Le rayon 18
+   de la bulle n'est ni `MeeshyRadius.md` (14) ni `.lg` (16) ; le champ du
+   composeur pose 22 ; l'heure d'une bulle emploie `.caption` de SwiftUI et non
+   `MeeshyFont`. Elles ne sont **pas générables** — elles ne sont déclarées
+   nulle part. Le tableau `HORS_TABLE_IOS` du générateur les déclare, chacune
+   avec son site Swift, et vaut inventaire de ce que iOS doit remonter chez
+   lui.
+3. **La géométrie iOS emploie des demi-pas** (10, 14, 18, 22 px) que l'échelle
+   fermée de la charte v3 (4, 8, 12, 16, 24…) ne contient pas. Soit l'échelle
+   s'ouvre à ces pas, soit la fidélité cède d'un pixel par endroit.
 
 ## Le pont Tailwind ↔ design-tokens
 

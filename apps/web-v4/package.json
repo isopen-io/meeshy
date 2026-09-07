@@ -13,7 +13,9 @@
     "mesure": "node scripts/mesure-poids.mjs",
     "cap:sync": "cap sync",
     "test": "bun test",
-    "gate": "bun run type-check && bun test && bun run build && node scripts/mesure-poids.mjs"
+    "gate": "bun run check:jetons && bun run type-check && bun test && bun run build && node scripts/mesure-poids.mjs",
+    "check:jetons": "node ../../packages/design-tokens/scripts/genere-depuis-ios.mjs --verifie",
+    "verifie:jetons": "node scripts/verifie-jetons.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "5.102.8",
