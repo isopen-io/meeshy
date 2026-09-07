@@ -131,32 +131,67 @@ maîtrise pas.
 
 ---
 
-## Le point qui demande un arbitrage avant d'écrire une ligne
+## L'arbitrage des adresses de conversation — TRANCHÉ (porteur, 2026-09-07)
 
-`/c/:conversation` est une **troisième** nomenclature. Le legacy sert
-aujourd'hui **quatre** adresses distinctes vers une conversation :
+> « On va garder les autres nomenclatures de la Legacy, juste ajouter d'autres
+> web de base : `/c` pour les conversations, `/chat/` pour les liens publics. »
 
-| adresse legacy | ce qu'elle fait |
+**Aucune redirection.** Les quatre adresses du legacy — `/conversation/:id`,
+`/conversations/[[...id]]`, `/chat/:id`, `/groups/:identifier` — sont
+**conservées telles quelles** et continuent d'être servies par `apps/web`. La v4
+n'en renomme aucune : elle **ajoute** deux adresses à elle.
+
+| adresse | qui la sert | rôle |
+|---|---|---|
+| `/c/:conversation` | **v4** | l'adresse du MEMBRE — privée |
+| `/chat/:share_link` | **v4** | l'adresse PUBLIQUE — un lien de partage |
+| `/conversation/:id`, `/conversations/[[...id]]`, `/chat/:id`, `/groups/:identifier` | legacy | inchangées, aucun lien ne bouge |
+
+Ce que ça coûte, et qu'il faut assumer les yeux ouverts : un vieux lien continue
+d'ouvrir l'ancienne application. **Ce n'est pas un lien mort, c'est deux
+produits vivants sur un domaine** — moins grave qu'une perte de lien, plus
+difficile à diagnostiquer. La décision est prise ; le point se rouvrira au
+décommissionnement (#5496), où ces quatre adresses devront enfin trouver une
+cible.
+
+**`/chat/:id` du legacy et `/chat/:share_link` de la v4 partagent le préfixe.**
+Le routage Traefik les sépare donc sur la FORME du segment, pas sur le préfixe :
+c'est un point d'attention pour #5561, pas un détail de configuration.
+
+## Ce qui se passe quand on atterrit sur une conversation — arrêté par le porteur
+
+Les deux adresses de la v4 ne servent pas le même public, et leur comportement
+face à un visiteur qui n'est **pas membre** est explicitement différent.
+
+### `/c/:conversation` — l'adresse du membre
+
+| état du visiteur | comportement |
 |---|---|
-| `/conversation/:conversationId` | le fil, par identifiant |
-| `/conversations/[[...id]]` | la liste, et le fil en segment optionnel |
-| `/chat/:id` | le fil par lien de partage |
-| `/groups/:identifier` | le fil d'un groupe, par identifiant lisible |
+| membre | le fil |
+| **sans compte** | **sortie immédiate vers `/`** |
+| connecté, conversation de **groupe** | une **modale** demande de valider qu'on rejoint le groupe |
+| connecté, conversation **directe** | **redirection immédiate vers `/`** |
 
-Tant que le legacy tourne, ces quatre-là continuent de répondre et **rien ne
-casse**. Mais elles ne pointeront pas vers la v4 : un utilisateur qui rouvre un
-vieux lien restera sur l'ancienne application, avec l'ancienne apparence, hors
-du temps réel de la v4. **Ce n'est pas un lien mort, c'est pire à diagnostiquer**
-— deux produits vivants sur le même domaine.
+La règle de fond : **`/c/` ne révèle rien d'une conversation dont on n'est pas
+membre.** Pas de titre, pas de participants, pas d'aperçu — la sortie est
+immédiate. C'est une garde fail-closed, et elle se teste comme telle : ce qui
+compte n'est pas ce que l'écran affiche, mais ce que la **charge servie
+contient**.
 
-Trois issues possibles, à trancher :
-1. Les quatre redirigent (308) vers `/c/:id` dès la V4.0.0 — demande de résoudre
-   `identifier` et `share_link` vers un id côté v4.
-2. Elles restent sur le legacy jusqu'au décommissionnement — simple, mais deux
-   produits coexistent visiblement.
-3. La v4 adopte `/conversation/:id` au lieu de `/c/:id` — un renommage de moins.
+> **Question de sécurité à trancher avant d'implémenter la modale.** « Connecté
+> + groupe ⇒ modale pour rejoindre » implique-t-il que **tout** compte connaissant
+> l'identifiant d'un groupe peut le rejoindre ? Si oui, l'identifiant devient un
+> secret, ce qu'un identifiant n'est jamais. La lecture sûre est : la modale ne
+> s'affiche que pour un groupe que ce visiteur **a le droit** de rejoindre
+> (groupe ouvert, ou invitation le concernant) ; tout autre cas retombe sur la
+> sortie vers `/`, indistinguable d'un groupe inexistant. **À confirmer par le
+> porteur** — c'est la différence entre une porte et une fuite d'inventaire.
 
----
+### `/chat/:share_link` — l'adresse publique
+
+On demande à rejoindre, **par un compte ou en anonyme**. C'est la seule des deux
+qui sert quelqu'un sans compte, et donc la seule où l'écran d'invitation existe.
+Rien de la conversation ne part avant le choix (voir #5561).
 
 ## L'inventaire complet — 80 routes du legacy
 
@@ -191,11 +226,13 @@ dans une version ultérieure ·
 | route | verdict | note |
 |---|---|---|
 | `/` | **V4.0.0** | la liste |
-| `/conversation/:conversationId` | **à arbitrer** | voir « le point qui demande un arbitrage » |
-| `/conversations/[[...id]]` | **à arbitrer** | idem |
+| `/conversation/:conversationId` | `legacy` | **conservée sans redirection** (porteur 2026-09-07) |
+| `/conversations/[[...id]]` | `legacy` | idem |
 | `/conversations/new` | `legacy` | création d'une conversation |
-| `/chat/:id` | **V4.0.0** | devient `/chat/:share_link` |
-| `/groups`, `/groups/:identifier` | **à arbitrer** | idem |
+| `/chat/:id` | `legacy` | conservée ; la v4 ajoute `/chat/:share_link` à côté |
+| `/groups`, `/groups/:identifier` | `legacy` | idem |
+| `/c/:conversation` | **V4.0.0** | **adresse neuve** — le fil du membre |
+| `/chat/:share_link` | **V4.0.0** | **adresse neuve** — rejoindre par lien public |
 | `/call/:callId` | `legacy` | appel en cours |
 
 ### Profil et réglages
