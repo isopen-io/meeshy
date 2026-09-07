@@ -46,6 +46,13 @@ export interface PostSaveMessage extends TranslatableMessage {
    * « pas encore liées ».
    */
   readonly attachmentMimeTypes: readonly string[];
+  /**
+   * `Boolean(stickerFromMetadata(message.metadata))` — calculé par l'appelant,
+   * qui seul détient le `metadata` brut. Porte l'axe d'engagement « sticker »
+   * (#5541) : indépendant de `attachmentMimeTypes`, un sticker voyage dans
+   * `metadata.sticker`, jamais comme pièce jointe.
+   */
+  readonly hasSticker: boolean;
 }
 
 /**
@@ -65,13 +72,13 @@ export interface PostSaveTranslationQueue {
   }): Promise<unknown>;
 }
 
-export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats' | 'engagement';
+export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats' | 'engagement' | 'stickerEngagement';
 
 /**
- * Ce que l'axe d'engagement « conversation distincte » (#5539) demande, et
- * rien de plus — la déduplication par conversation vit entièrement dans
- * `EngagementService.recordConversationActivity`, cette unité n'a qu'à
- * l'appeler.
+ * Ce que les axes d'engagement « conversation distincte » (#5539) et
+ * « sticker » (#5541) demandent, et rien de plus — la déduplication par
+ * conversation et le franchissement de palier vivent entièrement dans
+ * `EngagementService`, cette unité n'a qu'à l'appeler.
  */
 export interface PostSaveEngagementService {
   recordConversationActivity(
@@ -79,6 +86,7 @@ export interface PostSaveEngagementService {
     axisKey: EngagementAxisKey,
     conversationId: string,
   ): Promise<void>;
+  recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void>;
 }
 
 /**
@@ -274,5 +282,18 @@ export function runMessagePostSaveEffects(params: {
         );
       })
       .catch(report('engagement'));
+  }
+
+  // Axe d'engagement « sticker » (#5541, docs/product/streaks-badges-modele.md
+  // § 2, § 11) — indépendant de l'axe « conversation distincte » ci-dessus, et
+  // de tout axe de contenu (`content.text_message`…) : un message qui pose un
+  // sticker crédite `tool.sticker` en plus, jamais à sa place. Même garde
+  // anonyme que les autres axes : `EngagementCounter.userId` exige un
+  // `User.id`, qu'un participant anonyme n'a pas.
+  if (engagementService && message.senderUserId && message.hasSticker) {
+    const senderUserId = message.senderUserId;
+    void Promise.resolve()
+      .then(() => engagementService.recordActivity(senderUserId, 'tool.sticker'))
+      .catch(report('stickerEngagement'));
   }
 }
