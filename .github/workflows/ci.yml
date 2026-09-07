@@ -196,7 +196,7 @@ jobs:
 
       # PAS D'ÉTAPE DE LINT DÉDIÉE À `@meeshy/web-v3` (2026-09-07).
       #
-      # Elle existait pour l'ANCIENNE refonte, aujourd'hui `@meeshy/web-v3-old`
+      # Elle existait pour l'ANCIENNE refonte, aujourd'hui `@meeshy/web-old-version3`
       # et annulée. Le nom `@meeshy/web-v3` désigne désormais la NOUVELLE
       # application (ex `web-v4`), qui n'a pas encore de configuration ESLint :
       # rebrancher l'étape telle quelle rendrait une case VERTE qui ne linte
@@ -236,7 +236,7 @@ jobs:
       # avoir. La v3 naît à zéro erreur, et cette étape est la seule qui puisse
       # le garantir — elle ne porte pas `continue-on-error`.
       # `@meeshy/web-v3` désigne, depuis le 2026-09-07, la NOUVELLE application
-      # (ex `web-v4`, version 3.1.0) — l'ancienne refonte est `web-v3-old` et
+      # (ex `web-v4`, version 3.1.0) — l'ancienne refonte est `web-old-version3` et
       # ne passe plus par la CI, étant annulée. La nouvelle naît à zéro erreur,
       # donc elle reste dans l'étape BLOQUANTE et hors du ratchet gagé sur la
       # dette du legacy.
@@ -300,7 +300,7 @@ jobs:
       # Même raison de placement que le garde ci-dessus : l'invariant porte sur
       # le `Makefile` de la RACINE, donc il est appelé ici et non depuis les
       # tests d'une app. Sa première écriture vivait dans
-      # `apps/web-v3-old/__tests__/` — elle remontait de trois crans pour atteindre
+      # `apps/web-old-version3/__tests__/` — elle remontait de trois crans pour atteindre
       # sa surface et ne tournait dans AUCUN job — la matrice `test:` ne portait
       # alors que shared/web/gateway/agent : un contrôle inerte, qui laissait
       # rouvrir au commit suivant la régression qu'il prétendait fermer.
@@ -328,11 +328,11 @@ jobs:
       # Même raison de placement : l'invariant porte sur `ci.yml`, `docker.yml`
       # et `docker-compose.prod.yml` — trois fichiers de la RACINE. Il DÉROULE
       # les deux étapes de détection de `docker.yml` avec bash plutôt que de les
-      # relire : « un push qui ne touche que apps/web-v3-old construit-il la v3 sans
+      # relire : « un push qui ne touche que apps/web-old-version3 construit-il la v3 sans
       # réveiller le legacy ? » ne se lit pas dans le texte d'un `[[ == *"…"* ]]`.
       # RETIRÉ le 2026-09-07 avec le renommage (#5554). Ce garde vérifie qu'UNE
       # application Next est câblée de bout en bout — type-check, lint, matrice
-      # de tests, docker, compose. Son sujet est `apps/web-v3-old`, ANNULÉE : la
+      # de tests, docker, compose. Son sujet est `apps/web-old-version3`, ANNULÉE : la
       # directive porteur lui retire précisément ces trois câblages, donc le
       # garde ne peut plus être vert sans remettre en CI l'application qu'on
       # décommissionne. Et il ne peut pas non plus viser `apps/web-v3` (la
@@ -356,7 +356,7 @@ jobs:
       # entrent dans un workspace par `cd` et y lancent un script de paquet — donc
       # HORS du graphe — et 11 copies écrites à la main de « construis le paquet
       # partagé ». Le jour où `01c49fcfee` a fait importer `@meeshy/shared` par
-      # `apps/web-v3-old`, les trois jobs de la v3 sont devenus rouges — et LE JOB QUI
+      # `apps/web-old-version3`, les trois jobs de la v3 sont devenus rouges — et LE JOB QUI
       # CASSE N'EST PAS CELUI QUI A AJOUTÉ L'IMPORT, puisque la personne qui écrit
       # l'`import` ne touche aucun fichier de CI.
       #
@@ -451,7 +451,7 @@ jobs:
   # A11Y: le gate axe du § 8.5 de la conception v3 — SON PORTEUR
   # ===========================================================================
   # « 0 erreur axe serious/critical sur toute route (public) ». L'instrument
-  # vivait déjà (`apps/web-v3-old/e2e/visual/v3-a11y.spec.ts`, son verdict dans
+  # vivait déjà (`apps/web-old-version3/e2e/visual/v3-a11y.spec.ts`, son verdict dans
   # `lib/a11y.ts`, gagé par `__tests__/a11y-gate.test.ts`) — et RIEN ne le
   # lançait : la chaîne `test:a11y` n'apparaissait que deux fois dans le dépôt,
   # sa définition et le témoin qui vérifiait sa définition. Un instrument
@@ -525,9 +525,9 @@ jobs:
           cd packages/shared
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
-      - name: Build apps/web-v3-old (le manifeste que le balayage lit)
+      - name: Build apps/web-old-version3 (le manifeste que le balayage lit)
         run: |
-          cd apps/web-v3-old
+          cd apps/web-old-version3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
       - name: Install Playwright browsers
@@ -556,7 +556,7 @@ jobs:
       # écrite demain.
       - name: Gate pages — axe, cibles tactiles, surimpressions (projet ENTIER)
         run: |
-          cd apps/web-v3-old
+          cd apps/web-old-version3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:pages
 
       # PAS de `continue-on-error` ici : `check-v3-pipeline.mjs` interdit qu'une
@@ -567,7 +567,7 @@ jobs:
         if: failure()
         with:
           name: web-v3-a11y-traces
-          path: apps/web-v3-old/test-results/
+          path: apps/web-old-version3/test-results/
           retention-days: 7
 
   # ===========================================================================
@@ -656,7 +656,7 @@ jobs:
   # « 0 requête pendant que l'onglet est hidden ; 1 seule requête de battement
   # pour N onglets sur 10 min ». Même leçon que le gate axe ci-dessus, payée une
   # fois : un instrument déclaré n'est pas un instrument lancé. L'instrument vit
-  # dans `apps/web-v3-old/e2e/visual/v3-lifecycle.spec.ts`, son verdict dans
+  # dans `apps/web-old-version3/e2e/visual/v3-lifecycle.spec.ts`, son verdict dans
   # `lib/lifecycle.ts`, gagé sans navigateur par `__tests__/lifecycle-gate.test.ts`
   # — et ce job est l'une de ses deux invocations, l'autre étant la sixième mesure
   # de `scripts/v3-rapport.mjs`.
@@ -723,9 +723,9 @@ jobs:
           cd packages/shared
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
-      - name: Build apps/web-v3-old (le serveur que playwright.config.ts lève)
+      - name: Build apps/web-old-version3 (le serveur que playwright.config.ts lève)
         run: |
-          cd apps/web-v3-old
+          cd apps/web-old-version3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
       - name: Install Playwright browsers
@@ -733,7 +733,7 @@ jobs:
 
       - name: Gate cycle de vie — 0 requête mutante pendant que l'onglet est caché
         run: |
-          cd apps/web-v3-old
+          cd apps/web-old-version3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:lifecycle
 
       - name: Upload Playwright traces
@@ -741,7 +741,7 @@ jobs:
         if: failure()
         with:
           name: web-v3-lifecycle-traces
-          path: apps/web-v3-old/test-results/
+          path: apps/web-old-version3/test-results/
           retention-days: 7
 
   # ===========================================================================
@@ -825,9 +825,9 @@ jobs:
           cd packages/shared
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
-      - name: Build apps/web-v3-old (le serveur que les suites mesurent)
+      - name: Build apps/web-old-version3 (le serveur que les suites mesurent)
         run: |
-          cd apps/web-v3-old
+          cd apps/web-old-version3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
       - name: Install Playwright browsers
@@ -835,7 +835,7 @@ jobs:
 
       - name: Gate chaînes — lien partagé, causes de clôture, vitals réseau
         run: |
-          cd apps/web-v3-old
+          cd apps/web-old-version3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:chaines
 
       # Suivi #5163 § 12.12 — la réplique des gestes du fil (répondre, modifier,
@@ -848,7 +848,7 @@ jobs:
 
       - name: Gate gestes du fil — WebKit et Firefox
         run: |
-          cd apps/web-v3-old
+          cd apps/web-old-version3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:gestes-moteurs
 
       - name: Upload Playwright traces
@@ -856,7 +856,7 @@ jobs:
         if: failure()
         with:
           name: web-v3-chaines-traces
-          path: apps/web-v3-old/test-results/
+          path: apps/web-old-version3/test-results/
           retention-days: 7
 
   # ===========================================================================

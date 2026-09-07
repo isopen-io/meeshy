@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Garde de la chaîne d'intégration de apps/web-v3-old [L-0.5]
+// Garde de la chaîne d'intégration de apps/web-old-version3 [L-0.5]
 //
-// POURQUOI IL VIT À LA RACINE, ET PAS DANS apps/web-v3-old/__tests__
+// POURQUOI IL VIT À LA RACINE, ET PAS DANS apps/web-old-version3/__tests__
 //
 // L'invariant porte sur `.github/workflows/ci.yml`, `.github/workflows/docker.yml`
 // et les composes de DÉPLOIEMENT (`docker-compose.prod.yml`,
@@ -15,8 +15,8 @@
 //
 // POURQUOI LE DÉTECTEUR EST DÉROULÉ PAR BASH, PAS LU PAR UNE EXPRESSION RÉGULIÈRE
 //
-// La question que pose ce garde n'est pas « la chaîne `apps/web-v3-old/` figure-t-elle
-// dans docker.yml ? » mais « un commit qui ne touche QUE apps/web-v3-old construit-il
+// La question que pose ce garde n'est pas « la chaîne `apps/web-old-version3/` figure-t-elle
+// dans docker.yml ? » mais « un commit qui ne touche QUE apps/web-old-version3 construit-il
 // l'image de la v3, et LAISSE-T-IL le legacy tranquille ? ». Ces deux réponses ne
 // se lisent pas dans le texte : elles se mesurent en exécutant le script du
 // détecteur avec ses entrées. C'est le même parti que `make -n` dans le garde du
@@ -26,7 +26,7 @@
 // SOUS-CHAÎNE (`[[ "$SERVICES" == *"web"* ]]`). Une option `web-v3` y déclenche
 // AUSSI le build du legacy, et rien dans le texte ne le dit — seule l'exécution
 // le rend. Symétriquement, le détecteur de push teste `*"apps/web/"*`, qui ne
-// contient PAS `apps/web-v3-old/` : la v3 ne se construisait jamais.
+// contient PAS `apps/web-old-version3/` : la v3 ne se construisait jamais.
 //
 // POURQUOI LE RATCHET DE DETTE EST GARDÉ EN NÉGATIF
 //
@@ -59,14 +59,14 @@
 // thème. Une règle en `PathPrefix('/__v3')` nu publiait donc cette page-là.
 // D'où : un chemin ne se réclame qu'une fois qu'il est servi.
 //
-// Les deux sens se mesurent sur le DISQUE (ce que `apps/web-v3-old/` contient) et
+// Les deux sens se mesurent sur le DISQUE (ce que `apps/web-old-version3/` contient) et
 // sur le TEXTE de la règle — jamais sur une intention.
 //
 // POURQUOI CE QUE LA V3 IMPORTE HORS D'ELLE-MÊME EST GARDÉ ICI
 //
-// `apps/web-v3-old/app/globals.css` a importé la table de jetons par CHEMIN RELATIF
+// `apps/web-old-version3/app/globals.css` a importé la table de jetons par CHEMIN RELATIF
 // (`../../../packages/design-tokens/tokens.css`). L'étage builder ne copie que
-// `COPY apps/web-v3-old/ ./` : `packages/` n'entre pas dans l'image, et `next build`
+// `COPY apps/web-old-version3/ ./` : `packages/` n'entre pas dans l'image, et `next build`
 // y rend « Module not found ». Le défaut était INVISIBLE pour deux raisons qui
 // se renforcent — la v3 n'émet aucune PAGE, donc webpack ne compile jamais
 // `globals.css` ; et la mesure de l'implémenteur avait été faite en local,
@@ -75,12 +75,12 @@
 //
 // Symétriquement, une dépendance inter-paquets crée une entrée de build que la
 // chaîne de publication doit connaître : `docker.yml` ne déclenchait `web_v3`
-// que sur `apps/web-v3-old/**` et `packages/shared/**`. Une correction de la table
+// que sur `apps/web-old-version3/**` et `packages/shared/**`. Une correction de la table
 // ne reconstruisait AUCUNE image et la production continuait de servir
 // l'ancienne feuille, sans témoin. « Un champ ajouté en amont et pas relayé ».
 //
 // D'où trois invariants, dans cet ordre de sévérité :
-//   (i)   aucun fichier de la v3 n'atteint le disque hors de `apps/web-v3-old/` par
+//   (i)   aucun fichier de la v3 n'atteint le disque hors de `apps/web-old-version3/` par
 //         un chemin RELATIF — un franchissement de frontière se DÉCLARE dans le
 //         manifeste, où le reste de la chaîne peut le lire ;
 //   (ii)  tout paquet de workspace que le manifeste déclare est COPIÉ par le
@@ -109,7 +109,7 @@ import {
 } from './lib/v3-disque.mjs';
 
 // La règle Traefik du routeur `frontend-v3` n'a qu'UN parseur, et il vit du côté
-// CONTRAINT — l'invariant (i) ci-dessous interdit à `apps/web-v3-old/` d'atteindre
+// CONTRAINT — l'invariant (i) ci-dessous interdit à `apps/web-old-version3/` d'atteindre
 // `scripts/` par un chemin relatif, alors que ce garde descend sans rien casser.
 // Ce fichier en portait un second (`claimedPathsOf` + `captures`) : les deux ne
 // dupliquaient pas seulement la lecture, ils se CONTREDISAIENT — celui d'en face
@@ -119,7 +119,7 @@ import {
   cheminsServisParReecriture,
   PREFIXE_DE_ZONE,
   ZONE_DACTIFS,
-} from '../apps/web-v3-old/scripts/lib/perimetre-de-zone.mjs';
+} from '../apps/web-old-version3/scripts/lib/perimetre-de-zone.mjs';
 // Les invariants de ROUTAGE — la règle Traefik, le worker legacy, ce que la zone sert et ce
 // qu'elle lit de son environnement — vivent à côté (`scripts/lib/v3-routage.mjs`) : ce fichier
 // les déroule par déploiement et les prouve par ses sondes, il ne les écrit plus.
@@ -128,8 +128,8 @@ import { sondesDuGarde } from './lib/v3-sondes.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-const V3_WORKSPACE = '@meeshy/web-v3-old';
-const V3_DIRECTORY = 'apps/web-v3-old';
+const V3_WORKSPACE = '@meeshy/web-old-version3';
+const V3_DIRECTORY = 'apps/web-old-version3';
 const V3_IMAGE = 'meeshy-web-v3';
 const V3_PORT = '3300';
 const V3_ROUTER = 'frontend-v3';
@@ -525,7 +525,7 @@ const theDockerPathFilterCoversBothZones = (world) => {
   const paths = listValues(world.docker, '    paths:');
   return [
     ['apps/web/**', 'le legacy'],
-    ['apps/web-v3-old/**', 'la v3'],
+    ['apps/web-old-version3/**', 'la v3'],
   ]
     .filter(([glob]) => !paths.includes(glob))
     .map(([glob, zone]) => `le filtre paths de docker.yml ne couvre pas ${zone} (${glob} absent)`);
@@ -541,8 +541,8 @@ const expectSelection = (label, outputs, expected) =>
 
 const aV3CommitBuildsOnlyTheV3 = (world) =>
   expectSelection(
-    'un push ne touchant que apps/web-v3-old/',
-    detectOnPush(world, ['apps/web-v3-old/app/layout.tsx']),
+    'un push ne touchant que apps/web-old-version3/',
+    detectOnPush(world, ['apps/web-old-version3/app/layout.tsx']),
     { web_v3: true, web: false },
   );
 

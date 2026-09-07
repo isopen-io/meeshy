@@ -343,66 +343,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  apps/web-v3:
-    dependencies:
-      '@tanstack/react-query':
-        specifier: 5.102.8
-        version: 5.102.8(react@19.2.8)
-      preact:
-        specifier: 10.29.8
-        version: 10.29.8(preact-render-to-string@6.7.0)
-      zustand:
-        specifier: 5.0.15
-        version: 5.0.15(@types/react@19.2.18)(immer@11.1.15)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))
-    optionalDependencies:
-      '@capacitor/android':
-        specifier: 8.5.1
-        version: 8.5.1(@capacitor/core@8.5.1)
-      '@capacitor/cli':
-        specifier: 8.5.1
-        version: 8.5.1
-      '@capacitor/core':
-        specifier: 8.5.1
-        version: 8.5.1
-      '@capacitor/ios':
-        specifier: 8.5.1
-        version: 8.5.1(@capacitor/core@8.5.1)
-    devDependencies:
-      '@meeshy/design-tokens':
-        specifier: workspace:*
-        version: link:../../packages/design-tokens
-      '@tailwindcss/vite':
-        specifier: 4.3.3
-        version: 4.3.3(vite@8.2.2(@types/node@26.1.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.12)(yaml@2.9.0))
-      '@types/react':
-        specifier: 19.2.18
-        version: 19.2.18
-      '@types/react-dom':
-        specifier: 19.2.7
-        version: 19.2.7(@types/react@19.2.18)
-      preact-render-to-string:
-        specifier: 6.7.0
-        version: 6.7.0(preact@10.29.8)
-      react:
-        specifier: 19.2.8
-        version: 19.2.8
-      react-dom:
-        specifier: 19.2.8
-        version: 19.2.8(react@19.2.8)
-      tailwindcss:
-        specifier: 4.3.3
-        version: 4.3.3
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vite:
-        specifier: 8.2.2
-        version: 8.2.2(@types/node@26.1.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.12)(yaml@2.9.0)
-      vite-plugin-pwa:
-        specifier: 1.3.0
-        version: 1.3.0(vite@8.2.2(@types/node@26.1.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.12)(yaml@2.9.0))(workbox-build@6.6.0(@types/babel__core@7.20.5))(workbox-window@7.4.1)
-
-  apps/web-v3-old:
+  apps/web-old-version3:
     dependencies:
       '@meeshy/design-tokens':
         specifier: workspace:*
@@ -507,6 +448,65 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+
+  apps/web-v3:
+    dependencies:
+      '@tanstack/react-query':
+        specifier: 5.102.8
+        version: 5.102.8(react@19.2.8)
+      preact:
+        specifier: 10.29.8
+        version: 10.29.8(preact-render-to-string@6.7.0)
+      zustand:
+        specifier: 5.0.15
+        version: 5.0.15(@types/react@19.2.18)(immer@11.1.15)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))
+    optionalDependencies:
+      '@capacitor/android':
+        specifier: 8.5.1
+        version: 8.5.1(@capacitor/core@8.5.1)
+      '@capacitor/cli':
+        specifier: 8.5.1
+        version: 8.5.1
+      '@capacitor/core':
+        specifier: 8.5.1
+        version: 8.5.1
+      '@capacitor/ios':
+        specifier: 8.5.1
+        version: 8.5.1(@capacitor/core@8.5.1)
+    devDependencies:
+      '@meeshy/design-tokens':
+        specifier: workspace:*
+        version: link:../../packages/design-tokens
+      '@tailwindcss/vite':
+        specifier: 4.3.3
+        version: 4.3.3(vite@8.2.2(@types/node@26.1.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.12)(yaml@2.9.0))
+      '@types/react':
+        specifier: 19.2.18
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: 19.2.7
+        version: 19.2.7(@types/react@19.2.18)
+      preact-render-to-string:
+        specifier: 6.7.0
+        version: 6.7.0(preact@10.29.8)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: 19.2.8
+        version: 19.2.8(react@19.2.8)
+      tailwindcss:
+        specifier: 4.3.3
+        version: 4.3.3
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vite:
+        specifier: 8.2.2
+        version: 8.2.2(@types/node@26.1.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.12)(yaml@2.9.0)
+      vite-plugin-pwa:
+        specifier: 1.3.0
+        version: 1.3.0(vite@8.2.2(@types/node@26.1.1)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.12)(yaml@2.9.0))(workbox-build@6.6.0(@types/babel__core@7.20.5))(workbox-window@7.4.1)
 
   packages/design-tokens: {}
 

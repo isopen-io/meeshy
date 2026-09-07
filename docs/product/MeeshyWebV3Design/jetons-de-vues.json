@@ -36,7 +36,7 @@
     "adresse rend TROIS états décidés par le serveur ; deux sont des vues de la planche :",
     "`join` = lien VIVANT sans session (état CHOIX), `rights` = lien REJOINT (état INVITÉ,",
     "juste après la jonction). La valeur du jeton est ce que la passerelle de bouchon",
-    "(apps/web-v3-old/e2e/visual/lib/serveurs.ts) reconnaît pour servir CET état-là — comme",
+    "(apps/web-old-version3/e2e/visual/lib/serveurs.ts) reconnaît pour servir CET état-là — comme",
     "`lien-vivant` / `jeton-expire` séparent déjà les deux vues de `/l/:token`. `thread` est",
     "le fil du MEMBRE (`/chats/:cle`) ; le fil de l'INVITÉ est la vue `rights`, même module.",
     "UN ÉTAT QUI VIT DANS LA CHAÎNE DE REQUÊTE (conception § 12.10.3). `profilMembre` est une",

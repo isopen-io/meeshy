@@ -461,7 +461,7 @@ services:
   # interne (`gateway:3000`) et n'a pas à ressortir par Traefik. L'URL publique,
   # elle, est celle que les plateformes mettent en cache — donc le domaine.
   # `scripts/check-v3-pipeline.mjs` garde ce contrat : toute variable lue par
-  # `apps/web-v3-old/app` ou `apps/web-v3-old/lib` est déclarée ici.
+  # `apps/web-old-version3/app` ou `apps/web-old-version3/lib` est déclarée ici.
   frontend-v3:
     image: ${FRONTEND_V3_IMAGE:-isopen/meeshy-web-v3:latest}
     container_name: meeshy-frontend-v3
@@ -477,7 +477,7 @@ services:
       - NEXT_PUBLIC_API_URL=https://gate.${DOMAIN:-localhost}
       - NEXT_PUBLIC_FRONTEND_URL=https://${DOMAIN:-localhost}
       # LA CONFIGURATION FCM DU MODULE DE PRÉFÉRENCES (#5391) — lue par
-      # `apps/web-v3/app/connecte/prefs-porte.ts` dans CE processus Next :
+      # `apps/web-old-version3/app/connecte/prefs-porte.ts` dans CE processus Next :
       # déclarée sur le legacy elle serait inerte (même loi que V3_SW_PORTEES
       # du compose staging). Mêmes valeurs publiques que le service `frontend`.
       - NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyCGBiVIUvW8CiVytXGHN1za2T3yI_7ynro

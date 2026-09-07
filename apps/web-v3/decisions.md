@@ -157,15 +157,15 @@ service worker (push), et une bannière déjà affichée. La règle :
 Le point 1 est propre au web : sur iOS, le système sait que l'application est au
 premier plan. Dans un navigateur, c'est au service worker de le demander.
 
-## D-12 · Le renommage du 2026-09-07 — `web-v4` devient `web-v3`, l'ancienne v3 devient `web-v3-old`
+## D-12 · Le renommage du 2026-09-07 — `web-v4` devient `web-v3`, l'ancienne v3 devient `web-old-version3`
 
-Directive du porteur : *« Décommissionne web-v3 en web-v3-old et nomme le web-v4
+Directive du porteur : *« Décommissionne web-v3 en web-old-version3 et nomme le web-v4
 en web-v3, comme ça tout fonctionne avec ce qui sera développé. Ce sera la v3.1,
 car le début de v3 qui était en développement a été juste annulé. »*
 
 | avant | après | ce que c'est |
 |---|---|---|
-| `apps/web-v3` | **`apps/web-v3-old`** | l'ancienne refonte, **annulée**, jamais servie en production |
+| `apps/web-v3` | **`apps/web-old-version3`** | l'ancienne refonte, **annulée**, jamais servie en production |
 | `apps/web-v4` | **`apps/web-v3`** | le chantier, version **3.1.0** |
 
 Raison : tout ce que le dépôt nomme `web-v3` — filtres de CI, images Docker,
@@ -182,7 +182,7 @@ en premier, avant tout le reste.
 **Ce qui NE bouge pas, délibérément** : les noms de service, d'image et de
 variables d'environnement du déploiement (`FRONTEND_V3_IMAGE`,
 `meeshy-frontend-v3`, la zone `/__v3/`). Seuls les CHEMINS ont été repointés
-vers `web-v3-old`, pour que le déploiement en cours ne bouge pas d'un octet. La
+vers `web-old-version3`, pour que le déploiement en cours ne bouge pas d'un octet. La
 nouvelle application recevra sa propre configuration Docker quand elle sera
 prête à être servie — elle n'a pas encore de `Dockerfile`.
 
@@ -191,7 +191,7 @@ prête à être servie — elle n'a pas encore de `Dockerfile`.
 > chemins `apps/web-v3/...` qui désignent l'**ancienne** application. Les
 > réécrire falsifierait ce qui était vrai au moment où ils ont été écrits ; ce
 > sont des journaux, pas de la documentation. **Avant le 2026-09-07,
-> `apps/web-v3` veut dire `apps/web-v3-old`.** Les chemins des documents de
+> `apps/web-v3` veut dire `apps/web-old-version3`.** Les chemins des documents de
 > CONCEPTION, eux, ont été repointés — eux prescrivent, ils ne racontent pas.
 
 **Un trou ouvert par le renommage, déclaré** : l'étape de lint bloquante de la

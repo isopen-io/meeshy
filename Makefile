@@ -85,7 +85,7 @@ PROJECT_PROD := meeshy-prod
 
 # Paths
 WEB_DIR := apps/web
-WEB_V3_DIR := apps/web-v3-old
+WEB_V3_DIR := apps/web-old-version3
 IOS_DIR := apps/ios
 GATEWAY_DIR := services/gateway
 TRANSLATOR_DIR := services/translator

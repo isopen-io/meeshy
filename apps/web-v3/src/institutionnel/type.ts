@@ -1,7 +1,7 @@
 /**
  * LE TYPE DU CONTENU INSTITUTIONNEL.
  *
- * Repris tel quel de `apps/web-v3-old/app/institutionnel/document.ts` — avec les
+ * Repris tel quel de `apps/web-old-version3/app/institutionnel/document.ts` — avec les
  * cinq `contenu.ts` qui l'habitent. C'est le seul travail de l'ancienne refonte
  * qui se transporte sans réécriture, et pour une bonne raison : ce sont des
  * DONNÉES, pas du rendu. Le contenu lui-même vient du legacy mot pour mot

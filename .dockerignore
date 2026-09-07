@@ -81,7 +81,7 @@ docker-compose*.yml
 
 # ... SAUF ceux de la v3, dont son BUILD dépend (#4630).
 #
-# `apps/web-v3-old` a son script de build en trois temps —
+# `apps/web-old-version3` a son script de build en trois temps —
 # `next build && node scripts/check-app-router-built.mjs && node
 # scripts/check-bundle-budget.mjs` — et son `e2e/visual/lib/a11y.ts` importe
 # `scripts/lib/routes-emises.mjs`, que le `**/*.ts` du tsconfig fait
@@ -93,8 +93,8 @@ docker-compose*.yml
 # fichier qui EXISTE dans le dépôt — rien dans le message ne dit qu'il a été
 # filtré à l'entrée du contexte de build. Les deux gates du script `build`
 # auraient échoué juste après, pour la même raison.
-!apps/web-v3-old/scripts
-!apps/web-v3-old/scripts/**
+!apps/web-old-version3/scripts
+!apps/web-old-version3/scripts/**
 !services/gateway/docker-entrypoint.sh
 !services/translator/docker-entrypoint.sh
 !services/translator/docker-entrypoint-mongodb.sh
@@ -107,8 +107,8 @@ docker-compose*.yml
 # et le script `build` enchaîne `node scripts/check-app-router-built.mjs` puis
 # `check-bundle-budget.mjs`. L'image FINALE n'en porte rien — l'étage `runner`
 # ne copie que `.next/standalone` et `.next/static`.
-!apps/web-v3-old/scripts
-!apps/web-v3-old/scripts/**
+!apps/web-old-version3/scripts
+!apps/web-old-version3/scripts/**
 
 # === Exclude frontend and translator (only gateway needed) ===
 frontend/

@@ -105,7 +105,7 @@ function log(...args) {
 // C'est la PREMIERE marche du § 4.4 bis — declarer, DEPLOYER, puis reclamer au
 // routeur. L'invariant « le worker legacy connait TOUT ce que la zone sert »
 // (`scripts/lib/v3-routage.mjs`) la garde desormais : un ecran servi par
-// `apps/web-v3-old/app` et absent de cette liste fait rougir le gate.
+// `apps/web-old-version3/app` et absent de cette liste fait rougir le gate.
 const V3_ZONE_PREFIXES = [
   '/__v3',
   '/l',
@@ -137,7 +137,7 @@ const V3_ZONE_PREFIXES = [
   '/calls',
   // `/communities` entre le 2026-09-05 — les communautes du lecteur (matrice
   // ordre 45, L7 : liste, ouverture sur ses conversations, creation). Il etait
-  // servi par `apps/web-v3-old/app` sans etre ici : exactement le trou que les huit
+  // servi par `apps/web-old-version3/app` sans etre ici : exactement le trou que les huit
   // prefixes du 2026-09-03 ont solde, et que l'invariant garde depuis. Meme
   // marche que `/calls` juste au-dessus — declarer ICI, DEPLOYER, puis reclamer
   // au routeur (§ 4.4 bis).

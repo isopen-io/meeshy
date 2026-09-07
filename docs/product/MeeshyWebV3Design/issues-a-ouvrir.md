@@ -27,7 +27,7 @@
 ### Contexte
 La page `/notifications/preferences` permet se désabonner des notifications push. Actuellement, cliquer la bascule « désabonner » déclenche une navigation complète (rechargement), alors que la bascule « s'abonner » reste sur la page (optimiste + rollback visible).
 
-**Preuve au dépôt** : `apps/web-v3/lib/realtime/push-abonnement.ts:265-281` — `armeLAbonnementPush` intercepte UNIQUEMENT `valeur=true` (s'abonner). Le doc-comment (:263) dit explicitement : « la moitié désabonner traverse cet écouteur sans être interceptée » → rechargement complet.
+**Preuve au dépôt** : `apps/web-old-version3/lib/realtime/push-abonnement.ts:265-281` — `armeLAbonnementPush` intercepte UNIQUEMENT `valeur=true` (s'abonner). Le doc-comment (:263) dit explicitement : « la moitié désabonner traverse cet écouteur sans être interceptée » → rechargement complet.
 
 **Patron existant** : `lib/realtime/prefs.ts:1-230` — les treize bascules des préférences suppriment le rechargement (optimiste + rollback visible).
 

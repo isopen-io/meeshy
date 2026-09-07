@@ -16,7 +16,7 @@ import {
   REECRITURES_DE_ZONE,
   regleDuRouteur,
   routeDeReecriture,
-} from '../../apps/web-v3-old/scripts/lib/perimetre-de-zone.mjs';
+} from '../../apps/web-old-version3/scripts/lib/perimetre-de-zone.mjs';
 
 export const invariantsDeRoutage = ({ constantes, blockOf, listValues }) => {
   const {

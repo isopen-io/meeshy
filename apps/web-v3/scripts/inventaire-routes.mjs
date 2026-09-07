@@ -9,7 +9,7 @@
  *
  * Il énumère les DEUX legs, et pas seulement la v3 :
  *   apps/web        — le legacy, ce qui sert meeshy.me AUJOURD'HUI
- *   apps/web-v3-old — l'ancienne refonte, ANNULÉE le 2026-09-07
+ *   apps/web-old-version3 — l'ancienne refonte, ANNULÉE le 2026-09-07
  *   apps/web-v3     — la v3.1, le chantier (ex web-v4)
  * Le risque de casser un lien existant vient du PREMIER. Cadrer l'inventaire
  * sur la v3 seule laisserait tomber `/signup/affiliate/:token`,
@@ -53,7 +53,7 @@ function routes(app) {
 }
 
 const legacy = routes('apps/web');
-const annulee = routes('apps/web-v3-old');
+const annulee = routes('apps/web-old-version3');
 const v31 = routes('apps/web-v3');
 
 const urls = new Set([...legacy, ...annulee, ...v31].map((r) => r.url));
@@ -74,7 +74,7 @@ if (process.argv.includes('--json')) {
   );
 } else {
   console.log(`  apps/web         ${legacy.length} routes  (le legacy — sert meeshy.me)`);
-  console.log(`  apps/web-v3-old  ${annulee.length} routes  (l'ancienne refonte, ANNULÉE)`);
+  console.log(`  apps/web-old-version3  ${annulee.length} routes  (l'ancienne refonte, ANNULÉE)`);
   console.log(`  apps/web-v3      ${v31.length} routes  (la v3.1 — le chantier)`);
   console.log(`  union            ${urls.size} adresses distinctes\n`);
   const orphelines = [...urls].sort().filter((u) => dans(legacy, u) && !dans(annulee, u));
