@@ -7,7 +7,7 @@
  * Cet outil n'honore AUCUN drapeau : tout premier argument commencant par `-`
  * est refuse (code 2). Sans ce refus, `--vues linkRedirect` etait pris pour un
  * dossier et creait `--vues/` a la racine du depot. La loi vit dans
- * `apps/web-v3/scripts/lib/arguments-de-ligne.mjs`, avec ses temoins.
+ * `apps/web-old-version3/scripts/lib/arguments-de-ligne.mjs`, avec ses temoins.
  *
  * Sortie par defaut : docs/product/MeeshyWebV3Design/cible/
  * Chaque .png est la CIBLE d'implementation d'une vue ; vues.json en porte
@@ -19,7 +19,7 @@
  * la prochaine passe puis disparaitrait SANS UN MOT, et le refus qui suivrait
  * ressemblerait a un refus legitime. La regeneration ne peut pas effacer ce
  * qu'elle n'ecrit pas : loi et temoins dans
- * apps/web-v3/scripts/lib/index-des-vues.mjs.
+ * apps/web-old-version3/scripts/lib/index-des-vues.mjs.
  *
  * Ce fichier est une SOURCE, pas un tableau de bord : l'etat d'implementation
  * de chaque vue vit dans son issue GitHub, jamais ici.
@@ -90,9 +90,9 @@ function serve() {
 
 (async () => {
   const { dossierDeSortie } = await import(
-    pathToFileURL(path.join(ROOT, 'apps/web-v3/scripts/lib/arguments-de-ligne.mjs')).href);
+    pathToFileURL(path.join(ROOT, 'apps/web-old-version3/scripts/lib/arguments-de-ligne.mjs')).href);
   const { ecrisLIndex } = await import(
-    pathToFileURL(path.join(ROOT, 'apps/web-v3/scripts/lib/index-des-vues.mjs')).href);
+    pathToFileURL(path.join(ROOT, 'apps/web-old-version3/scripts/lib/index-des-vues.mjs')).href);
   const demande = dossierDeSortie(process.argv.slice(2), path.join(HERE, 'cible'));
   if (!demande.ok) {
     process.stderr.write(`[capture] ARGUMENT REFUSE — ${demande.raison}\n`);

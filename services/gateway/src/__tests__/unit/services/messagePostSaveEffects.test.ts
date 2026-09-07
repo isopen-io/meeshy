@@ -47,17 +47,25 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function makePrisma() {
+function makePrisma(overrides: { conversationType?: string | null; communityId?: string | null } = {}) {
   return {
     conversation: {
       update: jest.fn<any>().mockResolvedValue(undefined),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      findUnique: jest.fn<any>().mockResolvedValue({
+        type: overrides.conversationType === undefined ? 'direct' : overrides.conversationType,
+        communityId: overrides.communityId ?? null,
+      }),
     },
   } as any;
 }
 
 function makeTranslationService() {
   return { handleNewMessage: jest.fn<any>().mockResolvedValue({ status: 'queued' }) };
+}
+
+function makeEngagementService() {
+  return { recordConversationActivity: jest.fn<any>().mockResolvedValue(undefined) };
 }
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -229,6 +237,190 @@ describe('runMessagePostSaveEffects — comptage des messages', () => {
     await flush();
 
     expect(mockOnNewMessage.mock.calls[0][6]).toBe('location');
+  });
+});
+
+/**
+ * Le cinquième effet — l'axe d'engagement « conversation distincte » (#5538,
+ * #5539, #5540 ; docs/product/streaks-badges-modele.md § 2). Il ne vaut que
+ * pour un utilisateur ENREGISTRÉ (un anonyme n'a pas de ligne
+ * `EngagementCounter` possible, `userId` y étant un `User.id` requis), et
+ * seulement quand la conversation reçoit son PREMIER message de cet
+ * utilisateur — la déduplication elle-même vit dans
+ * `EngagementService.recordConversationActivity`, pas ici : cette unité se
+ * contente d'aiguiller l'axe depuis le TYPE et le `communityId` de la
+ * conversation. `communityId` PRIME sur `type` : une conversation rattachée
+ * à une communauté crédite `conversation.community`, quel que soit son
+ * `type` — jamais `private` ni `public`.
+ */
+describe('runMessagePostSaveEffects — axe d\'engagement des conversations', () => {
+  it('crédite l\'axe conversation.public pour un utilisateur enregistré dans une conversation publique', async () => {
+    const prisma = makePrisma({ conversationType: 'public' });
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage(),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(prisma.conversation.findUnique).toHaveBeenCalledWith({
+      where: { id: CONV_ID },
+      select: { type: true, communityId: true },
+    });
+    expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
+      USER_ID,
+      'conversation.public',
+      CONV_ID
+    );
+  });
+
+  it('crédite l\'axe conversation.private pour une conversation directe (#5538)', async () => {
+    const prisma = makePrisma({ conversationType: 'direct' });
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage(),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
+      USER_ID,
+      'conversation.private',
+      CONV_ID
+    );
+  });
+
+  it('crédite l\'axe conversation.private pour un groupe non rattaché à une communauté (#5538)', async () => {
+    const prisma = makePrisma({ conversationType: 'group' });
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage(),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
+      USER_ID,
+      'conversation.private',
+      CONV_ID
+    );
+  });
+
+  it('crédite l\'axe conversation.community pour une conversation rattachée à une communauté (#5540)', async () => {
+    const prisma = makePrisma({ conversationType: 'group', communityId: '507f1f77bcf86cd799439abc' });
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage(),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
+      USER_ID,
+      'conversation.community',
+      CONV_ID
+    );
+  });
+
+  it('crédite conversation.community, jamais conversation.public — communityId prime sur type', async () => {
+    const prisma = makePrisma({ conversationType: 'public', communityId: '507f1f77bcf86cd799439abc' });
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage(),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
+      USER_ID,
+      'conversation.community',
+      CONV_ID
+    );
+    expect(engagementService.recordConversationActivity).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'conversation.public',
+      expect.anything()
+    );
+  });
+
+  it('ne crédite rien, et ne lit même pas le type de la conversation, pour un expéditeur anonyme', async () => {
+    const prisma = makePrisma({ conversationType: 'public' });
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage({ senderUserId: null }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(prisma.conversation.findUnique).not.toHaveBeenCalled();
+    expect(engagementService.recordConversationActivity).not.toHaveBeenCalled();
+  });
+
+  it('ne rejette jamais quand aucun service d\'engagement n\'est câblé', async () => {
+    const prisma = makePrisma({ conversationType: 'public' });
+    const onError = jest.fn();
+
+    expect(() =>
+      runMessagePostSaveEffects({
+        prisma,
+        translationService: makeTranslationService(),
+        engagementService: undefined,
+        message: makeMessage(),
+        originalLanguage: 'fr',
+        onError,
+      })
+    ).not.toThrow();
+    await flush();
+
+    expect(onError).not.toHaveBeenCalledWith('engagement', expect.anything());
+  });
+
+  it('signale la panne d\'engagement sans toucher aux quatre autres effets', async () => {
+    const prisma = makePrisma({ conversationType: 'public' });
+    const translationService = makeTranslationService();
+    const engagementService = {
+      recordConversationActivity: jest.fn<any>().mockRejectedValue(new Error('engagement down')),
+    };
+    const onError = jest.fn();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService,
+      engagementService,
+      message: makeMessage(),
+      originalLanguage: 'fr',
+      onError,
+    });
+    await flush();
+
+    expect(prisma.conversation.update).toHaveBeenCalled();
+    expect(translationService.handleNewMessage).toHaveBeenCalled();
+    expect(mockOnNewMessage).toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith('engagement', expect.any(Error));
   });
 });
 

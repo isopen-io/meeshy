@@ -26,6 +26,7 @@ export * from './call-transcript.js';
 export * from './relative-time.js';
 export * from './time-remaining.js';
 export * from './calendar-date.js';
+export * from './age.js';
 export * from './presence-visibility.js';
 export * from './forward-source-visibility.js';
 export * from './participant-helpers.js';

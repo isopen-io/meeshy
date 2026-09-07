@@ -12,7 +12,7 @@
  * personne avait sous les yeux.
  *
  * La date est celle qu'affiche la page des conditions
- * (`apps/web-v3/app/terms/contenu.ts`, « Dernière mise à jour : 23 août 2026 »).
+ * (`apps/web-old-version3/app/terms/contenu.ts`, « Dernière mise à jour : 23 août 2026 »).
  * Elle vit ici pour que la page, le serveur et un futur écran de ré-acceptation
  * citent la MÊME valeur — c'est la leçon de `CONSENT_POLICY_VERSION_DEFAULT`
  * (`types/consents.ts`), où deux côtés tenant la valeur séparément ont fini par

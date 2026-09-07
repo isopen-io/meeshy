@@ -67,6 +67,9 @@ import {
 // Presence routes (runtime online status)
 import { getUsersPresence } from './presence';
 
+// Referral code (intrinsic per-account code, #3690)
+import { getReferralCode } from './referral-code';
+
 /**
  * Main user routes registration
  * Aggregates all user-related routes from modular files
@@ -111,6 +114,7 @@ export async function userRoutes(fastify: FastifyInstance) {
   // Friend requests & affiliate routes
   await getFriendRequests(fastify);
   await getAffiliateToken(fastify);
+  await getReferralCode(fastify);
 
   // Blocking routes
   await blockUser(fastify);

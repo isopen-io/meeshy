@@ -174,6 +174,17 @@ nonisolated struct PublishIntent: Equatable, Sendable {
     /// (un post sans scène, une pièce jointe simple).
     let mediaObjectIds: [String?]
 
+    /// **L'autorisation d'extraction du son** (#3996) — une autorisation sur
+    /// ce qui PART, décidée une fois pour la publication.
+    ///
+    /// Déclarée (`ComposerMediaAccessibility.allowSoundExtraction`,
+    /// `SoundExtractionToggle`) et déjà transmise sur la voie STORY
+    /// (`publishStoryInBackground(allowSoundExtraction:)`), elle mourait sur
+    /// la voie DOCUMENT — celle que prend tout post/réel du meuble : ni
+    /// `PublishIntent` ni la charge durable ne la portaient, si bien que
+    /// l'auteur croyait décider et le serveur ne l'apprenait jamais.
+    let allowSoundExtraction: Bool?
+
     private init(
         clientMutationId: String,
         type: String,
@@ -190,7 +201,8 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         storyEffects: StoryEffects?,
         mediaCaptions: [String?],
         mediaAlts: [String?],
-        mediaObjectIds: [String?]
+        mediaObjectIds: [String?],
+        allowSoundExtraction: Bool?
     ) {
         self.clientMutationId = clientMutationId
         self.type = type
@@ -208,6 +220,7 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         self.mediaCaptions = mediaCaptions
         self.mediaAlts = mediaAlts
         self.mediaObjectIds = mediaObjectIds
+        self.allowSoundExtraction = allowSoundExtraction
     }
 
     /// Le geste « **j'ai composé un document** » — un post ou un réel né du
@@ -258,7 +271,13 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         /// `URL source → identifiant d'objet de canvas`, tel que
         /// `applyContentMedia` l'a rendu et que le meuble l'accumule
         /// (`documentMediaObjectIdBySource`). Vide pour un post sans scène.
-        mediaObjectIds: ComposerMediaCaptions
+        mediaObjectIds: ComposerMediaCaptions,
+        /// **L'autorisation d'extraction du son** (#3996) — même champ,
+        /// même sémantique que `ComposerMediaAccessibility.allowSoundExtraction`
+        /// (`nil` ⇒ l'auteur n'a rien décidé). La règle 1 de ce fichier
+        /// interdit un défaut : un site qui n'expose aucun toggle l'écrit
+        /// `nil` en toutes lettres.
+        allowSoundExtraction: Bool?
     ) -> PublishIntent {
         PublishIntent(
             clientMutationId: ClientMutationId.generate(),
@@ -314,7 +333,8 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             // Le TROISIÈME réalignement, sur la même liste et dans le même
             // ordre — un quatrième tableau écrit séparément se décalerait au
             // premier fichier sauté.
-            mediaObjectIds: localMedia.map { mediaObjectIds[$0.url] }
+            mediaObjectIds: localMedia.map { mediaObjectIds[$0.url] },
+            allowSoundExtraction: allowSoundExtraction
         )
     }
 
@@ -380,7 +400,11 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             // accessible est sa transcription, déjà portée ci-dessus.
             mediaAlts: [nil],
             // Un vocal n'a pas de canvas : aucun objet à adopter.
-            mediaObjectIds: [nil]
+            mediaObjectIds: [nil],
+            // Un vocal n'a rien à EXTRAIRE, il EST déjà l'audio : aucun toggle
+            // ne s'offre sur ce geste, donc `nil` — « aucune décision » —
+            // plutôt qu'un `false` qui affirmerait un refus jamais exprimé.
+            allowSoundExtraction: nil
         )
     }
 }

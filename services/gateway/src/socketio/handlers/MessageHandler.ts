@@ -55,6 +55,7 @@ import { emitToConversationParticipants, participantUserRoomTargets } from '../e
 import { fetchParticipantSuperset } from '../participant-superset';
 import {
   resolveLastMessagePreviewPrism,
+  resolvePreviewMediaFields,
   toIsoOrNull,
 } from '../utils/lastMessagePreviewPrism';
 import { validateMessageLength } from '../../config/message-limits';
@@ -1613,7 +1614,14 @@ export class MessageHandler {
         for (const { room, participant } of targets) {
           this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
             ...updatePayload,
-            ...resolveLastMessagePreviewPrism(participant, message)
+            ...resolveLastMessagePreviewPrism(participant, message),
+            // Sous-groupe MÉDIA (#3737) — identique pour toute la room, donc
+            // hors de la boucle par destinataire serait plus juste ; posé ici
+            // pour rester à un seul point d'appel, comme le Prisme ci-dessus.
+            // `message` (le type `Message` partagé) satisfait déjà la forme
+            // attendue : `attachments` NON plafonné en entrée, plafonné en
+            // sortie par la fonction elle-même.
+            ...resolvePreviewMediaFields(message)
           });
         }
         handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: targets.length });

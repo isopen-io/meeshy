@@ -223,14 +223,16 @@ export const registerRequestSchema = {
       pattern: usernamePatternSource,
       description: 'Unique username (2-16 chars: letters, digits, - and _ only — no spaces). Optional: generated from the display name when absent.'
     },
-    // Borne alignée sur `PASSWORD_MIN_LENGTH` (utils/validation.ts). C'est CE
-    // schéma que Fastify applique avant le handler : il rendait
-    // « body/password must NOT have fewer than 8 characters » à la dernière
-    // étape du wizard web, lequel ouvrait le pas suivant dès 6.
+    // Borne alignée sur `PASSWORD_MIN_LENGTH` (utils/validation.ts) — un
+    // LITTÉRAL, délibérément, pas un import : `validation-primitives.ts`
+    // importe déjà `usernamePatternSource` depuis la façade `api-schemas.js`,
+    // qui ré-exporte CE fichier. Importer la constante ici la referait
+    // boucler. La garde `password-min-length-parity.test.ts` tient le
+    // littéral honnête.
     password: {
       type: 'string',
-      minLength: 6,
-      description: 'Password (minimum 6 characters)'
+      minLength: 12,
+      description: 'Password (minimum PASSWORD_MIN_LENGTH characters)'
     },
     firstName: firstNameProperty,
     lastName: lastNameProperty,
@@ -393,8 +395,8 @@ export const changePasswordRequestSchema = {
     },
     newPassword: {
       type: 'string',
-      minLength: 6,
-      description: 'New password (minimum 6 characters)'
+      minLength: 12,
+      description: 'New password (minimum PASSWORD_MIN_LENGTH characters)'
     }
   }
 } as const;
@@ -413,8 +415,8 @@ export const resetPasswordRequestSchema = {
     },
     newPassword: {
       type: 'string',
-      minLength: 6,
-      description: 'New password (minimum 6 characters)'
+      minLength: 12,
+      description: 'New password (minimum PASSWORD_MIN_LENGTH characters)'
     }
   }
 } as const;

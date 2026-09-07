@@ -96,6 +96,16 @@ const PREVIEW_GROUP_KEYS = new Set([
   'senderId',
   'location',
   'previewRecalculated',
+  // Sous-groupe MÉDIA (#3737) — auteur, pièce jointe, drapeaux éphémères du
+  // MESSAGE que `lastMessageId` nomme, jamais de la conversation : même
+  // raison que les cinq clés ci-dessus, `mediaGroupPatch` (plus bas) les
+  // consomme pour composer `lastMessage`.
+  'lastMessageSenderName',
+  'lastMessageAttachments',
+  'lastMessageAttachmentCount',
+  'lastMessageIsBlurred',
+  'lastMessageIsViewOnce',
+  'lastMessageExpiresAt',
 ]);
 
 /**
@@ -231,6 +241,92 @@ type PreviewedLastMessage =
   | { readonly decided: true; readonly lastMessage: Message | undefined };
 
 /**
+ * Une pièce jointe du sous-groupe MÉDIA (#3737), reconstituée dans la forme
+ * `Message['attachments']` — MINIMALE et délibérément incomplète : ce groupe
+ * ne porte que six champs (identiques à `LastMessagePreviewAttachment`,
+ * `packages/shared/types/socketio-events/conversation.ts`), jamais `fileUrl`
+ * ni les champs d'upload/provenance. Une ligne de liste ne rend qu'une
+ * vignette ; les composants qui ouvrent le fichier lisent le message COMPLET
+ * livré par `message:new`/REST, jamais cette ligne synthétique.
+ */
+function toPreviewAttachments(
+  value: unknown,
+  messageId: string,
+  createdAtIso: string
+): Message['attachments'] {
+  if (!Array.isArray(value)) return undefined;
+  return value.map((entry) => {
+    const a = (entry ?? {}) as Record<string, unknown>;
+    const originalName = typeof a.originalName === 'string' ? a.originalName : '';
+    return {
+      id: typeof a.id === 'string' ? a.id : '',
+      messageId,
+      fileName: originalName,
+      originalName,
+      mimeType: typeof a.mimeType === 'string' ? a.mimeType : '',
+      fileSize: typeof a.fileSize === 'number' ? a.fileSize : 0,
+      fileUrl: '',
+      thumbnailUrl: typeof a.thumbnailUrl === 'string' ? a.thumbnailUrl : undefined,
+      width: typeof a.width === 'number' ? a.width : undefined,
+      height: typeof a.height === 'number' ? a.height : undefined,
+      duration: typeof a.duration === 'number' ? a.duration : undefined,
+      uploadedBy: '',
+      isAnonymous: false,
+      createdAt: createdAtIso,
+      isForwarded: false,
+      capturedInApp: false,
+      isViewOnce: false,
+      viewOnceCount: 0,
+      isBlurred: false,
+    };
+  }) as unknown as Message['attachments'];
+}
+
+/**
+ * Le sous-groupe MÉDIA de l'aperçu (#3737) — auteur, pièce jointe(s), drapeaux
+ * éphémères du message que `lastMessageId` nomme. Suivi n°2 de la PR #3096,
+ * jamais pris : mêmes six champs que `ConversationUpdatedEventData`
+ * (`lastMessageSenderName` → `sender`, `lastMessageAttachments` →
+ * `attachments`, `lastMessageIsBlurred`/`IsViewOnce`/`ExpiresAt`).
+ *
+ * Consommé par `neutralLastMessage` (nouveau message pour la ligne) ET par la
+ * branche « MÊME message » de `previewedLastMessage` : un floutage qui
+ * expire, une pièce jointe qui atterrit après coup, ne changent pas
+ * `lastMessagePreview` et restaient invisibles à la ligne de liste jusqu'à une
+ * relecture complète (`GET /conversations`) — la panne que #3737 ferme.
+ *
+ * Ne pose que ce que `raw` PORTE : une clé absente laisse le champ du message
+ * cible intact (utile pour la branche « MÊME message », qui part d'un message
+ * déjà complet), jamais remis à un défaut vide.
+ */
+function mediaGroupPatch(
+  raw: Record<string, unknown>,
+  messageId: string,
+  createdAtIso: string
+): Partial<Message> {
+  return {
+    ...(typeof raw.lastMessageSenderName === 'string'
+      ? {
+          // Forme MINIMALE — `getMessageSenderName` (web) lit `displayName`
+          // en priorité 1, exactement ce que le serveur a déjà résolu
+          // (`resolveParticipantDisplayName`). Le reste de `Participant`
+          // (rôle, permissions, cycle de vie…) n'a ni valeur ni lecteur sur
+          // cette ligne synthétique.
+          sender: { displayName: raw.lastMessageSenderName } as Message['sender'],
+        }
+      : {}),
+    ...('lastMessageAttachments' in raw
+      ? { attachments: toPreviewAttachments(raw.lastMessageAttachments, messageId, createdAtIso) }
+      : {}),
+    ...(typeof raw.lastMessageIsBlurred === 'boolean' ? { isBlurred: raw.lastMessageIsBlurred } : {}),
+    ...(typeof raw.lastMessageIsViewOnce === 'boolean' ? { isViewOnce: raw.lastMessageIsViewOnce } : {}),
+    ...('lastMessageExpiresAt' in raw
+      ? { expiresAt: toDate(raw.lastMessageExpiresAt) ?? undefined }
+      : {}),
+  };
+}
+
+/**
  * Le message NEUTRE que le seul groupe d'aperçu permet de composer.
  *
  * Ce que le payload ne porte pas — l'expéditeur, les pièces jointes, les
@@ -265,6 +361,7 @@ function neutralLastMessage(
     translations: [],
     createdAt,
     timestamp: createdAt,
+    ...mediaGroupPatch(raw, id, createdAt.toISOString()),
   };
 }
 
@@ -301,14 +398,24 @@ function previewedLastMessage(
   if (typeof id !== 'string' || id.length === 0) return { decided: false };
 
   if (cached?.id === id) {
-    // MÊME message : seul son texte a pu changer. L'expéditeur, les pièces
-    // jointes et les drapeaux restent vrais — les jeter serait le défaut
-    // symétrique, et il frapperait le chemin le plus fréquenté, celui de
-    // l'envoi (`message:new` pose l'objet COMPLET, le `conversation:updated`
-    // jumeau arrive juste derrière avec le même id).
+    // MÊME message : son texte a pu changer (édition, traduction qui
+    // atterrit), et le sous-groupe MÉDIA (#3737) aussi — un floutage qui
+    // expire ou une pièce jointe qui arrive après coup ne touchent JAMAIS
+    // `lastMessagePreview`, et restaient invisibles jusqu'à une relecture
+    // complète. Ce que `raw` ne porte pas reste VRAI (`mediaGroupPatch` ne
+    // pose que ce qu'il reçoit) — les jeter serait le défaut symétrique, et
+    // il frapperait le chemin le plus fréquenté, celui de l'envoi
+    // (`message:new` pose l'objet COMPLET, le `conversation:updated` jumeau
+    // arrive juste derrière avec le même id).
     const preview = raw.lastMessagePreview;
-    if (typeof preview !== 'string' || preview === cached.content) return { decided: false };
-    return { decided: true, lastMessage: { ...cached, content: preview } };
+    const contentPatch =
+      typeof preview === 'string' && preview !== cached.content ? { content: preview } : {};
+    const cachedCreatedAt = toDate(cached.createdAt) ?? new Date();
+    const mediaPatch = mediaGroupPatch(raw, id, cachedCreatedAt.toISOString());
+    if (Object.keys(contentPatch).length === 0 && Object.keys(mediaPatch).length === 0) {
+      return { decided: false };
+    }
+    return { decided: true, lastMessage: { ...cached, ...contentPatch, ...mediaPatch } };
   }
 
   // AUTRE message. Sans horodatage lisible on ne compose rien : la ligne rend

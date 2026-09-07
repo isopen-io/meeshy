@@ -39,6 +39,7 @@ import { VOICE_CLONING_QUALITY_PRESETS } from '@meeshy/shared/types/preferences'
 import type { FastifyInstance } from 'fastify';
 import { emitPreferenceCategoryUpdated } from './preferences/preferences-broadcast';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { calculateAge } from '@meeshy/shared/utils/age';
 // Logger dédié pour VoiceProfileService
 const logger = enhancedLogger.child({ module: 'VoiceProfileService' });
 
@@ -947,7 +948,7 @@ export class VoiceProfileService extends EventEmitter {
     const now = new Date();
 
     if (birthDate) {
-      const age = this.calculateAge(birthDate);
+      const age = calculateAge(birthDate);
       if (age < 18) {
         // Minors: 2 months expiration
         now.setDate(now.getDate() + MINOR_PROFILE_EXPIRATION_DAYS);
@@ -958,17 +959,5 @@ export class VoiceProfileService extends EventEmitter {
     // Standard: 3 months expiration
     now.setDate(now.getDate() + STANDARD_PROFILE_EXPIRATION_DAYS);
     return now;
-  }
-
-  private calculateAge(birthDate: Date): number {
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-
-    return age;
   }
 }

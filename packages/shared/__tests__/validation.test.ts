@@ -360,7 +360,7 @@ describe('language-code normalization at the write boundary', () => {
   it('AuthSchemas.register lowercases system/regional language', () => {
     const parsed = AuthSchemas.register.parse({
       username: 'alice',
-      password: 'password123',
+      password: 'Xk9$mQ2vLp8#nR4wZ',
       firstName: 'Alice',
       lastName: 'Smith',
       email: 'alice@example.com',
@@ -374,7 +374,7 @@ describe('language-code normalization at the write boundary', () => {
   it('AuthSchemas.register still rejects unsupported codes', () => {
     const result = AuthSchemas.register.safeParse({
       username: 'alice',
-      password: 'password123',
+      password: 'Xk9$mQ2vLp8#nR4wZ',
       firstName: 'Alice',
       lastName: 'Smith',
       email: 'alice@example.com',
@@ -394,7 +394,7 @@ describe('language-code normalization at the write boundary', () => {
     for (const code of iosPickerCodes) {
       const result = AuthSchemas.register.safeParse({
         username: 'alice',
-        password: 'password123',
+        password: 'Xk9$mQ2vLp8#nR4wZ',
         firstName: 'Alice',
         lastName: 'Smith',
         email: 'alice@example.com',
@@ -409,7 +409,7 @@ describe('language-code normalization at the write boundary', () => {
   it('AuthSchemas.register accepts names with typographic apostrophes and combining marks', () => {
     const base = {
       username: 'alice',
-      password: 'password123',
+      password: 'Xk9$mQ2vLp8#nR4wZ',
       email: 'alice@example.com',
     };
     const validNames = [
@@ -428,7 +428,7 @@ describe('language-code normalization at the write boundary', () => {
   it('AuthSchemas.register still rejects names without any letter or with forbidden characters', () => {
     const base = {
       username: 'alice',
-      password: 'password123',
+      password: 'Xk9$mQ2vLp8#nR4wZ',
       email: 'alice@example.com',
       lastName: 'Smith',
     };

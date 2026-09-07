@@ -225,9 +225,6 @@ export const API_ENDPOINTS = {
     history: '/api/v1/calls/history',
     root: '/api/v1/calls',
   },
-  cleanup: {
-    root: '/api/v1/cleanup',
-  },
   communities: {
     byId: (id: string) => `/api/v1/communities/${id}`,
     byIdConversations: (id: string) => `/api/v1/communities/${id}/conversations`,
@@ -242,9 +239,6 @@ export const API_ENDPOINTS = {
     mine: '/api/v1/communities/mine',
     root: '/api/v1/communities',
     search: '/api/v1/communities/search',
-  },
-  conversation: {
-    byIdentifier: (identifier: string) => `/api/v1/conversation/${identifier}`,
   },
   conversations: {
     byConversationIdActiveCall: (conversationId: string) => `/api/v1/conversations/${conversationId}/active-call`,
@@ -288,9 +282,6 @@ export const API_ENDPOINTS = {
     root: '/api/v1/conversations',
     search: '/api/v1/conversations/search',
   },
-  detectLanguage: {
-    root: '/api/v1/detect-language',
-  },
   directory: {
     availability: '/api/v1/directory/availability',
     blocks: '/api/v1/directory/blocks',
@@ -319,9 +310,6 @@ export const API_ENDPOINTS = {
     metrics: '/api/v1/health/metrics',
     ready: '/api/v1/health/ready',
     root: '/health',
-  },
-  info: {
-    root: '/info',
   },
   invitations: {
     email: '/api/v1/invitations/email',
@@ -409,6 +397,7 @@ export const API_ENDPOINTS = {
     byPostIdImpression: (postId: string) => `/api/v1/posts/${postId}/impression`,
     byPostIdInteractions: (postId: string) => `/api/v1/posts/${postId}/interactions`,
     byPostIdLike: (postId: string) => `/api/v1/posts/${postId}/like`,
+    byPostIdMediaByMediaIdExport: (postId: string, mediaId: string) => `/api/v1/posts/${postId}/media/${mediaId}/export`,
     byPostIdPin: (postId: string) => `/api/v1/posts/${postId}/pin`,
     byPostIdRepost: (postId: string) => `/api/v1/posts/${postId}/repost`,
     byPostIdRepublish: (postId: string) => `/api/v1/posts/${postId}/republish`,
@@ -470,12 +459,6 @@ export const API_ENDPOINTS = {
   static: {
     byFilename: (filename: string) => `/api/v1/static/${filename}`,
   },
-  stats: {
-    root: '/api/v1/stats',
-  },
-  status: {
-    byMessageIdByLanguage: (messageId: string, language: string) => `/api/v1/status/${messageId}/${language}`,
-  },
   statusMetrics: {
     reset: '/api/v1/status-metrics/reset',
     root: '/api/v1/status-metrics',
@@ -485,9 +468,6 @@ export const API_ENDPOINTS = {
   },
   sync: {
     root: '/api/v1/sync',
-  },
-  test: {
-    root: '/api/v1/test',
   },
   trackingLinks: {
     adminAll: '/api/v1/tracking-links/admin/all',
@@ -527,9 +507,6 @@ export const API_ENDPOINTS = {
     conversationsByConversationId: (conversationId: string) => `/api/v1/user-preferences/conversations/${conversationId}`,
     reorder: '/api/v1/user-preferences/reorder',
   },
-  userStatus: {
-    root: '/api/v1/user-status',
-  },
   users: {
     byId: (id: string) => `/api/v1/users/${id}`,
     byUserIdAffiliateToken: (userId: string) => `/api/v1/users/${userId}/affiliate-token`,
@@ -554,6 +531,7 @@ export const API_ENDPOINTS = {
     meDevices: '/api/v1/users/me/devices',
     meDevicesByDeviceId: (deviceId: string) => `/api/v1/users/me/devices/${deviceId}`,
     mePassword: '/api/v1/users/me/password',
+    meReferralCode: '/api/v1/users/me/referral-code',
     meResendEmailChangeVerification: '/api/v1/users/me/resend-email-change-verification',
     meStats: '/api/v1/users/me/stats',
     meStatsAchievements: '/api/v1/users/me/stats/achievements',
@@ -761,7 +739,6 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/calls/:callId/transcript',
   '/api/v1/calls/active',
   '/api/v1/calls/history',
-  '/api/v1/cleanup',
   '/api/v1/communities',
   '/api/v1/communities/:id',
   '/api/v1/communities/:id/conversations',
@@ -775,7 +752,6 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/communities/check-identifier/:identifier',
   '/api/v1/communities/mine',
   '/api/v1/communities/search',
-  '/api/v1/conversation/:identifier',
   '/api/v1/conversations',
   '/api/v1/conversations/:conversationId/active-call',
   '/api/v1/conversations/:conversationId/attachments',
@@ -816,7 +792,6 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/conversations/check-identifier/:identifier',
   '/api/v1/conversations/join/:linkId',
   '/api/v1/conversations/search',
-  '/api/v1/detect-language',
   '/api/v1/directory/availability',
   '/api/v1/directory/blocks',
   '/api/v1/directory/blocks/:userId',
@@ -904,6 +879,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/posts/:postId/impression',
   '/api/v1/posts/:postId/interactions',
   '/api/v1/posts/:postId/like',
+  '/api/v1/posts/:postId/media/:mediaId/export',
   '/api/v1/posts/:postId/pin',
   '/api/v1/posts/:postId/repost',
   '/api/v1/posts/:postId/republish',
@@ -943,13 +919,10 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/sounds/:id/posts',
   '/api/v1/sounds/mine',
   '/api/v1/static/:filename',
-  '/api/v1/stats',
   '/api/v1/status-metrics',
   '/api/v1/status-metrics/reset',
-  '/api/v1/status/:messageId/:language',
   '/api/v1/stories/audio',
   '/api/v1/sync',
-  '/api/v1/test',
   '/api/v1/tracking-links',
   '/api/v1/tracking-links/:token',
   '/api/v1/tracking-links/:token/click',
@@ -976,7 +949,6 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/user-preferences/conversations',
   '/api/v1/user-preferences/conversations/:conversationId',
   '/api/v1/user-preferences/reorder',
-  '/api/v1/user-status',
   '/api/v1/users/:id',
   '/api/v1/users/:userId/affiliate-token',
   '/api/v1/users/:userId/block',
@@ -1000,6 +972,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/users/me/devices',
   '/api/v1/users/me/devices/:deviceId',
   '/api/v1/users/me/password',
+  '/api/v1/users/me/referral-code',
   '/api/v1/users/me/resend-email-change-verification',
   '/api/v1/users/me/stats',
   '/api/v1/users/me/stats/achievements',
@@ -1029,7 +1002,6 @@ export const API_PATH_TEMPLATES = [
   '/attachments/:attachmentId/analysis',
   '/attachments/batch/analysis',
   '/health',
-  '/info',
   '/voice/analysis',
 ] as const;
 
@@ -1212,7 +1184,6 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/calls/:callId/transcript': ['GET'],
   '/api/v1/calls/active': ['GET'],
   '/api/v1/calls/history': ['GET'],
-  '/api/v1/cleanup': ['POST'],
   '/api/v1/communities': ['GET', 'POST'],
   '/api/v1/communities/:id': ['GET', 'PUT', 'DELETE'],
   '/api/v1/communities/:id/conversations': ['GET'],
@@ -1226,7 +1197,6 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/communities/check-identifier/:identifier': ['GET'],
   '/api/v1/communities/mine': ['GET'],
   '/api/v1/communities/search': ['GET'],
-  '/api/v1/conversation/:identifier': ['GET'],
   '/api/v1/conversations': ['GET', 'POST'],
   '/api/v1/conversations/:conversationId/active-call': ['GET'],
   '/api/v1/conversations/:conversationId/attachments': ['GET'],
@@ -1267,7 +1237,6 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/conversations/check-identifier/:identifier': ['GET'],
   '/api/v1/conversations/join/:linkId': ['POST'],
   '/api/v1/conversations/search': ['GET'],
-  '/api/v1/detect-language': ['POST'],
   '/api/v1/directory/availability': ['GET'],
   '/api/v1/directory/blocks': ['GET'],
   '/api/v1/directory/blocks/:userId': ['PUT', 'DELETE'],
@@ -1355,6 +1324,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/posts/:postId/impression': ['POST'],
   '/api/v1/posts/:postId/interactions': ['GET'],
   '/api/v1/posts/:postId/like': ['POST', 'DELETE'],
+  '/api/v1/posts/:postId/media/:mediaId/export': ['GET'],
   '/api/v1/posts/:postId/pin': ['POST', 'DELETE'],
   '/api/v1/posts/:postId/repost': ['POST'],
   '/api/v1/posts/:postId/republish': ['POST'],
@@ -1394,13 +1364,10 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/sounds/:id/posts': ['GET'],
   '/api/v1/sounds/mine': ['GET'],
   '/api/v1/static/:filename': ['GET'],
-  '/api/v1/stats': ['GET'],
   '/api/v1/status-metrics': ['GET'],
   '/api/v1/status-metrics/reset': ['POST'],
-  '/api/v1/status/:messageId/:language': ['GET'],
   '/api/v1/stories/audio': ['GET'],
   '/api/v1/sync': ['GET'],
-  '/api/v1/test': ['GET'],
   '/api/v1/tracking-links': ['POST'],
   '/api/v1/tracking-links/:token': ['GET', 'PATCH', 'DELETE'],
   '/api/v1/tracking-links/:token/click': ['POST'],
@@ -1427,7 +1394,6 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/user-preferences/conversations': ['GET'],
   '/api/v1/user-preferences/conversations/:conversationId': ['GET', 'PUT', 'DELETE'],
   '/api/v1/user-preferences/reorder': ['POST'],
-  '/api/v1/user-status': ['POST'],
   '/api/v1/users/:id': ['GET'],
   '/api/v1/users/:userId/affiliate-token': ['GET'],
   '/api/v1/users/:userId/block': ['POST', 'DELETE'],
@@ -1451,6 +1417,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/users/me/devices': ['GET'],
   '/api/v1/users/me/devices/:deviceId': ['DELETE'],
   '/api/v1/users/me/password': ['PATCH'],
+  '/api/v1/users/me/referral-code': ['GET'],
   '/api/v1/users/me/resend-email-change-verification': ['POST'],
   '/api/v1/users/me/stats': ['GET'],
   '/api/v1/users/me/stats/achievements': ['GET'],
@@ -1480,6 +1447,5 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/attachments/:attachmentId/analysis': ['GET', 'POST'],
   '/attachments/batch/analysis': ['POST'],
   '/health': ['GET'],
-  '/info': ['GET'],
   '/voice/analysis': ['GET', 'POST'],
 };

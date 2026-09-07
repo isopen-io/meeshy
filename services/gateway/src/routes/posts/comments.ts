@@ -5,6 +5,7 @@ import { PostCommentService } from '../../services/PostCommentService';
 import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { PostAudioService } from '../../services/posts/PostAudioService';
+import { EngagementService } from '../../services/engagement/EngagementService';
 import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams, UnlikeSchema, TranslatePostSchema } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { safeBroadcast } from '../../socketio/serverEmit';
@@ -57,6 +58,7 @@ export function registerCommentRoutes(
 ) {
   const commentService = new PostCommentService(prisma);
   const mentionService = new MentionService(prisma);
+  const engagementService = new EngagementService(prisma);
 
   // GET /posts/:postId/comments — Top-level comments, cursor-paginated
   fastify.get('/posts/:postId/comments', {
@@ -193,6 +195,13 @@ export function registerCommentRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
       const targetPostId = target.id;
+
+      // #3959 — réglage AUTEUR posé à la publication : désactivé bloque TOUT
+      // commentaire (création ET réponse, même endpoint via `parentId`),
+      // auteur compris — fail-closed, pas d'exception qui rouvrirait le fil.
+      if (target.commentsDisabled) {
+        return sendForbidden(reply, 'Comments are disabled on this post', { code: 'COMMENTS_DISABLED' });
+      }
 
       // Idempotent via clientMutationId — replays return the same comment.
       type CommentResult = NonNullable<Awaited<ReturnType<typeof commentService.addComment>>>;
@@ -395,6 +404,20 @@ export function registerCommentRoutes(
           fileUrl: linkedMedia.fileUrl ?? '',
           authorId: authContext.registeredUser.id,
         }).catch((err) => enhancedLogger.error('comment audio processing failed', err));
+      }
+
+      // Axes d'engagement « commentaire texte » (#5537) et « comment.audio »
+      // (#5536) — mutuellement exclusifs, sur la même distinction que le
+      // pipeline audio ci-dessus : un commentaire SANS pièce jointe audio
+      // crédite `comment.text`, un commentaire AVEC crédite `comment.audio`.
+      if (!linkedMedia?.mimeType?.startsWith('audio/')) {
+        engagementService
+          .recordActivity(authContext.registeredUser.id, 'comment.text')
+          .catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: engagement comment.text failed', { err }));
+      } else {
+        engagementService
+          .recordActivity(authContext.registeredUser.id, 'comment.audio')
+          .catch((err) => enhancedLogger.error('comment.audio engagement recording failed', err));
       }
 
       const newCommentMentionedUsers = parsed.data.content

@@ -1438,7 +1438,7 @@ export class NotificationService {
   /**
    * Crée une notification avec la structure V2
    */
-  private async createNotification(params: {
+  async createNotification(params: {
     userId: string;
     type: NotificationType;
     priority: NotificationPriority;

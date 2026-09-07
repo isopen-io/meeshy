@@ -1,5 +1,153 @@
 # @meeshy/shared
 
+## 1.17.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - les images compilent avec le bun du CI — BUN_VERSION transmis en build-arg (Refs #5570)
+  - mot de passe 12 caractères partout, lookups email/phone limités (#3629)
+  - web-v3 déclare X-Canvas-Caps: 0 — plus de sentinelle sur une story canvas-only (#5501)
+  - remesure feed.js après l'en-tête x-canvas-caps (#5195) — CI rouge sur 3 checks
+  - web-v3 déclare X-Canvas-Caps: 0 — plus de sentinelle d'invite sur une story canvas-only (#5195)
+  - compacte() retire les commentaires CSS avant de replier l'espace (#5497)
+  - complète les deux constructions directes de ComposerDocumentDraft oubliées
+  - un seul hook lit les messages d'une conversation (#5490)
+  - ajoute le paramètre allowSoundExtraction manquant à enqueueDurableMediaPost
+  - le toggle d'extraction du son atteint enfin le serveur sur la voie document (#3996)
+  - apps/web sert le certificat mkcert partagé sur https://meeshy.local:3100 (#5488)
+  - l'expiration d'un retrait s'annonce, l'annuler se nomme (#5483)
+  - désambiguïse le doublon « Leçon 162 » de tasks/lessons.md (#5485)
+  - les neuf modules reprennent leur MAX conteneur — 3e application de la règle #5343
+  - la déconnexion et la rotation push ne se courent plus (#5391)
+  - remesure participate après fusion de dev (#5480/#5476 déjà mergées)
+  - huit modules de participation s'attendent par un marqueur, jamais par une minuterie
+  - compare-rendu.js classe le budget réseau par le groupe (public) de budgets.json (#5476)
+  - sépare la durée de vie d'une story de la copie de création (#5480)
+  - sdk-tests nomme ce qui casse avant de mourir (#5472)
+  - rattrape le ratchet feed après fusion de dev (story-neuve TUS)
+  - rattrape le ratchet du bundle composer, en retard sur #5390
+  - compare-rendu.js classe le budget réseau par le groupe (public) de budgets.json
+  - désactive le cache distant Turborepo, jamais joignable sans TURBO_TOKEN (#4861) (#5463)
+  - retire les faux morts prouvés des cliquets de catalogue (#5427)
+  - ShareLinkService migre vers DELETE /guest-sessions/me (#5456)
+  - rédige l'en-tête Authorization et couvre /auth/login/2fa (#4843) (#5455)
+  - PATCH /admin/share-links/:id rouvre un lien fermé (#5439)
+  - attrape ready et finished d'une transition abandonnée (#5440) (#5448)
+  - attache rate-limit@file au routeur Traefik du gateway (#3622) (#5443)
+  - copier/ouvrir un lien de partage révèlent l'URL via le geste souverain
+  - la navigation douce attrape les trois promesses de la View Transition (#5449)
+  - retire le jumeau mort PostApi.getStories, documente activeCall() (#4889) (#5371)
+  - la configuration FCM du module de préférences est déclarée sur les services v3 (#5391)
+  - le ratchet reprend le MAX conteneur et l'avatar de Marta se vise par son href
+  - les images du feed suivent l'origine PUBLIQUE — l'adresse Docker interne ne fuit plus au navigateur
+  - un média refusé au cap de dix slides est annoncé, pas avalé
+  - une story vidéo partait sans ratio ni vignette — deux chemins posaient, un seul mesurait
+  - un glyphe sans taille est un glyphe géant — svgDuSprite est borné par construction
+  - un écran large n'est plus un téléphone centré — la coquille passe à 940 px au-delà de 1024 px
+  - un Réel ne pouvait pas être publié — trois verrous, levés ensemble
+  - la corbeille revient sur la rangée des scènes
+  - la rangée haute compte les SCÈNES, plus les médias fondateurs
+  - le longpress d'un message ouvre le composer v3, et sa graine ne se perd plus
+  - le panneau du menu de ligne du fil pend du mauvais côté en RTL (#5412)
+  - une langue MESURÉE côté composer web entre par un champ dédié (#5349)
+  - un lien symbolique suivi pointait vers le Mac d'un développeur (#5404)
+  - la section Lieu demandait d'activer une localisation déjà active
+  - le cadrage choisi pour le fond ne survivait pas à la publication
+  - le vrai delta conteneur de liste est +8 — un octet sous le MAX mesuré (#5343)
+  - un lien symbolique suivi pointait vers le Mac d'un développeur
+  - guard the dead-entry debt of the generated Swift/TS endpoint catalogs (#5398)
+  - un refus de schéma à l'inscription parle français, jamais Ajv (#5400)
+  - la table des langues sort des bundles — liste et feed perdent la moitié de leur poids (#5396)
+  - MeeshyObjectID → ObjectID — le préfixe ne protégeait rien (#5394)
+  - la liste et le tableau de bord enregistrent le travailleur de zone (#5393)
+  - unify French wording between app and SDK localization catalogs (#5370)
+  - neuf vues MEMBRE mesuraient la page de CONNEXION — la garde de session se dérive désormais des groupes
+  - le refus d'inscription montre un message humain, jamais le texte brut de la passerelle (#5378)
+  - l'overlay inline du fil est RETIRÉ — 346 lignes qu'aucun appelant ne montait
+  - la disposition rejoint le type de publication, la ligne de pastilles s'en va
+  - le ratchet enregistre le MAX des environnements — le conteneur Docker rend +6 à +22 o gzip sur le même code (#5343)
+  - le plein écran s'ouvrait page 1 en annonçant « 2 / 2 »
+  - sept écrans de réglages retrouvent leur session, /search perd un en-tête erroné
+  - la scène 2 d'une publication montrait la photo de la scène 1
+  - rend au rapport ses captures — deux correctifs d'un doublon se sont ADDITIONNÉS
+  - câble le sessionToken sur les deux appelants réels du rafraîchissement (#5365)
+  - retire le describe « les rendus » dupliqué par la fusion de #5350 (#5362)
+  - l'auteur choisit enfin la disposition que le fil sait rendre
+  - une reconfiguration qui ne sait pas résoudre son NOUVEAU sujet n'a rien à dire sur l'ANCIEN
+  - une épreuve qui arme un retrait différé l'éteint avant de partir
+  - un currentUser en cours de CHARGEMENT n'est pas un anonyme (#5353)
+  - bun.lock rattrape les trois versions que le merge de release a bumpées
+  - la légende s'écrit sur le média ÉLU, plus sur une relecture de la slide
+  - chaque scène porte SA légende, là où la tuile a la place
+  - entrer sur une AUTRE scène est une autre présentation, pas la même reconfigurée
+  - une garde exigeait un hop MainActor SUPPRIMÉ, une autre ignorait la troisième cible de la description
+  - mon extraction laissait quatre gardes derrière elle — dont une qui exigeait la régression
+  - une scène qui joue dit POURQUOI on ne l'entend pas
+  - en LECTURE, le canvas rend la main — au geste qui le contient, et à ses propres bornes
+  - --https devient un alias documenté de docker-compose.local.yml (#5352)
+  - une scène qui ne montre RIEN n'impose pas sa hauteur à toute la publication
+  - l'atelier dit combien de slides il porte, et la légende paraît partout
+  - le fichier extrait manquait `import Combine` — quatre erreurs, une seule cause
+  - un refus testé par son MOT français, et une fonction endormie qu'il fallait NOMMER
+  - ce que l'appel écoute de son ENVIRONNEMENT sort de CallManager — le cumul de dette repasse sous son plafond
+  - quand la file se VIDE sort d'OutboxDispatcher — second fichier ramené sous le plafond dur
+  - les règles d'ENVOI d'un document sortent dans leur fichier — extraire, jamais monter le plafond
+  - mes deux helpers de mention étaient dans une classe VOISINE de leurs appelants
+  - une garde exigeait la résolution DANS la peau — donc interdisait la centralisation qui ferme la fuite
+  - une publication porte TOUTES ses scènes, et le lecteur peut les atteindre
+  - trois cliquets confondaient une règle avec sa FORME — une condition, un compte, un site
+  - trois témoins de l'éditeur d'objet — un filtre retiré, un spécimen remplacé, une fenêtre trop courte
+  - quatre gardes de mention regardaient le PROPRIÉTAIRE de la boîte, pas celui qui frappe
+  - trois témoins de géographie du rail décrivaient l'organisation d'avant deux directives
+  - une garde accusait le NOM d'une zone tactile qu'il n'a pas, une autre lisait l'ancien site de republication
+  - deux témoins affirmaient une TRADUCTION, donc testaient la locale de la machine
+  - la garde de la bande de mentions défendait une règle ABANDONNÉE
+  - la garde du slot de tête se repérait sur des icônes qui ont quitté la rangée
+  - deux gardes du meuble lisaient un `body` qui ne monte plus ce qu'elles gardent
+  - deux gardes ne trouvaient plus leur ancre — donc ne gardaient plus rien
+  - la garde des pilules tactiles comptait DEUX boutons, la barre en a trois
+  - les deux derniers témoins SDK épinglaient une visibilité et un contrat révolu
+  - citer un post ne publiait PLUS RIEN — la citation revient au chemin qui l'envoie
+  - la garde de l'hôte unique cherchait une SIGNATURE, et ne gardait plus rien
+  - la garde des injecteurs lit l'UNITÉ du meuble, pas le seul fichier qui présente
+  - deux témoins de la palette et du cycle d'effets mesuraient leur ÉPOQUE
+  - le témoin d'enregistrement se tait sous Reduce Motion, et le chevron du verrou suit le sens de LECTURE
+  - deux gardes du slot d'action épinglaient une ÉPOQUE, pas un invariant
+  - le plafond de participate suit la mesure de l'environnement qui GATE — +20 o d'écart de plateforme, zéro octet de code
+  - budgets-mesures enregistre le MAX des environnements — la CI mesurait +0,09 % sur le même commit et rougissait docker
+  - EXACT geo-discoverability réservée à un opt-in explicite et un adulte vérifié (#5565)
+  - export média watermarké côté serveur (#3600)
+  - stop growing NotificationService.ts past its frozen budget
+  - l'invitation par e-mail persiste sa relation et mène à une page qui existe (#5549)
+  - engagement counter service, BADGE_EARNED producer (#5530)
+  - un code de parrainage intrinsèque au compte (#5503)
+  - retire rotateRefreshToken mort, garde un JWT hérité de 6 mois refusé (#3621)
+  - retire trois routes mortes du pipeline de traduction par sondage (#5451)
+  - la liste de messages sert les drapeaux de protection PAR PIECE (#5125) (#5460)
+  - persist detectedLanguage on Post so on-demand translation reuses it (#5422) (#5459)
+  - community-preferences-routes.test.ts — même double partiel
+  - tests — jest.requireActual pour utils/logger, pas un double partiel
+  - logWarn() écrit réellement en prod — jumelle de #3617 pour WARN
+  - detectAnomalies compare enfin l'appareil, retire l'IP morte (#5355)
+  - analyticsConsentAt devient un consentement dédié (#4709) (#5421)
+  - route direct .log.error( calls through logError() (#3617)
+  - ajoute le 4e argument à l'assertion translatePost de posts-from-attachment-route.test.ts
+  - extraire les tests de profileCompletionRate — profile.test.ts hors budget
+  - profileCompletionRate se calcule en direct (#3688)
+  - `dev` ne compilait plus — `expired` sans sa réponse dans la garde
+  - remove IEncryptionAdapter, exercised by no implementer or caller (#5369)
+  - give a self-destructing message its own message:expired event (#5368)
+  - enforce conversation membership on voice attachmentId routes (#3624) (#5363)
+  - remapStoryEffectsMediaIds descend le canvas v3 (#5356)
+  - remove SignalProtocolAdapter, unreachable from every production path (#5357)
+  - mesurer et rallumer noUnusedParameters — deux gardes de sécurité trouvées au passage (#5347)
+  - l'aperçu d'une diffusion admin descend le Prisme, pas systemLanguage seul (#5342)
+  - stop caching translation failures as if they were valid
+  - engagement axis catalog for badges/streaks (#5530)
+  - break the api-responses/conversation/user type import cycle (#4683) (#5468)
+
 ## 1.16.1
 
 ### Patch Changes

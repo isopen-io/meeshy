@@ -489,6 +489,23 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// n'existe nulle part ailleurs à ce moment-là.
     public let mediaObjectIds: [String?]?
 
+    /// **L'autorisation d'extraction du son** (#3996), même clé top-level
+    /// `allowSoundExtraction` que le chemin direct (`CreatePostRequest`,
+    /// `PostService.create`).
+    ///
+    /// Porté ici pour la même raison que `storyEffects` et `location` : un
+    /// post du meuble n'emprunte JAMAIS `PostService.create`, il part par
+    /// cette file — en ligne comme hors ligne. Sans ce champ, le choix de
+    /// l'auteur survivait jusqu'à la composition de `PublishIntent`, et
+    /// mourait au premier passage par la file durable : déclaré, jamais
+    /// transmis.
+    ///
+    /// `nil` — le défaut — vaut « l'auteur n'a rien décidé » ; le gateway
+    /// applique alors son propre défaut (`CreatePostSchema.allowSoundExtraction`).
+    /// Optionnel aussi pour que toute ligne persistée avant ce champ continue
+    /// de décoder.
+    public let allowSoundExtraction: Bool?
+
     /// Le MIME que ce média a DÉCLARÉ, ou `nil` si la ligne n'en portait pas
     /// (écrite avant ce champ, ou site d'envoi qui n'en connaît aucun).
     ///
@@ -521,7 +538,8 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         storyEffects: StoryEffects? = nil,
         mediaCaptions: [String?]? = nil,
         mediaAlts: [String?]? = nil,
-        mediaObjectIds: [String?]? = nil
+        mediaObjectIds: [String?]? = nil,
+        allowSoundExtraction: Bool? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
@@ -544,6 +562,7 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.mediaCaptions = mediaCaptions
         self.mediaAlts = mediaAlts
         self.mediaObjectIds = mediaObjectIds
+        self.allowSoundExtraction = allowSoundExtraction
     }
 }
 

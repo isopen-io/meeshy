@@ -45,7 +45,7 @@ const zodOk = (corps: Record<string, unknown>) => AuthSchemas.register.safeParse
 const TROIS_CHAMPS = {
   displayName: 'Lena Vogel',
   email: 'lena@example.com',
-  password: 'motdepasse',
+  password: 'Xk9$mQ2vLp8#nR4wZ',
 } as const;
 
 const HERITE = {
@@ -53,7 +53,7 @@ const HERITE = {
   firstName: 'Lena',
   lastName: 'Vogel',
   email: 'lena@example.com',
-  password: 'motdepasse',
+  password: 'Xk9$mQ2vLp8#nR4wZ',
 } as const;
 
 describe('Zod accepte le formulaire à TROIS champs comme la charge héritée', () => {
@@ -67,7 +67,7 @@ describe('Zod accepte le formulaire à TROIS champs comme la charge héritée', 
 });
 
 describe('une identité est EXIGÉE — mais laquelle est au choix', () => {
-  const sansIdentite = { email: 'lena@example.com', password: 'motdepasse' };
+  const sansIdentite = { email: 'lena@example.com', password: 'Xk9$mQ2vLp8#nR4wZ' };
 
   it("Ajv n'exige que l'e-mail et le mot de passe au premier niveau", () => {
     expect([...registerRequestSchema.required]).toEqual(['email', 'password']);

@@ -8,9 +8,9 @@
    `--color-presence-*` de ce fichier — voir le doc-comment de light.css.
 
    Rien ici ne lit le schéma de couleurs de l'OS : `color-scheme` suit la CLASSE,
-   déclaré dans chacun des deux schémas, et apps/web-v3/app/theme-script.tsx ne
+   déclaré dans chacun des deux schémas, et apps/web-old-version3/app/theme-script.tsx ne
    fait que corriger la classe rendue par le serveur.
-   Gate : apps/web-v3/scripts/check-jetons.mjs. */
+   Gate : apps/web-old-version3/scripts/check-jetons.mjs. */
 @import './dark.css';
 @import './light.css';
 

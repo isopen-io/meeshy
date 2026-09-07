@@ -1,10 +1,10 @@
 # `@meeshy/design-tokens` — LA table de jetons de la v3 web
 
-Trois fichiers CSS, et **aucune valeur ailleurs**. `apps/web-v3/app/globals.css`
+Trois fichiers CSS, et **aucune valeur ailleurs**. `apps/web-old-version3/app/globals.css`
 les importe **par spécificateur de paquet** ; le harnais visuel
 (`docs/product/MeeshyWebV3Design/compare-rendu.js`) mesure le rendu qui en sort.
 Un composant de la v3 qui écrit une couleur, un rayon ou une police en dur est
-refusé par `apps/web-v3/scripts/check-jetons.mjs` (conception § 3.2,
+refusé par `apps/web-old-version3/scripts/check-jetons.mjs` (conception § 3.2,
 corollaire 2) — **les trois, pas seulement le premier** : la première écriture
 du gate ne regardait que les couleurs pendant que ce paragraphe en affirmait
 trois, et une restriction DÉCLARÉE que rien ne fait respecter est pire que son
@@ -19,10 +19,10 @@ light.css     schéma clair  — porté par .light seulement
 
 ## Pourquoi c'est un paquet, et pas juste un dossier
 
-`apps/web-v3/app/globals.css` a d'abord importé la table par chemin relatif
+`apps/web-old-version3/app/globals.css` a d'abord importé la table par chemin relatif
 (`../../../packages/design-tokens/tokens.css`). Ça marche en local, dans le
 monorepo intact — et **seulement là**. L'étage builder de
-`apps/web-v3/Dockerfile` copie `apps/web-v3/` et rien d'autre : dans l'image,
+`apps/web-old-version3/Dockerfile` copie `apps/web-v3/` et rien d'autre : dans l'image,
 `packages/` n'existe pas et `next build` rend
 `Module not found: Can't resolve '../../../packages/design-tokens/tokens.css'`.
 Le défaut restait invisible parce que la v3 n'émet encore **aucune page**, donc
@@ -42,7 +42,7 @@ paquet déclaré par la v3 reconstruit son image`).
 requête de média sur le schéma de couleurs de l'OS — le mot lui-même n'apparaît
 dans aucun des trois fichiers de jetons, pour que le témoin du critère de fin
 soit un `grep` et pas une lecture. Le seul site qui interroge l'OS est
-`apps/web-v3/app/theme-script.tsx`, qui lit `localStorage` puis, à défaut,
+`apps/web-old-version3/app/theme-script.tsx`, qui lit `localStorage` puis, à défaut,
 `matchMedia`, et **corrige** la classe rendue par le serveur avant le premier
 pixel.
 
@@ -54,7 +54,7 @@ classe**, jamais un jeton (conception § 2, issue #4413).
 
 **Et cette phrase est MESURÉE, pas seulement grepée.** Un `grep` dit qu'aucune
 requête de média n'est écrite ; il ne dit pas ce que le navigateur **sert**.
-`apps/web-v3/scripts/lib/cascade.mjs` résout la table — `@import` dans l'ordre,
+`apps/web-old-version3/scripts/lib/cascade.mjs` résout la table — `@import` dans l'ordre,
 spécificité, condition `prefers-color-scheme` — sous une classe et sous un
 schéma d'OS donnés, et le gate refuse toute propriété dont la valeur SERVIE
 change avec l'OS à classe égale (`suivisDeLOS`). Le témoin qui compte est celui
@@ -62,7 +62,7 @@ du lecteur **sans JavaScript**, donc sans classe : c'est lui, et lui seul, qu'un
 `@media` reprend — les deux classes explicites l'emportent par spécificité et ne
 verraient rien tomber.
 
-Le moteur, symétriquement, est **UN** module : `apps/web-v3/app/theme-script.tsx`.
+Le moteur, symétriquement, est **UN** module : `apps/web-old-version3/app/theme-script.tsx`.
 `moteursParalleles` refuse dans `apps/web-v3` les cinq formes par lesquelles un
 second site interroge le thème — une requête `@media` sur le schéma dans une
 feuille, sélecteur `.dark`/`.light` dans une feuille, `prefers-color-scheme` en
@@ -76,8 +76,8 @@ Vérification :
 
 ```bash
 grep -rn 'prefers-color-scheme' packages/design-tokens/*.css   # rien
-cd apps/web-v3 && node scripts/check-jetons.mjs
-cd apps/web-v3 && bunx jest --testPathPatterns='(jetons|moteur-de-theme|theme-script)'
+cd apps/web-old-version3 && node scripts/check-jetons.mjs
+cd apps/web-old-version3 && bunx jest --testPathPatterns='(jetons|moteur-de-theme|theme-script)'
 node scripts/check-v3-pipeline.mjs --self-test
 ```
 
@@ -116,7 +116,7 @@ choses manquaient, et les deux ne coûtaient rien :
    **blancs** sous une page sombre. La conception § 2 dit « `color-scheme` suit
    la classe » : il la suit en CSS.
 2. **La classe par défaut est rendue par le SERVEUR**
-   (`apps/web-v3/app/layout.tsx` → `<html className={THEME_PAR_DEFAUT}>`).
+   (`apps/web-old-version3/app/layout.tsx` → `<html className={THEME_PAR_DEFAUT}>`).
    Sans elle, `darkMode: ["class"]` laissait les utilitaires `dark:` de Tailwind
    INACTIFS chez un visiteur sans JS pendant que les jetons peignaient sombre —
    la jumelle divergente ci-dessus, recréée dans le cas no-JS. Le thème par

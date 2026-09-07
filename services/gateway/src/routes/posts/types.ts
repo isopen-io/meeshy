@@ -242,6 +242,9 @@ export const CreatePostSchema = z.object({
   // vers la bibliothèque de sons (Sound crédité à l'auteur). Ne gouverne que
   // le démuxage vidéo — les pistes audio suivent `feedsSoundLibrary`.
   allowSoundExtraction: z.boolean().optional(),
+  // Réglage AUTEUR posé à la publication (#3959) — désactive TOUT commentaire
+  // sur ce post (`POST /posts/:postId/comments`, création et réponses).
+  commentsDisabled: z.boolean().optional(),
   // Status/mood-specific
   moodEmoji: z.string().max(10).optional(),
   audioUrl: z.url().optional(),
@@ -295,6 +298,11 @@ export const CreatePostSchema = z.object({
   // est rejetée ici (400 VALIDATION_ERROR), même garde que `visibility`
   // ci-dessus — jamais un `geoPoint`/`geoPrecision` brut, à aucun niveau.
   discoverabilityPrecision: z.enum(['EXACT', 'NEIGHBORHOOD', 'CITY', 'REGION']).optional(),
+  // Opt-in EXPLICITE requis pour obtenir `EXACT` (#3637) — un geste séparé du
+  // simple choix dans l'énumération ci-dessus. Sans lui (ou pour un auteur
+  // dont la majorité n'est pas vérifiée), `EXACT` retombe sur `NEIGHBORHOOD`
+  // côté serveur (`PostService.createPost` via `resolveDiscoverabilityPrecision`).
+  discoverabilityPrecisionConfirmed: z.boolean().optional(),
 }).refine((data) => {
   if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
     return false;

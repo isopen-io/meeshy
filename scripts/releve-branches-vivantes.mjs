@@ -281,7 +281,7 @@ const MUTATIONS = [
   ['MA PROPRE branche écrit le chemin — je ne me dispute pas avec moi-même',
     (monde) => { monde.branches[0].ajoutes.push('apps/web/hooks/mien.ts'); monde.branches[0].divergents.push('apps/web/hooks/mien.ts'); }, 'ignore', 'claude/la-mienne'],
   ['un préfixe TROMPEUR : `apps/web-v3/…` ne répond pas au chemin `apps/web`',
-    ajoute('claude/faux-prefixe', 1, ['apps/web-v3/lib/z.ts']), 'ignore', 'claude/faux-prefixe'],
+    ajoute('claude/faux-prefixe', 1, ['apps/web-old-version3/lib/z.ts']), 'ignore', 'claude/faux-prefixe'],
   ['une branche déjà fusionnée n\'ajoute aucun fichier',
     ajoute('claude/fusionnee', 1, []), 'ignore', 'claude/fusionnee'],
   ['une branche SQUASHÉE — son diff trois-points l\'annonce encore, son contenu est dans la base',
