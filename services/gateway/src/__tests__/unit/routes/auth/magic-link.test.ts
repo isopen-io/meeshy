@@ -716,6 +716,29 @@ describe('POST /refresh — jeton hérité, sans `sid`', () => {
     await app.close();
   });
 
+  it('un JWT hérité vieux de six mois est refusé, même ENCORE DANS la fenêtre — critère de fin #3621', async () => {
+    // `legacyTokenRefusal` prouve déjà ce refus à son propre niveau
+    // (session-jwt.test.ts, « refuse un jeton plus vieux que l\'âge maximal »).
+    // Ce témoin le prouve à l\'étage que #3621 visait — la ROUTE — pour que le
+    // critère de fin de l\'issue (« un JWT de 6 mois est refusé (test) ») soit
+    // couvert de bout en bout, pas seulement au niveau de la fonction pure.
+    const dedans = new Date(LEGACY_SID_WINDOW_CLOSES_AT.getTime() - 24 * 3600 * 1000);
+    const sixMoisAvant = new Date(dedans.getTime() - 180 * 24 * 3600 * 1000);
+    const prisma = makePrisma();
+    const app = await buildApp({ prisma });
+    await servirJeton(jetonHerite(sixMoisAvant.getTime()));
+    figerHorloge(dedans);
+
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt-vieux-de-six-mois' } });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().data?.token).toBeUndefined();
+    // Refusé sur l'ÂGE du jeton, pas sur la fenêtre : l'horloge figée est
+    // encore dedans — ce qui distingue ce témoin de celui de la fenêtre fermée.
+    expect(prisma.userSession.count).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it('est REFUSÉ une fois la fenêtre fermée — le repli n\'est pas permanent', async () => {
     // Sans ce butoir, `{ ignoreExpiration: true }` rendait un jeton hérité
     // rafraîchissable INDÉFINIMENT : la garde du critère 2 n\'aurait jamais
