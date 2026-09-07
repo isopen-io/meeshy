@@ -2,6 +2,7 @@ import { COOKIE_DE_JETON, valeurDuCookie } from '@/lib/api/cookies';
 import { boiteDuLecteur, notificationServie, toutMarquerLu } from '@/lib/api/notifications';
 import { NOTIFS } from '@/lib/contenu/notifs';
 
+import { signaleArme } from './arme';
 import { observeCycleDeVie, unSeulMontageParEcran, type TransitionDeCycle } from './lifecycle';
 import * as N from './notifs-etat';
 import { etatDuDocument, peins, peintre, type PeintreDesNotifs } from './notifs-peinture';
@@ -134,6 +135,11 @@ const branche = (ctx: Contexte, socket: Socket): void => {
     const rattraper = doitRattraper({ deconnecteDepuis: ctx.deconnecteDepuis, maintenant: Date.now() });
     ctx.deconnecteDepuis = null;
     if (rattraper) void rattrape(ctx);
+    // ARMÉ ICI (#5139), jamais avant : avant `authenticated`, le socket n'a pas
+    // encore rejoint sa room personnelle — un `notification:new` poussé plus
+    // tôt n'atteindrait personne. Voir `point()` de `participate.ts`, qui pose
+    // son marqueur `.etat` au même instant, pour la même raison.
+    signaleArme(ctx.main);
   });
 
   socket.on('notification:new', (charge: unknown) => {
@@ -172,7 +178,14 @@ const connecte = async (ctx: Contexte): Promise<void> => {
   });
   ctx.socket = socket;
   branche(ctx, socket);
-  if (!ctx.cache && ctx.enLigne) socket.connect();
+  if (ctx.cache || !ctx.enLigne) {
+    // HORS LIGNE AU MONTAGE : aucune connexion ne s'ouvre, donc `authenticated`
+    // ne viendra jamais — le module est déjà interactif (« Tout lire »,
+    // gestes), et l'armer ici évite d'attendre un réseau qui n'arrivera pas.
+    signaleArme(ctx.main);
+    return;
+  }
+  socket.connect();
 };
 
 /** Voir `participate.ts` : `connect()` seul ne fait rien tant qu'une reconnexion est armée. */

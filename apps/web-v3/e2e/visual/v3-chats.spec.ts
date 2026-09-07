@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 
 import { SEUIL_DE_RATTRAPAGE_MS } from '../../lib/realtime/reconnect-policy';
+import { attendsLeModuleArme } from './lib/attente-de-module';
 import { avance, figeLHorloge, installeLHorloge } from './lib/navigateur-cycle';
 import {
   AUTRE_CONVERSATION,
@@ -89,10 +90,7 @@ const ouvre = async (browser: Browser, largeur = 390): Promise<Page> =>
   ouvreLaListe(await contexteDuLecteur(browser, { largeur }));
 
 /** Le module arrive APRÈS le premier pixel : on l'attend par son EFFET, jamais par une minuterie. */
-const attendsLeModule = async (page: Page): Promise<void> => {
-  await page.waitForFunction(() => document.querySelector('main[data-participation="liste"]') !== null);
-  await page.waitForTimeout(1_200);
-};
+const attendsLeModule = (page: Page): Promise<void> => attendsLeModuleArme(page, 'liste');
 
 const ordre = (page: Page): Promise<readonly string[]> =>
   page.$$eval('.liste ul > li', (lignes) => lignes.map((li) => (li as HTMLElement).dataset.conversation ?? ''));

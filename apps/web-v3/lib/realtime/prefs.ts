@@ -2,6 +2,7 @@ import { basculeUnePreference } from '@/lib/api/preferences';
 import { COOKIE_DE_JETON, valeurDuCookie } from '@/lib/api/cookies';
 import { estUneCleDePrefs, PREFS, type CleDePreference } from '@/lib/contenu/prefs-de-notif';
 
+import { signaleArme } from './arme';
 import { montreLeBandeau } from './bandeau';
 import { annule, bascule, reconcilie, type EtatDePrefs } from './prefs-etat';
 import { armeLAbonnementPush, memoriseLeContextePush, rejoueSiRotation } from './push-abonnement';
@@ -216,6 +217,7 @@ const demarre = (): void => {
   // l'abonnement sans geste du lecteur — voir le doc-comment de
   // `rejoueSiRotation`.
   void rejoueSiRotation(main);
+  signaleArme(main);
 };
 
 demarre();

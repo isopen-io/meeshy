@@ -24,7 +24,7 @@ import {
   rejoueSiRotationEnArrierePlan,
   urlBase64VersOctets,
 } from '@/lib/realtime/push-abonnement';
-import { CLE_DE_CONTEXTE_PUSH, CLE_DE_ROTATION_PUSH } from '@/lib/sw/signal';
+import { CACHE_DE_ROTATION_PUSH, CLE_DE_CONTEXTE_PUSH, CLE_DE_ROTATION_PUSH } from '@/lib/sw/signal';
 
 const CONFIG_ATTRS = {
   'data-firebase-api-key': 'AIza-test',
@@ -352,14 +352,22 @@ describe('rejoueSiRotation', () => {
   const submitEspionDeLaRotation = HTMLFormElement.prototype.submit;
   type FauxCache = { match: (cle: string) => Promise<unknown>; delete: (cle: string) => Promise<boolean> };
 
-  const monteLesCaches = (drapeauPose: boolean): { readonly open: jest.Mock<Promise<FauxCache>, [string]>; readonly entrees: Map<string, unknown> } => {
+  const monteLesCaches = (
+    drapeauPose: boolean,
+  ): { readonly open: jest.Mock<Promise<FauxCache>, [string]>; readonly keys: jest.Mock<Promise<string[]>, []>; readonly entrees: Map<string, unknown> } => {
     const entrees = new Map<string, unknown>();
     if (drapeauPose) entrees.set(CLE_DE_ROTATION_PUSH, { corps: '1' });
     const cache: FauxCache = {
       match: (cle) => Promise.resolve(entrees.get(cle)),
       delete: (cle) => Promise.resolve(entrees.delete(cle)),
     };
-    return { open: jest.fn((_nom: string) => Promise.resolve(cache)), entrees };
+    // Ce mock représente une cache DÉJÀ EXISTANTE (ouverte par un passage
+    // antérieur — abonnement, rotation) : `.keys()` la déclare présente,
+    // exactement comme un vrai `CacheStorage` la déclarerait après un
+    // premier `.open()`. Le témoin qui distingue « jamais créée » vit à
+    // part (`caches.open n'est jamais appelé quand la cache n'existe pas
+    // encore`) : il monte SON PROPRE mock avec `.keys()` vide.
+    return { open: jest.fn((_nom: string) => Promise.resolve(cache)), keys: jest.fn(() => Promise.resolve([CACHE_DE_ROTATION_PUSH])), entrees };
   };
 
   const rangeeAbonnee = (): { main: HTMLElement; formulaire: HTMLFormElement } => {
@@ -452,6 +460,30 @@ describe('rejoueSiRotation', () => {
     await rejoueSiRotation(main);
 
     expect(caches.open).not.toHaveBeenCalled();
+  });
+
+  /**
+   * LA CACHE DE ROTATION N'A JAMAIS ÉTÉ CRÉÉE — le cas nominal sur un
+   * appareil qui n'a jamais reçu de `pushsubscriptionchange` ni de sortie de
+   * session. `caches.open()` CRÉE le nom qu'on lui passe, MÊME SANS aucun
+   * `.put()` derrière (spec Cache Storage, § doc-comment de
+   * `lib/sw/travailleur.js`) : l'appeler pour un simple test d'existence
+   * ressuscite un cache que la déconnexion vient de purger, si l'ouverture
+   * arrive APRÈS la purge — la course mesurée par
+   * `e2e/visual/v3-deconnexion.spec.ts` (« plus AUCUN cache… »). La lecture
+   * du drapeau doit donc passer par `caches.keys()` D'ABORD, jamais par
+   * `caches.open()` en aveugle.
+   */
+  it('la cache de rotation n’existe pas encore : ne l’ouvre pas, ne rejoue rien', async () => {
+    const { main } = rangeeAbonnee();
+    const caches = { open: jest.fn(), keys: jest.fn(() => Promise.resolve([])) };
+    (globalThis as { caches?: unknown }).caches = caches;
+
+    await rejoueSiRotation(main);
+
+    expect(caches.keys).toHaveBeenCalled();
+    expect(caches.open).not.toHaveBeenCalled();
+    expect(HTMLFormElement.prototype.submit).not.toHaveBeenCalled();
   });
 });
 
@@ -557,7 +589,7 @@ describe('rejoueSiRotationEnArrierePlan', () => {
   const monteLesCaches = (options: {
     readonly drapeauPose: boolean;
     readonly contexte?: unknown;
-  }): { readonly open: jest.Mock<Promise<FauxCache>, [string]>; readonly entrees: Map<string, Response> } => {
+  }): { readonly open: jest.Mock<Promise<FauxCache>, [string]>; readonly keys: jest.Mock<Promise<string[]>, []>; readonly entrees: Map<string, Response> } => {
     const entrees = new Map<string, Response>();
     if (options.drapeauPose) entrees.set(CLE_DE_ROTATION_PUSH, new Response('1'));
     if (options.contexte !== undefined) entrees.set(CLE_DE_CONTEXTE_PUSH, new Response(JSON.stringify(options.contexte)));
@@ -565,7 +597,9 @@ describe('rejoueSiRotationEnArrierePlan', () => {
       match: (cle) => Promise.resolve(entrees.get(cle)),
       delete: (cle) => Promise.resolve(entrees.delete(cle)),
     };
-    return { open: jest.fn((_nom: string) => Promise.resolve(cache)), entrees };
+    // Comme pour `rejoueSiRotation` ci-dessus : ce mock représente une cache
+    // DÉJÀ EXISTANTE. Le témoin « jamais créée » monte son propre mock.
+    return { open: jest.fn((_nom: string) => Promise.resolve(cache)), keys: jest.fn(() => Promise.resolve([CACHE_DE_ROTATION_PUSH])), entrees };
   };
 
   const CONTEXTE_ABONNE = {
@@ -687,5 +721,27 @@ describe('rejoueSiRotationEnArrierePlan', () => {
     for (let i = 0; i < 6; i += 1) await attendUneMicrotache();
 
     expect(caches.entrees.has(CLE_DE_ROTATION_PUSH)).toBe(true);
+  });
+
+  /**
+   * LA CACHE DE ROTATION N'A JAMAIS ÉTÉ CRÉÉE (#5095, revue) — le cas
+   * nominal de CHAQUE chargement de `/chats`, sur un appareil qui n'a jamais
+   * eu de rotation. Appelée `void`, EN ARRIÈRE-PLAN, à charge de page
+   * (`lib/realtime/liste.ts:565`) : la fenêtre de course la plus large avec
+   * une déconnexion qui suit de près (`caches.open()` recrée le nom du
+   * cache MÊME SANS `.put()`, ressuscitant ce qu'une purge concurrente vient
+   * de vider — § doc-comment `lib/sw/travailleur.js`). `caches.keys()`
+   * D'ABORD ferme cette course à la source : rien à ouvrir tant que rien
+   * n'a jamais existé.
+   */
+  it('la cache de rotation n’existe pas encore : ne l’ouvre pas, ne fait rien', async () => {
+    const caches = { open: jest.fn(), keys: jest.fn(() => Promise.resolve([])) };
+    (globalThis as { caches?: unknown }).caches = caches;
+
+    await rejoueSiRotationEnArrierePlan();
+
+    expect(caches.keys).toHaveBeenCalled();
+    expect(caches.open).not.toHaveBeenCalled();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });
