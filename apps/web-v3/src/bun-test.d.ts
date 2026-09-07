@@ -18,8 +18,10 @@ declare module 'bun:test' {
     toBe(expected: unknown): void;
     toEqual(expected: unknown): void;
     toBeNull(): void;
+    toBeUndefined(): void;
     toBeCloseTo(expected: number, decimals?: number): void;
     toHaveLength(expected: number): void;
+    toContain(expected: unknown): void;
     toBeTruthy(): void;
     toThrow(): void;
   };

@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useState } from 'react';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 import { Glyph } from './glyph';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
 import { placePopover } from '@/lib/view/popover';
+import { findFocusableIndex, useRovingMenu } from '@/lib/view/roving-menu';
 
 /**
  * LE CHIP DE MODE — capsule teintée à l'accent, miroir de `ReadingModeChip`
@@ -17,6 +17,16 @@ import { placePopover } from '@/lib/view/popover';
  * Le préfixe « AUTO » marque une décision venue de l'orchestrateur
  * (`reason !== 'sticky'`) — encoche distincte d'un choix manuel figé, même
  * règle que `ReadingModeChipModel.isAuto` côté iOS.
+ *
+ * LA MÉCANIQUE CLAVIER/FOCUS/FERMETURE (roving tabindex, Échap, clic
+ * hors-menu) vient de `useRovingMenu` (`lib/view/roving-menu.ts`), PARTAGÉE
+ * avec `RowActions` depuis #5559 défaut 4 : les deux seuls menus du dépôt
+ * écrivaient la même mécanique deux fois, un motif qui se serait copié à
+ * chacun des trente écrans restants. ICI seuls survivent : le rendu propre
+ * à ce menu (icône+titre+sous-titre+coche, lignes désactivées MOTIVÉES,
+ * D-8), et le placement — ce chip n'est pas porté (`position: absolute`,
+ * ancré à son propre conteneur), donc il REMESURE au redimensionnement
+ * plutôt que de fermer comme le fait `RowActions` (porté, `position: fixed`).
  */
 /** Largeur SOUHAITÉE du menu ; `placePopover` le rétrécit sur un écran plus étroit. */
 const MENU_WIDTH = 256;
@@ -37,21 +47,7 @@ export function ReadingModeChip({
   onSelect: (mode: ConversationReadingMode) => void;
   onAuto: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [box, setBox] = useState<{ right: number; width: number }>({ right: 0, width: MENU_WIDTH });
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  /**
-   * ROVING TABINDEX (patron ARIA « menu ») — `itemRefs[rows.length]` est le
-   * bouton « Automatique », qui participe au même parcours au clavier que les
-   * cinq lignes. `activeIndex` porte l'item qui recevrait le focus au
-   * clavier ; UN SEUL item du groupe a `tabIndex=0` à la fois, les autres
-   * `-1` — c'est ce qui laisse `Tab` QUITTER le menu au premier coup plutôt
-   * que de le traverser ligne par ligne (`Tab` change de WIDGET, les flèches
-   * naviguent DANS le widget — distinction du patron APG).
-   */
-  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const [activeIndex, setActiveIndex] = useState(0);
 
   /**
    * Mesuré AVANT le premier rendu du menu : il ne se replace pas sous l'œil.
@@ -72,104 +68,44 @@ export function ReadingModeChip({
     }
   };
 
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false);
-        buttonRef.current?.focus();
-      }
-    };
-    const onPointerDown = (event: PointerEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) return;
-      if (buttonRef.current?.contains(event.target as Node)) return;
-      setOpen(false);
-    };
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('resize', measure);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('resize', measure);
-    };
-  }, [open]);
-
   /**
-   * Un bouton `disabled` (Résumé, Rivière — D-8) est HORS du parcours
-   * clavier par construction : le navigateur ne peut PAS lui donner le
-   * focus, quel que soit son `tabIndex`. `findFocusable` avance dans la
-   * DIRECTION donnée jusqu'à la prochaine ligne ATTEIGNABLE, plutôt que de
-   * s'arrêter sur une ligne que `.focus()` ignorerait silencieusement —
-   * sans quoi `activeIndex` (état React) et le focus DOM RÉEL divergeraient
-   * dès la première ligne grisée traversée.
+   * `itemRefs[rows.length]` est le bouton « Automatique », qui participe au
+   * même parcours au clavier que les cinq lignes (`total`, ci-dessous). Un
+   * bouton `disabled` (Résumé, Rivière — D-8) est HORS du parcours clavier
+   * par construction : le navigateur ne peut PAS lui donner le focus, quel
+   * que soit son `tabIndex` — `findFocusableIndex` (partagé,
+   * `roving-menu.ts`) avance dans la DIRECTION donnée jusqu'à la prochaine
+   * ligne ATTEIGNABLE plutôt que de s'arrêter dessus.
    */
   const total = rows.length + 1;
   const isDisabledAt = (index: number): boolean => (index < rows.length ? !rows[index]!.isAvailable : false);
-  const findFocusable = (start: number, direction: 1 | -1): number => {
-    let index = start;
-    for (let i = 0; i < total; i++) {
-      index = ((index + direction) % total + total) % total;
-      if (!isDisabledAt(index)) return index;
-    }
-    return start;
-  };
-  const moveFocusTo = (index: number) => {
-    setActiveIndex(index);
-    itemRefs.current[index]?.focus();
-  };
 
-  /**
-   * LE FOCUS ENTRE DANS LE MENU À L'OUVERTURE (défaut #5566 §9 : il restait
-   * sur le chip, et les flèches ne pouvaient donc rien déplacer). Il se pose
-   * sur la ligne COURANTE quand elle existe — c'est celle que l'utilisateur
-   * cherche en premier (même arbitrage que le commentaire de `disabled`
-   * ci-dessous) — sinon sur la première ligne ATTEIGNABLE.
-   */
-  useEffect(() => {
-    if (!open) return;
-    const current = rows.findIndex((row) => row.isCurrent && row.isAvailable);
-    const start = current === -1 ? findFocusable(-1, 1) : current;
-    setActiveIndex(start);
-    // Le focus DOM suit à l'image suivante, une fois le menu monté.
-    const raf = requestAnimationFrame(() => itemRefs.current[start]?.focus());
-    return () => cancelAnimationFrame(raf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  const onMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    switch (event.key) {
-      case 'ArrowDown':
-        event.preventDefault();
-        moveFocusTo(findFocusable(activeIndex, 1));
-        return;
-      case 'ArrowUp':
-        event.preventDefault();
-        moveFocusTo(findFocusable(activeIndex, -1));
-        return;
-      case 'Home':
-        event.preventDefault();
-        moveFocusTo(findFocusable(-1, 1));
-        return;
-      case 'End':
-        event.preventDefault();
-        moveFocusTo(findFocusable(total, -1));
-        return;
-      default:
-        return;
-    }
-  };
+  const { open, setOpen, closeAndFocusButton, activeIndex, setActiveIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown } =
+    useRovingMenu({
+      itemCount: total,
+      isDisabledAt,
+      /**
+       * LE FOCUS ENTRE DANS LE MENU À L'OUVERTURE (défaut #5566 §9 : il
+       * restait sur le chip, et les flèches ne pouvaient donc rien
+       * déplacer). Il se pose sur la ligne COURANTE quand elle existe —
+       * c'est celle que l'utilisateur cherche en premier — sinon sur la
+       * première ligne ATTEIGNABLE.
+       */
+      computeInitialIndex: () => {
+        const current = rows.findIndex((row) => row.isCurrent && row.isAvailable);
+        return current === -1 ? findFocusableIndex(total, -1, 1, isDisabledAt) : current;
+      },
+      onResize: measure,
+    });
 
   const choose = (mode: ConversationReadingMode) => {
     onSelect(mode);
-    setOpen(false);
-    buttonRef.current?.focus();
+    closeAndFocusButton();
   };
 
   const chooseAuto = () => {
     onAuto();
-    setOpen(false);
-    buttonRef.current?.focus();
+    closeAndFocusButton();
   };
 
   return (

@@ -94,6 +94,13 @@ const SWIFT_MAPPINGS = [
   ['marginVertical', 'BREATHING', 'amplitude de la respiration (breathing = Row.marginVertical)'],
   ['breathingRampStart', 'RAMP_START', 'début de la rampe de respiration'],
   ['breathingRampLength', 'RAMP_LENGTH', 'longueur de la rampe de respiration'],
+  /**
+   * `opacity` est UNIQUE dans `LentilleMetrics.swift` (vérifié avant
+   * d'ajouter cette entrée) : le seul autre risque de collision serait un
+   * second champ nommé `opacity` ailleurs dans le fichier — `swiftNumber`
+   * lirait alors le premier trouvé, pas nécessairement celui de `Muted`.
+   */
+  ['opacity', 'MUTED_OPACITY', 'opacité d’une rangée en sourdine (Muted.opacity, #5559)'],
 ];
 
 /**

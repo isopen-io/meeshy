@@ -33,16 +33,15 @@
  *    la première est la vraie : la peau est choisie par la SURFACE, jamais par
  *    l'expéditeur — le texte d'une citation de rangée plate n'est jamais
  *    blanc. La seconde MESURE le contraste dans les deux schémas et le tient
- *    au-dessus du plancher d'INVISIBILITÉ.
+ *    au-dessus de la barre AA (4,5:1).
  *
- *    Ce plancher n'est PAS la barre AA (4,5:1), et le dire est le sujet : le
- *    texte secondaire du schéma clair plafonne à ~3,0:1 dans TOUTE
- *    l'application (`--color-ios-ink-2` = `MeeshyColors.textSecondary`, mesuré
- *    3,04–3,12 sur la liste des conversations, qui est antérieure à ce lot).
- *    Monter cette assertion à 4,5 rendrait ce gate rouge pour une dette de
- *    PALETTE que D-4 interdit de corriger ici (aucune couleur écrite à la
- *    main : elle se corrige dans `MeeshyColors.swift` puis se régénère). La
- *    dette est reportée à part ; ce gate garde ce dont ce lot répond.
+ *    Cette barre était tenue à un plancher d'INVISIBILITÉ (2,5) le temps que
+ *    `--color-ios-ink-2` (`MeeshyColors.textSecondary`) reste sous AA en
+ *    schéma clair (~3,0:1 dans toute l'application, D-4 interdisant de
+ *    corriger la couleur ici — elle se corrige dans `MeeshyColors.swift` puis
+ *    se régénère). #5625 a relevé `textSecondary(isDark: false)` au cran
+ *    minimal qui passe (`indigo700.opacity(0.8)`, méthode D-18) : la citation
+ *    tient désormais 4,62:1 en clair — la barre AA remplace le plancher.
  * 9. Une RÉACTION reste visible dans le mode par DÉFAUT (elle ne l'était que
  *    dans le mode « Bulles »), et la pastille du Prisme a un EFFET.
  * 10. « Focal » et « Script » rendaient des PNG STRICTEMENT identiques
@@ -71,6 +70,7 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
+import { contrastOf } from './lib/contrast.mjs';
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
 const DIST = join(APP, 'dist');
@@ -133,13 +133,14 @@ const setScheme = (context, scheme) =>
 const QUOTE_TEXT = 'main li [data-reading-mode] button[aria-label^="Aller au message"] .line-clamp-2';
 
 /**
- * Le PLANCHER D'INVISIBILITÉ — pas la barre AA. Le défaut mesuré valait
- * 1,0:1 (blanc sur blanc) ; la peau neutre vaut 2,98:1 en clair et 8,47:1 en
- * sombre, plafonnées par `--color-ios-ink-2` (dette de palette, voir l'en-tête
- * de ce fichier). Ce seuil sépare « peint dans la mauvaise peau » de « peint
- * dans la bonne » — il ne certifie AUCUNE conformité d'accessibilité.
+ * LA BARRE AA (#5625, remplace l'ancien plancher d'invisibilité à 2,5). Le
+ * défaut mesuré valait 1,0:1 (blanc sur blanc) ; la peau neutre vaut
+ * désormais 4,62:1 en clair et 8,47:1 en sombre — `--color-ios-ink-2` a été
+ * relevée au cran minimal qui passe (D-18/#5625), donc ce seuil certifie
+ * réellement la conformité, plutôt que de séparer « peint dans la mauvaise
+ * peau » de « peint dans la bonne ».
  */
-const INVISIBILITY_FLOOR = 2.5;
+const AA_THRESHOLD = 4.5;
 
 const QUOTE_SKIN_LABEL =
   'la citation d’une rangée plate est peinte dans la peau NEUTRE, jamais dans celle de la bulle indigo';
@@ -158,52 +159,8 @@ const quoteSkinIsNeutral = (page) =>
     return !(r > 240 && g > 240 && b > 240);
   }, QUOTE_TEXT);
 
-/**
- * Le CONTRASTE d'un texte sur ce qui est RÉELLEMENT peint derrière lui : les
- * fonds des surfaces sont semi-transparents (`rgba(255,255,255,0.15)`), donc
- * lire `background-color` seul ne dit rien. On compose les fonds des ancêtres
- * jusqu'au premier opaque, puis on compose la couleur du texte par-dessus.
- * Sans cette composition, du blanc à 100 % sur du blanc à 15 % sur du blanc
- * passe pour un contraste de 21:1.
- */
-const contrastOf = (page, selector) =>
-  page.evaluate((sel) => {
-    const parse = (value) => {
-      const n = (value.match(/[\d.]+/g) ?? []).map(Number);
-      return n.length >= 3 ? { r: n[0], g: n[1], b: n[2], a: n.length > 3 ? n[3] : 1 } : null;
-    };
-    const over = (top, bottom) => ({
-      r: top.r * top.a + bottom.r * (1 - top.a),
-      g: top.g * top.a + bottom.g * (1 - top.a),
-      b: top.b * top.a + bottom.b * (1 - top.a),
-      a: 1,
-    });
-    const luminance = (c) => {
-      const f = (v) => {
-        const s = v / 255;
-        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-      };
-      return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
-    };
-    const backdropOf = (el) => {
-      const layers = [];
-      for (let node = el; node; node = node.parentElement) {
-        const bg = parse(getComputedStyle(node).backgroundColor);
-        if (bg && bg.a > 0) layers.push(bg);
-        if (bg && bg.a === 1) break;
-      }
-      return layers.reduceRight((under, layer) => over(layer, under), { r: 255, g: 255, b: 255, a: 1 });
-    };
-    const el = document.querySelector(sel);
-    if (!el) return null;
-    const backdrop = backdropOf(el);
-    const raw = parse(getComputedStyle(el).color);
-    if (!raw) return null;
-    const opacity = Number(getComputedStyle(el).opacity);
-    const text = over({ ...raw, a: raw.a * (Number.isNaN(opacity) ? 1 : opacity) }, backdrop);
-    const [a, b] = [luminance(text), luminance(backdrop)].sort((x, y) => y - x);
-    return Math.round(((a + 0.05) / (b + 0.05)) * 100) / 100;
-  }, selector);
+/** `contrastOf` vit désormais dans `./lib/contrast.mjs` (source unique,
+ *  #5559 revue-correction — voir son en-tête pour la méthode). */
 
 // --- 1 : le défaut est FOCAL, mesuré au DOM.
 {
@@ -256,8 +213,8 @@ const contrastOf = (page, selector) =>
   expect(await quoteSkinIsNeutral(page), QUOTE_SKIN_LABEL);
   const quoteDark = await contrastOf(page, QUOTE_TEXT);
   expect(
-    quoteDark !== null && quoteDark >= INVISIBILITY_FLOOR,
-    `schéma sombre : la citation d'une rangée plate n'est pas invisible (contraste ${quoteDark})`,
+    quoteDark !== null && quoteDark >= AA_THRESHOLD,
+    `schéma sombre : la citation d'une rangée plate tient AA (contraste ${quoteDark})`,
   );
 
   // --- 9 : la réaction survit au mode par DÉFAUT.
@@ -541,8 +498,8 @@ const contrastOf = (page, selector) =>
   expect(await quoteSkinIsNeutral(page), `${QUOTE_SKIN_LABEL} — schéma clair`);
   const quoteLight = await contrastOf(page, QUOTE_TEXT);
   expect(
-    quoteLight !== null && quoteLight >= INVISIBILITY_FLOOR,
-    `schéma clair : la citation d'une rangée plate n'est pas invisible (contraste ${quoteLight})`,
+    quoteLight !== null && quoteLight >= AA_THRESHOLD,
+    `schéma clair : la citation d'une rangée plate tient AA (contraste ${quoteLight})`,
   );
   await page.screenshot({ path: join(CAPTURES, 'thread-focal-light.png') });
   await context.close();

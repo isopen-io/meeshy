@@ -291,3 +291,31 @@
     inset: -5px;
   }
 }
+
+/**
+ * SUR UN APPAREIL SANS SURVOL, LE BOUTON D'ACTIONS DE RANGÉE RESTE VISIBLE
+ * ET ATTEIGNABLE EN PERMANENCE — #5559 revue-correction, défaut 6
+ * (bloquant).
+ *
+ * `group-hover:opacity-100` (`row-actions.tsx`) ne donne JAMAIS raison à un
+ * doigt : `any-hover: none` couvre tout appareil SANS AUCUN pointeur à
+ * survol, primaire ou secondaire (souris ET stylet compris) — Android réel
+ * et Chromium mobile mesurés `{anyHover:false}`. Le bouton restait donc
+ * `opacity-0 pointer-events-none` en PERMANENCE sur toute rangée non
+ * magnifiée : les actions de rangée n'existaient tout simplement pas au
+ * doigt, alors que leur place est déjà réservée en permanence (`pr-12`
+ * constant, `lens-row.tsx`) — les rendre visibles ne déplace rien.
+ *
+ * Cette règle vit HORS de tout `@layer` — à la différence des `@utility`
+ * voisins, qui rejoignent le calque `utilities` de Tailwind. Un style NON
+ * calqué l'emporte TOUJOURS sur un style calqué, quels que soient l'ordre
+ * du fichier et la spécificité (CSS Cascade Layers) : elle n'a donc pas à
+ * lutter avec `opacity-0`/`pointer-events-none` ni avec un futur utilitaire
+ * plus spécifique.
+ */
+@media (any-hover: none) {
+  .row-action-button {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}

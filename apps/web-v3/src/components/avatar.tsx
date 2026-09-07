@@ -29,6 +29,7 @@ export function Avatar({
   size,
   presence,
   name,
+  opacity,
 }: {
   initials: string;
   /** L'accent de la conversation — jamais une couleur codée en dur ici. */
@@ -36,6 +37,14 @@ export function Avatar({
   size: number;
   presence?: UserPresenceStatus;
   name?: string;
+  /**
+   * Le fondu de SOURDINE, appliqué ICI plutôt qu'en enveloppant l'avatar
+   * d'un `<span>` de plus (#5559 défauts 1/8) : c'est le CHROME de la rangée
+   * qui se fond — jamais le titre ni l'aperçu, dont l'opacité composée avec
+   * `MUTED_OPACITY` (0.55) faisait tomber le contraste sous le plancher AA
+   * dans les deux schémas (mesuré 3,74:1 / 2,80:1). Défaut `1`.
+   */
+  opacity?: number;
 }) {
   const dot = size * 0.26;
   // 0.8536 = (1 + cos(pi/4)) / 2 — le point a 45 deg sur le cercle, en fraction
@@ -52,7 +61,7 @@ export function Avatar({
        44, sous le plancher tactile. `block` est sans effet partout ailleurs
        (un élément de flex est déjà blockifié), et rend la géométrie DÉRIVÉE
        vraie dans tous les contextes. */
-    <span className="relative block shrink-0" style={{ width: size, height: size }}>
+    <span className="avatar-root relative block shrink-0" style={{ width: size, height: size, opacity: opacity ?? 1 }}>
       <span
         className="grid size-full place-items-center rounded-chip font-semibold text-ios-surface"
         style={{

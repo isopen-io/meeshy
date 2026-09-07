@@ -146,6 +146,15 @@ export const RAMP_START = 36;
 export const RAMP_LENGTH = 40;
 
 /**
+ * L'OPACITÉ D'UNE RANGÉE EN SOURDINE — `LentilleMetrics.Muted.opacity`
+ * (`apps/ios/.../Lentille/Core/LentilleMetrics.swift:303`), le SEUL rendu de
+ * la sourdine sur la peau Lentille (contrat §4.3, cité par
+ * `LentilleConversationRow.rowOpacity`) : pas de glyphe cloche sur le rang
+ * plat, juste ce fondu. `scripts/check-curve.mjs` la compare à sa source.
+ */
+export const MUTED_OPACITY = 0.55;
+
+/**
  * `distance` est ici `centre de bande − milieu du rang` : POSITIVE au-dessus de
  * la ligne, donc poussée vers le HAUT (valeur négative) ; négative en dessous,
  * poussée vers le bas.

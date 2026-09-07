@@ -109,7 +109,7 @@
   --ios-surface: #ffffff;
   --ios-surface-card: #f8f7ff;
   --ios-ink: #1e1b4b;
-  --ios-ink-2: color-mix(in srgb, #4338ca 60%, transparent);
+  --ios-ink-2: color-mix(in srgb, #4338ca 80%, transparent);
   --ios-ink-3: color-mix(in srgb, #4338ca 80%, transparent);
 
   --ios-bubble-other-opacity: 16%;
