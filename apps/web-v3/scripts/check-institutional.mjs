@@ -32,11 +32,10 @@
  * changent que très rarement ». Le 1 est celui qui manquait.
  */
 import { createServer } from 'node:http';
-import { existsSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 
-import { chromium } from '@playwright/test';
+import { launchChromium } from './lib/browser.mjs';
 
 import {
   INSTITUTIONAL_PATHS,
@@ -86,18 +85,7 @@ const server = createServer(async (req, res) => {
 await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 const BASE = `http://127.0.0.1:${server.address().port}`;
 
-/**
- * LE BINAIRE N'EST PAS AU MÊME ENDROIT PARTOUT, et un chemin en dur rendrait ce
- * témoin ininstallable ailleurs que sur la machine qui l'a écrit. Trois sources,
- * dans cet ordre : la variable d'environnement (qui tranche), le conteneur de
- * développement s'il porte le binaire, puis la résolution de Playwright
- * lui-même — celle qui vaut en intégration continue, après
- * `playwright install chromium`.
- */
-const binaire = process.env.CHROMIUM ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
-const browser = await chromium.launch(
-  existsSync(binaire) ? { executablePath: binaire } : {},
-);
+const browser = await launchChromium();
 const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
 
 /**

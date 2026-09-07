@@ -42,7 +42,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { chromium } from '@playwright/test';
+import { launchChromium } from './lib/browser.mjs';
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
 const BENCH = 500;
@@ -83,9 +83,7 @@ const server = createServer(async (req, res) => {
 await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 const BASE = `http://127.0.0.1:${server.address().port}`;
 
-const browser = await chromium.launch({
-  executablePath: process.env.CHROMIUM ?? '/opt/pw-browsers/chromium',
-});
+const browser = await launchChromium();
 const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const page = await context.newPage();
 
