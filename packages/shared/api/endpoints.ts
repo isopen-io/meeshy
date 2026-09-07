@@ -243,9 +243,6 @@ export const API_ENDPOINTS = {
     root: '/api/v1/communities',
     search: '/api/v1/communities/search',
   },
-  conversation: {
-    byIdentifier: (identifier: string) => `/api/v1/conversation/${identifier}`,
-  },
   conversations: {
     byConversationIdActiveCall: (conversationId: string) => `/api/v1/conversations/${conversationId}/active-call`,
     byConversationIdAttachments: (conversationId: string) => `/api/v1/conversations/${conversationId}/attachments`,
@@ -287,9 +284,6 @@ export const API_ENDPOINTS = {
     joinByLinkId: (linkId: string) => `/api/v1/conversations/join/${linkId}`,
     root: '/api/v1/conversations',
     search: '/api/v1/conversations/search',
-  },
-  detectLanguage: {
-    root: '/api/v1/detect-language',
   },
   directory: {
     availability: '/api/v1/directory/availability',
@@ -472,9 +466,6 @@ export const API_ENDPOINTS = {
   },
   stats: {
     root: '/api/v1/stats',
-  },
-  status: {
-    byMessageIdByLanguage: (messageId: string, language: string) => `/api/v1/status/${messageId}/${language}`,
   },
   statusMetrics: {
     reset: '/api/v1/status-metrics/reset',
@@ -775,7 +766,6 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/communities/check-identifier/:identifier',
   '/api/v1/communities/mine',
   '/api/v1/communities/search',
-  '/api/v1/conversation/:identifier',
   '/api/v1/conversations',
   '/api/v1/conversations/:conversationId/active-call',
   '/api/v1/conversations/:conversationId/attachments',
@@ -816,7 +806,6 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/conversations/check-identifier/:identifier',
   '/api/v1/conversations/join/:linkId',
   '/api/v1/conversations/search',
-  '/api/v1/detect-language',
   '/api/v1/directory/availability',
   '/api/v1/directory/blocks',
   '/api/v1/directory/blocks/:userId',
@@ -946,7 +935,6 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/stats',
   '/api/v1/status-metrics',
   '/api/v1/status-metrics/reset',
-  '/api/v1/status/:messageId/:language',
   '/api/v1/stories/audio',
   '/api/v1/sync',
   '/api/v1/test',
@@ -1226,7 +1214,6 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/communities/check-identifier/:identifier': ['GET'],
   '/api/v1/communities/mine': ['GET'],
   '/api/v1/communities/search': ['GET'],
-  '/api/v1/conversation/:identifier': ['GET'],
   '/api/v1/conversations': ['GET', 'POST'],
   '/api/v1/conversations/:conversationId/active-call': ['GET'],
   '/api/v1/conversations/:conversationId/attachments': ['GET'],
@@ -1267,7 +1254,6 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/conversations/check-identifier/:identifier': ['GET'],
   '/api/v1/conversations/join/:linkId': ['POST'],
   '/api/v1/conversations/search': ['GET'],
-  '/api/v1/detect-language': ['POST'],
   '/api/v1/directory/availability': ['GET'],
   '/api/v1/directory/blocks': ['GET'],
   '/api/v1/directory/blocks/:userId': ['PUT', 'DELETE'],
@@ -1397,7 +1383,6 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/stats': ['GET'],
   '/api/v1/status-metrics': ['GET'],
   '/api/v1/status-metrics/reset': ['POST'],
-  '/api/v1/status/:messageId/:language': ['GET'],
   '/api/v1/stories/audio': ['GET'],
   '/api/v1/sync': ['GET'],
   '/api/v1/test': ['GET'],

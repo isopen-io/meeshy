@@ -130,7 +130,11 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 //
 // 253 → 252 (#5427) : `StaticEndpoint.byFilename` retirée du compte de dette —
 // faux mort, voir `KNOWN_LIVE_VIA_OPAQUE_SERVER_URL` ci-dessus.
-const BASELINE_DEAD_ENTRIES = 252;
+//
+// 252 → 249 (#5423) : `ConversationEndpoint`, `DetectLanguageEndpoint` et
+// `StatusEndpoint` retirés du catalogue avec leurs trois routes de sondage
+// mortes — les trois entrées disparaissent, elles ne se comptent plus.
+const BASELINE_DEAD_ENTRIES = 249;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

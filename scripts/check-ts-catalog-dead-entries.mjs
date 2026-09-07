@@ -184,7 +184,10 @@ export const parseCatalogBlock = (blockLines) => {
 // 276 → 272 (#5427) : `l.byToken`, `static.byFilename`, `u.byUsername`,
 // `guestSessions.me` retirées du compte de dette — quatre faux morts, voir
 // `KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE` ci-dessus.
-const BASELINE_DEAD_ENTRIES = 272;
+//
+// 272 → 269 (#5423) : les trois routes de sondage mortes (`conversation`,
+// `detectLanguage`, `status`) sont retirées du catalogue avec leurs routes.
+const BASELINE_DEAD_ENTRIES = 269;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

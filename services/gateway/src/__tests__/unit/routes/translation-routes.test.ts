@@ -1,6 +1,6 @@
 /**
  * Unit tests for translation routes (translation.ts)
- * Tests GET /languages, POST /detect-language, POST /translate-blocking.
+ * Tests GET /languages, POST /translate-blocking.
  *
  * @jest-environment node
  */
@@ -91,45 +91,6 @@ describe('GET /languages', () => {
     expect(Array.isArray(body.data.languages)).toBe(true);
     expect(body.data.languages.length).toBeGreaterThan(0);
     expect(res.headers['cache-control']).toContain('public');
-  });
-});
-
-// ─── POST /detect-language ────────────────────────────────────────────────────
-
-describe('POST /detect-language', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with detected French language', async () => {
-    const res = await app.inject({
-      method: 'POST', url: '/detect-language',
-      payload: { text: 'Où est la clé ?' },
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    expect(body.data.language).toBe('fr');
-  });
-
-  it('returns 200 with detected English (no special chars)', async () => {
-    const res = await app.inject({
-      method: 'POST', url: '/detect-language',
-      payload: { text: 'Hello, how are you today?' },
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.data.language).toBe('en');
-  });
-
-  it('returns 200 detecting German text', async () => {
-    const res = await app.inject({
-      method: 'POST', url: '/detect-language',
-      payload: { text: 'Die Straße ist sehr groß.' },
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.data.language).toBe('de');
   });
 });
 
