@@ -39,8 +39,19 @@ import { SIGNAL_DE_DECONNEXION } from '@/lib/sw/signal';
 /** L'adresse de la sortie, telle que `formulaireDeSortie()` l'écrit. */
 const ACTION_DE_SORTIE = '/deconnexion';
 
-/** Le marqueur d'idempotence — porté par le DOCUMENT, seul terrain que deux modules ES partagent. */
-const MARQUEUR = 'meeshyDeconnexionArmee';
+/**
+ * Le marqueur d'idempotence — porté par le DOCUMENT, seul terrain que deux
+ * modules ES partagent. EXPORTÉ : c'est aussi le seul signal, côté
+ * navigateur, qu'un test peut attendre pour savoir que le clic sur
+ * « Déconnecter » traversera l'amélioration progressive (purge du travailleur
+ * de zone, session legacy, places invitées) plutôt que le seul POST natif —
+ * `document.documentElement.dataset[MARQUEUR_DECONNEXION_ARMEE] === '1'`.
+ * Sans l'attendre, un clic assez précoce (avant que ce module ait fini de se
+ * charger) soumet le formulaire nu : le serveur retire bien les cookies,
+ * mais aucun signal n'atteint le travailleur de zone.
+ */
+export const MARQUEUR_DECONNEXION_ARMEE = 'meeshyDeconnexionArmee';
+const MARQUEUR = MARQUEUR_DECONNEXION_ARMEE;
 
 const essaie = (etape: () => void): void => {
   try {
