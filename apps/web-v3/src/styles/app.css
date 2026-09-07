@@ -236,3 +236,58 @@
   white-space: nowrap;
   border: 0;
 }
+
+/*
+ * LA ZONE TACTILE, SANS GRANDIR LE DESSIN (#5566, revue, defaut 11 — puis
+ * defaut 1 de la revue-correction : le debord SYMETRIQUE -11px volait le
+ * clic du VOISIN plutot que de servir seulement le sien).
+ *
+ * La pastille du Prisme, chaque drapeau du pied et le bouton de lecture d'un
+ * vocal dessinent a 22 ou 34 px — grandir le DESSIN a 44 px grandirait
+ * CHAQUE bulle traduite, ce que la charte iOS n'a jamais fait. Le plancher
+ * tactile de 44 px reste du, lui, sans exception ni compensation absente
+ * (mesure : aucun second geste a taille pleine n'existe dans ce depot).
+ *
+ * Le `::after` en DEBORD (`inset` negatif) etend la zone CLIQUABLE au-dela
+ * de la boite visuelle sans reserver le moindre pixel de mise en page : un
+ * pseudo-element absolument positionne ne participe pas au flux, et un clic
+ * dans son emprise se resout sur l'element PARENT (aucun noeud DOM separe).
+ * Meme technique que les cibles surdimensionnees des interfaces natives.
+ *
+ * MAIS un debord symetrique sur les DEUX axes suppose un espace libre d'au
+ * moins 2x le debord de chaque cote — vrai VERTICALEMENT (rien d'autre ne
+ * vit a 11px au-dessus/en dessous de la ligne basse, mesure par
+ * `check-reading-mode.mjs`), FAUX HORIZONTALEMENT : la pastille et chaque
+ * drapeau sont des freres directs espaces d'un `gap-1` (4px, `bubble.tsx`,
+ * `focal-row.tsx`, `Flags` dans `message-blocks.tsx`). Sans les DEUX freres
+ * etant `position:relative` sans `z-index`, le debord du bouton SUIVANT en
+ * ordre DOM peint PAR-DESSUS le bouton PRECEDENT et lui vole jusqu'a 7 de ses
+ * 22px (~32% de sa surface) : cliquer la partie droite de la pastille du
+ * Prisme activait le drapeau voisin, cliquer la partie droite d'un drapeau
+ * activait le suivant — un controle qui declenche l'effet d'un AUTRE.
+ *
+ * Le debord horizontal est donc BORNE a la moitie du gap reel (4px / 2 = 2px)
+ * : les deux debords voisins se REJOIGNENT exactement au milieu du gap sans
+ * jamais franchir la boite visuelle de l'autre, quel que soit l'ordre de
+ * peinture. Le debord vertical, lui, reste plein (-11px) — rien ne le
+ * dispute. `inset-block`/`inset-inline` remplacent le raccourci `inset`
+ * pour porter deux valeurs distinctes par axe.
+ */
+@utility tap-target-22 {
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    inset-block: -11px;
+    inset-inline: -2px;
+  }
+}
+
+@utility tap-target-34 {
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    inset: -5px;
+  }
+}

@@ -19,6 +19,9 @@ declare module 'bun:test' {
     toEqual(expected: unknown): void;
     toBeNull(): void;
     toBeCloseTo(expected: number, decimals?: number): void;
+    toHaveLength(expected: number): void;
+    toBeTruthy(): void;
+    toThrow(): void;
   };
 
   export function expect(value: unknown): Expectations & { readonly not: Expectations };

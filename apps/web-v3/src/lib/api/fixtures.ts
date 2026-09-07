@@ -1,3 +1,5 @@
+import type { ReadingModePreference } from '@meeshy/shared/types/reading-modes';
+
 import type { Conversation, Message, MessageTranslation, Participant } from './types';
 
 /**
@@ -392,6 +394,29 @@ export const CONVERSATIONS: readonly Conversation[] = [
   },
 ];
 
+
+/**
+ * LA PRÉFÉRENCE DE MODE DE LECTURE PAR CONVERSATION (#5566, §3.4) — à la
+ * forme EXACTE de `GET /api/v1/user-preferences/conversations/:id`
+ * (`services/gateway/src/routes/conversation-preferences.ts:191`) : ligne
+ * absente ⇒ défauts (`readingMode: 'auto'`, `version: 0`, `isDefault: true`).
+ * `c-amina` porte un choix COLLANT (`script`, `version` > 0) pour que le
+ * comportement « collant serveur » soit observable dans ce POC de fixtures.
+ *
+ * La v3.1 n'a AUCUNE couche réseau aujourd'hui (`src/lib/reading-mode/sync.ts`
+ * ne fait que définir le PORT) : cette carte n'est consommée par rien encore
+ * — elle prépare le lot `staging`, sans lui faire réinventer la forme.
+ */
+export type ConversationReadingModePreference = {
+  readonly readingMode: ReadingModePreference;
+  readonly version: number;
+  readonly isDefault: boolean;
+};
+
+export const CONVERSATION_READING_MODE_PREFERENCES: Readonly<Record<string, ConversationReadingModePreference>> = {
+  [CONVERSATION_ID]: { readingMode: 'auto', version: 0, isDefault: true },
+  'c-amina': { readingMode: 'script', version: 3, isDefault: false },
+};
 
 /**
  * L'HISTORIQUE D'UNE CONVERSATION — vide par défaut, et c'est le point.

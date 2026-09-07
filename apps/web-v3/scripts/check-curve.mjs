@@ -37,9 +37,29 @@ const UPSTREAM = `${ROOT}packages/shared/utils/focus-curve.ts`;
 const UPSTREAM_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift`;
 const DOWNSTREAM = `${ROOT}apps/web-v3/src/lib/lens/law.ts`;
 
+/**
+ * PARTIE 2 — la rangée plate du FIL (#5566). Même dispositif, autre écran :
+ * `FocalMetrics.swift` (iOS, `Focal/Core/`) est la source des cotes de
+ * `src/lib/reading-mode/metrics.ts`, comme `LentilleMetrics.swift` l'est pour
+ * `lens/law.ts` ci-dessus. Deux peaux, un seul gate de dérivation.
+ */
+const UPSTREAM_FOCAL_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Main/Focal/Core/FocalMetrics.swift`;
+const DOWNSTREAM_FOCAL = `${ROOT}apps/web-v3/src/lib/reading-mode/metrics.ts`;
+
+/**
+ * PARTIE 3 — la PERSPECTIVE du Fil (#5566, correction de revue : « Focal » et
+ * « Script » rendaient des pixels identiques). `src/lib/reading-mode/perspective.ts`
+ * dérive le variant `thread` de `focus-curve.ts`, exactement comme `lens/law.ts`
+ * dérive le variant `list` ci-dessus.
+ */
+const DOWNSTREAM_THREAD = `${ROOT}apps/web-v3/src/lib/reading-mode/perspective.ts`;
+
 const source = readFileSync(UPSTREAM, 'utf8');
 const derived = readFileSync(DOWNSTREAM, 'utf8');
 const swift = readFileSync(UPSTREAM_SWIFT, 'utf8');
+const focalSwift = readFileSync(UPSTREAM_FOCAL_SWIFT, 'utf8');
+const focalDerived = readFileSync(DOWNSTREAM_FOCAL, 'utf8');
+const threadDerived = readFileSync(DOWNSTREAM_THREAD, 'utf8');
 
 /** Lit `nom: 520` ou `nom = 520` — la source les écrit des deux façons. */
 const count = (text, name) => {
@@ -133,6 +153,53 @@ for (const [swiftName, downstreamName, what] of SWIFT_MAPPINGS) {
 }
 
 /**
+ * PARTIE 2 — `FocalMetrics.swift` → `reading-mode/metrics.ts`. Les cotes sont
+ * lues dans les `enum` nichés (`Row`, `Avatar`, `Focus`, `Quote`, `MetaText`)
+ * de la même façon : `nom: Type = valeur`.
+ */
+const focalNumber = (name) => {
+  const m = new RegExp(`\\b${name}\\s*(?::\\s*\\w+\\s*)?=\\s*(-?[0-9.]+)`).exec(focalSwift);
+  return m === null ? null : Number(m[1]);
+};
+
+const FOCAL_MAPPINGS = [
+  ['paddingVertical', 'ROW_PADDING_VERTICAL', 'padding vertical de rangée (Row.paddingVertical)'],
+  ['paddingHorizontal', 'ROW_PADDING_HORIZONTAL', 'padding horizontal de rangée (Row.paddingHorizontal)'],
+  ['groupTopPadding', 'GROUP_TOP_PADDING', 'respiration entre deux groupes (Row.groupTopPadding)'],
+  ['size', 'AVATAR_SIZE', 'taille de la pastille (Avatar.size)'],
+  ['avatarSize', 'AVATAR_FRAME', 'cadre de pastille réservé (Focus.avatarSize)'],
+  ['railWidth', 'QUOTE_RAIL_WIDTH', 'filet de citation (Quote.railWidth)'],
+  ['lightOpacity', 'META_TEXT_OPACITY', 'opacité de la méta discrète (MetaText.lightOpacity)'],
+];
+
+for (const [swiftName, downstreamName, what] of FOCAL_MAPPINGS) {
+  const expectedFocal = focalNumber(swiftName);
+  const actualFocal = count(focalDerived, downstreamName);
+  if (expectedFocal === null) failures.push(`${what} : « ${swiftName} » est introuvable dans FocalMetrics.swift`);
+  else if (actualFocal === null) failures.push(`${what} : « ${downstreamName} » est introuvable dans reading-mode/metrics.ts`);
+  else if (expectedFocal !== actualFocal) failures.push(`${what} : Swift ${expectedFocal}, dérivée ${actualFocal}`);
+}
+
+/**
+ * `TEXT_INDENT` n'est PAS un littéral côté Swift (`avatarSize + 7`, une
+ * FORMULE) : on la revérifie explicitement plutôt que de laisser le régex
+ * générique manquer silencieusement le `+`.
+ */
+{
+  const avatarFrame = focalNumber('avatarSize');
+  const textIndent = count(focalDerived, 'TEXT_INDENT');
+  if (avatarFrame === null) {
+    failures.push('retrait de texte constant (Focus.textIndent) : « avatarSize » introuvable dans FocalMetrics.swift');
+  } else if (textIndent === null) {
+    failures.push('retrait de texte constant (Focus.textIndent) : « TEXT_INDENT » introuvable dans reading-mode/metrics.ts');
+  } else if (textIndent !== avatarFrame + 7) {
+    failures.push(
+      `retrait de texte constant (Focus.textIndent = avatarSize + 7) : Swift ${avatarFrame + 7}, dérivée ${textIndent}`,
+    );
+  }
+}
+
+/**
  * LES VALEURS sont vérifiées par `src/lib/lens/law.test.ts`, qui IMPORTE la
  * loi et compare sa sortie à une table — bun lit le TypeScript nativement, donc
  * aucune chirurgie de texte n'est nécessaire.
@@ -145,6 +212,45 @@ for (const [swiftName, downstreamName, what] of SWIFT_MAPPINGS) {
  *
  * Ce script garde donc ce qu'il sait faire SIMPLEMENT : comparer les
  * CONSTANTES des deux fichiers, texte contre texte.
+ */
+
+/**
+ * PARTIE 3 — les constantes du variant `thread` vivent dans un objet
+ * littéral distinct de `list` : on isole d'abord sa portion de texte, sans
+ * quoi `maxDistance` attraperait celle du variant `list`, déclarée juste
+ * après dans la source amont.
+ */
+const threadPortion = /thread:\s*\{[^}]*\}/.exec(source)?.[0] ?? '';
+const upstreamThreadValue = (name) => count(threadPortion, name);
+
+const THREAD_MAPPINGS = [
+  ['maxDistance', 'THREAD_MAX_DISTANCE', 'distance de saturation du fil'],
+  ['scaleDecay', 'THREAD_SCALE_DECAY', "amplitude de l'échelle du fil"],
+  ['alphaDecay', 'THREAD_ALPHA_DECAY', 'amplitude du fondu du fil'],
+];
+
+for (const [upstreamName, downstreamName, what] of THREAD_MAPPINGS) {
+  const expectedThread = upstreamThreadValue(upstreamName);
+  const actualThread = count(threadDerived, downstreamName);
+  if (expectedThread === null) failures.push(`${what} : « ${upstreamName} » introuvable dans le variant thread de focus-curve.ts`);
+  else if (actualThread === null) failures.push(`${what} : « ${downstreamName} » introuvable dans reading-mode/perspective.ts`);
+  else if (expectedThread !== actualThread) failures.push(`${what} : amont ${expectedThread}, dérivée ${actualThread}`);
+}
+
+/** La bande de focus du fil vit HORS du bloc `thread` (export top-level). */
+{
+  const expectedOffset = count(source, 'THREAD_FOCUS_BAND_OFFSET');
+  const actualOffset = count(threadDerived, 'THREAD_FOCUS_BAND_OFFSET');
+  if (expectedOffset === null) failures.push('bande de focus du fil : « THREAD_FOCUS_BAND_OFFSET » introuvable dans focus-curve.ts');
+  else if (actualOffset === null) failures.push('bande de focus du fil : « THREAD_FOCUS_BAND_OFFSET » introuvable dans reading-mode/perspective.ts');
+  else if (expectedOffset !== actualOffset) failures.push(`bande de focus du fil : amont ${expectedOffset}, dérivée ${actualOffset}`);
+}
+
+/**
+ * LES VALEURS du variant `thread` sont vérifiées par
+ * `src/lib/reading-mode/perspective.test.ts` — même partition des
+ * responsabilités que la PARTIE 1 : ce script compare des CONSTANTES, le test
+ * bun compare des SORTIES.
  */
 
 if (failures.length > 0) {
@@ -160,5 +266,9 @@ if (failures.length > 0) {
 console.log(
   `  La loi de la Lentille est conforme à focus-curve.ts` +
     ` (${MAPPINGS.length} constantes partagées, ${SWIFT_MAPPINGS.length} cotes iOS ;` +
-    ' les valeurs sont gardées par law.test.ts).',
+    ' les valeurs sont gardées par law.test.ts).' +
+    `\n  La rangée plate du Fil est conforme à FocalMetrics.swift` +
+    ` (${FOCAL_MAPPINGS.length + 1} cotes).` +
+    `\n  La perspective du Fil est conforme au variant thread de focus-curve.ts` +
+    ` (${THREAD_MAPPINGS.length + 1} constantes ; les valeurs sont gardées par perspective.test.ts).`,
 );

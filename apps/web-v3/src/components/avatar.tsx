@@ -44,7 +44,15 @@ export function Avatar({
   const showsDot = presence !== undefined && presence !== 'offline';
 
   return (
-    <span className="relative shrink-0" style={{ width: size, height: size }}>
+    /* `block` — et ce n'est pas décoratif : un `<span>` reste INLINE, et un
+       élément inline non remplacé IGNORE `width`/`height`. Dans un parent
+       flex l'avatar était blockifié par le flex lui-même, donc juste ; dans
+       un parent qui ne l'est pas (le bouton d'en-tête du Fil), il retombait
+       sur la taille de son TEXTE — 22×25 px mesurés pour une cible demandée à
+       44, sous le plancher tactile. `block` est sans effet partout ailleurs
+       (un élément de flex est déjà blockifié), et rend la géométrie DÉRIVÉE
+       vraie dans tous les contextes. */
+    <span className="relative block shrink-0" style={{ width: size, height: size }}>
       <span
         className="grid size-full place-items-center rounded-chip font-semibold text-ios-surface"
         style={{

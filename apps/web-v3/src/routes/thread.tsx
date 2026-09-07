@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+
+import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
 import { Avatar } from '@/components/avatar';
 import { Bubble } from '@/components/bubble';
 import { Composer } from '@/components/composer';
+import { FocalRow } from '@/components/focal-row';
 import { Glyph } from '@/components/glyph';
+import { ReadingModeChip } from '@/components/reading-mode-chip';
 import { CONVERSATIONS, PARTICIPANTS, VIEWER_ID, messagesOf } from '@/lib/api/fixtures';
 import type { Message } from '@/lib/api/types';
 import { accentOf, withAccent } from '@/lib/accent';
@@ -15,6 +19,24 @@ import { Link } from '@/routes/route-table';
 import { READER_LANGUAGES } from '@/lib/reader';
 import { useOnline } from '@/lib/net/online';
 import type { LocalDelivery } from '@/lib/view/message';
+import { menuRows } from '@/lib/reading-mode/catalog';
+import {
+  resolveThreadMode,
+  threadCapabilities,
+  toStickyPreference,
+  usesFlatRow,
+} from '@/lib/reading-mode/decision';
+import { readingModeStore } from '@/lib/reading-mode/store';
+import { useThreadPerspective } from '@/lib/reading-mode/scene';
+
+/**
+ * LE SCOPE DU MAGASIN DE MODE DE LECTURE — `'local'` tant qu'aucune session
+ * n'existe (#5555, D-13 : le scope prend un `userId` sans que ce fichier ni
+ * `store.ts` ne bougent). C'est la même clé pour tout visiteur de CETTE
+ * WebView tant que la session n'est pas branchée — acceptable ici (POC de
+ * fixtures), à corriger par le lot `staging`.
+ */
+const READING_MODE_SCOPE = 'local';
 
 /**
  * LE FIL.
@@ -56,6 +78,86 @@ export default function ThreadScreen() {
   const group = isGroup(conversation);
 
   /**
+   * LE MODE DE LECTURE (#5566) — la LOI vit dans `@meeshy/shared`
+   * (`decision.ts` ne fait que la consommer avec le catalogue de cet écran,
+   * D-14) ; le CHOIX COLLANT vit dans `readingModeStore`, scopé
+   * `(lecteur, conversation)`.
+   *
+   * `stickyMode` est un ÉTAT REACT qui MIROITE le magasin (comme
+   * `@Published mode` du contrôleur iOS) : le magasin est la source de
+   * vérité PERSISTANTE, l'état ne sert qu'à faire re-rendre l'écran quand la
+   * sélection change.
+   */
+  const [stickyMode, setStickyMode] = useState<ConversationReadingMode | null>(() =>
+    readingModeStore.getPreference(READING_MODE_SCOPE, conversation.id),
+  );
+  /**
+   * Figés à l'OUVERTURE (comme l'`init` du contrôleur iOS) : la branche
+   * d'absence de la loi lit l'INSTANT de l'ouverture, pas un instant qui
+   * recule à chaque rendu tant que l'écran reste monté.
+   *
+   * INITIALISEURS PARESSEUX, et ce n'est pas un détail de style : le
+   * virtualiseur re-rend CET écran à chaque image de défilement. Écrits
+   * `useRef(new Date())` / `useRef(store.lastOpenedAt(…))`, l'argument est
+   * évalué à CHAQUE rendu — une `Date` allouée et une lecture de magasin par
+   * image, pour une valeur que `useRef` jette aussitôt.
+   */
+  const [openedAt] = useState(() => new Date());
+  const [lastOpenedAt] = useState(() => readingModeStore.lastOpenedAt(READING_MODE_SCOPE, conversation.id));
+  useEffect(() => {
+    readingModeStore.noteOpened(READING_MODE_SCOPE, conversation.id, openedAt);
+    // Volontairement sur la seule CONVERSATION : ouvrir une fois par visite
+    // de cet écran, jamais à chaque rendu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversation.id]);
+
+  /**
+   * MÉMORISÉS, parce que le virtualiseur re-rend cet écran à chaque image de
+   * défilement : sans `useMemo`, la loi, les capacités et les CINQ lignes du
+   * menu (objets neufs, libellés interpolés) étaient reconstruites soixante
+   * fois par seconde pour un menu fermé. C'est aussi le motif que copieront
+   * les surfaces à venir — il doit être juste maintenant.
+   */
+  const readingDecision = useMemo(
+    () =>
+      resolveThreadMode({
+        unreadCount: unreadOf(conversation),
+        lastOpenedAt,
+        now: openedAt,
+        sticky: toStickyPreference(stickyMode),
+        // La v3.1 n'a pas encore de session (#5555) : tout lecteur est traité
+        // en INSCRIT. Sans effet observable ici — `summary`, le seul mode que
+        // la loi retire à un invité, est déjà hors du catalogue de rendu du
+        // web — mais c'est ce paramètre que le lot `staging` devra brancher.
+        isAnonymous: false,
+        conversationType: conversation.type,
+      }),
+    [conversation, lastOpenedAt, openedAt, stickyMode],
+  );
+  const readingCapabilities = useMemo(
+    () => threadCapabilities({ isAnonymous: false, conversationType: conversation.type }),
+    [conversation.type],
+  );
+  const readingMenuRows = useMemo(
+    () =>
+      menuRows({
+        availableModes: readingCapabilities.availableModes,
+        riverEligibilityReason: readingCapabilities.riverEligibilityReason,
+        currentMode: readingDecision.mode,
+      }),
+    [readingCapabilities, readingDecision.mode],
+  );
+  const currentRow = readingMenuRows.find((row) => row.mode === readingDecision.mode);
+  const selectReadingMode = (mode: ConversationReadingMode) => {
+    readingModeStore.setPreference(READING_MODE_SCOPE, conversation.id, mode);
+    setStickyMode(mode);
+  };
+  const resetReadingModeToAuto = () => {
+    readingModeStore.setPreference(READING_MODE_SCOPE, conversation.id, null);
+    setStickyMode(null);
+  };
+
+  /**
    * LA VIRTUALISATION DU FIL — la seule chose qui tienne un fil de cinq cents
    * messages sur une WebView Android d'entrée de gamme (#5446).
    *
@@ -82,6 +184,35 @@ export default function ThreadScreen() {
     overscan: 6,
     getItemKey: (index) => placed[index]?.message.id ?? index,
   });
+
+  /**
+   * LA PERSPECTIVE DU MODE FOCAL (#5566, correction de revue, défauts 1/5) —
+   * réservée au mode `focal` (jamais `script`, « densité uniforme, zéro
+   * perspective » côté iOS) : une passe d'AFFICHAGE hors React
+   * (`reading-mode/scene.ts`), sur les rangées `[data-row]` actuellement
+   * montées par le virtualiseur.
+   */
+  useThreadPerspective(scroller, readingDecision.mode === 'focal');
+
+  /**
+   * LE SAUT DE CITATION (#5566, défaut 10) — le bouton de citation promettait
+   * une navigation par son nom accessible et ne faisait rien. `scrollToIndex`
+   * amène le message cité dans la fenêtre virtualisée ; la mise en évidence
+   * s'efface d'elle-même, jamais un état qui s'accumule sans fin.
+   */
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jumpToMessage = (messageId: string) => {
+    const index = placed.findIndex((p) => p.message.id === messageId);
+    if (index === -1) return;
+    virtualizer.scrollToIndex(index, { align: 'center' });
+    setHighlightedId(messageId);
+    if (highlightTimer.current !== null) clearTimeout(highlightTimer.current);
+    highlightTimer.current = setTimeout(() => setHighlightedId(null), 1600);
+  };
+  useEffect(() => () => {
+    if (highlightTimer.current !== null) clearTimeout(highlightTimer.current);
+  }, []);
 
   /**
    * UN FIL S'OUVRE EN BAS. Sur le dernier message, pas sur le premier — et
@@ -233,9 +364,21 @@ export default function ThreadScreen() {
           ) : (
             <>
               <span className="flex-1" />
+              {/* LE CHIP DE MODE — clic ouvre le menu (§1.7 : écart assumé vs
+                  iOS, voir `reading-mode-chip.tsx`). Dans la grappe d'action,
+                  comme prescrit par la spécification #5566. */}
+              <ReadingModeChip
+                label={currentRow?.title ?? ''}
+                isAuto={readingDecision.reason !== 'sticky'}
+                rows={readingMenuRows}
+                onSelect={selectReadingMode}
+                onAuto={resetReadingModeToAuto}
+              />
               <button
                 type="button"
-                className="grid size-11 place-items-center"
+                /* `shrink-0` : ces deux cibles ne cèdent JAMAIS. Sur un écran
+                   étroit, c'est le chip qui tronque (voir `reading-mode-chip`). */
+                className="grid size-11 shrink-0 place-items-center"
                 style={{ color: 'var(--accent)' }}
                 aria-label="Appeler"
               >
@@ -248,7 +391,9 @@ export default function ThreadScreen() {
               </button>
               <button
                 type="button"
-                className="grid size-11 place-items-center"
+                /* `shrink-0` : ces deux cibles ne cèdent JAMAIS. Sur un écran
+                   étroit, c'est le chip qui tronque (voir `reading-mode-chip`). */
+                className="grid size-11 shrink-0 place-items-center"
                 style={{ color: 'var(--accent)' }}
                 aria-label="Rechercher dans la conversation"
               >
@@ -383,18 +528,44 @@ export default function ThreadScreen() {
                   </span>
                 </div>
               ) : null}
-              <Bubble
-                place={p}
-                languages={READER_LANGUAGES}
-                isGrouped={group}
-                viewerId={VIEWER_ID}
-                {...(localDelivery.has(p.message.id)
-                  ? {
-                      localDelivery: localDelivery.get(p.message.id) as LocalDelivery,
-                      onRetry: () => retry(p.message.id),
-                    }
-                  : {})}
-              />
+              {/* LE MODE DE LECTURE (#5566) : `focal`/`script` rendent la
+                  rangée plate, `bubbles` reste la bulle historique — D-7,
+                  D-8. `data-row` est la cible de `useThreadPerspective` —
+                  posé sur CHAQUE rangée, il est inerte hors du mode focal
+                  (l'effet n'est jamais activé). */}
+              <div data-row={p.message.id}>
+                {usesFlatRow(readingDecision.mode) ? (
+                  <FocalRow
+                    mode={readingDecision.mode}
+                    place={p}
+                    languages={READER_LANGUAGES}
+                    viewerId={VIEWER_ID}
+                    onJumpToMessage={jumpToMessage}
+                    highlighted={highlightedId === p.message.id}
+                    {...(localDelivery.has(p.message.id)
+                      ? {
+                          localDelivery: localDelivery.get(p.message.id) as LocalDelivery,
+                          onRetry: () => retry(p.message.id),
+                        }
+                      : {})}
+                  />
+                ) : (
+                  <Bubble
+                    place={p}
+                    languages={READER_LANGUAGES}
+                    isGrouped={group}
+                    viewerId={VIEWER_ID}
+                    onJumpToMessage={jumpToMessage}
+                    highlighted={highlightedId === p.message.id}
+                    {...(localDelivery.has(p.message.id)
+                      ? {
+                          localDelivery: localDelivery.get(p.message.id) as LocalDelivery,
+                          onRetry: () => retry(p.message.id),
+                        }
+                      : {})}
+                  />
+                )}
+              </div>
             </li>
             );
           })}

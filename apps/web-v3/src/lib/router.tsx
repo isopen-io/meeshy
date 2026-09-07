@@ -103,6 +103,28 @@ export function compile(pattern: string): CompiledPattern {
 }
 
 /**
+ * LA CLÉ DE REMONTAGE D'UN ÉCRAN (#5566, correction de revue, défaut 8) — un
+ * écran à PARAMÈTRES (`/c/$conversation`) ne doit PAS survivre à un
+ * changement de ces paramètres. Sans elle, `<Screen />` gardait la MÊME
+ * identité React d'une navigation fil → fil : chaque `useState(initialiseur)`
+ * de l'écran (mode de lecture collant, horloge d'ouverture, messages)
+ * n'était évalué qu'au premier montage et restait figé sur la conversation
+ * PRÉCÉDENTE, pendant que tout ce qui vient du contexte de route (en-tête,
+ * accent) suivait, lui, la nouvelle — un écran mi-vrai.
+ *
+ * `React.key` force un DÉMONTAGE, jamais un rendu différent : c'est la seule
+ * garantie que CHAQUE `useState` reparte de son initialiseur pour la
+ * nouvelle identité de route. Fonction PURE et exportée : c'est le même
+ * dispositif que `match` juste au-dessus — la seule logique de ce fichier où
+ * une erreur se voit tard et mal mérite un test qui ne passe pas par un DOM.
+ */
+export function routeKey(context: { readonly key: string; readonly params: Record<string, string> }): string {
+  const names = Object.keys(context.params).sort();
+  if (names.length === 0) return context.key;
+  return `${context.key}:${names.map((name) => `${name}=${context.params[name]}`).join('&')}`;
+}
+
+/**
  * Apparie un chemin a un motif COMPILE et rend ses parametres, ou `null`.
  *
  * Fonction PURE et exportee pour qu'elle soit testable seule : l'appariement
@@ -240,7 +262,7 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
       <Context.Provider value={context}>
         {wrap(
           <Suspense fallback={skeleton}>
-            <Screen />
+            <Screen key={routeKey(context)} />
           </Suspense>,
         )}
       </Context.Provider>
