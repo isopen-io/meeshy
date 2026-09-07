@@ -199,11 +199,38 @@ public extension CanvasV3 {
         var objects: [ObjectV3] = []
         var slot = 0
 
-        if let background = nonEmpty(effects.background) {
+        // **Le porteur du FOND existe dès que le fond a quelque chose à dire**
+        // (#5406). Son existence était conditionnée à la seule COULEUR, et
+        // `backgroundTransform` — qui ne voyage QUE dans sa charge — partait
+        // avec lui ou pas du tout.
+        //
+        // Or le champ le plus utile de ce transform, `videoFitMode` (le cadrage
+        // que le double-tap fond choisit : centré-letterbox ou plein cadre), ne
+        // vaut que sur un fond MÉDIA, c'est-à-dire précisément là où une couleur
+        // n'a aucune raison d'exister. La condition de perte et la condition
+        // d'utilité du geste étaient la même : sur la surface document
+        // (composer v3), `effects.background` reste nil — le `didSet` de
+        // `backgroundColor` ne tire pas à l'initialisation et la chaîne de sync
+        // de l'atelier n'y tourne pas —, donc le cadrage choisi n'atteignait
+        // JAMAIS le fil. Le lecteur retombait sur l'auto, qui est `aspectFill` :
+        // « l'image remplit toujours le canvas quoi qu'il arrive ».
+        //
+        // > **Un porteur dont l'existence dépend d'un seul de ses champs perd
+        // > tous les autres en silence.** Rien ne rougit : l'objet n'est pas
+        // > amputé, il n'est pas là.
+        //
+        // La clé `background` devient donc conditionnelle — un fond média sans
+        // couleur émet un porteur qui ne porte QUE son cadrage, et la relecture
+        // (`background = payload.string("background")`) rend `nil`, ce qu'elle
+        // rendait déjà en l'absence de porteur.
+        let backgroundHex = nonEmpty(effects.background)
+        let backgroundTransform = effects.backgroundTransform.flatMap { $0.isIdentity ? nil : $0 }
+        if backgroundHex != nil || backgroundTransform != nil {
             let fallback = slot
             slot += 1
-            var payload: [String: CanvasJSONValue] = ["background": .string(background)]
-            payload["transform"] = effects.backgroundTransform
+            var payload: [String: CanvasJSONValue] = [:]
+            if let backgroundHex { payload["background"] = .string(backgroundHex) }
+            payload["transform"] = backgroundTransform
                 .flatMap(wireObject)
                 .map(CanvasJSONValue.object) ?? .null
             objects.append(ObjectV3(id: "bg", kind: .media,

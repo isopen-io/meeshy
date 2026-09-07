@@ -87,6 +87,34 @@ export const afficheLeRefus = (ctx: Contexte, message: string): void => {
   noeud.hidden = false;
 };
 
+/**
+ * L'ANNONCE D'UN GESTE AU LECTEUR D'ÉCRAN (#5387) — écrite dans
+ * `#annonces-du-fil`, la région SERVIE VIDE (`fil-vue.ts`). Même tolérance
+ * que `afficheLeRefus` : une région absente ne fait pas planter le geste.
+ *
+ * VIDÉE MAINTENANT, RÉÉCRITE À LA TÂCHE SUIVANTE — et la tâche qui les sépare
+ * est tout le mécanisme. Un lecteur d'écran ne voit pas les écritures : il
+ * COMPARE le contenu de la région à la fin de la tâche, une fois les étapes
+ * de rendu passées. Vider puis réécrire dans la MÊME tâche ne lui présente
+ * donc qu'UN seul état — MESURÉ : deux `textContent` successifs ne livrent
+ * qu'un lot de mutations, portant le texte final —, si bien qu'un second
+ * retrait au MÊME libellé que le premier ne changeait rien et passait
+ * inaperçu. Le vide observable entre les deux tâches est ce qui rend chaque
+ * geste audible.
+ *
+ * Aucune minuterie n'est retenue : deux annonces rapprochées écrivent dans
+ * l'ordre où elles ont été demandées (même délai ⇒ FIFO), et la dernière est
+ * celle que le lecteur d'écran entend — ce qui est l'état vrai du fil.
+ */
+export const annonceLeGeste = (ctx: Contexte, texte: string): void => {
+  const noeud = ctx.main.querySelector<HTMLElement>('#annonces-du-fil');
+  if (noeud === null) return;
+  noeud.textContent = '';
+  setTimeout(() => {
+    noeud.textContent = texte;
+  }, 0);
+};
+
 /** Le focus se pose sur la LIGNE elle-même après un retrait — jamais `<body>` (leçon 519). */
 const poseLeFocusSurLaLigne = (ctx: Contexte, messageId: string): void => {
   const ligne = ctx.p.liste.querySelector<HTMLElement>(`li[data-id="${messageId}"]`);
@@ -116,7 +144,7 @@ type PoigneeDeRetrait = {
   readonly differe: (messageId: string) => void;
   /** « Annuler » — restaure la bulle. Inopérant si le différé a déjà été DÉSARMÉ (§ ci-dessous). */
   readonly annule: (messageId: string) => void;
-  /** `destruction` (§ 12.11 étage 3) — flush IMMÉDIAT de ce qui restait en fenêtre, par la route, `keepalive`. */
+  /** `destruction` (§ 12.11 étage 3) — purge les minuteurs LOCAUX ; n'envoie RIEN (§ décision Option A, revue #5387 — voir `detruit` ci-dessous). */
   readonly detruit: () => void;
 };
 
@@ -192,10 +220,14 @@ export const prendsLesRetraits = ({
     // un ÉCHEC de CE `DELETE` : c'est l'état DÉJÀ atteint, exactement comme
     // `reagis()` le traite déjà pour une réaction (`fil-mutations.ts`, un
     // 404 au retrait d'une réaction absente). Sans ce repli, un retrait
-    // REPRIS après un rechargement (`reprendLesRetraits`) dont le
-    // `keepalive` de la page précédente avait déjà abouti RESSUSCITAIT la
-    // bulle sur ce refus — le défaut même que la reprise corrige, rejoué un
-    // cran plus loin.
+    // REPRIS après un rechargement (`reprendLesRetraits`) dont un AUTRE
+    // onglet aurait entre-temps mené la MÊME fenêtre à son terme
+    // RESSUSCITERAIT la bulle sur ce refus — le défaut même que la reprise
+    // corrige, rejoué un cran plus loin. `detruit()` n'envoie plus rien
+    // (§ décision Option A) : ce n'est donc plus la fermeture de CETTE page
+    // qui peut créer la course, seulement deux onglets ouverts sur le même
+    // fil — le repli reste la garde qui les rend inoffensifs l'un pour
+    // l'autre.
     //
     // La branche SOCKET applique le repli en SYNCHRONE sur la valeur déjà
     // résolue par son SEUL `await` (`issueSocket`) — jamais par un second
@@ -219,6 +251,13 @@ export const prendsLesRetraits = ({
           });
     if (resultat.fait) {
       applique(ctx, F.confirmeLaMutation(ctx.etat, messageId));
+      // L'EXPIRATION S'ANNONCE AUSSI (défaut de revue #5387 — « la bulle
+      // passe de "Message retiré" à "Ce message a été supprimé" en
+      // silence ») : `differe()`/`annule()` annoncent déjà leurs deux
+      // issues ; celle-ci — la fenêtre qui se referme SANS "Annuler" — ne
+      // l'était pas. `FIL.supprime` est le MÊME texte que `.texte` affiche
+      // désormais (`fil-peinture.ts`) — deux surfaces, une seule phrase.
+      annonceLeGeste(ctx, FIL.supprime);
       return;
     }
     applique(ctx, F.retabli(ctx.etat, entree.avant));
@@ -244,12 +283,17 @@ export const prendsLesRetraits = ({
     // repère TEXTUEL (`.decompte`) reste dans le DOM en permanence — masqué
     // par défaut, seul `prefers-reduced-motion` le révèle (§ 12.5) — pour que
     // la coupure de l'animation laisse un REPÈRE, jamais une absence.
+    const secondes = Math.round(fenetreMs / 1000);
     const fente = ctx.p.liste.querySelector<HTMLElement>(`li[data-id="${messageId}"] .retrait`);
     if (fente !== null) {
       fente.style.setProperty('--duree-retrait', `${fenetreMs}ms`);
       const decompte = fente.querySelector<HTMLElement>('.decompte');
-      if (decompte !== null) decompte.textContent = FIL.decompteDuRetrait(Math.round(fenetreMs / 1000));
+      if (decompte !== null) decompte.textContent = FIL.decompteDuRetrait(secondes);
     }
+    // L'ANNONCE (#5387) — au lecteur d'écran comme à l'œil : le retrait a eu
+    // lieu ET reste annulable. `reprendLesRetraits` rejoue `differe()` au
+    // montage, donc l'annonce au rechargement est GRATUITE.
+    annonceLeGeste(ctx, FIL.retraitAnnonce(secondes));
     // Le focus se pose sur LE BOUTON D'ANNULATION — l'action que la fenêtre
     // offre — plutôt que sur la ligne : un lecteur d'écran l'annonce
     // aussitôt, sans un second geste pour le trouver. Ce que ce déplacement
@@ -259,8 +303,15 @@ export const prendsLesRetraits = ({
     // `poseLeFocusSurLaLigne` INCONDITIONNEL d'`annule`, dont le geste même
     // prouve que le focus était sur le bouton.
     const bouton = fente?.querySelector<HTMLElement>('.annuler-le-retrait') ?? null;
-    if (bouton !== null) bouton.focus();
-    else poseLeFocusSurLaLigne(ctx, messageId);
+    if (bouton !== null) {
+      // NOMINATIF (#5387) — `avant.texte` est le texte du message tel qu'il
+      // était JUSTE AVANT que `F.retireMoiMeme` (déjà appliqué plus haut) ne
+      // le vide : deux retraits différés à la fois (voir le témoin dédié)
+      // posaient jusqu'ici le MÊME aria-label générique sur leurs deux
+      // boutons, sans aucun moyen de les distinguer sans la vue.
+      bouton.setAttribute('aria-label', FIL.annulerLeRetrait(avant.texte));
+      bouton.focus();
+    } else poseLeFocusSurLaLigne(ctx, messageId);
   };
 
   const annule = (messageId: string): void => {
@@ -274,21 +325,51 @@ export const prendsLesRetraits = ({
     if (!encoreDiffere(messageId)) return;
     applique(ctx, F.retabli(ctx.etat, entree.avant));
     poseLeFocusSurLaLigne(ctx, messageId);
+    annonceLeGeste(ctx, FIL.retablissementAnnonce);
   };
 
+  /**
+   * L'ÉCRAN PART, MAIS LE RETRAIT N'EST PAS ENCORE DÉCIDÉ (défaut BLOQUANT
+   * de revue #5387 — « recharger pendant la fenêtre COMMET le retrait, et
+   * “Annuler” ment ») — DÉCISION Option A, celle qui tient la promesse du
+   * TITRE de l'issue : ce `detruit()` N'ENVOIE PLUS RIEN.
+   *
+   * LA VERSION PRÉCÉDENTE flushait ICI en `DELETE keepalive`, fire-and-forget
+   * — un geste écrit pour la fermeture d'onglet DÉFINITIVE. Mais `pagehide`
+   * se déclenche identiquement sur un simple RECHARGEMENT (F5), qui appelle
+   * cette même fonction AVANT que le document neuf ne charge. Deux moitiés
+   * livrées séparément (ce flush, et `reprendLesRetraits` qui relit
+   * l'intention persistée au montage suivant) ne s'étaient jamais
+   * RÉCONCILIÉES : un rechargement pendant la fenêtre envoyait le `DELETE`
+   * ICI, PUIS le document neuf, ignorant que la passerelle venait d'être
+   * servie, REJOUAIT `differe()` sur la même intention encore dans la
+   * réserve — offrant « Annuler » sur un message déjà supprimé, et faisant
+   * routinièrement partir un SECOND retrait à l'expiration de la fenêtre
+   * reprise (deux `DELETE` pour un seul geste, l'idempotence du serveur
+   * masquant le doublon plutôt que de l'empêcher).
+   *
+   * La passerelle n'offrant AUCUNE route de restauration (`deletedAt` sans
+   * repli, régime 3 — voir le doc-comment de `FENETRE_D_ANNULATION_DU_RETRAIT_MS`
+   * plus haut), les DEUX promesses ne peuvent pas tenir à la fois : soit un
+   * retrait part au premier `pagehide` (et un rechargement PENDANT la
+   * fenêtre le commet, sans confirmation) ; soit rien ne part tant que le
+   * lecteur n'a pas eu SA fenêtre entière, et l'intention — déjà écrite par
+   * `differe()` — attend alors dans la réserve la PROCHAINE ouverture de ce
+   * fil, dans CET onglet ou un autre : `reprendLesRetraits` y rejoue la
+   * fenêtre, et le retrait finit par partir SI personne ne l'annule, sans
+   * jamais courir deux fois. C'est cette seconde lecture qui tient le titre
+   * de l'issue (« un message retiré se rattrape ENCORE après rechargement »)
+   * — la première n'aurait jamais pu le tenir, quel que soit le correctif
+   * posé sur `reprendLesRetraits` seul.
+   *
+   * Un tab fermé pour de bon SANS revenir sur ce fil perd donc, au pire, un
+   * retrait déjà voulu — le message reste visible aux autres jusqu'au
+   * prochain passage sur cette conversation, où la fenêtre reprend
+   * automatiquement. C'est le seul coût que le régime 3 laisse racheter.
+   */
   const detruit = (): void => {
-    const entrees = [...enCours.entries()];
+    enCours.forEach(({ minuteur }) => clearTimeout(minuteur));
     enCours.clear();
-    // L'ÉCRAN PART : un retrait VOULU par le lecteur ne doit pas rester sans
-    // suite parce que la fenêtre n'a pas eu le temps d'expirer. Le socket est
-    // DÉJÀ déconnecté à cet instant (`participate.ts` › `destruction`, avant
-    // `ctx.gestes?.detruit()`) — la route, en `keepalive`, est le SEUL
-    // transport qui survit à la navigation ; fire-and-forget, aucun
-    // rétablissement n'est plus possible une fois l'écran parti.
-    entrees.forEach(([messageId, { minuteur }]) => {
-      clearTimeout(minuteur);
-      void retireParRoute({ creance: ctx.creance, messageId, base: ctx.config.passerelle, keepalive: true });
-    });
   };
 
   return { differe, annule, detruit };
@@ -296,25 +377,62 @@ export const prendsLesRetraits = ({
 
 /**
  * REPRENDRE CE QUI ATTENDAIT ENCORE À LA FERMETURE (suivi #5163 § 12.12,
- * défauts de revue « ne survit pas à un rechargement » et « le document
- * rechargé montre le message revenu ») — lue UNE fois au montage, contre
- * l'état SERVI par le document neuf, jamais contre une horloge locale :
+ * durci par la revue de #5387 — « recharger pendant la fenêtre commet le
+ * retrait ») — lue UNE fois au montage, contre l'état SERVI par le document
+ * neuf, jamais contre une horloge locale. `detruit()` n'envoie plus RIEN
+ * (§ décision Option A ci-dessus) : la passerelle n'a donc JAMAIS reçu ce
+ * retrait tant que ce module ne l'a pas envoyé lui-même — via `flush()`, à
+ * l'expiration d'UNE fenêtre, celle-ci ou une précédente reprise ici.
  *
- *   - la bulle est encore là, PAS `supprime` : la passerelle n'a toujours
- *     rien reçu (le `keepalive` de `detruit()` n'a pas encore abouti, ou
- *     l'écran a été fermé autrement qu'en naviguant). `differe()` REJOUE —
- *     la MÊME fenêtre, le MÊME bouton « Annuler » : le document ne montre
- *     JAMAIS le texte d'origine passé le premier octet du module, et
- *     l'éventuel refus « Message not found » d'un `keepalive` qui aurait
- *     entre-temps abouti est désormais IDEMPOTENT (`flush`, ci-dessus) — il
- *     ne ressuscite plus la bulle.
- *   - la bulle est déjà `supprime` : la passerelle a déjà tout reçu (le cas
- *     du SECOND rechargement du défaut de revue). Rien à rejouer — juste
- *     oublier l'intention, qui a atteint son but.
+ *   - la bulle est encore là, PAS `supprime` : c'est le cas NOMINAL — rien
+ *     n'est jamais parti. `differe()` REJOUE — la MÊME fenêtre, le MÊME
+ *     bouton « Annuler » : le document ne montre JAMAIS le texte d'origine
+ *     passé le premier octet du module.
+ *   - la bulle est déjà `supprime` : un AUTRE onglet, ou une fenêtre
+ *     REPRISE précédemment dans CET onglet, est allé au bout et a envoyé le
+ *     retrait — `message:deleted` ou le document SERVI le disent déjà.
+ *     Rien à rejouer — juste oublier l'intention, qui a atteint son but.
  *   - la bulle n'est plus dans la fenêtre SERVIE (page plus profonde, ou
  *     jamais chargée ici) : ni l'un ni l'autre n'est décidable — on laisse
  *     l'entrée, elle sera relue au prochain montage de ce fil.
+ *
+ * Un rechargement pendant la fenêtre ne fait donc JAMAIS partir un second
+ * retrait pour un seul geste (défaut MAJEUR de revue #5387) : la SEULE
+ * fenêtre qui puisse jamais flusher est celle-ci, reprise ou non — jamais un
+ * flush de fermeture EN PLUS.
  */
+/**
+ * IL N'Y A PAS DE PONT DEPUIS `?retirer=<id>` VERS LA FENÊTRE DIFFÉRÉE, ET
+ * C'EST DÉLIBÉRÉ (revue de #5387 — la § 4 étape 3 de la spécification en
+ * demandait un ; il est retiré, et voici pourquoi).
+ *
+ * Un pont qui ADOPTE l'état d'adresse rend une NAVIGATION destructrice :
+ * `?retirer=<id>` est une adresse ordinaire — elle s'écrit dans la barre, se
+ * met en signet, se copie, et le bouton RETOUR y ramène. L'adopter en
+ * fenêtre différée arme une minuterie qui SUPPRIME le message cinq secondes
+ * plus tard, sans que personne n'ait rien confirmé : revenir en arrière
+ * après avoir cliqué « Annuler » suffisait à perdre le message, et rouvrir
+ * l'adresse le perdait aussi. Un GET ne commet jamais une mutation
+ * destructrice — c'est la raison d'être des deux formulaires POST que la
+ * porte sert dans cet état.
+ *
+ * Sans pont, chaque régime garde sa fenêtre ET sa sémantique :
+ *
+ *   - AVEC JavaScript au moment du clic, le menu ouvre la fenêtre DIFFÉRÉE
+ *     (`prendsLesRetraits`) — un repentir APRÈS, durable à travers un
+ *     rechargement par la réserve (`reprendLesRetraits` ci-dessous) ;
+ *   - SANS JavaScript au moment du clic (module pas encore arrivé, 3G
+ *     rurale), la porte sert la fenêtre d'ADRESSE et ses deux formulaires,
+ *     qui restent cliquables et POSTENT — un chemin lent, mais entier, et
+ *     dont RIEN n'est engagé tant que « Confirmer le retrait » n'est pas
+ *     posté.
+ *
+ * La fente SERVIE n'est donc jamais masquée ni adoptée par le module, et la
+ * classe `retrait-en-attente` qu'elle porte n'est jamais retirée derrière le
+ * dos du serveur — deux effets de bord du pont qui laissaient, après une
+ * annulation, une ligne DÉFINITIVEMENT ternie et privée de son menu.
+ */
+
 export const reprendLesRetraits = async (ctx: Contexte, retraits: PoigneeDeRetrait): Promise<void> => {
   const ids = await retraitsEnAttente(ctx);
   ids.forEach((messageId) => {

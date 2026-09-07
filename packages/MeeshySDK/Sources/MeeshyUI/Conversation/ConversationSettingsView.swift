@@ -138,7 +138,7 @@ public struct ConversationSettingsView: View {
                         .scaleEffect(0.8)
                         .tint(MeeshyColors.indigo500)
                 } else {
-                    Text(String(localized: "common.save", defaultValue: "Sauvegarder", bundle: .module))
+                    Text(String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module))
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundColor(viewModel.hasChanges ? MeeshyColors.indigo500 : theme.textMuted)
                 }
@@ -458,7 +458,7 @@ public struct ConversationSettingsView: View {
         case .moderator:
             HStack(spacing: 3) {
                 Image(systemName: "checkmark.shield.fill").font(.system(size: 9))
-                Text(String(localized: "conversation.role.moderator", defaultValue: "Moderateur", bundle: .module)).font(.system(size: 11, weight: .medium))
+                Text(String(localized: "conversation.role.moderator", defaultValue: "Modo", bundle: .module)).font(.system(size: 11, weight: .medium))
             }.foregroundColor(MeeshyColors.success)
         case .member:
             EmptyView()

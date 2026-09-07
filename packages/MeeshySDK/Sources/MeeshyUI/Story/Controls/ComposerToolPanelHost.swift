@@ -549,7 +549,7 @@ struct ComposerToolPanelHost: View {
                     }
 
                     // Edit
-                    mediaActionBtn(icon: "pencil", color: actionTint, tip: String(localized: "common.edit", defaultValue: "Éditer", bundle: .module)) {
+                    mediaActionBtn(icon: "pencil", color: actionTint, tip: String(localized: "common.edit", defaultValue: "Modifier", bundle: .module)) {
                         onEditMedia?(media.id)
                     }
 

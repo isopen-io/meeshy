@@ -29,6 +29,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'attachment.photo', 'attachment.video', 'attachment.audio', 'attachment.document', 'attachment.files',
   'login.newDevice.title',
   'push.private',
+  'engagement.badgeEarned',
 ] as const;
 export type NotificationStringKey = typeof NOTIFICATION_STRING_KEYS[number];
 
@@ -132,6 +133,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.files': '📎 {count} fichiers',
     'login.newDevice.title': 'Nouvelle connexion détectée',
     'push.private': 'Nouvelle notification',
+    'engagement.badgeEarned': '🏅 Badge débloqué : {title} · palier {count}',
   },
   en: {
     'reaction.message': 'reacted {emoji} to your message',
@@ -179,6 +181,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.files': '📎 {count} files',
     'login.newDevice.title': 'New login detected',
     'push.private': 'New notification',
+    'engagement.badgeEarned': '🏅 Badge unlocked: {title} · milestone {count}',
   },
   es: {
     'reaction.message': 'reaccionó {emoji} a tu mensaje',
@@ -226,6 +229,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.files': '📎 {count} archivos',
     'login.newDevice.title': 'Nuevo inicio de sesión detectado',
     'push.private': 'Nueva notificación',
+    'engagement.badgeEarned': '🏅 Insignia desbloqueada: {title} · nivel {count}',
   },
   pt: {
     'reaction.message': 'reagiu {emoji} à sua mensagem',
@@ -273,6 +277,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.files': '📎 {count} arquivos',
     'login.newDevice.title': 'Novo login detectado',
     'push.private': 'Nova notificação',
+    'engagement.badgeEarned': '🏅 Emblema desbloqueado: {title} · nível {count}',
   },
   de: {
     'reaction.message': 'hat {emoji} auf deine Nachricht reagiert',
@@ -320,6 +325,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.files': '📎 {count} Dateien',
     'login.newDevice.title': 'Neue Anmeldung erkannt',
     'push.private': 'Neue Benachrichtigung',
+    'engagement.badgeEarned': '🏅 Abzeichen freigeschaltet: {title} · Stufe {count}',
   },
   it: {
     'reaction.message': 'ha reagito {emoji} al tuo messaggio',
@@ -367,6 +373,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.files': '📎 {count} file',
     'login.newDevice.title': 'Nuovo accesso rilevato',
     'push.private': 'Nuova notifica',
+    'engagement.badgeEarned': '🏅 Distintivo sbloccato: {title} · livello {count}',
   },
   ar: {
     'reaction.message': 'تفاعل {emoji} مع رسالتك',
@@ -414,6 +421,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.files': '📎 {count} ملفات',
     'login.newDevice.title': 'تم رصد تسجيل دخول جديد',
     'push.private': 'إشعار جديد',
+    'engagement.badgeEarned': '🏅 تم فتح شارة: {title} · المستوى {count}',
   },
   'zh-Hans': {
     'reaction.message': '用 {emoji} 回应了你的消息',
@@ -461,6 +469,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.files': '📎 {count} 个文件',
     'login.newDevice.title': '检测到新登录',
     'push.private': '新通知',
+    'engagement.badgeEarned': '🏅 徽章解锁：{title} · 第 {count} 级',
   },
 };
 

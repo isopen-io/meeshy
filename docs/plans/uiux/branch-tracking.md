@@ -30,7 +30,13 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 1. Au début de chaque itération : réinitialiser la branche de travail sur
    **`origin/dev`** (`git checkout -B <branche> origin/dev`), après avoir vérifié
-   sur `dev` que le défaut visé n'y est pas déjà corrigé
+   sur `dev` que le défaut visé n'y est pas déjà corrigé — **ET** balayé
+   l'anti-doublon dans les DEUX directions (#5308) : `ls docs/analyses/uiux/`
+   (numéros déjà pris) **et** `search_pull_requests` sur le **nom du fichier
+   cible**, pas sur le numéro (une PR ouverte sur la même surface ne porte pas
+   forcément le même suffixe `i` — cf. la collision 217i/#2353). `list_pull_requests`
+   seul à l'ouverture ne suffit pas : un essaim peut merger 20 PR en une heure ;
+   revérifier juste avant de committer
 2. Develop, commit, push on the working branch
 3. Once CI passes: ouvrir la PR **vers `dev`**
 4. After merge: update this file with the new base
@@ -73,7 +79,7 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > | 268i | [#4326](https://github.com/isopen-io/meeshy/pull/4326) | `d110653a` | #4308 (avancée) |
 > | 269i | [#4330](https://github.com/isopen-io/meeshy/pull/4330) | `5c2c6387` | #4328, #4329 (ouvertes) |
 >
-> - **Branche de travail** : `claude/intelligent-noether-m8jpj8`, **réinitialisée** (jamais supprimée) sur `origin/main` `56bc5fd9` — base de 270i.
+> - **Branche de travail** : `claude/intelligent-noether-m8jpj8`, **réinitialisée** (jamais supprimée) sur `origin/main` `56bc5fd9` — base de 270i. **⛔ STALE (#5308)** : cette ligne date d'AVANT la correction du 2026-09-05 ci-dessus et enregistre une base `main`, ce que le protocole interdit désormais. Avant d'ouvrir 272i, réinitialiser sur `origin/dev` (`git checkout -B claude/intelligent-noether-m8jpj8 origin/dev` + `push --force-with-lease`) et remplacer cette ligne par le nouveau couple : **base de travail = `origin/dev` <hash>** (d'où l'itération part) — **squash sur `main` = <hash>** (où elle atterrit après merge, colonne déjà présente au tableau ci-dessus). Les deux se lisent séparément : l'un dit d'où PARTIR, l'autre où le travail FINIT.
 >
 > ### 271i — FERMÉE SANS MERGE (#4541, issue #4540) — bâtie sur la mauvaise branche
 >

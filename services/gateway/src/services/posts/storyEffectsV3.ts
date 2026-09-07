@@ -58,6 +58,13 @@ function asArray(v: unknown): Record<string, unknown>[] {
   return Array.isArray(v) ? (v as Record<string, unknown>[]) : [];
 }
 
+/** Un objet qui porte au moins une clé — `undefined` sinon (un `{}` ne dit rien). */
+function objectWithKeys(v: unknown): Record<string, unknown> | undefined {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return undefined;
+  const record = v as Record<string, unknown>;
+  return Object.keys(record).length > 0 ? record : undefined;
+}
+
 function isStringMap(v: unknown): v is Record<string, string> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
     && Object.values(v as Record<string, unknown>).every((value) => typeof value === 'string')
@@ -132,10 +139,24 @@ export function convertV1ToV3(
   const objects: ObjectV3[] = [];
   let z = 0;
 
-  if (str(blob.background)) {
+  // **Le porteur du FOND existe dès que le fond a quelque chose à dire**
+  // (#5406) — jumeau EXACT de `CanvasV3.migratedScene` (Swift), qui portait la
+  // même condition et donc le même trou.
+  //
+  // `backgroundTransform` ne voyage QUE dans cette charge, et son champ le plus
+  // utile — `videoFitMode`, le cadrage que le double-tap fond choisit — ne vaut
+  // que sur un fond MÉDIA, c'est-à-dire là où une couleur de fond n'a aucune
+  // raison d'exister. Conditionner le porteur à la seule couleur jetait donc le
+  // cadrage précisément dans le cas où l'auteur venait de le choisir.
+  const bgTransform = objectWithKeys(blob.backgroundTransform);
+  const bgColor = str(blob.background);
+  if (bgColor !== undefined || bgTransform !== undefined) {
     objects.push({
       ...baseObject({ id: 'bg' }, 'media', 'bg', z++),
-      payload: { background: blob.background, transform: blob.backgroundTransform ?? null },
+      payload: {
+        ...(bgColor !== undefined ? { background: bgColor } : {}),
+        transform: bgTransform ?? null,
+      },
     });
   }
 
@@ -641,7 +662,11 @@ export function convertStoryEffectsForWire(effects: unknown): unknown {
 /**
  * Le LECTEUR d'une charge utile, tel que la négociation O17 le connaît.
  *
- * `canvasCaps` vient de l'en-tête `X-Canvas-Caps` (absent = client legacy) ;
+ * `canvasCaps` vient de l'en-tête `X-Canvas-Caps` — `undefined` (en-tête
+ * absent) vaut « client qui n'a rien dit » (legacy présumé) ; `0` vaut
+ * « client qui déclare ne rendre AUCUN canvas », une affirmation distincte de
+ * l'absence (#5195 — un client comme web-v3, qui ne lit jamais `storyEffects`
+ * par conception, se distingue ainsi d'un client simplement pas-encore-connu).
  * `readerLanguage` est la langue DÉJÀ résolue par le middleware d'auth
  * (`authContext.userLanguage` — le Prisme s'applique jusqu'à l'invite de mise
  * à jour). `broadcast` est l'exception temps réel F3 : une seule charge pour
@@ -740,7 +765,8 @@ export function upgradeSentinel(readerLanguage: string | undefined): Record<stri
  * pour la sentinelle ; `CANVAS_V3_READ` (lu à chaque appel, défaut OFF) ne
  * gouverne que la conversion de l'archive v1. Règle 5 : un post à média
  * porteur ne reçoit pas de sentinelle — `storyEffects` est OMIS, le média se
- * lit tel quel.
+ * lit tel quel. Règle 5 bis (#5195) : un lecteur qui DÉCLARE `canvasCaps: 0`
+ * ne reçoit pas non plus de sentinelle — voir plus bas.
  */
 export function negotiateWireStoryEffects<T>(post: T, reader?: WireReader): T {
   if (reader?.broadcast === true) return post;
@@ -753,7 +779,17 @@ export function negotiateWireStoryEffects<T>(post: T, reader?: WireReader): T {
     return { ...post, storyEffects: convertStoryEffectsForWire(effects) };
   }
   const media = (post as { media?: unknown }).media;
-  if (Array.isArray(media) && media.length > 0) {
+  /**
+   * `canvasCaps === 0` est une DÉCLARATION, jamais une absence (celle-ci vaut
+   * `undefined` — cf. `WireReader.canvasCaps`) : un client qui la pose dit
+   * « je ne rendrai AUCUN canvas », pas « je ne l'ai pas encore dit ». La
+   * sentinelle d'invite (« Mets à jour Meeshy pour voir ce contenu ») serait
+   * un conseil FAUX pour un tel client — se mettre à jour ne le ferait pas
+   * lire `storyEffects`, qu'il n'implémente pas par conception (#5195). Même
+   * sort que le média porteur (règle 5) : OMETTRE, jamais la sentinelle.
+   */
+  const declaresNoCanvasSupport = reader?.canvasCaps === 0;
+  if ((Array.isArray(media) && media.length > 0) || declaresNoCanvasSupport) {
     return { ...post, storyEffects: undefined };
   }
   return { ...post, storyEffects: upgradeSentinel(reader?.readerLanguage) };

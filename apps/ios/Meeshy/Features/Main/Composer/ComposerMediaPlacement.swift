@@ -89,9 +89,51 @@ nonisolated enum ComposerHeaderTiles {
 
     /// Les médias qui ont droit à une tuile, dans l'ordre de la liste du
     /// document — le seul ordre que l'auteur puisse prévoir.
-    static func tiles(_ media: [ComposerDocumentMedia],
-                      founding slideIdByMediaURL: [URL: String]) -> [ComposerDocumentMedia] {
-        media.filter { slideIdByMediaURL[$0.url] != nil }
+    /// **La rangée compte les SCÈNES** (constat porteur 2026-09-06 : « lorsque
+    /// je crée une nouvelle scène elle n'apparaît pas immédiatement dans la
+    /// mini-preview »).
+    ///
+    /// La règle précédente filtrait les MÉDIAS par l'index des fondations —
+    /// « une tuile par média posé en fond ». Elle rendait le bon résultat tant
+    /// que toute scène naissait d'un média, et le doc-comment de
+    /// `ComposerTopBar` énonçait d'ailleurs cette coïncidence comme une
+    /// définition : « une par `MeeshySlide`, ce qui veut dire une par média
+    /// posé en FOND ».
+    ///
+    /// Un fond COLORÉ sépare les deux termes : la scène existe, elle n'a aucun
+    /// média, et la rangée n'avait rien à montrer. L'auteur créait une scène
+    /// et rien à l'écran ne le lui disait.
+    ///
+    /// > **Une équivalence écrite comme un fait ne se relit pas** — elle se lit
+    /// > comme une définition. C'est ce qui la rend invisible le jour où ses
+    /// > deux termes divergent.
+    ///
+    /// La règle est donc devenue la QUESTION qui restait posée : que compte la
+    /// rangée ? Des scènes. Elle ne filtre plus — et c'est le point : tout
+    /// filtre y était une occasion de perdre une scène.
+    static func tiles(for slides: [StorySlide]) -> [StorySlide] {
+        slides
+    }
+
+    /// **Quelle tuile porte la corbeille** (constat porteur 2026-09-06 : « il
+    /// manque la poubelle pour supprimer les scènes »).
+    ///
+    /// Deux conditions, et chacune évite un contrôle qui MENT :
+    ///
+    /// 1. **la tuile COURANTE seulement.** Une corbeille sur chaque tuile ferait
+    ///    six cibles destructrices dans une rangée où le doigt navigue ; le
+    ///    geste de suppression vise ce qu'on REGARDE, comme l'ancienne rangée le
+    ///    faisait déjà pour les médias (`showsRemove(isSelected:…)`) ;
+    /// 2. **jamais sous deux scènes.** `removeSlide` refuse de descendre
+    ///    au-dessous d'une slide (`guard slides.count > 1`) : offrir la
+    ///    corbeille là serait un bouton qui ne fait rien — exactement le
+    ///    contrôle inerte que la loi 4 interdit.
+    ///
+    /// > La seconde condition ne se DÉDUIT pas de la première : une rangée
+    /// > montée à une seule scène aurait une tuile courante, donc une corbeille,
+    /// > et elle serait morte. C'est le modèle qui la donne, pas la vue.
+    static func showsDelete(sceneIndex: Int, currentIndex: Int, sceneCount: Int) -> Bool {
+        sceneCount > 1 && sceneIndex == currentIndex
     }
 }
 

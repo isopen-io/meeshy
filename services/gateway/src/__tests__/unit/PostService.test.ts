@@ -14,6 +14,7 @@ import { PostCommentService } from '../../services/PostCommentService';
 import { MediaService } from '../../services/MediaService';
 import type { PostReactionService } from '../../services/PostReactionService';
 import { PostType, PostVisibility } from '@meeshy/shared/prisma/client';
+import { createMockPrisma, makePost, createMockPostReactionService } from './post-service-mocks';
 
 // PostAudioService uses a singleton that requires initialization — mock it entirely
 // so PostService tests don't depend on ZMQ / SocialEventsHandler setup.
@@ -25,114 +26,6 @@ jest.mock('../../services/posts/PostAudioService', () => ({
     init: jest.fn(),
   },
 }));
-
-// ---------------------------------------------------------------------------
-// Mock helpers
-// ---------------------------------------------------------------------------
-
-function createMockPrisma() {
-  const prisma: any = {
-    post: {
-      findFirst: jest.fn(),
-      findUnique: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      count: jest.fn(),
-    },
-    postComment: {
-      findFirst: jest.fn(),
-      findMany: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      updateMany: jest.fn(),
-    },
-    commentReaction: {
-      upsert: jest.fn(),
-      deleteMany: jest.fn(),
-      groupBy: jest.fn(),
-      // `unlikeComment` lit la pile TRIÉE avant de retirer (2026-08-25) :
-      // l'emoji demandé la restreint, son absence la laisse entière, et la tête
-      // est la cible — c'est ce qui rend « retirer la DERNIÈRE posée » possible.
-      // Défaut vide : sans cible, le retrait est un no-op idempotent.
-      findMany: jest.fn().mockResolvedValue([]),
-      // Plafond des cinq réactions (2026-08-20) : `PostCommentService.likeComment`
-      // consulte `findFirst` (l'émoji est-il déjà posé ?) puis, si non, `count`
-      // (place encore disponible ?) AVANT toute purge/upsert. Défauts « personne
-      // n'a encore réagi » : ces tests veulent une création normale.
-      findFirst: jest.fn().mockResolvedValue(null),
-      count: jest.fn().mockResolvedValue(0),
-    },
-    postBookmark: {
-      upsert: jest.fn(),
-      delete: jest.fn(),
-      findFirst: jest.fn(),
-    },
-    postView: {
-      findUnique: jest.fn(),
-      findMany: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      count: jest.fn(),
-      deleteMany: jest.fn(),
-    },
-    postImpression: {
-      deleteMany: jest.fn(),
-    },
-    postMedia: {
-      // `{ count }` par défaut : le code compare le nombre de médias
-      // effectivement rattachés à celui demandé pour ne jamais écarter un
-      // média en silence. Un mock qui rend `undefined` casserait sur `.count`.
-      updateMany: jest.fn().mockResolvedValue({ count: 2 }),
-      findFirst: jest.fn(),
-      // `[]` par défaut : la règle de composition REEL (`qualifiesAsReel`)
-      // matérialise les mimeTypes des médias à classifier via findMany.
-      findMany: jest.fn().mockResolvedValue([]),
-      update: jest.fn(),
-      deleteMany: jest.fn(),
-    },
-    participant: {
-      findMany: jest.fn(),
-    },
-    postReaction: {
-      findMany: jest.fn(),
-      deleteMany: jest.fn(),
-    },
-    friendRequest: {
-      findMany: jest.fn(),
-    },
-  };
-  prisma.$transaction = jest.fn(async (arg: any) =>
-    typeof arg === 'function' ? arg(prisma) : Promise.all(arg),
-  );
-  return prisma;
-}
-
-function makePost(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'post-1',
-    authorId: 'user-author',
-    type: 'POST',
-    visibility: 'PUBLIC',
-    content: 'Hello world',
-    reactions: [],
-    reactionSummary: {},
-    reactionCount: 0,
-    likeCount: 0,
-    commentCount: 5,
-    shareCount: 0,
-    repostCount: 0,
-    isPinned: false,
-    deletedAt: null,
-    ...overrides,
-  };
-}
-
-function createMockPostReactionService() {
-  return {
-    addReaction: jest.fn<PostReactionService['addReaction']>().mockResolvedValue({ id: 'rxn-1', postId: 'post-1', userId: 'user-liker', emoji: '❤️', createdAt: new Date(), updatedAt: new Date() }),
-    removeReaction: jest.fn<PostReactionService['removeReaction']>().mockResolvedValue(true),
-  } as unknown as PostReactionService;
-}
 
 function makeComment(overrides: Record<string, unknown> = {}) {
   return {
@@ -442,96 +335,6 @@ describe('PostService', () => {
         .map((call: any[]) => call[0])
         .filter((args: any) => args.data && 'alt' in args.data);
       expect(altWrites).toEqual([]);
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // createPost — geo discoverability (INDÉPENDANTE de metadata.location)
-  // -----------------------------------------------------------------------
-
-  describe('createPost — geo discoverability', () => {
-    const basePostData = { type: PostType.POST, visibility: PostVisibility.PUBLIC };
-    const place = { latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel', address: null, category: null };
-
-    it('persists geoPoint/geoPrecision when discoverabilityPrecision is provided with a valid location', async () => {
-      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-1', ...args.data }));
-
-      await service.createPost({
-        ...basePostData,
-        location: place,
-        discoverabilityPrecision: 'CITY',
-      }, 'user-1');
-
-      const createCall = prisma.post.create.mock.calls[0][0];
-      // CITY arrondit à 0.1° (~10km) — cf. geoDiscoverability.ts.
-      expect(createCall.data.geoPoint).toEqual({ type: 'Point', coordinates: [2.3, 48.9] });
-      expect(createCall.data.geoPrecision).toBe('CITY');
-    });
-
-    it('quantizes EXACT precision to the unrounded coordinate', async () => {
-      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-2', ...args.data }));
-
-      await service.createPost({
-        ...basePostData,
-        location: place,
-        discoverabilityPrecision: 'EXACT',
-      }, 'user-1');
-
-      const createCall = prisma.post.create.mock.calls[0][0];
-      expect(createCall.data.geoPoint).toEqual({ type: 'Point', coordinates: [2.2945, 48.8584] });
-      expect(createCall.data.geoPrecision).toBe('EXACT');
-    });
-
-    it('leaves geoPoint/geoPrecision null when discoverabilityPrecision is absent, even with a valid location', async () => {
-      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-3', ...args.data }));
-
-      await service.createPost({ ...basePostData, location: place }, 'user-1');
-
-      const createCall = prisma.post.create.mock.calls[0][0];
-      expect(createCall.data.geoPoint).toBeUndefined();
-      expect(createCall.data.geoPrecision).toBeUndefined();
-    });
-
-    it('leaves geoPoint/geoPrecision null when discoverabilityPrecision is provided but location is absent', async () => {
-      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-4', ...args.data }));
-
-      await service.createPost({ ...basePostData, discoverabilityPrecision: 'CITY' }, 'user-1');
-
-      const createCall = prisma.post.create.mock.calls[0][0];
-      expect(createCall.data.geoPoint).toBeUndefined();
-      expect(createCall.data.geoPrecision).toBeUndefined();
-    });
-
-    it('ignores a client-supplied geoPoint/geoPrecision passthrough — the server always recomputes its own', async () => {
-      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-5', ...args.data }));
-
-      await service.createPost({
-        ...basePostData,
-        // Un attaquant qui contournerait le schéma Zod de la route et
-        // fournirait ces champs directement au service ne doit jamais les
-        // voir atterrir tels quels dans l'écriture Prisma — même garde que
-        // `metadata` (cf. sharedPlace.ts).
-        geoPoint: { type: 'Point', coordinates: [999, 999] },
-        geoPrecision: 'EXACT',
-      } as any, 'user-1');
-
-      const createCall = prisma.post.create.mock.calls[0][0];
-      expect(createCall.data.geoPoint).toBeUndefined();
-      expect(createCall.data.geoPrecision).toBeUndefined();
-    });
-
-    it('does not persist geoPoint/geoPrecision when the location coordinates are invalid, even with a valid precision', async () => {
-      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-6', ...args.data }));
-
-      await service.createPost({
-        ...basePostData,
-        location: { latitude: 999, longitude: 2.2945, name: null, address: null, category: null },
-        discoverabilityPrecision: 'CITY',
-      }, 'user-1');
-
-      const createCall = prisma.post.create.mock.calls[0][0];
-      expect(createCall.data.geoPoint).toBeUndefined();
-      expect(createCall.data.geoPrecision).toBeUndefined();
     });
   });
 

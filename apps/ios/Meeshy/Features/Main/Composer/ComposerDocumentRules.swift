@@ -583,6 +583,14 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// la régression que 7.4b avait fermée sur `PublishIntent.audioRecording`.
     let mobileTranscription: MobileTranscriptionPayload?
 
+    /// **L'autorisation d'extraction du son** (#3996) — même champ, même
+    /// sémantique que `ComposerMediaAccessibility.allowSoundExtraction`
+    /// (`nil` ⇒ l'auteur n'a rien décidé). Aucune valeur par défaut, même
+    /// discipline que le reste du type : un défaut le ferait disparaître
+    /// d'un site d'appel sans casser la moindre compilation, exactement le
+    /// mode de panne que ce champ vient corriger sur la voie DOCUMENT.
+    let allowSoundExtraction: Bool?
+
     /// Le brouillon d'un MOOD.
     ///
     /// `repostOfId` et `audioUrl` sont les deux graines d'une republication (lot
@@ -642,7 +650,11 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             forcePlainPost: false,
             // Un mood n'a pas d'outil micro (rangée du document seule, T2.6) :
             // aucun geste ne peut jamais alimenter ce champ pour ce format.
-            mobileTranscription: nil
+            mobileTranscription: nil,
+            // Un mood n'a pas de média (`localMedia: []` au-dessus) : aucun
+            // son à extraire, donc `nil` — « aucune décision » — plutôt qu'un
+            // `false` qui affirmerait un refus jamais exprimé.
+            allowSoundExtraction: nil
         )
     }
 
@@ -728,7 +740,13 @@ nonisolated struct ComposerDocumentDraft: Equatable {
         mediaAlts: ComposerMediaCaptions,
         /// Le pont `URL source → identifiant d'objet`, tenu par le meuble
         /// depuis le retour d'`applyContentMedia`.
-        mediaObjectIds: ComposerMediaCaptions
+        mediaObjectIds: ComposerMediaCaptions,
+        /// **L'autorisation d'extraction du son** (#3996), arrivée avec ce
+        /// lot — pour la MÊME raison que les champs juste au-dessus : un
+        /// défaut le ferait disparaître d'un site d'appel sans casser la
+        /// moindre compilation, et l'auteur croirait décider pendant que le
+        /// serveur ne l'apprend jamais.
+        allowSoundExtraction: Bool?
     ) -> ComposerDocumentDraft {
         ComposerDocumentDraft(
             format: format,
@@ -753,7 +771,8 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             mediaAlts: mediaAlts,
             mediaObjectIds: mediaObjectIds,
             forcePlainPost: forcePlainPost,
-            mobileTranscription: mobileTranscription
+            mobileTranscription: mobileTranscription,
+            allowSoundExtraction: allowSoundExtraction
         )
     }
 }
@@ -891,6 +910,17 @@ nonisolated enum ComposerDocumentCopy {
     static var publishFormatUnsupported: String {
         String(localized: "composer.publish.format.unsupported",
                defaultValue: "Ce format ne peut pas encore être publié d'ici",
+               bundle: .main)
+    }
+
+    /// **Le onzième média n'a nulle part où aller** (#4059).
+    ///
+    /// Un post plafonne à dix slides (`StoryComposerViewModel.canAddSlide`) ;
+    /// au-delà, `addSlide()` est un no-op et le média refusé doit se VOIR —
+    /// jamais se poser en silence sur la dernière slide créée.
+    static var mediaCapReached: String {
+        String(localized: "composer.document.media.capReached",
+               defaultValue: "Dix médias au maximum par post — celui-ci n'a pas été ajouté",
                bundle: .main)
     }
 

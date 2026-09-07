@@ -453,7 +453,7 @@ const texte = (message: Message, langueDuDocument: string): string => {
   return `<p class="texte"${langAttribut(langue, langueDuDocument)}>${echappe(message.texte)}</p>`;
 };
 
-const classes = (message: Message, suite: boolean): string =>
+const classes = (message: Message, suite: boolean, retraitEnAttente: boolean): string =>
   [
     'ligne',
     message.deMoi ? 'mien' : '',
@@ -461,9 +461,51 @@ const classes = (message: Message, suite: boolean): string =>
     message.systeme ? 'systeme' : '',
     message.supprime ? 'supprime' : '',
     message.protege ? 'protege' : '',
+    retraitEnAttente ? 'retrait-en-attente' : '',
   ]
     .filter((classe) => classe !== '')
     .join(' ');
+
+/**
+ * LA FENÊTRE D'ANNULATION D'UN RETRAIT, SANS JAVASCRIPT (#5387,
+ * `?retirer=<id>`) — DEUX formulaires SERVIS, jamais une fente cachée qu'un
+ * module viendrait révéler : sans JavaScript, rien ne le fera. « Annuler »
+ * poste `annuler-le-retrait` (aucune requête ne part, `fil-porte.ts`) ;
+ * « Confirmer le retrait » poste `retirer` + `confirme=1`, le SEUL chemin qui
+ * envoie réellement le `DELETE`. Les deux boutons portent `.action.discrete`
+ * — la classe qui donne déjà `min-height:var(--target-min)` (44 px) au reste
+ * du fil, jamais une règle à elles.
+ *
+ * LE FOCUS SE POSE SUR LA LIGNE, SANS JAVASCRIPT (défaut majeur de revue
+ * #5387 — « rien n'annonce le retrait au lecteur d'écran »).
+ *
+ * MESURÉ : `autofocus` sur « Annuler » NE FONCTIONNE PAS ICI — la redirection
+ * qui sert cette fenêtre porte TOUJOURS un FRAGMENT (`adresseDuMessage`,
+ * `fil-porte.ts` › `retireLeMessage` : `?retirer=<id>#m-<id>`, la même
+ * convention que tout envoi/modification, « jamais l'adresse nue »). Or un
+ * navigateur qui arrive sur une adresse à FRAGMENT applique le traitement de
+ * « la partie indiquée du document » (WHATWG, « scroll to the fragment ») —
+ * et cette étape l'emporte sur `autofocus` : mesuré au navigateur (Chromium),
+ * `autofocus` reste sans effet dès que l'URL porte `#m-<id>`, le focus
+ * restant sur `<body>`. La MÊME étape, en revanche, dit que si la partie
+ * indiquée EST focalisable, l'agent utilisateur la focalise — c'est ce
+ * mécanisme NATIF, jamais `autofocus`, qui pose le focus ici : `tabindex="-1"`
+ * sur la LIGNE elle-même (`attributs()`, ci-dessous) la rend focalisable, et
+ * le navigateur s'en charge SEUL, sans script. C'est le pendant SANS
+ * JavaScript du geste que `poseLeFocusSurLaLigne` fait AVEC JavaScript
+ * (`fil-gestes.ts`) — la même destination, deux mains différentes.
+ */
+const retraitServi = (message: Message, adresse: string): string =>
+  '<div class="retrait-servie">' +
+  `<p class="mention">${echappe(FIL.retraitEnAttente)}</p>` +
+  `<form method="post" action="${echappe(adresse)}">` +
+  `<button type="submit" name="annuler-le-retrait" value="${echappe(message.id)}" class="action discrete">${echappe(FIL.annuler)}</button>` +
+  '</form>' +
+  `<form method="post" action="${echappe(adresse)}">` +
+  '<input type="hidden" name="confirme" value="1"/>' +
+  `<button type="submit" name="retirer" value="${echappe(message.id)}" class="action discrete grave">${echappe(FIL.confirmerLeRetrait)}</button>` +
+  '</form>' +
+  '</div>';
 
 /**
  * LE MENU D'UNE LIGNE (§ 12.10.1, issue #5163) — l'atome `MENU_DE_LIGNE`
@@ -539,8 +581,17 @@ const gabaritDuMenu = (): string =>
   '</form>' +
   '</details>';
 
-const attributs = (message: Message): string =>
+/**
+ * `tabindex="-1"` UNIQUEMENT SUR LA LIGNE EN ATTENTE DE RETRAIT SERVIE
+ * (#5387) — c'est ce qui la rend FOCALISABLE, et donc ce que la « partie
+ * indiquée du document » (le fragment `#m-<id>` de la redirection,
+ * `retraitServi` ci-dessus) reçoit du focus SANS script : voir son
+ * doc-comment pour la mesure. Une ligne ORDINAIRE ne porte rien de plus —
+ * `tabindex="-1"` en dur y ferait un arrêt Tab supplémentaire pour rien.
+ */
+const attributs = (message: Message, retraitEnAttente = false): string =>
   `id="${echappe(identifiantDuMessage(message.id))}" data-id="${echappe(message.id)}"` +
+  (retraitEnAttente ? ' tabindex="-1"' : '') +
   (message.clientMessageId === null ? '' : ` data-cid="${echappe(message.clientMessageId)}"`) +
   (message.auteurId === null ? '' : ` data-auteur="${echappe(message.auteurId)}"`) +
   (message.ecritA === null ? '' : ` data-ecrit="${echappe(message.ecritA)}"`) +
@@ -592,6 +643,7 @@ export const ligne = ({
   composeurOuvert,
   estInvite,
   fuseau = null,
+  retrait = null,
 }: {
   readonly message: Message;
   readonly precedent: Message | null;
@@ -605,17 +657,26 @@ export const ligne = ({
   readonly estInvite: boolean;
   /** Le fuseau IANA du lecteur (cookie `meeshy_tz`) — absent : l'heure se dit en relatif. */
   readonly fuseau?: string | null;
+  /**
+   * `?retirer=<id>` (#5387) — LA cible de la fenêtre sans JavaScript, déjà
+   * résolue et validée par la porte (`resoutLeRetrait`) : cette fonction lui
+   * fait confiance, comme `composeurOuvert` lui fait confiance pour
+   * `contexte`. `null` — le cas nominal.
+   */
+  readonly retrait?: string | null;
 }): string => {
   if (message.systeme) {
     return (
-      `<li class="${classes(message, false)}" ${attributs(message)}>` +
+      `<li class="${classes(message, false, false)}" ${attributs(message)}>` +
       `<div class="corps"><p class="texte">${svgDuSprite('ph-ghost')} ${echappe(message.texte)}</p>${heure(message, maintenant, langueDuDocument, fuseau)}</div>` +
       '</li>'
     );
   }
 
+  const enAttenteDeRetrait = retrait !== null && message.id === retrait;
+
   return (
-    `<li class="${classes(message, estUneSuite(message, precedent))}" ${attributs(message)}>` +
+    `<li class="${classes(message, estUneSuite(message, precedent), enAttenteDeRetrait)}" ${attributs(message, enAttenteDeRetrait)}>` +
     avatar(message, adresse) +
     // DEUX COLONNES (#5136) : la bulle, et au bas de sa droite la datation.
     // `colonnes` est une classe EXPLICITE plutôt qu'un `:has(> .bulle)` — le
@@ -636,6 +697,19 @@ export const ligne = ({
     (message.lieu === null ? '' : lieuHtml(message.lieu)) +
     texte(message, langueDuDocument) +
     original(message, langueDuDocument) +
+    // LA FENÊTRE SANS JAVASCRIPT (#5387) VIT DANS LA BULLE, JAMAIS DANS LA
+    // RANGÉE `.corps.colonnes` (défaut BLOQUANT de revue — « la bulle
+    // s'écrase à 0 px de large, 912 px de haut à 390 px d'écran »). La
+    // rangée est un flex row à TROIS enfants possibles (`.bulle{flex:1}`,
+    // `.datation{flex:none}`, et le troisième) — `details.actions` s'y glisse
+    // sans la déranger parce que son FORMULAIRE est `position:absolute`
+    // (`fil-feuille.ts`), donc HORS FLUX ; `.retrait-servie`, lui, est un bloc
+    // ORDINAIRE (deux `<form>` bien réels, à lire et à cliquer), qui prenait
+    // donc sa part du flex row et écrasait `.bulle` à côté de lui. Posée ICI,
+    // dans le flux normal de la bulle — après le texte qu'elle retire,
+    // comme `original` — elle prend la largeur PLEINE de la bulle, sans
+    // jamais disputer l'espace à `.datation`.
+    (enAttenteDeRetrait ? retraitServi(message, adresse) : '') +
     '<p class="meta">' +
     pastille(message) +
     (message.edite ? `<span class="modifie">${echappe(FIL.modifie)}</span>` : '') +
@@ -653,7 +727,14 @@ export const ligne = ({
     reactionsHtml(message, adresse) +
     '</div>' +
     datation(message, maintenant, langueDuDocument, fuseau) +
-    menuDeLigne(message, adresse, { composeurOuvert, maintenant, estInvite }) +
+    // LE MENU NE SE POSE PLUS ICI QUAND LA FENÊTRE SANS JAVASCRIPT EST
+    // SERVIE (#5387) — comme un message `.supprime`, une ligne en attente de
+    // retrait n'a rien de plus à proposer : ses deux formulaires, désormais
+    // DANS LA BULLE ci-dessus, SONT le menu, le temps de la fenêtre. Rien ne
+    // se rend à cette place tant qu'`enAttenteDeRetrait` tient — un
+    // `details.actions` posé ici EN PLUS aurait offert un second « Retirer »
+    // par-dessus la fenêtre déjà servie (défaut MAJEUR de revue).
+    (enAttenteDeRetrait ? '' : menuDeLigne(message, adresse, { composeurOuvert, maintenant, estInvite })) +
     '</div>' +
     '</li>'
   );
@@ -677,6 +758,7 @@ export const lignes = ({
   composeurOuvert,
   estInvite,
   fuseau = null,
+  retrait = null,
 }: {
   readonly messages: readonly Message[];
   readonly maintenant: number;
@@ -688,6 +770,8 @@ export const lignes = ({
   readonly estInvite: boolean;
   /** Le fuseau IANA du lecteur (cookie `meeshy_tz`) — voir `heure()`. */
   readonly fuseau?: string | null;
+  /** `?retirer=<id>` (#5387) — voir `ligne()`. */
+  readonly retrait?: string | null;
 }): string =>
   messages
     .map((message, rang) => {
@@ -698,7 +782,7 @@ export const lignes = ({
         message.ecritA !== null && jour !== jourPrecedent
           ? separateurDeJour({ iso: message.ecritA, maintenant, langueDuDocument })
           : '';
-      return ligne({ message, precedent, maintenant, langueDuDocument, adresse, composeurOuvert, estInvite, fuseau }) + separateur;
+      return ligne({ message, precedent, maintenant, langueDuDocument, adresse, composeurOuvert, estInvite, fuseau, retrait }) + separateur;
     })
     .reverse()
     .join('');
@@ -769,7 +853,11 @@ export const gabaritDeLigne = (adresse: string): string =>
   // quoi la réduction de mouvement redeviendrait une absence d'information.
   // Le module y écrit le décompte (`differe()`, `fil-gestes.ts`) au moment
   // même où il arme `--duree-retrait` sur `.retrait` — la MÊME source.
-  `<span class="retrait"><button type="button" class="action discrete annuler-le-retrait" aria-label="${echappe(FIL.annulerLeRetrait)}">${echappe(FIL.annuler)}</button><span class="decompte" aria-hidden="true"></span></span>` +
+  // L'ARIA-LABEL GÉNÉRIQUE ICI N'EST QU'UN DÉFAUT DE GABARIT — `differe()`
+  // (`fil-gestes.ts`) le REMPLACE par sa forme NOMINATIVE au moment même où
+  // il arme la fenêtre, avec le texte du message qu'il vient de retirer
+  // (défaut de revue #5387). Ce gabarit ignore le CONTENU du message.
+  `<span class="retrait"><button type="button" class="action discrete annuler-le-retrait" aria-label="${echappe(FIL.annulerLeRetrait(''))}">${echappe(FIL.annuler)}</button><span class="decompte" aria-hidden="true"></span></span>` +
   boutonReagir() +
   '</p>' +
   `<ul class="reactions" aria-label="${echappe(FIL.reactions)}" hidden>${pastilleDeReaction({ emoji: '', nombre: 0, messageId: '', adresse })}</ul>` +

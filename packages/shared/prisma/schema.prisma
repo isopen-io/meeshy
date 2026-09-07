@@ -108,6 +108,11 @@ model User {
   bio                       String   @default("")
   email                     String   @unique
   phoneNumber               String?
+  /// Code de parrainage INTRINSÈQUE au compte — distinct d'un AffiliateToken
+  /// (qui nomme une campagne créée explicitement). Généré paresseusement au
+  /// premier accès par ReferralCodeService.ensureReferralCode (#3690) ; null
+  /// tant que personne ne l'a demandé.
+  referralCode              String?  @unique
 
   /// Mots repliés (minuscules, sans diacritiques) de `username`, `displayName`,
   /// `firstName` et `lastName`, plus les initiales. Recalculés à CHAQUE écriture
@@ -261,6 +266,13 @@ model User {
   /// Consentement pour le traitement général des données
   dataProcessingConsentAt DateTime?
 
+  /// Consentement à l'analytique produit (#4709) — la SEULE colonne qui
+  /// gouverne la préférence `PrivacyPreferenceSchema.allowAnalytics` ;
+  /// enfant direct de `dataProcessingConsentAt` dans la hiérarchie de
+  /// `CONSENT_PARENT` (`packages/shared/types/consents.ts`), jamais son
+  /// substitut. `PUT /me/consents/analytics` pose cette colonne.
+  analyticsConsentAt DateTime?
+
   /// Acceptation des conditions générales. L'acte de CRÉATION d'un compte vaut
   /// acceptation (les trois clients l'écrivent sous le bouton), donc la colonne
   /// est posée au `create` — jamais un booléen à côté, la date suffit.
@@ -293,6 +305,7 @@ model User {
   createdAffiliateTokens AffiliateToken[]              @relation("AffiliateTokenCreator")
   affiliateRelations     AffiliateRelation[]           @relation("AffiliateUser")
   referredRelations      AffiliateRelation[]           @relation("ReferredUser")
+  sentEmailInvitations   EmailInvitation[]              @relation("EmailInvitationSender")
   createdTrackingLinks   TrackingLink[]                @relation("TrackingLinkCreator")
   initiatedCalls         CallSession[]                 @relation("CallInitiator")
   conversationPrefs      UserConversationPreferences[]
@@ -1773,8 +1786,9 @@ model AffiliateToken {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  creator      User                @relation("AffiliateTokenCreator", fields: [createdBy], references: [id])
-  affiliations AffiliateRelation[]
+  creator          User                @relation("AffiliateTokenCreator", fields: [createdBy], references: [id])
+  affiliations     AffiliateRelation[]
+  emailInvitations EmailInvitation[]
 }
 
 /// Relation d'affiliation entre utilisateurs
@@ -1790,6 +1804,27 @@ model AffiliateRelation {
   affiliateToken AffiliateToken @relation(fields: [affiliateTokenId], references: [id])
   affiliateUser  User           @relation("AffiliateUser", fields: [affiliateUserId], references: [id])
   referredUser   User           @relation("ReferredUser", fields: [referredUserId], references: [id])
+}
+
+/// Relation d'invitation par e-mail persistée (#3691) — QUI a invité QUI, par
+/// quelle adresse, distincte de l'`AffiliateRelation` (qui ne s'écrit qu'APRÈS
+/// inscription). Le lien tracé et la page d'atterrissage réutilisent
+/// l'`AffiliateToken` existant (`/signup/affiliate/:token`) plutôt qu'un
+/// second système : `affiliateTokenId` pointe un jeton dédié à CETTE
+/// invitation (`maxUses: 1`), et son nom reste générique (jamais l'email du
+/// destinataire, public via `GET /affiliate/validate/:token`).
+model EmailInvitation {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  senderId         String   @db.ObjectId
+  email            String
+  affiliateTokenId String   @db.ObjectId
+  sentAt           DateTime @default(now())
+
+  sender         User           @relation("EmailInvitationSender", fields: [senderId], references: [id])
+  affiliateToken AffiliateToken @relation(fields: [affiliateTokenId], references: [id])
+
+  @@index([senderId])
+  @@index([email])
 }
 
 /// Lien de tracking pour compter les clics sur les liens partagés
@@ -3134,6 +3169,14 @@ model Post {
   content          String?
   /// Langue originale du contenu (ISO 639-1, détectée automatiquement à la création)
   originalLanguage String?
+  /// Langue MESURÉE on-device (tinyld) sur le texte réellement tapé au composer web
+  /// (#5349) — JAMAIS une préférence d'interface. Distincte d'`originalLanguage`
+  /// (revendication de l'auteur, qui garde son rang) : ce champ n'est qu'un SECOND
+  /// RECOURS, relu par `PostTranslationService` (création ET traduction à la
+  /// demande, #5422) quand aucune revendication n'a été persistée — avant que la
+  /// détection serveur par regex ne reprenne la main. `null` pour tout post publié
+  /// hors du composer web, ou dont la mesure on-device n'était pas assez fiable.
+  detectedLanguage String?
   /// Traductions auto-générées à la demande selon la langue du viewer
   /// Quand un utilisateur consulte un post dans une langue différente de originalLanguage,
   /// le backend traduit et cache le résultat ici (même pipeline que Message).
@@ -4393,4 +4436,45 @@ model PostHashtag {
   @@unique([postId, hashtagId], name: "post_hashtag_unique")
   @@index([hashtagId])
   @@index([postId])
+}
+
+/// Compteur d'engagement par (utilisateur, axe) — #5530,
+/// docs/product/streaks-badges-modele.md § 3. Un document par axe, jamais
+/// une colonne par axe sur `User` : ajouter un axe n'ajoute aucune migration
+/// de schéma. Incrémenté UNIQUEMENT par `EngagementService.recordActivity`
+/// (`services/gateway/src/services/engagement/EngagementService.ts`) — aucune
+/// route ni handler socket n'écrit ce modèle directement.
+model EngagementCounter {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  /// Clé stable du catalogue, ex. "content.audio_message" — voir
+  /// `EngagementAxisKey` (@meeshy/shared/types/engagement).
+  axisKey   String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, axisKey])
+  @@index([userId])
+}
+
+/// Garde anti-rejeu — #5530, docs/product/streaks-badges-modele.md § 4. Un
+/// palier déjà écrit ici ne se re-notifie jamais, même si le compteur source
+/// est recalculé : la mémoire de ce qui a déjà été notifié est CETTE table,
+/// pas la valeur courante du compteur. La contrainte unique est la garde
+/// (un `create` en conflit = palier déjà servi, no-op silencieux), jamais une
+/// relecture avant écriture — ça évite la course entre deux écritures
+/// concurrentes du même utilisateur.
+model EngagementMilestone {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String   @db.ObjectId
+  /// "badge" | "streak" | "level" | "achievement" — voir
+  /// `EngagementMilestoneType` (@meeshy/shared/types/engagement).
+  milestoneType String
+  /// ex. "content.audio_message:10", "streak:7", "level:3",
+  /// "achievement.first_post" — unique par (userId, milestoneType, clé).
+  milestoneKey  String
+  reachedAt     DateTime @default(now())
+
+  @@unique([userId, milestoneType, milestoneKey])
+  @@index([userId, milestoneType])
 }

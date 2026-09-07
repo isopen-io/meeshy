@@ -1121,3 +1121,35 @@ describe('W3 — les gardes et le reset de la publication', () => {
     expect(mockClearAttachments).toHaveBeenCalledTimes(1);
   });
 });
+
+// #5349 — la langue MESURÉE sur la légende tapée voyage jusqu'à `onPublish`,
+// jamais une préférence d'interface. `detectComposeLanguage`/tinyld ne sont
+// pas mockés ici : c'est la vraie détection on-device qui est exercée.
+describe('MeeshyComposer — langue mesurée sur la légende (#5349)', () => {
+  it('inclut detectedLanguage sur une légende suffisamment longue et confiante', () => {
+    const { published } = renderComposer();
+    expand();
+    type("Bonjour, comment vas-tu aujourd'hui ? J'espère que tout va bien.");
+    clickPublish();
+
+    expect(published()?.detectedLanguage).toBe('fr');
+  });
+
+  it("n'invente jamais de langue sur une légende trop courte", () => {
+    const { published } = renderComposer();
+    expand();
+    type('Ok');
+    clickPublish();
+
+    expect(published()).not.toHaveProperty('detectedLanguage');
+  });
+
+  it("n'invente jamais de langue quand seuls des médias sont publiés", () => {
+    mockAttachmentState.uploadedAttachments = [makeAttachment({ mimeType: 'image/jpeg' })];
+    const { published } = renderComposer();
+    expand();
+    clickPublish();
+
+    expect(published()).not.toHaveProperty('detectedLanguage');
+  });
+});

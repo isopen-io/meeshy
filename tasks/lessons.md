@@ -181,8 +181,6 @@ ce qu'on vient de pousser.
 
 ## Leçon 162 — Avant d'OUVRIR un chantier, regarder qui d'autre est déjà dessus — la leçon 159 vaut aussi à l'aller (2026-08-14, routine messaging, cycle 123bis)
 
-## Leçon 162 — Avant d'OUVRIR un chantier, regarder qui d'autre est déjà dessus — la leçon 159 vaut aussi à l'aller (2026-08-14, routine messaging, cycle 123bis)
-
 La leçon 160 disait : avant de RÉPARER un fichier cassé, chercher qui d'autre le répare déjà. Ce
 cycle a montré que la règle vaut à l'identique pour une FONCTIONNALITÉ, et qu'elle se paie plus
 cher — parce qu'un chantier dure des heures, pas trois minutes.
@@ -29360,3 +29358,138 @@ précisément ce à quoi on ne pense pas.
 **Placeholders** : `%1$d`/`%2$d` doivent survivre à la traduction — un ordinal
 perdu inverse les deux nombres en arabe (« la slide 3 sur 2 »). Vérifier, pas
 supposer.
+
+---
+
+## Leçon 543 — Un porteur dont l'existence dépend d'un SEUL de ses champs perd tous les autres en silence
+
+**Contexte** (#5406, retour porteur 2026-09-06). Le double-tap sur le fond du
+composer choisit son cadrage (`videoFitMode` : centré-letterbox ou plein cadre).
+Après publication, l'image remplissait toujours le canvas.
+
+**Ce que le champ traverse.** Le pan et l'échelle du fond voyagent sur
+`mediaObjects[bg]` ; `videoFitMode` est le seul qui ne soit pas une coordonnée
+géométrique et vit sur `effects.backgroundTransform` — lequel ne voyage QUE dans
+la charge de l'objet `bg` du document v3.
+
+**Le défaut.** Cet objet n'était émis que `if let background = nonEmpty(effects.background)`,
+c'est-à-dire si une COULEUR de fond était déclarée. **La condition de perte et la
+condition d'utilité du geste sont la même** : un cadrage ne vaut que sur un fond
+MÉDIA, là où une couleur n'a aucune raison d'exister.
+
+> Rien ne rougit, et il n'y a rien à trouver : l'objet n'est pas amputé, **il
+> n'est pas là**. Un champ absent d'une charge ne laisse aucune trace, à la
+> différence d'un champ vidé par un sérialiseur.
+
+**Les deux questions à poser à tout porteur de fil** :
+1. *Son existence est-elle conditionnée à l'un de ses champs ?* Si oui, tous les
+   autres partent avec ce champ.
+2. *Le champ qui décide est-il celui qui compte ?* Ici il ne l'était pas — et sa
+   présence était même ANTI-corrélée à celle du champ utile.
+
+**Le témoin ne pouvait pas tomber.** `testStoryEffectsWithBackgroundTransformRoundtrip`
+posait `background: "FF0000"`. C'est la leçon 261 sous un autre angle : un témoin
+de rang s'écrit sur un rang AUTRE que le premier, et ici le « rang 1 » est le cas
+où la couleur existe.
+
+**Et la règle était écrite deux fois** — `CanvasV3.migratedScene` (Swift) et
+`convertV1ToV3` (gateway) — **avec le même trou aux deux exemplaires**. Corriger
+une jumelle sans l'autre n'aurait rien réglé pour les clients qui passent par le
+convertisseur serveur.
+
+## Leçon 544 — Une garde de permission qui ne s'abonne à rien fige la permission au premier rendu
+
+**Contexte** (#5407, même retour porteur). La section « Lieu » de la palette de
+stickers affichait « Active la position pour épingler un lieu » alors que la
+localisation était active.
+
+**Le défaut.** `stickerNearbyPlacesProvided()` lisait
+`CLLocationManager().authorizationStatus` **à la volée, dans une expression de
+`body`**. La valeur est juste à cet instant — et rien ne la relit : SwiftUI ne
+réévalue un `body` que si un état OBSERVÉ change, et un statut système n'en est
+pas un. Un refus puis une autorisation accordée dans Réglages laissait le
+fournisseur à `nil` pour toute la session.
+
+> **La question à poser à toute lecture d'autorisation n'est pas « lit-elle la
+> bonne propriété ? » mais « que se passe-t-il quand la réponse CHANGE ? »**
+> L'API qui le dit existait et n'était pas branchée :
+> `locationManagerDidChangeAuthorization(_:)`.
+
+**Le message ne mentait pas — il rendait fidèlement un fournisseur absent.**
+C'est ce qui rend ce défaut coûteux à diagnostiquer : la chaîne d'affichage est
+correcte de bout en bout, et l'erreur est trois couches plus haut, dans la
+FRAÎCHEUR de la valeur injectée.
+
+**Le second manque, en aval.** Le chargement des lieux n'avait qu'un
+déclencheur : l'`onAppear` de la section. Une section déjà montée ne réapparaît
+pas — une permission fraîchement accordée n'avait donc aucun site où déclencher
+la recherche. Sans ce second déclencheur, le correctif aurait fait disparaître
+le message sur une grille restée vide : **pire que le message**.
+
+**Forme générale** : quand on rend une valeur d'environnement RÉACTIVE, chercher
+tout consommateur dont le déclencheur est un événement de CYCLE DE VIE
+(`onAppear`, `task`) — il ne se rejouera pas, et son travail restera à faire.
+
+---
+
+## Leçon 545 — Deux canaux de publication, deux inventaires de ce qui PART
+
+**Contexte** (#5409). Le longpress d'un message ouvrait encore l'ancien atelier.
+Le reroutage vers le composer v3 tenait en trois lignes ; ce qui l'avait
+empêché pendant plusieurs lots tenait en deux choses, et aucune n'était celle
+qui était écrite.
+
+**Ce qui était ÉCRIT.** Un doc-comment justifiait le routage vers l'atelier :
+« `ComposerDocumentDraft` n'a ni `mediaIds`, ni fichier, ni lieu ». Faux sur les
+trois points depuis #4756. Son JUMEAU, sur une autre porte, disait exactement la
+même chose et avait déjà été corrigé — la correction n'avait pas été portée ici.
+
+> Un doc-comment qui EXEMPTE une unité d'une règle se vérifie comme une
+> affirmation, pas comme une décision. Et corriger un exemplaire ne corrige pas
+> sa jumelle : le commentaire ne documente que le fichier qui le porte
+> (leçon 85).
+
+**Ce qui bloquait VRAIMENT.** `documentLocalMedia` — la seule liste que la voie
+document téléverse — n'a QU'UN écrivain, l'INTAKE. Une GRAINE va directement au
+canvas et saute l'intake. Tant que sa surface était la SCÈNE, cela ne coûtait
+rien : le canal scène reçoit tous les actifs chargés. La voie DOCUMENT ne les
+voit pas.
+
+> **Deux canaux de publication ⇒ deux inventaires de ce qui part.** Un média peut
+> être posé sur le canvas, visible à l'écran, décrit dans le blob publié — et
+> n'avoir aucun TÉLÉVERSEUR. Rien ne rougit : le canvas est juste, c'est la
+> publication qui est vide.
+
+C'est la forme exacte de la leçon 543 (#5406) sur un autre étage : un champ
+parfaitement produit, qu'aucun chemin ne fait voyager. **La question à poser à
+tout contenu composé n'est pas « est-il correct ? » mais « par quel canal
+part-il, et ce canal le connaît-il ? ».**
+
+**La jumelle avait déjà le défaut, en production.** Une autre porte montait déjà
+la surface document AVEC une graine et publiait pour de bon : partager une image
+depuis une autre app puis publier en POST perdait l'image. Elle n'a pas été
+trouvée en cherchant le bug — elle est tombée en posant la question ci-dessus à
+tous les monteurs de graine.
+
+## Leçon 546 — Un gate en arbre PARTAGÉ mesure l'arbre ; isoler est la seule mesure
+
+**Contexte** (#5409, même lot). Le build de l'app a échoué sur des fichiers que
+je n'avais pas touchés. `lsof` sur le verrou `build.db` a nommé le détenteur :
+une AUTRE session travaillait dans le même arbre, avec 8 fichiers du composer en
+vol — dont une signature de fonction à moitié changée.
+
+**Ce qu'il ne faut pas faire** : tuer son processus, ni committer le
+`project.pbxproj` (il porte les références de ses fichiers neufs, non
+committés — la CI casserait sur des chemins absents).
+
+**Ce qui mesure** : `git worktree add` depuis `HEAD`, y copier SES SEULS fichiers
+modifiés, régénérer le projet, compiler et tester là. Le verdict porte alors sur
+le diff, pas sur l'arbre.
+
+**Deux pièges pratiques mesurés dans la foulée :**
+- un build iOS complet dépasse la limite d'un job de fond (`BUILD INTERRUPTED`,
+  exit 144) — relancer en avant-plan par tranches, le cache est chaud et chaque
+  passe avance ;
+- ne PAS committer `project.pbxproj` est SÛR ici, et c'est vérifiable : les
+  workflows iOS lancent `xcodegen generate` avant de builder, et `meeshy.sh`
+  régénère sur dérive constatée.

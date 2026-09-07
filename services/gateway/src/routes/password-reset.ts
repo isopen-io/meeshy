@@ -24,6 +24,7 @@ import {
 import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types';
 import { disconnectRevokedSessions } from '../socketio/disconnectRevokedSessions';
 import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
+import { logError, logWarn } from '../utils/logger.js';
 
 // Zod schemas for request validation
 // Note: captchaToken is now optional as we use built-in bot protection instead
@@ -207,7 +208,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'Invalid request data');
       }
 
-      fastify.log.error({ err: error }, '[PasswordReset] Error in forgot-password');
+      logError(fastify.log, '[PasswordReset] Error in forgot-password', error);
       // Return generic success response even on error (security)
       return sendSuccess(reply, { message: 'If an account exists with this email, a password reset link has been sent.' });
     }
@@ -219,7 +220,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
    */
   fastify.post('/reset-password', {
     schema: {
-      description: 'Complete password reset using the token received via email. The new password must be at least 6 characters and include uppercase, lowercase, digit, and special character. If 2FA is enabled, a valid 2FA code must be provided.',
+      description: 'Complete password reset using the token received via email. The new password must be at least PASSWORD_MIN_LENGTH characters and include uppercase, lowercase, digit, and special character. If 2FA is enabled, a valid 2FA code must be provided.',
       tags: ['auth'],
       summary: 'Complete password reset',
       body: {
@@ -234,14 +235,14 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           },
           newPassword: {
             type: 'string',
-            minLength: 6,
+            minLength: PASSWORD_MIN_LENGTH,
             maxLength: 128,
-            description: 'New password (minimum 6 characters — PASSWORD_MIN_LENGTH)',
+            description: 'New password (minimum PASSWORD_MIN_LENGTH characters)',
             example: 'MyS3cur3P@ssw0rd!'
           },
           confirmPassword: {
             type: 'string',
-            minLength: 6,
+            minLength: PASSWORD_MIN_LENGTH,
             maxLength: 128,
             description: 'Password confirmation - must match newPassword exactly',
             example: 'MyS3cur3P@ssw0rd!'
@@ -319,7 +320,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           io: fastify.socketIOHandler?.getManager?.()?.getIO(),
           userId: result.userId ?? '',
           reason: 'password_changed',
-          onError: (err) => fastify.log.warn({ err }, '[PasswordReset] socket fanout failed after reset'),
+          onError: (err) => logWarn(fastify.log, '[PasswordReset] socket fanout failed after reset', err),
         });
         return sendSuccess(reply, { message: result.message });
       } else {
@@ -331,7 +332,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'Invalid request data');
       }
 
-      fastify.log.error({ err: error }, '[PasswordReset] Error in reset-password');
+      logError(fastify.log, '[PasswordReset] Error in reset-password', error);
       return sendInternalError(reply, 'An error occurred while resetting your password. Please try again.');
     }
   });
@@ -463,7 +464,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       });
 
     } catch (error) {
-      fastify.log.error({ err: error }, '[PasswordReset] Error verifying token');
+      logError(fastify.log, '[PasswordReset] Error verifying token', error);
       return sendInternalError(reply, 'Error verifying token');
     }
   });
@@ -565,7 +566,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'validation_error');
       }
-      fastify.log.error({ err: error }, '[PhonePasswordReset] Error in phone lookup');
+      logError(fastify.log, '[PhonePasswordReset] Error in phone lookup', error);
       return sendInternalError(reply, 'internal_error');
     }
   });
@@ -652,7 +653,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'validation_error');
       }
-      fastify.log.error({ err: error }, '[PhonePasswordReset] Error in identity verification');
+      logError(fastify.log, '[PhonePasswordReset] Error in identity verification', error);
       return sendInternalError(reply, 'internal_error');
     }
   });
@@ -735,7 +736,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'validation_error');
       }
-      fastify.log.error({ err: error }, '[PhonePasswordReset] Error in code verification');
+      logError(fastify.log, '[PhonePasswordReset] Error in code verification', error);
       return sendInternalError(reply, 'internal_error');
     }
   });
@@ -794,7 +795,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'validation_error');
       }
-      fastify.log.error({ err: error }, '[PhonePasswordReset] Error in code resend');
+      logError(fastify.log, '[PhonePasswordReset] Error in code resend', error);
       return sendInternalError(reply, 'internal_error');
     }
   });

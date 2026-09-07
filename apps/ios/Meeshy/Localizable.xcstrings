@@ -19432,100 +19432,6 @@
         }
       }
     },
-    "a11y.feed.compose.cancel": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إلغاء"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abbrechen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancelar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Annuler"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Annulla"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancelar"
-          }
-        }
-      }
-    },
-    "a11y.feed.compose.cancel.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يغلق المحرّر دون نشر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Schließt den Editor ohne zu veröffentlichen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Closes the composer without posting"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cierra el editor sin publicar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ferme l'éditeur sans publier"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chiude l'editor senza pubblicare"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fecha o editor sem publicar"
-          }
-        }
-      }
-    },
     "a11y.feed.compose.open": {
       "extractionState": "manual",
       "localizations": {
@@ -19616,194 +19522,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Abre o editor de publicações"
-          }
-        }
-      }
-    },
-    "a11y.feed.compose.publish": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "نشر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Veröffentlichen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Post"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Publicar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Publier"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pubblica"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Publicar"
-          }
-        }
-      }
-    },
-    "a11y.feed.compose.publish.disabled": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "غير متاح، أضِف محتوى"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nicht verfügbar, füge Inhalt hinzu"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unavailable, add some content"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No disponible, añade contenido"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Indisponible, ajoutez du contenu"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Non disponibile, aggiungi del contenuto"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Indisponível, adicione conteúdo"
-          }
-        }
-      }
-    },
-    "a11y.feed.compose.publish.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ينشر رسالتك في التدفق"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Veröffentlicht deine Nachricht im Feed"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Publishes your message to the feed"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Publica tu mensaje en el feed"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Publie votre message dans le fil"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pubblica il tuo messaggio nel feed"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Publica sua mensagem no feed"
-          }
-        }
-      }
-    },
-    "a11y.feed.compose.publish.uploading": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جارٍ الإرسال"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wird hochgeladen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Uploading"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enviando"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Envoi en cours"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Invio in corso"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enviando"
           }
         }
       }
@@ -52880,53 +52598,6 @@
         }
       }
     },
-    "common.publish": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "نشر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Veröffentlichen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Publish"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Publicar"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pubblica"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Publicar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Publier"
-          }
-        }
-      }
-    },
     "common.redo": {
       "extractionState": "manual",
       "localizations": {
@@ -60788,6 +60459,53 @@
         }
       }
     },
+    "composer.document.media.capReached": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بحد أقصى عشرة عناصر وسائط لكل منشور — لم تتم إضافة هذا العنصر"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Höchstens zehn Medien pro Beitrag – dieses wurde nicht hinzugefügt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up to ten media per post — this one wasn’t added"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Máximo diez elementos multimedia por publicación: este no se añadió"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dix médias au maximum par post — celui-ci n'a pas été ajouté"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Massimo dieci contenuti multimediali per post: questo non è stato aggiunto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No máximo dez mídias por post — esta não foi adicionada"
+          }
+        }
+      }
+    },
     "composer.drop.hint": {
       "extractionState": "manual",
       "localizations": {
@@ -62884,98 +62602,6 @@
         }
       }
     },
-    "composer.mosaic.a11y": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تخطيط المشاهد: %@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Anordnung der Szenen: %@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Scene layout: %@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Disposición de las escenas: %@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Disposition des scènes : %@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Disposizione delle scene: %@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Disposição das cenas: %@"
-          }
-        }
-      }
-    },
-    "composer.mosaic.a11y.hint": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "انقر مرتين لتغيير التخطيط"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zweimal tippen, um die Anordnung zu ändern"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Double-tap to change the layout"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toca dos veces para cambiar la disposición"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Touche deux fois pour changer la disposition"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tocca due volte per cambiare la disposizione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toque duas vezes para mudar a disposição"
-          }
-        }
-      }
-    },
     "composer.mosaic.carousel": {
       "localizations": {
         "ar": {
@@ -63110,6 +62736,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rolagem contínua"
+          }
+        }
+      }
+    },
+    "composer.mosaic.section": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تخطيط المشاهد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anordnung der Szenen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scene layout"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disposición de las escenas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disposition des scènes"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disposizione delle scene"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disposição das cenas"
           }
         }
       }
@@ -67322,48 +66994,140 @@
         }
       }
     },
-    "composer.slide.strip.position": {
+    "composer.slide.rail": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الشريحة %1$d من %2$d"
+            "value": "مشاهد المنشور"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Folie %1$d von %2$d"
+            "value": "Szenen der Veröffentlichung"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Slide %1$d of %2$d"
+            "value": "Publication scenes"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diapositiva %1$d de %2$d"
+            "value": "Escenas de la publicación"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Slide %1$d sur %2$d"
+            "value": "Scènes de la publication"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diapositiva %1$d di %2$d"
+            "value": "Scene della pubblicazione"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Slide %1$d de %2$d"
+            "value": "Cenas da publicação"
+          }
+        }
+      }
+    },
+    "composer.slide.rail.delete": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حذف المشهد %1$d"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szene %1$d löschen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete scene %1$d"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar la escena %1$d"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer la scène %1$d"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elimina la scena %1$d"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Excluir a cena %1$d"
+          }
+        }
+      }
+    },
+    "composer.slide.rail.position": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المشهد %1$d من %2$d"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szene %1$d von %2$d"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scene %1$d of %2$d"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escena %1$d de %2$d"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scène %1$d sur %2$d"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scena %1$d di %2$d"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cena %1$d de %2$d"
           }
         }
       }
@@ -93463,53 +93227,6 @@
         }
       }
     },
-    "feed.compose.placeholder": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "بماذا تفكّر؟"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Woran denkst du?"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "What's on your mind?"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Qué estás pensando?"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Qu'avez-vous en tête ?"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A cosa stai pensando?"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No que você está pensando?"
-          }
-        }
-      }
-    },
     "feed.compose.subtitle": {
       "extractionState": "stale",
       "localizations": {
@@ -93553,53 +93270,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Partager quelque chose avec le monde…"
-          }
-        }
-      }
-    },
-    "feed.compose.title": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "منشور جديد"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Neuer Beitrag"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "New post"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nueva publicación"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nuovo post"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nova publicação"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nouveau post"
           }
         }
       }

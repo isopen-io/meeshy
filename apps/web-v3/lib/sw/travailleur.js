@@ -129,11 +129,213 @@ const purgeLeNamespace = async () => {
   await Promise.all(cibles.map((nom) => caches.delete(nom)));
 };
 
+// LE PUSH WEB (#5391) — le travailleur de zone porte trois lots de plus, dans
+// le style plat de ce fichier :
+//
+//   1. `push` : la passerelle n'envoie QUE par FCM (`services/gateway/src/
+//      services/PushNotificationService.ts:657-672`) — le corps arrive sous
+//      `charge.notification.{title,body,icon,badge}`, DÉJÀ RÉSOLU AU PRISME
+//      côté serveur (loi de la bannière, § Prisme du CLAUDE.md). Ce worker ne
+//      touche à AUCUN des deux : ni troncature, ni recomposition, ni
+//      résolution de langue — il les sert VERBATIM. `silent: true` (les
+//      révocations, `call_cancel`) ⇒ `dataOnly` ⇒ le champ `notification` est
+//      ABSENT de la charge (`PushNotificationService.ts:55`) : aucune
+//      bannière n'est montrée, jamais une fabriquée à partir du seul `data`.
+//   2. `notificationclick` : ouvre l'ADRESSE PORTÉE PAR LA CHARGE, DANS LA
+//      ZONE — jamais un lien absolu forgé, jamais un hôte étranger. La
+//      cascade (`cibleDansLaZone`) est la TRADUCTION, aux adresses de la
+//      zone, de celle du legacy (`buildNotificationTargetUrl`,
+//      `apps/web/public/firebase-messaging-sw.js:26-50`) : `fcmOptions.link`
+//      (les deux casses du fil, § 2.4 de la spécification) au format legacy
+//      `/conversations/<id>?messageId=<mid>` transposé sur `adresseDuFil` /
+//      `adresseDuMessage` (`lib/api/adresses-du-fil.ts`) ; sinon
+//      `data.conversationId` ; sinon `data.postId` (`/post/<id>`, la seule
+//      adresse de contenu social de la v3 à ce jour) ; sinon
+//      `/notifications`. Toute cible ABSOLUE ou HORS ZONE retombe sur
+//      `/notifications` — FAIL-CLOSED : un `link` forgé n'ouvre jamais un
+//      site tiers.
+//   3. La purge de déconnexion (#5095, ci-dessus) désabonne aussi le
+//      NAVIGATEUR — `self.registration.pushManager` — en BEST-EFFORT, à côté
+//      de la purge des caches qu'elle faisait déjà : la déconnexion retire
+//      l'abonnement de CET appareil, jamais celui d'un autre.
+//
+// `cibleDansLaZone` ne peut PAS importer `lib/api/adresses-du-fil.ts` — ce
+// fichier est du JS plat, sans module — donc elle en RÉÉCRIT la formule
+// (`/chats/<id>`, `#m-<id>`) : le lien entre les deux est l'EXÉCUTION, pas un
+// import — `__tests__/sw-zone.test.ts` importe les fonctions réelles et
+// compare leur résultat à ce que ce worker calcule, pour CHAQUE cas.
+const ADRESSE_PAR_DEFAUT = '/notifications';
+
+const adresseDuFilLocale = (id) => '/chats/' + encodeURIComponent(id);
+const ancreDuMessageLocale = (id) => '#' + encodeURIComponent('m-' + id);
+const adresseDuMessageLocale = (adresse, id) => adresse + ancreDuMessageLocale(id);
+// LA TRANCHE, PAS SEULEMENT L'ANCRE (défaut de revue) — une ancre `#m-<id>`
+// ne trouve son nœud que si le message appartient à la page SERVIE, et la
+// porte du fil n'en sert qu'une tranche : une bannière pour un message plus
+// ancien que la dernière page ouvrait le fil AILLEURS que sur le message
+// annoncé. `?autour=<id>` est le paramètre que `app/connecte/fil-porte.ts`
+// lit précisément pour cela (`PARAM_DE_L_ANCRE`) — la composition rejouée
+// ici est celle d'`adresseDuMessage(adresseAutourDuMessage(…))`, comparée
+// aux fonctions RÉELLES par `__tests__/sw-zone.test.ts`.
+const adresseAutourLocale = (adresse, id) =>
+  adresse + (adresse.indexOf('?') === -1 ? '?' : '&') + 'autour=' + encodeURIComponent(id);
+const cibleDuMessageLocale = (conversationId, messageId) =>
+  adresseDuMessageLocale(adresseAutourLocale(adresseDuFilLocale(conversationId), messageId), messageId);
+
+// Un chemin déjà DANS LA ZONE (fourni tel quel par la charge) est servi sans
+// retouche — la cascade legacy (`/conversations/<id>`) ne s'applique QU'à un
+// lien qui n'en est pas un.
+const estUnCheminDeZone = (chemin) =>
+  chemin.startsWith('/chats/') ||
+  chemin.startsWith('/chat/') ||
+  chemin.startsWith('/post/') ||
+  chemin === '/notifications';
+
+const estAbsolue = (lien) => /^[a-z][a-z0-9+.-]*:\/\//i.test(lien);
+
+const cibleDepuisLeLien = (lien) => {
+  if (typeof lien !== 'string' || lien === '' || estAbsolue(lien) || !lien.startsWith('/')) return null;
+  const chemin = lien.split('?')[0].split('#')[0];
+  if (estUnCheminDeZone(chemin)) return lien;
+  const conversation = /^\/conversations\/([^/?#]+)/.exec(lien);
+  if (conversation === null) return null;
+  const id = decodeURIComponent(conversation[1]);
+  const messageId = new URL(lien, 'https://zone.invalide').searchParams.get('messageId');
+  return messageId === null ? adresseDuFilLocale(id) : cibleDuMessageLocale(id, messageId);
+};
+
+const cibleDansLaZone = (charge) => {
+  const lien =
+    (charge.fcmOptions && charge.fcmOptions.link) ||
+    (charge.fcm_options && charge.fcm_options.link) ||
+    (charge.data && charge.data.url);
+  const depuisLeLien = cibleDepuisLeLien(lien);
+  if (depuisLeLien !== null) return depuisLeLien;
+
+  const conversationId = charge.data && charge.data.conversationId;
+  if (typeof conversationId === 'string' && conversationId !== '') {
+    const messageId = charge.data.messageId;
+    return typeof messageId === 'string' && messageId !== ''
+      ? cibleDuMessageLocale(conversationId, messageId)
+      : adresseDuFilLocale(conversationId);
+  }
+
+  const postId = charge.data && charge.data.postId;
+  if (typeof postId === 'string' && postId !== '') return '/post/' + encodeURIComponent(postId);
+
+  return ADRESSE_PAR_DEFAUT;
+};
+
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+  let charge;
+  try {
+    charge = event.data.json();
+  } catch {
+    return;
+  }
+  // `dataOnly` (`silent: true`) : AUCUN bloc `notification` — révocations,
+  // signal d'appel annulé. Aucune bannière n'est montrée à leur sujet.
+  const notification = charge && charge.notification;
+  if (notification === undefined || notification === null) return;
+  // Un titre qui n'est pas une CHAÎNE ne se sert pas : `showNotification`
+  // coercerait `undefined` en le mot « undefined » sur l'écran verrouillé.
+  if (typeof notification.title !== 'string' || notification.title === '') return;
+
+  event.waitUntil(
+    self.registration.showNotification(notification.title, {
+      body: notification.body,
+      icon: notification.icon,
+      badge: notification.badge,
+      tag: (charge.data && charge.data.notificationId) || undefined,
+      data: { cible: cibleDansLaZone(charge) },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  const cible = event.notification.data && event.notification.data.cible;
+  event.notification.close();
+  if (typeof cible !== 'string' || cible === '') return;
+
+  // LE MÊME ÉCRAN, PAS LA MÊME ADRESSE (défaut de revue) — deux bannières de
+  // la MÊME conversation portent deux ancres différentes. Comparer l'adresse
+  // ENTIÈRE ouvrait alors une SECONDE fenêtre sur un fil déjà ouvert ; la
+  // fenêtre existante est donc reconnue par son CHEMIN, puis NAVIGUÉE vers la
+  // tranche annoncée quand elle n'y est pas déjà — `navigate` peut manquer ou
+  // refuser (une fenêtre qu'on ne contrôle pas), et le repli est alors le
+  // simple focus, jamais un doublon.
+  const chemin = (adresse) => {
+    try {
+      return new URL(adresse, self.location.href).pathname;
+    } catch {
+      return null;
+    }
+  };
+  const complet = (() => {
+    try {
+      return new URL(cible, self.location.href).href;
+    } catch {
+      return null;
+    }
+  })();
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((liste) => {
+      const vise = chemin(cible);
+      const ouvert = vise === null ? undefined : liste.find((client) => chemin(client.url) === vise);
+      if (!ouvert) return self.clients.openWindow(cible);
+      if (ouvert.url === complet || typeof ouvert.navigate !== 'function') return ouvert.focus();
+      return Promise.resolve(ouvert.navigate(complet))
+        .then((client) => (client && typeof client.focus === 'function' ? client.focus() : ouvert.focus()))
+        .catch(() => ouvert.focus());
+    }),
+  );
+});
+
+const purgeLAbonnementPush = async () => {
+  const gestionnaire = self.registration && self.registration.pushManager;
+  if (!gestionnaire) return;
+  try {
+    const abonnement = await gestionnaire.getSubscription();
+    if (abonnement) await abonnement.unsubscribe();
+  } catch {
+    // best-effort — un navigateur qui refuse laisse l'abonnement en place,
+    // et le token SERVEUR reste retiré par ailleurs (§ 3.5 de la spécification).
+  }
+};
+
+// LA ROTATION DE L'ABONNEMENT PUSH (#5391, suivi de revue) — un navigateur
+// PEUT invalider une `PushSubscription` (rotation de clé côté navigateur ou
+// FCM, hors du contrôle de la page) et livre alors `pushsubscriptionchange`
+// au WORKER qui la détient, jamais à une page qui peut être fermée. Ce
+// worker ne peut pas rejouer la danse REST lui-même : la configuration
+// Firebase (`data-firebase-*`) vit sur le DOCUMENT de `/notifications/
+// preferences` (§ 3.4 de la spécification), jamais dans ce fichier plat. Il
+// pose donc un DRAPEAU dans le Cache Storage — sous un nom STABLE, hors du
+// cycle de version (exempté du nettoyage `activate` ci-dessous) — que la
+// page relit à CHAQUE chargement (`lib/realtime/push-abonnement.ts`,
+// `rejoueSiRotation`) et efface après avoir rejoué l'abonnement. Le CONTRAT
+// (le nom de cache, la clé) vit dans `lib/sw/signal.ts`, comme
+// `SIGNAL_DE_DECONNEXION` : ce fichier plat porte le LITTÉRAL,
+// `__tests__/sw-zone.test.ts` l'EXÉCUTE contre la constante importée.
+const CACHE_DE_ROTATION_PUSH = 'meeshy-v3-sw-push-rotation';
+const CLE_DE_ROTATION_PUSH = '/__v3/signal-rotation-push';
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_DE_ROTATION_PUSH).then((cache) => cache.put(CLE_DE_ROTATION_PUSH, new Response('1'))),
+  );
+});
+
 self.addEventListener('message', (event) => {
   const donnees = event.data;
   if (typeof donnees !== 'object' || donnees === null || donnees.type !== 'meeshy-v3:deconnexion') return;
   cacheSuspenduJusqua = Date.now() + DUREE_DE_SUPPRESSION_MS;
-  if (event.waitUntil) event.waitUntil(purgeLeNamespace());
+  if (event.waitUntil) {
+    event.waitUntil(purgeLeNamespace());
+    event.waitUntil(purgeLAbonnementPush());
+  }
 });
 
 self.addEventListener('activate', (event) => {
@@ -142,7 +344,7 @@ self.addEventListener('activate', (event) => {
       const noms = await caches.keys();
       await Promise.all(
         noms
-          .filter((nom) => nom.startsWith(NAMESPACE) && nom !== CACHE_NAME)
+          .filter((nom) => nom.startsWith(NAMESPACE) && nom !== CACHE_NAME && nom !== CACHE_DE_ROTATION_PUSH)
           .map((nom) => caches.delete(nom)),
       );
       await self.clients.claim();

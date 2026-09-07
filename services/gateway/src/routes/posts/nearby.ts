@@ -12,6 +12,7 @@ import { createSocialDiscoveryRateLimitConfig, checkSharedRateLimit, type Shared
 import { getCacheStore } from '../../services/CacheStore';
 import { depreciee } from '../../utils/deprecation';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import { logError } from '../../utils/logger.js';
 
 /**
  * GET /posts/nearby + GET /posts/nearby/density — recherche géospatiale de
@@ -261,7 +262,7 @@ export function registerNearbyRoutes(
 
       return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
     } catch (error) {
-      fastify.log.error(`[GET /posts/nearby] Error: ${error}`);
+      logError(fastify.log, '[GET /posts/nearby] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -316,7 +317,7 @@ export function registerNearbyRoutes(
 
       return sendSuccess(reply, data);
     } catch (error) {
-      fastify.log.error(`[GET /posts/nearby/density] Error: ${error}`);
+      logError(fastify.log, '[GET /posts/nearby/density] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });

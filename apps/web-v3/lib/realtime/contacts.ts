@@ -3,6 +3,7 @@ import { COOKIE_DE_JETON, valeurDuCookie } from '@/lib/api/cookies';
 import { CONTACTS } from '@/lib/contenu/contacts';
 import { FENETRE_REVERSIBLE_MS } from '@/lib/contenu/liste';
 
+import { signaleArme } from './arme';
 import { observeCycleDeVie } from './lifecycle';
 
 /**
@@ -199,6 +200,7 @@ const demarre = (): void => {
   if (jeton === null) return;
 
   prendsLesGestes({ main, passerelle, jeton, differe: null });
+  signaleArme(main);
 };
 
 demarre();

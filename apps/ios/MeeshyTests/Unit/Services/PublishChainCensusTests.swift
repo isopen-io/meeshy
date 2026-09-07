@@ -77,7 +77,7 @@ final class PublishChainCensusTests: XCTestCase {
             audioUrl: nil, audioDuration: nil, visibilityUserIds: nil,
             location: nil, mentions: nil, discoverabilityPrecision: nil,
             repostOfId: nil, mobileTranscription: nil, storyEffects: nil,
-            mediaCaption: nil, mediaAlt: nil
+            mediaCaption: nil, mediaAlt: nil, allowSoundExtraction: nil
         )
     }
 
@@ -101,7 +101,6 @@ final class PublishChainCensusTests: XCTestCase {
     ///
     /// | champ | producteur atteignable depuis le meuble | pourquoi il n'atteint pas la file |
     /// |---|---|---|
-    /// | `allowSoundExtraction` | non — `SoundExtractionToggle`, monté par `ComposerToolPanelHost` → `ComposerBottomBand`, **l'ATELIER seul** | aucune porte ne l'écrit sur cette voie |
     ///
     /// **`mediaAlt` a QUITTÉ cette liste le 2026-09-05, dans la journée où il y
     /// était entré.** Il y est resté le temps d'un correctif : la voie durable
@@ -109,6 +108,17 @@ final class PublishChainCensusTests: XCTestCase {
     /// `PublishIntent.document` (réaligné sur l'index de `localMedia`, comme les
     /// légendes) → `enqueuePostMedia` → `CreatePostPayload.mediaAlts` →
     /// `serverKeyedTexts` → `CreatePostBody.mediaAlt`.
+    ///
+    /// **`allowSoundExtraction` a QUITTÉ cette liste à son tour (#3996).** Il y
+    /// était entré pour la raison inverse de `mediaAlt` — non pas « perdu en
+    /// route » mais « aucune porte ne l'écrit sur cette voie »
+    /// (`SoundExtractionToggle` ne vit que dans l'atelier). La voie durable le
+    /// porte désormais de bout en bout, elle aussi — `ComposerDocumentDraft
+    /// .allowSoundExtraction` → `PublishIntent.document` →
+    /// `enqueuePostMedia` → `CreatePostPayload.allowSoundExtraction` →
+    /// `CreatePostBody.allowSoundExtraction`. La table reste VIDE plutôt que
+    /// supprimée : elle documente la distinction pour le prochain champ qui
+    /// s'y trouvera.
     ///
     /// > **Une justification de garde se périme comme un compte.** L'ancienne
     /// > disait « rien ne peut écrire ces deux champs » ; c'est resté vrai pour
@@ -150,15 +160,13 @@ final class PublishChainCensusTests: XCTestCase {
     /// remise à l'atelier (`ComposerMediaAltDoorTests
     /// .test_chaqueRemiseDeLaCharge_passeParLaGreffe`).
     ///
-    /// **Il ne reste donc qu'`allowSoundExtraction`**, et pour l'autre raison :
-    /// aucune porte ne l'écrit sur cette voie. La liste est ÉPINGLÉE — aucun
-    /// champ NEUF ne peut la rejoindre en silence, et en RETIRER un exige de
-    /// passer ici. C'est l'interruption qui fait le travail, pas le nombre.
+    /// **La liste est VIDE depuis #3996**, et le reste comme ANCRE plutôt que
+    /// de disparaître : aucun champ NEUF ne peut la rejoindre en silence, et y
+    /// AJOUTER un exige de passer ici et de dire pourquoi. C'est
+    /// l'interruption qui fait le travail, pas le nombre.
     ///
     /// Suivi : #5196 · le recensement face au CONTRAT : #5239.
-    private static let absentsDeLaVoieDurable: Set<String> = [
-        "allowSoundExtraction",
-    ]
+    private static let absentsDeLaVoieDurable: Set<String> = []
 
     private func manquantsSurLaVoieDurable() -> Set<String> {
         let durable = champs(voieDurable())

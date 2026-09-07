@@ -2,6 +2,10 @@
  * @jest-environment node
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { gzipSync } from 'node:zlib';
+
 import { GET, POST } from '@/app/chats/[cle]/route';
 import { documentDuFil, type EtatDuFil } from '@/app/connecte/fil-vue';
 import { adresseDeLaFeuilleDeLien, adresseDuLienCree } from '@/lib/api/adresses-du-fil';
@@ -54,6 +58,7 @@ const TEMPS_REEL: EtatDuFil['tempsReel'] = {
     navigateur: { nom: 'navigateur.f.js', url: '/__v3/rt/navigateur.f.js', corps: '' },
     composer: { nom: 'composer.f.js', url: '/__v3/rt/composer.f.js', corps: '' },
     prefs: { nom: 'prefs.f.js', url: '/__v3/rt/prefs.f.js', corps: '' },
+    reels: { nom: 'reels.f.js', url: '/__v3/rt/reels.f.js', corps: '' },
     socket: { nom: 'socket.io.def.js', url: '/__v3/rt/socket.io.def.js', corps: '' },
   },
 };
@@ -234,6 +239,35 @@ describe('l’avis « lien créé »', () => {
   it('est ABSENTE sur une lecture pure, sans module pour jamais y écrire', () => {
     const doc = documentDuFil(ETAT());
     expect(doc).not.toContain('id="lien-cree"');
+  });
+});
+
+/**
+ * LE POIDS DES DEUX DOCUMENTS QUE `sheet:link` SERT, RATCHETÉ (#5276) — même
+ * mécanique que « le poids du document du fil » de `fil-plein.test.ts` :
+ * toute valeur au-dessus de celle enregistrée dans `budgets-mesures.json`
+ * rend rouge, et la faire monter exige un diff relu. La spécification #5034
+ * (tour 2, PR #5265) demandait ces deux mesures sans jamais les poser — un
+ * document peut grossir en silence tant que sa mesure n'existe pas (même
+ * dette que #5039).
+ */
+describe('le poids des documents ?lien et ?cree=, et le cliquet de mesures (#5276)', () => {
+  const octets = (source: string): number => gzipSync(Buffer.from(source, 'utf8'), { level: 9 }).length;
+  const mesures = JSON.parse(readFileSync(join(__dirname, '..', 'budgets-mesures.json'), 'utf8')) as {
+    readonly documents_du_fil: { readonly fil_lien_o: number; readonly fil_cree_o: number };
+  };
+  const SAISIE = saisieDuFil(CLE, TITRE);
+
+  const enLien = octets(documentDuFil(ETAT({ tempsReel: TEMPS_REEL, lien: { saisie: SAISIE, motif: null } })));
+  const enCree = octets(documentDuFil(ETAT({ tempsReel: TEMPS_REEL, lienCree: 'mshy_x' })));
+
+  it('ne laisse pas le document `?lien` grossir en silence', () => {
+    console.log(`[mesure] document ?lien ${enLien} o gzip · document ?cree= ${enCree} o gzip`);
+    expect(enLien).toBeLessThanOrEqual(mesures.documents_du_fil.fil_lien_o);
+  });
+
+  it('ne laisse pas le document `?cree=` grossir en silence', () => {
+    expect(enCree).toBeLessThanOrEqual(mesures.documents_du_fil.fil_cree_o);
   });
 });
 

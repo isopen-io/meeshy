@@ -1,4 +1,4 @@
-import { blocDuNavigateur } from '@/app/connecte/chargeur';
+import { blocDuNavigateur, scriptDuTravailleur } from '@/app/connecte/chargeur';
 import { svgDuSprite } from '@/app/actifs-inlines';
 import { DOCUMENT_LANGUAGE } from '@/app/document-language';
 import { echappe } from '@/app/socle';
@@ -338,7 +338,13 @@ export const documentDuTableau = (etat: EtatDuTableau): string => {
   const dessus = etat.espace ? feuilleDeLEspace({ lecteur: etat.lecteur, hote: '/' }) : '';
 
   return documentDuSite({
-    script: blocDuNavigateur(),
+    // LE TRAVAILLEUR DE ZONE (#5321) — `documentDuSite` est aussi le squelette
+    // des pages du SITE (vitrine, institutionnel), qui n'ont droit à AUCUN
+    // JavaScript applicatif ; c'est pourquoi la registration n'y est pas
+    // servie d'office comme dans `documentPleinEcran`, et pourquoi CE document
+    // connecté-ci la demande explicitement, comme il le fait déjà pour
+    // `blocDuNavigateur()` juste à côté.
+    script: blocDuNavigateur() + scriptDuTravailleur(),
     titre: `${TABLEAU_DE_BORD.titre} — Meeshy`,
     description: TABLEAU_DE_BORD.apercu,
     // La feuille du TABLEAU en plus de celle de la zone, et pour lui seul : la

@@ -38,8 +38,10 @@ import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { readPaginatedList } from '@/services/paginated-list';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
+import { useUser } from '@/stores';
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog';
 import { copyToClipboard as copyTextToClipboard } from '@/lib/clipboard';
+import { ShieldCheck, X } from 'lucide-react';
 
 interface ShareLink {
   id: string;
@@ -80,9 +82,114 @@ interface ShareLink {
   };
 }
 
+/**
+ * Doit rester égal à `reason: { minLength: 10 }` du schéma AJV de
+ * `POST /admin/share-links/:id/reveal` (`content-share-links.ts`) — Fastify/AJV
+ * refuse tout motif plus court avec un 400 AVANT le handler. Le web ne peut pas
+ * importer cette constante depuis le gateway (paquets distincts) ; elle est
+ * donc recopiée ICI, et doit être tenue à jour si le seuil serveur change
+ * (même pattern que `SOVEREIGN_REASON_MIN_LENGTH`, #4383,
+ * `UserConversationsSection.tsx`).
+ */
+const SOVEREIGN_REASON_MIN_LENGTH = 10;
+
+/**
+ * #5430 — « Copier » et « Ouvrir » sont morts depuis #4157 : ils manipulaient
+ * `shareLink.linkId`, qu'aucune liste ne sert plus (#5299/#4692). Décision
+ * produit : révéler l'URL complète est un geste SOUVERAIN (rang BIGBOSS
+ * seul, `requireSovereign()` sur `POST /admin/share-links/:id/reveal`),
+ * motif écrit obligatoire, tracé dans `AdminAuditLog`. Ce prompt évite
+ * l'aller-retour réseau (400 systématique sans motif) et dit à l'opérateur
+ * pourquoi on le lui demande — mêmes principes que `SovereignReasonModal`
+ * (`UserConversationsSection.tsx`, #4383), dupliqué ici plutôt que partagé
+ * car les deux prompts n'ont ni props ni clés i18n en commun au-delà du motif.
+ */
+function RevealReasonModal({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const { t } = useI18n('admin');
+  const [reason, setReason] = useState('');
+  const [touched, setTouched] = useState(false);
+  const trimmed = reason.trim();
+  const tooShort = trimmed.length < SOVEREIGN_REASON_MIN_LENGTH;
+
+  const handleConfirm = () => {
+    setTouched(true);
+    if (tooShort) return;
+    onConfirm(trimmed);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onCancel}>
+      <Card
+        className="w-full max-w-md dark:bg-gray-900 dark:border-gray-800"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="flex items-center gap-2 dark:text-gray-100 text-base min-w-0">
+            <ShieldCheck className="h-5 w-5 flex-shrink-0" />
+            <span className="truncate">{t('shareLinks.revealReasonTitle')}</span>
+          </CardTitle>
+          <button onClick={onCancel} aria-label="Close" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex-shrink-0">
+            <X className="h-5 w-5" />
+          </button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {t('shareLinks.revealReasonNotice')}
+          </p>
+          <div className="space-y-1">
+            <label htmlFor="share-link-reveal-reason-input" className="text-xs font-medium dark:text-gray-200">
+              {t('shareLinks.revealReasonLabel')}
+            </label>
+            <textarea
+              id="share-link-reveal-reason-input"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              onBlur={() => setTouched(true)}
+              placeholder={t('shareLinks.revealReasonPlaceholder')}
+              rows={3}
+              className="w-full text-sm border dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <p className="text-[11px] text-gray-400 dark:text-gray-500">
+              {t('shareLinks.revealReasonHint', { min: String(SOVEREIGN_REASON_MIN_LENGTH) })}
+            </p>
+            {touched && tooShort && (
+              <p className="text-[11px] text-red-600 dark:text-red-400">
+                {t('shareLinks.revealReasonTooShort', { min: String(SOVEREIGN_REASON_MIN_LENGTH) })}
+              </p>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              onClick={onCancel}
+              className="text-xs px-3 py-1.5 rounded-md border dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+            >
+              {t('shareLinks.revealCancel')}
+            </button>
+            <button
+              onClick={handleConfirm}
+              disabled={tooShort}
+              className="text-xs px-3 py-1.5 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {t('shareLinks.revealConfirm')}
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function AdminShareLinksPage() {
   const router = useRouter();
   const { t, locale } = useI18n('admin');
+  const currentUser = useUser();
+  const isSovereignReader = currentUser?.role === 'BIGBOSS';
   const [shareLinks, setShareLinks] = useState<ShareLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -95,6 +202,7 @@ export default function AdminShareLinksPage() {
     open: false,
     linkId: null
   });
+  const [revealRequest, setRevealRequest] = useState<{ shareLinkId: string; action: 'copy' | 'open' } | null>(null);
 
   useEffect(() => {
     loadShareLinks();
@@ -179,6 +287,42 @@ export default function AdminShareLinksPage() {
       // TODO que ce lot remplace toastait « supprimé » sans avoir rien appelé.
       console.error('Erreur lors de la suppression du lien:', error);
       toast.error(t('shareLinks.deleteError'));
+    }
+  };
+
+  // #5430 — `POST /admin/share-links/:id/reveal` est le seul chemin qui rend
+  // `linkId`/`identifier` (rang souverain, motif tracé) : `handleRevealConfirm`
+  // consomme la valeur RÉVÉLÉE par cet appel, jamais `shareLink.linkId` (qui
+  // n'est jamais servi par `GET /admin/share-links`, #5299/#4692).
+  const handleRevealConfirm = async (reason: string) => {
+    const request = revealRequest;
+    setRevealRequest(null);
+    if (!request) return;
+
+    try {
+      const response = await apiService.post<{
+        success: boolean;
+        data: { id: string; linkId?: string; identifier?: string };
+      }>(
+        API_ENDPOINTS.admin.shareLinksByIdReveal(request.shareLinkId),
+        { reason }
+      );
+      const revealed = response.data?.data?.linkId ?? response.data?.data?.identifier;
+      if (!revealed) {
+        toast.error(t('shareLinks.revealError'));
+        return;
+      }
+      if (request.action === 'copy') {
+        await copyToClipboard(revealed);
+      } else {
+        window.open(`/tracked/${revealed}`, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      // Même garde que `handleDeleteLink` : un refus (403 hors rang BIGBOSS,
+      // 400 motif trop court côté serveur, 404) arrive en exception — ne
+      // JAMAIS copier/ouvrir sur la foi d'un appel qui a échoué.
+      console.error('Erreur lors de la révélation du lien de partage:', error);
+      toast.error(t('shareLinks.revealError'));
     }
   };
 
@@ -413,17 +557,18 @@ export default function AdminShareLinksPage() {
 
                         {/* Boutons d'action - responsive */}
                         <div className="flex items-center space-x-2">
-                          {/* #5299 — `linkId` (secret de jointure, #4692) n'est jamais
-                              servi par cette liste : « Copier » et « Ouvrir » n'ont
-                              rien à copier / ouvrir tant qu'il n'est pas révélé.
-                              Masquées plutôt que de copier/ouvrir « undefined » —
-                              suivi : wiring de ces deux actions sur le geste
-                              souverain `POST /admin/share-links/:id/reveal`. */}
-                          {shareLink.linkId && (
+                          {/* #5430 — `linkId` (secret de jointure, #4692) n'est jamais
+                              servi par cette liste : « Copier » RÉVÈLE l'URL via le
+                              geste souverain `POST /admin/share-links/:id/reveal`
+                              (rang BIGBOSS, motif tracé) avant de la copier. Gardé
+                              sur le RÔLE — jamais sur `shareLink.linkId`, sans quoi
+                              il resterait mort pour tout le monde : un contrôle voué
+                              au 403 ne se propose pas. */}
+                          {isSovereignReader && (
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => copyToClipboard(shareLink.linkId!)}
+                              onClick={() => setRevealRequest({ shareLinkId: shareLink.id, action: 'copy' })}
                             >
                               <Copy className="h-4 w-4" />
                               <span className="sr-only sm:not-sr-only sm:ml-1">{t('shareLinks.copy')}</span>
@@ -438,8 +583,8 @@ export default function AdminShareLinksPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              {shareLink.linkId && (
-                                <DropdownMenuItem onClick={() => window.open(`/tracked/${shareLink.linkId}`, '_blank', 'noopener,noreferrer')}>
+                              {isSovereignReader && (
+                                <DropdownMenuItem onClick={() => setRevealRequest({ shareLinkId: shareLink.id, action: 'open' })}>
                                   <ExternalLink className="mr-2 h-4 w-4" />
                                   {t('shareLinks.open')}
                                 </DropdownMenuItem>
@@ -460,11 +605,11 @@ export default function AdminShareLinksPage() {
 
                           {/* Desktop - all actions visible */}
                           <div className="hidden md:flex space-x-2">
-                            {shareLink.linkId && (
+                            {isSovereignReader && (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => window.open(`/tracked/${shareLink.linkId}`, '_blank', 'noopener,noreferrer')}
+                                onClick={() => setRevealRequest({ shareLinkId: shareLink.id, action: 'open' })}
                               >
                                 <ExternalLink className="h-4 w-4 mr-1" />
                                 {t('shareLinks.open')}
@@ -622,6 +767,16 @@ export default function AdminShareLinksPage() {
           confirmText={t('shareLinks.deleteConfirm')}
           variant="destructive"
         />
+
+        {/* #5430 — motif souverain requis avant de révéler/copier/ouvrir un lien */}
+        {revealRequest && (
+          <RevealReasonModal
+            onCancel={() => setRevealRequest(null)}
+            onConfirm={(reason) => {
+              void handleRevealConfirm(reason);
+            }}
+          />
+        )}
       </div>
     </AdminLayout>
   );

@@ -49,6 +49,7 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
 import { WIRE_BROADCAST, isCanvasV3, unclaimedCanvasMediaIds } from '../../services/posts/storyEffectsV3';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
+import { logError, logWarn } from '../../utils/logger.js';
 
 /**
  * Écriture stricte de `storyEffects` (spec §C3, O15) — DERRIÈRE
@@ -400,12 +401,20 @@ export function registerCoreRoutes(
         // Rejouer sur un résultat disparu fabriquerait un doublon (contenu
         // supprimé qui ressuscite), d'où le 410 rendu par le catch de la route.
         replayCost: 'diverges',
-        op: () => postService.createPost({
-          ...parsed.data,
-          content: parsed.data.content !== undefined ? SecuritySanitizer.sanitizeText(parsed.data.content) : undefined,
-          type: parsed.data.type ?? 'POST',
-          visibility: parsed.data.visibility ?? (parsed.data.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
-        }, authContext.registeredUser.id) as Promise<CreatedPost & { id: string }>,
+        op: () => {
+          // `detectedLanguage` (#5349) EST désormais une entrée de
+          // `PostService.createPost`, persistée sur `Post` (#5422) : sans elle,
+          // une traduction demandée après coup (`translateOnDemand`) retombait
+          // sur la détection regex du serveur au lieu de la mesure on-device
+          // déjà faite à la création. Elle traverse donc par le spread comme le
+          // reste de `parsed.data`, au même titre qu'`originalLanguage`.
+          return postService.createPost({
+            ...parsed.data,
+            content: parsed.data.content !== undefined ? SecuritySanitizer.sanitizeText(parsed.data.content) : undefined,
+            type: parsed.data.type ?? 'POST',
+            visibility: parsed.data.visibility ?? (parsed.data.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
+          }, authContext.registeredUser.id) as Promise<CreatedPost & { id: string }>;
+        },
         onDuplicate: async (resultId) => {
           const replayed = await postService.getPostById(resultId, authContext.registeredUser.id);
           return replayed ? (replayed as unknown as CreatedPost & { id: string }) : null;
@@ -438,6 +447,9 @@ export function registerCoreRoutes(
         // une phrase inventée pour satisfaire l'extracteur, visible de tous et
         // traduite par le Prisme comme du contenu d'auteur.
         declaredMentions: parsed.data.mentions,
+        // Langue MESURÉE côté composer web (#5349) — voir la note d'en-tête
+        // de `runPublicationEffects` pour son rang face à `originalLanguage`.
+        detectedLanguage: parsed.data.detectedLanguage,
         porte: 'POST /posts',
       });
 
@@ -451,7 +463,7 @@ export function registerCoreRoutes(
       if (error instanceof MutationResultGone) {
         return sendGone(reply, 'Post already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
       }
-      fastify.log.error(`[POST /posts] Error: ${error}`);
+      logError(fastify.log, '[POST /posts] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -483,7 +495,7 @@ export function registerCoreRoutes(
         request,
       }));
     } catch (error) {
-      fastify.log.error(`[GET /posts/:postId] Error: ${error}`);
+      logError(fastify.log, '[GET /posts/:postId] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -563,7 +575,7 @@ export function registerCoreRoutes(
         // correction de frappe — elles n'y sont pas, c'est leur raison d'être.
         declared: parsed.data.mentions,
         onError: (err: unknown) => {
-          fastify.log.error(`[PUT /posts/:postId] post mention reconcile failed: ${err}`);
+          logError(fastify.log, '[PUT /posts/:postId] post mention reconcile failed', err);
         },
       });
 
@@ -577,7 +589,7 @@ export function registerCoreRoutes(
         postId,
         resolved: reconciled,
         onError: (err: unknown) => {
-          fastify.log.error(`[PUT /posts/:postId] post reference reload failed: ${err}`);
+          logError(fastify.log, '[PUT /posts/:postId] post reference reload failed', err);
         },
       });
 
@@ -585,11 +597,11 @@ export function registerCoreRoutes(
         const editHashtags = editedContent ? hashtagService.extractHashtags(editedContent) : [];
         if (editHashtags.length > 0) {
           hashtagService.createPostHashtags(postId, editHashtags).catch((err: unknown) => {
-            fastify.log.error(`[PUT /posts/:postId] hashtag persist failed: ${err}`);
+            logError(fastify.log, '[PUT /posts/:postId] hashtag persist failed', err);
           });
         }
         hashtagService.reconcileRemovedHashtags(postId, editHashtags.map((h) => h.tag)).catch((err: unknown) => {
-          fastify.log.error(`[PUT /posts/:postId] hashtag reconcile failed: ${err}`);
+          logError(fastify.log, '[PUT /posts/:postId] hashtag reconcile failed', err);
         });
       }
 
@@ -621,11 +633,11 @@ export function registerCoreRoutes(
           // peuvent pas diverger sur un même payload.
           socialEvents.broadcastStoryUpdated(broadcastPost, authContext.registeredUser.id, {
             engagementReset: storyContentEditRequested(parsed.data),
-          }).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast story updated failed'));
+          }).catch((err) => logWarn(fastify.log, '[PUT /posts/:postId]: broadcast story updated failed', err));
         } else if (updatedPostType === 'STATUS') {
-          socialEvents.broadcastStatusUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast status updated failed'));
+          socialEvents.broadcastStatusUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => logWarn(fastify.log, '[PUT /posts/:postId]: broadcast status updated failed', err));
         } else {
-          socialEvents.broadcastPostUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast post updated failed'));
+          socialEvents.broadcastPostUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => logWarn(fastify.log, '[PUT /posts/:postId]: broadcast post updated failed', err));
         }
       }
 
@@ -646,7 +658,7 @@ export function registerCoreRoutes(
       if (error instanceof Error && (error as { statusCode?: number }).statusCode === 422) {
         return sendBadRequest(reply, error.message, { code: 'INVALID_POST_UPDATE' });
       }
-      fastify.log.error(`[PUT /posts/:postId] Error: ${error}`);
+      logError(fastify.log, '[PUT /posts/:postId] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -675,7 +687,7 @@ export function registerCoreRoutes(
       broadcastPostRemoval(
         fastify.socialEvents,
         result,
-        (err) => fastify.log.warn({ err }, '[DELETE /posts/:postId]: broadcast deletion failed')
+        (err) => logWarn(fastify.log, '[DELETE /posts/:postId]: broadcast deletion failed', err)
       );
 
       return sendSuccess(reply, { deleted: true });
@@ -683,7 +695,7 @@ export function registerCoreRoutes(
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Not authorized to delete this post', { code: 'FORBIDDEN' });
       }
-      fastify.log.error(`[DELETE /posts/:postId] Error: ${error}`);
+      logError(fastify.log, '[DELETE /posts/:postId] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -734,7 +746,7 @@ export function registerCoreRoutes(
 
       return sendSuccess(reply, { requested: true, targetLanguage: parsed.data.targetLanguage });
     } catch (error) {
-      fastify.log.error(`[POST /posts/:postId/translate] Error: ${error}`);
+      logError(fastify.log, '[POST /posts/:postId/translate] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });

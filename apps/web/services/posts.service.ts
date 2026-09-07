@@ -42,6 +42,12 @@ export interface CreatePostRequest {
   readonly audioUrl?: string;
   readonly audioDuration?: number;
   readonly originalLanguage?: string;
+  /**
+   * Langue MESURÉE (tinyld, `detectMeasuredLanguage`) sur `content` — jamais
+   * une préférence d'interface, jamais réutilisée à la place
+   * d'`originalLanguage` (revendication). Voir #5349.
+   */
+  readonly detectedLanguage?: string;
   readonly mediaIds?: string[];
   /**
    * Alt text per media (accessibility, `PostMedia.alt`) — key is one of the

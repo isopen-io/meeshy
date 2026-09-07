@@ -55,7 +55,11 @@
  * façon de masquer un nœud sans le retirer de l'arbre d'accessibilité) et la
  * CONDITION du point de rupture. Témoin : `__tests__/charte.test.ts`.
  */
-export const compacte = (feuille: string): string => feuille.replace(/\s*\n\s*/g, '').trim();
+export const compacte = (feuille: string): string =>
+  feuille
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\s*\n\s*/g, '')
+    .trim();
 
 export const FEUILLE_DU_CHROME = compacte(`
 .enveloppe{max-width:var(--shell-width);margin:0 auto;padding:var(--space-5) var(--space-5) var(--space-8)}

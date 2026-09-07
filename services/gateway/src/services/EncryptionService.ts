@@ -29,7 +29,10 @@ let SignalLib: {
 let signalProtocolAvailable = false;
 
 // Try to load Signal Protocol library
-// Note: A symlink to prebuilds should exist in the gateway directory for node-gyp-build to work
+// node-gyp-build resolves the native binary from the package's OWN prebuilds
+// directory (node_modules/@signalapp/libsignal-client/prebuilds/<platform>/),
+// never from a symlink at the gateway root — measured directly (#4553): the
+// module loads correctly with no such symlink present.
 try {
   const signalModule = require('@signalapp/libsignal-client');
   SignalLib = {

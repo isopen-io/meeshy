@@ -34,6 +34,7 @@ import type { PostMedia, PostType, PostVisibility } from '@meeshy/shared/types/p
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 import type { PostReferenceDisplay } from '@meeshy/shared/types/post-reference';
 import type { ComposerDocumentEditPayload, ComposerDocumentPayload } from '@/components/composer/payload';
+import { detectMeasuredLanguage } from '@/utils/language-detection';
 
 /**
  * La surface DOCUMENT — celle des formats POST et RÉEL.
@@ -534,6 +535,12 @@ export function ComposerDocumentSurface({
     if (trimmed.length > CHAR_LIMIT) return;
     if (isAudienceIncomplete(visibility, visibilityUserIds.length)) return;
 
+    // Langue MESURÉE sur la légende réellement tapée (#5349) — jamais une
+    // préférence d'interface. `undefined` quand la mesure n'est pas fiable :
+    // le gateway retombe alors sur sa propre détection, jamais sur une
+    // supposition d'interface (voir la note d'en-tête de `payload.ts`).
+    const detectedLanguage = trimmed ? detectMeasuredLanguage(trimmed) : undefined;
+
     onPublish({
       content: trimmed,
       type: publishedType,
@@ -542,6 +549,7 @@ export function ComposerDocumentSurface({
         ? visibilityUserIds
         : undefined,
       mediaIds: hasUploadedMedia ? mediaIds : undefined,
+      ...(detectedLanguage ? { detectedLanguage } : {}),
       optimisticMedia: hasUploadedMedia
         ? uploadedAttachments.map((att, order) => ({
             id: att.id,

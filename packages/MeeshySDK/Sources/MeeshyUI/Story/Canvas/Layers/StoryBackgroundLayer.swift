@@ -1125,12 +1125,41 @@ extension StoryBackgroundLayer {
         // the SSRF-guarded resolver so a relative background URL still loads
         // instead of dropping to the solid-color fallback (black background on
         // another user's story).
-        if candidate.hasPrefix("http://")
-            || candidate.hasPrefix("https://")
-            || candidate.hasPrefix("/") {
+        if Self.isAddressable(candidate) {
             return MeeshyConfig.resolveMediaURL(candidate)
         }
         return nil
+    }
+
+    /// **Cette chaîne est-elle une ADRESSE, ou un IDENTIFIANT ?** (#5419)
+    ///
+    /// La question se pose à deux endroits — ici et
+    /// `StoryRenderer.backgroundRoutingKey` — et les deux y répondaient
+    /// différemment, chacun avec sa propre liste de préfixes. Aucune des deux
+    /// ne reconnaissait la forme que la passerelle sert RÉELLEMENT pour une
+    /// story : la **clé de stockage**, `2026/09/<auteur>/<fichier>.mp4`, sans
+    /// barre initiale.
+    ///
+    /// `MeeshyConfig.resolveMediaURL` sait pourtant la résoudre depuis #4324 —
+    /// son commentaire la nomme mot pour mot (« une chaîne sans barre initiale
+    /// n'est pas un chemin : c'est la CLÉ DE STOCKAGE du média »).
+    ///
+    /// > **La capacité existait au bas de la chaîne ; deux filtres au-dessus
+    /// > l'empêchaient d'être atteinte.** Le défaut n'était donc pas une
+    /// > fonction manquante mais une garde trop étroite, écrite deux fois — et
+    /// > le symptôme était `resolved=nil`, définitif, sur toute vidéo de fond
+    /// > d'une story publiée.
+    ///
+    /// Le discriminant est la BARRE : un `postMediaId` est un ObjectId (24
+    /// caractères hexadécimaux, sans séparateur), une adresse en porte toujours
+    /// au moins une. Le tester est plus sûr qu'énumérer des préfixes — c'est
+    /// l'énumération qui a laissé passer la forme de production.
+    nonisolated static func isAddressable(_ candidate: String) -> Bool {
+        guard !candidate.isEmpty else { return false }
+        return candidate.hasPrefix("http://")
+            || candidate.hasPrefix("https://")
+            || candidate.hasPrefix("file://")
+            || candidate.contains("/")
     }
 }
 

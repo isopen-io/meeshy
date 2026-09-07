@@ -108,7 +108,7 @@ describe('la vitrine', () => {
    * elle ne peut pas attendre le sprite externe.
    */
   it('inline ses glyphes depuis le sprite, sans une requête de plus', () => {
-    expect(doc).toContain(`<svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">`);
+    expect(doc).toContain(`<svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true">`);
     expect(doc).not.toContain('<use ');
     expect(doc).not.toContain('sprite.svg');
     expect(GLYPHE_DE_LA_MARQUE).toBe('ph-chat-circle');

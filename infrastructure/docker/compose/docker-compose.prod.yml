@@ -324,7 +324,7 @@ services:
       - "traefik.http.routers.gateway.rule=Host(`gate.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.gateway.entrypoints=websecure"
       - "traefik.http.routers.gateway.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.gateway.middlewares=compress@file"
+      - "traefik.http.routers.gateway.middlewares=rate-limit@file,compress@file"
       - "traefik.http.services.gateway.loadbalancer.server.port=3000"
 
   # Static Files Service - Nginx pour servir les fichiers uploadés sur static.${DOMAIN}
@@ -476,6 +476,16 @@ services:
       - MEESHY_GATEWAY_URL=http://gateway:3000
       - NEXT_PUBLIC_API_URL=https://gate.${DOMAIN:-localhost}
       - NEXT_PUBLIC_FRONTEND_URL=https://${DOMAIN:-localhost}
+      # LA CONFIGURATION FCM DU MODULE DE PRÉFÉRENCES (#5391) — lue par
+      # `apps/web-v3/app/connecte/prefs-porte.ts` dans CE processus Next :
+      # déclarée sur le legacy elle serait inerte (même loi que V3_SW_PORTEES
+      # du compose staging). Mêmes valeurs publiques que le service `frontend`.
+      - NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyCGBiVIUvW8CiVytXGHN1za2T3yI_7ynro
+      - NEXT_PUBLIC_FIREBASE_PROJECT_ID=meeshy-me
+      - NEXT_PUBLIC_FIREBASE_APP_ID=1:775794634022:web:d244d7c97208322dc365e7
+      - NEXT_PUBLIC_FIREBASE_VAPID_KEY=BDRguFxJ5f_alFmp-TCGc2VsLAaLEXybgcUGmIE7MMy4jpCjCYJZCcPGV9G1QKN2SBzYQhRuNL28fhKb2hsvvPo
+      - NEXT_PUBLIC_FCM_INSTALLATIONS_BASE=https://firebaseinstallations.googleapis.com
+      - NEXT_PUBLIC_FCM_REGISTRATIONS_BASE=https://fcmregistrations.googleapis.com
     depends_on:
       gateway:
         condition: service_healthy

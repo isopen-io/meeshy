@@ -59,6 +59,7 @@ import {
 import { matchesMongoWhere } from '../../helpers/mongo-where';
 import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
 import { BCRYPT_COST } from '../../../utils/password-hash';
+import { validatePasswordStrength } from '../../../utils/password-strength';
 
 // Mock Prisma Client
 const mockPrisma = {
@@ -1237,13 +1238,13 @@ describe('PasswordResetService', () => {
   // =========================================
 
   describe('Password Strength Validation (validatePasswordStrength)', () => {
+    // Extrait vers `utils/password-strength.ts` par #3629 — cinq portes
+    // partagent désormais la même fonction, exportée, plutôt qu'une méthode
+    // privée réservée à ce service.
     it('should accept password meeting all requirements', () => {
       mockZxcvbn.mockReturnValue({ score: 4, feedback: {} });
 
-      // Access private method through completion flow
-      const validation = (service as any).validatePasswordStrength(
-        'VeryStr0ng@Password!'
-      );
+      const validation = validatePasswordStrength('VeryStr0ng@Password!');
 
       expect(validation.isValid).toBe(true);
       expect(validation.errors).toHaveLength(0);
@@ -1252,7 +1253,7 @@ describe('PasswordResetService', () => {
     it('should collect multiple validation errors', () => {
       mockZxcvbn.mockReturnValue({ score: 0, feedback: { warning: 'Too common' } });
 
-      const validation = (service as any).validatePasswordStrength('weak');
+      const validation = validatePasswordStrength('weak');
 
       expect(validation.isValid).toBe(false);
       expect(validation.errors.length).toBeGreaterThan(1);
@@ -1264,9 +1265,7 @@ describe('PasswordResetService', () => {
         feedback: { warning: 'This is a commonly used password' }
       });
 
-      const validation = (service as any).validatePasswordStrength(
-        'Password123!'
-      );
+      const validation = validatePasswordStrength('Password123!');
 
       expect(validation.errors).toContain('This is a commonly used password');
     });

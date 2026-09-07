@@ -42,7 +42,8 @@ final class ComposerDocumentTrayPublishTests: XCTestCase {
             storyEffects: nil,
             mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:],
             forcePlainPost: false,
-            mobileTranscription: nil
+            mobileTranscription: nil,
+            allowSoundExtraction: nil
         )
     }
 

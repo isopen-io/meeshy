@@ -1,14 +1,24 @@
 import XCTest
 @testable import Meeshy
 
-/// **T3.3 — l'overlay inline iPad reçoit un NOM et une garde.**
+/// **T3.3 → RETRAIT — l'overlay inline iPad a été nommé, gardé, puis retiré.**
 ///
-/// Avant ce lot il sortait du radar de TOUTES les gardes existantes :
-/// `LegacyComposer` ne le nommait pas, et le commentaire de `.feedComposer`
-/// (`ComposerIntent.swift`) le disait lui-même. Le nommer (`feedInlineComposer`)
-/// le rend mesurable, sans le migrer — c'est T3.4 (descopable) qui le fera
-/// passer au meuble. En attendant, l'overlay est NOMMÉ + GARDÉ, strictement
-/// mieux qu'un composer que rien ne surveille.
+/// Avant T3.3 il sortait du radar de TOUTES les gardes : `LegacyComposer` ne le
+/// nommait pas, et le commentaire de `.feedComposer` le disait lui-même. Le
+/// nommer (`feedInlineComposer`) l'a rendu mesurable sans le migrer.
+///
+/// Le 2026-09-06, la migration du fil iPad vers le meuble lui a retiré son
+/// dernier appelant, et le porteur a demandé le décommissionnement. Les 346
+/// lignes sont parties.
+///
+/// > **Nommer d'abord, mesurer ensuite, retirer en dernier.** Sans le nom posé
+/// > à T3.3, ce retrait ne serait gardé par rien : **on ne peut pas écrire de
+/// > témoin NÉGATIF sur une chose qui n'a pas de nom.** C'est ce qui rend cette
+/// > suite utile APRÈS le retrait, alors même que son objet a disparu.
+///
+/// Elle épingle donc deux faits complémentaires : le nom SURVIT (pour que le
+/// retour de l'overlay ait quelque chose contre quoi buter), et l'overlay,
+/// lui, n'existe plus.
 final class FeedInlineComposerGuardTests: XCTestCase {
 
     private func source(_ relativePath: String) throws -> String {
@@ -103,10 +113,39 @@ final class FeedInlineComposerGuardTests: XCTestCase {
         )
     }
 
-    // 4 — garde-fou : la source lue est non vide et contient l'overlay.
-    func test_laSourceLue_estNonVide_etContientLOverlay() throws {
+    // 4 — le RETRAIT, épinglé par son ABSENCE.
+    /// **L'overlay inline iPad est RETIRÉ** (directive porteur 2026-09-06 :
+    /// « il faut décommissionner l'ancien composer de story et de post »).
+    ///
+    /// Ce témoin épinglait son EXISTENCE tant que la migration n'était pas
+    /// faite ; il épingle désormais son ABSENCE. Le rôle n'a pas changé — tenir
+    /// l'état RÉEL du produit — seul le sens s'est inversé le jour où l'état a
+    /// basculé.
+    ///
+    /// Les 346 lignes retirées n'avaient **aucun appelant** : `iPadRootView`
+    /// monte `FeedView`, qui monte le meuble depuis la migration du matin, et
+    /// plus rien ne référençait `composerOverlay` — seulement des commentaires.
+    ///
+    /// > **Un composer que rien ne monte n'est pas une capacité en réserve,
+    /// > c'est une seconde définition de la publication que personne ne
+    /// > surveille.** Celle-ci publiait `storyEffects: nil` sur une app où toute
+    /// > photo devient une scène : l'iPad fabriquait des publications d'une
+    /// > autre nature que l'iPhone, sans que rien ne le dise à l'auteur.
+    ///
+    /// Ce qui reste de l'ancien composer n'est PAS du code mort :
+    /// `FeedComposerSheet` porte encore les deux citations (le meuble refuse un
+    /// repost — levée 7.5) et cinq capacités que le meuble n'a pas — progression,
+    /// références, dépôt, éditeur d'image, son emprunté. Les retirer les
+    /// retirerait à l'utilisateur : voir `FeedComposerSheetRetirementInventoryTests`.
+    func test_lOverlayInlineIPad_estRetireDeFeedView() throws {
         let feedView = try source("Meeshy/Features/Main/Views/FeedView.swift")
         XCTAssertGreaterThan(feedView.count, 400, "FeedView introuvable ou vide")
-        XCTAssertTrue(feedView.contains("private var composerOverlay"), "L'overlay inline a disparu de FeedView")
+        XCTAssertFalse(
+            compact(feedView).contains("privatevarcomposerOverlay"),
+            "L'overlay inline iPad a été retiré le 2026-09-06 (346 lignes, zéro appelant). Le "
+                + "réintroduire rendrait à l'iPad un second écrivain de publication — celui qui "
+                + "publiait `storyEffects: nil`, donc sans scène, sans légende par média et hors "
+                + "mosaïque. Si un composer inline redevient nécessaire, il passe par le meuble."
+        )
     }
 }

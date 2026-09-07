@@ -605,7 +605,33 @@ extension StoryRenderer {
     /// regarde.
     nonisolated static func backgroundRoutingKey(postMediaId: String,
                                                  mediaURL: String?) -> String {
-        if let url = mediaURL, url.hasPrefix("http") { return url }
+        // **Une ADRESSE gagne sur un IDENTIFIANT** (#5419). Ce test ne
+        // reconnaissait que `http` : la clé de stockage servie par la
+        // passerelle pour une story — `2026/09/<auteur>/<fichier>.mp4` —
+        // retombait donc sur le `postMediaId`, que le résolveur de l'hôte ne
+        // sait pas résoudre (une story ne porte AUCUN `PostMedia` : son contenu
+        // vit dans le canvas). D'où `bg video configure … resolved=nil`,
+        // définitif, et une story vidéo qui ne se lit jamais.
+        //
+        // La règle vit dans `StoryBackgroundLayer.isAddressable` — le même
+        // prédicat que celui qui décide, un étage plus bas, si la chaîne part
+        // chez `MeeshyConfig.resolveMediaURL`. Deux réponses à une seule
+        // question sont ce qui a produit ce défaut.
+        //
+        // MAIS `isAddressable` reconnaît AUSSI `file://` (#5457) — et un
+        // `file://` n'est une adresse UTILISABLE que pour celui qui l'a écrit.
+        // Élargir la priorité à `isAddressable` a donc rouvert exactement ce
+        // que le paragraphe ci-dessus (et les deux au-dessus) documentent
+        // depuis l'origine : une `mediaURL` de sandbox AUTEUR ne doit gagner
+        // sur le `postMediaId` que lorsqu'aucun identifiant n'existe — sans
+        // quoi une story publiée avant `sanitizedForServerPublish()` retombe
+        // sur un chemin `file://` inaccessible à tout autre lecteur. Une
+        // adresse RÉSEAU (http/https, clé de stockage) n'a pas ce problème et
+        // continue de gagner sans condition.
+        if let url = mediaURL, StoryBackgroundLayer.isAddressable(url) {
+            let isAuthorSandboxFile = url.hasPrefix("file://")
+            if !isAuthorSandboxFile || postMediaId.isEmpty { return url }
+        }
         return postMediaId.isEmpty ? (mediaURL ?? "") : postMediaId
     }
 

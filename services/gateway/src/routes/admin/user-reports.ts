@@ -54,6 +54,7 @@ import { permissionsService } from '../../services/admin/permissions.service';
 import { UnifiedAuthContext, UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { sendNotFound, sendInternalError, sendPaginatedSuccess } from '../../utils/response';
+import { logError } from '../../utils/logger.js';
 
 // #4165 — plafonds de l'énumération, en amont de `GET
 // /admin/users/:userId/reported-messages`, des conversations puis des
@@ -92,8 +93,8 @@ export const SEUILS_REPORT: readonly SeuilReport[] = [
     permission: 'canViewUsers',
     raisonEcart:
       "AUDIT garde les métadonnées (son métier : auditer la modération), " +
-      "jamais `content` — retiré par le handler, même motif qu'`attachmentProtectionSelect` " +
-      "(`routes/admin/users.ts`)."
+      "jamais `content` — retiré par le handler, même motif que le nullage porté par " +
+      "`attachmentProtectionSelect` (`routes/admin/media-protection.ts`)."
   }
 ];
 
@@ -162,7 +163,7 @@ export function registerUserReportsRoutes(fastify: FastifyInstance): void {
         hasMore: offsetNum + reports.length < total
       });
     } catch (error) {
-      fastify.log.error({ err: error }, 'Error fetching user reports');
+      logError(fastify.log, 'Error fetching user reports', error);
       return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user reports' });
     }
   });
@@ -283,7 +284,7 @@ export function registerUserReportsRoutes(fastify: FastifyInstance): void {
         hasMore: offsetNum + reports.length < total
       });
     } catch (error) {
-      fastify.log.error({ err: error }, 'Error fetching user reported messages');
+      logError(fastify.log, 'Error fetching user reported messages', error);
       return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user reported messages' });
     }
   });

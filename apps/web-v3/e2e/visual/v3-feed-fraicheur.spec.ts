@@ -25,6 +25,7 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 
 import { COOKIE_DE_JETON } from '../../lib/api/cookies';
 import { SEUIL_DE_RATTRAPAGE_MS } from '../../lib/realtime/reconnect-policy';
+import { attendsLeModuleArme } from './lib/attente-de-module';
 import { avance, figeLHorloge, installeLHorloge, occulte, revele } from './lib/navigateur-cycle';
 import { JETON_DU_MEMBRE } from './lib/bouchon-socket';
 import { passerelleDeBouchon, serveurDeLaV3, type PasserelleDeBouchon, type ServeurV3 } from './lib/serveurs';
@@ -68,8 +69,7 @@ const ouvreLeFil = async (browser: Browser): Promise<Page> => {
   const reponse = await page.goto(`${v3.base}/feed`, { waitUntil: 'domcontentloaded' });
   expect(reponse?.status(), '/feed n’a pas servi le fil').toBe(200);
   // Le module arrive APRÈS le premier pixel : on l'attend par son EFFET.
-  await page.waitForFunction(() => document.querySelector('main[data-participation="feed"]') !== null);
-  await page.waitForTimeout(1_200);
+  await attendsLeModuleArme(page, 'feed');
   await figeLHorloge(ctx);
   return page;
 };

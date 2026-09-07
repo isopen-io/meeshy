@@ -730,7 +730,7 @@ describe('PATCH /users/me/password — unauthenticated', () => {
     const app = await buildApp({ authenticated: false, routes: [updateUserPassword] });
     const res = await app.inject({
       method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'oldpassword', newPassword: 'new12345678' },
+      payload: { currentPassword: 'oldpassword', newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
     });
     expect(res.statusCode).toBe(401);
     await app.close();
@@ -748,7 +748,7 @@ describe('PATCH /users/me/password — user not found', () => {
     const app = await buildApp({ routes: [updateUserPassword], prisma });
     const res = await app.inject({
       method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'oldpassword', newPassword: 'new12345678' },
+      payload: { currentPassword: 'oldpassword', newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
     });
     expect(res.statusCode).toBe(404);
     await app.close();
@@ -761,7 +761,7 @@ describe('PATCH /users/me/password — wrong current password', () => {
     const app = await buildApp({ routes: [updateUserPassword] });
     const res = await app.inject({
       method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'wrongpassword', newPassword: 'new12345678' },
+      payload: { currentPassword: 'wrongpassword', newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
     });
     expect(res.statusCode).toBe(400);
     await app.close();
@@ -774,7 +774,7 @@ describe('PATCH /users/me/password — success', () => {
     const app = await buildApp({ routes: [updateUserPassword] });
     const res = await app.inject({
       method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'correctpassword', newPassword: 'new12345678' },
+      payload: { currentPassword: 'correctpassword', newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
@@ -788,7 +788,7 @@ describe('PATCH /users/me/password — success with notification', () => {
     const app = await buildApp({ routes: [updateUserPassword], withNotificationService: true });
     const res = await app.inject({
       method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'correctpassword', newPassword: 'new12345678' },
+      payload: { currentPassword: 'correctpassword', newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
     });
     expect(res.statusCode).toBe(200);
     await app.close();
@@ -807,7 +807,7 @@ describe('PATCH /users/me/password — service error', () => {
     const app = await buildApp({ routes: [updateUserPassword], prisma });
     const res = await app.inject({
       method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'correctpassword', newPassword: 'new12345678' },
+      payload: { currentPassword: 'correctpassword', newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
     });
     expect(res.statusCode).toBe(500);
     await app.close();

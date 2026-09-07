@@ -19,6 +19,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 }));
 
 jest.mock('../../../../utils/logger', () => ({
+  ...(jest.requireActual('../../../../utils/logger') as object),
   logError: jest.fn(),
 }));
 

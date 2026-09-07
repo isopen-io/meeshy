@@ -19,6 +19,8 @@ import {
   routesDesPreferencesDuCompte,
   type EtatDeSuppressionDeBouchon,
 } from './bouchon-preferences';
+import { routesDuPush } from './bouchon-push';
+import { HEURES_DE_VIE_D_UNE_STORY } from '../../../lib/contenu/story-neuve';
 
 // Réexportées : `bouchon-preferences.ts` PORTE désormais ces cinq noms (§ son
 // propre en-tête) ; ce fichier les relaie pour que ses appelants existants
@@ -109,8 +111,25 @@ export type EtatDuCompteDeBouchon = {
    * écriture qui n'écrit rien.
    */
   readonly profil: Record<string, string>;
-  /** Les appareils de push, que `DELETE /users/me/devices/:id` retire pour de bon. */
-  readonly appareils: { id: string; deviceName: string; platform: string; lastUsedAt: string | null }[];
+  /**
+   * Les appareils de push, que `DELETE /users/me/devices/:id` retire pour de
+   * bon. `deviceId`/`type`/`isActive`/`token` (#5391) sont OPTIONNELS —
+   * les deux entrées de départ (`APPAREILS_DU_BOUCHON`) n'en portent aucun,
+   * comme des appareils iOS/Android déjà enregistrés hors de ce travail ;
+   * `POST`/`DELETE /api/v1/users/register-device-token`
+   * (`bouchon-push.ts`) les lisent/écrivent sur CE MÊME tableau — un seul
+   * magasin d'appareils, jamais une jumelle.
+   */
+  readonly appareils: {
+    id: string;
+    deviceName: string;
+    platform: string;
+    lastUsedAt: string | null;
+    deviceId?: string;
+    type?: string;
+    isActive?: boolean;
+    token?: string;
+  }[];
   /** Les conversations de GROUPE créées pendant la session — relues par la liste. */
   readonly conversationsCreees: { id: string; titre: string }[];
   /**
@@ -119,6 +138,23 @@ export type EtatDuCompteDeBouchon = {
    * audience se vérifie sur la charge envoyée, jamais sur le `<select>` rendu.
    */
   readonly publicationsRecues: Record<string, unknown>[];
+  /**
+   * LES MÉDIAS DE POST TÉLÉVERSÉS PAR TUS (#5390, `bouchon-uploads.ts`) — ce
+   * bloc RÉCLAME les entrées de `mediaIds` pour composer le post servi par
+   * `GET /api/v1/social/posts` (`filSocial`), la MÊME table que le bouchon
+   * TUS écrit et que `DELETE /api/v1/posts/media/:id` efface.
+   */
+  readonly mediasDePostEnAttente?: Map<string, { readonly id: string; readonly uploaderId: string; reclame: boolean }>;
+  /** Les octets des pièces téléversées — pour résoudre `fileUrl`/`mimeType` d'un `PostMedia` réclamé. */
+  readonly pieces?: Map<string, { readonly fileUrl: string; readonly mimeType: string }>;
+  /**
+   * LES POSTS CRÉÉS PAR `POST /api/v1/posts`, RELUS PAR `GET /api/v1/posts/:postId`
+   * (#5389) — sans cette table, `GET /:postId` sert TOUJOURS
+   * `PUBLICATION_DU_BOUCHON` (générique, sans média) : le témoin de bout en
+   * bout d'une story avec média ne peut alors jamais prouver que l'écran de
+   * LECTURE rend ce que l'écran d'ÉCRITURE vient d'envoyer.
+   */
+  readonly postsCrees?: Map<string, Record<string, unknown>>;
   /** La boîte de notifications du lecteur — servie par `GET /notifications`, mutée par `read-all`. */
   readonly boite: BoiteDeNotifsDeBouchon;
   /** Le fil de commentaires d'une publication — écrit par le POST, relu par le GET (#5091). */
@@ -595,6 +631,11 @@ export const routesDuCompte =
         chemin.startsWith('/api/v1/posts/') ||
         chemin.startsWith('/api/v1/social/') ||
         chemin.startsWith('/api/v1/users/me') ||
+        // `POST`/`DELETE /api/v1/users/register-device-token` (#5391) — HORS
+        // de `/api/v1/users/me`, une ligne d'admission à elle : sans elle, la
+        // porte lisait un 404 générique comme un succès (même piège que
+        // `/api/v1/me/…` deux lignes plus bas).
+        chemin === '/api/v1/users/register-device-token' ||
         chemin.startsWith('/api/v1/notifications') ||
         // TOUT `/api/v1/me/…` — les TREIZE préférences de notification du
         // compte (#4899, `GET`/`PATCH /api/v1/me/preferences`, DISTINCT de
@@ -697,6 +738,16 @@ export const routesDuCompte =
     }
 
     /**
+     * `POST`/`DELETE /api/v1/users/register-device-token` — LE PUSH WEB
+     * (#5391), EXTRAIT dans `bouchon-push.ts` (même patron que
+     * `bouchon-preferences.ts`). Lit/écrit le MÊME tableau `etat.appareils`
+     * que `GET`/`DELETE /api/v1/users/me/devices` ci-dessous.
+     */
+    if (routesDuPush(etat.appareils)({ requete, url, corps, json })) {
+      return true;
+    }
+
+    /**
      * `PATCH /api/v1/users/me` (`routes/users/profile-updates.ts:41`) — les
      * HUIT champs acceptés, et pas un de plus. Le bouchon REFUSE tout autre
      * champ plutôt que de l'ignorer : c'est la seule façon qu'un témoin rougisse
@@ -787,16 +838,67 @@ export const routesDuCompte =
      * client qui n'envoie rien.
      */
     if (chemin === '/api/v1/posts' && requete.method === 'POST') {
-      etat.publicationsRecues.push(
-        ((): Record<string, unknown> => {
-          try {
-            return JSON.parse(corps.toString('utf8')) as Record<string, unknown>;
-          } catch {
-            return {};
-          }
-        })(),
-      );
-      json({ success: true, data: { id: 'p-neuf' } }, 201);
+      const recu = ((): Record<string, unknown> => {
+        try {
+          return JSON.parse(corps.toString('utf8')) as Record<string, unknown>;
+        } catch {
+          return {};
+        }
+      })();
+      etat.publicationsRecues.push(recu);
+
+      /**
+       * MÉDIAS (#5390) — `mediaIds` est réclamé EXACTEMENT comme
+       * `claimableMediaWhere` le ferait : chaque id encore EN ATTENTE dans
+       * `mediasDePostEnAttente` (posé par le bouchon TUS,
+       * `bouchon-uploads.ts`) devient un média du post SERVI, et sort de
+       * l'attente — un second `POST /posts` avec le même id ne le
+       * retrouverait plus, comme la passerelle réelle.
+       */
+      const idsDemandes = Array.isArray(recu.mediaIds)
+        ? recu.mediaIds.filter((id): id is string => typeof id === 'string')
+        : [];
+      const media = idsDemandes
+        .map((id) => {
+          const attente = etat.mediasDePostEnAttente?.get(id);
+          const piece = etat.pieces?.get(id);
+          if (attente === undefined || piece === undefined) return null;
+          attente.reclame = true;
+          return { fileUrl: piece.fileUrl, mimeType: piece.mimeType, width: null, height: null };
+        })
+        .filter((m): m is { fileUrl: string; mimeType: string; width: null; height: null } => m !== null);
+
+      const id = `p-neuf-${etat.publicationsRecues.length}`;
+      const genre = typeof recu.type === 'string' ? recu.type : 'POST';
+      const nouvelle = {
+        id,
+        type: genre,
+        content: typeof recu.content === 'string' ? recu.content : '',
+        originalLanguage: typeof recu.originalLanguage === 'string' ? recu.originalLanguage : null,
+        translations: {},
+        createdAt: new Date().toISOString(),
+        // UNE STORY EXPIRE (#5389) — `ephemeralExpiresAt`
+        // (`services/posts/ephemeralPosts.ts:90`) : la passerelle réelle pose
+        // TOUJOURS une échéance à la création d'une STORY, jamais un POST. Un
+        // bouchon qui l'omettrait servirait une forme qu'aucune story créée
+        // ne prend jamais côté serveur.
+        expiresAt: genre === 'STORY' ? new Date(Date.now() + HEURES_DE_VIE_D_UNE_STORY * 3_600_000).toISOString() : null,
+        author: { id: MEMBRE.id, username: 'amina', displayName: MEMBRE.nom },
+        likeCount: 0,
+        commentCount: 0,
+        repostCount: 0,
+        isLikedByMe: false,
+        isRepostedByMe: false,
+        media,
+      };
+      etat.filSocial.posts = [nouvelle, ...etat.filSocial.posts];
+      // RELUE PAR `GET /api/v1/posts/:postId` (#5389) — voir plus bas : un
+      // post créé dans CE test doit se relire, pas retomber sur
+      // `PUBLICATION_DU_BOUCHON`, sans quoi le témoin de bout en bout ne peut
+      // pas prouver que `/stories/:id` rend le média qu'il vient de recevoir.
+      etat.postsCrees?.set(id, nouvelle);
+
+      json({ success: true, data: { id } }, 201);
       return true;
     }
 
@@ -871,8 +973,17 @@ export const routesDuCompte =
       return true;
     }
 
+    /**
+     * `GET /api/v1/posts/:postId` (`routes/posts/core.ts:472`, `requiredAuth`)
+     * — SERT D'ABORD un post créé PAR CE test (#5389) : le critère de fin
+     * d'une story avec média se prouve de bout en bout, `POST` puis `GET` sur
+     * le MÊME id, exactement ce que `PostService.getPostById` fait de tout id
+     * réel. Seul un id INCONNU du bouchon retombe sur `PUBLICATION_DU_BOUCHON`.
+     */
     if (/^\/api\/v1\/posts\/[^/]+$/.test(chemin)) {
-      json({ success: true, data: PUBLICATION_DU_BOUCHON });
+      const idDemande = chemin.split('/').pop() ?? '';
+      const cree = etat.postsCrees?.get(idDemande);
+      json({ success: true, data: cree ?? PUBLICATION_DU_BOUCHON });
       return true;
     }
 
@@ -1037,8 +1148,10 @@ export const routesDuCompte =
        * Prisme au niveau CONVERSATION (`lastMessageOriginalLanguage`,
        * `lastMessageTranslations` — une carte `{ langue: aperçu }` restreinte au
        * prisme du lecteur) et `userPreferences`, un TABLEAU d'au plus une
-       * entrée (`take: 1` sur `userId`). Les QUATRE lignes (#5164, correction de
-       * revue) sont déclarées UNE fois, dans `bouchon-monde.ts` — ce
+       * entrée (`take: 1` sur `userId`). Les DOUZE lignes (spécification « le
+       * rond flottant ne recouvre plus le pied de page », § T2 — quatre
+       * portées à douze pour démontrer les règles de complétude sur une vraie
+       * volumétrie) sont déclarées UNE fois, dans `bouchon-monde.ts` — ce
        * gestionnaire boucle dessus au lieu de porter le littéral.
        *
        * SEUL `delete-for-me` FILTRE ICI, parce que seul lui filtre EN
@@ -1059,7 +1172,15 @@ export const routesDuCompte =
         (ligne) => !etat.masquees.has(ligne.id),
       );
 
-      json({ success: true, data: lignes, pagination: { total: 7 } });
+      // `total` = `totalCount` en production : un `prisma.conversation.count()`
+      // sur TOUTES les conversations du lecteur, pas sur la page
+      // (`core-list.ts:503-507`, servi `:887`). Le bouchon rendant sa fixture
+      // ENTIÈRE en une page, les deux coïncident. Il portait `7` EN DUR pour
+      // quatre lignes ; la volumétrie a corrigé ce mensonge. Les trois champs
+      // voisins de la vraie route (`limit`, `offset`, `hasMore`) et son
+      // `cursorPagination` restent TUS tant qu'aucune surface de la v3 ne
+      // pagine — `lib/api/compte.ts` ne lit que `data`.
+      json({ success: true, data: lignes, pagination: { total: lignes.length } });
       return true;
     }
 

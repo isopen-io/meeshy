@@ -183,18 +183,33 @@ describe('la branche COMPARAISON du résolveur, par le chemin RÉEL', () => {
 // une mesure qui ne pouvait jamais dire si l'écran EST conforme, mesurée le
 // 2026-09-06 (`rendu/detail-profile.dark.png` = page `/login`, aux deux
 // bornes : next-start nu ET passerelle de bouchon correctement montée).
-describe('les sept écrans de réglages MEMBRE déclarent tous leur session', () => {
-  const ECRANS_DE_REGLAGES = [
-    'detail-profile',
-    'detail-privacy',
-    'detail-security',
-    'detail-media',
-    'detail-message',
-    'detail-notification',
-    'detail-application',
+describe('toute vue MEMBRE déclare sa session — dérivé des groupes de vues.json', () => {
+  // La liste n'est PAS écrite ici : elle se dérive des groupes de l'index réel,
+  // pour qu'une vue MEMBRE ajoutée demain rougisse d'elle-même si son entrée
+  // manque à l'annexe — 9 vues (feed, reels, composer, storyCreate, notifs,
+  // contacts, settings, profileEdit, password) capturaient la page de CONNEXION
+  // en silence, à l'octet près identiques, faute d'entrée (2026-09-06).
+  const GROUPES_MEMBRE = [
+    'MEMBRE — PRINCIPAL',
+    'APPELS',
+    'SOCIAL',
+    'ESPACE MEMBRE',
+    'ESPACE MEMBRE — FICHES DE REGLAGES',
   ] as const;
+  // Exclusions dites, jamais silencieuses : callAudio/callVideo sont des routes
+  // paramétrées P2 hors capture ; comments et story attendent la décision
+  // produit #5134 (lecture sans compte) avant de fixer leur session de capture.
+  const EXCLUES = new Set(['callAudio', 'callVideo', 'comments', 'story']);
+  const vuesMembre = captureFraiche()
+    .filter((v) => (GROUPES_MEMBRE as readonly string[]).includes(v.group))
+    .map((v) => v.id)
+    .filter((id) => !EXCLUES.has(id));
 
-  it.each(ECRANS_DE_REGLAGES)('%s déclare @session: membre dans jetons-de-vues.json', (id) => {
+  it('la dérivation trouve bien des vues (le filtre ne peut pas devenir inerte)', () => {
+    expect(vuesMembre.length).toBeGreaterThanOrEqual(20);
+  });
+
+  it.each(vuesMembre)('%s déclare @session: membre dans jetons-de-vues.json', (id) => {
     const annexe = JSON.parse(readFileSync(ANNEXE, 'utf8')) as {
       jetons: Record<string, Record<string, string> | undefined>;
     };

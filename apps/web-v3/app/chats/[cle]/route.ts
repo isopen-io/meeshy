@@ -16,6 +16,8 @@ import {
   reponseDemandee,
   rendu,
   resoutLeContexte,
+  resoutLeRetrait,
+  retraitDemande,
   soumissionDuFil,
   tempsReelDuDocument,
   traiteLaCreationDuLien,
@@ -76,6 +78,7 @@ const charge = async ({
   plein = null,
   idReponse = null,
   idModification = null,
+  idRetrait = null,
   lienDemande = false,
   lienSaisie,
   lienMotif = null,
@@ -96,6 +99,8 @@ const charge = async ({
   readonly idReponse?: string | null;
   /** `?modifier=` — ou le contexte CONSERVÉ d'un refus de modification. */
   readonly idModification?: string | null;
+  /** `?retirer=` — la fenêtre d'annulation d'un retrait, sans JavaScript (#5387). */
+  readonly idRetrait?: string | null;
   /** `?lien` — la feuille « nouveau lien de partage » est-elle ouverte (#5034) ? */
   readonly lienDemande?: boolean;
   /** La saisie REPOSÉE après un refus de création — sinon le défaut (conversation verrouillée, nom = titre du fil). */
@@ -133,6 +138,9 @@ const charge = async ({
   // `?repondre=` / `?modifier=` (§ 12.10.1, issue #5163) — résolus contre CE
   // qui vient d'être servi : une cible hors tranche n'arme rien.
   const contexte = resoutLeContexte({ idReponse, idModification, fil: issue.fil, maintenant, composeurOuvert: true, estInvite: false });
+  // `?retirer=` (#5387) — résolu contre CE qui vient d'être servi, comme
+  // `?repondre=`/`?modifier=` juste au-dessus.
+  const retrait = resoutLeRetrait({ idRetrait, fil: issue.fil, estInvite: false });
   // `?lien` (#5034, § 12.10.5) — la saisie REPOSÉE après un refus, ou le
   // défaut (conversation VERROUILLÉE sur `cle`, nom PRÉREMPLI du titre du fil).
   const lien = lienDemande ? { saisie: lienSaisie ?? saisieDuFil(cle, issue.fil.titre), motif: lienMotif } : null;
@@ -153,6 +161,7 @@ const charge = async ({
       profil,
       lien,
       lienCree,
+      retrait,
     }),
     // LE STATUT VIENT DE `statut` DIRECTEMENT (défaut 200) — pas de `erreur`,
     // depuis que la création d'un lien (#5034) peut refuser (422/503) SANS
@@ -176,19 +185,23 @@ export const GET = async (
 
   const idReponse = reponseDemandee(requete);
   const idModification = idReponse === null ? modificationDemandee(requete) : null;
+  // `?retirer=` (#5387) — le TROISIÈME état exclusif de cette famille (§ 4
+  // étape 2) : jamais en même temps que `?repondre=`/`?modifier=`.
+  const idRetrait = idReponse === null && idModification === null ? retraitDemande(requete) : null;
 
   return charge({
     requete,
     jeton,
     cle,
     avant: curseurDemande(requete),
-    // `?repondre=`/`?modifier=` servent la tranche AUTOUR de leur cible — la
-    // loi de `?media=` (§ 9 Q2 de la spécification #5163) appliquée à un
-    // troisième état ; `?avant=` l'emporte toujours (jamais les deux à la fois).
-    autour: ancreDemandee(requete) ?? idReponse ?? idModification,
+    // `?repondre=`/`?modifier=`/`?retirer=` servent la tranche AUTOUR de leur
+    // cible — la loi de `?media=` (§ 9 Q2 de la spécification #5163) appliquée
+    // à un état de plus ; `?avant=` l'emporte toujours (jamais deux à la fois).
+    autour: ancreDemandee(requete) ?? idReponse ?? idModification ?? idRetrait,
     plein: pleinDemande(requete),
     idReponse,
     idModification,
+    idRetrait,
     lienDemande: feuilleDeLienDemandee(requete),
     lienCree: lienCreeDemande(requete),
     erreur: null,

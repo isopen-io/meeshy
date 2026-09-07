@@ -1,4 +1,4 @@
-import { getSupportedLanguageCodes } from './languages.js';
+import { SUPPORTED_LANGUAGE_CODES } from './language-codes.js';
 
 /**
  * Ensemble des codes de langue supportés par Meeshy (lowercase), incluant les
@@ -11,7 +11,7 @@ import { getSupportedLanguageCodes } from './languages.js';
  * sans rapport), sous peine de casser la résolution du Prisme Linguistique.
  */
 const SUPPORTED_CODES = new Set(
-  getSupportedLanguageCodes().map((code) => code.toLowerCase())
+  SUPPORTED_LANGUAGE_CODES.map((code) => code.toLowerCase())
 );
 
 /**

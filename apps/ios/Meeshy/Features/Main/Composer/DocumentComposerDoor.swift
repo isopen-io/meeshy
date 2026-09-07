@@ -273,9 +273,16 @@ struct DocumentComposerDoor: View {
     /// changeait.
     private func publish(_ draft: ComposerDocumentDraft) async -> Bool {
         switch draft.format {
-        case .post: return await publishDocument(draft)
+        // Le RÉEL rejoint le post le 2026-09-06 (#4869) : même canal, même
+        // brouillon, seul le `type` déclaré change. Voir `ComposerPublishChannel`
+        // pour la raison de ne PAS lui donner le canal de la scène.
+        case .post, .reel: return await publishDocument(draft)
         case .status: return await publishMood(draft)
-        case .story, .reel: return refuse()
+        // La STORY reste refusée ICI, et son contournement est ailleurs :
+        // `performSoclePublish` la route vers `publishStoryScene()`. Le
+        // brouillon ne porte pas de slides — l'y faire passer publierait une
+        // story vide de tout ce que l'auteur a composé.
+        case .story: return refuse()
         }
     }
 
@@ -363,7 +370,11 @@ struct DocumentComposerDoor: View {
             storyEffects: draft.storyEffects,
             mediaCaptions: draft.mediaCaptions,
             mediaAlts: draft.mediaAlts,
-            mediaObjectIds: draft.mediaObjectIds
+            mediaObjectIds: draft.mediaObjectIds,
+            // **L'autorisation d'extraction du son** (#3996). Même discipline
+            // que le canvas juste au-dessus : la porte jumelle passe la même
+            // valeur au même rang.
+            allowSoundExtraction: draft.allowSoundExtraction
         ))
 
         let issue = ComposerDocumentSendOutcome.reported(

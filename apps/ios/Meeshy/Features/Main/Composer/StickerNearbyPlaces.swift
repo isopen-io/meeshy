@@ -172,11 +172,96 @@ extension View {
     /// l'auteur accorde la permission, et la retirer d'avance la rendrait
     /// impossible à accorder.
     func stickerNearbyPlacesProvided() -> some View {
-        let statut = CLLocationManager().authorizationStatus
-        let servable = statut != .denied && statut != .restricted
-        return environment(\.stickerNearbyPlaces,
-                           servable ? StickerNearbyPlacesProvider(
-                               nearby: { centre in await StickerNearbyPlaces.nearby(around: centre) }
-                           ) : nil)
+        modifier(StickerNearbyPlacesInjection())
+    }
+}
+
+/// **L'autorisation s'OBSERVE ; la lire une fois n'est pas la vérifier**
+/// (#5407, retour porteur 2026-09-06 : « bien que la localisation soit activée,
+/// ça indique d'activer la localisation »).
+///
+/// ## Le défaut
+///
+/// `stickerNearbyPlacesProvided()` lisait `CLLocationManager().authorizationStatus`
+/// à la volée, dans une expression de `body`. La valeur est juste À CET INSTANT
+/// — et rien ne la relit ensuite : SwiftUI ne réévalue un `body` que si un état
+/// OBSERVÉ change, et un statut système n'en est pas un.
+///
+/// Un auteur qui refuse la position, puis l'accorde dans Réglages, revient donc
+/// sur une palette qui sert encore `nil` : la section « Lieu » affiche « Active
+/// la position » **pour toute la durée de la session**, sur une position
+/// parfaitement active. Le message n'est pas faux par erreur de rédaction : il
+/// rend fidèlement un fournisseur absent, et c'est le fournisseur qui est
+/// périmé.
+///
+/// > **Une garde de permission qui ne s'abonne à rien fige la permission au
+/// > premier rendu.** L'API qui DIT le changement existe et n'était pas
+/// > branchée : `locationManagerDidChangeAuthorization(_:)`. La question à
+/// > poser à toute lecture d'autorisation n'est pas « lit-elle la bonne
+/// > propriété ? » mais **« que se passe-t-il quand la réponse change ? »**.
+///
+/// L'observateur est PARTAGÉ : un `CLLocationManager` par site de montage
+/// paierait un objet système à chaque rendu de chaque porte du composer, pour
+/// une réponse qui est la même partout.
+private struct StickerNearbyPlacesInjection: ViewModifier {
+    @ObservedObject private var autorisation = LocationAuthorizationObserver.shared
+
+    func body(content: Content) -> some View {
+        content.environment(
+            \.stickerNearbyPlaces,
+             autorisation.servesNearbyPlaces
+             ? StickerNearbyPlacesProvider(
+                 nearby: { centre in await StickerNearbyPlaces.nearby(around: centre) }
+             )
+             : nil
+        )
+    }
+}
+
+/// L'autorisation de localisation de l'app, SUIVIE — un seul manager pour tout
+/// le processus, et une publication à chaque changement. Voir
+/// `StickerNearbyPlacesInjection` pour ce que son absence coûtait.
+@MainActor
+final class LocationAuthorizationObserver: NSObject, ObservableObject {
+
+    static let shared = LocationAuthorizationObserver()
+
+    @Published private(set) var status: CLAuthorizationStatus
+
+    private let manager = CLLocationManager()
+
+    /// **L'onglet « Lieu » est servi partout SAUF sur un refus** (loi 4 : un
+    /// outil qu'on ne peut pas servir est absent, jamais grisé).
+    /// `.notDetermined` l'ouvre — c'est en y arrivant que l'auteur accorde la
+    /// permission, et la retirer d'avance la rendrait impossible à accorder.
+    var servesNearbyPlaces: Bool { Self.serves(status) }
+
+    /// La règle PURE, à part de l'observateur : elle s'éprouve sans
+    /// `CLLocationManager`, donc sans dépendre de l'état de la machine qui
+    /// exécute le test — un statut système n'est pas injectable.
+    nonisolated static func serves(_ status: CLAuthorizationStatus) -> Bool {
+        switch status {
+        case .denied, .restricted: return false
+        case .notDetermined, .authorizedAlways, .authorizedWhenInUse: return true
+        @unknown default: return true
+        }
+    }
+
+    /// Sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, une deinit synthétisée
+    /// est ISOLÉE et double-libère sur iOS 26.1 (SE-0466). Corps vide ⇒ la
+    /// libération redevient non isolée. Même raison que `OneShotFix`.
+    nonisolated deinit {}
+
+    private override init() {
+        status = manager.authorizationStatus
+        super.init()
+        manager.delegate = self
+    }
+}
+
+extension LocationAuthorizationObserver: CLLocationManagerDelegate {
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let nouveau = manager.authorizationStatus
+        Task { @MainActor [weak self] in self?.status = nouveau }
     }
 }

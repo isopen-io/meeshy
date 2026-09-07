@@ -14,6 +14,7 @@ import { expect, test } from '@playwright/test';
 
 import { COOKIE_DE_JETON, COOKIE_DE_SESSION } from '../../lib/api/cookies';
 import { ESPACE } from '../../lib/contenu/espace';
+import { MARQUEUR_DECONNEXION_ARMEE } from '../../lib/realtime/deconnexion';
 import { JETON_DU_MEMBRE } from './lib/bouchon-socket';
 import { porteInvitee } from './lib/porte-invitee';
 import { passerelleDeBouchon, serveurDeLaV3, type PasserelleDeBouchon, type ServeurV3 } from './lib/serveurs';
@@ -169,7 +170,21 @@ test('à la sortie, plus AUCUN cache du namespace v3 ne reste dans le navigateur
   ]);
 
   // 3. Il sort — et le travailleur emporte SES caches, ceux du lien compris.
+  //
+  // ATTENDRE L'ARMEMENT AVANT DE CLIQUER (#5095, revue e2e) — `liste.ts` (le
+  // module qui appelle `armeLaDeconnexion`) arrive APRÈS le premier pixel
+  // (§ 12.4) : un clic plus rapide que son exécution soumet le FORMULAIRE
+  // NU, qui retire bien les cookies côté serveur mais n'envoie JAMAIS le
+  // signal au travailleur de zone — la course mesurée en Chromium réel
+  // (T+0ms après la navigation vers `/`, la cache du travailleur était DÉJÀ
+  // là, inchangée sur toute la fenêtre du poll : la purge n'avait tout
+  // simplement jamais eu lieu). Le marqueur `MARQUEUR_DECONNEXION_ARMEE`
+  // existe précisément pour ce rendez-vous.
   await page.goto(`${v3.base}/chats?espace`);
+  await page.waitForFunction(
+    (marqueur) => document.documentElement.dataset[marqueur] === '1',
+    MARQUEUR_DECONNEXION_ARMEE,
+  );
   await page.getByRole('button', { name: ESPACE.deconnecter }).click();
   await expect(page).toHaveURL(`${v3.base}/`);
 

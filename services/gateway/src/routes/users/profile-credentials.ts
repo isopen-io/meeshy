@@ -7,7 +7,9 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import { hashPassword, verifyPassword } from '../../utils/password-hash';
+import { validatePasswordStrength } from '../../utils/password-strength';
 import {
+  PASSWORD_MIN_LENGTH,
   updatePasswordSchema,
   updateUsernameSchema
 } from '@meeshy/shared/utils/validation';
@@ -40,7 +42,7 @@ export async function updateUserPassword(fastify: FastifyInstance) {
         required: ['currentPassword', 'newPassword'],
         properties: {
           currentPassword: { type: 'string', minLength: 1, description: 'Current password for verification — no length bound: a bound would lock out accounts created under a lower one' },
-          newPassword: { type: 'string', minLength: 6, description: 'New password (min 6 characters — PASSWORD_MIN_LENGTH)' }
+          newPassword: { type: 'string', minLength: PASSWORD_MIN_LENGTH, description: 'New password (min PASSWORD_MIN_LENGTH characters)' }
         }
       },
       response: {
@@ -86,6 +88,16 @@ export async function updateUserPassword(fastify: FastifyInstance) {
 
       if (!isPasswordValid) {
         return sendBadRequest(reply, 'Current password is incorrect');
+      }
+
+      // #3629 — cette porte ne validait que la LONGUEUR (`updatePasswordSchema`,
+      // Zod) ; `zxcvbn` et les classes de caractères n'étaient consultés qu'au
+      // reset. Un compte pouvait donc CRÉER un mot de passe fort puis le
+      // CHANGER pour un mot de passe trivial sans qu'aucune règle ne s'y
+      // oppose.
+      const strength = validatePasswordStrength(body.newPassword);
+      if (!strength.isValid) {
+        return sendBadRequest(reply, `Password requirements: ${strength.errors.join(', ')}`);
       }
 
       const hashedPassword = await hashPassword(body.newPassword);
@@ -307,7 +319,7 @@ export async function updateUsername(fastify: FastifyInstance) {
           lastName: updatedUser.lastName,
         },
       })
-        .catch((err: unknown) => fastify.log.error({ err }, '[USERNAME_CHANGE] emitUserUpdated failed'));
+        .catch((err: unknown) => logError(fastify.log, '[USERNAME_CHANGE] emitUserUpdated failed', err));
 
       // `username` fait partie de l'identité de frappe mise en cache par
       // StatusHandler (`{ username, displayName }`). L'invalider pour que

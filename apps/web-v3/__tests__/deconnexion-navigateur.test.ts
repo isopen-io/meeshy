@@ -19,6 +19,7 @@ const monteLeFormulaire = (): HTMLFormElement => {
   document.body.innerHTML =
     '<form class="sortie" method="post" action="/deconnexion">' +
     '<input type="hidden" name="session" value="" />' +
+    '<input type="hidden" name="pushAppareil" value="" />' +
     '<button type="submit">Se déconnecter</button>' +
     '</form>';
   return document.querySelector('form[action="/deconnexion"]') as HTMLFormElement;
@@ -58,6 +59,33 @@ describe('armeLaDeconnexion', () => {
 
     const champ = formulaire.elements.namedItem('session') as HTMLInputElement;
     expect(champ.value).toBe('sess-abc');
+  });
+
+  /**
+   * LE CHAMP `pushAppareil` (#5391, § 3.5) — rempli depuis le cookie
+   * `meeshy_v3_push_appareil`, jamais un second store : la porte l'utilise
+   * pour retirer le TOKEN push de CET appareil avant d'expirer les cookies
+   * du membre.
+   */
+  it('remplit le champ pushAppareil depuis le cookie à la soumission', () => {
+    document.cookie = 'meeshy_v3_push_appareil=device-77;path=/';
+    const formulaire = monteLeFormulaire();
+    armeLaDeconnexion();
+
+    soumets(formulaire);
+
+    const champ = formulaire.elements.namedItem('pushAppareil') as HTMLInputElement;
+    expect(champ.value).toBe('device-77');
+  });
+
+  it('sans cookie appareil, le champ pushAppareil part vide — pas d’exception', () => {
+    const formulaire = monteLeFormulaire();
+    armeLaDeconnexion();
+
+    expect(() => soumets(formulaire)).not.toThrow();
+
+    const champ = formulaire.elements.namedItem('pushAppareil') as HTMLInputElement;
+    expect(champ.value).toBe('');
   });
 
   it('retire les trois clés legacy de localStorage à la soumission', () => {

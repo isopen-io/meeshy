@@ -1,5 +1,5 @@
 import { actifsTempsReel, type ActifsTempsReel } from '@/lib/actifs-rt';
-import { listeDeCheminsDeZone } from '@/lib/sw/portees';
+import { listeDeCheminsDeZone, porteesDuTravailleur } from '@/lib/sw/portees';
 
 /**
  * CE QU'UN DOCUMENT DE PARTICIPATION PORTE POUR SON MODULE — et le chargeur
@@ -140,6 +140,21 @@ export const SCRIPT_DU_TRAVAILLEUR = (portees: readonly string[]): string => {
     '</script>'
   );
 };
+
+/**
+ * LA REGISTRATION, PRÊTE À L'ENVIRONNEMENT (#5321) — `SCRIPT_DU_TRAVAILLEUR`
+ * prend une LISTE DE PORTÉES ; ce wrapper la lit depuis `V3_SW_PORTEES` une
+ * fois, pour que chaque document connecté n'ait pas à recopier
+ * `SCRIPT_DU_TRAVAILLEUR(porteesDuTravailleur(process.env['V3_SW_PORTEES']))`.
+ *
+ * `documentPleinEcran` (`fil-vue.ts`) le sert d'office, comme avant ; les
+ * deux documents composés par `documentDuSite` qui vivent aussi dans la zone
+ * connectée — le tableau de bord (`connecte/vue.ts`) et la liste des
+ * conversations (`liste-vue.ts`) — l'appellent désormais eux aussi : la
+ * registration ne dépendait, avant ce lot, que de la fonction par laquelle un
+ * écran composait son document, jamais de son appartenance à la zone.
+ */
+export const scriptDuTravailleur = (): string => SCRIPT_DU_TRAVAILLEUR(porteesDuTravailleur(process.env['V3_SW_PORTEES']));
 
 /**
  * LE BLOC DU NAVIGATEUR DE ZONE (#5106) — servi quand le déploiement déclare

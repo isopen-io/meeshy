@@ -593,6 +593,12 @@ struct MeeshyComposerHost: View {
     /// posé sans rien fonder.
     @State var mediaRoleByURL: [URL: ComposerMediaRole] = [:]
 
+    /// **La graine n'est ingérée qu'UNE fois** (#5409). `onAppear` peut se
+    /// rejouer (retour d'une feuille, recomposition du cover) ; sans ce loquet,
+    /// le même fichier entrerait plusieurs fois dans `documentLocalMedia` et
+    /// partirait en autant de pièces jointes.
+    @State var seedIngestedIntoDocument = false
+
     /// **Les LÉGENDES, une par média** (#4890, directive porteur 2026-09-02 :
     /// « chaque image doit avoir sa légende »).
     ///
@@ -1056,6 +1062,12 @@ struct MeeshyComposerHost: View {
         .adaptiveOnChange(of: moodSeed, initial: true) { _, graine in
             adoptMoodSeed(graine)
         }
+        // **Le FICHIER de la graine rejoint la liste que la voie document
+        // téléverse** (#5409). `onAppear` et non `adaptiveOnChange` : la graine
+        // est un `let` de l'init, elle ne change jamais — et
+        // `StoryComposerSeed` n'est pas Equatable (elle porte un `UIImage`),
+        // donc il n'y a rien à observer. Le loquet tient la répétition.
+        .onAppear { ingestSeedIntoDocumentIfNeeded() }
         // B3 (#3926) — le report du contenu vers la scène, en UN seul site :
         // dès que `mountedSurface` DEVIENT `.scene` (par l'éventail STORY/RÉEL
         // ou par une couleur de fond), le texte et le média composés suivent.

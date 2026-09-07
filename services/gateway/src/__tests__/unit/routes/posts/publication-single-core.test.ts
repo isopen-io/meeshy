@@ -417,7 +417,25 @@ describe('#4151 — le Prisme couvre la légende, quelle que soit la porte', () 
     await settle();
 
     expect(mockTranslatePost).toHaveBeenCalledWith(
-      PUBLISHED_ROW.id, PUBLISHED_ROW.content, 'fr',
+      PUBLISHED_ROW.id, PUBLISHED_ROW.content, 'fr', undefined,
+    );
+    expect(res.statusCode).toBe(201);
+
+    await app.close();
+  });
+
+  // #5349 — le second recours de traduction n'existe que sur `POST /posts` :
+  // c'est la seule porte dont le schéma déclare `detectedLanguage` (mesure
+  // on-device du composer web). `POST /posts/from-attachment` n'a pas de
+  // composer texte et ne le porte pas.
+  it('POST /posts relaie `detectedLanguage` à translatePost, en 4e position', async () => {
+    const { app } = await buildApp();
+
+    const res = await parPorte['POST /posts'](app, { detectedLanguage: 'es' });
+    await settle();
+
+    expect(mockTranslatePost).toHaveBeenCalledWith(
+      PUBLISHED_ROW.id, PUBLISHED_ROW.content, 'fr', 'es',
     );
     expect(res.statusCode).toBe(201);
 

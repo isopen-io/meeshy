@@ -1,10 +1,13 @@
 /**
  * Route tests — translation-non-blocking routes
  *
- * Covers all 3 routes via Fastify inject:
+ * Covers the module's only route via Fastify inject:
  *   POST /translate                          — submit async translation
- *   GET  /status/:messageId/:language        — poll translation status
- *   GET  /conversation/:identifier           — get conversation by identifier
+ *
+ * `GET /status/:messageId/:language` et `GET /conversation/:identifier`
+ * (jamais appelées par aucun client — #5423) ont été retirées avec ce
+ * module ; le résultat d'une traduction voyage désormais uniquement par le
+ * pipeline temps réel (Socket.IO `translation:completed`).
  *
  * @jest-environment node
  */
@@ -16,7 +19,6 @@ import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 
 const mockHandleNewMessage = jest.fn();
 const mockHandleMessage = jest.fn();
-const mockGetTranslation = jest.fn();
 
 jest.mock('../../../utils/logger', () => ({
   logError: jest.fn(),
@@ -49,25 +51,6 @@ const CONV_IDENTIFIER = 'conv_abc123';
 const RESOLVED_CONV_ID = 'bbbbbbbbbbbbbbbbbbbbbbbb';
 const AUTH = { authorization: 'Bearer token' };
 
-const TRANSLATION_RESULT = {
-  translatedText: 'Bonjour le monde',
-  sourceLanguage: 'en',
-  targetLanguage: 'fr',
-  confidenceScore: 0.95,
-  modelType: 'basic',
-  processingTime: 0.234,
-};
-
-const DB_CONVERSATION = {
-  id: RESOLVED_CONV_ID,
-  identifier: CONV_IDENTIFIER,
-  title: 'Test Chat',
-  type: 'direct',
-  createdAt: new Date('2024-01-01'),
-  lastMessageAt: new Date('2024-01-15'),
-  _count: { messages: 42, participants: 2 },
-};
-
 const DB_MESSAGE = {
   id: MSG_ID,
   content: 'Hello world',
@@ -80,7 +63,6 @@ const DB_MESSAGE = {
 
 type PrismaOpts = {
   messageFindUnique?: typeof DB_MESSAGE | null | Error;
-  conversationFindFirst?: typeof DB_CONVERSATION | null | Error;
   /** `null` = l'appelant ne participe pas à la conversation visée. */
   participantFindFirst?: { id: string } | null | Error;
 };
@@ -100,11 +82,8 @@ function makePrisma(opts: PrismaOpts = {}) {
     message: {
       findUnique: mockFn(opt(opts.messageFindUnique, DB_MESSAGE)),
     },
-    conversation: {
-      findFirst: mockFn(opt(opts.conversationFindFirst, DB_CONVERSATION)),
-    },
-    // La traduction porte le contenu des messages : chaque route du module
-    // vérifie désormais que l'appelant participe à la conversation.
+    // La traduction porte le contenu des messages : la route vérifie
+    // désormais que l'appelant participe à la conversation.
     participant: {
       findFirst: mockFn(opt(opts.participantFindFirst, { id: 'part-1' })),
     },
@@ -118,7 +97,6 @@ async function buildApp(prismaOpts: PrismaOpts = {}): Promise<FastifyInstance> {
   app.decorate('prisma', makePrisma(prismaOpts) as unknown);
   app.decorate('translationService', {
     handleNewMessage: (...a: unknown[]) => mockHandleNewMessage(...(a as [])),
-    getTranslation: (...a: unknown[]) => mockGetTranslation(...(a as [])),
   } as unknown);
   app.decorate('messagingService', {
     handleMessage: (...a: unknown[]) => mockHandleMessage(...(a as [])),
@@ -298,153 +276,16 @@ describe('POST /translate', () => {
   });
 });
 
-// ─── GET /status/:messageId/:language ────────────────────────────────────────
-
-describe('GET /status/:messageId/:language', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(() => app.close());
-  beforeEach(() => jest.clearAllMocks());
-
-  it('returns 200 with completed status when translation is available', async () => {
-    mockGetTranslation.mockResolvedValue(TRANSLATION_RESULT);
-    const res = await app.inject({
-      method: 'GET',
-      url: `/status/${MSG_ID}/fr`,
-      headers: AUTH,
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    expect(body.data.status).toBe('completed');
-    expect(body.data.translation).toEqual(TRANSLATION_RESULT);
-  });
-
-  it('returns 200 with processing status when translation is not yet available', async () => {
-    mockGetTranslation.mockResolvedValue(null);
-    const res = await app.inject({
-      method: 'GET',
-      url: `/status/${MSG_ID}/fr`,
-      headers: AUTH,
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    expect(body.data.status).toBe('processing');
-    expect(body.data.translation).toBeUndefined();
-  });
-
-  it('returns 500 when translation service throws', async () => {
-    mockGetTranslation.mockRejectedValue(new Error('service crash'));
-    const res = await app.inject({
-      method: 'GET',
-      url: `/status/${MSG_ID}/fr`,
-      headers: AUTH,
-    });
-    expect(res.statusCode).toBe(500);
-  });
-
-  it('passes correct messageId and language to getTranslation', async () => {
-    mockGetTranslation.mockResolvedValue(null);
-    await app.inject({ method: 'GET', url: `/status/${MSG_ID}/de`, headers: AUTH });
-    expect(mockGetTranslation).toHaveBeenCalledWith(MSG_ID, 'de');
-  });
-});
-
-// ─── GET /conversation/:identifier ───────────────────────────────────────────
-
-describe('GET /conversation/:identifier', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(() => app.close());
-  beforeEach(() => jest.clearAllMocks());
-
-  it('returns 200 with conversation details when identifier matches', async () => {
-    const res = await app.inject({
-      method: 'GET',
-      url: `/conversation/${CONV_IDENTIFIER}`,
-      headers: AUTH,
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    expect(body.data.id).toBe(RESOLVED_CONV_ID);
-    expect(body.data.identifier).toBe(CONV_IDENTIFIER);
-    expect(body.data.messageCount).toBe(42);
-    expect(body.data.memberCount).toBe(2);
-  });
-
-  it('returns 404 when conversation identifier not found', async () => {
-    const appNoConv = await buildApp({ conversationFindFirst: null });
-    const res = await appNoConv.inject({
-      method: 'GET',
-      url: '/conversation/unknown-identifier',
-      headers: AUTH,
-    });
-    expect(res.statusCode).toBe(404);
-    await appNoConv.close();
-  });
-
-  it('returns 500 on database error', async () => {
-    const appErr = await buildApp({ conversationFindFirst: new Error('db crash') });
-    const res = await appErr.inject({
-      method: 'GET',
-      url: `/conversation/${CONV_IDENTIFIER}`,
-      headers: AUTH,
-    });
-    expect(res.statusCode).toBe(500);
-    await appErr.close();
-  });
-
-  it('response includes all expected fields', async () => {
-    const res = await app.inject({
-      method: 'GET',
-      url: `/conversation/${CONV_IDENTIFIER}`,
-      headers: AUTH,
-    });
-    const body = res.json();
-    expect(body.data).toMatchObject({
-      id: expect.any(String),
-      identifier: expect.any(String),
-      type: expect.any(String),
-      messageCount: expect.any(Number),
-      memberCount: expect.any(Number),
-    });
-  });
-});
-
 // ─── Cloisonnement : la traduction porte le CONTENU des messages ─────────────
 //
-// Trois trous formaient une chaîne exploitable : `/status` n'avait aucune
-// garde et rendait le texte traduit — donc déchiffré — de n'importe quel
-// message à qui devinait un identifiant ; `/translate` chargeait bien les
-// participants du message visé mais ne les consultait jamais, si bien qu'un
-// compte quelconque déclenchait la retraduction d'un message d'autrui avant
-// d'aller le lire ; `/conversation/:identifier` exposait titre, type et
-// nombre de membres sans identité.
+// `/translate` chargeait bien les participants du message visé mais ne les
+// consultait jamais, si bien qu'un compte quelconque déclenchait la
+// retraduction d'un message d'autrui. Les deux autres trous de cette même
+// chaîne (`/status`, sans aucune garde ; `/conversation/:identifier`, ouverte
+// à toute identité) ont disparu avec les routes elles-mêmes (#5423).
 
 describe('cloisonnement des conversations', () => {
   beforeEach(() => jest.clearAllMocks());
-
-  it('refuse /status à un appelant sans identité', async () => {
-    const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: `/status/${MSG_ID}/fr` });
-    expect(res.statusCode).toBe(401);
-    await app.close();
-  });
-
-  it('refuse /status à un compte étranger à la conversation', async () => {
-    const app = await buildApp({ participantFindFirst: null });
-    const res = await app.inject({
-      method: 'GET',
-      url: `/status/${MSG_ID}/fr`,
-      headers: AUTH,
-    });
-    expect(res.statusCode).toBe(403);
-    // Et surtout : le service de traduction n'est jamais interrogé.
-    expect(mockGetTranslation).not.toHaveBeenCalled();
-    await app.close();
-  });
 
   it('refuse la retraduction d\'un message d\'une conversation étrangère', async () => {
     const app = await buildApp({ participantFindFirst: null });
@@ -456,16 +297,6 @@ describe('cloisonnement des conversations', () => {
     });
     expect(res.statusCode).toBe(403);
     expect(mockHandleNewMessage).not.toHaveBeenCalled();
-    await app.close();
-  });
-
-  it('refuse /conversation/:identifier à un appelant sans identité', async () => {
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'GET',
-      url: `/conversation/${CONV_IDENTIFIER}`,
-    });
-    expect(res.statusCode).toBe(401);
     await app.close();
   });
 });
