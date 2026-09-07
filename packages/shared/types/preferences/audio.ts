@@ -4,6 +4,19 @@
  */
 
 import { z } from 'zod';
+import type { VoiceCloningQualityPreset } from '../voice-api';
+
+/**
+ * Le preset de qualité du clonage vocal FIN (`voiceCloningQualityPreset`) est le
+ * même type que `VoiceCloningQualityPreset` (`../voice-api.ts`), qui gouverne
+ * déjà `VoiceProfileService.registerProfile()` et les presets ZMQ
+ * (`services/gateway/src/types/translation.types.ts`). Ne pas en redéclarer un
+ * second : `voiceCloneQuality` ci-dessous porte 'quality' (pas 'high_quality')
+ * pour une raison différente — c'est le préréglage SIMPLE déjà exposé par
+ * l'écran web (`audio-settings.tsx`), distinct des cinq réglages fins
+ * `voiceCloning*` (#3735).
+ */
+const VOICE_CLONING_QUALITY_PRESETS = ['fast', 'balanced', 'high_quality'] as const satisfies readonly VoiceCloningQualityPreset[];
 
 export const AudioPreferenceSchema = z.object({
   // Transcription
@@ -29,6 +42,20 @@ export const AudioPreferenceSchema = z.object({
   // Voice Profile
   voiceProfileEnabled: z.boolean().default(false),
   voiceCloneQuality: z.enum(['fast', 'balanced', 'quality']).default('balanced'),
+
+  /**
+   * Réglages fins du clonage vocal (Chatterbox TTS), écrits par
+   * `VoiceProfileService.registerProfile()`/`updateSettings()` (#3735) et lus
+   * à la composition de la requête TTS
+   * (`MessageTranslationService.processAudioAttachment()` →
+   * `AudioProcessRequest.voiceCloneParams.chatterbox`). Bornes alignées sur
+   * `validateChatterboxParams` (`services/gateway/src/types/translation.types.ts`).
+   */
+  voiceCloningExaggeration: z.number().min(0).max(1).default(0.5),
+  voiceCloningCfgWeight: z.number().min(0).max(1).default(0.5),
+  voiceCloningTemperature: z.number().min(0.1).max(2).default(1.0),
+  voiceCloningTopP: z.number().min(0).max(1).default(0.9),
+  voiceCloningQualityPreset: z.enum(VOICE_CLONING_QUALITY_PRESETS).default('balanced'),
 
   /**
    * Le canal de COMPATIBILITÉ ASCENDANTE, déclaré (#4589).
@@ -68,5 +95,10 @@ export const AUDIO_PREFERENCE_DEFAULTS: AudioPreference = {
   noiseSuppression: true,
   echoCancellation: true,
   voiceProfileEnabled: false,
-  voiceCloneQuality: 'balanced'
+  voiceCloneQuality: 'balanced',
+  voiceCloningExaggeration: 0.5,
+  voiceCloningCfgWeight: 0.5,
+  voiceCloningTemperature: 1.0,
+  voiceCloningTopP: 0.9,
+  voiceCloningQualityPreset: 'balanced'
 };
