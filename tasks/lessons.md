@@ -29590,3 +29590,135 @@ tomber à minuit).
 renommage traverse le code ET les chaînes, et les chaînes des TÉMOINS sont
 celles qu'on relit le moins — précisément parce qu'on les croit du test, pas du
 produit.
+
+## Leçon 549 — `justify-content: flex-end` rend le débordement du HAUT injoignable, sans rien dire
+
+**Le fait.** Le fil de la v3.1 défilait dans un `<main class="flex flex-col
+justify-end overflow-y-auto">`. En le virtualisant, sa liste est passée à une
+hauteur explicite de 46 175 px. Mesuré dans le navigateur :
+
+```
+ol.offsetHeight   46175
+main.scrollHeight   708      ← sa hauteur VISIBLE
+```
+
+Le fil entier était injoignable. Aucune erreur, aucun avertissement, aucune
+règle CSS invalide : `justify-content: flex-end` pousse le contenu vers la fin,
+et ce qui dépasse par le DÉBUT sort de la zone de défilement — le navigateur
+ne crée pas d'overflow atteignable de ce côté. La liste se rendait, les
+cellules étaient là, le virtualiseur croyait être en haut du fil parce que
+`scrollTop` ne pouvait jamais quitter 0.
+
+**La règle.** Pour ancrer un contenu en bas d'un conteneur défilant, employer
+`margin-block-start: auto` sur l'enfant, **jamais** `justify-content: flex-end`
+sur le conteneur. La marge automatique donne le même effet quand le contenu est
+court et se réduit à zéro quand il est long, ce qui laisse un débordement
+normal. C'est exactement le cas d'un fil de conversation, et c'est pourquoi le
+piège s'y présente.
+
+**Ce qui l'a attrapé, et ce qui ne l'a pas fait.** Ni `tsc`, ni les tests, ni
+l'œil : sur sept messages de fixture, le contenu tient dans l'écran et rien ne
+déborde. Il a fallu un témoin qui monte **cinq cents** messages et lise
+`scrollHeight`. **Un défaut de débordement ne se voit pas tant que rien ne
+déborde** — la fixture nominale est précisément le jeu de données qui le cache.
+
+**Corollaire, et c'est le même que la leçon du `flexShrink: 0` de la Lentille
+(rangées mesurées à 31 px au lieu de 84).** Un enfant flex de dimension
+explicite est comprimé ou déplacé par son conteneur sans que la dimension
+écrite change : `style.height` dit 46 175, `offsetHeight` dit 46 175, et la
+zone de défilement dit 708. **Lire la propriété qu'on a écrite ne prouve
+rien ; il faut lire celle que le navigateur en tire.**
+
+**Et sur le témoin lui-même.** Sa première version mesurait la stabilité de la
+HAUTEUR TOTALE du fil pendant le défilement, et déclarait le virtualiseur cassé
+(25 502 px de dérive). C'était le mauvais invariant : dans un fil virtualisé la
+hauteur totale change forcément — les estimations cèdent la place aux mesures
+réelles, il n'y a pas d'autre façon de connaître la taille de cellules qu'on ne
+monte pas. Ce qui ne doit pas bouger, c'est **ce que l'utilisateur regarde** :
+une cellule visible reste où elle est, et le virtualiseur corrige `scrollTop`
+pour ça. **Un témoin qui mesure la mauvaise invariance condamne le code qui
+fait exactement son travail** — et il le fait avec l'assurance d'une mesure.
+
+## Leçon 550 — Un témoin qui garde son bilan pour la fin perd ce qu'il a vu
+
+**Le fait.** Le témoin des états du fil relevait ses constats dans un tableau
+et les imprimait à la sortie. Mutation testée — la reprise d'un envoi rendue
+malhonnête (elle repasse en « en attente » même coupé) — le témoin a rendu :
+
+```
+    at .../check-thread-states.mjs:164
+  log: [ "  - waiting for getByText('Réessayer')" ],
+  name: 'TimeoutError'
+```
+
+Il AVAIT relevé le défaut : l'assertion précédente était déjà tombée. Mais
+l'étape suivante cliquait une bande de reprise que la mutation venait de faire
+disparaître, Playwright a levé, et le bilan n'a jamais été imprimé. Un défaut
+parfaitement détecté, rendu sous la forme d'un incident d'outillage.
+
+**Les deux règles.**
+
+1. **Imprimer au fil de l'eau.** Ce qu'un témoin a constaté doit survivre à ce
+   qui l'arrête ensuite. Un bilan différé est un bilan qu'on perd exactement
+   quand il est le plus utile — c'est-à-dire quand quelque chose casse.
+2. **Ce qui peut légitimement manquer se clique avec une garde.** Quand le
+   défaut cherché EST l'absence d'un élément, l'attendre par un clic direct
+   transforme une assertion en exception. Un helper qui rend `false` laisse le
+   témoin nommer le défaut trouvé plutôt que l'endroit où il a buté — et
+   permet de dire la nuance : « la bande avait déjà disparu hors ligne » n'est
+   pas « la reprise ne marche pas ».
+
+**Pourquoi ça compte plus qu'il n'y paraît.** Un gate qui rend une trace de
+pile au lieu d'une phrase se fait diagnostiquer comme cassé, pas comme
+déclencheur. C'est le même mécanisme que la leçon 548 : un témoin perd son
+autorité par la QUALITÉ de ce qu'il rend, pas seulement par sa justesse. Ici il
+avait raison, et il a eu l'air en panne.
+
+**Corollaire de méthode.** Ce défaut ne s'est vu qu'en MUTANT le code — le
+témoin était vert, et sa sortie verte était parfaite. **La sortie d'échec d'un
+témoin est du code que seule une mutation exécute** : ne jamais la considérer
+comme relue tant qu'on ne l'a pas lue en rouge.
+## Leçon 551 — Un chemin en dur JUSTE sur la machine qui l'écrit ne peut pas être vu localement
+
+**Le fait.** Le témoin de virtualisation lançait Chromium ainsi :
+
+```js
+chromium.launch({ executablePath: process.env.CHROMIUM ?? '/opt/pw-browsers/chromium' })
+```
+
+Vert localement, et pour la meilleure des mauvaises raisons : ce chemin EXISTE
+dans le conteneur de développement. En CI :
+
+```
+browserType.launch: Failed to launch chromium because executable
+  doesn't exist at /opt/pw-browsers/chromium
+```
+
+**Ce que le dépôt savait déjà.** Deux témoins plus anciens portaient la bonne
+forme — un candidat, une garde `existsSync`, et le repli sur la résolution de
+Playwright elle-même (celle qui vaut après `playwright install`). Deux autres
+codaient un chemin en dur. **La règle était donc écrite quatre fois et de deux
+façons**, et c'est l'endroit qu'aucun travail de CI n'exécutait qui portait la
+mauvaise. Le sixième témoin a recopié la moitié qu'il avait sous les yeux.
+
+**La règle.** Un réglage d'ENVIRONNEMENT — chemin de binaire, port, répertoire
+de cache — écrit à plusieurs endroits finit écrit de plusieurs façons. Il
+n'appartient pas au témoin qui s'en sert mais à un module qu'ils partagent
+tous : `scripts/lib/browser.mjs` ici, six appelants, une seule ligne à corriger
+le jour où le conteneur change de version.
+
+**Ce qui rend ce défaut particulier.** Il est structurellement invisible à
+l'endroit où on l'écrit : le chemin codé en dur est celui de la machine qui
+l'écrit, donc il est JUSTE là, et le témoin est vert. Aucune relecture locale,
+aucune exécution locale, aucune mutation locale ne peut le montrer. **La seule
+question qui l'attrape se pose à l'écriture** : *cette valeur est-elle vraie
+ailleurs que sur cette machine ?* — et pour un chemin absolu la réponse est
+non par défaut.
+
+**Corollaire, à ne pas manquer.** Reproduire le défaut demandait de simuler
+l'absence du binaire (`CHROMIUM=/n-existe-pas`), et cette simulation NE
+reproduit pas la CI non plus : le bac à sable porte une révision de Chromium
+que la version de Playwright du dépôt ne connaît pas. La preuve du correctif
+n'est donc pas une exécution mais une IDENTITÉ : le nouveau chemin de code est
+exactement celui que deux témoins verts en CI empruntent déjà. Le dire est plus
+honnête que de prétendre l'avoir mesuré.

@@ -4,7 +4,7 @@
  * (390 x 844 — l'iPhone que les cibles montrent), pour qu'on JUGE le rendu au
  * lieu de le supposer. Les captures vont dans `render/`, non versionnees.
  */
-import { chromium } from '@playwright/test';
+import { launchChromium } from './lib/browser.mjs';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE ?? 'http://localhost:4173';
@@ -28,11 +28,7 @@ const SCREENS = [
   { name: 'thread-live', path: '/c/c-amina' },
 ];
 
-/* Le Chromium prei-nstalle de l'environnement : la version de Playwright du
-   depot attend une autre revision, et `playwright install` est proscrit ici. */
-const browser = await chromium.launch({
-  executablePath: process.env.CHROMIUM ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-});
+const browser = await launchChromium();
 for (const scheme of ['dark', 'light']) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },

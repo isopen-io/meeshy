@@ -304,3 +304,102 @@ lien : retirer l'étape lui fait nommer le job, le scénario et la ligne.
 pas faite : les données restent des fixtures. Mais elles sont désormais écrites
 dans la FORME que la passerelle rend, donc le jour où le transport arrive,
 `fixtures.ts` disparaît sans qu'aucun composant ne bouge.
+
+## D-15 · Le fil est virtualisé, et son ancrage bas est un mécanisme — 2026-09-07 (#5560)
+
+**Pourquoi.** Cinq cents bulles montées, mesurées et repeintes à chaque image
+de défilement donnent un fil qui met deux secondes à s'ouvrir puis saccade.
+C'est le cas où une WebView Android d'entrée de gamme lâche (#5446), et la
+charte du dépôt classe une lenteur comme un **bug**, pas comme une dette.
+
+**Ce qui est réutilisé.** `@tanstack/react-virtual`, la bibliothèque que le
+legacy emploie déjà (`apps/web/components/conversations/hooks/useVirtualizedList.ts`).
+Ce hook-là n'est PAS repris : c'est un réglage de 37 lignes, pas une loi — le
+copier aurait fait une jumelle sans rien partager d'utile.
+
+**Le coût, mesuré.**
+
+| | avant | après |
+|---|---|---|
+| première peinture | 26,33 Ko | **26,36 Ko** |
+| à la demande | 30,24 Ko | **37,50 Ko** |
+
+Le virtualiseur pèse 7,09 Ko gzip — **à la demande**, jamais avant le premier
+pixel. Ça n'a pas été gratuit : la règle par défaut du découpage
+(`node_modules ⇒ core`) l'aurait mis dans le socle, faisant passer la première
+peinture à **31,44 Ko** pour un module que seul le fil monte. Et nommer le seul
+paquet React ne suffisait pas : `@tanstack/virtual-core` porte l'essentiel du
+calcul et restait dans le socle. Les deux sont nommés ; le gate de poids garde
+la porte.
+
+**L'ancrage bas est un mécanisme, pas un appel.** Un seul `scrollToIndex` vise
+le bas d'une hauteur ESTIMÉE, puis les cellules montées se mesurent et la
+hauteur change sous lui : le fil s'ouvrait « en bas » d'un fil dont le dernier
+message n'était pas rendu. On se ré-ancre donc sur une vingtaine d'images, et
+on **désarme à la première intention de l'utilisateur** (`wheel`, `touchstart`,
+`keydown`) — sans ce désarmement, remonter son historique dans la demi-seconde
+qui suit l'ouverture serait impossible, ce qui est pire que de s'ouvrir au
+mauvais endroit.
+
+**Deux pièges de mise en page, trouvés à la mesure et invisibles autrement.**
+
+1. `justify-content: flex-end` sur le conteneur défilant : un enfant plus haut
+   que lui déborde par le **haut**, et ce débordement-là **n'est pas
+   atteignable au défilement**. Relevé : un `<ol>` de 46 175 px dans un
+   `<main>` dont `scrollHeight` valait 708 — sa hauteur visible. Le fil entier
+   était injoignable, sans erreur, sans avertissement. L'ancrage se fait
+   désormais par `margin-block-start: auto`.
+2. `flexShrink: 0` sur la liste : un enfant flex de hauteur explicite est
+   **comprimé** dès que la somme dépasse la place. C'est le MÊME défaut que la
+   Lentille avait payé sur ses rangées, revenu parce qu'il ne se voit ni au
+   type-check ni à l'œil.
+
+**Le banc est une variante de CONSTRUCTION.** La virtualisation ne se prouve
+pas sur sept messages. `MEESHY_BENCH=500 bun run build` pose `__BENCH__` en
+littéral ; le build servi vaut `0`, la branche devient `if (0 > 0)`, rolldown
+l'élimine, et le gate de poids le prouve. Un paramètre d'URL aurait fait entrer
+du code de banc dans le bundle : pour mesurer la légèreté, on l'aurait dégradée.
+
+## D-16 · Les états du fil, et ce qu'ils refusent de promettre — 2026-09-07 (#5560)
+
+**Quatre états dessinés** : conversation sans historique, coupure réseau,
+message écrit hors ligne, reprise d'un envoi échoué.
+
+**L'état vide est un ÉTAT.** Un fil sans historique qui rend du blanc se lit,
+sur un réseau lent, comme un chargement qui ne finit pas — l'interprétation la
+plus naturelle et la plus fausse. Il fallait aussi qu'il soit ATTEIGNABLE : le
+POC servait la même liste de messages à toute adresse `/c/:id`, donc l'écran
+vide était du code que personne, témoin compris, ne pouvait afficher. Une
+conversation sans messages entre désormais dans la fixture, et `messagesOf()`
+rend un tableau vide comme le fera la passerelle avant sa première page.
+
+**La coupure s'ANNONCE, elle ne BLOQUE pas.** L'application lit parfaitement
+depuis son précache : un voile ou une modale puniraient l'utilisateur pour un
+état où tout ce qu'il veut lire est déjà là. Le bandeau ne dit qu'une chose,
+celle qu'il ne peut pas deviner : ce qu'il ÉCRIT ne partira pas maintenant.
+
+**`navigator.onLine === false` est fiable, `true` ne l'est pas.** Le système
+sait qu'aucune interface n'est disponible ; il ne sait pas si la passerelle
+répond — un portail captif ou une antenne saturée laissent le drapeau à `true`.
+On s'en sert donc pour annoncer une coupure CERTAINE, jamais pour promettre
+qu'un envoi passera. `useSyncExternalStore` plutôt qu'un état miroir : sur un
+réseau qui coupe toutes les minutes, le rendu de décalage arrive.
+
+**Ce que l'interface refuse de promettre.** Un message écrit hors ligne est
+marqué NON ENVOYÉ tout de suite — pas d'horloge qui tourne sur un envoi qui ne
+partira pas. Et « Réessayer » alors que l'appareil est toujours coupé **laisse
+le message en échec** : repasser en « en attente » ferait tourner cette même
+horloge pour rien, et l'utilisateur croirait que c'est parti. En ligne, l'état
+reste « en attente » et n'ira pas plus loin : sans transport (#5493), aucune
+confirmation n'existe, et peindre « remis » serait un mensonge. **Le manque se
+VOIT plutôt que de se cacher.**
+
+**La bande de reprise est DANS la bulle**, parti d'iOS et meilleur que
+l'alternative : un bandeau global dirait « un envoi a échoué » sans dire
+LEQUEL, ce qui est inutilisable sur un fil de cinquante messages.
+
+**L'état local ne touche pas le domaine.** « en attente » et « échoué » ne sont
+pas des champs de `Message` — le serveur ne les sert pas et ne les connaît pas.
+Ce sont des opinions de CE client sur une charge, elle, partageable ; les
+confondre ferait voyager l'échec d'un appareil jusqu'à l'écran d'un autre.
+Ils vivent donc dans une carte à côté de la liste, jamais dedans.
