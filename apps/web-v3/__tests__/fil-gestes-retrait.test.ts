@@ -223,6 +223,34 @@ describe('la fenêtre expirée envoie UNE fois, puis confirme sur l’accusé', 
       jest.useRealTimers();
     }
   });
+
+  /**
+   * DÉFAUT DE REVUE #5387 — « la bulle passe de "Message retiré" à "Ce
+   * message a été supprimé" EN SILENCE » : `differe()` et `annule()`
+   * annoncent déjà leurs deux issues (voir plus bas) ; l'expiration, elle,
+   * ne l'était pas.
+   */
+  it('l’expiration annonce la suppression confirmée dans #annonces-du-fil', async () => {
+    jest.useFakeTimers();
+    try {
+      const { socket } = socketDeTest(() => ({ success: true }));
+      const { ctx, applique, main } = monte({ pret: true, socket });
+      const retraits = prendsLesRetraits({ ctx, applique });
+
+      retraits.differe('m1');
+      jest.advanceTimersByTime(FENETRE_D_ANNULATION_DU_RETRAIT_MS);
+      await Promise.resolve();
+      // `annonceLeGeste` arme SA PROPRE minuterie (le vide observable entre
+      // deux annonces, voir son doc-comment) — un battement de plus la fait
+      // écrire. `await` (et non `return … .then()`) tient les minuteurs
+      // FICTIFS actifs jusqu'à cette ligne — le `finally` ne les repose en
+      // réels qu'une fois la fonction async intégralement déroulée.
+      jest.advanceTimersByTime(0);
+      expect(main.querySelector<HTMLElement>('#annonces-du-fil')?.textContent).toBe(FIL.supprime);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe('un refus au flush rétablit la bulle et dit sa raison', () => {
@@ -371,6 +399,100 @@ describe('la fenêtre ne fait RIEN partir d’un onglet caché ni d’un réseau
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+/**
+ * NOMINATIF (défaut de revue #5387 — « l'aria-label du bouton "Annuler" ne
+ * nomme pas le message visé ») : `differe()` peut armer DEUX fenêtres à la
+ * fois (m1 ET m2, cf. « detruit() n'envoie plus rien » plus bas) — un
+ * `aria-label` générique identique sur les deux boutons ne laisse alors AUCUN
+ * moyen d'entendre lequel vise quel message.
+ */
+describe('l’aria-label du bouton « Annuler » nomme le message visé (#5387)', () => {
+  it('differe() pose un aria-label qui reprend le texte du message retiré', () => {
+    const { socket } = socketDeTest(() => ({ success: true }));
+    const { ctx, applique, ligne } = monte({ pret: true, socket });
+    const retraits = prendsLesRetraits({ ctx, applique });
+
+    retraits.differe('m1');
+
+    const bouton = ligne().querySelector<HTMLButtonElement>('.annuler-le-retrait');
+    expect(bouton?.getAttribute('aria-label')).toBe(FIL.annulerLeRetrait('Un message que je peux retirer'));
+  });
+
+  it('deux retraits simultanés portent des aria-label DIFFÉRENTS', () => {
+    const M2 = mienMessage('m2', 'Un second message, bien distinct du premier');
+    document.open();
+    document.write(documentDuFil({ ...etatDuDocument(), fil: { ...etatDuDocument().fil, messages: [M2, M1] } }));
+    document.close();
+    const main = document.querySelector<HTMLElement>('main')!;
+    const p = peintre(main)!;
+    let etat: F.EtatDuFil = { bulles: [M1, M2].map(bulleServie), frappeurs: [], presents: [] };
+    const ctx = {
+      main,
+      p,
+      etat,
+      composeur: null,
+      ferme: false,
+      socket: null,
+      pret: false,
+      cache: false,
+      enLigne: true,
+      creance: { genre: 'membre', jeton: 'j' },
+      config: { passerelle: ORIGINE },
+      cles: null,
+    } as unknown as Contexte;
+    const applique = (c: Contexte, suivant: F.EtatDuFil): void => {
+      etat = suivant;
+      c.etat = suivant;
+      peins(c.p, suivant, Date.now());
+    };
+    const retraits = prendsLesRetraits({ ctx, applique });
+
+    retraits.differe('m1');
+    retraits.differe('m2');
+
+    const labelM1 = main.querySelector<HTMLElement>('li[data-id="m1"] .annuler-le-retrait')?.getAttribute('aria-label');
+    const labelM2 = main.querySelector<HTMLElement>('li[data-id="m2"] .annuler-le-retrait')?.getAttribute('aria-label');
+    expect(labelM1).not.toBe(labelM2);
+    expect(labelM1).toContain('Un message que je peux retirer');
+    expect(labelM2).toContain('Un second message');
+  });
+
+  it('un message média-seul (texte vide) retombe sur la forme générique', () => {
+    const M3 = mienMessage('m3', '');
+    document.open();
+    document.write(documentDuFil({ ...etatDuDocument(), fil: { ...etatDuDocument().fil, messages: [M3] } }));
+    document.close();
+    const main = document.querySelector<HTMLElement>('main')!;
+    const p = peintre(main)!;
+    let etat: F.EtatDuFil = { bulles: [M3].map(bulleServie), frappeurs: [], presents: [] };
+    const ctx = {
+      main,
+      p,
+      etat,
+      composeur: null,
+      ferme: false,
+      socket: null,
+      pret: false,
+      cache: false,
+      enLigne: true,
+      creance: { genre: 'membre', jeton: 'j' },
+      config: { passerelle: ORIGINE },
+      cles: null,
+    } as unknown as Contexte;
+    const applique = (c: Contexte, suivant: F.EtatDuFil): void => {
+      etat = suivant;
+      c.etat = suivant;
+      peins(c.p, suivant, Date.now());
+    };
+    const retraits = prendsLesRetraits({ ctx, applique });
+
+    retraits.differe('m3');
+
+    const bouton = main.querySelector<HTMLElement>('li[data-id="m3"] .annuler-le-retrait');
+    expect(bouton?.getAttribute('aria-label')).toBe('Annuler le retrait du message');
   });
 });
 

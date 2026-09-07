@@ -188,7 +188,21 @@ export const FIL = {
    * celui d'une ligne retirée).
    */
   messageRetire: 'Message retiré',
-  annulerLeRetrait: 'Annuler le retrait du message',
+  /**
+   * NOMINATIF (défaut de revue #5387 — « l'aria-label ne nomme pas le
+   * message visé ») : `differe()` peut armer DEUX fenêtres à la fois (une par
+   * message retiré), et un `aria-label` identique sur les deux boutons ne
+   * laisse aucun moyen de les distinguer au lecteur d'écran, qui ne voit ni
+   * l'ordre visuel ni la ligne. `texteOriginal` est le texte du message
+   * juste AVANT que `differe()` ne le remplace par `FIL.messageRetire` —
+   * capturé à la source (`avant.texte`, `fil-gestes.ts`), jamais relu depuis
+   * la bulle déjà retirée. Un média sans texte (`''`) retombe sur la forme
+   * générique : rien à nommer ne vaut mieux qu'un « : » suivi du vide.
+   */
+  annulerLeRetrait: (texteOriginal: string): string =>
+    texteOriginal === ''
+      ? 'Annuler le retrait du message'
+      : `Annuler le retrait du message : ${texteOriginal.length <= 30 ? texteOriginal : `${texteOriginal.slice(0, 30)}…`}`,
   /**
    * LE REPÈRE TEXTUEL DE LA FENÊTRE (suivi #5163 § 12.12, défaut majeur de
    * revue « rien ne dit que la fenêtre se referme ») — masqué tant que

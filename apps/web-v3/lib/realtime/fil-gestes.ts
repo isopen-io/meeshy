@@ -251,6 +251,13 @@ export const prendsLesRetraits = ({
           });
     if (resultat.fait) {
       applique(ctx, F.confirmeLaMutation(ctx.etat, messageId));
+      // L'EXPIRATION S'ANNONCE AUSSI (défaut de revue #5387 — « la bulle
+      // passe de "Message retiré" à "Ce message a été supprimé" en
+      // silence ») : `differe()`/`annule()` annoncent déjà leurs deux
+      // issues ; celle-ci — la fenêtre qui se referme SANS "Annuler" — ne
+      // l'était pas. `FIL.supprime` est le MÊME texte que `.texte` affiche
+      // désormais (`fil-peinture.ts`) — deux surfaces, une seule phrase.
+      annonceLeGeste(ctx, FIL.supprime);
       return;
     }
     applique(ctx, F.retabli(ctx.etat, entree.avant));
@@ -296,8 +303,15 @@ export const prendsLesRetraits = ({
     // `poseLeFocusSurLaLigne` INCONDITIONNEL d'`annule`, dont le geste même
     // prouve que le focus était sur le bouton.
     const bouton = fente?.querySelector<HTMLElement>('.annuler-le-retrait') ?? null;
-    if (bouton !== null) bouton.focus();
-    else poseLeFocusSurLaLigne(ctx, messageId);
+    if (bouton !== null) {
+      // NOMINATIF (#5387) — `avant.texte` est le texte du message tel qu'il
+      // était JUSTE AVANT que `F.retireMoiMeme` (déjà appliqué plus haut) ne
+      // le vide : deux retraits différés à la fois (voir le témoin dédié)
+      // posaient jusqu'ici le MÊME aria-label générique sur leurs deux
+      // boutons, sans aucun moyen de les distinguer sans la vue.
+      bouton.setAttribute('aria-label', FIL.annulerLeRetrait(avant.texte));
+      bouton.focus();
+    } else poseLeFocusSurLaLigne(ctx, messageId);
   };
 
   const annule = (messageId: string): void => {

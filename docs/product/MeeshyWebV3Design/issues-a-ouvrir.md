@@ -15,9 +15,63 @@
 
 ---
 
+## cle=notifs | Se désabonner des notifications push ne recharge plus la page
+
+**Restante Fluidité de #5391**  
+**Genre**: écran  
+**Route**: `/notifications/preferences`  
+**Milestone**: 74 (« La v3 web sert le rôle premier »)  
+**Priorité**: P1-role-secondaire  
+**Audience**: connecté  
+
+### Contexte
+La page `/notifications/preferences` permet se désabonner des notifications push. Actuellement, cliquer la bascule « désabonner » déclenche une navigation complète (rechargement), alors que la bascule « s'abonner » reste sur la page (optimiste + rollback visible).
+
+**Preuve au dépôt** : `apps/web-v3/lib/realtime/push-abonnement.ts:265-281` — `armeLAbonnementPush` intercepte UNIQUEMENT `valeur=true` (s'abonner). Le doc-comment (:263) dit explicitement : « la moitié désabonner traverse cet écouteur sans être interceptée » → rechargement complet.
+
+**Patron existant** : `lib/realtime/prefs.ts:1-230` — les treize bascules des préférences suppriment le rechargement (optimiste + rollback visible).
+
+### Critère de fin
+Intercepter la moitié `valeur=false` comme l'autre, dans `lib/realtime/push-abonnement.ts` :
+- désabonner le `PushManager`
+- poster le retrait
+- dévoiler la rangée « désabonné » servie
+- rollback visible sur échec
+- le chemin sans JavaScript (PRG) reste le chemin qui marche partout
+
+Tests : e2e (zéro `frameNavigated` après clic), jest sur l'écouteur, `javaScriptEnabled:false`.
+
+---
+
 ## cle=notifs | Le travailleur de zone porte le Web Push (#5391)
 **Status**: Déjà ouverte (mentionnée dans les travaux)
 **Numéro**: 5391 (à vérifier)
+
+---
+
+## cle=infra-1 | La décision d'architecture Web Push de la zone est inscrite dans la conception
+
+**Restante Maintenabilité documentaire de #5391**  
+**Genre**: infra  
+**Route**: (document)  
+**Milestone**: 74 (« La v3 web sert le rôle premier »)  
+**Priorité**: P1-role-secondaire  
+**Audience**: les deux (web legacy + v3)
+
+### Contexte
+Le code du canal push de la zone est livré (commit e5a9214c75 : `lib/sw/travailleur.js:310-340`, `lib/realtime/push-abonnement.ts`, `lib/sw/portees.ts`, purge à la déconnexion). Ce qui manque est le **DOCUMENT** : `docs/product/MeeshyWebV3Design/conception-web-v3.md` (§ 12) ne décrit pas le canal push.
+
+### Critère de fin
+Un § de `conception-web-v3.md` décrit le canal push avec `fichier:ligne` par affirmation :
+- qui porte l'abonnement (le worker de zone)
+- pourquoi le worker de zone et pas le legacy
+- la rotation `pushsubscriptionchange`
+- la course déconnexion/rotation et sa fermeture
+- les portées
+
+La matrice (`matrice.json`, ligne `notifs`) renvoie vers ce paragraphe.
+
+**Pas de chiffre inventé** : les poids restent « à mesurer » ou cités de `budgets-mesures.json` sans le modifier.
 
 ---
 
@@ -36,6 +90,46 @@
 ## cle=storyCreate | Une story part avec son média — /stories/new joint une image ou une vidéo (#5389)
 **Status**: Déjà ouverte (mentionnée dans les travaux)
 **Numéro**: 5389 (à vérifier)
+
+---
+
+## cle=callAudio | Un appel audio se reçoit, se prend et se raccroche depuis la v3
+
+**Genre**: écran  
+**Route**: `/calls/:id`  
+**Milestone**: 74 (« La v3 web sert le rôle premier »)  
+**Priorité**: P2-confort  
+**Audience**: connecté  
+
+### Contexte
+L'écran `/calls/:id` n'existe pas dans la v3 — la route existe (`app/calls/route.ts`), mais le commentaire dit : « `/calls/:id` n'est pas une destination que la v3 sert » — la ligne entière mène au fil, pas à un appel.
+
+C'est le premier écran de `ordre.md` (ordre 47) **réellement absent** dont la dépendance (calls, ordre 45) est livrée.
+
+### Critère de fin
+**ATTENTION pour la phase Concevoir** : le critère de `matrice.json` est périmé dans ses idiomes (« CallManager chargé par `next/dynamic` », vocabulaire App Router).
+
+La conception doit respécifier l'écran :
+- un module ES de participation (§ 12.4) qui porte la pile WebRTC
+- chargé APRÈS le premier pixel, jamais un framework hydraté (§ 12.10.6)
+- le repli sans JavaScript est un état dessiné (« cet écran exige JavaScript », § 3.2)
+
+e2e : recevoir `call:incoming`, accepter, raccrocher — zéro crash, 0 violation a11y serious/critical.
+
+Ne pas prendre `callVideo` ce tour (ordre 48, dépend de celui-ci).
+
+---
+
+## cle=notifs | Commentaire de clôture DÛ sur #5391 (2026-09-07)
+
+**Statut** : `mcp__github__*` indisponible cette passe (`plugin:github:github (400): "Error POSTing to endpoint: bad request: Authorization header is badly formatted"`, échec de connexion confirmé par ToolSearch — pas une absence de capacité). `gh`/`curl api.github.com` interdits par la mission. Commentaire NON posté — à poster dès que le serveur MCP répond.
+
+**Preuve à joindre au commentaire** : commit `e5a9214c75` (push le 7-09 avant fusion de `dev`, tête finale `d292bce995` après fusion) sur `dev` directement — `fix(web-v3): la déconnexion et la rotation push ne se courent plus (#5391)`. Correctif de revue e2e sur une course RÉELLE mesurée en Chromium (3-4 échecs sur 10 avant correctif) entre la purge de caches à la déconnexion et le rejeu de rotation push (`rejoueSiRotationEnArrierePlan`, appelé à chaque chargement de `/chats`) : `caches.open()` crée l'entrée d'index même sans écriture, donc pouvait ressusciter la cache de rotation juste après sa purge.
+
+Gates rejoués sur l'arbre fusionné : `type-check` vert, `lint` vert (5 avertissements préexistants, 0 erreur), `jest` 157/157 suites, 3339/3339 témoins verts. Poids ratchetés (`budgets-mesures.json`, remesuré après fusion avec le lot `#5139` déjà sur `dev` : `liste` 12304→12337 o gzip, `prefs` 4881→4900 o gzip, `navigateur` inchangé à 2335 o gzip).
+
+**Dimensions mûres** : Sécurité (aucun diff serveur), Maintenabilité (site unique `laCacheDeRotationExiste`, marqueur d'idempotence exporté plutôt que redécodé), Fluidité (la course qui cassait la purge de caches à la déconnexion est fermée).
+**Dimensions restantes** : celles déjà listées dans le corps de la mission pour #5391 (Utilité — aucune preuve qu'une notification ARRIVE réellement hors bouchon ; Complétude — pas de `pushsubscriptionchange` ; Fluidité — le retrait recharge la page ; Performance mesurée — poids `prefs.js` non relevé en conteneur ; Maintenabilité documentaire — décision d'architecture non inscrite dans la conception/matrice/vues). Ce correctif ne les referme pas, il ferme uniquement le défaut de course trouvé en revue e2e.
 
 ---
 
