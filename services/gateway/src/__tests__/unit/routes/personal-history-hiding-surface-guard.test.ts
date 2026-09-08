@@ -326,6 +326,25 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "expiration, sans lecteur. Masquer une ligne à la destruction la ferait " +
       'survivre indéfiniment à la préférence d\'affichage d\'un seul utilisateur.',
   },
+
+  // #5689 — anonymisation, à l'expiration de la grâce, des messages d'un
+  // compte SUPPRIMÉ. Même famille qu'`ExpiredMessagesCleanupService` ci-dessus :
+  // un balayage de rétention côté serveur, sans lecteur identifié — le
+  // `userId` en jeu est celui du compte qu'on ANONYMISE, jamais celui d'un
+  // lecteur dont il faudrait respecter les préférences d'affichage. Appliquer
+  // `applyPersonalHistoryHiding` ici épargnerait de la purge exactement les
+  // messages qu'un AUTRE participant aurait masqués pour lui-même — l'inverse
+  // du but : la purge doit couvrir TOUS les messages encore vivants du
+  // compte, sans egard à ce qu'un tiers a choisi de cacher chez lui.
+  'AccountMessagePurgeService.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Balayage de rétention côté serveur (#5689) : anonymise, à l'expiration " +
+      "de la grâce d'un compte supprimé, tous ses messages encore vivants. " +
+      "Sans lecteur — le `userId` résolu est celui du compte purgé, pas d'un " +
+      'lecteur dont la préférence de masquage personnel devrait être respectée.',
+  },
 };
 
 /**
