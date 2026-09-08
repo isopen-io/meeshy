@@ -10,6 +10,9 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 });
 
+// En-têtes de sécurité (hors CSP — voir next.config.security.js) : #3628.
+const { nonCspSecurityHeaders } = require('./next.config.security.js');
+
 const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
@@ -140,9 +143,15 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // Headers pour PWA et Service Workers
+  // Headers pour PWA et Service Workers, et en-têtes de sécurité globaux (#3628)
   async headers() {
     return [
+      {
+        // CSP exclue ici — voir le commentaire de nonCspSecurityHeaders dans
+        // next.config.security.js (audit du domaine à faire d'abord).
+        source: '/:path*',
+        headers: nonCspSecurityHeaders,
+      },
       {
         source: '/sw.js',
         headers: [
