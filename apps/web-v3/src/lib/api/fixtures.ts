@@ -12,6 +12,8 @@ import {
   kwame,
   message,
   minutesAgo,
+  recentMinutesBefore,
+  recentTodayAnchor,
   translation,
   viewer,
 } from './fixtures-base';
@@ -67,6 +69,18 @@ export { RIVER_CONTINUATION_WITNESS_ID, RIVER_NO_TRANSLATION_WITNESS_ID };
  */
 export { VIEWER_ID, PARTICIPANTS };
 
+/**
+ * `THREAD_ANCHOR` — ancre du fil « Équipe déploiement » (#5769). Tous les
+ * horaires de `MESSAGES` en dérivent (`recentMinutesBefore`) plutôt que de
+ * `minutesAgo` : la CLASSIFICATION en section (« aujourd'hui »/« hier »)
+ * dépend du dernier message (`lastMessage.createdAt`, ci-dessous), et
+ * `minutesAgo` ne garantit pas de rester du bon côté de minuit À PARIS (voir
+ * le commentaire de `minutesAgo`, `fixtures-base.ts`). Ancrer le fil ENTIER
+ * sur la même référence conserve l'ORDRE relatif des sept messages —
+ * seul le POINT DE RÉFÉRENCE change, jamais les écarts qui les séparent.
+ */
+const THREAD_ANCHOR = recentTodayAnchor();
+
 const kwameQuestion = message({
   id: 'm4',
   senderId: 'u-kwame',
@@ -74,7 +88,7 @@ const kwameQuestion = message({
   content: 'Nice. But the cold start is still above two seconds on 3G.',
   originalLanguage: 'en',
   translations: [],
-  createdAt: minutesAgo(87),
+  createdAt: recentMinutesBefore(THREAD_ANCHOR, 87),
 });
 
 export const MESSAGES: readonly Message[] = [
@@ -85,7 +99,7 @@ export const MESSAGES: readonly Message[] = [
     content: 'Good morning! Did the deployment finish last night?',
     originalLanguage: 'en',
     translations: [translation('m1', 'fr', 'Bonjour ! Est-ce que le déploiement a fini cette nuit ?')],
-    createdAt: minutesAgo(96),
+    createdAt: recentMinutesBefore(THREAD_ANCHOR, 96),
   }),
   message({
     id: 'm2',
@@ -96,7 +110,7 @@ export const MESSAGES: readonly Message[] = [
     translations: [
       translation('m2', 'en', 'Yes, everything went through around 3am. Let me show you the report.'),
     ],
-    createdAt: minutesAgo(94),
+    createdAt: recentMinutesBefore(THREAD_ANCHOR, 94),
   }),
   message({
     id: 'm3',
@@ -106,7 +120,7 @@ export const MESSAGES: readonly Message[] = [
     originalLanguage: 'fr',
     messageType: 'image',
     translations: [],
-    createdAt: minutesAgo(93),
+    createdAt: recentMinutesBefore(THREAD_ANCHOR, 93),
     attachments: [
       {
         ...attachmentDefaults,
@@ -121,7 +135,7 @@ export const MESSAGES: readonly Message[] = [
         width: 1200,
         height: 800,
         uploadedBy: VIEWER_ID,
-        createdAt: minutesAgo(93).toISOString(),
+        createdAt: recentMinutesBefore(THREAD_ANCHOR, 93).toISOString(),
       },
     ],
   }),
@@ -134,7 +148,7 @@ export const MESSAGES: readonly Message[] = [
     originalLanguage: 'fr',
     messageType: 'audio',
     translations: [],
-    createdAt: minutesAgo(85),
+    createdAt: recentMinutesBefore(THREAD_ANCHOR, 85),
     attachments: [
       {
         ...attachmentDefaults,
@@ -147,7 +161,7 @@ export const MESSAGES: readonly Message[] = [
         fileUrl: '',
         duration: 12_000,
         uploadedBy: 'u-amina',
-        createdAt: minutesAgo(85).toISOString(),
+        createdAt: recentMinutesBefore(THREAD_ANCHOR, 85).toISOString(),
         capturedInApp: true,
       },
     ],
@@ -159,7 +173,7 @@ export const MESSAGES: readonly Message[] = [
     content: 'On peut passer à un routeur plus léger, ça ferait −24 Ko.',
     originalLanguage: 'fr',
     translations: [translation('m6', 'en', 'We can switch to a lighter router, that would save 24 KB.')],
-    createdAt: minutesAgo(83),
+    createdAt: recentMinutesBefore(THREAD_ANCHOR, 83),
     /**
      * La citation voyage ENTIÈRE (`replyTo`), pas seulement par son
      * identifiant : la passerelle enrichit la charge, et une bulle qui n'aurait
@@ -178,7 +192,7 @@ export const MESSAGES: readonly Message[] = [
     content: 'Je pousse la mesure ce soir.',
     originalLanguage: 'fr',
     translations: [translation('m7', 'en', "I'll push the measurement tonight.")],
-    createdAt: minutesAgo(82),
+    createdAt: recentMinutesBefore(THREAD_ANCHOR, 82),
     deliveredCount: 2,
     readCount: 0,
   }),

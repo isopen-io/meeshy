@@ -17,7 +17,21 @@ import type { Message, MessageTranslation, Participant } from './types';
  * rattrapage, la preuve que l'extraction n'a rien déplacé d'observable.
  */
 
-/** `minutesAgo(90)` = il y a 90 minutes. Le fil se lit donc toujours comme aujourd'hui. */
+/**
+ * `minutesAgo(90)` = il y a 90 minutes.
+ *
+ * **NE GARANTIT PAS "aujourd'hui" (#5769).** `resolveLensSections`
+ * (`packages/shared/utils/conversation-sections.ts`) classe "aujourd'hui" /
+ * "hier" dans LE CALENDRIER DE PARIS (`timeZone: 'Europe/Paris'`, systématique
+ * dans les fixtures web-v3) — jamais dans celui, système, que `minutesAgo`
+ * ignore. Entre 22 h et minuit UTC (heure d'été) ou 23 h et minuit UTC (heure
+ * d'hiver), Paris a DÉJÀ changé de jour calendaire alors que l'instant réel
+ * n'a pas encore franchi minuit UTC : un message "il y a 82 minutes" y
+ * retombe sur LA VEILLE à Paris. Un message qui doit être OBSERVABLEMENT
+ * "aujourd'hui" (ou "hier", etc.) dans une assertion de section doit être
+ * ancré via `recentTodayAnchor`/`recentMinutesBefore` ci-dessous, jamais via
+ * ce décalage purement relatif à `Date.now()`.
+ */
 export const minutesAgo = (minutes: number): Date => new Date(Date.now() - minutes * 60_000);
 
 /**
@@ -32,6 +46,39 @@ export const dayAt = (daysAgo: number, hour: number, minute: number): Date => {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, hour, minute, 0, 0);
 };
+
+const PARIS_TIME_ZONE = 'Europe/Paris';
+
+/** Jour calendaire DE PARIS pour un instant donné — même mécanique que `localCalendarDate` (`conversation-sections.ts`), non exportée par la loi et dupliquée ici pour les fixtures uniquement. */
+const parisCalendarDate = (date: Date): { readonly year: number; readonly month: number; readonly day: number } => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: PARIS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const read = (type: 'year' | 'month' | 'day'): number =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return { year: read('year'), month: read('month'), day: read('day') };
+};
+
+/**
+ * L'ancre "récent, forcément aujourd'hui à Paris" (#5769). Calcule le jour
+ * calendaire DE PARIS pour l'instant réel puis y ancre 10 h UTC — toujours
+ * 11 h (heure d'hiver) ou 12 h (heure d'été) à Paris, jamais à moins de 9 h
+ * d'un minuit local dans un sens comme dans l'autre : insensible à l'heure
+ * réelle d'exécution du test, tout en restant DYNAMIQUE (le jour avance
+ * chaque jour, comme `minutesAgo` — jamais une date figée, cf. `fixtures.ts`
+ * sur la raison de ce choix).
+ */
+export const recentTodayAnchor = (): Date => {
+  const { year, month, day } = parisCalendarDate(new Date());
+  return new Date(Date.UTC(year, month - 1, day, 10, 0, 0));
+};
+
+/** Décale depuis `anchor` exactement comme `minutesAgo` décale depuis `Date.now()` — l'ORDRE relatif d'un fil qui l'utilise partout reste inchangé. */
+export const recentMinutesBefore = (anchor: Date, minutes: number): Date =>
+  new Date(anchor.getTime() - minutes * 60_000);
 
 export const VIEWER_ID = 'u-viewer';
 /** Le `username` du lecteur de fixture — `Participant` ne le porte pas à la racine (`participant.ts:125-150`). */
