@@ -1,5 +1,44 @@
 # @meeshy/gateway
 
+## 1.40.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - guard the accent-color hardcoding debt outside Theme (#3678)
+  - le legacy ne sert plus un jeton authentifié expiré
+  - l'absence est revérifiée AU MOMENT de livrer, et sur les trois sites qui en décident
+  - Focal élit une rangée — carte, chip agrandi, tampon de date — au lieu de la courbe retirée par iOS
+  - la présence se lit sur l'USAGE du jeton, pas sur la création de session
+  - la sélection suit la dernière CONNEXION, pas une activité qui ne dit rien
+  - une réaction ne contredit plus le message auquel elle répond
+  - un conteneur en retard sur ses routes se signale avant l'utilisateur (#5644) (#5673)
+  - le Focal par défaut se désactive par un paramètre de construction — VITE_READING_MODES=off ouvre le fil en bulles, comme iOS drapeau éteint
+  - type l'extracteur de routes et les matchers que son témoin emploie
+  - l'inventaire de parité voit les 9 adresses de la v3.1
+  - dériver le script d'amorçage du schéma d'une source unique (#5588)
+  - porte la remesure du budget du fil (#5426) dans cette PR
+  - une socket peut exiger une session vivante — drapeau DÉSARMÉ
+  - une session expirée ne se prolonge plus et cesse de se déclarer valide
+  - une session expirée n'est plus prolongée, ni utilisée pour ouvrir une socket (#5717)
+  - GET/PUT /me/terms — re-consentement CGU versionné (#3635)
+  - purge les médias physiques d'un compte supprimé (#5707)
+  - purger les médias restants d'un compte supprimé (#5690)
+  - anonymise les messages d'un compte supprimé à la fin de la grâce (#5702)
+  - align account-deletion grace period to the promised 30 days, purge sessions/voice profile/share links automatically (#3632) (#5688)
+  - GET /me/engagement expose compteurs, paliers et streak/niveau (#5670)
+  - l'export RGPD couvre posts, stories, commentaires, réactions, médias, profil vocal et sessions (#3633) (#5665)
+  - la publication d'un post alimente l'axe d'engagement « content.post » (#5592)
+  - poser un sticker alimente l'axe d'engagement « tool.sticker » (#5594)
+  - MIME vérifié, EXIF retiré, SVG en téléchargement forcé sur la route legacy (#3627) (#5630)
+  - GET /languages reflète SUPPORTED_LANGUAGES, pas 8 codes en dur (#5713)
+  - un seul jeu de défauts de workers, scaling réel, gRPC mort retiré (#3664)
+  - Settings devient la seule source du whisper_model/device (#3666) (#5664)
+  - Settings devient la seule source du whisper_model/device (#3666)
+  - plafond de durée pour l'audio transcrit/traduit (#3668) (#5434)
+  - plafond de duree pour l'audio transcrit/traduit (#3668)
+
 ## 1.39.0
 
 ### Minor Changes
