@@ -278,6 +278,7 @@ jobs:
           # au composite seul ne s'exécuterait nulle part.)
           python3 scripts/generate-icons.py --check
           node scripts/check-curve.mjs
+          node scripts/check-river-metrics.mjs
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
           node scripts/check-utilities.mjs
           node scripts/measure-weight.mjs

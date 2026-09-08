@@ -400,10 +400,10 @@ sur iOS ni sur le web.
 
 | élément | iOS | legacy `apps/web` | **`apps/web-v3`** |
 |---|---|---|---|
-| la loi (`resolveRiverLanes`) | miroir Swift 1 047 l | **importée** de `@meeshy/shared` | **disponible, jamais importée** |
-| `resolveRiverStep` / `…LaneHeaders` | ✅ | ✅ (`RiverThread.tsx:80`, `:216`) | ❌ |
-| les 61 vecteurs partagés | `RiverLaneVectorTests` | suite Jest | ❌ non rejoués |
-| disposition en colonnes · `focusRank` | ✅ | ✅ (`river-column-layout.ts`, `river-focus.ts`) | ❌ |
+| la loi (`resolveRiverLanes`) | miroir Swift 1 047 l | **importée** de `@meeshy/shared` | ✅ **importée** (`geometry.ts`, 2026-09-08, #5696) |
+| `resolveRiverStep` / `…LaneHeaders` | ✅ | ✅ (`RiverThread.tsx:80`, `:216`) | ✅ consommées par les vecteurs (`geometry.test.ts`, 2026-09-08) — pas encore par un rendu |
+| les 61 vecteurs partagés | `RiverLaneVectorTests` | suite Jest | ✅ **rejoués** à travers le mapping (`geometry.test.ts`, 2026-09-08, #5696) |
+| disposition en colonnes · `focusRank` | ✅ | ✅ (`river-column-layout.ts`, `river-focus.ts`) | ✅ **portés** (`columns.ts`, `focus.ts`, 2026-09-08, #5696) — pas encore consommés par un rendu |
 | tracé (branches, connecteurs, anneaux, naissance, queue) | `RiverLaneCanvas.swift` | ✅ (`river-paint.ts` + `RiverLaneOverlay.tsx`) | ❌ |
 | la bulle (contour, identité 44 %, heure en base, citation) | `RiverBubbleView.swift` | ✅ `RiverBubble.tsx` | ❌ |
 | bande d'en-tête (noms, fondu) | ✅ | ✅ `RiverLaneHeaderStrip.tsx` | ❌ |
@@ -413,8 +413,8 @@ sur iOS ni sur le web.
 | **identité vivante** (avatar, présence, story) | ✅ `:600-641` | ❌ (initiales seules) | ❌ |
 | **badge de transfert · citation de story 9:16** | ✅ `:432-440`, `:456-464` | ❌ | ❌ |
 | **poignée du temps · échelle de temps** | ✅ | ❌ | ❌ |
-| **mapping messages → loi · fenêtre de silence** | ✅ `RiverConversationMapping.swift` | ❌ (prop `contents`) | ❌ |
-| **curseur / atterrissage** | ✅ | partiel (état local) | ❌ |
+| **mapping messages → loi · fenêtre de silence** | ✅ `RiverConversationMapping.swift` | ❌ (prop `contents`) | ✅ **porté** (`geometry.ts` : `riverLanesInput`, `resolveRiverGeometry`, `SILENCE_WINDOW_LADDER_MS`, 2026-09-08, #5696) |
+| **curseur / atterrissage** | ✅ | partiel (état local) | ✅ **porté** (`cursorForMessageId`, `initialCursor`, `isAtPresent`, 2026-09-08, #5696) |
 | **frappe · pince · gestes tactiles** | ✅ | ❌ (clavier seul) | ❌ |
 | **virtualisation** | ✅ (`LazyVStack` + `RankExtent`) | ❌ | — (D-15 l'exige) |
 | `role="grid"` complet | ❌ | ✅ | ❌ |
@@ -422,15 +422,20 @@ sur iOS ni sur le web.
 
 **Ce que `catalog.ts` rend DÉJÀ, et bien.** La ligne « Rivière » existe au menu en 5e position (`MENU_ORDER`,
 `catalog.ts:12`), titre `'Rivière'` (`:29`), sous-titre par défaut « Les couloirs de la conversation » (`:37`). Elle
-est **toujours désactivée** (`isAvailable: false`, `:104`) et son sous-titre est **remplacé par la raison réelle**,
-trifurquée (`riverReason`, `:55-59`) : « Jamais en conversation directe » · « S'ouvrira à 5 personnes actives » · «
-S'ouvrira à 5 personnes actives — N aujourd'hui ».
+est **désactivée tant que le catalogue de RENDU ne la porte pas** (`THREAD_RENDERABLE_MODES`, D-8) et son sous-titre
+est **remplacé par la raison réelle**, **QUADRIFURQUÉE** depuis #5696 (`riverReason`, `catalog.ts`) : « Jamais en
+conversation directe » · « S'ouvrira à 5 personnes actives » · « S'ouvrira à 5 personnes actives — N aujourd'hui » ·
+« Bientôt disponible » (groupe déjà ÉLIGIBLE, pas encore rendu — la forme PROPRE au web, D-21).
 
-**Le troisième libellé est aujourd'hui INATTEIGNABLE**, et c'est la seule chose qui cloche : `decision.ts:56` passe
-`activeParticipantCount: null`, donc `reason.current` vaut toujours `null` et le branchement `catalog.ts:58` est mort.
-Une conversation à 128 membres (`fixtures.ts:378`) affiche « S'ouvrira à 5 personnes actives » sans jamais dire
-combien il y en a — alors que le nombre est à l'écran trois lignes plus haut (`thread.tsx:361`, « 128 participants »).
-**Défaut à part entière, indépendant de la décision d'intégrer la Rivière, corrigeable en une ligne.**
+**Le troisième libellé, SOLDÉ le 2026-09-08 (#5696) : `decision.ts` lit désormais `memberCount` (obligatoire,
+`Conversation.memberCount`, le même rapprochement qu'iOS `ConversationView.swift:569`) et le passe à la loi comme
+`activeParticipantCount` — `reason.current` porte le compte RÉEL, `thread.tsx` transmet la MÊME valeur que celle
+affichée trois lignes plus haut (« N participants »).** `c-deploiement` (`memberCount: 3`, sous le seuil) affiche
+désormais « S'ouvrira à 5 personnes actives — 3 aujourd'hui » ; `c-salon-riviere` (`memberCount: 5`, ÉLIGIBLE, mais
+`river` hors `THREAD_RENDERABLE_MODES`) affiche la quatrième forme, « Bientôt disponible » — jamais « … — 5
+aujourd'hui », le libellé FAUX qu'iOS montre drapeau `riviere_mode` OFF sur un groupe éligible
+(`ReadingModeLensSheet.swift:91-99`). Preuve : `check-reading-mode.mjs` (blocs 1 et 11), `decision.test.ts`,
+`catalog.test.ts`.
 
 ---
 

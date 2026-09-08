@@ -50,12 +50,33 @@ const DEFAULT_SUBTITLES: Readonly<Record<ConversationReadingMode, string>> = {
 const SUMMARY_UNAVAILABLE_REASON = 'Réservé aux lecteurs connectés';
 
 /**
- * La Rivière TRIFURQUE sa raison (`RiverEligibilityReasonKind`,
- * `packages/shared/utils/reading-modes.ts:217`) — jamais une formule unique
- * qui promettrait une porte qui n'existe pas à un duo.
+ * Éligible par la loi, mais pas encore dans `THREAD_RENDERABLE_MODES` — la
+ * SEULE raison propre au web (D-21/#5696 : « listée et motivée tant que sa
+ * condition n'est pas levée »). iOS, lui, montrerait ici « S'ouvrira à 5
+ * personnes actives — 5 aujourd'hui » quand `riviere_mode` est OFF sur un
+ * groupe éligible (`ReadingModeLensSheet.swift:91-99`) — un libellé FAUX
+ * (une porte annoncée fermée alors que la loi l'a ouverte) que la v3.1 ne
+ * reproduit pas : elle n'a pas de drapeau (D-20), elle a un mode éligible
+ * NON RENDU, et le dit sans mentir. Supprimée par le travail qui ajoute
+ * `'river'` à `THREAD_RENDERABLE_MODES`.
+ *
+ * Le libellé ne nomme AUCUNE plateforme (revue-correction #5696) : le MÊME
+ * `dist` est servi par le web, par la coque Android et par la coque iOS
+ * (variante B, `capacitor.config.ts`) — « bientôt sur le web » serait faux
+ * sur deux des trois cibles que la directive porteur sert « en une fois ».
+ */
+const RIVER_NOT_RENDERED_REASON = 'Bientôt disponible';
+
+/**
+ * La Rivière a QUATRE formes de raison (`RiverEligibilityReasonKind`,
+ * `packages/shared/utils/reading-modes.ts:217`, plus la forme propre au web
+ * ci-dessus) — jamais une formule unique qui promettrait une porte qui
+ * n'existe pas à un duo, ni une porte annoncée fermée qu'elle a pourtant
+ * ouverte.
  */
 function riverReason(reason: RiverEligibilityReason): string {
   if (reason.riverReason === 'neverEligible') return 'Jamais en conversation directe';
+  if (reason.riverReason === 'eligible') return RIVER_NOT_RENDERED_REASON;
   if (reason.current === null) return `S'ouvrira à ${reason.threshold} personnes actives`;
   return `S'ouvrira à ${reason.threshold} personnes actives — ${reason.current} aujourd'hui`;
 }
@@ -91,8 +112,16 @@ export function menuRows(input: MenuRowsInput): readonly MenuRow[] {
     }
 
     if (mode === 'river') {
+      // La ligne se dégrise par le catalogue de RENDU seul — exactement
+      // comme `focal`/`script`/`summary` ci-dessous : le jour où `'river'`
+      // entre dans `THREAD_RENDERABLE_MODES`, aucune autre ligne de ce
+      // fichier n'a à bouger.
+      const isAvailable = input.availableModes.includes(mode);
+      if (isAvailable) {
+        return { mode, title: TITLES[mode], subtitle: DEFAULT_SUBTITLES[mode], isCurrent, isAvailable, reason: null };
+      }
       const reason = riverReason(input.riverEligibilityReason);
-      return { mode, title: TITLES[mode], subtitle: reason, isCurrent, isAvailable: false, reason };
+      return { mode, title: TITLES[mode], subtitle: reason, isCurrent, isAvailable, reason };
     }
 
     // `focal` / `script` / `summary` (#5695) : disponibles ssi le catalogue

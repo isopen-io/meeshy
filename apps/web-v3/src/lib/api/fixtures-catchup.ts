@@ -4,6 +4,7 @@ import {
   amina,
   attachmentDefaults,
   conversationDefaults,
+  dayAt,
   fatou,
   kwame,
   message,
@@ -36,12 +37,6 @@ import {
 
 const CATCHUP_CONVERSATION_ID = 'c-rattrapage';
 export { CATCHUP_CONVERSATION_ID };
-
-/** `daysAgo` jours avant AUJOURD'HUI (calendrier local), à `hour:minute`. */
-const dayAt = (daysAgo: number, hour: number, minute: number): Date => {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, hour, minute, 0, 0);
-};
 
 const catchupMessage = (
   partial: Parameters<typeof message>[0],
