@@ -50,7 +50,7 @@ construction `VITE_READING_MODES` (#5674, D-20).
 | `focal-script.md` | l'analyse de Focal et Script : loi, rangée plate, scène, puce et menu, états, gestes, tableau, écarts, contradictions |
 | `bulle.md` | l'analyse de la Bulle : loi du mode, anatomie, fil en bulles, états, gestes, tableau, écarts, ce que la charte du README affirmait |
 | `resume.md` | l'analyse de faisabilité du Résumé Vivant — verdict : **intégrable sous condition** (digest calculé localement, aucun endpoint ; il manque un corpus de fixtures qui rende le mode atteignable, et l'inversion du gate) |
-| `riviere.md` | l'analyse de faisabilité de la Rivière (à venir dans ce dossier) |
+| `riviere.md` | l'analyse de faisabilité de la Rivière — verdict : **intégrable sous condition** (la loi des couloirs est déjà en TypeScript partagé avec 61 vecteurs, le compte de membres que lit iOS est déjà servi ; la condition est la virtualisation du tracé, D-15) |
 
 Chaque capture existe en `light` et en `dark`. Les captures sont réduites à
 l'échelle logique de l'appareil (388 × 844) ; les originaux 3× vivent hors
@@ -155,7 +155,16 @@ casse une suite ; `QUOTE_RAIL_WIDTH` dérivé, gardé, et servi nulle part.
   panneau agent optionnel restant un no-op ; conditions : un corpus de fixtures
   qui atteigne le seuil de 25 non-lus, l'inversion de `check-reading-mode.mjs`
   (qui exige aujourd'hui « Résumé désactivé »), le cadrage des dates hors
-  `'fr-FR'` en dur. `riviere.md` porte le verdict de la Rivière.
+  `'fr-FR'` en dur. `riviere.md` tranche pour la Rivière : OUI sous condition —
+  la loi (`packages/shared/utils/river-lanes.ts`, 1 044 l, 61 vecteurs
+  inter-plateformes) se porte à zéro ; `activeParticipantCount` est
+  `conversation.memberCount` sur iOS (`ConversationView.swift:569`), déjà servi
+  et affiché par web-v3 (une ligne dans `decision.ts:56`) ; aucun endpoint ;
+  une peau React complète existe dans le legacy, jamais montée ; la condition
+  unique est la virtualisation du tracé (D-15, miroir de
+  `RiverCanvasRankPlacement`) ; manquent les gestes tactiles, la poignée du
+  temps et son échelle, le mapping messages → loi. Quatre travaux, taille
+  moyenne. **D-21** en tire la décision.
 - **Question produit #5680** : la teinte de la bulle reçue — couleur de
   l'expéditeur mêlée d'indigo (iOS) ou accent de la conversation (directive du
   2026-09-04).

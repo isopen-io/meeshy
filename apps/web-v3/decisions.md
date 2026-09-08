@@ -675,3 +675,59 @@ fil s'ouvre en bulles sans puce, miroir exact du drapeau iOS `reading_modes`,
 Le « pas de demi-livraison » de D-9 vaut donc pour chaque écart listé dans
 `targets/` : une Lentille sans sections ou un Focal sans élection n'est pas
 « en avance », c'est un écart.
+
+## D-21 · Résumé et Rivière entrent au périmètre, chacun sous sa condition — 2026-09-08 (#5672)
+
+Directive porteur, le 2026-09-08 : *« Si c'est possible d'avoir résumé et
+rivière tout de suite alors les intégrer. »* D-8 les tenait hors périmètre
+comme un seul cas ; les deux analyses de faisabilité (`targets/resume.md`,
+`targets/riviere.md`) montrent qu'ils n'ont ni le même coût ni les mêmes
+dépendances. **D-8 est remplacée** : `summary` et `river` entrent au
+catalogue de rendu de la v3.1 (`THREAD_RENDERABLE_MODES`) dès que leur
+condition est levée, dans cet ordre.
+
+**Le Résumé Vivant — OUI, sous trois conditions.** Le digest est calculé
+LOCALEMENT depuis les messages chargés par trois lois pures
+(`DeterministicDigestBuilder`, `EpisodeSegmenter`, `FaceRampRanking` —
+`Focal/Summary/`, 1 477 lignes Swift dont près de la moitié de doc-comments),
+sans aucun endpoint ; le panneau agent (`GET /conversations/:id/analysis`,
+`requiredAuth`) reste optionnel et son échec un no-op, comme sur iOS. Aucun
+miroir TypeScript n'existe (amendement A2 : « pas de miroir ») ; 52 cas de test
+iOS se transcrivent tels quels. Conditions : (1) un corpus de fixtures qui
+rende le mode ATTEIGNABLE — 26 non-lus ou 10 non-lus après 24 h d'absence,
+là où la fixture actuelle en a 2 ; (2) `scripts/check-reading-mode.mjs`
+inversé dans le même commit, puisqu'il exige aujourd'hui « Résumé
+désactivé » ; (3) le cadrage des dates par la langue du lecteur, pas
+`'fr-FR'` en dur. Le masquage pour un invité est une décision de LOI
+(`resolveCapabilities`), pas une impossibilité de calcul.
+
+**La Rivière — OUI, sous une condition.** La loi des couloirs vit déjà en
+TypeScript partagé (`packages/shared/utils/river-lanes.ts`, 1 044 lignes,
+61 vecteurs inter-plateformes que l'iOS rejoue) : portage zéro. La donnée
+d'éligibilité n'est pas `activeParticipantCount` (que la passerelle sert
+`null` à dessein) mais `conversation.memberCount`, ce qu'iOS lit
+(`ConversationView.swift:569`) et que web-v3 affiche déjà — une ligne dans
+`decision.ts`. Aucun endpoint : c'est le mode le plus compatible avec le
+précache, et le seul accordé aux invités. Une peau React complète existe
+dans le legacy (`apps/web/components/conversations/riviere/`), jamais montée :
+elle se PORTE (Preact, jetons dérivés), elle ne s'importe pas. La condition
+unique est **D-15** : la peau legacy monte toutes les bulles et mesure
+chacune ; le tracé doit être virtualisé comme iOS le fait
+(`RiverCanvasRankPlacement`, `RiverLaneCanvas.swift:38-51`), sans quoi il
+disparaît dès qu'on quitte le haut du fil. Manquent ensuite les gestes
+tactiles, la poignée du temps et son échelle (aucun miroir web), le mapping
+messages → loi, l'avis système, l'identité vivante et les badges hors-champ.
+
+**L'ordre.** La conformité de la Lentille et de la rangée plate (Focal,
+Script) et de la Bulle passe d'abord : c'est ce que voit chaque conversation
+à l'ouverture. Puis le Résumé, que l'orchestrateur élit de lui-même dès 26
+non-lus. Puis la Rivière, choisie à la main et réservée aux groupes d'au
+moins cinq membres. `river` et `summary` restent LISTÉS et motivés au menu
+tant que leur condition n'est pas levée — jamais un mode qu'on ne sait pas
+rendre (la règle de D-8 survit, sa portée non).
+
+**Ce que ça coûte.** Deux chunks À LA DEMANDE (budgets.json) : ni le Résumé
+ni la Rivière ne pèsent sur la première peinture. Et un défaut à solder au
+passage : le troisième libellé de `catalog.ts` (« S'ouvrira à N personnes
+actives — M aujourd'hui ») est inatteignable tant que `current` vaut `null`
+alors que le nombre est affiché trois lignes plus haut.
