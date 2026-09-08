@@ -18,6 +18,9 @@ import {
   ENGAGEMENT_AXIS_WEIGHTS,
   CONTENT_ENGAGEMENT_AXES,
   CONVERSATION_ENGAGEMENT_AXES,
+  badgeMilestoneKey,
+  levelMilestoneKey,
+  streakMilestoneKey,
   type EngagementAxisKey,
   type EngagementAchievementKey,
 } from '@meeshy/shared/types/engagement';
@@ -119,7 +122,7 @@ export class EngagementService {
         data: {
           userId,
           milestoneType: 'badge',
-          milestoneKey: `${axisKey}:${threshold}`,
+          milestoneKey: badgeMilestoneKey(axisKey, threshold),
         },
       });
     } catch (err) {
@@ -303,7 +306,7 @@ export class EngagementService {
         data: {
           userId,
           milestoneType: 'streak',
-          milestoneKey: `streak:${threshold}`,
+          milestoneKey: streakMilestoneKey(threshold),
         },
       });
     } catch (err) {
@@ -370,7 +373,7 @@ export class EngagementService {
         data: {
           userId,
           milestoneType: 'level',
-          milestoneKey: `level:${threshold}`,
+          milestoneKey: levelMilestoneKey(threshold),
         },
       });
     } catch (err) {
