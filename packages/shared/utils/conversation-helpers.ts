@@ -281,6 +281,43 @@ export function buildTranslationRecord(translations: unknown): Record<string, st
   return record;
 }
 
+/**
+ * Dépouille la carte des traductions d'un POST ou d'un COMMENTAIRE
+ * (`{ [langue]: { text, translationModel, confidenceScore, createdAt, updatedAt } }`,
+ * `schema.prisma` `Post.translations` / `PostComment.translations`) en
+ * `Record<langue → texte>` — la forme qu'attend {@link resolvePrismTranslation}.
+ *
+ * Dialecte DISTINCT de {@link buildTranslationRecord} : celui-ci dépouille un
+ * TABLEAU (`Message.translations`, tel que servi sur le fil par
+ * `transformTranslationsToArray`), celui-ci une CARTE clé→objet — c'est la
+ * forme que la passerelle sert TELLE QUELLE pour un post ou un commentaire,
+ * sans transformation en tableau. Passer l'un à la fonction de l'autre rend
+ * une carte vide plutôt qu'une erreur, ce qui masquerait le défaut derrière un
+ * repli sur l'original — d'où deux fonctions nommées plutôt qu'une signature
+ * qui devine.
+ *
+ * `apps/web/hooks/use-post-translation.ts` en était la jumelle : un
+ * dépouillement local, réécrit à la main, que le § Prisme du `CLAUDE.md`
+ * racine interdit — une jumelle d'ADAPTATEUR ne fait pas servir une MAUVAISE
+ * langue, elle fait servir l'ORIGINAL, ce qui ressemble à une traduction
+ * absente.
+ *
+ * La clé rendue est la langue VERBATIM : la comparaison qui suit la normalise
+ * (`normalizeLanguageForDedup`), donc la canonicaliser ici serait la faire deux
+ * fois — et masquerait laquelle des deux fait foi.
+ */
+export function buildPostTranslationRecord(translations: unknown): Record<string, string> {
+  const record: Record<string, string> = {};
+  if (!translations || typeof translations !== 'object' || Array.isArray(translations)) return record;
+  for (const [key, entry] of Object.entries(translations as Record<string, { text?: unknown }>)) {
+    const text = entry?.text;
+    if (typeof text === 'string' && text.trim() !== '') {
+      record[key] = text;
+    }
+  }
+  return record;
+}
+
 export function resolvePrismTranslation(params: {
   translations?: Readonly<Record<string, string>> | null;
   originalLanguage?: string | null;
