@@ -53,6 +53,9 @@ const createMockPrisma = (): PrismaClient => ({
   },
   callParticipant: {
     findMany: jest.fn().mockResolvedValue([])
+  },
+  userSession: {
+    findUnique: jest.fn()
   }
 } as unknown as PrismaClient);
 
@@ -254,6 +257,119 @@ describe('AuthHandler — intégrité de session (#3625)', () => {
         code: 'token_expired'
       }));
       expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+    });
+  });
+
+  // #5712 — un JWT porteur de `sid` (session-jwt.ts, #4264) n'atteste que sa
+  // propre signature/expiration, jamais l'état de la `UserSession` qu'il
+  // nomme. Une session déjà expirée ou révoquée pouvait donc encore ouvrir un
+  // socket tant que le JWT lui-même (jusqu'à 365 jours pour un appareil
+  // mémorisé) n'avait pas expiré.
+  describe('session liée au JWT (`sid`, #5712)', () => {
+    const boundSessionRow = (overrides: Record<string, unknown> = {}) => ({
+      userId: 'user-123',
+      isValid: true,
+      expiresAt: new Date(Date.now() + 60_000),
+      ...overrides,
+    });
+
+    it('refuses a socket whose bound UserSession has expired', async () => {
+      jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123', sid: 'session-abc' } as any);
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } }
+      });
+      jest.spyOn(mockPrisma.userSession, 'findUnique').mockResolvedValue(
+        boundSessionRow({ expiresAt: new Date(Date.now() - 60_000) }) as any
+      );
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(activeUserRow() as any);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('auth:session-revoked', expect.objectContaining({
+        code: 'session_revoked',
+        reason: 'session_expired'
+      }));
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(connectedUsers.size).toBe(0);
+      // The doomed connection must never reach the user lookup / room joins.
+      expect(mockPrisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('refuses a socket whose bound UserSession was explicitly invalidated', async () => {
+      jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123', sid: 'session-abc' } as any);
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } }
+      });
+      jest.spyOn(mockPrisma.userSession, 'findUnique').mockResolvedValue(
+        boundSessionRow({ isValid: false }) as any
+      );
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(activeUserRow() as any);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('auth:session-revoked', expect.objectContaining({
+        reason: 'session_expired'
+      }));
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(connectedUsers.size).toBe(0);
+    });
+
+    it('refuses a socket whose `sid` names no session row at all', async () => {
+      jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123', sid: 'gone' } as any);
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } }
+      });
+      jest.spyOn(mockPrisma.userSession, 'findUnique').mockResolvedValue(null);
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(activeUserRow() as any);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(connectedUsers.size).toBe(0);
+    });
+
+    it('refuses a socket whose `sid` names a session belonging to someone else', async () => {
+      jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123', sid: 'session-abc' } as any);
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } }
+      });
+      jest.spyOn(mockPrisma.userSession, 'findUnique').mockResolvedValue(
+        boundSessionRow({ userId: 'someone-else' }) as any
+      );
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(activeUserRow() as any);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(connectedUsers.size).toBe(0);
+    });
+
+    it('still authenticates when the bound UserSession is valid and unexpired', async () => {
+      jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123', sid: 'session-abc' } as any);
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } }
+      });
+      jest.spyOn(mockPrisma.userSession, 'findUnique').mockResolvedValue(boundSessionRow() as any);
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(activeUserRow() as any);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(connectedUsers.size).toBe(1);
+      expect(mockSocket.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('still authenticates a legacy JWT carrying no `sid` at all (no session to check)', async () => {
+      jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123' } as any);
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } }
+      });
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(activeUserRow() as any);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(mockPrisma.userSession.findUnique).not.toHaveBeenCalled();
+      expect(connectedUsers.size).toBe(1);
+      expect(mockSocket.disconnect).not.toHaveBeenCalled();
     });
   });
 });

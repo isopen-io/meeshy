@@ -10,6 +10,7 @@ import { NotificationDigestJob } from './notification-digest';
 import { DeliveryQueueCleanupJob } from './delivery-queue-cleanup';
 import { MutationLogCleanupJob } from './mutation-log-cleanup';
 import { BanExpirySweepJob } from './ban-expiry-sweep';
+import { SessionExpirySweepJob } from './session-expiry-sweep';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
@@ -29,6 +30,7 @@ export class BackgroundJobsManager {
   private deliveryQueueCleanupJob: DeliveryQueueCleanupJob;
   private mutationLogCleanupJob: MutationLogCleanupJob;
   private banExpirySweepJob: BanExpirySweepJob;
+  private sessionExpirySweepJob: SessionExpirySweepJob;
   private isRunning: boolean = false;
 
   constructor(prisma: PrismaClient, emailService: EmailService, deliveryQueue?: RedisDeliveryQueue) {
@@ -46,6 +48,7 @@ export class BackgroundJobsManager {
     const userAuditService = new UserAuditService(prisma);
     const banService = new BanService(prisma, userManagementService);
     this.banExpirySweepJob = new BanExpirySweepJob(banService, userAuditService);
+    this.sessionExpirySweepJob = new SessionExpirySweepJob(prisma);
   }
 
   /**
@@ -65,6 +68,7 @@ export class BackgroundJobsManager {
     this.deliveryQueueCleanupJob.start();
     this.mutationLogCleanupJob.start();
     this.banExpirySweepJob.start();
+    this.sessionExpirySweepJob.start();
 
     this.isRunning = true;
     logger.info('All background jobs started successfully');
@@ -87,6 +91,7 @@ export class BackgroundJobsManager {
     this.deliveryQueueCleanupJob.stop();
     this.mutationLogCleanupJob.stop();
     this.banExpirySweepJob.stop();
+    this.sessionExpirySweepJob.stop();
 
     this.isRunning = false;
     logger.info('All background jobs stopped successfully');
@@ -104,6 +109,7 @@ export class BackgroundJobsManager {
     await this.deliveryQueueCleanupJob.runNow();
     await this.mutationLogCleanupJob.runNow();
     await this.banExpirySweepJob.runNow();
+    await this.sessionExpirySweepJob.runNow();
 
     logger.info('All jobs completed');
   }
@@ -119,6 +125,7 @@ export class BackgroundJobsManager {
       deliveryQueueCleanup: this.deliveryQueueCleanupJob,
       mutationLogCleanup: this.mutationLogCleanupJob,
       banExpirySweep: this.banExpirySweepJob,
+      sessionExpirySweep: this.sessionExpirySweepJob,
     };
   }
 

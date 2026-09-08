@@ -21,6 +21,11 @@ const DEFAULT_MESSAGES: Record<AuthSessionRevokedEventData['reason'], string> = 
   password_changed: 'Your password was changed — please sign in again.',
   logout_all_devices: 'All sessions were signed out — please sign in again.',
   admin_revoke: 'Your session was revoked — please sign in again.',
+  // Non émis par cette fonction (les trois appelants ci-dessus révoquent
+  // explicitement) — `AuthHandler._authenticateJWTUser` (#5712) émet ce
+  // motif directement, avec le même message. Présent ici pour que
+  // `DEFAULT_MESSAGES` couvre l'union entière du contrat.
+  session_expired: 'Your session has expired — please sign in again.',
 };
 
 export interface DisconnectRevokedSessionsParams {

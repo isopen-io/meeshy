@@ -197,8 +197,44 @@ export class AuthHandler {
       throw new Error('JWT_SECRET non configuré');
     }
 
-    const decoded = jwt.verify(token, jwtSecret) as { userId: string; exp?: number };
+    const decoded = jwt.verify(token, jwtSecret) as { userId: string; exp?: number; sid?: string };
     const userId = decoded.userId;
+
+    // #5712 — un JWT porteur de `sid` (session-jwt.ts, #4264) nomme la
+    // `UserSession` qui l'a émis. `jwt.verify` ci-dessus n'atteste que la
+    // signature et le propre `exp` du jeton — qui peut courir jusqu'à 365
+    // jours pour un appareil mobile mémorisé — jamais l'état de CETTE ligne :
+    // une session déjà expirée (`extendSessionExpiry` ne la ressuscite plus
+    // depuis ce même lot, mais rien n'empêchait l'ancien état de persister)
+    // ou explicitement invalidée pouvait encore ouvrir un socket tant que son
+    // JWT n'avait pas lui-même expiré. Un jeton SANS `sid` (fenêtre héritée,
+    // `LEGACY_SID_WINDOW_CLOSES_AT`) n'a rien à vérifier ici — même tolérance
+    // que `POST /auth/refresh`.
+    if (decoded.sid) {
+      const boundSession = await this.prisma.userSession.findUnique({
+        where: { id: decoded.sid },
+        select: { userId: true, isValid: true, expiresAt: true },
+      });
+      const sessionAlive =
+        !!boundSession &&
+        boundSession.userId === userId &&
+        boundSession.isValid === true &&
+        boundSession.expiresAt.getTime() > Date.now();
+
+      if (!sessionAlive) {
+        logger.info('socket auth refused — bound UserSession is no longer valid', {
+          socketId: socket.id,
+          userId,
+        });
+        socket.emit(SERVER_EVENTS.AUTH_SESSION_REVOKED, {
+          code: 'session_revoked',
+          message: 'Your session has expired — please sign in again.',
+          reason: 'session_expired',
+        });
+        socket.disconnect(true);
+        return;
+      }
+    }
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

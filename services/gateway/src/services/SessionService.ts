@@ -486,8 +486,13 @@ export async function extendSessionExpiry(token: string, days?: number): Promise
   const sessionToken = hashToken(token);
 
   try {
+    // #5712 — sans `expiresAt`, une session morte depuis des mois (isValid
+    // reste `true` tant que rien n'a balayé la ligne) se voyait prolongée et
+    // ressuscitait comme si elle venait d'être créée. `validateSession`
+    // porte déjà cette garde ; ici elle empêchait la seule autre écriture
+    // qui repousse `expiresAt`.
     const session = await db.userSession.findFirst({
-      where: { sessionToken, isValid: true },
+      where: { sessionToken, isValid: true, expiresAt: { gt: new Date() } },
     });
 
     if (!session) return false;

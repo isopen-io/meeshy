@@ -1087,6 +1087,23 @@ describe('SessionService', () => {
         expect(result).toBe(false);
       });
 
+      // #5712 — une session déjà expirée ne doit plus pouvoir être ressuscitée.
+      it('should never resurrect an already-expired session', async () => {
+        mockPrisma.userSession.findFirst.mockResolvedValueOnce(null);
+
+        const result = await extendSessionExpiry(mockToken, 90);
+
+        expect(result).toBe(false);
+        expect(mockPrisma.userSession.findFirst).toHaveBeenCalledWith({
+          where: {
+            sessionToken: expect.any(String),
+            isValid: true,
+            expiresAt: { gt: expect.any(Date) },
+          },
+        });
+        expect(mockPrisma.userSession.update).not.toHaveBeenCalled();
+      });
+
       it('should update lastActivityAt when extending', async () => {
         mockPrisma.userSession.findFirst.mockResolvedValueOnce(mockSession);
         mockPrisma.userSession.update.mockResolvedValueOnce(mockSession);

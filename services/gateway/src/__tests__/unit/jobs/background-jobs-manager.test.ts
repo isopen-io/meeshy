@@ -48,6 +48,14 @@ jest.mock('../../../jobs/ban-expiry-sweep', () => ({
   })),
 }));
 
+jest.mock('../../../jobs/session-expiry-sweep', () => ({
+  SessionExpirySweepJob: jest.fn().mockImplementation(() => ({
+    start: jest.fn(),
+    stop: jest.fn(),
+    runNow: jest.fn().mockResolvedValue(undefined),
+  })),
+}));
+
 jest.mock('../../../services/MagicLinkService', () => ({
   MagicLinkService: jest.fn().mockImplementation(() => ({})),
 }));
@@ -119,6 +127,7 @@ describe('BackgroundJobsManager', () => {
       expect(jobs.deliveryQueueCleanup.start).toHaveBeenCalledTimes(1);
       expect(jobs.mutationLogCleanup.start).toHaveBeenCalledTimes(1);
       expect(jobs.banExpirySweep.start).toHaveBeenCalledTimes(1);
+      expect(jobs.sessionExpirySweep.start).toHaveBeenCalledTimes(1);
 
       expect(manager.isJobsRunning()).toBe(true);
       manager.stopAll();
@@ -149,6 +158,7 @@ describe('BackgroundJobsManager', () => {
       expect(jobs.deliveryQueueCleanup.stop).toHaveBeenCalledTimes(1);
       expect(jobs.mutationLogCleanup.stop).toHaveBeenCalledTimes(1);
       expect(jobs.banExpirySweep.stop).toHaveBeenCalledTimes(1);
+      expect(jobs.sessionExpirySweep.stop).toHaveBeenCalledTimes(1);
 
       expect(manager.isJobsRunning()).toBe(false);
     });
@@ -181,6 +191,7 @@ describe('BackgroundJobsManager', () => {
       expect(jobs.deliveryQueueCleanup.runNow).toHaveBeenCalledTimes(1);
       expect(jobs.mutationLogCleanup.runNow).toHaveBeenCalledTimes(1);
       expect(jobs.banExpirySweep.runNow).toHaveBeenCalledTimes(1);
+      expect(jobs.sessionExpirySweep.runNow).toHaveBeenCalledTimes(1);
     });
 
     it('does not require startAll() to be called first', async () => {
@@ -191,7 +202,7 @@ describe('BackgroundJobsManager', () => {
   // ─── getJobs() ───────────────────────────────────────────────────────────
 
   describe('getJobs()', () => {
-    it('returns all six job instances', () => {
+    it('returns all seven job instances', () => {
       const jobs = manager.getJobs();
       expect(jobs).toHaveProperty('cleanupTokens');
       expect(jobs).toHaveProperty('unlockAccounts');
@@ -199,6 +210,7 @@ describe('BackgroundJobsManager', () => {
       expect(jobs).toHaveProperty('deliveryQueueCleanup');
       expect(jobs).toHaveProperty('mutationLogCleanup');
       expect(jobs).toHaveProperty('banExpirySweep');
+      expect(jobs).toHaveProperty('sessionExpirySweep');
     });
   });
 

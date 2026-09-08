@@ -56,7 +56,15 @@ export interface AuthTokenExpiredEventData {
 export interface AuthSessionRevokedEventData {
   readonly code: 'session_revoked';
   readonly message: string;
-  readonly reason: 'password_changed' | 'logout_all_devices' | 'admin_revoke';
+  /**
+   * `session_expired` (#5712) — la `UserSession` que le JWT nomme (claim
+   * `sid`, `session-jwt.ts`) n'est plus `isValid` ou son `expiresAt` est
+   * dépassé. Distinct des trois révocations explicites : rien n'a été
+   * révoqué ici, la session est simplement arrivée à échéance pendant que
+   * le JWT — dont la durée de vie peut atteindre 365 jours pour un appareil
+   * mobile mémorisé — restait cryptographiquement valide.
+   */
+  readonly reason: 'password_changed' | 'logout_all_devices' | 'admin_revoke' | 'session_expired';
 }
 
 /**
