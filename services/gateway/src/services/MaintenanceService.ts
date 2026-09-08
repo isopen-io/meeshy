@@ -14,6 +14,7 @@ import { sweepPendingPostMedia } from './posts/sweepPendingPostMedia';
 import type { PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
 import { conversationMessageStatsService } from './ConversationMessageStatsService';
 import type { SessionRevoker } from './admin/user-management.service';
+import { purgeAccountIsolatedData } from './AccountPurgeService';
 import {
   RECIPIENT_LANG_SELECT,
   recipientDateLocale,
@@ -721,6 +722,27 @@ export class MaintenanceService {
   }
 
   /**
+   * Purge, à l'expiration AUTOMATIQUE de la période de grâce, les trois
+   * tables ISOLÉES d'un compte supprimé (#3632) — sessions, profil vocal,
+   * liens de partage créés. Ne dépend PAS d'un clic sur le lien « supprimer
+   * maintenant » du rappel hebdomadaire : la promesse publique (« après 30
+   * jours, suppression définitive ») est une échéance, pas une action que
+   * l'utilisateur doit encore déclencher lui-même.
+   *
+   * Best-effort, après l'écriture qui a déjà fait passer la ligne en
+   * `GRACE_PERIOD_EXPIRED` — un échec ici ne doit pas faire compter
+   * l'expiration elle-même comme ratée par l'appelant ; la prochaine passe
+   * horaire rejouera la purge (`deleteMany` est idempotent).
+   */
+  private async purgeIsolatedDataOfExpiredAccount(userId: string): Promise<void> {
+    try {
+      await purgeAccountIsolatedData(this.prisma, userId);
+    } catch (error) {
+      logger.warn(`⚠️ [DELETION] Isolated-data purge failed for expired account user=${userId}:`, error);
+    }
+  }
+
+  /**
    * Traiter les demandes de suppression de compte :
    * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED)
    * 2. Envoyer les rappels hebdomadaires pour les requests GRACE_PERIOD_EXPIRED
@@ -753,6 +775,7 @@ export class MaintenanceService {
             ]);
             expiredCount++;
             await this.revokeSessionsOfDeletedAccount(req.userId);
+            await this.purgeIsolatedDataOfExpiredAccount(req.userId);
           } catch (error) {
             logger.error(`❌ [DELETION] Failed to expire request=${req.id} for user=${req.userId}:`, error);
           }
