@@ -16,7 +16,10 @@ import {
   STREAK_THRESHOLDS,
   LEVEL_THRESHOLDS,
   ENGAGEMENT_AXIS_WEIGHTS,
+  CONTENT_ENGAGEMENT_AXES,
+  CONVERSATION_ENGAGEMENT_AXES,
   type EngagementAxisKey,
+  type EngagementAchievementKey,
 } from '@meeshy/shared/types/engagement';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { NotificationService } from '../notifications/NotificationService';
@@ -65,6 +68,7 @@ export class EngagementService {
       await this.tryAwardBadge(userId, axisKey, threshold);
     }
 
+    await this.tryAwardAchievements(userId, axisKey, previousCount);
     await this.updateStreak(userId);
     await this.updateEngagementScore(userId, axisKey);
   }
@@ -140,6 +144,98 @@ export class EngagementService {
         userId,
         axisKey,
         threshold,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * Succès composés (§ 8, #5546) — cinq conditions ponctuelles évaluées
+   * après l'incrément du compteur d'axe. Toutes ne peuvent devenir vraies
+   * qu'au moment où UN axe passe de 0 à 1 : un axe déjà non nul ne change
+   * pas l'ensemble des axes atteints, donc ne peut compléter aucune
+   * condition — `previousCount !== 0` élimine tout appel qui ne peut rien
+   * déclencher, sans lecture supplémentaire.
+   */
+  private async tryAwardAchievements(
+    userId: string,
+    axisKey: EngagementAxisKey,
+    previousCount: number,
+  ): Promise<void> {
+    if (previousCount !== 0) return;
+
+    if (CONTENT_ENGAGEMENT_AXES.includes(axisKey)) {
+      await this.tryAwardAchievement(userId, 'achievement.first_content');
+      if (await this.hasAllAxes(userId, CONTENT_ENGAGEMENT_AXES)) {
+        await this.tryAwardAchievement(userId, 'achievement.all_content_types');
+      }
+    }
+
+    if (axisKey === 'content.audio_message' || axisKey === 'comment.audio') {
+      await this.tryAwardAchievement(userId, 'achievement.first_voice');
+    }
+
+    if (axisKey === 'tool.in_app_edit') {
+      await this.tryAwardAchievement(userId, 'achievement.editor');
+    }
+
+    if (CONVERSATION_ENGAGEMENT_AXES.includes(axisKey)) {
+      if (await this.hasAllAxes(userId, CONVERSATION_ENGAGEMENT_AXES)) {
+        await this.tryAwardAchievement(userId, 'achievement.three_conversation_kinds');
+      }
+    }
+  }
+
+  /** `true` si CHACUN des `axes` a déjà un `EngagementCounter.count` strictement positif pour `userId`. */
+  private async hasAllAxes(userId: string, axes: readonly EngagementAxisKey[]): Promise<boolean> {
+    const rows = await this.prisma.engagementCounter.findMany({
+      where: { userId, axisKey: { in: [...axes] }, count: { gt: 0 } },
+      select: { axisKey: true },
+    });
+    return rows.length >= axes.length;
+  }
+
+  /**
+   * Même garde anti-rejeu que `tryAwardBadge` (§ 4), portée par la contrainte
+   * unique `EngagementMilestone`. `achievementKey` porte déjà son préfixe
+   * `achievement.` (§ 8) : contrairement à `badge`/`streak`/`level`, il EST
+   * la `milestoneKey`, sans transformation.
+   */
+  private async tryAwardAchievement(
+    userId: string,
+    achievementKey: EngagementAchievementKey,
+  ): Promise<void> {
+    try {
+      await this.prisma.engagementMilestone.create({
+        data: {
+          userId,
+          milestoneType: 'achievement',
+          milestoneKey: achievementKey,
+        },
+      });
+    } catch (err) {
+      if (isP2002(err)) return;
+      throw err;
+    }
+
+    try {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
+      const lang = recipientLanguage(user, 'fr');
+      const notificationService = getSharedNotificationService() ?? new NotificationService(this.prisma);
+      await notificationService.createNotification({
+        userId,
+        type: 'achievement_unlocked',
+        priority: 'normal',
+        content: notificationString(lang, 'engagement.achievementUnlocked', {
+          title: achievementKey.replace('achievement.', ''),
+        }),
+        context: {},
+        metadata: { action: 'view_details', achievementKey },
+      });
+    } catch (err) {
+      log.warn('achievement_unlocked notification failed after milestone was recorded', {
+        userId,
+        achievementKey,
         error: err instanceof Error ? err.message : String(err),
       });
     }
