@@ -1,4 +1,6 @@
 import { spawnSync } from 'node:child_process';
+import { rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import tailwind from '@tailwindcss/vite';
@@ -105,6 +107,29 @@ const prerenderInstitutionalPages = (): Plugin => ({
   },
 });
 
+/**
+ * LE SERVICE WORKER INSTITUTIONNEL N'ENTRE PAS DANS LA COQUE (#5604,
+ * revue-correction).
+ *
+ * `sw-institutional.js` vit dans `public/`, donc Vite le RECOPIE tel quel dans
+ * TOUTE construction — y compris la variante B, ou VitePWA est pourtant retire
+ * et ou plus rien ne l'`importScripts`. Il partait donc dans l'APK et dans
+ * l'IPA en fichier MORT, pendant que `capacitor.config.ts` et le gate
+ * `check-shell-dist.mjs` affirmaient tous deux « aucun service worker ». Une
+ * affirmation qu'un fichier du dist contredit n'est pas une affirmation.
+ *
+ * `writeBundle` et non `generateBundle` : les actifs de `public/` sont copies
+ * HORS du graphe de rollup, donc invisibles du second.
+ */
+const dropInstitutionalServiceWorker = (): Plugin => ({
+  name: 'meeshy-drop-institutional-sw',
+  apply: 'build',
+  writeBundle(options) {
+    if (options.dir === undefined) return;
+    rmSync(join(options.dir, 'sw-institutional.js'), { force: true });
+  },
+});
+
 export default defineConfig({
   base: forCapacitor ? './' : '/',
   define: { __BENCH__: JSON.stringify(bench) },
@@ -117,6 +142,7 @@ export default defineConfig({
   plugins: [
     tailwind(),
     prerenderInstitutionalPages(),
+    ...(forCapacitor ? [dropInstitutionalServiceWorker()] : []),
     /**
      * VARIANTE A (PWA). Desactivee sous Capacitor : la coque native gere
      * elle-meme son cycle de vie, et un service worker par-dessus ferait deux

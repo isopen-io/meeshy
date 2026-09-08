@@ -43,7 +43,7 @@ export function Composer({
   };
 
   return (
-    <div className="flex flex-col" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 8px)' }}>
+    <div className="flex flex-col pb-safe">
       {replyTo ? (
         <div
           className="mx-3 mb-1 flex items-center gap-2 rounded-quote px-2.5 py-2"

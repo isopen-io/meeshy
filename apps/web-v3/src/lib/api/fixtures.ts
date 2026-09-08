@@ -362,7 +362,7 @@ export const CONVERSATIONS: readonly Conversation[] = [
       sender: amina,
       content: 'See you tomorrow at the office.',
       originalLanguage: 'en',
-      translations: [],
+      translations: [translation('m-amina', 'fr', 'On se voit demain au bureau.')],
       createdAt: minutesAgo(116),
     }),
     lastMessageAt: minutesAgo(116),

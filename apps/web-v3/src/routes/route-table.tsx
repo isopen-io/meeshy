@@ -14,7 +14,7 @@ export const ROUTES = {
 
 function NotFound() {
   return (
-    <div className="grid min-h-dvh place-items-center p-6 text-center">
+    <div className="grid min-h-dvh place-items-center p-6 pt-safe text-center">
       <div className="grid gap-3">
         <p className="text-screen font-bold">Cette href n’existe pas.</p>
         <a
