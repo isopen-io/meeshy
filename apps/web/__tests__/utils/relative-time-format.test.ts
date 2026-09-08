@@ -1,4 +1,8 @@
 import { formatPhrasedTimeAgo, formatCompactTimeAgo } from '@/utils/relative-time-format';
+import adminEn from '../../locales/en/admin.json';
+import adminEs from '../../locales/es/admin.json';
+import adminFr from '../../locales/fr/admin.json';
+import adminPt from '../../locales/pt/admin.json';
 
 // `t` fake mirroring the agent dashboard i18n key sets. Phrased keys carry a
 // literal `{count}` placeholder — UNE accolade, la forme réellement livrée par
@@ -87,30 +91,31 @@ describe('formatCompactTimeAgo', () => {
 });
 
 /**
- * Le corpus ci-dessus fabrique ses chaînes à la forme que le helper ATTEND
- * (`{{count}}`) : il valide le code contre lui-même et ne peut donc pas tomber
- * quand le code et les catalogues divergent. C'est exactement ce qui est arrivé
- * — le dashboard agent affichait « il y a {count}j » dans les quatre langues
- * pendant que ces tests restaient verts.
+ * Le corpus ci-dessus reste FABRIQUÉ : aligné sur la convention, il ne la
+ * PROUVE pas. Tant qu'il écrivait la forme que le helper attendait, il validait
+ * le code contre lui-même et ne pouvait pas tomber quand les deux divergeaient
+ * — le dashboard agent a affiché « il y a {count}j » dans les quatre langues
+ * pendant que ces témoins restaient verts.
  *
- * Ce bloc-ci sert le VRAI catalogue. Il est le seul à pouvoir échouer sur une
- * divergence de placeholder, et il vaut pour chaque langue livrée.
+ * Ce bloc-ci sert les catalogues LIVRÉS. Il est le seul à pouvoir échouer sur
+ * une divergence de placeholder, et il couvre chaque langue livrée.
  */
 describe('formatPhrasedTimeAgo — servi par les catalogues RÉELS', () => {
   const LOCALES = ['en', 'es', 'fr', 'pt'] as const;
 
-  const catalogue = (locale: string): Record<string, unknown> =>
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    require(`../../locales/${locale}/admin.json`) as Record<string, unknown>;
-
-  const lookup = (locale: string): TranslateKeyFake => (key: string): string => {
-    const value = key
-      .split('.')
-      .reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], catalogue(locale));
-    return typeof value === 'string' ? value : key;
+  const CATALOGUES: Record<string, unknown> = {
+    en: adminEn,
+    es: adminEs,
+    fr: adminFr,
+    pt: adminPt,
   };
 
-  type TranslateKeyFake = (key: string) => string;
+  const lookup = (locale: string) => (key: string): string => {
+    const value = key
+      .split('.')
+      .reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], CATALOGUES[locale]);
+    return typeof value === 'string' ? value : key;
+  };
 
   it.each(LOCALES)('n\'abandonne aucun placeholder non substitué (%s)', (locale) => {
     const tr = lookup(locale);
