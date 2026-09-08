@@ -125,6 +125,21 @@ struct ProgressionView: View {
 
                     badgesSection(progress)
                     achievementsSection(progress)
+
+                    // Les défis générés (#5759) — rangées horizontales, une par
+                    // section. Vide quand la passerelle ne sert pas la carte
+                    // d'atteignabilité : on ne promet rien qu'on ne sait mesurer.
+                    if !progress.achievementSections.isEmpty {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                            sectionHeader(
+                                icon: "medal.fill",
+                                title: AchievementCopy.sectionsHeader,
+                                trailing: "\(progress.achievementSections.reduce(0) { $0 + $1.unlockedCount })",
+                                color: accentColor
+                            )
+                            ProgressionGeneratedAchievements(sections: progress.achievementSections)
+                        }
+                    }
                 }
 
                 Spacer().frame(height: 40)

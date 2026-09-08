@@ -186,6 +186,11 @@ public struct EngagementProgress: Sendable, Equatable {
     public let meesh: EngagementMeeshProgress?
     /// Idem pour l'élan (#5749).
     public let elan: EngagementElanProgress?
+    /// Les succès du catalogue GÉNÉRATIF (#5758/#5759), rangés par section et
+    /// déjà tronqués à leur fenêtre. Distinct d'`achievements`, qui porte les
+    /// cinq succès composés historiques : les mêler mélangerait deux
+    /// vocabulaires sans que rien ne le signale.
+    public let achievementSections: [AchievementSectionView]
 
     public init(
         level: EngagementLevelProgress,
@@ -196,7 +201,8 @@ public struct EngagementProgress: Sendable, Equatable {
         badgesTotal: Int,
         isEmpty: Bool,
         meesh: EngagementMeeshProgress? = nil,
-        elan: EngagementElanProgress? = nil
+        elan: EngagementElanProgress? = nil,
+        achievementSections: [AchievementSectionView] = []
     ) {
         self.level = level
         self.streak = streak
@@ -207,6 +213,7 @@ public struct EngagementProgress: Sendable, Equatable {
         self.isEmpty = isEmpty
         self.meesh = meesh
         self.elan = elan
+        self.achievementSections = achievementSections
     }
 
     /// Les axes rangés par SECTION, dans l'ordre du modèle § 2 ; l'ordre du catalogue est conservé dans chaque section.
@@ -300,7 +307,18 @@ public enum EngagementProgressResolver {
             badgesTotal: EngagementAxisKey.allCases.count * EngagementCatalog.badgeThresholds.count,
             isEmpty: !hasActivity,
             meesh: payload.meesh.map(EngagementMeeshProgress.init(payload:)),
-            elan: payload.elan.map(EngagementElanProgress.init(payload:))
+            elan: payload.elan.map(EngagementElanProgress.init(payload:)),
+            achievementSections: payload.achievementReach.map { reach in
+                AchievementResolver.sections(
+                    reach: reach,
+                    unlocked: Dictionary(
+                        payload.milestones
+                            .filter { $0.milestoneType == .achievement }
+                            .map { ($0.milestoneKey, reachedDate($0.reachedAt)) },
+                        uniquingKeysWith: { first, _ in first }
+                    )
+                )
+            } ?? []
         )
     }
 

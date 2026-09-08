@@ -129,6 +129,10 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
     public let level: Level
     public let meesh: Meesh?
     public let elan: Elan?
+    /// La carte d'atteignabilité des succès (#5759) — `familyId -> plus grande
+    /// valeur que le produit peut rendre vraie`. Absente ⇒ les paliers d'AMPLEUR
+    /// sont masqués, ceux de VOLUME restent visibles.
+    public let achievementReach: [String: Int]?
 
     public init(
         counters: [Counter],
@@ -136,7 +140,8 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         streak: Streak,
         level: Level,
         meesh: Meesh? = nil,
-        elan: Elan? = nil
+        elan: Elan? = nil,
+        achievementReach: [String: Int]? = nil
     ) {
         self.counters = counters
         self.milestones = milestones
@@ -144,6 +149,7 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         self.level = level
         self.meesh = meesh
         self.elan = elan
+        self.achievementReach = achievementReach
     }
 
     /// Aucune activité — la charge qu'un compte neuf reçoit.
@@ -155,6 +161,6 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
     )
 
     private enum CodingKeys: String, CodingKey {
-        case counters, milestones, streak, level, meesh, elan
+        case counters, milestones, streak, level, meesh, elan, achievementReach
     }
 }

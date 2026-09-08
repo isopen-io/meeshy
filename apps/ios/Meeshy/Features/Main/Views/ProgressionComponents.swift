@@ -470,3 +470,82 @@ struct ProgressionElanBanner: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+/// LES SUCCÈS GÉNÉRÉS, EN RANGÉES HORIZONTALES (#5759).
+///
+/// La vue ne TRIE rien, ne FILTRE rien, ne TRONQUE rien : l'ordre de
+/// difficulté, le retrait des paliers inatteignables et la fenêtre
+/// `max(7, acquis + 2)` sont appliqués par `AchievementResolver`, miroir de la
+/// loi partagée et gardé par `achievement-catalog-mirror-parity`. Refaire l'un
+/// des trois ici ferait diverger iOS du web — le mécanisme exact qui a produit
+/// trois familles de Prisme divergentes en trois cycles.
+struct ProgressionGeneratedAchievements: View {
+    let sections: [AchievementSectionView]
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        if sections.isEmpty {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                ForEach(sections) { vue in
+                    VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                        HStack {
+                            Text(AchievementCopy.sectionTitle(vue.section))
+                                .font(MeeshyFont.relative(13, weight: .semibold))
+                                .foregroundColor(theme.textPrimary)
+                            Spacer()
+                            Text("\(vue.unlockedCount) / \(vue.attainableCount)")
+                                .font(MeeshyFont.relative(11, weight: .medium))
+                                .foregroundColor(theme.textMuted)
+                        }
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: MeeshySpacing.sm) {
+                                ForEach(vue.entries) { entry in
+                                    ProgressionAchievementChip(entry: entry)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+private struct ProgressionAchievementChip: View {
+    let entry: AchievementEntry
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Image(systemName: entry.unlocked ? "star.fill" : "medal")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(entry.unlocked ? MeeshyColors.success : theme.textMuted)
+                .accessibilityHidden(true)
+            // Une famille hors catalogue rend `nil` : on montre alors RIEN
+            // plutôt qu'une clé technique.
+            Text(AchievementCopy.label(entry.family, tier: entry.tier) ?? "")
+                .font(MeeshyFont.relative(11, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            if entry.unlocked {
+                Text(AchievementCopy.earned)
+                    .font(MeeshyFont.relative(10, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+            }
+        }
+        .frame(width: 132, alignment: .leading)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                .fill(entry.unlocked ? MeeshyColors.success.opacity(0.14) : theme.textMuted.opacity(0.08))
+        )
+        .accessibilityElement(children: .combine)
+    }
+}
