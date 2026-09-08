@@ -43,10 +43,20 @@ public final class EngagementProgressService: EngagementProgressProviding, @unch
     }
 
     public func mintMeesh(requestId: String) async throws -> APIMeeshMintResult {
-        let response: APIResponse<APIMeeshMintResult> = try await api.request(
+        // `post` encode le corps et pose la méthode : `request` prend une `Data`
+        // déjà sérialisée, ce qui obligerait à refaire ici ce que le client sait
+        // faire.
+        let response: APIResponse<APIMeeshMintResult> = try await api.post(
             MeEndpoint.meeshMint,
-            body: ["requestId": requestId]
+            body: MintRequest(requestId: requestId)
         )
         return response.data
+    }
+
+    /// Le corps de la frappe — un type nommé plutôt qu'un dictionnaire : c'est
+    /// lui qui fige la forme du contrat, et un `[String: String]` la laisserait
+    /// dériver sans qu'aucun compilateur ne le remarque.
+    private struct MintRequest: Encodable {
+        let requestId: String
     }
 }

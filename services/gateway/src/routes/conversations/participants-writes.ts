@@ -24,6 +24,7 @@ import { recipientLanguage } from '../../utils/recipient-language';
 import { appliquerDroitsDeParticipant } from './participant-rights-core';
 import { registerParticipantPatchRoute } from './participant-patch';
 import { repondreAuRefus } from './utils/participant-geste-reponse';
+import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantWriteRoutes' });
 
 /**
@@ -301,6 +302,14 @@ export function registerParticipantWriteRoutes(
         }
       });
       joinedParticipantId = created.id;
+
+      // Le succès revient à celui qui REJOINT, pas à celui qui l'ajoute :
+      // c'est lui qui entre dans le cercle (#5759).
+      void new CerclesAchievements(prisma).recordEvent({
+        kind: 'conversation.join',
+        userId,
+        conversationId,
+      });
     }
 
     // Annoncer l'arrivée — quatrième et dernière porte, même loi. Une entrée

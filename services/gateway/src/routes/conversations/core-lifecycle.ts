@@ -40,6 +40,7 @@ import { emitToConversationParticipants } from '../../socketio/emitToConversatio
 import { announceConversationClosed } from '../../socketio/announceConversationClosed';
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
 
@@ -327,6 +328,16 @@ export function registerCreateConversationRoute(
             }
           }
         }
+      });
+
+      // Succès « cercles » (#5759) — APRÈS l'ACK métier. Créer un cercle, c'est
+      // aussi le rejoindre : les deux familles (`create.count`, `join.*`) sont
+      // évaluées par les deux événements, chacun ne mesurant que la sienne.
+      void new CerclesAchievements(prisma).recordEvent({ kind: 'conversation.create', userId });
+      void new CerclesAchievements(prisma).recordEvent({
+        kind: 'conversation.join',
+        userId,
+        conversationId: conversation.id,
       });
 
       // Si la conversation est créée dans une communauté, ajouter automatiquement
