@@ -14,6 +14,8 @@
     "generate": "prisma generate --schema=../../packages/shared/prisma/schema.prisma",
     "migrate": "prisma migrate dev --schema=../../packages/shared/prisma/schema.prisma",
     "route-manifest:generate": "tsx scripts/generate-route-manifest.ts",
+    "check-deployed-revision": "tsx scripts/check-deployed-revision.ts",
+    "smoke-test-deployed-routes": "tsx scripts/smoke-test-deployed-routes.ts",
     "test": "jest --config=jest.config.json",
     "test:unit": "jest --config=jest.config.json",
     "test:integration": "jest --config=jest.config.temp.json --testPathPatterns='integration' --testTimeout=30000",

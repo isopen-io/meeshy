@@ -1,0 +1,94 @@
+# =============================================================================
+# MEESHY - Surveillance de la revision deployee (#5644)
+# =============================================================================
+# Incident du 2026-09-07 : le conteneur `meeshy-gateway` de production a servi
+# un binaire de neuf jours en arriere -- `/health` restait "healthy" tout du
+# long, aucun temoin ne comparait ce qui TOURNE a ce qui est ECRIT sur sa
+# branche de reference. Ce job lit `/health` (endpoint public, S0, aucun
+# secret requis) sur chaque cible, compare son `build.commit` a SA branche de
+# reference (`origin/main` pour la production, `origin/dev` pour staging --
+# #5616, « une poussee sur dev deploie staging »), et frappe les routes GET
+# que les clients publies appellent reellement pour
+# distinguer un 404 (route ABSENTE du serveur assemble) d'un 401/autre
+# (PRESENTE) -- la forme exacte du symptome du 2026-09-07
+# (`POST /api/v1/directory/friend-requests` en 404 pendant que le depot la
+# declarait depuis neuf jours).
+#
+# Les deux scripts sont documentes dans services/gateway/scripts/ :
+#   check-deployed-revision.ts, smoke-test-deployed-routes.ts
+# Leur regle de verdict est PURE et testee independamment sous
+# services/gateway/src/route-manifest/ (deployed-revision.ts, deploy-smoke.ts).
+# =============================================================================
+
+name: Surveillance revision deployee
+
+on:
+  schedule:
+    # Toutes les 30 minutes -- assez frequent pour rester sous la fenetre de
+    # neuf jours de l'incident du 2026-09-07 par au moins trois ordres de
+    # grandeur, sans amplifier le trafic sur des endpoints publics S0.
+    - cron: '*/30 * * * *'
+  workflow_dispatch: {}
+
+env:
+  BUN_VERSION: '1.3.14'
+  # Les deux scripts s'executent sous NODE, pas bun -- meme convention que les
+  # generateurs de `services/gateway/scripts/` : `check-deployed-revision.ts`
+  # et `smoke-test-deployed-routes.ts` ne montent pas le serveur Fastify (donc
+  # n'ouvrent aucun socket ZMQ, le panic bun documente dans
+  # `scripts/require-node-runtime.ts` ne les concerne pas), mais rien ne
+  # prouve leur comportement sous le runtime bun -- seul `npx tsx` sous Node a
+  # ete mesure. bun reste l'outil d'INSTALLATION (parite CI, cf. CLAUDE.md).
+  NODE_VERSION: '22.19'
+
+jobs:
+  watch:
+    name: Comparer /health a la branche de reference de chaque cible
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (historique complet requis par merge-base)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Recuperer origin/dev (staging s'y compare, la production suit origin/main deja checkout)
+        run: git fetch --no-tags origin dev:refs/remotes/origin/dev
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Node ${{ env.NODE_VERSION }} (execution des scripts)
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Installer les dependances
+        run: bun install --ignore-scripts
+
+      - name: Construire packages/shared (@meeshy/shared/api/*)
+        working-directory: packages/shared
+        run: bun run build
+
+      - name: Comparer la revision deployee de chaque cible a sa branche de reference
+        id: revision
+        working-directory: services/gateway
+        env:
+          MAX_COMMITS_BEHIND: '30'
+        run: npx tsx scripts/check-deployed-revision.ts
+
+      - name: Test de fumee -- routes publiees, production
+        if: always()
+        working-directory: services/gateway
+        env:
+          SMOKE_TEST_BASE_URL: https://gate.meeshy.me
+        run: npx tsx scripts/smoke-test-deployed-routes.ts
+
+      - name: Test de fumee -- routes publiees, staging
+        if: always()
+        working-directory: services/gateway
+        env:
+          SMOKE_TEST_BASE_URL: https://staging.meeshy.me
+        run: npx tsx scripts/smoke-test-deployed-routes.ts
