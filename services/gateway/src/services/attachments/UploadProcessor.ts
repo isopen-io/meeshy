@@ -25,6 +25,7 @@ import {
 } from '../AttachmentEncryptionService';
 import { MetadataManager } from './MetadataManager';
 import { planVideoTranscode, buildVideoTranscodeArgs } from './video-transcode-plan.js';
+import { verifyDeclaredMimeType } from './ContentSignature.js';
 
 export interface FileToUpload {
   buffer: Buffer;
@@ -144,7 +145,15 @@ export class UploadProcessor {
   }
 
   /**
-   * Valide un fichier selon son type et sa taille
+   * Valide un fichier selon son type, sa taille, et — pour les familles dont
+   * une signature fiable existe (image, audio, SVG, PDF) — la correspondance
+   * entre le `mimeType` déclaré et le contenu réel (#5615). Site UNIQUE de
+   * cette vérification pour `uploadFile`/`uploadEncryptedFile`, donc pour
+   * TOUT upload REST qui passe par `AttachmentService.uploadMultiple` —
+   * inscrit ou anonyme. Avant #5615, `ContentSignature.ts` ne sniffait que
+   * l'exemption anonyme (`classifyAnonymousAttachment`) ; un compte inscrit
+   * pouvait déclarer n'importe quel mimeType sans qu'aucun octet ne soit
+   * jamais regardé.
    */
   validateFile(file: FileToUpload): { valid: boolean; error?: string } {
     const attachmentType = getAttachmentType(file.mimeType, file.filename);
@@ -156,6 +165,11 @@ export class UploadProcessor {
         valid: false,
         error: `Fichier trop volumineux. Taille max: ${limitGB}GB`
       };
+    }
+
+    const signatureVerdict = verifyDeclaredMimeType(file.mimeType, file.buffer);
+    if (signatureVerdict.verified === false) {
+      return { valid: false, error: signatureVerdict.reason };
     }
 
     return { valid: true };

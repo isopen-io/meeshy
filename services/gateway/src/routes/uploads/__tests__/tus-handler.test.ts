@@ -453,7 +453,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
         prisma,
         headers: ANONYMOUS_HEADERS,
         filename: 'document.pdf',
-        filetype: 'audio/webm', // déclaration mensongère — l'exploit documenté
+        filetype: 'application/octet-stream', // déclaration générique, sans signature vérifiée
         bytes: PDF_BYTES,
       });
 
