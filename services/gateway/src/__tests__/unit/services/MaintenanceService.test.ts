@@ -62,11 +62,13 @@ function makePrisma(overrides: {
     userVoiceModel: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    message: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      findRaw: jest.fn<any>().mockResolvedValue([]),
+    },
     messageAttachment: {
       findMany: jest.fn<any>().mockResolvedValue([]),
-    },
-    message: {
-      findRaw: jest.fn<any>().mockResolvedValue([]),
     },
     messageAttachmentForEmptyMessage: {
       findMany: jest.fn<any>().mockResolvedValue([]),
@@ -547,6 +549,17 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
     expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
     expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
     expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({ where: { createdBy: 'user-a' } });
+  });
+
+  it('anonymise les messages de chaque compte expiré, résolus via ses lignes Participant (#5689)', async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+    sut.setSessionRevoker(makeRevoker([]));
+
+    await sweepDeletions(sut);
+
+    expect(prisma.participant.findMany).toHaveBeenCalledWith({ where: { userId: 'user-a' }, select: { id: true } });
   });
 
   it("un échec de la purge isolée ne fait pas compter l'expiration comme ratée — le lot continue", async () => {

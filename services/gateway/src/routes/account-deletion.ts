@@ -8,6 +8,8 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { disconnectRevokedSessions } from '../socketio/disconnectRevokedSessions';
 import { createCustomRateLimiter } from '../utils/rate-limiter.js';
 import { purgeAccountIsolatedData } from '../services/AccountPurgeService';
+import { anonymizeAccountMessages } from '../services/AccountMessagePurgeService';
+import { AttachmentService } from '../services/attachments';
 
 const logger = enhancedLogger.child({ module: 'AccountDeletionResolve' });
 
@@ -266,6 +268,12 @@ export async function accountDeletionRoutes(fastify: FastifyInstance) {
         // trois requêtes vides si la passe horaire est déjà passée.
         await purgeAccountIsolatedData(fastify.prisma, demande.userId).catch((error) =>
           logger.warn(`[Deletion] purge des données isolées échouée user=${demande.userId}`, error)
+        );
+
+        // Idem pour les messages (#5689) — anonymisés dès la bascule
+        // automatique, rejoué ici en défense en profondeur.
+        await anonymizeAccountMessages(fastify.prisma, new AttachmentService(fastify.prisma), demande.userId).catch(
+          (error) => logger.warn(`[Deletion] anonymisation des messages échouée user=${demande.userId}`, error)
         );
 
         // Le compte n'existe plus : ses sockets tombent, APRÈS l'écriture — un

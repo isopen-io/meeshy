@@ -15,6 +15,7 @@ import type { PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
 import { conversationMessageStatsService } from './ConversationMessageStatsService';
 import type { SessionRevoker } from './admin/user-management.service';
 import { purgeAccountIsolatedData } from './AccountPurgeService';
+import { anonymizeAccountMessages } from './AccountMessagePurgeService';
 import {
   RECIPIENT_LANG_SELECT,
   recipientDateLocale,
@@ -743,6 +744,21 @@ export class MaintenanceService {
   }
 
   /**
+   * Anonymise les messages du compte, à la même échéance AUTOMATIQUE que la
+   * purge des données isolées ci-dessus (#5689, suite de #3632) — ne dépend
+   * pas davantage d'un clic sur le lien de rappel. Best-effort et séparé de
+   * `purgeIsolatedDataOfExpiredAccount` : les deux touchent des tables sans
+   * rapport, et l'échec de l'une ne doit jamais empêcher l'autre.
+   */
+  private async anonymizeMessagesOfExpiredAccount(userId: string): Promise<void> {
+    try {
+      await anonymizeAccountMessages(this.prisma, this.attachmentService, userId);
+    } catch (error) {
+      logger.warn(`⚠️ [DELETION] Message anonymization failed for expired account user=${userId}:`, error);
+    }
+  }
+
+  /**
    * Traiter les demandes de suppression de compte :
    * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED)
    * 2. Envoyer les rappels hebdomadaires pour les requests GRACE_PERIOD_EXPIRED
@@ -776,6 +792,7 @@ export class MaintenanceService {
             expiredCount++;
             await this.revokeSessionsOfDeletedAccount(req.userId);
             await this.purgeIsolatedDataOfExpiredAccount(req.userId);
+            await this.anonymizeMessagesOfExpiredAccount(req.userId);
           } catch (error) {
             logger.error(`❌ [DELETION] Failed to expire request=${req.id} for user=${req.userId}:`, error);
           }

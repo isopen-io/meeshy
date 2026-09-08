@@ -63,6 +63,11 @@ function buildApp(etat: EtatDemande | null) {
     userSession: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     userVoiceModel: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     conversationShareLink: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
+    participant: { findMany: jest.fn(async (_a: unknown) => []) },
+    message: {
+      findMany: jest.fn(async (_a: unknown) => []),
+      updateMany: jest.fn(async (_a: unknown) => ({ count: 0 })),
+    },
   };
 
   return { prisma, ecritures, ligne: () => ligne };
@@ -193,6 +198,18 @@ describe('POST … /resolve — les effets', () => {
     expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u-1' } });
     expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u-1' } });
     expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({ where: { createdBy: 'u-1' } });
+
+    await app.close();
+  });
+
+  it('anonymise les messages du compte en défense en profondeur (#5689)', async () => {
+    const { prisma } = buildApp({ status: 'GRACE_PERIOD_EXPIRED', tokenExpiresAt: dans(3600_000) });
+    const app = await monter(prisma);
+
+    const res = await app.inject({ method: 'POST', url: `${PREFIXE}/resolve`, payload: { token: JETON, action: 'purge' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.participant.findMany).toHaveBeenCalledWith({ where: { userId: 'u-1' }, select: { id: true } });
 
     await app.close();
   });
