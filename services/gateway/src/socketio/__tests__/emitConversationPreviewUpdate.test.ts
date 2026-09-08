@@ -255,6 +255,55 @@ describe('emitConversationPreviewUpdate', () => {
     }
   });
 
+  it('émet le sous-groupe MÉDIA de #3737 (auteur, pièce jointe, drapeaux) — troisième émetteur', async () => {
+    // Ses deux jumeaux message-driven ont le même témoin dans
+    // `message-new-producer-parity.test.ts`. Suivi n°2 de la PR #3096.
+    const emitted: Emitted[] = [];
+    const withMedia = {
+      ...latest,
+      isBlurred: true,
+      isViewOnce: true,
+      expiresAt: new Date('2026-07-09T11:00:00Z'),
+      sender: { displayName: 'Bob', user: { displayName: 'Bob Legacy' } },
+      attachments: [
+        {
+          id: 'att-1',
+          mimeType: 'audio/mpeg',
+          thumbnailUrl: null,
+          originalName: 'memo.mp3',
+          fileSize: 4096,
+          duration: 12000,
+          width: null,
+          height: null,
+        },
+      ],
+      _count: { attachments: 3 },
+    };
+    const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], withMedia as any);
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    expect(emitted[0].payload.lastMessageSenderName).toBe('Bob');
+    expect(emitted[0].payload.lastMessageIsBlurred).toBe(true);
+    expect(emitted[0].payload.lastMessageIsViewOnce).toBe(true);
+    expect(emitted[0].payload.lastMessageExpiresAt).toBe('2026-07-09T11:00:00.000Z');
+    // `_count` (3) l'emporte sur la longueur de la liste chargée (1) — la
+    // requête Prisma réelle la capait déjà à `take: 1`.
+    expect(emitted[0].payload.lastMessageAttachmentCount).toBe(3);
+    expect(emitted[0].payload.lastMessageAttachments).toEqual([
+      {
+        id: 'att-1',
+        mimeType: 'audio/mpeg',
+        thumbnailUrl: null,
+        originalName: 'memo.mp3',
+        fileSize: 4096,
+        duration: 12000,
+        width: null,
+        height: null,
+      },
+    ]);
+  });
+
   it('émet `lastMessageAt` comme une CHAÎNE ISO, comme son jumeau `updatedAt`', async () => {
     const emitted: Emitted[] = [];
     const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], latest);

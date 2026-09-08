@@ -21,7 +21,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 551,
+  "routeCount": 553,
   "routes": [
     {
       "method": "DELETE",
@@ -1832,6 +1832,20 @@
     {
       "method": "GET",
       "path": "/api/v1/admin/users/:userId/activity",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users/:userId/bans",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -4391,20 +4405,6 @@
     },
     {
       "method": "GET",
-      "path": "/info",
-      "module": "registerAllRoutes (déclaration directe sur l'instance racine, hors server.register)",
-      "mountPrefix": "",
-      "securityLevel": "inconnu",
-      "securityLevelCandidates": [
-        "S0",
-        "S1"
-      ],
-      "securityBasisKey": "no-standard-auth-hook",
-      "hierarchyGated": false,
-      "adminPrefixed": false
-    },
-    {
-      "method": "GET",
       "path": "/voice/analysis",
       "module": "voiceAnalysisLegacyAliasRoutes",
       "mountPrefix": "",
@@ -5338,6 +5338,34 @@
       ],
       "securityBasisKey": "permission-gated",
       "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/users/:userId/ban",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": true,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/users/:userId/bans/:banId/lift",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": true,
       "adminPrefixed": true
     },
     {

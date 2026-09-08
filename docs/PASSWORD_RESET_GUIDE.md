@@ -160,10 +160,10 @@ Le script redémarre les services suivants (interruption brève ~30 secondes) :
 # Localisation
 /Users/smpceo/Documents/Services/Meeshy/meeshy/secrets/clear.txt
 
-# Contenu (exemple)
-ADMIN_PASSWORD_CLEAR="RHkviBF5divaF7qTe4hT"
-MEESHY_PASSWORD_CLEAR="wi8Oi9Lwnc05IQYMUoEf"
-TRAEFIK_PASSWORD_CLEAR="RHkviBF5divaF7qTe4hT"
+# Contenu (exemple — valeurs FICTIVES, à générer via `openssl rand -base64 20`)
+ADMIN_PASSWORD_CLEAR="<mot-de-passe-admin-genere>"
+MEESHY_PASSWORD_CLEAR="<mot-de-passe-meeshy-genere>"
+TRAEFIK_PASSWORD_CLEAR="<mot-de-passe-traefik-genere>"
 ...
 ```
 
@@ -177,10 +177,10 @@ TRAEFIK_PASSWORD_CLEAR="RHkviBF5divaF7qTe4hT"
 # Localisation
 /Users/smpceo/Documents/Services/Meeshy/meeshy/secrets/production-secrets.env
 
-# Contenu (exemple)
-JWT_SECRET="nWxvHWjvcbYT3lcQQd91PBoRX9MAySTipsxNecFxsQsORx3YsRUEVIVexq9gtCYR"
-ADMIN_PASSWORD="RHkviBF5divaF7qTe4hT"
-TRAEFIK_USERS="admin:$2y$05$f4LNd6WQ6yGw7QpCyH.BGOPtcDypOd9GzLrI7L1EqfzIkjBfhGsVu"
+# Contenu (exemple — valeurs FICTIVES, à générer via `openssl rand -hex 32`)
+JWT_SECRET="<secret-64-caracteres-hex-genere>"
+ADMIN_PASSWORD="<mot-de-passe-admin-genere>"
+TRAEFIK_USERS="admin:<hash-bcrypt-genere-par-htpasswd>"
 ...
 ```
 

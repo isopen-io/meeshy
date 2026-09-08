@@ -24,14 +24,14 @@ et l'image de la v3 — qui copie `packages/icons/` — n'a aucune raison d'emba
 1 512 SVG source. `racineDesTraces()` regarde d'abord l'arbre local : le jour où
 le paquet redescend ici, rien à changer.
 
-La génération écrit la mesure dans `apps/web-v3/budgets-mesures.json` →
+La génération écrit la mesure dans `apps/web-old-version3/budgets-mesures.json` →
 `sprite_phosphor`. **Le poids ne s'écrit pas à la main** : c'est le script qui le
-pose, et le témoin `apps/web-v3/__tests__/sprite.test.ts` recompare les octets du
+pose, et le témoin `apps/web-old-version3/__tests__/sprite.test.ts` recompare les octets du
 fichier commité à ceux du fichier de mesures.
 
 ## Les plafonds
 
-Ils vivent dans `apps/web-v3/budgets.json` → `actifs.plafonds`, avec le paragraphe
+Ils vivent dans `apps/web-old-version3/budgets.json` → `actifs.plafonds`, avec le paragraphe
 de la conception qui les porte. Ce README ne les redéclare pas.
 
 ## Les cinq défauts gardés
@@ -86,12 +86,12 @@ mettrait un triangle évidé au centre d'un disque plein — un écart de
 
 `@phosphor-icons/web` pèse **224 Ko** pour une seule graisse (mesuré : 144 Ko
 woff2 + 80 Ko css) et bloque le premier pixel. La v3 interdit son import, comme
-celui de `lucide-react` : `apps/web-v3/eslint.config.mjs`, témoin
-`apps/web-v3/__tests__/zone-lint.test.ts`.
+celui de `lucide-react` : `apps/web-old-version3/eslint.config.mjs`, témoin
+`apps/web-old-version3/__tests__/zone-lint.test.ts`.
 
 ## Où vit le témoin, et pourquoi pas ici
 
-`apps/web-v3/__tests__/sprite.test.ts`. `packages/` n'a aucun harnais de test et
+`apps/web-old-version3/__tests__/sprite.test.ts`. `packages/` n'a aucun harnais de test et
 n'entre dans aucune ligne de la matrice `test` de `ci.yml` ; `apps/web-v3` y
 entre nommément. C'est le précédent de `check-jetons.mjs`, qui garde le contenu
 de `packages/design-tokens` depuis `apps/web-v3`, et l'inverse de l'erreur
@@ -113,4 +113,4 @@ devDependency de la **racine**, donc **résolvable** depuis `apps/web-v3` (là o
 `lucide-react`, déclaré nulle part, rend `MODULE_NOT_FOUND`). C'est l'absence de
 protection que l'isolation de bun ne donne pas : `@phosphor-icons/core` et
 `@phosphor-icons/react` sont donc barrés nommément dans
-`apps/web-v3/eslint.config.mjs`, témoin `apps/web-v3/__tests__/zone-lint.test.ts`.
+`apps/web-old-version3/eslint.config.mjs`, témoin `apps/web-old-version3/__tests__/zone-lint.test.ts`.

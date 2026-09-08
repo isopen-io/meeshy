@@ -149,7 +149,25 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // la route serveur (watermark sharp/ffmpeg, cache) et son exposition dans les
 // catalogues générés. L'appel iOS (bouton d'export sur un média) est un
 // travail client à part, à ouvrir en issue de suivi le jour où l'écran existe.
-const BASELINE_DEAD_ENTRIES = 251;
+//
+// 251 → 246 (#5424) : cinq fichiers d'énumération retirés (`CleanupEndpoint`,
+// `StatsEndpoint`, `UserStatusEndpoint`, `TestEndpoint`, `InfoEndpoint`) —
+// quatre routes d'exploitation filtrées par
+// `packages/shared/api/ops-only-routes.ts`, et `/info` dont la route serveur
+// elle-même a été retirée. Aucun des cinq n'avait d'appelant Swift hors test.
+// 246 → 249 (#5528) : les trois routes de bannissement durable
+// (`AdminEndpoint.usersByUserIdBan`, `.usersByUserIdBans`,
+// `.usersByUserIdBansByBanIdLift`) — mortes à la naissance PAR CONSTRUCTION,
+// même cas que `meReferralCode` (#3690) et `byPostIdMediaByMediaIdExport`
+// (#3600) ci-dessus : #5528 ne livre que le modèle `Ban`, son journal d'audit
+// et l'écran admin WEB. L'appelant Swift (écran de modération iOS) est un
+// travail client à part, qui n'existe pas encore.
+//
+// Relevé par une session TIERCE, pas par celle qui a écrit #5528 : la fusion a
+// laissé `dev` rouge sur deux gates successifs (le cliquet de dette de types,
+// puis celui-ci, que le premier masquait), et corriger le premier seul aurait
+// déplacé le rouge sans débloquer la ligne. Voir #5617.
+const BASELINE_DEAD_ENTRIES = 249;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

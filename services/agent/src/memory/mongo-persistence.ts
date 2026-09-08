@@ -9,6 +9,40 @@ const DEFAULT_INACTIVITY_THRESHOLD_HOURS = 72;
 // Upper bound of the configurable delay (see agentConfigSchema in the gateway).
 const MAX_INACTIVITY_THRESHOLD_HOURS = 720;
 
+/** Jours d'oisiveté par défaut au-delà desquels un rôle AUTO rend sa place. */
+const DEFAULT_ROLE_MAX_IDLE_DAYS = 14;
+
+/**
+ * Combien de candidats on CHARGE avant de tirer au sort.
+ *
+ * Le vivier réel se compte en centaines (252 éligibles mesurés sur une seule
+ * conversation), et il faut le voir en entier pour tirer dedans — mais pas au
+ * prix d'une requête sans borne. Ce plafond est le compromis : assez large
+ * pour que le tirage soit VRAIMENT ouvert, assez petit pour rester une
+ * projection de quelques colonnes.
+ */
+const TAILLE_MAX_VIVIER = 500;
+
+/**
+ * Tirage sans remise, uniforme (Fisher-Yates partiel).
+ *
+ * Pourquoi un tirage et non un tri : en production, des centaines de
+ * participants partagent la MÊME valeur de `lastActiveAt` — la date du seed,
+ * à la seconde près. Un `orderBy` sur cette colonne n'a alors aucun pouvoir
+ * discriminant : Mongo rend l'ordre naturel de la collection, et `take` élit
+ * indéfiniment les mêmes premiers. Le hasard est ici la seule façon d'ouvrir
+ * le vivier — c'est la décision porteur du 2026-09-08 (#5663).
+ */
+function tirerAuSort<T>(vivier: readonly T[], combien: number): T[] {
+  if (combien >= vivier.length) return [...vivier];
+  const copie = [...vivier];
+  for (let i = 0; i < combien; i += 1) {
+    const j = i + Math.floor(Math.random() * (copie.length - i));
+    [copie[i], copie[j]] = [copie[j], copie[i]];
+  }
+  return copie.slice(0, combien);
+}
+
 const TRAIT_FIELDS = [
   'verbosity', 'formality', 'responseSpeed', 'initiativeRate', 'clarity', 'argumentation',
   'socialStyle', 'assertiveness', 'agreeableness', 'humor', 'emotionality', 'openness',
@@ -198,6 +232,75 @@ export class MongoPersistence {
     return toDelete.length;
   }
 
+  /**
+   * Libère les rôles AUTO qui n'ont pas servi depuis le délai de leur
+   * conversation — la SECONDE cause d'éviction, à côté de
+   * {@link evictRecentlyActiveUsers}.
+   *
+   * Celle-là ne libérait une place que si la personne REVENAIT. Un participant
+   * durablement absent gardait donc la sienne à vie, et cinq places prises
+   * gelaient la sélection pour toujours : mesuré en production, 252 candidats
+   * éligibles derrière 5 élus figés (#5663). L'oisiveté du rôle est le seul
+   * signal qui rouvre ce verrou.
+   *
+   * Un rôle sans `lastUsedAt` (tous ceux antérieurs au champ) est jugé sur sa
+   * date de CRÉATION : sans ce repli, l'ensemble du parc existant serait soit
+   * épargné pour toujours, soit balayé d'un coup.
+   *
+   * La ligne est SUPPRIMÉE, pas marquée — mais la persona n'est pas perdue
+   * pour autant : `AgentGlobalProfile` la porte par UTILISATEUR, hors
+   * conversation, et `getPotentialControlledUsers` la relit pour reconstruire
+   * le rôle si la personne est reprise. C'est déjà ce que fait l'éviction
+   * jumelle.
+   */
+  async evictStaleRoles(): Promise<number> {
+    const roles = await this.prisma.agentUserRole.findMany({
+      select: { id: true, userId: true, conversationId: true, lastUsedAt: true, createdAt: true },
+    });
+    if (roles.length === 0) return 0;
+
+    const configs = await this.prisma.agentConfig.findMany({
+      where: { conversationId: { in: [...new Set(roles.map((r) => r.conversationId))] } },
+      select: { conversationId: true, manualUserIds: true, roleMaxIdleDays: true },
+    });
+    const configMap = new Map(configs.map((c) => [c.conversationId, c]));
+
+    const now = Date.now();
+    const toDelete = roles.filter((r) => {
+      const config = configMap.get(r.conversationId);
+      const manualIds = new Set((config?.manualUserIds ?? []) as string[]);
+      // Un pilotage MANUEL est un choix explicite : l'oisiveté ne le défait pas.
+      if (manualIds.has(r.userId)) return false;
+      const idleDays = config?.roleMaxIdleDays ?? DEFAULT_ROLE_MAX_IDLE_DAYS;
+      const derniereUtilisation = (r.lastUsedAt ?? r.createdAt).getTime();
+      return derniereUtilisation < now - idleDays * 24 * 60 * 60 * 1000;
+    });
+    if (toDelete.length === 0) return 0;
+
+    await this.prisma.agentUserRole.deleteMany({
+      where: { id: { in: toDelete.map((r) => r.id) } },
+    });
+
+    return toDelete.length;
+  }
+
+  /**
+   * Horodate les rôles qui viennent de SERVIR — l'unique alimentation de
+   * `lastUsedAt`, et donc la seule chose qui protège une place de
+   * {@link evictStaleRoles}.
+   *
+   * Sans cet appel, tous les rôles vieilliraient sur leur `createdAt` et
+   * seraient évincés au bout du délai, y compris les plus actifs : l'éviction
+   * et son horodatage se posent ENSEMBLE ou pas du tout.
+   */
+  async touchUserRoles(conversationId: string, userIds: readonly string[]): Promise<void> {
+    if (userIds.length === 0) return;
+    await this.prisma.agentUserRole.updateMany({
+      where: { conversationId, userId: { in: [...userIds] } },
+      data: { lastUsedAt: new Date() },
+    });
+  }
+
   async getControlledUsers(conversationId: string): Promise<ControlledUser[]> {
     const [roles, config] = await Promise.all([
       this.prisma.agentUserRole.findMany({ where: { conversationId } }),
@@ -356,12 +459,10 @@ export class MongoPersistence {
           },
         },
       },
-      orderBy: { lastActiveAt: 'asc' },
-      take: limit,
+      take: TAILLE_MAX_VIVIER,
     });
 
-    return participants
-      .flatMap((p) => (p.user ? [p.user] : []));
+    return tirerAuSort(participants.flatMap((p) => (p.user ? [p.user] : [])), limit);
   }
 
   async getLeastActiveParticipants(
@@ -393,12 +494,10 @@ export class MongoPersistence {
           },
         },
       },
-      orderBy: { lastActiveAt: 'asc' },
-      take: limit,
+      take: TAILLE_MAX_VIVIER,
     });
 
-    return participants
-      .flatMap((p) => (p.user ? [p.user] : []));
+    return tirerAuSort(participants.flatMap((p) => (p.user ? [p.user] : [])), limit);
   }
 
   async getGlobalProfile(userId: string) {

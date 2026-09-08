@@ -1,0 +1,69 @@
+/* LE PONT vers la palette iOS.
+ *
+ * Ce fichier ne porte AUCUNE valeur. Les valeurs vivent dans
+ * `@meeshy/design-tokens/ios.css`, GÉNÉRÉ depuis MeeshyColors.swift et
+ * DesignTokens.swift par `packages/design-tokens/scripts/generate-from-ios.mjs`.
+ * Ce qui reste ici est un NOMMAGE : donner aux jetons iOS des noms
+ * d'utilitaires Tailwind. C'est le travail de l'application, pas de la table.
+ *
+ * Avant #5445, ce fichier recopiait la palette à la main — une seconde table,
+ * que la charte interdit (§ 12.5 règle 1), et dont le défaut n'est pas
+ * l'effort de recopie mais la DÉRIVE SILENCIEUSE : chaque table restant
+ * cohérente avec elle-même, une couleur corrigée d'un côté ne fait rougir
+ * aucun témoin de l'autre. Le gate `bun run check` de design-tokens l'interdit
+ * désormais : il régénère et refuse toute différence.
+ *
+ * CE QUI RESTE OUVERT (#5445) : `tokens.css` (la table de la v3) et cette
+ * palette-ci assignent les mêmes couleurs à des RÔLES différents — la v3 fait
+ * de indigo400 sa primaire, iOS de indigo500 ; les neutres de la v3 sont
+ * violacés, ceux d'iOS des gris vrais. Unifier ces rôles changerait le rendu
+ * d'une application en service : c'est une décision du porteur, pas un
+ * refactor.
+ */
+@import '@meeshy/design-tokens/ios.css';
+
+@theme inline {
+  --color-ios-brand: var(--ios-indigo-500);
+  --color-ios-brand-deep: var(--ios-indigo-700);
+  --color-read: var(--ios-read-receipt);
+  --color-i50: var(--ios-indigo-50);
+  --color-i200: var(--ios-indigo-200);
+  --color-i300: var(--ios-indigo-300);
+  --color-i400: var(--ios-indigo-400);
+  --color-i600: var(--ios-indigo-600);
+
+  --color-ios-surface: var(--ios-surface);
+  --color-ios-card: var(--ios-surface-card);
+  --color-ios-ink: var(--ios-ink);
+  --color-ios-ink-2: var(--ios-ink-2);
+  --color-ios-ink-3: var(--ios-ink-3);
+
+  --color-bubble-mine: var(--ios-bubble-mine);
+  --color-meta-mine: var(--ios-bubble-meta-mine);
+  --color-meta: var(--ios-bubble-meta);
+  --color-quote-mine: var(--ios-quote-bg-mine);
+  --color-quote: var(--ios-quote-bg);
+  --color-edge: var(--ios-edge);
+  --color-day-ink: var(--ios-day-ink);
+  --color-day-hairline: var(--ios-day-hairline);
+
+  /* Les géométries : celles que Swift DÉCLARE, et celles qu'il porte en
+     littéral — le générateur distingue les deux et cite le site de chacune. */
+  --radius-bubble: var(--ios-radius-bubble);
+  --radius-field-ios: var(--ios-radius-field);
+  --radius-quote: var(--ios-radius-quote);
+  --radius-row-ios: var(--ios-radius-md);
+  --size-avatar-row: var(--ios-avatar-row);
+  --size-avatar-bubble: var(--ios-avatar-bubble);
+  --size-avatar-header: var(--ios-avatar-header);
+  --size-avatar-typing: var(--ios-avatar-typing);
+  --size-header-circle: var(--ios-header-circle);
+
+  --text-check: var(--ios-font-caption);
+  --text-mini: var(--ios-font-footnote);
+  --text-time: var(--ios-text-time);
+  --text-title: var(--ios-font-subhead);
+  --text-bubble: var(--ios-font-body);
+  --text-input: var(--ios-text-input);
+  --text-large-title: var(--ios-text-large-title);
+}

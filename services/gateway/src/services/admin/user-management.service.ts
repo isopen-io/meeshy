@@ -319,26 +319,29 @@ export class UserManagementService {
       },
     });
 
-    if (!data.isActive) await this.revokeSessionsAfterDeactivation(userId);
+    if (!data.isActive) await this.revokeSessionsBestEffort(userId, 'deactivation');
 
     return user as unknown as FullUser;
   }
 
   /**
-   * Un compte mis hors service — désactivé (`deactivatedAt` non nul) ou
-   * supprimé en douceur (`isActive: false` seul) — est masqué pour TOUS ; un
-   * socket qui lui resterait ouvert continuerait de recevoir ses fils temps
-   * réel, d'émettre des `typing:start` (lus « en ligne ») et de voir la
-   * présence des autres. Après l'écriture, jamais avant ; best-effort : la
-   * ligne est déjà posée, une coupure qui échoue ne rend pas la désactivation.
+   * Révoque les sessions actives d'un compte après une écriture qui doit les
+   * invalider — désactivation/bannissement (`updateStatus`, `deleteUser`) ou
+   * réinitialisation de mot de passe par un admin (`resetPassword`, #5569) :
+   * un compte compromis dont le mot de passe est réinitialisé en réponse à un
+   * incident garde sinon ses sessions REST valides jusqu'à expiration du JWT
+   * (jusqu'à 24h). Un socket qui resterait ouvert continuerait de recevoir
+   * ses fils temps réel, d'émettre des `typing:start` (lus « en ligne ») et de
+   * voir la présence des autres. Après l'écriture, jamais avant ; best-effort :
+   * la ligne est déjà posée, une coupure qui échoue ne rend pas l'opération.
    */
-  private async revokeSessionsAfterDeactivation(userId: string): Promise<void> {
+  private async revokeSessionsBestEffort(userId: string, reason: string): Promise<void> {
     const revoke = this.deps.revokeSessions;
     if (!revoke) return;
     try {
       await revoke(userId);
     } catch (error) {
-      logWarn(logger, `[UserManagement] Session revocation failed after deactivation of user ${userId}`, error);
+      logWarn(logger, `[UserManagement] Session revocation failed after ${reason} of user ${userId}`, error);
     }
   }
 
@@ -359,6 +362,12 @@ export class UserManagementService {
       },
     });
 
+    // #5569 — un mot de passe réinitialisé par un admin (ex: réponse à un
+    // incident, compte compromis signalé) doit couper les sessions déjà
+    // ouvertes, exactement comme la réinitialisation libre-service
+    // (`PasswordResetService.ts`) le fait déjà pour son propre chemin.
+    await this.revokeSessionsBestEffort(userId, 'password reset');
+
     return user as unknown as FullUser;
   }
 
@@ -374,7 +383,7 @@ export class UserManagementService {
       },
     });
 
-    await this.revokeSessionsAfterDeactivation(userId);
+    await this.revokeSessionsBestEffort(userId, 'deletion');
 
     return user as unknown as FullUser;
   }

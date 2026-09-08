@@ -1,13 +1,14 @@
-/.next/
-/.rt/
-/out/
-/coverage/
-/node_modules/
-next-env.d.ts
-*.tsbuildinfo
+node_modules
+dist
+dist-*
+.vite
+*.local
 
-certificates
-
-/test-results/
-/playwright-report/
-/blob-report/
+# Les plateformes natives sont VERSIONNEES depuis #5604 (D-18, decisions.md) :
+# elles portent des reglages qu'aucune commande ne rejoue — SYMROOT dans
+# `ios/App/App.xcodeproj/project.pbxproj`, icones et splash du travail
+# `assets`, demain signature et permissions. `bunx cap add android`/`ios` ne
+# les recree PAS si elles existent deja ; leurs propres `.gitignore` GENERES
+# (`android/.gitignore`, `ios/.gitignore`) gouvernent ce qui, A L'INTERIEUR,
+# ne se committe jamais (copie du dist, produits de build, Pods).
+render

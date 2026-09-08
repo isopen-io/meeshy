@@ -4,7 +4,7 @@
  * `apps/web` enregistre son Service Worker sur `scope: '/'` — DEUX sites, même
  * script, même portée (`utils/service-worker.ts:28-31`, monté sans condition
  * par `app/layout.tsx:93` ; `utils/service-worker-registration.ts:95-97`, pour
- * FCM) : il voit donc TOUTE l'origine, la zone `/__v3` de `apps/web-v3`
+ * FCM) : il voit donc TOUTE l'origine, la zone `/__v3` de `apps/web-old-version3`
  * comprise. Sa branche « App Shell » est un cache-first qui attrape les
  * navigations, le JS, le CSS, les polices et les images. Traefik n'est donc pas
  * le seul aiguilleur de `meeshy.me` — ce worker en est un SECOND, non déclaré,
@@ -59,14 +59,39 @@ const swSource = fs.readFileSync(SW_SOURCE_PATH, 'utf8');
 const RACINE_DU_DEPOT = path.join(__dirname, '../../../..');
 
 /**
- * LES DEUX DÉPLOIEMENTS QUI SERVENT LA ZONE, et non le seul qui a été écrit le
- * premier. La bascule du § 4.9 se joue d'abord sur STAGING : ne lire que la
- * production revenait à gager l'environnement où rien ne bouge encore.
+ * LES DEUX DÉPLOIEMENTS QUI PEUVENT SERVIR LA ZONE, et non le seul qui a été
+ * écrit le premier. La bascule du § 4.9 se joue d'abord sur STAGING : ne lire
+ * que la production revenait à gager l'environnement où rien ne bouge encore.
  */
 const DEPLOIEMENTS = [
   { fichier: 'docker-compose.prod.yml', routeur: 'frontend-v3' },
   { fichier: 'docker-compose.staging.yml', routeur: 'frontend-v3-staging' },
 ] as const;
+
+/**
+ * CE TÉMOIN N'A DE SUJET QUE LÀ OÙ LE LEGACY EST DÉPLOYÉ.
+ *
+ * `public/sw.js` n'aiguille que l'origine qui le SERT : sa juridiction sur la
+ * zone v3 suppose DEUX occupants de la même origine — le legacy qui pose le
+ * worker, la zone qui lui échappe. Staging n'en a plus qu'un depuis la
+ * directive porteur du 2026-09-07 (§ « UN SEUL frontend sur staging, et c'est
+ * la v3.1 ») : le conteneur `meeshy-frontend-v3-staging` a été retiré AVEC son
+ * routeur, et `frontend-staging` sert désormais `isopen/meeshy-web-v31`. Il n'y
+ * a plus de frontière à garder là-bas — il n'y a plus de second occupant.
+ *
+ * D'où la forme, qui reste à DEUX SENS et non un simple retrait de la ligne :
+ * l'absence du routeur de zone n'est tolérée QUE si le déploiement ne sert plus
+ * l'image du legacy. **Redéployer `apps/web` sur staging sans rendre son
+ * routeur de zone fait rougir de nouveau** — c'est-à-dire exactement le cas où
+ * la frontière redevient nécessaire. Un `return []` inconditionnel, lui, aurait
+ * rendu le témoin muet sur ce déploiement pour toujours, et son silence
+ * ressemblerait à un verdict favorable.
+ *
+ * On lit l'IMAGE et non le nom du service : `frontend-staging` a gardé son nom
+ * en changeant d'occupant, donc le nom ne dit plus qui est là. Les mentions du
+ * legacy en COMMENTAIRE ne comptent pas — l'ancre `image:` les écarte.
+ */
+const IMAGE_DU_LEGACY = /^\s*image:.*isopen\/meeshy-(?:frontend|web):/m;
 
 class FakeResponse {
   readonly ok: boolean;
@@ -252,7 +277,11 @@ function traefikV3Paths(): readonly CheminReclame[] {
       .map((line) => line.trim())
       .find((line) => line.includes(`traefik.http.routers.${routeur}.rule=`));
     if (rule === undefined) {
-      throw new Error(`la règle du routeur ${routeur} est absente de ${fichier}`);
+      if (!IMAGE_DU_LEGACY.test(compose)) return [];
+      throw new Error(
+        `la règle du routeur ${routeur} est absente de ${fichier}, qui sert pourtant encore ` +
+          `l'image du legacy : la zone v3 y retomberait sous la juridiction de public/sw.js`
+      );
     }
     return [...rule.matchAll(/(PathPrefix|Path)\(`([^`]+)`\)/g)].map(([, matcher, valeur]) => ({
       matcher: matcher ?? '',

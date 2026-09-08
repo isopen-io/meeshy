@@ -1,13 +1,19 @@
 import { formatPhrasedTimeAgo, formatCompactTimeAgo } from '@/utils/relative-time-format';
+import adminEn from '../../locales/en/admin.json';
+import adminEs from '../../locales/es/admin.json';
+import adminFr from '../../locales/fr/admin.json';
+import adminPt from '../../locales/pt/admin.json';
 
 // `t` fake mirroring the agent dashboard i18n key sets. Phrased keys carry a
-// literal `{{count}}` placeholder (interpolated manually by the helper); compact
+// literal `{count}` placeholder — UNE accolade, la forme réellement livrée par
+// `apps/web/locales/*/admin.json`. Ce corpus écrivait la forme doublée, celle que
+// le code attendait : il validait le helper contre lui-même. Compact
 // keys are bare unit suffixes.
 const KEYS: Record<string, string> = {
   'agent.overview.timeAgo.justNow': 'Just now',
-  'agent.overview.timeAgo.minutes': '{{count}}min ago',
-  'agent.overview.timeAgo.hours': '{{count}}h ago',
-  'agent.overview.timeAgo.days': '{{count}}d ago',
+  'agent.overview.timeAgo.minutes': '{count}min ago',
+  'agent.overview.timeAgo.hours': '{count}h ago',
+  'agent.overview.timeAgo.days': '{count}d ago',
   'timeAgo.now': 'just now',
   'timeAgo.minutes': 'min',
   'timeAgo.hours': 'h',
@@ -81,5 +87,54 @@ describe('formatCompactTimeAgo', () => {
   it('crosses the 24-hour boundary into days', () => {
     expect(fmt(ago(24 * HOUR))).toBe('1d');
     expect(fmt(ago(23 * HOUR))).toBe('23h');
+  });
+});
+
+/**
+ * Le corpus ci-dessus reste FABRIQUÉ : aligné sur la convention, il ne la
+ * PROUVE pas. Tant qu'il écrivait la forme que le helper attendait, il validait
+ * le code contre lui-même et ne pouvait pas tomber quand les deux divergeaient
+ * — le dashboard agent a affiché « il y a {count}j » dans les quatre langues
+ * pendant que ces témoins restaient verts.
+ *
+ * Ce bloc-ci sert les catalogues LIVRÉS. Il est le seul à pouvoir échouer sur
+ * une divergence de placeholder, et il couvre chaque langue livrée.
+ */
+describe('formatPhrasedTimeAgo — servi par les catalogues RÉELS', () => {
+  const LOCALES = ['en', 'es', 'fr', 'pt'] as const;
+
+  const CATALOGUES: Record<string, unknown> = {
+    en: adminEn,
+    es: adminEs,
+    fr: adminFr,
+    pt: adminPt,
+  };
+
+  const lookup = (locale: string) => (key: string): string => {
+    const value = key
+      .split('.')
+      .reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], CATALOGUES[locale]);
+    return typeof value === 'string' ? value : key;
+  };
+
+  it.each(LOCALES)('n\'abandonne aucun placeholder non substitué (%s)', (locale) => {
+    const tr = lookup(locale);
+    const rendus = [
+      formatPhrasedTimeAgo(ago(5 * MINUTE), NOW, tr, 'agent.overview.timeAgo'),
+      formatPhrasedTimeAgo(ago(3 * HOUR), NOW, tr, 'agent.overview.timeAgo'),
+      formatPhrasedTimeAgo(ago(2 * DAY), NOW, tr, 'agent.overview.timeAgo'),
+    ];
+
+    for (const rendu of rendus) {
+      expect(rendu).not.toMatch(/\{+count\}+/);
+    }
+  });
+
+  it.each(LOCALES)('substitue réellement la valeur (%s)', (locale) => {
+    const tr = lookup(locale);
+
+    expect(formatPhrasedTimeAgo(ago(5 * MINUTE), NOW, tr, 'agent.overview.timeAgo')).toContain('5');
+    expect(formatPhrasedTimeAgo(ago(3 * HOUR), NOW, tr, 'agent.overview.timeAgo')).toContain('3');
+    expect(formatPhrasedTimeAgo(ago(2 * DAY), NOW, tr, 'agent.overview.timeAgo')).toContain('2');
   });
 });

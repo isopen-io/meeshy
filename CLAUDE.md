@@ -3,6 +3,25 @@
 > ## ⛔ Aucune feature sans issue — règle de démarrage (directive 2026-08-26)
 > **Avant d'écrire la première ligne d'une feature, d'une amélioration ou d'un correctif non trivial**, ouvrir (ou retrouver) son **issue** dans `isopen-io/meeshy`, la placer dans un **milestone précis** (nommé par le résultat attendu, avec échéance) et l'inscrire au projet « Meeshy — pilotage » (https://github.com/orgs/isopen-io/projects/1) avec `Status = In Progress`. Le commit qui livre la ferme (`Closes #n`) avec sa preuve (gate, mesure, PR). **Une tâche sans issue n'existe pas ; un travail sans milestone n'est pas planifié.** Ce qu'on découvre en chemin (dette, dimension non mûre, suivi) devient une issue à son tour — jamais une ligne dans un fichier ou une page. Détail : § « Pilotage du développement » du `CLAUDE.md` racine.
 
+> ## 🛑 LA V3 EN DÉVELOPPEMENT EST ANNULÉE — le chantier web est `apps/web-v3` (v3.1) (directive porteur 2026-09-07)
+> **Trois applications web coexistent, et leurs noms ont changé le 2026-09-07. Lire ce tableau avant de toucher à quoi que ce soit :**
+>
+> | répertoire | ce que c'est | état |
+> |---|---|---|
+> | `apps/web` | le LEGACY | **sert meeshy.me**, 80 routes, 100 % du trafic |
+> | `apps/web-v3` | **le chantier**, version **3.1.0** — ex `apps/web-v4` | la seule application web en développement |
+> | `apps/web-old-version3` | l'ancienne refonte v3, **annulée** | ne reçoit plus RIEN, n'a jamais servi une page en production |
+>
+> **`apps/web-old-version3` est ANNULÉE.** Aucune feature, aucun correctif, aucun portage d'écran — y compris si une issue ouverte avant ce jour le demande, y compris si `ordre.md` ou la matrice des 31 vues le prévoit : **ces plans sont périmés, ils ne se rejouent pas.** Les skills `meeshy-web-v3-lot` et `meeshy-web-v3-bout-en-bout` ne s'invoquent plus — ils visent cette application-là.
+>
+> **`apps/web-v3` est le SEUL chantier web.** C'est la v3.1 : la v3 en développement ayant été annulée, la numérotation reprend là où le produit en est. Son pilotage est le lot #5491 et ses issues.
+>
+> **L'UNIQUE exception au gel : `apps/web` (le legacy) SERT les utilisateurs jusqu'à la bascule.** Un incident de production, une faille de sécurité ou une régression bloquante s'y corrige — au minimum, et sans rien ajouter d'autre.
+>
+> **La v3.1 suit l'interface iOS**, pas la planche web : `apps/ios` et `packages/MeeshySDK` sont la référence de disposition, de hiérarchie, d'états et de gestes. La palette est DÉRIVÉE de `MeeshyColors.swift` (`packages/design-tokens/ios.css`, généré — #5445) ; `tokens.css` reste la table de `web-old-version3` et **mourra avec elle**.
+>
+> **Ce que la bascule coûte, mesuré** : le legacy sert **80 routes** (487 fichiers, 109 196 lignes) ; la v3.1 en sert **2** (2 256 lignes, sur fixtures, sans API ni temps réel). La parité est un chantier — elle se pilote par #5491, jamais par ce fichier. Les décisions d'architecture et de produit de la v3.1 vivent dans `apps/web-v3/decisions.md`.
+
 ## Project Overview
 Meeshy is a high-performance real-time messaging platform with multi-language translation, voice cloning, and end-to-end encryption. It supports 100k+ messages/second with simultaneous multi-language translation.
 

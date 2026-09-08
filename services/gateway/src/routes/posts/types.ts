@@ -242,6 +242,15 @@ export const CreatePostSchema = z.object({
   // vers la bibliothèque de sons (Sound crédité à l'auteur). Ne gouverne que
   // le démuxage vidéo — les pistes audio suivent `feedsSoundLibrary`.
   allowSoundExtraction: z.boolean().optional(),
+  // Réglage AUTEUR posé à la publication (#3959) — désactive TOUT commentaire
+  // sur ce post (`POST /posts/:postId/comments`, création et réponses).
+  commentsDisabled: z.boolean().optional(),
+  // DÉCLARÉ par le client, comme `capturedInApp` sur `PublishAttachmentSchema` :
+  // rien côté serveur ne distingue un média passé par l'éditeur de montage
+  // (recadrage, filtre, découpe) d'un média publié tel quel. Alimente les axes
+  // d'engagement mutuellement exclusifs « montage in-app » (#5542) et
+  // « publication directe » (#5543) — absent ou `false` ⇒ publication directe.
+  editedInApp: z.boolean().optional(),
   // Status/mood-specific
   moodEmoji: z.string().max(10).optional(),
   audioUrl: z.url().optional(),
@@ -611,6 +620,11 @@ export interface CommunityParams {
  * photo importée. Le serveur ne s'en sert pas pour décider — il l'enregistre
  * dans le journal de mutation, pour que « publié depuis une capture » reste
  * lisible après coup.
+ *
+ * `editedInApp` — même discipline que `capturedInApp`, mais une question
+ * DISTINCTE : est-ce que le média a été RETOUCHÉ (montage, recadrage, filtre)
+ * avant d'être publié depuis cet écran de partage ? Alimente les axes
+ * d'engagement « montage in-app » (#5542) / « publication directe » (#5543).
  */
 export const PublishAttachmentSchema = z.object({
   attachmentId: z.string().min(1),
@@ -618,4 +632,5 @@ export const PublishAttachmentSchema = z.object({
   content: z.string().max(5000).optional(),
   visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
   capturedInApp: z.boolean().optional(),
+  editedInApp: z.boolean().optional(),
 });

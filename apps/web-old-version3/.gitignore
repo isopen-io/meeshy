@@ -1,0 +1,13 @@
+/.next/
+/.rt/
+/out/
+/coverage/
+/node_modules/
+next-env.d.ts
+*.tsbuildinfo
+
+certificates
+
+/test-results/
+/playwright-report/
+/blob-report/

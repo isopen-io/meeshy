@@ -7,7 +7,7 @@
 // Le dépôt DÉCLARE la dépendance de build à deux endroits, et correctement :
 //
 //   turbo.json                  "build": { "dependsOn": ["^build"], … }
-//   apps/web-v3/package.json    "@meeshy/shared": "workspace:*"
+//   apps/web-old-version3/package.json    "@meeshy/shared": "workspace:*"
 //
 // `turbo run build --filter=@meeshy/web-v3` construirait donc `packages/shared`
 // d'abord, tout seul. Mesuré sur les 1 638 lignes du fichier, au 2026-09-02 :
@@ -32,7 +32,7 @@
 // la commande du graphe qui l'aurait déduite.
 //
 // Ce que la recopie a coûté : `01c49fcfee` a fait importer `@meeshy/shared` par
-// `apps/web-v3`. Les trois jobs qui construisent la v3 (`a11y-v3`,
+// `apps/web-old-version3`. Les trois jobs qui construisent la v3 (`a11y-v3`,
 // `lifecycle-v3`, `chaines-v3`) n'avaient pas leur étape à la main — trois jobs
 // rouges, réparés par `b975ec3c7e` en AJOUTANT les trois étapes manquantes,
 // c'est-à-dire la neuvième, dixième et onzième copie de la même ligne.
@@ -41,11 +41,11 @@
 // L'IMPORT : la personne qui écrit l'`import` ne touche aucun fichier de CI.
 //
 // REJOUÉ SUR LE DÉFAUT LUI-MÊME, et pas seulement raconté : remis
-// `.github/workflows/ci.yml` et `apps/web-v3/package.json` dans l'état de
+// `.github/workflows/ci.yml` et `apps/web-old-version3/package.json` dans l'état de
 // `f73f3c525e^` — l'arbre exact qui a rougi — ce garde rend rc=1 et NOMME les
 // trois jobs, les trois étapes et la raison :
 //
-//   job « a11y-v3 » · étape « Build apps/web-v3 (le manifeste que le balayage
+//   job « a11y-v3 » · étape « Build apps/web-old-version3 (le manifeste que le balayage
 //   lit) » (l.308) : construit @meeshy/web-v3 sans qu'aucune étape antérieure
 //   n'ait construit @meeshy/shared, déclaré workspace:* et PRODUCTEUR
 //   (scripts.build → tsc --project tsconfig.json).
@@ -64,9 +64,9 @@
 // L'invariant porte sur `.github/workflows/ci.yml`, sur `turbo.json` et sur les
 // manifestes des workspaces que la racine déclare : des fichiers de la RACINE.
 // Il est donc appelé par le job `quality` de `ci.yml`, à côté de
-// `check-type-debt.sh`, `check-lockfile-alignment.mjs`,
-// `check-makefile-workspaces.mjs` et `check-v3-pipeline.mjs`, et son témoin est
-// son propre `--self-test` — même forme que ses quatre voisins. Un garde de la
+// `check-type-debt.sh`, `check-lockfile-alignment.mjs` et
+// `check-makefile-workspaces.mjs`, et son témoin est son propre `--self-test`
+// — même forme que ses trois voisins. Un garde de la
 // CI écrit dans les tests d'un paquet que la CI porte est un garde qui remonte
 // de trois crans pour atteindre sa surface : c'est exactement le défaut que
 // `check-makefile-workspaces.mjs` documente en tête, et il a déjà coûté un
@@ -90,7 +90,7 @@
 //
 // Une dépendance `workspace:*` n'a besoin d'être CONSTRUITE que si elle PRODUIT
 // quelque chose que le consommateur importe. Mesuré sur les trois paquets que
-// `apps/web-v3` déclare :
+// `apps/web-old-version3` déclare :
 //
 //   @meeshy/shared         scripts.build = "tsc --project tsconfig.json"
 //                          main/exports  → ./dist/…            ⇒ PRODUIT
@@ -101,7 +101,7 @@
 //                          exports       → ./sprite.svg, ./critical.svg, …
 //                          — également commités                 ⇒ NE PRODUIT PAS
 //
-// (`apps/web-v3/next.config.ts` lit d'ailleurs
+// (`apps/web-old-version3/next.config.ts` lit d'ailleurs
 // `./node_modules/@meeshy/icons/critical.svg` comme un FICHIER SUR LE DISQUE,
 // jamais comme un module.)
 //
@@ -657,7 +657,7 @@ const MUTATIONS = [
         /      - name: Build packages\/shared[^\n]*\n        run: \|\n          cd packages\/shared\n[^\n]*\n/,
         '',
       ),
-    'job « a11y-v3 » · scénario bun · étape « Build apps/web-v3',
+    'job « a11y-v3 » · scénario bun · étape « Build apps/web-old-version3',
   ],
   [
     'une dépendance workspace:* PRODUCTRICE ajoutée sans son étape (le scénario que #4761 ferme)',
@@ -711,8 +711,8 @@ const MUTATIONS = [
       inJob(
         world,
         'a11y-v3',
-        /      - name: Build apps\/web-v3[^\n]*\n        run: \|\n          cd apps\/web-v3\n/,
-        '      - name: Build apps/web-v3 (branche)\n        run: |\n          if true; then cd apps/web-v3; fi\n',
+        /      - name: Build apps\/web-old-version3[^\n]*\n        run: \|\n          cd apps\/web-old-version3\n/,
+        '      - name: Build apps/web-old-version3 (branche)\n        run: |\n          if true; then cd apps/web-old-version3; fi\n',
       ),
     "n'est pas lisible",
   ],

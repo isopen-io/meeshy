@@ -130,28 +130,29 @@ export interface AudioProcessRequest {
     totalDurationMs: number;
   };
   useOriginalVoice?: boolean;
+  /**
+   * Paramètres Chatterbox TTS, à PLAT — pas nichés sous `chatterbox` (#3735).
+   *
+   * `zmq_audio_handler.py` (`services/translator`) lit
+   * `request_data.get('cloningParams') or request_data.get('voiceCloneParams')`
+   * puis `raw_cloning.get('exaggeration')` / `.get('cfgWeight')` etc.
+   * DIRECTEMENT sur cet objet — jamais sous une clé `chatterbox` imbriquée.
+   * `translation.types.ts` (`VoiceCloneParameters`, ce même service) porte une
+   * forme imbriquée `{chatterbox, performance, quality}` : c'est la forme
+   * INTERNE au calcul des presets (`applyPreset`/`mergeVoiceCloneParams`),
+   * jamais la forme du fil — `performance`/`quality` n'ont d'ailleurs aucun
+   * lecteur côté translator. Aplatir `.chatterbox` au site d'appel avant
+   * d'assigner ce champ.
+   */
   voiceCloneParams?: {
-    chatterbox?: {
-      exaggeration?: number;
-      cfgWeight?: number;
-      temperature?: number;
-      topP?: number;
-      minP?: number;
-      repetitionPenalty?: number;
-      autoOptimize?: boolean;
-    };
-    performance?: {
-      parallel?: boolean;
-      maxWorkers?: number;
-      optimizeModel?: boolean;
-      useFp16?: boolean;
-      warmup?: boolean;
-    };
-    quality?: {
-      minSimilarityThreshold?: number;
-      autoRetryOnLowSimilarity?: boolean;
-      maxRetries?: number;
-    };
+    exaggeration?: number;
+    cfgWeight?: number;
+    temperature?: number;
+    topP?: number;
+    minP?: number;
+    repetitionPenalty?: number;
+    autoOptimize?: boolean;
+    qualityPreset?: string;
   };
 }
 
