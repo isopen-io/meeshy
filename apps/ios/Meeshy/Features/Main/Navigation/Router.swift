@@ -289,10 +289,28 @@ final class Router: ObservableObject {
     @Published var pendingOpenSearch: Bool = false
 
     /// Demande d'ouverture du COMPOSEUR de post du flux depuis ailleurs (accès
-    /// rapides de la liste de conversations, tableau de bord — 2026-08-21) :
-    /// `RootView` montre le flux, `ThemedFeedOverlay` ouvre son composeur et
-    /// consomme le drapeau. Même patron que `pendingOpenSearch`.
+    /// rapides de la liste de conversations, tableau de bord — 2026-08-21).
+    /// Même patron que `pendingOpenSearch`.
+    ///
+    /// **Le drapeau se LÈVE ici et se RAMASSE par `consumePendingFeedComposer()`,
+    /// jamais autrement** : les deux racines ne montent pas le même flux —
+    /// `RootView` (iPhone) monte `ThemedFeedOverlay`, `iPadRootView` monte
+    /// `FeedView` — et chacune possède son propre drapeau de composeur. Tant que
+    /// la seule lectrice était l'enveloppe iPhone, « Publier un post » levait sur
+    /// iPad un drapeau que personne ne lisait : le bouton se peignait, vibrait,
+    /// et n'ouvrait rien (2026-09-08).
     @Published var pendingOpenFeedComposer: Bool = false
+
+    /// Ramasse la demande de composeur de flux, UNE fois.
+    ///
+    /// La remise à plat vit ICI, à son site unique : laissée à chaque hôte, elle
+    /// se réécrit à chaque racine et une racine finit par oublier — c'est
+    /// exactement ainsi que l'iPad s'est retrouvé sans lecteur.
+    func consumePendingFeedComposer() -> Bool {
+        guard pendingOpenFeedComposer else { return false }
+        pendingOpenFeedComposer = false
+        return true
+    }
 
     /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant, posé par l'item « Focal
     /// (bêta) » du menu d'appui long de la liste (gardé par
