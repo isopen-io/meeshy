@@ -186,6 +186,59 @@ describe('createSessionStore — la projection de l’utilisateur', () => {
 });
 
 /**
+ * F6 (#5650) — le Prisme du lecteur vient de la SESSION en source `gateway` :
+ * `SessionUser` gagne les trois rangs servis par `formatUserResponse`
+ * (`services/gateway/src/routes/auth/types.ts:146-148`).
+ */
+describe('createSessionStore — F6, les trois langues du Prisme', () => {
+  test('establish() projette les trois langues et jamais email', () => {
+    const storage = fakeStorage();
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+
+    store.getState().establish({
+      user: {
+        ...SERVED_USER,
+        systemLanguage: 'en',
+        regionalLanguage: 'fr',
+        customDestinationLanguage: null,
+      },
+      token: 'jwt',
+      sessionToken: 'sess',
+      expiresIn: 86400,
+    });
+
+    const session = store.getState().session;
+    if (session.status !== 'authenticated') throw new Error('unreachable');
+    expect(session.user.systemLanguage).toBe('en');
+    expect(session.user.regionalLanguage).toBe('fr');
+    expect(session.user.customDestinationLanguage).toBeNull();
+    expect('email' in session.user).toBe(false);
+  });
+
+  test('une entrée persistée SANS langues (forme d’avant ce lot) se restaure encore', () => {
+    const storage = fakeStorage({
+      'meeshy.session': JSON.stringify({
+        token: 'jwt-old',
+        sessionToken: 'sess-old',
+        user: { id: 'u-old', username: 'old' },
+        expiresAt: FIXED_NOW + 86_400_000,
+      }),
+    });
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+
+    store.getState().restoreSession();
+
+    expect(store.getState().session).toEqual({
+      status: 'authenticated',
+      user: { id: 'u-old', username: 'old' },
+      token: 'jwt-old',
+      sessionToken: 'sess-old',
+      expiresAt: FIXED_NOW + 86_400_000,
+    });
+  });
+});
+
+/**
  * « LA SESSION EST TENUE » ne peut pas vouloir dire « une session PÉRIMÉE est
  * présentée comme tenue » : le jeton servi porte sa durée (`expiresIn`,
  * `login.ts:211` — 24 h, ou 365 j sous `rememberDevice`), et un JWT expiré

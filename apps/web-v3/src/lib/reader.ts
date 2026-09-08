@@ -63,3 +63,37 @@ export const READER_LANGUAGES: readonly string[] =
  * `undefined`.
  */
 export const READER_LOCALE: string = READER_LANGUAGES[0] ?? 'fr';
+
+/**
+ * `resolveReaderLanguages` (#5650, F6) — le Prisme du lecteur RÉEL, une fois
+ * une session vivante. `fixtures` garde le lecteur PROVISOIRE ci-dessus
+ * (les captures et les témoins existants le lisent) ; `gateway` DESCEND
+ * `resolveUserLanguagesOrdered` sur la session AUTHENTIFIÉE — jamais un
+ * tableau vide (repli sur le lecteur provisoire si les trois rangs
+ * applicatifs sont tous vides, ce qui ne laisse parler QUE la locale, un
+ * prisme à un seul échelon — leçon 261 du dépôt).
+ *
+ * `deviceLocale` INJECTÉ (jamais relu ici) : le rang 4 reste la
+ * responsabilité de l'appelant, comme `currentDeviceLocale()`
+ * (`api/client.ts`).
+ */
+export function resolveReaderLanguages(params: {
+  readonly source: 'fixtures' | 'gateway';
+  readonly session: { readonly status: string; readonly user?: Record<string, unknown> };
+  readonly deviceLocale?: string | null;
+}): readonly string[] {
+  if (params.source === 'fixtures') return READER_LANGUAGES;
+  if (params.session.status !== 'authenticated' || params.session.user === undefined) return READER_LANGUAGES;
+
+  const user = params.session.user as {
+    readonly systemLanguage?: string | null;
+    readonly regionalLanguage?: string | null;
+    readonly customDestinationLanguage?: string | null;
+  };
+  const resolved =
+    params.deviceLocale === null || params.deviceLocale === undefined
+      ? resolveUserLanguagesOrdered(user)
+      : resolveUserLanguagesOrdered(user, { deviceLocale: params.deviceLocale });
+
+  return resolved.length > 0 ? resolved : READER_LANGUAGES;
+}

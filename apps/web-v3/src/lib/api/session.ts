@@ -37,7 +37,24 @@ import type { User } from '@meeshy/shared/types/user';
  *    Une entrée SANS échéance est CORROMPUE — jamais « valide pour toujours ».
  */
 
-export type SessionUser = Pick<User, 'id' | 'username' | 'displayName' | 'avatar'>;
+/**
+ * `systemLanguage` / `regionalLanguage` / `customDestinationLanguage`
+ * (#5650, F6) — les TROIS rangs du Prisme que la connexion SERT
+ * (`formatUserResponse`, `services/gateway/src/routes/auth/types.ts:146-148`)
+ * et que `resolveReaderLanguages()` (`lib/reader.ts`) consomme. Optionnels :
+ * une session PERSISTÉE d'avant ce lot ne les porte pas (Q6, `staging.md`),
+ * et `pickSessionUser` ne les écrit que quand ils sont PRÉSENTS — même garde
+ * que `displayName`/`avatar`.
+ */
+export type SessionUser = Pick<User, 'id' | 'username' | 'displayName' | 'avatar'> &
+  Partial<Pick<User, 'systemLanguage' | 'regionalLanguage'>> & {
+    /** `string | null` — la charge servie porte `null` sur un compte sans
+     * destination personnalisée (`formatUserResponse`, Prisma nullable) ;
+     * `User.customDestinationLanguage` ne le déclare pas (optional string
+     * seul), un écart déjà présent ailleurs dans le dépôt que ce fichier
+     * n'a pas vocation à corriger — il se contente de ne pas y échouer. */
+    readonly customDestinationLanguage?: string | null;
+  };
 
 /** La branche « second facteur attendu » ne porte AUCUN jeton d'accès —
  * seuls les champs que `login.ts:145-158` sert avant vérification. */
@@ -99,6 +116,11 @@ function pickSessionUser(user: SessionUser): SessionUser {
     username: user.username,
     ...(user.displayName !== undefined ? { displayName: user.displayName } : {}),
     ...(user.avatar !== undefined ? { avatar: user.avatar } : {}),
+    ...(user.systemLanguage !== undefined ? { systemLanguage: user.systemLanguage } : {}),
+    ...(user.regionalLanguage !== undefined ? { regionalLanguage: user.regionalLanguage } : {}),
+    ...(user.customDestinationLanguage !== undefined
+      ? { customDestinationLanguage: user.customDestinationLanguage }
+      : {}),
   };
 }
 

@@ -24,7 +24,7 @@ const INSTANT = new Date('2026-09-07T10:00:00Z');
 
 const SCREENS = [
   { name: 'list', path: '/' },
-  { name: 'thread', path: '/c/c-equipe' },
+  { name: 'thread', path: '/c/c-deploiement' },
   { name: 'thread-live', path: '/c/c-amina' },
   { name: 'login', path: '/login' },
   { name: 'signup', path: '/signup' },

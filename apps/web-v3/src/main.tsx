@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode, useEffect, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand/react';
@@ -7,6 +7,7 @@ import './styles/app.css';
 
 import Shell from '@/components/shell';
 import { apiConfig } from '@/lib/api/config';
+import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { useRoute } from '@/lib/router';
 import { followSystem } from '@/lib/scheme';
@@ -42,20 +43,15 @@ if (import.meta.env.DEV) void import('@/lib/api/dev-harness');
  * `staleTime` non nul est ce qui distingue « je reaffiche instantanement ce que
  * j'ai, puis je rafraichis en silence » de « je remets un spinner ». Sur la 3G
  * visee, c'est la difference entre une application et une page web.
+ *
+ * `appQueryClient` (#5650, F5/F9) REMPLACE le `new QueryClient` qui vivait
+ * ici : c'est l'instance UNIQUE, persistée par `dehydrate`/`hydrate` et
+ * purgée par la session — `performRowAction`
+ * (`lib/api/conversation-actions.ts`) et tout hook de `lib/api/query.ts`
+ * lisent et écrivent le MÊME client que celui fourni au contexte React ;
+ * deux instances distinctes rendraient chaque mutation optimiste invisible
+ * à la liste (défaut mesuré et corrigé pendant ce lot, `check-list-actions.mjs`).
  */
-const client = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30_000,
-      gcTime: 24 * 60 * 60 * 1000,
-      retry: 2,
-      refetchOnWindowFocus: true,
-      // Une reconnexion apres une coupure doit rafraichir : c'est le cas
-      // NOMINAL du reseau vise, pas un cas limite.
-      refetchOnReconnect: true,
-    },
-  },
-});
 
 /**
  * LA GARDE DE SESSION (#5555, E6) — branche `resolveRouteAccess` (pure) sur
@@ -98,7 +94,7 @@ if (!root) throw new Error('#root absent du document');
 
 createRoot(root).render(
   <StrictMode>
-    <QueryClientProvider client={client}>
+    <QueryClientProvider client={appQueryClient}>
       <Router wrap={(screen) => <Shell><SessionGate>{screen}</SessionGate></Shell>} skeleton={<Skeleton />} />
     </QueryClientProvider>
   </StrictMode>,
