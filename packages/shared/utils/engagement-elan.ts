@@ -108,3 +108,48 @@ export function computeEngagementElan(input: EngagementElanInput): EngagementEla
 export function creditedPoints(weight: number, elan: EngagementElan): number {
   return weight * elan.factor;
 }
+
+/**
+ * Les entrées de l'élan DÉRIVÉES de lignes déjà lues — aucune requête de plus.
+ *
+ * La route `GET /me/engagement` lit déjà les compteurs et les paliers pour
+ * composer sa charge ; lui faire relire la base pour l'élan serait payer deux
+ * fois la même information. Cette fonction est donc la JUMELLE de
+ * `EngagementService.loadElanInputs`, qui interroge la base avec un `where`
+ * étroit parce qu'elle tourne sur la voie chaude de chaque message.
+ *
+ * Deux chemins, une seule LOI : les deux finissent dans `computeEngagementElan`
+ * avec la même forme d'entrée. C'est ce qui garantit que le chiffre AFFICHÉ est
+ * celui qui sera CRÉDITÉ.
+ */
+export function elanInputsFromRows(params: {
+  readonly counters: readonly { readonly axisKey: string; readonly updatedAt: Date | string }[];
+  readonly milestones: readonly { readonly milestoneType: string; readonly milestoneKey: string }[];
+  readonly familyOf: (axisKey: string) => EngagementAxisFamily | null;
+  readonly now?: Date;
+}): EngagementElanInput {
+  const maintenant = (params.now ?? new Date()).getTime();
+  const depuis = maintenant - ELAN_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
+  const familles = new Set<EngagementAxisFamily>();
+  for (const compteur of params.counters) {
+    const quand = new Date(compteur.updatedAt).getTime();
+    if (!Number.isFinite(quand) || quand < depuis) continue;
+    const famille = params.familyOf(compteur.axisKey);
+    if (famille !== null) familles.add(famille);
+  }
+
+  let achievementCount = 0;
+  let highBadgeCount = 0;
+  for (const palier of params.milestones) {
+    if (palier.milestoneType === 'achievement') {
+      achievementCount += 1;
+      continue;
+    }
+    if (palier.milestoneType !== 'badge') continue;
+    const seuil = Number.parseInt(palier.milestoneKey.split(':').at(-1) ?? '', 10);
+    if (Number.isFinite(seuil) && seuil >= ELAN_HIGH_BADGE_THRESHOLD) highBadgeCount += 1;
+  }
+
+  return { activeFamilies: [...familles], achievementCount, highBadgeCount };
+}

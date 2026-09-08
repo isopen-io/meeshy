@@ -429,3 +429,44 @@ struct ProgressionMeeshHero: View {
         }
     }
 }
+
+/// L'ÉLAN COURANT (#5749) — montré SEULEMENT quand il change quelque chose.
+///
+/// Au neutre (×1) l'hôte ne monte pas cette vue : un badge « ×1 » n'apprend
+/// rien et occupe la place de ce qui compte. Et le texte dit ce qui PORTE le
+/// multiplicateur — un accélérateur dont on ignore la cause ne se pilote pas,
+/// il se subit.
+struct ProgressionElanBanner: View {
+    let elan: EngagementElanProgress
+
+    private var theme: ThemeManager { ThemeManager.shared }
+    private let tint = MeeshyColors.brandPrimary
+
+    var body: some View {
+        HStack(alignment: .top, spacing: MeeshySpacing.sm) {
+            Image(systemName: "wand.and.stars")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(tint)
+                .accessibilityHidden(true)
+            Text(
+                ProgressionCopy.elan(
+                    factor: elan.factor,
+                    families: elan.activeFamilyCount,
+                    windowDays: elan.windowDays,
+                    hasStanding: elan.hasStanding
+                )
+            )
+            .font(MeeshyFont.relative(11, weight: .semibold))
+            .foregroundColor(theme.textPrimary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                .fill(tint.opacity(0.14))
+        )
+        .accessibilityElement(children: .combine)
+    }
+}

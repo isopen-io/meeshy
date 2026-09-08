@@ -68,6 +68,25 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         }
     }
 
+    /// L'ÉLAN COURANT (#5749) — OPTIONNEL, comme `Meesh`.
+    ///
+    /// Ce que le PROCHAIN geste créditera, pas ce que le dernier a crédité : un
+    /// multiplicateur sert à décider quoi faire ensuite.
+    public struct Elan: Codable, Sendable, Equatable {
+        public let factor: Double
+        public let activeFamilyCount: Int
+        public let hasStanding: Bool
+        /// La fenêtre glissante en jours, SERVIE — aucun client ne la code en dur.
+        public let windowDays: Int
+
+        public init(factor: Double, activeFamilyCount: Int, hasStanding: Bool, windowDays: Int) {
+            self.factor = factor
+            self.activeFamilyCount = activeFamilyCount
+            self.hasStanding = hasStanding
+            self.windowDays = windowDays
+        }
+    }
+
     /// LES MEESHES (#5743) — OPTIONNEL, délibérément.
     ///
     /// Une passerelle antérieure à ce lot ne sert pas ce bloc, et l'écran doit
@@ -109,19 +128,22 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
     public let streak: Streak
     public let level: Level
     public let meesh: Meesh?
+    public let elan: Elan?
 
     public init(
         counters: [Counter],
         milestones: [Milestone],
         streak: Streak,
         level: Level,
-        meesh: Meesh? = nil
+        meesh: Meesh? = nil,
+        elan: Elan? = nil
     ) {
         self.counters = counters
         self.milestones = milestones
         self.streak = streak
         self.level = level
         self.meesh = meesh
+        self.elan = elan
     }
 
     /// Aucune activité — la charge qu'un compte neuf reçoit.
@@ -133,6 +155,6 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
     )
 
     private enum CodingKeys: String, CodingKey {
-        case counters, milestones, streak, level, meesh
+        case counters, milestones, streak, level, meesh, elan
     }
 }

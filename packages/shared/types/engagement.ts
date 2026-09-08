@@ -173,6 +173,23 @@ export type EngagementProgressPayload = {
     readonly engagementScore: number;
   };
   /**
+   * L'ÉLAN COURANT (#5749) — OPTIONNEL, comme `meesh`.
+   *
+   * Ce que le PROCHAIN geste créditera, pas ce que le dernier a crédité : un
+   * multiplicateur sert à décider quoi faire ensuite. Servi pour être MONTRÉ —
+   * un accélérateur qu'on ne voit pas n'accélère rien, il surprend.
+   */
+  readonly elan?: {
+    /** Le multiplicateur effectif, toujours dans [1, 5]. */
+    readonly factor: number;
+    /** Familles distinctes actives sur la fenêtre — ce qui porte les trois premiers crans. */
+    readonly activeFamilyCount: number;
+    /** L'assise permanente est-elle acquise — le quatrième cran. */
+    readonly hasStanding: boolean;
+    /** La fenêtre glissante, en jours — servie pour qu'aucun client ne la code en dur. */
+    readonly windowDays: number;
+  };
+  /**
    * Les Meeshes (#5743) — OPTIONNEL, délibérément.
    *
    * Un client déployé avant ce lot ne connaît pas ce champ et doit continuer
@@ -220,6 +237,16 @@ const isMilestoneEntry = (value: unknown): value is EngagementMilestoneEntry =>
  * Une charge partielle ferait afficher un solde sans savoir si la frappe est
  * possible — pire qu'une absence, qui n'affiche rien.
  */
+/** Le bloc `elan` : ABSENT (serveur antérieur) ou COMPLET, jamais à moitié. */
+const isElanBlock = (value: unknown): boolean =>
+  isRecord(value) &&
+  isNonNegativeInteger(value.activeFamilyCount) &&
+  typeof value.hasStanding === 'boolean' &&
+  isNonNegativeInteger(value.windowDays) &&
+  typeof value.factor === 'number' &&
+  Number.isFinite(value.factor) &&
+  value.factor >= 1;
+
 const isMeeshBlock = (value: unknown): boolean =>
   isRecord(value) &&
   isNonNegativeInteger(value.balance) &&
@@ -231,8 +258,9 @@ const isMeeshBlock = (value: unknown): boolean =>
 
 export function isEngagementProgressPayload(value: unknown): value is EngagementProgressPayload {
   if (!isRecord(value)) return false;
-  const { counters, milestones, streak, level, meesh } = value;
+  const { counters, milestones, streak, level, meesh, elan } = value;
   if (meesh !== undefined && !isMeeshBlock(meesh)) return false;
+  if (elan !== undefined && !isElanBlock(elan)) return false;
   return (
     Array.isArray(counters) &&
     counters.every(isCounterEntry) &&

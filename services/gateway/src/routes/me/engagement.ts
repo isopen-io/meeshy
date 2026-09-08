@@ -25,6 +25,12 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ENGAGEMENT_AXES, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { computeMeeshMintPlan, MEESH_MINT_COST } from '@meeshy/shared/utils/meesh';
+import {
+  computeEngagementElan,
+  elanInputsFromRows,
+  ELAN_WINDOW_DAYS,
+} from '@meeshy/shared/utils/engagement-elan';
+import { engagementAxisFamily, isEngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { logError } from '../../utils/logger';
@@ -107,6 +113,16 @@ const engagementResponseSchema = {
             engagementScore: { type: 'number' },
           },
         },
+        // L'ÉLAN courant (#5749) — servi pour être MONTRÉ.
+        elan: {
+          type: 'object',
+          properties: {
+            factor: { type: 'number' },
+            activeFamilyCount: { type: 'number' },
+            hasStanding: { type: 'boolean' },
+            windowDays: { type: 'number' },
+          },
+        },
         // Les Meeshes (#5743). Le SERVEUR sert le prix : aucun client ne le
         // code en dur, donc aucun ne devient faux le jour où il change.
         meesh: {
@@ -163,7 +179,10 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
           // contrainte unique `@@unique([userId, axisKey])`), aujourd'hui 13.
           fastify.prisma.engagementCounter.findMany({
             where: { userId },
-            select: { axisKey: true, count: true, points: true },
+            // `updatedAt` sert l'ÉLAN (#5749) : la seule écriture sur ce modèle
+            // est l'incrément d'activité, donc cette date EST celle du dernier
+            // geste sur l'axe. L'élan se dérive ainsi SANS requête de plus.
+            select: { axisKey: true, count: true, points: true, updatedAt: true },
             take: 100,
           }),
           // Idem : au plus (nb axes × BADGE_THRESHOLDS) + STREAK_THRESHOLDS +
@@ -189,6 +208,18 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
         // décider s'il montre le bouton. Le score TOTAL et le score DÉBITABLE
         // sont deux chiffres distincts : les conversations comptent dans le
         // niveau et ne se dépensent jamais (plancher inaliénable, #5743).
+        // L'élan COURANT — ce que le PROCHAIN geste créditera. Dérivé des lignes
+        // déjà lues, jamais relu : la route paierait deux fois la même
+        // information. Même LOI que le crédit (`computeEngagementElan`), donc le
+        // chiffre affiché est celui qui sera appliqué.
+        const elan = computeEngagementElan(
+          elanInputsFromRows({
+            counters,
+            milestones,
+            familyOf: (axisKey) => (isEngagementAxisKey(axisKey) ? engagementAxisFamily(axisKey) : null),
+          }),
+        );
+
         const plan = computeMeeshMintPlan(
           counters.map((c: { axisKey: string; count: number; points: number }) => ({
             axisKey: c.axisKey as EngagementAxisKey,
@@ -214,6 +245,12 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
           },
           level: {
             engagementScore: streakUser.engagementScore ?? 0,
+          },
+          elan: {
+            factor: elan.factor,
+            activeFamilyCount: elan.activeFamilyCount,
+            hasStanding: elan.hasStanding,
+            windowDays: ELAN_WINDOW_DAYS,
           },
           meesh: {
             balance: (streakUser as { meeshBalance?: number }).meeshBalance ?? 0,

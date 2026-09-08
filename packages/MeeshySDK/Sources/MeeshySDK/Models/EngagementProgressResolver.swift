@@ -106,6 +106,32 @@ public struct EngagementFamilyGroup: Sendable, Equatable, Identifiable {
     }
 }
 
+/// L'ÉLAN, tel que l'écran le rend (#5749) — miroir Swift d'`EngagementElanProgress`.
+///
+/// `isAccelerated` est dérivé plutôt que servi : au neutre (×1) l'écran ne
+/// montre RIEN. Un badge « ×1 » n'apprend rien et occupe la place de ce qui
+/// compte ; l'élan ne se montre qu'à partir du moment où il change quelque chose.
+public struct EngagementElanProgress: Sendable, Equatable {
+    public let factor: Double
+    public let activeFamilyCount: Int
+    public let hasStanding: Bool
+    public let windowDays: Int
+    /// `true` dès ×2 — la seule condition d'affichage.
+    public let isAccelerated: Bool
+
+    public init(payload: APIEngagementProgress.Elan) {
+        // Borné à [1, 5] ICI aussi : le plafond est une règle de produit, pas
+        // une convention de sérialisation — un serveur qui servirait 9 ne doit
+        // pas faire afficher 9.
+        let borne = min(5, max(1, payload.factor))
+        factor = borne
+        activeFamilyCount = max(0, payload.activeFamilyCount)
+        hasStanding = payload.hasStanding
+        windowDays = max(0, payload.windowDays)
+        isAccelerated = borne > 1
+    }
+}
+
 /// LES MEESHES, tels que l'écran les rend (#5743) — miroir Swift de
 /// `EngagementMeeshProgress` (`packages/shared/utils/engagement-progress.ts`).
 ///
@@ -158,6 +184,8 @@ public struct EngagementProgress: Sendable, Equatable {
     public let isEmpty: Bool
     /// `nil` quand la passerelle ne sert pas encore le bloc — l'écran n'affiche alors rien.
     public let meesh: EngagementMeeshProgress?
+    /// Idem pour l'élan (#5749).
+    public let elan: EngagementElanProgress?
 
     public init(
         level: EngagementLevelProgress,
@@ -167,7 +195,8 @@ public struct EngagementProgress: Sendable, Equatable {
         badgesEarned: Int,
         badgesTotal: Int,
         isEmpty: Bool,
-        meesh: EngagementMeeshProgress? = nil
+        meesh: EngagementMeeshProgress? = nil,
+        elan: EngagementElanProgress? = nil
     ) {
         self.level = level
         self.streak = streak
@@ -177,6 +206,7 @@ public struct EngagementProgress: Sendable, Equatable {
         self.badgesTotal = badgesTotal
         self.isEmpty = isEmpty
         self.meesh = meesh
+        self.elan = elan
     }
 
     /// Les axes rangés par SECTION, dans l'ordre du modèle § 2 ; l'ordre du catalogue est conservé dans chaque section.
@@ -269,7 +299,8 @@ public enum EngagementProgressResolver {
             badgesEarned: badgesEarned,
             badgesTotal: EngagementAxisKey.allCases.count * EngagementCatalog.badgeThresholds.count,
             isEmpty: !hasActivity,
-            meesh: payload.meesh.map(EngagementMeeshProgress.init(payload:))
+            meesh: payload.meesh.map(EngagementMeeshProgress.init(payload:)),
+            elan: payload.elan.map(EngagementElanProgress.init(payload:))
         )
     }
 

@@ -183,3 +183,55 @@ describe('MeeshHero', () => {
     expect(rendu).toContain('1 frappée depuis toujours');
   });
 });
+
+/**
+ * L'ÉLAN AFFICHÉ (#5749) — « un accélérateur qu'on ne voit pas n'accélère rien,
+ * il surprend ». Et son corollaire, tout aussi important : au neutre il ne doit
+ * RIEN occuper.
+ */
+const rendreAvecElan = (elan: {
+  factor: number;
+  activeFamilyCount: number;
+  hasStanding: boolean;
+  windowDays: number;
+}) =>
+  renderToStaticMarkup(
+    <ProgressionBody progress={resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, elan })} />,
+  );
+
+describe('ElanBanner', () => {
+  test('n’affiche RIEN au neutre — un badge « ×1 » n’apprend rien', () => {
+    const rendu = rendreAvecElan({ factor: 1, activeFamilyCount: 1, hasStanding: false, windowDays: 7 });
+    expect(rendu).not.toContain('Élan');
+  });
+
+  test('n’affiche rien non plus quand la passerelle ne sert pas le bloc', () => {
+    expect(html).not.toContain('Élan');
+  });
+
+  test('dit le facteur ET ce qui le porte — sinon il se subit au lieu de se piloter', () => {
+    const rendu = rendreAvecElan({ factor: 3, activeFamilyCount: 3, hasStanding: false, windowDays: 7 });
+    expect(rendu).toContain('Élan ×3');
+    expect(rendu).toContain('3 familles actives');
+    expect(rendu).toContain('sur 7 jours');
+    expect(rendu).toContain('rapportent 3 fois plus');
+  });
+
+  test('nomme l’assise quand elle porte le dernier cran', () => {
+    const rendu = rendreAvecElan({ factor: 5, activeFamilyCount: 4, hasStanding: true, windowDays: 7 });
+    expect(rendu).toContain('Élan ×5');
+    expect(rendu).toContain('plus votre assise');
+  });
+
+  test('accorde le singulier — « 1 famille active »', () => {
+    const rendu = rendreAvecElan({ factor: 2, activeFamilyCount: 1, hasStanding: true, windowDays: 7 });
+    expect(rendu).toContain('1 famille active');
+  });
+
+  test('borne un facteur aberrant servi par la passerelle', () => {
+    // Le plafond est une règle de PRODUIT, pas une convention de sérialisation.
+    const rendu = rendreAvecElan({ factor: 9, activeFamilyCount: 4, hasStanding: true, windowDays: 7 });
+    expect(rendu).toContain('Élan ×5');
+    expect(rendu).not.toContain('Élan ×9');
+  });
+});

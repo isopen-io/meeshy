@@ -97,6 +97,12 @@ struct ProgressionView: View {
                 if viewModel.showsSkeleton {
                     ProgressionSkeleton()
                 } else if let progress = viewModel.progress {
+                    // L'élan n'est monté qu'à partir de ×2 — au neutre il
+                    // n'apprend rien (#5749).
+                    if let elan = progress.elan, elan.isAccelerated {
+                        ProgressionElanBanner(elan: elan)
+                    }
+
                     // Le héros n'est monté que si la passerelle sert le bloc :
                     // un serveur antérieur ⇒ aucune section, jamais un solde à zéro
                     // affiché à quelqu'un qui en a deux (#5743).

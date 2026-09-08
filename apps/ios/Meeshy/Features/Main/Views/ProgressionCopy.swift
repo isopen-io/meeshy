@@ -127,6 +127,31 @@ enum ProgressionCopy {
         String(localized: "progression.points", defaultValue: "\(score) points", bundle: .main)
     }
 
+    /// L'élan courant, et CE QUI LE PORTE (#5749) — un multiplicateur dont on
+    /// ignore la cause ne se pilote pas, il se subit.
+    static func elan(factor: Double, families: Int, windowDays: Int, hasStanding: Bool) -> String {
+        // Le facteur est entier par construction (1 + crans) ; on l'affiche tel
+        // quel plutôt qu'en « ×2,0 », qui suggérerait une précision inexistante.
+        let f = Int(factor.rounded())
+        let familles = families == 1
+            ? String(localized: "progression.elan.family.one", defaultValue: "1 famille active", bundle: .main)
+            : String(localized: "progression.elan.family.many", defaultValue: "\(families) familles actives", bundle: .main)
+        let base = String(
+            localized: "progression.elan.base",
+            defaultValue: "Élan ×\(f) — \(familles) sur \(windowDays) jours",
+            bundle: .main
+        )
+        let assise = hasStanding
+            ? String(localized: "progression.elan.standing", defaultValue: ", plus votre assise", bundle: .main)
+            : ""
+        let effet = String(
+            localized: "progression.elan.effect",
+            defaultValue: "Vos prochains gestes rapportent \(f) fois plus.",
+            bundle: .main
+        )
+        return "\(base)\(assise). \(effet)"
+    }
+
     /// « 2 Meeshes » / « 1 Meesh » / « Aucune Meesh » — le solde (#5743).
     /// Le singulier est traité à part : « 1 Meeshes » se lirait comme un bogue.
     static func meeshBalance(_ balance: Int) -> String {

@@ -29,6 +29,7 @@ import { Link } from '@/routes/route-table';
 import {
   axesByFamily,
   type EngagementAxisProgress,
+  type EngagementElanProgress,
   type EngagementMeeshProgress,
   type EngagementProgress,
   type EngagementTier,
@@ -277,6 +278,34 @@ function AchievementsSection({ progress }: { progress: EngagementProgress }) {
  * une promesse (« ce qu'on a bâti en parlant aux autres ne se vend pas »), et
  * une promesse muette ne rassure personne.
  */
+/**
+ * L'ÉLAN COURANT (#5749) — montré SEULEMENT quand il change quelque chose.
+ *
+ * Au neutre (×1) rien ne s'affiche : un badge « ×1 » n'apprend rien et occupe
+ * la place de ce qui compte. Et le texte dit ce qui PORTE le multiplicateur —
+ * un accélérateur dont on ignore la cause ne se pilote pas, il se subit.
+ */
+function ElanBanner({ elan }: { elan: EngagementElanProgress }) {
+  const familles =
+    elan.activeFamilyCount === 1 ? '1 famille active' : `${elan.activeFamilyCount} familles actives`;
+  return (
+    <p
+      role="status"
+      className="flex items-center gap-2 rounded-card px-4 py-2 text-check font-semibold"
+      style={{
+        backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 14%, transparent)',
+        color: INK,
+      }}
+    >
+      <span style={{ color: BRAND }} aria-hidden="true">
+        <GlyphSvg glyph={PROGRESSION_GLYPHS.magicWand} size={13} />
+      </span>
+      Élan ×{elan.factor} — {familles} sur {elan.windowDays} jours
+      {elan.hasStanding ? ', plus votre assise' : ''}. Vos prochains gestes rapportent {elan.factor} fois plus.
+    </p>
+  );
+}
+
 function MeeshHero({ meesh, onMint, isMinting }: { meesh: EngagementMeeshProgress; onMint: () => void; isMinting: boolean }) {
   const soldeLabel = meesh.balance === 0 ? 'Aucune Meesh' : meesh.balance === 1 ? '1 Meesh' : `${meesh.balance} Meeshes`;
   return (
@@ -344,6 +373,8 @@ export function ProgressionBody({
 }) {
   return (
     <div className="flex flex-col gap-5 px-4 py-3">
+      {progress.elan?.isAccelerated === true ? <ElanBanner elan={progress.elan} /> : null}
+
       {progress.meesh !== undefined ? (
         <MeeshHero meesh={progress.meesh} onMint={onMint ?? (() => {})} isMinting={isMinting} />
       ) : null}

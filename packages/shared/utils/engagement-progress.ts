@@ -104,6 +104,22 @@ export type EngagementAchievementProgress = {
 };
 
 /**
+ * L'ÉLAN, tel que l'écran le rend (#5749) — ce que le PROCHAIN geste créditera.
+ *
+ * `isAccelerated` est dérivé plutôt que servi : au neutre (×1) l'écran ne doit
+ * rien montrer. Un badge « ×1 » n'apprend rien et occupe la place de ce qui
+ * compte ; l'élan ne se montre qu'à partir du moment où il change quelque chose.
+ */
+export type EngagementElanProgress = {
+  readonly factor: number;
+  readonly activeFamilyCount: number;
+  readonly hasStanding: boolean;
+  readonly windowDays: number;
+  /** `true` dès ×2 — la seule condition d'affichage. */
+  readonly isAccelerated: boolean;
+};
+
+/**
  * Les Meeshes, tels que l'écran les rend (#5743).
  *
  * `canMint` est DÉRIVÉ ici, jamais servi par le fil : le serveur envoie des
@@ -143,6 +159,8 @@ export type EngagementProgress = {
   readonly isEmpty: boolean;
   /** Absent quand la passerelle ne sert pas encore le bloc — l'écran n'affiche alors rien. */
   readonly meesh?: EngagementMeeshProgress;
+  /** Idem pour l'élan (#5749). */
+  readonly elan?: EngagementElanProgress;
 };
 
 export type EngagementFamilyGroup = {
@@ -261,6 +279,21 @@ export function resolveEngagementProgress(payload: EngagementProgressPayload): E
     badgesTotal: ENGAGEMENT_AXES.length * BADGE_THRESHOLDS.length,
     isEmpty: !hasActivity,
     ...(payload.meesh !== undefined ? { meesh: resolveMeesh(payload.meesh) } : {}),
+    ...(payload.elan !== undefined ? { elan: resolveElan(payload.elan) } : {}),
+  };
+}
+
+function resolveElan(elan: NonNullable<EngagementProgressPayload['elan']>): EngagementElanProgress {
+  // Borné à [1, 5] ici AUSSI : le plafond est une règle de produit, pas une
+  // convention de sérialisation — un serveur qui servirait 9 ne doit pas faire
+  // afficher 9.
+  const factor = Number.isFinite(elan.factor) ? Math.min(5, Math.max(1, elan.factor)) : 1;
+  return {
+    factor,
+    activeFamilyCount: safeCount(elan.activeFamilyCount),
+    hasStanding: elan.hasStanding === true,
+    windowDays: safeCount(elan.windowDays),
+    isAccelerated: factor > 1,
   };
 }
 
