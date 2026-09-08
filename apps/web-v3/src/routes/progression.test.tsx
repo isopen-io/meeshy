@@ -148,8 +148,10 @@ describe('MeeshHero', () => {
     });
     expect(rendu).toContain('Aucune Meesh');
     expect(rendu).toContain('Encore 1121 points convertibles');
-    // Le plancher est une PROMESSE — elle doit être dite, pas seulement tenue.
+    // Le sort des points de conversation doit être DIT : ils partiront en
+    // dernier, sans éteindre de badge (option C, #5743).
     expect(rendu).toContain('1300 points de conversation');
+    expect(rendu).toContain('sans éteindre aucun badge');
     expect(rendu).not.toContain('<button');
   });
 

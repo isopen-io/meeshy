@@ -165,7 +165,7 @@ enum ProgressionCopy {
         guard floor > 0 else { return manque }
         let plancher = String(
             localized: "progression.meesh.floor",
-            defaultValue: "Vos \(floor) points de conversation comptent dans votre niveau et ne se dépensent jamais.",
+            defaultValue: "Vos \(floor) points de conversation seront repris en dernier, sans éteindre aucun badge.",
             bundle: .main
         )
         return "\(manque) \(plancher)"

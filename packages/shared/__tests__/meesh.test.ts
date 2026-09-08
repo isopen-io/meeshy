@@ -8,7 +8,7 @@
 import { describe, it, expect } from '@jest/globals';
 import {
   computeMeeshMintPlan,
-  isDebitableAxis,
+  debitsActionCount,
   MEESH_MINT_COST,
   type MeeshAxisState,
 } from '../utils/meesh.js';
@@ -16,35 +16,55 @@ import {
 const axe = (axisKey: string, count: number, points: number): MeeshAxisState =>
   ({ axisKey, count, points }) as MeeshAxisState;
 
-describe('le plancher inaliénable — les conversations ne se dépensent pas', () => {
-  it('exclut les trois axes de conversation du débit', () => {
-    expect(isDebitableAxis('conversation.private')).toBe(false);
-    expect(isDebitableAxis('conversation.public')).toBe(false);
-    expect(isDebitableAxis('conversation.community')).toBe(false);
-    expect(isDebitableAxis('content.post')).toBe(true);
+describe('les conversations : POINTS repris, ACTIONS jamais (option C)', () => {
+  it('déclare que les trois axes de conversation ne perdent pas d\'actions', () => {
+    expect(debitsActionCount('conversation.private')).toBe(false);
+    expect(debitsActionCount('conversation.public')).toBe(false);
+    expect(debitsActionCount('conversation.community')).toBe(false);
+    expect(debitsActionCount('content.post')).toBe(true);
   });
 
-  it('refuse la frappe d\'un compte riche en conversations mais pauvre ailleurs', () => {
-    // 1 400 points au total, dont 1 300 de conversations : le score dépasse le
-    // prix, et pourtant rien n'est frappable. C'est le cas qui obligerait un
-    // bouton à refuser en disant POURQUOI.
+  it('rend leurs points CONVERTIBLES — 61 % du score en production était mort', () => {
+    // 1 400 points dont 1 300 de conversations. Sous l'ancienne règle, ce
+    // compte ne pouvait pas frapper malgré un score dépassant le prix.
     const plan = computeMeeshMintPlan([
       axe('conversation.private', 260, 1300),
       axe('content.text_message', 33, 100),
     ]);
-    expect(plan.canMint).toBe(false);
-    expect(plan.debitablePoints).toBe(100);
+    expect(plan.canMint).toBe(true);
+    expect(plan.debitablePoints).toBe(1400);
+    // `floorPoints` dit maintenant « repris en dernier, sans éteindre de badge ».
     expect(plan.floorPoints).toBe(1300);
-    expect(plan.missingPoints).toBe(MEESH_MINT_COST - 100);
-    expect(plan.debits).toHaveLength(0);
   });
 
-  it('ne débite JAMAIS un axe de conversation, même quand il reste des points à prendre', () => {
+  it('les reprend en DERNIER, après les outils', () => {
+    const plan = computeMeeshMintPlan([
+      axe('content.text_message', 100, 300),
+      axe('tool.sticker', 300, 300),
+      axe('conversation.private', 200, 1000),
+    ]);
+    expect(plan.debits.map((d) => d.axisKey)).toEqual([
+      'content.text_message',
+      'tool.sticker',
+      'conversation.private',
+    ]);
+  });
+
+  it('ne reprend AUCUNE action sur un axe de conversation — le badge reste vrai', () => {
+    // C'est la propriété qui protège des deux défauts : le badge ne contredit
+    // pas la liste que l'utilisateur a sous les yeux, et rien n'incite à
+    // ouvrir des fils bidon pour le regagner.
+    const plan = computeMeeshMintPlan([axe('conversation.private', 300, 1500)]);
+    const ligne = plan.debits.find((d) => d.axisKey === 'conversation.private');
+    expect(ligne?.points).toBe(MEESH_MINT_COST);
+    expect(ligne?.count).toBe(0);
+  });
+
+  it('ne touche les conversations que si le reste ne suffit pas', () => {
     const plan = computeMeeshMintPlan([
       axe('content.text_message', 500, 1500),
       axe('conversation.private', 200, 1000),
     ]);
-    expect(plan.canMint).toBe(true);
     expect(plan.debits.map((d) => d.axisKey)).not.toContain('conversation.private');
   });
 });

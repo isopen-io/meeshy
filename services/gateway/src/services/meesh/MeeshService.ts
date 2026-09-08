@@ -94,6 +94,11 @@ export class MeeshService {
             where: { userId_axisKey: { userId, axisKey: ligne.axisKey } },
             data: { points: { decrement: ligne.points }, count: { decrement: ligne.count } },
           });
+          // Un axe dont la frappe ne reprend AUCUNE action (les conversations,
+          // `MEESH_POINTS_ONLY_AXES`) garde ses badges intacts : son compteur
+          // n'a pas bougé, il n'y a rien à éteindre ni à regraver.
+          if (ligne.count === 0) continue;
+
           // Un palier de badge que le compteur ne couvre plus s'ÉTEINT : la
           // ligne gravée le tenait pour atteint (`reached: value >= seuil ||
           // reachedAt !== null`), c'est elle qu'il faut retirer pour que le

@@ -45,17 +45,53 @@ export const MEESH_DEBIT_ORDER: readonly (readonly EngagementAxisKey[])[] = [
   ['content.story'],
   ['content.post', 'content.reel'],
   ['tool.sticker', 'tool.in_app_edit', 'tool.direct_publish'],
+  // DERNIER rang : on ne reprend les points d'une conversation que si rien
+  // d'autre ne suffit — et jamais ses actions (voir `MEESH_POINTS_ONLY_AXES`).
+  ['conversation.private', 'conversation.public', 'conversation.community'],
 ];
 
-/** Les axes qu'aucune frappe ne débite — le plancher inaliénable du niveau. */
-export const MEESH_NON_DEBITABLE_AXES: readonly EngagementAxisKey[] = [
+/**
+ * Les axes dont la frappe reprend les POINTS mais jamais les ACTIONS.
+ *
+ * ## Pourquoi ces trois-là, et pourquoi seulement le count
+ *
+ * `conversation.*` compte des ENTITÉS DISTINCTES — l'axe est crédité UNE fois,
+ * au premier message de chaque conversation (`EngagementConversationCredit`,
+ * contrainte unique). Les autres axes comptent des gestes répétables.
+ *
+ * Deux conséquences, et une seule réponse :
+ *
+ *  1. **Décrémenter `count` fabriquerait une incitation perverse.** Pour
+ *     regagner un badge débité il faudrait OUVRIR de nouvelles conversations :
+ *     le mécanisme récompenserait la création de fils bidon. Débiter
+ *     `content.post` dit « publie davantage », ce que le produit veut ;
+ *     débiter `conversation.private` dirait « ouvre des fils avec plus de
+ *     gens », c'est-à-dire du spam.
+ *  2. **Le badge contredirait un fait VÉRIFIABLE.** « 50 conversations
+ *     privées » se compte à l'écran ; un badge affichant 43 après une frappe
+ *     contredirait la liste que l'utilisateur a sous les yeux. « 40 messages
+ *     texte » n'est pas vérifiable de la même façon.
+ *
+ * Rien de tout cela n'interdit de dépenser les POINTS. La première version de
+ * cette loi excluait ces axes entièrement, sur une raison qui ne tenait pas
+ * (« on ne peut pas défaire le fait d'avoir écrit ») — on ne peut pas non plus
+ * défaire un message envoyé, et le débit ne défait rien : c'est de la
+ * comptabilité. Le coût de cette erreur, mesuré en production le 2026-09-08:
+ * **61 % des points étaient inconvertibles**, portant le prix réel d'une Meesh
+ * de 1221 à ~3130 points d'activité.
+ *
+ * Scinder `count` et `points` (#5749) rend la bonne réponse possible : le score
+ * descend, le compteur ne bouge pas, le badge reste vrai.
+ */
+export const MEESH_POINTS_ONLY_AXES: readonly EngagementAxisKey[] = [
   'conversation.private',
   'conversation.public',
   'conversation.community',
 ];
 
-export const isDebitableAxis = (axisKey: EngagementAxisKey): boolean =>
-  !MEESH_NON_DEBITABLE_AXES.includes(axisKey);
+/** `true` si la frappe reprend aussi des ACTIONS sur cet axe (donc si ses badges peuvent s'éteindre). */
+export const debitsActionCount = (axisKey: EngagementAxisKey): boolean =>
+  !MEESH_POINTS_ONLY_AXES.includes(axisKey);
 
 /** Un axe tel que la base le porte : des actions et les points qu'elles ont crédités. */
 export type MeeshAxisState = {
@@ -113,8 +149,10 @@ export function computeMeeshMintPlan(axes: readonly MeeshAxisState[]): MeeshMint
   let debitablePoints = 0;
   let floorPoints = 0;
   for (const axe of parAxe.values()) {
-    if (isDebitableAxis(axe.axisKey)) debitablePoints += axe.points;
-    else floorPoints += axe.points;
+    debitablePoints += axe.points;
+    // `floorPoints` ne dit plus « inconvertible » mais « repris en DERNIER, et
+    // sans que le badge s'éteigne » — l'écran s'en sert pour l'expliquer.
+    if (!debitsActionCount(axe.axisKey)) floorPoints += axe.points;
   }
 
   if (debitablePoints < MEESH_MINT_COST) {
@@ -135,7 +173,10 @@ export function computeMeeshMintPlan(axes: readonly MeeshAxisState[]): MeeshMint
       const axe = parAxe.get(axisKey);
       if (!axe || axe.points === 0) continue;
       const points = Math.min(reste, axe.points);
-      const count = axe.count === 0 ? 0 : Math.min(axe.count, Math.round((points * axe.count) / axe.points));
+      const count =
+        !debitsActionCount(axisKey) || axe.count === 0
+          ? 0
+          : Math.min(axe.count, Math.round((points * axe.count) / axe.points));
       debits.push({ axisKey, points, count });
       reste -= points;
     }

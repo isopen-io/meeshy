@@ -325,7 +325,7 @@ function MeeshHero({ meesh, onMint, isMinting }: { meesh: EngagementMeeshProgres
         <p className="text-check" style={{ color: INK_2 }}>
           Encore {meesh.missingPoints} points convertibles avant une Meesh.
           {meesh.floorPoints > 0
-            ? ` Vos ${meesh.floorPoints} points de conversation comptent dans votre niveau et ne se dépensent jamais.`
+            ? ` Vos ${meesh.floorPoints} points de conversation seront repris en dernier, sans éteindre aucun badge.`
             : ''}
         </p>
       )}
