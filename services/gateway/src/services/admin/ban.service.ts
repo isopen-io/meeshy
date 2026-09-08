@@ -11,9 +11,21 @@ export interface CreateBanParams {
 
 export interface LiftBanParams {
   banId: string;
-  liftedById: string;
+  /** `null` distingue un lever AUTOMATIQUE (balayage d'expiration, #5527) d'un lever humain. */
+  liftedById: string | null;
   liftReason?: string;
+  /** Par défaut l'heure courante ; le balayage d'expiration pose l'échéance du ban elle-même. */
+  liftedAt?: Date;
 }
+
+/**
+ * Marqueur d'acteur SYSTÈME pour un `AdminAuditLog` posé par un balayage
+ * automatisé, jamais par un admin humain. `AdminAuditLog.adminId` est un
+ * `@db.ObjectId` sans relation Prisma (aucune contrainte de clé étrangère) :
+ * ce sentinel — un ObjectId valide, tous zéros — ne désigne aucun `User`
+ * réel, convention courante pour un acteur système en base MongoDB. #5527.
+ */
+export const SYSTEM_ACTOR_ID = '000000000000000000000000';
 
 /**
  * Un ban est EN VIGUEUR quand il n'a pas été levé et (permanent, ou son
@@ -31,8 +43,8 @@ export function estEnVigueur(ban: Pick<Ban, 'liftedAt' | 'expiresAt'>, maintenan
  * `User.isActive` via `UserManagementService.updateStatus` — le même levier
  * que la suspension existante, pour hériter de sa révocation de sessions.
  *
- * L'expiration AUTOMATIQUE d'un ban à durée n'est pas appliquée ici : un ban
- * expiré reste `isActive: false` jusqu'à un lever explicite. Suivi : #5527.
+ * L'expiration AUTOMATIQUE d'un ban à durée est appliquée par
+ * `sweepExpiredBans`, consommée par `BanExpirySweepJob` (#5527).
  */
 export class BanService {
   constructor(
@@ -66,7 +78,7 @@ export class BanService {
     const leve = await this.prisma.ban.update({
       where: { id: params.banId },
       data: {
-        liftedAt: new Date(),
+        liftedAt: params.liftedAt ?? new Date(),
         liftedById: params.liftedById,
         liftReason: params.liftReason ?? null,
       },
@@ -89,5 +101,33 @@ export class BanService {
       where: { userId, liftedAt: null, id: options.excludeBanId ? { not: options.excludeBanId } : undefined },
     });
     return tous.filter((b) => estEnVigueur(b));
+  }
+
+  /**
+   * Lève automatiquement tout ban à échéance PASSÉE et non encore levé —
+   * sans balayage, `Ban.expiresAt` est décoratif après son échéance : un
+   * compte banni 7 jours reste désactivé indéfiniment tant qu'un admin ne
+   * lève pas le ban à la main. `liftedAt` reprend l'échéance du ban (pas
+   * l'heure du balayage) et `liftedById: null` distingue ce lever
+   * automatique d'un lever humain. Réutilise `liftBan` — même garde « aucun
+   * autre ban en vigueur » avant de réactiver le compte. Consommé par
+   * `BanExpirySweepJob` (#5527).
+   */
+  async sweepExpiredBans(now: Date = new Date()): Promise<Ban[]> {
+    const expires = await this.prisma.ban.findMany({
+      where: { liftedAt: null, expiresAt: { not: null, lte: now } },
+    });
+
+    const lifted: Ban[] = [];
+    for (const ban of expires) {
+      const leve = await this.liftBan({
+        banId: ban.id,
+        liftedById: null,
+        liftReason: 'expired',
+        liftedAt: ban.expiresAt!,
+      });
+      lifted.push(leve);
+    }
+    return lifted;
   }
 }

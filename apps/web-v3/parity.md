@@ -42,11 +42,14 @@ Trois conséquences, et elles portent tout le reste de ce document :
 3. **Le mécanisme de bascule progressive est ÉCRIT, et exercé en staging** :
    Traefik donne au conteneur v3 une `priority=100` sur des chemins NOMMÉS,
    « tout chemin absent de cette règle est servi par `apps/web` ». La v4 s'y
-   branche à l'identique. `scripts/check-v3-pipeline.mjs` garde même les deux
-   sens (un actif servi hors règle, un chemin de la règle que la zone ne sert
-   pas) — il se porte. **Il n'a jamais tourné en production** : le premier
-   chemin public de la v4 sera aussi le premier essai réel de ce routage, et
-   c'est à traiter comme tel — pas comme un acquis.
+   branche à l'identique. `scripts/check-v3-pipeline.mjs` gardait les deux sens
+   (un actif servi hors règle, un chemin de la règle que la zone ne sert pas)
+   pour `apps/web-old-version3` — **ce garde n'était câblé à aucune étape de
+   CI et a été retiré (#5623) : le routage de la v4 n'a donc AUCUNE protection
+   automatisée équivalente aujourd'hui**, et il n'a jamais tourné en
+   production même du temps où il existait. Le premier chemin public de la v4
+   sera le premier essai réel de ce routage, sans filet — à traiter comme tel,
+   pas comme un acquis.
 
 ## La stratégie de bascule, qui découle de ce qui précède
 
