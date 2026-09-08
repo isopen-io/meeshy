@@ -202,4 +202,62 @@ final class CreatePostPayloadFidelityTests: XCTestCase {
         XCTAssertEqual(relu.language, "fr")
         XCTAssertEqual(relu.segments.first?.speakerId, "s1")
     }
+
+    // MARK: - #3996 — l'autorisation d'extraction du son voyage on-disk
+
+    /// Même discipline que `repostOfId`/`mobileTranscription` ci-dessus : une
+    /// ligne écrite AVANT ce champ doit continuer de décoder, `nil`.
+    func test_createPostPayload_decodeUneLigneEcriteAvantCeChamp_allowSoundExtractionAbsent() throws {
+        let ligneHistorique = Data("""
+        {
+          "clientMutationId": "cmid_00000000-0000-4000-8000-000000000005",
+          "content": "Un post d'avant ce champ",
+          "attachmentIds": [],
+          "visibility": "PUBLIC",
+          "type": "POST"
+        }
+        """.utf8)
+
+        let payload = try JSONDecoder().decode(CreatePostPayload.self, from: ligneHistorique)
+
+        XCTAssertNil(
+            payload.allowSoundExtraction,
+            "Une ligne écrite avant ce champ doit décoder, pas lever — nil vaut « aucune décision »."
+        )
+    }
+
+    /// Round-trip on-disk fidèle, sur les trois valeurs possibles : le flush
+    /// doit relire exactement ce que le composer y a déposé.
+    func test_createPostPayload_porteLAutorisationDExtractionDuSon() throws {
+        for valeur in [true, false] {
+            let payload = CreatePostPayload(
+                clientMutationId: "cmid_00000000-0000-4000-8000-000000000006",
+                content: "",
+                attachmentIds: [],
+                visibility: "PUBLIC",
+                allowSoundExtraction: valeur
+            )
+
+            let json = try jsonObject(payload)
+            XCTAssertEqual(json["allowSoundExtraction"] as? Bool, valeur)
+
+            let relu = try JSONDecoder().decode(CreatePostPayload.self, from: encoder.encode(payload))
+            XCTAssertEqual(relu, payload)
+            XCTAssertEqual(relu.allowSoundExtraction, valeur)
+        }
+    }
+
+    /// `nil` ⇒ la clé est ABSENTE du JSON persisté — « l'auteur n'a rien
+    /// décidé », jamais un refus affirmé.
+    func test_createPostPayload_sansDecisionDExtractionDuSon_nEcritPasLaCle() throws {
+        let payload = CreatePostPayload(
+            clientMutationId: "cmid_00000000-0000-4000-8000-000000000007",
+            content: "Un post ordinaire",
+            attachmentIds: [],
+            visibility: "PUBLIC"
+        )
+
+        let json = try jsonObject(payload)
+        XCTAssertFalse(json.keys.contains("allowSoundExtraction"))
+    }
 }

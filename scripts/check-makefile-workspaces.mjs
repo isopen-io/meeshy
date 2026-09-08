@@ -7,7 +7,7 @@
 // pas une app — donc il est appelé par le job `quality`, à côté des autres
 // gates de racine, et NON depuis les tests d'un paquet.
 //
-// Sa première écriture vivait dans `apps/web-v3/__tests__/makefile-workspaces.test.ts`.
+// Sa première écriture vivait dans `apps/web-old-version3/__tests__/makefile-workspaces.test.ts`.
 // Elle sortait de son propre workspace pour atteindre sa surface
 // (`join(__dirname,'..','..','..')` — seul test du dossier à remonter de trois
 // crans), et surtout elle ne tournait dans AUCUNE CI : la matrice `test:` de

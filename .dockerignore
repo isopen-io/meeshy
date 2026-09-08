@@ -39,6 +39,13 @@ services/translator/models/*
 **/*.spec.ts
 **/.nyc_output/
 
+# === Coques natives Capacitor (#5604) ===
+# L'image web ne lit rien de ces projets natifs (Android/iOS) : le Dockerfile
+# ne copie que `dist/`. Versionnees depuis #5604 (D-18), elles seraient sinon
+# copiees en pure perte a chaque construction d'image.
+apps/web-v3/android/
+apps/web-v3/ios/
+
 # === IDE ===
 .vscode/
 .idea/
@@ -81,7 +88,7 @@ docker-compose*.yml
 
 # ... SAUF ceux de la v3, dont son BUILD dépend (#4630).
 #
-# `apps/web-v3` a son script de build en trois temps —
+# `apps/web-old-version3` a son script de build en trois temps —
 # `next build && node scripts/check-app-router-built.mjs && node
 # scripts/check-bundle-budget.mjs` — et son `e2e/visual/lib/a11y.ts` importe
 # `scripts/lib/routes-emises.mjs`, que le `**/*.ts` du tsconfig fait
@@ -93,6 +100,16 @@ docker-compose*.yml
 # fichier qui EXISTE dans le dépôt — rien dans le message ne dit qu'il a été
 # filtré à l'entrée du contexte de build. Les deux gates du script `build`
 # auraient échoué juste après, pour la même raison.
+!apps/web-old-version3/scripts
+!apps/web-old-version3/scripts/**
+# LA v3.1 A LE MÊME BESOIN, pour une raison voisine et un symptôme identique :
+# `vite.config.ts` importe `./scripts/lib/institutional-routes.mjs` (la
+# source unique des cinq adresses institutionnelles), et son greffon de
+# construction lance `scripts/prerender-institutional.tsx`. La règle générique
+# `**/scripts/` ci-dessus les retirait du contexte, et l'erreur aurait désigné
+# un chemin JUSTE vers un fichier qui EXISTE dans le dépôt — rien n'aurait dit
+# qu'il avait été filtré à l'entrée. L'image FINALE n'en porte rien : l'étage
+# `runner` ne copie que `dist/`.
 !apps/web-v3/scripts
 !apps/web-v3/scripts/**
 !services/gateway/docker-entrypoint.sh
@@ -107,8 +124,8 @@ docker-compose*.yml
 # et le script `build` enchaîne `node scripts/check-app-router-built.mjs` puis
 # `check-bundle-budget.mjs`. L'image FINALE n'en porte rien — l'étage `runner`
 # ne copie que `.next/standalone` et `.next/static`.
-!apps/web-v3/scripts
-!apps/web-v3/scripts/**
+!apps/web-old-version3/scripts
+!apps/web-old-version3/scripts/**
 
 # === Exclude frontend and translator (only gateway needed) ===
 frontend/

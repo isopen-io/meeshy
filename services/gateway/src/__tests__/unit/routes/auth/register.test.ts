@@ -201,7 +201,7 @@ describe('POST /register — success', () => {
     const { app, authService } = await buildApp();
     const res = await app.inject({
       method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+      payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -228,7 +228,7 @@ describe('POST /register — le compte frais naît AVEC une session (#4264)', ()
     const { app } = await buildApp();
     await app.inject({
       method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+      payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
     });
 
     expect(mockCreateSession).toHaveBeenCalledWith({
@@ -243,7 +243,7 @@ describe('POST /register — le compte frais naît AVEC une session (#4264)', ()
     const { app, authService } = await buildApp();
     await app.inject({
       method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+      payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
     });
 
     expect(authService.generateToken).toHaveBeenCalledWith(expect.anything(), 'session-inscription');
@@ -259,7 +259,7 @@ describe('POST /register — le compte frais naît AVEC une session (#4264)', ()
     const { app } = await buildApp();
     const res = await app.inject({
       method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+      payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
     });
 
     expect(res.json().data.sessionToken).toBe('session-token-inscription');
@@ -283,7 +283,7 @@ describe('POST /register — Zod validation failure', () => {
     const { app } = await buildApp();
     const res = await app.inject({
       method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+      payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -303,7 +303,7 @@ describe('POST /register — register returns null', () => {
     const { app } = await buildApp({ authService });
     const res = await app.inject({
       method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+      payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
     });
     expect(res.statusCode).toBe(400);
     await app.close();
@@ -317,7 +317,7 @@ describe('POST /register — register returns result with no user', () => {
     const { app } = await buildApp({ authService });
     const res = await app.inject({
       method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+      payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
     });
     expect(res.statusCode).toBe(400);
     await app.close();
@@ -349,7 +349,7 @@ describe('POST /register — phone ownership conflict', () => {
 
   const inject = async (app: FastifyInstance) => app.inject({
     method: 'POST', url: '/register',
-    payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+    payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
   });
 
   it('sert le drapeau et le propriétaire masqué — sans eux le client ne peut pas ouvrir la modale', async () => {
@@ -383,7 +383,7 @@ describe('POST /register — phone ownership conflict', () => {
     const res = await inject(app);
 
     expect(res.json().data.pendingRegistration.password).toBeUndefined();
-    expect(res.payload).not.toContain('secret1234');
+    expect(res.payload).not.toContain('Xk9$mQ2vLp8#nR4wZ');
     await app.close();
   });
 });
@@ -406,7 +406,7 @@ describe('POST /register — refus typés (#5216)', () => {
 
   const inscrire = async (app: FastifyInstance) => app.inject({
     method: 'POST', url: '/register',
-    payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+    payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
   });
 
   it('un pseudo pris rend 409, NOMME son champ et propose des remplaçants', async () => {
@@ -462,7 +462,7 @@ describe('POST /register — generic service error', () => {
     const { app } = await buildApp({ authService });
     const res = await app.inject({
       method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+      payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
     });
     expect(res.statusCode).toBe(500);
     await app.close();
@@ -476,7 +476,7 @@ describe('POST /register — invalid phone transfer token', () => {
     const { app } = await buildApp({ phoneTransferService });
     const res = await app.inject({
       method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'secret123', email: 'alice@test.com', phoneTransferToken: 'bad-token' },
+      payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', phoneTransferToken: 'bad-token' },
     });
     expect(res.statusCode).toBe(400);
     await app.close();
@@ -491,7 +491,7 @@ describe('POST /register — valid phone transfer token', () => {
     const { app } = await buildApp({ phoneTransferService });
     const res = await app.inject({
       method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith', phoneTransferToken: 'valid-token' },
+      payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith', phoneTransferToken: 'valid-token' },
     });
     expect(res.statusCode).toBe(200);
     expect(phoneTransferService.executeRegistrationTransfer).toHaveBeenCalled();
@@ -549,7 +549,7 @@ describe('POST /register — un 400 rend la tentative, un 409 la garde', () => {
 
     await app.inject({
       method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+      payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
     });
 
     const total = remboursements();
@@ -599,7 +599,7 @@ describe('POST /register — un 400 rend la tentative, un 409 la garde', () => {
     // vient donc bien de la couche Zod du handler, pas du compilateur en amont.
     const res = await app.inject({
       method: 'POST', url: '/register',
-      payload: { displayName: 'Alice Smith', email: 'alice@test.com', password: 'secret1234' },
+      payload: { displayName: 'Alice Smith', email: 'alice@test.com', password: 'Xk9$mQ2vLp8#nR4wZ' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -619,7 +619,7 @@ describe('POST /register — un 400 rend la tentative, un 409 la garde', () => {
 
     const res = await app.inject({
       method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith', phoneTransferToken: 'bad' },
+      payload: { username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith', phoneTransferToken: 'bad' },
     });
 
     expect(res.statusCode).toBe(400);

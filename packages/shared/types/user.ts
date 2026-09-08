@@ -3,7 +3,7 @@
  * Harmonisation Gateway - Frontend
  */
 
-import type { PaginationMeta } from './api-responses.js';
+import type { PaginationMeta } from './pagination.js';
 
 /**
  * Rôles utilisateur globaux (aligné avec Prisma enum UserRole)
@@ -406,7 +406,16 @@ export enum UserAuditAction {
    * plus lourd du fichier — fabriquer une piece legale — se lisait comme une
    * modification de profil ordinaire.
    */
-  UPDATE_CONSENT = 'UPDATE_CONSENT'
+  UPDATE_CONSENT = 'UPDATE_CONSENT',
+
+  /**
+   * Bannissement durable (#3719) — distinct de `DEACTIVATE_USER`/`ACTIVATE_USER` :
+   * ces deux-là journalisent le SEUL bascule de `User.isActive`, sans motif
+   * structuré ni durée. `BAN_USER`/`UNBAN_USER` journalisent le geste sur la
+   * ligne `Ban` (motif requis, échéance optionnelle) qui pilote ce même bascule.
+   */
+  BAN_USER = 'BAN_USER',
+  UNBAN_USER = 'UNBAN_USER'
 }
 
 /**

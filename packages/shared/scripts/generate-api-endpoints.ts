@@ -31,6 +31,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { buildApiEndpointsCatalog, type ManifestRouteInput } from '../api/build-catalog.js';
+import { filterOutOpsOnlyRoutes } from '../api/ops-only-routes.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '../../..');
@@ -72,7 +73,9 @@ function readManifest(): readonly ManifestRouteInput[] {
 }
 
 function main(): void {
-  const routes = readManifest();
+  // #5424 — les routes d'EXPLOITATION (jamais destinées à un client) ne
+  // rejoignent pas le catalogue, sans quitter le manifeste (`ops-only-routes.ts`).
+  const routes = filterOutOpsOnlyRoutes(readManifest());
   const { source, pathTemplates } = buildApiEndpointsCatalog(routes);
 
   writeFileSync(OUTPUT_PATH, source, 'utf8');

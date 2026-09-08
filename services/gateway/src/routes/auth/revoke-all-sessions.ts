@@ -3,8 +3,10 @@ import type { FastifyRequest } from 'fastify';
 import { AuthRouteContext } from './types';
 import { invalidateAllSessions } from '../../services/SessionService';
 import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
+import { logWarn } from '../../utils/logger';
+import { getJwtSecret } from '../../utils/secrets';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
+const JWT_SECRET = getJwtSecret();
 
 interface RevokeAllPayload {
   userId: string;
@@ -114,7 +116,7 @@ export function registerRevokeAllSessionsRoute(context: AuthRouteContext) {
         io: fastify.socketIOHandler?.getManager?.()?.getIO(),
         userId: payload.userId,
         reason: 'logout_all_devices',
-        onError: (error) => fastify.log.warn({ err: error }, '[AUTH] socket fanout failed on revoke-all-sessions'),
+        onError: (error) => logWarn(fastify.log, '[AUTH] socket fanout failed on revoke-all-sessions', error),
       });
 
       reply.type('text/html').code(200);

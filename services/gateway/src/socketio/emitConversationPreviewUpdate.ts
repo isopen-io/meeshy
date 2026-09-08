@@ -3,8 +3,11 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { sharedPlaceFromMetadata } from '../services/location/sharedPlace';
 import { participantUserRoomTargets } from './emitToConversationParticipants';
 import {
+  PREVIEW_MEDIA_ATTACHMENT_SELECT,
+  PREVIEW_MEDIA_SENDER_SELECT,
   PREVIEW_PRISM_PARTICIPANT_SELECT,
   resolveLastMessagePreviewPrism,
+  resolvePreviewMediaFields,
   toIsoOrNull,
 } from './utils/lastMessagePreviewPrism';
 import { resolvePersonalPreviewOverrides } from './utils/personalPreviewOverride';
@@ -42,6 +45,9 @@ export type PreviewPrisma = Pick<
  * Lot 3 : sans `metadata`, un dernier message géolocalisé n'affiche jamais sa
  * position dans ce fanout temps réel de l'aperçu.
  * `translations` / `originalLanguage` : le Prisme de la ligne de liste.
+ * `isBlurred` / `isViewOnce` / `expiresAt` / `sender` / `attachments` /
+ * `_count` (#3737) : le sous-groupe MÉDIA du même aperçu — voir
+ * `resolvePreviewMediaFields`.
  */
 const PREVIEW_MESSAGE_SELECT = {
   id: true,
@@ -51,6 +57,12 @@ const PREVIEW_MESSAGE_SELECT = {
   metadata: true,
   translations: true,
   originalLanguage: true,
+  isBlurred: true,
+  isViewOnce: true,
+  expiresAt: true,
+  sender: { select: PREVIEW_MEDIA_SENDER_SELECT },
+  attachments: { take: 1, select: PREVIEW_MEDIA_ATTACHMENT_SELECT },
+  _count: { select: { attachments: true } },
 } as const;
 
 /**
@@ -101,6 +113,12 @@ type PreviewMessage = {
   metadata?: unknown;
   translations?: unknown;
   originalLanguage?: string | null;
+  isBlurred?: boolean | null;
+  isViewOnce?: boolean | null;
+  expiresAt?: Date | string | null;
+  sender?: { displayName?: string | null; user?: { displayName?: string | null } | null } | null;
+  attachments?: ReturnType<typeof resolvePreviewMediaFields>['lastMessageAttachments'];
+  _count?: { attachments?: number } | null;
 };
 
 /**
@@ -362,6 +380,7 @@ export async function emitConversationPreviewUpdate(
         ...basePayload,
         ...messagePayloadFor(own),
         ...prism,
+        ...resolvePreviewMediaFields(own),
       });
     }
   } catch (error) {

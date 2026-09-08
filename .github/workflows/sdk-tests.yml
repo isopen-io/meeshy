@@ -81,7 +81,9 @@ jobs:
           echo "sim_id=$SIM_ID" >> "$GITHUB_OUTPUT"
 
       - name: Run SDK tests
+        shell: bash
         run: |
+          set -o pipefail
           rm -rf TestResults.xcresult
           # Per-test allowance is 600, raised from 180 on 2026-07-30. Two export
           # tests were killed by the 180 s allowance on run #30549812265 —
@@ -92,13 +94,23 @@ jobs:
           # rather than the ~2.5x the rest of the suite shows. 180 s sat below the
           # floor for that work and turned slow into red. This allowance is still
           # the deadlock guard — it must stay well under timeout-minutes.
+          #
+          # SANS `-quiet` (#5466) : cinq runs sont morts en `rc=65` sans accuser
+          # un seul test — ni la console (`-quiet` l'assourdit), ni le xcresult
+          # (absent ou vide sur un crash précoce) ne portaient la moindre trace
+          # de CE QUI tournait à l'instant du crash. `xcodebuild` verbeux écrit
+          # une ligne « Test Case '-[Suite test]' started » par test ; on la
+          # garde ENTIÈRE dans un fichier, envoyé à `/dev/null` en console pour
+          # ne pas noyer un run VERT sous des dizaines de milliers de lignes —
+          # l'étape suivante en imprime la QUEUE si le bundle manque, et
+          # l'artefact ci-dessous en garde la totalité pour l'autopsie.
           xcodebuild test \
             -scheme MeeshySDK-Package \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
             -resultBundlePath TestResults.xcresult \
             -test-timeouts-enabled YES \
             -maximum-test-execution-time-allowance 600 \
-            -quiet
+            2>&1 | tee xcodebuild-raw.log >/dev/null
         working-directory: packages/MeeshySDK
 
       - name: Surface test failures
@@ -106,9 +118,38 @@ jobs:
         working-directory: packages/MeeshySDK
         run: |
           BUNDLE=TestResults.xcresult
-          [ -d "$BUNDLE" ] || { echo "No result bundle produced."; exit 0; }
+          if [ ! -d "$BUNDLE" ]; then
+            echo "::error::Aucun bundle de résultat produit — signature du crash d'infrastructure #5466 (rc=65 sans test nommé)."
+            if [ -f xcodebuild-raw.log ]; then
+              echo "::group::Dernières lignes du journal brut — cherche le dernier « Test Case … started » : c'est lui qui tournait à l'instant du crash"
+              tail -n 200 xcodebuild-raw.log
+              echo "::endgroup::"
+            fi
+            exit 0
+          fi
           echo "::group::Test failure summary"
-          xcrun xcresulttool get test-results summary --path "$BUNDLE" 2>/dev/null \
-            || xcrun xcresulttool get --legacy --format json --path "$BUNDLE" 2>/dev/null | head -c 60000 \
-            || echo "xcresulttool could not read the bundle."
+          SUMMARY=$(xcrun xcresulttool get test-results summary --path "$BUNDLE" 2>/dev/null)
+          if [ -z "$SUMMARY" ]; then
+            xcrun xcresulttool get --legacy --format json --path "$BUNDLE" 2>/dev/null | head -c 60000 \
+              || echo "xcresulttool could not read the bundle."
+          else
+            echo "$SUMMARY"
+            TOTAL=$(echo "$SUMMARY" | grep -o '"totalTestCount" *: *[0-9]*' | grep -o '[0-9]*$')
+            if [ -z "$TOTAL" ] || [ "$TOTAL" -eq 0 ]; then
+              echo "::error::Bundle présent mais 0 test comptabilisé — signature du crash d'infrastructure #5466. Voir le journal brut en artefact ci-dessous."
+            fi
+          fi
           echo "::endgroup::"
+
+      - name: Upload diagnostic artifacts on failure
+        # #5466 : un rc=65 sans test nommé ne laisse aucune piste — le journal
+        # brut et le bundle (quand il existe) sont la seule autopsie possible.
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-tests-failure-diagnostics
+          path: |
+            packages/MeeshySDK/xcodebuild-raw.log
+            packages/MeeshySDK/TestResults.xcresult
+          retention-days: 7
+          if-no-files-found: warn

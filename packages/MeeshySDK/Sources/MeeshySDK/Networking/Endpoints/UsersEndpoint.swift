@@ -35,6 +35,7 @@ public enum UsersEndpoint: MeeshyEndpoint, Sendable {
     case meDevices
     case meDevicesByDeviceId(deviceId: String)
     case mePassword
+    case meReferralCode
     case meResendEmailChangeVerification
     case meStats
     case meStatsAchievements
@@ -72,6 +73,7 @@ public enum UsersEndpoint: MeeshyEndpoint, Sendable {
         case .meDevices: return "/api/v1/users/me/devices"
         case .meDevicesByDeviceId(let deviceId): return "/api/v1/users/me/devices/\(deviceId)"
         case .mePassword: return "/api/v1/users/me/password"
+        case .meReferralCode: return "/api/v1/users/me/referral-code"
         case .meResendEmailChangeVerification: return "/api/v1/users/me/resend-email-change-verification"
         case .meStats: return "/api/v1/users/me/stats"
         case .meStatsAchievements: return "/api/v1/users/me/stats/achievements"

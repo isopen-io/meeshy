@@ -8,6 +8,8 @@ import {
 import { AuthSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import jwt from 'jsonwebtoken';
 import { getRequestContext } from '../../services/GeoIPService';
+import { logWarn } from '../../utils/logger';
+import { getJwtSecret } from '../../utils/secrets';
 import { markSessionTrusted } from '../../services/SessionService';
 import {
   createLoginRateLimiter,
@@ -162,7 +164,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       if (!session.isTrusted) {
         const notificationService = fastify.notificationService;
         if (notificationService) {
-          const jwtSecret = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
+          const jwtSecret = getJwtSecret();
           const revokeToken = jwt.sign(
             { userId: user.id, action: 'revoke-all' },
             jwtSecret,
@@ -295,7 +297,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       if (!session.isTrusted) {
         const notificationService = fastify.notificationService;
         if (notificationService) {
-          const jwtSecret = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
+          const jwtSecret = getJwtSecret();
           const revokeToken = jwt.sign(
             { userId: user.id, action: 'revoke-all' },
             jwtSecret,
@@ -402,7 +404,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
           });
           sessionId = session?.id;
         } catch (error) {
-          fastify.log.warn({ err: error }, '[AUTH] session lookup failed on logout');
+          logWarn(fastify.log, '[AUTH] session lookup failed on logout', error);
         }
 
         const loggedOut = await authService.logout(sessionToken);
@@ -421,7 +423,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
             userId,
             sessionId,
             message: 'Signed out.',
-            onError: (error) => fastify.log.warn({ err: error }, '[AUTH] socket cut failed on logout'),
+            onError: (error) => logWarn(fastify.log, '[AUTH] socket cut failed on logout', error),
           });
         }
       }

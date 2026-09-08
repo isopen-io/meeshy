@@ -1101,13 +1101,13 @@ describe('ZmqTranslationClient', () => {
       expect(isHealthy).toBe(false);
     });
 
-    it('should return true even when ping send fails (manager swallows ping errors)', async () => {
+    it('should return false when the ping send genuinely fails (#5611)', async () => {
       await client.initialize();
       (mockPushSocket.send as jest.Mock).mockRejectedValueOnce(new Error('Send failed'));
 
       const isHealthy = await client.healthCheck();
 
-      expect(isHealthy).toBe(true);
+      expect(isHealthy).toBe(false);
     });
   });
 

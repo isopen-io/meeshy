@@ -3,6 +3,25 @@
 > ## ⛔ Aucune feature sans issue — règle de démarrage (directive 2026-08-26)
 > **Avant d'écrire la première ligne d'une feature, d'une amélioration ou d'un correctif non trivial**, ouvrir (ou retrouver) son **issue** dans `isopen-io/meeshy`, la placer dans un **milestone précis** (nommé par le résultat attendu, avec échéance) et l'inscrire au projet « Meeshy — pilotage » (https://github.com/orgs/isopen-io/projects/1) avec `Status = In Progress`. Le commit qui livre la ferme (`Closes #n`) avec sa preuve (gate, mesure, PR). **Une tâche sans issue n'existe pas ; un travail sans milestone n'est pas planifié.** Ce qu'on découvre en chemin (dette, dimension non mûre, suivi) devient une issue à son tour — jamais une ligne dans un fichier ou une page. Détail : § « Pilotage du développement » du `CLAUDE.md` racine.
 
+> ## 🛑 LA V3 EN DÉVELOPPEMENT EST ANNULÉE — le chantier web est `apps/web-v3` (v3.1) (directive porteur 2026-09-07)
+> **Trois applications web coexistent, et leurs noms ont changé le 2026-09-07. Lire ce tableau avant de toucher à quoi que ce soit :**
+>
+> | répertoire | ce que c'est | état |
+> |---|---|---|
+> | `apps/web` | le LEGACY | **sert meeshy.me**, 80 routes, 100 % du trafic |
+> | `apps/web-v3` | **le chantier**, version **3.1.0** — ex `apps/web-v4` | la seule application web en développement |
+> | `apps/web-old-version3` | l'ancienne refonte v3, **annulée** | ne reçoit plus RIEN, n'a jamais servi une page en production |
+>
+> **`apps/web-old-version3` est ANNULÉE.** Aucune feature, aucun correctif, aucun portage d'écran — y compris si une issue ouverte avant ce jour le demande, y compris si `ordre.md` ou la matrice des 31 vues le prévoit : **ces plans sont périmés, ils ne se rejouent pas.** Les skills `meeshy-web-v3-lot` et `meeshy-web-v3-bout-en-bout` ne s'invoquent plus — ils visent cette application-là.
+>
+> **`apps/web-v3` est le SEUL chantier web.** C'est la v3.1 : la v3 en développement ayant été annulée, la numérotation reprend là où le produit en est. Son pilotage est le lot #5491 et ses issues.
+>
+> **L'UNIQUE exception au gel : `apps/web` (le legacy) SERT les utilisateurs jusqu'à la bascule.** Un incident de production, une faille de sécurité ou une régression bloquante s'y corrige — au minimum, et sans rien ajouter d'autre.
+>
+> **La v3.1 suit l'interface iOS**, pas la planche web : `apps/ios` et `packages/MeeshySDK` sont la référence de disposition, de hiérarchie, d'états et de gestes. La palette est DÉRIVÉE de `MeeshyColors.swift` (`packages/design-tokens/ios.css`, généré — #5445) ; `tokens.css` reste la table de `web-old-version3` et **mourra avec elle**.
+>
+> **Ce que la bascule coûte, mesuré** : le legacy sert **80 routes** (487 fichiers, 109 196 lignes) ; la v3.1 en sert **2** (2 256 lignes, sur fixtures, sans API ni temps réel). La parité est un chantier — elle se pilote par #5491, jamais par ce fichier. Les décisions d'architecture et de produit de la v3.1 vivent dans `apps/web-v3/decisions.md`.
+
 ## Project Overview
 Meeshy is a high-performance real-time messaging platform with multi-language translation, voice cloning, and end-to-end encryption. It supports 100k+ messages/second with simultaneous multi-language translation.
 
@@ -25,6 +44,16 @@ Corollaires :
 - `tasks/*.md` sont des JOURNAUX et des SOURCES : on y lit l'histoire et on y renvoie depuis les issues ; on ne s'en sert plus pour piloter. `tasks/lessons.md` reste vivant (leçons) — c'est le seul tracker de fichier maintenu.
 - Une session qui démarre un chantier commence par lire ses issues (`gh issue list --milestone "<nom>" --state open`, `gh project item-list 1 --owner isopen-io`) et pose `Status = In Progress` ; une session qui livre ferme ses issues et dit, dans le commentaire de clôture, ce qui est mûr et ce qui reste (voir les treize dimensions ci-dessous). Le scope `project` du token est requis pour les champs (`gh auth refresh -s project,read:project`).
 - Les documents de design du dépôt (`docs/product/*.html`, `docs/product/*.md`) gardent leur rendu publié en artifact — c'est du design, autorisé — mais l'ÉTAT des tâches qu'ils décrivent vit dans les issues, jamais dans le document.
+
+### La branche poussée tôt, complément de « aucune feature sans issue » (directive 2026-09-06, #5243)
+
+**L'issue dit QUOI ; la branche poussée dit QUI, MAINTENANT.** `Status = In Progress` vit dans Projects v2 (GraphQL) : une session distante ne peut ni le lire de façon fiable ni le poser en continu, et le tableau ne dit que ce que les autres ont *annoncé*. **Git est le seul substrat que toutes les sessions partagent, voient, et peuvent écrire** — c'est donc lui qui porte la réservation, jamais une convention non actionnable par tout le monde.
+
+1. **Pousser le squelette dans les quinze minutes**, avant d'écrire la logique — un commit poussé (squelette, témoin rouge, ou même le seul fichier de spécification) est visible de toute session en un `fetch` ; c'est gratuit, la branche existe de toute façon.
+2. **Corollaire d'asymétrie — la règle de tranchage, pas un conseil : quand deux lots se disputent un fichier, celui qui n'a rien écrit cède.** Un lot arrêté avant sa première écriture ne coûte que de la lecture ; l'autre a déjà payé. Aucune négociation n'est nécessaire — la décision se lit depuis ce que git montre.
+3. Une session qui découvre, au relevé, qu'une branche vivante écrit déjà ses chemins cède ce travail et en prend un autre — elle ne négocie pas, ne fusionne pas en avance, ne double pas.
+
+Cette doctrine réduit la FENÊTRE de collision (le seul facteur à forte dynamique — sessions actives et surface de travail ne baissent pas) ; elle ne prétend pas supprimer la collision. Les collisions d'**espace de noms partagé** (numéros de leçon, cliquets mesurés, registres générés) relèvent d'une règle différente : un identifiant qui ne s'alloue pas ne collisionne pas (#5102).
 
 ## Roadmap — un produit très optimisé, hyper fluide, mûr sur treize dimensions (directive 2026-08-26)
 

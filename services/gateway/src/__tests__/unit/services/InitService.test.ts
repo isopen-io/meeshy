@@ -94,6 +94,8 @@ describe('InitService.shouldInitialize', () => {
   it('returns false when FORCE_DB_RESET=true in production (safety guard)', async () => {
     process.env.FORCE_DB_RESET = 'true';
     process.env.NODE_ENV = 'production';
+    // #3623 — le constructeur exige désormais un JWT_SECRET fort en production.
+    process.env.JWT_SECRET = 'a-strong-test-secret-with-32-plus-characters';
     const sut = new InitService(makePrisma() as any);
 
     const result = await sut.shouldInitialize();

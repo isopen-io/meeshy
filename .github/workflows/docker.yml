@@ -22,6 +22,7 @@ on:
     tags: ['v*.*.*']
     paths:
       - 'apps/web/**'
+      - 'apps/web-old-version3/**'
       - 'apps/web-v3/**'
       - 'packages/design-tokens/**'
       - 'packages/icons/**'
@@ -43,6 +44,7 @@ on:
           - all
           - web
           - web-v3
+          - web-v31
           - gateway
           - translator
           - agent
@@ -136,6 +138,7 @@ jobs:
             if [[ "$SERVICES" == "all" ]]; then
               echo "web=true" >> $GITHUB_OUTPUT
               echo "web_v3=true" >> $GITHUB_OUTPUT
+              echo "web_v31=true" >> $GITHUB_OUTPUT
               echo "gateway=true" >> $GITHUB_OUTPUT
               echo "translator=true" >> $GITHUB_OUTPUT
               echo "agent=true" >> $GITHUB_OUTPUT
@@ -147,23 +150,75 @@ jobs:
               SELECTED=",${SERVICES// /},"
               echo "web=$([[ "$SELECTED" == *",web,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "web_v3=$([[ "$SELECTED" == *",web-v3,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+              # Les virgules encadrantes sont ce qui rend « web-v3 » et « web-v31 »
+              # disjoints : en sous-chaîne, demander la v3 aurait construit les deux.
+              echo "web_v31=$([[ "$SELECTED" == *",web-v31,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "gateway=$([[ "$SELECTED" == *",gateway,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "translator=$([[ "$SELECTED" == *",translator,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "agent=$([[ "$SELECTED" == *",agent,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             fi
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # **La v3.1 manquait à cette liste** (#5619). Une release taguée
+            # construisait le legacy, la v3 ANNULÉE, la passerelle, le
+            # translator et l'agent — et pas `apps/web-v3`, la seule
+            # application web en développement. Une omission dans une
+            # énumération ne rougit nulle part : elle produit une release
+            # complète en apparence, amputée en fait.
             echo "web=true" >> $GITHUB_OUTPUT
-            echo "web_v3=true" >> $GITHUB_OUTPUT
+            echo "web_v31=true" >> $GITHUB_OUTPUT
+            # `web_v3` reste FAUX même sur un tag : `apps/web-old-version3` est
+            # gelée (§ GEL DE LA V3) et n'est plus déployée nulle part depuis
+            # #5609. Construire une image que personne ne sert coûte un job et
+            # fait bouger un tag `staging` qui ne désigne plus rien.
+            echo "web_v3=false" >> $GITHUB_OUTPUT
             echo "gateway=true" >> $GITHUB_OUTPUT
             echo "translator=true" >> $GITHUB_OUTPUT
             echo "agent=true" >> $GITHUB_OUTPUT
           else
-            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+            # **Quand on ne sait pas ce qui a changé, on CONSTRUIT** (#5619).
+            #
+            # `github.event.before` vaut 40 zéros sur une branche NEUVE, et
+            # désigne un commit disparu après une poussée FORCÉE : `git diff`
+            # rend alors « fatal: bad object » (mesuré). L'ancien repli
+            # `HEAD~1 HEAD` ne regardait plus que le DERNIER commit — une
+            # poussée de cinq commits dont seul le premier touche
+            # `apps/web-v3/` ne construisait rien, et la livraison était
+            # perdue SANS QUE RIEN NE ROUGISSE.
+            #
+            # La direction de l'erreur se choisit par son coût de réparation :
+            # un build de trop coûte quelques minutes de runner ; un build
+            # manquant coûte une livraison silencieusement absente, qu'on ne
+            # découvre qu'en constatant que staging sert l'ancien.
+            BASE="${{ github.event.before }}"
+            if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+              echo "::warning::base de comparaison introuvable ($BASE) — construction de TOUS les services plutôt qu'une détection devinée"
+              BASE=""
+            fi
+            if [[ -n "$BASE" ]]; then
+              CHANGED=$(git diff --name-only "$BASE" "${{ github.sha }}")
+            else
+              CHANGED="__BASE_INTROUVABLE__"
+            fi
+            if [[ "$CHANGED" == "__BASE_INTROUVABLE__" ]]; then
+              echo "web=true" >> $GITHUB_OUTPUT
+              echo "web_v31=true" >> $GITHUB_OUTPUT
+              echo "web_v3=false" >> $GITHUB_OUTPUT
+              echo "gateway=true" >> $GITHUB_OUTPUT
+              echo "translator=true" >> $GITHUB_OUTPUT
+              echo "agent=true" >> $GITHUB_OUTPUT
+            else
             echo "web=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-            echo "web_v3=$([[ "$CHANGED" == *"apps/web-v3/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/icons/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            # L'app ANNULÉE ne suit plus les paquets partagés : un changement
+            # dans `packages/shared` ne peut pas obliger à reconstruire une
+            # application gelée que plus aucun conteneur ne sert (#5609). Seule
+            # une modification de SON répertoire la reconstruit encore — et ce
+            # répertoire ne bouge plus. Retrait complet : #5496.
+            echo "web_v3=$([[ "$CHANGED" == *"apps/web-old-version3/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "web_v31=$([[ "$CHANGED" == *"apps/web-v3/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "translator=$([[ "$CHANGED" == *"services/translator/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "agent=$([[ "$CHANGED" == *"services/agent/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            fi
           fi
 
       - name: Build services list
@@ -188,9 +243,22 @@ jobs:
 
           if [[ "${{ steps.changes.outputs.web_v3 }}" == "true" ]]; then
             HAS_CHANGES=true
+            VERSION=$(node -p "require('./apps/web-old-version3/package.json').version" 2>/dev/null || echo "0.0.0")
+            [[ "$FIRST" == "false" ]] && SERVICES+=','
+            SERVICES+='{"service":"web-v3","context":".","dockerfile":"./apps/web-old-version3/Dockerfile","image":"meeshy-web-v3","version":"'$VERSION'"}'
+            FIRST=false
+          fi
+
+          # LA v3.1 — image DISTINCTE de `meeshy-web-v3`, qui appartient encore à
+          # l'ancienne refonte. Reprendre ce nom maintenant changerait en
+          # silence ce qu'un `meeshy-web-v3:latest` déjà déployé désigne. La
+          # v3.1 le reprendra quand `apps/web-old-version3` sera supprimée
+          # (#5496) — pas avant.
+          if [[ "${{ steps.changes.outputs.web_v31 }}" == "true" ]]; then
+            HAS_CHANGES=true
             VERSION=$(node -p "require('./apps/web-v3/package.json').version" 2>/dev/null || echo "0.0.0")
             [[ "$FIRST" == "false" ]] && SERVICES+=','
-            SERVICES+='{"service":"web-v3","context":".","dockerfile":"./apps/web-v3/Dockerfile","image":"meeshy-web-v3","version":"'$VERSION'"}'
+            SERVICES+='{"service":"web-v31","context":".","dockerfile":"./apps/web-v3/Dockerfile","image":"meeshy-web-v31","version":"'$VERSION'"}'
             FIRST=false
           fi
 
@@ -345,6 +413,7 @@ jobs:
             VCS_REF=${{ github.sha }}
             VERSION=${{ matrix.version }}
             PACKAGE_MANAGER=${{ env.PACKAGE_MANAGER }}
+            BUN_VERSION=${{ env.BUN_VERSION }}
             TORCH_BACKEND=${{ matrix.torch_backend || 'cpu' }}
 
       - name: Build summary
@@ -366,6 +435,151 @@ jobs:
   # ===========================================================================
   # SECURITY: Scan images
   # ===========================================================================
+  # ===========================================================================
+  # DEPLOY STAGING: pousser les images fraîches SUR staging.meeshy.me
+  # ===========================================================================
+  # **Une image poussée au registre n'est pas une image déployée** (#5609).
+  #
+  # Jusqu'ici la chaîne s'arrêtait au `docker push` : le tag `staging` bougeait
+  # sur Docker Hub, et RIEN sur l'hôte ne le tirait — aucun watchtower, aucun
+  # cron, aucune étape de workflow (vérifié le 2026-09-07). `staging.meeshy.me`
+  # ne changeait qu'au prochain `docker compose pull` lancé à la main en SSH.
+  #
+  # > Un `latest` qui bouge au registre pendant que le conteneur garde son
+  # > digest est le pire des deux mondes : on croit avoir déployé, et on mesure
+  # > l'ancien.
+  #
+  # Ce job ne recrée QUE les services dont l'image vient d'être construite —
+  # jamais `up -d` nu, qui toucherait les huit autres services de staging.
+  deploy-staging:
+    name: Deploy to staging
+    runs-on: ubuntu-latest
+    needs: [detect, build]
+    # **Une livraison ne dépend pas du build du voisin** (#5619). `needs.build`
+    # est un résultat AGRÉGÉ : exiger `== 'success'` faisait qu'un échec du
+    # translator — image ML lourde, qui échoue régulièrement — bloquait la mise
+    # en ligne d'une v3.1 pourtant construite et poussée.
+    #
+    # `up -d` SANS `--force-recreate` ne recrée que ce dont le digest a bougé :
+    # un service dont le build a échoué garde simplement son image, sans
+    # bruit. Déployer après un build PARTIEL ne livre donc jamais un échec —
+    # ça livre ce qui a réussi.
+    if: github.ref == 'refs/heads/dev' && needs.detect.outputs.has_changes == 'true' && needs.build.result != 'skipped' && needs.build.result != 'cancelled'
+    steps:
+      - name: Résoudre les services de staging à recréer
+        id: cibles
+        env:
+          SERVICES_JSON: ${{ needs.detect.outputs.services }}
+        run: |
+          # La correspondance image → service de compose est ÉNUMÉRÉE, jamais
+          # devinée par un motif : un service inconnu doit se voir, pas être
+          # sauté en silence. C'est ce silence qui a laissé `meeshy-web-v31`
+          # construite et servie nulle part pendant des jours.
+          #
+          # `web` et `web-v3` n'ont PAS de ligne, et c'est une décision :
+          # staging ne sert plus le legacy ni l'ancienne refonte depuis #5609.
+          CIBLES=""
+          INCONNUS=""
+          for SVC in $(echo "$SERVICES_JSON" | jq -r '.include[].service'); do
+            case "$SVC" in
+              web-v31)    CIBLES="$CIBLES frontend-staging" ;;
+              gateway)    CIBLES="$CIBLES gateway-staging" ;;
+              translator) CIBLES="$CIBLES translator-staging" ;;
+              agent)      CIBLES="$CIBLES agent-staging" ;;
+              web|web-v3) echo "::notice::$SVC n'est plus déployé sur staging (#5609)" ;;
+              *)          INCONNUS="$INCONNUS $SVC" ;;
+            esac
+          done
+          if [ -n "$INCONNUS" ]; then
+            echo "::warning::services sans correspondance de déploiement :$INCONNUS — les ajouter au case ci-dessus, ou dire pourquoi ils n'y sont pas"
+          fi
+          echo "cibles=$(echo $CIBLES | xargs)" >> $GITHUB_OUTPUT
+
+      - name: Déployer
+        id: deploiement
+        if: steps.cibles.outputs.cibles != ''
+        env:
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+          KNOWN_HOSTS: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+          CIBLES: ${{ steps.cibles.outputs.cibles }}
+        run: |
+          set -euo pipefail
+          # SANS SECRET, ON LE DIT — et on ne rougit pas. Un job qui échoue à
+          # chaque poussée pour une clé jamais provisionnée serait ignoré au
+          # bout de trois jours, et c'est ainsi qu'un gate meurt. Un avertissement
+          # VISIBLE dans le résumé dit ce qu'il manque sans user le signal.
+          if [ -z "${SSH_KEY:-}" ] || [ -z "${SSH_HOST:-}" ]; then
+            echo "::warning::déploiement de staging NON armé — il manque les secrets STAGING_SSH_KEY / STAGING_SSH_HOST"
+            {
+              echo "## ⚠️ Staging non déployé"
+              echo ""
+              echo "Images construites et poussées, mais **rien ne les a tirées sur l'hôte**."
+              echo "Services concernés : \`$CIBLES\`"
+              echo ""
+              echo "Pour armer ce job, provisionner les secrets du dépôt :"
+              echo "\`STAGING_SSH_HOST\`, \`STAGING_SSH_USER\`, \`STAGING_SSH_KEY\`"
+              echo "(et, recommandé, \`STAGING_SSH_KNOWN_HOSTS\`)."
+            } >> $GITHUB_STEP_SUMMARY
+            echo "deploye=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          # L'empreinte de l'hôte EST une vérification : sans elle, `accept-new`
+          # fait confiance au premier venu. On accepte le repli, on ne le tait pas.
+          if [ -n "${KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+            chmod 600 ~/.ssh/known_hosts
+            SSH_OPTS="-o StrictHostKeyChecking=yes"
+          else
+            echo "::warning::STAGING_SSH_KNOWN_HOSTS absent — repli sur accept-new (confiance au premier contact)"
+            SSH_OPTS="-o StrictHostKeyChecking=accept-new"
+          fi
+
+          # **On envoie des NOMS, pas une commande.** La clé est contrainte
+          # côté hôte par `command="/usr/local/bin/meeshy-deploy-staging.sh",restrict`
+          # dans `authorized_keys` : quoi qu'on envoie, c'est ce script qui
+          # s'exécute, et notre demande lui arrive en donnée
+          # (`$SSH_ORIGINAL_COMMAND`), validée contre une liste blanche de
+          # services.
+          #
+          # > Une clé de CI qui ouvrirait un shell root donnerait, en cas de
+          # > fuite du secret GitHub, la machine entière. Celle-ci ne donne que
+          # > le droit de redéployer des services déjà déclarés — éprouvé :
+          # > `cat /etc/shadow`, `database-staging` et `frontend-staging; id`
+          # > sont refusés en rc=64.
+          #
+          # Le script fait le `pull`, le `up -d --no-deps`, attend, puis IMPRIME
+          # l'état. Un seul aller-retour, et c'est l'appelant qui juge — sur ce
+          # que la machine montre, pas sur le code de retour d'`up -d`, qui rend
+          # 0 dès que Docker accepte la commande.
+          set +e
+          SORTIE=$(ssh $SSH_OPTS -i ~/.ssh/id_deploy -o ConnectTimeout=20 \
+            "${SSH_USER:-root}@$SSH_HOST" "$CIBLES" 2>&1)
+          RC=$?
+          set -e
+          echo "$SORTIE"
+
+          if [ "$RC" -ne 0 ]; then
+            echo "::error::le déploiement a échoué (rc=$RC)"
+            exit "$RC"
+          fi
+          if echo "$SORTIE" | grep -qiE "restarting|exited"; then
+            echo "::error::un service de staging ne tient pas debout après déploiement"
+            exit 1
+          fi
+
+          {
+            echo "## Staging déployé"
+            echo ""
+            echo "Services recréés : \`$CIBLES\`"
+          } >> $GITHUB_STEP_SUMMARY
+          echo "deploye=true" >> $GITHUB_OUTPUT
+
   security-scan:
     name: Scan ${{ matrix.service }}
     runs-on: ubuntu-latest
@@ -379,6 +593,17 @@ jobs:
       security-events: write
 
     steps:
+      # LE TAG D'UNE BRANCHE S'ASSAINIT, parce qu'un nom de branche n'est pas un
+      # tag Docker. `docker/metadata-action` le fait à la CONSTRUCTION (un `/`
+      # devient `-`) ; cette étape-ci prenait `github.ref_name` BRUT, et
+      # cherchait donc un tag qui n'avait jamais été poussé.
+      #
+      # Le symptôme ne disait pas ça : Trivy rendait « could not parse
+      # reference: isopen/meeshy-web-v31:claude/v3-… » — une erreur de SYNTAXE
+      # sur le nom, pas une image introuvable. Et il ne se voyait ni sur `main`
+      # ni sur `dev`, dont les tags sont écrits en dur juste au-dessus : il
+      # fallait un déclenchement manuel depuis une branche à `/` dans son nom,
+      # c'est-à-dire toutes les branches `claude/*`.
       - name: Determine scan tag
         id: scan-tag
         run: |
@@ -387,7 +612,11 @@ jobs:
           elif [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
             echo "tag=staging${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}" >> $GITHUB_OUTPUT
           else
-            echo "tag=${{ github.ref_name }}${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}" >> $GITHUB_OUTPUT
+            # Même transformation que `docker/metadata-action` : tout ce qui
+            # n'est pas alphanumérique, point, tiret ou souligné devient un
+            # tiret.
+            SLUG=$(printf '%s' "${{ github.ref_name }}" | tr -c 'a-zA-Z0-9._-' '-')
+            echo "tag=${SLUG}${{ matrix.torch_backend == 'gpu' && '-gpu' || '' }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Security scan

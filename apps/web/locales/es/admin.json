@@ -1766,6 +1766,29 @@
     "systemWebSocket": "WebSocket",
     "systemActive": "Activo"
   },
+  "ban": {
+    "title": "Bloqueos",
+    "noBans": "Nunca se ha registrado ningún bloqueo para esta cuenta.",
+    "loadError": "No se pudo cargar el historial de bloqueos.",
+    "banButton": "Bloquear a este usuario",
+    "banSuccess": "Usuario bloqueado.",
+    "banError": "No se pudo bloquear a este usuario.",
+    "reasonPlaceholder": "Motivo del bloqueo (visible en el registro de auditoría)",
+    "reasonTooShort": "El motivo debe tener al menos 3 caracteres.",
+    "cancelButton": "Cancelar",
+    "confirmButton": "Confirmar bloqueo",
+    "statusActive": "Vigente",
+    "statusLifted": "Levantado",
+    "liftButton": "Levantar",
+    "liftSuccess": "Bloqueo levantado.",
+    "liftError": "No se pudo levantar este bloqueo.",
+    "createdAt": "Bloqueado el",
+    "expiresAt": "Hasta",
+    "duration24h": "24 horas",
+    "duration7d": "7 días",
+    "duration30d": "30 días",
+    "durationPermanent": "Permanente"
+  },
   "usersDetail": {
     "viewMembers": "Ver miembros",
     "membersModalTitle": "Miembros",
@@ -1990,7 +2013,16 @@
     "deleteTitle": "Eliminar enlace de compartición",
     "deleteDescription": "Esta acción es irreversible. El enlace de compartición y todos sus accesos serán eliminados permanentemente.",
     "deleteConfirm": "Eliminar",
-    "copyError": "Error al copiar el enlace"
+    "copyError": "Error al copiar el enlace",
+    "revealError": "No se pudo revelar el enlace de compartición",
+    "revealReasonTitle": "Motivo requerido",
+    "revealReasonNotice": "Revelar la URL completa de este enlace es una acción soberana: quedará registrada en el registro de auditoría del administrador.",
+    "revealReasonLabel": "Motivo",
+    "revealReasonPlaceholder": "Motivo de esta revelación...",
+    "revealReasonHint": "Indique un motivo de al menos {min} caracteres.",
+    "revealReasonTooShort": "El motivo debe tener al menos {min} caracteres.",
+    "revealConfirm": "Revelar",
+    "revealCancel": "Cancelar"
   },
   "translationsPage": {
     "loadError": "Error al cargar las traducciones",

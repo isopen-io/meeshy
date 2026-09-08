@@ -9,11 +9,15 @@ import { UnlockAccountsJob } from './unlock-accounts';
 import { NotificationDigestJob } from './notification-digest';
 import { DeliveryQueueCleanupJob } from './delivery-queue-cleanup';
 import { MutationLogCleanupJob } from './mutation-log-cleanup';
+import { BanExpirySweepJob } from './ban-expiry-sweep';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
 import { getCacheStore } from '../services/CacheStore';
 import { GeoIPService } from '../services/GeoIPService';
+import { BanService } from '../services/admin/ban.service';
+import { UserAuditService } from '../services/admin/user-audit.service';
+import { UserManagementService } from '../services/admin/user-management.service';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'BackgroundJobs' });
@@ -24,6 +28,7 @@ export class BackgroundJobsManager {
   private notificationDigestJob: NotificationDigestJob;
   private deliveryQueueCleanupJob: DeliveryQueueCleanupJob;
   private mutationLogCleanupJob: MutationLogCleanupJob;
+  private banExpirySweepJob: BanExpirySweepJob;
   private isRunning: boolean = false;
 
   constructor(prisma: PrismaClient, emailService: EmailService, deliveryQueue?: RedisDeliveryQueue) {
@@ -35,6 +40,12 @@ export class BackgroundJobsManager {
     this.notificationDigestJob = new NotificationDigestJob(prisma, emailService, magicLinkService);
     this.deliveryQueueCleanupJob = new DeliveryQueueCleanupJob(deliveryQueue ?? new RedisDeliveryQueue({ getNativeClient: () => null } as any));
     this.mutationLogCleanupJob = new MutationLogCleanupJob(prisma);
+    // Le balayage ne réactive jamais que via `updateStatus` — aucun besoin de
+    // `revokeSessions` (seule la désactivation en dépend, cf. `userAdminRoutes`).
+    const userManagementService = new UserManagementService(prisma);
+    const userAuditService = new UserAuditService(prisma);
+    const banService = new BanService(prisma, userManagementService);
+    this.banExpirySweepJob = new BanExpirySweepJob(banService, userAuditService);
   }
 
   /**
@@ -53,6 +64,7 @@ export class BackgroundJobsManager {
     this.notificationDigestJob.start();
     this.deliveryQueueCleanupJob.start();
     this.mutationLogCleanupJob.start();
+    this.banExpirySweepJob.start();
 
     this.isRunning = true;
     logger.info('All background jobs started successfully');
@@ -74,6 +86,7 @@ export class BackgroundJobsManager {
     this.notificationDigestJob.stop();
     this.deliveryQueueCleanupJob.stop();
     this.mutationLogCleanupJob.stop();
+    this.banExpirySweepJob.stop();
 
     this.isRunning = false;
     logger.info('All background jobs stopped successfully');
@@ -90,6 +103,7 @@ export class BackgroundJobsManager {
     await this.notificationDigestJob.runNow();
     await this.deliveryQueueCleanupJob.runNow();
     await this.mutationLogCleanupJob.runNow();
+    await this.banExpirySweepJob.runNow();
 
     logger.info('All jobs completed');
   }
@@ -104,6 +118,7 @@ export class BackgroundJobsManager {
       notificationDigest: this.notificationDigestJob,
       deliveryQueueCleanup: this.deliveryQueueCleanupJob,
       mutationLogCleanup: this.mutationLogCleanupJob,
+      banExpirySweep: this.banExpirySweepJob,
     };
   }
 

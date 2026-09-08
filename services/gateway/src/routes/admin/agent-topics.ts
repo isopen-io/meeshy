@@ -9,6 +9,7 @@ import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import { requirePermission } from '../../middleware/authorize';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { certifyPatterns, countMatchesOffLoop, type PatternRefusal } from '../../utils/safe-regex';
+import { logWarn } from '../../utils/logger';
 
 /**
  * Routes admin CRUD pour le catalogue de topics dynamiques utilisé par le
@@ -62,13 +63,13 @@ async function broadcastTopicsInvalidation(fastify: FastifyInstance): Promise<vo
   const payload = JSON.stringify({ scope: 'topics' });
   const tasks: Array<Promise<unknown>> = [
     getCacheStore().publish('agent:config-invalidated', payload).catch((err) =>
-      fastify.log.warn({ err }, '[TopicCatalog] Redis publish failed'),
+      logWarn(fastify.log, '[TopicCatalog] Redis publish failed', err),
     ),
   ];
   if (agentClient) {
     tasks.push(
       agentClient.invalidateCache({ scope: 'topics' } as any).catch((err) =>
-        fastify.log.warn({ err }, '[TopicCatalog] HTTP invalidate failed'),
+        logWarn(fastify.log, '[TopicCatalog] HTTP invalidate failed', err),
       ),
     );
   }
@@ -82,7 +83,7 @@ async function broadcastTopicsInvalidation(fastify: FastifyInstance): Promise<vo
 function notifyAdminDashboards(fastify: FastifyInstance): void {
   const payload: AgentAdminEventData = { kind: 'topics' };
   getCacheStore().publish(AGENT_ADMIN_EVENT_CHANNEL, JSON.stringify(payload)).catch((err) =>
-    fastify.log.warn({ err }, '[TopicCatalog] admin-event publish failed'));
+    logWarn(fastify.log, '[TopicCatalog] admin-event publish failed', err));
 }
 
 /**

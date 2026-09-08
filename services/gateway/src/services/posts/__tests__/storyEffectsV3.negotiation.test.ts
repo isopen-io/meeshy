@@ -219,6 +219,19 @@ describe('négociation O17 sur GET /posts/:postId', () => {
     await app.close();
   });
 
+  it('(5 bis, #5195) blob v3-natif, x-canvas-caps: 0 (déclare aucune prise en charge canvas), SANS média : storyEffects OMIS, jamais la sentinelle', async () => {
+    mockGetPostById.mockResolvedValue(storyRow(loadV3Blob()));
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'GET', url: `/posts/${POST_ID}`, headers: { 'x-canvas-caps': '0' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.storyEffects).toBeUndefined();
+    await app.close();
+  });
+
   it('(6) l\'invite suit la langue résolue du lecteur — repli fr', async () => {
     mockGetPostById.mockResolvedValue(storyRow(loadV3Blob()));
     const appEn = await buildApp('en');
@@ -339,6 +352,16 @@ describe('getStories — le tray négocie la forme pour le lecteur', () => {
     });
 
     expect((result.items[0] as { storyEffects?: unknown }).storyEffects).toEqual(v3);
+  });
+
+  it('lecteur caps=0 (déclare aucune prise en charge canvas), #5195 : blob v3-natif ⇒ storyEffects OMIS', async () => {
+    const service = new PostFeedService(storiesPrisma(loadV3Blob()));
+
+    const result = await service.getStories(USER_ID, {
+      reader: { canvasCaps: 0, readerLanguage: 'en' },
+    });
+
+    expect((result.items[0] as { storyEffects?: unknown }).storyEffects).toBeUndefined();
   });
 });
 

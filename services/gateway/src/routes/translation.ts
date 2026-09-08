@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { sendSuccess, sendError, sendUnauthorized, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../utils/response.js';
+import { sendSuccess, sendError, sendUnauthorized, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response.js';
 
 // Schémas de validation
 const TranslateRequestSchema = z.object({
@@ -183,54 +183,6 @@ const languagesResponseSchema = {
               flag: { type: 'string', example: 'US' }
             }
           }
-        }
-      }
-    }
-  }
-} as const;
-
-/**
- * OpenAPI schema for language detection request
- */
-const detectLanguageRequestSchema = {
-  type: 'object',
-  properties: {
-    text: {
-      type: 'string',
-      minLength: 1,
-      description: 'Text to detect language from',
-      example: 'Bonjour le monde'
-    }
-  },
-  required: ['text']
-} as const;
-
-/**
- * OpenAPI schema for language detection response
- */
-const detectLanguageResponseSchema = {
-  type: 'object',
-  properties: {
-    success: { type: 'boolean', example: true },
-    data: {
-      type: 'object',
-      properties: {
-        language: {
-          type: 'string',
-          description: 'Detected language code',
-          example: 'fr'
-        },
-        confidence: {
-          type: 'number',
-          minimum: 0,
-          maximum: 1,
-          description: 'Detection confidence score (0-1)',
-          example: 0.7
-        },
-        text: {
-          type: 'string',
-          description: 'Original text that was analyzed',
-          example: 'Bonjour le monde'
         }
       }
     }
@@ -533,62 +485,6 @@ export async function translationRoutes(fastify: FastifyInstance) {
         { code: 'ar', name: 'Arabic', flag: 'SA' }
       ]
     });
-  });
-
-  // Route pour détecter la langue
-  fastify.post<{ Body: { text: string } }>('/detect-language', {
-    schema: {
-      description: 'Detect the language of a given text using pattern-based analysis. Returns the detected language code and a confidence score. The detection is based on character patterns specific to different languages (accents, special characters).',
-      tags: ['translation'],
-      summary: 'Detect text language',
-      body: detectLanguageRequestSchema,
-      response: {
-        200: detectLanguageResponseSchema,
-        400: {
-          description: 'Bad request - validation error (empty text)',
-          ...errorResponseSchema
-        },
-        500: {
-          description: 'Internal server error - detection failed',
-          ...errorResponseSchema
-        }
-      }
-    }
-  }, async (request: FastifyRequest<{ Body: { text: string } }>, reply: FastifyReply) => {
-    try {
-      const { text } = request.body;
-
-      if (!text || text.length === 0) {
-        return sendBadRequest(reply, 'VALIDATION_ERROR', { message: 'Text is required' });
-      }
-
-      // Détection simple basée sur des patterns
-      let detectedLanguage = 'en';
-      let confidence = 0.5;
-
-      // Détection basique par patterns
-      if (/[àáâäçèéêëìíîïñòóôöùúûüÿ]/i.test(text)) {
-        detectedLanguage = 'fr';
-        confidence = 0.7;
-      } else if (/[ñáéíóúü]/i.test(text)) {
-        detectedLanguage = 'es';
-        confidence = 0.7;
-      } else if (/[äöüß]/i.test(text)) {
-        detectedLanguage = 'de';
-        confidence = 0.7;
-      }
-
-      return sendSuccess(reply, {
-        language: detectedLanguage,
-        confidence: confidence,
-        text: text
-      });
-
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown language detection error';
-      logError(request.log, 'Language detection error:', error);
-      return sendInternalError(reply, errorMessage);
-    }
   });
 
   // Route de test pour le service de traduction

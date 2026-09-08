@@ -16,7 +16,6 @@
 
 import crypto from 'crypto';
 import speakeasy from 'speakeasy';
-import zxcvbn from 'zxcvbn';
 import axios from 'axios';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CacheStore } from './CacheStore';
@@ -25,7 +24,7 @@ import { GeoIPService } from './GeoIPService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { hashPassword, verifyPassword } from '../utils/password-hash';
 import { unsetOrNull } from '../utils/prisma-unset';
-import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
+import { validatePasswordStrength } from '../utils/password-strength';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 
 // Logger dédié pour PasswordResetService
@@ -35,7 +34,6 @@ const logger = enhancedLogger.child({ module: 'PasswordResetService' });
 const TOKEN_EXPIRY_MINUTES = 15;
 const MAX_RESET_ATTEMPTS_24H = 10;
 const PASSWORD_HISTORY_COUNT = 10;
-const MIN_PASSWORD_SCORE = 3; // zxcvbn score (0-4)
 
 export interface PasswordResetRequest {
   email: string;
@@ -263,7 +261,7 @@ export class PasswordResetService {
       }
 
       // 2. Validate password strength
-      const passwordValidation = this.validatePasswordStrength(newPassword);
+      const passwordValidation = validatePasswordStrength(newPassword);
       if (!passwordValidation.isValid) {
         return {
           success: false,
@@ -365,7 +363,6 @@ export class PasswordResetService {
       const anomaly = await this.detectAnomalies(
         user.id,
         deviceFingerprint || '',
-        ipAddress,
         geoData?.location || ''
       );
 
@@ -635,49 +632,6 @@ export class PasswordResetService {
     });
   }
 
-  private validatePasswordStrength(password: string): {
-    isValid: boolean;
-    errors: string[];
-  } {
-    const errors: string[] = [];
-
-    // Basic requirements
-    if (password.length < PASSWORD_MIN_LENGTH) {
-      errors.push(`minimum ${PASSWORD_MIN_LENGTH} characters`);
-    }
-
-    if (!/[a-z]/.test(password)) {
-      errors.push('one lowercase letter');
-    }
-
-    if (!/[A-Z]/.test(password)) {
-      errors.push('one uppercase letter');
-    }
-
-    if (!/[0-9]/.test(password)) {
-      errors.push('one digit');
-    }
-
-    // Special character is optional (bonus for stronger password)
-    // if (!/[^a-zA-Z0-9]/.test(password)) {
-    //   errors.push('one special character');
-    // }
-
-    // Use zxcvbn for advanced strength checking
-    const result = zxcvbn(password);
-    if (result.score < MIN_PASSWORD_SCORE) {
-      errors.push(`password strength score is ${result.score}/4 (minimum: ${MIN_PASSWORD_SCORE}/4)`);
-      if (result.feedback.warning) {
-        errors.push(result.feedback.warning);
-      }
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors
-    };
-  }
-
   private async checkPasswordHistory(userId: string, newPassword: string): Promise<boolean> {
     const history = await this.prisma.passwordHistory.findMany({
       where: { userId },
@@ -720,25 +674,39 @@ export class PasswordResetService {
     return isValid;
   }
 
-  // #5331 (suivi) — `deviceFingerprint`/`ipAddress` sont chargés (`lastLoginDevice`,
-  // `lastLoginIp`) précisément pour être comparés ici, et ne le sont pas : seule
-  // l'anomalie géographique (« impossible travel ») est détectée. Un
-  // changement d'appareil ou d'IP sans déplacement de pays passe donc
-  // inaperçu. Non traité dans ce lot : le SEUIL d'un tel signal (tout nouvel
-  // appareil est-il suspect, ou seulement combiné à autre chose ?) est une
-  // décision produit, pas un paramètre mort à instruire au passage — voir
-  // #5331 pour le suivi ouvert.
+  // #5355 — décision produit sur les deux questions laissées ouvertes par
+  // #5331 (dette de paramètre mort, résolue en préfixant `_deviceFingerprint`/
+  // `_ipAddress`, cette dernière depuis retirée : voir point 2) :
+  //
+  // 1. Un appareil différent de celui enregistré déclenche l'alerte SEUL,
+  //    sans exiger de changement de pays. C'est le cas nominal d'un vol
+  //    d'identifiants : le mot de passe est réinitialisé depuis le MÊME pays
+  //    que la victime, sur un appareil qu'elle ne reconnaît pas.
+  // 2. Une IP différente SEULE n'est PAS comparée — délibérément, donc le
+  //    paramètre `ipAddress` est RETIRÉ plutôt que gardé mort : VPN,
+  //    itinérance mobile, renouvellement DHCP du FAI en changent une pour un
+  //    utilisateur légitime bien plus souvent qu'un attaquant, ce qui en
+  //    ferait du bruit garanti sans valeur de signal.
+  //
+  // Les deux tiennent parce que cette alerte est CONSULTATIVE, jamais un
+  // verrou : `isAnomaly: true` envoie un e-mail de sécurité, il ne bloque
+  // jamais la réinitialisation (c'est le 2FA, quand il est activé, qui
+  // gouverne l'admission). Un faux positif coûte un e-mail, jamais un
+  // verrouillage — ce qui justifie un seuil plus sensible que sur une garde
+  // bloquante.
   private async detectAnomalies(
     userId: string,
-    _deviceFingerprint: string,
-    _ipAddress: string,
+    deviceFingerprint: string,
     geoLocation: string
   ): Promise<{ isAnomaly: boolean; reason?: string }> {
+    // `lastLoginIp` n'est PAS chargée : la décision ci-dessus l'exclut comme
+    // signal, et une colonne chargée sans être lue finit toujours par se
+    // faire relire (piège armé — voir la note de `getConsentStatus` sur le
+    // même patron).
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         lastLoginDevice: true,
-        lastLoginIp: true,
         lastLoginLocation: true,
         lastActiveAt: true
       }
@@ -762,6 +730,17 @@ export class PasswordResetService {
           };
         }
       }
+    }
+
+    // Unrecognized device (#5355) — no signal on a first-ever reset
+    // (`lastLoginDevice` absent) or when the caller sent no fingerprint at
+    // all; both would otherwise read as "always different" and alert on
+    // every reset.
+    if (user.lastLoginDevice && deviceFingerprint && user.lastLoginDevice !== deviceFingerprint) {
+      return {
+        isAnomaly: true,
+        reason: 'Password reset completed from an unrecognized device'
+      };
     }
 
     return { isAnomaly: false };

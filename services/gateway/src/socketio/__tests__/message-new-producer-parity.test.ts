@@ -339,6 +339,57 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
     }
   });
 
+  it('les DEUX producteurs émettent le sous-groupe MÉDIA de #3737 (auteur, pièce jointe, drapeaux)', async () => {
+    // Suivi n°2 de la PR #3096, jamais pris : même classe de défaut que
+    // `location` (#3122) — un émetteur qui omet un membre du groupe d'aperçu
+    // laisse la ligne de liste mélanger deux messages jusqu'à une relecture
+    // complète. Ce témoin fait la preuve pour les DEUX producteurs
+    // message-driven ; le troisième (`emitConversationPreviewUpdate`) a le
+    // sien dans `emitConversationPreviewUpdate.test.ts`.
+    const message = makeContractMessage({
+      isViewOnce: true,
+      isBlurred: true,
+      expiresAt: new Date('2026-08-22T11:00:00.000Z'),
+      attachments: [
+        {
+          id: 'att-1',
+          mimeType: 'image/jpeg',
+          thumbnailUrl: 'https://cdn.example/att-1-thumb.jpg',
+          originalName: 'photo.jpg',
+          fileSize: 12345,
+          duration: null,
+          width: 800,
+          height: 600,
+        },
+        { id: 'att-2', mimeType: 'image/png', originalName: 'second.png', fileSize: 999 },
+      ],
+    });
+
+    const socketPayload = await updatedFromSocketPath(message);
+    const restPayload = await updatedFromRestPath(message);
+
+    for (const payload of [socketPayload, restPayload]) {
+      expect(payload.lastMessageSenderName).toBe('Alice');
+      expect(payload.lastMessageIsBlurred).toBe(true);
+      expect(payload.lastMessageIsViewOnce).toBe(true);
+      expect(payload.lastMessageExpiresAt).toBe('2026-08-22T11:00:00.000Z');
+      // Plafonnée à la première pièce jointe, comptée sur les DEUX.
+      expect(payload.lastMessageAttachmentCount).toBe(2);
+      expect(payload.lastMessageAttachments).toEqual([
+        {
+          id: 'att-1',
+          mimeType: 'image/jpeg',
+          thumbnailUrl: 'https://cdn.example/att-1-thumb.jpg',
+          originalName: 'photo.jpg',
+          fileSize: 12345,
+          duration: null,
+          width: 800,
+          height: 600,
+        },
+      ]);
+    }
+  });
+
   it("aucun producteur n'émet un champ que le contrat ne DÉCLARE pas", async () => {
     // Le cliquet du lot : voir l'en-tête de `conversation-updated-declared-fields.ts`.
     // Le typage seul ne peut pas le tenir — une clé écrite dans la source d'un

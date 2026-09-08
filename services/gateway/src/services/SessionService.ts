@@ -512,52 +512,13 @@ export async function extendSessionExpiry(token: string, days?: number): Promise
   }
 }
 
-/**
- * Refresh token rotation - Generate new refresh token while keeping session valid
- * Used by mobile apps to maintain long-term sessions securely
- */
-export async function rotateRefreshToken(currentRefreshToken: string): Promise<{
-  newRefreshToken: string;
-  expiresAt: Date;
-} | null> {
-  const db = getPrisma();
-  const refreshTokenHash = hashToken(currentRefreshToken);
-
-  try {
-    const session = await db.userSession.findFirst({
-      where: { refreshToken: refreshTokenHash, isValid: true },
-    });
-
-    if (!session) return null;
-
-    // Generate new refresh token
-    const newRefreshToken = randomBytes(32).toString('hex');
-    const newRefreshTokenHash = hashToken(newRefreshToken);
-
-    // Extend expiry based on device type
-    const extensionDays = session.isMobile ? SESSION_EXPIRY_MOBILE_DAYS : SESSION_EXPIRY_DESKTOP_DAYS;
-    const newExpiresAt = new Date();
-    newExpiresAt.setDate(newExpiresAt.getDate() + extensionDays);
-
-    await db.userSession.update({
-      where: { id: session.id },
-      data: {
-        refreshToken: newRefreshTokenHash,
-        expiresAt: newExpiresAt,
-        lastActivityAt: new Date()
-      },
-    });
-
-    logger.debug(`Refresh token rotated (${extensionDays} days)`);
-    return {
-      newRefreshToken,
-      expiresAt: newExpiresAt
-    };
-  } catch (error) {
-    logger.error('Failed to rotate refresh token', error as Error);
-    return null;
-  }
-}
+// `rotateRefreshToken` (#3621) a été retiré : aucune route ne l'appelait, et
+// `userSession.create` ci-dessus ne pose jamais `UserSession.refreshToken` —
+// son `where: { refreshToken: refreshTokenHash }` ne pouvait donc JAMAIS
+// matcher une ligne réelle. Le mécanisme de renouvellement effectivement
+// utilisé est `POST /auth/refresh` (`routes/auth/magic-link.ts`), qui lie le
+// JWT à sa session par le claim `sid` (`services/auth/session-jwt.ts`,
+// #4213/#4264) plutôt que par un `refreshToken` séparé.
 
 /**
  * Enforce maximum sessions per user

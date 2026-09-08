@@ -209,6 +209,24 @@ services:
       - "traefik.http.routers.translator.middlewares=compress@file"
       - "traefik.http.services.translator.loadbalancer.server.port=8000"
       # Pas d'authentification pour ML service
+      # unhealthy déclenche un restart (#5610) — restart:unless-stopped ne
+      # se déclenche que sur une SORTIE du process, jamais sur `unhealthy`.
+      - "autoheal=true"
+
+  # Autoheal — restaure un conteneur `unhealthy` (voir #5610 : le translator
+  # est resté bloqué à 0,01% CPU pendant 7 jours, `docker ps` affichant
+  # `Up 10 days` sans qu'aucun superviseur n'agisse sur le healthcheck rouge).
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: meeshy-autoheal
+    restart: unless-stopped
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=30
+      - AUTOHEAL_START_PERIOD=60
+      - AUTOHEAL_DEFAULT_STOP_TIMEOUT=10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   # Gateway Service sur gate.${DOMAIN}
   gateway:
@@ -324,7 +342,7 @@ services:
       - "traefik.http.routers.gateway.rule=Host(`gate.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.gateway.entrypoints=websecure"
       - "traefik.http.routers.gateway.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.gateway.middlewares=compress@file"
+      - "traefik.http.routers.gateway.middlewares=rate-limit@file,compress@file"
       - "traefik.http.services.gateway.loadbalancer.server.port=3000"
 
   # Static Files Service - Nginx pour servir les fichiers uploadés sur static.${DOMAIN}
@@ -443,8 +461,10 @@ services:
   # chemin PUBLIC prioritaire sur le legacy ne se publie pas avant que la zone
   # ait de quoi y répondre.
   #
-  # `scripts/check-v3-pipeline.mjs` garde les deux sens : un actif servi hors
-  # de cette règle, et un chemin de cette règle que la zone ne sert pas.
+  # `scripts/check-v3-pipeline.mjs` gardait les deux sens (un actif servi hors
+  # de cette règle, et un chemin de cette règle que la zone ne sert pas) ; ce
+  # garde n'était câblé à aucune étape de CI et a été retiré (#5623) — les deux
+  # sens restent vrais sur ce fichier mais aucun gate automatisé ne les tient.
   #
   # CE QUE LA ZONE LIT DE SON ENVIRONNEMENT, ET POURQUOI C'EST ICI
   #
@@ -460,8 +480,9 @@ services:
   # L'appel de la passerelle est SERVEUR à serveur : il passe par le réseau
   # interne (`gateway:3000`) et n'a pas à ressortir par Traefik. L'URL publique,
   # elle, est celle que les plateformes mettent en cache — donc le domaine.
-  # `scripts/check-v3-pipeline.mjs` garde ce contrat : toute variable lue par
-  # `apps/web-v3/app` ou `apps/web-v3/lib` est déclarée ici.
+  # `scripts/check-v3-pipeline.mjs` gardait ce contrat (toute variable lue par
+  # `apps/web-old-version3/app` ou `apps/web-old-version3/lib` déclarée ici) ;
+  # ce garde n'était câblé à aucune étape de CI et a été retiré (#5623).
   frontend-v3:
     image: ${FRONTEND_V3_IMAGE:-isopen/meeshy-web-v3:latest}
     container_name: meeshy-frontend-v3
@@ -476,6 +497,16 @@ services:
       - MEESHY_GATEWAY_URL=http://gateway:3000
       - NEXT_PUBLIC_API_URL=https://gate.${DOMAIN:-localhost}
       - NEXT_PUBLIC_FRONTEND_URL=https://${DOMAIN:-localhost}
+      # LA CONFIGURATION FCM DU MODULE DE PRÉFÉRENCES (#5391) — lue par
+      # `apps/web-old-version3/app/connecte/prefs-porte.ts` dans CE processus Next :
+      # déclarée sur le legacy elle serait inerte (même loi que V3_SW_PORTEES
+      # du compose staging). Mêmes valeurs publiques que le service `frontend`.
+      - NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyCGBiVIUvW8CiVytXGHN1za2T3yI_7ynro
+      - NEXT_PUBLIC_FIREBASE_PROJECT_ID=meeshy-me
+      - NEXT_PUBLIC_FIREBASE_APP_ID=1:775794634022:web:d244d7c97208322dc365e7
+      - NEXT_PUBLIC_FIREBASE_VAPID_KEY=BDRguFxJ5f_alFmp-TCGc2VsLAaLEXybgcUGmIE7MMy4jpCjCYJZCcPGV9G1QKN2SBzYQhRuNL28fhKb2hsvvPo
+      - NEXT_PUBLIC_FCM_INSTALLATIONS_BASE=https://firebaseinstallations.googleapis.com
+      - NEXT_PUBLIC_FCM_REGISTRATIONS_BASE=https://fcmregistrations.googleapis.com
     depends_on:
       gateway:
         condition: service_healthy
@@ -641,7 +672,28 @@ services:
   # CERTS DUMPER - Extrait acme.json en PEM (consomme par coturn)
   # ===========================================================================
   certs-dumper:
-    image: ldez/traefik-certs-dumper:v2.11.2
+    # v2.11.4 et non v2.11.2 (#5612) : la 2.11.2 PANIQUE sur cet `acme.json`.
+    #
+    #     panic: unsupported key type: ''
+    #       dumper/v2.extractPEMPrivateKey — dumper.go:105
+    #
+    # Traefik est en v3.6 et n'écrit plus `Account.KeyType` ; la 2.11.2 extrait
+    # la clé du COMPTE en commutant sur ce type, et meurt sur la chaîne vide.
+    # Mesuré en production : 4 820 redémarrages.
+    #
+    # `--version=v3` ne corrige RIEN — même panique, dans `dumper/v3`. Le
+    # drapeau de version n'était pas en cause, et le croire aurait fait changer
+    # la ligne d'à côté sans rien réparer.
+    #
+    # Et le défaut était MASQUÉ par sa propre boucle : les certificats sont
+    # écrits AVANT la panique (essai à blanc : 15 `.crt` + 15 `.key`), donc
+    # coturn recevait ses fichiers — par accident du redémarrage, jamais par le
+    # `--watch` ci-dessous, qui n'a jamais eu le temps de s'armer.
+    #
+    # v2.11.4 sur le MÊME acme.json : sortie=0, aucune panique, 15 certificats
+    # et 16 clés — une de plus, celle du compte, précisément ce sur quoi
+    # l'ancienne mourait.
+    image: ldez/traefik-certs-dumper:v2.11.4
     container_name: meeshy-certs-dumper
     restart: unless-stopped
     entrypoint:

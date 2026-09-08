@@ -187,7 +187,7 @@ describe('POST /register — invalid phone transfer token (line 82)', () => {
     const res = await app.inject({
       method: 'POST', url: '/register',
       payload: {
-        username: 'alice', password: 'secret1234', email: 'alice@test.com',
+        username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com',
         firstName: 'Alice', lastName: 'Smith', phoneTransferToken: 'bad-token',
       },
     });
@@ -213,7 +213,7 @@ describe('POST /register — une erreur non typée est une PANNE', () => {
   const inscrire = async (app: FastifyInstance) => app.inject({
     method: 'POST', url: '/register',
     payload: {
-      username: 'alice', password: 'secret1234', email: 'alice@test.com',
+      username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com',
       firstName: 'Alice', lastName: 'Smith',
     },
   });
@@ -247,7 +247,7 @@ describe('POST /register — valid transfer token but executeRegistrationTransfe
     const res = await app.inject({
       method: 'POST', url: '/register',
       payload: {
-        username: 'alice', password: 'secret1234', email: 'alice@test.com',
+        username: 'alice', password: 'Xk9$mQ2vLp8#nR4wZ', email: 'alice@test.com',
         firstName: 'Alice', lastName: 'Smith', phoneTransferToken: 'valid-token',
       },
     });

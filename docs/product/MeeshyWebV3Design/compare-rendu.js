@@ -30,7 +30,7 @@
  * de jeton du § 5.1 refuse a bon droit, donc les deux etaient comparees a
  * l'ecran clos, qui n'est la cible d'aucune des deux.
  *
- * La loi de selection vit dans `apps/web-v3/scripts/lib/vues-comparables.mjs`,
+ * La loi de selection vit dans `apps/web-old-version3/scripts/lib/vues-comparables.mjs`,
  * avec ses temoins : une route parametree se sert par un jeton DECLARE, et deux
  * vues qui partagent une route ont besoin d'un ETAT — un jeton vivant, un jeton
  * expire — pas d'une route.
@@ -41,7 +41,7 @@
  * exactement le refus qu'un jeton reellement absent produit — mode degrade
  * indiscernable du mode nominal. Il vit donc dans `jetons-de-vues.json`, que la
  * capture n'ouvre jamais, et que `litLesVues` joint a l'index par identifiant de
- * vue (`apps/web-v3/scripts/lib/index-des-vues.mjs`).
+ * vue (`apps/web-old-version3/scripts/lib/index-des-vues.mjs`).
  *
  * UN ETAT DE SESSION (conception § 12.8). Une route du MEMBRE — `/chats/:cle`,
  * `/chats/:id` — ne rend rien a un visiteur sans creance : elle redirige vers
@@ -54,7 +54,7 @@
  * l'outil ne savait pas produire.
  *
  * COMMENT LE JOUER SUR LA CHAINE. `--base` doit pointer un serveur v3 qui a une
- * passerelle derriere lui ; `apps/web-v3/scripts/conformite-des-vues.ts` monte
+ * passerelle derriere lui ; `apps/web-old-version3/scripts/conformite-des-vues.ts` monte
  * les deux (passerelle de bouchon + `next start`) et appelle ce script.
  */
 'use strict';
@@ -82,6 +82,12 @@ const BUDGET = {
   'role-premier': { octets: 120 * 1024, requetes: 12 },
   defaut: { octets: 300 * 1024, requetes: 30 },
 };
+
+// Le GROUPE qui vaut ce budget est lu dans budgets.json (groupe `(public)`,
+// via la meme loi de motif que le reste de l'outillage) — jamais une regex
+// locale : voir apps/web-old-version3/scripts/lib/budget-reseau.mjs (#5473).
+const BUDGETS_JSON = JSON.parse(
+  fs.readFileSync(path.join(ROOT, 'apps/web-old-version3/budgets.json'), 'utf8'));
 
 /**
  * Profil d'ENCRE : par ligne, la fraction de pixels qui s'ecartent du fond de
@@ -143,9 +149,11 @@ function ecartStructurel(a, b) {
   // La selection se tranche AVANT le navigateur : un refus ne coute alors aucun
   // lancement de Chromium, et il sort par la meme porte que le verdict.
   const { RC_NON_COMPARABLE, selectionComparable, refusDeSelection } = await import(
-    pathToFileURL(path.join(ROOT, 'apps/web-v3/scripts/lib/vues-comparables.mjs')).href);
+    pathToFileURL(path.join(ROOT, 'apps/web-old-version3/scripts/lib/vues-comparables.mjs')).href);
   const { litLesVues } = await import(
-    pathToFileURL(path.join(ROOT, 'apps/web-v3/scripts/lib/index-des-vues.mjs')).href);
+    pathToFileURL(path.join(ROOT, 'apps/web-old-version3/scripts/lib/index-des-vues.mjs')).href);
+  const { cleDeBudget } = await import(
+    pathToFileURL(path.join(ROOT, 'apps/web-old-version3/scripts/lib/budget-reseau.mjs')).href);
 
   // Un index qu'on ne sait pas LIRE se dit avant tout le reste, et par le meme
   // code de sortie : une annexe absente ou un jeton declare au mauvais endroit
@@ -245,7 +253,7 @@ function ecartStructurel(a, b) {
         entree.conforme = false;
       }
 
-      const budget = /^\/(l\/|stories\/|post\/|feed$)/.test(v.route) ? BUDGET['role-premier'] : BUDGET.defaut;
+      const budget = BUDGET[cleDeBudget(v.route, BUDGETS_JSON.groupes)];
       entree.octets = octets;
       entree.requetes = requetes;
       entree.budget_octets = budget.octets;

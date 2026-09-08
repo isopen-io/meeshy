@@ -916,7 +916,7 @@ describe('RegisterFormWizard', () => {
       const passwordInput = screen.getByPlaceholderText('Enter password');
       const confirmInput = screen.getByPlaceholderText('Confirm your password');
 
-      await user.type(passwordInput, 'password123');
+      await user.type(passwordInput, 'password123456');
       await user.type(confirmInput, 'different123');
 
       expect(screen.getByText('Passwords do not match')).toBeInTheDocument();
@@ -935,8 +935,8 @@ describe('RegisterFormWizard', () => {
       const passwordInput = screen.getByPlaceholderText('Enter password');
       const confirmInput = screen.getByPlaceholderText('Confirm your password');
 
-      await user.type(passwordInput, 'password123');
-      await user.type(confirmInput, 'password123');
+      await user.type(passwordInput, 'password123456');
+      await user.type(confirmInput, 'password123456');
 
       const continueButton = screen.getByRole('button', { name: /Continue/i });
       expect(continueButton).not.toBeDisabled();
@@ -996,8 +996,8 @@ describe('RegisterFormWizard', () => {
       await waitFor(() => {
         expect(screen.getByPlaceholderText('Enter password')).toBeInTheDocument();
       });
-      await user.type(screen.getByPlaceholderText('Enter password'), 'password123');
-      await user.type(screen.getByPlaceholderText('Confirm your password'), 'password123');
+      await user.type(screen.getByPlaceholderText('Enter password'), 'password123456');
+      await user.type(screen.getByPlaceholderText('Confirm your password'), 'password123456');
       await user.click(screen.getByRole('button', { name: /Continue/i }));
 
       await waitFor(() => {
@@ -1096,8 +1096,8 @@ describe('RegisterFormWizard', () => {
       await waitFor(() => {
         expect(screen.getByPlaceholderText('Enter password')).toBeInTheDocument();
       });
-      await user.type(screen.getByPlaceholderText('Enter password'), 'password123');
-      await user.type(screen.getByPlaceholderText('Confirm your password'), 'password123');
+      await user.type(screen.getByPlaceholderText('Enter password'), 'password123456');
+      await user.type(screen.getByPlaceholderText('Confirm your password'), 'password123456');
       await user.click(screen.getByRole('button', { name: /Continue/i }));
 
       // Preferences step

@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { conversationStatsService } from '../ConversationStatsService';
 import {
   conversationMessageStatsService,
@@ -64,7 +65,28 @@ export interface PostSaveTranslationQueue {
   }): Promise<unknown>;
 }
 
-export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats';
+export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats' | 'engagement' | 'contentEngagement';
+
+/**
+ * Ce que les axes d'engagement branchés sur le commit d'un message demandent,
+ * et rien de plus — la mécanique (compteur, anti-rejeu, notification de
+ * palier) vit entièrement dans `EngagementService`, cette unité n'a qu'à
+ * l'invoquer :
+ *
+ * - `recordActivity` pour un axe de CONTENU (#5531 `content.audio_message`,
+ *   #5532 `content.text_message`) — un franchissement par (utilisateur,
+ *   axe), sans déduplication par conversation ;
+ * - `recordConversationActivity` pour l'axe « conversation distincte »
+ *   (#5538, #5539, #5540) — dédupliqué par conversation, cf. son doc-comment.
+ */
+export interface PostSaveEngagementService {
+  recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void>;
+  recordConversationActivity(
+    userId: string,
+    axisKey: EngagementAxisKey,
+    conversationId: string,
+  ): Promise<void>;
+}
 
 /**
  * La poussée d'un message au translator, sous la forme que le service attend.
@@ -156,11 +178,18 @@ export function queueMessageTranslation(params: {
 export function runMessagePostSaveEffects(params: {
   prisma: Pick<PrismaClient, 'conversation'>;
   translationService: PostSaveTranslationQueue | null | undefined;
+  /**
+   * `undefined`/`null` désactive l'effet — même discipline que
+   * `translationService`, pour les mêmes deux raisons : un appelant qui n'a
+   * pas encore de service à câbler ne doit rien casser, et un double de test
+   * n'a rien à fournir quand il ne teste pas cet effet.
+   */
+  engagementService?: PostSaveEngagementService | null;
   message: PostSaveMessage;
   originalLanguage: string;
   onError?: (effect: PostSaveEffect, error: unknown) => void;
 }): void {
-  const { prisma, translationService, message, originalLanguage, onError } = params;
+  const { prisma, translationService, engagementService, message, originalLanguage, onError } = params;
 
   const report = (effect: PostSaveEffect) => (error: unknown) => onError?.(effect, error);
 
@@ -221,4 +250,54 @@ export function runMessagePostSaveEffects(params: {
       )
     )
     .catch(report('messageStats'));
+
+  // Axe d'engagement « conversation distincte » (#5538, #5539, #5540) —
+  // dérivé de la conversation, jamais recalculé au site d'appel.
+  // `communityId` PRIME sur `type` (docs/product/streaks-badges-modele.md
+  // § 2 : « conversations communautaires » = rattachée à une communauté,
+  // quel que soit son type) : une conversation rattachée à une communauté
+  // crédite `conversation.community`, jamais `private` ni `public`. Un
+  // utilisateur ANONYME n'a pas de ligne `EngagementCounter` possible
+  // (`userId` y est un `User.id` requis) : la garde évite même la lecture
+  // de la conversation quand elle ne peut mener nulle part.
+  if (engagementService && message.senderUserId) {
+    const senderUserId = message.senderUserId;
+    void Promise.resolve()
+      .then(async () => {
+        const conversation = await prisma.conversation.findUnique({
+          where: { id: message.conversationId },
+          select: { type: true, communityId: true },
+        });
+        if (!conversation) return;
+        const axisKey = conversation.communityId
+          ? 'conversation.community'
+          : conversation.type === 'public'
+            ? 'conversation.public'
+            : 'conversation.private';
+        await engagementService.recordConversationActivity(
+          senderUserId,
+          axisKey,
+          message.conversationId
+        );
+      })
+      .catch(report('engagement'));
+  }
+
+  // Axe d'engagement « contenu produit » (#5531 `content.audio_message`,
+  // #5532 `content.text_message`) — un même envoi ne crédite jamais les
+  // deux : AVEC au moins une pièce jointe dont le MIME résout en `audio`
+  // (même table que le comptage de conversation, `resolveAttachmentType`)
+  // crédite l'axe audio, SANS crédite l'axe texte. Même garde anonyme que
+  // ci-dessus : `EngagementCounter.userId` exige un `User.id`, qu'un
+  // participant anonyme n'a pas.
+  if (engagementService && message.senderUserId) {
+    const senderUserId = message.senderUserId;
+    const hasAudioAttachment = message.attachmentMimeTypes.some(
+      (mimeType) => resolveAttachmentType(mimeType) === 'audio'
+    );
+    const contentAxisKey = hasAudioAttachment ? 'content.audio_message' : 'content.text_message';
+    void Promise.resolve()
+      .then(() => engagementService.recordActivity(senderUserId, contentAxisKey))
+      .catch(report('contentEngagement'));
+  }
 }

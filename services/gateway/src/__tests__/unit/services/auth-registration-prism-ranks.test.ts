@@ -293,7 +293,7 @@ describe('rang 4 servi par HTTP — le corps ne porte AUCUNE langue', () => {
       payload: {
         displayName: 'Lectrice Sans Langue',
         email: 'sans.langue@example.com',
-        password: 'motdepasse',
+        password: 'Xk9$mQ2vLp8#nR4wZ',
       },
     });
 

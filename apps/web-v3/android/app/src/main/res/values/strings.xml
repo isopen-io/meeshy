@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Meeshy</string>
+    <string name="title_activity_main">Meeshy</string>
+    <string name="package_name">me.meeshy.app</string>
+    <string name="custom_url_scheme">me.meeshy.app</string>
+</resources>

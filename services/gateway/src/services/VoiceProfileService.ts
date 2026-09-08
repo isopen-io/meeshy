@@ -13,6 +13,7 @@
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma } from '@meeshy/shared/prisma/client';
 import { randomUUID } from 'crypto';
 import { EventEmitter } from 'events';
 import { promises as fs } from 'fs';
@@ -34,7 +35,11 @@ import {
   VoiceCloningUserSettings,
   VoicePreviewSample
 } from '@meeshy/shared/types/voice-api';
+import { VOICE_CLONING_QUALITY_PRESETS } from '@meeshy/shared/types/preferences';
+import type { FastifyInstance } from 'fastify';
+import { emitPreferenceCategoryUpdated } from './preferences/preferences-broadcast';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { calculateAge } from '@meeshy/shared/utils/age';
 // Logger dédié pour VoiceProfileService
 const logger = enhancedLogger.child({ module: 'VoiceProfileService' });
 
@@ -120,6 +125,7 @@ export interface VoiceProfileDetails extends SharedVoiceProfileDetails {
 export class VoiceProfileService extends EventEmitter {
   private prisma: PrismaClient;
   private zmqClient: ZmqTranslationClient;
+  private fastify?: FastifyInstance;
   private uploadBasePath: string;
   private pendingRequests: Map<string, {
     resolve: (value: VoiceProfileEvent) => void;
@@ -127,10 +133,17 @@ export class VoiceProfileService extends EventEmitter {
     timeout: NodeJS.Timeout;
   }> = new Map();
 
-  constructor(prisma: PrismaClient, zmqClient: ZmqTranslationClient) {
+  /**
+   * `fastify` est OPTIONNEL et ne sert qu'à la diffusion best-effort
+   * `preferences:updated` après une écriture de réglages de clonage vocal
+   * (#3735) — un appelant de test qui construit le service sans instance
+   * Fastify garde un service pleinement fonctionnel, juste muet sur ce canal.
+   */
+  constructor(prisma: PrismaClient, zmqClient: ZmqTranslationClient, fastify?: FastifyInstance) {
     super();
     this.prisma = prisma;
     this.zmqClient = zmqClient;
+    this.fastify = fastify;
     // UPLOAD_PATH doit être défini dans Docker, fallback sécurisé vers /app/uploads
     this.uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
 
@@ -564,17 +577,23 @@ export class VoiceProfileService extends EventEmitter {
           updateData.voiceCloningTopP = Math.max(0, Math.min(1, cloningSettings.voiceCloningTopP));
         }
         if (cloningSettings.voiceCloningQualityPreset !== undefined) {
-          const validPresets = ['fast', 'balanced', 'high_quality'];
-          if (validPresets.includes(cloningSettings.voiceCloningQualityPreset)) {
+          if ((VOICE_CLONING_QUALITY_PRESETS as readonly string[]).includes(cloningSettings.voiceCloningQualityPreset)) {
             updateData.voiceCloningQualityPreset = cloningSettings.voiceCloningQualityPreset;
           }
         }
 
-        // TODO: Save voice cloning settings to UserPreferences.audio JSON
-        // These settings (temperature, topP, qualityPreset) need to be migrated
         if (Object.keys(updateData).length > 0) {
-          logger.info('[VoiceProfileService] Voice cloning settings to save:', updateData);
-          logger.warn('[VoiceProfileService] Voice cloning settings storage not yet migrated to UserPreferences');
+          logger.info('[VoiceProfileService] Persisting voice cloning settings to UserPreferences.audio:', updateData);
+          // Best-effort : le profil vocal (embedding, qualityScore, userVoiceModel)
+          // est déjà écrit à ce point. Une panne sur cette persistance annexe
+          // (préférences UX, pas le profil lui-même) ne doit pas faire échouer
+          // toute l'inscription — l'utilisateur récupère un profil fonctionnel,
+          // juste sans ces réglages fins tant que la prochaine écriture réussit.
+          try {
+            await this.persistVoiceCloningSettings(userId, updateData);
+          } catch (persistError) {
+            logger.error('[VoiceProfileService] Failed to persist voice cloning settings', persistError);
+          }
         }
       }
 
@@ -850,6 +869,48 @@ export class VoiceProfileService extends EventEmitter {
   // HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
 
+  /**
+   * Persiste les réglages fins de clonage vocal validés dans
+   * `UserPreferences.audio` (#3735) — lus ensuite à la composition de la
+   * requête TTS par `MessageTranslationService.processAudioAttachment()`.
+   *
+   * Superpose `updateData` (déjà bornée par l'appelant) sur le document
+   * `audio` existant plutôt que de l'écraser : cette méthode ne connaît que
+   * les cinq clés `voiceCloning*`, et une écriture ici ne doit pas effacer un
+   * réglage `ttsEnabled`/`transcriptionSource`/… posé par ailleurs
+   * (`PATCH /me/preferences/audio`) — même règle de superposition que
+   * `resolveComplete` (`routes/me/preferences/preference-registry.ts`).
+   */
+  private async persistVoiceCloningSettings(
+    userId: string,
+    updateData: Record<string, number | string>
+  ): Promise<void> {
+    const existing = await this.prisma.userPreferences.findUnique({
+      where: { userId },
+      select: { audio: true }
+    });
+
+    const existingAudio =
+      existing?.audio && typeof existing.audio === 'object' && !Array.isArray(existing.audio)
+        ? (existing.audio as Record<string, unknown>)
+        : {};
+
+    const mergedAudio = { ...existingAudio, ...updateData } as Prisma.InputJsonValue;
+
+    await this.prisma.userPreferences.upsert({
+      where: { userId },
+      create: { userId, audio: mergedAudio },
+      update: { audio: mergedAudio }
+    });
+
+    // Best-effort : un appelant de test ou un contexte hors requête HTTP
+    // construit le service sans `fastify` (voir le doc-comment du
+    // constructeur) — la persistance ci-dessus reste complète sans lui.
+    if (this.fastify) {
+      emitPreferenceCategoryUpdated(this.fastify, userId, 'audio');
+    }
+  }
+
   private formatProfileDetails(voiceModel: any, user: any): VoiceProfileDetails {
     const now = new Date();
     const needsCalibration = voiceModel.nextRecalibrationAt
@@ -887,7 +948,7 @@ export class VoiceProfileService extends EventEmitter {
     const now = new Date();
 
     if (birthDate) {
-      const age = this.calculateAge(birthDate);
+      const age = calculateAge(birthDate);
       if (age < 18) {
         // Minors: 2 months expiration
         now.setDate(now.getDate() + MINOR_PROFILE_EXPIRATION_DAYS);
@@ -898,17 +959,5 @@ export class VoiceProfileService extends EventEmitter {
     // Standard: 3 months expiration
     now.setDate(now.getDate() + STANDARD_PROFILE_EXPIRATION_DAYS);
     return now;
-  }
-
-  private calculateAge(birthDate: Date): number {
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-
-    return age;
   }
 }

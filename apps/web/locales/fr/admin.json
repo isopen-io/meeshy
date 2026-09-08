@@ -1766,6 +1766,29 @@
     "systemWebSocket": "WebSocket",
     "systemActive": "Actif"
   },
+  "ban": {
+    "title": "Bannissements",
+    "noBans": "Aucun bannissement n'a jamais été prononcé pour ce compte.",
+    "loadError": "Impossible de charger l'historique des bannissements.",
+    "banButton": "Bannir cet utilisateur",
+    "banSuccess": "Utilisateur banni.",
+    "banError": "Impossible de bannir cet utilisateur.",
+    "reasonPlaceholder": "Motif du bannissement (visible dans le journal d'audit)",
+    "reasonTooShort": "Le motif doit compter au moins 3 caractères.",
+    "cancelButton": "Annuler",
+    "confirmButton": "Confirmer le bannissement",
+    "statusActive": "En vigueur",
+    "statusLifted": "Levé",
+    "liftButton": "Lever",
+    "liftSuccess": "Bannissement levé.",
+    "liftError": "Impossible de lever ce bannissement.",
+    "createdAt": "Banni le",
+    "expiresAt": "Jusqu'au",
+    "duration24h": "24 heures",
+    "duration7d": "7 jours",
+    "duration30d": "30 jours",
+    "durationPermanent": "Permanent"
+  },
   "usersDetail": {
     "viewMembers": "Voir les membres",
     "membersModalTitle": "Membres",
@@ -1990,7 +2013,16 @@
     "deleteTitle": "Supprimer le lien de partage",
     "deleteDescription": "Cette action est irréversible. Le lien de partage et tous ses accès seront supprimés définitivement.",
     "deleteConfirm": "Supprimer",
-    "copyError": "Erreur lors de la copie du lien"
+    "copyError": "Erreur lors de la copie du lien",
+    "revealError": "Erreur lors de la révélation du lien de partage",
+    "revealReasonTitle": "Motif de révélation requis",
+    "revealReasonNotice": "Révéler l'URL complète de ce lien est un geste souverain : il sera enregistré dans le journal d'audit administrateur.",
+    "revealReasonLabel": "Motif",
+    "revealReasonPlaceholder": "Motif de cette révélation...",
+    "revealReasonHint": "Indiquez un motif d'au moins {min} caractères.",
+    "revealReasonTooShort": "Le motif doit contenir au moins {min} caractères.",
+    "revealConfirm": "Révéler",
+    "revealCancel": "Annuler"
   },
   "translationsPage": {
     "loadError": "Erreur lors du chargement des traductions",

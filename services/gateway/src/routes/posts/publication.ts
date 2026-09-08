@@ -41,6 +41,7 @@
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Post } from '@meeshy/shared/types/post';
+import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { postSignalText } from '../../services/posts/storyContentComposition';
@@ -63,7 +64,7 @@ import {
 import type { ExtractedHashtag } from '../../services/HashtagService';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
 import { WIRE_BROADCAST, wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
-import { logError } from '../../utils/logger.js';
+import { logError, logWarn } from '../../utils/logger.js';
 
 /**
  * La ligne écrite, telle que le noyau a besoin de la LIRE.
@@ -102,6 +103,15 @@ export type PublicationPrisma = PostMentionPrisma & PostReferenceReaderPrisma;
 export interface PostHashtagIndexer {
   extractHashtags(text: string): ExtractedHashtag[];
   createPostHashtags(postId: string, hashtags: ExtractedHashtag[]): Promise<unknown>;
+}
+
+/**
+ * Ce que l'axe d'engagement « stories » (#5534) demande, et rien de plus —
+ * la déduplication par palier vit entièrement dans
+ * `EngagementService.recordActivity`, cette unité n'a qu'à l'appeler.
+ */
+export interface PostPublicationEngagementService {
+  recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void>;
 }
 
 /**
@@ -245,6 +255,20 @@ export interface PublicationEffectsParams {
   readonly detectedLanguage?: string;
   /** Préfixe de journal, pour que l'erreur nomme la porte qui l'a produite. */
   readonly porte: string;
+  /**
+   * `undefined`/`null` désactive l'axe d'engagement « stories » (#5534) —
+   * même discipline que les autres collaborateurs optionnels de ce module :
+   * un appelant qui n'a pas encore de service à câbler ne doit rien casser.
+   */
+  readonly engagementService?: PostPublicationEngagementService | null;
+  /**
+   * DÉCLARÉ par le client (`CreatePostSchema.editedInApp` /
+   * `PublishAttachmentSchema.editedInApp`) — rien côté serveur ne distingue un
+   * média passé par l'éditeur de montage d'un média publié tel quel. Décide
+   * entre les axes mutuellement exclusifs `tool.in_app_edit` (#5542) et
+   * `tool.direct_publish` (#5543) : absent/`false` ⇒ publication directe.
+   */
+  readonly editedInApp?: boolean;
 }
 
 const asOptionalString = (value: unknown): string | undefined =>
@@ -276,7 +300,7 @@ export async function runPublicationEffects(
   const {
     fastify, prisma, request, mentionService, hashtagService,
     post, authorId, postType, submittedContent, storyEffects, declaredMentions,
-    detectedLanguage, porte,
+    detectedLanguage, porte, engagementService, editedInApp,
   } = params;
 
   const postId = post.id;
@@ -305,7 +329,7 @@ export async function runPublicationEffects(
         // Second recours (#5349), UNIQUEMENT si aucune revendication n'a été
         // persistée : une détection on-device réelle, jamais une préférence.
         detectedLanguage,
-      ).catch((err) => fastify.log.warn({ err }, `[${porte}]: translate post failed`));
+      ).catch((err) => logWarn(fastify.log, `[${porte}]: translate post failed`, err));
     } catch {
       // PostTranslationService not initialized — skip silently
     }
@@ -370,7 +394,7 @@ export async function runPublicationEffects(
       : postType === 'STATUS'
         ? socialEvents.broadcastStatusCreated(audiencePost, authorId, cmid)
         : socialEvents.broadcastPostCreated(audiencePost, authorId, cmid);
-    broadcast.catch((err: unknown) => fastify.log.warn({ err }, `[${porte}]: broadcast created failed`));
+    broadcast.catch((err: unknown) => logWarn(fastify.log, `[${porte}]: broadcast created failed`, err));
   }
 
   // Un `#voyage` posé sur la SCÈNE reste indexé : sans la dérivation il
@@ -384,15 +408,19 @@ export async function runPublicationEffects(
     }
   }
 
+  // Le type vient de la ligne ÉCRITE, jamais du type DEMANDÉ — un REEL (ou une
+  // STORY) dégradé en POST par le service doit s'annoncer pour ce qu'il est
+  // devenu. Partagé par l'éventail d'amis ci-dessous et par les axes
+  // d'engagement « stories » (#5534) / « réels » (#5535) qui suivent.
+  const writtenType = (asOptionalString(post.type) ?? postType) as PublishedPostType;
+
   // Éventail vers les amis : `user_mentioned` prime (dedup via excludeUserIds).
-  // Le type vient de la ligne ÉCRITE — un REEL dégradé en POST par le service
-  // doit s'annoncer pour ce qu'il est devenu.
   const notifService = fastify.notificationService;
   if (notifService) {
     notifService.createFriendContentNotificationsBatch({
       postId,
       authorId,
-      contentType: (asOptionalString(post.type) ?? postType) as PublishedPostType,
+      contentType: writtenType,
       excerpt: postSignals?.slice(0, 100),
       postCreatedAt: (post.createdAt ?? undefined) as Date | undefined,
       postExpiresAt: (post.expiresAt ?? undefined) as Date | undefined,
@@ -401,6 +429,35 @@ export async function runPublicationEffects(
       visibilityUserIds,
     }).catch((err: unknown) => {
       logError(fastify.log, `[${porte}] friend content notification fan-out failed`, err);
+    });
+  }
+
+  // Axes d'engagement « stories » (#5534) et « réels » (#5535) — suivent le
+  // type ÉCRIT comme l'éventail juste au-dessus, mutuellement exclusifs sur
+  // la même ligne : un REEL non qualifiant dégradé en POST par le service ne
+  // doit créditer ni l'un ni l'autre.
+  if (engagementService && writtenType === 'STORY') {
+    engagementService.recordActivity(authorId, 'content.story').catch((err: unknown) => {
+      logError(fastify.log, `[${porte}] content.story engagement recording failed`, err);
+    });
+  } else if (engagementService && writtenType === 'REEL') {
+    engagementService.recordActivity(authorId, 'content.reel').catch((err: unknown) => {
+      logError(fastify.log, `[${porte}] content.reel engagement recording failed`, err);
+    });
+  }
+
+  // Axes d'engagement « montage in-app » (#5542) et « publication simple
+  // directe » (#5543) — mutuellement exclusifs, orthogonaux au TYPE (POST,
+  // STORY ou REEL, jamais STATUS ni un brouillon PRIVATE — modèle § 2, même
+  // discriminant que `content.post`). Le seul signal existant est celui que
+  // le client DÉCLARE (`editedInApp`) : le serveur ne peut pas observer si un
+  // média a traversé l'éditeur de montage. Absent/`false` ⇒ direct.
+  const isPublishedContent =
+    writtenType === 'STORY' || writtenType === 'REEL' || (writtenType === 'POST' && visibility !== 'PRIVATE');
+  if (engagementService && isPublishedContent) {
+    const toolAxis: EngagementAxisKey = editedInApp === true ? 'tool.in_app_edit' : 'tool.direct_publish';
+    engagementService.recordActivity(authorId, toolAxis).catch((err: unknown) => {
+      logError(fastify.log, `[${porte}] ${toolAxis} engagement recording failed`, err);
     });
   }
 
