@@ -366,6 +366,36 @@ for (const [casePattern, downstreamName, what] of CHIP_FILL_CASES) {
   else if (expectedCase !== actualCase) failures.push(`${what} : Swift ${expectedCase}, dérivée ${actualCase}`);
 }
 
+/**
+ * PARTIE 5 — `BubbleBlurRevealLifecycle.swift` → `reading-mode/protection.ts`
+ * (D-23, #5676). Une SEULE constante gardable par ce dispositif :
+ * `defaultRevealDuration: TimeInterval = 5` (`name: Type = valeur`, comme
+ * `SWIFT_MAPPINGS` ci-dessus). Le rayon de flou (`FocalProtectedContent.swift:33`,
+ * un TERNAIRE) et les trois phases du brouillard (des `case` de
+ * `Phase.duration`, pas des affectations `nom = valeur`) ne sont PAS
+ * gardables par ce lecteur générique — dit ici en commentaire, jamais
+ * contourné par une regex plus permissive qui rougirait pour la mauvaise
+ * raison (§ note PARTIE 1 sur `new Function`).
+ */
+const UPSTREAM_REVEAL_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleBlurRevealLifecycle.swift`;
+const DOWNSTREAM_PROTECTION = `${ROOT}apps/web-v3/src/lib/reading-mode/protection.ts`;
+const revealSwift = readFileSync(UPSTREAM_REVEAL_SWIFT, 'utf8');
+const protectionDerived = readFileSync(DOWNSTREAM_PROTECTION, 'utf8');
+const revealNumber = (name) => {
+  const m = new RegExp(`\\b${name}\\s*(?::\\s*\\w+\\s*)?=\\s*(-?[0-9.]+)`).exec(revealSwift);
+  return m === null ? null : Number(m[1]);
+};
+const REVEAL_MAPPINGS = [
+  ['defaultRevealDuration', 'REVEAL_DURATION_SECONDS', 'durée de révélation d’un message voilé (BubbleBlurRevealLifecycle.defaultRevealDuration)'],
+];
+for (const [swiftName, downstreamName, what] of REVEAL_MAPPINGS) {
+  const expectedReveal = revealNumber(swiftName);
+  const actualReveal = count(protectionDerived, downstreamName);
+  if (expectedReveal === null) failures.push(`${what} : « ${swiftName} » introuvable dans BubbleBlurRevealLifecycle.swift`);
+  else if (actualReveal === null) failures.push(`${what} : « ${downstreamName} » introuvable dans reading-mode/protection.ts`);
+  else if (expectedReveal !== actualReveal) failures.push(`${what} : Swift ${expectedReveal}, dérivée ${actualReveal}`);
+}
+
 if (failures.length > 0) {
   console.error('\n  La loi de la Lentille a DÉRIVÉ de packages/shared/utils/focus-curve.ts :\n');
   for (const e of failures) console.error(`    · ${e}`);
@@ -385,5 +415,7 @@ console.log(
     `\n  La perspective du Fil est conforme au variant thread de focus-curve.ts` +
     ` (${THREAD_MAPPINGS.length + 2} constantes ; les valeurs sont gardées par perspective.test.ts).` +
     `\n  L'élection du Fil est conforme à FocalScrollPerspective.swift` +
-    ` (${PERSPECTIVE_MAPPINGS.length + CHIP_FILL_CASES.length} cotes ; les valeurs sont gardées par election.test.ts).`,
+    ` (${PERSPECTIVE_MAPPINGS.length + CHIP_FILL_CASES.length} cotes ; les valeurs sont gardées par election.test.ts).` +
+    `\n  La protection du Fil est conforme à BubbleBlurRevealLifecycle.swift` +
+    ` (${REVEAL_MAPPINGS.length} cote ; les valeurs sont gardées par protection.test.ts).`,
 );

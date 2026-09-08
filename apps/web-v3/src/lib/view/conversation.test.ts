@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { presenceOf, titleOf } from './conversation';
-import type { Conversation, Participant } from '@/lib/api/types';
+import { presenceOf, previewKindOf, titleOf } from './conversation';
+import type { Conversation, Message, Participant } from '@/lib/api/types';
 
 const NOW = Date.parse('2026-09-07T12:00:00.000Z');
 const minutesAgo = (minutes: number): Date => new Date(NOW - minutes * 60_000);
@@ -97,5 +97,63 @@ describe('titleOf — customName PRIME (#5559 T11)', () => {
   test('customName chaîne vide ⇒ ignoré, comportement inchangé', () => {
     const c = conversation({ title: 'Équipe déploiement', userPreferences: [{ customName: '' }] });
     expect(titleOf(c, 'u-viewer')).toBe('Équipe déploiement');
+  });
+});
+
+/**
+ * `previewKindOf` — miroir de `LastMessageSummaryKind.swift:22-36` (D-23,
+ * #5676) : l'ordre expired → hidden → view-once → ephemeral → standard.
+ */
+const lastMessage = (partial: Partial<Message>): Message =>
+  ({
+    id: 'm1',
+    conversationId: 'c1',
+    senderId: 'u1',
+    content: 'contenu',
+    originalLanguage: 'fr',
+    messageType: 'text',
+    messageSource: 'user',
+    isEdited: false,
+    isViewOnce: false,
+    viewOnceCount: 0,
+    isBlurred: false,
+    deliveredCount: 0,
+    readCount: 0,
+    reactionCount: 0,
+    isEncrypted: false,
+    createdAt: minutesAgo(1),
+    timestamp: minutesAgo(1),
+    translations: [],
+    ...partial,
+  }) as Message;
+
+describe('previewKindOf — la forme de l’aperçu de liste (D-23, #5676)', () => {
+  test('lastMessage absent ⇒ standard', () => {
+    expect(previewKindOf(conversation({}), NOW)).toBe('standard');
+  });
+
+  test('expiresAt <= now ⇒ expired, AVANT tout', () => {
+    const c = conversation({ lastMessage: lastMessage({ expiresAt: minutesAgo(0) }) });
+    expect(previewKindOf(c, NOW)).toBe('expired');
+  });
+
+  test('isBlurred ⇒ hidden', () => {
+    const c = conversation({ lastMessage: lastMessage({ isBlurred: true }) });
+    expect(previewKindOf(c, NOW)).toBe('hidden');
+  });
+
+  test('isViewOnce ⇒ view-once', () => {
+    const c = conversation({ lastMessage: lastMessage({ isViewOnce: true }) });
+    expect(previewKindOf(c, NOW)).toBe('view-once');
+  });
+
+  test('expiresAt > now ⇒ ephemeral', () => {
+    const c = conversation({ lastMessage: lastMessage({ expiresAt: new Date(NOW + 120_000) }) });
+    expect(previewKindOf(c, NOW)).toBe('ephemeral');
+  });
+
+  test('rien de protégé ⇒ standard', () => {
+    const c = conversation({ lastMessage: lastMessage({}) });
+    expect(previewKindOf(c, NOW)).toBe('standard');
   });
 });

@@ -1,0 +1,131 @@
+/*
+ * LA PROTECTION DU FIL (D-23, #5676) — feuille propre à l'écran du fil,
+ * importée UNE fois par `routes/thread.tsx` (même mécanisme que
+ * `thread-scene.css` : Vite la scinde dans le CHUNK du fil, jamais dans la
+ * feuille critique — un message protégé n'est visible que là).
+ *
+ * AUCUNE VALEUR DE COULEUR NOUVELLE : `white`/`black` ci-dessous sont les
+ * littéraux CITÉS de `BubbleSystemViews.swift:34-37` (question 10 de D-23,
+ * réponse retenue : littéraux cités en commentaire, par sélecteur de schéma,
+ * plutôt qu'un jeton généré pour deux capsules) ; le reste vient des jetons
+ * (`--color-warn`, `--color-error`, `--color-ios-card`, `--color-ios-ink`).
+ * `prefers-reduced-motion` n'a rien à couper de spécifique : la règle 32
+ * d'`app.css` ramène déjà toute transition à 0,01 ms.
+ */
+
+/* LE VOILE — bouton plein bloc, substitut flouté (BLUR_RADIUS_PX porté en
+   style inline par `ProtectedContent`, dérivé de `protection.ts`). */
+.protected-veil {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  text-align: start;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+}
+.protected-veil[data-surface='bubble'] {
+  border-radius: var(--radius-bubble);
+}
+
+[data-surrogate] {
+  display: inline-block;
+  pointer-events: none;
+  color: var(--color-ios-ink);
+  opacity: 0.55;
+}
+
+/* Le média masqué — 160×120, rayon 16, `--color-ios-card` à 70 % (question 1 :
+   AUCUNE URL sous le voile). */
+[data-masked-media] {
+  display: grid;
+  place-items: center;
+  width: 160px;
+  height: 120px;
+  border-radius: 16px;
+  background-color: color-mix(in srgb, var(--color-ios-card) 70%, transparent);
+  color: var(--color-ios-ink-2);
+  font-size: var(--text-check, 12px);
+}
+
+/* LE BROUILLARD — une seule transition d'opacité (D-23 §1.4 point 6), couleurs
+ * reprises du radial iOS (`BubbleStandardLayout.swift:1519-1528`), jouée à
+ * la FERMETURE (revue #5676, défaut 5 — `data-fog` piloté par
+ * `protected-content.tsx`, jamais `@starting-style`) : les trois phases
+ * iOS (`BubbleBlurRevealLifecycle.scheduleReveal`) sont TOUTES après les
+ * 5 s, parce que c'est la DISPARITION du secret qui a besoin d'être
+ * expliquée — son APPARITION n'a besoin d'aucun fondu. Le nœud reste monté
+ * pendant `revealed` ET `fogging` (`data-protected="revealed"` couvre les
+ * deux) : une transition CSS ordinaire sur un élément déjà peint suffit,
+ * sans naissance opaque ni second rendu. `prefers-reduced-motion` la ramène
+ * à 0,01 ms par la règle 32 d'`app.css`.
+ */
+.protected-revealed {
+  position: relative;
+  /* MÊME PLANCHER que `.protected-veil` (revue #5676, défaut 4) : sans lui
+     un message d'une ligne (~24px de contenu réel) rendait une rangée 24px
+     plus BASSE une fois révélé que voilé (le voile porte, lui, un
+     `min-height` de cible tactile) — le texte qu'on venait de demander
+     apparaissait sous la boîte qu'on avait touchée, puis la rangée
+     remontait seule 5 s plus tard. Le plancher commun rend la géométrie
+     IDENTIQUE voilée et révélée pour tout contenu tenant sur une ligne ;
+     un contenu plus long (attaché, multi-lignes) dépasse déjà 44px des
+     deux côtés et n'est pas affecté. */
+  min-height: 44px;
+}
+.protected-fog {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 400ms ease-out;
+  background: radial-gradient(circle, color-mix(in srgb, white 35%, transparent), color-mix(in srgb, white 12%, transparent) 60%, transparent);
+}
+.protected-fog[data-fog='closing'] {
+  opacity: 1;
+}
+
+/* LA LÉGENDE D'ÉCHEC — grammaire d'ERREUR, pas de contenu (revue #5676,
+   défaut 6) : mêmes jetons que la bande « Non envoyé » voisine
+   (`focal-row.tsx:353-366`), jamais l'encre de corps. */
+.protected-notice-error {
+  background-color: color-mix(in srgb, var(--color-error) 18%, transparent);
+  color: var(--color-error);
+}
+
+/* LE TOMBSTONE DE LA BULLE — capsules `white/black` LITTÉRALES
+   (`BubbleSystemViews.swift:34-37`, question 10 de D-23). */
+.protected-notice {
+  padding-inline: var(--ios-space-md, 12px);
+  padding-block: var(--ios-space-sm, 8px);
+}
+.protected-notice--deleted {
+  background-color: color-mix(in srgb, white 5%, transparent);
+  border: 0.5px solid color-mix(in srgb, white 8%, transparent);
+}
+:root.light .protected-notice--deleted {
+  background-color: color-mix(in srgb, black 3%, transparent);
+  border-color: color-mix(in srgb, black 5%, transparent);
+}
+.protected-notice--burned {
+  background-color: color-mix(in srgb, var(--color-warn) 8%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--color-warn) 15%, transparent);
+}
+
+/* LE BADGE ÉPHÉMÈRE — `error.opacity(isDark ? 0.15 : 0.1)`
+   (`BubbleMetaBadges.swift:146-171`) : un SÉLECTEUR, jamais une lecture JS
+   du schéma (même discipline que `.focus-card`/`.focus-chip`,
+   `thread-scene.css`). */
+.protected-ephemeral-badge {
+  padding-inline: 8px;
+  padding-block: 4px;
+  color: var(--color-error);
+  border: 0.5px solid color-mix(in srgb, var(--color-error) 30%, transparent);
+  --ephemeral-fill: 15%;
+  background-color: color-mix(in srgb, var(--color-error) var(--ephemeral-fill), transparent);
+}
+:root.light .protected-ephemeral-badge {
+  --ephemeral-fill: 10%;
+}

@@ -43,7 +43,18 @@ const OUTPUT = join(HERE, '../src/components/glyphs.ts');
  * renommer un glyphe déjà consommé par `message-blocks.tsx`) résout donc vers
  * ce fichier précis plutôt que le motif `regular/<id>.svg`.
  */
-const OVERRIDES = { 'fill-play': join(CORE, 'fill/play-fill.svg') };
+const OVERRIDES = {
+  'fill-play': join(CORE, 'fill/play-fill.svg'),
+  /**
+   * `flame-fill` (D-23, #5676) — iOS emploie `flame.fill` pour le badge
+   * éphémère et le tombstone « Vu et supprimé »
+   * (`BubbleMetaBadges.swift:146-171`, `BubbleSystemViews.swift:50-85`) et
+   * `flame` régulier dans l'aperçu de LISTE
+   * (`LentilleConversationRow.swift:600-631`, `previewKindOf` §5.9) — les
+   * DEUX variants sont donc extraits, même dispositif que `fill-play`.
+   */
+  'flame-fill': join(CORE, 'fill/flame-fill.svg'),
+};
 
 /**
  * Noms de fichier phosphor (`push-pin.svg`) — le nom de propriété exporté est
@@ -83,6 +94,25 @@ const USED = [
   'user',
   'key',
   'caret-down',
+  /**
+   * D-23, #5676 — la protection du fil : `flame` (aperçu de liste, vue
+   * unique), `flame-fill` (badge éphémère, tombstone brûlé — voir
+   * `OVERRIDES` ci-dessus), `prohibit` (≈ `nosign` iOS, tombstone
+   * supprimé), `eye-slash` (aperçu de liste, message masqué).
+   */
+  'flame',
+  'flame-fill',
+  'prohibit',
+  'eye-slash',
+  /**
+   * `timer` (revue #5676) — iOS distingue dans la LIGNE DE LISTE l'éphémère
+   * (`timer`) de la vue unique (`flame`)
+   * (`LentilleConversationRow.swift:578-584`, `:616`, `standardPreview`
+   * `showEphemeralIcon`). Servir `flame` aux DEUX faisait porter au même
+   * glyphe deux états différents dans la même colonne — l'ambiguïté que la
+   * dimension 6 (cohérence de positionnement) interdit.
+   */
+  'timer',
 ];
 
 const missing = [];

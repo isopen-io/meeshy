@@ -1230,7 +1230,17 @@ const noRowCarriesContinuousPerspective = (page) =>
      défaut mesuré ici. On repart du conteneur direct de la pastille. */
   const rowButtons = pastille.locator('xpath=..').locator('.tap-target-22');
   const rowButtonCount = await rowButtons.count();
-  expect(rowButtonCount >= 3, `la ligne basse porte au moins la pastille et deux drapeaux (${rowButtonCount} trouvés)`);
+  /**
+   * `>= 2`, PAS `>= 3` (correction D-23, #5676) : la bande de drapeaux
+   * (`languageBand`, `reading-mode/meta.ts`) exclut désormais la langue
+   * SERVIE (leçon 261, témoin de RANG) — un drapeau qui rebasculerait sur la
+   * langue déjà à l'écran n'aurait aucun effet observable (loi 4). `m1`
+   * (original `en`, traduit `fr`, servi `fr`) ne porte donc plus qu'UN
+   * drapeau (`en`, l'original) plus la pastille : exactement les deux
+   * contrôles que les deux témoins de débord ci-dessous ciblent nommément
+   * (« Afficher…langue d'origine » et « English »).
+   */
+  expect(rowButtonCount >= 2, `la ligne basse porte au moins la pastille et le drapeau de la langue d’origine (${rowButtonCount} trouvés)`);
   for (let i = 0; i < rowButtonCount; i += 1) {
     const btn = rowButtons.nth(i);
     const label = (await btn.getAttribute('aria-label')) ?? (await btn.getAttribute('title')) ?? `#${i}`;

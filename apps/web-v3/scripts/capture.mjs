@@ -28,6 +28,8 @@ const SCREENS = [
   { name: 'thread-live', path: '/c/c-amina' },
   { name: 'login', path: '/login' },
   { name: 'signup', path: '/signup' },
+  /** LA PROTECTION (D-23, #5676) — au repos, peau Focal, mode par défaut. */
+  { name: 'thread-protected', path: '/c/c-protection' },
 ];
 
 const browser = await launchChromium();
@@ -119,6 +121,51 @@ for (const scheme of ['dark', 'light']) {
     await page.waitForTimeout(300);
     await page.screenshot({ path: `${OUTPUT}thread-script.${scheme}.png` });
     console.log(`  thread-script · ${scheme}`);
+    await page.close();
+  }
+
+  await context.close();
+}
+
+/**
+ * LA PROTECTION (D-23, #5676) — deux captures dynamiques de plus, sur
+ * `/c/c-protection`. `setFixedTime` suffit ici : la révélation s'appuie sur
+ * `setTimeout` RÉEL, pas sur `Date`, donc la capturer n'exige pas de figer le
+ * temps virtuel comme `check-thread-states.mjs` — un clic puis une attente
+ * réelle brève suffisent.
+ */
+for (const scheme of ['dark', 'light']) {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    colorScheme: scheme === 'light' ? 'light' : 'dark',
+  });
+
+  // thread-protected-revealed — juste après le tap sur le témoin flouté.
+  {
+    const page = await context.newPage();
+    await page.clock.setFixedTime(INSTANT);
+    await page.goto(`${BASE}/c/c-protection`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(300);
+    await page.locator('[data-protected="hidden"]').first().click();
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: `${OUTPUT}thread-protected-revealed.${scheme}.png` });
+    console.log(`  thread-protected-revealed · ${scheme}`);
+    await page.close();
+  }
+
+  // thread-protected-bubbles — la même Salle sécurisée, peau Bulles.
+  {
+    const page = await context.newPage();
+    await page.clock.setFixedTime(INSTANT);
+    await page.goto(`${BASE}/c/c-protection`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: /Mode de lecture/ }).click();
+    await page.waitForTimeout(150);
+    await page.getByRole('menuitemradio', { name: /Bulles/ }).click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${OUTPUT}thread-protected-bubbles.${scheme}.png` });
+    console.log(`  thread-protected-bubbles · ${scheme}`);
     await page.close();
   }
 
