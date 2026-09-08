@@ -427,8 +427,23 @@ export class MongoPersistence {
     excludedRoles: string[],
     excludedUserIds: string[],
   ) {
-    // Single delay: a user is only pickable after `thresholdHours` without
-    // connecting AND without posting in this conversation.
+    // Le seuil porte sur la CONNEXION, pas sur l'« activité ».
+    //
+    // `User.lastActiveAt` bouge sur toute activité de fond — socket rouverte,
+    // requête d'une appli en arrière-plan — et ne dit RIEN de la présence.
+    // Mesuré en production le 2026-09-08 : `clyf_tone` marqué actif il y a
+    // 36 min pour une dernière connexion à 71 JOURS, `La_mignonne` 117 min
+    // contre 92 jours. Sélectionner là-dessus écartait exactement les
+    // personnes qu'il fallait prendre (#5702).
+    //
+    // La trace de connexion est `UserSession.createdAt` — la création d'une
+    // session EST le login. `sessions: { none: … }` retient donc qui n'a
+    // ouvert AUCUNE session depuis le seuil ; quelqu'un qui n'en a jamais eu
+    // passe aussi, ce qui est juste.
+    //
+    // `isOnline: false` reste un garde-fou dur : quelle que soit l'ancienneté
+    // de sa dernière connexion, on ne parle jamais à la place de quelqu'un qui
+    // est là MAINTENANT.
     const threshold = new Date(Date.now() - thresholdHours * 60 * 60 * 1000);
     const existingRoles = await this.prisma.agentUserRole.findMany({
       where: { conversationId },
@@ -444,7 +459,8 @@ export class MongoPersistence {
         userId: { not: null, notIn: [...excludedUserIds, ...existingRoleUserIds] },
         user: {
           role: { notIn: excludedRoles as UserRole[] },
-          lastActiveAt: { lt: threshold },
+          isOnline: false,
+          sessions: { none: { createdAt: { gte: threshold } } },
         },
       },
       select: {
@@ -479,7 +495,9 @@ export class MongoPersistence {
         isActive: true,
         userId: { not: null, notIn: [...excludedUserIds, ...existingControlledUserIds] },
         user: {
-          lastActiveAt: { lt: recentLoginThreshold },
+          // Même loi que ci-dessus : la connexion décide, jamais l'activité.
+          isOnline: false,
+          sessions: { none: { createdAt: { gte: recentLoginThreshold } } },
         },
       },
       select: {
