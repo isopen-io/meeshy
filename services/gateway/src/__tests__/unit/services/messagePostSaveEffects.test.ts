@@ -505,7 +505,6 @@ describe('runMessagePostSaveEffects — axe d\'engagement des conversations', ()
     const engagementService = {
       recordActivity: jest.fn<any>().mockResolvedValue(undefined),
       recordConversationActivity: jest.fn<any>().mockRejectedValue(new Error('engagement down')),
-      recordActivity: jest.fn<any>().mockResolvedValue(undefined),
     };
     const onError = jest.fn();
 
@@ -562,7 +561,10 @@ describe('runMessagePostSaveEffects — axe d\'engagement des stickers (#5541)',
     });
     await flush();
 
-    expect(engagementService.recordActivity).not.toHaveBeenCalled();
+    expect(engagementService.recordActivity).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'tool.sticker'
+    );
   });
 
   it('crédite aussi conversation.private pour le même envoi — les deux axes ne s\'excluent pas', async () => {
