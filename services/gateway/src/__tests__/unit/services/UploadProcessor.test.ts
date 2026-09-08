@@ -61,30 +61,9 @@ jest.mock('fs', () => ({
 }));
 
 // Import after mocks
-import { UploadProcessor } from '../../../services/attachments/UploadProcessor';
-import type { FileToUpload } from '../../../services/attachments/UploadProcessor';
+import { UploadProcessor, type FileToUpload } from '../../../services/attachments/UploadProcessor';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-
-// #5615 — `validateFile` vérifie désormais la signature de contenu contre le
-// mimeType déclaré (image, audio, PDF, SVG) pour TOUT upload, plus seulement
-// l'exemption anonyme. Ces octets réels remplacent le texte arbitraire
-// qu'utilisaient ces tests : ils ne portent sur AUCUN comportement de
-// signature, donc leur fixture doit simplement CORRESPONDRE à son mimeType
-// déclaré, comme le ferait un vrai upload.
-const JPEG_SIGNATURE_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]);
-const PNG_SIGNATURE_BYTES = Buffer.concat([
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  Buffer.from([0x00, 0x00, 0x00, 0x0d]),
-  Buffer.from('IHDR', 'ascii'),
-]);
-const MP3_SIGNATURE_BYTES = Buffer.from('ID3\x03\x00\x00\x00\x00\x00\x00', 'binary');
-const PDF_SIGNATURE_BYTES = Buffer.from('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n', 'binary');
-const SIGNATURE_BYTES_BY_MIME_TYPE: Record<string, Buffer> = {
-  'image/jpeg': JPEG_SIGNATURE_BYTES,
-  'image/png': PNG_SIGNATURE_BYTES,
-  'audio/mpeg': MP3_SIGNATURE_BYTES,
-  'application/pdf': PDF_SIGNATURE_BYTES,
-};
+import { SIGNATURE_BYTES_BY_MIME_TYPE } from '../../../services/attachments/__tests__/signature-fixtures';
 
 describe('UploadProcessor', () => {
   let processor: UploadProcessor;
@@ -94,16 +73,13 @@ describe('UploadProcessor', () => {
   const testMessageId = '507f1f77bcf86cd799439012';
   const testAttachmentId = '507f1f77bcf86cd799439013';
 
-  const createTestFile = (overrides?: Partial<FileToUpload>): FileToUpload => {
-    const mimeType = overrides?.mimeType ?? 'image/jpeg';
-    return {
-      buffer: SIGNATURE_BYTES_BY_MIME_TYPE[mimeType] ?? Buffer.from('test file content'),
-      filename: 'test_image.jpg',
-      mimeType,
-      size: 1024 * 100, // 100KB
-      ...overrides,
-    };
-  };
+  const createTestFile = (overrides?: Partial<FileToUpload>): FileToUpload => ({
+    buffer: SIGNATURE_BYTES_BY_MIME_TYPE[overrides?.mimeType ?? 'image/jpeg'] ?? Buffer.from('test file content'),
+    filename: 'test_image.jpg',
+    mimeType: 'image/jpeg',
+    size: 1024 * 100, // 100KB
+    ...overrides,
+  });
 
   const createMockAttachment = (overrides?: any) => ({
     id: testAttachmentId,

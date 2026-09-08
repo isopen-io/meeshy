@@ -95,9 +95,9 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 // ─── Imports after mocks ──────────────────────────────────────────────────────
 
-import { UploadProcessor } from '../../../services/attachments/UploadProcessor';
-import type { FileToUpload } from '../../../services/attachments/UploadProcessor';
+import { UploadProcessor, type FileToUpload } from '../../../services/attachments/UploadProcessor';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { SIGNATURE_BYTES_BY_MIME_TYPE } from '../../../services/attachments/__tests__/signature-fixtures';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -105,17 +105,6 @@ class MockProc extends EventEmitter {
   stderr = new EventEmitter();
   kill = jest.fn() as jest.Mock<any>;
 }
-
-// #5615 — `validateFile` vérifie désormais la signature de contenu contre le
-// mimeType déclaré (image, audio, PDF, SVG). `video/mp4` (le défaut d'ici)
-// n'a pas de signature vérifiée par ce module, donc reste inchangé ; les
-// tests qui déclarent `image/jpeg`/`audio/mpeg` ont besoin d'octets réels.
-const JPEG_SIGNATURE_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]);
-const MP3_SIGNATURE_BYTES = Buffer.from('ID3\x03\x00\x00\x00\x00\x00\x00', 'binary');
-const SIGNATURE_BYTES_BY_MIME_TYPE: Record<string, Buffer> = {
-  'image/jpeg': JPEG_SIGNATURE_BYTES,
-  'audio/mpeg': MP3_SIGNATURE_BYTES,
-};
 
 function makeFile(overrides?: Partial<FileToUpload>): FileToUpload {
   const mimeType = overrides?.mimeType ?? 'video/mp4';
