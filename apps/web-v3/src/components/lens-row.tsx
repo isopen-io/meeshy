@@ -5,7 +5,7 @@ import { accentOf, withAccent } from '@/lib/accent';
 import { time } from '@/lib/grouping';
 import { MUTED_OPACITY } from '@/lib/lens/law';
 import type { RowActionId } from '@/lib/view/row-actions';
-import { initialsOf, isGroup, peerOf, presenceOf, titleOf } from '@/lib/view/conversation';
+import { initialsOf, isGroup, peerOf, previewKindOf, presenceOf, titleOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
 
 import { Avatar } from './avatar';
@@ -112,6 +112,18 @@ export function LensRow({
   const at = conversation.lastMessageAt ?? conversation.lastMessage?.createdAt;
 
   /**
+   * LA FORME DE L'APERÇU (D-23, #5676) — `previewKindOf` décide AVANT tout
+   * appel du Prisme : un aperçu `hidden`/`view-once`/`expired` ne descend
+   * JAMAIS `served()`, donc jamais `lastMessage.content` ni
+   * `lastMessageTranslations` — le contenu protégé ne traverse pas la ligne
+   * de liste (miroir `LastMessageSummaryKind.swift:22-36`).
+   */
+  const previewKind = previewKindOf(conversation);
+  const showsServedPreview = previewKind === 'standard' || previewKind === 'ephemeral';
+  const senderPrefix =
+    group && conversation.lastMessage?.sender ? `${conversation.lastMessage.sender.displayName} : ` : '';
+
+  /**
    * LA LIGNE DESCEND LA CARTE PRÉCALCULÉE PAR LE SERVEUR
    * (`lastMessageTranslations`), pas les traductions du message. C'est ce que
    * sert `GET /conversations`, déjà restreint aux langues du lecteur et tronqué
@@ -119,12 +131,14 @@ export function LensRow({
    * carte que la liste n'a pas reçue, donc servir l'original en croyant servir
    * le Prisme.
    */
-  const preview = served({
-    preferredLanguages: languages,
-    originalLanguage: conversation.lastMessageOriginalLanguage,
-    translations: conversation.lastMessageTranslations,
-    original: conversation.lastMessage?.content ?? '',
-  });
+  const preview = showsServedPreview
+    ? served({
+        preferredLanguages: languages,
+        originalLanguage: conversation.lastMessageOriginalLanguage,
+        translations: conversation.lastMessageTranslations,
+        original: conversation.lastMessage?.content ?? '',
+      })
+    : null;
 
   return (
     <li
@@ -269,19 +283,51 @@ export function LensRow({
             une place déjà réservée par le conteneur visuel de 100.
           */}
           <span
-            className={`text-body ${status.magnified ? 'line-clamp-2' : 'truncate'}`}
-            style={{ color: 'var(--color-ios-ink-2)' }}
+            className={`flex items-center gap-1 text-body ${status.magnified ? 'line-clamp-2' : 'truncate'}`}
+            style={{ color: previewKind === 'view-once' ? accent : 'var(--color-ios-ink-2)' }}
           >
-            {group && conversation.lastMessage?.sender ? `${conversation.lastMessage.sender.displayName} : ` : ''}
-            {/* `lang` porte la langue SERVIE par le Prisme, pas celle du
-                document : un lecteur d'écran doit prononcer un aperçu traduit
-                avec la voix de sa langue, jamais avec celle de l'expéditeur.
-                L'attribut est OMIS quand la langue est inconnue (une
-                conversation sans historique sert un original vide, sans
-                `originalLanguage`) : `lang=""` signifie « langue indéterminée »
-                et fait quitter au lecteur d'écran la voix du document — dire
-                « je ne sais pas » est ici pire que se taire. */}
-            <span {...(preview.language === '' ? {} : { lang: preview.language })}>{preview.text}</span>
+            {/* LES APERÇUS PROTÉGÉS (D-23, #5676) : aucune langue à annoncer,
+                aucun texte du message — mais le NOM de l'expéditeur reste,
+                comme iOS le sert (`senderLabel` précède le glyphe dans
+                `LentilleConversationRow.swift:600-624`) : un nom n'est pas le
+                contenu protégé, et le retirer faisait perdre en groupe la
+                seule information qui restait. Les glyphes suivent iOS un par
+                un — `eye.slash` masqué, `flame` vue unique, `timer` éphémère
+                actif, `timer` estompé pour l'expiré (`timer.badge.xmark`
+                n'ayant pas d'équivalent phosphor, le muet de la couleur porte
+                la nuance). */}
+            {previewKind === 'hidden' ? (
+              <>
+                {senderPrefix}
+                <Glyph name="eyeSlash" size={13} className="shrink-0" />
+                <span className="italic truncate">1 message caché</span>
+              </>
+            ) : previewKind === 'view-once' ? (
+              <>
+                {senderPrefix}
+                <Glyph name="flame" size={13} className="shrink-0" />
+                <span className="italic truncate">1 message vue unique</span>
+              </>
+            ) : previewKind === 'expired' ? (
+              <>
+                <Glyph name="timer" size={13} className="shrink-0" />
+                <span className="italic truncate">Message expiré</span>
+              </>
+            ) : (
+              <>
+                {senderPrefix}
+                {previewKind === 'ephemeral' ? <Glyph name="timer" size={13} className="shrink-0" /> : null}
+                {/* `lang` porte la langue SERVIE par le Prisme, pas celle du
+                    document : un lecteur d'écran doit prononcer un aperçu traduit
+                    avec la voix de sa langue, jamais avec celle de l'expéditeur.
+                    L'attribut est OMIS quand la langue est inconnue (une
+                    conversation sans historique sert un original vide, sans
+                    `originalLanguage`) : `lang=""` signifie « langue indéterminée »
+                    et fait quitter au lecteur d'écran la voix du document — dire
+                    « je ne sais pas » est ici pire que se taire. */}
+                <span {...(preview?.language ? { lang: preview.language } : {})}>{preview?.text ?? ''}</span>
+              </>
+            )}
           </span>
 
           {/* Le supplément, second volet : la date pleine et le compte de membres. */}

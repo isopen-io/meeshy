@@ -9,6 +9,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
  * par `main.tsx` sur CHAQUE route. Voir le doc-comment du fichier.
  */
 import '@/styles/thread-scene.css';
+import '@/styles/thread-protection.css';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
@@ -19,7 +20,8 @@ import { FocalRow } from '@/components/focal-row';
 import { Glyph } from '@/components/glyph';
 import { ReadingModeChip } from '@/components/reading-mode-chip';
 import { apiConfig } from '@/lib/api/config';
-import { CONVERSATIONS, PARTICIPANTS, VIEWER_ID, messagesOf } from '@/lib/api/fixtures';
+import { CONVERSATIONS, PARTICIPANTS, VIEWER_ID, messagesOf, recordViewOnceConsumption } from '@/lib/api/fixtures';
+import { applyConsumption } from '@/lib/api/view-once';
 import type { Message } from '@/lib/api/types';
 import { accentOf, withAccent } from '@/lib/accent';
 import { initialsOf, isGroup, peerOf, presenceOf, titleOf, unreadOf } from '@/lib/view/conversation';
@@ -80,6 +82,44 @@ export default function ThreadScreen() {
   const [localDelivery, setLocalDelivery] = useState<ReadonlyMap<string, LocalDelivery>>(new Map());
   const setDelivery = (messageId: string, state: LocalDelivery) =>
     setLocalDelivery((previous) => new Map(previous).set(messageId, state));
+
+  /**
+   * LA PROTECTION (D-23, #5676).
+   *
+   * `expiredIds` — l'état qui FORCE le re-rendu d'UNE rangée quand son
+   * minuteur éphémère s'éteint : `EphemeralBadge` tient son propre
+   * intervalle (`memo`), il ne remonte que l'INSTANT d'expiration, jamais un
+   * `setInterval` porté par la rangée elle-même.
+   *
+   * `consume` — la forme de la réponse `POST …/consume` MIMÉE
+   * (`isFullyConsumed: true` sur `maxViewOnceCount: 1`,
+   * `messages-view-once.ts:50-62`) : le fil lit toujours les fixtures
+   * (`apiConfig.source`, `:22`), donc `consume` n'atteint jamais le réseau —
+   * le PORT réel (`lib/api/view-once.ts::consumeViewOnce`) et le RÉDUCTEUR
+   * (`applyConsumption`) que ce lot écrit sont ceux que #5493 (seconde
+   * moitié) branchera sur `apiConfig.source === 'gateway'`. Hors ligne, la
+   * consommation échoue PROPREMENT (`false`) — la fenêtre ne s'ouvre pas.
+   *
+   * `recordViewOnceConsumption` — la MOITIÉ qui manquait (revue #5676,
+   * défaut 7) : `applyConsumption` ne change que `messages`, l'état LOCAL de
+   * CETTE route, qui repart des fixtures à chaque montage. Sans elle, un
+   * aller-retour vers `/` puis un retour sur ce fil relisait
+   * `viewOnceCount: 0` et le secret se relisait — la couche de données
+   * (`lib/api/fixtures.ts`) est le seul endroit qui survit au démontage.
+   */
+  const [expiredIds, setExpiredIds] = useState<ReadonlySet<string>>(new Set());
+  const onEphemeralExpired = useCallback((messageId: string) => {
+    setExpiredIds((previous) => (previous.has(messageId) ? previous : new Set(previous).add(messageId)));
+  }, []);
+  const consume = useCallback(
+    async (messageId: string): Promise<boolean> => {
+      if (!online) return false;
+      recordViewOnceConsumption(messageId);
+      setMessages((previous) => applyConsumption(previous, { messageId, viewOnceCount: 1 }));
+      return true;
+    },
+    [online],
+  );
 
   const otherUnread = CONVERSATIONS.filter((c) => c.id !== conversation.id).reduce(
     (total, c) => total + unreadOf(c),
@@ -622,6 +662,9 @@ export default function ThreadScreen() {
                     onJumpToMessage={jumpToMessage}
                     highlighted={highlightedId === p.message.id}
                     elected={isElected}
+                    expired={expiredIds.has(p.message.id)}
+                    onConsumeViewOnce={consume}
+                    onEphemeralExpired={onEphemeralExpired}
                     {...(localDelivery.has(p.message.id)
                       ? {
                           localDelivery: localDelivery.get(p.message.id) as LocalDelivery,
@@ -637,6 +680,9 @@ export default function ThreadScreen() {
                     viewerId={VIEWER_ID}
                     onJumpToMessage={jumpToMessage}
                     highlighted={highlightedId === p.message.id}
+                    expired={expiredIds.has(p.message.id)}
+                    onConsumeViewOnce={consume}
+                    onEphemeralExpired={onEphemeralExpired}
                     {...(localDelivery.has(p.message.id)
                       ? {
                           localDelivery: localDelivery.get(p.message.id) as LocalDelivery,
