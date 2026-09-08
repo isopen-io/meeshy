@@ -233,6 +233,16 @@ model User {
   // Profile completion
   profileCompletionRate Int? @default(0)
 
+  // Engagement — série de jours actifs (#5544,
+  // docs/product/streaks-badges-modele.md § 5). Un état, pas un historique :
+  // pas de collection à part.
+  currentStreakDays Int       @default(0)
+  longestStreakDays Int       @default(0)
+  /// Jour civil UTC (minuit) de la dernière activité qualifiante — jamais un
+  /// horodatage complet, pour que la comparaison de jour ne dépende pas de
+  /// l'heure de l'appel.
+  lastStreakDate    DateTime?
+
   // ============================================
   // E2EE / SIGNAL PROTOCOL ENCRYPTION FIELDS
   // ============================================
