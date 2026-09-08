@@ -15,9 +15,9 @@ jest.mock('@/hooks/useI18n', () => ({
     t: (key: string) => {
       const map: Record<string, string> = {
         'agent.overview.timeAgo.justNow': 'just now',
-        'agent.overview.timeAgo.minutes': '{{count}} min ago',
-        'agent.overview.timeAgo.hours': '{{count}} h ago',
-        'agent.overview.timeAgo.days': '{{count}} d ago',
+        'agent.overview.timeAgo.minutes': '{count} min ago',
+        'agent.overview.timeAgo.hours': '{count} h ago',
+        'agent.overview.timeAgo.days': '{count} d ago',
       };
       return map[key] ?? key;
     },
