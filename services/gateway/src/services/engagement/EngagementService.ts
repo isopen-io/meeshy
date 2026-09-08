@@ -11,7 +11,7 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { BADGE_THRESHOLDS, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import { BADGE_THRESHOLDS, STREAK_THRESHOLDS, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { NotificationService } from '../notifications/NotificationService';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
@@ -19,6 +19,13 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const log = enhancedLogger.child({ module: 'EngagementService' });
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Jour civil UTC (minuit) — la comparaison de série ne dépend jamais de l'heure de l'appel. */
+function startOfUtcDay(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
 
 /** Prisma signale une violation d'index unique par le code `P2002`. */
 function isP2002(err: unknown): boolean {
@@ -51,6 +58,8 @@ export class EngagementService {
     for (const threshold of crossedThresholds) {
       await this.tryAwardBadge(userId, axisKey, threshold);
     }
+
+    await this.updateStreak(userId);
   }
 
   /**
@@ -123,6 +132,97 @@ export class EngagementService {
       log.warn('badge_earned notification failed after milestone was recorded', {
         userId,
         axisKey,
+        threshold,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * Une activité qualifiante — n'importe quel appel à `recordActivity`, sur
+   * n'importe quel axe (§ 5) — fait avancer la série de jours actifs.
+   * Comparaison par JOUR CIVIL UTC : plusieurs activités le même jour ne
+   * l'incrémentent qu'une fois ; un jour sauté la remet à 1.
+   *
+   * Lecture puis écriture, pas une transaction : la fenêtre de course (deux
+   * activités du même utilisateur dans le même instant, à cheval sur minuit)
+   * est acceptée — cette mécanique de réengagement n'a pas la même exigence
+   * de justesse que le compteur d'axe (upsert atomique) ou l'anti-rejeu de
+   * palier (contrainte unique), qui la restent.
+   *
+   * `currentStreakDays`/`longestStreakDays` portent un `@default(0)` dans le
+   * schéma, qui ne s'applique qu'à la CRÉATION — un `User` créé avant cette
+   * migration a ces champs ABSENTS, pas à zéro (même piège que
+   * `Conversation.firstMessageSentAt`, cf. `packages/shared/CLAUDE.md`).
+   * D'où les replis `?? 0` : une série pour un compte pré-existant démarre
+   * à 1, jamais `NaN`.
+   */
+  private async updateStreak(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { currentStreakDays: true, longestStreakDays: true, lastStreakDate: true },
+    });
+    if (!user) return;
+
+    const today = startOfUtcDay(new Date());
+    const lastDay = user.lastStreakDate ? startOfUtcDay(user.lastStreakDate) : null;
+
+    if (lastDay && lastDay.getTime() === today.getTime()) {
+      return;
+    }
+
+    const previousStreak = user.currentStreakDays ?? 0;
+    const isConsecutiveDay = lastDay !== null && today.getTime() - lastDay.getTime() === ONE_DAY_MS;
+    const newStreak = isConsecutiveDay ? previousStreak + 1 : 1;
+    const newLongest = Math.max(user.longestStreakDays ?? 0, newStreak);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { currentStreakDays: newStreak, longestStreakDays: newLongest, lastStreakDate: today },
+    });
+
+    const crossedThresholds = STREAK_THRESHOLDS.filter(
+      (threshold) => threshold > previousStreak && threshold <= newStreak,
+    );
+
+    for (const threshold of crossedThresholds) {
+      await this.tryAwardStreakMilestone(userId, threshold);
+    }
+  }
+
+  /**
+   * Même garde anti-rejeu que `tryAwardBadge` (§ 4), portée par la contrainte
+   * unique `EngagementMilestone(userId, milestoneType, milestoneKey)`.
+   */
+  private async tryAwardStreakMilestone(userId: string, threshold: number): Promise<void> {
+    try {
+      await this.prisma.engagementMilestone.create({
+        data: {
+          userId,
+          milestoneType: 'streak',
+          milestoneKey: `streak:${threshold}`,
+        },
+      });
+    } catch (err) {
+      if (isP2002(err)) return;
+      throw err;
+    }
+
+    try {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
+      const lang = recipientLanguage(user, 'fr');
+      const notificationService = getSharedNotificationService() ?? new NotificationService(this.prisma);
+      await notificationService.createNotification({
+        userId,
+        type: 'streak_milestone',
+        priority: 'normal',
+        content: notificationString(lang, 'engagement.streakMilestone', { count: threshold }),
+        context: {},
+        metadata: { action: 'view_details', threshold },
+      });
+    } catch (err) {
+      log.warn('streak_milestone notification failed after milestone was recorded', {
+        userId,
         threshold,
         error: err instanceof Error ? err.message : String(err),
       });
