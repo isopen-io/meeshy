@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { hashPassword } from '../utils/password-hash';
+import { clearPendingTwoFactor } from './auth/pending-two-factor';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
 
@@ -157,8 +158,9 @@ export async function anonymizeUserIdentity(
       twoFactorSecret: null,
       twoFactorBackupCodes: [],
       twoFactorPendingSecret: null,
-      twoFactorChallengeHash: null,
-      twoFactorChallengeExpiresAt: null,
+      // Colonnes du défi d'étape 2 — SITE UNIQUE `services/auth/pending-two-factor.ts`
+      // (#4542) : jamais nommées ici, le fragment vient de son propre effaceur.
+      ...clearPendingTwoFactor(),
       signalIdentityKeyPublic: null,
       signalIdentityKeyPrivate: null,
       signalRegistrationId: null,
