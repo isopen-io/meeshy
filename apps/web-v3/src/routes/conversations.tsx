@@ -66,7 +66,10 @@ export default function ConversationsScreen() {
   const emptiness = emptinessOf(CONVERSATIONS, visible);
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden">
+    /* `pt-safe` : l'encoche HAUTE est portee par le CADRE de l'ecran, dans ses
+       100dvh (box-sizing: border-box) — jamais par `<body>`, qui l'AJOUTAIT
+       et poussait la barre de recherche hors du cadre (#5604, app.css). */
+    <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
         <h1
           className="flex-1 text-large-title font-bold"
@@ -269,10 +272,7 @@ export default function ConversationsScreen() {
       </ul>
 
       {/* La barre de recherche EN BAS — a portee du pouce (cf. doc-comment). */}
-      <div
-        className="shrink-0 px-4 pt-2"
-        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 8px)' }}
-      >
+      <div className="shrink-0 px-4 pt-2 pb-safe">
         <div
           className="flex items-center gap-3 px-4 py-3 backdrop-blur-xl"
           style={{

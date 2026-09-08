@@ -39,6 +39,13 @@ services/translator/models/*
 **/*.spec.ts
 **/.nyc_output/
 
+# === Coques natives Capacitor (#5604) ===
+# L'image web ne lit rien de ces projets natifs (Android/iOS) : le Dockerfile
+# ne copie que `dist/`. Versionnees depuis #5604 (D-18), elles seraient sinon
+# copiees en pure perte a chaque construction d'image.
+apps/web-v3/android/
+apps/web-v3/ios/
+
 # === IDE ===
 .vscode/
 .idea/

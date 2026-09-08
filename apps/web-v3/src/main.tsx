@@ -5,7 +5,16 @@ import { createRoot } from 'react-dom/client';
 import './styles/app.css';
 
 import Shell from '@/components/shell';
+import { followSystem } from '@/lib/scheme';
 import { Router } from '@/routes/route-table';
+
+/**
+ * Defaut 3c (recette 2026-09-07, #5604) : la bascule clair/sombre du systeme
+ * ne prenait qu'au relancement — cette fonction existait (`scheme.ts`) mais
+ * n'etait jamais appelee. Voir `scheme.test.ts` (T1) pour le comportement,
+ * et la recette simulateur R4 pour la preuve qu'elle est bien montee ici.
+ */
+followSystem();
 
 /**
  * CACHE-FIRST, RESEAU-ENSUITE — les « Instant App Principles » du depot,

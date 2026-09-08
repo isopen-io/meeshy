@@ -327,7 +327,7 @@ export default function ThreadScreen() {
        et une APPLICATION (seule la zone des messages defile, l'en-tete et le
        composeur sont des bords fixes). Avec `min-h-dvh` le composeur recouvrait
        les derniers messages — le defaut le plus visible du premier rendu. */
-    <div className="flex h-dvh flex-col overflow-hidden" style={withAccent(accent)}>
+    <div className="flex h-dvh flex-col overflow-hidden pt-safe" style={withAccent(accent)}>
       <header
         className="z-10 shrink-0 backdrop-blur-xl"
         style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-surface) 80%, transparent)' }}

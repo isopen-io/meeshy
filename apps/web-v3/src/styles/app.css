@@ -149,11 +149,27 @@
        porteur est « la PWA reprend l'interface iOS ». Voir ios.css. */
     background-color: var(--ios-surface);
     color: var(--ios-ink);
-    /* Les encoches. `viewport-fit=cover` dans l'index les expose ; sans ces
-       quatre lignes, l'en-tete passe SOUS l'encoche sur iPhone et sous la
-       barre de gestes Android. */
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
+    /*
+     * AUCUN inset ici — ni haut, ni bas (#5604, revue-correction).
+     *
+     * La coquille en portait un en HAUT (`padding-top: env(safe-area-inset-top)`)
+     * pendant que les ecrans plein-cadre (`conversations.tsx`, `thread.tsx`)
+     * sont des `h-dvh`, c'est-a-dire 100dvh = la hauteur VISIBLE ENTIERE. La
+     * boite du document valait donc `100dvh + inset-haut`, et l'exces partait
+     * SOUS le bord bas de l'ecran : le dernier bord fixe (barre de recherche
+     * en liste, composeur en fil) etait pousse hors du cadre d'EXACTEMENT la
+     * hauteur de l'encoche HAUTE. Mesure au simulateur `Meeshy Poc-Web-V31`
+     * (sonde `getComputedStyle` sur des boites de hauteur `env(...)`) :
+     * `TOP=62 BOT=34 innerHeight=874 documentElement.scrollHeight=936`
+     * — 936 = 874 + 62, la barre de recherche coupee de 62px.
+     *
+     * La loi, desormais UNE et symetrique sur les deux axes : l'inset est porte
+     * par le CADRE de l'ecran (`pt-safe` sur la racine `h-dvh`, ou `box-sizing:
+     * border-box` le fait tenir DANS les 100dvh) et par le BORD FIXE bas
+     * (`pb-safe`), jamais par la coquille. C'est le modele iOS que la v3.1 suit
+     * (D-1) : aucune barre de navigation systeme, chaque ecran dessine son
+     * propre en-tete flottant et respecte lui-meme ses encoches.
+     */
   }
 
   /* Regle 17 : le focus est un COUPLE (anneau + contre-anneau) — aucune
@@ -223,6 +239,30 @@
   color: white;
   background-color: var(--ios-indigo-500);
   border-radius: var(--radius-pill);
+}
+
+/*
+ * LES DEUX ENCOCHES, UNE SEULE ECRITURE CHACUNE (#5604, revue-correction).
+ *
+ * `max(env(safe-area-inset-bottom), 8px)` etait ecrit deux fois a la main
+ * (`composer.tsx`, `conversations.tsx`) et l'inset HAUT une troisieme, au
+ * mauvais endroit (la coquille — voir le commentaire de `body`). Trois
+ * ecritures d'une meme loi, c'est trois occasions de diverger ; les quarante
+ * surfaces iOS qui restent a porter en auraient fait quarante.
+ *
+ * `pt-safe` se pose sur la RACINE `h-dvh` d'un ecran plein-cadre : Tailwind
+ * pose `box-sizing: border-box` partout, donc le padding tient DANS les 100dvh
+ * au lieu de s'y ajouter — l'en-tete descend sous l'encoche sans que rien ne
+ * deborde par le bas. `pb-safe` se pose sur le dernier BORD FIXE de l'ecran
+ * (composeur, barre de recherche) ; le plancher de 8px est la respiration due
+ * quand l'appareil n'a pas d'indicateur home.
+ */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+@utility pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 8px);
 }
 
 @utility offscreen {
