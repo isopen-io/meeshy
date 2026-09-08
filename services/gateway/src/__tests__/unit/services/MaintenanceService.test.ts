@@ -28,8 +28,17 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
+// La logique d'anonymisation elle-même (#5689) a son propre témoin exhaustif
+// — `messaging/__tests__/anonymizeDeletedAccountMessages.test.ts` — jamais
+// ré-implémentée ici. Ce fichier-ci ne garde que la FRONTIÈRE : le balayage
+// l'appelle-t-il, avec le bon id, au bon moment ?
+jest.mock('../../../services/messaging/anonymizeDeletedAccountMessages', () => ({
+  anonymizeMessagesOfDeletedAccount: jest.fn<any>().mockResolvedValue({ anonymized: 0 }),
+}));
+
 import { MaintenanceService } from '../../../services/MaintenanceService';
 import { logger } from '../../../utils/logger';
+import { anonymizeMessagesOfDeletedAccount } from '../../../services/messaging/anonymizeDeletedAccountMessages';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -569,5 +578,43 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
     await expect(sweepDeletions(sut)).resolves.toBeUndefined();
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  // `privacy.json` promet l'anonymisation des messages à la fin de la grâce
+  // (#5689) — même moment que la révocation de sessions, APRÈS l'écriture.
+  it("anonymise les messages de CHAQUE compte expiré, APRÈS que sa transaction a abouti", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a'), expiredRequest('req-b', 'user-b')]);
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await sweepDeletions(sut);
+
+    expect(anonymizeMessagesOfDeletedAccount).toHaveBeenNthCalledWith(1, prisma, 'user-a');
+    expect(anonymizeMessagesOfDeletedAccount).toHaveBeenNthCalledWith(2, prisma, 'user-b');
+  });
+
+  it("une transaction qui échoue n'anonymise PAS les messages de ce compte", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    prisma.$transaction = jest.fn<() => Promise<unknown[]>>().mockRejectedValueOnce(new Error('write conflict'));
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
+    expect(anonymizeMessagesOfDeletedAccount).not.toHaveBeenCalled();
+  });
+
+  it("un échec d'anonymisation est journalisé et n'arrête pas le lot", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a'), expiredRequest('req-b', 'user-b')]);
+    (anonymizeMessagesOfDeletedAccount as jest.Mock)
+      .mockRejectedValueOnce(new Error('mongo down'))
+      .mockResolvedValueOnce({ anonymized: 0 });
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
+    expect(anonymizeMessagesOfDeletedAccount).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
   });
 });

@@ -9,6 +9,7 @@ import { logger } from '../utils/logger';
 import { AttachmentService } from './attachments';
 import { EmailService } from './EmailService';
 import { recomputeConversationLastMessageAt } from './messaging/messageRemovalEffects';
+import { anonymizeMessagesOfDeletedAccount } from './messaging/anonymizeDeletedAccountMessages';
 import { MediaService } from './MediaService';
 import { sweepPendingPostMedia } from './posts/sweepPendingPostMedia';
 import type { PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
@@ -743,8 +744,27 @@ export class MaintenanceService {
   }
 
   /**
+   * `privacy.json` promet, à la fin de la grâce : « les messages dans les
+   * conversations partagées sont anonymisés » — une exception NOMMÉE à
+   * « suppression définitive de toutes vos données personnelles », pas une
+   * omission. Après l'écriture, jamais avant, même raison que
+   * `revokeSessionsOfDeletedAccount` : la ligne `User` est déjà posée, et un
+   * échec ici ne doit pas être compté comme une expiration ratée par
+   * l'appelant. Détail : `services/messaging/anonymizeDeletedAccountMessages.ts`.
+   */
+  private async purgeMessagesOfDeletedAccount(userId: string): Promise<void> {
+    try {
+      await anonymizeMessagesOfDeletedAccount(this.prisma, userId);
+    } catch (error) {
+      logger.warn(`⚠️ [DELETION] Message anonymization failed for deleted account user=${userId}:`, error);
+    }
+  }
+
+  /**
    * Traiter les demandes de suppression de compte :
-   * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED)
+   * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED),
+   *    révoquer les sessions, purger les données isolées (#3632) puis
+   *    anonymiser les messages du compte (#5689)
    * 2. Envoyer les rappels hebdomadaires pour les requests GRACE_PERIOD_EXPIRED
    */
   private async processAccountDeletionRequests(): Promise<void> {
@@ -776,6 +796,7 @@ export class MaintenanceService {
             expiredCount++;
             await this.revokeSessionsOfDeletedAccount(req.userId);
             await this.purgeIsolatedDataOfExpiredAccount(req.userId);
+            await this.purgeMessagesOfDeletedAccount(req.userId);
           } catch (error) {
             logger.error(`❌ [DELETION] Failed to expire request=${req.id} for user=${req.userId}:`, error);
           }
