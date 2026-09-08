@@ -28,6 +28,7 @@ from .model_manager import (
     STTBackend,
     ModelType
 )
+from config.settings import get_settings
 
 # Import du smart segment merger pour fusionner intelligemment les mots courts
 from utils.smart_segment_merger import merge_short_segments
@@ -120,19 +121,23 @@ class TranscriptionService:
 
     def __init__(
         self,
-        model_size: str = "large-v3",
-        device: str = "cpu",
-        compute_type: str = "int8",  # int8 pour CPU (float16 non supporté sur CPU Mac)
+        model_size: Optional[str] = None,
+        device: Optional[str] = None,
+        compute_type: Optional[str] = None,
         models_path: Optional[str] = None
     ):
         if self._initialized:
             return
 
-        # Configuration - utilise les chemins centralisés du ModelManager
+        # Configuration - source UNIQUE : config.settings.Settings (#3666).
+        # `settings.whisper_model` était mort ici avant ce correctif : le service
+        # relisait os.getenv() avec SES PROPRES défauts, divergents de ceux de
+        # Settings — changer settings.py n'avait donc aucun effet en prod.
+        settings = get_settings()
         model_paths = get_model_paths()
-        self.model_size = os.getenv('WHISPER_MODEL', model_size)
-        self.device = os.getenv('WHISPER_DEVICE', device)
-        self.compute_type = os.getenv('WHISPER_COMPUTE_TYPE', compute_type)
+        self.model_size = model_size or settings.whisper_model
+        self.device = device or settings.whisper_device
+        self.compute_type = compute_type or settings.whisper_compute_type
         # Utilise le chemin centralisé pour Whisper (peut être override)
         self.models_path = models_path or str(model_paths.stt_whisper)
 
