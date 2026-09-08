@@ -3,6 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import type { ConversationReadingMode, ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 
 import { resolveThreadMode, threadCapabilities, toStickyPreference, toStoredMode, usesFlatRow } from './decision';
+import { CATCHUP_CONVERSATION } from '@/lib/api/fixtures-catchup';
+import { unreadOf } from '@/lib/view/conversation';
 
 /**
  * LA LOI DE CHOIX DU FIL — comportement par l'API publique, `now` et
@@ -23,11 +25,11 @@ describe('resolveThreadMode — ouverture par défaut (D-7)', () => {
   });
 });
 
-describe('resolveThreadMode — D-8 : un mode élu hors catalogue web retombe sur focal', () => {
-  test('26 non-lus (> 25) ⇒ la loi élirait « summary », le catalogue web ne le porte pas ⇒ focal/clamped-unavailable', () => {
+describe('resolveThreadMode — #5695 : « summary » entre au catalogue de rendu web (D-21)', () => {
+  test('26 non-lus (> 25) ⇒ summary/unread-over-cap', () => {
     expect(
       resolveThreadMode({ ...BASE, unreadCount: 26, lastOpenedAt: BASE.now, sticky: 'auto' }),
-    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+    ).toEqual({ mode: 'summary', reason: 'unread-over-cap' });
   });
 
   test('25 non-lus (pile au seuil) ⇒ toujours sous le plafond ⇒ focal/default', () => {
@@ -36,17 +38,24 @@ describe('resolveThreadMode — D-8 : un mode élu hors catalogue web retombe su
     ).toEqual({ mode: 'focal', reason: 'default' });
   });
 
-  test('absence (25 h, 10 non-lus) ⇒ la branche stale-absence élirait « summary » ⇒ focal/clamped-unavailable', () => {
+  test('absence (25 h, 10 non-lus — le plancher) ⇒ summary/stale-absence', () => {
     const lastOpenedAt = new Date(BASE.now.getTime() - 25 * 60 * 60 * 1000);
     expect(
       resolveThreadMode({ ...BASE, unreadCount: 10, lastOpenedAt, sticky: 'auto' }),
-    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+    ).toEqual({ mode: 'summary', reason: 'stale-absence' });
   });
 
   test('présence récente (23 h, 10 non-lus) ⇒ pas absent ⇒ focal/default', () => {
     const lastOpenedAt = new Date(BASE.now.getTime() - 23 * 60 * 60 * 1000);
     expect(
       resolveThreadMode({ ...BASE, unreadCount: 10, lastOpenedAt, sticky: 'auto' }),
+    ).toEqual({ mode: 'focal', reason: 'default' });
+  });
+
+  test('absence (25 h) mais 9 non-lus (sous le plancher de 10) ⇒ focal/default — la seconde moitié du plancher', () => {
+    const lastOpenedAt = new Date(BASE.now.getTime() - 25 * 60 * 60 * 1000);
+    expect(
+      resolveThreadMode({ ...BASE, unreadCount: 9, lastOpenedAt, sticky: 'auto' }),
     ).toEqual({ mode: 'focal', reason: 'default' });
   });
 });
@@ -74,6 +83,12 @@ describe('resolveThreadMode — le choix collant', () => {
     expect(
       resolveThreadMode({ ...BASE, unreadCount: 0, lastOpenedAt: BASE.now, sticky: 'bulles' }),
     ).toEqual({ mode: 'bubbles', reason: 'sticky' });
+  });
+
+  test('collant resume ⇒ summary/sticky (#5695 : summary est maintenant rendu)', () => {
+    expect(
+      resolveThreadMode({ ...BASE, unreadCount: 0, lastOpenedAt: BASE.now, sticky: 'resume' }),
+    ).toEqual({ mode: 'summary', reason: 'sticky' });
   });
 
   test('collant riviere ⇒ mode listé qu\'on ne sait pas rendre ⇒ focal/clamped-unavailable', () => {
@@ -143,20 +158,26 @@ describe('resolveThreadMode — horloge injectée', () => {
     ).toEqual({ mode: 'focal', reason: 'default' });
     expect(
       resolveThreadMode({ ...BASE, unreadCount: 10, lastOpenedAt, sticky: 'auto', now: far }),
-    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+    ).toEqual({ mode: 'summary', reason: 'stale-absence' });
   });
 
-  test('jamais ouverte (lastOpenedAt null) + non-lus ⇒ absence ⇒ clamped-unavailable', () => {
+  test('jamais ouverte (lastOpenedAt null) + non-lus ⇒ absence ⇒ summary/stale-absence', () => {
     expect(
       resolveThreadMode({ ...BASE, unreadCount: 10, lastOpenedAt: null, sticky: 'auto' }),
-    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+    ).toEqual({ mode: 'summary', reason: 'stale-absence' });
   });
 });
 
 describe('resolveThreadMode — identité et type de conversation', () => {
-  test('un invité reçoit la même décision par défaut (summary hors catalogue web pour tout le monde)', () => {
+  test('un invité à 26 non-lus reste clampé — la LOI retire summary du catalogue anonyme (reading-modes.ts:284-285)', () => {
     expect(
       resolveThreadMode({ ...BASE, isAnonymous: true, unreadCount: 26, lastOpenedAt: BASE.now, sticky: 'auto' }),
+    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+  });
+
+  test('un invité avec un choix collant « resume » reste clampé — même raison', () => {
+    expect(
+      resolveThreadMode({ ...BASE, isAnonymous: true, unreadCount: 0, lastOpenedAt: BASE.now, sticky: 'resume' }),
     ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
   });
 
@@ -164,6 +185,32 @@ describe('resolveThreadMode — identité et type de conversation', () => {
     expect(
       resolveThreadMode({ ...BASE, conversationType: 'direct', unreadCount: 0, lastOpenedAt: BASE.now, sticky: 'auto' }),
     ).toEqual({ mode: 'focal', reason: 'default' });
+  });
+});
+
+describe('resolveThreadMode — le corpus « rattrapage » (#5695, critère b)', () => {
+  test('catchupFixture_opensInSummary_unreadOverCap', () => {
+    const now = new Date();
+    expect(
+      resolveThreadMode({
+        unreadCount: unreadOf(CATCHUP_CONVERSATION),
+        lastOpenedAt: now,
+        now,
+        sticky: 'auto',
+        isAnonymous: false,
+        conversationType: 'group',
+      }),
+    ).toEqual({ mode: 'summary', reason: 'unread-over-cap' });
+  });
+});
+
+describe('threadCapabilities — #5695 : summary entré au catalogue de rendu, borné à l’identité', () => {
+  test('un inscrit voit summary dans availableModes', () => {
+    expect(threadCapabilities({ isAnonymous: false, conversationType: 'group' }).availableModes).toContain('summary');
+  });
+
+  test('un invité ne le voit PAS', () => {
+    expect(threadCapabilities({ isAnonymous: true, conversationType: 'group' }).availableModes).not.toContain('summary');
   });
 });
 

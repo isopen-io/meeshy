@@ -39,13 +39,15 @@ const DEFAULT_SUBTITLES: Readonly<Record<ConversationReadingMode, string>> = {
 };
 
 /**
- * Le Résumé Vivant n'est pas encore rendu par la v3.1 (`THREAD_RENDERABLE_MODES`
- * de `decision.ts` ne le porte pas) — raison PROPRE au web, distincte du 403
- * serveur d'un invité côté iOS (qui, lui, ne liste `summary` que pour un
- * inscrit) : ici la ligne existe pour TOUT lecteur, et dit pourquoi elle est
- * grisée.
+ * Le Résumé Vivant EST rendu par la v3.1 depuis #5695
+ * (`THREAD_RENDERABLE_MODES` de `decision.ts` le porte) : la ligne passe
+ * désormais par la branche GÉNÉRIQUE ci-dessous, comme `focal`/`script` —
+ * disponible ssi `availableModes` (borné par l'identité) le porte. La
+ * raison d'un invité (« Réservé aux lecteurs connectés », le 403 de
+ * `/conversations/:id/analysis`) est nommée là, PROPRE à ce mode — jamais
+ * la formule générique « Indisponible » des deux autres.
  */
-const SUMMARY_UNAVAILABLE_REASON = 'Pas encore disponible sur le web';
+const SUMMARY_UNAVAILABLE_REASON = 'Réservé aux lecteurs connectés';
 
 /**
  * La Rivière TRIFURQUE sa raison (`RiverEligibilityReasonKind`,
@@ -88,26 +90,19 @@ export function menuRows(input: MenuRowsInput): readonly MenuRow[] {
       };
     }
 
-    if (mode === 'summary') {
-      return {
-        mode,
-        title: TITLES[mode],
-        subtitle: SUMMARY_UNAVAILABLE_REASON,
-        isCurrent,
-        isAvailable: false,
-        reason: SUMMARY_UNAVAILABLE_REASON,
-      };
-    }
-
     if (mode === 'river') {
       const reason = riverReason(input.riverEligibilityReason);
       return { mode, title: TITLES[mode], subtitle: reason, isCurrent, isAvailable: false, reason };
     }
 
-    // `focal` / `script` : disponibles ssi le catalogue de rendu les porte.
+    // `focal` / `script` / `summary` (#5695) : disponibles ssi le catalogue
+    // de rendu les porte — pour `summary`, cela borne à l'IDENTITÉ (un
+    // invité ne l'a jamais dans `availableModes`, `decision.ts`).
     const isAvailable = input.availableModes.includes(mode);
-    return isAvailable
-      ? { mode, title: TITLES[mode], subtitle: DEFAULT_SUBTITLES[mode], isCurrent, isAvailable, reason: null }
-      : { mode, title: TITLES[mode], subtitle: 'Indisponible', isCurrent, isAvailable, reason: 'Indisponible' };
+    if (isAvailable) {
+      return { mode, title: TITLES[mode], subtitle: DEFAULT_SUBTITLES[mode], isCurrent, isAvailable, reason: null };
+    }
+    const reason = mode === 'summary' ? SUMMARY_UNAVAILABLE_REASON : 'Indisponible';
+    return { mode, title: TITLES[mode], subtitle: reason, isCurrent, isAvailable, reason };
   });
 }

@@ -30,6 +30,8 @@ const SCREENS = [
   { name: 'signup', path: '/signup' },
   /** LA PROTECTION (D-23, #5676) — au repos, peau Focal, mode par défaut. */
   { name: 'thread-protected', path: '/c/c-protection' },
+  /** LE RÉSUMÉ VIVANT (#5695, D-21) — le SEUL corpus qui ATTEINT `summary`. */
+  { name: 'thread-summary', path: '/c/c-rattrapage' },
 ];
 
 const browser = await launchChromium();

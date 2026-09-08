@@ -4,20 +4,30 @@
     "preact-web": {
       "runtime": "preact",
       "target": "web",
-      "document_gzip_9_bytes": 1324,
-      "critical_js_gzip_9_bytes": 21244,
-      "critical_css_gzip_9_bytes": 7935,
-      "first_paint_gzip_9_bytes": 30503,
-      "first_paint_kb": 29.79,
+      "document_gzip_9_bytes": 1326,
+      "critical_js_gzip_9_bytes": 23937,
+      "critical_css_gzip_9_bytes": 8302,
+      "first_paint_gzip_9_bytes": 33565,
+      "first_paint_kb": 32.78,
       "requests_before_first_pixel": 6,
-      "download_3g_s": 1.29,
-      "on_demand_gzip_9_bytes": 69176,
+      "download_3g_s": 1.42,
+      "on_demand_gzip_9_bytes": 99081,
       "critical_detail": {
-        "assets/index-CPPUEynx.js": 4390,
-        "assets/core-DP23y5Bv.js": 16563,
-        "assets/data-DIDJ0sae.js": 166,
-        "assets/index-C1ABlKpV.css": 7935,
+        "assets/index-BI--_Bnh.js": 4474,
+        "assets/core-Cuyx61hY.js": 18394,
+        "assets/data-BWdJfGyX.js": 944,
+        "assets/index-CMhUT9_1.css": 8302,
         "registerSW.js": 125
+      },
+      "on_demand_detail": {
+        "summary": {
+          "pattern": "^assets/summary-host-",
+          "files": [
+            "assets/summary-host-DOgYLlCJ.js"
+          ],
+          "gzip_9_bytes": 5954,
+          "kb": 5.81
+        }
       }
     },
     "react-web": {

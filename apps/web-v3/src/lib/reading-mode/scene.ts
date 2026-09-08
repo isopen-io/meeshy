@@ -37,7 +37,7 @@ import { SCENE_FLATTEN_DURATION_MS } from './metrics';
  *    arrive, seules les TRANSITIONS CSS tombent (`app.css:190-199`).
  */
 
-export type ThreadSceneMode = SceneMode | 'bubbles';
+export type ThreadSceneMode = SceneMode | 'bubbles' | 'summary';
 
 export type ThreadScene = {
   /** L'identifiant de la rangée élue, ou `null` hors scène active. */
@@ -64,7 +64,9 @@ export function useThreadScene(
 
   useEffect(() => {
     const element = frame.current;
-    if (element === null || mode === 'bubbles') return;
+    // La scène du fil est INERTE en `summary` (#5695) : le Résumé Vivant
+    // n'a pas de rangées `[data-row]` — même garde que `bubbles`.
+    if (element === null || mode === 'bubbles' || mode === 'summary') return;
 
     // `mode` est narrowé à `SceneMode` ('focal' | 'script') après la garde
     // ci-dessus — capturé une fois pour toute la durée de vie de l'effet.
