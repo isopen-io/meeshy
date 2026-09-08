@@ -1,15 +1,19 @@
 /**
- * Le schema clair/sombre — UNE source, deux lecteurs (le script inline de
- * index.html au demarrage, ce module ensuite).
+ * Le schema clair/sombre — UNE source, trois lecteurs (le script inline de
+ * index.html au demarrage, celui des pages institutionnelles prechauffees, ce
+ * module ensuite). La clé est importée de `inline-scheme-bootstrap.js` — pas
+ * recopiée ici — pour que les trois ne puissent plus diverger (#5588).
  *
  * La table de jetons fait tout le travail de couleur : basculer le schema, ici,
  * revient a poser une CLASSE. Aucun composant n'a a connaitre le schema courant
  * pour se peindre juste — c'est la raison pour laquelle ce POC n'ecrit presque
  * aucune variante `light:`.
  */
+import { SCHEME_KEY } from './inline-scheme-bootstrap.js';
+
 export type ColorScheme = 'light' | 'dark';
 
-const KEY = 'meeshy.scheme';
+const KEY = SCHEME_KEY;
 
 export function currentScheme(): ColorScheme {
   return document.documentElement.classList.contains('light') ? 'light' : 'dark';

@@ -8,6 +8,29 @@ import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
+import { INLINE_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
+
+/**
+ * `index.html` ne porte plus le TEXTE du script d'amorçage du schéma, mais un
+ * marqueur — voir son commentaire. Trois lecteurs (`index.html` via ce
+ * greffon, `scripts/prerender-institutional.tsx`, `src/lib/scheme.ts`) importent
+ * désormais la MÊME constante plutôt que de la recopier (#5588) : la clé et le
+ * script ne peuvent plus diverger entre eux.
+ */
+const SCHEME_BOOTSTRAP_MARKER = '/*@INLINE_SCHEME_BOOTSTRAP@*/';
+
+const inlineSchemeBootstrap = (): Plugin => ({
+  name: 'meeshy-inline-scheme-bootstrap',
+  transformIndexHtml(html) {
+    if (!html.includes(SCHEME_BOOTSTRAP_MARKER)) {
+      throw new Error(
+        `index.html ne porte plus le marqueur ${SCHEME_BOOTSTRAP_MARKER} : le script d'amorçage du ` +
+          "schéma ne serait plus injecté, et le premier rendu à froid basculerait de couleur (#5588).",
+      );
+    }
+    return html.replace(SCHEME_BOOTSTRAP_MARKER, INLINE_SCHEME_BOOTSTRAP);
+  },
+});
 
 /**
  * DEUX runtimes, UN code source.
@@ -215,6 +238,7 @@ export default defineConfig({
   },
   plugins: [
     tailwind(),
+    inlineSchemeBootstrap(),
     prerenderInstitutionalPages(),
     ...(forCapacitor ? [dropInstitutionalServiceWorker()] : []),
     /**
