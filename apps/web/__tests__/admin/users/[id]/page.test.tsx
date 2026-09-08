@@ -6,6 +6,47 @@ import { apiService } from '../../../../services/api.service';
 import { adminService } from '../../../../services/admin.service';
 import { toast } from 'sonner';
 
+/**
+ * LES PROPS QUE CE FICHIER DONNE À SES MOCKS.
+ *
+ * Une fabrique `jest.mock` n'a aucun contexte de types : ses paramètres sont
+ * des `any` implicites, que `noImplicitAny` compte comme dette. Les nommer ici
+ * une fois vaut mieux que de les annoter trente-trois fois — et mieux qu'un
+ * `any` assumé, que la charte du dépôt interdit.
+ *
+ * `unknown` sur les valeurs de passage (`user`, `onUpdate`) plutôt qu'un type
+ * du domaine : le mock ne fait que RELAYER ce qu'on lui donne, et prétendre
+ * connaître la forme le rendrait faux le jour où le composant réel change.
+ */
+type MockProps = {
+  readonly children?: React.ReactNode;
+  readonly className?: string;
+  readonly variant?: string;
+  readonly disabled?: boolean;
+  readonly onClick?: () => void;
+  readonly src?: string;
+  readonly alt?: string;
+  readonly userId?: string;
+  /**
+   * Les seuls champs que CES mocks lisent — pas le type du domaine.
+   * Un mock qui déclarerait `AdminUser` entier deviendrait faux le jour où
+   * le vrai composant change ; il ne relaie que ce qu'il affiche.
+   */
+  readonly user?: {
+    readonly firstName?: string;
+    readonly lastName?: string;
+    readonly username?: string;
+    readonly email?: string;
+    readonly phoneNumber?: string;
+    readonly bio?: string;
+    readonly systemLanguage?: string;
+    readonly regionalLanguage?: string;
+    readonly emailVerifiedAt?: string | null;
+  } | null;
+  readonly onUpdate?: (...args: readonly unknown[]) => void;
+  readonly onResetPassword?: (...args: readonly unknown[]) => void;
+};
+
 // Mock the next/navigation module
 const mockPush = jest.fn();
 const mockParams = { id: 'user-123' };
@@ -49,21 +90,21 @@ jest.mock('sonner', () => ({
 
 // Mock AdminLayout component
 jest.mock('@/components/admin/AdminLayout', () => {
-  return function MockAdminLayout({ children }) {
+  return function MockAdminLayout({ children }: MockProps) {
     return <div data-testid="admin-layout">{children}</div>;
   };
 });
 
 // Mock UI components
 jest.mock('@/components/ui/card', () => ({
-  Card: ({ children, className }) => <div data-testid="card" className={className}>{children}</div>,
-  CardContent: ({ children, className }) => <div data-testid="card-content" className={className}>{children}</div>,
-  CardHeader: ({ children, className }) => <div data-testid="card-header" className={className}>{children}</div>,
-  CardTitle: ({ children, className }) => <div data-testid="card-title" className={className}>{children}</div>,
+  Card: ({ children, className }: MockProps) => <div data-testid="card" className={className}>{children}</div>,
+  CardContent: ({ children, className }: MockProps) => <div data-testid="card-content" className={className}>{children}</div>,
+  CardHeader: ({ children, className }: MockProps) => <div data-testid="card-header" className={className}>{children}</div>,
+  CardTitle: ({ children, className }: MockProps) => <div data-testid="card-title" className={className}>{children}</div>,
 }));
 
 jest.mock('@/components/ui/button', () => ({
-  Button: ({ children, onClick, disabled, className, variant }) => (
+  Button: ({ children, onClick, disabled, className, variant }: MockProps) => (
     <button data-testid="button" onClick={onClick} disabled={disabled} className={className}>
       {children}
     </button>
@@ -71,42 +112,42 @@ jest.mock('@/components/ui/button', () => ({
 }));
 
 jest.mock('@/components/ui/badge', () => ({
-  Badge: ({ children, variant, className }) => (
+  Badge: ({ children, variant, className }: MockProps) => (
     <span data-testid="badge" className={className}>{children}</span>
   ),
 }));
 
 jest.mock('@/components/ui/input', () => ({
-  Input: (props) => <input data-testid="input" {...props} />,
+  Input: (props: MockProps) => <input data-testid="input" {...props} />,
 }));
 
 jest.mock('@/components/ui/avatar', () => ({
-  Avatar: ({ children, className }) => (
+  Avatar: ({ children, className }: MockProps) => (
     <div data-testid="avatar" className={className}>{children}</div>
   ),
-  AvatarImage: ({ src, alt }) => (
+  AvatarImage: ({ src, alt }: MockProps) => (
     <img data-testid="avatar-image" src={src} alt={alt} />
   ),
-  AvatarFallback: ({ children }) => (
+  AvatarFallback: ({ children }: MockProps) => (
     <div data-testid="avatar-fallback">{children}</div>
   ),
 }));
 
 // Mock sub-components that have been extracted from the page
 jest.mock('@/components/admin/user-detail/UserActivitySection', () => ({
-  UserActivitySection: ({ userId }) => (
+  UserActivitySection: ({ userId }: MockProps) => (
     <div data-testid="user-activity-section" data-user-id={userId}>Activity Section</div>
   ),
 }));
 
 jest.mock('@/components/admin/user-detail/UserGeolocationSection', () => ({
-  UserGeolocationSection: ({ user }) => (
+  UserGeolocationSection: ({ user }: MockProps) => (
     <div data-testid="user-geolocation-section">Geolocation Section</div>
   ),
 }));
 
 jest.mock('@/components/admin/user-detail/UserPersonalInfoSection', () => ({
-  UserPersonalInfoSection: ({ user, userId, onUpdate }) => {
+  UserPersonalInfoSection: ({ user, userId, onUpdate }: MockProps) => {
     const [editing, setEditing] = React.useState(false);
     const [firstName, setFirstName] = React.useState(user?.firstName || '');
     const [lastName, setLastName] = React.useState(user?.lastName || '');
@@ -153,13 +194,13 @@ jest.mock('@/components/admin/user-detail/UserPersonalInfoSection', () => ({
 }));
 
 jest.mock('@/components/admin/user-detail/UserContactInfoSection', () => ({
-  UserContactInfoSection: ({ user }) => (
+  UserContactInfoSection: ({ user }: MockProps) => (
     <div data-testid="contact-info-section">Contact Info</div>
   ),
 }));
 
 jest.mock('@/components/admin/user-detail/UserLanguageSection', () => ({
-  UserLanguageSection: ({ user }) => (
+  UserLanguageSection: ({ user }: MockProps) => (
     <div data-testid="language-section">
       {user?.systemLanguage && <span>{user.systemLanguage}</span>}
       {user?.regionalLanguage && <span>{user.regionalLanguage}</span>}
@@ -168,7 +209,7 @@ jest.mock('@/components/admin/user-detail/UserLanguageSection', () => ({
 }));
 
 jest.mock('@/components/admin/user-detail/UserSecuritySection', () => ({
-  UserSecuritySection: ({ user, onResetPassword }) => (
+  UserSecuritySection: ({ user, onResetPassword }: MockProps) => (
     <div data-testid="security-section">
       <h3>Sécurité</h3>
       <h3>Sécurité du compte</h3>
@@ -177,6 +218,12 @@ jest.mock('@/components/admin/user-detail/UserSecuritySection', () => ({
       <span>2FA activé</span>
       <button onClick={onResetPassword}>Réinitialiser le mot de passe</button>
     </div>
+  ),
+}));
+
+jest.mock('@/components/admin/user-detail/UserBanSection', () => ({
+  UserBanSection: ({ userId }: MockProps) => (
+    <div data-testid="ban-section">Bans {userId}</div>
   ),
 }));
 

@@ -31,10 +31,12 @@ webpack ne compile jamais `globals.css`.
 Un franchissement de frontière de paquet se **déclare** : `@meeshy/design-tokens`
 est un workspace, `apps/web-v3` le porte en dépendance, le Dockerfile l'installe
 comme le legacy installe `@meeshy/shared`, et `docker.yml` reconstruit l'image de
-la v3 quand ce paquet change. Les trois sont gardés par
+la v3 quand ce paquet change. Les trois étaient gardés par
 `scripts/check-v3-pipeline.mjs` (`aucune source de la v3 n'atteint le disque hors
 de son paquet`, `tout paquet déclaré par la v3 voyage dans son image`, `tout
-paquet déclaré par la v3 reconstruit son image`).
+paquet déclaré par la v3 reconstruit son image`) — ce garde n'était câblé à
+aucune étape de CI et a été retiré (#5623) ; l'invariant reste vrai sur le
+disque mais aucun gate ne le tient plus.
 
 ## Ce que la table ne fait jamais
 
@@ -78,7 +80,6 @@ Vérification :
 grep -rn 'prefers-color-scheme' packages/design-tokens/*.css   # rien
 cd apps/web-old-version3 && node scripts/check-jetons.mjs
 cd apps/web-old-version3 && bunx jest --testPathPatterns='(jetons|moteur-de-theme|theme-script)'
-node scripts/check-v3-pipeline.mjs --self-test
 ```
 
 ## Pourquoi le schéma sombre est porté par `:root`, et pourquoi ça ne suffit pas

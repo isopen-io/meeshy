@@ -172,7 +172,9 @@
       "name": "@meeshy/web-v3",
       "version": "3.1.0",
       "dependencies": {
+        "@meeshy/shared": "workspace:*",
         "@tanstack/react-query": "5.102.8",
+        "@tanstack/react-virtual": "3.14.10",
         "preact": "10.29.8",
         "zustand": "5.0.15",
       },

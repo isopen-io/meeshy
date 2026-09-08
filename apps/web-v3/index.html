@@ -8,7 +8,11 @@
     <meta name="theme-color" content="#0b0c14" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#f1f3f9" media="(prefers-color-scheme: light)" />
     <meta name="description" content="Messagerie multilingue temps reel" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- `favicon-48.png` est une PROJECTION de l'icone iOS (scripts/generate-icons.py,
+         TARGETS) — l'ancien favicon.svg (revue de #5606) etait redessine a la
+         main, une SECONDE source de marque qu'aucun gate ne reliait a iOS. -->
+    <link rel="icon" href="/favicon-48.png" type="image/png" sizes="48x48" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
     <title>Meeshy</title>
     <!--
       LE SEUL SCRIPT BLOQUANT DU DOCUMENT, et il tient en huit lignes.
@@ -21,10 +25,10 @@
     <script>
       (function () {
         try {
-          var choisi = localStorage.getItem('meeshy.schema');
-          var clair = choisi ? choisi === 'clair' : window.matchMedia('(prefers-color-scheme: light)').matches;
-          document.documentElement.classList.toggle('light', clair);
-          document.documentElement.classList.toggle('dark', !clair);
+          var chosen = localStorage.getItem('meeshy.scheme');
+          var light = chosen ? chosen === 'light' : window.matchMedia('(prefers-color-scheme: light)').matches;
+          document.documentElement.classList.toggle('light', light);
+          document.documentElement.classList.toggle('dark', !light);
         } catch (e) {
           /* Mode privé, stockage refusé : le schema sombre du HTML reste. */
         }
@@ -32,7 +36,7 @@
     </script>
   </head>
   <body>
-    <div id="racine"></div>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

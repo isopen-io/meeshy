@@ -23,7 +23,14 @@ export type TranslateKey = (key: string) => string;
 /**
  * Style « phrasé » : « Just now » / « 5min ago » / « 3h ago » / « 2d ago ».
  * Clés `<prefix>.{justNow,minutes,hours,days}` avec interpolation manuelle de
- * `{{count}}` (le `t` de ces vues ne prend pas de paramètres).
+ * `{count}` — UNE accolade (le `t` de ces vues ne prend pas de paramètres).
+ *
+ * C'est la convention de tous les catalogues web (170 occurrences de `{count}`
+ * en fr, aucune de la forme doublée) et celle qu'applique la jumelle
+ * `notification-helpers.ts`. Ce site cherchait la forme doublée : le `replace`
+ * ne trouvait jamais son motif et le dashboard agent affichait « il y a
+ * {count}j » dans les quatre langues. Les tests ne pouvaient pas le voir —
+ * leur `t` factice fabriquait la forme que le code attendait.
  */
 export function formatPhrasedTimeAgo(
   targetMs: number,
@@ -34,11 +41,11 @@ export function formatPhrasedTimeAgo(
   const bucket = classifyRelativeTime(targetMs, nowMs, { beyondDays: Infinity });
   switch (bucket.unit) {
     case 'minutes':
-      return t(`${prefix}.minutes`).replace('{{count}}', String(bucket.value));
+      return t(`${prefix}.minutes`).replace('{count}', String(bucket.value));
     case 'hours':
-      return t(`${prefix}.hours`).replace('{{count}}', String(bucket.value));
+      return t(`${prefix}.hours`).replace('{count}', String(bucket.value));
     case 'days':
-      return t(`${prefix}.days`).replace('{{count}}', String(bucket.value));
+      return t(`${prefix}.days`).replace('{count}', String(bucket.value));
     default:
       return t(`${prefix}.justNow`);
   }

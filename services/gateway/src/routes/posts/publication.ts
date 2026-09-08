@@ -261,6 +261,14 @@ export interface PublicationEffectsParams {
    * un appelant qui n'a pas encore de service à câbler ne doit rien casser.
    */
   readonly engagementService?: PostPublicationEngagementService | null;
+  /**
+   * DÉCLARÉ par le client (`CreatePostSchema.editedInApp` /
+   * `PublishAttachmentSchema.editedInApp`) — rien côté serveur ne distingue un
+   * média passé par l'éditeur de montage d'un média publié tel quel. Décide
+   * entre les axes mutuellement exclusifs `tool.in_app_edit` (#5542) et
+   * `tool.direct_publish` (#5543) : absent/`false` ⇒ publication directe.
+   */
+  readonly editedInApp?: boolean;
 }
 
 const asOptionalString = (value: unknown): string | undefined =>
@@ -292,7 +300,7 @@ export async function runPublicationEffects(
   const {
     fastify, prisma, request, mentionService, hashtagService,
     post, authorId, postType, submittedContent, storyEffects, declaredMentions,
-    detectedLanguage, porte, engagementService,
+    detectedLanguage, porte, engagementService, editedInApp,
   } = params;
 
   const postId = post.id;
@@ -447,6 +455,21 @@ export async function runPublicationEffects(
   } else if (engagementService && writtenType === 'POST' && visibility !== 'PRIVATE') {
     engagementService.recordActivity(authorId, 'content.post').catch((err: unknown) => {
       logError(fastify.log, `[${porte}] content.post engagement recording failed`, err);
+    });
+  }
+
+  // Axes d'engagement « montage in-app » (#5542) et « publication simple
+  // directe » (#5543) — mutuellement exclusifs, orthogonaux au TYPE (POST,
+  // STORY ou REEL, jamais STATUS ni un brouillon PRIVATE — modèle § 2, même
+  // discriminant que `content.post`). Le seul signal existant est celui que
+  // le client DÉCLARE (`editedInApp`) : le serveur ne peut pas observer si un
+  // média a traversé l'éditeur de montage. Absent/`false` ⇒ direct.
+  const isPublishedContent =
+    writtenType === 'STORY' || writtenType === 'REEL' || (writtenType === 'POST' && visibility !== 'PRIVATE');
+  if (engagementService && isPublishedContent) {
+    const toolAxis: EngagementAxisKey = editedInApp === true ? 'tool.in_app_edit' : 'tool.direct_publish';
+    engagementService.recordActivity(authorId, toolAxis).catch((err: unknown) => {
+      logError(fastify.log, `[${porte}] ${toolAxis} engagement recording failed`, err);
     });
   }
 

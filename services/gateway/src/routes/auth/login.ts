@@ -9,6 +9,7 @@ import { AuthSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import jwt from 'jsonwebtoken';
 import { getRequestContext } from '../../services/GeoIPService';
 import { logWarn } from '../../utils/logger';
+import { getJwtSecret } from '../../utils/secrets';
 import { markSessionTrusted } from '../../services/SessionService';
 import {
   createLoginRateLimiter,
@@ -163,7 +164,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       if (!session.isTrusted) {
         const notificationService = fastify.notificationService;
         if (notificationService) {
-          const jwtSecret = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
+          const jwtSecret = getJwtSecret();
           const revokeToken = jwt.sign(
             { userId: user.id, action: 'revoke-all' },
             jwtSecret,
@@ -296,7 +297,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       if (!session.isTrusted) {
         const notificationService = fastify.notificationService;
         if (notificationService) {
-          const jwtSecret = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
+          const jwtSecret = getJwtSecret();
           const revokeToken = jwt.sign(
             { userId: user.id, action: 'revoke-all' },
             jwtSecret,

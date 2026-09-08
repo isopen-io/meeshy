@@ -65,15 +65,22 @@ export interface PostSaveTranslationQueue {
   }): Promise<unknown>;
 }
 
-export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats' | 'engagement';
+export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats' | 'engagement' | 'contentEngagement';
 
 /**
- * Ce que l'axe d'engagement « conversation distincte » (#5539) demande, et
- * rien de plus — la déduplication par conversation vit entièrement dans
- * `EngagementService.recordConversationActivity`, cette unité n'a qu'à
- * l'appeler.
+ * Ce que les axes d'engagement branchés sur le commit d'un message demandent,
+ * et rien de plus — la mécanique (compteur, anti-rejeu, notification de
+ * palier) vit entièrement dans `EngagementService`, cette unité n'a qu'à
+ * l'invoquer :
+ *
+ * - `recordActivity` pour un axe de CONTENU (#5531 `content.audio_message`,
+ *   #5532 `content.text_message`) — un franchissement par (utilisateur,
+ *   axe), sans déduplication par conversation ;
+ * - `recordConversationActivity` pour l'axe « conversation distincte »
+ *   (#5538, #5539, #5540) — dédupliqué par conversation, cf. son doc-comment.
  */
 export interface PostSaveEngagementService {
+  recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void>;
   recordConversationActivity(
     userId: string,
     axisKey: EngagementAxisKey,
@@ -274,5 +281,23 @@ export function runMessagePostSaveEffects(params: {
         );
       })
       .catch(report('engagement'));
+  }
+
+  // Axe d'engagement « contenu produit » (#5531 `content.audio_message`,
+  // #5532 `content.text_message`) — un même envoi ne crédite jamais les
+  // deux : AVEC au moins une pièce jointe dont le MIME résout en `audio`
+  // (même table que le comptage de conversation, `resolveAttachmentType`)
+  // crédite l'axe audio, SANS crédite l'axe texte. Même garde anonyme que
+  // ci-dessus : `EngagementCounter.userId` exige un `User.id`, qu'un
+  // participant anonyme n'a pas.
+  if (engagementService && message.senderUserId) {
+    const senderUserId = message.senderUserId;
+    const hasAudioAttachment = message.attachmentMimeTypes.some(
+      (mimeType) => resolveAttachmentType(mimeType) === 'audio'
+    );
+    const contentAxisKey = hasAudioAttachment ? 'content.audio_message' : 'content.text_message';
+    void Promise.resolve()
+      .then(() => engagementService.recordActivity(senderUserId, contentAxisKey))
+      .catch(report('contentEngagement'));
   }
 }

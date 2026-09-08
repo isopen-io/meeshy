@@ -1,9 +1,14 @@
 /**
- * Axes d'engagement « stories » (#5534), « réels » (#5535) et « posts »
- * (#5533, sous-issues de #3695) — la publication d'une STORY crédite
+ * Axes d'engagement « stories » (#5534), « réels » (#5535), « posts »
+ * (#5533), « montage in-app » (#5542) et « publication simple directe »
+ * (#5543, sous-issues de #3695) — la publication d'une STORY crédite
  * `content.story`, celle d'un REEL crédite `content.reel`, celle d'un POST
- * (hors brouillon) crédite `content.post`, via
- * `EngagementService.recordActivity`. Mutuellement exclusifs sur la même
+ * hors brouillon crédite `content.post`, et TOUTE publication (POST hors
+ * brouillon, STORY ou REEL) crédite en plus `tool.in_app_edit` ou
+ * `tool.direct_publish`
+ * selon le signal `editedInApp` DÉCLARÉ par le client — via
+ * `EngagementService.recordActivity`. `content.*` et `tool.*` sont deux
+ * paires mutuellement exclusives ORTHOGONALES l'une à l'autre, sur la même
  * ligne écrite (`publication.ts`).
  *
  * Câblé au même site que le corps partagé de publication (#4151,
@@ -24,14 +29,7 @@
  * d'amis suit ce qui est en base »). `PostService.createPost` peut dégrader
  * un type non qualifiant (#PostService, 2026-08-02) ; un `type: 'STORY'`
  * (ou `'REEL'`) DEMANDÉ mais ÉCRIT comme `'POST'` ne doit créditer NI l'un
- * ni l'autre — mais crédite `content.post` s'il n'est pas un brouillon.
- *
- * **`content.post` — décision produit (#5533).** L'issue demandait
- * « status: PUBLISHED, pas brouillon » ; `Post` n'a pas de champ `status`
- * (vérifié contre `schema.prisma`). Le brouillon y est modélisé par
- * `PostVisibility.PRIVATE` (« Brouillon / seulement l'auteur ») — seul signal
- * du dépôt qui porte cette distinction. `content.post` crédite donc tout
- * POST dont la visibilité écrite n'est PAS `PRIVATE`.
+ * ni l'autre.
  *
  * @jest-environment node
  */
@@ -391,6 +389,132 @@ describe('POST /posts/from-attachment — axe d\'engagement « content.reel » (
 
     expect(res.statusCode).toBe(201);
     expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.reel');
+
+    await app.close();
+  });
+});
+
+/**
+ * Axes d'engagement « montage in-app » (#5542) et « publication simple
+ * directe » (#5543, sous-issues de #3695) — mutuellement exclusifs sur la
+ * même publication, décidés par le seul signal DÉCLARÉ par le client
+ * (`editedInApp`) : rien côté serveur ne distingue un média retouché d'un
+ * média publié tel quel. Orthogonaux au type écrit (POST/STORY/REEL) et à
+ * `content.*` ci-dessus, sauf pour l'exclusion du brouillon (visibilité
+ * PRIVATE) et de STATUS, absents du modèle § 2.
+ */
+describe('POST /posts — axes d\'engagement « tool.in_app_edit » / « tool.direct_publish » (#5542, #5543)', () => {
+  it('crédite tool.in_app_edit quand editedInApp est true', async () => {
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { content: 'Bonjour tout le monde', editedInApp: true },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'tool.in_app_edit');
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'tool.direct_publish');
+
+    await app.close();
+  });
+
+  it('crédite tool.direct_publish quand editedInApp est absent', async () => {
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { content: 'Bonjour tout le monde' },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'tool.direct_publish');
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'tool.in_app_edit');
+
+    await app.close();
+  });
+
+  it('crédite tool.direct_publish quand editedInApp est explicitement false', async () => {
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { content: 'Bonjour tout le monde', editedInApp: false },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'tool.direct_publish');
+
+    await app.close();
+  });
+
+  it('crédite le bon axe outil pour une STORY montée (orthogonal à content.story)', async () => {
+    mockCreatePost.mockResolvedValue(storyRow());
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { type: 'STORY', content: 'Bonjour tout le monde', editedInApp: true },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'content.story');
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'tool.in_app_edit');
+
+    await app.close();
+  });
+
+  it('ne crédite ni l\'un ni l\'autre pour un brouillon (visibilité PRIVATE)', async () => {
+    mockCreatePost.mockResolvedValue({ ...PUBLISHED_ROW, visibility: 'PRIVATE' });
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { content: 'Brouillon', visibility: 'PRIVATE', editedInApp: true },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'tool.in_app_edit');
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'tool.direct_publish');
+
+    await app.close();
+  });
+});
+
+describe('POST /posts/from-attachment — axes d\'engagement « tool.in_app_edit » / « tool.direct_publish » (#5542, #5543)', () => {
+  it('crédite tool.in_app_edit quand editedInApp est true', async () => {
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts/from-attachment',
+      payload: { attachmentId: ATTACHMENT_ID, editedInApp: true },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'tool.in_app_edit');
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'tool.direct_publish');
+
+    await app.close();
+  });
+
+  it('crédite tool.direct_publish quand editedInApp est absent', async () => {
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts/from-attachment',
+      payload: { attachmentId: ATTACHMENT_ID },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'tool.direct_publish');
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'tool.in_app_edit');
 
     await app.close();
   });
