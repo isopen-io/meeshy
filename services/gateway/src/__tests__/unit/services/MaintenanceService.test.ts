@@ -36,9 +36,21 @@ jest.mock('../../../services/messaging/anonymizeDeletedAccountMessages', () => (
   anonymizeMessagesOfDeletedAccount: jest.fn<any>().mockResolvedValue({ anonymized: 0 }),
 }));
 
+// Même raison, même patron que ci-dessus (#5690) : la logique de purge des
+// médias a son propre témoin — `media/__tests__/purgeDeletedAccountMedia.test.ts`
+// — ce fichier ne garde que la frontière.
+jest.mock('../../../services/media/purgeDeletedAccountMedia', () => ({
+  purgeMediaOfDeletedAccount: jest.fn<any>().mockResolvedValue({
+    attachmentsPurged: 0,
+    postMediaPurged: 0,
+    postMediaBytesReclaimed: 0,
+  }),
+}));
+
 import { MaintenanceService } from '../../../services/MaintenanceService';
 import { logger } from '../../../utils/logger';
 import { anonymizeMessagesOfDeletedAccount } from '../../../services/messaging/anonymizeDeletedAccountMessages';
+import { purgeMediaOfDeletedAccount } from '../../../services/media/purgeDeletedAccountMedia';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -615,6 +627,49 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
     await expect(sweepDeletions(sut)).resolves.toBeUndefined();
 
     expect(anonymizeMessagesOfDeletedAccount).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
+  });
+
+  // Les MÉDIAS restants d'un compte purgé (#5690) : ce qu'`anonymizeMessagesOfDeletedAccount`
+  // ne couvre pas — un MessageAttachment dont le message était déjà supprimé
+  // avant la grâce, et tout PostMedia du compte.
+  it('purge les médias restants de CHAQUE compte expiré, APRÈS avoir anonymisé ses messages', async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a'), expiredRequest('req-b', 'user-b')]);
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await sweepDeletions(sut);
+
+    expect(purgeMediaOfDeletedAccount).toHaveBeenNthCalledWith(1, prisma, attachmentService, expect.anything(), 'user-a');
+    expect(purgeMediaOfDeletedAccount).toHaveBeenNthCalledWith(2, prisma, attachmentService, expect.anything(), 'user-b');
+
+    const anonymizeOrder = (anonymizeMessagesOfDeletedAccount as jest.Mock).mock.invocationCallOrder[0];
+    const mediaOrder = (purgeMediaOfDeletedAccount as jest.Mock).mock.invocationCallOrder[0];
+    expect(mediaOrder).toBeGreaterThan(anonymizeOrder);
+  });
+
+  it("une transaction qui échoue ne purge PAS les médias de ce compte", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    prisma.$transaction = jest.fn<() => Promise<unknown[]>>().mockRejectedValueOnce(new Error('write conflict'));
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
+    expect(purgeMediaOfDeletedAccount).not.toHaveBeenCalled();
+  });
+
+  it('un échec de purge média est journalisé et n\'arrête pas le lot', async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a'), expiredRequest('req-b', 'user-b')]);
+    (purgeMediaOfDeletedAccount as jest.Mock)
+      .mockRejectedValueOnce(new Error('disk full'))
+      .mockResolvedValueOnce({ attachmentsPurged: 0, postMediaPurged: 0, postMediaBytesReclaimed: 0 });
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
+    expect(purgeMediaOfDeletedAccount).toHaveBeenCalledTimes(2);
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
   });
 });

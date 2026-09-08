@@ -10,6 +10,7 @@ import { AttachmentService } from './attachments';
 import { EmailService } from './EmailService';
 import { recomputeConversationLastMessageAt } from './messaging/messageRemovalEffects';
 import { anonymizeMessagesOfDeletedAccount } from './messaging/anonymizeDeletedAccountMessages';
+import { purgeMediaOfDeletedAccount as purgeDeletedAccountMedia } from './media/purgeDeletedAccountMedia';
 import { MediaService } from './MediaService';
 import { sweepPendingPostMedia } from './posts/sweepPendingPostMedia';
 import type { PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
@@ -761,10 +762,28 @@ export class MaintenanceService {
   }
 
   /**
+   * Suite de #3632/#5691 restée ouverte sous le nom « les médias » (#5690) :
+   * `purgeMessagesOfDeletedAccount` ci-dessus détruit déjà les pièces jointes
+   * des messages qu'il anonymise (`deletedAt: null` au moment de l'appel) —
+   * cette passe couvre ce qui lui échappe : un `MessageAttachment` dont le
+   * message portait déjà `deletedAt` AVANT l'expiration de la grâce, et tout
+   * `PostMedia` du compte, qu'aucun chemin de purge ne touchait jusqu'ici.
+   * Après l'anonymisation des messages, jamais avant — même best-effort,
+   * même raison. Détail : `services/media/purgeDeletedAccountMedia.ts`.
+   */
+  private async purgeMediaOfDeletedAccount(userId: string): Promise<void> {
+    try {
+      await purgeDeletedAccountMedia(this.prisma, this.attachmentService, this.mediaService, userId);
+    } catch (error) {
+      logger.warn(`⚠️ [DELETION] Media purge failed for deleted account user=${userId}:`, error);
+    }
+  }
+
+  /**
    * Traiter les demandes de suppression de compte :
    * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED),
-   *    révoquer les sessions, purger les données isolées (#3632) puis
-   *    anonymiser les messages du compte (#5689)
+   *    révoquer les sessions, purger les données isolées (#3632), anonymiser
+   *    les messages du compte (#5689) puis purger ses médias restants (#5690)
    * 2. Envoyer les rappels hebdomadaires pour les requests GRACE_PERIOD_EXPIRED
    */
   private async processAccountDeletionRequests(): Promise<void> {
@@ -797,6 +816,7 @@ export class MaintenanceService {
             await this.revokeSessionsOfDeletedAccount(req.userId);
             await this.purgeIsolatedDataOfExpiredAccount(req.userId);
             await this.purgeMessagesOfDeletedAccount(req.userId);
+            await this.purgeMediaOfDeletedAccount(req.userId);
           } catch (error) {
             logger.error(`❌ [DELETION] Failed to expire request=${req.id} for user=${req.userId}:`, error);
           }
