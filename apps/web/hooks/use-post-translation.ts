@@ -6,17 +6,9 @@ import {
   resolveUserLanguage,
   resolveUserLanguagesOrdered,
   resolvePrismTranslation,
+  buildPostTranslationRecord,
 } from '@meeshy/shared/utils/conversation-helpers';
 import { getDeviceLocale } from '@/lib/device-locale';
-
-interface TranslationEntry {
-  readonly text: string;
-  readonly translationModel?: string;
-  readonly confidenceScore?: number;
-  readonly createdAt?: string;
-}
-
-type TranslationsMap = Record<string, TranslationEntry>;
 
 interface UsePostTranslationResult {
   preferredLanguage: string;
@@ -74,17 +66,22 @@ function resolvePreferredLanguage(config: {
  * ou la clé de traduction était région-taguée ratait son rang et servait une
  * traduction d'un rang inférieur — la violation exacte du Prisme #3 que ce hook
  * était censé combattre.
+ *
+ * L'ADAPTATION DE FORME elle-même — `Record<string, { text }>` →
+ * `Record<string, string>` — ne se réécrit plus ici non plus (#4968) : elle
+ * délègue à `buildPostTranslationRecord` (`@meeshy/shared`), qui EST la SSOT de
+ * ce dialecte (celui des posts et commentaires, distinct du tableau des
+ * messages que dépouille `buildTranslationRecord`). Un dépouillement local
+ * était exactement la jumelle d'ADAPTATEUR que le § Prisme du `CLAUDE.md`
+ * racine interdit — elle ne fait pas servir une mauvaise langue, elle fait
+ * servir l'ORIGINAL, ce qui ressemble à une traduction absente.
  */
 function findTranslation(
   translations: unknown,
   orderedLanguages: readonly string[],
   originalLanguage: string | null,
 ): string | null {
-  if (!translations || typeof translations !== 'object') return null;
-  const record: Record<string, string> = {};
-  for (const [code, entry] of Object.entries(translations as TranslationsMap)) {
-    if (entry && typeof entry.text === 'string') record[code] = entry.text;
-  }
+  const record = buildPostTranslationRecord(translations);
   const resolved = resolvePrismTranslation({
     translations: record,
     originalLanguage,
