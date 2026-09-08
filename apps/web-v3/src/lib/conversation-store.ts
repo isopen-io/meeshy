@@ -36,6 +36,10 @@ export type ConversationOverride = {
 
 type Overrides = Readonly<Record<string, ConversationOverride>>;
 
+/** Les clés qu'un override PORTE — `unreadCount` à part, `flags` détaillé
+ * champ par champ (#5650, F4/§5, étape 7). */
+export type OverrideKey = 'isPinned' | 'isMuted' | 'isArchived' | 'unreadCount';
+
 export type ConversationStoreState = {
   readonly overrides: Overrides;
   togglePin(id: string, current: boolean): void;
@@ -43,6 +47,15 @@ export type ConversationStoreState = {
   toggleArchive(id: string, current: boolean): void;
   markRead(id: string): void;
   markUnread(id: string): void;
+  /**
+   * `clearOverride` (#5650, F4) — RETIRE les clés nommées de l'override d'UNE
+   * conversation, IMMUABLE, et supprime l'entrée quand elle devient vide
+   * (jamais un `{}` orphelin qui traînerait dans `overrides` indéfiniment).
+   * Consommé par `performRowAction` (`api/conversation-actions.ts`) : un
+   * 2xx retire la clé confirmée (le cache prend la valeur SERVEUR), un 4xx
+   * retire la même clé (rollback) — deux issues, un seul geste.
+   */
+  clearOverride(id: string, keys: readonly OverrideKey[]): void;
 };
 
 const mergeOverride = (overrides: Overrides, id: string, patch: ConversationOverride): Overrides => ({
@@ -74,6 +87,30 @@ export const conversationStore = createStore<ConversationStoreState>((set) => ({
    * au prochain `GET /conversations`.
    */
   markUnread: (id) => set((state) => ({ overrides: mergeOverride(state.overrides, id, { unreadCount: 1 }) })),
+  clearOverride: (id, keys) =>
+    set((state) => {
+      const current = state.overrides[id];
+      if (current === undefined) return state;
+
+      const removeFlags = new Set(keys.filter((k): k is Exclude<OverrideKey, 'unreadCount'> => k !== 'unreadCount'));
+      const removeUnread = keys.includes('unreadCount');
+
+      const remainingFlagEntries =
+        current.flags === undefined ? [] : Object.entries(current.flags).filter(([k]) => !removeFlags.has(k as Exclude<OverrideKey, 'unreadCount'>));
+
+      const next: ConversationOverride = {
+        ...(remainingFlagEntries.length > 0
+          ? { flags: Object.fromEntries(remainingFlagEntries) as Partial<ConversationFlags> }
+          : {}),
+        ...(!removeUnread && current.unreadCount !== undefined ? { unreadCount: current.unreadCount } : {}),
+      };
+
+      if (Object.keys(next).length === 0) {
+        const { [id]: _removed, ...rest } = state.overrides;
+        return { overrides: rest };
+      }
+      return { overrides: { ...state.overrides, [id]: next } };
+    }),
 }));
 
 /**

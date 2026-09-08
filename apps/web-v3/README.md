@@ -110,12 +110,20 @@ Trois variables lues UNIQUEMENT par `src/lib/api/config.ts`
 | Variable | Valeurs | Défaut | Effet |
 |---|---|---|---|
 | `VITE_API_BASE` | une origine absolue (`https://…`) | production (`https://gate.meeshy.me`), ou base relative en dehors d'une coque | la base des requêtes API |
-| `VITE_DATA_SOURCE` | `gateway` | `fixtures` | source des données servies aux écrans (`gateway` n'est pas encore câblée aux routes, § garde de `vite.config.ts`) |
+| `VITE_DATA_SOURCE` | `gateway` | `fixtures` | source des données servies aux écrans — la liste et le fil LISENT la passerelle (`lib/api/query.ts`, #5650) ; `bun test` et tous les gates restent sur `fixtures` |
 | `VITE_READING_MODES` | `on`, `off` | `on` | les MODES DE LECTURE du fil (D-20) : `on` ⇒ le fil s'ouvre en Focal, l'utilisateur choisit Script ou Bulles par la puce ; `off` ⇒ le fil s'ouvre en bulles, sans puce (`bubbles`/`flag-disabled`, prioritaire sur tout choix collant — `resolveOrchestratorDecision`, `packages/shared/utils/reading-modes.ts`). Paramètre de CONSTRUCTION, figé au déploiement — la v3.1 n'a ni toggle utilisateur ni programme bêta, contrairement à iOS ; miroir de `MEESHY_FLAG_READING_MODES` (`LentilleFeatureFlag.swift:82-90`). La liste Lentille n'en dépend pas (D-9) |
 
-`VITE_READING_MODES` et `VITE_DATA_SOURCE` sont gardées à la CONSTRUCTION
-(`vite.config.ts`) : une valeur ni admise ni absente fait échouer `vite build`
-plutôt que de laisser passer une faute de frappe en silence.
+`VITE_READING_MODES` ET `VITE_DATA_SOURCE` sont gardées à la CONSTRUCTION
+(`vite.config.ts`) : une valeur ni admise ni absente fait échouer
+`vite build` plutôt que de laisser passer une faute de frappe en silence.
+Depuis #5650, `gateway` est une valeur ADMISE (elle est câblée aux écrans) —
+mais une valeur inconnue reste refusée, parce que `resolveSource` la
+traiterait comme `fixtures` : `VITE_DATA_SOURCE=gatway` construirait, en
+silence, un déploiement de production servant des fixtures.
+`scripts/check-gateway-build.mjs` (dans `bun run gate`) vérifie la
+construction `gateway` dans un navigateur réel : garde de session, squelette
+sans saut de géométrie, corpus vide sans bande morte, échec annoncé comme
+une alerte.
 
 ## L'interface
 

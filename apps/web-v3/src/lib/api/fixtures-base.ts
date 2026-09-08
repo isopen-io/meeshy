@@ -33,6 +33,53 @@ export const dayAt = (daysAgo: number, hour: number, minute: number): Date => {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, hour, minute, 0, 0);
 };
 
+/**
+ * L'ANCRE DU FIL « ÉQUIPE DÉPLOIEMENT » — `minutesAgo(96..82)` place ses huit
+ * horodatages sur une fenêtre de 14 minutes qui, entre ~00:00 et ~01:36 heure
+ * de Paris, franchit minuit et fait basculer `c-deploiement` en section
+ * « Hier » (`lens/sections.test.ts` : « AUJOURD'HUI contient c-deploiement »).
+ *
+ * Le calendrier qui tranche est celui du LECTEUR de la loi partagée
+ * (`resolveConversationSections` / `localCalendarDate`, qui compare deux
+ * jours dans le `timeZone` REÇU, jamais celui du process) — le témoin fixe
+ * `'Europe/Paris'`, donc c'est ce fuseau qui décide ici aussi, PAS
+ * `new Date().getDate()` : sous `bun test`, le process tourne en `UTC`
+ * (`Intl.DateTimeFormat().resolvedOptions().timeZone === 'UTC'`, vérifié),
+ * si bien qu'une arithmétique en heure LOCALE DU PROCESS ne détecte jamais la
+ * traversée de minuit parisienne — c'est le bogue que la première version de
+ * cette ancre a laissé passer (elle comparait des horloges UTC en croyant
+ * comparer des horloges de Paris).
+ *
+ * `THREAD_ANCHOR` reproduit `minutesAgo(THREAD_SPAN_MINUTES)` (le PLUS ANCIEN
+ * horodatage du fil) SAUF quand son jour calendaire PARISIEN diffère de celui
+ * de « maintenant » — auquel cas l'ancre avance minute par minute jusqu'à
+ * rejoindre le jour calendaire parisien de « maintenant » (au plus
+ * `THREAD_SPAN_MINUTES` itérations, exécutées une seule fois au chargement du
+ * module). `threadMoment(n)` reporte alors chaque horodatage à la même
+ * distance de l'ancre qu'il l'aurait été de « maintenant » avec
+ * `minutesAgo(n)` : l'ORDRE et les ÉCARTS entre messages sont préservés au
+ * tick près, seule la traversée de minuit disparaît.
+ */
+const THREAD_SPAN_MINUTES = 96;
+const parisCalendarDay = (date: Date): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(
+    date,
+  );
+
+const THREAD_ANCHOR: Date = (() => {
+  const at = new Date();
+  const todayInParis = parisCalendarDay(at);
+  let candidate = new Date(at.getTime() - THREAD_SPAN_MINUTES * 60_000);
+  while (parisCalendarDay(candidate) !== todayInParis) {
+    candidate = new Date(candidate.getTime() + 60_000);
+  }
+  return candidate;
+})();
+
+/** `threadMoment(96)` = le premier message du fil ; `threadMoment(82)` = le dernier — voir `THREAD_ANCHOR`. */
+export const threadMoment = (minutesAgoAtWriting: number): Date =>
+  new Date(THREAD_ANCHOR.getTime() + (THREAD_SPAN_MINUTES - minutesAgoAtWriting) * 60_000);
+
 export const VIEWER_ID = 'u-viewer';
 /** Le `username` du lecteur de fixture — `Participant` ne le porte pas à la racine (`participant.ts:125-150`). */
 export const VIEWER_HANDLE = 'vous';

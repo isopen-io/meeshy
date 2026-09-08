@@ -57,20 +57,47 @@ const DEFAULT_NOW = (): number => performance.now();
 
 export function useThreadScene(
   frame: { current: HTMLElement | null },
-  { mode, now = DEFAULT_NOW }: { readonly mode: ThreadSceneMode; readonly now?: () => number },
+  {
+    mode,
+    ready = true,
+    now = DEFAULT_NOW,
+  }: { readonly mode: ThreadSceneMode; readonly ready?: boolean; readonly now?: () => number },
 ): ThreadScene {
   const [elected, setElected] = useState<string | null>(null);
   const dispatchRef = useRef<((event: SceneEvent) => void) | null>(null);
 
   useEffect(() => {
-    const element = frame.current;
     // La scène du fil est INERTE en `summary` (#5695) : le Résumé Vivant
     // n'a pas de rangées `[data-row]` — même garde que `bubbles`.
-    if (element === null || mode === 'bubbles' || mode === 'summary') return;
+    if (mode === 'bubbles' || mode === 'summary') return;
+    /**
+     * `ready` — L'HÔTE DÉCLARE QUE SON CADRE EXISTE (#5650, revue-correction).
+     *
+     * `frame.current` est `null` tant que l'hôte rend un état TRANSITOIRE
+     * (squelette, refus, échec) au lieu de son `<main ref={frame}>` : le
+     * contenu du fil arrive désormais par une requête. Sans un signal, cet
+     * effet ne se rejouait JAMAIS après l'arrivée du contenu — ses
+     * dépendances ne portent que `mode`, qui vaut souvent la même chose
+     * avant et après — et la scène restait DÉFINITIVEMENT inerte (mesuré :
+     * zéro rangée élue après un défilement soutenu, `check-reading-mode.mjs`).
+     *
+     * `ready` est ce signal, et il RE-DÉCLENCHE l'effet : au commit où
+     * l'hôte rend enfin son cadre, React a déjà attaché la ref avant de
+     * lancer les effets — l'élément est là, sans une seule image d'attente.
+     * C'est le MÊME contrat que l'ancrage bas de `thread.tsx` (dépendance
+     * `count`), et il remplace un `requestAnimationFrame` qui se
+     * reprogrammait SANS BORNE : sur un fil REFUSÉ — un état TERMINAL où le
+     * cadre n'existera jamais — cette boucle tournait à 60 Hz pour rien,
+     * tant que l'écran restait ouvert.
+     */
+    if (!ready) return;
 
     // `mode` est narrowé à `SceneMode` ('focal' | 'script') après la garde
     // ci-dessus — capturé une fois pour toute la durée de vie de l'effet.
     const sceneMode: SceneMode = mode;
+
+    const element = frame.current;
+    if (element === null) return;
 
     let state: SceneActivityState = sceneActivity.initialState();
     let electedId: string | null = null;
@@ -235,7 +262,7 @@ export function useThreadScene(
     // référence stable — même dispositif que `jumpToMessage`/`pin` dans
     // `thread.tsx`, dont les commentaires expliquent le même choix.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frame, mode]);
+  }, [frame, mode, ready]);
 
   /**
    * IDENTITÉS STABLES (correction de revue #5648) — l'objet rendu et sa

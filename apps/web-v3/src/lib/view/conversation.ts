@@ -106,7 +106,12 @@ export type PreviewKind = 'standard' | 'hidden' | 'view-once' | 'expired' | 'eph
 
 export function previewKindOf(conversation: Conversation, now: number = Date.now()): PreviewKind {
   const last = conversation.lastMessage;
-  if (last === undefined) return 'standard';
+  // #5650, revue-correction : la passerelle sert `null` (pas seulement
+  // `undefined`) pour une conversation sans premier message — mesuré en
+  // direct sur `gate.staging.meeshy.me`. `Conversation.lastMessage` est
+  // typé `Message | undefined` ; `null` n'y était pas gardé et faisait
+  // lever `last.expiresAt` juste en dessous.
+  if (last === undefined || last === null) return 'standard';
   if (last.expiresAt !== undefined && new Date(last.expiresAt).getTime() <= now) return 'expired';
   if (last.isBlurred) return 'hidden';
   if (last.isViewOnce) return 'view-once';

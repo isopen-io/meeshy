@@ -101,27 +101,35 @@ const appVersion = JSON.parse(
 ).version as string;
 
 /**
- * LA SOURCE DE DONNÉES SE DÉCIDE, MAIS ELLE N'EST PAS ENCORE CÂBLÉE (#5605).
+ * LA SOURCE DE DONNÉES EST CÂBLÉE (#5650) — `resolveApiConfig`
+ * (`src/lib/api/config.ts`) rend `source`, et `routes/conversations.tsx` /
+ * `routes/thread.tsx` la LISENT désormais via `lib/api/query.ts`
+ * (`useConversations`/`useThreadData`) : `VITE_DATA_SOURCE=gateway`
+ * construit une application qui parle réellement à la passerelle. La garde
+ * qui refusait cette valeur (#5605) a disparu dans CE diff — sa disparition
+ * est le témoin que le câblage est fait, un commentaire seul ne l'aurait pas
+ * prouvé. `bun test` et tous les gates restent sur `fixtures` (la valeur par
+ * défaut) ; `scripts/check-gateway-build.mjs` est le SEUL gate qui construit
+ * en `gateway` et le vérifie dans un navigateur réel.
  *
- * `resolveApiConfig` (`src/lib/api/config.ts`) rend déjà `source`, et c'est le
- * bon endroit — la base et la source se choisissent au MÊME endroit. Mais
- * AUCUN écran ne la lit : `routes/conversations.tsx` et `routes/thread.tsx`
- * importent `src/lib/api/fixtures.ts` en direct. Un déploiement qui poserait
- * `VITE_DATA_SOURCE=gateway` servirait donc les fixtures en CROYANT parler à
- * la passerelle, sans qu'aucun témoin ne rougisse.
- *
- * Une valeur qui ne fait rien est pire qu'une valeur absente : on refuse ici
- * de CONSTRUIRE plutôt que de laisser passer le malentendu. Ce garde-fou
- * disparaît le jour où les écrans lisent `apiConfig.source` — et sa
- * disparition sera VISIBLE dans le diff qui les câble, ce qu'un commentaire
- * n'aurait pas obtenu.
+ * LA GARDE RESTE, SON SENS CHANGE (revue-correction). Celle de #5605
+ * refusait la valeur `gateway` parce qu'elle n'était pas câblée ; elle
+ * faisait AUSSI, sans le dire, un second travail : refuser une valeur
+ * INCONNUE. `resolveSource` (`config.ts:79-81`) rend `fixtures` pour tout ce
+ * qui n'est pas EXACTEMENT `gateway` — donc `VITE_DATA_SOURCE=gatway`,
+ * `Gateway` ou `true` construirait, en silence, un déploiement de
+ * PRODUCTION servant des FIXTURES à des utilisateurs, en croyant parler à
+ * la passerelle. C'est exactement ce que la garde `VITE_READING_MODES`
+ * ci-dessous refuse pour sa propre variable, et son doc-comment CITE cette
+ * garde-ci comme précédent. On refuse donc toujours de construire sur une
+ * valeur inconnue ; on accepte désormais les deux qui existent.
  */
 const declaredDataSource = process.env.VITE_DATA_SOURCE;
-if (declaredDataSource !== undefined && declaredDataSource !== 'fixtures') {
+if (declaredDataSource !== undefined && declaredDataSource !== 'fixtures' && declaredDataSource !== 'gateway') {
   throw new Error(
-    `VITE_DATA_SOURCE=${declaredDataSource} : la source « passerelle » n'est pas encore câblée aux écrans ` +
-      '(les routes lisent src/lib/api/fixtures.ts en direct). Construire avec cette valeur servirait les ' +
-      'fixtures en silence. Retirer la variable, ou câbler les écrans sur apiConfig.source avant de la poser.',
+    `VITE_DATA_SOURCE=${declaredDataSource} : valeur inconnue. Les seules valeurs admises sont ` +
+      '« fixtures » (défaut), « gateway », ou la variable absente (⇒ « fixtures »). Une valeur ' +
+      'inconnue servirait les fixtures en silence, dans une construction qui se croit branchée.',
   );
 }
 

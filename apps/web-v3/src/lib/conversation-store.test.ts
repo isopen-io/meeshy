@@ -96,3 +96,43 @@ describe('markRead / markUnread (#5559 T5)', () => {
     expect(effectiveUnreadOf(c, store.getState().overrides)).toBe(3);
   });
 });
+
+describe('clearOverride (#5650, F4)', () => {
+  test('retire UNE clé de flag, garde les autres', () => {
+    const store = freshStore();
+    const c = conversation({ userPreferences: [{ isPinned: false, isMuted: false }] });
+    store.getState().togglePin(c.id, false);
+    store.getState().toggleMute(c.id, false);
+
+    store.getState().clearOverride(c.id, ['isPinned']);
+
+    expect(effectiveFlagsOf(c, store.getState().overrides).isPinned).toBe(false);
+    expect(effectiveFlagsOf(c, store.getState().overrides).isMuted).toBe(true);
+  });
+
+  test('retire la dernière clé restante ⇒ l’entrée disparaît de overrides', () => {
+    const store = freshStore();
+    store.getState().togglePin('c1', false);
+
+    store.getState().clearOverride('c1', ['isPinned']);
+
+    expect('c1' in store.getState().overrides).toBe(false);
+  });
+
+  test('retire unreadCount indépendamment des flags', () => {
+    const store = freshStore();
+    store.getState().togglePin('c1', false);
+    store.getState().markRead('c1');
+
+    store.getState().clearOverride('c1', ['unreadCount']);
+
+    expect(store.getState().overrides['c1']?.unreadCount).toBeUndefined();
+    expect(store.getState().overrides['c1']?.flags?.isPinned).toBe(true);
+  });
+
+  test('id sans override ⇒ no-op, aucune exception', () => {
+    const store = freshStore();
+    expect(() => store.getState().clearOverride('inconnu', ['isPinned'])).not.toThrow();
+    expect(store.getState().overrides).toEqual({});
+  });
+});
