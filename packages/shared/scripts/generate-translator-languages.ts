@@ -22,7 +22,7 @@
  * `LANGUAGE_MAPPINGS`, jamais son contenu brut.
  */
 
-import { exigerNodeRecent } from '../../../scripts/require-node-runtime.js';
+import { exigerNodeRecent } from '../../../scripts/node-guard/require-node-runtime.ts';
 
 // AVANT tout autre import : voir generate-ios-endpoints.ts pour la raison.
 exigerNodeRecent('packages/shared/scripts/generate-translator-languages.ts');
