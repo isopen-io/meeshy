@@ -304,6 +304,16 @@ jobs:
       - name: TS catalog dead-entries ratchet
         run: node scripts/check-ts-catalog-dead-entries.mjs --self-test && node scripts/check-ts-catalog-dead-entries.mjs
 
+      # #3678 — la règle d'accent (CLAUDE.md § « Conversation Accent Color »)
+      # veut qu'un composant lié au contexte d'une conversation utilise
+      # `accentColor`/`colorPalette`, jamais une couleur en dur. Le golden
+      # partagé qui PROUVE le calcul existe déjà (accent.vectors.json, joué
+      # par les 3 clients) ; ce cliquet ferme l'autre moitié du critère de
+      # fin de #3678 en empêchant le CONTOURNEMENT (`Color(hex:)` hors
+      # `Theme/`) de grossir en silence.
+      - name: Accent color hardcoding ratchet
+        run: node scripts/check-accent-color-hardcoding.mjs --self-test && node scripts/check-accent-color-hardcoding.mjs
+
       - name: Law literals guard
         run: bash scripts/check-law-literals.sh --self-test && bash scripts/check-law-literals.sh
 
