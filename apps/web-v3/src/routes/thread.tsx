@@ -9,6 +9,7 @@ import { Composer } from '@/components/composer';
 import { FocalRow } from '@/components/focal-row';
 import { Glyph } from '@/components/glyph';
 import { ReadingModeChip } from '@/components/reading-mode-chip';
+import { apiConfig } from '@/lib/api/config';
 import { CONVERSATIONS, PARTICIPANTS, VIEWER_ID, messagesOf } from '@/lib/api/fixtures';
 import type { Message } from '@/lib/api/types';
 import { accentOf, withAccent } from '@/lib/accent';
@@ -364,16 +365,24 @@ export default function ThreadScreen() {
           ) : (
             <>
               <span className="flex-1" />
-              {/* LE CHIP DE MODE — clic ouvre le menu (§1.7 : écart assumé vs
-                  iOS, voir `reading-mode-chip.tsx`). Dans la grappe d'action,
-                  comme prescrit par la spécification #5566. */}
-              <ReadingModeChip
-                label={currentRow?.title ?? ''}
-                isAuto={readingDecision.reason !== 'sticky'}
-                rows={readingMenuRows}
-                onSelect={selectReadingMode}
-                onAuto={resetReadingModeToAuto}
-              />
+              {/* LE CHIP DE MODE — SOUS DRAPEAU UNIQUEMENT (D-20, miroir
+                  `ConversationView.swift:2391-2430`) : `apiConfig.readingModesEnabled`
+                  est un paramètre de CONSTRUCTION, figé au déploiement — quand il
+                  est faux, `readingDecision.mode` vaut toujours `bubbles`
+                  (`resolveThreadMode`), donc ce chip n'aurait jamais rien d'autre
+                  à proposer que le mode déjà affiché. Clic ouvre le menu
+                  (§1.7 : écart assumé vs iOS, voir `reading-mode-chip.tsx`).
+                  Dans la grappe d'action, comme prescrit par la spécification
+                  #5566. */}
+              {apiConfig.readingModesEnabled ? (
+                <ReadingModeChip
+                  label={currentRow?.title ?? ''}
+                  isAuto={readingDecision.reason !== 'sticky'}
+                  rows={readingMenuRows}
+                  onSelect={selectReadingMode}
+                  onAuto={resetReadingModeToAuto}
+                />
+              ) : null}
               <button
                 type="button"
                 /* `shrink-0` : ces deux cibles ne cèdent JAMAIS. Sur un écran
