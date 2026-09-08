@@ -13,6 +13,8 @@ import asyncio
 # Import du health router
 from api.health import health_router, set_services
 from config.message_limits import can_translate_message, MessageLimits
+from config.settings import get_settings
+from services.language_capabilities import LanguageCapabilitiesService
 
 # Import du audio router (lazy loading)
 try:
@@ -264,17 +266,22 @@ class TranslationAPI:
         
         @self.app.get("/languages")
         async def get_supported_languages():
-            """Retourne les langues supportées"""
-            languages = {
-                "fr": "Français",
-                "en": "English", 
-                "es": "Español",
-                "de": "Deutsch",
-                "pt": "Português",
-                "zh": "中文",
-                "ja": "日本語",
-                "ar": "العربية"
-            }
+            """Retourne les langues supportées.
+
+            #5709 — reflète SUPPORTED_LANGUAGES (Settings.supported_languages_list),
+            jamais une copie codée en dur qui diverge dès qu'une langue est
+            ajoutée à la configuration sans toucher cet endpoint. Le nom natif
+            vient de LanguageCapabilitiesService, seule source de vérité pour
+            cette information dans ce service — jamais réinventé ici.
+            """
+            capabilities = LanguageCapabilitiesService()
+            languages = {}
+            for code in get_settings().supported_languages_list:
+                capability = capabilities.get_capability(code)
+                # Repli sur le code lui-même si une langue configurée manque au
+                # registre : mieux vaut l'annoncer sous une forme dégradée que
+                # la faire disparaître silencieusement de la réponse.
+                languages[code] = capability.native_name if capability else code
             return {"supported_languages": languages}
         
         @self.app.get("/models")
