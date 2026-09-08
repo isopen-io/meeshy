@@ -35,9 +35,9 @@ describe('getPotentialControlledUsers() — la CONNEXION décide, pas l\'activit
     await persistence.getPotentialControlledUsers('conv-1', 3, 72, [], []);
 
     const where = findMany.mock.calls[0][0].where as {
-      user: { sessions?: { none?: { createdAt?: { gte?: Date } } } };
+      user: { sessions?: { none?: { lastActivityAt?: { gte?: Date } } } };
     };
-    expect(where.user.sessions?.none?.createdAt?.gte).toBeInstanceOf(Date);
+    expect(where.user.sessions?.none?.lastActivityAt?.gte).toBeInstanceOf(Date);
   });
 
   it('borne ce seuil sur la durée CONFIGURÉE, pas sur une constante', async () => {
@@ -46,8 +46,8 @@ describe('getPotentialControlledUsers() — la CONNEXION décide, pas l\'activit
 
     await persistence.getPotentialControlledUsers('conv-1', 3, 100, [], []);
 
-    const gte = (findMany.mock.calls[0][0].where as { user: { sessions: { none: { createdAt: { gte: Date } } } } })
-      .user.sessions.none.createdAt.gte;
+    const gte = (findMany.mock.calls[0][0].where as { user: { sessions: { none: { lastActivityAt: { gte: Date } } } } })
+      .user.sessions.none.lastActivityAt.gte;
     const ecart = avant - gte.getTime();
     expect(ecart).toBeGreaterThanOrEqual(100 * HOUR - 5_000);
     expect(ecart).toBeLessThanOrEqual(100 * HOUR + 5_000);
@@ -93,9 +93,9 @@ describe('getLeastActiveParticipants() — même loi sur le chemin de secours', 
     await persistence.getLeastActiveParticipants('conv-1', 3, [], [], 72);
 
     const where = findMany.mock.calls[0][0].where as {
-      user: { sessions?: { none?: { createdAt?: { gte?: Date } } }; isOnline?: boolean };
+      user: { sessions?: { none?: { lastActivityAt?: { gte?: Date } } }; isOnline?: boolean };
     };
-    expect(where.user.sessions?.none?.createdAt?.gte).toBeInstanceOf(Date);
+    expect(where.user.sessions?.none?.lastActivityAt?.gte).toBeInstanceOf(Date);
     expect(where.user.isOnline).toBe(false);
   });
 });

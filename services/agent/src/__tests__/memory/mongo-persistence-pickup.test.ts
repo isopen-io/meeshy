@@ -106,7 +106,7 @@ describe('MongoPersistence.getLeastActiveParticipants()', () => {
 
     const where = prisma.participant.findMany.mock.calls[0][0].where;
     // Seuil porté par les SESSIONS depuis #5702 (voir le témoin voisin).
-    const cutoff = where.user.sessions.none.createdAt.gte.getTime();
+    const cutoff = where.user.sessions.none.lastActivityAt.gte.getTime();
     expect(cutoff).toBeGreaterThanOrEqual(before - 48 * HOUR);
     expect(cutoff).toBeLessThanOrEqual(after - 48 * HOUR);
   });
@@ -124,7 +124,7 @@ describe('MongoPersistence.getLeastActiveParticipants()', () => {
     const where = prisma.participant.findMany.mock.calls[0][0].where;
     // La connexion se lit sur les SESSIONS depuis #5702 : `user.lastActiveAt`
     // bougeait sur toute activité de fond et ne disait rien de la présence.
-    const cutoff = where.user.sessions.none.createdAt.gte.getTime();
+    const cutoff = where.user.sessions.none.lastActivityAt.gte.getTime();
     expect(cutoff).toBeGreaterThanOrEqual(before - 72 * HOUR);
     expect(cutoff).toBeLessThanOrEqual(after - 72 * HOUR);
   });
@@ -147,7 +147,7 @@ describe('MongoPersistence.getPotentialControlledUsers()', () => {
     // le PARTICIPANT pour l'activité dans CETTE conversation, la SESSION pour
     // la connexion réelle au produit (#5702).
     const participantCutoff = where.lastActiveAt.lt.getTime();
-    const userCutoff = where.user.sessions.none.createdAt.gte.getTime();
+    const userCutoff = where.user.sessions.none.lastActivityAt.gte.getTime();
     expect(participantCutoff).toBe(userCutoff);
     expect(userCutoff).toBeGreaterThanOrEqual(before - 30 * HOUR);
     expect(userCutoff).toBeLessThanOrEqual(after - 30 * HOUR);
