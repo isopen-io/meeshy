@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { nonCspSecurityHeaders } from './next.config.security.js';
 // Plugin next-intl désactivé pour éviter les redirections d'URL
 // L'internationalisation est gérée côté client via le LanguageContext
 // import createNextIntlPlugin from 'next-intl/plugin';
@@ -9,9 +10,6 @@ import type { NextConfig } from "next";
 const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 });
-
-// En-têtes de sécurité (hors CSP — voir next.config.security.js) : #3628.
-const { nonCspSecurityHeaders } = require('./next.config.security.js');
 
 const nextConfig: NextConfig = {
   eslint: {
