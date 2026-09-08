@@ -51,8 +51,11 @@ describe('resolveExportPage', () => {
     expect(resolveExportPage({ limit: '100', offset: '50' })).toEqual({ limit: 100, offset: 50 });
   });
 
-  it('ignores negative/zero/garbage values and falls back to defaults', () => {
-    expect(resolveExportPage({ limit: '-5', offset: '-1' })).toEqual({ limit: 500, offset: 0 });
+  it('clamps a negative offset to 0 and a negative limit to the floor of 1 (validatePagination semantics)', () => {
+    expect(resolveExportPage({ limit: '-5', offset: '-1' })).toEqual({ limit: 1, offset: 0 });
+  });
+
+  it('falls back to defaults on unparsable (garbage) values', () => {
     expect(resolveExportPage({ limit: 'not-a-number', offset: 'nope' })).toEqual({ limit: 500, offset: 0 });
   });
 });

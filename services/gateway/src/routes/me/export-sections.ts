@@ -16,19 +16,25 @@
  * `refreshToken`, `deviceFingerprint`).
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { validatePagination } from '../../utils/pagination';
 
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 2000;
 
 export type ExportPage = { readonly limit: number; readonly offset: number };
 
-/** Borne `limit`/`offset` une fois, pour toutes les sections d'un même appel. */
+/**
+ * Borne `limit`/`offset` une fois, pour toutes les sections d'un même appel.
+ *
+ * Route par `validatePagination` (SSOT, `utils/pagination.ts`) plutôt qu'un
+ * `parseInt` local — `pagination-parse-sweep.test.ts` interdit tout décodage de
+ * pagination hors de ce point unique sur les routes non-admin.
+ */
 export function resolveExportPage(query: { limit?: string; offset?: string }): ExportPage {
-  const rawLimit = Number.parseInt(query.limit ?? '', 10);
-  const rawOffset = Number.parseInt(query.offset ?? '', 10);
-  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, MAX_LIMIT) : DEFAULT_LIMIT;
-  const offset = Number.isFinite(rawOffset) && rawOffset > 0 ? rawOffset : 0;
-  return { limit, offset };
+  return validatePagination(query.offset ?? '0', query.limit, {
+    defaultLimit: DEFAULT_LIMIT,
+    maxLimit: MAX_LIMIT,
+  });
 }
 
 export type ExportSection<T> = { readonly items: readonly T[]; readonly total: number; readonly hasMore: boolean };
