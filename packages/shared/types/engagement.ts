@@ -28,6 +28,40 @@ export type EngagementAxisKey = (typeof ENGAGEMENT_AXES)[number];
 export const isEngagementAxisKey = (value: string): value is EngagementAxisKey =>
   (ENGAGEMENT_AXES as readonly string[]).includes(value);
 
+/** Les 5 axes de « contenu produit » (§ 8 — `achievement.first_content` / `achievement.all_content_types`). */
+export const CONTENT_ENGAGEMENT_AXES: readonly EngagementAxisKey[] = [
+  'content.audio_message',
+  'content.text_message',
+  'content.post',
+  'content.story',
+  'content.reel',
+];
+
+/** Les 3 axes de « conversation distincte » (§ 8 — `achievement.three_conversation_kinds`). */
+export const CONVERSATION_ENGAGEMENT_AXES: readonly EngagementAxisKey[] = [
+  'conversation.private',
+  'conversation.public',
+  'conversation.community',
+];
+
+/**
+ * Succès composés, socle § 8 — condition ponctuelle et non répétable,
+ * évaluée par `EngagementService.recordActivity` après incrément. La clé
+ * porte déjà son préfixe `achievement.` (contrairement à `badge`/`streak`/
+ * `level`, dont le préfixe vit dans `milestoneType`) : c'est la forme que
+ * `docs/product/streaks-badges-modele.md` § 4 et § 8 déclarent pour
+ * `EngagementMilestone.milestoneKey`.
+ */
+export const ENGAGEMENT_ACHIEVEMENT_KEYS = [
+  'achievement.first_content',
+  'achievement.all_content_types',
+  'achievement.first_voice',
+  'achievement.editor',
+  'achievement.three_conversation_kinds',
+] as const;
+
+export type EngagementAchievementKey = (typeof ENGAGEMENT_ACHIEVEMENT_KEYS)[number];
+
 /** Paliers par échelle — socle initial, tunable (§ 7). */
 export const BADGE_THRESHOLDS = [1, 10, 50, 100, 500] as const;
 export const STREAK_THRESHOLDS = [3, 7, 14, 30, 60, 100] as const;

@@ -5,6 +5,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { CONTENT_ENGAGEMENT_AXES, CONVERSATION_ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
 import { getSharedNotificationService } from '../../../../services/notifications/notification-service-registry';
 
@@ -19,12 +20,16 @@ function makePrisma(overrides: Partial<{
   upsert: jest.Mock;
   create: jest.Mock;
   findUnique: jest.Mock;
+  findMany: jest.Mock;
   conversationCreditCreate: jest.Mock;
   userUpdate: jest.Mock;
 }> = {}) {
   return {
     engagementCounter: {
       upsert: overrides.upsert ?? jest.fn(),
+      // Default: no other axis of any composed condition has been reached yet
+      // (empty counter table) — harmless for every test that isn't about achievements.
+      findMany: overrides.findMany ?? jest.fn().mockResolvedValue([]),
     },
     engagementMilestone: {
       create: overrides.create ?? jest.fn(),
@@ -518,5 +523,192 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(create).toHaveBeenCalledWith({
       data: { userId: 'user-1', milestoneType: 'level', milestoneKey: 'level:50' },
     });
+  });
+});
+
+describe('EngagementService achievements (#5546)', () => {
+  it('awards achievement.first_content on the first content-family axis reached, querying only the content axes', async () => {
+    const upsert = jest.fn().mockResolvedValue({ count: 1 }); // 0 -> 1
+    const create = jest.fn().mockResolvedValue({});
+    const findMany = jest.fn().mockResolvedValue([{ axisKey: 'content.text_message' }]); // only this one so far
+    const prisma = makePrisma({ upsert, create, findMany });
+    const notificationService = makeSharedNotificationService();
+    mockGetSharedNotificationService.mockReturnValue(notificationService);
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message');
+
+    expect(create).toHaveBeenCalledWith({
+      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.first_content' },
+    });
+    expect(notificationService.createNotification).toHaveBeenCalledWith({
+      userId: 'user-1',
+      type: 'achievement_unlocked',
+      priority: 'normal',
+      content: expect.any(String),
+      context: {},
+      metadata: { action: 'view_details', achievementKey: 'achievement.first_content' },
+    });
+    expect(findMany).toHaveBeenCalledWith({
+      where: { userId: 'user-1', axisKey: { in: [...CONTENT_ENGAGEMENT_AXES] }, count: { gt: 0 } },
+      select: { axisKey: true },
+    });
+    // Only 1 of the 5 content axes has been reached: the composed condition must not fire yet.
+    expect(create).not.toHaveBeenCalledWith({
+      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.all_content_types' },
+    });
+  });
+
+  it('replays achievement.first_content with zero notifications (anti-replay via unique constraint)', async () => {
+    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const create = jest.fn().mockRejectedValue(p2002Error());
+    const prisma = makePrisma({ upsert, create });
+    const notificationService = makeSharedNotificationService();
+    mockGetSharedNotificationService.mockReturnValue(notificationService);
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message');
+
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
+  });
+
+  it('awards achievement.all_content_types once every content axis has been reached', async () => {
+    const upsert = jest.fn().mockResolvedValue({ count: 1 }); // 0 -> 1, last of the five
+    const create = jest.fn().mockResolvedValue({});
+    const findMany = jest.fn().mockResolvedValue(CONTENT_ENGAGEMENT_AXES.map((axisKey) => ({ axisKey })));
+    const prisma = makePrisma({ upsert, create, findMany });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.reel');
+
+    expect(create).toHaveBeenCalledWith({
+      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.all_content_types' },
+    });
+  });
+
+  it('does not award achievement.all_content_types while a content axis is still untouched', async () => {
+    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const create = jest.fn().mockResolvedValue({});
+    const findMany = jest.fn().mockResolvedValue([
+      { axisKey: 'content.text_message' },
+      { axisKey: 'content.post' },
+    ]); // only 2 of 5
+    const prisma = makePrisma({ upsert, create, findMany });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.story');
+
+    expect(create).not.toHaveBeenCalledWith({
+      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.all_content_types' },
+    });
+  });
+
+  it.each(['content.audio_message', 'comment.audio'] as const)(
+    'awards achievement.first_voice on the first %s',
+    async (axisKey) => {
+      const upsert = jest.fn().mockResolvedValue({ count: 1 });
+      const create = jest.fn().mockResolvedValue({});
+      const prisma = makePrisma({ upsert, create });
+      mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+      const svc = new EngagementService(prisma);
+
+      await svc.recordActivity('user-1', axisKey);
+
+      expect(create).toHaveBeenCalledWith({
+        data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.first_voice' },
+      });
+    },
+  );
+
+  it('does not award achievement.first_voice for a non-audio axis', async () => {
+    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const create = jest.fn().mockResolvedValue({});
+    const prisma = makePrisma({ upsert, create });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message');
+
+    expect(create).not.toHaveBeenCalledWith({
+      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.first_voice' },
+    });
+  });
+
+  it('awards achievement.editor on the first in-app edit', async () => {
+    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const create = jest.fn().mockResolvedValue({});
+    const prisma = makePrisma({ upsert, create });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'tool.in_app_edit');
+
+    expect(create).toHaveBeenCalledWith({
+      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.editor' },
+    });
+  });
+
+  it('awards achievement.three_conversation_kinds once every conversation axis has been reached', async () => {
+    const upsert = jest.fn().mockResolvedValue({ count: 1 }); // 0 -> 1, last of the three
+    const create = jest.fn().mockResolvedValue({});
+    const findMany = jest.fn().mockResolvedValue(CONVERSATION_ENGAGEMENT_AXES.map((axisKey) => ({ axisKey })));
+    const prisma = makePrisma({ upsert, create, findMany });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'conversation.community');
+
+    expect(create).toHaveBeenCalledWith({
+      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.three_conversation_kinds' },
+    });
+  });
+
+  it('does not award achievement.three_conversation_kinds while a conversation axis is still untouched', async () => {
+    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const create = jest.fn().mockResolvedValue({});
+    const findMany = jest.fn().mockResolvedValue([{ axisKey: 'conversation.private' }]); // only 1 of 3
+    const prisma = makePrisma({ upsert, create, findMany });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'conversation.private');
+
+    expect(create).not.toHaveBeenCalledWith({
+      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.three_conversation_kinds' },
+    });
+  });
+
+  it('does not re-evaluate any achievement condition on a non-first increment of the axis', async () => {
+    const upsert = jest.fn().mockResolvedValue({ count: 2 }); // 1 -> 2, not a first touch
+    const create = jest.fn().mockResolvedValue({});
+    const findMany = jest.fn();
+    const prisma = makePrisma({ upsert, create, findMany });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message');
+
+    expect(findMany).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ milestoneType: 'achievement' }) }),
+    );
+  });
+
+  it('does not evaluate any achievement condition for an axis outside all five conditions', async () => {
+    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const create = jest.fn().mockResolvedValue({});
+    const findMany = jest.fn();
+    const prisma = makePrisma({ upsert, create, findMany });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'tool.direct_publish');
+
+    expect(findMany).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ milestoneType: 'achievement' }) }),
+    );
   });
 });
