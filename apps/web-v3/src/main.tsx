@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import './styles/app.css';
 
 import Shell from '@/components/shell';
+import { sessionStore } from '@/lib/api/session';
 import { followSystem } from '@/lib/scheme';
 import { Router } from '@/routes/route-table';
 
@@ -15,6 +16,20 @@ import { Router } from '@/routes/route-table';
  * et la recette simulateur R4 pour la preuve qu'elle est bien montee ici.
  */
 followSystem();
+
+/**
+ * LA SESSION EST TENUE (#5605, § 7.3) — lecture `localStorage` seule, aucun
+ * appel réseau : le coût est celui du module lui-même (`session.ts`
+ * n'importe jamais `http.ts`), mesuré avec le reste du socle.
+ */
+sessionStore.getState().restoreSession();
+
+/**
+ * LE HARNAIS DE RECETTE — DEV UNIQUEMENT. `import.meta.env.DEV` est un
+ * littéral de construction : cette branche entière, `import()` compris, est
+ * éliminée du bundle de production (voir `dev-harness.ts`).
+ */
+if (import.meta.env.DEV) void import('@/lib/api/dev-harness');
 
 /**
  * CACHE-FIRST, RESEAU-ENSUITE — les « Instant App Principles » du depot,

@@ -1,0 +1,16 @@
+# Les littéraux de CONSTRUCTION (`vite.config.ts` § `define`) sous `bun test`.
+#
+# `resolveApiConfig`/`apiConfig` (`src/lib/api/config.ts`, #5605) et la
+# fixture de banc (`src/lib/api/fixtures.ts`) lisent `__SHELL__`/`__BENCH__`
+# au niveau MODULE — pas seulement dans une branche gardée. Importer N'IMPORTE
+# QUEL export d'un tel fichier évalue tout le module, `__SHELL__`/`__BENCH__`
+# compris : sans ce define, `bun test` les rend `ReferenceError`, alors que
+# ni `vite build` ni `vite dev` (qui les REMPLACENT par un littéral avant
+# transpilation) ne rencontrent jamais le problème.
+#
+# Ces valeurs sont celles du build NORMAL (variante A, hors banc) — un témoin
+# qui a besoin de la variante coque/banc bouchonne son propre appel plutôt que
+# de dépendre d'un define global.
+[define]
+"__SHELL__" = "false"
+"__BENCH__" = "0"

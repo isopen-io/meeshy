@@ -11,15 +11,20 @@
  * La MÉTHODE fait partie du contrat, elle n'est jamais laissée à l'appelant :
  * chaque route citée par ce dépôt est un verbe FIXE (`PUT
  * /user-preferences/conversations/:id`, `POST …/receipts`, `POST
- * …/mark-unread`) et aucune n'accepte l'autre verbe. Un transport qui ne
- * recevrait que `(path, body)` laisserait le lot `staging` deviner le verbe —
- * c'est-à-dire se tromper une fois sur deux, contre un 404 silencieux.
+ * …/mark-unread`, `GET /me`) et aucune n'accepte l'autre verbe. Un transport
+ * qui ne recevrait que `(path, body)` laisserait le lot `staging` deviner le
+ * verbe — c'est-à-dire se tromper une fois sur deux, contre un 404 silencieux.
+ *
+ * `GET` rejoint `PUT`/`POST` avec le travail `staging` (#5605) : le client
+ * HTTP qu'il introduit lit `GET /me` pour la recette manuelle. Le type reste
+ * ADDITIF — un ajout futur (`DELETE`, `PATCH`) suit la même règle : jamais
+ * avant qu'une route citée l'exige.
  *
  * `body` est OPTIONNEL : `POST …/mark-unread` n'a pas de corps
  * (`services/gateway/src/routes/conversations/messages-read-status.ts:159-196`).
  */
 export type Transport = (request: {
-  readonly method: 'PUT' | 'POST';
+  readonly method: 'GET' | 'PUT' | 'POST';
   readonly path: string;
   readonly body?: unknown;
 }) => Promise<unknown>;

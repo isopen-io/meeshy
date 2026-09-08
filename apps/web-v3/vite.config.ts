@@ -63,6 +63,31 @@ const forCapacitor = process.env.MEESHY_TARGET === 'capacitor';
 const bench = Number.parseInt(process.env.MEESHY_BENCH ?? '0', 10) || 0;
 
 /**
+ * LA SOURCE DE DONNÉES SE DÉCIDE, MAIS ELLE N'EST PAS ENCORE CÂBLÉE (#5605).
+ *
+ * `resolveApiConfig` (`src/lib/api/config.ts`) rend déjà `source`, et c'est le
+ * bon endroit — la base et la source se choisissent au MÊME endroit. Mais
+ * AUCUN écran ne la lit : `routes/conversations.tsx` et `routes/thread.tsx`
+ * importent `src/lib/api/fixtures.ts` en direct. Un déploiement qui poserait
+ * `VITE_DATA_SOURCE=gateway` servirait donc les fixtures en CROYANT parler à
+ * la passerelle, sans qu'aucun témoin ne rougisse.
+ *
+ * Une valeur qui ne fait rien est pire qu'une valeur absente : on refuse ici
+ * de CONSTRUIRE plutôt que de laisser passer le malentendu. Ce garde-fou
+ * disparaît le jour où les écrans lisent `apiConfig.source` — et sa
+ * disparition sera VISIBLE dans le diff qui les câble, ce qu'un commentaire
+ * n'aurait pas obtenu.
+ */
+const declaredDataSource = process.env.VITE_DATA_SOURCE;
+if (declaredDataSource !== undefined && declaredDataSource !== 'fixtures') {
+  throw new Error(
+    `VITE_DATA_SOURCE=${declaredDataSource} : la source « passerelle » n'est pas encore câblée aux écrans ` +
+      '(les routes lisent src/lib/api/fixtures.ts en direct). Construire avec cette valeur servirait les ' +
+      'fixtures en silence. Retirer la variable, ou câbler les écrans sur apiConfig.source avant de la poser.',
+  );
+}
+
+/**
  * LE PRÉCHAUFFAGE ENTRE DANS LA CONSTRUCTION, et il n'y est pas par commodité.
  *
  * Il était enchaîné APRÈS `vite build` dans le script `build` du manifeste, et
@@ -132,7 +157,37 @@ const dropInstitutionalServiceWorker = (): Plugin => ({
 
 export default defineConfig({
   base: forCapacitor ? './' : '/',
-  define: { __BENCH__: JSON.stringify(bench) },
+  define: { __BENCH__: JSON.stringify(bench), __SHELL__: JSON.stringify(forCapacitor) },
+  /**
+   * LE PROXY DE DEV (#5605, staging) — DEV UNIQUEMENT, zéro octet dans `dist/`.
+   *
+   * La passerelle sert `CORS_ORIGINS=https://staging.meeshy.me,https://gate.staging.meeshy.me`
+   * en staging (`docker-compose.staging.yml:218`) — `http://localhost:5173`
+   * n'y figure PAS, et `originIsAllowed()` (`cors-origins.ts:131-139`) refuse
+   * toute origine hors liste. Un appel `fetch` direct depuis Chrome local se
+   * ferait donc REFUSER par CORS avant même d'atteindre la route.
+   *
+   * Le proxy rend l'appel SAME-ORIGIN côté navigateur (`/api/v1/…` reste sur
+   * `localhost:5173` : c'est le fetch du navigateur que le vérificateur CORS
+   * du NAVIGATEUR regarde, et il ne voit qu'une requête locale). Mais le
+   * navigateur pose quand même un en-tête `Origin: http://localhost:5173`
+   * sur la requête sortante, et `http-proxy` la RELAIE telle quelle vers
+   * `gate.staging.meeshy.me` — sans le retrait ci-dessous, la passerelle
+   * recevrait exactement l'origine qu'elle refuse (`cors-origins.ts:131-139`,
+   * `localhost:5173` absent de `CORS_ORIGINS`) et l'appel échouerait quand
+   * même, une couche plus loin que le navigateur.
+   */
+  server: {
+    proxy: {
+      '/api/v1': {
+        target: process.env.MEESHY_PROXY_TARGET ?? 'https://gate.staging.meeshy.me',
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => proxyReq.removeHeader('origin'));
+        },
+      },
+    },
+  },
   resolve: {
     alias: [
       ...(runtime === 'preact' ? aliasPreact : []),
