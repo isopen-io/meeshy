@@ -38,6 +38,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case preferencesPrivacy
     case preferencesVideo
     case root
+    case terms
 
     public var path: String {
         switch self {
@@ -67,6 +68,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .preferencesPrivacy: return "/api/v1/me/preferences/privacy"
         case .preferencesVideo: return "/api/v1/me/preferences/video"
         case .root: return "/api/v1/me"
+        case .terms: return "/api/v1/me/terms"
         }
     }
 }
