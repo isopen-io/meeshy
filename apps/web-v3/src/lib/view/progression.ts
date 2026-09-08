@@ -102,11 +102,21 @@ export const streakRecordLabel = (longestDays: number): string => `Record : ${pl
  * dernier franchi, ou l'échelle complète. Une barre sans phrase dit une
  * fraction ; la phrase dit le pas.
  */
-export function nextStepLabel(scale: EngagementScaleProgress, unit: { readonly singular: string; readonly plural: string; readonly goal: string }): string {
-  if (scale.nextThreshold === null) return 'Échelle complète';
+export function nextStepLabel(
+  scale: EngagementScaleProgress,
+  unit: { readonly singular: string; readonly plural: string; readonly goal: string },
+  /**
+   * Ce que la phrase NOMME comme but — le prochain palier par défaut. Le
+   * niveau passe son RANG (« niveau 4 »), jamais son seuil de points
+   * (« niveau 400 ») : c'est le défaut de la notification `level_up`
+   * relevé en production, et la carte de niveau le rejouait.
+   */
+  goalValue: number | null = scale.nextThreshold,
+): string {
+  if (scale.nextThreshold === null || goalValue === null) return 'Échelle complète';
   const remaining = Math.max(0, scale.nextThreshold - scale.value);
   const counted = unit.plural === '' ? `${remaining}` : plural(remaining, unit.singular, unit.plural);
-  return `Encore ${counted} avant ${unit.goal} ${scale.nextThreshold}`;
+  return `Encore ${counted} avant ${unit.goal} ${goalValue}`;
 }
 
 export const BADGE_UNIT = { singular: '', plural: '', goal: 'le palier' } as const;

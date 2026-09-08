@@ -173,7 +173,7 @@ function LevelCard({ progress }: { progress: EngagementProgress }) {
         <ProgressBar progress={level.progress} label={`Niveau ${level.level} — vers le niveau ${level.level + 1}`} tint={BRAND} />
       </div>
       <p className="mt-2 text-check" style={{ color: INK_2 }}>
-        {nextStepLabel(level, LEVEL_UNIT)}
+        {nextStepLabel(level, LEVEL_UNIT, level.nextThreshold === null ? null : level.level + 1)}
       </p>
     </Card>
   );

@@ -143,7 +143,10 @@ enum ProgressionCopy {
     /// La phrase de la barre — ce qu'il reste AVANT le prochain palier, depuis
     /// le dernier franchi, ou l'échelle complète. Une barre sans phrase dit une
     /// fraction ; la phrase dit le pas.
-    static func nextStep(for scale: EngagementScaleProgress, kind: ScaleKind) -> String {
+    /// Le niveau NOMME son RANG (« niveau 4 »), jamais son seuil de points
+    /// (« niveau 400 ») — le défaut de la notification `level_up` relevé en
+    /// production, que la carte de niveau aurait rejoué.
+    static func nextStep(for scale: EngagementScaleProgress, kind: ScaleKind, level: Int? = nil) -> String {
         guard let next = scale.nextThreshold, let remaining = scale.remainingToNext else {
             return String(localized: "progression.scale.complete", defaultValue: "Échelle complète", bundle: .main)
         }
@@ -151,7 +154,8 @@ enum ProgressionCopy {
         case .badge:
             return String(localized: "progression.next.badge", defaultValue: "Encore \(remaining) avant le palier \(next)", bundle: .main)
         case .level:
-            return String(localized: "progression.next.level", defaultValue: "Encore \(remaining) points avant le niveau \(next)", bundle: .main)
+            let nextLevel = (level ?? scale.reachedCount) + 1
+            return String(localized: "progression.next.level", defaultValue: "Encore \(remaining) points avant le niveau \(nextLevel)", bundle: .main)
         case .streak:
             return String(localized: "progression.next.streak", defaultValue: "Encore \(remaining) jours avant le jalon de \(next)", bundle: .main)
         }

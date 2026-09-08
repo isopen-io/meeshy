@@ -53,8 +53,9 @@ describe('les phrases de palier', () => {
     expect(messages && nextStepLabel(messages, BADGE_UNIT)).toBe('Encore 8 avant le palier 50');
   });
 
-  test('le niveau compte en points, la série en jours', () => {
-    expect(nextStepLabel(progress.level, LEVEL_UNIT)).toBe('Encore 50 points avant le niveau 400');
+  test('le niveau compte en points et nomme son RANG, la série en jours', () => {
+    // « niveau 4 », jamais « niveau 400 » — le seuil de points n'est pas un niveau.
+    expect(nextStepLabel(progress.level, LEVEL_UNIT, progress.level.level + 1)).toBe('Encore 50 points avant le niveau 4');
     expect(nextStepLabel(progress.streak, STREAK_UNIT)).toBe('Encore 2 jours avant le jalon de 7');
   });
 

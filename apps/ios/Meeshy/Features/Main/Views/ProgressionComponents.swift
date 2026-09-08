@@ -103,7 +103,7 @@ struct ProgressionLevelCard: View {
                     label: String(localized: "progression.a11y.bar.level", defaultValue: "Vers le niveau \(level.level + 1)", bundle: .main)
                 )
                 .padding(.top, MeeshySpacing.xs)
-                Text(ProgressionCopy.nextStep(for: level.scale, kind: .level))
+                Text(ProgressionCopy.nextStep(for: level.scale, kind: .level, level: level.level))
                     .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)

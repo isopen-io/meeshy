@@ -35,6 +35,11 @@ describe('ProgressionBody — un utilisateur à mi-chemin', () => {
     expect(html).toContain('aria-valuenow="80"');
   });
 
+  test('la carte de niveau nomme le RANG suivant, jamais le seuil de points', () => {
+    expect(html).toContain('Encore 50 points avant le niveau 4');
+    expect(html).not.toContain('niveau 400');
+  });
+
   test('les TREIZE axes sont rendus — y compris ceux à zéro, qui disent ce qu’il reste à faire', () => {
     for (const key of ENGAGEMENT_AXES) expect(html).toContain(AXIS_LABELS[key]);
     expect(html).toContain('Encore 1 avant le palier 1');
