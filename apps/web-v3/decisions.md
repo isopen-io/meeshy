@@ -731,3 +731,76 @@ ni la Rivière ne pèsent sur la première peinture. Et un défaut à solder au
 passage : le troisième libellé de `catalog.ts` (« S'ouvrira à N personnes
 actives — M aujourd'hui ») est inatteignable tant que `current` vaut `null`
 alors que le nombre est affiché trois lignes plus haut.
+
+## D-22 · Focal se distingue de Script par une ÉLECTION, pas par une courbe de perspective — 2026-09-08
+
+**Ce que D-19 décrivait comme câblé** — `useThreadPerspective(scroller, mode === 'focal')`
+(`thread.tsx:195`, `src/lib/reading-mode/scene.ts`) — pose `opacity` et
+`transform: scale()` en continu sur CHAQUE rangée hors d'une bande centrale
+(`perspective.ts:46-52`, constantes 380/0,40/0,82). C'est la mécanique que
+`FocalScrollPerspective.swift` portait avant le lot Magnificence : iOS l'a
+**retirée le 2026-08-24** (`apps/ios/decisions.md:328`) et l'a remplacée par
+une ÉLECTION — un id élu par le centre de la région visible avec hystérésis
+95 (`FocalFocusCurve.threadFocusBandHysteresis`), armée par un geste soutenu
+(≥ 1 200 pt/s OU ≥ 4 000 ms, jamais sur un défilement programmé) et aplatie
+4,5 s après le dernier tick. Seules DEUX rangées se reconfigurent par
+transition (l'ancienne élue, la nouvelle) : carte teintée, chip d'identité
+agrandi, tampon de date — jamais une échelle ni une opacité posée sur tout le
+fil. `targets/focal-script.md` § 3.7, 4.2 et 10 (écart 1) documentent la cible
+capturée le 2026-09-08 ; aucune rangée du fil n'y porte `transform: scale`
+ni `opacity < 1` hors du cycle de révélation heure/coches.
+
+**Ce qui change.** La scène reste HORS React (une passe `rAF`, comme
+`scene.ts` aujourd'hui) mais n'écrit plus `opacity`/`transform` en continu :
+elle pose un attribut `data-elected` sur au plus une rangée et une classe de
+carte, gouvernés par l'armement du geste utilisateur — même famille de
+désarmement que l'ancrage bas (D-15 : `wheel`/`touchstart`/`keydown`, jamais
+`scrollTo` programmé). Le révélé des heures/coches (`FocalTimestampRevealState`,
+`FocalMetaRow.swift:88-95`) suit la MÊME source d'activité que l'élection —
+un seul état d'activité pour les deux, pas deux minuteurs indépendants.
+
+**Ce que ça ne change pas.** `script` reste le second mode de la rangée plate,
+sans élection à aucun moment (D-19) ; `FocalRow` reste partagée par les deux
+modes ; le mécanisme reste hors du chemin de rendu React pour la même raison
+que `scene.ts` l'était (fréquence de défilement).
+
+**Ce que ça coûte.** `scripts/check-reading-mode.mjs` § 10 exige aujourd'hui
+« transform posée en Focal / absente en Script » — cette assertion s'INVERSE
+dans le même commit que le rebranchement (elle devient : aucune rangée ne
+porte de `transform: scale` ni `opacity < 1` de perspective continue, une
+seule porte `data-elected="true"` après un défilement soutenu). `perspective.test.ts`
+gèle une loi qui n'est plus celle qu'on rebranche : il reste comme point de
+rebranchement documenté, pas comme gate du nouveau mécanisme — le nouveau
+mécanisme a son propre témoin (`election.test.ts`).
+
+## D-23 · Un message protégé a UN site de rendu, partagé par la rangée plate et la bulle — 2026-09-08
+
+`isBlurred`, `isViewOnce`, `expiresAt` et `deletedAt` ne sont lus par AUCUN
+composant web-v3 aujourd'hui (`focal-row.tsx:119` ne lit `isBlurred` que pour
+décider si la ligne basse se monte ; `bubble.tsx` ne lit aucun des quatre).
+Un message flouté ou à vue unique s'affiche donc **en clair** sur les deux
+peaux — la régression que `targets/focal-script.md` § 6 et `bulle.md` § 3.11
+documentent comme « absent et dangereux », au rang de la dimension 1
+(sécurité) de la charte du dépôt : à corriger avant que le fil lise de
+vraies données, pas après.
+
+**Le site est UNIQUE.** iOS a DEUX apparitions du même cycle —
+`FocalProtectedContent.swift:20-48` (rangée plate) et
+`BubbleStandardLayout.swift:568,966-981,1591-1600` +
+`BubbleBlurRevealLifecycle.swift` (bulle) — qui partagent la même loi : flou,
+`allowsHitTesting(false)`, tap → révélation 5 s → re-flou, `consumeViewOnce`
+pour la vue unique. La v3.1 n'écrit CETTE loi qu'une fois —
+`src/lib/reading-mode/protection.ts`, une machine à états pure
+(`hidden → revealed(until) → hidden | consumed`) testée sans DOM — et UN
+composant de présentation, `components/protected-content.tsx`, monté par
+`focal-row.tsx` ET `bubble.tsx`. Écrire le cycle deux fois (une horloge de
+révélation par peau) est le défaut que D-14 (une loi, plusieurs clients)
+interdit déjà pour le Prisme ; il s'applique ici à l'intérieur d'un seul
+client.
+
+**Ce que ça ne couvre pas.** La teinte de la bulle reçue (mélange expéditeur
+à 70 % d'indigo, `ThemedMessageBubble.swift:383-390`) reste une question
+produit ouverte (#5680) ; ce travail n'y touche pas. Les autres états
+manquants de la bulle (supprimé, système, appel, sticker — `bulle.md` § 6.6,
+§ 9) restent hors périmètre : seuls les QUATRE états de protection
+(flouté, vue unique, éphémère, supprimé) sont couverts par ce travail.
