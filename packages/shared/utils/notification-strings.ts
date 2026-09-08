@@ -31,6 +31,10 @@ export const NOTIFICATION_STRING_KEYS = [
   'push.private',
   'engagement.badgeEarned', 'engagement.streakMilestone', 'engagement.levelUp',
   'engagement.achievementUnlocked',
+  'engagement.badgeEarned',
+  'report.resolved.title',
+  'report.resolved.actionTaken',
+  'report.resolved.noAction',
 ] as const;
 export type NotificationStringKey = typeof NOTIFICATION_STRING_KEYS[number];
 
@@ -138,6 +142,9 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'engagement.streakMilestone': '🔥 Série de {count} jours !',
     'engagement.levelUp': '⭐ Niveau {count} atteint !',
     'engagement.achievementUnlocked': '🏆 Succès débloqué : {title}',
+    'report.resolved.title': 'Votre signalement a été examiné',
+    'report.resolved.actionTaken': 'Nous avons pris une mesure suite à votre signalement.',
+    'report.resolved.noAction': 'Après examen, nous n’avons pas identifié de violation de nos règles concernant votre signalement.',
   },
   en: {
     'reaction.message': 'reacted {emoji} to your message',
@@ -189,6 +196,9 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'engagement.streakMilestone': '🔥 {count}-day streak!',
     'engagement.levelUp': '⭐ Level {count} reached!',
     'engagement.achievementUnlocked': '🏆 Achievement unlocked: {title}',
+    'report.resolved.title': 'Your report has been reviewed',
+    'report.resolved.actionTaken': 'We took action based on your report.',
+    'report.resolved.noAction': 'After review, we did not find a violation of our rules related to your report.',
   },
   es: {
     'reaction.message': 'reaccionó {emoji} a tu mensaje',
@@ -240,6 +250,9 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'engagement.streakMilestone': '🔥 ¡Racha de {count} días!',
     'engagement.levelUp': '⭐ ¡Nivel {count} alcanzado!',
     'engagement.achievementUnlocked': '🏆 Logro desbloqueado: {title}',
+    'report.resolved.title': 'Se ha revisado tu denuncia',
+    'report.resolved.actionTaken': 'Tomamos medidas a partir de tu denuncia.',
+    'report.resolved.noAction': 'Tras revisarlo, no encontramos ninguna infracción de nuestras normas relacionada con tu denuncia.',
   },
   pt: {
     'reaction.message': 'reagiu {emoji} à sua mensagem',
@@ -291,6 +304,9 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'engagement.streakMilestone': '🔥 Sequência de {count} dias!',
     'engagement.levelUp': '⭐ Nível {count} alcançado!',
     'engagement.achievementUnlocked': '🏆 Conquista desbloqueada: {title}',
+    'report.resolved.title': 'A sua denúncia foi analisada',
+    'report.resolved.actionTaken': 'Tomámos uma medida com base na sua denúncia.',
+    'report.resolved.noAction': 'Após análise, não identificámos uma violação das nossas regras relacionada com a sua denúncia.',
   },
   de: {
     'reaction.message': 'hat {emoji} auf deine Nachricht reagiert',
@@ -342,6 +358,9 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'engagement.streakMilestone': '🔥 {count}-Tage-Serie!',
     'engagement.levelUp': '⭐ Stufe {count} erreicht!',
     'engagement.achievementUnlocked': '🏆 Erfolg freigeschaltet: {title}',
+    'report.resolved.title': 'Deine Meldung wurde geprüft',
+    'report.resolved.actionTaken': 'Wir haben aufgrund deiner Meldung Maßnahmen ergriffen.',
+    'report.resolved.noAction': 'Nach Prüfung haben wir keinen Verstoß gegen unsere Regeln im Zusammenhang mit deiner Meldung festgestellt.',
   },
   it: {
     'reaction.message': 'ha reagito {emoji} al tuo messaggio',
@@ -393,6 +412,9 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'engagement.streakMilestone': '🔥 Serie di {count} giorni!',
     'engagement.levelUp': '⭐ Livello {count} raggiunto!',
     'engagement.achievementUnlocked': '🏆 Obiettivo sbloccato: {title}',
+    'report.resolved.title': 'La tua segnalazione è stata esaminata',
+    'report.resolved.actionTaken': 'Abbiamo adottato provvedimenti in base alla tua segnalazione.',
+    'report.resolved.noAction': 'Dopo l’esame, non abbiamo riscontrato violazioni delle nostre regole relative alla tua segnalazione.',
   },
   ar: {
     'reaction.message': 'تفاعل {emoji} مع رسالتك',
@@ -444,6 +466,9 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'engagement.streakMilestone': '🔥 سلسلة {count} يوم!',
     'engagement.levelUp': '⭐ تم الوصول إلى المستوى {count}!',
     'engagement.achievementUnlocked': '🏆 تم فتح الإنجاز: {title}',
+    'report.resolved.title': 'تمت مراجعة بلاغك',
+    'report.resolved.actionTaken': 'اتخذنا إجراءً بناءً على بلاغك.',
+    'report.resolved.noAction': 'بعد المراجعة، لم نجد أي انتهاك لقواعدنا يتعلق ببلاغك.',
   },
   'zh-Hans': {
     'reaction.message': '用 {emoji} 回应了你的消息',
@@ -495,6 +520,9 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'engagement.streakMilestone': '🔥 连续 {count} 天！',
     'engagement.levelUp': '⭐ 达到第 {count} 级！',
     'engagement.achievementUnlocked': '🏆 成就解锁：{title}',
+    'report.resolved.title': '您的举报已处理',
+    'report.resolved.actionTaken': '我们已根据您的举报采取了措施。',
+    'report.resolved.noAction': '经审核，我们未发现与您的举报相关的规则违规行为。',
   },
 };
 
