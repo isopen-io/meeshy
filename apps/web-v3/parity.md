@@ -3,17 +3,40 @@
 > **Source** : `node scripts/route-inventory.mjs` (et `--json`). Ce tableau est
 > une PROJECTION de ce script ; le jour où il rend une route absente d'ici,
 > c'est ce document qui a tort. Issue : #5492. Lot : #5491.
-> Relevé du **2026-09-07**.
+> Relevé du **2026-09-08**.
 
 ## Ce que la mesure a rendu, et qui change le cadrage de #5492
 
 | application | routes | où elle tourne |
 |---|---|---|
 | `apps/web` (legacy) | **80** | **la PRODUCTION, seule — 100 % du trafic utilisateur** |
-| `apps/web-v3` | 48 | **le STAGING** (confirmé par le porteur, 2026-09-07) |
-| `apps/web-v3` | 0 | nulle part encore |
+| `apps/web-old-version3` | 48 | nulle part — **ANNULÉE** le 2026-09-07 |
+| `apps/web-v3` (la v3.1) | **9** — 4 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
 
-**La v3 n'a jamais servi un seul écran à un utilisateur réel.**
+**L'ancienne refonte n'a jamais servi un seul écran à un utilisateur réel.**
+
+> **Correction du 2026-09-08 (#5669).** Ce tableau a porté « `apps/web-v3` — 0 —
+> nulle part encore » pendant tout le cadrage de #5492, et c'était FAUX : la
+> v3.1 servait déjà quatre écrans et cinq documents. Le script n'énumérait que
+> la convention Next.js (`page.tsx` / `route.ts`), que la v3.1 n'a pas — ses
+> adresses sont écrites à la main dans `src/routes/route-table.tsx` (D-3) et ses
+> documents institutionnels sont pré-rendus hors du routeur. **Un énumérateur
+> aveugle à une application ne dit pas « zéro » : il ne dit RIEN, et son silence
+> se lit comme un zéro.** Les deux lignes de la v3 se confondaient de surcroît
+> sous le même nom, l'annulée et le chantier, ce qui rendait l'erreur illisible.
+>
+> `scripts/lib/v31-routes.mjs` lit désormais les deux familles à leur source, et
+> `src/routes/route-inventory.test.ts` en est la jumelle : il IMPORTE `ROUTES`
+> et REJOUE l'extraction, si bien qu'une route ajoutée à la table que
+> l'inventaire ne verrait pas fait rougir `bun test`.
+
+### Ce que les 9 adresses de la v3.1 disent de la bascule
+
+`node scripts/route-inventory.mjs --json` : **huit des neuf existent déjà dans
+le legacy** (`/`, `/login`, `/signup` et les cinq documents). La seule adresse
+que la v3.1 introduit est `/c/:conversation` — le fil. La parité d'URL n'est
+donc pas le chantier ; c'est la parité d'ÉCRANS qui l'est, et l'écart se compte
+sur les **80** routes du legacy, pas sur un espace de nommage à réconcilier.
 
 > **Correction du 2026-09-07.** Une première version de ce document déduisait le
 > déploiement de `docker-compose.prod.yml`, qui décrit un routeur `frontend-v3`
