@@ -61,6 +61,7 @@ extension Route {
         case .communityInvite: return "CommunityInvite"
         case .notifications: return "Notifications"
         case .userStats: return "UserStats"
+        case .progression: return "Progression"
         case .links: return "Links"
         case .affiliate: return "Affiliate"
         case .trackingLinks: return "TrackingLinks"

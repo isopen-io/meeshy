@@ -423,6 +423,9 @@ struct RootView: View {
                     case .userStats:
                         UserStatsView()
                             .navigationBarHidden(true)
+                    case .progression:
+                        ProgressionView()
+                            .navigationBarHidden(true)
                     case .links:
                         LinksHubView()
                     case .affiliate:
@@ -1053,6 +1056,7 @@ struct RootView: View {
             } else {
                 switch routeName {
                 case "userStats": router.push(.userStats)
+                case "progression": router.push(.progression)
                 case "affiliate": router.push(.affiliate)
                 default: break
                 }
@@ -1821,7 +1825,9 @@ struct RootView: View {
             }
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
-            router.push(.userStats)
+            // Un palier annoncé ouvre le tableau de bord qui le RESTITUE
+            // (#5698) — pas les statistiques, qui ne connaissent pas ces paliers.
+            router.push(.progression)
 
         case .legacyAffiliateSignup:
             router.push(.affiliate)

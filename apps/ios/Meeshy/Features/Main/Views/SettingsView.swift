@@ -651,6 +651,19 @@ struct SettingsView: View {
 
             Button {
                 HapticFeedback.light()
+                router.push(.progression)
+            } label: {
+                settingsRow(icon: "trophy.fill", title: String(localized: "settings.tools.progression", defaultValue: "Progression", bundle: .main), color: MeeshyColors.warningHex) {
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .accessibilityLabel(String(localized: "settings.tools.progression", defaultValue: "Progression", bundle: .main))
+            .accessibilityHint(String(localized: "settings.tools.progression.hint", defaultValue: "Vos badges, votre niveau et votre série de jours actifs", bundle: .main))
+
+            Button {
+                HapticFeedback.light()
                 showAffiliate = true
             } label: {
                 settingsRow(icon: "link.badge.plus", title: String(localized: "settings.tools.affiliate", bundle: .main), color: MeeshyColors.successHex) {
