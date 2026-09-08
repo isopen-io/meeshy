@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ConversationReadingMode, ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 
-import { resolveThreadMode, toStickyPreference, toStoredMode, usesFlatRow } from './decision';
+import { resolveThreadMode, threadCapabilities, toStickyPreference, toStoredMode, usesFlatRow } from './decision';
 
 /**
  * LA LOI DE CHOIX DU FIL — comportement par l'API publique, `now` et
@@ -86,6 +86,49 @@ describe('resolveThreadMode — le choix collant', () => {
     expect(
       resolveThreadMode({ ...BASE, unreadCount: 999, lastOpenedAt: null, sticky: 'script' }),
     ).toEqual({ mode: 'script', reason: 'sticky' });
+  });
+});
+
+describe('resolveThreadMode — drapeau éteint (VITE_READING_MODES=off)', () => {
+  /**
+   * PARAMÈTRE DE CONSTRUCTION, jamais un toggle : `readingModesEnabled` entre
+   * par l'ENTRÉE (défaut `apiConfig.readingModesEnabled` quand absent — non
+   * exercé ici, les témoins ci-dessus le couvrent déjà en laissant le champ
+   * absent). Miroir `ReadingModeOrchestrator.resolveOrchestratorDecision`
+   * (Swift, branche 1) : drapeau éteint ⇒ `bubbles`/`flag-disabled`, JAMAIS
+   * clampé, et PRIORITAIRE sur tout choix collant — la table de priorité
+   * Swift place cette branche AVANT `stickyChoice`.
+   */
+  test('drapeau éteint, rien de collant ⇒ bubbles/flag-disabled', () => {
+    expect(
+      resolveThreadMode({ ...BASE, unreadCount: 0, lastOpenedAt: BASE.now, sticky: 'auto', readingModesEnabled: false }),
+    ).toEqual({ mode: 'bubbles', reason: 'flag-disabled' });
+  });
+
+  test('collant focal + drapeau éteint ⇒ bubbles/flag-disabled (le drapeau PRIME sur le collant)', () => {
+    expect(
+      resolveThreadMode({ ...BASE, unreadCount: 0, lastOpenedAt: BASE.now, sticky: 'focal', readingModesEnabled: false }),
+    ).toEqual({ mode: 'bubbles', reason: 'flag-disabled' });
+  });
+
+  test('collant bulles + drapeau éteint ⇒ bubbles/flag-disabled (la raison est celle de la loi, pas "sticky")', () => {
+    expect(
+      resolveThreadMode({ ...BASE, unreadCount: 0, lastOpenedAt: BASE.now, sticky: 'bulles', readingModesEnabled: false }),
+    ).toEqual({ mode: 'bubbles', reason: 'flag-disabled' });
+  });
+
+  test('threadCapabilities({ readingModesEnabled: false }).availableModes est vide — la loi ne rend que bubbles, hors THREAD_RENDERABLE_MODES', () => {
+    expect(
+      threadCapabilities({ isAnonymous: false, conversationType: 'group', readingModesEnabled: false }).availableModes,
+    ).toEqual([]);
+  });
+
+  test('le défaut (paramètre absent) reste inchangé — équivalent à readingModesEnabled: true', () => {
+    expect(
+      resolveThreadMode({ ...BASE, unreadCount: 0, lastOpenedAt: BASE.now, sticky: 'auto' }),
+    ).toEqual(
+      resolveThreadMode({ ...BASE, unreadCount: 0, lastOpenedAt: BASE.now, sticky: 'auto', readingModesEnabled: true }),
+    );
   });
 });
 

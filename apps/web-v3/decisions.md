@@ -99,6 +99,10 @@ C'est un écart assumé avec iOS **en pratique** — pas en droit : la loi iOS d
 la même chose, mais son drapeau étant désactivé, ses utilisateurs voient des
 bulles. La v4 applique la loi telle qu'elle est écrite.
 
+> **Amendée le 2026-09-08 par D-20.** Ce n'est plus un écart : la cible est
+> l'app iOS drapeaux activés, où le fil s'ouvre en Focal. Le seul réglage est
+> le paramètre de construction `VITE_READING_MODES` (#5674).
+
 ## D-8 · `summary` et `river` sont hors périmètre, et la loi retombe sur `focal` — 2026-09-07 (#5566)
 
 La loi élit `summary` au-delà de 25 non-lus, ou après 24 h d'absence avec ≥ 10
@@ -127,6 +131,13 @@ remplacer**, pas à conserver à côté.
 
 Écart assumé avec iOS, où le drapeau `lentille_list` est désactivé par défaut :
 les utilisateurs iOS ne voient pas la lentille, les utilisateurs web la verront.
+
+> **Amendée le 2026-09-08 par D-20.** Ce n'est plus un écart : la cible est
+> l'app iOS drapeaux activés, où la Lentille EST la liste — avec tout ce que le
+> drapeau monte (sections et stickers, pont ✦, magnification actionnable, scène
+> qui s'aplatit au repos, rail de stories). Sans drapeau, la v3.1 n'a aucun
+> retour arrière : le « pas de demi-livraison » ci-dessus vaut pour chaque
+> écart listé dans `targets/lentille.md`.
 
 ## D-10 · La v4 écrit le mode de lecture vers le serveur — 2026-09-07 (#5566)
 
@@ -582,3 +593,81 @@ servent plus que API 24-30. Sans cet attribut le fond retombait sur le
 clair, jamais la marque. `values/colors.xml` (`splash_background`) +
 `styles.xml` le posent ; mesuré après correctif : `#0B0C14`, système en mode
 CLAIR compris.
+
+## D-19 · `script` n'est PAS `river` — deux modes distincts, un seul hors périmètre — 2026-09-08
+
+La spécification du lot « thread/style » (préparation de cible, tour du
+2026-09-08) posait la question en ouvert : *« script = rivière ? à trancher
+en lisant le catalogue `@meeshy/shared/types/reading-modes` »*. Le catalogue,
+et le code déjà écrit, la tranchent déjà — cette entrée le rend CITABLE au
+lieu de laisser la question rouverte à chaque lecture de la spécification.
+
+**Non : `script` et `river` (Rivière) sont deux valeurs DISTINCTES du même
+type `ConversationReadingMode`.** La preuve est à trois endroits qui
+s'accordent :
+- le gateway valide `auto|focal|script|resume|riviere` — **cinq** valeurs
+  (D-10, `routes/conversation-preferences.ts`) ;
+- `catalog.ts` leur donne des titres et des sous-titres séparés (« Script » /
+  « Rangée plate, densité uniforme » vs « Rivière » / « Les couloirs de la
+  conversation ») et les traite par des branches différentes de `menuRows()` ;
+- `decision.ts` (`THREAD_RENDERABLE_MODES = ['focal', 'script']`) rend
+  `script` DISPONIBLE au même titre que `focal`, quand `river` reste hors de
+  ce catalogue de rendu — au même rang que `summary`, sous la loi D-8.
+
+**Ce que ça tranche pour la suite.** `script` n'est donc pas une question
+ouverte ni une variante de `river` : c'est le second mode de la RANGÉE PLATE
+(`usesFlatRow`, `decision.ts`), déjà EN PÉRIMÈTRE de la v3.1, qui partage
+`FocalRow` avec `focal` et n'en diffère que par l'absence de perspective au
+défilement (`useThreadPerspective(scroller, mode === 'focal')`,
+`thread.tsx:195`) — mécanisme déjà câblé, distinct du travail qui reste à
+faire sur la colonne méta (`FocalMetaColumn.swift:62-76`,
+`showsDeliveryChecks`, non encore extraite en fonction nommée testée dans
+`src/lib/reading-mode/meta.ts`). `river` reste hors périmètre (D-8), sans
+lien avec cette clarification.
+
+## D-20 · La cible est l'app iOS DRAPEAUX ACTIVÉS — et la v3.1 n'a ni drapeau ni programme bêta — 2026-09-08 (#5672)
+
+Directive porteur, le 2026-09-08 : *« Il faut re-analyser la vue de Meeshy avec
+les dernières Features activées car c'est la cible : la vue Lentille, messages
+Focal, Scripts et Bulle ! Il faut refaire une analyse avant implémentation. »*
+Puis : *« dans cette version pas besoin de ceci ! par défaut la lentille est là
+et la conversation focal aussi avec possibilité des choix en script ou bulle »*
+— et, sur le drapeau en dur de `decision.ts` : *« s'il est déjà possible de
+désactiver autant mettre un paramètre de configuration pour désactiver la focal
+par défaut »*.
+
+**Ce que la cible EST.** iOS porte trois drapeaux indépendants — `lentille_list`,
+`reading_modes`, `riviere_mode` (`Lentille/Core/LentilleFeatureFlag.swift:82-186`)
+— qu'un seul interrupteur allume, Réglages › Bêta (`BetaFeaturesPreference`,
+clé `meeshy.pref.beta_features_enabled`), et qu'une installation neuve a ÉTEINTS.
+La référence de la v3.1 est l'app iOS **avec ces trois drapeaux ON** : la liste
+Lentille (sections, stickers, pont ✦, magnification actionnable, scène qui
+s'aplatit au repos, rail de stories), le fil en rangée plate (Focal avec son
+élection, Script), Bulles comme choix. Toute capture prise drapeaux éteints
+montre l'ANCIEN produit (liste en cartes `ThemedConversationRow`, bulle à
+queue) et ne vaut rien comme cible — le run `wf_81ad007f-ceb` l'a fait, et son
+propre rapport l'écrivait (« preuve vivante que le drapeau iOS est désactivé »).
+Le dossier `apps/web-v3/targets/` (captures clair/sombre, arbres
+d'accessibilité, analyses par vue avec tableau iOS → web-v3) est la source de
+vérité des phases Cadrer, Concevoir et Spécifier ; il PRIME sur toute
+spécification antérieure.
+
+**Ce que ça change à D-7 et D-9.** Les deux disaient « écart assumé avec iOS,
+où le drapeau est désactivé ». Le FAIT reste vrai ; le STATUT change : ouvrir
+en Focal et servir la Lentille ne sont plus des écarts mais la conformité, et
+tout ce que le drapeau ON monte entre au périmètre de parité (`targets/*.md`,
+§ écarts). La phrase « écart assumé avec iOS où le drapeau est désactivé »
+n'est plus recevable dans une décision ni une spécification.
+
+**Ce que ça ne change pas.** La v3.1 n'a ni toggle utilisateur ni programme
+bêta : la Lentille EST la liste (D-9), le fil S'OUVRE en Focal (D-7),
+l'utilisateur CHOISIT Script ou Bulles par la puce. Le seul réglage est un
+paramètre de CONSTRUCTION, `VITE_READING_MODES` (`on` par défaut, `off` ⇒ le
+fil s'ouvre en bulles sans puce, miroir exact du drapeau iOS `reading_modes`,
+#5674), lu au seul endroit qui lit l'environnement, `src/lib/api/config.ts`.
+
+**Ce que ça coûte.** Sans drapeau, la v3.1 n'a aucun retour arrière à chaud —
+`VITE_READING_MODES=off` est un retour au déploiement, pas un interrupteur.
+Le « pas de demi-livraison » de D-9 vaut donc pour chaque écart listé dans
+`targets/` : une Lentille sans sections ou un Focal sans élection n'est pas
+« en avance », c'est un écart.

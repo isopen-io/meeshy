@@ -101,6 +101,22 @@ gamme, et la fluidité de défilement réelle qui va avec, restent « à mesurer
 — aucun appareil physique n'est disponible ici ; c'est le seul point que cette
 passe n'a pas pu clore.
 
+### Les paramètres de construction (`VITE_*`)
+
+Trois variables lues UNIQUEMENT par `src/lib/api/config.ts`
+(`resolveApiConfig`), jamais relues ailleurs — personne d'autre n'importe
+`import.meta.env` dans ce dépôt :
+
+| Variable | Valeurs | Défaut | Effet |
+|---|---|---|---|
+| `VITE_API_BASE` | une origine absolue (`https://…`) | production (`https://gate.meeshy.me`), ou base relative en dehors d'une coque | la base des requêtes API |
+| `VITE_DATA_SOURCE` | `gateway` | `fixtures` | source des données servies aux écrans (`gateway` n'est pas encore câblée aux routes, § garde de `vite.config.ts`) |
+| `VITE_READING_MODES` | `on`, `off` | `on` | les MODES DE LECTURE du fil (D-20) : `on` ⇒ le fil s'ouvre en Focal, l'utilisateur choisit Script ou Bulles par la puce ; `off` ⇒ le fil s'ouvre en bulles, sans puce (`bubbles`/`flag-disabled`, prioritaire sur tout choix collant — `resolveOrchestratorDecision`, `packages/shared/utils/reading-modes.ts`). Paramètre de CONSTRUCTION, figé au déploiement — la v3.1 n'a ni toggle utilisateur ni programme bêta, contrairement à iOS ; miroir de `MEESHY_FLAG_READING_MODES` (`LentilleFeatureFlag.swift:82-90`). La liste Lentille n'en dépend pas (D-9) |
+
+`VITE_READING_MODES` et `VITE_DATA_SOURCE` sont gardées à la CONSTRUCTION
+(`vite.config.ts`) : une valeur ni admise ni absente fait échouer `vite build`
+plutôt que de laisser passer une faute de frappe en silence.
+
 ## L'interface
 
 Reprise de l'app iOS, relevée dans `apps/ios` et `packages/MeeshySDK` — pas des

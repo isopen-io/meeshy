@@ -31,6 +31,18 @@ export type DataSource = 'fixtures' | 'gateway';
 export type ApiConfig = {
   readonly base: string;
   readonly source: DataSource;
+  /**
+   * LES MODES DE LECTURE DU FIL — paramètre de CONSTRUCTION, jamais un toggle
+   * utilisateur ni un programme bêta (la v3.1 n'a ni l'un ni l'autre, D-20).
+   * Miroir de `MEESHY_FLAG_READING_MODES` (`LentilleFeatureFlag.swift:82-90`) :
+   * `true` par défaut (D-7, le fil s'ouvre en Focal ; D-20), figé au
+   * déploiement par `VITE_READING_MODES`. Il ne gouverne QUE le fil : la liste
+   * Lentille (D-9) n'a aucun paramètre, elle est la seule peau. Consommé comme `isFlagEnabled` par
+   * `resolveOrchestratorDecision` (`packages/shared/utils/reading-modes.ts`) —
+   * drapeau éteint ⇒ `bubbles`/`flag-disabled`, JAMAIS clampé, prioritaire
+   * sur tout choix collant.
+   */
+  readonly readingModesEnabled: boolean;
 };
 
 /**
@@ -47,6 +59,7 @@ export type ApiEnv = {
   readonly [key: string]: unknown;
   readonly VITE_API_BASE?: string;
   readonly VITE_DATA_SOURCE?: string;
+  readonly VITE_READING_MODES?: string;
 };
 
 const PRODUCTION_ORIGIN = 'https://gate.meeshy.me';
@@ -68,6 +81,17 @@ function resolveSource(env: ApiEnv): DataSource {
 }
 
 /**
+ * `'off'` DÉSACTIVE, tout le reste (absent, `'on'`, ou une valeur qui n'aurait
+ * pas dû franchir la garde de construction) ACTIVE — la garde de
+ * `vite.config.ts` (§ `VITE_READING_MODES`) fait déjà échouer la
+ * construction sur une valeur ni `'on'` ni `'off'` ni absente ; cette
+ * fonction n'a donc qu'UN comparateur à tenir, jamais une re-validation.
+ */
+function resolveReadingModes(env: ApiEnv): boolean {
+  return env.VITE_READING_MODES !== 'off';
+}
+
+/**
  * La base — FAIL-CLOSED en coque : une surcharge relative n'y mène nulle
  * part (miroir `MeeshyConfig.swift:6`, où le défaut est toujours une origine
  * absolue), et une erreur de configuration doit rendre un défaut qui
@@ -85,7 +109,11 @@ function resolveBase(env: ApiEnv, { shell }: { readonly shell: boolean }): strin
 }
 
 export function resolveApiConfig(env: ApiEnv, options: { readonly shell: boolean }): ApiConfig {
-  return { base: resolveBase(env, options), source: resolveSource(env) };
+  return {
+    base: resolveBase(env, options),
+    source: resolveSource(env),
+    readingModesEnabled: resolveReadingModes(env),
+  };
 }
 
 /**
