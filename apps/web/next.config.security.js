@@ -56,10 +56,16 @@ const securityHeaders = [
     value: 'strict-origin-when-cross-origin'
   },
 
-  // Feature policy (disable unused features)
+  // Feature policy — camera/microphone/geolocation stay ALLOWED for the app's
+  // own origin: Meeshy is a calling + voice-message + live-location product
+  // (services/webrtc-service.ts, hooks/use-voice-recording.ts,
+  // lib/geolocation.ts). `camera=()` / `microphone=()` (empty allowlist) would
+  // deny the feature to EVERY context, including same-origin — that would
+  // have silently broken calls, voice recording and location sharing in
+  // production the moment this header shipped.
   {
     key: 'Permissions-Policy',
-    value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()'
+    value: 'camera=(self), microphone=(self), geolocation=(self), interest-cohort=()'
   },
 
   // XSS Protection (legacy but still useful)
@@ -88,17 +94,36 @@ const securityHeaders = [
 ];
 
 /**
+ * `securityHeaders` minus Content-Security-Policy.
+ *
+ * CSP is an ALLOWLIST: shipping it wrong doesn't warn anyone, it silently
+ * blocks whatever it forgot (a WebSocket to the real gateway domain, a
+ * Firebase call, an image host) — and this file's `connect-src` already read
+ * `NEXT_PUBLIC_API_DOMAIN`, an env var that does not exist anywhere in this
+ * repo (production sets `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_WS_URL`, see
+ * `docker-compose.prod.yml`), so it would have resolved to the `localhost:3001`
+ * fallback in every real environment and blocked the app's own API/WS traffic.
+ * Wiring CSP in needs a real allowlist audit (gateway, translator, static
+ * asset host, Firebase/FCM domains, image remote patterns) verified against a
+ * running environment — tracked separately (#3628 follow-up). Until then,
+ * only the non-CSP hardening headers below are wired into `next.config.ts`.
+ */
+const nonCspSecurityHeaders = securityHeaders.filter(
+  (header) => header.key !== 'Content-Security-Policy'
+);
+
+/**
  * Export security headers configuration
  * Use in next.config.js:
  *
- * const { securityHeaders } = require('./next.config.security');
+ * const { nonCspSecurityHeaders } = require('./next.config.security');
  *
  * module.exports = {
  *   async headers() {
  *     return [
  *       {
  *         source: '/:path*',
- *         headers: securityHeaders
+ *         headers: nonCspSecurityHeaders
  *       }
  *     ];
  *   }
@@ -106,5 +131,6 @@ const securityHeaders = [
  */
 module.exports = {
   securityHeaders,
+  nonCspSecurityHeaders,
   ContentSecurityPolicy
 };
