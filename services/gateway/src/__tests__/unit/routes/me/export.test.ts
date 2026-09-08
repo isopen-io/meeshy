@@ -71,6 +71,18 @@ async function buildApp(opts: {
     user: { findUnique: mocks.userFindUnique },
     participant: { findMany: mocks.participantFindMany },
     message: { findMany: mocks.messageFindMany },
+    // #3633 — le défaut "toutes les types" en couvre désormais dix, pas trois ;
+    // ce fichier ne teste que profile/messages/contacts, ces doubles évitent
+    // seulement qu'un modèle non simulé fasse lever le chemin par défaut.
+    post: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    postComment: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    reaction: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    postReaction: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    commentReaction: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    messageAttachment: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    postMedia: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    userVoiceModel: { findFirst: jest.fn().mockResolvedValue(null) },
+    userSession: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
   } as any);
 
   app.decorate('authenticate', async (req: FastifyRequest) => {
@@ -117,7 +129,11 @@ describe('GET /export — default JSON (all types)', () => {
     expect(body.data).toBeDefined();
     expect(body.data.exportDate).toBeDefined();
     expect(body.data.format).toBe('json');
-    expect(body.data.requestedTypes).toEqual(['profile', 'messages', 'contacts']);
+    // #3633 — le défaut couvre désormais les dix types, pas seulement les trois
+    // premiers (l'export RGPD ne doit pas exiger de connaître chaque catégorie).
+    expect(body.data.requestedTypes).toEqual([
+      'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions',
+    ]);
     expect(body.data.profile).toBeDefined();
     expect(body.data.profile.id).toBe(USER_ID);
     expect(body.data.messages).toBeDefined();

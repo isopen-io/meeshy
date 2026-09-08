@@ -302,7 +302,9 @@ describe('Le point de montage — routes/index.ts (#4359)', () => {
    * moyen de le déduire de la ligne qu'on édite**. Un lot cadré sur son
    * propre territoire — routes/me, sécurité, budget — ne peut pas voir le
    * second site ; seule la suite COMPLÈTE du gateway le rattrape, après la
-   * poussée. C'est arrivé à #3734, puis de nouveau à #5670.
+   * poussée. C'est arrivé à #3734, puis de nouveau à #5670 — dont le lot a
+   * écrit, en remontant la copie de 63 à 64 : « le suivi reste ouvert tel
+   * quel ». C'est ce suivi que ce retrait solde.
    *
    * Ce que ce fichier garde est ce dont son récit a besoin, et rien de plus :
    * l'ORDRE RELATIF de `me-categories` et `me-permissions` au même préfixe,

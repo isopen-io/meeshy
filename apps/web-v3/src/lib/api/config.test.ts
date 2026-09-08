@@ -58,3 +58,29 @@ describe('resolveApiConfig — la source de données', () => {
     expect(resolveApiConfig({ VITE_DATA_SOURCE: '' }, { shell: false }).source).toBe('fixtures');
   });
 });
+
+/**
+ * `readingModesEnabled` — paramètre de CONSTRUCTION, miroir de
+ * `MEESHY_FLAG_READING_MODES` (`LentilleFeatureFlag.swift:82-90`), consommé
+ * par `resolveOrchestratorDecision` (`packages/shared/utils/reading-modes.ts`)
+ * comme `isFlagEnabled`. La v3.1 n'a ni toggle utilisateur ni programme
+ * bêta : `'off'` est la SEULE valeur qui désactive, tout le reste (absent,
+ * `'on'`, ou toute autre chaîne) vaut ACTIVÉ ici — les valeurs inconnues sont
+ * rejetées en amont, à la CONSTRUCTION, par la garde de `vite.config.ts`
+ * (§ `VITE_READING_MODES`, calquée sur la garde `VITE_DATA_SOURCE` déjà en
+ * place) : ce fichier ne revalide donc pas ce que la garde de construction a
+ * déjà refusé de laisser passer.
+ */
+describe('resolveApiConfig — readingModesEnabled (paramètre de construction, D-20)', () => {
+  test('défaut (variable absente) : activé — la Lentille est là par défaut', () => {
+    expect(resolveApiConfig({}, { shell: false }).readingModesEnabled).toBe(true);
+  });
+
+  test('VITE_READING_MODES=on : activé', () => {
+    expect(resolveApiConfig({ VITE_READING_MODES: 'on' }, { shell: false }).readingModesEnabled).toBe(true);
+  });
+
+  test('VITE_READING_MODES=off : désactivé', () => {
+    expect(resolveApiConfig({ VITE_READING_MODES: 'off' }, { shell: false }).readingModesEnabled).toBe(false);
+  });
+});

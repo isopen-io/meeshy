@@ -468,6 +468,42 @@ jobs:
         run: bash scripts/check-swift-viewbuilder.sh --self-test && bash scripts/check-swift-viewbuilder.sh
 
   # ===========================================================================
+  # apps/web-old-version3 est ANNULÉE (directive porteur 2026-09-07, CLAUDE.md
+  # racine § « LA V3 EN DÉVELOPPEMENT EST ANNULÉE ») et ne reçoit plus aucune
+  # feature, aucun correctif, aucun portage d'écran. Les trois jobs `a11y-v3`,
+  # `lifecycle-v3` et `chaines-v3` ci-dessous la construisent et l'éprouvent
+  # malgré tout, en gate BLOQUANT, à CHAQUE PR du dépôt — qu'elle touche ou non
+  # ce répertoire (#5686). Constaté sur #5678, dont le diff est un seul fichier
+  # de test du gateway : `chaines-v3` y était rouge sur un fichier de
+  # `apps/web-old-version3` inchangé depuis 19 h.
+  #
+  # Ce job les rend CONDITIONNELS à un changement RÉEL de
+  # `apps/web-old-version3/**` — l'option la MOINS destructrice des trois que
+  # #5686 posait (retirer les jobs, les rendre non-bloquants, ou les
+  # conditionner aux chemins) : elle rend immédiatement le temps de CI aux
+  # lots qui n'ont rien à voir avec cette application, sans préjuger de si/quand
+  # elle sera décommissionnée — une décision hors de portée de cette session.
+  # `workflow_dispatch` (déclenchement manuel) les force toujours à tourner :
+  # un run demandé explicitement n'a pas à deviner ce qu'on voulait éprouver.
+  # ===========================================================================
+  detect-legacy-v3-changes:
+    name: Détecter les changements de apps/web-old-version3 (annulée, #5686)
+    runs-on: ubuntu-latest
+    outputs:
+      touched: ${{ steps.filter.outputs.legacy == 'true' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Filtrer les chemins modifiés
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            legacy:
+              - 'apps/web-old-version3/**'
+
+  # ===========================================================================
   # A11Y: le gate axe du § 8.5 de la conception v3 — SON PORTEUR
   # ===========================================================================
   # « 0 erreur axe serious/critical sur toute route (public) ». L'instrument
@@ -485,7 +521,8 @@ jobs:
   a11y-v3:
     name: A11y web-v3 (axe serious/critical)
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, detect-legacy-v3-changes]
+    if: needs.detect-legacy-v3-changes.outputs.touched == 'true'
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -716,7 +753,8 @@ jobs:
   lifecycle-v3:
     name: Cycle de vie web-v3 (0 requête onglet caché)
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, detect-legacy-v3-changes]
+    if: needs.detect-legacy-v3-changes.outputs.touched == 'true'
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -816,7 +854,8 @@ jobs:
   chaines-v3:
     name: Chaînes web-v3 (lien partagé, vitals réseau)
     runs-on: ubuntu-latest
-    needs: quality
+    needs: [quality, detect-legacy-v3-changes]
+    if: needs.detect-legacy-v3-changes.outputs.touched == 'true'
     # 20 → 30 (suivi #5163 § 12.12) : ce job installe désormais WebKit et
     # Firefox EN PLUS de Chromium, et rejoue la suite des gestes du fil sur
     # les deux — mesuré en local ~2 min pour l'installation des deux
@@ -1954,7 +1993,7 @@ jobs:
   summary:
     name: Summary
     runs-on: ubuntu-latest
-    needs: [quality, a11y-v3, lifecycle-v3, chaines-v3, institutionnel-v3, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
+    needs: [quality, detect-legacy-v3-changes, a11y-v3, lifecycle-v3, chaines-v3, institutionnel-v3, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
       - name: Pipeline Summary
@@ -1966,6 +2005,7 @@ jobs:
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Détection apps/web-old-version3 (#5686) | ${{ needs.detect-legacy-v3-changes.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| A11y web-v3 (axe) | ${{ needs.a11y-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Cycle de vie web-v3 | ${{ needs.lifecycle-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Peaux web-v3 (institutionnel + Lentille + fil) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY

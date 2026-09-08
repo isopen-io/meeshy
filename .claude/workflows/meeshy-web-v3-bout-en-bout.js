@@ -107,6 +107,28 @@ coherence generale sur l'emulateur Android (QEMU) et tester sur Chrome en local 
 *.staging.meeshy.me. »
 
 SOURCES DE VERITE, dans cet ordre — lis-les AVANT d'ecrire quoi que ce soit :
+0. ${V3}/targets/README.md   LA CIBLE DES QUATRE VUES — Lentille (la liste), Focal, Script et Bulles
+   (le fil) — capturee le 2026-09-08 sur l'app iOS DRAPEAUX BETA ACTIVES (directive porteur
+   2026-09-08, issue #5672, decision D-20) : les captures (targets/*.png, clair ET sombre, listees
+   et decrites par targets/captures.md — la preuve drapeaux ON est settings.beta.*), les arbres
+   d'accessibilite (*.a11y.txt), les donnees semees sur staging (targets/seed.md) et les analyses
+   (targets/lentille.md, focal-script.md, bulle.md, resume.md, riviere.md : anatomie citee
+   fichier:ligne, lois, etats, gestes, tableau iOS → web-v3 avec verdict par element, ecarts
+   ordonnes par visibilite avec leur temoin). targets/README.md en est la synthese : ce qui est
+   tranche, ce qui reste a trancher (#5680), les defauts de la cible iOS (#5681-#5683). Ce dossier
+   PRIME sur toute specification anterieure et sur toute capture faite drapeaux eteints.
+   Le fait le plus lourd qu'il etablit : sur iOS, ce qui distingue Focal de Script n'est PAS une
+   courbe d'estompage (retiree le 2026-08-24) mais l'ELECTION d'une rangee — carte teintee, chip
+   d'identite agrandi, tampon date — armee au defilement soutenu et aplatie 4,5 s apres ; web-v3
+   applique aujourd'hui la courbe retiree et n'a pas l'election (targets/focal-script.md § 4). UNE CAPTURE iOS N'EST UNE CIBLE QUE DRAPEAUX ON : iOS porte trois drapeaux
+   (lentille_list, reading_modes, riviere_mode — Lentille/Core/LentilleFeatureFlag.swift) qu'un
+   seul interrupteur allume, Reglages › Beta (cle UserDefaults meeshy.pref.beta_features_enabled,
+   Lentille/Core/BetaFeaturesPreference.swift). Une installation neuve les a OFF : une capture
+   sans la preuve « Reglages › Beta : programme ON » montre l'ANCIEN produit (liste en cartes,
+   fil en bulles sans puce de mode — la bulle iOS n'a PAS de queue, rayon 18 uniforme dans les deux
+   configurations, targets/bulle.md) et ne vaut rien comme cible. Au simulateur : \`xcrun simctl terminate <udid>
+   me.meeshy.app && xcrun simctl spawn <udid> defaults write me.meeshy.app
+   meeshy.pref.beta_features_enabled -bool true && xcrun simctl launch <udid> me.meeshy.app\`.
 1. ${IOS}/Meeshy/Features/** et ${SDK}/Sources/**   LA REFERENCE (decision D-1) : disposition,
    hierarchie, etats et gestes de CHAQUE ecran se lisent dans le code SwiftUI — jamais dans la
    planche web de l'ancienne v3. Un ecran web-v3 se specifie en CITANT les fichiers Swift qui
@@ -148,7 +170,7 @@ touche pas.
 
 LES TROIS PLATEFORMES, UN SEUL CODE :
 - WEB : \`vite build\` → dist/ (variante A, PWA) ; serveur local \`bunx vite --port 5173\`.
-- COQUES (variante B) : \`MEESHY_CIBLE=capacitor bunx vite build && bunx cap sync\` — le MEME dist,
+- COQUES (variante B) : \`MEESHY_TARGET=capacitor bunx vite build && bunx cap sync\` — le MEME dist,
   base relative, sans service worker. Les coques ios/ et android/ de ${V3} sont GENEREES
   (\`bunx cap add ios\`, \`bunx cap add android\`) si absentes ; capacitor.config.ts est la source.
 - OUTILLAGE LOCAL VERIFIE (2026-09-07) : SDK Android a ~/android-sdk (PAS ~/Library/Android),
@@ -265,9 +287,28 @@ DECISIONS DU PORTEUR EN VIGUEUR — ne les rediscute pas : applique-les.
    toute action a un effet IMMEDIAT et OPTIMISTE ; citation/reponse avec saut et mise en evidence,
    plein ecran sur tout media, transcription au Prisme, avatar et nom dans le pied de la DERNIERE
    bulle d'une suite (jamais la premiere, regle iOS), groupement meme auteur + meme jour SANS
-   fenetre temporelle (src/lib/grouping.ts, meme loi que iOS/Android/legacy), bulle envoyee
-   INDIGO de marque, bulle recue a l'ACCENT de la conversation, recherche de la liste EN BAS.
+   fenetre temporelle ET jamais a travers un message systeme (MessageDayGrouping.swift:97 ;
+   src/lib/grouping.ts ne porte pas encore ce troisieme critere), bulle envoyee INDIGO de marque,
+   bulle recue : voir la CHARTE (iOS mele la couleur de l'expediteur a 70 % d'indigo — question
+   produit ouverte, l'« accent de la conversation » de cette directive n'est que le repli iOS),
+   recherche de la liste EN BAS.
    Le mode de lecture par defaut est FOCAL (D-7) et la lentille est la seule peau de liste (D-9).
+   LA CIBLE EST iOS DRAPEAUX ACTIVES (D-20, directive porteur 2026-09-08) : la Lentille, Focal,
+   Script et Bulles se lisent dans ${V3}/targets/ — jamais dans une capture drapeaux eteints, et
+   « ecart assume avec iOS ou le drapeau est desactive » n'est plus une phrase recevable.
+   ET LA V3.1 N'A NI DRAPEAU NI PROGRAMME BETA (porteur, 2026-09-08 : « dans cette version pas
+   besoin de ceci ! par defaut la lentille est la et la conversation focal aussi avec possibilite
+   des choix en script ou bulle ») : les drapeaux iOS ne servent qu'a CAPTURER la cible ; sur le
+   web, la Lentille EST la liste (aucune autre peau), le fil S'OUVRE en Focal, et l'utilisateur
+   CHOISIT Script ou Bulles par la puce de mode. Resume et Riviere ENTRENT au perimetre sous leurs
+   conditions (D-21 remplace D-8 — targets/resume.md, targets/riviere.md) : le Resume apres un corpus
+   de fixtures qui l'atteigne (26 non-lus), l'inversion de check-reading-mode.mjs et le cadrage des
+   dates par la langue du lecteur ; la Riviere apres la virtualisation du trace (D-15, miroir de
+   RiverCanvasRankPlacement) — sa loi est deja dans @meeshy/shared (river-lanes.ts, 61 vecteurs) et
+   son eligibilite lit conversation.memberCount, deja servi. Ordre : Lentille, rangee plate (Focal,
+   Script) et Bulle d'abord, puis Resume, puis Riviere ; tous deux en chunk A LA DEMANDE. Un mode
+   dont la condition n'est pas levee reste LISTE et motive au menu, jamais rendu.
+   Aucun toggle « beta », aucun \`isFlagEnabled\` configurable, aucun chemin « bulles par defaut ».
 
 5. STORY ET COMMENTS SE LIVRENT AU LECTEUR CONNECTE (decision 2026-09-02, la passerelle n'a pas
    bouge) : GET /posts/:postId et GET /posts/:postId/comments sont en requiredAuth — un visiteur
@@ -631,6 +672,12 @@ TA MISSION — CADRER ce tour. Tu ne modifies AUCUN fichier de production.
    web-v3 qui la portent deja (wc -l, ce qu'ils font — lis-les, cite fichier:ligne), si origin/dev
    porte le meme etat que la branche, et ce qui MANQUE par rapport a l'ecran iOS et aux
    directives — verdict : livre / a-completer / a-styliser / absent.
+   Pour \`conversations\` (Lentille) et \`thread\` (Focal, Script, Bulles, Resume, Riviere) :
+   l'etat des lieux CONTRE iOS drapeaux ON est DEJA FAIT dans ${V3}/targets/ (lentille.md,
+   focal-script.md, bulle.md, resume.md, riviere.md — tableau element iOS → web-v3, ecarts
+   ordonnes par visibilite, temoins ; README.md en tete) : PARS de
+   ses ecarts, ne le refais pas ; complete-le seulement si \`git log --since=<date du dossier>
+   -- ${IOS}/Meeshy/Features/Main/{Lentille,Focal,Views/Bubble} ${V3}/src\` montre du mouvement.
    Pour \`assets\` : compare ${IOS}/Meeshy/Assets.xcassets et Resources a ce que ${V3}/public et
    les coques servent. Pour \`shells\` : rejoue les trois defauts de la DIRECTIVE 3 (ils sont
    peut-etre deja corriges — verifie dans le code, pas de memoire). Pour \`staging\` : lis
@@ -678,8 +725,12 @@ Sois FACTUEL : 'etat' cite des commandes et leurs sorties, pas des impressions.`
   const CHARTE = `
 LA CHARTE VISUELLE : l'interface iOS elle-meme (D-1) rendue par les jetons DERIVES de Swift (D-4,
 packages/design-tokens/scripts/generate-from-ios.mjs). Aucune valeur en dur ; bulle a rayon
-uniforme 18 px sans ombre ni degrade ; bulle envoyee indigo de marque, bulle recue a l'accent de
-la conversation ; avatar+nom dans le pied de la DERNIERE bulle d'une suite ; recherche en bas ;
+uniforme 18 px sans ombre ni degrade (le media a 16, targets/bulle.md § 10) ; bulle envoyee indigo
+de marque ; bulle recue : iOS peint la couleur de l'EXPEDITEUR melee a 70 % d'indigo
+(ThemedMessageBubble.swift:383-390), l'accent de conversation n'etant que le repli — question
+produit ouverte (targets/README.md), ne tranche pas seul ; avatar+nom dans le pied de la DERNIERE
+bulle d'une suite (showIdentityBar, BubbleStandardLayout.swift:238-240 — le parametre showAvatar
+est MORT, ne t'y fie pas) ; recherche en bas ;
 cibles >= 44 px ; les DEUX schemas regardes. Temoins : bun run check:tokens,
 bun run check:tokens-resolved, node scripts/check-utilities.mjs.
 `
@@ -699,6 +750,20 @@ L'ECRAN iOS QUI EXISTE (D-1) — pas une maquette web.
    jusqu'a l'ecran, capture CLAIR et SOMBRE (\`xcrun simctl ui <udid> appearance dark\` puis
    relance l'app — la bascule a chaud ne prend pas), pose les fichiers dans
    ${dossierDeTravail}/cibles/<cle>.{light,dark}.png et REGARDE-LES.
+   DRAPEAUX ON, OBLIGATOIREMENT (source 0 du socle, D-20) : AVANT toute capture, active le
+   programme beta (\`xcrun simctl terminate <udid> me.meeshy.app && xcrun simctl spawn <udid>
+   defaults write me.meeshy.app meeshy.pref.beta_features_enabled -bool true && xcrun simctl
+   launch <udid> me.meeshy.app\`), ouvre Reglages › Beta dans l'app et capture la PREUVE
+   (${dossierDeTravail}/cibles/settings.beta.light.png : toggle ON, trois fonctionnalites actives).
+   Sans cette preuve, aucune capture de ce tour n'est une cible. Si ${V3}/targets/ porte deja la
+   cible de cette cle (lentille.*, thread.focal.*, thread.focal.scene.*, thread.script.*,
+   thread.bubbles.*, thread.summary.*, thread.river.*, reading-mode-sheet.*, thread.message-menu.*),
+   REUTILISE-la et ne recapture que si le Swift a bouge depuis la date du dossier (git log). Compte de test :
+   \`${dossierDeTravail}/captures/signup-creds.txt\` s'il existe (compte jetable sur STAGING,
+   jamais la production) ; sinon cree-en un par POST /api/v1/auth/register sur
+   gate.staging.meeshy.me et note-le la. Le simulateur doit porter l'app NATIVE (le chemin de
+   \`xcrun simctl listapps\` finit par Meeshy.app, pas App.app — la coque Capacitor partage
+   l'identifiant me.meeshy.app).
    Si l'ecran iOS n'existe pas (travail purement web), dis-le : la cible est alors la coherence
    avec les ecrans web-v3 existants.
 2. LES DECISIONS. Si un travail impose une DIRECTION nouvelle (une regle, un placement, un
@@ -840,7 +905,10 @@ ${synchroAvant && synchroAvant.fichiers_touches_par_dev ? `\nCE QUE LES SESSIONS
 CE QUE LA SPECIFICATION CONTIENT, dans cet ordre :
 1. LA REFERENCE iOS, lue : les fichiers Swift qui rendent cet ecran (ouvre-les, cite
    fichier:ligne) — disposition, hierarchie, etats, gestes, vocabulaire. Ce que la v3.1 REPREND et
-   ce qu'elle adapte au web (et pourquoi). Pour un travail d'infra (assets, shells, staging) : la
+   ce qu'elle adapte au web (et pourquoi). Pour \`conversations\` et \`thread\` : PARS de
+   ${V3}/targets/ (lentille.md, focal-script.md, bulle.md, et les captures drapeaux ON) — la
+   specification CITE ses sections et son tableau d'ecarts, et ne recopie ni ne rediscute ce qu'il
+   a deja tranche ; une capture drapeaux eteints n'est pas une reference. Pour un travail d'infra (assets, shells, staging) : la
    source iOS des actifs ou du comportement, citee de la meme facon.
 2. L'ETAT DES LIEUX web-v3, mesure : les fichiers qui portent DEJA cette surface (wc -l), ce
    qu'ils font (fichier:ligne), ce qui MANQUE par rapport au critere de fin et a la reference iOS.
@@ -906,7 +974,7 @@ METHODE, dans cet ordre :
    scripts/capture.mjs\`, ou une capture manuelle) ; pose les captures dans
    ${dossierDeTravail}/rendus/${t.cle}-{light,dark}.png et REGARDE-LES, compare-les a la cible iOS.
 5. COQUES (si le travail touche le dist, les assets, le routeur ou une coque) : reconstruit et
-   rejoue sur les DEUX coques — \`MEESHY_CIBLE=capacitor bunx vite build && bunx cap sync\`, APK +
+   rejoue sur les DEUX coques — \`MEESHY_TARGET=capacitor bunx vite build && bunx cap sync\`, APK +
    installation sur l'AVD Meeshy_Poc_Web-v31 (QEMU), build + installation sur le simulateur « Meeshy Poc-Web-V31 »,
    capture chaque coque et REGARDE. Les commandes exactes sont dans le socle.
 6. Fais tourner localement : \`cd ${V3} && bun run type-check && bun test\`, puis \`bun run build\`
@@ -1138,7 +1206,7 @@ Dans cet ordre, en t'arretant pour corriger des qu'un gate est rouge :
    reference iOS (compare aux cibles de ${dossierDeTravail}/cibles/ quand elles existent).
 5. \`node ${V3}/scripts/route-inventory.mjs\` (rc 0 — la parite est a jour).
 ${coquesTouchees ? `6. LA COHERENCE DES COQUES (le tour a touche dist/assets/coques) :
-   \`cd ${V3} && MEESHY_CIBLE=capacitor bunx vite build && bunx cap sync\` ;
+   \`cd ${V3} && MEESHY_TARGET=capacitor bunx vite build && bunx cap sync\` ;
    ANDROID (QEMU) : demarre l'AVD Meeshy_Poc_Web-v31 si aucun \`adb devices\` ne repond, gradle
    assembleDebug (JAVA_HOME et ANDROID_HOME du socle), \`adb install -r\`, lance MainActivity,
    capture (\`adb exec-out screencap -p\`) clair ET sombre (\`adb shell cmd uimode night yes|no\` +

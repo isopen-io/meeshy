@@ -126,6 +126,28 @@ if (declaredDataSource !== undefined && declaredDataSource !== 'fixtures') {
 }
 
 /**
+ * LES MODES DE LECTURE DU FIL — PARAMÈTRE DE CONSTRUCTION, jamais un toggle
+ * utilisateur ni un programme bêta (directive porteur 2026-09-08, D-20). La
+ * liste Lentille n'en dépend pas (D-9).
+ *
+ * Miroir de `MEESHY_FLAG_READING_MODES` (iOS, `LentilleFeatureFlag.swift:82-90`) :
+ * `resolveApiConfig` (`src/lib/api/config.ts`) accepte déjà `'on'`, `'off'` et
+ * l'absence — `'off'` seul désactive. Une TROISIÈME valeur ne ferait rien de
+ * mal à l'exécution (`resolveReadingModes` la traiterait comme `'on'`), mais
+ * ce silence est exactement le malentendu que la garde `VITE_DATA_SOURCE`
+ * ci-dessus refuse déjà : une faute de frappe (`'On'`, `'disabled'`) partirait
+ * pour un déploiement entier en croyant avoir choisi une valeur qui n'existe
+ * pas. On refuse ici de CONSTRUIRE plutôt que de laisser passer le malentendu.
+ */
+const declaredReadingModes = process.env.VITE_READING_MODES;
+if (declaredReadingModes !== undefined && declaredReadingModes !== 'on' && declaredReadingModes !== 'off') {
+  throw new Error(
+    `VITE_READING_MODES=${declaredReadingModes} : valeur inconnue. Les seules valeurs admises sont ` +
+      '« on » (défaut), « off », ou la variable absente (⇒ « on »).',
+  );
+}
+
+/**
  * LE PRÉCHAUFFAGE ENTRE DANS LA CONSTRUCTION, et il n'y est pas par commodité.
  *
  * Il était enchaîné APRÈS `vite build` dans le script `build` du manifeste, et
