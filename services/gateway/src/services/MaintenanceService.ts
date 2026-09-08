@@ -16,6 +16,7 @@ import type { PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
 import { conversationMessageStatsService } from './ConversationMessageStatsService';
 import type { SessionRevoker } from './admin/user-management.service';
 import { purgeAccountIsolatedData } from './AccountPurgeService';
+import { purgeMediaOfDeletedAccount } from './purgeDeletedAccountMedia';
 import {
   RECIPIENT_LANG_SELECT,
   recipientDateLocale,
@@ -761,10 +762,28 @@ export class MaintenanceService {
   }
 
   /**
+   * Les médias physiques du compte — `MessageAttachment`/`PostMedia` — la
+   * classe que ni #5688 (tables isolées, sans octets) ni #5689 (messages,
+   * lignes déjà anonymisées) ne couvraient. Exécuté APRÈS
+   * `purgeMessagesOfDeletedAccount` : les attachments des messages du compte
+   * sont déjà supprimés par #5689 à ce stade, ce balayage-ci couvre ce qui
+   * reste (attachments en attente, messages déjà `deletedAt` avant #5689,
+   * tout `PostMedia`). Best-effort, même raison que ses voisins ci-dessus.
+   * Détail : `services/purgeDeletedAccountMedia.ts`.
+   */
+  private async purgeMediaOfExpiredAccount(userId: string): Promise<void> {
+    try {
+      await purgeMediaOfDeletedAccount(this.prisma, this.attachmentService, this.mediaService, userId);
+    } catch (error) {
+      logger.warn(`⚠️ [DELETION] Media purge failed for deleted account user=${userId}:`, error);
+    }
+  }
+
+  /**
    * Traiter les demandes de suppression de compte :
    * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED),
-   *    révoquer les sessions, purger les données isolées (#3632) puis
-   *    anonymiser les messages du compte (#5689)
+   *    révoquer les sessions, purger les données isolées (#3632), anonymiser
+   *    les messages (#5689) puis les médias (#5690) du compte
    * 2. Envoyer les rappels hebdomadaires pour les requests GRACE_PERIOD_EXPIRED
    */
   private async processAccountDeletionRequests(): Promise<void> {
@@ -797,6 +816,7 @@ export class MaintenanceService {
             await this.revokeSessionsOfDeletedAccount(req.userId);
             await this.purgeIsolatedDataOfExpiredAccount(req.userId);
             await this.purgeMessagesOfDeletedAccount(req.userId);
+            await this.purgeMediaOfExpiredAccount(req.userId);
           } catch (error) {
             logger.error(`❌ [DELETION] Failed to expire request=${req.id} for user=${req.userId}:`, error);
           }
