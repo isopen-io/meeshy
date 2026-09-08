@@ -22,6 +22,7 @@ import {
   readFilePrefix,
 } from '../../services/attachments/AnonymousUploadIdentity';
 import { classifyAnonymousAttachment, verifyDeclaredMimeType, RECOMMENDED_SIGNATURE_PREFIX_BYTES } from '../../services/attachments/ContentSignature';
+import { isExifStrippable, stripExifFromImageBuffer } from '../../services/attachments/ExifStrip';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { originIsAllowed } from '../../config/cors-origins';
 
@@ -380,16 +381,6 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         await fs.unlink(sourcePath).catch((err) => logger.debug('tus: temp file unlink failed after copy', { sourcePath, err }));
       }
 
-      const fileSize = upload.size || 0;
-      const relPath = path.join(year, month, userId, storedName);
-      // #4324 — ce qui se PERSISTE est la clé de stockage, jamais une adresse : ni
-      // hôte, ni préfixe d'API, ni version. Ce sont des décisions de déploiement,
-      // et une donnée qui les porte devient fausse dès que l'une d'elles change.
-      // Les trois clients posent la route : `buildAttachmentUrl` (web),
-      // `MeeshyConfig.resolveMediaURL` (iOS), `me.meeshy.sdk.util.resolveMediaUrl`
-      // (Android).
-      const fileUrl = relPath;
-
       // #5615 — sniffing MIME étendu à TOUS les uploads TUS (inscrits ET
       // anonymes), pas seulement l'exemption anonyme ci-dessous : un mimeType
       // déclaré qui ne correspond pas au contenu réel (pour les familles dont
@@ -407,7 +398,29 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         throw { status_code: 400, body: `${mimeVerdict.reason}\n` };
       }
 
+      let fileSize = upload.size || 0;
       const attachmentType = getAttachmentType(mimeType, filename);
+      // #3627 — EXIF/GPS retiré des photos AVANT toute persistance : c'est le
+      // fichier `destPath` qui est servi tel quel par `GET /attachments/:id`.
+      if (attachmentType === 'image' && isExifStrippable(mimeType)) {
+        try {
+          const original = await fs.readFile(destPath);
+          const stripped = await stripExifFromImageBuffer(original, mimeType);
+          await fs.writeFile(destPath, stripped);
+          fileSize = stripped.length;
+        } catch (err) {
+          logger.warn('[TUS] EXIF strip failed, keeping original bytes', { err });
+        }
+      }
+      const relPath = path.join(year, month, userId, storedName);
+      // #4324 — ce qui se PERSISTE est la clé de stockage, jamais une adresse : ni
+      // hôte, ni préfixe d'API, ni version. Ce sont des décisions de déploiement,
+      // et une donnée qui les porte devient fausse dès que l'une d'elles change.
+      // Les trois clients posent la route : `buildAttachmentUrl` (web),
+      // `MeeshyConfig.resolveMediaURL` (iOS), `me.meeshy.sdk.util.resolveMediaUrl`
+      // (Android).
+      const fileUrl = relPath;
+
       let metadata: Record<string, any> = {};
       try {
         metadata = await metadataManager.extractMetadata(
