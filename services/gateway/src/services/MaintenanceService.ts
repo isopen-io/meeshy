@@ -14,7 +14,7 @@ import { sweepPendingPostMedia } from './posts/sweepPendingPostMedia';
 import type { PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
 import { conversationMessageStatsService } from './ConversationMessageStatsService';
 import type { SessionRevoker } from './admin/user-management.service';
-import { purgeAccountIsolatedData } from './AccountPurgeService';
+import { purgeAccountIsolatedData, anonymizeUserIdentity } from './AccountPurgeService';
 import {
   RECIPIENT_LANG_SELECT,
   recipientDateLocale,
@@ -743,6 +743,20 @@ export class MaintenanceService {
   }
 
   /**
+   * Anonymise, dans le même mouvement, l'identité (#5691) de la ligne `User` —
+   * même contrat best-effort/idempotent que son voisin ci-dessus
+   * (`updateMany` filtré sur le marqueur déjà posé, rejouable sans effet de
+   * bord par la prochaine passe horaire).
+   */
+  private async anonymizeIdentityOfExpiredAccount(userId: string): Promise<void> {
+    try {
+      await anonymizeUserIdentity(this.prisma, userId);
+    } catch (error) {
+      logger.warn(`⚠️ [DELETION] Identity anonymization failed for expired account user=${userId}:`, error);
+    }
+  }
+
+  /**
    * Traiter les demandes de suppression de compte :
    * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED)
    * 2. Envoyer les rappels hebdomadaires pour les requests GRACE_PERIOD_EXPIRED
@@ -776,6 +790,7 @@ export class MaintenanceService {
             expiredCount++;
             await this.revokeSessionsOfDeletedAccount(req.userId);
             await this.purgeIsolatedDataOfExpiredAccount(req.userId);
+            await this.anonymizeIdentityOfExpiredAccount(req.userId);
           } catch (error) {
             logger.error(`❌ [DELETION] Failed to expire request=${req.id} for user=${req.userId}:`, error);
           }

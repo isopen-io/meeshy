@@ -21,6 +21,10 @@ jest.mock('../../../socketio/disconnectRevokedSessions', () => ({
   disconnectRevokedSessions: jest.fn(async () => 0),
 }));
 
+jest.mock('../../../utils/password-hash', () => ({
+  hashPassword: jest.fn(async () => '$2b$12$hash-de-test'),
+}));
+
 import { accountDeletionRoutes, MAX_RESOLVE_ATTEMPTS } from '../../../routes/account-deletion';
 
 const PREFIXE = '/api/v1/account/deletion';
@@ -59,6 +63,7 @@ function buildApp(etat: EtatDemande | null) {
     user: {
       findUnique: jest.fn(async () => ({ isActive: false })),
       update: jest.fn(async (a: unknown) => { ecritures.push({ user: a }); return {}; }),
+      updateMany: jest.fn(async (a: unknown) => { ecritures.push({ userAnonymize: a }); return { count: 1 }; }),
     },
     userSession: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     userVoiceModel: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
@@ -193,6 +198,21 @@ describe('POST … /resolve — les effets', () => {
     expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u-1' } });
     expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u-1' } });
     expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({ where: { createdBy: 'u-1' } });
+
+    await app.close();
+  });
+
+  it('anonymise l’identité (`User.username`/`email`/…) en défense en profondeur (#5691)', async () => {
+    const { prisma } = buildApp({ status: 'GRACE_PERIOD_EXPIRED', tokenExpiresAt: dans(3600_000) });
+    const app = await monter(prisma);
+
+    const res = await app.inject({ method: 'POST', url: `${PREFIXE}/resolve`, payload: { token: JETON, action: 'purge' } });
+
+    expect(res.statusCode).toBe(200);
+    const [{ where, data }] = (prisma.user.updateMany as jest.Mock).mock.calls[0] as [{ where: any; data: any }];
+    expect(where).toEqual({ id: 'u-1', username: { not: 'compte-supprime-u-1' } });
+    expect(data.username).toBe('compte-supprime-u-1');
+    expect(data.displayName).toBeNull();
 
     await app.close();
   });

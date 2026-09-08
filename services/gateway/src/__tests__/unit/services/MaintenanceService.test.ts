@@ -28,6 +28,10 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
+jest.mock('../../../utils/password-hash', () => ({
+  hashPassword: jest.fn(async () => '$2b$12$hash-de-test'),
+}));
+
 import { MaintenanceService } from '../../../services/MaintenanceService';
 import { logger } from '../../../utils/logger';
 
@@ -547,6 +551,32 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
     expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
     expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
     expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({ where: { createdBy: 'user-a' } });
+  });
+
+  it("anonymise l'identité (`User.username`/`email`/…) de chaque compte expiré (#5691)", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+    sut.setSessionRevoker(makeRevoker([]));
+
+    await sweepDeletions(sut);
+
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 'user-a', username: { not: 'compte-supprime-user-a' } },
+      data: expect.objectContaining({ username: 'compte-supprime-user-a', displayName: null }),
+    });
+  });
+
+  it("un échec de l'anonymisation d'identité ne fait pas compter l'expiration comme ratée — le lot continue", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    prisma.user.updateMany.mockRejectedValueOnce(new Error('mongo down'));
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+    sut.setSessionRevoker(makeRevoker([]));
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
   });
 
   it("un échec de la purge isolée ne fait pas compter l'expiration comme ratée — le lot continue", async () => {
