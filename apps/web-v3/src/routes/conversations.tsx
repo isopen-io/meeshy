@@ -10,6 +10,8 @@ import { CONVERSATIONS, VIEWER_ID } from '@/lib/api/fixtures';
 import { accentOf } from '@/lib/accent';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
+import { partagerInvitation, RETOUR_INVITATION } from '@/lib/view/invitation';
+import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { resolveLensSections } from '@/lib/lens/sections';
 import { READER_LANGUAGES } from '@/lib/reader';
 import { useMinute } from '@/lib/view/use-minute';
@@ -59,6 +61,35 @@ function handleRowAction(conversationId: string, id: RowActionId): void {
       return;
   }
 }
+
+/**
+ * **Les portes RÉELLES du démarrage — et elles seules.**
+ *
+ * iOS en peint NEUF (`ConversationListQuickActions`) : chercher des membres,
+ * voir ses contacts, ses affiliations, écrire, story, mood, post, inviter,
+ * lien raccourci. La v3.1 n'a de route pour AUCUNE d'entre elles
+ * (`route-table.tsx` : `list`, `thread`, `login`, `signup`, `progression`) —
+ * les porter toutes ici peindrait huit contrôles qui mentent, c'est-à-dire
+ * exactement ce que la revue #5559 a dû DÉFAIRE sur l'en-tête de cet écran.
+ *
+ * Reste celle qui n'a besoin d'aucune route pour AGIR : inviter. C'est aussi
+ * la seule des quatre que l'état vide promettait (« un message, une story, un
+ * mood, un post — ou invitez vos amis ») qu'on puisse tenir aujourd'hui ; la
+ * phrase a donc été réécrite pour ne plus promettre les trois autres.
+ *
+ * Les huit portes manquantes sont un chantier de parité, pas un oubli : elles
+ * arriveront avec leurs écrans et s'ajouteront ICI — une ligne par porte,
+ * impossible à ajouter sans son effet puisque `run` n'est pas optionnel.
+ */
+const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
+  {
+    key: 'inviter',
+    label: 'Inviter des amis',
+    hint: 'Partagez votre lien Meeshy : c’est ainsi que naît une première conversation.',
+    glyph: 'linkSimple',
+    run: async () => RETOUR_INVITATION[await partagerInvitation(window.location.origin)],
+  },
+];
 
 export default function ConversationsScreen() {
   const [filter, setFilter] = useState<ListFilter>('all');
@@ -313,7 +344,28 @@ export default function ConversationsScreen() {
           voit pas l'issue est un cul-de-sac, et une cale destinée à la
           magnification n'a rien à caler quand il n'y a rien à magnifier.
         */}
-        {visible.length > 0 ? <li aria-hidden="true" style={{ height: '50dvh', flexShrink: 0 }} /> : null}
+        {/*
+          ET LA CALE PORTE LES ACCÈS RAPIDES (2026-09-08). iOS met exactement
+          ici les siens — `ConversationListView.listTail`, haut d'une demi-région
+          visible, la MÊME hauteur et la MÊME raison. La v3.1 n'y mettait qu'un
+          `aria-hidden` : une demi-fenêtre de vide sous la dernière ligne, sans
+          une issue, là où l'utilisateur arrive précisément parce qu'il a fini de
+          lire sa liste et cherche quoi faire.
+
+          La hauteur reste : c'est elle qui laisse la dernière conversation
+          rejoindre la bande de focus. Ce qui change, c'est qu'elle n'est plus
+          VIDE — et elle cesse donc d'être `aria-hidden`, puisqu'elle porte
+          maintenant quelque chose à lire.
+        */}
+        {visible.length > 0 ? (
+          <li style={{ minHeight: '50dvh', flexShrink: 0 }}>
+            <QuickActions
+              title="Et maintenant ?"
+              subtitle="Meeshy s’écrit à plusieurs — invitez quelqu’un à vous rejoindre."
+              actions={ACTIONS_DE_DEMARRAGE}
+            />
+          </li>
+        ) : null}
         {/*
           DEUX états VIDES DISTINCTS (#5559 T15) : `empty-corpus` (aucune
           conversation du tout — l'écran de DÉMARRAGE) contre `empty-filter`
@@ -331,9 +383,22 @@ export default function ConversationsScreen() {
             <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
               Aucune conversation pour l’instant.
             </p>
-            <p className="text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
-              Un message, une story, un mood, un post — ou invitez vos amis.
-            </p>
+            {/*
+              LA SORTIE DE L'ÉCRAN DE DÉMARRAGE (2026-09-08). Cet état récitait
+              « Un message, une story, un mood, un post — ou invitez vos amis »
+              — la phrase d'iOS, où elle SURMONTE neuf boutons — sous ZÉRO
+              bouton. Il annonçait quatre gestes et n'en offrait aucun, quand
+              `empty-filter`, douze lignes plus bas, a toujours eu sa sortie.
+
+              Un état vide dont on ne voit pas l'issue est un cul-de-sac : le
+              commentaire de la cale le dit déjà pour l'état filtré. Celui-ci
+              était pire — il DÉCRIVAIT l'issue sans la donner.
+            */}
+            <QuickActions
+              title="Commencez ici"
+              subtitle="Meeshy s’écrit à plusieurs — invitez quelqu’un à vous rejoindre."
+              actions={ACTIONS_DE_DEMARRAGE}
+            />
           </li>
         ) : null}
         {emptiness === 'empty-filter' ? (
