@@ -16,6 +16,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendUnauthorized, sendError, sendInternalError } from '../../utils/response.js';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { logError } from '../../utils/logger';
 import { MeeshService } from '../../services/meesh/MeeshService';
 
@@ -29,6 +30,15 @@ function mintRateLimitConfig() {
     max: 10,
     timeWindow: '1 minute',
     hook: 'preHandler' as const,
+    // `false` — FAIL-CLOSED, à l'inverse de la route de lecture voisine.
+    //
+    // Une panne du magasin de débit ferme ici la frappe, et c'est voulu : une
+    // MONNAIE ne se frappe pas pendant que sa garde est aveugle. Le coût du
+    // refus est nul (les points restent, l'utilisateur réessaie dans une
+    // minute) ; le coût de l'inverse serait une fenêtre d'abus sur une écriture
+    // irréversible. `skipOnError: true` se justifie pour un écran de
+    // consultation, jamais pour une écriture qui crée de la valeur.
+    skipOnError: false,
     keyGenerator: (request: FastifyRequest) => {
       const userId = request.auth?.userId;
       return userId ? `me:meesh:mint:${userId}` : `me:meesh:mint:ip:${request.ip}`;
@@ -92,7 +102,16 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Body: { requestId: string } }>, reply: FastifyReply) => {
       const userId = request.auth?.userId;
-      if (!userId) return sendUnauthorized(reply, 'Authentication required');
+      if (!userId) {
+        // Le sens est NOMMÉ plutôt qu'hérité du défaut : `undefined` disparaît
+        // à la sérialisation, et deux 401 ne se distinguaient alors que par le
+        // filage d'une prose française (#4857). Ici le sens est bien
+        // « non authentifié » — le dire ne change pas la réponse, il la rend
+        // lisible par un client.
+        return sendUnauthorized(reply, 'Authentication required', {
+          code: AUTH_ERROR_CODES.UNAUTHORIZED,
+        });
+      }
 
       try {
         const outcome = await new MeeshService(fastify.prisma).mint(userId, request.body.requestId);

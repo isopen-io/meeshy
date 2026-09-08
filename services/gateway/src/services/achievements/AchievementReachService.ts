@@ -60,11 +60,23 @@ export class AchievementReachService {
     }
   }
 
+  /** Le maximum d'une COLONNE — `null` si la mesure échoue, distinct de « zéro ». */
+  private async maxColumn(lire: () => Promise<number>): Promise<number | null> {
+    try {
+      return await lire();
+    } catch (err) {
+      log.warn('mesure d’atteignabilité indisponible', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+  }
+
   async load(): Promise<AchievementReach> {
     const maintenant = Date.now();
     if (this.cache && this.cache.expiresAt > maintenant) return this.cache.reach;
 
-    const [conversation, communaute] = await Promise.all([
+    const [conversation, communaute, appel, serie, meeshes] = await Promise.all([
       this.maxGroupCount(() =>
         this.prisma.participant.groupBy({
           by: ['conversationId'],
@@ -82,6 +94,25 @@ export class AchievementReachService {
           _count: { _all: true },
         }) as never,
       ),
+      this.maxGroupCount(() =>
+        this.prisma.callParticipant.groupBy({
+          by: ['callSessionId'],
+          _count: { _all: true },
+        }) as never,
+      ),
+      // Série et Meeshes se mesurent par un MAXIMUM sur une colonne, pas par un
+      // groupe : le plus long enchaînement jamais tenu, la plus grosse frappe
+      // jamais atteinte.
+      this.maxColumn(() =>
+        this.prisma.user.aggregate({ _max: { longestStreakDays: true } }).then(
+          (r) => r._max.longestStreakDays ?? 0,
+        ),
+      ),
+      this.maxColumn(() =>
+        this.prisma.user.aggregate({ _max: { meeshMintedLifetime: true } }).then(
+          (r) => r._max.meeshMintedLifetime ?? 0,
+        ),
+      ),
     ]);
 
     const reach = new Map<string, number>();
@@ -95,6 +126,13 @@ export class AchievementReachService {
       // réalité : la plus grande communauté qui existe.
       reach.set('community.create.size', communaute);
     }
+    if (appel !== null) reach.set('call.start.size', appel);
+    // `streak` et `meesh` sont des échelles de VOLUME, donc VISIBLES sans
+    // mesure — mais leurs paliers hauts seraient absurdes sans borne : 10 000
+    // jours font vingt-sept ans, et 10 000 Meeshes douze millions de points.
+    // La mesure les retient jusqu'à ce que le produit les rende possibles.
+    if (serie !== null) reach.set('streak.hold.count', serie);
+    if (meeshes !== null) reach.set('meesh.mint.count', meeshes);
 
     this.cache = { reach, expiresAt: maintenant + REACH_CACHE_TTL_MS };
     return reach;

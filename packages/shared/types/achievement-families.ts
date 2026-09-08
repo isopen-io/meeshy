@@ -46,8 +46,90 @@ export const CERCLES_FAMILIES: readonly AchievementFamily[] = [
   { section: 'cercles', subject: 'community', verb: 'create', scale: 'count', baseDifficulty: 3 },
 ];
 
-/** Toutes les familles déclarées, toutes sections confondues. */
-export const ACHIEVEMENT_FAMILIES: readonly AchievementFamily[] = [...CERCLES_FAMILIES];
+/**
+ * Section `parole` (#5759) — ce qu'on produit et envoie.
+ *
+ * Le type d'un envoi se lit sur `Message.messageType` pour le texte, et sur le
+ * `mimeType` de la pièce jointe pour le reste : c'est la seule discrimination
+ * que la base porte réellement, et l'inventer autrement produirait des
+ * compteurs qui ne comptent rien.
+ */
+export const PAROLE_FAMILIES: readonly AchievementFamily[] = [
+  { section: 'parole', subject: 'message', verb: 'send', scale: 'count', baseDifficulty: 0 },
+  { section: 'parole', subject: 'voice', verb: 'send', scale: 'count', baseDifficulty: 0.8 },
+  { section: 'parole', subject: 'image', verb: 'send', scale: 'count', baseDifficulty: 0.8 },
+  { section: 'parole', subject: 'video', verb: 'send', scale: 'count', baseDifficulty: 1.3 },
+];
+
+/** Section `retouche` — le soin apporté à ce qu'on a déjà dit. */
+export const RETOUCHE_FAMILIES: readonly AchievementFamily[] = [
+  { section: 'retouche', subject: 'message', verb: 'edit', scale: 'count', baseDifficulty: 1 },
+  { section: 'retouche', subject: 'message', verb: 'delete', scale: 'count', baseDifficulty: 1 },
+  { section: 'retouche', subject: 'message', verb: 'react', scale: 'count', baseDifficulty: 0.5 },
+];
+
+/**
+ * Section `appels`.
+ *
+ * LANCER coûte plus que REJOINDRE — il faut une intention et des interlocuteurs
+ * disponibles, là où rejoindre ne demande que de répondre.
+ */
+export const APPELS_FAMILIES: readonly AchievementFamily[] = [
+  { section: 'appels', subject: 'call', verb: 'join', scale: 'count', baseDifficulty: 1.5 },
+  { section: 'appels', subject: 'call', verb: 'start', scale: 'count', baseDifficulty: 2 },
+  { section: 'appels', subject: 'call', verb: 'start', scale: 'size', baseDifficulty: 2.5 },
+];
+
+/**
+ * Section `ambassade`.
+ *
+ * `referral` ne compte que les relations ACHEVÉES (`status: 'completed'`) : une
+ * invitation envoyée n'est pas une ambassade, sinon le badge récompenserait le
+ * spam plutôt que la venue de quelqu'un.
+ */
+export const AMBASSADE_FAMILIES: readonly AchievementFamily[] = [
+  { section: 'ambassade', subject: 'referral', verb: 'complete', scale: 'count', baseDifficulty: 2.5 },
+  { section: 'ambassade', subject: 'link', verb: 'click', scale: 'count', baseDifficulty: 1.5 },
+];
+
+/**
+ * Section `constance` — la plus longue série JAMAIS tenue.
+ *
+ * Adossée à `User.longestStreakDays`, le RECORD, jamais la série courante : une
+ * série rompue ne doit pas retirer un succès (règle porteur, « un succès atteint
+ * reste à vie »).
+ *
+ * L'échelle est `count` — des JOURS, pas une ampleur d'audience. Les paliers
+ * absurdes (10 000 jours = 27 ans) sont retenus par l'atteignabilité mesurée,
+ * pas par une table de seuils dédiée : c'est le mécanisme qui existe déjà.
+ */
+export const CONSTANCE_FAMILIES: readonly AchievementFamily[] = [
+  { section: 'constance', subject: 'streak', verb: 'hold', scale: 'count', baseDifficulty: 2 },
+];
+
+/** Section `monnaie` — les Meeshes FRAPPÉES à vie, jamais le solde (#5744). */
+export const MONNAIE_FAMILIES: readonly AchievementFamily[] = [
+  { section: 'monnaie', subject: 'meesh', verb: 'mint', scale: 'count', baseDifficulty: 3.5 },
+];
+
+/**
+ * Toutes les familles déclarées, dans l'ordre des sections.
+ *
+ * La section `decouverte` est ABSENTE, et ce n'est pas un oubli : elle demande
+ * la forme COLLECTION (#5751) — « quels éléments d'un ensemble fini ont été
+ * touchés » — dont AUCUN stockage n'existe encore. La déclarer produirait des
+ * succès que rien ne peut faire tomber, exactement l'erreur de
+ * `community.leave.count` (#5760). Elle rejoindra le catalogue avec son modèle.
+ */
+export const ACHIEVEMENT_FAMILIES: readonly AchievementFamily[] = [
+  ...CERCLES_FAMILIES,
+  ...PAROLE_FAMILIES,
+  ...RETOUCHE_FAMILIES,
+  ...APPELS_FAMILIES,
+  ...AMBASSADE_FAMILIES,
+  ...CONSTANCE_FAMILIES,
+  ...MONNAIE_FAMILIES,
+];
 
 /** L'identité d'une famille dans les tables de libellés — sans sa section, qui n'en change pas le sens. */
 export const familyId = (family: AchievementFamily): string =>

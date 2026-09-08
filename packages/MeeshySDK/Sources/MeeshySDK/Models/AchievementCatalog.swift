@@ -55,7 +55,12 @@ public enum AchievementCatalog {
     public static let windowMinimum = 7
     public static let windowStep = 2
 
-    /// Section « cercles » (#5759).
+    /// Les familles, TOUTES sections — miroir exact du TypeScript, gardé par
+    /// `achievement-catalog-mirror-parity`.
+    ///
+    /// `decouverte` est ABSENTE des deux côtés : elle demande la forme
+    /// COLLECTION (#5751), dont aucun stockage n'existe encore.
+    ///
     ///
     /// `community.leave.count` est ABSENTE, comme côté TypeScript : quitter une
     /// communauté SUPPRIME la ligne, il n'y a rien à compter (#5760). La
@@ -70,6 +75,20 @@ public enum AchievementCatalog {
         AchievementFamily(section: "cercles", subject: "community", verb: "join", scale: "count", baseDifficulty: 2.5),
         AchievementFamily(section: "cercles", subject: "community", verb: "create", scale: "size", baseDifficulty: 2),
         AchievementFamily(section: "cercles", subject: "community", verb: "create", scale: "count", baseDifficulty: 3),
+        AchievementFamily(section: "parole", subject: "message", verb: "send", scale: "count", baseDifficulty: 0),
+        AchievementFamily(section: "parole", subject: "voice", verb: "send", scale: "count", baseDifficulty: 0.8),
+        AchievementFamily(section: "parole", subject: "image", verb: "send", scale: "count", baseDifficulty: 0.8),
+        AchievementFamily(section: "parole", subject: "video", verb: "send", scale: "count", baseDifficulty: 1.3),
+        AchievementFamily(section: "retouche", subject: "message", verb: "edit", scale: "count", baseDifficulty: 1),
+        AchievementFamily(section: "retouche", subject: "message", verb: "delete", scale: "count", baseDifficulty: 1),
+        AchievementFamily(section: "retouche", subject: "message", verb: "react", scale: "count", baseDifficulty: 0.5),
+        AchievementFamily(section: "appels", subject: "call", verb: "join", scale: "count", baseDifficulty: 1.5),
+        AchievementFamily(section: "appels", subject: "call", verb: "start", scale: "count", baseDifficulty: 2),
+        AchievementFamily(section: "appels", subject: "call", verb: "start", scale: "size", baseDifficulty: 2.5),
+        AchievementFamily(section: "ambassade", subject: "referral", verb: "complete", scale: "count", baseDifficulty: 2.5),
+        AchievementFamily(section: "ambassade", subject: "link", verb: "click", scale: "count", baseDifficulty: 1.5),
+        AchievementFamily(section: "constance", subject: "streak", verb: "hold", scale: "count", baseDifficulty: 2),
+        AchievementFamily(section: "monnaie", subject: "meesh", verb: "mint", scale: "count", baseDifficulty: 3.5),
     ]
 
     /// Une famille absente de la carte n'est pas « zéro » : c'est « non mesuré ».

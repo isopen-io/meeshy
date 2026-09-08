@@ -32,6 +32,7 @@ import {
 } from '@meeshy/shared/utils/engagement-elan';
 import { engagementAxisFamily, isEngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { AchievementReachService } from '../../services/achievements/AchievementReachService';
+import { GlobalAchievements } from '../../services/achievements/GlobalAchievements';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { logError } from '../../utils/logger';
@@ -177,6 +178,12 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
       }
 
       try {
+        // Le balayage des succès AVANT la lecture : il grave ce qui est franchi,
+        // et la charge servie le reflète immédiatement. Idempotent (anti-rejeu
+        // par contrainte unique) et best-effort — un échec ici ne doit pas
+        // fermer un écran de consultation.
+        await new GlobalAchievements(fastify.prisma).sweep(userId).catch(() => undefined);
+
         const [user, counters, milestones] = await Promise.all([
           fastify.prisma.user.findUnique({ where: { id: userId }, select: USER_ENGAGEMENT_SELECT }),
           // `take` borné, jamais retiré (#4165 critère 4) — même si le
