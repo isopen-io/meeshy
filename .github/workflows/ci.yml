@@ -194,12 +194,17 @@ jobs:
         run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} lint
         continue-on-error: true
 
-      # Même partage que le type-check ci-dessous : l'amnistie de l'étape
-      # précédente est achetée par la dette du legacy. La v3 n'en a aucune, et
-      # une étape amnistiée est le SEUL signal qu'elle aurait — autant dire
-      # aucun. Elle rougit donc pour elle seule, sans toucher au reste.
-      - name: Lint (apps/web-v3 — blocking)
-        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} lint --filter=@meeshy/web-v3
+      # PAS D'ÉTAPE DE LINT DÉDIÉE À `@meeshy/web-v3` (2026-09-07).
+      #
+      # Elle existait pour l'ANCIENNE refonte, aujourd'hui `@meeshy/web-old-version3`
+      # et annulée. Le nom `@meeshy/web-v3` désigne désormais la NOUVELLE
+      # application (ex `web-v4`), qui n'a pas encore de configuration ESLint :
+      # rebrancher l'étape telle quelle rendrait une case VERTE qui ne linte
+      # rien — un signal pire que l'absence de signal, parce qu'on le croit.
+      #
+      # Ce qui tient la place en attendant : le type-check bloquant ci-dessous
+      # et les gates de l'application (jetons dérivés, poids). L'ESLint de la
+      # v3.1 est un suivi, pas un oubli.
 
       # Lint (apps/web — debt ratchet), jumeau de #5442 pour ESLint : la même
       # amnistie de cache qui rend `bun run lint` illisible touche `apps/web`,
@@ -230,8 +235,45 @@ jobs:
       # faire entrer la v3 lui offrirait un budget d'erreurs qu'elle n'a pas à
       # avoir. La v3 naît à zéro erreur, et cette étape est la seule qui puisse
       # le garantir — elle ne porte pas `continue-on-error`.
+      # `@meeshy/web-v3` désigne, depuis le 2026-09-07, la NOUVELLE application
+      # (ex `web-v4`, version 3.1.0) — l'ancienne refonte est `web-old-version3` et
+      # ne passe plus par la CI, étant annulée. La nouvelle naît à zéro erreur,
+      # donc elle reste dans l'étape BLOQUANTE et hors du ratchet gagé sur la
+      # dette du legacy.
+      #
+      # Elle n'y était pas avant ce jour : sous son ancien nom, aucun filtre de
+      # ce fichier ne la citait, et sa PR pouvait être verte avec l'application
+      # cassée. Un gate qui ne tourne pas n'est pas un gate.
       - name: Type-check (contract packages — blocking)
         run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check --filter=@meeshy/shared --filter=@meeshy/gateway --filter=@meeshy/agent --filter=@meeshy/web-v3
+
+      # LES GATES PROPRES À LA V4 — ils ne rentrent dans aucun filtre turbo
+      # parce qu'ils ne sont pas des tâches de package : ce sont des mesures.
+      #
+      #   check:tokens      la palette dérivée n'a pas dérivé de MeeshyColors.swift
+      #   measure-weight    la première peinture tient sous le plafond de budgets.json
+      #   check-utilities   aucune classe utilitaire n'est morte dans la feuille
+      #
+      # Le second est la raison d'être de cette application (une zone rurale,
+      # un réseau payé au mégaoctet) : le laisser hors CI reviendrait à écrire
+      # un budget que personne ne vérifie. Le build est mesuré à ~200 ms, le
+      # coût d'étape est négligeable.
+      - name: Gates web-v3 (jetons dérivés + poids de la première peinture)
+        run: |
+          # `@meeshy/shared` sert son `dist/` : le type-check et le build de la
+          # v3.1 s'y résolvent depuis #5493. Étape EXPLICITE plutôt que filtre
+          # turbo, pour rester alignée sur les trois autres travaux navigateur
+          # qui la portent déjà.
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+          cd ../../apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} check:tokens
+          node scripts/check-curve.mjs
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+          node scripts/check-utilities.mjs
+          node scripts/measure-weight.mjs
+          node scripts/check-docker-context.mjs
+          node scripts/check-git-tracking.mjs
 
       - name: Type-check (apps/web — debt ratchet)
         run: bash scripts/check-type-debt.sh --self-test && bash scripts/check-type-debt.sh
@@ -269,7 +311,7 @@ jobs:
       # Même raison de placement que le garde ci-dessus : l'invariant porte sur
       # le `Makefile` de la RACINE, donc il est appelé ici et non depuis les
       # tests d'une app. Sa première écriture vivait dans
-      # `apps/web-v3/__tests__/` — elle remontait de trois crans pour atteindre
+      # `apps/web-old-version3/__tests__/` — elle remontait de trois crans pour atteindre
       # sa surface et ne tournait dans AUCUN job — la matrice `test:` ne portait
       # alors que shared/web/gateway/agent : un contrôle inerte, qui laissait
       # rouvrir au commit suivant la régression qu'il prétendait fermer.
@@ -297,10 +339,22 @@ jobs:
       # Même raison de placement : l'invariant porte sur `ci.yml`, `docker.yml`
       # et `docker-compose.prod.yml` — trois fichiers de la RACINE. Il DÉROULE
       # les deux étapes de détection de `docker.yml` avec bash plutôt que de les
-      # relire : « un push qui ne touche que apps/web-v3 construit-il la v3 sans
+      # relire : « un push qui ne touche que apps/web-old-version3 construit-il la v3 sans
       # réveiller le legacy ? » ne se lit pas dans le texte d'un `[[ == *"…"* ]]`.
-      - name: web-v3 pipeline guard
-        run: node scripts/check-v3-pipeline.mjs --self-test && node scripts/check-v3-pipeline.mjs
+      # RETIRÉ le 2026-09-07 avec le renommage (#5554). Ce garde vérifie qu'UNE
+      # application Next est câblée de bout en bout — type-check, lint, matrice
+      # de tests, docker, compose. Son sujet est `apps/web-old-version3`, ANNULÉE : la
+      # directive porteur lui retire précisément ces trois câblages, donc le
+      # garde ne peut plus être vert sans remettre en CI l'application qu'on
+      # décommissionne. Et il ne peut pas non plus viser `apps/web-v3` (la
+      # v3.1), qui est en Vite : il lit `app/`, les réécritures `/__v3/` et
+      # `next.config.ts`, qui n'y existent pas.
+      #
+      # Le script reste dans l'arbre — il fait foi sur ce que la chaîne de
+      # l'ancienne application contenait, et c'est lui qu'on supprimera AVEC
+      # elle. Le remplaçant de la v3.1 est l'étape « Gates web-v3 » du job
+      # `quality` ci-dessus (jetons dérivés + poids de la première peinture).
+      # Suivi : #5496 (décommissionnement).
 
       # Même raison de placement que les gardes ci-dessus : l'invariant porte sur
       # `ci.yml`, sur `turbo.json` et sur les manifestes des workspaces — la
@@ -313,7 +367,7 @@ jobs:
       # entrent dans un workspace par `cd` et y lancent un script de paquet — donc
       # HORS du graphe — et 11 copies écrites à la main de « construis le paquet
       # partagé ». Le jour où `01c49fcfee` a fait importer `@meeshy/shared` par
-      # `apps/web-v3`, les trois jobs de la v3 sont devenus rouges — et LE JOB QUI
+      # `apps/web-old-version3`, les trois jobs de la v3 sont devenus rouges — et LE JOB QUI
       # CASSE N'EST PAS CELUI QUI A AJOUTÉ L'IMPORT, puisque la personne qui écrit
       # l'`import` ne touche aucun fichier de CI.
       #
@@ -408,7 +462,7 @@ jobs:
   # A11Y: le gate axe du § 8.5 de la conception v3 — SON PORTEUR
   # ===========================================================================
   # « 0 erreur axe serious/critical sur toute route (public) ». L'instrument
-  # vivait déjà (`apps/web-v3/e2e/visual/v3-a11y.spec.ts`, son verdict dans
+  # vivait déjà (`apps/web-old-version3/e2e/visual/v3-a11y.spec.ts`, son verdict dans
   # `lib/a11y.ts`, gagé par `__tests__/a11y-gate.test.ts`) — et RIEN ne le
   # lançait : la chaîne `test:a11y` n'apparaissait que deux fois dans le dépôt,
   # sa définition et le témoin qui vérifiait sa définition. Un instrument
@@ -482,9 +536,9 @@ jobs:
           cd packages/shared
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
-      - name: Build apps/web-v3 (le manifeste que le balayage lit)
+      - name: Build apps/web-old-version3 (le manifeste que le balayage lit)
         run: |
-          cd apps/web-v3
+          cd apps/web-old-version3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
       - name: Install Playwright browsers
@@ -513,7 +567,7 @@ jobs:
       # écrite demain.
       - name: Gate pages — axe, cibles tactiles, surimpressions (projet ENTIER)
         run: |
-          cd apps/web-v3
+          cd apps/web-old-version3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:pages
 
       # PAS de `continue-on-error` ici : `check-v3-pipeline.mjs` interdit qu'une
@@ -524,8 +578,115 @@ jobs:
         if: failure()
         with:
           name: web-v3-a11y-traces
-          path: apps/web-v3/test-results/
+          path: apps/web-old-version3/test-results/
           retention-days: 7
+
+  # ===========================================================================
+  # CACHE INSTITUTIONNEL: les cinq pages restent ELLES-MÊMES à la deuxième visite
+  # ===========================================================================
+  # Un job À PART de « Gates web-v3 » (job `quality`), et pour une raison de
+  # coût : celui-ci lève un navigateur, donc télécharge Chromium. `quality` est
+  # la dépendance de presque tout le workflow — l'y ajouter retarderait chaque
+  # autre job d'une minute pour une preuve qui n'intéresse que cinq documents.
+  #
+  # CE QU'IL ATTRAPE, et que rien d'autre ne pouvait voir. #5554 a livré les
+  # cinq pages institutionnelles en HTML statique — une requête, zéro script —
+  # et l'a mesuré sur une visite FROIDE. À la deuxième, la `NavigationRoute` du
+  # service worker servait la coquille de l'application à leur place : « À
+  # propos de Meeshy », un h1, 0 script en visite 1 ; « Meeshy », aucun h1,
+  # 2 scripts en visite 2 — et la coquille n'a pas de route `/about`, donc page
+  # blanche. Ni un test de construction (les fichiers étaient sur le disque), ni
+  # la mesure de première peinture (elle n'installe le service worker qu'à la
+  # fin) ne pouvaient le voir. Il faut un navigateur RÉEL et une DEUXIÈME
+  # visite : c'est exactement ce que ce job fait.
+  institutionnel-v3:
+    name: Peaux web-v3 (institutionnel, Lentille, états et virtualisation du fil)
+    runs-on: ubuntu-latest
+    needs: quality
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache bun dependencies
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install dependencies (bun with retry)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
+
+      - name: Install dependencies (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
+        run: pnpm install --no-frozen-lockfile
+
+      # Le préchauffage des cinq documents fait partie de CE build depuis
+      # qu'il est un greffon de `vite.config.ts` : le témoin mesure donc
+      # exactement ce qu'un déploiement servirait.
+      - name: Build packages/shared (la v3.1 en importe depuis #5493)
+        run: |
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
+      - name: Build apps/web-v3
+        run: |
+          cd apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Gate cache institutionnel
+        run: |
+          cd apps/web-v3
+          node scripts/check-institutional.mjs
+
+      # LE CRITÈRE BINAIRE DE LA LENTILLE, dans le MÊME travail : il lève le
+      # même navigateur sur le même `dist`, et un second travail paierait une
+      # installation de Chromium pour rien.
+      - name: Gate flux de la Lentille (mise en page invariable au défilement)
+        run: |
+          cd apps/web-v3
+          node scripts/check-lens.mjs
+
+      - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
+        run: |
+          cd apps/web-v3
+          node scripts/check-thread-states.mjs
+
+      # EN DERNIER, et pas par hasard : ce témoin RECONSTRUIT `dist` en variante
+      # de banc (500 messages) pour mesurer la virtualisation, puis le
+      # reconstruit normalement. Le placer avant les deux autres leur ferait
+      # mesurer un `dist` qui n'est pas celui qu'on livre.
+      - name: Gate virtualisation du fil (500 messages)
+        run: |
+          cd apps/web-v3
+          node scripts/check-thread-virtualization.mjs
 
   # ===========================================================================
   # LIFECYCLE: le gate de cycle de vie du § 8.5 de la conception v3 — SON PORTEUR
@@ -533,7 +694,7 @@ jobs:
   # « 0 requête pendant que l'onglet est hidden ; 1 seule requête de battement
   # pour N onglets sur 10 min ». Même leçon que le gate axe ci-dessus, payée une
   # fois : un instrument déclaré n'est pas un instrument lancé. L'instrument vit
-  # dans `apps/web-v3/e2e/visual/v3-lifecycle.spec.ts`, son verdict dans
+  # dans `apps/web-old-version3/e2e/visual/v3-lifecycle.spec.ts`, son verdict dans
   # `lib/lifecycle.ts`, gagé sans navigateur par `__tests__/lifecycle-gate.test.ts`
   # — et ce job est l'une de ses deux invocations, l'autre étant la sixième mesure
   # de `scripts/v3-rapport.mjs`.
@@ -600,9 +761,9 @@ jobs:
           cd packages/shared
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
-      - name: Build apps/web-v3 (le serveur que playwright.config.ts lève)
+      - name: Build apps/web-old-version3 (le serveur que playwright.config.ts lève)
         run: |
-          cd apps/web-v3
+          cd apps/web-old-version3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
       - name: Install Playwright browsers
@@ -610,7 +771,7 @@ jobs:
 
       - name: Gate cycle de vie — 0 requête mutante pendant que l'onglet est caché
         run: |
-          cd apps/web-v3
+          cd apps/web-old-version3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:lifecycle
 
       - name: Upload Playwright traces
@@ -618,7 +779,7 @@ jobs:
         if: failure()
         with:
           name: web-v3-lifecycle-traces
-          path: apps/web-v3/test-results/
+          path: apps/web-old-version3/test-results/
           retention-days: 7
 
   # ===========================================================================
@@ -702,9 +863,9 @@ jobs:
           cd packages/shared
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
-      - name: Build apps/web-v3 (le serveur que les suites mesurent)
+      - name: Build apps/web-old-version3 (le serveur que les suites mesurent)
         run: |
-          cd apps/web-v3
+          cd apps/web-old-version3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
       - name: Install Playwright browsers
@@ -712,7 +873,7 @@ jobs:
 
       - name: Gate chaînes — lien partagé, causes de clôture, vitals réseau
         run: |
-          cd apps/web-v3
+          cd apps/web-old-version3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:chaines
 
       # Suivi #5163 § 12.12 — la réplique des gestes du fil (répondre, modifier,
@@ -725,7 +886,7 @@ jobs:
 
       - name: Gate gestes du fil — WebKit et Firefox
         run: |
-          cd apps/web-v3
+          cd apps/web-old-version3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:gestes-moteurs
 
       - name: Upload Playwright traces
@@ -733,7 +894,7 @@ jobs:
         if: failure()
         with:
           name: web-v3-chaines-traces
-          path: apps/web-v3/test-results/
+          path: apps/web-old-version3/test-results/
           retention-days: 7
 
   # ===========================================================================
@@ -1784,7 +1945,7 @@ jobs:
   summary:
     name: Summary
     runs-on: ubuntu-latest
-    needs: [quality, a11y-v3, lifecycle-v3, chaines-v3, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
+    needs: [quality, a11y-v3, lifecycle-v3, chaines-v3, institutionnel-v3, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
       - name: Pipeline Summary
@@ -1798,6 +1959,7 @@ jobs:
           echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| A11y web-v3 (axe) | ${{ needs.a11y-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Cycle de vie web-v3 | ${{ needs.lifecycle-v3.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Peaux web-v3 (institutionnel + Lentille + fil) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Chaînes web-v3 | ${{ needs.chaines-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Python) | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY

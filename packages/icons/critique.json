@@ -1,6 +1,6 @@
 {
   "role": "Les glyphes du SOUS-SPRITE CRITIQUE — ceux que le § 8.5 autorise à inliner dans app/layout.tsx parce qu'ils sont rendus au-dessus de la ligne de flottaison, avant que le sprite externe soit arrivé. Le reste attend le fichier.",
-  "plafond": "≤ 8 glyphes (conception § 8.5). Le plafond est dans apps/web-v3/budgets.json → actifs.plafonds.critical_glyphes ; cette liste ne le redéclare pas.",
+  "plafond": "≤ 8 glyphes (conception § 8.5). Le plafond est dans apps/web-old-version3/budgets.json → actifs.plafonds.critical_glyphes ; cette liste ne le redéclare pas.",
   "lu_par": "packages/icons/scripts/build-sprite.ts — seul producteur de critical.svg",
   "revise_par": "l'écran qui inline ce sous-sprite : L0 pose le layout, L1 (linkRedirect, linkExpired) et L3 (story, comments, reelShared, moods) rendent les premières icônes. Cette liste est DÉCLARÉE depuis les vues P0 de la planche ; elle se corrige à la première capture réelle, jamais par intuition.",
   "source": "docs/product/MeeshyWebV3Design/MeeshyWebV3.dc.html (BLANKS, MAP) et matrice.json, lignes de priorité P0",

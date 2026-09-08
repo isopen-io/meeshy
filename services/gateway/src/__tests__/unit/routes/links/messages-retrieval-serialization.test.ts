@@ -203,6 +203,51 @@ describe('GET /links/:identifier/messages — ce que le schéma laisse passer', 
       expect(served.replyTo.sender.isMeeshyer).toBe(false);
     });
 
+    // #4952 — `getConversationMessagesWithDetails` charge la ligne CITÉE en
+    // entier (`include`) : sans masquage, un message à vue unique / flouté /
+    // chiffré ouvert par un lien de partage servait son texte en clair à la
+    // population la plus exposée (visiteurs sans compte).
+    it('masque le texte du message cité quand il est protégé (vue unique)', async () => {
+      const raw = makeRawMessage(anonymousParticipant);
+      raw.replyTo = {
+        ...raw.replyTo,
+        content: 'Le secret à ne jamais répéter',
+        isViewOnce: true,
+      } as typeof raw.replyTo;
+
+      const [served] = await serveMessages([formatLinkMessageWithDetails(raw)]);
+
+      expect(served.replyTo.content).not.toBe('Le secret à ne jamais répéter');
+      expect(JSON.stringify(served)).not.toContain('Le secret à ne jamais répéter');
+      expect(served.replyTo.isViewOnce).toBe(true);
+    });
+
+    it('masque le texte du message cité quand il est flouté', async () => {
+      const raw = makeRawMessage(anonymousParticipant);
+      raw.replyTo = {
+        ...raw.replyTo,
+        content: 'Un contenu sensible flouté',
+        isBlurred: true,
+      } as typeof raw.replyTo;
+
+      const [served] = await serveMessages([formatLinkMessageWithDetails(raw)]);
+
+      expect(served.replyTo.content).not.toBe('Un contenu sensible flouté');
+      expect(served.replyTo.isBlurred).toBe(true);
+    });
+
+    it('sert les drapeaux de protection à `false` pour une citation ordinaire', async () => {
+      const [served] = await serveMessages([
+        formatLinkMessageWithDetails(makeRawMessage(anonymousParticipant)),
+      ]);
+
+      expect(served.replyTo.content).toBe('Salut');
+      expect(served.replyTo.isViewOnce).toBe(false);
+      expect(served.replyTo.isBlurred).toBe(false);
+      expect(served.replyTo.isEncrypted).toBe(false);
+      expect(served.replyTo.effectFlags).toBe(0);
+    });
+
     it("sert l'état d'édition", async () => {
       const [served] = await serveMessages([
         formatLinkMessageWithDetails(makeRawMessage(anonymousParticipant)),

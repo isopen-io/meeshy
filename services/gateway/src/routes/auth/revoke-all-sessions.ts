@@ -4,8 +4,9 @@ import { AuthRouteContext } from './types';
 import { invalidateAllSessions } from '../../services/SessionService';
 import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
 import { logWarn } from '../../utils/logger';
+import { getJwtSecret } from '../../utils/secrets';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
+const JWT_SECRET = getJwtSecret();
 
 interface RevokeAllPayload {
   userId: string;

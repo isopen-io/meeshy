@@ -1,0 +1,152 @@
+{
+  "date": "2026-09-07",
+  "variants": {
+    "preact-web": {
+      "runtime": "preact",
+      "target": "web",
+      "document_gzip_9_bytes": 1021,
+      "critical_js_gzip_9_bytes": 19399,
+      "critical_css_gzip_9_bytes": 6589,
+      "first_paint_gzip_9_bytes": 27009,
+      "first_paint_kb": 26.38,
+      "requests_before_first_pixel": 6,
+      "download_3g_s": 1.14,
+      "on_demand_gzip_9_bytes": 38956,
+      "critical_detail": {
+        "assets/index-DhfsZxj3.js": 2845,
+        "assets/core-Sn_KJdiA.js": 16257,
+        "assets/data-lSQzGbbk.js": 172,
+        "assets/index--0N4CS7m.css": 6589,
+        "registerSW.js": 125
+      }
+    },
+    "react-web": {
+      "runtime": "react",
+      "target": "web",
+      "document_gzip_9_bytes": 1047,
+      "critical_js_gzip_9_bytes": 69718,
+      "critical_css_gzip_9_bytes": 5936,
+      "first_paint_gzip_9_bytes": 76701,
+      "first_paint_kb": 74.9,
+      "requests_before_first_pixel": 7,
+      "download_3g_s": 3.25,
+      "on_demand_gzip_9_bytes": 20036,
+      "critical_detail": {
+        "assets/index-BcSqX_WH.js": 2952,
+        "assets/rolldown-runtime-CbXtAM7H.js": 368,
+        "assets/donnees-BtFiqILz.js": 3072,
+        "assets/socle-ByRhlhM4.js": 63201,
+        "assets/index-Cs9wykzF.css": 5936,
+        "registerSW.js": 125
+      }
+    },
+    "preact-capacitor": {
+      "runtime": "preact",
+      "target": "capacitor",
+      "document_gzip_9_bytes": 977,
+      "critical_js_gzip_9_bytes": 18031,
+      "critical_css_gzip_9_bytes": 5936,
+      "first_paint_gzip_9_bytes": 24944,
+      "first_paint_kb": 24.36,
+      "requests_before_first_pixel": 5,
+      "download_3g_s": 1.06,
+      "on_demand_gzip_9_bytes": 11171,
+      "critical_detail": {
+        "assets/index-CgqZo8qZ.js": 2861,
+        "assets/donnees-CJE2g6v6.js": 8037,
+        "assets/socle-BgqVopyO.js": 7133,
+        "assets/index-Cs9wykzF.css": 5936
+      }
+    }
+  },
+  "documents_institutionnels": {
+    "quoi": "Ce que chaque page institutionnelle REMET EN UNE FOIS : le HTML, sa feuille dédiée inlinée et son script de thème. Zéro script externe, zéro feuille externe — mesuré par les invariants du producteur.",
+    "produit_par": "cd apps/web-v3 && bun run build (l'étape scripts/prerender-institutional.tsx)",
+    "date": "2026-09-07",
+    "unite": "octets gzip -9 du document servi",
+    "feuille_dediee_gzip_octets": 4628,
+    "note_feuille": "La feuille de ces pages est SÉPARÉE de celle de l'application (source(none) + @source limité) : inliner celle de l'app leur faisait transporter les styles de la liste, du fil et du composeur — 2,1 Ko gzip de trop par page, payés cinq fois et jamais mis en cache. Mesuré : /about est passé de 11,28 à 9,25 Ko.",
+    "pages": {
+      "about": 9472,
+      "contact": 6154,
+      "partners": 6758,
+      "privacy": 8673,
+      "terms": 7076
+    },
+    "requests_before_first_pixel": 1,
+    "franchissement": {
+      "page": "about",
+      "mesure_ko": 9.25,
+      "plafond_ko": 9,
+      "status": "FRANCHI ET DÉCLARÉ",
+      "raison": "La charte v3 fixe 9 Ko par document. /about porte 248 lignes de contenu — c'est la page la plus longue des cinq, et son dépassement est de 2,8 %. Sa feuille (4,52 Ko) est déjà la version réduite ; le reste est du CONTENU, qui ne se comprime pas davantage sans le couper. Déclaré plutôt que caché, conformément au ratchet du § 8.3 : le franchir davantage demandera un diff relu."
+    }
+  },
+  "cache_institutionnel": {
+    "quoi": "Ce que l'INSTALLATION du service worker télécharge pour les cinq pages institutionnelles, et ce qu'une visite ultérieure leur coûte. Le porteur a demandé qu'elles soient « entièrement cachées, elles ne changent que très rarement » (2026-09-07) ; la demande a révélé qu'elles n'étaient pas seulement hors cache, mais MASQUÉES — la NavigationRoute du service worker servait la coquille de l'application à leur place dès la deuxième visite.",
+    "produit_par": "cd apps/web-v3 && bun run build && node scripts/check-institutional.mjs",
+    "date": "2026-09-07",
+    "avant_le_correctif": {
+      "entrees_de_precache": 16,
+      "pages_institutionnelles_precachees": 0,
+      "titre_de_about_visite_1": "À propos de Meeshy",
+      "titre_de_about_visite_2": "Meeshy",
+      "scripts_externes_visite_2": 2,
+      "h1_visite_2": null,
+      "ouvre_hors_ligne": false,
+      "cause": "Le préchauffage était enchaîné APRÈS `vite build` dans le script `build` : quand vite-plugin-pwa parcourait dist/ pour composer son manifeste, les cinq documents n'existaient pas encore."
+    },
+    "doublon_supprime": {
+      "quoi": "Chaque page est écrite dans DEUX formes — `about.html` et `about/index.html` — identiques octet pour octet mais distinctes comme ADRESSES : Workbox précachait les deux.",
+      "avant_requetes": 10,
+      "avant_brut_octets": 286515,
+      "apres_requetes": 5,
+      "apres_brut_octets": 143258,
+      "comment": "globIgnores: ['*/index.html'] ne garde que la forme canonique ; public/sw-institutional.js ramène `/about/` sur `/about` en 302, donc les deux formes restent servies, hors ligne comprises.",
+      "pourquoi_ca_comptait": "Le doublon seul (~37 Ko gzip) pesait plus lourd que la première peinture entière de l'application (25,13 Ko)."
+    },
+    "apres": {
+      "entrees_de_precache": 22,
+      "precache_total_ko_brut": 269.1,
+      "installation_institutionnel_brut_octets": 143258,
+      "installation_institutionnel_requetes": 5,
+      "requetes_reseau_visite_2": 0,
+      "scripts_externes": 0,
+      "formes_servies": 10,
+      "ouvre_hors_ligne": true
+    },
+    "temoin": "scripts/check-institutional.mjs — un navigateur RÉEL et une DEUXIÈME visite. Aucun test de construction ne pouvait voir ce défaut : les fichiers étaient bien sur le disque. Vérifié par mutation : l'état d'avant le correctif rend rc=1 sur 35 invariants rompus."
+  },
+  "lentille": {
+    "quoi": "La peau LENTILLE de l'écran / — ligne PLATE de 84 px, perspective au défilement, magnification en place. Elle REMPLACE la peau carte, retirée : #5567 la déclare seule peau de la v3.1.",
+    "produit_par": "cd apps/web-v3 && bun run build && node scripts/measure-weight.mjs && node scripts/check-lens.mjs",
+    "date": "2026-09-07",
+    "first_paint_kb": 25.22,
+    "premiere_peinture_avant_ko": 25.13,
+    "surcout_premiere_peinture_ko": 0.09,
+    "a_la_demande_ko": 26.75,
+    "a_la_demande_avant_ko": 23.98,
+    "note_cout": "La peau et sa scène arrivent avec le morceau de l'écran /, jamais avant le premier pixel : le surcoût de première peinture (0,09 Ko) n'est que la table de routage. Les 2,8 Ko à la demande portent la ligne, la loi et le moteur de défilement.",
+    "critere_binaire": {
+      "enonce": "Directive porteur : « le flux ne bouge jamais au défilement, ou on garde les cartes ». Il n'y a pas de demi-mesure à mesurer.",
+      "temoin": "scripts/check-lens.mjs — navigateur réel, cinq paliers de défilement, `offsetTop` et `offsetHeight` de chaque case relevés à chacun.",
+      "cases": 4,
+      "hauteur_de_case_px": 84,
+      "paliers_px": [
+        40,
+        120,
+        240,
+        400,
+        600
+      ],
+      "cases_ayant_bouge": 0,
+      "opacites_distinctes": 12,
+      "transformations_distinctes": 15,
+      "mouvement_reduit": "toutes les opacités à 1, ÉLECTION CONSERVÉE — on perd le relief, jamais le repère",
+      "verifie_par_mutation": "faire grandir la case (84 → 100 quand magnifiée) rend rc=1 sur les cinq paliers"
+    },
+    "mecanisme": "La case de mise en page mesure 84 en permanence ; le conteneur visuel mesure 100 et déborde de 8 de chaque côté, son supplément à `opacity: 0` au repos. AUCUNE propriété de mise en page n'est jamais animée — seuls `transform` et `opacity`, les deux que le compositeur sait bouger sans repasser par la mise en page.",
+    "defaut_trouve_par_le_temoin": "`flexShrink: 0` manquait sur la case : la liste étant un conteneur flex, les cases étaient COMPRIMÉES à 31 px au lieu de 84. La compression étant uniforme, la perspective continuait de s'appliquer et rien n'avait l'air cassé à l'œil — seule la mesure de mise en page l'a vu.",
+    "loi": "src/lib/lens/law.ts, DÉRIVÉE de packages/shared/utils/focus-curve.ts (7 constantes) et de LentilleMetrics.swift (3 cotes de respiration). `scripts/check-curve.mjs` interdit la dérive ; `loi.test.ts` garde les valeurs (17 tests)."
+  }
+}

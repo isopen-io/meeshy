@@ -18,9 +18,9 @@
 // sous `$(CERTS_DIR)` (`infrastructure/docker/compose/certs/{cert,key}.pem`),
 // d'où Traefik le sert déjà. C'est l'emplacement PARTAGÉ, hors des deux zones
 // web (legacy et v3) : le consommer ici n'ajoute aucune autorité locale à
-// faire confiance et ne duplique aucun secret. Patron : `apps/web-v3/scripts/
+// faire confiance et ne duplique aucun secret. Patron : `apps/web-old-version3/scripts/
 // dev-https.mjs`, le même script pour la zone v3, gardé par
-// `apps/web-v3/__tests__/dev-https.test.ts`.
+// `apps/web-old-version3/__tests__/dev-https.test.ts`.
 //
 // CE QUE CE FICHIER NE TOUCHE PAS
 //
@@ -59,7 +59,7 @@ export const SELF_SIGNED_FALLBACK =
   'bannières du Makefile, affichera un nom invalide. Le combler : make setup-certs';
 
 // `--experimental-https` reste TOUJOURS là : c'est lui qui allume TLS. Mesuré
-// (patron `apps/web-v3/scripts/dev-https.mjs`) — passer seulement
+// (patron `apps/web-old-version3/scripts/dev-https.mjs`) — passer seulement
 // `--experimental-https-key` / `--experimental-https-cert` fait démarrer
 // Next 15.5.23 en CLAIR, et sa bannière annonce alors `http://…` sans que
 // rien ne signale l'erreur. Les deux chemins d'accès aux fichiers ne sont que
