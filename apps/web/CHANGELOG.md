@@ -1,5 +1,78 @@
 # @meeshy/web
 
+## 1.39.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - l'agent puise dans tout le vivier d'inactifs, pas dans les cinq mêmes
+  - le témoin des catalogues charge ses JSON par import, pas par require()
+  - se connecter et s'inscrire fonctionnent de bout en bout
+  - le temps relatif du dashboard agent rend une durée, pas son placeholder
+  - la marque iOS — logo, signature, splashscreen — servie par le web et les coques
+  - la base d'API se configure en une seule source et l'application parle au staging
+  - les coques Android et iOS embarquent le dist et démarrent sur émulateur et simulateur
+  - la liste des conversations atteint l'anatomie complète de ConversationListView
+  - le témoin de frontière de zone ne condamne plus un déploiement sans legacy
+  - le fil s'ouvre en mode FOCAL et le menu des modes de lecture existe
+  - les trois routes de bannissement entrent dans la référence du catalogue Swift
+  - le cliquet de dette de types redevient vert — mocks admin typés
+  - (beta) le workflow docker redevient VALIDE — `secrets` n'est pas un contexte de `if`
+  - (beta) certs-dumper cesse de boucler — v2.11.4 extrait la clé du compte ACME
+  - (beta) la fiche détail montre la trace du son de fond, et le toucher arrête ou reprend
+  - le témoin des états emprunte le lancement partagé
+  - le lancement de Chromium est écrit une fois, plus six
+  - les états du fil — vide, coupure, échec d'envoi rejouable
+  - le son de fond d'un post à plusieurs scènes se joue dans la fiche détail
+  - les icônes d'app sont le vrai logo Meeshy, dérivé de l'icône iOS
+  - le fil est virtualisé — 500 messages, 17 cellules montées
+  - le domaine vient de @meeshy/shared — six jumelles retirées
+  - la nomenclature du code passe à l'anglais, cinq couches
+  - l'écran / passe à la peau LENTILLE — ligne plate, flux immobile
+  - le travail « institutionnel-v3 » entre dans le résumé de pipeline
+  - deux déclarations de types que `.gitignore` avalait
+  - assainit le tag que le scan de sécurité cherche
+  - conversation:updated porte enfin son groupe MÉDIA (#3737)
+  - renomme apps/web-v3-old en apps/web-old-version3
+  - les cinq pages institutionnelles étaient MASQUÉES, pas seulement hors cache
+  - les cinq pages institutionnelles, préchauffées en HTML statique
+  - web-v4 devient web-v3, l'ancienne v3 devient web-v3-old (v3.1)
+  - place the react-hooks/set-state-in-effect disable on the right line
+  - bannissement durable — modèle Ban, journal d'audit, écran admin (#3719)
+  - la palette iOS du web est GÉNÉRÉE depuis Swift, plus recopiée
+  - le routeur ne coûte plus la moitié de la première peinture
+  - POC d'une application TypeScript unique — web, Android, iOS
+  - des franchissements croisés émettent ACHIEVEMENT_UNLOCKED (#5546)
+  - tenir le budget de taille des suites après #5615
+  - l'envoi d'un message vocal alimente content.audio_message (#5582)
+  - sniffing MIME étendu à tout upload, SVG/PDF couverts (#5615)
+  - un score agrégé multi-axes pondéré émet LEVEL_UP (#5545)
+  - une série de jours actifs émet STREAK_MILESTONE (#5635)
+  - une série de jours actifs émet STREAK_MILESTONE (#5544)
+  - un balayage lève automatiquement les bans à échéance expirée
+  - régénère route-manifest.json et rend son cliquet capable de nommer l'écart
+  - la sonde ZMQ dédie sa socket PUSH — plus de faux négatif de concurrence
+  - la citation d'un message protégé applique enfin le masquage sur les liens et les fils (#4952)
+  - publier via le montage in-app ou en direct alimente les axes d'engagement (#5542, #5543)
+  - JWT_SECRET et mots de passe seed refusent un défaut faible en production (#5600)
+  - le clonage vocal fin est persisté et lu à la synthèse TTS (#5477)
+  - fermer la fenêtre de course de la déduplication d'export watermarké (#5583) (#5586)
+  - la publication d'un réel alimente l'axe d'engagement « content.reel » (#5591)
+  - la publication d'une story alimente l'axe d'engagement « content.story » (#5589)
+  - l'envoi d'un message texte alimente l'axe d'engagement « content.text_message »
+  - une conversation communautaire distincte alimente l'axe d'engagement « conversation.community » (#5540)
+  - une conversation privée distincte alimente l'axe d'engagement « conversation.private » (#5538)
+  - un commentaire audio alimente l'axe d'engagement « comment.audio » (#5536)
+  - l'envoi d'un message vocal alimente content.audio_message
+  - un commentaire texte alimente l'axe d'engagement « comment.text » (#5580)
+  - filtrer les routes d'exploitation du catalogue client (#5424)
+  - une conversation publique distincte alimente l'axe d'engagement « conversation.public » (#5577)
+  - un auteur peut désactiver les commentaires de son post (#5576)
+  - une conversation publique distincte alimente l'axe d'engagement (#5539)
+  - la réinitialisation de mot de passe par un admin révoque les sessions actives (#5572)
+  - un verrou synchrone ne gèle plus l'event loop (#5610)
+
 ## 1.38.0
 
 ### Minor Changes
