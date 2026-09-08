@@ -644,8 +644,12 @@ La référence de la v3.1 est l'app iOS **avec ces trois drapeaux ON** : la list
 Lentille (sections, stickers, pont ✦, magnification actionnable, scène qui
 s'aplatit au repos, rail de stories), le fil en rangée plate (Focal avec son
 élection, Script), Bulles comme choix. Toute capture prise drapeaux éteints
-montre l'ANCIEN produit (liste en cartes `ThemedConversationRow`, bulle à
-queue) et ne vaut rien comme cible — le run `wf_81ad007f-ceb` l'a fait, et son
+montre l'ANCIEN produit (liste en cartes `ThemedConversationRow`, fil en
+bulles sans puce de mode) et ne vaut rien comme cible. Précision du même jour
+(`targets/bulle.md`) : la bulle iOS n'a PAS de queue dans les deux
+configurations — rayon 18 uniforme, `BubbleBackground.swift:20-23` — ce que
+la capture drapeaux éteints montrait comme « queue » était un texte stylé,
+pas la peau de bulle — le run `wf_81ad007f-ceb` l'a fait, et son
 propre rapport l'écrivait (« preuve vivante que le drapeau iOS est désactivé »).
 Le dossier `apps/web-v3/targets/` (captures clair/sombre, arbres
 d'accessibilité, analyses par vue avec tableau iOS → web-v3) est la source de
