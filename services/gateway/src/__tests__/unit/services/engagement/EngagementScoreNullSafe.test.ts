@@ -75,7 +75,7 @@ function makeMongoLikePrisma(initialScore: number | null | undefined) {
       upsert: jest.fn().mockResolvedValue({ count: 2, points: 6 }),
       findMany: jest.fn().mockResolvedValue([]),
     },
-    engagementMilestone: { create: jest.fn().mockResolvedValue({}) },
+    engagementMilestone: { create: jest.fn().mockResolvedValue({}), findMany: jest.fn().mockResolvedValue([]) },
     engagementConversationCredit: { create: jest.fn().mockResolvedValue({}) },
     user: { findUnique: jest.fn().mockResolvedValue(null), update: userUpdate },
     $runCommandRaw: runCommandRaw,

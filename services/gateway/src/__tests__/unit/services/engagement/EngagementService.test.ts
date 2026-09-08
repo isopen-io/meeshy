@@ -38,12 +38,25 @@ function makePrisma(overrides: Partial<{
   return {
     engagementCounter: {
       upsert: overrides.upsert ?? jest.fn(),
-      // Default: no other axis of any composed condition has been reached yet
-      // (empty counter table) — harmless for every test that isn't about achievements.
-      findMany: overrides.findMany ?? jest.fn().mockResolvedValue([]),
+      // `findMany` sert désormais DEUX questions, et un mock qui ignore son
+      // `where` répondrait la même chose aux deux :
+      //  - `hasAllAxes` (succès composés) filtre sur `axisKey` + `count > 0` ;
+      //  - `loadElanInputs` (#5749) filtre sur `updatedAt >= fenêtre`.
+      // Servir les axes d'un succès à la résolution d'élan ferait croire à
+      // plusieurs familles actives et multiplierait les points d'un test qui
+      // ne parle pas d'élan. Le mock DISCRIMINE donc, comme la base.
+      findMany: jest.fn(async (args: unknown) => {
+        const where = (args as { where?: { updatedAt?: unknown } } | undefined)?.where;
+        if (where?.updatedAt !== undefined) return [];
+        const surcharge = overrides.findMany;
+        return surcharge ? await surcharge(args as never) : [];
+      }),
     },
     engagementMilestone: {
       create: overrides.create ?? jest.fn(),
+      // Lu par la résolution d'élan (#5749) : aucun palier gravé ⇒ pas
+      // d'assise, donc facteur porté par les seules familles actives.
+      findMany: jest.fn().mockResolvedValue([]),
     },
     engagementConversationCredit: {
       create: overrides.conversationCreditCreate ?? jest.fn().mockResolvedValue({}),
@@ -73,9 +86,14 @@ function makeStreakPrisma(streakState: {
   return {
     engagementCounter: {
       upsert: jest.fn().mockResolvedValue({ count: 2 }), // 1 -> 2, crosses no badge threshold (isolates the streak logic under test)
+      // Lu par la résolution d'élan (#5749) : aucune activité récente ⇒ seule
+      // la famille du geste courant compte, donc facteur neutre — ce qui laisse
+      // les assertions de série et de niveau lire des poids non multipliés.
+      findMany: jest.fn().mockResolvedValue([]),
     },
     engagementMilestone: {
       create: overrides.create ?? jest.fn().mockResolvedValue({}),
+      findMany: jest.fn().mockResolvedValue([]),
     },
     engagementConversationCredit: {
       create: jest.fn().mockResolvedValue({}),
@@ -105,9 +123,11 @@ function makeLevelPrisma(overrides: Partial<{
   return {
     engagementCounter: {
       upsert: overrides.upsert ?? jest.fn().mockResolvedValue({ count: 2 }), // 1 -> 2, no badge threshold crossed
+      findMany: jest.fn().mockResolvedValue([]),
     },
     engagementMilestone: {
       create: overrides.create ?? jest.fn().mockResolvedValue({}),
+      findMany: jest.fn().mockResolvedValue([]),
     },
     engagementConversationCredit: {
       create: jest.fn().mockResolvedValue({}),

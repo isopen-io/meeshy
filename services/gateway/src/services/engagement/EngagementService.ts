@@ -19,11 +19,20 @@ import {
   CONTENT_ENGAGEMENT_AXES,
   CONVERSATION_ENGAGEMENT_AXES,
   badgeMilestoneKey,
+  engagementAxisFamily,
   levelMilestoneKey,
   streakMilestoneKey,
+  type EngagementAxisFamily,
   type EngagementAxisKey,
   type EngagementAchievementKey,
 } from '@meeshy/shared/types/engagement';
+import {
+  computeEngagementElan,
+  creditedPoints,
+  ELAN_HIGH_BADGE_THRESHOLD,
+  ELAN_WINDOW_DAYS,
+  type EngagementElan,
+} from '@meeshy/shared/utils/engagement-elan';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { engagementAchievementTitle, engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 import { NotificationService } from '../notifications/NotificationService';
@@ -34,6 +43,32 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 const log = enhancedLogger.child({ module: 'EngagementService' });
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Durée de validité du cache d'entrées d'élan (#5749).
+ *
+ * L'élan demande deux lectures — les familles actives sur la fenêtre glissante,
+ * et l'assise permanente. `recordActivity` s'exécute sur CHAQUE message : les
+ * payer à chaque geste ajouterait deux allers-retours à la voie chaude, ce que
+ * la dimension 2 interdit (« une lenteur est un BUG »).
+ *
+ * Une minute de péremption est sans conséquence : la fenêtre glissante est de
+ * sept JOURS et l'assise ne bouge qu'au franchissement d'un palier. Le pire cas
+ * est un compte qui vient de débloquer son dixième succès et crédite au facteur
+ * précédent pendant moins d'une minute — l'élan est un bonus, jamais une
+ * propriété de correction.
+ */
+const ELAN_CACHE_TTL_MS = 60 * 1000;
+
+/** Au-delà, le cache est purgé de ses entrées périmées — borne la mémoire d'un processus long. */
+const ELAN_CACHE_MAX_ENTRIES = 10_000;
+
+type ElanInputs = {
+  readonly recentFamilies: readonly EngagementAxisFamily[];
+  readonly achievementCount: number;
+  readonly highBadgeCount: number;
+  readonly expiresAt: number;
+};
 
 /** Jour civil UTC (minuit) — la comparaison de série ne dépend jamais de l'heure de l'appel. */
 function startOfUtcDay(date: Date): Date {
@@ -61,7 +96,94 @@ export function levelIndexOf(threshold: number): number {
 }
 
 export class EngagementService {
+  /** Cache par compte des ENTRÉES de l'élan — voir `ELAN_CACHE_TTL_MS`. */
+  private readonly elanCache = new Map<string, ElanInputs>();
+
   constructor(private readonly prisma: PrismaClient) {}
+
+  /**
+   * Les entrées de l'élan pour `userId` : les familles actives sur la fenêtre
+   * glissante, et l'assise permanente. Deux lectures indexées, mises en cache
+   * une minute (`ELAN_CACHE_TTL_MS`).
+   *
+   * `EngagementCounter.updatedAt` suffit à dire qu'une famille est active :
+   * la SEULE écriture sur ce modèle est l'incrément d'activité, donc la date
+   * de modification EST la date du dernier geste sur cet axe. Aucun stockage
+   * neuf n'est nécessaire.
+   */
+  private async loadElanInputs(userId: string): Promise<ElanInputs> {
+    const maintenant = Date.now();
+    const enCache = this.elanCache.get(userId);
+    if (enCache && enCache.expiresAt > maintenant) return enCache;
+
+    const depuis = new Date(maintenant - ELAN_WINDOW_DAYS * ONE_DAY_MS);
+    const [compteursRecents, paliers] = await Promise.all([
+      this.prisma.engagementCounter.findMany({
+        where: { userId, updatedAt: { gte: depuis } },
+        select: { axisKey: true },
+      }),
+      this.prisma.engagementMilestone.findMany({
+        where: { userId, milestoneType: { in: ['achievement', 'badge'] } },
+        select: { milestoneType: true, milestoneKey: true },
+      }),
+    ]);
+
+    const familles = new Set<EngagementAxisFamily>();
+    for (const ligne of compteursRecents) {
+      // Un axe présent en base mais absent du catalogue (rétrogradation de
+      // version) est ignoré plutôt que de faire lever `engagementAxisFamily`.
+      try {
+        familles.add(engagementAxisFamily(ligne.axisKey as EngagementAxisKey));
+      } catch {
+        continue;
+      }
+    }
+
+    let achievementCount = 0;
+    let highBadgeCount = 0;
+    for (const palier of paliers) {
+      if (palier.milestoneType === 'achievement') {
+        achievementCount += 1;
+        continue;
+      }
+      // Clé de badge : `<axisKey>:<seuil>` — le seuil est le dernier segment.
+      const seuil = Number.parseInt(palier.milestoneKey.split(':').at(-1) ?? '', 10);
+      if (Number.isFinite(seuil) && seuil >= ELAN_HIGH_BADGE_THRESHOLD) highBadgeCount += 1;
+    }
+
+    const entree: ElanInputs = {
+      recentFamilies: [...familles],
+      achievementCount,
+      highBadgeCount,
+      expiresAt: maintenant + ELAN_CACHE_TTL_MS,
+    };
+
+    if (this.elanCache.size >= ELAN_CACHE_MAX_ENTRIES) {
+      for (const [cle, valeur] of this.elanCache) {
+        if (valeur.expiresAt <= maintenant) this.elanCache.delete(cle);
+      }
+    }
+    this.elanCache.set(userId, entree);
+    return entree;
+  }
+
+  /**
+   * L'élan qui s'applique à CE geste sur CET axe.
+   *
+   * La famille de l'axe courant est ajoutée aux familles récentes : un
+   * utilisateur qui n'écrivait que du contenu et poste son premier commentaire
+   * EST, à cet instant, actif dans deux familles. La lui refuser jusqu'au
+   * geste suivant ferait mentir la règle « plusieurs sprints en même temps »
+   * au moment précis où elle devient vraie.
+   */
+  private async elanFor(userId: string, axisKey: EngagementAxisKey): Promise<EngagementElan> {
+    const inputs = await this.loadElanInputs(userId);
+    return computeEngagementElan({
+      activeFamilies: [...inputs.recentFamilies, engagementAxisFamily(axisKey)],
+      achievementCount: inputs.achievementCount,
+      highBadgeCount: inputs.highBadgeCount,
+    });
+  }
 
   /**
    * Incrémente le compteur de `axisKey` pour `userId` et notifie chaque
@@ -70,10 +192,18 @@ export class EngagementService {
    * neuf qu'un palier dans `]N, N+1]`.
    */
   async recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void> {
+    // UN SEUL élan pour ce geste, résolu avant toute écriture et partagé par le
+    // compteur et le score : deux résolutions indépendantes pourraient tomber
+    // de part et d'autre de la péremption du cache et créditer deux montants
+    // différents pour un même geste, ce qui romprait l'invariant
+    // `engagementScore == Σ(points)` de façon indétectable.
+    const elan = await this.elanFor(userId, axisKey);
+    const points = creditedPoints(ENGAGEMENT_AXIS_WEIGHTS[axisKey], elan);
+
     const counter = await this.prisma.engagementCounter.upsert({
       where: { userId_axisKey: { userId, axisKey } },
-      create: { userId, axisKey, count: 1, points: ENGAGEMENT_AXIS_WEIGHTS[axisKey] },
-      update: { count: { increment: 1 }, points: { increment: ENGAGEMENT_AXIS_WEIGHTS[axisKey] } },
+      create: { userId, axisKey, count: 1, points },
+      update: { count: { increment: 1 }, points: { increment: points } },
       select: { count: true },
     });
 
@@ -89,7 +219,7 @@ export class EngagementService {
 
     await this.tryAwardAchievements(userId, axisKey, previousCount);
     await this.updateStreak(userId);
-    await this.updateEngagementScore(userId, axisKey);
+    await this.updateEngagementScore(userId, points);
   }
 
   /**
@@ -361,10 +491,16 @@ export class EngagementService {
   }
 
   /**
-   * Ajoute le poids de `axisKey` (`ENGAGEMENT_AXIS_WEIGHTS`) au score agrégé
-   * `User.engagementScore` et notifie chaque palier `LEVEL_THRESHOLDS`
-   * franchi par CET incrément précis — même mécanique que le compteur d'axe
-   * (§ 5, § 7).
+   * Ajoute `points` au score agrégé `User.engagementScore` et notifie chaque
+   * palier `LEVEL_THRESHOLDS` franchi par CET incrément précis — même
+   * mécanique que le compteur d'axe (§ 5, § 7).
+   *
+   * `points` est le poids de l'axe DÉJÀ multiplié par l'élan (#5749), calculé
+   * une fois par `recordActivity` et partagé avec le compteur : c'est ce qui
+   * tient l'invariant `engagementScore == Σ(EngagementCounter.points)`. La
+   * méthode ne recalcule donc RIEN — lui passer un axe l'obligerait à
+   * re-résoudre l'élan, avec le risque de tomber de l'autre côté de la
+   * péremption du cache et de créditer deux montants pour un même geste.
    *
    * ## Pourquoi une commande brute et non `increment` (#5742)
    *
@@ -394,12 +530,11 @@ export class EngagementService {
    * Prisma ne sait pas exprimer une mise à jour par pipeline : d'où
    * `$runCommandRaw`, idiome déjà employé dans le dépôt (`routes/posts/nearby.ts`).
    */
-  private async updateEngagementScore(userId: string, axisKey: EngagementAxisKey): Promise<void> {
-    const weight = ENGAGEMENT_AXIS_WEIGHTS[axisKey];
+  private async updateEngagementScore(userId: string, points: number): Promise<void> {
     const result = (await this.prisma.$runCommandRaw({
       findAndModify: 'User',
       query: { _id: { $oid: userId } },
-      update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, weight] } } }],
+      update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, points] } } }],
       new: true,
       fields: { engagementScore: 1 },
     } as never)) as unknown as { value?: { engagementScore?: number } | null };
@@ -408,7 +543,7 @@ export class EngagementService {
     // Compte introuvable (supprimé entre l'activité et ce crédit) : rien à
     // notifier, et surtout pas un palier calculé sur `undefined`.
     if (typeof newScore !== 'number') return;
-    const previousScore = newScore - weight;
+    const previousScore = newScore - points;
     const crossedThresholds = LEVEL_THRESHOLDS.filter(
       (threshold) => threshold > previousScore && threshold <= newScore,
     );
