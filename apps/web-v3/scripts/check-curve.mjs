@@ -221,6 +221,14 @@ for (const [swiftName, downstreamName, what] of FOCAL_MAPPINGS) {
 const SCENE_MS_MAPPINGS = [
   ['restDelay', 'SCENE_REST_DELAY_MS', 'délai de repos avant aplatissement (Scene.restDelay)'],
   ['flattenDuration', 'SCENE_FLATTEN_DURATION_MS', "durée de l'aplatissement (Scene.flattenDuration)"],
+  /**
+   * #5694 (écart 2) — la LENTILLE réutilise cette même cote
+   * (`LentilleSceneActivity.noteScroll` anime littéralement
+   * `withAnimation(.easeOut(duration: FocalMetrics.Scene.enterDuration))`,
+   * `Perspective/LentilleSceneActivity.swift:38-40`) : un SEUL gate, deux
+   * consommateurs (`reading-mode/metrics.ts`, `lens/scene.ts` qui l'importe).
+   */
+  ['enterDuration', 'SCENE_ENTER_DURATION_MS', "durée de l'entrée en scène (Scene.enterDuration)"],
 ];
 for (const [swiftName, downstreamName, what] of SCENE_MS_MAPPINGS) {
   const expectedSeconds = focalNumber(swiftName);
@@ -396,6 +404,107 @@ for (const [swiftName, downstreamName, what] of REVEAL_MAPPINGS) {
   else if (expectedReveal !== actualReveal) failures.push(`${what} : Swift ${expectedReveal}, dérivée ${actualReveal}`);
 }
 
+/**
+ * PARTIE 6 — LA TYPOGRAPHIE DE LA RANGÉE DE LA LENTILLE (#5694, écart 1).
+ * `LentilleMetrics.Name.size`/`.Line2.size` ne sont PAS des littéraux Swift
+ * (`MeeshyFont.bodySize`/`.subheadSize`) — leur aval n'est donc pas une
+ * constante TS gardée par extraction textuelle, comme les parties
+ * précédentes, mais les jetons `--ios-font-body`/`--ios-font-subhead`/
+ * `--ios-text-time` déjà DÉRIVÉS de Swift par `generate-from-ios.mjs` (gate
+ * `check:tokens`) — ce gate-ci ferme la boucle : il compare CES jetons à
+ * `packages/shared/design/lentille-tokens.json` (`list.name/.line2/.time`,
+ * la source normative de la cote, `LentilleMetrics.swift:73-90`) et vérifie
+ * que `lens-row.tsx` utilise bien les classes Tailwind qui les portent.
+ * Une valeur FALSIFIÉE dans l'un ou l'autre fichier fait rougir ce gate.
+ */
+const UPSTREAM_LENTILLE_TOKENS = `${ROOT}packages/shared/design/lentille-tokens.json`;
+const IOS_CSS = `${ROOT}packages/design-tokens/ios.css`;
+const THEME_CSS = `${ROOT}apps/web-v3/src/styles/ios.css`;
+const LENS_ROW = `${ROOT}apps/web-v3/src/components/lens-row.tsx`;
+const LENS_TIME = `${ROOT}apps/web-v3/src/components/lens-time.tsx`;
+
+const lentilleTokens = JSON.parse(readFileSync(UPSTREAM_LENTILLE_TOKENS, 'utf8'));
+const iosCss = readFileSync(IOS_CSS, 'utf8');
+const themeCss = readFileSync(THEME_CSS, 'utf8');
+
+/**
+ * LES COMMENTAIRES SONT RETIRÉS AVANT TOUTE RECHERCHE DE CLASSE — sans quoi
+ * ce gate NE PEUT PAS ÉCHOUER (revue #5694). Chaque classe gardée ici est
+ * NOMMÉE dans le doc-comment qui la justifie, juste au-dessus de l'élément :
+ * un simple `grep` de la classe reste donc vert même quand l'élément ne la
+ * porte plus. Mesuré : `text-bubble` remplacé par `text-check` sur le nom de
+ * la rangée (15 px → 10 px, une régression VISIBLE à l'œil) laissait ce gate
+ * VERT. C'est la leçon « un test qui ne peut pas échouer ne valide rien ».
+ */
+const withoutComments = (source) =>
+  source
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/^[ \t]*\/\/.*$/gm, ' ');
+
+const lensRowSource = withoutComments(readFileSync(LENS_ROW, 'utf8'));
+const lensTimeSource = withoutComments(readFileSync(LENS_TIME, 'utf8'));
+
+const cssPxVar = (name) => {
+  const m = new RegExp(`--${name}:\\s*([0-9.]+)px`).exec(iosCss);
+  return m === null ? null : Number(m[1]);
+};
+
+/** L'alias Tailwind : `--text-<utilitaire>: var(--<jeton iOS>)` dans `src/styles/ios.css`. */
+const themeAlias = (utility) => {
+  const m = new RegExp(`--text-${utility}:\\s*var\\(--([a-zA-Z0-9-]+)\\)`).exec(themeCss);
+  return m === null ? null : m[1];
+};
+
+/** Le poids Tailwind qui vaut le poids déclaré par le jeton. */
+const WEIGHT_CLASS = { 400: 'font-normal', 500: 'font-medium', 600: 'font-semibold', 700: 'font-bold', 800: 'font-extrabold', 900: 'font-black' };
+
+/**
+ * LA CHAÎNE COMPLÈTE, maillon par maillon : `lentille-tokens.json` (la cote
+ * normative) → `--ios-*` (`packages/design-tokens/ios.css`, DÉRIVÉ de Swift)
+ * → `--text-*` (l'alias Tailwind de `src/styles/ios.css`) → la classe
+ * RÉELLEMENT posée sur l'élément. Rompre n'importe lequel des quatre maillons
+ * fait rougir ce gate. Le POIDS suit la même chaîne, sans alias : Tailwind le
+ * porte en standard.
+ */
+const TYPOGRAPHY_MAPPINGS = [
+  { cssVarName: 'ios-font-body', utility: 'bubble', tokenKey: 'name', source: lensRowSource, what: 'nom de la rangée (list.name, lens-row.tsx)' },
+  { cssVarName: 'ios-font-subhead', utility: 'title', tokenKey: 'line2', source: lensRowSource, what: "aperçu de la rangée — ligne 2 (list.line2, lens-row.tsx)" },
+  { cssVarName: 'ios-text-time', utility: 'time', tokenKey: 'time', source: lensTimeSource, what: "heure de la rangée (list.time, lens-time.tsx)" },
+];
+
+for (const { cssVarName, utility, tokenKey, source, what } of TYPOGRAPHY_MAPPINGS) {
+  const token = lentilleTokens.list?.[tokenKey];
+  const expectedToken = token?.size;
+  const actualCss = cssPxVar(cssVarName);
+  if (typeof expectedToken !== 'number') {
+    failures.push(`${what} : « list.${tokenKey}.size » introuvable dans lentille-tokens.json`);
+    continue;
+  }
+  if (actualCss === null) {
+    failures.push(`${what} : « --${cssVarName} » introuvable dans ios.css`);
+    continue;
+  }
+  if (actualCss !== expectedToken) {
+    failures.push(`${what} : lentille-tokens.json ${expectedToken}, ios.css ${actualCss}`);
+  }
+  const alias = themeAlias(utility);
+  if (alias === null) {
+    failures.push(`${what} : l'alias « --text-${utility} » est absent de src/styles/ios.css`);
+  } else if (alias !== cssVarName) {
+    failures.push(`${what} : « --text-${utility} » pointe sur --${alias}, attendu --${cssVarName}`);
+  }
+  if (!new RegExp(`\\btext-${utility}\\b`).test(source)) {
+    failures.push(`${what} : la classe « text-${utility} » n'est posée sur aucun élément`);
+  }
+  if (typeof token.weight === 'number') {
+    const weightClass = WEIGHT_CLASS[token.weight];
+    if (weightClass === undefined) failures.push(`${what} : poids ${token.weight} sans utilitaire Tailwind connu`);
+    else if (!new RegExp(`\\b${weightClass}\\b`).test(source)) {
+      failures.push(`${what} : le poids ${token.weight} (« ${weightClass} ») n'est posé sur aucun élément`);
+    }
+  }
+}
+
 if (failures.length > 0) {
   console.error('\n  La loi de la Lentille a DÉRIVÉ de packages/shared/utils/focus-curve.ts :\n');
   for (const e of failures) console.error(`    · ${e}`);
@@ -417,5 +526,7 @@ console.log(
     `\n  L'élection du Fil est conforme à FocalScrollPerspective.swift` +
     ` (${PERSPECTIVE_MAPPINGS.length + CHIP_FILL_CASES.length} cotes ; les valeurs sont gardées par election.test.ts).` +
     `\n  La protection du Fil est conforme à BubbleBlurRevealLifecycle.swift` +
-    ` (${REVEAL_MAPPINGS.length} cote ; les valeurs sont gardées par protection.test.ts).`,
+    ` (${REVEAL_MAPPINGS.length} cote ; les valeurs sont gardées par protection.test.ts).` +
+    `\n  La typographie de la rangée de la Lentille est conforme à lentille-tokens.json` +
+    ` (${TYPOGRAPHY_MAPPINGS.length} chaînes complètes : jeton → ios.css → alias Tailwind → classe posée).`,
 );

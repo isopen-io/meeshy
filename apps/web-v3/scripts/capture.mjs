@@ -79,6 +79,29 @@ for (const scheme of ['dark', 'light']) {
     await page.close();
   }
 
+  /**
+   * list-scrolled — LA LENTILLE EN SCÈNE (#5694). La capture au repos ne peut
+   * montrer NI le sticker COLLÉ (il n'a encore rien sous quoi glisser), NI la
+   * rangée magnifiée (au repos, `level` vaut 0 et la magnification est
+   * aplatie) : les deux comportements que ce lot a livrés sont donc invisibles
+   * sur `list.*`. C'est la capture à comparer à `targets/lentille.scrolled.*`.
+   */
+  {
+    const page = await context.newPage();
+    await page.clock.setFixedTime(INSTANT);
+    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(300);
+    await page.locator('#contenu').hover();
+    for (let i = 0; i < 7; i += 1) {
+      await page.mouse.wheel(0, 40);
+      await page.waitForTimeout(60);
+    }
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: `${OUTPUT}list-scrolled.${scheme}.png` });
+    console.log(`  list-scrolled · ${scheme}`);
+    await page.close();
+  }
+
   // thread-focal-scene — après 4,2 s de `wheel` soutenu (< 4,5 s d'aplatissement).
   {
     const page = await context.newPage();

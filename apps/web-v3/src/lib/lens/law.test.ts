@@ -4,7 +4,9 @@ import {
   BAND_OFFSET,
   BAND_HALF_HEIGHT,
   bandCenter,
+  blend,
   electFocus,
+  enterLevel,
   perspective,
 } from './law';
 
@@ -122,5 +124,57 @@ describe('les cotes de la bande', () => {
   test('elles sont celles de la source amont', () => {
     expect(BAND_OFFSET).toBe(140);
     expect(BAND_HALF_HEIGHT).toBe(45);
+  });
+});
+
+/**
+ * L'ENTRÉE ET L'APLATISSEMENT DE LA SCÈNE (#5694, écart 2) — miroir
+ * `LentilleSceneActivity.blend` (`Perspective/LentilleSceneActivity.swift:60-66`).
+ */
+describe("l'aplatissement de la scène (blend)", () => {
+  const p = { alpha: 0.55, scale: 0.96 };
+
+  test('level 0 rend l’IDENTITÉ, quelle que soit la perspective', () => {
+    expect(blend(p, 0)).toEqual({ alpha: 1, scale: 1 });
+  });
+
+  test('level 1 rend la perspective INCHANGÉE', () => {
+    expect(blend(p, 1)).toEqual(p);
+  });
+
+  test('level 0,5 interpole à mi-chemin', () => {
+    const b = blend(p, 0.5);
+    expect(b.alpha).toBeCloseTo(0.775, 10);
+    expect(b.scale).toBeCloseTo(0.98, 10);
+  });
+
+  test('un level hors [0, 1] est écrêté', () => {
+    expect(blend(p, -3)).toEqual({ alpha: 1, scale: 1 });
+    expect(blend(p, 7)).toEqual(p);
+  });
+});
+
+describe("l'entrée de la scène (enterLevel)", () => {
+  test('à 0 ms, le niveau est nul', () => {
+    expect(enterLevel(0, 250)).toBe(0);
+  });
+
+  test('à la durée pleine, le niveau vaut 1', () => {
+    expect(enterLevel(250, 250)).toBe(1);
+  });
+
+  test('ease-out : plus vite au début — à mi-durée, le niveau dépasse 0,5', () => {
+    const halfway = enterLevel(125, 250);
+    expect(halfway).toBeGreaterThan(0.5);
+    expect(halfway).toBeLessThan(1);
+  });
+
+  test('monotone : un temps plus long ne rend jamais un niveau plus faible', () => {
+    expect(enterLevel(50, 250)).toBeLessThan(enterLevel(150, 250));
+    expect(enterLevel(150, 250)).toBeLessThan(enterLevel(250, 250));
+  });
+
+  test('un temps au-delà de la durée reste plafonné à 1', () => {
+    expect(enterLevel(10_000, 250)).toBe(1);
   });
 });

@@ -112,9 +112,18 @@ export const FLAG_LIMIT_MAGNIFIED = 5;
 export const FOCUS_STRIP_OVERHANG = FOCUS_CHIP_HEIGHT / 2 + ROW_PADDING_VERTICAL;
 export const IDENTITY_OVERHANG = IDENTITY_CHIP_HEIGHT / 2 + ROW_PADDING_VERTICAL;
 
-/** `FocalMetrics.Scene.restDelay` / `.flattenDuration` — SECONDES côté Swift, ×1000 ici. */
+/**
+ * `FocalMetrics.Scene.restDelay` / `.flattenDuration` / `.enterDuration` —
+ * SECONDES côté Swift, ×1000 ici. `enterDuration` (#5694, écart 2) est
+ * PARTAGÉE avec la Lentille : `LentilleSceneActivity.noteScroll` anime
+ * littéralement `withAnimation(.easeOut(duration:
+ * FocalMetrics.Scene.enterDuration))` — la Lentille ne porte pas sa PROPRE
+ * cote d'entrée, elle réutilise celle du Fil (`lens/scene.ts` l'importe
+ * d'ici plutôt que d'en recopier une jumelle).
+ */
 export const SCENE_REST_DELAY_MS = 4500;
 export const SCENE_FLATTEN_DURATION_MS = 450;
+export const SCENE_ENTER_DURATION_MS = 250;
 
 /** `FocalMetrics.Pill.fadeDurationMs` — le fondu du révélé (heure, coches). */
 export const REVEAL_FADE_DURATION_MS = 280;

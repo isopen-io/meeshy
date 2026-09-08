@@ -107,8 +107,8 @@ const WCAG_AA = 4.5;
  *  l'alpha propre du token (`--color-ios-ink-2` est translucide) PUIS
  *  l'opacité CSS de l'élément, avant de mesurer la luminance WCAG. */
 const rowInkContrast = async (page, row) => ({
-  title: await contrastOf(page, `[data-row="${row}"] .lens-row .text-title`),
-  preview: await contrastOf(page, `[data-row="${row}"] .lens-row .text-body`),
+  title: await contrastOf(page, `[data-row="${row}"] [data-name]`),
+  preview: await contrastOf(page, `[data-row="${row}"] [data-line2]`),
 });
 const checkRowInkMeetsAA = async (page, row, schemeLabel) => {
   const { title, preview } = await rowInkContrast(page, row);
@@ -122,6 +122,28 @@ const checkRowInkMeetsAA = async (page, row, schemeLabel) => {
       "c'est le dernier message, la ligne la plus lue de l'écran phare",
   );
 };
+/**
+ * L'EN-TÊTE DE SECTION EST LE PLUS PETIT TEXTE DE L'ÉCRAN (#5694 revue) —
+ * 10,5 px, `list.sticker.size`. C'est celui dont le contraste peut le moins
+ * se permettre d'être approximatif, et le seul que ce lot ajoute : il entre
+ * donc dans le balayage AA, dans les DEUX schémas, comme le titre et
+ * l'aperçu. L'heure passe par le même token que l'aperçu (`--color-ios-ink-3`
+ * contre `-ink-2`) et se mesure aussi : c'est le troisième texte de la
+ * rangée, et le seul dont la couleur est INCONDITIONNELLE.
+ */
+const checkLensInkMeetsAA = async (page, schemeLabel) => {
+  const sticker = await contrastOf(page, '[data-sticker]');
+  check(
+    sticker !== null && sticker >= WCAG_AA,
+    `${schemeLabel} : l'en-tête de section (10,5 px) tient AA (${sticker}:1, ≥ ${WCAG_AA}:1 attendu)`,
+  );
+  const time = await contrastOf(page, '[data-row="c-deploiement"] [data-time]');
+  check(
+    time !== null && time >= WCAG_AA,
+    `${schemeLabel} : l'heure de la rangée tient AA (${time}:1, ≥ ${WCAG_AA}:1 attendu)`,
+  );
+};
+
 const BUTTON = 'button[aria-label="Actions de conversation"]';
 const rowIds = (page) => page.$$eval('[data-row]', (els) => els.map((el) => el.dataset.row));
 const menuItem = (label) => `[role="menu"] [role="menuitem"]:text-is("${label}")`;
@@ -138,6 +160,7 @@ await page.waitForTimeout(300);
 // est muette dans les fixtures, `c-deploiement` (le SUJET du § 4) est ordinaire.
 await checkRowInkMeetsAA(page, 'c-annonces', 'schéma sombre, rangée MUETTE');
 await checkRowInkMeetsAA(page, 'c-deploiement', 'schéma sombre, rangée ordinaire');
+await checkLensInkMeetsAA(page, 'schéma sombre');
 
 // ------------------------------------------------------- 1. présence et exposition
 const buttons = await page.$$eval(BUTTON, (els) =>
@@ -265,12 +288,26 @@ const pinnedMark = (row) => page.$(`[data-row="${row}"] [aria-label="Épinglée"
  * que `useScene` réécrit à chaque image (`scene.ts:104-108`).
  */
 const avatarOpacity = (row) => page.$eval(`[data-row="${row}"] .avatar-root`, (el) => Number(getComputedStyle(el).opacity));
-/** Le TITRE et l'APERÇU, eux, gardent leur encre PLEINE sous sourdine — la
- *  preuve DIRECTE que le lot ne compose plus le fondu avec le texte servi. */
+/**
+ * Le TITRE et l'APERÇU, eux, gardent leur encre PLEINE sous sourdine — la
+ * preuve DIRECTE que le lot ne compose plus le fondu avec le texte servi.
+ * `[data-name]`/`[data-line2]` — pas `.text-title`/`.text-body` (leçon 548) :
+ * #5694 a changé la classe de TAILLE du nom (`text-title` → `text-bubble`) et
+ * de l'aperçu (`text-body` → `text-title`) — un sélecteur ancré sur une
+ * classe de taille se serait mis à interroger le MAUVAIS nœud, en silence.
+ */
 const rowTitleOpacity = (row) =>
-  page.$eval(`[data-row="${row}"] .lens-row .text-title`, (el) => Number(getComputedStyle(el).opacity));
+  page.$eval(`[data-row="${row}"] [data-name]`, (el) => Number(getComputedStyle(el).opacity));
 const rowPreviewOpacity = (row) =>
-  page.$eval(`[data-row="${row}"] .lens-row .text-body`, (el) => Number(getComputedStyle(el).opacity));
+  page.$eval(`[data-row="${row}"] [data-line2]`, (el) => Number(getComputedStyle(el).opacity));
+/**
+ * L'HEURE (#5694, écart 8) — `[data-time]` est le crochet STABLE posé par
+ * `LensTime`. Sa COULEUR ne doit JAMAIS dépendre du non-lu — c'est la preuve
+ * directe que `LentilleConversationRow.timestampColor` (toujours tertiaire)
+ * est bien respectée côté web.
+ */
+const rowTimeColor = (row) =>
+  page.$eval(`[data-row="${row}"] [data-time]`, (el) => getComputedStyle(el).color);
 /** `data-unread` est le crochet STABLE du badge — même parti que `data-row`,
  *  qui sert déjà `check-lens.mjs` : compter sur la position d'un `<span>` dans
  *  le lien rendrait ce témoin faux au premier remaniement de la rangée. */
@@ -306,10 +343,45 @@ await act(SUBJECT, 'Son');
 check((await avatarOpacity(SUBJECT)) === 1, 'après « Son », le CHROME revient à pleine opacité');
 
 check((await unreadBadge(SUBJECT)) === '2', `avant action, le badge de non-lus affiche 2 (${await unreadBadge(SUBJECT)})`);
+/**
+ * L'HEURE NE CHANGE PAS DE COULEUR AVEC LE NON-LU (#5694, écart 8) —
+ * `LentilleConversationRow.timestampColor` rend TOUJOURS l'encre tertiaire,
+ * « le timestamp rouge sur non-lu est supprimé ». Mesurée AVANT et APRÈS le
+ * même aller-retour « Lu »/« Non lu » que le badge, sur le MÊME sujet.
+ */
+/**
+ * L'HEURE EST RELATIVE, PAS UNE HORLOGE (#5694, écart 8 — critère (d)) —
+ * `LentilleRowTimestamp` sert `RelativeTimeFormatter.shortString`
+ * (« maintenant » / « 45s » / « 5 min » / « 2h » / « 3j » / « 2sem » /
+ * « 2 mois » / date absolue), jamais le `HH:MM` que la Lentille rendait
+ * avant ce lot. Le témoin refuse explicitement la forme horaire : c'est
+ * elle, et elle seule, que la régression rétablirait.
+ */
+const timeLabel = await page.$eval(`[data-row="${SUBJECT}"] [data-time]`, (el) => el.textContent ?? '');
+check(
+  !/^\d{1,2}:\d{2}$/.test(timeLabel.trim()),
+  `l'heure de la rangée est RELATIVE, pas une horloge HH:MM (« ${timeLabel} »)`,
+);
+check(
+  /^(maintenant|\d+\s?(s|min|h|j|sem|mois)|\d{1,2} [^ ]+\.?( \d{4})?)$/.test(timeLabel.trim()),
+  `l'heure suit l'échelle de RelativeTimeFormatter.shortString (« ${timeLabel} »)`,
+);
+
+const timeColorBefore = await rowTimeColor(SUBJECT);
 await act(SUBJECT, 'Lu');
 check((await unreadBadge(SUBJECT)) === null, 'après « Lu », le badge de non-lus disparaît');
+const timeColorAfterRead = await rowTimeColor(SUBJECT);
+check(
+  timeColorAfterRead === timeColorBefore,
+  `l'heure ne change PAS de couleur après « Lu » (${timeColorBefore} → ${timeColorAfterRead})`,
+);
 await act(SUBJECT, 'Non lu');
 check((await unreadBadge(SUBJECT)) === '1', `après « Non lu », le badge revient à 1 (${await unreadBadge(SUBJECT)})`);
+const timeColorAfterUnread = await rowTimeColor(SUBJECT);
+check(
+  timeColorAfterUnread === timeColorBefore,
+  `l'heure ne change PAS de couleur après « Non lu » (${timeColorBefore} → ${timeColorAfterUnread})`,
+);
 await act(SUBJECT, 'Lu');
 
 await act(SUBJECT, 'Archiver');
@@ -362,20 +434,21 @@ check(mutedLight === 0.55, `schéma clair : le CHROME de la rangée en sourdine 
 /**
  * L'opacité CSS de l'élément de texte reste à 1 — c'est ce que prouve cette
  * paire d'assertions, ni plus ni moins : que le fondu de sourdine ne
- * s'applique PAS au nœud `.text-title`/`.text-body`. Ça ne dit RIEN de
+ * s'applique PAS au nœud `[data-name]`/`[data-line2]`. Ça ne dit RIEN de
  * l'encre elle-même, qui porte SA PROPRE translucidité dans le token
  * (`--color-ios-ink-2` = `color-mix(… 80% …)`) — d'où `checkRowInkMeetsAA`
  * juste après, seule assertion qui mesure ce que l'ŒIL reçoit (#5559
  * revue-correction, défaut 1 bis).
  */
-const mutedLightTitle = await pageLight.$eval('[data-row="c-annonces"] .lens-row .text-title', (el) => Number(getComputedStyle(el).opacity));
-const mutedLightPreview = await pageLight.$eval('[data-row="c-annonces"] .lens-row .text-body', (el) => Number(getComputedStyle(el).opacity));
+const mutedLightTitle = await pageLight.$eval('[data-row="c-annonces"] [data-name]', (el) => Number(getComputedStyle(el).opacity));
+const mutedLightPreview = await pageLight.$eval('[data-row="c-annonces"] [data-line2]', (el) => Number(getComputedStyle(el).opacity));
 check(
   mutedLightTitle === 1 && mutedLightPreview === 1,
   `schéma clair : le titre et l'aperçu de la rangée en sourdine ne portent pas le fondu de CHROME au niveau CSS (${mutedLightTitle}, ${mutedLightPreview})`,
 );
 await checkRowInkMeetsAA(pageLight, 'c-annonces', 'schéma clair, rangée MUETTE');
 await checkRowInkMeetsAA(pageLight, 'c-deploiement', 'schéma clair, rangée ordinaire');
+await checkLensInkMeetsAA(pageLight, 'schéma clair');
 
 await pageLight.close();
 await light.close();
@@ -425,6 +498,19 @@ check(
 const tapResult = await touchPage.evaluate(async (row) => {
   const btn = document.querySelector(`[data-row="${row}"] button[aria-label="Actions de conversation"]`);
   if (btn === null) return { ok: false, why: 'bouton absent' };
+  /**
+   * LA RANGÉE EST D'ABORD AMENÉE SOUS L'ŒIL. `elementFromPoint` interroge le
+   * point de l'ÉCRAN : sur une rangée hors du cadre visible, il rend ce qui
+   * est peint là (la barre de recherche), et le témoin accuse le bouton d'un
+   * défaut qui n'est pas le sien. Ce qu'on mesure ici, c'est que le CENTRE du
+   * bouton retombe sur le bouton — jamais sur son conteneur muet —, pas que
+   * la dernière rangée du corpus tienne par hasard dans l'écran au repos.
+   * (Relevé #5694 : la jonction de 8 px entre sections, ajoutée par la revue,
+   * a déplacé cette rangée de 24 px et fait rougir le témoin sans qu'aucun
+   * bouton n'ait bougé dans sa rangée.)
+   */
+  btn.scrollIntoView({ block: 'center' });
+  await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
   const r = btn.getBoundingClientRect();
   const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
   return { ok: hit === btn || (btn.contains(hit) ?? false), tag: hit?.tagName ?? null };

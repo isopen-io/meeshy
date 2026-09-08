@@ -155,6 +155,39 @@ export const RAMP_LENGTH = 40;
 export const MUTED_OPACITY = 0.55;
 
 /**
+ * `blend` — miroir `LentilleSceneActivity.blend(_:level:)`
+ * (`Lentille/Perspective/LentilleSceneActivity.swift:60-66`) : fond une
+ * perspective vers l'IDENTITÉ selon le niveau d'activité de la scène.
+ * `level` 0 ⇒ identité (alpha 1, échelle 1 — l'AJUSTEMENT AU REPOS, écart 2
+ * de la spécification #5694) ; `level` 1 ⇒ la perspective telle quelle.
+ * `level` hors `[0, 1]` est ÉCRÊTÉ, comme côté Swift (`min(1, max(0, level))`).
+ */
+export const blend = (p: Perspective, level: number): Perspective => {
+  const clamped = clamp01(level);
+  return {
+    alpha: 1 - (1 - p.alpha) * clamped,
+    scale: 1 - (1 - p.scale) * clamped,
+  };
+};
+
+/**
+ * `enterLevel` — la fraction d'ENTRÉE en scène, ease-out (miroir
+ * `withAnimation(.easeOut(duration: …))`,
+ * `LentilleSceneActivity.swift:38-40`). `durationMs` est un PARAMÈTRE, jamais
+ * une constante importée ici — cette loi ne dépend de rien (§ doc-comment de
+ * tête) ; l'appelant (`lens/scene.ts`) lui passe `SCENE_ENTER_DURATION_MS`,
+ * partagée avec le Fil (`reading-mode/metrics.ts`).
+ *
+ * Ease-out quadratique (`1 − (1 − t)²`) : plus vite au début, monotone,
+ * `enterLevel(0, d) === 0`, `enterLevel(d, d) === 1`.
+ */
+export const enterLevel = (elapsedMs: number, durationMs: number): number => {
+  if (durationMs <= 0) return 1;
+  const t = clamp01(elapsedMs / durationMs);
+  return 1 - (1 - t) * (1 - t);
+};
+
+/**
  * `distance` est ici `centre de bande − milieu du rang` : POSITIVE au-dessus de
  * la ligne, donc poussée vers le HAUT (valeur négative) ; négative en dessous,
  * poussée vers le bas.
