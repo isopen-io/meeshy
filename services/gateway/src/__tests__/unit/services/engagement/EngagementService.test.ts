@@ -16,6 +16,17 @@ const mockGetSharedNotificationService = getSharedNotificationService as jest.Mo
   typeof getSharedNotificationService
 >;
 
+/**
+ * Le crédit de score passe par `$runCommandRaw` depuis #5742 : `increment` nu
+ * échouait sur un `engagementScore` valant `null` en base. Ces fabriques
+ * rendent donc la forme d'une réponse `findAndModify` — `{ value: { … } }` —
+ * et `scoreAfter` est le score APRÈS l'incrément, celui dont le service déduit
+ * les paliers franchis.
+ */
+function makeRawScore(scoreAfter = 0) {
+  return jest.fn().mockResolvedValue({ ok: 1, value: { engagementScore: scoreAfter } });
+}
+
 function makePrisma(overrides: Partial<{
   upsert: jest.Mock;
   create: jest.Mock;
@@ -45,6 +56,7 @@ function makePrisma(overrides: Partial<{
       findUnique: overrides.findUnique ?? jest.fn().mockResolvedValue({ systemLanguage: 'fr' }),
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({}),
     },
+    $runCommandRaw: makeRawScore(),
   } as unknown as PrismaClient;
 }
 
@@ -72,6 +84,7 @@ function makeStreakPrisma(streakState: {
       findUnique,
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({}),
     },
+    $runCommandRaw: makeRawScore(),
   } as unknown as PrismaClient;
 }
 
@@ -87,6 +100,7 @@ function makeLevelPrisma(overrides: Partial<{
   create: jest.Mock;
   userUpdate: jest.Mock;
   upsert: jest.Mock;
+  runCommandRaw: jest.Mock;
 }> = {}) {
   return {
     engagementCounter: {
@@ -102,6 +116,7 @@ function makeLevelPrisma(overrides: Partial<{
       findUnique: jest.fn().mockResolvedValue(null),
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({ engagementScore: 0 }),
     },
+    $runCommandRaw: overrides.runCommandRaw ?? makeRawScore(),
   } as unknown as PrismaClient;
 }
 
@@ -133,8 +148,11 @@ describe('EngagementService.recordActivity', () => {
 
     expect(upsert).toHaveBeenCalledWith({
       where: { userId_axisKey: { userId: 'user-1', axisKey: 'content.text_message' } },
-      create: { userId: 'user-1', axisKey: 'content.text_message', count: 1 },
-      update: { count: { increment: 1 } },
+      // `points` à côté de `count` depuis #5742 : deux colonnes, deux questions —
+      // `count` compte des ACTIONS et pilote les badges, `points` porte ce que
+      // l'axe crédite au score et pilote le niveau puis la frappe des Meeshes.
+      create: { userId: 'user-1', axisKey: 'content.text_message', count: 1, points: 3 },
+      update: { count: { increment: 1 }, points: { increment: 3 } },
       select: { count: true },
     });
   });
@@ -257,8 +275,8 @@ describe('EngagementService.recordConversationActivity', () => {
     });
     expect(upsert).toHaveBeenCalledWith({
       where: { userId_axisKey: { userId: 'user-1', axisKey: 'conversation.public' } },
-      create: { userId: 'user-1', axisKey: 'conversation.public', count: 1 },
-      update: { count: { increment: 1 } },
+      create: { userId: 'user-1', axisKey: 'conversation.public', count: 1, points: 5 },
+      update: { count: { increment: 1 }, points: { increment: 5 } },
       select: { count: true },
     });
   });
@@ -433,40 +451,44 @@ describe('EngagementService streak tracking (#5544)', () => {
 });
 
 describe('EngagementService level tracking (#5545)', () => {
-  it('adds the axis family weight to the engagement score via an atomic $inc', async () => {
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 3 });
-    const prisma = makeLevelPrisma({ userUpdate });
+  it('adds the axis family weight to the engagement score, null-safely (#5742)', async () => {
+    const runCommandRaw = makeRawScore(3);
+    const prisma = makeLevelPrisma({ runCommandRaw });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
     await svc.recordActivity('user-1', 'content.text_message'); // content family, weight 3
 
-    expect(userUpdate).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
-      data: { engagementScore: { increment: 3 } },
-      select: { engagementScore: true },
+    // Le pipeline `$ifNull` traite `null` ET l'absence comme zéro — c'est ce
+    // que l'`increment` nu ne savait pas faire, et qui a tué le score en
+    // production pendant trois mois.
+    expect(runCommandRaw).toHaveBeenCalledWith({
+      findAndModify: 'User',
+      query: { _id: { $oid: 'user-1' } },
+      update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, 3] } } }],
+      new: true,
+      fields: { engagementScore: 1 },
     });
   });
 
   it('weighs a tool axis at 1, distinct from a content axis at 3', async () => {
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 1 });
-    const prisma = makeLevelPrisma({ userUpdate });
+    const runCommandRaw = makeRawScore(1);
+    const prisma = makeLevelPrisma({ runCommandRaw });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
     await svc.recordActivity('user-1', 'tool.sticker');
 
-    expect(userUpdate).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
-      data: { engagementScore: { increment: 1 } },
-      select: { engagementScore: true },
-    });
+    const command = runCommandRaw.mock.calls[0][0] as {
+      update: Array<{ $set: { engagementScore: { $add: [unknown, number] } } }>;
+    };
+    expect(command.update[0].$set.engagementScore.$add[1]).toBe(1);
   });
 
   it('does not create a level milestone or notify when the increment crosses no level threshold', async () => {
     const create = jest.fn();
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 20 }); // 17 -> 20, no threshold in ]17,20]
-    const prisma = makeLevelPrisma({ create, userUpdate });
+    const runCommandRaw = makeRawScore(20); // 17 -> 20, no threshold in ]17,20]
+    const prisma = makeLevelPrisma({ create, runCommandRaw });
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -479,8 +501,8 @@ describe('EngagementService level tracking (#5545)', () => {
 
   it('awards LEVEL_UP and notifies exactly once when the increment lands on a threshold', async () => {
     const create = jest.fn().mockResolvedValue({});
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 10 }); // 5 -> 10, crosses threshold 10
-    const prisma = makeLevelPrisma({ create, userUpdate });
+    const runCommandRaw = makeRawScore(10); // 5 -> 10, crosses threshold 10
+    const prisma = makeLevelPrisma({ create, runCommandRaw });
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -504,8 +526,7 @@ describe('EngagementService level tracking (#5545)', () => {
 
   it('replays the same level threshold with zero notifications (anti-replay via unique constraint)', async () => {
     const create = jest.fn().mockRejectedValue(p2002Error());
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 10 });
-    const prisma = makeLevelPrisma({ create, userUpdate });
+    const prisma = makeLevelPrisma({ create, runCommandRaw: makeRawScore(10) });
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -518,8 +539,7 @@ describe('EngagementService level tracking (#5545)', () => {
 
   it('lands exactly on a threshold boundary and still crosses it (inclusive upper bound)', async () => {
     const create = jest.fn().mockResolvedValue({});
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 50 }); // 45 -> 50, crosses 50
-    const prisma = makeLevelPrisma({ create, userUpdate });
+    const prisma = makeLevelPrisma({ create, runCommandRaw: makeRawScore(50) }); // 45 -> 50, crosses 50
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 

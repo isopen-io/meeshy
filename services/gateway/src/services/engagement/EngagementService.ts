@@ -72,8 +72,8 @@ export class EngagementService {
   async recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void> {
     const counter = await this.prisma.engagementCounter.upsert({
       where: { userId_axisKey: { userId, axisKey } },
-      create: { userId, axisKey, count: 1 },
-      update: { count: { increment: 1 } },
+      create: { userId, axisKey, count: 1, points: ENGAGEMENT_AXIS_WEIGHTS[axisKey] },
+      update: { count: { increment: 1 }, points: { increment: ENGAGEMENT_AXIS_WEIGHTS[axisKey] } },
       select: { count: true },
     });
 
@@ -364,20 +364,50 @@ export class EngagementService {
    * Ajoute le poids de `axisKey` (`ENGAGEMENT_AXIS_WEIGHTS`) au score agrégé
    * `User.engagementScore` et notifie chaque palier `LEVEL_THRESHOLDS`
    * franchi par CET incrément précis — même mécanique que le compteur d'axe
-   * (§ 5, § 7). `$inc` atomique : un `User` créé avant cette migration a le
-   * champ ABSENT (pas à zéro), et Mongo traite `$inc` sur un champ absent
-   * comme un départ à zéro, ce qui est déjà le comportement voulu — aucun
-   * repli `?? 0` n'est nécessaire ici, à la différence d'`updateStreak`.
+   * (§ 5, § 7).
+   *
+   * ## Pourquoi une commande brute et non `increment` (#5742)
+   *
+   * La version précédente écrivait par `{ increment: weight }`, en s'appuyant
+   * sur ce doc-comment : « un `User` créé avant cette migration a le champ
+   * ABSENT (pas à zéro), et Mongo traite `$inc` sur un champ absent comme un
+   * départ à zéro ». L'affirmation est JUSTE pour un champ absent, et le champ
+   * n'était pas absent — il était `null`. Vérifié contre Mongo 8 :
+   *
+   *     champ ABSENT + $inc  ->  { s: 3 }
+   *     champ NULL   + $inc  ->  ERREUR « Cannot apply $inc to a value of
+   *                              non-numeric type »
+   *
+   * Mesuré en production le 2026-09-08 : `engagementScore` valait `null` sur
+   * les 9 comptes ayant une activité, la somme pondérée de leurs compteurs
+   * allant de 8 à 140. Chaque crédit échouait, en silence — cet appel est le
+   * DERNIER de `recordActivity`, donc compteurs, badges, succès et série
+   * étaient déjà commités quand il rejetait. Aucune ligne d'erreur, trois mois
+   * de score mort, et un écran « Progression » annonçant « Niveau 0 · 0 point »
+   * à un compte qui avait produit 140 points.
+   *
+   * Le pipeline d'agrégation `$ifNull` traite `null` ET l'absence comme zéro,
+   * en UNE écriture atomique — strictement mieux qu'une normalisation suivie
+   * d'un `$inc`, qui en demanderait deux. `findAndModify` rend en prime la
+   * valeur NEUVE, nécessaire pour savoir quels paliers cet incrément franchit.
+   *
+   * Prisma ne sait pas exprimer une mise à jour par pipeline : d'où
+   * `$runCommandRaw`, idiome déjà employé dans le dépôt (`routes/posts/nearby.ts`).
    */
   private async updateEngagementScore(userId: string, axisKey: EngagementAxisKey): Promise<void> {
     const weight = ENGAGEMENT_AXIS_WEIGHTS[axisKey];
-    const user = await this.prisma.user.update({
-      where: { id: userId },
-      data: { engagementScore: { increment: weight } },
-      select: { engagementScore: true },
-    });
+    const result = (await this.prisma.$runCommandRaw({
+      findAndModify: 'User',
+      query: { _id: { $oid: userId } },
+      update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, weight] } } }],
+      new: true,
+      fields: { engagementScore: 1 },
+    } as never)) as unknown as { value?: { engagementScore?: number } | null };
 
-    const newScore = user.engagementScore;
+    const newScore = result?.value?.engagementScore;
+    // Compte introuvable (supprimé entre l'activité et ce crédit) : rien à
+    // notifier, et surtout pas un palier calculé sur `undefined`.
+    if (typeof newScore !== 'number') return;
     const previousScore = newScore - weight;
     const crossedThresholds = LEVEL_THRESHOLDS.filter(
       (threshold) => threshold > previousScore && threshold <= newScore,

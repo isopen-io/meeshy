@@ -4540,6 +4540,20 @@ model EngagementCounter {
   /// `EngagementAxisKey` (@meeshy/shared/types/engagement).
   axisKey   String
   count     Int      @default(0)
+  /// Les POINTS que cet axe a crédités au score agrégé — distincts de `count`,
+  /// qui compte des ACTIONS (#5742, #5749).
+  ///
+  /// Deux colonnes parce que deux questions : `count` pilote les BADGES
+  /// (« cinquante messages vocaux » veut dire cinquante, quel que soit l'élan
+  /// du jour), `points` pilote le SCORE, le niveau et la frappe des Meeshes.
+  /// Les confondre ferait obtenir ses badges cinq fois plus vite à qui joue
+  /// avec un multiplicateur ×5, ce qui viderait toute comparaison entre
+  /// comptes de son sens.
+  ///
+  /// L'invariant tenu par le service est `User.engagementScore == Σ(points)`.
+  /// Il remplace `Σ(count × poids)`, que l'accélérateur d'élan (#5749) rendra
+  /// faux dès qu'un point sera crédité à un facteur autre que 1.
+  points    Int      @default(0)
   updatedAt DateTime @updatedAt
 
   @@unique([userId, axisKey])
