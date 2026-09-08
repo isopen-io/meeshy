@@ -34,6 +34,25 @@
 // Les deux sens ensemble ont un effet de bord voulu : un `bun.lock` commité
 // SANS l'arbre de fichiers qu'il décrit (ou l'inverse) rougit. Le lock et le
 // disque ne peuvent plus diverger sur un clone propre sans que la CI le dise.
+//
+// POURQUOI LE CHAMP `version` D'UN WORKSPACE N'EST PLUS COMPARÉ [issue #5740]
+//
+// Il l'a été, et c'est ce qui a rendu le Quality gate rouge sur `main` à
+// chaque commit `chore(release): version packages [skip ci]` (changesets bump
+// les manifestes, jamais `bun.lock`). Mesuré avant de trancher : ni
+// `bun install --ignore-scripts` ni `bun install --force --lockfile-only` ne
+// réécrivent ce champ pour un paquet de workspace LOCAL — bun ne le traite
+// simplement pas comme une donnée qu'un `install` rafraîchit. L'option
+// « faire committer bun.lock par le processus de release » n'a donc pas de
+// commande qui la rende vraie.
+// Et la comparaison ne protégeait rien : `version` d'un workspace n'est
+// référencé par AUCUNE autre entrée du lock (les dépendances internes
+// résolvent en `workspace:*`, jamais par numéro), donc rien ne peut résoudre
+// différemment selon sa valeur. Ce que la comparaison gardait, c'était du
+// bruit de CI répété à chaque release, pas un invariant de résolution.
+// `name`, lui, reste comparé : il compose `resolutionKeyFor` plus bas et une
+// divergence dirait un workspace mal apparié — un fait de résolution, pas
+// seulement de métadonnée.
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -240,9 +259,13 @@ const pairedWorkspaces = (world) => {
     .map(({ directory, document }) => ({ directory, document, locked: locked[directory] }));
 };
 
+// `version` en est exclu : voir « POURQUOI LE CHAMP version D'UN WORKSPACE
+// N'EST PLUS COMPARÉ » en tête de fichier (#5740). `name`, lui, est comparé —
+// il compose `resolutionKeyFor` plus bas, une divergence est un fait de
+// résolution.
 const lockRepeatsTheIdentityOfEachManifest = (world) =>
   pairedWorkspaces(world).flatMap(({ directory, document, locked }) =>
-    ['name', 'version'].flatMap((field) =>
+    ['name'].flatMap((field) =>
       document[field] === locked[field] ||
       document[field] === undefined ||
       locked[field] === undefined
@@ -428,13 +451,6 @@ const MUTATIONS = [
     'bun.lock déclare un workspace absent du graphe sur disque',
   ],
   [
-    'une version de manifeste que le lock ne suit pas',
-    (world) => {
-      world.lock.workspaces['apps/web'].version = '0.0.0-sonde';
-    },
-    'version : manifeste=',
-  ],
-  [
     'une portée de manifeste que le lock ne suit pas',
     (world) => {
       world.manifests.find(({ directory }) => directory === 'apps/web').document.dependencies[
@@ -494,6 +510,21 @@ const MUTATIONS = [
   ],
 ];
 
+// Le pendant positif de MUTATIONS : une divergence que ce garde doit TOLÉRER.
+// Sans ce témoin, rien n'empêche une réécriture future de
+// `lockRepeatsTheIdentityOfEachManifest` de réintroduire `version` en
+// silence — #5740 redeviendrait rouge à chaque `chore(release)` sans qu'aucun
+// self-test ne le voie venir.
+const TOLERATED_MUTATIONS = [
+  [
+    'une version de manifeste que le lock ne suit pas (#5740 — aucune conséquence de résolution)',
+    (world) => {
+      world.manifests.find(({ directory }) => directory === 'apps/web').document.version =
+        '999.0.0-sonde';
+    },
+  ],
+];
+
 const selfTest = (world) => {
   const blind = MUTATIONS.filter(
     ([, apply, expected]) =>
@@ -502,11 +533,19 @@ const selfTest = (world) => {
   blind.forEach(([title, , expected]) =>
     console.error(`AVEUGLE : « ${title} » n'a produit aucun échec contenant « ${expected} »`),
   );
-  if (blind.length > 0) {
-    console.error(`\n${blind.length}/${MUTATIONS.length} mutations passent sous le garde.`);
+
+  const overzealous = TOLERATED_MUTATIONS.filter(([, apply]) => inspect(mutate(world, apply)).length > 0);
+  overzealous.forEach(([title]) =>
+    console.error(`TROP STRICT : « ${title} » aurait dû rester silencieuse`),
+  );
+
+  const failing = blind.length + overzealous.length;
+  const total = MUTATIONS.length + TOLERATED_MUTATIONS.length;
+  if (failing > 0) {
+    console.error(`\n${failing}/${total} sondes échouent.`);
     return 1;
   }
-  console.log(`self-test : ${MUTATIONS.length}/${MUTATIONS.length} mutations détectées.`);
+  console.log(`self-test : ${total}/${total} sondes correctes (${MUTATIONS.length} détectées, ${TOLERATED_MUTATIONS.length} tolérées).`);
   return 0;
 };
 
