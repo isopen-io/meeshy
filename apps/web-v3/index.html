@@ -21,19 +21,14 @@
       demarrage a froid, c'est-a-dire exactement le cas de la 3G rurale, ou
       l'application met plusieurs secondes a arriver. Il est INLINE parce
       qu'une requete de plus le rendrait inutile.
+
+      Son texte n'est PAS ici : le greffon `meeshy-inline-scheme-bootstrap`
+      (vite.config.ts) remplace le marqueur ci-dessous par
+      `INLINE_SCHEME_BOOTSTRAP` (src/lib/inline-scheme-bootstrap.js), la MÊME
+      constante que lit scripts/prerender-institutional.tsx et qu'importe
+      src/lib/scheme.ts — une seule définition, trois lecteurs (#5588).
     -->
-    <script>
-      (function () {
-        try {
-          var chosen = localStorage.getItem('meeshy.scheme');
-          var light = chosen ? chosen === 'light' : window.matchMedia('(prefers-color-scheme: light)').matches;
-          document.documentElement.classList.toggle('light', light);
-          document.documentElement.classList.toggle('dark', !light);
-        } catch (e) {
-          /* Mode privé, stockage refusé : le schema sombre du HTML reste. */
-        }
-      })();
-    </script>
+    <script>/*@INLINE_SCHEME_BOOTSTRAP@*/</script>
   </head>
   <body>
     <div id="root"></div>

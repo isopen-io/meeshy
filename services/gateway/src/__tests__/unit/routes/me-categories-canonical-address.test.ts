@@ -287,29 +287,32 @@ describe('Le point de montage — routes/index.ts (#4359)', () => {
     expect(categoriesEntry.module).toBe(meCategoriesRoutes);
   });
 
-  it('ROUTE_TABLE compte désormais 63 entrées (62 + `social-events`, #4150)', () => {
-    // Ce compte est SIGNALÉ à l'intégrateur, jamais régénéré ici :
-    // `route-manifest.json` / `packages/shared/api/endpoints.ts` sont des
-    // artefacts DÉRIVÉS, hors territoire de #4359 comme de #4349 — et
-    // les DEUX ont été régénérés par CE lot (#4348), qui n'est donc pas dans
-    // ce cas d'exemption. Voir `route-registration-table.test.ts` pour le
-    // détail complet des paliers successifs (57→…→62) — ce fichier-ci n'en
-    // garde qu'une COPIE ponctuelle, propre à son propre récit d'adjacence
-    // `me-permissions`/`me-categories`.
-    //
-    // 62 depuis #3734 (`admin-share-links`). Et cette COPIE a un coût qui
-    // vient d'être payé : le lot de #3734 a mis à jour le canary de
-    // `route-registration-table.test.ts` — le fichier que le commentaire
-    // ci-dessus désigne comme la référence — sans savoir que celui-ci en
-    // tenait un second. Les gates du lot, cadrés sur son territoire et ses
-    // voisins, ne pouvaient pas le voir ; seule la suite COMPLÈTE l'a
-    // rattrapé, et après la poussée.
-    //
-    // Deux témoins qui comptent la MÊME grandeur dans deux fichiers sont une
-    // jumelle : celui qu'on n'édite pas devient rouge, et il n'y a aucun
-    // moyen de le déduire de la ligne qu'on édite. Suivi à ouvrir — soit ce
-    // compte se lit depuis un site unique, soit cette assertion disparaît
-    // d'ici, son récit d'adjacence n'ayant pas besoin d'un TOTAL.
-    expect(ROUTE_TABLE.length).toBe(63);
-  });
+  /**
+   * LE TOTAL DE `ROUTE_TABLE` NE SE COMPTE PLUS ICI (#5671).
+   *
+   * Un `expect(ROUTE_TABLE.length).toBe(N)` vivait à cet endroit, COPIE de
+   * celui de `route-registration-table.test.ts` — qui porte le canary de
+   * référence et le journal complet des paliers (57→…). Le doc-comment de
+   * cette copie annonçait lui-même sa propre fin : « son récit d'adjacence
+   * n'ayant pas besoin d'un TOTAL ».
+   *
+   * Il a fallu la lui donner, parce que le coût s'est payé deux fois. Deux
+   * témoins qui comptent la MÊME grandeur dans deux fichiers sont une
+   * jumelle : celui qu'on n'édite pas devient rouge, et **il n'y a aucun
+   * moyen de le déduire de la ligne qu'on édite**. Un lot cadré sur son
+   * propre territoire — routes/me, sécurité, budget — ne peut pas voir le
+   * second site ; seule la suite COMPLÈTE du gateway le rattrape, après la
+   * poussée. C'est arrivé à #3734, puis de nouveau à #5670 — dont le lot a
+   * écrit, en remontant la copie de 63 à 64 : « le suivi reste ouvert tel
+   * quel ». C'est ce suivi que ce retrait solde.
+   *
+   * Ce que ce fichier garde est ce dont son récit a besoin, et rien de plus :
+   * l'ORDRE RELATIF de `me-categories` et `me-permissions` au même préfixe,
+   * vérifié juste au-dessus par `findIndex`. Cet ordre ne dépend d'aucun
+   * total, et il rougirait tout autant si l'entrée disparaissait.
+   *
+   * Ajouter une route au tableau ne fait donc plus rougir un test qu'un lot
+   * scopé à son territoire ne pouvait pas voir. Le compte a UN site :
+   * `route-registration-table.test.ts`.
+   */
 });

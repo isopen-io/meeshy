@@ -143,7 +143,20 @@ describe('ROUTE_TABLE (#4278)', () => {
     // AVANT régénération qu'une seule différence, `+ DELETE
     // /api/v1/admin/share-links/:id (module=registerAdminShareLinkRoutes)`,
     // soit exactement celle-là et aucune autre.
-    expect(ROUTE_TABLE.length).toBe(63);
+    //
+    // 63 → 64 le 2026-09-08 (#5547) : entrée `me-engagement`, l'adresse NEUVE
+    // `GET /api/v1/me/engagement` (écran « Progression » — compteurs, paliers
+    // et streak/niveau de l'utilisateur authentifié). Aucun alias, aucune
+    // route retirée ni renommée. Vérifié : le manifeste régénéré passe de 553
+    // à 554 routes, et le diff ne porte QUE cette entrée-là.
+    //
+    // 64 → 65 le 2026-09-08 (#3635) : entrée `me-terms`, les DEUX adresses
+    // NEUVES `GET`/`PUT /api/v1/me/terms` (re-consentement CGU versionné,
+    // même patron que `me-consents` : signal `upToDate` + action de
+    // ré-acceptation citant la version en vigueur). Aucun alias, aucune route
+    // retirée ni renommée. Vérifié : le manifeste régénéré passe de 554 à
+    // 556 routes, soit exactement ces deux-là et aucune autre.
+    expect(ROUTE_TABLE.length).toBe(65);
   });
 });
 

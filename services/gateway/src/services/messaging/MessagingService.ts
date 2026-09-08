@@ -16,6 +16,7 @@ import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
 import { queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
 import { EngagementService } from '../engagement/EngagementService';
+import { stickerFromMetadata } from '../stickers/messageSticker';
 import {
   admitMessageForward,
   describeForwardRefusal,
@@ -497,6 +498,7 @@ export class MessagingService {
         senderId: message.senderId,
         senderUserId: saved.sender?.userId ?? null,
         attachmentMimeTypes: (saved.attachments ?? []).map((att) => att.mimeType ?? ''),
+        hasSticker: Boolean(stickerFromMetadata(message.metadata)),
         content: message.content,
         messageType: message.messageType,
         replyToId: message.replyToId

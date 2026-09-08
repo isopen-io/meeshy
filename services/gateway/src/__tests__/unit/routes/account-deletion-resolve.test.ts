@@ -60,6 +60,9 @@ function buildApp(etat: EtatDemande | null) {
       findUnique: jest.fn(async () => ({ isActive: false })),
       update: jest.fn(async (a: unknown) => { ecritures.push({ user: a }); return {}; }),
     },
+    userSession: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
+    userVoiceModel: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
+    conversationShareLink: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
   };
 
   return { prisma, ecritures, ligne: () => ligne };
@@ -176,6 +179,20 @@ describe('POST … /resolve — les effets', () => {
     // suppression définitive était une promesse que rien ne tenait.
     expect(res.json().data.dataPurged).toBe(false);
     expect(res.json().data.status).toBe('COMPLETED');
+
+    await app.close();
+  });
+
+  it('purge les tables ISOLÉES (sessions, profil vocal, liens) en défense en profondeur (#3632)', async () => {
+    const { prisma } = buildApp({ status: 'GRACE_PERIOD_EXPIRED', tokenExpiresAt: dans(3600_000) });
+    const app = await monter(prisma);
+
+    const res = await app.inject({ method: 'POST', url: `${PREFIXE}/resolve`, payload: { token: JETON, action: 'purge' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u-1' } });
+    expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: 'u-1' } });
+    expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({ where: { createdBy: 'u-1' } });
 
     await app.close();
   });

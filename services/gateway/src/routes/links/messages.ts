@@ -7,6 +7,7 @@ import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { stickerFromMetadata } from '../../services/stickers/messageSticker';
 import { stripClientMessageId } from '../../socketio/utils/message-ack-shaping.js';
 import { broadcastLinkMessage } from '../../socketio/broadcastLinkMessage.js';
 import { runMessagePostSaveEffects } from '../../services/messaging/messagePostSaveEffects.js';
@@ -417,6 +418,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           // son `Participant.id`, exactement comme le fait `recompute()`.
           senderUserId: null,
           attachmentMimeTypes: [],
+          hasSticker: Boolean(stickerFromMetadata(message.metadata)),
           content: message.content,
           messageType: message.messageType,
           replyToId: message.replyToId

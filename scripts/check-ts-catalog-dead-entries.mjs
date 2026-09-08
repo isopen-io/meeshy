@@ -209,7 +209,23 @@ export const parseCatalogBlock = (blockLines) => {
 // par `packages/shared/api/ops-only-routes.ts` (jamais destinées à un
 // client), et `info` dont la route serveur elle-même a été retirée
 // (`route-registration.ts`, périmée et sans appelant mesuré).
-const BASELINE_DEAD_ENTRIES = 266;
+//
+// 266 → 267 (#5547) : `me.engagement` (`GET /me/engagement`, écran de
+// consultation « Progression ») — morte à la naissance PAR CONSTRUCTION,
+// même forme que `users.meReferralCode` (#3690) ci-dessus : cette issue
+// livre la route gateway (lecture des compteurs/paliers/streak, #5530) et
+// son exposition dans les catalogues générés ; l'appelant web-v3 (l'écran
+// « Progression ») est un travail d'écran séparé, pas encore ouvert — voir
+// le corps de la PR qui livre cette route pour le détail du périmètre
+// différé.
+//
+// 267 → 268 (#3635) : `me.terms` (`GET`/`PUT /me/terms`, signal + action de
+// re-consentement CGU versionné) — morte à la naissance PAR CONSTRUCTION,
+// même forme que `me.engagement` (#5547) ci-dessus : cette issue livre la
+// route gateway et son exposition dans les catalogues générés ; l'écran de
+// ré-acceptation (iOS/Android/web) qui l'appellera est un travail client à
+// part, ouvert séparément (#5716).
+const BASELINE_DEAD_ENTRIES = 268;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

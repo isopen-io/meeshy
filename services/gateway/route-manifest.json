@@ -21,7 +21,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 553,
+  "routeCount": 556,
   "routes": [
     {
       "method": "DELETE",
@@ -3017,6 +3017,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/me/engagement",
+      "module": "meEngagementRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/me/export",
       "module": "dataExportRoutes",
       "mountPrefix": "/api/v1/me",
@@ -3188,6 +3202,20 @@
       "path": "/api/v1/me/preferences/video",
       "module": "anonyme~9",
       "mountPrefix": "/api/v1/me/preferences/video",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/terms",
+      "module": "meTermsRoutes",
+      "mountPrefix": "/api/v1/me",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -7740,6 +7768,20 @@
       "path": "/api/v1/me/preferences/video",
       "module": "anonyme~9",
       "mountPrefix": "/api/v1/me/preferences/video",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/me/terms",
+      "module": "meTermsRoutes",
+      "mountPrefix": "/api/v1/me",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",

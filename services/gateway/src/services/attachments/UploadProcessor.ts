@@ -25,6 +25,7 @@ import {
 } from '../AttachmentEncryptionService';
 import { MetadataManager } from './MetadataManager';
 import { planVideoTranscode, buildVideoTranscodeArgs } from './video-transcode-plan.js';
+import { isExifStrippable, stripExifFromImageBuffer } from './ExifStrip.js';
 import { verifyDeclaredMimeType } from './ContentSignature.js';
 
 export interface FileToUpload {
@@ -352,7 +353,7 @@ export class UploadProcessor {
    * Sauvegarde physiquement un fichier avec permissions sécurisées
    * Pour les fichiers audio, applique automatiquement une amplification de +9dB
    */
-  async saveFile(buffer: Buffer, relativePath: string, mimeType?: string): Promise<void> {
+  async saveFile(buffer: Buffer, relativePath: string, mimeType?: string): Promise<{ size: number }> {
     const fullPath = path.join(this.uploadBasePath, relativePath);
     const directory = path.dirname(fullPath);
 
@@ -363,6 +364,16 @@ export class UploadProcessor {
     if (mimeType && mimeType.startsWith('audio/')) {
       logger.debug('Amplification audio avant sauvegarde');
       finalBuffer = await this.amplifyAudio(buffer, mimeType);
+    } else if (mimeType && isExifStrippable(mimeType)) {
+      // #3627 — EXIF/GPS retiré AVANT persistance : c'est ce fichier que
+      // `GET /attachments/:id` sert tel quel. `mimeType` absent (chemin
+      // chiffré, ligne 591 plus bas) saute cette branche sans y penser —
+      // le serveur ne peut pas lire un buffer E2EE en clair de toute façon.
+      try {
+        finalBuffer = await stripExifFromImageBuffer(buffer, mimeType);
+      } catch (error) {
+        logger.warn('EXIF strip failed, storing original bytes', error as Error);
+      }
     }
 
     await fs.writeFile(fullPath, finalBuffer);
@@ -372,6 +383,8 @@ export class UploadProcessor {
     } catch (error) {
       logger.error('Impossible de modifier les permissions du fichier', error as Error);
     }
+
+    return { size: finalBuffer.length };
   }
 
   /**
@@ -421,7 +434,7 @@ export class UploadProcessor {
     }
 
     const filePath = this.generateFilePath(userId, file.filename);
-    await this.saveFile(file.buffer, filePath, file.mimeType);
+    const saved = await this.saveFile(file.buffer, filePath, file.mimeType);
 
     const attachmentType = getAttachmentType(file.mimeType, file.filename);
     let metadata = await this.metadataManager.extractMetadata(
@@ -429,14 +442,14 @@ export class UploadProcessor {
       attachmentType,
       file.mimeType,
       providedMetadata,
-      file.size  // Passer la taille du fichier pour validation de cohérence
+      saved.size  // Passer la taille du fichier RÉELLEMENT écrit (EXIF/audio peuvent la changer)
     );
 
     // The stored representation may diverge from the upload after transcoding
     // (e.g. video → capped-resolution H.264 mp4). Everything persisted below
     // (URL, size, mime, dimensions) reads these, not the raw upload.
     let storedFilePath = filePath;
-    let storedFileSize = file.size;
+    let storedFileSize = saved.size;
     let storedMimeType = file.mimeType;
 
     let thumbnailPath: string | null = null;

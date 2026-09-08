@@ -24,10 +24,13 @@ class Settings:
         self.enable_audio_services = os.getenv("ENABLE_AUDIO_SERVICES", "true").lower() == "true"
         self.enable_voice_api = os.getenv("ENABLE_VOICE_API", "true").lower() == "true"
 
-        # Whisper configuration
-        self.whisper_model = os.getenv("WHISPER_MODEL", "distil-large-v3")
-        self.whisper_device = os.getenv("WHISPER_DEVICE", "auto")
-        self.whisper_compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "float16")
+        # Whisper configuration — seule source de vérité (#3666) ; TranscriptionService
+        # la consomme via get_settings(), il ne redéfinit plus ses propres défauts.
+        # Alignés sur ce qui tourne réellement en prod (int8 : float16 n'est pas
+        # supporté par ctranslate2 sur CPU) — changer ici, jamais dans le service.
+        self.whisper_model = os.getenv("WHISPER_MODEL", "large-v3")
+        self.whisper_device = os.getenv("WHISPER_DEVICE", "cpu")
+        self.whisper_compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
 
         # ═══════════════════════════════════════════════════════════════
         # TTS MODEL SELECTION
@@ -70,7 +73,6 @@ class Settings:
         
         # Configuration des ports
         self.fastapi_port = int(os.getenv("FASTAPI_PORT", "8000"))
-        self.grpc_port = int(os.getenv("GRPC_PORT", "50051"))
         self.zmq_port = int(os.getenv("ZMQ_PORT", "5555"))
         
         # Configuration base de données

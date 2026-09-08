@@ -9,11 +9,15 @@ import { logger } from '../utils/logger';
 import { AttachmentService } from './attachments';
 import { EmailService } from './EmailService';
 import { recomputeConversationLastMessageAt } from './messaging/messageRemovalEffects';
+import { anonymizeMessagesOfDeletedAccount } from './messaging/anonymizeDeletedAccountMessages';
 import { MediaService } from './MediaService';
 import { sweepPendingPostMedia } from './posts/sweepPendingPostMedia';
 import type { PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
 import { conversationMessageStatsService } from './ConversationMessageStatsService';
 import type { SessionRevoker } from './admin/user-management.service';
+import { purgeAccountIsolatedData } from './AccountPurgeService';
+import { purgeMediaOfDeletedAccount } from './purgeDeletedAccountMedia';
+import { cleanupExpiredSessions } from './SessionService';
 import {
   RECIPIENT_LANG_SELECT,
   recipientDateLocale,
@@ -700,6 +704,25 @@ export class MaintenanceService {
     } catch (error) {
       logger.error('❌ Erreur lors du nettoyage des données expirées:', error);
     }
+
+    // Invalider les `UserSession` dont l'échéance est dépassée (#5712) —
+    // `cleanupExpiredSessions` existait déjà (filtre `expiresAt`, motif
+    // `expired`) mais n'avait jusqu'ici AUCUN appelant de production. Mesuré :
+    // 140 lignes expirées depuis jusqu'à six mois restaient `isValid: true`,
+    // faussant toute lecture qui s'y fie (listing de sessions, `/auth/refresh`
+    // dont le régime `sid` s'arrête à `isValid`) sans jamais accorder d'accès
+    // — le chemin d'authentification filtre déjà `expiresAt` lui-même.
+    // Try/catch séparé, même raison que ses voisins ci-dessus : un Mongo
+    // indisponible sur CE balayage ne doit pas empêcher les deux précédents
+    // d'avoir déjà réussi.
+    try {
+      const invalidated = await cleanupExpiredSessions();
+      if (invalidated > 0) {
+        logger.info(`🧹 ${invalidated} sessions expirées invalidées (#5712)`);
+      }
+    } catch (error) {
+      logger.error('❌ Erreur lors de l\'invalidation des sessions expirées:', error);
+    }
   }
 
   /**
@@ -721,8 +744,66 @@ export class MaintenanceService {
   }
 
   /**
+   * Purge, à l'expiration AUTOMATIQUE de la période de grâce, les trois
+   * tables ISOLÉES d'un compte supprimé (#3632) — sessions, profil vocal,
+   * liens de partage créés. Ne dépend PAS d'un clic sur le lien « supprimer
+   * maintenant » du rappel hebdomadaire : la promesse publique (« après 30
+   * jours, suppression définitive ») est une échéance, pas une action que
+   * l'utilisateur doit encore déclencher lui-même.
+   *
+   * Best-effort, après l'écriture qui a déjà fait passer la ligne en
+   * `GRACE_PERIOD_EXPIRED` — un échec ici ne doit pas faire compter
+   * l'expiration elle-même comme ratée par l'appelant ; la prochaine passe
+   * horaire rejouera la purge (`deleteMany` est idempotent).
+   */
+  private async purgeIsolatedDataOfExpiredAccount(userId: string): Promise<void> {
+    try {
+      await purgeAccountIsolatedData(this.prisma, userId);
+    } catch (error) {
+      logger.warn(`⚠️ [DELETION] Isolated-data purge failed for expired account user=${userId}:`, error);
+    }
+  }
+
+  /**
+   * `privacy.json` promet, à la fin de la grâce : « les messages dans les
+   * conversations partagées sont anonymisés » — une exception NOMMÉE à
+   * « suppression définitive de toutes vos données personnelles », pas une
+   * omission. Après l'écriture, jamais avant, même raison que
+   * `revokeSessionsOfDeletedAccount` : la ligne `User` est déjà posée, et un
+   * échec ici ne doit pas être compté comme une expiration ratée par
+   * l'appelant. Détail : `services/messaging/anonymizeDeletedAccountMessages.ts`.
+   */
+  private async purgeMessagesOfDeletedAccount(userId: string): Promise<void> {
+    try {
+      await anonymizeMessagesOfDeletedAccount(this.prisma, userId);
+    } catch (error) {
+      logger.warn(`⚠️ [DELETION] Message anonymization failed for deleted account user=${userId}:`, error);
+    }
+  }
+
+  /**
+   * Les médias physiques du compte — `MessageAttachment`/`PostMedia` — la
+   * classe que ni #5688 (tables isolées, sans octets) ni #5689 (messages,
+   * lignes déjà anonymisées) ne couvraient. Exécuté APRÈS
+   * `purgeMessagesOfDeletedAccount` : les attachments des messages du compte
+   * sont déjà supprimés par #5689 à ce stade, ce balayage-ci couvre ce qui
+   * reste (attachments en attente, messages déjà `deletedAt` avant #5689,
+   * tout `PostMedia`). Best-effort, même raison que ses voisins ci-dessus.
+   * Détail : `services/purgeDeletedAccountMedia.ts`.
+   */
+  private async purgeMediaOfExpiredAccount(userId: string): Promise<void> {
+    try {
+      await purgeMediaOfDeletedAccount(this.prisma, this.attachmentService, this.mediaService, userId);
+    } catch (error) {
+      logger.warn(`⚠️ [DELETION] Media purge failed for deleted account user=${userId}:`, error);
+    }
+  }
+
+  /**
    * Traiter les demandes de suppression de compte :
-   * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED)
+   * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED),
+   *    révoquer les sessions, purger les données isolées (#3632), anonymiser
+   *    les messages (#5689) puis les médias (#5690) du compte
    * 2. Envoyer les rappels hebdomadaires pour les requests GRACE_PERIOD_EXPIRED
    */
   private async processAccountDeletionRequests(): Promise<void> {
@@ -753,6 +834,9 @@ export class MaintenanceService {
             ]);
             expiredCount++;
             await this.revokeSessionsOfDeletedAccount(req.userId);
+            await this.purgeIsolatedDataOfExpiredAccount(req.userId);
+            await this.purgeMessagesOfDeletedAccount(req.userId);
+            await this.purgeMediaOfExpiredAccount(req.userId);
           } catch (error) {
             logger.error(`❌ [DELETION] Failed to expire request=${req.id} for user=${req.userId}:`, error);
           }

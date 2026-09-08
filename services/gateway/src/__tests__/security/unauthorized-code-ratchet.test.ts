@@ -34,8 +34,19 @@ const FIXTURES = join(__dirname, 'fixtures', 'unauthorized-code');
  * comptés de `contacts-directory.ts`/`devices.ts` (aucune créance JWT). Le
  * défaut reste le choix juste pour ce sens ; relevé plutôt que d'inventer un
  * code spécifique qui ne nommerait rien de plus précis.
+ *
+ * 118 → 119 (#5547) : `GET /me/engagement` — même sens générique
+ * (« Authentication required »), même famille que `me/consents.ts` et
+ * `me/get-me.ts` juste au-dessus dans ce même répertoire. Relevé pour la même
+ * raison : inventer un code distinct ici ne nommerait rien de plus précis que
+ * ce que le défaut porte déjà.
+ *
+ * 119 → 121 (#3635) : `GET /me/terms` et `PUT /me/terms` — même sens
+ * générique (« Authentication required »), même famille que `me/consents.ts`
+ * juste au-dessus. Deux sites, pas un : les deux routes du fichier NEUF
+ * `me/terms.ts` reposent chacune sur le défaut.
  */
-const DETTE_MAXIMALE = 118;
+const DETTE_MAXIMALE = 121;
 
 describe('sendUnauthorized — cliquet de dette des sens non nommés', () => {
   it('le nombre de sites qui se reposent sur le défaut ne dépasse pas la dette mesurée', () => {

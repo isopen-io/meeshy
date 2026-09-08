@@ -167,7 +167,24 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // laissé `dev` rouge sur deux gates successifs (le cliquet de dette de types,
 // puis celui-ci, que le premier masquait), et corriger le premier seul aurait
 // déplacé le rouge sans débloquer la ligne. Voir #5617.
-const BASELINE_DEAD_ENTRIES = 249;
+//
+// 249 → 250 (#5547) : `MeEndpoint.engagement` (nouvelle route
+// `GET /me/engagement`, écran de consultation « Progression ») — morte à la
+// naissance PAR CONSTRUCTION, même cas que `meReferralCode` (#3690) et
+// `usersByUserIdBan` (#5528) ci-dessus : cette issue ne livre que la route
+// gateway (lecture des compteurs/paliers/streak, #5530) et son exposition
+// dans les catalogues générés. L'appelant Swift (l'écran « Progression »
+// iOS) est un travail client à part, pas encore ouvert — voir le corps de
+// la PR qui livre cette route pour le détail du périmètre différé.
+//
+// 250 → 251 (#3635) : `MeEndpoint.terms` (nouvelle route `GET /me/terms`,
+// signal + action de re-consentement CGU versionné) — morte à la naissance
+// PAR CONSTRUCTION, même cas que `meEngagement` (#5547) ci-dessus : cette
+// issue ne livre que la route gateway (`GET`/`PUT /me/terms`) et son
+// exposition dans les catalogues générés. L'écran de ré-acceptation
+// iOS/Android/Web qui l'appellera est un travail client à part, ouvert
+// séparément (#5716).
+const BASELINE_DEAD_ENTRIES = 251;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

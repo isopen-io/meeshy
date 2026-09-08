@@ -317,7 +317,15 @@ export function registerFileStreamRoute(fastify: FastifyInstance): void {
       // only async onSend hook — the proven-safe state every other route has.
       onSend: (request, reply, payload, done) => {
         reply.removeHeader('X-Frame-Options');
-        reply.header('Content-Security-Policy', "frame-ancestors *");
+        // #3627 — un SVG a déjà posé la CSP `sandbox` dans le handler (même
+        // garde que `GET /attachments/:attachmentId`) ; l'écraser ici par
+        // `frame-ancestors *` la neutraliserait pour TOUT le monde, y
+        // compris les navigateurs qui n'honorent que la dernière valeur de
+        // l'en-tête. Ce hook ne pose `frame-ancestors *` que pour tout ce
+        // qui n'est PAS un SVG.
+        if (reply.getHeader('Content-Type') !== 'image/svg+xml') {
+          reply.header('Content-Security-Policy', "frame-ancestors *");
+        }
         crossOriginMediaHeaders(request, reply, payload, done);
       }
     },
@@ -446,7 +454,21 @@ export function registerFileStreamRoute(fastify: FastifyInstance): void {
         reply.header('Content-Type', mimeType);
         reply.header('Content-Length', fileSize);
         reply.header('ETag', etag);
-        reply.header('Content-Disposition', 'inline');
+        // #3627 — même garde que `GET /attachments/:attachmentId` : un SVG
+        // peut porter du JavaScript et l'exécuterait dans l'origine de la
+        // passerelle s'il était servi `inline`. Cette route PAR CHEMIN sert
+        // les mêmes octets (c'est l'alias legacy non versionné, #4187) et
+        // n'avait jamais reçu cette garde — un fichier `.svg` uploadé
+        // légitimement (déclaré `image/svg+xml`, sans concept d'EXIF/binaire,
+        // voir `ContentSignature.verifyDeclaredMimeType`) restait servi
+        // inline par cette seule porte.
+        if (mimeType === 'image/svg+xml') {
+          reply.header('Content-Disposition', `attachment; filename="${sanitizeAsciiFilename(decodedPath.split('/').pop() || 'file.svg')}"`);
+          reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
+        } else {
+          reply.header('Content-Disposition', 'inline');
+        }
+        reply.header('X-Content-Type-Options', 'nosniff');
         reply.header('Cache-Control', cacheControl);
 
         const stream = createReadStream(filePath);

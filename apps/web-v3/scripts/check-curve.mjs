@@ -50,9 +50,22 @@ const DOWNSTREAM_FOCAL = `${ROOT}apps/web-v3/src/lib/reading-mode/metrics.ts`;
  * PARTIE 3 — la PERSPECTIVE du Fil (#5566, correction de revue : « Focal » et
  * « Script » rendaient des pixels identiques). `src/lib/reading-mode/perspective.ts`
  * dérive le variant `thread` de `focus-curve.ts`, exactement comme `lens/law.ts`
- * dérive le variant `list` ci-dessus.
+ * dérive le variant `list` ci-dessus. `THREAD_FOCUS_BAND_HYSTERESIS` (#5648)
+ * y est ajoutée : son aval n'est PAS `perspective.ts` (gelé, sans appelant de
+ * production) mais `reading-mode/election.ts` — la source amont reste
+ * `focus-curve.ts`, seul l'aval change.
  */
 const DOWNSTREAM_THREAD = `${ROOT}apps/web-v3/src/lib/reading-mode/perspective.ts`;
+const DOWNSTREAM_ELECTION = `${ROOT}apps/web-v3/src/lib/reading-mode/election.ts`;
+
+/**
+ * PARTIE 4 — L'ÉLECTION du Fil (#5648 : « Focal se distingue de Script par
+ * l'élection d'une rangée »). `FocalScrollPerspective.swift` porte les cotes
+ * de la carte teintée et les seuils d'armement de la magnificence — une
+ * SECONDE source Swift, distincte de `FocalMetrics.swift` (PARTIE 2) :
+ * `reading-mode/metrics.ts` et `reading-mode/election.ts` en sont l'aval.
+ */
+const UPSTREAM_PERSPECTIVE_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift`;
 
 const source = readFileSync(UPSTREAM, 'utf8');
 const derived = readFileSync(DOWNSTREAM, 'utf8');
@@ -60,6 +73,8 @@ const swift = readFileSync(UPSTREAM_SWIFT, 'utf8');
 const focalSwift = readFileSync(UPSTREAM_FOCAL_SWIFT, 'utf8');
 const focalDerived = readFileSync(DOWNSTREAM_FOCAL, 'utf8');
 const threadDerived = readFileSync(DOWNSTREAM_THREAD, 'utf8');
+const electionDerived = readFileSync(DOWNSTREAM_ELECTION, 'utf8');
+const perspectiveSwift = readFileSync(UPSTREAM_PERSPECTIVE_SWIFT, 'utf8');
 
 /** Lit `nom: 520` ou `nom = 520` — la source les écrit des deux façons. */
 const count = (text, name) => {
@@ -177,6 +192,16 @@ const FOCAL_MAPPINGS = [
   ['avatarSize', 'AVATAR_FRAME', 'cadre de pastille réservé (Focus.avatarSize)'],
   ['railWidth', 'QUOTE_RAIL_WIDTH', 'filet de citation (Quote.railWidth)'],
   ['lightOpacity', 'META_TEXT_OPACITY', 'opacité de la méta discrète (MetaText.lightOpacity)'],
+  // --- #5648 : la SCÈNE du fil (élection, carte, chips, tampon).
+  ['chipHeight', 'FOCUS_CHIP_HEIGHT', 'hauteur des chips de la bande (FocusStrip.chipHeight)'],
+  ['chipMinWidth', 'FOCUS_CHIP_MIN_WIDTH', 'largeur minimale des chips (FocusStrip.chipMinWidth)'],
+  ['chipInset', 'FOCUS_CHIP_INSET', 'débord horizontal des chips (FocusStrip.chipInset)'],
+  ['identityAvatarSize', 'IDENTITY_AVATAR_SIZE', "taille de l'avatar du chip d'identité (FocusStrip.identityAvatarSize)"],
+  ['identityChipHeight', 'IDENTITY_CHIP_HEIGHT', "hauteur du chip d'identité (FocusStrip.identityChipHeight)"],
+  ['identityNameSize', 'IDENTITY_NAME_SIZE', "taille du nom dans le chip d'identité (FocusStrip.identityNameSize)"],
+  ['flagLimitPlain', 'FLAG_LIMIT_PLAIN', 'plafond de drapeaux sur une rangée ordinaire (FocusStrip.flagLimitPlain)'],
+  ['flagLimitMagnified', 'FLAG_LIMIT_MAGNIFIED', 'plafond de drapeaux sur la bande de la rangée élue (FocusStrip.flagLimitMagnified)'],
+  ['fadeDurationMs', 'REVEAL_FADE_DURATION_MS', 'durée du fondu du révélé (Pill.fadeDurationMs)'],
 ];
 
 for (const [swiftName, downstreamName, what] of FOCAL_MAPPINGS) {
@@ -185,6 +210,25 @@ for (const [swiftName, downstreamName, what] of FOCAL_MAPPINGS) {
   if (expectedFocal === null) failures.push(`${what} : « ${swiftName} » est introuvable dans FocalMetrics.swift`);
   else if (actualFocal === null) failures.push(`${what} : « ${downstreamName} » est introuvable dans reading-mode/metrics.ts`);
   else if (expectedFocal !== actualFocal) failures.push(`${what} : Swift ${expectedFocal}, dérivée ${actualFocal}`);
+}
+
+/**
+ * `Scene.restDelay` / `.flattenDuration` (#5648) sont en SECONDES côté
+ * Swift — `SCENE_REST_DELAY_MS`/`SCENE_FLATTEN_DURATION_MS` les portent en
+ * MILLISECONDES (`×1000`), même dispositif que `TEXT_INDENT` ci-dessus :
+ * une FORMULE, revérifiée explicitement plutôt que recopiée en dur.
+ */
+const SCENE_MS_MAPPINGS = [
+  ['restDelay', 'SCENE_REST_DELAY_MS', 'délai de repos avant aplatissement (Scene.restDelay)'],
+  ['flattenDuration', 'SCENE_FLATTEN_DURATION_MS', "durée de l'aplatissement (Scene.flattenDuration)"],
+];
+for (const [swiftName, downstreamName, what] of SCENE_MS_MAPPINGS) {
+  const expectedSeconds = focalNumber(swiftName);
+  const actualMs = count(focalDerived, downstreamName);
+  if (expectedSeconds === null) failures.push(`${what} : « ${swiftName} » introuvable dans FocalMetrics.swift`);
+  else if (actualMs === null) failures.push(`${what} : « ${downstreamName} » introuvable dans reading-mode/metrics.ts`);
+  else if (Math.round(expectedSeconds * 1000) !== actualMs)
+    failures.push(`${what} : Swift ${expectedSeconds}s (×1000 = ${expectedSeconds * 1000}), dérivée ${actualMs}`);
 }
 
 /**
@@ -260,6 +304,68 @@ for (const [upstreamName, downstreamName, what] of THREAD_MAPPINGS) {
  * bun compare des SORTIES.
  */
 
+/**
+ * `THREAD_FOCUS_BAND_HYSTERESIS` (#5648) — l'AMONT reste `focus-curve.ts`
+ * (comme `THREAD_FOCUS_BAND_OFFSET` juste au-dessus), mais son AVAL a changé
+ * de fichier : `perspective.ts` est GELÉ (sans appelant de production
+ * depuis #5648), l'hystérésis vit désormais dans `reading-mode/election.ts`.
+ */
+{
+  const expectedHysteresis = count(source, 'THREAD_FOCUS_BAND_HYSTERESIS');
+  const actualHysteresis = count(electionDerived, 'THREAD_FOCUS_BAND_HYSTERESIS');
+  if (expectedHysteresis === null) failures.push('hystérésis de la bande de focus du fil : « THREAD_FOCUS_BAND_HYSTERESIS » introuvable dans focus-curve.ts');
+  else if (actualHysteresis === null) failures.push('hystérésis de la bande de focus du fil : « THREAD_FOCUS_BAND_HYSTERESIS » introuvable dans reading-mode/election.ts');
+  else if (expectedHysteresis !== actualHysteresis) failures.push(`hystérésis de la bande de focus du fil : amont ${expectedHysteresis}, dérivée ${actualHysteresis}`);
+}
+
+/**
+ * PARTIE 4 — `FocalScrollPerspective.swift` → `reading-mode/metrics.ts` /
+ * `reading-mode/election.ts` (#5648). SECONDE source Swift du Fil, distincte
+ * de `FocalMetrics.swift` (PARTIE 2) : les seuils d'armement de la
+ * magnificence et les teintes de la carte/des chips.
+ */
+const perspectiveNumber = (name) => {
+  const m = new RegExp(`\\b${name}\\s*(?::\\s*\\w+\\s*)?=\\s*(-?[0-9.]+)`).exec(perspectiveSwift);
+  return m === null ? null : Number(m[1]);
+};
+
+const PERSPECTIVE_MAPPINGS = [
+  ['sustainedScrollMs', 'SUSTAINED_SCROLL_MS', 'durée soutenue avant armement (FocalMagnificationLaw.sustainedScrollMs)'],
+  ['highVelocityThreshold', 'HIGH_VELOCITY_THRESHOLD', "seuil de vitesse d'armement immédiat (FocalMagnificationLaw.highVelocityThreshold)"],
+  ['focusCardCornerRadius', 'FOCUS_CARD_RADIUS', 'rayon de la carte de focus (focusCardCornerRadius)'],
+  ['focusCardHorizontalInset', 'FOCUS_CARD_HORIZONTAL_INSET', 'débord horizontal de la carte (focusCardHorizontalInset)'],
+  ['focusCardFillOpacityDark', 'FOCUS_CARD_FILL_DARK', 'teinte de la carte, schéma sombre (focusCardFillOpacityDark)'],
+  ['focusCardFillOpacityLight', 'FOCUS_CARD_FILL_LIGHT', 'teinte de la carte, schéma clair (focusCardFillOpacityLight)'],
+];
+
+for (const [swiftName, downstreamName, what] of PERSPECTIVE_MAPPINGS) {
+  const expectedPerspective = perspectiveNumber(swiftName);
+  const actualPerspective = count(focalDerived, downstreamName);
+  if (expectedPerspective === null) failures.push(`${what} : « ${swiftName} » introuvable dans FocalScrollPerspective.swift`);
+  else if (actualPerspective === null) failures.push(`${what} : « ${downstreamName} » introuvable dans reading-mode/metrics.ts`);
+  else if (expectedPerspective !== actualPerspective) failures.push(`${what} : Swift ${expectedPerspective}, dérivée ${actualPerspective}`);
+}
+
+/**
+ * `focusChipFillOpacity(isDark:isActive:)` (:206-213) — QUATRE `return` dans
+ * un `switch`, pas des littéraux nommés : une regex dédiée par cas plutôt
+ * que le lecteur générique, qui ne sait lire qu'un `nom = valeur`.
+ */
+const CHIP_FILL_CASES = [
+  ['\\(true, false\\)', 'FOCUS_CHIP_FILL_DARK', 'teinte du chip, sombre/inactif (case (true, false))'],
+  ['\\(false, false\\)', 'FOCUS_CHIP_FILL_LIGHT', 'teinte du chip, clair/inactif (case (false, false))'],
+  ['\\(true, true\\)', 'FOCUS_CHIP_FILL_ACTIVE_DARK', 'teinte du chip, sombre/actif (case (true, true))'],
+  ['\\(false, true\\)', 'FOCUS_CHIP_FILL_ACTIVE_LIGHT', 'teinte du chip, clair/actif (case (false, true))'],
+];
+for (const [casePattern, downstreamName, what] of CHIP_FILL_CASES) {
+  const m = new RegExp(`case ${casePattern}:\\s*return\\s*(-?[0-9.]+)`).exec(perspectiveSwift);
+  const expectedCase = m === null ? null : Number(m[1]);
+  const actualCase = count(focalDerived, downstreamName);
+  if (expectedCase === null) failures.push(`${what} : introuvable dans FocalScrollPerspective.swift`);
+  else if (actualCase === null) failures.push(`${what} : « ${downstreamName} » introuvable dans reading-mode/metrics.ts`);
+  else if (expectedCase !== actualCase) failures.push(`${what} : Swift ${expectedCase}, dérivée ${actualCase}`);
+}
+
 if (failures.length > 0) {
   console.error('\n  La loi de la Lentille a DÉRIVÉ de packages/shared/utils/focus-curve.ts :\n');
   for (const e of failures) console.error(`    · ${e}`);
@@ -275,7 +381,9 @@ console.log(
     ` (${MAPPINGS.length} constantes partagées, ${SWIFT_MAPPINGS.length} cotes iOS ;` +
     ' les valeurs sont gardées par law.test.ts).' +
     `\n  La rangée plate du Fil est conforme à FocalMetrics.swift` +
-    ` (${FOCAL_MAPPINGS.length + 1} cotes).` +
+    ` (${FOCAL_MAPPINGS.length + 1 + SCENE_MS_MAPPINGS.length} cotes).` +
     `\n  La perspective du Fil est conforme au variant thread de focus-curve.ts` +
-    ` (${THREAD_MAPPINGS.length + 1} constantes ; les valeurs sont gardées par perspective.test.ts).`,
+    ` (${THREAD_MAPPINGS.length + 2} constantes ; les valeurs sont gardées par perspective.test.ts).` +
+    `\n  L'élection du Fil est conforme à FocalScrollPerspective.swift` +
+    ` (${PERSPECTIVE_MAPPINGS.length + CHIP_FILL_CASES.length} cotes ; les valeurs sont gardées par election.test.ts).`,
 );

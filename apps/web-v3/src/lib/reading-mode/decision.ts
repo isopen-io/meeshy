@@ -8,6 +8,8 @@ import {
 import type { ConversationReadingMode, ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 import type { ConversationType } from '@meeshy/shared/types/conversation';
 
+import { apiConfig } from '@/lib/api/config';
+
 /**
  * LA LOI DE CHOIX DU FIL — le domicile de la décision reste
  * `packages/shared/utils/reading-modes.ts` (D-14) : ce fichier ne réécrit
@@ -44,14 +46,23 @@ export type ThreadCapabilities = {
  * « 0 aujourd'hui » au menu. `riverEligibilityReason` reste servie dans tous
  * les cas (drapeau Rivière off compris) : c'est elle qui alimente le libellé
  * grisé de `catalog.ts`.
+ *
+ * `readingModesEnabled` — LE PARAMÈTRE DE CONSTRUCTION (D-20,
+ * `VITE_READING_MODES`, miroir `MEESHY_FLAG_READING_MODES`). Défaut
+ * `apiConfig.readingModesEnabled` quand l'appelant ne le précise pas — un
+ * témoin peut l'injecter, l'écran ne le fait jamais. Drapeau éteint ⇒
+ * `resolveCapabilities` rend `['bubbles']`, hors `THREAD_RENDERABLE_MODES` :
+ * `availableModes` ressort donc VIDE, jamais `['focal', 'script']` comme si
+ * le drapeau était toujours ON.
  */
 export function threadCapabilities(input: {
   readonly isAnonymous: boolean;
   readonly conversationType: ConversationType;
+  readonly readingModesEnabled?: boolean;
 }): ThreadCapabilities {
   const full = resolveCapabilities({
     identity: { isAnonymous: input.isAnonymous },
-    isFlagEnabled: true,
+    isFlagEnabled: input.readingModesEnabled ?? apiConfig.readingModesEnabled,
     conversationType: input.conversationType,
     activeParticipantCount: null,
   });
@@ -68,6 +79,8 @@ export type ResolveThreadModeInput = {
   readonly sticky: ReadingModePreference;
   readonly isAnonymous: boolean;
   readonly conversationType: ConversationType;
+  /** Défaut `apiConfig.readingModesEnabled` — voir doc-comment de `threadCapabilities`. */
+  readonly readingModesEnabled?: boolean;
 };
 
 /** Les deux modes que la RANGÉE PLATE rend ; `bubbles` garde la peau bulle. */
@@ -85,9 +98,20 @@ export type ThreadModeDecision = {
  * clampe sur `focal`/`clamped-unavailable` (« bubbles » n'appartient à AUCUN
  * catalogue drapeau-on). La loi reste INTACTE — cette règle vit à la
  * CONSOMMATION, pas dans `resolveOrchestratorDecision`.
+ *
+ * ORDRE (D-20, miroir `ReadingModeOrchestrator.resolveOrchestratorDecision`,
+ * table de priorité Swift — branche 1 AVANT branche 2) : le drapeau éteint
+ * PRIME sur le choix collant, y compris `sticky === 'bulles'`. La loi partagée
+ * le garantit déjà (`isFlagEnabled: false` court-circuite AVANT
+ * `stickyChoice`), donc `lawDecision.mode === 'bubbles'` ne peut provenir que
+ * de CETTE branche — un `bulles` collant drapeau ON est toujours CLAMPÉ par
+ * la loi (`'bubbles'` n'appartient à aucun catalogue drapeau-on) avant
+ * d'atteindre ce point. Tester `lawDecision.mode` plutôt que relire le
+ * drapeau une seconde fois évite qu'une re-vérification diverge de la loi.
  */
 export function resolveThreadMode(input: ResolveThreadModeInput): ThreadModeDecision {
-  const capabilities = threadCapabilities(input);
+  const readingModesEnabled = input.readingModesEnabled ?? apiConfig.readingModesEnabled;
+  const capabilities = threadCapabilities({ ...input, readingModesEnabled });
   const orchestratorCapabilities: ReadingModeCapabilities = {
     availableModes: capabilities.availableModes,
     riverEligible: capabilities.riverEligibilityReason.riverReason === 'eligible',
@@ -100,8 +124,12 @@ export function resolveThreadMode(input: ResolveThreadModeInput): ThreadModeDeci
     now: input.now,
     stickyChoice: input.sticky,
     capabilities: orchestratorCapabilities,
-    isFlagEnabled: true,
+    isFlagEnabled: readingModesEnabled,
   });
+
+  if (lawDecision.mode === 'bubbles') {
+    return { mode: 'bubbles', reason: lawDecision.reason };
+  }
 
   if (input.sticky === 'bulles') {
     return { mode: 'bubbles', reason: 'sticky' };
@@ -112,9 +140,12 @@ export function resolveThreadMode(input: ResolveThreadModeInput): ThreadModeDeci
   }
 
   /**
-   * INATTEIGNABLE par construction — drapeau toujours ON (D-7, donc jamais la
-   * branche `flag-disabled`, seule à produire `bubbles`) et catalogue de rendu
-   * réduit à `focal`/`script`, sur lequel la loi clampe elle-même. ÉCRIT
+   * Reste ATTEIGNABLE pour UNE raison désormais : un mode listé hors
+   * catalogue de rendu web (`riviere`/`resume` collant, ou 26+ non-lus qui
+   * élirait `summary`) — drapeau ON, catalogue de rendu réduit à
+   * `focal`/`script`, sur lequel la loi clampe elle-même. Le repli
+   * `focal`/`clamped-unavailable` reste juste pour CE cas ; le drapeau éteint
+   * ne l'atteint plus jamais (retenu par le premier `if` ci-dessus). ÉCRIT
    * plutôt que CASTÉ : le jour où `THREAD_RENDERABLE_MODES` s'élargit, c'est
    * cette ligne qu'on relit, là où un `as` aurait menti en silence.
    */

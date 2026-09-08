@@ -49,4 +49,80 @@ for (const scheme of ['dark', 'light']) {
   }
   await context.close();
 }
+
+/**
+ * LA SCÈNE DU FIL (#5648) — quatre captures dynamiques sur
+ * `/c/c-salon-riviere`, comparées à `targets/thread.focal.scene.*`,
+ * `thread.focal.timestamps.*`, `thread.script.*`. `page.clock.setFixedTime`
+ * ne fige QUE `Date` (les libellés « Aujourd'hui »/l'heure) — `performance.now()`
+ * continue de tourner en temps réel, c'est ce que la scène lit
+ * (`reading-mode/scene.ts`), donc le geste de défilement ci-dessous produit
+ * un armement et une élection réels.
+ */
+for (const scheme of ['dark', 'light']) {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    colorScheme: scheme === 'light' ? 'light' : 'dark',
+  });
+
+  // thread-focal-rest — au repos, avant tout geste.
+  {
+    const page = await context.newPage();
+    await page.clock.setFixedTime(INSTANT);
+    await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${OUTPUT}thread-focal-rest.${scheme}.png` });
+    console.log(`  thread-focal-rest · ${scheme}`);
+    await page.close();
+  }
+
+  // thread-focal-scene — après 4,2 s de `wheel` soutenu (< 4,5 s d'aplatissement).
+  {
+    const page = await context.newPage();
+    await page.clock.setFixedTime(INSTANT);
+    await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(300);
+    await page.locator('main').hover();
+    for (let i = 0; i < 42; i += 1) {
+      await page.mouse.wheel(0, -40);
+      await page.waitForTimeout(100);
+    }
+    await page.screenshot({ path: `${OUTPUT}thread-focal-scene.${scheme}.png` });
+    console.log(`  thread-focal-scene · ${scheme}`);
+    await page.close();
+  }
+
+  // thread-focal-reveal — 200 ms après le dernier `wheel` (heure/coches révélées).
+  {
+    const page = await context.newPage();
+    await page.clock.setFixedTime(INSTANT);
+    await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(300);
+    await page.locator('main').hover();
+    await page.mouse.wheel(0, -40);
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: `${OUTPUT}thread-focal-reveal.${scheme}.png` });
+    console.log(`  thread-focal-reveal · ${scheme}`);
+    await page.close();
+  }
+
+  // thread-script — le mode Script, densité uniforme, zéro élection.
+  {
+    const page = await context.newPage();
+    await page.clock.setFixedTime(INSTANT);
+    await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: /Mode de lecture/ }).click();
+    await page.waitForTimeout(150);
+    await page.getByRole('menuitemradio', { name: /Script/ }).click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${OUTPUT}thread-script.${scheme}.png` });
+    console.log(`  thread-script · ${scheme}`);
+    await page.close();
+  }
+
+  await context.close();
+}
+
 await browser.close();

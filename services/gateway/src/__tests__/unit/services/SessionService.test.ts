@@ -1029,6 +1029,28 @@ describe('SessionService', () => {
     });
 
     describe('extendSessionExpiry', () => {
+      it('refuse de prolonger une session déjà expirée', async () => {
+        // Le filtre porte désormais `expiresAt` : une session morte n'est plus
+        // trouvée, donc plus jamais ressuscitée (#5712).
+        mockPrisma.userSession.findFirst.mockResolvedValueOnce(null);
+
+        const result = await extendSessionExpiry('token-dune-session-morte', 30);
+
+        expect(result).toBe(false);
+        expect(mockPrisma.userSession.update).not.toHaveBeenCalled();
+      });
+
+      it('passe expiresAt au filtre de lecture', async () => {
+        mockPrisma.userSession.findFirst.mockResolvedValueOnce(null);
+        const avant = Date.now();
+
+        await extendSessionExpiry('un-token');
+
+        const where = mockPrisma.userSession.findFirst.mock.calls[0][0].where;
+        expect(where.expiresAt.gt).toBeInstanceOf(Date);
+        expect(where.expiresAt.gt.getTime()).toBeGreaterThanOrEqual(avant - 5_000);
+      });
+
       it('should extend session expiry by specified days', async () => {
         mockPrisma.userSession.findFirst.mockResolvedValueOnce(mockSession);
         mockPrisma.userSession.update.mockResolvedValueOnce({
@@ -1085,6 +1107,25 @@ describe('SessionService', () => {
         const result = await extendSessionExpiry('invalid-token');
 
         expect(result).toBe(false);
+      });
+
+      // #5712 — mesuré en production : 140 `UserSession` expirées depuis
+      // jusqu'à six mois restaient `isValid: true` (rien ne les invalidait),
+      // et cette méthode ne filtrait que sur `isValid` — une session morte
+      // depuis des mois se voyait donc PROLONGÉE et redevenait active. La
+      // fonction est aujourd'hui sans appelant de production (latent), mais
+      // exportée : le premier « remember me »/keep-alive qui l'appelle doit
+      // la trouver déjà fermée.
+      it('refuse de prolonger une session dont `expiresAt` est déjà dépassé', async () => {
+        mockPrisma.userSession.findFirst.mockResolvedValueOnce(null);
+
+        const result = await extendSessionExpiry(mockToken);
+
+        expect(result).toBe(false);
+        expect(mockPrisma.userSession.findFirst).toHaveBeenCalledWith({
+          where: { sessionToken: mockTokenHash, isValid: true, expiresAt: { gt: expect.any(Date) } },
+        });
+        expect(mockPrisma.userSession.update).not.toHaveBeenCalled();
       });
 
       it('should update lastActivityAt when extending', async () => {

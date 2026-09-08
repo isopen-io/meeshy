@@ -7,6 +7,12 @@
  * production. Ce script est donc la SOURCE de `parity.md` — il se rejoue, et le
  * jour où il rend une route absente du tableau, c'est le tableau qui a tort.
  *
+ * Les trois applications ne se lisent pas de la même façon, et c'est la raison
+ * du détour par `lib/v31-routes.mjs` : les deux premières suivent la convention
+ * Next.js (`page.tsx` / `route.ts`), la v3.1 déclare ses adresses à la main. Un
+ * énumérateur qui ne connaît qu'une convention ne dit pas « zéro route » — il
+ * ne dit rien, et son silence se lit comme un zéro.
+ *
  * Il énumère les DEUX legs, et pas seulement la v3 :
  *   apps/web        — le legacy, ce qui sert meeshy.me AUJOURD'HUI
  *   apps/web-old-version3 — l'ancienne refonte, ANNULÉE le 2026-09-07
@@ -18,6 +24,8 @@
  */
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { v31Routes } from './lib/v31-routes.mjs';
 
 const ROOT = new URL('../../..', import.meta.url).pathname;
 
@@ -54,7 +62,12 @@ function routes(app) {
 
 const legacy = routes('apps/web');
 const cancelled = routes('apps/web-old-version3');
-const v31 = routes('apps/web-v3');
+// La v3.1 n'a PAS la convention Next.js que `routes()` sait lire : ses adresses
+// sont écrites à la main dans `src/routes/route-table.tsx`, et ses cinq
+// documents institutionnels sont pré-rendus hors du routeur. `routes()` y
+// rendait donc `[]` — un silence que ce tableau a affiché comme un zéro
+// pendant tout le cadrage de #5492 (#5669).
+const v31 = v31Routes();
 
 const urls = new Set([...legacy, ...cancelled, ...v31].map((r) => r.url));
 const dans = (list, url) => list.some((r) => r.url === url);
@@ -75,7 +88,11 @@ if (process.argv.includes('--json')) {
 } else {
   console.log(`  apps/web         ${legacy.length} routes  (le legacy — sert meeshy.me)`);
   console.log(`  apps/web-old-version3  ${cancelled.length} routes  (l'ancienne refonte, ANNULÉE)`);
-  console.log(`  apps/web-v3      ${v31.length} routes  (la v3.1 — le chantier)`);
+  const ecrans = v31.filter((r) => r.kind === 'écran').length;
+  console.log(
+    `  apps/web-v3      ${v31.length} routes  (la v3.1 — le chantier : ` +
+      `${ecrans} écrans + ${v31.length - ecrans} documents pré-rendus)`,
+  );
   console.log(`  union            ${urls.size} adresses distinctes\n`);
   const orphans = [...urls].sort().filter((u) => dans(legacy, u) && !dans(cancelled, u));
   console.log(`  ${orphans.length} routes du LEGACY sans équivalent dans l'ancienne refonte —`);

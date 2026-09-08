@@ -603,6 +603,57 @@ describe('GET /attachments/file/*', () => {
     });
   });
 
+  describe('SVG served via the legacy path route forces download (#3627)', () => {
+    let app: FastifyInstance;
+    beforeAll(async () => {
+      mockStat.mockResolvedValue({ size: 128, mtimeMs: 1700000004000 });
+      app = await buildApp();
+    });
+    afterAll(async () => { await app.close(); });
+
+    it('forces download disposition instead of inline, mirroring GET /attachments/:attachmentId', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/image.svg',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-disposition']).toContain('attachment');
+      expect(res.headers['content-disposition']).not.toContain('inline');
+    });
+
+    it('sets a sandboxed Content-Security-Policy', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/image.svg',
+      });
+      expect(res.headers['content-security-policy']).toContain('sandbox');
+    });
+
+    it('sets X-Content-Type-Options: nosniff', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/image.svg',
+      });
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+    });
+
+    it('still sets Content-Disposition: inline for a non-SVG file', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/photo.jpg',
+      });
+      expect(res.headers['content-disposition']).toBe('inline');
+    });
+
+    it('sets X-Content-Type-Options: nosniff on non-SVG files too', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/photo.jpg',
+      });
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+    });
+  });
+
   describe('onSend hook removes X-Frame-Options', () => {
     let app: FastifyInstance;
     beforeAll(async () => {

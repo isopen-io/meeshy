@@ -8,6 +8,29 @@ import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
+import { INLINE_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
+
+/**
+ * `index.html` ne porte plus le TEXTE du script d'amorçage du schéma, mais un
+ * marqueur — voir son commentaire. Trois lecteurs (`index.html` via ce
+ * greffon, `scripts/prerender-institutional.tsx`, `src/lib/scheme.ts`) importent
+ * désormais la MÊME constante plutôt que de la recopier (#5588) : la clé et le
+ * script ne peuvent plus diverger entre eux.
+ */
+const SCHEME_BOOTSTRAP_MARKER = '/*@INLINE_SCHEME_BOOTSTRAP@*/';
+
+const inlineSchemeBootstrap = (): Plugin => ({
+  name: 'meeshy-inline-scheme-bootstrap',
+  transformIndexHtml(html) {
+    if (!html.includes(SCHEME_BOOTSTRAP_MARKER)) {
+      throw new Error(
+        `index.html ne porte plus le marqueur ${SCHEME_BOOTSTRAP_MARKER} : le script d'amorçage du ` +
+          "schéma ne serait plus injecté, et le premier rendu à froid basculerait de couleur (#5588).",
+      );
+    }
+    return html.replace(SCHEME_BOOTSTRAP_MARKER, INLINE_SCHEME_BOOTSTRAP);
+  },
+});
 
 /**
  * DEUX runtimes, UN code source.
@@ -99,6 +122,28 @@ if (declaredDataSource !== undefined && declaredDataSource !== 'fixtures') {
     `VITE_DATA_SOURCE=${declaredDataSource} : la source « passerelle » n'est pas encore câblée aux écrans ` +
       '(les routes lisent src/lib/api/fixtures.ts en direct). Construire avec cette valeur servirait les ' +
       'fixtures en silence. Retirer la variable, ou câbler les écrans sur apiConfig.source avant de la poser.',
+  );
+}
+
+/**
+ * LES MODES DE LECTURE DU FIL — PARAMÈTRE DE CONSTRUCTION, jamais un toggle
+ * utilisateur ni un programme bêta (directive porteur 2026-09-08, D-20). La
+ * liste Lentille n'en dépend pas (D-9).
+ *
+ * Miroir de `MEESHY_FLAG_READING_MODES` (iOS, `LentilleFeatureFlag.swift:82-90`) :
+ * `resolveApiConfig` (`src/lib/api/config.ts`) accepte déjà `'on'`, `'off'` et
+ * l'absence — `'off'` seul désactive. Une TROISIÈME valeur ne ferait rien de
+ * mal à l'exécution (`resolveReadingModes` la traiterait comme `'on'`), mais
+ * ce silence est exactement le malentendu que la garde `VITE_DATA_SOURCE`
+ * ci-dessus refuse déjà : une faute de frappe (`'On'`, `'disabled'`) partirait
+ * pour un déploiement entier en croyant avoir choisi une valeur qui n'existe
+ * pas. On refuse ici de CONSTRUIRE plutôt que de laisser passer le malentendu.
+ */
+const declaredReadingModes = process.env.VITE_READING_MODES;
+if (declaredReadingModes !== undefined && declaredReadingModes !== 'on' && declaredReadingModes !== 'off') {
+  throw new Error(
+    `VITE_READING_MODES=${declaredReadingModes} : valeur inconnue. Les seules valeurs admises sont ` +
+      '« on » (défaut), « off », ou la variable absente (⇒ « on »).',
   );
 }
 
@@ -215,6 +260,7 @@ export default defineConfig({
   },
   plugins: [
     tailwind(),
+    inlineSchemeBootstrap(),
     prerenderInstitutionalPages(),
     ...(forCapacitor ? [dropInstitutionalServiceWorker()] : []),
     /**

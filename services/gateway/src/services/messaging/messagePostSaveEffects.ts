@@ -46,6 +46,13 @@ export interface PostSaveMessage extends TranslatableMessage {
    * « pas encore liées ».
    */
   readonly attachmentMimeTypes: readonly string[];
+  /**
+   * `Boolean(stickerFromMetadata(message.metadata))` — calculé par l'appelant,
+   * qui seul détient le `metadata` brut. Porte l'axe d'engagement « sticker »
+   * (#5541) : indépendant de `attachmentMimeTypes`, un sticker voyage dans
+   * `metadata.sticker`, jamais comme pièce jointe.
+   */
+  readonly hasSticker: boolean;
 }
 
 /**
@@ -65,7 +72,7 @@ export interface PostSaveTranslationQueue {
   }): Promise<unknown>;
 }
 
-export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats' | 'engagement' | 'contentEngagement';
+export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats' | 'engagement' | 'contentEngagement' | 'stickerEngagement';
 
 /**
  * Ce que les axes d'engagement branchés sur le commit d'un message demandent,
@@ -74,8 +81,9 @@ export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translati
  * l'invoquer :
  *
  * - `recordActivity` pour un axe de CONTENU (#5531 `content.audio_message`,
- *   #5532 `content.text_message`) — un franchissement par (utilisateur,
- *   axe), sans déduplication par conversation ;
+ *   #5532 `content.text_message`) ou l'axe « sticker » (#5541
+ *   `tool.sticker`) — un franchissement par (utilisateur, axe), sans
+ *   déduplication par conversation ;
  * - `recordConversationActivity` pour l'axe « conversation distincte »
  *   (#5538, #5539, #5540) — dédupliqué par conversation, cf. son doc-comment.
  */
@@ -86,6 +94,7 @@ export interface PostSaveEngagementService {
     axisKey: EngagementAxisKey,
     conversationId: string,
   ): Promise<void>;
+  recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void>;
 }
 
 /**
@@ -299,5 +308,18 @@ export function runMessagePostSaveEffects(params: {
     void Promise.resolve()
       .then(() => engagementService.recordActivity(senderUserId, contentAxisKey))
       .catch(report('contentEngagement'));
+  }
+
+  // Axe d'engagement « sticker » (#5541, docs/product/streaks-badges-modele.md
+  // § 2, § 11) — indépendant de l'axe « conversation distincte » ci-dessus, et
+  // de l'axe « contenu produit » ci-dessus (`content.text_message`…) : un
+  // message qui pose un sticker crédite `tool.sticker` en plus, jamais à sa
+  // place. Même garde anonyme que les autres axes : `EngagementCounter.userId`
+  // exige un `User.id`, qu'un participant anonyme n'a pas.
+  if (engagementService && message.senderUserId && message.hasSticker) {
+    const senderUserId = message.senderUserId;
+    void Promise.resolve()
+      .then(() => engagementService.recordActivity(senderUserId, 'tool.sticker'))
+      .catch(report('stickerEngagement'));
   }
 }
