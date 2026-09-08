@@ -26,6 +26,8 @@ const SCREENS = [
   { name: 'list', path: '/' },
   { name: 'thread', path: '/c/c-equipe' },
   { name: 'thread-live', path: '/c/c-amina' },
+  { name: 'login', path: '/login' },
+  { name: 'signup', path: '/signup' },
 ];
 
 const browser = await launchChromium();

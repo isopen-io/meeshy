@@ -10,6 +10,8 @@ import { createRouter } from '@/lib/router';
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },
   thread: { pattern: '/c/$conversation', screen: () => import('@/routes/thread') },
+  login: { pattern: '/login', screen: () => import('@/routes/login') },
+  signup: { pattern: '/signup', screen: () => import('@/routes/signup') },
 } as const;
 
 function NotFound() {

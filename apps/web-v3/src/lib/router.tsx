@@ -273,12 +273,25 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
     to,
     params,
     search,
+    replace = false,
     children,
     ...rest
   }: {
     to: C;
     params?: ParamsOf<T[C]['pattern']>;
     search?: Record<string, string | undefined>;
+    /**
+     * REMPLACER l'entree courante au lieu d'en empiler une (defaut : empiler).
+     *
+     * Il existe pour les liens qui REFERMENT plutot qu'ils n'avancent : le
+     * « X » de l'inscription, « Deja un compte ? Se connecter ». Sans lui, ces
+     * gestes s'ecrivaient `<button onClick={navigate(..., true)}>` — un
+     * controle qui NAVIGUE sans etre un lien : pas de `href`, pas d'ouverture
+     * en nouvel onglet, pas de menu contextuel, pas de prechargement, et rien
+     * a montrer dans la barre d'etat. Le motif serait recopie par les 40+
+     * surfaces a venir ; deux lignes ici l'evitent partout.
+     */
+    replace?: boolean;
     children: ReactNode;
   } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'children'>) {
     const url = href(to, params, search);
@@ -314,7 +327,7 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
           if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
           e.preventDefault();
           disarm();
-          navigate(url);
+          navigate(url, replace);
         }}
       >
         {children}

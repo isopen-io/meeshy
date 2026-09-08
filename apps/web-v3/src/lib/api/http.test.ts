@@ -190,6 +190,49 @@ describe('createHttpTransport — l’enveloppe', () => {
   });
 });
 
+describe('createHttpTransport — le champ d’un refus (#5555, T1)', () => {
+  test('un corps { field: "email" } rend { ok:false, field:"email" } — forme register.ts:401-407 / 409', async () => {
+    const { impl } = fakeFetch({
+      status: 409,
+      body: { success: false, error: 'Adresse déjà utilisée', code: 'EMAIL_TAKEN', field: 'email' },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await transport.request({ method: 'POST', path: '/api/v1/auth/register' });
+    expect(result).toEqual({ ok: false, status: 409, error: 'Adresse déjà utilisée', code: 'EMAIL_TAKEN', field: 'email' });
+  });
+
+  test('un refus AJV — `details` en TABLEAU, sans field à la racine — rend quand même `field` (mesuré en direct sur gate.staging.meeshy.me, POST /auth/register, mot de passe de 5 caractères)', async () => {
+    const { impl } = fakeFetch({
+      status: 400,
+      body: {
+        success: false,
+        error: 'Validation Error',
+        message: 'body/password must NOT have fewer than 12 characters',
+        code: 'VALIDATION_ERROR',
+        details: [{ field: 'password', message: 'must NOT have fewer than 12 characters' }],
+      },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await transport.request({ method: 'POST', path: '/api/v1/auth/register' });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect(result.field).toBe('password');
+    expect(result.code).toBe('VALIDATION_ERROR');
+  });
+
+  test('un corps sans field rend un échec SANS la clé — forme login.ts:133', async () => {
+    const { impl } = fakeFetch({
+      status: 401,
+      body: { success: false, error: 'Identifiants invalides', code: 'INVALID_CREDENTIALS' },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await transport.request({ method: 'POST', path: '/api/v1/auth/login' });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect('field' in result).toBe(false);
+  });
+});
+
 describe('createHttpTransport — l’annulation', () => {
   test('le signal de l’appelant est TRANSMIS à fetch — l’annuler annule ce que fetch reçoit', async () => {
     // `timeoutMs` désactivé : sans lui, `signal` serait un composé

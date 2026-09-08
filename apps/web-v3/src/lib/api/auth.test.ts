@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { ApiResult, HttpRequest } from './http';
-import { createAuthClient } from './auth';
+import { createAuthClient, isPhoneConflict } from './auth';
 import { createSessionStore } from './session';
 
 /**
@@ -176,6 +176,76 @@ describe('login() — refus (login.ts:133)', () => {
     const result = await auth.login({ username: 'ada', password: 'faux' });
 
     expect(result).toEqual({ ok: false, status: 401, error: 'Identifiants invalides', code: 'INVALID_CREDENTIALS' });
+    expect(store.getState().session).toEqual({ status: 'anonymous' });
+  });
+});
+
+describe('register() — POST /auth/register (#5555, T2)', () => {
+  test('200 succès (register.ts:383-388) ⇒ magasin authenticated, session persistée avec échéance', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([
+      {
+        ok: true,
+        data: { user: { id: 'u-9', username: 'nova', displayName: 'Nova' }, token: 'jwt-9', sessionToken: 'sess-9', expiresIn: 86400 },
+      },
+    ]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.register({ displayName: 'Nova', email: 'nova@x.io', password: 'un-mot-de-passe-solide' });
+
+    expect(result.ok).toBe(true);
+    expect(store.getState().session).toEqual({
+      status: 'authenticated',
+      user: { id: 'u-9', username: 'nova', displayName: 'Nova' },
+      token: 'jwt-9',
+      sessionToken: 'sess-9',
+      expiresAt: FIXED_NOW + 86_400_000,
+    });
+    expect(calls[0]).toEqual({
+      method: 'POST',
+      path: '/api/v1/auth/register',
+      body: { displayName: 'Nova', email: 'nova@x.io', password: 'un-mot-de-passe-solide' },
+    });
+  });
+
+  test('200 phoneOwnershipConflict (register.ts:301-331) ⇒ magasin INCHANGÉ (anonymous), résultat rendu tel quel', async () => {
+    const store = memoryStore();
+    const { transport } = stubTransport([
+      {
+        ok: true,
+        data: {
+          phoneOwnershipConflict: true,
+          phoneOwnerInfo: {
+            maskedDisplayName: 'N***',
+            maskedUsername: 'n***a',
+            maskedEmail: 'n***@x.io',
+            avatar: null,
+            phoneNumber: '0612345678',
+            phoneCountryCode: 'FR',
+          },
+          pendingRegistration: { email: 'nova@x.io' },
+        },
+      },
+    ]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.register({ displayName: 'Nova', email: 'nova@x.io', password: 'un-mot-de-passe-solide', phoneNumber: '0612345678', phoneCountryCode: 'FR' });
+
+    expect(result.ok).toBe(true);
+    expect(store.getState().session).toEqual({ status: 'anonymous' });
+    expect(result.ok && isPhoneConflict(result.data)).toBe(true);
+  });
+
+  test('échec (409 EMAIL_TAKEN) ⇒ rien d’écrit, le champ voyage jusqu’à l’appelant', async () => {
+    const store = memoryStore();
+    const { transport } = stubTransport([
+      { ok: false, status: 409, error: 'Adresse déjà utilisée', code: 'EMAIL_TAKEN', field: 'email' },
+    ]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.register({ displayName: 'Nova', email: 'nova@x.io', password: 'un-mot-de-passe-solide' });
+
+    expect(result).toEqual({ ok: false, status: 409, error: 'Adresse déjà utilisée', code: 'EMAIL_TAKEN', field: 'email' });
     expect(store.getState().session).toEqual({ status: 'anonymous' });
   });
 });

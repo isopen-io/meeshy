@@ -14,3 +14,8 @@
 [define]
 "__SHELL__" = "false"
 "__BENCH__" = "0"
+# `__APP_VERSION__` porte ici une valeur SENTINELLE, jamais la vraie version :
+# recopier `package.json` dans ce fichier rejouerait exactement le defaut que
+# le litteral de construction corrige. Les temoins comparent au SYMBOLE, pas a
+# une chaine ecrite.
+"__APP_VERSION__" = "\"0.0.0-test\""

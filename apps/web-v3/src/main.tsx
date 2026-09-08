@@ -1,13 +1,17 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { StrictMode } from 'react';
+import { StrictMode, useEffect, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { useStore } from 'zustand/react';
 
 import './styles/app.css';
 
 import Shell from '@/components/shell';
+import { apiConfig } from '@/lib/api/config';
 import { sessionStore } from '@/lib/api/session';
+import { useRoute } from '@/lib/router';
 import { followSystem } from '@/lib/scheme';
-import { Router } from '@/routes/route-table';
+import { resolveRouteAccess } from '@/lib/session-guard';
+import { Router, href, navigate } from '@/routes/route-table';
 
 /**
  * Defaut 3c (recette 2026-09-07, #5604) : la bascule clair/sombre du systeme
@@ -53,6 +57,28 @@ const client = new QueryClient({
   },
 });
 
+/**
+ * LA GARDE DE SESSION (#5555, E6) — branche `resolveRouteAccess` (pure) sur
+ * la route COURANTE et le magasin de session PARTAGÉ. Elle rend le squelette
+ * pendant qu'elle redirige plutôt que de laisser passer un flash du contenu
+ * privé (D-6) — même si, `apiConfig.source` valant `'fixtures'` tant que le
+ * transport réel n'est câblé nulle part (#5493), elle ne mord encore sur
+ * AUCUN écran : le jour où un écran passe en source `'gateway'`, la garde
+ * est déjà là, pas à ajouter.
+ */
+function SessionGate({ children }: { children: ReactNode }) {
+  const { key } = useRoute();
+  const status = useStore(sessionStore, (s) => s.session.status);
+  const decision = resolveRouteAccess({ sessionStatus: status, source: apiConfig.source, routeKey: key });
+
+  useEffect(() => {
+    if (decision === 'redirect-login') navigate(href('login'), true);
+    if (decision === 'redirect-home') navigate(href('list'), true);
+  }, [decision]);
+
+  return decision === 'allow' ? children : <Skeleton />;
+}
+
 /** Le squelette d'attente d'un ecran decoupe — statique, jamais un spinner. */
 function Skeleton() {
   return (
@@ -73,7 +99,7 @@ if (!root) throw new Error('#root absent du document');
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={client}>
-      <Router wrap={(screen) => <Shell>{screen}</Shell>} skeleton={<Skeleton />} />
+      <Router wrap={(screen) => <Shell><SessionGate>{screen}</SessionGate></Shell>} skeleton={<Skeleton />} />
     </QueryClientProvider>
   </StrictMode>,
 );
