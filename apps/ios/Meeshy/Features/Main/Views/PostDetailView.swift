@@ -104,6 +104,12 @@ struct PostDetailView: View {
     /// (mutuellement exclusifs — un seul rend à la fois). Jamais
     /// `isGlobalMuted` du viewer story : surfaces indépendantes.
     @State var isCanvasMuted = false
+    /// **Arrêt LOCAL de la lecture, commandé par le viewer** (#5602) — le
+    /// troisième terme de `StoryDetailPlaybackPolicy`, servi aux TROIS chemins
+    /// de rendu (mosaïque, mono-scène, republication) : « le bouton stop et
+    /// play permet d'arrêter tout ou de poursuivre tout ». Distinct du muet,
+    /// qui laisse la scène courir en silence.
+    @State var isCanvasPaused = false
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none

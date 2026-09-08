@@ -132,6 +132,31 @@ describe('Cliquet — route-manifest.json reflète le serveur assemblé', () => 
     }
 
     const noticeChanged = JSON.stringify(fresh.notice) !== JSON.stringify(committed.notice);
+
+    // LES CHAMPS DE TÊTE — tout ce que l'artefact porte hors `routes` et
+    // `notice`. Sans eux, une divergence sur `routeCount` s'annonçait
+    // « 0 différence(s) : » suivi du VIDE, et c'est exactement ce qu'une
+    // résolution de merge produit : le tableau `routes` prend les deux côtés,
+    // le compteur n'en prend qu'un. Le cliquet SAVAIT qu'il divergeait et ne
+    // pouvait pas dire OÙ — il déplaçait alors son travail sur son lecteur au
+    // lieu de le faire, ce qui est la seule chose qu'on lui demande.
+    //
+    // L'énumération part des CLÉS des deux objets plutôt que d'une liste
+    // écrite ici : un champ ajouté un jour à l'artefact serait sinon le
+    // prochain à diverger en silence, et le commentaire au-dessus se
+    // relirait à l'identique.
+    const asRecord = (artefact: RouteManifestArtifact): Record<string, unknown> =>
+      artefact as unknown as Record<string, unknown>;
+    const freshHead = asRecord(fresh);
+    const committedHead = asRecord(committed);
+    const headChanged = [...new Set([...Object.keys(freshHead), ...Object.keys(committedHead)])]
+      .filter((champ) => champ !== 'routes' && champ !== 'notice')
+      .filter((champ) => JSON.stringify(freshHead[champ]) !== JSON.stringify(committedHead[champ]))
+      .map(
+        (champ) =>
+          `~ ${champ}  (commité=${JSON.stringify(committedHead[champ])}, ` +
+          `frais=${JSON.stringify(freshHead[champ])})`
+      );
     const orderChanged =
       added.length === 0 && removed.length === 0 && changed.length === 0 && !noticeChanged &&
       JSON.stringify(fresh.routes.map(routeKey)) !== JSON.stringify(committedRoutes.map(routeKey));
@@ -140,8 +165,16 @@ describe('Cliquet — route-manifest.json reflète le serveur assemblé', () => 
       ...added,
       ...removed,
       ...changed,
+      ...headChanged,
       ...(noticeChanged ? ['~ notice  (description des colonnes ou légende de sécurité a changé)'] : []),
       ...(orderChanged ? ['~ ordre des routes (mêmes routes, ordre différent)'] : []),
+      // Un écart que RIEN de ce qui précède n'explique est un défaut du
+      // harnais, pas de l'artefact — et il se dit comme tel plutôt que de
+      // laisser une liste vide passer pour un verdict.
+      ...(added.length === 0 && removed.length === 0 && changed.length === 0 &&
+      headChanged.length === 0 && !noticeChanged && !orderChanged
+        ? ['~ les deux JSON diffèrent sans qu’aucun champ ne l’explique — le comparateur de ce cliquet est incomplet']
+        : []),
     ];
 
     throw new Error(

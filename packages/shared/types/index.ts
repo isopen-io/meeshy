@@ -89,6 +89,9 @@ export * from './reaction.js';
 // Export des types mentions
 export * from './mention.js';
 
+// Export des types d'engagement (streaks/badges — catalogue des axes, #5530)
+export * from './engagement.js';
+
 // Export des types références de post (Prisme des références — parité Swift)
 export type {
   PostReferenceDisplay,

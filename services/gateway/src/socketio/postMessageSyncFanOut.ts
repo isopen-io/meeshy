@@ -12,6 +12,7 @@ import {
 import { participantUserRoomTargets } from './emitToConversationParticipants';
 import {
   resolveLastMessagePreviewPrism,
+  resolvePreviewMediaFields,
   toIsoOrNull,
 } from './utils/lastMessagePreviewPrism';
 import { sharedPlaceFromMetadata } from '../services/location/sharedPlace';
@@ -180,7 +181,11 @@ export async function syncConversationListOnNewMessage(
     for (const { room, participant } of participantUserRoomTargets(allParticipants)) {
       ctx.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
         ...updatePayload,
-        ...resolveLastMessagePreviewPrism(participant, message)
+        ...resolveLastMessagePreviewPrism(participant, message),
+        // Sous-groupe MÉDIA (#3737) — parité avec le chemin WS
+        // (`MessageHandler.ts`) et `emitConversationPreviewUpdate.ts`, les
+        // deux autres émetteurs de ce même groupe.
+        ...resolvePreviewMediaFields(message)
       });
     }
 

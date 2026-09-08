@@ -22,7 +22,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { UploadedFile, UploadTextBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { classifyAnonymousAttachment, matchesDeclaredSignature } from '../../services/attachments/ContentSignature.js';
+import { classifyAnonymousAttachment } from '../../services/attachments/ContentSignature.js';
 
 /**
  * Plafond RÉEL, en OCTETS, du champ `content` de `POST /attachments/upload-
@@ -155,28 +155,6 @@ export async function registerUploadRoutes(
 
         if (files.length === 0) {
           return sendBadRequest(reply, 'No files provided');
-        }
-
-        // #3627 — le `Content-Type` multipart est déclaré par le CLIENT,
-        // jamais vérifié avant ce lot pour un appelant REGISTERED. Un fichier
-        // qui déclare `image/*`/`audio/*` sans en porter la signature est
-        // refusé avant tout traitement.
-        //
-        // Un appelant ANONYME n'entre PAS dans cette porte : son chemin,
-        // `classifyAnonymousAttachment` plus bas, vérifie déjà les mêmes
-        // signatures — mais pour RECLASSIFIER un type déclaré qui ne
-        // correspond à aucun octet connu vers la catégorie « fichier », la
-        // plus stricte, plutôt que pour rejeter platement (round 1 sécurité,
-        // task-1-fix-round-1). Rejeter ici avant la classification romprait
-        // ce contrat : un PDF déclaré `audio/webm` doit retomber sous le
-        // droit de FICHIER (403 si interdit), jamais sous une erreur 400
-        // générique qui court-circuiterait la décision de permission.
-        if (!isAnonymous) {
-          for (const file of files) {
-            if (!matchesDeclaredSignature(file.mimeType, file.buffer)) {
-              return sendBadRequest(reply, 'File content does not match the declared type');
-            }
-          }
         }
 
         if (isAnonymous && authContext.participantId) {

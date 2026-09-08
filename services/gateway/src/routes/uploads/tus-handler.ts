@@ -21,7 +21,7 @@ import {
   fetchShareLinkAnonymousFlags,
   readFilePrefix,
 } from '../../services/attachments/AnonymousUploadIdentity';
-import { classifyAnonymousAttachment, matchesDeclaredSignature, RECOMMENDED_SIGNATURE_PREFIX_BYTES } from '../../services/attachments/ContentSignature';
+import { classifyAnonymousAttachment, verifyDeclaredMimeType, RECOMMENDED_SIGNATURE_PREFIX_BYTES } from '../../services/attachments/ContentSignature';
 import { isExifStrippable, stripExifFromImageBuffer } from '../../services/attachments/ExifStrip';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { originIsAllowed } from '../../config/cors-origins';
@@ -381,26 +381,21 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         await fs.unlink(sourcePath).catch((err) => logger.debug('tus: temp file unlink failed after copy', { sourcePath, err }));
       }
 
-      // #3627 — le `filetype` TUS est déclaré par le CLIENT, jamais vérifié
-      // avant ce lot pour un appelant REGISTERED (PostMedia comme MESSAGE).
-      //
-      // Un appelant ANONYME n'entre PAS dans cette porte : la branche
-      // MESSAGE anonyme, plus bas, appelle `classifyAnonymousAttachment` —
-      // qui vérifie la MÊME signature, mais pour RECLASSIFIER un type
-      // déclaré sans octets correspondants vers la catégorie « fichier »
-      // plutôt que pour rejeter platement (round 1/2 sécurité). Rejeter ici
-      // romprait ce contrat, mesuré par
-      // `tus-handler.test.ts` : un PDF déclaré `audio/webm` doit retomber
-      // sous le droit de FICHIER (403 si interdit), jamais sous un 400
-      // générique qui court-circuiterait la décision de permission.
-      if (!isAnonymous) {
-        const signaturePrefix = await readFilePrefix(destPath, RECOMMENDED_SIGNATURE_PREFIX_BYTES);
-        if (!matchesDeclaredSignature(mimeType, signaturePrefix)) {
-          await fs.unlink(destPath).catch((err) =>
-            logger.debug('[TUS] Mismatched-signature upload cleanup failed', { destPath, err }));
-          logger.warn('[TUS] Declared MIME type does not match file signature — rejected', { mimeType, filename });
-          throw { status_code: 400, body: 'File content does not match the declared type\n' };
-        }
+      // #5615 — sniffing MIME étendu à TOUS les uploads TUS (inscrits ET
+      // anonymes), pas seulement l'exemption anonyme ci-dessous : un mimeType
+      // déclaré qui ne correspond pas au contenu réel (pour les familles dont
+      // une signature fiable existe — image, audio, SVG, PDF, voir la
+      // décision dans `ContentSignature.ts`) fait REJETER l'upload, avant
+      // toute extraction de métadonnées et avant de savoir s'il s'agit d'un
+      // PostMedia ou d'un MessageAttachment. Le préfixe est lu UNE FOIS et
+      // réutilisé plus bas par `classifyAnonymousAttachment` (même octets).
+      const signaturePrefix = await readFilePrefix(destPath, RECOMMENDED_SIGNATURE_PREFIX_BYTES);
+      const mimeVerdict = verifyDeclaredMimeType(mimeType, signaturePrefix);
+      if (mimeVerdict.verified === false) {
+        await fs.unlink(destPath).catch((err) =>
+          logger.debug('[TUS] Upload cleanup failed (declared MIME type mismatch)', { destPath, err }));
+        logger.warn(`[TUS] Upload REFUSED — ${mimeVerdict.reason} (userId=${userId})`);
+        throw { status_code: 400, body: `${mimeVerdict.reason}\n` };
       }
 
       let fileSize = upload.size || 0;
@@ -552,7 +547,8 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
             throw { status_code: 403, body: 'Share link not found\n' };
           }
 
-          const signaturePrefix = await readFilePrefix(destPath, RECOMMENDED_SIGNATURE_PREFIX_BYTES);
+          // Mêmes octets que la vérification globale ci-dessus (#5615) — pas
+          // de second aller-retour disque pour le même préfixe.
           const verdict = classifyAnonymousAttachment(mimeType, signaturePrefix, shareLinkFlags);
           if (verdict.allowed === false) {
             await fs.unlink(destPath).catch((err) =>

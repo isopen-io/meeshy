@@ -61,9 +61,9 @@ jest.mock('fs', () => ({
 }));
 
 // Import after mocks
-import { UploadProcessor } from '../../../services/attachments/UploadProcessor';
-import type { FileToUpload } from '../../../services/attachments/UploadProcessor';
+import { UploadProcessor, type FileToUpload } from '../../../services/attachments/UploadProcessor';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { SIGNATURE_BYTES_BY_MIME_TYPE } from '../../../services/attachments/__tests__/signature-fixtures';
 
 describe('UploadProcessor', () => {
   let processor: UploadProcessor;
@@ -74,7 +74,7 @@ describe('UploadProcessor', () => {
   const testAttachmentId = '507f1f77bcf86cd799439013';
 
   const createTestFile = (overrides?: Partial<FileToUpload>): FileToUpload => ({
-    buffer: Buffer.from('test file content'),
+    buffer: SIGNATURE_BYTES_BY_MIME_TYPE[overrides?.mimeType ?? 'image/jpeg'] ?? Buffer.from('test file content'),
     filename: 'test_image.jpg',
     mimeType: 'image/jpeg',
     size: 1024 * 100, // 100KB

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Le fond de l'ecran de lancement, et RIEN d'autre (#5604, revue-correction).
+
+  La MEME valeur que `capacitor.config.ts` (android.backgroundColor /
+  ios.backgroundColor), que `background_color` du manifest PWA
+  (`vite.config.ts`) et que le `theme-color` sombre de `index.html` — directive
+  porteur 2026-09-07 soir : « les coques Capacitor (icone, splash, fond
+  #0b0c14) et le manifest PWA servent les MEMES actifs ».
+
+  Pourquoi une ressource COULEUR et pas seulement `@drawable/splash` : depuis
+  Android 12 (API 31) le systeme dessine lui-meme l'ecran de lancement et
+  IGNORE `android:background` du theme. Les onze `drawable*/splash.png`
+  generes ne servent donc plus que API 24-30 ; au-dela, c'est
+  `windowSplashScreenBackground` qui peint le fond, et sans lui le systeme
+  retombe sur le `colorBackground` du theme — BLANC des que l'appareil est en
+  mode clair, c'est-a-dire un eclair blanc devant une application que
+  l'utilisateur a mise en sombre.
+-->
+<resources>
+    <color name="splash_background">#0B0C14</color>
+</resources>

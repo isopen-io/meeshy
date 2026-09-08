@@ -233,6 +233,26 @@ model User {
   // Profile completion
   profileCompletionRate Int? @default(0)
 
+  // Engagement — série de jours actifs (#5544,
+  // docs/product/streaks-badges-modele.md § 5). Un état, pas un historique :
+  // pas de collection à part.
+  currentStreakDays Int       @default(0)
+  longestStreakDays Int       @default(0)
+  /// Jour civil UTC (minuit) de la dernière activité qualifiante — jamais un
+  /// horodatage complet, pour que la comparaison de jour ne dépende pas de
+  /// l'heure de l'appel.
+  lastStreakDate    DateTime?
+  /// Score agrégé multi-axes pondéré (#5545,
+  /// docs/product/streaks-badges-modele.md § 5, § 7) — somme des poids
+  /// `ENGAGEMENT_AXIS_WEIGHTS` (@meeshy/shared/types/engagement) de chaque
+  /// activité créditée. Maintenu par `$inc` atomique dans
+  /// `EngagementService.recordActivity`, jamais par un recalcul de scan.
+  /// Monotone croissant — aucune activité ne le décrémente. Un `User` créé
+  /// avant cette migration a ce champ ABSENT, pas à zéro (même piège que
+  /// `currentStreakDays` ci-dessus) : `$inc` sur un champ Mongo absent le
+  /// crée à la valeur de l'incrément, ce qui est déjà le comportement voulu.
+  engagementScore   Int       @default(0)
+
   // ============================================
   // E2EE / SIGNAL PROTOCOL ENCRYPTION FIELDS
   // ============================================
@@ -305,6 +325,7 @@ model User {
   createdAffiliateTokens AffiliateToken[]              @relation("AffiliateTokenCreator")
   affiliateRelations     AffiliateRelation[]           @relation("AffiliateUser")
   referredRelations      AffiliateRelation[]           @relation("ReferredUser")
+  sentEmailInvitations   EmailInvitation[]              @relation("EmailInvitationSender")
   createdTrackingLinks   TrackingLink[]                @relation("TrackingLinkCreator")
   initiatedCalls         CallSession[]                 @relation("CallInitiator")
   conversationPrefs      UserConversationPreferences[]
@@ -1785,8 +1806,9 @@ model AffiliateToken {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  creator      User                @relation("AffiliateTokenCreator", fields: [createdBy], references: [id])
-  affiliations AffiliateRelation[]
+  creator          User                @relation("AffiliateTokenCreator", fields: [createdBy], references: [id])
+  affiliations     AffiliateRelation[]
+  emailInvitations EmailInvitation[]
 }
 
 /// Relation d'affiliation entre utilisateurs
@@ -1802,6 +1824,27 @@ model AffiliateRelation {
   affiliateToken AffiliateToken @relation(fields: [affiliateTokenId], references: [id])
   affiliateUser  User           @relation("AffiliateUser", fields: [affiliateUserId], references: [id])
   referredUser   User           @relation("ReferredUser", fields: [referredUserId], references: [id])
+}
+
+/// Relation d'invitation par e-mail persistée (#3691) — QUI a invité QUI, par
+/// quelle adresse, distincte de l'`AffiliateRelation` (qui ne s'écrit qu'APRÈS
+/// inscription). Le lien tracé et la page d'atterrissage réutilisent
+/// l'`AffiliateToken` existant (`/signup/affiliate/:token`) plutôt qu'un
+/// second système : `affiliateTokenId` pointe un jeton dédié à CETTE
+/// invitation (`maxUses: 1`), et son nom reste générique (jamais l'email du
+/// destinataire, public via `GET /affiliate/validate/:token`).
+model EmailInvitation {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  senderId         String   @db.ObjectId
+  email            String
+  affiliateTokenId String   @db.ObjectId
+  sentAt           DateTime @default(now())
+
+  sender         User           @relation("EmailInvitationSender", fields: [senderId], references: [id])
+  affiliateToken AffiliateToken @relation(fields: [affiliateTokenId], references: [id])
+
+  @@index([senderId])
+  @@index([email])
 }
 
 /// Lien de tracking pour compter les clics sur les liens partagés
@@ -1929,6 +1972,47 @@ model AdminAuditLog {
   @@index([adminId])
   @@index([userId])
   @@index([action])
+  @@index([createdAt])
+}
+
+/// Bannissement durable d'un utilisateur (#3719) — la SUSPENSION (`User.isActive`)
+/// n'a ni durée ni motif structuré ni historique ; un `Ban` en est le journal
+/// IMMUABLE : une ligne créée n'est jamais modifiée ni supprimée, seul un lever
+/// (`liftedAt`/`liftedById`/`liftReason`) la ferme, en laissant les champs de
+/// création intacts. Plusieurs lignes par utilisateur = l'historique complet des
+/// bannissements, jamais un seul état écrasé.
+///
+/// `expiresAt: null` = permanent. Un ban est EN VIGUEUR quand `liftedAt` est nul
+/// ET (`expiresAt` est nul OU `expiresAt` est dans le futur) — calculé par
+/// `BanService`, jamais stocké en double (pas de `isActive` redondant ici).
+///
+/// Portée 2026-09 : la création/le lever d'un `Ban` pilote `User.isActive`
+/// (même levier que la suspension actuelle), mais l'EXPIRATION AUTOMATIQUE d'un
+/// ban à durée n'est pas encore appliquée par un balayage — suivi ouvert en
+/// #5527 (dimension 13 · Complétude), un admin doit lever explicitement un ban
+/// expiré pour réactiver le compte tant que ce suivi n'est pas livré.
+model Ban {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// L'utilisateur banni
+  userId    String   @db.ObjectId
+  /// L'administrateur qui a prononcé le bannissement
+  bannedById String  @db.ObjectId
+  /// Motif du bannissement, toujours requis
+  reason    String
+  /// Fin du bannissement ; `null` = permanent
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  /// Date à laquelle le ban a été LEVÉ par un admin ; `null` = jamais levé.
+  /// Distinct de `expiresAt` : un ban expiré mais non levé reste en base tel
+  /// quel, `liftedAt` ne s'écrit que sur un geste administratif explicite.
+  liftedAt   DateTime?
+  liftedById String?   @db.ObjectId
+  liftReason String?
+
+  @@index([userId])
+  @@index([userId, liftedAt])
+  @@index([bannedById])
   @@index([createdAt])
 }
 
@@ -3240,6 +3324,17 @@ model Post {
   allowSoundExtraction Boolean @default(false)
 
   // ============================================
+  // MODÉRATION DE LA PUBLICATION
+  // ============================================
+  /// Réglage AUTEUR posé à la publication (#3959) — un drapeau de ce qui
+  /// PART, jamais une propriété d'une slide/objet de storyEffects. `false`
+  /// par défaut (commentaires ouverts, comportement historique). Gouverne
+  /// `POST /posts/:postId/comments` (création ET réponses, même endpoint) —
+  /// fail-closed : désactivé bloque TOUT commentaire, auteur compris, comme
+  /// la fermeture de discussion des plateformes de référence.
+  commentsDisabled Boolean @default(false)
+
+  // ============================================
   // STATUS/MOOD-SPECIFIC
   // ============================================
   /// Emoji mood (ex: "😴", "🎉", "💪", "☕")
@@ -4413,4 +4508,67 @@ model PostHashtag {
   @@unique([postId, hashtagId], name: "post_hashtag_unique")
   @@index([hashtagId])
   @@index([postId])
+}
+
+/// Compteur d'engagement par (utilisateur, axe) — #5530,
+/// docs/product/streaks-badges-modele.md § 3. Un document par axe, jamais
+/// une colonne par axe sur `User` : ajouter un axe n'ajoute aucune migration
+/// de schéma. Incrémenté UNIQUEMENT par `EngagementService.recordActivity`
+/// (`services/gateway/src/services/engagement/EngagementService.ts`) — aucune
+/// route ni handler socket n'écrit ce modèle directement.
+model EngagementCounter {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  /// Clé stable du catalogue, ex. "content.audio_message" — voir
+  /// `EngagementAxisKey` (@meeshy/shared/types/engagement).
+  axisKey   String
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, axisKey])
+  @@index([userId])
+}
+
+/// Garde anti-rejeu — #5530, docs/product/streaks-badges-modele.md § 4. Un
+/// palier déjà écrit ici ne se re-notifie jamais, même si le compteur source
+/// est recalculé : la mémoire de ce qui a déjà été notifié est CETTE table,
+/// pas la valeur courante du compteur. La contrainte unique est la garde
+/// (un `create` en conflit = palier déjà servi, no-op silencieux), jamais une
+/// relecture avant écriture — ça évite la course entre deux écritures
+/// concurrentes du même utilisateur.
+model EngagementMilestone {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String   @db.ObjectId
+  /// "badge" | "streak" | "level" | "achievement" — voir
+  /// `EngagementMilestoneType` (@meeshy/shared/types/engagement).
+  milestoneType String
+  /// ex. "content.audio_message:10", "streak:7", "level:3",
+  /// "achievement.first_post" — unique par (userId, milestoneType, clé).
+  milestoneKey  String
+  reachedAt     DateTime @default(now())
+
+  @@unique([userId, milestoneType, milestoneKey])
+  @@index([userId, milestoneType])
+}
+
+/// Garde de dédoublonnage des axes "conversation distincte" (#5539,
+/// docs/product/streaks-badges-modele.md § 2) — "l'utilisateur envoie un
+/// premier message dans une conversation {privée,publique,communautaire}
+/// DISTINCTE" exige de savoir si CETTE conversation a déjà crédité CET axe
+/// pour CET utilisateur, ce qu'`EngagementCounter` (un total, sans mémoire
+/// par conversation) ne peut pas répondre. La contrainte unique est la
+/// garde — un `create` en conflit = conversation déjà créditée pour cet
+/// axe, no-op silencieux — jamais une relecture avant écriture, même
+/// raison anti-course qu'`EngagementMilestone`.
+model EngagementConversationCredit {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String   @db.ObjectId
+  /// "conversation.private" | "conversation.public" | "conversation.community"
+  /// — voir `EngagementAxisKey` (@meeshy/shared/types/engagement).
+  axisKey        String
+  conversationId String   @db.ObjectId
+  creditedAt     DateTime @default(now())
+
+  @@unique([userId, axisKey, conversationId])
+  @@index([userId, axisKey])
 }

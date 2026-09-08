@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { UserFilters } from '@meeshy/shared/types';
 
 // Le hachage vit dans `utils/password-hash` — SITE UNIQUE depuis #5216, et le
@@ -22,80 +21,10 @@ jest.mock('../../../../utils/password-hash', () => ({
 import { UserManagementService } from '../../../../services/admin/user-management.service';
 import { hashPassword, verifyPassword, BCRYPT_COST } from '../../../../utils/password-hash';
 import { logger } from '../../../../utils/logger';
+import { makeUser, makePrisma, makeService } from './user-management-mocks';
 
 const mockHash = hashPassword as jest.Mock;
 const mockCompare = verifyPassword as jest.Mock;
-
-function makeUser(overrides: Partial<Record<string, unknown>> = {}) {
-  return {
-    id: '507f1f77bcf86cd799439011',
-    username: 'testuser',
-    firstName: 'John',
-    lastName: 'Doe',
-    displayName: 'John D.',
-    bio: '',
-    email: 'test@example.com',
-    password: 'hashed',
-    phoneNumber: null,
-    avatar: null,
-    role: 'USER',
-    isActive: true,
-    isOnline: false,
-    emailVerifiedAt: null,
-    phoneVerifiedAt: null,
-    lastActiveAt: new Date(),
-    systemLanguage: 'en',
-    regionalLanguage: 'en',
-    customDestinationLanguage: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    deactivatedAt: null,
-    deletedAt: null,
-    twoFactorEnabledAt: null,
-    twoFactorSecret: null,
-    twoFactorBackupCodes: null,
-    failedLoginAttempts: 0,
-    lockedUntil: null,
-    lockedReason: null,
-    ...overrides,
-  };
-}
-
-function makePrisma(methods: Partial<{
-  findMany: jest.Mock;
-  findUnique: jest.Mock;
-  create: jest.Mock;
-  update: jest.Mock;
-  count: jest.Mock;
-}> = {}) {
-  return {
-    user: {
-      findMany: methods.findMany ?? jest.fn(),
-      findUnique: methods.findUnique ?? jest.fn(),
-      create: methods.create ?? jest.fn(),
-      update: methods.update ?? jest.fn(),
-      count: methods.count ?? jest.fn(),
-    },
-    // `createUser` route désormais aussi par `ensureGlobalConversationMembership`
-    // (#3876) — repli SANS salon global trouvé par défaut : les describe
-    // blocks qui ne testent pas ce comportement restent silencieux.
-    conversation: {
-      findFirst: jest.fn().mockResolvedValue(null),
-    },
-    participant: {
-      findFirst: jest.fn().mockResolvedValue(null),
-      create: jest.fn().mockResolvedValue({ id: 'part-new' }),
-      findMany: jest.fn().mockResolvedValue([]),
-    },
-    message: {
-      create: jest.fn().mockResolvedValue({ id: 'msg-1' }),
-    },
-  } as unknown as PrismaClient;
-}
-
-function makeService(prisma?: PrismaClient, deps?: { revokeSessions?: unknown; resolveSocketManager?: unknown }) {
-  return new UserManagementService(prisma ?? makePrisma(), deps as never);
-}
 
 beforeEach(() => {
   jest.clearAllMocks();

@@ -460,7 +460,7 @@ export function registerFileStreamRoute(fastify: FastifyInstance): void {
         // les mêmes octets (c'est l'alias legacy non versionné, #4187) et
         // n'avait jamais reçu cette garde — un fichier `.svg` uploadé
         // légitimement (déclaré `image/svg+xml`, sans concept d'EXIF/binaire,
-        // voir `ContentSignature.matchesDeclaredSignature`) restait servi
+        // voir `ContentSignature.verifyDeclaredMimeType`) restait servi
         // inline par cette seule porte.
         if (mimeType === 'image/svg+xml') {
           reply.header('Content-Disposition', `attachment; filename="${sanitizeAsciiFilename(decodedPath.split('/').pop() || 'file.svg')}"`);

@@ -117,8 +117,24 @@ public nonisolated struct MeeshyColors {
         isDark ? indigo50 : indigo950
     }
 
+    /// D-18 bis (2026-09-08, #5625) — la variante CLAIRE, `indigo700
+    /// .opacity(0.6)`, mesurait **2,70–3,12:1** selon le fond (composition
+    /// alpha PUIS luminance WCAG, même loi que `textMuted` ci-dessous) : sous
+    /// AA texte normal (4,5:1) sur CHAQUE fond clair déclaré, y compris le
+    /// fond de rangée le plus fréquent (`backgroundSecondary` `#F8F7FF`,
+    /// mesure `apps/web-v3` : 2,70:1 sur une rangée en sourdine, 2,80–3,12:1
+    /// ailleurs). La variante SOMBRE (`indigo300`, opaque) n'était pas en
+    /// cause (14,05:1 mesuré) — seule la CLAIRE est touchée, comme pour D-18.
+    /// Relevée à `indigo700.opacity(0.8)` — le MÊME cran minimal que
+    /// `textMuted(isDark: false)`, calculé par la même méthode sur les mêmes
+    /// deux fonds clairs déclarés les plus sombres du thème (0.79 échoue sur
+    /// `backgroundTertiary` à 4,496:1) : **4,76:1** sur `backgroundSecondary`
+    /// `#F8F7FF`, **4,60:1** sur `backgroundTertiary` `#EEF2FF`. Les deux
+    /// jetons partagent désormais la même couleur en clair — ils gardent des
+    /// RÔLES distincts (texte secondaire vs méta discrète), ce n'est ni un
+    /// alias ni une fusion de fonctions.
     public static func textSecondary(isDark: Bool) -> Color {
-        isDark ? indigo300 : indigo700.opacity(0.6)
+        isDark ? indigo300 : indigo700.opacity(0.8)
     }
 
     /// D-18 (2026-08-18, soldée) — `indigo500.opacity(0.4)`/`indigo400.opacity(0.5)`

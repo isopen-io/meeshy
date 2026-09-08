@@ -5,7 +5,7 @@
 #
 # POURQUOI CE WORKFLOW EXISTE
 #
-# L'instrument existait — `apps/web-v3/scripts/baseline.mjs`, sa forme, ses six
+# L'instrument existait — `apps/web-old-version3/scripts/baseline.mjs`, sa forme, ses six
 # cibles, sa sortie datée — et AUCUN hôte ne savait l'exécuter : l'egress des
 # sessions de développement répond 403 à `CONNECT meeshy.me:443`, donc la mesure
 # ne pouvait être prise nulle part. Un instrument qu'aucune commande ne lance
@@ -123,7 +123,7 @@ jobs:
           POST: ${{ inputs.post }}
           MOOD: ${{ inputs.mood }}
         run: |
-          node apps/web-v3/scripts/baseline.mjs \
+          node apps/web-old-version3/scripts/baseline.mjs \
             "$ACCUEIL" \
             "$LIEN" \
             "$STORY" \
@@ -136,7 +136,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: web-v3-baseline
-          path: apps/web-v3/e2e/visual/baseline.json
+          path: apps/web-old-version3/e2e/visual/baseline.json
           if-no-files-found: error
 
       - name: Summarise what to commit
@@ -147,11 +147,11 @@ jobs:
             echo
             echo 'Appliquer au dépôt :'
             echo '```'
-            echo 'gh run download <run-id> -n web-v3-baseline -D apps/web-v3/e2e/visual/'
+            echo 'gh run download <run-id> -n web-v3-baseline -D apps/web-old-version3/e2e/visual/'
             echo 'node scripts/v3-rapport.mjs   # la septième mesure doit passer au vert'
             echo '```'
             echo
             echo '```json'
-            cat apps/web-v3/e2e/visual/baseline.json
+            cat apps/web-old-version3/e2e/visual/baseline.json
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

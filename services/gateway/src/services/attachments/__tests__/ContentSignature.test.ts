@@ -1,8 +1,8 @@
 import {
   matchesAudioSignature,
   matchesImageSignature,
-  matchesDeclaredSignature,
   classifyAnonymousAttachment,
+  verifyDeclaredMimeType,
 } from '../ContentSignature';
 
 // ─── Fixtures : octets d'en-tête réels ─────────────────────────────────────────
@@ -52,6 +52,9 @@ const WEBP_HEADER = Buffer.concat([
 const PDF_HEADER = Buffer.from('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n', 'binary');
 const ZIP_DOCX_HEADER = Buffer.from([0x50, 0x4b, 0x03, 0x04]); // docx/zip
 const PLAIN_TEXT = Buffer.from('Bonjour, ceci est un simple fichier texte.', 'utf8');
+const SVG_HEADER_PROLOG = Buffer.from('<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'utf8');
+const SVG_HEADER_BARE = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><circle r="1"/></svg>', 'utf8');
+const SVG_HEADER_WITH_BOM = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), SVG_HEADER_BARE]);
 
 describe('matchesAudioSignature', () => {
   it.each([
@@ -246,53 +249,49 @@ describe('classifyAnonymousAttachment', () => {
   });
 });
 
-// ─── matchesDeclaredSignature — vérification universelle (#3627) ───────────
+// ─── verifyDeclaredMimeType (#5615) ─────────────────────────────────────────
 //
-// Contrairement à `classifyAnonymousAttachment`, cette fonction ne RECLASSE
-// rien : elle rend un verdict binaire, appliqué à TOUT appelant (registered
-// ou anonyme) sur `routes/attachments/upload.ts` et `routes/uploads/tus-handler.ts`
-// — jusqu'ici les magic bytes ne servaient qu'à arbitrer un droit de lien de
-// partage anonyme, jamais à vérifier l'intégrité déclaré/réel pour tous.
+// Contrairement à `classifyAnonymousAttachment` (qui ne s'applique qu'à
+// l'exemption anonyme et retombe silencieusement sur le seau « fichier » en
+// cas de signature manquante), cette fonction s'applique à TOUT upload
+// (inscrit ou anonyme) et REJETTE explicitement un mimeType déclaré qui ne
+// correspond pas au contenu réel — critère de fin de #5615.
 
-describe('matchesDeclaredSignature', () => {
-  it('accepte une image dont les octets correspondent au type déclaré', () => {
-    expect(matchesDeclaredSignature('image/jpeg', JPEG_HEADER)).toBe(true);
-    expect(matchesDeclaredSignature('image/png', PNG_HEADER)).toBe(true);
-    expect(matchesDeclaredSignature('image/webp', WEBP_HEADER)).toBe(true);
+describe('verifyDeclaredMimeType', () => {
+  it.each([
+    ['image/png déclaré sur un vrai PNG', 'image/png', PNG_HEADER],
+    ['image/jpeg déclaré sur un vrai JPEG', 'image/jpeg', JPEG_HEADER],
+    ['audio/webm déclaré sur un vrai WebM', 'audio/webm', WEBM_HEADER],
+    ['audio/mpeg déclaré sur un vrai MP3 (ID3)', 'audio/mpeg', MP3_ID3_HEADER],
+    ['application/pdf déclaré sur un vrai PDF', 'application/pdf', PDF_HEADER],
+    ['image/svg+xml déclaré sur un SVG avec prologue XML', 'image/svg+xml', SVG_HEADER_PROLOG],
+    ['image/svg+xml déclaré sur un SVG sans prologue', 'image/svg+xml', SVG_HEADER_BARE],
+    ['image/svg+xml déclaré sur un SVG avec BOM UTF-8', 'image/svg+xml', SVG_HEADER_WITH_BOM],
+    // Familles sans signature fiable connue — la déclaration est crue par décision produit.
+    ['video/mp4 déclaré sur un contenu quelconque', 'video/mp4', PLAIN_TEXT],
+    ['text/plain déclaré sur un contenu quelconque', 'text/plain', PDF_HEADER],
+    ['application/zip déclaré sur un contenu quelconque', 'application/zip', PLAIN_TEXT],
+  ])('vérifie %s', (_label, mimeType, buffer) => {
+    expect(verifyDeclaredMimeType(mimeType, buffer)).toEqual({ verified: true });
   });
 
-  it('accepte un audio dont les octets correspondent au type déclaré', () => {
-    expect(matchesDeclaredSignature('audio/webm', WEBM_HEADER)).toBe(true);
-    expect(matchesDeclaredSignature('audio/mp4', MP4_M4A_HEADER)).toBe(true);
-    expect(matchesDeclaredSignature('audio/wav', WAV_HEADER)).toBe(true);
+  it.each([
+    ['image/png déclaré sur un PDF (usurpation)', 'image/png', PDF_HEADER],
+    ['image/jpeg déclaré sur du texte brut', 'image/jpeg', PLAIN_TEXT],
+    ['audio/webm déclaré sur un PDF (usurpation)', 'audio/webm', PDF_HEADER],
+    ['audio/mpeg déclaré sur une image PNG', 'audio/mpeg', PNG_HEADER],
+    ['application/pdf déclaré sur une image PNG', 'application/pdf', PNG_HEADER],
+    ['application/pdf déclaré sur du texte brut', 'application/pdf', PLAIN_TEXT],
+    ['image/svg+xml déclaré sur un PDF (usurpation)', 'image/svg+xml', PDF_HEADER],
+    ['image/svg+xml déclaré sur du texte brut sans balise', 'image/svg+xml', PLAIN_TEXT],
+  ])('rejette %s', (_label, mimeType, buffer) => {
+    const verdict = verifyDeclaredMimeType(mimeType, buffer);
+    expect(verdict.verified).toBe(false);
+    expect((verdict as { reason: string }).reason).toContain(mimeType);
   });
 
-  it('refuse une image dont les octets ne correspondent pas au type déclaré', () => {
-    expect(matchesDeclaredSignature('image/png', PDF_HEADER)).toBe(false);
-    expect(matchesDeclaredSignature('image/jpeg', ZIP_DOCX_HEADER)).toBe(false);
-  });
-
-  it('refuse un audio dont les octets ne correspondent pas au type déclaré', () => {
-    expect(matchesDeclaredSignature('audio/webm', PDF_HEADER)).toBe(false);
-    expect(matchesDeclaredSignature('audio/mp4', PLAIN_TEXT)).toBe(false);
-  });
-
-  it('normalise la casse du type déclaré', () => {
-    expect(matchesDeclaredSignature('IMAGE/JPEG', JPEG_HEADER)).toBe(true);
-    expect(matchesDeclaredSignature('AUDIO/WEBM', PDF_HEADER)).toBe(false);
-  });
-
-  it('exempte SVG — XML texte, hors du périmètre binaire de matchesImageSignature', () => {
-    // `image/svg+xml` n'est même pas dans `ACCEPTED_MIME_TYPES.IMAGE`
-    // (packages/shared/types/attachment.ts) : le traiter comme une image
-    // binaire rejetterait tout SVG légitime, qui n'a pas de magic number.
-    expect(matchesDeclaredSignature('image/svg+xml', Buffer.from('<svg xmlns="…"></svg>'))).toBe(true);
-    expect(matchesDeclaredSignature('IMAGE/SVG+XML', Buffer.from('<svg></svg>'))).toBe(true);
-  });
-
-  it('laisse passer un type hors image/audio (gap documenté, pas une garantie universelle)', () => {
-    expect(matchesDeclaredSignature('application/pdf', PLAIN_TEXT)).toBe(true);
-    expect(matchesDeclaredSignature('video/mp4', PLAIN_TEXT)).toBe(true);
-    expect(matchesDeclaredSignature('text/plain', PDF_HEADER)).toBe(true);
+  it('normalise la casse et les paramètres du mimeType déclaré', () => {
+    expect(verifyDeclaredMimeType('IMAGE/PNG', PNG_HEADER)).toEqual({ verified: true });
+    expect(verifyDeclaredMimeType('image/png; charset=binary', PDF_HEADER).verified).toBe(false);
   });
 });

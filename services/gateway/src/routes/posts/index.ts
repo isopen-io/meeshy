@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { registerCoreRoutes } from './core';
 import { registerPostMediaRoutes } from './media';
+import { registerPostMediaExportRoutes } from './media-export';
 import { registerFeedRoutes } from './feed';
 import { registerCommentRoutes } from './comments';
 import { registerInteractionRoutes } from './interactions';
@@ -35,6 +36,7 @@ export async function postRoutes(fastify: FastifyInstance) {
 
   registerCoreRoutes(fastify, prisma, requiredAuth);
   registerPostMediaRoutes(fastify, prisma, requiredAuth);
+  registerPostMediaExportRoutes(fastify, prisma, requiredAuth);
   registerFeedRoutes(fastify, prisma, requiredAuth, optionalAuth);
   registerCommentRoutes(fastify, prisma, requiredAuth);
   registerInteractionRoutes(fastify, prisma, requiredAuth, orphanCleanup);

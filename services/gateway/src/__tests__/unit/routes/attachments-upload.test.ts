@@ -309,7 +309,7 @@ describe('POST /attachments/upload — invalid metadata JSON', () => {
       url: '/attachments/upload',
       headers: { 'content-type': CT },
       // application/octet-stream : hors du périmètre image/audio de
-      // `matchesDeclaredSignature` (#3627) — ce test exerce le parsing de
+      // `verifyDeclaredMimeType` (#5615) — ce test exerce le parsing de
       // métadonnées, pas la vérification de signature de contenu.
       payload: multipartFileWithMetadata('photo.bin', 'application/octet-stream', '{not valid json}'),
     });
@@ -331,7 +331,7 @@ describe('POST /attachments/upload — non-metadata field ignored', () => {
       url: '/attachments/upload',
       headers: { 'content-type': CT },
       // application/octet-stream : hors du périmètre image/audio de
-      // `matchesDeclaredSignature` (#3627) — ce test exerce l'ignorance d'un
+      // `verifyDeclaredMimeType` (#5615) — ce test exerce l'ignorance d'un
       // champ hors-contrat, pas la vérification de signature de contenu.
       payload: multipartFileWithExtraField('photo.bin', 'application/octet-stream'),
     });

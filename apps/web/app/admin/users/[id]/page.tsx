@@ -34,6 +34,7 @@ import { UserPersonalInfoSection } from '@/components/admin/user-detail/UserPers
 import { UserContactInfoSection } from '@/components/admin/user-detail/UserContactInfoSection';
 import { UserLanguageSection } from '@/components/admin/user-detail/UserLanguageSection';
 import { UserSecuritySection } from '@/components/admin/user-detail/UserSecuritySection';
+import { UserBanSection } from '@/components/admin/user-detail/UserBanSection';
 import { UserGeolocationSection } from '@/components/admin/user-detail/UserGeolocationSection';
 import { UserActivitySection } from '@/components/admin/user-detail/UserActivitySection';
 import { UserConversationsSection } from '@/components/admin/user-detail/UserConversationsSection';
@@ -112,7 +113,11 @@ export default function UserDetailPage() {
         loadUserData();
       }
     } catch (error: unknown) {
-      toast.error(error.message || t('usersDetail.roleUpdateError'));
+      toast.error(
+        error instanceof Error && error.message !== ''
+          ? error.message
+          : t('usersDetail.roleUpdateError'),
+      );
     } finally {
       setSaving(false);
     }
@@ -130,7 +135,11 @@ export default function UserDetailPage() {
         loadUserData();
       }
     } catch (error: unknown) {
-      toast.error(error.message || t('usersDetail.statusChangeError'));
+      toast.error(
+        error instanceof Error && error.message !== ''
+          ? error.message
+          : t('usersDetail.statusChangeError'),
+      );
     }
   };
 
@@ -152,7 +161,11 @@ export default function UserDetailPage() {
         setPasswordReset({ open: false, newPassword: '', confirmPassword: '', reason: '' });
       }
     } catch (error: unknown) {
-      toast.error(error.message || t('usersDetail.passwordResetError'));
+      toast.error(
+        error instanceof Error && error.message !== ''
+          ? error.message
+          : t('usersDetail.passwordResetError'),
+      );
     } finally {
       setSaving(false);
     }
@@ -168,7 +181,11 @@ export default function UserDetailPage() {
         router.push('/admin/users');
       }
     } catch (error: unknown) {
-      toast.error(error.message || t('usersDetail.deleteError'));
+      toast.error(
+        error instanceof Error && error.message !== ''
+          ? error.message
+          : t('usersDetail.deleteError'),
+      );
     } finally {
       setSaving(false);
     }
@@ -308,6 +325,8 @@ export default function UserDetailPage() {
               onUpdate={loadUserData}
               onResetPassword={() => setPasswordReset({ ...passwordReset, open: true })}
             />
+
+            <UserBanSection userId={userId} onUpdate={loadUserData} />
 
             <UserGeolocationSection user={user} />
 

@@ -5,6 +5,17 @@ import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { ensureGlobalConversationMembership } from './conversations/ensureGlobalConversationMembership';
+import { getJwtSecret, requireStrongSecret } from '../utils/secrets';
+import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation-primitives';
+
+/**
+ * Les trois comptes de bootstrap (#3623) — `bigboss123`/`admin123` étaient un
+ * défaut public COMMITTÉ, utilisable par quiconque lit le dépôt. Même garde
+ * que `getJwtSecret()` : refus au boot en production/staging sans l'env var
+ * dédiée, tolérance avec avertissement en dev/test.
+ */
+const requireSeedPassword = (envVar: string, insecureDefault: string): string =>
+  requireStrongSecret({ envVar, insecureDefault, minLength: PASSWORD_MIN_LENGTH });
 
 // Logger dédié pour InitService
 const logger = enhancedLogger.child({ module: 'InitService' });
@@ -29,7 +40,7 @@ export class InitService {
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
-    this.authService = new AuthService(prisma, process.env.JWT_SECRET || 'default-jwt-secret');
+    this.authService = new AuthService(prisma, getJwtSecret());
   }
 
   /**
@@ -139,7 +150,7 @@ export class InitService {
   private async createBigbossUser(): Promise<void> {
     // Utilisateur fixe avec certains champs configurables
     const username = 'meeshy'; // FIXE
-    const password = process.env.MEESHY_PASSWORD || 'bigboss123'; // CONFIGURABLE
+    const password = requireSeedPassword('MEESHY_PASSWORD', 'bigboss123'); // CONFIGURABLE
     const firstName = 'Meeshy'; // FIXE
     const lastName = 'Sama'; // FIXE
     const email = process.env.MEESHY_EMAIL || 'meeshy@meeshy.me'; // CONFIGURABLE
@@ -210,7 +221,7 @@ export class InitService {
   private async createAdminUser(): Promise<void> {
     // Utilisateur fixe avec certains champs configurables
     const username = 'admin'; // FIXE
-    const password = process.env.ADMIN_PASSWORD || 'admin123'; // CONFIGURABLE
+    const password = requireSeedPassword('ADMIN_PASSWORD', 'admin123'); // CONFIGURABLE
     const firstName = 'Admin'; // FIXE
     const lastName = 'Manager'; // FIXE
     const email = process.env.ADMIN_EMAIL || 'admin@meeshy.me'; // CONFIGURABLE
@@ -413,7 +424,7 @@ export class InitService {
   private async createAndreTabethUser(): Promise<void> {
     // Utilisateur entièrement configurable - Default: ADMIN with English
     const username = process.env.ATABETH_USERNAME || 'atabeth';
-    const password = process.env.ATABETH_PASSWORD || 'admin123';
+    const password = requireSeedPassword('ATABETH_PASSWORD', 'admin123');
     const firstName = process.env.ATABETH_FIRST_NAME || 'André';
     const lastName = process.env.ATABETH_LAST_NAME || 'Tabeth';
     const email = process.env.ATABETH_EMAIL || 'atabeth@meeshy.me';

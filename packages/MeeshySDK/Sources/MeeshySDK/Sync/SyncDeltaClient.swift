@@ -15,7 +15,7 @@ public protocol SyncDeltaTransporting: Sendable {
 }
 
 /// CE QUE LE CLIENT DEMANDE — le miroir du client web
-/// (`apps/web-v3/lib/realtime/sync/delta-client.ts`), paramètre pour paramètre.
+/// (`apps/web-old-version3/lib/realtime/sync/delta-client.ts`), paramètre pour paramètre.
 public struct SyncDeltaRequest: Sendable, Equatable {
     /// Le dernier `checkpoint` reçu, ou l'instant de la dernière ligne peinte au premier tour.
     public let since: String

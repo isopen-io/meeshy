@@ -72,19 +72,17 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 const JWT_SECRET = 'test-secret-tus-transcription';
 const ORIGINAL_JWT_SECRET = process.env.JWT_SECRET;
 const ORIGINAL_UPLOAD_PATH = process.env.UPLOAD_PATH;
-// #3627 — un vrai en-tête MP4/M4A (ftyp box) : `onUploadFinish` vérifie
-// désormais la signature réelle contre le `filetype` déclaré pour tout
-// appelant REGISTERED (ce que ces tests exercent), donc un contenu arbitraire
-// ne suffit plus à faire passer un upload déclaré `audio/mp4`.
+// #5615 — `onUploadFinish` vérifie désormais la signature de contenu contre le
+// `filetype` déclaré, pour TOUS les uploads (pas seulement l'exemption
+// anonyme). Un M4A/MP4 réel (ftyp box) remplace le texte arbitraire d'avant —
+// ce fichier ne teste aucun comportement de signature, seulement le transport
+// de la transcription.
 const AUDIO_BYTES = Buffer.concat([
   Buffer.from([0x00, 0x00, 0x00, 0x18]),
   Buffer.from('ftypM4A ', 'ascii'),
   Buffer.from([0x00, 0x00, 0x00, 0x00]),
   Buffer.from('M4A mp42isom', 'ascii'),
 ]);
-// PNG minimal (signature 8 octets + chunk IHDR de longueur 13) — pour le test
-// qui déclare `image/png` : un contenu AUDIO échouerait désormais la même
-// vérification de signature, pour une raison hors du périmètre de ce test.
 const PNG_BYTES = Buffer.concat([
   Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
   Buffer.from([0x00, 0x00, 0x00, 0x0d]),
@@ -149,10 +147,10 @@ describe('tus-handler — transcription faite sur l’appareil', () => {
     prisma: ReturnType<typeof buildFakePrisma>;
     filetype?: string;
     filename?: string;
+    /** Octets réels écrits sur disque — doivent correspondre à `filetype` (#5615). */
+    bytes?: Buffer;
     /** Valeur DÉCODÉE de la clé `transcription` (`@tus/server` défait le base64). */
     transcription?: string;
-    /** Octets réellement écrits sur disque — défaut : un en-tête M4A valide. */
-    content?: Buffer;
   }) {
     process.env.UPLOAD_PATH = uploadDir;
     jest.resetModules();
@@ -160,7 +158,7 @@ describe('tus-handler — transcription faite sur l’appareil', () => {
     await registerTusRoutes(buildFakeFastify(params.prisma));
     if (!captured) throw new Error('options TUS non capturées');
 
-    const content = params.content ?? AUDIO_BYTES;
+    const bytes = params.bytes ?? AUDIO_BYTES;
     const uploadId = 'upload-transcription';
     const metadata: Record<string, string> = {
       filename: params.filename ?? 'voice.m4a',
@@ -170,17 +168,17 @@ describe('tus-handler — transcription faite sur l’appareil', () => {
 
     const created = await captured.onUploadCreate(
       { headers: headersFrom(registeredHeaders()) },
-      { metadata, size: content.length }
+      { metadata, size: bytes.length }
     );
 
     const tusTempPath = path.join(uploadDir, '.tus-resumable');
     await fs.mkdir(tusTempPath, { recursive: true });
-    await fs.writeFile(path.join(tusTempPath, uploadId), content);
+    await fs.writeFile(path.join(tusTempPath, uploadId), bytes);
 
     try {
       return await captured.onUploadFinish(
         {},
-        { id: uploadId, metadata: created.metadata, size: content.length, storage: undefined }
+        { id: uploadId, metadata: created.metadata, size: bytes.length, storage: undefined }
       );
     } catch (thrown) {
       return thrown as { status_code?: number; body?: string };
@@ -279,7 +277,7 @@ describe('tus-handler — transcription faite sur l’appareil', () => {
       prisma,
       filename: 'photo.png',
       filetype: 'image/png',
-      content: PNG_BYTES,
+      bytes: PNG_BYTES,
       transcription: JSON.stringify(VALID_TRANSCRIPTION),
     });
 
