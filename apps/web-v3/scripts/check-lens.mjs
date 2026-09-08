@@ -99,6 +99,25 @@ constate(
   `une case ne mesure pas 84 : ${JSON.stringify(before.filter((r) => r.height !== 84))}`,
 );
 
+/**
+ * §5.9 de la spécification #5676 (D-23) — l'aperçu de liste de la Salle
+ * sécurisée (`c-protection`) NE SERT JAMAIS son sujet flouté : la rangée
+ * annonce « 1 message caché », jamais le texte protégé.
+ */
+const protectedRow = await page.evaluate(() => {
+  const li = document.querySelector('[data-row="c-protection"]');
+  return li === null ? null : li.textContent ?? '';
+});
+constate(protectedRow !== null, 'la rangée « c-protection » est introuvable dans la Lentille');
+constate(
+  protectedRow !== null && !protectedRow.includes('7741'),
+  `la rangée « c-protection » fuit le sujet du message flouté : ${JSON.stringify(protectedRow)}`,
+);
+constate(
+  protectedRow !== null && protectedRow.includes('1 message caché'),
+  `la rangée « c-protection » ne dit pas « 1 message caché » : ${JSON.stringify(protectedRow)}`,
+);
+
 /** On défile PAR PALIERS, en relevant la géométrie à chaque, et on la compare. */
 const readings = [];
 for (const y of [40, 120, 240, 400, 600]) {

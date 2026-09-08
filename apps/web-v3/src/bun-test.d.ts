@@ -11,8 +11,8 @@
  * `scripts/check-git-tracking.mjs` garde désormais la classe entière.
  */
 declare module 'bun:test' {
-  export function describe(name: string, body: () => void): void;
   export function test(name: string, body: () => void | Promise<void>): void;
+  export function describe(name: string, body: () => void): void;
   export function afterEach(body: () => void | Promise<void>): void;
 
   type Expectations = {
@@ -29,6 +29,8 @@ declare module 'bun:test' {
     toBeTruthy(): void;
     toBeGreaterThan(expected: number): void;
     toBeGreaterThanOrEqual(expected: number): void;
+    toBeLessThan(expected: number): void;
+    toBeLessThanOrEqual(expected: number): void;
     toBeInstanceOf(expected: unknown): void;
     toThrow(expected?: RegExp | string): void;
   };
