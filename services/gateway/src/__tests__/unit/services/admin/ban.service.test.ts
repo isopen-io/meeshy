@@ -105,4 +105,103 @@ describe('BanService', () => {
       expect(prisma.ban.findMany).toHaveBeenCalledWith({ where: { userId: 'u1' }, orderBy: { createdAt: 'desc' } });
     });
   });
+
+  describe('liftBan — lever automatique (#5527)', () => {
+    it('accepte liftedById: null et un liftedAt personnalisé', async () => {
+      const echeance = new Date('2026-09-01T00:00:00Z');
+      const banLeve = { id: 'ban1', userId: 'u1', bannedById: 'admin1', reason: 'Spam', expiresAt: echeance, createdAt: new Date(), liftedAt: echeance, liftedById: null, liftReason: 'expired' };
+      prisma.ban.findUniqueOrThrow.mockResolvedValue({ id: 'ban1', userId: 'u1', liftedAt: null, expiresAt: echeance });
+      prisma.ban.update.mockResolvedValue(banLeve);
+      prisma.ban.findMany.mockResolvedValue([]);
+
+      const resultat = await service.liftBan({ banId: 'ban1', liftedById: null, liftReason: 'expired', liftedAt: echeance });
+
+      expect(prisma.ban.update).toHaveBeenCalledWith({
+        where: { id: 'ban1' },
+        data: { liftedAt: echeance, liftedById: null, liftReason: 'expired' },
+      });
+      expect(resultat).toBe(banLeve);
+    });
+  });
+
+  describe('sweepExpiredBans', () => {
+    it('ne lève rien quand aucun ban n’a expiré', async () => {
+      prisma.ban.findMany.mockResolvedValue([]);
+
+      const resultat = await service.sweepExpiredBans(new Date('2026-09-07T00:00:00Z'));
+
+      expect(resultat).toEqual([]);
+      expect(prisma.ban.update).not.toHaveBeenCalled();
+      expect(ums.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('interroge les bans non levés dont l’échéance est passée ou égale à `now`', async () => {
+      const maintenant = new Date('2026-09-07T00:00:00Z');
+      prisma.ban.findMany.mockResolvedValue([]);
+
+      await service.sweepExpiredBans(maintenant);
+
+      expect(prisma.ban.findMany).toHaveBeenCalledWith({
+        where: { liftedAt: null, expiresAt: { not: null, lte: maintenant } },
+      });
+    });
+
+    it('lève un ban expiré : liftedAt = expiresAt, liftedById = null, liftReason = expired, et réactive le compte', async () => {
+      const echeance = new Date('2026-09-01T00:00:00Z');
+      const expire = { id: 'ban1', userId: 'u1', liftedAt: null, expiresAt: echeance };
+      const banLeve = { ...expire, bannedById: 'admin1', reason: 'Spam', createdAt: new Date(), liftedAt: echeance, liftedById: null, liftReason: 'expired' };
+
+      prisma.ban.findMany.mockImplementation(({ where }: any) =>
+        Promise.resolve('id' in (where ?? {}) ? [] : [expire])
+      );
+      prisma.ban.findUniqueOrThrow.mockResolvedValue(expire);
+      prisma.ban.update.mockResolvedValue(banLeve);
+
+      const resultat = await service.sweepExpiredBans();
+
+      expect(prisma.ban.update).toHaveBeenCalledWith({
+        where: { id: 'ban1' },
+        data: { liftedAt: echeance, liftedById: null, liftReason: 'expired' },
+      });
+      expect(ums.updateStatus).toHaveBeenCalledWith('u1', { isActive: true });
+      expect(resultat).toEqual([banLeve]);
+    });
+
+    it('ne réactive PAS le compte quand un autre ban reste en vigueur', async () => {
+      const echeance = new Date('2026-09-01T00:00:00Z');
+      const expire = { id: 'ban1', userId: 'u1', liftedAt: null, expiresAt: echeance };
+      const banLeve = { ...expire, liftedAt: echeance, liftedById: null, liftReason: 'expired' };
+
+      prisma.ban.findMany.mockImplementation(({ where }: any) =>
+        Promise.resolve('id' in (where ?? {}) ? [{ id: 'ban2', userId: 'u1', liftedAt: null, expiresAt: null }] : [expire])
+      );
+      prisma.ban.findUniqueOrThrow.mockResolvedValue(expire);
+      prisma.ban.update.mockResolvedValue(banLeve);
+
+      await service.sweepExpiredBans();
+
+      expect(ums.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('lève chaque ban expiré indépendamment, pour des utilisateurs distincts', async () => {
+      const expire1 = { id: 'ban1', userId: 'u1', liftedAt: null, expiresAt: new Date('2026-09-01T00:00:00Z') };
+      const expire2 = { id: 'ban2', userId: 'u2', liftedAt: null, expiresAt: new Date('2026-09-02T00:00:00Z') };
+
+      prisma.ban.findMany.mockImplementation(({ where }: any) =>
+        Promise.resolve('id' in (where ?? {}) ? [] : [expire1, expire2])
+      );
+      prisma.ban.findUniqueOrThrow.mockImplementation(({ where }: any) =>
+        Promise.resolve(where.id === 'ban1' ? expire1 : expire2)
+      );
+      prisma.ban.update.mockImplementation(({ where, data }: any) =>
+        Promise.resolve({ id: where.id, userId: where.id === 'ban1' ? 'u1' : 'u2', ...data })
+      );
+
+      const resultat = await service.sweepExpiredBans();
+
+      expect(resultat).toHaveLength(2);
+      expect(ums.updateStatus).toHaveBeenCalledWith('u1', { isActive: true });
+      expect(ums.updateStatus).toHaveBeenCalledWith('u2', { isActive: true });
+    });
+  });
 });
