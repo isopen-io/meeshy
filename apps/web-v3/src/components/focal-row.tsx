@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 
 import { deliveryOf, isMineOf, translationsOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
@@ -10,6 +10,7 @@ import type { FlatRowMode } from '@/lib/reading-mode/decision';
 import { mountsBottomLine } from '@/lib/reading-mode/meta';
 import {
   AVATAR_SIZE,
+  FLAG_LIMIT_PLAIN,
   GROUP_TOP_PADDING,
   META_TEXT_OPACITY,
   ROW_PADDING_HORIZONTAL,
@@ -19,6 +20,7 @@ import {
 
 import { Avatar } from './avatar';
 import { Glyph } from './glyph';
+import { FocusCard, FocusIdentity, FocusStamp, FocusStrip } from './focal-focus-overlays';
 import {
   Attachments,
   Check,
@@ -57,8 +59,21 @@ import {
  * colonne se monte sur CHAQUE rangée (jamais seulement la tête de groupe) :
  * une rangée de continuation SANS heure était le défaut mesuré (#5566
  * défaut 6) — la tête de groupe ne porte plus que l'IDENTITÉ.
+ *
+ * L'ÉLECTION (#5648) — Focal se distingue désormais de Script par l'ÉLECTION
+ * d'une rangée au défilement soutenu (carte teintée, chip d'identité
+ * agrandi, tampon de date), plus par la courbe continue qu'iOS a retirée
+ * (`reading-mode/perspective.ts`, gelée). `elected` est la SEULE donnée que
+ * l'hôte fait traverser React à ce sujet (`reading-mode/scene.ts`) : quand
+ * elle bascule, l'en-tête d'identité et la colonne méta s'effacent
+ * (`FocalRow.swift:182, :269, :317-322`), la ligne basse ordinaire cède la
+ * place à `FocusStrip`/`FocusStamp` (`focal-focus-overlays.tsx`) — DEUX
+ * rangées re-rendent par changement d'élection (l'ancienne élue, la
+ * nouvelle), jamais toutes. `memo` en bas de fichier tient cette promesse :
+ * une rangée dont AUCUNE prop ne change ne re-rend jamais, y compris
+ * pendant la scène du fil.
  */
-export function FocalRow({
+export const FocalRow = memo(function FocalRow({
   mode,
   place,
   languages,
@@ -67,6 +82,7 @@ export function FocalRow({
   onRetry,
   onJumpToMessage,
   highlighted = false,
+  elected = false,
 }: {
   mode: FlatRowMode;
   place: PlacedMessage;
@@ -79,6 +95,8 @@ export function FocalRow({
   onJumpToMessage: (messageId: string) => void;
   /** Mis en évidence brièvement après un saut de citation. */
   highlighted?: boolean;
+  /** Élue par la scène du fil (`reading-mode/scene.ts`) — Focal seul, jamais Script. */
+  elected?: boolean;
 }) {
   const { message, head, tail } = place;
   const isMine = isMineOf(message, viewerId);
@@ -123,9 +141,15 @@ export function FocalRow({
 
   const delivery = localDelivery === 'pending' ? 'pending' : deliveryOf(message);
 
+  // Le tampon n'est calculé QUE quand il est rendu (§5.6 de la spécification
+  // #5648) — cette rangée ne re-rend que sur un changement de `elected`
+  // (`memo`), donc `new Date()` ici ne tourne pas à chaque frame de la scène.
+  const now = elected ? new Date() : null;
+
   return (
     <div
       data-reading-mode={mode}
+      data-elected={elected ? 'true' : undefined}
       className="grid transition-colors duration-500"
       style={{
         gridTemplateColumns: `${TEXT_INDENT}px 1fr`,
@@ -138,17 +162,39 @@ export function FocalRow({
           : 'transparent',
       }}
     >
-      <div className="flex justify-center pt-0.5">
+      {/* L'AVATAR DE LA TÊTE DE GROUPE — s'EFFACE en focus, comme le nom
+          juste à côté : côté iOS l'en-tête d'identité ENTIER (avatar + nom)
+          passe à `opacity: 0` (`FocalRow.swift:269`) et `focusIdentityChip`
+          le REMPLACE à la même place. Le laisser visible peignait DEUX
+          pastilles et DEUX noms sur la même rangée (mesuré sur
+          `thread-focal-scene.dark.png`, correction de revue #5648). */}
+      <div className="flex justify-center pt-0.5" style={{ opacity: elected ? 0 : 1 }}>
         {head ? <Avatar initials={initialsOf(senderName)} color="var(--accent)" size={AVATAR_SIZE} /> : null}
       </div>
 
-      <div className="min-w-0">
+      {/* `position: relative` sur TOUTE la colonne de contenu — tête de
+          groupe COMPRISE — et non sur le seul bloc « deux colonnes »
+          (correction de revue, capture `thread-focal-scene.dark.png`) :
+          ancrée plus bas, `FocusIdentity` (34 px, overhang -20 px)
+          débordait DANS le texte du message plutôt que dans la zone
+          RÉSERVÉE par l'en-tête d'identité (désormais invisible,
+          `opacity:0`, mais toujours présente dans le flux — donc encore
+          « à elle » l'espace que la superposition vient occuper). Sur une
+          rangée de CONTINUATION (sans tête), le débordement reste possible
+          — écart hors périmètre de #5648, à suivre si mesuré. */}
+      <div className="min-w-0 relative">
+        {elected ? <FocusCard /> : null}
+        {elected ? (
+          <FocusIdentity initials={initialsOf(senderName)} name={senderName} accent="var(--accent)" />
+        ) : null}
+
         {head ? (
           /* TÊTE DE GROUPE : l'IDENTITÉ seule (défaut 6) — « cet en-tête ne
              date plus rien » (iOS, `FocalIdentityHeader.swift:13-18`).
              L'heure vit désormais dans la colonne méta, accolée à CHAQUE
-             rangée, tête comme continuation. */
-          <div className="pb-0.5">
+             rangée, tête comme continuation. S'EFFACE en focus (:269) —
+             `FocusIdentity` la remplace en overlay. */
+          <div className="pb-0.5" style={{ opacity: elected ? 0 : 1 }}>
             <span className="text-title font-extrabold" style={{ color: 'var(--color-ios-ink)' }}>
               {senderName}
             </span>
@@ -208,9 +254,33 @@ export function FocalRow({
             {/* LA LIGNE BASSE — drapeaux PUIS réactions, même ligne : c'est
                 l'arbitrage porteur du 2026-08-18 que `FocalRow.flagAndReactionsRow`
                 porte côté iOS. Conditionnelle (défaut 7) : elle ne monte plus
-                sur un message sans rien à dire. */}
+                sur un message sans rien à dire.
+
+                S'EFFACE en focus par `visibility: hidden`, PAS par démontage
+                (correction de revue #5648, défaut bloquant 3) : la
+                DÉMONTER — comme une première version de ce lot le faisait —
+                réduit la rangée élue de la hauteur de cette ligne (26 px),
+                et fait remonter `.focus-strip`/`.focus-stamp`
+                (`bottom: calc(-1 * var(--focus-strip-overhang))`, ancrés au
+                bas du bloc de contenu) SUR la dernière ligne du texte que
+                l'élection vient de mettre en avant. `FocalRow.swift:317-322`
+                fait l'INVERSE mot pour mot — `.opacity(input.isFocused ? 0
+                : 1)` — « la bande SUR la ligne basse remplace visuellement
+                cette ligne, QUI GARDE SA PLACE ». `visibility: hidden` (et
+                non `opacity: 0`, le traitement de l'avatar/du nom deux blocs
+                plus haut) parce que CETTE ligne porte des `<button>` DE
+                PRISME : `opacity: 0` les aurait laissés dans l'ordre de
+                tabulation et l'arbre d'accessibilité — exactement l'anti-
+                motif WCAG que `FocusStrip` (le composant qui les REMPLACE
+                visuellement) documente avoir évité en restant hors
+                `aria-hidden`. `visibility: hidden` réserve la MÊME hauteur
+                sans y laisser de contrôle atteignable au clavier ni annoncé
+                deux fois. */}
             {showsBottomLine ? (
-              <div className="flex items-center gap-1 pt-1" style={{ color: 'var(--color-meta)' }}>
+              <div
+                className="flex items-center gap-1 pt-1"
+                style={{ color: 'var(--color-meta)', visibility: elected ? 'hidden' : 'visible' }}
+              >
                 <PrismPastille
                   servedLanguage={rendered.language}
                   originalLanguage={message.originalLanguage}
@@ -223,18 +293,62 @@ export function FocalRow({
                   languages={footerLanguages}
                   active={openLanguage}
                   onPick={(code) => setOpenLanguage((v) => (v === code ? null : code))}
+                  limit={FLAG_LIMIT_PLAIN}
                 />
                 {reactions.map(([glyph, count]) => (
                   <ReactionChip key={glyph} glyph={glyph} count={count} />
                 ))}
+              </div>
+            ) : elected ? (
+              /* DÉFAUT 1 (#5648, correction de revue) — le recouvrement du
+                 texte par le tampon n'était corrigé QUE pour les rangées qui
+                 montent une ligne basse (ci-dessus, `visibility: hidden`
+                 réserve sa hauteur). Une rangée ÉLUE SANS ligne basse
+                 (continuation `tail === false`, ou message sans traduction
+                 ni réaction) ne réservait AUCUNE hauteur : `.focus-strip`/
+                 `.focus-stamp` (ancrés `bottom: calc(-1 *
+                 var(--focus-strip-overhang))` sur cette colonne) débordaient
+                 alors de 9 px SUR la dernière ligne de texte qu'ils élisent
+                 — mesuré sur `riv-19` (continuation) et reproductible sur
+                 tout message sans traduction ni réaction
+                 (`fixtures.test.ts`, témoins `RIVER_CONTINUATION_WITNESS_ID`
+                 / `RIVER_NO_TRANSLATION_WITNESS_ID`).
+
+                 Ce `div` réserve la MÊME hauteur qu'une ligne basse réelle,
+                 avec les MÊMES classes que sa cible tactile
+                 (`pt-1` + `size-[22px]`, `PrismPastille`/`Flags` ci-dessus) —
+                 aucune cote nouvelle à garder par `check-curve.mjs`, la
+                 hauteur suit la géométrie déjà dérivée. `aria-hidden` : rien
+                 à annoncer, ni contrôle ni texte. Il ne se monte QUE sur la
+                 rangée ÉLUE (iOS porte le MÊME débord, `FocalRow.swift:202-
+                 211` — un défaut de la CIBLE, `targets/README.md` — ce
+                 réservoir est donc une divergence ASSUMÉE, documentée,
+                 jamais une recopie muette) : sur une rangée ORDINAIRE sans
+                 ligne basse, réserver cette hauteur ferait réapparaître la
+                 « ligne blanche inutile » que la directive porteur du
+                 2026-09-04 est venue supprimer (défaut 7, `meta.ts`). */
+              <div className="flex items-center gap-1 pt-1" aria-hidden>
+                <span data-focus-reserve className="size-[22px]" />
               </div>
             ) : null}
           </div>
 
           {/* LA COLONNE MÉTA — heure puis accusé, sur CHAQUE rangée (défaut
               6). `Check` est déjà silencieux (`isMine === false` ⇒ `null`) :
-              une rangée reçue ne porte que l'heure. */}
-          <div className="flex shrink-0 items-center gap-1 pb-0.5">
+              une rangée reçue ne porte que l'heure.
+              `.focal-meta` PILOTE LE RÉVÉLÉ PAR CSS (`app.css`, depuis
+              `main[data-revealed]`) — zéro re-rendu au geste, jamais une
+              prop : la même feuille que `FocalRevealedDetail` (iOS)
+              n'invalide qu'elle-même. `[data-elected='true'] .focal-meta`
+              s'efface en plus (`FocusStamp` la remplace en overlay). */}
+          <div
+            className="focal-meta flex shrink-0 items-center gap-1 pb-0.5"
+            /* `opacity: 0` ne retire RIEN de l'arbre d'accessibilité : sans
+               cette garde, la rangée élue annonçait son heure DEUX fois (la
+               colonne méta masquée, puis `FocusStamp` qui la porte en clair
+               avec sa date et son accusé). */
+            aria-hidden={elected ? true : undefined}
+          >
             <time
               className="text-time font-medium tabular-nums"
               /* `META_TEXT_OPACITY` et non un `0.55` en dur : la cote est
@@ -248,8 +362,44 @@ export function FocalRow({
             </time>
             <Check status={delivery} isMine={isMine} />
           </div>
+
+          {elected && now !== null ? (
+            <>
+              {/* LA BANDE DE FOCUS monte sous la MÊME loi que la ligne basse
+                  qu'elle remplace (`mountsBottomLine`) — jamais sous une loi
+                  à elle. Sans ce garde-fou, la rangée élue montrait des
+                  drapeaux là où la rangée ordinaire n'en montre AUCUN, et
+                  surtout elle FRANCHISSAIT la garde nommée de cette loi :
+                  « jamais de drapeau en clair sur un message VOILÉ » — la
+                  langue d'origine d'un message protégé partait sur la carte
+                  de l'élue (correction de revue #5648, doctrine des cycles
+                  124/125 du CLAUDE.md : une protection se mesure sur TOUT ce
+                  que la surface transporte). */}
+              {showsBottomLine ? (
+                <FocusStrip
+                  servedLanguage={rendered.language}
+                  originalLanguage={message.originalLanguage}
+                  footerLanguages={footerLanguages}
+                  active={openLanguage}
+                  onToggleOriginal={() =>
+                    setOpenLanguage((v) => (v === message.originalLanguage ? null : message.originalLanguage))
+                  }
+                  onPickLanguage={(code) => setOpenLanguage((v) => (v === code ? null : code))}
+                  reactions={reactions}
+                />
+              ) : null}
+              <FocusStamp
+                sentAt={new Date(message.createdAt)}
+                now={now}
+                timeString={time(message.createdAt)}
+                locale={languages[0] ?? 'fr'}
+                delivery={delivery}
+                isMine={isMine}
+              />
+            </>
+          ) : null}
         </div>
       </div>
     </div>
   );
-}
+});

@@ -731,3 +731,182 @@ ni la Rivière ne pèsent sur la première peinture. Et un défaut à solder au
 passage : le troisième libellé de `catalog.ts` (« S'ouvrira à N personnes
 actives — M aujourd'hui ») est inatteignable tant que `current` vaut `null`
 alors que le nombre est affiché trois lignes plus haut.
+
+## D-22 · Focal se distingue de Script par une ÉLECTION, pas par une courbe de perspective — 2026-09-08
+
+**Ce que D-19 décrivait comme câblé** — `useThreadPerspective(scroller, mode === 'focal')`
+(`thread.tsx:195`, `src/lib/reading-mode/scene.ts`) — pose `opacity` et
+`transform: scale()` en continu sur CHAQUE rangée hors d'une bande centrale
+(`perspective.ts:46-52`, constantes 380/0,40/0,82). C'est la mécanique que
+`FocalScrollPerspective.swift` portait avant le lot Magnificence : iOS l'a
+**retirée le 2026-08-24** (`apps/ios/decisions.md:328`) et l'a remplacée par
+une ÉLECTION — un id élu par le centre de la région visible avec hystérésis
+95 (`FocalFocusCurve.threadFocusBandHysteresis`), armée par un geste soutenu
+(≥ 1 200 pt/s OU ≥ 4 000 ms, jamais sur un défilement programmé) et aplatie
+4,5 s après le dernier tick. Seules DEUX rangées se reconfigurent par
+transition (l'ancienne élue, la nouvelle) : carte teintée, chip d'identité
+agrandi, tampon de date — jamais une échelle ni une opacité posée sur tout le
+fil. `targets/focal-script.md` § 3.7, 4.2 et 10 (écart 1) documentent la cible
+capturée le 2026-09-08 ; aucune rangée du fil n'y porte `transform: scale`
+ni `opacity < 1` hors du cycle de révélation heure/coches.
+
+**Ce qui change.** La scène reste HORS React (une passe `rAF`, comme
+`scene.ts` aujourd'hui) mais n'écrit plus `opacity`/`transform` en continu :
+elle pose un attribut `data-elected` sur au plus une rangée et une classe de
+carte, gouvernés par l'armement du geste utilisateur — même famille de
+désarmement que l'ancrage bas (D-15 : `wheel`/`touchstart`/`keydown`, jamais
+`scrollTo` programmé). Le révélé des heures/coches (`FocalTimestampRevealState`,
+`FocalMetaRow.swift:88-95`) suit la MÊME source d'activité que l'élection —
+un seul état d'activité pour les deux, pas deux minuteurs indépendants.
+
+**Ce que ça ne change pas.** `script` reste le second mode de la rangée plate,
+sans élection à aucun moment (D-19) ; `FocalRow` reste partagée par les deux
+modes ; le mécanisme reste hors du chemin de rendu React pour la même raison
+que `scene.ts` l'était (fréquence de défilement).
+
+**Ce que ça coûte.** `scripts/check-reading-mode.mjs` § 10 exige aujourd'hui
+« transform posée en Focal / absente en Script » — cette assertion s'INVERSE
+dans le même commit que le rebranchement (elle devient : aucune rangée ne
+porte de `transform: scale` ni `opacity < 1` de perspective continue, une
+seule porte `data-elected="true"` après un défilement soutenu). `perspective.test.ts`
+gèle une loi qui n'est plus celle qu'on rebranche : il reste comme point de
+rebranchement documenté, pas comme gate du nouveau mécanisme — le nouveau
+mécanisme a son propre témoin (`election.test.ts`).
+
+**LIVRÉ (#5648, 2026-09-08).** Trois lois pures neuves : `src/lib/scene/activity.ts`
+(la source d'activité UNIQUE — révélé + armement, réutilisée par le futur
+`lens/scene.ts`), `src/lib/reading-mode/election.ts` (`focusLine`,
+`electThreadFocus` — réutilise `lens/law.ts::electFocus`, `armingLaw.isArmed`,
+`velocityOf`), `src/lib/reading-mode/stamp.ts` (`focusStampLabel`, port de
+`FocalFocusTimestamp.label`). `src/lib/reading-mode/scene.ts` réécrit
+(`useThreadScene`, hors React, horloge `performance.now()` injectée) —
+`useThreadPerspective` disparaît, `thread.tsx` l'appelle et pose
+`sceneStyleVars()` sur `<main>`. `src/components/focal-focus-overlays.tsx`
+(nouveau) porte les quatre superpositions de l'élue (`FocusCard`,
+`FocusIdentity`, `FocusStrip`, `FocusStamp`), extraites de `focal-row.tsx`
+(`memo`, prop `elected`, `data-elected`). `message-blocks.tsx::Flags` prend
+un `limit` (3 sur la ligne basse ordinaire, 5 sur la bande de l'élue).
+Fixture `c-salon-riviere` (40 messages, 5 participants) ajoutée : seule
+conversation du jeu qui défile assez pour armer la scène.
+
+Gates : `bun test` (57 témoins neufs, tous verts), `node scripts/check-curve.mjs`
+(PARTIE 2 étendue, PARTIE 3 + PARTIE 4 neuves — 10 cotes supplémentaires
+dérivées de `FocalScrollPerspective.swift`), `node scripts/check-reading-mode.mjs`
+(§ 10 inversé, § 13 neuf — révélé Focal/Script, § 5 étendu — élection sous
+`prefers-reduced-motion`), `bun run build`, `bun run type-check` — tous
+verts. Mesure : première peinture 30,09 Ko (plafond 40 Ko `budgets.json`),
+en hausse de ~3,7 Ko sur les 26,38 Ko relevés le 2026-09-07 — la CSS globale
+de la scène (`app.css`, non route-splittée) en porte l'essentiel ; le chunk
+`thread-*.js` lui-même n'a quasiment pas grossi (~11,2 Ko gzip, contre
+~11,46 Ko avant ce lot), confirmé par grep du bundle (`data-elected`,
+`focus-card` présents dans `thread-*.js`, absents de `core-*.js`).
+
+**Dimensions mûres** : 1 (sécurité — sans objet, aucune donnée sensible),
+2 (performance — zéro écriture DOM par rangée/frame, une lecture de
+géométrie par frame, React traversé une fois par changement d'élu), 4
+(fluidité — élection posée sans saut de hauteur, transitions coupées sous
+mouvement réduit), 7 (facilité d'usage — même geste qu'iOS arme la scène),
+11 (maintenabilité — trois lois pures testées, un seul hook, une seule
+source d'activité partageable avec la Lentille #5694), 12 (simplicité —
+toute la complexité de l'armement/révélé vit dans `scene/activity.ts`,
+l'utilisateur ne voit qu'une carte qui apparaît).
+**Dimensions restantes, chacune sa propre issue à ouvrir** : 8 (UX — la bande
+de focus DÉBORDE de ~25 px sous le début de la dernière ligne de texte dès
+qu'elle porte plus d'une capsule ; la géométrie est celle d'iOS au pixel
+près — `overhang = chipHeight/2 + innerMargin`, cote DÉRIVÉE et gardée — et
+la cible `thread.focal.scene.*` montre le même débord avec sa capsule
+unique : c'est un défaut de la CIBLE, à porter à `targets/README.md`
+§ défauts iOS, jamais une divergence à inventer côté web), 13 (complétude —
+trois éléments de la cible restent hors périmètre : le fond animé de la
+conversation, la pilule de jour flottante, le bouton « revenir en bas »,
+chacun à sa propre issue compagnon, § 9 question 5 de la spécification).
+
+**REVUE-CORRECTION (#5648, même jour).** Neuf défauts pris sur la première
+livraison, tous corrigés dans la passe, chacun avec sa preuve :
+1. **BLOQUANT — bande de focus INATTEIGNABLE.** Chaque rangée est un contexte
+   d'empilement (`transform` du virtualiseur) et les rangées se peignent dans
+   l'ordre du DOM : les superpositions qui débordent vers le BAS passaient
+   sous la rangée suivante. `document.elementFromPoint` au centre du drapeau
+   rendait la rangée d'après — le contrôle était présent, fonctionnel et
+   inatteignable au doigt. `zIndex: 1` sur la SEULE rangée élue
+   (`thread.tsx`) ; témoin `check-reading-mode.mjs` §10.
+2. **BLOQUANT — la bande FRANCHISSAIT la garde de voile.** Elle montait sous
+   une loi à elle et non sous `mountsBottomLine`, dont la garde nommée est
+   « jamais de drapeau en clair sur un message VOILÉ » : la langue d'origine
+   d'un message protégé partait sur la carte de l'élue. La bande monte
+   désormais sous la MÊME loi que la ligne basse qu'elle remplace.
+3. **MAJEUR — `aria-hidden` sur un conteneur à boutons FOCALISABLES.** La
+   ligne basse ordinaire étant démontée sur l'élue, ces boutons sont les
+   SEULS contrôles de Prisme de la rangée : les masquer retirait au lecteur
+   d'écran la mention même que le message est traduit. `aria-hidden` levé.
+4. **MAJEUR — DEUX pastilles d'avatar et deux noms.** L'en-tête d'identité
+   s'effaçait, son AVATAR non (colonne de grille distincte, hors de
+   l'en-tête). iOS efface l'en-tête ENTIER (`FocalRow.swift:269`).
+5. **MAJEUR — ancrage horizontal faux.** Les quatre superpositions étaient
+   ancrées sur la colonne de CONTENU alors qu'iOS les pose sur le corps de
+   la rangée, gouttière d'avatar comprise : carte s'arrêtant à droite de
+   l'avatar, chip d'identité 41 px à droite de la pastille qu'il remplace,
+   bande tombant SOUS le texte au lieu de la gouttière. `--focus-text-indent`
+   les y ramène ; mesuré carte à `row+6`, chips à `row+20`, exactement iOS.
+6. **MAJEUR — `--scene-flatten-ms` sans lecteur.** Les 450 ms d'aplatissement
+   étaient ATTENDUS puis la carte disparaissait d'un coup : aucune règle CSS
+   ne lisait la variable, `data-scene` n'avait aucun consommateur. Mesuré
+   après correction : `scene='idle'`, opacité 0,88 en cours de transition
+   `0.45s`.
+7. **MAJEUR — `memo` inopérant.** `place(messages)` était rappelé à chaque
+   rendu et `jumpToMessage` recréé : deux props neuves par rendu sur CHAQUE
+   rangée, donc la promesse « deux rangées re-rendent, jamais toutes » était
+   fausse par construction. `useMemo`/`useCallback` sur la chaîne complète
+   (`placed`, `jumpToMessage`, l'objet rendu par `useThreadScene`).
+8. **MAJEUR — l'intention ne se refermait jamais.** Après la fin de la
+   fenêtre de révélé, `intent` restait ouvert : le premier défilement
+   programmé non annoncé (ancrage navigateur, `scrollIntoView`) comptait
+   comme un geste. Refermée avec la session, comme `didEndDecelerating`.
+9. **MINEURS** — capsule de chip VIDE quand `PrismPastille` rend `null` ;
+   heure de la nouvelle élue en fantôme derrière son tampon (280 ms de fondu
+   là où iOS reconfigure d'un coup) ; heure annoncée DEUX fois au lecteur
+   d'écran (`opacity: 0` ne retire rien de l'arbre) ; `padding-inline: 7px`
+   en dur dans une feuille qui déclare n'en porter aucun ; `dataset.revealed`
+   réécrit à chaque événement de défilement ; en-tête de
+   `check-reading-mode.mjs` décrivant encore la courbe retirée.
+
+**Et le CORPUS lui-même était en cause** : les 40 messages du Salon Rivière
+n'avaient AUCUNE traduction, donc `mountsBottomLine` était toujours faux et
+la bande de focus ne naissait jamais dans le gate — il « armait, élisait,
+aplatissait » sans jamais faire naître la moitié de ce que l'élection
+AJOUTE. Chaque message est désormais traduit, un sur cinq écrit en anglais
+(la seule condition qui fasse naître la pastille du Prisme), et le gate
+EXIGE d'abord que l'élue porte une bande avec des contrôles — sans quoi les
+trois témoins qui suivent ne prouveraient rien.
+
+## D-23 · Un message protégé a UN site de rendu, partagé par la rangée plate et la bulle — 2026-09-08
+
+`isBlurred`, `isViewOnce`, `expiresAt` et `deletedAt` ne sont lus par AUCUN
+composant web-v3 aujourd'hui (`focal-row.tsx:119` ne lit `isBlurred` que pour
+décider si la ligne basse se monte ; `bubble.tsx` ne lit aucun des quatre).
+Un message flouté ou à vue unique s'affiche donc **en clair** sur les deux
+peaux — la régression que `targets/focal-script.md` § 6 et `bulle.md` § 3.11
+documentent comme « absent et dangereux », au rang de la dimension 1
+(sécurité) de la charte du dépôt : à corriger avant que le fil lise de
+vraies données, pas après.
+
+**Le site est UNIQUE.** iOS a DEUX apparitions du même cycle —
+`FocalProtectedContent.swift:20-48` (rangée plate) et
+`BubbleStandardLayout.swift:568,966-981,1591-1600` +
+`BubbleBlurRevealLifecycle.swift` (bulle) — qui partagent la même loi : flou,
+`allowsHitTesting(false)`, tap → révélation 5 s → re-flou, `consumeViewOnce`
+pour la vue unique. La v3.1 n'écrit CETTE loi qu'une fois —
+`src/lib/reading-mode/protection.ts`, une machine à états pure
+(`hidden → revealed(until) → hidden | consumed`) testée sans DOM — et UN
+composant de présentation, `components/protected-content.tsx`, monté par
+`focal-row.tsx` ET `bubble.tsx`. Écrire le cycle deux fois (une horloge de
+révélation par peau) est le défaut que D-14 (une loi, plusieurs clients)
+interdit déjà pour le Prisme ; il s'applique ici à l'intérieur d'un seul
+client.
+
+**Ce que ça ne couvre pas.** La teinte de la bulle reçue (mélange expéditeur
+à 70 % d'indigo, `ThemedMessageBubble.swift:383-390`) reste une question
+produit ouverte (#5680) ; ce travail n'y touche pas. Les autres états
+manquants de la bulle (supprimé, système, appel, sticker — `bulle.md` § 6.6,
+§ 9) restent hors périmètre : seuls les QUATRE états de protection
+(flouté, vue unique, éphémère, supprimé) sont couverts par ce travail.
