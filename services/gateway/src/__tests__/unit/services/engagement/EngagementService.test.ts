@@ -70,6 +70,36 @@ function makeStreakPrisma(streakState: {
   } as unknown as PrismaClient;
 }
 
+/**
+ * Fixture dédiée au score de niveau : `findUnique` rend `null` pour que
+ * `updateStreak` prenne sa branche « aucun utilisateur » et ne pose pas son
+ * propre appel à `user.update` — ce qui isole l'unique appel qui reste sur ce
+ * mock à celui d'`updateEngagementScore`. Le compteur d'axe est fixé à un
+ * niveau qui ne franchit aucun palier de badge, pour ne pas mélanger les deux
+ * notifications dans les assertions.
+ */
+function makeLevelPrisma(overrides: Partial<{
+  create: jest.Mock;
+  userUpdate: jest.Mock;
+  upsert: jest.Mock;
+}> = {}) {
+  return {
+    engagementCounter: {
+      upsert: overrides.upsert ?? jest.fn().mockResolvedValue({ count: 2 }), // 1 -> 2, no badge threshold crossed
+    },
+    engagementMilestone: {
+      create: overrides.create ?? jest.fn().mockResolvedValue({}),
+    },
+    engagementConversationCredit: {
+      create: jest.fn().mockResolvedValue({}),
+    },
+    user: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      update: overrides.userUpdate ?? jest.fn().mockResolvedValue({ engagementScore: 0 }),
+    },
+  } as unknown as PrismaClient;
+}
+
 function makeSharedNotificationService(overrides: Partial<{
   createNotification: jest.Mock;
 }> = {}) {
@@ -299,7 +329,10 @@ describe('EngagementService streak tracking (#5544)', () => {
   });
 
   it('does not increment the streak twice for two activities on the same day', async () => {
-    const userUpdate = jest.fn();
+    // `userUpdate` is still called by `updateEngagementScore` (an orthogonal
+    // concern, exercised in its own describe block below) — this test asserts
+    // only that none of those calls carry STREAK fields.
+    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 0 });
     const prisma = makeStreakPrisma(
       { currentStreakDays: 3, longestStreakDays: 3, lastStreakDate: TODAY_UTC_MIDNIGHT },
       { userUpdate },
@@ -310,7 +343,9 @@ describe('EngagementService streak tracking (#5544)', () => {
     await svc.recordActivity('user-1', 'content.post');
     await svc.recordActivity('user-1', 'content.text_message');
 
-    expect(userUpdate).not.toHaveBeenCalled();
+    expect(userUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ currentStreakDays: expect.anything() }) }),
+    );
   });
 
   it('resets a skipped-day streak to 1 without lowering the recorded longest streak', async () => {
@@ -386,5 +421,102 @@ describe('EngagementService streak tracking (#5544)', () => {
 
     expect(create).toHaveBeenCalledTimes(1);
     expect(notificationService.createNotification).not.toHaveBeenCalled();
+  });
+});
+
+describe('EngagementService level tracking (#5545)', () => {
+  it('adds the axis family weight to the engagement score via an atomic $inc', async () => {
+    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 3 });
+    const prisma = makeLevelPrisma({ userUpdate });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message'); // content family, weight 3
+
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { engagementScore: { increment: 3 } },
+      select: { engagementScore: true },
+    });
+  });
+
+  it('weighs a tool axis at 1, distinct from a content axis at 3', async () => {
+    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 1 });
+    const prisma = makeLevelPrisma({ userUpdate });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'tool.sticker');
+
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { engagementScore: { increment: 1 } },
+      select: { engagementScore: true },
+    });
+  });
+
+  it('does not create a level milestone or notify when the increment crosses no level threshold', async () => {
+    const create = jest.fn();
+    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 20 }); // 17 -> 20, no threshold in ]17,20]
+    const prisma = makeLevelPrisma({ create, userUpdate });
+    const notificationService = makeSharedNotificationService();
+    mockGetSharedNotificationService.mockReturnValue(notificationService);
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message'); // weight 3
+
+    expect(create).not.toHaveBeenCalled();
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
+  });
+
+  it('awards LEVEL_UP and notifies exactly once when the increment lands on a threshold', async () => {
+    const create = jest.fn().mockResolvedValue({});
+    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 10 }); // 5 -> 10, crosses threshold 10
+    const prisma = makeLevelPrisma({ create, userUpdate });
+    const notificationService = makeSharedNotificationService();
+    mockGetSharedNotificationService.mockReturnValue(notificationService);
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'conversation.private'); // weight 5
+
+    expect(create).toHaveBeenCalledWith({
+      data: { userId: 'user-1', milestoneType: 'level', milestoneKey: 'level:10' },
+    });
+    expect(notificationService.createNotification).toHaveBeenCalledWith({
+      userId: 'user-1',
+      type: 'level_up',
+      priority: 'normal',
+      content: expect.any(String),
+      context: {},
+      metadata: { action: 'view_details', threshold: 10 },
+    });
+  });
+
+  it('replays the same level threshold with zero notifications (anti-replay via unique constraint)', async () => {
+    const create = jest.fn().mockRejectedValue(p2002Error());
+    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 10 });
+    const prisma = makeLevelPrisma({ create, userUpdate });
+    const notificationService = makeSharedNotificationService();
+    mockGetSharedNotificationService.mockReturnValue(notificationService);
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'conversation.private');
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(notificationService.createNotification).not.toHaveBeenCalled();
+  });
+
+  it('lands exactly on a threshold boundary and still crosses it (inclusive upper bound)', async () => {
+    const create = jest.fn().mockResolvedValue({});
+    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 50 }); // 45 -> 50, crosses 50
+    const prisma = makeLevelPrisma({ create, userUpdate });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'conversation.private'); // weight 5
+
+    expect(create).toHaveBeenCalledWith({
+      data: { userId: 'user-1', milestoneType: 'level', milestoneKey: 'level:50' },
+    });
   });
 });

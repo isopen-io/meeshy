@@ -11,7 +11,13 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { BADGE_THRESHOLDS, STREAK_THRESHOLDS, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import {
+  BADGE_THRESHOLDS,
+  STREAK_THRESHOLDS,
+  LEVEL_THRESHOLDS,
+  ENGAGEMENT_AXIS_WEIGHTS,
+  type EngagementAxisKey,
+} from '@meeshy/shared/types/engagement';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { NotificationService } from '../notifications/NotificationService';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
@@ -60,6 +66,7 @@ export class EngagementService {
     }
 
     await this.updateStreak(userId);
+    await this.updateEngagementScore(userId, axisKey);
   }
 
   /**
@@ -222,6 +229,73 @@ export class EngagementService {
       });
     } catch (err) {
       log.warn('streak_milestone notification failed after milestone was recorded', {
+        userId,
+        threshold,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * Ajoute le poids de `axisKey` (`ENGAGEMENT_AXIS_WEIGHTS`) au score agrégé
+   * `User.engagementScore` et notifie chaque palier `LEVEL_THRESHOLDS`
+   * franchi par CET incrément précis — même mécanique que le compteur d'axe
+   * (§ 5, § 7). `$inc` atomique : un `User` créé avant cette migration a le
+   * champ ABSENT (pas à zéro), et Mongo traite `$inc` sur un champ absent
+   * comme un départ à zéro, ce qui est déjà le comportement voulu — aucun
+   * repli `?? 0` n'est nécessaire ici, à la différence d'`updateStreak`.
+   */
+  private async updateEngagementScore(userId: string, axisKey: EngagementAxisKey): Promise<void> {
+    const weight = ENGAGEMENT_AXIS_WEIGHTS[axisKey];
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { engagementScore: { increment: weight } },
+      select: { engagementScore: true },
+    });
+
+    const newScore = user.engagementScore;
+    const previousScore = newScore - weight;
+    const crossedThresholds = LEVEL_THRESHOLDS.filter(
+      (threshold) => threshold > previousScore && threshold <= newScore,
+    );
+
+    for (const threshold of crossedThresholds) {
+      await this.tryAwardLevelUp(userId, threshold);
+    }
+  }
+
+  /**
+   * Même garde anti-rejeu que `tryAwardBadge`/`tryAwardStreakMilestone`
+   * (§ 4), portée par la contrainte unique `EngagementMilestone`.
+   */
+  private async tryAwardLevelUp(userId: string, threshold: number): Promise<void> {
+    try {
+      await this.prisma.engagementMilestone.create({
+        data: {
+          userId,
+          milestoneType: 'level',
+          milestoneKey: `level:${threshold}`,
+        },
+      });
+    } catch (err) {
+      if (isP2002(err)) return;
+      throw err;
+    }
+
+    try {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
+      const lang = recipientLanguage(user, 'fr');
+      const notificationService = getSharedNotificationService() ?? new NotificationService(this.prisma);
+      await notificationService.createNotification({
+        userId,
+        type: 'level_up',
+        priority: 'normal',
+        content: notificationString(lang, 'engagement.levelUp', { count: threshold }),
+        context: {},
+        metadata: { action: 'view_details', threshold },
+      });
+    } catch (err) {
+      log.warn('level_up notification failed after milestone was recorded', {
         userId,
         threshold,
         error: err instanceof Error ? err.message : String(err),
