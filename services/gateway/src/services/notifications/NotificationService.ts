@@ -1740,6 +1740,13 @@ export class NotificationService {
                 // handler iOS lit cette clé défensivement : absente →
                 // résolution via receivedRequests par senderId.
                 friendRequestId: params.context.friendRequestId || '',
+                // Indice de ROUTE — le nom d'écran que le tap doit ouvrir quand
+                // la notification ne porte ni conversation ni contenu social
+                // (les quatre notifications de réengagement, #5547/#5698 :
+                // `progression`). Le client qui sait naviguer par nom de route
+                // le suit tel quel ; absent → chaîne vide, jamais une clé
+                // inventée côté client.
+                route: pickMetadataString(params.metadata, 'route'),
                 // Discriminant d'entité du contenu social — pilote la surface
                 // ouverte au tap côté client (lecteur de réel / viewer éphémère
                 // / détail de post). `contentType` sert de repli : c'est sous ce

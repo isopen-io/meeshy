@@ -83,6 +83,27 @@ export default function ConversationsScreen() {
           Meeshy Chats
         </h1>
         {/*
+          L'ENTRÉE DU TABLEAU DE BORD « PROGRESSION » (#5547). Sur iOS elle vit
+          dans le profil et les réglages (#5698) ; la v3.1 n'a pas encore de
+          `/me` (inventaire de parité, V4.0.0) — l'en-tête de la liste est donc
+          sa porte jusque-là, à la place où l'utilisateur la chercherait sans
+          le savoir. Un `Link`, jamais un bouton qui navigue : `href`, nouvel
+          onglet, préchargement à l'intention (`router.tsx` § Link).
+        */}
+        <Link
+          to="progression"
+          aria-label="Progression — badges, niveau et série"
+          className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          <span
+            className="grid size-8 place-items-center rounded-chip"
+            style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 14%, transparent)' }}
+          >
+            <Glyph name="trophy" size={16} />
+          </span>
+        </Link>
+        {/*
           #5559 revue-correction, défaut 2 : « Créer un lien de partage » et
           « Nouvelle conversation » n'avaient AUCUN gestionnaire — aucune
           route ne les sert aujourd'hui (`route-table.tsx` ne déclare que

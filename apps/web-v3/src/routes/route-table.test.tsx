@@ -22,6 +22,13 @@ describe('ROUTES — /login et /signup', () => {
     expect(match(compiled, '/signup')).toEqual({});
   });
 
+  test('progression s’apparie à /me/progression — sous l’espace du profil, et à rien d’autre (#5547)', () => {
+    const compiled = compile(ROUTES.progression.pattern);
+    expect(match(compiled, '/me/progression')).toEqual({});
+    expect(match(compiled, '/me')).toBe(null);
+    expect(match(compiled, '/progression')).toBe(null);
+  });
+
   test('chaque route est un import() paresseux, pas un module déjà résolu', () => {
     // On ne les APPELLE PAS : invoquer `screen()` déclenche l'`import()` réel
     // (donc la transpilation JSX du module cible) au lieu de tester la seule
@@ -29,5 +36,6 @@ describe('ROUTES — /login et /signup', () => {
     // exercés ici non plus.
     expect(typeof ROUTES.login.screen).toBe('function');
     expect(typeof ROUTES.signup.screen).toBe('function');
+    expect(typeof ROUTES.progression.screen).toBe('function');
   });
 });

@@ -169,7 +169,7 @@ public extension UserNotificationPreferences {
         case .translationCompleted, .translationReady, .legacyTranslationReady,
              .transcriptionCompleted, .voiceCloneReady:
             return true  // power-user features: no toggle yet, always allow
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned,
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned,
              .legacyStatusUpdate, .legacyAffiliateSignup:
             return true
         }

@@ -173,9 +173,12 @@ describe('EngagementService.recordActivity', () => {
       userId: 'user-1',
       type: 'badge_earned',
       priority: 'normal',
-      content: expect.any(String),
+      // Le MOT du lecteur, jamais la clé stable : « conversation.private ·
+      // palier 10 » a été servi en production (2026-09-08). `route` dit où le
+      // tap mène — l'écran « Progression ».
+      content: '🏅 Badge débloqué : Publications · palier 10',
       context: {},
-      metadata: { action: 'view_details', axisKey: 'content.post', threshold: 10 },
+      metadata: { action: 'view_details', route: 'progression', axisKey: 'content.post', threshold: 10 },
     });
   });
 
@@ -406,9 +409,9 @@ describe('EngagementService streak tracking (#5544)', () => {
       userId: 'user-1',
       type: 'streak_milestone',
       priority: 'normal',
-      content: expect.any(String),
+      content: '🔥 Série de 3 jours !',
       context: {},
-      metadata: { action: 'view_details', threshold: 3 },
+      metadata: { action: 'view_details', route: 'progression', threshold: 3 },
     });
   });
 
@@ -491,9 +494,11 @@ describe('EngagementService level tracking (#5545)', () => {
       userId: 'user-1',
       type: 'level_up',
       priority: 'normal',
-      content: expect.any(String),
+      // Le RANG du palier (niveau 1), jamais le seuil de score (10 points) :
+      // « Niveau 150 atteint » se lisait comme un cent-cinquantième niveau.
+      content: '⭐ Niveau 1 atteint !',
       context: {},
-      metadata: { action: 'view_details', threshold: 10 },
+      metadata: { action: 'view_details', route: 'progression', threshold: 10, level: 1 },
     });
   });
 
@@ -545,9 +550,9 @@ describe('EngagementService achievements (#5546)', () => {
       userId: 'user-1',
       type: 'achievement_unlocked',
       priority: 'normal',
-      content: expect.any(String),
+      content: '🏆 Succès débloqué : Premier pas',
       context: {},
-      metadata: { action: 'view_details', achievementKey: 'achievement.first_content' },
+      metadata: { action: 'view_details', route: 'progression', achievementKey: 'achievement.first_content' },
     });
     expect(findMany).toHaveBeenCalledWith({
       where: { userId: 'user-1', axisKey: { in: [...CONTENT_ENGAGEMENT_AXES] }, count: { gt: 0 } },

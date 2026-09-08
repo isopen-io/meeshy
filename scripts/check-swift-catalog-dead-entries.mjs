@@ -184,7 +184,7 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // exposition dans les catalogues générés. L'écran de ré-acceptation
 // iOS/Android/Web qui l'appellera est un travail client à part, ouvert
 // séparément (#5716).
-const BASELINE_DEAD_ENTRIES = 251;
+const BASELINE_DEAD_ENTRIES = 250;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

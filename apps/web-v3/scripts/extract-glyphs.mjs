@@ -113,42 +113,95 @@ const USED = [
    * dimension 6 (cohérence de positionnement) interdit.
    */
   'timer',
+  // L'entrée du tableau de bord « Progression » (#5547) sur l'en-tête de la
+  // liste, et le titre de l'écran : le SEUL glyphe de ce lot qui entre au
+  // socle — les quatorze autres vivent dans le jeu d'écran ci-dessous.
+  'trophy',
 ];
 
-const missing = [];
-const entries = USED.map((id) => {
-  const path = OVERRIDES[id] ?? join(CORE, 'regular', `${id}.svg`);
-  let source;
-  try {
-    source = readFileSync(path, 'utf8');
-  } catch {
-    missing.push(id);
-    return '';
-  }
-  const viewBox = /viewBox="([^"]+)"/.exec(source)?.[1] ?? '0 0 256 256';
-  const body = /<svg[^>]*>([\s\S]*)<\/svg>/.exec(source)?.[1]?.trim() ?? '';
-  const name = id.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
-  return `  ${name}: { viewBox: ${JSON.stringify(viewBox)}, body: ${JSON.stringify(body)} },`;
-}).join('\n');
+/**
+ * LE JEU D'ÉCRAN DE « PROGRESSION » (#5547) — émis dans un SECOND module,
+ * `glyphs-progression.ts`, que seule la route `/me/progression` importe.
+ *
+ * Pourquoi deux modules et non quatorze entrées de plus dans `GLYPHS` :
+ * `glyphs.ts` est importé par `glyph.tsx`, donc par TOUS les écrans, donc il
+ * vit dans le socle que le lecteur paie avant le premier pixel. Un glyphe qui
+ * ne sert qu'à un écran y coûterait ses octets à chaque démarrage à froid, y
+ * compris pour qui n'ouvre jamais cet écran — exactement la règle qui a sorti
+ * le virtualiseur du socle (D-15). Le jeu d'écran est chargé avec sa route,
+ * et le gate de poids ne le compte pas dans la première peinture.
+ */
+const PROGRESSION = [
+  'fire',
+  'star',
+  'medal',
+  'chat-text',
+  'article',
+  'camera',
+  'film-strip',
+  'waveform',
+  'chat-circle-text',
+  'globe',
+  'users-three',
+  'magic-wand',
+  'paper-plane-tilt',
+];
 
-if (missing.length) {
-  console.error(`Glyphes absents de @phosphor-icons/core/assets/regular : ${missing.join(', ')}`);
-  process.exit(1);
+function extract(ids) {
+  const missing = [];
+  const entries = ids.map((id) => {
+    const path = OVERRIDES[id] ?? join(CORE, 'regular', `${id}.svg`);
+    let source;
+    try {
+      source = readFileSync(path, 'utf8');
+    } catch {
+      missing.push(id);
+      return '';
+    }
+    const viewBox = /viewBox="([^"]+)"/.exec(source)?.[1] ?? '0 0 256 256';
+    const body = /<svg[^>]*>([\s\S]*)<\/svg>/.exec(source)?.[1]?.trim() ?? '';
+    const name = id.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
+    return `  ${name}: { viewBox: ${JSON.stringify(viewBox)}, body: ${JSON.stringify(body)} },`;
+  }).join('\n');
+
+  if (missing.length) {
+    console.error(`Glyphes absents de @phosphor-icons/core/assets/regular : ${missing.join(', ')}`);
+    process.exit(1);
+  }
+  return entries;
 }
 
-writeFileSync(
-  OUTPUT,
-  `/* GENERE par scripts/extract-glyphs.mjs depuis @phosphor-icons/core.
+function emit({ ids, output, constant, type, role }) {
+  writeFileSync(
+    output,
+    `/* GENERE par scripts/extract-glyphs.mjs depuis @phosphor-icons/core.
  * Ne pas editer a la main : relancer \`node scripts/extract-glyphs.mjs\`.
- * La liste des glyphes employes vit dans ce script, pas ici. */
+ * La liste des glyphes employes vit dans ce script, pas ici.
+ * ${role} */
 
-export const GLYPHS = {
-${entries}
+export const ${constant} = {
+${extract(ids)}
 } as const;
 
-export type GlyphName = keyof typeof GLYPHS;
+export type ${type} = keyof typeof ${constant};
 `,
-);
+  );
+  const bytes = Buffer.byteLength(readFileSync(output));
+  console.log(`  ${ids.length} glyphes extraits → ${output.slice(HERE.length - 'scripts'.length)} · ${bytes} o de module`);
+}
 
-const bytes = Buffer.byteLength(readFileSync(OUTPUT));
-console.log(`  ${USED.length} glyphes extraits · ${bytes} o de module`);
+emit({
+  ids: USED,
+  output: OUTPUT,
+  constant: 'GLYPHS',
+  type: 'GlyphName',
+  role: 'LE SOCLE : importe par glyph.tsx, donc par tous les ecrans — paye avant le premier pixel.',
+});
+
+emit({
+  ids: PROGRESSION,
+  output: join(HERE, '../src/components/glyphs-progression.ts'),
+  constant: 'PROGRESSION_GLYPHS',
+  type: 'ProgressionGlyphName',
+  role: "LE JEU D'ECRAN de /me/progression (#5547) : charge avec sa route, jamais dans le socle.",
+});

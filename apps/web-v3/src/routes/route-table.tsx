@@ -12,6 +12,10 @@ export const ROUTES = {
   thread: { pattern: '/c/$conversation', screen: () => import('@/routes/thread') },
   login: { pattern: '/login', screen: () => import('@/routes/login') },
   signup: { pattern: '/signup', screen: () => import('@/routes/signup') },
+  /* Le tableau de bord des streaks & badges (#5547) — sous `/me/`, l'espace
+     du profil (inventaire de parité : `/me` est V4.0.0), privé (garde de
+     session), découpé comme les autres : aucun octet avant le premier pixel. */
+  progression: { pattern: '/me/progression', screen: () => import('@/routes/progression') },
 } as const;
 
 function NotFound() {
