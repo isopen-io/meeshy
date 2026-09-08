@@ -62,6 +62,10 @@ class WorkerPool:
         self.workers_running = False
         self.worker_tasks: List[asyncio.Task] = []
         self.workers_active = 0
+        # Boucle de travail à réutiliser pour créer de nouveaux workers lors
+        # d'un scale UP (posée par start_workers, absente tant qu'il n'a pas
+        # tourné — un _scale_to appelé hors service n'a alors rien à créer).
+        self._worker_loop_func: Optional[Callable] = None
 
         # Scaling configuration
         self.scaling_check_interval = 30  # secondes
@@ -100,8 +104,9 @@ class WorkerPool:
         logger.info(f"[{self.pool_name.upper()}] Starting {self.current_workers} workers...")
         self.workers_running = True
 
+        self._worker_loop_func = worker_loop_func
         self.worker_tasks = [
-            asyncio.create_task(worker_loop_func(f"{self.pool_name}_worker_{i}"))
+            asyncio.create_task(worker_loop_func(f"{self.pool_name}_worker_{i}", i))
             for i in range(self.current_workers)
         ]
 
@@ -190,20 +195,33 @@ class WorkerPool:
         """
         Ajuste le nombre de workers
 
+        Scale UP crée réellement les tâches manquantes, avec la même boucle de
+        travail que celle passée à `start_workers` — sans quoi `current_workers`
+        ne serait qu'un compteur, déconnecté du nombre de tâches qui tournent
+        vraiment (#3664).
+
+        Scale DOWN ne tue aucune tâche : chaque boucle de travail reçoit son
+        indice de worker et s'arrête d'elle-même dès qu'il dépasse
+        `current_workers` (voir `zmq_pool_manager._normal_worker_loop` /
+        `_any_worker_loop`) — la tâche en cours se termine avant l'arrêt, ce
+        qui rend le rétrécissement gracieux sans mécanisme d'annulation.
+
         Args:
             new_count: Nouveau nombre de workers
         """
-        if new_count > self.current_workers:
-            # Scale UP: Ajouter des workers
-            # Note: Les nouveaux workers doivent être créés par le manager
-            # car ils ont besoin du worker_loop_func
-            pass
-        else:
-            # Scale DOWN: Les workers s'arrêteront naturellement
-            # quand workers_running devient False ou après timeout
-            pass
-
         old_count = self.current_workers
+
+        if (
+            new_count > old_count
+            and self.workers_running
+            and self._worker_loop_func is not None
+        ):
+            new_tasks = [
+                asyncio.create_task(self._worker_loop_func(f"{self.pool_name}_worker_{i}", i))
+                for i in range(old_count, new_count)
+            ]
+            self.worker_tasks.extend(new_tasks)
+
         self.current_workers = new_count
         self.stats['scaling_events'] += 1
 

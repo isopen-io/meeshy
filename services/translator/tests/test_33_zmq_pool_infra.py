@@ -216,7 +216,7 @@ class TestWorkerPool:
     async def test_start_workers_creates_tasks(self):
         pool = self._pool(default_workers=2)
 
-        async def dummy_worker(name):
+        async def dummy_worker(name, index):
             pass
 
         tasks = await pool.start_workers(dummy_worker)
@@ -226,11 +226,75 @@ class TestWorkerPool:
         assert not pool.workers_running
 
     @pytest.mark.asyncio
+    async def test_start_workers_passes_a_distinct_index_to_each_worker(self):
+        """The worker loop needs its own index to self-stop on scale DOWN (#3664)."""
+        pool = self._pool(default_workers=3)
+        seen_indices = []
+
+        async def dummy_worker(name, index):
+            seen_indices.append(index)
+
+        await pool.start_workers(dummy_worker)
+        await pool.stop_workers()
+        assert sorted(seen_indices) == [0, 1, 2]
+
+    @pytest.mark.asyncio
     async def test_stop_workers_when_no_tasks(self):
         pool = self._pool()
         pool.workers_running = True
         await pool.stop_workers()
         assert not pool.workers_running
+
+    # — real dynamic scaling (#3664: _scale_to() used to be two dead `pass`) ────
+
+    @pytest.mark.asyncio
+    async def test_scale_up_spawns_real_worker_tasks_when_running(self):
+        """Scale UP must add actual tasks, not just bump a counter — otherwise
+        current_workers lies about how many workers are really running."""
+        pool = self._pool(default_workers=2, max_scaling_workers=5)
+
+        async def dummy_worker(name, index):
+            await asyncio.sleep(10)
+
+        await pool.start_workers(dummy_worker)
+        assert len(pool.worker_tasks) == 2
+
+        await pool._scale_to(4)
+
+        assert pool.current_workers == 4
+        assert len(pool.worker_tasks) == 4
+        assert not pool.worker_tasks[-1].done()
+
+        await pool.stop_workers()
+
+    @pytest.mark.asyncio
+    async def test_scale_down_does_not_spawn_new_tasks(self):
+        pool = self._pool(default_workers=4, min_workers=1)
+
+        async def dummy_worker(name, index):
+            await asyncio.sleep(10)
+
+        await pool.start_workers(dummy_worker)
+        assert len(pool.worker_tasks) == 4
+
+        await pool._scale_to(2)
+
+        assert pool.current_workers == 2
+        # Aucune tâche annulée directement : les workers excédentaires
+        # s'arrêtent d'eux-mêmes (voir zmq_pool_manager) — la liste garde donc
+        # ses 4 entrées jusqu'à ce qu'ils se terminent naturellement.
+        assert len(pool.worker_tasks) == 4
+
+        await pool.stop_workers()
+
+    @pytest.mark.asyncio
+    async def test_scale_up_without_running_workers_does_not_spawn_tasks(self):
+        """check_scaling() can run before start_workers(); _scale_to() must not
+        crash for lack of a worker_loop_func to call."""
+        pool = self._pool(default_workers=2)
+        await pool._scale_to(4)
+        assert pool.current_workers == 4
+        assert pool.worker_tasks == []
 
     # — module-level helpers ───────────────────────────────────────────────────
 
