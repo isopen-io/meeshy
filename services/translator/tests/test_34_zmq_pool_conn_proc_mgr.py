@@ -793,6 +793,47 @@ class TestTranslationPoolManagerGetStats:
 # ─── Worker loops & QueueEmpty edge-cases (zmq_pool_manager coverage) ─────────
 
 
+class TestWorkerLoopSelfStopOnScaleDown:
+    """A scale DOWN doesn't cancel any task (#3664): the excess workers must
+
+    notice, on their own, that their index no longer fits under
+    current_workers, and stop themselves without processing another task.
+    """
+
+    async def test_normal_worker_exits_immediately_when_index_exceeds_current_workers(self):
+        mgr = _make_manager()  # normal_workers=2 → current_workers == 2
+        mgr.normal_pool.workers_running = True
+        mgr._get_next_task = AsyncMock()
+
+        await asyncio.wait_for(mgr._normal_worker_loop("test_w", worker_index=5), timeout=2.0)
+
+        mgr._get_next_task.assert_not_called()
+
+    async def test_normal_worker_keeps_running_when_index_still_fits(self):
+        mgr = _make_manager()  # normal_workers=2
+        mgr.normal_pool.workers_running = True
+        call_count = {"n": 0}
+
+        async def get_and_stop(*args):
+            call_count["n"] += 1
+            mgr.normal_pool.workers_running = False
+            return None
+
+        mgr._get_next_task = get_and_stop
+        await asyncio.wait_for(mgr._normal_worker_loop("test_w", worker_index=1), timeout=2.0)
+
+        assert call_count["n"] == 1
+
+    async def test_any_worker_exits_immediately_when_index_exceeds_current_workers(self):
+        mgr = _make_manager()  # any_workers=2 → current_workers == 2
+        mgr.any_pool.workers_running = True
+        mgr._get_next_task = AsyncMock()
+
+        await asyncio.wait_for(mgr._any_worker_loop("test_any", worker_index=5), timeout=2.0)
+
+        mgr._get_next_task.assert_not_called()
+
+
 class TestNormalWorkerLoop:
     async def test_loop_runs_two_iterations_and_exits(self):
         mgr = _make_manager()

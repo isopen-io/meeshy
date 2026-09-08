@@ -603,6 +603,31 @@ class TestLanguagesEndpoint:
         assert languages["es"] == "Espa\u00f1ol"
         logger.info("Noms langues OK")
 
+    def test_languages_reflects_configured_supported_languages(self, test_client):
+        """#5709 \u2014 /languages ne sert plus 8 langues cod\u00e9es en dur : elle
+        reflete Settings.supported_languages_list (40 codes par d\u00e9faut),
+        jamais une copie fig\u00e9e qui diverge d\u00e8s qu'on ajoute une langue \u00e0
+        SUPPORTED_LANGUAGES sans toucher cet endpoint."""
+        logger.info("Test 23.25: /languages reflete la configuration reelle")
+
+        from config.settings import get_settings
+        configured = get_settings().supported_languages_list
+
+        response = test_client.get("/languages")
+        assert response.status_code == 200
+        languages = response.json()["supported_languages"]
+
+        # Le contrat n'est pas seulement "au moins 8" : chaque code CONFIGURE
+        # doit etre servi, ni plus ni moins \u2014 un code qui disparaitrait de la
+        # reponse romprait la promesse aussi silencieusement qu'un code fige.
+        assert set(languages.keys()) == set(configured)
+        assert len(configured) > 8, "la config par d\u00e9faut doit d\u00e9passer l'ancien codage en dur pour que ce test soit probant"
+
+        # Une langue absente de l'ancien dictionnaire fig\u00e9, servie avec son
+        # nom natif reel \u2014 pas un simple echo du code ISO.
+        assert languages["ru"] == "\u0420\u0443\u0441\u0441\u043a\u0438\u0439"
+        logger.info("/languages refletee OK")
+
 
 # ============================================================================
 # TESTS: MODELS ENDPOINT

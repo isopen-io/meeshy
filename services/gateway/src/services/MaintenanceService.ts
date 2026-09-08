@@ -10,13 +10,13 @@ import { AttachmentService } from './attachments';
 import { EmailService } from './EmailService';
 import { recomputeConversationLastMessageAt } from './messaging/messageRemovalEffects';
 import { anonymizeMessagesOfDeletedAccount } from './messaging/anonymizeDeletedAccountMessages';
-import { purgeMediaOfDeletedAccount as purgeDeletedAccountMedia } from './media/purgeDeletedAccountMedia';
 import { MediaService } from './MediaService';
 import { sweepPendingPostMedia } from './posts/sweepPendingPostMedia';
 import type { PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
 import { conversationMessageStatsService } from './ConversationMessageStatsService';
 import type { SessionRevoker } from './admin/user-management.service';
 import { purgeAccountIsolatedData } from './AccountPurgeService';
+import { purgeMediaOfDeletedAccount } from './purgeDeletedAccountMedia';
 import {
   RECIPIENT_LANG_SELECT,
   recipientDateLocale,
@@ -762,18 +762,18 @@ export class MaintenanceService {
   }
 
   /**
-   * Suite de #3632/#5691 restée ouverte sous le nom « les médias » (#5690) :
-   * `purgeMessagesOfDeletedAccount` ci-dessus détruit déjà les pièces jointes
-   * des messages qu'il anonymise (`deletedAt: null` au moment de l'appel) —
-   * cette passe couvre ce qui lui échappe : un `MessageAttachment` dont le
-   * message portait déjà `deletedAt` AVANT l'expiration de la grâce, et tout
-   * `PostMedia` du compte, qu'aucun chemin de purge ne touchait jusqu'ici.
-   * Après l'anonymisation des messages, jamais avant — même best-effort,
-   * même raison. Détail : `services/media/purgeDeletedAccountMedia.ts`.
+   * Les médias physiques du compte — `MessageAttachment`/`PostMedia` — la
+   * classe que ni #5688 (tables isolées, sans octets) ni #5689 (messages,
+   * lignes déjà anonymisées) ne couvraient. Exécuté APRÈS
+   * `purgeMessagesOfDeletedAccount` : les attachments des messages du compte
+   * sont déjà supprimés par #5689 à ce stade, ce balayage-ci couvre ce qui
+   * reste (attachments en attente, messages déjà `deletedAt` avant #5689,
+   * tout `PostMedia`). Best-effort, même raison que ses voisins ci-dessus.
+   * Détail : `services/purgeDeletedAccountMedia.ts`.
    */
-  private async purgeMediaOfDeletedAccount(userId: string): Promise<void> {
+  private async purgeMediaOfExpiredAccount(userId: string): Promise<void> {
     try {
-      await purgeDeletedAccountMedia(this.prisma, this.attachmentService, this.mediaService, userId);
+      await purgeMediaOfDeletedAccount(this.prisma, this.attachmentService, this.mediaService, userId);
     } catch (error) {
       logger.warn(`⚠️ [DELETION] Media purge failed for deleted account user=${userId}:`, error);
     }
@@ -783,7 +783,7 @@ export class MaintenanceService {
    * Traiter les demandes de suppression de compte :
    * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED),
    *    révoquer les sessions, purger les données isolées (#3632), anonymiser
-   *    les messages du compte (#5689) puis purger ses médias restants (#5690)
+   *    les messages (#5689) puis les médias (#5690) du compte
    * 2. Envoyer les rappels hebdomadaires pour les requests GRACE_PERIOD_EXPIRED
    */
   private async processAccountDeletionRequests(): Promise<void> {
@@ -816,7 +816,7 @@ export class MaintenanceService {
             await this.revokeSessionsOfDeletedAccount(req.userId);
             await this.purgeIsolatedDataOfExpiredAccount(req.userId);
             await this.purgeMessagesOfDeletedAccount(req.userId);
-            await this.purgeMediaOfDeletedAccount(req.userId);
+            await this.purgeMediaOfExpiredAccount(req.userId);
           } catch (error) {
             logger.error(`❌ [DELETION] Failed to expire request=${req.id} for user=${req.userId}:`, error);
           }
