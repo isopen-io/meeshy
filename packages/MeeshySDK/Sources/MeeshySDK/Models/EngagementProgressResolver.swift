@@ -106,6 +106,45 @@ public struct EngagementFamilyGroup: Sendable, Equatable, Identifiable {
     }
 }
 
+/// LES MEESHES, tels que l'écran les rend (#5743) — miroir Swift de
+/// `EngagementMeeshProgress` (`packages/shared/utils/engagement-progress.ts`).
+///
+/// `canMint` est DÉRIVÉ ici, jamais servi par le fil : la passerelle envoie des
+/// faits (points débitables, prix), le client en tire la décision d'AFFICHER le
+/// bouton. C'est ce qui garantit que le web et iOS prennent la MÊME décision
+/// sur les MÊMES chiffres.
+public struct EngagementMeeshProgress: Sendable, Equatable {
+    public let balance: Int
+    /// Frappées à vie — monotone, c'est elle que le rang interroge (#5744).
+    public let mintedLifetime: Int
+    /// Ce qui peut servir à frapper — les conversations en sont exclues.
+    public let debitablePoints: Int
+    /// Le plancher inaliénable : compté dans le niveau, jamais dépensable.
+    public let floorPoints: Int
+    public let missingPoints: Int
+    public let mintCost: Int
+    /// Vrai quand les points débitables couvrent le prix — la SEULE condition
+    /// d'affichage du bouton (« sinon pas de bouton », directive porteur).
+    public let canMint: Bool
+    /// Fraction parcourue vers la prochaine Meesh, mesurée sur les points
+    /// DÉBITABLES : une barre nourrie par le plancher promettrait une Meesh qui
+    /// n'arriverait jamais.
+    public let progress: Double
+
+    public init(payload: APIEngagementProgress.Meesh) {
+        let cost = max(0, payload.mintCost)
+        let debitable = max(0, payload.debitablePoints)
+        balance = max(0, payload.balance)
+        mintedLifetime = max(0, payload.mintedLifetime)
+        debitablePoints = debitable
+        floorPoints = max(0, payload.floorPoints)
+        missingPoints = max(0, payload.missingPoints)
+        mintCost = cost
+        canMint = cost > 0 && debitable >= cost
+        progress = cost == 0 ? 0 : min(1, max(0, Double(debitable) / Double(cost)))
+    }
+}
+
 public struct EngagementProgress: Sendable, Equatable {
     public let level: EngagementLevelProgress
     public let streak: EngagementStreakProgress
@@ -117,6 +156,8 @@ public struct EngagementProgress: Sendable, Equatable {
     public let badgesTotal: Int
     /// Aucune activité comptée, aucun palier gravé — l'ÉTAT VIDE de l'écran.
     public let isEmpty: Bool
+    /// `nil` quand la passerelle ne sert pas encore le bloc — l'écran n'affiche alors rien.
+    public let meesh: EngagementMeeshProgress?
 
     public init(
         level: EngagementLevelProgress,
@@ -125,7 +166,8 @@ public struct EngagementProgress: Sendable, Equatable {
         achievements: [EngagementAchievementProgress],
         badgesEarned: Int,
         badgesTotal: Int,
-        isEmpty: Bool
+        isEmpty: Bool,
+        meesh: EngagementMeeshProgress? = nil
     ) {
         self.level = level
         self.streak = streak
@@ -134,6 +176,7 @@ public struct EngagementProgress: Sendable, Equatable {
         self.badgesEarned = badgesEarned
         self.badgesTotal = badgesTotal
         self.isEmpty = isEmpty
+        self.meesh = meesh
     }
 
     /// Les axes rangés par SECTION, dans l'ordre du modèle § 2 ; l'ordre du catalogue est conservé dans chaque section.
@@ -225,7 +268,8 @@ public enum EngagementProgressResolver {
             achievements: achievements,
             badgesEarned: badgesEarned,
             badgesTotal: EngagementAxisKey.allCases.count * EngagementCatalog.badgeThresholds.count,
-            isEmpty: !hasActivity
+            isEmpty: !hasActivity,
+            meesh: payload.meesh.map(EngagementMeeshProgress.init(payload:))
         )
     }
 

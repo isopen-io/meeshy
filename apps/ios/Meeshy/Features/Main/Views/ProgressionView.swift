@@ -97,6 +97,17 @@ struct ProgressionView: View {
                 if viewModel.showsSkeleton {
                     ProgressionSkeleton()
                 } else if let progress = viewModel.progress {
+                    // Le héros n'est monté que si la passerelle sert le bloc :
+                    // un serveur antérieur ⇒ aucune section, jamais un solde à zéro
+                    // affiché à quelqu'un qui en a deux (#5743).
+                    if let meesh = progress.meesh {
+                        ProgressionMeeshHero(
+                            meesh: meesh,
+                            isMinting: viewModel.isMinting,
+                            onMint: { Task { await viewModel.mint() } }
+                        )
+                    }
+
                     if progress.isEmpty {
                         ProgressionNotice(kind: .empty)
                     }

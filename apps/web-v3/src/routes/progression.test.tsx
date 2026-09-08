@@ -109,3 +109,75 @@ describe('les autres états', () => {
     expect(offline).not.toContain('Réseau indisponible');
   });
 });
+
+/**
+ * LE HÉROS DES MEESHES (#5743) — et surtout ce qu'il REFUSE d'afficher.
+ *
+ * La directive du porteur est une NÉGATION (« le bouton quand les points le
+ * permettent, sinon pas de bouton »), et une négation ne se prouve que par un
+ * témoin qui cherche l'absence. Les trois cas ci-dessous couvrent les trois
+ * états possibles du bloc : absent, insuffisant, frappable.
+ */
+const rendreAvecMeesh = (meesh: {
+  balance: number;
+  mintedLifetime: number;
+  debitablePoints: number;
+  floorPoints: number;
+  missingPoints: number;
+  mintCost: number;
+}) =>
+  renderToStaticMarkup(
+    <ProgressionBody progress={resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, meesh })} />,
+  );
+
+describe('MeeshHero', () => {
+  test('n’affiche RIEN quand la passerelle ne sert pas le bloc', () => {
+    // La fixture n'a pas de bloc `meesh` : un client déployé avant ce lot, ou
+    // parlant à une passerelle antérieure, ne doit peindre aucun solde inventé.
+    expect(html).not.toContain('Meesh');
+  });
+
+  test('sans assez de points : le solde, le manque, et AUCUN bouton', () => {
+    const rendu = rendreAvecMeesh({
+      balance: 0,
+      mintedLifetime: 0,
+      debitablePoints: 100,
+      floorPoints: 1300,
+      missingPoints: 1121,
+      mintCost: 1221,
+    });
+    expect(rendu).toContain('Aucune Meesh');
+    expect(rendu).toContain('Encore 1121 points convertibles');
+    // Le plancher est une PROMESSE — elle doit être dite, pas seulement tenue.
+    expect(rendu).toContain('1300 points de conversation');
+    expect(rendu).not.toContain('<button');
+  });
+
+  test('avec assez de points : le bouton de conversion apparaît', () => {
+    const rendu = rendreAvecMeesh({
+      balance: 2,
+      mintedLifetime: 5,
+      debitablePoints: 1300,
+      floorPoints: 40,
+      missingPoints: 0,
+      mintCost: 1221,
+    });
+    expect(rendu).toContain('2 Meeshes');
+    expect(rendu).toContain('5 frappées depuis toujours');
+    expect(rendu).toContain('Convertir 1221 points en une Meesh');
+    expect(rendu).toContain('<button');
+  });
+
+  test('accorde le singulier — « 1 Meesh », jamais « 1 Meeshes »', () => {
+    const rendu = rendreAvecMeesh({
+      balance: 1,
+      mintedLifetime: 1,
+      debitablePoints: 0,
+      floorPoints: 0,
+      missingPoints: 1221,
+      mintCost: 1221,
+    });
+    expect(rendu).toContain('>1 Meesh<');
+    expect(rendu).toContain('1 frappée depuis toujours');
+  });
+});

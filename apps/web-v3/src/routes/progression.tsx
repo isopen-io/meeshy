@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useRef } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
 import { GLYPHS } from '@/components/glyphs';
@@ -6,7 +7,7 @@ import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { ProgressBar } from '@/components/progress-bar';
 import { httpTransport, unwrap } from '@/lib/api/client';
 import { apiConfig } from '@/lib/api/config';
-import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress } from '@/lib/api/engagement';
+import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, mintMeesh } from '@/lib/api/engagement';
 import { useOnline } from '@/lib/net/online';
 import {
   ACHIEVEMENT_COPY,
@@ -28,6 +29,7 @@ import { Link } from '@/routes/route-table';
 import {
   axesByFamily,
   type EngagementAxisProgress,
+  type EngagementMeeshProgress,
   type EngagementProgress,
   type EngagementTier,
 } from '@meeshy/shared/utils/engagement-progress';
@@ -58,6 +60,8 @@ import {
 
 const BRAND = 'var(--color-ios-brand)';
 const STREAK_TINT = 'var(--ios-warning)';
+/** L'ambre des Meeshes — la même famille que les badges, distincte de la marque. */
+const MEESH_TINT = 'var(--ios-warning)';
 const UNLOCKED_TINT = 'var(--ios-success)';
 const INK = 'var(--color-ios-ink)';
 const INK_2 = 'var(--color-ios-ink-2)';
@@ -254,9 +258,96 @@ function AchievementsSection({ progress }: { progress: EngagementProgress }) {
  * LE CORPS — pur. `online` vient de l'écran : hors ligne, l'instantané reste
  * peint tel quel, le bandeau de l'en-tête dit le reste.
  */
-export function ProgressionBody({ progress }: { progress: EngagementProgress }) {
+/**
+ * LE HÉROS DES MEESHES (#5743) — la première chose qu'on voit sur l'écran.
+ *
+ * Trois refus, tous délibérés :
+ *
+ *  - **rien du tout** quand la passerelle ne sert pas le bloc (`meesh`
+ *    absent) : un client déployé avant ce lot ne doit pas peindre un solde
+ *    inventé ;
+ *  - **pas de bouton grisé** — directive porteur : « le bouton pour convertir
+ *    quand les points le permettent, sinon pas de bouton ». Un contrôle qui
+ *    existe sans effet est un contrôle qui ment (loi 4) ;
+ *  - **la barre se mesure sur les points DÉBITABLES**, jamais sur le score
+ *    total. Une barre nourrie par le plancher conversationnel promettrait une
+ *    Meesh qui n'arriverait jamais.
+ *
+ * Et quand la frappe est impossible, l'écran DIT pourquoi — le plancher est
+ * une promesse (« ce qu'on a bâti en parlant aux autres ne se vend pas »), et
+ * une promesse muette ne rassure personne.
+ */
+function MeeshHero({ meesh, onMint, isMinting }: { meesh: EngagementMeeshProgress; onMint: () => void; isMinting: boolean }) {
+  const soldeLabel = meesh.balance === 0 ? 'Aucune Meesh' : meesh.balance === 1 ? '1 Meesh' : `${meesh.balance} Meeshes`;
+  return (
+    <section aria-labelledby="progression-meesh" className="flex flex-col gap-3 rounded-card px-4 py-4"
+      style={{
+        backgroundColor: 'color-mix(in srgb, var(--ios-warning) 12%, transparent)',
+        border: '1px solid color-mix(in srgb, var(--ios-warning) 30%, transparent)',
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <span style={{ color: MEESH_TINT }} aria-hidden="true">
+          <GlyphSvg glyph={PROGRESSION_GLYPHS.medal} size={18} />
+        </span>
+        <h2 id="progression-meesh" className="text-headline font-bold" style={{ color: INK }}>
+          {soldeLabel}
+        </h2>
+      </div>
+
+      {meesh.mintedLifetime > 0 ? (
+        <p className="text-check" style={{ color: INK_2 }}>
+          {meesh.mintedLifetime === 1 ? '1 frappée depuis toujours' : `${meesh.mintedLifetime} frappées depuis toujours`}
+        </p>
+      ) : null}
+
+      <ProgressBar
+        progress={meesh.progress}
+        label={`Vers la prochaine Meesh — ${meesh.debitablePoints} points sur ${meesh.mintCost}`}
+        tint={MEESH_TINT}
+      />
+
+      {meesh.canMint ? (
+        // Le bouton RESTE pendant la frappe, avec son état dit : le faire
+        // disparaître au moment du tap donnerait l'impression que l'action a
+        // échoué, alors qu'elle est en cours.
+        <button
+          type="button"
+          onClick={onMint}
+          disabled={isMinting}
+          aria-busy={isMinting}
+          className="min-h-11 rounded-chip px-4 text-body font-semibold disabled:opacity-60"
+          style={{ backgroundColor: MEESH_TINT, color: 'var(--color-ios-surface)' }}
+        >
+          {isMinting ? 'Frappe en cours…' : `Convertir ${meesh.mintCost} points en une Meesh`}
+        </button>
+      ) : (
+        <p className="text-check" style={{ color: INK_2 }}>
+          Encore {meesh.missingPoints} points convertibles avant une Meesh.
+          {meesh.floorPoints > 0
+            ? ` Vos ${meesh.floorPoints} points de conversation comptent dans votre niveau et ne se dépensent jamais.`
+            : ''}
+        </p>
+      )}
+    </section>
+  );
+}
+
+export function ProgressionBody({
+  progress,
+  onMint,
+  isMinting = false,
+}: {
+  progress: EngagementProgress;
+  onMint?: () => void;
+  isMinting?: boolean;
+}) {
   return (
     <div className="flex flex-col gap-5 px-4 py-3">
+      {progress.meesh !== undefined ? (
+        <MeeshHero meesh={progress.meesh} onMint={onMint ?? (() => {})} isMinting={isMinting} />
+      ) : null}
+
       {progress.isEmpty ? (
         <p
           role="status"
@@ -345,6 +436,23 @@ export function ProgressionError({ message, online, onRetry }: { message: string
 
 export default function ProgressionScreen() {
   const online = useOnline();
+  const queryClient = useQueryClient();
+  /**
+   * L'identifiant d'idempotence est généré UNE fois par intention de frappe,
+   * jamais par requête : sinon un retry deviendrait une seconde frappe, ce que
+   * cet identifiant est justement là pour empêcher (#5743). Il n'est renouvelé
+   * qu'après une frappe RÉUSSIE.
+   */
+  const requestIdRef = useRef<string>(crypto.randomUUID());
+
+  const mint = useMutation({
+    mutationFn: async () => unwrap(await mintMeesh(httpTransport, requestIdRef.current)),
+    onSuccess: () => {
+      requestIdRef.current = crypto.randomUUID();
+      void queryClient.invalidateQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY });
+    },
+  });
+
   const query = useQuery({
     queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY,
     queryFn: async ({ signal }) =>
@@ -384,7 +492,7 @@ export default function ProgressionScreen() {
 
       <main id="contenu" className="flex-1 overflow-y-auto pb-safe">
         {query.data !== undefined ? (
-          <ProgressionBody progress={query.data} />
+          <ProgressionBody progress={query.data} onMint={() => mint.mutate()} isMinting={mint.isPending} />
         ) : query.isError ? (
           <ProgressionError message={query.error.message} online={online} onRetry={() => void query.refetch()} />
         ) : (

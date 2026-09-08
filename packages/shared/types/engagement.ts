@@ -151,6 +151,8 @@ export const levelMilestoneKey = (threshold: number): string => `level:${thresho
 export type EngagementCounterEntry = {
   readonly axisKey: string;
   readonly count: number;
+  /** Points crédités par cet axe, élan compris (#5749) — optionnel : un serveur antérieur ne le sert pas. */
+  readonly points?: number;
 };
 
 export type EngagementMilestoneEntry = {
@@ -170,6 +172,28 @@ export type EngagementProgressPayload = {
   readonly level: {
     readonly engagementScore: number;
   };
+  /**
+   * Les Meeshes (#5743) — OPTIONNEL, délibérément.
+   *
+   * Un client déployé avant ce lot ne connaît pas ce champ et doit continuer
+   * de fonctionner ; un serveur antérieur ne le sert pas et l'écran doit
+   * simplement ne rien montrer. C'est la règle « un contrat NEUF s'AJOUTE à
+   * l'ancien pour les clients déployés » — la garde de frontière ci-dessous
+   * accepte donc son absence, et REFUSE une forme partielle.
+   */
+  readonly meesh?: {
+    readonly balance: number;
+    /** Frappées à vie — monotone, c'est elle que le rang interroge (#5744). */
+    readonly mintedLifetime: number;
+    /** Points repris à des axes débitables — jamais les conversations. */
+    readonly debitablePoints: number;
+    /** Points du plancher inaliénable, montrés mais jamais dépensables. */
+    readonly floorPoints: number;
+    /** Points manquants pour frapper — `0` quand la frappe est possible. */
+    readonly missingPoints: number;
+    /** Le prix d'une frappe, servi par le serveur pour qu'aucun client ne le code en dur. */
+    readonly mintCost: number;
+  };
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -179,7 +203,10 @@ const isNonNegativeInteger = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0;
 
 const isCounterEntry = (value: unknown): value is EngagementCounterEntry =>
-  isRecord(value) && typeof value.axisKey === 'string' && isNonNegativeInteger(value.count);
+  isRecord(value) &&
+  typeof value.axisKey === 'string' &&
+  isNonNegativeInteger(value.count) &&
+  (value.points === undefined || isNonNegativeInteger(value.points));
 
 const isMilestoneEntry = (value: unknown): value is EngagementMilestoneEntry =>
   isRecord(value) &&
@@ -188,9 +215,24 @@ const isMilestoneEntry = (value: unknown): value is EngagementMilestoneEntry =>
   typeof value.milestoneKey === 'string' &&
   typeof value.reachedAt === 'string';
 
+/**
+ * Le bloc `meesh` : ABSENT (serveur antérieur) ou COMPLET, jamais à moitié.
+ * Une charge partielle ferait afficher un solde sans savoir si la frappe est
+ * possible — pire qu'une absence, qui n'affiche rien.
+ */
+const isMeeshBlock = (value: unknown): boolean =>
+  isRecord(value) &&
+  isNonNegativeInteger(value.balance) &&
+  isNonNegativeInteger(value.mintedLifetime) &&
+  isNonNegativeInteger(value.debitablePoints) &&
+  isNonNegativeInteger(value.floorPoints) &&
+  isNonNegativeInteger(value.missingPoints) &&
+  isNonNegativeInteger(value.mintCost);
+
 export function isEngagementProgressPayload(value: unknown): value is EngagementProgressPayload {
   if (!isRecord(value)) return false;
-  const { counters, milestones, streak, level } = value;
+  const { counters, milestones, streak, level, meesh } = value;
+  if (meesh !== undefined && !isMeeshBlock(meesh)) return false;
   return (
     Array.isArray(counters) &&
     counters.every(isCounterEntry) &&

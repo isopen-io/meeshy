@@ -103,6 +103,33 @@ export type EngagementAchievementProgress = {
   readonly reachedAt: string | null;
 };
 
+/**
+ * Les Meeshes, tels que l'écran les rend (#5743).
+ *
+ * `canMint` est DÉRIVÉ ici, jamais servi par le fil : le serveur envoie des
+ * faits (points débitables, prix), le client en tire la décision d'AFFICHER le
+ * bouton. Deux règles qui en découlent :
+ *  - un serveur antérieur ne sert pas le bloc ⇒ `meesh` est absent ⇒ l'écran
+ *    ne montre RIEN, ni solde ni bouton ;
+ *  - le bouton n'apparaît QUE si `canMint` — pas de bouton grisé (directive
+ *    porteur : « le bouton pour convertir quand les points le permettent,
+ *    sinon pas de bouton »).
+ */
+export type EngagementMeeshProgress = {
+  readonly balance: number;
+  readonly mintedLifetime: number;
+  /** Ce qui peut servir à frapper — les conversations en sont exclues. */
+  readonly debitablePoints: number;
+  /** Le plancher inaliénable : compté dans le niveau, jamais dépensable. */
+  readonly floorPoints: number;
+  readonly missingPoints: number;
+  readonly mintCost: number;
+  /** Vrai quand les points débitables couvrent le prix. */
+  readonly canMint: boolean;
+  /** Fraction parcourue vers la prochaine Meesh — `1` quand la frappe est possible. */
+  readonly progress: number;
+};
+
 export type EngagementProgress = {
   readonly level: EngagementLevelProgress;
   readonly streak: EngagementStreakProgress;
@@ -114,6 +141,8 @@ export type EngagementProgress = {
   readonly badgesTotal: number;
   /** Aucune activité comptée, aucun palier gravé — l'ÉTAT VIDE de l'écran (dimension 8). */
   readonly isEmpty: boolean;
+  /** Absent quand la passerelle ne sert pas encore le bloc — l'écran n'affiche alors rien. */
+  readonly meesh?: EngagementMeeshProgress;
 };
 
 export type EngagementFamilyGroup = {
@@ -231,6 +260,33 @@ export function resolveEngagementProgress(payload: EngagementProgressPayload): E
     badgesEarned,
     badgesTotal: ENGAGEMENT_AXES.length * BADGE_THRESHOLDS.length,
     isEmpty: !hasActivity,
+    ...(payload.meesh !== undefined ? { meesh: resolveMeesh(payload.meesh) } : {}),
+  };
+}
+
+/**
+ * `canMint` et `progress` sont DÉRIVÉS ici, jamais servis par le fil : le
+ * serveur envoie des faits, le client en tire la décision d'afficher — c'est ce
+ * qui garantit que les trois plateformes prennent la MÊME décision sur les
+ * MÊMES chiffres.
+ *
+ * `progress` se mesure sur les points DÉBITABLES, pas sur le score total : une
+ * barre qui monterait grâce à des points de conversation — que la frappe ne
+ * peut pas reprendre (#5743) — promettrait une Meesh qui n'arriverait jamais.
+ */
+function resolveMeesh(meesh: NonNullable<EngagementProgressPayload['meesh']>): EngagementMeeshProgress {
+  const mintCost = safeCount(meesh.mintCost);
+  const debitablePoints = safeCount(meesh.debitablePoints);
+  const canMint = mintCost > 0 && debitablePoints >= mintCost;
+  return {
+    balance: safeCount(meesh.balance),
+    mintedLifetime: safeCount(meesh.mintedLifetime),
+    debitablePoints,
+    floorPoints: safeCount(meesh.floorPoints),
+    missingPoints: safeCount(meesh.missingPoints),
+    mintCost,
+    canMint,
+    progress: mintCost === 0 ? 0 : clamp01(debitablePoints / mintCost),
   };
 }
 

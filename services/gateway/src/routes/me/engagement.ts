@@ -23,7 +23,8 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
+import { ENGAGEMENT_AXES, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import { computeMeeshMintPlan, MEESH_MINT_COST } from '@meeshy/shared/utils/meesh';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { logError } from '../../utils/logger';
@@ -32,6 +33,8 @@ const USER_ENGAGEMENT_SELECT = {
   currentStreakDays: true,
   longestStreakDays: true,
   engagementScore: true,
+  meeshBalance: true,
+  meeshMintedLifetime: true,
 } as const;
 
 type UserEngagementColumns = {
@@ -69,6 +72,7 @@ const counterEntrySchema = {
   properties: {
     axisKey: { type: 'string', enum: [...ENGAGEMENT_AXES] },
     count: { type: 'number' },
+    points: { type: 'number' },
   },
 } as const;
 
@@ -101,6 +105,19 @@ const engagementResponseSchema = {
           type: 'object',
           properties: {
             engagementScore: { type: 'number' },
+          },
+        },
+        // Les Meeshes (#5743). Le SERVEUR sert le prix : aucun client ne le
+        // code en dur, donc aucun ne devient faux le jour où il change.
+        meesh: {
+          type: 'object',
+          properties: {
+            balance: { type: 'number' },
+            mintedLifetime: { type: 'number' },
+            debitablePoints: { type: 'number' },
+            floorPoints: { type: 'number' },
+            missingPoints: { type: 'number' },
+            mintCost: { type: 'number' },
           },
         },
       },
@@ -146,7 +163,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
           // contrainte unique `@@unique([userId, axisKey])`), aujourd'hui 13.
           fastify.prisma.engagementCounter.findMany({
             where: { userId },
-            select: { axisKey: true, count: true },
+            select: { axisKey: true, count: true, points: true },
             take: 100,
           }),
           // Idem : au plus (nb axes × BADGE_THRESHOLDS) + STREAK_THRESHOLDS +
@@ -167,10 +184,24 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
 
         const streakUser = user as UserEngagementColumns;
 
+        // Le plan de frappe est DÉRIVÉ des compteurs déjà lus — aucune
+        // requête de plus, et le client rejoue exactement le même calcul pour
+        // décider s'il montre le bouton. Le score TOTAL et le score DÉBITABLE
+        // sont deux chiffres distincts : les conversations comptent dans le
+        // niveau et ne se dépensent jamais (plancher inaliénable, #5743).
+        const plan = computeMeeshMintPlan(
+          counters.map((c: { axisKey: string; count: number; points: number }) => ({
+            axisKey: c.axisKey as EngagementAxisKey,
+            count: c.count,
+            points: c.points,
+          })),
+        );
+
         return sendSuccess(reply, {
-          counters: counters.map((c: { axisKey: string; count: number }) => ({
+          counters: counters.map((c: { axisKey: string; count: number; points: number }) => ({
             axisKey: c.axisKey,
             count: c.count,
+            points: c.points,
           })),
           milestones: milestones.map((m: { milestoneType: string; milestoneKey: string; reachedAt: Date }) => ({
             milestoneType: m.milestoneType,
@@ -184,7 +215,15 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
           level: {
             engagementScore: streakUser.engagementScore ?? 0,
           },
-        });
+          meesh: {
+            balance: (streakUser as { meeshBalance?: number }).meeshBalance ?? 0,
+            mintedLifetime: (streakUser as { meeshMintedLifetime?: number }).meeshMintedLifetime ?? 0,
+            debitablePoints: plan.debitablePoints,
+            floorPoints: plan.floorPoints,
+            missingPoints: plan.missingPoints,
+            mintCost: MEESH_MINT_COST,
+          },
+});
       } catch (error) {
         logError('Error fetching engagement', error, { source: 'me-engagement-routes' });
         return sendInternalError(reply, 'FETCH_ERROR', { message: 'Failed to fetch engagement' });
