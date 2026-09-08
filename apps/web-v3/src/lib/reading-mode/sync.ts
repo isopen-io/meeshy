@@ -1,5 +1,7 @@
 import type { ConversationReadingMode, ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 
+import type { Transport } from '../net/transport';
+
 /**
  * LE PORT SERVEUR (D-10) — ce fichier définit la FORME du câblage réseau,
  * jamais le réseau lui-même : `transport` est un paramètre INJECTABLE, et le
@@ -12,20 +14,14 @@ import type { ConversationReadingMode, ReadingModePreference } from '@meeshy/sha
  *   - écriture : `PUT /api/v1/user-preferences/conversations/:conversationId`
  *     (`conversation-preferences.ts:349`), corps `{ readingMode }` seul —
  *     les autres champs restent inchangés (l.393-404).
+ *
+ * `Transport` est désormais PARTAGÉ (`../net/transport.ts`, #5559 §5.1) : un
+ * second domaine (`api/preferences.ts`) écrit vers la passerelle, et un
+ * `Transport` par domaine aurait été la jumelle divergente que le dépôt
+ * interdit. Réexporté ici pour que les consommateurs existants de ce module
+ * (`import type { Transport } from './sync'`) n'aient rien à changer.
  */
-
-/**
- * La MÉTHODE fait partie du port, elle n'est pas laissée à l'appelant : la
- * route d'écriture est un `PUT` (`conversation-preferences.ts:349`) et il
- * n'existe AUCUN `POST` à cette adresse. Un transport qui ne reçoit que
- * `(path, body)` laisse le lot `staging` deviner le verbe — c'est-à-dire se
- * tromper une fois sur deux, contre un 404 silencieux.
- */
-export type Transport = (request: {
-  readonly method: 'PUT';
-  readonly path: string;
-  readonly body: unknown;
-}) => Promise<unknown>;
+export type { Transport } from '../net/transport';
 
 /**
  * Compose la requête EXACTE de la route PUT (§3.2) : la méthode, le chemin et

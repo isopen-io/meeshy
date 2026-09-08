@@ -1,4 +1,6 @@
 import { spawnSync } from 'node:child_process';
+import { readFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import tailwind from '@tailwindcss/vite';
@@ -84,6 +86,46 @@ const forCapacitor = process.env.MEESHY_TARGET === 'capacitor';
 const bench = Number.parseInt(process.env.MEESHY_BENCH ?? '0', 10) || 0;
 
 /**
+ * LA VERSION DU PRODUIT — LUE, jamais recopiée (revue de #5555, défaut 8).
+ *
+ * `BrandSignature` rend « Meeshy {version} » sur les cinq pages
+ * institutionnelles ET sur l'écran de connexion. Le préchauffage lit
+ * `package.json` (`scripts/prerender-institutional.tsx`) ; l'application, elle,
+ * n'a pas de système de fichiers — la version y arrivait donc en LITTÉRAL
+ * (`'3.1.0'` dans `routes/login.tsx`), juste ce jour-là et faux au prochain
+ * `npm version`. Un littéral de construction relit la MÊME source au même
+ * moment que le reste de la table : une source, deux lecteurs, aucune copie.
+ */
+const appVersion = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
+).version as string;
+
+/**
+ * LA SOURCE DE DONNÉES SE DÉCIDE, MAIS ELLE N'EST PAS ENCORE CÂBLÉE (#5605).
+ *
+ * `resolveApiConfig` (`src/lib/api/config.ts`) rend déjà `source`, et c'est le
+ * bon endroit — la base et la source se choisissent au MÊME endroit. Mais
+ * AUCUN écran ne la lit : `routes/conversations.tsx` et `routes/thread.tsx`
+ * importent `src/lib/api/fixtures.ts` en direct. Un déploiement qui poserait
+ * `VITE_DATA_SOURCE=gateway` servirait donc les fixtures en CROYANT parler à
+ * la passerelle, sans qu'aucun témoin ne rougisse.
+ *
+ * Une valeur qui ne fait rien est pire qu'une valeur absente : on refuse ici
+ * de CONSTRUIRE plutôt que de laisser passer le malentendu. Ce garde-fou
+ * disparaît le jour où les écrans lisent `apiConfig.source` — et sa
+ * disparition sera VISIBLE dans le diff qui les câble, ce qu'un commentaire
+ * n'aurait pas obtenu.
+ */
+const declaredDataSource = process.env.VITE_DATA_SOURCE;
+if (declaredDataSource !== undefined && declaredDataSource !== 'fixtures') {
+  throw new Error(
+    `VITE_DATA_SOURCE=${declaredDataSource} : la source « passerelle » n'est pas encore câblée aux écrans ` +
+      '(les routes lisent src/lib/api/fixtures.ts en direct). Construire avec cette valeur servirait les ' +
+      'fixtures en silence. Retirer la variable, ou câbler les écrans sur apiConfig.source avant de la poser.',
+  );
+}
+
+/**
  * LE PRÉCHAUFFAGE ENTRE DANS LA CONSTRUCTION, et il n'y est pas par commodité.
  *
  * Il était enchaîné APRÈS `vite build` dans le script `build` du manifeste, et
@@ -128,9 +170,66 @@ const prerenderInstitutionalPages = (): Plugin => ({
   },
 });
 
+/**
+ * LE SERVICE WORKER INSTITUTIONNEL N'ENTRE PAS DANS LA COQUE (#5604,
+ * revue-correction).
+ *
+ * `sw-institutional.js` vit dans `public/`, donc Vite le RECOPIE tel quel dans
+ * TOUTE construction — y compris la variante B, ou VitePWA est pourtant retire
+ * et ou plus rien ne l'`importScripts`. Il partait donc dans l'APK et dans
+ * l'IPA en fichier MORT, pendant que `capacitor.config.ts` et le gate
+ * `check-shell-dist.mjs` affirmaient tous deux « aucun service worker ». Une
+ * affirmation qu'un fichier du dist contredit n'est pas une affirmation.
+ *
+ * `writeBundle` et non `generateBundle` : les actifs de `public/` sont copies
+ * HORS du graphe de rollup, donc invisibles du second.
+ */
+const dropInstitutionalServiceWorker = (): Plugin => ({
+  name: 'meeshy-drop-institutional-sw',
+  apply: 'build',
+  writeBundle(options) {
+    if (options.dir === undefined) return;
+    rmSync(join(options.dir, 'sw-institutional.js'), { force: true });
+  },
+});
+
 export default defineConfig({
   base: forCapacitor ? './' : '/',
-  define: { __BENCH__: JSON.stringify(bench) },
+  define: {
+    __BENCH__: JSON.stringify(bench),
+    __SHELL__: JSON.stringify(forCapacitor),
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
+  /**
+   * LE PROXY DE DEV (#5605, staging) — DEV UNIQUEMENT, zéro octet dans `dist/`.
+   *
+   * La passerelle sert `CORS_ORIGINS=https://staging.meeshy.me,https://gate.staging.meeshy.me`
+   * en staging (`docker-compose.staging.yml:218`) — `http://localhost:5173`
+   * n'y figure PAS, et `originIsAllowed()` (`cors-origins.ts:131-139`) refuse
+   * toute origine hors liste. Un appel `fetch` direct depuis Chrome local se
+   * ferait donc REFUSER par CORS avant même d'atteindre la route.
+   *
+   * Le proxy rend l'appel SAME-ORIGIN côté navigateur (`/api/v1/…` reste sur
+   * `localhost:5173` : c'est le fetch du navigateur que le vérificateur CORS
+   * du NAVIGATEUR regarde, et il ne voit qu'une requête locale). Mais le
+   * navigateur pose quand même un en-tête `Origin: http://localhost:5173`
+   * sur la requête sortante, et `http-proxy` la RELAIE telle quelle vers
+   * `gate.staging.meeshy.me` — sans le retrait ci-dessous, la passerelle
+   * recevrait exactement l'origine qu'elle refuse (`cors-origins.ts:131-139`,
+   * `localhost:5173` absent de `CORS_ORIGINS`) et l'appel échouerait quand
+   * même, une couche plus loin que le navigateur.
+   */
+  server: {
+    proxy: {
+      '/api/v1': {
+        target: process.env.MEESHY_PROXY_TARGET ?? 'https://gate.staging.meeshy.me',
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => proxyReq.removeHeader('origin'));
+        },
+      },
+    },
+  },
   resolve: {
     alias: [
       ...(runtime === 'preact' ? aliasPreact : []),
@@ -141,6 +240,7 @@ export default defineConfig({
     tailwind(),
     inlineSchemeBootstrap(),
     prerenderInstitutionalPages(),
+    ...(forCapacitor ? [dropInstitutionalServiceWorker()] : []),
     /**
      * VARIANTE A (PWA). Desactivee sous Capacitor : la coque native gere
      * elle-meme son cycle de vie, et un service worker par-dessus ferait deux
@@ -151,7 +251,7 @@ export default defineConfig({
       : [
           VitePWA({
             registerType: 'autoUpdate',
-            includeAssets: ['favicon.svg'],
+            includeAssets: ['favicon-48.png'],
             manifest: {
               name: 'Meeshy',
               short_name: 'Meeshy',
@@ -170,7 +270,25 @@ export default defineConfig({
               ],
             },
             workbox: {
-              globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+              /**
+               * `brand/*.png` (#5606) : les DEUX actifs de marque servis par
+               * les pages institutionnelles (le logo d'en-tête, le glyphe de
+               * la signature de pied) — pas les icônes du manifest, dont le
+               * doublon a déjà coûté ~37 Ko d'installation une fois (#5554,
+               * `globIgnores` ci-dessous). ~13 Ko bruts pour les deux, contre
+               * une signature affichant un glyphe CASSÉ au tout premier accès
+               * hors ligne à une page institutionnelle sans ce précache — le
+               * cache d'exécution `medias` (CacheFirst, plus bas) ne les
+               * connaît qu'APRÈS un premier succès réseau.
+               *
+               * `favicon-48.png` (revue de #5606, défaut 1) : l'ancien
+               * `favicon.svg` entrait dans le précache par le motif `svg`
+               * générique ; sa PROJECTION dérivée d'iOS est un PNG, et un
+               * favicon absent du précache redeviendrait une requête réseau à
+               * la deuxième visite — exactement ce que `check-institutional.mjs`
+               * (critère 3) exige à zéro.
+               */
+              globPatterns: ['**/*.{js,css,html,svg,woff2}', 'brand/*.png', 'favicon-48.png'],
               /**
                * Chaque page institutionnelle est écrite dans DEUX formes —
                * `about.html` et `about/index.html` — parce qu'un serveur

@@ -9,13 +9,19 @@ import { ZmqConnectionManager, ConnectionManagerConfig } from '../../../services
 // initialization succeeded. The lazy arrows read the current mock sockets, so
 // beforeEach can still hand each test fresh ones, and the tests now assert on
 // observable behavior (connected sockets) rather than constructor identity.
+//
+// `initialize()` constructs TWO Push sockets (push + ping, #5611) — the
+// factory dispatches by construction order so each resolves to its own mock,
+// letting tests prove the two channels are independent instances.
 let mockPushSocket: any;
+let mockPingSocket: any;
 let mockSubSocket: any;
 let mockContext: any;
+let pushConstructCount = 0;
 
 jest.mock('zeromq', () => ({
   Context: jest.fn(() => mockContext),
-  Push: jest.fn(() => mockPushSocket),
+  Push: jest.fn(() => (pushConstructCount++ === 0 ? mockPushSocket : mockPingSocket)),
   Subscriber: jest.fn(() => mockSubSocket),
 }));
 
@@ -32,8 +38,16 @@ describe('ZmqConnectionManager', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
     jest.spyOn(console, 'error').mockImplementation(() => {});
 
+    pushConstructCount = 0;
+
     // Create mock sockets
     mockPushSocket = {
+      connect: jest.fn(() => Promise.resolve()),
+      send: jest.fn(() => Promise.resolve()),
+      close: jest.fn(() => Promise.resolve())
+    } as any;
+
+    mockPingSocket = {
       connect: jest.fn(() => Promise.resolve()),
       send: jest.fn(() => Promise.resolve()),
       close: jest.fn(() => Promise.resolve())
@@ -76,8 +90,15 @@ describe('ZmqConnectionManager', () => {
       // the mocks — without depending on that fragile reference identity.
       const sockets = manager.getSockets();
       expect(sockets.pushSocket).toBe(mockPushSocket);
+      expect(sockets.pingSocket).toBe(mockPingSocket);
       expect(sockets.subSocket).toBe(mockSubSocket);
       expect(mockPushSocket.connect).toHaveBeenCalledWith(`tcp://${config.host}:${config.pushPort}`);
+      // La sonde connecte une socket PUSH DISTINCTE, au même port (#5611) —
+      // deux pairs PUSH peuvent connecter le même PULL du translator sans
+      // conflit, et c'est précisément ce qui évite qu'elle partage le
+      // verrou d'écriture d'une traduction en vol.
+      expect(sockets.pingSocket).not.toBe(sockets.pushSocket);
+      expect(mockPingSocket.connect).toHaveBeenCalledWith(`tcp://${config.host}:${config.pushPort}`);
       expect(mockSubSocket.connect).toHaveBeenCalledWith(`tcp://${config.host}:${config.subPort}`);
       expect(mockSubSocket.subscribe).toHaveBeenCalledWith('');
       expect(manager.getIsConnected()).toBe(true);
@@ -85,6 +106,12 @@ describe('ZmqConnectionManager', () => {
 
     it('should throw error when push socket connection fails', async () => {
       mockPushSocket.connect.mockRejectedValue(new Error('Connection failed'));
+
+      await expect(manager.initialize()).rejects.toThrow('Connection failed');
+    });
+
+    it('should throw error when ping socket connection fails', async () => {
+      mockPingSocket.connect.mockRejectedValue(new Error('Connection failed'));
 
       await expect(manager.initialize()).rejects.toThrow('Connection failed');
     });
@@ -265,16 +292,17 @@ describe('ZmqConnectionManager', () => {
       await manager.initialize();
     });
 
-    it('should send ping message successfully', async () => {
+    it('should send ping message on the dedicated ping socket, never on the translation socket (#5611)', async () => {
       await manager.sendPing();
 
-      expect(mockPushSocket.send).toHaveBeenCalled();
-      const sentMessage = JSON.parse(mockPushSocket.send.mock.calls[0][0]);
+      expect(mockPingSocket.send).toHaveBeenCalled();
+      expect(mockPushSocket.send).not.toHaveBeenCalled();
+      const sentMessage = JSON.parse(mockPingSocket.send.mock.calls[0][0]);
       expect(sentMessage.type).toBe('ping');
       expect(sentMessage.timestamp).toBeDefined();
     });
 
-    it('should resolve silently when push socket is not initialized', async () => {
+    it('should resolve silently when ping socket is not initialized', async () => {
       const uninitializedManager = new ZmqConnectionManager(config);
 
       await expect(uninitializedManager.sendPing()).resolves.toBeUndefined();
@@ -285,9 +313,37 @@ describe('ZmqConnectionManager', () => {
       await manager.sendPing();
       const afterPing = Date.now();
 
-      const sentMessage = JSON.parse(mockPushSocket.send.mock.calls[0][0]);
+      const sentMessage = JSON.parse(mockPingSocket.send.mock.calls[0][0]);
       expect(sentMessage.timestamp).toBeGreaterThanOrEqual(beforePing);
       expect(sentMessage.timestamp).toBeLessThanOrEqual(afterPing);
+    });
+
+    it('should reject when the ping socket send genuinely fails — the verdict is no longer swallowed (#5611)', async () => {
+      mockPingSocket.send.mockRejectedValueOnce(new Error('Socket is busy writing; only one send operation may be in progress at any time'));
+
+      await expect(manager.sendPing()).rejects.toThrow('Socket is busy writing');
+    });
+
+    it('does not collide with an in-flight translation send — mirrors zeromq.js single-flight PUSH sockets (#5611)', async () => {
+      // Modèle fidèle de la contrainte réelle de zeromq.js : une socket PUSH
+      // ne tolère qu'un seul send() en vol. Avant la socket dédiée, la sonde
+      // ET la traduction visaient la MÊME socket et se heurtaient à cette
+      // règle ("Socket is busy writing"). Ici pushSocket et pingSocket sont
+      // deux instances distinctes : la traduction reste en vol sur l'une
+      // pendant que la sonde réussit sur l'autre.
+      let releaseTranslationSend!: () => void;
+      mockPushSocket.send.mockImplementationOnce(
+        () => new Promise((resolve) => { releaseTranslationSend = resolve; })
+      );
+
+      const translationSend = manager.send({ type: 'translation', text: 'hello' });
+
+      await expect(manager.sendPing()).resolves.toBeUndefined();
+      expect(mockPingSocket.send).toHaveBeenCalledTimes(1);
+      expect(mockPushSocket.send).toHaveBeenCalledTimes(1); // toujours en vol, jamais un second appel
+
+      releaseTranslationSend();
+      await translationSend;
     });
   });
 
@@ -297,6 +353,7 @@ describe('ZmqConnectionManager', () => {
       await manager.close();
 
       expect(mockPushSocket.close).toHaveBeenCalled();
+      expect(mockPingSocket.close).toHaveBeenCalled();
       expect(mockSubSocket.close).toHaveBeenCalled();
       expect(manager.getIsConnected()).toBe(false);
     });
@@ -319,6 +376,7 @@ describe('ZmqConnectionManager', () => {
 
       const sockets = manager.getSockets();
       expect(sockets.pushSocket).toBeNull();
+      expect(sockets.pingSocket).toBeNull();
       expect(sockets.subSocket).toBeNull();
     });
   });
@@ -328,6 +386,7 @@ describe('ZmqConnectionManager', () => {
       const sockets = manager.getSockets();
 
       expect(sockets.pushSocket).toBeNull();
+      expect(sockets.pingSocket).toBeNull();
       expect(sockets.subSocket).toBeNull();
     });
 
@@ -336,6 +395,7 @@ describe('ZmqConnectionManager', () => {
       const sockets = manager.getSockets();
 
       expect(sockets.pushSocket).toBe(mockPushSocket);
+      expect(sockets.pingSocket).toBe(mockPingSocket);
       expect(sockets.subSocket).toBe(mockSubSocket);
     });
 
@@ -345,6 +405,7 @@ describe('ZmqConnectionManager', () => {
       const sockets = manager.getSockets();
 
       expect(sockets.pushSocket).toBeNull();
+      expect(sockets.pingSocket).toBeNull();
       expect(sockets.subSocket).toBeNull();
     });
   });

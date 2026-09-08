@@ -238,8 +238,11 @@ const HORS_TABLE_PAR_SCHEMA = [
 // ------------------------------------------------------------------ SORTIE
 
 const row = (name, value) => `  ${name}: ${value};`;
+// `purple*` rejoint la rampe indigo (#5555) : le titre « Meeshy » et le lien
+// « Créer un compte » de LoginView.swift dégradent purple700→600→500, une
+// couleur DISTINCTE de la marque indigo qui n'était pas encore dérivée.
 const ramp = [...constantes]
-  .filter(([n]) => /^indigo\d+$/.test(n))
+  .filter(([n]) => /^(indigo|purple)\d+$/.test(n))
   .map(([n, v]) => row(`--ios-${n.replace(/(\d+)$/, '-$1')}`, v));
 
 const SEMANTIQUES = [
@@ -280,7 +283,7 @@ const output = `/* GÉNÉRÉ — ne pas éditer à la main.
 
 :root,
 :root.dark {
-  /* La rampe indigo — la marque, identique dans les deux schémas. */
+  /* Les rampes indigo et purple — la marque, identiques dans les deux schémas. */
 ${ramp.join('\n')}
 
   /* Les couleurs sémantiques et les neutres — hors schéma également. */

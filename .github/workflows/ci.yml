@@ -268,6 +268,15 @@ jobs:
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
           cd ../../apps/web-v3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} check:tokens
+          # #5606 — les actifs DÉRIVÉS de l'icône iOS (icônes PWA, splashs des
+          # deux coques) sont commités : sans ce contrôle, une icône iOS
+          # retouchée laisserait `public/` et les coques périmés EN SILENCE.
+          # Le témoin `scripts/brand-assets.test.ts` couvre les copies octet
+          # pour octet, pas les images RECALCULÉES — c'est cette ligne-ci qui
+          # les garde. (Le composite `bun run gate` n'est PAS lancé en CI :
+          # cette étape énumère ses maillons un par un, donc un maillon ajouté
+          # au composite seul ne s'exécuterait nulle part.)
+          python3 scripts/generate-icons.py --check
           node scripts/check-curve.mjs
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
           node scripts/check-utilities.mjs

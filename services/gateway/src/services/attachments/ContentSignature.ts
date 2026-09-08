@@ -228,6 +228,98 @@ export function matchesImageSignature(buffer: Buffer): boolean {
   return false;
 }
 
+// ─── SVG / PDF ──────────────────────────────────────────────────────────────
+
+/**
+ * Fenêtre de recherche du prologue SVG : assez large pour un BOM UTF-8 suivi
+ * d'un commentaire XML ou d'un DOCTYPE avant la première balise significative,
+ * sans lire le document entier.
+ */
+const SVG_SIGNATURE_SEARCH_WINDOW = 512;
+
+/**
+ * Un SVG légitime commence, une fois le BOM UTF-8 optionnel retiré, par un
+ * prologue XML (`<?xml`) ou directement par la balise racine (`<svg`) —
+ * insensible à la casse et aux espaces de tête (RFC citant la spec SVG 1.1 §5.1).
+ */
+function matchesSvgSignature(buffer: Buffer): boolean {
+  if (buffer.length === 0) return false;
+  const start = startsWithBytes(buffer, [0xef, 0xbb, 0xbf]) ? 3 : 0;
+  const window = buffer.toString('latin1', start, Math.min(buffer.length, start + SVG_SIGNATURE_SEARCH_WINDOW));
+  const head = window.trimStart().toLowerCase();
+  return head.startsWith('<?xml') || head.startsWith('<svg');
+}
+
+/** Signature officielle PDF — `%PDF-` en tête de fichier (spec PDF §7.5.2). */
+function matchesPdfSignature(buffer: Buffer): boolean {
+  return startsWithAscii(buffer, '%PDF-');
+}
+
+// ─── Vérification du mimeType déclaré contre le contenu réel ───────────────
+
+export type DeclaredMimeSignatureVerdict =
+  | { readonly verified: true }
+  | { readonly verified: false; readonly reason: string };
+
+/**
+ * Vérifie qu'un `mimeType` déclaré par le client correspond au contenu réel du
+ * fichier, pour les familles dont ce module connaît une signature (#5615).
+ *
+ * Contexte : `classifyAnonymousAttachment` ci-dessus ne se sert des fonctions
+ * de signature que pour DÉCIDER un rang de permission (voix vs image vs
+ * fichier) sur l'exemption anonyme — une signature qui ne correspond pas
+ * retombe silencieusement dans le seau « fichier », plus permissif. Cette
+ * fonction répond à une question différente, posée pour TOUT upload (inscrit
+ * ou anonyme) : le mimeType déclaré ment-il sur ce que le fichier EST ? Un
+ * mensonge avéré REJETTE l'upload plutôt que de le reclassifier.
+ *
+ * Décision produit (#5615) — que faire d'un type dont ce module ne connaît
+ * AUCUNE signature (vidéo, texte, code, la plupart des formats de document) ?
+ * **Accepté par défaut.** Vérifier une signature demande un vrai parseur de
+ * conteneur pour la plupart de ces formats (`ACCEPTED_MIME_TYPES.DOCUMENT`/
+ * `.CODE` couvrent des dizaines de types textuels indiscernables d'un texte
+ * arbitraire par leurs seuls octets de tête) — les inventer produirait une
+ * fausse impression de renfort, exactement ce que la docstring du module
+ * refuse déjà pour GIF/MP3 non renforcés. La vérification porte donc
+ * uniquement sur les familles où une signature FIABLE existe : image
+ * (raster), audio, SVG, PDF. Pour tout le reste, la déclaration est crue —
+ * c'est une liste noire implicite (on rejette ce qu'on sait faux), pas une
+ * allowlist stricte (on n'exige pas de preuve pour ce qu'on ne sait pas
+ * vérifier).
+ */
+export function verifyDeclaredMimeType(declaredMimeType: string, buffer: Buffer): DeclaredMimeSignatureVerdict {
+  const normalized = (declaredMimeType.split(';')[0] || declaredMimeType).trim().toLowerCase();
+
+  if (normalized === 'image/svg+xml') {
+    return matchesSvgSignature(buffer)
+      ? { verified: true }
+      : { verified: false, reason: `Declared type "${declaredMimeType}" does not match SVG content` };
+  }
+
+  if (normalized === 'application/pdf') {
+    return matchesPdfSignature(buffer)
+      ? { verified: true }
+      : { verified: false, reason: `Declared type "${declaredMimeType}" does not match PDF content` };
+  }
+
+  if (normalized.startsWith('image/')) {
+    return matchesImageSignature(buffer)
+      ? { verified: true }
+      : { verified: false, reason: `Declared type "${declaredMimeType}" does not match any known image signature` };
+  }
+
+  if (normalized.startsWith('audio/')) {
+    return matchesAudioSignature(buffer)
+      ? { verified: true }
+      : { verified: false, reason: `Declared type "${declaredMimeType}" does not match any known audio signature` };
+  }
+
+  // Aucune signature fiable connue pour cette famille — voir la décision
+  // produit ci-dessus. Retourner `verified: true` ici n'authentifie rien,
+  // c'est un aveu explicite d'absence de vérification.
+  return { verified: true };
+}
+
 // ─── Décision d'autorisation anonyme ───────────────────────────────────────
 
 export type ShareLinkAnonymousFlags = {

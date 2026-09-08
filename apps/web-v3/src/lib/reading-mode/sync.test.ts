@@ -28,7 +28,7 @@ describe('applyRemotePreference — arbitrage de version', () => {
 
 describe('pushPreference — le port serveur (D-10)', () => {
   test('compose la MÉTHODE, le chemin et le corps EXACT { readingMode } de la route PUT', async () => {
-    const calls: { readonly method: string; readonly path: string; readonly body: unknown }[] = [];
+    const calls: { readonly method: string; readonly path: string; readonly body?: unknown }[] = [];
     const transport: Transport = async (request) => {
       calls.push(request);
       return { success: true };

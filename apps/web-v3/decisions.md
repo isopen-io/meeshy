@@ -403,3 +403,182 @@ pas des champs de `Message` — le serveur ne les sert pas et ne les connaît pa
 Ce sont des opinions de CE client sur une charge, elle, partageable ; les
 confondre ferait voyager l'échec d'un appareil jusqu'à l'écran d'un autre.
 Ils vivent donc dans une carte à côté de la liste, jamais dedans.
+
+## D-17 · Les actions de rangée passent par un MENU, et leur état est un OVERRIDE — 2026-09-07 (#5559)
+
+**Le véhicule des actions est un menu ancré, pas un swipe.** iOS sert
+épingler / sourdine / lu–non-lu / archiver par deux glissements
+(`ConversationListView.swift:945-1040`) ET par un menu contextuel
+(`ConversationListView+Rows.swift:113-216`) : le menu est donc un véhicule
+CONFORME, pas une invention web. Il prend ici le geste primaire, pour deux
+raisons qui ne se discutent pas au cas par cas : le web n'a pas de vocabulaire
+de glissement horizontal qui ne se dispute pas avec le défilement de liste et
+le retour-geste des coques Capacitor ; et un bouton donne gratuitement le
+clavier et le lecteur d'écran, qu'un glissement ne donne jamais.
+
+**Le bouton d'actions est TOUJOURS tabulable et jamais `aria-hidden`.** Seule
+son APPARENCE est conditionnelle. La première forme le réservait à la rangée
+magnifiée — or la magnification est élue par la POSITION DE DÉFILEMENT, que
+personne ne pilote au clavier : les actions de toutes les autres rangées
+n'existaient donc pas pour qui n'a ni souris ni écran. Un contrôle qu'on VOIT
+au survol et qu'aucune technologie d'assistance ne peut atteindre est pire
+qu'un contrôle absent, parce que rien ne le signale.
+
+**Le menu suit le patron ARIA du menu déjà écrit** (`ReadingModeChip`) —
+tabindex roulant, flèches, `Home`/`End`, focus qui entre à l'ouverture et
+revient au bouton à la fermeture. Deux menus dans une même application, deux
+comportements clavier, et le témoin de l'un ne dit plus rien de l'autre :
+c'est la jumelle que ce dépôt paie deux fois à chaque fois qu'il l'ouvre.
+
+**L'épinglage se VOIT sur la rangée.** iOS n'en a pas besoin : il range les
+épinglées dans une SECTION nommée. La v3.1 a troqué les sections contre des
+chips de filtre, et rien ne restait alors pour DIRE l'épinglage — « Épingler »
+une conversation déjà en tête ne changeait strictement rien à l'écran. Une
+action dont l'effet n'est pas observable est une action inerte, quel que soit
+l'état qu'elle a bien changé en mémoire.
+
+**L'état de ces actions est un OVERRIDE, jamais une persistance.**
+`isPinned` / `isMuted` / `isArchived` viennent du fil (`userPreferences`,
+`GET /conversations`) et `unreadCount` du serveur : le magasin ne porte que la
+CORRECTION optimiste qu'un appel confirmera ou effacera, contrairement au mode
+de lecture (D-10) qui, lui, est un choix COLLANT du lecteur. Un magasin qui
+persisterait ces trois drapeaux les ferait survivre à leur propre démenti par
+le serveur.
+
+## D-18 · Les coques Capacitor sont versionnées — 2026-09-08 (#5604)
+
+**Ce qui se committe.** Les DEUX projets natifs générés par `bunx cap add android`
+et `bunx cap add ios` (`android/`, `ios/`), avec leurs réglages : le
+`SceneDelegate`/`AppDelegate` du gabarit, `android/app/src/main/java/me/meeshy/app/MainActivity.java`
+(surcharge du retour matériel, ci-dessous), les icônes et splashs du travail
+`assets` posés dans `android/app/src/main/res/` et
+`ios/App/App/Assets.xcassets/`. La directive porteur fait de l'APK un livrable
+UTILISATEUR (pas seulement un POC) et ces fichiers portent des réglages
+qu'aucune commande ne rejoue — contrairement à ce que le `.gitignore` du POC
+promettait (« regénérées, jamais éditées à la main ») : elles LE SONT
+désormais.
+
+**Ce qui ne se committe JAMAIS.** La copie du dist embarquée par `cap sync`
+(`android/app/src/main/assets/public/`, `ios/App/App/public/`) — un PRODUIT de
+build, régénéré à chaque `cap sync` ; `.gradle/`, `android/**/build/`,
+`local.properties`, `ios/App/Pods/` (si CocoaPods est un jour choisi),
+`ios/App/Build/` (produits `xcodebuild`, voir ci-dessous). Les `.gitignore`
+GÉNÉRÉS à l'intérieur des coques (`android/.gitignore`, `ios/.gitignore`) en
+sont l'autorité pour leur propre arbre ; `scripts/check-git-tracking.mjs` reste
+`OUT_OF_SCOPE` sur `android`/`ios` — leur cycle est le leur.
+
+**La règle de correctif.** Un défaut de coque se cherche D'ABORD côté coque
+(fichier natif versionné) ; côté application SEULEMENT si la coque ne peut pas
+le porter, et alors derrière une constante de construction éliminée du build
+web (motif `__BENCH__`, `vite.config.ts`) — jamais un `import '@capacitor/app'`
+nu dans le code partagé avec le web.
+
+**SYMROOT : PAS de réglage projet, contrairement à ce que la spécification
+attendait.** Poser `SYMROOT = "$(PROJECT_DIR)/Build"` dans
+`project.pbxproj` (les deux configurations, Debug et Release) — comme fait une
+première fois puis DÉFAIT — casse la résolution de paquets Swift avec
+« *Packages are not supported when using legacy build locations, but the
+current project has them enabled* ». Cause : Capacitor 8 génère l'iOS shell sur
+**SPM** (`ios/App/CapApp-SPM/Package.swift`), pas CocoaPods — la spécification
+supposait un `Podfile`, absent du gabarit 8.5.1. Un SYMROOT DÉCLARÉ dans le
+`.pbxproj` bascule Xcode en « legacy build locations », incompatible avec la
+résolution de paquets locaux. **La machine porte déjà le réglage qu'il fallait**
+— préférence globale `com.apple.dt.Xcode` (`IDEBuildLocationStyle=Custom`,
+`IDECustomBuildLocationType=RelativeToWorkspace`,
+`IDECustomBuildProductsPath=Build/Products`), la MÊME que celle qui fait déjà
+atterrir `apps/ios/Meeshy.xcodeproj` sous `Build/Products/` sans qu'aucune
+ligne de son propre `.pbxproj` ne le déclare. `xcodebuild` sans aucun réglage
+de coque produit donc déjà `ios/App/Build/Products/Debug-iphonesimulator/App.app`,
+et ce chemin ne dépend d'AUCUN fichier versionné — seulement de la machine de
+build. Ce point mérite un suivi côté CI/outillage (les runners partagent-ils ce
+même réglage, ou un `-derivedDataPath` explicite doit-il l'y remplacer ?),
+hors du périmètre de ce travail.
+
+**Le CocoaPods de la spécification ne s'applique pas.** Le gabarit Capacitor
+8.5.1 ne génère aucun `Podfile` : `bunx cap add ios` écrit directement
+`CapApp-SPM/Package.swift`, résolu par des chemins LOCAUX vers `node_modules`
+(zéro réseau). La question 6 de la spécification (« CocoaPods ou SPM ? ») se
+tranche donc par le gabarit lui-même, sans repli à documenter.
+
+**Défaut 3b (retour matériel Android) corrigé CÔTÉ COQUE, comme prescrit.**
+`BridgeActivity` (Capacitor 8) ne surcharge PLUS `onBackPressed()` par défaut
+(retiré du cœur depuis Capacitor 3) : un seul appui matériel FERMAIT
+l'application entière depuis un fil, quel que soit l'historique JS du routeur
+(`pushState` pourtant réel). `MainActivity.java` ajoute un
+`OnBackPressedCallback` : `WebView.canGoBack()` → `goBack()` ; sinon,
+comportement système par défaut. Vérifié sur l'AVD : fil → liste (1er retour,
+app au premier plan) → sortie (2e retour, attendu).
+
+**Défaut 3c (bascule clair/sombre à chaud) corrigé côté APPLICATION** — c'est
+le web/PWA qui portait le bug, pas la coque : `followSystem()`
+(`src/lib/scheme.ts`) existait mais n'était appelée nulle part. `main.tsx`
+l'appelle désormais au démarrage. Un second défaut, plus fin, y a été trouvé
+en même temps (T1) : `followSystem()` appliquait la préférence système en
+appelant `setScheme()`, qui PERSISTE en `localStorage` — un suivi automatique
+se transformait ainsi en choix explicite dès le premier changement système, et
+plus AUCUN changement suivant n'était honoré. `applyScheme()` (peint, sans
+persister) en est désormais le seul geste ; `setScheme()` reste réservé au
+choix EXPLICITE de l'utilisateur. Vérifié en DIRECT sur le simulateur :
+`xcrun simctl ui … appearance dark` puis `light`, sans relancer l'app, les
+deux fois répercutées.
+
+**Défaut 3a (safe-area) corrigé — et la loi des encoches tient désormais en UNE
+phrase.** Le défaut n'était PAS en bas : il était en HAUT, et il coupait le bas.
+La coquille (`body`) portait `padding-top: env(safe-area-inset-top)` pendant que
+les écrans plein-cadre (`conversations.tsx`, `thread.tsx`) sont des `h-dvh`,
+c'est-à-dire 100dvh = la hauteur visible ENTIÈRE. La boîte du document valait
+donc `100dvh + inset-haut`, et l'excès partait sous le bord bas de l'écran : la
+barre de recherche et le composeur — tous deux pourtant correctement repliés de
+`max(env(safe-area-inset-bottom), 8px)` sur leur propre bord — étaient poussés
+hors du cadre d'EXACTEMENT la hauteur de l'encoche HAUTE.
+
+Mesuré au simulateur `Meeshy Poc-Web-V31`, par une sonde `getComputedStyle` sur
+des boîtes de hauteur `env(…)` injectée dans le dist embarqué :
+
+| | avant | après |
+|---|---|---|
+| `env(safe-area-inset-top)` | **62** | 62 |
+| `env(safe-area-inset-bottom)` | **34** | 34 |
+| `window.innerHeight` | 874 | 874 |
+| `documentElement.scrollHeight` | **936** (= 874 + 62) | **874** |
+
+Ces valeurs invalident la première lecture de ce défaut, qui concluait que
+`env(safe-area-inset-*)` se résolvait à ZÉRO sur ce simulateur et rangeait le
+symptôme en « défaut d'environnement, non vérifiable ici ». Elles ne sont pas
+nulles ; c'est la SOMME qui débordait. La leçon de méthode : **un inset qui
+« ne fait rien » de visible en bas peut être un inset qui agit en HAUT** — la
+mesure discriminante n'est pas la valeur de `env(…)` mais la comparaison
+`scrollHeight` / `innerHeight`, qui nomme l'excès et sa hauteur exacte.
+
+**La loi, désormais UNE et symétrique.** L'inset est porté par le CADRE de
+l'écran (`pt-safe` sur la racine `h-dvh` — `box-sizing: border-box` le fait
+tenir DANS les 100dvh au lieu de s'y ajouter) et par le BORD FIXE bas
+(`pb-safe`), **jamais par la coquille**, qui n'en porte plus aucun. C'est le
+modèle iOS que la v3.1 suit (D-1) : aucune barre de navigation système, chaque
+écran dessine son propre en-tête flottant et respecte lui-même ses encoches —
+et c'est le motif que les quarante surfaces restantes copieront. Les deux
+utilitaires `pt-safe` / `pb-safe` (`app.css`) sont l'écriture UNIQUE de cette
+loi : `max(env(safe-area-inset-bottom), 8px)` était jusque-là recopié à la main
+dans `composer.tsx` et `conversations.tsx`, et l'inset haut une troisième fois,
+au mauvais endroit. Vérifié en capture sur la liste ET sur le fil, clair et
+sombre.
+
+Cette loi est GARDÉE, pas seulement écrite : `src/routes/safe-area.test.ts`
+exige que toute racine `h-dvh`/`min-h-dvh` de `src/routes/` porte `pt-safe`
+(liste d'exemptions motivées, vide à ce jour) et que le bloc `body` d'`app.css`
+ne pose plus aucun `padding-*: env(safe-area-*)`. C'est un témoin de
+CONVENTION — que la classe PEIGNE est prouvé par `check-utilities.mjs`, qui
+oppose chaque classe employée à la feuille réellement produite, et la mesure
+finale reste la recette simulateur (`scrollHeight` vs `innerHeight`). Le défaut
+étant invisible sur un navigateur de bureau (inset nul) et ne se voyant qu'en
+coque, chacune des quarante surfaces restantes le rejouerait autrement en
+silence.
+
+**Splash Android 12+ : `windowSplashScreenBackground` était manquant.** Depuis
+API 31 le système peint lui-même l'écran de lancement et IGNORE
+`android:background` du thème — les onze `drawable*/splash.png` générés ne
+servent plus que API 24-30. Sans cet attribut le fond retombait sur le
+`colorBackground` du thème : mesuré `#1E1F25` en mode sombre, blanc en mode
+clair, jamais la marque. `values/colors.xml` (`splash_background`) +
+`styles.xml` le posent ; mesuré après correctif : `#0B0C14`, système en mode
+CLAIR compris.

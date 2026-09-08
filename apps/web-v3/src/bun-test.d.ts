@@ -13,14 +13,22 @@
 declare module 'bun:test' {
   export function describe(name: string, body: () => void): void;
   export function test(name: string, body: () => void | Promise<void>): void;
+  export function afterEach(body: () => void | Promise<void>): void;
 
   type Expectations = {
     toBe(expected: unknown): void;
     toEqual(expected: unknown): void;
     toBeNull(): void;
+    toBeUndefined(): void;
+    toBeDefined(): void;
     toBeCloseTo(expected: number, decimals?: number): void;
     toHaveLength(expected: number): void;
+    toContain(expected: unknown): void;
+    toMatch(expected: RegExp | string): void;
     toBeTruthy(): void;
+    toBeGreaterThan(expected: number): void;
+    toBeGreaterThanOrEqual(expected: number): void;
+    toBeInstanceOf(expected: unknown): void;
     toThrow(): void;
   };
 
@@ -34,3 +42,24 @@ declare module 'bun:test' {
  * construit.
  */
 declare const __BENCH__: number;
+
+/**
+ * `__SHELL__` — `true` sous `MEESHY_TARGET=capacitor` (la coque native),
+ * `false` en web nu. Posé en littéral par `vite.config.ts` (même mécanique
+ * que `__BENCH__`) ; `src/lib/api/config.ts` en dérive `apiConfig.base` — une
+ * coque ne peut jamais résoudre une base RELATIVE (`capacitor://localhost/…`
+ * ne mène nulle part), le web nu le peut (proxée en dev, même origine en
+ * déploiement). Sous `bun test`, `bunfig.toml` (`[define]`) fournit la
+ * valeur du build NORMAL (`false`) — cette déclaration ne fait que TYPER la
+ * constante, elle ne la RÉSOUT pas.
+ */
+declare const __SHELL__: boolean;
+
+/**
+ * `__APP_VERSION__` — la version de `package.json`, LUE par `vite.config.ts`
+ * au moment de la construction (même mécanique que `__SHELL__`). Le pied de
+ * marque de l'écran de connexion la rend ; le préchauffage institutionnel lit
+ * le MÊME `package.json` depuis le disque. Une source, deux lecteurs — jamais
+ * un littéral recopié dans un écran.
+ */
+declare const __APP_VERSION__: string;

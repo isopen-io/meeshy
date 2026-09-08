@@ -91,7 +91,13 @@
   --text-brand: var(--text-lg);
   --text-body: var(--text-md);
   --text-secondary: var(--text-base);
-  --text-meta: var(--text-sm);
+  /* `--text-caption`, pas `--text-meta` (revue de #5606, défaut 1) : ce nom
+     collisionnait avec `--color-meta` (`ios.css`) — Tailwind ne peut résoudre
+     l'utilitaire `text-meta` que d'UNE façon, et la couleur gagnait toujours,
+     faisant disparaître le `font-size` sans qu'aucune classe ne devienne
+     « morte » au sens de `check-utilities.mjs`. `text-caption` porte la
+     taille ; `text-meta` reste le nom de la couleur muette (§ ios.css). */
+  --text-caption: var(--text-sm);
   --text-chip: var(--text-xs);
 
   /* ---- RAYONS : cinq roles, pas cinq tailles (charte regle 9) ---- */
@@ -149,11 +155,27 @@
        porteur est « la PWA reprend l'interface iOS ». Voir ios.css. */
     background-color: var(--ios-surface);
     color: var(--ios-ink);
-    /* Les encoches. `viewport-fit=cover` dans l'index les expose ; sans ces
-       quatre lignes, l'en-tete passe SOUS l'encoche sur iPhone et sous la
-       barre de gestes Android. */
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
+    /*
+     * AUCUN inset ici — ni haut, ni bas (#5604, revue-correction).
+     *
+     * La coquille en portait un en HAUT (`padding-top: env(safe-area-inset-top)`)
+     * pendant que les ecrans plein-cadre (`conversations.tsx`, `thread.tsx`)
+     * sont des `h-dvh`, c'est-a-dire 100dvh = la hauteur VISIBLE ENTIERE. La
+     * boite du document valait donc `100dvh + inset-haut`, et l'exces partait
+     * SOUS le bord bas de l'ecran : le dernier bord fixe (barre de recherche
+     * en liste, composeur en fil) etait pousse hors du cadre d'EXACTEMENT la
+     * hauteur de l'encoche HAUTE. Mesure au simulateur `Meeshy Poc-Web-V31`
+     * (sonde `getComputedStyle` sur des boites de hauteur `env(...)`) :
+     * `TOP=62 BOT=34 innerHeight=874 documentElement.scrollHeight=936`
+     * — 936 = 874 + 62, la barre de recherche coupee de 62px.
+     *
+     * La loi, desormais UNE et symetrique sur les deux axes : l'inset est porte
+     * par le CADRE de l'ecran (`pt-safe` sur la racine `h-dvh`, ou `box-sizing:
+     * border-box` le fait tenir DANS les 100dvh) et par le BORD FIXE bas
+     * (`pb-safe`), jamais par la coquille. C'est le modele iOS que la v3.1 suit
+     * (D-1) : aucune barre de navigation systeme, chaque ecran dessine son
+     * propre en-tete flottant et respecte lui-meme ses encoches.
+     */
   }
 
   /* Regle 17 : le focus est un COUPLE (anneau + contre-anneau) — aucune
@@ -225,6 +247,30 @@
   border-radius: var(--radius-pill);
 }
 
+/*
+ * LES DEUX ENCOCHES, UNE SEULE ECRITURE CHACUNE (#5604, revue-correction).
+ *
+ * `max(env(safe-area-inset-bottom), 8px)` etait ecrit deux fois a la main
+ * (`composer.tsx`, `conversations.tsx`) et l'inset HAUT une troisieme, au
+ * mauvais endroit (la coquille — voir le commentaire de `body`). Trois
+ * ecritures d'une meme loi, c'est trois occasions de diverger ; les quarante
+ * surfaces iOS qui restent a porter en auraient fait quarante.
+ *
+ * `pt-safe` se pose sur la RACINE `h-dvh` d'un ecran plein-cadre : Tailwind
+ * pose `box-sizing: border-box` partout, donc le padding tient DANS les 100dvh
+ * au lieu de s'y ajouter — l'en-tete descend sous l'encoche sans que rien ne
+ * deborde par le bas. `pb-safe` se pose sur le dernier BORD FIXE de l'ecran
+ * (composeur, barre de recherche) ; le plancher de 8px est la respiration due
+ * quand l'appareil n'a pas d'indicateur home.
+ */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+@utility pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 8px);
+}
+
 @utility offscreen {
   position: absolute;
   width: 1px;
@@ -289,5 +335,33 @@
     content: '';
     position: absolute;
     inset: -5px;
+  }
+}
+
+/**
+ * SUR UN APPAREIL SANS SURVOL, LE BOUTON D'ACTIONS DE RANGÉE RESTE VISIBLE
+ * ET ATTEIGNABLE EN PERMANENCE — #5559 revue-correction, défaut 6
+ * (bloquant).
+ *
+ * `group-hover:opacity-100` (`row-actions.tsx`) ne donne JAMAIS raison à un
+ * doigt : `any-hover: none` couvre tout appareil SANS AUCUN pointeur à
+ * survol, primaire ou secondaire (souris ET stylet compris) — Android réel
+ * et Chromium mobile mesurés `{anyHover:false}`. Le bouton restait donc
+ * `opacity-0 pointer-events-none` en PERMANENCE sur toute rangée non
+ * magnifiée : les actions de rangée n'existaient tout simplement pas au
+ * doigt, alors que leur place est déjà réservée en permanence (`pr-12`
+ * constant, `lens-row.tsx`) — les rendre visibles ne déplace rien.
+ *
+ * Cette règle vit HORS de tout `@layer` — à la différence des `@utility`
+ * voisins, qui rejoignent le calque `utilities` de Tailwind. Un style NON
+ * calqué l'emporte TOUJOURS sur un style calqué, quels que soient l'ordre
+ * du fichier et la spécificité (CSS Cascade Layers) : elle n'a donc pas à
+ * lutter avec `opacity-0`/`pointer-events-none` ni avec un futur utilitaire
+ * plus spécifique.
+ */
+@media (any-hover: none) {
+  .row-action-button {
+    opacity: 1;
+    pointer-events: auto;
   }
 }

@@ -72,15 +72,34 @@ pendant la nuit et un témoin qui cherchait « Aujourd'hui » tombait sans qu'un
 ligne de code ait bougé. Ce qui doit être fixe, c'est la **forme** du jeu de
 données, pas l'instant où on le regarde.
 
-### Ce qui n'a PAS pu être vérifié ici
+### Les coques (#5604) — mesuré au 2026-09-08
 
-**Aucun APK n'a été produit.** L'installation du SDK Android est refusée par la
-politique de sortie de l'environnement (`dl.google.com` — CONNECT 403). Sont
-vérifiés : `cap add android` (75 ms), `cap sync` (86 ms), le projet natif
-généré (75 fichiers, 808 Ko) et les actifs web embarqués (228 Ko). **La taille
-de l'APK, le temps de démarrage à froid et la fluidité de défilement réelle sur
-un Android d'entrée de gamme restent à mesurer** — et c'est le dernier point
-qui décide vraiment de la variante B.
+Les coques `android/` et `ios/` sont générées, versionnées (D-18) et
+DÉMARRENT — sur l'AVD `Meeshy_Poc_Web-v31` et le simulateur
+`Meeshy Poc-Web-V31` (54438823-4ADC-4536-88D2-FC441395FA04).
+
+| | Android | iOS |
+|---|---|---|
+| construction | `assembleDebug` : **19 s** à froid, **1 s** incrémental | `xcodebuild` : **7 s** à froid |
+| artefact | `app-debug.apk` : **4 828 917 octets** (≈4,6 Mio) | `App.app` sous `ios/App/Build/Products/Debug-iphonesimulator/` |
+| démarrage | liste rendue ; splash `#0b0c14` mesuré au pixel, système en mode clair compris | liste rendue, les deux schémas |
+| retour matériel (défaut 3b) | **corrigé** — fil → liste → sortie (`MainActivity.java`, D-18) | sans objet |
+| bascule clair/sombre à chaud (défaut 3c) | sans objet (suit `uimode night`, natif) | **corrigé et vérifié** — `simctl ui … appearance dark/light` répercuté SANS relancer l'app |
+| safe-area (défaut 3a) | non concerné (la WebView est posée dans les barres système) | **corrigé et MESURÉ** — `scrollHeight` passe de 936 à 874 pour `innerHeight` 874 : le débord de 62 px qui coupait la barre de recherche a disparu (D-18) |
+
+**Le piège de `cap sync`, à connaître avant toute recette.** `bun run gate`
+reconstruit `dist/` en variante **A** (base absolue, service worker) : un
+`cap sync` lancé juste après pousserait CE dist dans les coques, qui
+n'afficheraient plus rien. Toute recette de coque recommence donc par
+`MEESHY_TARGET=capacitor bunx vite build`, puis `bunx cap sync`. Le gate
+`check-shell-dist.mjs` construit, lui, dans son propre `dist-capacitor/` et
+l'efface derrière lui — il ne touche jamais `dist/`, et n'est donc pas une
+protection contre ce piège.
+
+**Le temps de démarrage à froid CHRONOMÉTRÉ sur un appareil réel d'entrée de
+gamme, et la fluidité de défilement réelle qui va avec, restent « à mesurer »**
+— aucun appareil physique n'est disponible ici ; c'est le seul point que cette
+passe n'a pas pu clore.
 
 ## L'interface
 

@@ -84,6 +84,21 @@ const kwame: Participant = {
   lastActiveAt: minutesAgo(2),
 };
 
+/**
+ * Hors des fenêtres d'une ET de trois minutes, dans celle de cinq : `idle`,
+ * le rang que ni `amina` (online) ni `kwame` (away) ne couvraient — sans
+ * elle l'état `idle` de la loi 1/3/5 n'était observable nulle part dans le
+ * jeu de démonstration (#5559 §5.3).
+ */
+const fatou: Participant = {
+  ...participantDefaults,
+  id: 'p-fatou',
+  userId: 'u-fatou',
+  displayName: 'Fatou Bâ',
+  isOnline: false,
+  lastActiveAt: minutesAgo(4),
+};
+
 export const PARTICIPANTS: readonly Participant[] = [viewer, amina, kwame];
 
 /**
@@ -298,6 +313,15 @@ const conversationDefaults = {
   updatedAt: minutesAgo(0),
 } as const;
 
+/**
+ * `userPreferences` mime EXACTEMENT la forme que sert
+ * `GET /api/v1/conversations` : un TABLEAU d'au plus une entrée
+ * (`services/gateway/src/routes/conversations/core-list.ts:360-365`, `take: 1`),
+ * projetée par `conversationUserPreferencesSelect`
+ * (`services/gateway/src/routes/conversations/core-selects.ts:62-80`) — jamais
+ * une carte aplatie. `src/lib/api/preferences.ts` (`flagsOf`/`customNameOf`)
+ * en fait le narrowing.
+ */
 export const CONVERSATIONS: readonly Conversation[] = [
   {
     ...conversationDefaults,
@@ -324,13 +348,21 @@ export const CONVERSATIONS: readonly Conversation[] = [
     memberCount: 2,
     participants: [viewer, amina],
     unreadCount: 0,
+    /**
+     * L'ÉPINGLÉE (#5559 §5.3) : son dernier message est le plus ANCIEN de la
+     * liste (`minutesAgo(116)`, contre `minutesAgo(0)` pour l'équipe
+     * déploiement) — sans l'épinglage elle serait dernière du tri ; avec lui
+     * elle passe en tête. C'est ce qui rend le tri épinglées-d'abord
+     * OBSERVABLE plutôt que vrai par coïncidence d'horodatage.
+     */
+    userPreferences: [{ isPinned: true, isMuted: false, isArchived: false }],
     lastMessage: message({
       id: 'm-amina',
       senderId: 'u-amina',
       sender: amina,
       content: 'See you tomorrow at the office.',
       originalLanguage: 'en',
-      translations: [],
+      translations: [translation('m-amina', 'fr', 'On se voit demain au bureau.')],
       createdAt: minutesAgo(116),
     }),
     lastMessageAt: minutesAgo(116),
@@ -346,6 +378,8 @@ export const CONVERSATIONS: readonly Conversation[] = [
     memberCount: 128,
     participants: [viewer, kwame],
     unreadCount: 0,
+    /** LA SOURDINE (#5559 §5.3) : rend l'opacité 0.55 de la rangée observable. */
+    userPreferences: [{ isPinned: false, isMuted: true, isArchived: false }],
     lastMessage: message({
       id: 'm-annonces',
       senderId: 'u-kwame',
@@ -367,11 +401,26 @@ export const CONVERSATIONS: readonly Conversation[] = [
   {
     ...conversationDefaults,
     id: 'c-nouvelle',
-    title: 'Fatou Bâ',
     type: 'direct',
     memberCount: 2,
-    participants: [viewer, amina],
+    /**
+     * `fatou` — le SEUL participant `idle` du jeu (rang 3 de la loi 1/3/5,
+     * #5559 §5.3) : ni `amina` (online) ni `kwame` (away) ne couvraient ce
+     * rang. Avant #5559 cette entrée réutilisait `amina` alors que son titre
+     * affichait « Fatou Bâ » — un pair qui ne correspondait pas au nom rendu.
+     */
+    participants: [viewer, fatou],
     unreadCount: 0,
+    /**
+     * `updatedAt` explicite (#5559, revue) : `conversationDefaults` le pose à
+     * `minutesAgo(0)` pour TOUTES les entrées — juste tant que rien ne le lit,
+     * faux dès qu'`orderConversations` (§5.5) l'emploie en REPLI de
+     * `lastMessageAt` absent. Sans cet override, une conversation SANS
+     * historique remontait au-dessus d'une conversation ACTIVE dont le
+     * dernier message date de plus d'une minute — le tri « le plus
+     * récemment vivant d'abord » rendait l'inverse de ce qu'il promet.
+     */
+    updatedAt: minutesAgo(60 * 24 * 3),
   },
   {
     ...conversationDefaults,
@@ -380,6 +429,12 @@ export const CONVERSATIONS: readonly Conversation[] = [
     memberCount: 2,
     participants: [viewer, kwame],
     unreadCount: 0,
+    /**
+     * LE CORPUS ARCHIVÉ (#5559 §5.3) : sans cette entrée, la chip
+     * « Archivées » serait un état INATTEIGNABLE — rien dans le jeu ne
+     * l'aurait jamais peuplée.
+     */
+    userPreferences: [{ isPinned: false, isMuted: false, isArchived: true }],
     lastMessage: message({
       id: 'm-kwame',
       senderId: VIEWER_ID,

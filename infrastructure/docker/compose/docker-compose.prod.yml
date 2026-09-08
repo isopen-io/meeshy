@@ -209,6 +209,24 @@ services:
       - "traefik.http.routers.translator.middlewares=compress@file"
       - "traefik.http.services.translator.loadbalancer.server.port=8000"
       # Pas d'authentification pour ML service
+      # unhealthy déclenche un restart (#5610) — restart:unless-stopped ne
+      # se déclenche que sur une SORTIE du process, jamais sur `unhealthy`.
+      - "autoheal=true"
+
+  # Autoheal — restaure un conteneur `unhealthy` (voir #5610 : le translator
+  # est resté bloqué à 0,01% CPU pendant 7 jours, `docker ps` affichant
+  # `Up 10 days` sans qu'aucun superviseur n'agisse sur le healthcheck rouge).
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: meeshy-autoheal
+    restart: unless-stopped
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=30
+      - AUTOHEAL_START_PERIOD=60
+      - AUTOHEAL_DEFAULT_STOP_TIMEOUT=10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   # Gateway Service sur gate.${DOMAIN}
   gateway:

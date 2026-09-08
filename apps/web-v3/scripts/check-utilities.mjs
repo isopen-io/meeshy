@@ -18,6 +18,36 @@
  * reconnu : une classe absente du CSS construit est une classe morte, quelle
  * qu'en soit la raison — jeton renommé, faute de frappe, utilitaire retiré.
  * Le gate lit donc la sortie, pas la configuration.
+ *
+ * PAR FEUILLE, PAS EN BLOC (revue de #5606, défaut 2) — la première version
+ * concaténait les DEUX feuilles produites (`index-*.css`, l'application ;
+ * `institutional-*.css`, les cinq pages précachées — deux entrées CSS
+ * DISTINCTES et STABLES, `vite.config.ts` § `rollupOptions.input`) avant de
+ * comparer. `text-body`, `text-secondary`, `text-screen`, `text-thread` et
+ * `text-brand` sont morts dans `institutional-*.css` (son `@theme` ne les
+ * déclarait pas) et vivants dans `index-*.css` (celui de l'application) : la
+ * concaténation faisait gagner le second, et ce gate rendait vert un texte
+ * institutionnel rendu à la taille du corps sur les cinq pages. Chaque groupe
+ * de sources est donc comparé à SA SEULE feuille — `src/institutional/**` à
+ * `institutional-*.css`, le reste de `src/` à `index-*.css` — et un fichier
+ * qui n'appartient à aucun groupe connu fait échouer le gate plutôt que de se
+ * ranger en silence dans l'un ou l'autre.
+ *
+ * UNE RÈGLE QUELCONQUE N'EST PAS UNE RÈGLE SUFFISANTE (revue de #5606, défaut
+ * 1) — « la classe a une règle » ne dit pas « la règle fait ce que son jeton
+ * promet ». Quand un rôle de COULEUR (`--color-<role>`) et un rôle de TAILLE
+ * (`--text-<role>`) portent le MÊME nom, Tailwind ne peut émettre qu'UNE seule
+ * résolution pour l'utilitaire `text-<role>` — mesuré : la couleur gagne
+ * TOUJOURS, et la règle de `font-size` que `--text-<role>` promettait
+ * disparaît sans qu'aucune classe ne devienne « morte » au sens du gate
+ * ci-dessus (`.text-meta{color:...}` EXISTE bel et bien dans la feuille). Le
+ * premier gate ne voyait donc pas `text-meta` perdre sa taille : il vérifiait
+ * « une règle existe-t-elle ? », jamais « la règle porte-t-elle le style que
+ * SON PROPRE jeton déclare ? ». `sizelessTextClasses` lit les rôles de taille
+ * déclarés par le thème de CHAQUE groupe et exige que la règle compilée de
+ * `text-<rôle>` contienne `font-size` — sinon le rôle est SILENCIEUSEMENT
+ * réduit à sa seule couleur, exactement le défaut qui a échappé au premier
+ * passage de ce gate sur les cinq pages institutionnelles.
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -32,25 +62,31 @@ const DIST = join(ROOT, 'dist');
  * pour autant. Chaque entrée dit POURQUOI — une liste d'exceptions sans motif
  * redevient un tapis sous lequel on pousse les vraies.
  */
-const ALLOWED = new Map([
+export const ALLOWED = new Map([
   ['group', 'marqueur de variante Tailwind : aucune règle propre'],
   ['peer', 'idem'],
   ['sr-only', 'émis seulement quand employé ; conservé comme utilitaire natif'],
   ['lens-row', 'crochet de sélection de la scène et du témoin — aucun style attendu'],
   ['lens-extra', 'idem : ce que la scène montre ou cache par style inline'],
+  [
+    'avatar-root',
+    'crochet de sélection du témoin de contraste (#5559 revue-correction, ' +
+      'défauts 1/8 — `check-list-actions.mjs`) : le fondu de sourdine vit en ' +
+      'style INLINE (`opacity`, prop `Avatar`), jamais dans la feuille',
+  ],
 ]);
 
-const sourceFiles = (dir) =>
+export const sourceFiles = (dir) =>
   readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
     const p = join(dir, e.name);
     if (e.isDirectory()) return sourceFiles(p);
     return /\.(tsx|ts)$/.test(e.name) ? [p] : [];
   });
 
-/** Les classes écrites dans le source, variantes ôtées. */
-const usedClasses = () => {
+/** Les classes écrites dans les fichiers donnés, variantes ôtées. */
+export const usedClasses = (files) => {
   const found = new Map();
-  for (const file of sourceFiles(join(ROOT, 'src'))) {
+  for (const file of files) {
     const text = readFileSync(file, 'utf8');
     for (const m of text.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\}|\{'([^']*)'\})/g)) {
       const raw = (m[1] ?? m[2] ?? m[3]).replace(/\$\{[^}]*\}/g, ' ');
@@ -68,33 +104,127 @@ const usedClasses = () => {
   return found;
 };
 
-const escapeForCss = (name) => name.replace(/[.[\]/%#(),!:]/g, (c) => `\\${c}`);
+export const escapeForCss = (name) => name.replace(/[.[\]/%#(),!:]/g, (c) => `\\${c}`);
 
-const builtCss = () => {
-  const assets = join(DIST, 'assets');
-  const sheets = readdirSync(assets).filter((f) => f.endsWith('.css'));
-  if (sheets.length === 0) {
-    throw new Error('Aucune feuille dans dist/assets — lancer `vite build` d’abord.');
-  }
-  return sheets.map((f) => readFileSync(join(assets, f), 'utf8')).join('\n');
+/** Le corps `{ ... }` de la règle `.name{...}` dans `css`, ou `null` si absente. */
+export const findRuleBody = (css, name) => {
+  const m = css.match(new RegExp(`\\.${escapeForCss(name)}\\{([^}]*)\\}`));
+  return m ? m[1] : null;
 };
 
-const css = builtCss();
-const dead = [];
-for (const [name, file] of usedClasses()) {
-  if (ALLOWED.has(name)) continue;
-  if (css.includes(`.${escapeForCss(name)}`)) continue;
-  dead.push({ name, file });
-}
+/**
+ * Les rôles de taille déclarés par une source de thème — les noms qui suivent
+ * `--text-` dans un bloc `@theme`. Lit le TEXTE source (pas la feuille
+ * produite) : c'est là que le rôle est NOMMÉ, avant toute résolution.
+ */
+export const textSizeRoles = (themeSource) => {
+  const roles = new Set();
+  for (const m of themeSource.matchAll(/--text-([a-z0-9-]+)\s*:/g)) roles.add(m[1]);
+  return roles;
+};
 
-if (dead.length > 0) {
-  console.error(`\n  ${dead.length} classe(s) SANS RÈGLE dans la feuille produite :\n`);
-  for (const { name, file } of dead) console.error(`    ${name}  —  ${file}`);
-  console.error(
-    '\n  Une classe absente de la feuille ne peint RIEN et ne rougit nulle part.\n' +
-      '  Soit le jeton a été renommé et la classe ne l’a pas suivi, soit la\n' +
-      '  classe n’a jamais existé. Corriger le nom, ou déclarer le jeton.\n',
-  );
-  process.exit(1);
-}
-console.log(`\n  ${usedClasses().size} classes employées, toutes portées par la feuille produite.\n`);
+/**
+ * Les classes `text-<rôle>` employées dont le thème du groupe déclare un
+ * `--text-<rôle>` (une promesse de TAILLE), mais dont la règle compilée ne
+ * porte aucun `font-size` — collision de nom avec un `--color-<rôle>` qui a
+ * gagné la résolution Tailwind. Une classe absente de la feuille (déjà
+ * couverte par `dead`) n'est PAS redemandée ici.
+ */
+export const sizelessTextClasses = (used, css, sizeRoles) => {
+  const findings = [];
+  for (const [name, file] of used) {
+    const m = /^text-([a-z0-9-]+)$/.exec(name);
+    if (!m || !sizeRoles.has(m[1])) continue;
+    const body = findRuleBody(css, name);
+    if (body === null) continue; // classe morte : déjà signalée par `dead`
+    if (!body.includes('font-size')) findings.push({ name, file });
+  }
+  return findings;
+};
+
+const runCli = () => {
+  /**
+   * LES DEUX GROUPES, chacun sa feuille et son THÈME — voir le doc-comment
+   * ci-dessus. `INSTITUTIONAL_DIR` capture tout `src/institutional/**` ; le
+   * reste de `src/` (toute l'application) va au groupe `app`. Un fichier
+   * `.ts`/`.tsx` hors de `src/` ne serait rangé dans AUCUN des deux — il n'y
+   * en a aucun aujourd'hui (`sourceFiles` part de `src/` seul).
+   */
+  const INSTITUTIONAL_DIR = join(ROOT, 'src/institutional');
+  const allFiles = sourceFiles(join(ROOT, 'src'));
+  const STYLES = join(ROOT, 'src/styles');
+  const IOS_THEME = readFileSync(join(STYLES, 'ios.css'), 'utf8');
+  const GROUPS = [
+    {
+      name: 'institutional-*.css (pages institutionnelles)',
+      files: allFiles.filter((f) => f.startsWith(INSTITUTIONAL_DIR + '/')),
+      sheetPrefix: 'institutional-',
+      themeSource: readFileSync(join(STYLES, 'institutional.css'), 'utf8') + IOS_THEME,
+    },
+    {
+      name: 'index-*.css (application)',
+      files: allFiles.filter((f) => !f.startsWith(INSTITUTIONAL_DIR + '/')),
+      sheetPrefix: 'index-',
+      themeSource: readFileSync(join(STYLES, 'app.css'), 'utf8') + IOS_THEME,
+    },
+  ];
+
+  const sheetFor = (prefix) => {
+    const assets = join(DIST, 'assets');
+    const sheets = readdirSync(assets).filter((f) => f.startsWith(prefix) && f.endsWith('.css'));
+    if (sheets.length === 0) {
+      throw new Error(`Aucune feuille \`${prefix}*.css\` dans dist/assets — lancer \`vite build\` d’abord.`);
+    }
+    if (sheets.length > 1) {
+      throw new Error(`Plusieurs feuilles \`${prefix}*.css\` dans dist/assets : ${sheets.join(', ')}.`);
+    }
+    return readFileSync(join(assets, sheets[0]), 'utf8');
+  };
+
+  let totalUsed = 0;
+  const dead = [];
+  const sizeless = [];
+  for (const group of GROUPS) {
+    const css = sheetFor(group.sheetPrefix);
+    const used = usedClasses(group.files);
+    const roles = textSizeRoles(group.themeSource);
+    totalUsed += used.size;
+    for (const [name, file] of used) {
+      if (ALLOWED.has(name)) continue;
+      if (!css.includes(`.${escapeForCss(name)}`)) {
+        dead.push({ name, file, sheet: group.name });
+        continue;
+      }
+    }
+    for (const finding of sizelessTextClasses(used, css, roles)) sizeless.push({ ...finding, sheet: group.name });
+  }
+
+  if (dead.length > 0) {
+    console.error(`\n  ${dead.length} classe(s) SANS RÈGLE dans la feuille qui les sert :\n`);
+    for (const { name, file, sheet } of dead) console.error(`    ${name}  —  ${file}  (attendu dans ${sheet})`);
+    console.error(
+      '\n  Une classe absente de la feuille ne peint RIEN et ne rougit nulle part.\n' +
+        '  Soit le jeton a été renommé et la classe ne l’a pas suivi, soit la\n' +
+        '  classe n’a jamais existé, soit son `@theme` ne le déclare que dans\n' +
+        '  L’AUTRE feuille. Corriger le nom, ou déclarer le jeton là où il sert.\n',
+    );
+    process.exit(1);
+  }
+
+  if (sizeless.length > 0) {
+    console.error(`\n  ${sizeless.length} classe(s) dont la TAILLE promise est masquée par une couleur homonyme :\n`);
+    for (const { name, file, sheet } of sizeless) console.error(`    ${name}  —  ${file}  (${sheet})`);
+    console.error(
+      '\n  Un `--text-<rôle>` est déclaré pour cette classe, mais la règle compilée\n' +
+        '  ne porte aucun `font-size` — un `--color-<rôle>` du même nom a gagné la\n' +
+        '  résolution Tailwind et la classe ne peint plus QUE la couleur. Renommer\n' +
+        '  l’un des deux rôles pour lever la collision (jamais les deux sous le\n' +
+        '  même nom).\n',
+    );
+    process.exit(1);
+  }
+
+  console.log(`\n  ${totalUsed} classes employées, toutes portées par la feuille qui les sert, avec le style promis.\n`);
+};
+
+if (import.meta.url === `file://${process.argv[1]}`) runCli();

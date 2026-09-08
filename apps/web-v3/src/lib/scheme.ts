@@ -19,10 +19,17 @@ export function currentScheme(): ColorScheme {
   return document.documentElement.classList.contains('light') ? 'light' : 'dark';
 }
 
-export function setScheme(scheme: ColorScheme): void {
+/** Peint le schema — sans le PERSISTER. Le seul geste que `followSystem` doit faire :
+ * persister ici transformerait un suivi automatique en choix explicite, et le
+ * PROCHAIN changement systeme se trouverait ignore (defaut trouve par T1). */
+function applyScheme(scheme: ColorScheme): void {
   const light = scheme === 'light';
   document.documentElement.classList.toggle('light', light);
   document.documentElement.classList.toggle('dark', !light);
+}
+
+export function setScheme(scheme: ColorScheme): void {
+  applyScheme(scheme);
   try {
     localStorage.setItem(KEY, scheme);
   } catch {
@@ -33,6 +40,10 @@ export function setScheme(scheme: ColorScheme): void {
 /**
  * Suit la preference SYSTEME tant que l'utilisateur n'a rien choisi lui-meme.
  * Rend la fonction de desabonnement.
+ *
+ * N'appelle jamais `setScheme()` : persister l'application automatique la
+ * ferait relire comme un choix EXPLICITE au prochain evenement `change`, et un
+ * seul basculement systeme suffirait a arreter tout suivi ulterieur.
  */
 export function followSystem(): () => void {
   const query = window.matchMedia('(prefers-color-scheme: light)');
@@ -43,7 +54,7 @@ export function followSystem(): () => void {
     } catch {
       chosen = null;
     }
-    if (chosen === null) setScheme(e.matches ? 'light' : 'dark');
+    if (chosen === null) applyScheme(e.matches ? 'light' : 'dark');
   };
   query.addEventListener('change', onSchemeChange);
   return () => query.removeEventListener('change', onSchemeChange);

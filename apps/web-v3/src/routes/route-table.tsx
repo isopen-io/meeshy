@@ -10,11 +10,13 @@ import { createRouter } from '@/lib/router';
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },
   thread: { pattern: '/c/$conversation', screen: () => import('@/routes/thread') },
+  login: { pattern: '/login', screen: () => import('@/routes/login') },
+  signup: { pattern: '/signup', screen: () => import('@/routes/signup') },
 } as const;
 
 function NotFound() {
   return (
-    <div className="grid min-h-dvh place-items-center p-6 text-center">
+    <div className="grid min-h-dvh place-items-center p-6 pt-safe text-center">
       <div className="grid gap-3">
         <p className="text-screen font-bold">Cette href n’existe pas.</p>
         <a
