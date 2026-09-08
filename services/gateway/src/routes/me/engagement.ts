@@ -31,6 +31,7 @@ import {
   ELAN_WINDOW_DAYS,
 } from '@meeshy/shared/utils/engagement-elan';
 import { engagementAxisFamily, isEngagementAxisKey } from '@meeshy/shared/types/engagement';
+import { AchievementReachService } from '../../services/achievements/AchievementReachService';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { logError } from '../../utils/logger';
@@ -113,6 +114,11 @@ const engagementResponseSchema = {
             engagementScore: { type: 'number' },
           },
         },
+        // La carte d'atteignabilité des succès (#5759) — `additionalProperties`
+        // parce que ses clés sont des identifiants de famille, pas un ensemble
+        // fermé : une famille ajoutée au catalogue ne doit pas exiger de
+        // modifier ce schéma.
+        achievementReach: { type: 'object', additionalProperties: { type: 'number' } },
         // L'ÉLAN courant (#5749) — servi pour être MONTRÉ.
         elan: {
           type: 'object',
@@ -208,6 +214,10 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
         // décider s'il montre le bouton. Le score TOTAL et le score DÉBITABLE
         // sont deux chiffres distincts : les conversations comptent dans le
         // niveau et ne se dépensent jamais (plancher inaliénable, #5743).
+        // La carte d'atteignabilité — mise en cache une heure côté service : la
+        // plus grande conversation du produit ne bouge pas plus vite.
+        const reach = await new AchievementReachService(fastify.prisma).load();
+
         // L'élan COURANT — ce que le PROCHAIN geste créditera. Dérivé des lignes
         // déjà lues, jamais relu : la route paierait deux fois la même
         // information. Même LOI que le crédit (`computeEngagementElan`), donc le
@@ -246,6 +256,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
           level: {
             engagementScore: streakUser.engagementScore ?? 0,
           },
+          achievementReach: Object.fromEntries(reach),
           elan: {
             factor: elan.factor,
             activeFamilyCount: elan.activeFamilyCount,

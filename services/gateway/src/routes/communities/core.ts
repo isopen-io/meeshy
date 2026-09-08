@@ -21,6 +21,7 @@ import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendFor
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { communityConversationSchema, flattenCommunityCounts } from './serialization';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
+import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 
@@ -482,6 +483,15 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
             }
           }
         }
+      });
+
+      // Succès « cercles » (#5759) — APRÈS l'ACK métier. Le créateur rejoint
+      // aussi son cercle : les deux familles (`create.count`, `create.size`)
+      // sont évaluées d'un seul événement.
+      void new CerclesAchievements(fastify.prisma).recordEvent({
+        kind: 'community.create',
+        userId,
+        communityId: community.id,
       });
 
       return sendSuccess(reply, flattenCommunityCounts(community), { statusCode: 201 });

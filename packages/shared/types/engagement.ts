@@ -173,6 +173,16 @@ export type EngagementProgressPayload = {
     readonly engagementScore: number;
   };
   /**
+   * LA CARTE D'ATTEIGNABILITÉ des succès (#5759) — OPTIONNELLE.
+   *
+   * `familyId -> plus grande valeur que le produit peut rendre vraie`. Une
+   * famille ABSENTE de la carte n'est pas « zéro » : c'est « non mesuré », et
+   * la loi d'affichage (`isAttainable`) masque alors ses paliers d'AMPLEUR tout
+   * en laissant ses paliers de VOLUME visibles. Servir zéro dirait « rien n'est
+   * atteignable », ce qui est faux et pire.
+   */
+  readonly achievementReach?: Readonly<Record<string, number>>;
+  /**
    * L'ÉLAN COURANT (#5749) — OPTIONNEL, comme `meesh`.
    *
    * Ce que le PROCHAIN geste créditera, pas ce que le dernier a crédité : un
@@ -258,7 +268,13 @@ const isMeeshBlock = (value: unknown): boolean =>
 
 export function isEngagementProgressPayload(value: unknown): value is EngagementProgressPayload {
   if (!isRecord(value)) return false;
-  const { counters, milestones, streak, level, meesh, elan } = value;
+  const { counters, milestones, streak, level, meesh, elan, achievementReach } = value;
+  if (
+    achievementReach !== undefined &&
+    (!isRecord(achievementReach) || !Object.values(achievementReach).every(isNonNegativeInteger))
+  ) {
+    return false;
+  }
   if (meesh !== undefined && !isMeeshBlock(meesh)) return false;
   if (elan !== undefined && !isElanBlock(elan)) return false;
   return (

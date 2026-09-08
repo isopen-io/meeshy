@@ -35,7 +35,13 @@ export const CERCLES_FAMILIES: readonly AchievementFamily[] = [
   { section: 'cercles', subject: 'conversation', verb: 'create', scale: 'count', baseDifficulty: 2.5 },
   { section: 'cercles', subject: 'community', verb: 'join', scale: 'size', baseDifficulty: 1.5 },
   { section: 'cercles', subject: 'community', verb: 'join', scale: 'count', baseDifficulty: 2.5 },
-  { section: 'cercles', subject: 'community', verb: 'leave', scale: 'count', baseDifficulty: 2.3 },
+  // `community.leave.count` est ABSENTE, et ce n'est pas un oubli : quitter une
+  // communauté SUPPRIME la ligne `CommunityMember` (`deleteMany`,
+  // `routes/communities/membership.ts`), là où quitter une conversation pose un
+  // `leftAt`. Il n'existe donc AUCUNE trace à compter. La déclarer produirait un
+  // succès que rien ne peut faire tomber — un badge mort, exactement ce que la
+  // grille legacy de #5735 nous a déjà coûté. Rendre ce départ traçable est un
+  // changement de sémantique à part entière (#5760).
   { section: 'cercles', subject: 'community', verb: 'create', scale: 'size', baseDifficulty: 2 },
   { section: 'cercles', subject: 'community', verb: 'create', scale: 'count', baseDifficulty: 3 },
 ];

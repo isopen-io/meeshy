@@ -53,6 +53,12 @@ import {
   type EngagementMilestoneType,
   type EngagementProgressPayload,
 } from '../types/engagement.js';
+import { ACHIEVEMENT_FAMILIES } from '../types/achievement-families.js';
+import {
+  expandCatalog,
+  sectionViews,
+  type AchievementSectionView,
+} from './achievement-view.js';
 
 /** Un palier d'une échelle (badge, série ou niveau), atteint ou à venir. */
 export type EngagementTier = {
@@ -161,6 +167,16 @@ export type EngagementProgress = {
   readonly meesh?: EngagementMeeshProgress;
   /** Idem pour l'élan (#5749). */
   readonly elan?: EngagementElanProgress;
+  /**
+   * Les succès du catalogue GÉNÉRATIF (#5758/#5759), rangés par section et
+   * déjà tronqués à leur fenêtre `max(7, acquis + 2)`.
+   *
+   * Distinct de `achievements` ci-dessus, qui porte les cinq succès composés
+   * historiques (#5530) : ceux-là sont nommés un par un, ceux-ci sont produits
+   * par la grammaire. La fusion des deux listes est un lot à part — les mêler
+   * ici mélangerait deux vocabulaires sans que rien ne le signale.
+   */
+  readonly achievementSections?: readonly AchievementSectionView[];
 };
 
 export type EngagementFamilyGroup = {
@@ -280,7 +296,28 @@ export function resolveEngagementProgress(payload: EngagementProgressPayload): E
     isEmpty: !hasActivity,
     ...(payload.meesh !== undefined ? { meesh: resolveMeesh(payload.meesh) } : {}),
     ...(payload.elan !== undefined ? { elan: resolveElan(payload.elan) } : {}),
+    ...(payload.achievementReach !== undefined
+      ? { achievementSections: resolveAchievementSections(payload) }
+      : {}),
   };
+}
+
+/**
+ * Les sections de succès générés, prêtes à rendre.
+ *
+ * La carte d'atteignabilité vient du SERVEUR (elle mesure la réalité du
+ * produit) ; le développement, l'ordre et la fenêtre sont calculés ICI, par la
+ * loi partagée — c'est ce qui garantit que le web et iOS montrent exactement
+ * les mêmes entrées dans le même ordre.
+ */
+function resolveAchievementSections(payload: EngagementProgressPayload): readonly AchievementSectionView[] {
+  const reach = new Map(Object.entries(payload.achievementReach ?? {}));
+  const unlocked = new Map<string, string | null>();
+  for (const milestone of payload.milestones) {
+    if (milestone.milestoneType !== 'achievement') continue;
+    unlocked.set(milestone.milestoneKey, milestone.reachedAt);
+  }
+  return sectionViews(expandCatalog({ families: ACHIEVEMENT_FAMILIES, reach, unlocked }));
 }
 
 function resolveElan(elan: NonNullable<EngagementProgressPayload['elan']>): EngagementElanProgress {
