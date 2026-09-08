@@ -1,5 +1,27 @@
 # @meeshy/gateway
 
+## 1.41.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - SUPPORTED_LANGUAGES vient de packages/shared, plus d'un littéral (#3658)
+  - un message flouté, à vue unique, éphémère ou supprimé n'est plus servi en clair sur le fil
+  - les vues Progression prennent leurs teintes en Color, sans un Color(hex:) de plus
+  - la carte de niveau nomme le rang suivant, jamais le seuil de points
+  - une notification de palier dit le MOT, le NIVEAU, et mène à l'écran Progression
+  - l'écran Progression — badges, niveau, série et succès depuis GET /me/engagement
+  - l'écran /me/progression — badges, niveau, série et succès
+  - les clés de palier viennent du catalogue partagé
+  - posts delegate Prism translation stripping to a shared adapter (#5723)
+  - la loi de progression des badges, écrite une fois pour le web et iOS
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.18.0
+
 ## 1.40.0
 
 ### Minor Changes
