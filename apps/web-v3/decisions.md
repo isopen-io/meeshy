@@ -582,3 +582,34 @@ servent plus que API 24-30. Sans cet attribut le fond retombait sur le
 clair, jamais la marque. `values/colors.xml` (`splash_background`) +
 `styles.xml` le posent ; mesuré après correctif : `#0B0C14`, système en mode
 CLAIR compris.
+
+## D-19 · `script` n'est PAS `river` — deux modes distincts, un seul hors périmètre — 2026-09-08
+
+La spécification du lot « thread/style » (préparation de cible, tour du
+2026-09-08) posait la question en ouvert : *« script = rivière ? à trancher
+en lisant le catalogue `@meeshy/shared/types/reading-modes` »*. Le catalogue,
+et le code déjà écrit, la tranchent déjà — cette entrée le rend CITABLE au
+lieu de laisser la question rouverte à chaque lecture de la spécification.
+
+**Non : `script` et `river` (Rivière) sont deux valeurs DISTINCTES du même
+type `ConversationReadingMode`.** La preuve est à trois endroits qui
+s'accordent :
+- le gateway valide `auto|focal|script|resume|riviere` — **cinq** valeurs
+  (D-10, `routes/conversation-preferences.ts`) ;
+- `catalog.ts` leur donne des titres et des sous-titres séparés (« Script » /
+  « Rangée plate, densité uniforme » vs « Rivière » / « Les couloirs de la
+  conversation ») et les traite par des branches différentes de `menuRows()` ;
+- `decision.ts` (`THREAD_RENDERABLE_MODES = ['focal', 'script']`) rend
+  `script` DISPONIBLE au même titre que `focal`, quand `river` reste hors de
+  ce catalogue de rendu — au même rang que `summary`, sous la loi D-8.
+
+**Ce que ça tranche pour la suite.** `script` n'est donc pas une question
+ouverte ni une variante de `river` : c'est le second mode de la RANGÉE PLATE
+(`usesFlatRow`, `decision.ts`), déjà EN PÉRIMÈTRE de la v3.1, qui partage
+`FocalRow` avec `focal` et n'en diffère que par l'absence de perspective au
+défilement (`useThreadPerspective(scroller, mode === 'focal')`,
+`thread.tsx:195`) — mécanisme déjà câblé, distinct du travail qui reste à
+faire sur la colonne méta (`FocalMetaColumn.swift:62-76`,
+`showsDeliveryChecks`, non encore extraite en fonction nommée testée dans
+`src/lib/reading-mode/meta.ts`). `river` reste hors périmètre (D-8), sans
+lien avec cette clarification.
