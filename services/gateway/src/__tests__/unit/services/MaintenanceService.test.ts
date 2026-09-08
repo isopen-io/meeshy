@@ -56,6 +56,12 @@ function makePrisma(overrides: {
     conversationShareLink: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    userSession: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    userVoiceModel: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     messageAttachment: {
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
@@ -527,6 +533,31 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
     expect(prisma.$transaction).toHaveBeenCalledTimes(2);
     expect(revokeSessions).toHaveBeenCalledTimes(2);
     expect(order).toEqual(['revoked:user-b']);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
+  });
+
+  it('purge les trois tables ISOLÉES (sessions, profil vocal, liens de partage) de chaque compte expiré, sans attendre un clic sur « supprimer maintenant » (#3632)', async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+    sut.setSessionRevoker(makeRevoker([]));
+
+    await sweepDeletions(sut);
+
+    expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
+    expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
+    expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({ where: { createdBy: 'user-a' } });
+  });
+
+  it("un échec de la purge isolée ne fait pas compter l'expiration comme ratée — le lot continue", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    prisma.userSession.deleteMany.mockRejectedValueOnce(new Error('mongo down'));
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+    sut.setSessionRevoker(makeRevoker([]));
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
   });
 
