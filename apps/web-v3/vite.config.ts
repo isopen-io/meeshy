@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -61,6 +61,21 @@ const forCapacitor = process.env.MEESHY_TARGET === 'capacitor';
  * `MEESHY_TARGET`, déjà en place.
  */
 const bench = Number.parseInt(process.env.MEESHY_BENCH ?? '0', 10) || 0;
+
+/**
+ * LA VERSION DU PRODUIT — LUE, jamais recopiée (revue de #5555, défaut 8).
+ *
+ * `BrandSignature` rend « Meeshy {version} » sur les cinq pages
+ * institutionnelles ET sur l'écran de connexion. Le préchauffage lit
+ * `package.json` (`scripts/prerender-institutional.tsx`) ; l'application, elle,
+ * n'a pas de système de fichiers — la version y arrivait donc en LITTÉRAL
+ * (`'3.1.0'` dans `routes/login.tsx`), juste ce jour-là et faux au prochain
+ * `npm version`. Un littéral de construction relit la MÊME source au même
+ * moment que le reste de la table : une source, deux lecteurs, aucune copie.
+ */
+const appVersion = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
+).version as string;
 
 /**
  * LA SOURCE DE DONNÉES SE DÉCIDE, MAIS ELLE N'EST PAS ENCORE CÂBLÉE (#5605).
@@ -157,7 +172,11 @@ const dropInstitutionalServiceWorker = (): Plugin => ({
 
 export default defineConfig({
   base: forCapacitor ? './' : '/',
-  define: { __BENCH__: JSON.stringify(bench), __SHELL__: JSON.stringify(forCapacitor) },
+  define: {
+    __BENCH__: JSON.stringify(bench),
+    __SHELL__: JSON.stringify(forCapacitor),
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   /**
    * LE PROXY DE DEV (#5605, staging) — DEV UNIQUEMENT, zéro octet dans `dist/`.
    *

@@ -47,8 +47,11 @@ const OVERRIDES = { 'fill-play': join(CORE, 'fill/play-fill.svg') };
 
 /**
  * Noms de fichier phosphor (`push-pin.svg`) — le nom de propriété exporté est
- * la même chaîne en camelCase. Les cinq derniers servent les actions de
- * rangée et le déclencheur de menu (#5559, §5.6) ; les vingt premiers sont
+ * la même chaîne en camelCase. Les cinq de la ligne 76-80 servent les actions
+ * de rangée et le déclencheur de menu (#5559, §5.6) ; les trois derniers
+ * (`user`, `key`, `caret-down`) servent les écrans de connexion et
+ * d'inscription (#5555, § E1) — le champ identifiant, le champ de code à deux
+ * facteurs, et le chevron du sélecteur de pays ; les vingt premiers sont
  * repris tels quels du curatage précédent.
  */
 const USED = [
@@ -77,6 +80,9 @@ const USED = [
   'envelope-open',
   'archive',
   'dots-three-vertical',
+  'user',
+  'key',
+  'caret-down',
 ];
 
 const missing = [];

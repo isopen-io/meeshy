@@ -43,6 +43,58 @@ function isTwoFactorResponse(data: LoginResponseData): data is LoginTwoFactorDat
   return (data as LoginTwoFactorData).requires2FA === true;
 }
 
+/**
+ * LA CHARGE EXACTE de `POST /auth/register` (`register.ts:133`,
+ * `registerRequestSchema`) — sept clés au plus, jamais `username` /
+ * `firstName` / `lastName` : la passerelle les DÉRIVE de `displayName`
+ * (#5218). Composée par `composeRegisterBody()` (`signup-form.ts`).
+ */
+export type RegisterBody = {
+  readonly displayName: string;
+  readonly email: string;
+  readonly password: string;
+  readonly phoneNumber?: string;
+  readonly phoneCountryCode?: string;
+  readonly systemLanguage?: string;
+  readonly regionalLanguage?: string;
+};
+
+/** La branche « compte créé » (`register.ts:383-388`) — l'inscription CRÉE une
+ * session (#4264), à la même forme qu'un login réussi. */
+type RegisterSuccessData = {
+  readonly user: SessionUser;
+  readonly token: string;
+  readonly sessionToken: string;
+  readonly expiresIn: number;
+};
+
+/** La branche « conflit de numéro » (`register.ts:301-331`) — AUCUN compte
+ * créé, ni token ni sessionToken : la reprise appartient à l'écran, jamais à
+ * ce client. */
+export type PhoneOwnerInfo = {
+  readonly maskedDisplayName: string;
+  readonly maskedUsername: string;
+  readonly maskedEmail: string;
+  readonly avatar: string | null;
+  readonly phoneNumber: string;
+  readonly phoneCountryCode: string;
+};
+
+export type PhoneConflictData = {
+  readonly phoneOwnershipConflict: true;
+  readonly phoneOwnerInfo: PhoneOwnerInfo;
+  readonly pendingRegistration: Record<string, unknown>;
+};
+
+export type RegisterResponseData = RegisterSuccessData | PhoneConflictData;
+
+/** Le discriminant entre les deux branches de succès de `register()` — exporté
+ * pour que l'écran d'inscription (`routes/signup.tsx`) n'ait pas à connaître
+ * la forme interne de `RegisterResponseData` pour la distinguer. */
+export function isPhoneConflict(data: RegisterResponseData): data is PhoneConflictData {
+  return (data as PhoneConflictData).phoneOwnershipConflict === true;
+}
+
 export type TwoFactorCompleteData = {
   readonly user: SessionUser;
   readonly token: string;
@@ -80,6 +132,32 @@ export function createAuthClient({ transport, store }: AuthDeps) {
       store.getState().beginTwoFactor({ user: result.data.user, twoFactorToken: result.data.twoFactorToken });
       return result;
     }
+    store.getState().establish({
+      user: result.data.user,
+      token: result.data.token,
+      sessionToken: result.data.sessionToken,
+      expiresIn: result.data.expiresIn,
+    });
+    return result;
+  }
+
+  /**
+   * `POST /auth/register` (T2) — la seule des deux branches de succès qui
+   * ÉTABLIT une session est `RegisterSuccessData` (#4264). Le conflit de
+   * numéro (#5555, hors périmètre : la modale de transfert) laisse le
+   * magasin `anonymous` et rend son résultat TEL QUEL à l'appelant, qui porte
+   * seul la décision de reprise (continuer sans le numéro, transférer).
+   */
+  async function register(body: RegisterBody): Promise<ApiResult<RegisterResponseData>> {
+    const result = await transport.request<RegisterResponseData>({
+      method: 'POST',
+      path: '/api/v1/auth/register',
+      body,
+    });
+    if (!result.ok) return result;
+
+    if (isPhoneConflict(result.data)) return result;
+
     store.getState().establish({
       user: result.data.user,
       token: result.data.token,
@@ -135,7 +213,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     return transport.request<{ message: string }>({ method: 'POST', path: '/api/v1/auth/logout', headers });
   }
 
-  return { login, completeTwoFactor, logout };
+  return { login, register, completeTwoFactor, logout };
 }
 
 /**
@@ -144,7 +222,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
  * seconde instance de l'un ou de l'autre.
  */
 export const auth = createAuthClient({ transport: httpTransport, store: sessionStore });
-export const { login, completeTwoFactor, logout } = auth;
+export const { login, register, completeTwoFactor, logout } = auth;
 
 // Réexport pour un appelant qui a seulement besoin de composer une requête
 // bas niveau (recette manuelle § 7 de la spécification).

@@ -18,7 +18,7 @@
 
 :root,
 :root.dark {
-  /* La rampe indigo — la marque, identique dans les deux schémas. */
+  /* Les rampes indigo et purple — la marque, identiques dans les deux schémas. */
   --ios-indigo-50: #eef2ff;
   --ios-indigo-100: #e0e7ff;
   --ios-indigo-200: #c7d2fe;
@@ -30,6 +30,9 @@
   --ios-indigo-800: #3730a3;
   --ios-indigo-900: #312e81;
   --ios-indigo-950: #1e1b4b;
+  --ios-purple-500: #a855f7;
+  --ios-purple-600: #8b5cf6;
+  --ios-purple-700: #b24bf3;
 
   /* Les couleurs sémantiques et les neutres — hors schéma également. */
   --ios-success: #34d399;

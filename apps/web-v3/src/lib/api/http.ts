@@ -56,6 +56,11 @@ export type ApiFailure = {
   readonly status: number;
   readonly error: string;
   readonly code?: string;
+  /** Le champ de formulaire que ce refus vise — `details.field` de
+   * `sendError()` (`services/gateway/src/utils/response.ts`), étalé à la
+   * RACINE de l'enveloppe (`register.ts:401-407`, `409` § champ conflit). Sans
+   * lui, aucun refus d'inscription ne peut se poser SOUS son champ (#5555, T1). */
+  readonly field?: string;
 };
 
 export type ApiSuccess<T> = {
@@ -136,6 +141,38 @@ function credentialHeaders(credential: Credential | null): Record<string, string
  * sans `success` déclarée rend un échec générique, jamais `undefined`. */
 function envelopeOf(payload: unknown): Record<string, unknown> {
   return payload !== null && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
+}
+
+/**
+ * Le champ visé par un refus — sous DEUX formes, mesurées en direct sur le
+ * staging réel (#5555, recette) :
+ *
+ *  1. `envelope.field` — une CHAÎNE À LA RACINE, posée par `sendError()`
+ *     (`services/gateway/src/utils/response.ts`, `details` étalé) : la forme
+ *     des refus APPLICATIFS (`register.ts` catch, `isRegistrationRefusal`).
+ *  2. `envelope.details` — un TABLEAU `{ field, message }[]`, posé par
+ *     `schemaValidationErrorResponse()` (`services/gateway/src/utils/schema-validation-error.ts`) :
+ *     la forme des refus AJV (le body ne respecte même pas le schéma JSON de
+ *     la route, avant que le handler ne s'exécute — `server.ts`, « Refus de
+ *     SCHÉMA »). Vérifié en direct : `POST /auth/register` avec un mot de
+ *     passe de 5 caractères contre `gate.staging.meeshy.me` rend
+ *     `{ details: [{ field: 'password', message: '…' }] }`, SANS `field` à
+ *     la racine — la première forme seule aurait laissé ce refus tomber au
+ *     bandeau générique plutôt que sous le champ mot de passe.
+ *
+ * Le PREMIER élément du tableau gagne — même règle que
+ * `SignupViewModel.applyRejection` (iOS) : « le premier message qui vise un
+ * champ gagne ».
+ */
+function fieldOf(envelope: Record<string, unknown>): string | undefined {
+  if (typeof envelope.field === 'string') return envelope.field;
+  if (Array.isArray(envelope.details)) {
+    const first = envelope.details[0];
+    if (first !== null && typeof first === 'object' && typeof (first as { field?: unknown }).field === 'string') {
+      return (first as { field: string }).field;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -230,11 +267,13 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
       };
     }
 
+    const field = fieldOf(envelope);
     return {
       ok: false,
       status: response.status,
       error: typeof envelope.error === 'string' ? envelope.error : GENERIC_ERROR(response.status),
       ...(typeof envelope.code === 'string' ? { code: envelope.code } : {}),
+      ...(field !== undefined ? { field } : {}),
     };
   }
 
