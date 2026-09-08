@@ -543,8 +543,7 @@ describe('Admin report routes', () => {
       await app.ready();
 
       const updated = { id: '507f1f77bcf86cd799439020', status: 'resolved' };
-      mockReportService.getReportById.mockResolvedValueOnce({ id: '507f1f77bcf86cd799439020', status: 'pending' });
-      mockReportService.updateReport.mockResolvedValueOnce(updated);
+      mockReportService.getReportById.mockResolvedValueOnce({ id: '507f1f77bcf86cd799439020', status: 'pending' }); mockReportService.updateReport.mockResolvedValueOnce(updated);
 
       const res = await app.inject({
         method: 'PATCH',
@@ -579,8 +578,7 @@ describe('Admin report routes', () => {
       app = buildReportApp();
       await app.ready();
 
-      mockReportService.getReportById.mockResolvedValueOnce({ id: '507f1f77bcf86cd799439020', status: 'pending' });
-      mockReportService.updateReport.mockRejectedValueOnce(new Error('DB error'));
+      mockReportService.getReportById.mockResolvedValueOnce({ id: '507f1f77bcf86cd799439020', status: 'pending' }); mockReportService.updateReport.mockRejectedValueOnce(new Error('DB error'));
 
       const res = await app.inject({
         method: 'PATCH',
