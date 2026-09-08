@@ -287,13 +287,13 @@ describe('Le point de montage — routes/index.ts (#4359)', () => {
     expect(categoriesEntry.module).toBe(meCategoriesRoutes);
   });
 
-  it('ROUTE_TABLE compte désormais 63 entrées (62 + `social-events`, #4150)', () => {
+  it('ROUTE_TABLE compte désormais 64 entrées (62 + `social-events`, #4150)', () => {
     // Ce compte est SIGNALÉ à l'intégrateur, jamais régénéré ici :
     // `route-manifest.json` / `packages/shared/api/endpoints.ts` sont des
     // artefacts DÉRIVÉS, hors territoire de #4359 comme de #4349 — et
     // les DEUX ont été régénérés par CE lot (#4348), qui n'est donc pas dans
     // ce cas d'exemption. Voir `route-registration-table.test.ts` pour le
-    // détail complet des paliers successifs (57→…→62) — ce fichier-ci n'en
+    // détail complet des paliers successifs (57→…→64) — ce fichier-ci n'en
     // garde qu'une COPIE ponctuelle, propre à son propre récit d'adjacence
     // `me-permissions`/`me-categories`.
     //
@@ -305,11 +305,18 @@ describe('Le point de montage — routes/index.ts (#4359)', () => {
     // voisins, ne pouvaient pas le voir ; seule la suite COMPLÈTE l'a
     // rattrapé, et après la poussée.
     //
+    // 63 → 64 (#5547, `me-engagement`) — même rattrapage, cette fois repéré
+    // AVANT la poussée en faisant tourner la suite complète du gateway plutôt
+    // que le seul territoire du lot. Le suivi reste ouvert tel quel : ce
+    // compte devrait se lire depuis un site unique, ou cette assertion
+    // devrait disparaître d'ici, son récit d'adjacence n'ayant pas besoin
+    // d'un TOTAL.
+    //
     // Deux témoins qui comptent la MÊME grandeur dans deux fichiers sont une
     // jumelle : celui qu'on n'édite pas devient rouge, et il n'y a aucun
     // moyen de le déduire de la ligne qu'on édite. Suivi à ouvrir — soit ce
     // compte se lit depuis un site unique, soit cette assertion disparaît
     // d'ici, son récit d'adjacence n'ayant pas besoin d'un TOTAL.
-    expect(ROUTE_TABLE.length).toBe(63);
+    expect(ROUTE_TABLE.length).toBe(64);
   });
 });
