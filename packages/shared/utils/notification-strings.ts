@@ -29,7 +29,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'attachment.photo', 'attachment.video', 'attachment.audio', 'attachment.document', 'attachment.files',
   'login.newDevice.title',
   'push.private',
-  'engagement.badgeEarned', 'engagement.streakMilestone',
+  'engagement.badgeEarned', 'engagement.streakMilestone', 'engagement.levelUp',
 ] as const;
 export type NotificationStringKey = typeof NOTIFICATION_STRING_KEYS[number];
 
@@ -135,6 +135,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'push.private': 'Nouvelle notification',
     'engagement.badgeEarned': '🏅 Badge débloqué : {title} · palier {count}',
     'engagement.streakMilestone': '🔥 Série de {count} jours !',
+    'engagement.levelUp': '⭐ Niveau {count} atteint !',
   },
   en: {
     'reaction.message': 'reacted {emoji} to your message',
@@ -184,6 +185,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'push.private': 'New notification',
     'engagement.badgeEarned': '🏅 Badge unlocked: {title} · milestone {count}',
     'engagement.streakMilestone': '🔥 {count}-day streak!',
+    'engagement.levelUp': '⭐ Level {count} reached!',
   },
   es: {
     'reaction.message': 'reaccionó {emoji} a tu mensaje',
@@ -233,6 +235,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'push.private': 'Nueva notificación',
     'engagement.badgeEarned': '🏅 Insignia desbloqueada: {title} · nivel {count}',
     'engagement.streakMilestone': '🔥 ¡Racha de {count} días!',
+    'engagement.levelUp': '⭐ ¡Nivel {count} alcanzado!',
   },
   pt: {
     'reaction.message': 'reagiu {emoji} à sua mensagem',
@@ -282,6 +285,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'push.private': 'Nova notificação',
     'engagement.badgeEarned': '🏅 Emblema desbloqueado: {title} · nível {count}',
     'engagement.streakMilestone': '🔥 Sequência de {count} dias!',
+    'engagement.levelUp': '⭐ Nível {count} alcançado!',
   },
   de: {
     'reaction.message': 'hat {emoji} auf deine Nachricht reagiert',
@@ -331,6 +335,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'push.private': 'Neue Benachrichtigung',
     'engagement.badgeEarned': '🏅 Abzeichen freigeschaltet: {title} · Stufe {count}',
     'engagement.streakMilestone': '🔥 {count}-Tage-Serie!',
+    'engagement.levelUp': '⭐ Stufe {count} erreicht!',
   },
   it: {
     'reaction.message': 'ha reagito {emoji} al tuo messaggio',
@@ -380,6 +385,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'push.private': 'Nuova notifica',
     'engagement.badgeEarned': '🏅 Distintivo sbloccato: {title} · livello {count}',
     'engagement.streakMilestone': '🔥 Serie di {count} giorni!',
+    'engagement.levelUp': '⭐ Livello {count} raggiunto!',
   },
   ar: {
     'reaction.message': 'تفاعل {emoji} مع رسالتك',
@@ -429,6 +435,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'push.private': 'إشعار جديد',
     'engagement.badgeEarned': '🏅 تم فتح شارة: {title} · المستوى {count}',
     'engagement.streakMilestone': '🔥 سلسلة {count} يوم!',
+    'engagement.levelUp': '⭐ تم الوصول إلى المستوى {count}!',
   },
   'zh-Hans': {
     'reaction.message': '用 {emoji} 回应了你的消息',
@@ -478,6 +485,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'push.private': '新通知',
     'engagement.badgeEarned': '🏅 徽章解锁：{title} · 第 {count} 级',
     'engagement.streakMilestone': '🔥 连续 {count} 天！',
+    'engagement.levelUp': '⭐ 达到第 {count} 级！',
   },
 };
 
