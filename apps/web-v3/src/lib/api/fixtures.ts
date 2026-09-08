@@ -532,6 +532,190 @@ const RIVER_MESSAGES: readonly Message[] = RIVER_LINES.map((content, i) => {
 
 const riverLastMessage = RIVER_MESSAGES[RIVER_MESSAGES.length - 1] as Message;
 
+/**
+ * LA SALLE SÉCURISÉE (D-23, #5676) — la SEULE conversation du jeu qui porte
+ * les quatre protections (flou, vue unique, éphémère, supprimé) : sans elle,
+ * `protectionOf`/`ProtectedContent` ne peuvent être vus qu'à l'unité, jamais
+ * ENSEMBLE sur un vrai fil, ce que le gate visuel (`check-thread-states.mjs`
+ * §5) et les captures exigent. `conversationId` est réécrit EXPLICITEMENT
+ * sur chaque message — `message()` empile `messageDefaults` (lié à
+ * `CONVERSATION_ID`) AVANT `partial`, même discipline que `RIVER_MESSAGES`.
+ */
+const PROTECTION_CONVERSATION_ID = 'c-protection';
+
+const protectionParticipants: readonly Participant[] = [viewer, amina, kwame];
+
+const protectionIntro = message({
+  id: 'prot-1',
+  conversationId: PROTECTION_CONVERSATION_ID,
+  senderId: 'u-amina',
+  sender: amina,
+  content: 'Reminder: never paste codes in the general channel.',
+  originalLanguage: 'en',
+  translations: [translation('prot-1', 'fr', 'Rappel : ne collez jamais de code dans le canal général.')],
+  createdAt: minutesAgo(30),
+});
+
+/**
+ * L'ACCUSÉ DE KWAME — un message TRADUIT, NON PROTÉGÉ, DERNIER de son propre
+ * groupe (`kwame` change le locuteur, donc `prot-1` devient `tail` — la
+ * grouping loi `continues()` n'admet que MÊME auteur/MÊME jour). Sans lui,
+ * la Salle sécurisée n'a AUCUNE rangée qui puisse faire échouer le témoin
+ * « au moins un drapeau sur une rangée traduite non voilée » (`prot-1`
+ * resterait continué par `prot-2`, même auteur — `check-thread-states.mjs`
+ * §10) : les six témoins de protection couvrent tous une forme différente,
+ * mais aucun n'était utilisable comme repère « normal ».
+ */
+const protectionAck = message({
+  id: 'prot-1b',
+  conversationId: PROTECTION_CONVERSATION_ID,
+  senderId: 'u-kwame',
+  sender: kwame,
+  content: 'Noted, thanks.',
+  originalLanguage: 'en',
+  translations: [translation('prot-1b', 'fr', 'Reçu, merci.')],
+  createdAt: minutesAgo(28),
+});
+
+/** FLOUTÉ (`isBlurred`) — au repos, ni le texte ni son sens ne doivent atteindre le DOM (§4.1). */
+export const BLURRED_WITNESS_ID = 'prot-2';
+const protectionBlurred = message({
+  id: BLURRED_WITNESS_ID,
+  conversationId: PROTECTION_CONVERSATION_ID,
+  senderId: 'u-amina',
+  sender: amina,
+  content: 'Le code du coffre est 4817-2290.',
+  originalLanguage: 'fr',
+  translations: [],
+  isBlurred: true,
+  createdAt: minutesAgo(26),
+});
+
+/**
+ * VUE UNIQUE, AVEC une traduction française — le témoin qui fait rougir
+ * « pas de drapeau sur un message voilé ». DEUX conditions, pas une (revue) :
+ * une TRADUCTION (sans elle `languageBand` rend `[]` et `PrismPastille` se
+ * tait déjà) **et** la place de DERNIER de son groupe (`tail`) — la loi du
+ * pied exige `isLastInGroup`, donc un message voilé continué par un message
+ * du MÊME auteur ne montrerait aucun drapeau de toute façon, garde posée ou
+ * non. C'est pourquoi `prot-4` suit sous une AUTRE identité : sans ce
+ * changement, `prot-3` n'était pas `tail` et le témoin restait vert la garde
+ * retirée (mesuré).
+ */
+export const VIEW_ONCE_WITNESS_ID = 'prot-3';
+const protectionViewOnce = message({
+  id: VIEW_ONCE_WITNESS_ID,
+  conversationId: PROTECTION_CONVERSATION_ID,
+  senderId: 'u-kwame',
+  sender: kwame,
+  content: 'Here is the door code: 5531.',
+  originalLanguage: 'en',
+  translations: [translation(VIEW_ONCE_WITNESS_ID, 'fr', 'Voici le code de la porte : 5531.')],
+  isViewOnce: true,
+  isBlurred: true,
+  maxViewOnceCount: 1,
+  viewOnceCount: 0,
+  createdAt: minutesAgo(22),
+});
+
+/**
+ * VUE UNIQUE, sans traduction — le tap HORS LIGNE (§4.8 §9) se joue sur ce
+ * second témoin. Il est d'AMINA, pas de Kwame : c'est ce qui referme le
+ * groupe de `prot-3` et lui rend la place de `tail` dont son propre témoin a
+ * besoin (voir le doc-comment ci-dessus).
+ */
+export const VIEW_ONCE_OFFLINE_WITNESS_ID = 'prot-4';
+const protectionViewOnceOffline = message({
+  id: VIEW_ONCE_OFFLINE_WITNESS_ID,
+  conversationId: PROTECTION_CONVERSATION_ID,
+  senderId: 'u-amina',
+  sender: amina,
+  content: 'Second code, à ne pas partager : 9902.',
+  originalLanguage: 'fr',
+  translations: [],
+  isViewOnce: true,
+  isBlurred: true,
+  maxViewOnceCount: 1,
+  viewOnceCount: 0,
+  createdAt: minutesAgo(18),
+});
+
+/** ÉPHÉMÈRE — `expiresAt` dans le FUTUR, indépendamment de `createdAt` : le minuteur est vivant à l'ouverture. */
+export const EPHEMERAL_WITNESS_ID = 'prot-5';
+const protectionEphemeral = message({
+  id: EPHEMERAL_WITNESS_ID,
+  conversationId: PROTECTION_CONVERSATION_ID,
+  senderId: VIEWER_ID,
+  sender: viewer,
+  content: 'Je passe au bureau dans dix minutes.',
+  originalLanguage: 'fr',
+  translations: [],
+  expiresAt: minutesAgo(-2),
+  createdAt: minutesAgo(14),
+});
+
+/**
+ * SUPPRIMÉ — `content` NON VIDE (miroir de `messages-advanced-delete.ts:180-183`,
+ * qui blanchit `translations` mais jamais `content`) : le témoin doit pouvoir
+ * FAIRE ÉCHOUER une fuite, pas se contenter d'un champ déjà vide.
+ */
+export const DELETED_WITNESS_ID = 'prot-6';
+const protectionDeleted = message({
+  id: DELETED_WITNESS_ID,
+  conversationId: PROTECTION_CONVERSATION_ID,
+  senderId: 'u-kwame',
+  sender: kwame,
+  content: 'Ce texte ne doit jamais être rendu.',
+  originalLanguage: 'fr',
+  translations: [],
+  deletedAt: minutesAgo(4),
+  createdAt: minutesAgo(10),
+});
+
+/** BRÛLÉ À L'ARRIVÉE — `viewOnceCount ≥ maxViewOnceCount` : aucune affordance, tombstone direct. */
+export const BURNED_WITNESS_ID = 'prot-7';
+const protectionBurned = message({
+  id: BURNED_WITNESS_ID,
+  conversationId: PROTECTION_CONVERSATION_ID,
+  senderId: 'u-amina',
+  sender: amina,
+  content: 'Burned before you opened this.',
+  originalLanguage: 'en',
+  translations: [],
+  isViewOnce: true,
+  isBlurred: true,
+  maxViewOnceCount: 1,
+  viewOnceCount: 1,
+  createdAt: minutesAgo(6),
+});
+
+/** Le dernier message de la salle — flouté : l'aperçu de LISTE a un sujet à protéger (§5.9). */
+const protectionLastMessage = message({
+  id: 'prot-8',
+  conversationId: PROTECTION_CONVERSATION_ID,
+  senderId: 'u-amina',
+  sender: amina,
+  content: 'Nouveau code demain matin : 7741.',
+  originalLanguage: 'fr',
+  translations: [],
+  isBlurred: true,
+  createdAt: minutesAgo(1),
+});
+
+const PROTECTION_MESSAGES: readonly Message[] = [
+  protectionIntro,
+  protectionAck,
+  protectionBlurred,
+  protectionViewOnce,
+  protectionViewOnceOffline,
+  protectionEphemeral,
+  protectionDeleted,
+  protectionBurned,
+  protectionLastMessage,
+];
+
+export { PROTECTION_CONVERSATION_ID };
+
 /** Les champs qu'une `Conversation` exige et que la vue ne consulte pas. */
 const conversationDefaults = {
   status: 'active',
@@ -694,6 +878,24 @@ export const CONVERSATIONS: readonly Conversation[] = [
     lastMessageAt: riverLastMessage.createdAt,
     lastMessageOriginalLanguage: 'fr',
   },
+  {
+    ...conversationDefaults,
+    id: PROTECTION_CONVERSATION_ID,
+    title: 'Salle sécurisée',
+    type: 'group',
+    memberCount: 3,
+    participants: protectionParticipants,
+    unreadCount: 1,
+    lastMessage: protectionLastMessage,
+    lastMessageAt: protectionLastMessage.createdAt,
+    /**
+     * L'APERÇU DE LISTE A UN SUJET FLOUTÉ (§5.9, #5676) : ni traduction ni
+     * carte à descendre — `previewKindOf` doit s'arrêter à `isBlurred` AVANT
+     * de lire `lastMessageTranslations`.
+     */
+    lastMessageTranslations: {},
+    lastMessageOriginalLanguage: 'fr',
+  },
 ];
 
 
@@ -721,6 +923,52 @@ export const CONVERSATION_READING_MODE_PREFERENCES: Readonly<Record<string, Conv
 };
 
 /**
+ * LA CONSOMMATION D'UNE VUE UNIQUE SURVIT AU DÉMONTAGE DE LA ROUTE (revue
+ * #5676, défaut 7). `messagesOf` repart des tableaux CONSTANTS ci-dessus à
+ * CHAQUE montage de `/c/:conversation` : sans mémoire À CÔTÉ d'eux, quitter
+ * le fil vers `/` puis y revenir relisait `viewOnceCount: 0` et le secret
+ * se relisait — autant de fois qu'on veut, par n'importe quel visiteur. Le
+ * réducteur `applyConsumption` (`lib/api/view-once.ts`) est juste, mais il
+ * n'agit que sur l'état LOCAL de la route (`routes/thread.tsx`) ; ce qui
+ * manquait était un endroit qui survit à ce démontage.
+ *
+ * Aujourd'hui les FIXTURES SONT le produit que tout le monde voit (staging
+ * non branché, `apiConfig.source`) : cet ensemble EST donc la couche de
+ * données, la même que le réseau remplacera par le `viewOnceCount` servi
+ * par la passerelle (#5493) — une seule source, jamais une jumelle portée
+ * par la route.
+ */
+const consumedViewOnceIds = new Set<string>();
+
+/** Appelé par `routes/thread.tsx::consume` une fois la consommation confirmée. */
+export function recordViewOnceConsumption(messageId: string): void {
+  consumedViewOnceIds.add(messageId);
+}
+
+/**
+ * TÉMOIN SEUL — jamais appelé par l'application. `consumedViewOnceIds` vit
+ * pour la durée du PROCESSUS (module partagé entre tous les fichiers de
+ * `bun test`, pas seulement entre les montages d'une route) : sans ce
+ * remise à zéro, un test qui consomme `VIEW_ONCE_WITNESS_ID` ferait
+ * dépendre `fixtures.test.ts` (qui l'attend à `viewOnceCount: 0`) de
+ * l'ORDRE d'exécution des fichiers — exactement le défaut que la
+ * discipline `afterEach` de `scheme.test.ts` évite déjà pour un état
+ * global comparable.
+ */
+export function resetViewOnceConsumptionForTests(): void {
+  consumedViewOnceIds.clear();
+}
+
+const withConsumption = (messages: readonly Message[]): readonly Message[] => {
+  if (consumedViewOnceIds.size === 0) return messages;
+  return messages.map((m) => {
+    if (!m.isViewOnce || !consumedViewOnceIds.has(m.id)) return m;
+    const max = m.maxViewOnceCount ?? 1;
+    return m.viewOnceCount < max ? { ...m, viewOnceCount: max } : m;
+  });
+};
+
+/**
  * L'HISTORIQUE D'UNE CONVERSATION — vide par défaut, et c'est le point.
  *
  * Le POC servait la même liste de messages à toute adresse `/c/:id`, ce qui
@@ -730,8 +978,9 @@ export const CONVERSATION_READING_MODE_PREFERENCES: Readonly<Record<string, Conv
  * première page de résultats.
  */
 export const messagesOf = (conversationId: string): readonly Message[] => {
-  if (conversationId === CONVERSATION_ID) return THREAD_MESSAGES;
-  if (conversationId === RIVER_CONVERSATION_ID) return RIVER_MESSAGES;
+  if (conversationId === CONVERSATION_ID) return withConsumption(THREAD_MESSAGES);
+  if (conversationId === RIVER_CONVERSATION_ID) return withConsumption(RIVER_MESSAGES);
+  if (conversationId === PROTECTION_CONVERSATION_ID) return withConsumption(PROTECTION_MESSAGES);
   const last = CONVERSATIONS.find((c) => c.id === conversationId)?.lastMessage;
-  return last === undefined ? [] : [last];
+  return last === undefined ? [] : withConsumption([last]);
 };

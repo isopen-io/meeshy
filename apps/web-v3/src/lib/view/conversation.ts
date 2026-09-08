@@ -91,3 +91,25 @@ export const presenceOf = (
         },
     now,
   );
+
+/**
+ * LA FORME DE L'APERÇU DE LISTE — miroir de `LastMessageSummaryKind.swift:6-37`
+ * (D-23, #5676) : un aperçu PROTÉGÉ ne descend PAS le Prisme, jamais
+ * `lastMessage.content` ni `lastMessageTranslations` — `previewKindOf` est le
+ * SEUL point de décision, appelé AVANT `served()` (`lens-row.tsx`).
+ *
+ * ORDRE, exactement celui d'iOS : `expired` (échu) → `hidden` (flouté) →
+ * `view-once` → `ephemeral` (en cours) → `standard`. Un `lastMessage` absent
+ * (conversation sans historique) rend `standard` — rien à protéger.
+ */
+export type PreviewKind = 'standard' | 'hidden' | 'view-once' | 'expired' | 'ephemeral';
+
+export function previewKindOf(conversation: Conversation, now: number = Date.now()): PreviewKind {
+  const last = conversation.lastMessage;
+  if (last === undefined) return 'standard';
+  if (last.expiresAt !== undefined && new Date(last.expiresAt).getTime() <= now) return 'expired';
+  if (last.isBlurred) return 'hidden';
+  if (last.isViewOnce) return 'view-once';
+  if (last.expiresAt !== undefined && new Date(last.expiresAt).getTime() > now) return 'ephemeral';
+  return 'standard';
+}

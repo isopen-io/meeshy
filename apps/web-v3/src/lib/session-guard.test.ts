@@ -8,7 +8,7 @@ import { resolveRouteAccess, type RouteKey } from './session-guard';
  * session, les routes PUBLIQUES d'authentification en refusent une active.
  */
 
-const PRIVATE_ROUTES: readonly RouteKey[] = ['list', 'thread'];
+const PRIVATE_ROUTES: readonly RouteKey[] = ['list', 'thread', 'progression'];
 const PUBLIC_AUTH_ROUTES: readonly RouteKey[] = ['login', 'signup'];
 
 describe('resolveRouteAccess — source fixtures : toujours allow (les deux moitiés du seuil)', () => {
@@ -24,6 +24,9 @@ describe('resolveRouteAccess — source fixtures : toujours allow (les deux moit
 describe('resolveRouteAccess — source gateway, visiteur anonyme sur une route PRIVÉE ⇒ redirect-login', () => {
   test('list', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'list' })).toBe('redirect-login'));
   test('thread', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'thread' })).toBe('redirect-login'));
+  // #5547 — le tableau de bord lit `GET /me/engagement`, qui ne sert que
+  // l'utilisateur AUTHENTIFIÉ : un visiteur sans compte n'y a rien à voir.
+  test('progression', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'progression' })).toBe('redirect-login'));
 });
 
 describe('resolveRouteAccess — source gateway, session ACTIVE sur login/signup ⇒ redirect-home', () => {

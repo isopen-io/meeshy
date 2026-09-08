@@ -160,9 +160,13 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     case maintenance = "maintenance"
     case updateAvailable = "update_available"
 
-    // Engagement
+    // Engagement — les QUATRE types que la passerelle émet
+    // (`packages/shared/types/notification.ts`). `level_up` manquait : un
+    // niveau atteint décodait en `.system`, s'affichait comme une alerte
+    // système et n'ouvrait pas l'écran « Progression » (#5698).
     case achievementUnlocked = "achievement_unlocked"
     case streakMilestone = "streak_milestone"
+    case levelUp = "level_up"
     case badgeEarned = "badge_earned"
 
     // Legacy uppercase (backward compat)
@@ -204,7 +208,10 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .friendNewStory: return "camera.fill"
         case .friendNewPost: return "square.text.square.fill"
         case .friendNewMood: return "face.smiling.fill"
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned: return "trophy.fill"
+        case .achievementUnlocked, .legacyAchievementUnlocked: return "trophy.fill"
+        case .badgeEarned: return "medal.fill"
+        case .streakMilestone: return "flame.fill"
+        case .levelUp: return "star.fill"
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted: return "globe"
         case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled: return "exclamationmark.triangle.fill"
         case .system, .maintenance, .updateAvailable: return "bell.fill"
@@ -236,8 +243,13 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
             return "9B59B6"
         case .friendRequest, .contactRequest, .legacyFriendRequest, .friendAccepted, .contactAccepted, .legacyFriendAccepted, .legacyStatusUpdate:
             return "4ECDC4"
-        case .communityInvite, .communityJoined, .communityLeft, .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft, .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
+        case .communityInvite, .communityJoined, .communityLeft, .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft:
             return "F8B500"
+        // La famille « engagement » porte l'ambre des badges de l'écran
+        // « Progression » (`MeeshyColors.warningHex`), distinct de la famille
+        // « communauté » ci-dessus — un badge ne ressemble plus à une invitation.
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
+            return "FBBF24"
         case .missedCall, .callDeclined, .incomingCall, .incomingCallAlert, .callEnded, .legacyCallMissed, .legacyCallIncoming:
             return "E91E63"
         case .legacyAffiliateSignup:
@@ -637,8 +649,17 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
             return "Traduction disponible"
         case .voiceCloneReady:
             return "Clone vocal pret"
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
-            return "Nouveau badge debloque !"
+        // Un titre PAR palier — le corps (serveur, langue du lecteur) dit
+        // lequel ; le titre dit de quelle ÉCHELLE il s'agit. « Nouveau badge »
+        // pour une série de sept jours ou un niveau atteint disait faux.
+        case .badgeEarned:
+            return "Badge débloqué"
+        case .streakMilestone:
+            return "Série de jours actifs"
+        case .levelUp:
+            return "Niveau atteint"
+        case .achievementUnlocked, .legacyAchievementUnlocked:
+            return "Succès débloqué"
         case .securityAlert, .legacySystemAlert:
             return "Alerte de securite"
         case .loginNewDevice:

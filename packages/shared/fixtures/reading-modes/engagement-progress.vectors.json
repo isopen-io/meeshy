@@ -1,0 +1,206 @@
+{
+  "$format": {
+    "input": "EngagementProgressPayload — la charge EXACTE de GET /me/engagement (#5670) : counters[{axisKey,count}], milestones[{milestoneType,milestoneKey,reachedAt}], streak{currentStreakDays,longestStreakDays}, level{engagementScore}.",
+    "expected": "PROJECTION de resolveEngagementProgress (packages/shared/utils/engagement-progress.ts) : { level, levelNext (null au sommet), levelProgress, streakNext, streakProgress, streakReached, badgesEarned, isEmpty, achievements: [clés DÉBLOQUÉES, ordre du catalogue], axes: { axisKey: { reachedCount, nextThreshold, progress } } — seuls les axes dont value > 0 OU reachedCount > 0 figurent }. Les fractions sont comparées à 1e-4.",
+    "provenance": "Contrat cross-plateforme de la loi de progression (#5547 web, #5698 iOS). TS le rejoue (__tests__/vectors/engagement-progress.vectors.test.ts) et iOS aussi (apps/ios/MeeshyTests/Unit/Engagement/EngagementProgressVectorTests.swift, via EngagementProgressResolver). Sur divergence entre ce fichier et le TS, c'est le TS qui a raison — le miroir bouge, jamais le vecteur sans lui."
+  },
+  "vectors": [
+    {
+      "_label": "aucune activité — état vide, premiers paliers pointés",
+      "input": {
+        "counters": [],
+        "milestones": [],
+        "streak": { "currentStreakDays": 0, "longestStreakDays": 0 },
+        "level": { "engagementScore": 0 }
+      },
+      "expected": {
+        "level": 0,
+        "levelNext": 10,
+        "levelProgress": 0,
+        "streakNext": 3,
+        "streakProgress": 0,
+        "streakReached": 0,
+        "badgesEarned": 0,
+        "isEmpty": true,
+        "achievements": [],
+        "axes": {}
+      }
+    },
+    {
+      "_label": "douze messages texte — deux badges, pas mesuré depuis le palier 10",
+      "input": {
+        "counters": [{ "axisKey": "content.text_message", "count": 12 }],
+        "milestones": [
+          { "milestoneType": "badge", "milestoneKey": "content.text_message:1", "reachedAt": "2026-09-01T08:00:00.000Z" },
+          { "milestoneType": "badge", "milestoneKey": "content.text_message:10", "reachedAt": "2026-09-04T08:00:00.000Z" },
+          { "milestoneType": "level", "milestoneKey": "level:10", "reachedAt": "2026-09-02T08:00:00.000Z" },
+          { "milestoneType": "achievement", "milestoneKey": "achievement.first_content", "reachedAt": "2026-09-01T08:00:00.000Z" }
+        ],
+        "streak": { "currentStreakDays": 1, "longestStreakDays": 1 },
+        "level": { "engagementScore": 36 }
+      },
+      "expected": {
+        "level": 1,
+        "levelNext": 50,
+        "levelProgress": 0.65,
+        "streakNext": 3,
+        "streakProgress": 0.333333,
+        "streakReached": 0,
+        "badgesEarned": 2,
+        "isEmpty": false,
+        "achievements": ["achievement.first_content"],
+        "axes": { "content.text_message": { "reachedCount": 2, "nextThreshold": 50, "progress": 0.05 } }
+      }
+    },
+    {
+      "_label": "palier gravé sans compteur — un badge servi ne se reprend pas",
+      "input": {
+        "counters": [],
+        "milestones": [{ "milestoneType": "badge", "milestoneKey": "content.post:1", "reachedAt": "2026-08-30T00:00:00.000Z" }],
+        "streak": { "currentStreakDays": 0, "longestStreakDays": 0 },
+        "level": { "engagementScore": 0 }
+      },
+      "expected": {
+        "level": 0,
+        "levelNext": 10,
+        "levelProgress": 0,
+        "streakNext": 3,
+        "streakProgress": 0,
+        "streakReached": 0,
+        "badgesEarned": 1,
+        "isEmpty": false,
+        "achievements": [],
+        "axes": { "content.post": { "reachedCount": 1, "nextThreshold": 1, "progress": 0 } }
+      }
+    },
+    {
+      "_label": "axe et paliers hors catalogue — ignorés, l'écran reste vide",
+      "input": {
+        "counters": [{ "axisKey": "content.future", "count": 99 }],
+        "milestones": [
+          { "milestoneType": "badge", "milestoneKey": "content.future:10", "reachedAt": "2026-09-01T00:00:00.000Z" },
+          { "milestoneType": "badge", "milestoneKey": "content.post:7", "reachedAt": "2026-09-01T00:00:00.000Z" },
+          { "milestoneType": "streak", "milestoneKey": "streak:5", "reachedAt": "2026-09-01T00:00:00.000Z" }
+        ],
+        "streak": { "currentStreakDays": 0, "longestStreakDays": 0 },
+        "level": { "engagementScore": 0 }
+      },
+      "expected": {
+        "level": 0,
+        "levelNext": 10,
+        "levelProgress": 0,
+        "streakNext": 3,
+        "streakProgress": 0,
+        "streakReached": 0,
+        "badgesEarned": 0,
+        "isEmpty": true,
+        "achievements": [],
+        "axes": {}
+      }
+    },
+    {
+      "_label": "niveau 3 à 160 points, série de 8 jours sur un record de 20",
+      "input": {
+        "counters": [
+          { "axisKey": "content.story", "count": 30 },
+          { "axisKey": "comment.text", "count": 5 },
+          { "axisKey": "conversation.private", "count": 3 }
+        ],
+        "milestones": [
+          { "milestoneType": "level", "milestoneKey": "level:150", "reachedAt": "2026-09-02T00:00:00.000Z" },
+          { "milestoneType": "streak", "milestoneKey": "streak:7", "reachedAt": "2026-08-20T00:00:00.000Z" }
+        ],
+        "streak": { "currentStreakDays": 8, "longestStreakDays": 20 },
+        "level": { "engagementScore": 160 }
+      },
+      "expected": {
+        "level": 3,
+        "levelNext": 400,
+        "levelProgress": 0.04,
+        "streakNext": 14,
+        "streakProgress": 0.142857,
+        "streakReached": 3,
+        "badgesEarned": 4,
+        "isEmpty": false,
+        "achievements": [],
+        "axes": {
+          "content.story": { "reachedCount": 2, "nextThreshold": 50, "progress": 0.5 },
+          "comment.text": { "reachedCount": 1, "nextThreshold": 10, "progress": 0.444444 },
+          "conversation.private": { "reachedCount": 1, "nextThreshold": 10, "progress": 0.222222 }
+        }
+      }
+    },
+    {
+      "_label": "échelles complètes — plus de palier suivant, barres à 1",
+      "input": {
+        "counters": [{ "axisKey": "tool.sticker", "count": 500 }],
+        "milestones": [],
+        "streak": { "currentStreakDays": 100, "longestStreakDays": 120 },
+        "level": { "engagementScore": 2600 }
+      },
+      "expected": {
+        "level": 6,
+        "levelNext": null,
+        "levelProgress": 1,
+        "streakNext": null,
+        "streakProgress": 1,
+        "streakReached": 6,
+        "badgesEarned": 5,
+        "isEmpty": false,
+        "achievements": [],
+        "axes": { "tool.sticker": { "reachedCount": 5, "nextThreshold": null, "progress": 1 } }
+      }
+    },
+    {
+      "_label": "deux succès débloqués, dans l'ordre du catalogue quel que soit l'ordre servi",
+      "input": {
+        "counters": [
+          { "axisKey": "content.audio_message", "count": 1 },
+          { "axisKey": "content.text_message", "count": 2 }
+        ],
+        "milestones": [
+          { "milestoneType": "achievement", "milestoneKey": "achievement.first_voice", "reachedAt": "2026-09-03T12:00:00.000Z" },
+          { "milestoneType": "achievement", "milestoneKey": "achievement.first_content", "reachedAt": "2026-09-03T11:00:00.000Z" }
+        ],
+        "streak": { "currentStreakDays": 2, "longestStreakDays": 2 },
+        "level": { "engagementScore": 9 }
+      },
+      "expected": {
+        "level": 0,
+        "levelNext": 10,
+        "levelProgress": 0.9,
+        "streakNext": 3,
+        "streakProgress": 0.666667,
+        "streakReached": 0,
+        "badgesEarned": 2,
+        "isEmpty": false,
+        "achievements": ["achievement.first_content", "achievement.first_voice"],
+        "axes": {
+          "content.audio_message": { "reachedCount": 1, "nextThreshold": 10, "progress": 0 },
+          "content.text_message": { "reachedCount": 1, "nextThreshold": 10, "progress": 0.111111 }
+        }
+      }
+    },
+    {
+      "_label": "record inférieur à la série courante — le record est ramené à elle",
+      "input": {
+        "counters": [],
+        "milestones": [],
+        "streak": { "currentStreakDays": 5, "longestStreakDays": 2 },
+        "level": { "engagementScore": 0 }
+      },
+      "expected": {
+        "level": 0,
+        "levelNext": 10,
+        "levelProgress": 0,
+        "streakNext": 7,
+        "streakProgress": 0.5,
+        "streakReached": 1,
+        "badgesEarned": 0,
+        "isEmpty": false,
+        "achievements": [],
+        "axes": {}
+      }
+    }
+  ]
+}

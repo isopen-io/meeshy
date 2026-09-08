@@ -223,6 +223,7 @@ post-*
 # (likely a stray root-level artifact) is undocumented.
 !packages/shared/types/post-reference.ts
 !services/gateway/src/__tests__/unit/post-service-mocks.ts
+!apps/web/__tests__/hooks/post-translation-map-single-source.test.ts
 !services/gateway/src/__tests__/unit/post-service-geo-discoverability.test.ts
 !packages/shared/fixtures/canvas-v3/post-carousel-sound-library.json
 !packages/shared/fixtures/canvas-v3/post-sound-original.json

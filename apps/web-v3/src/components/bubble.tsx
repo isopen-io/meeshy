@@ -6,9 +6,12 @@ import type { LocalDelivery } from '@/lib/view/message';
 import { served } from '@/lib/api/prism';
 import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
+import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
+import { ephemeralOf, protectionOf } from '@/lib/reading-mode/protection';
 
 import { Avatar } from './avatar';
 import { Glyph } from './glyph';
+import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
 import {
   Attachments,
   Check,
@@ -19,6 +22,8 @@ import {
   SecondaryText,
   reactionEntries,
 } from './message-blocks';
+
+const defaultNow = (): number => Date.now();
 
 /**
  * LA BULLE — le composant le plus dense de l'interface, et celui sur lequel la
@@ -35,6 +40,22 @@ import {
  *    premier), en groupe, et seulement en reception.
  * 3. La bulle ENVOYEE est l'indigo de marque, le MEME dans toutes les
  *    conversations ; seule la bulle RECUE porte l'accent de la conversation.
+ *
+ * LA PROTECTION (D-23, #5676) — `deleted` SEUL ne monte AUCUNE bulle :
+ * `BubbleDeletedView` (`Bubble/BubbleSystemViews.swift`) est une vue À PART,
+ * une capsule alignée du côté de l'expéditeur avec l'espace opposé de 50 px,
+ * jamais le fond indigo/accent. `expired` ne rend rien (`EmptyView`).
+ * `veiled` ET `burned` gardent la bulle entière (fond, rayon, pied) et
+ * enveloppent SEULEMENT citation/pièces-jointes/texte/panneau secondaire —
+ * jamais la bande de reprise d'un envoi échoué (`:131-145` reste HORS voile).
+ * `burned` REJOINT `veiled` : c'est `ThemedMessageBubble.swift:305-324`
+ * exactement (`.burned where !isRevealed → BubbleBurnedView`, sinon le
+ * contenu) — la bulle iOS montre déjà le contenu PENDANT la fenêtre de
+ * révélation et ne bascule sur `BubbleBurnedView` qu'une fois éteinte.
+ * Le pied N'AFFICHE `PrismPastille`/`Flags` QUE quand `mountsBottomLine(...)`
+ * l'autorise (critère c, #5676 — la bulle APPELLE enfin la loi du pied
+ * qu'elle ignorait) : un message voilé ne montre plus JAMAIS sa langue
+ * d'origine en clair.
  */
 
 export function Bubble({
@@ -46,6 +67,10 @@ export function Bubble({
   onRetry,
   onJumpToMessage,
   highlighted = false,
+  expired = false,
+  onConsumeViewOnce,
+  onEphemeralExpired,
+  now = defaultNow,
 }: {
   place: PlacedMessage;
   languages: readonly string[];
@@ -58,10 +83,41 @@ export function Bubble({
   onJumpToMessage: (messageId: string) => void;
   /** Mis en évidence brièvement après un saut de citation. */
   highlighted?: boolean;
+  /** FORCÉ par l'hôte quand `EphemeralBadge.onExpired` s'est déclenché pour CE message. */
+  expired?: boolean;
+  /** Consomme une vue unique (D-10, `lib/api/view-once.ts`). */
+  onConsumeViewOnce?: (messageId: string) => Promise<boolean>;
+  onEphemeralExpired?: (messageId: string) => void;
+  /** Horloge injectable — jamais `Date.now()` lu directement. */
+  now?: () => number;
 }) {
   const { message, tail } = place;
+  const nowMs = now();
+  const kind = expired ? 'expired' : protectionOf(message, nowMs);
   const isMine = isMineOf(message, viewerId);
+  // TOUJOURS appelé, quel que soit `kind` — les règles des hooks interdisent
+  // un retour anticipé AVANT un hook.
   const [openLanguage, setOpenLanguage] = useState<string | null>(null);
+
+  if (kind === 'expired') return null;
+
+  /**
+   * `deleted` SEUL prend la vue à part, SANS bulle. `burned` REJOINT
+   * `veiled` plus bas — c'est exactement `ThemedMessageBubble.swift:305-324`
+   * (`.burned where !blurController.isRevealed → BubbleBurnedView`, SINON le
+   * contenu standard) : la bulle iOS montre déjà le contenu PENDANT la
+   * fenêtre de révélation et ne bascule sur le tombstone qu'une fois la
+   * fenêtre éteinte. Router `burned` ici COUPERAIT cette fenêtre à l'instant
+   * même où la consommation serveur répond — avant les 5 s payées par le
+   * lecteur (D-23 §1.4 point 4).
+   */
+  if (kind === 'deleted') {
+    return (
+      <div data-message={message.id} style={{ marginBottom: tail ? 6 : 2 }}>
+        <ProtectionNotice kind={kind} surface="bubble" isMine={isMine} />
+      </div>
+    );
+  }
 
   const translations = translationsOf(message);
   const rendered = served({
@@ -79,7 +135,14 @@ export function Bubble({
    */
   const showsIdentity = isGrouped && !isMine && tail;
 
-  const footerLanguages = [...new Set([message.originalLanguage, ...translations.map((t) => t.language)])];
+  // `kind === 'veiled' | 'burned'` toutes deux passent par `ProtectedContent`.
+  const isProtected = kind !== 'standard';
+  const footerLanguages = languageBand({
+    originalLanguage: message.originalLanguage,
+    preferredLanguages: languages,
+    translations: translations.map((t) => t.language),
+    servedLanguage: rendered.language,
+  });
   const secondary =
     openLanguage === null
       ? null
@@ -88,12 +151,46 @@ export function Bubble({
         : (translations.find((t) => t.language === openLanguage)?.text ?? null);
 
   const reactions = reactionEntries(message.reactionSummary);
+  const ephemeral = ephemeralOf(message.expiresAt, nowMs);
+
+  /** LE PIED — la loi (D-23, #5676) : jamais de drapeau en clair sur un message voilé, un seul jeu par suite. */
+  const showsBottomLine = mountsBottomLine({
+    hasTranslation: translations.length > 0,
+    isVeiled: isProtected,
+    isLastInGroup: tail,
+    hasReactions: reactions.length > 0,
+  });
 
   const receivedBg = 'color-mix(in srgb, var(--accent) var(--ios-bubble-other-opacity), transparent)';
   const receivedHairline = 'color-mix(in srgb, var(--accent) var(--ios-bubble-other-hairline-opacity), transparent)';
 
+  const contentBlock = (
+    <>
+      {message.replyTo ? (
+        <Quote quote={message.replyTo} isMine={isMine} onJump={() => onJumpToMessage(message.replyTo!.id)} />
+      ) : null}
+      {message.attachments ? <Attachments attachments={message.attachments} /> : null}
+
+      {rendered.text ? (
+        /* Le contenu AFFICHE est deja la traduction preferee, rendu
+           exactement comme du contenu natif — ni encadre, ni italique, ni
+           annonce. C'est le Prisme : la traduction ne se signale que par
+           la pastille du pied. `lang` porte la langue REELLEMENT servie,
+           pour que la synthese vocale la prononce juste. */
+        <p className="text-bubble leading-[1.35] whitespace-pre-wrap" lang={rendered.language}>
+          {rendered.text}
+        </p>
+      ) : null}
+
+      {openLanguage !== null && secondary !== null ? (
+        <SecondaryText code={openLanguage} text={secondary} isMine={isMine} />
+      ) : null}
+    </>
+  );
+
   return (
     <div
+      data-message={message.id}
       className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
       /* L'espacement vertical DEPEND de la place dans le groupe : 6 px en
          queue, 2 px au milieu. C'est ce qui fait lire une suite comme un
@@ -104,6 +201,18 @@ export function Bubble({
         className="relative max-w-[70%] min-w-0"
         style={{ marginInlineStart: isMine ? 50 : 0, marginInlineEnd: isMine ? 0 : 50 }}
       >
+        {/* LE BADGE ÉPHÉMÈRE — AU-DESSUS de la bulle, HORS du fond coloré
+            (`BubbleStandardLayout.swift:543-550`). Aligné du côté de la bulle. */}
+        {ephemeral.state === 'running' && message.expiresAt !== undefined ? (
+          <div className={`mb-1 flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+            <EphemeralBadge
+              expiresAt={message.expiresAt}
+              now={now}
+              onExpired={() => onEphemeralExpired?.(message.id)}
+            />
+          </div>
+        ) : null}
+
         <div
           className="rounded-bubble px-3.5 py-2.5 transition-shadow duration-500"
           style={{
@@ -116,17 +225,14 @@ export function Bubble({
             boxShadow: highlighted ? '0 0 0 2.5px var(--accent)' : 'none',
           }}
         >
-          {message.replyTo ? (
-            <Quote quote={message.replyTo} isMine={isMine} onJump={() => onJumpToMessage(message.replyTo!.id)} />
-          ) : null}
-          {message.attachments ? <Attachments attachments={message.attachments} /> : null}
           {/*
             LA BANDE DE REPRISE EST **DANS** LA BULLE, pas sous le fil — c'est
             le parti d'iOS, et il vaut mieux que le nôtre : un bandeau global
             dirait « un envoi a échoué » sans dire LEQUEL, et sur un fil de
             cinquante messages c'est une information inutilisable. Ici l'échec
             est attaché au message qui a échoué, et le geste de reprise est à
-            l'endroit où le regard se pose déjà.
+            l'endroit où le regard se pose déjà. HORS VOILE (D-23) : un échec
+            se voit même sur un message protégé.
           */}
           {localDelivery === 'failed' && onRetry !== undefined ? (
             <button
@@ -144,20 +250,23 @@ export function Bubble({
             </button>
           ) : null}
 
-          {rendered.text ? (
-            /* Le contenu AFFICHE est deja la traduction preferee, rendu
-               exactement comme du contenu natif — ni encadre, ni italique, ni
-               annonce. C'est le Prisme : la traduction ne se signale que par
-               la pastille du pied. `lang` porte la langue REELLEMENT servie,
-               pour que la synthese vocale la prononce juste. */
-            <p className="text-bubble leading-[1.35] whitespace-pre-wrap" lang={rendered.language}>
-              {rendered.text}
-            </p>
-          ) : null}
-
-          {openLanguage !== null && secondary !== null ? (
-            <SecondaryText code={openLanguage} text={secondary} isMine={isMine} />
-          ) : null}
+          {isProtected ? (
+            <ProtectedContent
+              messageId={message.id}
+              kind={kind}
+              isViewOnce={message.isViewOnce}
+              contentLength={message.content.length}
+              attachmentCount={message.attachments?.length ?? 0}
+              surface="bubble"
+              isMine={isMine}
+              onConsumeViewOnce={onConsumeViewOnce}
+              now={now}
+            >
+              {contentBlock}
+            </ProtectedContent>
+          ) : (
+            contentBlock
+          )}
 
           <div
             className={`flex items-start gap-2 ${showsIdentity ? 'pt-2' : 'pt-1'}`}
@@ -178,19 +287,27 @@ export function Bubble({
                 </span>
               ) : null}
               <div className="flex items-center gap-1">
-                <PrismPastille
-                  servedLanguage={rendered.language}
-                  originalLanguage={message.originalLanguage}
-                  active={openLanguage}
-                  onToggle={() =>
-                    setOpenLanguage((v) => (v === message.originalLanguage ? null : message.originalLanguage))
-                  }
-                />
-                <Flags
-                  languages={footerLanguages}
-                  active={openLanguage}
-                  onPick={(code) => setOpenLanguage((v) => (v === code ? null : code))}
-                />
+                {/* PrismPastille/Flags N'APPARAISSENT QUE quand la loi du pied
+                    l'autorise (D-23, critère c) — la bulle IGNORAIT cette loi
+                    avant ce lot et rendait ces contrôles sur CHAQUE message,
+                    voilé compris (`bulle.md` § 9 écart 5). */}
+                {showsBottomLine ? (
+                  <>
+                    <PrismPastille
+                      servedLanguage={rendered.language}
+                      originalLanguage={message.originalLanguage}
+                      active={openLanguage}
+                      onToggle={() =>
+                        setOpenLanguage((v) => (v === message.originalLanguage ? null : message.originalLanguage))
+                      }
+                    />
+                    <Flags
+                      languages={footerLanguages}
+                      active={openLanguage}
+                      onPick={(code) => setOpenLanguage((v) => (v === code ? null : code))}
+                    />
+                  </>
+                ) : null}
                 <span className="flex-1" />
                 <time
                   className="text-time font-medium tabular-nums"

@@ -63,6 +63,11 @@ enum Route: Hashable {
     case communityInvite(String)
     case notifications
     case userStats
+    /// Le tableau de bord des streaks & badges (#5698) — niveau, série,
+    /// badges par axe, succès ; la cible des quatre notifications de
+    /// réengagement (`badge_earned`, `streak_milestone`, `level_up`,
+    /// `achievement_unlocked`).
+    case progression
     case links
     case affiliate
     case trackingLinks
@@ -129,6 +134,8 @@ extension Route {
             return String(localized: "route.title.notifications", defaultValue: "Notifications", bundle: .main)
         case .userStats:
             return String(localized: "route.title.stats", defaultValue: "Statistiques", bundle: .main)
+        case .progression:
+            return String(localized: "route.title.progression", defaultValue: "Progression", bundle: .main)
         case .links:
             return String(localized: "route.title.links", defaultValue: "Liens", bundle: .main)
         case .affiliate:

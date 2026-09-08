@@ -230,6 +230,7 @@ extension iPadRootView {
         } else {
             switch routeName {
             case "userStats": rightPanelRoute = .userStats
+            case "progression": rightPanelRoute = .progression
             case "affiliate": rightPanelRoute = .affiliate
             default: break
             }
@@ -327,8 +328,8 @@ extension iPadRootView {
                 navigateToConversationById(conversationId)
             }
 
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
-            rightPanelRoute = .userStats
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
+            rightPanelRoute = .progression
 
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate
@@ -384,8 +385,8 @@ extension iPadRootView {
                 )
             }
 
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
-            rightPanelRoute = .userStats
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
+            rightPanelRoute = .progression
 
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate
@@ -511,8 +512,8 @@ extension iPadRootView {
                 )
             }
 
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
-            rightPanelRoute = .userStats
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
+            rightPanelRoute = .progression
 
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate

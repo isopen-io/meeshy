@@ -910,3 +910,111 @@ produit ouverte (#5680) ; ce travail n'y touche pas. Les autres états
 manquants de la bulle (supprimé, système, appel, sticker — `bulle.md` § 6.6,
 § 9) restent hors périmètre : seuls les QUATRE états de protection
 (flouté, vue unique, éphémère, supprimé) sont couverts par ce travail.
+
+**Ce que ça a coûté** (`node scripts/measure-weight.mjs`, avant/après) :
+`first_paint` 29,79 → 29,82 Ko gzip — INCHANGÉ au sens du plafond (`budgets.json`
+40 Ko) ; `on_demand` 67,55 → 71,56 Ko gzip, soit +4,01 Ko pour cinq modules
+neufs (`protection.ts`, `protected-content.tsx`, `view-once.ts`,
+`thread-protection.css`, l'extension de `meta.ts`) et cinq glyphes (`flame`,
+`flame-fill`, `prohibit`, `eye-slash`, `timer`) — mesuré après revue. Le seuil
+de JUSTIFICATION que la spécification s'était donné (4 Ko, D-23 §7) est franchi
+de 10 o, du fait du cinquième glyphe ajouté en revue pour lever l'ambiguïté
+`flame` éphémère / `flame` vue unique : ce n'est pas un plafond de
+`budgets.json` (seul `first_paint`, 40 Ko, en est un, et il reste à 29,82) mais
+la ligne est dite ici plutôt que tue — le prochain lot du fil justifie son
+ajout ou extrait. `bun run gate` : 492 témoins `bun test`,
+`check-curve.mjs` PARTIE 5, `check-utilities.mjs`, `check-thread-states.mjs`
+§5 (41 assertions × 2 peaux) tous verts.
+
+**Les DIVERGENCES avec iOS, assumées et documentées** (D-23 §1.4, questions
+tranchées § 9 de la spécification #5676) :
+1. Le contenu voilé N'EST PAS dans le DOM avant révélation (iOS « rend puis
+   obscurcit » ; le web substitue un texte dérivé de la seule LONGUEUR,
+   `surrogateOf`) — le DOM est la surface de fuite sur le web, pas sur iOS.
+2. `isViewOnce` SANS `isBlurred` est voilé (forme SDK `declaredProtection`,
+   fail-closed) — Focal iOS ne voile que sur `isBlurred`.
+3. Un seul rayon de flou, 18 px (Focal) — la bulle iOS en porte 20.
+4. **`burned` REJOINT `veiled`, jamais le tombstone plat** — écart majeur
+   trouvé en TDD (§4.8) : router `burned` vers le tombstone dès la
+   consommation (comme `FocalRow.swift:66`) coupait la fenêtre de révélation
+   de 5 s à l'instant même où le serveur répond, avant qu'elle ne s'écoule.
+   Le web garde le comportement de la BULLE iOS (`ThemedMessageBubble.swift:305-324`,
+   contenu visible pendant la fenêtre, tombstone après) sur LES DEUX peaux —
+   un défaut suspecté de la cible Focal, à ouvrir en issue iOS (jamais
+   recopié ici).
+5. Le drapeau de rang 1 (langue préférée) est gardé par l'existence d'une
+   traduction — iOS l'ajoute sans condition car le tap y DEMANDE une
+   traduction, transport que le web n'a pas encore (loi 4 : pas de contrôle
+   inerte).
+6. Brouillard simplifié : une transition d'opacité 400 ms sur un voile
+   radial, au lieu des trois phases iOS (0,4/0,4/0,5 s).
+7. Pas de préférence de durée de révélation — constante 5 s, la préférence
+   viendra avec l'écran Réglages.
+8. Échec de consommation VISIBLE (`role="status"`, 2,5 s) — iOS reste muet.
+
+**Issue iOS à ouvrir** (divergence 4) : « Focal : le tombstone d'une vue
+unique coupe la fenêtre de révélation payée par le lecteur ».
+
+### Ce que la revue a corrigé, et ce que ça enseigne — 2026-09-08
+
+Sept défauts, tous portés par des témoins neufs ; deux tiennent d'une même
+racine — **un témoin peut décrire exactement la bonne règle et ne jamais
+pouvoir la contredire.**
+
+1. **La garde « aucun drapeau sur un message voilé » n'était tenue par AUCUN
+   témoin.** Mesuré : `isVeiled: isProtected` remplacé par `isVeiled: false`
+   dans les DEUX peaux laissait `bun test` à 488/488 et
+   `check-thread-states.mjs` entièrement vert. Deux causes se
+   superposaient — le témoin visait un message SANS traduction (`languageBand`
+   rend `[]` et `PrismPastille` se tait déjà quand la langue servie EST
+   l'originale, `message-blocks.tsx:60`), et le seul message voilé ET traduit
+   n'était pas `tail` (`mountsBottomLine` exige `isLastInGroup`, donc la ligne
+   basse ne montait pas de toute façon). Corrigé sur les trois plans : `prot-4`
+   change d'expéditeur pour rendre à `prot-3` sa place de fin de groupe, un
+   test de fixture épingle cette PLACE (pas seulement le champ), et deux
+   témoins de composant (`bubble.test.tsx`, `focal-row.test.tsx`) rendent la
+   garde falsifiable hors DOM. Les quatre rougissent maintenant à la
+   suppression de la garde.
+2. **`rendersContent`/`showsAffordance` étaient une loi que personne
+   n'appelait** : déclarées « SEULE source du quand rendre les enfants »,
+   testées, et re-écrites en `if` dans `protected-content.tsx`. Une jumelle
+   d'autant plus dangereuse qu'elle avait ses propres témoins verts. Le
+   composant appelle désormais la loi.
+3. **Le brouillard ne peignait jamais.** `.protected-fog` naissait à
+   `opacity: 0` sans qu'aucune règle ne l'en fasse sortir, et son parent était
+   `static` — un `position: absolute` calé sur un ancêtre quelconque. La
+   divergence 6 ci-dessus était donc ANNONCÉE et non APPLIQUÉE.
+   `.protected-revealed { position: relative }` lui donne son bloc conteneur ;
+   `@starting-style` lui donne son déclencheur sans un second `@keyframes` (la
+   charte n'en autorise qu'un, règle 32) ni un rendu de plus. Sur un moteur
+   sans `@starting-style`, la révélation est instantanée — jamais cassée.
+   Aucun gate ne peut le tenir (une transition CSS vit sur l'horloge du
+   compositeur, que `page.clock` ne simule pas) : mesuré à la main,
+   1 → 0,90 → 0,59 → 0,08 → 0 sur 400 ms.
+4. **L'indice VoiceOver était annoncé par personne.** iOS sert DEUX chaînes
+   (`bubble.content.hidden` + `.hint`) ; sur le web, `aria-label` REMPLACE le
+   contenu dans le calcul du nom accessible, donc le `<span class="sr-only">`
+   du bouton-voile était inatteignable. `aria-describedby` le rend à sa
+   fonction de description.
+5. **Le tombstone plat était indenté deux fois.** `FocalDeletedRow` pose
+   `.padding(.leading, indent)` parce qu'iOS n'a pas de gouttière ; la rangée
+   web vit DÉJÀ dans la colonne 2 d'une grille large de `TEXT_INDENT`. Mesuré :
+   texte à x=112 quand toute autre parole du fil commence à x=71. Corrigé,
+   re-mesuré à 71.
+6. **Le voile occupait deux fois la place de ce qu'il cachait.** `▇` (U+2587)
+   avance d'un cadratin, une lettre latine d'un demi : un bloc par caractère
+   faisait tenir sur TROIS lignes un message qui en occupe UNE, et la
+   révélation faisait sauter le fil. `SURROGATE_ADVANCE_RATIO` vise la LARGEUR
+   du contenu — ce qu'iOS obtient gratuitement en floutant le vrai texte.
+7. **Les glyphes de la ligne de liste confondaient deux états.** `flame`
+   servait l'éphémère ET la vue unique dans la même colonne, quand iOS
+   distingue `timer` (éphémère) de `flame` (vue unique)
+   (`LentilleConversationRow.swift:578-584`), et le nom de l'expéditeur, que
+   `senderLabel` sert AVANT le glyphe sur les deux formes protégées, avait
+   été retiré. Un nom n'est pas le contenu protégé.
+
+**Le témoin de fuite interroge le DOM ENTIER, pas `innerText`** : une fuite
+peut voyager dans un attribut (`title`, `alt`, `data-*`) qu'`innerText` ne
+montre pas, et c'est le DOM qui est la surface de fuite du web (divergence 1).
+
+Le chiffre de poids ci-dessus est celui d'APRÈS revue.

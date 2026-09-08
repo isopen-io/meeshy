@@ -7,7 +7,8 @@ import { served } from '@/lib/api/prism';
 import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
 import type { FlatRowMode } from '@/lib/reading-mode/decision';
-import { mountsBottomLine } from '@/lib/reading-mode/meta';
+import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
+import { ephemeralOf, protectionOf } from '@/lib/reading-mode/protection';
 import {
   AVATAR_SIZE,
   FLAG_LIMIT_PLAIN,
@@ -21,6 +22,7 @@ import {
 import { Avatar } from './avatar';
 import { Glyph } from './glyph';
 import { FocusCard, FocusIdentity, FocusStamp, FocusStrip } from './focal-focus-overlays';
+import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
 import {
   Attachments,
   Check,
@@ -31,6 +33,8 @@ import {
   SecondaryText,
   reactionEntries,
 } from './message-blocks';
+
+const defaultNow = (): number => Date.now();
 
 /**
  * LA RANGÉE PLATE DU FIL (Focal / Script) — miroir de `FocalRow.swift`
@@ -72,6 +76,23 @@ import {
  * nouvelle), jamais toutes. `memo` en bas de fichier tient cette promesse :
  * une rangée dont AUCUNE prop ne change ne re-rend jamais, y compris
  * pendant la scène du fil.
+ *
+ * LA PROTECTION (D-23, #5676) — le dispatch par `kind`
+ * (`protectionOf(message, now)`) : `deleted` SEUL rend un TOMBSTONE PLAT
+ * (`ProtectionNotice surface="row"`, aucun avatar, aucune identité, aucune
+ * colonne méta — `FocalRow.swift:66-67 systemBody`) ; `expired` ne rend RIEN
+ * (`EmptyView`, `FocalRow.swift:63-73`) ; `veiled` ET `burned` gardent la
+ * grille ENTIÈRE (identité et méta restent lisibles,
+ * `FocalProtectedContent.swift:18-19`) et enveloppent SEULEMENT
+ * citation/pièces-jointes/texte/panneau secondaire dans
+ * `<ProtectedContent surface="row">` — jamais la bande de reprise d'un
+ * envoi échoué (`FocalRow.swift:224-238` reste HORS voile, un échec se voit
+ * même sur un message protégé). `burned` REJOINT `veiled` — et c'est un ÉCART
+ * ASSUMÉ avec `FocalRow.swift:66` (qui bascule `systemBody` dès que
+ * `kind === .burned`) : le web garde le comportement de la BULLE, « contenu
+ * visible pendant la fenêtre, tombstone après » (D-23 §1.4 point 4, question
+ * 3 — un défaut suspecté de la CIBLE, à ouvrir en issue iOS). `standard` n'appelle même pas
+ * `ProtectedContent` (« plan vide ⇒ vue intacte »).
  */
 export const FocalRow = memo(function FocalRow({
   mode,
@@ -83,6 +104,10 @@ export const FocalRow = memo(function FocalRow({
   onJumpToMessage,
   highlighted = false,
   elected = false,
+  expired = false,
+  onConsumeViewOnce,
+  onEphemeralExpired,
+  now = defaultNow,
 }: {
   mode: FlatRowMode;
   place: PlacedMessage;
@@ -97,10 +122,70 @@ export const FocalRow = memo(function FocalRow({
   highlighted?: boolean;
   /** Élue par la scène du fil (`reading-mode/scene.ts`) — Focal seul, jamais Script. */
   elected?: boolean;
+  /**
+   * FORCÉ par l'hôte (`thread.tsx`, état `expiredIds`) quand
+   * `EphemeralBadge.onExpired` s'est déclenché pour CE message — jamais un
+   * `setInterval` posé ici : une seconde horloge dans cette rangée est le
+   * défaut que D-23 interdit (« écrire une seconde horloge de révélation
+   * dans une peau »).
+   */
+  expired?: boolean;
+  /** Consomme une vue unique (D-10, `lib/api/view-once.ts`) ; `undefined` en environnement sans réseau. */
+  onConsumeViewOnce?: (messageId: string) => Promise<boolean>;
+  onEphemeralExpired?: (messageId: string) => void;
+  /** Horloge injectable — jamais `Date.now()` lu directement (déterminisme des témoins). */
+  now?: () => number;
 }) {
   const { message, head, tail } = place;
+  const nowMs = now();
+  const kind = expired ? 'expired' : protectionOf(message, nowMs);
   const isMine = isMineOf(message, viewerId);
+  // TOUJOURS appelé, quel que soit `kind` — les REGLES DES HOOKS interdisent
+  // un retour anticipé AVANT un hook : `kind` peut basculer d'un rendu à
+  // l'autre (message expiré, consommé) et React exige le MÊME nombre
+  // d'appels de hooks à chaque rendu de ce composant.
   const [openLanguage, setOpenLanguage] = useState<string | null>(null);
+
+  // `expired` — EmptyView : rien à rendre, mais l'ANCRE structurelle reste
+  // (`data-message`) pour que les gates puissent constater l'absence.
+  if (kind === 'expired') {
+    return <div data-reading-mode={mode} data-message={message.id} data-protected="expired" />;
+  }
+
+  /**
+   * `deleted` SEUL prend le TOMBSTONE PLAT (ni avatar, ni identité, ni
+   * colonne méta, `FocalRow.swift:66-67`) : un message supprimé n'a JAMAIS
+   * eu de fenêtre à ouvrir. `burned` N'EST PAS traité ici — et c'est un
+   * ÉCART ASSUMÉ avec `FocalRow.swift:66` (qui bascule sur `systemBody` dès
+   * que `kind === .burned`, donc dès que la consommation aboutit) : le web
+   * garde le comportement de la BULLE (D-23 §1.4 point 4, question 3) —
+   * « contenu visible pendant la fenêtre, tombstone après ». Router `burned`
+   * ici COUPERAIT la révélation à l'instant même où la consommation serveur
+   * répond, avant que les 5 s payées par le lecteur ne s'écoulent. `burned`
+   * rejoint donc `veiled` plus bas : `ProtectedContent` sait déjà rendre son
+   * tombstone SANS affordance quand il MONTE directement sur un message
+   * brûlé à l'arrivée (`viewOnceCount ≥ maxViewOnceCount` avant toute
+   * interaction) — la même fonction couvre les deux histoires par sa PHASE
+   * locale, jamais par le `kind` du dernier rendu de l'hôte.
+   */
+  if (kind === 'deleted') {
+    return (
+      <div
+        data-reading-mode={mode}
+        data-message={message.id}
+        className="grid"
+        style={{
+          gridTemplateColumns: `${TEXT_INDENT}px 1fr`,
+          paddingInline: ROW_PADDING_HORIZONTAL,
+          paddingBlockStart: head ? GROUP_TOP_PADDING : ROW_PADDING_VERTICAL,
+          paddingBlockEnd: ROW_PADDING_VERTICAL,
+        }}
+      >
+        <div aria-hidden />
+        <ProtectionNotice kind={kind} surface="row" />
+      </div>
+    );
+  }
 
   const translations = translationsOf(message);
   const rendered = served({
@@ -110,7 +195,12 @@ export const FocalRow = memo(function FocalRow({
     original: message.content,
   });
 
-  const footerLanguages = [...new Set([message.originalLanguage, ...translations.map((t) => t.language)])];
+  const footerLanguages = languageBand({
+    originalLanguage: message.originalLanguage,
+    preferredLanguages: languages,
+    translations: translations.map((t) => t.language),
+    servedLanguage: rendered.language,
+  });
   const secondary =
     openLanguage === null
       ? null
@@ -124,17 +214,22 @@ export const FocalRow = memo(function FocalRow({
   const senderName = message.sender?.displayName ?? (isMine ? 'Vous' : '');
   const reactions = reactionEntries(message.reactionSummary);
 
+  // `kind === 'veiled' | 'burned'` toutes deux passent par `ProtectedContent`
+  // (voir le commentaire ci-dessus sur le tombstone plat).
+  const isProtected = kind !== 'standard';
+
   /**
    * LA LIGNE BASSE — miroir de `FocalMetaColumn.mountsBottomLine` (défaut 7) :
    * elle ne monte plus systématiquement, seulement si elle a quelque chose à
    * dire (un jeu de drapeaux SUR LE DERNIER message d'un groupe traduit et
    * non voilé, ou une réaction). `hasTranslation` porte sur CE message —
    * indépendamment de l'exploration en cours (`openLanguage`) : la loi ne
-   * connaît que la donnée, jamais l'état d'un panneau ouvert.
+   * connaît que la donnée, jamais l'état d'un panneau ouvert. `isVeiled`
+   * couvre désormais TOUTE protection (D-23), pas seulement `isBlurred`.
    */
   const showsBottomLine = mountsBottomLine({
     hasTranslation: translations.length > 0,
-    isBlurred: message.isBlurred,
+    isVeiled: isProtected,
     isLastInGroup: tail,
     hasReactions: reactions.length > 0,
   });
@@ -144,12 +239,45 @@ export const FocalRow = memo(function FocalRow({
   // Le tampon n'est calculé QUE quand il est rendu (§5.6 de la spécification
   // #5648) — cette rangée ne re-rend que sur un changement de `elected`
   // (`memo`), donc `new Date()` ici ne tourne pas à chaque frame de la scène.
-  const now = elected ? new Date() : null;
+  const nowMoment = elected ? new Date() : null;
+
+  const ephemeral = ephemeralOf(message.expiresAt, nowMs);
+
+  const contentBlock = (
+    <>
+      {/* `isMine={false}` DÉLIBÉRÉMENT, et ce n'est pas un oubli : la peau
+          « mine » de la citation est écrite pour le fond INDIGO de la bulle
+          (nom en blanc, texte en blanc 70 %, filet blanc). La rangée plate
+          n'a AUCUN fond — servie « mine », la citation d'un message à soi
+          devenait du blanc sur du blanc en schéma clair, donc INVISIBLE
+          (mesuré : contraste 1,0:1). Une peau ne se choisit pas sur
+          l'expéditeur mais sur la SURFACE qui la porte. */}
+      {message.replyTo ? (
+        <Quote quote={message.replyTo} isMine={false} onJump={() => onJumpToMessage(message.replyTo!.id)} />
+      ) : null}
+      {message.attachments ? <Attachments attachments={message.attachments} /> : null}
+
+      {rendered.text ? (
+        <p
+          className="text-bubble leading-[1.35] whitespace-pre-wrap"
+          lang={rendered.language}
+          style={{ color: 'var(--color-ios-ink)' }}
+        >
+          {rendered.text}
+        </p>
+      ) : null}
+
+      {openLanguage !== null && secondary !== null ? (
+        <SecondaryText code={openLanguage} text={secondary} isMine={false} />
+      ) : null}
+    </>
+  );
 
   return (
     <div
       data-reading-mode={mode}
       data-elected={elected ? 'true' : undefined}
+      data-message={message.id}
       className="grid transition-colors duration-500"
       style={{
         gridTemplateColumns: `${TEXT_INDENT}px 1fr`,
@@ -188,6 +316,18 @@ export const FocalRow = memo(function FocalRow({
           <FocusIdentity initials={initialsOf(senderName)} name={senderName} accent="var(--accent)" />
         ) : null}
 
+        {/* LE BADGE ÉPHÉMÈRE — AU-DESSUS de l'identité (F11,
+            `FocalEphemeralBadge.swift:22-37`, `FocalRow.swift:365-376`),
+            monté SEULEMENT quand le minuteur tourne. Tient SON PROPRE
+            intervalle (`memo`) — cette rangée ne re-rend jamais pour lui. */}
+        {ephemeral.state === 'running' && message.expiresAt !== undefined ? (
+          <EphemeralBadge
+            expiresAt={message.expiresAt}
+            now={now}
+            onExpired={() => onEphemeralExpired?.(message.id)}
+          />
+        ) : null}
+
         {head ? (
           /* TÊTE DE GROUPE : l'IDENTITÉ seule (défaut 6) — « cet en-tête ne
              date plus rien » (iOS, `FocalIdentityHeader.swift:13-18`).
@@ -207,20 +347,9 @@ export const FocalRow = memo(function FocalRow({
             `HStack(alignment:.bottom)` fait côté iOS. */}
         <div className="flex items-end gap-2">
           <div className="min-w-0 flex-1">
-            {/* `isMine={false}` DÉLIBÉRÉMENT, et ce n'est pas un oubli : la peau
-                « mine » de la citation est écrite pour le fond INDIGO de la bulle
-                (nom en blanc, texte en blanc 70 %, filet blanc). La rangée plate
-                n'a AUCUN fond — servie « mine », la citation d'un message à soi
-                devenait du blanc sur du blanc en schéma clair, donc INVISIBLE
-                (mesuré : contraste 1,0:1). Une peau ne se choisit pas sur
-                l'expéditeur mais sur la SURFACE qui la porte. */}
-            {message.replyTo ? (
-              <Quote quote={message.replyTo} isMine={false} onJump={() => onJumpToMessage(message.replyTo!.id)} />
-            ) : null}
-            {message.attachments ? <Attachments attachments={message.attachments} /> : null}
-
-            {/* La bande de reprise reste DANS la rangée du message concerné —
-                même parti que la bulle (§ commentaire `bubble.tsx`). */}
+            {/* La bande de reprise reste DANS la rangée du message concerné,
+                et HORS voile : un échec d'envoi se voit même sur un message
+                protégé (`FocalRow.swift:224-238`, même parti que la bulle). */}
             {localDelivery === 'failed' && onRetry !== undefined ? (
               <button
                 type="button"
@@ -237,19 +366,22 @@ export const FocalRow = memo(function FocalRow({
               </button>
             ) : null}
 
-            {rendered.text ? (
-              <p
-                className="text-bubble leading-[1.35] whitespace-pre-wrap"
-                lang={rendered.language}
-                style={{ color: 'var(--color-ios-ink)' }}
+            {isProtected ? (
+              <ProtectedContent
+                messageId={message.id}
+                kind={kind}
+                isViewOnce={message.isViewOnce}
+                contentLength={message.content.length}
+                attachmentCount={message.attachments?.length ?? 0}
+                surface="row"
+                onConsumeViewOnce={onConsumeViewOnce}
+                now={now}
               >
-                {rendered.text}
-              </p>
-            ) : null}
-
-            {openLanguage !== null && secondary !== null ? (
-              <SecondaryText code={openLanguage} text={secondary} isMine={false} />
-            ) : null}
+                {contentBlock}
+              </ProtectedContent>
+            ) : (
+              contentBlock
+            )}
 
             {/* LA LIGNE BASSE — drapeaux PUIS réactions, même ligne : c'est
                 l'arbitrage porteur du 2026-08-18 que `FocalRow.flagAndReactionsRow`
@@ -363,7 +495,7 @@ export const FocalRow = memo(function FocalRow({
             <Check status={delivery} isMine={isMine} />
           </div>
 
-          {elected && now !== null ? (
+          {elected && nowMoment !== null ? (
             <>
               {/* LA BANDE DE FOCUS monte sous la MÊME loi que la ligne basse
                   qu'elle remplace (`mountsBottomLine`) — jamais sous une loi
@@ -390,7 +522,7 @@ export const FocalRow = memo(function FocalRow({
               ) : null}
               <FocusStamp
                 sentAt={new Date(message.createdAt)}
-                now={now}
+                now={nowMoment}
                 timeString={time(message.createdAt)}
                 locale={languages[0] ?? 'fr'}
                 delivery={delivery}

@@ -94,6 +94,9 @@ extension iPadRootView {
         case .userStats:
             UserStatsView()
                                 .navigationBarHidden(true)
+        case .progression:
+            ProgressionView()
+                                .navigationBarHidden(true)
         case .links:
             LinksHubView()
                         case .affiliate:
