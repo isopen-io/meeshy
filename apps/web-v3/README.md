@@ -125,6 +125,24 @@ construction `gateway` dans un navigateur réel : garde de session, squelette
 sans saut de géométrie, corpus vide sans bande morte, échec annoncé comme
 une alerte.
 
+### La source `gateway` — poids et délai réels mesurés (#5650)
+
+| | `fixtures` | `gateway` |
+|---|---|---|
+| avant le premier pixel | 24,53 Ko gzip | **34,87 Ko gzip** — cache TanStack persisté (`dehydrate`/`hydrate`) + garde de session |
+| présence de données de fixture dans le socle | — | **aucune** : `grep -c "Amina\|Kwame\|Fatou\|u-viewer" dist/assets/{index,core}-*.js` rend 0 |
+
+Le délai de garde (`http.ts::DEFAULT_TIMEOUT_MS`) a été mesuré, pas deviné,
+contre `gate.staging.meeshy.me` (compte de recette, 5 tirs) : `GET
+/conversations` p95 **1,52 s** (pire cas 1,86 s), `GET /conversations/:id`
+**0,30 s**, `GET …/messages?limit=50` **0,66 s**. Règle retenue : `p95 × 3 <
+15 000 ms` ⇒ le timeout de 15 s garde 5,6 s de marge sur le pire cas observé.
+
+Rejouer : `VITE_DATA_SOURCE=gateway bun run build && node
+scripts/check-gateway-build.mjs` pour le poids et la garde de session ; le
+délai se rejoue à la main (`curl -w '%{time_total}'`) contre un compte de
+recette staging — aucun gate n'y dépend, voir `decisions.md` § D-26.
+
 ## L'interface
 
 Reprise de l'app iOS, relevée dans `apps/ios` et `packages/MeeshySDK` — pas des
