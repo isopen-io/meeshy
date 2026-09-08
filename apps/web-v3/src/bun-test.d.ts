@@ -24,12 +24,13 @@ declare module 'bun:test' {
     toBeCloseTo(expected: number, decimals?: number): void;
     toHaveLength(expected: number): void;
     toContain(expected: unknown): void;
+    toContainEqual(expected: unknown): void;
     toMatch(expected: RegExp | string): void;
     toBeTruthy(): void;
     toBeGreaterThan(expected: number): void;
     toBeGreaterThanOrEqual(expected: number): void;
     toBeInstanceOf(expected: unknown): void;
-    toThrow(): void;
+    toThrow(expected?: RegExp | string): void;
   };
 
   export function expect(value: unknown): Expectations & { readonly not: Expectations };
