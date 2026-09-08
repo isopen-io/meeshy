@@ -23,6 +23,20 @@ second (directive porteur : le pipeline s'etend, il ne se double pas). Rendu
 CONDITIONNEL : si `android/`/`ios/` n'existent pas encore (coque non generee),
 les cibles PWA seules sont ecrites, comme avant #5604 — ce script reste
 rejouable a tout moment du cycle de vie de la coque.
+
+Etendu par #5606 (travail « assets ») pour les DEUX AUTRES actifs de marque
+que la directive nomme explicitement : le LOGO in-app (`MeeshyLogo.imageset`,
+projete sans consommateur Swift aujourd'hui — c'est la forme recuperable du
+logo anime des ecrans iOS, dessine programmatiquement et donc non redessinable
+cote web) et le glyphe-GABARIT de la SIGNATURE de marque
+(`AppIconFooter.imageset`, `template-rendering-intent: template` — seul
+l'alpha compte, le web le teinte par masque CSS). Copies octet pour octet des
+entrees @3x (la taille recuperable la plus proche des tailles logiques 40 pt /
+28 pt que `BrandSignature.swift` rend), vers `public/brand/`. `--check`
+(#5606) verrouille les TROIS familles de copies de ce fichier — PWA calculees,
+copies de coque et copies de marque — sans dupliquer leur calcul : un seul
+point d'ecriture (`emit`) route vers le disque ou vers une comparaison, selon
+le mode.
 """
 import struct
 import sys
@@ -30,7 +44,8 @@ import zlib
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-SOURCE = REPO / "apps/ios/Meeshy/Assets.xcassets/AppIcon.appiconset/Icon-Light-1024x1024.png"
+XCASSETS = REPO / "apps/ios/Meeshy/Assets.xcassets"
+SOURCE = XCASSETS / "AppIcon.appiconset/Icon-Light-1024x1024.png"
 APP = Path(__file__).resolve().parent.parent
 PUBLIC = APP / "public"
 ANDROID = APP / "android"
@@ -40,7 +55,38 @@ TARGETS = {
     "icon-192.png": 192,
     "icon-512.png": 512,
     "icon-512-maskable.png": 512,
+    # Le FAVICON (revue de #5606, defaut 1) : `public/favicon.svg` etait une
+    # transcription vectorielle faite a la main (degrade + rect + trois barres),
+    # une SECONDE source de marque que rien ne reliait a l'icone iOS — la
+    # directive porteur dit qu'on recupere, jamais qu'on redessine. 48 px est
+    # la plus grande taille d'affichage d'un favicon courant (retina 2x d'un
+    # onglet 24 px) ; au-dessus, l'icone d'app (192/512) sert deja les usages
+    # plus grands (apple-touch-icon, PWA).
+    "favicon-48.png": 48,
 }
+
+# --- Le logo in-app et le glyphe de signature (#5606) ------------------------
+
+# Copies OCTET POUR OCTET (directive : on recupere, on ne redessine pas) des
+# entrees @3x — la taille logique 40 pt / 28 pt de `BrandSignature.swift`
+# rendue a la densite la plus haute qu'iOS embarque. `src/lib/brand.ts` nomme
+# ces DEUX memes chemins publics ; les changer ici sans y toucher romprait le
+# rendu en silence (aucun gate ne lie les deux chaines de caracteres).
+BRAND_COPIES = {
+    XCASSETS / "MeeshyLogo.imageset/MeeshyLogo@3x.png": PUBLIC / "brand/logo.png",
+    XCASSETS / "AppIconFooter.imageset/AppIconFooter@3x.png": PUBLIC / "brand/signature-mask.png",
+}
+
+# `--check` (#5606) : aucune ecriture, seulement des DIVERGENCES accumulees.
+# Verrouille la ligne 4 du critere de fin sur les TROIS familles de copies
+# (PWA, coque, marque) via `emit()`, le point d'ecriture unique — jamais un
+# second calcul qui pourrait diverger du premier (la jumelle qu'une revue
+# chercherait). VU ROUGIR (#5606) : un octet inverse dans `public/icon-192.png`
+# puis dans `public/brand/logo.png` fait sortir `--check` en 1, nommant les
+# DEUX chemins et aucun autre ; restaure, il ressort en 0. `check:brand-assets`
+# (package.json) l'appelle dans le gate composite.
+CHECK = "--check" in sys.argv[1:]
+DIVERGENCES: list[str] = []
 
 # --- Cibles de coque (#5604) -------------------------------------------------
 
@@ -186,9 +232,29 @@ def downscale(width, height, lines, size):
     return out_lines
 
 
+def emit(path, data, *, quiet=False, label=None):
+    """LE POINT D'ECRITURE UNIQUE (#5606) — icones RENDUES (via
+    `write_png_rect`) et copies OCTET POUR OCTET (icone de coque, logo, glyphe
+    de signature) y convergent toutes. En mode `--check`, n'ecrit RIEN : lit
+    l'existant (ou `None` s'il manque) et accumule le chemin dans
+    `DIVERGENCES` s'il differe de `data` — c'est ce qui verrouille les lignes
+    1, 3 et 4 du critere de fin SANS un second calcul qui recalculerait (et
+    pourrait diverger de) le premier."""
+    if CHECK:
+        existing = path.read_bytes() if path.exists() else None
+        if existing != data:
+            DIVERGENCES.append(str(path.relative_to(REPO)))
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    if not quiet:
+        print(f"  {path.relative_to(REPO)}  {label if label is not None else f'{len(data)} octets'}")
+
+
 def write_png_rect(path, width, height, lines, *, quiet=False):
-    """Encode des lignes RGBA en PNG WxH. Seule fonction qui ecrit un PNG —
-    `write_png` (carre) en est desormais la projection la plus courante."""
+    """Encode des lignes RGBA en PNG WxH puis le remet a `emit`. Seule
+    fonction qui ENCODE un PNG — `write_png` (carre) en est desormais la
+    projection la plus courante."""
 
     def chunk(kind, body):
         payload = kind + body
@@ -202,10 +268,7 @@ def write_png_rect(path, width, height, lines, *, quiet=False):
         + chunk(b"IDAT", zlib.compress(raw, 9))
         + chunk(b"IEND", b"")
     )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(png)
-    if not quiet:
-        print(f"  {path.relative_to(REPO)}  {width}x{height}  {len(png)} octets")
+    emit(path, png, quiet=quiet, label=f"{width}x{height}  {len(png)} octets")
 
 
 def write_png(path, size, lines):
@@ -269,10 +332,11 @@ def generate_android_assets(width, height, lines):
         write_png(res / f"mipmap-{density}/ic_launcher_foreground.png", size, downscale(width, height, lines, size))
     for qualifier, (w, h) in ANDROID_SPLASH_SIZES.items():
         write_png_rect(res / qualifier / "splash.png", w, h, splash_lines(w, h, width, height, lines))
-    print(
-        f"  Android : {len(ANDROID_ICON_SIZES) * 2} icones, {len(ANDROID_FOREGROUND_SIZES)} avant-plans, "
-        f"{len(ANDROID_SPLASH_SIZES)} splashs"
-    )
+    if not CHECK:
+        print(
+            f"  Android : {len(ANDROID_ICON_SIZES) * 2} icones, {len(ANDROID_FOREGROUND_SIZES)} avant-plans, "
+            f"{len(ANDROID_SPLASH_SIZES)} splashs"
+        )
 
 
 def generate_ios_assets(width, height, lines):
@@ -282,12 +346,21 @@ def generate_ios_assets(width, height, lines):
         return
     assets = IOS / "App/App/Assets.xcassets"
     icon_target = assets / "AppIcon.appiconset" / IOS_ICON_FILE
-    icon_target.write_bytes(SOURCE.read_bytes())
-    print(f"  {icon_target.relative_to(REPO)}  copie octet pour octet de {SOURCE.name}")
+    emit(icon_target, SOURCE.read_bytes(), label=f"copie octet pour octet de {SOURCE.name}")
     splash = splash_lines(IOS_SPLASH_SIZE, IOS_SPLASH_SIZE, width, height, lines)
     for filename in IOS_SPLASH_FILES:
         write_png(assets / "Splash.imageset" / filename, IOS_SPLASH_SIZE, splash)
-    print(f"  iOS : 1 icone, {len(IOS_SPLASH_FILES)} splashs")
+    if not CHECK:
+        print(f"  iOS : 1 icone, {len(IOS_SPLASH_FILES)} splashs")
+
+
+def generate_brand_assets():
+    """Le logo in-app et le glyphe-gabarit de la signature (#5606) — copies
+    OCTET POUR OCTET, inconditionnelles : `public/` existe toujours, a
+    l'inverse d'une coque qui peut ne pas etre generee. Servies par
+    `src/lib/brand.ts` (`BRAND_LOGO_PATH`, `BRAND_SIGNATURE_MASK_PATH`)."""
+    for source, target in BRAND_COPIES.items():
+        emit(target, source.read_bytes(), label=f"copie octet pour octet de {source.name}")
 
 
 # Une entree par coque, chacune gardee par l'existence de son projet natif —
@@ -302,11 +375,24 @@ def main():
     if not SOURCE.exists():
         raise SystemExit(f"source introuvable : {SOURCE}")
     width, height, lines = read_png_rgba(SOURCE)
-    print(f"source : {SOURCE.relative_to(REPO)} ({width}x{height})")
+    if not CHECK:
+        print(f"source : {SOURCE.relative_to(REPO)} ({width}x{height})")
     for name, size in TARGETS.items():
         write_png(PUBLIC / name, size, downscale(width, height, lines, size))
+    generate_brand_assets()
     for generate in SHELL_TARGETS.values():
         generate(width, height, lines)
+
+    if not CHECK:
+        return 0
+    if DIVERGENCES:
+        print(f"\n  {len(DIVERGENCES)} actif(s) servi(s) divergent de leur source iOS (ou sont absents) :\n")
+        for path in DIVERGENCES:
+            print(f"    · {path}")
+        print("\n  Rejouer `python3 scripts/generate-icons.py` puis committer le resultat.\n")
+        return 1
+    print("  Tous les actifs derives (PWA, coque, marque) sont conformes a leur source iOS.")
+    return 0
 
 
 if __name__ == "__main__":

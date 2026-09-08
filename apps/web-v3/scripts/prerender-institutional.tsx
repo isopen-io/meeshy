@@ -21,12 +21,15 @@
  * produire — la même que l'application, donc les mêmes jetons, sans seconde
  * table de style.
  */
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { render } from 'preact-render-to-string';
+
+import packageJson from '../package.json';
+import budgets from '../budgets.json';
 
 import { InstitutionalPage } from '../src/institutional/page';
 import { PAGE_ABOUT } from '../src/institutional/about';
@@ -38,6 +41,22 @@ import type { ContentPage } from '../src/institutional/type';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DIST = join(HERE, '../dist');
+
+/**
+ * `Meeshy {version}` (`src/lib/brand.ts`) — la SEULE lecture de la version de
+ * l'application, au SEUL point de build qui compose ces pages (#5606, § E3).
+ */
+const VERSION = packageJson.version;
+
+/**
+ * LE PLAFOND PAR PAGE (revue de #5606, défaut 3) — jusqu'ici gzip était
+ * MESURÉ (voir `total` en bas de fichier) mais jamais GARDÉ : le doc-comment
+ * de `src/styles/institutional.css` citait un plafond de 9 Ko sans qu'aucun
+ * script ne le lise. Le plafond vit dans `budgets.json` — la SEULE table de
+ * ce dépôt (comme `first_paint.kb` pour la première peinture de
+ * l'application) — pour que la valeur ne se retype nulle part.
+ */
+const INSTITUTIONAL_PAGE_BUDGET_KB = budgets.institutional_page.kb.value;
 
 const PAGES: readonly { readonly route: string; readonly page: ContentPage }[] = [
   { route: 'about', page: PAGE_ABOUT },
@@ -95,7 +114,7 @@ const escape = (s: string): string =>
 const THEME_SCRIPT = `(function(){try{var c=localStorage.getItem('meeshy.scheme');var l=c?c==='light':window.matchMedia('(prefers-color-scheme: light)').matches;document.documentElement.classList.toggle('light',l);document.documentElement.classList.toggle('dark',!l);}catch(e){}})();`;
 
 function document(route: string, page: ContentPage, sheet: string): string {
-  const body = render(<InstitutionalPage page={page} />);
+  const body = render(<InstitutionalPage page={page} version={VERSION} />);
   const url = `${ORIGIN}/${route}`;
   /* « À propos de Meeshy · Meeshy » : le suffixe de marque ne s'ajoute qu'aux
      titres qui ne la portent pas déjà. Un onglet qui bégaie le nom du produit
@@ -118,7 +137,7 @@ function document(route: string, page: ContentPage, sheet: string): string {
 <meta name="twitter:card" content="summary">
 <meta name="theme-color" content="#0b0c14" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-48.png" type="image/png" sizes="48x48">
 <style>${sheet}</style>
 <script>${THEME_SCRIPT}</script>
 </head>
@@ -140,6 +159,39 @@ function document(route: string, page: ContentPage, sheet: string): string {
  * dans TOUS les commentaires, pas seulement le premier. L'écrire ici en toutes
  * lettres a fait résoudre un module nommé d'après la fin de la phrase.)
  */
+/**
+ * LES SOUS-RESSOURCES que le document demande AU NAVIGATEUR, en plus de
+ * lui-même : l'icône déclarée par `<link>`, les images, et les fichiers
+ * appelés par un `url(…)` de style en ligne — le masque du glyphe de la
+ * signature de marque, par exemple.
+ *
+ * POURQUOI CETTE FONCTION EXISTE (revue de #5606). La ligne de rapport de ce
+ * script annonçait « 1 requête » en DUR. C'était vrai tant que ces pages
+ * n'étaient que du texte ; le jour où l'une d'elles a servi un logo, le
+ * chiffre est devenu FAUX sans que rien ne bouge — dans un dépôt où le poids
+ * est un gate et où « un chiffre non mesuré ne compte pas », un littéral qui
+ * a l'air d'une mesure est pire qu'une absence de mesure. On COMPTE.
+ *
+ * Les `href` de navigation (`/about`, `/privacy`) ne sont pas des
+ * sous-ressources : seuls les `href` de `<link>` le sont. Le `canonical`, lui,
+ * est absolu (`https://…`), donc hors du motif ancré sur `/`.
+ */
+const SUBRESOURCE_PATTERNS = [
+  /<(?:img|script|source|iframe)\b[^>]*\ssrc="(\/[^"]*)"/g,
+  /<link\b[^>]*\shref="(\/[^"]*)"/g,
+  /url\((\/[^)"']*)\)/g,
+] as const;
+
+const subresources = (html: string): readonly string[] => {
+  const urls = new Set<string>();
+  for (const pattern of SUBRESOURCE_PATTERNS) {
+    for (const [, url] of html.matchAll(pattern)) {
+      if (url) urls.add(url);
+    }
+  }
+  return [...urls];
+};
+
 function check(route: string, html: string, page: ContentPage): void {
   const body = /<body>([\s\S]*)<\/body>/.exec(html)?.[1] ?? '';
   const failures: string[] = [];
@@ -158,6 +210,17 @@ function check(route: string, html: string, page: ContentPage): void {
   // toléré est le thème, inline.
   if (/<script[^>]+src=/.test(html)) failures.push('un script EXTERNE est référencé');
   if (/<link[^>]+rel="stylesheet"/.test(html)) failures.push('une feuille EXTERNE est référencée');
+  /* CHAQUE sous-ressource référencée doit EXISTER dans le dist (revue de
+     #5606). Le générateur d'actifs (`scripts/generate-icons.py`) et les
+     chemins que le markup sert (`src/lib/brand.ts`) sont deux chaînes de
+     caractères tenues dans DEUX langages : un renommage d'un seul côté rendait
+     jusqu'ici une page au logo cassé, en vert. Ce contrôle-ci ferme la porte
+     là où elle compte — sur le document ÉCRIT, quel que soit le chemin par
+     lequel l'actif y est arrivé. */
+  for (const url of subresources(html)) {
+    const file = join(DIST, url.replace(/^\//, '').replace(/[?#].*$/, ''));
+    if (!existsSync(file)) failures.push(`sous-ressource absente du dist : ${url}`);
+  }
 
   if (failures.length > 0) {
     console.error(`\n  /${route} — ${failures.length} invariant(s) rompu(s) :`);
@@ -168,6 +231,7 @@ function check(route: string, html: string, page: ContentPage): void {
 
 const sheet = producedSheet();
 let total = 0;
+const overBudget: string[] = [];
 for (const { route, page } of PAGES) {
   const html = document(route, page, sheet);
 
@@ -200,6 +264,29 @@ for (const { route, page } of PAGES) {
      même — gzip niveau 9, comme partout ailleurs dans ce dépôt. */
   const gz = gzipSync(Buffer.from(html), { level: 9 }).length;
   total += gz;
-  console.log(`  /${route.padEnd(9)} ${String(Math.round((gz / 1024) * 100) / 100).padStart(6)} Ko gzip · 1 requête · 0 script`);
+  const gzKb = Math.round((gz / 1024) * 100) / 100;
+  if (gzKb > INSTITUTIONAL_PAGE_BUDGET_KB) {
+    overBudget.push(`/${route} : ${gzKb} Ko gzip, plafond ${INSTITUTIONAL_PAGE_BUDGET_KB} Ko (budgets.json → institutional_page.kb)`);
+  }
+  /* Le document LUI-MÊME plus ce qu'il fait chercher au navigateur. Compté,
+     jamais annoncé — voir le doc-comment de `subresources`. */
+  const requests = 1 + subresources(html).length;
+  console.log(
+    `  /${route.padEnd(9)} ${String(gzKb).padStart(6)} Ko gzip · ` +
+      `${requests} requête${requests > 1 ? 's' : ''} · 0 script`,
+  );
 }
 console.log(`  ${' '.repeat(10)}${String(Math.round((total / 1024) * 100) / 100).padStart(6)} Ko pour les cinq\n`);
+
+/**
+ * LE GATE (revue de #5606, défaut 3) — un dépassement rend le script en
+ * erreur, comme `scripts/measure-weight.mjs` le fait déjà pour la première
+ * peinture de l'application. Après l'affichage des cinq lignes : le rapport
+ * complet sert de preuve même quand une seule page dépasse.
+ */
+if (overBudget.length > 0) {
+  console.error(`  ${overBudget.length} page(s) institutionnelle(s) au-dessus du plafond :\n`);
+  for (const line of overBudget) console.error(`    · ${line}`);
+  console.error('\n  Alléger la page, ou faire arbitrer le plafond par le porteur (budgets.json).\n');
+  process.exit(1);
+}
