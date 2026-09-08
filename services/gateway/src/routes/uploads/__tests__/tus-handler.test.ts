@@ -443,7 +443,12 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
     const RAW_SESSION_TOKEN = 'anon-session-token-xyz';
     const ANONYMOUS_HEADERS = { 'x-session-token': RAW_SESSION_TOKEN };
 
-    it('refuse un PDF déclaré audio/webm quand le lien interdit fichiers ET images (contournement fermé)', async () => {
+    it('refuse un PDF déclaré audio/webm — désormais un rejet GLOBAL de signature (#5615), avant même la classification anonyme', async () => {
+      // Avant #5615 : cette déclaration mensongère retombait dans le seau
+      // « fichier » (ni audio ni image reconnus), refusé en 403 par
+      // `allowAnonymousFiles: false`. Depuis #5615, `verifyDeclaredMimeType`
+      // rejette la déclaration ELLE-MÊME (400) avant d'atteindre cette
+      // classification — le lien aurait été OUVERT que le rejet serait le même.
       const prisma = buildFakePrisma({
         participant: { id: 'participant-1', anonymousSession: { shareLinkId: 'sharelink-locked' } },
         shareLink: { allowAnonymousFiles: false, allowAnonymousImages: false },
@@ -457,7 +462,8 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
         bytes: PDF_BYTES,
       });
 
-      expect(result.status_code).toBe(403);
+      expect(result.status_code).toBe(400);
+      expect(result.body).toContain('does not match any known audio signature');
       expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
     });
 
@@ -517,6 +523,29 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
 
       expect(result.status_code).toBe(200);
       expect(prisma.messageAttachment.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuse un fichier déclaré image/png sur un lien totalement OUVERT — la signature prime sur les permissions (#5615)', async () => {
+      // Avant #5615 : sur un lien ouvert (`allowAnonymousFiles`/`Images` tous
+      // deux vrais), une déclaration mensongère atterrissait dans un seau
+      // TOUJOURS autorisé — aucune vérification ne s'y opposait. C'est
+      // exactement le trou que #5615 ferme : la correspondance mimeType↔octets
+      // se vérifie AVANT toute question de permission.
+      const prisma = buildFakePrisma({
+        participant: { id: 'participant-1', anonymousSession: { shareLinkId: 'sharelink-open' } },
+        shareLink: { allowAnonymousFiles: true, allowAnonymousImages: true },
+      });
+
+      const result = await runFullUpload({
+        prisma,
+        headers: ANONYMOUS_HEADERS,
+        filename: 'document.pdf',
+        filetype: 'image/png', // déclaration mensongère, lien pourtant totalement ouvert
+        bytes: PDF_BYTES,
+      });
+
+      expect(result.status_code).toBe(400);
+      expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
     });
 
     it('résout l\'identité par sessionTokenHash — jamais le jeton brut comme userId (fermeture du 2e volet du contournement)', async () => {
@@ -597,6 +626,82 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       const createCall = (prisma.messageAttachment.create as jest.Mock<any>).mock.calls[0][0] as any;
       expect(createCall.data.uploadedBy).toBe('user-registered-1');
       expect(createCall.data.isAnonymous).toBe(false);
+    });
+
+    // ── #5615 : la vérification de signature protège aussi le compte inscrit ──
+    //
+    // AVANT #5615, `classifyAnonymousAttachment` (donc TOUTE vérification de
+    // signature sur ce chemin) ne s'exécutait que `if (isAnonymous)` : un
+    // compte enregistré, qui ne consulte de toute façon aucun lien de
+    // partage, pouvait déclarer n'importe quel mimeType sans qu'aucun octet
+    // ne soit jamais regardé. C'est le trou que l'issue #5615 nomme
+    // explicitement (« aucune vérification n'est appliquée en dehors de
+    // l'exemption anonyme »).
+
+    it('refuse un PDF déclaré image/png pour un utilisateur ENREGISTRÉ (#5615)', async () => {
+      const prisma = buildFakePrisma();
+      const token = jwt.sign({ userId: 'user-registered-1' }, JWT_SECRET);
+
+      const result = await runFullUpload({
+        prisma,
+        headers: { authorization: `Bearer ${token}` },
+        filename: 'photo.png',
+        filetype: 'image/png', // déclaration mensongère — aucun lien de partage à contourner ici
+        bytes: PDF_BYTES,
+      });
+
+      expect(result.status_code).toBe(400);
+      expect(result.body).toContain('does not match any known image signature');
+      expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
+    });
+
+    it('autorise un SVG légitime déclaré image/svg+xml pour un utilisateur enregistré', async () => {
+      const prisma = buildFakePrisma();
+      const token = jwt.sign({ userId: 'user-registered-1' }, JWT_SECRET);
+
+      const result = await runFullUpload({
+        prisma,
+        headers: { authorization: `Bearer ${token}` },
+        filename: 'icon.svg',
+        filetype: 'image/svg+xml',
+        bytes: Buffer.from('<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'utf8'),
+      });
+
+      expect(result.status_code).toBe(200);
+      expect(prisma.messageAttachment.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuse un PDF déclaré image/svg+xml pour un utilisateur enregistré (couverture SVG, #5615)', async () => {
+      const prisma = buildFakePrisma();
+      const token = jwt.sign({ userId: 'user-registered-1' }, JWT_SECRET);
+
+      const result = await runFullUpload({
+        prisma,
+        headers: { authorization: `Bearer ${token}` },
+        filename: 'fake.svg',
+        filetype: 'image/svg+xml',
+        bytes: PDF_BYTES,
+      });
+
+      expect(result.status_code).toBe(400);
+      expect(result.body).toContain('does not match SVG content');
+      expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
+    });
+
+    it("n'exige aucune signature pour une famille sans vérification connue (vidéo, texte…) — décision produit #5615", async () => {
+      const prisma = buildFakePrisma();
+      const token = jwt.sign({ userId: 'user-registered-1' }, JWT_SECRET);
+
+      const result = await runFullUpload({
+        prisma,
+        headers: { authorization: `Bearer ${token}` },
+        filename: 'clip.mp4',
+        filetype: 'video/mp4',
+        bytes: Buffer.from('contenu vidéo quelconque, aucune signature vérifiée pour cette famille'),
+      });
+
+      expect(result.status_code).toBe(200);
+      expect(prisma.messageAttachment.create).toHaveBeenCalledTimes(1);
     });
   });
 
