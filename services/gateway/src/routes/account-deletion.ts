@@ -7,10 +7,19 @@ import { sendSuccess, sendGone, sendInternalError } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { disconnectRevokedSessions } from '../socketio/disconnectRevokedSessions';
 import { createCustomRateLimiter } from '../utils/rate-limiter.js';
+import { purgeAccountIsolatedData } from '../services/AccountPurgeService';
 
 const logger = enhancedLogger.child({ module: 'AccountDeletionResolve' });
 
-const GRACE_PERIOD_DAYS = 90;
+/**
+ * Alignée sur la promesse PUBLIQUE (`apps/web/locales/<lang>/privacy.json`,
+ * clé `retention.content` : « Période de grâce de 30 jours »), pas l'inverse
+ * — le code portait 90 jours depuis l'origine de #4183, en contradiction avec
+ * un texte légal déjà publié dans les 4 locales (#3632). Aligner le code sur
+ * un engagement déjà pris envers l'utilisateur n'est pas une décision produit
+ * à instruire ; l'inverse (allonger la promesse à 90 jours) en serait une.
+ */
+const GRACE_PERIOD_DAYS = 30;
 
 /**
  * Au-delà, la demande est INVALIDÉE plutôt que laissée ouverte à la devinette.
@@ -98,9 +107,11 @@ export async function accountDeletionRoutes(fastify: FastifyInstance) {
                   canCancelUntil: { type: 'string', nullable: true },
                   /**
                    * Ce que la suppression FAIT réellement aujourd'hui : le
-                   * compte est désactivé et daté, les données ne sont PAS
-                   * purgées. La page le dit — c'est la décision du critère 7,
-                   * et la purge effective est un lot à part.
+                   * compte est désactivé et daté, sessions/profil vocal/liens
+                   * de partage sont purgés (#3632) — messages, médias et
+                   * identité ne le sont PAS encore, chacun son suivi. Reste
+                   * `false` tant que ces trois catégories survivent : la page
+                   * ne doit pas affirmer une purge totale qui n'a pas eu lieu.
                    */
                   dataPurged: { type: 'boolean' },
                 },
@@ -248,6 +259,15 @@ export async function accountDeletionRoutes(fastify: FastifyInstance) {
           data: { status: 'COMPLETED', confirmTokenHash: jetonConsomme(demande.id, 'used') },
         });
 
+        // Défense en profondeur : la bascule automatique CONFIRMED ->
+        // GRACE_PERIOD_EXPIRED (précondition de `purge`, ci-dessus dans
+        // `etatAttendu`) a déjà purgé ces trois tables ISOLÉES depuis
+        // `MaintenanceService` (#3632). Idempotent — rejouer ici ne coûte que
+        // trois requêtes vides si la passe horaire est déjà passée.
+        await purgeAccountIsolatedData(fastify.prisma, demande.userId).catch((error) =>
+          logger.warn(`[Deletion] purge des données isolées échouée user=${demande.userId}`, error)
+        );
+
         // Le compte n'existe plus : ses sockets tombent, APRÈS l'écriture — un
         // socket resté ouvert recevrait encore les fils temps réel d'un compte
         // supprimé. Best-effort par construction.
@@ -265,10 +285,14 @@ export async function accountDeletionRoutes(fastify: FastifyInstance) {
           status: 'COMPLETED',
           gracePeriodEndsAt: null,
           canCancelUntil: null,
-          // DIT LA VÉRITÉ. La page annonçait « supprimé définitivement » quand
-          // le code ne fait qu'un `isActive: false` + `deletedAt` : rien n'est
-          // purgé. La purge réelle est un lot à part, irréversible, qui mérite
-          // sa propre revue (#4183 critère 7).
+          // DIT LA VÉRITÉ. Sessions, profil vocal et liens de partage SONT
+          // purgés (ci-dessus, #3632) ; les messages envoyés (visibles par
+          // d'autres participants), les médias et l'identité (`User.username`
+          // / `email` / …) ne le sont PAS encore — chacun est un suivi séparé
+          // ouvert depuis #3632, avec sa propre revue (#4183 critère 7). Tant
+          // que ces trois catégories restent vivantes, `dataPurged` reste
+          // `false` : la page ne doit pas affirmer une purge totale qui n'a
+          // pas eu lieu.
           dataPurged: false,
         });
       } catch (error) {
