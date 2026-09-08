@@ -218,7 +218,14 @@ export const parseCatalogBlock = (blockLines) => {
 // « Progression ») est un travail d'écran séparé, pas encore ouvert — voir
 // le corps de la PR qui livre cette route pour le détail du périmètre
 // différé.
-const BASELINE_DEAD_ENTRIES = 267;
+//
+// 267 → 268 (#3635) : `me.terms` (`GET`/`PUT /me/terms`, signal + action de
+// re-consentement CGU versionné) — morte à la naissance PAR CONSTRUCTION,
+// même forme que `me.engagement` (#5547) ci-dessus : cette issue livre la
+// route gateway et son exposition dans les catalogues générés ; l'écran de
+// ré-acceptation (iOS/Android/web) qui l'appellera est un travail client à
+// part, ouvert séparément (#5716).
+const BASELINE_DEAD_ENTRIES = 268;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

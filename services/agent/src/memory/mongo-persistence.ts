@@ -533,6 +533,32 @@ export class MongoPersistence {
     return tirerAuSort(participants.flatMap((p) => (p.user ? [p.user] : [])), limit);
   }
 
+  /**
+   * La présence d'un utilisateur AU MOMENT DE LIVRER — les deux seules choses
+   * qui décident si l'agent peut encore parler à sa place.
+   *
+   * La connexion se lit sur une session VIVANTE (`isValid` ET non expirée) :
+   * 140 sessions expirées se déclaraient valides en production, et une session
+   * morte ne prouve aucune présence (#5712). `User.lastActiveAt` est
+   * délibérément ABSENT de cette lecture — il est écrit par une socket qui se
+   * rouvre seule et déclare présents des gens partis depuis des mois (#5703).
+   */
+  async getPresenceForDelivery(userId: string): Promise<{ isOnline: boolean; derniereConnexionMs: number | null }> {
+    const [session, user] = await Promise.all([
+      this.prisma.userSession.findFirst({
+        where: { userId, isValid: true, expiresAt: { gt: new Date() } },
+        orderBy: { lastActivityAt: 'desc' },
+        select: { lastActivityAt: true },
+      }),
+      this.prisma.user.findUnique({ where: { id: userId }, select: { isOnline: true } }),
+    ]);
+
+    return {
+      isOnline: user?.isOnline ?? false,
+      derniereConnexionMs: session?.lastActivityAt?.getTime() ?? null,
+    };
+  }
+
   async getGlobalProfile(userId: string) {
     return this.prisma.agentGlobalProfile.findUnique({ where: { userId } });
   }
@@ -601,7 +627,17 @@ export class MongoPersistence {
           conversationId: { in: allConvIds },
           isActive: true,
           userId: { not: null },
-          user: { lastActiveAt: { lt: recentLoginThreshold } },
+          // Même loi qu'en aval : la CONNEXION décide, pas l'activité.
+          //
+          // Ce comptage choisit quelles CONVERSATIONS valent un scan. Le laisser
+          // sur `lastActiveAt` aurait écarté des conversations entières dont les
+          // participants paraissent actifs par une socket qui se rouvre seule —
+          // le défaut de #5703, une couche plus haut, et invisible depuis les
+          // sélecteurs d'utilisateurs.
+          user: {
+            isOnline: false,
+            sessions: { none: { lastActivityAt: { gte: recentLoginThreshold } } },
+          },
         },
         _count: true,
       }),

@@ -123,6 +123,7 @@ import meRoutes from './me';
 import { mePermissionsRoutes } from './me/permissions';
 import { meCategoriesRoutes } from './me/categories';
 import { meConsentsRoutes } from './me/consents';
+import { meTermsRoutes } from './me/terms';
 import { meEngagementRoutes } from './me/engagement';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
@@ -278,6 +279,9 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // `routes/me/consents.ts`) — même patron de montage AUTONOME que
   // `me-permissions`/`me-categories` juste au-dessus (#4348).
   { name: 'me-consents', prefix: `${API_PREFIX}/me`, module: meConsentsRoutes },
+  // Re-consentement CGU (#3635) — même patron de montage AUTONOME que
+  // `me-consents` juste au-dessus.
+  { name: 'me-terms', prefix: `${API_PREFIX}/me`, module: meTermsRoutes },
   // Écran « Progression » (#5547) — lecture seule de EngagementCounter /
   // EngagementMilestone / User.{currentStreakDays, longestStreakDays,
   // engagementScore}. Montage AUTONOME, même patron que `me-consents` juste

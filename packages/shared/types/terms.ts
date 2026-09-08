@@ -22,8 +22,13 @@
  *
  * Il ne dit pas qu'un compte doit RÉ-ACCEPTER quand la version change : la
  * colonne enregistre ce qui a été accepté, elle n'arbitre rien. Comparer la
- * version gravée à celle-ci — et décider quoi faire de l'écart — est un lot à
- * part, qui commence par une décision produit.
+ * version gravée à celle-ci est fait par `GET /me/terms` (#3635,
+ * `routes/me/terms.ts`), qui rend `upToDate` ; `PUT /me/terms` grave un
+ * ré-acceptation, sous la même discipline que `PUT /me/consents/:purpose`
+ * (le client CITE la version, 409 sur tout écart). Ce que NI l'un NI l'autre
+ * ne tranche : l'ENFORCEMENT — bloquer l'accès, afficher une bannière — reste
+ * une décision produit par plateforme, à instruire quand un client construit
+ * l'écran de ré-acceptation.
  *
  * Format : `YYYY-MM-DD`, la date de publication du texte. Une version qui
  * n'avance pas quand le texte change est pire qu'une absence de version.

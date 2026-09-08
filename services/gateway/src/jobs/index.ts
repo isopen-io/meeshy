@@ -10,6 +10,7 @@ import { NotificationDigestJob } from './notification-digest';
 import { DeliveryQueueCleanupJob } from './delivery-queue-cleanup';
 import { MutationLogCleanupJob } from './mutation-log-cleanup';
 import { BanExpirySweepJob } from './ban-expiry-sweep';
+import { sweepExpiredSessions } from './session-expiry-sweep';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
@@ -29,9 +30,18 @@ export class BackgroundJobsManager {
   private deliveryQueueCleanupJob: DeliveryQueueCleanupJob;
   private mutationLogCleanupJob: MutationLogCleanupJob;
   private banExpirySweepJob: BanExpirySweepJob;
+  /**
+   * Le balayage des sessions expirées n'a pas de classe à lui : c'est UNE
+   * requête, sans état ni dépendance. Une classe n'ajouterait qu'un emballage
+   * à tenir (#5712).
+   */
+  private sessionSweepInterval: NodeJS.Timeout | null = null;
   private isRunning: boolean = false;
 
+  private prismaClient: PrismaClient;
+
   constructor(prisma: PrismaClient, emailService: EmailService, deliveryQueue?: RedisDeliveryQueue) {
+    this.prismaClient = prisma;
     this.cleanupTokensJob = new CleanupExpiredTokens(prisma);
     this.unlockAccountsJob = new UnlockAccountsJob(prisma);
     // Reuse the existing passwordless-login mechanism for the digest CTA
@@ -66,6 +76,18 @@ export class BackgroundJobsManager {
     this.mutationLogCleanupJob.start();
     this.banExpirySweepJob.start();
 
+    // Toutes les six heures : une session dont l'échéance est passée cesse de
+    // se déclarer valide. Sans ce balayage, `isValid` ment à tout ce qui le lit
+    // — 140 lignes le faisaient en production, dont depuis mars (#5712).
+    const balayerLesSessions = () => {
+      sweepExpiredSessions(this.prismaClient)
+        .then((n) => { if (n > 0) logger.info(`${n} expired session(s) invalidated`); })
+        .catch((err) => logger.error('Session expiry sweep failed', err));
+    };
+    balayerLesSessions();
+    this.sessionSweepInterval = setInterval(balayerLesSessions, 6 * 60 * 60 * 1000);
+    this.sessionSweepInterval.unref();
+
     this.isRunning = true;
     logger.info('All background jobs started successfully');
   }
@@ -87,6 +109,11 @@ export class BackgroundJobsManager {
     this.deliveryQueueCleanupJob.stop();
     this.mutationLogCleanupJob.stop();
     this.banExpirySweepJob.stop();
+
+    if (this.sessionSweepInterval) {
+      clearInterval(this.sessionSweepInterval);
+      this.sessionSweepInterval = null;
+    }
 
     this.isRunning = false;
     logger.info('All background jobs stopped successfully');
