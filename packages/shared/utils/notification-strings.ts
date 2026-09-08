@@ -31,7 +31,6 @@ export const NOTIFICATION_STRING_KEYS = [
   'push.private',
   'engagement.badgeEarned', 'engagement.streakMilestone', 'engagement.levelUp',
   'engagement.achievementUnlocked',
-  'engagement.badgeEarned',
   'report.resolved.title',
   'report.resolved.actionTaken',
   'report.resolved.noAction',
