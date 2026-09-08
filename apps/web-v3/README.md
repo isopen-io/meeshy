@@ -129,12 +129,20 @@ maquettes web. Ce qui en découle et qu'on rate en regardant vite :
   ni dégradé — les ombres ont été retirées côté iOS pour la fluidité du
   défilement, les reposer coûterait des passes hors-écran sur l'appareil visé.
 - **La bulle envoyée est l'indigo de marque**, la même dans toutes les
-  conversations ; seule la bulle **reçue** porte l'accent de la conversation.
+  conversations. La bulle **reçue** porte la couleur de son **expéditeur**,
+  mêlée à 70 % d'indigo (`ThemedMessageBubble.swift:383-390` :
+  `blend(senderColor × 0,30, indigo500 × 0,70)`) — l'accent de la conversation
+  n'est que le repli quand le message ne porte pas de couleur d'expéditeur.
+  Vérifié le 2026-09-08 (`targets/bulle.md` § 10) ; la directive du 2026-09-04
+  disait « l'accent de la conversation » — question produit ouverte, voir
+  `targets/README.md`.
 - **L'avatar et le nom vivent DANS le pied de la bulle**, et seulement sur le
   **dernier** message d'une suite (jamais le premier), en groupe, en réception.
 - **Regroupement** : même auteur + même jour, **sans fenêtre temporelle**
-  (`src/lib/grouping.ts`, témoins compris). C'est la même loi que iOS, le web
-  et Android.
+  (`src/lib/grouping.ts`, témoins compris) — et, troisième critère de la loi
+  iOS (`MessageDayGrouping.swift:97`), **jamais à travers un message système** :
+  un avis d'arrivée et le premier message de l'arrivant sont deux groupes.
+  Le web ne porte pas encore ce troisième critère (`targets/bulle.md` § 9.12).
 - **Prisme Linguistique** : le contenu affiché EST déjà la traduction préférée,
   rendu comme du contenu natif ; la seule marque est la pastille `translate` et
   la bande de drapeaux du pied. La descente est dans `src/lib/api/prism.ts`,
@@ -147,7 +155,10 @@ maquettes web. Ce qui en découle et qu'on rate en regardant vite :
 
 Réseau réel (fixtures figées), temps réel, en-tête repliable au défilement,
 gestes de balayage sur les lignes et les bulles, menu au appui long, rail de
-stories complet, listes virtualisées. Aucun n'est bloquant pour l'arbitrage ;
+stories complet, listes virtualisées. Aucun n'était bloquant pour l'arbitrage du
+POC ; depuis la cible du 2026-09-08 (D-20, `targets/`), le menu d'appui long
+d'une bulle et les gestes de fil sont des écarts à combler, pas des options —
+sans eux une bulle n'a aucune action (`targets/bulle.md` § 9.3) ;
 la virtualisation, en revanche, est **obligatoire** avant toute mesure de
 fluidité sérieuse sur Android d'entrée de gamme.
 
