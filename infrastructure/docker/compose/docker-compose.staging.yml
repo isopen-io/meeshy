@@ -195,6 +195,21 @@ services:
       - "traefik.http.routers.translator-staging.entrypoints=websecure"
       - "traefik.http.routers.translator-staging.tls.certresolver=letsencrypt"
       - "traefik.http.services.translator-staging.loadbalancer.server.port=8000"
+      # unhealthy déclenche un restart (#5610) — voir le service `autoheal`.
+      - "autoheal=true"
+
+  # Autoheal — restaure un conteneur `unhealthy` (#5610).
+  autoheal-staging:
+    image: willfarrell/autoheal:latest
+    container_name: meeshy-autoheal-staging
+    restart: unless-stopped
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=30
+      - AUTOHEAL_START_PERIOD=60
+      - AUTOHEAL_DEFAULT_STOP_TIMEOUT=10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   # ===========================================================================
   # GATEWAY STAGING - API Service

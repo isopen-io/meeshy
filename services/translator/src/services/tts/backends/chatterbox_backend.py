@@ -21,7 +21,7 @@ from typing import Optional, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 from ..base import BaseTTSBackend
-from ..synth_watchdog import with_synth_watchdog
+from ..synth_watchdog import DEFAULT_TTS_SAVE_TIMEOUT_S, with_synth_watchdog
 from config.settings import get_settings
 from services.voice_analyzer_service import VoiceAnalyzerService, VoiceCharacteristics
 from ...model_manager import TTSBackend as TTSBackendEnum
@@ -495,7 +495,19 @@ class ChatterboxBackend(BaseTTSBackend):
         synth_label = f"chatterbox:{'multi' if use_multilingual else 'mono'}:{lang_code}"
 
         try:
-            with self._synthesis_lock:
+            # Acquisition non bloquante pour l'event loop (#5610) : un `with
+            # self._synthesis_lock:` appelle `Lock.acquire()` SYNCHRONE sur le
+            # thread appelant. Tous les workers tournent en coroutines sur le
+            # MÊME thread d'event loop (asyncio.create_task, pas des process/
+            # threads séparés) — si une deuxième synthèse atteint ce point
+            # pendant qu'une première est bloquée dans `run_in_executor`
+            # ci-dessous, son `acquire()` gèle tout le thread d'event loop,
+            # y compris le minuteur `asyncio.wait_for` du watchdog qui devait
+            # justement libérer le verrou : plus rien ne peut alors s'exécuter,
+            # même `/live`. Passer l'acquisition dans l'executor laisse
+            # l'event loop vivant pendant l'attente, watchdog compris.
+            await loop.run_in_executor(None, self._synthesis_lock.acquire)
+            try:
                 if use_multilingual:
                     _model = model_multi
                     _text = text
@@ -573,12 +585,18 @@ class ChatterboxBackend(BaseTTSBackend):
                     label=synth_label,
                 )
 
-                await loop.run_in_executor(
-                    None,
-                    lambda: torchaudio.save(output_path, wav, sample_rate)
+                await with_synth_watchdog(
+                    loop.run_in_executor(
+                        None,
+                        lambda: torchaudio.save(output_path, wav, sample_rate)
+                    ),
+                    timeout_s=DEFAULT_TTS_SAVE_TIMEOUT_S,
+                    label=f"{synth_label}:save",
                 )
 
                 return output_path
+            finally:
+                self._synthesis_lock.release()
 
         except IndexError as e:
             # Erreur spécifique Chatterbox avec textes trop courts
