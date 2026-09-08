@@ -32,6 +32,7 @@ import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normali
 import { attachmentAudioRichView, type AttachmentAudioRichView } from '../audio/attachmentAudioRichView';
 import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
 import { diffTranslationTargets } from '../../utils/translation-targets';
+import { applyPreset, mergeVoiceCloneParams, type ChatterboxTTSParams, type VoiceCloneParameters } from '../../types/translation.types';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -2557,6 +2558,60 @@ export class MessageTranslationService extends EventEmitter {
         logger.debug(`   ℹ️ No existing voice profile for user ${params.senderId}`);
       }
 
+      // 2bis. Lire les réglages fins de clonage vocal de l'utilisateur (#3735) —
+      // `UserPreferences.audio` (voiceCloningExaggeration/CfgWeight/Temperature/
+      // TopP/QualityPreset), écrits par `VoiceProfileService.registerProfile()`.
+      // Sans clonage autorisé, Chatterbox synthétise sur la voix par défaut :
+      // ces réglages n'ont alors aucun effet et ne sont pas lus.
+      //
+      // `applyPreset`/`mergeVoiceCloneParams` (`../../types/translation.types`)
+      // rendent la forme IMBRIQUÉE `{chatterbox, performance, quality}` — celle
+      // qui sert au CALCUL du preset. Le fil ZMQ, lui, attend `chatterbox` à
+      // PLAT (`zmq-translation/types.ts` § doc-comment sur `voiceCloneParams`) :
+      // aplatir ici, au site d'appel, est ce qui évite qu'un futur lecteur
+      // recopie la forme imbriquée sans savoir qu'elle ne traverse pas le fil.
+      let voiceCloneParams: { [K in keyof ChatterboxTTSParams]: ChatterboxTTSParams[K] } & { qualityPreset?: string } | undefined;
+      if (shouldGenerateVoiceClone) {
+        try {
+          const audioPrefs = await this.prisma.userPreferences.findUnique({
+            where: { userId: params.senderId },
+            select: { audio: true }
+          });
+          const audio = audioPrefs?.audio as Record<string, unknown> | null | undefined;
+
+          if (audio && typeof audio === 'object') {
+            const overrides: ChatterboxTTSParams = {};
+            if (typeof audio.voiceCloningExaggeration === 'number') {
+              overrides.exaggeration = audio.voiceCloningExaggeration;
+            }
+            if (typeof audio.voiceCloningCfgWeight === 'number') {
+              overrides.cfgWeight = audio.voiceCloningCfgWeight;
+            }
+            if (typeof audio.voiceCloningTemperature === 'number') {
+              overrides.temperature = audio.voiceCloningTemperature;
+            }
+            if (typeof audio.voiceCloningTopP === 'number') {
+              overrides.topP = audio.voiceCloningTopP;
+            }
+
+            const preset = audio.voiceCloningQualityPreset;
+            const hasPreset = preset === 'fast' || preset === 'balanced' || preset === 'high_quality';
+
+            if (hasPreset || Object.keys(overrides).length > 0) {
+              const resolved: VoiceCloneParameters = hasPreset
+                ? applyPreset(preset as 'fast' | 'balanced' | 'high_quality', { chatterbox: overrides })
+                : mergeVoiceCloneParams({ chatterbox: overrides });
+              voiceCloneParams = {
+                ...resolved.chatterbox,
+                ...(hasPreset ? { qualityPreset: preset as string } : {})
+              };
+            }
+          }
+        } catch (prefsError) {
+          logger.debug(`   ℹ️ Impossible de lire les préférences de clonage vocal pour ${params.senderId}`);
+        }
+      }
+
       logger.info(
         `🔍 [VOICE-PROFILE-TRACE] Envoi requête Translator | ` +
         `Msg: ${params.messageId} | Att: ${params.attachmentId} | Conv: ${params.conversationId} | ` +
@@ -2589,7 +2644,8 @@ export class MessageTranslationService extends EventEmitter {
         originalSenderId: params.senderId,
         existingVoiceProfile: shouldGenerateVoiceClone ? existingVoiceProfile : undefined,
         useOriginalVoice: shouldGenerateVoiceClone,
-        userLanguage: userLanguage  // Langue de l'utilisateur pour fallback sur messages courts
+        userLanguage: userLanguage,  // Langue de l'utilisateur pour fallback sur messages courts
+        voiceCloneParams
       });
 
       logger.info(`🔍 [VOICE-PROFILE-TRACE] ✅ Requête envoyée avec succès`);

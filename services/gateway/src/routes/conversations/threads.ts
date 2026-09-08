@@ -18,6 +18,7 @@ import { hoistLocationOnto } from '../../services/location/sharedPlace';
 import { hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { MESSAGE_PROTECTION_SELECT } from './messages-list-query';
+import { servedQuotedMessage, type QuotedMessageRow } from '../../services/messaging/servedQuotedMessage';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
 
@@ -84,6 +85,14 @@ const threadMessageSelect = {
       validatedMentions: true,
       // Même rappel que ci-dessus, sur le message CITÉ cette fois.
       metadata: true,
+      // #4952 — sans ces quatre drapeaux, `servedQuotedMessage` ne peut pas
+      // savoir que le message CITÉ est protégé : `quotedMessageIsProtected`
+      // les lit tous, et une citation manquante sur l'un d'eux servirait le
+      // texte en clair en croyant appliquer la garde.
+      isViewOnce: true,
+      isBlurred: true,
+      isEncrypted: true,
+      effectFlags: true,
       sender: {
         select: {
           id: true,
@@ -112,7 +121,15 @@ const threadMessageSelect = {
           mimeType: true,
           fileSize: true,
           fileUrl: true,
-          thumbnailUrl: true
+          thumbnailUrl: true,
+          thumbHash: true,
+          // Les mêmes trois drapeaux, au niveau de la PIÈCE JOINTE cette
+          // fois : `maskedAttachment` (`servedQuotedMessage`) les lit pour
+          // décider si CETTE pièce, indépendamment du message qui la porte,
+          // doit perdre son URL et son ThumbHash.
+          isViewOnce: true,
+          isBlurred: true,
+          effectFlags: true
         }
       }
     }
@@ -164,8 +181,35 @@ function serializeThreadMessage<T extends Record<string, unknown>>(message: T): 
   };
 }
 
+/**
+ * Applique `servedQuotedMessage` — le site UNIQUE partagé avec la liste REST
+ * et `message:new` socket — au `replyTo` imbriqué d'un message de fil (#4952).
+ *
+ * `threadMessageSelect.replyTo` charge la ligne CITÉE en entier (content,
+ * traductions absentes du select, pièces jointes) ; sans ce masquage, un
+ * message à vue unique / flouté / chiffré ouvert par son fil de réponses
+ * servait son texte et ses pièces jointes en clair dans la citation — alors
+ * que le message RACINE porte déjà ses drapeaux depuis #4885 et que le schéma
+ * de réponse (`additionalProperties: true`) ne tronque rien qui les
+ * accompagnerait.
+ */
+function maskThreadMessageQuote<T extends Record<string, unknown>>(message: T): T {
+  const replyTo = (message as { replyTo?: unknown }).replyTo;
+  if (!replyTo || typeof replyTo !== 'object' || Array.isArray(replyTo)) {
+    return message;
+  }
+  const quotedRow = replyTo as Record<string, unknown> & QuotedMessageRow;
+  return {
+    ...message,
+    replyTo: {
+      ...quotedRow,
+      ...servedQuotedMessage(quotedRow, { includeTranslations: false }),
+    },
+  };
+}
+
 const formatThreadMessage = <T extends Record<string, unknown>>(message: T): T =>
-  hoistThreadMessageLocation(serializeThreadMessage(message));
+  hoistThreadMessageLocation(maskThreadMessageQuote(serializeThreadMessage(message)));
 
 export function registerThreadsRoutes(
   fastify: FastifyInstance,

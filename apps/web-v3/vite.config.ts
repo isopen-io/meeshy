@@ -1,11 +1,13 @@
 import { spawnSync } from 'node:child_process';
+import { readFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import tailwind from '@tailwindcss/vite';
 import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-import { MOTIF_INSTITUTIONNEL } from './scripts/lib/routes-institutionnelles.mjs';
+import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
 
 /**
  * DEUX runtimes, UN code source.
@@ -14,7 +16,7 @@ import { MOTIF_INSTITUTIONNEL } from './scripts/lib/routes-institutionnelles.mjs
  * Preact via `preact/compat`. Le code applicatif est IDENTIQUE dans les deux
  * cas — c'est tout l'interet de compat, et c'est ce qui rend la comparaison de
  * poids honnete : le meme arbre, le meme Tailwind, le meme routeur, seul le
- * runtime change. Le POC mesure les deux (scripts/mesure-poids.mjs).
+ * runtime change. Le POC mesure les deux (scripts/measure-weight.mjs).
  */
 const runtime = process.env.MEESHY_RUNTIME === 'react' ? 'react' : 'preact';
 
@@ -39,9 +41,66 @@ const aliasPreact = [
 /**
  * VARIANTE B (Capacitor) : la coque native charge le bundle depuis le systeme
  * de fichiers, jamais depuis une origine http. Les chemins absolus casseraient
- * — d'ou la base relative. `MEESHY_CIBLE=capacitor` bascule la construction.
+ * — d'ou la base relative. `MEESHY_TARGET=capacitor` bascule la construction.
  */
-const pourCapacitor = process.env.MEESHY_CIBLE === 'capacitor';
+const forCapacitor = process.env.MEESHY_TARGET === 'capacitor';
+
+/**
+ * LE BANC DE FIL LONG — une constante de CONSTRUCTION, jamais un paramètre d'URL.
+ *
+ * La virtualisation ne se prouve pas sur sept messages ; il en faut cinq cents.
+ * Les fabriquer à la demande depuis l'application aurait fait entrer du code de
+ * banc d'essai dans le bundle servi aux utilisateurs — pour mesurer la légèreté,
+ * on l'aurait dégradée.
+ *
+ * `__BENCH__` est remplacé par un LITTÉRAL à la construction. Dans le build
+ * normal il vaut `0`, la branche qui rembourre la fixture devient
+ * `if (0 > 0)`, et rolldown l'élimine : le coût est nul, et le gate de poids
+ * le prouve plutôt que ce commentaire. `MEESHY_BENCH=500 bun run build` produit
+ * la variante que le témoin mesure — même mécanique que `MEESHY_RUNTIME` et
+ * `MEESHY_TARGET`, déjà en place.
+ */
+const bench = Number.parseInt(process.env.MEESHY_BENCH ?? '0', 10) || 0;
+
+/**
+ * LA VERSION DU PRODUIT — LUE, jamais recopiée (revue de #5555, défaut 8).
+ *
+ * `BrandSignature` rend « Meeshy {version} » sur les cinq pages
+ * institutionnelles ET sur l'écran de connexion. Le préchauffage lit
+ * `package.json` (`scripts/prerender-institutional.tsx`) ; l'application, elle,
+ * n'a pas de système de fichiers — la version y arrivait donc en LITTÉRAL
+ * (`'3.1.0'` dans `routes/login.tsx`), juste ce jour-là et faux au prochain
+ * `npm version`. Un littéral de construction relit la MÊME source au même
+ * moment que le reste de la table : une source, deux lecteurs, aucune copie.
+ */
+const appVersion = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8'),
+).version as string;
+
+/**
+ * LA SOURCE DE DONNÉES SE DÉCIDE, MAIS ELLE N'EST PAS ENCORE CÂBLÉE (#5605).
+ *
+ * `resolveApiConfig` (`src/lib/api/config.ts`) rend déjà `source`, et c'est le
+ * bon endroit — la base et la source se choisissent au MÊME endroit. Mais
+ * AUCUN écran ne la lit : `routes/conversations.tsx` et `routes/thread.tsx`
+ * importent `src/lib/api/fixtures.ts` en direct. Un déploiement qui poserait
+ * `VITE_DATA_SOURCE=gateway` servirait donc les fixtures en CROYANT parler à
+ * la passerelle, sans qu'aucun témoin ne rougisse.
+ *
+ * Une valeur qui ne fait rien est pire qu'une valeur absente : on refuse ici
+ * de CONSTRUIRE plutôt que de laisser passer le malentendu. Ce garde-fou
+ * disparaît le jour où les écrans lisent `apiConfig.source` — et sa
+ * disparition sera VISIBLE dans le diff qui les câble, ce qu'un commentaire
+ * n'aurait pas obtenu.
+ */
+const declaredDataSource = process.env.VITE_DATA_SOURCE;
+if (declaredDataSource !== undefined && declaredDataSource !== 'fixtures') {
+  throw new Error(
+    `VITE_DATA_SOURCE=${declaredDataSource} : la source « passerelle » n'est pas encore câblée aux écrans ` +
+      '(les routes lisent src/lib/api/fixtures.ts en direct). Construire avec cette valeur servirait les ' +
+      'fixtures en silence. Retirer la variable, ou câbler les écrans sur apiConfig.source avant de la poser.',
+  );
+}
 
 /**
  * LE PRÉCHAUFFAGE ENTRE DANS LA CONSTRUCTION, et il n'y est pas par commodité.
@@ -66,13 +125,13 @@ const pourCapacitor = process.env.MEESHY_CIBLE === 'capacitor';
  * preact et lit des `.tsx`, ce que ce fichier de configuration — chargé par
  * Node — ne sait pas faire.
  */
-const prechauffeLesPagesInstitutionnelles = (): Plugin => ({
-  name: 'meeshy-prechauffe-institutionnel',
+const prerenderInstitutionalPages = (): Plugin => ({
+  name: 'meeshy-prerender-institutional',
   apply: 'build',
   closeBundle: {
     sequential: true,
     handler() {
-      const r = spawnSync('bun', ['run', 'scripts/prerend-institutionnel.tsx'], {
+      const r = spawnSync('bun', ['run', 'scripts/prerender-institutional.tsx'], {
         cwd: fileURLToPath(new URL('.', import.meta.url)),
         stdio: 'inherit',
       });
@@ -88,8 +147,66 @@ const prechauffeLesPagesInstitutionnelles = (): Plugin => ({
   },
 });
 
+/**
+ * LE SERVICE WORKER INSTITUTIONNEL N'ENTRE PAS DANS LA COQUE (#5604,
+ * revue-correction).
+ *
+ * `sw-institutional.js` vit dans `public/`, donc Vite le RECOPIE tel quel dans
+ * TOUTE construction — y compris la variante B, ou VitePWA est pourtant retire
+ * et ou plus rien ne l'`importScripts`. Il partait donc dans l'APK et dans
+ * l'IPA en fichier MORT, pendant que `capacitor.config.ts` et le gate
+ * `check-shell-dist.mjs` affirmaient tous deux « aucun service worker ». Une
+ * affirmation qu'un fichier du dist contredit n'est pas une affirmation.
+ *
+ * `writeBundle` et non `generateBundle` : les actifs de `public/` sont copies
+ * HORS du graphe de rollup, donc invisibles du second.
+ */
+const dropInstitutionalServiceWorker = (): Plugin => ({
+  name: 'meeshy-drop-institutional-sw',
+  apply: 'build',
+  writeBundle(options) {
+    if (options.dir === undefined) return;
+    rmSync(join(options.dir, 'sw-institutional.js'), { force: true });
+  },
+});
+
 export default defineConfig({
-  base: pourCapacitor ? './' : '/',
+  base: forCapacitor ? './' : '/',
+  define: {
+    __BENCH__: JSON.stringify(bench),
+    __SHELL__: JSON.stringify(forCapacitor),
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
+  /**
+   * LE PROXY DE DEV (#5605, staging) — DEV UNIQUEMENT, zéro octet dans `dist/`.
+   *
+   * La passerelle sert `CORS_ORIGINS=https://staging.meeshy.me,https://gate.staging.meeshy.me`
+   * en staging (`docker-compose.staging.yml:218`) — `http://localhost:5173`
+   * n'y figure PAS, et `originIsAllowed()` (`cors-origins.ts:131-139`) refuse
+   * toute origine hors liste. Un appel `fetch` direct depuis Chrome local se
+   * ferait donc REFUSER par CORS avant même d'atteindre la route.
+   *
+   * Le proxy rend l'appel SAME-ORIGIN côté navigateur (`/api/v1/…` reste sur
+   * `localhost:5173` : c'est le fetch du navigateur que le vérificateur CORS
+   * du NAVIGATEUR regarde, et il ne voit qu'une requête locale). Mais le
+   * navigateur pose quand même un en-tête `Origin: http://localhost:5173`
+   * sur la requête sortante, et `http-proxy` la RELAIE telle quelle vers
+   * `gate.staging.meeshy.me` — sans le retrait ci-dessous, la passerelle
+   * recevrait exactement l'origine qu'elle refuse (`cors-origins.ts:131-139`,
+   * `localhost:5173` absent de `CORS_ORIGINS`) et l'appel échouerait quand
+   * même, une couche plus loin que le navigateur.
+   */
+  server: {
+    proxy: {
+      '/api/v1': {
+        target: process.env.MEESHY_PROXY_TARGET ?? 'https://gate.staging.meeshy.me',
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => proxyReq.removeHeader('origin'));
+        },
+      },
+    },
+  },
   resolve: {
     alias: [
       ...(runtime === 'preact' ? aliasPreact : []),
@@ -98,18 +215,19 @@ export default defineConfig({
   },
   plugins: [
     tailwind(),
-    prechauffeLesPagesInstitutionnelles(),
+    prerenderInstitutionalPages(),
+    ...(forCapacitor ? [dropInstitutionalServiceWorker()] : []),
     /**
      * VARIANTE A (PWA). Desactivee sous Capacitor : la coque native gere
      * elle-meme son cycle de vie, et un service worker par-dessus ferait deux
      * caches concurrents sur le meme bundle.
      */
-    ...(pourCapacitor
+    ...(forCapacitor
       ? []
       : [
           VitePWA({
             registerType: 'autoUpdate',
-            includeAssets: ['favicon.svg'],
+            includeAssets: ['favicon-48.png'],
             manifest: {
               name: 'Meeshy',
               short_name: 'Meeshy',
@@ -122,13 +240,31 @@ export default defineConfig({
               background_color: '#0b0c14',
               theme_color: '#0b0c14',
               icons: [
-                { src: '/icone-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-                { src: '/icone-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-                { src: '/icone-512-masque.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+                { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+                { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+                { src: '/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
               ],
             },
             workbox: {
-              globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+              /**
+               * `brand/*.png` (#5606) : les DEUX actifs de marque servis par
+               * les pages institutionnelles (le logo d'en-tête, le glyphe de
+               * la signature de pied) — pas les icônes du manifest, dont le
+               * doublon a déjà coûté ~37 Ko d'installation une fois (#5554,
+               * `globIgnores` ci-dessous). ~13 Ko bruts pour les deux, contre
+               * une signature affichant un glyphe CASSÉ au tout premier accès
+               * hors ligne à une page institutionnelle sans ce précache — le
+               * cache d'exécution `medias` (CacheFirst, plus bas) ne les
+               * connaît qu'APRÈS un premier succès réseau.
+               *
+               * `favicon-48.png` (revue de #5606, défaut 1) : l'ancien
+               * `favicon.svg` entrait dans le précache par le motif `svg`
+               * générique ; sa PROJECTION dérivée d'iOS est un PNG, et un
+               * favicon absent du précache redeviendrait une requête réseau à
+               * la deuxième visite — exactement ce que `check-institutional.mjs`
+               * (critère 3) exige à zéro.
+               */
+              globPatterns: ['**/*.{js,css,html,svg,woff2}', 'brand/*.png', 'favicon-48.png'],
               /**
                * Chaque page institutionnelle est écrite dans DEUX formes —
                * `about.html` et `about/index.html` — parce qu'un serveur
@@ -140,7 +276,7 @@ export default defineConfig({
                * peinture entière de l'application.
                *
                * Seule la forme canonique entre donc au précache ; `/about/`
-               * est ramenée sur `/about` par `sw-institutionnel.js`. Le motif
+               * est ramenée sur `/about` par `sw-institutional.js`. Le motif
                * ne croise pas les `/`, donc l'`index.html` de la racine — la
                * coquille de l'application — n'est PAS exclu.
                */
@@ -149,7 +285,7 @@ export default defineConfig({
                * Chargé EN TÊTE du service worker généré, donc son écouteur
                * `fetch` passe avant ceux de Workbox.
                */
-              importScripts: ['sw-institutionnel.js'],
+              importScripts: ['sw-institutional.js'],
               /**
                * LA CEINTURE, le précache étant les bretelles.
                *
@@ -162,10 +298,10 @@ export default defineConfig({
                * l'application — n'est pas exclu par erreur.
                *
                * Sa source est partagée avec le préchauffage
-               * (`scripts/lib/routes-institutionnelles.mjs`) : deux listes
+               * (`scripts/lib/institutional-routes.mjs`) : deux listes
                * tenues à la main auraient divergé au premier ajout de page.
                */
-              navigateFallbackDenylist: [MOTIF_INSTITUTIONNEL],
+              navigateFallbackDenylist: [INSTITUTIONAL_PATTERN],
               /**
                * La zone rurale est la raison d'etre de ce cache : le shell est
                * precache une fois, puis JAMAIS retelecharge tant que son hash
@@ -205,11 +341,11 @@ export default defineConfig({
        * DEUX entrées CSS : celle de l'application, et celle — beaucoup plus
        * maigre — des pages institutionnelles préchauffées, dont la détection
        * Tailwind est limitée à leurs propres fichiers (`source(none)` +
-       * `@source`). Voir src/styles/institutionnel.css.
+       * `@source`). Voir src/styles/institutional.css.
        */
       input: {
         index: fileURLToPath(new URL('./index.html', import.meta.url)),
-        institutionnel: fileURLToPath(new URL('./src/styles/institutionnel.css', import.meta.url)),
+        institutional: fileURLToPath(new URL('./src/styles/institutional.css', import.meta.url)),
       },
       output: {
         /**
@@ -217,10 +353,29 @@ export default defineConfig({
          * coupable quand un poids monte (§ 8.4 de la conception v3), et pour
          * qu'un ecran neuf ne renchérisse pas la premiere peinture.
          */
+        /**
+         * `core` est le SOCLE : ce que le document référence lui-même, donc ce
+         * que le lecteur paie AVANT le premier pixel. Une dépendance n'y entre
+         * que si plusieurs routes la lisent.
+         *
+         * Le règle par défaut — « node_modules ⇒ core » — est fausse dès qu'une
+         * dépendance ne sert qu'à un écran, et elle l'est en silence : mesuré,
+         * `@tanstack/react-virtual` y a fait passer la première peinture de
+         * 26,33 à 31,44 Ko pour un module que seul le fil monte. On NOMME donc
+         * les dépendances mono-écran, et le gate de poids garde la porte.
+         */
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
-            if (id.includes('@tanstack/react-query')) return 'donnees';
-            return 'socle';
+            if (id.includes('@tanstack/react-query')) return 'data';
+            // Le virtualiseur ne sert qu'au fil : son propre morceau, chargé
+            // par la route qui l'importe et par personne d'autre.
+            // `virtual-core` porte l'essentiel du calcul : le nommer AUSSI est
+            // le point qui compte — nommer le seul paquet React laissait 6 Ko
+            // de son moteur dans le socle, et la mesure l'a dit avant moi.
+            if (id.includes('@tanstack/react-virtual') || id.includes('@tanstack/virtual-core')) {
+              return 'virtual';
+            }
+            return 'core';
           }
           return undefined;
         },

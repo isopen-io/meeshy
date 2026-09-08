@@ -11,16 +11,18 @@
 #     Un runtime Node n'aurait rien à exécuter — il ne ferait que servir des
 #     fichiers, pour ~150 Mo au lieu de ~50.
 #
-#   · UN SEUL paquet du monorepo entre : `@meeshy/design-tokens`, le seul que
-#     le manifeste déclare. La règle du dépôt vaut quand même — tout ce que
-#     l'application importe hors de `apps/web-v3/` doit entrer dans l'image ET
-#     dans les déclencheurs de `docker.yml` — et c'est elle qui interdit
-#     d'ajouter `packages/shared` « au cas où » : on construirait un paquet que
-#     rien n'importe.
+#   · DEUX paquets du monorepo entrent, et seulement ceux que le manifeste
+#     déclare : `@meeshy/design-tokens` (la palette dérivée d'iOS) et
+#     `@meeshy/shared` (les types du domaine et trois lois — Prisme, présence,
+#     accent de conversation). La règle du dépôt est la même dans les deux
+#     sens : tout ce que l'application importe hors de `apps/web-v3/` doit
+#     entrer dans l'image ET dans les déclencheurs de `docker.yml`, et rien
+#     d'autre n'y entre « au cas où ». `packages/shared` a rejoint cette liste
+#     avec #5493, quand la projection locale des types a été retirée.
 #
 #   · La construction TOURNE SOUS BUN, et ce n'est pas une préférence : le
 #     greffon de préchauffage de `vite.config.ts` lance
-#     `bun run scripts/prerend-institutionnel.tsx`, qui rend du JSX avec la
+#     `bun run scripts/prerender-institutional.tsx`, qui rend du JSX avec la
 #     pragma preact. Une image de construction sans bun produirait un `dist`
 #     sans les cinq pages — et un service worker qui servirait la coquille de
 #     l'application à leur place. Défaut SILENCIEUX : le build sortirait vert.
@@ -43,11 +45,17 @@ WORKDIR /app
 # échouerait sur un écart qui est voulu.
 COPY apps/web-v3/package.json ./
 COPY packages/design-tokens/ ./packages/design-tokens/
+# `@meeshy/shared` est la source de vérité des types ET de trois lois que
+# l'application ne réécrit pas (Prisme, présence, accent de conversation). Son
+# `exports` pointe `dist/`, donc l'image doit le CONSTRUIRE — c'est du `tsc`
+# seul : aucune entrée de son `tsconfig` n'importe `@prisma/client`, ce qui
+# tient la génération Prisma hors de cette image.
+COPY packages/shared/ ./packages/shared/
 
 # `bun -e` et non `node -e` : l'image de construction est celle de bun, et rien
 # n'y garantit un binaire node.
-RUN bun -e "const f=require('fs');const p=JSON.parse(f.readFileSync('package.json','utf8'));p.workspaces=['packages/design-tokens'];f.writeFileSync('package.json',JSON.stringify(p,null,2));" \
-    && printf 'packages:\n  - "packages/design-tokens"\n' > pnpm-workspace.yaml
+RUN bun -e "const f=require('fs');const p=JSON.parse(f.readFileSync('package.json','utf8'));p.workspaces=['packages/design-tokens','packages/shared'];f.writeFileSync('package.json',JSON.stringify(p,null,2));" \
+    && printf 'packages:\n  - "packages/design-tokens"\n  - "packages/shared"\n' > pnpm-workspace.yaml
 
 # `--ignore-scripts` : le postinstall de `grpc-tools` télécharge un binaire par
 # une URL S3 que les proxys sortants réécrivent, et l'installation s'arrête là
@@ -63,9 +71,18 @@ RUN bun install --ignore-scripts --no-save
 # bien là avant de construire.
 COPY apps/web-v3/ ./
 
-RUN bun -e "const f=require('fs');const p=JSON.parse(f.readFileSync('package.json','utf8'));p.workspaces=['packages/design-tokens'];f.writeFileSync('package.json',JSON.stringify(p,null,2));" \
+RUN bun -e "const f=require('fs');const p=JSON.parse(f.readFileSync('package.json','utf8'));p.workspaces=['packages/design-tokens','packages/shared'];f.writeFileSync('package.json',JSON.stringify(p,null,2));" \
     && test -e node_modules/@meeshy/design-tokens \
     || { echo "le lien de workspace @meeshy/design-tokens est absent"; exit 1; }
+RUN test -e node_modules/@meeshy/shared \
+    || { echo "le lien de workspace @meeshy/shared est absent"; exit 1; }
+
+# `@meeshy/shared` sert son `dist/` : sans cette étape, l'import se résout sur
+# un répertoire vide et le build échoue — ou pire, un bundler indulgent le
+# laisse passer et l'application perd le Prisme en silence.
+RUN cd packages/shared && bun run build
+RUN test -s packages/shared/dist/utils/conversation-helpers.js \
+    || { echo "packages/shared n'a pas produit son dist"; exit 1; }
 
 # Le build EST le préchauffage : le greffon de `vite.config.ts` écrit les cinq
 # documents avant que `vite-plugin-pwa` ne scelle son manifeste de précache.

@@ -250,22 +250,39 @@ jobs:
       # LES GATES PROPRES À LA V4 — ils ne rentrent dans aucun filtre turbo
       # parce qu'ils ne sont pas des tâches de package : ce sont des mesures.
       #
-      #   check:jetons  la palette dérivée n'a pas dérivé de MeeshyColors.swift
-      #   mesure-poids  la première peinture tient sous le plafond de budgets.json
+      #   check:tokens      la palette dérivée n'a pas dérivé de MeeshyColors.swift
+      #   measure-weight    la première peinture tient sous le plafond de budgets.json
+      #   check-utilities   aucune classe utilitaire n'est morte dans la feuille
       #
       # Le second est la raison d'être de cette application (une zone rurale,
       # un réseau payé au mégaoctet) : le laisser hors CI reviendrait à écrire
       # un budget que personne ne vérifie. Le build est mesuré à ~200 ms, le
       # coût d'étape est négligeable.
       - name: Gates web-v3 (jetons dérivés + poids de la première peinture)
-        working-directory: apps/web-v3
         run: |
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} check:jetons
-          node scripts/verifie-courbe.mjs
+          # `@meeshy/shared` sert son `dist/` : le type-check et le build de la
+          # v3.1 s'y résolvent depuis #5493. Étape EXPLICITE plutôt que filtre
+          # turbo, pour rester alignée sur les trois autres travaux navigateur
+          # qui la portent déjà.
+          cd packages/shared
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
-          node scripts/mesure-poids.mjs
-          node scripts/verifie-contexte-docker.mjs
-          node scripts/verifie-suivi-git.mjs
+          cd ../../apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} check:tokens
+          # #5606 — les actifs DÉRIVÉS de l'icône iOS (icônes PWA, splashs des
+          # deux coques) sont commités : sans ce contrôle, une icône iOS
+          # retouchée laisserait `public/` et les coques périmés EN SILENCE.
+          # Le témoin `scripts/brand-assets.test.ts` couvre les copies octet
+          # pour octet, pas les images RECALCULÉES — c'est cette ligne-ci qui
+          # les garde. (Le composite `bun run gate` n'est PAS lancé en CI :
+          # cette étape énumère ses maillons un par un, donc un maillon ajouté
+          # au composite seul ne s'exécuterait nulle part.)
+          python3 scripts/generate-icons.py --check
+          node scripts/check-curve.mjs
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+          node scripts/check-utilities.mjs
+          node scripts/measure-weight.mjs
+          node scripts/check-docker-context.mjs
+          node scripts/check-git-tracking.mjs
 
       - name: Type-check (apps/web — debt ratchet)
         run: bash scripts/check-type-debt.sh --self-test && bash scripts/check-type-debt.sh
@@ -550,21 +567,21 @@ jobs:
       # (`testIgnore`), et aucune étape ne les nommait. Elles portent les
       # critères de fin de huit issues qu'aucun gate ne pouvait donc prouver.
       #
-      # `check-v3-pipeline.mjs` était censé l'attraper et ne le voyait pas : sa
-      # lecture de `SUITES_DE_PAGE` ne sait pas lire un `...SPREAD`, et la liste
-      # a cessé d'être un littéral le jour où elle s'est mise à RELEVER ses
-      # suites sur le disque. La garde est corrigée dans le même lot ; le
-      # correctif de fond, lui, est ici : **une étape lance un PROJET, pas une
-      # énumération** — c'est la seule forme qui fasse entrer d'office la suite
-      # écrite demain.
+      # Une étape qui nommait `test:a11y`, `test:cibles` et `test:fil-a11y`
+      # (trois des onze suites du projet `pages`) laissait les huit autres —
+      # `v3-nouvelle-conversation`, `v3-nouveau-lien` et six `*-a11y` — sans
+      # aucun job pour les lancer : `test:chaines` les ignore par construction
+      # (`testIgnore`), et aucune étape ne les nommait. Le correctif de fond
+      # est ici : **une étape lance un PROJET, pas une énumération** — c'est la
+      # seule forme qui fasse entrer d'office la suite écrite demain.
       - name: Gate pages — axe, cibles tactiles, surimpressions (projet ENTIER)
         run: |
           cd apps/web-old-version3
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:pages
 
-      # PAS de `continue-on-error` ici : `check-v3-pipeline.mjs` interdit qu'une
-      # étape nommant la v3 en porte un, et le job est de toute façon déjà rouge
-      # quand celle-ci tourne.
+      # PAS de `continue-on-error` ici : le job est de toute façon déjà rouge
+      # quand l'étape précédente échoue, et masquer celle-ci retirerait le seul
+      # artefact qui explique pourquoi.
       - name: Upload Playwright traces
         uses: actions/upload-artifact@v7
         if: failure()
@@ -592,7 +609,7 @@ jobs:
   # fin) ne pouvaient le voir. Il faut un navigateur RÉEL et une DEUXIÈME
   # visite : c'est exactement ce que ce job fait.
   institutionnel-v3:
-    name: Peaux web-v3 (cache institutionnel + flux de la Lentille)
+    name: Peaux web-v3 (institutionnel, Lentille, états et virtualisation du fil)
     runs-on: ubuntu-latest
     needs: quality
     timeout-minutes: 15
@@ -640,6 +657,11 @@ jobs:
       # Le préchauffage des cinq documents fait partie de CE build depuis
       # qu'il est un greffon de `vite.config.ts` : le témoin mesure donc
       # exactement ce qu'un déploiement servirait.
+      - name: Build packages/shared (la v3.1 en importe depuis #5493)
+        run: |
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
       - name: Build apps/web-v3
         run: |
           cd apps/web-v3
@@ -651,7 +673,7 @@ jobs:
       - name: Gate cache institutionnel
         run: |
           cd apps/web-v3
-          node scripts/verifie-institutionnel.mjs
+          node scripts/check-institutional.mjs
 
       # LE CRITÈRE BINAIRE DE LA LENTILLE, dans le MÊME travail : il lève le
       # même navigateur sur le même `dist`, et un second travail paierait une
@@ -659,7 +681,21 @@ jobs:
       - name: Gate flux de la Lentille (mise en page invariable au défilement)
         run: |
           cd apps/web-v3
-          node scripts/verifie-lentille.mjs
+          node scripts/check-lens.mjs
+
+      - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
+        run: |
+          cd apps/web-v3
+          node scripts/check-thread-states.mjs
+
+      # EN DERNIER, et pas par hasard : ce témoin RECONSTRUIT `dist` en variante
+      # de banc (500 messages) pour mesurer la virtualisation, puis le
+      # reconstruit normalement. Le placer avant les deux autres leur ferait
+      # mesurer un `dist` qui n'est pas celui qu'on livre.
+      - name: Gate virtualisation du fil (500 messages)
+        run: |
+          cd apps/web-v3
+          node scripts/check-thread-virtualization.mjs
 
   # ===========================================================================
   # LIFECYCLE: le gate de cycle de vie du § 8.5 de la conception v3 — SON PORTEUR
@@ -1932,7 +1968,7 @@ jobs:
           echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| A11y web-v3 (axe) | ${{ needs.a11y-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Cycle de vie web-v3 | ${{ needs.lifecycle-v3.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Peaux web-v3 (institutionnel + Lentille) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Peaux web-v3 (institutionnel + Lentille + fil) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Chaînes web-v3 | ${{ needs.chaines-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Python) | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY

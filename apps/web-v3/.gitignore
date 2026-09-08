@@ -4,11 +4,11 @@ dist-*
 .vite
 *.local
 
-# Les plateformes natives sont REGENEREES, pas versionnees, tant que ce POC
-# n'a pas ete arbitre : `bunx cap add android` les repose en 75 ms et elles
-# n'ont recu aucune edition manuelle. Le jour ou la variante B est retenue,
-# elles se committent (convention Capacitor) parce qu'elles portent alors des
-# reglages — signature, permissions, icones — qu'aucune commande ne rejoue.
-android
-ios
-rendu
+# Les plateformes natives sont VERSIONNEES depuis #5604 (D-18, decisions.md) :
+# elles portent des reglages qu'aucune commande ne rejoue — SYMROOT dans
+# `ios/App/App.xcodeproj/project.pbxproj`, icones et splash du travail
+# `assets`, demain signature et permissions. `bunx cap add android`/`ios` ne
+# les recree PAS si elles existent deja ; leurs propres `.gitignore` GENERES
+# (`android/.gitignore`, `ios/.gitignore`) gouvernent ce qui, A L'INTERIEUR,
+# ne se committe jamais (copie du dist, produits de build, Pods).
+render

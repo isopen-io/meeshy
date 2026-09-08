@@ -34,6 +34,8 @@ import {
 import { registerConversationMessagesSovereignRoute } from './conversation-messages-sovereign';
 import { registerUserReportsRoutes } from './user-reports';
 import { registerUserWriteRoutes } from './users-write';
+import { registerUserBanRoutes } from './user-bans';
+import { BanService } from '../../services/admin/ban.service';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
@@ -103,11 +105,16 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     resolveSocketManager: () => fastify.socketIOHandler?.getManager(),
   });
   const userAuditService = new UserAuditService(fastify.prisma);
+  const banService = new BanService(fastify.prisma, userManagementService);
 
   // Les ÉCRITURES vivent dans `users-write.ts`, sous la loi de leur CHAMP
   // (#4154). Ce fichier ne garde que les lectures, la création et la
   // suppression — trois gestes qui ne posent pas la question « quel champ ».
   registerUserWriteRoutes(fastify, { userManagementService, userAuditService });
+
+  // Le bannissement (#3719) est un geste DISCRET, pas un champ du compte —
+  // il ne rejoint pas la loi des champs, il porte sa propre adresse.
+  registerUserBanRoutes(fastify, { banService, userManagementService, userAuditService });
 
   /**
    * GET /admin/users - Liste tous les utilisateurs (avec sanitization)

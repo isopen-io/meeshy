@@ -95,9 +95,9 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 // ─── Imports after mocks ──────────────────────────────────────────────────────
 
-import { UploadProcessor } from '../../../services/attachments/UploadProcessor';
-import type { FileToUpload } from '../../../services/attachments/UploadProcessor';
+import { UploadProcessor, type FileToUpload } from '../../../services/attachments/UploadProcessor';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { SIGNATURE_BYTES_BY_MIME_TYPE } from '../../../services/attachments/__tests__/signature-fixtures';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -107,10 +107,11 @@ class MockProc extends EventEmitter {
 }
 
 function makeFile(overrides?: Partial<FileToUpload>): FileToUpload {
+  const mimeType = overrides?.mimeType ?? 'video/mp4';
   return {
-    buffer: Buffer.from('content'),
+    buffer: SIGNATURE_BYTES_BY_MIME_TYPE[mimeType] ?? Buffer.from('content'),
     filename: 'test.mp4',
-    mimeType: 'video/mp4',
+    mimeType,
     size: 1024 * 100,
     ...overrides,
   };

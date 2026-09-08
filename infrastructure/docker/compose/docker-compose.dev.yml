@@ -200,6 +200,25 @@ services:
       timeout: 5s
       retries: 2
       start_period: 120s
+    labels:
+      # unhealthy déclenche un restart (#5610) — voir le service `autoheal`.
+      - "autoheal=true"
+
+  # Autoheal — restaure un conteneur `unhealthy` (#5610 : le translator est
+  # resté bloqué 7 jours en production, `restart: unless-stopped` ne
+  # réagissant qu'à une sortie de process, jamais à un healthcheck rouge).
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: meeshy-dev-autoheal
+    restart: unless-stopped
+    profiles: ["full"]
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=30
+      - AUTOHEAL_START_PERIOD=60
+      - AUTOHEAL_DEFAULT_STOP_TIMEOUT=10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   # ===========================================================================
   # GATEWAY - API Service (profile: full)

@@ -32,7 +32,7 @@ de trois fois le runtime Preact entier. Ce poids s'est révélé
 **incompressible** : retirer toutes ses options rend un chunk au **hash
 identique** — on ne paie pas ce qu'on utilise, on paie le moteur.
 
-Il est remplacé par `src/lib/routeur.tsx`, taillé pour ce que Meeshy demande
+Il est remplacé par `src/lib/router.tsx`, taillé pour ce que Meeshy demande
 (paramètres de chemin typés depuis le motif, paramètres de recherche,
 découpage par route, préchargement à l'intention, restauration du défilement) :
 **~1,4 Ko gzip**. La première peinture passe de **50,85 à 24,53 Ko** et de
@@ -54,12 +54,12 @@ rencontre.
 | ouverture **hors ligne** | **oui**, navigation comprise — vérifié | oui |
 | pipeline | `vite build` | `vite build && cap sync` — **86 ms** |
 
-Les deux se construisent depuis **le même `dist/`** ; seul `MEESHY_CIBLE`
+Les deux se construisent depuis **le même `dist/`** ; seul `MEESHY_TARGET`
 change (base relative, service worker retiré). C'est la condition pour que
 « transformable sans friction » soit une mesure et non une promesse.
 
-Rejouer : `bun run gate`, `node scripts/verifie-hors-ligne.mjs`,
-`node scripts/capture.mjs` (captures dans `rendu/`, non versionnées).
+Rejouer : `bun run gate`, `node scripts/check-offline.mjs`,
+`node scripts/capture.mjs` (captures dans `render/`, non versionnées).
 
 Les captures figent l'horloge de la page (`page.clock.setFixedTime`) : sans
 ça, deux captures du même code diffèrent par leurs horodatages et comparer un
@@ -72,15 +72,34 @@ pendant la nuit et un témoin qui cherchait « Aujourd'hui » tombait sans qu'un
 ligne de code ait bougé. Ce qui doit être fixe, c'est la **forme** du jeu de
 données, pas l'instant où on le regarde.
 
-### Ce qui n'a PAS pu être vérifié ici
+### Les coques (#5604) — mesuré au 2026-09-08
 
-**Aucun APK n'a été produit.** L'installation du SDK Android est refusée par la
-politique de sortie de l'environnement (`dl.google.com` — CONNECT 403). Sont
-vérifiés : `cap add android` (75 ms), `cap sync` (86 ms), le projet natif
-généré (75 fichiers, 808 Ko) et les actifs web embarqués (228 Ko). **La taille
-de l'APK, le temps de démarrage à froid et la fluidité de défilement réelle sur
-un Android d'entrée de gamme restent à mesurer** — et c'est le dernier point
-qui décide vraiment de la variante B.
+Les coques `android/` et `ios/` sont générées, versionnées (D-18) et
+DÉMARRENT — sur l'AVD `Meeshy_Poc_Web-v31` et le simulateur
+`Meeshy Poc-Web-V31` (54438823-4ADC-4536-88D2-FC441395FA04).
+
+| | Android | iOS |
+|---|---|---|
+| construction | `assembleDebug` : **19 s** à froid, **1 s** incrémental | `xcodebuild` : **7 s** à froid |
+| artefact | `app-debug.apk` : **4 828 917 octets** (≈4,6 Mio) | `App.app` sous `ios/App/Build/Products/Debug-iphonesimulator/` |
+| démarrage | liste rendue ; splash `#0b0c14` mesuré au pixel, système en mode clair compris | liste rendue, les deux schémas |
+| retour matériel (défaut 3b) | **corrigé** — fil → liste → sortie (`MainActivity.java`, D-18) | sans objet |
+| bascule clair/sombre à chaud (défaut 3c) | sans objet (suit `uimode night`, natif) | **corrigé et vérifié** — `simctl ui … appearance dark/light` répercuté SANS relancer l'app |
+| safe-area (défaut 3a) | non concerné (la WebView est posée dans les barres système) | **corrigé et MESURÉ** — `scrollHeight` passe de 936 à 874 pour `innerHeight` 874 : le débord de 62 px qui coupait la barre de recherche a disparu (D-18) |
+
+**Le piège de `cap sync`, à connaître avant toute recette.** `bun run gate`
+reconstruit `dist/` en variante **A** (base absolue, service worker) : un
+`cap sync` lancé juste après pousserait CE dist dans les coques, qui
+n'afficheraient plus rien. Toute recette de coque recommence donc par
+`MEESHY_TARGET=capacitor bunx vite build`, puis `bunx cap sync`. Le gate
+`check-shell-dist.mjs` construit, lui, dans son propre `dist-capacitor/` et
+l'efface derrière lui — il ne touche jamais `dist/`, et n'est donc pas une
+protection contre ce piège.
+
+**Le temps de démarrage à froid CHRONOMÉTRÉ sur un appareil réel d'entrée de
+gamme, et la fluidité de défilement réelle qui va avec, restent « à mesurer »**
+— aucun appareil physique n'est disponible ici ; c'est le seul point que cette
+passe n'a pas pu clore.
 
 ## L'interface
 
@@ -98,11 +117,11 @@ maquettes web. Ce qui en découle et qu'on rate en regardant vite :
 - **L'avatar et le nom vivent DANS le pied de la bulle**, et seulement sur le
   **dernier** message d'une suite (jamais le premier), en groupe, en réception.
 - **Regroupement** : même auteur + même jour, **sans fenêtre temporelle**
-  (`src/lib/groupage.ts`, témoins compris). C'est la même loi que iOS, le web
+  (`src/lib/grouping.ts`, témoins compris). C'est la même loi que iOS, le web
   et Android.
 - **Prisme Linguistique** : le contenu affiché EST déjà la traduction préférée,
   rendu comme du contenu natif ; la seule marque est la pastille `translate` et
-  la bande de drapeaux du pied. La descente est dans `src/lib/api/prisme.ts`,
+  la bande de drapeaux du pied. La descente est dans `src/lib/api/prism.ts`,
   avec le témoin qui compte — celui qui s'écrit sur un **rang autre que le
   premier**, sinon le court-circuit interdit et la règle juste rendent le même
   verdict.
@@ -120,7 +139,7 @@ fluidité sérieuse sur Android d'entrée de gamme.
 
 **Aucune valeur de couleur ou de géométrie iOS n'est écrite à la main ici.**
 `packages/design-tokens/ios.css` est **généré** depuis `MeeshyColors.swift` et
-`DesignTokens.swift` par `packages/design-tokens/scripts/genere-depuis-ios.mjs`.
+`DesignTokens.swift` par `packages/design-tokens/scripts/generate-from-ios.mjs`.
 `src/styles/ios.css` ne fait plus que **nommer** ces jetons en utilitaires
 Tailwind.
 
@@ -128,8 +147,8 @@ Deux gates, qui vérifient deux choses différentes :
 
 | gate | ce qu'il prouve |
 |---|---|
-| `bun run check:jetons` | le CSS généré n'a pas dérivé de ses sources Swift |
-| `bun run verifie:jetons` | **le navigateur peint bien ces valeurs-là**, dans les deux schémas |
+| `bun run check:tokens` | le CSS généré n'a pas dérivé de ses sources Swift |
+| `bun run check:tokens-resolved` | **le navigateur peint bien ces valeurs-là**, dans les deux schémas |
 
 Le second n'est pas redondant : entre le fichier généré et le pixel il y a un
 import, un `@theme inline`, la cascade et deux classes de schéma, et n'importe
@@ -170,4 +189,4 @@ vus rougir sur une valeur falsifiée.
   D'où `erreur`, `anneau`, `av-N`, `pile`.
 
 Les noms d'utilitaires sont les **rôles** de la charte, pas des tailles :
-`rounded-carte`, `text-corps`, `bg-plan`. Un mésusage se voit en revue.
+`rounded-card`, `text-body`, `bg-panel`. Un mésusage se voit en revue.

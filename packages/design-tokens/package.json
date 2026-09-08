@@ -22,7 +22,7 @@
     "./ios.css": "./ios.css"
   },
   "scripts": {
-    "genere:ios": "node scripts/genere-depuis-ios.mjs",
-    "check": "node scripts/genere-depuis-ios.mjs --verifie"
+    "generate:ios": "node scripts/generate-from-ios.mjs",
+    "check": "node scripts/generate-from-ios.mjs --check"
   }
 }
