@@ -37,3 +37,15 @@ declare module 'bun:test' {
  * construit.
  */
 declare const __BENCH__: number;
+
+/**
+ * `__SHELL__` — `true` sous `MEESHY_TARGET=capacitor` (la coque native),
+ * `false` en web nu. Posé en littéral par `vite.config.ts` (même mécanique
+ * que `__BENCH__`) ; `src/lib/api/config.ts` en dérive `apiConfig.base` — une
+ * coque ne peut jamais résoudre une base RELATIVE (`capacitor://localhost/…`
+ * ne mène nulle part), le web nu le peut (proxée en dev, même origine en
+ * déploiement). Sous `bun test`, `bunfig.toml` (`[define]`) fournit la
+ * valeur du build NORMAL (`false`) — cette déclaration ne fait que TYPER la
+ * constante, elle ne la RÉSOUT pas.
+ */
+declare const __SHELL__: boolean;
