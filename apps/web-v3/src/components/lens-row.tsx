@@ -1,8 +1,9 @@
+import { memo } from 'react';
+
 import type { Conversation } from '@/lib/api/types';
 import type { ConversationFlags } from '@/lib/api/preferences';
 import { served } from '@/lib/api/prism';
 import { accentOf, withAccent } from '@/lib/accent';
-import { time } from '@/lib/grouping';
 import { MUTED_OPACITY } from '@/lib/lens/law';
 import type { RowActionId } from '@/lib/view/row-actions';
 import { initialsOf, isGroup, peerOf, previewKindOf, presenceOf, titleOf } from '@/lib/view/conversation';
@@ -10,6 +11,7 @@ import { Link } from '@/routes/route-table';
 
 import { Avatar } from './avatar';
 import { Glyph } from './glyph';
+import { LensTime } from './lens-time';
 import { RowActions } from './row-actions';
 
 /**
@@ -64,15 +66,7 @@ export type RowState = {
 
 const AT_REST: RowState = { magnified: false, alpha: 1, scale: 1, breathing: 0 };
 
-export function LensRow({
-  conversation,
-  languages,
-  viewerId,
-  status = AT_REST,
-  flags,
-  unreadCount,
-  onRowAction,
-}: {
+export type LensRowProps = {
   conversation: Conversation;
   languages: readonly string[];
   viewerId: string;
@@ -81,8 +75,26 @@ export function LensRow({
   flags: ConversationFlags;
   /** Compte non-lu EFFECTIF — `effectiveUnreadOf(conversation, overrides)`. */
   unreadCount: number;
-  onRowAction: (id: RowActionId) => void;
-}) {
+  /**
+   * `(conversationId, id) => void` — jamais `(id) => void` fermé sur
+   * `conversation` (#5694, cinquième point) : un callback RECRÉÉ à chaque
+   * rendu de l'écran casserait `memo` en aval pour TOUTES les rangées, quel
+   * que soit le soin mis à comparer le reste. `routes/conversations.tsx`
+   * passe désormais une fonction MODULE-LEVEL, stable par construction —
+   * cette rangée n'a plus besoin de fermer sur rien pour agir.
+   */
+  onRowAction: (conversationId: string, id: RowActionId) => void;
+};
+
+function LensRowImpl({
+  conversation,
+  languages,
+  viewerId,
+  status = AT_REST,
+  flags,
+  unreadCount,
+  onRowAction,
+}: LensRowProps) {
   const unread = unreadCount > 0;
   /**
    * LE FONDU DE SOURDINE NE PORTE QUE SUR LE CHROME — #5559 défauts 1/8
@@ -120,8 +132,21 @@ export function LensRow({
    */
   const previewKind = previewKindOf(conversation);
   const showsServedPreview = previewKind === 'standard' || previewKind === 'ephemeral';
-  const senderPrefix =
-    group && conversation.lastMessage?.sender ? `${conversation.lastMessage.sender.displayName} : ` : '';
+  /**
+   * LA CLASSE DE TRONCATURE DE L'APERÇU — `truncate` au repos (une ligne,
+   * point de suspension), `line-clamp-2` magnifié (deux lignes, point de
+   * suspension). Les deux n'opèrent que sur un BLOC : voir le commentaire de
+   * `data-line2` plus bas.
+   */
+  const previewText = status.magnified ? 'line-clamp-2' : 'truncate';
+  const senderName = group ? conversation.lastMessage?.sender?.displayName : undefined;
+  /**
+   * Le nom de l'expéditeur reste HORS du nœud qui porte `lang` — le Prisme
+   * n'a rien à dire du nom d'une personne — mais dans le MÊME flux de texte
+   * que l'aperçu : c'est une seule phrase, qui se tronque d'un seul point de
+   * suspension, comme le `Text` concaténé d'iOS.
+   */
+  const senderPrefix = senderName === undefined ? null : `${senderName} : `;
 
   /**
    * LA LIGNE DESCEND LA CARTE PRÉCALCULÉE PAR LE SERVEUR
@@ -236,8 +261,23 @@ export function LensRow({
           </span>
 
           <span className="flex items-baseline gap-2">
+            {/*
+              LA HIÉRARCHIE TYPOGRAPHIQUE (#5694, écart 1) — `LentilleMetrics.
+              Name.size` = `MeeshyFont.bodySize` (15), poids `.heavy` (800 CSS)
+              CONSTANT : le poids ne dépend PAS du non-lu
+              (`LentilleConversationRow.swift:283-367`, `Name.font` fixe) —
+              c'est le badge de non-lus qui porte la nouvelle, jamais un
+              nom plus ou moins gras. `text-bubble` (15px) et
+              `font-extrabold` (800) sont des jetons DÉRIVÉS
+              (`packages/design-tokens/ios.css`, `check:tokens`) et un poids
+              STANDARD Tailwind — aucun littéral écrit ici (D-4). `data-name`
+              est le crochet STABLE des gates (`check-curve.mjs`,
+              `check-list-actions.mjs`), jamais une classe de taille appelée
+              à changer (leçon 548).
+            */}
             <span
-              className={`min-w-0 flex-1 truncate text-title ${unread ? 'font-black' : 'font-bold'}`}
+              data-name
+              className="min-w-0 flex-1 truncate text-bubble font-extrabold"
               style={{ color: 'var(--color-ios-ink)' }}
             >
               {title}
@@ -269,21 +309,46 @@ export function LensRow({
                 mot, et le texte hors écran est le seul porteur qui n'ajoute
                 aucun pixel ; il n'a donc, lui, aucune raison de se fondre. */}
             {flags.isMuted ? <span className="sr-only">En sourdine</span> : null}
-            <span
-              className="shrink-0 text-check font-bold tabular-nums"
-              style={{ color: unread ? 'var(--accent)' : 'var(--color-ios-ink-3)', opacity: chromeFade }}
-            >
-              {at === undefined ? '' : time(at)}
-            </span>
+            {/*
+              L'HEURE (#5694, écarts 1 et 8) — `LentilleMetrics.Time.size` = 12
+              poids `.bold` (700), et `LentilleConversationRow.timestampColor`
+              rend TOUJOURS l'encre TERTIAIRE (`:458-471` — « le timestamp
+              rouge sur non-lu est supprimé ») : `LensTime` ne prend même pas
+              de prop `unread`, la règle est structurelle. RELATIVE
+              (`shortRelativeTime`), vivante à la minute (`minuteClock`), et
+              fondue avec le reste du CHROME sous sourdine (`chromeFade`).
+            */}
+            {at === undefined ? null : (
+              <span style={{ opacity: chromeFade }}>
+                <LensTime at={at} />
+              </span>
+            )}
           </span>
 
           {/*
-            L'APERÇU. Au repos une ligne, magnifié deux — et c'est `line-clamp`
-            qui change, pas la hauteur du conteneur : la deuxième ligne occupe
-            une place déjà réservée par le conteneur visuel de 100.
+            L'APERÇU (`list.line2`, #5694 écart 1). Au repos une ligne,
+            magnifié deux — et c'est `line-clamp` qui change, pas la hauteur
+            du conteneur : la deuxième ligne occupe une place déjà réservée
+            par le conteneur visuel de 100. `text-title` (13px = `MeeshyFont.
+            subheadSize`, poids RÉGULIER — `LentilleMetrics.Line2`) est le
+            jeton DÉRIVÉ ; `data-line2` le crochet stable des gates.
+
+            UN FLUX DE TEXTE, PAS UNE RANGÉE FLEX (#5694 revue). En
+            `display: flex`, `text-overflow: ellipsis` ne s'applique JAMAIS —
+            les nœuds de texte y deviennent des éléments flex anonymes : la
+            ligne se coupait NET au bord, sans point de suspension, là où la
+            cible iOS en montre un (`targets/lentille.dark.png`). Pire une
+            fois magnifiée : le nom de l'expéditeur et les deux lignes de
+            l'aperçu formaient deux colonnes centrées l'une contre l'autre,
+            la seconde ligne repartant au MILIEU de la rangée. iOS n'a
+            qu'UN `Text` concaténé, et cette ligne en est le miroir : un bloc
+            de texte, le glyphe posé `inline-block` dedans, `truncate` au
+            repos et `line-clamp-2` magnifié — deux utilitaires qui, eux,
+            opèrent sur un bloc.
           */}
           <span
-            className={`flex items-center gap-1 text-body ${status.magnified ? 'line-clamp-2' : 'truncate'}`}
+            data-line2
+            className={`block min-w-0 text-title ${previewText}`}
             style={{ color: previewKind === 'view-once' ? accent : 'var(--color-ios-ink-2)' }}
           >
             {/* LES APERÇUS PROTÉGÉS (D-23, #5676) : aucune langue à annoncer,
@@ -299,24 +364,24 @@ export function LensRow({
             {previewKind === 'hidden' ? (
               <>
                 {senderPrefix}
-                <Glyph name="eyeSlash" size={13} className="shrink-0" />
-                <span className="italic truncate">1 message caché</span>
+                <Glyph name="eyeSlash" size={13} className="mr-1 inline-block align-[-2px]" />
+                <span className="italic">1 message caché</span>
               </>
             ) : previewKind === 'view-once' ? (
               <>
                 {senderPrefix}
-                <Glyph name="flame" size={13} className="shrink-0" />
-                <span className="italic truncate">1 message vue unique</span>
+                <Glyph name="flame" size={13} className="mr-1 inline-block align-[-2px]" />
+                <span className="italic">1 message vue unique</span>
               </>
             ) : previewKind === 'expired' ? (
               <>
-                <Glyph name="timer" size={13} className="shrink-0" />
-                <span className="italic truncate">Message expiré</span>
+                <Glyph name="timer" size={13} className="mr-1 inline-block align-[-2px]" />
+                <span className="italic">Message expiré</span>
               </>
             ) : (
               <>
                 {senderPrefix}
-                {previewKind === 'ephemeral' ? <Glyph name="timer" size={13} className="shrink-0" /> : null}
+                {previewKind === 'ephemeral' ? <Glyph name="timer" size={13} className="mr-1 inline-block align-[-2px]" /> : null}
                 {/* `lang` porte la langue SERVIE par le Prisme, pas celle du
                     document : un lecteur d'écran doit prononcer un aperçu traduit
                     avec la voix de sa langue, jamais avec celle de l'expéditeur.
@@ -362,7 +427,59 @@ export function LensRow({
         ) : null}
       </Link>
 
-      <RowActions flags={flags} unread={unread} magnified={status.magnified} onAction={onRowAction} />
+      <RowActions
+        flags={flags}
+        unread={unread}
+        magnified={status.magnified}
+        onAction={(id) => onRowAction(conversation.id, id)}
+      />
     </li>
   );
 }
+
+/**
+ * LE COMPARATEUR DE `memo` (#5694, cinquième point — directive 7) — écrit à
+ * la MAIN plutôt que la comparaison superficielle par défaut de `memo`, pour
+ * une raison précise : `flags` est un OBJET reconstruit à chaque rendu de
+ * l'écran (`effectiveFlagsOf(...)`, `routes/conversations.tsx`) même quand
+ * son CONTENU n'a pas changé — la comparaison par défaut (`Object.is` sur
+ * chaque prop) verrait cette référence neuve et re-rendrait TOUTE rangée à
+ * CHAQUE tick de scène ou d'horloge, exactement le défaut que ce lot ajoute
+ * sinon : deux sources de re-rendu NEUVES (entrée/sortie de scène ; tick de
+ * l'heure) sur un écran qui re-rendait déjà toutes ses rangées à chaque
+ * élection.
+ *
+ * `conversation`, `languages` et `onRowAction` restent comparés par
+ * RÉFÉRENCE — `CONVERSATIONS`, `READER_LANGUAGES` et la fonction MODULE-LEVEL
+ * `handleRowAction` (`routes/conversations.tsx`) sont tous les trois des
+ * identités STABLES d'un rendu à l'autre ; une référence qui change ICI est
+ * un signal réel, pas du bruit.
+ */
+export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
+  if (prev.conversation !== next.conversation) return false;
+  if (prev.languages !== next.languages) return false;
+  if (prev.viewerId !== next.viewerId) return false;
+  if (prev.unreadCount !== next.unreadCount) return false;
+  if (prev.onRowAction !== next.onRowAction) return false;
+
+  const s1 = prev.status ?? AT_REST;
+  const s2 = next.status ?? AT_REST;
+  if (s1.magnified !== s2.magnified || s1.alpha !== s2.alpha || s1.scale !== s2.scale || s1.breathing !== s2.breathing) {
+    return false;
+  }
+
+  /**
+   * Les drapeaux se comparent CLÉ PAR CLÉ, ÉNUMÉRÉES depuis l'objet — jamais
+   * par une liste écrite à la main (revue #5694). Une liste manuelle est un
+   * INVENTAIRE À TENIR À JOUR : le jour où `ConversationFlags` gagne un
+   * quatrième drapeau, un comparateur qui n'en connaît que trois répond
+   * « identiques » sur une rangée qui a changé — et la rangée ne se re-rend
+   * PLUS, en silence, sans qu'aucun témoin ne rougisse. C'est la forme du
+   * relais qui recopie champ par champ (`CLAUDE.md`, cycle 126).
+   */
+  const before = Object.keys(prev.flags) as (keyof ConversationFlags)[];
+  const after = Object.keys(next.flags) as (keyof ConversationFlags)[];
+  return before.length === after.length && before.every((key) => prev.flags[key] === next.flags[key]);
+}
+
+export const LensRow = memo(LensRowImpl, sameRowProps);

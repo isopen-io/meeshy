@@ -809,6 +809,18 @@ export const CONVERSATIONS: readonly Conversation[] = [
    * L'état vide est un état à part entière (« Complétude », dimension 13) et
    * il n'existe que si quelque chose y mène : sans cette entrée, l'écran vide
    * serait du code que personne, témoin compris, n'atteint jamais.
+   *
+   * `lastMessageAt` EST POSÉ (#5694, correction défaut 1) — `lastMessage`
+   * reste absent (aucun message n'a jamais été envoyé), mais `lastMessageAt`
+   * ne l'est JAMAIS sur le fil : `schema.prisma:495` le déclare
+   * `DateTime @default(now())`, sans `?`, et le `select` de la liste le
+   * demande sans condition (`core-list.ts:340`) — la passerelle sert
+   * TOUJOURS une valeur, celle posée à la création de la conversation. Le
+   * modèle iOS en fait autant : `CoreModels.swift:250` décode `lastMessageAt`
+   * comme un `Date` NON optionnel. Une fixture qui omettait le champ
+   * fabriquait un état que ni le serveur ni aucun client ne peut produire —
+   * la rangée rendue perdait alors son heure (`lens-row.tsx`, `at === undefined`
+   * ⇒ aucun `LensTime`), un défaut de CORPUS, pas de composant.
    */
   {
     ...conversationDefaults,
@@ -831,8 +843,13 @@ export const CONVERSATIONS: readonly Conversation[] = [
      * historique remontait au-dessus d'une conversation ACTIVE dont le
      * dernier message date de plus d'une minute — le tri « le plus
      * récemment vivant d'abord » rendait l'inverse de ce qu'il promet.
+     *
+     * `lastMessageAt` porte la MÊME valeur : sans message, le serveur ne
+     * touche plus le champ après la création — les deux dates coïncident
+     * pour cette conversation, comme elles le feraient sur le vrai wire.
      */
     updatedAt: minutesAgo(60 * 24 * 3),
+    lastMessageAt: minutesAgo(60 * 24 * 3),
   },
   {
     ...conversationDefaults,

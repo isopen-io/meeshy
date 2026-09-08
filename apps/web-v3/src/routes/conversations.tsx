@@ -1,16 +1,18 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { Avatar } from '@/components/avatar';
 import { Glyph } from '@/components/glyph';
 import { LensRow } from '@/components/lens-row';
+import { LensSection } from '@/components/lens-sticker';
 import { useScene } from '@/lib/lens/scene';
 import { CONVERSATIONS, VIEWER_ID } from '@/lib/api/fixtures';
 import { accentOf } from '@/lib/accent';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
+import { resolveLensSections } from '@/lib/lens/sections';
 import { READER_LANGUAGES } from '@/lib/reader';
-import type { Conversation } from '@/lib/api/types';
+import { useMinute } from '@/lib/view/use-minute';
 import type { RowActionId } from '@/lib/view/row-actions';
 import { initialsOf, titleOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
@@ -27,14 +29,18 @@ import { Link } from '@/routes/route-table';
  */
 
 /**
- * Un seul callback par écran, PARAMÉTRÉ par conversation à l'appel — plutôt
- * qu'une fabrique `(conversation) => (id) => …` recréée à chaque rendu de
- * chaque rangée (99 conversations × un nouveau closure par image de
- * défilement magnifiée). Les actions du store portent déjà l'id de
- * conversation ; ce gestionnaire n'a besoin que de la lire une fois via
- * `getState()` au moment du CLIC, jamais au rendu.
+ * UN SEUL callback MODULE-LEVEL, jamais une fabrique `(conversation) => (id)
+ * => …` recréée à chaque rendu de chaque rangée (99 conversations × un
+ * nouveau closure par image de défilement magnifiée, ou pire, par tick de
+ * scène/d'horloge maintenant que `LensRow` est `memo`-isée, #5694
+ * cinquième point). Prend l'ID plutôt que l'objet `Conversation` :
+ * `handleRowAction` lui-même reste ainsi une référence STABLE d'un rendu à
+ * l'autre — `LensRow` la reçoit directement, sans wrapper — et le lookup
+ * dans `CONVERSATIONS` ne coûte qu'au moment du CLIC, jamais au rendu.
  */
-function handleRowAction(conversation: Conversation, id: RowActionId): void {
+function handleRowAction(conversationId: string, id: RowActionId): void {
+  const conversation = CONVERSATIONS.find((c) => c.id === conversationId);
+  if (conversation === undefined) return;
   const { overrides, togglePin, toggleMute, toggleArchive, markRead, markUnread } = conversationStore.getState();
   const flags = effectiveFlagsOf(conversation, overrides);
   switch (id) {
@@ -58,12 +64,44 @@ export default function ConversationsScreen() {
   const [filter, setFilter] = useState<ListFilter>('all');
   const [search, setSearch] = useState('');
   const frame = useRef<HTMLUListElement | null>(null);
-  const { focus } = useScene(frame);
+  const { focus, level } = useScene(frame);
   const overrides = useStore(conversationStore, (s) => s.overrides);
 
-  const filtered = applyFilter({ conversations: CONVERSATIONS, filter, search, viewerId: VIEWER_ID, overrides });
-  const visible = orderConversations(filtered, overrides);
-  const emptiness = emptinessOf(CONVERSATIONS, visible);
+  /**
+   * LES SECTIONS (#5694, écart 6) — `resolveLensSections` re-partitionne le
+   * corpus FILTRÉ (recherche et archives déjà réglées par `applyFilter`) en
+   * ÉPINGLES → EN DIRECT → AUJOURD'HUI → HIER → CETTE SEMAINE → PLUS ANCIEN ;
+   * chaque section est déjà TRIÉE en interne (`sortConversations`), donc
+   * l'ordre issu de `orderConversations` ne sert plus qu'à `emptinessOf` et
+   * à la queue de liste — jamais au rendu, désormais porté par les sections.
+   * `now`/`timeZone` sont INJECTÉS depuis la peau, jamais lus dans la loi.
+   *
+   * LES TROIS PASSES SONT MÉMORISÉES ENSEMBLE (revue #5694). Cet écran se
+   * re-rend à CHAQUE élection de la scène — plusieurs fois par seconde
+   * pendant un défilement — et à chaque entrée/sortie de scène. Refaire à
+   * chacun de ces rendus un filtre, un tri et un partitionnement, tous les
+   * trois en O(n log n) sur le corpus ENTIER, c'est la dépense qu'on ne
+   * peut pas se permettre le jour où la liste sert des centaines de
+   * conversations — et c'est la forme que les trente écrans suivants
+   * copieront. Les entrées réelles sont peu nombreuses et stables : le
+   * filtre, la recherche, les remplacements optimistes du magasin, le fuseau
+   * — et LA MINUTE, sans laquelle les sections temporelles gèleraient au
+   * montage et « Aujourd'hui » resterait « Aujourd'hui » après minuit.
+   */
+  const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
+  const minute = useMinute();
+  const { visible, emptiness, sections } = useMemo(() => {
+    const kept = applyFilter({ conversations: CONVERSATIONS, filter, search, viewerId: VIEWER_ID, overrides });
+    const ordered = orderConversations(kept, overrides);
+    return {
+      visible: ordered,
+      emptiness: emptinessOf(CONVERSATIONS, ordered),
+      sections: resolveLensSections({ conversations: kept, overrides, now: new Date(), timeZone }),
+    };
+    // `minute` n'entre dans AUCUNE des expressions ci-dessus : c'est
+    // volontaire — elle y est la clé qui fait ré-évaluer `new Date()`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, search, overrides, timeZone, minute]);
 
   return (
     /* `pt-safe` : l'encoche HAUTE est portee par le CADRE de l'ecran, dans ses
@@ -207,26 +245,58 @@ export default function ConversationsScreen() {
         des boîtes. La Lentille est un flux — les rangées se touchent, et c'est
         la perspective qui les sépare.
       */}
-      <ul ref={frame} id="contenu" className="flex flex-1 flex-col overflow-y-auto px-2 pt-2">
-        {visible.map((c) => (
-          <LensRow
-            key={c.id}
-            conversation={c}
-            languages={READER_LANGUAGES}
-            viewerId={VIEWER_ID}
-            flags={effectiveFlagsOf(c, overrides)}
-            unreadCount={effectiveUnreadOf(c, overrides)}
-            onRowAction={(id) => handleRowAction(c, id)}
-            status={{
-              magnified: focus === c.id,
-              /* La perspective est écrite par la scène directement dans le
-                 style du nœud, à chaque image. Ces valeurs-ci ne sont que
-                 l'état de DÉPART, avant la première passe. */
-              alpha: 1,
-              scale: 1,
-              breathing: 0,
-            }}
-          />
+      {/*
+        `pt-2` NE VIT PLUS ICI (#5694, correction défaut 3) — c'est `LensSection`
+        qui ouvre l'espace au-dessus de CHAQUE en-tête, marge comprise pour la
+        première. Un `padding-top` sur ce scrollport décalait le repère de
+        `position: sticky` (borné à sa boîte de PADDING) à `y = 8` au lieu de
+        `y = 0` : 8 px de rangée défilaient hors de portée de l'en-tête collant
+        et s'y peignaient tranchés au-dessus. Voir le doc-comment de `LensSection`.
+      */}
+      <ul ref={frame} id="contenu" className="flex flex-1 flex-col overflow-y-auto px-2">
+        {/*
+          SECTIONS ET STICKERS COLLANTS (#5694, écart 6) — `pinnedViews:
+          [.sectionHeaders]` côté iOS. Chaque section est un BLOC (`LensSection`)
+          qui contient son en-tête collant puis ses rangées : `position: sticky`
+          fait le reste, sans second conteneur de défilement. Le bloc n'est pas
+          décoratif — c'est lui qui BORNE le collant, donc qui fait chasser un
+          en-tête par le suivant au lieu de les empiler tous en haut (revue
+          #5694 ; voir le doc-comment de `LensSticker`).
+        */}
+        {sections.map((section) => (
+          <LensSection key={section.id} id={section.id}>
+            {section.conversations.map((c) => (
+              <LensRow
+                key={c.id}
+                conversation={c}
+                languages={READER_LANGUAGES}
+                viewerId={VIEWER_ID}
+                flags={effectiveFlagsOf(c, overrides)}
+                unreadCount={effectiveUnreadOf(c, overrides)}
+                onRowAction={handleRowAction}
+                status={{
+                  /**
+                   * L'APLATISSEMENT AU REPOS (#5694, écart 2) —
+                   * `LentilleMagnifiableRow.isMagnified = scene.level > 0 &&
+                   * election.electedId == id`
+                   * (`Mode/LentilleMagnification.swift:435-437`) : la
+                   * rangée élue ne reste MAGNIFIÉE visuellement qu'en scène
+                   * ACTIVE. `level` retombe à 0 après `SCENE_REST_DELAY_MS`
+                   * d'immobilité (`lens/scene.ts`) — sans ce gate, le
+                   * supplément magnifié restait affiché indéfiniment après
+                   * la fin du défilement.
+                   */
+                  magnified: level > 0 && focus === c.id,
+                  /* La perspective est écrite par la scène directement dans le
+                     style du nœud, à chaque image. Ces valeurs-ci ne sont que
+                     l'état de DÉPART, avant la première passe. */
+                  alpha: 1,
+                  scale: 1,
+                  breathing: 0,
+                }}
+              />
+            ))}
+          </LensSection>
         ))}
         {/*
           LA QUEUE DE LISTE — une demi-hauteur de fenêtre de vide sous la
