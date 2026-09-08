@@ -11,6 +11,8 @@ import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, mintMeesh } from
 import { useOnline } from '@/lib/net/online';
 import {
   ACHIEVEMENT_COPY,
+  ACHIEVEMENT_SECTION_TITLES,
+  generatedAchievementLabel,
   AXIS_GLYPHS,
   AXIS_LABELS,
   BADGE_UNIT,
@@ -34,6 +36,7 @@ import {
   type EngagementProgress,
   type EngagementTier,
 } from '@meeshy/shared/utils/engagement-progress';
+import type { AchievementSectionView } from '@meeshy/shared/utils/achievement-view';
 
 /**
  * L'ÉCRAN « PROGRESSION » (#5547) — le tableau de bord des streaks & badges
@@ -306,6 +309,81 @@ function ElanBanner({ elan }: { elan: EngagementElanProgress }) {
   );
 }
 
+/**
+ * LES SUCCÈS GÉNÉRÉS, EN RANGÉES HORIZONTALES (#5759).
+ *
+ * Une section = une rangée qui défile latéralement. Trois propriétés que le
+ * catalogue impose et que ce rendu doit respecter :
+ *
+ *  - **l'ordre est celui de la difficulté**, calculé par la loi partagée — le
+ *    rendu ne trie RIEN, sans quoi le web et iOS pourraient diverger ;
+ *  - **la fenêtre est déjà appliquée** (`max(7, acquis + 2)`) : les entrées
+ *    reçues sont exactement celles à montrer, donc le prochain objectif est
+ *    toujours le dernier de la rangée ;
+ *  - **aucun palier inatteignable n'arrive ici** — il a été retiré en amont,
+ *    pas masqué en CSS : un objectif qu'on ne peut pas tenir ne doit pas
+ *    exister dans l'arbre, même invisible.
+ *
+ * La rangée défile dans SON conteneur (`overflow-x`), jamais le document : la
+ * page ne défile jamais horizontalement.
+ */
+function GeneratedAchievements({ sections }: { sections: readonly AchievementSectionView[] }) {
+  if (sections.length === 0) return null;
+  return (
+    <section aria-labelledby="progression-generated" className="flex flex-col gap-4">
+      <SectionTitle
+        id="progression-generated"
+        glyph={PROGRESSION_GLYPHS.medal}
+        title="Défis"
+        tint={BRAND}
+      />
+      {sections.map((vue) => (
+        <div key={vue.section} className="flex flex-col gap-2">
+          <div className="flex items-baseline justify-between">
+            <h3 className="text-caption font-semibold" style={{ color: INK }}>
+              {ACHIEVEMENT_SECTION_TITLES[vue.section]}
+            </h3>
+            <span className="text-check" style={{ color: INK_2 }}>
+              {vue.unlockedCount} / {vue.attainableCount}
+            </span>
+          </div>
+          <ul
+            className="flex gap-2 overflow-x-auto pb-1"
+            aria-label={`${ACHIEVEMENT_SECTION_TITLES[vue.section]} — ${vue.unlockedCount} sur ${vue.attainableCount}`}
+          >
+            {vue.entries.map((entry) => (
+              <li
+                key={entry.key}
+                className="flex min-w-36 shrink-0 flex-col gap-1 rounded-card px-3 py-2"
+                style={{
+                  backgroundColor: entry.unlocked
+                    ? 'color-mix(in srgb, var(--color-ok) 14%, transparent)'
+                    : 'color-mix(in srgb, var(--color-ios-ink) 6%, transparent)',
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{ color: entry.unlocked ? 'var(--color-ok)' : INK_2 }}
+                >
+                  <GlyphSvg glyph={entry.unlocked ? PROGRESSION_GLYPHS.star : PROGRESSION_GLYPHS.medal} size={13} />
+                </span>
+                <span className="text-check font-semibold" style={{ color: INK }}>
+                  {generatedAchievementLabel(entry.family, entry.tier)}
+                </span>
+                {entry.unlocked ? (
+                  <span className="text-check" style={{ color: INK_2 }}>
+                    Obtenu
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 function MeeshHero({ meesh, onMint, isMinting }: { meesh: EngagementMeeshProgress; onMint: () => void; isMinting: boolean }) {
   const soldeLabel = meesh.balance === 0 ? 'Aucune Meesh' : meesh.balance === 1 ? '1 Meesh' : `${meesh.balance} Meeshes`;
   return (
@@ -394,6 +472,10 @@ export function ProgressionBody({
         <LevelCard progress={progress} />
         <StreakCard progress={progress} />
       </div>
+
+      {progress.achievementSections !== undefined ? (
+        <GeneratedAchievements sections={progress.achievementSections} />
+      ) : null}
 
       <section aria-labelledby="progression-badges" className="flex flex-col gap-4">
         <SectionTitle

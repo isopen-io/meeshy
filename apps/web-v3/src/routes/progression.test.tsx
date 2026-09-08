@@ -235,3 +235,107 @@ describe('ElanBanner', () => {
     expect(rendu).not.toContain('Élan ×9');
   });
 });
+
+/**
+ * LES SUCCÈS GÉNÉRÉS EN RANGÉES (#5759) — ce que la fenêtre montre, et ce
+ * qu'elle refuse de montrer.
+ */
+const rendreAvecDefis = (params: {
+  reach: Record<string, number>;
+  milestones?: Array<{ milestoneType: string; milestoneKey: string; reachedAt: string }>;
+}) =>
+  renderToStaticMarkup(
+    <ProgressionBody
+      progress={resolveEngagementProgress({
+        ...ENGAGEMENT_PROGRESS_FIXTURE,
+        milestones: params.milestones ?? [],
+        achievementReach: params.reach,
+      } as never)}
+    />,
+  );
+
+describe('GeneratedAchievements', () => {
+  test('n’affiche rien quand la passerelle ne sert pas la carte', () => {
+    expect(html).not.toContain('Défis');
+  });
+
+  test('ne rend JAMAIS un palier d’ampleur que le produit ne peut pas tenir', () => {
+    // La plus grande conversation compte 300 membres. Le palier 1 000 est
+    // retiré EN AMONT — il n'entre pas dans l'arbre, il n'est pas masqué en
+    // CSS : un objectif qu'on ne peut pas tenir ne doit pas exister.
+    //
+    // Ce témoin ne dit RIEN de ce qui est visible : c'est la FENÊTRE qui en
+    // décide, et confondre les deux le rendrait fragile. Il ne prouve qu'une
+    // chose — l'inatteignable est absent.
+    const rendu = rendreAvecDefis({ reach: { 'conversation.join.size': 300 } });
+    expect(rendu).toContain('Conversation de 10 membres');
+    expect(rendu).not.toContain('Conversation de 1 000 membres');
+    expect(rendu).not.toContain('Conversation de 1 000 000 membres');
+  });
+
+  test('laisse le VOLUME visible sans mesure — répéter n’est pas impossible', () => {
+    const rendu = rendreAvecDefis({ reach: {} });
+    expect(rendu).toContain('conversations rejointes');
+  });
+
+  test('montre SEPT entrées à un compte qui n’a rien décroché', () => {
+    const rendu = rendreAvecDefis({ reach: { 'conversation.join.size': 1000000 } });
+    const cercles = rendu.slice(rendu.indexOf('Cercles'));
+    const items = cercles.split('<li').length - 1;
+    expect(items).toBeGreaterThanOrEqual(7);
+  });
+
+  test('ouvre la fenêtre DEUX PAR DEUX à mesure que les succès tombent', () => {
+    // La règle est `max(7, acquis + 2)` : deux acquis laissent la fenêtre à 7
+    // (2 + 2 = 4 < 7), dix acquis l'ouvrent à douze. C'est CETTE progression
+    // qu'il faut mesurer — pas la présence d'un palier précis, qui dépendrait
+    // de l'ordre de difficulté et rendrait le témoin fragile.
+    const reach = { 'conversation.join.size': 1000000 };
+    const compter = (rendu: string) => {
+      const debut = rendu.indexOf('Cercles');
+      return rendu.slice(debut, rendu.indexOf('</ul>', debut)).split('<li').length - 1;
+    };
+
+    const avec2 = compter(
+      rendreAvecDefis({
+        reach,
+        milestones: [10, 100].map((t) => ({
+          milestoneType: 'achievement',
+          milestoneKey: `achievement.cercles.conversation.join.size:${t}`,
+          reachedAt: '2026-09-08T00:00:00.000Z',
+        })),
+      }),
+    );
+    const avec10 = compter(
+      rendreAvecDefis({
+        reach,
+        milestones: [
+          ...[10, 100, 1000, 10000, 100000, 1000000].map((t) => ({
+            milestoneType: 'achievement',
+            milestoneKey: `achievement.cercles.conversation.join.size:${t}`,
+            reachedAt: '2026-09-08T00:00:00.000Z',
+          })),
+          ...[1, 10, 100, 1000].map((t) => ({
+            milestoneType: 'achievement',
+            milestoneKey: `achievement.cercles.conversation.join.count:${t}`,
+            reachedAt: '2026-09-08T00:00:00.000Z',
+          })),
+        ],
+      }),
+    );
+
+    expect(avec2).toBe(7);
+    expect(avec10).toBe(12);
+    // Le prochain objectif est TOUJOURS visible : la fenêtre dépasse toujours
+    // les acquis de deux.
+    expect(avec10).toBeGreaterThan(10);
+  });
+
+  test('affiche le compte ACQUIS sur ATTEIGNABLE, jamais sur le total déclaré', () => {
+    // Promettre un dénominateur qu'on ne peut pas atteindre découragerait pour
+    // rien : le total est celui du réel.
+    const rendu = rendreAvecDefis({ reach: { 'conversation.join.size': 300 } });
+    expect(rendu).toContain('Cercles');
+    expect(rendu).not.toContain('/ 0');
+  });
+});
