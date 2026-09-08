@@ -326,6 +326,21 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "expiration, sans lecteur. Masquer une ligne à la destruction la ferait " +
       'survivre indéfiniment à la préférence d\'affichage d\'un seul utilisateur.',
   },
+
+  // #5689 — même famille qu'ExpiredMessagesCleanupService juste au-dessus,
+  // pour la même raison : un balayage de purge de compte supprimé, sans
+  // lecteur, qui détruit les messages du compte plutôt que de les masquer
+  // pour un utilisateur en particulier.
+  'messaging/anonymizeDeletedAccountMessages.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Balayage de purge de compte supprimé, à la fin de sa période de grâce : " +
+      'il détruit le contenu des messages du compte (destination fixée par ' +
+      "privacy.json), sans lecteur. Masquer une ligne à la destruction la " +
+      'ferait survivre indéfiniment à la préférence d\'affichage d\'un seul ' +
+      'utilisateur — même raisonnement, même exemption.',
+  },
 };
 
 /**
