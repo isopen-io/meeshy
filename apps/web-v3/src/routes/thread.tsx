@@ -1,5 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+
+/**
+ * Feuille propre à cet écran (correction de revue #5648, défaut majeur 6) —
+ * import STATIQUE mais placé ICI : `thread.tsx` n'est lui-même atteint que
+ * par `import('@/routes/thread')` (`route-table.tsx`), donc Vite scinde
+ * cette CSS dans le CHUNK du fil, jamais dans la feuille globale chargée
+ * par `main.tsx` sur CHAQUE route. Voir le doc-comment du fichier.
+ */
+import '@/styles/thread-scene.css';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
@@ -28,7 +37,8 @@ import {
   usesFlatRow,
 } from '@/lib/reading-mode/decision';
 import { readingModeStore } from '@/lib/reading-mode/store';
-import { useThreadPerspective } from '@/lib/reading-mode/scene';
+import { useThreadScene } from '@/lib/reading-mode/scene';
+import { sceneStyleVars } from '@/lib/reading-mode/metrics';
 
 /**
  * LE SCOPE DU MAGASIN DE MODE DE LECTURE — `'local'` tant qu'aucune session
@@ -75,7 +85,17 @@ export default function ThreadScreen() {
     (total, c) => total + unreadOf(c),
     0,
   );
-  const placed = place(messages);
+  /**
+   * `place()` rend des objets NEUFS à chaque appel : sans ce `useMemo`,
+   * CHAQUE rendu de l'écran — dont ceux que la scène du fil provoque à
+   * chaque changement d'élu — donnait une nouvelle identité à `place` sur
+   * les cinquante rangées montées, et le `memo` de `FocalRow` ne
+   * court-circuitait JAMAIS (correction de revue #5648 : la promesse « deux
+   * rangées re-rendent, jamais toutes » était écrite dans un commentaire et
+   * démentie par ce seul appel). `messages` est un état, donc son identité
+   * ne bouge qu'à l'arrivée d'un message.
+   */
+  const placed = useMemo(() => place(messages), [messages]);
   const group = isGroup(conversation);
 
   /**
@@ -187,13 +207,14 @@ export default function ThreadScreen() {
   });
 
   /**
-   * LA PERSPECTIVE DU MODE FOCAL (#5566, correction de revue, défauts 1/5) —
-   * réservée au mode `focal` (jamais `script`, « densité uniforme, zéro
-   * perspective » côté iOS) : une passe d'AFFICHAGE hors React
-   * (`reading-mode/scene.ts`), sur les rangées `[data-row]` actuellement
-   * montées par le virtualiseur.
+   * LA SCÈNE DU FIL (#5648) — l'ÉLECTION d'une rangée au défilement soutenu
+   * (Focal seul), plus par la courbe continue qu'iOS a retirée
+   * (`reading-mode/perspective.ts`, gelée) ; le RÉVÉLÉ (heure, coches) vit
+   * en Focal ET en Script — `useThreadScene` le monte donc dès que le mode
+   * n'est PAS `bubbles` (« densité uniforme, zéro perspective » ne parle
+   * que de l'ÉLECTION, jamais du révélé).
    */
-  useThreadPerspective(scroller, readingDecision.mode === 'focal');
+  const scene = useThreadScene(scroller, { mode: readingDecision.mode });
 
   /**
    * LE SAUT DE CITATION (#5566, défaut 10) — le bouton de citation promettait
@@ -203,14 +224,30 @@ export default function ThreadScreen() {
    */
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const jumpToMessage = (messageId: string) => {
-    const index = placed.findIndex((p) => p.message.id === messageId);
-    if (index === -1) return;
-    virtualizer.scrollToIndex(index, { align: 'center' });
-    setHighlightedId(messageId);
-    if (highlightTimer.current !== null) clearTimeout(highlightTimer.current);
-    highlightTimer.current = setTimeout(() => setHighlightedId(null), 1600);
-  };
+  /**
+   * `useCallback` et non une fonction nue : cette référence est une PROP de
+   * chaque `FocalRow`, dont le `memo` (#5648) ne vaut que si elle est
+   * stable. `noteProgrammaticScroll` l'est déjà (`reading-mode/scene.ts`),
+   * `virtualizer` aussi (instance TanStack), `placed` depuis le `useMemo`
+   * ci-dessus — la chaîne tient de bout en bout.
+   */
+  const noteProgrammaticScroll = scene.noteProgrammaticScroll;
+  const jumpToMessage = useCallback(
+    (messageId: string) => {
+      const index = placed.findIndex((p) => p.message.id === messageId);
+      if (index === -1) return;
+      // ANNONCE le défilement PROGRAMMÉ avant de le déclencher — ni le révélé
+      // ni l'armement de la scène ne doivent réagir à un saut de citation
+      // (§1.5 de la spécification #5648, même famille de désarmement que
+      // l'ancrage bas ci-dessous, D-15).
+      noteProgrammaticScroll();
+      virtualizer.scrollToIndex(index, { align: 'center' });
+      setHighlightedId(messageId);
+      if (highlightTimer.current !== null) clearTimeout(highlightTimer.current);
+      highlightTimer.current = setTimeout(() => setHighlightedId(null), 1600);
+    },
+    [placed, virtualizer, noteProgrammaticScroll],
+  );
   useEffect(() => () => {
     if (highlightTimer.current !== null) clearTimeout(highlightTimer.current);
   }, []);
@@ -245,6 +282,12 @@ export default function ThreadScreen() {
     };
     const pin = () => {
       if (!armed) return;
+      // ANNONCE au premier pin : l'ancrage en bas ne doit ni révéler ni
+      // armer la scène du fil (§5.8 de la spécification #5648) — l'unique
+      // intention qui la RELÂCHE (`release`, même écouteurs) rouvre la
+      // scène par le même événement, sans course possible entre les deux
+      // effets.
+      if (frames === 0) scene.noteProgrammaticScroll();
       el.scrollTop = el.scrollHeight;
       if (++frames < 20) raf = requestAnimationFrame(pin);
     };
@@ -456,6 +499,12 @@ export default function ThreadScreen() {
       <main
         id="contenu"
         ref={scroller}
+        /* `tabIndex={-1}` — focalisable PROGRAMMATIQUEMENT (jamais dans
+           l'ordre de tabulation naturel) : c'est ce qui permet à `PageUp` /
+           `PageDown` de défiler CE conteneur au clavier — l'intention que
+           `reading-mode/scene.ts` écoute (`keydown`, D-15) — sans ajouter un
+           arrêt de tabulation superflu au parcours normal (#5648 §4.5). */
+        tabIndex={-1}
         /*
           PAS de `justify-end` ici, et c'est mesuré : avec
           `justify-content: flex-end`, un enfant plus haut que le conteneur
@@ -468,6 +517,16 @@ export default function ThreadScreen() {
           normal quand il est long.
         */
         className="flex flex-1 flex-col overflow-y-auto px-3.5 pt-2 pb-2"
+        /*
+          LES COTES DE LA SCÈNE DU FIL (#5648) — la SEULE porte par laquelle
+          `reading-mode/metrics.ts::sceneStyleVars()` atteint le CSS,
+          héritées par chaque rangée `[data-row]` en dessous
+          (`focal-focus-overlays.tsx`, `app.css`). `--accent` hérite déjà de
+          la racine (`withAccent`, sur le conteneur d'écran) — inutile de la
+          reposer ici, une variable CSS traverse les nœuds intermédiaires
+          sans qu'ils la déclarent.
+        */
+        style={sceneStyleVars()}
       >
         {/*
           `flexShrink: 0` n'est PAS une précaution : `<main>` est un conteneur
@@ -510,6 +569,7 @@ export default function ThreadScreen() {
           {virtualizer.getVirtualItems().map((row) => {
             const p = placed[row.index];
             if (p === undefined) return null;
+            const isElected = scene.elected === p.message.id;
             return (
             <li
               key={p.message.id}
@@ -521,6 +581,16 @@ export default function ThreadScreen() {
                 top: 0,
                 width: '100%',
                 transform: `translateY(${row.start}px)`,
+                /* CHAQUE rangée est un CONTEXTE D'EMPILEMENT (`transform`), et
+                   les rangées se peignent dans l'ordre du DOM : les
+                   superpositions de l'élue qui DÉBORDENT vers le bas (bande de
+                   focus, tampon) passaient donc SOUS la rangée suivante.
+                   Mesuré : `elementFromPoint` au centre du drapeau de la bande
+                   rendait la rangée d'APRÈS — le contrôle était INATTEIGNABLE
+                   au doigt et à la souris, quoique présent et fonctionnel
+                   (correction de revue #5648). Élever la SEULE rangée élue
+                   suffit ; aucune autre ne porte de débord. */
+                ...(isElected ? { zIndex: 1 } : {}),
               }}
             >
               {p.opensDay ? (
@@ -539,9 +609,9 @@ export default function ThreadScreen() {
               ) : null}
               {/* LE MODE DE LECTURE (#5566) : `focal`/`script` rendent la
                   rangée plate, `bubbles` reste la bulle historique — D-7,
-                  D-8. `data-row` est la cible de `useThreadPerspective` —
-                  posé sur CHAQUE rangée, il est inerte hors du mode focal
-                  (l'effet n'est jamais activé). */}
+                  D-8. `data-row` est le CANDIDAT d'élection de
+                  `reading-mode/scene.ts` (#5648) — posé sur CHAQUE rangée,
+                  candidat SEULEMENT quand la scène est armée (mode focal). */}
               <div data-row={p.message.id}>
                 {usesFlatRow(readingDecision.mode) ? (
                   <FocalRow
@@ -551,6 +621,7 @@ export default function ThreadScreen() {
                     viewerId={VIEWER_ID}
                     onJumpToMessage={jumpToMessage}
                     highlighted={highlightedId === p.message.id}
+                    elected={isElected}
                     {...(localDelivery.has(p.message.id)
                       ? {
                           localDelivery: localDelivery.get(p.message.id) as LocalDelivery,

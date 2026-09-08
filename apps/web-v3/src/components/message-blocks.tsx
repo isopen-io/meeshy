@@ -126,15 +126,25 @@ export function Check({ status, isMine }: { status: Delivery; isMine: boolean })
   );
 }
 
-/** La bande de drapeaux du pied — au plus QUATRE, dedupliquees. */
+/**
+ * La bande de drapeaux du pied — au plus `limit` (4 par défaut, la cote
+ * historique de ce composant). La rangée ÉLUE du fil (#5648) passe
+ * `FLAG_LIMIT_PLAIN` (3) sur sa ligne basse ordinaire et
+ * `FLAG_LIMIT_MAGNIFIED` (5) sur sa bande de focus
+ * (`FocalMetrics.FocusStrip.flagLimitPlain/.flagLimitMagnified`,
+ * gardées par `scripts/check-curve.mjs`) — deux cotes iOS, un seul
+ * composant.
+ */
 export function Flags({
   languages,
   active,
   onPick,
+  limit = 4,
 }: {
   languages: readonly string[];
   active: string | null;
   onPick: (code: string) => void;
+  limit?: number;
 }) {
   return (
     /* `gap-1` (4px) et non `gap-0.5` (2px, defaut 1 de la revue-correction
@@ -145,7 +155,7 @@ export function Flags({
        conteneur pastille+drapeaux dans `bubble.tsx`/`focal-row.tsx`), elle
        porte -2px de chaque cote sans jamais se recouvrir. */
     <span className="flex items-center gap-1">
-      {languages.slice(0, 4).map((code) => {
+      {languages.slice(0, limit).map((code) => {
         const isActive = code === active;
         return (
           <button

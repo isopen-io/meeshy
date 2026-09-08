@@ -158,34 +158,54 @@ const runCli = () => {
     {
       name: 'institutional-*.css (pages institutionnelles)',
       files: allFiles.filter((f) => f.startsWith(INSTITUTIONAL_DIR + '/')),
-      sheetPrefix: 'institutional-',
+      /**
+       * Prédicat plutôt qu'un préfixe unique : `institutional-*.css` reste
+       * la SEULE feuille de ce groupe (source(none) + @source limité, voir
+       * le doc-comment de tête) — un filtre par PRÉFIXE l'exprime aussi
+       * bien qu'un filtre par groupe, et les deux formes cohabitent ici
+       * pour que `sheetFor` ait une signature UNIQUE.
+       */
+      sheetMatch: (f) => f.startsWith('institutional-'),
       themeSource: readFileSync(join(STYLES, 'institutional.css'), 'utf8') + IOS_THEME,
     },
     {
-      name: 'index-*.css (application)',
+      name: 'index-*.css + chunks d’écran (application)',
       files: allFiles.filter((f) => !f.startsWith(INSTITUTIONAL_DIR + '/')),
-      sheetPrefix: 'index-',
+      /**
+       * TOUTE feuille NON institutionnelle appartient à l'application — pas
+       * seulement `index-*.css` (correction de revue #5648, défaut majeur
+       * 6) : `thread-scene.css` (`src/routes/thread.tsx`) en est sortie
+       * pour rejoindre le CHUNK du fil plutôt que la feuille critique
+       * chargée sur CHAQUE route (poids, `measure-weight.mjs`). C'est une
+       * partition par POIDS DE CHARGEMENT, jamais par THÈME : contrairement
+       * à la frontière institutionnel/application (deux `@theme` distincts,
+       * voir le doc-comment de tête), une classe utilitaire de
+       * `focal-row.tsx` reste la MÊME classe, avec la MÊME table de jetons,
+       * qu'elle vive dans la feuille critique ou dans un chunk à la
+       * demande — les concaténer ne réintroduit donc PAS le faux-positif
+       * que la scission institutionnel/application a corrigé. Un futur
+       * écran qui sort sa propre feuille (`settings-*.css`, etc.) entre
+       * automatiquement dans ce groupe, sans toucher ce fichier.
+       */
+      sheetMatch: (f) => !f.startsWith('institutional-'),
       themeSource: readFileSync(join(STYLES, 'app.css'), 'utf8') + IOS_THEME,
     },
   ];
 
-  const sheetFor = (prefix) => {
+  const sheetFor = (match) => {
     const assets = join(DIST, 'assets');
-    const sheets = readdirSync(assets).filter((f) => f.startsWith(prefix) && f.endsWith('.css'));
+    const sheets = readdirSync(assets).filter((f) => f.endsWith('.css') && match(f));
     if (sheets.length === 0) {
-      throw new Error(`Aucune feuille \`${prefix}*.css\` dans dist/assets — lancer \`vite build\` d’abord.`);
+      throw new Error(`Aucune feuille correspondante dans dist/assets — lancer \`vite build\` d’abord.`);
     }
-    if (sheets.length > 1) {
-      throw new Error(`Plusieurs feuilles \`${prefix}*.css\` dans dist/assets : ${sheets.join(', ')}.`);
-    }
-    return readFileSync(join(assets, sheets[0]), 'utf8');
+    return sheets.map((f) => readFileSync(join(assets, f), 'utf8')).join('\n');
   };
 
   let totalUsed = 0;
   const dead = [];
   const sizeless = [];
   for (const group of GROUPS) {
-    const css = sheetFor(group.sheetPrefix);
+    const css = sheetFor(group.sheetMatch);
     const used = usedClasses(group.files);
     const roles = textSizeRoles(group.themeSource);
     totalUsed += used.size;
