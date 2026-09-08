@@ -162,6 +162,19 @@ function makePrisma(opts: PrismaOpts = {}) {
         ? jest.fn().mockRejectedValue(opts.messageError)
         : jest.fn().mockResolvedValue(opts.messagesResult !== undefined ? opts.messagesResult : [makeMessage()]),
     },
+    // #3633 — sections ajoutées (posts, stories, comments, reactions, media,
+    // voiceProfile, sessions). Ce fichier ne teste QUE profile/messages/contacts ;
+    // ces doubles n'existent que pour que le défaut "toutes les types" (désormais
+    // dix, pas trois) ne lève pas sur un modèle non simulé.
+    post: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    postComment: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    reaction: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    postReaction: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    commentReaction: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    messageAttachment: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    postMedia: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
+    userVoiceModel: { findFirst: jest.fn().mockResolvedValue(null) },
+    userSession: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) },
   };
 }
 
