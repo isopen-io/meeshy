@@ -15,6 +15,7 @@ import type { SessionBoundTokenPayload } from '../../services/auth/session-jwt';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { liveSessionFilter, requiresLiveSession } from './live-session-gate';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -331,6 +332,32 @@ export class AuthHandler {
     // (handshake puis `authenticate` manuel), n'a rien de neuf à annoncer aux
     // contacts — chaque écriture ici part en broadcast vers chacun d'eux.
     if (isFirstSocket) {
+      // Le REFUS de connexion sur session morte, derrière son drapeau (#5712).
+      //
+      // Il se pose ICI, avant la seule écriture d'activité du chemin : c'est
+      // elle qui fait paraître présente une personne absente depuis des mois.
+      // Tant que le drapeau dort, le comportement est strictement inchangé.
+      //
+      // Mesuré avant livraison : 53 utilisateurs avec session vivante, ZÉRO
+      // connecté sans — mais sur un seul connecté à l'heure du relevé, ce qui
+      // ne suffit pas pour armer. La décision d'armer appartient au porteur,
+      // sur une mesure en heure pleine.
+      if (requiresLiveSession()) {
+        const sessionToken = extractSessionToken(socket);
+        const vivante = sessionToken
+          ? await this.prisma.userSession.findFirst({
+              where: liveSessionFilter(user.id, hashSessionToken(sessionToken)),
+              select: { id: true },
+            })
+          : null;
+
+        if (!vivante) {
+          logger.warn('socket refused: no live session', { userId: user.id });
+          socket.disconnect(true);
+          return;
+        }
+      }
+
       await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
     }
 
@@ -369,7 +396,10 @@ export class AuthHandler {
       if (!sessionToken) return;
 
       const session = await this.prisma.userSession.findFirst({
-        where: { userId, sessionToken: hashSessionToken(sessionToken), isValid: true },
+        // `isValid` seul ne suffit pas : 140 sessions EXPIRÉES le portaient en
+        // production (#5712). Étiqueter un socket avec une session morte ferait
+        // croire à une traçabilité qui n'existe plus.
+        where: liveSessionFilter(userId, hashSessionToken(sessionToken)),
         select: { id: true },
       });
 
