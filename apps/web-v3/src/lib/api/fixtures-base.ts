@@ -20,6 +20,19 @@ import type { Message, MessageTranslation, Participant } from './types';
 /** `minutesAgo(90)` = il y a 90 minutes. Le fil se lit donc toujours comme aujourd'hui. */
 export const minutesAgo = (minutes: number): Date => new Date(Date.now() - minutes * 60_000);
 
+/**
+ * `daysAgo` jours avant AUJOURD'HUI (calendrier LOCAL), à `hour:minute` —
+ * DÉPLACÉ depuis `fixtures-catchup.ts` (#5696, étape 4b) plutôt que recopié :
+ * `fixtures-river.ts` en a besoin pour l'ouverture du Salon Rivière, exactement
+ * pour la même raison que #5695 l'a écrit — construire une date-calendrier
+ * directement plutôt qu'espérer qu'un delta de minutes (`minutesAgo`) retombe
+ * à plus de 3 h d'un minuit local.
+ */
+export const dayAt = (daysAgo: number, hour: number, minute: number): Date => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, hour, minute, 0, 0);
+};
+
 export const VIEWER_ID = 'u-viewer';
 /** Le `username` du lecteur de fixture — `Participant` ne le porte pas à la racine (`participant.ts:125-150`). */
 export const VIEWER_HANDLE = 'vous';

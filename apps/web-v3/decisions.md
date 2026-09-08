@@ -610,9 +610,10 @@ s'accordent :
 - `catalog.ts` leur donne des titres et des sous-titres séparés (« Script » /
   « Rangée plate, densité uniforme » vs « Rivière » / « Les couloirs de la
   conversation ») et les traite par des branches différentes de `menuRows()` ;
-- `decision.ts` (`THREAD_RENDERABLE_MODES = ['focal', 'script']`) rend
-  `script` DISPONIBLE au même titre que `focal`, quand `river` reste hors de
-  ce catalogue de rendu — au même rang que `summary`, sous la loi D-8.
+- `decision.ts` (`THREAD_RENDERABLE_MODES = ['focal', 'script', 'summary']`
+  depuis D-24 — la citation d'origine, `['focal', 'script']`, est périmée)
+  rend `script` DISPONIBLE au même titre que `focal`, quand `river` reste
+  hors de ce catalogue de rendu, sous la loi D-8.
 
 **Ce que ça tranche pour la suite.** `script` n'est donc pas une question
 ouverte ni une variante de `river` : c'est le second mode de la RANGÉE PLATE
@@ -1153,5 +1154,63 @@ servent qu'un chunk à la demande.
 **Ce qui reste, déclaré, pas oublié :** le curseur de lecture
 (`markCaughtUpFromSummaryOrRiver`) n'a aucun transport web — issue `staging`
 quand `POST …/read` sera câblé. Le troisième libellé de `catalog.ts` pour
-`river` (D-21, inchangé) reste inatteignable. Les coques (QEMU, simulateur)
-n'ont pas été rejouées avec ce lot — le build Capacitor seul a été vérifié.
+`river` était inatteignable à l'écriture de cette entrée — **D-25 (#5696)
+l'atteint** : `threadCapabilities` lit désormais `memberCount`, jamais
+`null` fabriqué. Les coques (QEMU, simulateur) n'ont pas été rejouées avec
+ce lot — le build Capacitor seul a été vérifié.
+
+## D-25 · La loi de la Rivière est câblée : `memberCount` est l'éligibilité, `grantedModes` ⟂ `availableModes`, la raison a quatre formes — 2026-09-08 (#5696)
+
+`threadCapabilities` (`decision.ts`) lit désormais `memberCount:
+number | null` (obligatoire) et le passe à `resolveCapabilities` comme
+`activeParticipantCount` — le même rapprochement qu'iOS
+(`ConversationView.swift:569`, `memberCount ?? 0`) : ce n'est PAS un
+décompte d'actifs (G-123, toujours absent), c'est l'effectif du groupe, un
+faux POSITIF possible que la loi de forme absorbe elle-même (`river-lanes.ts`
+sérialise sous trois voix). `isRiverFlagEnabled: true` est un LITTÉRAL, pas
+une lecture de config — D-20 : la v3.1 n'a ni drapeau ni programme bêta.
+
+`ThreadCapabilities` porte désormais DEUX catalogues, pour deux questions
+distinctes : `grantedModes` (ce que la LOI accorde — `river` y entre dès
+`memberCount >= 5`) et `availableModes` (`grantedModes ∩
+THREAD_RENDERABLE_MODES` — ce que CET écran sait dessiner). `river` reste
+listé au menu, désactivé, HORS `THREAD_RENDERABLE_MODES` — ce travail ne
+rend rien à l'écran.
+
+La raison Rivière du menu (`catalog.ts`) a désormais QUATRE formes, pas
+trois : aux trois de la loi partagée (`neverEligible` / `belowThreshold` à
+compte connu ou inconnu) s'ajoute une forme PROPRE au web —
+« Bientôt disponible » — pour un groupe déjà ÉLIGIBLE que
+`THREAD_RENDERABLE_MODES` ne rend pas encore. Sans elle, un groupe à 5
+membres afficherait « S'ouvrira à 5 personnes actives — 5 aujourd'hui » —
+une porte annoncée fermée alors que la loi l'a ouverte, exactement le
+libellé FAUX qu'iOS montre quand `riviere_mode` est OFF sur un groupe
+éligible (`ReadingModeLensSheet.swift:91-99`, un défaut de la cible, jamais
+reproduit ici).
+
+`src/lib/river/` porte désormais le `Core` de la Rivière — `geometry.ts`
+(le mapping `Message` → loi, miroir de `RiverConversationMapping.swift`),
+`columns.ts`/`focus.ts` (portés tels quels du legacy web, arithmétique pure
+de pixels), `metrics.ts` (les cotes, dérivées de `lentille-tokens.json` →
+`RiverMetrics.swift`, gardées par `scripts/check-river-metrics.mjs`, un
+fichier À PART de `check-curve.mjs` parce que la Rivière a TROIS sources).
+Les 61 vecteurs partagés (24 + 22 + 15) sont rejoués DEPUIS web-v3, À
+TRAVERS le mapping — pas seulement la loi nue. L'ouverture du Salon
+Rivière (`RIVER_OPENING_MESSAGES`, `fixtures-river-opening.ts`) est le corpus qui
+ATTEINT les couloirs (`layout: 'lanes'`, `voiceCount: 9`) là où les 40
+messages seuls (deux voix strictes) ne le peuvent pas — une page PLUS
+ANCIENNE de la même conversation, servie aux seuls témoins de la loi
+(`messagesOf`/`hasOlderMessagesOf` inchangés, D-24 : une page, pas une
+fixture jumelle).
+
+Ce travail n'ajoute AUCUN chunk et ne change PAS la première peinture
+(mesuré : 32,78 Ko, identique à l'octet — `src/lib/river/**` n'est importé
+par aucun module de production, et le paquet ne contient ni `resolveRiverLanes`
+ni `SILENCE_WINDOW_LADDER_MS`). Le corpus d'ouverture, lui, PARTAIT : né
+d'appels à `message()` au niveau du module, Rollup ne pouvait pas l'élaguer et
+`dist/assets/reader-*.js` embarquait « riv-open » chez chaque lecteur. Il vit
+depuis la revue-correction dans `fixtures-river-opening.ts`, module SANS
+importateur de production — le chunk `reader` retombe de 11 736 à 11 092 o
+gzip (mesuré). **Un corpus qu'aucune route ne sert ne doit jamais entrer dans
+un fichier que le paquet atteint.** `river` reste hors `THREAD_RENDERABLE_MODES`
+: le rendu de la Rivière (le plan virtualisé, D-15) est un travail séparé.

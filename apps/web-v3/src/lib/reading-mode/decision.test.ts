@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ConversationReadingMode, ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 
-import { resolveThreadMode, threadCapabilities, toStickyPreference, toStoredMode, usesFlatRow } from './decision';
+import { THREAD_RENDERABLE_MODES, resolveThreadMode, threadCapabilities, toStickyPreference, toStoredMode, usesFlatRow } from './decision';
 import { CATCHUP_CONVERSATION } from '@/lib/api/fixtures-catchup';
 import { unreadOf } from '@/lib/view/conversation';
 
@@ -15,6 +15,8 @@ const BASE = {
   now: new Date('2026-09-07T12:00:00.000Z'),
   isAnonymous: false,
   conversationType: 'group' as const,
+  /** #5696 : champ OBLIGATOIRE depuis ce travail — `null` par défaut (compte inconnu), comme avant. */
+  memberCount: null as number | null,
 };
 
 describe('resolveThreadMode — ouverture par défaut (D-7)', () => {
@@ -134,7 +136,7 @@ describe('resolveThreadMode — drapeau éteint (VITE_READING_MODES=off)', () =>
 
   test('threadCapabilities({ readingModesEnabled: false }).availableModes est vide — la loi ne rend que bubbles, hors THREAD_RENDERABLE_MODES', () => {
     expect(
-      threadCapabilities({ isAnonymous: false, conversationType: 'group', readingModesEnabled: false }).availableModes,
+      threadCapabilities({ isAnonymous: false, conversationType: 'group', memberCount: null, readingModesEnabled: false }).availableModes,
     ).toEqual([]);
   });
 
@@ -199,6 +201,7 @@ describe('resolveThreadMode — le corpus « rattrapage » (#5695, critère b)',
         sticky: 'auto',
         isAnonymous: false,
         conversationType: 'group',
+        memberCount: null,
       }),
     ).toEqual({ mode: 'summary', reason: 'unread-over-cap' });
   });
@@ -206,11 +209,64 @@ describe('resolveThreadMode — le corpus « rattrapage » (#5695, critère b)',
 
 describe('threadCapabilities — #5695 : summary entré au catalogue de rendu, borné à l’identité', () => {
   test('un inscrit voit summary dans availableModes', () => {
-    expect(threadCapabilities({ isAnonymous: false, conversationType: 'group' }).availableModes).toContain('summary');
+    expect(threadCapabilities({ isAnonymous: false, conversationType: 'group', memberCount: null }).availableModes).toContain('summary');
   });
 
   test('un invité ne le voit PAS', () => {
-    expect(threadCapabilities({ isAnonymous: true, conversationType: 'group' }).availableModes).not.toContain('summary');
+    expect(threadCapabilities({ isAnonymous: true, conversationType: 'group', memberCount: null }).availableModes).not.toContain('summary');
+  });
+});
+
+describe("threadCapabilities — #5696 : l'éligibilité de la Rivière lit memberCount comme iOS", () => {
+  test('memberCount 5, groupe ⇒ river dans grantedModes, riverReason eligible, current 5', () => {
+    const capabilities = threadCapabilities({ isAnonymous: false, conversationType: 'group', memberCount: 5 });
+    expect(capabilities.grantedModes).toContain('river');
+    expect(capabilities.riverEligibilityReason).toEqual({ threshold: 5, current: 5, riverReason: 'eligible' });
+  });
+
+  // (c) — assertion EXPLICITE : `river` reste hors du catalogue de RENDU du web.
+  test('memberCount 5 ⇒ river ABSENT de availableModes — hors THREAD_RENDERABLE_MODES', () => {
+    expect(THREAD_RENDERABLE_MODES).not.toContain('river');
+    const capabilities = threadCapabilities({ isAnonymous: false, conversationType: 'group', memberCount: 5 });
+    expect(capabilities.availableModes).not.toContain('river');
+  });
+
+  test('memberCount 4 ⇒ belowThreshold, current 4 — la seconde moitié du seuil', () => {
+    const capabilities = threadCapabilities({ isAnonymous: false, conversationType: 'group', memberCount: 4 });
+    expect(capabilities.riverEligibilityReason).toEqual({ threshold: 5, current: 4, riverReason: 'belowThreshold' });
+  });
+
+  test("memberCount 3 ⇒ riverReason belowThreshold, current 3, threshold 5 — le troisième libellé devient atteignable", () => {
+    const capabilities = threadCapabilities({ isAnonymous: false, conversationType: 'group', memberCount: 3 });
+    expect(capabilities.riverEligibilityReason).toEqual({ threshold: 5, current: 3, riverReason: 'belowThreshold' });
+  });
+
+  test('memberCount null ⇒ belowThreshold, current null — jamais 0 fabriqué', () => {
+    const capabilities = threadCapabilities({ isAnonymous: false, conversationType: 'group', memberCount: null });
+    expect(capabilities.riverEligibilityReason).toEqual({ threshold: 5, current: null, riverReason: 'belowThreshold' });
+  });
+
+  test('direct, memberCount 2 ⇒ neverEligible', () => {
+    const capabilities = threadCapabilities({ isAnonymous: false, conversationType: 'direct', memberCount: 2 });
+    expect(capabilities.riverEligibilityReason.riverReason).toBe('neverEligible');
+  });
+
+  test('direct, memberCount 50 ⇒ neverEligible — le compte ne renverse jamais la structure', () => {
+    const capabilities = threadCapabilities({ isAnonymous: false, conversationType: 'direct', memberCount: 50 });
+    expect(capabilities.riverEligibilityReason.riverReason).toBe('neverEligible');
+  });
+
+  test('invité, memberCount 5 ⇒ river dans grantedModes — la Rivière est ACCORDÉE aux invités (reading-modes.ts:288-300)', () => {
+    const capabilities = threadCapabilities({ isAnonymous: true, conversationType: 'group', memberCount: 5 });
+    expect(capabilities.grantedModes).toContain('river');
+  });
+});
+
+describe('resolveThreadMode — memberCount ne change PAS la décision de ce travail', () => {
+  test('collant riviere, memberCount 5 ⇒ focal/clamped-unavailable (river listé, non rendu)', () => {
+    expect(
+      resolveThreadMode({ ...BASE, memberCount: 5, unreadCount: 0, lastOpenedAt: BASE.now, sticky: 'riviere' }),
+    ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
   });
 });
 

@@ -234,12 +234,22 @@ export default function ThreadScreen() {
         // `summary`, la loi le retire de `threadCapabilities`).
         isAnonymous: viewer.isAnonymous,
         conversationType: conversation.type,
+        // #5696 : l'éligibilité de la Rivière lit `memberCount` comme iOS
+        // (`ConversationView.swift:569`) — MÊME champ que celui affiché
+        // juste en-dessous (« N participants »), voir `thread.tsx` ligne
+        // sur `conversation.memberCount`.
+        memberCount: conversation.memberCount ?? null,
       }),
     [conversation, lastOpenedAt, openedAt, stickyMode, viewer.isAnonymous],
   );
   const readingCapabilities = useMemo(
-    () => threadCapabilities({ isAnonymous: viewer.isAnonymous, conversationType: conversation.type }),
-    [conversation.type, viewer.isAnonymous],
+    () =>
+      threadCapabilities({
+        isAnonymous: viewer.isAnonymous,
+        conversationType: conversation.type,
+        memberCount: conversation.memberCount ?? null,
+      }),
+    [conversation.type, conversation.memberCount, viewer.isAnonymous],
   );
   const readingMenuRows = useMemo(
     () =>

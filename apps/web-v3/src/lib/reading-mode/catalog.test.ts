@@ -3,9 +3,9 @@ import { describe, expect, test } from 'bun:test';
 import { menuRows, MENU_ORDER } from './catalog';
 import { threadCapabilities } from './decision';
 
-const groupCapabilities = threadCapabilities({ isAnonymous: false, conversationType: 'group' });
-const directCapabilities = threadCapabilities({ isAnonymous: false, conversationType: 'direct' });
-const guestCapabilities = threadCapabilities({ isAnonymous: true, conversationType: 'group' });
+const groupCapabilities = threadCapabilities({ isAnonymous: false, conversationType: 'group', memberCount: null });
+const directCapabilities = threadCapabilities({ isAnonymous: false, conversationType: 'direct', memberCount: null });
+const guestCapabilities = threadCapabilities({ isAnonymous: true, conversationType: 'group', memberCount: null });
 
 describe('menuRows — cinq lignes, ordre fixe', () => {
   test('MENU_ORDER est [focal, script, bubbles, summary, river]', () => {
@@ -48,6 +48,41 @@ describe('menuRows — river, désactivé ET motivé', () => {
     const river = rows.find((r) => r.mode === 'river');
     expect(river?.isAvailable).toBe(false);
     expect(river?.reason).toBe('Jamais en conversation directe');
+  });
+});
+
+describe('menuRows — river (#5696) : les QUATRE formes de la raison', () => {
+  test('memberCount 3 ⇒ raison « S’ouvrira à 5 personnes actives — 3 aujourd’hui »', () => {
+    const capabilities = threadCapabilities({ isAnonymous: false, conversationType: 'group', memberCount: 3 });
+    const rows = menuRows({ ...capabilities, currentMode: 'focal' });
+    const river = rows.find((r) => r.mode === 'river');
+    expect(river?.isAvailable).toBe(false);
+    expect(river?.reason).toBe("S'ouvrira à 5 personnes actives — 3 aujourd'hui");
+  });
+
+  test('memberCount 5 (éligible) ⇒ isAvailable false, raison « Bientôt disponible » — JAMAIS « 5 aujourd’hui »', () => {
+    const capabilities = threadCapabilities({ isAnonymous: false, conversationType: 'group', memberCount: 5 });
+    const rows = menuRows({ ...capabilities, currentMode: 'focal' });
+    const river = rows.find((r) => r.mode === 'river');
+    expect(river?.isAvailable).toBe(false);
+    expect(river?.reason).toBe('Bientôt disponible');
+    // L'APOSTROPHE EST DROITE (U+0027), comme le libellé de `catalog.ts` : avec
+    // la typographique (U+2019), cette ligne ne pouvait JAMAIS échouer —
+    // elle cherchait une chaîne que la production n'écrit nulle part
+    // (revue-correction #5696).
+    expect(river?.reason).not.toContain("aujourd'hui");
+  });
+
+  test('availableModes portant « river » (entrée forgée) ⇒ isAvailable true, reason null — la ligne se dégrise par le catalogue de RENDU seul', () => {
+    const capabilities = threadCapabilities({ isAnonymous: false, conversationType: 'group', memberCount: 5 });
+    const rows = menuRows({
+      availableModes: [...capabilities.availableModes, 'river'],
+      riverEligibilityReason: capabilities.riverEligibilityReason,
+      currentMode: 'focal',
+    });
+    const river = rows.find((r) => r.mode === 'river');
+    expect(river?.isAvailable).toBe(true);
+    expect(river?.reason).toBeNull();
   });
 });
 

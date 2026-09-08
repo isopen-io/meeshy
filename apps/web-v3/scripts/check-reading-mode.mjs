@@ -9,8 +9,8 @@
  *    (`data-reading-mode="focal"`), AUCUNE bulle.
  * 2. Le menu du chip liste les CINQ modes + « Automatique » ; `Résumé` est
  *    DISPONIBLE pour un inscrit depuis #5695 (D-21) ; `Rivière` reste
- *    désactivée et MOTIVÉE (D-8 : jamais un mode qu'on ne sait pas rendre,
- *    jamais un placeholder muet).
+ *    désactivée et MOTIVÉE (D-8) — ses deux raisons, sous le seuil et déjà
+ *    éligible, sont mesurées par `lib/check-river-menu.mjs` (#5696).
  * 3. Sélectionner « Bulles » change RÉELLEMENT le rendu (l'effet), la
  *    sélection SURVIT à un rechargement (persistance), et « Automatique »
  *    revient au focal.
@@ -79,7 +79,9 @@ import { fileURLToPath } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
 import { checkLivingSummary } from './lib/check-summary.mjs';
+import { assertRiverBelowThreshold, checkEligibleRiverRow } from './lib/check-river-menu.mjs';
 import { contrastOf } from './lib/contrast.mjs';
+import { waitForFlattenFade, waitForRevealedOpacity } from './lib/scene-polling.mjs';
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
 const DIST = join(APP, 'dist');
@@ -435,11 +437,7 @@ const noRowCarriesContinuousPerspective = (page) =>
    * #5695).
    */
   expect((await summaryRow.isDisabled()) === false, 'Résumé est DISPONIBLE (#5695) — plus jamais désactivé pour un inscrit');
-  expect((await riverRow.isDisabled()) === true, 'Rivière est désactivée');
-  expect(
-    ((await riverRow.textContent()) ?? '').trim().length > 'Rivière'.length,
-    'Rivière porte une raison NON VIDE, pas un placeholder muet',
-  );
+  await assertRiverBelowThreshold({ riverRow, expect });
 
   /**
    * ET une raison LISIBLE, pas seulement présente : voilée avec sa ligne
@@ -804,19 +802,18 @@ const noRowCarriesContinuousPerspective = (page) =>
    * moins — aucun nouveau geste n'a lieu pendant l'attente.
    */
   /**
-   * LE FONDU de l'aplatissement (`--scene-flatten-ms`, 450 ms) est
-   * ÉCHANTILLONNÉ, jamais sondé une fois : le passage à `idle` tombe entre
-   * 4,5 s et 4,8 s (granularité des ticks), et le fondu dure 450 ms
-   * après. Un seul instant de mesure serait un pari ; onze le sont pas.
-   * Sans la règle CSS qui LIT la variable, la carte reste à 1 puis se
-   * démonte d'un coup — c'est exactement l'état de la première livraison,
-   * où `data-scene` n'avait aucun consommateur.
+   * LE FONDU de l'aplatissement (`--scene-flatten-ms`, 450 ms) est SONDÉ
+   * sur une fenêtre LARGE (`waitForFlattenFade`, `lib/scene-polling.mjs`),
+   * jamais échantillonné à taille fixe : sous charge (`load average`
+   * élevé), les 24 pas fixes de 60 ms (correction de revue #5696)
+   * pouvaient manquer la fenêtre entière (`{"opacity":1,…}` observé sous
+   * charge). Sans la règle CSS qui LIT la variable, la carte reste à 1
+   * puis se démonte d'un coup — l'état de la première livraison.
    */
-  const flattenSamples = [];
   await page.waitForTimeout(Math.max(0, 4300 - (Date.now() - lastGestureAt)));
-  for (let i = 0; i < 24; i += 1) {
-    flattenSamples.push(
-      await page.evaluate(() => {
+  const { matched: fadingSample, seen: flattenSamples } = await waitForFlattenFade(page, {
+    sample: () =>
+      page.evaluate(() => {
         const card = document.querySelector('main .focus-card');
         return {
           scene: document.querySelector('main')?.dataset.scene ?? null,
@@ -824,14 +821,11 @@ const noRowCarriesContinuousPerspective = (page) =>
           ms: card === null ? null : getComputedStyle(card).transitionDuration,
         };
       }),
-    );
-    await page.waitForTimeout(60);
-  }
-  const fading = flattenSamples.filter(
-    (x) => x.scene === 'idle' && x.opacity !== null && x.opacity < 1 && x.ms === '0.45s',
-  );
+    until: (x) => x.scene === 'idle' && x.opacity !== null && x.opacity < 1 && x.ms === '0.45s',
+    budgetMs: 12000,
+  });
   expect(
-    fading.length > 0,
+    fadingSample !== null,
     `l'aplatissement FOND la carte sur \`--scene-flatten-ms\` — ${JSON.stringify(flattenSamples.filter((x) => x.scene === 'idle'))}`,
   );
 
@@ -990,28 +984,31 @@ const noRowCarriesContinuousPerspective = (page) =>
   );
 
   /**
-   * `--reveal-fade-ms` (280) sépare le moment où `main[data-revealed]`
-   * bascule du moment où l'opacité COMPUTÉE atteint 1 (transition CSS) —
-   * mesuré : ~400 ms suffisent après un `wheel` pour que la transition ait
-   * fini. Vérifier à 50 ms, c'est vérifier une valeur INTERMÉDIAIRE de la
-   * transition, jamais son état stable.
+   * SOUTENIR le geste plutôt que l'ÉCHANTILLONNER (`waitForRevealedOpacity`,
+   * `lib/scene-polling.mjs`, correction de revue #5696) : un `wheel`
+   * unique + `waitForTimeout(450)` fixe course contre la transition CSS
+   * sous charge et peut l'attraper EN VOL (`[0.808236,…]`) ou avant qu'elle
+   * ait commencé (`[0,0,…]`) — observé sous charge, jamais un désaccord
+   * sur la fonctionnalité. Chaque `wheel` re-arme
+   * `SCROLL_ACTIVITY_LINGER_MS` : soutenir le geste NE PEUT PAS faire
+   * manquer la fenêtre.
    */
-  await page.locator('main').hover();
-  await page.mouse.wheel(0, -40);
-  await page.waitForTimeout(450);
-  const duringGesture = await metaOpacities();
+  const { opacities: duringGesture, lastWheelAt: focalLastWheelAt } = await waitForRevealedOpacity(page, {
+    sample: metaOpacities,
+  });
   expect(
     duringGesture.some((o) => o === 1),
     `pendant le geste (Focal), au moins une heure de rangée est révélée (${JSON.stringify(duringGesture)})`,
   );
 
   /**
-   * `SCROLL_ACTIVITY_LINGER_MS` (900) après le DERNIER `scrolled`, PUIS
-   * `--reveal-fade-ms` (280) pour le fondu de sortie — mesuré : le fondu
-   * complet prend jusqu'à ~1,7 s après le `wheel`. 2,1 s laisse une marge
-   * sûre.
+   * `SCROLL_ACTIVITY_LINGER_MS` (900) après le DERNIER `wheel` RÉELLEMENT
+   * dispatché (`focalLastWheelAt`, jamais un offset fixe depuis le début
+   * du bloc — le geste ci-dessus a pu se répéter), PUIS `--reveal-fade-ms`
+   * (280) pour le fondu de sortie — mesuré : le fondu complet prend
+   * jusqu'à ~1,7 s après le dernier `wheel`. 2,1 s laisse une marge sûre.
    */
-  await page.waitForTimeout(2100 - 450);
+  await page.waitForTimeout(Math.max(0, 2100 - (Date.now() - focalLastWheelAt)));
   const afterLinger = await metaOpacities();
   expect(
     afterLinger.every((o) => o === 0),
@@ -1023,10 +1020,7 @@ const noRowCarriesContinuousPerspective = (page) =>
   await page.waitForTimeout(150);
   await page.getByRole('menuitemradio', { name: /Script/ }).click();
   await page.waitForTimeout(300);
-  await page.locator('main').hover();
-  await page.mouse.wheel(0, -40);
-  await page.waitForTimeout(450);
-  const scriptDuring = await metaOpacities();
+  const { opacities: scriptDuring } = await waitForRevealedOpacity(page, { sample: metaOpacities });
   expect(
     scriptDuring.some((o) => o === 1),
     `pendant le geste (Script), au moins une heure de rangée est révélée (${JSON.stringify(scriptDuring)})`,
@@ -1273,6 +1267,8 @@ const noRowCarriesContinuousPerspective = (page) =>
   await context.close();
 }
 
+// --- 11 : LA RIVIÈRE ÉLIGIBLE, grisée et motivée SANS MENTIR (#5696) — `lib/check-river-menu.mjs`.
+await checkEligibleRiverRow({ browser, BASE, setScheme, expect });
 
 // --- 14 : LE RÉSUMÉ VIVANT (#5695) — `lib/check-summary.mjs` (l'hôte est hors
 // budget de taille) ; il reçoit LE compteur de défauts et LA pose de schéma.
