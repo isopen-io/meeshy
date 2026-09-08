@@ -22,6 +22,17 @@
  * `FocalRow.swift` (« même rangée, densité uniforme, zéro perspective ») —
  * la perspective du fil vit HORS de la rangée, dans la passe de défilement,
  * exactement comme côté iOS (`MessageListViewController`, pas `FocalRow`).
+ *
+ * SANS APPELANT DE PRODUCTION DEPUIS #5648. La correction de revue ci-dessus
+ * a elle-même été retirée d'iOS le 2026-08-24 (`apps/ios/decisions.md:328`,
+ * « la courbe n'est plus appliquée ») : Focal se distingue désormais de
+ * Script par l'ÉLECTION d'une rangée (carte teintée, chip d'identité,
+ * tampon de date — `reading-mode/election.ts`, `reading-mode/scene.ts`,
+ * `focal-focus-overlays.tsx`), pas par un fondu continu. Ce fichier et son
+ * test (`perspective.test.ts`) restent en place, GELÉS, comme point de
+ * rebranchement documenté — la loi est correcte, elle décrit un chrome
+ * qu'iOS a lui-même retiré ; la retirer À SON TOUR sans qu'une décision
+ * porteur ne le demande romprait la traçabilité de #5566.
  */
 
 /** `focusCurve('thread', d).alpha/.scale` — mêmes constantes, même formule. */

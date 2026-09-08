@@ -28,8 +28,35 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
+// La logique d'anonymisation elle-même (#5689) a son propre témoin exhaustif
+// — `messaging/__tests__/anonymizeDeletedAccountMessages.test.ts` — jamais
+// ré-implémentée ici. Ce fichier-ci ne garde que la FRONTIÈRE : le balayage
+// l'appelle-t-il, avec le bon id, au bon moment ?
+jest.mock('../../../services/messaging/anonymizeDeletedAccountMessages', () => ({
+  anonymizeMessagesOfDeletedAccount: jest.fn<any>().mockResolvedValue({ anonymized: 0 }),
+}));
+
+// Même raison, même patron — le témoin exhaustif de #5690 vit dans
+// `__tests__/unit/services/purgeDeletedAccountMedia.test.ts`.
+jest.mock('../../../services/purgeDeletedAccountMedia', () => ({
+  purgeMediaOfDeletedAccount: jest.fn<any>().mockResolvedValue({ attachmentsDeleted: 0, postMediaDeleted: 0 }),
+}));
+
+// `cleanupExpiredSessions` (#5712) est un singleton de module (`getPrisma()`
+// interne, alimenté par `initSessionService` au démarrage — le même
+// `fastify.prisma` que ce service reçoit par injection). Le mocker ici garde
+// ce fichier sur SA frontière : le balayage journalier l'appelle-t-il, et
+// absorbe-t-il son échec ? Son propre comportement (le filtre `expiresAt`,
+// le motif d'invalidation) est le témoin exhaustif de `SessionService.test.ts`.
+jest.mock('../../../services/SessionService', () => ({
+  cleanupExpiredSessions: jest.fn<any>().mockResolvedValue(0),
+}));
+
 import { MaintenanceService } from '../../../services/MaintenanceService';
 import { logger } from '../../../utils/logger';
+import { anonymizeMessagesOfDeletedAccount } from '../../../services/messaging/anonymizeDeletedAccountMessages';
+import { purgeMediaOfDeletedAccount } from '../../../services/purgeDeletedAccountMedia';
+import { cleanupExpiredSessions } from '../../../services/SessionService';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -54,6 +81,12 @@ function makePrisma(overrides: {
       count: jest.fn<any>().mockResolvedValue(0),
     },
     conversationShareLink: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    userSession: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    userVoiceModel: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     messageAttachment: {
@@ -423,6 +456,28 @@ describe('cleanupExpiredData', () => {
 
     await expect(sut.cleanupExpiredData()).resolves.toBeUndefined();
   });
+
+  // #5712 — `cleanupExpiredSessions` existait déjà (filtre `expiresAt`, motif
+  // `expired`) mais n'avait aucun appelant de production : « appelé
+  // uniquement par ses propres tests ». Les 140 `UserSession` mesurées
+  // expirées-mais-`isValid:true` ne se soldent qu'une fois ce balayage
+  // rejoint au nettoyage journalier.
+  it('invalidates expired UserSession rows via cleanupExpiredSessions', async () => {
+    const prisma = makePrisma();
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await sut.cleanupExpiredData();
+
+    expect(cleanupExpiredSessions).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not throw when cleanupExpiredSessions fails — best-effort, like its neighbors', async () => {
+    (cleanupExpiredSessions as jest.Mock<any>).mockRejectedValueOnce(new Error('Mongo down'));
+    const prisma = makePrisma();
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await expect(sut.cleanupExpiredData()).resolves.toBeUndefined();
+  });
 });
 
 // ─── getMaintenanceStats ──────────────────────────────────────────────────────
@@ -530,6 +585,31 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
   });
 
+  it('purge les trois tables ISOLÉES (sessions, profil vocal, liens de partage) de chaque compte expiré, sans attendre un clic sur « supprimer maintenant » (#3632)', async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+    sut.setSessionRevoker(makeRevoker([]));
+
+    await sweepDeletions(sut);
+
+    expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
+    expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
+    expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({ where: { createdBy: 'user-a' } });
+  });
+
+  it("un échec de la purge isolée ne fait pas compter l'expiration comme ratée — le lot continue", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    prisma.userSession.deleteMany.mockRejectedValueOnce(new Error('mongo down'));
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+    sut.setSessionRevoker(makeRevoker([]));
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
+  });
+
   it('sans révocateur injecté, le lot expire les demandes sans lever', async () => {
     const prisma = makePrisma();
     prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
@@ -538,5 +618,81 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
     await expect(sweepDeletions(sut)).resolves.toBeUndefined();
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  // `privacy.json` promet l'anonymisation des messages à la fin de la grâce
+  // (#5689) — même moment que la révocation de sessions, APRÈS l'écriture.
+  it("anonymise les messages de CHAQUE compte expiré, APRÈS que sa transaction a abouti", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a'), expiredRequest('req-b', 'user-b')]);
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await sweepDeletions(sut);
+
+    expect(anonymizeMessagesOfDeletedAccount).toHaveBeenNthCalledWith(1, prisma, 'user-a');
+    expect(anonymizeMessagesOfDeletedAccount).toHaveBeenNthCalledWith(2, prisma, 'user-b');
+  });
+
+  it("une transaction qui échoue n'anonymise PAS les messages de ce compte", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    prisma.$transaction = jest.fn<() => Promise<unknown[]>>().mockRejectedValueOnce(new Error('write conflict'));
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
+    expect(anonymizeMessagesOfDeletedAccount).not.toHaveBeenCalled();
+  });
+
+  it("un échec d'anonymisation est journalisé et n'arrête pas le lot", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a'), expiredRequest('req-b', 'user-b')]);
+    (anonymizeMessagesOfDeletedAccount as jest.Mock)
+      .mockRejectedValueOnce(new Error('mongo down'))
+      .mockResolvedValueOnce({ anonymized: 0 });
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
+    expect(anonymizeMessagesOfDeletedAccount).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
+  });
+
+  // Les médias physiques du compte (#5690) — même moment que l'anonymisation
+  // des messages, APRÈS que sa transaction a abouti.
+  it("purge les médias de CHAQUE compte expiré, APRÈS que sa transaction a abouti", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a'), expiredRequest('req-b', 'user-b')]);
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await sweepDeletions(sut);
+
+    expect(purgeMediaOfDeletedAccount).toHaveBeenNthCalledWith(1, prisma, attachmentService, expect.anything(), 'user-a');
+    expect(purgeMediaOfDeletedAccount).toHaveBeenNthCalledWith(2, prisma, attachmentService, expect.anything(), 'user-b');
+  });
+
+  it("une transaction qui échoue ne purge PAS les médias de ce compte", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    prisma.$transaction = jest.fn<() => Promise<unknown[]>>().mockRejectedValueOnce(new Error('write conflict'));
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
+    expect(purgeMediaOfDeletedAccount).not.toHaveBeenCalled();
+  });
+
+  it('un échec de purge des médias est journalisé et n\'arrête pas le lot', async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a'), expiredRequest('req-b', 'user-b')]);
+    (purgeMediaOfDeletedAccount as jest.Mock)
+      .mockRejectedValueOnce(new Error('mongo down'))
+      .mockResolvedValueOnce({ attachmentsDeleted: 0, postMediaDeleted: 0 });
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
+    expect(purgeMediaOfDeletedAccount).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
   });
 });

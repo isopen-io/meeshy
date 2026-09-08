@@ -6,6 +6,7 @@ import type { AgentResponse, AgentReaction } from '../zmq/types';
 import type { ZmqAgentPublisher } from '../zmq/zmq-publisher';
 import type { MongoPersistence } from '../memory/mongo-persistence';
 import type { RedisStateManager } from '../memory/redis-state';
+import { peutEncoreParler } from './presence-recheck';
 
 const SORTED_SET_KEY = 'agent:delivery:pending';
 const ITEM_PREFIX = 'agent:delivery:item:';
@@ -236,6 +237,29 @@ export class RedisDeliveryQueue {
 
   private async deliver(item: RedisDeliveryItem): Promise<void> {
     try {
+      // La personne est-elle ENCORE absente ?
+      //
+      // Une action attend jusqu'à 360 minutes en file. La sélection l'a jugée
+      // légitime il y a six heures ; entre-temps la personne a pu revenir, et
+      // rien ne le vérifiait — la seule garde d'alors regardait l'activité de la
+      // CONVERSATION, jamais la présence de la personne empruntée (#5703).
+      //
+      // Le seuil est celui de la conversation : revérifier avec une constante
+      // serait tantôt plus strict que la sélection (des actions légitimes
+      // abandonnées), tantôt plus laxiste (des gens revenus quand même
+      // usurpés).
+      const config = await this.persistence.getAgentConfig(item.conversationId);
+      const presence = await this.persistence.getPresenceForDelivery(item.action.asUserId);
+      if (!peutEncoreParler({
+        isOnline: presence.isOnline,
+        derniereConnexionMs: presence.derniereConnexionMs,
+        seuilHeures: config?.inactivityThresholdHours ?? 72,
+        maintenantMs: Date.now(),
+      })) {
+        console.log(`[RedisDeliveryQueue] Action abandonnée — ${item.action.asUserId} est revenu (conv=${item.conversationId})`);
+        return;
+      }
+
       const recentCount = await this.persistence.getRecentMessageCount(item.conversationId, 1);
       if (recentCount > 3 && item.action.type === 'message') {
         console.log(`[RedisDeliveryQueue] Skipping message — conv=${item.conversationId} has ${recentCount} recent messages (human activity)`);

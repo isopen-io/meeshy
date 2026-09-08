@@ -220,11 +220,14 @@ class TranslationPoolManager:
 
         logger.info("[POOL_MANAGER] All workers and services stopped")
 
-    async def _normal_worker_loop(self, worker_name: str):
+    async def _normal_worker_loop(self, worker_name: str, worker_index: int = 0):
         """Boucle de travail pour les workers normaux"""
         logger.info(f"[WORKER] {worker_name} started")
 
-        while self.normal_pool.workers_running:
+        # `worker_index >= current_workers` est comment un worker excédentaire
+        # se termine lui-même après un scale DOWN (#3664) — sans lui,
+        # `_scale_to` ne ferait que mentir sur `current_workers`.
+        while self.normal_pool.workers_running and worker_index < self.normal_pool.current_workers:
             try:
                 # Check dynamic scaling
                 queue_size = self.connection_manager.normal_pool.qsize()
@@ -252,11 +255,11 @@ class TranslationPoolManager:
 
         logger.info(f"[WORKER] {worker_name} stopped")
 
-    async def _any_worker_loop(self, worker_name: str):
+    async def _any_worker_loop(self, worker_name: str, worker_index: int = 0):
         """Boucle de travail pour les workers any"""
         logger.info(f"[WORKER] {worker_name} started")
 
-        while self.any_pool.workers_running:
+        while self.any_pool.workers_running and worker_index < self.any_pool.current_workers:
             try:
                 # Check dynamic scaling
                 queue_size = self.connection_manager.any_pool.qsize()

@@ -1,0 +1,147 @@
+/*
+ * FEUILLE PROPRE À L'ÉCRAN DU FIL (correction de revue #5648, défaut
+ * majeur 6) — sortie d'`app.css` (chargée sur CHAQUE route) pour rejoindre
+ * le chunk du fil (déjà à la demande, `route-table.tsx`). Ces 134 lignes ne
+ * s'appliquent JAMAIS hors de `/c/:conversation` (sélecteurs `.focus-*`,
+ * `main[data-scene]`, `main[data-revealed]`) : les laisser dans la feuille
+ * critique payait +1,55 Ko gzip sur CHAQUE premier pixel — liste, login,
+ * signup compris — pour un écran qu'ils ne visitent pas forcément. Importée
+ * une seule fois, statiquement, en tête de `routes/thread.tsx` : Vite la
+ * scinde alors dans le CHUNK du fil, jamais dans la feuille globale. Les
+ * variables qu'elle consomme (`--color-ios-card`, `--accent`, etc.) restent
+ * définies dans `app.css` (`:root`) — une propriété CSS personnalisée se
+ * résout au moment de la peinture, quelle que soit la feuille qui la lit.
+ *
+ * LA SCÈNE DU FIL (#5648) — Focal se distingue de Script par l'ÉLECTION
+ * d'une rangée au défilement soutenu (carte teintée, chip d'identité
+ * agrandi, tampon de date), plus par la courbe continue qu'iOS a retirée
+ * (`reading-mode/perspective.ts`, gelée) ; heure et coches se révèlent
+ * pendant le geste, en Focal ET en Script.
+ *
+ * AUCUNE VALEUR NUMÉRIQUE ICI : chaque cote arrive par
+ * `reading-mode/metrics.ts::sceneStyleVars()`, posée sur `<main>`
+ * (`thread.tsx`) et héritée par toute la sous-arborescence — la même
+ * discipline que `--accent` (`accent.ts`). Le basculement clair/sombre des
+ * deux teintes (`--focus-fill`, `--focus-chip-fill`) passe par un
+ * SÉLECTEUR (`:root.light …`), jamais par une lecture JS de
+ * `currentScheme()` — sans ça, une rangée déjà élue resterait figée sur
+ * l'ancien schéma après une bascule à chaud (le défaut que `scheme.ts`
+ * corrige par ailleurs pour tout le reste de l'application).
+ *
+ * `prefers-reduced-motion` n'a RIEN à couper ici de spécifique : la règle
+ * générale de `@layer base` (ci-dessus, regle 32) ramène déjà toutes les
+ * `transition-duration` à `0.01ms` — l'élection se pose sans transition,
+ * jamais sans se poser.
+ */
+
+/* LE RÉVÉLÉ — heure et coche masquées au repos, révélées pendant le geste
+   (Focal ET Script, `main[data-revealed]` posé par `reading-mode/scene.ts`). */
+.focal-meta {
+  opacity: 0;
+  transition: opacity var(--reveal-fade-ms, 0ms) ease-in-out;
+  pointer-events: none;
+}
+main[data-revealed='true'] .focal-meta {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* La rangée ÉLUE ne passe JAMAIS par le révélé : elle porte sa date, son
+   heure et son accusé en PERMANENCE via `.focus-stamp` — les doubler
+   derrière le tampon serait un second texte pour la même information. */
+[data-elected='true'] .focal-meta {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  /* SANS fondu, et c'est mesuré : la transition du révélé faisait passer
+     l'heure de la NOUVELLE élue par 280 ms de valeurs intermédiaires,
+     visibles en fantôme DERRIÈRE le tampon qui porte déjà la même heure
+     (capture `thread-focal-scene.light.png`). iOS échange le contenu des
+     deux rangées concernées en UNE reconfiguration, jamais en fondu
+     (`reconfigureFocalItems`). */
+  transition-duration: 0s !important;
+}
+
+/* LES SUPERPOSITIONS DE LA RANGÉE ÉLUE — `position: absolute` sur le bloc
+   de contenu (`position: relative`, `focal-row.tsx`) : AUCUNE hauteur
+   réservée, zéro relayout au changement d'élection.
+
+   L'ANCRAGE HORIZONTAL est celui d'iOS, pas celui du bloc de contenu :
+   là-bas les quatre superpositions sont posées sur `standardBody`
+   (`FocalRow.swift:190-212`), qui COMPREND la gouttière d'avatar. Le
+   `-var(--focus-text-indent)` les y ramène — sans lui, la carte s'arrêtait à
+   droite de l'avatar, le chip d'identité se posait 41 px à droite de la
+   pastille qu'il remplace (DEUX pastilles peintes), et la bande de focus
+   tombait SOUS la dernière ligne de texte au lieu de la gouttière (mesuré :
+   9 px de recouvrement — correction de revue #5648). */
+.focus-card,
+.focus-identity,
+.focus-strip,
+.focus-stamp {
+  transition: opacity var(--reveal-fade-ms, 0ms) ease-in-out;
+}
+
+/* L'APLATISSEMENT (`flattenFocalScene`, `--scene-flatten-ms`) — la scène
+   passe à `idle` puis la carte se DÉMONTE 450 ms plus tard
+   (`reading-mode/scene.ts`, « Phase 1 : le fondu »). Sans cette règle, ce
+   délai ne fondait RIEN : la carte restait pleinement opaque puis
+   disparaissait d'un coup, et `--scene-flatten-ms` n'avait aucun lecteur.
+   `beginFromCurrentState` (iOS) est ce que fait naturellement une transition
+   CSS interrompue — reprendre la scène pendant le fondu la ramène depuis sa
+   valeur présentée, jamais d'un saut. */
+main[data-scene='idle'] .focus-card,
+main[data-scene='idle'] .focus-identity,
+main[data-scene='idle'] .focus-strip,
+main[data-scene='idle'] .focus-stamp {
+  opacity: 0;
+  transition-duration: var(--scene-flatten-ms, 0ms);
+  pointer-events: none;
+}
+
+.focus-card {
+  position: absolute;
+  inset-inline-start: calc(-1 * (var(--focus-text-indent) + var(--focus-card-inset-x)));
+  inset-inline-end: calc(-1 * var(--focus-card-inset-x));
+  inset-block: calc(-1 * var(--focus-card-inset-y));
+  border-radius: var(--focus-card-radius);
+  pointer-events: none;
+  --focus-fill: var(--focus-fill-dark);
+  background-color: color-mix(in srgb, var(--accent) calc(var(--focus-fill) * 100%), transparent);
+}
+:root.light .focus-card {
+  --focus-fill: var(--focus-fill-light);
+}
+
+.focus-identity {
+  position: absolute;
+  top: calc(-1 * var(--focus-identity-overhang));
+  inset-inline-start: calc(var(--focus-chip-inset) - var(--focus-text-indent));
+}
+
+.focus-strip {
+  position: absolute;
+  bottom: calc(-1 * var(--focus-strip-overhang));
+  inset-inline-start: calc(var(--focus-chip-inset) - var(--focus-text-indent));
+}
+
+.focus-stamp {
+  position: absolute;
+  bottom: calc(-1 * var(--focus-strip-overhang));
+  inset-inline-end: var(--focus-chip-inset);
+}
+
+/* LA CAPSULE DE CHIP — opaque `--color-ios-card`, voilée par l'accent de la
+   conversation (`--focus-chip-fill`, basculée clair/sombre par sélecteur
+   comme `.focus-card` ci-dessus) : `FocalScrollPerspective.focusChip`
+   (:848-864), « sans contour ». */
+.focus-chip {
+  display: inline-flex;
+  align-items: center;
+  height: var(--focus-chip-h);
+  min-width: var(--focus-chip-minw);
+  padding-inline: var(--focus-chip-pad-x);
+  border-radius: var(--radius-pill, 999px);
+  --focus-chip-fill: var(--focus-chip-fill-dark);
+  background-color: color-mix(in srgb, var(--accent) calc(var(--focus-chip-fill) * 100%), var(--color-ios-card));
+}
+:root.light .focus-chip {
+  --focus-chip-fill: var(--focus-chip-fill-light);
+}

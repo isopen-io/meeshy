@@ -56,7 +56,17 @@ export interface AuthTokenExpiredEventData {
 export interface AuthSessionRevokedEventData {
   readonly code: 'session_revoked';
   readonly message: string;
-  readonly reason: 'password_changed' | 'logout_all_devices' | 'admin_revoke';
+  /**
+   * `session_expired` (#5712) — la `UserSession` nommée par le claim `sid`
+   * du JWT (`services/auth/session-jwt.ts`) n'est plus valide OU a dépassé
+   * son `expiresAt` au moment où le socket tente de s'authentifier. Distinct
+   * des trois autres motifs : ceux-ci décrivent une révocation ACTIVE d'un
+   * socket déjà connecté (`disconnectSession`/`disconnectRevokedSessions`),
+   * celui-ci un REFUS à la connexion — aucun client ne switche sur `reason`
+   * aujourd'hui (web/iOS déclenchent la même déconnexion pour les quatre),
+   * l'ajout est donc sans risque de décodage strict.
+   */
+  readonly reason: 'password_changed' | 'logout_all_devices' | 'admin_revoke' | 'session_expired';
 }
 
 /**

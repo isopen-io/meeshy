@@ -1,8 +1,9 @@
-import type { ConversationState, PendingAction, PendingMessage, AgentHistoryEntry } from '../graph/state';
+import type { ConversationState, PendingAction, PendingMessage, PendingReaction, AgentHistoryEntry } from '../graph/state';
 import type { LlmProvider } from '../llm/types';
 import { parseJsonLlm } from '../utils/parse-json-llm';
 import { getArchetype } from '@meeshy/shared/agent/archetypes';
 import { contentHash } from '../utils/content-hash';
+import { reactionEstCoherente, dedupliquerReactions } from './reaction-coherence';
 
 const STOP_WORDS = new Set([
   'alors', 'aussi', 'autre', 'avant', 'avoir', 'cette', 'comme', 'dans',
@@ -121,6 +122,32 @@ export function runDeterministicChecks(
   return { ok: true, reason: '' };
 }
 
+/**
+ * Les réactions passaient SANS aucun contrôle (`reactionsPassthrough`) pendant
+ * que les messages étaient filtrés — d'où un 🤔 sur « D'accord » et deux agents
+ * posant 🙌 au même endroit, mesurés en production (#5666).
+ */
+function filtrerReactions(
+  reactions: readonly PendingReaction[],
+  messages: readonly { id: string; content: string }[],
+): { retenues: PendingReaction[]; rejets: string[] } {
+  const contenuParId = new Map(messages.map((m) => [m.id, m.content]));
+  const rejets: string[] = [];
+
+  const uniques = dedupliquerReactions(reactions);
+  const doublons = reactions.length - uniques.length;
+
+  const retenues = uniques.filter((r) => {
+    const verdict = reactionEstCoherente(r.emoji, contenuParId.get(r.targetMessageId));
+    if (!verdict.ok) rejets.push(verdict.reason);
+    return verdict.ok;
+  });
+
+  if (doublons > 0) rejets.push(`${doublons} réaction(s) en double`);
+
+  return { retenues, rejets };
+}
+
 export function createQualityGateNode(llm: LlmProvider) {
   return async function qualityGate(state: ConversationState) {
     try {
@@ -134,9 +161,14 @@ export function createQualityGateNode(llm: LlmProvider) {
       const reactions = actions.filter((a) => a.type === 'reaction');
 
       if (messages.length === 0) {
+        const { retenues, rejets } = filtrerReactions(reactions as PendingReaction[], state.messages ?? []);
+        if (rejets.length > 0) {
+          console.log(`[QualityGate] ${rejets.length} réaction(s) écartée(s) : ${rejets.join(' | ')}`);
+        }
         return {
-          pendingActions: reactions,
-          _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped', _traceExtra: { skipped: true, reactionsPassthrough: reactions.length },
+          pendingActions: retenues,
+          _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped',
+          _traceExtra: { skipped: true, reactionsKept: retenues.length, reactionsRejected: rejets.length },
         };
       }
 
@@ -269,7 +301,14 @@ Retourne un JSON: { "coherent": boolean, "score": 0-1, "correctLanguage": boolea
         validatedMessages.push(msg);
       }
 
-      console.log(`[QualityGate] Validated ${validatedMessages.length}/${messages.length} messages, ${reactions.length} reactions pass-through`);
+      const { retenues: reactionsRetenues, rejets: rejetsReactions } = filtrerReactions(
+        reactions as PendingReaction[],
+        state.messages ?? [],
+      );
+      if (rejetsReactions.length > 0) {
+        console.log(`[QualityGate] ${rejetsReactions.length} réaction(s) écartée(s) : ${rejetsReactions.join(' | ')}`);
+      }
+      console.log(`[QualityGate] Validated ${validatedMessages.length}/${messages.length} messages, ${reactionsRetenues.length}/${reactions.length} reactions`);
 
       const newHistory: AgentHistoryEntry[] = validatedMessages
         .filter((a): a is PendingMessage => a.type === 'message')
@@ -281,7 +320,7 @@ Retourne un JSON: { "coherent": boolean, "score": 0-1, "correctLanguage": boolea
         }));
 
       return {
-        pendingActions: [...validatedMessages, ...reactions],
+        pendingActions: [...validatedMessages, ...reactionsRetenues],
         agentHistory: newHistory,
         _traceInputTokens: 0,
         _traceOutputTokens: 0,

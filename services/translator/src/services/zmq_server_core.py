@@ -47,8 +47,12 @@ class ZMQTranslationServer:
                  gateway_sub_port: int = 5558,   # Port où Translator PUB bind (Gateway SUB connect ici)
                  normal_pool_size: int = 10000,
                  any_pool_size: int = 10000,
-                 normal_workers: int = 3,
-                 any_workers: int = 2,
+                 # None laisse TranslationPoolManager résoudre le défaut
+                 # (NORMAL_WORKERS_DEFAULT / ANY_WORKERS_DEFAULT, sinon
+                 # calculate_optimal_workers) — SEULE source de ces défauts
+                 # depuis #3664, plutôt qu'un troisième jeu de valeurs ici.
+                 normal_workers: Optional[int] = None,
+                 any_workers: Optional[int] = None,
                  translation_service=None,
                  database_url: str = None):
         

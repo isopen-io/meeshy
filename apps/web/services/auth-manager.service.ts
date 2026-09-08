@@ -168,10 +168,37 @@ class AuthManager {
 
   // ==================== GETTERS ====================
 
+  /**
+   * Le jeton, et jamais un jeton PÉRIMÉ.
+   *
+   * Symétrique de la garde des sessions ANONYMES (`getAnonymousSession`), et de
+   * ce que fait déjà la v3.1 (`persisted.expiresAt <= now()`). Le legacy ne
+   * l'avait pas : il servait un JWT mort, et la socket le rouvrait — côté
+   * serveur, `AuthHandler` écrit alors `User.lastActiveAt`, si bien qu'une
+   * personne absente depuis des mois paraît présente et échappe à la sélection
+   * de l'agent.
+   *
+   * Mesuré le 2026-09-08 : `La_mignonne`, utilisatrice du legacy, « active » il
+   * y a 148 minutes avec DEUX sessions expirées depuis 62 jours et aucun message
+   * jamais envoyé (#5712).
+   *
+   * On ne jette que ce qu'on SAIT périmé : un jeton sans `exp`, ou illisible,
+   * est servi tel quel — le serveur reste l'autorité, et une lecture cliente
+   * ratée ne doit pas déconnecter quelqu'un de légitime.
+   */
   getAuthToken(): string | null {
     /* istanbul ignore next */
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN);
+    const token = localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN);
+    if (!token) return null;
+
+    const exp = decodeJwtPayload(token)?.exp;
+    if (typeof exp === 'number' && Date.now() >= exp * 1000) {
+      localStorage.removeItem(AUTH_STORAGE_KEYS.AUTH_TOKEN);
+      return null;
+    }
+
+    return token;
   }
 
   getCurrentUser(): User | null {

@@ -16,10 +16,11 @@
  * 4. Les DEUX schémas sont capturés et LUS (outil Read, en dehors de ce
  *    script — il produit les fichiers, ne les regarde pas).
  * 5. `prefers-reduced-motion: reduce` : aucune transformation de perspective
- *    n'est posée sur les rangées, même en mode Focal — `reading-mode/scene.ts`
- *    coupe la passe entière avant son premier `requestAnimationFrame` quand
- *    la préférence est active (§10 ci-dessous prouve l'INVERSE : la passe
- *    EXISTE dès que le mouvement n'est pas réduit).
+ *    n'est posée sur les rangées — plus aucune ne l'est JAMAIS depuis #5648
+ *    (la courbe continue a été retirée d'iOS le 2026-08-24). Ce que la
+ *    préférence coupe désormais, ce sont les TRANSITIONS de la scène ; ce
+ *    qu'elle ne coupe PAS, c'est l'élection elle-même — elle se pose quand
+ *    même, sans fondu : l'élection est une information, jamais une animation.
  * 6. AUCUN contrôle de l'en-tête n'en RECOUVRE un autre : le centre de chaque
  *    bouton renvoie ce bouton (`elementFromPoint`). Le chip débordait de sa
  *    boîte de 44 px et volait le centre de « Appeler » — un contrôle rendu
@@ -44,12 +45,18 @@
  *    tient désormais 4,62:1 en clair — la barre AA remplace le plancher.
  * 9. Une RÉACTION reste visible dans le mode par DÉFAUT (elle ne l'était que
  *    dans le mode « Bulles »), et la pastille du Prisme a un EFFET.
- * 10. « Focal » et « Script » rendaient des PNG STRICTEMENT identiques
- *     (mesuré : `Buffer.equals === true`). Ce gate scrolle et compare la
- *     `transform` calculée de la rangée la plus haute dans les DEUX modes :
- *     posée en Focal, absente en Script — la perspective (`reading-mode/
- *     scene.ts`, dérivée de `focus-curve.ts` variant `thread`, gardée par
- *     `check-curve.mjs`) est désormais réelle, pas seulement annoncée.
+ * 10. INVERSÉ PAR #5648. « Focal » et « Script » rendaient des PNG
+ *     STRICTEMENT identiques ; la première réponse fut une courbe de
+ *     perspective — qu'iOS avait déjà retirée. Ce que ce gate mesure
+ *     désormais est l'ÉLECTION : après un défilement soutenu, EXACTEMENT une
+ *     rangée porte `[data-elected="true"]` avec sa carte teintée, son chip
+ *     d'identité et son tampon de date ; AUCUNE rangée du fil ne porte de
+ *     `scale` ni d'`opacity < 1` ; 4,95 s après le dernier tick, plus aucune
+ *     élue ; en Script, jamais aucune. Trois witnesses de revue s'y
+ *     ajoutent : la bande de focus est ATTEIGNABLE au doigt (elle passait
+ *     sous la rangée suivante, contrôle inerte), l'élue ne peint qu'UNE
+ *     pastille d'avatar (elle en peignait deux), et aucune capsule de chip
+ *     n'est VIDE.
  * 11. TOUTE rangée porte une heure (elle ne datait que la tête de groupe —
  *     une rangée de continuation n'avait AUCUNE date). La pastille du Prisme
  *     dessine 22 px mais sa zone TACTILE excède sa boîte visuelle
@@ -161,6 +168,138 @@ const quoteSkinIsNeutral = (page) =>
 
 /** `contrastOf` vit désormais dans `./lib/contrast.mjs` (source unique,
  *  #5559 revue-correction — voir son en-tête pour la méthode). */
+
+/**
+ * LE GESTE SOUTENU (#5648) — `page.mouse.wheel` toutes les 100 ms, la même
+ * cadence que la porte DURÉE de `FocalMagnificationLaw` (`sustainedMs`,
+ * `election.ts`). Un `wheel` réel (et non un `scrollTo` programmé) ouvre
+ * l'intention et compte pour l'armement, exactement comme sur un trackpad.
+ * `dx`/`dy` par défaut : un défilement LENT (40 px/100 ms = 400 px/s, sous
+ * le seuil de vitesse 1200 px/s) — c'est la DURÉE qui doit armer, pas la
+ * vitesse, sauf appel explicite avec un pas plus grand (porte vitesse).
+ */
+const sustainedWheelScroll = async (page, { ms, step = 40, tick = 100 }) => {
+  await page.locator('main').hover();
+  const ticks = Math.ceil(ms / tick);
+  for (let i = 0; i < ticks; i += 1) {
+    await page.mouse.wheel(0, -step);
+    await page.waitForTimeout(tick);
+  }
+};
+
+/**
+ * L'IDENTIFIANT DU MESSAGE ÉLU (#5648, défaut 1) — `[data-row]` porte
+ * l'`id` du message (`routes/thread.tsx`, la même primitive que
+ * `element.querySelectorAll('[data-row]')` lit déjà côté `scene.ts` pour
+ * candidater à l'élection) ; `[data-elected="true"]` (posé par `FocalRow`)
+ * est un DESCENDANT de ce nœud, jamais lui-même — `.closest()` remonte à
+ * l'ancêtre qui porte l'id.
+ */
+const electedMessageId = (page) =>
+  page.evaluate(() => {
+    const el = document.querySelector('main li [data-elected="true"]');
+    return el ? (el.closest('[data-row]')?.getAttribute('data-row') ?? null) : null;
+  });
+
+/**
+ * ÉLIT UNE RANGÉE PRÉCISE (#5648, défaut 1) — plutôt que « celle qui
+ * tombe » d'un défilement soutenu depuis le bas du fil (ce que fait le
+ * geste ci-dessus), on la vise EXPLICITEMENT, en deux temps.
+ *
+ * (1) LA RANGÉE EST VIRTUALISÉE (`@tanstack/react-virtual`,
+ * `routes/thread.tsx`) : `[data-row="…"]` n'existe dans le DOM que si son
+ * index est dans (ou proche de) la fenêtre visible. `scrollIntoView` sur un
+ * nœud pas encore monté est un NO-OP silencieux (`?.`) — un défilement
+ * RÉEL (`wheel`), gradué, fait avancer la fenêtre virtualisée jusqu'à ce
+ * que la cible apparaisse.
+ *
+ * (2) UNE FOIS RENDUE, on la CENTRE (`scrollIntoView`, un défilement
+ * PROGRAMMÉ : aucune intention ouverte, `scene.ts` l'ignore) puis on arme
+ * la scène par la porte DURÉE avec une amplitude quasi NULLE (alternance du
+ * signe à chaque tick : dérive nette ≈ 0, bien en-deçà de l'hystérésis de
+ * 95 px, `election.ts::THREAD_FOCUS_BAND_HYSTERESIS`) — la rangée déjà
+ * centrée reste donc la plus proche de la ligne de focus tout au long du
+ * geste, quoi que la phase (1) ait pu élire en passant.
+ */
+const electRow = async (page, rowId, { ms = 4200, step = 3, tick = 100 } = {}) => {
+  await page.locator('main').hover();
+  for (let i = 0; i < 80; i += 1) {
+    if ((await page.locator(`main [data-row="${rowId}"]`).count()) > 0) break;
+    await page.mouse.wheel(0, -80);
+    await page.waitForTimeout(50);
+  }
+  await page.evaluate((id) => {
+    document.querySelector(`main [data-row="${id}"]`)?.scrollIntoView({ block: 'center' });
+  }, rowId);
+  await page.waitForTimeout(50);
+  const ticks = Math.ceil(ms / tick);
+  for (let i = 0; i < ticks; i += 1) {
+    await page.mouse.wheel(0, i % 2 === 0 ? -step : step);
+    await page.waitForTimeout(tick);
+  }
+};
+
+/**
+ * NON-RECOUVREMENT DU TEXTE PAR LA BANDE/LE TAMPON DE FOCUS (#5648, défaut
+ * 1) — même mesure que `heightAndOverlap` ci-dessous (§10), extraite pour
+ * être appliquée à une rangée CHOISIE (`electRow`) plutôt qu'à celle qu'un
+ * défilement générique élit. Rend aussi si un réservoir (`[data-focus-
+ * reserve]`, un attribut plutôt qu'une classe — `check-utilities.mjs`
+ * exige une RÈGLE CSS pour toute classe utilisée, et ce marqueur n'en a
+ * délibérément aucune) est monté (la rangée n'a pas de ligne basse) et si
+ * le nœud élu existe —
+ * un appelant qui n'a pas réussi à ÉLIRE sa cible doit le voir, jamais lire
+ * un `false` par défaut qui ressemblerait à un succès.
+ */
+const focusOverlapOf = (page) =>
+  page.evaluate(() => {
+    const row = document.querySelector('main li [data-elected="true"]');
+    if (row === null) return { found: false, stripOverText: null, stampOverText: null, hasReserve: null };
+    const textEl = [...row.querySelectorAll('p')].find((e) => (e.textContent ?? '').trim().length > 0);
+    const strip = row.querySelector('.focus-strip');
+    const stamp = row.querySelector('.focus-stamp');
+    const box = (e) => (e ? e.getBoundingClientRect() : null);
+    const overlaps = (a, b) =>
+      !!a && !!b && a.top < b.bottom && b.top < a.bottom && a.left < b.right && b.left < a.right;
+    const T = box(textEl);
+    return {
+      found: true,
+      stripOverText: overlaps(box(strip), T),
+      stampOverText: overlaps(box(stamp), T),
+      hasReserve: row.querySelector('[data-focus-reserve]') !== null,
+    };
+  });
+
+/**
+ * Aucune rangée du fil ne porte de perspective CONTINUE — la courbe qu'iOS a
+ * retirée. Elle écrivait `style.opacity` ET `style.transform` sur la rangée
+ * elle-même (`[data-row] > *`, l'ancien `useThreadPerspective`) : c'est donc
+ * la RANGÉE qu'on interroge pour l'opacité.
+ *
+ * Le `scale`, lui, est balayé sur TOUTE la sous-arborescence — plus strict
+ * que la version d'origine, qui ne regardait que deux nœuds. L'opacité ne
+ * peut pas l'être : depuis #5648 l'en-tête d'identité ET la pastille
+ * d'avatar de la rangée ÉLUE s'effacent à `opacity: 0` (miroir
+ * `FocalRow.swift:269`, l'identité passant au chip de focus), et la colonne
+ * méta au repos aussi (le révélé). Trois fondus VOULUS, qu'un balayage de
+ * sous-arborescence rendrait indistinguables de la courbe qu'on interdit.
+ */
+const noRowCarriesContinuousPerspective = (page) =>
+  page.evaluate(() => {
+    const offenders = [];
+    for (const row of document.querySelectorAll('main li [data-reading-mode]')) {
+      const style = getComputedStyle(row);
+      if (Number(style.opacity) < 1) {
+        offenders.push({ tag: row.tagName, why: 'opacity', opacity: style.opacity });
+      }
+      for (const node of [row, ...row.querySelectorAll('*')]) {
+        if (getComputedStyle(node).transform.includes('scale(')) {
+          offenders.push({ tag: node.tagName, why: 'scale', transform: getComputedStyle(node).transform });
+        }
+      }
+    }
+    return offenders;
+  });
 
 // --- 1 : le défaut est FOCAL, mesuré au DOM.
 {
@@ -381,35 +520,15 @@ const quoteSkinIsNeutral = (page) =>
   );
 
   /**
-   * --- défauts 1/5 : la PERSPECTIVE distingue RÉELLEMENT « Focal » de
-   * « Script » au défilement. Avant ce lot, les deux modes rendaient des PNG
-   * STRICTEMENT identiques (`Buffer.equals === true`, 87 862 octets) — la
-   * courbe `thread` de `focus-curve.ts` (dérivée dans
-   * `reading-mode/perspective.ts`, gardée par `check-curve.mjs`) est
-   * désormais appliquée aux rangées visibles en mode `focal` SEUL
-   * (`reading-mode/scene.ts`), jamais en `script` (« densité uniforme, zéro
-   * perspective », même ligne que `FocalRow.swift`).
+   * --- défauts 1/5, SOLDÉS par #5648 : « Focal » et « Script » ne se
+   * distinguent plus par une courbe continue (retirée d'iOS le 2026-08-24,
+   * `apps/ios/decisions.md:328`) mais par l'ÉLECTION d'une rangée au
+   * défilement soutenu — voir le bloc « --- 10 » ci-dessous, sur
+   * `/c/c-salon-riviere` (seule conversation du jeu qui défile assez pour
+   * armer la scène ; `c-deploiement`, 7 messages, ne le permettait pas —
+   * l'ancien garde `scrollSlack > 4` SAUTAIT sa propre mesure, ce qui ne
+   * PROUVAIT rien, spécification #5648 §2).
    */
-  const scrollSlack = await page.evaluate(() => {
-    const m = document.querySelector('main');
-    return m ? m.scrollHeight - m.clientHeight : 0;
-  });
-  if (scrollSlack > 4) {
-    await page.evaluate(() => document.querySelector('main')?.scrollTo({ top: 0 }));
-    await page.waitForTimeout(250);
-    const focalTransform = await page.evaluate(() => {
-      const row = document.querySelector('main li [data-reading-mode="focal"]');
-      return row ? getComputedStyle(row).transform : null;
-    });
-    expect(
-      focalTransform !== null && focalTransform !== 'none',
-      `en mode focal, la rangée la plus haute porte une transform de perspective au défilement (${focalTransform})`,
-    );
-    await page.evaluate(() => document.querySelector('main')?.scrollTo({ top: 999_999 }));
-    await page.waitForTimeout(250);
-  } else {
-    console.log('  (mesure ignorée : le fil de démonstration ne défile pas assez pour la perspective)');
-  }
 
   /**
    * AU CLAVIER, de bout en bout (défaut #5566 §9, corrigé) : `Enter` ouvre le
@@ -447,19 +566,6 @@ const quoteSkinIsNeutral = (page) =>
     'le focus revient au chip après un choix — jamais perdu sur le document',
   );
 
-  if (scrollSlack > 4) {
-    await page.evaluate(() => document.querySelector('main')?.scrollTo({ top: 0 }));
-    await page.waitForTimeout(250);
-    const scriptTransform = await page.evaluate(() => {
-      const row = document.querySelector('main li [data-reading-mode="script"]');
-      return row ? getComputedStyle(row).transform : null;
-    });
-    expect(
-      scriptTransform === null || scriptTransform === 'none',
-      `en mode script, AUCUNE perspective n'est posée — « densité uniforme, zéro perspective » (${scriptTransform})`,
-    );
-  }
-
   await page.keyboard.press('Enter');
   await page.waitForTimeout(200);
   const focusedAfterReopen = await page.evaluate(() => document.activeElement?.textContent ?? '');
@@ -473,6 +579,454 @@ const quoteSkinIsNeutral = (page) =>
   expect(
     await page.evaluate(() => document.activeElement?.getAttribute('aria-haspopup') === 'menu'),
     'Escape rend le focus au chip',
+  );
+
+  await context.close();
+}
+
+/**
+ * --- 10 : L'ÉLECTION DE LA SCÈNE (#5648) — Focal se distingue de Script par
+ * l'ÉLECTION d'une rangée au défilement soutenu (carte teintée, chip
+ * d'identité agrandi, tampon de date), plus par la courbe continue qu'iOS a
+ * retirée. Sur `/c/c-salon-riviere` (40 messages) — la SEULE conversation du
+ * jeu qui défile assez pour armer la scène ; `c-deploiement` ne le permet
+ * pas (l'ancien garde `scrollSlack > 4` le SAUTAIT, ce qui ne prouvait
+ * rien).
+ */
+{
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await setScheme(context, 'dark');
+  const page = await context.newPage();
+  await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'load' });
+  await page.waitForSelector('main li');
+  await page.waitForTimeout(400);
+
+  // Le fil de démonstration DOIT défiler assez pour que la scène soit
+  // observable — un gate qui saute sa propre mesure ne prouve rien
+  // (spécification #5648 §2, §4.5).
+  const scrollSlack = await page.evaluate(() => {
+    const m = document.querySelector('main');
+    return m ? m.scrollHeight - m.clientHeight : 0;
+  });
+  expect(scrollSlack > 4, `le fil de démonstration défile assez pour armer la scène (scrollSlack=${scrollSlack})`);
+
+  // (1) AU REPOS : aucune élection, aucune scène.
+  expect(
+    (await page.locator('main li [data-reading-mode="focal"][data-elected="true"]').count()) === 0,
+    'au repos, aucune rangée Focal n’est élue',
+  );
+  expect(
+    await page.evaluate(() => document.querySelector('main')?.dataset.scene === undefined),
+    'au repos, `main[data-scene]` est absent',
+  );
+
+  // BASELINE — hauteurs AU REPOS, indexées par le texte de chaque rangée :
+  // comparées après l'élection pour prouver qu'ÉLIRE ne fait JAMAIS bouger
+  // la hauteur de la rangée élue (correction de revue #5648, défaut
+  // bloquant 3 : la ligne basse était DÉMONTÉE plutôt qu'effacée, ce
+  // qu'aucun témoin d'AVANT cette correction n'attrapait).
+  // (2) DÉFILEMENT SOUTENU (4 200 ms ≥ SUSTAINED_SCROLL_MS, jamais ≥ 1 200 px/s
+  // sur un seul pas) : EXACTEMENT une rangée élue, avec sa carte, son chip
+  // d’identité et son tampon.
+  await sustainedWheelScroll(page, { ms: 4200 });
+  // L'HORLOGE DU REPOS part du DERNIER `wheel`, pas de la fin des assertions
+  // qui suivent : sans ce repère, l'échantillonnage du fondu (plus bas)
+  // tombait entièrement AVANT le passage à `idle` et ne mesurait rien.
+  const lastGestureAt = Date.now();
+  const electedCount = await page.locator('main li [data-elected="true"]').count();
+  expect(electedCount === 1, `après un défilement soutenu, EXACTEMENT une rangée est élue (${electedCount})`);
+
+  const elected = page.locator('main li [data-elected="true"]').first();
+  const cardBg = await elected.locator('.focus-card').evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(
+    cardBg !== 'rgba(0, 0, 0, 0)' && cardBg !== 'transparent',
+    `la carte de la rangée élue porte un fond calculé ≠ transparent (${cardBg})`,
+  );
+
+  const identity = await elected.locator('.focus-identity').evaluate((el) => {
+    const avatar = el.querySelector('.avatar-root');
+    const r = el.getBoundingClientRect();
+    const a = avatar ? avatar.getBoundingClientRect() : null;
+    return { height: r.height, avatarWidth: a ? a.width : null };
+  });
+  expect(identity.height >= 34, `le chip d'identité de l'élue mesure au moins 34 px de haut (${identity.height})`);
+  expect(identity.avatarWidth === 26, `l'avatar du chip d'identité mesure 26 px (${identity.avatarWidth})`);
+
+  const stampText = await elected.locator('.focus-stamp').first().innerText();
+  expect(
+    /^Aujourd'hui \d{1,2}:\d{2}/.test(stampText),
+    `le tampon de l'élue commence par « Aujourd'hui HH:MM » (« ${stampText} »)`,
+  );
+
+  const offenders = await noRowCarriesContinuousPerspective(page);
+  expect(
+    offenders.length === 0,
+    `aucune rangée du fil ne porte de perspective continue (scale/opacity<1) — ${JSON.stringify(offenders)}`,
+  );
+
+  /**
+   * WITNESSES DE REVUE (#5648) — trois défauts MESURÉS sur la première
+   * livraison, chacun invisible d'un test de rendu :
+   *
+   * a) la bande de focus DÉBORDE sous la rangée, et chaque rangée est un
+   *    contexte d'empilement (`transform` du virtualiseur) : ses boutons
+   *    passaient SOUS la rangée suivante — présents, fonctionnels, et
+   *    INATTEIGNABLES au doigt. `elementFromPoint` est le seul témoin qui
+   *    l'attrape (la loi 4 : un contrôle existe s'il a un effet) ;
+   * b) l'en-tête d'identité de l'élue s'efface, mais son AVATAR restait
+   *    peint : deux pastilles pour un seul auteur ;
+   * c) `PrismPastille` rend `null` quand la langue servie EST l'originale —
+   *    sa capsule restait montée, VIDE.
+   */
+  const overlayHealth = await elected.evaluate((row) => {
+    const strip = row.querySelector('.focus-strip');
+    const buttons = [...(strip?.querySelectorAll('button') ?? [])];
+    const unreachable = buttons.filter((b) => {
+      const r = b.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return top !== b && !b.contains(top);
+    }).length;
+    const emptyChips = [...row.querySelectorAll('.focus-chip')].filter(
+      (c) => c.textContent?.trim() === '' && c.children.length === 0,
+    ).length;
+    return {
+      buttons: buttons.length,
+      unreachable,
+      emptyChips,
+      avatars: row.querySelectorAll('.avatar-root').length,
+      visibleAvatars: [...row.querySelectorAll('.avatar-root')].filter((a) => {
+        for (let n = a; n instanceof HTMLElement; n = n.parentElement) {
+          if (Number(getComputedStyle(n).opacity) === 0) return false;
+          if (n.hasAttribute('data-elected')) break;
+        }
+        return true;
+      }).length,
+      hasStrip: strip !== null,
+      stripInsideAriaHidden: strip !== null && strip.closest('[aria-hidden="true"]') !== null,
+    };
+  });
+  expect(
+    overlayHealth.hasStrip && overlayHealth.buttons > 0,
+    `la rangée élue porte une bande de focus AVEC des contrôles — sans quoi les trois witnesses ci-dessous ne prouveraient rien (${JSON.stringify(overlayHealth)})`,
+  );
+  expect(
+    overlayHealth.unreachable === 0,
+    `chaque bouton de la bande de focus est ATTEIGNABLE au doigt — ${JSON.stringify(overlayHealth)}`,
+  );
+  expect(
+    overlayHealth.visibleAvatars <= 1,
+    `la rangée élue ne peint qu'UNE pastille d'avatar (${overlayHealth.visibleAvatars})`,
+  );
+  expect(overlayHealth.emptyChips === 0, `aucune capsule de chip VIDE sur l'élue (${overlayHealth.emptyChips})`);
+  expect(
+    !overlayHealth.stripInsideAriaHidden,
+    'la bande de focus n’est pas sous un `aria-hidden` — elle porte les SEULS contrôles de Prisme de la rangée élue',
+  );
+
+  /**
+   * WITNESS DÉFAUT BLOQUANT 3 (#5648, correction de revue) — ÉLIRE une
+   * rangée ne change JAMAIS sa hauteur : comparée à la hauteur COMMUNE des
+   * rangées NON élues actuellement rendues (le corpus est de « densité
+   * uniforme du premier au dernier message », fixture dédiée), jamais à un
+   * relevé « au repos » — le virtualiseur ne rendait pas encore cette
+   * rangée avant le défilement, donc rien à y comparer temporellement. Ni
+   * la bande ni le tampon ne recouvrent JAMAIS le `<p>` du message qu'ils
+   * élisent. `FocalRow.swift:317-322` efface la ligne basse par opacité —
+   * « la bande SUR la ligne basse remplace visuellement cette ligne, QUI
+   * GARDE SA PLACE » — jamais en la démontant.
+   */
+  const heightAndOverlap = await elected.evaluate((row) => {
+    const li = row.closest('li');
+    const others = [...document.querySelectorAll('main li[data-index]')]
+      .filter((n) => n !== li)
+      .map((n) => Math.round(n.getBoundingClientRect().height));
+    const commonHeight = others.length > 0 ? others.sort((a, b) => a - b)[Math.floor(others.length / 2)] : null;
+    const textEl = [...row.querySelectorAll('p')].find((e) => (e.textContent ?? '').trim().length > 0);
+    const strip = row.querySelector('.focus-strip');
+    const stamp = row.querySelector('.focus-stamp');
+    const box = (e) => (e ? e.getBoundingClientRect() : null);
+    const overlaps = (a, b) =>
+      !!a && !!b && a.top < b.bottom && b.top < a.bottom && a.left < b.right && b.left < a.right;
+    const T = box(textEl);
+    return {
+      liH: li ? Math.round(li.getBoundingClientRect().height) : null,
+      commonHeight,
+      stripOverText: overlaps(box(strip), T),
+      stampOverText: overlaps(box(stamp), T),
+    };
+  });
+  expect(
+    heightAndOverlap.liH === heightAndOverlap.commonHeight,
+    `élire une rangée ne change JAMAIS sa hauteur, comparée à celle des rangées voisines non élues — ${JSON.stringify(heightAndOverlap)}`,
+  );
+  expect(
+    !heightAndOverlap.stripOverText,
+    `la bande de focus ne recouvre JAMAIS le texte de la rangée qu'elle élit — ${JSON.stringify(heightAndOverlap)}`,
+  );
+  expect(
+    !heightAndOverlap.stampOverText,
+    `le tampon de focus ne recouvre JAMAIS le texte de la rangée qu'il élit — ${JSON.stringify(heightAndOverlap)}`,
+  );
+
+  /**
+   * WITNESS DÉFAUT MAJEUR 5 (#5648, correction de revue) — cliquer un
+   * contrôle de la bande de focus fait GRANDIR la rangée (panneau
+   * secondaire de traduction) sans jamais DÉPLACER l'élection sur une
+   * rangée voisine. `reading-mode/scene.ts` ne reprogramme la passe de
+   * géométrie que depuis un `scrolled` COMPTÉ (`state.intent` vrai) —
+   * jamais depuis le relayout lui-même.
+   */
+  const electedKeyBeforeClick = await elected.evaluate((row) => row.closest('li')?.getAttribute('data-index') ?? null);
+  await elected.locator('.focus-strip button').first().click();
+  await page.waitForTimeout(300);
+  const stillElectedKey = await page.evaluate(() => {
+    const row = document.querySelector('main li [data-elected="true"]');
+    return row ? (row.closest('li')?.getAttribute('data-index') ?? null) : null;
+  });
+  expect(
+    stillElectedKey === electedKeyBeforeClick,
+    `cliquer un contrôle de la bande de focus ne déplace JAMAIS l'élection (avant « ${electedKeyBeforeClick} », après « ${stillElectedKey} »)`,
+  );
+
+  /**
+   * (3) APLATISSEMENT — `SCENE_REST_DELAY_MS` (4 500) + `SCENE_FLATTEN_DURATION_MS`
+   * (450) après le DERNIER `scrolled` compté, PLUS la granularité des `tick`
+   * d'horloge (`SCROLL_ACTIVITY_LINGER_MS / 3` = 300 ms, qui peut retarder de
+   * jusqu'à un tick la DÉTECTION du passage à l'inactivité) : 4 950 ms au
+   * minimum, mesuré. 5 400 ms laisse une marge sûre sans rien prouver de
+   * moins — aucun nouveau geste n'a lieu pendant l'attente.
+   */
+  /**
+   * LE FONDU de l'aplatissement (`--scene-flatten-ms`, 450 ms) est
+   * ÉCHANTILLONNÉ, jamais sondé une fois : le passage à `idle` tombe entre
+   * 4,5 s et 4,8 s (granularité des ticks), et le fondu dure 450 ms
+   * après. Un seul instant de mesure serait un pari ; onze le sont pas.
+   * Sans la règle CSS qui LIT la variable, la carte reste à 1 puis se
+   * démonte d'un coup — c'est exactement l'état de la première livraison,
+   * où `data-scene` n'avait aucun consommateur.
+   */
+  const flattenSamples = [];
+  await page.waitForTimeout(Math.max(0, 4300 - (Date.now() - lastGestureAt)));
+  for (let i = 0; i < 24; i += 1) {
+    flattenSamples.push(
+      await page.evaluate(() => {
+        const card = document.querySelector('main .focus-card');
+        return {
+          scene: document.querySelector('main')?.dataset.scene ?? null,
+          opacity: card === null ? null : Number(getComputedStyle(card).opacity),
+          ms: card === null ? null : getComputedStyle(card).transitionDuration,
+        };
+      }),
+    );
+    await page.waitForTimeout(60);
+  }
+  const fading = flattenSamples.filter(
+    (x) => x.scene === 'idle' && x.opacity !== null && x.opacity < 1 && x.ms === '0.45s',
+  );
+  expect(
+    fading.length > 0,
+    `l'aplatissement FOND la carte sur \`--scene-flatten-ms\` — ${JSON.stringify(flattenSamples.filter((x) => x.scene === 'idle'))}`,
+  );
+
+  await page.waitForTimeout(5400);
+  expect(
+    (await page.locator('main li [data-elected="true"]').count()) === 0,
+    '5,4 s après le dernier tick, plus aucune rangée élue (aplatissement)',
+  );
+
+  /**
+   * (3 bis) LES DEUX TÉMOINS DU DÉFAUT 1 (#5648, correction de revue) — le
+   * corpus par défaut de `c-salon-riviere` alternait STRICTEMENT expéditeur
+   * et traduisait CHAQUE message : `mountsBottomLine` (`reading-mode/meta.ts`)
+   * ne pouvait donc JAMAIS rendre `false`, et le témoin `heightAndOverlap`
+   * ci-dessus ne pouvait faire échouer AUCUNE garde sur une rangée SANS
+   * ligne basse — exactement la forme où le recouvrement de 9 px a été
+   * mesuré. `RIVER_CONTINUATION_WITNESS_ID` (`riv-5`, miroir de la
+   * constante EXPORTÉE `apps/web-v3/src/lib/api/fixtures.ts`) est une
+   * CONTINUATION (`tail === false`, traduite, sans réaction) ;
+   * `RIVER_NO_TRANSLATION_WITNESS_ID` (`riv-12`) ne porte NI traduction NI
+   * réaction. `electRow` les ÉLIT explicitement (défilement gradué jusqu'à
+   * ce que la rangée virtualisée apparaisse, puis `scrollIntoView` et un
+   * défilement soutenu d'amplitude quasi nulle) plutôt que d'espérer que
+   * l'un d'eux tombe sous le geste générique du bloc ci-dessus — les deux
+   * index sont d'ailleurs choisis LOIN de la zone que ce geste générique
+   * élit (`fixtures.ts`, commentaire de `RIVER_NO_TRANSLATION_INDEX`), pour
+   * que ses propres witnesses (bande de focus AVEC contrôles, etc.)
+   * restent déterministes.
+   */
+  for (const witnessId of ['riv-5', 'riv-12']) {
+    await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'load' });
+    await page.waitForSelector('main li');
+    await page.waitForTimeout(400);
+    await electRow(page, witnessId);
+
+    const electedId = await electedMessageId(page);
+    expect(electedId === witnessId, `l'élection cible bien la rangée-témoin « ${witnessId} » (élue : « ${electedId} »)`);
+
+    const overlap = await focusOverlapOf(page);
+    expect(overlap.found, `une rangée est élue pour le témoin « ${witnessId} »`);
+    expect(
+      !overlap.stripOverText,
+      `la bande de focus ne recouvre JAMAIS le texte de la rangée-témoin sans ligne basse « ${witnessId} » — ${JSON.stringify(overlap)}`,
+    );
+    expect(
+      !overlap.stampOverText,
+      `le tampon de focus ne recouvre JAMAIS le texte de la rangée-témoin sans ligne basse « ${witnessId} » — ${JSON.stringify(overlap)}`,
+    );
+    // Le réservoir (`[data-focus-reserve]`, `focal-row.tsx`) n'existe QUE sur
+    // les témoins qui n'ont réellement AUCUNE ligne basse — les deux le sont.
+    expect(
+      overlap.hasReserve === true,
+      `la rangée-témoin sans ligne basse « ${witnessId} » monte le réservoir de hauteur (\`[data-focus-reserve]\`) — ${JSON.stringify(overlap)}`,
+    );
+  }
+
+  // (4) LA PORTE VITESSE : un défilement FRANC (une seule frame, > 1 200 px/s)
+  // arme IMMÉDIATEMENT.
+  await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'load' });
+  await page.waitForSelector('main li');
+  await page.waitForTimeout(400);
+  await page.locator('main').hover();
+  await page.mouse.wheel(0, -600);
+  await page.waitForTimeout(300);
+  const velocityElected = await page.locator('main li [data-elected="true"]').count();
+  expect(velocityElected === 1, `un défilement franc (>1200 px/s) arme immédiatement (${velocityElected} élues)`);
+
+  // (5) DÉFILEMENT PROGRAMMÉ : `scrollTo` répété SANS `wheel`/`touchstart`/
+  // `keydown` — l'intention ne s'ouvre jamais, donc ni le révélé ni
+  // l'armement ne réagissent.
+  await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'load' });
+  await page.waitForSelector('main li');
+  await page.waitForTimeout(400);
+  await page.evaluate(() => document.querySelector('main')?.scrollTo({ top: 0 }));
+  for (let i = 0; i < 50; i += 1) {
+    await page.evaluate(() => {
+      const m = document.querySelector('main');
+      if (m) m.scrollTo({ top: m.scrollTop + 60 });
+    });
+    await page.waitForTimeout(100);
+  }
+  expect(
+    (await page.locator('main li [data-elected="true"]').count()) === 0,
+    'un défilement PROGRAMMÉ (scrollTo, sans intention utilisateur) n’élit jamais',
+  );
+
+  // (6) SCRIPT : le même geste soutenu n'élit JAMAIS, et ne monte pas de scène.
+  await page.getByRole('button', { name: /Mode de lecture/ }).click();
+  await page.waitForTimeout(150);
+  await page.getByRole('menuitemradio', { name: /Script/ }).click();
+  await page.waitForTimeout(300);
+  expect(
+    (await page.locator('main li [data-reading-mode="script"]').count()) > 0,
+    'le mode Script est bien actif pour ce test',
+  );
+  await sustainedWheelScroll(page, { ms: 4200 });
+  expect(
+    (await page.locator('main li [data-elected="true"]').count()) === 0,
+    'en Script, le même geste soutenu n’élit JAMAIS',
+  );
+  expect(
+    await page.evaluate(() => document.querySelector('main')?.dataset.scene === undefined),
+    'en Script, `main[data-scene]` reste absent',
+  );
+
+  // CLAVIER : `PageUp` répété est une INTENTION au même titre qu'un `wheel`
+  // (D-15) — `<main tabIndex={-1}>` se focalise programmatiquement. Le choix
+  // « Script » du sous-test précédent PERSISTE (`readingModeStore`,
+  // `localStorage`) : `page.goto` seul y REVIENT au rechargement — on efface
+  // le magasin d'abord, sans quoi ce sous-test « clavier » recharge en
+  // Script (qui n'arme jamais) et ne prouve rien.
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'load' });
+  await page.waitForSelector('main li');
+  await page.waitForTimeout(400);
+  expect(
+    (await page.locator('main li [data-reading-mode="focal"]').count()) > 0,
+    'le magasin de mode réinitialisé, le fil rouvre bien en Focal pour le sous-test clavier',
+  );
+  await page.evaluate(() => (document.querySelector('main'))?.focus());
+  for (let i = 0; i < 14; i += 1) {
+    await page.keyboard.press('PageUp');
+    await page.waitForTimeout(300);
+  }
+  const keyboardElected = await page.locator('main li [data-elected="true"]').count();
+  expect(keyboardElected === 1, `PageUp soutenu au clavier élit une rangée (${keyboardElected})`);
+
+  await context.close();
+}
+
+/**
+ * --- 13 : LE RÉVÉLÉ (#5648) — heure et coches masquées au repos, révélées
+ * pendant le geste, EN FOCAL COMME EN SCRIPT (D-22 : « le révélé vit en
+ * Focal ET en Script »). La rangée ÉLUE fait exception : son `<time>` méta
+ * reste à 0 (remplacé par `.focus-stamp`, toujours à 1).
+ */
+{
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await setScheme(context, 'dark');
+  const page = await context.newPage();
+  await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'load' });
+  await page.waitForSelector('main li');
+  await page.waitForTimeout(400);
+
+  const metaOpacities = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('main li [data-reading-mode] time')]
+        .filter((t) => !t.classList.contains('focus-stamp'))
+        .map((t) => Number(getComputedStyle(t.closest('.focal-meta') ?? t).opacity)),
+    );
+
+  const atRest = await metaOpacities();
+  expect(
+    atRest.length > 0 && atRest.every((o) => o === 0),
+    `au repos (Focal), toute heure de rangée est masquée (${JSON.stringify(atRest)})`,
+  );
+
+  /**
+   * `--reveal-fade-ms` (280) sépare le moment où `main[data-revealed]`
+   * bascule du moment où l'opacité COMPUTÉE atteint 1 (transition CSS) —
+   * mesuré : ~400 ms suffisent après un `wheel` pour que la transition ait
+   * fini. Vérifier à 50 ms, c'est vérifier une valeur INTERMÉDIAIRE de la
+   * transition, jamais son état stable.
+   */
+  await page.locator('main').hover();
+  await page.mouse.wheel(0, -40);
+  await page.waitForTimeout(450);
+  const duringGesture = await metaOpacities();
+  expect(
+    duringGesture.some((o) => o === 1),
+    `pendant le geste (Focal), au moins une heure de rangée est révélée (${JSON.stringify(duringGesture)})`,
+  );
+
+  /**
+   * `SCROLL_ACTIVITY_LINGER_MS` (900) après le DERNIER `scrolled`, PUIS
+   * `--reveal-fade-ms` (280) pour le fondu de sortie — mesuré : le fondu
+   * complet prend jusqu'à ~1,7 s après le `wheel`. 2,1 s laisse une marge
+   * sûre.
+   */
+  await page.waitForTimeout(2100 - 450);
+  const afterLinger = await metaOpacities();
+  expect(
+    afterLinger.every((o) => o === 0),
+    `2,1 s après le dernier "wheel" (900 + 280 ms de fondu), toute heure retombe à 0 (${JSON.stringify(afterLinger)})`,
+  );
+
+  // SCRIPT : le révélé vit AUSSI en Script (D-22), sans jamais élire.
+  await page.getByRole('button', { name: /Mode de lecture/ }).click();
+  await page.waitForTimeout(150);
+  await page.getByRole('menuitemradio', { name: /Script/ }).click();
+  await page.waitForTimeout(300);
+  await page.locator('main').hover();
+  await page.mouse.wheel(0, -40);
+  await page.waitForTimeout(450);
+  const scriptDuring = await metaOpacities();
+  expect(
+    scriptDuring.some((o) => o === 1),
+    `pendant le geste (Script), au moins une heure de rangée est révélée (${JSON.stringify(scriptDuring)})`,
+  );
+  expect(
+    (await page.locator('main li [data-elected="true"]').count()) === 0,
+    'en Script, le révélé n’élit jamais',
   );
 
   await context.close();
@@ -555,8 +1109,46 @@ const quoteSkinIsNeutral = (page) =>
   );
   expect(
     transforms.every((style) => !/scale\(|perspective\(/.test(style)),
-    'mouvement réduit : aucune transform de perspective sur les rangées (aucune passe de perspective à ce lot)',
+    'mouvement réduit : aucune transform de perspective sur les rangées (la scène du fil ne pose plus aucune écriture style.transform, #5648)',
   );
+
+  /**
+   * --- #5648 §4.5(d) : `reducedMotion: 'reduce'` COUPE les TRANSITIONS,
+   * jamais l'ÉLECTION — « l'élection n'est pas une animation ». Le même
+   * geste soutenu, sur `/c/c-salon-riviere`, élit QUAND MÊME une rangée ; la
+   * transition CSS de sa carte tombe à ~0 (règle globale `app.css:190-199`).
+   */
+  await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'load' });
+  await page.waitForSelector('main li');
+  await page.waitForTimeout(400);
+  await sustainedWheelScroll(page, { ms: 4200 });
+  const reducedElectedCount = await page.locator('main li [data-elected="true"]').count();
+  expect(
+    reducedElectedCount === 1,
+    `mouvement réduit : l'élection se pose QUAND MÊME (${reducedElectedCount} élues) — ce n'est pas une animation`,
+  );
+  const reducedTransitionDuration = await page
+    .locator('main li [data-elected="true"] .focus-card')
+    .first()
+    .evaluate((el) => getComputedStyle(el).transitionDuration);
+  /**
+   * Chromium formate `0.00001s` en NOTATION SCIENTIFIQUE (`1e-05s`), une
+   * TROISIÈME forme que ni `0s` ni `0.00001s` ne couvrent en texte — la
+   * seule comparaison qui tienne est NUMÉRIQUE (`parseFloat`), pas un motif
+   * de chaîne.
+   */
+  expect(
+    parseFloat(reducedTransitionDuration) < 0.001,
+    `mouvement réduit : la transition de la carte tombe à ~0 (${reducedTransitionDuration})`,
+  );
+  const reducedOffenders = await noRowCarriesContinuousPerspective(page);
+  expect(
+    reducedOffenders.length === 0,
+    `mouvement réduit : toujours aucune perspective continue (${JSON.stringify(reducedOffenders)})`,
+  );
+  await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
+  await page.waitForSelector('main li');
+  await page.waitForTimeout(400);
 
   /**
    * --- défaut 11 : la zone TACTILE excède le DESSIN (22 px) jusqu'à 44 px,

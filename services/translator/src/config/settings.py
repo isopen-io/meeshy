@@ -73,7 +73,6 @@ class Settings:
         
         # Configuration des ports
         self.fastapi_port = int(os.getenv("FASTAPI_PORT", "8000"))
-        self.grpc_port = int(os.getenv("GRPC_PORT", "50051"))
         self.zmq_port = int(os.getenv("ZMQ_PORT", "5555"))
         
         # Configuration base de données

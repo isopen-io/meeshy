@@ -427,8 +427,38 @@ export class MongoPersistence {
     excludedRoles: string[],
     excludedUserIds: string[],
   ) {
-    // Single delay: a user is only pickable after `thresholdHours` without
-    // connecting AND without posting in this conversation.
+    // Le seuil porte sur la CONNEXION, pas sur l'« activité ».
+    //
+    // `User.lastActiveAt` bouge sur toute activité de fond — socket rouverte,
+    // requête d'une appli en arrière-plan — et ne dit RIEN de la présence.
+    // Mesuré en production le 2026-09-08 : `clyf_tone` marqué actif il y a
+    // 36 min pour une dernière connexion à 71 JOURS, `La_mignonne` 117 min
+    // contre 92 jours. Sélectionner là-dessus écartait exactement les
+    // personnes qu'il fallait prendre (#5702).
+    //
+    // Le signal est `UserSession.lastActivityAt` — l'USAGE du jeton, écrit par
+    // le middleware d'authentification (access token) et par `AuthService`
+    // (login / refresh). C'est la seule horloge que le porteur reconnaît comme
+    // une présence : « le refresh token et l'access token rafraîchissent la
+    // connexion, tout le reste non ».
+    //
+    // Et NON `createdAt` : quelqu'un qui utilise l'app depuis des semaines sans
+    // se reconnecter garde une session ancienne mais VIVANTE — `clyf_tone`,
+    // session créée il y a 71 jours mais utilisée il y a 66 minutes, serait
+    // pilotée à tort.
+    //
+    // Ni `User.lastActiveAt` : une connexion SOCKET l'écrit
+    // (`AuthHandler` → `updateUserOnlineStatus`) en s'authentifiant sur le JWT
+    // sans vérifier que la session est encore valide. `La_mignonne` le montre —
+    // activité il y a 148 min, sessions expirées depuis 62 JOURS, aucun
+    // message : une appli installée qui rouvre sa socket, personne derrière.
+    //
+    // `sessions: { none: … }` retient qui n'a utilisé AUCUNE session depuis le
+    // seuil ; quelqu'un qui n'en a jamais eu passe aussi, ce qui est juste.
+    //
+    // `isOnline: false` reste un garde-fou dur : quelle que soit l'ancienneté
+    // de sa dernière connexion, on ne parle jamais à la place de quelqu'un qui
+    // est là MAINTENANT.
     const threshold = new Date(Date.now() - thresholdHours * 60 * 60 * 1000);
     const existingRoles = await this.prisma.agentUserRole.findMany({
       where: { conversationId },
@@ -444,7 +474,8 @@ export class MongoPersistence {
         userId: { not: null, notIn: [...excludedUserIds, ...existingRoleUserIds] },
         user: {
           role: { notIn: excludedRoles as UserRole[] },
-          lastActiveAt: { lt: threshold },
+          isOnline: false,
+          sessions: { none: { lastActivityAt: { gte: threshold } } },
         },
       },
       select: {
@@ -479,7 +510,9 @@ export class MongoPersistence {
         isActive: true,
         userId: { not: null, notIn: [...excludedUserIds, ...existingControlledUserIds] },
         user: {
-          lastActiveAt: { lt: recentLoginThreshold },
+          // Même loi que ci-dessus : la connexion décide, jamais l'activité.
+          isOnline: false,
+          sessions: { none: { lastActivityAt: { gte: recentLoginThreshold } } },
         },
       },
       select: {
@@ -498,6 +531,32 @@ export class MongoPersistence {
     });
 
     return tirerAuSort(participants.flatMap((p) => (p.user ? [p.user] : [])), limit);
+  }
+
+  /**
+   * La présence d'un utilisateur AU MOMENT DE LIVRER — les deux seules choses
+   * qui décident si l'agent peut encore parler à sa place.
+   *
+   * La connexion se lit sur une session VIVANTE (`isValid` ET non expirée) :
+   * 140 sessions expirées se déclaraient valides en production, et une session
+   * morte ne prouve aucune présence (#5712). `User.lastActiveAt` est
+   * délibérément ABSENT de cette lecture — il est écrit par une socket qui se
+   * rouvre seule et déclare présents des gens partis depuis des mois (#5703).
+   */
+  async getPresenceForDelivery(userId: string): Promise<{ isOnline: boolean; derniereConnexionMs: number | null }> {
+    const [session, user] = await Promise.all([
+      this.prisma.userSession.findFirst({
+        where: { userId, isValid: true, expiresAt: { gt: new Date() } },
+        orderBy: { lastActivityAt: 'desc' },
+        select: { lastActivityAt: true },
+      }),
+      this.prisma.user.findUnique({ where: { id: userId }, select: { isOnline: true } }),
+    ]);
+
+    return {
+      isOnline: user?.isOnline ?? false,
+      derniereConnexionMs: session?.lastActivityAt?.getTime() ?? null,
+    };
   }
 
   async getGlobalProfile(userId: string) {
@@ -568,7 +627,17 @@ export class MongoPersistence {
           conversationId: { in: allConvIds },
           isActive: true,
           userId: { not: null },
-          user: { lastActiveAt: { lt: recentLoginThreshold } },
+          // Même loi qu'en aval : la CONNEXION décide, pas l'activité.
+          //
+          // Ce comptage choisit quelles CONVERSATIONS valent un scan. Le laisser
+          // sur `lastActiveAt` aurait écarté des conversations entières dont les
+          // participants paraissent actifs par une socket qui se rouvre seule —
+          // le défaut de #5703, une couche plus haut, et invisible depuis les
+          // sélecteurs d'utilisateurs.
+          user: {
+            isOnline: false,
+            sessions: { none: { lastActivityAt: { gte: recentLoginThreshold } } },
+          },
         },
         _count: true,
       }),

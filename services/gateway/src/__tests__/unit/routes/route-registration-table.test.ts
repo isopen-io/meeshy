@@ -149,7 +149,14 @@ describe('ROUTE_TABLE (#4278)', () => {
     // et streak/niveau de l'utilisateur authentifié). Aucun alias, aucune
     // route retirée ni renommée. Vérifié : le manifeste régénéré passe de 553
     // à 554 routes, et le diff ne porte QUE cette entrée-là.
-    expect(ROUTE_TABLE.length).toBe(64);
+    //
+    // 64 → 65 le 2026-09-08 (#3635) : entrée `me-terms`, les DEUX adresses
+    // NEUVES `GET`/`PUT /api/v1/me/terms` (re-consentement CGU versionné,
+    // même patron que `me-consents` : signal `upToDate` + action de
+    // ré-acceptation citant la version en vigueur). Aucun alias, aucune route
+    // retirée ni renommée. Vérifié : le manifeste régénéré passe de 554 à
+    // 556 routes, soit exactement ces deux-là et aucune autre.
+    expect(ROUTE_TABLE.length).toBe(65);
   });
 });
 

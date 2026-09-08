@@ -362,6 +362,7 @@ export const API_ENDPOINTS = {
     preferencesPrivacy: '/api/v1/me/preferences/privacy',
     preferencesVideo: '/api/v1/me/preferences/video',
     root: '/api/v1/me',
+    terms: '/api/v1/me/terms',
   },
   mentions: {
     me: '/api/v1/mentions/me',
@@ -856,6 +857,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/me/preferences/notification',
   '/api/v1/me/preferences/privacy',
   '/api/v1/me/preferences/video',
+  '/api/v1/me/terms',
   '/api/v1/mentions/me',
   '/api/v1/mentions/messages/:messageId',
   '/api/v1/mentions/suggestions',
@@ -1305,6 +1307,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/me/preferences/notification': ['GET', 'PUT', 'PATCH', 'DELETE'],
   '/api/v1/me/preferences/privacy': ['GET', 'PUT', 'PATCH', 'DELETE'],
   '/api/v1/me/preferences/video': ['GET', 'PUT', 'PATCH', 'DELETE'],
+  '/api/v1/me/terms': ['GET', 'PUT'],
   '/api/v1/mentions/me': ['GET'],
   '/api/v1/mentions/messages/:messageId': ['GET'],
   '/api/v1/mentions/suggestions': ['GET'],

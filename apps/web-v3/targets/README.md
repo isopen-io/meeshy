@@ -184,6 +184,21 @@ disent « cinq entrées » pour un menu qui en a six ; `SectionScrollPill` n'est
 plus montée (retrait produit du 2026-08-23) ; la raison motivée des lignes
 grisées du menu du fil n'est affichée nulle part sur iOS — le web l'affiche.
 
+**`FocalRow.swift:202-211` (#5648, correction de revue, défaut 1) monte
+l'overlay bas (`focusStrip`/`focusStampChip`) SANS AUCUNE condition sur la
+présence d'une ligne basse** — sur un message qui n'est ni le dernier de son
+groupe ni traduit ni réagi, iOS n'a donc RIEN pour réserver la place que
+l'overhang de `focusStampChip` suppose, et le même recouvrement du texte que
+le web a mesuré (9 px, `apps/web-v3/src/components/focal-row.tsx`) doit s'y
+reproduire à l'identique — non revérifié au simulateur par ce lot, à faire
+avant de fermer le suivi. `web-v3` DIVERGE ici DÉLIBÉRÉMENT (jamais en
+silence) : la rangée ÉLUE sans ligne basse réserve désormais un placeholder
+invisible de la même hauteur (`[data-focus-reserve]`,
+`fixtures.test.ts::RIVER_CONTINUATION_WITNESS_ID` /
+`RIVER_NO_TRANSLATION_WITNESS_ID`, `check-reading-mode.mjs` §10) — une
+correction de la cible, pas une recopie de son défaut, à porter côté iOS par
+son propre suivi (#5718) plutôt que par ce fichier.
+
 ## Comment s'en servir
 
 1. Une spécification d'écran de la liste ou du fil CITE l'analyse et la
