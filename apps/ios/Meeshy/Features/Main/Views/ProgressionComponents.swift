@@ -11,7 +11,7 @@ import MeeshyUI
 /// Une carte teintée — la même surface que `UserStatsView.statCard` et les
 /// sections de `SettingsView` : dégradé du thème dans la teinte, filet 1 pt.
 struct ProgressionCard<Content: View>: View {
-    let tint: String
+    let tint: Color
     @ViewBuilder let content: () -> Content
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -80,7 +80,7 @@ struct ProgressionLevelCard: View {
     let level: EngagementLevelProgress
 
     private var theme: ThemeManager { ThemeManager.shared }
-    private let tint = MeeshyColors.brandPrimaryHex
+    private let tint = MeeshyColors.brandPrimary
 
     var body: some View {
         ProgressionCard(tint: tint) {
@@ -88,7 +88,7 @@ struct ProgressionLevelCard: View {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "star.fill")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Color(hex: tint))
+                        .foregroundColor(tint)
                         .accessibilityHidden(true)
                     Text(ProgressionCopy.levelTitle(level.level))
                         .font(MeeshyFont.relative(17, weight: .bold, design: .rounded))
@@ -99,7 +99,7 @@ struct ProgressionLevelCard: View {
                     .foregroundColor(theme.textMuted)
                 ProgressionBar(
                     progress: level.scale.progress,
-                    tint: Color(hex: tint),
+                    tint: tint,
                     label: String(localized: "progression.a11y.bar.level", defaultValue: "Vers le niveau \(level.level + 1)", bundle: .main)
                 )
                 .padding(.top, MeeshySpacing.xs)
@@ -118,7 +118,7 @@ struct ProgressionStreakCard: View {
     let streak: EngagementStreakProgress
 
     private var theme: ThemeManager { ThemeManager.shared }
-    private let tint = MeeshyColors.warningHex
+    private let tint = MeeshyColors.warning
 
     var body: some View {
         ProgressionCard(tint: tint) {
@@ -126,7 +126,7 @@ struct ProgressionStreakCard: View {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "flame.fill")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Color(hex: tint))
+                        .foregroundColor(tint)
                         .accessibilityHidden(true)
                     Text(ProgressionCopy.streak(streak.currentDays))
                         .font(MeeshyFont.relative(17, weight: .bold, design: .rounded))
@@ -139,7 +139,7 @@ struct ProgressionStreakCard: View {
                     .foregroundColor(theme.textMuted)
                 ProgressionBar(
                     progress: streak.scale.progress,
-                    tint: Color(hex: tint),
+                    tint: tint,
                     label: String(localized: "progression.a11y.bar.streak", defaultValue: "Série de jours actifs, vers le prochain jalon", bundle: .main)
                 )
                 .padding(.top, MeeshySpacing.xs)
@@ -158,17 +158,17 @@ struct ProgressionAxisRow: View {
     let axis: EngagementAxisProgress
 
     private var theme: ThemeManager { ThemeManager.shared }
-    private let tint = MeeshyColors.brandPrimaryHex
+    private let tint = MeeshyColors.brandPrimary
 
     var body: some View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: ProgressionCopy.symbol(for: axis.axis))
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(Color(hex: tint))
+                .foregroundColor(tint)
                 .frame(width: 36, height: 36)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(Color(hex: tint).opacity(0.12))
+                        .fill(tint.opacity(0.12))
                 )
                 .accessibilityHidden(true)
 
@@ -185,7 +185,7 @@ struct ProgressionAxisRow: View {
                         .monospacedDigit()
                 }
                 HStack {
-                    ProgressionTierDots(tiers: axis.scale.tiers, tint: Color(hex: tint))
+                    ProgressionTierDots(tiers: axis.scale.tiers, tint: tint)
                     Spacer(minLength: MeeshySpacing.sm)
                     Text(ProgressionCopy.nextStep(for: axis.scale, kind: .badge))
                         .font(MeeshyFont.relative(11, weight: .medium))

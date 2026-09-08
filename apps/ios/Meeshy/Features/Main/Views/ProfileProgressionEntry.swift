@@ -10,7 +10,7 @@ struct ProfileProgressionEntry: View {
     let action: () -> Void
 
     private var theme: ThemeManager { ThemeManager.shared }
-    private let tint = MeeshyColors.warningHex
+    private let tint = MeeshyColors.warning
 
     var body: some View {
         Button {
@@ -20,11 +20,11 @@ struct ProfileProgressionEntry: View {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "trophy.fill")
                     .font(MeeshyFont.relative(14, weight: .medium))
-                    .foregroundColor(Color(hex: tint))
+                    .foregroundColor(tint)
                     .frame(width: 28, height: 28)
                     .background(
                         RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                            .fill(Color(hex: tint).opacity(0.12))
+                            .fill(tint.opacity(0.12))
                     )
                     .accessibilityHidden(true)
 

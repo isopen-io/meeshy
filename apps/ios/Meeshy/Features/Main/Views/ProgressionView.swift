@@ -29,7 +29,7 @@ struct ProgressionView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var viewModel: ProgressionViewModel
 
-    private let accentColor = MeeshyColors.brandPrimaryHex
+    private let accentColor = MeeshyColors.brandPrimary
 
     init(viewModel: ProgressionViewModel? = nil) {
         _viewModel = StateObject(wrappedValue: viewModel ?? ProgressionViewModel())
@@ -57,7 +57,7 @@ struct ProgressionView: View {
             } label: {
                 Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(16, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundColor(accentColor)
             }
             .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
@@ -158,10 +158,10 @@ struct ProgressionView: View {
                 icon: "trophy.fill",
                 title: String(localized: "progression.section.achievements", defaultValue: "Succès", bundle: .main),
                 trailing: "\(progress.unlockedAchievementCount) / \(progress.achievements.count)",
-                color: MeeshyColors.successHex
+                color: MeeshyColors.success
             )
 
-            ProgressionCard(tint: MeeshyColors.successHex) {
+            ProgressionCard(tint: MeeshyColors.success) {
                 VStack(spacing: 0) {
                     ForEach(Array(progress.achievements.enumerated()), id: \.element.id) { index, achievement in
                         if index > 0 {
@@ -174,15 +174,15 @@ struct ProgressionView: View {
         }
     }
 
-    private func sectionHeader(icon: String, title: String, trailing: String, color: String) -> some View {
+    private func sectionHeader(icon: String, title: String, trailing: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(12, weight: .semibold))
-                .foregroundColor(Color(hex: color))
+                .foregroundColor(color)
                 .accessibilityHidden(true)
             Text(title.uppercased())
                 .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
-                .foregroundColor(Color(hex: color))
+                .foregroundColor(color)
                 .tracking(1.2)
             Spacer()
             Text(trailing)
