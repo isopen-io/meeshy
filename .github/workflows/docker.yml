@@ -466,6 +466,17 @@ jobs:
     # ça livre ce qui a réussi.
     if: github.ref == 'refs/heads/dev' && needs.detect.outputs.has_changes == 'true' && needs.build.result != 'skipped' && needs.build.result != 'cancelled'
     steps:
+      # Requis par l'étape de test de fumée plus bas — elle exécute le script
+      # depuis CE commit (celui qui vient d'être construit et déployé), pas
+      # depuis un `npx` qui irait le chercher ailleurs.
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.19'
+
       - name: Résoudre les services de staging à recréer
         id: cibles
         env:
@@ -579,6 +590,30 @@ jobs:
             echo "Services recréés : \`$CIBLES\`"
           } >> $GITHUB_STEP_SUMMARY
           echo "deploye=true" >> $GITHUB_OUTPUT
+
+      # (#5644) Un conteneur en retard sur ses routes ne se voit ni à la santé
+      # (`healthy` tout du long), ni aux logs (un 404 n'est pas une erreur), ni
+      # à la CI (verte, elle mesure le dépôt, pas le binaire servi). Seule une
+      # requête RÉELLE contre chaque route du manifeste, après le redéploiement,
+      # peut distinguer « absente » (404) de « présente, accès refusé » (401/403).
+      - name: Test de fumée des routes (post-déploiement)
+        if: steps.cibles.outputs.cibles != '' && steps.deploiement.outputs.deploye == 'true' && contains(steps.cibles.outputs.cibles, 'gateway-staging')
+        env:
+          BASE_URL: https://gate.staging.${{ vars.DOMAIN || 'meeshy.me' }}
+        run: |
+          set -euo pipefail
+          # Le script de déploiement a déjà attendu que les conteneurs tiennent
+          # debout, mais Traefik peut prendre quelques secondes à router vers
+          # une cible fraîchement recréée. On donne au /health public une
+          # fenêtre courte avant de lancer la sonde complète — sans quoi un
+          # 502/503 transitoire se lirait comme des dizaines de routes absentes.
+          for i in $(seq 1 12); do
+            if curl -fsS --max-time 5 "$BASE_URL/health" > /dev/null 2>&1; then
+              break
+            fi
+            sleep 5
+          done
+          npx --yes tsx@4 services/gateway/scripts/route-smoke-test.ts --base-url "$BASE_URL" --manifest services/gateway/route-manifest.json
 
   security-scan:
     name: Scan ${{ matrix.service }}

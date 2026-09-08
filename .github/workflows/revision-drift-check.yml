@@ -1,0 +1,90 @@
+# Un conteneur en retard sur ses routes se signale AVANT l'utilisateur (#5644).
+#
+# Incident du 2026-09-07 : `meeshy-gateway` tournait une révision de neuf jours
+# pendant que Traefik le déclarait `healthy` et que la CI restait verte — la
+# route que l'app iOS appelait n'existait tout simplement pas sur ce binaire.
+# Aucun témoin ne comparait ce qui TOURNE à ce qui est ÉCRIT sur `origin/main`.
+#
+# `/health` grave déjà `build.commit` (`packages/shared/utils/build-info.ts`,
+# posé par `VCS_REF`/`GIT_COMMIT` au build Docker) — ce job ne fait que le LIRE
+# et le confronter à l'historique du dépôt, sur un intervalle régulier.
+#
+# Le test de fumée du job `deploy-staging` (`docker.yml`) prouve la même classe
+# de défaut plus fort — une route absente, prouvée par une vraie requête — mais
+# seulement AU MOMENT du déploiement. Celui-ci couvre l'angle mort : une
+# révision qui dérive SANS nouveau déploiement (le cas exact de l'incident :
+# l'image était déjà sur l'hôte, seul le conteneur n'a jamais été recréé).
+name: Comparer la révision servie à origin/main
+
+on:
+  schedule:
+    - cron: '0 * * * *' # toutes les heures — un écart met au plus 60 min à se voir
+  workflow_dispatch:
+    inputs:
+      max_drift_commits:
+        description: "Commits de retard tolérés sur origin/main avant alerte"
+        required: false
+        default: '15'
+
+jobs:
+  drift:
+    name: ${{ matrix.target.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - name: production
+            url: https://gate.meeshy.me/health
+          - name: staging
+            url: https://gate.staging.meeshy.me/health
+    steps:
+      - name: Checkout (historique complet — requis par git merge-base/rev-list)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Lire la révision servie par /health
+        id: health
+        run: |
+          set -euo pipefail
+          BODY=$(curl -fsS --max-time 10 "${{ matrix.target.url }}") || {
+            echo "::error::${{ matrix.target.name }} — /health injoignable sur ${{ matrix.target.url }}"
+            exit 1
+          }
+          COMMIT=$(echo "$BODY" | jq -r '.build.commit // empty')
+          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
+
+      - name: Comparer à origin/main
+        env:
+          COMMIT: ${{ steps.health.outputs.commit }}
+          MAX_DRIFT: ${{ github.event.inputs.max_drift_commits || '15' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$COMMIT" ]; then
+            echo "::error::${{ matrix.target.name }} — /health ne grave aucun build.commit (GIT_COMMIT absent de l'image en cours d'exécution)"
+            exit 1
+          fi
+
+          if ! git cat-file -e "${COMMIT}^{commit}" 2>/dev/null; then
+            echo "::error::${{ matrix.target.name }} — révision servie \`$COMMIT\` introuvable dans l'historique de ce dépôt"
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "$COMMIT" origin/main; then
+            echo "::error::${{ matrix.target.name }} — \`$COMMIT\` n'est PAS un ancêtre d'origin/main (branche inattendue, ou historique réécrit)"
+            exit 1
+          fi
+
+          DRIFT=$(git rev-list --count "${COMMIT}..origin/main")
+          {
+            echo "### ${{ matrix.target.name }}"
+            echo ""
+            echo "Sert \`${COMMIT}\` — **$DRIFT** commit(s) derrière \`origin/main\` (seuil : $MAX_DRIFT)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$DRIFT" -gt "$MAX_DRIFT" ]; then
+            echo "::error::${{ matrix.target.name }} est en retard de $DRIFT commits sur origin/main (seuil $MAX_DRIFT) — cf. #5644 : vérifier que le conteneur a bien été recréé après le dernier build"
+            exit 1
+          fi
