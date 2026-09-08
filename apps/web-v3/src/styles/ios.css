@@ -67,3 +67,20 @@
   --text-input: var(--ios-text-input);
   --text-large-title: var(--ios-text-large-title);
 }
+
+/**
+ * LE RÉSUMÉ VIVANT (#5695) — SIX alias, DÉLIBÉRÉMENT hors du `@theme inline`
+ * ci-dessus : ce bloc est importé PARTOUT (feuille globale), donc tout
+ * jeton qui y entre grossit la PREMIÈRE PEINTURE, mesurée par
+ * `measure-weight.mjs`. Ces six-là ne sont consommés qu'en `style={{
+ * fontSize: 'var(--text-summary-title)' }}` par les composants du Résumé
+ * (`src/components/summary/**`), jamais comme classe Tailwind
+ * (`check-utilities.mjs` ne les cherche donc pas) : ils vivent dans
+ * `styles/summary.css`, chargée UNIQUEMENT par le chunk qui les consomme
+ * (`summary-skeleton.tsx`, statique dans le CHUNK DU FIL — lui-même lazy,
+ * jamais dans `index-*.js`). Mesuré : les y laisser coûtait +0,20 Ko à la
+ * première peinture pour une fonctionnalité qui ne s'ouvre qu'à la demande.
+ * Les VALEURS SOURCE (`--ios-text-summary-*`, `--ios-summary-*`) restent
+ * générées par `packages/design-tokens/scripts/generate-from-ios.mjs`
+ * (D-4) — seule leur NOMINATION locale change de domicile.
+ */

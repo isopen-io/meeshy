@@ -1,6 +1,22 @@
 import type { ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 
-import type { Conversation, Message, MessageTranslation, Participant } from './types';
+import type { Conversation, Message, Participant } from './types';
+import {
+  CONVERSATION_ID,
+  PARTICIPANTS,
+  VIEWER_ID,
+  amina,
+  attachmentDefaults,
+  bruno,
+  conversationDefaults,
+  fatou,
+  kwame,
+  message,
+  minutesAgo,
+  translation,
+  viewer,
+} from './fixtures-base';
+import { CATCHUP_CONVERSATION, CATCHUP_CONVERSATION_ID, CATCHUP_MESSAGES } from './fixtures-catchup';
 
 /**
  * LES DONNÉES DE DÉMONSTRATION — dans la FORME que sert la passerelle.
@@ -25,150 +41,15 @@ import type { Conversation, Message, MessageTranslation, Participant } from './t
  * traduction française. C'est le seul jeu qui fait tomber un résolveur de
  * Prisme faux : un jeu tout-français rendrait vert n'importe quelle
  * implémentation.
+ *
+ * LE SOCLE (`minutesAgo`, les cinq personnes, `message()`/`translation()`,
+ * les défauts) a été EXTRAIT vers `fixtures-base.ts` (#5695, étape 1) — ce
+ * fichier a franchi le budget de taille (1000-1200 lignes) et le corpus
+ * « rattrapage » (`fixtures-catchup.ts`) a besoin du même socle. `VIEWER_ID`
+ * et `PARTICIPANTS` sont RÉEXPORTÉS ici pour que les importateurs existants
+ * (`thread.tsx`, `conversations.tsx`) n'aient rien à changer.
  */
-
-/** `minutesAgo(90)` = il y a 90 minutes. Le fil se lit donc toujours comme aujourd'hui. */
-const minutesAgo = (minutes: number): Date => new Date(Date.now() - minutes * 60_000);
-
-export const VIEWER_ID = 'u-viewer';
-const CONVERSATION_ID = 'c-deploiement';
-
-/**
- * Les champs qu'un `Participant` exige et dont la vue ne fait RIEN. Les poser
- * une fois ici plutôt qu'à chaque personne garde la fixture lisible sans
- * mentir sur la forme : ce sont bien des champs de la charge.
- */
-const participantDefaults = {
-  conversationId: CONVERSATION_ID,
-  type: 'user',
-  role: 'member',
-  language: 'fr',
-  permissions: {
-    canSendMessages: true,
-    canSendFiles: true,
-    canSendImages: true,
-    canSendVideos: true,
-    canSendAudios: true,
-    canSendLocations: true,
-    canSendLinks: true,
-  },
-  isActive: true,
-  joinedAt: minutesAgo(60 * 24 * 30),
-} as const;
-
-const viewer: Participant = {
-  ...participantDefaults,
-  id: 'p-viewer',
-  userId: VIEWER_ID,
-  displayName: 'Vous',
-  isOnline: true,
-  lastActiveAt: minutesAgo(0),
-};
-
-const amina: Participant = {
-  ...participantDefaults,
-  id: 'p-amina',
-  userId: 'u-amina',
-  displayName: 'Amina Diallo',
-  isOnline: true,
-  lastActiveAt: minutesAgo(0),
-};
-
-/** Hors de la fenêtre d'une minute mais dans celle de trois : `away`, calculé. */
-const kwame: Participant = {
-  ...participantDefaults,
-  id: 'p-kwame',
-  userId: 'u-kwame',
-  displayName: 'Kwame Mensah',
-  isOnline: false,
-  lastActiveAt: minutesAgo(2),
-};
-
-/**
- * Hors des fenêtres d'une ET de trois minutes, dans celle de cinq : `idle`,
- * le rang que ni `amina` (online) ni `kwame` (away) ne couvraient — sans
- * elle l'état `idle` de la loi 1/3/5 n'était observable nulle part dans le
- * jeu de démonstration (#5559 §5.3).
- */
-const fatou: Participant = {
-  ...participantDefaults,
-  id: 'p-fatou',
-  userId: 'u-fatou',
-  displayName: 'Fatou Bâ',
-  isOnline: false,
-  lastActiveAt: minutesAgo(4),
-};
-
-export const PARTICIPANTS: readonly Participant[] = [viewer, amina, kwame];
-
-/**
- * LE CINQUIÈME MEMBRE DU SALON RIVIÈRE (#5648, `targets/seed.md` §« Salon
- * Rivière » : `memberCount: 5`) — au mot près de la cible semée sur staging.
- * Il ne parle dans AUCUN des 40 messages (l'alternance A/B suffit à faire
- * défiler le fil) : sa seule fonction est de porter le compte de membres à
- * cinq, condition d'éligibilité de la Rivière (`conversation.memberCount`,
- * D-21) que ce lot ne rend pas encore mais ne doit pas fermer par erreur.
- */
-const bruno: Participant = {
-  ...participantDefaults,
-  id: 'p-bruno',
-  userId: 'u-bruno',
-  displayName: 'Bruno Bêta',
-  isOnline: false,
-  lastActiveAt: minutesAgo(120),
-};
-
-/**
- * Une traduction est une LIGNE, pas une paire — c'est la forme que rend la
- * passerelle, et `buildTranslationRecord` (shared) est ce qui la ramène à la
- * carte `{ langue: texte }` que le Prisme consomme.
- */
-const translation = (
-  messageId: string,
-  targetLanguage: string,
-  translatedContent: string,
-): MessageTranslation => ({
-  id: `t-${messageId}-${targetLanguage}`,
-  messageId,
-  targetLanguage,
-  translatedContent,
-  translationModel: 'medium',
-  createdAt: minutesAgo(0),
-});
-
-/** Les champs d'état qu'un message porte toujours, et qu'aucune fixture n'a à répéter. */
-const messageDefaults = {
-  conversationId: CONVERSATION_ID,
-  messageType: 'text',
-  messageSource: 'user',
-  isEdited: false,
-  isViewOnce: false,
-  viewOnceCount: 0,
-  isBlurred: false,
-  deliveredCount: 2,
-  readCount: 2,
-  reactionCount: 0,
-  isEncrypted: false,
-} as const;
-
-const message = (
-  partial: Omit<Message, keyof typeof messageDefaults | 'timestamp'> &
-    Partial<Message> & { readonly createdAt: Date },
-): Message => ({ ...messageDefaults, ...partial, timestamp: partial.createdAt });
-
-/** Les compteurs de consommation d'une pièce jointe : zéro sur une fixture. */
-const attachmentDefaults = {
-  isViewOnce: false,
-  viewOnceCount: 0,
-  isBlurred: false,
-  viewedCount: 0,
-  downloadedCount: 0,
-  consumedCount: 0,
-  isEncrypted: false,
-  isForwarded: false,
-  isAnonymous: false,
-  capturedInApp: false,
-} as const;
+export { VIEWER_ID, PARTICIPANTS };
 
 const kwameQuestion = message({
   id: 'm4',
@@ -716,15 +597,6 @@ const PROTECTION_MESSAGES: readonly Message[] = [
 
 export { PROTECTION_CONVERSATION_ID };
 
-/** Les champs qu'une `Conversation` exige et que la vue ne consulte pas. */
-const conversationDefaults = {
-  status: 'active',
-  visibility: 'private',
-  isActive: true,
-  createdAt: minutesAgo(60 * 24 * 30),
-  updatedAt: minutesAgo(0),
-} as const;
-
 /**
  * `userPreferences` mime EXACTEMENT la forme que sert
  * `GET /api/v1/conversations` : un TABLEAU d'au plus une entrée
@@ -886,9 +758,10 @@ export const CONVERSATIONS: readonly Conversation[] = [
     /**
      * `unreadCount: 3`, PAS 26 (#5648 §9 question 7) : à 26 la loi de choix
      * de mode élirait `summary` (Résumé), clampé `focal` faute de rendu —
-     * vrai mais BRUYANT pour ce lot, qui vérifie l'élection FOCALE. #5695
-     * relèvera ce compte quand le Résumé sera rendu (D-21) ; un même corpus,
-     * deux lots, jamais deux fixtures jumelles.
+     * vrai mais BRUYANT pour ce lot, qui vérifie l'élection FOCALE. #5695 a
+     * choisi un corpus DISTINCT, `c-rattrapage`, parce que ce gate a besoin
+     * d'un fil qui s'ouvre en FOCAL — un même corpus, deux lots, jamais deux
+     * fixtures jumelles.
      */
     unreadCount: 3,
     lastMessage: riverLastMessage,
@@ -913,6 +786,7 @@ export const CONVERSATIONS: readonly Conversation[] = [
     lastMessageTranslations: {},
     lastMessageOriginalLanguage: 'fr',
   },
+  CATCHUP_CONVERSATION,
 ];
 
 
@@ -998,6 +872,19 @@ export const messagesOf = (conversationId: string): readonly Message[] => {
   if (conversationId === CONVERSATION_ID) return withConsumption(THREAD_MESSAGES);
   if (conversationId === RIVER_CONVERSATION_ID) return withConsumption(RIVER_MESSAGES);
   if (conversationId === PROTECTION_CONVERSATION_ID) return withConsumption(PROTECTION_MESSAGES);
+  if (conversationId === CATCHUP_CONVERSATION_ID) return withConsumption(CATCHUP_MESSAGES);
   const last = CONVERSATIONS.find((c) => c.id === conversationId)?.lastMessage;
   return last === undefined ? [] : withConsumption([last]);
 };
+
+/**
+ * LA FENÊTRE CHARGÉE COUVRE-T-ELLE TOUT LE NON-LU ? (#5695, étape 2) — mime
+ * `cursorPagination.hasMore` (`services/gateway/src/routes/conversations/
+ * messages-list.ts:724,764-771`) : `true` ssi des messages PLUS ANCIENS
+ * existeraient au-delà de la première page. Seul `c-rattrapage` déclare sa
+ * fenêtre partielle aujourd'hui — c'est ce qui rend « Sur les N derniers
+ * messages » (Résumé Vivant, `LivingSummaryView.swift:71-75`) ATTEIGNABLE
+ * sans mentir : les autres fils du jeu sont chargés en ENTIER.
+ */
+export const hasOlderMessagesOf = (conversationId: string): boolean =>
+  conversationId === CATCHUP_CONVERSATION_ID;

@@ -50,3 +50,16 @@ export const READER_LANGUAGES: readonly string[] =
   deviceLocale === undefined
     ? resolveUserLanguagesOrdered(reader)
     : resolveUserLanguagesOrdered(reader, { deviceLocale });
+
+/**
+ * LA FACE CADRAGE DU PRISME (CLAUDE.md § Prisme, cycle 125) — dans quelle
+ * LANGUE on ADRESSE le lecteur (titre d'épisode, libellé relatif de jour),
+ * distincte de la face CONTENU (`READER_LANGUAGES`, quelle traduction
+ * servir). Rang 1 du prisme — jamais `navigator.language` seul, qui
+ * concourrait à son RANG 4 (règle 2 du Prisme) et ne doit jamais LE
+ * supplanter. `'fr'` en repli : `READER_LANGUAGES` ne rend jamais un
+ * tableau vide (`reader` du dépôt) mais un futur appelant qui composerait
+ * son propre prisme vide ne doit pas produire de libellé cadré par
+ * `undefined`.
+ */
+export const READER_LOCALE: string = READER_LANGUAGES[0] ?? 'fr';

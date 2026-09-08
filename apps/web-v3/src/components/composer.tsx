@@ -26,7 +26,16 @@ export function Composer({
   onCancelReply,
 }: {
   onSend: (text: string) => void;
-  replyTo?: { author: string; excerpt: string };
+  /**
+   * LA CITATION PRÉ-ADRESSÉE — `language` est la LANGUE DANS LAQUELLE
+   * `excerpt` EST SERVI (`served().language`, jamais la langue d'origine du
+   * message). Sans elle, un extrait résolu par le Prisme se prononcerait avec
+   * la voix du DOCUMENT : le défaut du cycle 122 du `CLAUDE.md` — un résolveur
+   * qui élit le bon texte n'a corrigé personne tant que ce qu'il élit n'est
+   * pas ANNONCÉ à qui l'affiche. `bubble.tsx:180` et `focal-row.tsx:263`
+   * posent déjà `lang={rendered.language}` pour la même raison.
+   */
+  replyTo?: { author: string; excerpt: string; language?: string };
   onCancelReply?: () => void;
 }) {
   const [text, setText] = useState('');
@@ -46,6 +55,7 @@ export function Composer({
     <div className="flex flex-col pb-safe">
       {replyTo ? (
         <div
+          data-composer-reply
           className="mx-3 mb-1 flex items-center gap-2 rounded-quote px-2.5 py-2"
           style={{ backgroundColor: 'var(--color-ios-card)' }}
         >
@@ -54,7 +64,11 @@ export function Composer({
             <span className="font-semibold" style={{ color: 'var(--accent)' }}>
               {replyTo.author}{' '}
             </span>
-            <span className="truncate" style={{ color: 'var(--color-ios-ink-2)' }}>
+            <span
+              className="truncate"
+              style={{ color: 'var(--color-ios-ink-2)' }}
+              {...(replyTo.language ? { lang: replyTo.language } : {})}
+            >
               {replyTo.excerpt}
             </span>
           </span>

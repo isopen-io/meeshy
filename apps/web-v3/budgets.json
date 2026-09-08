@@ -19,6 +19,17 @@
       "source": "Le doc-comment de src/styles/institutional.css citait deja un plafond de 9 Ko (mesure de rejet de l'alternative -- inliner la feuille de l'application aurait coute 11,28 Ko) sans qu'aucun gate ne le fasse respecter : /about mesurait 9,28 Ko avant ce lot, 9,59 apres son ajout de logo+signature -- deja AU-DESSUS de 9. 10 est le plafond le plus proche qui absorbe la mesure ACTUELLE (9,59-9,69 selon les jetons ajoutes) avec une marge round, sur le meme modele que first_paint.kb ci-dessus : une CIBLE proposee, jamais arbitree par le porteur, qui attend sa decision (alleger la page ou relever le plafond)."
     }
   },
+  "on_demand_chunks": {
+    "subject": "chunks CHARGES A LA DEMANDE (import() differe), gzip -9 -- hors premiere peinture par construction (#5695). Chaque entree nomme le PATTERN de fichier qu'elle borne (prefixe du chunk produit par Vite) ; measure-weight.mjs rougit si AUCUN fichier ne matche (un lazy() casse inline le module, sans erreur ailleurs) ou si la somme depasse la valeur.",
+    "summary": {
+      "pattern": "^assets/summary-host-",
+      "kb": {
+        "value": 7,
+        "status": "CIBLE -- MESUREE PAR #5695, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-08 (`bun run build` puis `node scripts/measure-weight.mjs`) : 5,93 Ko gzip -9, arrondi au Ko SUPERIEUR (6) + 1 Ko de marge, meme discipline que first_paint.kb ci-dessus."
+      }
+    }
+  },
   "network_note": "Le profil est REPRIS TEL QUEL de apps/web-v3/budgets.json — deux chiffres mesures sur deux profils differents ne se comparent pas, et la comparaison v3 / v4 est precisement ce que ce POC doit rendre.",
   "network": {
     "profile": {

@@ -7,9 +7,10 @@
  *
  * 1. Le fil s'ouvre en mode FOCAL par défaut (D-7) : des rangées PLATES
  *    (`data-reading-mode="focal"`), AUCUNE bulle.
- * 2. Le menu du chip liste les CINQ modes + « Automatique » ; `Résumé` et
- *    `Rivière` sont désactivés et MOTIVÉS (D-8 : jamais un mode qu'on ne
- *    sait pas rendre, jamais un placeholder muet).
+ * 2. Le menu du chip liste les CINQ modes + « Automatique » ; `Résumé` est
+ *    DISPONIBLE pour un inscrit depuis #5695 (D-21) ; `Rivière` reste
+ *    désactivée et MOTIVÉE (D-8 : jamais un mode qu'on ne sait pas rendre,
+ *    jamais un placeholder muet).
  * 3. Sélectionner « Bulles » change RÉELLEMENT le rendu (l'effet), la
  *    sélection SURVIT à un rechargement (persistance), et « Automatique »
  *    revient au focal.
@@ -77,6 +78,7 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
+import { checkLivingSummary } from './lib/check-summary.mjs';
 import { contrastOf } from './lib/contrast.mjs';
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
@@ -425,12 +427,15 @@ const noRowCarriesContinuousPerspective = (page) =>
 
   const summaryRow = page.getByRole('menuitemradio', { name: /Résumé/ });
   const riverRow = page.getByRole('menuitemradio', { name: /Rivière/ });
-  expect((await summaryRow.isDisabled()) === true, 'Résumé est désactivé');
+  /**
+   * INVERSÉ (#5695) — le Résumé Vivant est RENDU depuis ce lot (D-21) : pour
+   * le lecteur de fixture (inscrit), la ligne « Résumé » est désormais
+   * SÉLECTIONNABLE, comme « Focal »/« Script ». Seule « Rivière » reste
+   * désactivée et motivée (elle n'est pas encore rendue, hors périmètre de
+   * #5695).
+   */
+  expect((await summaryRow.isDisabled()) === false, 'Résumé est DISPONIBLE (#5695) — plus jamais désactivé pour un inscrit');
   expect((await riverRow.isDisabled()) === true, 'Rivière est désactivée');
-  expect(
-    ((await summaryRow.textContent()) ?? '').trim().length > 'Résumé'.length,
-    'Résumé porte une raison NON VIDE, pas un placeholder muet',
-  );
   expect(
     ((await riverRow.textContent()) ?? '').trim().length > 'Rivière'.length,
     'Rivière porte une raison NON VIDE, pas un placeholder muet',
@@ -490,7 +495,9 @@ const noRowCarriesContinuousPerspective = (page) =>
         .filter((b) => (b.textContent ?? '').startsWith(title))
         .map((b) => b.querySelectorAll('span span')[1])
         .map((el) => (el ? ratio(el) : null))[0] ?? null;
-    return { available: subtitleOf('Script'), unavailable: subtitleOf('Résumé') };
+    // #5695 : « Résumé » est désormais DISPONIBLE — le témoin d'encre mesure
+    // « Rivière », la seule ligne encore désactivée et motivée.
+    return { available: subtitleOf('Script'), unavailable: subtitleOf('Rivière') };
   });
   expect(
     reasonInk.unavailable !== null && reasonInk.unavailable === reasonInk.available,
@@ -1265,6 +1272,11 @@ const noRowCarriesContinuousPerspective = (page) =>
 
   await context.close();
 }
+
+
+// --- 14 : LE RÉSUMÉ VIVANT (#5695) — `lib/check-summary.mjs` (l'hôte est hors
+// budget de taille) ; il reçoit LE compteur de défauts et LA pose de schéma.
+await checkLivingSummary({ browser, BASE, CAPTURES, setScheme, expect, AA_THRESHOLD });
 
 await browser.close();
 server.close();

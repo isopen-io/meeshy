@@ -1018,3 +1018,140 @@ peut voyager dans un attribut (`title`, `alt`, `data-*`) qu'`innerText` ne
 montre pas, et c'est le DOM qui est la surface de fuite du web (divergence 1).
 
 Le chiffre de poids ci-dessus est celui d'APRÈS revue.
+
+## D-24 · Le Résumé Vivant est RENDU — les trois lois vivent dans `src/lib/summary/`, la fenêtre partielle est une DONNÉE — 2026-09-08 (#5695)
+
+D-21 posait trois conditions à l'entrée de `summary` au catalogue de rendu
+web ; les trois sont tenues. `THREAD_RENDERABLE_MODES` (`decision.ts`) porte
+désormais `['focal', 'script', 'summary']` — un inscrit à plus de 25
+non-lus (ou absent > 24 h avec ≥ 10 non-lus) ouvre son fil sur le Résumé
+Vivant, calculé LOCALEMENT depuis les messages déjà chargés, sans aucun
+endpoint pour le digest lui-même.
+
+**Domicile des trois lois — (A), PROVISOIRE (§9 question 1 de la
+spécification).** `src/lib/summary/{episodes,digest,face-ramp,assembly,types}.ts`
+transcrit `EpisodeSegmenter.swift` / `DeterministicDigestBuilder.swift` /
+`FaceRampRanking.swift` ligne à ligne. COMPTÉ (revue, `bun test src/lib/summary/`) :
+56 témoins purs — 13 segmentation (les 11 d'iOS + 2 sur le rang du cadrage),
+19 digest (les 17 d'iOS + 2), 12 rampe (les 12 d'iOS), 12 assemblage — plus
+9 témoins de RENDU (`living-summary.test.tsx`) et 3 de citation
+(`composer.test.tsx`). Le chiffre « 40 des 52 » de la première rédaction
+n'avait été compté nulle part. L'amendement A2
+(`LivingSummaryModels.swift:4-9`, « pas de mirroir TypeScript ») a été pris
+quand aucun second client TS n'existait ; la v3.1 en est un. Ce domicile
+bascule en (B) — `packages/shared/utils/living-summary.ts` — quand un
+second consommateur TypeScript (Android) lira ces lois ; une issue
+`décision-produit` porte l'arbitrage.
+
+**Le corpus « rattrapage » (`c-rattrapage`, `fixtures-catchup.ts`) déclare sa
+fenêtre PARTIELLE.** `hasOlderMessagesOf(conversationId)` mime
+`cursorPagination.hasMore` (`messages-list.ts:724,764-771`) — c'est la SEULE
+source de `windowCoversUnread`, jamais un booléen posé à la main dans un
+composant. `c-salon-riviere` garde `unreadCount: 3` : un corpus DISTINCT
+pour chaque gate, jamais deux fixtures jumelles qui dériveraient l'une de
+l'autre. `fixtures.ts` ayant franchi son budget de taille (1000-1200
+lignes), le socle commun (`minutesAgo`, les cinq personnes, `message()`/
+`translation()`, les défauts) a été EXTRAIT vers `fixtures-base.ts` — une
+extraction PURE, `bun test` restant vert avant l'ajout du corpus.
+
+**Neuf écarts déclarés, chacun à son site :**
+1. Mentions par `parseMentions` (`packages/shared/utils/mention-parser.ts`,
+   frontières Unicode), restreint au seul lecteur — amélioration de
+   l'heuristique iOS (sous-chaîne `@username`), biais faux négatif conservé.
+2. `MediaTally.links` compte les URL `https?://` du contenu — `trackedLinkMap`
+   n'existe pas dans `@meeshy/shared` ; issue compagnon pour le porter au
+   domaine. Rien n'affiche `media` cette itération (iOS non plus).
+3. `DigestMediaKind.location` reste inatteignable depuis une pièce jointe
+   réelle — `AttachmentType` partagé n'a pas ce cas.
+4. Le chevron « avancer » des épisodes est `caretLeft` retourné par la classe
+   `.glyph-forward` (`scaleX(-1)` en LTR, identité sous `:dir(rtl)`) — jamais
+   un nom de côté physique dans un identifiant.
+5. Tap ouvre le menu du chip (écart déjà assumé, `reading-mode-chip.tsx`).
+6. `windowCoversUnread` mime `cursorPagination.hasMore` (ci-dessus).
+7. Le cadrage des dates lit `READER_LOCALE` (rang 1 du Prisme,
+   `reader.ts`) — jamais `navigator.language` seul (règle 2 du Prisme).
+8. Le tap d'un visage de la Rampe PRÉ-ADRESSE le composeur : citation posée
+   PAR LE PRISME (`served()`, jamais `content` brut) ET `replyToId` gravé à
+   l'envoi.
+9. Le panneau agent (`GET /conversations/:id/analysis`) est inobservable en
+   source `fixtures` (aucun appel réseau, comme un invité) — même no-op
+   silencieux qu'iOS. Type local minimal (`conversation-analysis.ts`) :
+   `packages/shared` n'a pas de type pour cette route ; issue compagnon.
+
+**Le dixième écart, non prévu par D-21 : le port n'utilise PAS `useQuery`.**
+La spécification #5695 suggérait `@tanstack/react-query` (comme le port
+lui-même le nomme). MESURÉ après implémentation : un second consommateur
+lazy de `useQuery` (`progression.tsx` étant le premier) fait que Rollup
+partage son code entre les deux chunks — et le `manualChunks` de
+`vite.config.ts` force TOUT module `@tanstack/react-query` dans le chunk
+`data`, référencé par `main.tsx` (`QueryClientProvider`), donc CRITIQUE.
+`summary-host.tsx` appelle donc `loadConversationAnalysis` par un effet nu
+(`useEffect`/`useState`), qui réplique le contrat utile (`enabled`/`retry:
+false`, no-op silencieux sur erreur) sans le runtime partagé. Issue compagnon
+à ouvrir : séparer le chunk `data` par point d'entrée avant qu'un troisième
+consommateur lazy de `useQuery` ne reproduise le même défaut.
+
+**LA MESURE DE POIDS, REFAITE EN REVUE — le chiffre de la première rédaction
+n'avait pas de référence.** Elle citait « 32,71 Ko avant ce lot » sans qu'aucune
+construction de l'arbre d'AVANT ne l'ait rendu (la valeur enregistrée,
+29,79 Ko, était bien stale). La revue a construit l'arbre `HEAD` dans un
+répertoire à part (mêmes `node_modules`, `packages/design-tokens` restauré à
+`HEAD`) et mesuré : **33 415 o gzip -9, soit 32,63 Ko avant le lot ; 33 565 o,
+soit 32,78 Ko après**, corrections de revue comprises — **+150 o (+0,15 Ko)**,
+au-dessus de la tolérance de ±0,1 Ko que le critère de fin nommait. Le coût est
+ENTIER dans la feuille GLOBALE (+134 o) et il est STRUCTUREL : Tailwind 4 émet
+ses utilitaires dans l'UNIQUE feuille de l'application quel que soit le chunk
+qui les pose (13 règles neuves : `-top-1`, `max-w-[48px]`, `min-h-11`,
+`text-[10px]`…), et la table de jetons générée (`packages/design-tokens/ios.css`,
+D-4) est globale par construction (5 déclarations neuves). Aucune feature
+n'atteindra donc « première peinture inchangée » tant que la feuille n'est pas
+découpée par point d'entrée — c'est CE découpage, pas l'inline-style au cas par
+cas, qui est la suite à ouvrir. Le plafond du gate (`budgets.json first_paint.kb`
+= 40) reste tenu avec 7,2 Ko de marge. Le chunk `summary` mesure 5,81 Ko, sous
+son plafond de 7.
+
+**Les jetons du Résumé (six littéraux Swift, `HORS_TABLE_IOS` /
+`HORS_TABLE_PAR_SCHEMA` de `generate-from-ios.mjs`) vivent dans
+`src/styles/summary.css`, PAS `ios.css`** — la même mesure de poids l'exige :
+`ios.css` est importé PARTOUT, `summary.css` seulement par
+`summary-skeleton.tsx` (statique dans le chunk du fil, lui-même lazy). Les
+VALEURS restent générées (D-4) ; seule leur NOMINATION locale change de
+domicile — un précédent pour toute future feature dont les jetons ne
+servent qu'un chunk à la demande.
+
+**Corrections de revue (2026-09-08), chacune avec son témoin :**
+- **La ligne « Sur les N derniers messages » ne tenait pas AA.** `indigo500`
+  en texte de 12 px vaut **4,45:1 en sombre, 4,47:1 en clair** — sous la barre
+  de 4,5 que le gate pose déjà pour la citation. Le témoin ne pouvait pas le
+  voir : son sélecteur `[data-summary] p` rendait le PREMIER `p`, la ligne de
+  COMPTES (8,79:1) — un témoin qui ne mesure pas ce qu'il nomme. Sélecteur
+  nommé (`[data-partial-window]`) et encre servie par `--color-day-ink`, le
+  jeton GÉNÉRÉ (D-4, `MessageDaySeparator.swift`) que le dépôt sert déjà pour
+  de l'indigo lisible dans les DEUX schémas : **13,34:1 en sombre, 7,9:1 en
+  clair**. La teinte iOS reste juste sur un fond NOIR plein ; elle ne l'est pas
+  sur les deux fonds du web.
+- **« Reprendre le fil » n'était pas en bas.** `sticky bottom-4` seul ne colle
+  que si le contenu DÉBORDE ; mesuré, `main.scrollHeight === clientHeight` et
+  le bouton flottait 153 px au-dessus du composeur. `mt-auto` (+ `sticky`)
+  reproduit le `VStack { Spacer(); … }` d'iOS ; témoin : la distance
+  bouton→bas de la zone de lecture est bornée à 32 px.
+- **La citation pré-adressée ne disait pas sa langue.** `served()` rend la
+  PAIRE ; seul `text` voyageait jusqu'au composeur, donc un extrait résolu par
+  le Prisme se prononçait avec la voix du document (cycle 122). `replyTo`
+  porte `language`, le composeur pose `lang` — comme `bubble.tsx:180` et
+  `focal-row.tsx:263`. Témoins : `composer.test.tsx` (écrit sur `en`, pas sur
+  le rang 1) et le gate.
+- **L'inset horizontal valait 30 px** (les 14 px de `<main>` + les 16 px du
+  conteneur) contre 16 sur iOS : `px-0.5` rend exactement 16.
+- **« 1 message t'attendent »** — le patron unique d'iOS ne s'accorde pas ; ce
+  libellé n'a d'autre voix qu'un lecteur d'écran, il s'accorde ici.
+- **L'indice d'épisode n'était pas prouvé** : le gate ne collectait que
+  `aria-label`/`textContent`, jamais les `aria-describedby`, d'où un motif
+  écrit en alternative avec « · » — vrai par le seul titre. Le gate résout
+  désormais les descriptions.
+
+**Ce qui reste, déclaré, pas oublié :** le curseur de lecture
+(`markCaughtUpFromSummaryOrRiver`) n'a aucun transport web — issue `staging`
+quand `POST …/read` sera câblé. Le troisième libellé de `catalog.ts` pour
+`river` (D-21, inchangé) reste inatteignable. Les coques (QEMU, simulateur)
+n'ont pas été rejouées avec ce lot — le build Capacitor seul a été vérifié.

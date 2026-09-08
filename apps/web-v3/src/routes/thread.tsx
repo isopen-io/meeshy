@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { useStore } from 'zustand/react';
 
 /**
  * Feuille propre à cet écran (correction de revue #5648, défaut majeur 6) —
@@ -19,16 +20,27 @@ import { Composer } from '@/components/composer';
 import { FocalRow } from '@/components/focal-row';
 import { Glyph } from '@/components/glyph';
 import { ReadingModeChip } from '@/components/reading-mode-chip';
+import { SummarySkeleton } from '@/components/summary/summary-skeleton';
 import { apiConfig } from '@/lib/api/config';
-import { CONVERSATIONS, PARTICIPANTS, VIEWER_ID, messagesOf, recordViewOnceConsumption } from '@/lib/api/fixtures';
+import {
+  CONVERSATIONS,
+  PARTICIPANTS,
+  VIEWER_ID,
+  hasOlderMessagesOf,
+  messagesOf,
+  recordViewOnceConsumption,
+} from '@/lib/api/fixtures';
 import { applyConsumption } from '@/lib/api/view-once';
 import type { Message } from '@/lib/api/types';
+import { served } from '@/lib/api/prism';
+import { sessionStore } from '@/lib/api/session';
+import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf, withAccent } from '@/lib/accent';
 import { initialsOf, isGroup, peerOf, presenceOf, titleOf, unreadOf } from '@/lib/view/conversation';
 import { useParams } from '@/lib/router';
 import { dayLabel, place } from '@/lib/grouping';
 import { Link } from '@/routes/route-table';
-import { READER_LANGUAGES } from '@/lib/reader';
+import { READER_LANGUAGES, READER_LOCALE } from '@/lib/reader';
 import { useOnline } from '@/lib/net/online';
 import type { LocalDelivery } from '@/lib/view/message';
 import { menuRows } from '@/lib/reading-mode/catalog';
@@ -41,6 +53,15 @@ import {
 import { readingModeStore } from '@/lib/reading-mode/store';
 import { useThreadScene } from '@/lib/reading-mode/scene';
 import { sceneStyleVars } from '@/lib/reading-mode/metrics';
+
+/**
+ * LE RÉSUMÉ VIVANT (#5695) — module À LA DEMANDE : `SummaryHost` n'entre
+ * dans le CHUNK DU FIL qu'au moment où `readingDecision.mode === 'summary'`
+ * demande son premier rendu (`import()`), jamais dans la première peinture.
+ * `SummarySkeleton`, lui, reste un import STATIQUE (voir son doc-comment) :
+ * c'est le `fallback` de la `Suspense` qui attend ce module.
+ */
+const SummaryHost = lazy(() => import('@/components/summary/summary-host'));
 
 /**
  * LE SCOPE DU MAGASIN DE MODE DE LECTURE — `'local'` tant qu'aucune session
@@ -61,6 +82,12 @@ const READING_MODE_SCOPE = 'local';
  * iOS explicite, et il tient : deux etats, deux roles.
  *
  * Le bouton de retour porte le compte de non-lus des AUTRES conversations.
+ *
+ * Depuis #5695, `<main>` rend soit la rangée plate/bulle (Focal/Script/
+ * Bulles), soit le Résumé Vivant (`mode === 'summary'`) — la prochaine
+ * surface (Rivière, D-21) EXTRAIT le montage des modes dans
+ * `src/routes/thread-modes.tsx` avant d'y ajouter la sienne : ce fichier
+ * reste sous le budget de taille, mais il ne le restera pas une quatrième fois.
  */
 export default function ThreadScreen() {
   const { conversation: id } = useParams<'/c/$conversation'>();
@@ -69,6 +96,22 @@ export default function ThreadScreen() {
   const [messages, setMessages] = useState<readonly Message[]>(() => messagesOf(id));
   const [typing] = useState(true);
   const online = useOnline();
+
+  /**
+   * QUI LIT (#5695, étape 9) — `resolveViewer` (`lib/api/viewer.ts`) remplace
+   * les deux `isAnonymous: false` en dur qui précédaient : en source
+   * `fixtures`, `viewer.id === VIEWER_ID` par construction (inchangé,
+   * observable nulle part) ; en `gateway`, la session RÉELLE tranche.
+   */
+  const session = useStore(sessionStore, (s) => s.session);
+  const viewer = useMemo(() => resolveViewer({ source: apiConfig.source, session }), [session]);
+
+  /**
+   * LA FENÊTRE COUVRE-T-ELLE TOUT LE NON-LU ? — mime `cursorPagination.hasMore`
+   * (`hasOlderMessagesOf`, `lib/api/fixtures.ts`) : c'est ce qui rend
+   * « Sur les N derniers messages » (Résumé Vivant) atteignable sans mentir.
+   */
+  const windowCoversUnread = !hasOlderMessagesOf(conversation.id);
 
   /**
    * L'ÉTAT LOCAL D'UN ENVOI — à CÔTÉ du domaine, jamais dedans.
@@ -135,7 +178,7 @@ export default function ThreadScreen() {
    * démentie par ce seul appel). `messages` est un état, donc son identité
    * ne bouge qu'à l'arrivée d'un message.
    */
-  const placed = useMemo(() => place(messages), [messages]);
+  const placed = useMemo(() => place(messages, { locale: READER_LOCALE }), [messages]);
   const group = isGroup(conversation);
 
   /**
@@ -186,18 +229,17 @@ export default function ThreadScreen() {
         lastOpenedAt,
         now: openedAt,
         sticky: toStickyPreference(stickyMode),
-        // La v3.1 n'a pas encore de session (#5555) : tout lecteur est traité
-        // en INSCRIT. Sans effet observable ici — `summary`, le seul mode que
-        // la loi retire à un invité, est déjà hors du catalogue de rendu du
-        // web — mais c'est ce paramètre que le lot `staging` devra brancher.
-        isAnonymous: false,
+        // #5695 : `summary` est désormais dans le catalogue de rendu web —
+        // `viewer.isAnonymous` a un effet OBSERVABLE ici (un invité perd
+        // `summary`, la loi le retire de `threadCapabilities`).
+        isAnonymous: viewer.isAnonymous,
         conversationType: conversation.type,
       }),
-    [conversation, lastOpenedAt, openedAt, stickyMode],
+    [conversation, lastOpenedAt, openedAt, stickyMode, viewer.isAnonymous],
   );
   const readingCapabilities = useMemo(
-    () => threadCapabilities({ isAnonymous: false, conversationType: conversation.type }),
-    [conversation.type],
+    () => threadCapabilities({ isAnonymous: viewer.isAnonymous, conversationType: conversation.type }),
+    [conversation.type, viewer.isAnonymous],
   );
   const readingMenuRows = useMemo(
     () =>
@@ -293,6 +335,51 @@ export default function ThreadScreen() {
   }, []);
 
   /**
+   * LE SAUT DIFFÉRÉ (#5695) — les TROIS sorties du Résumé Vivant reposent
+   * sur `jumpToMessage`, qui n'a de cible que quand `<ol>` est MONTÉ
+   * (`usesFlatRow`). Sans ce différé, basculer `summary → script` puis
+   * sauter dans le MÊME geste viserait un virtualiseur qui compte encore
+   * zéro rangée plate — miroir des trois portes iOS
+   * (`ConversationView.swift:1527-1547`, qui posent `scrollToMessageId` +
+   * `trigger`, consommés APRÈS le rebasculement de mode).
+   */
+  const [pendingJump, setPendingJump] = useState<string | null>(null);
+  useEffect(() => {
+    if (pendingJump === null || !usesFlatRow(readingDecision.mode)) return;
+    jumpToMessage(pendingJump);
+    setPendingJump(null);
+  }, [pendingJump, readingDecision.mode, jumpToMessage]);
+
+  /**
+   * LE PRÉ-ADRESSAGE DU COMPOSEUR (#5695, écart 8 §1.4) — au tap d'un
+   * visage de la Rampe, le composeur s'ouvre déjà adressé à cette personne :
+   * la citation ET `replyToId` à l'envoi.
+   */
+  const [replyTarget, setReplyTarget] = useState<string | null>(null);
+
+  /**
+   * LES TROIS SORTIES DU RÉSUMÉ VIVANT (#5695) — miroir
+   * `ConversationView.swift:1527-1547` : visage → script + saut sur la
+   * PREMIÈRE preuve + pré-adressage ; épisode → script + saut sur son
+   * PREMIER message ; « Reprendre le fil » → script + saut sur le PREMIER
+   * message d'un AUTRE (jamais du lecteur). Aucun retour automatique.
+   */
+  const onReplyToPerson = (entry: { readonly evidenceMessageIds: readonly string[] }) => {
+    const target = entry.evidenceMessageIds[0] ?? null;
+    selectReadingMode('script');
+    setPendingJump(target);
+    setReplyTarget(target);
+  };
+  const onOpenEpisode = (episode: { readonly messageIds: readonly string[] }) => {
+    selectReadingMode('script');
+    setPendingJump(episode.messageIds[0] ?? null);
+  };
+  const onResumeThread = () => {
+    selectReadingMode('script');
+    setPendingJump(messages.find((m) => m.senderId !== VIEWER_ID)?.id ?? null);
+  };
+
+  /**
    * UN FIL S'OUVRE EN BAS. Sur le dernier message, pas sur le premier — et
    * `align: 'end'` plutôt qu'un `scrollTop = scrollHeight`, qui serait faux
    * tant que les hauteurs réelles ne sont pas mesurées.
@@ -346,9 +433,49 @@ export default function ThreadScreen() {
   }, [count]);
   const title = titleOf(conversation, VIEWER_ID);
   const accent = accentOf(conversation);
-  const viewer = PARTICIPANTS.find((p) => p.userId === VIEWER_ID);
+  /** Le `Participant` FIXTURE du lecteur — distinct de `viewer` (l'identité
+   * résolue par `resolveViewer`, ci-dessus) : celui-ci porte la charge que
+   * `sender` exige (avatar, présence…), jamais confondu avec « qui lit ». */
+  const viewerParticipant = PARTICIPANTS.find((p) => p.userId === VIEWER_ID);
 
-  const send = (text: string) => {
+  /**
+   * LE CADRAGE DES DATES DU RÉSUMÉ (#5695, étape 11) — `lang` est RÉSOLU
+   * UNE FOIS ici, jamais une lecture DOM par nœud (`episode-list.tsx`,
+   * `living-summary.tsx` le reçoivent en prop). `undefined` quand la locale
+   * de cadrage EST celle du document — aucun `lang` superflu posé.
+   */
+  const summaryLang =
+    typeof document === 'object' && READER_LOCALE !== document.documentElement.lang ? READER_LOCALE : undefined;
+
+  /**
+   * LA CITATION DU COMPOSEUR PRÉ-ADRESSÉ (#5695, écart 8) — l'extrait passe
+   * par le PRISME (`served()`, jamais `content` brut) : citer quelqu'un dans
+   * une langue qu'il n'a pas écrite serait exactement le défaut que le
+   * Prisme existe pour éviter.
+   */
+  const replyToMessage = replyTarget === null ? undefined : messages.find((m) => m.id === replyTarget);
+  const replyToServed =
+    replyToMessage === undefined
+      ? undefined
+      : served({
+          preferredLanguages: READER_LANGUAGES,
+          originalLanguage: replyToMessage.originalLanguage,
+          translations: replyToMessage.translations,
+          original: replyToMessage.content,
+        });
+  const replyTo =
+    replyToMessage === undefined || replyToServed === undefined
+      ? undefined
+      : {
+          author: replyToMessage.sender?.displayName ?? replyToMessage.senderId,
+          excerpt: replyToServed.text,
+          /* La PAIRE, jamais le seul texte : `served()` rend `language`
+             précisément pour que l'hôte puisse DIRE dans quelle langue il
+             sert (`lang`), comme `bubble.tsx` et `focal-row.tsx`. */
+          ...(replyToServed.language === '' ? {} : { language: replyToServed.language }),
+        };
+
+  const send = (text: string, replyToId: string | null = null) => {
     /**
      * OPTIMISTIC UPDATE : le message apparait AVANT le reseau, en etat
      * « en-attente ». C'est non negociable sur la 3G visee — attendre l'accuse
@@ -375,7 +502,8 @@ export default function ThreadScreen() {
         id: localId,
         conversationId: conversation.id,
         senderId: VIEWER_ID,
-        ...(viewer === undefined ? {} : { sender: viewer }),
+        ...(viewerParticipant === undefined ? {} : { sender: viewerParticipant }),
+        ...(replyToId === null ? {} : { replyToId }),
         content: text,
         originalLanguage: 'fr',
         messageType: 'text',
@@ -578,24 +706,50 @@ export default function ThreadScreen() {
           payé sur ses rangées ; il est venu deux fois parce qu'il ne se voit
           ni au type-check ni à l'œil, seulement à la mesure.
         */}
-        {placed.length === 0 ? (
+        {readingDecision.mode === 'summary' ? (
           /*
-            L'ÉTAT VIDE EST UN ÉTAT, pas une absence d'écran. Un fil sans
-            historique qui rend du blanc laisse croire à un chargement qui ne
-            finit pas — sur un réseau lent, c'est l'interprétation la plus
-            naturelle et la plus fausse.
+            LE RÉSUMÉ VIVANT (#5695) — SOUS l'en-tête (le `<main>` du fil est
+            déjà un FRÈRE de `<header>`, jamais en dessous en z-order) :
+            correction du défaut #5682 de la cible iOS, pas sa recopie.
+            La scène (`useThreadScene`) est INERTE sur ce mode
+            (`reading-mode/scene.ts`) — le virtualiseur reste construit
+            (`useVirtualizer` ne peut pas être conditionnel) mais rien ne
+            monte de rangée `[data-row]` ici.
           */
-          <div className="grid flex-1 place-items-center px-8 text-center">
-            <div className="grid gap-2">
-              <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-                Aucun message pour l’instant
-              </p>
-              <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-                Écrivez le premier — il sera traduit dans la langue de chacun.
-              </p>
-            </div>
-          </div>
-        ) : null}
+          <Suspense fallback={<SummarySkeleton />}>
+            <SummaryHost
+              conversationId={conversation.id}
+              messages={messages}
+              participants={PARTICIPANTS}
+              viewer={viewer}
+              windowCoversUnread={windowCoversUnread}
+              locale={READER_LOCALE}
+              {...(summaryLang !== undefined ? { lang: summaryLang } : {})}
+              onReplyToPerson={onReplyToPerson}
+              onOpenEpisode={onOpenEpisode}
+              onResumeThread={onResumeThread}
+            />
+          </Suspense>
+        ) : (
+          <>
+            {placed.length === 0 ? (
+              /*
+                L'ÉTAT VIDE EST UN ÉTAT, pas une absence d'écran. Un fil sans
+                historique qui rend du blanc laisse croire à un chargement qui ne
+                finit pas — sur un réseau lent, c'est l'interprétation la plus
+                naturelle et la plus fausse.
+              */
+              <div className="grid flex-1 place-items-center px-8 text-center">
+                <div className="grid gap-2">
+                  <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+                    Aucun message pour l’instant
+                  </p>
+                  <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
+                    Écrivez le premier — il sera traduit dans la langue de chacun.
+                  </p>
+                </div>
+              </div>
+            ) : null}
 
         <ol
           style={{
@@ -643,7 +797,7 @@ export default function ThreadScreen() {
                       backgroundColor: 'color-mix(in srgb, var(--color-ios-card) 70%, transparent)',
                     }}
                   >
-                    {dayLabel(p.message.createdAt)}
+                    {dayLabel(p.message.createdAt, { locale: READER_LOCALE })}
                   </span>
                 </div>
               ) : null}
@@ -726,10 +880,18 @@ export default function ThreadScreen() {
             </span>
           </div>
         ) : null}
+          </>
+        )}
       </main>
 
       <div className="shrink-0">
-        <Composer onSend={send} />
+        <Composer
+          onSend={(text) => {
+            send(text, replyTarget);
+            setReplyTarget(null);
+          }}
+          {...(replyTo ? { replyTo, onCancelReply: () => setReplyTarget(null) } : {})}
+        />
       </div>
     </div>
   );

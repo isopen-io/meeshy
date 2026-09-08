@@ -195,6 +195,9 @@ const HORS_TABLE_IOS = [
   ['--ios-header-circle', '28px', 'ConversationView+Header.swift — cercle visuel des actions (cible 44)'],
   ['--ios-bubble-mine', 'var(--ios-indigo-500)', 'BubbleBackground.swift — brandPrimary, le MÊME dans toutes les conversations'],
   ['--ios-bubble-meta-mine', 'color-mix(in srgb, white 70%, transparent)', 'BubbleFooter.swift:283 — metaColor quand isMe'],
+  ['--ios-text-summary-title', '20px', 'Focal/Summary/LivingSummaryView.swift:64 — relative(20, .heavy), « Résumé Vivant »'],
+  ['--ios-text-summary-counts', '14px', 'Focal/Summary/LivingSummaryView.swift:68 — relative(14, .semibold), « N messages · P personnes »'],
+  ['--ios-text-summary-partial', '12px', 'Focal/Summary/LivingSummaryView.swift:73 — relative(12, .medium), « Sur les N derniers messages »'],
 ];
 
 /**
@@ -233,6 +236,18 @@ const HORS_TABLE_PAR_SCHEMA = [
   ],
   ['--ios-day-ink', 'var(--ios-indigo-200)', 'var(--ios-indigo-700)', 'MessageDaySeparator.swift'],
   ['--ios-day-hairline', 'var(--ios-indigo-900)', 'var(--ios-indigo-200)', 'MessageDaySeparator.swift — strokeBorder'],
+  [
+    '--ios-summary-surface-tint',
+    'color-mix(in srgb, white 6%, transparent)',
+    'color-mix(in srgb, black 4%, transparent)',
+    'FocalMetrics.swift:385-386 — SurfaceTint, fond des cartes d’épisode du Résumé Vivant',
+  ],
+  [
+    '--ios-summary-skeleton-fill',
+    'color-mix(in srgb, white 8%, transparent)',
+    'color-mix(in srgb, black 6%, transparent)',
+    'Focal/Summary/LivingSummaryView.swift:151-164 — remplissage des trois barres du squelette',
+  ],
 ];
 
 // ------------------------------------------------------------------ SORTIE

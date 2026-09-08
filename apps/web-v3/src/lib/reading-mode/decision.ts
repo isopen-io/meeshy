@@ -18,15 +18,16 @@ import { apiConfig } from '@/lib/api/config';
  * loi gelée avec le stockage local.
  *
  * `THREAD_RENDERABLE_MODES` est le catalogue que la v3.1 sait DESSINER
- * aujourd'hui : `focal` (D-7, le défaut) et `script` (même rangée plate, sans
- * perspective). `summary` (Résumé Vivant) et `river` (Rivière) restent
- * LISTÉS au menu (`catalog.ts`) mais hors de ce catalogue de rendu — la loi
- * partagée les CLAMPE donc elle-même sur `focal`/`clamped-unavailable`
- * (D-8 : jamais un mode qu'on ne sait pas rendre). Aucune réécriture de la
- * loi n'est nécessaire : c'est le mécanisme même que `resolveOrchestratorDecision`
- * expose pour ça.
+ * aujourd'hui : `focal` (D-7, le défaut), `script` (même rangée plate, sans
+ * perspective) et `summary` (le Résumé Vivant, #5695 — D-21 : un corpus qui
+ * l'ATTEINT, le gate DOM inversé, le cadrage des dates par la langue du
+ * lecteur). `river` (Rivière) reste LISTÉ au menu (`catalog.ts`) mais hors
+ * de ce catalogue de rendu — la loi partagée le CLAMPE donc elle-même sur
+ * `focal`/`clamped-unavailable` (D-8 : jamais un mode qu'on ne sait pas
+ * rendre). Aucune réécriture de la loi n'est nécessaire : c'est le
+ * mécanisme même que `resolveOrchestratorDecision` expose pour ça.
  */
-export const THREAD_RENDERABLE_MODES: readonly ConversationReadingMode[] = ['focal', 'script'];
+export const THREAD_RENDERABLE_MODES: readonly ConversationReadingMode[] = ['focal', 'script', 'summary'];
 
 export type ThreadCapabilities = {
   readonly availableModes: readonly ConversationReadingMode[];
@@ -35,11 +36,11 @@ export type ThreadCapabilities = {
 
 /**
  * Le catalogue de CET écran : les modes rendables (`THREAD_RENDERABLE_MODES`)
- * bornés à ceux que la loi partagée accorde à cette identité — un invité perd
- * `summary` de toute façon (403 serveur), mais `summary` n'est déjà pas dans
- * `THREAD_RENDERABLE_MODES`, donc cette intersection ne change rien
- * d'observable ici ; elle est faite pour rester honnête si le catalogue de
- * rendu s'élargit un jour sans qu'on oublie la borne d'identité.
+ * bornés à ceux que la loi partagée accorde à cette identité — DÉSORMAIS
+ * OBSERVABLE (#5695) : `summary` est dans `THREAD_RENDERABLE_MODES`, et un
+ * invité le perd via CETTE intersection (la loi partagée retire `summary`
+ * du catalogue anonyme, `reading-modes.ts:284-285` — 403 serveur sur
+ * `/conversations/:id/analysis`) plutôt qu'en amont.
  *
  * `activeParticipantCount: null` — la v3.1 n'a AUCUNE source de ce compte
  * aujourd'hui (comme iOS avant G-123) : le mentir en `0` afficherait
@@ -87,7 +88,7 @@ export type ResolveThreadModeInput = {
 export type FlatRowMode = 'focal' | 'script';
 
 export type ThreadModeDecision = {
-  readonly mode: FlatRowMode | 'bubbles';
+  readonly mode: FlatRowMode | 'bubbles' | 'summary';
   readonly reason: OrchestratorDecisionReason;
 };
 
@@ -140,10 +141,20 @@ export function resolveThreadMode(input: ResolveThreadModeInput): ThreadModeDeci
   }
 
   /**
-   * Reste ATTEIGNABLE pour UNE raison désormais : un mode listé hors
-   * catalogue de rendu web (`riviere`/`resume` collant, ou 26+ non-lus qui
-   * élirait `summary`) — drapeau ON, catalogue de rendu réduit à
-   * `focal`/`script`, sur lequel la loi clampe elle-même. Le repli
+   * `summary` (#5695) — la loi ne rend ce mode que si `threadCapabilities`
+   * l'a laissé dans `availableModes`, ce qui exige `isAnonymous: false`
+   * (§9 question, `reading-modes.ts:284-285`) : un invité à 26 non-lus ne
+   * traverse JAMAIS cette branche, la loi l'a déjà clampé sur `focal` avant
+   * d'y arriver (`REGISTERED_AVAILABLE_MODES` vs `ANONYMOUS_AVAILABLE_MODES`).
+   */
+  if (lawDecision.mode === 'summary') {
+    return { mode: 'summary', reason: lawDecision.reason };
+  }
+
+  /**
+   * Reste ATTEIGNABLE pour UNE raison désormais : `riviere` (Rivière)
+   * collant seul — drapeau ON, catalogue de rendu web (`focal`/`script`/
+   * `summary`), sur lequel la loi clampe elle-même. Le repli
    * `focal`/`clamped-unavailable` reste juste pour CE cas ; le drapeau éteint
    * ne l'atteint plus jamais (retenu par le premier `if` ci-dessus). ÉCRIT
    * plutôt que CASTÉ : le jour où `THREAD_RENDERABLE_MODES` s'élargit, c'est

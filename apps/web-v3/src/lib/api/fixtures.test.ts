@@ -30,6 +30,7 @@ import { place } from '../grouping';
 const ALL_MESSAGES = [
   ...THREAD_MESSAGES,
   ...messagesOf('c-salon-riviere'),
+  ...messagesOf('c-rattrapage'),
   ...CONVERSATIONS.flatMap((c) => (c.lastMessage ? [c.lastMessage] : [])),
 ];
 
@@ -70,7 +71,7 @@ test('le Salon Rivière traduit ses 32 messages français par une VRAIE traducti
  */
 test('le Salon Rivière porte une rangée de CONTINUATION (tail === false)', () => {
   const river = messagesOf('c-salon-riviere');
-  const placed = place(river);
+  const placed = place(river, { locale: 'fr' });
   const witness = placed.find((p) => p.message.id === RIVER_CONTINUATION_WITNESS_ID);
   expect(witness).toBeDefined();
   expect(witness?.tail).toBe(false);
@@ -132,7 +133,7 @@ test('VIEW_ONCE_WITNESS_ID : vue unique non consommée, ET une traduction (le t�
  * seulement le champ : c'est elle qui rend le témoin falsifiable.
  */
 test('VIEW_ONCE_WITNESS_ID est le DERNIER de son groupe — sans quoi le témoin « pas de drapeau » ne peut pas rougir', () => {
-  const placed = place(messagesOf(PROTECTION_CONVERSATION_ID));
+  const placed = place(messagesOf(PROTECTION_CONVERSATION_ID), { locale: 'fr' });
   expect(placed.find((p) => p.message.id === VIEW_ONCE_WITNESS_ID)?.tail).toBe(true);
 });
 

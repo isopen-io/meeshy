@@ -87,6 +87,30 @@ const profile = budgets.network.profile;
 /** Le temps de TELECHARGEMENT seul, hors latence — un plancher, jamais un LCP. */
 const seconds = (bytes) => Math.round(((bytes * 8) / profile.download_bps) * 100) / 100;
 
+/**
+ * LES CHUNKS À LA DEMANDE, PAR NOM (#5695) — chaque entrée de
+ * `budgets.json › on_demand_chunks` borne un `pattern` (préfixe du fichier
+ * produit par Vite) : un `lazy()` cassé INLINE le module dans un chunk
+ * voisin plutôt que d'échouer bruyamment — le chunk nommé disparaît SANS
+ * ERREUR ailleurs. C'est pour ça que l'ABSENCE de fichier correspondant est
+ * un échec au même titre qu'un dépassement.
+ */
+const onDemandChunkEntries = Object.entries(budgets.on_demand_chunks ?? {}).filter(([key]) => key !== 'subject');
+const onDemandChunks = {};
+const onDemandChunkFailures = [];
+for (const [name, spec] of onDemandChunkEntries) {
+  const pattern = new RegExp(spec.pattern);
+  const matches = allAssets.filter((a) => pattern.test(a.file));
+  const gzip = matches.reduce((s, a) => s + a.gzip, 0);
+  onDemandChunks[name] = { pattern: spec.pattern, files: matches.map((m) => m.file), gzip_9_bytes: gzip, kb: kb(gzip) };
+  const cap = spec.kb?.value;
+  if (matches.length === 0) {
+    onDemandChunkFailures.push(`  AUCUN FICHIER : « ${name} » (motif ${spec.pattern}) — le lazy() est-il cassé ?`);
+  } else if (typeof cap === 'number' && onDemandChunks[name].kb > cap) {
+    onDemandChunkFailures.push(`  DEPASSEMENT : « ${name} » ${onDemandChunks[name].kb} Ko > plafond ${cap} Ko`);
+  }
+}
+
 const measure = {
   runtime: process.env.MEESHY_RUNTIME === 'react' ? 'react' : 'preact',
   target: process.env.MEESHY_TARGET === 'capacitor' ? 'capacitor' : 'web',
@@ -99,6 +123,7 @@ const measure = {
   download_3g_s: seconds(firstPaint),
   on_demand_gzip_9_bytes: onDemand.reduce((s, a) => s + a.gzip, 0),
   critical_detail: Object.fromEntries(critical.map((c) => [c.file, c.gzip])),
+  on_demand_detail: onDemandChunks,
 };
 
 if (asJson) {
@@ -112,6 +137,9 @@ if (asJson) {
   console.log(`  ${String(measure.requests_before_first_pixel).padStart(8)}     requetes`);
   console.log(`  ${String(measure.download_3g_s).padStart(8)} s   de telechargement seul sur ${profile.name}`);
   console.log(`  ${String(kb(measure.on_demand_gzip_9_bytes)).padStart(8)} Ko  a la demande (hors premiere peinture)\n`);
+  for (const [name, detail] of Object.entries(onDemandChunks)) {
+    console.log(`    ${String(detail.kb).padStart(6)} Ko  chunk « ${name} » (${detail.files.length} fichier(s))`);
+  }
 }
 
 const cap = budgets.first_paint?.kb?.value;
@@ -124,6 +152,11 @@ if (typeof cap === 'number') {
     );
     rc = 1;
   }
+}
+
+if (onDemandChunkFailures.length > 0) {
+  console.error(`\n${onDemandChunkFailures.join('\n')}\n`);
+  rc = 1;
 }
 
 if (ratchet) {
