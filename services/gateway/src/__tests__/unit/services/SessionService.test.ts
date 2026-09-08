@@ -1029,6 +1029,28 @@ describe('SessionService', () => {
     });
 
     describe('extendSessionExpiry', () => {
+      it('refuse de prolonger une session déjà expirée', async () => {
+        // Le filtre porte désormais `expiresAt` : une session morte n'est plus
+        // trouvée, donc plus jamais ressuscitée (#5712).
+        mockPrisma.userSession.findFirst.mockResolvedValueOnce(null);
+
+        const result = await extendSessionExpiry('token-dune-session-morte', 30);
+
+        expect(result).toBe(false);
+        expect(mockPrisma.userSession.update).not.toHaveBeenCalled();
+      });
+
+      it('passe expiresAt au filtre de lecture', async () => {
+        mockPrisma.userSession.findFirst.mockResolvedValueOnce(null);
+        const avant = Date.now();
+
+        await extendSessionExpiry('un-token');
+
+        const where = mockPrisma.userSession.findFirst.mock.calls[0][0].where;
+        expect(where.expiresAt.gt).toBeInstanceOf(Date);
+        expect(where.expiresAt.gt.getTime()).toBeGreaterThanOrEqual(avant - 5_000);
+      });
+
       it('should extend session expiry by specified days', async () => {
         mockPrisma.userSession.findFirst.mockResolvedValueOnce(mockSession);
         mockPrisma.userSession.update.mockResolvedValueOnce({
