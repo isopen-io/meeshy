@@ -208,7 +208,7 @@ export default defineConfig({
       : [
           VitePWA({
             registerType: 'autoUpdate',
-            includeAssets: ['favicon.svg'],
+            includeAssets: ['favicon-48.png'],
             manifest: {
               name: 'Meeshy',
               short_name: 'Meeshy',
@@ -227,7 +227,25 @@ export default defineConfig({
               ],
             },
             workbox: {
-              globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+              /**
+               * `brand/*.png` (#5606) : les DEUX actifs de marque servis par
+               * les pages institutionnelles (le logo d'en-tête, le glyphe de
+               * la signature de pied) — pas les icônes du manifest, dont le
+               * doublon a déjà coûté ~37 Ko d'installation une fois (#5554,
+               * `globIgnores` ci-dessous). ~13 Ko bruts pour les deux, contre
+               * une signature affichant un glyphe CASSÉ au tout premier accès
+               * hors ligne à une page institutionnelle sans ce précache — le
+               * cache d'exécution `medias` (CacheFirst, plus bas) ne les
+               * connaît qu'APRÈS un premier succès réseau.
+               *
+               * `favicon-48.png` (revue de #5606, défaut 1) : l'ancien
+               * `favicon.svg` entrait dans le précache par le motif `svg`
+               * générique ; sa PROJECTION dérivée d'iOS est un PNG, et un
+               * favicon absent du précache redeviendrait une requête réseau à
+               * la deuxième visite — exactement ce que `check-institutional.mjs`
+               * (critère 3) exige à zéro.
+               */
+              globPatterns: ['**/*.{js,css,html,svg,woff2}', 'brand/*.png', 'favicon-48.png'],
               /**
                * Chaque page institutionnelle est écrite dans DEUX formes —
                * `about.html` et `about/index.html` — parce qu'un serveur

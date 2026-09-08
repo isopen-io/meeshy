@@ -91,7 +91,13 @@
   --text-brand: var(--text-lg);
   --text-body: var(--text-md);
   --text-secondary: var(--text-base);
-  --text-meta: var(--text-sm);
+  /* `--text-caption`, pas `--text-meta` (revue de #5606, défaut 1) : ce nom
+     collisionnait avec `--color-meta` (`ios.css`) — Tailwind ne peut résoudre
+     l'utilitaire `text-meta` que d'UNE façon, et la couleur gagnait toujours,
+     faisant disparaître le `font-size` sans qu'aucune classe ne devienne
+     « morte » au sens de `check-utilities.mjs`. `text-caption` porte la
+     taille ; `text-meta` reste le nom de la couleur muette (§ ios.css). */
+  --text-caption: var(--text-sm);
   --text-chip: var(--text-xs);
 
   /* ---- RAYONS : cinq roles, pas cinq tailles (charte regle 9) ---- */

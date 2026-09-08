@@ -12,6 +12,8 @@
  * correctes, `<body></body>`. Un défaut qui passe tous les contrôles sauf celui
  * de regarder la page.
  */
+import { BRAND_LOGO_PATH } from '../lib/brand';
+import { BrandSignature } from './brand-signature';
 import type { Block, Card, FramedRow, ContentPage, Section } from './type';
 
 /**
@@ -49,7 +51,7 @@ function BlockCard({ card }: { card: Card }) {
       {card.mention ? (
         /* La ligne qui QUALIFIE la carte — un tarif, une durée. Capitales
            espacées, comme la charte le demande pour un qualifiant. */
-        <p className="mt-2 text-meta font-semibold uppercase" style={{ color: 'var(--color-ios-brand)', letterSpacing: '0.08em' }}>
+        <p className="mt-2 text-caption font-semibold uppercase" style={{ color: 'var(--color-ios-brand)', letterSpacing: '0.08em' }}>
           {card.mention}
         </p>
       ) : null}
@@ -137,7 +139,7 @@ function RenderedSection({ section }: { section: Section }) {
   );
 }
 
-export function InstitutionalPage({ page }: { page: ContentPage }) {
+export function InstitutionalPage({ page, version }: { page: ContentPage; version: string }) {
   return (
     /* L'encre PLEINE sur tout le corps — charte règle 18 : « l'encre du contenu
        est --color-text ; le gris est réservé à ce qu'on peut ne pas lire ». La
@@ -150,15 +152,22 @@ export function InstitutionalPage({ page }: { page: ContentPage }) {
       </a>
 
       <header className="mx-auto flex max-w-[42rem] items-center gap-3 px-5 pt-6 pb-2">
+        {/* `minHeight: 44` — la cible de la charte. Le lien ne portait que du
+            texte (≈ 20 px de haut) ; le logo l'a amené à 40. Les 4 derniers
+            se posent ici plutôt que sur l'image, pour que la zone cliquable
+            couvre le mot autant que la marque. */}
         <a
           href="/"
           className="flex items-center gap-2 text-brand font-bold"
-          style={{ color: 'var(--color-ios-brand)' }}
+          style={{ color: 'var(--color-ios-brand)', minHeight: 44 }}
         >
+          {/* Décoratif : « Meeshy » à côté porte déjà le nom — un `alt` ici le
+              ferait lire deux fois par un lecteur d'écran. */}
+          <img src={BRAND_LOGO_PATH} width="40" height="40" alt="" />
           Meeshy
         </a>
         <span className="flex-1" />
-        <a href="/" className="text-meta underline underline-offset-2">
+        <a href="/" className="text-caption text-meta underline underline-offset-2">
           Retour à l’accueil
         </a>
       </header>
@@ -169,7 +178,7 @@ export function InstitutionalPage({ page }: { page: ContentPage }) {
         </h1>
         {page.hero ? <p className="mt-3 text-secondary">{page.hero}</p> : null}
         {page.mention ? (
-          <p className="mt-2 text-meta" style={{ color: 'var(--color-ios-ink-3)' }}>
+          <p className="mt-2 text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
             {page.mention}
           </p>
         ) : null}
@@ -199,7 +208,7 @@ export function InstitutionalPage({ page }: { page: ContentPage }) {
       </main>
 
       <footer
-        className="mx-auto max-w-[42rem] px-5 pb-8 text-meta"
+        className="mx-auto max-w-[42rem] px-5 pb-8 text-caption"
         style={{ color: 'var(--color-ios-ink-3)' }}
       >
         <nav className="flex flex-wrap gap-x-4 gap-y-2">
@@ -209,6 +218,7 @@ export function InstitutionalPage({ page }: { page: ContentPage }) {
           <a href="/privacy" className="underline underline-offset-2">Confidentialité</a>
           <a href="/terms" className="underline underline-offset-2">Conditions</a>
         </nav>
+        <BrandSignature version={version} />
       </footer>
     </div>
   );
