@@ -6,7 +6,7 @@ import type { SessionState } from './api/session';
  * routeur ni le DOM.
  *
  * Deux familles de routes, symétriques : les routes PRIVÉES (`list`,
- * `thread`) exigent une session — un visiteur SANS COMPTE en est sorti (D-6,
+ * `thread`, `progression`) exigent une session — un visiteur SANS COMPTE en est sorti (D-6,
  * même doctrine que `/c/`) ; les routes d'AUTHENTIFICATION (`login`,
  * `signup`) refusent une session déjà ACTIVE — s'y présenter connecté n'a pas
  * de sens produit et renvoie vers `/`. Toute autre route (inconnue, ou future)
@@ -21,11 +21,11 @@ import type { SessionState } from './api/session';
  * déjà avant que le travail `staging` (#5605, livré) ne soit consommé partout.
  */
 
-export type RouteKey = 'list' | 'thread' | 'login' | 'signup';
+export type RouteKey = 'list' | 'thread' | 'progression' | 'login' | 'signup';
 
 export type RouteAccessDecision = 'allow' | 'redirect-login' | 'redirect-home';
 
-const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['list', 'thread']);
+const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['list', 'thread', 'progression']);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup']);
 
 /**
