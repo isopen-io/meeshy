@@ -3,7 +3,7 @@
 > **Source** : `node scripts/route-inventory.mjs` (et `--json`). Ce tableau est
 > une PROJECTION de ce script ; le jour où il rend une route absente d'ici,
 > c'est ce document qui a tort. Issue : #5492. Lot : #5491.
-> Relevé du **2026-09-08**.
+> Relevé du **2026-09-09**.
 
 ## Ce que la mesure a rendu, et qui change le cadrage de #5492
 
@@ -11,7 +11,7 @@
 |---|---|---|
 | `apps/web` (legacy) | **80** | **la PRODUCTION, seule — 100 % du trafic utilisateur** |
 | `apps/web-old-version3` | 48 | nulle part — **ANNULÉE** le 2026-09-07 |
-| `apps/web-v3` (la v3.1) | **9** — 4 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
+| `apps/web-v3` (la v3.1) | **10** — 5 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
 
 **L'ancienne refonte n'a jamais servi un seul écran à un utilisateur réel.**
 
@@ -30,13 +30,23 @@
 > et REJOUE l'extraction, si bien qu'une route ajoutée à la table que
 > l'inventaire ne verrait pas fait rougir `bun test`.
 
-### Ce que les 9 adresses de la v3.1 disent de la bascule
+### Ce que les 10 adresses de la v3.1 disent de la bascule
 
-`node scripts/route-inventory.mjs --json` : **huit des neuf existent déjà dans
-le legacy** (`/`, `/login`, `/signup` et les cinq documents). La seule adresse
-que la v3.1 introduit est `/c/:conversation` — le fil. La parité d'URL n'est
+`node scripts/route-inventory.mjs --json` : **huit des dix existent déjà dans
+le legacy** (`/`, `/login`, `/signup` et les cinq documents). Les deux adresses
+que la v3.1 introduit sont `/c/:conversation` — le fil — et `/me/progression`
+(badges, niveau, série, succès ; `legacy=false` dans l'inventaire). La parité d'URL n'est
 donc pas le chantier ; c'est la parité d'ÉCRANS qui l'est, et l'écart se compte
 sur les **80** routes du legacy, pas sur un espace de nommage à réconcilier.
+
+> **Correction du 2026-09-09.** Ce document est resté à « 9 » (relevé du
+> 2026-09-08) alors que `/me/progression` (commit `beb7cffbfb`) avait déjà
+> rejoint la table des routes avant cette date-là — un écart entre le script
+> et sa projection qui a duré un tour entier sans qu'aucun gate ne le
+> signale, `route-inventory.mjs` n'étant vérifié qu'à la marge par le gate
+> composite (segment 5), pas sur son propre delta. `node
+> scripts/route-inventory.mjs` fait foi ; ce tableau vient de se réaligner
+> dessus.
 
 > **Correction du 2026-09-07.** Une première version de ce document déduisait le
 > déploiement de `docker-compose.prod.yml`, qui décrit un routeur `frontend-v3`
