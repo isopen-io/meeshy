@@ -31,8 +31,11 @@ export function estEnVigueur(ban: Pick<Ban, 'liftedAt' | 'expiresAt'>, maintenan
  * `User.isActive` via `UserManagementService.updateStatus` — le même levier
  * que la suspension existante, pour hériter de sa révocation de sessions.
  *
- * L'expiration AUTOMATIQUE d'un ban à durée n'est pas appliquée ici : un ban
- * expiré reste `isActive: false` jusqu'à un lever explicite. Suivi : #5527.
+ * L'expiration AUTOMATIQUE d'un ban à durée est un balayage périodique
+ * (`jobs/ban-expiry-sweep.ts`, #5527) qui appelle `expireBan` pour chaque
+ * `Ban` échu — jamais une vérification paresseuse au premier accès admin :
+ * sans balayage, un compte banni 7 jours resterait désactivé indéfiniment
+ * tant qu'aucun admin ne consulte sa fiche.
  */
 export class BanService {
   constructor(
@@ -84,10 +87,42 @@ export class BanService {
     return this.prisma.ban.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } });
   }
 
-  async listActiveBans(userId: string, options: { excludeBanId?: string } = {}): Promise<Ban[]> {
+  async listActiveBans(
+    userId: string,
+    options: { excludeBanId?: string; now?: Date } = {}
+  ): Promise<Ban[]> {
     const tous = await this.prisma.ban.findMany({
       where: { userId, liftedAt: null, id: options.excludeBanId ? { not: options.excludeBanId } : undefined },
     });
-    return tous.filter((b) => estEnVigueur(b));
+    return tous.filter((b) => estEnVigueur(b, options.now));
+  }
+
+  /**
+   * Lever AUTOMATIQUE d'un ban dont l'échéance est dépassée (#5527) — appelé
+   * par le balayage périodique, jamais par un geste admin. `liftedById` reste
+   * `null` : c'est ce qui distingue ce lever d'un lever humain (`liftBan`, qui
+   * exige toujours un acteur). `liftedAt` prend la valeur de `expiresAt`
+   * elle-même (pas l'instant du balayage) — le ban a cessé d'être en vigueur
+   * à son échéance, le balayage ne fait que le CONSTATER.
+   */
+  async expireBan(banId: string, now: Date = new Date()): Promise<{ ban: Ban; reactivated: boolean }> {
+    const ban = await this.prisma.ban.findUniqueOrThrow({ where: { id: banId } });
+
+    const leve = await this.prisma.ban.update({
+      where: { id: banId },
+      data: {
+        liftedAt: ban.expiresAt ?? now,
+        liftedById: null,
+        liftReason: 'expired',
+      },
+    });
+
+    const autresEnVigueur = await this.listActiveBans(ban.userId, { excludeBanId: banId, now });
+    const reactivated = autresEnVigueur.length === 0;
+    if (reactivated) {
+      await this.userManagementService.updateStatus(ban.userId, { isActive: true });
+    }
+
+    return { ban: leve, reactivated };
   }
 }
