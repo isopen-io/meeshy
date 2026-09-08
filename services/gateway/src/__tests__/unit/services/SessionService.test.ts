@@ -1087,6 +1087,25 @@ describe('SessionService', () => {
         expect(result).toBe(false);
       });
 
+      // #5712 — mesuré en production : 140 `UserSession` expirées depuis
+      // jusqu'à six mois restaient `isValid: true` (rien ne les invalidait),
+      // et cette méthode ne filtrait que sur `isValid` — une session morte
+      // depuis des mois se voyait donc PROLONGÉE et redevenait active. La
+      // fonction est aujourd'hui sans appelant de production (latent), mais
+      // exportée : le premier « remember me »/keep-alive qui l'appelle doit
+      // la trouver déjà fermée.
+      it('refuse de prolonger une session dont `expiresAt` est déjà dépassé', async () => {
+        mockPrisma.userSession.findFirst.mockResolvedValueOnce(null);
+
+        const result = await extendSessionExpiry(mockToken);
+
+        expect(result).toBe(false);
+        expect(mockPrisma.userSession.findFirst).toHaveBeenCalledWith({
+          where: { sessionToken: mockTokenHash, isValid: true, expiresAt: { gt: expect.any(Date) } },
+        });
+        expect(mockPrisma.userSession.update).not.toHaveBeenCalled();
+      });
+
       it('should update lastActivityAt when extending', async () => {
         mockPrisma.userSession.findFirst.mockResolvedValueOnce(mockSession);
         mockPrisma.userSession.update.mockResolvedValueOnce(mockSession);

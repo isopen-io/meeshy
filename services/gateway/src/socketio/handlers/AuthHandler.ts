@@ -11,6 +11,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import jwt from 'jsonwebtoken';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketAuthenticateSchema } from '../../validation/socket-event-schemas.js';
+import type { SessionBoundTokenPayload } from '../../services/auth/session-jwt';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -197,7 +198,7 @@ export class AuthHandler {
       throw new Error('JWT_SECRET non configuré');
     }
 
-    const decoded = jwt.verify(token, jwtSecret) as { userId: string; exp?: number };
+    const decoded = jwt.verify(token, jwtSecret) as Pick<SessionBoundTokenPayload, 'userId' | 'exp' | 'sid'>;
     const userId = decoded.userId;
 
     const user = await this.prisma.user.findUnique({
@@ -229,6 +230,46 @@ export class AuthHandler {
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Account disabled' });
       socket.disconnect(true);
       return;
+    }
+
+    // #5712 — un JWT authentique reste utilisable jusqu'à SA PROPRE expiration
+    // (24h, `TOKEN_TTL`) même quand la `UserSession` qui l'a émis est, elle,
+    // périmée depuis des mois : `POST /auth/refresh` continue de le renouveler
+    // (son filtre s'arrête à `isValid`, décision assumée et documentée sur
+    // place dans `routes/auth/magic-link.ts` — un durcissement qu'elle diffère
+    // explicitement), et jusqu'ici rien côté socket ne relisait jamais la
+    // session nommée. Mesuré en production : 34 comptes actifs sur des
+    // sessions expirées depuis jusqu'à six mois.
+    //
+    // Le claim `sid` (`services/auth/session-jwt.ts`) NOMME la session ; on la
+    // relit ici et on refuse la reconnexion si elle n'est plus `isValid` OU si
+    // son `expiresAt` est dépassé. Contrairement à `/refresh`, cette porte est
+    // NEUVE : durcir dès sa création n'est pas le « durcissement mesuré à
+    // part » que `/refresh` diffère, c'est la garde que #5712 demande.
+    //
+    // Un jeton SANS `sid` (émis avant #4264) n'est PAS bloqué : refuser
+    // d'emblée déconnecterait tout le parc installé pour fermer un cas
+    // étroit, exactement le compromis que #4213 avait déjà écarté pour
+    // `/refresh`.
+    if (decoded.sid) {
+      const namedSession = await this.prisma.userSession.findFirst({
+        where: { id: decoded.sid, userId: user.id, isValid: true, expiresAt: { gt: new Date() } },
+        select: { id: true },
+      });
+
+      if (!namedSession) {
+        logger.info('socket refusé — la session nommée par le JWT n\'est plus valide ou a expiré', {
+          socketId: socket.id,
+          userId: user.id,
+        });
+        socket.emit(SERVER_EVENTS.AUTH_SESSION_REVOKED, {
+          code: 'session_revoked',
+          message: 'Session expired — please sign in again.',
+          reason: 'session_expired',
+        });
+        socket.disconnect(true);
+        return;
+      }
     }
 
     const resolvedLanguages = resolveUserLanguagesOrdered(user, {

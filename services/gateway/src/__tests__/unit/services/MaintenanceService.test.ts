@@ -42,10 +42,21 @@ jest.mock('../../../services/purgeDeletedAccountMedia', () => ({
   purgeMediaOfDeletedAccount: jest.fn<any>().mockResolvedValue({ attachmentsDeleted: 0, postMediaDeleted: 0 }),
 }));
 
+// `cleanupExpiredSessions` (#5712) est un singleton de module (`getPrisma()`
+// interne, alimenté par `initSessionService` au démarrage — le même
+// `fastify.prisma` que ce service reçoit par injection). Le mocker ici garde
+// ce fichier sur SA frontière : le balayage journalier l'appelle-t-il, et
+// absorbe-t-il son échec ? Son propre comportement (le filtre `expiresAt`,
+// le motif d'invalidation) est le témoin exhaustif de `SessionService.test.ts`.
+jest.mock('../../../services/SessionService', () => ({
+  cleanupExpiredSessions: jest.fn<any>().mockResolvedValue(0),
+}));
+
 import { MaintenanceService } from '../../../services/MaintenanceService';
 import { logger } from '../../../utils/logger';
 import { anonymizeMessagesOfDeletedAccount } from '../../../services/messaging/anonymizeDeletedAccountMessages';
 import { purgeMediaOfDeletedAccount } from '../../../services/purgeDeletedAccountMedia';
+import { cleanupExpiredSessions } from '../../../services/SessionService';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -441,6 +452,28 @@ describe('cleanupExpiredData', () => {
   it('does not throw on DB error during cleanup', async () => {
     const prisma = makePrisma();
     (prisma.participant.deleteMany as jest.Mock<any>).mockRejectedValue(new Error('DB error'));
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await expect(sut.cleanupExpiredData()).resolves.toBeUndefined();
+  });
+
+  // #5712 — `cleanupExpiredSessions` existait déjà (filtre `expiresAt`, motif
+  // `expired`) mais n'avait aucun appelant de production : « appelé
+  // uniquement par ses propres tests ». Les 140 `UserSession` mesurées
+  // expirées-mais-`isValid:true` ne se soldent qu'une fois ce balayage
+  // rejoint au nettoyage journalier.
+  it('invalidates expired UserSession rows via cleanupExpiredSessions', async () => {
+    const prisma = makePrisma();
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await sut.cleanupExpiredData();
+
+    expect(cleanupExpiredSessions).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not throw when cleanupExpiredSessions fails — best-effort, like its neighbors', async () => {
+    (cleanupExpiredSessions as jest.Mock<any>).mockRejectedValueOnce(new Error('Mongo down'));
+    const prisma = makePrisma();
     const sut = new MaintenanceService(prisma as any, attachmentService as any);
 
     await expect(sut.cleanupExpiredData()).resolves.toBeUndefined();
