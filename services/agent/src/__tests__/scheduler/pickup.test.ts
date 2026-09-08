@@ -53,6 +53,8 @@ function makePersistence(overrides: Record<string, jest.Mock> = {}) {
     getRecentMessageCount: jest.fn().mockResolvedValue(1),
     getRecentUniqueAuthors: jest.fn().mockResolvedValue(1),
     evictRecentlyActiveUsers: jest.fn().mockResolvedValue(0),
+    evictStaleRoles: jest.fn().mockResolvedValue(0),
+    touchUserRoles: jest.fn().mockResolvedValue(undefined),
     getControlledUsers: jest.fn().mockResolvedValue([makeControlledUser()]),
     getAgentConfig: jest.fn().mockResolvedValue({
       autoPickupEnabled: true,
@@ -298,6 +300,8 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
     const graph = { invoke: jest.fn().mockResolvedValue({ pendingActions: [] }) };
     const persistence = makePersistence({
       evictRecentlyActiveUsers: jest.fn().mockResolvedValue(2),
+      evictStaleRoles: jest.fn().mockResolvedValue(0),
+      touchUserRoles: jest.fn().mockResolvedValue(undefined),
     });
 
     const scanner = new ConversationScanner(

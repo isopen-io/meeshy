@@ -29,6 +29,8 @@ function makePersistence(overrides: Record<string, jest.Mock> = {}) {
     getRecentMessageCount: jest.fn().mockResolvedValue(1),
     getRecentUniqueAuthors: jest.fn().mockResolvedValue(1),
     evictRecentlyActiveUsers: jest.fn().mockResolvedValue(0),
+    evictStaleRoles: jest.fn().mockResolvedValue(0),
+    touchUserRoles: jest.fn().mockResolvedValue(undefined),
     getControlledUsers: jest.fn().mockResolvedValue([makeControlledUser()]),
     getAgentConfig: jest.fn().mockResolvedValue({
       scanIntervalMinutes: 3,

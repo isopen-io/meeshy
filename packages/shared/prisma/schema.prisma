@@ -3899,6 +3899,11 @@ model AgentConfig {
   inactivityThresholdHours Int      @default(72)
   minHistoricalMessages    Int      @default(0)
   maxControlledUsers       Int      @default(5)
+  /// Jours d'oisiveté au-delà desquels un rôle AUTO est libéré et sa place
+  /// rendue au vivier. Sans ce délai, cinq places prises gelaient la sélection
+  /// pour toujours : mesuré 252 candidats éligibles pour 5 élus (#5663).
+  /// Les rôles MANUELS n'expirent jamais.
+  roleMaxIdleDays          Int      @default(14)
   excludedRoles            String[]
   excludedUserIds          String[] @db.ObjectId
 
@@ -4085,11 +4090,23 @@ model AgentUserRole {
   confidence        Float    @default(0.0)
   locked            Boolean  @default(false)
 
+  /// La dernière fois que ce rôle a effectivement SERVI (message ou réaction
+  /// émis sous cette identité). `null` pour les rôles antérieurs au champ —
+  /// `evictStaleRoles` juge alors sur `createdAt`, sans quoi ils occuperaient
+  /// leur place à jamais (#5663).
+  ///
+  /// Pas de booléen jumeau : une place est libre ou occupée par la seule
+  /// existence de la ligne, et sa fraîcheur se lit sur cette date.
+  lastUsedAt        DateTime?
+
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   @@unique([userId, conversationId])
   @@index([conversationId])
+  /// L'éviction par oisiveté balaie sur cette colonne, toutes conversations
+  /// confondues.
+  @@index([lastUsedAt])
 }
 
 model AgentConversationSummary {
