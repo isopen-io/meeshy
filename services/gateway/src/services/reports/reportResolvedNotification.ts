@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { notificationString } from '@meeshy/shared/utils/notification-strings';
-import type { ReportResolvedNotificationMetadata } from '@meeshy/shared/types/notification';
+import { reportResolvedStrings } from '@meeshy/shared/utils/report-resolved-strings';
+import type { GenericNotificationMetadata } from '@meeshy/shared/types/notification';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -43,21 +43,16 @@ export async function notifyReportResolved(prisma: PrismaClient, report: Resolve
 
   try {
     const outcome = report.status;
-    const hasActionTaken = !!report.actionTaken && report.actionTaken !== 'none';
-    const bodyKey = outcome === 'resolved' && hasActionTaken
-      ? 'report.resolved.actionTaken'
-      : 'report.resolved.noAction';
+    const hasActionTaken = outcome === 'resolved' && !!report.actionTaken && report.actionTaken !== 'none';
 
     const reporter = await prisma.user.findUnique({
       where: { id: report.reporterId },
       select: RECIPIENT_LANG_SELECT,
     });
     const lang = recipientLanguage(reporter, 'fr');
+    const { title, content } = reportResolvedStrings(lang, hasActionTaken);
 
-    const title = notificationString(lang, 'report.resolved.title');
-    const content = notificationString(lang, bodyKey);
-
-    const metadata: ReportResolvedNotificationMetadata = {
+    const metadata: GenericNotificationMetadata = {
       reportedType: report.reportedType,
       reportType: report.reportType,
       outcome,
@@ -71,7 +66,7 @@ export async function notifyReportResolved(prisma: PrismaClient, report: Resolve
       priority: 'normal',
       content,
       title,
-      context: { reportId: report.id },
+      context: {},
       metadata,
     });
   } catch (error) {

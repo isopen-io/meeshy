@@ -218,10 +218,6 @@ export interface NotificationContext {
   readonly friendRequestId?: string;
   readonly reactionId?: string;
   readonly postId?: string;
-  /** #3718 — signalement dont la résolution vient d'être notifiée à son
-   *  auteur (art. 16 DSA : le déclarant reçoit une réponse motivée). Absent
-   *  pour tout autre type de notification. */
-  readonly reportId?: string;
   readonly commentId?: string;
   /** Identifiant du commentaire parent quand `commentId` est une réponse.
    *  Permet au client de naviguer jusqu'à la réponse : ouvrir l'entité,
@@ -577,21 +573,6 @@ export interface LoginNewDeviceNotificationMetadata extends BaseNotificationMeta
 }
 
 /**
- * Metadata pour report_resolved (#3718 — art. 16 DSA : réponse motivée au
- * déclarant d'un signalement).
- */
-export interface ReportResolvedNotificationMetadata extends BaseNotificationMetadata {
-  readonly reportedType: string;
-  readonly reportType: string;
-  /** Issue du signalement — un statut `resolved` sans mesure prise (`actionTaken`
-   *  absent/`none`) reste un `outcome: 'resolved'` : c'est le CHAMP `actionTaken`
-   *  qui distingue « examiné, mesure prise » de « examiné, rien à signaler ». */
-  readonly outcome: 'resolved' | 'rejected' | 'dismissed';
-  readonly actionTaken?: string | null;
-  readonly action: 'view_details';
-}
-
-/**
  * Metadata générique pour autres types
  */
 export interface GenericNotificationMetadata extends BaseNotificationMetadata {
@@ -612,7 +593,6 @@ export type NotificationMetadata =
   | ConversationCreatedNotificationMetadata
   | TranslationNotificationMetadata
   | SystemNotificationMetadata
-  | ReportResolvedNotificationMetadata
   | PostLikeNotificationMetadata
   | PostCommentNotificationMetadata
   | PostRepostNotificationMetadata

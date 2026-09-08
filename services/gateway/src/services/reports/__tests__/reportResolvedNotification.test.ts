@@ -79,7 +79,7 @@ describe('notifyReportResolved', () => {
     const call = service.createNotification.mock.calls[0][0] as any;
     expect(call.userId).toBe('reporter-1');
     expect(call.type).toBe('report_resolved');
-    expect(call.context).toEqual({ reportId: 'report-1' });
+    expect(call.context).toEqual({});
     expect(call.metadata).toMatchObject({
       reportedType: 'message',
       reportType: 'spam',
