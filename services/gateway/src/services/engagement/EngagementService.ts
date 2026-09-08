@@ -364,21 +364,31 @@ export class EngagementService {
    * Ajoute le poids de `axisKey` (`ENGAGEMENT_AXIS_WEIGHTS`) au score agrégé
    * `User.engagementScore` et notifie chaque palier `LEVEL_THRESHOLDS`
    * franchi par CET incrément précis — même mécanique que le compteur d'axe
-   * (§ 5, § 7). `$inc` atomique : un `User` créé avant cette migration a le
-   * champ ABSENT (pas à zéro), et Mongo traite `$inc` sur un champ absent
-   * comme un départ à zéro, ce qui est déjà le comportement voulu — aucun
-   * repli `?? 0` n'est nécessaire ici, à la différence d'`updateStreak`.
+   * (§ 5, § 7). Lecture puis écriture explicite, comme `updateStreak` —
+   * jamais un `increment` nu : `engagementScore` n'est pas seulement ABSENT
+   * sur un `User` pré-migration, il vaut `null` sur les 9 premiers comptes
+   * qui ont eu une activité (#5742, mesuré contre Mongo 8 : `$inc` sur un
+   * champ `null` lève `Cannot apply $inc to a value of non-numeric type`,
+   * silencieusement avalé par `recordActivity` qui n'attend rien de cet
+   * appel — le score restait `null` pour toujours, sans une ligne de log).
+   * Le repli `?? 0` couvre les deux cas (absent et `null`) d'un seul geste.
    */
   private async updateEngagementScore(userId: string, axisKey: EngagementAxisKey): Promise<void> {
     const weight = ENGAGEMENT_AXIS_WEIGHTS[axisKey];
-    const user = await this.prisma.user.update({
+    const current = await this.prisma.user.findUnique({
       where: { id: userId },
-      data: { engagementScore: { increment: weight } },
       select: { engagementScore: true },
     });
+    if (!current) return;
 
-    const newScore = user.engagementScore;
-    const previousScore = newScore - weight;
+    const previousScore = current.engagementScore ?? 0;
+    const newScore = previousScore + weight;
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { engagementScore: newScore },
+    });
+
     const crossedThresholds = LEVEL_THRESHOLDS.filter(
       (threshold) => threshold > previousScore && threshold <= newScore,
     );
