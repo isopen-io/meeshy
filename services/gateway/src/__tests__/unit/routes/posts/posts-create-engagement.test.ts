@@ -1,9 +1,11 @@
 /**
- * Axes d'engagement « stories » (#5534), « réels » (#5535), « montage
- * in-app » (#5542) et « publication simple directe » (#5543, sous-issues de
- * #3695) — la publication d'une STORY crédite `content.story`, celle d'un
- * REEL crédite `content.reel`, et TOUTE publication (POST hors brouillon,
- * STORY ou REEL) crédite en plus `tool.in_app_edit` ou `tool.direct_publish`
+ * Axes d'engagement « stories » (#5534), « réels » (#5535), « posts »
+ * (#5533), « montage in-app » (#5542) et « publication simple directe »
+ * (#5543, sous-issues de #3695) — la publication d'une STORY crédite
+ * `content.story`, celle d'un REEL crédite `content.reel`, celle d'un POST
+ * hors brouillon crédite `content.post`, et TOUTE publication (POST hors
+ * brouillon, STORY ou REEL) crédite en plus `tool.in_app_edit` ou
+ * `tool.direct_publish`
  * selon le signal `editedInApp` DÉCLARÉ par le client — via
  * `EngagementService.recordActivity`. `content.*` et `tool.*` sont deux
  * paires mutuellement exclusives ORTHOGONALES l'une à l'autre, sur la même
@@ -19,7 +21,7 @@
  * Fichier séparé de `core.test.ts` (`DETTE_HERITEE`, plafonné à 1654 lignes —
  * cf. CLAUDE.md § Budget de taille) et de `publication-single-core.test.ts`
  * (déjà focalisé sur la parité des trois portes, #4151) : celui-ci garde
- * uniquement les axes `content.story` / `content.reel`.
+ * uniquement les axes `content.story` / `content.reel` / `content.post`.
  *
  * **Le type qui décide est le type ÉCRIT, pas le type DEMANDÉ** — même
  * discriminant que l'éventail d'amis (`publication.ts`, commentaire de
@@ -513,6 +515,88 @@ describe('POST /posts/from-attachment — axes d\'engagement « tool.in_app_edit
     expect(res.statusCode).toBe(201);
     expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'tool.direct_publish');
     expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'tool.in_app_edit');
+
+    await app.close();
+  });
+});
+
+describe('POST /posts — axe d\'engagement « content.post » (#5533)', () => {
+  it('crédite content.post pour un POST publié (visibilité non PRIVATE)', async () => {
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { content: 'Bonjour tout le monde' },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'content.post');
+
+    await app.close();
+  });
+
+  it('ne crédite PAS content.post pour un brouillon (visibilité PRIVATE)', async () => {
+    mockCreatePost.mockResolvedValue({ ...PUBLISHED_ROW, visibility: 'PRIVATE' });
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { content: 'Brouillon', visibility: 'PRIVATE' },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.post');
+
+    await app.close();
+  });
+
+  it('ne crédite PAS content.post pour une STORY', async () => {
+    mockCreatePost.mockResolvedValue(storyRow());
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { type: 'STORY', content: 'Bonjour tout le monde' },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.post');
+
+    await app.close();
+  });
+});
+
+describe('POST /posts/from-attachment — axe d\'engagement « content.post » (#5533)', () => {
+  it('crédite content.post pour une pièce jointe publiée en POST', async () => {
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts/from-attachment',
+      payload: { attachmentId: ATTACHMENT_ID },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).toHaveBeenCalledWith(USER_ID, 'content.post');
+
+    await app.close();
+  });
+
+  it('ne crédite pas content.post pour un brouillon (visibilité PRIVATE)', async () => {
+    mockCreatePost.mockResolvedValue({ ...PUBLISHED_ROW, visibility: 'PRIVATE' });
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts/from-attachment',
+      payload: { attachmentId: ATTACHMENT_ID, visibility: 'PRIVATE' },
+    });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(mockRecordActivity).not.toHaveBeenCalledWith(USER_ID, 'content.post');
 
     await app.close();
   });

@@ -40,6 +40,7 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
     senderId: PART_ID,
     senderUserId: USER_ID,
     attachmentMimeTypes: [] as readonly string[],
+    hasSticker: false,
     content: 'Bonjour',
     messageType: 'text',
     replyToId: null,
@@ -521,6 +522,128 @@ describe('runMessagePostSaveEffects — axe d\'engagement des conversations', ()
     expect(translationService.handleNewMessage).toHaveBeenCalled();
     expect(mockOnNewMessage).toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith('engagement', expect.any(Error));
+  });
+});
+
+/**
+ * Le sixième effet — l'axe d'engagement « sticker » (#5541,
+ * docs/product/streaks-badges-modele.md § 2, § 11). Indépendant de l'axe
+ * « conversation distincte » ci-dessus : les deux peuvent créditer pour le
+ * même message. Ne vaut que pour un utilisateur ENREGISTRÉ, et seulement
+ * quand l'appelant a résolu `hasSticker: true` depuis `metadata.sticker`
+ * (cette unité ne relit jamais `metadata` elle-même).
+ */
+describe('runMessagePostSaveEffects — axe d\'engagement des stickers (#5541)', () => {
+  it('crédite tool.sticker quand le message porte un sticker', async () => {
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma: makePrisma(),
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage({ hasSticker: true }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'tool.sticker');
+  });
+
+  it('ne crédite pas tool.sticker pour un message sans sticker', async () => {
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma: makePrisma(),
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage({ hasSticker: false }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordActivity).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'tool.sticker'
+    );
+  });
+
+  it('crédite aussi conversation.private pour le même envoi — les deux axes ne s\'excluent pas', async () => {
+    const prisma = makePrisma({ conversationType: 'direct' });
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage({ hasSticker: true }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'tool.sticker');
+    expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
+      USER_ID,
+      'conversation.private',
+      CONV_ID
+    );
+  });
+
+  it('ne crédite rien pour un expéditeur anonyme, même avec un sticker', async () => {
+    const engagementService = makeEngagementService();
+
+    runMessagePostSaveEffects({
+      prisma: makePrisma(),
+      translationService: makeTranslationService(),
+      engagementService,
+      message: makeMessage({ hasSticker: true, senderUserId: null }),
+      originalLanguage: 'fr',
+    });
+    await flush();
+
+    expect(engagementService.recordActivity).not.toHaveBeenCalled();
+  });
+
+  it('ne rejette jamais quand aucun service d\'engagement n\'est câblé', async () => {
+    const onError = jest.fn();
+
+    expect(() =>
+      runMessagePostSaveEffects({
+        prisma: makePrisma(),
+        translationService: makeTranslationService(),
+        engagementService: undefined,
+        message: makeMessage({ hasSticker: true }),
+        originalLanguage: 'fr',
+        onError,
+      })
+    ).not.toThrow();
+    await flush();
+
+    expect(onError).not.toHaveBeenCalledWith('stickerEngagement', expect.anything());
+  });
+
+  it('signale la panne sans toucher aux autres effets', async () => {
+    const prisma = makePrisma();
+    const translationService = makeTranslationService();
+    const engagementService = {
+      recordConversationActivity: jest.fn<any>().mockResolvedValue(undefined),
+      recordActivity: jest.fn<any>().mockRejectedValue(new Error('sticker engagement down')),
+    };
+    const onError = jest.fn();
+
+    runMessagePostSaveEffects({
+      prisma,
+      translationService,
+      engagementService,
+      message: makeMessage({ hasSticker: true }),
+      originalLanguage: 'fr',
+      onError,
+    });
+    await flush();
+
+    expect(prisma.conversation.update).toHaveBeenCalled();
+    expect(translationService.handleNewMessage).toHaveBeenCalled();
+    expect(mockOnNewMessage).toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith('stickerEngagement', expect.any(Error));
   });
 });
 
