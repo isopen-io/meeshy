@@ -17,6 +17,7 @@ import { conversationMessageStatsService } from './ConversationMessageStatsServi
 import type { SessionRevoker } from './admin/user-management.service';
 import { purgeAccountIsolatedData } from './AccountPurgeService';
 import { purgeMediaOfDeletedAccount } from './purgeDeletedAccountMedia';
+import { cleanupExpiredSessions } from './SessionService';
 import {
   RECIPIENT_LANG_SELECT,
   recipientDateLocale,
@@ -702,6 +703,25 @@ export class MaintenanceService {
 
     } catch (error) {
       logger.error('❌ Erreur lors du nettoyage des données expirées:', error);
+    }
+
+    // Invalider les `UserSession` dont l'échéance est dépassée (#5712) —
+    // `cleanupExpiredSessions` existait déjà (filtre `expiresAt`, motif
+    // `expired`) mais n'avait jusqu'ici AUCUN appelant de production. Mesuré :
+    // 140 lignes expirées depuis jusqu'à six mois restaient `isValid: true`,
+    // faussant toute lecture qui s'y fie (listing de sessions, `/auth/refresh`
+    // dont le régime `sid` s'arrête à `isValid`) sans jamais accorder d'accès
+    // — le chemin d'authentification filtre déjà `expiresAt` lui-même.
+    // Try/catch séparé, même raison que ses voisins ci-dessus : un Mongo
+    // indisponible sur CE balayage ne doit pas empêcher les deux précédents
+    // d'avoir déjà réussi.
+    try {
+      const invalidated = await cleanupExpiredSessions();
+      if (invalidated > 0) {
+        logger.info(`🧹 ${invalidated} sessions expirées invalidées (#5712)`);
+      }
+    } catch (error) {
+      logger.error('❌ Erreur lors de l\'invalidation des sessions expirées:', error);
     }
   }
 
