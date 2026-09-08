@@ -167,38 +167,27 @@ class MeeshyTranslationServer:
             zmq_push_port = int(os.getenv('TRANSLATOR_ZMQ_PULL_PORT', '5555'))
             zmq_pub_port = int(os.getenv('TRANSLATOR_ZMQ_PUB_PORT', '5558'))
             
-            # Configuration des workers avec valeurs configurables
-            normal_workers_default = int(os.getenv('NORMAL_WORKERS_DEFAULT', '20'))
-            any_workers_default = int(os.getenv('ANY_WORKERS_DEFAULT', '10'))
-            
-            # Calculer les workers en fonction de max_workers si pas configuré explicitement
-            if os.getenv('NORMAL_WORKERS_DEFAULT') is None:
-                normal_workers = max(normal_workers_default, max_workers // 2)
-            else:
-                normal_workers = normal_workers_default
-                
-            if os.getenv('ANY_WORKERS_DEFAULT') is None:
-                any_workers = max(any_workers_default, max_workers // 4)
-            else:
-                any_workers = any_workers_default
-            
             # TRANSLATOR N'A PAS BESOIN DE MongoDB - utilise uniquement Redis pour le cache
             # Les profils vocaux sont gérés par le Gateway, pas par le Translator
             database_url = None  # Désactivé : Translator n'accède pas à MongoDB
 
+            # Le nombre de workers par défaut n'a plus qu'UNE source :
+            # TranslationPoolManager (NORMAL_WORKERS_DEFAULT / ANY_WORKERS_DEFAULT,
+            # sinon calculate_optimal_workers basé sur le CPU) — ne pas le
+            # recalculer ici avec un jeu de défauts distinct (#3664).
             self.zmq_server = ZMQTranslationServer(
                 gateway_push_port=zmq_push_port,
                 gateway_sub_port=zmq_pub_port,
-                normal_workers=normal_workers,
-                any_workers=any_workers,
                 translation_service=self.translation_service,
                 database_url=database_url
             )
-            
-            logger.info(f"[TRANSLATOR] 🔧 Configuration workers haute performance: normal={normal_workers}, any={any_workers}, total={normal_workers + any_workers}")
-            logger.info(f"[TRANSLATOR] 🚀 Capacité estimée: ~{normal_workers + any_workers} traductions simultanées")
+
             # Initialiser le serveur ZMQ
             await self.zmq_server.initialize()
+            normal_workers = self.zmq_server.pool_manager.normal_pool.current_workers
+            any_workers = self.zmq_server.pool_manager.any_pool.current_workers
+            logger.info(f"[TRANSLATOR] 🔧 Configuration workers haute performance: normal={normal_workers}, any={any_workers}, total={normal_workers + any_workers}")
+            logger.info(f"[TRANSLATOR] 🚀 Capacité estimée: ~{normal_workers + any_workers} traductions simultanées")
             logger.info("[TRANSLATOR] ✅ Serveur ZMQ configuré avec service ML unifié")
             
             # 3. Initialiser les services audio si disponibles
