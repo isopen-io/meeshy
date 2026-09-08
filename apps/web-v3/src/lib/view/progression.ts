@@ -1,4 +1,5 @@
 import type { EngagementAchievementKey, EngagementAxisFamily, EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import { ENGAGEMENT_ACHIEVEMENT_LABELS, ENGAGEMENT_AXIS_LABELS } from '@meeshy/shared/utils/engagement-labels';
 import type { EngagementScaleProgress } from '@meeshy/shared/utils/engagement-progress';
 
 /**
@@ -7,13 +8,14 @@ import type { EngagementScaleProgress } from '@meeshy/shared/utils/engagement-pr
  * (`@meeshy/shared/utils/engagement-progress`), qui, elle, ne connaît aucun
  * mot : elle rend des clés et des nombres, ce fichier les fait parler.
  *
- * Les libellés sont ceux d'iOS (`apps/ios/Meeshy/Localizable.xcstrings`,
- * clés `progression.*`, posées dans le MÊME lot — #5698) : « même mot, même
- * icône » (dimension 6). Les tables sont typées `Record<clé, …>` sur les
- * unions du catalogue partagé : un axe ou un succès ajouté côté serveur sans
- * libellé ici ne compile plus — c'est le témoin d'exhaustivité que le
- * compilateur tient gratuitement, et `progression.test.ts` le rejoue sur les
- * valeurs.
+ * Les libellés d'axe et de succès viennent du catalogue PARTAGÉ
+ * (`engagement-labels.ts`) — celui que la passerelle prononce dans les
+ * bannières et que le miroir iOS porte (`Localizable.xcstrings`) : « même
+ * mot, même icône » (dimension 6), une seule écriture. Les tables locales
+ * (glyphes, familles) sont typées `Record<clé, …>` sur les unions du
+ * catalogue : un axe ajouté côté serveur sans glyphe ici ne compile plus —
+ * c'est le témoin d'exhaustivité que le compilateur tient gratuitement, et
+ * `progression.test.ts` le rejoue sur les valeurs.
  *
  * Sous-ensemble de `GlyphName | ProgressionGlyphName` (`@/components`) —
  * délibérément NON importé ici : `src/lib/` reste en amont de `src/components/`,
@@ -35,21 +37,16 @@ export type ProgressionGlyph =
   | 'magicWand'
   | 'paperPlaneTilt';
 
-export const AXIS_LABELS: Record<EngagementAxisKey, string> = {
-  'content.audio_message': 'Messages vocaux',
-  'content.text_message': 'Messages texte',
-  'content.post': 'Publications',
-  'content.story': 'Stories',
-  'content.reel': 'Réels',
-  'comment.audio': 'Commentaires vocaux',
-  'comment.text': 'Commentaires écrits',
-  'conversation.private': 'Conversations privées',
-  'conversation.public': 'Conversations publiques',
-  'conversation.community': 'Conversations de communauté',
-  'tool.sticker': 'Stickers posés',
-  'tool.in_app_edit': 'Montages dans l’app',
-  'tool.direct_publish': 'Publications directes',
-};
+/**
+ * Les MOTS viennent du catalogue partagé (`@meeshy/shared/utils/engagement-labels`),
+ * le même que la passerelle prononce dans les bannières et que le miroir iOS
+ * porte (`Localizable.xcstrings`, gardé par `engagement-labels-mirror-parity`).
+ * La v3.1 parle français sur tous ses écrans à ce jour — le jour où elle
+ * suivra la langue du lecteur, seule cette constante bouge.
+ */
+const WEB_LANGUAGE = 'fr';
+
+export const AXIS_LABELS: Record<EngagementAxisKey, string> = ENGAGEMENT_AXIS_LABELS[WEB_LANGUAGE];
 
 export const AXIS_GLYPHS: Record<EngagementAxisKey, ProgressionGlyph> = {
   'content.audio_message': 'microphone',
@@ -80,28 +77,7 @@ export type AchievementCopy = {
   readonly condition: string;
 };
 
-export const ACHIEVEMENT_COPY: Record<EngagementAchievementKey, AchievementCopy> = {
-  'achievement.first_content': {
-    title: 'Premier pas',
-    condition: 'Publier un premier contenu, quel qu’il soit',
-  },
-  'achievement.all_content_types': {
-    title: 'Touche-à-tout',
-    condition: 'Un message vocal, un message texte, une publication, une story et un réel',
-  },
-  'achievement.first_voice': {
-    title: 'Première voix',
-    condition: 'Un premier message ou commentaire vocal',
-  },
-  'achievement.editor': {
-    title: 'Monteur',
-    condition: 'Un premier montage dans l’app avant de publier',
-  },
-  'achievement.three_conversation_kinds': {
-    title: 'Trois cercles',
-    condition: 'Écrire dans une conversation privée, une publique et une de communauté',
-  },
-};
+export const ACHIEVEMENT_COPY: Record<EngagementAchievementKey, AchievementCopy> = ENGAGEMENT_ACHIEVEMENT_LABELS[WEB_LANGUAGE];
 
 export const progressPercent = (progress: number): number => Math.round(Math.min(1, Math.max(0, progress)) * 100);
 

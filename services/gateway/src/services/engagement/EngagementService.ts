@@ -25,6 +25,7 @@ import {
   type EngagementAchievementKey,
 } from '@meeshy/shared/types/engagement';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
+import { engagementAchievementTitle, engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 import { NotificationService } from '../notifications/NotificationService';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
@@ -42,6 +43,21 @@ function startOfUtcDay(date: Date): Date {
 /** Prisma signale une violation d'index unique par le code `P2002`. */
 function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
+}
+
+/**
+ * L'indice de route que les QUATRE notifications de réengagement transportent
+ * (`metadata.route`, projeté en `data.route` sur le fil push) : l'écran
+ * « Progression », qui RESTITUE le palier annoncé. Un client qui sait naviguer
+ * par nom de route (iOS `pushNavigateToRoute`, la v3.1 web) le suit tel quel ;
+ * un client qui route par TYPE de notification n'a rien à lire ici.
+ */
+export const ENGAGEMENT_ROUTE = 'progression';
+
+/** Le rang d'un seuil de score dans l'échelle des niveaux — « niveau 3 » pour le palier 150. */
+export function levelIndexOf(threshold: number): number {
+  const index = LEVEL_THRESHOLDS.indexOf(threshold as (typeof LEVEL_THRESHOLDS)[number]);
+  return index === -1 ? 0 : index + 1;
 }
 
 export class EngagementService {
@@ -134,13 +150,22 @@ export class EngagementService {
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
       const lang = recipientLanguage(user, 'fr');
       const notificationService = getSharedNotificationService() ?? new NotificationService(this.prisma);
+      // Le MOT, jamais la clé : « Badge débloqué : conversation.private ·
+      // palier 10 » a été servi en production (2026-09-08) parce que la clé
+      // stable tenait lieu de titre. Le libellé se résout à la langue du
+      // LECTEUR (`engagementAxisLabel`, même catalogue que la v3.1 web et le
+      // miroir iOS) ; `route` dit au client où le tap MÈNE — l'écran
+      // « Progression » (#5547 web, #5698 iOS), jamais un autre.
       await notificationService.createNotification({
         userId,
         type: 'badge_earned',
         priority: 'normal',
-        content: notificationString(lang, 'engagement.badgeEarned', { title: axisKey, count: threshold }),
+        content: notificationString(lang, 'engagement.badgeEarned', {
+          title: engagementAxisLabel(lang, axisKey),
+          count: threshold,
+        }),
         context: {},
-        metadata: { action: 'view_details', axisKey, threshold },
+        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, axisKey, threshold },
       });
     } catch (err) {
       log.warn('badge_earned notification failed after milestone was recorded', {
@@ -230,10 +255,10 @@ export class EngagementService {
         type: 'achievement_unlocked',
         priority: 'normal',
         content: notificationString(lang, 'engagement.achievementUnlocked', {
-          title: achievementKey.replace('achievement.', ''),
+          title: engagementAchievementTitle(lang, achievementKey),
         }),
         context: {},
-        metadata: { action: 'view_details', achievementKey },
+        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, achievementKey },
       });
     } catch (err) {
       log.warn('achievement_unlocked notification failed after milestone was recorded', {
@@ -324,7 +349,7 @@ export class EngagementService {
         priority: 'normal',
         content: notificationString(lang, 'engagement.streakMilestone', { count: threshold }),
         context: {},
-        metadata: { action: 'view_details', threshold },
+        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, threshold },
       });
     } catch (err) {
       log.warn('streak_milestone notification failed after milestone was recorded', {
@@ -389,9 +414,13 @@ export class EngagementService {
         userId,
         type: 'level_up',
         priority: 'normal',
-        content: notificationString(lang, 'engagement.levelUp', { count: threshold }),
+        // Le NIVEAU, jamais le seuil de score : « Niveau 150 atteint » (le
+        // palier de points) se lisait comme un cent-cinquantième niveau. Le
+        // niveau est le RANG du palier dans l'échelle (§ 7) — le même que
+        // l'écran « Progression » affiche (`EngagementLevelProgress.level`).
+        content: notificationString(lang, 'engagement.levelUp', { count: levelIndexOf(threshold) }),
         context: {},
-        metadata: { action: 'view_details', threshold },
+        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, threshold, level: levelIndexOf(threshold) },
       });
     } catch (err) {
       log.warn('level_up notification failed after milestone was recorded', {

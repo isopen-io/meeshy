@@ -1824,7 +1824,7 @@ struct RootView: View {
                 ))
             }
 
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
             // Un palier annoncé ouvre le tableau de bord qui le RESTITUE
             // (#5698) — pas les statistiques, qui ne connaissent pas ces paliers.
             router.push(.progression)

@@ -328,7 +328,7 @@ extension iPadRootView {
                 navigateToConversationById(conversationId)
             }
 
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
             rightPanelRoute = .progression
 
         case .legacyAffiliateSignup:
@@ -385,7 +385,7 @@ extension iPadRootView {
                 )
             }
 
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
             rightPanelRoute = .progression
 
         case .legacyAffiliateSignup:
@@ -512,7 +512,7 @@ extension iPadRootView {
                 )
             }
 
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
             rightPanelRoute = .progression
 
         case .legacyAffiliateSignup:
