@@ -266,6 +266,33 @@ LANGUAGE_MAPPINGS = {
     'sv': 'swe_Latn',      # Swedish
     'tr': 'tur_Latn',      # Turkish
     'uk': 'ukr_Cyrl',      # Ukrainian
+    # === Langues fantômes mappées (#3659) — 18 des 25 langues offertes sans
+    # code NLLB avaient un vrai code dans le catalogue NLLB-200/FLORES-200 ;
+    # leur absence ici faisait retomber toute demande sur `fra_Latn` en
+    # silence (TranslatorEngine.lang_codes.get(code, 'fra_Latn')). Les 7
+    # restantes (bas, byv, dua, ewo, fan, ksf, nnh — langues camerounaises
+    # hors NLLB-200) ne sont délibérément PAS ajoutées ici : décision du
+    # porteur, elles restent offertes au produit mais ne sont jamais
+    # traduites — TranslatorEngine lève désormais une erreur explicite
+    # plutôt que d'inventer une traduction.
+    'ak': 'aka_Latn',      # Akan (Ghana)
+    'az': 'azj_Latn',      # Azerbaijani (Nord)
+    'bm': 'bam_Latn',      # Bambara (Mali)
+    'ca': 'cat_Latn',      # Catalan
+    'et': 'est_Latn',      # Estonian
+    'ka': 'kat_Geor',      # Georgian
+    'kk': 'kaz_Cyrl',      # Kazakh
+    'km': 'khm_Khmr',      # Khmer (Cambodge)
+    'lo': 'lao_Laoo',      # Lao
+    'lv': 'lvs_Latn',      # Latvian (Standard)
+    'my': 'mya_Mymr',      # Burmese
+    'ne': 'npi_Deva',      # Nepali
+    'sk': 'slk_Latn',      # Slovak
+    'sl': 'slv_Latn',      # Slovenian
+    'sr': 'srp_Cyrl',      # Serbian
+    'ta': 'tam_Taml',      # Tamil
+    'tl': 'tgl_Latn',      # Tagalog (Filipino)
+    'uz': 'uzn_Latn',      # Uzbek (Nord)
 
     # === Langues Asiatiques ===
     'ar': 'arb_Arab',      # Arabic
