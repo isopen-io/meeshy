@@ -171,8 +171,20 @@ describe('EngagementService.recordActivity', () => {
       // `points` à côté de `count` depuis #5742 : deux colonnes, deux questions —
       // `count` compte des ACTIONS et pilote les badges, `points` porte ce que
       // l'axe crédite au score et pilote le niveau puis la frappe des Meeshes.
-      create: { userId: 'user-1', axisKey: 'content.text_message', count: 1, points: 3 },
-      update: { count: { increment: 1 }, points: { increment: 3 } },
+      //
+      // Le poids se LIT au barème, jamais recopié : écrit en dur (3), ce témoin
+      // est tombé au réordonnancement de #5766 qui a porté le contenu à 9 —
+      // il mesurait alors la mémoire de l'auteur, pas le comportement.
+      create: {
+        userId: 'user-1',
+        axisKey: 'content.text_message',
+        count: 1,
+        points: ENGAGEMENT_AXIS_WEIGHTS['content.text_message'],
+      },
+      update: {
+        count: { increment: 1 },
+        points: { increment: ENGAGEMENT_AXIS_WEIGHTS['content.text_message'] },
+      },
       select: { count: true },
     });
   });

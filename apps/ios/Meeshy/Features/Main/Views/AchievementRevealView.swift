@@ -33,6 +33,12 @@ struct AchievementRevealView: View {
     private var titre: String {
         switch reveal {
         case .achievement(let clé): return ProgressionCopy.title(for: clé)
+        case .composedAchievement(let famille, let palier):
+            // Le MOT, jamais la clé. `label` ne rend `nil` que pour une famille
+            // sans gabarit — le titre de section reste alors juste, là où
+            // « achievement.cercles.conversation.join.size:1000 » ne dirait rien.
+            return AchievementCopy.label(famille, tier: palier)
+                ?? AchievementCopy.sectionTitle(famille.section)
         case .streak(let jours): return ProgressionCopy.streak(jours)
         case .level(let rang): return ProgressionCopy.levelTitle(rang)
         }
@@ -42,6 +48,14 @@ struct AchievementRevealView: View {
         switch reveal {
         case .achievement(let clé):
             return ProgressionCopy.condition(for: clé)
+        case .composedAchievement(let famille, _):
+            // Le titre PORTE déjà la condition (« 1 000 messages envoyés ») :
+            // la répéter ici ne dirait rien de neuf. Ce qui manque au lecteur,
+            // c'est OÙ ce palier se range — la section, qu'il retrouvera en
+            // rangée sur le tableau de bord.
+            return String(localized: "reveal.composed.subtitle",
+                          defaultValue: "Un palier de plus dans « \(AchievementCopy.sectionTitle(famille.section)) ».",
+                          bundle: .main)
         case .streak(let jours):
             return String(localized: "reveal.streak.subtitle",
                           defaultValue: "\(jours) jours d'affilée. La série continue tant que vous écrivez.",
@@ -55,7 +69,8 @@ struct AchievementRevealView: View {
 
     private var bandeau: String {
         switch reveal {
-        case .achievement: return String(localized: "reveal.badge.achievement", defaultValue: "Succès débloqué", bundle: .main)
+        case .achievement, .composedAchievement:
+            return String(localized: "reveal.badge.achievement", defaultValue: "Succès débloqué", bundle: .main)
         case .streak: return String(localized: "reveal.badge.streak", defaultValue: "Série tenue", bundle: .main)
         case .level: return String(localized: "reveal.badge.level", defaultValue: "Nouveau niveau", bundle: .main)
         }
@@ -63,7 +78,7 @@ struct AchievementRevealView: View {
 
     private var teinte: Color {
         switch reveal {
-        case .achievement: return MeeshyColors.purple500
+        case .achievement, .composedAchievement: return MeeshyColors.purple500
         case .streak: return MeeshyColors.warning
         case .level: return MeeshyColors.indigo500
         }

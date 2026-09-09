@@ -30,7 +30,8 @@ import {
   elanInputsFromRows,
   ELAN_WINDOW_DAYS,
 } from '@meeshy/shared/utils/engagement-elan';
-import { engagementAxisFamily, isEngagementAxisKey } from '@meeshy/shared/types/engagement';
+import { engagementAxisFamily, isEngagementAxisKey, maxEngagementMilestonesPerUser } from '@meeshy/shared/types/engagement';
+import { ACHIEVEMENT_FAMILIES } from '@meeshy/shared/types/achievement-families';
 import { AchievementReachService } from '../../services/achievements/AchievementReachService';
 import { GlobalAchievements } from '../../services/achievements/GlobalAchievements';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -148,6 +149,9 @@ const engagementResponseSchema = {
   },
 } as const;
 
+/** Tout ce qu'un compte PEUT porter — calculé, donc jamais périmé. */
+const PLAFOND_PALIERS = maxEngagementMilestonesPerUser(ACHIEVEMENT_FAMILIES);
+
 export async function meEngagementRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/engagement',
@@ -198,15 +202,19 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
             select: { axisKey: true, count: true, points: true, updatedAt: true },
             take: 100,
           }),
-          // Idem : au plus (nb axes × BADGE_THRESHOLDS) + STREAK_THRESHOLDS +
-          // LEVEL_THRESHOLDS + ENGAGEMENT_ACHIEVEMENT_KEYS lignes par
-          // utilisateur (13×5 + 6 + 6 + 5 = 82 aujourd'hui) — `take` large
-          // devant ce plafond réel, pas un chiffre choisi au hasard.
+          // `take` DÉRIVÉ du catalogue, jamais écrit à la main (#5847). Le
+          // commentaire d'origine annonçait « 82 aujourd'hui » et la borne
+          // valait 200 : justes au moment de leur écriture, faux depuis que
+          // quatre axes sociaux (#5766) et cent quatorze succès composés
+          // (#5758) sont arrivés — plafond réel 216. Avec `desc`, c'étaient
+          // les paliers les plus ANCIENS qui tombaient : les tout premiers
+          // succès de l'utilisateur, absents de son tableau de bord sans que
+          // rien ne le signale.
           fastify.prisma.engagementMilestone.findMany({
             where: { userId },
             select: { milestoneType: true, milestoneKey: true, reachedAt: true },
             orderBy: { reachedAt: 'desc' },
-            take: 200,
+            take: PLAFOND_PALIERS,
           }),
         ]);
 

@@ -15,6 +15,11 @@ import Foundation
 /// des contrôles — le plus cher, parce qu'il ne se voit qu'à la lecture.
 public enum EngagementReveal: Equatable, Sendable {
     case achievement(EngagementAchievementKey)
+    /// Un succès de la GRAMMAIRE (#5758) — `achievement.cercles.conversation.join.size:1000`.
+    /// Il porte sa famille et son palier plutôt que sa chaîne : ce qui l'affiche
+    /// a besoin des deux pour composer le libellé, et les redériver à chaque
+    /// lecture ferait deux analyses de la même clé.
+    case composedAchievement(family: AchievementFamily, tier: Int)
     case streak(days: Int)
     case level(Int)
 
@@ -51,9 +56,12 @@ public enum EngagementReveal: Equatable, Sendable {
     ) -> EngagementReveal? {
         switch type {
         case .achievementUnlocked, .legacyAchievementUnlocked, .badgeEarned:
-            guard let brut = achievementKey,
-                  let clé = EngagementAchievementKey(rawValue: brut) else { return nil }
-            return .achievement(clé)
+            guard let brut = achievementKey else { return nil }
+            // Les CINQ legacy d'abord : leur clé n'a pas la forme composée, donc
+            // les deux lectures ne peuvent pas se disputer une même chaîne.
+            if let clé = EngagementAchievementKey(rawValue: brut) { return .achievement(clé) }
+            guard let lu = AchievementCatalog.parse(key: brut) else { return nil }
+            return .composedAchievement(family: lu.family, tier: lu.tier)
 
         case .levelUp:
             guard let rang = level, rang > 0 else { return nil }
@@ -72,9 +80,28 @@ public enum EngagementReveal: Equatable, Sendable {
     /// même famille, afin que la célébration et la grille se reconnaissent.
     public var symbolName: String {
         switch self {
-        case .achievement: return "rosette"
+        case .achievement, .composedAchievement: return "rosette"
         case .streak: return "flame.fill"
         case .level: return "star.circle.fill"
+        }
+    }
+
+    /// **Ce qui se célèbre TOUT SEUL, sans que l'utilisateur ait rien touché.**
+    ///
+    /// Directive porteur (2026-09-09) : *« la vue d'achievement s'affiche
+    /// lorsqu'on a réalisé une opération qui déclenche un succès, le reste ce
+    /// sont des notifications rien de plus »*. Un SUCCÈS nomme un fait rare et
+    /// non répétable — il mérite qu'on interrompe. Un badge, une série, un
+    /// niveau tombent au fil de l'usage : les célébrer tous ferait de la
+    /// célébration un bruit, et le premier bruit qu'on apprend à ignorer est
+    /// celui qui devait faire plaisir.
+    ///
+    /// Le TAP, lui, reste servi pour les trois formes : quelqu'un qui touche
+    /// une notification de série a demandé à la voir.
+    public var celebratesUnprompted: Bool {
+        switch self {
+        case .achievement, .composedAchievement: return true
+        case .streak, .level: return false
         }
     }
 }
