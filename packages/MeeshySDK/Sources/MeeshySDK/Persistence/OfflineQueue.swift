@@ -883,9 +883,12 @@ public actor OfflineQueue {
     private var items: [OfflineQueueItem] = []
     private var isRetrying = false
     private var cancellables = Set<AnyCancellable>()
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+    let logger = Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
     /// Outbox pool — injected at boot via `configure(pool:)`. Nil until wired.
-    private var outboxPool: (any DatabaseWriter)?
+    /// `internal` (et non `private`) : les extensions de CE type vivant dans
+    /// d'AUTRES fichiers (#5830) n'atteignent pas un `private`, qui reste borné
+    /// au fichier — la frontière invisible que toute extraction franchit.
+    var outboxPool: (any DatabaseWriter)?
     /// Per-`cmid` outcome subscribers (AsyncStream continuations). A single
     /// cmid may have multiple observers (e.g. one ViewModel + one banner) ;
     /// each receives the same terminal event before the stream finishes.
@@ -899,13 +902,13 @@ public actor OfflineQueue {
     /// `publishOutcome` qui ne reviendra pas.
     private var outcomeTombstones = BoundedFIFOMap<String, OutboxOutcome>(capacity: 200)
 
-    private let encoder: JSONEncoder = {
+    let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.dateEncodingStrategy = .iso8601
         return e
     }()
 
-    private let decoder: JSONDecoder = {
+    let decoder: JSONDecoder = {
         let d = JSONDecoder()
         d.dateDecodingStrategy = .iso8601
         return d
