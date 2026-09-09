@@ -10,8 +10,13 @@
  * (`dist-capacitor`, couvert par le motif `dist-*` du `.gitignore`) et affirme
  * sur `index.html` et la liste des fichiers émis :
  *
- *   1. la base est RELATIVE — la coque charge depuis le système de fichiers,
- *      jamais depuis une origine http ; un chemin absolu (`/assets/…`) casse ;
+ *   1. la base est ROOT-ABSOLUE (`/assets/…`) et AUCUNE balise `<base>` n'est
+ *      émise — les deux coques servent une origine VIRTUELLE
+ *      (`https://localhost/…` Android, `capacitor://localhost/…` iOS) montée
+ *      à la RACINE ; un chemin relatif (`./assets/…`) servi en réponse à un
+ *      chemin navigué autre que `/` résout contre CE chemin (404), et une
+ *      balise `<base>` qui le rattraperait casserait au passage toutes les
+ *      URL réduites à un fragment (D-27 corrigée en revue, #5812) ;
  *   2. AUCUN service worker n'est émis (`sw.js`, `registerSW.js`) — la coque
  *      gère son propre cycle de vie, deux caches sur le même bundle se
  *      marcheraient dessus ;
@@ -21,8 +26,8 @@
  *      blanc précède l'application au démarrage à froid en schéma sombre.
  *
  * Vu ROUGIR sur une valeur falsifiée : un `vite build` SANS `MEESHY_TARGET`
- * fait tomber (1) — base absolue `/assets/…` — et (2) — `sw.js` /
- * `registerSW.js` sont émis. `auditShellDist` est exportée PURE et le pilote
+ * fait tomber (2) — `sw.js` / `registerSW.js` sont émis ; un build de la
+ * variante B revenu à `base: './'` fait tomber (1). `auditShellDist` est exportée PURE et le pilote
  * ci-dessous ne s'exécute que lorsque ce fichier est le POINT D'ENTRÉE : sans
  * cette garde, `import { auditShellDist }` déclenchait une construction
  * complète, et la « pureté » annoncée par ce commentaire était fausse — le
@@ -36,6 +41,7 @@ import { extname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
+import { INSTITUTIONAL_ROUTES } from './lib/institutional-routes.mjs';
 
 const APP = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const OUT_DIR = 'dist-capacitor';
@@ -48,34 +54,44 @@ const OUT = join(APP, OUT_DIR);
 export function auditShellDist(html, files) {
   const violations = [];
 
-  /* LA BALISE <base href="/"> (#5725) — L'UNIQUE HREF ABSOLUE TOLÉRÉE.
+  /* AUCUNE BALISE <base> — ELLE EST LE CORRECTIF QUI A ÉTÉ ESSAYÉ, PUIS
+   * REFUSÉ (#5725 → #5812).
    *
-   * Sans elle, un lien profond (`/c/<id>`) charge bien `index.html` (les
-   * deux coques servent la coquille pour tout chemin sans extension —
-   * html5mode Android, routeur iOS, voir vite.config.ts §
-   * capacitorBaseHref), mais le NAVIGATEUR résout ensuite `./assets/x.js`
-   * contre le chemin NAVIGUÉ (`https://localhost/c/assets/x.js`, 404) plutôt
-   * que contre la racine : le corps arrive, le script jamais. `<base
-   * href="/">` fixe la résolution de TOUT le document sur la racine sans
-   * réécrire un seul chemin généré par Vite. */
-  const baseMatches = [...html.matchAll(/<base\s+href=["']([^"']*)["']\s*\/?>/gi)];
-  if (baseMatches.length !== 1 || baseMatches[0][1] !== '/') {
+   * `<base href="/">` répare bien la résolution des actifs d'un lien
+   * profond, mais elle déplace la résolution de TOUTE URL relative du
+   * document — les URL RÉDUITES À UN FRAGMENT comprises. Mesuré sur le dist
+   * de la coque : depuis `/c/<id>`, le lien d'évitement `<a href="#contenu">`
+   * (`src/components/shell.tsx`, présent sur CHAQUE écran) résolvait vers
+   * `https://localhost/#contenu` — l'activer quittait le fil pour la liste.
+   * Le correctif retenu est la BASE de Vite elle-même (`base: '/'`, la même
+   * que la variante A) ; cette clause interdit le retour de la balise. */
+  if (/<base[\s>]/i.test(html)) {
     violations.push(
-      'balise <base href="/"> absente ou incorrecte — sans elle, un lien profond (/c/<id>) ' +
-        'charge index.html mais résout ses actifs relatifs contre le chemin navigué ' +
-        '(/c/assets/…, 404) : la coquille arrive, le fil jamais (#5725).',
+      'une balise <base> est émise — elle déplace la résolution de TOUTE URL relative du ' +
+        'document, fragments compris : depuis /c/<id>, le lien d’évitement <a href="#contenu"> ' +
+        'quitte le fil pour la liste (mesuré, #5812). La base se règle par `base` de Vite.',
     );
   }
-  const htmlSansBase = html.replace(/<base\s+href=["'][^"']*["']\s*\/?>/gi, '');
 
-  // `="/x` est une base ABSOLUE ; `="./x` ou `="//x` (protocole-relatif,
-  // absent ici) ne doivent pas matcher — d'où l'ancrage sur le caractère qui
-  // suit `/` plutôt que sur `/` seul. La balise <base>, seule href absolue
-  // tolérée, a déjà été retirée ci-dessus et jugée à part.
-  if (/=["']\/(?!\/)/.test(htmlSansBase)) {
+  /* LES ACTIFS SONT ROOT-ABSOLUS (#5725, #5812).
+   *
+   * `./assets/x.js` servi en réponse à une navigation vers `/c/<id>` résout
+   * contre le chemin NAVIGUÉ (`https://localhost/c/assets/x.js`, 404) :
+   * `index.html` arrive, son script jamais — une coquille inerte. Les deux
+   * coques montent leur origine virtuelle à la RACINE, donc `/assets/x.js`
+   * résout correctement quel que soit le chemin navigué. */
+  const relatifs = [...html.matchAll(/(?:src|href)=["'](\.\/[^"']*)["']/gi)].map((m) => m[1]);
+  if (relatifs.length > 0) {
     violations.push(
-      'base ABSOLUE détectée dans index.html (attendu : chemins relatifs "./…", hors <base>) — ' +
-        'la coque native charge le bundle depuis le système de fichiers, jamais depuis une origine http.',
+      `des actifs RELATIFS sont émis (${relatifs.slice(0, 3).join(', ')}) — servis en réponse à ` +
+        'un chemin navigué autre que la racine, ils résolvent contre CE chemin (/c/assets/…, 404) : ' +
+        'la coquille arrive, le fil jamais (D-27, #5725).',
+    );
+  }
+  if (!/(?:src|href)=["']\/assets\//i.test(html)) {
+    violations.push(
+      'aucun actif root-absolu (/assets/…) dans index.html — la base de la variante B doit être ' +
+        'la racine, comme celle de la variante A (D-27 corrigée en revue, #5812).',
     );
   }
 
@@ -106,6 +122,28 @@ export function auditShellDist(html, files) {
     violations.push(
       'theme-color #0b0c14 absent de index.html — un flash blanc précède l’application au ' +
         'démarrage à froid en schéma sombre.',
+    );
+  }
+
+  /* LES CINQ PAGES INSTITUTIONNELLES SONT DANS *CE* DIST, PAS DANS SON VOISIN
+   * (#5812, élargit #5821).
+   *
+   * `scripts/prerender-institutional.tsx` écrivait `../dist` EN DUR : une
+   * construction de la variante B les écrivait dans la sortie de la
+   * variante A, et `dist-capacitor/` (celui que CE gate embarque dans l'APK
+   * et l'IPA) n'en recevait AUCUNE — un défaut qu'aucune des quatre clauses
+   * ci-dessus ne pouvait voir, puisque toutes portent sur `index.html`
+   * seul. `files` est déjà préfixé du nom du dossier de sortie
+   * (`allFiles(OUT).map(f => f.slice(APP.length + 1))`) : chercher
+   * `${route}/index.html` en SUFFIXE, pas en préfixe, pour rester correct
+   * quel que soit ce préfixe. */
+  const routesManquantes = INSTITUTIONAL_ROUTES.filter(
+    (route) => !files.some((f) => f.endsWith(`${route}/index.html`)),
+  );
+  if (routesManquantes.length > 0) {
+    violations.push(
+      `page(s) institutionnelle(s) absente(s) de CE dist : ${routesManquantes.join(', ')} — le ` +
+        'préchauffage a écrit ailleurs (D-27 corrigée en revue, #5812, élargit #5821).',
     );
   }
 
@@ -164,37 +202,134 @@ function serveShellDist(dist) {
 }
 
 /**
- * LE LIEN PROFOND, JOUÉ AVEC UN NAVIGATEUR RÉEL (#5725, critère 3).
+ * L'INSTANTANÉ DE PAGE, SÉRIALISÉ VERS LE NAVIGATEUR (#5812).
+ *
+ * SANS FERMETURE : `page.evaluate(readDeepLinkSnapshot)` envoie le CORPS de
+ * cette fonction dans la page (Playwright la sérialise) — toute variable
+ * capturée de ce module y serait `undefined`. C'est pourquoi elle est aussi
+ * le site que réutilise `scripts/shell-deeplink-probe.mjs` (Étape 3, WebView
+ * réelle d'un appareil via CDP) : la MÊME loi, jouée par le gate et par la
+ * recette manuelle, jamais deux lectures divergentes du même DOM.
+ *
+ * `hasComposer` : `textarea` n'apparaît qu'à un seul endroit du dépôt
+ * (`src/components/composer.tsx`) — ni `ThreadRefused`, ni `ThreadSkeleton`,
+ * ni `NotFound` n'en montent. Le sélecteur le plus simple qui est VRAI sur
+ * le fil et FAUX partout ailleurs, mesuré.
+ *
+ * `skipLinkTarget` / `documentUrl` : le lien d'évitement est le PREMIER
+ * contrôle du clavier sur chaque écran (`src/components/shell.tsx`). Un
+ * chargement direct ne se juge pas seulement à ce qui MONTE : la moitié du
+ * correctif de #5725 (une balise `<base>`) montait le fil et faisait quitter
+ * l'écran au premier appui sur Tab+Entrée. On rapporte donc l'URL RÉSOLUE de
+ * ce lien, pas son attribut — c'est la résolution qui change, jamais la
+ * source.
+ */
+export function readDeepLinkSnapshot() {
+  const skipLink = document.querySelector('.skip-link');
+  return {
+    bodyLen: document.body.innerHTML.length,
+    rootChildren: document.getElementById('root')?.childElementCount ?? -1,
+    hasThreadMain: document.querySelector('main#contenu') !== null,
+    hasComposer: document.querySelector('textarea') !== null,
+    documentUrl: location.href,
+    skipLinkTarget: skipLink instanceof HTMLAnchorElement ? skipLink.href : null,
+  };
+}
+
+/**
+ * LE JUGEMENT SUR UN INSTANTANÉ, PUR (#5812).
+ *
+ * `auditDeepLink` prouvait jusqu'ici `bodyLen > 0`, `#root` non vide et zéro
+ * `pageerror` — un seuil qu'un écran REFUSÉ (D-6) ou `NotFound` franchissent
+ * tout autant qu'un fil réel (mesuré : REFUSÉ `bodyLen 1627`, INTROUVABLE
+ * `bodyLen 479` — les DEUX passaient). `expect: 'thread'` exige la preuve
+ * POSITIVE que c'est le fil (repères structurels, jamais seulement « non
+ * vide ») ; `expect: 'refused'` exige la preuve que ce N'EST PAS le fil — un
+ * seuil qui ne peut dire que « vide/non vide » ne peut pas garder D-6.
+ */
+export function auditDeepLinkPage(snapshot, { expect }) {
+  const violations = [];
+
+  if (snapshot.bodyLen === 0) {
+    violations.push('page blanche : corps VIDE (bodyLen = 0) — la coquille arrive, rien ne monte.');
+    return violations;
+  }
+  if (snapshot.rootChildren <= 0) {
+    violations.push(
+      `#root n'a monté AUCUN enfant (${snapshot.rootChildren}) — la coquille arrive, rien ne monte.`,
+    );
+    return violations;
+  }
+
+  if (expect === 'thread' && !(snapshot.hasThreadMain && snapshot.hasComposer)) {
+    violations.push(
+      `ce n'est pas le fil qui a monté (hasThreadMain=${snapshot.hasThreadMain}, ` +
+        `hasComposer=${snapshot.hasComposer}) — un autre écran (refus D-6, introuvable) a pris sa place.`,
+    );
+  }
+  if (expect === 'refused' && snapshot.hasThreadMain) {
+    violations.push(
+      'le FIL a monté alors qu’un refus était attendu (id inconnu) — fuite de contenu, D-6.',
+    );
+  }
+
+  /* LE LIEN D'ÉVITEMENT RESTE SUR L'ÉCRAN CHARGÉ (#5812).
+   *
+   * Route-indépendant, donc jugé pour les deux attentes : c'est une
+   * propriété de la RÉSOLUTION D'URL du document, que seule la coque
+   * changeait (une balise `<base>`). Comparer les URL privées de leur
+   * fragment — l'ancre `#contenu` est précisément ce que le lien AJOUTE. */
+  if (snapshot.skipLinkTarget === null || snapshot.skipLinkTarget === undefined) {
+    violations.push(
+      'aucun lien d’évitement (.skip-link) sur l’écran chargé — la coquille en pose un sur CHAQUE ' +
+        'route (src/components/shell.tsx) ; son absence rendrait cette clause muette (#5812).',
+    );
+  } else {
+    const cible = snapshot.skipLinkTarget.split('#')[0];
+    const ici = (snapshot.documentUrl ?? '').split('#')[0];
+    if (cible !== ici) {
+      violations.push(
+        `le lien d’évitement QUITTE l’écran chargé (${snapshot.skipLinkTarget} depuis ` +
+          `${snapshot.documentUrl}) — le premier contrôle du clavier ramène à la racine. ` +
+          'Une balise <base> déplace la résolution des URL réduites à un fragment (#5812).',
+      );
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * LE LIEN PROFOND, JOUÉ AVEC UN NAVIGATEUR RÉEL (#5725, #5812, critère 3).
  *
  * `auditShellDist` garde la FORME statique de `index.html` (dont la balise
  * `<base>`) ; ceci garde le COMPORTEMENT — une navigation DIRECTE (jamais un
  * `pushState` interne) vers `/c/<id>`, exactement ce qu'un lien profond, une
- * restauration ou un App Link produit dans une coque, doit faire monter le
- * FIL, pas seulement livrer un corps non vide.
+ * restauration ou un App Link produit dans une coque. DEUX cas, le même
+ * serveur, le même navigateur : un id CONNU doit monter le fil, un id
+ * INCONNU doit monter le refus (D-6) — jamais l'un à la place de l'autre.
  */
 async function auditDeepLink(dist) {
   const server = await serveShellDist(dist);
   const base = `http://127.0.0.1:${server.address().port}`;
   const browser = await launchChromium();
+  const cases = [
+    { path: '/c/c-deploiement', expect: 'thread' },
+    { path: '/c/zzz-inconnu', expect: 'refused' },
+  ];
   try {
-    const page = await browser.newPage();
-    const pageErrors = [];
-    page.on('pageerror', (err) => pageErrors.push(String(err)));
-    await page.goto(`${base}/c/c-deploiement`, { waitUntil: 'networkidle' });
-    const bodyLen = await page.evaluate(() => document.body.innerHTML.length);
-    const rootChildren = await page.evaluate(() => document.getElementById('root')?.childElementCount ?? -1);
     const violations = [];
-    if (bodyLen === 0) {
-      violations.push('lien profond /c/c-deploiement : corps VIDE (bodyLen = 0) — page blanche.');
-    }
-    if (rootChildren <= 0) {
-      violations.push(
-        `lien profond /c/c-deploiement : #root n'a monté AUCUN enfant (${rootChildren}) — la coquille ` +
-          'arrive, le fil jamais.',
-      );
-    }
-    if (pageErrors.length > 0) {
-      violations.push(`lien profond /c/c-deploiement : ${pageErrors.length} erreur(s) JS — ${pageErrors[0]}`);
+    for (const { path, expect } of cases) {
+      const page = await browser.newPage();
+      const pageErrors = [];
+      page.on('pageerror', (err) => pageErrors.push(String(err)));
+      await page.goto(`${base}${path}`, { waitUntil: 'networkidle' });
+      const snapshot = await page.evaluate(readDeepLinkSnapshot);
+      await page.close();
+      if (pageErrors.length > 0) {
+        violations.push(`lien profond ${path} : ${pageErrors.length} erreur(s) JS — ${pageErrors[0]}`);
+      }
+      violations.push(...auditDeepLinkPage(snapshot, { expect }).map((v) => `lien profond ${path} : ${v}`));
     }
     return violations;
   } finally {
@@ -214,6 +349,12 @@ async function main() {
   });
   if (build.status !== 0) {
     console.error('\n  la construction de la variante B a échoué — voir la sortie ci-dessus.\n');
+    /* Le dossier de travail est EFFACÉ même sur cet échec précoce (#5812,
+       revue-correction du point d'étape) — sinon `dist-capacitor/` restait
+       au sol et faisait rougir `check-git-tracking.mjs` au tour suivant,
+       exactement le défaut que le nettoyage de fin de `main()` existe déjà
+       pour éviter. */
+    rmSync(OUT, { recursive: true, force: true });
     process.exit(1);
   }
 
@@ -221,7 +362,7 @@ async function main() {
   const files = allFiles(OUT).map((f) => f.slice(APP.length + 1));
   const violations = auditShellDist(html, files);
 
-  console.log('  navigation directe vers /c/c-deploiement (repli SPA, comme les deux coques) …');
+  console.log('  navigation directe vers /c/c-deploiement (fil) et /c/zzz-inconnu (refus D-6), repli SPA …');
   violations.push(...(await auditDeepLink(OUT)));
 
   /* Le dossier de travail est EFFACÉ avant de rendre le verdict : laissé en
@@ -239,8 +380,10 @@ async function main() {
   }
 
   console.log(
-    `  ${OUT_DIR}/ honore le contrat de la variante B : base relative, sans service worker, ` +
-      'viewport-fit=cover, theme-color #0b0c14, lien profond /c/<id> monte le fil.',
+    `  ${OUT_DIR}/ honore le contrat de la variante B : base root-absolue sans balise <base>, ` +
+      'sans service worker, ' +
+      'viewport-fit=cover, theme-color #0b0c14 ; lien profond /c/c-deploiement monte le fil, ' +
+      '/c/zzz-inconnu rend le refus (D-6).',
   );
 }
 

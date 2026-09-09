@@ -1290,7 +1290,13 @@ Preuve de la recette (compte `cible-web-trois`, id `6a9fa8396248cfa007f2ab16`), 
 
 **Deux points restés ouverts, hors de ce diff :** `useThreadScene` reçoit son signal d'attache par un paramètre `ready` déclaré par l'hôte plutôt que par une boucle `requestAnimationFrame` — celle-ci se reprogrammait SANS BORNE (son propre doc-comment la disait « bornée ») et tournait à 60 Hz pour rien sur un fil REFUSÉ, un état TERMINAL où le cadre n'apparaîtra jamais. Et `otherUnread` (`thread.tsx`) OBSERVE le cache partagé (`useConversationsSnapshot`, `enabled: false` — jamais une requête de plus) au lieu d'en prendre un instantané au premier rendu : sur un lien direct vers `/c/:id`, où le cache est encore vide, le compteur restait à zéro pour toujours.
 
-## D-27 · Un lien profond charge la coquille mais casse ses propres actifs — `<base href="/">`, jamais la base globale — 2026-09-09 (#5725)
+## D-27 · Un lien profond charge la coquille mais casse ses propres actifs — la base RACINE pour les deux variantes — 2026-09-09 (#5725)
+
+> **Le corps ci-dessous est le PREMIER état de cette décision, conservé tel
+> quel. Son correctif — une balise `<base href="/">` — a été RENVERSÉ le même
+> jour en revue (#5812) : il réparait les actifs et cassait toutes les URL
+> réduites à un fragment. Lire le « Complément 2026-09-09 bis » en fin de
+> section avant de s'y fier.**
 
 Le travail « lien profond vers un fil » (#5725) partait d'un diagnostic
 hérité et FAUX : le commentaire de `vite.config.ts` affirmait que la coque
@@ -1348,3 +1354,170 @@ Android, `scene(_:continue:)`/`application(_:continue:)` iOS, puis appeler
 compagnon — sans lui, un App Link réel ne parvient toujours pas jusqu'au
 WebView, même si celui-ci sait désormais correctement répondre une fois
 atteint.
+
+**Complément 2026-09-09 (#5812) — ce que ce point d'étape affirmait de trop,
+et ce qui le corrige.**
+
+1. **La capture citée ci-dessus (`targets/shells.avd-deeplink.png`) n'a
+   jamais existé** (`ls targets/ | grep shell` vide, `git status` propre au
+   moment de l'écrire) — une absence DÉDUITE écrite comme si elle était
+   mesurée. Les preuves de coque de ce travail vivent HORS dépôt
+   (`<racine>/.cache/web-v3-workflow/recette/`, produites par
+   `scripts/shell-deeplink-probe.mjs`) et sont JOINTES à l'issue plutôt que
+   versionnées : `targets/` reste réservé aux captures iOS NATIVES drapeaux
+   ON (`targets/captures.md`), jamais aux captures de la coque testée.
+2. **« La preuve iOS est la même mécanique » était une DÉDUCTION, pas une
+   MESURE — et la mesure a trouvé une ASYMÉTRIE que la déduction ne pouvait
+   pas voir.** `capacitor.config.ts` expose `resolveCapacitorConfig(env)`,
+   qui pose `server.appStartPath` (clé Capacitor ≥ 7.3 TYPÉE,
+   `@capacitor/cli/dist/declarations.d.ts:617`) sous
+   `MEESHY_SHELL_START_PATH` — un paramètre de RECETTE, jamais posé au
+   déploiement. **Côté Android, ça marche tel quel** : `Bridge.java`
+   (`appUrl += appUrlPath`) ne fait qu'une concaténation de chaîne, ensuite
+   servie par le même repli `html5mode` que toute autre navigation — mesuré
+   sur l'AVD `Meeshy_Poc_Web-v31`, l'app démarre directement dans « Équipe
+   déploiement ». **Côté iOS, `appStartPath` seul CRASHE la coque** :
+   `CAPBridgeViewController.loadWebView()` (`@capacitor/ios` 8.5.1) garde
+   `FileManager.default.fileExists(atPath: bridge.config.appStartFileURL.path)`
+   — un chemin de FICHIER LITTÉRAL sous `public/` — et appelle
+   `fatalLoadError()` (`exit(1)`, un arrêt PROPRE, donc AUCUN rapport de
+   crash dans `CrashReporter`) si rien n'existe à cet exact chemin, AVANT
+   même d'atteindre `Router.swift` — dont le repli SPA (`route(for:)`,
+   toujours actif sur toute navigation POST-chargement) n'entre jamais en
+   jeu pour CE premier chargement. Reproduit sur le simulateur
+   `Meeshy Poc-Web-V31` : `⚡️ ERROR: Unable to load …/App.app/public//c/c-deploiement`,
+   process disparu sans écran. Un placeholder local (fichier vide sous
+   `ios/App/App/public/c/c-deploiement`, jamais commité — `ios/.gitignore`
+   généré exclut déjà `public/`, régénéré par `cap sync` à chaque
+   synchronisation) suffit à satisfaire la garde ; `Router.swift` réécrit
+   ensuite CE chemin vers `/index.html` sans jamais lire le placeholder.
+   **`MEESHY_SHELL_START_PATH` reste donc un paramètre de recette
+   ASYMÉTRIQUE : autonome sur Android, il exige un placeholder manuel sous
+   iOS avant chaque recette — une limitation de `@capacitor/ios` 8.5.1 pour
+   un `appStartPath` de route CLIENT (jamais un fichier réel), non
+   documentée en amont.** La preuve simulateur, une fois le placeholder posé,
+   est un chargement direct RÉEL (capture jointe, thread « Équipe
+   déploiement » rendu en schéma clair) — plus une inférence depuis le seul
+   comportement Android.
+3. **L'audit ne prouvait, avant ce complément, que « non vide » — pas
+   « le fil ».** Mesuré : un écran REFUSÉ (D-6, `bodyLen 1627`) et un écran
+   INTROUVABLE (`NotFound`, `bodyLen 479`) passaient tous deux le seuil
+   `bodyLen > 0 && #root non vide`. `readDeepLinkSnapshot()` /
+   `auditDeepLinkPage(snapshot, { expect })` (`scripts/check-shell-dist.mjs`)
+   exigent désormais la preuve POSITIVE (`main#contenu` + `textarea`, repères
+   structurels du fil, `src/routes/thread.tsx:730-731`,
+   `src/components/composer.tsx:122`) pour `expect: 'thread'`, et la preuve
+   NÉGATIVE (`!hasThreadMain`) pour `expect: 'refused'` — un id inconnu doit
+   monter le refus, jamais le fil (D-6). `auditDeepLink()` joue désormais
+   LES DEUX cas (`/c/c-deploiement` et `/c/zzz-inconnu`) sur le même dist
+   servi.
+4. **Ce qui reste séparé, avec ses issues :** l'entrée système (Universal
+   Links iOS / App Links Android, #5819) ; la cible d'un lien profond perdue
+   quand `SessionGate` redirige vers `/login` (#5820) ; le prérendu
+   institutionnel qui ignore `--outDir` — SOLDÉ au « Complément ter »
+   ci-dessous (#5821, la lecture en dur de `../dist` ne demeure plus).
+
+**Complément 2026-09-09 bis (revue #5812) — le correctif de D-27 réparait les
+actifs et cassait toutes les autres URL relatives : la `base` de Vite, jamais
+une balise `<base>`.**
+
+1. **Mesuré sur le dist de la coque, Chromium réel, repli SPA :** avec
+   `<base href="/">`, depuis `/c/c-deploiement`, le lien d'évitement
+   `<a href="#contenu">` de `src/components/shell.tsx` — le PREMIER contrôle
+   du clavier, présent sur CHAQUE écran — résolvait vers
+   `http://…/#contenu` ; l'activer QUITTAIT le fil pour la liste
+   (`hasThreadMain: true → false`, `hasComposer: true → false`). Une balise
+   `<base>` déplace la résolution de TOUTE URL relative du document, et les
+   URL réduites à un fragment en font partie (elle atteindrait demain
+   `<use href="#…">`, `url(#filtre)`, toute ancre de page). Le défaut ne
+   frappait que les deux coques, jamais le web : exactement la divergence que
+   la variante B existe pour éviter.
+2. **Le correctif retenu est la BASE elle-même** : `base: '/'` pour les deux
+   variantes (`vite.config.ts`). Le motif « des chemins absolus casseraient »
+   décrivait un `file://` que D-27 avait déjà réfuté — les deux coques
+   montent une origine VIRTUELLE À LA RACINE (`https://localhost/…`,
+   `capacitor://localhost/…`), donc `/assets/x.js` résout correctement quel
+   que soit le chemin navigué, exactement comme en variante A. D-27 avait
+   conservé la base relative pour ne pas contredire la clause 1 de
+   `check-shell-dist.mjs` — c'est-à-dire pour préserver la garde d'une
+   contrainte que la même décision venait de démontrer inexistante.
+   `auditShellDist` affirme désormais l'inverse : actifs root-absolus, AUCUNE
+   balise `<base>`.
+3. **Le gate ne pouvait pas voir ce défaut** : il NAVIGUAIT sans jamais
+   ACTIVER un contrôle. `readDeepLinkSnapshot` rapporte désormais l'URL
+   RÉSOLUE du lien d'évitement et l'URL du document ; `auditDeepLinkPage`
+   refuse, pour les deux attentes, un lien d'évitement qui quitte l'écran
+   chargé. Trois témoins falsifiés (clause `<base>`, clause d'évitement sur
+   le fil, la même sur le refus).
+4. **La sonde de recette ne fonctionnait pas.** `shell-deeplink-probe.mjs`
+   passait par `chromium.connectOverCDP()` : contre la WebView Android
+   (Chrome 133) la poignée de main échoue — « Protocol error
+   (Browser.setDownloadBehavior): Browser context management is not
+   supported », une WebView exposant une cible `page` et jamais un navigateur
+   complet. Réécrite en CDP BRUT sur le `webSocketDebuggerUrl` de la page
+   (aucune dépendance), elle rend l'instantané et la capture. Un outil de
+   recette qu'on ne lance pas est un contrôle inerte de plus.
+5. **La garde de `MEESHY_SHELL_START_PATH` portait sur une ROUTE** (`/c/…`) ;
+   elle porte désormais sur la FORME : `/` initial simple (Android
+   `Bridge.java` concatène sans séparateur) et AUCUNE extension de fichier
+   (iOS ne réécrit vers `index.html` que les chemins sans extension,
+   `CapacitorRouter.route(for:)`). Les 40+ surfaces à porter emploieront la
+   même recette sans modifier ce fichier LIVRÉ.
+6. **`capacitor.config.ts` et son témoin sont entrés dans `tsc --noEmit`** :
+   `tsconfig.json` n'incluait que `src`, `vite.config.ts` et `scripts` — le
+   fichier venait d'acquérir de la logique et un témoin, tous deux hors du
+   type-check. Falsifié (une annotation fausse fait rougir le gate).
+
+**Preuves de coque, avec la base racine** — AVD `Meeshy_Poc_Web-v31`, APK
+debug, CDP réel : `/c/c-deploiement` → `hasThreadMain: true`,
+`hasComposer: true`, `skipLinkTarget: https://localhost/c/c-deploiement#contenu`
+(il RESTE sur le fil) ; `/c/zzz-inconnu` → refus (D-6). Simulateur
+`Meeshy Poc-Web-V31` (54438823), build Xcode réel, `MEESHY_SHELL_START_PATH`
++ placeholder iOS : la coque démarre directement dans le fil. Captures hors
+dépôt (`<racine>/.cache/web-v3-workflow/recette/`), jointes à l'issue.
+
+**Complément 2026-09-09 ter (revue #5812) — le prérendu institutionnel
+écrivait dans la sortie de L'AUTRE variante ; le gate ne pouvait pas le voir
+parce qu'il ne regarde que le document racine, jamais les pages qu'il a fait
+écrire à côté (SOLDE #5821).**
+
+1. **Mesuré, sans aucune dépendance à un dist stale :** `MEESHY_TARGET=
+   capacitor bunx vite build --outDir dist-probe-review` produisait un
+   `dist-probe-review/` SANS `about/`, `contact/`, `partners/`, `privacy/`
+   ni `terms/` — les cinq pages atterrissaient dans `dist/` (l'autre
+   variante, pas reconstruite par cette commande), dont le `about/index.html`
+   ressortait avec la date de mtime d'un build ANTÉRIEUR à celui qui venait
+   de tourner. `scripts/prerender-institutional.tsx:44` lisait
+   `join(HERE, '../dist')` inconditionnellement ; le greffon qui l'invoque
+   (`vite.config.ts`, `prerenderInstitutionalPages`) tourne pour LES DEUX
+   variantes, sans jamais lui dire où le build en cours écrit réellement.
+2. **Le correctif est un site UNIQUE de résolution, jamais deux lectures
+   indépendantes de `--outDir`.** `scripts/lib/resolve-dist-dir.mjs`
+   (`resolveDistDir(here, argv)`, PURE, témoin sans build) décide : un
+   troisième `argv` non vide gagne, sinon repli `../dist`. Le greffon capture
+   `config.build.outDir` par `configResolved` et le relaie en argument de
+   ligne de commande au script préchauffé (`spawnSync(…, [
+   'scripts/prerender-institutional.tsx', dist])`) — la même donnée que Vite
+   a déjà résolue, jamais redevinée côté script.
+3. **Le gate ne pouvait pas voir ce défaut** : ses quatre clauses portent
+   toutes sur `index.html` et la liste des fichiers du dist audité, mais
+   aucune ne vérifiait que les pages institutionnelles S'Y TROUVENT — un
+   `dist-capacitor/` totalement dépourvu d'`about/index.html` passait les
+   quatre. `auditShellDist` (`scripts/check-shell-dist.mjs`) gagne une
+   cinquième clause : les cinq routes de `INSTITUTIONAL_ROUTES`
+   (`scripts/lib/institutional-routes.mjs`) doivent apparaître en SUFFIXE
+   (`${route}/index.html`) dans la liste des fichiers du dist audité — un
+   dist auquel il manque une seule page nomme précisément celle-là, jamais
+   un « quelque chose manque » vague. Trois témoins ajoutés
+   (`check-shell-dist.test.ts`) : zéro page présente, une seule absente, les
+   cinq présentes — plus quatre témoins pour `resolveDistDir` (absence
+   d'argument, `argv` court, argument explicite relatif/absolu, chaîne vide
+   qui ne doit PAS déguiser une absence).
+4. **Vérifié sur le dist réel, pas seulement sur les fonctions pures** :
+   `node scripts/check-shell-dist.mjs` lancé SEUL dans un arbre SANS `dist/`
+   préexistant (le scénario que #5821 nommait) passe désormais — la
+   construction `--outDir dist-capacitor` qu'il pilote écrit ses cinq pages
+   au bon endroit du premier coup, la cinquième clause le confirme, et
+   `dist-capacitor/` reste effacé derrière lui. La variante A
+   (`bun run build`, sans `--outDir`) continue de recevoir ses cinq pages
+   dans `dist/`, inchangée.
