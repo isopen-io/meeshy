@@ -249,6 +249,30 @@ describe('createHttpTransport — le champ d’un refus (#5555, T1)', () => {
     if (result.ok) throw new Error('unreachable');
     expect('field' in result).toBe(false);
   });
+
+  test('un 429 rend `retryAfter` — forme rate-limiter.ts:307 (#5912)', async () => {
+    const { impl } = fakeFetch({
+      status: 429,
+      body: { success: false, error: 'RATE_LIMIT_EXCEEDED', message: "Trop de tentatives d'inscription (limite: 3/5min).", retryAfter: 300, limit: 3 },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await transport.request({ method: 'POST', path: '/api/v1/auth/register' });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect(result.retryAfter).toBe(300);
+  });
+
+  test('un corps sans retryAfter rend un échec SANS la clé', async () => {
+    const { impl } = fakeFetch({
+      status: 409,
+      body: { success: false, error: 'Adresse déjà utilisée', code: 'EMAIL_TAKEN', field: 'email' },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await transport.request({ method: 'POST', path: '/api/v1/auth/register' });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect('retryAfter' in result).toBe(false);
+  });
 });
 
 describe('createHttpTransport — l’annulation', () => {
