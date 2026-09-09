@@ -95,6 +95,28 @@ describe('la rangée de la Lentille — hiérarchie typographique (#5694, écart
     expect(html).toContain('data-time');
     expect(html).toContain('<time');
   });
+
+  /**
+   * #5780 — une conversation sans historique servait un original vide
+   * (`served()` sans traduction ni texte) : la ligne 2 se rendait comme un
+   * `<span>` VIDE plutôt que comme un état. La rangée doit dire « Nouvelle
+   * conversation », jamais rien.
+   */
+  test("une conversation sans historique dit « Nouvelle conversation » sur la ligne 2, jamais une ligne vide", () => {
+    const html = renderToStaticMarkup(
+      <LensRow
+        {...baseProps({
+          conversation: conversationWithoutLastMessage({ lastMessageAt: new Date('2026-01-01T10:00:00Z') }),
+        })}
+      />,
+    );
+    expect(html).toContain('Nouvelle conversation');
+  });
+
+  test('une conversation AVEC historique ne dit jamais « Nouvelle conversation »', () => {
+    const html = renderToStaticMarkup(<LensRow {...baseProps()} />);
+    expect(html).not.toContain('Nouvelle conversation');
+  });
 });
 
 describe('sameRowProps — le comparateur de memo (#5694, cinquième point)', () => {
