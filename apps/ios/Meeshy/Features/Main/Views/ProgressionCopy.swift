@@ -299,6 +299,11 @@ enum ProgressionCopy {
     /// L'en-tête du hero quand un succès a DÉJÀ été décroché.
     static let heroLastTitle = String(localized: "progression.hero.last", defaultValue: "Dernier succès", bundle: .main)
 
+    /// L'en-tête du menu Meesh — le MOT, à côté du logo. Le panneau s'ouvrait
+    /// sur un solde nu : hors du bouton qui l'a ouvert, rien ne nommait la
+    /// monnaie dont il parlait.
+    static let meeshEntryTitle = String(localized: "progression.meesh.title", defaultValue: "Meesh", bundle: .main)
+
     /// L'en-tête du hero de la FLAMME (directive porteur 2026-09-09). Il en
     /// manquait un : le hero s'ouvrait sur « 9 jours d'affilée », un chiffre
     /// sans nom. Ses deux voisins — DERNIER SUCCÈS, VOS ÉLANS — se présentent ;

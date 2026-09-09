@@ -29,16 +29,41 @@ struct ProgressionMeeshEntry: View {
             HapticFeedback.light()
             ouvert.toggle()
         } label: {
-            HStack(spacing: 4) {
+            // `(N logo)` — le NOMBRE puis la MARQUE, dans une capsule allongée
+            // (directive porteur 2026-09-09). Deux changements, une raison
+            // commune : ce jeton nomme une monnaie de Meeshy, pas une
+            // décoration.
+            //
+            // Le glyphe était `medal.fill`, un symbole SYSTÈME : il disait
+            // « récompense » en général, quand il fallait dire « Meesh ». Le
+            // logo de la marque vivait pourtant dans les assets sans qu'AUCUN
+            // code Swift ne le monte — un actif orphelin, présent et jamais
+            // servi.
+            //
+            // Et la capsule était serrée à 10 pt : le nombre y touchait ses
+            // bords, ce qui la faisait lire comme un badge de compteur plutôt
+            // que comme un contrôle qu'on touche.
+            HStack(spacing: 6) {
                 Text("\(meesh.balance)")
-                    .font(MeeshyFont.relative(16, weight: .bold, design: .rounded))
-                Image(systemName: "medal.fill")
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(17, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                // **Le logo garde SES couleurs.** `renderingMode(.template)`
+                // le rendait en carré plein orange : le PNG porte un canal
+                // alpha, mais il est OPAQUE partout — le fond fait partie du
+                // dessin. Teinté, un logo à fond plein devient un rectangle
+                // uni, et l'identité qu'on voulait montrer disparaît
+                // exactement là où on la mettait.
+                Image("MeeshyLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 20, height: 20)
+                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
             }
             .foregroundColor(tint)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 14)
             .frame(minHeight: 44)
             .background(Capsule().fill(tint.opacity(0.16)))
+            .overlay(Capsule().stroke(tint.opacity(0.28), lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("progression.meesh.entry")
@@ -46,9 +71,24 @@ struct ProgressionMeeshEntry: View {
         .accessibilityAddTraits(.isButton)
         .popover(isPresented: $ouvert) {
             ProgressionMeeshDetail(meesh: meesh, isMinting: isMinting, onMint: onMint)
-                .frame(idealWidth: 280)
-                .padding(MeeshySpacing.md)
-                .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tint: tint)
+                .frame(idealWidth: 300)
+                .padding(MeeshySpacing.lg)
+                // **Verre NEUTRE, jamais teinté** (directive porteur
+                // 2026-09-09 : « le menu affiché au touché doit être bien
+                // travaillé »). Le `tint: tint` peignait le panneau en aplat
+                // ORANGE plein : le titre teinté devenait jaune sur jaune —
+                // illisible — et le solde perdait le contraste que le thème lui
+                // donne. Une teinte sert à SIGNALER, elle ne peut pas servir de
+                // fond à ce qu'elle signale.
+                .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
+                        .fill(ThemeManager.shared.backgroundSecondary)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
+                        .stroke(tint.opacity(0.30), lineWidth: 1)
+                )
                 .presentationCompactAdaptationPopoverIfAvailable()
         }
     }
@@ -70,6 +110,23 @@ struct ProgressionMeeshDetail: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            // L'EN-TÊTE du menu — le logo et le mot. Le panneau s'ouvrait sur un
+            // solde nu : hors du bouton qui l'a ouvert, plus rien ne disait de
+            // quelle monnaie on parlait, et « 3 Meesh » devait porter seul à la
+            // fois le nom et le chiffre.
+            HStack(spacing: 6) {
+                Image("MeeshyLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 16, height: 16)
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                Text(ProgressionCopy.meeshEntryTitle)
+                    .font(.caption2.weight(.semibold))
+                    .textCase(.uppercase)
+                Spacer(minLength: 0)
+            }
+            .foregroundColor(tint)
+
             // Les formulations viennent du hero d'origine : « Aucune Meesh »
             // plutôt que « 0 Meesh », « Convertir » plutôt que « Frapper ». Une
             // refonte de DISPOSITION ne réécrit pas la langue en passant —
