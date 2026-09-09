@@ -141,6 +141,8 @@ const engagementResponseSchema = {
             floorPoints: { type: 'number' },
             missingPoints: { type: 'number' },
             mintCost: { type: 'number' },
+            firstMintedAt: { type: ['string', 'null'] },
+            lastMintedAt: { type: ['string', 'null'] },
           },
         },
       },
@@ -184,7 +186,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
         // fermer un écran de consultation.
         await new GlobalAchievements(fastify.prisma).sweep(userId).catch(() => undefined);
 
-        const [user, counters, milestones] = await Promise.all([
+        const [user, counters, milestones, frappes] = await Promise.all([
           fastify.prisma.user.findUnique({ where: { id: userId }, select: USER_ENGAGEMENT_SELECT }),
           // `take` borné, jamais retiré (#4165 critère 4) — même si le
           // maximum THÉORIQUE tient déjà sous la borne : au plus
@@ -207,6 +209,21 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
             select: { milestoneType: true, milestoneKey: true, reachedAt: true },
             orderBy: { reachedAt: 'desc' },
             take: 200,
+          }),
+          // LES BORNES DU REGISTRE DE FRAPPE (#5839).
+          //
+          // `reason: 'mint'` n'est pas un détail : le registre porte AUSSI les
+          // dons reçus, les octrois et les sanctions. Sans ce filtre, le
+          // sous-menu annoncerait « première frappe » la date d'un cadeau — un
+          // mensonge que rien ne signalerait, puisque la date, elle, serait
+          // vraie.
+          //
+          // Un `aggregate` plutôt que deux `findFirst` : un seul aller-retour,
+          // servi par l'index `[userId, createdAt]` déjà déclaré au modèle.
+          fastify.prisma.meeshLedger.aggregate({
+            where: { userId, reason: 'mint' },
+            _min: { createdAt: true },
+            _max: { createdAt: true },
           }),
         ]);
 
@@ -277,6 +294,8 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
             floorPoints: plan.floorPoints,
             missingPoints: plan.missingPoints,
             mintCost: MEESH_MINT_COST,
+            firstMintedAt: frappes._min.createdAt?.toISOString() ?? null,
+            lastMintedAt: frappes._max.createdAt?.toISOString() ?? null,
           },
 });
       } catch (error) {
