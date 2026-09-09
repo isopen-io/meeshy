@@ -21,6 +21,10 @@ export const ENGAGEMENT_AXES = [
   'tool.sticker',
   'tool.in_app_edit',
   'tool.direct_publish',
+  'social.tracked_link',
+  'social.share',
+  'social.invite_joined',
+  'social.friendship',
 ] as const;
 
 export type EngagementAxisKey = (typeof ENGAGEMENT_AXES)[number];
@@ -35,6 +39,26 @@ export const CONTENT_ENGAGEMENT_AXES: readonly EngagementAxisKey[] = [
   'content.post',
   'content.story',
   'content.reel',
+];
+
+/**
+ * Les 4 axes du LIEN SOCIAL (#5766).
+ *
+ * Les treize axes d'origine mesurent ce que l'auteur PRODUIT — contenu,
+ * commentaires, conversations, outils. Aucun ne mesurait ce qu'il TISSE. Or
+ * Meeshy est une messagerie : ce qui fait revenir quelqu'un n'est pas seulement
+ * ce qu'il publie, c'est le lien qu'il noue.
+ *
+ * Les quatre se distinguent par QUI agit, et c'est ce qui les rend
+ * non redondants : `tracked_link` et `share` sont des gestes de l'auteur ;
+ * `invite_joined` et `friendship` sont des gestes d'un AUTRE que l'auteur
+ * provoque. Les seconds valent plus cher à obtenir — c'est voulu.
+ */
+export const SOCIAL_ENGAGEMENT_AXES: readonly EngagementAxisKey[] = [
+  'social.tracked_link',
+  'social.share',
+  'social.invite_joined',
+  'social.friendship',
 ];
 
 /** Les 3 axes de « conversation distincte » (§ 8 — `achievement.three_conversation_kinds`). */
@@ -78,10 +102,43 @@ export const isEngagementMilestoneType = (value: string): value is EngagementMil
  * Poids par FAMILLE d'axe, appliqués au score agrégé de niveau (§ 5, § 7) —
  * constantes nommées, jamais des nombres dispersés dans le code.
  */
-export const CONTENT_AXIS_WEIGHT = 3;
-export const COMMENT_AXIS_WEIGHT = 2;
+/**
+ * **9 — le poids le plus fort du catalogue** (arbitrage porteur, 2026-09-09,
+ * relevé depuis 3).
+ *
+ * Ce que l'auteur PRODUIT passe devant tout : un message, une story, un réel,
+ * un post sont la matière même du produit — le lien et la conversation
+ * existent pour les porter.
+ *
+ * **Le relèvement n'est pas rétroactif, et c'est voulu.**
+ * `EngagementService.addToScore` fait `engagementScore: { increment: weight }`
+ * sur `User` : le score est BANQUÉ, jamais recalculé depuis les compteurs. Le
+ * contenu déjà produit garde donc les 3 points qu'il valait, et aucun niveau
+ * n'est distribué rétroactivement. L'échelle est mixte le temps que les
+ * comptes tournent — c'est le prix, connu, d'un score persisté plutôt que
+ * dérivé.
+ */
+export const CONTENT_AXIS_WEIGHT = 9;
+/**
+ * **3** (arbitrage porteur, 2026-09-09, relevé depuis 2).
+ *
+ * Commenter n'est pas seulement réagir : c'est produire du contenu chez
+ * quelqu'un d'autre. Non rétroactif, comme les autres relèvements du jour —
+ * le score est banqué à l'incrément, jamais recalculé.
+ */
+export const COMMENT_AXIS_WEIGHT = 3;
 export const CONVERSATION_AXIS_WEIGHT = 5;
 export const TOOL_AXIS_WEIGHT = 1;
+/**
+ * **7 — deuxième poids du catalogue** (arbitrage porteur, 2026-09-09, qui a
+ * renversé la proposition initiale de 4).
+ *
+ * Le lien passe devant la conversation (5) : **sans lien noué, il n'y a
+ * aucune conversation à tenir.** Inviter, partager, être rejoint, se lier sont
+ * les gestes qui CRÉENT la condition des autres axes — mais ils restent au
+ * service de ce qui se produit (9).
+ */
+export const SOCIAL_AXIS_WEIGHT = 7;
 
 /** Poids par axe — exhaustif sur `EngagementAxisKey`, vérifié par le compilateur. */
 export const ENGAGEMENT_AXIS_WEIGHTS: Record<EngagementAxisKey, number> = {
@@ -98,6 +155,10 @@ export const ENGAGEMENT_AXIS_WEIGHTS: Record<EngagementAxisKey, number> = {
   'tool.sticker': TOOL_AXIS_WEIGHT,
   'tool.in_app_edit': TOOL_AXIS_WEIGHT,
   'tool.direct_publish': TOOL_AXIS_WEIGHT,
+  'social.tracked_link': SOCIAL_AXIS_WEIGHT,
+  'social.share': SOCIAL_AXIS_WEIGHT,
+  'social.invite_joined': SOCIAL_AXIS_WEIGHT,
+  'social.friendship': SOCIAL_AXIS_WEIGHT,
 };
 
 /**
@@ -108,7 +169,7 @@ export const ENGAGEMENT_AXIS_WEIGHTS: Record<EngagementAxisKey, number> = {
  * tenir en miroir sur trois clients — chacun la DÉRIVE de la clé qu'il
  * affiche (Swift : `EngagementAxisKey.family`, `EngagementCatalog.swift`).
  */
-export const ENGAGEMENT_AXIS_FAMILIES = ['content', 'comment', 'conversation', 'tool'] as const;
+export const ENGAGEMENT_AXIS_FAMILIES = ['content', 'comment', 'conversation', 'tool', 'social'] as const;
 
 export type EngagementAxisFamily = (typeof ENGAGEMENT_AXIS_FAMILIES)[number];
 

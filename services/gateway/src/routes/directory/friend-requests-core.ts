@@ -15,6 +15,7 @@ import {
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
+import { EngagementService } from '../../services/engagement/EngagementService';
 
 /** Le plafond d'une page de demandes. */
 export const LIMITE_MAX_DEMANDES = 100;
@@ -393,6 +394,19 @@ async function trancherDemande(
 
   fastify.socialEvents?.invalidateFriendsCache(demande.senderId);
   fastify.socialEvents?.invalidateFriendsCache(demande.receiverId);
+
+  // Axe `social.friendship` (#5766) — **les DEUX parties sont créditées**, et
+  // ce n'est pas une largesse : une amitié n'appartient à personne seul. Ne
+  // créditer que celui qui accepte punirait l'autre d'avoir demandé, alors que
+  // c'est lui qui a fait le premier geste.
+  //
+  // Tir-et-oublie, comme les treize autres axes : un compteur d'engagement ne
+  // fait jamais échouer l'acte qu'il mesure.
+  const engagement = new EngagementService(fastify.prisma);
+  for (const partie of [demande.senderId, demande.receiverId]) {
+    engagement.recordActivity(partie, 'social.friendship')
+      .catch((err) => logError(fastify.log, 'engagement social.friendship failed:', err));
+  }
 
   if (notifications) {
     await notifications.createFriendAcceptedNotification({
