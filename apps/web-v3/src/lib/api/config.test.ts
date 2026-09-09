@@ -59,14 +59,17 @@ describe('resolveApiConfig — la base', () => {
    * `ARG VITE_API_BASE=""` non renseigné au `docker build` pose la chaîne VIDE,
    * que Vite expose telle quelle (#5872).
    */
-  test.each([['vide', ''], ['blanche', '   ']])(
-    "surcharge %s = ABSENTE, jamais une base relative",
-    (_nom, valeur) => {
-      expect(resolveApiConfig({ VITE_API_BASE: valeur }, { shell: false }).base).toBe('https://gate.meeshy.me');
-      expect(resolveApiConfig({ DEV: true, VITE_API_BASE: valeur }, { shell: false }).base).toBe('');
-      expect(resolveApiConfig({ VITE_API_BASE: valeur }, { shell: true }).base).toBe('https://gate.meeshy.me');
-    }
-  );
+  test('surcharge VIDE = ABSENTE, jamais une base relative', () => {
+    expect(resolveApiConfig({ VITE_API_BASE: '' }, { shell: false }).base).toBe('https://gate.meeshy.me');
+    expect(resolveApiConfig({ DEV: true, VITE_API_BASE: '' }, { shell: false }).base).toBe('');
+    expect(resolveApiConfig({ VITE_API_BASE: '' }, { shell: true }).base).toBe('https://gate.meeshy.me');
+  });
+
+  test('surcharge BLANCHE = ABSENTE elle aussi', () => {
+    expect(resolveApiConfig({ VITE_API_BASE: '   ' }, { shell: false }).base).toBe('https://gate.meeshy.me');
+    expect(resolveApiConfig({ DEV: true, VITE_API_BASE: '   ' }, { shell: false }).base).toBe('');
+    expect(resolveApiConfig({ VITE_API_BASE: '   ' }, { shell: true }).base).toBe('https://gate.meeshy.me');
+  });
 
   test('coque Capacitor, défaut : base ABSOLUE de production — miroir de MeeshyConfig.swift:6', () => {
     expect(resolveApiConfig({}, { shell: true }).base).toBe('https://gate.meeshy.me');
