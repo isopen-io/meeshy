@@ -89,7 +89,7 @@ describe('POST /communities/:id/invite — inviter not a member, proven by mutat
     prisma.community.findFirst = jest.fn<any>(findFirstHonouringWhere([
       {
         id: COMM_ID, isPrivate: false, createdBy: OTHER_USER_ID,
-        members: [{ userId: OTHER_USER_ID, role: 'admin' }],
+        members: [{ userId: OTHER_USER_ID, role: 'admin', isActive: true }],
       },
     ]));
     app = await buildAuthApp(prisma);
@@ -116,8 +116,8 @@ describe('POST /communities/:id/invite — private community, non-admin inviter,
       {
         id: COMM_ID, isPrivate: true, createdBy: OTHER_USER_ID,
         members: [
-          { userId: OTHER_USER_ID, role: 'admin' },
-          { userId: USER_ID, role: 'member' },
+          { userId: OTHER_USER_ID, role: 'admin', isActive: true },
+          { userId: USER_ID, role: 'member', isActive: true },
         ],
       },
     ]));
