@@ -5,6 +5,7 @@ import { describe, expect, test } from 'bun:test';
 import { resolveConversationSections, type SectionableConversation } from '@meeshy/shared/utils/conversation-sections';
 
 import { CONVERSATIONS } from '@/lib/api/fixtures';
+import { FIXTURES_LOADED_AT } from '@/lib/api/fixtures-base';
 import { applyFilter } from '@/lib/lens/filters';
 
 import { resolveLensSections, sectionLabelOf } from './sections';
@@ -101,7 +102,15 @@ describe('les vecteurs partagés de sectionnement (rejoués depuis web-v3)', () 
 });
 
 describe('resolveLensSections — sur les fixtures web-v3', () => {
-  const now = new Date();
+  /**
+   * `FIXTURES_LOADED_AT` plutôt qu'un second `new Date()` (#5797) : le fil
+   * « Équipe déploiement » (`THREAD_ANCHOR`, `fixtures-base.ts`) est ancré
+   * sur ce MÊME instant — un `new Date()` propre à ce test dérivait, entre
+   * le chargement du module `fixtures.ts` et l'exécution de ce test, à la
+   * traversée d'un minuit parisien, faisant flaker
+   * « AUJOURD'HUI contient c-deploiement » sans aucun changement de code.
+   */
+  const now = FIXTURES_LOADED_AT;
   const timeZone = 'Europe/Paris';
 
   function sections() {

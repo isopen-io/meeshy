@@ -79,6 +79,13 @@
  *   passer par `buildApiUrl`/`apiService` — est resté dans l'inventaire :
  *   candidat sérieux à un cinquième bug de la famille #4219/#4222, PAS
  *   corrigé ici (hors territoire de cette garde, qui n'écrit que des tests).
+ * - Les fichiers spéciaux Next.js `sitemap.ts`/`robots.ts` (#3672) : ce sont
+ *   des générateurs de CONFIGURATION statique lus par le framework au build —
+ *   aucun `fetch`, aucun `buildApiUrl`, aucun `apiService`, structurellement
+ *   AUCUN appel réseau ne peut partir de ces fichiers. `app/robots.ts` liste
+ *   `/api/` dans ses préfixes `disallow` pour dire aux robots de NE PAS
+ *   explorer le BFF local — c'est une directive de CRAWL, pas un chemin
+ *   appelé, donc pas de la même famille que #4219/#4222.
  *
  * ## L'inventaire figé — CE QU'IL EST, ET COMMENT IL DÉCROÎT
  *
@@ -137,6 +144,15 @@ const IGNORED_DIRS = new Set([
 
 /** Seul fichier où un littéral d'API EST le catalogue plutôt qu'une lecture qui le contourne (voir header). */
 const CATALOG_DEFINITION_FILES = new Set([path.join(WEB_ROOT, 'lib/config.ts')]);
+
+/**
+ * Fichiers spéciaux Next.js qui ne peuvent STRUCTURELLEMENT émettre aucun
+ * appel réseau (aucun `fetch`/`buildApiUrl`/`apiService` n'y a de sens — ce
+ * sont des générateurs de config lus par le framework, voir header). Un
+ * littéral `/api/` y est une directive de CRAWL ou une chaîne de
+ * configuration, jamais une adresse appelée.
+ */
+const NO_NETWORK_CALL_FILES = new Set([path.join(WEB_ROOT, 'app/robots.ts')]);
 
 /** Les sept verbes HTTP publics de `ApiService` (`services/api.service.ts`) — chacun délègue à `request()`, qui appelle `buildApiUrl(endpoint)` SANS transformer l'argument. Un littéral ici a exactement le même effet qu'un littéral passé à `buildApiUrl` directement. */
 const API_SERVICE_VERBS = ['get', 'post', 'put', 'patch', 'delete', 'uploadFile', 'getBlob'] as const;
@@ -374,6 +390,7 @@ export function sweepApiPathLiterals(webRoot: string): ApiLiteralSite[] {
   const sites: ApiLiteralSite[] = [];
   for (const file of sourceFilesUnderWeb(webRoot)) {
     if (CATALOG_DEFINITION_FILES.has(file)) continue;
+    if (NO_NETWORK_CALL_FILES.has(file)) continue;
     const source = fs.readFileSync(file, 'utf8');
     sites.push(...scanApiPathLiterals(source, path.relative(webRoot, file), prefixes));
   }

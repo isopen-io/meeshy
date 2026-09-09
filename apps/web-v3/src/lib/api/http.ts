@@ -1,4 +1,4 @@
-import type { PaginationMeta } from '@meeshy/shared/types/api-responses';
+import type { CursorPaginationMeta, PaginationMeta } from '@meeshy/shared/types/api-responses';
 
 import type { Transport } from '../net/transport';
 
@@ -67,6 +67,17 @@ export type ApiSuccess<T> = {
   readonly ok: true;
   readonly data: T;
   readonly pagination?: PaginationMeta;
+  /**
+   * #5650 (F2/§3.3) — la pagination CURSEUR d'une route qui la sert à côté de
+   * `pagination` (`GET /conversations/:id/messages`,
+   * `services/gateway/src/routes/conversations/messages-list.ts:743-756` :
+   * `{ data, cursorPagination, meta, pagination? }` — DEUX champs de
+   * pagination SIBLINGS de `data`, jamais imbriqués dedans). Sans ce champ,
+   * `hasOlder` (§ `messages.ts`) était irrécupérable depuis ce pont UNIQUE : le
+   * SEUL autre choix était un second chemin réseau pour le fil, exactement la
+   * jumelle divergente que ce transport existe pour éviter.
+   */
+  readonly cursorPagination?: CursorPaginationMeta;
 };
 
 export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
@@ -108,13 +119,22 @@ export type HttpTransport = Transport & {
 const GENERIC_ERROR = (status: number): string => `Erreur ${status}`;
 
 /**
- * Valeur CONSERVATRICE et PROVISOIRE — aucun écran ne consomme encore ce
- * transport ce tour (#5605 § périmètre), donc aucun p95 réel n'existe pour
- * l'arbitrer. Le premier travail qui câble un écran réel DOIT la
- * reconsidérer contre le p95 MESURÉ de ses routes (dimension 2), jamais la
- * garder par confort — inventer une valeur définitive sans mesure serait
- * exactement l'erreur que la doctrine de poids du dépôt interdit pour un
- * chiffre de performance.
+ * Valeur CONSERVATRICE, ARBITRÉE contre le p95 MESURÉ (#5650, §7.3) —
+ * `GET /conversations` (5 tirs sur `gate.staging.meeshy.me`, compte
+ * `cible-web-trois`) : 1.662 / 1.668 / 1.857 / 1.634 / 1.516 s — p95 (5e
+ * tir) ≈ 1,52 s, pire cas observé 1,86 s. `GET /conversations/:id` :
+ * ~0,30-0,32 s. `GET …/messages?limit=50` : ~0,60-0,69 s. Règle retenue
+ * (§7.3 de la spécification) : `p95 × 3 < 15 s` ⇒ la valeur reste — ici
+ * 1,86 × 3 ≈ 5,6 s, largement sous le plafond. `15_000` n'est donc plus
+ * PROVISOIRE : c'est une garde large, mesurée, pas une estimation.
+ *
+ * CE N'EST PAS LA SEULE HORLOGE SUR CE CHEMIN (revue-correction) : dans la
+ * VARIANTE A (PWA), le service worker route `/api/**` en NetworkFirst avec
+ * `networkTimeoutSeconds: 3` (`vite.config.ts` § runtimeCaching). C'est LUI
+ * qui tranche le premier — au-delà de trois secondes il sert le cache
+ * disque au lieu d'attendre, ce qui est la dégradation hors-ligne VOULUE,
+ * pas une panne. Ce délai-ci reste la garde du chemin sans service worker
+ * (variante B Capacitor, `bunx vite` en développement, et tout témoin).
  */
 const DEFAULT_TIMEOUT_MS = 15_000;
 
@@ -264,6 +284,9 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
         ok: true,
         data: envelope.data as T,
         ...(envelope.pagination !== undefined ? { pagination: envelope.pagination as PaginationMeta } : {}),
+        ...(envelope.cursorPagination !== undefined
+          ? { cursorPagination: envelope.cursorPagination as CursorPaginationMeta }
+          : {}),
       };
     }
 

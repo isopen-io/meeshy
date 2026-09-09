@@ -312,12 +312,24 @@ jobs:
       # after resolve — see the "Save SPM cache" step for why the split matters.
       # Kept in its own tree (`$RUNNER_TEMP/spm`, via -clonedSourcePackagesDirPath)
       # so it caches independently of the compiled build products below.
+      #
+      # Keyed on the committed Package.resolved (present at checkout, before
+      # XcodeGen runs), not project.yml: project.yml changes for reasons that
+      # have nothing to do with the resolved package graph (targets, sources,
+      # entitlements, build settings — 43 changes in the 30 days before this
+      # fix, vs. Package.resolved only moving when a `packages:` version bump
+      # actually changes what SPM resolves), so keying on it invalidated a
+      # perfectly good SPM cache on every unrelated project.yml edit. The
+      # restore-keys prefix falls back to the most recent cache on an actual
+      # miss (a real dependency bump) instead of a full ~6 min cold resolve.
       - name: Restore SPM cache
         id: spm-restore
         uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/spm
-          key: ios-spm-${{ hashFiles('apps/ios/project.yml') }}
+          key: ios-spm-${{ hashFiles('apps/ios/Meeshy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            ios-spm-
 
       # Compiled modules / build products. RESTORE-ONLY; the save is explicit,
       # after the compile step (see "Save DerivedData build cache"), because the
@@ -412,7 +424,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/spm
-          key: ios-spm-${{ hashFiles('apps/ios/project.yml') }}
+          key: ios-spm-${{ hashFiles('apps/ios/Meeshy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
 
       # Compile separately from running so DerivedData can be banked the moment
       # the (expensive) build finishes — see "Save DerivedData build cache".
