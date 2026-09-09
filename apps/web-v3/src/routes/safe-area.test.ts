@@ -39,25 +39,58 @@ const FULL_FRAME = /\b(?:min-)?h-dvh\b/;
  * liste d'exceptions sans motif redevient un tapis sous lequel on pousse les
  * vraies (même discipline que `ALLOWED` dans `check-utilities.mjs`).
  */
-const EXEMPT = new Map<string, string>();
+const EXEMPT = new Map<string, string>([
+  [
+    'components/shell.tsx',
+    "la COQUILLE, justement : c'est elle qui ne doit porter AUCUN inset — " +
+      "l'écran plein-cadre le porte lui-même. La garder hors exception ferait " +
+      'rougir le témoin sur la règle qu’il défend.',
+  ],
+]);
+
+/**
+ * DEUX dossiers, parce qu'une racine plein-cadre n'habite pas forcément
+ * `routes/` (#5816). `/auth/magic-link` monte `MagicLinkFlow` et
+ * `MagicLinkValidation` — c'est le COMPOSANT qui porte `h-dvh`, la route ne
+ * fait que choisir lequel des deux selon `?token=`. Scanner `routes/` seul
+ * laissait ces écrans, et tout écran écrit de la même façon, hors du témoin :
+ * l'énumération affirmait « tout écran plein-cadre », son balayage n'en voyait
+ * qu'un dossier.
+ */
+const SCANNED = [
+  { dir: ROUTES, prefix: '' },
+  { dir: join(ROUTES, '..', 'components'), prefix: 'components/' },
+];
 
 const screenFiles = () =>
-  readdirSync(ROUTES, { withFileTypes: true })
-    .filter((e) => e.isFile() && e.name.endsWith('.tsx'))
-    .map((e) => e.name);
+  SCANNED.flatMap(({ dir, prefix }) =>
+    readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.tsx'))
+      .map((e) => ({ name: `${prefix}${e.name}`, path: join(dir, e.name) })),
+  );
 
 describe('les écrans plein-cadre portent eux-mêmes l’encoche haute', () => {
   test('la liste des écrans scannés n’est pas vide — sinon ce témoin ne garde rien', () => {
-    const withFrame = screenFiles().filter((f) => FULL_FRAME.test(readFileSync(join(ROUTES, f), 'utf8')));
+    const withFrame = screenFiles().filter((f) => FULL_FRAME.test(readFileSync(f.path, 'utf8')));
     expect(withFrame.length > 0).toBe(true);
   });
 
-  for (const file of screenFiles()) {
-    const source = readFileSync(join(ROUTES, file), 'utf8');
-    if (!FULL_FRAME.test(source)) continue;
-    const reason = EXEMPT.get(file);
+  test('les DEUX dossiers rendent des écrans plein-cadre — un balayage borgne se verrait ici', () => {
+    const pleinCadre = screenFiles().filter((f) => FULL_FRAME.test(readFileSync(f.path, 'utf8')));
+    /* `prefix` vaut '' pour `routes/` : compter par `startsWith` y compterait
+       TOUT, et le témoin passerait au vert sur un balayage borgne. On compte
+       donc les noms QUALIFIÉS d'un côté, les nus de l'autre. */
+    const dansComposants = pleinCadre.filter((f) => f.name.startsWith('components/')).length;
+    const dansRoutes = pleinCadre.filter((f) => !f.name.includes('/')).length;
+    expect(dansRoutes > 0 && dansComposants > 0).toBe(true);
+  });
 
-    test(`${file} — sa racine h-dvh porte pt-safe${reason === undefined ? '' : ' (exempté)'}`, () => {
+  for (const file of screenFiles()) {
+    const source = readFileSync(file.path, 'utf8');
+    if (!FULL_FRAME.test(source)) continue;
+    const reason = EXEMPT.get(file.name);
+
+    test(`${file.name} — sa racine h-dvh porte pt-safe${reason === undefined ? '' : ' (exempté)'}`, () => {
       if (reason !== undefined) {
         expect(reason.length > 0).toBe(true);
         return;

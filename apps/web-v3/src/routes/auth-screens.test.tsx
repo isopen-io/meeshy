@@ -7,6 +7,7 @@ import { LanguageSheet } from '@/components/language-sheet';
 
 import LoginScreen from './login';
 import SignupScreen from './signup';
+import WelcomeScreen from './welcome';
 
 /**
  * LES DEUX PORTES, RENDUES (revue de #5555) — ce que les témoins purs
@@ -47,6 +48,59 @@ describe('LoginScreen — la marque et la version', () => {
 
   test('« Créer un compte » est une ANCRE vers /signup — pas un bouton qui navigue', () => {
     expect(html).toContain('href="/signup"');
+  });
+});
+
+/**
+ * LES DEUX PORTES (#5816, T8) — `LoginView.swift:478-503` : « Connexion sans
+ * mot de passe » AVANT « Mot de passe oublié ? » dans le HTML (l'ordre de
+ * son doc-comment l.479-480), toutes deux des ANCRES.
+ */
+describe('LoginScreen — les deux portes', () => {
+  const html = renderToStaticMarkup(<LoginScreen />);
+
+  test('« Connexion sans mot de passe » (/auth/magic-link) précède « Mot de passe oublié ? » (/forgot-password)', () => {
+    const magicLinkIndex = html.indexOf('href="/auth/magic-link"');
+    const forgotPasswordIndex = html.indexOf('href="/forgot-password"');
+    expect(magicLinkIndex).toBeGreaterThan(-1);
+    expect(forgotPasswordIndex).toBeGreaterThan(-1);
+    expect(magicLinkIndex).toBeLessThan(forgotPasswordIndex);
+    expect(html).toContain('Connexion sans mot de passe');
+    expect(html).toContain('Mot de passe oublié ?');
+  });
+
+  test('les deux sont des ANCRES — aucun `onClick` qui navigue via history', () => {
+    expect(html).not.toContain('history.pushState');
+  });
+});
+
+/**
+ * L'ACCUEIL (#5816, T8) — `WelcomeView.swift` : le glyphe des trois traits
+ * (jamais l'icône d'application), « Meeshy », la tagline, les deux portes
+ * (`/signup`, `/login`), le pied de marque.
+ */
+describe('WelcomeScreen', () => {
+  const html = renderToStaticMarkup(<WelcomeScreen />);
+
+  test('rend le GLYPHE des trois traits, jamais l’icône d’application', () => {
+    expect(html.match(/<line/g)).toHaveLength(3);
+    expect(html).not.toContain('/brand/logo.png');
+  });
+
+  test('« Meeshy » et sa tagline sont rendus', () => {
+    expect(html).toContain('Meeshy');
+    expect(html).toContain('Écrivez dans votre langue');
+  });
+
+  test('les deux portes sont des ANCRES vers /signup et /login', () => {
+    expect(html).toContain('href="/signup"');
+    expect(html).toContain('href="/login"');
+    expect(html).toContain('Créer un compte');
+    expect(html).toContain('Se connecter');
+  });
+
+  test('le pied de marque « Services CEO » est rendu', () => {
+    expect(html).toContain('Services CEO');
   });
 });
 

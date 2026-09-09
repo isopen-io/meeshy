@@ -49,3 +49,55 @@ describe('resolveRouteAccess — source gateway, session ACTIVE sur une route PR
   test('list', () => expect(resolveRouteAccess({ sessionStatus: 'authenticated', source: 'gateway', routeKey: 'list' })).toBe('allow'));
   test('thread', () => expect(resolveRouteAccess({ sessionStatus: 'authenticated', source: 'gateway', routeKey: 'thread' })).toBe('allow'));
 });
+
+/**
+ * L'ACCUEIL (#5816, T6) — quatre clés neuves. `welcomeCompleted` ne pèse que
+ * sur une route PRIVÉE visitée sans session : soldé ⇒ `redirect-login`
+ * (comportement inchangé, celui que les blocs ci-dessus vérifient SANS
+ * fournir le champ) ; non soldé ⇒ `redirect-welcome`.
+ */
+describe('resolveRouteAccess — l’accueil (#5816)', () => {
+  test('privée + anonyme + welcomeCompleted:false ⇒ redirect-welcome', () => {
+    for (const routeKey of PRIVATE_ROUTES) {
+      expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey, welcomeCompleted: false })).toBe(
+        'redirect-welcome',
+      );
+    }
+  });
+
+  test('privée + anonyme + welcomeCompleted:true ⇒ redirect-login (les deux moitiés du seuil)', () => {
+    for (const routeKey of PRIVATE_ROUTES) {
+      expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey, welcomeCompleted: true })).toBe(
+        'redirect-login',
+      );
+    }
+  });
+
+  test('gateway + authenticated sur welcome/magicLink/forgotPassword ⇒ redirect-home', () => {
+    for (const routeKey of ['welcome', 'magicLink', 'forgotPassword'] as const) {
+      expect(resolveRouteAccess({ sessionStatus: 'authenticated', source: 'gateway', routeKey })).toBe('redirect-home');
+    }
+  });
+
+  test('gateway + anonyme sur welcome/magicLink/forgotPassword ⇒ allow', () => {
+    for (const routeKey of ['welcome', 'magicLink', 'forgotPassword'] as const) {
+      expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey })).toBe('allow');
+    }
+  });
+
+  test('magicLinkValidate ⇒ allow pour les TROIS statuts (§9 Q4 — le jeton ne doit pas expirer dans la boîte mail)', () => {
+    for (const sessionStatus of ['anonymous', 'pending2fa', 'authenticated'] as const) {
+      expect(resolveRouteAccess({ sessionStatus, source: 'gateway', routeKey: 'magicLinkValidate' })).toBe('allow');
+    }
+  });
+
+  test('pending2fa sur welcome ⇒ allow (un pending n’est pas une session active)', () => {
+    expect(resolveRouteAccess({ sessionStatus: 'pending2fa', source: 'gateway', routeKey: 'welcome' })).toBe('allow');
+  });
+
+  test('fixtures ⇒ allow sur les quatre clés neuves, quel que soit welcomeCompleted', () => {
+    for (const routeKey of ['welcome', 'magicLink', 'magicLinkValidate', 'forgotPassword'] as const) {
+      expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'fixtures', routeKey, welcomeCompleted: false })).toBe('allow');
+    }
+  });
+});

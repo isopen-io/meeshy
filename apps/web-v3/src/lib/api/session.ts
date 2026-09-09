@@ -2,6 +2,8 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import type { User } from '@meeshy/shared/types/user';
 
+import { safeLocalStorage } from '../storage';
+
 /**
  * LE MAGASIN DE SESSION (#5605, T3) — UNE source, motif `conversation-store.ts`
  * (`zustand/vanilla` : observable HORS de tout composant, sans DOM).
@@ -186,41 +188,13 @@ function purge(storage: SessionStorage): void {
   }
 }
 
-/**
- * `localStorage` réel — seul point d'accès au global, résolu paresseusement
- * pour qu'un contexte sans DOM (bun test import d'un consommateur, rendu
- * institutionnel préchauffé) ne fasse jamais échouer l'IMPORT du module :
- * seule la création SANS storage explicite le sollicite, et elle retombe en
- * mémoire si l'accès échoue (navigation privée stricte, `localStorage`
- * absent).
- */
-function browserStorage(): SessionStorage {
-  try {
-    const probe = '__meeshy_session_probe__';
-    globalThis.localStorage.setItem(probe, '1');
-    globalThis.localStorage.removeItem(probe);
-    return globalThis.localStorage;
-  } catch {
-    const memory = new Map<string, string>();
-    return {
-      getItem: (key) => memory.get(key) ?? null,
-      setItem: (key, value) => {
-        memory.set(key, value);
-      },
-      removeItem: (key) => {
-        memory.delete(key);
-      },
-    };
-  }
-}
-
 export type SessionStoreOptions = {
   readonly storage?: SessionStorage;
   readonly now?: () => number;
 };
 
 export function createSessionStore(options: SessionStoreOptions = {}): SessionStoreApi {
-  const storage = options.storage ?? browserStorage();
+  const storage = options.storage ?? safeLocalStorage();
   const now = options.now ?? (() => Date.now());
 
   return createStore<SessionStoreState>((set) => ({
