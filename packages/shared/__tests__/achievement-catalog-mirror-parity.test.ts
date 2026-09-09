@@ -16,7 +16,7 @@
  * Xcode ni d'un simulateur, donc il tourne dans le même `bun test` que le reste.
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ACHIEVEMENT_FAMILIES, familyId } from '../types/achievement-families.js';

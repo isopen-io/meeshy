@@ -299,7 +299,7 @@ export function registerLeaveRoutes(
       void new CerclesAchievements(fastify.prisma).recordEvent({
         kind: 'conversation.leave',
         userId,
-      });
+      }).catch(() => undefined);
 
       return sendSuccess(reply, { conversationId: id, leftAt: now.toISOString() })
     }

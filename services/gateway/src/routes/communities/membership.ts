@@ -219,7 +219,7 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
         kind: 'community.join',
         userId,
         communityId: id,
-      });
+      }).catch(() => undefined);
 
       // Pas de gate ici : le membre rendu est l'APPELANT lui-même, et une
       // préférence de visibilité ne se cache pas à celui qui l'a posée.
@@ -460,7 +460,7 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
         kind: 'community.join',
         userId: inviteeId,
         communityId: id,
-      });
+      }).catch(() => undefined);
 
       // Critère STRICT avec le viewer réel (l'inviteur) — être membre de la
       // même communauté que l'invité ne vaut plus d'accès à sa présence.

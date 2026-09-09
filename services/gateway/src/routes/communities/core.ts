@@ -492,7 +492,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         kind: 'community.create',
         userId,
         communityId: community.id,
-      });
+      }).catch(() => undefined);
 
       return sendSuccess(reply, flattenCommunityCounts(community), { statusCode: 201 });
     } catch (error) {

@@ -5,7 +5,7 @@
  * facteur sort de quelles entrées, et surtout ce que la loi REFUSE de faire.
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import {
   computeEngagementElan,
   creditedPoints,

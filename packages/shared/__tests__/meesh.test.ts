@@ -5,7 +5,7 @@
  * surtout ce que le plan REFUSE de faire.
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import {
   computeMeeshMintPlan,
   debitsActionCount,

@@ -6,7 +6,7 @@
  * succès invisible — une panne silencieuse, la pire espèce.
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import { achievementLabel, ACHIEVEMENT_LABELS } from '../utils/achievement-labels.js';
 import { ACHIEVEMENT_FAMILIES, familyId } from '../types/achievement-families.js';
 import { NOTIFICATION_LANGUAGES } from '../utils/notification-strings.js';

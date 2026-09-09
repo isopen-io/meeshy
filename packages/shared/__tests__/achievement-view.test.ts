@@ -2,7 +2,7 @@
  * La grammaire des succès et sa fenêtre d'affichage (#5758).
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import {
   achievementKey,
   difficultyOf,

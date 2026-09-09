@@ -309,7 +309,7 @@ export function registerParticipantWriteRoutes(
         kind: 'conversation.join',
         userId,
         conversationId,
-      });
+      }).catch(() => undefined);
     }
 
     // Annoncer l'arrivée — quatrième et dernière porte, même loi. Une entrée

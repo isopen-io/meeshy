@@ -333,12 +333,12 @@ export function registerCreateConversationRoute(
       // Succès « cercles » (#5759) — APRÈS l'ACK métier. Créer un cercle, c'est
       // aussi le rejoindre : les deux familles (`create.count`, `join.*`) sont
       // évaluées par les deux événements, chacun ne mesurant que la sienne.
-      void new CerclesAchievements(prisma).recordEvent({ kind: 'conversation.create', userId });
+      void new CerclesAchievements(prisma).recordEvent({ kind: 'conversation.create', userId }).catch(() => undefined);
       void new CerclesAchievements(prisma).recordEvent({
         kind: 'conversation.join',
         userId,
         conversationId: conversation.id,
-      });
+      }).catch(() => undefined);
 
       // Si la conversation est créée dans une communauté, ajouter automatiquement
       // tous les participants à la communauté s'ils n'y sont pas déjà
