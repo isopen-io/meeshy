@@ -38,10 +38,25 @@ describe('la séquence du hub', () => {
     expect(premierLien).toBeGreaterThan(suite.lastIndexOf('elans'));
   });
 
-  it('sert les trois sections dans l\'ordre badges, défis, succès', () => {
+  it('sert les sections dans l\'ordre badges, défis, succès', () => {
+    const sections = progressionLayout(
+      resolveEngagementProgress({ ...VIDE, achievementReach: {} }),
+    ).flatMap((b) => (b.kind === 'section-link' ? [b.section] : []));
+    expect(sections).toEqual(['badges', 'defis', 'succes']);
+  });
+
+  /**
+   * **Une porte qui ne va nulle part est PIRE qu'une porte absente.**
+   *
+   * Sans carte d'atteignabilité, l'entrée « Défis » annoncerait « 0 / 0 » et
+   * ouvrirait une page vide : l'utilisateur lit ça comme une panne, pas comme
+   * une absence. Badges et Succès restent, eux, en toute circonstance — leur
+   * catalogue est une constante partagée, jamais une mesure du serveur.
+   */
+  it('retire la porte des DÉFIS quand la carte manque, et garde les deux autres', () => {
     const sections = progressionLayout(resolveEngagementProgress(VIDE))
       .flatMap((b) => (b.kind === 'section-link' ? [b.section] : []));
-    expect(sections).toEqual(['badges', 'defis', 'succes']);
+    expect(sections).toEqual(['badges', 'succes']);
   });
 });
 

@@ -66,12 +66,27 @@ export type ProgressionBlock =
  * du réflexe « pas de données, pas de bloc », qui produit un premier lancement
  * muet — le moment où l'utilisateur a le plus besoin qu'on lui parle.
  */
-export function progressionLayout(_progress: EngagementProgress): readonly ProgressionBlock[] {
+export function progressionLayout(progress: EngagementProgress): readonly ProgressionBlock[] {
+  /**
+   * La porte des DÉFIS n'existe que si la passerelle sert la carte
+   * d'atteignabilité. Sans elle, l'entrée annoncerait « 0 / 0 » et mènerait à
+   * une page vide : une porte qui ne va nulle part est pire qu'une porte
+   * absente, parce qu'elle se lit comme une panne. Badges et Succès, eux, sont
+   * TOUJOURS servis : leur catalogue est une constante partagée, jamais une
+   * mesure du serveur.
+   *
+   * (Ce que « carte absente » doit vouloir dire au juste est une décision
+   * produit ouverte — #5829. Ici on refuse simplement de promettre du vide.)
+   */
+  const sections = PROGRESSION_SECTIONS.filter(
+    (section) => section !== 'defis' || progress.achievementSections !== undefined,
+  );
+
   return [
     { kind: 'last-achievement' },
     { kind: 'level' },
     { kind: 'elans' },
-    ...PROGRESSION_SECTIONS.map((section) => ({ kind: 'section-link', section }) as const),
+    ...sections.map((section) => ({ kind: 'section-link', section }) as const),
   ];
 }
 
