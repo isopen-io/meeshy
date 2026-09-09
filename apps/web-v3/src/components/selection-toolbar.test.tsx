@@ -1,9 +1,9 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { SelectionToolbar } from './selection-toolbar';
 
 describe('SelectionToolbar — rendu (T13)', () => {
@@ -28,12 +28,12 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 
 describe('SelectionToolbar — effets (T13)', () => {
   beforeAll(() => {
-    GlobalRegistrator.register();
+    ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });
   afterAll(async () => {
     delete globals.IS_REACT_ACT_ENVIRONMENT;
-    await GlobalRegistrator.unregister();
+    await releaseHappyDomIfRegistered();
   });
 
   let container: HTMLDivElement;
