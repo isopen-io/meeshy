@@ -275,6 +275,7 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
     search,
     replace = false,
     children,
+    onClick: onClickProp,
     ...rest
   }: {
     to: C;
@@ -323,8 +324,12 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
         onBlur={disarm}
         onClick={(e) => {
           // On laisse le navigateur faire son travail quand l'utilisateur le
-          // lui demande : nouvel onglet, telechargement, cible explicite.
-          if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          // lui demande : nouvel onglet, telechargement, cible explicite. Le
+          // `onClick` de l'appelant n'est meme pas invoque pour ces gestes-la
+          // (#5816, E2) : rien de ce qui suit un clic SPA ne doit se produire.
+          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          onClickProp?.(e);
+          if (e.defaultPrevented) return;
           e.preventDefault();
           disarm();
           navigate(url, replace);

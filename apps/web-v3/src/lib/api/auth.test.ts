@@ -293,3 +293,168 @@ describe('logout() — wipe D’ABORD (miroir SessionSnapshotStore.wipe(), login
     expect(store.getState().session).toEqual({ status: 'anonymous' });
   });
 });
+
+/**
+ * LE LIEN MAGIQUE ET LE MOT DE PASSE OUBLIÉ (#5816, T3a-c) — miroir
+ * `MagicLinkView.swift` / `MeeshyForgotPasswordView.swift`, § 3 de la
+ * spécification.
+ */
+describe('requestMagicLink() — POST /auth/magic-link/request (routes/magic-link.ts:45-118)', () => {
+  test('corps { email } SEUL ; le magasin reste anonymous ; le résultat est rendu SANS être avalé', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.requestMagicLink({ email: 'ada@x.io' });
+
+    expect(calls[0]).toEqual({ method: 'POST', path: '/api/v1/auth/magic-link/request', body: { email: 'ada@x.io' } });
+    expect(result).toEqual({ ok: true, data: { expiresInSeconds: 600 }, status: 200 });
+    expect(store.getState().session).toEqual({ status: 'anonymous' });
+  });
+
+  test('rememberDevice n’est envoyé que s’il est fourni (même règle que login)', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.requestMagicLink({ email: 'ada@x.io', rememberDevice: true });
+
+    expect(calls[0]?.body).toEqual({ email: 'ada@x.io', rememberDevice: true });
+  });
+
+  test('un échec (débit dépassé) laisse aussi le magasin anonymous, résultat rendu tel quel', async () => {
+    const store = memoryStore();
+    const { transport } = stubTransport([{ ok: true, data: {}, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.requestMagicLink({ email: 'ada@x.io' });
+
+    expect(result).toEqual({ ok: true, data: {}, status: 200 });
+    expect(store.getState().session).toEqual({ status: 'anonymous' });
+  });
+});
+
+describe('validateMagicLink() — POST /auth/magic-link/validate (routes/magic-link.ts:150-330)', () => {
+  test('(a) 200 session ⇒ magasin authenticated, token/sessionToken/expiresAt et persisté', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([
+      {
+        ok: true,
+        data: {
+          user: { id: 'u-1', username: 'ada', displayName: 'Ada' },
+          token: 'jwt-ml',
+          sessionToken: 'sess-ml',
+          session: { id: 's-ml', isTrusted: false },
+          expiresIn: 86_400,
+        },
+        status: 200,
+      },
+    ]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.validateMagicLink('tok-abc');
+
+    expect(calls[0]).toEqual({ method: 'POST', path: '/api/v1/auth/magic-link/validate', body: { token: 'tok-abc' } });
+    expect(result.ok).toBe(true);
+    expect(store.getState().session).toEqual({
+      status: 'authenticated',
+      user: { id: 'u-1', username: 'ada', displayName: 'Ada' },
+      token: 'jwt-ml',
+      sessionToken: 'sess-ml',
+      expiresAt: FIXED_NOW + 86_400_000,
+    });
+  });
+
+  test('(b) 200 requires2FA ⇒ magasin pending2fa, AUCUN jeton', async () => {
+    const store = memoryStore();
+    const { transport } = stubTransport([
+      {
+        ok: true,
+        data: {
+          requires2FA: true,
+          twoFactorToken: 'tok-2fa',
+          user: { id: 'u-1', username: 'ada', email: 'a@x.io', firstName: 'A', lastName: 'D', displayName: 'Ada' },
+          message: 'Veuillez entrer votre code',
+        },
+        status: 200,
+      },
+    ]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.validateMagicLink('tok-abc');
+
+    expect(store.getState().session).toEqual({
+      status: 'pending2fa',
+      twoFactorToken: 'tok-2fa',
+      user: { id: 'u-1', username: 'ada', email: 'a@x.io', firstName: 'A', lastName: 'D', displayName: 'Ada' },
+    });
+  });
+
+  test('(c) 400 ⇒ magasin INCHANGÉ', async () => {
+    const store = memoryStore();
+    const { transport } = stubTransport([{ ok: false, status: 400, error: 'This link has expired. Please request a new one.' }]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.validateMagicLink('tok-expired');
+
+    expect(result.ok).toBe(false);
+    expect(store.getState().session).toEqual({ status: 'anonymous' });
+  });
+
+  test('(d) magasin déjà authenticated (autre compte) ⇒ clearSession() AVANT la requête', async () => {
+    const store = memoryStore();
+    store
+      .getState()
+      .establish({ user: { id: 'u-old', username: 'old' }, token: 'jwt-old', sessionToken: 'sess-old', expiresIn: 86_400 });
+
+    const seenSessionStatusAtCallTime: string[] = [];
+    const transport = {
+      request: async <T>(_request: HttpRequest) => {
+        seenSessionStatusAtCallTime.push(store.getState().session.status);
+        return {
+          ok: true,
+          data: {
+            user: { id: 'u-new', username: 'new' },
+            token: 'jwt-new',
+            sessionToken: 'sess-new',
+            session: { id: 's-new' },
+            expiresIn: 86_400,
+          },
+          status: 200,
+        } as ApiResult<T>;
+      },
+    };
+    const auth = createAuthClient({ transport, store });
+
+    await auth.validateMagicLink('tok-new');
+
+    expect(seenSessionStatusAtCallTime).toEqual(['anonymous']);
+    const session = store.getState().session;
+    expect(session.status).toBe('authenticated');
+    expect(session.status === 'authenticated' && session.user).toEqual({ id: 'u-new', username: 'new' });
+  });
+});
+
+describe('forgotPassword() — POST /auth/forgot-password (password-reset.ts:110-215)', () => {
+  test('corps { email } vers /api/v1/auth/forgot-password ; magasin intact', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([{ ok: true, data: undefined, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.forgotPassword('ada@x.io');
+
+    expect(calls[0]).toEqual({ method: 'POST', path: '/api/v1/auth/forgot-password', body: { email: 'ada@x.io' } });
+    expect(result.ok).toBe(true);
+    expect(store.getState().session).toEqual({ status: 'anonymous' });
+  });
+
+  test('200 avec data:undefined rend ok:true (forme nominale du serveur, § 3.3)', async () => {
+    const store = memoryStore();
+    const { transport } = stubTransport([{ ok: true, data: undefined, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.forgotPassword('ada@x.io');
+
+    expect(result).toEqual({ ok: true, data: undefined, status: 200 });
+  });
+});

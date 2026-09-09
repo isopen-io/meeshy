@@ -39,3 +39,41 @@ describe('ROUTES — /login et /signup', () => {
     expect(typeof ROUTES.progression.screen).toBe('function');
   });
 });
+
+/**
+ * LES QUATRE ADRESSES DE #5816 (T1) — chacune s'apparie à SON motif et à
+ * rien d'autre : en particulier `magicLink` ne prend PAS
+ * `/auth/magic-link/validate` (le regex de `compile` est ANCRÉ, `router.tsx:102`
+ * — sans l'ancrage, un préfixe apparierait aussi son propre suffixe), et
+ * `magicLinkValidate` ne prend pas `/auth/magic-link`.
+ */
+describe('ROUTES — les quatre adresses de #5816', () => {
+  test('welcome s’apparie à /welcome', () => {
+    const compiled = compile(ROUTES.welcome.pattern);
+    expect(match(compiled, '/welcome')).toEqual({});
+  });
+
+  test('magicLink s’apparie à /auth/magic-link, jamais à /auth/magic-link/validate', () => {
+    const compiled = compile(ROUTES.magicLink.pattern);
+    expect(match(compiled, '/auth/magic-link')).toEqual({});
+    expect(match(compiled, '/auth/magic-link/validate')).toBe(null);
+  });
+
+  test('magicLinkValidate s’apparie à /auth/magic-link/validate, jamais à /auth/magic-link', () => {
+    const compiled = compile(ROUTES.magicLinkValidate.pattern);
+    expect(match(compiled, '/auth/magic-link/validate')).toEqual({});
+    expect(match(compiled, '/auth/magic-link')).toBe(null);
+  });
+
+  test('forgotPassword s’apparie à /forgot-password', () => {
+    const compiled = compile(ROUTES.forgotPassword.pattern);
+    expect(match(compiled, '/forgot-password')).toEqual({});
+  });
+
+  test('les quatre screen sont des fonctions (import() paresseux)', () => {
+    expect(typeof ROUTES.welcome.screen).toBe('function');
+    expect(typeof ROUTES.magicLink.screen).toBe('function');
+    expect(typeof ROUTES.magicLinkValidate.screen).toBe('function');
+    expect(typeof ROUTES.forgotPassword.screen).toBe('function');
+  });
+});

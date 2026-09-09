@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Glyph } from './glyph';
+import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
 import type { GlyphName } from './glyphs';
 
 /**
@@ -19,6 +19,7 @@ export function Field({
   id,
   label,
   icon,
+  glyph,
   tint,
   focused,
   error,
@@ -27,6 +28,15 @@ export function Field({
   id: string;
   label?: string | undefined;
   icon?: GlyphName | undefined;
+  /**
+   * Un tracé du SOCLE porté par sa FORME plutôt que par son nom — alternative
+   * à `icon` pour un jeu d'écran (#5816, `AUTH_GLYPHS.envelope` : le champ
+   * e-mail du lien magique et du mot de passe oublié). Même dispositif que
+   * `axisGlyph` (`routes/progression.tsx:72-74`) : `Field` reste agnostique
+   * du jeu qui a produit le tracé. `icon` et `glyph` ne se posent jamais
+   * ensemble — au plus l'un des deux.
+   */
+  glyph?: GlyphShape | undefined;
   /** La couleur du bord au focus — `var(--ios-purple-600)` (connexion) ou
    * `var(--ios-indigo-500)` (inscription) : DEUX écrans, deux teintes,
    * jamais une troisième source de vérité pour le focus. */
@@ -39,6 +49,7 @@ export function Field({
   children: (ids: { id: string; describedBy: string | undefined }) => ReactNode;
 }) {
   const errorId = `${id}-error`;
+  const iconStyle = { color: `color-mix(in srgb, ${tint} 70%, transparent)`, flexShrink: 0 };
   return (
     <div className="grid gap-1">
       {label !== undefined ? (
@@ -56,9 +67,8 @@ export function Field({
           }`,
         }}
       >
-        {icon !== undefined ? (
-          <Glyph name={icon} size={20} style={{ color: `color-mix(in srgb, ${tint} 70%, transparent)`, flexShrink: 0 }} />
-        ) : null}
+        {icon !== undefined ? <Glyph name={icon} size={20} style={iconStyle} /> : null}
+        {icon === undefined && glyph !== undefined ? <GlyphSvg glyph={glyph} size={20} style={iconStyle} /> : null}
         {children({ id, describedBy: error !== undefined ? errorId : undefined })}
       </div>
       {error !== undefined ? (

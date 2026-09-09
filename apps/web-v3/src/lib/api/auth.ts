@@ -110,6 +110,35 @@ export type AuthDeps = {
   readonly store: SessionStoreApi;
 };
 
+/**
+ * LA BRANCHE PARTAGÉE d'une réponse « connexion réussie » (`LoginResponseData`)
+ * — extraite (#5816, E5) pour que `login()` ET `validateMagicLink()` la
+ * suivent SANS la recopier : les deux routes rendent la MÊME union
+ * (`routes/magic-link.ts:166-206` a exactement la forme de `login.ts:145-158,
+ * 206-212`).
+ */
+function applyLoginResponse(store: SessionStoreApi, data: LoginResponseData): void {
+  if (isTwoFactorResponse(data)) {
+    store.getState().beginTwoFactor({ user: data.user, twoFactorToken: data.twoFactorToken });
+    return;
+  }
+  store.getState().establish({
+    user: data.user,
+    token: data.token,
+    sessionToken: data.sessionToken,
+    expiresIn: data.expiresIn,
+  });
+}
+
+/** `POST /auth/magic-link/request` (`routes/magic-link.ts:45-118`) —
+ * `expiresInSeconds` optionnel : ABSENT sur un refus de débit dépassé
+ * emballé en 200 (§ 3.1 de la spécification, § `view/magic-link.ts`). */
+export type MagicLinkRequestData = { readonly expiresInSeconds?: number };
+
+/** `POST /auth/forgot-password` (`password-reset.ts:110-215`) — nominal SANS
+ * `data`, erreur interne `{ message }` : aucun champ que ce client consulte. */
+export type ForgotPasswordData = { readonly message?: string } | undefined;
+
 export function createAuthClient({ transport, store }: AuthDeps) {
   async function login(request: LoginRequest): Promise<ApiResult<LoginResponseData>> {
     // Corps composé d'un seul tenant — `rememberDevice` est OPTIONNEL au
@@ -128,17 +157,54 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     });
     if (!result.ok) return result;
 
-    if (isTwoFactorResponse(result.data)) {
-      store.getState().beginTwoFactor({ user: result.data.user, twoFactorToken: result.data.twoFactorToken });
-      return result;
-    }
-    store.getState().establish({
-      user: result.data.user,
-      token: result.data.token,
-      sessionToken: result.data.sessionToken,
-      expiresIn: result.data.expiresIn,
-    });
+    applyLoginResponse(store, result.data);
     return result;
+  }
+
+  /**
+   * `POST /auth/magic-link/request` (T3a) — AUCUNE écriture de magasin : une
+   * demande de lien n'authentifie personne, elle envoie un e-mail.
+   * `rememberDevice` suit la même règle que `login()` — omis si non fourni,
+   * jamais envoyé à `false` par défaut (iOS ne l'envoie pas du tout,
+   * `AuthService.swift:89` — § 9 Q7 de la spécification).
+   */
+  async function requestMagicLink(request: {
+    readonly email: string;
+    readonly rememberDevice?: boolean;
+  }): Promise<ApiResult<MagicLinkRequestData>> {
+    const body = {
+      email: request.email,
+      ...(request.rememberDevice !== undefined ? { rememberDevice: request.rememberDevice } : {}),
+    };
+    return transport.request<MagicLinkRequestData>({ method: 'POST', path: '/api/v1/auth/magic-link/request', body });
+  }
+
+  /**
+   * `POST /auth/magic-link/validate` (T3b) — la MÊME union que `login()`
+   * (`applyLoginResponse`, partagée) sur un succès. Un lien ouvert alors que
+   * le magasin est DÉJÀ `authenticated` (un autre compte, ou une session
+   * restaurée) purge D'ABORD (`clearSession()`) — le P0
+   * `MeeshyApp.swift:1019-1034` : jamais `establish(B)` par-dessus une
+   * session `A` encore vivante.
+   */
+  async function validateMagicLink(token: string): Promise<ApiResult<LoginResponseData>> {
+    if (store.getState().session.status === 'authenticated') store.getState().clearSession();
+
+    const result = await transport.request<LoginResponseData>({
+      method: 'POST',
+      path: '/api/v1/auth/magic-link/validate',
+      body: { token },
+    });
+    if (!result.ok) return result;
+
+    applyLoginResponse(store, result.data);
+    return result;
+  }
+
+  /** `POST /auth/forgot-password` (T3c) — AUCUNE écriture de magasin :
+   * demander un lien de réinitialisation n'authentifie personne non plus. */
+  async function forgotPassword(email: string): Promise<ApiResult<ForgotPasswordData>> {
+    return transport.request<ForgotPasswordData>({ method: 'POST', path: '/api/v1/auth/forgot-password', body: { email } });
   }
 
   /**
@@ -213,7 +279,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     return transport.request<{ message: string }>({ method: 'POST', path: '/api/v1/auth/logout', headers });
   }
 
-  return { login, register, completeTwoFactor, logout };
+  return { login, register, completeTwoFactor, logout, requestMagicLink, validateMagicLink, forgotPassword };
 }
 
 /**
@@ -222,7 +288,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
  * seconde instance de l'un ou de l'autre.
  */
 export const auth = createAuthClient({ transport: httpTransport, store: sessionStore });
-export const { login, register, completeTwoFactor, logout } = auth;
+export const { login, register, completeTwoFactor, logout, requestMagicLink, validateMagicLink, forgotPassword } = auth;
 
 // Réexport pour un appelant qui a seulement besoin de composer une requête
 // bas niveau (recette manuelle § 7 de la spécification).
