@@ -5,6 +5,20 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { backfillEngagementScores } from '../engagementScoreBackfill';
+import { ENGAGEMENT_AXIS_WEIGHTS } from '@meeshy/shared';
+
+/**
+ * **Le barème se LIT, il ne se recopie pas.** Ces attentes portaient les poids
+ * en dur (« weight 3 », « weight 2 ») ; le lot #5766 les a fait passer à 9 et 3
+ * et ces trois témoins sont tombés — non pas parce que le backfill s'était
+ * cassé, mais parce qu'ils épinglaient une TABLE plutôt qu'une RÈGLE.
+ *
+ * Ce que le backfill doit prouver est « la somme pondérée des compteurs », pas
+ * « 32 ». Dérivé du catalogue, le témoin survit à tout réglage de barème et
+ * continue d'attraper la seule chose qu'il doit attraper : une pondération
+ * oubliée, un compteur ignoré, un utilisateur mélangé avec un autre.
+ */
+const poids = (axe: string): number => ENGAGEMENT_AXIS_WEIGHTS[axe as keyof typeof ENGAGEMENT_AXIS_WEIGHTS];
 
 type Counter = { userId: string; axisKey: string; count: number };
 
@@ -41,15 +55,18 @@ describe('backfillEngagementScores', () => {
   it('recomputes the score of an account whose field is null, from its counters', async () => {
     const { prisma, update } = makePrisma({
       counters: [
-        { userId: 'user-1', axisKey: 'content.text_message', count: 10 }, // weight 3 -> 30
-        { userId: 'user-1', axisKey: 'tool.sticker', count: 2 }, // weight 1 -> 2
+        { userId: 'user-1', axisKey: 'content.text_message', count: 10 },
+        { userId: 'user-1', axisKey: 'tool.sticker', count: 2 },
       ],
       scoresByUserId: { 'user-1': null },
     });
 
     const report = await backfillEngagementScores(prisma, { apply: true });
 
-    expect(update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { engagementScore: 32 } });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { engagementScore: 10 * poids('content.text_message') + 2 * poids('tool.sticker') },
+    });
     expect(report).toEqual({ scanned: 1, corrected: 1, alreadyValid: 0 });
   });
 
@@ -140,32 +157,45 @@ describe('backfillEngagementScores', () => {
   it('sums counters across axes of different weights for the same user', async () => {
     const { prisma, update } = makePrisma({
       counters: [
-        { userId: 'user-1', axisKey: 'content.post', count: 1 }, // weight 3
-        { userId: 'user-1', axisKey: 'comment.text', count: 1 }, // weight 2
-        { userId: 'user-1', axisKey: 'conversation.public', count: 1 }, // weight 5
-        { userId: 'user-1', axisKey: 'tool.direct_publish', count: 1 }, // weight 1
+        { userId: 'user-1', axisKey: 'content.post', count: 1 },
+        { userId: 'user-1', axisKey: 'comment.text', count: 1 },
+        { userId: 'user-1', axisKey: 'conversation.public', count: 1 },
+        { userId: 'user-1', axisKey: 'tool.direct_publish', count: 1 },
       ],
       scoresByUserId: { 'user-1': NaN },
     });
 
     await backfillEngagementScores(prisma, { apply: true });
 
-    expect(update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { engagementScore: 11 } });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: {
+        engagementScore:
+          poids('content.post') + poids('comment.text')
+          + poids('conversation.public') + poids('tool.direct_publish'),
+      },
+    });
   });
 
   it('keeps each account independent when several are corrected in the same run', async () => {
     const { prisma, update } = makePrisma({
       counters: [
-        { userId: 'user-1', axisKey: 'tool.sticker', count: 4 }, // -> 4
-        { userId: 'user-2', axisKey: 'content.text_message', count: 2 }, // -> 6
+        { userId: 'user-1', axisKey: 'tool.sticker', count: 4 },
+        { userId: 'user-2', axisKey: 'content.text_message', count: 2 },
       ],
       scoresByUserId: { 'user-1': null, 'user-2': null },
     });
 
     const report = await backfillEngagementScores(prisma, { apply: true });
 
-    expect(update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { engagementScore: 4 } });
-    expect(update).toHaveBeenCalledWith({ where: { id: 'user-2' }, data: { engagementScore: 6 } });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { engagementScore: 4 * poids('tool.sticker') },
+    });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'user-2' },
+      data: { engagementScore: 2 * poids('content.text_message') },
+    });
     expect(report).toEqual({ scanned: 2, corrected: 2, alreadyValid: 0 });
   });
 });
