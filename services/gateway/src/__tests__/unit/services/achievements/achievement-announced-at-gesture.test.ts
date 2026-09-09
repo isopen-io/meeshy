@@ -51,6 +51,8 @@ function makeNotificationService() {
 function makePrisma(params: {
   dejaGraves?: readonly string[];
   counts?: Record<string, number>;
+  /** Membres de la conversation qu'on vient de rejoindre — l'AMPLEUR. */
+  tailleConversation?: number;
 }) {
   const deja = new Set(params.dejaGraves ?? []);
   const graves: string[] = [];
@@ -68,9 +70,23 @@ function makePrisma(params: {
 
   const compteur = (nom: string) => jest.fn().mockResolvedValue(params.counts?.[nom] ?? 0);
 
+  /**
+   * `participant.count` répond à DEUX questions et un mock qui ignore son
+   * `where` rendrait la même chose aux deux : le VOLUME de conversations
+   * rejointes (filtre sur `userId`) et l'AMPLEUR de celle qu'on vient de
+   * rejoindre (filtre sur `conversationId`). Les confondre ferait franchir un
+   * palier d'ampleur à chaque palier de volume — un témoin vert qui ne mesure
+   * rien. Le mock DISCRIMINE donc, comme la base.
+   */
+  const participantCount = jest.fn(async (args: unknown) => {
+    const where = (args as { where?: { conversationId?: string } } | undefined)?.where;
+    if (where?.conversationId !== undefined) return params.tailleConversation ?? 0;
+    return params.counts?.participant ?? 0;
+  });
+
   const prisma = {
     engagementMilestone: { create },
-    participant: { count: compteur('participant') },
+    participant: { count: participantCount },
     communityMember: { count: compteur('communityMember') },
     community: { count: compteur('community') },
     message: { count: compteur('message') },
@@ -99,10 +115,12 @@ describe("l'annonce d'un succès", () => {
 
   it('part au moment du GESTE, avec la clé composée du palier franchi', async () => {
     const createNotification = makeNotificationService();
-    // Dixième conversation rejointe : le palier `count:10` est franchi, le
-    // `count:1` l'était déjà.
+    // Dixième conversation rejointe, et elle ne compte que trois membres : le
+    // palier de VOLUME `count:10` est franchi, celui d'AMPLEUR ne l'est pas.
+    // Le `count:1` l'était déjà.
     const { prisma } = makePrisma({
       counts: { participant: 10 },
+      tailleConversation: 3,
       dejaGraves: [achievementKey(famille('conversation.join.count'), 1)],
     });
 
@@ -147,6 +165,31 @@ describe("l'annonce d'un succès", () => {
     expect(graves).toHaveLength(4);
     expect(createNotification).toHaveBeenCalledTimes(1);
     expect(createNotification.mock.calls[0][0].metadata?.achievementKey).toContain(':1000');
+  });
+
+  it("annonce DEUX succès quand un geste franchit deux FAMILLES — ce sont deux faits", async () => {
+    const createNotification = makeNotificationService();
+    // Dixième conversation rejointe, ET elle compte dix membres : le volume et
+    // l'ampleur franchissent chacun leur palier. Ce sont deux succès distincts,
+    // pas un doublon — les taire en garderait un pour soi. La rafale se
+    // gouverne à l'AFFICHAGE (le client célèbre l'un après l'autre), jamais en
+    // perdant un fait acquis.
+    const { prisma } = makePrisma({ counts: { participant: 10 }, tailleConversation: 10 });
+
+    await new CerclesAchievements(prisma).recordEvent({
+      kind: 'conversation.join',
+      userId: 'u1',
+      conversationId: 'c1',
+    });
+
+    const cles = createNotification.mock.calls.map((c) => c[0].metadata?.achievementKey);
+    expect(cles).toHaveLength(2);
+    expect(new Set(cles)).toEqual(
+      new Set([
+        achievementKey(famille('conversation.join.count'), 10),
+        achievementKey(famille('conversation.join.size'), 10),
+      ]),
+    );
   });
 
   it('reste MUETTE quand aucun palier neuf ne se grave', async () => {

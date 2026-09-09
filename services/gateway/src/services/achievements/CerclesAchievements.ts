@@ -29,8 +29,8 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CERCLES_FAMILIES, familyId } from '@meeshy/shared/types/achievement-families';
-import { achievementKey, tiersOf } from '@meeshy/shared/types/achievement-catalog';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { graveEtAnnonce, type AchievementOrigin } from './AchievementAnnounce';
 
 const log = enhancedLogger.child({ module: 'CerclesAchievements' });
 
@@ -57,27 +57,22 @@ export class CerclesAchievements {
   constructor(private readonly prisma: PrismaClient) {}
 
   /**
-   * Grave les paliers que `valeur` fait franchir sur `familyId`.
+   * Grave les paliers que `valeur` fait franchir sur `familyId`, et les ANNONCE
+   * quand l'attribution vient d'un geste.
    *
-   * On ne compare pas à la valeur PRÉCÉDENTE : la contrainte unique suffit, et
-   * s'en passer rend la méthode rejouable — un backfill ou un événement perdu
-   * se rattrapent sans logique de reprise.
+   * La règle vit à son site unique (`graveEtAnnonce`) : elle était écrite ici
+   * ET dans `GlobalAchievements`, mot pour mot. Deux copies d'une règle qui
+   * doit maintenant NOTIFIER auraient divergé au premier correctif.
    */
-  private async graveTiers(userId: string, id: string, valeur: number): Promise<void> {
+  private async graveTiers(
+    userId: string,
+    id: string,
+    valeur: number,
+    origin: AchievementOrigin,
+  ): Promise<void> {
     const f = famille(id);
     if (!f) return;
-    for (const palier of tiersOf(f)) {
-      if (valeur < palier) continue;
-      try {
-        await this.prisma.engagementMilestone.create({
-          data: { userId, milestoneType: 'achievement', milestoneKey: achievementKey(f, palier) },
-        });
-      } catch (err) {
-        // P2002 : déjà gravé — l'anti-rejeu a joué, rien à faire.
-        if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') continue;
-        throw err;
-      }
-    }
+    await graveEtAnnonce({ prisma: this.prisma, userId, family: f, valeur, origin });
   }
 
   /** Conversations rejointes, hors générales — le VOLUME. */
@@ -107,7 +102,7 @@ export class CerclesAchievements {
    * métier (rejoindre une conversation, créer une communauté). Un succès non
    * gravé se rattrape au geste suivant — l'idempotence est là pour ça.
    */
-  async recordEvent(event: CercleEvent): Promise<void> {
+  async recordEvent(event: CercleEvent, origin: AchievementOrigin = 'geste'): Promise<void> {
     try {
       switch (event.kind) {
         case 'conversation.join': {
@@ -115,22 +110,22 @@ export class CerclesAchievements {
             this.conversationsRejointes(event.userId),
             this.tailleConversation(event.conversationId),
           ]);
-          await this.graveTiers(event.userId, 'conversation.join.count', volume);
-          await this.graveTiers(event.userId, 'conversation.join.size', taille);
+          await this.graveTiers(event.userId, 'conversation.join.count', volume, origin);
+          await this.graveTiers(event.userId, 'conversation.join.size', taille, origin);
           return;
         }
         case 'conversation.leave': {
           const partis = await this.prisma.participant.count({
             where: { userId: event.userId, leftAt: { not: null } },
           });
-          await this.graveTiers(event.userId, 'conversation.leave.count', partis);
+          await this.graveTiers(event.userId, 'conversation.leave.count', partis, origin);
           return;
         }
         case 'conversation.create': {
           const creees = await this.prisma.participant.count({
             where: { userId: event.userId, role: 'creator' },
           });
-          await this.graveTiers(event.userId, 'conversation.create.count', creees);
+          await this.graveTiers(event.userId, 'conversation.create.count', creees, origin);
           return;
         }
         case 'community.join': {
@@ -138,15 +133,15 @@ export class CerclesAchievements {
             this.communautesRejointes(event.userId),
             this.tailleCommunaute(event.communityId),
           ]);
-          await this.graveTiers(event.userId, 'community.join.count', volume);
-          await this.graveTiers(event.userId, 'community.join.size', taille);
+          await this.graveTiers(event.userId, 'community.join.count', volume, origin);
+          await this.graveTiers(event.userId, 'community.join.size', taille, origin);
           return;
         }
         case 'community.leave': {
           const partis = await this.prisma.communityMember.count({
             where: { userId: event.userId, leftAt: { not: null } },
           });
-          await this.graveTiers(event.userId, 'community.leave.count', partis);
+          await this.graveTiers(event.userId, 'community.leave.count', partis, origin);
           return;
         }
         case 'community.create': {
@@ -154,8 +149,8 @@ export class CerclesAchievements {
             this.prisma.community.count({ where: { createdBy: event.userId } }),
             this.tailleCommunaute(event.communityId),
           ]);
-          await this.graveTiers(event.userId, 'community.create.count', volume);
-          await this.graveTiers(event.userId, 'community.create.size', taille);
+          await this.graveTiers(event.userId, 'community.create.count', volume, origin);
+          await this.graveTiers(event.userId, 'community.create.size', taille, origin);
           return;
         }
       }
