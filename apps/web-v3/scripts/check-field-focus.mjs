@@ -18,7 +18,11 @@
  *   1. `box-shadow: none` — aucune moitié orpheline du couple ;
  *   2. `outline-style: none` — l'anneau reste bien porté par la boîte ;
  *   3. la BOÎTE change de couleur de bordure entre repos et focus — le focus
- *      demeure SIGNALÉ, sans quoi corriger le halo l'aurait simplement effacé.
+ *      demeure SIGNALÉ, sans quoi corriger le halo l'aurait simplement effacé ;
+ *   4. la BOÎTE change aussi d'ÉPAISSEUR de bordure entre repos et focus
+ *      (#5894) — la règle 17 interdit qu'une couleur seule porte le signal ;
+ *      un changement de teinte SANS changement de forme ne suffit pas, même
+ *      si la mesure 3 ci-dessus passe déjà.
  *
  * POURQUOI UN NAVIGATEUR RÉEL. Le défaut naît de la CASCADE entre une classe
  * utilitaire posée sur la saisie et une règle de base posée sur `:focus-visible` :
@@ -83,12 +87,23 @@ for (const route of ECRANS) {
   );
   const lu = [];
   for (let i = 0; i < combien; i += 1) {
-    const repos = await page.evaluate((n) => {
-      const el = document.querySelectorAll('.field-box :is(input, select, textarea)')[n];
-      el.blur();
-      return getComputedStyle(el.parentElement).borderTopColor;
+    /* `blur()` et la LECTURE sont deux évaluations séparées, comme pour le
+       focus ci-dessous (#5894) : un champ `autoFocus` (lien magique, mot de
+       passe oublié) est DÉJÀ focalisé au montage, et lire dans la MÊME
+       évaluation que `blur()` mesurait donc le style d'AVANT le rendu que
+       cet appel déclenche — l'asymétrie faisait dépendre le repos de l'ordre
+       des champs plutôt que de leur état réel. */
+    await page.evaluate((n) => {
+      document.querySelectorAll('.field-box :is(input, select, textarea)')[n].blur();
     }, i);
     await page.waitForTimeout(120);
+    const repos = await page.evaluate((n) => {
+      const el = document.querySelectorAll('.field-box :is(input, select, textarea)')[n];
+      return {
+        couleur: getComputedStyle(el.parentElement).borderTopColor,
+        epaisseur: getComputedStyle(el.parentElement).borderTopWidth,
+      };
+    }, i);
     const focus = await page.evaluate((n) => {
       document.querySelectorAll('.field-box :is(input, select, textarea)')[n].focus();
     }, i);
@@ -100,12 +115,15 @@ for (const route of ECRANS) {
         ({ n, repos: r }) => {
           const el = document.querySelectorAll('.field-box :is(input, select, textarea)')[n];
           const c = getComputedStyle(el);
+          const boite = getComputedStyle(el.parentElement);
           return {
             type: el.getAttribute('type') ?? el.tagName.toLowerCase(),
             boxShadow: c.boxShadow,
             outlineStyle: c.outlineStyle,
-            bordureRepos: r,
-            bordureFocus: getComputedStyle(el.parentElement).borderTopColor,
+            bordureRepos: r.couleur,
+            bordureFocus: boite.borderTopColor,
+            epaisseurRepos: r.epaisseur,
+            epaisseurFocus: boite.borderTopWidth,
           };
         },
         { n: i, repos },
@@ -130,6 +148,14 @@ for (const route of ECRANS) {
       champ.bordureRepos !== champ.bordureFocus,
       `${route} champ #${champ.i} (${champ.type}) — la boîte ne change pas de bordure ` +
         `au focus (\`${champ.bordureFocus}\`) : le focus n'est plus signalé du tout`,
+    );
+    /* Règle 17 (#5894) : une couleur seule ne tient pas — la boîte doit
+       aussi changer de FORME (ici son épaisseur de bordure) au focus. */
+    constate(
+      champ.epaisseurRepos !== champ.epaisseurFocus,
+      `${route} champ #${champ.i} (${champ.type}) — la boîte ne change pas d'ÉPAISSEUR ` +
+        `de bordure au focus (\`${champ.epaisseurRepos}\` → \`${champ.epaisseurFocus}\`) : ` +
+        `le focus n'est signalé que par une couleur`,
     );
   }
   await context.close();
