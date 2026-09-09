@@ -84,6 +84,15 @@ RUN cd packages/shared && bun run build
 RUN test -s packages/shared/dist/utils/conversation-helpers.js \
     || { echo "packages/shared n'a pas produit son dist"; exit 1; }
 
+# **L'ORIGINE DE L'API SE FIGE ICI, ou nulle part (#5872).** `import.meta.env`
+# est remplacé à la CONSTRUCTION : une variable posée au démarrage du conteneur
+# n'atteindrait jamais le bundle. Sans cet `ARG`, `resolveApiConfig` retombe
+# sur l'origine de PRODUCTION — un défaut qui fonctionne, mais qui fait pointer
+# staging vers la passerelle de production. C'est le workflow qui déclare la
+# valeur par environnement (`docker.yml`, § build-args de `web-v31`).
+ARG VITE_API_BASE=""
+ENV VITE_API_BASE=${VITE_API_BASE}
+
 # Le build EST le préchauffage : le greffon de `vite.config.ts` écrit les cinq
 # documents avant que `vite-plugin-pwa` ne scelle son manifeste de précache.
 RUN bun run build
