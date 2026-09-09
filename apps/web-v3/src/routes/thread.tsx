@@ -964,15 +964,16 @@ export default function ThreadScreen() {
       ) : (
         <div className="shrink-0">
           <Composer
-            onSend={(text) => {
+            onSend={({ text, attachments }) => {
               /* LE MESSAGE CITÉ ENTIER, PAS SON SEUL IDENTIFIANT
                  (revue-correction #5813, défaut majeur 6) — `replyToMessage`
                  est déjà résolu plus haut pour la bande du composeur ; le
                  réutiliser ici évite une seconde recherche ET porte la
                  citation jusqu'à la bulle optimiste. */
-              send(text, replyToMessage ?? null);
+              send(text, attachments, replyToMessage ?? null);
               setReplyTarget(null);
             }}
+            {...(viewerParticipant ? { rights: viewerParticipant.permissions } : {})}
             {...(replyTo ? { replyTo, onCancelReply: () => setReplyTarget(null) } : {})}
           />
         </div>

@@ -1,8 +1,19 @@
-import { describe, expect, test } from 'bun:test';
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { Message, Participant } from '@/lib/api/types';
 
+import { pendingAttachmentOf } from './attachments';
 import { confirmedMessageOf, localMessageOf } from './local-message';
+
+// `File`/`URL.createObjectURL`, requis par `attachmentPreviewOf` — DOM réel.
+beforeAll(() => {
+  GlobalRegistrator.register();
+});
+
+afterAll(async () => {
+  await GlobalRegistrator.unregister();
+});
 
 const sender: Participant = {
   id: 'p-viewer',
@@ -149,6 +160,40 @@ describe('localMessageOf', () => {
       now,
     });
     expect('replyTo' in withoutReply).toBe(false);
+  });
+
+  /**
+   * #5668 — LA BULLE OPTIMISTE PORTE SES PIÈCES JOINTES. `messageType` par
+   * défaut reste `'text'` (non-régression) ; le fournir change la valeur
+   * posée.
+   */
+  test('attachments : projection en Attachment (fileUrl = blob:), clé ABSENTE sans sélection', () => {
+    const pending = pendingAttachmentOf(new File([new Uint8Array(4)], 'photo.png', { type: 'image/png' }));
+    const withAttachments = localMessageOf({
+      clientMessageId: 'cid_8',
+      conversationId: 'c-a',
+      viewerId: 'u-viewer',
+      content: '',
+      originalLanguage: 'fr',
+      attachments: [pending],
+      messageType: 'image',
+      now,
+    });
+    expect(withAttachments.messageType).toBe('image');
+    expect(withAttachments.attachments).toHaveLength(1);
+    expect(withAttachments.attachments?.[0]?.fileUrl.startsWith('blob:')).toBe(true);
+    expect(withAttachments.attachments?.[0]?.fileName).toBe('photo.png');
+
+    const withoutAttachments = localMessageOf({
+      clientMessageId: 'cid_9',
+      conversationId: 'c-a',
+      viewerId: 'u-viewer',
+      content: 'bonjour',
+      originalLanguage: 'fr',
+      now,
+    });
+    expect('attachments' in withoutAttachments).toBe(false);
+    expect(withoutAttachments.messageType).toBe('text');
   });
 });
 

@@ -1,5 +1,8 @@
+import type { AttachmentMessageType } from '@meeshy/shared/utils/attachment-message-type';
+
 import type { Message, Participant } from '@/lib/api/types';
 import type { SentMessageAck } from '@/lib/api/messages';
+import { attachmentPreviewOf, type PendingAttachment } from './attachments';
 
 /**
  * LE MESSAGE LOCAL (#5813, étape 3) — la forme optimiste, avant confirmation.
@@ -35,6 +38,21 @@ export function localMessageOf(input: {
    * cycle 122, « qui AFFICHE ce qu'il élit ? »).
    */
   readonly replyTo?: Message;
+  /**
+   * LES PIÈCES JOINTES DE LA BULLE OPTIMISTE (#5668) — des `PendingAttachment`
+   * (`send/attachments.ts`), projetées en `Attachment` du domaine par
+   * `attachmentPreviewOf` (`fileUrl` = URL D'OBJET LOCAL, jamais le chemin
+   * serveur). `undefined`/liste vide ⇒ clé `attachments` ABSENTE, jamais un
+   * tableau vide posé (même discipline que `replyToId`).
+   */
+  readonly attachments?: readonly PendingAttachment[];
+  /**
+   * LE TYPE DÉCLARÉ (#5668) — `'text'` par défaut pour ne rien changer aux
+   * appelants existants (revue-correction #5813 n'en avait pas besoin) ;
+   * `perform-send.ts` le dérive de la sélection via `messageTypeOfPending`
+   * (`send/attachments.ts`) avant d'appeler ce constructeur.
+   */
+  readonly messageType?: 'text' | AttachmentMessageType;
   readonly now: Date;
 }): LocalMessage {
   return {
@@ -47,7 +65,7 @@ export function localMessageOf(input: {
     ...(input.replyTo === undefined ? {} : { replyTo: input.replyTo }),
     content: input.content,
     originalLanguage: input.originalLanguage,
-    messageType: 'text',
+    messageType: input.messageType ?? 'text',
     messageSource: 'user',
     isEdited: false,
     isViewOnce: false,
@@ -60,6 +78,9 @@ export function localMessageOf(input: {
     reactionCount: 0,
     isEncrypted: false,
     translations: [],
+    ...(input.attachments === undefined || input.attachments.length === 0
+      ? {}
+      : { attachments: input.attachments.map(attachmentPreviewOf) }),
     createdAt: input.now,
     timestamp: input.now,
   };

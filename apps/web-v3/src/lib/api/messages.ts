@@ -83,22 +83,31 @@ export function messagesQuery(deps: ConversationsDeps, conversationId: string) {
 export type { HttpTransport };
 
 /**
- * L'ENVOI D'UN MESSAGE (#5813, étape 2) — `POST /api/v1/conversations/:id/messages`
+ * L'ENVOI D'UN MESSAGE (#5813, étape 2 ; étendu #5668 aux pièces jointes) —
+ * `POST /api/v1/conversations/:id/messages`
  * (`services/gateway/src/routes/conversations/messages-send.ts:117-120`,
  * `SendMessageBodySchema:41-105`). SUCCÈS = **200**, pas 201
  * (`response.ts:38`, `messages-send.ts:391` — § 0 de la spécification #5813,
  * le critère de recette qui dit « 201 » est FAUX).
  *
- * `body` porte le sous-ensemble TEXTE que ce lot exige — `content`,
- * `originalLanguage`, `clientMessageId` (l'identifiant d'idempotence,
- * `client-message-id.ts`), `replyToId` en option. Aucune clé posée à
- * `undefined` (`exactOptionalPropertyTypes`) : c'est à l'APPELANT
- * (`send/perform-send.ts`) de ne construire la clé que quand elle existe.
+ * `content` est OPTIONNEL (`.refine()` du serveur : `content.trim()` non vide
+ * OU `attachmentIds.length > 0`, `messages-send.ts:96-105`) — un vocal PUR
+ * part SANS la clé, jamais `content: ''`. `messageType` est OPTIONNEL et
+ * n'est posé QUE hors du défaut serveur `'text'` (`messages-send.ts:59`,
+ * `:142`) — la même discipline « aucune clé à sa valeur par défaut » que le
+ * reste de ce port. `attachmentIds` : les ids rendus par
+ * `POST /api/v1/attachments/upload` (`api/attachments.ts`), bornés à
+ * `MAX_ATTACHMENTS_PER_MESSAGE` (`@meeshy/shared/types/attachment.ts:454`) —
+ * la borne n'est PAS revérifiée ici, c'est `send/attachments.ts` /
+ * `use-recorder.ts` qui composent la sélection, jamais un lot déjà hors
+ * limite. Aucune clé posée à `undefined` (`exactOptionalPropertyTypes`).
  */
 export type SendMessageBody = {
-  readonly content: string;
+  readonly content?: string;
   readonly originalLanguage: string;
   readonly clientMessageId: string;
+  readonly messageType?: 'image' | 'file' | 'audio' | 'video';
+  readonly attachmentIds?: readonly string[];
   readonly replyToId?: string;
 };
 

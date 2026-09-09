@@ -114,4 +114,28 @@ describe('outboxStore', () => {
     store.getState().remove('c-a', 'cid_1');
     expect('c-a' in store.getState().entries).toBe(false);
   });
+
+  /**
+   * #5668 — `markUploaded` pose `attachmentIds` SUR `upload`, sans y toucher
+   * si l'entrée n'a jamais porté `upload` (un envoi sans pièce jointe).
+   */
+  test('markUploaded pose upload.attachmentIds sans changer upload.files', () => {
+    const store = createOutboxStore();
+    const withUpload = entry('cid_1', { upload: { files: [] } });
+    store.getState().enqueue('c-a', withUpload);
+
+    store.getState().markUploaded('c-a', 'cid_1', ['att-1', 'att-2']);
+
+    expect(entriesOf(store.getState(), 'c-a')[0]?.upload?.attachmentIds).toEqual(['att-1', 'att-2']);
+    expect(entriesOf(store.getState(), 'c-a')[0]?.upload?.files).toBe(withUpload.upload!.files);
+  });
+
+  test('markUploaded sur une entrée SANS upload ne pose rien (aucun champ inventé)', () => {
+    const store = createOutboxStore();
+    store.getState().enqueue('c-a', entry('cid_1'));
+
+    store.getState().markUploaded('c-a', 'cid_1', ['att-1']);
+
+    expect(entriesOf(store.getState(), 'c-a')[0]?.upload).toBeUndefined();
+  });
 });

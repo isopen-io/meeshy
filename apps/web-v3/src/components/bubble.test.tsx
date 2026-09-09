@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { Bubble } from './bubble';
+import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { Message } from '@/lib/api/types';
 import type { PlacedMessage } from '@/lib/grouping';
 
@@ -347,5 +348,52 @@ describe('Bubble — displayLanguage, myReactions, selected (#5814, T12)', () =>
     const html = renderWith({});
     expect(html).not.toContain('role="checkbox"');
     expect(html).not.toContain('aria-selected');
+  });
+});
+
+
+/**
+ * L'IMAGE D'UNE BULLE (revue-correction #5668) — la bulle OPTIMISTE d'une
+ * photo qu'on vient de choisir porte un `fileUrl` en `blob:`
+ * (`attachmentPreviewOf`, `send/attachments.ts`) que RIEN ne lisait : le
+ * tiroir du composeur en montrait la vignette et la bulle envoyée juste
+ * au-dessus un rectangle gris. « Qui AFFICHE ce qu'il élit ? » — cycle 122 du
+ * `CLAUDE.md`.
+ *
+ * Le second cas est le rang AUTRE que le premier : une charge SANS URL (les
+ * fixtures posent `fileUrl: ''`) ne doit produire AUCUN `<img>` — `src=""`
+ * redemanderait la page courante, et le glyphe reste le fond légitime.
+ */
+describe('Bubble — la pièce jointe IMAGE (#5668, revue-correction)', () => {
+  const withImage = (fileUrl: string): Message => ({
+    ...BASE_MESSAGE,
+    messageType: 'image',
+    attachments: [
+      {
+        ...attachmentDefaults,
+        id: 'att-1',
+        messageId: BASE_MESSAGE.id,
+        fileName: 'plage.jpg',
+        originalName: 'plage.jpg',
+        mimeType: 'image/jpeg',
+        fileSize: 1234,
+        fileUrl,
+        uploadedBy: 'u-amina',
+        createdAt: '2026-09-08T09:00:00.000Z',
+      },
+    ],
+  });
+
+  test('une URL servie ⇒ un <img> qui la porte, avec son texte de remplacement', () => {
+    const html = render(withImage('blob:http://localhost/abc'));
+    expect(html).toContain('<img');
+    expect(html).toContain('blob:http://localhost/abc');
+    expect(html).toContain('alt="plage.jpg"');
+  });
+
+  test('AUCUNE URL ⇒ AUCUN <img> (jamais `src=""`), le glyphe reste seul et nommé', () => {
+    const html = render(withImage(''));
+    expect(html).not.toContain('<img');
+    expect(html).toContain('aria-label="plage.jpg"');
   });
 });

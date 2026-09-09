@@ -352,6 +352,50 @@
 }
 
 /**
+ * LA BARRE D'ENREGISTREMENT CHANGE D'ENCRE AVEC LE SCHÉMA (#5668,
+ * revue-correction) — iOS peint ses cinq éléments en BLANC sur nuit et en
+ * ACCENT de conversation sur clair (`UniversalComposerBar+Recording.swift:144-152`
+ * pour le fond, le liseré et l'onde ; `:220-225` pour le bouton d'arrêt).
+ * Les peindre en `--accent` dans les DEUX schémas — ce que faisait la
+ * première version de ce lot — donnait un carré d'arrêt accent sur un fond
+ * accent à 12 % : le glyphe disparaissait sur nuit. Les pourcentages sont
+ * ceux de Swift, un par un ; la seule VALEUR est `--ios-recording-ink-dark`,
+ * dérivée (`packages/design-tokens`), l'accent venant de la conversation.
+ */
+:root,
+:root.dark {
+  --recording-ink: var(--ios-recording-ink-dark);
+  --recording-surface: color-mix(in srgb, var(--recording-ink) 8%, transparent);
+  --recording-hairline: color-mix(in srgb, var(--recording-ink) 15%, transparent);
+  --recording-fill: color-mix(in srgb, var(--recording-ink) 14%, transparent);
+}
+
+:root.light {
+  --recording-ink: var(--accent);
+  --recording-surface: color-mix(in srgb, var(--recording-ink) 6%, transparent);
+  --recording-hairline: color-mix(in srgb, var(--recording-ink) 20%, transparent);
+  --recording-fill: color-mix(in srgb, var(--recording-ink) 12%, transparent);
+}
+
+/**
+ * #5668 — une taille de plus, le même calcul ((44 − visuel) / 2 par bord) :
+ * les boutons de la barre d'enregistrement (32 px, `+Recording.swift:162-278`).
+ * La croix de suppression d'une pièce jointe en attente (18 px) n'emploie PAS
+ * ce motif : elle est déjà `position: absolute` (coin de la tuile), et
+ * `position: relative` ci-dessous l'aurait défaite — sa cible de 44 px est
+ * un bouton INVISIBLE de 44 px qui CONTIENT le badge visuel de 18 px
+ * (`composer-tray.tsx`, `PreviewTile`), jamais un pseudo-élément.
+ */
+@utility tap-target-32 {
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+  }
+}
+
+/**
  * SUR UN APPAREIL SANS SURVOL, LE BOUTON D'ACTIONS DE RANGÉE RESTE VISIBLE
  * ET ATTEIGNABLE EN PERMANENCE — #5559 revue-correction, défaut 6
  * (bloquant).

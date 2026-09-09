@@ -368,10 +368,32 @@ export function Attachments({ attachments }: { attachments: readonly Attachment[
                  la moitie du CLS sur un reseau lent. */
               className="grid max-w-[300px] place-items-center overflow-hidden rounded-card bg-black/40"
               style={{ aspectRatio: '300 / 240' }}
-              role="img"
-              aria-label={attachment.alt ?? attachment.originalName}
+              {...(attachment.fileUrl === '' ? { role: 'img', 'aria-label': attachment.alt ?? attachment.originalName } : {})}
             >
-              <Glyph name="image" size={40} className="opacity-40" />
+              {/* L'IMAGE, QUAND ON EN A UNE (revue-correction #5668) — la
+                  bulle OPTIMISTE d'une photo qu'on vient de choisir portait un
+                  `fileUrl` en `blob:` (`attachmentPreviewOf`,
+                  `send/attachments.ts`) que RIEN ne lisait : le composeur en
+                  montrait la vignette, et la bulle envoyée juste au-dessus un
+                  rectangle gris. Un producteur sans consommateur — la question
+                  du cycle 122 du `CLAUDE.md`, « qui AFFICHE ce qu'il élit ? ».
+                  Le glyphe reste DERRIÈRE : il est le fond tant que l'image
+                  n'est pas arrivée (chargement) et le repli si elle échoue
+                  (`onError`), et il reste seul quand la charge ne porte aucune
+                  URL — ce que les fixtures font (`fileUrl: ''`). */}
+              <Glyph name="image" size={40} className="col-start-1 row-start-1 opacity-40" />
+              {attachment.fileUrl === '' ? null : (
+                <img
+                  src={attachment.fileUrl}
+                  alt={attachment.alt ?? attachment.originalName}
+                  loading="lazy"
+                  decoding="async"
+                  className="col-start-1 row-start-1 size-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.hidden = true;
+                  }}
+                />
+              )}
             </div>
           );
         }

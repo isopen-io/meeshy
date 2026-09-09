@@ -6,6 +6,7 @@ import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { messagesQueryKey } from '@/lib/api/messages';
 import type { Conversation, Message } from '@/lib/api/types';
 
+import { pendingAttachmentOf } from './attachments';
 import { entriesOf, createOutboxStore } from './outbox-store';
 import { debounceEntryCountForTests, performSend, retrySend, type SendDeps } from './perform-send';
 
@@ -68,6 +69,30 @@ const m1: Message = {
   createdAt: new Date('2026-09-09T09:00:00.000Z'),
   timestamp: new Date('2026-09-09T09:00:00.000Z'),
 };
+
+/**
+ * UN `fetchImpl` ROUTÉ PAR CHEMIN (#5668) — les témoins d'attachements
+ * traversent DEUX endpoints distincts (`POST /attachments/upload` puis
+ * `POST /conversations/:id/messages`, § 0 de la spécification #5668) : un
+ * `fetchImpl` unique ne peut plus répondre à l'aveugle par ORDRE d'appel.
+ */
+function routedFetch(routes: Readonly<Record<string, { readonly status: number; readonly body?: unknown }>>) {
+  const calls: { readonly url: string; readonly init: RequestInit }[] = [];
+  const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    calls.push({ url, init: init ?? {} });
+    const path = Object.keys(routes).find((p) => url.includes(p));
+    const response = path === undefined ? { status: 404 } : routes[path]!;
+    return new Response(response.body === undefined ? null : JSON.stringify(response.body), {
+      status: response.status,
+    });
+  }) as typeof fetch;
+  return { impl, calls };
+}
+
+function pngFile(name = 'a.png'): File {
+  return new File([new Uint8Array([1, 2, 3])], name, { type: 'image/png' });
+}
 
 function seededClient(): QueryClient {
   const queryClient = new QueryClient();
@@ -553,5 +578,164 @@ describe('performSend', () => {
     const p4 = performSend({ conversationId: 'c-a', draft: draftB, viewerId: 'u-viewer', deps: { ...deps, now: () => clock + 100000 } });
     await Promise.all([p3, p4]);
     expect(calls.length).toBe(4);
+  });
+});
+
+/**
+ * LES PIÈCES JOINTES (#5668) — deux appels réseau distincts, DANS L'ORDRE :
+ * `POST /attachments/upload` (multipart) PUIS
+ * `POST /conversations/:id/messages` (JSON, `attachmentIds`).
+ */
+describe('performSend — pièces jointes (#5668)', () => {
+  test('un vocal PUR (aucun texte) : upload PUIS message avec attachmentIds + messageType, SANS clé content', async () => {
+    const { impl, calls } = routedFetch({
+      '/attachments/upload': {
+        status: 200,
+        body: { success: true, data: { attachments: [{ id: 'att-1', messageId: '', fileName: 'voix.webm', originalName: 'voix.webm', mimeType: 'audio/webm', fileSize: 3, fileUrl: 'https://x/voix.webm' }] } },
+      },
+      '/conversations/c-a/messages': { status: 200, body: ackBody('m9', 'x') },
+    });
+    const queryClient = seededClient();
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient,
+      outbox,
+      online: true,
+    };
+    const pending = [pendingAttachmentOf(new File([new Uint8Array(3)], 'voix.webm', { type: 'audio/webm' }), { durationMs: 900 })];
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: '', originalLanguage: 'fr', attachments: pending },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.url).toContain('/attachments/upload');
+    expect(calls[0]?.init.body).toBeInstanceOf(FormData);
+    expect(calls[1]?.url).toContain('/conversations/c-a/messages');
+    const sentBody = JSON.parse(String(calls[1]?.init.body));
+    expect(sentBody.attachmentIds).toEqual(['att-1']);
+    expect(sentBody.messageType).toBe('audio');
+    expect('content' in sentBody).toBe(false);
+    expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(0);
+  });
+
+  test('texte + photo : messageType image, une seule photo ⇒ une seule catégorie', async () => {
+    const { impl, calls } = routedFetch({
+      '/attachments/upload': {
+        status: 200,
+        body: { success: true, data: { attachments: [{ id: 'att-2', messageId: '', fileName: 'a.png', originalName: 'a.png', mimeType: 'image/png', fileSize: 3, fileUrl: 'https://x/a.png' }] } },
+      },
+      '/conversations/c-a/messages': { status: 200, body: ackBody('m9', 'x') },
+    });
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'regarde', originalLanguage: 'fr', attachments: [pendingAttachmentOf(pngFile())] },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const sentBody = JSON.parse(String(calls[1]?.init.body));
+    expect(sentBody.content).toBe('regarde');
+    expect(sentBody.messageType).toBe('image');
+  });
+
+  /**
+   * RÉCONCILIATION PAR COMPTE (§ 0 « UPLOAD_PARTIAL ») — `uploadMultiple`
+   * avale les échecs PAR FICHIER sous `success: true` : moins d'attachements
+   * que de fichiers envoyés est un ÉCHEC, jamais un envoi partiel silencieux.
+   * `POST …/messages` n'est JAMAIS appelé dans ce cas.
+   */
+  test('upload PARTIEL (moins d’attachements que de fichiers) ⇒ failed UPLOAD_PARTIAL, message JAMAIS envoyé', async () => {
+    const { impl, calls } = routedFetch({
+      '/attachments/upload': {
+        status: 200,
+        body: { success: true, data: { attachments: [{ id: 'att-3', messageId: '', fileName: 'a.png', originalName: 'a.png', mimeType: 'image/png', fileSize: 3, fileUrl: 'https://x/a.png' }] } },
+      },
+    });
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox,
+      online: true,
+    };
+    const pending = [pendingAttachmentOf(pngFile('a.png')), pendingAttachmentOf(pngFile('b.png'))];
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: '', originalLanguage: 'fr', attachments: pending },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    expect(calls).toHaveLength(1); // jamais de second appel vers …/messages.
+    const entry = entriesOf(outbox.getState(), 'c-a')[0]!;
+    expect(entry.delivery).toBe('failed');
+    expect(entry.lastError?.code).toBe('UPLOAD_PARTIAL');
+  });
+
+  /**
+   * REPRISE SANS RE-UPLOAD (§ 0 « Reprise ») — l'upload a RÉUSSI, mais
+   * `POST …/messages` a échoué (500). `retrySend` ne rappelle PAS
+   * `/attachments/upload` : il réutilise `attachmentIds` déjà obtenus.
+   */
+  test('upload réussi puis message en échec : retrySend NE RE-UPLOAD PAS, réutilise attachmentIds', async () => {
+    let messageAttempts = 0;
+    const calls: { readonly url: string; readonly init: RequestInit }[] = [];
+    const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, init: init ?? {} });
+      if (url.includes('/attachments/upload')) {
+        return new Response(
+          JSON.stringify({ success: true, data: { attachments: [{ id: 'att-4', messageId: '', fileName: 'a.png', originalName: 'a.png', mimeType: 'image/png', fileSize: 3, fileUrl: 'https://x/a.png' }] } }),
+          { status: 200 },
+        );
+      }
+      messageAttempts += 1;
+      if (messageAttempts === 1) return new Response(JSON.stringify({ success: false, error: 'panne' }), { status: 500 });
+      return new Response(JSON.stringify(ackBody('m9', 'x')), { status: 200 });
+    }) as typeof fetch;
+
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: '', originalLanguage: 'fr', attachments: [pendingAttachmentOf(pngFile())] },
+      viewerId: 'u-viewer',
+      deps,
+    });
+    const failedEntry = entriesOf(outbox.getState(), 'c-a')[0]!;
+    expect(failedEntry.delivery).toBe('failed');
+    expect(failedEntry.upload?.attachmentIds).toEqual(['att-4']);
+    const uploadCallsBeforeRetry = calls.filter((c) => c.url.includes('/attachments/upload')).length;
+    expect(uploadCallsBeforeRetry).toBe(1);
+
+    await retrySend({ conversationId: 'c-a', clientMessageId: failedEntry.message.clientMessageId, deps });
+
+    const uploadCallsAfterRetry = calls.filter((c) => c.url.includes('/attachments/upload')).length;
+    expect(uploadCallsAfterRetry).toBe(1); // JAMAIS un second upload.
+    expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(0); // la reprise a réussi.
   });
 });
