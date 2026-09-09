@@ -55,7 +55,19 @@
 // 2026-09-08 (méthodologie propre à ce script — #3678 en mesurait 583 avec
 // une méthode non tracée ailleurs ; la référence ci-dessous est ancrée sur ce
 // script, pas sur la mesure manuelle de l'issue).
-const BASELINE_HARDCODED_COLOR_COUNT = 956;
+//
+// #5883 — le comptage était TEXTUEL : `Color(hex:` matchait aussi bien un
+// APPEL qu'un doc-comment qui le CITE pour expliquer un correctif voisin. Le
+// commit 27ab5d1b (#5874) a fait rougir le garde en ajoutant une phrase qui
+// justifiait sa propre correction, sans ajouter un seul usage réel — « un
+// garde qui punit la phrase qui le justifie apprend aux gens à ne plus
+// écrire la phrase ». Les commentaires sont désormais retirés AVANT comptage
+// (`stripComments`, même machine à états que `AppSourceGuard.stripComments`
+// côté Swift — quatre modes : code, littéral de chaîne, commentaire de
+// ligne, commentaire de bloc). Effet de bord révélateur : la référence de
+// 956 comptait ONZE mentions qui n'étaient que des commentaires ; elle est
+// réancrée à 945, qui est le nombre d'usages RÉELS.
+const BASELINE_HARDCODED_COLOR_COUNT = 945;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -75,6 +87,59 @@ const SEARCH_ROOTS = [
 const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests', 'Theme']);
 
 const HARDCODED_COLOR_RE = /Color\(hex:/g;
+
+// Port fidèle de `AppSourceGuard.stripComments` (apps/ios/MeeshyTests/Helpers/
+// AppSourceGuard.swift), lui-même un port de `ComposerSourceGuard.stripComments`
+// (SDK) — même machine à états, quatre modes : code, littéral de chaîne (avec
+// échappements), commentaire de ligne `//…`, commentaire de bloc `/* … */`.
+// Couper au premier `//` sans conscience des littéraux tronquerait une ligne
+// contenant une URL `"https://…"` ; un stripper naïf laisserait un commentaire
+// de bloc multi-ligne se refermer trop tôt. Fonction PURE, testée par
+// --self-test.
+export const stripComments = (source) => {
+  const MODE = Object.freeze({ CODE: 'code', STRING: 'string', LINE_COMMENT: 'line', BLOCK_COMMENT: 'block' });
+  let mode = MODE.CODE;
+  let result = '';
+  let escaped = false;
+  let pendingSlash = false;
+  let pendingStar = false;
+
+  for (const character of source) {
+    if (mode === MODE.CODE) {
+      if (pendingSlash) {
+        pendingSlash = false;
+        if (character === '/') { mode = MODE.LINE_COMMENT; continue; }
+        if (character === '*') { mode = MODE.BLOCK_COMMENT; continue; }
+        result += '/';
+      }
+      if (character === '/') { pendingSlash = true; continue; }
+      if (character === '"') { mode = MODE.STRING; }
+      result += character;
+      continue;
+    }
+    if (mode === MODE.STRING) {
+      result += character;
+      if (escaped) { escaped = false; continue; }
+      if (character === '\\') { escaped = true; continue; }
+      if (character === '"') { mode = MODE.CODE; }
+      continue;
+    }
+    if (mode === MODE.LINE_COMMENT) {
+      if (character === '\n') { mode = MODE.CODE; result += character; }
+      continue;
+    }
+    // MODE.BLOCK_COMMENT
+    if (pendingStar && character === '/') {
+      pendingStar = false;
+      mode = MODE.CODE;
+      continue;
+    }
+    pendingStar = character === '*';
+    if (character === '\n') { result += character; }
+  }
+  if (pendingSlash && mode === MODE.CODE) { result += '/'; }
+  return result;
+};
 
 export const listSwiftFiles = (absRoot, relRoot) => {
   const out = [];
@@ -108,7 +173,7 @@ export const countHardcodedColors = (files) => {
   const perFile = [];
   let total = 0;
   for (const { path, source } of files) {
-    const matches = source.match(HARDCODED_COLOR_RE);
+    const matches = stripComments(source).match(HARDCODED_COLOR_RE);
     if (matches && matches.length > 0) {
       perFile.push({ path, count: matches.length });
       total += matches.length;
@@ -139,20 +204,53 @@ const selfTest = () => {
     { path: 'Sdk/Views/Card.swift', source: 'let c = Color(hex: "#123456")' },
     { path: 'App/Screen.swift', source: 'let e = Color(hex: "#ABCDEF")\nlet f = Color(hex: "#FEDCBA")' },
     { path: 'App/Empty.swift', source: 'struct Empty {}' },
+    // #5883 — une mention en commentaire, PAS un usage. Un doc-comment de
+    // ligne citant la fonction (comme 27ab5d1b l'a fait pour expliquer son
+    // correctif) et un commentaire de bloc multi-ligne : aucun des deux ne
+    // doit peser dans le compte.
+    {
+      path: 'App/DocOnly.swift',
+      source: [
+        '/// `Color(hex:)` n\'est PAS faillible : le `?? MeeshyColors.indigo400` qui',
+        '/// suit est mort — voir Color(hex: "#000000") cité ici en exemple.',
+        'struct DocOnly {',
+        '  /* ancien code, retiré :',
+        '     let g = Color(hex: "#111111")',
+        '  */',
+        '  let h = accentHex.isEmpty ? MeeshyColors.indigo400 : Color(hex: accentHex)', // ← seul usage RÉEL de ce fichier
+        '}',
+      ].join('\n'),
+    },
   ];
   // Le monde ne contient déjà que des fichiers RETENUS par listSwiftFiles
   // (l'exclusion Theme/Tests est un filtre de CHEMIN, testé par lecture du
   // code — `EXCLUDED_DIR_NAMES.has(name)` est une comparaison d'ensemble
   // triviale). Ce que ce garde doit prouver, c'est que son COMPTAGE est
-  // juste sur ce qu'on lui donne à compter : 2 + 1 + 2 = 5, `Empty.swift`
-  // absent du détail par fichier.
+  // juste sur ce qu'on lui donne à compter : 2 + 1 + 2 + 1 = 6, `Empty.swift`
+  // absent du détail par fichier — et `DocOnly.swift` n'y compte QUE son
+  // unique usage réel, pas les trois mentions portées par ses commentaires.
   const { total, perFile } = countHardcodedColors(world);
-  if (total !== 5) {
-    console.error(`AVEUGLE : total attendu 5, obtenu ${total}.`);
+  if (total !== 6) {
+    console.error(`AVEUGLE : total attendu 6, obtenu ${total}.`);
     return 1;
   }
-  if (perFile.length !== 3 || perFile.some((f) => f.path === 'App/Empty.swift')) {
+  if (perFile.length !== 4 || perFile.some((f) => f.path === 'App/Empty.swift')) {
     console.error(`AVEUGLE : un fichier sans occurrence ne doit pas figurer dans le détail, obtenu ${JSON.stringify(perFile)}.`);
+    return 1;
+  }
+  const docOnly = perFile.find((f) => f.path === 'App/DocOnly.swift');
+  if (!docOnly || docOnly.count !== 1) {
+    console.error(
+      `AVEUGLE : DocOnly.swift ne doit compter que son unique usage réel (les mentions en commentaire ne comptent pas), obtenu ${JSON.stringify(docOnly)}.`,
+    );
+    return 1;
+  }
+  // Un cliquet qui ne compte QUE le texte — la régression exacte de #5883 —
+  // doit être distingué explicitement : rejouer le comptage textuel brut sur
+  // DocOnly.swift doit rendre PLUS que le comptage conscient des commentaires.
+  const textualDocOnlyMatches = world.find((f) => f.path === 'App/DocOnly.swift').source.match(HARDCODED_COLOR_RE);
+  if (!textualDocOnlyMatches || textualDocOnlyMatches.length <= docOnly.count) {
+    console.error('AVEUGLE : le monde de test ne distingue pas un comptage conscient des commentaires d\'un comptage textuel.');
     return 1;
   }
   const screen = perFile.find((f) => f.path === 'App/Screen.swift');
@@ -174,7 +272,21 @@ const selfTest = () => {
     return 1;
   }
 
-  console.log('self-test : 6/6 vérifications passées (comptage par fichier, total, cliquet à deux sens).');
+  // stripComments elle-même, isolée de countHardcodedColors : une chaîne
+  // contenant un `//` (URL) ne doit PAS être tronquée — c'est le piège que le
+  // doc-comment de `AppSourceGuard.stripComments` nomme explicitement.
+  const withUrl = stripComments('let url = "https://meeshy.me/x" // vrai commentaire\nlet n = 1');
+  if (!withUrl.includes('"https://meeshy.me/x"') || withUrl.includes('vrai commentaire')) {
+    console.error(`AVEUGLE : stripComments a tronqué un littéral contenant //, obtenu ${JSON.stringify(withUrl)}.`);
+    return 1;
+  }
+  const withBlock = stripComments('let a = 1\n/* bloc\n   multi-ligne */\nlet b = 2');
+  if (withBlock.includes('bloc') || !withBlock.includes('let a = 1') || !withBlock.includes('let b = 2')) {
+    console.error(`AVEUGLE : stripComments n'a pas fermé un bloc multi-ligne, obtenu ${JSON.stringify(withBlock)}.`);
+    return 1;
+  }
+
+  console.log('self-test : 9/9 vérifications passées (stripComments, comptage par fichier, total, cliquet à deux sens).');
   return 0;
 };
 
