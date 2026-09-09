@@ -137,13 +137,19 @@ export class CerclesAchievements {
           await this.graveTiers(event.userId, 'community.join.size', taille, origin);
           return;
         }
-        case 'community.leave': {
-          const partis = await this.prisma.communityMember.count({
-            where: { userId: event.userId, leftAt: { not: null } },
-          });
-          await this.graveTiers(event.userId, 'community.leave.count', partis, origin);
+        case 'community.leave':
+          // BRANCHE MORTE, retirée de son travail plutôt que de son type.
+          //
+          // `community.leave.count` n'est PAS au catalogue, et pas par oubli :
+          // quitter une communauté SUPPRIME la ligne `CommunityMember`
+          // (`deleteMany`, `routes/communities/membership.ts`), donc `leftAt`
+          // n'est jamais posé et le compte rendrait toujours zéro. Le `famille()`
+          // de `graveTiers` rendait déjà `undefined` — l'agrégat était donc payé
+          // pour rien, à chaque départ.
+          //
+          // Le CAS reste déclaré : le jour où le départ devient traçable (#5760),
+          // c'est ici que la mesure revient, et l'union du type le rappelle.
           return;
-        }
         case 'community.create': {
           const [volume, taille] = await Promise.all([
             this.prisma.community.count({ where: { createdBy: event.userId } }),

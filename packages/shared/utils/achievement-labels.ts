@@ -2,8 +2,11 @@
  * LES GABARITS DE LIBELLÉ DES SUCCÈS (#5759).
  *
  * UN gabarit par FAMILLE, pas un libellé par succès : `{n}` porte le palier.
- * Neuf familles × huit langues = 72 chaînes, pour ~50 succès aujourd'hui et
- * autant qu'on voudra demain — ajouter un palier ne coûte AUCUNE traduction.
+ * Vingt-deux familles × sept langues = 154 chaînes, pour **114 succès**
+ * aujourd'hui et autant qu'on voudra demain — ajouter un palier ne coûte
+ * AUCUNE traduction. (Le chiffre se recompte : `ACHIEVEMENT_FAMILIES.length` ×
+ * les locales de `NotificationLanguage`. Écrit à la main, il a déjà périmé une
+ * fois — « neuf familles × huit langues » datait des trois premières sections.)
  *
  * ## Pourquoi un gabarit par famille, et non une composition libre
  *
