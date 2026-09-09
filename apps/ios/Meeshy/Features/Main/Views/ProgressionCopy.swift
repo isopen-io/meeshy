@@ -223,17 +223,27 @@ enum ProgressionCopy {
         return "\(manque) \(plancher)"
     }
 
-    /// « 5 jours d’affilée » / « Aucune série en cours ».
+    /// « 5 jours d’affilée » / « 1 jour d’affilée » / « Aucune série en cours ».
+    ///
+    /// Le singulier a sa propre clé, comme le solde de Meeshes : une forme
+    /// unique écrivait « 1 jours d’affilée » sur le hero de la flamme, et aucun
+    /// témoin ne le disait — toutes les fixtures valaient 5, 6 ou 11.
     static func streak(_ currentDays: Int) -> String {
         guard currentDays > 0 else {
             return String(localized: "progression.streak.none", defaultValue: "Aucune série en cours", bundle: .main)
+        }
+        if currentDays == 1 {
+            return String(localized: "progression.streak.days.one", defaultValue: "1 jour d’affilée", bundle: .main)
         }
         return String(localized: "progression.streak.days", defaultValue: "\(currentDays) jours d’affilée", bundle: .main)
     }
 
     /// « Record : 12 jours » — la série la plus longue, qui tient les jalons pour atteints.
     static func streakRecord(_ longestDays: Int) -> String {
-        String(localized: "progression.streak.record", defaultValue: "Record : \(longestDays) jours", bundle: .main)
+        if longestDays == 1 {
+            return String(localized: "progression.streak.record.one", defaultValue: "Record : 1 jour", bundle: .main)
+        }
+        return String(localized: "progression.streak.record", defaultValue: "Record : \(longestDays) jours", bundle: .main)
     }
 
     /// La phrase de la barre — ce qu'il reste AVANT le prochain palier, depuis
@@ -253,6 +263,9 @@ enum ProgressionCopy {
             let nextLevel = (level ?? scale.reachedCount) + 1
             return String(localized: "progression.next.level", defaultValue: "Encore \(remaining) points avant le niveau \(nextLevel)", bundle: .main)
         case .streak:
+            if remaining == 1 {
+                return String(localized: "progression.next.streak.one", defaultValue: "Encore 1 jour avant le jalon de \(next)", bundle: .main)
+            }
             return String(localized: "progression.next.streak", defaultValue: "Encore \(remaining) jours avant le jalon de \(next)", bundle: .main)
         }
     }
@@ -260,6 +273,14 @@ enum ProgressionCopy {
     /// « Obtenu le 3 septembre 2026 », ou `nil` quand aucune trace gravée ne date le palier.
     static func obtained(_ reachedAt: String?) -> String? {
         guard let date = EngagementProgressResolver.reachedDate(reachedAt) else { return nil }
+        return obtained(date: date)
+    }
+
+    /// La même phrase à partir d'une `Date` déjà décodée — pour les appelants
+    /// qui en tiennent une. Sans cette porte, ils ré-encodaient en ISO pour
+    /// faire re-décoder ici, un aller-retour qui reperdait la fraction de
+    /// seconde en chemin.
+    static func obtained(date: Date) -> String {
         let formatted = date.formatted(date: .long, time: .omitted)
         return String(localized: "progression.obtained", defaultValue: "Obtenu le \(formatted)", bundle: .main)
     }

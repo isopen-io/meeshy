@@ -36,7 +36,7 @@ final class ProgressionMeeshEntryTests: XCTestCase {
             milestones: [
                 .init(milestoneType: .badge, milestoneKey: "content.text_message:100", reachedAt: "2026-08-30T08:00:00.000Z"),
                 .init(milestoneType: .badge, milestoneKey: "content.story:10", reachedAt: "2026-09-02T09:00:00.000Z"),
-                .init(milestoneType: .achievement, milestoneKey: "polyglotte", reachedAt: "2026-09-05T18:20:00.000Z")
+                .init(milestoneType: .achievement, milestoneKey: "achievement.first_voice", reachedAt: "2026-09-05T18:20:00.000Z")
             ],
             streak: .init(currentStreakDays: 6, longestStreakDays: 11),
             level: .init(engagementScore: 1244),

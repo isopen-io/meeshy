@@ -42,7 +42,13 @@ struct ProgressionLastAchievementHero: View {
         var candidats: [(titre: String, date: Date, reveal: EngagementReveal?)] = []
 
         for succes in progress.achievements where succes.unlocked {
-            guard let brut = succes.reachedAt, let date = ISO8601DateFormatter().date(from: brut) else { continue }
+            // `ISO8601DateFormatter()` NU n'accepte pas les fractions de
+            // seconde — or `reachedAt.toISOString()` en émet TOUJOURS. Chaque
+            // candidat était donc écarté et le hero restait dans son état vide
+            // pour tout le monde, sans que rien ne rougisse : l'état vide est
+            // légitime, et la vue rendue était valide.
+            // `reachedDate` existe pour ça, et son doc-comment le dit.
+            guard let date = EngagementProgressResolver.reachedDate(succes.reachedAt) else { continue }
             candidats.append((ProgressionCopy.title(for: succes.key), date, .achievement(succes.key)))
         }
         for section in progress.achievementSections {
@@ -58,7 +64,10 @@ struct ProgressionLastAchievementHero: View {
         }
 
         guard let plusRecent = candidats.max(by: { $0.date < $1.date }) else { return nil }
-        let quand = ProgressionCopy.obtained(ISO8601DateFormatter().string(from: plusRecent.date)) ?? ""
+        // Ré-encoder la `Date` en ISO pour la faire re-décoder juste après
+        // était un aller-retour qui reperdait la fraction de seconde au
+        // passage. On date la `Date`.
+        let quand = ProgressionCopy.obtained(date: plusRecent.date)
         return (plusRecent.titre, quand, plusRecent.reveal)
     }
 
