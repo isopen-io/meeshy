@@ -95,6 +95,44 @@ final class QuickActionDoorsOnBothRootsTests: XCTestCase {
         }
     }
 
+    // MARK: - UN bloc, toujours en fin de liste
+
+    /// **Les accès rapides se montent à UN seul endroit : la queue de liste.**
+    ///
+    /// `listTail` vit à l'indentation du `if groupedConversations.isEmpty { … }
+    /// else { … }` — donc DEHORS : il se rend dans toutes les branches. La
+    /// branche « aucune conversation » montait par-dessus son PROPRE bloc, si
+    /// bien qu'un compte neuf — celui qui a le plus besoin d'aide — voyait les
+    /// accès rapides DEUX FOIS, l'un sous l'autre.
+    ///
+    /// La règle porteur (2026-09-09) sépare deux questions que ce doublon
+    /// confondait : **les héros sont conditionnés au seuil de démarrage**, et
+    /// **le bloc est TOUJOURS en fin de liste**. Un seul montage répond aux
+    /// deux ; deux montages n'en servaient aucune correctement.
+    func test_theQuickActionsMountOnce_atTheListTail() throws {
+        let code = try source("Meeshy/Features/Main/Views/ConversationListView.swift")
+
+        XCTAssertFalse(code.contains("quickActions(isEmptyState: true, conversationCount: 0)"),
+                       "L'état vide de démarrage ne monte plus son propre bloc : la queue le "
+                           + "porte déjà, et se rend dans TOUTES les branches.")
+
+        let montages = code.components(separatedBy: "quickActions(isEmptyState:").count - 1
+        XCTAssertEqual(montages, 2,
+                       "Exactement deux occurrences attendues : la DÉCLARATION de la fabrique "
+                           + "et son UNIQUE site de montage (la queue). Mesuré : \(montages).")
+    }
+
+    /// Le titre suit le VIDE, pas le site de montage — c'est ce qui permet au
+    /// bloc unique de dire « Aucune conversation » à qui démarre et « Et
+    /// maintenant ? » à qui a fini de lire sa liste.
+    func test_theTailTitleFollowsEmptiness_notItsMountSite() throws {
+        let code = try source("Meeshy/Features/Main/Views/ConversationListView.swift")
+        XCTAssertTrue(code.contains("isEmptyState: conversationViewModel.conversations.isEmpty"),
+                      "La queue décide son titre depuis le corpus.")
+        XCTAssertTrue(code.contains("conversationCount: conversationViewModel.conversations.count"),
+                      "Et le seuil des héros lit le compte BRUT, jamais le compte filtré.")
+    }
+
     private func source(_ relativeToAppRoot: String) throws -> String {
         AppSourceGuard.stripComments(try AppSourceGuard.unit(relativeToAppRoot))
     }

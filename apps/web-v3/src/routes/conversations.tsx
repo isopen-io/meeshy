@@ -479,60 +479,6 @@ export default function ConversationsScreen() {
           </LensSection>
         ))}
         {/*
-          LA QUEUE DE LISTE — une demi-hauteur de fenêtre de vide sous la
-          dernière rangée. Sans elle, la bande de focus, ancrée à 140 du bas,
-          ne pourrait jamais atteindre les dernières conversations : elles
-          resteraient à jamais non magnifiées, et la liste se terminerait par
-          une zone morte que rien n'explique.
-
-          ELLE N'EXISTE QUE S'IL Y A UNE RANGÉE À MAGNIFIER. Rendue
-          inconditionnellement, elle poussait l'état vide 50 dvh plus bas :
-          mesuré à 390×844, le panneau « Aucune conversation ne correspond… »
-          commençait à 688 px et finissait à 899 — sa SORTIE, le bouton « Tout
-          afficher », tombait donc hors de l'écran. Un état vide dont on ne
-          voit pas l'issue est un cul-de-sac, et une cale destinée à la
-          magnification n'a rien à caler quand il n'y a rien à magnifier.
-        */}
-        {/*
-          ET LA CALE PORTE LES ACCÈS RAPIDES (2026-09-08). iOS met exactement
-          ici les siens — `ConversationListView.listTail`, haut d'une demi-région
-          visible, la MÊME hauteur et la MÊME raison. La v3.1 n'y mettait qu'un
-          `aria-hidden` : une demi-fenêtre de vide sous la dernière ligne, sans
-          une issue, là où l'utilisateur arrive précisément parce qu'il a fini de
-          lire sa liste et cherche quoi faire.
-
-          La hauteur reste : c'est elle qui laisse la dernière conversation
-          rejoindre la bande de focus. Ce qui change, c'est qu'elle n'est plus
-          VIDE — et elle cesse donc d'être `aria-hidden`, puisqu'elle porte
-          maintenant quelque chose à lire.
-        */}
-        {/*
-          ELLE EST RENDUE DÈS QU'ON A UNE CONVERSATION — jamais conditionnée à
-          ce que le FILTRE laisse voir (correction porteur 2026-09-09).
-
-          Mesuré sur iOS : `listTail` vit à l'indentation de `if
-          groupedConversations.isEmpty { … } else { … }`, donc DEHORS — la queue
-          se rend dans TOUTES les branches, y compris « la recherche ne rend
-          rien ». La v3.1 la conditionnait à `visible.length > 0`, le compte
-          FILTRÉ : chercher un mot absent effaçait d'un coup la seule aide de
-          l'écran, exactement au moment où l'on ne trouve pas ce qu'on cherche.
-
-          La HAUTEUR, elle, reste conditionnée aux rangées : c'est une cale de
-          magnification, et elle n'a rien à caler quand rien n'est affiché.
-          Sans cette distinction, l'état filtré vide repartait 50 dvh plus bas —
-          le défaut que le commentaire ci-dessus a déjà corrigé une fois.
-        */}
-        {conversations.length > 0 ? (
-          <li style={{ minHeight: visible.length > 0 ? '50dvh' : 0, flexShrink: 0 }}>
-            <QuickActions
-              title="Et maintenant ?"
-              subtitle="Meeshy s’écrit à plusieurs — invitez quelqu’un à vous rejoindre."
-              actions={ACTIONS_DE_DEMARRAGE}
-              conversationCount={conversations.length}
-            />
-          </li>
-        ) : null}
-        {/*
           DEUX états VIDES DISTINCTS (#5559 T15) : `empty-corpus` (aucune
           conversation du tout — l'écran de DÉMARRAGE) contre `empty-filter`
           (un filtre ou une recherche qui ne rend rien sur un corpus non
@@ -590,6 +536,68 @@ export default function ConversationsScreen() {
             >
               Tout afficher
             </button>
+          </li>
+        ) : null}
+        {/*
+          LA QUEUE DE LISTE — une demi-hauteur de fenêtre de vide sous la
+          dernière rangée. Sans elle, la bande de focus, ancrée à 140 du bas,
+          ne pourrait jamais atteindre les dernières conversations : elles
+          resteraient à jamais non magnifiées, et la liste se terminerait par
+          une zone morte que rien n'explique.
+
+          ELLE N'EXISTE QUE S'IL Y A UNE RANGÉE À MAGNIFIER. Rendue
+          inconditionnellement, elle poussait l'état vide 50 dvh plus bas :
+          mesuré à 390×844, le panneau « Aucune conversation ne correspond… »
+          commençait à 688 px et finissait à 899 — sa SORTIE, le bouton « Tout
+          afficher », tombait donc hors de l'écran. Un état vide dont on ne
+          voit pas l'issue est un cul-de-sac, et une cale destinée à la
+          magnification n'a rien à caler quand il n'y a rien à magnifier.
+        */}
+        {/*
+          ET LA CALE PORTE LES ACCÈS RAPIDES (2026-09-08). iOS met exactement
+          ici les siens — `ConversationListView.listTail`, haut d'une demi-région
+          visible, la MÊME hauteur et la MÊME raison. La v3.1 n'y mettait qu'un
+          `aria-hidden` : une demi-fenêtre de vide sous la dernière ligne, sans
+          une issue, là où l'utilisateur arrive précisément parce qu'il a fini de
+          lire sa liste et cherche quoi faire.
+
+          La hauteur reste : c'est elle qui laisse la dernière conversation
+          rejoindre la bande de focus. Ce qui change, c'est qu'elle n'est plus
+          VIDE — et elle cesse donc d'être `aria-hidden`, puisqu'elle porte
+          maintenant quelque chose à lire.
+        */}
+        {/*
+          L’ORDRE SUIT iOS (2026-09-09) : la branche VIDE se rend AVANT `listTail`
+          (`ConversationListView` — le `if groupedConversations.isEmpty` précède la
+          queue). La v3.1 les avait dans l’ordre inverse : en recherche infructueuse,
+          le bloc d’accès rapides s’intercalait AU-DESSUS du « Aucune conversation ne
+          correspond à… », si bien que la réponse à ce qu’on venait de taper arrivait
+          après une proposition de faire autre chose.
+        */}
+        {/*
+          ELLE EST RENDUE DÈS QU'ON A UNE CONVERSATION — jamais conditionnée à
+          ce que le FILTRE laisse voir (correction porteur 2026-09-09).
+
+          Mesuré sur iOS : `listTail` vit à l'indentation de `if
+          groupedConversations.isEmpty { … } else { … }`, donc DEHORS — la queue
+          se rend dans TOUTES les branches, y compris « la recherche ne rend
+          rien ». La v3.1 la conditionnait à `visible.length > 0`, le compte
+          FILTRÉ : chercher un mot absent effaçait d'un coup la seule aide de
+          l'écran, exactement au moment où l'on ne trouve pas ce qu'on cherche.
+
+          La HAUTEUR, elle, reste conditionnée aux rangées : c'est une cale de
+          magnification, et elle n'a rien à caler quand rien n'est affiché.
+          Sans cette distinction, l'état filtré vide repartait 50 dvh plus bas —
+          le défaut que le commentaire ci-dessus a déjà corrigé une fois.
+        */}
+        {conversations.length > 0 ? (
+          <li style={{ minHeight: visible.length > 0 ? '50dvh' : 0, flexShrink: 0 }}>
+            <QuickActions
+              title="Et maintenant ?"
+              subtitle="Meeshy s’écrit à plusieurs — invitez quelqu’un à vous rejoindre."
+              actions={ACTIONS_DE_DEMARRAGE}
+              conversationCount={conversations.length}
+            />
           </li>
         ) : null}
           </>

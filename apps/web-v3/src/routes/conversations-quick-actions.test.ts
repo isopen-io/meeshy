@@ -37,3 +37,23 @@ describe('la queue d’accès rapides suit iOS', () => {
     expect(source).toContain('conversationCount={0}');
   });
 });
+
+/**
+ * **L'ORDRE suit iOS** : la branche VIDE se rend AVANT `listTail`
+ * (`ConversationListView` : le `if groupedConversations.isEmpty { … } else { … }`
+ * précède la queue). Dans l'ordre inverse, une recherche infructueuse
+ * intercalait le bloc d'accès rapides AU-DESSUS de « Aucune conversation ne
+ * correspond à… » — la réponse à ce qu'on venait de taper arrivait après une
+ * proposition de faire autre chose.
+ */
+describe('l’ordre des blocs suit iOS', () => {
+  test('les panneaux vides précèdent la queue', () => {
+    const corpus = source.indexOf("emptiness === 'empty-corpus'");
+    const filtre = source.indexOf("emptiness === 'empty-filter'");
+    const queue = source.indexOf('{conversations.length > 0 ? (');
+
+    expect(corpus).toBeGreaterThan(-1);
+    expect(filtre).toBeGreaterThan(corpus);
+    expect(queue).toBeGreaterThan(filtre);
+  });
+});
