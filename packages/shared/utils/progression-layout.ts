@@ -75,11 +75,17 @@ export function progressionLayout(progress: EngagementProgress): readonly Progre
    * TOUJOURS servis : leur catalogue est une constante partagée, jamais une
    * mesure du serveur.
    *
+   * La règle porte sur le fait qu'il Y AIT des sections, pas sur la présence de
+   * la carte : c'est la seule formulation que le miroir Swift peut reproduire à
+   * l'identique, son modèle collapsant « absente » et « vide » en un tableau
+   * vide. Une règle qu'un miroir ne peut pas dire est une divergence en
+   * attente.
+   *
    * (Ce que « carte absente » doit vouloir dire au juste est une décision
    * produit ouverte — #5829. Ici on refuse simplement de promettre du vide.)
    */
   const sections = PROGRESSION_SECTIONS.filter(
-    (section) => section !== 'defis' || progress.achievementSections !== undefined,
+    (section) => section !== 'defis' || (progress.achievementSections ?? []).length > 0,
   );
 
   return [
