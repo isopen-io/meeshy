@@ -21,8 +21,12 @@ on:
     branches: [main, dev]
     tags: ['v*.*.*']
     paths:
+      # `apps/web` reste déclencheur bien que son image ne se construise plus
+      # (#5882) : le retour arrière est de RÉACTIVER un job, pas de récupérer du
+      # code, et un déclenchement qui ne retient aucun service ne construit rien.
+      # `apps/web-old-version3` a quitté le dépôt — un chemin qui n'existe plus
+      # ne déclenche rien et ne fait que mentir sur ce que ce workflow observe.
       - 'apps/web/**'
-      - 'apps/web-old-version3/**'
       - 'apps/web-v3/**'
       - 'packages/design-tokens/**'
       - 'packages/icons/**'
@@ -42,13 +46,10 @@ on:
         type: choice
         options:
           - all
-          - web
           - web-v3
           - gateway
           - translator
           - agent
-          - web,gateway
-          - web,translator
           - web-v3,gateway
           - gateway,translator
       custom_services:
@@ -135,7 +136,6 @@ jobs:
             fi
 
             if [[ "$SERVICES" == "all" ]]; then
-              echo "web=true" >> $GITHUB_OUTPUT
               echo "web_v3=true" >> $GITHUB_OUTPUT
               echo "gateway=true" >> $GITHUB_OUTPUT
               echo "translator=true" >> $GITHUB_OUTPUT
@@ -147,7 +147,6 @@ jobs:
               # « web » et « web-v3 » disjoints — le second jeton « web-v31 » a
               # disparu avec le build de l'app annulée (#5880).
               SELECTED=",${SERVICES// /},"
-              echo "web=$([[ "$SELECTED" == *",web,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "web_v3=$([[ "$SELECTED" == *",web-v3,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "gateway=$([[ "$SELECTED" == *",gateway,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "translator=$([[ "$SELECTED" == *",translator,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -160,7 +159,6 @@ jobs:
             # application web en développement. Une omission dans une
             # énumération ne rougit nulle part : elle produit une release
             # complète en apparence, amputée en fait.
-            echo "web=true" >> $GITHUB_OUTPUT
             # `web_v3` désigne désormais `apps/web-v3`, la SEULE application web
             # en développement — et il est donc VRAI sur un tag. L'ancien
             # `web_v3` (l'app annulée) ne se construit plus du tout (#5880).
@@ -194,13 +192,11 @@ jobs:
               CHANGED="__BASE_INTROUVABLE__"
             fi
             if [[ "$CHANGED" == "__BASE_INTROUVABLE__" ]]; then
-              echo "web=true" >> $GITHUB_OUTPUT
               echo "web_v3=true" >> $GITHUB_OUTPUT
               echo "gateway=true" >> $GITHUB_OUTPUT
               echo "translator=true" >> $GITHUB_OUTPUT
               echo "agent=true" >> $GITHUB_OUTPUT
             else
-            echo "web=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             # `web_v3` désigne `apps/web-v3` — le SEUL chantier web (#5880).
             # `apps/web-old-version3`, annulée, ne déclenche plus rien : elle ne
             # se construit plus du tout, donc aucun chemin ne la vise.
@@ -223,26 +219,24 @@ jobs:
             TORCH_INPUT="cpu"
           fi
 
-          if [[ "${{ steps.changes.outputs.web }}" == "true" ]]; then
-            HAS_CHANGES=true
-            VERSION=$(cat apps/web/VERSION 2>/dev/null || echo "1.0.0")
-            [[ "$FIRST" == "false" ]] && SERVICES+=','
-            SERVICES+='{"service":"web","context":".","dockerfile":"./apps/web/Dockerfile","image":"meeshy-web","version":"'$VERSION'"}'
-            FIRST=false
-          fi
-
           # `apps/web-old-version3` ne se construit plus (#5880). Elle est
           # ANNULÉE (directive porteur 2026-09-07), n'est plus déployée depuis
           # #5609, et son `web_v3` était déjà forcé à `false` sur un tag : le
           # job ne produisait qu'une image que personne ne sert. Son nom de
           # service est repris ci-dessous par le SEUL chantier web.
           #
-          # Le nom d'IMAGE, lui, reste `meeshy-web-v31` : `docker-compose.prod.yml`
-          # (§ `FRONTEND_V3_IMAGE`) référence encore `isopen/meeshy-web-v3:latest`,
-          # et le reprendre ferait pointer la PRODUCTION vers la v3.1 en silence.
-          # Renommer le service est CI-interne et réversible ; renommer l'image
-          # se voit en production et demande une bascule coordonnée des compose,
-          # y compris celui de l'hôte, qui diverge du dépôt. Deux gestes.
+          # **La v3.1 PREND l'image du legacy** (directive porteur 2026-09-09,
+          # #5882) : elle remplace `apps/web` comme application web de Meeshy.
+          #
+          # Ce que ça déclenche, et ce que ça ne déclenche pas : `latest` — ce
+          # que la production sert — n'est poussé que depuis `main` (cf.
+          # `docker/metadata-action` plus bas). Un build sur `dev` ne pousse que
+          # `staging` et `<version>-<horodatage>`. **La bascule de production
+          # est donc le `dev` -> `main`**, pas la fusion de ce lot.
+          #
+          # Et c'est pourquoi le build du legacy s'arrête ICI et non vendredi :
+          # deux producteurs d'un seul tag `staging` se l'écrasent l'un l'autre
+          # dans le même run, sans que rien ne le dise. Ses SOURCES restent.
           if [[ "${{ steps.changes.outputs.web_v3 }}" == "true" ]]; then
             HAS_CHANGES=true
             VERSION=$(node -p "require('./apps/web-v3/package.json').version" 2>/dev/null || echo "0.0.0")
@@ -276,7 +270,7 @@ jobs:
               API_BASE=''
               DATA_SOURCE='fixtures'
             fi
-            SERVICES+='{"service":"web-v3","context":".","dockerfile":"./apps/web-v3/Dockerfile","image":"meeshy-web-v31","version":"'$VERSION'","viteApiBase":"'$API_BASE'","viteDataSource":"'$DATA_SOURCE'"}'
+            SERVICES+='{"service":"web-v3","context":".","dockerfile":"./apps/web-v3/Dockerfile","image":"meeshy-web","version":"'$VERSION'","viteApiBase":"'$API_BASE'","viteDataSource":"'$DATA_SOURCE'"}'
             FIRST=false
           fi
 
@@ -507,9 +501,8 @@ jobs:
           # sauté en silence. C'est ce silence qui a laissé `meeshy-web-v31`
           # construite et servie nulle part pendant des jours.
           #
-          # `web` n'a PAS de ligne, et c'est une décision : staging ne sert plus
-          # le legacy depuis #5609. L'ancienne refonte, elle, ne se construit
-          # même plus (#5880) — elle ne peut donc plus apparaître ici.
+          # Ni le legacy ni l'ancienne refonte ne peuvent apparaître ici : le
+          # premier ne se construit plus depuis #5882, la seconde depuis #5880.
           CIBLES=""
           INCONNUS=""
           for SVC in $(echo "$SERVICES_JSON" | jq -r '.include[].service'); do
@@ -518,7 +511,6 @@ jobs:
               gateway)    CIBLES="$CIBLES gateway-staging" ;;
               translator) CIBLES="$CIBLES translator-staging" ;;
               agent)      CIBLES="$CIBLES agent-staging" ;;
-              web)        echo "::notice::$SVC n'est plus déployé sur staging (#5609)" ;;
               *)          INCONNUS="$INCONNUS $SVC" ;;
             esac
           done

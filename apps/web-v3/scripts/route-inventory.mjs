@@ -15,7 +15,6 @@
  *
  * Il énumère les DEUX legs, et pas seulement la v3 :
  *   apps/web        — le legacy, ce qui sert meeshy.me AUJOURD'HUI
- *   apps/web-old-version3 — l'ancienne refonte, ANNULÉE le 2026-09-07
  *   apps/web-v3     — la v3.1, le chantier (ex web-v4)
  * Le risque de casser un lien existant vient du PREMIER. Cadrer l'inventaire
  * sur la v3 seule laisserait tomber `/signup/affiliate/:token`,
@@ -61,7 +60,6 @@ function routes(app) {
 }
 
 const legacy = routes('apps/web');
-const cancelled = routes('apps/web-old-version3');
 // La v3.1 n'a PAS la convention Next.js que `routes()` sait lire : ses adresses
 // sont écrites à la main dans `src/routes/route-table.tsx`, et ses cinq
 // documents institutionnels sont pré-rendus hors du routeur. `routes()` y
@@ -69,7 +67,7 @@ const cancelled = routes('apps/web-old-version3');
 // pendant tout le cadrage de #5492 (#5669).
 const v31 = v31Routes();
 
-const urls = new Set([...legacy, ...cancelled, ...v31].map((r) => r.url));
+const urls = new Set([...legacy, ...v31].map((r) => r.url));
 const dans = (list, url) => list.some((r) => r.url === url);
 
 if (process.argv.includes('--json')) {
@@ -78,7 +76,6 @@ if (process.argv.includes('--json')) {
       [...urls].sort().map((url) => ({
         url,
         legacy: dans(legacy, url),
-        cancelled: dans(cancelled, url),
         v31: dans(v31, url),
       })),
       null,
@@ -87,15 +84,20 @@ if (process.argv.includes('--json')) {
   );
 } else {
   console.log(`  apps/web         ${legacy.length} routes  (le legacy — sert meeshy.me)`);
-  console.log(`  apps/web-old-version3  ${cancelled.length} routes  (l'ancienne refonte, ANNULÉE)`);
   const ecrans = v31.filter((r) => r.kind === 'écran').length;
   console.log(
     `  apps/web-v3      ${v31.length} routes  (la v3.1 — le chantier : ` +
       `${ecrans} écrans + ${v31.length - ecrans} documents pré-rendus)`,
   );
   console.log(`  union            ${urls.size} adresses distinctes\n`);
-  const orphans = [...urls].sort().filter((u) => dans(legacy, u) && !dans(cancelled, u));
-  console.log(`  ${orphans.length} routes du LEGACY sans équivalent dans l'ancienne refonte —`);
-  console.log(`  celles que cadrer l'inventaire sur elle seule aurait laissé tomber :\n`);
-  for (const u of orphans) console.log(`    ${u}`);
+  // La colonne de l'ancienne refonte a disparu avec elle (#5882). Elle
+  // opposait au legacy une application ANNULÉE : depuis sa sortie du dépôt,
+  // `routes()` y rendait `[]` et l'écart valait le legacy tout entier — un
+  // compte qui ne pouvait plus varier, donc qui ne mesurait plus rien. La
+  // question qui reste est la SEULE qui décide de la bascule : que sert le
+  // legacy que la v3.1 ne sert pas encore ?
+  const manquantes = [...urls].sort().filter((u) => dans(legacy, u) && !dans(v31, u));
+  console.log(`  ${manquantes.length} routes du LEGACY sans équivalent dans la v3.1 —`);
+  console.log(`  ce qui reste à porter avant que la bascule soit complète :\n`);
+  for (const u of manquantes) console.log(`    ${u}`);
 }

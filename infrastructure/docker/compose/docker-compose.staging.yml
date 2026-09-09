@@ -343,23 +343,31 @@ services:
   # place dans chaque diagnostic, pour servir du code que personne ne modifie
   # plus.
   #
-  # La v3.1 (`apps/web-v3`) est le SEUL chantier web. `docker.yml` construit
-  # déjà son image (`meeshy-web-v31`) et la tague `staging` sur `dev` : il ne
-  # manquait que ce raccordement pour qu'elle soit SERVIE. Une image construite
-  # et déployée nulle part est un build qui ne prouve rien.
+  # La v3.1 (`apps/web-v3`) est le SEUL chantier web. `docker.yml` construit son
+  # image et la tague `staging` sur `dev` : il ne manquait que ce raccordement
+  # pour qu'elle soit SERVIE. Une image construite et déployée nulle part est un
+  # build qui ne prouve rien.
+  #
+  # **Elle publie sous `meeshy-web` depuis le 2026-09-09 (#5882)** — le nom du
+  # legacy, qu'elle remplace comme application web de Meeshy. Son ancien nom
+  # `meeshy-web-v31` n'est plus poussé : un hôte qui tirerait encore ce tag
+  # servirait une image qui a cessé d'être construite, et rien ne le lui dirait.
+  # Le legacy, lui, n'est plus construit du tout — deux producteurs d'un seul
+  # tag `staging` se l'écraseraient l'un l'autre dans le même run.
   #
   # **Ce que la bascule coûte, et il faut le dire** : `staging.meeshy.me` ne
   # sert plus le legacy. Les 80 routes d'`apps/web` n'y sont plus éprouvables —
-  # elles restent servies en PRODUCTION (`meeshy-frontend`), qui garde son
-  # image `isopen/meeshy-web:latest`. Un correctif d'incident sur le legacy se
-  # valide donc en local (`docker-compose.local.yml`), plus sur staging.
+  # elles restent servies en PRODUCTION (`meeshy-frontend`) jusqu'à la bascule
+  # `dev` -> `main` : `latest` n'est poussé que depuis `main`, donc un build sur
+  # `dev` ne touche pas la production. Un correctif d'incident sur le legacy se
+  # valide en local (`docker-compose.local.yml`), plus sur staging.
   #
   # Aucune variable d'environnement : cette image est un bundle Vite servi par
   # nginx, sans rendu à l'exécution et — à ce jour — sans client d'API. Les
   # `NEXT_PUBLIC_*` du legacy y seraient INERTES, et une variable inerte se lit
   # comme une configuration active.
   frontend-staging:
-    image: ${FRONTEND_IMAGE:-isopen/meeshy-web-v31:staging}
+    image: ${FRONTEND_IMAGE:-isopen/meeshy-web:staging}
     container_name: meeshy-frontend-staging
     restart: unless-stopped
     # PAS de `depends_on: gateway-staging`. Le legacy en avait besoin : son

@@ -69,29 +69,49 @@ const DEPLOIEMENTS = [
 ] as const;
 
 /**
- * CE TÉMOIN N'A DE SUJET QUE LÀ OÙ LE LEGACY EST DÉPLOYÉ.
+ * CE TÉMOIN N'A DE SUJET QUE LÀ OÙ L'ORIGINE A DEUX OCCUPANTS.
  *
  * `public/sw.js` n'aiguille que l'origine qui le SERT : sa juridiction sur la
  * zone v3 suppose DEUX occupants de la même origine — le legacy qui pose le
- * worker, la zone qui lui échappe. Staging n'en a plus qu'un depuis la
- * directive porteur du 2026-09-07 (§ « UN SEUL frontend sur staging, et c'est
- * la v3.1 ») : le conteneur `meeshy-frontend-v3-staging` a été retiré AVEC son
- * routeur, et `frontend-staging` sert désormais `isopen/meeshy-web-v31`. Il n'y
- * a plus de frontière à garder là-bas — il n'y a plus de second occupant.
+ * worker, la zone qui lui échappe. Là où un seul service revendique l'hôte, il
+ * n'y a pas de frontière à garder, et ce témoin n'a rien à juger : staging
+ * depuis le 2026-09-07 (« UN SEUL frontend sur staging, et c'est la v3.1 »),
+ * la production depuis #5882, qui retire le conteneur de l'ancienne refonte
+ * AVEC son routeur — plus personne ne sert `/__v3/…`, donc plus personne à qui
+ * le worker devrait céder le passage.
  *
- * D'où la forme, qui reste à DEUX SENS et non un simple retrait de la ligne :
- * l'absence du routeur de zone n'est tolérée QUE si le déploiement ne sert plus
- * l'image du legacy. **Redéployer `apps/web` sur staging sans rendre son
- * routeur de zone fait rougir de nouveau** — c'est-à-dire exactement le cas où
- * la frontière redevient nécessaire. Un `return []` inconditionnel, lui, aurait
- * rendu le témoin muet sur ce déploiement pour toujours, et son silence
- * ressemblerait à un verdict favorable.
+ * ON COMPTE LES OCCUPANTS DE L'HÔTE, ET NON LE NOM DE L'IMAGE. Le
+ * discriminant précédent — « ce déploiement sert-il `isopen/meeshy-(frontend|web)` ? »
+ * — est mort le jour où #5882 a donné le nom d'image du legacy à la v3.1 qui
+ * le remplace : il aurait déclaré le legacy PRÉSENT sur un staging qui sert la
+ * v3.1, et exigé là-bas un routeur de zone que la directive du 2026-09-07 avait
+ * précisément supprimé. Un discriminant peut être ANTI-corrélé à ce qu'il
+ * prétend distinguer, et il continue de rendre un verdict.
  *
- * On lit l'IMAGE et non le nom du service : `frontend-staging` a gardé son nom
- * en changeant d'occupant, donc le nom ne dit plus qui est là. Les mentions du
- * legacy en COMMENTAIRE ne comptent pas — l'ancre `image:` les écarte.
+ * La forme reste à DEUX SENS, et c'est ce qui la rend utile : dès qu'un SECOND
+ * routeur revendique le même hôte, la frontière redevient nécessaire et son
+ * absence — ou sa présence sous un autre nom que celui attendu — fait rougir.
+ * Un `return []` inconditionnel, lui, aurait rendu le témoin muet pour
+ * toujours, et son silence ressemblerait à un verdict favorable.
  */
-const IMAGE_DU_LEGACY = /^\s*image:.*isopen\/meeshy-(?:frontend|web):/m;
+const hotesRevendiques = (regle: string): readonly string[] =>
+  [...regle.matchAll(/Host\(`([^`]+)`\)/g)].map(([, hote]) => hote ?? '');
+
+/**
+ * Les hôtes que PLUSIEURS routeurs du fichier se partagent — c'est-à-dire les
+ * origines à deux occupants, les seules où une frontière de zone ait un sens.
+ */
+function originesPartagees(compose: string): ReadonlySet<string> {
+  const comptes = new Map<string, number>();
+  for (const ligne of compose.split('\n')) {
+    const regle = /traefik\.http\.routers\.[A-Za-z0-9_-]+\.rule=(.*)$/.exec(ligne.trim());
+    if (regle === null) continue;
+    for (const hote of new Set(hotesRevendiques(regle[1] ?? ''))) {
+      comptes.set(hote, (comptes.get(hote) ?? 0) + 1);
+    }
+  }
+  return new Set([...comptes].filter(([, n]) => n > 1).map(([hote]) => hote));
+}
 
 class FakeResponse {
   readonly ok: boolean;
@@ -277,10 +297,12 @@ function traefikV3Paths(): readonly CheminReclame[] {
       .map((line) => line.trim())
       .find((line) => line.includes(`traefik.http.routers.${routeur}.rule=`));
     if (rule === undefined) {
-      if (!IMAGE_DU_LEGACY.test(compose)) return [];
+      const partagees = originesPartagees(compose);
+      if (partagees.size === 0) return [];
       throw new Error(
-        `la règle du routeur ${routeur} est absente de ${fichier}, qui sert pourtant encore ` +
-          `l'image du legacy : la zone v3 y retomberait sous la juridiction de public/sw.js`
+        `la règle du routeur ${routeur} est absente de ${fichier}, dont l'origine a pourtant ` +
+          `plusieurs occupants (${[...partagees].join(', ')}) : la zone v3 y retomberait ` +
+          `sous la juridiction de public/sw.js`
       );
     }
     return [...rule.matchAll(/(PathPrefix|Path)\(`([^`]+)`\)/g)].map(([, matcher, valeur]) => ({
@@ -413,7 +435,22 @@ describe('public/sw.js — la zone v3 échappe entièrement au Service Worker le
       'comme en staging, échappe au worker',
     () => {
       const chemins = traefikV3Paths();
-      expect(chemins.length).toBeGreaterThan(0);
+
+      // NON-VACUITÉ, TROISIÈME ÉTAT. Zéro chemin ne signifie plus « l'extraction
+      // est en panne » : depuis #5882, aucun déploiement n'a de second occupant
+      // sur son origine, donc aucun routeur de zone n'est déclaré et il n'y a
+      // rien à éprouver. Ce cas ne sort PAS en vert silencieux — il assère la
+      // RAISON de son vide, et il rougit dès qu'une origine redevient partagée
+      // sans que ce témoin en tire un chemin. Un `toBeGreaterThan(0)` retiré
+      // sans rien mettre à la place aurait laissé passer l'inverse : un routeur
+      // de zone présent que l'extraction ne verrait plus.
+      if (chemins.length === 0) {
+        for (const { fichier } of DEPLOIEMENTS) {
+          const compose = fs.readFileSync(path.join(RACINE_DU_DEPOT, fichier), 'utf8');
+          expect([fichier, [...originesPartagees(compose)]]).toEqual([fichier, []]);
+        }
+        return;
+      }
 
       const cache = createFakeCache();
       const sw = loadServiceWorker({ fetchImpl: neverCalled(), cache });

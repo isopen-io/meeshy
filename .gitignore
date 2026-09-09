@@ -26,24 +26,14 @@ backend/node_modules/
 # production
 /build
 **/*/*.d.*
-# ... sauf les déclarations ÉCRITES À LA MAIN, qui sont des sources.
-# `apps/web-old-version3/scripts/check-app-router-built.d.mts` type le gate de build que
-# `__tests__/app-router-build.test.ts` importe : ignoré, il manque au clone, et
-# le type-check de `@meeshy/web-v3` — l'étape BLOQUANTE de `ci.yml` — tombe en
-# « TS7016: Could not find a declaration file for module ». Mesuré en déplaçant
-# le fichier : `bun run type-check` passe de 0 à 1 erreur.
-!apps/web-old-version3/scripts/*.d.mts
-!apps/web-old-version3/scripts/lib/*.d.mts
-# Même cause, même effet pour `apps/web-old-version3/types/css.d.ts` : il déclare l'import
-# à effet de bord de `app/globals.css`, qui porte la table de jetons. Ignoré, il
-# manque au clone et le type-check BLOQUANT tombe en « TS2882: Cannot find module
-# or type declarations for side-effect import ». Mesuré en déplaçant le fichier.
-!apps/web-old-version3/types/*.d.ts
-# Et pour `apps/web-old-version3/eslint/frontiere-de-zone.d.mts`, qui type le plugin de la
-# frontière de zone (§ 3.2 corollaire 4) que `__tests__/zone-lint.test.ts` monte
-# par l'API `Linter`. Même cause, même effet, même mesure : TS7016 au clone.
-!apps/web-old-version3/eslint/*.d.mts
-# LA v3.1 A LES MÊMES BESOINS, et l'oubli s'est payé cash. `apps/web-v3`
+# ... sauf les déclarations ÉCRITES À LA MAIN, qui sont des sources. Ignorée,
+# une telle déclaration manque au CLONE et le type-check BLOQUANT de `ci.yml`
+# tombe en « TS7016: Could not find a declaration file for module » ou en
+# « TS2882: Cannot find module or type declarations for side-effect import ».
+# Mesuré, à chaque fois, en déplaçant le fichier : `bun run type-check` passe
+# de 0 à 1 erreur.
+#
+# LA v3.1 EN A BESOIN, et l'oubli s'est payé cash. `apps/web-v3`
 # n'entrait dans le type-check de `ci.yml` que depuis le renommage
 # (2026-09-07) : à sa PREMIÈRE exécution, la CI a rendu quatre TS2307/TS7016
 # sur des fichiers présents dans l'arbre de travail et absents du clone.
@@ -62,9 +52,9 @@ backend/node_modules/
 !apps/web-v3/src/lib/*.d.ts
 !apps/web-v3/scripts/*.d.mts
 !apps/web-v3/scripts/lib/*.d.mts
-# `scripts/lib/navigateur.d.cts` type `scripts/lib/navigateur.cjs` — le site UNIQUE de
-# « où est Chromium » (conception § 9.2) — pour `apps/web-old-version3/playwright.config.ts`. Même
-# raison que ci-dessus : ignoré, il manque au clone et le type-check tombe en TS7016.
+# `scripts/lib/navigateur.d.cts` type `scripts/lib/navigateur.cjs` — le site
+# UNIQUE de « où est Chromium » (conception § 9.2). Même raison que ci-dessus :
+# ignoré, il manque au clone et le type-check tombe en TS7016.
 !scripts/lib/*.d.cts
 **/*/build/
 **/*/dist/

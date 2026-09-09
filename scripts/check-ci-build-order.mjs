@@ -4,6 +4,14 @@
 //
 // CE QU'IL FERME
 //
+// NOTE 2026-09-09 (#5882) — les chemins `apps/web-old-version3` et les jobs
+// `a11y-v3` / `lifecycle-v3` / `chaines-v3` cités ci-dessous ont quitté le
+// dépôt avec l'application annulée. Ils sont conservés au PASSÉ : ils nomment
+// les commits (`01c49fcfee`, `f73f3c525e^`, `b975ec3c7e`) sur lesquels ce
+// garde a été rejoué, et ces commits, eux, existent toujours. Les sondes du
+// self-test, elles, sont réancrées sur `institutionnel-v3` — une sonde qui
+// ne trouve plus sa cible ne prouve plus rien.
+//
 // Le dépôt DÉCLARE la dépendance de build à deux endroits, et correctement :
 //
 //   turbo.json                  "build": { "dependsOn": ["^build"], … }
@@ -649,15 +657,19 @@ const inJob = (world, job, needle, replacement) => {
 
 const MUTATIONS = [
   [
-    "l'étape « Build packages/shared » retirée du job a11y-v3 (le défaut de 01c49fcfee)",
+    // Ancrée sur `institutionnel-v3` depuis #5882 : elle visait `a11y-v3`, parti
+    // avec l'application annulée. `inJob` JETTE sur un job introuvable plutôt
+    // que de muter dans le vide — c'est ce qui a fait tomber le self-test au
+    // lieu de le laisser vert sur une sonde devenue inerte.
+    "l'étape « Build packages/shared » retirée du job institutionnel-v3 (le défaut de 01c49fcfee)",
     (world) =>
       inJob(
         world,
-        'a11y-v3',
+        'institutionnel-v3',
         /      - name: Build packages\/shared[^\n]*\n        run: \|\n          cd packages\/shared\n[^\n]*\n/,
         '',
       ),
-    'job « a11y-v3 » · scénario bun · étape « Build apps/web-old-version3',
+    'job « institutionnel-v3 » · scénario bun · étape « Build apps/web-v3',
   ],
   [
     'une dépendance workspace:* PRODUCTRICE ajoutée sans son étape (le scénario que #4761 ferme)',
@@ -706,13 +718,13 @@ const MUTATIONS = [
     "invoque bun, qu'aucune étape antérieure du job n'installe",
   ],
   [
-    "la v3 construite par un `cd` pris dans une branche de shell",
+    "la v3.1 construite par un `cd` pris dans une branche de shell",
     (world) =>
       inJob(
         world,
-        'a11y-v3',
-        /      - name: Build apps\/web-old-version3[^\n]*\n        run: \|\n          cd apps\/web-old-version3\n/,
-        '      - name: Build apps/web-old-version3 (branche)\n        run: |\n          if true; then cd apps/web-old-version3; fi\n',
+        'institutionnel-v3',
+        /      - name: Build apps\/web-v3[^\n]*\n        run: \|\n          cd apps\/web-v3\n/,
+        '      - name: Build apps/web-v3 (branche)\n        run: |\n          if true; then cd apps/web-v3; fi\n',
       ),
     "n'est pas lisible",
   ],

@@ -173,7 +173,12 @@ export const violations = (workflow) => {
 const MUTATIONS = [
   {
     nom: 'règle 1 — un job retiré du needs',
-    muter: (texte) => texte.replace('lifecycle-v3, chaines-v3,', 'lifecycle-v3,'),
+    // Ancrée sur `institutionnel-v3` depuis #5882 : la mutation visait
+    // `lifecycle-v3, chaines-v3,`, deux jobs partis avec l'application annulée.
+    // Une mutation qui ne trouve plus sa cible ne change RIEN et sort VERTE —
+    // le self-test rendait alors « la mutation n'a rien changé », c'est-à-dire
+    // le cliquet en panne annoncé par le cliquet lui-même.
+    muter: (texte) => texte.replace('quality, institutionnel-v3,', 'quality,'),
     attendu: /n'est pas dans le needs/,
   },
   {

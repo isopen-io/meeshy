@@ -88,7 +88,7 @@ const KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE = new Set([
   // `apps/web/components/v2/MessageBubble.tsx`.
   'u.byUsername',
   // `PATCH`/`DELETE /api/v1/guest-sessions/me` — appelée par
-  // `apps/web-old-version3/lib/api/invite.ts:84` via un chemin construit à la main
+  // `lib/api/invite.ts:84` de l'ancienne refonte via un chemin construit à la main
   // (`CHEMIN_BATTEMENT`). `apps/web-v3` est HORS du périmètre `SEARCH_ROOTS`
   // de ce script (`apps/web`, `packages/shared`) : élargir le périmètre à
   // toute l'arborescence `web-v3` déplacerait le compte de dette de façon non

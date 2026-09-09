@@ -85,7 +85,12 @@ PROJECT_PROD := meeshy-prod
 
 # Paths
 WEB_DIR := apps/web
-WEB_V3_DIR := apps/web-old-version3
+# `apps/web-old-version3` a quitté le dépôt (#5882) : ce répertoire désigne
+# désormais le SEUL chantier web, `apps/web-v3`. Les panneaux tmux lancent
+# `run dev` et non `run dev:https` — ce dernier script n'existe pas dans ce
+# manifeste, et une cible qui appelle un script absent échoue sans rien dire
+# d'utile.
+WEB_V3_DIR := apps/web-v3
 IOS_DIR := apps/ios
 GATEWAY_DIR := services/gateway
 TRANSLATOR_DIR := services/translator
@@ -1239,7 +1244,7 @@ _dev-bg-domain: ## Lancer les services en background avec HTTPS
 	@sleep 2
 	@# Web v3 HTTPS
 	@echo "  $(CYAN)✨ Web v3 HTTPS ($(LOCAL_DOMAIN):3300)...$(NC)"
-	@cd $(WEB_V3_DIR) && $(JS_RUNTIME) run dev:https > $(CURDIR)/logs/web-v3.log 2>&1 & echo $$! > $(CURDIR)/$(WEB_V3_PID)
+	@cd $(WEB_V3_DIR) && $(JS_RUNTIME) run dev > $(CURDIR)/logs/web-v3.log 2>&1 & echo $$! > $(CURDIR)/$(WEB_V3_PID)
 	@sleep 3
 	@echo ""
 	@$(MAKE) _show-domain-urls
@@ -1566,7 +1571,7 @@ dev-bg-network: ## 🔄 Lancer les services en background (réseau)
 	@sleep 2
 	@# Web v3 HTTPS
 	@echo "  $(CYAN)✨ Web v3 HTTPS ($(HOST):3300)...$(NC)"
-	@cd $(WEB_V3_DIR) && $(JS_RUNTIME) run dev:https > $(CURDIR)/logs/web-v3.log 2>&1 & echo $$! > $(CURDIR)/$(WEB_V3_PID)
+	@cd $(WEB_V3_DIR) && $(JS_RUNTIME) run dev > $(CURDIR)/logs/web-v3.log 2>&1 & echo $$! > $(CURDIR)/$(WEB_V3_PID)
 	@sleep 3
 	@echo ""
 	@$(MAKE) _show-network-urls
