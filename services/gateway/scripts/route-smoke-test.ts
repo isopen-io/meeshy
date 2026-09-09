@@ -61,13 +61,26 @@ function loadManifestRoutes(manifestPath: string): ManifestRoute[] {
   return parsed.routes;
 }
 
+/**
+ * Le corps n'est lu QUE sur un 404 : c'est le seul statut dont le verdict en
+ * dépend (#5857), et une route en 200 peut rendre un fichier entier — le
+ * télécharger cinq cent cinquante fois pour ne rien en faire serait payer le
+ * réseau pour rien. Un corps illisible (HTML de proxy, JSON tronqué) rend
+ * `undefined`, et `classifySmokeStatus` le traite comme « rien n'est prouvé ».
+ */
 function makeTimedFetch(timeoutMs: number): SmokeFetch {
   return async (url, init) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(url, { ...init, signal: controller.signal });
-      return { status: response.status };
+      if (response.status !== 404) return { status: response.status };
+      const texte = await response.text().catch(() => '');
+      try {
+        return { status: response.status, body: JSON.parse(texte) as unknown };
+      } catch {
+        return { status: response.status };
+      }
     } finally {
       clearTimeout(timer);
     }
@@ -89,7 +102,7 @@ async function main(): Promise<void> {
   });
   const report = summarizeSmokeResults(results);
 
-  console.log(`✓ ${report.total - report.absent.length - report.unreachable.length}/${report.total} routes répondent (≠ 404)`);
+  console.log(`✓ ${report.total - report.absent.length - report.unreachable.length}/${report.total} routes servies par le conteneur`);
 
   if (report.absent.length > 0) {
     console.error(`\n✗ ${report.absent.length} route(s) ABSENTE(S) du conteneur servi (404) :`);
