@@ -160,7 +160,7 @@ export function QuickActions({ title, subtitle, actions, conversationCount }: Qu
       <p
         role="status"
         aria-live="polite"
-        className="px-1 text-footnote"
+        className="px-1 text-mini"
         style={{ color: 'var(--color-ios-ink-2)', minHeight: 18 }}
       >
         {retour ?? ''}
