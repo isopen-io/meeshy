@@ -68,13 +68,16 @@ final class QuickActionDoorsOnBothRootsTests: XCTestCase {
     /// suffit donc pas : il faut d'abord RÉVÉLER le flux, comme `RootView` le
     /// fait côté iPhone en montrant l'enveloppe.
     func test_theIPadRoot_revealsTheFeed_soTheRequestFindsItsReader() throws {
-        let racine = try source("Meeshy/Features/Main/Views/iPadRootView.swift")
-        XCTAssertTrue(racine.contains("adaptiveOnChange(of: router.pendingOpenFeedComposer)"),
+        // L'écoute vit dans `iPadStoryAndLifecycleLayer` (#5837) ; la racine
+        // lui remet `closePanels` comme action de révélation.
+        let couche = try source("Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift")
+        XCTAssertTrue(couche.contains("adaptiveOnChange(of: router.pendingOpenFeedComposer)"),
                       "La racine iPad écoute la demande.")
-        XCTAssertTrue(racine.contains("guard pending, isConversationOpen else { return }"),
+        XCTAssertTrue(couche.contains("guard pending, isConversationOpen else { return }"),
                       "Elle n'agit QUE si le flux est masqué par une conversation — sinon "
                           + "il est déjà là et refermer les panneaux serait un effet de bord.")
-        XCTAssertTrue(racine.contains("closePanels()"),
+        let racine = try source("Meeshy/Features/Main/Views/iPadRootView.swift")
+        XCTAssertTrue(racine.contains("onRevealFeed: closePanels"),
                       "Révéler le flux sur iPad, c'est refermer les panneaux — l'analogue "
                           + "exact de `showFeed = true` côté iPhone.")
     }
