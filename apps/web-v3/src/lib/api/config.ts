@@ -96,6 +96,20 @@ function resolveReadingModes(env: ApiEnv): boolean {
 }
 
 /**
+ * **Une chaîne VIDE n'est pas une origine déclarée — elle est une ABSENCE.**
+ *
+ * Un `ARG VITE_API_BASE=""` non renseigné au `docker build` pose la variable à
+ * la chaîne vide, et Vite l'expose telle quelle : sans cette normalisation,
+ * `override !== undefined` serait vrai et la base retomberait à `''`, soit
+ * exactement le défaut que #5872 corrige — réintroduit par le mécanisme censé
+ * le corriger. Le même raisonnement vaut pour une valeur blanche.
+ */
+function declaredOverride(env: ApiEnv): string | undefined {
+  const brut = env.VITE_API_BASE?.trim();
+  return brut === undefined || brut === '' ? undefined : brut;
+}
+
+/**
  * La base — FAIL-CLOSED PARTOUT : une erreur de configuration doit rendre un
  * défaut qui FONCTIONNE plutôt qu'une base cassée (miroir
  * `MeeshyConfig.swift:6`, où le défaut est toujours une origine absolue).
@@ -117,8 +131,8 @@ function resolveReadingModes(env: ApiEnv): boolean {
  * mène nulle part, d'où le rejet d'une surcharge relative dans cette branche.
  */
 function resolveBase(env: ApiEnv, { shell }: { readonly shell: boolean }): string {
-  const override = env.VITE_API_BASE;
-  if (override !== undefined && ABSOLUTE_ORIGIN_PATTERN.test(override.trim())) {
+  const override = declaredOverride(env);
+  if (override !== undefined && ABSOLUTE_ORIGIN_PATTERN.test(override)) {
     return normalizeOrigin(override);
   }
   if (!shell) {

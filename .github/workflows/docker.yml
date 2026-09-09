@@ -258,7 +258,22 @@ jobs:
             HAS_CHANGES=true
             VERSION=$(node -p "require('./apps/web-v3/package.json').version" 2>/dev/null || echo "0.0.0")
             [[ "$FIRST" == "false" ]] && SERVICES+=','
-            SERVICES+='{"service":"web-v31","context":".","dockerfile":"./apps/web-v3/Dockerfile","image":"meeshy-web-v31","version":"'$VERSION'"}'
+            # **L'origine de l'API se fige au BUILD, pas au démarrage (#5872).**
+            # `import.meta.env` est remplacé par Vite à la construction : une
+            # variable posée sur le conteneur n'atteindrait jamais le bundle.
+            # `dev` alimente staging (cf. `deploy-staging` plus bas), donc son
+            # image pointe la passerelle de STAGING ; un tag `v*` construit pour
+            # la production, où le défaut de `resolveApiConfig` est déjà la
+            # bonne origine — d'où la chaîne vide. `build-args` rend alors
+            # `VITE_API_BASE=` : c'est `declaredOverride` (`config.ts`) qui
+            # traite cette chaîne vide comme une ABSENCE, sans quoi la base
+            # redeviendrait relative — le défaut même que ce lot corrige.
+            if [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
+              API_BASE='https://gate.staging.meeshy.me'
+            else
+              API_BASE=''
+            fi
+            SERVICES+='{"service":"web-v31","context":".","dockerfile":"./apps/web-v3/Dockerfile","image":"meeshy-web-v31","version":"'$VERSION'","viteApiBase":"'$API_BASE'"}'
             FIRST=false
           fi
 
@@ -415,6 +430,7 @@ jobs:
             PACKAGE_MANAGER=${{ env.PACKAGE_MANAGER }}
             BUN_VERSION=${{ env.BUN_VERSION }}
             TORCH_BACKEND=${{ matrix.torch_backend || 'cpu' }}
+            VITE_API_BASE=${{ matrix.viteApiBase || '' }}
 
       - name: Build summary
         run: |
