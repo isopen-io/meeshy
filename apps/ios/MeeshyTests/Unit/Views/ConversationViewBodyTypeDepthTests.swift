@@ -73,6 +73,88 @@ final class ConversationViewBodyTypeDepthTests: XCTestCase {
         try assertNestingWithinBudget(of: ConversationListView.Body.self, label: "ConversationListView.body")
     }
 
+    // MARK: - Les RACINES — dette mesurée, cliquet descendant (#5837)
+
+    /// **La racine manquait au budget, et c'est elle qui porte les autres.**
+    ///
+    /// Crash device du 2026-09-09 12:51 (`Meeshy-2026-09-09-125103.ips`) :
+    /// `EXC_BAD_ACCESS`, `sp = 0x16bbffef0` **DANS** la page de garde
+    /// (`Stack Guard 16bbfc000-16bc00000`), 91 trames dans le décodeur de
+    /// métadonnées. `ConversationListView.init` déborde en résolvant un
+    /// KeyPath, atteint depuis `RootView.body` → `NavigationStack` → `ZStack`.
+    /// Le même crash existait déjà le 2026-09-03 (108 trames, même page de
+    /// garde) : l'app vit sur le fil depuis des jours et bascule par
+    /// intermittence, le cache de métadonnées étant global au process.
+    ///
+    /// **Les trois `body` bornés ci-dessus étaient VERTS.** Ce n'est pas leur
+    /// profondeur qui a franchi la limite, c'est celle du TRONC qui les
+    /// héberge — et que personne ne mesurait.
+    ///
+    /// > Une racine n'est pas un écran de plus : **tout ce qu'elle imbrique
+    /// > s'ajoute à la pile de CHAQUE vue qu'elle matérialise.** Un
+    /// > modificateur posé sur elle coûte un niveau à tous ses enfants. Le
+    /// > budget mesurait les branches et ignorait le tronc.
+    ///
+    /// ## Pourquoi un CLIQUET plutôt que le budget de 40
+    ///
+    /// Mesuré le 2026-09-09 : `RootView.body` = **66** niveaux (~1095 Ko),
+    /// `iPadRootView.body` = **69** (~1145 Ko), contre **1008 Ko** de pile
+    /// principale sur l'appareil. Les ramener à 40 demande de regrouper les
+    /// **46 modificateurs de premier niveau** de `RootView.body` (lignes
+    /// 609→1182) en `ViewModifier`s — chacun crée un nœud d'attribut où le
+    /// graphe DÉROULE la pile. C'est le lot #5837, et il ne se bâcle pas : ces
+    /// fermetures capturent une vingtaine d'états de la racine, et l'ORDRE des
+    /// modificateurs porte du comportement (une feuille présentée sous un
+    /// `environmentObject` ne voit pas le même environnement qu'au-dessus).
+    ///
+    /// En attendant, le cliquet fait ce qu'un budget ne peut pas faire ici :
+    /// il **interdit d'aggraver**. Un modificateur de plus sur une racine
+    /// rougit immédiatement — c'est exactement ce qui manquait quand la chaîne
+    /// est passée sous les yeux de tout le monde jusqu'à 66 sans que rien ne
+    /// le dise.
+    ///
+    /// **Ces deux nombres ne doivent que DESCENDRE.** Les abaisser au fil du
+    /// découpage ; ne JAMAIS les relever. Un test qui DESCEND reste vert et
+    /// laisse un mot dans le journal — faire échouer une amélioration
+    /// bloquerait précisément les lots qui remboursent la dette.
+    private static let rootViewMeasuredDepth = 66
+    private static let iPadRootViewMeasuredDepth = 69
+
+    func test_rootViewBody_nestingDoesNotGrow() throws {
+        try assertNestingRatchet(of: RootView.Body.self,
+                                 label: "RootView.body",
+                                 ceiling: Self.rootViewMeasuredDepth)
+    }
+
+    func test_iPadRootViewBody_nestingDoesNotGrow() throws {
+        try assertNestingRatchet(of: iPadRootView.Body.self,
+                                 label: "iPadRootView.body",
+                                 ceiling: Self.iPadRootViewMeasuredDepth)
+    }
+
+    /// Le cliquet ne prétend pas que la dette est réglée — il fige son
+    /// AMPLEUR, et dit quand elle descend pour qu'on abaisse le plafond.
+    private func assertNestingRatchet(of type: Any.Type, label: String, ceiling: Int) throws {
+        let measured = try Self.measureOnDeepStack(type)
+        XCTAssertLessThanOrEqual(
+            measured.depth, ceiling,
+            """
+            \(label) imbrique son type concret sur \(measured.depth) niveaux, au-dessus
+            du plafond hérité de \(ceiling) (#5837). Cette racine déborde DÉJÀ les
+            1008 Ko de pile de l'appareil — l'aggraver crashe au lancement, et le
+            simulateur (8 Mo de pile) ne le verra jamais. Regrouper les modificateurs
+            en `ViewModifier` au lieu d'en ajouter un de plus.
+            """
+        )
+        if measured.depth < ceiling {
+            print("""
+            [cliquet #5837] \(label) est descendu à \(measured.depth) niveaux \
+            (plafond \(ceiling)) — ABAISSER le plafond dans ce fichier, sinon la \
+            marge regagnée se reperd en silence au prochain lot.
+            """)
+        }
+    }
+
     // MARK: - Harnais
 
     private func assertNestingWithinBudget(of type: Any.Type, label: String) throws {
