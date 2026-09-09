@@ -42,13 +42,22 @@ jobs:
         # Le job tournant toutes les heures, il rougissait une fois par heure
         # sur une situation SAINE, et n'attrapait donc plus l'incident pour
         # lequel il a été écrit.
+        # `paths` est le CONTEXTE DE BUILD de la cible — les mêmes répertoires
+        # que `detect` (docker.yml) lit pour décider de reconstruire l'image
+        # gateway (`services/gateway/**`, `packages/shared/**`). Les deux
+        # décisions se prennent ainsi sur la même donnée (#5907) : un commit
+        # hors de ce périmètre (ex. `apps/web-v3` pendant #5491) ne peut pas
+        # faire rougir la cible, puisqu'il n'aurait de toute façon pas
+        # déclenché de nouvelle image ni de redéploiement.
         target:
           - name: production
             url: https://gate.meeshy.me/health
             ref: origin/main
+            paths: 'services/gateway packages/shared'
           - name: staging
             url: https://gate.staging.meeshy.me/health
             ref: origin/dev
+            paths: 'services/gateway packages/shared'
     steps:
       - name: Checkout (historique complet — requis par git merge-base/rev-list)
         uses: actions/checkout@v7
@@ -70,6 +79,7 @@ jobs:
         env:
           COMMIT: ${{ steps.health.outputs.commit }}
           REF: ${{ matrix.target.ref }}
+          PATHS: ${{ matrix.target.paths }}
           MAX_DRIFT: ${{ github.event.inputs.max_drift_commits || '15' }}
         run: |
           set -euo pipefail
@@ -89,14 +99,24 @@ jobs:
             exit 1
           fi
 
-          DRIFT=$(git rev-list --count "${COMMIT}..${REF}")
+          # La référence n'est pas la tête de la branche mais le DERNIER commit
+          # qui pouvait entrer dans l'image de la cible — sans quoi le garde
+          # rougit à chaque livraison hors de son contexte de build, sans
+          # qu'aucun conteneur ne soit périmé (#5907).
+          REF_EFFECTIVE=$(git rev-list -1 "$REF" -- $PATHS)
+          if [ -z "$REF_EFFECTIVE" ]; then
+            echo "::error::${{ matrix.target.name }} — aucun commit de \`$REF\` ne touche son contexte de build ($PATHS)"
+            exit 1
+          fi
+
+          DRIFT=$(git rev-list --count "${COMMIT}..${REF_EFFECTIVE}")
           {
             echo "### ${{ matrix.target.name }}"
             echo ""
-            echo "Sert \`${COMMIT}\` — **$DRIFT** commit(s) derrière \`$REF\` (seuil : $MAX_DRIFT)."
+            echo "Sert \`${COMMIT}\` — **$DRIFT** commit(s) derrière son contexte de build sur \`$REF\` (\`${REF_EFFECTIVE}\`, seuil : $MAX_DRIFT)."
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$DRIFT" -gt "$MAX_DRIFT" ]; then
-            echo "::error::${{ matrix.target.name }} est en retard de $DRIFT commits sur \`$REF\` (seuil $MAX_DRIFT) — cf. #5644 : vérifier que le conteneur a bien été recréé après le dernier build"
+            echo "::error::${{ matrix.target.name }} est en retard de $DRIFT commits sur son contexte de build (\`$REF_EFFECTIVE\` sur \`$REF\`, seuil $MAX_DRIFT) — cf. #5644 : vérifier que le conteneur a bien été recréé après le dernier build"
             exit 1
           fi
