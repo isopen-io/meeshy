@@ -576,7 +576,7 @@ struct SyncPill: View {
     private var accessibilityHintText: String {
         switch visibleEntry?.tapOutcome {
         case .retry:
-            return String(localized: "sync.pill.a11y.retry.hint", defaultValue: "Touchez pour relancer la publication.", bundle: .main)
+            return String(localized: "sync.pill.a11y.retry.hint", defaultValue: "Touchez pour réessayer l’opération.", bundle: .main)
         case .navigate:
             return String(localized: "sync.pill.a11y.openLocation.hint", defaultValue: "Touchez pour ouvrir l'emplacement de l'opération.", bundle: .main)
         case .advance, .none:

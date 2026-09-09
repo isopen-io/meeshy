@@ -164956,43 +164956,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اضغط لإعادة محاولة النشر."
+            "value": "اضغط لإعادة محاولة العملية."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tippen, um die Veröffentlichung erneut zu versuchen."
+            "value": "Tippen, um den Vorgang zu wiederholen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap to retry publishing."
+            "value": "Tap to retry this operation."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca para reintentar la publicación."
+            "value": "Toca para reintentar la operación."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Touchez pour relancer la publication."
+            "value": "Touchez pour réessayer l’opération."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca per riprovare la pubblicazione."
+            "value": "Tocca per riprovare l’operazione."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque para tentar publicar novamente."
+            "value": "Toque para tentar a operação novamente."
           }
         }
       }
@@ -165003,43 +165003,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جارٍ إعادة محاولة النشر…"
+            "value": "جارٍ إعادة المحاولة…"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Veröffentlichung wird erneut versucht …"
+            "value": "Neuer Versuch …"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Retrying publication…"
+            "value": "Retrying…"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reintentando la publicación…"
+            "value": "Reintentando…"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nouvelle tentative de publication…"
+            "value": "Nouvelle tentative…"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nuovo tentativo di pubblicazione…"
+            "value": "Nuovo tentativo…"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tentando publicar novamente…"
+            "value": "Tentando novamente…"
           }
         }
       }
@@ -165050,43 +165050,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعذَّرت إعادة محاولة هذا النشر."
+            "value": "تعذَّرت إعادة محاولة هذه العملية."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Veröffentlichung konnte nicht erneut versucht werden."
+            "value": "Dieser Vorgang konnte nicht wiederholt werden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Couldn’t retry this publication."
+            "value": "Couldn’t retry this operation."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No se pudo reintentar esta publicación."
+            "value": "No se pudo reintentar esta operación."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossible de relancer cette publication."
+            "value": "Impossible de réessayer cette opération."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossibile riprovare questa pubblicazione."
+            "value": "Impossibile riprovare questa operazione."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Não foi possível tentar publicar novamente."
+            "value": "Não foi possível repetir esta operação."
           }
         }
       }

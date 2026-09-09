@@ -42,6 +42,12 @@ final class StuckPublicationRetryTests: XCTestCase {
 
     /// **La relance PRIME sur la navigation.** Sur une publication échouée,
     /// naviguer n'a même pas de destination : le post n'existe pas encore.
+    ///
+    /// Et le mécanisme est celui de la LIGNE, pas celui du réel : la pastille
+    /// porte aussi bien « Message non envoyé » que « Blocage non effectué ».
+    /// C'est pourquoi le vocabulaire servi à VoiceOver dit « l'opération » —
+    /// vérifié au simulateur, où l'indice promettait « relancer la
+    /// publication » au-dessus d'un blocage.
     func test_tapOutcome_laRelancePrimeSurLaNavigation() {
         let e = entree(source: .post(id: "p1"), retry: "ofqm_cmid_1")
         XCTAssertEqual(e.tapOutcome, .retry(outboxId: "ofqm_cmid_1"))

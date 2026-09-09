@@ -2,7 +2,14 @@ import Foundation
 import MeeshySDK
 import os
 
-/// **Ce que fait le doigt sur « Réel non publié »** (#5830).
+/// **Ce que fait le doigt sur une entrée terminale de la pastille** (#5830) —
+/// « Réel non publié », mais aussi bien « Message non envoyé » ou « Blocage non
+/// effectué » : le mécanisme est celui de la LIGNE, pas celui du réel.
+///
+/// Le vocabulaire l'a suivi après vérification au simulateur : l'indice
+/// VoiceOver promettait « relancer la publication » AU-DESSUS d'un blocage. Une
+/// promesse trop précise sur un mécanisme général est un indice menteur — le
+/// même défaut que celui qu'on corrige, dans les mots.
 ///
 /// Écrit UNE fois, appelé depuis `ConnectionBanner` — le seul étage que
 /// `RootView` (iPhone) et `iPadRootView` montent tous les deux. Un geste écrit
@@ -48,7 +55,7 @@ enum StuckPublicationRetry {
     ) {
         HapticFeedback.light()
         toasts.show(String(localized: "sync.pill.retry.started",
-                           defaultValue: "Nouvelle tentative de publication…",
+                           defaultValue: "Nouvelle tentative…",
                            bundle: .main))
         Task {
             do {
@@ -58,7 +65,7 @@ enum StuckPublicationRetry {
                 Self.logger.error("Relance manuelle refusée pour \(outboxId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 await MainActor.run {
                     toasts.showError(String(localized: "sync.pill.retry.failed",
-                                            defaultValue: "Impossible de relancer cette publication.",
+                                            defaultValue: "Impossible de réessayer cette opération.",
                                             bundle: .main))
                 }
             }
