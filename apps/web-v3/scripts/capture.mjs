@@ -32,6 +32,16 @@ const SCREENS = [
   { name: 'thread-protected', path: '/c/c-protection' },
   /** LE RÉSUMÉ VIVANT (#5695, D-21) — le SEUL corpus qui ATTEINT `summary`. */
   { name: 'thread-summary', path: '/c/c-rattrapage' },
+  /** LES QUATRE PORTES D'ENTRÉE (#5816) — capturées SANS session : `/welcome`
+      renvoie vers `/` dès qu'il y en a une, et c'est précisément l'écran du
+      visiteur qu'on veut voir. `/auth/magic-link` est ici dans son état de
+      SAISIE (aucun `?token=`) ; l'attente et son compte à rebours sont tenus
+      par les témoins de `magic-link.test.tsx`, qu'une capture figée ne saurait
+      montrer sans mentir sur le temps. */
+  { name: 'welcome', path: '/welcome' },
+  { name: 'magic-link', path: '/auth/magic-link' },
+  { name: 'magic-link-validate', path: '/auth/magic-link/validate' },
+  { name: 'forgot-password', path: '/forgot-password' },
 ];
 
 const browser = await launchChromium();

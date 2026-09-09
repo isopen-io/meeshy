@@ -186,6 +186,19 @@
     box-shadow: 0 0 0 var(--stroke-strong) var(--color-focus-contra);
   }
 
+  /* Corollaire de la regle 17 — UN COUPLE NE SE DEMI-ANNULE PAS (#5816).
+     Une saisie posee DANS un bloc de champ (`.field-box`) porte
+     `outline-none` : sans cette exception, elle annule l'ANNEAU et garde le
+     CONTRE-ANNEAU, c'est-a-dire un halo blanc de 2px qui recouvre la bordure
+     de la boite sur toute la largeur de la saisie — la bordure paraissait
+     coupee des que le champ prenait le focus, ce que `autoFocus` rend
+     immediat. Le couple se pose donc sur la BOITE, jamais sur la saisie
+     qui la remplit. Mesure : `box-shadow: rgb(255,255,255) 0 0 0 2px` avec
+     `outline-style: none` sur `/auth/magic-link`. */
+  .field-box :is(input, select, textarea):focus-visible {
+    box-shadow: none;
+  }
+
   /* Regle 32 : le mouvement ne deplace rien, et se coupe entierement. */
   @media (prefers-reduced-motion: reduce) {
     *,

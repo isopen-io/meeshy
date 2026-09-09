@@ -11,7 +11,7 @@
 |---|---|---|
 | `apps/web` (legacy) | **80** | **la PRODUCTION, seule — 100 % du trafic utilisateur** |
 | `apps/web-old-version3` | 48 | nulle part — **ANNULÉE** le 2026-09-07 |
-| `apps/web-v3` (la v3.1) | **10** — 5 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
+| `apps/web-v3` (la v3.1) | **14** — 9 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
 
 **L'ancienne refonte n'a jamais servi un seul écran à un utilisateur réel.**
 
@@ -252,7 +252,7 @@ dans une version ultérieure ·
 | `/signup/affiliate/:token` | **V4.0.0** | une porte parmi d'autres vers la clé d'affiliation |
 | `/auth/magic-link` | **V4.0.0** | |
 | `/auth/magic-link/validate` | **V4.0.0** | |
-| `/forgot-password` | `legacy` | mot de passe oublié ; le magic link en couvre une partie de l'usage — mesurer avant de porter |
+| `/forgot-password` | **V4.0.0** | porté par #5816 : le MÊME écran répond à 200 et à 404 — l'existence d'une adresse ne se lit pas dans la réponse. Le flux TÉLÉPHONE et `/reset-password` restent `legacy` |
 | `/forgot-password/check-email` | `legacy` | état d'attente du précédent |
 | `/reset-password` | `legacy` | consommation du lien de réinitialisation |
 | `/auth/verify-email` | `legacy` | vérification d'adresse |

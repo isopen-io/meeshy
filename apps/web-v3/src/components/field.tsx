@@ -58,7 +58,7 @@ export function Field({
         </label>
       ) : null}
       <div
-        className="flex items-center gap-3 rounded-[14px] px-4 transition-colors"
+        className="field-box flex items-center gap-3 rounded-[14px] px-4 transition-colors"
         style={{
           minHeight: 48,
           backgroundColor: 'var(--color-ios-card)',
