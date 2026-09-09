@@ -148,7 +148,7 @@ export function InstitutionalPage({ page, version }: { page: ContentPage; versio
        la mention de date et le pied prennent l'encre atténuée. */
     <div style={{ backgroundColor: 'var(--color-ios-surface)', color: 'var(--color-ios-ink)' }}>
       <a href="#contenu" className="skip-link">
-        Aller au content
+        Aller au contenu
       </a>
 
       <header className="mx-auto flex max-w-[42rem] items-center gap-3 px-5 pt-6 pb-2">

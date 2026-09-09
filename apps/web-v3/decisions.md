@@ -1289,3 +1289,263 @@ Preuve de la recette (compte `cible-web-trois`, id `6a9fa8396248cfa007f2ab16`), 
 7. **Trois états dessinés étaient ÉPARPILLÉS sur toute la hauteur** (`ListError`, `ThreadRefused`, `ThreadError`) : `grid flex-1 place-items-center` centre chaque enfant DANS SA RANGÉE et répartit les rangées implicites sur la hauteur — icône en haut, titre au tiers, bouton en bas. `content-center` les tasse. Et `ListError` affichait `error.message`, c'est-à-dire la CHAÎNE PLATE de la passerelle (« Internal server error ») : de l'anglais technique sur le premier écran d'un lecteur francophone, avec le risque d'y voir passer un nom d'interne. Une phrase de PRODUIT la remplace, comme iOS (`ConversationListView.swift:1761-1793` sert un sous-titre fixe, jamais l'erreur brute).
 
 **Deux points restés ouverts, hors de ce diff :** `useThreadScene` reçoit son signal d'attache par un paramètre `ready` déclaré par l'hôte plutôt que par une boucle `requestAnimationFrame` — celle-ci se reprogrammait SANS BORNE (son propre doc-comment la disait « bornée ») et tournait à 60 Hz pour rien sur un fil REFUSÉ, un état TERMINAL où le cadre n'apparaîtra jamais. Et `otherUnread` (`thread.tsx`) OBSERVE le cache partagé (`useConversationsSnapshot`, `enabled: false` — jamais une requête de plus) au lieu d'en prendre un instantané au premier rendu : sur un lien direct vers `/c/:id`, où le cache est encore vide, le compteur restait à zéro pour toujours.
+
+## D-27 · Un lien profond charge la coquille mais casse ses propres actifs — la base RACINE pour les deux variantes — 2026-09-09 (#5725)
+
+> **Le corps ci-dessous est le PREMIER état de cette décision, conservé tel
+> quel. Son correctif — une balise `<base href="/">` — a été RENVERSÉ le même
+> jour en revue (#5812) : il réparait les actifs et cassait toutes les URL
+> réduites à un fragment. Lire le « Complément 2026-09-09 bis » en fin de
+> section avant de s'y fier.**
+
+Le travail « lien profond vers un fil » (#5725) partait d'un diagnostic
+hérité et FAUX : le commentaire de `vite.config.ts` affirmait que la coque
+Capacitor « charge le bundle depuis le système de fichiers » et qu'un chemin
+absolu « casserait » — d'où la base relative (`./assets/…`) de la variante B.
+Lire les sources RÉELLES de `@capacitor/android` 8.5.1 (`WebViewLocalServer.java`,
+champ `html5mode`, VRAI par défaut) et `@capacitor/ios` 8.5.1 (`Router.swift`,
+`CapacitorRouter.route(for:)`, INCONDITIONNEL) montre que les DEUX coques
+servent déjà nativement `index.html` pour tout chemin sans extension : `/c/<id>`
+n'est PAS un 404 natif, et les deux coques servent une origine VIRTUELLE
+(`https://localhost/…` Android, `capacitor://localhost/…` iOS), jamais un
+`file://` littéral — le motif « chemins absolus casseraient » ne décrit rien
+de ce mécanisme.
+
+**Le vrai défaut est un cran plus bas.** `index.html` écrit ses actifs en
+chemins RELATIFS (`./assets/x.js`) ; servi en réponse à une navigation
+DIRECTE vers `/c/<id>` (lien profond, restauration, App Link), le NAVIGATEUR
+résout `./assets/x.js` contre le chemin NAVIGUÉ — `https://localhost/c/assets/x.js`,
+qui n'existe pas. `index.html` arrive (corps non vide, quelques centaines
+d'octets), son script JAMAIS : une coquille inerte, jamais le fil. Mesuré
+empiriquement (Playwright + serveur qui rejoue le repli html5mode) : SANS
+correctif, `#root` monte 0 enfant et 4 requêtes d'actifs échouent en 404 ;
+AVEC, `#root` monte son arbre complet et le fil rend (bodyLen 31 → 25 325).
+Confirmé une seconde fois sur le vrai AVD `Meeshy_Poc_Web-v31` (APK debug,
+`location.href = '/c/c-deploiement'` piloté par CDP réel via le socket
+`webview_devtools_remote_*`) : le fil rend intégralement (Amina Diallo, le
+message cité, le composeur) et sur le simulateur iOS dédié `Meeshy Poc-Web-V31`
+(build Xcode réel de la coque, capture jointe `targets/shells.avd-deeplink.png`
+côté Android — la preuve iOS est la même mécanique, `Router.swift`
+inconditionnel, qui ne dépend d'aucun drapeau).
+
+**La décision : une balise `<base href="/">`, injectée UNIQUEMENT dans le
+build `MEESHY_TARGET=capacitor` (`vite.config.ts` § `capacitorBaseHref`),
+jamais un changement de la `base` globale de Vite.** Elle fixe la résolution
+de TOUT le document sur la racine, quel que soit le chemin navigué, sans
+réécrire un seul `href`/`src` généré par Vite — le contrat « actifs en
+chemins relatifs » que `check-shell-dist.mjs` garde reste vrai ailleurs dans
+le document ; l'audit retire désormais cette seule balise avant de juger le
+reste (elle est l'UNIQUE href absolue tolérée, et sa présence — exactement
+`href="/"`, une fois — est elle-même un critère du gate). Variante A (web)
+n'y touche pas : sa base est déjà absolue (`/`), donc déjà correcte pour tout
+chemin navigué — la garde `forCapacitor` isole le changement, prouvé par la
+mesure de poids inchangée (34,96 Ko avant premier pixel, aucun `<base>` dans
+`dist/index.html`).
+
+**Ce que ça ne règle PAS, et qui reste hors de ce travail.** L'ENTRÉE native
+du lien profond — Universal Links (iOS, `CFBundleURLTypes`/associated
+domains) et App Links (Android, `<intent-filter>` dans `AndroidManifest.xml`)
+— n'existe encore sur AUCUNE des deux coques (vérifié : aucun schéma, aucun
+filtre déclaré). Ce travail répare la MOITIÉ « une fois que le WebView est
+pointé sur `/c/<id>`, le fil rend » ; la moitié « comment le système
+d'exploitation pointe le WebView là-dessus » (gérer l'intent/l'activity
+Android, `scene(_:continue:)`/`application(_:continue:)` iOS, puis appeler
+`location.href` ou le routeur JS) est un travail SÉPARÉ, à ouvrir en issue
+compagnon — sans lui, un App Link réel ne parvient toujours pas jusqu'au
+WebView, même si celui-ci sait désormais correctement répondre une fois
+atteint.
+
+**Complément 2026-09-09 (#5812) — ce que ce point d'étape affirmait de trop,
+et ce qui le corrige.**
+
+1. **La capture citée ci-dessus (`targets/shells.avd-deeplink.png`) n'a
+   jamais existé** (`ls targets/ | grep shell` vide, `git status` propre au
+   moment de l'écrire) — une absence DÉDUITE écrite comme si elle était
+   mesurée. Les preuves de coque de ce travail vivent HORS dépôt
+   (`<racine>/.cache/web-v3-workflow/recette/`, produites par
+   `scripts/shell-deeplink-probe.mjs`) et sont JOINTES à l'issue plutôt que
+   versionnées : `targets/` reste réservé aux captures iOS NATIVES drapeaux
+   ON (`targets/captures.md`), jamais aux captures de la coque testée.
+2. **« La preuve iOS est la même mécanique » était une DÉDUCTION, pas une
+   MESURE — et la mesure a trouvé une ASYMÉTRIE que la déduction ne pouvait
+   pas voir.** `capacitor.config.ts` expose `resolveCapacitorConfig(env)`,
+   qui pose `server.appStartPath` (clé Capacitor ≥ 7.3 TYPÉE,
+   `@capacitor/cli/dist/declarations.d.ts:617`) sous
+   `MEESHY_SHELL_START_PATH` — un paramètre de RECETTE, jamais posé au
+   déploiement. **Côté Android, ça marche tel quel** : `Bridge.java`
+   (`appUrl += appUrlPath`) ne fait qu'une concaténation de chaîne, ensuite
+   servie par le même repli `html5mode` que toute autre navigation — mesuré
+   sur l'AVD `Meeshy_Poc_Web-v31`, l'app démarre directement dans « Équipe
+   déploiement ». **Côté iOS, `appStartPath` seul CRASHE la coque** :
+   `CAPBridgeViewController.loadWebView()` (`@capacitor/ios` 8.5.1) garde
+   `FileManager.default.fileExists(atPath: bridge.config.appStartFileURL.path)`
+   — un chemin de FICHIER LITTÉRAL sous `public/` — et appelle
+   `fatalLoadError()` (`exit(1)`, un arrêt PROPRE, donc AUCUN rapport de
+   crash dans `CrashReporter`) si rien n'existe à cet exact chemin, AVANT
+   même d'atteindre `Router.swift` — dont le repli SPA (`route(for:)`,
+   toujours actif sur toute navigation POST-chargement) n'entre jamais en
+   jeu pour CE premier chargement. Reproduit sur le simulateur
+   `Meeshy Poc-Web-V31` : `⚡️ ERROR: Unable to load …/App.app/public//c/c-deploiement`,
+   process disparu sans écran. Un placeholder local (fichier vide sous
+   `ios/App/App/public/c/c-deploiement`, jamais commité — `ios/.gitignore`
+   généré exclut déjà `public/`, régénéré par `cap sync` à chaque
+   synchronisation) suffit à satisfaire la garde ; `Router.swift` réécrit
+   ensuite CE chemin vers `/index.html` sans jamais lire le placeholder.
+   **`MEESHY_SHELL_START_PATH` reste donc un paramètre de recette
+   ASYMÉTRIQUE : autonome sur Android, il exige un placeholder manuel sous
+   iOS avant chaque recette — une limitation de `@capacitor/ios` 8.5.1 pour
+   un `appStartPath` de route CLIENT (jamais un fichier réel), non
+   documentée en amont.** La preuve simulateur, une fois le placeholder posé,
+   est un chargement direct RÉEL (capture jointe, thread « Équipe
+   déploiement » rendu en schéma clair) — plus une inférence depuis le seul
+   comportement Android.
+3. **L'audit ne prouvait, avant ce complément, que « non vide » — pas
+   « le fil ».** Mesuré : un écran REFUSÉ (D-6, `bodyLen 1627`) et un écran
+   INTROUVABLE (`NotFound`, `bodyLen 479`) passaient tous deux le seuil
+   `bodyLen > 0 && #root non vide`. `readDeepLinkSnapshot()` /
+   `auditDeepLinkPage(snapshot, { expect })` (`scripts/check-shell-dist.mjs`)
+   exigent désormais la preuve POSITIVE (`main#contenu` + `textarea`, repères
+   structurels du fil, `src/routes/thread.tsx:730-731`,
+   `src/components/composer.tsx:122`) pour `expect: 'thread'`, et la preuve
+   NÉGATIVE (`!hasThreadMain`) pour `expect: 'refused'` — un id inconnu doit
+   monter le refus, jamais le fil (D-6). `auditDeepLink()` joue désormais
+   LES DEUX cas (`/c/c-deploiement` et `/c/zzz-inconnu`) sur le même dist
+   servi.
+4. **Ce qui reste séparé, avec ses issues :** l'entrée système (Universal
+   Links iOS / App Links Android, #5819) ; la cible d'un lien profond perdue
+   quand `SessionGate` redirige vers `/login` (#5820) ; le prérendu
+   institutionnel qui ignore `--outDir` — SOLDÉ au « Complément ter »
+   ci-dessous (#5821, la lecture en dur de `../dist` ne demeure plus).
+
+**Complément 2026-09-09 bis (revue #5812) — le correctif de D-27 réparait les
+actifs et cassait toutes les autres URL relatives : la `base` de Vite, jamais
+une balise `<base>`.**
+
+1. **Mesuré sur le dist de la coque, Chromium réel, repli SPA :** avec
+   `<base href="/">`, depuis `/c/c-deploiement`, le lien d'évitement
+   `<a href="#contenu">` de `src/components/shell.tsx` — le PREMIER contrôle
+   du clavier, présent sur CHAQUE écran — résolvait vers
+   `http://…/#contenu` ; l'activer QUITTAIT le fil pour la liste
+   (`hasThreadMain: true → false`, `hasComposer: true → false`). Une balise
+   `<base>` déplace la résolution de TOUTE URL relative du document, et les
+   URL réduites à un fragment en font partie (elle atteindrait demain
+   `<use href="#…">`, `url(#filtre)`, toute ancre de page). Le défaut ne
+   frappait que les deux coques, jamais le web : exactement la divergence que
+   la variante B existe pour éviter.
+2. **Le correctif retenu est la BASE elle-même** : `base: '/'` pour les deux
+   variantes (`vite.config.ts`). Le motif « des chemins absolus casseraient »
+   décrivait un `file://` que D-27 avait déjà réfuté — les deux coques
+   montent une origine VIRTUELLE À LA RACINE (`https://localhost/…`,
+   `capacitor://localhost/…`), donc `/assets/x.js` résout correctement quel
+   que soit le chemin navigué, exactement comme en variante A. D-27 avait
+   conservé la base relative pour ne pas contredire la clause 1 de
+   `check-shell-dist.mjs` — c'est-à-dire pour préserver la garde d'une
+   contrainte que la même décision venait de démontrer inexistante.
+   `auditShellDist` affirme désormais l'inverse : actifs root-absolus, AUCUNE
+   balise `<base>`.
+3. **Le gate ne pouvait pas voir ce défaut** : il NAVIGUAIT sans jamais
+   ACTIVER un contrôle. `readDeepLinkSnapshot` rapporte désormais l'URL
+   RÉSOLUE du lien d'évitement et l'URL du document ; `auditDeepLinkPage`
+   refuse, pour les deux attentes, un lien d'évitement qui quitte l'écran
+   chargé. Trois témoins falsifiés (clause `<base>`, clause d'évitement sur
+   le fil, la même sur le refus).
+4. **La sonde de recette ne fonctionnait pas.** `shell-deeplink-probe.mjs`
+   passait par `chromium.connectOverCDP()` : contre la WebView Android
+   (Chrome 133) la poignée de main échoue — « Protocol error
+   (Browser.setDownloadBehavior): Browser context management is not
+   supported », une WebView exposant une cible `page` et jamais un navigateur
+   complet. Réécrite en CDP BRUT sur le `webSocketDebuggerUrl` de la page
+   (aucune dépendance), elle rend l'instantané et la capture. Un outil de
+   recette qu'on ne lance pas est un contrôle inerte de plus.
+5. **La garde de `MEESHY_SHELL_START_PATH` portait sur une ROUTE** (`/c/…`) ;
+   elle porte désormais sur la FORME : `/` initial simple (Android
+   `Bridge.java` concatène sans séparateur) et AUCUNE extension de fichier
+   (iOS ne réécrit vers `index.html` que les chemins sans extension,
+   `CapacitorRouter.route(for:)`). Les 40+ surfaces à porter emploieront la
+   même recette sans modifier ce fichier LIVRÉ.
+6. **`capacitor.config.ts` et son témoin sont entrés dans `tsc --noEmit`** :
+   `tsconfig.json` n'incluait que `src`, `vite.config.ts` et `scripts` — le
+   fichier venait d'acquérir de la logique et un témoin, tous deux hors du
+   type-check. Falsifié (une annotation fausse fait rougir le gate).
+
+**Preuves de coque, avec la base racine** — AVD `Meeshy_Poc_Web-v31`, APK
+debug, CDP réel : `/c/c-deploiement` → `hasThreadMain: true`,
+`hasComposer: true`, `skipLinkTarget: https://localhost/c/c-deploiement#contenu`
+(il RESTE sur le fil) ; `/c/zzz-inconnu` → refus (D-6). Simulateur
+`Meeshy Poc-Web-V31` (54438823), build Xcode réel, `MEESHY_SHELL_START_PATH`
++ placeholder iOS : la coque démarre directement dans le fil. Captures hors
+dépôt (`<racine>/.cache/web-v3-workflow/recette/`), jointes à l'issue.
+
+**Complément 2026-09-09 ter (revue #5812) — le prérendu institutionnel
+écrivait dans la sortie de L'AUTRE variante ; le gate ne pouvait pas le voir
+parce qu'il ne regarde que le document racine, jamais les pages qu'il a fait
+écrire à côté (SOLDE #5821).**
+
+1. **Mesuré, sans aucune dépendance à un dist stale :** `MEESHY_TARGET=
+   capacitor bunx vite build --outDir dist-probe-review` produisait un
+   `dist-probe-review/` SANS `about/`, `contact/`, `partners/`, `privacy/`
+   ni `terms/` — les cinq pages atterrissaient dans `dist/` (l'autre
+   variante, pas reconstruite par cette commande), dont le `about/index.html`
+   ressortait avec la date de mtime d'un build ANTÉRIEUR à celui qui venait
+   de tourner. `scripts/prerender-institutional.tsx:44` lisait
+   `join(HERE, '../dist')` inconditionnellement ; le greffon qui l'invoque
+   (`vite.config.ts`, `prerenderInstitutionalPages`) tourne pour LES DEUX
+   variantes, sans jamais lui dire où le build en cours écrit réellement.
+2. **Le correctif est un site UNIQUE de résolution, jamais deux lectures
+   indépendantes de `--outDir`.** `scripts/lib/resolve-dist-dir.mjs`
+   (`resolveDistDir(here, argv)`, PURE, témoin sans build) décide : un
+   troisième `argv` non vide gagne, sinon repli `../dist`. Le greffon capture
+   `config.build.outDir` par `configResolved` et le relaie en argument de
+   ligne de commande au script préchauffé (`spawnSync(…, [
+   'scripts/prerender-institutional.tsx', dist])`) — la même donnée que Vite
+   a déjà résolue, jamais redevinée côté script.
+3. **Le gate ne pouvait pas voir ce défaut** : ses quatre clauses portent
+   toutes sur `index.html` et la liste des fichiers du dist audité, mais
+   aucune ne vérifiait que les pages institutionnelles S'Y TROUVENT — un
+   `dist-capacitor/` totalement dépourvu d'`about/index.html` passait les
+   quatre. `auditShellDist` (`scripts/check-shell-dist.mjs`) gagne une
+   cinquième clause : les cinq routes de `INSTITUTIONAL_ROUTES`
+   (`scripts/lib/institutional-routes.mjs`) doivent apparaître en SUFFIXE
+   (`${route}/index.html`) dans la liste des fichiers du dist audité — un
+   dist auquel il manque une seule page nomme précisément celle-là, jamais
+   un « quelque chose manque » vague. Trois témoins ajoutés
+   (`check-shell-dist.test.ts`) : zéro page présente, une seule absente, les
+   cinq présentes — plus quatre témoins pour `resolveDistDir` (absence
+   d'argument, `argv` court, argument explicite relatif/absolu, chaîne vide
+   qui ne doit PAS déguiser une absence).
+4. **Vérifié sur le dist réel, pas seulement sur les fonctions pures** :
+   `node scripts/check-shell-dist.mjs` lancé SEUL dans un arbre SANS `dist/`
+   préexistant (le scénario que #5821 nommait) passe désormais — la
+   construction `--outDir dist-capacitor` qu'il pilote écrit ses cinq pages
+   au bon endroit du premier coup, la cinquième clause le confirme, et
+   `dist-capacitor/` reste effacé derrière lui. La variante A
+   (`bun run build`, sans `--outDir`) continue de recevoir ses cinq pages
+   dans `dist/`, inchangée.
+
+## D-28 · Un message part par REST avec son `clientMessageId`, se confirme par greffe de l'accusé, et se relance à la main — 2026-09-09 (#5813)
+
+**Amende D-16** : sa clause « en ligne, l'état reste "en attente"… sans transport (#5493) » n'est plus vraie — le transport existe. Les DEUX autres clauses de D-16 (hors ligne ⇒ échec immédiat sans horloge ; « Réessayer » hors ligne laisse en échec) restent inchangées et gardées par `check-thread-states.mjs`.
+
+**`POST /api/v1/conversations/:id/messages` rend 200, pas 201** (`services/gateway/src/routes/conversations/messages-send.ts:391`, `response.ts:38`) — le critère de recette de l'issue disait 201 ; c'est une erreur du critère, corrigée en commentaire de clôture. Le corps envoyé est le sous-ensemble TEXTE de `SendMessageBodySchema` : `{ content, originalLanguage, clientMessageId, replyToId? }`. `clientMessageId` (`cid_<uuid v4>`, `src/lib/api/client-message-id.ts` — implémentation LOCALE sur `crypto.getRandomValues`, jamais `@meeshy/shared/utils/client-message-id` qui importe `crypto` de Node) est l'identifiant d'IDEMPOTENCE : un second `POST` avec le même `(conversationId, clientMessageId)` rend le message EXISTANT (`MessagingService.ts:151-201`), ce qui rend « Réessayer » sûr même quand la première tentative a atteint le serveur et perdu son accusé.
+
+**Le message local vit dans un OUTBOX (`src/lib/send/outbox-store.ts`, `zustand/vanilla`, mémoire seule), HORS du cache TanStack** — jamais un doublon : un 2xx greffe l'accusé (`confirmedMessageOf`) sur le local et l'écrit DIRECTEMENT dans `messagesQueryKey(id)` (`upsertConfirmed`, remplace par `id` OU `clientMessageId` s'il existe déjà — un écho socket arrivé avant l'accusé REST, cas #5494 — sinon append en queue), puis retire l'entrée d'outbox. Un 4xx/5xx/réseau/timeout laisse l'entrée `failed` avec sa cause (`ApiFailure`) ; « Réessayer » (`retrySend`) rejoue l'appel avec le MÊME `clientMessageId` et la MÊME `originalLanguage` — **aucune régénération au renvoi**, la langue composée ne doit jamais être réécrite en silence (Prisme).
+
+**`send/perform-send.ts` est le SITE UNIQUE de la règle** — débounce du double-tap à 600 ms (miroir `ConversationViewModel.swift:81`), annulation du refetch en vol AVANT d'écrire le confirmé (`cancelQueries` avant `setQueryData`), patch de la liste (`patchConversation`, `lastMessage`/`lastMessageAt`/`lastMessageOriginalLanguage` posés, `lastMessageTranslations` RETIRÉ — jamais posé à `undefined`, `exactOptionalPropertyTypes`). `src/lib/view/use-send.ts` n'est qu'un abonnement à l'outbox, SANS RÈGLE — le hook que trente écrans copieront doit rester juste maintenant.
+
+**Reprise MANUELLE seule ce lot** — pas d'outbox persistante ni de rejeu automatique (iOS `OfflineQueue`/`OutboxFlusher`, backoff, 5 tentatives) : issue compagnon « une file de reprise hors ligne rejoue les envois à la reconnexion ». Le bandeau hors ligne cesse de promettre un rejeu (« vos messages ne partiront pas maintenant », plus « … partiront à la reconnexion »). `originalLanguage` à l'envoi = rang 1 du Prisme du lecteur (`useReaderLanguages().languages[0]`), jamais une détection on-device (issue compagnon : composeur avec détection + barre de langue). Aucun toast sur un refus permanent (403 `USER_BLOCKED`) — la bande de reprise porte la cause EN CLAIR (« Non envoyé — envoi refusé pour cette conversation »), en info-bulle (`title`) et dans l'annonce `aria-live`. Cette phrase de D-28 décrivait d'abord un `title` qui n'existait pas : `lastError` était capturé sur l'entrée d'outbox et lu par PERSONNE — le défaut du cycle 122 du `CLAUDE.md` racine, « qui AFFICHE ce qu'il élit ? ». `sendFailureReason` (`src/lib/send/failure-reason.ts`) en est le site unique et ne sert JAMAIS `failure.error` tel quel : c'est la prose de la passerelle, écrite pour un développeur et pas toujours en français (« You are not a participant of this conversation », mesuré sur `gate.staging.meeshy.me` le 2026-09-09). Hors ligne, aucune cause n'est dite : le bandeau de coupure la porte déjà (revue-correction).
+
+**L'horloge d'envoi (`send/send-clock.ts`) ne clignote qu'après 200 ms** — miroir `BubbleDeliveryCheck.swift:128-141` : composant FEUILLE (`SendingClock`, `message-blocks.tsx`), jamais une seconde horloge portée par la rangée (même doctrine que D-23 pour l'éphémère).
+
+**Une annonce `aria-live="polite"`** (un seul nœud, entre l'en-tête et `<main>`) dit « Message non envoyé » / « Message envoyé ». Les DEUX signaux sont projetés de l'outbox, et ils sont DISTINCTS : l'échec se lit sur le compte d'entrées `failed`, la confirmation sur `confirmed[conversationId]`, un compteur MONOTONE que seul `remove` (le geste du 2xx) incrémente. Les dériver tous deux du compte de `failed` — sa BAISSE valant « envoyé » — annonçait « Message envoyé » au DÉBUT d'une reprise, avant tout appel réseau, puis « Message non envoyé » quand elle échouait ; et un envoi réussi du premier coup, qui ne fait jamais varier ce compte, n'annonçait rien. Le compteur est indexé PAR CONVERSATION comme `entries`, pour que les surfaces d'envoi à venir n'annoncent jamais la confirmation d'un fil voisin (revue-correction).
+
+**Un envoi ÉCHOUÉ ne peint AUCUN accusé** — `checkStatusOf(message, localDelivery)` (`src/lib/view/message.ts`) est le site UNIQUE que les deux peaux appellent, et il rend `null` sur `'failed'`. Un local en échec porte `deliveredCount: 0`, que `deliveryOf` lit — à raison — comme « envoyé » : la coche ✓ s'affichait donc à côté de la bande « Non envoyé · Réessayer », `title="envoyé"` compris. Deux affirmations contraires sur le même message. iOS ne peint jamais l'accusé d'un `.sendFailed` (`BubbleFooter.swift:186-197`). Le défaut préexistait à D-16 mais n'était atteignable que HORS LIGNE ; le transport le rend atteignable EN LIGNE, sur tout 4xx/5xx (revue-correction).
+
+**Aucune exception ne laisse un message sur l'horloge** — `dispatch` rattrape tout ce que `attempt` pourrait lever et pose `failed`. `performSend` est appelé en `void` par le hook : un rejet y resterait non traité et l'entrée d'outbox garderait `pending` pour toujours, une horloge qui tourne sans reprise possible — le mensonge d'interface que `check-thread-states.mjs` existe pour interdire. Direction de l'erreur choisie par le COÛT DE RÉPARATION : un « Réessayer » de trop se rejoue (l'appel est idempotent par `clientMessageId`), une horloge figée ne se répare pas (revue-correction).
+
+**La carte du débounce se PURGE** (`pruneDebounce`, `perform-send.ts`) : sa clé porte le texte entier du message et sa valeur ne vaut que 600 ms — sans purge, une session gardait en mémoire chaque message jamais écrit (dimension 3, « aucun cache non borné »).
+
+Sites uniques réutilisés, aucune jumelle : `outcomeOf` (extrait de `conversation-actions.ts` vers `api/outcome.ts`), `patchConversation` (extrait vers `api/conversations.ts`), `messagesQueryKey`/`decodeMessagesPage`, `httpTransport`/`ApiError`, `useOnline`, `LocalDelivery`/`deliveryOf`.
+
+**Mesuré sur la passerelle RÉELLE** (recette du 2026-09-09, compte `cible-web-trois`, `POST https://gate.staging.meeshy.me/api/v1/conversations/6a9fb2ec6248cfa007f2b198/messages`) : **HTTP 200**, `data` porte `id` / `conversationId` / `createdAt` / `clientMessageId` / `senderId` / `content` / `messageType` — exactement ce que `projectAck` exige et lit. **`deliveredCount` et `readCount` sont ABSENTS de l'accusé** : les quatre colonnes agrégées ne sont plus stockées sur `Message` (`packages/shared/prisma/schema.prisma`, § « STATUTS AGRÉGÉS — PLUS AUCUN N'EST STOCKÉ ») et se calculent À LA LECTURE, servies par `GET …/messages` seul. Le critère de recette qui demandait un « `deliveredCount` réel » sur l'accusé demandait donc une chose que la passerelle ne sert pas : `confirmedMessageOf` retombe sur `0`, `deliveryOf` rend `'sent'` (une coche), et la page suivante sert les compteurs vrais (`deliveredCount: 0, readCount: 0, recipientCount: 4`, mesurés). Un SECOND `POST` avec le même `clientMessageId` rend le MÊME `id` et `isDuplicate: true`, et `GET …/messages` ne montre qu'UNE occurrence — « Réessayer » est donc sûr même quand la première tentative a atteint le serveur. Sans jeton : `401` ; avec un jeton valide sur une conversation dont on n'est pas membre : `403` « You are not a participant of this conversation », rien du contenu ne fuit (D-6).
+
+**Mesuré** : le lot vit entièrement dans le CHUNK DU FIL (`src/lib/send/*`, `use-send.ts`, `sendAction`/`retrySendAction` dans `api/query.ts`) — aucun octet n'atteint le chunk `core`/`index` partagé avec la liste (vérifié en isolant le diff : premher paint à 34,96 Ko sans le lot, 34,98 Ko avec, sur l'état courant de `dev` — le chiffre de 32,78 Ko de `budgets-measured.json`, daté du 2026-09-08, ne reflète plus la branche, qui a intégré d'autres lots depuis).

@@ -14,6 +14,13 @@ declare module 'bun:test' {
   export function test(name: string, body: () => void | Promise<void>): void;
   export function describe(name: string, body: () => void): void;
   export function afterEach(body: () => void | Promise<void>): void;
+  /**
+   * `beforeAll`/`afterAll` (#5813, revue-correction) — le SEUL couple de ce
+   * fichier qui enregistre/désenregistre une ressource GLOBALE scopée à un
+   * `describe` (happy-dom, `composer.test.tsx`) plutôt qu'un état par test.
+   */
+  export function beforeAll(body: () => void | Promise<void>): void;
+  export function afterAll(body: () => void | Promise<void>): void;
 
   type Expectations = {
     toBe(expected: unknown): void;

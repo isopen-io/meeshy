@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import tailwind from '@tailwindcss/vite';
@@ -178,27 +178,48 @@ if (declaredReadingModes !== undefined && declaredReadingModes !== 'on' && decla
  * preact et lit des `.tsx`, ce que ce fichier de configuration — chargé par
  * Node — ne sait pas faire.
  */
-const prerenderInstitutionalPages = (): Plugin => ({
-  name: 'meeshy-prerender-institutional',
-  apply: 'build',
-  closeBundle: {
-    sequential: true,
-    handler() {
-      const r = spawnSync('bun', ['run', 'scripts/prerender-institutional.tsx'], {
-        cwd: fileURLToPath(new URL('.', import.meta.url)),
-        stdio: 'inherit',
-      });
-      if (r.status !== 0) {
-        throw new Error(
-          `Le préchauffage des pages institutionnelles a échoué (code ${r.status}). ` +
-            'La construction s\'arrête : un `dist` sans ces documents produirait un ' +
-            'service worker qui sert la coquille de l\'application sur /about, /privacy, ' +
-            'etc. — un défaut SILENCIEUX, que seule une deuxième visite révèle.',
-        );
-      }
+const prerenderInstitutionalPages = (): Plugin => {
+  const root = fileURLToPath(new URL('.', import.meta.url));
+  /**
+   * REÇU DE `configResolved`, JAMAIS DEVINÉ (#5812, élargit #5821).
+   *
+   * Ce greffon tourne pour LES DEUX variantes (rien ne le conditionne à
+   * `forCapacitor`) : la A construit `dist/` par défaut, la B `dist-
+   * capacitor/` sous `--outDir` explicite (`check-shell-dist.mjs`) ou
+   * `MEESHY_TARGET=capacitor` seul (le défaut de `outDir` reste alors
+   * `dist`, MAIS les deux constructions ne coexistent jamais dans le même
+   * process). Sans relayer `config.build.outDir` au script préchauffé, ce
+   * dernier retombait sur `../dist` EN DUR quel que soit l'appelant : une
+   * construction de la variante B écrivait ses cinq pages dans la sortie de
+   * la variante A — mesuré, `dist-capacitor/` n'en recevait AUCUNE.
+   */
+  let outDir = 'dist';
+  return {
+    name: 'meeshy-prerender-institutional',
+    apply: 'build',
+    configResolved(config) {
+      outDir = config.build.outDir;
     },
-  },
-});
+    closeBundle: {
+      sequential: true,
+      handler() {
+        const dist = resolve(root, outDir);
+        const r = spawnSync('bun', ['run', 'scripts/prerender-institutional.tsx', dist], {
+          cwd: root,
+          stdio: 'inherit',
+        });
+        if (r.status !== 0) {
+          throw new Error(
+            `Le préchauffage des pages institutionnelles a échoué (code ${r.status}). ` +
+              'La construction s\'arrête : un `dist` sans ces documents produirait un ' +
+              'service worker qui sert la coquille de l\'application sur /about, /privacy, ' +
+              'etc. — un défaut SILENCIEUX, que seule une deuxième visite révèle.',
+          );
+        }
+      },
+    },
+  };
+};
 
 /**
  * LE SERVICE WORKER INSTITUTIONNEL N'ENTRE PAS DANS LA COQUE (#5604,
@@ -224,7 +245,39 @@ const dropInstitutionalServiceWorker = (): Plugin => ({
 });
 
 export default defineConfig({
-  base: forCapacitor ? './' : '/',
+  /**
+   * LE LIEN PROFOND CASSAIT SES PROPRES ACTIFS (#5725, D-27 — corrigé en
+   * revue, #5812).
+   *
+   * Les deux coques servent déjà `index.html` pour tout chemin sans
+   * extension — Android par `html5mode` (`WebViewLocalServer.java`, VRAI par
+   * défaut), iOS INCONDITIONNELLEMENT (`CapacitorRouter.route(for:)`,
+   * `Router.swift`). Le commentaire historique de ce fichier (« des chemins
+   * absolus casseraient ») décrivait un chargement `file://` littéral qui n'a
+   * PAS cours ici : les deux coques servent une origine VIRTUELLE
+   * (`https://localhost/…` Android, `capacitor://localhost/…` iOS), jamais le
+   * système de fichiers brut — d'où la base RELATIVE (`./assets/…`) qu'elles
+   * portaient, et le défaut qui en découlait : servi en réponse à une
+   * navigation vers `/c/<id>`, le navigateur résolvait `./assets/x.js` contre
+   * l'URL NAVIGUÉE (`https://localhost/c/assets/x.js`, 404) — `index.html`
+   * arrivait, son script jamais.
+   *
+   * La base est donc la MÊME pour les deux variantes : la racine. Un chemin
+   * root-absolu (`/assets/x.js`) résout contre l'ORIGINE, quel que soit le
+   * chemin navigué — c'est exactement ce qui rendait la variante A immunisée.
+   *
+   * Une balise `<base href="/">` produirait le même effet sur les actifs et
+   * a été essayée (D-27) : elle est REFUSÉE, et `check-shell-dist.mjs` la
+   * refuse explicitement. `<base>` déplace la résolution de TOUTE URL
+   * relative du document — les URL RÉDUITES À UN FRAGMENT comprises. Mesuré
+   * sur le dist de la coque : avec `<base href="/">`, le lien d'évitement
+   * `<a href="#contenu">` de `src/components/shell.tsx` résolvait vers
+   * `https://localhost/#contenu` depuis `/c/<id>` — l'activer QUITTAIT le fil
+   * pour la liste (`hasThreadMain: true → false`). Le premier contrôle du
+   * clavier sur chaque écran, cassé dans les deux coques et nulle part
+   * ailleurs.
+   */
+  base: '/',
   define: {
     __BENCH__: JSON.stringify(bench),
     __SHELL__: JSON.stringify(forCapacitor),

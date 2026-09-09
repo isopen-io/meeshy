@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import type { Message } from './api/types';
-import { continues, dayLabel, place } from './grouping';
+import { continues, dayLabel, mergeTimeline, place } from './grouping';
 
 /**
  * Un `Message` du domaine porte une quinzaine de champs d'état dont le
@@ -133,4 +133,43 @@ test('labels injectables => un catalogue peut remplacer « Aujourd’hui »', ()
   expect(
     dayLabel('2026-03-10T09:00:00Z', opts({ labels: { today: 'Today', yesterday: 'Hier', dayBeforeYesterday: 'Avant-hier' } })),
   ).toBe('Today');
+});
+
+/**
+ * `mergeTimeline` (revue-correction #5813, défaut majeur 5) — la fusion
+ * REMPLACE une concaténation qui affichait deux messages dans l'ordre
+ * INVERSE de leur saisie dès que le second confirmait plus vite que le
+ * premier.
+ */
+test('deux envois rapprochés, le SECOND confirme AVANT le premier => l’ordre de SAISIE l’emporte', () => {
+  const confirmed = [msg('second', 'u1', '2026-09-09T10:00:00.100Z')];
+  const pending = [msg('premier-en-vol', 'u1', '2026-09-09T10:00:00.000Z')];
+  // Concaténer donnerait [second, premier] — l'inverse de la saisie.
+  expect(mergeTimeline(confirmed, pending).map((m) => m.id)).toEqual(['premier-en-vol', 'second']);
+});
+
+test('un message REPRIS (createdAt ANCIEN) reste avant un message parti ENTRE-TEMPS', () => {
+  // A tapé à 09:00, échoue hors ligne ; B tapé ensuite part et se confirme ;
+  // on reprend A, dont l'accusé porte le `createdAt` D'ORIGINE (60 s plus tôt).
+  const confirmed = [
+    msg('a-repris', 'u1', '2026-09-09T09:00:00.000Z'),
+    msg('b-en-ligne', 'u1', '2026-09-09T09:01:00.000Z'),
+  ];
+  expect(mergeTimeline(confirmed, []).map((m) => m.id)).toEqual(['a-repris', 'b-en-ligne']);
+});
+
+test('même horodatage => départage STABLE par id, jamais l’ordre arbitraire du tri natif', () => {
+  const confirmed = [msg('z', 'u1', '2026-09-09T09:00:00.000Z')];
+  const pending = [msg('a', 'u1', '2026-09-09T09:00:00.000Z')];
+  expect(mergeTimeline(confirmed, pending).map((m) => m.id)).toEqual(['a', 'z']);
+});
+
+test('l’ordre est IDENTIQUE que la source vienne du cache ou de l’outbox — même critère pour les deux', () => {
+  const all = [
+    msg('m1', 'u1', '2026-09-09T09:00:00.000Z'),
+    msg('m2', 'u1', '2026-09-09T09:02:00.000Z'),
+    msg('m3', 'u1', '2026-09-09T09:01:00.000Z'),
+  ];
+  expect(mergeTimeline(all, []).map((m) => m.id)).toEqual(['m1', 'm3', 'm2']);
+  expect(mergeTimeline([], all).map((m) => m.id)).toEqual(['m1', 'm3', 'm2']);
 });

@@ -5,7 +5,8 @@ import type { ConversationStoreState, OverrideKey } from '@/lib/conversation-sto
 import { effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import type { RowActionId } from '@/lib/view/row-actions';
 
-import { CONVERSATIONS_QUERY_KEY, type ConversationsDeps } from './conversations';
+import { CONVERSATIONS_QUERY_KEY, patchConversation, type ConversationsDeps } from './conversations';
+import { outcomeOf } from './outcome';
 import { pushConversationFlags, pushRead, pushUnread } from './preferences';
 import type { Conversation } from './types';
 
@@ -17,23 +18,15 @@ import type { Conversation } from './types';
  * rollback : l'override est retiré, le cache reste intact) /
  * `failedTransient` (réseau, 5xx : l'override RESTE — l'outbox iOS rejoue,
  * sur le web c'est une issue compagnon « file de reprise hors ligne »).
+ *
+ * `outcomeOf` et `patchConversation` vivent désormais dans `./outcome` et
+ * `./conversations` (#5813, étape 0) — `send/perform-send.ts` (un envoi de
+ * message) les réutilise sans en écrire une seconde copie.
  */
 export type ConversationActionDeps = ConversationsDeps & {
   readonly store: StoreApi<ConversationStoreState>;
   readonly queryClient: QueryClient;
 };
-
-/** L'ISSUE d'un appel réseau, lue sur la forme `ApiResult` que rend le
- * transport RÉEL (`ok`/`status`) — jamais devinée sur le nom d'une erreur. */
-type Outcome = 'success' | 'permanent' | 'transient';
-
-function outcomeOf(result: unknown): Outcome {
-  if (typeof result !== 'object' || result === null) return 'transient';
-  const r = result as { readonly ok?: unknown; readonly status?: unknown };
-  if (r.ok === true) return 'success';
-  const status = typeof r.status === 'number' ? r.status : 0;
-  return status >= 400 && status < 500 ? 'permanent' : 'transient';
-}
 
 function successDataOf(result: unknown): Record<string, unknown> | undefined {
   if (typeof result !== 'object' || result === null) return undefined;
@@ -45,16 +38,6 @@ function preferenceEntryOf(conversation: Conversation): Record<string, unknown> 
   const raw = conversation.userPreferences;
   const entry = Array.isArray(raw) ? raw[0] : undefined;
   return typeof entry === 'object' && entry !== null ? (entry as Record<string, unknown>) : {};
-}
-
-function patchConversation(
-  queryClient: QueryClient,
-  conversationId: string,
-  updater: (conversation: Conversation) => Conversation,
-): void {
-  queryClient.setQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY, (list) =>
-    list === undefined ? list : list.map((c) => (c.id === conversationId ? updater(c) : c)),
-  );
 }
 
 type ActionPlan = {

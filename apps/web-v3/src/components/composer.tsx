@@ -48,7 +48,19 @@ export function Composer({
     if (!own) return;
     onSend(own);
     setText('');
-    if (field.current) field.current.style.height = 'auto';
+    if (field.current) {
+      field.current.style.height = 'auto';
+      /* LE CHAMP GARDE LE FOCUS APRÈS UN ENVOI AU DOIGT (revue-correction
+         #5813, défaut majeur 8) — le geste NOMINAL sur téléphone. Sans ce
+         rappel, le `<button>` d'envoi prenait le focus (la touche Entrée,
+         elle, ne le perd jamais : le champ reste la cible de l'événement),
+         le clavier se refermait, le micro se remontait et le champ
+         RÉTRÉCISSAIT sous le doigt — trois phrases de suite coûtaient trois
+         taps de plus et trois sauts de mise en page. iOS tient le champ par
+         `@FocusState isTyping` (`ConversationView.swift:314`), qu'aucun
+         envoi ne remet à `false`. */
+      field.current.focus();
+    }
   };
 
   return (
@@ -154,6 +166,12 @@ export function Composer({
           {sendTarget ? (
             <button
               type="button"
+              /* `preventDefault` sur l'appui EMPÊCHE le bouton de voler le
+                 focus au moment même du tap (revue-correction #5813, défaut
+                 majeur 8) — sans lui, le champ perdait le focus une image
+                 avant que `send()` ne le lui rende, et cette image suffit à
+                 voir le micro remonter et le champ rétrécir. */
+              onPointerDown={(e) => e.preventDefault()}
               onClick={() => send(text)}
               className="grid size-11 place-items-center rounded-chip"
               style={{
@@ -168,6 +186,7 @@ export function Composer({
               <button
                 key={emoji}
                 type="button"
+                onPointerDown={(e) => e.preventDefault()}
                 onClick={() => send(emoji)}
                 className="grid size-11 place-items-center rounded-chip text-[22px]"
                 style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}
