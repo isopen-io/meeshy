@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import os
 
 /// **La progression d'un téléversement multi-média SURVIT à la tentative qui
 /// l'a obtenue** (#5830).

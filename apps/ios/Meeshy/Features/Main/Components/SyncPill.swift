@@ -87,6 +87,28 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
         self.showsActivityDots = showsActivityDots
         self.retryOutboxId = retryOutboxId
     }
+
+    /// **Ce qu'un doigt sur CETTE entrée déclenche** — une seule question, une
+    /// seule réponse, hors de la vue pour être jouable sans écran.
+    ///
+    /// L'ordre n'est pas arbitraire : sur une ligne définitivement échouée,
+    /// RELANCER est ce que le doigt veut. Naviguer vers « l'emplacement de
+    /// l'opération » n'a d'ailleurs pas de sens pour une publication — le post
+    /// n'existe pas encore, et c'est bien pour ça que `mapCreatePost` rend
+    /// `.unknown` et que le tap tombait dans un `break` (#5830).
+    enum TapOutcome: Equatable {
+        case retry(outboxId: String)
+        case navigate(OutboxUIItem.Source)
+        /// Ligne de statut pure (hors ligne, reconnexion, synchronisation) :
+        /// le tap fait juste avancer la rotation.
+        case advance
+    }
+
+    var tapOutcome: TapOutcome {
+        if let retryOutboxId { return .retry(outboxId: retryOutboxId) }
+        if let source { return .navigate(source) }
+        return .advance
+    }
 }
 
 /// **Les contextes auxquels la pastille CÈDE, en un seul endroit** (#4028).
@@ -162,7 +184,7 @@ struct SyncPill: View {
     /// publication or a send that has definitively failed. Prioritaire sur
     /// `onTap` : sur une ligne épuisée, RELANCER est ce que le doigt veut, pas
     /// naviguer vers un contenu qui n'existe pas encore.
-    var onRetry: ((String) -> Void)? = nil
+    let onRetry: ((String) -> Void)?
 
     @StateObject private var rotator = SyncPillRotator()
     @Environment(\.colorScheme) private var colorScheme
@@ -224,10 +246,12 @@ struct SyncPill: View {
 
     init(
         entries: [SyncPillEntry],
-        onTap: ((OutboxUIItem.Source) -> Void)? = nil
+        onTap: ((OutboxUIItem.Source) -> Void)? = nil,
+        onRetry: ((String) -> Void)? = nil
     ) {
         self.entries = entries
         self.onTap = onTap
+        self.onRetry = onRetry
     }
 
     private var isDark: Bool { colorScheme == .dark }
@@ -550,22 +574,26 @@ struct SyncPill: View {
     /// d'un emplacement qui n'existe pas encore serait un indice MENTEUR, pire
     /// qu'un silence.
     private var accessibilityHintText: String {
-        if visibleEntry?.retryOutboxId != nil {
+        switch visibleEntry?.tapOutcome {
+        case .retry:
             return String(localized: "sync.pill.a11y.retry.hint", defaultValue: "Touchez pour relancer la publication.", bundle: .main)
-        }
-        if visibleEntry?.source != nil {
+        case .navigate:
             return String(localized: "sync.pill.a11y.openLocation.hint", defaultValue: "Touchez pour ouvrir l'emplacement de l'opération.", bundle: .main)
+        case .advance, .none:
+            return ""
         }
-        return ""
     }
 
     private func handleTap() {
         guard let entry = visibleEntry else { return }
-        if let outboxId = entry.retryOutboxId, let onRetry {
+        switch entry.tapOutcome {
+        case .retry(let outboxId):
+            guard let onRetry else { return rotator.advance() }
             onRetry(outboxId)
-        } else if let source = entry.source, let onTap {
+        case .navigate(let source):
+            guard let onTap else { return rotator.advance() }
             onTap(source)
-        } else {
+        case .advance:
             // Pure status row (offline/syncing/reconnecting) — single tap
             // just advances the rotation manually.
             rotator.advance()
