@@ -505,6 +505,82 @@ for (const { cssVarName, utility, tokenKey, source, what } of TYPOGRAPHY_MAPPING
   }
 }
 
+/**
+ * PARTIE 7 — LE MENU DU MESSAGE (#5814, G3). `MessageOverlayMenu.swift` et
+ * `MessageActionsMenu.swift` → `src/lib/view/message-menu-metrics.ts`. Même
+ * dispositif que les PARTIES 2 et 5 : `nom: Type = valeur`, lu par regex, et
+ * comparé au littéral aval.
+ *
+ * CE QUI N'EST PAS GARDABLE ICI, dit plutôt que contourné (§ note PARTIE 5) :
+ * le plancher de réduction de l'aperçu vit DANS un appel (`max(0.4, …)`,
+ * `MessageOverlayMenu.swift:274`) et la largeur du rail (`nlEmojiWidth = 300`)
+ * borne VINGT tuiles là où la v3.1 en dessine SEPT — deux cotes dont l'aval
+ * diverge par décision, pas par dérive. Une regex plus permissive les ferait
+ * rougir pour la mauvaise raison.
+ */
+const UPSTREAM_OVERLAY_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Main/Components/MessageOverlayMenu.swift`;
+const UPSTREAM_ACTIONS_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Main/Components/MessageActionsMenu.swift`;
+const DOWNSTREAM_MENU_METRICS = `${ROOT}apps/web-v3/src/lib/view/message-menu-metrics.ts`;
+const overlaySwift = readFileSync(UPSTREAM_OVERLAY_SWIFT, 'utf8');
+const actionsSwift = readFileSync(UPSTREAM_ACTIONS_SWIFT, 'utf8');
+const menuMetrics = readFileSync(DOWNSTREAM_MENU_METRICS, 'utf8');
+const swiftAssignment = (source, name) => {
+  const m = new RegExp(`\\b${name}\\s*(?::\\s*\\w+\\s*)?=\\s*(-?[0-9.]+)`).exec(source);
+  return m === null ? null : Number(m[1]);
+};
+const MENU_MAPPINGS = [
+  [overlaySwift, 'nlEmojiBarHeight', 'RAIL_HEIGHT', 'hauteur du rail de réactions (nlEmojiBarHeight)'],
+  [overlaySwift, 'nlGap', 'RAIL_GAP', 'écart rail → aperçu (nlGap)'],
+  [overlaySwift, 'nlMenuGap', 'MENU_GAP', 'écart aperçu → liste (nlMenuGap)'],
+  [overlaySwift, 'nlSidePadding', 'SIDE_PADDING', 'marge latérale du cluster (nlSidePadding)'],
+  [actionsSwift, 'menuWidth', 'MENU_WIDTH', 'largeur de la liste d’actions (MessageActionsMenu.menuWidth)'],
+  [actionsSwift, 'rowMinHeight', 'MENU_ROW_HEIGHT', 'hauteur d’une entrée (MessageActionsMenu.rowMinHeight)'],
+];
+for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
+  const expectedMenu = swiftAssignment(swiftSource, swiftName);
+  const actualMenu = count(menuMetrics, downstreamName);
+  if (expectedMenu === null) failures.push(`${what} : « ${swiftName} » introuvable dans la source Swift`);
+  else if (actualMenu === null) failures.push(`${what} : « ${downstreamName} » introuvable dans message-menu-metrics.ts`);
+  else if (expectedMenu !== actualMenu) failures.push(`${what} : Swift ${expectedMenu}, dérivée ${actualMenu}`);
+}
+// `estimatedSize(actionCount:)` rend `count * scaledRow + 20` — le CHROME de
+// la liste, une addition dans un `return`, pas une affectation nommée : on lit
+// donc le littéral à SA place, en citant l'expression qui l'entoure.
+{
+  const m = /CGFloat\(count\)\s*\*\s*scaledRow\s*\+\s*([0-9.]+)/.exec(actionsSwift);
+  const expectedChrome = m === null ? null : Number(m[1]);
+  const actualChrome = count(menuMetrics, 'MENU_CHROME');
+  if (expectedChrome === null) failures.push('chrome de la liste : « count * scaledRow + N » introuvable dans MessageActionsMenu.estimatedSize');
+  else if (actualChrome === null) failures.push('chrome de la liste : « MENU_CHROME » introuvable dans message-menu-metrics.ts');
+  else if (expectedChrome !== actualChrome) failures.push(`chrome de la liste : Swift ${expectedChrome}, dérivée ${actualChrome}`);
+}
+// LE RAIL, ses SIX emojis rapides et ses VINGT étendus viennent du MÊME
+// tableau Swift (`defaultEmojis`) — la v3.1 en projette les 6 premiers sur le
+// rail et les 20 sur la feuille « Ajouter ». Recopiés à la main une fois, ils
+// dériveraient en silence : on les compare.
+{
+  const block = /private let defaultEmojis = \[([\s\S]*?)\]/.exec(overlaySwift);
+  const DOWNSTREAM_ACTIONS = `${ROOT}apps/web-v3/src/lib/view/message-actions.ts`;
+  const actionsSource = readFileSync(DOWNSTREAM_ACTIONS, 'utf8');
+  const emojisOf = (text) => (text.match(/'([^']+)'|"([^"]+)"/g) ?? []).map((t) => t.slice(1, -1));
+  const quickBlock = /export const QUICK_REACTIONS = \[([\s\S]*?)\]/.exec(actionsSource);
+  const extendedBlock = /export const EXTENDED_REACTIONS = \[([\s\S]*?)\]/.exec(actionsSource);
+  if (block === null) failures.push('le rail : « defaultEmojis » introuvable dans MessageOverlayMenu.swift');
+  else if (quickBlock === null || extendedBlock === null) {
+    failures.push('le rail : QUICK_REACTIONS/EXTENDED_REACTIONS introuvables dans message-actions.ts');
+  } else {
+    const swiftEmojis = emojisOf(block[1]);
+    const quick = emojisOf(quickBlock[1]);
+    const extended = emojisOf(extendedBlock[1]);
+    if (extended.join(' ') !== swiftEmojis.join(' ')) {
+      failures.push(`les 20 emojis étendus ont dérivé de defaultEmojis (Swift « ${swiftEmojis.join('')} », dérivée « ${extended.join('')} »)`);
+    }
+    if (quick.join(' ') !== swiftEmojis.slice(0, 6).join(' ')) {
+      failures.push(`les 6 emojis du rail ne sont pas les 6 premiers de defaultEmojis (Swift « ${swiftEmojis.slice(0, 6).join('')} », dérivée « ${quick.join('')} »)`);
+    }
+  }
+}
+
 if (failures.length > 0) {
   console.error('\n  La loi de la Lentille a DÉRIVÉ de packages/shared/utils/focus-curve.ts :\n');
   for (const e of failures) console.error(`    · ${e}`);
@@ -528,5 +604,7 @@ console.log(
     `\n  La protection du Fil est conforme à BubbleBlurRevealLifecycle.swift` +
     ` (${REVEAL_MAPPINGS.length} cote ; les valeurs sont gardées par protection.test.ts).` +
     `\n  La typographie de la rangée de la Lentille est conforme à lentille-tokens.json` +
-    ` (${TYPOGRAPHY_MAPPINGS.length} chaînes complètes : jeton → ios.css → alias Tailwind → classe posée).`,
+    ` (${TYPOGRAPHY_MAPPINGS.length} chaînes complètes : jeton → ios.css → alias Tailwind → classe posée).` +
+    `\n  Le menu du message est conforme à MessageOverlayMenu.swift/MessageActionsMenu.swift` +
+    ` (${MENU_MAPPINGS.length} cotes + le chrome de la liste + les 6/20 emojis du rail).`,
 );

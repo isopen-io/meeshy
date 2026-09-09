@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo } from 'react';
 
 import { checkStatusOf, isMineOf, translationsOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
@@ -30,7 +30,6 @@ import {
   PrismPastille,
   Quote,
   ReactionChip,
-  SecondaryText,
   reactionEntries,
 } from './message-blocks';
 
@@ -110,11 +109,42 @@ export const FocalRow = memo(function FocalRow({
   onConsumeViewOnce,
   onEphemeralExpired,
   now = defaultNow,
+  displayLanguage,
+  onPickLanguage,
+  myReactions,
+  selected,
+  onToggleSelect,
 }: {
   mode: FlatRowMode;
   place: PlacedMessage;
   languages: readonly string[];
   viewerId: string;
+  /** Traduire (#5814) — une langue IMPOSÉE au rang 0 du Prisme, `undefined`
+   * ⇒ la résolution ordinaire (`languages`) décide seule. UN résolveur,
+   * `resolvePrismTranslation` (D-14) : jamais une seconde loi. */
+  displayLanguage?: string;
+  /**
+   * LE GESTE QUI POSE `displayLanguage` (revue #5814, défaut majeur 12) — le
+   * pied de CETTE rangée (pastille + drapeaux) appelle CE prop, exactement
+   * comme le sous-menu « Traduire » du menu du message appelle
+   * `useMessageMenu.onPickLanguage` : UNE seule loi de « quelle langue pour
+   * CE message », jamais une révélation locale qui répondrait autrement que
+   * le menu. `undefined` ⇒ le pied garde son effet (loi 4 : pas de bouton
+   * inerte) via l'appel optionnel — mais l'hôte (`routes/thread.tsx`) le
+   * fournit TOUJOURS en production.
+   */
+  onPickLanguage?: (code: string) => void;
+  /** Les emojis que CE lecteur a posés sur CE message (`reaction-store.ts`)
+   * — marque `ReactionChip mine` (#5814, T12), sans en faire un bouton. */
+  myReactions?: readonly string[];
+  /** Mode sélection ACTIF (`undefined` hors sélection) — `false` = rangée
+   * non cochée, `true` = cochée (#5814, question 5). */
+  selected?: boolean;
+  /** VA AVEC `selected` — sans elle, la coche serait un contrôle INERTE
+   * (loi 4). Prend l'id plutôt qu'une fermeture par rangée : une référence
+   * STABLE (`useCallback` chez l'hôte) est ce qui laisse `memo` faire son
+   * travail quand cinquante rangées sont montées. */
+  onToggleSelect?: (messageId: string) => void;
   /** L'opinion de CE client sur l'envoi, tant que le transport n'a pas tranché. */
   localDelivery?: LocalDelivery;
   /** Epoch ms du début de la tentative en cours — l'horloge des 200 ms
@@ -149,11 +179,6 @@ export const FocalRow = memo(function FocalRow({
   const nowMs = now();
   const kind = expired ? 'expired' : protectionOf(message, nowMs);
   const isMine = isMineOf(message, viewerId);
-  // TOUJOURS appelé, quel que soit `kind` — les REGLES DES HOOKS interdisent
-  // un retour anticipé AVANT un hook : `kind` peut basculer d'un rendu à
-  // l'autre (message expiré, consommé) et React exige le MÊME nombre
-  // d'appels de hooks à chaque rendu de ce composant.
-  const [openLanguage, setOpenLanguage] = useState<string | null>(null);
 
   // `expired` — EmptyView : rien à rendre, mais l'ANCRE structurelle reste
   // (`data-message`) pour que les gates puissent constater l'absence.
@@ -198,11 +223,32 @@ export const FocalRow = memo(function FocalRow({
 
   const translations = translationsOf(message);
   const rendered = served({
-    preferredLanguages: languages,
+    // `displayLanguage` est une INSERTION au rang 0 (#5814, § 5 étape 4) —
+    // UN résolveur (`resolvePrismTranslation`, D-14), jamais un second.
+    preferredLanguages: displayLanguage === undefined ? languages : [displayLanguage, ...languages],
     originalLanguage: message.originalLanguage,
     translations: message.translations,
     original: message.content,
   });
+  /**
+   * LA RÉSOLUTION NATURELLE, SANS `displayLanguage` (revue #5814, correction
+   * après gate — `check-reading-mode.mjs` § 9 bis) — `PrismPastille` se
+   * MONTE quand une traduction existe naturellement pour CE message,
+   * jamais quand l'override ACTIF la rend égale à l'original. Utiliser
+   * `rendered.language` pour cette garde était le défaut : cliquer la
+   * pastille pose `displayLanguage = originalLanguage`, ce qui fait
+   * `rendered.language === originalLanguage` — et un `PrismPastille` gardé
+   * par CETTE égalité se DÉMONTE au clic qui vient de le presser, avant
+   * même que le doigt ne se relève. Le bouton doit rester monté tant que
+   * l'ORIGINE offre quelque chose à explorer, quel que soit ce qui est
+   * actuellement affiché.
+   */
+  const naturalServedLanguage = served({
+    preferredLanguages: languages,
+    originalLanguage: message.originalLanguage,
+    translations: message.translations,
+    original: message.content,
+  }).language;
 
   const footerLanguages = languageBand({
     originalLanguage: message.originalLanguage,
@@ -210,12 +256,14 @@ export const FocalRow = memo(function FocalRow({
     translations: translations.map((t) => t.language),
     servedLanguage: rendered.language,
   });
-  const secondary =
-    openLanguage === null
-      ? null
-      : openLanguage === message.originalLanguage
-        ? message.content
-        : (translations.find((t) => t.language === openLanguage)?.text ?? null);
+  /**
+   * LA LANGUE ACTIVE DU PIED (revue #5814, défaut majeur 12) — `rendered
+   * .language`, jamais un état local : c'est la langue RÉELLEMENT affichée
+   * (celle que le Prisme a effectivement servie, `displayLanguage` compris),
+   * donc la pastille/les drapeaux ne peuvent plus se désynchroniser du texte
+   * qu'ils décrivent.
+   */
+  const activeLanguage = rendered.language;
 
   // Le viewer n'a pas toujours de `sender` peuplé sur ses propres messages
   // (fixture, charge socket allégée) — « Vous » comble l'identité, jamais un
@@ -232,8 +280,8 @@ export const FocalRow = memo(function FocalRow({
    * elle ne monte plus systématiquement, seulement si elle a quelque chose à
    * dire (un jeu de drapeaux SUR LE DERNIER message d'un groupe traduit et
    * non voilé, ou une réaction). `hasTranslation` porte sur CE message —
-   * indépendamment de l'exploration en cours (`openLanguage`) : la loi ne
-   * connaît que la donnée, jamais l'état d'un panneau ouvert. `isVeiled`
+   * indépendamment de la langue explorée (`displayLanguage`) : la loi ne
+   * connaît que la donnée, jamais quelle langue est actuellement servie. `isVeiled`
    * couvre désormais TOUTE protection (D-23), pas seulement `isBlurred`.
    */
   const showsBottomLine = mountsBottomLine({
@@ -279,10 +327,6 @@ export const FocalRow = memo(function FocalRow({
           {rendered.text}
         </p>
       ) : null}
-
-      {openLanguage !== null && secondary !== null ? (
-        <SecondaryText code={openLanguage} text={secondary} isMine={false} />
-      ) : null}
     </>
   );
 
@@ -291,6 +335,12 @@ export const FocalRow = memo(function FocalRow({
       data-reading-mode={mode}
       data-elected={elected ? 'true' : undefined}
       data-message={message.id}
+      /* PAS d'`aria-selected` ICI (revue #5814) : l'attribut n'est défini que
+         sur `option`/`row`/`gridcell`/`tab`/`treeitem`. Sur un `div` sans
+         rôle il était invalide — et rendu DEUX fois (l'hôte le posait aussi
+         sur `[data-row]`). L'état de sélection est porté par la COCHE, un
+         `role="checkbox"` réel avec `aria-checked`, qui est aussi le seul
+         chemin CLAVIER vers la bascule. */
       className="grid transition-colors duration-500"
       style={{
         gridTemplateColumns: `${TEXT_INDENT}px 1fr`,
@@ -300,7 +350,9 @@ export const FocalRow = memo(function FocalRow({
         borderRadius: 10,
         backgroundColor: highlighted
           ? 'color-mix(in srgb, var(--accent) 22%, transparent)'
-          : 'transparent',
+          : selected === true
+            ? 'color-mix(in srgb, var(--accent) 10%, transparent)'
+            : 'transparent',
       }}
     >
       {/* L'AVATAR DE LA TÊTE DE GROUPE — s'EFFACE en focus, comme le nom
@@ -308,9 +360,48 @@ export const FocalRow = memo(function FocalRow({
           passe à `opacity: 0` (`FocalRow.swift:269`) et `focusIdentityChip`
           le REMPLACE à la même place. Le laisser visible peignait DEUX
           pastilles et DEUX noms sur la même rangée (mesuré sur
-          `thread-focal-scene.dark.png`, correction de revue #5648). */}
-      <div className="flex justify-center pt-0.5" style={{ opacity: elected ? 0 : 1 }}>
-        {head ? <Avatar initials={initialsOf(senderName)} color="var(--accent)" size={AVATAR_SIZE} /> : null}
+          `thread-focal-scene.dark.png`, correction de revue #5648).
+
+          EN MODE SÉLECTION (`selected !== undefined`, #5814) — une COCHE
+          REMPLACE l'avatar dans le MÊME gabarit : le mode sélection est actif
+          pour TOUT le fil à la fois, jamais une rangée isolée. */}
+      <div
+        className="flex justify-center pt-0.5"
+        /* L'EFFACEMENT EN FOCUS NE VAUT QUE POUR L'AVATAR (revue #5814) :
+           effacer la COCHE d'une rangée élue la rendrait invisible ET
+           incliquable au milieu d'un mode sélection actif. */
+        style={{ opacity: elected && selected === undefined ? 0 : 1 }}
+      >
+        {selected !== undefined ? (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={selected}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleSelect?.(message.id);
+            }}
+            className="grid place-items-center"
+            style={{ width: TEXT_INDENT, minHeight: 44 }}
+          >
+            <span
+              aria-hidden
+              className="grid place-items-center rounded-full"
+              style={{
+                width: AVATAR_SIZE,
+                height: AVATAR_SIZE,
+                border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--color-ios-ink-3)'}`,
+                backgroundColor: selected ? 'var(--accent)' : 'transparent',
+                color: 'white',
+              }}
+            >
+              {selected ? '✓' : null}
+            </span>
+            <span className="offscreen">Sélectionner ce message</span>
+          </button>
+        ) : head ? (
+          <Avatar initials={initialsOf(senderName)} color="var(--accent)" size={AVATAR_SIZE} />
+        ) : null}
       </div>
 
       {/* `position: relative` sur TOUTE la colonne de contenu — tête de
@@ -419,21 +510,19 @@ export const FocalRow = memo(function FocalRow({
                 style={{ color: 'var(--color-meta)', visibility: elected ? 'hidden' : 'visible' }}
               >
                 <PrismPastille
-                  servedLanguage={rendered.language}
+                  servedLanguage={naturalServedLanguage}
                   originalLanguage={message.originalLanguage}
-                  active={openLanguage}
-                  onToggle={() =>
-                    setOpenLanguage((v) => (v === message.originalLanguage ? null : message.originalLanguage))
-                  }
+                  active={activeLanguage}
+                  onToggle={() => onPickLanguage?.(message.originalLanguage)}
                 />
                 <Flags
                   languages={footerLanguages}
-                  active={openLanguage}
-                  onPick={(code) => setOpenLanguage((v) => (v === code ? null : code))}
+                  active={activeLanguage}
+                  onPick={(code) => onPickLanguage?.(code)}
                   limit={FLAG_LIMIT_PLAIN}
                 />
                 {reactions.map(([glyph, count]) => (
-                  <ReactionChip key={glyph} glyph={glyph} count={count} />
+                  <ReactionChip key={glyph} glyph={glyph} count={count} mine={myReactions?.includes(glyph) ?? false} />
                 ))}
               </div>
             ) : elected ? (
@@ -516,14 +605,12 @@ export const FocalRow = memo(function FocalRow({
                   que la surface transporte). */}
               {showsBottomLine ? (
                 <FocusStrip
-                  servedLanguage={rendered.language}
+                  servedLanguage={naturalServedLanguage}
                   originalLanguage={message.originalLanguage}
                   footerLanguages={footerLanguages}
-                  active={openLanguage}
-                  onToggleOriginal={() =>
-                    setOpenLanguage((v) => (v === message.originalLanguage ? null : message.originalLanguage))
-                  }
-                  onPickLanguage={(code) => setOpenLanguage((v) => (v === code ? null : code))}
+                  active={activeLanguage}
+                  onToggleOriginal={() => onPickLanguage?.(message.originalLanguage)}
+                  onPickLanguage={(code) => onPickLanguage?.(code)}
                   reactions={reactions}
                 />
               ) : null}

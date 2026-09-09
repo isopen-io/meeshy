@@ -115,8 +115,26 @@ describe('createHttpTransport — l’enveloppe', () => {
     expect(result).toEqual({
       ok: true,
       data: { id: 'c-1' },
+      status: 200,
       pagination: { total: 1, offset: 0, limit: 20, hasMore: false },
     });
+  });
+
+  test('succès 201 ⇒ status: 201 posé (#5814, distingue « créée » de 200 « inchangée »)', async () => {
+    // forme : routes/reactions.ts:132-270 (POST /api/v1/reactions, création)
+    const { impl } = fakeFetch({ status: 201, body: { success: true, data: { id: 'r-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await transport.request<{ id: string }>({ method: 'POST', path: '/api/v1/reactions' });
+    expect(result).toEqual({ ok: true, data: { id: 'r-1' }, status: 201 });
+  });
+
+  test('DELETE part avec la méthode et SANS corps (#5814, retrait d’une réaction)', async () => {
+    // forme : routes/reactions.ts:279-283 (DELETE /api/v1/reactions/:messageId/:emoji)
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: { message: 'ok' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    await transport.request({ method: 'DELETE', path: '/api/v1/reactions/m1/%F0%9F%91%8D' });
+    expect(calls[0]?.init.method).toBe('DELETE');
+    expect(calls[0]?.init.body).toBeUndefined();
   });
 
   test('échec 401 ⇒ { ok: false, status, error, code } — error est une CHAÎNE PLATE', async () => {

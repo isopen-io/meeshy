@@ -175,3 +175,85 @@ describe('Composer — le focus après un envoi au doigt (revue-correction #5813
     expect(sent).toBe('Bonjour');
   });
 });
+
+/**
+ * « COMPOSER » MET LE CURSEUR DANS LE CHAMP (revue #5814, défaut majeur 8)
+ * — avant ce correctif, `document.activeElement` valait BODY après l'action
+ * « Composer » du menu du message : `focusTakenRef.current = true`
+ * (`use-message-menu.ts`) empêchait le menu de rendre le focus à la rangée,
+ * mais rien ne le prenait à sa place.
+ */
+describe('Composer — « Composer » met le curseur dans le champ (revue #5814, défaut majeur 8)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    GlobalRegistrator.register();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(async () => {
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await GlobalRegistrator.unregister();
+  });
+
+  let container: HTMLDivElement;
+  let root: Root;
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  const mountWithReply = (replyTo?: { author: string; excerpt: string }) => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<Composer onSend={() => {}} {...(replyTo ? { replyTo } : {})} />);
+    });
+    return container;
+  };
+
+  test('sans citation au montage, le champ ne VOLE pas le focus', () => {
+    const el = mountWithReply();
+    const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
+    expect(document.activeElement).not.toBe(field);
+  });
+
+  test('une citation qui S’ARME (transition indéfini → défini, exactement « Composer ») ⇒ le champ REÇOIT le focus', () => {
+    const el = mountWithReply();
+    const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
+    expect(document.activeElement).not.toBe(field);
+
+    act(() => {
+      root.render(<Composer onSend={() => {}} replyTo={{ author: 'Amina', excerpt: 'On se voit demain ?' }} />);
+    });
+
+    expect(document.activeElement).toBe(field);
+    void el;
+  });
+
+  test('rester en citation (la référence de `replyTo` change sans transition) ⇒ ne REVOLE pas le focus déjà donné ailleurs', () => {
+    mountWithReply({ author: 'Amina', excerpt: 'Premier texte' });
+    const field = container.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
+    // Le lecteur a explicitement DÉPLACÉ son focus ailleurs après l'armement.
+    const elsewhere = document.createElement('button');
+    document.body.appendChild(elsewhere);
+    act(() => {
+      elsewhere.focus();
+    });
+    expect(document.activeElement).toBe(elsewhere);
+
+    // Un rendu parent RECONSTRUIT l'objet `replyTo` (référence neuve, même
+    // valeur) — motif `routes/thread.tsx`, qui ne mémoïse pas cet objet.
+    act(() => {
+      root.render(<Composer onSend={() => {}} replyTo={{ author: 'Amina', excerpt: 'Premier texte' }} />);
+    });
+
+    expect(document.activeElement).toBe(elsewhere);
+    void field;
+    elsewhere.remove();
+  });
+});
