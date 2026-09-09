@@ -1454,6 +1454,11 @@ struct RootView: View {
         let callerName: String?
         let isVideoCall: Bool
         let iceServersJSON: String?
+        /// Le palier à CÉLÉBRER (#5809). Il voyage ICI parce qu'il se dérive de
+        /// la métadonnée, que ce contexte est le seul à voir : sans lui, la
+        /// vue de révélation n'aurait rien à montrer et le tap retomberait sur
+        /// le tableau de bord — le défaut d'origine, une couche plus bas.
+        let reveal: EngagementReveal?
 
         init(from notification: APINotification) {
             type = notification.notificationType
@@ -1467,6 +1472,7 @@ struct RootView: View {
             senderId = notification.senderId
             senderUsername = notification.senderName
             storyContext = StoryNotificationContext.from(notification)
+            reveal = EngagementReveal.from(type: notification.notificationType, metadata: notification.metadata)
             callId = nil
             callerUserId = nil
             callerName = nil
@@ -1486,6 +1492,7 @@ struct RootView: View {
             senderId = event.senderId
             senderUsername = event.senderUsername
             storyContext = NotificationNavContext.makeStoryContext(from: event)
+            reveal = EngagementReveal.from(type: event.notificationType, metadata: event.metadata)
             callId = nil
             callerUserId = nil
             callerName = nil
@@ -1505,6 +1512,11 @@ struct RootView: View {
             senderId = payload.senderId
             senderUsername = payload.senderUsername
             storyContext = NotificationNavContext.makeStoryContext(from: payload)
+            // La charge APNs ne porte pas de `NotificationMetadata` typée : on
+            // ne fabrique PAS un palier plausible, on n'en célèbre aucun et le
+            // tap retombe sur le tableau de bord. Un badge inventé serait pire
+            // que pas de badge — cf. le repli MENTEUR d'`EngagementReveal`.
+            reveal = nil
             callId = payload.callId
             callerUserId = payload.callerUserId
             callerName = payload.callerName
