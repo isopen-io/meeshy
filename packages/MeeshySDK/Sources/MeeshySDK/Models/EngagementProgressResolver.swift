@@ -319,17 +319,20 @@ public enum EngagementProgressResolver {
             isEmpty: !hasActivity,
             meesh: payload.meesh.map(EngagementMeeshProgress.init(payload:)),
             elan: payload.elan.map(EngagementElanProgress.init(payload:)),
-            achievementSections: payload.achievementReach.map { reach in
-                AchievementResolver.sections(
-                    reach: reach,
-                    unlocked: Dictionary(
-                        payload.milestones
-                            .filter { $0.milestoneType == .achievement }
-                            .map { ($0.milestoneKey, reachedDate($0.reachedAt)) },
-                        uniquingKeysWith: { first, _ in first }
-                    )
+            // `?? [:]` — jamais `?? []` sur le résultat : le catalogue des défis
+            // est une constante locale (AchievementCatalog.families), un
+            // `achievementReach` ABSENT de la charge ne doit pas vider la
+            // section, seulement dégrader chaque famille comme un `reach` VIDE
+            // le ferait déjà (#5916).
+            achievementSections: AchievementResolver.sections(
+                reach: payload.achievementReach ?? [:],
+                unlocked: Dictionary(
+                    payload.milestones
+                        .filter { $0.milestoneType == .achievement }
+                        .map { ($0.milestoneKey, reachedDate($0.reachedAt)) },
+                    uniquingKeysWith: { first, _ in first }
                 )
-            } ?? []
+            )
         )
     }
 

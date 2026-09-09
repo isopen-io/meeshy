@@ -188,6 +188,18 @@ final class EngagementProgressResolverTests: XCTestCase {
 
     // MARK: - Catalogue
 
+    // MARK: - Défis (#5916)
+
+    func test_resolve_nilAchievementReach_stillProducesSectionsFromTheLocalCatalogue() {
+        // Le catalogue est une constante locale (AchievementCatalog.families) : un
+        // `achievementReach` ABSENT de la charge (serveur plus ancien, réponse
+        // filtrée) ne doit pas vider la section Défis — seul un `reach` VIDE ({})
+        // doit produire le même résultat qu'un `reach` nil (#5916).
+        let progress = EngagementProgressResolver.resolve(makePayload())
+
+        XCTAssertFalse(progress.achievementSections.isEmpty)
+    }
+
     func test_catalogue_familyIsTheKeyPrefix() {
         for axis in EngagementAxisKey.allCases {
             XCTAssertTrue(axis.rawValue.hasPrefix("\(axis.family.rawValue)."), "\(axis) n'est pas préfixé par sa famille")
