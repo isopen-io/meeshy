@@ -245,12 +245,12 @@ model User {
   /// Score agrégé multi-axes pondéré (#5545,
   /// docs/product/streaks-badges-modele.md § 5, § 7) — somme des poids
   /// `ENGAGEMENT_AXIS_WEIGHTS` (@meeshy/shared/types/engagement) de chaque
-  /// activité créditée. Maintenu par `$inc` atomique dans
-  /// `EngagementService.recordActivity`, jamais par un recalcul de scan.
-  /// Monotone croissant — aucune activité ne le décrémente. Un `User` créé
-  /// avant cette migration a ce champ ABSENT, pas à zéro (même piège que
-  /// `currentStreakDays` ci-dessus) : `$inc` sur un champ Mongo absent le
-  /// crée à la valeur de l'incrément, ce qui est déjà le comportement voulu.
+  /// activité créditée. Maintenu par lecture + écriture explicite dans
+  /// `EngagementService.updateEngagementScore`, jamais par `$inc` (#5742 :
+  /// mesuré contre Mongo 8, `$inc` sur un champ `null` lève — et ce champ
+  /// PEUT valoir `null`, pas seulement ABSENT sur un `User` pré-migration,
+  /// dès la première activité créditée avant ce correctif) ni par un
+  /// recalcul de scan. Monotone croissant — aucune activité ne le décrémente.
   engagementScore   Int       @default(0)
   /// Solde de Meeshes — PROJECTION de lecture du registre `MeeshLedger`, pas
   /// la vérité (#5743). La vérité est `Σ(MeeshLedger.delta)`, réconciliable ;
