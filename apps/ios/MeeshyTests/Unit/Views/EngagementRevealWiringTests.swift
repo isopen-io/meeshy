@@ -62,6 +62,30 @@ final class EngagementRevealWiringTests: XCTestCase {
                            + "n'en pose aucun, faute de métadonnée typée.")
     }
 
+    // MARK: - La SECONDE porte : le geste, sans tap (#5847)
+
+    /// L'hôte écoute le socket EN PLUS du drapeau du routeur. Sans cette
+    /// seconde porte, un succès ne se célèbre que si l'utilisateur va le
+    /// chercher dans la cloche — la récompense arrive sous forme de devoir.
+    func test_theHost_alsoListensToLiveNotifications() throws {
+        let hote = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/EngagementRevealHost.swift"))
+        XCTAssertTrue(hote.contains("newNotificationReceived"),
+                      "L'hôte doit s'abonner aux notifications reçues en direct — c'est "
+                          + "la porte par laquelle un succès se célèbre AU GESTE.")
+        XCTAssertTrue(hote.contains("celebratesUnprompted"),
+                      "Et il doit filtrer : seul un SUCCÈS s'ouvre tout seul. Un badge, "
+                          + "une série, un niveau se contentent d'une notification.")
+    }
+
+    /// La règle de surface, à son site unique. L'écrire dans l'hôte plutôt que
+    /// dans le SDK la rendrait invisible à l'autre client.
+    func test_onlyAnAchievement_celebratesUnprompted() {
+        XCTAssertTrue(EngagementReveal.achievement(.firstVoice).celebratesUnprompted)
+        XCTAssertFalse(EngagementReveal.streak(days: 7).celebratesUnprompted)
+        XCTAssertFalse(EngagementReveal.level(3).celebratesUnprompted)
+    }
+
     /// La célébration ne REMPLACE pas le tableau de bord : elle le couvre. Le
     /// tap continue donc de l'ouvrir, exactement comme avant — sinon refermer
     /// la célébration laisserait l'utilisateur là d'où il vient.

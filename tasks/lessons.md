@@ -29828,3 +29828,63 @@ c'est elle que le rapport de l'agent avait déjà écrite sans la lire.
 Détail : `.claude/workflows/meeshy-web-v3-bout-en-bout.js` § « DEUX SIMULATEURS »,
 `apps/web-v3/targets/README.md` § « Comment ces cibles ont été prises »,
 simulateur « Meeshy Ref-Native » (`3E761BC1-845D-49D2-8E4D-E0606E04D3E2`), #5805, #5806.
+
+## Leçon 555 — Un doc-comment qui NOMME son propre manque est un défaut mesuré que personne n'a lu
+
+2026-09-09, #5847. Le porteur demande que la vue de succès s'affiche quand on
+réalise l'opération qui le déclenche. Mesure : **cent quatorze succès composés
+se gravaient en silence** — `git grep createNotification --
+services/gateway/src/services/achievements` rendait ZÉRO, et la célébration
+n'était atteignable que par un tap dans le centre de notifications.
+
+Le plus troublant n'est pas le défaut : c'est que **le code le disait**, dans le
+doc-comment de la fonction fautive, en toutes lettres :
+
+> *« Ce qu'il ne donne PAS, et qui reste à gagner : la notification AU MOMENT du
+> geste. Un succès balayé tombe quand l'utilisateur regarde, pas quand il agit. »*
+
+Cette phrase est honnête, juste, et datée du lot qui a livré la feature. Elle
+décrit un produit à moitié livré, et elle est restée là — parce qu'un
+doc-comment n'est ni une issue, ni un test rouge, ni une ligne de tableau. **Rien
+dans le dépôt ne relit les aveux.**
+
+> **Chercher les aveux est une technique d'audit à part entière**, et la moins
+> chère du dépôt : `git grep -iE "ne (donne|fait|couvre) pas|reste à gagner|pour
+> l'instant|à étendre|TODO"` dans le dossier d'une feature qu'on suspecte
+> incomplète. Un auteur consciencieux écrit précisément où il s'est arrêté ; ce
+> qui manque, c'est quelqu'un pour transformer la phrase en issue.
+
+**Corollaire de gouvernance, et c'est lui qui compte** : `CLAUDE.md` dit qu'une
+issue fermée doit ouvrir *une issue par dimension qui n'est pas mûre*. Ce
+doc-comment EST une dimension non mûre (13 — complétude), écrite au bon endroit,
+au bon moment, par la bonne personne — **et pas dans le bon substrat**. La règle
+se relit donc : ce qu'on découvre en chemin devient une issue, y compris quand
+on l'a soi-même écrit dans un commentaire trois lignes plus haut.
+
+## Leçon 556 — Deux signaux qui partagent leur MÉCANIQUE ne partagent pas leur SURFACE
+
+Même lot. `docs/product/streaks-badges-modele.md` définit quatre notifications
+de réengagement et dit, § 1 : *« Les quatre partagent la même mécanique de bas
+niveau et ne diffèrent que par la fonction qui décide "ce seuil est-il
+franchi ?" »*. Vrai — et incomplet d'une manière qui a coûté la feature.
+
+Le porteur a tranché autre chose : **un succès se CÉLÈBRE (vue plein écran, sans
+qu'on touche rien), un badge / une série / un niveau se NOTIFIENT**. Un succès
+nomme un fait rare et non répétable ; les autres tombent au fil de l'usage.
+Les célébrer tous ferait de la célébration un bruit, et le premier bruit qu'on
+apprend à ignorer est celui qui devait faire plaisir.
+
+Cette décision ne se déduit d'aucun champ, d'aucun type, d'aucune contrainte
+technique — c'est une décision de PRODUIT, et le document qui gouverne la
+sémantique ne l'énonçait nulle part. D'où un code où `announcingTypes` mélange
+les quatre, et une célébration branchée sur le seul tap.
+
+> Quand un document déclare que N choses « ne diffèrent que par X », se demander
+> **par quoi d'autre elles pourraient différer côté UTILISATEUR** — la surface,
+> l'urgence, l'interruption, la persistance, qui peut les voir. Un axe de
+> variation absent du document n'est pas un axe absent du produit : c'est un axe
+> que chaque site tranchera dans son coin, différemment.
+
+Site unique désormais : `EngagementReveal.celebratesUnprompted`, et la table du
+§ 1 du modèle qui dit, pour chacun des quatre types, ce qui se passe au geste et
+ce qui se passe au tap.

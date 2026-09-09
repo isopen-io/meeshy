@@ -14,8 +14,8 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ACHIEVEMENT_FAMILIES, familyId } from '@meeshy/shared/types/achievement-families';
-import { achievementKey, tiersOf } from '@meeshy/shared/types/achievement-catalog';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { graveEtAnnonce, type AchievementOrigin } from './AchievementAnnounce';
 
 const log = enhancedLogger.child({ module: 'GlobalAchievements' });
 
@@ -37,20 +37,19 @@ const famille = (id: string) => ACHIEVEMENT_FAMILIES.find((f) => familyId(f) ===
 export class GlobalAchievements {
   constructor(private readonly prisma: PrismaClient) {}
 
-  private async graveTiers(userId: string, id: string, valeur: number): Promise<void> {
+  /**
+   * Grave et annonce — la règle vit à son site unique (`graveEtAnnonce`), qui
+   * la partage avec `CerclesAchievements`. Elle était ici en double.
+   */
+  private async graveTiers(
+    userId: string,
+    id: string,
+    valeur: number,
+    origin: AchievementOrigin,
+  ): Promise<void> {
     const f = famille(id);
     if (!f) return;
-    for (const palier of tiersOf(f)) {
-      if (valeur < palier) continue;
-      try {
-        await this.prisma.engagementMilestone.create({
-          data: { userId, milestoneType: 'achievement', milestoneKey: achievementKey(f, palier) },
-        });
-      } catch (err) {
-        if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') continue;
-        throw err;
-      }
-    }
+    await graveEtAnnonce({ prisma: this.prisma, userId, family: f, valeur, origin });
   }
 
   /**
@@ -83,26 +82,29 @@ export class GlobalAchievements {
    * de l'écran « Progression » — un écran qu'on ouvre rarement, jamais sur la
    * voie chaude d'un message.
    *
-   * Ce qu'il ne donne PAS, et qui reste à gagner : la notification AU MOMENT du
-   * geste. Un succès balayé tombe quand l'utilisateur regarde, pas quand il
-   * agit. Le câblage par événement (`recordEvent`, déjà écrit) est
-   * l'optimisation qui le rendra — famille par famille, sans jamais laisser un
-   * badge mort entre-temps.
+   * **Il est MUET, et c'est délibéré (#5847).** Il passe `origin: 'balayage'`,
+   * donc rien de ce qu'il grave ne s'annonce : c'est un rattrapage, il découvre
+   * ce qui était DÉJÀ vrai. Notifier ferait tomber des dizaines de bannières
+   * d'un coup à la première ouverture de l'écran, pour des gestes vieux de
+   * plusieurs jours. La célébration appartient au câblage par ÉVÉNEMENT
+   * (`recordEvent` depuis un site de geste, `origin: 'geste'`), qui reste à
+   * étendre famille par famille — sans jamais laisser un badge mort entre-temps.
    */
   async sweep(userId: string): Promise<void> {
+    const origin: AchievementOrigin = 'balayage';
     await Promise.all([
-      this.recordEvent({ kind: 'message.send', userId }),
-      this.recordEvent({ kind: 'attachment.send', userId, mimeType: 'audio/' }),
-      this.recordEvent({ kind: 'attachment.send', userId, mimeType: 'image/' }),
-      this.recordEvent({ kind: 'attachment.send', userId, mimeType: 'video/' }),
-      this.recordEvent({ kind: 'message.edit', userId }),
-      this.recordEvent({ kind: 'message.delete', userId }),
-      this.recordEvent({ kind: 'message.react', userId }),
-      this.recordEvent({ kind: 'call.join', userId }),
-      this.recordEvent({ kind: 'referral.complete', userId }),
-      this.recordEvent({ kind: 'link.click', userId }),
-      this.sweepCallStart(userId),
-      this.sweepUserScalars(userId),
+      this.recordEvent({ kind: 'message.send', userId }, origin),
+      this.recordEvent({ kind: 'attachment.send', userId, mimeType: 'audio/' }, origin),
+      this.recordEvent({ kind: 'attachment.send', userId, mimeType: 'image/' }, origin),
+      this.recordEvent({ kind: 'attachment.send', userId, mimeType: 'video/' }, origin),
+      this.recordEvent({ kind: 'message.edit', userId }, origin),
+      this.recordEvent({ kind: 'message.delete', userId }, origin),
+      this.recordEvent({ kind: 'message.react', userId }, origin),
+      this.recordEvent({ kind: 'call.join', userId }, origin),
+      this.recordEvent({ kind: 'referral.complete', userId }, origin),
+      this.recordEvent({ kind: 'link.click', userId }, origin),
+      this.sweepCallStart(userId, origin),
+      this.sweepUserScalars(userId, origin),
     ]);
   }
 
@@ -111,13 +113,13 @@ export class GlobalAchievements {
    * plus grand. Le balayage prend le plus grand jamais tenu — un record ne
    * redescend pas.
    */
-  private async sweepCallStart(userId: string): Promise<void> {
+  private async sweepCallStart(userId: string, origin: AchievementOrigin): Promise<void> {
     try {
       const sessions = await this.prisma.callSession.findMany({
         where: { initiatorId: userId },
         select: { id: true },
       });
-      await this.graveTiers(userId, 'call.start.count', sessions.length);
+      await this.graveTiers(userId, 'call.start.count', sessions.length, origin);
       if (sessions.length === 0) return;
       const tailles = await this.prisma.callParticipant.groupBy({
         by: ['callSessionId'],
@@ -125,7 +127,7 @@ export class GlobalAchievements {
         _count: { _all: true },
       });
       const plusGrand = tailles.reduce((max, t) => Math.max(max, t._count._all), 0);
-      await this.graveTiers(userId, 'call.start.size', plusGrand);
+      await this.graveTiers(userId, 'call.start.size', plusGrand, origin);
     } catch (err) {
       log.warn('balayage call.start échoué', {
         userId,
@@ -135,15 +137,15 @@ export class GlobalAchievements {
   }
 
   /** Série et Meeshes vivent sur `User` — une seule lecture pour les deux. */
-  private async sweepUserScalars(userId: string): Promise<void> {
+  private async sweepUserScalars(userId: string, origin: AchievementOrigin): Promise<void> {
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         select: { longestStreakDays: true, meeshMintedLifetime: true },
       });
       if (!user) return;
-      await this.graveTiers(userId, 'streak.hold.count', user.longestStreakDays ?? 0);
-      await this.graveTiers(userId, 'meesh.mint.count', user.meeshMintedLifetime ?? 0);
+      await this.graveTiers(userId, 'streak.hold.count', user.longestStreakDays ?? 0, origin);
+      await this.graveTiers(userId, 'meesh.mint.count', user.meeshMintedLifetime ?? 0, origin);
     } catch (err) {
       log.warn('balayage des scalaires utilisateur échoué', {
         userId,
@@ -152,14 +154,14 @@ export class GlobalAchievements {
     }
   }
 
-  async recordEvent(event: GlobalAchievementEvent): Promise<void> {
+  async recordEvent(event: GlobalAchievementEvent, origin: AchievementOrigin = 'geste'): Promise<void> {
     try {
       switch (event.kind) {
         case 'message.send': {
           const n = await this.prisma.message.count({
             where: { sender: { userId: event.userId }, deletedAt: null },
           });
-          return this.graveTiers(event.userId, 'message.send.count', n);
+          return this.graveTiers(event.userId, 'message.send.count', n, origin);
         }
         case 'attachment.send': {
           const id = this.familyForMime(event.mimeType);
@@ -171,39 +173,39 @@ export class GlobalAchievements {
               message: { sender: { userId: event.userId } },
             },
           });
-          return this.graveTiers(event.userId, id, n);
+          return this.graveTiers(event.userId, id, n, origin);
         }
         case 'message.edit': {
           const n = await this.prisma.message.count({
             where: { sender: { userId: event.userId }, isEdited: true },
           });
-          return this.graveTiers(event.userId, 'message.edit.count', n);
+          return this.graveTiers(event.userId, 'message.edit.count', n, origin);
         }
         case 'message.delete': {
           const n = await this.prisma.message.count({
             where: { sender: { userId: event.userId }, deletedAt: { not: null } },
           });
-          return this.graveTiers(event.userId, 'message.delete.count', n);
+          return this.graveTiers(event.userId, 'message.delete.count', n, origin);
         }
         case 'message.react': {
           const n = await this.prisma.reaction.count({
             where: { participant: { userId: event.userId } },
           });
-          return this.graveTiers(event.userId, 'message.react.count', n);
+          return this.graveTiers(event.userId, 'message.react.count', n, origin);
         }
         case 'call.start': {
           const [n, taille] = await Promise.all([
             this.prisma.callSession.count({ where: { initiatorId: event.userId } }),
             this.prisma.callParticipant.count({ where: { callSessionId: event.callSessionId } }),
           ]);
-          await this.graveTiers(event.userId, 'call.start.count', n);
-          return this.graveTiers(event.userId, 'call.start.size', taille);
+          await this.graveTiers(event.userId, 'call.start.count', n, origin);
+          return this.graveTiers(event.userId, 'call.start.size', taille, origin);
         }
         case 'call.join': {
           const n = await this.prisma.callParticipant.count({
             where: { participant: { userId: event.userId } },
           });
-          return this.graveTiers(event.userId, 'call.join.count', n);
+          return this.graveTiers(event.userId, 'call.join.count', n, origin);
         }
         case 'referral.complete': {
           // ACHEVÉES seulement : une invitation envoyée n'est pas une
@@ -212,20 +214,20 @@ export class GlobalAchievements {
           const n = await this.prisma.affiliateRelation.count({
             where: { affiliateUserId: event.userId, status: 'completed' },
           });
-          return this.graveTiers(event.userId, 'referral.complete.count', n);
+          return this.graveTiers(event.userId, 'referral.complete.count', n, origin);
         }
         case 'link.click': {
           const n = await this.prisma.trackingLinkClick.count({
             where: { trackingLink: { createdBy: event.userId } },
           });
-          return this.graveTiers(event.userId, 'link.click.count', n);
+          return this.graveTiers(event.userId, 'link.click.count', n, origin);
         }
         case 'streak.hold':
           // Le RECORD, jamais la série courante : une série rompue ne retire
           // pas un succès (« un succès atteint reste à vie »).
-          return this.graveTiers(event.userId, 'streak.hold.count', event.days);
+          return this.graveTiers(event.userId, 'streak.hold.count', event.days, origin);
         case 'meesh.mint':
-          return this.graveTiers(event.userId, 'meesh.mint.count', event.minted);
+          return this.graveTiers(event.userId, 'meesh.mint.count', event.minted, origin);
       }
     } catch (err) {
       log.warn('évaluation de succès échouée — le geste métier reste acquis', {
