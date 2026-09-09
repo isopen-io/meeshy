@@ -198,6 +198,30 @@ mot. Le 2026-09-09, la « capture de l'ecran iOS » d'un tour a montre web-v3 su
   coque — ni \`xcodebuild\` du projet ${V3}/ios, ni \`cap run\`, ni \`simctl install\` d'un App.app.
   Si l'app manque : \`xcrun simctl install ${SIM_REF} ${IOS}/Build/Products/Debug-iphonesimulator/Meeshy.app\`
   (build par \`${IOS}/meeshy.sh build\` si absent), puis le drapeau (source 0 du socle).
+- SE CONNECTER SUR LA REFERENCE — directive porteur du 2026-09-09, MESUREE le jour meme :
+  les identifiants sont \`DEMO_USER\` et \`DEMO_PASSWORD\` de \`${REPO}/apps/ios/fastlane/.env\`
+  (hors depot ; c'est la source que le CLAUDE.md racine designe deja, § Test Credentials).
+  Mesure : \`POST /api/v1/auth/login\` sur gate.staging.meeshy.me rend 200 et un jeton pour ce
+  couple. NE LES AFFICHE JAMAIS et ne les recopie nulle part — ni rapport, ni commit, ni capture,
+  ni corps d'issue. Les relever ainsi :
+  \`U=$(grep '^DEMO_USER=' ${REPO}/apps/ios/fastlane/.env | cut -d= -f2- | tr -d '"')\`
+  \`P=$(grep '^DEMO_PASSWORD=' ${REPO}/apps/ios/fastlane/.env | cut -d= -f2- | tr -d '"')\`
+  * CE MOT DE PASSE SE COLLE, IL NE SE TAPE PAS. Il porte des MAJUSCULES, et \`idb ui text\`
+    AVALE ou corrompt un caractere a SHIFT dans un champ SECURISE **sans lever d'erreur** —
+    juste une longueur inferieure de 1, de facon non reproductible. La voie sure ne passe par
+    aucune frappe : \`printf %s "$P" | xcrun simctl pbcopy ${SIM_REF}\`, puis appui long sur le
+    champ mot de passe et « Coller ».
+  * \`ATABETH_PASSWORD\` de \`infrastructure/envs/.env.example\` est une valeur d'EXEMPLE :
+    mesuree 401 sur staging ET en production. N'y reviens pas — un \`.env.example\` ne porte pas
+    de secret, meme quand sa valeur n'a pas l'air d'un gabarit.
+  * SI LE COMPTE MANQUE SUR L'ENVIRONNEMENT VISE, LE CREER EST AUTORISE (porteur, 2026-09-09) :
+    \`POST /api/v1/auth/register\` sur gate.staging.meeshy.me, avec un mot de passe SANS majuscule
+    ni ponctuation — il se tapera alors directement par \`idb ui text\`. Note l'identifiant dans
+    \`${V3}/targets/seed.md\` ; le mot de passe reste hors depot.
+  * LA CONNEXION SE PROUVE PAR L'ECRAN D'APRES — la liste des conversations du compte, avec les
+    donnees semees — JAMAIS par la longueur du champ : une suggestion QuickType d'iOS pre-remplit
+    le champ securise au focus (longueur 12 observee avant toute frappe) et la premiere frappe
+    reelle la dissout. Detail : \`${V3}/targets/README.md\` § « Se connecter sur Meeshy Ref-Native ».
 - LA COQUE vit sur « Meeshy Poc-Web-V31 » (${SIM_CHANTIER}) et NULLE PART AILLEURS. Aucune capture
   prise sur ce simulateur n'est une cible iOS, quoi qu'elle montre.
 - AVANT TOUTE CAPTURE DE REFERENCE, TROIS verifications, dans l'ordre — la capture est NULLE si une
