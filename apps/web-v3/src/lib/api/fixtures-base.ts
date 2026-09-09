@@ -59,22 +59,51 @@ export const dayAt = (daysAgo: number, hour: number, minute: number): Date => {
  * distance de l'ancre qu'il l'aurait été de « maintenant » avec
  * `minutesAgo(n)` : l'ORDRE et les ÉCARTS entre messages sont préservés au
  * tick près, seule la traversée de minuit disparaît.
+ *
+ * SECONDE TRAVERSÉE (#5797) — le paragraphe ci-dessus corrige la traversée
+ * DANS la fenêtre `minutesAgo(96..82)`, mais `THREAD_ANCHOR` se calculait sur
+ * son PROPRE `new Date()`, capturé au CHARGEMENT du module, pendant que
+ * `sections.test.ts` capturait un SECOND `new Date()`, indépendant, à
+ * l'EXÉCUTION du test. Si minuit parisien tombait entre les deux (le module
+ * se charge avant que la suite ne s'exécute), leurs jours calendaires
+ * parisiens divergeaient : `THREAD_ANCHOR` restait sur l'ancien jour pendant
+ * que le test attendait le nouveau — le test lui-même utilise `THREAD_ANCHOR`
+ * pour tout ce qu'il place, mais pas `THREAD_ANCHOR` pour choisir la fenêtre.
+ * `FIXTURES_LOADED_AT`, exporté ci-dessous, est l'UNIQUE `new Date()` du
+ * module — tout consommateur qui a besoin d'un « maintenant » cohérent avec
+ * cette ancre (au premier chef `sections.test.ts`) le RÉUTILISE au lieu d'en
+ * capturer un second : deux lectures indépendantes ne peuvent plus diverger
+ * puisqu'il n'en reste qu'une seule.
  */
 const THREAD_SPAN_MINUTES = 96;
-const parisCalendarDay = (date: Date): string =>
+export const parisCalendarDay = (date: Date): string =>
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(
     date,
   );
 
-const THREAD_ANCHOR: Date = (() => {
-  const at = new Date();
+/**
+ * Pure — extraite pour être testée indépendamment du chargement du module
+ * (#5797) : quel que soit `at`, l'ancre rendue tombe TOUJOURS dans le jour
+ * calendaire parisien de `at`, y compris quand `at` est à quelques minutes
+ * d'un minuit parisien de part ou d'autre.
+ */
+export const resolveThreadAnchor = (at: Date, spanMinutes: number): Date => {
   const todayInParis = parisCalendarDay(at);
-  let candidate = new Date(at.getTime() - THREAD_SPAN_MINUTES * 60_000);
+  let candidate = new Date(at.getTime() - spanMinutes * 60_000);
   while (parisCalendarDay(candidate) !== todayInParis) {
     candidate = new Date(candidate.getTime() + 60_000);
   }
   return candidate;
-})();
+};
+
+/**
+ * L'instant PARTAGÉ entre l'ancre du fil et tout consommateur qui a besoin
+ * d'un « maintenant » cohérent avec elle — un seul `new Date()` au
+ * chargement du module, jamais deux (#5797, voir le commentaire ci-dessus).
+ */
+export const FIXTURES_LOADED_AT: Date = new Date();
+
+const THREAD_ANCHOR: Date = resolveThreadAnchor(FIXTURES_LOADED_AT, THREAD_SPAN_MINUTES);
 
 /** `threadMoment(96)` = le premier message du fil ; `threadMoment(82)` = le dernier — voir `THREAD_ANCHOR`. */
 export const threadMoment = (minutesAgoAtWriting: number): Date =>
