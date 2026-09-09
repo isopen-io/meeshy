@@ -12,16 +12,36 @@ import MeeshyUI
 /// C'est la différence qui empêche la divergence de revenir : un client qui
 /// compose sa propre séquence finit toujours par la faire dériver.
 
-/// LE HERO DU DERNIER SUCCÈS (#5840).
+/// CE QU'UN HERO DEMANDE D'OUVRIR — le palier, sa date, et s'il est OBTENU.
 ///
-/// Le PROCHAIN succès aurait demandé une distance — « encore 2 » — et cette
-/// distance n'existe nulle part : les compteurs servis sont par AXE quand les
-/// défis sont par FAMILLE, sans pont. Le porteur a tranché pour le DERNIER, qui
-/// se lit dans ce qui est déjà servi.
+/// Trois valeurs passées de main en main auraient fini par se désordonner, et
+/// `AchievementRevealView.Occasion` a besoin des trois pour se composer
+/// JUSTE : un palier verrouillé ouvert avec `unlocked: true` afficherait
+/// « Débloqué » sur un succès qu'on n'a pas.
+struct ProgressionRevealRequest: Identifiable {
+    let reveal: EngagementReveal
+    let reachedAt: String?
+    let unlocked: Bool
+    var id: String { "\(reveal)|\(unlocked)" }
+}
+
+/// LE HERO DU DERNIER SUCCÈS (#5840), ET DU PROCHAIN À DÉFAUT (#5831).
 ///
-/// Sur un compte qui n'a rien décroché il ne DISPARAÎT pas : il dit quoi viser.
-/// Une section qui s'efface au premier lancement rend muet le seul moment où
-/// l'utilisateur a besoin qu'on lui parle.
+/// Deux élections concurrentes ont été écrites en parallèle, chacune couvrant
+/// ce que l'autre ratait ; la fusion garde les deux moitiés.
+///
+/// **Obtenu** — l'élection de cette branche, qui balaie les succès NOMMÉS *et*
+/// les paliers GÉNÉRÉS (`achievementSections`) : `heroAchievement` ne connaît
+/// que les premiers, et le dernier fait d'un compte peut très bien être un
+/// palier généré.
+///
+/// **Rien d'obtenu** — l'élection de #5831 (`heroAchievement`), qui nomme le
+/// PROCHAIN verrouillé et sa CONDITION. Cette branche n'affichait là qu'un
+/// conseil figé : correct, mais moins que ce que la passerelle sert déjà.
+///
+/// Dans les deux cas le hero ne DISPARAÎT pas — et dans les deux cas il
+/// s'ouvre : « un succès qu'on n'a PAS encore obtenu s'y regarde aussi, c'est
+/// là qu'on lit ce qu'il faut faire pour l'avoir » (#5831).
 struct ProgressionLastAchievementHero: View {
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -29,17 +49,17 @@ struct ProgressionLastAchievementHero: View {
     let progress: EngagementProgress
     let isDark: Bool
     /// Ouvre la CÉLÉBRATION — animation et étoiles (directive porteur).
-    var onReveal: (EngagementReveal) -> Void = { _ in }
+    var onReveal: (ProgressionRevealRequest) -> Void = { _ in }
 
-    /// Ce que le hero montre — et ce qu'il CÉLÈBRE au toucher.
+    /// Ce que le hero montre — et ce qu'il OUVRE au toucher.
     ///
     /// Les deux provenances ne portent pas le même type de date : `String?`
     /// (ISO du fil) pour les succès composés, `Date?` pour les paliers générés.
     /// On compare donc des `Date`, en décodant l'ISO une seule fois — comparer
     /// deux chaînes de formats différents aurait « marché » sur les cas
     /// courants et menti sur les autres.
-    private var dernier: (titre: String, quand: String, reveal: EngagementReveal?)? {
-        var candidats: [(titre: String, date: Date, reveal: EngagementReveal?)] = []
+    private var obtenu: (titre: String, quand: String, requete: ProgressionRevealRequest)? {
+        var candidats: [(titre: String, date: Date, requete: ProgressionRevealRequest)] = []
 
         for succes in progress.achievements where succes.unlocked {
             // `ISO8601DateFormatter()` NU n'accepte pas les fractions de
@@ -47,19 +67,36 @@ struct ProgressionLastAchievementHero: View {
             // candidat était donc écarté et le hero restait dans son état vide
             // pour tout le monde, sans que rien ne rougisse : l'état vide est
             // légitime, et la vue rendue était valide.
-            // `reachedDate` existe pour ça, et son doc-comment le dit.
             guard let date = EngagementProgressResolver.reachedDate(succes.reachedAt) else { continue }
-            candidats.append((ProgressionCopy.title(for: succes.key), date, .achievement(succes.key)))
+            candidats.append((
+                ProgressionCopy.title(for: succes.key),
+                date,
+                ProgressionRevealRequest(
+                    reveal: .achievement(succes.key),
+                    reachedAt: succes.reachedAt,
+                    unlocked: true
+                )
+            ))
         }
         for section in progress.achievementSections {
             for entree in section.entries where entree.unlocked {
                 guard let date = entree.reachedAt,
                       let libelle = AchievementCopy.label(entree.family, tier: entree.tier) else { continue }
-                // Pas de `reveal` pour un palier GÉNÉRÉ : `EngagementReveal` ne
-                // sait célébrer que les succès NOMMÉS, et lui en fabriquer un
-                // par défaut donnerait une célébration cohérente et FAUSSE —
-                // le repli menteur que son propre doc-comment interdit (#5847).
-                candidats.append((libelle, date, nil))
+                // Un palier GÉNÉRÉ se célèbre AUSSI depuis #5831 :
+                // `EngagementReveal.composedAchievement(family:tier:)` sait le
+                // nommer. Cette branche posait `nil` ici, et son commentaire
+                // affirmait que le type ne savait pas le faire — vrai à sa
+                // base, faux depuis. Un commentaire qui justifie une lacune se
+                // périme AVEC elle.
+                candidats.append((
+                    libelle,
+                    date,
+                    ProgressionRevealRequest(
+                        reveal: .composedAchievement(family: entree.family, tier: entree.tier),
+                        reachedAt: nil,
+                        unlocked: true
+                    )
+                ))
             }
         }
 
@@ -67,39 +104,61 @@ struct ProgressionLastAchievementHero: View {
         // Ré-encoder la `Date` en ISO pour la faire re-décoder juste après
         // était un aller-retour qui reperdait la fraction de seconde au
         // passage. On date la `Date`.
-        let quand = ProgressionCopy.obtained(date: plusRecent.date)
-        return (plusRecent.titre, quand, plusRecent.reveal)
+        return (plusRecent.titre, ProgressionCopy.obtained(date: plusRecent.date), plusRecent.requete)
+    }
+
+    /// À défaut d'obtenu : le PROCHAIN verrouillé et ce qu'il demande (#5831).
+    private var prochain: (titre: String, quand: String, requete: ProgressionRevealRequest)? {
+        guard obtenu == nil, let cible = progress.heroAchievement, !cible.unlocked else { return nil }
+        return (
+            ProgressionCopy.title(for: cible.key),
+            ProgressionCopy.condition(for: cible.key),
+            ProgressionRevealRequest(
+                reveal: .achievement(cible.key),
+                reachedAt: cible.reachedAt,
+                unlocked: false
+            )
+        )
     }
 
     var body: some View {
-        let acquis = dernier
+        let acquis = obtenu
+        let vise = prochain
+        let montre = acquis ?? vise
         Button {
-            if let reveal = acquis?.reveal { onReveal(reveal) }
+            if let requete = montre?.requete { onReveal(requete) }
         } label: {
-            corps(acquis)
+            corps(montre, obtenu: acquis != nil)
         }
         .buttonStyle(.plain)
-        .disabled(acquis?.reveal == nil)
-        .accessibilityHint(acquis?.reveal == nil ? Text(verbatim: "") : Text(ProgressionCopy.heroRevealHint))
+        .disabled(montre == nil)
+        .accessibilityHint(montre == nil ? Text(verbatim: "") : Text(ProgressionCopy.heroRevealHint))
     }
 
     @ViewBuilder
-    private func corps(_ acquis: (titre: String, quand: String, reveal: EngagementReveal?)?) -> some View {
+    private func corps(
+        _ montre: (titre: String, quand: String, requete: ProgressionRevealRequest)?,
+        obtenu: Bool
+    ) -> some View {
+        // Le VERT dit « acquis » ; sur un palier qu'on n'a pas encore, il
+        // mentirait. La teinte suit donc ce que la carte MONTRE, jamais la
+        // seule identité de la vue.
+        let teinte = obtenu ? MeeshyColors.success : MeeshyColors.textMuted(isDark: isDark)
         HStack(spacing: MeeshySpacing.md) {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(MeeshyColors.success.opacity(0.22))
+                .fill(teinte.opacity(0.22))
                 .frame(width: 48, height: 48)
-                .overlay(Image(systemName: "trophy.fill").foregroundStyle(MeeshyColors.success))
+                .overlay(Image(systemName: "trophy.fill").foregroundStyle(teinte))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(acquis == nil ? ProgressionCopy.heroFirstTitle : ProgressionCopy.heroLastTitle)
+                Text(bandeau(montre: montre != nil, obtenu: obtenu))
                     .font(.caption2.weight(.semibold))
                     .textCase(.uppercase)
                     .foregroundStyle(theme.textMuted)
-                if let acquis {
-                    Text(acquis.titre).font(.body.weight(.bold)).foregroundStyle(theme.textPrimary)
-                    Text(acquis.quand).font(.caption).foregroundStyle(theme.textMuted)
+                if let montre {
+                    Text(montre.titre).font(.body.weight(.bold)).foregroundStyle(theme.textPrimary)
+                    Text(montre.quand).font(.caption).foregroundStyle(theme.textMuted)
                 } else {
                     Text(ProgressionCopy.heroFirstHint)
                         .font(.body.weight(.bold))
@@ -111,14 +170,20 @@ struct ProgressionLastAchievementHero: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(MeeshyColors.success.opacity(0.12))
+                .fill(teinte.opacity(0.12))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(MeeshyColors.success.opacity(0.28), lineWidth: 1)
+                        .stroke(teinte.opacity(0.28), lineWidth: 1)
                 )
         )
     }
+
+    private func bandeau(montre: Bool, obtenu: Bool) -> String {
+        if obtenu { return ProgressionCopy.heroLastTitle }
+        return montre ? ProgressionCopy.heroNextTitle : ProgressionCopy.heroFirstTitle
+    }
 }
+
 
 /// LE HERO DU NIVEAU — pleine largeur, et il ÉNUMÈRE (#5841).
 ///
@@ -400,6 +465,12 @@ struct ProgressionSectionPage: View {
     let isDark: Bool
     let onClose: () -> Void
 
+    /// La célébration est portée ICI, pas chez l'hôte : cette page est
+    /// présentée en `sheet`, et un `fullScreenCover` attaché à `ProgressionView`
+    /// s'ouvrirait DERRIÈRE elle. Une porte qui existe et ne se voit pas est
+    /// une porte qui n'existe pas.
+    @State private var reveal: ProgressionRevealRequest?
+
     private var theme: ThemeManager { ThemeManager.shared }
 
     private var titre: String {
@@ -473,6 +544,12 @@ struct ProgressionSectionPage: View {
                 }
             }
         }
+        .fullScreenCover(item: $reveal) { palier in
+            AchievementRevealView(
+                reveal: palier.reveal,
+                occasion: .consultation(unlocked: palier.unlocked, reachedAt: palier.reachedAt)
+            ) { reveal = nil }
+        }
     }
 
     @ViewBuilder
@@ -503,7 +580,21 @@ struct ProgressionSectionPage: View {
                 VStack(spacing: 0) {
                     ForEach(Array(progress.achievements.enumerated()), id: \.element.id) { index, achievement in
                         if index > 0 { Divider().overlay(theme.textMuted.opacity(0.2)) }
-                        ProgressionAchievementRow(achievement: achievement)
+                        Button {
+                            reveal = ProgressionRevealRequest(
+                                reveal: .achievement(achievement.key),
+                                reachedAt: achievement.reachedAt,
+                                unlocked: achievement.unlocked
+                            )
+                        } label: {
+                            ProgressionAchievementRow(achievement: achievement)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityHint(Text(String(
+                            localized: "progression.achievement.a11y.hint",
+                            defaultValue: "Ouvre le succès en grand",
+                            bundle: .main)))
                     }
                 }
             }

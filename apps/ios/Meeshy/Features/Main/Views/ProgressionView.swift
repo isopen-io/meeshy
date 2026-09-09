@@ -47,7 +47,7 @@ struct ProgressionView: View {
     /// que depuis une NOTIFICATION : le succès qu'on avait sous les yeux ne se
     /// rejouait pas. Le porteur veut qu'il se retouche — animation et étoiles
     /// comprises.
-    @State private var reveal: EngagementReveal?
+    @State private var reveal: ProgressionRevealRequest?
 
     init(viewModel: ProgressionViewModel? = nil) {
         _viewModel = StateObject(wrappedValue: viewModel ?? ProgressionViewModel())
@@ -64,7 +64,14 @@ struct ProgressionView: View {
         }
         .task { await viewModel.load() }
         .fullScreenCover(item: $reveal) { palier in
-            AchievementRevealView(reveal: palier, onContinue: { reveal = nil })
+            // `.consultation` et NON `.celebration` (#5831) : on arrive ici
+            // DEPUIS le tableau de bord, où la célébration voudrait « mener »
+            // — elle y renverrait à l'écran qu'on n'a pas quitté. Le hero ne
+            // montre que de l'OBTENU, d'où `unlocked: true`.
+            AchievementRevealView(
+                reveal: palier.reveal,
+                occasion: .consultation(unlocked: palier.unlocked, reachedAt: palier.reachedAt)
+            ) { reveal = nil }
         }
         .sheet(item: $destination) { section in
             ProgressionSectionPage(
@@ -141,6 +148,12 @@ struct ProgressionView: View {
                 if viewModel.showsSkeleton {
                     ProgressionSkeleton()
                 } else if let progress = viewModel.progress {
+                    // L'ÉTAT VIDE, repris de #5831 : sans lui, quelqu'un qui
+                    // n'a encore rien fait lit une séquence de heros muets et
+                    // trois portes qui n'ouvrent sur rien.
+                    if progress.isEmpty {
+                        ProgressionNotice(kind: .empty)
+                    }
                     /*
                      * LA VUE PARCOURT la séquence, elle ne la compose plus.
                      *
@@ -186,82 +199,5 @@ struct ProgressionView: View {
             .padding(.top, 8)
         }
         .refreshable { await viewModel.load(forceNetwork: true) }
-    }
-
-    // MARK: - Sections
-
-    private func badgesSection(_ progress: EngagementProgress) -> some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            sectionHeader(
-                icon: "medal.fill",
-                title: String(localized: "progression.section.badges", defaultValue: "Badges", bundle: .main),
-                trailing: "\(progress.badgesEarned) / \(progress.badgesTotal)",
-                color: accentColor
-            )
-
-            ForEach(progress.axesByFamily) { group in
-                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                    Text(ProgressionCopy.title(for: group.family))
-                        .font(MeeshyFont.relative(12, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
-                        .padding(.leading, 4)
-                        .accessibilityAddTraits(.isHeader)
-
-                    ProgressionCard(tint: accentColor) {
-                        VStack(spacing: 0) {
-                            ForEach(Array(group.axes.enumerated()), id: \.element.id) { index, axis in
-                                if index > 0 {
-                                    Divider().overlay(theme.textMuted.opacity(0.2))
-                                }
-                                ProgressionAxisRow(axis: axis)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func achievementsSection(_ progress: EngagementProgress) -> some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            sectionHeader(
-                icon: "trophy.fill",
-                title: String(localized: "progression.section.achievements", defaultValue: "Succès", bundle: .main),
-                trailing: "\(progress.unlockedAchievementCount) / \(progress.achievements.count)",
-                color: MeeshyColors.success
-            )
-
-            ProgressionCard(tint: MeeshyColors.success) {
-                VStack(spacing: 0) {
-                    ForEach(Array(progress.achievements.enumerated()), id: \.element.id) { index, achievement in
-                        if index > 0 {
-                            Divider().overlay(theme.textMuted.opacity(0.2))
-                        }
-                        ProgressionAchievementRow(achievement: achievement)
-                    }
-                }
-            }
-        }
-    }
-
-    private func sectionHeader(icon: String, title: String, trailing: String, color: Color) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(MeeshyFont.relative(12, weight: .semibold))
-                .foregroundColor(color)
-                .accessibilityHidden(true)
-            Text(title.uppercased())
-                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
-                .foregroundColor(color)
-                .tracking(1.2)
-            Spacer()
-            Text(trailing)
-                .font(MeeshyFont.relative(11, weight: .semibold, design: .rounded))
-                .foregroundColor(theme.textMuted)
-                .monospacedDigit()
-        }
-        .padding(.horizontal, 4)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
     }
 }

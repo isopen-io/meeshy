@@ -1,5 +1,134 @@
 # @meeshy/translator
 
+## 1.40.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - SUPPORTED_LANGUAGES vient de packages/shared, plus d'un littéral (#3658)
+  - un message flouté, à vue unique, éphémère ou supprimé n'est plus servi en clair sur le fil
+  - les vues Progression prennent leurs teintes en Color, sans un Color(hex:) de plus
+  - la carte de niveau nomme le rang suivant, jamais le seuil de points
+  - une notification de palier dit le MOT, le NIVEAU, et mène à l'écran Progression
+  - l'écran Progression — badges, niveau, série et succès depuis GET /me/engagement
+  - l'écran /me/progression — badges, niveau, série et succès
+  - les clés de palier viennent du catalogue partagé
+  - posts delegate Prism translation stripping to a shared adapter (#5723)
+  - la loi de progression des badges, écrite une fois pour le web et iOS
+
+## 1.39.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - guard the accent-color hardcoding debt outside Theme (#3678)
+  - le legacy ne sert plus un jeton authentifié expiré
+  - l'absence est revérifiée AU MOMENT de livrer, et sur les trois sites qui en décident
+  - Focal élit une rangée — carte, chip agrandi, tampon de date — au lieu de la courbe retirée par iOS
+  - la présence se lit sur l'USAGE du jeton, pas sur la création de session
+  - la sélection suit la dernière CONNEXION, pas une activité qui ne dit rien
+  - une réaction ne contredit plus le message auquel elle répond
+  - un conteneur en retard sur ses routes se signale avant l'utilisateur (#5644) (#5673)
+  - le Focal par défaut se désactive par un paramètre de construction — VITE_READING_MODES=off ouvre le fil en bulles, comme iOS drapeau éteint
+  - type l'extracteur de routes et les matchers que son témoin emploie
+  - l'inventaire de parité voit les 9 adresses de la v3.1
+  - dériver le script d'amorçage du schéma d'une source unique (#5588)
+  - porte la remesure du budget du fil (#5426) dans cette PR
+  - une socket peut exiger une session vivante — drapeau DÉSARMÉ
+  - une session expirée ne se prolonge plus et cesse de se déclarer valide
+  - une session expirée n'est plus prolongée, ni utilisée pour ouvrir une socket (#5717)
+  - GET/PUT /me/terms — re-consentement CGU versionné (#3635)
+  - purge les médias physiques d'un compte supprimé (#5707)
+  - purger les médias restants d'un compte supprimé (#5690)
+  - anonymise les messages d'un compte supprimé à la fin de la grâce (#5702)
+  - align account-deletion grace period to the promised 30 days, purge sessions/voice profile/share links automatically (#3632) (#5688)
+  - GET /me/engagement expose compteurs, paliers et streak/niveau (#5670)
+  - l'export RGPD couvre posts, stories, commentaires, réactions, médias, profil vocal et sessions (#3633) (#5665)
+  - la publication d'un post alimente l'axe d'engagement « content.post » (#5592)
+  - poser un sticker alimente l'axe d'engagement « tool.sticker » (#5594)
+  - MIME vérifié, EXIF retiré, SVG en téléchargement forcé sur la route legacy (#3627) (#5630)
+  - GET /languages reflète SUPPORTED_LANGUAGES, pas 8 codes en dur (#5713)
+  - un seul jeu de défauts de workers, scaling réel, gRPC mort retiré (#3664)
+  - Settings devient la seule source du whisper_model/device (#3666) (#5664)
+  - Settings devient la seule source du whisper_model/device (#3666)
+  - plafond de durée pour l'audio transcrit/traduit (#3668) (#5434)
+  - plafond de duree pour l'audio transcrit/traduit (#3668)
+
+## 1.38.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - l'agent puise dans tout le vivier d'inactifs, pas dans les cinq mêmes
+  - le témoin des catalogues charge ses JSON par import, pas par require()
+  - se connecter et s'inscrire fonctionnent de bout en bout
+  - le temps relatif du dashboard agent rend une durée, pas son placeholder
+  - la marque iOS — logo, signature, splashscreen — servie par le web et les coques
+  - la base d'API se configure en une seule source et l'application parle au staging
+  - les coques Android et iOS embarquent le dist et démarrent sur émulateur et simulateur
+  - la liste des conversations atteint l'anatomie complète de ConversationListView
+  - le témoin de frontière de zone ne condamne plus un déploiement sans legacy
+  - le fil s'ouvre en mode FOCAL et le menu des modes de lecture existe
+  - les trois routes de bannissement entrent dans la référence du catalogue Swift
+  - le cliquet de dette de types redevient vert — mocks admin typés
+  - (beta) le workflow docker redevient VALIDE — `secrets` n'est pas un contexte de `if`
+  - (beta) certs-dumper cesse de boucler — v2.11.4 extrait la clé du compte ACME
+  - (beta) la fiche détail montre la trace du son de fond, et le toucher arrête ou reprend
+  - le témoin des états emprunte le lancement partagé
+  - le lancement de Chromium est écrit une fois, plus six
+  - les états du fil — vide, coupure, échec d'envoi rejouable
+  - le son de fond d'un post à plusieurs scènes se joue dans la fiche détail
+  - les icônes d'app sont le vrai logo Meeshy, dérivé de l'icône iOS
+  - le fil est virtualisé — 500 messages, 17 cellules montées
+  - le domaine vient de @meeshy/shared — six jumelles retirées
+  - la nomenclature du code passe à l'anglais, cinq couches
+  - l'écran / passe à la peau LENTILLE — ligne plate, flux immobile
+  - le travail « institutionnel-v3 » entre dans le résumé de pipeline
+  - deux déclarations de types que `.gitignore` avalait
+  - assainit le tag que le scan de sécurité cherche
+  - conversation:updated porte enfin son groupe MÉDIA (#3737)
+  - renomme apps/web-v3-old en apps/web-old-version3
+  - les cinq pages institutionnelles étaient MASQUÉES, pas seulement hors cache
+  - les cinq pages institutionnelles, préchauffées en HTML statique
+  - web-v4 devient web-v3, l'ancienne v3 devient web-v3-old (v3.1)
+  - place the react-hooks/set-state-in-effect disable on the right line
+  - bannissement durable — modèle Ban, journal d'audit, écran admin (#3719)
+  - la palette iOS du web est GÉNÉRÉE depuis Swift, plus recopiée
+  - le routeur ne coûte plus la moitié de la première peinture
+  - POC d'une application TypeScript unique — web, Android, iOS
+  - des franchissements croisés émettent ACHIEVEMENT_UNLOCKED (#5546)
+  - tenir le budget de taille des suites après #5615
+  - l'envoi d'un message vocal alimente content.audio_message (#5582)
+  - sniffing MIME étendu à tout upload, SVG/PDF couverts (#5615)
+  - un score agrégé multi-axes pondéré émet LEVEL_UP (#5545)
+  - une série de jours actifs émet STREAK_MILESTONE (#5635)
+  - une série de jours actifs émet STREAK_MILESTONE (#5544)
+  - un balayage lève automatiquement les bans à échéance expirée
+  - régénère route-manifest.json et rend son cliquet capable de nommer l'écart
+  - la sonde ZMQ dédie sa socket PUSH — plus de faux négatif de concurrence
+  - la citation d'un message protégé applique enfin le masquage sur les liens et les fils (#4952)
+  - publier via le montage in-app ou en direct alimente les axes d'engagement (#5542, #5543)
+  - JWT_SECRET et mots de passe seed refusent un défaut faible en production (#5600)
+  - le clonage vocal fin est persisté et lu à la synthèse TTS (#5477)
+  - fermer la fenêtre de course de la déduplication d'export watermarké (#5583) (#5586)
+  - la publication d'un réel alimente l'axe d'engagement « content.reel » (#5591)
+  - la publication d'une story alimente l'axe d'engagement « content.story » (#5589)
+  - l'envoi d'un message texte alimente l'axe d'engagement « content.text_message »
+  - une conversation communautaire distincte alimente l'axe d'engagement « conversation.community » (#5540)
+  - une conversation privée distincte alimente l'axe d'engagement « conversation.private » (#5538)
+  - un commentaire audio alimente l'axe d'engagement « comment.audio » (#5536)
+  - l'envoi d'un message vocal alimente content.audio_message
+  - un commentaire texte alimente l'axe d'engagement « comment.text » (#5580)
+  - filtrer les routes d'exploitation du catalogue client (#5424)
+  - une conversation publique distincte alimente l'axe d'engagement « conversation.public » (#5577)
+  - un auteur peut désactiver les commentaires de son post (#5576)
+  - une conversation publique distincte alimente l'axe d'engagement (#5539)
+  - la réinitialisation de mot de passe par un admin révoque les sessions actives (#5572)
+  - un verrou synchrone ne gèle plus l'event loop (#5610)
+
 ## 1.37.0
 
 ### Minor Changes

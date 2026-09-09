@@ -370,20 +370,35 @@ const noRowCarriesContinuousPerspective = (page) =>
     'une réaction posée sur un message reste visible dans le mode par défaut',
   );
 
-  // --- 9 bis : la pastille du Prisme a un EFFET (elle n'en avait aucun).
+  /**
+   * --- 9 bis : la pastille du Prisme a un EFFET (elle n'en avait aucun).
+   *
+   * SUBSTITUTION, PAS RÉVÉLATION (revue #5814, défaut majeur 12) — la
+   * pastille posait un panneau `SecondaryText` SOUS le texte (un second
+   * `p[lang]` apparaissait, d'où l'ancienne mesure par COMPTE) ; elle pose
+   * désormais `displayLanguage` via `onPickLanguage`, LA MÊME loi que le
+   * sous-menu « Traduire » du menu du message — le texte SERVI (et son
+   * `lang`) CHANGE en place, il ne se double plus d'un second paragraphe.
+   * La mesure suit donc l'attribut `lang` du paragraphe de LA MÊME rangée
+   * (`closest('[data-reading-mode]')`, jamais un compte document-large qui
+   * confondrait les rangées), pas un compte d'éléments.
+   */
   const pastille = page.locator('main li [data-reading-mode] button[aria-label*="langue d’origine"]').first();
   expect((await pastille.count()) > 0, 'un message traduit porte la pastille du Prisme');
-  const beforePastille = await page.locator('main li [data-reading-mode] p[lang]').count();
+  const langOf = async () =>
+    pastille.evaluate((btn) => btn.closest('[data-reading-mode]')?.querySelector('p[lang]')?.getAttribute('lang') ?? null);
+  const beforeLang = await langOf();
   await pastille.click();
   await page.waitForTimeout(200);
+  const afterLang = await langOf();
   expect(
-    (await page.locator('main li [data-reading-mode] p[lang]').count()) > beforePastille,
-    'cliquer la pastille du Prisme OUVRE la langue d’origine (le contrôle a un effet)',
+    afterLang !== null && afterLang !== beforeLang,
+    `cliquer la pastille du Prisme OUVRE la langue d’origine (le contrôle a un effet) — ${beforeLang} → ${afterLang}`,
   );
   await pastille.click();
   await page.waitForTimeout(200);
   expect(
-    (await page.locator('main li [data-reading-mode] p[lang]').count()) === beforePastille,
+    (await langOf()) === beforeLang,
     'la recliquer referme — le contrôle est une bascule, pas un aller simple',
   );
 

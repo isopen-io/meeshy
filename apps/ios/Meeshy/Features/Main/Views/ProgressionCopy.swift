@@ -302,6 +302,11 @@ enum ProgressionCopy {
     /// Et quand il n'y en a AUCUN — le hero ne disparaît pas, il change de propos.
     static let heroFirstTitle = String(localized: "progression.hero.first", defaultValue: "Premier succès", bundle: .main)
 
+    /// Le bandeau quand le hero montre un palier PAS ENCORE obtenu (#5831).
+    /// Même clé que la carte qu'il remplace : le mot ne change pas parce que
+    /// la vue qui le rend a changé.
+    static let heroNextTitle = String(localized: "progression.hero.next", defaultValue: "Prochain succès", bundle: .main)
+
     static let heroFirstHint = String(
         localized: "progression.hero.first.hint",
         defaultValue: "Envoyez un message — le premier tombe tout de suite.",

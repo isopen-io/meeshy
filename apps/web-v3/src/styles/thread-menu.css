@@ -1,0 +1,154 @@
+/*
+ * LE MENU DU MESSAGE (#5814) — feuille propre à l'écran du fil, importée UNE
+ * fois par `routes/thread.tsx` comme `thread-scene.css`/`thread-protection.css` :
+ * Vite la scinde dans le CHUNK du fil, jamais dans la feuille globale.
+ *
+ * `--safe-top`/`--safe-bottom` — la SEULE porte par laquelle une loi PURE
+ * (`placeMessageMenuCluster`, `lib/view/popover.ts`) reçoit l'encoche de
+ * l'appareil : lues par `getComputedStyle(document.documentElement)`
+ * (`components/message-menu.tsx::safeAreaInsets`), jamais un second calcul
+ * d'`env()` en JavaScript. Postées sur `:root` — peu importe quelle feuille
+ * les déclare, elles s'appliquent au document entier.
+ */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* LE CLUSTER — enveloppe plein écran (rail + aperçu + liste), positionnée
+   par `placeMessageMenuCluster` (`lib/view/popover.ts`) en style INLINE ;
+   cette règle ne porte que ce qu'AUCUN style inline ne peut exprimer : la
+   couche d'empilement au-dessus du voile. */
+.message-menu-cluster {
+  z-index: 41;
+}
+
+/* LE VOILE — teinte + flou, question 1 de la spécification (retenu : parité
+   avec la capture cible, `.contextMenu` natif iOS 26). `color-mix` prend le
+   pourcentage DIRECTEMENT dans MessageOverlayMenu.swift:533 (0,4 clair /
+   0,5 sombre) — un sélecteur de schéma, jamais une lecture JS. Le SOMBRE est
+   le défaut de la table (`:root`, même discipline que `thread-scene.css`/
+   `thread-protection.css`) ; `:root.light` surcharge à 0,4. */
+.message-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background-color: color-mix(in srgb, black 50%, transparent);
+  /* UNE SEULE ÉCRITURE, NON PRÉFIXÉE (revue #5814) — écrite avec sa jumelle
+     `-webkit-`, la minification (Lightning CSS) FUSIONNAIT les deux en ne
+     gardant QUE la forme préfixée : mesuré sur le dist,
+     `getComputedStyle(.message-menu-backdrop).backdropFilter === 'none'` et
+     le fond du fil restait NET sous le voile — le flou tranché en § question 1
+     de la spécification n'atteignait aucun lecteur. Le préfixe est le travail
+     du build, jamais de la feuille. Gardé par `check-thread-states.mjs` § 6. */
+  backdrop-filter: blur(16px);
+  animation: messageMenuBackdropIn 260ms ease-out;
+}
+:root.light .message-menu-backdrop {
+  background-color: color-mix(in srgb, black 40%, transparent);
+}
+
+@keyframes messageMenuBackdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* LE RAIL — capsule, entrée en vague ATTENUÉE (`scale` seul, jamais un
+   décalage de position — les seules propriétés qui n'invalident PAS le
+   layout, même discipline que la Lentille/la scène du fil). */
+.message-menu-rail {
+  display: flex;
+  align-items: center;
+  /* `gap` posé en STYLE INLINE par `message-menu.tsx` (`RAIL_TILE_GAP`,
+     `message-menu-metrics.ts`) — jamais un second `10px` écrit ici. */
+  border-radius: var(--radius-pill, 999px);
+  padding: 9px 8px;
+  background-color: var(--color-ios-card);
+  border: 1px solid var(--color-edge);
+  box-shadow: var(--shadow-cast, 0 8px 24px rgba(0, 0, 0, 0.24));
+  animation: messageMenuRailIn 260ms cubic-bezier(0.32, 1.4, 0.55, 1);
+}
+
+@keyframes messageMenuRailIn {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* LA LISTE D'ACTIONS — même chrome que `RowActions`/`ReadingModeChip`
+   (`app.css`, `rounded-card`+`shadow-cast`), ancrée en HAUT (les nouvelles
+   lignes qui apparaissent en changeant de panneau — le sous-menu Traduire —
+   poussent vers le BAS, jamais vers le haut). */
+.message-menu-list {
+  border-radius: var(--radius-card, 14px);
+  overflow: hidden;
+  background-color: var(--color-ios-card);
+  border: 1px solid var(--color-edge);
+  box-shadow: var(--shadow-cast, 0 8px 24px rgba(0, 0, 0, 0.24));
+  transform-origin: top;
+  animation: messageMenuListIn 260ms cubic-bezier(0.32, 1.4, 0.55, 1);
+}
+.message-menu-list > button + button {
+  border-top: 1px solid var(--color-edge);
+}
+
+@keyframes messageMenuListIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-menu-backdrop,
+  .message-menu-rail,
+  .message-menu-list {
+    animation: none;
+  }
+}
+
+/*
+ * LA SÉLECTION DE TEXTE NATIVE NE DOIT PAS DÉMARRER SOUS UN DOIGT (#5814,
+ * critère 5) — `-webkit-touch-callout` retire le menu « Copier/Partager »
+ * iOS/Android au relâchement d'un appui long ; `user-select: none` (SOUS
+ * `any-hover: none` seulement — une souris garde la sélection de texte
+ * ordinaire, le geste 500 ms n'existe pas pour elle) empêche l'appui long au
+ * doigt de sélectionner le texte de la rangée AU LIEU d'ouvrir le menu.
+ *
+ * `[data-row]` NE SUFFIT PAS (revue #5814, défaut majeur 7, mesuré sur l'AVD
+ * `Meeshy_Poc_Web-v31`, `AND-2-menu.png`) — le CLUSTER (`.message-menu-*`)
+ * vit dans un PORTAIL sur `document.body`, HORS de cette portée. Au
+ * relâchement d'un appui long dont le doigt se trouve à l'endroit où la
+ * liste d'actions vient d'apparaître (cas NOMINAL pour tout message de la
+ * moitié basse du fil, le rail montant AU-DESSUS de l'aperçu), la WebView
+ * Android démarre une sélection de texte SUR un libellé du menu (« Copier »
+ * surligné, barre système « Copy | Share | Select all | Read aloud »
+ * par-dessus, masquant « Traduire ») : WebKit tranche au `touchstart`
+ * (jamais reproduit sur la coque iOS), la WebView Android plus tard, une
+ * fois le menu déjà monté. La garde doit donc couvrir le cluster ENTIER, pas
+ * seulement son ancre.
+ */
+[data-row],
+.message-menu-cluster {
+  -webkit-touch-callout: none;
+}
+@media (any-hover: none) {
+  [data-row],
+  .message-menu-cluster {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}

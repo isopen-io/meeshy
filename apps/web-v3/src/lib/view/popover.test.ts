@@ -1,6 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 
-import { placePopover, placePopoverVertical } from './popover';
+import { placeMessageMenuCluster, placePopover, placePopoverVertical, type MessageMenuClusterInput } from './popover';
+import {
+  MENU_GAP,
+  MENU_WIDTH,
+  PREVIEW_SCALE_FLOOR,
+  RAIL_GAP,
+  RAIL_HEIGHT,
+  RAIL_WIDTH,
+  SIDE_PADDING,
+} from './message-menu-metrics';
 
 /**
  * LA GÉOMÉTRIE MESURÉE DU DÉFAUT (#5566) : chip du fil sur un écran de 390 px,
@@ -112,5 +121,78 @@ describe('placePopoverVertical — jamais hors du bas de l’écran', () => {
       margin: MARGIN_V,
     });
     expect(box.top).toBe(104);
+  });
+});
+
+/**
+ * `placeMessageMenuCluster` — port de `MessageOverlayMenu.swift:230-289`
+ * (#5814, T4). `clusterInput` pose une ancre RAISONNABLE (une rangée de
+ * 88 px de haut, écran de 800 px) — chaque test surcharge le SEUL paramètre
+ * qu'il fait varier.
+ */
+const clusterInput = (overrides: Partial<MessageMenuClusterInput> = {}): MessageMenuClusterInput => ({
+  anchor: { top: 400, bottom: 488, left: 20, right: 370, width: 350, height: 88 },
+  viewport: { width: 390, height: 800 },
+  safe: { top: 0, bottom: 0 },
+  menuHeight: 5 * 44 + 8,
+  isMine: false,
+  railHeight: RAIL_HEIGHT,
+  railGap: RAIL_GAP,
+  menuGap: MENU_GAP,
+  sidePadding: SIDE_PADDING,
+  menuWidth: MENU_WIDTH,
+  railWidth: RAIL_WIDTH,
+  previewScaleFloor: PREVIEW_SCALE_FLOOR,
+  ...overrides,
+});
+
+describe('placeMessageMenuCluster — rail au-dessus, liste au-dessous, jamais hors écran', () => {
+  test('rail AU-DESSUS de l’aperçu, liste AU-DESSOUS — gaps 12/6 tenus', () => {
+    const placement = placeMessageMenuCluster(clusterInput());
+    expect(placement.previewTop - (placement.railTop + RAIL_HEIGHT)).toBe(RAIL_GAP);
+    expect(placement.menuTop).toBeGreaterThan(placement.previewTop);
+  });
+
+  test('un cluster qui tient ⇒ previewScale === 1 (jamais agrandi ni réduit)', () => {
+    const placement = placeMessageMenuCluster(clusterInput());
+    expect(placement.previewScale).toBe(1);
+  });
+
+  test('un aperçu trop haut pour la place disponible ⇒ scale réduit, plancher 0.4', () => {
+    const placement = placeMessageMenuCluster(
+      clusterInput({
+        anchor: { top: 400, bottom: 1400, left: 20, right: 370, width: 350, height: 1000 },
+        viewport: { width: 390, height: 800 },
+      }),
+    );
+    expect(placement.previewScale).toBeLessThan(1);
+    expect(placement.previewScale).toBeGreaterThanOrEqual(PREVIEW_SCALE_FLOOR);
+  });
+
+  test('un aperçu ÉNORME est bloqué au plancher 0.4, jamais en dessous', () => {
+    const placement = placeMessageMenuCluster(
+      clusterInput({
+        anchor: { top: 400, bottom: 5400, left: 20, right: 370, width: 350, height: 5000 },
+        viewport: { width: 390, height: 800 },
+      }),
+    );
+    expect(placement.previewScale).toBe(PREVIEW_SCALE_FLOOR);
+  });
+
+  test('cluster clampé dans [safeTop+12, H-safeBottom-12]', () => {
+    const placement = placeMessageMenuCluster(
+      clusterInput({ anchor: { top: 10, bottom: 98, left: 20, right: 370, width: 350, height: 88 }, safe: { top: 20, bottom: 20 } }),
+    );
+    expect(placement.railTop).toBeGreaterThanOrEqual(32);
+  });
+
+  test('ancre GAUCHE pour une rangée plate / une bulle reçue (isMine: false)', () => {
+    const placement = placeMessageMenuCluster(clusterInput({ isMine: false }));
+    expect(placement.anchorX).toBe(20 + 350 / 2);
+  });
+
+  test('ancre DROITE (maxX - w/2) pour une bulle envoyée (isMine: true)', () => {
+    const placement = placeMessageMenuCluster(clusterInput({ isMine: true }));
+    expect(placement.anchorX).toBe(370 - 350 / 2);
   });
 });

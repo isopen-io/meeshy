@@ -24,7 +24,7 @@
  * unitaire ne peut couper un réseau.
  */
 import { createServer } from 'node:http';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -481,6 +481,426 @@ const runProtectionSuite = async (skin) => {
 
 await runProtectionSuite('focal');
 await runProtectionSuite('bulles');
+
+/**
+ * 6 — LE MENU DU MESSAGE (#5814) : L'APPUI LONG, LE CLIC DROIT ET LA TOUCHE
+ * MENU OUVRENT LE MÊME MENU, ET CHAQUE ENTRÉE A UN EFFET.
+ *
+ * POURQUOI UN NAVIGATEUR RÉEL, alors que `message-menu.test.tsx` couvre déjà
+ * l'ouverture. Trois choses n'existent que là : (a) le vrai `contextmenu` du
+ * clic droit et le vrai `pointerdown` tenu, sur les rangées VIRTUALISÉES du
+ * fil réel — pas sur une rangée de banc ; (b) `navigator.clipboard`, qu'aucun
+ * test unitaire n'a ; (c) l'EFFET d'une action sur l'écran ENTIER (la barre de
+ * sélection qui remplace le composeur, la citation qui apparaît dans le
+ * composeur, la capsule optimiste qui pousse sous la bulle). Le critère de fin
+ * de #5814 demande exactement cela : « chaque entrée a un EFFET mesurable ».
+ *
+ * ON MESURE L'EFFET, JAMAIS LA PRÉSENCE. Un menu dont les cinq entrées
+ * existent et ne font rien passerait n'importe quel témoin structurel — c'est
+ * le défaut le plus fréquent du dépôt (loi 4 : « un contrôle existe s'il a un
+ * effet »). Chaque ligne ci-dessous nomme donc ce qui CHANGE.
+ */
+{
+  const menuContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  // `navigator.clipboard` n'existe pas sur un contexte non sécurisé (http) :
+  // on le POSE avant tout script de page et on garde ce qu'on y écrit.
+  await menuContext.addInitScript(() => {
+    const written = [];
+    Object.defineProperty(window, '__copied', { get: () => written });
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text) => {
+          written.push(text);
+          return Promise.resolve();
+        },
+      },
+    });
+  });
+  const menuPage = await menuContext.newPage();
+  await menuPage.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
+  await menuPage.waitForSelector('[data-message]');
+  await menuPage.waitForTimeout(300);
+
+  const rows = menuPage.locator('[data-row]');
+  const cluster = menuPage.locator('[role="menu"]');
+  const listItems = menuPage.locator('.message-menu-list [role="menuitem"]');
+
+  /**
+   * Le fil est ANCRÉ EN BAS et VIRTUALISÉ : une rangée peut être montée sans
+   * être à l'écran. `click()` fait défiler tout seul, `mouse.move()` non — on
+   * amène donc la rangée en vue avant TOUT geste de bas niveau, sinon le
+   * témoin mesure un pointeur posé dans le vide (mesuré en revue).
+   */
+  const openMenuOnRow = async (index) => {
+    await rows.nth(index).scrollIntoViewIfNeeded();
+    await rows.nth(index).click({ button: 'right' });
+    await menuPage.waitForTimeout(250);
+  };
+  /** Rend `false` PLUTÔT QUE DE LEVER quand l'entrée manque — un témoin doit
+   *  nommer le défaut trouvé, jamais mourir dessus (§ `clickIfPresent`). */
+  const clickMenuItem = async (label) => {
+    const item = listItems.filter({ hasText: label }).first();
+    if ((await item.count()) === 0) return expect(false, `l'entrée « ${label} » manque au menu`);
+    await item.click();
+    await menuPage.waitForTimeout(250);
+    return true;
+  };
+
+  // 6.1 — LE CLIC DROIT ouvre UN menu, avec son rail et ses entrées.
+  await openMenuOnRow(2);
+  expect((await cluster.count()) === 1, 'le clic droit sur la 3e rangée ouvre UN role=menu');
+  expect(
+    (await menuPage.locator('[role="group"][aria-label="Réagir"] [role="menuitem"]').count()) === 7,
+    'le rail porte 6 emojis + « Ajouter une réaction »',
+  );
+
+  /**
+   * 6.1 bis — LE VOILE FLOUTE POUR DE BON. La spécification a tranché « flou »
+   * (parité avec la capture cible iOS 26) ; la feuille le déclarait ET la
+   * minification le PERDAIT — `backdrop-filter` écrit à côté de sa jumelle
+   * `-webkit-` était fusionné en la seule forme préfixée, que Chromium
+   * n'applique pas. Mesuré sur le dist : `backdropFilter === 'none'`, fond
+   * NET sous le voile. Une décision de design qui n'atteint aucun lecteur
+   * n'a été prise pour personne — on la mesure donc dans le NAVIGATEUR, sur
+   * le style RÉSOLU, jamais dans la feuille source.
+   */
+  const veil = await menuPage.evaluate(() => {
+    const el = document.querySelector('.message-menu-backdrop');
+    if (el === null) return null;
+    const cs = getComputedStyle(el);
+    return { filter: cs.backdropFilter, background: cs.backgroundColor };
+  });
+  expect(veil !== null, 'le menu pose un voile plein écran');
+  expect(
+    veil !== null && veil.filter !== 'none' && veil.filter !== '',
+    `le voile FLOUTE le fond (backdrop-filter: ${veil?.filter})`,
+  );
+  expect(
+    veil !== null && /rgba?\(0, ?0, ?0/.test(veil.background),
+    `le voile TEINTE le fond (${veil?.background})`,
+  );
+
+  /**
+   * 6.1 ter — LE CLUSTER PORTE L'ACCENT DE LA CONVERSATION. `--accent` est
+   * posée sur la RACINE de l'écran ; le menu vit dans un PORTAIL sur `body`,
+   * donc hors de cette portée — mesuré, l'avatar du clone et les cinq icônes
+   * retombaient sur la valeur globale, un cluster gris au-dessus d'un fil
+   * teinté. La charte veut l'inverse (« ALL conversation-context components
+   * MUST use accentColor »).
+   */
+  const accentCheck = await menuPage.evaluate(() => {
+    const row = document.querySelector('[data-row]');
+    const backdrop = document.querySelector('.message-menu-backdrop');
+    if (row === null || backdrop === null) return null;
+    const icon = backdrop.querySelector('.message-menu-list svg');
+    return {
+      row: getComputedStyle(row).getPropertyValue('--accent').trim(),
+      menu: getComputedStyle(backdrop).getPropertyValue('--accent').trim(),
+      icon: icon === null ? null : getComputedStyle(icon).color,
+    };
+  });
+  expect(accentCheck !== null && accentCheck.row !== '', 'la rangée porte bien un accent de conversation');
+  expect(
+    accentCheck !== null && accentCheck.menu === accentCheck.row,
+    `le menu porte l'accent de la conversation (rangée ${accentCheck?.row}, menu ${accentCheck?.menu})`,
+  );
+
+  // 6.2 — AUCUN CONTRÔLE SANS GESTIONNAIRE : tout ce qui est atteignable dans
+  // le cluster est un `<button type="button">` actif. Un `<div>` cliquable ou
+  // un bouton désactivé y serait un contrôle qui ment.
+  const inertControls = await menuPage.evaluate(() => {
+    const root = document.querySelector('[role="menu"]');
+    if (root === null) return ['aucun cluster'];
+    const controls = Array.from(root.querySelectorAll('[role="menuitem"], [role="menuitemradio"]'));
+    return controls
+      .filter((el) => el.tagName !== 'BUTTON' || el.hasAttribute('disabled') || el.getAttribute('type') !== 'button')
+      .map((el) => `${el.tagName}/${el.getAttribute('aria-label') ?? el.textContent}`);
+  });
+  expect(inertControls.length === 0, `0 contrôle du menu sans gestionnaire (${inertControls.join(', ')})`);
+
+  // 6.3 — ÉCHAP ferme et rend le focus À LA RANGÉE.
+  await menuPage.keyboard.press('Escape');
+  await menuPage.waitForTimeout(200);
+  expect((await cluster.count()) === 0, 'Échap ferme le menu');
+  expect(
+    await menuPage.evaluate(() => document.activeElement?.hasAttribute('data-row') === true),
+    'Échap rend le focus à la rangée qui a ouvert le menu',
+  );
+
+  // 6.4 — LA TOUCHE MENU (Shift+F10) ouvre le MÊME menu depuis le clavier.
+  await menuPage.keyboard.press('Shift+F10');
+  await menuPage.waitForTimeout(250);
+  expect((await cluster.count()) === 1, 'Shift+F10 sur la rangée focalisée ouvre le menu');
+
+  // 6.4 bis — LE PARCOURS CLAVIER DU RAIL. `ArrowRight` y déplaçait le focus
+  // par un événement RECOPIÉ (`{ ...event, key }`), qui perd `preventDefault`
+  // — méthode de PROTOTYPE : le rail levait `TypeError` et restait inerte.
+  const railFirst = menuPage.locator('[role="group"][aria-label="Réagir"] [role="menuitem"]').first();
+  await railFirst.focus();
+  const focusedBefore = await menuPage.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+  await menuPage.keyboard.press('ArrowRight');
+  await menuPage.waitForTimeout(120);
+  const focusedAfter = await menuPage.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+  expect(
+    focusedAfter !== null && focusedAfter !== focusedBefore,
+    `ArrowRight déplace le focus sur le rail (${focusedBefore} → ${focusedAfter})`,
+  );
+  // 6.4 ter — TAB NE SORT PAS DU CLUSTER : derrière le voile, les rangées sont
+  // focalisables et pourtant inatteignables.
+  await menuPage.keyboard.press('Tab');
+  await menuPage.waitForTimeout(120);
+  expect(
+    await menuPage.evaluate(() => document.querySelector('[role="menu"]')?.contains(document.activeElement) === true),
+    'Tab garde le focus DANS le menu',
+  );
+  await menuPage.keyboard.press('Escape');
+  await menuPage.waitForTimeout(150);
+
+  // 6.5 — L'APPUI LONG (500 ms, souris tenue) ouvre le même menu, et le geste
+  // ne laisse AUCUNE sélection de texte native derrière lui.
+  await rows.nth(0).scrollIntoViewIfNeeded();
+  await rows.nth(0).hover();
+  await menuPage.mouse.down();
+  await menuPage.waitForTimeout(700);
+  await menuPage.mouse.up();
+  await menuPage.waitForTimeout(250);
+  const longPressOpened = expect((await cluster.count()) === 1, 'un appui tenu 500 ms ouvre le menu');
+  expect(
+    await menuPage.evaluate(() => (window.getSelection()?.toString() ?? '') === ''),
+    "l'appui long ne sélectionne pas le texte de la rangée",
+  );
+  if (!longPressOpened) await openMenuOnRow(0);
+
+  // 6.6 — COPIER écrit le texte SERVI dans le presse-papiers.
+  const servedText = await rows.nth(0).innerText();
+  if (await clickMenuItem('Copier')) {
+    const copied = await menuPage.evaluate(() => window.__copied);
+    expect(copied.length === 1, 'Copier écrit une fois dans le presse-papiers');
+    expect(
+      copied.length === 1 && servedText.includes(copied[0]),
+      `Copier écrit le texte SERVI (« ${copied[0] ?? ''} »)`,
+    );
+  }
+
+  // 6.7 — TRADUIRE change le texte servi ET l'attribut `lang` de la rangée.
+  const langBefore = await rows.nth(0).locator('[lang]').first().getAttribute('lang');
+  const textBefore = await rows.nth(0).innerText();
+  await openMenuOnRow(0);
+  if (await clickMenuItem('Traduire')) {
+    const choices = menuPage.locator('[role="group"][aria-label="Traduire"] [role="menuitemradio"]');
+    expect((await choices.count()) >= 2, 'le sous-menu Traduire offre au moins deux langues');
+    // La langue NON servie — un témoin de RANG ne se pose jamais sur le rang 1.
+    const unchecked = choices.and(menuPage.locator('[aria-checked="false"]'));
+    const target = (await unchecked.count()) > 0 ? unchecked.first() : choices.nth(1);
+    await target.click();
+    await menuPage.waitForTimeout(350);
+    const langAfter = await rows.nth(0).locator('[lang]').first().getAttribute('lang');
+    const textAfter = await rows.nth(0).innerText();
+    expect(langAfter !== langBefore, `Traduire change lang (${langBefore} → ${langAfter})`);
+    expect(textAfter !== textBefore, 'Traduire change le TEXTE servi, pas seulement son étiquette');
+  }
+
+  // 6.8 — UNE RÉACTION DU RAIL pousse une capsule OPTIMISTE sous la rangée.
+  const chipsBefore = await rows.nth(0).locator('.rounded-chip').count();
+  await openMenuOnRow(0);
+  await menuPage.locator('[role="group"][aria-label="Réagir"] [role="menuitem"]').first().click();
+  await menuPage.waitForTimeout(300);
+  expect(
+    (await rows.nth(0).locator('.rounded-chip').count()) > chipsBefore,
+    'une réaction du rail ajoute une capsule tout de suite (optimiste)',
+  );
+
+  // 6.9 — COMPOSER pré-adresse le composeur (la citation apparaît).
+  await openMenuOnRow(0);
+  if (await clickMenuItem('Composer')) {
+    expect(
+      (await menuPage.getByRole('button', { name: /Annuler la réponse/ }).count()) > 0 ||
+        (await menuPage.locator('[data-reply-target]').count()) > 0,
+      'Composer pré-adresse le composeur (la citation apparaît)',
+    );
+  }
+
+  // 6.10 — SÉLECTIONNER remplace le composeur par la barre de sélection, et la
+  // coche de la rangée est un contrôle RÉEL (role=checkbox), pas un décor.
+  await openMenuOnRow(0);
+  if (await clickMenuItem('Sélectionner')) {
+    expect(
+      (await menuPage.getByRole('toolbar', { name: 'Sélection de messages' }).count()) === 1,
+      'Sélectionner remplace le composeur par la barre de sélection',
+    );
+    expect(
+      (await menuPage.getByPlaceholder('Message…').count()) === 0,
+      'le composeur et la barre de sélection ne coexistent jamais',
+    );
+    const checkboxes = menuPage.getByRole('checkbox');
+    const checked = await checkboxes.count();
+    expect(checked > 1, 'chaque rangée porte une coche role=checkbox atteignable');
+    if (checked > 1) {
+      const second = checkboxes.nth(1);
+      const before = await second.getAttribute('aria-checked');
+      await second.click();
+      await menuPage.waitForTimeout(250);
+      expect(
+        (await second.getAttribute('aria-checked')) !== before,
+        "la coche d'une AUTRE rangée bascule au clic (contrôle réel, pas un décor)",
+      );
+    }
+  }
+
+  await menuPage.close();
+  await menuContext.close();
+
+  /**
+   * 6.12 — LA COPIE NE FAIT PAS SORTIR UN CONTENU PROTÉGÉ (D-23).
+   *
+   * Le menu retire « Copier » d'un message protégé — mais le mode SÉLECTION
+   * n'a qu'UN bouton « Copier » pour toute la sélection. Le texte que le § 5
+   * vérifie absent du DOM entier peut donc partir par le PRESSE-PAPIERS, une
+   * porte que ce fichier n'interrogeait pas : « que transporte-t-on À CÔTÉ de
+   * ce qu'on garde ? » (cycle 123 du CLAUDE.md racine). Vu ROUGIR avant le
+   * correctif de revue.
+   */
+  {
+    const leakContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await leakContext.addInitScript(() => {
+      const written = [];
+      Object.defineProperty(window, '__copied', { get: () => written });
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText: (text) => { written.push(text); return Promise.resolve(); } },
+      });
+    });
+    const leakPage = await leakContext.newPage();
+    await leakPage.goto(`${BASE}/c/c-protection`, { waitUntil: 'load' });
+    await leakPage.waitForSelector('[data-message]');
+    await leakPage.waitForTimeout(300);
+
+    const rowFor = (id) => leakPage.locator(`[data-row]:has([data-message="${id}"])`);
+
+    // (a) le menu d'un message PROTÉGÉ n'offre pas « Copier ».
+    await rowFor(BLURRED_WITNESS_ID).click({ button: 'right' });
+    await leakPage.waitForTimeout(250);
+    const protectedLabels = await leakPage.locator('.message-menu-list [role="menuitem"]').allInnerTexts();
+    expect(!protectedLabels.includes('Copier'), 'un message flouté n’offre pas « Copier »');
+    expect(!protectedLabels.includes('Traduire'), 'un message flouté n’offre pas « Traduire »');
+    await leakPage.keyboard.press('Escape');
+    await leakPage.waitForTimeout(200);
+
+    // (b) le SÉLECTIONNER + « Copier » de la barre ne fait pas sortir le secret.
+    await rowFor(TRANSLATED_UNVEILED_WITNESS_ID).click({ button: 'right' });
+    await leakPage.waitForTimeout(250);
+    await leakPage.locator('.message-menu-list [role="menuitem"]').filter({ hasText: 'Sélectionner' }).first().click();
+    await leakPage.waitForTimeout(250);
+    const blurredCheckbox = rowFor(BLURRED_WITNESS_ID).getByRole('checkbox');
+    if ((await blurredCheckbox.count()) === 0) {
+      expect(false, 'la rangée floutée porte une coche de sélection');
+    } else {
+      await blurredCheckbox.first().click();
+      await leakPage.waitForTimeout(250);
+      await leakPage.getByRole('button', { name: 'Copier' }).click();
+      await leakPage.waitForTimeout(250);
+      const leaked = await leakPage.evaluate(() => window.__copied.join('\n'));
+      expect(!leaked.includes(BLURRED_CONTENT), 'le contenu flouté ne part JAMAIS dans le presse-papiers');
+      expect(leaked.length > 0, 'la copie d’une sélection mixte rend quand même le message non protégé');
+    }
+    await leakPage.close();
+    await leakContext.close();
+  }
+
+  /**
+   * 6.11 — LA GARDE TACTILE, MESURÉE SUR UN APPAREIL SANS SURVOL.
+   *
+   * `user-select: none` sur `[data-row]` vit sous `@media (any-hover: none)` :
+   * sur le Chrome de bureau qui joue les témoins ci-dessus, cette requête ne
+   * matche PAS — leur « l'appui long ne sélectionne pas le texte » ne prouve
+   * donc RIEN de la coque, où le doigt sélectionnerait le texte AU LIEU
+   * d'ouvrir le menu. On rejoue la mesure dans un contexte TACTILE, et on lit
+   * le style RÉSOLU plutôt que la feuille : c'est le navigateur qui tranche
+   * si la requête matche.
+   */
+  const touchContext = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  const touchPage = await touchContext.newPage();
+  await touchPage.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
+  await touchPage.waitForSelector('[data-row]');
+  await touchPage.waitForTimeout(300);
+  const touchGuard = await touchPage.evaluate(() => {
+    const row = document.querySelector('[data-row]');
+    if (row === null) return null;
+    const style = getComputedStyle(row);
+    return {
+      coarse: window.matchMedia('(any-hover: none)').matches,
+      userSelect: style.userSelect || style.webkitUserSelect,
+    };
+  });
+  expect(touchGuard !== null && touchGuard.coarse, 'le contexte tactile fait matcher (any-hover: none)');
+  expect(
+    touchGuard !== null && touchGuard.userSelect === 'none',
+    `au doigt, la rangée n'est pas sélectionnable (user-select: ${touchGuard?.userSelect})`,
+  );
+  /**
+   * `-webkit-touch-callout` NE SE MESURE PAS DANS CHROMIUM : la propriété est
+   * propre à WebKit, donc son moteur la JETTE à l'analyse — ni
+   * `getComputedStyle` ni `cssRules[].cssText` ne la rendent, et l'y chercher
+   * fait rougir un témoin pour la mauvaise raison. Ce qui SE mesure, et qui
+   * est le vrai risque, c'est qu'elle ARRIVE dans la feuille construite : le
+   * même lot a perdu `backdrop-filter` exactement ainsi (fusionné par la
+   * minification en sa seule forme préfixée). On lit donc le DIST.
+   */
+  const distCss = await readdir(join(DIST, 'assets'));
+  const calloutServed = (
+    await Promise.all(
+      distCss
+        .filter((f) => f.endsWith('.css'))
+        .map(async (f) => /\[data-row\][^}]*-webkit-touch-callout\s*:\s*none/.test(await readFile(join(DIST, 'assets', f), 'utf8'))),
+    )
+  ).some(Boolean);
+  expect(calloutServed, 'la feuille construite porte `-webkit-touch-callout: none` sur [data-row] (garde de coque WebKit)');
+
+  /**
+   * 6.12 — LA MÊME GARDE COUVRE LE CLUSTER DU MENU (revue #5814, défaut
+   * majeur 7, mesuré sur l'AVD `Meeshy_Poc_Web-v31`, `AND-2-menu.png`) —
+   * `[data-row]` seul ne suffit pas : le cluster (`.message-menu-*`) vit
+   * dans un PORTAIL sur `document.body`, hors de cette portée. Au
+   * relâchement d'un appui long dont le doigt se trouve à l'endroit où la
+   * liste d'actions vient d'apparaître, la WebView Android démarrait une
+   * sélection de texte SUR un libellé du menu au lieu de le laisser ouvert.
+   * Même méthode que ci-dessus : `user-select` RÉSOLU sur `.message-menu-
+   * list` dans le contexte tactile, `-webkit-touch-callout` lu dans le DIST
+   * construit (WebKit-only, jeté par Chromium à l'analyse).
+   */
+  await touchPage.dispatchEvent('[data-row]', 'contextmenu');
+  await touchPage.waitForSelector('.message-menu-list');
+  const clusterTouchGuard = await touchPage.evaluate(() => {
+    const list = document.querySelector('.message-menu-list');
+    if (list === null) return null;
+    const style = getComputedStyle(list);
+    return { userSelect: style.userSelect || style.webkitUserSelect };
+  });
+  expect(
+    clusterTouchGuard !== null && clusterTouchGuard.userSelect === 'none',
+    `au doigt, la liste d'actions du menu n'est pas sélectionnable (user-select: ${clusterTouchGuard?.userSelect})`,
+  );
+  const clusterCalloutServed = (
+    await Promise.all(
+      distCss
+        .filter((f) => f.endsWith('.css'))
+        .map(async (f) =>
+          /\.message-menu-cluster[^}]*-webkit-touch-callout\s*:\s*none/.test(await readFile(join(DIST, 'assets', f), 'utf8')),
+        ),
+    )
+  ).some(Boolean);
+  expect(
+    clusterCalloutServed,
+    'la feuille construite porte `-webkit-touch-callout: none` sur `.message-menu-cluster` (garde de coque WebKit, menu compris)',
+  );
+  await touchPage.close();
+  await touchContext.close();
+}
 
 await browser.close();
 server.close();

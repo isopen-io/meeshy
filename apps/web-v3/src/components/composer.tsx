@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Glyph } from './glyph';
 
@@ -42,6 +42,25 @@ export function Composer({
   const [focused, setFocused] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
   const sendTarget = text.trim().length > 0;
+  const hasReply = replyTo !== undefined;
+
+  /**
+   * « COMPOSER » MET LE CURSEUR DANS LE CHAMP (revue #5814, défaut majeur
+   * 8) — `useMessageMenu.onMenuAction('compose')` pose `focusTakenRef.current
+   * = true` sur la PROMESSE que quelqu'un prend le focus ; mesuré,
+   * `document.activeElement` valait BODY après ce geste, contrairement à
+   * iOS (`ConversationView+LongPressMenu.swift`,
+   * `restoreStateAfterLongPressIfNeeded`). La citation est ARMÉE (`replyTo`
+   * devient défini) exactement quand ce geste a eu lieu : c'est donc la
+   * TRANSITION indéfini → défini qui focalise, jamais chaque rendu où
+   * `replyTo` reste défini (l'objet est reconstruit à chaque rendu de
+   * l'hôte, `thread.tsx` — une dépendance sur SA RÉFÉRENCE volerait le
+   * focus en boucle).
+   */
+  useEffect(() => {
+    if (hasReply) field.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- volontairement la TRANSITION, pas l'identité de `replyTo` (voir le doc-comment).
+  }, [hasReply]);
 
   const send = (value: string) => {
     const own = value.trim();

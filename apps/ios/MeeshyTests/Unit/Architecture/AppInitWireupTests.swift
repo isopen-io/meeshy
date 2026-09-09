@@ -377,8 +377,9 @@ final class AppInitWireupTests: XCTestCase {
     /// (« Attempt to present … which is already presenting »). C'est la course
     /// que les `Task.sleep(350 ms)` masquaient.
     func test_theStoryComposerCoverIsMountedOnlyAtTheRoots() throws {
-        let mounts = ["Meeshy/Features/Main/Views/RootView.swift",
-                      "Meeshy/Features/Main/Views/iPadRootView+Sheets.swift"]
+        // Les covers vivent dans les couches nominales des racines (#5837).
+        let mounts = ["Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
+                      "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift"]
         for path in mounts {
             XCTAssertEqual(
                 occurrences(of: ".storyComposerCover(", in: try appSource(path)), 1,

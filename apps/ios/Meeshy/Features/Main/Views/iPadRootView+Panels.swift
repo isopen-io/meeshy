@@ -5,10 +5,69 @@ import MeeshyUI
 
 // MARK: - iPad Root View Right Panel Content (Hub Routes)
 
-extension iPadRootView {
+/// Le panneau droit de l'iPad quand une route (autre qu'une conversation) y
+/// est ouverte : une `NavigationStack` locale autour de `iPadPanelDestination`.
+///
+/// `NavigationStack` OBLIGATOIRE : sans lui, tout `NavigationLink` interne à un
+/// écran du panneau est inerte (lignes de TrackingLinksView / ShareLinksView /
+/// CommunityLinksView vers leur vue de détail — mortes sur iPad jusqu'au
+/// 2026-07-29). `.id(route)` vide la pile locale quand on change de route,
+/// sinon la vue de détail poussée survivrait au changement d'écran racine.
+struct iPadRightPanel: View {
+    let route: Route
+    @Binding var rightPanelRoute: Route?
+    let notificationManager: NotificationToastManager
+    let onOpenConversation: (Conversation) -> Void
+    let onNotificationTap: (APINotification) -> Void
 
-    @ViewBuilder
-    func rightPanelContent(for route: Route) -> some View {
+    var body: some View {
+        NavigationStack {
+            iPadPanelDestination(
+                route: route,
+                rightPanelRoute: $rightPanelRoute,
+                notificationManager: notificationManager,
+                onOpenConversation: onOpenConversation,
+                onNotificationTap: onNotificationTap
+            )
+            // Filet de sécurité pour les écrans qui délèguent leur chrome à la
+            // barre système (Messages favoris, membres d'une communauté…) :
+            // racine du panneau, ils n'ont ni bouton retour propre ni geste de
+            // retour, donc aucune sortie. Les écrans à en-tête maison posent
+            // `.navigationBarHidden(true)` et ne voient jamais ce bouton.
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        HapticFeedback.light()
+                        rightPanelRoute = nil
+                    } label: {
+                        Image(systemName: "chevron.backward")
+                    }
+                    .accessibilityLabel(String(localized: "root.ipad.close_panel", defaultValue: "Fermer", bundle: .main))
+                }
+            }
+        }
+        .id(route)
+        // Rend `dismiss()` opérant pour les écrans racine du panneau : ils ne
+        // sont ni poussés ni présentés, leur bouton retour n'avait donc aucun
+        // effet. Cf. `PanelBackAction`.
+        .environment(\.meeshyPanelDismiss, { rightPanelRoute = nil })
+    }
+}
+
+/// L'écran du PANNEAU DROIT de l'iPad pour une `Route`.
+///
+/// Une struct NOMINALE, et non une fonction `@ViewBuilder` d'extension
+/// (#5837) : appelée depuis `rightColumn`, le `switch` à 27 cas — arbre
+/// `_ConditionalContent` plus la chaîne de chaque cas — entrait dans le type
+/// concret de `iPadRootView.body`. Ici la racine ne voit qu'un nom.
+struct iPadPanelDestination: View {
+    let route: Route
+    @Binding var rightPanelRoute: Route?
+    let notificationManager: NotificationToastManager
+    let onOpenConversation: (Conversation) -> Void
+    let onNotificationTap: (APINotification) -> Void
+
+    var body: some View {
         switch route {
         case .settings:
             SettingsView()
@@ -42,7 +101,7 @@ extension iPadRootView {
                 onSelectConversation: { apiConversation in
                     let currentUserId = AuthManager.shared.currentUser?.id ?? ""
                     let conv = apiConversation.toConversation(currentUserId: currentUserId)
-                    openConversation(conv)
+                    onOpenConversation(conv)
                 },
                 onOpenSettings: { community in
                     rightPanelRoute = .communitySettings(community)
@@ -83,7 +142,7 @@ extension iPadRootView {
         case .notifications:
             NotificationListView(
                 onNotificationTap: { notification in
-                    handleNotificationTap(notification)
+                    onNotificationTap(notification)
                 },
                 onDismiss: { rightPanelRoute = nil }
             )
@@ -145,8 +204,6 @@ extension iPadRootView {
         }
     }
 }
-
-// MARK: - iPad Left Column Header
 
 struct iPadLeftColumnHeader: View {
     let title: String

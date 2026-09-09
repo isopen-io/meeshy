@@ -32,8 +32,9 @@ final class EngagementRevealWiringTests: XCTestCase {
     // MARK: - Les DEUX racines posent, les DEUX racines ramassent
 
     func test_bothRoots_mountTheRevealHost() throws {
-        for racine in ["Meeshy/Features/Main/Views/RootView.swift",
-                       "Meeshy/Features/Main/Views/iPadRootView.swift"] {
+        // L'hôte est posé par la couche de covers de chaque racine (#5837).
+        for racine in ["Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
+                       "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift"] {
             let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(racine))
             XCTAssertTrue(code.contains("engagementReveal(router: router)"),
                           "\(racine) doit monter l'hôte de célébration — un hôte posé sur "
@@ -60,6 +61,30 @@ final class EngagementRevealWiringTests: XCTestCase {
         XCTAssertEqual(ipad.components(separatedBy: "router.pendingEngagementReveal =").count - 1, 2,
                        "Les gestionnaires API et socket dérivent le palier ; celui du push "
                            + "n'en pose aucun, faute de métadonnée typée.")
+    }
+
+    // MARK: - La SECONDE porte : le geste, sans tap (#5847)
+
+    /// L'hôte écoute le socket EN PLUS du drapeau du routeur. Sans cette
+    /// seconde porte, un succès ne se célèbre que si l'utilisateur va le
+    /// chercher dans la cloche — la récompense arrive sous forme de devoir.
+    func test_theHost_alsoListensToLiveNotifications() throws {
+        let hote = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/EngagementRevealHost.swift"))
+        XCTAssertTrue(hote.contains("newNotificationReceived"),
+                      "L'hôte doit s'abonner aux notifications reçues en direct — c'est "
+                          + "la porte par laquelle un succès se célèbre AU GESTE.")
+        XCTAssertTrue(hote.contains("celebratesUnprompted"),
+                      "Et il doit filtrer : seul un SUCCÈS s'ouvre tout seul. Un badge, "
+                          + "une série, un niveau se contentent d'une notification.")
+    }
+
+    /// La règle de surface, à son site unique. L'écrire dans l'hôte plutôt que
+    /// dans le SDK la rendrait invisible à l'autre client.
+    func test_onlyAnAchievement_celebratesUnprompted() {
+        XCTAssertTrue(EngagementReveal.achievement(.firstVoice).celebratesUnprompted)
+        XCTAssertFalse(EngagementReveal.streak(days: 7).celebratesUnprompted)
+        XCTAssertFalse(EngagementReveal.level(3).celebratesUnprompted)
     }
 
     /// La célébration ne REMPLACE pas le tableau de bord : elle le couvre. Le

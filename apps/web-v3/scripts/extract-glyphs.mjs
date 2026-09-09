@@ -216,3 +216,23 @@ emit({
   type: 'ProgressionGlyphName',
   role: "LE JEU D'ECRAN de /me/progression (#5547) : charge avec sa route, jamais dans le socle.",
 });
+
+/**
+ * LE JEU D'ECRAN DU MENU DU MESSAGE (#5814) — miroir
+ * `MessageActionsMenu.swift:96-111` : Selectionner (check-circle), Traduire
+ * (globe), Copier (copy), Composer (magic-wand), Plus... (dots-three).
+ * `magic-wand` et `globe` existent deja dans le jeu PROGRESSION : deux jeux
+ * d'ecran distincts peuvent extraire le meme glyphe phosphor, chacun dans SON
+ * module — ils ne se chargent jamais ensemble (le fil et /me/progression ne
+ * sont pas la meme route), donc aucun octet n'est paye deux fois au meme
+ * demarrage.
+ */
+const THREAD_MENU = ['check-circle', 'globe', 'copy', 'magic-wand', 'dots-three'];
+
+emit({
+  ids: THREAD_MENU,
+  output: join(HERE, '../src/components/glyphs-thread-menu.ts'),
+  constant: 'THREAD_MENU_GLYPHS',
+  type: 'ThreadMenuGlyphName',
+  role: "LE JEU D'ECRAN du menu du message (#5814) : charge avec le chunk du fil, jamais dans le socle.",
+});

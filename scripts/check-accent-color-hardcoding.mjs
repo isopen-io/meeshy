@@ -55,7 +55,7 @@
 // 2026-09-08 (méthodologie propre à ce script — #3678 en mesurait 583 avec
 // une méthode non tracée ailleurs ; la référence ci-dessous est ancrée sur ce
 // script, pas sur la mesure manuelle de l'issue).
-const BASELINE_HARDCODED_COLOR_COUNT = 957;
+const BASELINE_HARDCODED_COLOR_COUNT = 956;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

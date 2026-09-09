@@ -18,7 +18,7 @@ export type Viewer = {
 };
 
 export function resolveViewer(input: { readonly source: DataSource; readonly session: SessionState }): Viewer {
-  if (input.source === 'fixtures') {
+  if (__FIXTURES__ && input.source === 'fixtures') {
     return { id: VIEWER_ID, handle: VIEWER_HANDLE, displayName: 'Vous', isAnonymous: false };
   }
   if (input.session.status === 'authenticated') {

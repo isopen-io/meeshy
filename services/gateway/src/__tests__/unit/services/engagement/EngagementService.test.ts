@@ -78,6 +78,7 @@ function makeStreakPrisma(streakState: {
   currentStreakDays: number;
   longestStreakDays: number;
   lastStreakDate: Date | null;
+  timezone?: string | null;
 }, overrides: Partial<{ create: jest.Mock; userUpdate: jest.Mock }> = {}) {
   // Same answer for every call: the streak-state read AND the (fallback-to-'fr')
   // language lookup a crossed threshold triggers — `recipientLanguage` degrades
@@ -171,8 +172,20 @@ describe('EngagementService.recordActivity', () => {
       // `points` à côté de `count` depuis #5742 : deux colonnes, deux questions —
       // `count` compte des ACTIONS et pilote les badges, `points` porte ce que
       // l'axe crédite au score et pilote le niveau puis la frappe des Meeshes.
-      create: { userId: 'user-1', axisKey: 'content.text_message', count: 1, points: 3 },
-      update: { count: { increment: 1 }, points: { increment: 3 } },
+      //
+      // Le poids se LIT au barème, jamais recopié : écrit en dur (3), ce témoin
+      // est tombé au réordonnancement de #5766 qui a porté le contenu à 9 —
+      // il mesurait alors la mémoire de l'auteur, pas le comportement.
+      create: {
+        userId: 'user-1',
+        axisKey: 'content.text_message',
+        count: 1,
+        points: ENGAGEMENT_AXIS_WEIGHTS['content.text_message'],
+      },
+      update: {
+        count: { increment: 1 },
+        points: { increment: ENGAGEMENT_AXIS_WEIGHTS['content.text_message'] },
+      },
       select: { count: true },
     });
   });
@@ -470,6 +483,161 @@ describe('EngagementService streak tracking (#5544)', () => {
   });
 });
 
+describe('EngagementService streak tracking honors User.timezone (#5734)', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('does not double-count two activities on the same LOCAL day that straddle the UTC day boundary', async () => {
+    // Both activities happen on the SAME America/Los_Angeles calendar day
+    // (Sept 7): a morning one (already recorded, `lastStreakDate` holds its
+    // civil-day marker) and a late-night one at 22:00 local. Los Angeles is
+    // UTC-7, so 22:00 local on Sept 7 is 05:00 UTC on Sept 8 — a UTC day
+    // later. Comparing by UTC civil day (the pre-#5734 behavior) would read
+    // this as a NEW day and increment the streak a second time for a single
+    // local day; comparing by the user's timezone must not.
+    const LAST_STREAK_MARKER = new Date('2026-09-07T00:00:00.000Z'); // civil-day marker for LA Sept 7
+    const NOW_UTC = new Date('2026-09-08T05:00:00.000Z'); // 2026-09-07T22:00 America/Los_Angeles
+    jest.useFakeTimers().setSystemTime(NOW_UTC);
+
+    const userUpdate = jest.fn().mockResolvedValue({});
+    const prisma = makeStreakPrisma(
+      {
+        currentStreakDays: 4,
+        longestStreakDays: 6,
+        lastStreakDate: LAST_STREAK_MARKER,
+        timezone: 'America/Los_Angeles',
+      },
+      { userUpdate },
+    );
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message');
+
+    expect(userUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ currentStreakDays: expect.anything() }) }),
+    );
+  });
+
+  it('increments the streak once the user has genuinely reached the next LOCAL day', async () => {
+    const LAST_STREAK_MARKER = new Date('2026-09-07T00:00:00.000Z'); // civil-day marker for LA Sept 7
+    const NOW_UTC = new Date('2026-09-08T17:00:00.000Z'); // 2026-09-08T10:00 America/Los_Angeles
+    jest.useFakeTimers().setSystemTime(NOW_UTC);
+
+    const userUpdate = jest.fn().mockResolvedValue({});
+    const prisma = makeStreakPrisma(
+      {
+        currentStreakDays: 4,
+        longestStreakDays: 6,
+        lastStreakDate: LAST_STREAK_MARKER,
+        timezone: 'America/Los_Angeles',
+      },
+      { userUpdate },
+    );
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message');
+
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: {
+        currentStreakDays: 5,
+        longestStreakDays: 6,
+        lastStreakDate: new Date('2026-09-08T00:00:00.000Z'), // civil-day marker for LA Sept 8
+      },
+    });
+  });
+
+  it('counts two evenings 24h apart at the same local hour as a two-day streak (the #5734 acceptance example)', async () => {
+    const EVENING_ONE = new Date('2026-09-06T00:00:00.000Z'); // civil-day marker for LA Sept 6
+    const EVENING_TWO_NOW = new Date('2026-09-08T02:00:00.000Z'); // 2026-09-07T19:00 America/Los_Angeles
+    jest.useFakeTimers().setSystemTime(EVENING_TWO_NOW);
+
+    const userUpdate = jest.fn().mockResolvedValue({});
+    const prisma = makeStreakPrisma(
+      {
+        currentStreakDays: 1,
+        longestStreakDays: 1,
+        lastStreakDate: EVENING_ONE,
+        timezone: 'America/Los_Angeles',
+      },
+      { userUpdate },
+    );
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message');
+
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: {
+        currentStreakDays: 2,
+        longestStreakDays: 2,
+        lastStreakDate: new Date('2026-09-07T00:00:00.000Z'), // civil-day marker for LA Sept 7
+      },
+    });
+  });
+
+  it('does not regress a user with no timezone on record: the UTC repli is unchanged', async () => {
+    const TODAY = new Date('2026-09-08T14:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(TODAY);
+
+    const userUpdate = jest.fn().mockResolvedValue({});
+    const prisma = makeStreakPrisma(
+      {
+        currentStreakDays: 4,
+        longestStreakDays: 6,
+        lastStreakDate: new Date('2026-09-07T00:00:00.000Z'),
+        timezone: null,
+      },
+      { userUpdate },
+    );
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message');
+
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: {
+        currentStreakDays: 5,
+        longestStreakDays: 6,
+        lastStreakDate: new Date('2026-09-08T00:00:00.000Z'),
+      },
+    });
+  });
+
+  it('falls back to UTC when the stored timezone is not a valid IANA identifier', async () => {
+    const TODAY = new Date('2026-09-08T14:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(TODAY);
+
+    const userUpdate = jest.fn().mockResolvedValue({});
+    const prisma = makeStreakPrisma(
+      {
+        currentStreakDays: 4,
+        longestStreakDays: 6,
+        lastStreakDate: new Date('2026-09-07T00:00:00.000Z'),
+        timezone: 'Not/A_Zone',
+      },
+      { userUpdate },
+    );
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message');
+
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: {
+        currentStreakDays: 5,
+        longestStreakDays: 6,
+        lastStreakDate: new Date('2026-09-08T00:00:00.000Z'),
+      },
+    });
+  });
+});
 describe('EngagementService level tracking (#5545)', () => {
   /**
    * Le poids lu est celui du CATALOGUE, jamais un nombre recopié ici.
@@ -541,7 +709,7 @@ describe('EngagementService level tracking (#5545)', () => {
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
 
-    await svc.recordActivity('user-1', 'content.text_message'); // weight 3
+    await svc.recordActivity('user-1', 'content.text_message'); // weight 9
 
     expect(create).not.toHaveBeenCalled();
     expect(notificationService.createNotification).not.toHaveBeenCalled();

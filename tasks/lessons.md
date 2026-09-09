@@ -29828,3 +29828,220 @@ c'est elle que le rapport de l'agent avait déjà écrite sans la lire.
 Détail : `.claude/workflows/meeshy-web-v3-bout-en-bout.js` § « DEUX SIMULATEURS »,
 `apps/web-v3/targets/README.md` § « Comment ces cibles ont été prises »,
 simulateur « Meeshy Ref-Native » (`3E761BC1-845D-49D2-8E4D-E0606E04D3E2`), #5805, #5806.
+
+## Leçon 555 — Un doc-comment qui NOMME son propre manque est un défaut mesuré que personne n'a lu
+
+2026-09-09, #5847. Le porteur demande que la vue de succès s'affiche quand on
+réalise l'opération qui le déclenche. Mesure : **cent quatorze succès composés
+se gravaient en silence** — `git grep createNotification --
+services/gateway/src/services/achievements` rendait ZÉRO, et la célébration
+n'était atteignable que par un tap dans le centre de notifications.
+
+Le plus troublant n'est pas le défaut : c'est que **le code le disait**, dans le
+doc-comment de la fonction fautive, en toutes lettres :
+
+> *« Ce qu'il ne donne PAS, et qui reste à gagner : la notification AU MOMENT du
+> geste. Un succès balayé tombe quand l'utilisateur regarde, pas quand il agit. »*
+
+Cette phrase est honnête, juste, et datée du lot qui a livré la feature. Elle
+décrit un produit à moitié livré, et elle est restée là — parce qu'un
+doc-comment n'est ni une issue, ni un test rouge, ni une ligne de tableau. **Rien
+dans le dépôt ne relit les aveux.**
+
+> **Chercher les aveux est une technique d'audit à part entière**, et la moins
+> chère du dépôt : `git grep -iE "ne (donne|fait|couvre) pas|reste à gagner|pour
+> l'instant|à étendre|TODO"` dans le dossier d'une feature qu'on suspecte
+> incomplète. Un auteur consciencieux écrit précisément où il s'est arrêté ; ce
+> qui manque, c'est quelqu'un pour transformer la phrase en issue.
+
+**Corollaire de gouvernance, et c'est lui qui compte** : `CLAUDE.md` dit qu'une
+issue fermée doit ouvrir *une issue par dimension qui n'est pas mûre*. Ce
+doc-comment EST une dimension non mûre (13 — complétude), écrite au bon endroit,
+au bon moment, par la bonne personne — **et pas dans le bon substrat**. La règle
+se relit donc : ce qu'on découvre en chemin devient une issue, y compris quand
+on l'a soi-même écrit dans un commentaire trois lignes plus haut.
+
+## Leçon 556 — Deux signaux qui partagent leur MÉCANIQUE ne partagent pas leur SURFACE
+
+Même lot. `docs/product/streaks-badges-modele.md` définit quatre notifications
+de réengagement et dit, § 1 : *« Les quatre partagent la même mécanique de bas
+niveau et ne diffèrent que par la fonction qui décide "ce seuil est-il
+franchi ?" »*. Vrai — et incomplet d'une manière qui a coûté la feature.
+
+Le porteur a tranché autre chose : **un succès se CÉLÈBRE (vue plein écran, sans
+qu'on touche rien), un badge / une série / un niveau se NOTIFIENT**. Un succès
+nomme un fait rare et non répétable ; les autres tombent au fil de l'usage.
+Les célébrer tous ferait de la célébration un bruit, et le premier bruit qu'on
+apprend à ignorer est celui qui devait faire plaisir.
+
+Cette décision ne se déduit d'aucun champ, d'aucun type, d'aucune contrainte
+technique — c'est une décision de PRODUIT, et le document qui gouverne la
+sémantique ne l'énonçait nulle part. D'où un code où `announcingTypes` mélange
+les quatre, et une célébration branchée sur le seul tap.
+
+> Quand un document déclare que N choses « ne diffèrent que par X », se demander
+> **par quoi d'autre elles pourraient différer côté UTILISATEUR** — la surface,
+> l'urgence, l'interruption, la persistance, qui peut les voir. Un axe de
+> variation absent du document n'est pas un axe absent du produit : c'est un axe
+> que chaque site tranchera dans son coin, différemment.
+
+Site unique désormais : `EngagementReveal.celebratesUnprompted`, et la table du
+§ 1 du modèle qui dit, pour chacun des quatre types, ce qui se passe au geste et
+ce qui se passe au tap.
+
+## Leçon 557 — Découper des FONCTIONS ne découpe pas le TYPE : seule une frontière nominale non générique coupe la chaîne d'un `body`
+
+**Le fait (#5837, 2026-09-09).** `RootView.body` = 66 niveaux d'imbrication de
+type (~1 095 Ko de pile de démangleur), `iPadRootView.body` = 69 (~1 145 Ko),
+contre 1 008 Ko de pile principale sur l'appareil : chaque racine débordait SEULE,
+avant même les ~180 Ko que la traversée SwiftUI consomme. Crash au lancement sur
+iPhone en Debug, intermittent (cache de métadonnées global au process), invisible
+au simulateur (8 Mo de pile). Les trois `body` déjà bornés à 40 étaient verts.
+
+**Ce qui comptait, et que le découpage existant ne touchait pas.** L'iPad avait
+DÉJÀ « découpé » sa chaîne : `applyingSheets(_ content: some View) -> some View`
+dans un fichier à part, `rightPanelContent(for:)` dans une extension. Zéro effet
+sur la profondeur — une fonction générique ou un `@ViewBuilder` d'extension rend
+un type opaque qui se re-niche INTÉGRALEMENT chez l'appelant. Ce qui coupe la
+chaîne, c'est une frontière **nominale et non générique** : le parent ne voit
+qu'un nom (`ModifiedContent<…, RootSheetsLayer>`, `RootRouteDestination`), et le
+contenu est matérialisé dans son propre nœud d'attribut, pile déroulée.
+
+Trois gestes, mesurés :
+
+| geste | avant → après |
+|---|---|
+| `switch` de 27 routes de `navigationDestination` → `RootRouteDestination` (struct) | le type de retour de la closure est un paramètre GÉNÉRIQUE de `navigationDestination` : l'arbre `_ConditionalContent` des 27 cas et leurs chaînes entraient dans la racine |
+| 46 modificateurs → 6 `ViewModifier` nominaux par tranches CONTIGUËS (`RootLayers/`) | 46 maillons → 6 ; l'ordre interne à chaque tranche est celui de la chaîne d'origine |
+| `NavigationStack` + toolbar du panneau iPad → `iPadRightPanel` (struct) | 27 → 24 sur l'iPad, le dernier palier |
+
+`RootView.body` **66 → 21**, `iPadRootView.body` **69 → 24** ; couche la plus
+profonde : 16. Aucun `AnyView`.
+
+**La règle.**
+1. **Une racine n'est pas un écran de plus** : tout ce qu'elle imbrique s'ajoute
+   à la pile de CHAQUE vue qu'elle matérialise. Le budget de profondeur mesure
+   les racines ET chaque couche — sinon la racine passe au vert pendant qu'une
+   couche regrossit en silence, et le découpage a DÉPLACÉ la dette.
+2. **Convertir un modificateur en `ViewModifier` ne retire rien** (un maillon
+   reste un maillon) ; c'est le REGROUPEMENT en tranches nominales qui compte.
+   Un `ViewModifier` GÉNÉRIQUE (`AdaptiveOnChangeModifier<V>`) coûte un niveau
+   de plus par argument générique : passer `AnyHashable` plutôt que `[Route]`.
+3. **L'ordre porte du comportement** : une feuille présentée sous un
+   `environmentObject` ne voit pas le même environnement qu'au-dessus. On tranche
+   par runs contigus ; on ne réordonne jamais pour partager davantage.
+4. **Le coût réel est le câblage de l'état**, pas la vue : un `@State` lu par une
+   seule tranche déménage dans son `ViewModifier` ; un état partagé reste à la
+   racine et voyage en `Binding`. Les corps de `.task` et les `onReceive` restent
+   des méthodes de la racine, remis en fermetures — la couche ne possède rien.
+5. **Un vert « ConversationView.body = 0 niveau (7 caractères) » est vacuous** :
+   le `body` rend un `AnyView`, la garde certifie le type que l'effacement a
+   aplati. À relire avant d'être cru (leçon du 2026-09-03).
+
+**Le piège d'outillage payé au passage.** `git add <a> <b> <chemin-déjà-supprimé>`
+échoue sur le pathspec manquant et n'indexe RIEN — puis un `;` laisse passer le
+`git commit`, qui embarque la seule suppression déjà indexée par `git rm`. Le
+commit poussé disait « 21 fichiers » dans son message et en contenait UN.
+`git show --stat HEAD` avant tout `push`, et jamais `;` entre un `add` et son
+`commit`.
+
+Détail : `apps/ios/Meeshy/Features/Main/Views/RootLayers/`,
+`ConversationViewBodyTypeDepthTests` (racines, destinations, couches, plafond
+racine 24), #5837.
+
+## Leçon 558 — Un gate qui ne peut pas distinguer deux causes ne garde rien, et un gate rouge en permanence est un gate MORT
+
+2026-09-09. `Deploy to staging` rougissait à chaque déploiement RÉUSSI : la
+sonde de fumée de #5644 déclarait douze routes « absentes du conteneur servi ».
+Les six images se construisaient, se scannaient et se déployaient ; seule la
+sonde échouait, sur les **douze mêmes routes**, run après run — vérifié
+identique sur trois révisions dont une antérieure à mon travail.
+
+La sonde interroge chaque `:param` avec un ObjectId **qui n'existe pas**
+(`000000000000000000000000`), puis classait tout 404 en « route absente ». Or
+une route PUBLIQUE de lecture-par-identifiant répond légitimement 404 pour un
+identifiant inconnu. Le classificateur ne pouvait pas distinguer les deux
+causes — il était **structurellement incapable** de rendre un verdict juste,
+quel que soit son seuil : le signal qui les sépare n'était pas dans les données
+qu'on lui remettait (`SmokeFetchResponse` ne portait que `{ status }`).
+
+> **Devant un gate rouge, la première question n'est pas « pourquoi
+> échoue-t-il ? » mais « PEUT-IL être vert ? »** — et la seconde : « les
+> données qu'il reçoit contiennent-elles de quoi trancher ? ». Un gate dont
+> l'entrée ne porte pas le discriminant ne se règle pas, il se recâble.
+
+Ce qui l'a rendu invisible : les routes GARDÉES échappaient au piège **par
+accident** — elles rendent 401/403 AVANT de chercher quoi que ce soit. La
+couverture apparente était donc de 539/551, et l'échec avait l'air d'une
+anomalie locale plutôt que d'un vice de conception.
+
+Le discriminant existait, une couche plus bas — dans le CORPS :
+
+    /api/v1/users/000…0   404 {"success":false,"error":"User not found"}
+    /api/v1/inexistante   404 {"error":"Not Found","statusCode":404}
+
+Le premier est `sendError()`, producteur UNIQUE des réponses du gateway : le
+reconnaître PROUVE que notre handler a tourné. La règle retenue est donc
+POSITIVE et fail-closed — présent seulement sur cette signature ; la forme
+Fastify, un corps vide, du HTML de proxy n'ont rien prouvé et restent absent.
+Conclure l'inverse (absent SI forme Fastify) pencherait du mauvais côté : le
+jour où cette forme change, une route vraiment disparue passerait pour
+présente, soit exactement la panne que le gate existe pour attraper.
+
+**Et la vérification d'un correctif de gate a DEUX directions.** Faire passer
+un gate est trivial — il suffit de désarmer sa condition. Les deux mesures,
+contre l'hôte réel :
+
+    manifeste complet                    ✓ 551/551 servies      sortie 0
+    manifeste piégé d'une route fantôme  ✗ 1 absente détectée   sortie 1
+
+> **Un correctif qui rend un gate vert sans prouver qu'il rougit encore est une
+> alarme ÉTEINTE, pas une alarme réparée.** La seconde mesure coûte trois
+> minutes et c'est la seule qui distingue les deux.
+
+Voisines : leçon 275 (une protection se mesure sur tout ce que la charge
+TRANSPORTE), et la famille « un contrôle existe s'il a un effet ».
+
+## Leçon 559 — Deux gates écrits pour le MÊME incident peuvent tomber du même côté, et le second se trouve en relevant le premier
+
+Même jour, même dispositif. #5644 avait produit DEUX témoins pour un incident
+réel (un conteneur de neuf jours servi comme sain) : la sonde de fumée
+ci-dessus, et un contrôle horaire de dérive qui lit `build.commit` sur
+`/health`. Les deux rougissaient sur des situations SAINES.
+
+Le second confrontait ses **deux** cibles à `origin/main` :
+
+```yaml
+matrix:
+  target:
+    - { name: production, url: https://gate.meeshy.me/health }
+    - { name: staging,    url: https://gate.staging.meeshy.me/health }
+…
+if ! git merge-base --is-ancestor "$COMMIT" origin/main; then
+```
+
+Or `deploy-staging` porte `if: github.ref == 'refs/heads/dev'` — **staging sert
+`dev`**. Le gate exigeait donc de staging une révision de `main` : vert
+seulement si `dev == main`, c'est-à-dire jamais. Mesuré : staging servait
+`d576784c`, tête de `dev` — exactement ce qu'il devait servir — et le gate le
+déclarait « branche inattendue, ou historique réécrit ». Toutes les heures.
+
+> **Une matrice qui partage une référence ÉCRITE EN DUR ment sur toute cible
+> qui ne la partage pas.** La forme du défaut est la généralisation abusive :
+> ce qui est vrai de la première cible est posé comme vrai de la matrice. La
+> parade est de faire DÉCLARER à chaque cible ce qui la distingue (`ref:`),
+> jamais de le déduire au centre.
+
+Ce que j'en retiens sur la MÉTHODE, et qui vaut au-delà de ces deux gates :
+
+> **Quand un gate se révèle faux, relever les AUTRES gates du même lot avant de
+> refermer.** Ils ont été écrits le même jour, par la même main, sur la même
+> compréhension du problème — et ils partagent donc ses angles morts. Ici le
+> second n'a pas été cherché : il est simplement apparu dans le relevé de la CI
+> pendant que je corrigeais le premier, et il aurait pu ne jamais apparaître si
+> j'avais arrêté de regarder après avoir expliqué le rouge de `Docker`.
+
+Corollaire opérationnel : un gate qui rougit sur du sain se répare ou se
+retire, jamais ne se tolère. Deux gates morts, c'est tout le dispositif d'une
+issue de fiabilité qui ne dit plus rien — et personne ne s'en aperçoit, puisque
+le rouge fait partie du décor.

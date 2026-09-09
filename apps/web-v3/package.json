@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/web-v3",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "private": true,
   "type": "module",
   "description": "La v3.1 web — une application TypeScript unique, servie en web, installable en PWA, empaquetable Android/iOS par Capacitor. Interface reprise de l'app iOS.",
@@ -32,7 +32,8 @@
     "check:reading-mode": "node scripts/check-reading-mode.mjs",
     "check:list-actions": "node scripts/check-list-actions.mjs",
     "check:shell-dist": "node scripts/check-shell-dist.mjs",
-    "check:gateway-build": "node scripts/check-gateway-build.mjs"
+    "check:gateway-build": "node scripts/check-gateway-build.mjs",
+    "build:shells": "node scripts/build-shells.mjs"
   },
   "dependencies": {
     "@meeshy/shared": "workspace:*",

@@ -99,6 +99,31 @@ public enum AchievementCatalog {
         return tier <= mesure
     }
 
+    /// **L'INVERSE de `AchievementFamily.key(tier:)`** — lire une clé composée
+    /// telle que la passerelle la grave et la pousse (#5847).
+    ///
+    /// `achievement.<section>.<sujet>.<geste>.<échelle>:<palier>`. Une clé qui
+    /// ne se range dans AUCUNE famille déclarée, ou dont le palier n'appartient
+    /// pas à l'échelle de sa famille, rend `nil` : le catalogue ne l'a jamais
+    /// produite, donc célébrer « une conversation de 42 membres » afficherait un
+    /// badge bien dessiné pour un fait inventé. C'est le repli MENTEUR, le plus
+    /// cher parce qu'il ne se voit qu'à la lecture.
+    public static func parse(key: String) -> (family: AchievementFamily, tier: Int)? {
+        let morceaux = key.split(separator: ":", omittingEmptySubsequences: false)
+        guard morceaux.count == 2, let palier = Int(morceaux[1]) else { return nil }
+
+        let chemin = morceaux[0].split(separator: ".", omittingEmptySubsequences: false)
+        guard chemin.count == 5, chemin[0] == "achievement" else { return nil }
+
+        guard let famille = families.first(where: {
+            $0.section == chemin[1] && $0.subject == chemin[2]
+                && $0.verb == chemin[3] && $0.scale == chemin[4]
+        }) else { return nil }
+
+        guard famille.tiers.contains(palier) else { return nil }
+        return (famille, palier)
+    }
+
     public static func windowSize(unlockedCount: Int) -> Int {
         max(windowMinimum, max(0, unlockedCount) + windowStep)
     }

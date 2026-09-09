@@ -66,6 +66,24 @@ export type RovingMenuOptions = {
   /** `RowActions` referme ; `ReadingModeChip` remesure. Ni l'un ni l'autre par défaut. */
   readonly onScroll?: () => void;
   readonly onResize?: () => void;
+  /**
+   * OÙ REND LE FOCUS À LA FERMETURE (#5814) — `RowActions`/`ReadingModeChip`
+   * déclenchent depuis un `<button>` (`buttonRef`, ci-dessous) ; le menu du
+   * message, lui, s'ouvre depuis une RANGÉE (`<div data-row>`, appui long,
+   * clic droit, `ContextMenu`), qui n'a pas de `buttonRef` à porter. Quand
+   * fourni, `closeAndFocusButton` y rend le focus ; sinon, le comportement
+   * EXISTANT (`buttonRef.current?.focus()`) — inchangé pour les deux
+   * appelants historiques.
+   */
+  readonly returnFocusTo?: () => HTMLElement | null;
+  /**
+   * OUVERT DÈS LE MONTAGE (#5814) — le menu du message est monté par son
+   * hôte SEULEMENT quand `menuTarget !== null` (portail conditionnel) : il
+   * n'a pas de bouton déclencheur à cliquer une seconde fois pour s'ouvrir,
+   * contrairement à `RowActions`/`ReadingModeChip`. `false` par défaut —
+   * inchangé pour les deux appelants historiques.
+   */
+  readonly initialOpen?: boolean;
 };
 
 export type RovingMenu = {
@@ -79,12 +97,27 @@ export type RovingMenu = {
   readonly buttonRef: RefObject<HTMLButtonElement | null>;
   readonly menuRef: RefObject<HTMLDivElement | null>;
   readonly itemRefs: RefObject<(HTMLButtonElement | null)[]>;
+  /**
+   * DÉPLACE LE FOCUS À PARTIR D'UNE TOUCHE, sans événement (#5814 revue).
+   * Rend `true` quand la touche a été CONSOMMÉE — à l'appelant d'appeler
+   * alors `preventDefault()` sur SON événement.
+   *
+   * Cette porte existe parce qu'un appelant peut avoir besoin de TRADUIRE
+   * une touche (le rail du menu du message est HORIZONTAL : `ArrowRight`
+   * y vaut `ArrowDown`). La première écriture passait un événement RECOPIÉ
+   * (`{ ...event, key: mappedKey }`) : la copie perd `preventDefault`, qui
+   * vit sur le PROTOTYPE de l'événement (synthétique React comme natif
+   * Preact) — mesuré, `TypeError: event.preventDefault is not a function`,
+   * et le rail était donc INERTE au clavier. Une touche se passe par sa
+   * VALEUR, jamais par un événement fabriqué.
+   */
+  readonly handleKey: (key: string) => boolean;
   readonly onMenuKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
 };
 
 export function useRovingMenu(options: RovingMenuOptions): RovingMenu {
-  const { itemCount, isDisabledAt = () => false, computeInitialIndex, onScroll, onResize } = options;
-  const [open, setOpen] = useState(false);
+  const { itemCount, isDisabledAt = () => false, computeInitialIndex, onScroll, onResize, returnFocusTo } = options;
+  const [open, setOpen] = useState(options.initialOpen ?? false);
   const [activeIndex, setActiveIndex] = useState(0);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -92,7 +125,7 @@ export function useRovingMenu(options: RovingMenuOptions): RovingMenu {
 
   const closeAndFocusButton = () => {
     setOpen(false);
-    buttonRef.current?.focus();
+    (returnFocusTo?.() ?? buttonRef.current)?.focus();
   };
 
   // Échap + clic/appui hors du menu.
@@ -137,28 +170,39 @@ export function useRovingMenu(options: RovingMenuOptions): RovingMenu {
     itemRefs.current[index]?.focus();
   };
 
-  const onMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    switch (event.key) {
+  const handleKey = (key: string): boolean => {
+    switch (key) {
       case 'ArrowDown':
-        event.preventDefault();
         moveFocusTo(findFocusableIndex(itemCount, activeIndex, 1, isDisabledAt));
-        return;
+        return true;
       case 'ArrowUp':
-        event.preventDefault();
         moveFocusTo(findFocusableIndex(itemCount, activeIndex, -1, isDisabledAt));
-        return;
+        return true;
       case 'Home':
-        event.preventDefault();
         moveFocusTo(findFocusableIndex(itemCount, -1, 1, isDisabledAt));
-        return;
+        return true;
       case 'End':
-        event.preventDefault();
         moveFocusTo(findFocusableIndex(itemCount, itemCount, -1, isDisabledAt));
-        return;
+        return true;
       default:
-        return;
+        return false;
     }
   };
 
-  return { open, setOpen, closeAndFocusButton, activeIndex, setActiveIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown };
+  const onMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (handleKey(event.key)) event.preventDefault();
+  };
+
+  return {
+    open,
+    setOpen,
+    closeAndFocusButton,
+    activeIndex,
+    setActiveIndex,
+    buttonRef,
+    menuRef,
+    itemRefs,
+    handleKey,
+    onMenuKeyDown,
+  };
 }

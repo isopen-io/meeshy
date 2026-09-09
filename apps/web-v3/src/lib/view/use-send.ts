@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useStore } from 'zustand/react';
 
 import { isPermanentFailure } from '@/lib/api/outcome';
@@ -22,6 +22,14 @@ export function useSend(params: {
   readonly viewerId: string;
   readonly sender?: Participant;
   readonly originalLanguage: string;
+  /**
+   * LA RÉGION LIVE PARTAGÉE (revue #5814, défaut majeur 9) — `useSend` ne
+   * possède plus SA propre annonce : il la POSE sur `useLiveAnnouncer`, la
+   * MÊME que `useMessageMenu`, pour que la dernière source à parler soit
+   * toujours celle qu'un lecteur d'écran entend (voir le doc-comment de
+   * `use-live-announcer.ts`).
+   */
+  readonly announce: (message: string) => void;
 }): {
   /** Les locaux de CETTE conversation (`entries[i].message`), mémoïsés :
    * une identité STABLE tant que l'outbox de cette conversation n'a pas
@@ -52,20 +60,8 @@ export function useSend(params: {
    */
   readonly send: (text: string, replyTo: Message | null) => void;
   readonly retry: (messageId: string) => void;
-  /**
-   * Annonce lecteur d'écran — « Message non envoyé » / « Message envoyé »,
-   * PROJETÉE de l'outbox (§ 6.3 de la spécification #5813), jamais un état
-   * parallèle. Les DEUX signaux sont distincts et le doivent : l'échec se lit
-   * sur le compte d'entrées `failed`, la confirmation sur le compteur
-   * MONOTONE `confirmed` (`outbox-store.ts`). Les dériver tous deux du seul
-   * compte de `failed` — sa BAISSE valant « envoyé » — annonçait « Message
-   * envoyé » au DÉBUT d'une reprise, avant tout appel réseau, puis « Message
-   * non envoyé » quand elle échouait ; et un envoi réussi du premier coup,
-   * qui ne fait jamais varier ce compte, n'annonçait RIEN.
-   */
-  readonly announcement: string;
 } {
-  const { conversationId, viewerId, sender, originalLanguage } = params;
+  const { conversationId, viewerId, sender, originalLanguage, announce } = params;
   const online = useOnline();
   const entries = useStore(outboxStore, (s) => entriesOf(s, conversationId));
 
@@ -125,7 +121,6 @@ export function useSend(params: {
   const confirmedCount = useStore(outboxStore, (s) => confirmedCountOf(s, conversationId));
   const previousFailedCount = useRef(failedCount);
   const previousConfirmedCount = useRef(confirmedCount);
-  const [announcement, setAnnouncement] = useState('');
   useEffect(() => {
     /* L'ÉCHEC PRIME sur la confirmation quand les deux bougent dans la même
        image : c'est lui qui appelle un geste. */
@@ -137,12 +132,12 @@ export function useSend(params: {
       const reason = sendFailureReason(
         [...entries].reverse().find((entry) => entry.delivery === 'failed')?.lastError,
       );
-      setAnnouncement(reason === undefined ? 'Message non envoyé' : `Message non envoyé — ${reason}`);
+      announce(reason === undefined ? 'Message non envoyé' : `Message non envoyé — ${reason}`);
     }
-    else if (confirmedCount > previousConfirmedCount.current) setAnnouncement('Message envoyé');
+    else if (confirmedCount > previousConfirmedCount.current) announce('Message envoyé');
     previousFailedCount.current = failedCount;
     previousConfirmedCount.current = confirmedCount;
-  }, [failedCount, confirmedCount, entries]);
+  }, [failedCount, confirmedCount, entries, announce]);
 
-  return { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry, announcement };
+  return { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry };
 }

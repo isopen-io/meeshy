@@ -113,14 +113,24 @@ final class ProgressionLastAchievementHeroTests: XCTestCase {
         )
     }
 
-    /// Sans aucun succès, l'état vide est LÉGITIME — c'est ce qui rendait le
-    /// défaut invisible, et c'est ce qu'il ne faut pas casser en le corrigeant.
-    func test_withoutAnyAchievement_theEmptyStateIsLegitimate() {
+    /// Sans aucun succès OBTENU, le hero ne se tait pas : il nomme le PROCHAIN
+    /// et ce qu'il demande (#5831, récupéré à la fusion).
+    ///
+    /// Cette branche n'affichait là qu'un conseil FIGÉ — correct, mais moins
+    /// que ce que la passerelle sert déjà. Le témoin qui l'attendait est donc
+    /// remplacé, pas supprimé : ce qu'il gardait — « le hero ne disparaît
+    /// jamais » — reste gardé, sur la bonne phrase.
+    func test_withoutAnyUnlockedAchievement_theHeroNamesTheNextOne() {
         let vide = EngagementProgressResolver.resolve(.empty)
         let root = render(ProgressionLastAchievementHero(progress: vide, isDark: false))
+        let lu = dit(root).joined(separator: " | ")
         XCTAssertTrue(
-            dit(root).joined(separator: " | ").contains("Premier succès"),
-            "L'état vide a disparu avec le correctif."
+            lu.contains("Prochain succès"),
+            "Rien d'obtenu ⇒ le hero doit VISER : un trou à cet endroit-là est le pire des états vides."
+        )
+        XCTAssertFalse(
+            lu.contains("Dernier succès"),
+            "Annoncer « dernier » sur un palier qu'on n'a pas obtenu est un mensonge de bandeau."
         )
     }
 }

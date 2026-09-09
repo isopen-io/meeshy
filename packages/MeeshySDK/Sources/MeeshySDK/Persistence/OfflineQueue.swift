@@ -883,9 +883,12 @@ public actor OfflineQueue {
     private var items: [OfflineQueueItem] = []
     private var isRetrying = false
     private var cancellables = Set<AnyCancellable>()
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+    let logger = Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
     /// Outbox pool — injected at boot via `configure(pool:)`. Nil until wired.
-    private var outboxPool: (any DatabaseWriter)?
+    /// `internal` (et non `private`) : les extensions de CE type vivant dans
+    /// d'AUTRES fichiers (#5830) n'atteignent pas un `private`, qui reste borné
+    /// au fichier — la frontière invisible que toute extraction franchit.
+    var outboxPool: (any DatabaseWriter)?
     /// Per-`cmid` outcome subscribers (AsyncStream continuations). A single
     /// cmid may have multiple observers (e.g. one ViewModel + one banner) ;
     /// each receives the same terminal event before the stream finishes.
@@ -899,13 +902,13 @@ public actor OfflineQueue {
     /// `publishOutcome` qui ne reviendra pas.
     private var outcomeTombstones = BoundedFIFOMap<String, OutboxOutcome>(capacity: 200)
 
-    private let encoder: JSONEncoder = {
+    let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.dateEncodingStrategy = .iso8601
         return e
     }()
 
-    private let decoder: JSONDecoder = {
+    let decoder: JSONDecoder = {
         let d = JSONDecoder()
         d.dateDecodingStrategy = .iso8601
         return d
@@ -1051,6 +1054,17 @@ public actor OfflineQueue {
         }
 
         await refreshPendingCount()
+        // **Une ligne RÉ-ARMÉE est, pour le flusher, exactement une ligne
+        // fraîchement enfilée** (#5830) — et sans ce signal il ne le sait pas.
+        // `nextAttemptAt = now` ne réveille personne : le flusher tourne au
+        // boot, au retour de premier plan, au retour du réseau, et sur CE
+        // signal (`OutboxRetryScheduler.startObservingMutationEnqueued`,
+        // débounce 250 ms). Sans lui, toucher « Réel non publié » aurait fait
+        // exactement ce que le défaut faisait déjà : changer un statut sans
+        // que rien ne parte, jusqu'au prochain événement de cycle de vie —
+        // un contrôle qui a l'air d'agir. C'est le piège que ce lot ferme,
+        // rejoué une couche plus bas.
+        mutationEnqueued.send(())
     }
 
     /// Convenience wrapper for UI surfaces (e.g. failed-message bubbles) that
@@ -1105,7 +1119,12 @@ public actor OfflineQueue {
         guard let pool = outboxPool else { return }
         do {
             try await pool.write { db in
-                try OutboxRecord
+                // `deleteAll` rend le nombre de lignes supprimées ; ici il ne
+                // porte aucune décision — zéro ligne signifie « déjà nettoyé »,
+                // ce qui est un succès. Le `_ =` le dit AU SITE plutôt que de
+                // laisser la valeur remonter jusqu'à l'appelant, qui n'en
+                // saurait pas plus quoi faire.
+                _ = try OutboxRecord
                     .filter(Column("clientMessageId") == cmid)
                     .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
                     .filter(Column("status") != OutboxStatus.inflight.rawValue)

@@ -1,3 +1,5 @@
+import { tiersOf, type AchievementFamily } from './achievement-catalog.js';
+
 /**
  * Catalogue des axes d'engagement — source de vérité unique, importée par le
  * gateway (producteur, `EngagementService.recordActivity`) et les clients
@@ -358,5 +360,34 @@ export function isEngagementProgressPayload(value: unknown): value is Engagement
     isNonNegativeInteger(streak.longestStreakDays) &&
     isRecord(level) &&
     isNonNegativeInteger(level.engagementScore)
+  );
+}
+
+/**
+ * **LE NOMBRE MAXIMAL DE PALIERS QU'UN COMPTE PEUT PORTER (#5847) — dérivé,
+ * jamais écrit à la main.**
+ *
+ * `GET /me/engagement` borne sa lecture d'`EngagementMilestone` (critère 4 de
+ * #4165 : aucune requête sans `take`). La borne valait `200`, avec en
+ * commentaire « 82 aujourd'hui » — un chiffre juste au moment où il a été
+ * écrit, et faux depuis : quatre axes sociaux (#5766) et cent quatorze succès
+ * composés (#5758) sont arrivés ensuite. Le plafond réel mesuré le 2026-09-09
+ * est **216**, et la route lisait `desc` : ce sont donc les paliers les PLUS
+ * ANCIENS qui disparaissaient — les tout premiers succès de l'utilisateur,
+ * ceux auxquels il tient, silencieusement absents de son tableau de bord.
+ *
+ * Une borne qui se calcule ne peut plus périmer. Ajouter un axe, un seuil ou
+ * une famille la fait monter dans le même commit, sans que personne n'ait à y
+ * penser.
+ */
+export function maxEngagementMilestonesPerUser(families: readonly AchievementFamily[]): number {
+  const badges = ENGAGEMENT_AXES.length * BADGE_THRESHOLDS.length;
+  const composes = families.reduce((total, family) => total + tiersOf(family).length, 0);
+  return (
+    badges +
+    STREAK_THRESHOLDS.length +
+    LEVEL_THRESHOLDS.length +
+    ENGAGEMENT_ACHIEVEMENT_KEYS.length +
+    composes
   );
 }
