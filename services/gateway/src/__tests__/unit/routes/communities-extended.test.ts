@@ -434,7 +434,7 @@ describe('POST /communities/:id/members — existing member (line 1097)', () => 
       members: [{ role: 'admin', userId: USER_ID }],
     });
     prisma.user.findFirst.mockResolvedValue({ id: OTHER_USER_ID });
-    prisma.communityMember.findFirst.mockResolvedValue({ id: MEMBER_ID, role: 'member', userId: OTHER_USER_ID });
+    prisma.communityMember.findFirst.mockResolvedValue({ id: MEMBER_ID, role: 'member', userId: OTHER_USER_ID, isActive: true });
     ({ app } = await buildAuthApp(prisma));
   });
   afterAll(async () => { await app.close(); });
@@ -775,7 +775,7 @@ describe('POST /communities/:id/join — already a member (line 1789)', () => {
   beforeAll(async () => {
     const prisma = makePrisma();
     prisma.community.findFirst.mockResolvedValue({ id: COMM_ID, isPrivate: false });
-    prisma.communityMember.findFirst.mockResolvedValue({ id: MEMBER_ID, userId: USER_ID, role: 'member' });
+    prisma.communityMember.findFirst.mockResolvedValue({ id: MEMBER_ID, userId: USER_ID, role: 'member', isActive: true });
     ({ app } = await buildAuthApp(prisma));
   });
   afterAll(async () => { await app.close(); });
@@ -956,7 +956,7 @@ describe('POST /communities/:id/invite — invitee already a member (line 2019)'
       members: [{ role: 'admin', userId: USER_ID }],
     });
     prisma.user.findFirst.mockResolvedValue({ id: INVITEE_ID });
-    prisma.communityMember.findFirst.mockResolvedValue({ id: MEMBER_ID, userId: INVITEE_ID, role: 'member' });
+    prisma.communityMember.findFirst.mockResolvedValue({ id: MEMBER_ID, userId: INVITEE_ID, role: 'member', isActive: true });
     ({ app } = await buildAuthApp(prisma));
   });
   afterAll(async () => { await app.close(); });

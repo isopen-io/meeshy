@@ -1583,7 +1583,14 @@ struct ConversationListView: View {
     @ViewBuilder
     private var listTail: some View {
         if LentilleFeatureFlag.isLentilleListEnabled {
-            quickActions(isEmptyState: false, conversationCount: conversationViewModel.conversations.count, minHeight: listTailMinHeight)
+            // UNIQUE montage des accès rapides (2026-09-09). `listTail` vit
+            // HORS du `if groupedConversations.isEmpty` : il se rend dans
+            // toutes les branches. Le titre suit donc le VIDE plutôt que le
+            // site d'appel — « Aucune conversation » à qui démarre, « Et
+            // maintenant ? » à qui a fini de lire sa liste.
+            quickActions(isEmptyState: conversationViewModel.conversations.isEmpty,
+                         conversationCount: conversationViewModel.conversations.count,
+                         minHeight: listTailMinHeight)
         } else {
             Color.clear.frame(height: 60)
         }
@@ -1794,10 +1801,13 @@ struct ConversationListView: View {
                         case .createFirstConversation:
                             Group {
                                 if LentilleFeatureFlag.isLentilleListEnabled {
-                                    // État vide = les MÊMES accès rapides que la
-                                    // queue de liste (2026-08-21) : tout commence
-                                    // ici — message, story, mood, post, invitation.
-                                    quickActions(isEmptyState: true, conversationCount: 0)
+                                    // RIEN ICI (2026-09-09). La queue de liste
+                                    // porte les accès rapides et se rend dans
+                                    // TOUTES les branches, celle-ci comprise :
+                                    // les monter ici aussi les affichait DEUX
+                                    // fois, l'un sous l'autre, à un compte neuf
+                                    // — celui qui a le plus besoin d'aide.
+                                    EmptyView()
                                 } else {
                                     EmptyStateView(
                                         icon: "bubble.left.and.bubble.right",

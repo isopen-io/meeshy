@@ -15,6 +15,8 @@ import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf } from '@/lib/accent';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
+import { partagerInvitation, RETOUR_INVITATION } from '@/lib/view/invitation';
+import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { resolveLensSections } from '@/lib/lens/sections';
 import { useOnline } from '@/lib/net/online';
 import { useReaderLanguages } from '@/lib/view/use-reader';
@@ -133,6 +135,42 @@ function ListError({ online, onRetry }: { readonly online: boolean; readonly onR
     </li>
   );
 }
+
+/**
+ * **Les portes RÉELLES du démarrage — et elles seules.**
+ *
+ * iOS en peint NEUF (`ConversationListQuickActions`) : chercher des membres,
+ * voir ses contacts, ses affiliations, écrire, story, mood, post, inviter,
+ * lien raccourci. La v3.1 n'a de route pour AUCUNE d'entre elles
+ * (`route-table.tsx` : `list`, `thread`, `login`, `signup`, `progression`) —
+ * les porter toutes ici peindrait huit contrôles qui mentent, c'est-à-dire
+ * exactement ce que la revue #5559 a dû DÉFAIRE sur l'en-tête de cet écran.
+ *
+ * Reste celle qui n'a besoin d'aucune route pour AGIR : inviter. C'est aussi
+ * la seule des quatre que l'état vide promettait (« un message, une story, un
+ * mood, un post — ou invitez vos amis ») qu'on puisse tenir aujourd'hui ; la
+ * phrase a donc été réécrite pour ne plus promettre les trois autres.
+ *
+ * Les huit portes manquantes sont un chantier de parité, pas un oubli : elles
+ * arriveront avec leurs écrans et s'ajouteront ICI — une ligne par porte,
+ * impossible à ajouter sans son effet puisque `run` n'est pas optionnel.
+ */
+const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
+  {
+    key: 'inviter',
+    label: 'Inviter des amis',
+    hint: 'Partagez votre lien Meeshy : c’est ainsi que naît une première conversation.',
+    glyph: 'linkSimple',
+    // HÉROS, alors qu'iOS range `invite` en TUILE. L'écart est assumé et
+    // TEMPORAIRE : les trois héros d'iOS — chercher des membres, ses contacts,
+    // ses affiliations — n'ont aucune porte sur la v3.1 (#5765). Laisser le
+    // rang vacant montrerait une seule petite tuile à qui démarre, là où la
+    // directive demande un gros bouton. Le jour où les trois héros arrivent,
+    // celui-ci reprend son rang de tuile.
+    hero: true,
+    run: async () => RETOUR_INVITATION[await partagerInvitation(window.location.origin)],
+  },
+];
 
 export default function ConversationsScreen() {
   const [filter, setFilter] = useState<ListFilter>('all');
@@ -441,22 +479,6 @@ export default function ConversationsScreen() {
           </LensSection>
         ))}
         {/*
-          LA QUEUE DE LISTE — une demi-hauteur de fenêtre de vide sous la
-          dernière rangée. Sans elle, la bande de focus, ancrée à 140 du bas,
-          ne pourrait jamais atteindre les dernières conversations : elles
-          resteraient à jamais non magnifiées, et la liste se terminerait par
-          une zone morte que rien n'explique.
-
-          ELLE N'EXISTE QUE S'IL Y A UNE RANGÉE À MAGNIFIER. Rendue
-          inconditionnellement, elle poussait l'état vide 50 dvh plus bas :
-          mesuré à 390×844, le panneau « Aucune conversation ne correspond… »
-          commençait à 688 px et finissait à 899 — sa SORTIE, le bouton « Tout
-          afficher », tombait donc hors de l'écran. Un état vide dont on ne
-          voit pas l'issue est un cul-de-sac, et une cale destinée à la
-          magnification n'a rien à caler quand il n'y a rien à magnifier.
-        */}
-        {visible.length > 0 ? <li aria-hidden="true" style={{ height: '50dvh', flexShrink: 0 }} /> : null}
-        {/*
           DEUX états VIDES DISTINCTS (#5559 T15) : `empty-corpus` (aucune
           conversation du tout — l'écran de DÉMARRAGE) contre `empty-filter`
           (un filtre ou une recherche qui ne rend rien sur un corpus non
@@ -473,9 +495,23 @@ export default function ConversationsScreen() {
             <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
               Aucune conversation pour l’instant.
             </p>
-            <p className="text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
-              Un message, une story, un mood, un post — ou invitez vos amis.
-            </p>
+            {/*
+              LA SORTIE DE L'ÉCRAN DE DÉMARRAGE (2026-09-08). Cet état récitait
+              « Un message, une story, un mood, un post — ou invitez vos amis »
+              — la phrase d'iOS, où elle SURMONTE neuf boutons — sous ZÉRO
+              bouton. Il annonçait quatre gestes et n'en offrait aucun, quand
+              `empty-filter`, douze lignes plus bas, a toujours eu sa sortie.
+
+              Un état vide dont on ne voit pas l'issue est un cul-de-sac : le
+              commentaire de la cale le dit déjà pour l'état filtré. Celui-ci
+              était pire — il DÉCRIVAIT l'issue sans la donner.
+            */}
+            <QuickActions
+              title="Commencez ici"
+              subtitle="Meeshy s’écrit à plusieurs — invitez quelqu’un à vous rejoindre."
+              actions={ACTIONS_DE_DEMARRAGE}
+              conversationCount={0}
+            />
           </li>
         ) : null}
         {emptiness === 'empty-filter' ? (
@@ -500,6 +536,68 @@ export default function ConversationsScreen() {
             >
               Tout afficher
             </button>
+          </li>
+        ) : null}
+        {/*
+          LA QUEUE DE LISTE — une demi-hauteur de fenêtre de vide sous la
+          dernière rangée. Sans elle, la bande de focus, ancrée à 140 du bas,
+          ne pourrait jamais atteindre les dernières conversations : elles
+          resteraient à jamais non magnifiées, et la liste se terminerait par
+          une zone morte que rien n'explique.
+
+          ELLE N'EXISTE QUE S'IL Y A UNE RANGÉE À MAGNIFIER. Rendue
+          inconditionnellement, elle poussait l'état vide 50 dvh plus bas :
+          mesuré à 390×844, le panneau « Aucune conversation ne correspond… »
+          commençait à 688 px et finissait à 899 — sa SORTIE, le bouton « Tout
+          afficher », tombait donc hors de l'écran. Un état vide dont on ne
+          voit pas l'issue est un cul-de-sac, et une cale destinée à la
+          magnification n'a rien à caler quand il n'y a rien à magnifier.
+        */}
+        {/*
+          ET LA CALE PORTE LES ACCÈS RAPIDES (2026-09-08). iOS met exactement
+          ici les siens — `ConversationListView.listTail`, haut d'une demi-région
+          visible, la MÊME hauteur et la MÊME raison. La v3.1 n'y mettait qu'un
+          `aria-hidden` : une demi-fenêtre de vide sous la dernière ligne, sans
+          une issue, là où l'utilisateur arrive précisément parce qu'il a fini de
+          lire sa liste et cherche quoi faire.
+
+          La hauteur reste : c'est elle qui laisse la dernière conversation
+          rejoindre la bande de focus. Ce qui change, c'est qu'elle n'est plus
+          VIDE — et elle cesse donc d'être `aria-hidden`, puisqu'elle porte
+          maintenant quelque chose à lire.
+        */}
+        {/*
+          L’ORDRE SUIT iOS (2026-09-09) : la branche VIDE se rend AVANT `listTail`
+          (`ConversationListView` — le `if groupedConversations.isEmpty` précède la
+          queue). La v3.1 les avait dans l’ordre inverse : en recherche infructueuse,
+          le bloc d’accès rapides s’intercalait AU-DESSUS du « Aucune conversation ne
+          correspond à… », si bien que la réponse à ce qu’on venait de taper arrivait
+          après une proposition de faire autre chose.
+        */}
+        {/*
+          ELLE EST RENDUE DÈS QU'ON A UNE CONVERSATION — jamais conditionnée à
+          ce que le FILTRE laisse voir (correction porteur 2026-09-09).
+
+          Mesuré sur iOS : `listTail` vit à l'indentation de `if
+          groupedConversations.isEmpty { … } else { … }`, donc DEHORS — la queue
+          se rend dans TOUTES les branches, y compris « la recherche ne rend
+          rien ». La v3.1 la conditionnait à `visible.length > 0`, le compte
+          FILTRÉ : chercher un mot absent effaçait d'un coup la seule aide de
+          l'écran, exactement au moment où l'on ne trouve pas ce qu'on cherche.
+
+          La HAUTEUR, elle, reste conditionnée aux rangées : c'est une cale de
+          magnification, et elle n'a rien à caler quand rien n'est affiché.
+          Sans cette distinction, l'état filtré vide repartait 50 dvh plus bas —
+          le défaut que le commentaire ci-dessus a déjà corrigé une fois.
+        */}
+        {conversations.length > 0 ? (
+          <li style={{ minHeight: visible.length > 0 ? '50dvh' : 0, flexShrink: 0 }}>
+            <QuickActions
+              title="Et maintenant ?"
+              subtitle="Meeshy s’écrit à plusieurs — invitez quelqu’un à vous rejoindre."
+              actions={ACTIONS_DE_DEMARRAGE}
+              conversationCount={conversations.length}
+            />
           </li>
         ) : null}
           </>

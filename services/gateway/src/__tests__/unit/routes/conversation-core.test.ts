@@ -221,8 +221,7 @@ const makePrisma = (): any => ({
     findFirst: jest.fn().mockResolvedValue(null),
   },
   communityMember: {
-    findMany: jest.fn().mockResolvedValue([]),
-    createMany: jest.fn().mockResolvedValue({}),
+    findMany: jest.fn().mockResolvedValue([]), createMany: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({ count: 0 }),
   },
   agentConversationSummary: {
     findUnique: jest.fn().mockResolvedValue(null),
@@ -3354,7 +3353,7 @@ describe('registerCoreRoutes', () => {
         { id: USER_ID, displayName: 'Alice', username: 'alice', avatar: null },
         { id: OTHER_USER_ID, displayName: 'Bob', username: 'bob', avatar: null },
       ]);
-      prisma.communityMember.findMany.mockResolvedValue([{ userId: USER_ID }]);
+      prisma.communityMember.findMany.mockResolvedValue([{ id: 'cm-1', userId: USER_ID, isActive: true }]);
       prisma.conversation.create.mockResolvedValue({
         id: CONV_ID, type: 'group', title: 'Test', createdAt: new Date(), participants: [],
       });
@@ -3519,16 +3518,16 @@ describe('registerCoreRoutes', () => {
         id: CONV_ID, type: 'group', title: 'CG', createdAt: new Date(), participants: [],
       });
       prisma.user.findMany.mockResolvedValue([]);
-      // All users are already members — no new ones
+      // All users are already ACTIVE members — no new ones, none to reactivate
       prisma.communityMember.findMany.mockResolvedValue([
-        { userId: USER_ID },
-        { userId: OTHER_USER_ID },
+        { id: 'cm-1', userId: USER_ID, isActive: true },
+        { id: 'cm-2', userId: OTHER_USER_ID, isActive: true },
       ]);
       const handler = getHandler(fastify, 'POST', '/conversations');
       const reply = makeReply();
       await handler(makeRequest({ body: {} }), reply);
       expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
-      expect(mockSendSuccess).toHaveBeenCalled();
+      expect(prisma.communityMember.updateMany).not.toHaveBeenCalled(); expect(mockSendSuccess).toHaveBeenCalled();
     });
   });
 

@@ -133,6 +133,18 @@ function LensRowImpl({
   const previewKind = previewKindOf(conversation);
   const showsServedPreview = previewKind === 'standard' || previewKind === 'ephemeral';
   /**
+   * SANS HISTORIQUE (#5780) — `previewKindOf` rend `standard` pour une
+   * conversation qui n'a jamais reçu de message (`lastMessage` absent, `null`
+   * comme `undefined` — #5650) : rien à protéger, mais rien à SERVIR non plus.
+   * `served()` reçoit alors un original vide et aucune traduction, donc
+   * `preview.text === ''` — sans ce cas, la ligne 2 se rendait comme un
+   * `<span>` VIDE, pas comme un état. `lastMessageAt` reste servi
+   * inconditionnellement par la passerelle (`schema.prisma:495`, sans `?`) :
+   * l'heure de création s'affiche déjà (voir `at` ci-dessus) ; seul le texte
+   * manquait un état à dire.
+   */
+  const hasNoHistory = conversation.lastMessage === undefined || conversation.lastMessage === null;
+  /**
    * LA CLASSE DE TRONCATURE DE L'APERÇU — `truncate` au repos (une ligne,
    * point de suspension), `line-clamp-2` magnifié (deux lignes, point de
    * suspension). Les deux n'opèrent que sur un BLOC : voir le commentaire de
@@ -378,6 +390,8 @@ function LensRowImpl({
                 <Glyph name="timer" size={13} className="mr-1 inline-block align-[-2px]" />
                 <span className="italic">Message expiré</span>
               </>
+            ) : hasNoHistory ? (
+              <span className="italic">Nouvelle conversation</span>
             ) : (
               <>
                 {senderPrefix}

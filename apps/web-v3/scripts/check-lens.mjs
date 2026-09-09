@@ -122,6 +122,27 @@ constate(
   `la rangée « c-protection » ne dit pas « 1 message caché » : ${JSON.stringify(protectedRow)}`,
 );
 
+/**
+ * #5780 — une conversation SANS HISTORIQUE (`lastMessage` absent, aucun
+ * message jamais envoyé) ne doit jamais rendre une ligne 2 vide : elle dit
+ * « Nouvelle conversation », et l'heure de création reste servie
+ * (`lastMessageAt` n'est jamais absent sur le wire — `schema.prisma:495`).
+ */
+const nouvelleRow = await page.evaluate(() => {
+  const li = document.querySelector('[data-row="c-nouvelle"]');
+  if (li === null) return null;
+  return { text: li.textContent ?? '', hasTime: li.querySelector('[data-time]') !== null };
+});
+constate(nouvelleRow !== null, 'la rangée « c-nouvelle » (conversation sans historique) est introuvable dans la Lentille');
+constate(
+  nouvelleRow !== null && nouvelleRow.text.includes('Nouvelle conversation'),
+  `la rangée « c-nouvelle » ne dit pas « Nouvelle conversation » : ${JSON.stringify(nouvelleRow?.text)}`,
+);
+constate(
+  nouvelleRow !== null && nouvelleRow.hasTime,
+  'la rangée « c-nouvelle » ne montre aucune heure — lastMessageAt devrait pourtant toujours être servi',
+);
+
 /** On défile PAR PALIERS, en relevant la géométrie à chaque, et on la compare. */
 const readings = [];
 for (const y of [40, 120, 240, 400, 600]) {
