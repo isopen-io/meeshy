@@ -104,6 +104,16 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         public let missingPoints: Int
         /// Le prix, SERVI par la passerelle — aucun client ne le code en dur.
         public let mintCost: Int
+        /// ISO 8601 des BORNES du registre de frappe (#5839) — la première et
+        /// la dernière, `nil` quand il n'y en a eu aucune.
+        ///
+        /// Optionnelles au sens du DÉCODAGE, pas du produit : une passerelle
+        /// antérieure au lot ne sert pas ces clés, et leur absence doit rester
+        /// décodable. Gardées en chaîne comme `Milestone.reachedAt` — c'est la
+        /// forme du contrat ET celle du cache ; la `Date` se dérive à la
+        /// présentation.
+        public let firstMintedAt: String?
+        public let lastMintedAt: String?
 
         public init(
             balance: Int,
@@ -111,7 +121,9 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
             debitablePoints: Int,
             floorPoints: Int,
             missingPoints: Int,
-            mintCost: Int
+            mintCost: Int,
+            firstMintedAt: String? = nil,
+            lastMintedAt: String? = nil
         ) {
             self.balance = balance
             self.mintedLifetime = mintedLifetime
@@ -119,6 +131,8 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
             self.floorPoints = floorPoints
             self.missingPoints = missingPoints
             self.mintCost = mintCost
+            self.firstMintedAt = firstMintedAt
+            self.lastMintedAt = lastMintedAt
         }
     }
 

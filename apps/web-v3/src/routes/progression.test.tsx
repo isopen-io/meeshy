@@ -1,13 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { BADGE_THRESHOLDS, ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
-import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
+import { BADGE_THRESHOLDS, ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES, ENGAGEMENT_AXIS_WEIGHTS } from '@meeshy/shared/types/engagement';
+import { axesByFamily, resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { ACHIEVEMENT_COPY, AXIS_LABELS } from '@/lib/view/progression';
 
-import { ProgressionBody, ProgressionError, ProgressionSkeleton } from './progression';
+import { ElansHero, MeeshDetail, ProgressionBody } from './progression';
+import { AchievementsSection, AxisRow, GeneratedAchievements, ProgressionError, ProgressionSkeleton } from './progression-parts';
 
 /**
  * L'ÉCRAN « PROGRESSION », RENDU (#5547) — ce que les témoins purs ne prouvent
@@ -45,83 +46,139 @@ const sansBlocsOptionnels = (() => {
  */
 const TOTAL_BADGES = ENGAGEMENT_AXES.length * BADGE_THRESHOLDS.length;
 
-describe('ProgressionBody — un utilisateur à mi-chemin', () => {
-  /**
-   * Les chiffres se DÉRIVENT de la fixture, ils ne s'y recopient pas.
-   *
-   * La version précédente épinglait « Niveau 3 » et « 350 points ». Le porteur
-   * a réglé le barème le 2026-09-09 et la famille sociale est entrée au
-   * catalogue : la fixture vaut désormais 1244 points, et le témoin accusait
-   * l'ÉCRAN alors que seule la donnée avait bougé. Ce qui est sous test ici est
-   * que l'écran DIT ce que la loi a résolu — pas quelle valeur la loi résout.
-   */
-  test('le niveau et son score, la série et son record', () => {
-    expect(html).toContain(`Niveau ${fixture.level.level}`);
-    expect(html).toContain(`${fixture.level.value} points`);
-    expect(html).toContain(`${fixture.streak.value} jours d’affilée`);
-    expect(html).toContain(`Record : ${ENGAGEMENT_PROGRESS_FIXTURE.streak.longestStreakDays} jours`);
+/**
+ * LE HUB rend ce que la séquence partagée déclare : trois heros, trois portes.
+ * Le DÉTAIL — les axes, les défis, les succès nommés — a migré vers les pages
+ * dédiées, et les témoins l'y suivent. Un témoin qui reste sur l'ancienne
+ * surface après une découpe ne mesure plus l'écran, il mesure l'habitude.
+ */
+describe('le hub — un utilisateur à mi-chemin', () => {
+  test('ouvre sur le DERNIER succès décroché, pas sur le prochain', () => {
+    expect(html).toContain('Dernier succès');
+    expect(html).toContain('Décroché le');
   });
 
   /**
-   * Ce qui est sous test est que CHAQUE barre est nommée et chiffrée — pas
-   * combien il y en a. Le compte a changé (2 → 3) le jour où le hero des
-   * Meeshes a montré sa propre progression vers la frappe : un total figé
-   * aurait accusé l'écran d'une régression qui était un ajout.
+   * Les chiffres se DÉRIVENT de la fixture, ils ne s'y recopient pas — le
+   * porteur a réglé le barème le 2026-09-09, et un nombre en dur accuserait
+   * l'ÉCRAN d'une régression que seule la donnée a causée.
    */
-  test('les barres sont des `progressbar` NOMMÉES, avec leur valeur', () => {
-    const barres = html.match(/role="progressbar"[^>]*/g) ?? [];
-    expect(barres.length).toBeGreaterThanOrEqual(2);
-    for (const barre of barres) {
-      expect(barre).toContain('aria-valuenow=');
-      expect(barre).toMatch(/aria-label=|aria-labelledby=/);
-    }
-    expect(html).toContain(`aria-valuenow="${Math.round(fixture.level.progress * 100)}"`);
+  test('le hero du niveau dit le rang et le score', () => {
+    expect(html).toContain(`Niveau ${fixture.level.level}`);
+    expect(html).toContain(`${fixture.level.value} points`);
+  });
 
-    // Sans les blocs optionnels, il en reste exactement deux : le niveau et la
-    // série. C'est la LIGNE DE BASE, et elle, elle ne bouge pas.
-    expect(sansBlocsOptionnels.match(/role="progressbar"/g)).toHaveLength(2);
+  /**
+   * LA FLAMME est son propre hero depuis #5838 — elle vivait dans celui du
+   * niveau, le porteur a tranché « 1 Hero Niveau, 1 Hero Élan, 1 Hero Flamme »
+   * (`packages/shared/utils/progression-layout.ts`). Un client qui ne rend
+   * pas ce bloc ne compile même plus : la séquence partagée est un type
+   * SOMME, `ProgressionBody` doit épuiser ses cas.
+   */
+  test('le hero de la flamme dit la série qu\'il a recueillie', () => {
+    expect(html).toContain('Série');
+    expect(html).toContain(`${fixture.streak.value} jours d’affilée`);
+    expect(html).toContain(`Record : ${ENGAGEMENT_PROGRESS_FIXTURE.streak.longestStreakDays} jours`);
   });
 
   test('la carte de niveau nomme le RANG suivant, jamais le seuil de points', () => {
     const manque = (fixture.level.nextThreshold ?? 0) - fixture.level.value;
     expect(html).toContain(`Encore ${manque} points avant le niveau ${fixture.level.level + 1}`);
-    // Le SEUIL n'est jamais servi comme un rang — c'est le défaut que ce
-    // témoin garde : « niveau 400 » au lieu de « niveau 4 ».
     expect(html).not.toContain(`niveau ${fixture.level.nextThreshold}`);
   });
 
-  test('les TREIZE axes sont rendus — y compris ceux à zéro, qui disent ce qu’il reste à faire', () => {
-    for (const key of ENGAGEMENT_AXES) expect(html).toContain(AXIS_LABELS[key]);
-    expect(html).toContain('Encore 1 avant le palier 1');
+  /**
+   * Le barème est DÉRIVÉ de `ENGAGEMENT_AXIS_WEIGHTS`. Ce témoin le vérifie en
+   * cherchant les poids RÉELS : s'il les recopiait, il passerait au vert sur
+   * une énumération figée, c'est-à-dire sur le défaut qu'il doit attraper.
+   */
+  test('le hero du niveau ÉNUMÈRE comment gagner, avec les poids du catalogue', () => {
+    expect(html).toContain('Comment gagner des points');
+    const poids = [...new Set(Object.values(ENGAGEMENT_AXIS_WEIGHTS))];
+    for (const p of poids) expect(html).toContain(`+${p}`);
+  });
+
+  test('le hero du niveau dit le prix d\'une Meesh, servi par le serveur', () => {
+    expect(html).toContain(`${fixture.meesh?.mintCost} points se convertissent en une Meesh`);
+  });
+
+  test('les barres sont des `progressbar` NOMMÉES, avec leur valeur', () => {
+    const barres = html.match(/role="progressbar"[^>]*/g) ?? [];
+    expect(barres.length).toBeGreaterThanOrEqual(1);
+    for (const barre of barres) {
+      expect(barre).toContain('aria-valuenow=');
+      expect(barre).toMatch(/aria-label=|aria-labelledby=/);
+    }
   });
 
   /**
-   * Le compte OBTENU se dérive aussi, pour la même raison que le TOTAL au-dessus :
-   * il valait 15, et les six paliers sociaux de la fixture l'ont porté à 21. Un
-   * nombre en dur ici accuse l'écran d'une régression que seule la donnée a
-   * causée. Ce qui est sous test est que les trois nombres CONCORDENT — le
-   * compte affiché, les pastilles pleines, les pastilles vides.
+   * Les trois portes sont là, chacune avec SON compte — c'est le compte qui
+   * donne envie d'ouvrir. Un lien sans chiffre ne dit pas s'il vaut le geste.
    */
-  test('le compte de badges et les cinq pastilles par axe', () => {
-    const obtenus = fixture.badgesEarned;
-    expect(html).toContain(`${obtenus} / ${TOTAL_BADGES}`);
-    expect(html.match(/Palier \d+ atteint/g)?.length).toBe(obtenus);
-    expect(html.match(/Palier \d+ à atteindre/g)?.length).toBe(TOTAL_BADGES - obtenus);
+  test('les trois entrées de section annoncent leur compte', () => {
+    expect(html).toContain('Badges');
+    expect(html).toContain('Défis');
+    expect(html).toContain('Succès');
+    expect(html).toContain(`${fixture.badgesEarned} / ${TOTAL_BADGES}`);
+    expect(html).toContain(
+      `${fixture.achievements.filter((a) => a.unlocked).length} / ${fixture.achievements.length}`,
+    );
   });
 
-  test('les succès : quatre débloqués et datés, un verrouillé avec sa condition', () => {
-    expect(html).toContain('4 / 5');
-    for (const key of ENGAGEMENT_ACHIEVEMENT_KEYS) expect(html).toContain(ACHIEVEMENT_COPY[key].title);
-    expect(html).toContain(ACHIEVEMENT_COPY['achievement.all_content_types'].condition);
-    expect(html.match(/Obtenu le /g)?.length).toBe(4);
-  });
-
-  test('aucun bandeau d’état vide sur un utilisateur actif', () => {
-    expect(html).not.toContain('Aucune activité comptée');
+  /** Le DÉTAIL n'est plus ici : il a sa page. Le hub doit tenir court. */
+  test('ne rend PAS le détail des axes — il a sa page', () => {
+    expect(html).not.toContain('Palier');
   });
 });
 
-describe('ProgressionBody — l’état VIDE est un état, et il montre le catalogue entier', () => {
+/**
+ * LA PAGE DÉDIÉE DES BADGES — le détail que le hub n'annonce que par un compte.
+ */
+describe('la page des badges', () => {
+  const htmlBadges = renderToStaticMarkup(
+    <>
+      {axesByFamily(fixture.axes).map((groupe) =>
+        groupe.axes.map((axe) => <AxisRow key={axe.axisKey} axis={axe} />),
+      )}
+    </>,
+  );
+
+  test('rend les axes du catalogue ENTIER — y compris ceux à zéro', () => {
+    for (const key of ENGAGEMENT_AXES) expect(htmlBadges).toContain(AXIS_LABELS[key]);
+    expect(htmlBadges).toContain('Encore 1 avant le palier 1');
+  });
+
+  test('les pastilles pleines et vides CONCORDENT avec le compte du hub', () => {
+    const obtenus = fixture.badgesEarned;
+    expect(htmlBadges.match(/Palier \d+ atteint/g)?.length).toBe(obtenus);
+    expect(htmlBadges.match(/Palier \d+ à atteindre/g)?.length).toBe(TOTAL_BADGES - obtenus);
+  });
+});
+
+/**
+ * LA PAGE DÉDIÉE DES SUCCÈS — les cinq composés, nommés un par un.
+ */
+describe('la page des succès', () => {
+  const htmlSucces = renderToStaticMarkup(<AchievementsSection progress={fixture} />);
+
+  test('quatre débloqués et datés, un verrouillé avec sa condition', () => {
+    expect(htmlSucces).toContain('4 / 5');
+    for (const key of ENGAGEMENT_ACHIEVEMENT_KEYS) expect(htmlSucces).toContain(ACHIEVEMENT_COPY[key].title);
+    expect(htmlSucces).toContain(ACHIEVEMENT_COPY['achievement.all_content_types'].condition);
+    expect(htmlSucces.match(/Obtenu le /g)?.length).toBe(4);
+  });
+});
+
+/**
+ * L'ÉTAT VIDE — porté par les HEROS eux-mêmes.
+ *
+ * Un bandeau « aucune activité » séparé existait ; il est devenu redondant, et
+ * moins utile : le hero du dernier succès dit quoi faire pour décrocher le
+ * premier, celui des élans dit ce qui multiplie. Une phrase générique
+ * au-dessus de trois blocs qui disent la même chose en mieux occupait la place
+ * sans rien ajouter.
+ */
+describe('le hub — un compte VIDE parle quand même', () => {
   const empty = renderToStaticMarkup(
     <ProgressionBody
       progress={resolveEngagementProgress({
@@ -133,18 +190,21 @@ describe('ProgressionBody — l’état VIDE est un état, et il montre le catal
     />,
   );
 
-  test('le bandeau dit quoi faire, en `role="status"`', () => {
-    expect(empty).toContain('role="status"');
-    expect(empty).toContain('Aucune activité comptée');
+  test('le hero des succès dit comment décrocher le PREMIER', () => {
+    expect(empty).toContain('Premier succès');
+    expect(empty).toContain('Envoyez un message');
+    expect(empty).not.toContain('Décroché le');
   });
 
-  test('niveau 0, aucune série, tout le catalogue de badges, 0 / 5 succès — et tout le catalogue verrouillé', () => {
+  test('le hero des élans explique ce qui multiplie, plutôt que de se taire', () => {
+    expect(empty).toContain('Vos élans');
+    expect(empty).toContain('multiplie');
+  });
+
+  test('le niveau 0 et les trois portes restent servis — un catalogue vide reste un catalogue', () => {
     expect(empty).toContain('Niveau 0');
-    expect(empty).toContain('Aucune série en cours');
     expect(empty).toContain(`0 / ${TOTAL_BADGES}`);
     expect(empty).toContain('0 / 5');
-    for (const key of ENGAGEMENT_AXES) expect(empty).toContain(AXIS_LABELS[key]);
-    expect(empty).not.toContain('Obtenu le ');
   });
 });
 
@@ -185,7 +245,11 @@ const rendreAvecMeesh = (meesh: {
   mintCost: number;
 }) =>
   renderToStaticMarkup(
-    <ProgressionBody progress={resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, meesh })} />,
+    <MeeshDetail
+      meesh={resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, meesh }).meesh!}
+      onMint={() => {}}
+      isMinting={false}
+    />,
   );
 
 describe('MeeshHero', () => {
@@ -261,7 +325,7 @@ const rendreAvecElan = (elan: {
   windowDays: number;
 }) =>
   renderToStaticMarkup(
-    <ProgressionBody progress={resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, elan })} />,
+    <ElansHero progress={resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, elan })} />,
   );
 
 describe('ElanBanner', () => {
@@ -309,15 +373,16 @@ const rendreAvecDefis = (params: {
   reach: Record<string, number>;
   milestones?: Array<{ milestoneType: string; milestoneKey: string; reachedAt: string }>;
 }) =>
-  renderToStaticMarkup(
-    <ProgressionBody
-      progress={resolveEngagementProgress({
-        ...ENGAGEMENT_PROGRESS_FIXTURE,
-        milestones: params.milestones ?? [],
-        achievementReach: params.reach,
-      } as never)}
-    />,
-  );
+  (() => {
+    const progress = resolveEngagementProgress({
+      ...ENGAGEMENT_PROGRESS_FIXTURE,
+      milestones: params.milestones ?? [],
+      achievementReach: params.reach,
+    } as never);
+    return progress.achievementSections === undefined
+      ? ''
+      : renderToStaticMarkup(<GeneratedAchievements sections={progress.achievementSections} />);
+  })();
 
 describe('GeneratedAchievements', () => {
   test('n’affiche rien quand la passerelle ne sert pas la carte', () => {
