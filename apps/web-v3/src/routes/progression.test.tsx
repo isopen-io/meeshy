@@ -23,6 +23,23 @@ const fixture = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
 const html = renderToStaticMarkup(<ProgressionBody progress={fixture} />);
 
 /**
+ * Le MÊME écran, servi par une passerelle qui ne connaît AUCUN des trois blocs
+ * optionnels — un client déployé avant ce lot, ou parlant à une version
+ * antérieure. C'est le support des témoins d'ABSENCE, qui doivent retirer ce
+ * qu'ils prétendent absent plutôt que de compter sur une fixture incomplète.
+ */
+const sansBlocsOptionnels = renderToStaticMarkup(
+  <ProgressionBody
+    progress={resolveEngagementProgress({
+      ...ENGAGEMENT_PROGRESS_FIXTURE,
+      meesh: undefined,
+      elan: undefined,
+      achievementReach: undefined,
+    })}
+  />,
+);
+
+/**
  * **Le total de badges se CALCULE, il ne s'écrit pas.** Il valait 65 (13 axes ×
  * 5 paliers) ; la famille sociale l'a porté à 85 (#5766). Un nombre en dur se
  * périme au premier axe ajouté, et fait échouer un témoin qui n'a rien à dire
@@ -32,21 +49,48 @@ const html = renderToStaticMarkup(<ProgressionBody progress={fixture} />);
 const TOTAL_BADGES = ENGAGEMENT_AXES.length * BADGE_THRESHOLDS.length;
 
 describe('ProgressionBody — un utilisateur à mi-chemin', () => {
+  /**
+   * Les chiffres se DÉRIVENT de la fixture, ils ne s'y recopient pas.
+   *
+   * La version précédente épinglait « Niveau 3 » et « 350 points ». Le porteur
+   * a réglé le barème le 2026-09-09 et la famille sociale est entrée au
+   * catalogue : la fixture vaut désormais 1244 points, et le témoin accusait
+   * l'ÉCRAN alors que seule la donnée avait bougé. Ce qui est sous test ici est
+   * que l'écran DIT ce que la loi a résolu — pas quelle valeur la loi résout.
+   */
   test('le niveau et son score, la série et son record', () => {
-    expect(html).toContain('Niveau 3');
-    expect(html).toContain('350 points');
-    expect(html).toContain('5 jours d’affilée');
-    expect(html).toContain('Record : 12 jours');
+    expect(html).toContain(`Niveau ${fixture.level.level}`);
+    expect(html).toContain(`${fixture.level.value} points`);
+    expect(html).toContain(`${fixture.streak.value} jours d’affilée`);
+    expect(html).toContain(`Record : ${ENGAGEMENT_PROGRESS_FIXTURE.streak.longestStreakDays} jours`);
   });
 
+  /**
+   * Ce qui est sous test est que CHAQUE barre est nommée et chiffrée — pas
+   * combien il y en a. Le compte a changé (2 → 3) le jour où le hero des
+   * Meeshes a montré sa propre progression vers la frappe : un total figé
+   * aurait accusé l'écran d'une régression qui était un ajout.
+   */
   test('les barres sont des `progressbar` NOMMÉES, avec leur valeur', () => {
-    expect(html.match(/role="progressbar"/g)).toHaveLength(2);
-    expect(html).toContain('aria-valuenow="80"');
+    const barres = html.match(/role="progressbar"[^>]*/g) ?? [];
+    expect(barres.length).toBeGreaterThanOrEqual(2);
+    for (const barre of barres) {
+      expect(barre).toContain('aria-valuenow=');
+      expect(barre).toMatch(/aria-label=|aria-labelledby=/);
+    }
+    expect(html).toContain(`aria-valuenow="${Math.round(fixture.level.progress * 100)}"`);
+
+    // Sans les blocs optionnels, il en reste exactement deux : le niveau et la
+    // série. C'est la LIGNE DE BASE, et elle, elle ne bouge pas.
+    expect(sansBlocsOptionnels.match(/role="progressbar"/g)).toHaveLength(2);
   });
 
   test('la carte de niveau nomme le RANG suivant, jamais le seuil de points', () => {
-    expect(html).toContain('Encore 50 points avant le niveau 4');
-    expect(html).not.toContain('niveau 400');
+    const manque = (fixture.level.nextThreshold ?? 0) - fixture.level.value;
+    expect(html).toContain(`Encore ${manque} points avant le niveau ${fixture.level.level + 1}`);
+    // Le SEUIL n'est jamais servi comme un rang — c'est le défaut que ce
+    // témoin garde : « niveau 400 » au lieu de « niveau 4 ».
+    expect(html).not.toContain(`niveau ${fixture.level.nextThreshold}`);
   });
 
   test('les TREIZE axes sont rendus — y compris ceux à zéro, qui disent ce qu’il reste à faire', () => {
@@ -140,10 +184,17 @@ const rendreAvecMeesh = (meesh: {
   );
 
 describe('MeeshHero', () => {
+  /**
+   * L'absence se CONSTRUIT, elle ne s'hérite pas de la fixture.
+   *
+   * Ce témoin lisait `html` — le rendu de la fixture — et passait au vert
+   * uniquement parce que la fixture ne portait PAS de bloc `meesh`. Le jour où
+   * la démonstration en a reçu un (pour que le porteur voie le hero), il est
+   * tombé : il ne mesurait pas l'absence du bloc, il mesurait un manque de
+   * données. Un témoin d'absence doit RETIRER ce qu'il prétend absent.
+   */
   test('n’affiche RIEN quand la passerelle ne sert pas le bloc', () => {
-    // La fixture n'a pas de bloc `meesh` : un client déployé avant ce lot, ou
-    // parlant à une passerelle antérieure, ne doit peindre aucun solde inventé.
-    expect(html).not.toContain('Meesh');
+    expect(sansBlocsOptionnels).not.toContain('Meesh');
   });
 
   test('sans assez de points : le solde, le manque, et AUCUN bouton', () => {
@@ -215,7 +266,7 @@ describe('ElanBanner', () => {
   });
 
   test('n’affiche rien non plus quand la passerelle ne sert pas le bloc', () => {
-    expect(html).not.toContain('Élan');
+    expect(sansBlocsOptionnels).not.toContain('Élan');
   });
 
   test('dit le facteur ET ce qui le porte — sinon il se subit au lieu de se piloter', () => {
@@ -265,7 +316,7 @@ const rendreAvecDefis = (params: {
 
 describe('GeneratedAchievements', () => {
   test('n’affiche rien quand la passerelle ne sert pas la carte', () => {
-    expect(html).not.toContain('Défis');
+    expect(sansBlocsOptionnels).not.toContain('Défis');
   });
 
   test('ne rend JAMAIS un palier d’ampleur que le produit ne peut pas tenir', () => {

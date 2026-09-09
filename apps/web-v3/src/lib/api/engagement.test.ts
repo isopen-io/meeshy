@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from './engagement-fixture';
 import { ENGAGEMENT_PROGRESS_PATH, fetchEngagementProgress, loadEngagementProgress } from './engagement';
 import { createHttpTransport } from './http';
@@ -73,9 +74,13 @@ describe('loadEngagementProgress — la source se lit à la construction', () =>
 
     const result = await loadEngagementProgress({ source: 'fixtures', transport });
 
+    // Ce qui est sous test est que la fixture est RÉSOLUE sans réseau, pas
+    // quel niveau elle atteint : le barème est un paramètre réglable, et un
+    // témoin qui l'épingle casse à chaque réglage sans rien dire du transport.
+    const attendu = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
     expect(calls).toHaveLength(0);
-    expect(result.ok && result.data.level.level).toBe(3);
-    expect(result.ok && result.data.badgesEarned).toBe(15);
+    expect(result.ok && result.data.level.level).toBe(attendu.level.level);
+    expect(result.ok && result.data.badgesEarned).toBe(attendu.badgesEarned);
   });
 
   test("source 'gateway' : la progression RÉSOLUE depuis la charge servie", async () => {

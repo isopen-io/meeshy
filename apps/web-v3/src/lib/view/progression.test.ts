@@ -55,7 +55,10 @@ describe('les phrases de palier', () => {
 
   test('le niveau compte en points et nomme son RANG, la série en jours', () => {
     // « niveau 4 », jamais « niveau 400 » — le seuil de points n'est pas un niveau.
-    expect(nextStepLabel(progress.level, LEVEL_UNIT, progress.level.level + 1)).toBe('Encore 50 points avant le niveau 4');
+    const manque = (progress.level.nextThreshold ?? 0) - progress.level.value;
+    expect(nextStepLabel(progress.level, LEVEL_UNIT, progress.level.level + 1)).toBe(
+      `Encore ${manque} points avant le niveau ${progress.level.level + 1}`,
+    );
     expect(nextStepLabel(progress.streak, STREAK_UNIT)).toBe('Encore 2 jours avant le jalon de 7');
   });
 
