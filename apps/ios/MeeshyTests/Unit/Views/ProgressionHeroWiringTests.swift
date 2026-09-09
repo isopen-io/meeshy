@@ -64,9 +64,14 @@ final class ProgressionHeroWiringTests: XCTestCase {
                       "Rejouer l'haptique de SUCCÈS à chaque consultation userait le signal qui compte.")
         XCTAssertTrue(code.contains("reveal.close"),
                       "Depuis le tableau de bord, promettre d'y aller serait faux : on en revient.")
-        XCTAssertTrue(code.contains("guard occasion.estObtenu else { return MeeshyColors.textMuted"),
+        XCTAssertTrue(code.contains("guard occasion.estObtenu else { return MeeshyColors.neutral500"),
                       "La couleur EST le signal « c'est à vous » : la servir à ce qui n'est pas "
-                          + "obtenu la vide de son sens sur tout l'écran.")
+                          + "obtenu la vide de son sens sur tout l'écran. Et `neutral500` plutôt que "
+                          + "`textMuted` — mesuré au simulateur, ce dernier rend un lavande PLEIN qui "
+                          + "se lit comme une seconde récompense.")
+        XCTAssertTrue(code.contains("if !reduceMotion && occasion.estObtenu {"),
+                      "Un rayonnement dit « ta-daa » : le peindre autour d'un palier NON obtenu "
+                          + "félicite pour rien.")
     }
 
     func test_occasion_estObtenu_suitLEtatDuSucces() {

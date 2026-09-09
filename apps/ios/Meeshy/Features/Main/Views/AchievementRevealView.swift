@@ -96,7 +96,13 @@ struct AchievementRevealView: View {
         // Un palier verrouillé se peint en GRIS, pas dans la couleur de la
         // récompense : la couleur EST le signal « c'est à vous ». La servir à
         // ce qui n'est pas obtenu la vide de son sens sur tout l'écran.
-        guard occasion.estObtenu else { return MeeshyColors.textMuted(isDark: isDark) }
+        //
+        // `neutral500` et non `textMuted` : mesuré au simulateur, ce dernier
+        // rend `indigo300` à 70 % — sur un disque de 128 pt, un lavande PLEIN
+        // qui se lit comme une SECONDE récompense plutôt que comme une absence.
+        // Le gris neutre est déjà le vocabulaire du verrouillé dans cette app
+        // (`AchievementBadgeView`, teinte « 808080 »).
+        guard occasion.estObtenu else { return MeeshyColors.neutral500 }
         switch reveal {
         case .achievement: return MeeshyColors.purple500
         case .streak: return MeeshyColors.warning
@@ -156,7 +162,12 @@ struct AchievementRevealView: View {
             // Les rayons ne tournent QUE si l'animation est permise — sinon ils
             // ne sont pas peints du tout : un décor immobile n'explique rien et
             // encombre la lecture.
-            if !reduceMotion {
+            //
+            // Et ils ne se peignent QUE pour un palier OBTENU : un rayonnement
+            // dit « ta-daa ». Le servir à ce qui n'est pas encore acquis
+            // félicite pour rien — même erreur que la couleur, une couche
+            // au-dessus.
+            if !reduceMotion && occasion.estObtenu {
                 ForEach(0..<12, id: \.self) { i in
                     Capsule()
                         .fill(teinte.opacity(0.35))
