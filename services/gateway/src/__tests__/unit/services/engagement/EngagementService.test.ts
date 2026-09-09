@@ -171,8 +171,8 @@ describe('EngagementService.recordActivity', () => {
       // `points` à côté de `count` depuis #5742 : deux colonnes, deux questions —
       // `count` compte des ACTIONS et pilote les badges, `points` porte ce que
       // l'axe crédite au score et pilote le niveau puis la frappe des Meeshes.
-      create: { userId: 'user-1', axisKey: 'content.text_message', count: 1, points: 3 },
-      update: { count: { increment: 1 }, points: { increment: 3 } },
+      create: { userId: 'user-1', axisKey: 'content.text_message', count: 1, points: 9 },
+      update: { count: { increment: 1 }, points: { increment: 9 } },
       select: { count: true },
     });
   });
@@ -541,7 +541,7 @@ describe('EngagementService level tracking (#5545)', () => {
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
 
-    await svc.recordActivity('user-1', 'content.text_message'); // weight 3
+    await svc.recordActivity('user-1', 'content.text_message'); // weight 9
 
     expect(create).not.toHaveBeenCalled();
     expect(notificationService.createNotification).not.toHaveBeenCalled();
