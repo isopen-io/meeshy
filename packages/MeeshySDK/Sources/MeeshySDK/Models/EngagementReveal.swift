@@ -31,18 +31,36 @@ public enum EngagementReveal: Equatable, Sendable {
     /// `level_up` porte `threshold` ET `level`, et c'est le RANG qui se
     /// célèbre. Lire `threshold` d'abord en ferait une série de 400 jours.
     public static func from(type: MeeshyNotificationType, metadata: NotificationMetadata?) -> EngagementReveal? {
+        from(type: type, achievementKey: metadata?.achievementKey,
+             threshold: metadata?.threshold, level: metadata?.level)
+    }
+
+    /// Porte du chemin SOCKET. `SocketNotificationMetadata` est un type
+    /// DISTINCT de `NotificationMetadata` — deux décodeurs pour un même objet
+    /// sur le fil. La règle, elle, n'existe qu'une fois : ces deux surcharges
+    /// ne font que la nourrir. Les laisser diverger ferait célébrer un palier
+    /// reçu par la liste des notifications et pas le même reçu en direct.
+    public static func from(type: MeeshyNotificationType, metadata: SocketNotificationMetadata?) -> EngagementReveal? {
+        from(type: type, achievementKey: metadata?.achievementKey,
+             threshold: metadata?.threshold, level: metadata?.level)
+    }
+
+    /// **La règle, à son site unique.**
+    public static func from(
+        type: MeeshyNotificationType, achievementKey: String?, threshold: Int?, level: Int?
+    ) -> EngagementReveal? {
         switch type {
         case .achievementUnlocked, .legacyAchievementUnlocked, .badgeEarned:
-            guard let brut = metadata?.achievementKey,
+            guard let brut = achievementKey,
                   let clé = EngagementAchievementKey(rawValue: brut) else { return nil }
             return .achievement(clé)
 
         case .levelUp:
-            guard let rang = metadata?.level, rang > 0 else { return nil }
+            guard let rang = level, rang > 0 else { return nil }
             return .level(rang)
 
         case .streakMilestone:
-            guard let jours = metadata?.threshold, jours > 0 else { return nil }
+            guard let jours = threshold, jours > 0 else { return nil }
             return .streak(days: jours)
 
         default:

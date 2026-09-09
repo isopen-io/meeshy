@@ -137,6 +137,15 @@ public struct SocketNotificationMetadata: Decodable, Sendable {
     /// Nature du média principal du contenu visé — « image » | « video » | « audio ».
     public let mediaType: String?
     public let attachments: SocketNotificationAttachments?
+
+    // Paliers d'engagement (#5809). La passerelle les pose sur le MÊME objet
+    // `metadata` que le chemin REST ; ce décodeur-ci les ignorait aussi. Sans
+    // eux, un palier reçu EN DIRECT — l'app ouverte, le cas le plus fréquent —
+    // n'aurait jamais été célébré, pendant que le même palier reçu par la
+    // liste des notifications l'aurait été. Deux chemins, un seul comportement.
+    public let achievementKey: String?
+    public let threshold: Int?
+    public let level: Int?
 }
 
 public struct SocketNotificationAttachments: Decodable, Sendable {

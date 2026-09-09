@@ -78,6 +78,26 @@ final class EngagementRevealTests: XCTestCase {
                          + "ne fabrique pas une célébration.")
     }
 
+    // MARK: - Les DEUX portes rendent le MÊME verdict
+
+    /// `SocketNotificationMetadata` est un type DISTINCT de
+    /// `NotificationMetadata` : deux décodeurs pour un même objet sur le fil.
+    /// Un palier reçu EN DIRECT (l'app ouverte, le cas le plus fréquent) passe
+    /// par le premier ; le même palier relu dans la liste des notifications
+    /// passe par le second. Les laisser diverger célébrerait l'un et pas
+    /// l'autre — et le défaut ne se verrait que chez qui garde l'app ouverte.
+    func test_bothDoors_agree_onTheSameMilestone() throws {
+        let charge = #"{"achievementKey":"achievement.first_voice","threshold":400,"level":4}"#
+        let rest = try JSONDecoder().decode(NotificationMetadata.self, from: Data(charge.utf8))
+        let socket = try JSONDecoder().decode(SocketNotificationMetadata.self, from: Data(charge.utf8))
+
+        for type in [MeeshyNotificationType.achievementUnlocked, .levelUp, .streakMilestone] {
+            XCTAssertEqual(EngagementReveal.from(type: type, metadata: rest),
+                           EngagementReveal.from(type: type, metadata: socket),
+                           "Les deux portes servent la même règle pour \(type.rawValue).")
+        }
+    }
+
     /// Les cinq types annonceurs sont exactement ceux que les deux racines
     /// routent vers le tableau de bord — la liste ne doit pas diverger d'elles.
     func test_announcingTypes_coverTheFiveRoutedTypes() {
