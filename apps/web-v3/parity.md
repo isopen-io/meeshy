@@ -10,7 +10,7 @@
 | application | routes | où elle tourne |
 |---|---|---|
 | `apps/web` (legacy) | **80** | **la PRODUCTION, seule — 100 % du trafic utilisateur** |
-| `apps/web-old-version3` | 48 | nulle part — **ANNULÉE** le 2026-09-07 |
+| `apps/web-old-version3` | 48 | n'a jamais servi un écran ; **annulée** le 2026-09-07, quitte le dépôt avec #5882 |
 | `apps/web-v3` (la v3.1) | **14** — 9 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
 
 **L'ancienne refonte n'a jamais servi un seul écran à un utilisateur réel.**
