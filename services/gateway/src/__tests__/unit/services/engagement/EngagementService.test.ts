@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { CONTENT_ENGAGEMENT_AXES, CONVERSATION_ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
+import { CONTENT_ENGAGEMENT_AXES, CONVERSATION_ENGAGEMENT_AXES, ENGAGEMENT_AXIS_WEIGHTS, SOCIAL_ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
 import { getSharedNotificationService } from '../../../../services/notifications/notification-service-registry';
 
@@ -433,19 +433,47 @@ describe('EngagementService streak tracking (#5544)', () => {
 });
 
 describe('EngagementService level tracking (#5545)', () => {
+  /**
+   * Le poids lu est celui du CATALOGUE, jamais un nombre recopié ici.
+   *
+   * La version précédente épinglait `increment: 3` en dur, et le porteur a
+   * réglé les poids trois fois le 2026-09-09 (contenu 3→9, commentaire 2→3,
+   * plus la famille sociale à 7). Un témoin qui casse à chaque réglage d'un
+   * paramètre TUNABLE ne protège rien : il ne dit plus si le service ajoute le
+   * BON poids, il dit seulement que le barème n'a pas bougé. Ce qui est sous
+   * test ici est la mécanique — « le poids de l'axe est ajouté » — et elle se
+   * vérifie contre la source de vérité.
+   */
   it('adds the axis family weight to the engagement score via an atomic $inc', async () => {
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 3 });
+    const attendu = ENGAGEMENT_AXIS_WEIGHTS['content.text_message'];
+    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: attendu });
     const prisma = makeLevelPrisma({ userUpdate });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
-    await svc.recordActivity('user-1', 'content.text_message'); // content family, weight 3
+    await svc.recordActivity('user-1', 'content.text_message');
 
     expect(userUpdate).toHaveBeenCalledWith({
       where: { id: 'user-1' },
-      data: { engagementScore: { increment: 3 } },
+      data: { engagementScore: { increment: attendu } },
       select: { engagementScore: true },
     });
+  });
+
+  /**
+   * **Le poids DISTINGUE les familles, ou il ne sert à rien.** Le témoin
+   * ci-dessus passerait au vert si tous les axes valaient la même chose : il
+   * lit la constante des deux côtés. Celui-ci mesure l'ÉCART voulu par le
+   * porteur — contenu 9 > social 7 > conversation 5 > commentaire 3 > outil 1.
+   */
+  it('le barème ORDONNE les familles — le lien vaut plus que la conversation', () => {
+    const poids = (axe: keyof typeof ENGAGEMENT_AXIS_WEIGHTS) => ENGAGEMENT_AXIS_WEIGHTS[axe];
+    expect(poids('content.text_message')).toBeGreaterThan(poids(SOCIAL_ENGAGEMENT_AXES[0]!));
+    expect(poids(SOCIAL_ENGAGEMENT_AXES[0]!)).toBeGreaterThan(poids('conversation.private'));
+    expect(poids('conversation.private')).toBeGreaterThan(poids('comment.text'));
+    expect(poids('comment.text')).toBeGreaterThan(poids('tool.sticker'));
+    // Les quatre axes sociaux partagent UN poids : la famille est l'unité.
+    expect(new Set(SOCIAL_ENGAGEMENT_AXES.map(poids)).size).toBe(1);
   });
 
   it('weighs a tool axis at 1, distinct from a content axis at 3', async () => {

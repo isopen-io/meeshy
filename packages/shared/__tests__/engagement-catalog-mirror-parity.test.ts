@@ -114,7 +114,10 @@ describe('catalogue de streaks & badges — TS et Swift ne peuvent pas diverger'
     expect([...BADGE_THRESHOLDS]).toEqual([1, 10, 50, 100, 500]);
     expect([...STREAK_THRESHOLDS]).toEqual([3, 7, 14, 30, 60, 100]);
     expect([...LEVEL_THRESHOLDS]).toEqual([10, 50, 150, 400, 1000, 2500]);
-    expect(ENGAGEMENT_AXES).toHaveLength(13);
+    // 13 axes d'origine + les 4 du LIEN SOCIAL (#5766, 2026-09-09). Le compte
+    // est ÉPINGLÉ pour qu'un axe ajouté par accident se voie ; un axe ajouté
+    // DÉLIBÉRÉMENT met ce nombre à jour dans le même commit.
+    expect(ENGAGEMENT_AXES).toHaveLength(17);
     expect(ENGAGEMENT_ACHIEVEMENT_KEYS).toHaveLength(5);
   });
 });

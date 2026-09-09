@@ -40,6 +40,14 @@ enum ProgressionCopy {
             return String(localized: "progression.axis.tool.sticker", defaultValue: "Stickers posés", bundle: .main)
         case .inAppEdit:
             return String(localized: "progression.axis.tool.in_app_edit", defaultValue: "Montages dans l’app", bundle: .main)
+        case .trackedLink:
+            return String(localized: "progression.axis.social.tracked_link", defaultValue: "Liens créés", bundle: .main)
+        case .share:
+            return String(localized: "progression.axis.social.share", defaultValue: "Contenus partagés", bundle: .main)
+        case .inviteJoined:
+            return String(localized: "progression.axis.social.invite_joined", defaultValue: "Invités venus", bundle: .main)
+        case .friendship:
+            return String(localized: "progression.axis.social.friendship", defaultValue: "Amitiés nouées", bundle: .main)
         case .directPublish:
             return String(localized: "progression.axis.tool.direct_publish", defaultValue: "Publications directes", bundle: .main)
         }
@@ -61,6 +69,10 @@ enum ProgressionCopy {
         case .communityConversation: return "person.3.fill"
         case .sticker: return "face.smiling.fill"
         case .inAppEdit: return "wand.and.stars"
+        case .trackedLink: return "link.badge.plus"
+        case .share: return "square.and.arrow.up.fill"
+        case .inviteJoined: return "person.badge.plus.fill"
+        case .friendship: return "person.2.fill"
         case .directPublish: return "paperplane.fill"
         }
     }
@@ -75,6 +87,8 @@ enum ProgressionCopy {
             return String(localized: "progression.family.conversation", defaultValue: "Conversations", bundle: .main)
         case .tool:
             return String(localized: "progression.family.tool", defaultValue: "Outils", bundle: .main)
+        case .social:
+            return String(localized: "progression.family.social", defaultValue: "Liens tissés", bundle: .main)
         }
     }
 

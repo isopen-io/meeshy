@@ -26,6 +26,12 @@ public enum EngagementAxisKey: String, CaseIterable, Codable, Sendable, Hashable
     case sticker = "tool.sticker"
     case inAppEdit = "tool.in_app_edit"
     case directPublish = "tool.direct_publish"
+    // Le LIEN SOCIAL (#5766) — ce que l'auteur TISSE, là où les treize
+    // premiers axes ne mesuraient que ce qu'il PRODUIT.
+    case trackedLink = "social.tracked_link"
+    case share = "social.share"
+    case inviteJoined = "social.invite_joined"
+    case friendship = "social.friendship"
 
     /// La famille EST le préfixe de la clé (`engagementAxisFamily`, TS) —
     /// aucune table à tenir en miroir.
@@ -41,6 +47,7 @@ public enum EngagementAxisFamily: String, CaseIterable, Codable, Sendable, Hasha
     case comment
     case conversation
     case tool
+    case social
 }
 
 /// Les quatre natures de palier gravées dans `EngagementMilestone.milestoneType`.
