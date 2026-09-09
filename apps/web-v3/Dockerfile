@@ -93,6 +93,12 @@ RUN test -s packages/shared/dist/utils/conversation-helpers.js \
 ARG VITE_API_BASE=""
 ENV VITE_API_BASE=${VITE_API_BASE}
 
+# `VITE_DATA_SOURCE` suit la même logique (#5880) : `resolveSource` exige
+# l'égalité STRICTE à `gateway`, donc une valeur vide vaut `fixtures` — le
+# défaut, et le comportement de toute construction qui ne la déclare pas.
+ARG VITE_DATA_SOURCE="fixtures"
+ENV VITE_DATA_SOURCE=${VITE_DATA_SOURCE}
+
 # Le build EST le préchauffage : le greffon de `vite.config.ts` écrit les cinq
 # documents avant que `vite-plugin-pwa` ne scelle son manifeste de précache.
 RUN bun run build

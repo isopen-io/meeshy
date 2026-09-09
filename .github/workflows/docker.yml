@@ -44,7 +44,6 @@ on:
           - all
           - web
           - web-v3
-          - web-v31
           - gateway
           - translator
           - agent
@@ -138,7 +137,6 @@ jobs:
             if [[ "$SERVICES" == "all" ]]; then
               echo "web=true" >> $GITHUB_OUTPUT
               echo "web_v3=true" >> $GITHUB_OUTPUT
-              echo "web_v31=true" >> $GITHUB_OUTPUT
               echo "gateway=true" >> $GITHUB_OUTPUT
               echo "translator=true" >> $GITHUB_OUTPUT
               echo "agent=true" >> $GITHUB_OUTPUT
@@ -146,13 +144,11 @@ jobs:
               # Sélection par JETON, pas par sous-chaîne. `*"web"*` répondait vrai
               # pour « web-v3 » : demander la v3 construisait AUSSI le legacy, et
               # rien dans le texte ne le disait. Les virgules encadrantes rendent
-              # « web » et « web-v3 » disjoints.
+              # « web » et « web-v3 » disjoints — le second jeton « web-v31 » a
+              # disparu avec le build de l'app annulée (#5880).
               SELECTED=",${SERVICES// /},"
               echo "web=$([[ "$SELECTED" == *",web,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "web_v3=$([[ "$SELECTED" == *",web-v3,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-              # Les virgules encadrantes sont ce qui rend « web-v3 » et « web-v31 »
-              # disjoints : en sous-chaîne, demander la v3 aurait construit les deux.
-              echo "web_v31=$([[ "$SELECTED" == *",web-v31,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "gateway=$([[ "$SELECTED" == *",gateway,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "translator=$([[ "$SELECTED" == *",translator,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "agent=$([[ "$SELECTED" == *",agent,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -165,12 +161,10 @@ jobs:
             # énumération ne rougit nulle part : elle produit une release
             # complète en apparence, amputée en fait.
             echo "web=true" >> $GITHUB_OUTPUT
-            echo "web_v31=true" >> $GITHUB_OUTPUT
-            # `web_v3` reste FAUX même sur un tag : `apps/web-old-version3` est
-            # gelée (§ GEL DE LA V3) et n'est plus déployée nulle part depuis
-            # #5609. Construire une image que personne ne sert coûte un job et
-            # fait bouger un tag `staging` qui ne désigne plus rien.
-            echo "web_v3=false" >> $GITHUB_OUTPUT
+            # `web_v3` désigne désormais `apps/web-v3`, la SEULE application web
+            # en développement — et il est donc VRAI sur un tag. L'ancien
+            # `web_v3` (l'app annulée) ne se construit plus du tout (#5880).
+            echo "web_v3=true" >> $GITHUB_OUTPUT
             echo "gateway=true" >> $GITHUB_OUTPUT
             echo "translator=true" >> $GITHUB_OUTPUT
             echo "agent=true" >> $GITHUB_OUTPUT
@@ -201,20 +195,16 @@ jobs:
             fi
             if [[ "$CHANGED" == "__BASE_INTROUVABLE__" ]]; then
               echo "web=true" >> $GITHUB_OUTPUT
-              echo "web_v31=true" >> $GITHUB_OUTPUT
-              echo "web_v3=false" >> $GITHUB_OUTPUT
+              echo "web_v3=true" >> $GITHUB_OUTPUT
               echo "gateway=true" >> $GITHUB_OUTPUT
               echo "translator=true" >> $GITHUB_OUTPUT
               echo "agent=true" >> $GITHUB_OUTPUT
             else
             echo "web=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-            # L'app ANNULÉE ne suit plus les paquets partagés : un changement
-            # dans `packages/shared` ne peut pas obliger à reconstruire une
-            # application gelée que plus aucun conteneur ne sert (#5609). Seule
-            # une modification de SON répertoire la reconstruit encore — et ce
-            # répertoire ne bouge plus. Retrait complet : #5496.
-            echo "web_v3=$([[ "$CHANGED" == *"apps/web-old-version3/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-            echo "web_v31=$([[ "$CHANGED" == *"apps/web-v3/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            # `web_v3` désigne `apps/web-v3` — le SEUL chantier web (#5880).
+            # `apps/web-old-version3`, annulée, ne déclenche plus rien : elle ne
+            # se construit plus du tout, donc aucun chemin ne la vise.
+            echo "web_v3=$([[ "$CHANGED" == *"apps/web-v3/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "translator=$([[ "$CHANGED" == *"services/translator/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "agent=$([[ "$CHANGED" == *"services/agent/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -241,20 +231,19 @@ jobs:
             FIRST=false
           fi
 
+          # `apps/web-old-version3` ne se construit plus (#5880). Elle est
+          # ANNULÉE (directive porteur 2026-09-07), n'est plus déployée depuis
+          # #5609, et son `web_v3` était déjà forcé à `false` sur un tag : le
+          # job ne produisait qu'une image que personne ne sert. Son nom de
+          # service est repris ci-dessous par le SEUL chantier web.
+          #
+          # Le nom d'IMAGE, lui, reste `meeshy-web-v31` : `docker-compose.prod.yml`
+          # (§ `FRONTEND_V3_IMAGE`) référence encore `isopen/meeshy-web-v3:latest`,
+          # et le reprendre ferait pointer la PRODUCTION vers la v3.1 en silence.
+          # Renommer le service est CI-interne et réversible ; renommer l'image
+          # se voit en production et demande une bascule coordonnée des compose,
+          # y compris celui de l'hôte, qui diverge du dépôt. Deux gestes.
           if [[ "${{ steps.changes.outputs.web_v3 }}" == "true" ]]; then
-            HAS_CHANGES=true
-            VERSION=$(node -p "require('./apps/web-old-version3/package.json').version" 2>/dev/null || echo "0.0.0")
-            [[ "$FIRST" == "false" ]] && SERVICES+=','
-            SERVICES+='{"service":"web-v3","context":".","dockerfile":"./apps/web-old-version3/Dockerfile","image":"meeshy-web-v3","version":"'$VERSION'"}'
-            FIRST=false
-          fi
-
-          # LA v3.1 — image DISTINCTE de `meeshy-web-v3`, qui appartient encore à
-          # l'ancienne refonte. Reprendre ce nom maintenant changerait en
-          # silence ce qu'un `meeshy-web-v3:latest` déjà déployé désigne. La
-          # v3.1 le reprendra quand `apps/web-old-version3` sera supprimée
-          # (#5496) — pas avant.
-          if [[ "${{ steps.changes.outputs.web_v31 }}" == "true" ]]; then
             HAS_CHANGES=true
             VERSION=$(node -p "require('./apps/web-v3/package.json').version" 2>/dev/null || echo "0.0.0")
             [[ "$FIRST" == "false" ]] && SERVICES+=','
@@ -268,12 +257,26 @@ jobs:
             # `VITE_API_BASE=` : c'est `declaredOverride` (`config.ts`) qui
             # traite cette chaîne vide comme une ABSENCE, sans quoi la base
             # redeviendrait relative — le défaut même que ce lot corrige.
+            #
+            # **`VITE_DATA_SOURCE` suit la même règle** (directive porteur
+            # 2026-09-09) : sans lui, `resolveSource` rend `fixtures` et
+            # staging affiche des données FACTICES sous un login pourtant
+            # réparé (#5872). Sur `dev`, staging consomme donc la passerelle.
+            # Ailleurs, `fixtures` est posé EXPLICITEMENT et non laissé vide :
+            # la garde de `vite.config.ts` refuse toute valeur qui n'est ni
+            # `fixtures`, ni `gateway`, ni ABSENTE — et une chaîne vide n'est
+            # aucune des trois. `ENV VITE_DATA_SOURCE=` aurait fait ÉCHOUER la
+            # construction de production, la garde faisant exactement son
+            # travail. `VITE_API_BASE` n'a pas ce verrou : sa valeur vide est
+            # traitée comme une absence par `declaredOverride`.
             if [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
               API_BASE='https://gate.staging.meeshy.me'
+              DATA_SOURCE='gateway'
             else
               API_BASE=''
+              DATA_SOURCE='fixtures'
             fi
-            SERVICES+='{"service":"web-v31","context":".","dockerfile":"./apps/web-v3/Dockerfile","image":"meeshy-web-v31","version":"'$VERSION'","viteApiBase":"'$API_BASE'"}'
+            SERVICES+='{"service":"web-v3","context":".","dockerfile":"./apps/web-v3/Dockerfile","image":"meeshy-web-v31","version":"'$VERSION'","viteApiBase":"'$API_BASE'","viteDataSource":"'$DATA_SOURCE'"}'
             FIRST=false
           fi
 
@@ -431,6 +434,7 @@ jobs:
             BUN_VERSION=${{ env.BUN_VERSION }}
             TORCH_BACKEND=${{ matrix.torch_backend || 'cpu' }}
             VITE_API_BASE=${{ matrix.viteApiBase || '' }}
+            VITE_DATA_SOURCE=${{ matrix.viteDataSource || '' }}
 
       - name: Build summary
         run: |
@@ -503,17 +507,18 @@ jobs:
           # sauté en silence. C'est ce silence qui a laissé `meeshy-web-v31`
           # construite et servie nulle part pendant des jours.
           #
-          # `web` et `web-v3` n'ont PAS de ligne, et c'est une décision :
-          # staging ne sert plus le legacy ni l'ancienne refonte depuis #5609.
+          # `web` n'a PAS de ligne, et c'est une décision : staging ne sert plus
+          # le legacy depuis #5609. L'ancienne refonte, elle, ne se construit
+          # même plus (#5880) — elle ne peut donc plus apparaître ici.
           CIBLES=""
           INCONNUS=""
           for SVC in $(echo "$SERVICES_JSON" | jq -r '.include[].service'); do
             case "$SVC" in
-              web-v31)    CIBLES="$CIBLES frontend-staging" ;;
+              web-v3)     CIBLES="$CIBLES frontend-staging" ;;
               gateway)    CIBLES="$CIBLES gateway-staging" ;;
               translator) CIBLES="$CIBLES translator-staging" ;;
               agent)      CIBLES="$CIBLES agent-staging" ;;
-              web|web-v3) echo "::notice::$SVC n'est plus déployé sur staging (#5609)" ;;
+              web)        echo "::notice::$SVC n'est plus déployé sur staging (#5609)" ;;
               *)          INCONNUS="$INCONNUS $SVC" ;;
             esac
           done
