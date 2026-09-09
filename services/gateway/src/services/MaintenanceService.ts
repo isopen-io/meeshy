@@ -17,6 +17,7 @@ import { conversationMessageStatsService } from './ConversationMessageStatsServi
 import type { SessionRevoker } from './admin/user-management.service';
 import { purgeAccountIsolatedData } from './AccountPurgeService';
 import { purgeMediaOfDeletedAccount } from './purgeDeletedAccountMedia';
+import { deactivateCommunityMembershipsOfDeletedAccount } from './deactivateDeletedAccountCommunityMemberships';
 import { cleanupExpiredSessions } from './SessionService';
 import {
   RECIPIENT_LANG_SELECT,
@@ -800,10 +801,28 @@ export class MaintenanceService {
   }
 
   /**
+   * Aucun des trois chemins de suppression de compte ne touchait
+   * `CommunityMember` (#5801) : un compte purgé restait compté comme membre
+   * ACTIF de chaque communauté qu'il avait rejointe. Même geste que le
+   * départ volontaire et le retrait admin (#5760/#5799/#5800) —
+   * `isActive: false` + `leftAt` — jamais un `deleteMany`, pour la même
+   * raison qu'eux : l'historique de modération de la communauté survit.
+   * Best-effort, même posture que ses voisins ci-dessus.
+   */
+  private async deactivateCommunityMembershipsOfExpiredAccount(userId: string): Promise<void> {
+    try {
+      await deactivateCommunityMembershipsOfDeletedAccount(this.prisma, userId);
+    } catch (error) {
+      logger.warn(`⚠️ [DELETION] Community membership deactivation failed for deleted account user=${userId}:`, error);
+    }
+  }
+
+  /**
    * Traiter les demandes de suppression de compte :
    * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED),
    *    révoquer les sessions, purger les données isolées (#3632), anonymiser
-   *    les messages (#5689) puis les médias (#5690) du compte
+   *    les messages (#5689) puis les médias (#5690) du compte, désactiver
+   *    ses adhésions aux communautés (#5801)
    * 2. Envoyer les rappels hebdomadaires pour les requests GRACE_PERIOD_EXPIRED
    */
   private async processAccountDeletionRequests(): Promise<void> {
@@ -837,6 +856,7 @@ export class MaintenanceService {
             await this.purgeIsolatedDataOfExpiredAccount(req.userId);
             await this.purgeMessagesOfDeletedAccount(req.userId);
             await this.purgeMediaOfExpiredAccount(req.userId);
+            await this.deactivateCommunityMembershipsOfExpiredAccount(req.userId);
           } catch (error) {
             logger.error(`❌ [DELETION] Failed to expire request=${req.id} for user=${req.userId}:`, error);
           }
