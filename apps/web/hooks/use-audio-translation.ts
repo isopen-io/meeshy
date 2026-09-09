@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { SocketIOTranslatedAudio, AttachmentTranslations } from '@meeshy/shared/types';
 import type { AudioTranslationEventData } from '@meeshy/shared/types/socketio-events';
 import { toSocketIOTranslation } from '@meeshy/shared/types';
+import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 import { apiService } from '@/services/api.service';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 
@@ -81,6 +82,47 @@ interface UseAudioTranslationReturn {
 }
 
 /**
+ * Cœur PUR de la résolution Prisme pour la famille AUDIO (issue #3677 —
+ * garde de parité du Prisme pour ses quatre familles de résolveurs). Extrait
+ * du hook pour être golden-testé indépendamment
+ * (`apps/web/__tests__/hooks/use-audio-translation.prism-vectors.test.ts`,
+ * rejeu du même `packages/shared/fixtures/reading-modes/prism-translation.vectors.json`
+ * que les trois autres familles).
+ *
+ * Délègue la DESCENTE à `resolvePrismTranslation` (`@meeshy/shared`), la SSOT
+ * du Prisme (CLAUDE.md § « La descente elle-même est UNE fonction ») —
+ * l'ancienne boucle manuscrite comparait les codes par `.toLowerCase()` seul,
+ * ratant les paires taguées région (`'en-US'` vs `'en'`) que
+ * `normalizeLanguageForDedup` canonicalise. Miroir de
+ * `AudioTrackLanguageResolver.resolve` (iOS) et de `resolveTranslatedAudio`
+ * (Android).
+ *
+ * Rend le `targetLanguage` TEL QU'IL EST STOCKÉ (jamais sa forme normalisée) :
+ * `currentAudioUrl` / `currentAudioDuration` retrouvent leur piste par égalité
+ * stricte sur ce champ.
+ */
+export function resolveAudioPrismLanguage(
+  audios: readonly SocketIOTranslatedAudio[],
+  userLanguages: readonly string[] | undefined,
+  originalLanguage: string | null | undefined
+): string {
+  if (!userLanguages?.length || audios.length === 0) return 'original';
+
+  const translations: Record<string, string> = {};
+  for (const audio of audios) {
+    if (audio.url) translations[audio.targetLanguage] = audio.targetLanguage;
+  }
+
+  const resolved = resolvePrismTranslation({
+    translations,
+    originalLanguage: originalLanguage ?? null,
+    preferredLanguages: userLanguages,
+  });
+
+  return resolved ? resolved.language : 'original';
+}
+
+/**
  * Hook personnalisé pour gérer la transcription et traduction audio
  * Gère la réception via WebSocket et les requêtes API
  */
@@ -115,38 +157,8 @@ export function useAudioTranslation({
   // Auto-sélection de la langue selon les préférences utilisateur — logique
   // partagée entre le seed initial et la ré-évaluation réactive ci-dessous.
   const resolveAutoLanguage = useCallback(
-    (audios: readonly SocketIOTranslatedAudio[]): string => {
-      if (!userLanguages?.length || audios.length === 0) return 'original';
-      const originalLang = (transcription?.language ?? initialTranscription?.language)?.toLowerCase();
-      // Règle 3 du Prisme (`/CLAUDE.md`) : la langue d'origine concourt à son
-      // RANG, jamais en court-circuit. Ce parcours portait auparavant un test
-      // `userLanguages.includes(originalLang)` AVANT la boucle — c'est-à-dire
-      // mot pour mot la formulation que la règle interdit : « si la langue
-      // d'origine appartient au prisme ⇒ afficher l'original ». Elle
-      // rétrograde la langue PRIMAIRE dès que la langue d'origine occupe un
-      // rang inférieur, ce que la locale appareil (règle 2, rang 4) produit
-      // mécaniquement. Prisme ['fr','en'] + vocal anglais + piste française
-      // ⇒ la piste FRANÇAISE, jamais l'original.
-      //
-      // Miroir de `AudioTrackLanguageResolver.resolve` (iOS) et de
-      // `resolveTranslatedAudio` (Android) : on parcourt les langues du
-      // lecteur DANS L'ORDRE, et la première servie gagne — par une piste
-      // traduite, ou parce que le vocal est déjà dans cette langue.
-      //
-      // Les deux côtés sont minusculés : `userLanguages` sort lowercasé de
-      // `resolveUserLanguagesOrdered`, mais la langue d'origine vient de
-      // Whisper et la langue cible du pipeline TTS. On rend en revanche le
-      // `targetLanguage` TEL QU'IL EST STOCKÉ — `currentAudioUrl` et
-      // `currentAudioDuration` retrouvent leur piste par égalité stricte sur
-      // ce champ, qu'un code renormalisé ferait manquer.
-      for (const lang of userLanguages) {
-        const lower = lang.toLowerCase();
-        if (originalLang && lower === originalLang) return 'original';
-        const match = audios.find(t => t.targetLanguage.toLowerCase() === lower && t.url);
-        if (match) return match.targetLanguage;
-      }
-      return 'original';
-    },
+    (audios: readonly SocketIOTranslatedAudio[]): string =>
+      resolveAudioPrismLanguage(audios, userLanguages, transcription?.language ?? initialTranscription?.language),
     [userLanguages, transcription?.language, initialTranscription?.language]
   );
 
