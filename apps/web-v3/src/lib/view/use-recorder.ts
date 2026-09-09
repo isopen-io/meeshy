@@ -75,8 +75,18 @@ export function createBrowserRecorderEngine(): RecorderEngine {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         return { ok: true, stream };
-      } catch {
-        return { ok: false, reason: 'refused' };
+      } catch (error) {
+        // Défaut 5 (revue #5668) : `error.name` PROJETÉ, jamais écrasé en
+        // un seul motif. `NotAllowedError`/`PermissionDeniedError`/
+        // `SecurityError` sont un vrai REFUS (réglages à changer, le
+        // "Réessayer" peut aboutir) ; tout le reste — `NotFoundError`
+        // (aucun micro), `NotReadableError` (micro pris par une autre app),
+        // `OverconstrainedError`, `NotSupportedError`, `AbortError` — n'a
+        // AUCUNE chance d'aboutir en réessayant : c'est `unsupported`, dont
+        // la bande ne montre pas de « Réessayer » (composer.tsx:124-125).
+        const name = error instanceof DOMException ? error.name : undefined;
+        const isRefusal = name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError';
+        return { ok: false, reason: isRefusal ? 'refused' : 'unsupported' };
       }
     },
     start(stream, onLevel) {
@@ -208,6 +218,17 @@ export function useRecorder(params?: {
   const streamRef = useRef<MediaStream | null>(null);
   const startedAtRef = useRef(0);
   const cancelIntervalRef = useRef<(() => void) | null>(null);
+  /**
+   * GARDE DE RÉ-ENTRANCE (défaut 6, revue #5668) — `true` DÈS l'appel
+   * synchrone de `start()`, `false` seulement au retour à un état où une
+   * nouvelle captation est légitime (échec, annulation, arrêt, reset). Un
+   * second tap pendant `requesting` (la fenêtre où le bouton est encore
+   * rendu, `aria-busy` seulement) ne relance donc PAS `requestStream()` :
+   * sans cette garde, `streamRef.current` était ÉCRASÉ par la seconde
+   * captation et la première piste micro restait ouverte pour toute la
+   * session — un témoin système de captation allumé après annulation.
+   */
+  const activeRef = useRef(false);
 
   const stopMetering = useCallback(() => {
     cancelIntervalRef.current?.();
@@ -225,13 +246,19 @@ export function useRecorder(params?: {
   }, []);
 
   const start = useCallback(() => {
+    if (activeRef.current) return; // Défaut 6 : re-entrance gardée, jamais une seconde captation.
+    activeRef.current = true;
     setState({ status: 'requesting', durationMs: 0, levels: [] });
     void (async () => {
       const result = await engine.requestStream();
       if (!result.ok) {
+        activeRef.current = false;
         setState({ status: result.reason, durationMs: 0, levels: [] });
         return;
       }
+      // Relâchement défensif (défaut 6) : si un flux précédent est encore
+      // référencé, on ne l'écrase jamais sans le relâcher d'abord.
+      if (streamRef.current !== null) engine.release(streamRef.current);
       streamRef.current = result.stream;
       startedAtRef.current = now();
       setState({ status: 'recording', durationMs: 0, levels: [] });
@@ -255,10 +282,15 @@ export function useRecorder(params?: {
       engine.release(streamRef.current);
       streamRef.current = null;
     }
+    activeRef.current = false;
   }, [engine, stopMetering]);
 
   const cancel = useCallback(() => {
-    if (state.status === 'recording') {
+    // Défaut 6 : `teardown()` couvre aussi `requesting` — un double tap qui
+    // annule PENDANT la demande de permission (avant que `recording` ne
+    // soit atteint) doit encore relâcher la piste si elle vient d'arriver,
+    // jamais seulement quand `status === 'recording'`.
+    if (state.status === 'recording' || state.status === 'requesting') {
       void engine.stop();
       teardown();
     }
@@ -277,7 +309,10 @@ export function useRecorder(params?: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `now`/`teardown` stables.
   }, [state.status]);
 
-  const reset = useCallback(() => setState(RECORDER_IDLE_STATE), []);
+  const reset = useCallback(() => {
+    activeRef.current = false;
+    setState(RECORDER_IDLE_STATE);
+  }, []);
 
   return { state, start, cancel, stop, reset };
 }

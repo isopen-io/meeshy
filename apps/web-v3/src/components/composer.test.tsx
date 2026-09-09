@@ -116,24 +116,51 @@ describe('Composer — le focus après un envoi au doigt (revue-correction #5813
    * happy-dom, à la différence d'un navigateur réel, ne déplace PAS
    * automatiquement le focus vers un bouton au `pointerdown` — impossible
    * donc d'observer ici le VOL de focus que `preventDefault()` empêche dans
-   * WKWebView. Ce que ce témoin PEUT prouver, et prouve : le champ n'a jamais
-   * reçu le focus par un autre chemin dans cet environnement, donc si
-   * `document.activeElement === field` après l'envoi, c'est UNIQUEMENT parce
-   * que `send()` l'a explicitement redonné (`field.current.focus()`) — la
-   * ligne que le défaut majeur 8 protège. Retirer cette ligne fait échouer ce
-   * test (vérifié en local avant ce commit) ; retirer `onPointerDown` seul ne
-   * le fait PAS, d'où le témoin séparé ci-dessous sur `defaultPrevented`.
+   * WKWebView. `type()` ne simule que `.value` + `input` : il ne pose PAS le
+   * focus réel du clavier, donc ce témoin le pose EXPLICITEMENT (`field.focus()`)
+   * pour reproduire la précondition du geste NOMINAL — texte tapé, champ
+   * focalisé, tap sur Envoyer.
+   *
+   * DEPUIS LE DÉFAUT 9 (revue #5668), `send()` ne redonne le focus QUE si le
+   * champ l'AVAIT déjà (`keepFocus = document.activeElement === field`,
+   * capturé AVANT l'envoi) — l'ancien rappel était INCONDITIONNEL et rouvrait
+   * le clavier après un vocal ou une photo envoyés SANS avoir touché le
+   * champ (témoin séparé ci-dessous). Ici, le champ avait le focus : il doit
+   * le GARDER après l'envoi — retirer le rappel conditionnel fait échouer ce
+   * test.
    */
-  test('après un tap sur le bouton d’envoi, le champ REÇOIT le focus (rattrapage de `send()`)', () => {
+  test('champ focalisé + tap sur Envoyer ⇒ le champ GARDE le focus (rattrapage de `send()`)', () => {
     const el = mount(() => {});
     const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
     type(field, 'Bonjour');
-    expect(document.activeElement).not.toBe(field);
+    act(() => field.focus());
+    expect(document.activeElement).toBe(field);
     const sendButton = el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!;
 
     tap(sendButton);
 
     expect(document.activeElement).toBe(field);
+  });
+
+  /**
+   * DÉFAUT 9 (revue #5668) — le rappel de focus était INCONDITIONNEL :
+   * envoyer un vocal (`sendRecordingNow`) ou une photo sans jamais avoir
+   * touché le champ ouvrait quand même le clavier, ce qui faisait DISPARAÎTRE
+   * le micro de la rangée (`canRecord && !focused`). iOS ne pose jamais
+   * `isTyping = true` à l'envoi (`ConversationView.swift:314`) : le focus y
+   * reste ce qu'il ÉTAIT. Ce témoin envoie SANS jamais focaliser le champ, et
+   * exige qu'il ne le reçoive PAS après coup.
+   */
+  test('envoi SANS avoir focalisé le champ ⇒ le champ NE REÇOIT PAS le focus après l’envoi', () => {
+    const el = mount(() => {});
+    const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
+    type(field, 'Bonjour'); // pose le TEXTE sans jamais focaliser (comme `type()` le documente).
+    expect(document.activeElement).not.toBe(field);
+    const sendButton = el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!;
+
+    tap(sendButton);
+
+    expect(document.activeElement).not.toBe(field);
   });
 
   /**
@@ -469,7 +496,11 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
   test('micro refusé par le navigateur ⇒ bande DESSINÉE avec « Réessayer » et « Fermer », et « Fermer » la ferme', async () => {
     Object.defineProperty(globalThis, 'MediaRecorder', { value: class {}, configurable: true });
     Object.defineProperty(navigator, 'mediaDevices', {
-      value: { getUserMedia: () => Promise.reject(new Error('NotAllowedError')) },
+      // Défaut 5 (revue #5668) : un VRAI `DOMException` nommé
+      // `NotAllowedError`, comme `getUserMedia` le rejette réellement — un
+      // `Error` au message homonyme (l'ancien bouchon) ne portait aucun
+      // `.name` exploitable et masquait la projection de `error.name`.
+      value: { getUserMedia: () => Promise.reject(new DOMException('refusé', 'NotAllowedError')) },
       configurable: true,
     });
     try {
@@ -497,6 +528,47 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
       Reflect.deleteProperty(navigator, 'mediaDevices');
     }
   });
+
+  /**
+   * DÉFAUT 5 (revue #5668) — `NotFoundError` (aucun micro sur l'appareil),
+   * `NotReadableError` (micro pris par une autre application) et
+   * `NotSupportedError` (constaté, mesuré, en Chromium HEADLESS) ne sont PAS
+   * un refus : aucun réglage à changer ne les résout, donc AUCUN
+   * « Réessayer » — seulement « Micro indisponible sur ce navigateur » et
+   * une sortie. La version livrée les envoyait tous vers la bande de refus,
+   * avec un « Réessayer » qui ne pouvait jamais aboutir (loi 4).
+   */
+  const unsupportedRecorderNames = [
+    'NotFoundError', // aucun micro sur l'appareil.
+    'NotReadableError', // micro déjà pris par une autre application.
+    'NotSupportedError', // mesuré en Chromium headless.
+    'AbortError', // abandon du navigateur.
+    'OverconstrainedError', // contrainte audio non satisfaite.
+  ] as const;
+
+  for (const domExceptionName of unsupportedRecorderNames) {
+    test(`${domExceptionName} ⇒ « Micro indisponible sur ce navigateur », SANS « Réessayer »`, async () => {
+      Object.defineProperty(globalThis, 'MediaRecorder', { value: class {}, configurable: true });
+      Object.defineProperty(navigator, 'mediaDevices', {
+        value: { getUserMedia: () => Promise.reject(new DOMException('indisponible', domExceptionName)) },
+        configurable: true,
+      });
+      try {
+        const el = mount(() => {});
+        act(() => {
+          el.querySelector<HTMLButtonElement>('[aria-label="Enregistrer un message vocal"]')!.click();
+        });
+        await flush();
+
+        expect(el.textContent).toContain('Micro indisponible sur ce navigateur');
+        expect(el.textContent).not.toContain('Réessayer');
+        expect(el.textContent).not.toContain('Micro refusé');
+      } finally {
+        Reflect.deleteProperty(globalThis, 'MediaRecorder');
+        Reflect.deleteProperty(navigator, 'mediaDevices');
+      }
+    });
+  }
 
   /**
    * UN FICHIER ÉCARTÉ LE DIT (revue-correction #5668) — au-delà de

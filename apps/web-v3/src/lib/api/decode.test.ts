@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { decodeConversation, decodeMessage, toDate } from './decode';
 import { CONVERSATION_ID, VIEWER_ID, amina, conversationDefaults, message, translation, viewer } from './fixtures-base';
+import { protectionOf } from '../reading-mode/protection';
 import type { Conversation, Message } from './types';
 
 describe('toDate — idempotent', () => {
@@ -265,5 +266,52 @@ describe('decode — le `null` explicite de la passerelle, sur les deux porteurs
     } as unknown as Message;
     expect(() => decodeMessage(raw)).not.toThrow();
     expect(decodeMessage(raw).createdAt).toBeInstanceOf(Date);
+  });
+});
+
+/**
+ * Défaut 4, revue #5668 : la passerelle sert `deletedAt: null` (et les six
+ * autres champs de date optionnels) pour un message JAMAIS supprimé —
+ * mesuré en direct sur `gate.staging.meeshy.me`. `...rest` étalait la clé
+ * AVANT que `dateFieldOf(…, null)` ne rende `{}` ; un objet vide spreadé
+ * ensuite ne défait rien de ce que `...rest` vient d'écrire. Résultat :
+ * TOUT message servi par la passerelle réelle s'affichait « Message
+ * supprimé » (`protectionOf` teste `deletedAt !== undefined`, et
+ * `null !== undefined` est vrai). Ce témoin échoue sans le correctif.
+ */
+describe('decodeMessage — les sept clés de date optionnelles, servies `null` par la passerelle réelle (défaut 4, #5668)', () => {
+  const rawNullDates = {
+    ...message({
+      id: 'm11',
+      senderId: VIEWER_ID,
+      sender: viewer,
+      content: 'jamais supprimé',
+      originalLanguage: 'fr',
+      translations: [],
+      createdAt: '2026-09-09T09:00:00.000Z' as unknown as Date,
+    }),
+    updatedAt: null,
+    editedAt: null,
+    deletedAt: null,
+    expiresAt: null,
+    pinnedAt: null,
+    deliveredToAllAt: null,
+    readByAllAt: null,
+  } as unknown as Message;
+
+  test('aucune des sept clés ne survit à `null` — toutes ABSENTES du message décodé', () => {
+    const decoded = decodeMessage(rawNullDates);
+    expect('updatedAt' in decoded).toBe(false);
+    expect('editedAt' in decoded).toBe(false);
+    expect('deletedAt' in decoded).toBe(false);
+    expect('expiresAt' in decoded).toBe(false);
+    expect('pinnedAt' in decoded).toBe(false);
+    expect('deliveredToAllAt' in decoded).toBe(false);
+    expect('readByAllAt' in decoded).toBe(false);
+  });
+
+  test('un message avec `deletedAt: null` ⇒ protection STANDARD, jamais « deleted »', () => {
+    const decoded = decodeMessage(rawNullDates);
+    expect(protectionOf(decoded, Date.now())).toBe('standard');
   });
 });

@@ -49,9 +49,15 @@ type ProtectionFields = Pick<Message, 'deletedAt' | 'isViewOnce' | 'viewOnceCoun
  * est fail-closed et n'a donc pas besoin d'être exclu ici.
  */
 export function protectionOf(message: ProtectionFields, now: number): ProtectionKind {
-  if (message.deletedAt !== undefined) return 'deleted';
+  // Second verrou (défaut 4, revue #5668) : `!= null` plutôt que
+  // `!== undefined` — fail-closed même si une charge NON décodée (un
+  // `null` explicite de la passerelle, jamais retiré par `decodeMessage`)
+  // atteint malgré tout cette loi. `decodeMessage` reste le site qui
+  // retire la clé ; ce garde est une redondance délibérée, pas un
+  // remplacement.
+  if (message.deletedAt != null) return 'deleted';
   if (message.isViewOnce && message.viewOnceCount > 0) return 'burned';
-  if (message.expiresAt !== undefined && new Date(message.expiresAt).getTime() <= now) return 'expired';
+  if (message.expiresAt != null && new Date(message.expiresAt).getTime() <= now) return 'expired';
   // Forme SDK `declaredProtection` (`MessageModels.swift:178-191`) : voilé
   // dès que l'un OU l'autre est vrai — jamais `isBlurred` seul.
   if (message.isBlurred || message.isViewOnce) return 'veiled';

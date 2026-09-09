@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 
 import type { Message, Attachment } from '@/lib/api/types';
+import { attachmentSrc } from '@/lib/api/media-url';
 import { kindOf, waveformOf } from '@/lib/view/message';
 import type { Delivery } from '@/lib/view/message';
 import { languageColor, flag, languageName } from '@/lib/languages';
@@ -380,11 +381,18 @@ export function Attachments({ attachments }: { attachments: readonly Attachment[
                   Le glyphe reste DERRIÈRE : il est le fond tant que l'image
                   n'est pas arrivée (chargement) et le repli si elle échoue
                   (`onError`), et il reste seul quand la charge ne porte aucune
-                  URL — ce que les fixtures font (`fileUrl: ''`). */}
+                  URL — ce que les fixtures font (`fileUrl: ''`).
+
+                  `attachmentSrc` RÉSOUT le chemin RELATIF que sert la
+                  passerelle (`/api/v1/attachments/file/…`) contre
+                  `apiConfig.base` (défaut 2, revue-correction #5668,
+                  `lib/api/media-url.ts`) — sans lui, le navigateur le résout
+                  contre l'origine du DOCUMENT, valide seulement derrière le
+                  proxy Vite du dev, jamais en PWA déployée ni dans une coque. */}
               <Glyph name="image" size={40} className="col-start-1 row-start-1 opacity-40" />
               {attachment.fileUrl === '' ? null : (
                 <img
-                  src={attachment.fileUrl}
+                  src={attachmentSrc(attachment.fileUrl)}
                   alt={attachment.alt ?? attachment.originalName}
                   loading="lazy"
                   decoding="async"

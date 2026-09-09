@@ -11,6 +11,7 @@ import {
   removePendingAttachment,
   type PendingAttachment,
 } from '@/lib/send/attachments';
+import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
 import { recordingSupported, useRecorder } from '@/lib/view/use-recorder';
 
@@ -112,7 +113,12 @@ export function Composer({
       ? { message: fileRefusal, onDismiss: () => setFileRefusal(null) }
       : recorder.state.status === 'refused'
         ? {
-            message: 'Micro refusé — autorisez-le dans les réglages du navigateur',
+            /* « dans les réglages », sans dire LESQUELS (revue-correction,
+               mesuré sur la coque Android : la permission y est celle de
+               l'APPLICATION, pas du navigateur — la copie « réglages du
+               navigateur » envoyait le lecteur au mauvais endroit sur deux
+               des trois plateformes). */
+            message: 'Micro refusé — autorisez-le dans les réglages',
             onRetry: () => recorder.start(),
             onDismiss: recorder.reset,
           }
@@ -140,30 +146,39 @@ export function Composer({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- volontairement la TRANSITION, pas l'identité de `replyTo` (voir le doc-comment).
   }, [hasReply]);
 
-  const resetAfterSend = () => {
+  const resetAfterSend = (opts?: { readonly keepFocus: boolean }) => {
     setText('');
     setPending([]);
     setPanelOpen(false);
     if (field.current) {
       field.current.style.height = 'auto';
-      /* LE CHAMP GARDE LE FOCUS APRÈS UN ENVOI AU DOIGT (revue-correction
-         #5813, défaut majeur 8) — le geste NOMINAL sur téléphone. Sans ce
-         rappel, le `<button>` d'envoi prenait le focus (la touche Entrée,
-         elle, ne le perd jamais : le champ reste la cible de l'événement),
-         le clavier se refermait, le micro se remontait et le champ
-         RÉTRÉCISSAIT sous le doigt — trois phrases de suite coûtaient trois
-         taps de plus et trois sauts de mise en page. iOS tient le champ par
-         `@FocusState isTyping` (`ConversationView.swift:314`), qu'aucun
-         envoi ne remet à `false`. */
-      field.current.focus();
+      /* LE CHAMP GARDE LE FOCUS APRÈS UN ENVOI AU DOIGT — MAIS SEULEMENT
+         S'IL L'AVAIT DÉJÀ (revue-correction #5813 défaut majeur 8, puis
+         défaut 9 de la revue #5668) — le geste NOMINAL sur téléphone, texte
+         tapé puis envoyé. Sans ce rappel, le `<button>` d'envoi prenait le
+         focus (la touche Entrée, elle, ne le perd jamais : le champ reste
+         la cible de l'événement), le clavier se refermait, le micro se
+         remontait et le champ RÉTRÉCISSAIT sous le doigt.
+         Ce rappel était INCONDITIONNEL (#5668, défaut 9) : sur le chemin
+         VOCAL (`sendRecordingNow`) ou un envoi de photo SANS avoir touché
+         le champ, l'utilisateur n'avait JAMAIS eu le focus dessus — le
+         reprendre ouvrait le clavier et faisait DISPARAÎTRE le micro de la
+         rangée (`canRecord && !focused`), pour un geste qu'il n'avait pas
+         demandé. iOS ne pose JAMAIS `isTyping = true` à l'envoi
+         (`ConversationView.swift:314`, aucun site de `sendMessageWithAttachments`
+         ne le repose) : le focus y reste ce qu'il ÉTAIT. `keepFocus` est
+         l'état du champ CAPTURÉ par `send()` avant l'envoi, jamais deviné
+         ici. */
+      if (opts?.keepFocus) field.current.focus();
     }
   };
 
   const send = (value: string, attachments: readonly PendingAttachment[] = pending) => {
     const own = value.trim();
     if (!own && attachments.length === 0) return;
+    const keepFocus = document.activeElement === field.current;
     onSend({ text: own, attachments });
-    resetAfterSend();
+    resetAfterSend({ keepFocus });
   };
 
   /** LA TUILE « PHOTOS »/« FICHIER » (`<input type="file">`, `composer-tray.tsx`)
@@ -183,7 +198,17 @@ export function Composer({
     setPanelOpen(false);
   };
 
-  const removeAttachment = (localId: string) => setPending((prev) => removePendingAttachment(prev, localId));
+  /**
+   * RETIRER UNE PIÈCE AVANT L'ENVOI EST LE SEUL GESTE QUI SAIT QUE SON URL
+   * NE SERT PLUS JAMAIS (défaut 7, revue #5668) — cette pièce ne deviendra
+   * JAMAIS l'attachement d'une bulle optimiste, donc rien d'autre ne
+   * référencera `previewUrlFor(localId, …)` : la révoquer ICI, et nulle
+   * part ailleurs, est sans risque.
+   */
+  const removeAttachment = (localId: string) => {
+    releasePreviewUrl(localId);
+    setPending((prev) => removePendingAttachment(prev, localId));
+  };
 
   /** ARRÊTER → JOINDRE — place le vocal dans le tiroir, la composition
    * continue (miroir `stopRecordingToAttachment`, `+AttachmentHandlers.swift:107-114`). */

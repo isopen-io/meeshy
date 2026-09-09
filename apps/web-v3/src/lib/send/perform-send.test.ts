@@ -690,6 +690,50 @@ describe('performSend — pièces jointes (#5668)', () => {
   });
 
   /**
+   * JAMAIS UN MESSAGE AMPUTÉ (revue-correction #5668) — si l'entrée d'outbox
+   * a perdu sa phase d'upload alors que le message DÉCLARE des pièces,
+   * l'envoi ÉCHOUE (« Réessayer » offert) plutôt que de partir sans elles :
+   * une bulle qui montre la photo en local pendant que le serveur enregistre
+   * un message vide est un écart que personne ne verrait jamais.
+   */
+  test('entrée sans phase d’upload mais message AVEC pièces ⇒ échec, jamais un POST sans attachmentIds', async () => {
+    const { impl, calls } = routedFetch({ '/conversations/c-a/messages': { status: 200, body: ackBody('m9', 'x') } });
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox,
+      online: true,
+    };
+    await performSend({
+      conversationId: 'c-a',
+      // Nom DISTINCT des autres témoins de ce bloc : la clé de dédoublonnage
+      // (`debounceKeyOf`) porte `nom:taille`, et deux envois identiques à
+      // moins de 600 ms n'en font qu'un — le second n'enquêterait rien.
+      draft: { content: '', originalLanguage: 'fr', attachments: [pendingAttachmentOf(pngFile('amputee.png'))] },
+      viewerId: 'u-viewer',
+      deps,
+    });
+    const entry = entriesOf(outbox.getState(), 'c-a')[0]!;
+    // On SIMULE la perte de la phase (course de reprise) en rejouant la
+    // tentative sur une entrée dont `upload` a été retiré.
+    outbox.setState((state) => ({
+      entries: {
+        ...state.entries,
+        'c-a': state.entries['c-a']!.map(({ upload: _dropped, ...rest }) => ({ ...rest, delivery: 'failed' as const })),
+      },
+    }));
+    const before = calls.length;
+
+    await retrySend({ conversationId: 'c-a', clientMessageId: entry.message.clientMessageId, deps });
+
+    expect(calls.length).toBe(before); // aucun POST supplémentaire
+    expect(entriesOf(outbox.getState(), 'c-a')[0]?.delivery).toBe('failed');
+    expect(entriesOf(outbox.getState(), 'c-a')[0]?.lastError?.code).toBe('UPLOAD_PARTIAL');
+  });
+
+  /**
    * REPRISE SANS RE-UPLOAD (§ 0 « Reprise ») — l'upload a RÉUSSI, mais
    * `POST …/messages` a échoué (500). `retrySend` ne rappelle PAS
    * `/attachments/upload` : il réutilise `attachmentIds` déjà obtenus.

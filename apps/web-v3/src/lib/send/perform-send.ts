@@ -112,16 +112,32 @@ export function debounceEntryCountForTests(): number {
  * serveur, `messages-send.ts:59`).
  */
 function bodyOf(message: LocalMessage, attachmentIds: readonly string[]): SendMessageBody {
+  const declared = declaredAttachmentType(message.messageType);
   return {
     ...(message.content.trim().length > 0 ? { content: message.content } : {}),
     originalLanguage: message.originalLanguage,
     clientMessageId: message.clientMessageId,
-    ...(message.messageType === 'text'
-      ? {}
-      : { messageType: message.messageType as 'image' | 'file' | 'audio' | 'video' }),
+    ...(declared === undefined ? {} : { messageType: declared }),
     ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
     ...(message.replyToId === undefined ? {} : { replyToId: message.replyToId }),
   };
+}
+
+/**
+ * LE TYPE QU'ON A LE DROIT DE DÉCLARER, sans assertion (revue-correction
+ * #5668) — `LocalMessage['messageType']` porte AUSSI `'system'` et
+ * `'location'`, que ce lot ne produit jamais : un `as` les aurait laissés
+ * passer en silence si un futur appelant en posait un. Rendre `undefined`
+ * laisse alors le défaut serveur (`'text'`, `messages-send.ts:220`)
+ * s'appliquer, plutôt que d'écrire une déclaration que le serveur, lui, ne
+ * corrigera PAS (`attachment-message-type.ts:112-113`).
+ */
+function declaredAttachmentType(
+  messageType: LocalMessage['messageType'],
+): 'image' | 'file' | 'audio' | 'video' | undefined {
+  return messageType === 'image' || messageType === 'file' || messageType === 'audio' || messageType === 'video'
+    ? messageType
+    : undefined;
 }
 
 /**
@@ -198,7 +214,29 @@ async function uploadPhase(params: {
     (e) => e.message.clientMessageId === message.clientMessageId,
   );
   const upload = entry?.upload;
-  if (upload === undefined) return [];
+  if (upload === undefined) {
+    /**
+     * L'ENTRÉE NE PORTE PLUS SA PHASE D'UPLOAD, MAIS LE MESSAGE DÉCLARE DES
+     * PIÈCES (revue-correction #5668) — rendre `[]` enverrait le message
+     * AMPUTÉ : la bulle montrerait la photo en local, le serveur
+     * enregistrerait un message vide, et personne ne verrait jamais l'écart.
+     * La direction de l'erreur se choisit par le COÛT DE RÉPARATION
+     * (`tasks/lessons.md`) : un « Réessayer » de trop se rejoue, une pièce
+     * perdue en silence ne se répare pas.
+     */
+    if ((message.attachments?.length ?? 0) > 0) {
+      deps.outbox
+        .getState()
+        .markFailed(conversationId, message.clientMessageId, {
+          ok: false,
+          status: 0,
+          error: 'Pièces jointes introuvables pour cet envoi',
+          code: 'UPLOAD_PARTIAL',
+        });
+      return null;
+    }
+    return [];
+  }
   if (upload.attachmentIds !== undefined) return upload.attachmentIds;
   if (upload.files.length === 0) return [];
 

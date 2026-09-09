@@ -23,6 +23,19 @@ beforeAll(() => {
 });
 
 afterAll(async () => {
+  // Défaut 2 (revue #5668) — DRAINER le planificateur React AVANT de
+  // désenregistrer `window` : `bun test` enchaîne les fichiers dans le même
+  // process, et une tâche `performWorkOnRootViaSchedulerTask` posée par le
+  // DERNIER `act()` de ce fichier peut survivre au-delà du dernier `await`
+  // synchrone visible ici. Sans ce drain, `GlobalRegistrator.unregister()`
+  // efface `window` PENDANT que cette tâche s'exécute encore, et elle lève
+  // `TypeError: undefined is not an object (evaluating 'window.event')` —
+  // observé de façon INTERMITTENTE (5/5, 20/20 machine au repos) sous
+  // charge, jamais un défaut du fichier qui l'exécute (10/10 seul). Ce
+  // fichier suit le même patron que les onze autres (`GlobalRegistrator`
+  // par fichier) ; eux restent HORS de ce lot — issue compagnon dédiée pour
+  // le préchargement UNIQUE (`bunfig.toml [test] preload`).
+  await act(async () => {});
   delete globals.IS_REACT_ACT_ENVIRONMENT;
   await GlobalRegistrator.unregister();
 });
@@ -309,5 +322,78 @@ describe('useRecorder — stop()/cancel() et le seuil de 0,5 s (#5668)', () => {
     act(() => recorder.cancel());
 
     expect(engine.stopCalls).toBe(0);
+  });
+});
+
+/**
+ * DÉFAUT 6 (revue #5668) — un DOUBLE TAP pendant `requesting` (la fenêtre
+ * où le bouton est encore rendu, seulement `aria-busy`) ne doit JAMAIS
+ * lancer une seconde `requestStream()` : sans garde, la seconde captation
+ * écrasait `streamRef.current` sans relâcher la première — un témoin
+ * système de captation restait allumé après « Annuler ».
+ */
+describe('useRecorder — double tap pendant `requesting` (défaut 6, revue #5668)', () => {
+  test('deux start() consécutifs pendant `requesting` ⇒ UNE SEULE requestStream(), UNE SEULE piste ouverte', async () => {
+    let recorder!: Recorder;
+    let requestCalls = 0;
+    let releaseCalls = 0;
+    let resolveRequest!: (result: RecorderEngineResult) => void;
+    const stream = fakeStream();
+    const engine: RecorderEngine = {
+      requestStream: () =>
+        new Promise<RecorderEngineResult>((resolve) => {
+          requestCalls += 1;
+          resolveRequest = resolve;
+        }),
+      start: () => {},
+      stop: async () => ({ blob: new Blob([]), mimeType: 'audio/webm' }),
+      release: () => {
+        releaseCalls += 1;
+      },
+    };
+    mount({ onReady: (r) => (recorder = r), engine });
+
+    // Deux taps synchrones, comme un double tap réel — le second survient
+    // AVANT que `requestStream()` n'ait résolu.
+    act(() => {
+      recorder.start();
+      recorder.start();
+    });
+    expect(requestCalls).toBe(1);
+
+    await act(async () => {
+      resolveRequest({ ok: true, stream });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    act(() => recorder.cancel());
+    expect(releaseCalls).toBe(1); // autant de relâchements que de flux rendus.
+  });
+
+  test('start() rappelé pendant `recording` (déjà actif) ⇒ ignoré, aucune seconde demande', async () => {
+    let recorder!: Recorder;
+    const engine = fakeEngine({ ok: true, stream: fakeStream() });
+    let calls = 0;
+    const countingEngine: RecorderEngine = {
+      ...engine,
+      requestStream: async () => {
+        calls += 1;
+        return engine.requestStream();
+      },
+    };
+    mount({ onReady: (r) => (recorder = r), engine: countingEngine });
+
+    await act(async () => {
+      recorder.start();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(calls).toBe(1);
+
+    act(() => {
+      recorder.start(); // déjà `recording` — doit être un no-op.
+    });
+    expect(calls).toBe(1);
   });
 });

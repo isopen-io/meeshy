@@ -11,6 +11,8 @@ import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { Attachment } from '@/lib/api/types';
 
+import { previewUrlFor } from './attachment-preview-url';
+
 /**
  * LA SÉLECTION DU COMPOSEUR (#5668, étape b) — état PUR, hors DOM et hors
  * React : ce que `RecentMediaStrip`/`+ComposerAttachments.swift` appellent le
@@ -167,6 +169,11 @@ export function messageTypeOfPending(list: readonly PendingAttachment[]): 'text'
  * « tempId »). `fileUrl` est un URL D'OBJET LOCAL : il vit tant que la bulle
  * optimiste vit, jamais persisté, jamais envoyé au serveur — c'est
  * `attachmentIds` (obtenus par `uploadAttachments`) qui voyage sur le POST.
+ *
+ * `previewUrlFor` (défaut 7, revue #5668) — PARTAGE l'URL avec la tuile du
+ * plateau (`composer-tray.tsx § PreviewTile`) au lieu d'en créer une SECONDE
+ * pour le même fichier : avant ce partage, une photo choisie fuyait deux
+ * blobs, un seul jamais révoqué.
  */
 export function attachmentPreviewOf(pending: PendingAttachment): Attachment {
   return {
@@ -177,7 +184,7 @@ export function attachmentPreviewOf(pending: PendingAttachment): Attachment {
     originalName: pending.name,
     mimeType: pending.file.type,
     fileSize: pending.size,
-    fileUrl: URL.createObjectURL(pending.file),
+    fileUrl: previewUrlFor(pending.localId, pending.file),
     // `uploadedBy`/`createdAt` : le domaine les exige (`Attachment.uploadedBy`,
     // `.createdAt: string`) mais AUCUN écran ne les lit sur une pièce en
     // ATTENTE (`message-blocks.tsx` ne consulte ni l'un ni l'autre) — posés

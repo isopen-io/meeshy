@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { MAX_ATTACHMENTS_PER_MESSAGE, SMALL_FILE_THRESHOLD } from '@meeshy/shared/types/attachment';
 import { DEFAULT_USER_PERMISSIONS } from '@meeshy/shared/types/participant';
 
+import { previewUrlFor, releasePreviewUrl } from './attachment-preview-url';
 import {
   acceptPendingFiles,
   addPendingAttachment,
@@ -124,6 +125,45 @@ describe('attachmentPreviewOf — la charge que la bulle optimiste rend', () => 
   test('sans durationMs, la clé duration est ABSENTE — jamais 0 fabriqué', () => {
     const pending = pendingAttachmentOf(file('a.png', 'image/png'));
     expect('duration' in attachmentPreviewOf(pending)).toBe(false);
+  });
+});
+
+/**
+ * DÉFAUT 7 (revue #5668) — `attachmentPreviewOf` créait sa PROPRE
+ * `createObjectURL`, jamais révoquée : mesuré, trois envois d'UNE photo ⇒
+ * six URL créées, trois seulement révoquées (celles de la tuile du plateau,
+ * qui démonte). `previewUrlFor` (`attachment-preview-url.ts`) partage
+ * désormais l'URL entre la tuile ET la bulle optimiste — UNE seule création
+ * par pièce, jamais deux.
+ */
+describe('attachmentPreviewOf — l’URL d’aperçu, PARTAGÉE (défaut 7, revue #5668)', () => {
+  test('deux appels sur la MÊME pièce ⇒ la MÊME fileUrl, jamais une seconde createObjectURL', () => {
+    const pending = pendingAttachmentOf(file('photo.jpg', 'image/jpeg'));
+    const first = attachmentPreviewOf(pending);
+    const second = attachmentPreviewOf(pending);
+    expect(second.fileUrl).toBe(first.fileUrl);
+  });
+
+  test('previewUrlFor(localId, file) rend la MÊME URL que celle posée par attachmentPreviewOf pour ce localId', () => {
+    const pending = pendingAttachmentOf(file('photo.jpg', 'image/jpeg'));
+    const preview = attachmentPreviewOf(pending);
+    expect(previewUrlFor(pending.localId, pending.file)).toBe(preview.fileUrl);
+  });
+
+  test('releasePreviewUrl retire l’entrée — un appel ULTÉRIEUR recrée une URL neuve, jamais la même', () => {
+    // Comptage SCOPÉ à ce `localId` — la carte est un magasin de MODULE
+    // partagé par toute la suite (même discipline que
+    // `resetPendingAttachmentIdsForTests`) : sa TAILLE globale dépend de ce
+    // que d'AUTRES fichiers y ont laissé, jamais un témoin fiable ici.
+    const pending = pendingAttachmentOf(file('photo.jpg', 'image/jpeg'));
+    const before = attachmentPreviewOf(pending);
+    releasePreviewUrl(pending.localId);
+    const after = previewUrlFor(pending.localId, pending.file);
+    expect(after).not.toBe(before.fileUrl);
+  });
+
+  test('releasePreviewUrl sur un localId inconnu ⇒ ne lève pas (idempotent)', () => {
+    expect(() => releasePreviewUrl('jamais-créé')).not.toThrow();
   });
 });
 

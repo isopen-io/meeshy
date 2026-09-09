@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
+import { previewUrlFor } from '@/lib/send/attachment-preview-url';
 import { mayAttach, type PendingAttachment } from '@/lib/send/attachments';
 import { MIN_SENDABLE_DURATION_MS, type RecorderState } from '@/lib/view/use-recorder';
+import { interpolatedLevel, waveformBarCount } from '@/lib/view/waveform';
 
 /**
  * LE TIROIR DU COMPOSEUR (#5668) — CHARGÉ À LA DEMANDE (`composer.tsx` le
@@ -88,11 +90,42 @@ function spokenDuration(durationMs: number): string {
   return minutes === 0 ? `${rest} s` : `${minutes} min ${rest} s`;
 }
 
+/**
+ * DÉFAUT 8 (revue #5668) — mesurée sur 178 px disponibles, l'onde
+ * n'occupait que 73 px (41 %) : les 15 échantillons bruts, un par barre,
+ * alignés `flex-start` sans rien pour remplir le reste. Miroir
+ * `UniversalComposerBar+Recording.swift:305-340` — `barCount` dépend de la
+ * LARGEUR MESURÉE du conteneur (`ResizeObserver`), et `interpolatedLevel`
+ * (`lib/view/waveform.ts`) étale les 15 niveaux sur TOUTES les barres :
+ * l'onde lit comme une courbe continue, jamais un tas collé à gauche.
+ * `MAX_LEVELS` (`use-recorder.ts`) reste à 15 côté ÉCHANTILLONNAGE — c'est
+ * l'AFFICHAGE qui interpole, jamais l'échantillonnage qui grossit.
+ */
 function Waveform({ levels }: { readonly levels: readonly number[] }) {
   const reduced = REDUCED_MOTION();
-  const bars = levels.length > 0 ? levels : [0, 0, 0, 0, 0];
+  const containerRef = useRef<HTMLSpanElement>(null);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (el === null) return;
+    const measure = () => setWidth(el.clientWidth);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // AVANT toute mesure (premier rendu, ou environnement sans
+  // `ResizeObserver`) : repli sur les échantillons bruts plutôt qu'UNE
+  // seule barre — jamais un écran qui semble vide.
+  const barCount = width > 0 ? waveformBarCount(width) : Math.max(levels.length, 1);
+  const sampled = levels.length > 0 ? levels : [0];
+  const bars = Array.from({ length: barCount }, (_, i) => interpolatedLevel(i, barCount, sampled));
+
   return (
-    <span className="flex h-6 flex-1 items-center gap-[2.5px]" aria-hidden>
+    <span ref={containerRef} className="flex h-6 flex-1 items-center gap-[2.5px]" aria-hidden>
       {bars.map((level, i) => (
         <span
           key={i}
@@ -332,19 +365,21 @@ function AttachmentPanel({
 }
 
 function PreviewTile({ attachment, onRemove }: { readonly attachment: PendingAttachment; readonly onRemove: () => void }) {
-  // UN URL D'OBJET PAR PIÈCE, PAS PAR RENDU — `URL.createObjectURL` appelé à
-  // chaque rendu fuirait un objet par image, jamais révoqué (dimension 3,
-  // « aucune rétention »). Calculé une fois par `attachment.file`, révoqué au
-  // DÉMONTAGE de cette tuile (retrait ou envoi).
+  /**
+   * UN URL D'OBJET PAR PIÈCE, PARTAGÉ AVEC LA BULLE OPTIMISTE (défaut 7,
+   * revue #5668) — `previewUrlFor` (`lib/send/attachment-preview-url.ts`)
+   * est le SEUL site qui appelle `URL.createObjectURL`, mémoïsé par
+   * `localId`. Cette tuile ne le RÉVOQUE plus à son démontage : l'envoi
+   * démonte la tuile (le plateau se ferme) exactement quand la bulle
+   * optimiste commence à utiliser la MÊME URL — la révoquer ici casserait
+   * l'image qu'`attachmentPreviewOf` vient de poser. La révocation est
+   * EXPLICITE, au geste qui sait que l'URL ne sert plus jamais : retirer la
+   * pièce AVANT l'envoi (`onRemove`, `composer.tsx § removeAttachment`).
+   */
   const previewUrl = useMemo(
-    () => (attachment.kind === 'image' ? URL.createObjectURL(attachment.file) : undefined),
-    [attachment.file, attachment.kind],
+    () => (attachment.kind === 'image' ? previewUrlFor(attachment.localId, attachment.file) : undefined),
+    [attachment.localId, attachment.file, attachment.kind],
   );
-  useEffect(() => {
-    return () => {
-      if (previewUrl !== undefined) URL.revokeObjectURL(previewUrl);
-    };
-  }, [previewUrl]);
 
   return (
     <div className="relative shrink-0" style={{ width: 56 }}>

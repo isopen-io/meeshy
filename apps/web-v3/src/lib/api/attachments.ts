@@ -29,6 +29,12 @@ export type PendingUpload = {
   /** Millisecondes — posé seulement pour un enregistrement vocal
    * (`use-recorder.ts`). */
   readonly durationMs?: number;
+  /** `PendingAttachment.localId` (`send/attachments.ts`) — REÇU quand
+   * l'appelant en a un (défaut 7, revue #5668), pour que le repli
+   * `fixtures` réutilise l'URL d'aperçu déjà créée (`previewUrlFor`)
+   * plutôt que d'en fabriquer une troisième pour le même fichier. Sans
+   * effet sur le port réel : `formDataOf` ne le sert jamais au fil. */
+  readonly localId?: string;
 };
 
 function formDataOf(pending: readonly PendingUpload[]): FormData {

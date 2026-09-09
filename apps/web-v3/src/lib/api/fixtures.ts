@@ -1,5 +1,7 @@
 import type { ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 
+import { previewUrlFor } from '@/lib/send/attachment-preview-url';
+
 import type { Attachment, Conversation, Message, Participant } from './types';
 import {
   CONVERSATION_ID,
@@ -676,9 +678,9 @@ const uploadedAttachmentsById = new Map<string, Attachment>();
 let uploadedAttachmentCounter = 0;
 
 export function uploadedAttachmentsOf(
-  files: readonly { readonly file: File; readonly durationMs?: number }[],
+  files: readonly { readonly file: File; readonly durationMs?: number; readonly localId?: string }[],
 ): readonly Attachment[] {
-  return files.map(({ file, durationMs }) => {
+  return files.map(({ file, durationMs, localId }) => {
     uploadedAttachmentCounter += 1;
     const attachment: Attachment = {
       ...attachmentDefaults,
@@ -688,7 +690,14 @@ export function uploadedAttachmentsOf(
       originalName: file.name,
       mimeType: file.type,
       fileSize: file.size,
-      fileUrl: URL.createObjectURL(file),
+      // Défaut 7 (revue #5668) : RÉUTILISE l'URL déjà créée pour cette pièce
+      // (`previewUrlFor`, partagée avec la tuile du plateau ET la bulle
+      // optimiste) plutôt que d'en créer une TROISIÈME — la vraie passerelle
+      // sert une URL `https://`, jamais un blob : ce repli n'existe que
+      // pour les fixtures, qui simulent la réponse serveur avec le fichier
+      // déjà en main. `localId` absent (appelant hors `PendingAttachment`,
+      // témoin direct) ⇒ repli sur une URL dédiée, comme avant.
+      fileUrl: localId === undefined ? URL.createObjectURL(file) : previewUrlFor(localId, file),
       uploadedBy: VIEWER_ID,
       createdAt: new Date().toISOString(),
       ...(durationMs === undefined ? {} : { duration: durationMs }),
