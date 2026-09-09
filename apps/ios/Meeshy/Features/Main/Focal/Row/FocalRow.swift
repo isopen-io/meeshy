@@ -319,6 +319,21 @@ struct FocalRow: View {
                     // En focus, la bande SUR la ligne basse remplace visuellement
                     // cette ligne — qui garde sa place (hauteur stable).
                     .opacity(input.isFocused ? 0 : 1)
+            } else if input.isFocused {
+                // Miroir iOS du défaut 1 fermé côté web (#5648,
+                // `apps/web-v3/src/components/focal-row.tsx:528-558`,
+                // `data-focus-reserve`) : sans ligne basse, la rangée n'a
+                // aucune hauteur réservée sous son texte, et `focusStrip`/
+                // `focusStampChip` (overlay `.bottom`, `offset(y: overhang)`)
+                // remontent alors sur sa dernière ligne. Réservé UNIQUEMENT
+                // sur la rangée ÉLUE sans ligne basse : ailleurs, ça ferait
+                // réapparaître la ligne blanche que #5135 a retirée.
+                Color.clear
+                    .frame(height: Self.focusOverlayReserveHeight(
+                        chipHeight: FocalMetrics.FocusStrip.chipHeight,
+                        overhang: FocalMetrics.FocusStrip.overhang
+                    ))
+                    .accessibilityHidden(true)
             }
         }
         // La bulle prend toute la laisse que la colonne lui laisse : sans cela
@@ -339,6 +354,23 @@ struct FocalRow: View {
             isLastInGroup: input.isLastInGroup,
             hasReactions: mountsReactions
         )
+    }
+
+    /// Hauteur à réserver sous le texte d'une rangée ÉLUE **sans** ligne
+    /// basse (#5718, miroir du défaut 1 fermé côté web par #5648).
+    ///
+    /// `focusStrip`/`focusStampChip` se posent en `.overlay(alignment:
+    /// .bottom)` puis `.offset(y: overhang)` : leur bord bas descend donc de
+    /// `overhang` sous le bord bas de la rangée, et leur bord haut — à
+    /// `chipHeight` au-dessus du leur — remonte de `chipHeight - overhang`
+    /// AU-DESSUS de ce même bord bas. Quand une ligne basse réelle est
+    /// montée (`flagAndReactionsRow`), c'est sa propre hauteur qui absorbe ce
+    /// débord ; sans elle, rien ne l'absorbe et la bande recouvre la
+    /// dernière ligne de texte. Réserver exactement `chipHeight - overhang`
+    /// annule le débord au point près, quelle que soit l'évolution future de
+    /// ces deux cotes — jamais une valeur à part qui pourrait diverger.
+    static func focusOverlayReserveHeight(chipHeight: CGFloat, overhang: CGFloat) -> CGFloat {
+        max(0, chipHeight - overhang)
     }
 
     // MARK: - F-083ter (F11) — badges éphémère/épinglé/transféré
