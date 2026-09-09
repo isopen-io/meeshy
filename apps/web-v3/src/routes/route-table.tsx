@@ -23,6 +23,20 @@ export const ROUTES = {
   progressionBadges: { pattern: '/me/progression/badges', screen: () => import('@/routes/progression-badges') },
   progressionDefis: { pattern: '/me/progression/defis', screen: () => import('@/routes/progression-defis') },
   progressionSucces: { pattern: '/me/progression/succes', screen: () => import('@/routes/progression-succes') },
+  /* L'ACCUEIL À DEUX PORTES (#5816) — soldé une fois par appareil
+     (`welcomeStore`), miroir `WelcomeView.swift`. */
+  welcome: { pattern: '/welcome', screen: () => import('@/routes/welcome') },
+  /* LE LIEN MAGIQUE (#5816) — même adresse pour la SAISIE (`?token=` absent)
+     et la VALIDATION du lien reçu par e-mail (`MagicLinkService.ts:548-549`
+     vise exactement `/auth/magic-link?token=`) : `magic-link.tsx` distingue
+     les deux au montage. `magicLinkValidate` est l'adresse du DIGEST
+     (`jobs/notification-digest.ts:50`, `?token=&returnUrl=`) — même écran de
+     validation, adresse SÉPARÉE. */
+  magicLink: { pattern: '/auth/magic-link', screen: () => import('@/routes/magic-link') },
+  magicLinkValidate: { pattern: '/auth/magic-link/validate', screen: () => import('@/routes/magic-link-validate') },
+  /* MOT DE PASSE OUBLIÉ, flux E-MAIL (#5816) — le flux TÉLÉPHONE et
+     `/reset-password` sont hors tranche (issues compagnons). */
+  forgotPassword: { pattern: '/forgot-password', screen: () => import('@/routes/forgot-password') },
 } as const;
 
 function NotFound() {

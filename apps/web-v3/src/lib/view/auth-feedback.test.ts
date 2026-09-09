@@ -1,7 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { ApiFailure } from '../api/http';
-import { placeLoginFailure, placeSignupFailure, type PhoneConflict } from './auth-feedback';
+import type { ApiFailure, ApiResult } from '../api/http';
+import {
+  placeLoginFailure,
+  placeMagicLinkValidationFailure,
+  placeSignupFailure,
+  resolveForgotPasswordOutcome,
+  type ForgotPasswordData,
+  type PhoneConflict,
+} from './auth-feedback';
 
 /**
  * LE PLACEMENT D'UN REFUS (#5555, T5/T6) — miroir de la table
@@ -105,5 +112,76 @@ describe('placeLoginFailure — quatre textes DISTINCTS, jamais vides', () => {
   test('aucun ne reproduit le texte technique brut du serveur', () => {
     expect(locked.message).not.toContain('User Locked Error');
     expect(throttled.message).not.toContain('RATE_LIMIT_EXCEEDED');
+  });
+});
+
+/**
+ * MOT DE PASSE OUBLIÉ (#5816, T5) — `POST /auth/forgot-password` rend 200
+ * TOUJOURS (anti-énumération, § 3.3 de la spécification). Aucun 404 n'existe
+ * sur cette route ; ce témoin garde que si un jour un tel refus arrivait
+ * (proxy, version), le client servirait quand même l'écran « e-mail envoyé »
+ * — jamais un texte qui révèle l'absence du compte.
+ */
+describe('resolveForgotPasswordOutcome — 200 ET 404 rendent la MÊME issue', () => {
+  test('200 avec data:undefined (forme nominale du serveur) ⇒ sent', () => {
+    const result: ApiResult<ForgotPasswordData> = { ok: true, data: undefined, status: 200 };
+    expect(resolveForgotPasswordOutcome(result)).toEqual({ kind: 'sent' });
+  });
+
+  test('404 ⇒ sent — le client ne révèle jamais l’absence du compte', () => {
+    const result: ApiResult<ForgotPasswordData> = { ok: false, status: 404, error: 'Not Found' };
+    expect(resolveForgotPasswordOutcome(result)).toEqual({ kind: 'sent' });
+  });
+
+  test('400 ⇒ invalid-email', () => {
+    const result: ApiResult<ForgotPasswordData> = { ok: false, status: 400, error: 'Invalid request data' };
+    expect(resolveForgotPasswordOutcome(result)).toEqual({ kind: 'invalid-email' });
+  });
+
+  test('429 ⇒ bandeau « Trop de demandes… »', () => {
+    const result: ApiResult<ForgotPasswordData> = { ok: false, status: 429, error: 'RATE_LIMIT_EXCEEDED' };
+    const outcome = resolveForgotPasswordOutcome(result);
+    expect(outcome.kind).toBe('failed');
+    if (outcome.kind === 'failed') expect(outcome.message).toContain('Trop de demandes');
+  });
+
+  test('status 0 ⇒ hors-ligne', () => {
+    const result: ApiResult<ForgotPasswordData> = { ok: false, status: 0, error: 'Failed to fetch' };
+    expect(resolveForgotPasswordOutcome(result)).toEqual({ kind: 'offline' });
+  });
+
+  test('500 ⇒ bandeau générique + code, jamais `error` brut', () => {
+    const result: ApiResult<ForgotPasswordData> = { ok: false, status: 500, error: 'Server error' };
+    const outcome = resolveForgotPasswordOutcome(result);
+    expect(outcome.kind).toBe('failed');
+    if (outcome.kind === 'failed') {
+      expect(outcome.message).not.toBe('Server error');
+      expect(outcome.message).toContain('500');
+    }
+  });
+});
+
+describe('placeMagicLinkValidationFailure — un seul texte pour les cinq phrases serveur', () => {
+  test('400 (lien invalide, déjà utilisé, expiré ou révoqué) ⇒ « Lien invalide ou expiré »', () => {
+    for (const error of [
+      'This link is invalid.',
+      'This link has already been used.',
+      'This link has expired. Please request a new one.',
+      'This link has been revoked.',
+    ]) {
+      const result = placeMagicLinkValidationFailure(failure({ status: 400, error }));
+      expect(result.message).toBe('Lien invalide ou expiré');
+    }
+  });
+
+  test('status 0 ⇒ hors-ligne', () => {
+    const result = placeMagicLinkValidationFailure(failure({ status: 0, error: 'Failed to fetch' }));
+    expect(result.message).toContain('connexion');
+  });
+
+  test('autre statut ⇒ générique + code, jamais `error` brut', () => {
+    const result = placeMagicLinkValidationFailure(failure({ status: 500, error: 'Server error' }));
+    expect(result.message).not.toBe('Server error');
+    expect(result.message).toContain('500');
   });
 });

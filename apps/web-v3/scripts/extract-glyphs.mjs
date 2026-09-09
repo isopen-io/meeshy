@@ -236,3 +236,21 @@ emit({
   type: 'ThreadMenuGlyphName',
   role: "LE JEU D'ECRAN du menu du message (#5814) : charge avec le chunk du fil, jamais dans le socle.",
 });
+
+/**
+ * LE JEU D'ECRAN DES ROUTES D'AUTHENTIFICATION (#5816) — le heros de
+ * MagicLinkView (`wand.and.stars`), l'icone d'email du champ (`envelope`,
+ * distinct de `envelope-open` du socle, qui reste l'etat "attente") et le
+ * bouton "Renvoyer" (`arrow.clockwise`). Charge avec `/auth/magic-link` et
+ * `/forgot-password`, jamais dans le socle : ces trois glyphes ne servent
+ * qu'a un visiteur SANS session, un chemin rare compare au fil.
+ */
+const AUTH = ['envelope', 'magic-wand', 'arrow-clockwise'];
+
+emit({
+  ids: AUTH,
+  output: join(HERE, '../src/components/glyphs-auth.ts'),
+  constant: 'AUTH_GLYPHS',
+  type: 'AuthGlyphName',
+  role: "LE JEU D'ECRAN des routes d'authentification (#5816) : charge avec elles, jamais dans le socle.",
+});
