@@ -553,7 +553,7 @@ describe('EngagementService level tracking (#5545)', () => {
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
 
-    await svc.recordActivity('user-1', 'content.text_message'); // weight 3
+    await svc.recordActivity('user-1', 'content.text_message'); // weight 9
 
     expect(create).not.toHaveBeenCalled();
     expect(notificationService.createNotification).not.toHaveBeenCalled();
