@@ -30108,8 +30108,29 @@ sonde.
 
 > **Après tout lot qui supprime, renomme ou déplace : chercher les gardes dont
 > l'ANCRE textuelle visait ce qui vient de bouger.** `grep` le nom disparu dans
-> `scripts/` et `__tests__/` est de trente secondes ; un garde inversé vit des
-> mois. Le lot qui déplace est le seul moment où l'on sait quoi chercher.
+> TOUT le dépôt est de trente secondes ; un garde inversé vit des mois. Le lot
+> qui déplace est le seul moment où l'on sait quoi chercher.
+
+QUATRIÈME OCCURRENCE, ET ELLE CORRIGE LA CONSIGNE CI-DESSUS. J'avais écrit
+« grep dans `scripts/` et `__tests__/` » — deux endroits choisis parce que c'est
+là que VIVAIENT les trois premiers. La CI en a rendu un quatrième depuis
+`services/gateway/src/__tests__/security/claude-md-paths-exist-guard.test.ts` :
+un cliquet qui compte les chemins cités par les `CLAUDE.md` et qui n'existent
+pas, dette déclarée **7**, mesurée **8**.
+
+Le huitième était `scripts/v3-rapport.mjs` — **le fichier que le lot supprimait,
+cité dans la phrase du `CLAUDE.md` qui annonçait sa suppression.** Écrire « son
+agrégateur `scripts/v3-rapport.mjs` est parti avec elle » apprend au lecteur un
+chemin mort ; le garde a raison, et la phrase se dit sans le chemin (« son
+agrégateur des sept mesures »).
+
+> **Un document qui ANNONCE une suppression est le premier endroit où un chemin
+> mort apparaît** — on nomme ce qu'on retire, au présent, dans le même geste. Et
+> le garde qui l'attrape n'est pas dans le territoire du lot : il est chez le
+> service qui a écrit le cliquet, ici le gateway. La consigne juste est donc
+> « grep le nom disparu dans TOUT le dépôt », sans présumer d'où un garde
+> surveille — un garde de DOCUMENT peut vivre à côté d'un service qui n'a
+> aucun rapport avec le document.
 
 ## Leçon 561 — Une phrase au passé écrite par la branche PRIORITAIRE sur le fait porté par l'AUTRE naît fausse, et le devient vraie plus tard
 
