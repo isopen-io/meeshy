@@ -88,7 +88,17 @@ final class ProgressionViewModel: ObservableObject {
         }
         let apply: @MainActor @Sendable ([APIEngagementProgress]) -> Void = { [weak self] snapshots in
             guard let self, let snapshot = snapshots.first else { return }
-            self.progress = EngagementProgressResolver.resolve(snapshot)
+            let resolu = EngagementProgressResolver.resolve(snapshot)
+            self.progress = resolu
+            // Les rappels de série se REPLANIFIENT à chaque lecture de la
+            // progression (#5902) : c'est le seul moment où l'on connaît à la
+            // fois le nombre de jours tenus et l'état du geste du jour. Le
+            // planificateur retire toujours son jeu précédent, donc l'appeler
+            // souvent ne peut pas empiler de rappels.
+            Task { await StreakReminderScheduler.shared.replanifier(
+                serieEnCours: resolu.streak.currentDays,
+                aAgiAujourdhui: StreakActivityMark.aAgiAujourdhui()
+            ) }
         }
 
         if forceNetwork {

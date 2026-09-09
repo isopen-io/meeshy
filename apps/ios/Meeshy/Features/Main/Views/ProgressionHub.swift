@@ -399,19 +399,30 @@ struct ProgressionFlammeHero: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
+                // La SÉMANTIQUE d'abord, comme ses deux voisins : le hero
+                // s'ouvrait sur un chiffre sans nom.
+                Text(ProgressionCopy.heroStreakTitle)
+                    .font(.caption2.weight(.semibold))
+                    .textCase(.uppercase)
+                    .foregroundStyle(theme.textMuted)
                 Text(ProgressionCopy.streak(progress.streak.scale.value))
                     .font(.body.weight(.bold))
                     .foregroundStyle(theme.textPrimary)
                 Text(ProgressionCopy.streakRecord(progress.streak.longestDays))
                     .font(.caption)
                     .foregroundStyle(theme.textMuted)
+                // Le jalon passe en DERNIÈRE LIGNE (directive porteur
+                // 2026-09-09). À droite, il était cadré à l'opposé de ce qu'il
+                // qualifie et se lisait comme une colonne à part ; en dessous,
+                // il termine la phrase que les deux lignes commencent — où j'en
+                // suis, mon record, ce qui reste. C'est aussi la forme qu'a
+                // déjà `ProgressionStreakCard`, dont ce hero est le résumé.
+                Text(ProgressionCopy.nextStep(for: progress.streak.scale, kind: .streak))
+                    .font(.caption)
+                    .foregroundStyle(theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
-
-            Text(ProgressionCopy.nextStep(for: progress.streak.scale, kind: .streak))
-                .font(.caption)
-                .multilineTextAlignment(.trailing)
-                .foregroundStyle(theme.textMuted)
         }
         .padding(16)
         .background(

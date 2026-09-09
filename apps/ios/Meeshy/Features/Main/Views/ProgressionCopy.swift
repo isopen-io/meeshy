@@ -299,6 +299,12 @@ enum ProgressionCopy {
     /// L'en-tête du hero quand un succès a DÉJÀ été décroché.
     static let heroLastTitle = String(localized: "progression.hero.last", defaultValue: "Dernier succès", bundle: .main)
 
+    /// L'en-tête du hero de la FLAMME (directive porteur 2026-09-09). Il en
+    /// manquait un : le hero s'ouvrait sur « 9 jours d'affilée », un chiffre
+    /// sans nom. Ses deux voisins — DERNIER SUCCÈS, VOS ÉLANS — se présentent ;
+    /// celui-ci laissait le lecteur deviner de quoi on lui parle.
+    static let heroStreakTitle = String(localized: "progression.hero.streak", defaultValue: "Série", bundle: .main)
+
     /// Et quand il n'y en a AUCUN — le hero ne disparaît pas, il change de propos.
     static let heroFirstTitle = String(localized: "progression.hero.first", defaultValue: "Premier succès", bundle: .main)
 
