@@ -223,6 +223,49 @@ const dropInstitutionalServiceWorker = (): Plugin => ({
   },
 });
 
+/**
+ * LE LIEN PROFOND CASSAIT SES PROPRES ACTIFS (#5725, D-27).
+ *
+ * `webDir: 'dist'` + `capacitor.config.ts` : les deux coques servent déjà
+ * `index.html` pour tout chemin sans extension — Android par `html5mode`
+ * (`WebViewLocalServer.java`, VRAI par défaut), iOS INCONDITIONNELLEMENT
+ * (`CapacitorRouter.route(for:)`, `Router.swift`). Le commentaire historique
+ * de ce fichier (« chemins absolus casseraient ») décrivait un chargement
+ * `file://` littéral qui n'a PAS cours ici : les deux coques servent une
+ * origine VIRTUELLE (`https://localhost/…` Android, `capacitor://localhost/…`
+ * iOS), jamais le système de fichiers brut.
+ *
+ * Le défaut réel est un cran plus bas : `index.html` écrit ses actifs en
+ * chemins RELATIFS (base `./`, ci-dessus) ; servi en réponse à une
+ * navigation vers `/c/<id>`, le NAVIGATEUR résout `./assets/x.js` contre
+ * l'URL NAVIGUÉE — `https://localhost/c/assets/x.js`, qui n'existe pas.
+ * `index.html` arrive (corps non vide), son script JAMAIS : un lien profond
+ * rend une coquille inerte, jamais le fil.
+ *
+ * `<base href="/">` fixe la résolution de TOUT le document sur la racine,
+ * quel que soit le chemin navigué — sans réécrire un seul `href`/`src`
+ * généré par Vite, donc sans toucher au contrat « actifs en chemins
+ * relatifs » que `check-shell-dist.mjs` garde par ailleurs (il retire
+ * désormais cette seule balise avant de juger le reste du document).
+ * Variante A (web) n'en a pas besoin : sa base est déjà absolue (`/`), donc
+ * ses actifs résolvent correctement quel que soit le chemin — d'où la garde
+ * `forCapacitor` uniquement.
+ */
+const capacitorBaseHref = (): Plugin => ({
+  name: 'meeshy-capacitor-base-href',
+  apply: 'build',
+  transformIndexHtml(html) {
+    if (!html.includes('<meta charset="utf-8" />')) {
+      throw new Error(
+        'index.html ne porte plus <meta charset="utf-8" /> : le point d\'ancrage de ' +
+          '<base href="/"> a disparu — un lien profond casserait à nouveau la résolution ' +
+          'de ses actifs (#5725).',
+      );
+    }
+    return html.replace('<meta charset="utf-8" />', '<meta charset="utf-8" />\n    <base href="/">');
+  },
+});
+
 export default defineConfig({
   base: forCapacitor ? './' : '/',
   define: {
@@ -270,7 +313,7 @@ export default defineConfig({
     tailwind(),
     inlineSchemeBootstrap(),
     prerenderInstitutionalPages(),
-    ...(forCapacitor ? [dropInstitutionalServiceWorker()] : []),
+    ...(forCapacitor ? [dropInstitutionalServiceWorker(), capacitorBaseHref()] : []),
     /**
      * VARIANTE A (PWA). Desactivee sous Capacitor : la coque native gere
      * elle-meme son cycle de vie, et un service worker par-dessus ferait deux

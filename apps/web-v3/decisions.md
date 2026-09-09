@@ -1289,3 +1289,62 @@ Preuve de la recette (compte `cible-web-trois`, id `6a9fa8396248cfa007f2ab16`), 
 7. **Trois états dessinés étaient ÉPARPILLÉS sur toute la hauteur** (`ListError`, `ThreadRefused`, `ThreadError`) : `grid flex-1 place-items-center` centre chaque enfant DANS SA RANGÉE et répartit les rangées implicites sur la hauteur — icône en haut, titre au tiers, bouton en bas. `content-center` les tasse. Et `ListError` affichait `error.message`, c'est-à-dire la CHAÎNE PLATE de la passerelle (« Internal server error ») : de l'anglais technique sur le premier écran d'un lecteur francophone, avec le risque d'y voir passer un nom d'interne. Une phrase de PRODUIT la remplace, comme iOS (`ConversationListView.swift:1761-1793` sert un sous-titre fixe, jamais l'erreur brute).
 
 **Deux points restés ouverts, hors de ce diff :** `useThreadScene` reçoit son signal d'attache par un paramètre `ready` déclaré par l'hôte plutôt que par une boucle `requestAnimationFrame` — celle-ci se reprogrammait SANS BORNE (son propre doc-comment la disait « bornée ») et tournait à 60 Hz pour rien sur un fil REFUSÉ, un état TERMINAL où le cadre n'apparaîtra jamais. Et `otherUnread` (`thread.tsx`) OBSERVE le cache partagé (`useConversationsSnapshot`, `enabled: false` — jamais une requête de plus) au lieu d'en prendre un instantané au premier rendu : sur un lien direct vers `/c/:id`, où le cache est encore vide, le compteur restait à zéro pour toujours.
+
+## D-27 · Un lien profond charge la coquille mais casse ses propres actifs — `<base href="/">`, jamais la base globale — 2026-09-09 (#5725)
+
+Le travail « lien profond vers un fil » (#5725) partait d'un diagnostic
+hérité et FAUX : le commentaire de `vite.config.ts` affirmait que la coque
+Capacitor « charge le bundle depuis le système de fichiers » et qu'un chemin
+absolu « casserait » — d'où la base relative (`./assets/…`) de la variante B.
+Lire les sources RÉELLES de `@capacitor/android` 8.5.1 (`WebViewLocalServer.java`,
+champ `html5mode`, VRAI par défaut) et `@capacitor/ios` 8.5.1 (`Router.swift`,
+`CapacitorRouter.route(for:)`, INCONDITIONNEL) montre que les DEUX coques
+servent déjà nativement `index.html` pour tout chemin sans extension : `/c/<id>`
+n'est PAS un 404 natif, et les deux coques servent une origine VIRTUELLE
+(`https://localhost/…` Android, `capacitor://localhost/…` iOS), jamais un
+`file://` littéral — le motif « chemins absolus casseraient » ne décrit rien
+de ce mécanisme.
+
+**Le vrai défaut est un cran plus bas.** `index.html` écrit ses actifs en
+chemins RELATIFS (`./assets/x.js`) ; servi en réponse à une navigation
+DIRECTE vers `/c/<id>` (lien profond, restauration, App Link), le NAVIGATEUR
+résout `./assets/x.js` contre le chemin NAVIGUÉ — `https://localhost/c/assets/x.js`,
+qui n'existe pas. `index.html` arrive (corps non vide, quelques centaines
+d'octets), son script JAMAIS : une coquille inerte, jamais le fil. Mesuré
+empiriquement (Playwright + serveur qui rejoue le repli html5mode) : SANS
+correctif, `#root` monte 0 enfant et 4 requêtes d'actifs échouent en 404 ;
+AVEC, `#root` monte son arbre complet et le fil rend (bodyLen 31 → 25 325).
+Confirmé une seconde fois sur le vrai AVD `Meeshy_Poc_Web-v31` (APK debug,
+`location.href = '/c/c-deploiement'` piloté par CDP réel via le socket
+`webview_devtools_remote_*`) : le fil rend intégralement (Amina Diallo, le
+message cité, le composeur) et sur le simulateur iOS dédié `Meeshy Poc-Web-V31`
+(build Xcode réel de la coque, capture jointe `targets/shells.avd-deeplink.png`
+côté Android — la preuve iOS est la même mécanique, `Router.swift`
+inconditionnel, qui ne dépend d'aucun drapeau).
+
+**La décision : une balise `<base href="/">`, injectée UNIQUEMENT dans le
+build `MEESHY_TARGET=capacitor` (`vite.config.ts` § `capacitorBaseHref`),
+jamais un changement de la `base` globale de Vite.** Elle fixe la résolution
+de TOUT le document sur la racine, quel que soit le chemin navigué, sans
+réécrire un seul `href`/`src` généré par Vite — le contrat « actifs en
+chemins relatifs » que `check-shell-dist.mjs` garde reste vrai ailleurs dans
+le document ; l'audit retire désormais cette seule balise avant de juger le
+reste (elle est l'UNIQUE href absolue tolérée, et sa présence — exactement
+`href="/"`, une fois — est elle-même un critère du gate). Variante A (web)
+n'y touche pas : sa base est déjà absolue (`/`), donc déjà correcte pour tout
+chemin navigué — la garde `forCapacitor` isole le changement, prouvé par la
+mesure de poids inchangée (34,96 Ko avant premier pixel, aucun `<base>` dans
+`dist/index.html`).
+
+**Ce que ça ne règle PAS, et qui reste hors de ce travail.** L'ENTRÉE native
+du lien profond — Universal Links (iOS, `CFBundleURLTypes`/associated
+domains) et App Links (Android, `<intent-filter>` dans `AndroidManifest.xml`)
+— n'existe encore sur AUCUNE des deux coques (vérifié : aucun schéma, aucun
+filtre déclaré). Ce travail répare la MOITIÉ « une fois que le WebView est
+pointé sur `/c/<id>`, le fil rend » ; la moitié « comment le système
+d'exploitation pointe le WebView là-dessus » (gérer l'intent/l'activity
+Android, `scene(_:continue:)`/`application(_:continue:)` iOS, puis appeler
+`location.href` ou le routeur JS) est un travail SÉPARÉ, à ouvrir en issue
+compagnon — sans lui, un App Link réel ne parvient toujours pas jusqu'au
+WebView, même si celui-ci sait désormais correctement répondre une fois
+atteint.

@@ -21,6 +21,8 @@ import { auditShellDist } from './check-shell-dist.mjs';
 
 const CONFORME =
   '<!doctype html><html><head>' +
+  '<meta charset="utf-8" />' +
+  '<base href="/">' +
   '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />' +
   '<meta name="theme-color" content="#0b0c14" media="(prefers-color-scheme: dark)" />' +
   '<script type="module" crossorigin src="./assets/index-abc.js"></script>' +
@@ -68,5 +70,35 @@ describe('auditShellDist — les quatre clauses du contrat de la variante B', ()
   test('une URL protocole-relative (//cdn) n’est PAS lue comme une base absolue', () => {
     const relatif = CONFORME.replace('./assets/index-abc.js', '//cdn.example/index-abc.js');
     expect(auditShellDist(relatif, FICHIERS_CONFORMES)).toEqual([]);
+  });
+});
+
+/**
+ * LE LIEN PROFOND (#5725) — TÉMOIN QUI ROUGIT AVANT LE CORRECTIF.
+ *
+ * `index.html` est écrit en chemins RELATIFS (`./assets/…`) : c'est
+ * `<base href="/">` qui fixe leur résolution sur la racine, quel que soit le
+ * chemin navigué. Sans lui, les DEUX coques (html5mode Android, routeur iOS —
+ * voir vite.config.ts § capacitorBaseHref) servent bien `index.html` en
+ * réponse à `/c/<id>`, mais le NAVIGATEUR résout alors `./assets/x.js`
+ * contre l'URL naviguée : `https://localhost/c/assets/x.js`, qui n'existe
+ * pas. Le corps arrive (non vide), le script jamais — un lien profond rend
+ * une coquille inerte.
+ */
+describe('auditShellDist — le lien profond résout ses actifs (#5725)', () => {
+  test('SANS <base href="/">, un lien profond casse la résolution des actifs — ROUGE', () => {
+    const sansBase = CONFORME.replace('<base href="/">', '');
+    const violations = auditShellDist(sansBase, FICHIERS_CONFORMES);
+    expect(violations.some((v: string) => v.includes('<base'))).toBe(true);
+  });
+
+  test('un <base> qui pointe ailleurs que la racine est refusé', () => {
+    const mauvaiseBase = CONFORME.replace('<base href="/">', '<base href="/c/">');
+    const violations = auditShellDist(mauvaiseBase, FICHIERS_CONFORMES);
+    expect(violations.some((v: string) => v.includes('<base'))).toBe(true);
+  });
+
+  test('AVEC <base href="/">, un dist par ailleurs conforme ne rend aucune violation — VERT', () => {
+    expect(auditShellDist(CONFORME, FICHIERS_CONFORMES)).toEqual([]);
   });
 });
