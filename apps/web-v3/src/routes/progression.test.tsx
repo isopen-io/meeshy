@@ -63,9 +63,20 @@ describe('le hub — un utilisateur à mi-chemin', () => {
    * porteur a réglé le barème le 2026-09-09, et un nombre en dur accuserait
    * l'ÉCRAN d'une régression que seule la donnée a causée.
    */
-  test('le hero du niveau dit le rang, le score, et la série qu\'il a recueillie', () => {
+  test('le hero du niveau dit le rang et le score', () => {
     expect(html).toContain(`Niveau ${fixture.level.level}`);
     expect(html).toContain(`${fixture.level.value} points`);
+  });
+
+  /**
+   * LA FLAMME est son propre hero depuis #5838 — elle vivait dans celui du
+   * niveau, le porteur a tranché « 1 Hero Niveau, 1 Hero Élan, 1 Hero Flamme »
+   * (`packages/shared/utils/progression-layout.ts`). Un client qui ne rend
+   * pas ce bloc ne compile même plus : la séquence partagée est un type
+   * SOMME, `ProgressionBody` doit épuiser ses cas.
+   */
+  test('le hero de la flamme dit la série qu\'il a recueillie', () => {
+    expect(html).toContain('Série');
     expect(html).toContain(`${fixture.streak.value} jours d’affilée`);
     expect(html).toContain(`Record : ${ENGAGEMENT_PROGRESS_FIXTURE.streak.longestStreakDays} jours`);
   });
