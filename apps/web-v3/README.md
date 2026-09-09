@@ -72,10 +72,10 @@ pendant la nuit et un témoin qui cherchait « Aujourd'hui » tombait sans qu'un
 ligne de code ait bougé. Ce qui doit être fixe, c'est la **forme** du jeu de
 données, pas l'instant où on le regarde.
 
-### Les coques (#5604) — mesuré au 2026-09-08
+### Les coques (#5604, #5815) — mesuré au 2026-09-09
 
-Les coques `android/` et `ios/` sont générées, versionnées (D-18) et
-DÉMARRENT — sur l'AVD `Meeshy_Poc_Web-v31` et le simulateur
+Les coques `android/` et `ios/` sont générées, versionnées (D-18) et **SE
+CONNECTENT AU STAGING** — sur l'AVD `Meeshy_Poc_Web-v31` et le simulateur
 `Meeshy Poc-Web-V31` (54438823-4ADC-4536-88D2-FC441395FA04).
 
 | | Android | iOS |
@@ -86,6 +86,8 @@ DÉMARRENT — sur l'AVD `Meeshy_Poc_Web-v31` et le simulateur
 | retour matériel (défaut 3b) | **corrigé** — fil → liste → sortie (`MainActivity.java`, D-18) | sans objet |
 | bascule clair/sombre à chaud (défaut 3c) | sans objet (suit `uimode night`, natif) | **corrigé et vérifié** — `simctl ui … appearance dark/light` répercuté SANS relancer l'app |
 | safe-area (défaut 3a) | non concerné (la WebView est posée dans les barres système) | **corrigé et MESURÉ** — `scrollHeight` passe de 936 à 874 pour `innerHeight` 874 : le débord de 62 px qui coupait la barre de recherche a disparu (D-18) |
+| connexion réelle (#5815) | compte `cible-web-trois` : Lentille avec « Voyage Lisbonne » épinglée et le Salon Rivière — capture `render/shell.android.png` | idem, `render/shell.ios.png` |
+| origine de la WebView (CORS) | `https://localhost` (`CapConfig.java:38-39`) | `capacitor://localhost` (`CAPInstanceDescriptor.m:10-11`) |
 
 **Le piège de `cap sync`, à connaître avant toute recette.** `bun run gate`
 reconstruit `dist/` en variante **A** (base absolue, service worker) : un
@@ -95,6 +97,59 @@ n'afficheraient plus rien. Toute recette de coque recommence donc par
 `check-shell-dist.mjs` construit, lui, dans son propre `dist-capacitor/` et
 l'efface derrière lui — il ne touche jamais `dist/`, et n'est donc pas une
 protection contre ce piège.
+
+**La commande de construction (#5815).** `scripts/build-shells.mjs` est le
+site UNIQUE qui construit une coque de RECETTE contre une passerelle réelle —
+il refuse plus qu'il ne construit :
+
+```bash
+MEESHY_TARGET=capacitor VITE_API_BASE=https://gate.staging.meeshy.me VITE_DATA_SOURCE=gateway \
+  node scripts/build-shells.mjs --target android|ios|both [--no-native]
+```
+
+Il REFUSE, avant tout coût (`resolveShellBuildEnv`) : une base d'API RELATIVE
+(la coque ne la résout nulle part — `config.ts::resolveBase` retomberait, lui,
+sur la production en SILENCE) ; `VITE_DATA_SOURCE` autre que `gateway` (une
+coque de recette sur `fixtures` montrerait Amina Diallo, Kwame Mensah et Fatou
+Bâ au lieu du compte semé) ; `MEESHY_SHELL_START_PATH` posé (un chemin de
+RECETTE, jamais dans une coque livrée) ; le simulateur de RÉFÉRENCE
+(`3E761BC1-…`, où vit l'app NATIVE iOS — la coque n'y entre JAMAIS, leçon
+554). Il AUDITE, après chaque étape coûteuse : `auditShellBundle` (aucun
+marqueur de fixture dans les fichiers embarqués, la base d'API demandée est
+bien celle qui a été inlinée) et `auditSyncedShellConfig` (aucune coque
+SYNCHRONISÉE ne porte `server.appStartPath` — fuite mesurée le 2026-09-09 sur
+`android/app/src/main/assets/capacitor.config.json`, reste d'une recette de
+lien profond antérieure).
+
+**Pourquoi la passerelle laisse entrer ces deux origines.** Une WebView
+Capacitor envoie un en-tête `Origin`, contrairement à une app native — les
+deux origines VIRTUELLES ci-dessus sont déclarées dans `CORS_ORIGINS` /
+`ALLOWED_ORIGINS` du staging (`infrastructure/docker/compose/docker-compose.staging.yml`),
+gardées par `services/gateway/src/__tests__/unit/config/cors-origins.test.ts`
+et portées sur l'hôte à la main (patch chirurgical `sed` sur les deux lignes,
+jamais `deploy-staging.sh`). La production n'ouvre rien tant que l'APK n'est
+pas livré aux utilisateurs (#5651 reste ouverte pour cette étape).
+
+**Le chemin CI (`docker.yml` job `deploy-staging`) ne recopie JAMAIS ce
+fichier sur l'hôte** — il ne fait que `pull` + `up -d --no-deps` depuis le
+compose déjà présent là-bas ; seul `infrastructure/scripts/deploy-staging.sh`
+(non appelé par la CI) synchronise le fichier du dépôt. Une future
+modification de `CORS_ORIGINS`/`ALLOWED_ORIGINS` dans le dépôt passerait donc
+tous les gates (ils gardent le DÉPÔT, `cors-origins.test.ts`) sans jamais
+atteindre l'hôte — dérive silencieuse. Suivi ouvert : #5877 (choisir entre
+recopier le compose en CI, ou une vérification de recette datée). En
+attendant, vérifier après tout déploiement de staging touchant le gateway :
+
+```bash
+for O in https://localhost capacitor://localhost https://etranger.example https://staging.meeshy.me; do
+  printf '%s → ' "$O"
+  curl -s -D - -o /dev/null -X OPTIONS -H "Origin: $O" \
+    -H 'Access-Control-Request-Method: POST' \
+    https://gate.staging.meeshy.me/api/v1/auth/login | grep -i '^access-control-allow-origin' || echo 'refusé'
+done
+```
+Les deux origines de coque doivent revenir dans `access-control-allow-origin`,
+`https://etranger.example` doit être « refusé ».
 
 **Le temps de démarrage à froid CHRONOMÉTRÉ sur un appareil réel d'entrée de
 gamme, et la fluidité de défilement réelle qui va avec, restent « à mesurer »**
@@ -187,7 +242,34 @@ une alerte.
 | | `fixtures` | `gateway` |
 |---|---|---|
 | avant le premier pixel | 24,53 Ko gzip | **34,87 Ko gzip** — cache TanStack persisté (`dehydrate`/`hydrate`) + garde de session |
-| présence de données de fixture dans le socle | — | **aucune** : `grep -c "Amina\|Kwame\|Fatou\|u-viewer" dist/assets/{index,core}-*.js` rend 0 |
+| présence de données de fixture dans le bundle | — | **aucune, dans AUCUN fichier** — tenu par un gate (`check-gateway-build.mjs`), plus par un `grep` à la main |
+
+**Ce que la mesure d'hier ne voyait pas, et comment c'est fermé (revue
+#5815).** La ligne ci-dessus disait « aucune » sur la foi d'un `grep` de
+`dist/assets/{index,core}-*.js` : les fixtures ne vivaient pas là. Elles
+vivaient dans `use-reader-*.js`, le morceau que la liste ET le fil chargent —
+`conversations.ts`, `messages.ts`, `reactions.ts`, `viewer.ts` et
+`routes/thread.tsx` importent `src/lib/api/fixtures*.ts` STATIQUEMENT et ne
+gardent que l'APPEL (`if (source === 'fixtures')`, une valeur d'EXÉCUTION) :
+aucun bundler ne peut élaguer un module dont un export reste référencé.
+Deux leviers, tous deux des LITTÉRAUX de construction :
+
+- `__FIXTURES__` (`vite.config.ts` § `define`, `false` sous
+  `VITE_DATA_SOURCE=gateway`) rend les branches MORTES à la construction —
+  `__FIXTURES__ && source === 'fixtures'` rend exactement ce que rendait
+  `source === 'fixtures'`, `apiConfig.source` reste la source de vérité du
+  comportement ;
+- la règle d'élagage (`build.rollupOptions.treeshake.moduleSideEffects`)
+  DÉCLARE les six `fixtures*.ts` sans effet de bord, sans quoi le bundler
+  garde des modules dont les exports ne servent plus (ils bâtissent leurs
+  données par des `.map(…)` au niveau module).
+
+Mesuré, variante B `gateway` : `use-reader-*.js` passe de **46,53 à 26,21 Ko**
+(**16,53 → 10,03 Ko gzip**), et le à-la-demande du dist `gateway` tombe à
+**109,06 Ko** contre 115,33 Ko en `fixtures`. La première peinture ne bouge
+pas (35,79 Ko : les fixtures n'y étaient pas). Le gate qui le TIENT est
+`check-gateway-build.mjs`, qui balaie TOUT le dist — jamais un motif de nom :
+un morceau neuf s'appellerait autrement, et c'est lui qu'il faut attraper.
 
 Le délai de garde (`http.ts::DEFAULT_TIMEOUT_MS`) a été mesuré, pas deviné,
 contre `gate.staging.meeshy.me` (compte de recette, 5 tirs) : `GET

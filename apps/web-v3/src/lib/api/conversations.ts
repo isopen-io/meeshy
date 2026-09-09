@@ -33,7 +33,7 @@ export type ConversationsDeps = {
 export async function loadConversations(
   params: ConversationsDeps & { readonly signal?: AbortSignal },
 ): Promise<ApiResult<readonly Conversation[]>> {
-  if (params.source === 'fixtures') return { ok: true, data: CONVERSATIONS };
+  if (__FIXTURES__ && params.source === 'fixtures') return { ok: true, data: CONVERSATIONS };
   return params.transport.request<readonly Conversation[]>({
     method: 'GET',
     path: '/api/v1/conversations',
@@ -44,7 +44,7 @@ export async function loadConversations(
 export async function loadConversation(
   params: ConversationsDeps & { readonly id: string; readonly signal?: AbortSignal },
 ): Promise<ApiResult<Conversation>> {
-  if (params.source === 'fixtures') {
+  if (__FIXTURES__ && params.source === 'fixtures') {
     const found = CONVERSATIONS.find((c) => c.id === params.id);
     return found === undefined
       ? { ok: false, status: 404, error: 'Conversation not found' }

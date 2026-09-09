@@ -32,7 +32,8 @@
     "check:reading-mode": "node scripts/check-reading-mode.mjs",
     "check:list-actions": "node scripts/check-list-actions.mjs",
     "check:shell-dist": "node scripts/check-shell-dist.mjs",
-    "check:gateway-build": "node scripts/check-gateway-build.mjs"
+    "check:gateway-build": "node scripts/check-gateway-build.mjs",
+    "build:shells": "node scripts/build-shells.mjs"
   },
   "dependencies": {
     "@meeshy/shared": "workspace:*",
