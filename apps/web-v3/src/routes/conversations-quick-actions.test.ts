@@ -1,6 +1,14 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, test } from 'bun:test';
 
-const source = await Bun.file(new URL('./conversations.tsx', import.meta.url)).text();
+// `node:fs`, jamais le global `Bun` : `tsconfig.json` ne déclare pas ses types,
+// et `bun test` passait au vert pendant que `tsc --noEmit` rougissait en CI
+// (TS2868). C'est la forme qu'emploient déjà `safe-area.test.ts` et
+// `sections.test.ts` pour lire une source.
+const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'conversations.tsx'), 'utf8');
 
 /**
  * **La queue d'accès rapides ne dépend pas de ce que le FILTRE laisse voir.**
