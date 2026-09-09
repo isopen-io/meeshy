@@ -579,12 +579,21 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Only community admins can remove members');
       }
 
-      // Supprimer le membre
-      await fastify.prisma.communityMember.deleteMany({
-        where: {
-          communityId: id,
-          userId: memberId
-        }
+      // Aligné sur le départ volontaire (#5760) : `isActive: false` + `leftAt`,
+      // jamais une suppression — la ligne reste la trace du retrait, et la
+      // ré-adhésion (POST .../join, .../invite, .../members) la réactive au
+      // lieu d'en ouvrir une seconde (#5800).
+      const activeMembership = await fastify.prisma.communityMember.findFirst({
+        where: { communityId: id, userId: memberId, isActive: true }
+      });
+
+      if (!activeMembership) {
+        return sendNotFound(reply, 'Member not found in this community');
+      }
+
+      await fastify.prisma.communityMember.update({
+        where: { id: activeMembership.id },
+        data: { isActive: false, leftAt: new Date() }
       });
 
       return sendSuccess(reply, { message: 'Member removed successfully' });
