@@ -16,6 +16,7 @@ import MeeshySDK
 /// n'a pas survécu au remplacement), pas le rendu localisé — la traduction
 /// elle-même est garantie par le catalogue et le cliquet français
 /// (`FrenchDefaultValueRatchetTests`).
+@MainActor
 final class AchievementCopySingularAgreementTests: XCTestCase {
 
     /// Les dix-huit familles de VOLUME — dérivées du catalogue partagé, pas
