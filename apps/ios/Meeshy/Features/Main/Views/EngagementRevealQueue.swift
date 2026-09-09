@@ -20,7 +20,7 @@ import MeeshySDK
 ///    avoir vu six n'est plus une récompense mais une prise en otage. Au-delà,
 ///    les paliers restent ACQUIS et le tableau de bord les restitue — c'est
 ///    l'écran, pas la file, qui est l'inventaire.
-struct EngagementRevealQueue: Equatable {
+nonisolated struct EngagementRevealQueue: Equatable {
 
     /// Ce que la file accepte de faire attendre, célébration en cours comprise.
     static let capacité = 3
