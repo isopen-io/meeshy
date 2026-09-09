@@ -55,7 +55,10 @@
 // 2026-09-08 (méthodologie propre à ce script — #3678 en mesurait 583 avec
 // une méthode non tracée ailleurs ; la référence ci-dessous est ancrée sur ce
 // script, pas sur la mesure manuelle de l'issue).
-const BASELINE_HARDCODED_COLOR_COUNT = 956;
+// Réancrée à 945 le 2026-09-09 : la référence de 956 comptait ONZE mentions
+// qui n'étaient que des COMMENTAIRES. Ce n'est pas une amélioration du code —
+// c'est la même dette, mesurée juste. Le cliquet compte désormais des USAGES.
+const BASELINE_HARDCODED_COLOR_COUNT = 945;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -101,6 +104,21 @@ export const listSwiftFiles = (absRoot, relRoot) => {
   return out;
 };
 
+// **Un COMMENTAIRE qui nomme `Color(hex:)` n'en est pas un usage.**
+//
+// Le 2026-09-09, ce cliquet a rougi sur `dev` — 957 contre 956 — pour un
+// doc-comment. Le commit #5874 corrigeait un vrai défaut (`Color(hex:)` n'est
+// pas faillible, son `?? repli` était donc MORT) et EXPLIQUAIT la correction
+// juste au-dessus, en citant la fonction. Le compteur textuel a lu cette
+// explication comme une couleur en dur de plus.
+//
+// Un garde qui punit la phrase qui le justifie apprend aux gens à ne plus
+// écrire la phrase. Les commentaires sont donc retirés avant comptage — même
+// geste que `AppSourceGuard.stripComments`, déjà employé par les gardes de
+// source côté iOS.
+export const stripSwiftComments = (source) =>
+  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
 // Fonction pure : compte les occurrences dans un monde DÉJÀ LU (path →
 // source), indépendamment du parcours de fichiers réel — c'est elle que
 // --self-test exerce.
@@ -108,7 +126,7 @@ export const countHardcodedColors = (files) => {
   const perFile = [];
   let total = 0;
   for (const { path, source } of files) {
-    const matches = source.match(HARDCODED_COLOR_RE);
+    const matches = stripSwiftComments(source).match(HARDCODED_COLOR_RE);
     if (matches && matches.length > 0) {
       perFile.push({ path, count: matches.length });
       total += matches.length;
@@ -139,6 +157,17 @@ const selfTest = () => {
     { path: 'Sdk/Views/Card.swift', source: 'let c = Color(hex: "#123456")' },
     { path: 'App/Screen.swift', source: 'let e = Color(hex: "#ABCDEF")\nlet f = Color(hex: "#FEDCBA")' },
     { path: 'App/Empty.swift', source: 'struct Empty {}' },
+    // Un doc-comment qui NOMME `Color(hex:)` — souvent pour expliquer
+    // pourquoi on ne s'en sert PAS — ne compte pas ; la ligne de code qui
+    // suit, si (#5883).
+    {
+      path: 'App/Documente.swift',
+      source:
+        '/// `Color(hex:)` n\'est PAS faillible : sur une chaîne illisible il rend du noir.\n' +
+        '// second commentaire avec Color(hex: "#000000") dedans\n' +
+        '/* bloc\n   Color(hex: "#111111")\n*/\n' +
+        'let g = Color(hex: "#654321")',
+    },
   ];
   // Le monde ne contient déjà que des fichiers RETENUS par listSwiftFiles
   // (l'exclusion Theme/Tests est un filtre de CHEMIN, testé par lecture du
@@ -147,11 +176,22 @@ const selfTest = () => {
   // juste sur ce qu'on lui donne à compter : 2 + 1 + 2 = 5, `Empty.swift`
   // absent du détail par fichier.
   const { total, perFile } = countHardcodedColors(world);
-  if (total !== 5) {
-    console.error(`AVEUGLE : total attendu 5, obtenu ${total}.`);
+  if (total !== 6) {
+    console.error(`AVEUGLE : total attendu 6, obtenu ${total}.`);
     return 1;
   }
-  if (perFile.length !== 3 || perFile.some((f) => f.path === 'App/Empty.swift')) {
+  const documente = perFile.find((f) => f.path === 'App/Documente.swift');
+  if (!documente || documente.count !== 1) {
+    console.error(
+      `AVEUGLE : un fichier dont TROIS mentions sur quatre sont en commentaire doit compter 1, obtenu ${JSON.stringify(documente)}.`,
+    );
+    return 1;
+  }
+  if (stripSwiftComments('// Color(hex: "#fff")\nlet a = 1').includes('Color(hex:')) {
+    console.error('AVEUGLE : stripSwiftComments doit retirer un commentaire de ligne.');
+    return 1;
+  }
+  if (perFile.length !== 4 || perFile.some((f) => f.path === 'App/Empty.swift')) {
     console.error(`AVEUGLE : un fichier sans occurrence ne doit pas figurer dans le détail, obtenu ${JSON.stringify(perFile)}.`);
     return 1;
   }
@@ -174,7 +214,7 @@ const selfTest = () => {
     return 1;
   }
 
-  console.log('self-test : 6/6 vérifications passées (comptage par fichier, total, cliquet à deux sens).');
+  console.log('self-test : 8/8 vérifications passées (comptage par fichier, total, commentaires ignorés, cliquet à deux sens).');
   return 0;
 };
 

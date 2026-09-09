@@ -25,7 +25,7 @@ export function addReaction(
   deps: ConversationsDeps,
   params: { readonly messageId: string; readonly emoji: string },
 ): Promise<ApiResult<ReactionData>> {
-  if (deps.source === 'fixtures') return Promise.resolve(fixtureAddReaction(params));
+  if (__FIXTURES__ && deps.source === 'fixtures') return Promise.resolve(fixtureAddReaction(params));
   return deps.transport.request<ReactionData>({ method: 'POST', path: '/api/v1/reactions', body: params });
 }
 
@@ -33,7 +33,7 @@ export function removeReaction(
   deps: ConversationsDeps,
   params: { readonly messageId: string; readonly emoji: string },
 ): Promise<ApiResult<{ readonly message: string }>> {
-  if (deps.source === 'fixtures') return Promise.resolve(fixtureRemoveReaction(params));
+  if (__FIXTURES__ && deps.source === 'fixtures') return Promise.resolve(fixtureRemoveReaction(params));
   return deps.transport.request<{ readonly message: string }>({
     method: 'DELETE',
     path: `/api/v1/reactions/${params.messageId}/${encodeURIComponent(params.emoji)}`,

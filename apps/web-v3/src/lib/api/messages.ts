@@ -31,7 +31,7 @@ const MESSAGES_LIMIT = 50;
 export async function loadMessages(
   params: ConversationsDeps & { readonly conversationId: string; readonly signal?: AbortSignal },
 ): Promise<ApiResult<MessagesPage>> {
-  if (params.source === 'fixtures') {
+  if (__FIXTURES__ && params.source === 'fixtures') {
     return {
       ok: true,
       data: { messages: messagesOf(params.conversationId), hasOlder: hasOlderMessagesOf(params.conversationId) },
@@ -173,7 +173,7 @@ export async function sendMessage(
     readonly signal?: AbortSignal;
   },
 ): Promise<ApiResult<SentMessageAck>> {
-  if (params.source === 'fixtures') {
+  if (__FIXTURES__ && params.source === 'fixtures') {
     const created = recordSentMessage(params.conversationId, params.body);
     return { ok: true, data: ackOf(created, params.body.clientMessageId) };
   }

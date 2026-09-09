@@ -73,6 +73,20 @@ declare const __BENCH__: number;
 declare const __SHELL__: boolean;
 
 /**
+ * `__FIXTURES__` — `false` sous `VITE_DATA_SOURCE=gateway`, `true` partout
+ * ailleurs (revue #5815). Même mécanique que `__SHELL__` : un littéral posé
+ * par `vite.config.ts`, fourni sous `bun test` par `bunfig.toml`.
+ *
+ * Il ne DÉCIDE rien — `apiConfig.source` reste la source de vérité du
+ * comportement, et `__FIXTURES__ && source === 'fixtures'` rend exactement ce
+ * que rendait `source === 'fixtures'`. Il DIT à Rollup ce que la construction
+ * sait déjà, pour qu'elle puisse élaguer `src/lib/api/fixtures*.ts` : sans
+ * lui, une coque de recette construite contre la passerelle embarquait quand
+ * même tout le jeu de fixtures (`build-shells.mjs::auditShellBundle`).
+ */
+declare const __FIXTURES__: boolean;
+
+/**
  * `__APP_VERSION__` — la version de `package.json`, LUE par `vite.config.ts`
  * au moment de la construction (même mécanique que `__SHELL__`). Le pied de
  * marque de l'écran de connexion la rend ; le préchauffage institutionnel lit
