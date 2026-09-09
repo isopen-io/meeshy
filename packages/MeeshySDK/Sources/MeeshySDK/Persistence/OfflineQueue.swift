@@ -1119,7 +1119,12 @@ public actor OfflineQueue {
         guard let pool = outboxPool else { return }
         do {
             try await pool.write { db in
-                try OutboxRecord
+                // `deleteAll` rend le nombre de lignes supprimées ; ici il ne
+                // porte aucune décision — zéro ligne signifie « déjà nettoyé »,
+                // ce qui est un succès. Le `_ =` le dit AU SITE plutôt que de
+                // laisser la valeur remonter jusqu'à l'appelant, qui n'en
+                // saurait pas plus quoi faire.
+                _ = try OutboxRecord
                     .filter(Column("clientMessageId") == cmid)
                     .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
                     .filter(Column("status") != OutboxStatus.inflight.rawValue)

@@ -67,7 +67,17 @@ struct PostSceneSoundHeader: View {
     let accentHex: String
     let onTogglePlayback: () -> Void
 
-    private var tint: Color { Color(hex: accentHex) ?? MeeshyColors.indigo400 }
+    /// `Color(hex:)` n'est PAS faillible : sur une chaîne illisible, son
+    /// `Scanner` laisse `rgb = 0` et rend du NOIR. Le `??` qui suivait ne
+    /// pouvait donc jamais s'appliquer — l'indigo de repli était mort, et un
+    /// accent absent peignait un en-tête noir au lieu de la couleur voulue.
+    ///
+    /// La garde porte donc sur la SEULE défaillance réaliste, la chaîne vide
+    /// (accent non servi), ce qui rend au repli l'effet que son auteur lui
+    /// prêtait.
+    private var tint: Color {
+        accentHex.isEmpty ? MeeshyColors.indigo400 : Color(hex: accentHex)
+    }
 
     var body: some View {
         if let trace {
