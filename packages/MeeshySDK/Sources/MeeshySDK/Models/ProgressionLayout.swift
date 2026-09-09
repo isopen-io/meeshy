@@ -14,7 +14,10 @@ import Foundation
 /// n'était pas un test de plus, c'était un endroit où l'ordre soit ÉCRIT — et,
 /// Xcode ne pouvant pas importer un module TypeScript, un endroit de CHAQUE
 /// côté plus une garde qui les compare (`progression-layout-mirror-parity`).
-public enum ProgressionSection: String, Sendable, CaseIterable {
+public enum ProgressionSection: String, Sendable, CaseIterable, Identifiable {
+    /// L'identité EST la clé — une porte se distingue par ce qu'elle ouvre.
+    public var id: String { rawValue }
+
     case badges
     case defis
     case succes
@@ -29,6 +32,10 @@ public enum ProgressionBlock: Sendable, Equatable {
     case lastAchievement
     case level
     case elans
+    /// LA FLAMME — la série de jours, en hero à part entière. Trois questions
+    /// distinctes — où j'en suis, ce qui multiplie, ce que je tiens — méritent
+    /// trois blocs, pas un bloc dense (directive porteur).
+    case flamme
     case sectionLink(ProgressionSection)
 }
 
@@ -50,6 +57,6 @@ public enum ProgressionLayout {
             section != .defis || !progress.achievementSections.isEmpty
         }
 
-        return [.lastAchievement, .level, .elans] + sections.map { ProgressionBlock.sectionLink($0) }
+        return [.lastAchievement, .level, .elans, .flamme] + sections.map { ProgressionBlock.sectionLink($0) }
     }
 }

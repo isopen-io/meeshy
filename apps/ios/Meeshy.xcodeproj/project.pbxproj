@@ -1003,6 +1003,7 @@
 		9405D7252071390311E1AB2F /* MyStoriesDeleteConfirmationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39CCC66403299EC38C8E2C9E /* MyStoriesDeleteConfirmationTests.swift */; };
 		940821D8C4ABAB8CF9B99559 /* SlideThumbBackgroundDoorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3DADAA54E3752ACDCBED327 /* SlideThumbBackgroundDoorTests.swift */; };
 		947118BFB9F264EC888D7C6C /* ComposerSoundCreditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C857F7336DEABE137D924932 /* ComposerSoundCreditTests.swift */; };
+		94750CAD3250A01CDA9CE6C7 /* ProgressionHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED3B59E527DF6E6273E10A0 /* ProgressionHub.swift */; };
 		948CBBE0C339871A8874C121 /* DependencyContainerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E75FBA68E95B0DC9C9C31339 /* DependencyContainerTests.swift */; };
 		94C0ACF6FD3CED3509BA6148 /* PiPVideoSampleBufferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59A0D13CC0A92C4E7C213929 /* PiPVideoSampleBufferView.swift */; };
 		94C4C1516CDC7E3020C221A2 /* MeeshyComposerHost+Captions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46E274ADD5509BE618A620F8 /* MeeshyComposerHost+Captions.swift */; };
@@ -3288,6 +3289,7 @@
 		CE87654142A6243C964F8E3A /* MockPostService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockPostService.swift; sourceTree = "<group>"; };
 		CE948D4F466D2D9B0A14D57C /* ComposerFormatFan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerFormatFan.swift; sourceTree = "<group>"; };
 		CEB19495A2C64AC013A9129C /* SocialAudioTrackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialAudioTrackTests.swift; sourceTree = "<group>"; };
+		CED3B59E527DF6E6273E10A0 /* ProgressionHub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionHub.swift; sourceTree = "<group>"; };
 		CF520CFB021C0F6D5DA562E7 /* PostSceneMosaic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostSceneMosaic.swift; sourceTree = "<group>"; };
 		CF631034AD05D4523AF5933D /* StoryUploadQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryUploadQueueTests.swift; sourceTree = "<group>"; };
 		CF6F1273AC291B2F8A87F307 /* StoryExportShareSheetPaletteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryExportShareSheetPaletteTests.swift; sourceTree = "<group>"; };
@@ -5254,6 +5256,7 @@
 				D35A1CF474626049B75448AD /* ProfileView.swift */,
 				24802D6B9C01A966C02A7419 /* ProgressionComponents.swift */,
 				25CA31F83B018CD058173935 /* ProgressionCopy.swift */,
+				CED3B59E527DF6E6273E10A0 /* ProgressionHub.swift */,
 				CE6224494F85A90D6E891517 /* ProgressionView.swift */,
 				088521A1106C3364358D8E13 /* ReactionPaletteModifier.swift */,
 				C63E94A1D37F76CC5CBD98CB /* RecordingWaveformBars.swift */,
@@ -6973,6 +6976,7 @@
 				A431718180EE349BAD17236F /* ProfileView.swift in Sources */,
 				108E7C0625847E5E366B6E2A /* ProgressionComponents.swift in Sources */,
 				F12EC1D7157AF62385FCBF09 /* ProgressionCopy.swift in Sources */,
+				94750CAD3250A01CDA9CE6C7 /* ProgressionHub.swift in Sources */,
 				35F8D43B94C6F41365F1BD1E /* ProgressionView.swift in Sources */,
 				94DE63E05B2E1CD72294CACE /* ProgressionViewModel.swift in Sources */,
 				E987ACC4642CAFF8F7FBEC21 /* PublishIntent.swift in Sources */,

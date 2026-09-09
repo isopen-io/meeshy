@@ -56,6 +56,15 @@ export type ProgressionBlock =
   | { readonly kind: 'last-achievement' }
   | { readonly kind: 'level' }
   | { readonly kind: 'elans' }
+  /**
+   * LA FLAMME — la série de jours, en hero à part entière.
+   *
+   * Elle avait été repliée DANS le hero du niveau, faute d'être nommée par la
+   * cible. Le porteur l'a tranché : « 1 Hero Niveau, 1 Hero Élan, 1 Hero
+   * Flamme ». Trois questions distinctes — où j'en suis, ce qui multiplie, ce
+   * que je tiens — méritent trois blocs, pas un bloc dense.
+   */
+  | { readonly kind: 'flamme' }
   | { readonly kind: 'section-link'; readonly section: ProgressionSection };
 
 /**
@@ -92,6 +101,7 @@ export function progressionLayout(progress: EngagementProgress): readonly Progre
     { kind: 'last-achievement' },
     { kind: 'level' },
     { kind: 'elans' },
+    { kind: 'flamme' },
     ...sections.map((section) => ({ kind: 'section-link', section }) as const),
   ];
 }

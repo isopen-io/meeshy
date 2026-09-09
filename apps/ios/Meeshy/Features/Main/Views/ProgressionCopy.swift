@@ -259,4 +259,62 @@ enum ProgressionCopy {
         }
         return String(localized: "progression.a11y.tier.pending", defaultValue: "Palier \(tier.threshold) à atteindre", bundle: .main)
     }
+
+    // MARK: - Le hub (#5838, #5840, #5841, #5842)
+
+    /// L'en-tête du hero quand un succès a DÉJÀ été décroché.
+    static let heroLastTitle = String(localized: "progression.hero.last", defaultValue: "Dernier succès", bundle: .main)
+
+    /// Et quand il n'y en a AUCUN — le hero ne disparaît pas, il change de propos.
+    static let heroFirstTitle = String(localized: "progression.hero.first", defaultValue: "Premier succès", bundle: .main)
+
+    static let heroFirstHint = String(
+        localized: "progression.hero.first.hint",
+        defaultValue: "Envoyez un message — le premier tombe tout de suite.",
+        bundle: .main
+    )
+
+    /// L'indice VoiceOver du hero touchable — il annonce l'EFFET, pas le geste.
+    static let heroRevealHint = String(
+        localized: "progression.hero.reveal.hint",
+        defaultValue: "Revoir la célébration de ce succès",
+        bundle: .main
+    )
+
+    static let howToEarn = String(
+        localized: "progression.level.howToEarn",
+        defaultValue: "Comment gagner des points",
+        bundle: .main
+    )
+
+    /// Le prix vient du SERVEUR (`meesh.mintCost`) : aucun client ne le code en dur.
+    static func mintPrice(_ cost: Int) -> String {
+        String(
+            localized: "progression.level.mintPrice",
+            defaultValue: "\(cost) points se convertissent en une Meesh — la monnaie rare de Meeshy.",
+            bundle: .main
+        )
+    }
+
+    static let elansTitle = String(localized: "progression.elans.title", defaultValue: "Vos élans", bundle: .main)
+
+    static let elansEmpty = String(
+        localized: "progression.elans.empty",
+        defaultValue: "Publiez une story, un post, un réel ou lancez une conversation : chaque famille tenue en même temps multiplie vos points.",
+        bundle: .main
+    )
+
+    static let elansHint = String(
+        localized: "progression.elans.hint",
+        defaultValue: "Tenez une famille de plus en même temps pour déclencher le multiplicateur.",
+        bundle: .main
+    )
+
+    static let badgesTitle = String(localized: "progression.section.badges", defaultValue: "Badges", bundle: .main)
+
+    static let achievementsTitle = String(
+        localized: "progression.section.achievements",
+        defaultValue: "Succès",
+        bundle: .main
+    )
 }

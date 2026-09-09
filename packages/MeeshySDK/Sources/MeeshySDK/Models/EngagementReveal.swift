@@ -13,7 +13,19 @@ import Foundation
 /// niveau 1) donnerait une célébration COHÉRENTE et FAUSSE : badge bien dessiné,
 /// titre plausible, et le mauvais palier. C'est le repli MENTEUR de la grappe
 /// des contrôles — le plus cher, parce qu'il ne se voit qu'à la lecture.
-public enum EngagementReveal: Equatable, Sendable {
+public enum EngagementReveal: Equatable, Sendable, Identifiable {
+
+    /// L'identité EST le palier célébré — c'est ce qui permet de le présenter
+    /// par `.fullScreenCover(item:)` depuis le hero du dernier succès, sans
+    /// booléen d'accompagnement qui pourrait diverger de la valeur.
+    public var id: String {
+        switch self {
+        case .achievement(let clé): return "achievement:\(clé.rawValue)"
+        case .streak(let jours): return "streak:\(jours)"
+        case .level(let rang): return "level:\(rang)"
+        }
+    }
+
     case achievement(EngagementAchievementKey)
     case streak(days: Int)
     case level(Int)

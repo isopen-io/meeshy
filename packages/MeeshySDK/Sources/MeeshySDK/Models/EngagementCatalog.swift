@@ -70,6 +70,25 @@ public enum EngagementAchievementKey: String, CaseIterable, Codable, Sendable, H
 /// Les paliers — socle initial, tunable (§ 7), et les clés de palier telles
 /// que `EngagementService` les grave (§ 4).
 public enum EngagementCatalog {
+    /// LE BARÈME, par FAMILLE — miroir de `ENGAGEMENT_AXIS_WEIGHTS` (TS).
+    ///
+    /// Le hero du niveau l'ÉNUMÈRE (#5841) : « Contenu produit +9, Lien social
+    /// +7… ». Il fallait donc qu'iOS le connaisse, et qu'il ne puisse pas
+    /// dériver — le porteur l'a réglé trois fois le 2026-09-09, et une valeur
+    /// recopiée se périme au premier réglage sans qu'aucun témoin ne rougisse.
+    /// La garde `progression-layout-mirror-parity` compare les cinq nombres.
+    ///
+    /// Par FAMILLE et non par axe : c'est ainsi que le TypeScript les décide
+    /// (cinq constantes, dix-sept axes), et un miroir plus fin inventerait une
+    /// granularité que la source n'a pas.
+    public static let familyWeights: [EngagementAxisFamily: Int] = [
+        .content: 9,
+        .social: 7,
+        .conversation: 5,
+        .comment: 3,
+        .tool: 1,
+    ]
+
     public static let badgeThresholds: [Int] = [1, 10, 50, 100, 500]
     public static let streakThresholds: [Int] = [3, 7, 14, 30, 60, 100]
     public static let levelThresholds: [Int] = [10, 50, 150, 400, 1000, 2500]
