@@ -301,6 +301,26 @@ final class Router: ObservableObject {
     /// et n'ouvrait rien (2026-09-08).
     @Published var pendingOpenFeedComposer: Bool = false
 
+    /// Le palier à CÉLÉBRER avant d'ouvrir le tableau de bord (#5809), posé par
+    /// le tap d'une notification de succès, de série ou de niveau.
+    ///
+    /// `nil` est un état LÉGITIME : une charge qui ne dit pas quel palier a été
+    /// franchi n'en fait pas inventer un — le tap ouvre alors le tableau de
+    /// bord comme avant, sans célébration.
+    @Published var pendingEngagementReveal: EngagementReveal?
+
+    /// Ramasse le palier à célébrer, UNE fois.
+    ///
+    /// La remise à plat vit ICI, à son site unique : les deux racines montent
+    /// des hôtes différents, et une remise à zéro laissée à chacune finit par
+    /// diverger — une racine oublie, et son bouton cesse d'agir sans que rien
+    /// ne rougisse.
+    func consumePendingEngagementReveal() -> EngagementReveal? {
+        guard let palier = pendingEngagementReveal else { return nil }
+        pendingEngagementReveal = nil
+        return palier
+    }
+
     /// Ramasse la demande de composeur de flux, UNE fois.
     ///
     /// La remise à plat vit ICI, à son site unique : laissée à chaque hôte, elle

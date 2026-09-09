@@ -145,6 +145,8 @@ extension iPadRootView {
             // plusieurs hôtes qui observent le même `showStoryComposer`, et
             // chacun présentait son propre cover. Détail dans
             // `StoryComposerCover`.
+            // Jumelle EXACTE du montage iPhone (#5809) — même hôte, même ligne.
+            .engagementReveal(router: router)
             .storyComposerCover(
                 viewModel: storyViewModel,
                 router: router,
