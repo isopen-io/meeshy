@@ -3,7 +3,8 @@
 # Incident du 2026-09-07 : `meeshy-gateway` tournait une révision de neuf jours
 # pendant que Traefik le déclarait `healthy` et que la CI restait verte — la
 # route que l'app iOS appelait n'existait tout simplement pas sur ce binaire.
-# Aucun témoin ne comparait ce qui TOURNE à ce qui est ÉCRIT sur `origin/main`.
+# Aucun témoin ne comparait ce qui TOURNE à ce qui est ÉCRIT sur SA branche
+# (`origin/main` pour production, `origin/dev` pour staging — #5862).
 #
 # `/health` grave déjà `build.commit` (`packages/shared/utils/build-info.ts`,
 # posé par `VCS_REF`/`GIT_COMMIT` au build Docker) — ce job ne fait que le LIRE
@@ -14,7 +15,7 @@
 # seulement AU MOMENT du déploiement. Celui-ci couvre l'angle mort : une
 # révision qui dérive SANS nouveau déploiement (le cas exact de l'incident :
 # l'image était déjà sur l'hôte, seul le conteneur n'a jamais été recréé).
-name: Comparer la révision servie à origin/main
+name: Comparer la révision servie à sa branche
 
 on:
   schedule:
@@ -22,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       max_drift_commits:
-        description: "Commits de retard tolérés sur origin/main avant alerte"
+        description: "Commits de retard tolérés sur la branche de la cible avant alerte"
         required: false
         default: '15'
 
@@ -33,11 +34,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # **Chaque cible déclare SA branche, et ce n'est pas un détail (#5862).**
+        # `deploy-staging` (docker.yml) porte `if: github.ref ==
+        # 'refs/heads/dev'` : staging sert `dev`, production sert `main`.
+        # Comparer les deux à `main` exigeait de staging qu'il serve une
+        # révision de `main` — vert seulement si `dev == main`, donc jamais.
+        # Le job tournant toutes les heures, il rougissait une fois par heure
+        # sur une situation SAINE, et n'attrapait donc plus l'incident pour
+        # lequel il a été écrit.
         target:
           - name: production
             url: https://gate.meeshy.me/health
+            ref: origin/main
           - name: staging
             url: https://gate.staging.meeshy.me/health
+            ref: origin/dev
     steps:
       - name: Checkout (historique complet — requis par git merge-base/rev-list)
         uses: actions/checkout@v7
@@ -55,9 +66,10 @@ jobs:
           COMMIT=$(echo "$BODY" | jq -r '.build.commit // empty')
           echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
 
-      - name: Comparer à origin/main
+      - name: Comparer à la branche de la cible
         env:
           COMMIT: ${{ steps.health.outputs.commit }}
+          REF: ${{ matrix.target.ref }}
           MAX_DRIFT: ${{ github.event.inputs.max_drift_commits || '15' }}
         run: |
           set -euo pipefail
@@ -72,19 +84,19 @@ jobs:
             exit 1
           fi
 
-          if ! git merge-base --is-ancestor "$COMMIT" origin/main; then
-            echo "::error::${{ matrix.target.name }} — \`$COMMIT\` n'est PAS un ancêtre d'origin/main (branche inattendue, ou historique réécrit)"
+          if ! git merge-base --is-ancestor "$COMMIT" "$REF"; then
+            echo "::error::${{ matrix.target.name }} — \`$COMMIT\` n'est PAS un ancêtre de \`$REF\` (branche inattendue, ou historique réécrit)"
             exit 1
           fi
 
-          DRIFT=$(git rev-list --count "${COMMIT}..origin/main")
+          DRIFT=$(git rev-list --count "${COMMIT}..${REF}")
           {
             echo "### ${{ matrix.target.name }}"
             echo ""
-            echo "Sert \`${COMMIT}\` — **$DRIFT** commit(s) derrière \`origin/main\` (seuil : $MAX_DRIFT)."
+            echo "Sert \`${COMMIT}\` — **$DRIFT** commit(s) derrière \`$REF\` (seuil : $MAX_DRIFT)."
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$DRIFT" -gt "$MAX_DRIFT" ]; then
-            echo "::error::${{ matrix.target.name }} est en retard de $DRIFT commits sur origin/main (seuil $MAX_DRIFT) — cf. #5644 : vérifier que le conteneur a bien été recréé après le dernier build"
+            echo "::error::${{ matrix.target.name }} est en retard de $DRIFT commits sur \`$REF\` (seuil $MAX_DRIFT) — cf. #5644 : vérifier que le conteneur a bien été recréé après le dernier build"
             exit 1
           fi
