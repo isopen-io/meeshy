@@ -100,6 +100,10 @@
   --ios-text-summary-title: 20px; /* Focal/Summary/LivingSummaryView.swift:64 — relative(20, .heavy), « Résumé Vivant » */
   --ios-text-summary-counts: 14px; /* Focal/Summary/LivingSummaryView.swift:68 — relative(14, .semibold), « N messages · P personnes » */
   --ios-text-summary-partial: 12px; /* Focal/Summary/LivingSummaryView.swift:73 — relative(12, .medium), « Sur les N derniers messages » */
+  --ios-tile-photo: #9B59B6; /* UniversalComposerBar+Attachments.swift:250 — CarouselTile(id: "photo").color */
+  --ios-tile-file: #45B7D1; /* UniversalComposerBar+Attachments.swift:262 — CarouselTile(id: "file").color */
+  --ios-tile-voice: #E74C3C; /* UniversalComposerBar+Attachments.swift:274 — CarouselTile(id: "voice").color */
+  --ios-recording-ink-dark: #FFFFFF; /* UniversalComposerBar+Recording.swift:148 — waveformColor = isDark ? "FFFFFF" : accentColor */
   --ios-bubble-other-opacity: 28%; /* BubbleBackground.swift — other.opacity(isDark ? 0.28 : 0.16) */
   --ios-bubble-other-hairline-opacity: 34%; /* BubbleBackground.swift — strokeBorder(isDark ? 0.34 : 0.26) */
   --ios-bubble-meta: color-mix(in srgb, white 55%, transparent); /* BubbleFooter.swift:283-285 — metaColor hors isMe */

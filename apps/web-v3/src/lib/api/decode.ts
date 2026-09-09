@@ -53,18 +53,41 @@ function dateFieldOf<K extends string>(key: K, value: Date | string | null | und
  * exception qui viderait tout l'écran pour un champ absent.
  */
 export function decodeMessage(raw: Message): Message {
-  // `null` RETIRÉ, jamais recopié (#5650, revue-correction) — la passerelle
-  // sert `sender: null` (`messages-list-query.ts:678`) et `replyTo: null`
-  // (`:718`, la citation d'un message disparu) là où `@meeshy/shared`
-  // déclare `Participant | undefined` / `Message | undefined`. Un simple
-  // `{ ...raw }` REPOSERAIT la clé à `null` : la garde conditionnelle qui
-  // suit ne peut pas retirer ce que l'étalement vient d'écrire. On DÉFAIT
-  // donc les deux clés de la source avant de recomposer — c'est le seul
-  // endroit du chemin de données qui connaît le `null` du fil, et aucune
-  // vue n'a plus à le connaître.
-  const { sender: rawSender, replyTo: rawReplyTo, ...rest } = raw as Message & {
+  // `null` RETIRÉ, jamais recopié (#5650, revue-correction ; durci défaut 4
+  // de la revue #5668 — les SEPT clés de date portaient le même piège que
+  // `sender`/`replyTo` sans être défaites de la source). La passerelle sert
+  // `sender: null` (`messages-list-query.ts:678`), `replyTo: null` (`:718`,
+  // la citation d'un message disparu) et `deletedAt: null` /
+  // `expiresAt: null` / … (mesuré en direct sur `gate.staging.meeshy.me`,
+  // script diag-deleted.mjs) là où `@meeshy/shared` déclare des champs
+  // optionnels. Un simple `{ ...raw }` REPOSERAIT chacune de ces clés à
+  // `null` : la garde conditionnelle qui suit (`dateFieldOf` rendant `{}`)
+  // ne peut pas RETIRER ce que l'étalement vient d'écrire — un objet vide
+  // spreadé après `...rest` ne défait rien. On DÉFAIT donc TOUTES les clés
+  // que la passerelle peut servir à `null` avant de recomposer — c'est le
+  // seul endroit du chemin de données qui connaît le `null` du fil, et
+  // aucune vue n'a plus à le connaître.
+  const {
+    sender: rawSender,
+    replyTo: rawReplyTo,
+    updatedAt: rawUpdatedAt,
+    editedAt: rawEditedAt,
+    deletedAt: rawDeletedAt,
+    expiresAt: rawExpiresAt,
+    pinnedAt: rawPinnedAt,
+    deliveredToAllAt: rawDeliveredToAllAt,
+    readByAllAt: rawReadByAllAt,
+    ...rest
+  } = raw as Message & {
     readonly sender?: Message['sender'] | null;
     readonly replyTo?: Message | null;
+    readonly updatedAt?: Message['updatedAt'] | null;
+    readonly editedAt?: Message['editedAt'] | null;
+    readonly deletedAt?: Message['deletedAt'] | null;
+    readonly expiresAt?: Message['expiresAt'] | null;
+    readonly pinnedAt?: Message['pinnedAt'] | null;
+    readonly deliveredToAllAt?: Message['deliveredToAllAt'] | null;
+    readonly readByAllAt?: Message['readByAllAt'] | null;
   };
   const senderLastActiveAt = rawSender?.lastActiveAt;
   const sender =
@@ -80,13 +103,13 @@ export function decodeMessage(raw: Message): Message {
     translations: (raw.translations ?? []).map((t) => ({ ...t, createdAt: toDate(t.createdAt) })),
     ...(rawReplyTo === undefined || rawReplyTo === null ? {} : { replyTo: decodeMessage(rawReplyTo) }),
     createdAt: toDate(raw.createdAt),
-    ...dateFieldOf('updatedAt', raw.updatedAt),
-    ...dateFieldOf('editedAt', raw.editedAt),
-    ...dateFieldOf('deletedAt', raw.deletedAt),
-    ...dateFieldOf('expiresAt', raw.expiresAt),
-    ...dateFieldOf('pinnedAt', raw.pinnedAt),
-    ...dateFieldOf('deliveredToAllAt', raw.deliveredToAllAt),
-    ...dateFieldOf('readByAllAt', raw.readByAllAt),
+    ...dateFieldOf('updatedAt', rawUpdatedAt),
+    ...dateFieldOf('editedAt', rawEditedAt),
+    ...dateFieldOf('deletedAt', rawDeletedAt),
+    ...dateFieldOf('expiresAt', rawExpiresAt),
+    ...dateFieldOf('pinnedAt', rawPinnedAt),
+    ...dateFieldOf('deliveredToAllAt', rawDeliveredToAllAt),
+    ...dateFieldOf('readByAllAt', rawReadByAllAt),
   };
 }
 

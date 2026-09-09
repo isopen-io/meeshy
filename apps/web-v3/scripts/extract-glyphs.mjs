@@ -46,6 +46,13 @@ const OUTPUT = join(HERE, '../src/components/glyphs.ts');
 const OVERRIDES = {
   'fill-play': join(CORE, 'fill/play-fill.svg'),
   /**
+   * `stop` (#5668) — le bouton « Arrêter et ajouter aux pièces jointes » de la
+   * barre d'enregistrement rend `stop.fill` côté iOS
+   * (`UniversalComposerBar+Recording.swift:215-239`) : le variant PLEIN,
+   * même dispositif que `fill-play`.
+   */
+  stop: join(CORE, 'fill/stop-fill.svg'),
+  /**
    * `flame-fill` (D-23, #5676) — iOS emploie `flame.fill` pour le badge
    * éphémère et le tombstone « Vu et supprimé »
    * (`BubbleMetaBadges.swift:146-171`, `BubbleSystemViews.swift:50-85`) et
@@ -253,4 +260,24 @@ emit({
   constant: 'AUTH_GLYPHS',
   type: 'AuthGlyphName',
   role: "LE JEU D'ECRAN des routes d'authentification (#5816) : charge avec elles, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DU TIROIR DU COMPOSEUR (#5668) — `stop` (le bouton
+ * « Arreter et ajouter aux pieces jointes » de la barre d'enregistrement).
+ * `image`, `file`, `microphone` et `x` (tuiles, aperçu, annuler) restent au
+ * SOCLE : ils y sont deja pour d'autres usages (rangee du composeur, blocs de
+ * message), les dupliquer ici paierait leurs octets deux fois. Charge avec le
+ * chunk `composer-tray` (#5668, § 7 de la specification), jamais dans le
+ * socle ni dans le chunk du fil : la barre d'enregistrement n'entre qu'au
+ * premier tap sur le micro ou le "+".
+ */
+const COMPOSER = ['stop'];
+
+emit({
+  ids: COMPOSER,
+  output: join(HERE, '../src/components/glyphs-composer.ts'),
+  constant: 'COMPOSER_GLYPHS',
+  type: 'ComposerGlyphName',
+  role: "LE JEU D'ECRAN du tiroir du composeur (#5668) : charge avec le chunk composer-tray, jamais dans le socle.",
 });

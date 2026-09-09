@@ -24,6 +24,11 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- #5668 — sans elle, getUserMedia() de la WKWebView échoue AVANT toute
+	     demande à l'utilisateur : le composeur n'atteint jamais l'état
+	     "requesting" (recette simulateur, socle du prompt). -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Meeshy a besoin du micro pour enregistrer un message vocal dans une conversation.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

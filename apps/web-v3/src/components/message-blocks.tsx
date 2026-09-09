@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 
 import type { Message, Attachment } from '@/lib/api/types';
+import { attachmentSrc } from '@/lib/api/media-url';
 import { kindOf, waveformOf } from '@/lib/view/message';
 import type { Delivery } from '@/lib/view/message';
 import { languageColor, flag, languageName } from '@/lib/languages';
@@ -368,10 +369,39 @@ export function Attachments({ attachments }: { attachments: readonly Attachment[
                  la moitie du CLS sur un reseau lent. */
               className="grid max-w-[300px] place-items-center overflow-hidden rounded-card bg-black/40"
               style={{ aspectRatio: '300 / 240' }}
-              role="img"
-              aria-label={attachment.alt ?? attachment.originalName}
+              {...(attachment.fileUrl === '' ? { role: 'img', 'aria-label': attachment.alt ?? attachment.originalName } : {})}
             >
-              <Glyph name="image" size={40} className="opacity-40" />
+              {/* L'IMAGE, QUAND ON EN A UNE (revue-correction #5668) — la
+                  bulle OPTIMISTE d'une photo qu'on vient de choisir portait un
+                  `fileUrl` en `blob:` (`attachmentPreviewOf`,
+                  `send/attachments.ts`) que RIEN ne lisait : le composeur en
+                  montrait la vignette, et la bulle envoyée juste au-dessus un
+                  rectangle gris. Un producteur sans consommateur — la question
+                  du cycle 122 du `CLAUDE.md`, « qui AFFICHE ce qu'il élit ? ».
+                  Le glyphe reste DERRIÈRE : il est le fond tant que l'image
+                  n'est pas arrivée (chargement) et le repli si elle échoue
+                  (`onError`), et il reste seul quand la charge ne porte aucune
+                  URL — ce que les fixtures font (`fileUrl: ''`).
+
+                  `attachmentSrc` RÉSOUT le chemin RELATIF que sert la
+                  passerelle (`/api/v1/attachments/file/…`) contre
+                  `apiConfig.base` (défaut 2, revue-correction #5668,
+                  `lib/api/media-url.ts`) — sans lui, le navigateur le résout
+                  contre l'origine du DOCUMENT, valide seulement derrière le
+                  proxy Vite du dev, jamais en PWA déployée ni dans une coque. */}
+              <Glyph name="image" size={40} className="col-start-1 row-start-1 opacity-40" />
+              {attachment.fileUrl === '' ? null : (
+                <img
+                  src={attachmentSrc(attachment.fileUrl)}
+                  alt={attachment.alt ?? attachment.originalName}
+                  loading="lazy"
+                  decoding="async"
+                  className="col-start-1 row-start-1 size-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.hidden = true;
+                  }}
+                />
+              )}
             </div>
           );
         }
