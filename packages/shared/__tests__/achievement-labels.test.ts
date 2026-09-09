@@ -7,9 +7,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { achievementLabel, ACHIEVEMENT_LABELS } from '../utils/achievement-labels.js';
+import { achievementLabel, ACHIEVEMENT_LABELS, ACHIEVEMENT_LABELS_ONE } from '../utils/achievement-labels.js';
 import { ACHIEVEMENT_FAMILIES, familyId } from '../types/achievement-families.js';
-import { NOTIFICATION_LANGUAGES } from '../utils/notification-strings.js';
+import { NOTIFICATION_LANGUAGES, type NotificationLanguage } from '../utils/notification-strings.js';
 
 describe('la table est complète — aucune famille sans gabarit', () => {
   it('couvre les huit langues pour CHAQUE famille déclarée', () => {
@@ -80,5 +80,63 @@ describe('le libellé sert la langue du LECTEUR, chiffres compris', () => {
   it('rend null pour une famille hors catalogue — jamais une clé affichée', () => {
     const inconnue = { section: 'cercles', subject: 'ovni', verb: 'zap', scale: 'count', baseDifficulty: 1 } as never;
     expect(achievementLabel('fr', inconnue, 10)).toBeNull();
+  });
+});
+
+describe('le premier palier de chaque famille de VOLUME s\'accorde au singulier (#5832)', () => {
+  const LANGUES_QUI_ACCORDENT: readonly NotificationLanguage[] = ['fr', 'en', 'es', 'pt', 'de', 'it'];
+  const FAMILLES_VOLUME = ACHIEVEMENT_FAMILIES.filter((f) => f.scale === 'count');
+
+  it('couvre les dix-huit familles de volume dans les six langues qui accordent', () => {
+    // 18 familles × 6 langues = 108 chaînes, pas 180 : les familles d'AMPLEUR
+    // (scale 'size') ne descendent jamais à 1, donc n'ont pas besoin d'accord.
+    expect(FAMILLES_VOLUME).toHaveLength(18);
+    const manques: string[] = [];
+    for (const langue of LANGUES_QUI_ACCORDENT) {
+      for (const famille of FAMILLES_VOLUME) {
+        if (ACHIEVEMENT_LABELS_ONE[langue]?.[familyId(famille)] === undefined) {
+          manques.push(`${langue}/${familyId(famille)}`);
+        }
+      }
+    }
+    expect(manques).toEqual([]);
+  });
+
+  it('porte le marqueur {n} dans chaque forme au singulier', () => {
+    const sansMarqueur: string[] = [];
+    for (const langue of LANGUES_QUI_ACCORDENT) {
+      for (const [cle, gabarit] of Object.entries(ACHIEVEMENT_LABELS_ONE[langue] ?? {})) {
+        if (!gabarit.includes('{n}')) sansMarqueur.push(`${langue}/${cle}`);
+      }
+    }
+    expect(sansMarqueur).toEqual([]);
+  });
+
+  it('ne définit aucune forme pour ar / zh-Hans — déjà justes sans accord (#5832)', () => {
+    expect(ACHIEVEMENT_LABELS_ONE.ar).toBeUndefined();
+    expect(ACHIEVEMENT_LABELS_ONE['zh-Hans']).toBeUndefined();
+  });
+
+  const messageSend = ACHIEVEMENT_FAMILIES.find((f) => familyId(f) === 'message.send.count')!;
+
+  it.each([
+    ['fr', '1 message envoyé'],
+    ['en', '1 message sent'],
+    ['es', '1 mensaje enviado'],
+    ['pt', '1 mensagem enviada'],
+    ['de', '1 Nachricht gesendet'],
+    ['it', '1 messaggio inviato'],
+  ] as const)('achievementLabel(%s, message.send.count, 1) accorde le singulier', (langue, attendu) => {
+    expect(achievementLabel(langue, messageSend, 1)).toBe(attendu);
+  });
+
+  it('laisse le pluriel intact à partir du palier 10', () => {
+    expect(achievementLabel('fr', messageSend, 10)).toBe('10 messages envoyés');
+    expect(achievementLabel('en', messageSend, 10)).toBe('10 messages sent');
+  });
+
+  it('un succès d\'AMPLEUR au palier 1 (hors catalogue réel) n\'est pas accordé — seul le VOLUME l\'est', () => {
+    const conversationTaille = ACHIEVEMENT_FAMILIES.find((f) => familyId(f) === 'conversation.join.size')!;
+    expect(achievementLabel('fr', conversationTaille, 1)).toBe('Conversation de 1 membres');
   });
 });

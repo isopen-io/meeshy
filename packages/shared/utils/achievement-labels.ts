@@ -226,6 +226,145 @@ export const ACHIEVEMENT_LABELS: Record<NotificationLanguage, FamilyLabels> = {
   },
 };
 
+/**
+ * L'ACCORD AU SINGULIER du palier 1, pour les familles de VOLUME (#5832).
+ *
+ * `ACHIEVEMENT_LABELS` porte UNE forme par famille, au pluriel — juste à partir
+ * du palier 10, faux au palier 1 (« 1 messages envoyés »). Cette table ne
+ * COUVRE QUE ce que `ACHIEVEMENT_LABELS` ne peut pas porter seule :
+ *  - les 18 familles de VOLUME (`scale: 'count'`) — les familles d'AMPLEUR
+ *    commencent à 10, jamais à 1, donc n'ont jamais besoin d'accord ;
+ *  - les 6 langues qui FLÉCHISSENT au singulier — `ar` (déjà singulier après
+ *    ١ dans cette construction) et `zh-Hans` (aucun accord de nombre) n'y
+ *    figurent pas : l'absence y est la règle, pas un oubli.
+ *
+ * `achievementLabel()` choisit cette table quand `Intl.PluralRules` range le
+ * palier dans la catégorie « one » ET qu'une forme y est déclarée ; sinon il
+ * retombe sur `ACHIEVEMENT_LABELS`, sans changement de comportement.
+ */
+export const ACHIEVEMENT_LABELS_ONE: Partial<Record<NotificationLanguage, FamilyLabels>> = {
+  fr: {
+    'conversation.join.count': '{n} conversation rejointe',
+    'conversation.leave.count': '{n} conversation quittée',
+    'conversation.create.count': '{n} conversation créée',
+    'community.join.count': '{n} communauté rejointe',
+    'community.create.count': '{n} communauté créée',
+    'message.send.count': '{n} message envoyé',
+    'voice.send.count': '{n} vocal envoyé',
+    'image.send.count': '{n} image envoyée',
+    'video.send.count': '{n} vidéo envoyée',
+    'message.edit.count': '{n} message corrigé',
+    'message.delete.count': '{n} message supprimé',
+    'message.react.count': '{n} réaction posée',
+    'call.join.count': '{n} appel rejoint',
+    'call.start.count': '{n} appel lancé',
+    'referral.complete.count': '{n} filleul arrivé',
+    'link.click.count': '{n} clic sur vos liens',
+    'streak.hold.count': 'Série de {n} jour',
+    'meesh.mint.count': '{n} Meesh frappée',
+  },
+  en: {
+    'conversation.join.count': '{n} conversation joined',
+    'conversation.leave.count': '{n} conversation left',
+    'conversation.create.count': '{n} conversation created',
+    'community.join.count': '{n} community joined',
+    'community.create.count': '{n} community created',
+    'message.send.count': '{n} message sent',
+    'voice.send.count': '{n} voice note sent',
+    'image.send.count': '{n} image sent',
+    'video.send.count': '{n} video sent',
+    'message.edit.count': '{n} message edited',
+    'message.delete.count': '{n} message deleted',
+    'message.react.count': '{n} reaction added',
+    'call.join.count': '{n} call joined',
+    'call.start.count': '{n} call started',
+    'referral.complete.count': '{n} referral landed',
+    'link.click.count': '{n} click on your links',
+    'streak.hold.count': '{n}-day streak',
+    'meesh.mint.count': '{n} Meesh minted',
+  },
+  es: {
+    'conversation.join.count': '{n} conversación unida',
+    'conversation.leave.count': '{n} conversación abandonada',
+    'conversation.create.count': '{n} conversación creada',
+    'community.join.count': '{n} comunidad unida',
+    'community.create.count': '{n} comunidad creada',
+    'message.send.count': '{n} mensaje enviado',
+    'voice.send.count': '{n} nota de voz enviada',
+    'image.send.count': '{n} imagen enviada',
+    'video.send.count': '{n} vídeo enviado',
+    'message.edit.count': '{n} mensaje editado',
+    'message.delete.count': '{n} mensaje eliminado',
+    'message.react.count': '{n} reacción añadida',
+    'call.join.count': '{n} llamada unida',
+    'call.start.count': '{n} llamada iniciada',
+    'referral.complete.count': '{n} referido llegado',
+    'link.click.count': '{n} clic en tus enlaces',
+    'streak.hold.count': 'Racha de {n} día',
+    'meesh.mint.count': '{n} Meesh acuñada',
+  },
+  pt: {
+    'conversation.join.count': '{n} conversa entrada',
+    'conversation.leave.count': '{n} conversa deixada',
+    'conversation.create.count': '{n} conversa criada',
+    'community.join.count': '{n} comunidade entrada',
+    'community.create.count': '{n} comunidade criada',
+    'message.send.count': '{n} mensagem enviada',
+    'voice.send.count': '{n} áudio enviado',
+    'image.send.count': '{n} imagem enviada',
+    'video.send.count': '{n} vídeo enviado',
+    'message.edit.count': '{n} mensagem editada',
+    'message.delete.count': '{n} mensagem apagada',
+    'message.react.count': '{n} reação adicionada',
+    'call.join.count': '{n} chamada entrada',
+    'call.start.count': '{n} chamada iniciada',
+    'referral.complete.count': '{n} indicado chegado',
+    'link.click.count': '{n} clique nos seus links',
+    'streak.hold.count': 'Sequência de {n} dia',
+    'meesh.mint.count': '{n} Meesh cunhada',
+  },
+  de: {
+    'conversation.join.count': '{n} Unterhaltung beigetreten',
+    'conversation.leave.count': '{n} Unterhaltung verlassen',
+    'conversation.create.count': '{n} Unterhaltung erstellt',
+    'community.join.count': '{n} Community beigetreten',
+    'community.create.count': '{n} Community erstellt',
+    'message.send.count': '{n} Nachricht gesendet',
+    'voice.send.count': '{n} Sprachnachricht gesendet',
+    'image.send.count': '{n} Bild gesendet',
+    'video.send.count': '{n} Video gesendet',
+    'message.edit.count': '{n} Nachricht bearbeitet',
+    'message.delete.count': '{n} Nachricht gelöscht',
+    'message.react.count': '{n} Reaktion gesetzt',
+    'call.join.count': '{n} Anruf beigetreten',
+    'call.start.count': '{n} Anruf gestartet',
+    'referral.complete.count': '{n} Empfehlung angekommen',
+    'link.click.count': '{n} Klick auf Ihre Links',
+    'streak.hold.count': '{n}-Tag-Serie',
+    'meesh.mint.count': '{n} Meesh geprägt',
+  },
+  it: {
+    'conversation.join.count': '{n} conversazione raggiunta',
+    'conversation.leave.count': '{n} conversazione lasciata',
+    'conversation.create.count': '{n} conversazione creata',
+    'community.join.count': '{n} community raggiunta',
+    'community.create.count': '{n} community creata',
+    'message.send.count': '{n} messaggio inviato',
+    'voice.send.count': '{n} vocale inviato',
+    'image.send.count': '{n} immagine inviata',
+    'video.send.count': '{n} video inviato',
+    'message.edit.count': '{n} messaggio modificato',
+    'message.delete.count': '{n} messaggio eliminato',
+    'message.react.count': '{n} reazione aggiunta',
+    'call.join.count': '{n} chiamata raggiunta',
+    'call.start.count': '{n} chiamata avviata',
+    'referral.complete.count': '{n} invitato arrivato',
+    'link.click.count': '{n} clic sui tuoi link',
+    'streak.hold.count': 'Serie di {n} giorno',
+    'meesh.mint.count': '{n} Meesh coniata',
+  },
+};
+
 /** Les locales dont le format de nombre correspond à chaque langue du catalogue. */
 const NUMBER_LOCALES: Record<NotificationLanguage, string> = {
   fr: 'fr-FR',
@@ -255,7 +394,10 @@ export function achievementLabel(
   tier: number,
 ): string | null {
   const lang = normalizeNotificationLanguage(language);
-  const gabarit = ACHIEVEMENT_LABELS[lang][familyId(family)];
+  const cle = familyId(family);
+  const estSingulier = new Intl.PluralRules(NUMBER_LOCALES[lang]).select(tier) === 'one';
+  const gabarit = (estSingulier ? ACHIEVEMENT_LABELS_ONE[lang]?.[cle] : undefined)
+    ?? ACHIEVEMENT_LABELS[lang][cle];
   if (gabarit === undefined) return null;
   const nombre = new Intl.NumberFormat(NUMBER_LOCALES[lang]).format(tier);
   return gabarit.replace('{n}', nombre);
