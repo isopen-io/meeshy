@@ -530,6 +530,7 @@ describe('POST /communities/:id/leave', () => {
 
   it('returns 200 on successful leave', async () => {
     (app as any).prisma.community.findFirst.mockResolvedValueOnce({ id: COMM_ID, createdBy: OTHER_USER_ID });
+    (app as any).prisma.communityMember.findFirst.mockResolvedValueOnce({ id: 'mem-leave', userId: USER_ID, isActive: true });
     const res = await app.inject({ method: 'POST', url: '/communities/' + COMM_ID + '/leave' });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
