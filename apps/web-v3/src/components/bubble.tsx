@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 import { checkStatusOf, isMineOf, translationsOf } from '@/lib/view/message';
 import { initialsOf } from '@/lib/view/conversation';
 import type { LocalDelivery } from '@/lib/view/message';
@@ -19,7 +17,6 @@ import {
   PrismPastille,
   Quote,
   ReactionChip,
-  SecondaryText,
   reactionEntries,
 } from './message-blocks';
 
@@ -73,11 +70,35 @@ export function Bubble({
   onConsumeViewOnce,
   onEphemeralExpired,
   now = defaultNow,
+  displayLanguage,
+  onPickLanguage,
+  myReactions,
+  selected,
+  onToggleSelect,
 }: {
   place: PlacedMessage;
   languages: readonly string[];
   isGrouped: boolean;
   viewerId: string;
+  /** Traduire (#5814) — une langue IMPOSÉE au rang 0 du Prisme, `undefined`
+   * ⇒ la résolution ordinaire (`languages`) décide seule. */
+  displayLanguage?: string;
+  /**
+   * LE GESTE QUI POSE `displayLanguage` (revue #5814, défaut majeur 12) —
+   * même contrat que `focal-row.tsx` : le pied de la bulle (pastille +
+   * drapeaux) appelle CE prop, la MÊME loi que le sous-menu « Traduire » du
+   * menu du message (`useMessageMenu.onPickLanguage`), jamais une
+   * révélation locale divergente. Fourni TOUJOURS par l'hôte en production.
+   */
+  onPickLanguage?: (code: string) => void;
+  /** Les emojis que CE lecteur a posés sur CE message — marque `ReactionChip
+   * mine` (#5814, T12), sans en faire un bouton. */
+  myReactions?: readonly string[];
+  /** Mode sélection ACTIF (`undefined` hors sélection). */
+  selected?: boolean;
+  /** VA AVEC `selected` — sans elle la coche serait INERTE (loi 4).
+   * Prend l'id : référence STABLE chez l'hôte, `memo` préservé. */
+  onToggleSelect?: (messageId: string) => void;
   /** L'opinion de CE client sur l'envoi, tant que le transport n'a pas tranché. */
   localDelivery?: LocalDelivery;
   /** Epoch ms du début de la tentative en cours — l'horloge des 200 ms
@@ -106,9 +127,6 @@ export function Bubble({
   /** L'accusé QUE CETTE PEAU A LE DROIT DE PEINDRE — `null` ⇒ rien
    * (`lib/view/message.ts`, site unique partagé avec `FocalRow`). */
   const checkStatus = checkStatusOf(message, localDelivery);
-  // TOUJOURS appelé, quel que soit `kind` — les règles des hooks interdisent
-  // un retour anticipé AVANT un hook.
-  const [openLanguage, setOpenLanguage] = useState<string | null>(null);
 
   if (kind === 'expired') return null;
 
@@ -132,11 +150,22 @@ export function Bubble({
 
   const translations = translationsOf(message);
   const rendered = served({
-    preferredLanguages: languages,
+    // `displayLanguage` est une INSERTION au rang 0 (#5814) — UN résolveur
+    // (`resolvePrismTranslation`, D-14), jamais un second.
+    preferredLanguages: displayLanguage === undefined ? languages : [displayLanguage, ...languages],
     originalLanguage: message.originalLanguage,
     translations: message.translations,
     original: message.content,
   });
+  /** LA RÉSOLUTION NATURELLE, SANS `displayLanguage` — voir `focal-row.tsx`,
+   * même correction, même raison : `PrismPastille` ne doit pas se démonter
+   * en réponse au clic qui vient de le presser. */
+  const naturalServedLanguage = served({
+    preferredLanguages: languages,
+    originalLanguage: message.originalLanguage,
+    translations: message.translations,
+    original: message.content,
+  }).language;
 
   /**
    * L'identite ne se montre QUE : en groupe, en reception, et sur la QUEUE
@@ -154,12 +183,9 @@ export function Bubble({
     translations: translations.map((t) => t.language),
     servedLanguage: rendered.language,
   });
-  const secondary =
-    openLanguage === null
-      ? null
-      : openLanguage === message.originalLanguage
-        ? message.content
-        : (translations.find((t) => t.language === openLanguage)?.text ?? null);
+  /** LA LANGUE ACTIVE DU PIED (revue #5814, défaut majeur 12) — `rendered
+   * .language`, jamais un état local : voir `focal-row.tsx`, même loi. */
+  const activeLanguage = rendered.language;
 
   const reactions = reactionEntries(message.reactionSummary);
   const ephemeral = ephemeralOf(message.expiresAt, nowMs);
@@ -192,16 +218,15 @@ export function Bubble({
           {rendered.text}
         </p>
       ) : null}
-
-      {openLanguage !== null && secondary !== null ? (
-        <SecondaryText code={openLanguage} text={secondary} isMine={isMine} />
-      ) : null}
     </>
   );
 
   return (
     <div
       data-message={message.id}
+      /* PAS d'`aria-selected` ICI (revue #5814) — invalide sur un `div` sans
+         rôle, et doublé par l'hôte. L'état vit sur la COCHE (`role="checkbox"`
+         + `aria-checked`), qui est aussi le chemin CLAVIER. */
       className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
       /* L'espacement vertical DEPEND de la place dans le groupe : 6 px en
          queue, 2 px au milieu. C'est ce qui fait lire une suite comme un
@@ -212,6 +237,44 @@ export function Bubble({
         className="relative max-w-[70%] min-w-0"
         style={{ marginInlineStart: isMine ? 50 : 0, marginInlineEnd: isMine ? 0 : 50 }}
       >
+        {/* LA COCHE DE SÉLECTION (#5814, question 5) — DANS la gouttière de
+            50 px que `marginInlineStart/End` réserve juste au-dessus, jamais
+            en dehors (revue #5814 : la première écriture la posait « du côté
+            opposé à l'espace réservé », c'est-à-dire en DÉBORD du fil, là où
+            rien ne garantit qu'elle tienne à l'écran). Pour un message ENVOYÉ
+            la gouttière est à gauche (`marginInlineStart: 50`), pour un
+            message REÇU elle est à droite (`marginInlineEnd: 50`).
+            `role="checkbox"` réel : un contrôle qui a un effet, atteignable au
+            clavier, dont l'état est LU par un lecteur d'écran. */}
+        {selected !== undefined ? (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={selected}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleSelect?.(message.id);
+            }}
+            className="absolute grid place-items-center"
+            style={{ top: -2, [isMine ? 'left' : 'right']: -46, width: 44, minHeight: 44 }}
+          >
+            <span
+              aria-hidden
+              className="grid place-items-center rounded-full"
+              style={{
+                width: 20,
+                height: 20,
+                border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--color-ios-ink-3)'}`,
+                backgroundColor: selected ? 'var(--accent)' : 'transparent',
+                color: 'white',
+                fontSize: 11,
+              }}
+            >
+              {selected ? '✓' : null}
+            </span>
+            <span className="offscreen">Sélectionner ce message</span>
+          </button>
+        ) : null}
         {/* LE BADGE ÉPHÉMÈRE — AU-DESSUS de la bulle, HORS du fond coloré
             (`BubbleStandardLayout.swift:543-550`). Aligné du côté de la bulle. */}
         {ephemeral.state === 'running' && message.expiresAt !== undefined ? (
@@ -297,17 +360,15 @@ export function Bubble({
                 {showsBottomLine ? (
                   <>
                     <PrismPastille
-                      servedLanguage={rendered.language}
+                      servedLanguage={naturalServedLanguage}
                       originalLanguage={message.originalLanguage}
-                      active={openLanguage}
-                      onToggle={() =>
-                        setOpenLanguage((v) => (v === message.originalLanguage ? null : message.originalLanguage))
-                      }
+                      active={activeLanguage}
+                      onToggle={() => onPickLanguage?.(message.originalLanguage)}
                     />
                     <Flags
                       languages={footerLanguages}
-                      active={openLanguage}
-                      onPick={(code) => setOpenLanguage((v) => (v === code ? null : code))}
+                      active={activeLanguage}
+                      onPick={(code) => onPickLanguage?.(code)}
                     />
                   </>
                 ) : null}
@@ -344,7 +405,7 @@ export function Bubble({
             style={{ bottom: -8 }}
           >
             {reactions.map(([glyph, count]) => (
-              <ReactionChip key={glyph} glyph={glyph} count={count} />
+              <ReactionChip key={glyph} glyph={glyph} count={count} mine={myReactions?.includes(glyph) ?? false} />
             ))}
           </div>
         ) : null}

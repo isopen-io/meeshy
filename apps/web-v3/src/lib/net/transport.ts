@@ -18,13 +18,16 @@
  * `GET` rejoint `PUT`/`POST` avec le travail `staging` (#5605) : le client
  * HTTP qu'il introduit lit `GET /me` pour la recette manuelle. Le type reste
  * ADDITIF — un ajout futur (`DELETE`, `PATCH`) suit la même règle : jamais
- * avant qu'une route citée l'exige.
+ * avant qu'une route citée l'exige. `DELETE` rejoint le trio avec le retrait
+ * d'une réaction (#5814, `DELETE /api/v1/reactions/:messageId/:emoji`,
+ * `services/gateway/src/routes/reactions.ts:279-283`) — SANS corps, comme le
+ * `body` optionnel ci-dessous le permet déjà.
  *
  * `body` est OPTIONNEL : `POST …/mark-unread` n'a pas de corps
  * (`services/gateway/src/routes/conversations/messages-read-status.ts:159-196`).
  */
 export type Transport = (request: {
-  readonly method: 'GET' | 'PUT' | 'POST';
+  readonly method: 'GET' | 'PUT' | 'POST' | 'DELETE';
   readonly path: string;
   readonly body?: unknown;
 }) => Promise<unknown>;

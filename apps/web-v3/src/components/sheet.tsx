@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 
 import { Glyph } from './glyph';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 /**
  * LA FEUILLE PLEIN ÉCRAN, CHERCHABLE (#5555, correction de revue défaut 4) —
@@ -25,6 +26,13 @@ import { Glyph } from './glyph';
  * LE CONTENU RESTE À L'APPELANT (la liste, son filtrage, son état vide) :
  * cette coquille porte le comportement modal, l'en-tête et le champ de
  * recherche — c'est-à-dire exactement ce qui serait recopié de travers.
+ *
+ * LE CHAMP DE RECHERCHE EST OPTIONNEL (#5814, § 5 étape 4) — les feuilles
+ * « Détails du message » et « Ajouter une réaction » n'ont rien à filtrer :
+ * une recherche sur cinq lignes ou vingt emojis fixes n'a aucun effet, et un
+ * contrôle sans effet est le défaut que la loi 4 du dépôt interdit. Les
+ * quatre props de recherche vont ENSEMBLE (aucune n'a de sens seule) —
+ * absentes, le bandeau de recherche ne se monte pas du tout.
  */
 export function Sheet({
   title,
@@ -36,23 +44,15 @@ export function Sheet({
   children,
 }: {
   title: string;
-  searchLabel: string;
-  searchPlaceholder: string;
-  search: string;
-  onSearchChange: (value: string) => void;
+  searchLabel?: string;
+  searchPlaceholder?: string;
+  search?: string;
+  onSearchChange?: (value: string) => void;
   onClose: () => void;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
-
-  /** `onClose` par RÉFÉRENCE : l'effet ci-dessous ne doit s'exécuter qu'au
-   * montage — le rebrancher à chaque rendu de l'hôte (qui recrée la fonction)
-   * empilerait une entrée d'historique par frappe dans le champ de recherche. */
-  const onCloseRef = useRef(onClose);
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  });
 
   /**
    * LE RETOUR MATÉRIEL FERME LA FEUILLE, PAS L'ÉCRAN (correction de revue,
@@ -65,32 +65,21 @@ export function Sheet({
    * appui BACK rendait `/login` — la feuille fermée ET le formulaire perdu,
    * saisie comprise, pour un seul geste.
    *
-   * Le correctif est celui que le web emploie depuis toujours pour ses
-   * couches : la feuille POSE une entrée d'historique (même URL — le routeur
-   * la voit identique et ne re-rend rien, `router.tsx` § `notify`) et se
-   * ferme sur `popstate`. Le retour CONSOMME donc l'entrée de la feuille au
-   * lieu de quitter l'écran. Fermée autrement (Échap, le bouton), elle REND
-   * son entrée (`history.back()`) pour qu'un retour ultérieur ne soit pas
-   * avalé. Il vit ici et pas dans les deux feuilles : toute couche à venir —
-   * visionneuse de média, menus, composer — hérite du même geste.
+   * LE GESTE VIT DÉSORMAIS DANS `useBackDismiss` (revue #5814, défaut majeur
+   * 6) — extrait d'ici pour que `MessageMenu` (un portail, pas un
+   * `<dialog>`) et toute couche future (visionneuse de média…) le partagent,
+   * plutôt que de le réécrire une jumelle divergente.
    */
+  useBackDismiss(onClose);
+
+  /** Le comportement PROPRE au `<dialog>` (le piège de focus/Échap natifs) —
+   * distinct du geste de retour ci-dessus, qui ne connaît rien de `<dialog>`. */
   useEffect(() => {
     const dialog = ref.current;
     if (dialog === null) return;
     if (!dialog.open) dialog.showModal();
-
-    window.history.pushState(null, '');
-    let consumedByHistory = false;
-    const onPopState = () => {
-      consumedByHistory = true;
-      onCloseRef.current();
-    };
-    window.addEventListener('popstate', onPopState);
-
     return () => {
-      window.removeEventListener('popstate', onPopState);
       if (dialog.open) dialog.close();
-      if (!consumedByHistory) window.history.back();
     };
   }, []);
 
@@ -127,23 +116,25 @@ export function Sheet({
           </h2>
         </div>
 
-        <div className="shrink-0 px-4 pb-2">
-          <div
-            className="flex items-center gap-2 rounded-[14px] px-4"
-            style={{ minHeight: 44, backgroundColor: 'var(--color-ios-card)' }}
-          >
-            <Glyph name="magnifyingGlass" size={18} style={{ color: 'var(--color-ios-ink-3)' }} />
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => onSearchChange(e.currentTarget.value)}
-              placeholder={searchPlaceholder}
-              className="w-full bg-transparent py-2 text-body outline-none"
-              style={{ color: 'var(--color-ios-ink)' }}
-              aria-label={searchLabel}
-            />
+        {onSearchChange === undefined ? null : (
+          <div className="shrink-0 px-4 pb-2">
+            <div
+              className="flex items-center gap-2 rounded-[14px] px-4"
+              style={{ minHeight: 44, backgroundColor: 'var(--color-ios-card)' }}
+            >
+              <Glyph name="magnifyingGlass" size={18} style={{ color: 'var(--color-ios-ink-3)' }} />
+              <input
+                type="search"
+                value={search ?? ''}
+                onChange={(e) => onSearchChange(e.currentTarget.value)}
+                placeholder={searchPlaceholder}
+                className="w-full bg-transparent py-2 text-body outline-none"
+                style={{ color: 'var(--color-ios-ink)' }}
+                aria-label={searchLabel}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         <ul className="flex-1 overflow-y-auto pb-safe">{children}</ul>
       </div>

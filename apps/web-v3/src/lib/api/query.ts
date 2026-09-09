@@ -12,6 +12,7 @@ import { conversationQuery, conversationsQuery, type ConversationsDeps } from '.
 import type { Conversation, Participant } from './types';
 import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
+import { performReaction, type PerformReactionResult } from './reactions';
 
 /**
  * L'ADAPTATEUR UNIQUE (#5650, F2/F3) — le SEUL endroit qui résout
@@ -139,4 +140,14 @@ export function retrySendAction(params: {
     clientMessageId,
     deps: { ...deps, queryClient: appQueryClient, outbox: outboxStore, online },
   });
+}
+
+/**
+ * `reactAction` (#5814) — RÉFÉRENCE DE MODULE STABLE, motif `rowAction` :
+ * liée à l'instance PARTAGÉE `appQueryClient`. Le SITE UNIQUE que le menu du
+ * message (`message-menu.tsx`) et son hôte (`routes/thread.tsx`) appellent —
+ * jamais une seconde écriture du plan optimiste.
+ */
+export function reactAction(conversationId: string, messageId: string, emoji: string): Promise<PerformReactionResult> {
+  return performReaction({ conversationId, messageId, emoji, deps: { ...deps, queryClient: appQueryClient } });
 }

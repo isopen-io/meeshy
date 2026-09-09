@@ -1,6 +1,7 @@
 import { QueryClient, dehydrate, hydrate, type DehydratedState } from '@tanstack/react-query';
 
 import { ApiError } from './client';
+import { reactionStore } from './reaction-store';
 import { sessionStore, type SessionStoreApi, type SessionStoreState } from './session';
 
 /**
@@ -63,6 +64,23 @@ function browserStorage(): StorageLike {
 type PersistedCache = {
   readonly buster: string;
   readonly state: DehydratedState;
+  /**
+   * « MES RÉACTIONS » (revue #5814, défaut majeur 5) — miroir de
+   * `reactionStore.mine` (`reaction-store.ts`). AVANT ce champ, le compte
+   * optimiste d'une réaction (`Message.reactionSummary`, dans `state`
+   * ci-dessus) survivait à un rechargement alors que « qui a posé cet
+   * emoji » (`reactionStore`, zustand vanilla, hors de ce cache) repartait
+   * TOUJOURS à vide : à CHAQUE relance de la PWA ou de la coque, un lecteur
+   * qui avait réagi voyait son propre emoji sans « la vôtre », un second tap
+   * le RE-comptait (double-comptage définitif, capture `K1-reaction-double-
+   * comptee.png`), et le retrait devenait INERTE (loi 4). Les deux moitiés
+   * d'un même fait — « combien » et « qui » — doivent vivre sur la MÊME
+   * horloge : celle-ci, le même `buster`, la même purge à la déconnexion
+   * (D-6). `optional` : un cache écrit AVANT ce correctif n'en porte pas —
+   * `hydrateReactions` traite son absence comme « aucune réaction connue »,
+   * jamais comme une erreur.
+   */
+  readonly reactions?: Readonly<Record<string, readonly string[]>>;
 };
 
 function isPersistedCache(value: unknown): value is PersistedCache {
@@ -163,6 +181,12 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
       const parsed: unknown = JSON.parse(raw);
       if (isPersistedCache(parsed) && parsed.buster === buster) {
         hydrate(client, parsed.state);
+        // « MES RÉACTIONS », SUR LA MÊME HORLOGE (revue #5814, défaut
+        // majeur 5) — restaurée dans le MÊME bloc, sous la MÊME garde de
+        // `buster`, pour que les deux moitiés d'un même fait naissent et
+        // meurent ensemble. `?? {}` : un cache antérieur à ce correctif
+        // n'a pas ce champ.
+        reactionStore.setState({ mine: parsed.reactions ?? {} });
       } else {
         storage.removeItem(CACHE_KEY);
       }
@@ -180,7 +204,8 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
   const persist = (): void => {
     try {
       const state = dehydrate(client, { shouldDehydrateQuery: (q) => q.state.status === 'success' });
-      storage.setItem(CACHE_KEY, JSON.stringify({ buster, state }));
+      const reactions = reactionStore.getState().mine;
+      storage.setItem(CACHE_KEY, JSON.stringify({ buster, state, reactions }));
     } catch {
       /* Stockage refusé (quota, navigation privée) : le cache tient pour
        * l'onglet, sans se souvenir — même doctrine que `session.ts`. */
@@ -192,10 +217,17 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
   // une écriture différée, jamais synchrone (un défilement qui met à jour
   // vingt rangées ne doit pas écrire vingt fois `localStorage`).
   let debounceHandle: ReturnType<typeof setTimeout> | undefined;
-  client.getQueryCache().subscribe(() => {
+  const schedulePersist = () => {
     if (debounceHandle !== undefined) clearTimeout(debounceHandle);
     debounceHandle = setTimeout(persist, DEBOUNCE_MS);
-  });
+  };
+  client.getQueryCache().subscribe(schedulePersist);
+  // `reactionStore` DÉCLENCHE AUSSI (revue #5814, défaut majeur 5) — chaque
+  // écriture de `performReaction` pose déjà un delta sur le cache des
+  // messages DANS LE MÊME GESTE (`applyDelta`), ce qui suffirait à planifier
+  // une écriture ; cette ligne rend le couplage EXPLICITE plutôt que de
+  // reposer sur une coïncidence d'ordonnancement entre deux fichiers.
+  reactionStore.subscribe(schedulePersist);
 
   if (typeof document !== 'undefined') {
     // FORCÉ à la fermeture / mise en arrière-plan — le débounce ci-dessus ne
@@ -220,6 +252,13 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
       if (identity === lastIdentity) return;
       lastIdentity = identity;
       client.clear();
+      // « MES RÉACTIONS » DE L'IDENTITÉ PRÉCÉDENTE (revue #5814, défaut
+      // majeur 5, D-6) — sans cette ligne, `reactionStore` restait en
+      // MÉMOIRE (module-level, jamais démonté) au-delà de la purge du
+      // cache : un compte SUIVANT sur le même navigateur aurait hérité des
+      // emojis « miens » du compte PRÉCÉDENT tant qu'aucune réaction
+      // nouvelle n'écrasait la carte.
+      reactionStore.setState({ mine: {} });
       try {
         storage.removeItem(CACHE_KEY);
       } catch {

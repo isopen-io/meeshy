@@ -86,3 +86,88 @@ export function placePopoverVertical(input: VerticalPopoverPlacement): VerticalP
   // d'un côté qu'on aurait pu éviter en partie.
   return { top: Math.max(input.margin, input.viewportHeight - input.estimatedHeight - input.margin) };
 }
+
+/**
+ * LE CLUSTER DU MENU DU MESSAGE (#5814) — port ligne à ligne de
+ * `MessageOverlayMenu.swift:230-289` : rail de réactions AU-DESSUS, aperçu
+ * du message au centre, liste d'actions AU-DESSOUS. Loi PURE, sans DOM —
+ * même discipline que `placePopover`/`placePopoverVertical` ci-dessus.
+ *
+ * `previewScale` ne dépasse JAMAIS 1 — l'aperçu est réduit, jamais agrandi
+ * (`PREVIEW_SCALE_FLOOR` est un PLANCHER) — et `anchorX` suit le bord de
+ * l'ancre selon `isMine`, comme `MessageOverlayMenu.swift:255-257`
+ * (`isMe ? maxX - w/2 : minX + w/2`).
+ */
+export type MessageMenuClusterInput = {
+  readonly anchor: {
+    readonly top: number;
+    readonly bottom: number;
+    readonly left: number;
+    readonly right: number;
+    readonly width: number;
+    readonly height: number;
+  };
+  readonly viewport: { readonly width: number; readonly height: number };
+  readonly safe: { readonly top: number; readonly bottom: number };
+  readonly menuHeight: number;
+  readonly isMine: boolean;
+  /** Cotes DÉRIVÉES (`message-menu-metrics.ts`) — jamais des nombres en dur ici. */
+  readonly railHeight: number;
+  readonly railGap: number;
+  readonly menuGap: number;
+  readonly sidePadding: number;
+  readonly menuWidth: number;
+  readonly railWidth: number;
+  readonly previewScaleFloor: number;
+};
+
+export type MessageMenuClusterPlacement = {
+  readonly railTop: number;
+  readonly previewTop: number;
+  readonly previewScale: number;
+  readonly menuTop: number;
+  readonly anchorX: number;
+  readonly menuLeft: number;
+  readonly railLeft: number;
+};
+
+export function placeMessageMenuCluster(input: MessageMenuClusterInput): MessageMenuClusterPlacement {
+  const { anchor, viewport, safe, menuHeight, isMine } = input;
+  const { railHeight, railGap, menuGap, sidePadding, menuWidth, railWidth, previewScaleFloor } = input;
+
+  // `nlAvailTop` / `nlAvailBottom` / `nlAvailable` (:242-244).
+  const availTop = safe.top + 12;
+  const availBottom = viewport.height - safe.bottom - 12;
+  const available = Math.max(160, availBottom - availTop);
+
+  // `nlChrome` / `nlFitScale` (:245-249) — l'aperçu se réduit SEULEMENT.
+  const chrome = railHeight + railGap + menuGap + menuHeight;
+  const previewScale =
+    anchor.height + chrome > available
+      ? Math.max(previewScaleFloor, Math.min(1, (available - chrome) / Math.max(1, anchor.height)))
+      : 1;
+
+  const previewWidth = anchor.width * previewScale;
+  const previewHeight = anchor.height * previewScale;
+  const clusterHeight = railHeight + railGap + previewHeight + menuGap + menuHeight;
+
+  // `nlAnchorX` (:255-257).
+  const anchorX = isMine ? anchor.right - previewWidth / 2 : anchor.left + previewWidth / 2;
+
+  // `nlDesiredTop` / `nlClusterTop` (:258-259).
+  const desiredTop = anchor.top - railHeight - railGap;
+  const clusterTop = Math.max(availTop, Math.min(desiredTop, availBottom - clusterHeight));
+
+  const railTop = clusterTop;
+  const previewTop = clusterTop + railHeight + railGap;
+  const menuTop = previewTop + previewHeight + menuGap;
+
+  const menuLeft = Math.max(sidePadding, Math.min(viewport.width - sidePadding - menuWidth, anchorX - menuWidth / 2));
+  const clampedRailWidth = Math.min(railWidth, Math.max(0, viewport.width - 2 * sidePadding));
+  const railLeft = Math.max(
+    sidePadding,
+    Math.min(viewport.width - sidePadding - clampedRailWidth, anchorX - clampedRailWidth / 2),
+  );
+
+  return { railTop, previewTop, previewScale, menuTop, anchorX, menuLeft, railLeft };
+}

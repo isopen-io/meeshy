@@ -97,17 +97,36 @@ export function reactionEntries(
   return Object.entries(summary ?? {});
 }
 
-/** UNE pilule de réaction — la bulle la pose en débord, la rangée plate en ligne basse. */
-export function ReactionChip({ glyph, count }: { glyph: string; count: number }) {
+/**
+ * UNE pilule de réaction — la bulle la pose en débord, la rangée plate en
+ * ligne basse. `mine` (#5814, T12) marque « CE lecteur a posé cet emoji » —
+ * un contour d'accent, miroir `BubbleReactionsOverlay.swift:189-199` — SANS
+ * en faire un `<button>` : la BASCULE par la capsule reste hors de ce lot
+ * (`bulle.md` écart 8), seul le rail du menu du message réagit
+ * (`message-menu.tsx`).
+ *
+ * LA MARQUE EST TEXTUELLE, PAS `aria-pressed` (revue #5814) : `aria-pressed`
+ * n'est défini QUE sur `role="button"`. Posé sur ce `<span>` sans rôle, il
+ * était ignoré par la norme — et, chez les lecteurs d'écran qui le prennent
+ * quand même, il annonçait un BOUTON BASCULE que rien ne bascule : très
+ * exactement le contrôle qui ment que la loi 4 du dépôt interdit, et sur
+ * CHAQUE capsule du fil (`aria-pressed="false"` était rendu partout). La
+ * ligne hors écran porte déjà l'information, elle seule reste.
+ */
+export function ReactionChip({ glyph, count, mine = false }: { glyph: string; count: number; mine?: boolean }) {
   return (
     <span
       className="flex items-center gap-0.5 rounded-chip px-1.5 py-0.5 text-check"
-      style={{ backgroundColor: 'var(--color-ios-card)', border: '1px solid var(--color-edge)' }}
+      style={{
+        backgroundColor: mine ? 'color-mix(in srgb, var(--accent) 16%, var(--color-ios-card))' : 'var(--color-ios-card)',
+        border: mine ? '1px solid var(--accent)' : '1px solid var(--color-edge)',
+      }}
     >
       <span aria-hidden>{glyph}</span>
       <span className="tabular-nums opacity-70">{count}</span>
       <span className="offscreen">
         {count} réaction{count > 1 ? 's' : ''} {glyph}
+        {mine ? ' — la vôtre' : ''}
       </span>
     </span>
   );
@@ -230,35 +249,20 @@ export function Flags({
   );
 }
 
-/** Le panneau qui s'ouvre SOUS le texte quand on tape un drapeau. */
-export function SecondaryText({ code, text, isMine }: { code: string; text: string; isMine: boolean }) {
-  const color = languageColor(code);
-  return (
-    <div className="pt-2">
-      <div className="flex items-center gap-1.5" aria-hidden>
-        <span className="h-px flex-1" style={{ backgroundColor: `color-mix(in srgb, ${color} 40%, transparent)` }} />
-        <span className="size-1 rounded-full" style={{ backgroundColor: color }} />
-        <span className="h-px flex-1" style={{ backgroundColor: `color-mix(in srgb, ${color} 40%, transparent)` }} />
-      </div>
-      <div
-        className="mt-2 rounded-menu px-2 py-2"
-        style={{ backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)` }}
-      >
-        <p className="flex items-center gap-1.5 text-mini font-semibold" style={{ color: color }}>
-          <span>{flag(code)}</span>
-          <span>{languageName(code)}</span>
-        </p>
-        <p
-          className="mt-1 text-title"
-          lang={code}
-          style={{ color: isMine ? 'color-mix(in srgb, white 85%, transparent)' : 'var(--color-ios-ink-2)' }}
-        >
-          {text}
-        </p>
-      </div>
-    </div>
-  );
-}
+// `SecondaryText` (le panneau « sous le texte » ouvert par un tap de
+// drapeau) A ÉTÉ RETIRÉ EN REVUE (#5814, défaut majeur 12) : il tenait une
+// loi de langue LOCALE à la rangée (`openLanguage`), divergente de celle du
+// menu du message (`useMessageMenu.displayLanguages`) — un même geste
+// (« quelle langue pour CE message ») rendait deux réponses contradictoires
+// à l'écran (le pied révélait l'anglais, le sous-menu « Traduire » cochait
+// toujours le français). Le pied et le sous-menu partagent désormais UN
+// SEUL état (`displayLanguage`/`onPickLanguage`, D-14 : `served()` reste
+// l'UNIQUE résolveur), qui SUBSTITUE le texte plutôt que de le doubler d'un
+// panneau — rapprochant du même mouvement web-v3 de la cible iOS
+// (`FocalRow.swift:1082`, `onSetActiveDisplayLanguageForGroup`, qui change
+// le texte SERVI). La portée PAR GROUPE (iOS l'applique à toute la suite,
+// web-v3 reste par rangée) demeure un écart ASSUMÉ, tracé en dehors de ce
+// lot (`targets/focal-script.md` § 10 écart 4).
 
 export function Quote({
   quote,

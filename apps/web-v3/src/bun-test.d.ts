@@ -15,6 +15,13 @@ declare module 'bun:test' {
   export function describe(name: string, body: () => void): void;
   export function afterEach(body: () => void | Promise<void>): void;
   /**
+   * `beforeEach` (#5814) — remet un état de MODULE (magasin, bouchon) à son
+   * défaut avant CHAQUE témoin, symétrique à `afterEach` déjà déclaré
+   * ci-dessus. Requis dès qu'un fichier de témoins partage un état mutable
+   * entre plusieurs `test()` (`reactionStore`, `fixtures-reactions.ts`).
+   */
+  export function beforeEach(body: () => void | Promise<void>): void;
+  /**
    * `beforeAll`/`afterAll` (#5813, revue-correction) — le SEUL couple de ce
    * fichier qui enregistre/désenregistre une ressource GLOBALE scopée à un
    * `describe` (happy-dom, `composer.test.tsx`) plutôt qu'un état par test.
