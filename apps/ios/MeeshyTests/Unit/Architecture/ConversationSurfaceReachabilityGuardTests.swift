@@ -96,6 +96,22 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
         // > repris. La supprimer serait jeter le code qu'il faudra réécrire à
         // > l'ouverture de ce canal ; la laisser sans l'inscrire ici la rendrait
         // > indiscernable d'un vestige.
+        //
+        // **CORRECTION 2026-09-09 (#5830) — « la ligne bloquée part seule à la
+        // reconnexion » était FAUX, et un réel du porteur en est la preuve.**
+        // Mesuré sur son appareil : `createPost`/REEL, `attempts = 5`,
+        // `status = exhausted`, ses trois fichiers encore sur le disque, et la
+        // passerelle acceptant parfaitement les mêmes octets. Une ligne
+        // ÉPUISÉE ne repart JAMAIS seule — c'est la définition de cet état. La
+        // dette a donc été consentie sur une prémisse que la mesure
+        // contredit, ce qu'aucun témoin ne pouvait dire : l'allowlist prouve
+        // qu'un appelant manque, pas que sa JUSTIFICATION tient.
+        //
+        // La réouverture existe désormais, ailleurs et mieux : la pastille
+        // « Réel non publié » RELANCE la ligne (#5830). Mieux, parce que le
+        // brouillon restauré ici aurait perdu ce que `RecoveredOfflinePost` ne
+        // porte pas — `storyEffects`, `mediaObjectIds`, les légendes : pour un
+        // réel à trois scènes, une « reprise » qui rend la composition à plat.
         "recoverStuckPostDraftIfNeeded",
 
         // ── 244i · le fil : trois méthodes dont le SEUL appelant est la SUITE ──

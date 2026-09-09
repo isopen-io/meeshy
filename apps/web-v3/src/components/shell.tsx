@@ -19,7 +19,7 @@ export default function Shell({ children }: { children: ReactNode }) {
         href="#contenu"
         className="skip-link"
       >
-        Aller au content
+        Aller au contenu
       </a>
       {children}
     </div>

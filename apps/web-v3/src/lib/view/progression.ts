@@ -1,6 +1,8 @@
 import type { EngagementAchievementKey, EngagementAxisFamily, EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { ENGAGEMENT_ACHIEVEMENT_LABELS, ENGAGEMENT_AXIS_LABELS } from '@meeshy/shared/utils/engagement-labels';
 import type { EngagementScaleProgress } from '@meeshy/shared/utils/engagement-progress';
+import { achievementLabel } from '@meeshy/shared/utils/achievement-labels';
+import type { AchievementFamily, AchievementSection } from '@meeshy/shared/types/achievement-catalog';
 
 /**
  * CE QUE L'ÉCRAN « PROGRESSION » DIT (#5547) — les libellés, les glyphes et les
@@ -139,3 +141,25 @@ export function reachedAtLabel(reachedAt: string | null): string | null {
   if (Number.isNaN(date.getTime())) return null;
   return `Obtenu le ${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}`;
 }
+
+/**
+ * LES SECTIONS DE SUCCÈS GÉNÉRÉS (#5759) — un titre par rangée horizontale.
+ *
+ * Les LIBELLÉS des succès viennent du catalogue partagé
+ * (`achievementLabel`) ; seuls les TITRES de section sont ici, parce qu'ils
+ * nomment un découpage d'écran, pas un fait de produit.
+ */
+export const ACHIEVEMENT_SECTION_TITLES: Record<AchievementSection, string> = {
+  cercles: 'Cercles',
+  parole: 'Parole',
+  retouche: 'Retouches',
+  appels: 'Appels',
+  ambassade: 'Ambassade',
+  constance: 'Constance',
+  monnaie: 'Monnaie',
+  decouverte: 'Découverte',
+};
+
+/** Le libellé d'un succès généré, dans la langue de l'écran. */
+export const generatedAchievementLabel = (family: AchievementFamily, tier: number): string =>
+  achievementLabel(WEB_LANGUAGE, family, tier) ?? '';

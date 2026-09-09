@@ -18,7 +18,31 @@ import MeeshyUI
 /// animation : la demande est de ne pas en jouer.
 struct AchievementRevealView: View {
 
+    /// **POURQUOI cette vue est à l'écran** — ce n'est pas la même nouvelle,
+    /// et une vue qui l'ignore ment sur l'une des deux (#5831).
+    ///
+    /// Célébrer, c'est annoncer un fait qui vient de tomber : haptique de
+    /// succès, « Succès débloqué », et une sortie qui MÈNE au tableau de bord.
+    /// Consulter, c'est y revenir depuis ce même tableau de bord : on n'y
+    /// refête rien, on n'y « va » nulle part — on referme. Et un succès qu'on
+    /// n'a PAS encore obtenu s'y regarde aussi : c'est là qu'on lit ce qu'il
+    /// faut faire pour l'avoir.
+    enum Occasion: Equatable {
+        case celebration
+        case consultation(unlocked: Bool, reachedAt: String?)
+
+        var estCelebration: Bool { self == .celebration }
+
+        var estObtenu: Bool {
+            switch self {
+            case .celebration: return true
+            case .consultation(let unlocked, _): return unlocked
+            }
+        }
+    }
+
     let reveal: EngagementReveal
+    var occasion: Occasion = .celebration
     let onContinue: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -33,6 +57,12 @@ struct AchievementRevealView: View {
     private var titre: String {
         switch reveal {
         case .achievement(let clé): return ProgressionCopy.title(for: clé)
+        case .composedAchievement(let famille, let palier):
+            // Le MOT, jamais la clé. `label` ne rend `nil` que pour une famille
+            // sans gabarit — le titre de section reste alors juste, là où
+            // « achievement.cercles.conversation.join.size:1000 » ne dirait rien.
+            return AchievementCopy.label(famille, tier: palier)
+                ?? AchievementCopy.sectionTitle(famille.section)
         case .streak(let jours): return ProgressionCopy.streak(jours)
         case .level(let rang): return ProgressionCopy.levelTitle(rang)
         }
@@ -42,6 +72,14 @@ struct AchievementRevealView: View {
         switch reveal {
         case .achievement(let clé):
             return ProgressionCopy.condition(for: clé)
+        case .composedAchievement(let famille, _):
+            // Le titre PORTE déjà la condition (« 1 000 messages envoyés ») :
+            // la répéter ici ne dirait rien de neuf. Ce qui manque au lecteur,
+            // c'est OÙ ce palier se range — la section, qu'il retrouvera en
+            // rangée sur le tableau de bord.
+            return String(localized: "reveal.composed.subtitle",
+                          defaultValue: "Un palier de plus dans « \(AchievementCopy.sectionTitle(famille.section)) ».",
+                          bundle: .main)
         case .streak(let jours):
             return String(localized: "reveal.streak.subtitle",
                           defaultValue: "\(jours) jours d'affilée. La série continue tant que vous écrivez.",
@@ -54,19 +92,50 @@ struct AchievementRevealView: View {
     }
 
     private var bandeau: String {
+        if case .consultation(let unlocked, let reachedAt) = occasion {
+            guard unlocked else {
+                return String(localized: "reveal.badge.locked", defaultValue: "Succès à débloquer", bundle: .main)
+            }
+            return ProgressionCopy.obtained(reachedAt)
+                ?? String(localized: "reveal.badge.unlocked", defaultValue: "Succès obtenu", bundle: .main)
+        }
         switch reveal {
-        case .achievement: return String(localized: "reveal.badge.achievement", defaultValue: "Succès débloqué", bundle: .main)
+        case .achievement, .composedAchievement:
+            return String(localized: "reveal.badge.achievement", defaultValue: "Succès débloqué", bundle: .main)
         case .streak: return String(localized: "reveal.badge.streak", defaultValue: "Série tenue", bundle: .main)
         case .level: return String(localized: "reveal.badge.level", defaultValue: "Nouveau niveau", bundle: .main)
         }
     }
 
     private var teinte: Color {
+        // Un palier verrouillé se peint en GRIS, pas dans la couleur de la
+        // récompense : la couleur EST le signal « c'est à vous ». La servir à
+        // ce qui n'est pas obtenu la vide de son sens sur tout l'écran.
+        //
+        // `neutral500` et non `textMuted` : mesuré au simulateur, ce dernier
+        // rend `indigo300` à 70 % — sur un disque de 128 pt, un lavande PLEIN
+        // qui se lit comme une SECONDE récompense plutôt que comme une absence.
+        // Le gris neutre est déjà le vocabulaire du verrouillé dans cette app
+        // (`AchievementBadgeView`, teinte « 808080 »).
+        guard occasion.estObtenu else { return MeeshyColors.neutral500 }
         switch reveal {
-        case .achievement: return MeeshyColors.purple500
+        case .achievement, .composedAchievement: return MeeshyColors.purple500
         case .streak: return MeeshyColors.warning
         case .level: return MeeshyColors.indigo500
         }
+    }
+
+    private var symbole: String {
+        occasion.estObtenu ? reveal.symbolName : "lock.fill"
+    }
+
+    /// Ce que la sortie PROMET. Depuis une notification, elle mène au tableau
+    /// de bord — la vue le couvre, la refermer y arrive. Depuis ce même
+    /// tableau de bord, promettre d'y aller serait faux : on en revient.
+    private var libelleSortie: String {
+        occasion.estCelebration
+            ? String(localized: "reveal.continue", defaultValue: "Voir ma progression", bundle: .main)
+            : String(localized: "reveal.close", defaultValue: "Fermer", bundle: .main)
     }
 
     var body: some View {
@@ -108,7 +177,12 @@ struct AchievementRevealView: View {
             // Les rayons ne tournent QUE si l'animation est permise — sinon ils
             // ne sont pas peints du tout : un décor immobile n'explique rien et
             // encombre la lecture.
-            if !reduceMotion {
+            //
+            // Et ils ne se peignent QUE pour un palier OBTENU : un rayonnement
+            // dit « ta-daa ». Le servir à ce qui n'est pas encore acquis
+            // félicite pour rien — même erreur que la couleur, une couche
+            // au-dessus.
+            if !reduceMotion && occasion.estObtenu {
                 ForEach(0..<12, id: \.self) { i in
                     Capsule()
                         .fill(teinte.opacity(0.35))
@@ -126,7 +200,7 @@ struct AchievementRevealView: View {
                 .frame(width: 128, height: 128)
                 .shadow(color: teinte.opacity(0.45), radius: 24, y: 10)
 
-            Image(systemName: reveal.symbolName)
+            Image(systemName: symbole)
                 .font(MeeshyFont.relative(56, weight: .semibold))
                 .foregroundColor(.white)
         }
@@ -161,7 +235,7 @@ struct AchievementRevealView: View {
             HapticFeedback.light()
             onContinue()
         } label: {
-            Text(String(localized: "reveal.continue", defaultValue: "Voir ma progression", bundle: .main))
+            Text(libelleSortie)
                 .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, minHeight: 52)
@@ -174,7 +248,10 @@ struct AchievementRevealView: View {
     // MARK: - L'entrée
 
     private func entrer() {
-        HapticFeedback.success()
+        // L'haptique de SUCCÈS annonce un fait nouveau. La rejouer à chaque
+        // consultation ferait fêter, plusieurs fois par jour, quelque chose qui
+        // n'arrive plus — et userait le signal qui compte.
+        if occasion.estCelebration { HapticFeedback.success() } else { HapticFeedback.light() }
         guard !reduceMotion else {
             // POSÉ, pas animé — et le halo reste à son échelle de repos.
             apparu = true

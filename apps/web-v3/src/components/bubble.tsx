@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { deliveryOf, isMineOf, translationsOf } from '@/lib/view/message';
+import { checkStatusOf, isMineOf, translationsOf } from '@/lib/view/message';
 import { initialsOf } from '@/lib/view/conversation';
 import type { LocalDelivery } from '@/lib/view/message';
 import { served } from '@/lib/api/prism';
@@ -10,11 +10,11 @@ import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
 import { ephemeralOf, protectionOf } from '@/lib/reading-mode/protection';
 
 import { Avatar } from './avatar';
-import { Glyph } from './glyph';
 import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
 import {
   Attachments,
   Check,
+  FailedSendBand,
   Flags,
   PrismPastille,
   Quote,
@@ -64,6 +64,8 @@ export function Bubble({
   isGrouped,
   viewerId,
   localDelivery,
+  sendStartedAt,
+  sendFailureReason,
   onRetry,
   onJumpToMessage,
   highlighted = false,
@@ -78,6 +80,12 @@ export function Bubble({
   viewerId: string;
   /** L'opinion de CE client sur l'envoi, tant que le transport n'a pas tranché. */
   localDelivery?: LocalDelivery;
+  /** Epoch ms du début de la tentative en cours — l'horloge des 200 ms
+   * (§5 étape 9 de la spécification #5813). */
+  sendStartedAt?: number;
+  /** LA CAUSE de l'échec, en clair (`sendFailureReason`) — portée par la
+   * bande elle-même : `lastError` était capturé et lu par PERSONNE. */
+  sendFailureReason?: string;
   onRetry?: () => void;
   /** Saute au message cité (#5566 défaut 10 : le bouton de citation ne faisait rien). */
   onJumpToMessage: (messageId: string) => void;
@@ -95,6 +103,9 @@ export function Bubble({
   const nowMs = now();
   const kind = expired ? 'expired' : protectionOf(message, nowMs);
   const isMine = isMineOf(message, viewerId);
+  /** L'accusé QUE CETTE PEAU A LE DROIT DE PEINDRE — `null` ⇒ rien
+   * (`lib/view/message.ts`, site unique partagé avec `FocalRow`). */
+  const checkStatus = checkStatusOf(message, localDelivery);
   // TOUJOURS appelé, quel que soit `kind` — les règles des hooks interdisent
   // un retour anticipé AVANT un hook.
   const [openLanguage, setOpenLanguage] = useState<string | null>(null);
@@ -234,20 +245,12 @@ export function Bubble({
             l'endroit où le regard se pose déjà. HORS VOILE (D-23) : un échec
             se voit même sur un message protégé.
           */}
-          {localDelivery === 'failed' && onRetry !== undefined ? (
-            <button
-              type="button"
-              onClick={onRetry}
-              className="mb-1.5 flex w-full items-center gap-1.5 rounded-quote px-2 py-1.5 text-left text-check font-semibold"
-              style={{
-                backgroundColor: 'color-mix(in srgb, var(--color-error) 18%, transparent)',
-                color: isMine ? 'white' : 'var(--color-error)',
-              }}
-            >
-              <Glyph name="warningCircle" size={12} />
-              <span className="flex-1">Non envoyé</span>
-              <span style={{ textDecoration: 'underline' }}>Réessayer</span>
-            </button>
+          {localDelivery === 'failed' ? (
+            <FailedSendBand
+              {...(sendFailureReason === undefined ? {} : { reason: sendFailureReason })}
+              {...(onRetry === undefined ? {} : { onRetry })}
+              textColor={isMine ? 'white' : 'var(--color-error)'}
+            />
           ) : null}
 
           {isProtected ? (
@@ -315,10 +318,18 @@ export function Bubble({
                 >
                   {time(message.createdAt)}
                 </time>
-                <Check
-                  status={localDelivery === 'pending' ? 'pending' : deliveryOf(message)}
-                  isMine={isMine}
-                />
+                {/* `checkStatusOf` et non `deliveryOf` (revue-correction #5813) :
+                    `null` sur un envoi ÉCHOUÉ, dont la bande dit déjà « Non
+                    envoyé ». Peindre là la coche « envoyé » (ce que
+                    `deliveredCount: 0` produit) contredirait la bande à dix
+                    pixels de distance, `title` compris. */}
+                {checkStatus === null ? null : (
+                  <Check
+                    status={checkStatus}
+                    isMine={isMine}
+                    {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
+                  />
+                )}
               </div>
             </div>
           </div>

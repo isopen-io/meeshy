@@ -101,6 +101,63 @@ gamme, et la fluidité de défilement réelle qui va avec, restent « à mesurer
 — aucun appareil physique n'est disponible ici ; c'est le seul point que cette
 passe n'a pas pu clore.
 
+### Le lien profond dans une coque (#5812) — `MEESHY_SHELL_START_PATH`
+
+La coque et le web partagent la MÊME base : la racine (`base: '/'`,
+`vite.config.ts`). Un chargement DIRECT de `/c/<id>` (lien profond,
+restauration, App Link) résout donc ses actifs contre l'ORIGINE — html5mode
+Android sert déjà `index.html` pour tout chemin sans extension, le routeur iOS
+aussi, inconditionnellement. `scripts/check-shell-dist.mjs` (dans
+`bun run gate`) le prouve avec un navigateur réel sur le dist capacitor, et
+REFUSE deux formes : des actifs relatifs (`./assets/…`, le défaut d'origine)
+et une balise `<base>` (le premier correctif, retiré en revue — elle réparait
+les actifs et cassait toutes les URL réduites à un fragment : depuis
+`/c/<id>`, le lien d'évitement `<a href="#contenu">` quittait le fil).
+Détail : `decisions.md` § D-27.
+
+Pour PROUVER la même chose sur un appareil/simulateur réel sans attendre
+l'entrée système (Universal Links / App Links, issue compagnon séparée),
+`capacitor.config.ts` lit `MEESHY_SHELL_START_PATH` — un paramètre de
+RECETTE, jamais posé au déploiement — et le porte sur `server.appStartPath`
+(Capacitor ≥ 7.3) : la coque synchronisée démarre alors directement sur ce
+chemin. Recette :
+
+```bash
+MEESHY_TARGET=capacitor bunx vite build && bunx cap sync
+MEESHY_SHELL_START_PATH=/c/c-deploiement bunx cap sync android   # ou ios
+```
+
+`resolveCapacitorConfig` refuse (lève) deux FORMES, chacune tirée d'une
+source lue : une valeur sans `/` initial (Android, `Bridge.java`, concatène le
+chemin SANS séparateur — elle fusionnerait avec l'hôte) et une valeur qui
+porte une extension de fichier (iOS ne réécrit vers `index.html` que les
+chemins SANS extension, `CapacitorRouter.route(for:)` — elle serait servie
+littéralement, donc 404). La garde porte sur la forme, jamais sur une route :
+les surfaces à venir emploieront la même recette sans modifier ce fichier
+livré. Voir `capacitor.config.test.ts` et `scripts/shell-deeplink-probe.mjs`
+(CDP BRUT sur la cible `page` de la WebView — `connectOverCDP` de Playwright
+échoue contre une WebView, qui n'expose aucun navigateur complet).
+
+**Asymétrie mesurée entre les deux coques (#5812).** Sur Android, la recette
+ci-dessus suffit seule. **Sur iOS, `appStartPath` seul CRASHE la coque**
+(`⚡️ ERROR: Unable to load …/App.app/public//c/c-deploiement`, arrêt propre,
+`exit(1)`, aucun rapport dans `CrashReporter`) : `CAPBridgeViewController.loadWebView()`
+(`@capacitor/ios` 8.5.1) exige qu'un FICHIER LITTÉRAL existe à ce chemin
+sous `public/` avant même de charger l'URL — une garde qui précède
+`Router.swift` (son repli SPA ne s'applique qu'aux navigations qui suivent
+CE premier chargement, jamais à lui). Pour la recette iOS, poser un
+placeholder AVANT de construire dans Xcode (jamais commité — `public/` est
+exclu par `ios/.gitignore` généré et réécrit à chaque `cap sync`) :
+
+```bash
+mkdir -p ios/App/App/public/c && : > ios/App/App/public/c/c-deploiement
+xcodebuild -project ios/App/App.xcodeproj -scheme App -destination 'id=<udid>' build
+```
+
+`Router.swift` réécrit ensuite ce chemin vers `/index.html` sans jamais LIRE
+le placeholder — sa présence suffit à passer la garde. Détail :
+`decisions.md` § D-27 « Complément 2026-09-09 ».
+
 ### Les paramètres de construction (`VITE_*`)
 
 Trois variables lues UNIQUEMENT par `src/lib/api/config.ts`

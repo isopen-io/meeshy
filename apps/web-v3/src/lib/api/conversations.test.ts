@@ -1,7 +1,14 @@
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 
-import { CONVERSATIONS_QUERY_KEY, conversationQuery, conversationsQuery, loadConversation, loadConversations } from './conversations';
+import {
+  CONVERSATIONS_QUERY_KEY,
+  conversationQuery,
+  conversationsQuery,
+  loadConversation,
+  loadConversations,
+  patchConversation,
+} from './conversations';
 import { decodeConversations as decodeConversationsRef } from './decode';
 import { createHttpTransport } from './http';
 import { CONVERSATIONS } from './fixtures';
@@ -161,5 +168,32 @@ describe('conversationQuery — initialData depuis la liste en cache', () => {
   test('sans queryClient, aucune initialData — la fabrique reste appelable', () => {
     const options = conversationQuery({ source: 'fixtures', transport: createHttpTransport({ base: '' }) }, 'c-a');
     expect('initialData' in options).toBe(false);
+  });
+});
+
+/**
+ * `patchConversation` (#5813, étape 0 — extraction de
+ * `conversation-actions.ts:50-58`, aucun changement de règle) — le témoin
+ * d'origine (`conversation-actions.test.ts`) exerce déjà cette fonction au
+ * travers de `performRowAction` ; celui-ci l'exerce directement.
+ */
+describe('patchConversation', () => {
+  test('patch UNE conversation ⇒ les autres sont toBe-identiques', () => {
+    const a = { ...CONVERSATIONS[0]!, id: 'c-a', unreadCount: 1 };
+    const b = { ...CONVERSATIONS[0]!, id: 'c-b', unreadCount: 2 };
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, [a, b]);
+
+    patchConversation(queryClient, 'c-a', (c) => ({ ...c, unreadCount: 0 }));
+
+    const list = queryClient.getQueryData<readonly (typeof a)[]>(CONVERSATIONS_QUERY_KEY);
+    expect(list?.[0]?.unreadCount).toBe(0);
+    expect(list?.[1]).toBe(b);
+  });
+
+  test('cache absent ⇒ reste undefined', () => {
+    const queryClient = new QueryClient();
+    patchConversation(queryClient, 'c-a', (c) => c);
+    expect(queryClient.getQueryData(CONVERSATIONS_QUERY_KEY)).toBeUndefined();
   });
 });

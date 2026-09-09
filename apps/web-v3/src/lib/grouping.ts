@@ -70,6 +70,31 @@ export type PlaceOptions = {
   readonly timeZone?: string;
 };
 
+/**
+ * LA FUSION DU FIL (revue-correction #5813, défaut majeur 5) — `place()`,
+ * juste en dessous, suppose un ordre ASCENDANT : c'est lui qui décide
+ * `head`/`tail`/`opensDay` à partir des voisins d'INDICE. `[...confirmed,
+ * ...pending]` (`routes/thread.tsx`, avant ce correctif) CONCATÉNAIT au lieu
+ * de fusionner : `pending` (l'outbox) grandit dans l'ordre du GESTE (l'ordre
+ * de saisie), `confirmed` (le cache) dans l'ordre du SERVEUR (`createdAt`) —
+ * deux envois rapprochés dont le second répond plus vite s'affichaient donc
+ * dans l'ordre INVERSE de leur saisie, et un renvoi après une reprise
+ * plaçait le message repris APRÈS un message parti entre-temps alors que son
+ * `createdAt` est plus ANCIEN. L'ordre changeait en prime au rechargement,
+ * puisque le serveur, lui, trie toujours par `createdAt`.
+ *
+ * Départage STABLE par `id` : deux messages à la même milliseconde (un
+ * bouchon de test, un double envoi très rapide) gardent un ordre
+ * déterministe plutôt que celui, arbitraire, du tri natif sur des clés
+ * égales.
+ */
+export function mergeTimeline(confirmed: readonly Message[], pending: readonly Message[]): readonly Message[] {
+  return [...confirmed, ...pending].sort((a, b) => {
+    const delta = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    return delta !== 0 ? delta : a.id.localeCompare(b.id);
+  });
+}
+
 export function place(messages: readonly Message[], options: PlaceOptions): readonly PlacedMessage[] {
   return messages.map((message, i) => {
     const previous = messages[i - 1];

@@ -64,3 +64,33 @@ export async function loadEngagementProgress(params: {
   const result = await fetchEngagementProgress(params.transport, params.signal);
   return result.ok ? { ok: true, data: resolveEngagementProgress(result.data) } : result;
 }
+
+/**
+ * LA FRAPPE D'UNE MEESH — `POST /api/v1/me/meesh/mint` (#5743).
+ *
+ * `requestId` est fourni par l'APPELANT et porte l'idempotence : un double-tap,
+ * un retry réseau ou une reprise d'onglet ne frappent qu'une fois. Il est donc
+ * généré UNE fois par intention de frappe, pas une fois par requête — sans quoi
+ * le retry deviendrait une seconde frappe, ce que l'identifiant est justement
+ * là pour empêcher.
+ */
+export const MEESH_MINT_PATH = '/api/v1/me/meesh/mint';
+
+export type MeeshMintResult = {
+  readonly status: 'minted' | 'already-minted' | 'insufficient';
+  readonly balance?: number;
+  readonly mintedLifetime?: number;
+};
+
+export async function mintMeesh(
+  transport: HttpTransport,
+  requestId: string,
+  signal?: AbortSignal,
+): Promise<ApiResult<MeeshMintResult>> {
+  return transport.request<MeeshMintResult>({
+    method: 'POST',
+    path: MEESH_MINT_PATH,
+    body: { requestId },
+    ...(signal !== undefined ? { signal } : {}),
+  });
+}

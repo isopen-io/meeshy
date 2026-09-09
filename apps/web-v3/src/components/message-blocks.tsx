@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 
 import type { Message, Attachment } from '@/lib/api/types';
 import { kindOf, waveformOf } from '@/lib/view/message';
 import type { Delivery } from '@/lib/view/message';
 import { languageColor, flag, languageName } from '@/lib/languages';
+import { shouldRevealSendingClock } from '@/lib/send/send-clock';
 
 import { Glyph } from './glyph';
 import type { GlyphName } from './glyphs';
@@ -112,11 +113,41 @@ export function ReactionChip({ glyph, count }: { glyph: string; count: number })
   );
 }
 
-export function Check({ status, isMine }: { status: Delivery; isMine: boolean }) {
+/**
+ * L'HORLOGE RÉVÉLÉE APRÈS 200 MS (#5813, étape 9, miroir
+ * `BubbleDeliveryCheck.swift:128-141`) — composant FEUILLE : c'est LUI qui
+ * tient le minuteur, jamais la rangée qui l'englobe (`bulle.md`, écart 754,
+ * doctrine D-23 déjà appliquée à l'éphémère : « écrire une seconde horloge
+ * de révélation dans une peau » est le défaut interdit). `useState` +
+ * `useEffect(setTimeout)`, désarmé au démontage — jamais un `setInterval`.
+ */
+function SendingClock({ startedAt, children }: { startedAt: number; children: ReactElement }) {
+  const [revealed, setRevealed] = useState(() => shouldRevealSendingClock(startedAt, Date.now()));
+  useEffect(() => {
+    if (revealed) return;
+    const remaining = Math.max(0, 200 - (Date.now() - startedAt));
+    const timer = setTimeout(() => setRevealed(true), remaining);
+    return () => clearTimeout(timer);
+  }, [startedAt, revealed]);
+  return revealed ? children : null;
+}
+
+export function Check({
+  status,
+  isMine,
+  sendStartedAt,
+}: {
+  status: Delivery;
+  isMine: boolean;
+  /** Epoch ms du DÉBUT de la tentative en cours (`outbox-store.ts`) — SEUL
+   * `status === 'pending'` en tient compte (§5 étape 9 de la spécification
+   * #5813) : sous ce seuil, aucune horloge ne clignote. */
+  sendStartedAt?: number;
+}) {
   if (!isMine) return null;
   const check = CHECKS[status];
   if (!check) return null;
-  return (
+  const glyph = (
     <Glyph
       name={check.name}
       size={check.size}
@@ -124,6 +155,10 @@ export function Check({ status, isMine }: { status: Delivery; isMine: boolean })
       {...(check.read ? { style: { color: 'var(--color-read)' } } : {})}
     />
   );
+  if (status === 'pending' && sendStartedAt !== undefined) {
+    return <SendingClock startedAt={sendStartedAt}>{glyph}</SendingClock>;
+  }
+  return glyph;
 }
 
 /**
@@ -348,5 +383,62 @@ export function Attachments({ attachments }: { attachments: readonly Attachment[
         return null;
       })}
     </>
+  );
+}
+
+/**
+ * LA BANDE DE REPRISE D'UN ENVOI ÉCHOUÉ (revue-correction #5813, défauts
+ * majeurs 2 et 7) — SITE UNIQUE partagé par `bubble.tsx` et `focal-row.tsx`,
+ * pour que les deux peaux tiennent la MÊME règle de cible tactile et la
+ * MÊME règle de refus permanent, sans jumelle à resynchroniser (deux copies
+ * de ce bloc divergeaient déjà sur la couleur du texte).
+ *
+ * `onRetry === undefined` ⇒ REFUS PERMANENT (`permanentOf`,
+ * `lib/view/use-send.ts`, dérivé d'`isPermanentFailure`,
+ * `lib/api/outcome.ts`) : la CAUSE reste affichée, le GESTE disparaît —
+ * jamais un bouton qui promet un rejeu impossible (403/401 ne peuvent pas
+ * aboutir en rejouant le MÊME appel, quel que soit le nombre de tentatives).
+ * La bande devient un `<div>` sans `Réessayer`, jamais un `<button>` inerte.
+ *
+ * `min-height: 44` est la cible tactile du dépôt (dimension 5, « cibles
+ * >= 44 px ») — la bande était mesurée à 27 px, le seul contrôle de
+ * réparation du fil sous la règle que le dépôt tient déjà ailleurs
+ * (`routes/conversations.tsx`, l'erreur de liste). `text-mini` (11px,
+ * `--ios-font-footnote`) remplace `text-check` (10px, `--ios-font-caption`) —
+ * un token DÉRIVÉ plus grand (D-4), jamais une valeur inventée.
+ */
+export function FailedSendBand({
+  reason,
+  onRetry,
+  textColor,
+}: {
+  readonly reason?: string;
+  readonly onRetry?: () => void;
+  readonly textColor: string;
+}) {
+  const label = reason === undefined ? 'Non envoyé' : `Non envoyé — ${reason}`;
+  const className = 'mb-1.5 flex w-full items-center gap-1.5 rounded-quote px-2 text-left text-mini font-semibold';
+  const style = {
+    backgroundColor: 'color-mix(in srgb, var(--color-error) 18%, transparent)',
+    color: textColor,
+    minHeight: 44,
+  };
+  const titleProp = reason === undefined ? {} : { title: reason };
+
+  if (onRetry === undefined) {
+    return (
+      <div className={className} style={style} {...titleProp}>
+        <Glyph name="warningCircle" size={12} />
+        <span className="flex-1">{label}</span>
+      </div>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onRetry} {...titleProp} className={className} style={style}>
+      <Glyph name="warningCircle" size={12} />
+      <span className="flex-1">{label}</span>
+      <span style={{ textDecoration: 'underline' }}>Réessayer</span>
+    </button>
   );
 }

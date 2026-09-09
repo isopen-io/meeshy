@@ -23,6 +23,20 @@ const fixture = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
 const html = renderToStaticMarkup(<ProgressionBody progress={fixture} />);
 
 /**
+ * Le MÊME écran, servi par une passerelle qui ne connaît AUCUN des trois blocs
+ * optionnels — un client déployé avant ce lot, ou parlant à une version
+ * antérieure. C'est le support des témoins d'ABSENCE, qui doivent retirer ce
+ * qu'ils prétendent absent plutôt que de compter sur une fixture incomplète.
+ */
+const sansBlocsOptionnels = (() => {
+  // Les clés sont OMISES, pas posées à `undefined` : sous
+  // `exactOptionalPropertyTypes`, « absent » et « présent et undefined » sont
+  // deux types distincts, et c'est bien l'ABSENCE que ce rendu doit servir.
+  const { meesh: _m, elan: _e, achievementReach: _r, ...sansOptions } = ENGAGEMENT_PROGRESS_FIXTURE;
+  return renderToStaticMarkup(<ProgressionBody progress={resolveEngagementProgress(sansOptions)} />);
+})();
+
+/**
  * **Le total de badges se CALCULE, il ne s'écrit pas.** Il valait 65 (13 axes ×
  * 5 paliers) ; la famille sociale l'a porté à 85 (#5766). Un nombre en dur se
  * périme au premier axe ajouté, et fait échouer un témoin qui n'a rien à dire
@@ -32,21 +46,48 @@ const html = renderToStaticMarkup(<ProgressionBody progress={fixture} />);
 const TOTAL_BADGES = ENGAGEMENT_AXES.length * BADGE_THRESHOLDS.length;
 
 describe('ProgressionBody — un utilisateur à mi-chemin', () => {
+  /**
+   * Les chiffres se DÉRIVENT de la fixture, ils ne s'y recopient pas.
+   *
+   * La version précédente épinglait « Niveau 3 » et « 350 points ». Le porteur
+   * a réglé le barème le 2026-09-09 et la famille sociale est entrée au
+   * catalogue : la fixture vaut désormais 1244 points, et le témoin accusait
+   * l'ÉCRAN alors que seule la donnée avait bougé. Ce qui est sous test ici est
+   * que l'écran DIT ce que la loi a résolu — pas quelle valeur la loi résout.
+   */
   test('le niveau et son score, la série et son record', () => {
-    expect(html).toContain('Niveau 3');
-    expect(html).toContain('350 points');
-    expect(html).toContain('5 jours d’affilée');
-    expect(html).toContain('Record : 12 jours');
+    expect(html).toContain(`Niveau ${fixture.level.level}`);
+    expect(html).toContain(`${fixture.level.value} points`);
+    expect(html).toContain(`${fixture.streak.value} jours d’affilée`);
+    expect(html).toContain(`Record : ${ENGAGEMENT_PROGRESS_FIXTURE.streak.longestStreakDays} jours`);
   });
 
+  /**
+   * Ce qui est sous test est que CHAQUE barre est nommée et chiffrée — pas
+   * combien il y en a. Le compte a changé (2 → 3) le jour où le hero des
+   * Meeshes a montré sa propre progression vers la frappe : un total figé
+   * aurait accusé l'écran d'une régression qui était un ajout.
+   */
   test('les barres sont des `progressbar` NOMMÉES, avec leur valeur', () => {
-    expect(html.match(/role="progressbar"/g)).toHaveLength(2);
-    expect(html).toContain('aria-valuenow="80"');
+    const barres = html.match(/role="progressbar"[^>]*/g) ?? [];
+    expect(barres.length).toBeGreaterThanOrEqual(2);
+    for (const barre of barres) {
+      expect(barre).toContain('aria-valuenow=');
+      expect(barre).toMatch(/aria-label=|aria-labelledby=/);
+    }
+    expect(html).toContain(`aria-valuenow="${Math.round(fixture.level.progress * 100)}"`);
+
+    // Sans les blocs optionnels, il en reste exactement deux : le niveau et la
+    // série. C'est la LIGNE DE BASE, et elle, elle ne bouge pas.
+    expect(sansBlocsOptionnels.match(/role="progressbar"/g)).toHaveLength(2);
   });
 
   test('la carte de niveau nomme le RANG suivant, jamais le seuil de points', () => {
-    expect(html).toContain('Encore 50 points avant le niveau 4');
-    expect(html).not.toContain('niveau 400');
+    const manque = (fixture.level.nextThreshold ?? 0) - fixture.level.value;
+    expect(html).toContain(`Encore ${manque} points avant le niveau ${fixture.level.level + 1}`);
+    // Le SEUIL n'est jamais servi comme un rang — c'est le défaut que ce
+    // témoin garde : « niveau 400 » au lieu de « niveau 4 ».
+    expect(html).not.toContain(`niveau ${fixture.level.nextThreshold}`);
   });
 
   test('les TREIZE axes sont rendus — y compris ceux à zéro, qui disent ce qu’il reste à faire', () => {
@@ -54,10 +95,18 @@ describe('ProgressionBody — un utilisateur à mi-chemin', () => {
     expect(html).toContain('Encore 1 avant le palier 1');
   });
 
+  /**
+   * Le compte OBTENU se dérive aussi, pour la même raison que le TOTAL au-dessus :
+   * il valait 15, et les six paliers sociaux de la fixture l'ont porté à 21. Un
+   * nombre en dur ici accuse l'écran d'une régression que seule la donnée a
+   * causée. Ce qui est sous test est que les trois nombres CONCORDENT — le
+   * compte affiché, les pastilles pleines, les pastilles vides.
+   */
   test('le compte de badges et les cinq pastilles par axe', () => {
-    expect(html).toContain(`15 / ${TOTAL_BADGES}`);
-    expect(html.match(/Palier \d+ atteint/g)?.length).toBe(15);
-    expect(html.match(/Palier \d+ à atteindre/g)?.length).toBe(TOTAL_BADGES - 15);
+    const obtenus = fixture.badgesEarned;
+    expect(html).toContain(`${obtenus} / ${TOTAL_BADGES}`);
+    expect(html.match(/Palier \d+ atteint/g)?.length).toBe(obtenus);
+    expect(html.match(/Palier \d+ à atteindre/g)?.length).toBe(TOTAL_BADGES - obtenus);
   });
 
   test('les succès : quatre débloqués et datés, un verrouillé avec sa condition', () => {
@@ -116,5 +165,242 @@ describe('les autres états', () => {
     const offline = renderToStaticMarkup(<ProgressionError message="Réseau indisponible" online={false} onRetry={noop} />);
     expect(offline).toContain('Hors ligne — aucune progression en mémoire');
     expect(offline).not.toContain('Réseau indisponible');
+  });
+});
+
+/**
+ * LE HÉROS DES MEESHES (#5743) — et surtout ce qu'il REFUSE d'afficher.
+ *
+ * La directive du porteur est une NÉGATION (« le bouton quand les points le
+ * permettent, sinon pas de bouton »), et une négation ne se prouve que par un
+ * témoin qui cherche l'absence. Les trois cas ci-dessous couvrent les trois
+ * états possibles du bloc : absent, insuffisant, frappable.
+ */
+const rendreAvecMeesh = (meesh: {
+  balance: number;
+  mintedLifetime: number;
+  debitablePoints: number;
+  floorPoints: number;
+  missingPoints: number;
+  mintCost: number;
+}) =>
+  renderToStaticMarkup(
+    <ProgressionBody progress={resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, meesh })} />,
+  );
+
+describe('MeeshHero', () => {
+  /**
+   * L'absence se CONSTRUIT, elle ne s'hérite pas de la fixture.
+   *
+   * Ce témoin lisait `html` — le rendu de la fixture — et passait au vert
+   * uniquement parce que la fixture ne portait PAS de bloc `meesh`. Le jour où
+   * la démonstration en a reçu un (pour que le porteur voie le hero), il est
+   * tombé : il ne mesurait pas l'absence du bloc, il mesurait un manque de
+   * données. Un témoin d'absence doit RETIRER ce qu'il prétend absent.
+   */
+  test('n’affiche RIEN quand la passerelle ne sert pas le bloc', () => {
+    expect(sansBlocsOptionnels).not.toContain('Meesh');
+  });
+
+  test('sans assez de points : le solde, le manque, et AUCUN bouton', () => {
+    const rendu = rendreAvecMeesh({
+      balance: 0,
+      mintedLifetime: 0,
+      debitablePoints: 100,
+      floorPoints: 1300,
+      missingPoints: 1121,
+      mintCost: 1221,
+    });
+    expect(rendu).toContain('Aucune Meesh');
+    expect(rendu).toContain('Encore 1121 points convertibles');
+    // Le sort des points de conversation doit être DIT : ils partiront en
+    // dernier, sans éteindre de badge (option C, #5743).
+    expect(rendu).toContain('1300 points de conversation');
+    expect(rendu).toContain('sans éteindre aucun badge');
+    expect(rendu).not.toContain('<button');
+  });
+
+  test('avec assez de points : le bouton de conversion apparaît', () => {
+    const rendu = rendreAvecMeesh({
+      balance: 2,
+      mintedLifetime: 5,
+      debitablePoints: 1300,
+      floorPoints: 40,
+      missingPoints: 0,
+      mintCost: 1221,
+    });
+    expect(rendu).toContain('2 Meeshes');
+    expect(rendu).toContain('5 frappées depuis toujours');
+    expect(rendu).toContain('Convertir 1221 points en une Meesh');
+    expect(rendu).toContain('<button');
+  });
+
+  test('accorde le singulier — « 1 Meesh », jamais « 1 Meeshes »', () => {
+    const rendu = rendreAvecMeesh({
+      balance: 1,
+      mintedLifetime: 1,
+      debitablePoints: 0,
+      floorPoints: 0,
+      missingPoints: 1221,
+      mintCost: 1221,
+    });
+    expect(rendu).toContain('>1 Meesh<');
+    expect(rendu).toContain('1 frappée depuis toujours');
+  });
+});
+
+/**
+ * L'ÉLAN AFFICHÉ (#5749) — « un accélérateur qu'on ne voit pas n'accélère rien,
+ * il surprend ». Et son corollaire, tout aussi important : au neutre il ne doit
+ * RIEN occuper.
+ */
+const rendreAvecElan = (elan: {
+  factor: number;
+  activeFamilyCount: number;
+  hasStanding: boolean;
+  windowDays: number;
+}) =>
+  renderToStaticMarkup(
+    <ProgressionBody progress={resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, elan })} />,
+  );
+
+describe('ElanBanner', () => {
+  test('n’affiche RIEN au neutre — un badge « ×1 » n’apprend rien', () => {
+    const rendu = rendreAvecElan({ factor: 1, activeFamilyCount: 1, hasStanding: false, windowDays: 7 });
+    expect(rendu).not.toContain('Élan');
+  });
+
+  test('n’affiche rien non plus quand la passerelle ne sert pas le bloc', () => {
+    expect(sansBlocsOptionnels).not.toContain('Élan');
+  });
+
+  test('dit le facteur ET ce qui le porte — sinon il se subit au lieu de se piloter', () => {
+    const rendu = rendreAvecElan({ factor: 3, activeFamilyCount: 3, hasStanding: false, windowDays: 7 });
+    expect(rendu).toContain('Élan ×3');
+    expect(rendu).toContain('3 familles actives');
+    expect(rendu).toContain('sur 7 jours');
+    expect(rendu).toContain('rapportent 3 fois plus');
+  });
+
+  test('nomme l’assise quand elle porte le dernier cran', () => {
+    const rendu = rendreAvecElan({ factor: 5, activeFamilyCount: 4, hasStanding: true, windowDays: 7 });
+    expect(rendu).toContain('Élan ×5');
+    expect(rendu).toContain('plus votre assise');
+  });
+
+  test('accorde le singulier — « 1 famille active »', () => {
+    const rendu = rendreAvecElan({ factor: 2, activeFamilyCount: 1, hasStanding: true, windowDays: 7 });
+    expect(rendu).toContain('1 famille active');
+  });
+
+  test('borne un facteur aberrant servi par la passerelle', () => {
+    // Le plafond est une règle de PRODUIT, pas une convention de sérialisation.
+    const rendu = rendreAvecElan({ factor: 9, activeFamilyCount: 4, hasStanding: true, windowDays: 7 });
+    expect(rendu).toContain('Élan ×5');
+    expect(rendu).not.toContain('Élan ×9');
+  });
+});
+
+/**
+ * LES SUCCÈS GÉNÉRÉS EN RANGÉES (#5759) — ce que la fenêtre montre, et ce
+ * qu'elle refuse de montrer.
+ */
+const rendreAvecDefis = (params: {
+  reach: Record<string, number>;
+  milestones?: Array<{ milestoneType: string; milestoneKey: string; reachedAt: string }>;
+}) =>
+  renderToStaticMarkup(
+    <ProgressionBody
+      progress={resolveEngagementProgress({
+        ...ENGAGEMENT_PROGRESS_FIXTURE,
+        milestones: params.milestones ?? [],
+        achievementReach: params.reach,
+      } as never)}
+    />,
+  );
+
+describe('GeneratedAchievements', () => {
+  test('n’affiche rien quand la passerelle ne sert pas la carte', () => {
+    expect(sansBlocsOptionnels).not.toContain('Défis');
+  });
+
+  test('ne rend JAMAIS un palier d’ampleur que le produit ne peut pas tenir', () => {
+    // La plus grande conversation compte 300 membres. Le palier 1 000 est
+    // retiré EN AMONT — il n'entre pas dans l'arbre, il n'est pas masqué en
+    // CSS : un objectif qu'on ne peut pas tenir ne doit pas exister.
+    //
+    // Ce témoin ne dit RIEN de ce qui est visible : c'est la FENÊTRE qui en
+    // décide, et confondre les deux le rendrait fragile. Il ne prouve qu'une
+    // chose — l'inatteignable est absent.
+    const rendu = rendreAvecDefis({ reach: { 'conversation.join.size': 300 } });
+    expect(rendu).toContain('Conversation de 10 membres');
+    expect(rendu).not.toContain('Conversation de 1 000 membres');
+    expect(rendu).not.toContain('Conversation de 1 000 000 membres');
+  });
+
+  test('laisse le VOLUME visible sans mesure — répéter n’est pas impossible', () => {
+    const rendu = rendreAvecDefis({ reach: {} });
+    expect(rendu).toContain('conversations rejointes');
+  });
+
+  test('montre SEPT entrées à un compte qui n’a rien décroché', () => {
+    const rendu = rendreAvecDefis({ reach: { 'conversation.join.size': 1000000 } });
+    const cercles = rendu.slice(rendu.indexOf('Cercles'));
+    const items = cercles.split('<li').length - 1;
+    expect(items).toBeGreaterThanOrEqual(7);
+  });
+
+  test('ouvre la fenêtre DEUX PAR DEUX à mesure que les succès tombent', () => {
+    // La règle est `max(7, acquis + 2)` : deux acquis laissent la fenêtre à 7
+    // (2 + 2 = 4 < 7), dix acquis l'ouvrent à douze. C'est CETTE progression
+    // qu'il faut mesurer — pas la présence d'un palier précis, qui dépendrait
+    // de l'ordre de difficulté et rendrait le témoin fragile.
+    const reach = { 'conversation.join.size': 1000000 };
+    const compter = (rendu: string) => {
+      const debut = rendu.indexOf('Cercles');
+      return rendu.slice(debut, rendu.indexOf('</ul>', debut)).split('<li').length - 1;
+    };
+
+    const avec2 = compter(
+      rendreAvecDefis({
+        reach,
+        milestones: [10, 100].map((t) => ({
+          milestoneType: 'achievement',
+          milestoneKey: `achievement.cercles.conversation.join.size:${t}`,
+          reachedAt: '2026-09-08T00:00:00.000Z',
+        })),
+      }),
+    );
+    const avec10 = compter(
+      rendreAvecDefis({
+        reach,
+        milestones: [
+          ...[10, 100, 1000, 10000, 100000, 1000000].map((t) => ({
+            milestoneType: 'achievement',
+            milestoneKey: `achievement.cercles.conversation.join.size:${t}`,
+            reachedAt: '2026-09-08T00:00:00.000Z',
+          })),
+          ...[1, 10, 100, 1000].map((t) => ({
+            milestoneType: 'achievement',
+            milestoneKey: `achievement.cercles.conversation.join.count:${t}`,
+            reachedAt: '2026-09-08T00:00:00.000Z',
+          })),
+        ],
+      }),
+    );
+
+    expect(avec2).toBe(7);
+    expect(avec10).toBe(12);
+    // Le prochain objectif est TOUJOURS visible : la fenêtre dépasse toujours
+    // les acquis de deux.
+    expect(avec10).toBeGreaterThan(10);
+  });
+
+  test('affiche le compte ACQUIS sur ATTEIGNABLE, jamais sur le total déclaré', () => {
+    // Promettre un dénominateur qu'on ne peut pas atteindre découragerait pour
+    // rien : le total est celui du réel.
+    const rendu = rendreAvecDefis({ reach: { 'conversation.join.size': 300 } });
+    expect(rendu).toContain('Cercles');
+    expect(rendu).not.toContain('/ 0');
   });
 });

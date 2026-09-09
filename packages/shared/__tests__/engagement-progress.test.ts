@@ -209,3 +209,110 @@ describe('isEngagementProgressPayload — la garde de frontière est fail-closed
     expect(isEngagementProgressPayload(value)).toBe(false);
   });
 });
+
+/**
+ * Les deux PROJECTIONS servies aux clients : les sections de succès générés
+ * et l'élan. Elles n'étaient tenues que par les vecteurs de bout en bout, qui
+ * disent un chiffre juste sans dire pourquoi il l'est.
+ */
+describe('les sections de succès générés — dérivées ICI, pour que web et iOS montrent la même chose', () => {
+  /**
+   * **La carte ABSENTE éteint la section entière — et c'est une question ouverte.**
+   *
+   * `isAttainable` déclare qu'une famille non mesurée garde ses paliers de
+   * VOLUME (« rien n'empêche structurellement de répéter un geste »). Mais le
+   * porteur de la section est conditionné à `achievementReach !== undefined` :
+   * une passerelle qui ne sert PAS la carte n'éteint pas l'ampleur, elle éteint
+   * TOUT. Les deux lectures se défendent — « le serveur ne parle pas succès »
+   * contre « le catalogue est une loi CLIENTE » — et la seconde est celle que
+   * le commentaire du type affirme.
+   *
+   * Le témoin épingle le comportement RÉEL pour qu'un changement soit délibéré ;
+   * la question est ouverte en décision produit, pas tranchée ici.
+   */
+  it('éteint la section ENTIÈRE quand la carte manque — pas seulement les paliers d\'ampleur', () => {
+    const sansCarte = resolveEngagementProgress(payload({ achievementReach: undefined }));
+    expect(sansCarte.achievementSections).toBeUndefined();
+  });
+
+  it("une carte VIDE, elle, laisse vivre les paliers de VOLUME — non mesuré n'est pas zéro", () => {
+    const carteVide = resolveEngagementProgress(payload({ achievementReach: {} }));
+    const clefs = (carteVide.achievementSections ?? []).flatMap((s) => s.entries.map((e) => e.key));
+
+    expect(clefs.length).toBeGreaterThan(0);
+    // Aucune ampleur : on ne promet pas « une conversation d'un million » sans mesure.
+    expect(clefs.some((k) => k.includes('.size:'))).toBe(false);
+    expect(clefs.some((k) => k.includes('.count:'))).toBe(true);
+  });
+
+  it('range les entrées par section et les tronque à la fenêtre', () => {
+    const progress = resolveEngagementProgress(
+      payload({ achievementReach: { 'conversation.join.size': 1000000 } }),
+    );
+    const sections = progress.achievementSections ?? [];
+    expect(sections.length).toBeGreaterThan(0);
+    for (const section of sections) {
+      expect(section.entries.length).toBeLessThanOrEqual(
+        Math.max(7, section.entries.filter((e) => e.unlocked).length + 2),
+      );
+    }
+  });
+
+  it("marque ACQUISE l'entrée dont le palier est gravé, et ELLE SEULE", () => {
+    const nu = resolveEngagementProgress(payload({ achievementReach: { 'conversation.join.size': 1000000 } }));
+    const cible = (nu.achievementSections ?? []).flatMap((s) => s.entries)[0];
+    expect(cible).toBeDefined();
+
+    const progress = resolveEngagementProgress(
+      payload({
+        achievementReach: { 'conversation.join.size': 1000000 },
+        milestones: [
+          {
+            milestoneType: 'achievement',
+            milestoneKey: cible!.key,
+            reachedAt: '2026-09-09T10:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    const toutes = (progress.achievementSections ?? []).flatMap((s) => s.entries);
+    const acquises = toutes.filter((e) => e.unlocked);
+
+    expect(acquises.map((e) => e.key)).toEqual([cible!.key]);
+    expect(acquises[0]?.reachedAt).toBe('2026-09-09T10:00:00.000Z');
+  });
+});
+
+describe("l'élan servi — le plafond est une règle de PRODUIT, pas de sérialisation", () => {
+  const avecElan = (factor: number) =>
+    resolveEngagementProgress(
+      payload({ elan: { factor, activeFamilyCount: 3, hasStanding: true, windowDays: 7 } }),
+    ).elan;
+
+  it('rend tel quel un facteur déjà dans la plage', () => {
+    expect(avecElan(3)?.factor).toBe(3);
+  });
+
+  it("BORNE à 5 un serveur qui servirait 9 — sinon l'écran afficherait 9", () => {
+    expect(avecElan(9)?.factor).toBe(5);
+  });
+
+  it('remonte à 1 un facteur SOUS le neutre', () => {
+    expect(avecElan(0)?.factor).toBe(1);
+  });
+
+  it('retombe au neutre sur un facteur ILLISIBLE plutôt que de propager NaN', () => {
+    expect(avecElan(Number.NaN)?.factor).toBe(1);
+  });
+
+  it('reporte les trois champs qui EXPLIQUENT le facteur — un accélérateur invisible surprend', () => {
+    const elan = avecElan(4);
+    expect(elan?.activeFamilyCount).toBe(3);
+    expect(elan?.hasStanding).toBe(true);
+    expect(elan?.windowDays).toBe(7);
+  });
+
+  it("n'est pas servi du tout quand la passerelle ne le donne pas", () => {
+    expect(resolveEngagementProgress(payload({ elan: undefined })).elan).toBeUndefined();
+  });
+});

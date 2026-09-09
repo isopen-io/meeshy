@@ -31,6 +31,15 @@ struct ProgressionView: View {
 
     private let accentColor = MeeshyColors.brandPrimary
 
+    /// **Le succès ouvert en grand** (#5831). `AchievementRevealView` existait
+    /// et n'avait qu'UNE porte : le tap d'une notification. Depuis l'écran qui
+    /// LISTE précisément ce qu'elle célèbre, on ne pouvait pas l'ouvrir — une
+    /// célébration ne se voyait donc qu'une fois, au vol.
+    ///
+    /// `EngagementAchievementProgress` est déjà `Identifiable` (sa clé) : le
+    /// `fullScreenCover(item:)` s'en sert tel quel, sans enveloppe.
+    @State private var succesOuvert: EngagementAchievementProgress?
+
     init(viewModel: ProgressionViewModel? = nil) {
         _viewModel = StateObject(wrappedValue: viewModel ?? ProgressionViewModel())
     }
@@ -45,6 +54,16 @@ struct ProgressionView: View {
             }
         }
         .task { await viewModel.load() }
+        // COUVRE le tableau de bord plutôt que de s'empiler devant : refermer
+        // ramène là où le doigt était, sans transition de pile. Même dispositif
+        // que `EngagementRevealHost`, et la MÊME vue — un second exemplaire
+        // divergerait au premier ajustement.
+        .fullScreenCover(item: $succesOuvert) { succes in
+            AchievementRevealView(
+                reveal: .achievement(succes.key),
+                occasion: .consultation(unlocked: succes.unlocked, reachedAt: succes.reachedAt)
+            ) { succesOuvert = nil }
+        }
     }
 
     // MARK: - Header
@@ -97,8 +116,32 @@ struct ProgressionView: View {
                 if viewModel.showsSkeleton {
                     ProgressionSkeleton()
                 } else if let progress = viewModel.progress {
+                    // L'élan n'est monté qu'à partir de ×2 — au neutre il
+                    // n'apprend rien (#5749).
+                    if let elan = progress.elan, elan.isAccelerated {
+                        ProgressionElanBanner(elan: elan)
+                    }
+
+                    // Le héros n'est monté que si la passerelle sert le bloc :
+                    // un serveur antérieur ⇒ aucune section, jamais un solde à zéro
+                    // affiché à quelqu'un qui en a deux (#5743).
+                    if let meesh = progress.meesh {
+                        ProgressionMeeshHero(
+                            meesh: meesh,
+                            isMinting: viewModel.isMinting,
+                            onMint: { Task { await viewModel.mint() } }
+                        )
+                    }
+
                     if progress.isEmpty {
                         ProgressionNotice(kind: .empty)
+                    }
+
+                    if let heros = progress.heroAchievement {
+                        ProgressionHeroCard(achievement: heros) {
+                            HapticFeedback.light()
+                            succesOuvert = heros
+                        }
                     }
 
                     HStack(alignment: .top, spacing: MeeshySpacing.md) {
@@ -108,6 +151,21 @@ struct ProgressionView: View {
 
                     badgesSection(progress)
                     achievementsSection(progress)
+
+                    // Les défis générés (#5759) — rangées horizontales, une par
+                    // section. Vide quand la passerelle ne sert pas la carte
+                    // d'atteignabilité : on ne promet rien qu'on ne sait mesurer.
+                    if !progress.achievementSections.isEmpty {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                            sectionHeader(
+                                icon: "medal.fill",
+                                title: AchievementCopy.sectionsHeader,
+                                trailing: "\(progress.achievementSections.reduce(0) { $0 + $1.unlockedCount })",
+                                color: accentColor
+                            )
+                            ProgressionGeneratedAchievements(sections: progress.achievementSections)
+                        }
+                    }
                 }
 
                 Spacer().frame(height: 40)
@@ -167,7 +225,22 @@ struct ProgressionView: View {
                         if index > 0 {
                             Divider().overlay(theme.textMuted.opacity(0.2))
                         }
-                        ProgressionAchievementRow(achievement: achievement)
+                        // La rangée reste un PRÉSENTATEUR pur ; c'est son hôte
+                        // qui décide ce qu'un doigt y déclenche. Un bouton dans
+                        // la rangée obligerait chaque hôte futur à hériter de
+                        // CETTE destination-là.
+                        Button {
+                            HapticFeedback.light()
+                            succesOuvert = achievement
+                        } label: {
+                            ProgressionAchievementRow(achievement: achievement)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint(String(localized: "progression.achievement.a11y.hint",
+                                                  defaultValue: "Touchez pour voir ce succès en grand.",
+                                                  bundle: .main))
+                        .accessibilityAddTraits(.isButton)
                     }
                 }
             }

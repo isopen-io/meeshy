@@ -1,13 +1,15 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { conversationStore } from '@/lib/conversation-store';
+import { performSend, retrySend, type Draft } from '@/lib/send/perform-send';
+import { outboxStore } from '@/lib/send/outbox-store';
 import type { RowActionId } from '@/lib/view/row-actions';
 
 import { ApiError, httpTransport } from './client';
 import { apiConfig } from './config';
 import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, type ConversationsDeps } from './conversations';
-import type { Conversation } from './types';
+import type { Conversation, Participant } from './types';
 import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
 
@@ -99,5 +101,42 @@ export function rowAction(conversationId: string, action: RowActionId): void {
     conversationId,
     action,
     deps: { ...deps, store: conversationStore, queryClient: appQueryClient },
+  });
+}
+
+/**
+ * `sendAction`/`retrySendAction` (#5813, étape 6) — RÉFÉRENCES DE MODULE
+ * STABLES, motif `rowAction` ci-dessus : liées aux instances PARTAGÉES
+ * (`appQueryClient`, `outboxStore`) et à `deps` (la SEULE résolution de
+ * `apiConfig.source`, `:20`). `online` est REÇU — ce module n'appelle pas
+ * `useOnline()` (un hook), c'est `use-send.ts` qui le fournit.
+ */
+export function sendAction(params: {
+  readonly conversationId: string;
+  readonly draft: Draft;
+  readonly viewerId: string;
+  readonly sender?: Participant;
+  readonly online: boolean;
+}): Promise<void> {
+  const { conversationId, draft, viewerId, sender, online } = params;
+  return performSend({
+    conversationId,
+    draft,
+    viewerId,
+    ...(sender === undefined ? {} : { sender }),
+    deps: { ...deps, queryClient: appQueryClient, outbox: outboxStore, online },
+  });
+}
+
+export function retrySendAction(params: {
+  readonly conversationId: string;
+  readonly clientMessageId: string;
+  readonly online: boolean;
+}): Promise<void> {
+  const { conversationId, clientMessageId, online } = params;
+  return retrySend({
+    conversationId,
+    clientMessageId,
+    deps: { ...deps, queryClient: appQueryClient, outbox: outboxStore, online },
   });
 }

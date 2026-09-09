@@ -39,9 +39,20 @@ import { PAGE_PRIVACY } from '../src/institutional/privacy';
 import { PAGE_TERMS } from '../src/institutional/terms';
 import type { ContentPage } from '../src/institutional/type';
 import { INLINE_SCHEME_BOOTSTRAP } from '../src/lib/inline-scheme-bootstrap.js';
+import { resolveDistDir } from './lib/resolve-dist-dir.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DIST = join(HERE, '../dist');
+/**
+ * LE RÉPERTOIRE DE SORTIE EST REÇU, JAMAIS DEVINÉ (#5812, élargit #5821).
+ *
+ * `../dist` en dur ignorait `--outDir` : une construction de la variante B
+ * (`dist-capacitor/`, invoquée par `vite.config.ts` sous `MEESHY_TARGET=
+ * capacitor`) écrivait ses cinq pages institutionnelles dans la sortie de la
+ * variante A à la place — `dist-capacitor/` n'en recevait AUCUNE, et
+ * `dist/` en recevait d'une construction qui ne le visait pas. Voir
+ * `scripts/lib/resolve-dist-dir.mjs` pour la mesure et le témoin.
+ */
+const DIST = resolveDistDir(HERE, process.argv);
 
 /**
  * `Meeshy {version}` (`src/lib/brand.ts`) — la SEULE lecture de la version de

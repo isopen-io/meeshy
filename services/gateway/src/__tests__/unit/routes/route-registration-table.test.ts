@@ -156,7 +156,13 @@ describe('ROUTE_TABLE (#4278)', () => {
     // ré-acceptation citant la version en vigueur). Aucun alias, aucune route
     // retirée ni renommée. Vérifié : le manifeste régénéré passe de 554 à
     // 556 routes, soit exactement ces deux-là et aucune autre.
-    expect(ROUTE_TABLE.length).toBe(65);
+    //
+    // 65 → 66 le 2026-09-09 (#5743) : entrée `me-meesh`, l'adresse NEUVE
+    // `POST /api/v1/me/meesh/mint` (la frappe d'une Meesh contre 1221 points
+    // débitables — action MANUELLE, atomique, idempotente par `requestId`).
+    // Aucun alias, aucune route retirée ni renommée. Vérifié : le manifeste
+    // régénéré passe de 556 à 557 routes, soit exactement celle-là.
+    expect(ROUTE_TABLE.length).toBe(66);
   });
 });
 

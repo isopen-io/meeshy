@@ -10,18 +10,50 @@ import MeeshyUI
 /// lecteur que côté iPhone). Il est donc écrit UNE fois et posé en une ligne
 /// de chaque côté.
 ///
-/// La révélation COUVRE le tableau de bord plutôt que de le précéder dans la
-/// pile : le tap pousse `.progression` comme avant, et la célébration se pose
-/// par-dessus. En la refermant, l'utilisateur est déjà arrivé — aucun geste de
-/// plus que s'il n'y avait pas eu de célébration.
+/// ## Deux portes, et une seule règle
+///
+/// 1. **Le TAP** sur une notification de palier (`router.pendingEngagementReveal`).
+///    La révélation COUVRE le tableau de bord plutôt que de le précéder dans la
+///    pile : le tap pousse `.progression` comme avant, et la célébration se pose
+///    par-dessus. En la refermant, l'utilisateur est déjà arrivé.
+///
+/// 2. **LE GESTE — sans que personne ne touche rien (#5847).** Directive porteur
+///    (2026-09-09) : *« la vue d'achievement s'affiche lorsqu'on a réalisé une
+///    opération qui déclenche un succès, le reste ce sont des notifications rien
+///    de plus »*. Un succès annoncé par la passerelle arrive en direct par le
+///    socket ; il se célèbre là, au moment où l'utilisateur vient d'agir.
+///    Attendre un tap faisait arriver la récompense sous forme de devoir.
+///
+/// **Seul un SUCCÈS passe par la seconde porte** (`celebratesUnprompted`). Un
+/// badge, une série, un niveau tombent au fil de l'usage : interrompre à chaque
+/// fois ferait de la célébration un bruit — et le premier bruit qu'on apprend à
+/// ignorer est celui qui devait faire plaisir. Ils gardent la première porte :
+/// quelqu'un qui TOUCHE la notification d'une série a demandé à la voir.
 private struct RevealItem: Identifiable {
-    let id = UUID()
     let reveal: EngagementReveal
+
+    /// L'identité est le PALIER, pas un `UUID` neuf à chaque construction : la
+    /// file reconstruit cet enveloppe à chaque rendu, et une identité instable
+    /// ferait re-présenter la même célébration en boucle.
+    var id: String { String(describing: reveal) }
 }
 
 struct EngagementRevealHost: ViewModifier {
     @ObservedObject var router: Router
-    @State private var item: RevealItem?
+    @State private var file = EngagementRevealQueue()
+
+    /// Un seul chemin fait avancer la file — le `set` de ce lien. `onContinue`
+    /// y passe aussi (il pose `nil`), ce qui interdit le double avancement qui
+    /// aurait sauté une célébration en attente.
+    private var lien: Binding<RevealItem?> {
+        Binding(
+            get: { file.enCours.map { RevealItem(reveal: $0) } },
+            set: { nouveau in
+                guard nouveau == nil else { return }
+                file.termine()
+            }
+        )
+    }
 
     func body(content: Content) -> some View {
         content
@@ -31,10 +63,21 @@ struct EngagementRevealHost: ViewModifier {
             // l'utilisateur vient de l'ouvrir depuis l'écran verrouillé.
             .adaptiveOnChange(of: router.pendingEngagementReveal, initial: true) { _, _ in
                 guard let palier = router.consumePendingEngagementReveal() else { return }
-                item = RevealItem(reveal: palier)
+                file.enfile(palier)
             }
-            .fullScreenCover(item: $item) { courant in
-                AchievementRevealView(reveal: courant.reveal) { item = nil }
+            // La seconde porte. `newNotificationReceived` est le point où le
+            // socket a déjà dédupliqué (APNs premier plan + `notification:new`
+            // pour un même fait) et persisté — s'y brancher évite de refaire
+            // l'un et l'autre, et garantit que la célébration et la cloche
+            // parlent du même événement.
+            .onReceive(NotificationToastManager.shared.newNotificationReceived) { event in
+                guard let palier = EngagementReveal.from(type: event.notificationType,
+                                                        metadata: event.metadata),
+                      palier.celebratesUnprompted else { return }
+                file.enfile(palier)
+            }
+            .fullScreenCover(item: lien) { courant in
+                AchievementRevealView(reveal: courant.reveal) { lien.wrappedValue = nil }
             }
     }
 }

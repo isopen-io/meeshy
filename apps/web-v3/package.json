@@ -42,6 +42,7 @@
     "zustand": "5.0.15"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.14.0",
     "@meeshy/design-tokens": "workspace:*",
     "@tailwindcss/vite": "4.3.3",
     "@types/react": "19.2.18",

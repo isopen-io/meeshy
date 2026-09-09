@@ -1,8 +1,9 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 
-import { loadMessages, messagesQuery } from './messages';
+import { loadMessages, messagesQuery, sendMessage } from './messages';
 import { createHttpTransport } from './http';
-import { hasOlderMessagesOf, messagesOf } from './fixtures';
+import { hasOlderMessagesOf, messagesOf, resetSentMessagesForTests } from './fixtures';
+import { VIEWER_ID } from './fixtures-base';
 
 function fakeFetch(response: { readonly status: number; readonly body?: unknown }) {
   const calls: { readonly url: string; readonly init: RequestInit }[] = [];
@@ -153,5 +154,201 @@ describe('messagesQuery — identité du résultat entre deux rendus (source gat
 
     expect(first).toBeDefined();
     expect(second).toBe(first);
+  });
+});
+
+describe('sendMessage — gateway', () => {
+  afterEach(() => resetSentMessagesForTests());
+
+  test('POST /api/v1/conversations/:id/messages, corps EXACT, projection de l’accusé', async () => {
+    const { impl, calls } = fakeFetch({
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          id: 'm9',
+          clientMessageId: 'cid_abc',
+          conversationId: 'c-a',
+          senderId: 'u1',
+          content: 'bonjour',
+          messageType: 'text',
+          createdAt: '2026-09-09T10:00:00.000Z',
+          deliveredCount: 0,
+          readCount: 0,
+          translations: {},
+          sender: { id: 'p1' },
+        },
+      },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await sendMessage({
+      source: 'gateway',
+      transport,
+      conversationId: 'c-a',
+      body: { content: 'bonjour', originalLanguage: 'fr', clientMessageId: 'cid_abc' },
+    });
+
+    expect(calls[0]?.url).toBe('/api/v1/conversations/c-a/messages');
+    expect(calls[0]?.init.method).toBe('POST');
+    const headers = calls[0]?.init.headers;
+    const contentType =
+      headers instanceof Headers
+        ? headers.get('Content-Type')
+        : ((headers as Record<string, string> | undefined)?.['Content-Type'] ?? null);
+    expect(contentType).toBe('application/json');
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
+      content: 'bonjour',
+      originalLanguage: 'fr',
+      clientMessageId: 'cid_abc',
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.id).toBe('m9');
+      expect(typeof result.data.createdAt).toBe('string');
+      expect(Object.keys(result.data).sort()).toEqual(
+        ['id', 'clientMessageId', 'conversationId', 'senderId', 'content', 'messageType', 'createdAt', 'deliveredCount', 'readCount'].sort(),
+      );
+    }
+  });
+
+  test('replyToId présent ⇒ la clé est dans le corps', async () => {
+    const { impl, calls } = fakeFetch({
+      status: 200,
+      body: { success: true, data: { id: 'm9', conversationId: 'c-a', createdAt: '2026-09-09T10:00:00.000Z' } },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    await sendMessage({
+      source: 'gateway',
+      transport,
+      conversationId: 'c-a',
+      body: { content: 'bonjour', originalLanguage: 'fr', clientMessageId: 'cid_abc', replyToId: 'm1' },
+    });
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
+      content: 'bonjour',
+      originalLanguage: 'fr',
+      clientMessageId: 'cid_abc',
+      replyToId: 'm1',
+    });
+  });
+
+  test('400 ⇒ ok:false, status:400', async () => {
+    const { impl } = fakeFetch({ status: 400, body: { success: false, error: 'Validation error' } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await sendMessage({
+      source: 'gateway',
+      transport,
+      conversationId: 'c-a',
+      body: { content: 'x', originalLanguage: 'fr', clientMessageId: 'cid_abc' },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(400);
+  });
+
+  test('403 USER_BLOCKED ⇒ status:403, code:USER_BLOCKED', async () => {
+    const { impl } = fakeFetch({
+      status: 403,
+      body: { success: false, error: 'blocked', code: 'USER_BLOCKED' },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await sendMessage({
+      source: 'gateway',
+      transport,
+      conversationId: 'c-a',
+      body: { content: 'x', originalLanguage: 'fr', clientMessageId: 'cid_abc' },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(403);
+      expect(result.code).toBe('USER_BLOCKED');
+    }
+  });
+
+  test('429 ⇒ status:429', async () => {
+    const { impl } = fakeFetch({ status: 429, body: { success: false, error: 'Trop de requêtes' } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await sendMessage({
+      source: 'gateway',
+      transport,
+      conversationId: 'c-a',
+      body: { content: 'x', originalLanguage: 'fr', clientMessageId: 'cid_abc' },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(429);
+  });
+
+  test('fetchImpl qui lance ⇒ status:0, code absent', async () => {
+    const rejecting = (async () => {
+      throw new Error('offline');
+    }) as unknown as typeof fetch;
+    const transport = createHttpTransport({ base: '', fetchImpl: rejecting });
+    const result = await sendMessage({
+      source: 'gateway',
+      transport,
+      conversationId: 'c-a',
+      body: { content: 'x', originalLanguage: 'fr', clientMessageId: 'cid_abc' },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(0);
+      expect(result.code).toBeUndefined();
+    }
+  });
+
+  test('délai de garde RÉEL ⇒ status:0, code:TIMEOUT', async () => {
+    // Respecte le signal comme le ferait un vrai `fetch` (motif `http.test.ts`).
+    const neverResolves = (async (_url: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (signal?.aborted) {
+          reject(signal.reason);
+          return;
+        }
+        signal?.addEventListener('abort', () => reject(signal.reason));
+      })) as typeof fetch;
+    const transport = createHttpTransport({ base: '', fetchImpl: neverResolves, timeoutMs: 20 });
+    const result = await sendMessage({
+      source: 'gateway',
+      transport,
+      conversationId: 'c-a',
+      body: { content: 'x', originalLanguage: 'fr', clientMessageId: 'cid_abc' },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(0);
+      expect(result.code).toBe('TIMEOUT');
+    }
+  });
+});
+
+describe('sendMessage — fixtures', () => {
+  afterEach(() => resetSentMessagesForTests());
+
+  test('fetchImpl jamais appelé ; le message enregistré est reservi par messagesOf', async () => {
+    let calls = 0;
+    const impl = (async () => {
+      calls += 1;
+      return new Response(null, { status: 200 });
+    }) as typeof fetch;
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await sendMessage({
+      source: 'fixtures',
+      transport,
+      conversationId: 'c-deploiement',
+      body: { content: 'bonjour', originalLanguage: 'en', clientMessageId: 'cid_xyz' },
+    });
+
+    expect(calls).toBe(0);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.senderId).toBe(VIEWER_ID);
+
+    const stored = messagesOf('c-deploiement').find((m) => m.id === result.data.id);
+    expect(stored).toBeDefined();
+    expect(stored?.content).toBe('bonjour');
+    expect(stored?.originalLanguage).toBe('en');
+    expect((stored as { readonly clientMessageId?: string } | undefined)?.clientMessageId).toBe('cid_xyz');
+    expect(stored?.sender?.userId).toBe(VIEWER_ID);
   });
 });

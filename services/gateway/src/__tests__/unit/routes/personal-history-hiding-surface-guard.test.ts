@@ -288,6 +288,32 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   'MessageReadStatusService.ts': { kind: 'applies', reads: 7, applications: 2 },
 
   /**
+   * #5759 — les succès de « parole » et « retouche ». Trois lectures, toutes
+   * des COMPTES (`message.count`) filtrés sur `sender: { userId }` : ce que le
+   * titulaire du succès a lui-même PRODUIT.
+   *
+   * Exempt pour deux raisons distinctes, et il faut les deux :
+   *
+   *  1. **rien n'est SERVI.** Ces lectures ne rendent aucun contenu, aucun
+   *     auteur, aucun aperçu — seulement un entier comparé à un palier. Il n'y
+   *     a donc rien à masquer : le masquage protège ce qu'un lecteur VOIT.
+   *  2. **le masquage est personnel, la production ne l'est pas.** Effacer son
+   *     historique cache ce qu'on a REÇU ; ça ne défait pas d'avoir envoyé.
+   *     Appliquer le masquage ici ferait redescendre un succès parce que
+   *     l'utilisateur a nettoyé sa vue — or un succès atteint reste à vie
+   *     (règle porteur).
+   */
+  'achievements/GlobalAchievements.ts': {
+    kind: 'exempt',
+    reads: 3,
+    why:
+      'Comptes de la production PROPRE du titulaire (`sender: { userId }`), ' +
+      'comparés à un palier de succès. Aucun contenu servi, donc rien à ' +
+      "masquer ; et effacer son historique cache ce qu'on a reçu, sans défaire " +
+      "d'avoir envoyé — masquer ici ferait redescendre un succès acquis.",
+  },
+
+  /**
    * G-122 — le pont ✦ de la ligne de liste. Il NOMME les auteurs des messages
    * non lus : exactement l'ensemble que le badge compte, donc exactement le
    * même masquage. Sans l'application, un auteur dont le lecteur a effacé
@@ -496,7 +522,16 @@ describe('personal history hiding — dénombrement des surfaces de lecture', ()
     const scanned = scanServices();
 
     expect(scanned.length).toBeGreaterThan(0);
-    expect(scanned.map((f) => f.relative)).toEqual(Object.keys(SERVICE_LAYER_SURFACES).sort());
+    // Les DEUX côtés trient par `localeCompare`, comme `scanServices`.
+    // `Array.prototype.sort()` nu compare par point de code : il range toute
+    // minuscule APRÈS toute majuscule, et les deux ordres ne coïncidaient ici
+    // que par accident — tant qu'aucune surface ne vivait dans un
+    // sous-répertoire à initiale minuscule autre que `messaging/`. La première
+    // qui l'a fait (`achievements/`, #5759) a révélé la divergence : le témoin
+    // rougissait sur un ORDRE, en accusant un contenu qui, lui, était juste.
+    expect(scanned.map((f) => f.relative)).toEqual(
+      Object.keys(SERVICE_LAYER_SURFACES).sort((a, b) => a.localeCompare(b)),
+    );
   });
 
   it('compte exactement les lectures et les applications que la couche service déclare', () => {

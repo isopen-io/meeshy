@@ -77,6 +77,24 @@ export function conversationsQuery(deps: ConversationsDeps) {
  * est OPTIONNEL : la fabrique reste appelable sans lui (témoin, ou un appelant
  * qui n'a pas encore de liste en cache), simplement sans ce raccourci.
  */
+/**
+ * LA MUTATION DE LISTE (#5813, étape 0 — extrait de
+ * `conversation-actions.ts:50-58`, AUCUN changement de règle) — le SITE
+ * UNIQUE qui patch UNE conversation du cache `CONVERSATIONS_QUERY_KEY` ;
+ * les autres restent `toBe`-identiques (`list.map` ne recrée pas les lignes
+ * non touchées). Réutilisé par `send/perform-send.ts` (« la liste suit
+ * l'envoi », § 3.1/3.5 de la spécification #5813).
+ */
+export function patchConversation(
+  queryClient: QueryClient,
+  conversationId: string,
+  updater: (conversation: Conversation) => Conversation,
+): void {
+  queryClient.setQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY, (list) =>
+    list === undefined ? list : list.map((c) => (c.id === conversationId ? updater(c) : c)),
+  );
+}
+
 export function conversationQuery(deps: ConversationsDeps, id: string, init?: { readonly queryClient?: QueryClient }) {
   const cached = init?.queryClient?.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY);
   const found = cached?.find((c) => c.id === id);

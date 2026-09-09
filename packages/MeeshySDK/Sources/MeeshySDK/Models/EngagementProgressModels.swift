@@ -24,10 +24,14 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
     public struct Counter: Codable, Sendable, Equatable {
         public let axisKey: String
         public let count: Int
+        /// Points crédités par cet axe, élan compris (#5749). Optionnel : une
+        /// passerelle antérieure ne le sert pas, et rien n'en dépend à l'écran.
+        public let points: Int?
 
-        public init(axisKey: String, count: Int) {
+        public init(axisKey: String, count: Int, points: Int? = nil) {
             self.axisKey = axisKey
             self.count = count
+            self.points = points
         }
     }
 
@@ -64,17 +68,88 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         }
     }
 
+    /// L'ÉLAN COURANT (#5749) — OPTIONNEL, comme `Meesh`.
+    ///
+    /// Ce que le PROCHAIN geste créditera, pas ce que le dernier a crédité : un
+    /// multiplicateur sert à décider quoi faire ensuite.
+    public struct Elan: Codable, Sendable, Equatable {
+        public let factor: Double
+        public let activeFamilyCount: Int
+        public let hasStanding: Bool
+        /// La fenêtre glissante en jours, SERVIE — aucun client ne la code en dur.
+        public let windowDays: Int
+
+        public init(factor: Double, activeFamilyCount: Int, hasStanding: Bool, windowDays: Int) {
+            self.factor = factor
+            self.activeFamilyCount = activeFamilyCount
+            self.hasStanding = hasStanding
+            self.windowDays = windowDays
+        }
+    }
+
+    /// LES MEESHES (#5743) — OPTIONNEL, délibérément.
+    ///
+    /// Une passerelle antérieure à ce lot ne sert pas ce bloc, et l'écran doit
+    /// alors ne RIEN montrer : ni solde, ni bouton. Décodé en `nil` plutôt que
+    /// remplacé par des zéros — un solde de zéro affiché à quelqu'un qui en a
+    /// deux serait pire qu'une absence.
+    public struct Meesh: Codable, Sendable, Equatable {
+        public let balance: Int
+        /// Frappées à vie — monotone, c'est elle que le rang interroge (#5744).
+        public let mintedLifetime: Int
+        /// Points repris à des axes débitables — jamais les conversations.
+        public let debitablePoints: Int
+        /// Le plancher inaliénable : compté dans le niveau, jamais dépensable.
+        public let floorPoints: Int
+        public let missingPoints: Int
+        /// Le prix, SERVI par la passerelle — aucun client ne le code en dur.
+        public let mintCost: Int
+
+        public init(
+            balance: Int,
+            mintedLifetime: Int,
+            debitablePoints: Int,
+            floorPoints: Int,
+            missingPoints: Int,
+            mintCost: Int
+        ) {
+            self.balance = balance
+            self.mintedLifetime = mintedLifetime
+            self.debitablePoints = debitablePoints
+            self.floorPoints = floorPoints
+            self.missingPoints = missingPoints
+            self.mintCost = mintCost
+        }
+    }
+
     public var id: String { "current" }
     public let counters: [Counter]
     public let milestones: [Milestone]
     public let streak: Streak
     public let level: Level
+    public let meesh: Meesh?
+    public let elan: Elan?
+    /// La carte d'atteignabilité des succès (#5759) — `familyId -> plus grande
+    /// valeur que le produit peut rendre vraie`. Absente ⇒ les paliers d'AMPLEUR
+    /// sont masqués, ceux de VOLUME restent visibles.
+    public let achievementReach: [String: Int]?
 
-    public init(counters: [Counter], milestones: [Milestone], streak: Streak, level: Level) {
+    public init(
+        counters: [Counter],
+        milestones: [Milestone],
+        streak: Streak,
+        level: Level,
+        meesh: Meesh? = nil,
+        elan: Elan? = nil,
+        achievementReach: [String: Int]? = nil
+    ) {
         self.counters = counters
         self.milestones = milestones
         self.streak = streak
         self.level = level
+        self.meesh = meesh
+        self.elan = elan
+        self.achievementReach = achievementReach
     }
 
     /// Aucune activité — la charge qu'un compte neuf reçoit.
@@ -86,6 +161,6 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
     )
 
     private enum CodingKeys: String, CodingKey {
-        case counters, milestones, streak, level
+        case counters, milestones, streak, level, meesh, elan, achievementReach
     }
 }
