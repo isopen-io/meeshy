@@ -178,27 +178,45 @@ if (declaredReadingModes !== undefined && declaredReadingModes !== 'on' && decla
  * preact et lit des `.tsx`, ce que ce fichier de configuration — chargé par
  * Node — ne sait pas faire.
  */
-const prerenderInstitutionalPages = (): Plugin => ({
-  name: 'meeshy-prerender-institutional',
-  apply: 'build',
-  closeBundle: {
-    sequential: true,
-    handler() {
-      const r = spawnSync('bun', ['run', 'scripts/prerender-institutional.tsx'], {
-        cwd: fileURLToPath(new URL('.', import.meta.url)),
-        stdio: 'inherit',
-      });
-      if (r.status !== 0) {
-        throw new Error(
-          `Le préchauffage des pages institutionnelles a échoué (code ${r.status}). ` +
-            'La construction s\'arrête : un `dist` sans ces documents produirait un ' +
-            'service worker qui sert la coquille de l\'application sur /about, /privacy, ' +
-            'etc. — un défaut SILENCIEUX, que seule une deuxième visite révèle.',
-        );
-      }
+const prerenderInstitutionalPages = (): Plugin => {
+  // Résolu par `configResolved`, jamais deviné : voir le commentaire ci-dessous.
+  let distDir = '';
+  return {
+    name: 'meeshy-prerender-institutional',
+    apply: 'build',
+    configResolved(resolvedConfig) {
+      /**
+       * LE DIST RÉELLEMENT CONSTRUIT (#5821), jamais `../dist` en dur.
+       *
+       * Ce greffon tourne pour LES DEUX variantes (rien ne le garde sur
+       * `forCapacitor`), et la variante B (`check-shell-dist.mjs`) construit
+       * avec `--outDir dist-capacitor`. `resolvedConfig.build.outDir` porte
+       * la valeur RÉELLE de cette construction — littérale ou venue du CLI —
+       * et `resolvedConfig.root` la rend absolue : le script préchauffé n'a
+       * plus à supposer où Vite vient d'écrire.
+       */
+      distDir = join(resolvedConfig.root, resolvedConfig.build.outDir);
     },
-  },
-});
+    closeBundle: {
+      sequential: true,
+      handler() {
+        const r = spawnSync('bun', ['run', 'scripts/prerender-institutional.tsx'], {
+          cwd: fileURLToPath(new URL('.', import.meta.url)),
+          env: { ...process.env, MEESHY_PRERENDER_DIST: distDir },
+          stdio: 'inherit',
+        });
+        if (r.status !== 0) {
+          throw new Error(
+            `Le préchauffage des pages institutionnelles a échoué (code ${r.status}). ` +
+              'La construction s\'arrête : un `dist` sans ces documents produirait un ' +
+              'service worker qui sert la coquille de l\'application sur /about, /privacy, ' +
+              'etc. — un défaut SILENCIEUX, que seule une deuxième visite révèle.',
+          );
+        }
+      },
+    },
+  };
+};
 
 /**
  * LE SERVICE WORKER INSTITUTIONNEL N'ENTRE PAS DANS LA COQUE (#5604,

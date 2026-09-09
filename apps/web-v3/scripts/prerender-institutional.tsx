@@ -24,7 +24,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { render } from 'preact-render-to-string';
 
@@ -41,7 +41,24 @@ import type { ContentPage } from '../src/institutional/type';
 import { INLINE_SCHEME_BOOTSTRAP } from '../src/lib/inline-scheme-bootstrap.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DIST = join(HERE, '../dist');
+
+/**
+ * LE DIST RÉELLEMENT CONSTRUIT, jamais `../dist` en dur (#5821).
+ *
+ * `vite.config.ts` invoque ce script depuis son greffon `closeBundle`, quel
+ * que soit l'`--outDir` de LA CONSTRUCTION EN COURS — la variante B
+ * (`check-shell-dist.mjs`) construit dans `dist-capacitor/`. Le greffon lit
+ * son propre `outDir` résolu et le transmet par `MEESHY_PRERENDER_DIST` :
+ * ce script n'a donc plus à DEVINER où Vite vient d'écrire.
+ *
+ * Le repli `../dist` reste correct pour un lancement isolé de ce script
+ * (sans passer par le greffon) contre une construction par défaut.
+ */
+export function resolveDistDir(env: Readonly<Record<string, string | undefined>> = process.env): string {
+  return env.MEESHY_PRERENDER_DIST ?? join(HERE, '../dist');
+}
+
+const DIST = resolveDistDir();
 
 /**
  * `Meeshy {version}` (`src/lib/brand.ts`) — la SEULE lecture de la version de
@@ -227,64 +244,74 @@ function check(route: string, html: string, page: ContentPage): void {
   }
 }
 
-const sheet = producedSheet();
-let total = 0;
-const overBudget: string[] = [];
-for (const { route, page } of PAGES) {
-  const html = document(route, page, sheet);
+/**
+ * Le pilote ne tourne QUE si ce fichier est le point d'entrée (#5821, même
+ * garde que `check-shell-dist.mjs`) : importé (par le témoin de
+ * `resolveDistDir`), le module n'expose que ses fonctions pures, sans lire
+ * ni écrire de `dist`.
+ */
+function main(): void {
+  const sheet = producedSheet();
+  let total = 0;
+  const overBudget: string[] = [];
+  for (const { route, page } of PAGES) {
+    const html = document(route, page, sheet);
+
+    /**
+     * DEUX fichiers pour une page, et ce n'est pas un doublon par paresse.
+     *
+     * `/privacy` (sans barre finale) est l'URL qu'on PARTAGE, et la façon dont
+     * un serveur la résout dépend de sa convention : nginx `try_files` et la
+     * plupart des hébergeurs statiques la font tomber sur `privacy/index.html`,
+     * mais `vite preview` — et tout serveur qui privilégie le repli d'une
+     * application à page unique — sert l'`index.html` du SOCLE à la place.
+     * Mesuré : `/privacy/` rendait le bon titre, `/privacy` rendait « Meeshy ».
+     *
+     * Une page institutionnelle qui tombe sur le socle perd ses métadonnées au
+     * moment précis où elles servent — un robot ou une carte d'aperçu ne suit
+     * pas de redirection côté client. Écrire les DEUX formes retire la question
+     * au serveur : quelle que soit sa convention, il trouve un fichier.
+     *
+     * `<link rel="canonical">` désigne la forme SANS barre finale, pour qu'un
+     * moteur n'indexe pas deux fois la même page.
+     */
+    check(route, html, page);
+
+    const dir = join(DIST, route);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'index.html'), html);
+    writeFileSync(join(DIST, `${route}.html`), html);
+    /* `node:zlib` plutôt que l'API globale du runtime : le type-check ne doit
+       pas dépendre des types d'un runtime particulier, et le chiffre est le
+       même — gzip niveau 9, comme partout ailleurs dans ce dépôt. */
+    const gz = gzipSync(Buffer.from(html), { level: 9 }).length;
+    total += gz;
+    const gzKb = Math.round((gz / 1024) * 100) / 100;
+    if (gzKb > INSTITUTIONAL_PAGE_BUDGET_KB) {
+      overBudget.push(`/${route} : ${gzKb} Ko gzip, plafond ${INSTITUTIONAL_PAGE_BUDGET_KB} Ko (budgets.json → institutional_page.kb)`);
+    }
+    /* Le document LUI-MÊME plus ce qu'il fait chercher au navigateur. Compté,
+       jamais annoncé — voir le doc-comment de `subresources`. */
+    const requests = 1 + subresources(html).length;
+    console.log(
+      `  /${route.padEnd(9)} ${String(gzKb).padStart(6)} Ko gzip · ` +
+        `${requests} requête${requests > 1 ? 's' : ''} · 0 script`,
+    );
+  }
+  console.log(`  ${' '.repeat(10)}${String(Math.round((total / 1024) * 100) / 100).padStart(6)} Ko pour les cinq\n`);
 
   /**
-   * DEUX fichiers pour une page, et ce n'est pas un doublon par paresse.
-   *
-   * `/privacy` (sans barre finale) est l'URL qu'on PARTAGE, et la façon dont
-   * un serveur la résout dépend de sa convention : nginx `try_files` et la
-   * plupart des hébergeurs statiques la font tomber sur `privacy/index.html`,
-   * mais `vite preview` — et tout serveur qui privilégie le repli d'une
-   * application à page unique — sert l'`index.html` du SOCLE à la place.
-   * Mesuré : `/privacy/` rendait le bon titre, `/privacy` rendait « Meeshy ».
-   *
-   * Une page institutionnelle qui tombe sur le socle perd ses métadonnées au
-   * moment précis où elles servent — un robot ou une carte d'aperçu ne suit
-   * pas de redirection côté client. Écrire les DEUX formes retire la question
-   * au serveur : quelle que soit sa convention, il trouve un fichier.
-   *
-   * `<link rel="canonical">` désigne la forme SANS barre finale, pour qu'un
-   * moteur n'indexe pas deux fois la même page.
+   * LE GATE (revue de #5606, défaut 3) — un dépassement rend le script en
+   * erreur, comme `scripts/measure-weight.mjs` le fait déjà pour la première
+   * peinture de l'application. Après l'affichage des cinq lignes : le rapport
+   * complet sert de preuve même quand une seule page dépasse.
    */
-  check(route, html, page);
-
-  const dir = join(DIST, route);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, 'index.html'), html);
-  writeFileSync(join(DIST, `${route}.html`), html);
-  /* `node:zlib` plutôt que l'API globale du runtime : le type-check ne doit
-     pas dépendre des types d'un runtime particulier, et le chiffre est le
-     même — gzip niveau 9, comme partout ailleurs dans ce dépôt. */
-  const gz = gzipSync(Buffer.from(html), { level: 9 }).length;
-  total += gz;
-  const gzKb = Math.round((gz / 1024) * 100) / 100;
-  if (gzKb > INSTITUTIONAL_PAGE_BUDGET_KB) {
-    overBudget.push(`/${route} : ${gzKb} Ko gzip, plafond ${INSTITUTIONAL_PAGE_BUDGET_KB} Ko (budgets.json → institutional_page.kb)`);
+  if (overBudget.length > 0) {
+    console.error(`  ${overBudget.length} page(s) institutionnelle(s) au-dessus du plafond :\n`);
+    for (const line of overBudget) console.error(`    · ${line}`);
+    console.error('\n  Alléger la page, ou faire arbitrer le plafond par le porteur (budgets.json).\n');
+    process.exit(1);
   }
-  /* Le document LUI-MÊME plus ce qu'il fait chercher au navigateur. Compté,
-     jamais annoncé — voir le doc-comment de `subresources`. */
-  const requests = 1 + subresources(html).length;
-  console.log(
-    `  /${route.padEnd(9)} ${String(gzKb).padStart(6)} Ko gzip · ` +
-      `${requests} requête${requests > 1 ? 's' : ''} · 0 script`,
-  );
 }
-console.log(`  ${' '.repeat(10)}${String(Math.round((total / 1024) * 100) / 100).padStart(6)} Ko pour les cinq\n`);
 
-/**
- * LE GATE (revue de #5606, défaut 3) — un dépassement rend le script en
- * erreur, comme `scripts/measure-weight.mjs` le fait déjà pour la première
- * peinture de l'application. Après l'affichage des cinq lignes : le rapport
- * complet sert de preuve même quand une seule page dépasse.
- */
-if (overBudget.length > 0) {
-  console.error(`  ${overBudget.length} page(s) institutionnelle(s) au-dessus du plafond :\n`);
-  for (const line of overBudget) console.error(`    · ${line}`);
-  console.error('\n  Alléger la page, ou faire arbitrer le plafond par le porteur (budgets.json).\n');
-  process.exit(1);
-}
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
