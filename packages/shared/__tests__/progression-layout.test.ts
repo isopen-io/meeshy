@@ -15,7 +15,7 @@
 import { describe, it, expect } from 'vitest';
 import { resolveEngagementProgress } from '../utils/engagement-progress.js';
 import type { EngagementProgressPayload } from '../types/engagement.js';
-import { progressionLayout } from '../utils/progression-layout.js';
+import { lastAchievement, progressionLayout } from '../utils/progression-layout.js';
 
 const VIDE: EngagementProgressPayload = {
   counters: [],
@@ -29,7 +29,7 @@ const kinds = (payload: EngagementProgressPayload) =>
 
 describe('la séquence du hub', () => {
   it('ouvre sur le PROCHAIN SUCCÈS, puis le niveau, puis les élans', () => {
-    expect(kinds(VIDE).slice(0, 3)).toEqual(['next-achievement', 'level', 'elans']);
+    expect(kinds(VIDE).slice(0, 3)).toEqual(['last-achievement', 'level', 'elans']);
   });
 
   it('range les entrées de section APRÈS les trois heros, jamais entre eux', () => {
@@ -56,8 +56,74 @@ describe('ce que la séquence REFUSE de faire', () => {
   });
 
   it('garde les trois heros sur un compte VIDE — un écran neuf explique, il ne se tait pas', () => {
-    expect(kinds(VIDE)).toContain('next-achievement');
+    expect(kinds(VIDE)).toContain('last-achievement');
     expect(kinds(VIDE)).toContain('level');
     expect(kinds(VIDE)).toContain('elans');
+  });
+});
+
+/**
+ * LE DERNIER SUCCÈS DÉCROCHÉ (#5840).
+ *
+ * Le hero devait d'abord montrer le PROCHAIN. Impossible : dire « prochain »
+ * demande une DISTANCE, et cette distance n'existe nulle part — `AchievementEntry`
+ * ne porte qu'un booléen, les compteurs servis sont par AXE quand les défis sont
+ * par FAMILLE, sans pont. Le porteur a tranché : ce sera le DERNIER, qui se lit
+ * dans ce qui est déjà servi.
+ */
+describe('le dernier succès décroché', () => {
+  const avec = (
+    named: readonly { key: string; reachedAt: string | null }[],
+    generated: readonly { key: string; reachedAt: string | null }[],
+  ) =>
+    lastAchievement({
+      achievements: named.map((n) => ({ ...n, unlocked: true })),
+      achievementSections: [
+        {
+          section: 'parole',
+          entries: generated.map((g) => ({ ...g, unlocked: true })),
+          unlockedCount: generated.length,
+          attainableCount: generated.length,
+        },
+      ],
+    } as never);
+
+  it('élit le plus RÉCENT, quelle que soit sa provenance', () => {
+    const vu = avec(
+      [{ key: 'achievement.first_voice', reachedAt: '2026-08-01T00:00:00.000Z' }],
+      [{ key: 'achievement.parole.message.send.count:10', reachedAt: '2026-09-01T00:00:00.000Z' }],
+    );
+    expect(vu).toEqual({
+      kind: 'generated',
+      key: 'achievement.parole.message.send.count:10',
+      reachedAt: '2026-09-01T00:00:00.000Z',
+    });
+  });
+
+  it('laisse gagner un succès NOMMÉ quand c\'est lui le plus récent', () => {
+    const vu = avec(
+      [{ key: 'achievement.editor', reachedAt: '2026-09-05T00:00:00.000Z' }],
+      [{ key: 'achievement.parole.message.send.count:10', reachedAt: '2026-09-01T00:00:00.000Z' }],
+    );
+    expect(vu?.kind).toBe('named');
+    expect(vu?.key).toBe('achievement.editor');
+  });
+
+  it('rend `null` quand rien n\'a été décroché — le hero dira quoi viser', () => {
+    expect(avec([], [])).toBeNull();
+  });
+
+  it('ignore un succès marqué acquis SANS date — il ne peut pas être « le dernier »', () => {
+    expect(avec([{ key: 'achievement.editor', reachedAt: null }], [])).toBeNull();
+  });
+
+  /**
+   * Une date illisible perdrait TOUTE comparaison (`NaN > x` est faux), donc
+   * elle ne gagnerait jamais — mais elle gagnerait par DÉFAUT si elle était la
+   * seule, et le hero afficherait « décroché le Invalid Date ». Elle est
+   * écartée AVANT la comparaison, pas pendant.
+   */
+  it('écarte une date illisible plutôt que de la laisser gagner par défaut', () => {
+    expect(avec([{ key: 'achievement.editor', reachedAt: 'pas-une-date' }], [])).toBeNull();
   });
 });

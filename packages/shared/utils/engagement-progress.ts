@@ -150,7 +150,21 @@ export type EngagementMeeshProgress = {
   readonly canMint: boolean;
   /** Fraction parcourue vers la prochaine Meesh — `1` quand la frappe est possible. */
   readonly progress: number;
+  /**
+   * ISO 8601 de la première et de la dernière frappe, `null` quand il n'y en a
+   * eu aucune — ce que le sous-menu de l'entrée Meesh raconte (#5839).
+   *
+   * Une valeur illisible devient `null` plutôt que d'atteindre l'écran : une
+   * date fausse est pire qu'une date absente, parce que la vue l'affiche avec
+   * la même assurance que les vraies.
+   */
+  readonly firstMintedAt: string | null;
+  readonly lastMintedAt: string | null;
 };
+
+/** Une date ISO utilisable, ou `null` — le repli n'invente jamais l'instant présent. */
+const isoOrNull = (value: unknown): string | null =>
+  typeof value === 'string' && Number.isFinite(new Date(value).getTime()) ? value : null;
 
 export type EngagementProgress = {
   readonly level: EngagementLevelProgress;
@@ -357,6 +371,8 @@ function resolveMeesh(meesh: NonNullable<EngagementProgressPayload['meesh']>): E
     mintCost,
     canMint,
     progress: mintCost === 0 ? 0 : clamp01(debitablePoints / mintCost),
+    firstMintedAt: isoOrNull(meesh.firstMintedAt),
+    lastMintedAt: isoOrNull(meesh.lastMintedAt),
   };
 }
 

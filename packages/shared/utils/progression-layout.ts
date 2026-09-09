@@ -40,7 +40,20 @@ export type ProgressionSection = (typeof PROGRESSION_SECTIONS)[number];
  * chaîne libre aurait laissé passer.
  */
 export type ProgressionBlock =
-  | { readonly kind: 'next-achievement' }
+  /**
+   * Le DERNIER succès décroché, et non le prochain.
+   *
+   * Le prochain aurait demandé une DISTANCE — « encore 2 » — et cette distance
+   * n'existe nulle part : `AchievementEntry` ne porte qu'un booléen, et les
+   * compteurs servis sont par AXE quand les défis sont par FAMILLE, sans pont
+   * entre les deux espaces de noms. Le serveur sait compter, mais sur le chemin
+   * d'événement, et jette le résultat (#5840).
+   *
+   * Le dernier décroché, lui, se lit dans ce qui est DÉJÀ servi : le `reachedAt`
+   * des paliers gravés. Un bloc qui dit vrai avec la donnée d'aujourd'hui vaut
+   * mieux qu'un bloc juste qui attend une migration.
+   */
+  | { readonly kind: 'last-achievement' }
   | { readonly kind: 'level' }
   | { readonly kind: 'elans' }
   | { readonly kind: 'section-link'; readonly section: ProgressionSection };
@@ -55,9 +68,55 @@ export type ProgressionBlock =
  */
 export function progressionLayout(_progress: EngagementProgress): readonly ProgressionBlock[] {
   return [
-    { kind: 'next-achievement' },
+    { kind: 'last-achievement' },
     { kind: 'level' },
     { kind: 'elans' },
     ...PROGRESSION_SECTIONS.map((section) => ({ kind: 'section-link', section }) as const),
   ];
+}
+
+/**
+ * Ce que le hero du dernier succès montre : le palier gravé le PLUS RÉCEMMENT,
+ * toutes provenances confondues.
+ *
+ * Deux familles de succès coexistent et le hero ne doit pas choisir entre elles :
+ * les cinq succès COMPOSÉS nommés un par un (#5530) et les paliers produits par
+ * la grammaire (#5758). L'utilisateur ne connaît pas cette distinction — il a
+ * décroché quelque chose, il veut le revoir.
+ *
+ * `null` quand rien n'a jamais été décroché : le hero dit alors ce qu'on peut
+ * viser, il ne disparaît pas. Une section qui s'efface sur un compte neuf est
+ * précisément ce qui rend un premier lancement muet.
+ */
+export type LastAchievement =
+  | { readonly kind: 'named'; readonly key: string; readonly reachedAt: string }
+  | { readonly kind: 'generated'; readonly key: string; readonly reachedAt: string };
+
+export function lastAchievement(progress: EngagementProgress): LastAchievement | null {
+  const candidats: LastAchievement[] = [];
+
+  for (const succes of progress.achievements) {
+    if (succes.unlocked && succes.reachedAt !== null) {
+      candidats.push({ kind: 'named', key: succes.key, reachedAt: succes.reachedAt });
+    }
+  }
+
+  for (const section of progress.achievementSections ?? []) {
+    for (const entree of section.entries) {
+      if (entree.unlocked && entree.reachedAt !== null) {
+        candidats.push({ kind: 'generated', key: entree.key, reachedAt: entree.reachedAt });
+      }
+    }
+  }
+
+  // Une date ILLISIBLE ne gagne pas par accident : `NaN` perdrait toute
+  // comparaison en silence et laisserait remonter un candidat arbitraire.
+  const datables = candidats.filter((c) => Number.isFinite(new Date(c.reachedAt).getTime()));
+  if (datables.length === 0) return null;
+
+  return datables.reduce((plusRecent, candidat) =>
+    new Date(candidat.reachedAt).getTime() > new Date(plusRecent.reachedAt).getTime()
+      ? candidat
+      : plusRecent,
+  );
 }
