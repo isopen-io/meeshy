@@ -50,6 +50,23 @@ final class FocalRowFocusReserveTests: XCTestCase {
         XCTAssertEqual(FocalRow.focusOverlayReserveHeight(chipHeight: 24, overhang: 40), 0)
     }
 
+    /// Couverture paramétrée sur plusieurs échelles de cotes — la formule ne
+    /// dépend QUE de la différence, jamais d'une des deux valeurs isolément.
+    func test_laFormule_neDependQueDeLaDifference_surPlusieursEchelles() {
+        let cas: [(chipHeight: CGFloat, overhang: CGFloat, attendu: CGFloat)] = [
+            (16, 10, 6),
+            (40, 5, 35),
+            (24, 15, 9),   // les cotes actuelles de FocalMetrics.FocusStrip
+            (12, 12, 0),
+        ]
+        for c in cas {
+            XCTAssertEqual(
+                FocalRow.focusOverlayReserveHeight(chipHeight: c.chipHeight, overhang: c.overhang),
+                c.attendu
+            )
+        }
+    }
+
     // MARK: - Garde source : la réserve n'est posée QUE sur la rangée élue sans ligne basse
 
     private func rowSource() throws -> String {
