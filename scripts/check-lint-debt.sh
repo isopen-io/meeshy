@@ -76,7 +76,7 @@ NC='\033[0m'
 # d'ancrage du cliquet jumeau. Confirmé stable avec et sans
 # `packages/shared/dist` construit (cf. en-tête) — aucun écart d'environnement
 # à documenter ici.
-readonly WEB_LINT_BASELINE=3988
+readonly WEB_LINT_BASELINE=3987
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly REPO_ROOT
