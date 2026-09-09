@@ -205,7 +205,9 @@ mot. Le 2026-09-09, la « capture de l'ecran iOS » d'un tour a montre web-v3 su
   1. \`xcrun simctl listapps ${SIM_REF} | grep -A8 '"me.meeshy.app"' | grep Path\` finit par
      \`/Meeshy.app\` (CFBundleName = Meeshy) — jamais \`/App.app\` ;
   2. \`idb ui describe-all --udid ${SIM_REF}\` rend PLUSIEURS noeuds (boutons, textes, cellules) :
-     UN SEUL noeud AXApplication = une WKWebView = la coque, jamais une vue native ;
+     UN SEUL noeud AXApplication = une WKWebView = la coque, jamais une vue native. Une feuille
+     SYSTEME posee par-dessus l'app (permission, « Save Password? ») masque l'arbre de la meme
+     facon : ferme-la (Not Now / Allow), redemande, et regarde la capture (outil Read) ;
   3. l'ecran montre les comptes SEMES de targets/seed.md (cible-web-trois, Bruno Beta, le Salon
      Riviere…). Kwame Mensah, Amina Diallo, Fatou Ba, « Equipe deploiement », la puce « AUTO Focal »,
      l'auteur « Vous » sont les FIXTURES de web-v3 : si tu les vois, tu regardes web-v3, pas iOS.

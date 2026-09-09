@@ -76,7 +76,8 @@ dépôt.
   seule échoue** : le chemin rendu par `xcrun simctl listapps $U` finit par
   `/Meeshy.app` (jamais `/App.app`) ; l'arbre d'accessibilité (`idb ui
   describe-all --udid $U`) a plusieurs nœuds — un seul nœud `AXApplication` est
-  une WKWebView, donc la coque ; l'écran montre les comptes semés de `seed.md`
+  une WKWebView, donc la coque, ou une feuille système posée par-dessus
+  (permission, « Save Password? ») : la fermer, puis redemander ; l'écran montre les comptes semés de `seed.md`
   (`cible-web-trois`, Bruno Beta, le Salon Rivière), jamais les fixtures de
   web-v3 (Kwame Mensah, Amina Diallo, Fatou Ba, « Équipe déploiement », la puce
   « AUTO Focal », l'auteur « Vous »). La troisième ne dépend d'aucun outil.
