@@ -38,7 +38,7 @@ import { served } from '@/lib/api/prism';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf, withAccent } from '@/lib/accent';
-import { isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
+import { initialsOf, isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
 import { useParams } from '@/lib/router';
 import { dayLabel, mergeTimeline, place } from '@/lib/grouping';
 import { useReaderLanguages } from '@/lib/view/use-reader';
@@ -124,6 +124,21 @@ export default function ThreadScreen() {
   );
 
   /**
+   * QUI ÉCRIT — DÉRIVÉ, jamais écrit en dur (revue #5815). L'indicateur
+   * portait « AD » et « Amina écrit » en LITTÉRAL : le nom d'une FIXTURE
+   * gravé dans un composant de production, que le jour du socket (#5494,
+   * `query.ts:91`) aurait servi à tous les lecteurs pour tous leurs
+   * correspondants — et le seul marqueur de fixture de `thread-*.js` qui ne
+   * venait pas d'un import (`build-shells.mjs::auditShellBundle`).
+   * Aucun typist connu ⇒ aucun indicateur : on n'invente pas de copie, la
+   * forme iOS est « <Auteur> écrit » (`ConversationListViewModel.swift:966`).
+   */
+  const typist = useMemo(
+    () => conversation?.participants.find((p) => p.userId !== viewer.id),
+    [conversation, viewer.id],
+  );
+
+  /**
    * LA FENÊTRE COUVRE-T-ELLE TOUT LE NON-LU ? — `threadData.hasOlder` mime
    * `cursorPagination.hasMore` : c'est ce qui rend « Sur les N derniers
    * messages » (Résumé Vivant) atteignable sans mentir.
@@ -156,7 +171,7 @@ export default function ThreadScreen() {
   const consume = useCallback(
     async (messageId: string): Promise<boolean> => {
       if (!online) return false;
-      if (apiConfig.source === 'fixtures') recordViewOnceConsumption(messageId);
+      if (__FIXTURES__ && apiConfig.source === 'fixtures') recordViewOnceConsumption(messageId);
       queryClient.setQueryData<{ readonly messages: readonly Message[]; readonly hasOlder: boolean }>(
         messagesQueryKey(id),
         (page) =>
@@ -868,18 +883,18 @@ export default function ThreadScreen() {
           })}
         </ol>
 
-        {threadData.typing ? (
+        {threadData.typing && typist !== undefined ? (
           /* L'indicateur de frappe est une VRAIE cellule du flux, en queue —
              pas un overlay : il pousse le fil comme le ferait un message, donc
              l'arrivee du vrai message ne fait sauter aucune ligne. */
           <div className="flex items-end gap-1.5 py-1">
-            <Avatar initials="AD" color={accent} size={18} />
+            <Avatar initials={initialsOf(typist.displayName)} color={accent} size={18} />
             <span
               className="flex items-center gap-1.5 rounded-chip px-3 py-2"
               style={{ backgroundColor: 'var(--color-ios-card)' }}
             >
               <span className="text-time" style={{ color: 'var(--color-ios-ink-2)' }}>
-                Amina écrit
+                {typist.displayName} écrit
               </span>
               <span className="flex gap-[3px]" aria-hidden>
                 {[0, 1, 2].map((i) => (

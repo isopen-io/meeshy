@@ -244,6 +244,12 @@ const dropInstitutionalServiceWorker = (): Plugin => ({
   },
 });
 
+/**
+ * LES SIX FABRIQUES DE FIXTURES — nommées ICI, lues par la règle d'élagage
+ * (§ `build.rollupOptions.treeshake`, revue #5815).
+ */
+const FIXTURE_MODULE = /\/src\/lib\/api\/fixtures[\w-]*\.ts$/;
+
 export default defineConfig({
   /**
    * LE LIEN PROFOND CASSAIT SES PROPRES ACTIFS (#5725, D-27 — corrigé en
@@ -281,13 +287,37 @@ export default defineConfig({
   define: {
     __BENCH__: JSON.stringify(bench),
     __SHELL__: JSON.stringify(forCapacitor),
+    /**
+     * `__FIXTURES__` — LE JEU DE FIXTURES EST-IL LIÉ DANS CE BUNDLE ?
+     * (revue #5815). Littéral, jamais une valeur d'exécution : c'est la
+     * seule forme que Rollup sait replier. `apiConfig.source` reste la
+     * source de vérité du COMPORTEMENT ; `__FIXTURES__` ne fait que dire à
+     * la construction ce qu'elle sait déjà, pour qu'elle puisse ÉLAGUER.
+     *
+     * Les deux ne peuvent pas diverger dangereusement : `resolveSource`
+     * (`src/lib/api/config.ts:79-81`) lit `import.meta.env.VITE_DATA_SOURCE`,
+     * que Vite peuple depuis ce MÊME `process.env` — et le seul écart
+     * possible (variable posée dans un `.env` que `process.env` ne voit pas)
+     * rend `__FIXTURES__` VRAI, donc GARDE les fixtures dans le bundle : du
+     * poids en trop, jamais une branche fixtures élaguée sous les pieds
+     * d'une exécution qui l'attend.
+     *
+     * Sans lui, `VITE_DATA_SOURCE=gateway` embarquait quand même les ~74 Ko
+     * de `src/lib/api/fixtures*.ts` (Amina Diallo, Kwame Mensah, Fatou Bâ,
+     * `u-viewer` mesurés dans `use-reader-*.js`) : Rollup ne peut pas élaguer
+     * un module dont un export est référencé par une branche que seule une
+     * valeur d'EXÉCUTION rend morte.
+     */
+    __FIXTURES__: JSON.stringify(declaredDataSource !== 'gateway'),
     __APP_VERSION__: JSON.stringify(appVersion),
   },
   /**
    * LE PROXY DE DEV (#5605, staging) — DEV UNIQUEMENT, zéro octet dans `dist/`.
    *
-   * La passerelle sert `CORS_ORIGINS=https://staging.meeshy.me,https://gate.staging.meeshy.me`
-   * en staging (`docker-compose.staging.yml:218`) — `http://localhost:5173`
+   * La passerelle NOMME ses origines en staging (`CORS_ORIGINS` de
+   * `docker-compose.staging.yml` : les deux hôtes du staging et, depuis
+   * #5815, les deux origines VIRTUELLES des coques Capacitor) —
+   * `http://localhost:5173`
    * n'y figure PAS, et `originIsAllowed()` (`cors-origins.ts:131-139`) refuse
    * toute origine hors liste. Un appel `fetch` direct depuis Chrome local se
    * ferait donc REFUSER par CORS avant même d'atteindre la route.
@@ -444,6 +474,22 @@ export default defineConfig({
     cssCodeSplit: true,
     reportCompressedSize: true,
     rollupOptions: {
+      /**
+       * LES SIX FABRIQUES DE FIXTURES N'ONT AUCUN EFFET DE BORD (revue #5815).
+       *
+       * `__FIXTURES__` (§ `define`) rend leurs exports NON RÉFÉRENCÉS sous
+       * `VITE_DATA_SOURCE=gateway` — mesuré : `CONVERSATIONS` (« Voyage
+       * Lisbonne ») disparaît bien du bundle. Les MODULES, eux, restaient :
+       * ils bâtissent leurs jeux de données par des appels au niveau module
+       * (`.map(…)`), et un bundler suppose par défaut qu'un tel appel peut
+       * agir hors du module. On DÉCLARE donc le contraire, pour ces fichiers
+       * NOMMÉS et eux seuls — jamais un `sideEffects: false` de
+       * `package.json`, qui l'affirmerait de toute l'application (magasins,
+       * amorçage du schéma, feuilles CSS importées pour leur seul effet).
+       */
+      treeshake: {
+        moduleSideEffects: [{ test: FIXTURE_MODULE, sideEffects: false }],
+      },
       /**
        * DEUX entrées CSS : celle de l'application, et celle — beaucoup plus
        * maigre — des pages institutionnelles préchauffées, dont la détection
