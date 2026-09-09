@@ -29,6 +29,12 @@ const V3 = `${REPO}/apps/web-v3`
 const IOS = `${REPO}/apps/ios`
 const SDK = `${REPO}/packages/MeeshySDK`
 const SCRATCH = `${REPO}/.cache/web-v3-workflow`
+// DEUX SIMULATEURS, JAMAIS UN SEUL (2026-09-09) : l'app NATIVE apps/ios (LA REFERENCE) et la coque
+// Capacitor de web-v3 (L'OBJET TESTE) portent le meme identifiant me.meeshy.app — installer l'une
+// REMPLACE l'autre en silence. Les gates du tour 2 ont pose la coque sur le simulateur du chantier,
+// et la conception du tour 3 y a « capture l'ecran iOS » : c'etait web-v3 sur ses fixtures.
+const SIM_REF = typeof A.sim_ref === 'string' && A.sim_ref ? A.sim_ref : '3E761BC1-845D-49D2-8E4D-E0606E04D3E2'
+const SIM_CHANTIER = typeof A.sim_chantier === 'string' && A.sim_chantier ? A.sim_chantier : '54438823-4ADC-4536-88D2-FC441395FA04'
 
 // La branche de travail est, par defaut, la branche COURANTE : chaque session lance ce script depuis
 // sa propre branche `claude/…`, et un nom ecrit en dur ici enverrait la session suivante travailler
@@ -177,11 +183,32 @@ LES TROIS PLATEFORMES, UN SEUL CODE :
   JAVA_HOME=/opt/homebrew/opt/openjdk@21, AVD \`Meeshy_Poc_Web-v31\` (nom affiche « Meeshy Poc Web-v31 », android-36 arm64, demarrage :
   ~/android-sdk/emulator/emulator -avd Meeshy_Poc_Web-v31 -no-snapshot -no-audio), adb dans
   ~/android-sdk/platform-tools ; APK par \`cd ${V3}/android && JAVA_HOME=/opt/homebrew/opt/openjdk@21 ANDROID_HOME=~/android-sdk ./gradlew assembleDebug\`
-  → app/build/outputs/apk/debug/app-debug.apk. Simulateur iOS DEDIE au chantier : « Meeshy Poc-Web-V31 »
-  (54438823-4ADC-4536-88D2-FC441395FA04, iPhone 16 Pro, iOS 26.1 — la DERNIERE version iOS disponible, directive porteur — noms fixes par le porteur
-  2026-09-07 : c'est LUI qu'on utilise, jamais un autre) ; build par \`xcodebuild -project ${V3}/ios/App/App.xcodeproj -scheme App -destination 'id=54438823-4ADC-4536-88D2-FC441395FA04' build\`
+  → app/build/outputs/apk/debug/app-debug.apk. Simulateur iOS DEDIE a la COQUE du chantier : « Meeshy Poc-Web-V31 »
+  (${SIM_CHANTIER}, iPhone 16 Pro, iOS 26.1 — la DERNIERE version iOS disponible, directive porteur — noms fixes par le porteur
+  2026-09-07 : c'est LUI qui recoit la coque, jamais un autre) ; build par \`xcodebuild -project ${V3}/ios/App/App.xcodeproj -scheme App -destination 'id=${SIM_CHANTIER}' build\`
   → produits sous ${V3}/ios/App/Build/Products/Debug-iphonesimulator/App.app (le projet fixe son
   SYMROOT — ne cherche pas dans DerivedData).
+
+DEUX SIMULATEURS, DEUX APPS, UN SEUL IDENTIFIANT — la regle qui empeche de se comparer a soi-meme
+(2026-09-09). L'app NATIVE ${IOS} (LA REFERENCE de tout ecran, D-1) et la coque Capacitor de web-v3
+(L'OBJET TESTE) portent toutes deux \`me.meeshy.app\` : installer l'une REMPLACE l'autre sans un
+mot. Le 2026-09-09, la « capture de l'ecran iOS » d'un tour a montre web-v3 sur ses fixtures.
+- LA REFERENCE vit sur « Meeshy Ref-Native » (${SIM_REF}) : apps/ios NATIF, drapeaux beta ON,
+  compte \`cible-web-trois\` de targets/seed.md sur STAGING. Ce simulateur NE RECOIT JAMAIS la
+  coque — ni \`xcodebuild\` du projet ${V3}/ios, ni \`cap run\`, ni \`simctl install\` d'un App.app.
+  Si l'app manque : \`xcrun simctl install ${SIM_REF} ${IOS}/Build/Products/Debug-iphonesimulator/Meeshy.app\`
+  (build par \`${IOS}/meeshy.sh build\` si absent), puis le drapeau (source 0 du socle).
+- LA COQUE vit sur « Meeshy Poc-Web-V31 » (${SIM_CHANTIER}) et NULLE PART AILLEURS. Aucune capture
+  prise sur ce simulateur n'est une cible iOS, quoi qu'elle montre.
+- AVANT TOUTE CAPTURE DE REFERENCE, TROIS verifications, dans l'ordre — la capture est NULLE si une
+  seule echoue, et tu ecris les trois resultats dans ton rapport a cote de chaque capture :
+  1. \`xcrun simctl listapps ${SIM_REF} | grep -A8 '"me.meeshy.app"' | grep Path\` finit par
+     \`/Meeshy.app\` (CFBundleName = Meeshy) — jamais \`/App.app\` ;
+  2. \`idb ui describe-all --udid ${SIM_REF}\` rend PLUSIEURS noeuds (boutons, textes, cellules) :
+     UN SEUL noeud AXApplication = une WKWebView = la coque, jamais une vue native ;
+  3. l'ecran montre les comptes SEMES de targets/seed.md (cible-web-trois, Bruno Beta, le Salon
+     Riviere…). Kwame Mensah, Amina Diallo, Fatou Ba, « Equipe deploiement », la puce « AUTO Focal »,
+     l'auteur « Vous » sont les FIXTURES de web-v3 : si tu les vois, tu regardes web-v3, pas iOS.
 - CAPTURES WEB : \`cd ${V3} && BASE=http://localhost:5173 CHROMIUM='' node scripts/capture.mjs\`
   (le script epingle un chemin CI Linux ; CHROMIUM vide fait retomber Playwright sur son cache
   local). Captures Android : \`adb exec-out screencap -p > f.png\` ; iOS : \`xcrun simctl io <udid>
@@ -744,16 +771,18 @@ TA MISSION — POSER LA CIBLE DE CHAQUE TRAVAIL AVANT LE CODE. La cible d'un ecr
 L'ECRAN iOS QUI EXISTE (D-1) — pas une maquette web.
 
 1. LES CAPTURES CIBLES iOS. Pour chaque travail de genre "ecran" ci-dessous, capture l'ecran de
-   REFERENCE dans l'app iOS au simulateur du chantier « Meeshy Poc-Web-V31 » (54438823-4ADC-4536-88D2-FC441395FA04) :
-   construis/installe l'app iOS si besoin (\`${IOS}/../ios/meeshy.sh build\` — lis apps/ios/CLAUDE.md ;
+   REFERENCE dans l'app iOS NATIVE au simulateur de REFERENCE « Meeshy Ref-Native » (${SIM_REF}) —
+   JAMAIS sur « Meeshy Poc-Web-V31 » (${SIM_CHANTIER}), qui porte la coque Capacitor de web-v3 :
+   installe l'app native si elle manque (\`xcrun simctl install ${SIM_REF} ${IOS}/Build/Products/Debug-iphonesimulator/Meeshy.app\`,
+   build par \`${IOS}/meeshy.sh build\` — lis apps/ios/CLAUDE.md ;
    si le build iOS est trop long ou casse, dis-le et capture ce qui est atteignable), navigue
-   jusqu'a l'ecran, capture CLAIR et SOMBRE (\`xcrun simctl ui <udid> appearance dark\` puis
+   jusqu'a l'ecran, capture CLAIR et SOMBRE (\`xcrun simctl ui ${SIM_REF} appearance dark\` puis
    relance l'app — la bascule a chaud ne prend pas), pose les fichiers dans
    ${dossierDeTravail}/cibles/<cle>.{light,dark}.png et REGARDE-LES.
    DRAPEAUX ON, OBLIGATOIREMENT (source 0 du socle, D-20) : AVANT toute capture, active le
-   programme beta (\`xcrun simctl terminate <udid> me.meeshy.app && xcrun simctl spawn <udid>
+   programme beta (\`xcrun simctl terminate ${SIM_REF} me.meeshy.app && xcrun simctl spawn ${SIM_REF}
    defaults write me.meeshy.app meeshy.pref.beta_features_enabled -bool true && xcrun simctl
-   launch <udid> me.meeshy.app\`), ouvre Reglages › Beta dans l'app et capture la PREUVE
+   launch ${SIM_REF} me.meeshy.app\`), ouvre Reglages › Beta dans l'app et capture la PREUVE
    (${dossierDeTravail}/cibles/settings.beta.light.png : toggle ON, trois fonctionnalites actives).
    Sans cette preuve, aucune capture de ce tour n'est une cible. Si ${V3}/targets/ porte deja la
    cible de cette cle (lentille.*, thread.focal.*, thread.focal.scene.*, thread.script.*,
@@ -761,9 +790,11 @@ L'ECRAN iOS QUI EXISTE (D-1) — pas une maquette web.
    REUTILISE-la et ne recapture que si le Swift a bouge depuis la date du dossier (git log). Compte de test :
    \`${dossierDeTravail}/captures/signup-creds.txt\` s'il existe (compte jetable sur STAGING,
    jamais la production) ; sinon cree-en un par POST /api/v1/auth/register sur
-   gate.staging.meeshy.me et note-le la. Le simulateur doit porter l'app NATIVE (le chemin de
-   \`xcrun simctl listapps\` finit par Meeshy.app, pas App.app — la coque Capacitor partage
-   l'identifiant me.meeshy.app).
+   gate.staging.meeshy.me et note-le la. AVANT chaque capture, les TROIS verifications du socle
+   (chemin /Meeshy.app, arbre a11y a plusieurs noeuds, comptes semes et non fixtures) — une capture
+   qui en rate une est NULLE : ne la pose pas, dis-le dans le rapport. Si l'app est sur l'accueil :
+   Sign in › Staging › identifiant cible-web-trois, mot de passe = 2e ligne du fichier de comptes
+   (idb ui tap / idb ui text), et la ligne « Connected to » doit dire gate.staging.meeshy.me.
    Si l'ecran iOS n'existe pas (travail purement web), dis-le : la cible est alors la coherence
    avec les ecrans web-v3 existants.
 2. LES DECISIONS. Si un travail impose une DIRECTION nouvelle (une regle, un placement, un
@@ -888,7 +919,7 @@ ${ATTRIBUTION}
     const synchroAvant = await resynchroniser(`avant ${t.cle}`)
     const cheminCible = CIBLES.get(t.cle)
     const cible = t.genre !== 'infra'
-      ? `\nLA CIBLE de cet ecran est l'ecran iOS : ${cheminCible ? `capture de reference ${cheminCible} (et sa jumelle sombre) — REGARDE-LA (outil Read)` : `pas de capture posee — lis les fichiers Swift de reference (${t.reference_ios || 'a retrouver dans Features/**'}) et, si tu peux, capture l'ecran au simulateur`}. Elle fait foi sur la disposition, la hierarchie, les etats et les gestes ; les jetons derives de Swift font foi sur le style.`
+      ? `\nLA CIBLE de cet ecran est l'ecran iOS : ${cheminCible ? `capture de reference ${cheminCible} (et sa jumelle sombre) — REGARDE-LA (outil Read)` : `pas de capture posee — lis les fichiers Swift de reference (${t.reference_ios || 'a retrouver dans Features/**'}) et, si tu peux, capture l'ecran au simulateur de REFERENCE ${SIM_REF} (app native, apres les trois verifications du socle — jamais ${SIM_CHANTIER}, qui porte la coque)`}. Elle fait foi sur la disposition, la hierarchie, les etats et les gestes ; les jetons derives de Swift font foi sur le style.`
       : ''
     const phare = PHARES.has(t.cle)
 
@@ -980,7 +1011,7 @@ METHODE, dans cet ordre :
    ${dossierDeTravail}/rendus/${t.cle}-{light,dark}.png et REGARDE-LES, compare-les a la cible iOS.
 5. COQUES (si le travail touche le dist, les assets, le routeur ou une coque) : reconstruit et
    rejoue sur les DEUX coques — \`MEESHY_TARGET=capacitor bunx vite build && bunx cap sync\`, APK +
-   installation sur l'AVD Meeshy_Poc_Web-v31 (QEMU), build + installation sur le simulateur « Meeshy Poc-Web-V31 »,
+   installation sur l'AVD Meeshy_Poc_Web-v31 (QEMU), build + installation sur le simulateur DE LA COQUE « Meeshy Poc-Web-V31 » (${SIM_CHANTIER}) — JAMAIS sur ${SIM_REF}, le simulateur de reference,
    capture chaque coque et REGARDE. Les commandes exactes sont dans le socle.
 6. Fais tourner localement : \`cd ${V3} && bun run type-check && bun test\`, puis \`bun run build\`
    et \`node scripts/check-curve.mjs\` ; corrige AVANT de rendre.
@@ -1014,6 +1045,10 @@ A. PRENDRE EN DEFAUT — LA SURFACE (git diff, git status, fichiers) :
 - la COHERENCE AVEC iOS : ouvre la capture cible ET la capture produite — meme disposition, meme
   hierarchie, memes etats, memes gestes ? (l'ecart typographique web/iOS est assume, pas l'ecart
   de structure) ;
+- LA CIBLE EST-ELLE iOS ? Une capture cible prise sur ${SIM_CHANTIER} (la coque), dont le
+  \`.a11y.txt\` jumeau n'a qu'UN noeud, ou qui montre les fixtures de web-v3 (Kwame Mensah, Amina
+  Diallo, « AUTO Focal », « Vous ») est web-v3 compare a lui-meme : BLOQUANT — le travail se
+  reprend depuis une capture NATIVE sur ${SIM_REF} (regle « deux simulateurs » du socle) ;
 - un NOM francais nouveau (fichier, identifiant, jeton, cle) : defaut D-13 ;
 - du 'any', une donnee mutee, un fichier hors budget qu'on a grossi ;
 - une JUMELLE : couleur en dur au lieu d'un jeton derive, resolution de langue reecrite au lieu

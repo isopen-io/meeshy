@@ -58,16 +58,32 @@ dépôt.
 
 ## Comment ces cibles ont été prises
 
-- Simulateur nommé par le porteur : « Meeshy Poc-Web-V31 »
-  (`54438823-4ADC-4536-88D2-FC441395FA04`, iPhone 16 Pro, iOS 26.1).
+- Le 2026-09-08, sur le simulateur nommé par le porteur, « Meeshy Poc-Web-V31 »
+  (`54438823-4ADC-4536-88D2-FC441395FA04`, iPhone 16 Pro, iOS 26.1), qui portait
+  alors l'app native. **Depuis le 2026-09-09, deux simulateurs, jamais un seul** :
+  l'app native `apps/ios` (la référence) et la coque Capacitor de web-v3 (l'objet
+  testé) partagent l'identifiant `me.meeshy.app`, et installer l'une remplace
+  l'autre sans un mot — les gates du tour 2 ont posé la coque sur ce simulateur,
+  et la conception du tour suivant y a « capturé l'écran iOS » : c'était web-v3
+  sur ses fixtures (Kwame Mensah, Amina Diallo). La référence vit désormais sur
+  **« Meeshy Ref-Native »** (`3E761BC1-845D-49D2-8E4D-E0606E04D3E2`, iPhone 16 Pro,
+  iOS 26.1), qui ne reçoit jamais la coque ; la coque vit sur « Meeshy Poc-Web-V31 »
+  et nulle part ailleurs.
 - App iOS **native** (`Meeshy.app`, build 1800, version 1.0.7), construite par
-  `./apps/ios/meeshy.sh build` — le chemin de `xcrun simctl listapps` finit par
-  `Meeshy.app`, jamais `App.app` (la coque Capacitor partage l'identifiant
-  `me.meeshy.app`).
+  `./apps/ios/meeshy.sh build` et installée par `xcrun simctl install $U
+  apps/ios/Build/Products/Debug-iphonesimulator/Meeshy.app`.
+- **Trois vérifications avant toute capture, et la capture est nulle si une
+  seule échoue** : le chemin rendu par `xcrun simctl listapps $U` finit par
+  `/Meeshy.app` (jamais `/App.app`) ; l'arbre d'accessibilité (`idb ui
+  describe-all --udid $U`) a plusieurs nœuds — un seul nœud `AXApplication` est
+  une WKWebView, donc la coque ; l'écran montre les comptes semés de `seed.md`
+  (`cible-web-trois`, Bruno Beta, le Salon Rivière), jamais les fixtures de
+  web-v3 (Kwame Mensah, Amina Diallo, Fatou Ba, « Équipe déploiement », la puce
+  « AUTO Focal », l'auteur « Vous »). La troisième ne dépend d'aucun outil.
 - Activation, sans passer par l'interface :
 
   ```bash
-  U=54438823-4ADC-4536-88D2-FC441395FA04
+  U=3E761BC1-845D-49D2-8E4D-E0606E04D3E2   # « Meeshy Ref-Native »
   xcrun simctl terminate $U me.meeshy.app
   xcrun simctl spawn $U defaults write me.meeshy.app meeshy.pref.beta_features_enabled -bool true
   xcrun simctl launch $U me.meeshy.app
