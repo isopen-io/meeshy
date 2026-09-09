@@ -61,6 +61,11 @@ export type ApiFailure = {
    * RACINE de l'enveloppe (`register.ts:401-407`, `409` § champ conflit). Sans
    * lui, aucun refus d'inscription ne peut se poser SOUS son champ (#5555, T1). */
   readonly field?: string;
+  /** SECONDES avant que la porte ne se rouvre — `retryAfter` de la charge, posé
+   * par `RateLimiter.middleware()` (`services/gateway/src/utils/rate-limiter.ts`)
+   * sur tout 429. Sans lui, un message d'attente doit RÉÉCRIRE la fenêtre du
+   * serveur, et ment dès qu'elle change (#5912). */
+  readonly retryAfter?: number;
 };
 
 export type ApiSuccess<T> = {
@@ -323,12 +328,18 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
     }
 
     const field = fieldOf(envelope);
+    /* `Number.isFinite` et non `typeof number` : un `NaN` passerait le second
+       et produirait « NaN minutes » chez le lecteur. */
+    const retryAfter = typeof envelope.retryAfter === 'number' && Number.isFinite(envelope.retryAfter)
+      ? envelope.retryAfter
+      : undefined;
     return {
       ok: false,
       status: response.status,
       error: typeof envelope.error === 'string' ? envelope.error : GENERIC_ERROR(response.status),
       ...(typeof envelope.code === 'string' ? { code: envelope.code } : {}),
       ...(field !== undefined ? { field } : {}),
+      ...(retryAfter !== undefined ? { retryAfter } : {}),
     };
   }
 

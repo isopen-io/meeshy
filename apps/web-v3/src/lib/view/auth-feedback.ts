@@ -80,6 +80,21 @@ function fieldForCode(code: string | undefined): SignupField | null {
   }
 }
 
+/**
+ * L'ATTENTE, DITE EN MINUTES ET TIRÉE DE LA CHARGE (#5912).
+ *
+ * `retryAfter` est en SECONDES. On arrondit au SUPÉRIEUR : « 0 minute » serait
+ * faux dans la seule direction qui compte — celle qui invite à réessayer tout
+ * de suite, c'est-à-dire à reconsommer le quota. Sans `retryAfter`, on ne
+ * FABRIQUE pas de délai : une imprécision assumée vaut mieux qu'un chiffre
+ * inventé que l'utilisateur croira.
+ */
+function attenteLisible(retryAfter: number | undefined): string {
+  if (retryAfter === undefined || !Number.isFinite(retryAfter) || retryAfter <= 0) return 'quelques minutes';
+  const minutes = Math.ceil(retryAfter / 60);
+  return minutes === 1 ? '1 minute' : `${minutes} minutes`;
+}
+
 function rejectionBannerMessage(failure: ApiFailure): string {
   const supportCode = failure.code ?? String(failure.status);
   return `${REJECTION_GENERIC_MESSAGE} (${supportCode})`;
@@ -108,6 +123,23 @@ export function placeSignupFailure(failure: ApiFailure | PhoneConflict): SignupF
 
   if (failure.status === 0) {
     return { fieldErrors: {}, bannerError: NETWORK_UNAVAILABLE_MESSAGE, showSignIn };
+  }
+
+  /* LE QUOTA D'INSCRIPTION, DIT AVEC SA VRAIE DURÉE (#5912).
+     `POST /auth/register` tolère trois tentatives par cinq minutes et par IP, et
+     un 409 « déjà pris » les consomme SANS remboursement — délibérément, pour
+     qu'un oracle d'énumération ne soit pas gratuit. La conséquence est qu'un
+     humain ordinaire ferme la porte en trois collisions de pseudo, sans avoir
+     rien créé, pendant que l'API lui renvoie des `suggestions` qui l'invitent à
+     réessayer. Le repli générique disait « réessayez dans un instant » : le seul
+     geste qui prolonge le blocage. Placé AVANT la résolution de champ — aucun
+     champ n'est en cause, c'est la porte qui est fermée. */
+  if (failure.status === 429) {
+    return {
+      fieldErrors: {},
+      bannerError: `Trop de tentatives d'inscription. Réessayez dans ${attenteLisible(failure.retryAfter)}.`,
+      showSignIn,
+    };
   }
 
   const field = (failure.field !== undefined ? fieldForServerName(failure.field) : null) ?? fieldForCode(failure.code);

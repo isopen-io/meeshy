@@ -185,3 +185,63 @@ describe('placeMagicLinkValidationFailure — un seul texte pour les cinq phrase
     expect(result.message).toContain('500');
   });
 });
+
+/**
+ * LE REFUS QUI PRESCRIT LE GESTE QUI LE PROLONGE (#5912).
+ *
+ * Mesuré sur staging : `POST /auth/register` tolère TROIS tentatives par cinq
+ * minutes et par IP, et un `409` « pseudo déjà pris » consomme le quota SANS
+ * remboursement — délibérément (`register.ts` : « un oracle remboursable est un
+ * oracle gratuit »). Or la collision de pseudo est l'issue la plus courante
+ * d'une inscription humaine, et l'API renvoie même des `suggestions` qui
+ * INVITENT à réessayer. Trois collisions ⇒ porte fermée cinq minutes, zéro
+ * compte créé.
+ *
+ * `placeSignupFailure` n'avait AUCUNE branche 429 — alors que
+ * `placeLoginFailure` et `resolveForgotPasswordOutcome` en ont une chacune. Le
+ * refus tombait donc dans le repli générique et rendait :
+ *
+ *     « L'inscription a été refusée — réessayez dans un instant. (RATE_LIMIT_EXCEEDED) »
+ *
+ * — « dans un instant » pour une attente de CINQ MINUTES, et un jeton machine
+ * servi à un lecteur. Le doc-comment de `placeLoginFailure`, trente lignes plus
+ * haut dans ce fichier, interdit déjà explicitement le second : la règle était
+ * écrite et appliquée deux fois sur trois, et le site manquant était celui où
+ * l'utilisateur arrive en PREMIER.
+ *
+ * LE DÉLAI VIENT DE `retryAfter`, jamais d'une constante : l'écrire en dur ici
+ * dupliquerait la fenêtre du serveur, si bien qu'un changement de fenêtre ferait
+ * MENTIR le texte sans que rien ne rougisse.
+ */
+describe('placeSignupFailure — un 429 dit la vraie attente, jamais un jeton machine', () => {
+  test('429 avec retryAfter ⇒ l’attente RÉELLE, arrondie à la minute supérieure', () => {
+    const result = placeSignupFailure(failure({ status: 429, error: 'RATE_LIMIT_EXCEEDED', retryAfter: 219 }));
+    expect(result.bannerError).not.toBeNull();
+    expect(result.bannerError).toContain('4 minutes');
+    expect(result.fieldErrors).toEqual({});
+  });
+
+  test('429 ⇒ jamais « dans un instant » : c’est le geste qui prolonge le blocage', () => {
+    const result = placeSignupFailure(failure({ status: 429, error: 'RATE_LIMIT_EXCEEDED', retryAfter: 219 }));
+    expect(result.bannerError).not.toContain('dans un instant');
+  });
+
+  test('429 ⇒ aucun jeton machine dans le texte servi', () => {
+    const result = placeSignupFailure(failure({ status: 429, error: 'RATE_LIMIT_EXCEEDED', retryAfter: 219 }));
+    expect(result.bannerError).not.toContain('RATE_LIMIT_EXCEEDED');
+    expect(result.bannerError).not.toContain('429');
+  });
+
+  test('429 SANS retryAfter ⇒ une phrase honnête, sans délai inventé', () => {
+    const result = placeSignupFailure(failure({ status: 429, error: 'RATE_LIMIT_EXCEEDED' }));
+    expect(result.bannerError).not.toBeNull();
+    expect(result.bannerError).not.toContain('RATE_LIMIT_EXCEEDED');
+    expect(result.bannerError).toContain('quelques minutes');
+  });
+
+  test('une seconde restante s’arrondit à UNE minute, jamais à zéro', () => {
+    const result = placeSignupFailure(failure({ status: 429, error: 'RATE_LIMIT_EXCEEDED', retryAfter: 1 }));
+    expect(result.bannerError).toContain('1 minute');
+    expect(result.bannerError).not.toContain('0 minute');
+  });
+});

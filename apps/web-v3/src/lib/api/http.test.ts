@@ -467,3 +467,44 @@ describe('createHttpTransport — le délai de garde PAR APPEL', () => {
     expect(await abortedAfterATick(calls[0]!.init)).toBe(false);
   });
 });
+
+/**
+ * `retryAfter` — LE DÉLAI VIENT DU SERVEUR, JAMAIS D'UNE CONSTANTE (#5912).
+ *
+ * La charge d'un 429 de la passerelle, mesurée sur staging :
+ *
+ *     {"success":false,"error":"RATE_LIMIT_EXCEEDED",
+ *      "message":"Trop de tentatives d'inscription (limite: 3/5min)…",
+ *      "retryAfter":219}
+ *
+ * Sans ce champ sur `ApiFailure`, tout message d'attente doit RÉÉCRIRE la
+ * fenêtre du serveur — et ment dès qu'elle change, sans qu'aucun témoin ne
+ * rougisse. C'est le motif du soir : une valeur dupliquée là où elle aurait
+ * dû être transportée.
+ */
+describe('createHttpTransport — retryAfter remonte jusqu’à l’appelant', () => {
+  test('un 429 avec retryAfter le porte sur l’échec', async () => {
+    const { impl } = fakeFetch({ status: 429, body: { success: false, error: 'RATE_LIMIT_EXCEEDED', retryAfter: 219 } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await transport.request<unknown>({ method: 'POST', path: '/auth/register', body: {} });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.retryAfter).toBe(219);
+  });
+
+  test('un 429 SANS retryAfter n’en invente aucun', async () => {
+    const { impl } = fakeFetch({ status: 429, body: { success: false, error: 'RATE_LIMIT_EXCEEDED' } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await transport.request<unknown>({ method: 'POST', path: '/auth/register', body: {} });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.retryAfter).toBeUndefined();
+  });
+
+  /** `NaN` passerait un `typeof === 'number'` et rendrait « NaN minutes ». */
+  test('un retryAfter non fini est ignoré plutôt que servi', async () => {
+    const { impl } = fakeFetch({ status: 429, body: { success: false, error: 'x', retryAfter: 'bientôt' } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await transport.request<unknown>({ method: 'POST', path: '/auth/register', body: {} });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.retryAfter).toBeUndefined();
+  });
+});
