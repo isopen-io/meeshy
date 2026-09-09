@@ -1,548 +1,477 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
-import { GLYPHS } from '@/components/glyphs';
+import { Glyph, GlyphSvg } from '@/components/glyph';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
+import { GLYPHS } from '@/components/glyphs';
+import { GlassSurface, GlassBack } from '@/components/glass-surface';
 import { ProgressBar } from '@/components/progress-bar';
 import { httpTransport, unwrap } from '@/lib/api/client';
 import { apiConfig } from '@/lib/api/config';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, mintMeesh } from '@/lib/api/engagement';
 import { useOnline } from '@/lib/net/online';
+import { Link } from '@/routes/route-table';
 import {
   ACHIEVEMENT_COPY,
-  ACHIEVEMENT_SECTION_TITLES,
-  generatedAchievementLabel,
-  AXIS_GLYPHS,
-  AXIS_LABELS,
-  BADGE_UNIT,
   FAMILY_LABELS,
-  LEVEL_UNIT,
-  STREAK_UNIT,
+  generatedAchievementLabel,
   levelTitle,
-  nextStepLabel,
-  reachedAtLabel,
   scoreLabel,
   streakLabel,
   streakRecordLabel,
-  type ProgressionGlyph,
 } from '@/lib/view/progression';
-import { Link } from '@/routes/route-table';
 import {
-  axesByFamily,
-  type EngagementAxisProgress,
-  type EngagementElanProgress,
-  type EngagementMeeshProgress,
-  type EngagementProgress,
-  type EngagementTier,
-} from '@meeshy/shared/utils/engagement-progress';
-import type { AchievementSectionView } from '@meeshy/shared/utils/achievement-view';
+  BRAND,
+  CARD,
+  INK,
+  INK_2,
+  MEESH_TINT,
+  STREAK_TINT,
+  UNLOCKED_TINT,
+  ProgressionError,
+  ProgressionSkeleton,
+} from '@/routes/progression-parts';
+
+import { progressionLayout, lastAchievement } from '@meeshy/shared/utils/progression-layout';
+import type { ProgressionSection } from '@meeshy/shared/utils/progression-layout';
+import type { EngagementProgress, EngagementMeeshProgress } from '@meeshy/shared/utils/engagement-progress';
+import { ENGAGEMENT_AXIS_WEIGHTS, engagementAxisFamily } from '@meeshy/shared/types/engagement';
+import type { EngagementAxisFamily } from '@meeshy/shared/types/engagement';
+
+export { ProgressionError, ProgressionSkeleton };
 
 /**
- * L'ÉCRAN « PROGRESSION » (#5547) — le tableau de bord des streaks & badges
- * (`docs/product/streaks-badges-modele.md` § 9) : le niveau que porte le score,
- * la série qui court et son record, les badges par famille d'axe avec le
- * palier suivant, les succès débloqués et ceux qu'il reste à débloquer.
+ * « PROGRESSION » EST UN HUB — trois heros, trois portes (#5838, #5843).
  *
- * Anatomie iOS (#5698, dessinés ensemble) : en-tête flottant sans barre de
- * navigation système, deux cartes de résumé, puis des sections en cartes
- * teintées — la même hiérarchie que `UserStatsView` / `SettingsView`. Ce que
- * l'écran REFUSE de faire :
- *  - lire l'historique des notifications — il restitue l'ÉTAT courant, depuis
- *    `GET /me/engagement`, même si aucune notification n'a jamais été vue ;
- *  - cacher un axe à zéro — l'état vide est le catalogue ENTIER, verrouillé,
- *    avec la première action qui débloque ; un écran qui ne montrerait que
- *    l'acquis ne dirait pas ce qu'il reste à faire (dimension 8) ;
- *  - peindre un spinner — squelette à froid, données en cache sinon
- *    (`staleTime`, `main.tsx`), et hors ligne l'instantané reste affiché avec
- *    le bandeau de coupure, jamais un voile.
+ * L'écran était un défilement unique où badges, défis et succès s'empilaient :
+ * on n'y trouvait plus rien, et l'iOS natif empilait les mêmes pièces dans un
+ * AUTRE ordre, sans que rien ne rougisse. La séquence est désormais déclarée
+ * dans `packages/shared` (`progressionLayout`) et les deux clients l'obéissent.
  *
- * `ProgressionScreen` (défaut) porte la LECTURE — la requête et ses états ;
- * `ProgressionBody` porte le RENDU, pur, testé par `progression.test.tsx`
- * sans monter TanStack Query (même découpe que `LoginScreen` / `Field`).
+ * Ce fichier ne décide donc plus de l'ordre : il le PARCOURT. C'est la
+ * différence qui empêche la divergence de revenir — un client qui compose sa
+ * propre séquence finit toujours par la faire dériver.
  */
 
-const BRAND = 'var(--color-ios-brand)';
-const STREAK_TINT = 'var(--ios-warning)';
-/** L'ambre des Meeshes — la même famille que les badges, distincte de la marque. */
-const MEESH_TINT = 'var(--ios-warning)';
-const UNLOCKED_TINT = 'var(--ios-success)';
-const INK = 'var(--color-ios-ink)';
-const INK_2 = 'var(--color-ios-ink-2)';
-const CARD = 'var(--color-ios-card)';
+const dateCourte = (iso: string): string =>
+  new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
-/** Les glyphes d'axe viennent des DEUX jeux — le socle (`user`, `smiley`, `microphone`) et celui de l'écran. */
-function axisGlyph(name: ProgressionGlyph): GlyphShape {
-  return name in PROGRESSION_GLYPHS ? PROGRESSION_GLYPHS[name as keyof typeof PROGRESSION_GLYPHS] : GLYPHS[name as keyof typeof GLYPHS];
+/** Le libellé du dernier succès, quelle que soit sa provenance. */
+function libelleDernierSucces(progress: EngagementProgress): { titre: string; quand: string } | null {
+  const dernier = lastAchievement(progress);
+  if (dernier === null) return null;
+
+  if (dernier.kind === 'named') {
+    const copie = ACHIEVEMENT_COPY[dernier.key as keyof typeof ACHIEVEMENT_COPY];
+    return { titre: copie?.title ?? dernier.key, quand: dateCourte(dernier.reachedAt) };
+  }
+
+  const entree = (progress.achievementSections ?? [])
+    .flatMap((s) => s.entries)
+    .find((e) => e.key === dernier.key);
+  return {
+    titre: entree === undefined ? dernier.key : generatedAchievementLabel(entree.family, entree.tier),
+    quand: dateCourte(dernier.reachedAt),
+  };
 }
 
-function Card({ tint, children, className }: { tint: string; children: React.ReactNode; className?: string }) {
+/**
+ * LE HERO DU DERNIER SUCCÈS — ce qu'on vient de décrocher (#5840).
+ *
+ * Sur un compte qui n'a rien décroché il ne DISPARAÎT pas : il dit ce qu'on
+ * peut viser. Une section qui s'efface au premier lancement rend muet le seul
+ * moment où l'utilisateur a besoin qu'on lui parle.
+ */
+export function LastAchievementHero({ progress }: { progress: EngagementProgress }) {
+  const dernier = libelleDernierSucces(progress);
+
   return (
-    <div
-      className={`rounded-card p-4 ${className ?? ''}`}
+    <section
+      aria-labelledby="progression-dernier"
+      className="flex items-center gap-3 rounded-card px-4 py-4"
       style={{
-        backgroundColor: CARD,
-        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${tint} 22%, transparent)`,
+        backgroundColor: `color-mix(in srgb, ${UNLOCKED_TINT} 12%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${UNLOCKED_TINT} 28%, transparent)`,
       }}
     >
-      {children}
-    </div>
-  );
-}
-
-function SectionTitle({ glyph, title, tint, trailing, id }: { glyph: GlyphShape; title: string; tint: string; trailing?: string; id: string }) {
-  return (
-    <div className="flex items-center gap-2 px-1">
-      <span style={{ color: tint }}>
-        <GlyphSvg glyph={glyph} size={13} />
-      </span>
-      <h2 id={id} className="flex-1 text-check font-bold tracking-[0.08em] uppercase" style={{ color: tint }}>
-        {title}
-      </h2>
-      {trailing !== undefined ? (
-        <span className="text-check font-semibold" style={{ color: INK_2 }}>
-          {trailing}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-/** Les cinq pastilles d'un axe — une par palier, pleine quand il est atteint, datée quand il a été gravé. */
-function TierDots({ tiers, tint, axisLabel }: { tiers: readonly EngagementTier[]; tint: string; axisLabel: string }) {
-  return (
-    <ol className="flex items-center gap-1" aria-label={`Paliers de ${axisLabel}`}>
-      {tiers.map((tier) => {
-        const dated = reachedAtLabel(tier.reachedAt);
-        return (
-          <li
-            key={tier.threshold}
-            className="size-2.5 rounded-chip"
-            style={{
-              backgroundColor: tier.reached ? tint : 'transparent',
-              boxShadow: `inset 0 0 0 1.5px ${tier.reached ? tint : 'color-mix(in srgb, var(--color-ios-ink-3) 55%, transparent)'}`,
-            }}
-            aria-label={
-              tier.reached ? `Palier ${tier.threshold} atteint${dated ? ` — ${dated.toLowerCase()}` : ''}` : `Palier ${tier.threshold} à atteindre`
-            }
-          />
-        );
-      })}
-    </ol>
-  );
-}
-
-function AxisRow({ axis }: { axis: EngagementAxisProgress }) {
-  const label = AXIS_LABELS[axis.axisKey];
-  return (
-    <li className="flex items-center gap-3 py-2.5">
       <span
-        className="grid size-9 shrink-0 place-items-center rounded-field"
-        style={{ color: BRAND, backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
+        className="grid size-12 shrink-0 place-items-center rounded-card"
+        style={{ backgroundColor: `color-mix(in srgb, ${UNLOCKED_TINT} 22%, transparent)`, color: UNLOCKED_TINT }}
+        aria-hidden="true"
       >
-        <GlyphSvg glyph={axisGlyph(AXIS_GLYPHS[axis.axisKey])} size={16} />
+        <Glyph name="trophy" size={24} />
       </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-body font-semibold" style={{ color: INK }}>
-            {label}
-          </span>
-          <span className="shrink-0 text-caption font-semibold tabular-nums" style={{ color: INK_2 }}>
-            {axis.value}
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <TierDots tiers={axis.tiers} tint={BRAND} axisLabel={label} />
-          <span className="truncate text-check" style={{ color: INK_2 }}>
-            {nextStepLabel(axis, BADGE_UNIT)}
-          </span>
-        </div>
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <h2 id="progression-dernier" className="text-check font-semibold uppercase tracking-wide" style={{ color: INK_2 }}>
+          {dernier === null ? 'Premier succès' : 'Dernier succès'}
+        </h2>
+        {dernier === null ? (
+          <p className="text-body font-bold" style={{ color: INK }}>
+            Envoyez un message — le premier tombe tout de suite.
+          </p>
+        ) : (
+          <>
+            <p className="truncate text-body font-bold" style={{ color: INK }}>
+              {dernier.titre}
+            </p>
+            <p className="text-caption" style={{ color: INK_2 }}>
+              Décroché le {dernier.quand}
+            </p>
+          </>
+        )}
       </div>
-    </li>
+    </section>
   );
 }
 
-function LevelCard({ progress }: { progress: EngagementProgress }) {
-  const { level } = progress;
+/**
+ * LE HERO DU NIVEAU — pleine largeur, et il ÉNUMÈRE (#5841).
+ *
+ * Le barème est dérivé de `ENGAGEMENT_AXIS_WEIGHTS`, jamais recopié dans une
+ * chaîne : le porteur l'a réglé trois fois le 2026-09-09, et une phrase en dur
+ * se serait périmée au premier réglage sans qu'aucun témoin ne rougisse — c'est
+ * exactement ce qui est arrivé à la fixture de démonstration (#5762).
+ */
+export function LevelHero({ progress, mintCost }: { progress: EngagementProgress; mintCost: number | null }) {
+  const bareme = (Object.keys(FAMILY_LABELS) as EngagementAxisFamily[])
+    .map((famille) => {
+      const axe = (Object.keys(ENGAGEMENT_AXIS_WEIGHTS) as (keyof typeof ENGAGEMENT_AXIS_WEIGHTS)[]).find(
+        (a) => engagementAxisFamily(a) === famille,
+      );
+      return axe === undefined ? null : { famille, poids: ENGAGEMENT_AXIS_WEIGHTS[axe] };
+    })
+    .filter((x): x is { famille: EngagementAxisFamily; poids: number } => x !== null)
+    .sort((a, b) => b.poids - a.poids);
+
+  const manque = progress.level.nextThreshold === null ? null : progress.level.nextThreshold - progress.level.value;
+
   return (
-    <Card tint={BRAND}>
-      <div className="flex items-center gap-2">
-        <span style={{ color: BRAND }}>
-          <GlyphSvg glyph={PROGRESSION_GLYPHS.star} size={16} />
-        </span>
-        <p className="text-title font-bold" style={{ color: INK }}>
-          {levelTitle(level.level)}
+    <section aria-labelledby="progression-niveau" className="flex flex-col gap-3 rounded-card px-4 py-4" style={{ backgroundColor: CARD }}>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 id="progression-niveau" className="text-large-title font-bold" style={{ color: INK }}>
+          {levelTitle(progress.level.level)}
+        </h2>
+        <p className="text-title font-bold" style={{ color: BRAND }}>
+          {scoreLabel(progress.level.value)}
         </p>
       </div>
-      <p className="mt-1 text-caption" style={{ color: INK_2 }}>
-        {scoreLabel(level.value)}
-      </p>
-      <div className="mt-3">
-        <ProgressBar progress={level.progress} label={`Niveau ${level.level} — vers le niveau ${level.level + 1}`} tint={BRAND} />
-      </div>
-      <p className="mt-2 text-check" style={{ color: INK_2 }}>
-        {nextStepLabel(level, LEVEL_UNIT, level.nextThreshold === null ? null : level.level + 1)}
-      </p>
-    </Card>
-  );
-}
 
-function StreakCard({ progress }: { progress: EngagementProgress }) {
-  const { streak } = progress;
-  return (
-    <Card tint={STREAK_TINT}>
-      <div className="flex items-center gap-2">
-        <span style={{ color: STREAK_TINT }}>
-          <GlyphSvg glyph={PROGRESSION_GLYPHS.fire} size={16} />
+      <ProgressBar progress={progress.level.progress} tint={BRAND} label="Progression vers le niveau suivant" />
+
+      {/* LA SÉRIE reste ICI, dans le hero du niveau.
+          Elle occupait une carte jumelle avant le hub ; la cible n'en parle
+          pas, et un silence de la cible n'est pas une interdiction — ce qui
+          existe et complète l'écran s'AGRÈGE, il ne se supprime pas. Sa place
+          naturelle est le niveau : les deux répondent à « où j'en suis ». */}
+      <p className="flex items-center gap-1.5 text-caption" style={{ color: INK_2 }}>
+        <span style={{ color: STREAK_TINT }} aria-hidden="true">
+          <GlyphSvg glyph={PROGRESSION_GLYPHS.fire} size={13} />
         </span>
-        <p className="text-title font-bold" style={{ color: INK }}>
-          {streakLabel(streak.currentDays)}
+        {streakLabel(progress.streak.value)} · {streakRecordLabel(progress.streak.longestDays)}
+      </p>
+      {manque === null ? null : (
+        <p className="text-caption" style={{ color: INK_2 }}>
+          Encore {scoreLabel(manque)} avant le niveau {progress.level.level + 1}
         </p>
-      </div>
-      <p className="mt-1 text-caption" style={{ color: INK_2 }}>
-        {streakRecordLabel(streak.longestDays)}
-      </p>
-      <div className="mt-3">
-        <ProgressBar progress={streak.progress} label="Série de jours actifs — vers le prochain jalon" tint={STREAK_TINT} />
-      </div>
-      <p className="mt-2 text-check" style={{ color: INK_2 }}>
-        {nextStepLabel(streak, STREAK_UNIT)}
-      </p>
-    </Card>
-  );
-}
+      )}
 
-function AchievementsSection({ progress }: { progress: EngagementProgress }) {
-  const unlocked = progress.achievements.filter((a) => a.unlocked).length;
-  return (
-    <section aria-labelledby="progression-achievements" className="flex flex-col gap-2">
-      <SectionTitle
-        id="progression-achievements"
-        glyph={GLYPHS.trophy}
-        title="Succès"
-        tint={UNLOCKED_TINT}
-        trailing={`${unlocked} / ${progress.achievements.length}`}
-      />
-      <Card tint={UNLOCKED_TINT} className="py-1">
-        <ul className="divide-y" style={{ borderColor: 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)' }}>
-          {progress.achievements.map((achievement) => {
-            const copy = ACHIEVEMENT_COPY[achievement.key];
-            const dated = reachedAtLabel(achievement.reachedAt);
-            return (
-              <li key={achievement.key} className="flex items-center gap-3 py-2.5">
-                <span
-                  className="grid size-9 shrink-0 place-items-center rounded-field"
-                  style={{
-                    color: achievement.unlocked ? UNLOCKED_TINT : INK_2,
-                    backgroundColor: achievement.unlocked
-                      ? 'color-mix(in srgb, var(--ios-success) 14%, transparent)'
-                      : 'color-mix(in srgb, var(--color-ios-ink-3) 18%, transparent)',
-                  }}
-                >
-                  {achievement.unlocked ? <Glyph name="trophy" size={16} /> : <Glyph name="lock" size={16} />}
-                </span>
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-body font-semibold" style={{ color: achievement.unlocked ? INK : INK_2 }}>
-                    {copy.title}
-                  </span>
-                  <span className="text-check" style={{ color: INK_2 }}>
-                    {achievement.unlocked ? (dated ?? 'Débloqué') : copy.condition}
-                  </span>
-                </div>
-              </li>
-            );
-          })}
+      <div className="flex flex-col gap-1.5 border-t pt-3" style={{ borderColor: 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)' }}>
+        <p className="text-check font-semibold uppercase tracking-wide" style={{ color: INK_2 }}>
+          Comment gagner des points
+        </p>
+        <ul className="flex flex-wrap gap-x-3 gap-y-1">
+          {bareme.map(({ famille, poids }) => (
+            <li key={famille} className="text-caption" style={{ color: INK }}>
+              {FAMILY_LABELS[famille]} <span style={{ color: BRAND, fontWeight: 700 }}>+{poids}</span>
+            </li>
+          ))}
         </ul>
-      </Card>
+        {mintCost === null ? null : (
+          <p className="text-caption" style={{ color: INK_2 }}>
+            {mintCost} points se convertissent en une Meesh — la monnaie rare de Meeshy.
+          </p>
+        )}
+      </div>
     </section>
   );
 }
 
 /**
- * LE CORPS — pur. `online` vient de l'écran : hors ligne, l'instantané reste
- * peint tel quel, le bandeau de l'en-tête dit le reste.
+ * LE HERO DES ÉLANS EN COURS (#5842).
+ *
+ * L'élan était UN facteur global affiché en bannière ; le porteur le veut au
+ * pluriel — ce sur quoi on est en train de tenir. Tant que `content.mood`
+ * n'existe pas comme axe (#5735), le hero se compose sans lui et l'accueillera
+ * sans renumérotation : il lit les familles ACTIVES, jamais une liste écrite.
  */
-/**
- * LE HÉROS DES MEESHES (#5743) — la première chose qu'on voit sur l'écran.
- *
- * Trois refus, tous délibérés :
- *
- *  - **rien du tout** quand la passerelle ne sert pas le bloc (`meesh`
- *    absent) : un client déployé avant ce lot ne doit pas peindre un solde
- *    inventé ;
- *  - **pas de bouton grisé** — directive porteur : « le bouton pour convertir
- *    quand les points le permettent, sinon pas de bouton ». Un contrôle qui
- *    existe sans effet est un contrôle qui ment (loi 4) ;
- *  - **la barre se mesure sur les points DÉBITABLES**, jamais sur le score
- *    total. Une barre nourrie par le plancher conversationnel promettrait une
- *    Meesh qui n'arriverait jamais.
- *
- * Et quand la frappe est impossible, l'écran DIT pourquoi — le plancher est
- * une promesse (« ce qu'on a bâti en parlant aux autres ne se vend pas »), et
- * une promesse muette ne rassure personne.
- */
-/**
- * L'ÉLAN COURANT (#5749) — montré SEULEMENT quand il change quelque chose.
- *
- * Au neutre (×1) rien ne s'affiche : un badge « ×1 » n'apprend rien et occupe
- * la place de ce qui compte. Et le texte dit ce qui PORTE le multiplicateur —
- * un accélérateur dont on ignore la cause ne se pilote pas, il se subit.
- */
-function ElanBanner({ elan }: { elan: EngagementElanProgress }) {
-  const familles =
-    elan.activeFamilyCount === 1 ? '1 famille active' : `${elan.activeFamilyCount} familles actives`;
-  return (
-    <p
-      role="status"
-      className="flex items-center gap-2 rounded-card px-4 py-2 text-check font-semibold"
-      style={{
-        backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 14%, transparent)',
-        color: INK,
-      }}
-    >
-      <span style={{ color: BRAND }} aria-hidden="true">
-        <GlyphSvg glyph={PROGRESSION_GLYPHS.magicWand} size={13} />
-      </span>
-      Élan ×{elan.factor} — {familles} sur {elan.windowDays} jours
-      {elan.hasStanding ? ', plus votre assise' : ''}. Vos prochains gestes rapportent {elan.factor} fois plus.
-    </p>
-  );
-}
+export function ElansHero({ progress }: { progress: EngagementProgress }) {
+  const elan = progress.elan;
+  const actives = progress.axes.filter((a) => a.value > 0);
+  const familles = [...new Set(actives.map((a) => a.family))];
 
-/**
- * LES SUCCÈS GÉNÉRÉS, EN RANGÉES HORIZONTALES (#5759).
- *
- * Une section = une rangée qui défile latéralement. Trois propriétés que le
- * catalogue impose et que ce rendu doit respecter :
- *
- *  - **l'ordre est celui de la difficulté**, calculé par la loi partagée — le
- *    rendu ne trie RIEN, sans quoi le web et iOS pourraient diverger ;
- *  - **la fenêtre est déjà appliquée** (`max(7, acquis + 2)`) : les entrées
- *    reçues sont exactement celles à montrer, donc le prochain objectif est
- *    toujours le dernier de la rangée ;
- *  - **aucun palier inatteignable n'arrive ici** — il a été retiré en amont,
- *    pas masqué en CSS : un objectif qu'on ne peut pas tenir ne doit pas
- *    exister dans l'arbre, même invisible.
- *
- * La rangée défile dans SON conteneur (`overflow-x`), jamais le document : la
- * page ne défile jamais horizontalement.
- */
-function GeneratedAchievements({ sections }: { sections: readonly AchievementSectionView[] }) {
-  if (sections.length === 0) return null;
   return (
-    <section aria-labelledby="progression-generated" className="flex flex-col gap-4">
-      <SectionTitle
-        id="progression-generated"
-        glyph={PROGRESSION_GLYPHS.medal}
-        title="Défis"
-        tint={BRAND}
-      />
-      {sections.map((vue) => (
-        <div key={vue.section} className="flex flex-col gap-2">
-          <div className="flex items-baseline justify-between">
-            <h3 className="text-caption font-semibold" style={{ color: INK }}>
-              {ACHIEVEMENT_SECTION_TITLES[vue.section]}
-            </h3>
-            <span className="text-check" style={{ color: INK_2 }}>
-              {vue.unlockedCount} / {vue.attainableCount}
-            </span>
-          </div>
-          <ul
-            className="flex gap-2 overflow-x-auto pb-1"
-            aria-label={`${ACHIEVEMENT_SECTION_TITLES[vue.section]} — ${vue.unlockedCount} sur ${vue.attainableCount}`}
-          >
-            {vue.entries.map((entry) => (
-              <li
-                key={entry.key}
-                className="flex min-w-36 shrink-0 flex-col gap-1 rounded-card px-3 py-2"
-                style={{
-                  backgroundColor: entry.unlocked
-                    ? 'color-mix(in srgb, var(--color-ok) 14%, transparent)'
-                    : 'color-mix(in srgb, var(--color-ios-ink) 6%, transparent)',
-                }}
-              >
-                <span
-                  aria-hidden="true"
-                  style={{ color: entry.unlocked ? 'var(--color-ok)' : INK_2 }}
-                >
-                  <GlyphSvg glyph={entry.unlocked ? PROGRESSION_GLYPHS.star : PROGRESSION_GLYPHS.medal} size={13} />
-                </span>
-                <span className="text-check font-semibold" style={{ color: INK }}>
-                  {generatedAchievementLabel(entry.family, entry.tier)}
-                </span>
-                {entry.unlocked ? (
-                  <span className="text-check" style={{ color: INK_2 }}>
-                    Obtenu
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
-    </section>
-  );
-}
-
-function MeeshHero({ meesh, onMint, isMinting }: { meesh: EngagementMeeshProgress; onMint: () => void; isMinting: boolean }) {
-  const soldeLabel = meesh.balance === 0 ? 'Aucune Meesh' : meesh.balance === 1 ? '1 Meesh' : `${meesh.balance} Meeshes`;
-  return (
-    <section aria-labelledby="progression-meesh" className="flex flex-col gap-3 rounded-card px-4 py-4"
+    <section
+      aria-labelledby="progression-elans"
+      className="flex flex-col gap-2 rounded-card px-4 py-4"
       style={{
-        backgroundColor: 'color-mix(in srgb, var(--ios-warning) 12%, transparent)',
-        border: '1px solid color-mix(in srgb, var(--ios-warning) 30%, transparent)',
+        backgroundColor: `color-mix(in srgb, ${BRAND} 10%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${BRAND} 24%, transparent)`,
       }}
     >
       <div className="flex items-center gap-2">
-        <span style={{ color: MEESH_TINT }} aria-hidden="true">
-          <GlyphSvg glyph={PROGRESSION_GLYPHS.medal} size={18} />
+        <span style={{ color: BRAND }} aria-hidden="true">
+          <GlyphSvg glyph={PROGRESSION_GLYPHS.magicWand} size={18} />
         </span>
-        <h2 id="progression-meesh" className="text-large-title font-bold" style={{ color: INK }}>
-          {soldeLabel}
+        <h2 id="progression-elans" className="flex-1 text-body font-bold" style={{ color: INK }}>
+          {elan?.isAccelerated === true ? `Élan ×${elan.factor}` : 'Vos élans'}
         </h2>
       </div>
 
-      {meesh.mintedLifetime > 0 ? (
-        <p className="text-check" style={{ color: INK_2 }}>
-          {meesh.mintedLifetime === 1 ? '1 frappée depuis toujours' : `${meesh.mintedLifetime} frappées depuis toujours`}
+      {familles.length === 0 ? (
+        <p className="text-caption" style={{ color: INK_2 }}>
+          Publiez une story, un post, un réel ou lancez une conversation : chaque famille tenue en même temps multiplie
+          vos points.
         </p>
-      ) : null}
-
-      <ProgressBar
-        progress={meesh.progress}
-        label={`Vers la prochaine Meesh — ${meesh.debitablePoints} points sur ${meesh.mintCost}`}
-        tint={MEESH_TINT}
-      />
-
-      {meesh.canMint ? (
-        // Le bouton RESTE pendant la frappe, avec son état dit : le faire
-        // disparaître au moment du tap donnerait l'impression que l'action a
-        // échoué, alors qu'elle est en cours.
-        <button
-          type="button"
-          onClick={onMint}
-          disabled={isMinting}
-          aria-busy={isMinting}
-          className="min-h-11 rounded-chip px-4 text-body font-semibold disabled:opacity-60"
-          style={{ backgroundColor: MEESH_TINT, color: 'var(--color-ios-surface)' }}
-        >
-          {isMinting ? 'Frappe en cours…' : `Convertir ${meesh.mintCost} points en une Meesh`}
-        </button>
       ) : (
-        <p className="text-check" style={{ color: INK_2 }}>
-          Encore {meesh.missingPoints} points convertibles avant une Meesh.
-          {meesh.floorPoints > 0
-            ? ` Vos ${meesh.floorPoints} points de conversation seront repris en dernier, sans éteindre aucun badge.`
-            : ''}
-        </p>
+        <>
+          <ul className="flex flex-wrap gap-2">
+            {familles.map((famille) => (
+              <li
+                key={famille}
+                className="rounded-chip px-2.5 py-1 text-check font-semibold"
+                style={{ backgroundColor: `color-mix(in srgb, ${BRAND} 16%, transparent)`, color: INK }}
+              >
+                {FAMILY_LABELS[famille]}
+              </li>
+            ))}
+          </ul>
+          {elan?.isAccelerated === true ? (
+            <p className="text-caption" style={{ color: INK_2 }}>
+              {elan.activeFamilyCount === 1 ? '1 famille active' : `${elan.activeFamilyCount} familles actives`} sur{' '}
+              {elan.windowDays} jours{elan.hasStanding ? ', plus votre assise' : ''} — vos prochains gestes rapportent{' '}
+              {elan.factor} fois plus.
+            </p>
+          ) : (
+            <p className="text-caption" style={{ color: INK_2 }}>
+              Tenez une famille de plus en même temps pour déclencher le multiplicateur.
+            </p>
+          )}
+        </>
       )}
     </section>
   );
 }
 
-export function ProgressionBody({
-  progress,
+/** Les trois glyphes du jeu d'écran, résolus une fois — `Glyph` ne connaît que le socle. */
+const GLYPHE_SECTION = {
+  medal: PROGRESSION_GLYPHS.medal,
+  star: PROGRESSION_GLYPHS.star,
+  trophy: GLYPHS.trophy,
+} as const;
+
+const SECTION_META: Record<
+  ProgressionSection,
+  { titre: string; glyphe: 'medal' | 'star' | 'trophy'; teinte: string; route: 'progressionBadges' | 'progressionDefis' | 'progressionSucces' }
+> = {
+  badges: { titre: 'Badges', glyphe: 'medal', teinte: BRAND, route: 'progressionBadges' },
+  defis: { titre: 'Défis', glyphe: 'star', teinte: STREAK_TINT, route: 'progressionDefis' },
+  succes: { titre: 'Succès', glyphe: 'trophy', teinte: UNLOCKED_TINT, route: 'progressionSucces' },
+};
+
+/** Le compte que l'entrée annonce — c'est lui qui donne envie d'ouvrir. */
+function compteDe(section: ProgressionSection, progress: EngagementProgress): { fait: number; total: number } {
+  if (section === 'badges') return { fait: progress.badgesEarned, total: progress.badgesTotal };
+  if (section === 'succes') {
+    return { fait: progress.achievements.filter((a) => a.unlocked).length, total: progress.achievements.length };
+  }
+  const sections = progress.achievementSections ?? [];
+  return {
+    fait: sections.reduce((n, s) => n + s.unlockedCount, 0),
+    total: sections.reduce((n, s) => n + s.attainableCount, 0),
+  };
+}
+
+export function SectionLink({ section, progress }: { section: ProgressionSection; progress: EngagementProgress }) {
+  const meta = SECTION_META[section];
+  const { fait, total } = compteDe(section, progress);
+
+  return (
+    <Link
+      to={meta.route}
+      className="flex items-center gap-3 rounded-card px-4 py-3"
+      style={{ backgroundColor: CARD, minHeight: 44 }}
+    >
+      <span
+        className="grid size-9 shrink-0 place-items-center rounded-chip"
+        style={{ backgroundColor: `color-mix(in srgb, ${meta.teinte} 16%, transparent)`, color: meta.teinte }}
+        aria-hidden="true"
+      >
+        <GlyphSvg glyph={GLYPHE_SECTION[meta.glyphe]} size={18} />
+      </span>
+      <span className="flex-1 text-body font-semibold" style={{ color: INK }}>
+        {meta.titre}
+      </span>
+      <span className="text-body font-bold" style={{ color: meta.teinte }}>
+        {fait} / {total}
+      </span>
+      <span style={{ color: INK_2 }} aria-hidden="true">
+        <GlyphSvg glyph={PROGRESSION_GLYPHS.caretRight} size={16} />
+      </span>
+    </Link>
+  );
+}
+
+/**
+ * L'ENTRÉE MEESH — le solde en haut à droite, le détail en verre (#5839).
+ *
+ * Elle remplace une coupe qui ne disait rien. Le solde se lit SANS ouvrir : un
+ * indicateur qu'il faut toucher pour savoir ce qu'il vaut n'informe pas, il
+ * intrigue.
+ *
+ * Le sous-menu ne propose la frappe QUE si les points la permettent — la
+ * directive du porteur est une NÉGATION, et une négation se prouve par un
+ * témoin qui cherche l'absence.
+ */
+function MeeshEntry({
+  meesh,
   onMint,
-  isMinting = false,
+  isMinting,
 }: {
-  progress: EngagementProgress;
-  onMint?: () => void;
-  isMinting?: boolean;
+  meesh: EngagementMeeshProgress;
+  onMint: () => void;
+  isMinting: boolean;
+}) {
+  const [ouvert, setOuvert] = useState(false);
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOuvert((o) => !o)}
+        aria-expanded={ouvert}
+        aria-label={`${meesh.balance} Meesh — voir le détail`}
+        className="flex items-center gap-1.5 rounded-chip px-2.5"
+        style={{
+          minHeight: 44,
+          backgroundColor: `color-mix(in srgb, ${MEESH_TINT} 16%, transparent)`,
+          color: MEESH_TINT,
+        }}
+      >
+        <span className="text-body font-bold">{meesh.balance}</span>
+        <GlyphSvg glyph={PROGRESSION_GLYPHS.medal} size={20} />
+      </button>
+
+      {ouvert ? (
+        <GlassSurface prominent role="dialog" aria-label="Détail des Meeshes" className="absolute right-0 top-12 z-20 w-64 p-4">
+          <MeeshDetail meesh={meesh} onMint={onMint} isMinting={isMinting} />
+        </GlassSurface>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * LE CONTENU du sous-menu, séparé de son bouton.
+ *
+ * Deux raisons, et la seconde compte plus : l'état d'OUVERTURE est une affaire
+ * de bouton, pas de contenu ; et un contenu qui n'existe qu'à l'intérieur d'un
+ * `useState` ne se mesure qu'en simulant un clic — ce qui fait tester le geste
+ * quand on voulait tester ce qui est DIT.
+ */
+export function MeeshDetail({
+  meesh,
+  onMint,
+  isMinting,
+}: {
+  meesh: EngagementMeeshProgress;
+  onMint: () => void;
+  isMinting: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-5 px-4 py-3">
-      {progress.elan?.isAccelerated === true ? <ElanBanner elan={progress.elan} /> : null}
-
-      {progress.meesh !== undefined ? (
-        <MeeshHero meesh={progress.meesh} onMint={onMint ?? (() => {})} isMinting={isMinting} />
-      ) : null}
-
-      {progress.isEmpty ? (
-        <p
-          role="status"
-          className="rounded-card px-4 py-3 text-caption"
-          style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 10%, transparent)', color: INK }}
-        >
-          Aucune activité comptée pour l’instant. Envoyez un message, publiez une story… votre premier badge tombe dès la
-          première action.
+    <div className="flex flex-col gap-2">
+      {/* Les formulations viennent du hero d'origine : « Aucune Meesh » plutôt
+          que « 0 Meesh », « Convertir » plutôt que « Frapper ». Une refonte de
+          DISPOSITION ne réécrit pas la langue en passant — l'utilisateur
+          reconnaît les mots, c'est à ça qu'il sait que c'est la même chose. */}
+      <p className="text-title font-bold" style={{ color: INK }}>
+        {meesh.balance === 0 ? 'Aucune Meesh' : meesh.balance === 1 ? '1 Meesh' : `${meesh.balance} Meeshes`}
+      </p>
+      {/* À zéro, la ligne dirait « 0 frappées depuis toujours » juste au-dessus
+          de « Aucune frappe pour l'instant » — deux fois la même absence. Le
+          natif applique la même garde : c'est la STRUCTURE qui est unifiée, pas
+          seulement la disposition. */}
+      {meesh.mintedLifetime > 0 ? (
+        <p className="text-caption" style={{ color: INK_2 }}>
+          {meesh.mintedLifetime === 1 ? '1 frappée depuis toujours' : `${meesh.mintedLifetime} frappées depuis toujours`}
         </p>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3">
-        <LevelCard progress={progress} />
-        <StreakCard progress={progress} />
-      </div>
+            {meesh.firstMintedAt === null ? (
+              <p className="text-caption" style={{ color: INK_2 }}>
+                Aucune frappe pour l’instant.
+              </p>
+            ) : (
+              <dl className="flex flex-col gap-1 text-caption" style={{ color: INK_2 }}>
+                <div className="flex justify-between gap-2">
+                  <dt>Première frappe</dt>
+                  <dd style={{ color: INK }}>{dateCourte(meesh.firstMintedAt)}</dd>
+                </div>
+                {/* Une frappe unique a la même date des deux côtés : la répéter
+                    n'apprend rien et fait douter de la seconde ligne. */}
+                {meesh.lastMintedAt !== null && meesh.lastMintedAt !== meesh.firstMintedAt ? (
+                  <div className="flex justify-between gap-2">
+                    <dt>Dernière frappe</dt>
+                    <dd style={{ color: INK }}>{dateCourte(meesh.lastMintedAt)}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            )}
 
-      {progress.achievementSections !== undefined ? (
-        <GeneratedAchievements sections={progress.achievementSections} />
-      ) : null}
-
-      <section aria-labelledby="progression-badges" className="flex flex-col gap-4">
-        <SectionTitle
-          id="progression-badges"
-          glyph={PROGRESSION_GLYPHS.medal}
-          title="Badges"
-          tint={BRAND}
-          trailing={`${progress.badgesEarned} / ${progress.badgesTotal}`}
-        />
-        {axesByFamily(progress.axes).map((group) => (
-          <section key={group.family} aria-labelledby={`progression-family-${group.family}`} className="flex flex-col gap-2">
-            <h3 id={`progression-family-${group.family}`} className="px-1 text-caption font-semibold" style={{ color: INK_2 }}>
-              {FAMILY_LABELS[group.family]}
-            </h3>
-            <Card tint={BRAND} className="py-1">
-              <ul className="divide-y" style={{ borderColor: 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)' }}>
-                {group.axes.map((axis) => (
-                  <AxisRow key={axis.axisKey} axis={axis} />
-                ))}
-              </ul>
-            </Card>
-          </section>
-        ))}
-      </section>
-
-      <AchievementsSection progress={progress} />
+            {meesh.canMint ? (
+              <button
+                type="button"
+                onClick={onMint}
+                disabled={isMinting}
+                className="mt-1 rounded-chip px-4 text-body font-bold"
+                style={{ minHeight: 44, backgroundColor: MEESH_TINT, color: 'var(--color-ios-surface)' }}
+              >
+                {isMinting ? 'Frappe en cours…' : `Convertir ${meesh.mintCost} points en une Meesh`}
+              </button>
+            ) : (
+              <p className="text-caption" style={{ color: INK_2 }}>
+                Encore {meesh.missingPoints} points convertibles avant une Meesh.
+                {/* Le PLANCHER inaliénable se dit ici, pas ailleurs : sans lui,
+                    l'utilisateur compte ses points de conversation dans ce qui
+                    manque et ne comprend pas pourquoi le compte ne tombe pas
+                    juste. */}
+                {meesh.floorPoints > 0
+                  ? ` Vos ${meesh.floorPoints} points de conversation seront repris en dernier, sans éteindre aucun badge.`
+                  : ''}
+              </p>
+            )}
     </div>
   );
 }
 
-/** Le squelette de démarrage à froid — la FORME de l'écran, jamais un spinner. */
-export function ProgressionSkeleton() {
+/**
+ * Le CORPS du hub — il parcourt la séquence partagée, il ne la compose pas.
+ *
+ * La frappe a quitté ce composant : elle vit dans l'entrée Meesh de l'en-tête
+ * (#5839), où le solde se lit sans défiler. Le corps n'a donc plus besoin ni
+ * de `onMint` ni de `isMinting` — les garder « au cas où » aurait laissé deux
+ * chemins vers la même action, dont un mort.
+ */
+export function ProgressionBody({ progress }: { progress: EngagementProgress }) {
   return (
-    <div className="flex flex-col gap-5 px-4 py-3" aria-busy="true" aria-label="Progression en cours de chargement">
-      <div className="grid grid-cols-2 gap-3">
-        {[0, 1].map((i) => (
-          <div key={i} className="h-28 rounded-card" style={{ backgroundColor: CARD }} />
-        ))}
-      </div>
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="h-36 rounded-card" style={{ backgroundColor: CARD }} />
-      ))}
-    </div>
-  );
-}
-
-/** L'échec — nommé, avec sa reprise ; hors ligne sans instantané, c'est la coupure qui est nommée. */
-export function ProgressionError({ message, online, onRetry }: { message: string; online: boolean; onRetry: () => void }) {
-  return (
-    <div role="alert" className="flex flex-col items-center gap-3 px-6 py-10 text-center">
-      <span style={{ color: 'var(--color-error)' }}>
-        <Glyph name="warningCircle" size={28} />
-      </span>
-      <p className="text-body font-semibold" style={{ color: INK }}>
-        {online ? 'La progression n’a pas pu être chargée' : 'Hors ligne — aucune progression en mémoire'}
-      </p>
-      <p className="text-caption" style={{ color: INK_2 }}>
-        {online ? message : 'Elle s’affichera à la reconnexion.'}
-      </p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
-        style={{ backgroundColor: BRAND, minHeight: 44 }}
-      >
-        Réessayer
-      </button>
+    <div className="flex flex-col gap-4 px-4 py-3">
+      {progressionLayout(progress).map((bloc) => {
+        if (bloc.kind === 'last-achievement') return <LastAchievementHero key="dernier" progress={progress} />;
+        if (bloc.kind === 'level') {
+          return <LevelHero key="niveau" progress={progress} mintCost={progress.meesh?.mintCost ?? null} />;
+        }
+        if (bloc.kind === 'elans') return <ElansHero key="elans" progress={progress} />;
+        return <SectionLink key={bloc.section} section={bloc.section} progress={progress} />;
+      })}
     </div>
   );
 }
@@ -572,24 +501,26 @@ export default function ProgressionScreen() {
       unwrap(await loadEngagementProgress({ source: apiConfig.source, transport: httpTransport, signal })),
   });
 
+  const meesh = query.data?.meesh;
+
   return (
-    /* `pt-safe` sur la racine `h-dvh` : l'encoche haute est portée par le
-       CADRE de l'écran, jamais par la coquille (#5604, `safe-area.test.ts`). */
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <header
         className="z-10 shrink-0 backdrop-blur-xl"
         style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-surface) 80%, transparent)' }}
       >
         <div className="flex items-center gap-2 px-4 py-2">
-          <Link to="list" className="grid size-11 shrink-0 place-items-center rounded-chip" style={{ color: BRAND }} aria-label="Retour">
-            <Glyph name="caretLeft" size={22} />
+          <Link to="list" className="grid size-11 shrink-0 place-items-center" style={{ color: BRAND }} aria-label="Retour">
+            <GlassBack>
+              <Glyph name="caretLeft" size={22} />
+            </GlassBack>
           </Link>
           <h1 className="flex-1 truncate text-title font-bold" style={{ color: INK }}>
             Progression
           </h1>
-          <span className="grid size-11 shrink-0 place-items-center" style={{ color: STREAK_TINT }} aria-hidden="true">
-            <Glyph name="trophy" size={20} />
-          </span>
+          {meesh === undefined ? null : (
+            <MeeshEntry meesh={meesh} onMint={() => mint.mutate()} isMinting={mint.isPending} />
+          )}
         </div>
         {online ? null : (
           <p
@@ -605,7 +536,7 @@ export default function ProgressionScreen() {
 
       <main id="contenu" className="flex-1 overflow-y-auto pb-safe">
         {query.data !== undefined ? (
-          <ProgressionBody progress={query.data} onMint={() => mint.mutate()} isMinting={mint.isPending} />
+          <ProgressionBody progress={query.data} />
         ) : query.isError ? (
           <ProgressionError message={query.error.message} online={online} onRetry={() => void query.refetch()} />
         ) : (

@@ -316,3 +316,64 @@ describe("l'élan servi — le plafond est une règle de PRODUIT, pas de sérial
     expect(resolveEngagementProgress(payload({ elan: undefined })).elan).toBeUndefined();
   });
 });
+
+/**
+ * LES DATES DE FRAPPE (#5839) — ce que le sous-menu de l'entrée Meesh doit dire.
+ *
+ * Elles viennent de `MeeshLedger`, journal en ajout seul indexé par
+ * `[userId, createdAt]` : min et max sur `reason: 'mint'`. Le partagé ne les
+ * calcule pas, il les PORTE — mais il refuse ce qui n'a pas de sens.
+ */
+describe('les dates de frappe voyagent avec le solde', () => {
+  const avecMeesh = (extra: Record<string, unknown>) =>
+    resolveEngagementProgress(
+      payload({
+        meesh: {
+          balance: 2,
+          mintedLifetime: 2,
+          debitablePoints: 400,
+          floorPoints: 0,
+          missingPoints: 821,
+          mintCost: 1221,
+          ...extra,
+        },
+      }),
+    ).meesh;
+
+  it('sert les deux dates telles quelles', () => {
+    const m = avecMeesh({
+      firstMintedAt: '2026-07-01T10:00:00.000Z',
+      lastMintedAt: '2026-09-01T10:00:00.000Z',
+    });
+    expect(m?.firstMintedAt).toBe('2026-07-01T10:00:00.000Z');
+    expect(m?.lastMintedAt).toBe('2026-09-01T10:00:00.000Z');
+  });
+
+  it('rend `null` quand rien n\'a jamais été frappé — jamais une date inventée', () => {
+    const m = avecMeesh({ balance: 0, mintedLifetime: 0 });
+    expect(m?.firstMintedAt).toBeNull();
+    expect(m?.lastMintedAt).toBeNull();
+  });
+
+  /**
+   * Une frappe UNIQUE a la même date des deux côtés, et c'est correct : le
+   * sous-menu dira « frappée le 1er juillet » une seule fois plutôt que
+   * d'afficher deux lignes identiques — mais c'est la VUE qui décide de ça, pas
+   * la loi, qui se contente de ne pas mentir.
+   */
+  it('porte la même date des deux côtés sur une frappe unique', () => {
+    const m = avecMeesh({
+      balance: 1,
+      mintedLifetime: 1,
+      firstMintedAt: '2026-07-01T10:00:00.000Z',
+      lastMintedAt: '2026-07-01T10:00:00.000Z',
+    });
+    expect(m?.firstMintedAt).toBe(m?.lastMintedAt);
+  });
+
+  it('refuse une date ILLISIBLE plutôt que de la propager à l\'écran', () => {
+    const m = avecMeesh({ firstMintedAt: 'pas-une-date', lastMintedAt: 42 });
+    expect(m?.firstMintedAt).toBeNull();
+    expect(m?.lastMintedAt).toBeNull();
+  });
+});

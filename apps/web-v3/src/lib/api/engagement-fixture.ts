@@ -116,6 +116,20 @@ export const ENGAGEMENT_PROGRESS_FIXTURE: EngagementProgressPayload = {
   meesh: {
     balance: 1,
     mintedLifetime: 1,
+    /**
+     * La date de LA frappe — `mintedLifetime: 1` l'exige.
+     *
+     * Sans elle, le sous-menu disait « 1 frappée depuis toujours » ET « aucune
+     * frappe pour l'instant » dans le même panneau. Une fixture qui déclare un
+     * compte à vie sans lui donner de date se contredit — le même défaut que
+     * son score contredisant ses compteurs, une ligne plus haut.
+     *
+     * Première et dernière sont ÉGALES parce qu'il n'y en a eu qu'une : c'est
+     * le cas où la vue doit taire la seconde ligne plutôt que de répéter la
+     * même date deux fois.
+     */
+    firstMintedAt: daysAgo(21),
+    lastMintedAt: daysAgo(21),
     debitablePoints: 1244,
     floorPoints: 45,
     missingPoints: 0,

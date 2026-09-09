@@ -132,6 +132,10 @@ const USED = [
  * et le gate de poids ne le compte pas dans la première peinture.
  */
 const PROGRESSION = [
+  // `caret-right` n'entre PAS au socle : il ne sert qu'aux entrées de section
+  // du hub (#5843). Même règle que les autres — un glyphe d'un seul écran ne
+  // se paie pas au démarrage à froid de tous les autres.
+  'caret-right',
   'fire',
   'star',
   'medal',

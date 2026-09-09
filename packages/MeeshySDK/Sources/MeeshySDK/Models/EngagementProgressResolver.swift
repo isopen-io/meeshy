@@ -156,6 +156,15 @@ public struct EngagementMeeshProgress: Sendable, Equatable {
     /// DÉBITABLES : une barre nourrie par le plancher promettrait une Meesh qui
     /// n'arriverait jamais.
     public let progress: Double
+    /// LES BORNES du registre de frappe (#5839), `nil` quand il n'y a eu aucune
+    /// frappe — ce que le sous-menu de l'entrée Meesh raconte.
+    ///
+    /// Une chaîne illisible devient `nil` plutôt que d'atteindre l'écran : une
+    /// date fausse est PIRE qu'une date absente, parce que la vue l'affiche
+    /// avec la même assurance que les vraies. Miroir de `isoOrNull`
+    /// (`packages/shared/utils/engagement-progress.ts`).
+    public let firstMintedAt: Date?
+    public let lastMintedAt: Date?
 
     public init(payload: APIEngagementProgress.Meesh) {
         let cost = max(0, payload.mintCost)
@@ -168,6 +177,8 @@ public struct EngagementMeeshProgress: Sendable, Equatable {
         mintCost = cost
         canMint = cost > 0 && debitable >= cost
         progress = cost == 0 ? 0 : min(1, max(0, Double(debitable) / Double(cost)))
+        firstMintedAt = EngagementProgressResolver.reachedDate(payload.firstMintedAt)
+        lastMintedAt = EngagementProgressResolver.reachedDate(payload.lastMintedAt)
     }
 }
 
