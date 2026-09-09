@@ -758,8 +758,12 @@ struct FocalRow: View {
     /// tombée avec elle et la garde d'origine (`translation != nil ||
     /// showsReactions`) redevient la bonne — élargie de ses deux exceptions.
     private var flagAndReactionsRow: some View {
-        let showsReactions = mountsReactions
-        return HStack(alignment: .center, spacing: 6) {
+        // `mountsReactions` lu DIRECTEMENT plutôt que lié à un `let` : la
+        // liaison imposait un `return` explicite, qui DÉSARME le `ViewBuilder`
+        // de la propriété. Inoffensif tant que le corps tient en une
+        // expression — et un piège dès qu'on y ajoutera une seconde vue, qui
+        // ne se monterait alors pas.
+        HStack(alignment: .center, spacing: 6) {
             // Jamais de drapeau EN CLAIR sur un message protégé (revue
             // adversariale 2026-08-18) : la bulle floute sa bande de
             // drapeaux avec le contenu — révéler la langue d'origine
@@ -776,7 +780,7 @@ struct FocalRow: View {
             if let translation = content.translation, !content.isBlurred, input.isLastInGroup {
                 plainLanguageFlags(translation)
             }
-            if showsReactions {
+            if mountsReactions {
                 BubbleReactionsOverlay(
                     messageId: content.messageId,
                     summaries: content.reactions,
