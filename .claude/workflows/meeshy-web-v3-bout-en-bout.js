@@ -456,8 +456,8 @@ const ISSUES = {
     issues: {
       type: 'array',
       items: {
-        type: 'object', additionalProperties: false, required: ['cle', 'numero'],
-        properties: { cle: { type: 'string' }, numero: { type: 'number' }, url: { type: 'string' }, deja_ouverte: { type: 'boolean' } },
+        type: 'object', additionalProperties: false, required: ['cle', 'titre', 'numero'],
+        properties: { cle: { type: 'string' }, titre: { type: 'string', description: 'le titre SEMANTIQUE du travail, recopie VERBATIM — c est lui qui distingue deux travaux de la meme surface' }, numero: { type: 'number' }, url: { type: 'string' }, deja_ouverte: { type: 'boolean' } },
       },
     },
   },
@@ -811,6 +811,8 @@ Pour CHAQUE travail :
 - cherche d'abord une issue OUVERTE qui le couvre (\`gh issue list --search\`) ; si elle existe,
   rends son numero avec deja_ouverte=true — n'en cree pas une seconde ; si son titre ou son corps
   sont perimes, mets-la a jour plutot que d'ouvrir une jumelle ;
+- rends \`titre\` = le titre du travail RECOPIE VERBATIM (c'est la cle : deux travaux peuvent
+  partager la meme surface, jamais le meme titre) ;
 - sinon cree-la : label "web-v3" (cree le label s'il n'existe pas), le milestone du chantier, et
   reference l'epopee #5491 dans le corps ;
 - titre : le titre SEMANTIQUE fourni ; corps : Contexte (avec preuve fichier:ligne et la reference
@@ -824,7 +826,10 @@ LES TRAVAUX :
 ${travaux.map(ligneDeTravail).join('\n')}`,
       { label: `ouvrir:tour-${tour}`, phase: 'Ouvrir', schema: ISSUES, model: MODELE.mecanique, effort: 'medium' })
 
-    numero = new Map(((ouverture && ouverture.issues) || []).filter((i) => i.numero > 0).map((i) => [i.cle, i.numero]))
+    // Cle = le TITRE du travail, jamais la surface : deux travaux de la meme surface (`thread` x2 le
+    // 2026-09-08) partageaient un numero, et le premier commit a ferme l'issue du second (#5676 au
+    // lieu de #5648). Repli sur la cle de surface pour une reponse qui n'aurait pas recopie le titre.
+    numero = new Map(((ouverture && ouverture.issues) || []).filter((i) => i.numero > 0).map((i) => [i.titre || i.cle, i.numero]))
     log(`${numero.size}/${travaux.length} issues connues`)
   }
 
@@ -879,7 +884,7 @@ ${ATTRIBUTION}
   }
 
   for (const t of travaux) {
-    const num = numero.get(t.cle)
+    const num = numero.get(t.titre_issue) ?? numero.get(t.cle)
     const synchroAvant = await resynchroniser(`avant ${t.cle}`)
     const cheminCible = CIBLES.get(t.cle)
     const cible = t.genre !== 'infra'

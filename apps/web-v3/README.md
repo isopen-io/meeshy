@@ -110,12 +110,38 @@ Trois variables lues UNIQUEMENT par `src/lib/api/config.ts`
 | Variable | Valeurs | Défaut | Effet |
 |---|---|---|---|
 | `VITE_API_BASE` | une origine absolue (`https://…`) | production (`https://gate.meeshy.me`), ou base relative en dehors d'une coque | la base des requêtes API |
-| `VITE_DATA_SOURCE` | `gateway` | `fixtures` | source des données servies aux écrans (`gateway` n'est pas encore câblée aux routes, § garde de `vite.config.ts`) |
+| `VITE_DATA_SOURCE` | `gateway` | `fixtures` | source des données servies aux écrans — la liste et le fil LISENT la passerelle (`lib/api/query.ts`, #5650) ; `bun test` et tous les gates restent sur `fixtures` |
 | `VITE_READING_MODES` | `on`, `off` | `on` | les MODES DE LECTURE du fil (D-20) : `on` ⇒ le fil s'ouvre en Focal, l'utilisateur choisit Script ou Bulles par la puce ; `off` ⇒ le fil s'ouvre en bulles, sans puce (`bubbles`/`flag-disabled`, prioritaire sur tout choix collant — `resolveOrchestratorDecision`, `packages/shared/utils/reading-modes.ts`). Paramètre de CONSTRUCTION, figé au déploiement — la v3.1 n'a ni toggle utilisateur ni programme bêta, contrairement à iOS ; miroir de `MEESHY_FLAG_READING_MODES` (`LentilleFeatureFlag.swift:82-90`). La liste Lentille n'en dépend pas (D-9) |
 
-`VITE_READING_MODES` et `VITE_DATA_SOURCE` sont gardées à la CONSTRUCTION
-(`vite.config.ts`) : une valeur ni admise ni absente fait échouer `vite build`
-plutôt que de laisser passer une faute de frappe en silence.
+`VITE_READING_MODES` ET `VITE_DATA_SOURCE` sont gardées à la CONSTRUCTION
+(`vite.config.ts`) : une valeur ni admise ni absente fait échouer
+`vite build` plutôt que de laisser passer une faute de frappe en silence.
+Depuis #5650, `gateway` est une valeur ADMISE (elle est câblée aux écrans) —
+mais une valeur inconnue reste refusée, parce que `resolveSource` la
+traiterait comme `fixtures` : `VITE_DATA_SOURCE=gatway` construirait, en
+silence, un déploiement de production servant des fixtures.
+`scripts/check-gateway-build.mjs` (dans `bun run gate`) vérifie la
+construction `gateway` dans un navigateur réel : garde de session, squelette
+sans saut de géométrie, corpus vide sans bande morte, échec annoncé comme
+une alerte.
+
+### La source `gateway` — poids et délai réels mesurés (#5650)
+
+| | `fixtures` | `gateway` |
+|---|---|---|
+| avant le premier pixel | 24,53 Ko gzip | **34,87 Ko gzip** — cache TanStack persisté (`dehydrate`/`hydrate`) + garde de session |
+| présence de données de fixture dans le socle | — | **aucune** : `grep -c "Amina\|Kwame\|Fatou\|u-viewer" dist/assets/{index,core}-*.js` rend 0 |
+
+Le délai de garde (`http.ts::DEFAULT_TIMEOUT_MS`) a été mesuré, pas deviné,
+contre `gate.staging.meeshy.me` (compte de recette, 5 tirs) : `GET
+/conversations` p95 **1,52 s** (pire cas 1,86 s), `GET /conversations/:id`
+**0,30 s**, `GET …/messages?limit=50` **0,66 s**. Règle retenue : `p95 × 3 <
+15 000 ms` ⇒ le timeout de 15 s garde 5,6 s de marge sur le pire cas observé.
+
+Rejouer : `VITE_DATA_SOURCE=gateway bun run build && node
+scripts/check-gateway-build.mjs` pour le poids et la garde de session ; le
+délai se rejoue à la main (`curl -w '%{time_total}'`) contre un compte de
+recette staging — aucun gate n'y dépend, voir `decisions.md` § D-26.
 
 ## L'interface
 

@@ -20,6 +20,95 @@ import type { Message, MessageTranslation, Participant } from './types';
 /** `minutesAgo(90)` = il y a 90 minutes. Le fil se lit donc toujours comme aujourd'hui. */
 export const minutesAgo = (minutes: number): Date => new Date(Date.now() - minutes * 60_000);
 
+/**
+ * `daysAgo` jours avant AUJOURD'HUI (calendrier LOCAL), à `hour:minute` —
+ * DÉPLACÉ depuis `fixtures-catchup.ts` (#5696, étape 4b) plutôt que recopié :
+ * `fixtures-river.ts` en a besoin pour l'ouverture du Salon Rivière, exactement
+ * pour la même raison que #5695 l'a écrit — construire une date-calendrier
+ * directement plutôt qu'espérer qu'un delta de minutes (`minutesAgo`) retombe
+ * à plus de 3 h d'un minuit local.
+ */
+export const dayAt = (daysAgo: number, hour: number, minute: number): Date => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, hour, minute, 0, 0);
+};
+
+/**
+ * L'ANCRE DU FIL « ÉQUIPE DÉPLOIEMENT » — `minutesAgo(96..82)` place ses huit
+ * horodatages sur une fenêtre de 14 minutes qui, entre ~00:00 et ~01:36 heure
+ * de Paris, franchit minuit et fait basculer `c-deploiement` en section
+ * « Hier » (`lens/sections.test.ts` : « AUJOURD'HUI contient c-deploiement »).
+ *
+ * Le calendrier qui tranche est celui du LECTEUR de la loi partagée
+ * (`resolveConversationSections` / `localCalendarDate`, qui compare deux
+ * jours dans le `timeZone` REÇU, jamais celui du process) — le témoin fixe
+ * `'Europe/Paris'`, donc c'est ce fuseau qui décide ici aussi, PAS
+ * `new Date().getDate()` : sous `bun test`, le process tourne en `UTC`
+ * (`Intl.DateTimeFormat().resolvedOptions().timeZone === 'UTC'`, vérifié),
+ * si bien qu'une arithmétique en heure LOCALE DU PROCESS ne détecte jamais la
+ * traversée de minuit parisienne — c'est le bogue que la première version de
+ * cette ancre a laissé passer (elle comparait des horloges UTC en croyant
+ * comparer des horloges de Paris).
+ *
+ * `THREAD_ANCHOR` reproduit `minutesAgo(THREAD_SPAN_MINUTES)` (le PLUS ANCIEN
+ * horodatage du fil) SAUF quand son jour calendaire PARISIEN diffère de celui
+ * de « maintenant » — auquel cas l'ancre avance minute par minute jusqu'à
+ * rejoindre le jour calendaire parisien de « maintenant » (au plus
+ * `THREAD_SPAN_MINUTES` itérations, exécutées une seule fois au chargement du
+ * module). `threadMoment(n)` reporte alors chaque horodatage à la même
+ * distance de l'ancre qu'il l'aurait été de « maintenant » avec
+ * `minutesAgo(n)` : l'ORDRE et les ÉCARTS entre messages sont préservés au
+ * tick près, seule la traversée de minuit disparaît.
+ *
+ * SECONDE TRAVERSÉE (#5797) — le paragraphe ci-dessus corrige la traversée
+ * DANS la fenêtre `minutesAgo(96..82)`, mais `THREAD_ANCHOR` se calculait sur
+ * son PROPRE `new Date()`, capturé au CHARGEMENT du module, pendant que
+ * `sections.test.ts` capturait un SECOND `new Date()`, indépendant, à
+ * l'EXÉCUTION du test. Si minuit parisien tombait entre les deux (le module
+ * se charge avant que la suite ne s'exécute), leurs jours calendaires
+ * parisiens divergeaient : `THREAD_ANCHOR` restait sur l'ancien jour pendant
+ * que le test attendait le nouveau — le test lui-même utilise `THREAD_ANCHOR`
+ * pour tout ce qu'il place, mais pas `THREAD_ANCHOR` pour choisir la fenêtre.
+ * `FIXTURES_LOADED_AT`, exporté ci-dessous, est l'UNIQUE `new Date()` du
+ * module — tout consommateur qui a besoin d'un « maintenant » cohérent avec
+ * cette ancre (au premier chef `sections.test.ts`) le RÉUTILISE au lieu d'en
+ * capturer un second : deux lectures indépendantes ne peuvent plus diverger
+ * puisqu'il n'en reste qu'une seule.
+ */
+const THREAD_SPAN_MINUTES = 96;
+export const parisCalendarDay = (date: Date): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(
+    date,
+  );
+
+/**
+ * Pure — extraite pour être testée indépendamment du chargement du module
+ * (#5797) : quel que soit `at`, l'ancre rendue tombe TOUJOURS dans le jour
+ * calendaire parisien de `at`, y compris quand `at` est à quelques minutes
+ * d'un minuit parisien de part ou d'autre.
+ */
+export const resolveThreadAnchor = (at: Date, spanMinutes: number): Date => {
+  const todayInParis = parisCalendarDay(at);
+  let candidate = new Date(at.getTime() - spanMinutes * 60_000);
+  while (parisCalendarDay(candidate) !== todayInParis) {
+    candidate = new Date(candidate.getTime() + 60_000);
+  }
+  return candidate;
+};
+
+/**
+ * L'instant PARTAGÉ entre l'ancre du fil et tout consommateur qui a besoin
+ * d'un « maintenant » cohérent avec elle — un seul `new Date()` au
+ * chargement du module, jamais deux (#5797, voir le commentaire ci-dessus).
+ */
+export const FIXTURES_LOADED_AT: Date = new Date();
+
+const THREAD_ANCHOR: Date = resolveThreadAnchor(FIXTURES_LOADED_AT, THREAD_SPAN_MINUTES);
+
+/** `threadMoment(96)` = le premier message du fil ; `threadMoment(82)` = le dernier — voir `THREAD_ANCHOR`. */
+export const threadMoment = (minutesAgoAtWriting: number): Date =>
+  new Date(THREAD_ANCHOR.getTime() + (THREAD_SPAN_MINUTES - minutesAgoAtWriting) * 60_000);
+
 export const VIEWER_ID = 'u-viewer';
 /** Le `username` du lecteur de fixture — `Participant` ne le porte pas à la racine (`participant.ts:125-150`). */
 export const VIEWER_HANDLE = 'vous';

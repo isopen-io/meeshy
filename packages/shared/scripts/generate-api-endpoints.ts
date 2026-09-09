@@ -20,16 +20,7 @@
  * le gateway applique déjà à ses propres scripts CLI.
  */
 
-// `packages/shared` est ESM (`"type": "module"`) tandis que la racine du dépôt
-// est CJS : la détection des exports nommés d'un module CJS importé depuis ESM
-// échoue sur un fichier TypeScript compilé à la volée. `createRequire` charge
-// le garde-fou par le chemin CJS, qui lui fonctionne — c'est exactement ce que
-// fait le script jumeau du gateway, sans le savoir, parce qu'il EST CJS (#5757).
-import { createRequire } from 'node:module';
-const requireCjs = createRequire(import.meta.url);
-const { exigerNodeRecent } = requireCjs('../../../scripts/require-node-runtime.ts') as {
-  exigerNodeRecent: (script: string) => void;
-};
+import { exigerNodeRecent } from '../../../scripts/node-guard/require-node-runtime.js';
 
 // AVANT tout autre import : ce qui suit charge undici par transitivite,
 // et un Node trop ancien y echoue sur une pile qui ne nomme pas la cause.

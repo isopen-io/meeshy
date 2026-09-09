@@ -5,15 +5,20 @@ import { Avatar } from '@/components/avatar';
 import { Glyph } from '@/components/glyph';
 import { LensRow } from '@/components/lens-row';
 import { LensSection } from '@/components/lens-sticker';
+import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { useScene } from '@/lib/lens/scene';
-import { CONVERSATIONS, VIEWER_ID } from '@/lib/api/fixtures';
+import { apiConfig } from '@/lib/api/config';
+import { rowAction, useConversations } from '@/lib/api/query';
+import type { Conversation } from '@/lib/api/types';
+import { sessionStore } from '@/lib/api/session';
+import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf } from '@/lib/accent';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
 import { resolveLensSections } from '@/lib/lens/sections';
-import { READER_LANGUAGES } from '@/lib/reader';
+import { useOnline } from '@/lib/net/online';
+import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useMinute } from '@/lib/view/use-minute';
-import type { RowActionId } from '@/lib/view/row-actions';
 import { initialsOf, titleOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
 
@@ -29,35 +34,104 @@ import { Link } from '@/routes/route-table';
  */
 
 /**
- * UN SEUL callback MODULE-LEVEL, jamais une fabrique `(conversation) => (id)
- * => …` recréée à chaque rendu de chaque rangée (99 conversations × un
- * nouveau closure par image de défilement magnifiée, ou pire, par tick de
- * scène/d'horloge maintenant que `LensRow` est `memo`-isée, #5694
- * cinquième point). Prend l'ID plutôt que l'objet `Conversation` :
- * `handleRowAction` lui-même reste ainsi une référence STABLE d'un rendu à
- * l'autre — `LensRow` la reçoit directement, sans wrapper — et le lookup
- * dans `CONVERSATIONS` ne coûte qu'au moment du CLIC, jamais au rendu.
+ * LA HAUTEUR RÉSERVÉE DU RAIL (#5650, F5/§5 étape 9, revue-correction) —
+ * `check-gateway-build.mjs` comparait l'`offsetTop` de la première rangée
+ * avant/après résolution et rougissait de 130 px : le rail (avatar 72 +
+ * liséré + libellé) se PEIGNAIT VIDE tant que `list.data === undefined`
+ * (`conversations` vaut `[]`), puis SAUTAIT à sa hauteur réelle une fois les
+ * conversations arrivées.
+ *
+ * La hauteur se réserve par une TUILE FANTÔME — la MÊME boîte que la vraie,
+ * rendue invisible — jamais par un nombre écrit à la main (même discipline
+ * que `SkeletonSectionStub`, `components/lens-skeleton.tsx`, et D-4 : aucune
+ * cote de géométrie ne s'écrit ici). Un `minHeight: 130` aurait deux torts
+ * qu'une tuile n'a pas : il fige une cote qui dérive dès que l'avatar ou la
+ * typographie du libellé bougent, et il creuse un TROU de 130 px au-dessus
+ * de l'état vide d'un compte qui n'a encore AUCUNE conversation — le tout
+ * premier écran d'un nouvel arrivant.
  */
-function handleRowAction(conversationId: string, id: RowActionId): void {
-  const conversation = CONVERSATIONS.find((c) => c.id === conversationId);
-  if (conversation === undefined) return;
-  const { overrides, togglePin, toggleMute, toggleArchive, markRead, markUnread } = conversationStore.getState();
-  const flags = effectiveFlagsOf(conversation, overrides);
-  switch (id) {
-    case 'pin':
-      togglePin(conversation.id, flags.isPinned);
-      return;
-    case 'mute':
-      toggleMute(conversation.id, flags.isMuted);
-      return;
-    case 'archive':
-      toggleArchive(conversation.id, flags.isArchived);
-      return;
-    case 'read':
-      if (effectiveUnreadOf(conversation, overrides) > 0) markRead(conversation.id);
-      else markUnread(conversation.id);
-      return;
-  }
+function RailPlaceholderTile() {
+  return (
+    <li aria-hidden="true" className="flex w-[88px] shrink-0 flex-col items-center gap-1.5" style={{ visibility: 'hidden' }}>
+      <span className="grid place-items-center rounded-chip p-[2.5px]">
+        <Avatar initials="" color="var(--color-ios-card)" size={72} />
+      </span>
+      <span className="w-full truncate text-center text-check">&nbsp;</span>
+    </li>
+  );
+}
+
+/**
+ * `rowAction` (#5650, F2/F4/§5 étape 9) — RÉFÉRENCE DE MODULE STABLE
+ * importée de `lib/api/query.ts` (« l'adaptateur UNIQUE ») : elle applique
+ * l'override optimiste PUIS, en source `gateway`, appelle le port réel et
+ * arbitre l'issue (`performRowAction`) — `handleRowAction` (module-level, ce
+ * fichier) n'existe plus : sa seule responsabilité (l'override immédiat)
+ * vit désormais avec l'appel réseau qui la CONFIRME ou la DÉFAIT, un seul
+ * geste au lieu de deux fils divergents.
+ */
+
+/**
+ * L'ÉCHEC DE LA LISTE, à CACHE VIDE — iOS `.syncError`
+ * (`ConversationListView.swift:1761-1793`) : icône, titre, sous-titre,
+ * « Réessayer » ⇒ `refetch()`, plus la phrase « Hors ligne » quand c'est le
+ * cas (même forme que `ProgressionError`, `routes/progression.tsx`).
+ *
+ * Rendu comme UN `<li>`, jamais un conteneur à part : cet écran garde
+ * `<ul ref={frame} id="contenu">` MONTÉ EN PERMANENCE (chargement, échec,
+ * contenu réel confondus) — c'est ce qui laisse `useScene(frame)` attacher
+ * ses écouteurs UNE fois, au montage, sans jamais les perdre quand l'état
+ * bascule (§5 étape 9, revue-correction : un `<ul>` REMPLACÉ par un autre
+ * nœud laissait la scène de perspective orpheline — mesuré par
+ * `check-lens.mjs`, six invariants rompus).
+ */
+/** Référence STABLE — un `[]` littéral par rendu changerait l'identité de
+ * `conversations` à chaque image et défairait les mémos qui en dépendent. */
+const EMPTY_CONVERSATIONS: readonly Conversation[] = [];
+
+/**
+ * `content-center` ET NON `place-items-center` SEUL (#5650, revue-correction)
+ * — `grid flex-1 place-items-center` centre chaque enfant DANS SA RANGÉE, et
+ * les rangées implicites se répartissent sur toute la hauteur : à l'écran,
+ * l'icône était collée en haut, le titre au tiers, le bouton en bas — quatre
+ * éléments éparpillés au lieu d'un bloc. `align-content: center` TASSE les
+ * rangées au centre ; `gap-3` redevient l'espacement réel entre elles.
+ */
+function ListError({ online, onRetry }: { readonly online: boolean; readonly onRetry: () => void }) {
+  return (
+    <li role="alert" className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center">
+      <span style={{ color: 'var(--color-error)' }}>
+        <Glyph name="warningCircle" size={28} />
+      </span>
+      <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+        {online ? 'Impossible de charger vos conversations' : 'Hors ligne'}
+      </p>
+      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {/*
+          UNE PHRASE DE PRODUIT, JAMAIS LE MESSAGE DU SERVEUR
+          (revue-correction #5650) — cette ligne rendait `error.message`,
+          c'est-à-dire la CHAÎNE PLATE que la passerelle sert
+          (`sendError`) : « Internal server error », « Unauthorized access
+          to this conversation »… de l'ANGLAIS technique sur le premier
+          écran d'un lecteur francophone, et une fuite d'interne quand la
+          chaîne nomme une contrainte ou une table. iOS ne fait pas
+          autrement : `conversations.error.title` + un sous-titre FIXE
+          (`ConversationListView.swift:1761-1793`), jamais l'erreur brute.
+        */}
+        {online
+          ? 'Réessayez dans un instant — vos messages sont en sécurité.'
+          : 'Vos conversations s’afficheront à la reconnexion.'}
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+        style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
+      >
+        Réessayer
+      </button>
+    </li>
+  );
 }
 
 export default function ConversationsScreen() {
@@ -65,7 +139,35 @@ export default function ConversationsScreen() {
   const [search, setSearch] = useState('');
   const frame = useRef<HTMLUListElement | null>(null);
   const { focus, level } = useScene(frame);
+  const online = useOnline();
+
+  /**
+   * LA SOURCE (#5650) — `useConversations()` sert les fixtures OU la
+   * passerelle selon `apiConfig.source`, résolu à la CONSTRUCTION. `session`
+   * et `viewer` suivent la même règle que `thread.tsx` (`resolveViewer`,
+   * `lib/api/viewer.ts`) : en fixtures, l'identité du POC ; en gateway,
+   * la session RÉELLE.
+   */
+  const list = useConversations();
+  /** `loading` — CACHE VIDE ET requête en vol, jamais « une requête est en
+   * cours » : un rafraîchissement de fond sur un cache PLEIN ne remet ni
+   * squelette ni `aria-busy` (§ Instant App Principles). Et `isError` sur un
+   * cache vide est un ÉCHEC, pas un chargement — annoncer « Chargement des
+   * conversations » au-dessus d'un `role="alert"` masquerait l'alerte pour
+   * un lecteur d'écran, qui n'annonce pas le contenu d'une région occupée. */
+  const loading = list.data === undefined && !list.isError;
+  const session = useStore(sessionStore, (s) => s.session);
+  const viewer = useMemo(() => resolveViewer({ source: apiConfig.source, session }), [session]);
+  const { languages: readerLanguages } = useReaderLanguages();
+  const conversations = list.data ?? EMPTY_CONVERSATIONS;
   const overrides = useStore(conversationStore, (s) => s.overrides);
+  /** Le corpus du RAIL — même précédence iOS que `applyFilter` (l'archivé
+   * sort), mémorisé parce qu'il se lit DEUX fois par rendu (la décision de
+   * peindre la région, puis les tuiles). */
+  const railConversations = useMemo(
+    () => conversations.filter((c) => !effectiveFlagsOf(c, overrides).isArchived),
+    [conversations, overrides],
+  );
 
   /**
    * LES SECTIONS (#5694, écart 6) — `resolveLensSections` re-partitionne le
@@ -91,17 +193,17 @@ export default function ConversationsScreen() {
   const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
   const minute = useMinute();
   const { visible, emptiness, sections } = useMemo(() => {
-    const kept = applyFilter({ conversations: CONVERSATIONS, filter, search, viewerId: VIEWER_ID, overrides });
+    const kept = applyFilter({ conversations, filter, search, viewerId: viewer.id ?? '', overrides });
     const ordered = orderConversations(kept, overrides);
     return {
       visible: ordered,
-      emptiness: emptinessOf(CONVERSATIONS, ordered),
+      emptiness: emptinessOf(conversations, ordered),
       sections: resolveLensSections({ conversations: kept, overrides, now: new Date(), timeZone }),
     };
     // `minute` n'entre dans AUCUNE des expressions ci-dessus : c'est
     // volontaire — elle y est la clé qui fait ré-évaluer `new Date()`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, search, overrides, timeZone, minute]);
+  }, [conversations, filter, search, viewer.id, overrides, timeZone, minute]);
 
   return (
     /* `pt-safe` : l'encoche HAUTE est portee par le CADRE de l'ecran, dans ses
@@ -177,10 +279,20 @@ export default function ConversationsScreen() {
         la liste sans jamais la retirer du rail — deux vérités pour un même
         état, sur le MÊME écran.
       */}
+      {/*
+        LE RAIL NE SE PEINT PAS QUAND IL N'A RIEN À MONTRER (revue-correction
+        #5650) — un compte sans conversation, ou dont tout est archivé, ne
+        garde ni région étiquetée vide pour le lecteur d'écran ni bande
+        blanche au-dessus de son état vide. Pendant le CHARGEMENT en
+        revanche, il se peint avec sa tuile fantôme : c'est ce qui tient
+        l'`offsetTop` du contenu identique avant et après la résolution.
+      */}
+      {loading || railConversations.length > 0 ? (
       <section aria-label="Accès rapide aux conversations" className="shrink-0 overflow-x-auto pb-1">
         <ul className="flex gap-3 px-4 py-2">
-          {CONVERSATIONS.filter((c) => !effectiveFlagsOf(c, overrides).isArchived).map((c) => {
-            const title = titleOf(c, VIEWER_ID);
+          {railConversations.length === 0 ? <RailPlaceholderTile /> : null}
+          {railConversations.map((c) => {
+            const title = titleOf(c, viewer.id ?? '');
             return (
               <li key={c.id} className="flex w-[88px] shrink-0 flex-col items-center gap-1.5">
                 <Link
@@ -210,6 +322,7 @@ export default function ConversationsScreen() {
           })}
         </ul>
       </section>
+      ) : null}
 
       <nav aria-label="Filtres" className="shrink-0 overflow-x-auto">
         <ul className="flex gap-2 px-4 py-1.5">
@@ -253,7 +366,36 @@ export default function ConversationsScreen() {
         `y = 0` : 8 px de rangée défilaient hors de portée de l'en-tête collant
         et s'y peignaient tranchés au-dessus. Voir le doc-comment de `LensSection`.
       */}
-      <ul ref={frame} id="contenu" className="flex flex-1 flex-col overflow-y-auto px-2">
+      {/*
+        `<ul ref={frame} id="contenu">` reste MONTÉ EN PERMANENCE — voir le
+        doc-comment de `ListError` : c'est ce qui laisse `useScene(frame)`
+        attacher ses écouteurs UNE fois et ne jamais les perdre quand l'état
+        du réseau bascule. `aria-busy`/`aria-label` reflètent l'état de
+        CHARGEMENT sur ce MÊME nœud, jamais un second conteneur.
+      */}
+      <ul
+        ref={frame}
+        id="contenu"
+        className="flex flex-1 flex-col overflow-y-auto px-2"
+        {...(loading ? { 'aria-busy': true, 'aria-label': 'Chargement des conversations' } : {})}
+      >
+        {/*
+          LES TROIS ÉTATS DU RÉSEAU (#5650, F5/§5 étape 9), même doctrine que
+          `ConversationListViewModel.performLoadConversations` : `list.data`
+          présent (même STALE) ⇒ peindre SANS spinner ; `undefined` ET
+          `isError` (cache VIDE, requête en échec) ⇒ `ListError` avec
+          « Réessayer » ; `undefined` seul (cache vide, requête en vol) ⇒ le
+          squelette à géométrie exacte. Un refetch de fond qui échoue alors
+          qu'une donnée est déjà affichée NE CHANGE RIEN à l'écran (iOS
+          `.offline` garde le snapshot) : c'est la branche `list.data`
+          présent qui l'assure, quel que soit `list.isError`.
+        */}
+        {list.data === undefined && list.isError ? (
+          <ListError online={online} onRetry={() => void list.refetch()} />
+        ) : loading ? (
+          <LensSkeletonRows />
+        ) : (
+          <>
         {/*
           SECTIONS ET STICKERS COLLANTS (#5694, écart 6) — `pinnedViews:
           [.sectionHeaders]` côté iOS. Chaque section est un BLOC (`LensSection`)
@@ -269,11 +411,11 @@ export default function ConversationsScreen() {
               <LensRow
                 key={c.id}
                 conversation={c}
-                languages={READER_LANGUAGES}
-                viewerId={VIEWER_ID}
+                languages={readerLanguages}
+                viewerId={viewer.id ?? ''}
                 flags={effectiveFlagsOf(c, overrides)}
                 unreadCount={effectiveUnreadOf(c, overrides)}
-                onRowAction={handleRowAction}
+                onRowAction={rowAction}
                 status={{
                   /**
                    * L'APLATISSEMENT AU REPOS (#5694, écart 2) —
@@ -360,6 +502,8 @@ export default function ConversationsScreen() {
             </button>
           </li>
         ) : null}
+          </>
+        )}
       </ul>
 
       {/* La barre de recherche EN BAS — a portee du pouce (cf. doc-comment). */}

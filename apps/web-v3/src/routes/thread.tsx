@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useStore } from 'zustand/react';
@@ -21,15 +22,11 @@ import { FocalRow } from '@/components/focal-row';
 import { Glyph } from '@/components/glyph';
 import { ReadingModeChip } from '@/components/reading-mode-chip';
 import { SummarySkeleton } from '@/components/summary/summary-skeleton';
+import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiConfig } from '@/lib/api/config';
-import {
-  CONVERSATIONS,
-  PARTICIPANTS,
-  VIEWER_ID,
-  hasOlderMessagesOf,
-  messagesOf,
-  recordViewOnceConsumption,
-} from '@/lib/api/fixtures';
+import { recordViewOnceConsumption } from '@/lib/api/fixtures';
+import { messagesQueryKey } from '@/lib/api/messages';
+import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
 import { applyConsumption } from '@/lib/api/view-once';
 import type { Message } from '@/lib/api/types';
 import { served } from '@/lib/api/prism';
@@ -40,7 +37,7 @@ import { initialsOf, isGroup, peerOf, presenceOf, titleOf, unreadOf } from '@/li
 import { useParams } from '@/lib/router';
 import { dayLabel, place } from '@/lib/grouping';
 import { Link } from '@/routes/route-table';
-import { READER_LANGUAGES, READER_LOCALE } from '@/lib/reader';
+import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useOnline } from '@/lib/net/online';
 import type { LocalDelivery } from '@/lib/view/message';
 import { menuRows } from '@/lib/reading-mode/catalog';
@@ -51,6 +48,7 @@ import {
   usesFlatRow,
 } from '@/lib/reading-mode/decision';
 import { readingModeStore } from '@/lib/reading-mode/store';
+import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { useThreadScene } from '@/lib/reading-mode/scene';
 import { sceneStyleVars } from '@/lib/reading-mode/metrics';
 
@@ -62,15 +60,6 @@ import { sceneStyleVars } from '@/lib/reading-mode/metrics';
  * c'est le `fallback` de la `Suspense` qui attend ce module.
  */
 const SummaryHost = lazy(() => import('@/components/summary/summary-host'));
-
-/**
- * LE SCOPE DU MAGASIN DE MODE DE LECTURE — `'local'` tant qu'aucune session
- * n'existe (#5555, D-13 : le scope prend un `userId` sans que ce fichier ni
- * `store.ts` ne bougent). C'est la même clé pour tout visiteur de CETTE
- * WebView tant que la session n'est pas branchée — acceptable ici (POC de
- * fixtures), à corriger par le lot `staging`.
- */
-const READING_MODE_SCOPE = 'local';
 
 /**
  * LE FIL.
@@ -91,27 +80,43 @@ const READING_MODE_SCOPE = 'local';
  */
 export default function ThreadScreen() {
   const { conversation: id } = useParams<'/c/$conversation'>();
-  const conversation = CONVERSATIONS.find((c) => c.id === id) ?? CONVERSATIONS[0]!;
+
+  /**
+   * LA SOURCE (#5650, F2/F5/§5 étape 10) — `useThreadData(id)` compose
+   * `useConversation`/`useMessages` (`lib/api/query.ts`) : `conversation`
+   * peut être `undefined` (chargement, refus) — plus AUCUN repli sur une
+   * autre conversation (F8, `thread.test.tsx` § id inconnu).
+   */
+  const threadData = useThreadData(id);
+  const conversation = threadData.conversation;
+  const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
-  const [messages, setMessages] = useState<readonly Message[]>(() => messagesOf(id));
-  const [typing] = useState(true);
+
+  /**
+   * `pendingSends` — les envois OPTIMISTES de CETTE session, jamais
+   * confirmés par le serveur (#5493 : pas de transport d'écriture ce tour).
+   * `messages` (plus bas) les COMPOSE avec `threadData.messages` — le
+   * domaine CONFIRMÉ, qui vit désormais dans le cache TanStack.
+   */
+  const [pendingSends, setPendingSends] = useState<readonly Message[]>([]);
+  const messages = useMemo(() => [...threadData.messages, ...pendingSends], [threadData.messages, pendingSends]);
   const online = useOnline();
 
   /**
    * QUI LIT (#5695, étape 9) — `resolveViewer` (`lib/api/viewer.ts`) remplace
    * les deux `isAnonymous: false` en dur qui précédaient : en source
-   * `fixtures`, `viewer.id === VIEWER_ID` par construction (inchangé,
-   * observable nulle part) ; en `gateway`, la session RÉELLE tranche.
+   * `fixtures`, `viewer.id` égale l'identifiant du POC par construction
+   * (inchangé, observable nulle part) ; en `gateway`, la session RÉELLE tranche.
    */
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiConfig.source, session }), [session]);
 
   /**
-   * LA FENÊTRE COUVRE-T-ELLE TOUT LE NON-LU ? — mime `cursorPagination.hasMore`
-   * (`hasOlderMessagesOf`, `lib/api/fixtures.ts`) : c'est ce qui rend
-   * « Sur les N derniers messages » (Résumé Vivant) atteignable sans mentir.
+   * LA FENÊTRE COUVRE-T-ELLE TOUT LE NON-LU ? — `threadData.hasOlder` mime
+   * `cursorPagination.hasMore` : c'est ce qui rend « Sur les N derniers
+   * messages » (Résumé Vivant) atteignable sans mentir.
    */
-  const windowCoversUnread = !hasOlderMessagesOf(conversation.id);
+  const windowCoversUnread = !threadData.hasOlder;
 
   /**
    * L'ÉTAT LOCAL D'UN ENVOI — à CÔTÉ du domaine, jamais dedans.
@@ -134,21 +139,16 @@ export default function ThreadScreen() {
    * intervalle (`memo`), il ne remonte que l'INSTANT d'expiration, jamais un
    * `setInterval` porté par la rangée elle-même.
    *
-   * `consume` — la forme de la réponse `POST …/consume` MIMÉE
-   * (`isFullyConsumed: true` sur `maxViewOnceCount: 1`,
-   * `messages-view-once.ts:50-62`) : le fil lit toujours les fixtures
-   * (`apiConfig.source`, `:22`), donc `consume` n'atteint jamais le réseau —
-   * le PORT réel (`lib/api/view-once.ts::consumeViewOnce`) et le RÉDUCTEUR
-   * (`applyConsumption`) que ce lot écrit sont ceux que #5493 (seconde
-   * moitié) branchera sur `apiConfig.source === 'gateway'`. Hors ligne, la
-   * consommation échoue PROPREMENT (`false`) — la fenêtre ne s'ouvre pas.
-   *
-   * `recordViewOnceConsumption` — la MOITIÉ qui manquait (revue #5676,
-   * défaut 7) : `applyConsumption` ne change que `messages`, l'état LOCAL de
-   * CETTE route, qui repart des fixtures à chaque montage. Sans elle, un
-   * aller-retour vers `/` puis un retour sur ce fil relisait
-   * `viewOnceCount: 0` et le secret se relisait — la couche de données
-   * (`lib/api/fixtures.ts`) est le seul endroit qui survit au démontage.
+   * `consume` (#5650, §5 étape 10) — écrit désormais dans le CACHE de
+   * requêtes (`queryClient.setQueryData(messagesQueryKey(id), …)`), jamais
+   * un état local : `threadData.messages` (dérivé du MÊME cache par
+   * `select`) reflète la consommation au rendu SUIVANT, sans second état à
+   * tenir synchronisé. En source `fixtures`, `recordViewOnceConsumption`
+   * fait survivre la consommation à un aller-retour vers `/` (la couche de
+   * données est le seul endroit qui survit au démontage) ; en `gateway`,
+   * c'est le port `consumeViewOnce` (`lib/api/view-once.ts`) qui écrira la
+   * confirmation serveur — HORS PÉRIMÈTRE de ce diff (l'écriture cache
+   * suffit pour la session courante).
    */
   const [expiredIds, setExpiredIds] = useState<ReadonlySet<string>>(new Set());
   const onEphemeralExpired = useCallback((messageId: string) => {
@@ -157,16 +157,33 @@ export default function ThreadScreen() {
   const consume = useCallback(
     async (messageId: string): Promise<boolean> => {
       if (!online) return false;
-      recordViewOnceConsumption(messageId);
-      setMessages((previous) => applyConsumption(previous, { messageId, viewOnceCount: 1 }));
+      if (apiConfig.source === 'fixtures') recordViewOnceConsumption(messageId);
+      queryClient.setQueryData<{ readonly messages: readonly Message[]; readonly hasOlder: boolean }>(
+        messagesQueryKey(id),
+        (page) =>
+          page === undefined
+            ? page
+            : { ...page, messages: applyConsumption(page.messages, { messageId, viewOnceCount: 1 }) },
+      );
       return true;
     },
-    [online],
+    [online, queryClient, id],
   );
 
-  const otherUnread = CONVERSATIONS.filter((c) => c.id !== conversation.id).reduce(
-    (total, c) => total + unreadOf(c),
-    0,
+  /**
+   * `otherUnread` (#5650, §5 étape 10) — le cache PARTAGÉ de la liste, OBSERVÉ
+   * (`useConversationsSnapshot`, `enabled: false` — jamais une requête de
+   * plus) plutôt que lu une fois : la liste et le fil partagent le MÊME
+   * `QueryClient` (`appQueryClient`, `main.tsx`), donc le compteur suit ce
+   * qui s'y écrit. Un `getQueryData()` au premier rendu restait à ZÉRO pour
+   * toujours sur un lien direct vers `/c/:id`, où le cache est encore vide.
+   * Filtré sur l'id de ROUTE, pas `conversation?.id` — le compteur reste
+   * correct même pendant le chargement de cette conversation.
+   */
+  const listSnapshot = useConversationsSnapshot();
+  const otherUnread = useMemo(
+    () => (listSnapshot ?? []).filter((c) => c.id !== id).reduce((total, c) => total + unreadOf(c), 0),
+    [listSnapshot, id],
   );
   /**
    * `place()` rend des objets NEUFS à chaque appel : sans ce `useMemo`,
@@ -178,14 +195,25 @@ export default function ThreadScreen() {
    * démentie par ce seul appel). `messages` est un état, donc son identité
    * ne bouge qu'à l'arrivée d'un message.
    */
-  const placed = useMemo(() => place(messages, { locale: READER_LOCALE }), [messages]);
-  const group = isGroup(conversation);
+  /**
+   * `conversationId`/`conversationType`/`memberCount` — accesseurs SÛRS,
+   * `conversation` pouvant être `undefined` pendant `pending`/`refused`/
+   * `error` (F8) : les hooks ci-dessous s'exécutent à CHAQUE rendu (règle des
+   * Hooks), y compris ceux-là — leur résultat est sans conséquence tant que
+   * le rendu final (plus bas) ne montre pas encore le fil réel.
+   */
+  const conversationId = conversation?.id ?? id;
+  const { languages: readerLanguages, locale: readerLocale } = useReaderLanguages();
+  const scope = useMemo(() => readingModeScopeOf(viewer), [viewer.id]);
+  const placed = useMemo(() => place(messages, { locale: readerLocale }), [messages, readerLocale]);
+  const group = conversation !== undefined && isGroup(conversation);
 
   /**
    * LE MODE DE LECTURE (#5566) — la LOI vit dans `@meeshy/shared`
    * (`decision.ts` ne fait que la consommer avec le catalogue de cet écran,
    * D-14) ; le CHOIX COLLANT vit dans `readingModeStore`, scopé
-   * `(lecteur, conversation)`.
+   * `(lecteur, conversation)` — `scope` REMPLACE la constante `'local'`
+   * figée (#5650, F7).
    *
    * `stickyMode` est un ÉTAT REACT qui MIROITE le magasin (comme
    * `@Published mode` du contrôleur iOS) : le magasin est la source de
@@ -193,7 +221,7 @@ export default function ThreadScreen() {
    * sélection change.
    */
   const [stickyMode, setStickyMode] = useState<ConversationReadingMode | null>(() =>
-    readingModeStore.getPreference(READING_MODE_SCOPE, conversation.id),
+    readingModeStore.getPreference(scope, conversationId),
   );
   /**
    * Figés à l'OUVERTURE (comme l'`init` du contrôleur iOS) : la branche
@@ -207,13 +235,13 @@ export default function ThreadScreen() {
    * image, pour une valeur que `useRef` jette aussitôt.
    */
   const [openedAt] = useState(() => new Date());
-  const [lastOpenedAt] = useState(() => readingModeStore.lastOpenedAt(READING_MODE_SCOPE, conversation.id));
+  const [lastOpenedAt] = useState(() => readingModeStore.lastOpenedAt(scope, conversationId));
   useEffect(() => {
-    readingModeStore.noteOpened(READING_MODE_SCOPE, conversation.id, openedAt);
-    // Volontairement sur la seule CONVERSATION : ouvrir une fois par visite
-    // de cet écran, jamais à chaque rendu.
+    readingModeStore.noteOpened(scope, conversationId, openedAt);
+    // Volontairement sur la seule CONVERSATION (et son scope) : ouvrir une
+    // fois par visite de cet écran, jamais à chaque rendu.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversation.id]);
+  }, [scope, conversationId]);
 
   /**
    * MÉMORISÉS, parce que le virtualiseur re-rend cet écran à chaque image de
@@ -225,7 +253,7 @@ export default function ThreadScreen() {
   const readingDecision = useMemo(
     () =>
       resolveThreadMode({
-        unreadCount: unreadOf(conversation),
+        unreadCount: conversation === undefined ? 0 : unreadOf(conversation),
         lastOpenedAt,
         now: openedAt,
         sticky: toStickyPreference(stickyMode),
@@ -233,13 +261,23 @@ export default function ThreadScreen() {
         // `viewer.isAnonymous` a un effet OBSERVABLE ici (un invité perd
         // `summary`, la loi le retire de `threadCapabilities`).
         isAnonymous: viewer.isAnonymous,
-        conversationType: conversation.type,
+        conversationType: conversation?.type ?? 'direct',
+        // #5696 : l'éligibilité de la Rivière lit `memberCount` comme iOS
+        // (`ConversationView.swift:569`) — MÊME champ que celui affiché
+        // juste en-dessous (« N participants »), voir `thread.tsx` ligne
+        // sur `conversation.memberCount`.
+        memberCount: conversation?.memberCount ?? null,
       }),
     [conversation, lastOpenedAt, openedAt, stickyMode, viewer.isAnonymous],
   );
   const readingCapabilities = useMemo(
-    () => threadCapabilities({ isAnonymous: viewer.isAnonymous, conversationType: conversation.type }),
-    [conversation.type, viewer.isAnonymous],
+    () =>
+      threadCapabilities({
+        isAnonymous: viewer.isAnonymous,
+        conversationType: conversation?.type ?? 'direct',
+        memberCount: conversation?.memberCount ?? null,
+      }),
+    [conversation?.type, conversation?.memberCount, viewer.isAnonymous],
   );
   const readingMenuRows = useMemo(
     () =>
@@ -252,11 +290,11 @@ export default function ThreadScreen() {
   );
   const currentRow = readingMenuRows.find((row) => row.mode === readingDecision.mode);
   const selectReadingMode = (mode: ConversationReadingMode) => {
-    readingModeStore.setPreference(READING_MODE_SCOPE, conversation.id, mode);
+    readingModeStore.setPreference(scope, conversationId, mode);
     setStickyMode(mode);
   };
   const resetReadingModeToAuto = () => {
-    readingModeStore.setPreference(READING_MODE_SCOPE, conversation.id, null);
+    readingModeStore.setPreference(scope, conversationId, null);
     setStickyMode(null);
   };
 
@@ -296,7 +334,15 @@ export default function ThreadScreen() {
    * n'est PAS `bubbles` (« densité uniforme, zéro perspective » ne parle
    * que de l'ÉLECTION, jamais du révélé).
    */
-  const scene = useThreadScene(scroller, { mode: readingDecision.mode });
+  /**
+   * `ready` — le cadre `<main ref={scroller}>` n'existe qu'une fois le fil
+   * RÉSOLU (les états transitoires plus bas rendent d'autres arbres) et il
+   * n'y a de rangée à élire que si le fil en porte : `placed.length > 0`
+   * dit les deux à la fois, et RE-DÉCLENCHE la scène au commit où le cadre
+   * apparaît — exactement comme l'ancrage bas (`count`, plus bas) le fait
+   * déjà pour la même raison.
+   */
+  const scene = useThreadScene(scroller, { mode: readingDecision.mode, ready: placed.length > 0 });
 
   /**
    * LE SAUT DE CITATION (#5566, défaut 10) — le bouton de citation promettait
@@ -376,7 +422,7 @@ export default function ThreadScreen() {
   };
   const onResumeThread = () => {
     selectReadingMode('script');
-    setPendingJump(messages.find((m) => m.senderId !== VIEWER_ID)?.id ?? null);
+    setPendingJump(messages.find((m) => m.senderId !== (viewer.id ?? ''))?.id ?? null);
   };
 
   /**
@@ -431,12 +477,29 @@ export default function ThreadScreen() {
     // Volontairement sur le seul COMPTE : se ré-ancrer à chaque rendu
     // empêcherait l'utilisateur de remonter son historique.
   }, [count]);
-  const title = titleOf(conversation, VIEWER_ID);
+
+  /**
+   * LES TROIS ÉTATS AVANT LE RENDU RÉEL (#5650, F5/F8/§5 étape 10) — TOUS les
+   * HOOKS ci-dessus se sont déjà exécutés (règle des Hooks : jamais un hook
+   * après un retour anticipé) ; tout ce qui suit est du calcul SIMPLE, en
+   * sécurité derrière ce garde. `refused` prime sur `error` (un id 403/404
+   * reste un refus, jamais une panne réseau à réessayer) ; `pending` couvre
+   * aussi le cas défensif `conversation === undefined` — la narrowing
+   * TypeScript qui suit rend `conversation` NON-optionnel pour le reste de
+   * la fonction.
+   */
+  if (threadData.status === 'refused') return <ThreadRefused />;
+  if (threadData.status === 'error') return <ThreadError onRetry={threadData.refetch} />;
+  if (threadData.status === 'pending' || conversation === undefined) return <ThreadSkeleton />;
+
+  const title = titleOf(conversation, viewer.id ?? '');
   const accent = accentOf(conversation);
-  /** Le `Participant` FIXTURE du lecteur — distinct de `viewer` (l'identité
-   * résolue par `resolveViewer`, ci-dessus) : celui-ci porte la charge que
-   * `sender` exige (avatar, présence…), jamais confondu avec « qui lit ». */
-  const viewerParticipant = PARTICIPANTS.find((p) => p.userId === VIEWER_ID);
+  /** Le `Participant` du lecteur DANS cette conversation — distinct de
+   * `viewer` (l'identité résolue par `resolveViewer`, ci-dessus) : celui-ci
+   * porte la charge que `sender` exige (avatar, présence…), jamais confondu
+   * avec « qui lit ». Depuis le domaine SERVI (`conversation.participants`),
+   * jamais la fixture `PARTICIPANTS` en direct (#5650, §5 étape 10). */
+  const viewerParticipant = conversation.participants.find((p) => p.userId === viewer.id);
 
   /**
    * LE CADRAGE DES DATES DU RÉSUMÉ (#5695, étape 11) — `lang` est RÉSOLU
@@ -445,7 +508,7 @@ export default function ThreadScreen() {
    * de cadrage EST celle du document — aucun `lang` superflu posé.
    */
   const summaryLang =
-    typeof document === 'object' && READER_LOCALE !== document.documentElement.lang ? READER_LOCALE : undefined;
+    typeof document === 'object' && readerLocale !== document.documentElement.lang ? readerLocale : undefined;
 
   /**
    * LA CITATION DU COMPOSEUR PRÉ-ADRESSÉ (#5695, écart 8) — l'extrait passe
@@ -458,7 +521,7 @@ export default function ThreadScreen() {
     replyToMessage === undefined
       ? undefined
       : served({
-          preferredLanguages: READER_LANGUAGES,
+          preferredLanguages: readerLanguages,
           originalLanguage: replyToMessage.originalLanguage,
           translations: replyToMessage.translations,
           original: replyToMessage.content,
@@ -496,12 +559,12 @@ export default function ThreadScreen() {
      * manque se VOIT plutôt que de se cacher.
      */
     setDelivery(localId, online ? 'pending' : 'failed');
-    setMessages((previous) => [
+    setPendingSends((previous) => [
       ...previous,
       {
         id: localId,
         conversationId: conversation.id,
-        senderId: VIEWER_ID,
+        senderId: viewer.id ?? '',
         ...(viewerParticipant === undefined ? {} : { sender: viewerParticipant }),
         ...(replyToId === null ? {} : { replyToId }),
         content: text,
@@ -638,7 +701,7 @@ export default function ThreadScreen() {
               initials={initialsOf(title)}
               color={accent}
               size={44}
-              {...(group ? {} : { presence: presenceOf(peerOf(conversation, VIEWER_ID)) })}
+              {...(group ? {} : { presence: presenceOf(peerOf(conversation, viewer.id ?? '')) })}
             />
           </button>
         </div>
@@ -720,10 +783,10 @@ export default function ThreadScreen() {
             <SummaryHost
               conversationId={conversation.id}
               messages={messages}
-              participants={PARTICIPANTS}
+              participants={conversation.participants}
               viewer={viewer}
               windowCoversUnread={windowCoversUnread}
-              locale={READER_LOCALE}
+              locale={readerLocale}
               {...(summaryLang !== undefined ? { lang: summaryLang } : {})}
               onReplyToPerson={onReplyToPerson}
               onOpenEpisode={onOpenEpisode}
@@ -797,7 +860,7 @@ export default function ThreadScreen() {
                       backgroundColor: 'color-mix(in srgb, var(--color-ios-card) 70%, transparent)',
                     }}
                   >
-                    {dayLabel(p.message.createdAt, { locale: READER_LOCALE })}
+                    {dayLabel(p.message.createdAt, { locale: readerLocale })}
                   </span>
                 </div>
               ) : null}
@@ -811,8 +874,8 @@ export default function ThreadScreen() {
                   <FocalRow
                     mode={readingDecision.mode}
                     place={p}
-                    languages={READER_LANGUAGES}
-                    viewerId={VIEWER_ID}
+                    languages={readerLanguages}
+                    viewerId={viewer.id ?? ''}
                     onJumpToMessage={jumpToMessage}
                     highlighted={highlightedId === p.message.id}
                     elected={isElected}
@@ -829,9 +892,9 @@ export default function ThreadScreen() {
                 ) : (
                   <Bubble
                     place={p}
-                    languages={READER_LANGUAGES}
+                    languages={readerLanguages}
                     isGrouped={group}
-                    viewerId={VIEWER_ID}
+                    viewerId={viewer.id ?? ''}
                     onJumpToMessage={jumpToMessage}
                     highlighted={highlightedId === p.message.id}
                     expired={expiredIds.has(p.message.id)}
@@ -851,7 +914,7 @@ export default function ThreadScreen() {
           })}
         </ol>
 
-        {typing ? (
+        {threadData.typing ? (
           /* L'indicateur de frappe est une VRAIE cellule du flux, en queue —
              pas un overlay : il pousse le fil comme le ferait un message, donc
              l'arrivee du vrai message ne fait sauter aucune ligne. */

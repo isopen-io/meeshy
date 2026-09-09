@@ -30,6 +30,21 @@ import { apiConfig } from '@/lib/api/config';
 export const THREAD_RENDERABLE_MODES: readonly ConversationReadingMode[] = ['focal', 'script', 'summary'];
 
 export type ThreadCapabilities = {
+  /**
+   * Ce que la LOI accorde à cette identité sur cette conversation
+   * (`resolveCapabilities`) — `river` y entre dès `memberCount >= 5`
+   * (#5696, travail `river`). Il est SERVI pour qu'un témoin puisse
+   * distinguer « la loi refuse » de « cet écran ne sait pas dessiner », deux
+   * verdicts qu'`availableModes` seul confond.
+   *
+   * **AUCUNE VUE NE LE LIT, ET AUCUNE NE DOIT** : un mode d'ici peut être
+   * hors `THREAD_RENDERABLE_MODES`, donc impossible à peindre. Ce qui pilote
+   * le menu est `availableModes` (le dégrisage) et `riverEligibilityReason`
+   * (le libellé, dont la QUATRIÈME forme lit `riverReason === 'eligible'` —
+   * `catalog.ts`, jamais ce champ-ci).
+   */
+  readonly grantedModes: readonly ConversationReadingMode[];
+  /** `grantedModes ∩ THREAD_RENDERABLE_MODES` — ce que CET écran sait dessiner. */
   readonly availableModes: readonly ConversationReadingMode[];
   readonly riverEligibilityReason: RiverEligibilityReason;
 };
@@ -42,12 +57,6 @@ export type ThreadCapabilities = {
  * du catalogue anonyme, `reading-modes.ts:284-285` — 403 serveur sur
  * `/conversations/:id/analysis`) plutôt qu'en amont.
  *
- * `activeParticipantCount: null` — la v3.1 n'a AUCUNE source de ce compte
- * aujourd'hui (comme iOS avant G-123) : le mentir en `0` afficherait
- * « 0 aujourd'hui » au menu. `riverEligibilityReason` reste servie dans tous
- * les cas (drapeau Rivière off compris) : c'est elle qui alimente le libellé
- * grisé de `catalog.ts`.
- *
  * `readingModesEnabled` — LE PARAMÈTRE DE CONSTRUCTION (D-20,
  * `VITE_READING_MODES`, miroir `MEESHY_FLAG_READING_MODES`). Défaut
  * `apiConfig.readingModesEnabled` quand l'appelant ne le précise pas — un
@@ -59,15 +68,36 @@ export type ThreadCapabilities = {
 export function threadCapabilities(input: {
   readonly isAnonymous: boolean;
   readonly conversationType: ConversationType;
+  /**
+   * L'EFFECTIF du groupe (`Conversation.memberCount`, servi par
+   * `GET /conversations/:id`), `null` = inconnu — JAMAIS `0` par défaut
+   * (« 0 aujourd'hui » serait un chiffre fabriqué, `reading-modes.ts:224-
+   * 231`). Ce n'est PAS un décompte d'actifs : c'est le rapprochement qu'iOS
+   * fait dans le fil (`ConversationView.swift:569`, `memberCount ?? 0`) —
+   * un faux POSITIF possible que la loi de forme absorbe elle-même (à moins
+   * de trois voix entendues, elle sérialise, `river-lanes.ts:636-641`),
+   * jamais un faux négatif. OBLIGATOIRE : chaque appelant DIT ce qu'il sait
+   * — un défaut silencieux serait le `null` d'avant, une fois de plus
+   * (#5696).
+   */
+  readonly memberCount: number | null;
   readonly readingModesEnabled?: boolean;
 }): ThreadCapabilities {
   const full = resolveCapabilities({
     identity: { isAnonymous: input.isAnonymous },
     isFlagEnabled: input.readingModesEnabled ?? apiConfig.readingModesEnabled,
+    /*
+     * D-20 : la v3.1 n'a NI drapeau NI programme bêta. Le paramètre reste
+     * sur la loi partagée pour le calendrier d'iOS (`reading-modes.ts:259-
+     * 266`) ; ici il vaut TOUJOURS vrai — jamais lu d'une config, jamais un
+     * toggle.
+     */
+    isRiverFlagEnabled: true,
     conversationType: input.conversationType,
-    activeParticipantCount: null,
+    activeParticipantCount: input.memberCount,
   });
   return {
+    grantedModes: full.availableModes,
     availableModes: full.availableModes.filter((mode) => THREAD_RENDERABLE_MODES.includes(mode)),
     riverEligibilityReason: full.riverEligibilityReason,
   };
@@ -80,6 +110,8 @@ export type ResolveThreadModeInput = {
   readonly sticky: ReadingModePreference;
   readonly isAnonymous: boolean;
   readonly conversationType: ConversationType;
+  /** Voir le doc-comment de `threadCapabilities` — obligatoire depuis #5696. */
+  readonly memberCount: number | null;
   /** Défaut `apiConfig.readingModesEnabled` — voir doc-comment de `threadCapabilities`. */
   readonly readingModesEnabled?: boolean;
 };
