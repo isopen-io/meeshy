@@ -21,6 +21,9 @@ enum AchievementCopy {
 
     static func label(_ family: AchievementFamily, tier: Int) -> String? {
         let n = nombre(tier)
+        if tier == 1, let singulier = labelOne(family.id, n: n) {
+            return singulier
+        }
         switch family.id {
         case "conversation.join.size":
             return String(localized: "achievement.conversation.join.size",
@@ -88,6 +91,82 @@ enum AchievementCopy {
         case "meesh.mint.count":
             return String(localized: "achievement.meesh.mint.count",
                           defaultValue: "\(n) Meeshes frappées", bundle: .main)
+        default:
+            return nil
+        }
+    }
+
+    /// L'ACCORD AU SINGULIER du palier 1, pour les familles de VOLUME (#5859).
+    ///
+    /// `label(_:tier:)` porte UNE forme par famille, au pluriel — juste à
+    /// partir du palier 10, faux au palier 1 (« 1 messages envoyés »). Ce
+    /// gabarit ne couvre que ce que le pluriel ne peut pas porter seul : les
+    /// dix-huit familles de VOLUME (`scale: "count"` — les familles d'AMPLEUR
+    /// commencent à 10, jamais à 1, donc n'ont jamais besoin d'accord) dans
+    /// les six langues qui fléchissent au singulier. `ar` en est absente : sa
+    /// construction (nombre + nom singulier) est déjà juste à 1 — miroir exact
+    /// de `ACHIEVEMENT_LABELS_ONE` (`packages/shared/utils/achievement-labels.ts`,
+    /// #5846), qui pour la même raison ne déclare ni `ar` ni `zh-Hans`.
+    ///
+    /// Retourne `nil` pour toute famille hors de cette liste (les quatre
+    /// familles d'AMPLEUR, ou une famille inconnue) — `label(_:tier:)` retombe
+    /// alors sur le gabarit pluriel, sans changement de comportement.
+    static func labelOne(_ familyId: String, n: String) -> String? {
+        switch familyId {
+        case "conversation.join.count":
+            return String(localized: "achievement.conversation.join.count.one",
+                          defaultValue: "\(n) conversation rejointe", bundle: .main)
+        case "conversation.leave.count":
+            return String(localized: "achievement.conversation.leave.count.one",
+                          defaultValue: "\(n) conversation quittée", bundle: .main)
+        case "conversation.create.count":
+            return String(localized: "achievement.conversation.create.count.one",
+                          defaultValue: "\(n) conversation créée", bundle: .main)
+        case "community.join.count":
+            return String(localized: "achievement.community.join.count.one",
+                          defaultValue: "\(n) communauté rejointe", bundle: .main)
+        case "community.create.count":
+            return String(localized: "achievement.community.create.count.one",
+                          defaultValue: "\(n) communauté créée", bundle: .main)
+        case "message.send.count":
+            return String(localized: "achievement.message.send.count.one",
+                          defaultValue: "\(n) message envoyé", bundle: .main)
+        case "voice.send.count":
+            return String(localized: "achievement.voice.send.count.one",
+                          defaultValue: "\(n) vocal envoyé", bundle: .main)
+        case "image.send.count":
+            return String(localized: "achievement.image.send.count.one",
+                          defaultValue: "\(n) image envoyée", bundle: .main)
+        case "video.send.count":
+            return String(localized: "achievement.video.send.count.one",
+                          defaultValue: "\(n) vidéo envoyée", bundle: .main)
+        case "message.edit.count":
+            return String(localized: "achievement.message.edit.count.one",
+                          defaultValue: "\(n) message corrigé", bundle: .main)
+        case "message.delete.count":
+            return String(localized: "achievement.message.delete.count.one",
+                          defaultValue: "\(n) message supprimé", bundle: .main)
+        case "message.react.count":
+            return String(localized: "achievement.message.react.count.one",
+                          defaultValue: "\(n) réaction posée", bundle: .main)
+        case "call.join.count":
+            return String(localized: "achievement.call.join.count.one",
+                          defaultValue: "\(n) appel rejoint", bundle: .main)
+        case "call.start.count":
+            return String(localized: "achievement.call.start.count.one",
+                          defaultValue: "\(n) appel lancé", bundle: .main)
+        case "referral.complete.count":
+            return String(localized: "achievement.referral.complete.count.one",
+                          defaultValue: "\(n) filleul arrivé", bundle: .main)
+        case "link.click.count":
+            return String(localized: "achievement.link.click.count.one",
+                          defaultValue: "\(n) clic sur vos liens", bundle: .main)
+        case "streak.hold.count":
+            return String(localized: "achievement.streak.hold.count.one",
+                          defaultValue: "Série de \(n) jour", bundle: .main)
+        case "meesh.mint.count":
+            return String(localized: "achievement.meesh.mint.count.one",
+                          defaultValue: "\(n) Meesh frappée", bundle: .main)
         default:
             return nil
         }

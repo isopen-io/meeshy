@@ -8,8 +8,10 @@ import type { GlyphName } from './glyphs';
  *
  * Miroir de la composition répétée dans `LoginView.swift`/`SignupView.swift` :
  * icône violette à 70 % à gauche, surface `theme.inputBackground`, coin
- * `MeeshyRadius.md` (14 px), bord `inputBorder` à 30 % — teinté et à 60 %
- * quand focus. Le refus se pose SOUS le champ, en `role="alert"`.
+ * `MeeshyRadius.md` (14 px), bord `inputBorder` à 30 % — teinté à 60 % ET
+ * épaissi (1px → 2px, #5894) quand focus : la règle 17 interdit qu'un signal
+ * ne tienne qu'à une couleur, y compris ici où l'anneau lui-même est exclu
+ * (#5816). Le refus se pose SOUS le champ, en `role="alert"`.
  *
  * PRIMITIVES EN PROPS, AUCUN MAGASIN GLOBAL (Zero Unnecessary Re-render) :
  * `focused` est un booléen que l'écran porte lui-même (`useState`) — ce
@@ -62,7 +64,13 @@ export function Field({
         style={{
           minHeight: 48,
           backgroundColor: 'var(--color-ios-card)',
-          border: `1px solid ${
+          /* Le focus est un COUPLE teinte + FORME (#5894, corollaire de la
+             règle 17) : la boîte double aussi l'épaisseur de son bord
+             (1px → 2px), jamais la seule teinte — sans quoi le signal ne
+             tient pas sur un fond dont le contraste de couleur est faible.
+             `box-sizing: border-box` (préflight Tailwind) absorbe le pixel
+             de plus DANS la boîte : ni ses voisins ni sa hauteur ne bougent. */
+          border: `${focused ? '2px' : '1px'} solid ${
             focused ? `color-mix(in srgb, ${tint} 60%, transparent)` : 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)'
           }`,
         }}
