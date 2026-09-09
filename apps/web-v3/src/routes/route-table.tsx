@@ -16,6 +16,13 @@ export const ROUTES = {
      du profil (inventaire de parité : `/me` est V4.0.0), privé (garde de
      session), découpé comme les autres : aucun octet avant le premier pixel. */
   progression: { pattern: '/me/progression', screen: () => import('@/routes/progression') },
+  /* Les trois PAGES DÉDIÉES du hub (#5843). Chacune a sa route parce qu'elle a
+     son propre retour, son propre titre et son propre compte — un panneau qui
+     se déplie dans le hub n'aurait ni l'un ni les autres, et le bouton système
+     « retour » refermerait l'écran entier au lieu du panneau. */
+  progressionBadges: { pattern: '/me/progression/badges', screen: () => import('@/routes/progression-badges') },
+  progressionDefis: { pattern: '/me/progression/defis', screen: () => import('@/routes/progression-defis') },
+  progressionSucces: { pattern: '/me/progression/succes', screen: () => import('@/routes/progression-succes') },
   /* L'ACCUEIL À DEUX PORTES (#5816) — soldé une fois par appareil
      (`welcomeStore`), miroir `WelcomeView.swift`. */
   welcome: { pattern: '/welcome', screen: () => import('@/routes/welcome') },

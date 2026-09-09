@@ -283,6 +283,16 @@ export type EngagementProgressPayload = {
     readonly missingPoints: number;
     /** Le prix d'une frappe, servi par le serveur pour qu'aucun client ne le code en dur. */
     readonly mintCost: number;
+    /**
+     * PREMIÈRE et DERNIÈRE frappe (#5839) — ISO 8601, `null` si rien n'a été
+     * frappé.
+     *
+     * Elles ne se dérivent pas du solde : un solde à 1 peut venir d'un DON
+     * reçu, jamais d'une frappe. Elles se lisent sur `MeeshLedger`, filtré sur
+     * `reason: 'mint'` — le seul endroit qui distingue frapper de recevoir.
+     */
+    readonly firstMintedAt?: string | null;
+    readonly lastMintedAt?: string | null;
   };
 };
 
