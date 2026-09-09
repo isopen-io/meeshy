@@ -73,85 +73,78 @@ final class ConversationViewBodyTypeDepthTests: XCTestCase {
         try assertNestingWithinBudget(of: ConversationListView.Body.self, label: "ConversationListView.body")
     }
 
-    // MARK: - Les RACINES — dette mesurée, cliquet descendant (#5837)
+    // MARK: - Les RACINES et leurs couches (#5837)
 
     /// **La racine manquait au budget, et c'est elle qui porte les autres.**
     ///
     /// Crash device du 2026-09-09 12:51 (`Meeshy-2026-09-09-125103.ips`) :
-    /// `EXC_BAD_ACCESS`, `sp = 0x16bbffef0` **DANS** la page de garde
-    /// (`Stack Guard 16bbfc000-16bc00000`), 91 trames dans le décodeur de
-    /// métadonnées. `ConversationListView.init` déborde en résolvant un
+    /// `EXC_BAD_ACCESS`, `sp` DANS la page de garde, 91 trames dans le décodeur
+    /// de métadonnées. `ConversationListView.init` débordait en résolvant un
     /// KeyPath, atteint depuis `RootView.body` → `NavigationStack` → `ZStack`.
-    /// Le même crash existait déjà le 2026-09-03 (108 trames, même page de
-    /// garde) : l'app vit sur le fil depuis des jours et bascule par
-    /// intermittence, le cache de métadonnées étant global au process.
-    ///
-    /// **Les trois `body` bornés ci-dessus étaient VERTS.** Ce n'est pas leur
-    /// profondeur qui a franchi la limite, c'est celle du TRONC qui les
-    /// héberge — et que personne ne mesurait.
+    /// Les trois `body` bornés ci-dessus étaient VERTS : ce n'est pas leur
+    /// profondeur qui a franchi la limite, c'est celle du TRONC qui les héberge
+    /// — mesuré le 2026-09-09 : `RootView.body` = **66** niveaux (~1095 Ko),
+    /// `iPadRootView.body` = **69** (~1145 Ko), contre 1008 Ko de pile.
     ///
     /// > Une racine n'est pas un écran de plus : **tout ce qu'elle imbrique
     /// > s'ajoute à la pile de CHAQUE vue qu'elle matérialise.** Un
-    /// > modificateur posé sur elle coûte un niveau à tous ses enfants. Le
-    /// > budget mesurait les branches et ignorait le tronc.
+    /// > modificateur posé sur elle coûte un niveau à tous ses enfants.
     ///
-    /// ## Pourquoi un CLIQUET plutôt que le budget de 40
-    ///
-    /// Mesuré le 2026-09-09 : `RootView.body` = **66** niveaux (~1095 Ko),
-    /// `iPadRootView.body` = **69** (~1145 Ko), contre **1008 Ko** de pile
-    /// principale sur l'appareil. Les ramener à 40 demande de regrouper les
-    /// **46 modificateurs de premier niveau** de `RootView.body` (lignes
-    /// 609→1182) en `ViewModifier`s — chacun crée un nœud d'attribut où le
-    /// graphe DÉROULE la pile. C'est le lot #5837, et il ne se bâcle pas : ces
-    /// fermetures capturent une vingtaine d'états de la racine, et l'ORDRE des
-    /// modificateurs porte du comportement (une feuille présentée sous un
-    /// `environmentObject` ne voit pas le même environnement qu'au-dessus).
-    ///
-    /// En attendant, le cliquet fait ce qu'un budget ne peut pas faire ici :
-    /// il **interdit d'aggraver**. Un modificateur de plus sur une racine
-    /// rougit immédiatement — c'est exactement ce qui manquait quand la chaîne
-    /// est passée sous les yeux de tout le monde jusqu'à 66 sans que rien ne
-    /// le dise.
-    ///
-    /// **Ces deux nombres ne doivent que DESCENDRE.** Les abaisser au fil du
-    /// découpage ; ne JAMAIS les relever. Un test qui DESCEND reste vert et
-    /// laisse un mot dans le journal — faire échouer une amélioration
-    /// bloquerait précisément les lots qui remboursent la dette.
-    private static let rootViewMeasuredDepth = 66
-    private static let iPadRootViewMeasuredDepth = 69
-
-    func test_rootViewBody_nestingDoesNotGrow() throws {
-        try assertNestingRatchet(of: RootView.Body.self,
-                                 label: "RootView.body",
-                                 ceiling: Self.rootViewMeasuredDepth)
+    /// Remboursé par des `ViewModifier` NOMINAUX par tranches CONTIGUËS
+    /// (`RootLayers/`), et deux vues nominales pour les `switch` de routes.
+    /// Chaque couche est mesurée ICI aussi : sinon la racine passe au vert
+    /// pendant qu'une couche regrossit en silence — le découpage déplacerait
+    /// la dette au lieu de la rembourser.
+    func test_rootViewBody_nestingStaysWithinStackBudget() throws {
+        try assertNestingWithinBudget(of: RootView.Body.self, label: "RootView.body")
     }
 
-    func test_iPadRootViewBody_nestingDoesNotGrow() throws {
-        try assertNestingRatchet(of: iPadRootView.Body.self,
-                                 label: "iPadRootView.body",
-                                 ceiling: Self.iPadRootViewMeasuredDepth)
+    func test_iPadRootViewBody_nestingStaysWithinStackBudget() throws {
+        try assertNestingWithinBudget(of: iPadRootView.Body.self, label: "iPadRootView.body")
     }
 
-    /// Le cliquet ne prétend pas que la dette est réglée — il fige son
-    /// AMPLEUR, et dit quand elle descend pour qu'on abaisse le plafond.
-    private func assertNestingRatchet(of type: Any.Type, label: String, ceiling: Int) throws {
-        let measured = try Self.measureOnDeepStack(type)
-        XCTAssertLessThanOrEqual(
-            measured.depth, ceiling,
-            """
-            \(label) imbrique son type concret sur \(measured.depth) niveaux, au-dessus
-            du plafond hérité de \(ceiling) (#5837). Cette racine déborde DÉJÀ les
-            1008 Ko de pile de l'appareil — l'aggraver crashe au lancement, et le
-            simulateur (8 Mo de pile) ne le verra jamais. Regrouper les modificateurs
-            en `ViewModifier` au lieu d'en ajouter un de plus.
-            """
-        )
-        if measured.depth < ceiling {
-            print("""
-            [cliquet #5837] \(label) est descendu à \(measured.depth) niveaux \
-            (plafond \(ceiling)) — ABAISSER le plafond dans ce fichier, sinon la \
-            marge regagnée se reperd en silence au prochain lot.
-            """)
+    func test_rootRouteDestinations_nestingStaysWithinStackBudget() throws {
+        try assertNestingWithinBudget(of: RootRouteDestination.Body.self, label: "RootRouteDestination.body")
+        try assertNestingWithinBudget(of: iPadPanelDestination.Body.self, label: "iPadPanelDestination.body")
+    }
+
+    func test_rootLayers_nestingStaysWithinStackBudget() throws {
+        try assertNestingWithinBudget(of: RootStatusBubbleLayer.Body.self, label: "RootStatusBubbleLayer.body")
+        try assertNestingWithinBudget(of: RootIntentRoutingLayer.Body.self, label: "RootIntentRoutingLayer.body")
+        try assertNestingWithinBudget(of: RootEnvironmentLayer.Body.self, label: "RootEnvironmentLayer.body")
+        try assertNestingWithinBudget(of: RootStoryDoorsLayer.Body.self, label: "RootStoryDoorsLayer.body")
+        try assertNestingWithinBudget(of: RootChromeLayer.Body.self, label: "RootChromeLayer.body")
+        try assertNestingWithinBudget(of: RootSheetsLayer.Body.self, label: "RootSheetsLayer.body")
+    }
+
+    func test_iPadRootLayers_nestingStaysWithinStackBudget() throws {
+        try assertNestingWithinBudget(of: iPadEnvironmentLayer.Body.self, label: "iPadEnvironmentLayer.body")
+        try assertNestingWithinBudget(of: iPadStoryAndLifecycleLayer.Body.self, label: "iPadStoryAndLifecycleLayer.body")
+        try assertNestingWithinBudget(of: iPadSheetsLayer.Body.self, label: "iPadSheetsLayer.body")
+        try assertNestingWithinBudget(of: iPadCoversAndChromeLayer.Body.self, label: "iPadCoversAndChromeLayer.body")
+    }
+
+    /// Le budget global laisse la marge ; ce plafond dit ce qu'une RACINE doit
+    /// rester : un `ZStack` d'enfants nominaux et une poignée de couches. Une
+    /// racine à 30 niveaux n'a pas dérivé « un peu » — quelqu'un a recommencé
+    /// à empiler des modificateurs dessus au lieu de les ranger dans une couche.
+    private static let maxRootNestingDepth = 24
+
+    func test_rootBodies_stayShallow_becauseEveryChildPaysForThem() throws {
+        for (type, label) in [(RootView.Body.self as Any.Type, "RootView.body"),
+                              (iPadRootView.Body.self, "iPadRootView.body")] {
+            let measured = try Self.measureOnDeepStack(type)
+            XCTAssertLessThanOrEqual(
+                measured.depth, Self.maxRootNestingDepth,
+                """
+                \(label) imbrique \(measured.depth) niveaux, au-dessus du plafond de \
+                racine (\(Self.maxRootNestingDepth)). Un modificateur posé sur une racine \
+                coûte un niveau à CHAQUE vue qu'elle héberge (#5837) : le ranger dans la \
+                couche nominale de `RootLayers/` qui lui correspond, pas l'ajouter ici.
+                Nom de type mesuré (\(measured.typeNameLength) caractères) tronqué :
+                \(measured.excerpt)
+                """
+            )
         }
     }
 
@@ -159,6 +152,7 @@ final class ConversationViewBodyTypeDepthTests: XCTestCase {
 
     private func assertNestingWithinBudget(of type: Any.Type, label: String) throws {
         let measured = try Self.measureOnDeepStack(type)
+        print("[profondeur #5837] \(label) = \(measured.depth) niveaux (\(measured.typeNameLength) caractères)")
         XCTAssertLessThanOrEqual(
             measured.depth, Self.maxSafeNestingDepth,
             """

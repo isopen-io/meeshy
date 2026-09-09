@@ -32,8 +32,9 @@ final class EngagementRevealWiringTests: XCTestCase {
     // MARK: - Les DEUX racines posent, les DEUX racines ramassent
 
     func test_bothRoots_mountTheRevealHost() throws {
-        for racine in ["Meeshy/Features/Main/Views/RootView.swift",
-                       "Meeshy/Features/Main/Views/iPadRootView.swift"] {
+        // L'hôte est posé par la couche de covers de chaque racine (#5837).
+        for racine in ["Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
+                       "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift"] {
             let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(racine))
             XCTAssertTrue(code.contains("engagementReveal(router: router)"),
                           "\(racine) doit monter l'hôte de célébration — un hôte posé sur "

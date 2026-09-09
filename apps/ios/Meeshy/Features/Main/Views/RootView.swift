@@ -291,7 +291,7 @@ struct RootView: View {
     var body: some View {
         ZStack {
             // 1. Dynamic Background
-            themedBackground
+            RootThemedBackground(theme: theme)
 
             // 2. Main content -- NavigationStack
             NavigationStack(path: $router.path) {
@@ -310,162 +310,16 @@ struct RootView: View {
                     onNewConversation: { showNewConversation = true }
                 )
                 .navigationBarHidden(true)
+                // Les 27 écrans vivent dans `RootRouteDestination` (#5837) : le
+                // `switch` entrait sinon, avec la chaîne de chaque cas, dans le
+                // type concret de ce `body`.
                 .navigationDestination(for: Route.self) { route in
-                    switch route {
-                    case .conversation(let conv):
-                        ConversationView(
-                            conversation: conv,
-                            replyContext: router.pendingReplyContext,
-                            // I-075 — override éphémère, jamais persistant :
-                            // consommé ici comme `pendingReplyContext`
-                            // ci-dessus, jamais écrit en préférence.
-                            forcedReadingMode: router.pendingForcedReadingMode
-                        )
-                        // Identité par conversation — même fix que iPadRootView.
-                        // `Router.navigateToConversation` REMPLACE la pile en une
-                        // mutation (`path = [.conversation(B)]`) : déjà dans la
-                        // conversation A, un tap sur la notification de B réutilise
-                        // cette vue à la même profondeur — la prop `conversation`
-                        // change (header OK) mais le @StateObject viewModel créé
-                        // pour A survit et `.task` ne se relance pas : le contenu
-                        // restait sur A. `.id` force le teardown (flush du
-                        // brouillon de A via onDisappear) + une vue neuve pour B.
-                        .id(conv.id)
-                        .navigationBarHidden(true)
-                        .onAppear {
-                            router.pendingReplyContext = nil
-                            router.pendingForcedReadingMode = nil
-                        }
-                    case .settings:
-                        SettingsView()
-                            .navigationBarHidden(true)
-                    case .profile:
-                        ProfileView()
-                            .navigationBarHidden(true)
-                    case .contacts(let initialTab):
-                        ContactsHubView(initialTab: initialTab)
-                            .navigationBarHidden(true)
-                    case .peopleDiscovery(let initialTab):
-                        PeopleDiscoveryView(initialTab: initialTab)
-                            .navigationBarHidden(true)
-                    case .nearbyDiscovery(let initialCoordinate):
-                        NearbyDiscoveryView(initialCoordinate: initialCoordinate?.coordinate)
-                            .navigationBarHidden(true)
-                    case .communityList:
-                        CommunityListView(
-                            onSelectCommunity: { community in
-                                router.push(.communityDetail(community.id))
-                            },
-                            onCreateCommunity: {
-                                router.push(.communityCreate)
-                            },
-                            onDismiss: { router.pop() }
-                        )
-                        .navigationBarHidden(true)
-                    case .communityDetail(let communityId):
-                        CommunityDetailView(
-                            communityId: communityId,
-                            onSelectConversation: { apiConversation in
-                                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-                                let conv = apiConversation.toConversation(currentUserId: currentUserId)
-                                router.push(.conversation(conv))
-                            },
-                            onOpenSettings: { community in
-                                router.push(.communitySettings(community))
-                            },
-                            onOpenMembers: { id in
-                                router.push(.communityMembers(id))
-                            },
-                            onInvite: { id in
-                                router.push(.communityInvite(id))
-                            },
-                            onDismiss: { router.pop() }
-                        )
-                        .navigationBarHidden(true)
-                    case .communityCreate:
-                        CommunityCreateView(
-                            onCreated: { community in
-                                router.pop()
-                                router.push(.communityDetail(community.id))
-                            },
-                            onDismiss: { router.pop() }
-                        )
-                        .navigationBarHidden(true)
-                    case .communitySettings(let community):
-                        CommunitySettingsView(
-                            community: community,
-                            onUpdated: { _ in router.pop() },
-                            onDeleted: { router.popToRoot() },
-                            onLeft: { router.popToRoot() }
-                        )
-                    case .communityMembers(let communityId):
-                        CommunityMembersView(
-                            communityId: communityId,
-                            onInvite: {
-                                router.push(.communityInvite(communityId))
-                            }
-                        )
-                    case .communityInvite(let communityId):
-                        // Poussée dans la pile : `dismiss()` interne à son propre
-                        // NavigationStack est inerte, « Done » ne fermait rien.
-                        CommunityInviteView(communityId: communityId, onDone: { router.pop() })
-                    case .notifications:
-                        NotificationListView(
-                            onNotificationTap: { notification in
-                                handleNotificationTap(notification)
-                            },
-                            onDismiss: { router.pop() }
-                        )
-                        .navigationBarHidden(true)
-                        .onDisappear {
-                            Task { await notificationManager.refreshUnreadCount() }
-                        }
-                    case .userStats:
-                        UserStatsView()
-                            .navigationBarHidden(true)
-                    case .progression:
-                        ProgressionView()
-                            .navigationBarHidden(true)
-                    case .links:
-                        LinksHubView()
-                    case .affiliate:
-                        AffiliateView()
-                            .navigationBarHidden(true)
-                    case .trackingLinks:
-                        TrackingLinksView()
-                            .navigationBarHidden(true)
-                    case .shareLinks:
-                        ShareLinksView()
-                            .navigationBarHidden(true)
-                    case .communityLinks:
-                        CommunityLinksView()
-                            .navigationBarHidden(true)
-                    case .dataExport:
-                        DataExportView()
-                            .navigationBarHidden(true)
-                    case .postDetail(let postId, let initialPost, let showComments, let commentId, let parentCommentId):
-                        PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments, targetCommentId: commentId, targetParentCommentId: parentCommentId)
-                    case .hashtagResults(let tag):
-                        HashtagResultsView(tag: tag)
-                    case .bookmarks:
-                        // Pas de `navigationBarHidden` : cet écran n'a pas
-                        // d'en-tête maison, la barre système porte son titre ET
-                        // son retour. La masquer en ferait un cul-de-sac.
-                        BookmarksView()
-                    case .starredMessages:
-                        StarredMessagesView()
-                    case .friendRequests:
-                        FriendRequestListView()
-                            .navigationBarHidden(true)
-                    case .storyNotificationTarget(let storyId, let intent, let context, let commentId, let parentCommentId):
-                        StoryNotificationTargetScreen(
-                            storyId: storyId,
-                            intent: intent,
-                            context: context,
-                            commentId: commentId,
-                            parentCommentId: parentCommentId
-                        )
-                    }
+                    RootRouteDestination(
+                        route: route,
+                        router: router,
+                        notificationManager: notificationManager,
+                        onNotificationTap: handleNotificationTap
+                    )
                 }
             }
             .scrollContentBackground(.hidden)
@@ -569,111 +423,28 @@ struct RootView: View {
             // 8. Toast overlay — handled at MeeshyApp level to avoid duplicates
 
             // 9. Notification toast overlay (socket real-time)
-            VStack {
-                if let toast = notificationManager.currentToast {
-                    NotificationToastView(event: toast) {
-                        if suppressToastTap { return }
-                        notificationManager.dismissToast()
-                        handleSocketNotificationTap(toast)
-                    }
-                    // Long press OR pull the toast down ("tirer à la main") to
-                    // open a conversation preview overlay instead of navigating.
-                    .simultaneousGesture(
-                        LongPressGesture(minimumDuration: 0.35).onEnded { _ in
-                            openNotificationPreview(for: toast)
-                        }
-                    )
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 24)
-                            .onEnded { value in
-                                if value.translation.height > 36 {
-                                    openNotificationPreview(for: toast)
-                                }
-                            }
-                    )
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .padding(.top, MeeshySpacing.xxl)
-                }
-                Spacer()
-            }
-            .animation(MeeshyAnimation.springDefault, value: notificationManager.currentToast?.id)
-            .zIndex(201)
-        }
-        // Hôte UNIQUE de la bulle de mood pour toute la fenêtre iPhone. La
-        // bulle se rend dans le repère de CE conteneur — poser l'hôte plus
-        // bas (liste, carte de feed, tray…) faisait rendre une bulle par
-        // hôte frère, chacune décalée dans son propre repère (bug
-        // 2026-07-30). Les présentations modales (sheets, fullScreenCover)
-        // gardent leur propre pose : l'overlay racine est invisible sous
-        // elles. Cf. StatusBubbleOverlayModifier.
-        .withStatusBubble()
-        // Une bulle est un popover contextuel : elle ne survit pas à une
-        // navigation (sinon elle se ré-ancre absurdement sur l'écran suivant).
-        .adaptiveOnChange(of: router.path) { _, _ in
-            if StatusBubbleController.shared.currentEntry != nil {
-                StatusBubbleController.shared.dismiss()
-            }
-        }
-        // Le lien de partage demande QUI entre. La feuille ne se monte que
-        // lorsque le choix existe vraiment : déjà membre, ou lien exigeant un
-        // compte, `ShareLinkEntryPolicy` a déjà tranché sans rien demander.
-        .sheet(item: $shareLinkChoice) { choice in
-            ShareLinkIdentitySheet(
-                choice: choice,
-                accountDisplayName: AuthManager.shared.currentUser?.displayName
-                    ?? AuthManager.shared.currentUser?.username
-                    ?? String(localized: "shareLink.identity.account.fallback", defaultValue: "mon compte"),
-                accountUsername: AuthManager.shared.currentUser?.username,
-                onContinueWithAccount: { joinViaShareLink(identifier: choice.identifier) },
-                // La session invitée est portée par `MeeshyApp`, au-dessus de
-                // cette vue : on lui passe l'intention plutôt que d'essayer de
-                // présenter le conteneur invité depuis ici.
-                onJoinAnonymously: { deepLinkRouter.requestedGuestJoin = choice.identifier }
+            RootNotificationToastOverlay(
+                notificationManager: notificationManager,
+                suppressToastTap: suppressToastTap,
+                onTap: handleSocketNotificationTap,
+                onPreview: openNotificationPreview(for:)
             )
         }
-        // Lot 4.7 — la republication d'un mood passe par le MEUBLE. La porte
-        // PORTE son format (`sourceFormat: .status`) au lieu de le deviner : une
-        // entrée de bulle de mood EST un statut par construction, et
-        // `RepostTargeting` n'entre pas ici — son rôle est de lire le type d'une
-        // CARTE de fil, pas d'un type déjà connu.
-        //
-        // `repostOfId` n'est pas dans la graine : la porte le porte déjà
-        // (`ofPostId:`), et le meuble le lit par `ComposerOrigin.repostedPostId`.
-        //
-        // CE QUE CE SITE LIVRE. La loi 5 est câblée des DEUX côtés depuis le
-        // 2026-08-25. Le MIROIR repart en `STATUS`, avec son emoji, sa phrase
-        // et son attribution ; l'ANCRAGE — le second chip « Post », offert par
-        // `offeredFormats == [.status, .post]` — atteint un écran : le plateau
-        // est monté par le `body` du meuble sous `ComposerFormatFanPlacement`,
-        // et la porte du mood aiguille sur le format vers
-        // `StatusViewModel.anchorStatusAsPost` (`POST /posts/:id/repost`).
-        // Gardes : `ComposerDocumentSurfaceTests`
-        // `.test_leRepostDUnMood_offreLAncrage_ET_unEcranLePeint` et
-        // `ComposerMoodSurfaceTests`
-        // `.test_laPorteDuMood_aiguilleSurLeFORMAT_etRefuseLesDeuxQuElleNeSaitPasPublier`.
-        //
-        // CE QU'IL NE LIVRE TOUJOURS PAS : le plafond d'ÉLARGISSEMENT de la loi
-        // 10. Ce site ne sème pas `visibility:` dans sa graine, et c'est
-        // DÉLIBÉRÉ — `APIPost.toStatusEntry()` ne transmet pas l'audience de
-        // l'original, si bien qu'un semis ne sèmerait qu'un `nil` et que
-        // `StoryRepostAudience.allowed(fromRawValue: nil)` ne concéderait que
-        // `[.private]` : un sélecteur à UN chip. Le trou pèse identiquement sur
-        // le ruban du mood, peint ici depuis le lot 4.6 ; l'ancrage n'en ajoute
-        // aucun. Levée : la ligne de `StoryModels.swift`, PUIS le semis.
-        .sheet(item: $republishStatusEntry) { entry in
-            MoodComposerDoor(
-                intent: ComposerIntent(origin: .repost(ofPostId: entry.id, sourceFormat: .status)),
-                seed: ComposerMoodSeed(
-                    emoji: entry.moodEmoji,
-                    text: entry.content,
-                    viaUsername: entry.username,
-                    audioUrl: entry.audioUrl
-                ),
-                viewModel: statusViewModel
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
+        // Chaque couche est un `ViewModifier` NOMINAL (#5837) : la chaîne de 46
+        // modificateurs imbriquait 66 niveaux dans le type de ce `body`, ~1095 Ko
+        // de pile de démangleur contre 1008 Ko sur l'appareil — l'app crashait
+        // au lancement. L'ORDRE des couches, et celui des modificateurs dans
+        // chacune, sont ceux de la chaîne d'origine : une feuille présentée sous
+        // un `environmentObject` ne voit pas le même environnement qu'au-dessus.
+        // Garde : `ConversationViewBodyTypeDepthTests`.
+        .modifier(RootStatusBubbleLayer(
+            navigationToken: AnyHashable(router.path),
+            shareLinkChoice: $shareLinkChoice,
+            republishStatusEntry: $republishStatusEntry,
+            statusViewModel: statusViewModel,
+            onContinueWithAccount: joinViaShareLink(identifier:),
+            onJoinAnonymously: { deepLinkRouter.requestedGuestJoin = $0 }
+        ))
         .environment(\.openURL, OpenURLAction { url in
             let destination = DeepLinkParser.parse(url)
             switch destination {
@@ -684,499 +455,198 @@ struct RootView: View {
                 return .handled
             }
         })
-        .environmentObject(router)
-        .environmentObject(storyViewModel)
-        .environmentObject(statusViewModel)
-        .environmentObject(conversationViewModel)
-        .environmentObject(storyViewerCoordinator)
-        // Humeur / anneau de story par EnvironmentValues : les feuilles (dont la
-        // feuille de commentaires) en héritent, contrairement aux
-        // EnvironmentObject ci-dessus. Cf. SocialChromeEnvironment.swift.
-        .meeshySocialChrome(status: statusViewModel, story: storyViewModel, storyViewer: storyViewerCoordinator)
-        .environment(\.zoomTransitionNamespace, storyZoomNamespace)
-        // In-app notification preview: long-press / pull-down on a toast opens
-        // the conversation (last messages + simple composer) over the current
-        // page. A sheet creates a fresh environment, so the objects the reused
-        // `ConversationView` reads must be re-injected here.
-        .sheet(item: $notificationPreviewConversation) { conv in
-            ConversationView(conversation: conv, previewMode: true, onOpenFullConversation: {
-                // Leave the preview and open the real conversation with a
-                // navigation push so going back returns to the originating
-                // screen. Dismiss first, then push to avoid a present/dismiss
-                // race.
-                notificationPreviewConversation = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    router.navigateToConversation(conv)
-                }
-            })
-                .environmentObject(router)
-                .environmentObject(storyViewModel)
-                .environmentObject(statusViewModel)
-                .environmentObject(conversationViewModel)
-                .environmentObject(storyViewerCoordinator)
-                .presentationDetents([.large, .medium])
-                .presentationDragIndicator(.visible)
-        }
-        // Propagate story viewer presentation state down to chrome (sync
-        // pill, etc.) so they can skip rendering while a `fullScreenCover`
-        // story is on top. Read by `ConnectionBanner` via
-        // `@Environment(\.isStoryViewerPresenting)`. Cf. bug 2026-05-27.
-        .environment(\.isStoryViewerPresenting, storyViewerCoordinator.pendingRequest != nil)
-        // Tuile « Stories » du profil → page « Mes stories » (en cours et
-        // passées). Hôte UNIQUE de ce listener : la racine est montée quelle
-        // que soit la provenance de la feuille de profil.
-        .myStoriesSheet(
-            isPresented: $showMyStoriesFromProfile,
-            followUp: $myStoriesProfileFollowUp,
-            viewModel: storyViewModel,
-            userId: AuthManager.shared.currentUser?.id ?? "",
+        .modifier(RootEnvironmentLayer(
+            router: router,
+            storyViewModel: storyViewModel,
             statusViewModel: statusViewModel,
+            conversationViewModel: conversationViewModel,
+            storyViewerCoordinator: storyViewerCoordinator,
+            storyZoomNamespace: storyZoomNamespace,
+            notificationPreviewConversation: $notificationPreviewConversation,
+            onOpenFullConversation: { router.navigateToConversation($0) }
+        ))
+        .modifier(RootStoryDoorsLayer(
+            showMyStoriesFromProfile: $showMyStoriesFromProfile,
+            myStoriesProfileFollowUp: $myStoriesProfileFollowUp,
+            editingStorySessionFromProfile: $editingStorySessionFromProfile,
+            storyViewModel: storyViewModel,
+            statusViewModel: statusViewModel,
+            conversationViewModel: conversationViewModel,
             router: router,
-            conversationListViewModel: conversationViewModel,
-            perform: { action in
-                switch action {
-                case .openViewer(let postId):
-                    storyViewerCoordinator.present(StoryViewerRequest(
-                        id: AuthManager.shared.currentUser?.id ?? "",
-                        singleGroup: true, postId: postId))
-                case .createStory:
-                    storyViewModel.showStoryComposer = true
-                case .editStory(let story):
-                    editingStorySessionFromProfile = StoryEditSession(
-                        story: story,
-                        composer: StoryComposerViewModel(editing: story))
-                case .resumeDraft(let draftId):
-                    storyViewModel.openComposer(resumingDraftId: draftId)
-                }
-            }
-        )
-        .storyEditComposerCover(session: $editingStorySessionFromProfile, viewModel: storyViewModel)
-        .onReceive(NotificationCenter.default.publisher(for: .openMyStories)) { _ in
-            showMyStoriesFromProfile = true
-        }
-        // Le titre de scène est ce qu'iPadOS affiche sous la fenêtre en App
-        // Exposé / Stage Manager. `connectedScenes.first` le posait sur une
-        // scène arbitraire : avec deux fenêtres Meeshy, la fenêtre au premier
-        // plan gardait le titre de l'autre. `activeWindowScene` cible celle
-        // que l'utilisateur regarde.
-        .adaptiveOnChange(of: router.sceneTitle) { _, title in
-            DeviceLayout.activeWindowScene?.title = String(format: String(localized: "root.scene_title_format", defaultValue: "Meeshy — %@", bundle: .main), title)
-        }
-        .onAppear {
-            DeviceLayout.activeWindowScene?.title = String(localized: "root.scene_title_default", defaultValue: "Meeshy — Conversations", bundle: .main)
-        }
-        .task {
-            // Connect Socket.IO early so the backend knows we're online
-            MessageSocketManager.shared.connect()
-            statusViewModel.subscribeToSocketEvents()
-            // Sans cet appel, le SDK reçoit bien `story:created` /
-            // `story:updated` / `story:deleted` mais personne n'est sink'é
-            // sur les publishers de SocialSocketManager → les stories des
-            // amis n'arrivent jamais dans `storyGroups` en temps réel.
-            storyViewModel.subscribeToSocketEvents()
-            // Même raison, pour le feed : `FeedSocketHandler` est le SEUL
-            // écrivain disque de post:created/updated/reposted, des
-            // commentaires et des réactions. Armé par `FeedView` et désarmé à
-            // sa disparition, il ratait tout ce qui arrivait ailleurs dans
-            // l'app. `arm()` est idempotent — jamais désarmé.
-            DependencyContainer.shared.feedSocketHandler.arm()
-
-            // Start SyncEngine socket relay
-            await ConversationSyncEngine.shared.startSocketRelay()
-
-            // Deferred cleanup
-            Task.detached(priority: .background) {
-                try? await Task.sleep(for: .seconds(5))
-                await ConversationSyncEngine.shared.cleanupRetentionIfNeeded()
-            }
-
-            // Observe sync events for conversation list
-            conversationViewModel.observeSync()
-
-            #if DEBUG
-            // Pré-résout à pile courte les métadonnées du 1er rendu de
-            // ConversationView (classe de crashs stack-overflow du décodeur
-            // Swift sur device Debug — cf. ConversationFirstRenderWarmup).
-            ConversationFirstRenderWarmup.run()
-            #endif
-
-            // Réponse à un mood (confirmée via pop-up, ou immédiate en DM) :
-            // résout/ouvre la DM avec l'auteur et amorce le composer.
-            StatusBubbleController.shared.onConfirmedReply = { entry in
-                router.navigateToStoryReply(
-                    .status(statusId: entry.id, authorId: entry.userId,
-                            authorName: entry.username, emoji: entry.moodEmoji,
-                            content: entry.content, publishedAt: entry.createdAt),
-                    conversationListViewModel: conversationViewModel
-                )
-            }
-
-            // Republication d'un mood : câblé ICI (hôte racine de la bulle)
-            // — l'ancien branchement vivait dans un overlay mort de
-            // ConversationListView, le bouton « Republier » n'agissait donc
-            // jamais depuis la bulle du modifier.
-            StatusBubbleController.shared.onRepublish = { entry in
-                republishStatusEntry = entry
-            }
-
-            // Pilier 22 V3 wiring — register the StoryViewModel as the
-            // queue's upload executor. setExecutor also registers the
-            // queue's publish handler in the same call, so the M5 auto-
-            // drain that fires next has a guaranteed-non-nil executor to
-            // delegate to. Calling configure() at app boot (in MeeshyApp)
-            // intentionally only sets up listeners — the handler is
-            // registered HERE, atomic with the executor assignment, to
-            // avoid the boot race that would burn retry budget on a
-            // guaranteed-fail call.
-            StoryPublishService.shared.setExecutor(storyViewModel)
-
-            // C4b — plancher de version lu au démarrage. Best-effort et
-            // SILENCIEUX : sans lui, un binaire périmé qui ne fait que LIRE ne
-            // rencontre jamais de 426 et se croit à jour indéfiniment.
-            // Parallélisé comme les autres : il ne doit rien retenir.
-            async let versionFloor: Void = upgradeGate.checkFloor()
-            async let storiesLoad: Void = storyViewModel.loadStories()
-            async let statusesLoad: Void = statusViewModel.loadStatuses()
-            async let conversationsLoad: Void = conversationViewModel.loadConversations()
-            async let unreadRefresh: Void = notificationManager.refreshUnreadCount()
-            _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh, versionFloor)
-        }
-        .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
-            StoryViewerContainer(
-                viewModel: storyViewModel,
-                userId: request.id,
-                isPresented: Binding(
-                    get: { storyViewerCoordinator.pendingRequest != nil },
-                    set: { if !$0 { storyViewerCoordinator.dismiss() } }
-                ),
-                onReplyToStory: { replyContext in
-                    storyViewerCoordinator.dismiss()
-                    router.navigateToStoryReply(replyContext, conversationListViewModel: conversationViewModel)
-                },
-                singleGroup: request.singleGroup,
-                postId: request.postId,
-                startAtFirstUnviewed: request.startAtFirstUnviewed,
-                presentationSource: "RootView.fromConv",
-                initialAction: request.initialAction,
-                targetCommentId: request.targetCommentId,
-                targetParentCommentId: request.targetParentCommentId
-            )
-            // Re-inject the trio that StoryViewerView declares as
-            // @EnvironmentObject (so it can re-inject them onto its inner
-            // SharePickerView sheet). fullScreenCover does not inherit
-            // EnvironmentObjects automatically.
-            .environmentObject(router)
-            .environmentObject(statusViewModel)
-            .environmentObject(conversationViewModel)
-            // Re-inject le flag isStoryViewerPresenting — fullScreenCover
-            // n'hérite pas non plus des `Environment` values du parent,
-            // donc le `StoryViewerContainer.ConnectionBanner` interne au
-            // cover ne pouvait pas se cacher sans ça. Bug sync pill
-            // chevauche header 2026-05-27.
-            .environment(\.isStoryViewerPresenting, true)
-            // U1 — transition zoom depuis la bulle du tray (iOS 18+, no-op
-            // sinon). sourceID = userId du groupe : si la story s'ouvre
-            // depuis un point d'entrée sans bulle enregistrée (notification,
-            // deep link), iOS retombe sur la transition cover standard.
-            .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
-        }
-        // Composer de CRÉATION — monté ici, au niveau racine, comme le viewer
-        // juste au-dessus. Il vivait dans `StoryTrayView`, instanciée par la
-        // liste de conversations ET par la feuille de feed qui la recouvre sans
-        // la démonter : deux trays vivantes observaient le même
-        // `showStoryComposer` et présentaient le même cover en double. Détail
-        // dans `StoryComposerCover`.
-        // La célébration d'un palier (#5809), posée en UNE ligne : l'hôte est
-        // écrit une seule fois et vit chez sa jumelle iPad à l'identique.
-        .engagementReveal(router: router)
-        .storyComposerCover(
-            viewModel: storyViewModel,
+            storyViewerCoordinator: storyViewerCoordinator,
+            storyZoomNamespace: storyZoomNamespace,
+            onStart: startRootServices
+        ))
+        .modifier(RootChromeLayer(
+            reelsPresenter: reelsPresenter,
+            conversationViewModel: conversationViewModel,
+            storyViewerCoordinator: storyViewerCoordinator,
             router: router,
-            conversationListViewModel: conversationViewModel,
-            statusViewModel: statusViewModel
-        )
-        // **Vue `2a` — l'entrée externe** (#5056). Montée à la racine, comme le
-        // composer de création juste au-dessus, et pour la MÊME raison : deux
-        // hôtes vivants présenteraient le cover en double sur la même fiche.
-        //
-        // La fiche vient du conteneur App Group, déposée par l'extension de
-        // partage ; `ShareComposeHandoffConsumer` la balaie à chaque réveil.
-        .shareComposeCover(
-            consumer: ShareComposeHandoffConsumer.shared,
-            storyViewModel: storyViewModel
-        )
-        // Point de montage unique du SyncPill (indicateur de frappe global +
-        // statut connexion + file d'attente hors-ligne), voir
-        // docs/superpowers/specs/2026-08-11-global-chrome-banner-stacking-design.md.
-        // Chaîné ICI, AVANT .modifier(CallPresentationLayer()), pour que le
-        // composite (contenu + SyncPill) soit comprimé comme un bloc sous la
-        // bannière d'appel (VStack de compression de frame, §B2 de la spec —
-        // l'ordre inverse ferait chevaucher les deux bannières).
-        // conversationListViewModel/isStoryViewerPresenting passés
-        // explicitement, jamais via @EnvironmentObject/@Environment dans ce
-        // .overlay (§B1 de la spec — crash documenté 4× dans ce repo).
-        // Masqué pendant le lecteur de réels immersif (frère de ZStack, pas
-        // un fullScreenCover — contrairement au story viewer déjà gated via
-        // isStoryViewerPresenting, il n'avait aucune garde équivalente).
-        // Padding-top fixe quand une conversation est active : compense le
-        // floatingHeaderSection propre à ConversationView (qui utilisait
-        // auparavant un décalage 56/72pt suivant composerState.showOptions —
-        // 72pt fixe est un compromis assumé plutôt qu'un couplage à cet état
-        // privé, cf. spec §Partie 1/C1).
-        .overlay(alignment: .top) {
-            if reelsPresenter.launch == nil {
-                ConnectionBanner(
-                    conversationListViewModel: conversationViewModel,
-                    isStoryViewerPresenting: storyViewerCoordinator.pendingRequest != nil,
-                    onItemTap: handleSyncPillTap,
-                    activeConversationId: { router.currentConversationId ?? notificationPreviewConversation?.id }
-                )
-                // La remontée sous la Dynamic Island est RÉSERVÉE à la
-                // conversation (#4066). Hors conversation la pastille reprend
-                // une assise explicite : `liftedTopPadding` bornait déjà à `0`,
-                // si bien qu'elle se collait au bord haut sans que personne
-                // l'ait demandé — 8 pt est la valeur que le viewer de story
-                // portait avant la remontée du 25 août, et un jeton du dépôt
-                // plutôt qu'une constante de plus.
-                .padding(.top, router.currentConversationId != nil
-                    ? ConnectionBanner.liftedTopPadding(base: 72)
-                    : MeeshySpacing.sm)
-            }
-        }
-        // Présentation d'appel (cover plein écran + PiP + pastille + bulle +
-        // bannière call-waiting) extraite dans `CallPresentationLayer` : le tick
-        // `callDuration` 1 Hz et les stats qualité WebRTC n'invalident plus TOUT
-        // `RootView.body` (cause du watchdog 0x8BADF00D en arrière-plan pendant un
-        // appel). Toute la logique/les commentaires détaillés vivent dans le
-        // ViewModifier ci-dessus.
-        // B4 — Mini audio player hoisted into `CallPresentationLayer`
-        // (2026-08-13, same mount point as the call banner — see the
-        // ViewModifier's doc comment above). Closures capture `router` via
-        // this local `@StateObject`, same reasoning as before the hoist:
-        // the handler routes through `navigateToConversationById` (same
-        // path used by deep links and push notifications), so the
-        // cache-first resolution + navigation retry logic is shared.
-        .modifier(CallPresentationLayer(
-            miniPlayerOnTapBody: {
+            activeConversationId: { router.currentConversationId ?? notificationPreviewConversation?.id },
+            onSyncPillTap: handleSyncPillTap,
+            onMiniPlayerTap: {
                 guard let convId = ConversationAudioCoordinator.shared
                     .activeContext?.conversationId else { return }
                 navigateToConversationById(convId)
             },
-            // Hide the bar whenever the user is already inside the
-            // conversation playing the audio — the in-place audio bubble
-            // owns the controls there.
-            miniPlayerCurrentConversationId: { router.currentConversationId }
+            showFeed: showFeed,
+            showMenu: showMenu
         ))
-        // SyncPill is mounted INSIDE ConnectionBanner (replacing the legacy
-        // single-label "Synchronisation..." pill) via the single
-        // `.overlay(alignment: .top)` mount point above. Same chrome
-        // dimensions — see ConnectionBanner.syncingPill / SyncPillContent.
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
-        .animation(.spring(), value: showMenu)
-        .onReceive(NotificationCenter.default.publisher(for: .navigateToConversation)) { notification in
-            if let conversation = notification.object as? Conversation {
-                router.navigateToConversation(conversation)
-            }
+        .modifier(RootIntentRoutingLayer(
+            router: router,
+            storyViewModel: storyViewModel,
+            onNavigateToConversation: { router.navigateToConversation($0) },
+            onPushNotificationTap: handlePushNotificationTap,
+            onNavigateToConversationId: { navigateToConversationById($0, highlightMessageId: $1) },
+            isKnownConversation: { conversationId in
+                conversationViewModel.conversations.contains { $0.id == conversationId }
+            },
+            onSendMessageToUser: handleSendMessageToUser,
+            onPushNavigateToRoute: handlePushNavigateToRoute
+        ))
+        .modifier(RootSheetsLayer(
+            router: router,
+            statusViewModel: statusViewModel,
+            conversationViewModel: conversationViewModel,
+            showSharePicker: $showSharePicker,
+            showNewConversation: $showNewConversation,
+            showFeed: $showFeed,
+            feedWasVisibleBeforeNav: $feedWasVisibleBeforeNav,
+            deepLinkRouter: deepLinkRouter,
+            upgradeGate: upgradeGate,
+            onDeepLink: handleDeepLink
+        ))
+    }
+
+    // MARK: - Démarrage de la racine
+
+    /// Le corps du `.task` de la racine, monté par `RootStoryDoorsLayer` :
+    /// connexion socket, abonnements, exécuteur de publication, chargements
+    /// parallèles. Écrit ICI parce que la racine possède tout ce qu'il touche.
+    private func startRootServices() async {
+        // Connect Socket.IO early so the backend knows we're online
+        MessageSocketManager.shared.connect()
+        statusViewModel.subscribeToSocketEvents()
+        // Sans cet appel, le SDK reçoit bien `story:created` /
+        // `story:updated` / `story:deleted` mais personne n'est sink'é
+        // sur les publishers de SocialSocketManager → les stories des
+        // amis n'arrivent jamais dans `storyGroups` en temps réel.
+        storyViewModel.subscribeToSocketEvents()
+        // Même raison, pour le feed : `FeedSocketHandler` est le SEUL
+        // écrivain disque de post:created/updated/reposted, des
+        // commentaires et des réactions. Armé par `FeedView` et désarmé à
+        // sa disparition, il ratait tout ce qui arrivait ailleurs dans
+        // l'app. `arm()` est idempotent — jamais désarmé.
+        DependencyContainer.shared.feedSocketHandler.arm()
+
+        // Start SyncEngine socket relay
+        await ConversationSyncEngine.shared.startSocketRelay()
+
+        // Deferred cleanup
+        Task.detached(priority: .background) {
+            try? await Task.sleep(for: .seconds(5))
+            await ConversationSyncEngine.shared.cleanupRetentionIfNeeded()
         }
-        // Drive push-tap navigation straight off the published intent instead
-        // of a NotificationCenter post. `@Published` replays its current value
-        // to late subscribers, so a cold launch (tap from a terminated app)
-        // where this view mounts AFTER the splash + payload was set still
-        // receives it — the previous post-then-clear hop in MeeshyApp dropped
-        // the intent when no view was mounted to hear the post, and the user
-        // landed on the list instead of the conversation. Clearing AFTER we
-        // navigate makes this the single consumption point.
-        .onReceive(PushNotificationManager.shared.$pendingNotificationPayload) { payload in
-            guard let payload, AuthManager.shared.isAuthenticated else { return }
-            handlePushNotificationTap(payload)
-            PushNotificationManager.shared.clearPendingNotification()
-        }
-        // Navigation par id demandée par une vue sans accès aux helpers de
-        // résolution (StarredMessagesView) — le highlight scopé est déjà parké
-        // sur le Router par l'émetteur.
-        .onReceive(NotificationCenter.default.publisher(for: .meeshyNavigateToConversation)) { notification in
-            guard let conversationId = notification.object as? String, !conversationId.isEmpty else { return }
-            navigateToConversationById(conversationId, highlightMessageId: router.pendingHighlightMessageId)
-        }
-        // Tap sur la carte Now Playing (l'app est simplement ré-ouverte) →
-        // ramène vers la conversation et le message audio en cours de lecture.
-        .nowPlayingReturnNavigation(router: router) { conversationId in
-            conversationViewModel.conversations.contains { $0.id == conversationId }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("sendMessageToUser"))) { notification in
-            guard let targetUserId = notification.object as? String else { return }
-            if let existingConv = conversationViewModel.conversations.first(where: {
-                $0.type == .direct && $0.participantUserId == targetUserId
-            }) {
-                router.navigateToConversation(existingConv)
-                return
-            }
-            Task {
-                do {
-                    let response = try await ConversationService.shared.create(
-                        type: "direct",
-                        participantIds: [targetUserId]
-                    )
-                    let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-                    let apiConv = try await ConversationService.shared.getById(response.id)
-                    let conv = apiConv.toConversation(currentUserId: currentUserId)
-                    router.navigateToConversation(conv)
-                } catch {
-                    FeedbackToastManager.shared.showError(String(localized: "root.create_conversation.error", defaultValue: "Impossible de créer la conversation", bundle: .main))
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openProfileSheet"))) { notification in
-            guard let info = notification.object as? [String: String],
-                  let userId = info["userId"] else { return }
-            let username = info["username"] ?? userId
-            router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
-        }
-        // Phase H — `StoryExpiredContent` posts `.openStoryComposer` from the
-        // notification flow when the underlying story is gone. Routing the
-        // composer through `StoryViewModel.showStoryComposer` reuses the
-        // single existing presentation surface (`StoryTrayView` listens on
-        // the same flag) so the composer animates in cleanly without
-        // stacking covers.
-        .onReceive(NotificationCenter.default.publisher(for: .openStoryComposer)) { _ in
-            storyViewModel.showStoryComposer = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("pushNavigateToRoute"))) { notification in
-            guard let routeName = notification.object as? String else { return }
-            if routeName.hasPrefix("postDetail:") {
-                let postId = String(routeName.dropFirst("postDetail:".count))
-                router.push(.postDetail(postId))
-            } else if routeName.hasPrefix("storyDetail:") {
-                let postId = String(routeName.dropFirst("storyDetail:".count))
-                if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                    storyViewerCoordinator.present(StoryViewerRequest(
-                        id: storyViewModel.storyGroups[groupIdx].id,
-                        startAtFirstUnviewed: true
-                    ))
-                } else {
-                    router.push(.postDetail(postId))
-                }
-            } else {
-                switch routeName {
-                case "userStats": router.push(.userStats)
-                case "progression": router.push(.progression)
-                case "affiliate": router.push(.affiliate)
-                default: break
-                }
-            }
-        }
-        .onOpenURL { url in
-            // Only the share intent flows through Router here — every other
-            // destination (joinLink/chatLink/conversation/magicLink) is
-            // already routed via MeeshyApp's `.onOpenURL` → DeepLinkRouter →
-            // pendingDeepLink → handleDeepLink. Letting Router.handleDeepLink
-            // process those a second time double-fires the API call and
-            // races the navigation with the pendingDeepLink path.
-            if case .share = DeepLinkParser.parse(url) {
-                router.handleDeepLink(url)
-            }
-        }
-        // La fiche d'un visiteur SANS COMPTE — son identité vit dans une
-        // conversation, pas sur un profil.
-        .sheet(item: $router.participantProfileTarget) { target in
-            ParticipantProfileSheet(
-                conversationId: target.conversationId,
-                participantId: target.participantId
+
+        // Observe sync events for conversation list
+        conversationViewModel.observeSync()
+
+        #if DEBUG
+        // Pré-résout à pile courte les métadonnées du 1er rendu de
+        // ConversationView (classe de crashs stack-overflow du décodeur
+        // Swift sur device Debug — cf. ConversationFirstRenderWarmup).
+        ConversationFirstRenderWarmup.run()
+        #endif
+
+        // Réponse à un mood (confirmée via pop-up, ou immédiate en DM) :
+        // résout/ouvre la DM avec l'auteur et amorce le composer.
+        StatusBubbleController.shared.onConfirmedReply = { entry in
+            router.navigateToStoryReply(
+                .status(statusId: entry.id, authorId: entry.userId,
+                        authorName: entry.username, emoji: entry.moodEmoji,
+                        content: entry.content, publishedAt: entry.createdAt),
+                conversationListViewModel: conversationViewModel
             )
         }
-        .sheet(item: $router.deepLinkProfileUser) { user in
-            UserProfileSheet(
-                user: user,
-                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
-                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
-                postsContent: { uid in
-                    AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
-                        router.deepLinkProfileUser = nil
-                        router.push(.postDetail(post.id, post))
-                    }, onOpenReel: { reel, reels in
-                        ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
-                    }))
-                }
-            )
-            .presentationDetents([.large, .medium])
-            .presentationDragIndicator(.visible)
+
+        // Republication d'un mood : câblé ICI (hôte racine de la bulle)
+        // — l'ancien branchement vivait dans un overlay mort de
+        // ConversationListView, le bouton « Republier » n'agissait donc
+        // jamais depuis la bulle du modifier.
+        StatusBubbleController.shared.onRepublish = { entry in
+            republishStatusEntry = entry
         }
-        .sheet(isPresented: $showSharePicker) {
-            if let content = router.pendingShareContent {
-                // SwiftUI sheets create a separate presentation hierarchy and do
-                // NOT inherit EnvironmentObjects from the parent view automatically.
-                // Re-inject the trio that SharePickerView declares as
-                // @EnvironmentObject (conversationListViewModel, router,
-                // statusViewModel), otherwise tapping share crashes with
-                // "EnvironmentObject error → SharePickerView.<missing>".
-                SharePickerView(
-                    sharedContent: content,
-                    onDismiss: {
-                        router.pendingShareContent = nil
-                    }
+
+        // Pilier 22 V3 wiring — register the StoryViewModel as the
+        // queue's upload executor. setExecutor also registers the
+        // queue's publish handler in the same call, so the M5 auto-
+        // drain that fires next has a guaranteed-non-nil executor to
+        // delegate to. Calling configure() at app boot (in MeeshyApp)
+        // intentionally only sets up listeners — the handler is
+        // registered HERE, atomic with the executor assignment, to
+        // avoid the boot race that would burn retry budget on a
+        // guaranteed-fail call.
+        StoryPublishService.shared.setExecutor(storyViewModel)
+
+        // C4b — plancher de version lu au démarrage. Best-effort et
+        // SILENCIEUX : sans lui, un binaire périmé qui ne fait que LIRE ne
+        // rencontre jamais de 426 et se croit à jour indéfiniment.
+        // Parallélisé comme les autres : il ne doit rien retenir.
+        async let versionFloor: Void = upgradeGate.checkFloor()
+        async let storiesLoad: Void = storyViewModel.loadStories()
+        async let statusesLoad: Void = statusViewModel.loadStatuses()
+        async let conversationsLoad: Void = conversationViewModel.loadConversations()
+        async let unreadRefresh: Void = notificationManager.refreshUnreadCount()
+        _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh, versionFloor)
+    }
+
+    // MARK: - Intentions reçues par la racine (via `RootIntentRoutingLayer`)
+
+    private func handleSendMessageToUser(_ notification: Notification) {
+        guard let targetUserId = notification.object as? String else { return }
+        if let existingConv = conversationViewModel.conversations.first(where: {
+            $0.type == .direct && $0.participantUserId == targetUserId
+        }) {
+            router.navigateToConversation(existingConv)
+            return
+        }
+        Task {
+            do {
+                let response = try await ConversationService.shared.create(
+                    type: "direct",
+                    participantIds: [targetUserId]
                 )
-                .environmentObject(conversationViewModel)
-                .environmentObject(router)
-                .environmentObject(statusViewModel)
-                .presentationDetents([.medium, .large])
+                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+                let apiConv = try await ConversationService.shared.getById(response.id)
+                let conv = apiConv.toConversation(currentUserId: currentUserId)
+                router.navigateToConversation(conv)
+            } catch {
+                FeedbackToastManager.shared.showError(String(localized: "root.create_conversation.error", defaultValue: "Impossible de créer la conversation", bundle: .main))
             }
         }
-        .adaptiveOnChange(of: router.pendingShareContent != nil) { _, hasContent in
-            if hasContent {
-                showSharePicker = true
+    }
+
+    private func handlePushNavigateToRoute(_ notification: Notification) {
+        guard let routeName = notification.object as? String else { return }
+        if routeName.hasPrefix("postDetail:") {
+            let postId = String(routeName.dropFirst("postDetail:".count))
+            router.push(.postDetail(postId))
+        } else if routeName.hasPrefix("storyDetail:") {
+            let postId = String(routeName.dropFirst("storyDetail:".count))
+            if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
+                storyViewerCoordinator.present(StoryViewerRequest(
+                    id: storyViewModel.storyGroups[groupIdx].id,
+                    startAtFirstUnviewed: true
+                ))
+            } else {
+                router.push(.postDetail(postId))
             }
-        }
-        .sheet(isPresented: $showNewConversation) {
-            NewConversationView()
-                .environmentObject(statusViewModel)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .adaptiveOnChange(of: router.path) { _, newPath in
-            if !newPath.isEmpty && showFeed {
-                feedWasVisibleBeforeNav = true
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showFeed = false
-                }
-            } else if newPath.isEmpty && feedWasVisibleBeforeNav {
-                feedWasVisibleBeforeNav = false
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showFeed = true
-                }
-            }
-        }
-        // Accès rapide « Publier un post » (liste de conversations, tableau de
-        // bord — 2026-08-21) : le flux se montre, et `ThemedFeedOverlay`
-        // consomme le drapeau en ouvrant son composeur.
-        .adaptiveOnChange(of: router.pendingOpenFeedComposer) { _, pending in
-            guard pending, !showFeed else { return }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                showFeed = true
-            }
-        }
-        // `initial: true` covers the cold-launch race where a Universal
-        // Link sets `pendingDeepLink` from AppDelegate.continue:userActivity:
-        // BEFORE this view mounts. Without it, a plain `.onChange` only fires
-        // on subsequent transitions and the user lands on the home screen
-        // with the deep link silently discarded. `consumePendingDeepLink`
-        // returns nil for the typical cold-launch (no pending link), so
-        // firing on the initial value is a free no-op when there's nothing
-        // to process.
-        .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink, initial: true) { _, newValue in
-            handleDeepLink(newValue)
-        }
-        // C4b — la rupture. Posée EN DERNIER dans la chaîne, donc la plus
-        // extérieure : elle doit recouvrir les feuilles et les covers déjà
-        // montés, pas passer derrière eux.
-        //
-        // Le binding est CONSTANT, et c'est le point : `UpgradeGateController`
-        // n'expose aucun moyen de repasser à `nil`, et un `fullScreenCover`
-        // piloté par une constante n'a aucun geste de fermeture. La porte est
-        // une rupture, pas un avertissement.
-        .fullScreenCover(isPresented: .constant(upgradeGate.isBlocked)) {
-            if let requirement = upgradeGate.requirement {
-                UpgradeGateView(requirement: requirement)
+        } else {
+            switch routeName {
+            case "userStats": router.push(.userStats)
+            case "progression": router.push(.progression)
+            case "affiliate": router.push(.affiliate)
+            default: break
             }
         }
     }
@@ -2016,22 +1486,6 @@ struct RootView: View {
     }
 
     // MARK: - Themed Background
-    private var themedBackground: some View {
-        ZStack {
-            theme.backgroundGradient
-
-            // Static blurred orbs — 100% static, cached by Metal once, zero per-frame GPU work
-            ForEach(Array(theme.ambientOrbs.enumerated()), id: \.offset) { _, orb in
-                Circle()
-                    .fill(Color(hex: orb.color).opacity(orb.opacity))
-                    .frame(width: orb.size, height: orb.size)
-                    .blur(radius: orb.size * 0.25)
-                    .offset(x: orb.offset.x, y: orb.offset.y)
-            }
-        }
-        .drawingGroup()  // Rasterise l'ensemble en une seule texture Metal — zéro composition par frame
-        .ignoresSafeArea()
-    }
 
     // MARK: - Reels Liquid Reveal Orchestration
 
