@@ -28,16 +28,13 @@ const html = renderToStaticMarkup(<ProgressionBody progress={fixture} />);
  * antérieure. C'est le support des témoins d'ABSENCE, qui doivent retirer ce
  * qu'ils prétendent absent plutôt que de compter sur une fixture incomplète.
  */
-const sansBlocsOptionnels = renderToStaticMarkup(
-  <ProgressionBody
-    progress={resolveEngagementProgress({
-      ...ENGAGEMENT_PROGRESS_FIXTURE,
-      meesh: undefined,
-      elan: undefined,
-      achievementReach: undefined,
-    })}
-  />,
-);
+const sansBlocsOptionnels = (() => {
+  // Les clés sont OMISES, pas posées à `undefined` : sous
+  // `exactOptionalPropertyTypes`, « absent » et « présent et undefined » sont
+  // deux types distincts, et c'est bien l'ABSENCE que ce rendu doit servir.
+  const { meesh: _m, elan: _e, achievementReach: _r, ...sansOptions } = ENGAGEMENT_PROGRESS_FIXTURE;
+  return renderToStaticMarkup(<ProgressionBody progress={resolveEngagementProgress(sansOptions)} />);
+})();
 
 /**
  * **Le total de badges se CALCULE, il ne s'écrit pas.** Il valait 65 (13 axes ×
@@ -98,10 +95,18 @@ describe('ProgressionBody — un utilisateur à mi-chemin', () => {
     expect(html).toContain('Encore 1 avant le palier 1');
   });
 
+  /**
+   * Le compte OBTENU se dérive aussi, pour la même raison que le TOTAL au-dessus :
+   * il valait 15, et les six paliers sociaux de la fixture l'ont porté à 21. Un
+   * nombre en dur ici accuse l'écran d'une régression que seule la donnée a
+   * causée. Ce qui est sous test est que les trois nombres CONCORDENT — le
+   * compte affiché, les pastilles pleines, les pastilles vides.
+   */
   test('le compte de badges et les cinq pastilles par axe', () => {
-    expect(html).toContain(`15 / ${TOTAL_BADGES}`);
-    expect(html.match(/Palier \d+ atteint/g)?.length).toBe(15);
-    expect(html.match(/Palier \d+ à atteindre/g)?.length).toBe(TOTAL_BADGES - 15);
+    const obtenus = fixture.badgesEarned;
+    expect(html).toContain(`${obtenus} / ${TOTAL_BADGES}`);
+    expect(html.match(/Palier \d+ atteint/g)?.length).toBe(obtenus);
+    expect(html.match(/Palier \d+ à atteindre/g)?.length).toBe(TOTAL_BADGES - obtenus);
   });
 
   test('les succès : quatre débloqués et datés, un verrouillé avec sa condition', () => {
