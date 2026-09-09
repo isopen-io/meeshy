@@ -209,6 +209,20 @@ struct iPadRootView: View {
             .onReceive(NotificationCenter.default.publisher(for: .openMyStories)) { _ in
                 showMyStoriesFromProfile = true
             }
+            // Accès rapide « Publier un post » : RÉVÉLER le flux, exactement ce
+            // que `RootView` fait côté iPhone (`showFeed = true`) — c'est
+            // `FeedView` qui ouvre ensuite le composeur, en ramassant la demande
+            // à son apparition (`feedPostComposer`).
+            //
+            // Le flux iPad n'occupe la colonne gauche QUE si aucune conversation
+            // n'est ouverte (`leftColumn`). Sans cette moitié, la demande levée
+            // depuis la liste — qui n'est visible, elle, QUE conversation
+            // ouverte — tombait sur une vue non montée : le bouton restait
+            // inerte précisément dans le cas où on le voit.
+            .adaptiveOnChange(of: router.pendingOpenFeedComposer) { _, pending in
+                guard pending, isConversationOpen else { return }
+                closePanels()
+            }
             .onAppear {
                 router.onRouteRequested = { route in
                     if case .conversation(let conv) = route {
