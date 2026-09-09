@@ -222,7 +222,9 @@ final class UpgradeGateTests: XCTestCase {
     /// c'est exactement le genre d'oubli qu'aucun test de comportement ne
     /// rattrape — les deux racines ne partagent pas une ligne.
     func test_lesDeuxRacines_montentLaPorte_enFullScreenCover() throws {
-        for racine in ["Meeshy/Features/Main/Views/RootView.swift",
+        // Sur iPhone la porte est la dernière ligne de `RootSheetsLayer`
+        // (RootLayers/RootViewLayers.swift, #5837) ; l'iPad la garde sur sa racine.
+        for racine in ["Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
                        "Meeshy/Features/Main/Views/iPadRootView.swift"] {
             let texte = try source(racine)
 

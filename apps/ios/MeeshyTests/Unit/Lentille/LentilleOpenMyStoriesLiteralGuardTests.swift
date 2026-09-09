@@ -36,7 +36,10 @@ final class LentilleOpenMyStoriesLiteralGuardTests: XCTestCase {
         "Meeshy/Features/Main/Views/RootView.swift",
         "Meeshy/Features/Main/Views/iPadRootView.swift",
         "Meeshy/Features/Main/Views/ConversationListView.swift",
-        "Meeshy/Features/Main/Views/ProfileUserPostsList.swift"
+        "Meeshy/Features/Main/Views/ProfileUserPostsList.swift",
+        // Les écouteurs des deux racines vivent dans leurs couches (#5837).
+        "Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
+        "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift"
     ]
 
     private func sources() throws -> [(name: String, code: String)] {
@@ -55,8 +58,8 @@ final class LentilleOpenMyStoriesLiteralGuardTests: XCTestCase {
     func test_guardActuallyLoadsAllFourFiles_neverSilentlyEmpty() throws {
         let loaded = try sources()
         XCTAssertEqual(
-            loaded.count, 4,
-            "cette garde doit charger EXACTEMENT les 4 fichiers re-prouvés par R-j — un chemin " +
+            loaded.count, 6,
+            "cette garde doit charger EXACTEMENT les 6 fichiers (4 re-prouvés par R-j + les 2 couches) — un chemin " +
             "manquant ferait passer la suite au vert sans avoir rien vérifié (leçon 257)."
         )
         for file in loaded {
@@ -126,18 +129,18 @@ final class LentilleOpenMyStoriesLiteralGuardTests: XCTestCase {
     // MARK: - Les quatre sites consomment bien la constante partagée
 
     func test_rootView_listensViaTheSharedConstant() throws {
-        let stripped = AppSourceGuard.stripComments(try sources()[0].code)
+        let stripped = AppSourceGuard.stripComments(try sources()[4].code)
         XCTAssertTrue(
             stripped.contains("NotificationCenter.default.publisher(for: .openMyStories)"),
-            "RootView.swift doit écouter via `NotificationCenter.default.publisher(for: .openMyStories)`."
+            "RootLayers/RootViewLayers.swift (RootStoryDoorsLayer) doit écouter via `NotificationCenter.default.publisher(for: .openMyStories)`."
         )
     }
 
     func test_iPadRootView_listensViaTheSharedConstant() throws {
-        let stripped = AppSourceGuard.stripComments(try sources()[1].code)
+        let stripped = AppSourceGuard.stripComments(try sources()[5].code)
         XCTAssertTrue(
             stripped.contains("NotificationCenter.default.publisher(for: .openMyStories)"),
-            "iPadRootView.swift doit écouter via `NotificationCenter.default.publisher(for: .openMyStories)`."
+            "RootLayers/iPadRootViewLayers.swift (iPadStoryAndLifecycleLayer) doit écouter via `NotificationCenter.default.publisher(for: .openMyStories)`."
         )
     }
 

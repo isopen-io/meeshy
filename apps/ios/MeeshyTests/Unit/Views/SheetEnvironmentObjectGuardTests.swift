@@ -86,9 +86,20 @@ final class SheetEnvironmentObjectGuardTests: XCTestCase {
     }
 
     func test_bothRoots_poseSocialChromeResolvers() throws {
-        for root in ["Meeshy/Features/Main/Views/RootView.swift",
-                     "Meeshy/Features/Main/Views/iPadRootView.swift"] {
-            let stripped = AppSourceGuard.stripComments(try source(root))
+        // Depuis #5837 chaque racine pose son environnement par une couche
+        // nominale (`RootEnvironmentLayer` / `iPadEnvironmentLayer`) : c'est
+        // dans la couche que `.meeshySocialChrome(...)` est appelé, et la
+        // racine doit monter cette couche.
+        for (root, layer) in [("Meeshy/Features/Main/Views/RootView.swift",
+                               "Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift"),
+                              ("Meeshy/Features/Main/Views/iPadRootView.swift",
+                               "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift")] {
+            let rootCode = AppSourceGuard.stripComments(try source(root))
+            XCTAssertTrue(
+                rootCode.contains("EnvironmentLayer("),
+                "\(root) doit monter sa couche d'environnement — c'est elle qui pose le chrome social."
+            )
+            let stripped = AppSourceGuard.stripComments(try source(layer))
             XCTAssertTrue(
                 stripped.contains(".meeshySocialChrome("),
                 """
