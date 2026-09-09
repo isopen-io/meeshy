@@ -14,8 +14,34 @@ import { resolveApiConfig } from './config';
  * derrière la même origine que le document.
  */
 describe('resolveApiConfig — la base', () => {
-  test('défaut web : base relative', () => {
-    expect(resolveApiConfig({}, { shell: false }).base).toBe('');
+  /**
+   * **La base relative n'est valide QUE là où un proxy la rend valide (#5872).**
+   *
+   * En dev, `vite.config.ts` (§ `server.proxy`) relaie `/api/v1` vers la
+   * passerelle : `''` y désigne bien l'API. En PRODUCTION il n'y a aucun
+   * proxy — `nginx.conf` n'a pas de `location /api` — et `''` désigne le
+   * serveur de fichiers statiques, qui répond **405** à un POST. Mesuré le
+   * 2026-09-09 : plus personne ne pouvait se connecter depuis
+   * `staging.meeshy.me`, et la console ne montrait que
+   * `/api/v1/auth/login … 405`.
+   *
+   * Le défaut retombe donc sur l'origine de production — le même repli que la
+   * branche coque, et pour la même raison qu'elle l'a déjà : une erreur de
+   * configuration doit rendre un défaut qui FONCTIONNE, jamais une base
+   * cassée. C'est `VITE_API_BASE` qui désigne un autre environnement.
+   */
+  test('défaut web en DEV : base relative — le proxy Vite la rend valide', () => {
+    expect(resolveApiConfig({ DEV: true }, { shell: false }).base).toBe('');
+  });
+
+  test("défaut web en PRODUCTION : origine absolue, jamais '' — sans proxy, '' vise nginx (#5872)", () => {
+    expect(resolveApiConfig({}, { shell: false }).base).toBe('https://gate.meeshy.me');
+    expect(resolveApiConfig({ DEV: false }, { shell: false }).base).toBe('https://gate.meeshy.me');
+  });
+
+  test('surcharge explicite en DEV : elle gagne sur le relatif', () => {
+    const config = resolveApiConfig({ DEV: true, VITE_API_BASE: 'https://gate.staging.meeshy.me' }, { shell: false });
+    expect(config.base).toBe('https://gate.staging.meeshy.me');
   });
 
   test('surcharge web : origine normalisée, sans barre finale', () => {

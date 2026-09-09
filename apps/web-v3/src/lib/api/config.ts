@@ -19,9 +19,11 @@
  *
  * LE CAS QUE iOS N'A PAS : la base RELATIVE. Une coque native ne peut pas
  * résoudre `/api/v1` (`capacitor://localhost/api/v1` ne mène nulle part), un
- * document web PEUT — proxé en dev (`vite.config.ts` § `server.proxy`),
- * servi par la même origine que la passerelle en déploiement. `base: ''`
- * n'est donc PAS une erreur de config : c'est le défaut du web nu.
+ * document web PEUT — mais SEULEMENT derrière un proxy. En dev,
+ * `vite.config.ts` (§ `server.proxy`) en fournit un ; en déploiement, AUCUN
+ * (`nginx.conf` n'a pas de `location /api`). `base: ''` est donc le défaut du
+ * web nu EN DÉVELOPPEMENT, et une base cassée partout ailleurs — c'est ce qui
+ * a coupé la connexion sur `staging.meeshy.me` le 2026-09-09 (#5872).
  */
 
 /** Le CHOIX de source de données — jamais lu ailleurs qu'ici et par les
@@ -57,6 +59,8 @@ export type ApiEnv = {
   // avec un type qui ne déclarerait QUE des champs optionnels — TS2559, alors
   // que la forme réelle EST compatible via l'index signature de la source.
   readonly [key: string]: unknown;
+  /** `import.meta.env.DEV` — posé par Vite. SEUL mode où `/api/v1` est proxé. */
+  readonly DEV?: boolean;
   readonly VITE_API_BASE?: string;
   readonly VITE_DATA_SOURCE?: string;
   readonly VITE_READING_MODES?: string;
@@ -92,18 +96,34 @@ function resolveReadingModes(env: ApiEnv): boolean {
 }
 
 /**
- * La base — FAIL-CLOSED en coque : une surcharge relative n'y mène nulle
- * part (miroir `MeeshyConfig.swift:6`, où le défaut est toujours une origine
- * absolue), et une erreur de configuration doit rendre un défaut qui
- * FONCTIONNE plutôt qu'une base cassée.
+ * La base — FAIL-CLOSED PARTOUT : une erreur de configuration doit rendre un
+ * défaut qui FONCTIONNE plutôt qu'une base cassée (miroir
+ * `MeeshyConfig.swift:6`, où le défaut est toujours une origine absolue).
+ *
+ * **La base relative n'est valide que là où un proxy la rend valide (#5872).**
+ * En DEV, `vite.config.ts` (§ `server.proxy`) relaie `/api/v1` vers la
+ * passerelle : `''` y désigne bien l'API, et c'est le seul endroit. En
+ * PRODUCTION il n'y a aucun proxy — `nginx.conf` n'a pas de `location /api` —
+ * donc `''` désigne le serveur de FICHIERS STATIQUES, qui répond **405** à un
+ * POST. Mesuré le 2026-09-09 : plus personne ne pouvait se connecter depuis
+ * `staging.meeshy.me`, la console ne montrant que `/api/v1/auth/login … 405`.
+ *
+ * Le doc-comment d'origine assumait « servi par la même origine que la
+ * passerelle en déploiement » — hypothèse jamais réalisée : ni `nginx.conf`,
+ * ni le `Dockerfile`, ni le workflow ne l'ont câblée. Une hypothèse d'infra
+ * qu'aucune infra ne tient est un défaut, pas un défaut de configuration.
+ *
+ * Une coque, elle, n'a jamais de proxy : `capacitor://localhost/api/v1` ne
+ * mène nulle part, d'où le rejet d'une surcharge relative dans cette branche.
  */
 function resolveBase(env: ApiEnv, { shell }: { readonly shell: boolean }): string {
   const override = env.VITE_API_BASE;
-  if (!shell) {
-    return override === undefined ? '' : normalizeOrigin(override);
-  }
   if (override !== undefined && ABSOLUTE_ORIGIN_PATTERN.test(override.trim())) {
     return normalizeOrigin(override);
+  }
+  if (!shell) {
+    if (override !== undefined) return normalizeOrigin(override);
+    return env.DEV === true ? '' : PRODUCTION_ORIGIN;
   }
   return PRODUCTION_ORIGIN;
 }
