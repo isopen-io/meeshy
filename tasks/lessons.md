@@ -29888,7 +29888,7 @@ les quatre, et une célébration branchée sur le seul tap.
 Site unique désormais : `EngagementReveal.celebratesUnprompted`, et la table du
 § 1 du modèle qui dit, pour chacun des quatre types, ce qui se passe au geste et
 ce qui se passe au tap.
-## Leçon 555 — Découper des FONCTIONS ne découpe pas le TYPE : seule une frontière nominale non générique coupe la chaîne d'un `body`
+## Leçon 557 — Découper des FONCTIONS ne découpe pas le TYPE : seule une frontière nominale non générique coupe la chaîne d'un `body`
 
 **Le fait (#5837, 2026-09-09).** `RootView.body` = 66 niveaux d'imbrication de
 type (~1 095 Ko de pile de démangleur), `iPadRootView.body` = 69 (~1 145 Ko),
