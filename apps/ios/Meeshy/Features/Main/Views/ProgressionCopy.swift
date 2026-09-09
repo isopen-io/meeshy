@@ -185,6 +185,19 @@ enum ProgressionCopy {
             : String(localized: "progression.meesh.minted.many", defaultValue: "\(minted) frappées depuis toujours", bundle: .main)
     }
 
+    /// Ce que l'entrée de l'en-tête ANNONCE au lecteur d'écran (#5839).
+    ///
+    /// Le solde y est REDIT alors qu'il est déjà à l'écran : la capsule montre
+    /// un chiffre nu à côté d'une médaille, ce qui ne dit pas de quoi il est le
+    /// nombre. Un libellé qui se contente de « Meesh » perdrait la valeur.
+    static func meeshEntryA11y(_ balance: Int) -> String {
+        String(
+            localized: "progression.meesh.entry.a11y",
+            defaultValue: "\(balance) Meesh — voir le détail",
+            bundle: .main
+        )
+    }
+
     /// L'action de conversion — le prix vient du SERVEUR, jamais d'une constante locale.
     static func meeshMintAction(_ cost: Int) -> String {
         String(
@@ -260,7 +273,7 @@ enum ProgressionCopy {
         return String(localized: "progression.a11y.tier.pending", defaultValue: "Palier \(tier.threshold) à atteindre", bundle: .main)
     }
 
-    // MARK: - Le hub (#5838, #5840, #5841, #5842)
+    // MARK: - Le hub (#5838, #5839, #5841, #5842)
 
     /// L'en-tête du hero quand un succès a DÉJÀ été décroché.
     static let heroLastTitle = String(localized: "progression.hero.last", defaultValue: "Dernier succès", bundle: .main)

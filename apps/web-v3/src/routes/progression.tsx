@@ -396,9 +396,15 @@ export function MeeshDetail({
       <p className="text-title font-bold" style={{ color: INK }}>
         {meesh.balance === 0 ? 'Aucune Meesh' : meesh.balance === 1 ? '1 Meesh' : `${meesh.balance} Meeshes`}
       </p>
-      <p className="text-caption" style={{ color: INK_2 }}>
-        {meesh.mintedLifetime === 1 ? '1 frappée depuis toujours' : `${meesh.mintedLifetime} frappées depuis toujours`}
-      </p>
+      {/* À zéro, la ligne dirait « 0 frappées depuis toujours » juste au-dessus
+          de « Aucune frappe pour l'instant » — deux fois la même absence. Le
+          natif applique la même garde : c'est la STRUCTURE qui est unifiée, pas
+          seulement la disposition. */}
+      {meesh.mintedLifetime > 0 ? (
+        <p className="text-caption" style={{ color: INK_2 }}>
+          {meesh.mintedLifetime === 1 ? '1 frappée depuis toujours' : `${meesh.mintedLifetime} frappées depuis toujours`}
+        </p>
+      ) : null}
 
             {meesh.firstMintedAt === null ? (
               <p className="text-caption" style={{ color: INK_2 }}>

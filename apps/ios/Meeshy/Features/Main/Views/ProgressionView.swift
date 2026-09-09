@@ -99,11 +99,26 @@ struct ProgressionView: View {
 
             Spacer()
 
-            Image(systemName: "trophy.fill")
-                .font(MeeshyFont.relative(16, weight: .semibold))
-                .foregroundColor(MeeshyColors.warning)
-                .frame(width: 24, height: 24)
-                .accessibilityHidden(true)
+            /*
+             * L'ENTRÉE MEESH remplace le trophée (#5839).
+             *
+             * Le trophée était `accessibilityHidden(true)`, ne réagissait à
+             * rien et n'annonçait rien : un ornement posé à l'endroit où l'œil
+             * cherche un contrôle. À sa place, le solde et sa porte.
+             *
+             * `nil` quand la passerelle ne sert pas le bloc — l'écran n'affiche
+             * alors RIEN : un solde de zéro montré à quelqu'un qui en a deux
+             * serait pire qu'une absence.
+             */
+            if let meesh = viewModel.progress?.meesh {
+                ProgressionMeeshEntry(
+                    meesh: meesh,
+                    isMinting: viewModel.isMinting,
+                    onMint: { Task { await viewModel.mint() } }
+                )
+            } else {
+                Color.clear.frame(width: 24, height: 24)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
