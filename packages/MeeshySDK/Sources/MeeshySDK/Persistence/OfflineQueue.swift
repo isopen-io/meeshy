@@ -1054,6 +1054,17 @@ public actor OfflineQueue {
         }
 
         await refreshPendingCount()
+        // **Une ligne RÉ-ARMÉE est, pour le flusher, exactement une ligne
+        // fraîchement enfilée** (#5830) — et sans ce signal il ne le sait pas.
+        // `nextAttemptAt = now` ne réveille personne : le flusher tourne au
+        // boot, au retour de premier plan, au retour du réseau, et sur CE
+        // signal (`OutboxRetryScheduler.startObservingMutationEnqueued`,
+        // débounce 250 ms). Sans lui, toucher « Réel non publié » aurait fait
+        // exactement ce que le défaut faisait déjà : changer un statut sans
+        // que rien ne parte, jusqu'au prochain événement de cycle de vie —
+        // un contrôle qui a l'air d'agir. C'est le piège que ce lot ferme,
+        // rejoué une couche plus bas.
+        mutationEnqueued.send(())
     }
 
     /// Convenience wrapper for UI surfaces (e.g. failed-message bubbles) that

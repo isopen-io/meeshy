@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import GRDB
 @testable import MeeshySDK
 
@@ -163,5 +164,28 @@ final class OfflineQueuePostMediaProgressTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(record).status, .pending)
         XCTAssertEqual(try XCTUnwrap(record).attempts, 0)
         XCTAssertEqual(try acquis(id).map(\.id), ["media0"])
+    }
+
+    /// **Ré-armer une ligne ne suffit pas : il faut RÉVEILLER le flusher.**
+    ///
+    /// `nextAttemptAt = now` ne déclenche rien par lui-même — le flusher tourne
+    /// au boot, au retour de premier plan, au retour du réseau, et sur
+    /// `mutationEnqueued`. Sans ce signal, toucher « Réel non publié » ferait
+    /// exactement ce que le défaut faisait : changer un statut sans que rien ne
+    /// parte. Un contrôle qui A L'AIR d'agir est pire que celui qui ne fait
+    /// rien — il consomme la confiance du geste.
+    func test_retryItem_reveilleLeFlusher() async throws {
+        let id = try await enfilerReel(cmid: "cmid_progression_6")
+        try await pool.write { db in
+            try db.execute(sql: "UPDATE outbox SET status = ? WHERE id = ?",
+                           arguments: [OutboxStatus.exhausted.rawValue, id])
+        }
+
+        let attente = expectation(description: "mutationEnqueued émis par la relance")
+        let jeton = queue.mutationEnqueued.publisher.sink { _ in attente.fulfill() }
+        defer { jeton.cancel() }
+
+        try await queue.retryItem(id)
+        await fulfillment(of: [attente], timeout: 2.0)
     }
 }
