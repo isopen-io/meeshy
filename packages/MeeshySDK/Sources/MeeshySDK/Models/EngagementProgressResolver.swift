@@ -319,17 +319,27 @@ public enum EngagementProgressResolver {
             isEmpty: !hasActivity,
             meesh: payload.meesh.map(EngagementMeeshProgress.init(payload:)),
             elan: payload.elan.map(EngagementElanProgress.init(payload:)),
-            achievementSections: payload.achievementReach.map { reach in
-                AchievementResolver.sections(
-                    reach: reach,
-                    unlocked: Dictionary(
-                        payload.milestones
-                            .filter { $0.milestoneType == .achievement }
-                            .map { ($0.milestoneKey, reachedDate($0.reachedAt)) },
-                        uniquingKeysWith: { first, _ in first }
-                    )
+            // **Le catalogue est LOCAL — il ne dépend pas de sa mesure** (#5916).
+            //
+            // Ce `map … ?? []` rendait ZÉRO section quand `achievementReach`
+            // manquait de la charge, et `ProgressionLayout` retirait alors la
+            // porte « Défis » de l'écran entier : un tiers du hub disparaissait
+            // sans qu'aucune erreur ne soit levée.
+            //
+            // Or `isAttainable` sait déjà répondre sans mesure — une famille
+            // dont l'échelle est `count` reste atteignable. Un `reach` VIDE
+            // produisait donc des entrées ; seul le repli placé AVANT le
+            // catalogue n'en produisait aucune. Deux façons de ne pas savoir
+            // qui dégradaient à l'opposé l'une de l'autre.
+            achievementSections: AchievementResolver.sections(
+                reach: payload.achievementReach ?? [:],
+                unlocked: Dictionary(
+                    payload.milestones
+                        .filter { $0.milestoneType == .achievement }
+                        .map { ($0.milestoneKey, reachedDate($0.reachedAt)) },
+                    uniquingKeysWith: { first, _ in first }
                 )
-            } ?? []
+            )
         )
     }
 

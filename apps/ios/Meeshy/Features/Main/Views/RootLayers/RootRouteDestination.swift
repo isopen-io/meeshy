@@ -133,6 +133,13 @@ struct RootRouteDestination: View {
         case .progression:
             ProgressionView()
                 .navigationBarHidden(true)
+        case .progressionSection(let section):
+            // `navigationBarHidden(true)` comme ses voisines : la page porte son
+            // propre chrome (le `<` de verre et le compte). Le glissement depuis
+            // le bord reste servi — c'est `NavigationStack` qui le donne, et il
+            // survit à une barre masquée ; c'était la FEUILLE qui l'empêchait.
+            ProgressionSectionPage(section: section)
+                .navigationBarHidden(true)
         case .links:
             LinksHubView()
         case .affiliate:

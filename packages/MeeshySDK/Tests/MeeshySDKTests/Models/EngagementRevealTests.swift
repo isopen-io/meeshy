@@ -14,6 +14,52 @@ final class EngagementRevealTests: XCTestCase {
         try JSONDecoder().decode(NotificationMetadata.self, from: Data(json.utf8))
     }
 
+    // MARK: - Le QUATRIÈME champ, oublié par la passe qui a corrigé les trois
+
+    /// **Un badge ne porte PAS `achievementKey` — il porte `axisKey`.**
+    ///
+    /// `tryAwardBadge` pose `metadata: { action, route, axisKey, threshold }`
+    /// (`EngagementService.ts`) là où `tryAwardAchievement` pose
+    /// `achievementKey`. La passe qui a fait entrer les trois champs ci-dessous
+    /// dans `NotificationMetadata` n'a pas vu le quatrième : le décodeur jette
+    /// `axisKey` en silence, exactement le défaut que ce fichier documente,
+    /// resté ouvert pour la moitié badge de son sujet.
+    func test_metadata_decodesTheBadgeAxis() throws {
+        let m = try metadata(#"{"action":"view_details","axisKey":"content.message.text","threshold":100}"#)
+        XCTAssertEqual(m.axisKey, "content.message.text",
+                       "Sans l'axe, une notification de badge ne peut désigner AUCUN palier.")
+        XCTAssertEqual(m.threshold, 100)
+    }
+
+    /// **`announcingTypes` DÉCLARE que `badgeEarned` annonce un palier.** Tant
+    /// que `from` rend `nil` pour lui, la déclaration est fausse : toucher la
+    /// notification d'un badge ouvre le tableau de bord sans jamais montrer ce
+    /// qui vient d'être gagné — le défaut #5809 pour les badges seuls.
+    func test_from_derivesABadgeFromItsAxisAndThreshold() throws {
+        let m = try metadata(#"{"axisKey":"content.message.text","threshold":100}"#)
+        let palier = EngagementReveal.from(type: .badgeEarned, metadata: m)
+        XCTAssertEqual(palier, .badge(axis: "content.message.text", threshold: 100),
+                       "Un badge annoncé doit se célébrer comme les trois autres formes.")
+    }
+
+    /// Le badge tombe au fil de l'usage : il se montre au TAP, jamais tout
+    /// seul. Seuls les succès — composés ou du catalogue génératif —
+    /// interrompent (directive porteur 2026-09-09, confirmée le même jour :
+    /// « automatique pour succès et défis »).
+    func test_aBadgeNeverCelebratesUnprompted() {
+        XCTAssertFalse(EngagementReveal.badge(axis: "content.message.text", threshold: 100).celebratesUnprompted,
+                       "Célébrer chaque badge ferait de la célébration un bruit.")
+        XCTAssertTrue(EngagementReveal.composedAchievement(family: AchievementCatalog.families[0], tier: AchievementCatalog.families[0].tiers[0]).celebratesUnprompted,
+                      "Un défi du catalogue génératif se célèbre seul.")
+    }
+
+    /// Un badge sans son seuil, ou sans son axe, ne se fabrique pas : c'est le
+    /// repli MENTEUR que l'en-tête de `EngagementReveal` interdit.
+    func test_from_refusesAnIncompleteBadge() throws {
+        XCTAssertNil(EngagementReveal.from(type: .badgeEarned, metadata: try metadata(#"{"axisKey":"content.message.text"}"#)))
+        XCTAssertNil(EngagementReveal.from(type: .badgeEarned, metadata: try metadata(#"{"threshold":100}"#)))
+    }
+
     // MARK: - Le fil porte les trois champs
 
     func test_metadata_decodesTheThreeMilestoneFields() throws {

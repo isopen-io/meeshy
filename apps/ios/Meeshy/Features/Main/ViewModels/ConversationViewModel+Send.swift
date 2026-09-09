@@ -222,6 +222,14 @@ extension ConversationViewModel {
             Logger.messages.error("SendFlow EARLY-RETURN guard=emptyContent convId=\(self.conversationId, privacy: .public)")
             return false
         }
+        // LE GESTE DU JOUR est marqué ICI (#5902) : le message a passé la garde
+        // d'éligibilité, il part — par le réseau ou par l'outbox. La marque
+        // sert aux rappels de série, qui s'annulent pour la journée dès qu'un
+        // geste est posé. La poser sur le SUCCÈS aurait demandé de toucher les
+        // quatre sorties de cette fonction, et un envoi mis en file hors ligne
+        // compte tout autant : il partira.
+        StreakActivityMark.marquer()
+
         // Debounce: a fast double-tap on the send button used to trigger two
         // concurrent `sendMessage` runs, both inserting their own optimistic
         // record with a fresh `tempId`, both POSTing the request — the user
