@@ -397,7 +397,7 @@ function MeeshHero({ meesh, onMint, isMinting }: { meesh: EngagementMeeshProgres
         <span style={{ color: MEESH_TINT }} aria-hidden="true">
           <GlyphSvg glyph={PROGRESSION_GLYPHS.medal} size={18} />
         </span>
-        <h2 id="progression-meesh" className="text-headline font-bold" style={{ color: INK }}>
+        <h2 id="progression-meesh" className="text-large-title font-bold" style={{ color: INK }}>
           {soldeLabel}
         </h2>
       </div>

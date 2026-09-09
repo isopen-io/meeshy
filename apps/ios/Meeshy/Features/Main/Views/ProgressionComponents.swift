@@ -410,7 +410,7 @@ struct ProgressionMeeshHero: View {
                                 : ProgressionCopy.meeshMintAction(meesh.mintCost)
                         )
                         .font(MeeshyFont.relative(14, weight: .semibold))
-                        .foregroundColor(theme.background)
+                        .foregroundColor(theme.backgroundPrimary)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(tint))
                     }
