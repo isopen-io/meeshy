@@ -38,6 +38,7 @@ type NotificationArgs = {
   userId: string;
   type: string;
   content: string;
+  context?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
 };
 
@@ -140,6 +141,33 @@ describe("l'annonce d'un succès", () => {
     // Le MOT, jamais la clé — la leçon du `first_content` servi tel quel.
     expect(args.content).toContain('10');
     expect(args.content).not.toContain('achievement.');
+  });
+
+  /// **L'annonce ne porte AUCUN contexte de conversation, et ce n'est pas un
+  /// détail de forme.** Le client met en sourdine toute notification dont la
+  /// `conversationId` est celle qu'il a à l'écran (`NotificationToastManager
+  /// .handleNewNotification`, retour anticipé AVANT `newNotificationReceived`).
+  /// Rattacher un succès à la conversation où il a été obtenu l'avalerait donc
+  /// exactement dans le cas nominal : on vient d'agir DANS cette conversation,
+  /// on y est encore. La célébration disparaîtrait sans qu'aucun témoin ne
+  /// rougisse — le palier étant, lui, bien gravé.
+  it("ne rattache le succès à AUCUNE conversation — sinon le client le met en sourdine", async () => {
+    const createNotification = makeNotificationService();
+    const { prisma } = makePrisma({
+      counts: { participant: 10 },
+      tailleConversation: 3,
+      dejaGraves: [achievementKey(famille('conversation.join.count'), 1)],
+    });
+
+    await new CerclesAchievements(prisma).recordEvent({
+      kind: 'conversation.join',
+      userId: 'u1',
+      conversationId: 'c1',
+    });
+
+    const args = createNotification.mock.calls[0][0];
+    expect(args.context ?? {}).toEqual({});
+    expect(JSON.stringify(args)).not.toContain('c1');
   });
 
   it("ne part PAS quand c'est le balayage qui grave — le geste est passé", async () => {
