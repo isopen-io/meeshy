@@ -5,7 +5,13 @@
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { CONTENT_ENGAGEMENT_AXES, CONVERSATION_ENGAGEMENT_AXES, ENGAGEMENT_AXIS_WEIGHTS, SOCIAL_ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
+import {
+  CONTENT_ENGAGEMENT_AXES,
+  CONVERSATION_ENGAGEMENT_AXES,
+  ENGAGEMENT_AXIS_WEIGHTS,
+  SOCIAL_ENGAGEMENT_AXES,
+  type EngagementAxisKey,
+} from '@meeshy/shared/types/engagement';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
 import { getSharedNotificationService } from '../../../../services/notifications/notification-service-registry';
 
@@ -48,11 +54,12 @@ function makePrisma(overrides: Partial<{
   } as unknown as PrismaClient;
 }
 
-/** Fixture dédiée `updateStreak` : contrôle `currentStreakDays`/`longestStreakDays`/`lastStreakDate` sans mélanger le mock de langue. */
+/** Fixture dédiée `updateStreak` : contrôle `currentStreakDays`/`longestStreakDays`/`lastStreakDate`/`timezone` sans mélanger le mock de langue. */
 function makeStreakPrisma(streakState: {
   currentStreakDays: number;
   longestStreakDays: number;
   lastStreakDate: Date | null;
+  timezone?: string | null;
 }, overrides: Partial<{ create: jest.Mock; userUpdate: jest.Mock }> = {}) {
   // Same answer for every call: the streak-state read AND the (fallback-to-'fr')
   // language lookup a crossed threshold triggers — `recipientLanguage` degrades
@@ -76,18 +83,27 @@ function makeStreakPrisma(streakState: {
 }
 
 /**
- * Fixture dédiée au score de niveau : `findUnique` rend `null` pour que
- * `updateStreak` prenne sa branche « aucun utilisateur » et ne pose pas son
- * propre appel à `user.update` — ce qui isole l'unique appel qui reste sur ce
- * mock à celui d'`updateEngagementScore`. Le compteur d'axe est fixé à un
- * niveau qui ne franchit aucun palier de badge, pour ne pas mélanger les deux
- * notifications dans les assertions.
+ * Fixture dédiée au score de niveau. `findUnique` distingue ses appelants par
+ * la FORME du `select` reçu, jamais par l'ordre d'appel :
+ * `updateStreak` (select `currentStreakDays`) prend sa branche « aucun
+ * utilisateur » (`null`) et ne pose pas son propre appel à `user.update` — ce
+ * qui isole l'unique appel qui reste sur ce mock à celui
+ * d'`updateEngagementScore`, dont le `select: { engagementScore }` reçoit
+ * `previousScore` (#5742 : lecture explicite, plus d'`$inc`). Le compteur
+ * d'axe est fixé à un niveau qui ne franchit aucun palier de badge, pour ne
+ * pas mélanger les deux notifications dans les assertions.
  */
-function makeLevelPrisma(overrides: Partial<{
+function makeLevelPrisma(previousScore: number, overrides: Partial<{
   create: jest.Mock;
   userUpdate: jest.Mock;
   upsert: jest.Mock;
+  findUnique: jest.Mock;
 }> = {}) {
+  const findUnique = overrides.findUnique ?? jest.fn((args: { select?: Record<string, boolean> }) => {
+    if (args?.select?.currentStreakDays) return Promise.resolve(null);
+    if (args?.select?.engagementScore) return Promise.resolve({ engagementScore: previousScore });
+    return Promise.resolve({ systemLanguage: 'fr' });
+  });
   return {
     engagementCounter: {
       upsert: overrides.upsert ?? jest.fn().mockResolvedValue({ count: 2 }), // 1 -> 2, no badge threshold crossed
@@ -99,8 +115,8 @@ function makeLevelPrisma(overrides: Partial<{
       create: jest.fn().mockResolvedValue({}),
     },
     user: {
-      findUnique: jest.fn().mockResolvedValue(null),
-      update: overrides.userUpdate ?? jest.fn().mockResolvedValue({ engagementScore: 0 }),
+      findUnique,
+      update: overrides.userUpdate ?? jest.fn().mockResolvedValue({}),
     },
   } as unknown as PrismaClient;
 }
@@ -432,22 +448,58 @@ describe('EngagementService streak tracking (#5544)', () => {
   });
 });
 
-describe('EngagementService level tracking (#5545)', () => {
-  /**
-   * Le poids lu est celui du CATALOGUE, jamais un nombre recopié ici.
-   *
-   * La version précédente épinglait `increment: 3` en dur, et le porteur a
-   * réglé les poids trois fois le 2026-09-09 (contenu 3→9, commentaire 2→3,
-   * plus la famille sociale à 7). Un témoin qui casse à chaque réglage d'un
-   * paramètre TUNABLE ne protège rien : il ne dit plus si le service ajoute le
-   * BON poids, il dit seulement que le barème n'a pas bougé. Ce qui est sous
-   * test ici est la mécanique — « le poids de l'axe est ajouté » — et elle se
-   * vérifie contre la source de vérité.
-   */
-  it('adds the axis family weight to the engagement score via an atomic $inc', async () => {
-    const attendu = ENGAGEMENT_AXIS_WEIGHTS['content.text_message'];
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: attendu });
-    const prisma = makeLevelPrisma({ userUpdate });
+describe('EngagementService streak tracking honors User.timezone (#5734)', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('does not double-count two activities on the same LOCAL day that straddle the UTC day boundary', async () => {
+    // Both activities happen on the SAME America/Los_Angeles calendar day
+    // (Sept 7): a morning one (already recorded, `lastStreakDate` holds its
+    // civil-day marker) and a late-night one at 22:00 local. Los Angeles is
+    // UTC-7, so 22:00 local on Sept 7 is 05:00 UTC on Sept 8 — a UTC day
+    // later. Comparing by UTC civil day (the pre-#5734 behavior) would read
+    // this as a NEW day and increment the streak a second time for a single
+    // local day; comparing by the user's timezone must not.
+    const LAST_STREAK_MARKER = new Date('2026-09-07T00:00:00.000Z'); // civil-day marker for LA Sept 7
+    const NOW_UTC = new Date('2026-09-08T05:00:00.000Z'); // 2026-09-07T22:00 America/Los_Angeles
+    jest.useFakeTimers().setSystemTime(NOW_UTC);
+
+    const userUpdate = jest.fn().mockResolvedValue({});
+    const prisma = makeStreakPrisma(
+      {
+        currentStreakDays: 4,
+        longestStreakDays: 6,
+        lastStreakDate: LAST_STREAK_MARKER,
+        timezone: 'America/Los_Angeles',
+      },
+      { userUpdate },
+    );
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message');
+
+    expect(userUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ currentStreakDays: expect.anything() }) }),
+    );
+  });
+
+  it('increments the streak once the user has genuinely reached the next LOCAL day', async () => {
+    const LAST_STREAK_MARKER = new Date('2026-09-07T00:00:00.000Z'); // civil-day marker for LA Sept 7
+    const NOW_UTC = new Date('2026-09-08T17:00:00.000Z'); // 2026-09-08T10:00 America/Los_Angeles
+    jest.useFakeTimers().setSystemTime(NOW_UTC);
+
+    const userUpdate = jest.fn().mockResolvedValue({});
+    const prisma = makeStreakPrisma(
+      {
+        currentStreakDays: 4,
+        longestStreakDays: 6,
+        lastStreakDate: LAST_STREAK_MARKER,
+        timezone: 'America/Los_Angeles',
+      },
+      { userUpdate },
+    );
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
@@ -455,8 +507,132 @@ describe('EngagementService level tracking (#5545)', () => {
 
     expect(userUpdate).toHaveBeenCalledWith({
       where: { id: 'user-1' },
-      data: { engagementScore: { increment: attendu } },
-      select: { engagementScore: true },
+      data: {
+        currentStreakDays: 5,
+        longestStreakDays: 6,
+        lastStreakDate: new Date('2026-09-08T00:00:00.000Z'), // civil-day marker for LA Sept 8
+      },
+    });
+  });
+
+  it('counts two evenings 24h apart at the same local hour as a two-day streak (the #5734 acceptance example)', async () => {
+    const EVENING_ONE = new Date('2026-09-06T00:00:00.000Z'); // civil-day marker for LA Sept 6
+    const EVENING_TWO_NOW = new Date('2026-09-08T02:00:00.000Z'); // 2026-09-07T19:00 America/Los_Angeles
+    jest.useFakeTimers().setSystemTime(EVENING_TWO_NOW);
+
+    const userUpdate = jest.fn().mockResolvedValue({});
+    const prisma = makeStreakPrisma(
+      {
+        currentStreakDays: 1,
+        longestStreakDays: 1,
+        lastStreakDate: EVENING_ONE,
+        timezone: 'America/Los_Angeles',
+      },
+      { userUpdate },
+    );
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message');
+
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: {
+        currentStreakDays: 2,
+        longestStreakDays: 2,
+        lastStreakDate: new Date('2026-09-07T00:00:00.000Z'), // civil-day marker for LA Sept 7
+      },
+    });
+  });
+
+  it('does not regress a user with no timezone on record: the UTC repli is unchanged', async () => {
+    const TODAY = new Date('2026-09-08T14:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(TODAY);
+
+    const userUpdate = jest.fn().mockResolvedValue({});
+    const prisma = makeStreakPrisma(
+      {
+        currentStreakDays: 4,
+        longestStreakDays: 6,
+        lastStreakDate: new Date('2026-09-07T00:00:00.000Z'),
+        timezone: null,
+      },
+      { userUpdate },
+    );
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message');
+
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: {
+        currentStreakDays: 5,
+        longestStreakDays: 6,
+        lastStreakDate: new Date('2026-09-08T00:00:00.000Z'),
+      },
+    });
+  });
+
+  it('falls back to UTC when the stored timezone is not a valid IANA identifier', async () => {
+    const TODAY = new Date('2026-09-08T14:00:00.000Z');
+    jest.useFakeTimers().setSystemTime(TODAY);
+
+    const userUpdate = jest.fn().mockResolvedValue({});
+    const prisma = makeStreakPrisma(
+      {
+        currentStreakDays: 4,
+        longestStreakDays: 6,
+        lastStreakDate: new Date('2026-09-07T00:00:00.000Z'),
+        timezone: 'Not/A_Zone',
+      },
+      { userUpdate },
+    );
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message');
+
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: {
+        currentStreakDays: 5,
+        longestStreakDays: 6,
+        lastStreakDate: new Date('2026-09-08T00:00:00.000Z'),
+      },
+    });
+  });
+});
+
+describe('EngagementService level tracking (#5545)', () => {
+  /**
+   * **Deux vérités réconciliées ici** (2026-09-09) : la FORME vient de la
+   * production, le POIDS vient du catalogue.
+   *
+   * La forme, d'abord — `main` a remplacé le `$inc` atomique par une lecture
+   * suivie d'une écriture explicite, parce qu'un `increment` contre un
+   * `engagementScore` NULL tuait l'opération (#5742). C'est un correctif de
+   * production : il gagne, sans discussion.
+   *
+   * Le poids, ensuite — la version précédente épinglait `3` en dur, et le
+   * porteur a réglé le barème trois fois le même jour (contenu 3→9,
+   * commentaire 2→3, famille sociale à 7). Un témoin qui casse à chaque
+   * réglage d'un paramètre TUNABLE ne dit plus si le service ajoute le BON
+   * poids, seulement que le barème n'a pas bougé.
+   */
+  it('adds the axis family weight to the engagement score via a read + explicit write', async () => {
+    const attendu = ENGAGEMENT_AXIS_WEIGHTS['content.text_message'];
+    const userUpdate = jest.fn().mockResolvedValue({});
+    const prisma = makeLevelPrisma(0, { userUpdate });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message');
+
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      // Score de départ 0 + le poids de l'axe : la valeur ÉCRITE, pas un delta.
+      data: { engagementScore: attendu },
     });
   });
 
@@ -477,8 +653,8 @@ describe('EngagementService level tracking (#5545)', () => {
   });
 
   it('weighs a tool axis at 1, distinct from a content axis at 3', async () => {
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 1 });
-    const prisma = makeLevelPrisma({ userUpdate });
+    const userUpdate = jest.fn().mockResolvedValue({});
+    const prisma = makeLevelPrisma(0, { userUpdate });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
@@ -486,15 +662,48 @@ describe('EngagementService level tracking (#5545)', () => {
 
     expect(userUpdate).toHaveBeenCalledWith({
       where: { id: 'user-1' },
-      data: { engagementScore: { increment: 1 } },
-      select: { engagementScore: true },
+      data: { engagementScore: 1 },
+    });
+  });
+
+  it('never sends an atomic $inc — a null-valued field would throw it away silently (#5742)', async () => {
+    const userUpdate = jest.fn().mockResolvedValue({});
+    const prisma = makeLevelPrisma(0, { userUpdate });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'tool.sticker');
+
+    const call = userUpdate.mock.calls[0]?.[0] as { data: { engagementScore: unknown } } | undefined;
+    expect(call?.data.engagementScore).toBe(1); // an explicit number, never `{ increment: … }`
+  });
+
+  it('treats a null engagementScore (not merely absent) as 0, never NaN (#5742)', async () => {
+    const userUpdate = jest.fn().mockResolvedValue({});
+    const findUnique = jest.fn((args: { select?: Record<string, boolean> }) => {
+      if (args?.select?.currentStreakDays) return Promise.resolve(null);
+      if (args?.select?.engagementScore) return Promise.resolve({ engagementScore: null });
+      return Promise.resolve({ systemLanguage: 'fr' });
+    });
+    const prisma = makeLevelPrisma(0, { userUpdate, findUnique });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'content.text_message');
+
+    // Ce que ce témoin prouve est `null → 0`, PAS la valeur du barème : le
+    // poids vient donc du catalogue. Écrit en dur, il tombait au premier
+    // réglage du porteur en accusant la garde anti-NaN, qui n'y était pour
+    // rien (contenu 3→9, 2026-09-09).
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { engagementScore: ENGAGEMENT_AXIS_WEIGHTS['content.text_message'] },
     });
   });
 
   it('does not create a level milestone or notify when the increment crosses no level threshold', async () => {
     const create = jest.fn();
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 20 }); // 17 -> 20, no threshold in ]17,20]
-    const prisma = makeLevelPrisma({ create, userUpdate });
+    const prisma = makeLevelPrisma(17); // 17 -> 20, no threshold in ]17,20]
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -507,8 +716,7 @@ describe('EngagementService level tracking (#5545)', () => {
 
   it('awards LEVEL_UP and notifies exactly once when the increment lands on a threshold', async () => {
     const create = jest.fn().mockResolvedValue({});
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 10 }); // 5 -> 10, crosses threshold 10
-    const prisma = makeLevelPrisma({ create, userUpdate });
+    const prisma = makeLevelPrisma(5, { create }); // 5 -> 10, crosses threshold 10
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -532,8 +740,7 @@ describe('EngagementService level tracking (#5545)', () => {
 
   it('replays the same level threshold with zero notifications (anti-replay via unique constraint)', async () => {
     const create = jest.fn().mockRejectedValue(p2002Error());
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 10 });
-    const prisma = makeLevelPrisma({ create, userUpdate });
+    const prisma = makeLevelPrisma(5, { create }); // 5 -> 10, crosses threshold 10
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -546,8 +753,7 @@ describe('EngagementService level tracking (#5545)', () => {
 
   it('lands exactly on a threshold boundary and still crosses it (inclusive upper bound)', async () => {
     const create = jest.fn().mockResolvedValue({});
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 50 }); // 45 -> 50, crosses 50
-    const prisma = makeLevelPrisma({ create, userUpdate });
+    const prisma = makeLevelPrisma(45, { create }); // 45 -> 50, crosses 50
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
@@ -556,6 +762,46 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(create).toHaveBeenCalledWith({
       data: { userId: 'user-1', milestoneType: 'level', milestoneKey: 'level:50' },
     });
+  });
+
+  it('keeps engagementScore equal to Σ(counter × weight) across several activities — the invariant (#5742)', async () => {
+    // No mocked Prisma here: a small in-memory model plays the SAME role a
+    // real MongoDB document would, so the invariant is checked against the
+    // actual read-then-write sequence `updateEngagementScore` performs, not
+    // against a fixture that already assumes the answer.
+    let storedScore: number | null = null;
+    const findUnique = jest.fn((args: { select?: Record<string, boolean> }) => {
+      if (args?.select?.currentStreakDays) return Promise.resolve(null);
+      if (args?.select?.engagementScore) return Promise.resolve({ engagementScore: storedScore });
+      return Promise.resolve({ systemLanguage: 'fr' });
+    });
+    const userUpdate = jest.fn((args: { data: { engagementScore: number } }) => {
+      storedScore = args.data.engagementScore;
+      return Promise.resolve({});
+    });
+    let nextCount = 0;
+    const upsert = jest.fn().mockImplementation(() => Promise.resolve({ count: ++nextCount }));
+    const prisma = {
+      engagementCounter: { upsert, findMany: jest.fn().mockResolvedValue([]) },
+      engagementMilestone: { create: jest.fn().mockResolvedValue({}) },
+      engagementConversationCredit: { create: jest.fn().mockResolvedValue({}) },
+      user: { findUnique, update: userUpdate },
+    } as unknown as PrismaClient;
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    const activities: EngagementAxisKey[] = [
+      'content.text_message', // weight 3
+      'tool.sticker', // weight 1
+      'conversation.private', // weight 5
+      'content.text_message', // weight 3
+    ];
+    for (const axisKey of activities) {
+      await svc.recordActivity('user-1', axisKey);
+    }
+
+    const expectedScore = activities.reduce((sum, axisKey) => sum + ENGAGEMENT_AXIS_WEIGHTS[axisKey], 0);
+    expect(storedScore).toBe(expectedScore);
   });
 });
 

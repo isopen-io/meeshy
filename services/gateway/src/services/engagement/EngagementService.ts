@@ -40,6 +40,38 @@ function startOfUtcDay(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
+/**
+ * Jour civil de `date` dans `timezone` (repli UTC si absent ou invalide, #5734) —
+ * rendu comme un marqueur `Date.UTC(y, m, d)`, jamais comme le début RÉEL du jour
+ * dans ce fuseau. La série ne compare que des ÉTIQUETTES de jour civil, jamais des
+ * instants : deux jours civils consécutifs valent toujours exactement `ONE_DAY_MS`
+ * sous ce marqueur, y compris à cheval sur une transition d'heure d'été — ce que
+ * l'instant réel de minuit local ne garantit pas.
+ */
+function civilDayInTimezone(date: Date, timezone: string | null | undefined): Date {
+  if (!timezone) return startOfUtcDay(date);
+
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const year = Number(parts.find((p) => p.type === 'year')?.value);
+    const month = Number(parts.find((p) => p.type === 'month')?.value);
+    const day = Number(parts.find((p) => p.type === 'day')?.value);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+      return startOfUtcDay(date);
+    }
+    return new Date(Date.UTC(year, month - 1, day));
+  } catch {
+    // `timezone` porte une valeur qu'`Intl` refuse (IANA invalide, corrompue) —
+    // repli UTC, jamais une levée qui casserait `recordActivity`.
+    return startOfUtcDay(date);
+  }
+}
+
 /** Prisma signale une violation d'index unique par le code `P2002`. */
 function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
@@ -272,7 +304,8 @@ export class EngagementService {
   /**
    * Une activité qualifiante — n'importe quel appel à `recordActivity`, sur
    * n'importe quel axe (§ 5) — fait avancer la série de jours actifs.
-   * Comparaison par JOUR CIVIL UTC : plusieurs activités le même jour ne
+   * Comparaison par JOUR CIVIL DANS LE FUSEAU DE L'UTILISATEUR (`User.timezone`,
+   * repli UTC si absent — #5734) : plusieurs activités le même jour civil ne
    * l'incrémentent qu'une fois ; un jour sauté la remet à 1.
    *
    * Lecture puis écriture, pas une transaction : la fenêtre de course (deux
@@ -291,11 +324,16 @@ export class EngagementService {
   private async updateStreak(userId: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { currentStreakDays: true, longestStreakDays: true, lastStreakDate: true },
+      select: { currentStreakDays: true, longestStreakDays: true, lastStreakDate: true, timezone: true },
     });
     if (!user) return;
 
-    const today = startOfUtcDay(new Date());
+    const today = civilDayInTimezone(new Date(), user.timezone);
+    // `lastStreakDate` already stores a CIVIL-DAY MARKER (`Date.UTC(y, m, d)`,
+    // written below) — re-running it through `civilDayInTimezone` would
+    // reinterpret that midnight-UTC instant AS IF it were a fresh moment in the
+    // user's timezone, shifting it a day off for any non-UTC offset. Only
+    // `startOfUtcDay` (idempotent on an already-normalized marker) belongs here.
     const lastDay = user.lastStreakDate ? startOfUtcDay(user.lastStreakDate) : null;
 
     if (lastDay && lastDay.getTime() === today.getTime()) {
@@ -364,21 +402,31 @@ export class EngagementService {
    * Ajoute le poids de `axisKey` (`ENGAGEMENT_AXIS_WEIGHTS`) au score agrégé
    * `User.engagementScore` et notifie chaque palier `LEVEL_THRESHOLDS`
    * franchi par CET incrément précis — même mécanique que le compteur d'axe
-   * (§ 5, § 7). `$inc` atomique : un `User` créé avant cette migration a le
-   * champ ABSENT (pas à zéro), et Mongo traite `$inc` sur un champ absent
-   * comme un départ à zéro, ce qui est déjà le comportement voulu — aucun
-   * repli `?? 0` n'est nécessaire ici, à la différence d'`updateStreak`.
+   * (§ 5, § 7). Lecture puis écriture explicite, comme `updateStreak` —
+   * jamais un `increment` nu : `engagementScore` n'est pas seulement ABSENT
+   * sur un `User` pré-migration, il vaut `null` sur les 9 premiers comptes
+   * qui ont eu une activité (#5742, mesuré contre Mongo 8 : `$inc` sur un
+   * champ `null` lève `Cannot apply $inc to a value of non-numeric type`,
+   * silencieusement avalé par `recordActivity` qui n'attend rien de cet
+   * appel — le score restait `null` pour toujours, sans une ligne de log).
+   * Le repli `?? 0` couvre les deux cas (absent et `null`) d'un seul geste.
    */
   private async updateEngagementScore(userId: string, axisKey: EngagementAxisKey): Promise<void> {
     const weight = ENGAGEMENT_AXIS_WEIGHTS[axisKey];
-    const user = await this.prisma.user.update({
+    const current = await this.prisma.user.findUnique({
       where: { id: userId },
-      data: { engagementScore: { increment: weight } },
       select: { engagementScore: true },
     });
+    if (!current) return;
 
-    const newScore = user.engagementScore;
-    const previousScore = newScore - weight;
+    const previousScore = current.engagementScore ?? 0;
+    const newScore = previousScore + weight;
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { engagementScore: newScore },
+    });
+
     const crossedThresholds = LEVEL_THRESHOLDS.filter(
       (threshold) => threshold > previousScore && threshold <= newScore,
     );
