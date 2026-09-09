@@ -21,7 +21,7 @@ public enum EngagementReveal: Equatable, Sendable {
     /// Les types de notification qui annoncent un palier. Les deux clés de
     /// succès (moderne et LEGACY majuscule) comptent pour une seule : le fil
     /// porte encore les deux pour les clients déployés.
-    public static let announcingTypes: Set<NotificationType> = [
+    public static let announcingTypes: Set<MeeshyNotificationType> = [
         .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned,
     ]
 
@@ -30,7 +30,7 @@ public enum EngagementReveal: Equatable, Sendable {
     /// L'ordre des branches suit la SPÉCIFICITÉ, pas l'ordre du catalogue : un
     /// `level_up` porte `threshold` ET `level`, et c'est le RANG qui se
     /// célèbre. Lire `threshold` d'abord en ferait une série de 400 jours.
-    public static func from(type: NotificationType, metadata: NotificationMetadata?) -> EngagementReveal? {
+    public static func from(type: MeeshyNotificationType, metadata: NotificationMetadata?) -> EngagementReveal? {
         switch type {
         case .achievementUnlocked, .legacyAchievementUnlocked, .badgeEarned:
             guard let brut = metadata?.achievementKey,

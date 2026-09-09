@@ -886,6 +886,9 @@ struct RootView: View {
         // la démonter : deux trays vivantes observaient le même
         // `showStoryComposer` et présentaient le même cover en double. Détail
         // dans `StoryComposerCover`.
+        // La célébration d'un palier (#5809), posée en UNE ligne : l'hôte est
+        // écrit une seule fois et vit chez sa jumelle iPad à l'identique.
+        .engagementReveal(router: router)
         .storyComposerCover(
             viewModel: storyViewModel,
             router: router,
@@ -1839,6 +1842,12 @@ struct RootView: View {
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
             // Un palier annoncé ouvre le tableau de bord qui le RESTITUE
             // (#5698) — pas les statistiques, qui ne connaissent pas ces paliers.
+            //
+            // Et il se CÉLÈBRE d'abord (#5809) : `EngagementRevealHost` couvre
+            // le tableau de bord dès que ce palier est posé. `nil` quand la
+            // charge ne dit pas lequel — on n'en invente pas, et le tap se
+            // comporte alors exactement comme avant.
+            router.pendingEngagementReveal = ctx.reveal
             router.push(.progression)
 
         case .legacyAffiliateSignup:

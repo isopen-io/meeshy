@@ -71,7 +71,7 @@ struct AchievementRevealView: View {
 
     var body: some View {
         ZStack {
-            MeeshyColors.background(isDark: isDark).ignoresSafeArea()
+            MeeshyColors.backgroundPrimary(isDark: isDark).ignoresSafeArea()
             lueurDeFond.ignoresSafeArea()
 
             VStack(spacing: MeeshySpacing.xl) {
