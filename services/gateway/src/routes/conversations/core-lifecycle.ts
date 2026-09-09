@@ -23,6 +23,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { isBlockedBetween } from '../../utils/blocking';
 import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { reconcileCommunityMembership } from '../../services/conversations/communityMembershipSync';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import {
@@ -341,31 +342,12 @@ export function registerCreateConversationRoute(
       }).catch(() => undefined);
 
       // Si la conversation est créée dans une communauté, ajouter automatiquement
-      // tous les participants à la communauté s'ils n'y sont pas déjà
+      // tous les participants à la communauté s'ils n'y sont pas déjà —
+      // réactivant au passage une ligne laissée par un départ (#5760), voir
+      // `reconcileCommunityMembership`.
       if (communityId) {
         const allUserIds = [userId, ...uniqueParticipantIds];
-
-        // Récupérer les membres actuels de la communauté
-        const existingMembers = await prisma.communityMember.findMany({
-          where: {
-            communityId,
-            userId: { in: allUserIds }
-          },
-          select: { userId: true }
-        });
-
-        const existingUserIds = existingMembers.map(member => member.userId);
-        const newUserIds = allUserIds.filter(id => !existingUserIds.includes(id));
-
-        // Ajouter les nouveaux membres à la communauté
-        if (newUserIds.length > 0) {
-          await prisma.communityMember.createMany({
-            data: newUserIds.map(userId => ({
-              communityId,
-              userId
-            }))
-          });
-        }
+        await reconcileCommunityMembership(prisma, communityId, allUserIds);
       }
 
       // Pour les DMs, pas de titre — le frontend résout le nom de l'interlocuteur

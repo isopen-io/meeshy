@@ -37,6 +37,10 @@ export type ProgressionGlyph =
   | 'usersThree'
   | 'smiley'
   | 'magicWand'
+  | 'linkSimple'
+  | 'shareNetwork'
+  | 'userPlus'
+  | 'handshake'
   | 'paperPlaneTilt';
 
 /**
@@ -64,6 +68,10 @@ export const AXIS_GLYPHS: Record<EngagementAxisKey, ProgressionGlyph> = {
   'tool.sticker': 'smiley',
   'tool.in_app_edit': 'magicWand',
   'tool.direct_publish': 'paperPlaneTilt',
+  'social.tracked_link': 'linkSimple',
+  'social.share': 'shareNetwork',
+  'social.invite_joined': 'userPlus',
+  'social.friendship': 'handshake',
 };
 
 export const FAMILY_LABELS: Record<EngagementAxisFamily, string> = {
@@ -71,6 +79,7 @@ export const FAMILY_LABELS: Record<EngagementAxisFamily, string> = {
   comment: 'Commentaires',
   conversation: 'Conversations',
   tool: 'Outils',
+  social: 'Lien social',
 };
 
 export type AchievementCopy = {

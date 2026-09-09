@@ -118,7 +118,7 @@ describe('resolveEngagementProgress — les badges par axe', () => {
     const groups = axesByFamily(resolveEngagementProgress(EMPTY).axes);
     expect(groups.map((g) => g.family)).toEqual([...ENGAGEMENT_AXIS_FAMILIES]);
     expect(groups.flatMap((g) => g.axes.map((a) => a.axisKey))).toEqual([...ENGAGEMENT_AXES]);
-    expect(groups.map((g) => g.axes.length)).toEqual([5, 2, 3, 3]);
+    expect(groups.map((g) => g.axes.length)).toEqual([5, 2, 3, 3, 4]);
   });
 });
 

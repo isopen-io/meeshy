@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
+import { BADGE_THRESHOLDS, ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
@@ -21,6 +21,15 @@ import { ProgressionBody, ProgressionError, ProgressionSkeleton } from './progre
 
 const fixture = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
 const html = renderToStaticMarkup(<ProgressionBody progress={fixture} />);
+
+/**
+ * **Le total de badges se CALCULE, il ne s'écrit pas.** Il valait 65 (13 axes ×
+ * 5 paliers) ; la famille sociale l'a porté à 85 (#5766). Un nombre en dur se
+ * périme au premier axe ajouté, et fait échouer un témoin qui n'a rien à dire
+ * sur le défaut réel — ici, il aurait accusé l'écran alors que seul le
+ * catalogue avait bougé.
+ */
+const TOTAL_BADGES = ENGAGEMENT_AXES.length * BADGE_THRESHOLDS.length;
 
 describe('ProgressionBody — un utilisateur à mi-chemin', () => {
   test('le niveau et son score, la série et son record', () => {
@@ -46,9 +55,9 @@ describe('ProgressionBody — un utilisateur à mi-chemin', () => {
   });
 
   test('le compte de badges et les cinq pastilles par axe', () => {
-    expect(html).toContain('15 / 65');
+    expect(html).toContain(`15 / ${TOTAL_BADGES}`);
     expect(html.match(/Palier \d+ atteint/g)?.length).toBe(15);
-    expect(html.match(/Palier \d+ à atteindre/g)?.length).toBe(65 - 15);
+    expect(html.match(/Palier \d+ à atteindre/g)?.length).toBe(TOTAL_BADGES - 15);
   });
 
   test('les succès : quatre débloqués et datés, un verrouillé avec sa condition', () => {
@@ -80,10 +89,10 @@ describe('ProgressionBody — l’état VIDE est un état, et il montre le catal
     expect(empty).toContain('Aucune activité comptée');
   });
 
-  test('niveau 0, aucune série, 0 / 65 badges, 0 / 5 succès — et tout le catalogue verrouillé', () => {
+  test('niveau 0, aucune série, tout le catalogue de badges, 0 / 5 succès — et tout le catalogue verrouillé', () => {
     expect(empty).toContain('Niveau 0');
     expect(empty).toContain('Aucune série en cours');
-    expect(empty).toContain('0 / 65');
+    expect(empty).toContain(`0 / ${TOTAL_BADGES}`);
     expect(empty).toContain('0 / 5');
     for (const key of ENGAGEMENT_AXES) expect(empty).toContain(AXIS_LABELS[key]);
     expect(empty).not.toContain('Obtenu le ');

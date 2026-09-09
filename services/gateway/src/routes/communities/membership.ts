@@ -86,6 +86,7 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
       const memberships = await fastify.prisma.communityMember.findMany({
         where: {
           userId,
+          isActive: true,
           ...(roleFilter && roleFilter.length > 0 ? { role: { in: roleFilter } } : {})
         },
         include: {
@@ -189,28 +190,50 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
         where: { communityId: id, userId }
       });
 
-      if (existingMember) {
+      if (existingMember?.isActive) {
         return sendConflict(reply, 'You are already a member of this community');
       }
 
-      const member = await fastify.prisma.communityMember.create({
-        data: {
-          communityId: id,
-          userId,
-          role: CommunityRole.MEMBER as string
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatar: true,
-              isOnline: true
+      // Une ligne INACTIVE (`isActive: false`, laissée par un départ — #5760)
+      // se RÉACTIVE : créer en présence d'une ligne existante produirait une
+      // seconde ligne pour la même paire (communityId, userId), exactement le
+      // défaut que `resolveConversationEntry` existe pour éviter côté
+      // conversation. Le rôle repart de MEMBER, jamais de l'ancien rang — un
+      // rang se donne, il ne se retrouve pas dans une ligne périmée.
+      const member = existingMember
+        ? await fastify.prisma.communityMember.update({
+            where: { id: existingMember.id },
+            data: { isActive: true, leftAt: null, role: CommunityRole.MEMBER as string },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                  avatar: true,
+                  isOnline: true
+                }
+              }
             }
-          }
-        }
-      });
+          })
+        : await fastify.prisma.communityMember.create({
+            data: {
+              communityId: id,
+              userId,
+              role: CommunityRole.MEMBER as string
+            },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                  avatar: true,
+                  isOnline: true
+                }
+              }
+            }
+          });
 
       // Succès « cercles » (#5759) — APRÈS l'ACK métier, jamais avant : on ne
       // grave pas un palier pour une adhésion qui n'a pas eu lieu. Best-effort
@@ -303,13 +326,22 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Community creator cannot leave their own community. Transfer ownership or delete the community instead.');
       }
 
-      const deleted = await fastify.prisma.communityMember.deleteMany({
-        where: { communityId: id, userId }
+      // Aligné sur le départ de conversation (#5760) : `isActive: false` +
+      // `leftAt`, jamais une suppression — la ligne reste la trace du départ,
+      // et la ré-adhésion la réactive au lieu d'en ouvrir une seconde (voir
+      // POST /communities/:id/join et .../invite).
+      const activeMembership = await fastify.prisma.communityMember.findFirst({
+        where: { communityId: id, userId, isActive: true }
       });
 
-      if (deleted.count === 0) {
+      if (!activeMembership) {
         return sendNotFound(reply, 'You are not a member of this community');
       }
+
+      await fastify.prisma.communityMember.update({
+        where: { id: activeMembership.id },
+        data: { isActive: false, leftAt: new Date() }
+      });
 
       return sendSuccess(reply, { message: 'Successfully left community' });
     } catch (error) {
@@ -395,7 +427,7 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
           isPrivate: true,
           createdBy: true,
           members: {
-            where: { userId },
+            where: { userId, isActive: true },
             select: { role: true }
           }
         }
@@ -430,29 +462,49 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
         where: { communityId: id, userId: inviteeId }
       });
 
-      if (existingMember) {
+      if (existingMember?.isActive) {
         return sendConflict(reply, 'User is already a member of this community');
       }
 
-      const member = await fastify.prisma.communityMember.create({
-        data: {
-          communityId: id,
-          userId: inviteeId,
-          role: CommunityRole.MEMBER as string
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatar: true,
-              isOnline: true,
-              deactivatedAt: true
+      // Réactivation d'une ligne laissée par un départ (#5760), même règle
+      // que POST /communities/:id/join : jamais de seconde ligne pour la
+      // même paire, et le rôle repart de MEMBER.
+      const member = existingMember
+        ? await fastify.prisma.communityMember.update({
+            where: { id: existingMember.id },
+            data: { isActive: true, leftAt: null, role: CommunityRole.MEMBER as string },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                  avatar: true,
+                  isOnline: true,
+                  deactivatedAt: true
+                }
+              }
             }
-          }
-        }
-      });
+          })
+        : await fastify.prisma.communityMember.create({
+            data: {
+              communityId: id,
+              userId: inviteeId,
+              role: CommunityRole.MEMBER as string
+            },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                  avatar: true,
+                  isOnline: true,
+                  deactivatedAt: true
+                }
+              }
+            }
+          });
 
       // Le succès revient à l'INVITÉ, pas à celui qui invite : c'est lui qui
       // rejoint le cercle (#5759).

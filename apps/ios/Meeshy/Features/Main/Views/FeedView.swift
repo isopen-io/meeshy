@@ -651,16 +651,11 @@ struct FeedView: View {
         // L'origine est la MÊME que celle du fil iPhone (`.feedComposer`) —
         // même intention, même profil, même socle. Une origine « iPad » aurait
         // fabriqué une seconde vérité à tenir d'accord avec la première.
-        .fullScreenCover(isPresented: $showComposer) {
-            DocumentComposerDoor(
-                intent: ComposerIntent(origin: .feedComposer),
-                viewModel: viewModel,
-                storyViewModel: storyViewModel,
-                router: router,
-                conversationListViewModel: conversationListViewModel,
-                statusViewModel: statusViewModel
-            )
-        }
+        .feedPostComposer(
+            isPresented: $showComposer, router: router, viewModel: viewModel,
+            storyViewModel: storyViewModel, statusViewModel: statusViewModel,
+            conversationListViewModel: conversationListViewModel
+        )
     }
 
     /// Actions du header, dans l'ordre de lecture : les Réels, puis « À

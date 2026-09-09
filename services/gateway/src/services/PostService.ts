@@ -22,6 +22,7 @@ import { MediaService } from './MediaService';
 import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
 import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupService';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { EngagementService } from './engagement/EngagementService';
 import { ZMQSingleton } from './ZmqSingleton';
 import { authorSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
@@ -1755,6 +1756,15 @@ export class PostService {
         });
         return { link, shareCount: updated.shareCount };
       });
+      // Axe `social.share` (#5766) — crédité UNIQUEMENT sur `reused: false`,
+      // c'est-à-dire à la PREMIÈRE mise en partage de ce contenu par cette
+      // personne. Les deux autres sorties de cette méthode rendent
+      // `reused: true` : elles réutilisent un lien déjà émis, et les créditer
+      // ferait gagner des points en pressant « Partager » en boucle. Un axe
+      // d'engagement qui se farme ne mesure plus rien.
+      new EngagementService(this.prisma)
+        .recordActivity(userId, 'social.share')
+        .catch((err: unknown) => log.warn('engagement social.share failed', { err }));
       return { shared: true, shareCount: created.shareCount, token: created.link.token, shortUrl: `${baseUrl}${created.link.shortUrl}`, reused: false };
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {

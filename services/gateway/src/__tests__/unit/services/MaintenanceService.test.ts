@@ -42,6 +42,12 @@ jest.mock('../../../services/purgeDeletedAccountMedia', () => ({
   purgeMediaOfDeletedAccount: jest.fn<any>().mockResolvedValue({ attachmentsDeleted: 0, postMediaDeleted: 0 }),
 }));
 
+// Même raison, même patron — le témoin exhaustif de #5801 vit dans
+// `__tests__/unit/services/deactivateDeletedAccountCommunityMemberships.test.ts`.
+jest.mock('../../../services/deactivateDeletedAccountCommunityMemberships', () => ({
+  deactivateCommunityMembershipsOfDeletedAccount: jest.fn<any>().mockResolvedValue({ deactivated: 0 }),
+}));
+
 // `cleanupExpiredSessions` (#5712) est un singleton de module (`getPrisma()`
 // interne, alimenté par `initSessionService` au démarrage — le même
 // `fastify.prisma` que ce service reçoit par injection). Le mocker ici garde
@@ -56,6 +62,7 @@ import { MaintenanceService } from '../../../services/MaintenanceService';
 import { logger } from '../../../utils/logger';
 import { anonymizeMessagesOfDeletedAccount } from '../../../services/messaging/anonymizeDeletedAccountMessages';
 import { purgeMediaOfDeletedAccount } from '../../../services/purgeDeletedAccountMedia';
+import { deactivateCommunityMembershipsOfDeletedAccount } from '../../../services/deactivateDeletedAccountCommunityMemberships';
 import { cleanupExpiredSessions } from '../../../services/SessionService';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
@@ -88,6 +95,9 @@ function makePrisma(overrides: {
     },
     userVoiceModel: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    communityMember: {
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     messageAttachment: {
       findMany: jest.fn<any>().mockResolvedValue([]),
@@ -693,6 +703,44 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
     await expect(sweepDeletions(sut)).resolves.toBeUndefined();
 
     expect(purgeMediaOfDeletedAccount).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
+  });
+
+  // Les adhésions aux communautés du compte (#5801) — même moment que la
+  // purge des médias, APRÈS que sa transaction a abouti.
+  it("désactive les adhésions aux communautés de CHAQUE compte expiré, APRÈS que sa transaction a abouti", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a'), expiredRequest('req-b', 'user-b')]);
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await sweepDeletions(sut);
+
+    expect(deactivateCommunityMembershipsOfDeletedAccount).toHaveBeenNthCalledWith(1, prisma, 'user-a');
+    expect(deactivateCommunityMembershipsOfDeletedAccount).toHaveBeenNthCalledWith(2, prisma, 'user-b');
+  });
+
+  it("une transaction qui échoue ne désactive PAS les adhésions de ce compte", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    prisma.$transaction = jest.fn<() => Promise<unknown[]>>().mockRejectedValueOnce(new Error('write conflict'));
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
+    expect(deactivateCommunityMembershipsOfDeletedAccount).not.toHaveBeenCalled();
+  });
+
+  it("un échec de désactivation des adhésions est journalisé et n'arrête pas le lot", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a'), expiredRequest('req-b', 'user-b')]);
+    (deactivateCommunityMembershipsOfDeletedAccount as jest.Mock)
+      .mockRejectedValueOnce(new Error('mongo down'))
+      .mockResolvedValueOnce({ deactivated: 0 });
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
+    expect(deactivateCommunityMembershipsOfDeletedAccount).toHaveBeenCalledTimes(2);
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
   });
 });

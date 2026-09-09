@@ -47,6 +47,7 @@ const mockMember = {
   communityId: COMMUNITY_ID,
   userId: OTHER_USER_ID,
   role: 'member',
+  isActive: true,
   joinedAt: new Date('2025-01-01'),
   user: { id: OTHER_USER_ID, username: 'bob', displayName: 'Bob', avatar: null, isOnline: false, lastActiveAt: null },
 };
@@ -346,8 +347,8 @@ describe('POST /communities/:id/members — caller is not admin, proven by mutat
             id: COMMUNITY_ID,
             createdBy: OTHER_USER_ID,
             members: [
-              { userId: OTHER_USER_ID, role: 'admin' },
-              { userId: USER_ID, role: 'member' },
+              { userId: OTHER_USER_ID, role: 'admin', isActive: true },
+              { userId: USER_ID, role: 'member', isActive: true },
             ],
           },
         ]),
@@ -547,8 +548,8 @@ describe('PATCH /communities/:id/members/:memberId/role — caller is not admin,
             id: COMMUNITY_ID,
             createdBy: OTHER_USER_ID,
             members: [
-              { userId: OTHER_USER_ID, role: 'admin' },
-              { userId: USER_ID, role: 'member' },
+              { userId: OTHER_USER_ID, role: 'admin', isActive: true },
+              { userId: USER_ID, role: 'member', isActive: true },
             ],
           },
         ]),
@@ -696,8 +697,8 @@ describe('DELETE /communities/:id/members/:memberId — caller is not admin, pro
             id: COMMUNITY_ID,
             createdBy: OTHER_USER_ID,
             members: [
-              { userId: OTHER_USER_ID, role: 'admin' },
-              { userId: USER_ID, role: 'member' },
+              { userId: OTHER_USER_ID, role: 'admin', isActive: true },
+              { userId: USER_ID, role: 'member', isActive: true },
             ],
           },
         ]),
@@ -718,16 +719,66 @@ describe('DELETE /communities/:id/members/:memberId — caller is not admin, pro
 
 describe('DELETE /communities/:id/members/:memberId — success', () => {
   let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp('USER'); });
+  let prisma: ReturnType<typeof makePrisma>;
+  beforeAll(async () => {
+    prisma = makePrisma({
+      communityMember: {
+        findFirst: jest.fn<any>().mockResolvedValue({ id: MEMBER_ID, communityId: COMMUNITY_ID, userId: MEMBER_ID, isActive: true }),
+        create: jest.fn<any>().mockResolvedValue(mockMember),
+        count: jest.fn<any>().mockResolvedValue(1),
+        findMany: jest.fn<any>().mockResolvedValue([mockMember]),
+        update: jest.fn<any>().mockResolvedValue({ ...mockMember, isActive: false, leftAt: new Date() }),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      },
+    });
+    app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('authenticate', async (req: any) => {
+      (req as any).authContext = { isAuthenticated: true, userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER' } };
+    });
+    app.decorate('prisma', prisma as any);
+    await app.register(registerMemberRoutes);
+    await app.ready();
+  });
   afterAll(async () => { await app.close(); });
 
-  it('returns 200 on successful removal', async () => {
+  it('returns 200 on successful removal, sets isActive:false + leftAt instead of deleting the row (#5800)', async () => {
     const res = await app.inject({
       method: 'DELETE',
       url: `/communities/${COMMUNITY_ID}/members/${MEMBER_ID}`,
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    expect(prisma.communityMember.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.communityMember.update).toHaveBeenCalledWith({
+      where: { id: MEMBER_ID },
+      data: { isActive: false, leftAt: expect.any(Date) },
+    });
+  });
+});
+
+describe('DELETE /communities/:id/members/:memberId — target is not an active member', () => {
+  let app: FastifyInstance;
+  let prisma: ReturnType<typeof makePrisma>;
+  beforeAll(async () => {
+    prisma = makePrisma();
+    app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('authenticate', async (req: any) => {
+      (req as any).authContext = { isAuthenticated: true, userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER' } };
+    });
+    app.decorate('prisma', prisma as any);
+    await app.register(registerMemberRoutes);
+    await app.ready();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 404 without touching the row', async () => {
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/communities/${COMMUNITY_ID}/members/${MEMBER_ID}`,
+    });
+    expect(res.statusCode).toBe(404);
+    expect(prisma.communityMember.update).not.toHaveBeenCalled();
+    expect(prisma.communityMember.deleteMany).not.toHaveBeenCalled();
   });
 });
 

@@ -145,6 +145,13 @@ const PROGRESSION = [
   'users-three',
   'magic-wand',
   'paper-plane-tilt',
+  // La famille SOCIALE (#5766) : lien créé, contenu partagé, invité venu,
+  // amitié nouée. Quatre axes neufs, quatre glyphes — sans eux la vue tombe
+  // sur un `Record` incomplet, ce que le type-check refuse à juste titre.
+  'link-simple',
+  'share-network',
+  'user-plus',
+  'handshake',
 ];
 
 function extract(ids) {

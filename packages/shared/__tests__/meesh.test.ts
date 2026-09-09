@@ -7,11 +7,14 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  axesHorsOrdreDeDebit,
   computeMeeshMintPlan,
   debitsActionCount,
+  MEESH_DEBIT_ORDER,
   MEESH_MINT_COST,
   type MeeshAxisState,
 } from '../utils/meesh.js';
+import { ENGAGEMENT_AXES, type EngagementAxisKey } from '../types/engagement.js';
 
 const axe = (axisKey: string, count: number, points: number): MeeshAxisState =>
   ({ axisKey, count, points }) as MeeshAxisState;
@@ -217,5 +220,54 @@ describe('la résolution des Meeshes pour l\'écran (#5743)', () => {
     });
     expect(zero.meesh?.progress).toBe(0);
     expect(zero.meesh?.canMint).toBe(false);
+  });
+});
+
+
+describe("l'ordre de débit couvre le catalogue — sinon la frappe fuit", () => {
+  it('ne laisse AUCUN axe hors de l\'ordre de débit', () => {
+    expect(axesHorsOrdreDeDebit()).toEqual([]);
+  });
+
+  it("ne range jamais un axe DEUX fois — un doublon le débiterait en double", () => {
+    const ranges = MEESH_DEBIT_ORDER.flat();
+    expect(ranges).toHaveLength(new Set(ranges).size);
+    expect(ranges).toHaveLength(ENGAGEMENT_AXES.length);
+  });
+
+  /**
+   * **L'invariant qui attrape la fuite, quelle qu'en soit la cause.**
+   *
+   * `MeeshService` décrémente `User.engagementScore` de `MEESH_MINT_COST` en
+   * bloc, et les `EngagementCounter` ligne par ligne depuis `plan.debits`. Si
+   * la somme des lignes est INFÉRIEURE au coût, les deux registres divergent
+   * silencieusement — le score paie 1221, les compteurs rendent moins, et
+   * l'utilisateur garde des points déjà facturés.
+   *
+   * Le témoin ne regarde donc pas la TABLE (c'est le rôle du précédent) mais
+   * le RÉSULTAT : dès que la frappe est déclarée possible, elle est INTÉGRALE.
+   * Il tombe si un axe sort de l'ordre, si un rang est mal écrit, ou si le
+   * calcul du reste dérive — trois causes, un seul témoin.
+   */
+  it('débite EXACTEMENT le coût dès que la frappe est déclarée possible', () => {
+    const parts = ENGAGEMENT_AXES.map((axisKey) =>
+      axe(axisKey, 40, Math.ceil(MEESH_MINT_COST / ENGAGEMENT_AXES.length) + 3),
+    );
+    const plan = computeMeeshMintPlan(parts);
+
+    expect(plan.canMint).toBe(true);
+    expect(plan.debits.reduce((n, d) => n + d.points, 0)).toBe(MEESH_MINT_COST);
+  });
+
+  it('débite intégralement même quand SEULE la famille sociale porte des points', () => {
+    const sociaux = (ENGAGEMENT_AXES as readonly EngagementAxisKey[]).filter((a) =>
+      a.startsWith('social.'),
+    );
+    expect(sociaux.length).toBeGreaterThan(0);
+
+    const plan = computeMeeshMintPlan(sociaux.map((a) => axe(a, 10, MEESH_MINT_COST)));
+
+    expect(plan.canMint).toBe(true);
+    expect(plan.debits.reduce((n, d) => n + d.points, 0)).toBe(MEESH_MINT_COST);
   });
 });

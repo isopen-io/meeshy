@@ -45,10 +45,38 @@ export const MEESH_DEBIT_ORDER: readonly (readonly EngagementAxisKey[])[] = [
   ['content.story'],
   ['content.post', 'content.reel'],
   ['tool.sticker', 'tool.in_app_edit', 'tool.direct_publish'],
+  // AVANT-DERNIER rang : le LIEN social (#5766). Il se reprend après tout ce
+  // qu'on produit seul, parce qu'un lien partagé, un ami qui rejoint ou une
+  // amitié nouée engagent quelqu'un d'AUTRE — mais il n'est pas le plancher :
+  // le porteur a réservé cette place aux conversations, et à elles seules.
+  ['social.tracked_link', 'social.share', 'social.invite_joined', 'social.friendship'],
   // DERNIER rang : on ne reprend les points d'une conversation que si rien
   // d'autre ne suffit — et jamais ses actions (voir `MEESH_POINTS_ONLY_AXES`).
   ['conversation.private', 'conversation.public', 'conversation.community'],
 ];
+
+/**
+ * Tout axe du catalogue apparaît une fois et une seule dans l'ordre de débit.
+ *
+ * ## Pourquoi cette garde existe
+ *
+ * `computeMeeshMintPlan` additionne les points de TOUS les axes pour décider
+ * si la frappe est possible, puis ne reprend que ceux qu'il sait ranger. Un
+ * axe absent de l'ordre rend donc `canMint: true` sur des points qu'aucune
+ * ligne ne débite : `User.engagementScore` perd les 1221 du coût pendant que
+ * la somme des `EngagementCounter.points` en perd moins. Les deux registres
+ * divergent, et l'invariant « score = Σ points » se défait à chaque frappe.
+ *
+ * C'est arrivé : la famille SOCIALE est entrée au catalogue (#5766) sans
+ * atteindre cette table. Rien n'a rougi, parce qu'une table incomplète se lit
+ * exactement comme une table complète. La garde rend l'oubli impossible —
+ * elle est le pendant, pour l'économie, du `Record` exhaustif qui a arrêté le
+ * même oubli côté vue.
+ */
+export const axesHorsOrdreDeDebit = (): readonly EngagementAxisKey[] => {
+  const ranges = new Set<string>(MEESH_DEBIT_ORDER.flat());
+  return (ENGAGEMENT_AXES as readonly EngagementAxisKey[]).filter((a) => !ranges.has(a));
+};
 
 /**
  * Les axes dont la frappe reprend les POINTS mais jamais les ACTIONS.

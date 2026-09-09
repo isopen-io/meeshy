@@ -437,6 +437,20 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
     public let city: String?
     public let location: String?
 
+    // MARK: - Paliers d'engagement (#5809)
+    //
+    // La passerelle les pose depuis toujours (`EngagementService` :
+    // `{ action, route, achievementKey }` pour un succès, `{ …, threshold }`
+    // pour une série, `{ …, threshold, level }` pour un niveau) — et ce
+    // décodeur les JETAIT en silence. Une vue de célébration ne pouvait donc
+    // pas savoir QUOI célébrer : le palier voyageait, personne ne le lisait.
+    /// La clé stable du succès débloqué (`achievement.first_voice`…).
+    public let achievementKey: String?
+    /// Le palier atteint — jours de série, ou score du niveau.
+    public let threshold: Int?
+    /// Le RANG du niveau, déjà calculé par la passerelle (`levelIndexOf`).
+    public let level: Int?
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         messagePreview = try container.decodeIfPresent(String.self, forKey: .messagePreview)
@@ -467,6 +481,9 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
         countryName = try container.decodeIfPresent(String.self, forKey: .countryName)
         city = try container.decodeIfPresent(String.self, forKey: .city)
         location = try container.decodeIfPresent(String.self, forKey: .location)
+        achievementKey = try container.decodeIfPresent(String.self, forKey: .achievementKey)
+        threshold = try container.decodeIfPresent(Int.self, forKey: .threshold)
+        level = try container.decodeIfPresent(Int.self, forKey: .level)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -475,6 +492,7 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
         case contentType, postPreview, parentCommentPreview, excerpt, mediaType, postThumbnailUrl, attachments
         case deviceName, deviceVendor, deviceOS, deviceOSVersion, deviceType
         case ipAddress, country, countryName, city, location
+        case achievementKey, threshold, level
     }
 }
 

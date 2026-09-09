@@ -43,6 +43,10 @@ export const ENGAGEMENT_AXIS_LABELS: Record<NotificationLanguage, AxisLabels> = 
     'tool.sticker': 'Stickers posés',
     'tool.in_app_edit': 'Montages dans l’app',
     'tool.direct_publish': 'Publications directes',
+    'social.tracked_link': 'Liens créés',
+    'social.share': 'Contenus partagés',
+    'social.invite_joined': 'Invités venus',
+    'social.friendship': 'Amitiés nouées',
   },
   en: {
     'content.audio_message': 'Voice messages',
@@ -58,6 +62,10 @@ export const ENGAGEMENT_AXIS_LABELS: Record<NotificationLanguage, AxisLabels> = 
     'tool.sticker': 'Stickers placed',
     'tool.in_app_edit': 'In-app edits',
     'tool.direct_publish': 'Direct publications',
+    'social.tracked_link': 'Links created',
+    'social.share': 'Shared content',
+    'social.invite_joined': 'Invites who joined',
+    'social.friendship': 'Friendships formed',
   },
   es: {
     'content.audio_message': 'Mensajes de voz',
@@ -73,6 +81,10 @@ export const ENGAGEMENT_AXIS_LABELS: Record<NotificationLanguage, AxisLabels> = 
     'tool.sticker': 'Stickers colocados',
     'tool.in_app_edit': 'Ediciones en la app',
     'tool.direct_publish': 'Publicaciones directas',
+    'social.tracked_link': 'Enlaces creados',
+    'social.share': 'Contenido compartido',
+    'social.invite_joined': 'Invitados que se unieron',
+    'social.friendship': 'Amistades creadas',
   },
   pt: {
     'content.audio_message': 'Mensagens de voz',
@@ -88,6 +100,10 @@ export const ENGAGEMENT_AXIS_LABELS: Record<NotificationLanguage, AxisLabels> = 
     'tool.sticker': 'Stickers colocados',
     'tool.in_app_edit': 'Edições no app',
     'tool.direct_publish': 'Publicações diretas',
+    'social.tracked_link': 'Links criados',
+    'social.share': 'Conteúdo compartilhado',
+    'social.invite_joined': 'Convidados que entraram',
+    'social.friendship': 'Amizades criadas',
   },
   de: {
     'content.audio_message': 'Sprachnachrichten',
@@ -103,6 +119,10 @@ export const ENGAGEMENT_AXIS_LABELS: Record<NotificationLanguage, AxisLabels> = 
     'tool.sticker': 'Gesetzte Sticker',
     'tool.in_app_edit': 'Bearbeitungen in der App',
     'tool.direct_publish': 'Direkte Veröffentlichungen',
+    'social.tracked_link': 'Erstellte Links',
+    'social.share': 'Geteilte Inhalte',
+    'social.invite_joined': 'Beigetretene Eingeladene',
+    'social.friendship': 'Geknüpfte Freundschaften',
   },
   it: {
     'content.audio_message': 'Messaggi vocali',
@@ -118,6 +138,10 @@ export const ENGAGEMENT_AXIS_LABELS: Record<NotificationLanguage, AxisLabels> = 
     'tool.sticker': 'Sticker inseriti',
     'tool.in_app_edit': 'Montaggi nell’app',
     'tool.direct_publish': 'Pubblicazioni dirette',
+    'social.tracked_link': 'Link creati',
+    'social.share': 'Contenuti condivisi',
+    'social.invite_joined': 'Invitati arrivati',
+    'social.friendship': 'Amicizie strette',
   },
   ar: {
     'content.audio_message': 'رسائل صوتية',
@@ -133,6 +157,10 @@ export const ENGAGEMENT_AXIS_LABELS: Record<NotificationLanguage, AxisLabels> = 
     'tool.sticker': 'ملصقات موضوعة',
     'tool.in_app_edit': 'تعديلات داخل التطبيق',
     'tool.direct_publish': 'منشورات مباشرة',
+    'social.tracked_link': 'روابط منشأة',
+    'social.share': 'محتوى مُشارَك',
+    'social.invite_joined': 'مدعوون انضموا',
+    'social.friendship': 'صداقات جديدة',
   },
   'zh-Hans': {
     'content.audio_message': '语音消息',
@@ -148,6 +176,10 @@ export const ENGAGEMENT_AXIS_LABELS: Record<NotificationLanguage, AxisLabels> = 
     'tool.sticker': '已使用的贴纸',
     'tool.in_app_edit': '应用内剪辑',
     'tool.direct_publish': '直接发布',
+    'social.tracked_link': '已创建的链接',
+    'social.share': '已分享的内容',
+    'social.invite_joined': '已加入的受邀者',
+    'social.friendship': '已建立的好友',
   },
 };
 

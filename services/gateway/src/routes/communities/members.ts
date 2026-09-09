@@ -121,7 +121,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         select: {
           createdBy: true,
           isPrivate: true,
-          members: { select: { userId: true } }
+          members: { where: { isActive: true }, select: { userId: true } }
         }
       });
 
@@ -142,7 +142,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
 
       const [members, totalCount] = await Promise.all([
         fastify.prisma.communityMember.findMany({
-          where: { communityId: id },
+          where: { communityId: id, isActive: true },
           include: {
             user: {
               select: {
@@ -159,7 +159,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
           skip: offsetNum,
           take: limitNum
         }),
-        fastify.prisma.communityMember.count({ where: { communityId: id } })
+        fastify.prisma.communityMember.count({ where: { communityId: id, isActive: true } })
       ]);
 
       // Critère STRICT, quel que soit le statut de membre du lecteur. La
@@ -279,7 +279,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         select: {
           createdBy: true,
           members: {
-            where: { userId },
+            where: { userId, isActive: true },
             select: { role: true }
           }
         }
@@ -316,8 +316,33 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
       });
 
       let member;
-      if (existingMember) {
+      if (existingMember?.isActive) {
         member = existingMember;
+      } else if (existingMember) {
+        // Ligne laissée par un départ (#5760) : on la RÉACTIVE avec le rôle
+        // demandé, plutôt que d'ouvrir une seconde ligne pour la même paire
+        // (communityId, userId) — même règle que POST .../join et .../invite.
+        member = await fastify.prisma.communityMember.update({
+          where: { id: existingMember.id },
+          data: {
+            isActive: true,
+            leftAt: null,
+            /* istanbul ignore next -- AddMemberSchema's `role` is `.optional().default(CommunityRole.MEMBER)`, so Zod's own parse() already guarantees a defined value here */
+            role: (validatedData.role || CommunityRole.MEMBER) as string
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatar: true,
+                isOnline: true,
+                deactivatedAt: true
+              }
+            }
+          }
+        });
       } else {
         // Ajouter le membre avec le role specifie (par defaut: MEMBER)
         member = await fastify.prisma.communityMember.create({
@@ -431,7 +456,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         select: {
           createdBy: true,
           members: {
-            where: { userId },
+            where: { userId, isActive: true },
             select: { role: true }
           }
         }
@@ -561,7 +586,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         select: {
           createdBy: true,
           members: {
-            where: { userId },
+            where: { userId, isActive: true },
             select: { role: true }
           }
         }
@@ -579,12 +604,21 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Only community admins can remove members');
       }
 
-      // Supprimer le membre
-      await fastify.prisma.communityMember.deleteMany({
-        where: {
-          communityId: id,
-          userId: memberId
-        }
+      // Aligné sur le départ volontaire (#5760) : `isActive: false` + `leftAt`,
+      // jamais une suppression — la ligne reste la trace du retrait, et la
+      // ré-adhésion (POST .../join, .../invite, .../members) la réactive au
+      // lieu d'en ouvrir une seconde (#5800).
+      const activeMembership = await fastify.prisma.communityMember.findFirst({
+        where: { communityId: id, userId: memberId, isActive: true }
+      });
+
+      if (!activeMembership) {
+        return sendNotFound(reply, 'Member not found in this community');
+      }
+
+      await fastify.prisma.communityMember.update({
+        where: { id: activeMembership.id },
+        data: { isActive: false, leftAt: new Date() }
       });
 
       return sendSuccess(reply, { message: 'Member removed successfully' });

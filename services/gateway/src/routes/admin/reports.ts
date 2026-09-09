@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { getReportService } from '../../services/admin/report.service';
+import { isNewlyResolvedReportTransition, notifyReportResolved } from '../../services/reports/reportResolvedNotification';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import type {
   UpdateReportDTO,
@@ -215,6 +216,13 @@ export async function reportRoutes(fastify: FastifyInstance) {
   /**
    * PATCH /api/admin/reports/:id
    * Mettre a jour un signalement (moderateur uniquement)
+   *
+   * #3718 — art. 16 DSA : le déclarant reçoit une réponse motivée quand son
+   * signalement BASCULE dans un statut terminal (resolved/rejected/dismissed).
+   * La transition se lit en comparant le statut AVANT et APRÈS l'écriture —
+   * sans le fetch préalable, un modérateur qui rouvre un signalement déjà
+   * résolu (ou n'en change que `moderatorNotes`) renotifierait le déclarant à
+   * chaque sauvegarde.
    */
   fastify.patch('/:id', {
     onRequest: [fastify.authenticate, requireModeratorPermission]
@@ -225,7 +233,23 @@ export async function reportRoutes(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
       const body = updateReportSchema.parse(request.body);
 
+      const existingReport = await reportService.getReportById(id);
+      if (!existingReport) {
+        return sendNotFound(reply, 'Signalement non trouve');
+      }
+
       const report = await reportService.updateReport(id, moderatorId, body as UpdateReportDTO);
+
+      if (isNewlyResolvedReportTransition(existingReport.status, report.status)) {
+        await notifyReportResolved(fastify.prisma, {
+          id: report.id,
+          reporterId: report.reporterId,
+          reportedType: report.reportedType,
+          reportType: report.reportType,
+          status: report.status as 'resolved' | 'rejected' | 'dismissed',
+          actionTaken: report.actionTaken,
+        });
+      }
 
       return sendSuccess(reply, report, { message: 'Signalement mis a jour' });
     } catch (error) {
