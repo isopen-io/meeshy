@@ -763,6 +763,7 @@
 		6CEED65191970F45220CDE32 /* SyncPillViewModelDeriveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 374DEBBF0F310903600A1D19 /* SyncPillViewModelDeriveTests.swift */; };
 		6D24BA4C7B12710ACF996675 /* BridgeFormatterVectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F4B2A11637F6D7D2F29954 /* BridgeFormatterVectorTests.swift */; };
 		6D825780CDC83209A6B71E64 /* BubbleExpandableText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 452C50A733BE010683FB1DF6 /* BubbleExpandableText.swift */; };
+		6DD2F8E9FA8184E1143DDF03 /* XcodeCloudBuildNumberGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B26746C8D05D72EDC0D3942B /* XcodeCloudBuildNumberGuardTests.swift */; };
 		6E19CD43CDEEDE55498410AC /* ComposerRailDoorBadgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76A33CC3C4DB22AC2D30DA5B /* ComposerRailDoorBadgeTests.swift */; };
 		6E239B1A4C30D9FBD2B61B49 /* ComposerSoundColumn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5439C41E594D52885A9BD988 /* ComposerSoundColumn.swift */; };
 		6E3174A5EC42C8B7738E4A55 /* NotificationContentRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3DB2491EA18B3414BE023A1 /* NotificationContentRouterTests.swift */; };
@@ -3150,6 +3151,7 @@
 		B176702401936F84123D5CC1 /* OptionalViewReturnGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptionalViewReturnGuardTests.swift; sourceTree = "<group>"; };
 		B2126D077796B80072DF10E0 /* MuteButtonExistenceGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuteButtonExistenceGuardTests.swift; sourceTree = "<group>"; };
 		B232CC8D626DB2E8ACF39F7C /* FeatureFlagGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlagGateTests.swift; sourceTree = "<group>"; };
+		B26746C8D05D72EDC0D3942B /* XcodeCloudBuildNumberGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XcodeCloudBuildNumberGuardTests.swift; sourceTree = "<group>"; };
 		B26E649B036E4539F0958924 /* ComposerForegroundSoundMountGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerForegroundSoundMountGuardTests.swift; sourceTree = "<group>"; };
 		B2C311EFD41630C6F05D8B82 /* SystemNoticeEngravedTimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemNoticeEngravedTimeTests.swift; sourceTree = "<group>"; };
 		B2E8E44274BFD31F63D9A6C5 /* MeeshyWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = MeeshyWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -4842,6 +4844,7 @@
 				F7591FD244D7F915345E03F2 /* WidgetDataManagerTests.swift */,
 				B5B99C4AC41D5A1E5AE4B2CE /* WidgetLocalizationCatalogGuardTests.swift */,
 				FEF38E3D047682661CD7F272 /* WidgetPresenceContractTests.swift */,
+				B26746C8D05D72EDC0D3942B /* XcodeCloudBuildNumberGuardTests.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -8262,6 +8265,7 @@
 				89C70C65AE01611B61BDA9C0 /* WidgetLocalizationCatalogGuardTests.swift in Sources */,
 				77E8B1786DD5A9E6DCFE4E0E /* WidgetPresenceContractTests.swift in Sources */,
 				470998B73A666263CACC9135 /* WindowMetricsSSOTTests.swift in Sources */,
+				6DD2F8E9FA8184E1143DDF03 /* XcodeCloudBuildNumberGuardTests.swift in Sources */,
 				10816B8E7B471361D4CB5ED6 /* ZZEndStateConnectedSessionTests.swift in Sources */,
 				B91F955A597C93347D104202 /* iPadRightPanelNavigationGuardTests.swift in Sources */,
 				FEE768A6D398A3EBEF1A8948 /* iPadRootViewPerfRerenderTests.swift in Sources */,
