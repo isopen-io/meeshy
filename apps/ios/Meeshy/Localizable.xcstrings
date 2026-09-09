@@ -127084,10 +127084,16 @@
     "progression.a11y.bar.meesh": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vers la prochaine Meesh"
+            "value": "نحو Meesh التالية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dem Weg zur nächsten Meesh"
           }
         },
         "en": {
@@ -127102,16 +127108,10 @@
             "value": "Hacia la próxima Meesh"
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rumo à próxima Meesh"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auf dem Weg zur nächsten Meesh"
+            "value": "Vers la prochaine Meesh"
           }
         },
         "it": {
@@ -127120,10 +127120,16 @@
             "value": "Verso la prossima Meesh"
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "نحو Meesh التالية"
+            "value": "Rumo à próxima Meesh"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rumo à próxima Meesh"
           }
         },
         "zh-Hans": {
@@ -128547,10 +128553,16 @@
     "progression.elans.empty": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publiez une story, un post, un réel ou lancez une conversation : chaque famille tenue en même temps multiplie vos points."
+            "value": "انشر قصة أو منشورًا أو مقطعًا أو ابدأ محادثة: كل عائلة تحافظ عليها في الوقت نفسه تضاعف نقاطك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Poste eine Story, einen Beitrag, ein Reel oder starte eine Unterhaltung: Jede Familie, die du gleichzeitig hältst, vervielfacht deine Punkte."
           }
         },
         "en": {
@@ -128565,16 +128577,10 @@
             "value": "Publica una historia, una publicación, un reel o inicia una conversación: cada familia que mantienes a la vez multiplica tus puntos."
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publique um story, um post, um reel ou inicie uma conversa: cada família mantida ao mesmo tempo multiplica os seus pontos."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Poste eine Story, einen Beitrag, ein Reel oder starte eine Unterhaltung: Jede Familie, die du gleichzeitig hältst, vervielfacht deine Punkte."
+            "value": "Publiez une story, un post, un réel ou lancez une conversation : chaque famille tenue en même temps multiplie vos points."
           }
         },
         "it": {
@@ -128583,10 +128589,16 @@
             "value": "Pubblica una storia, un post, un reel o avvia una conversazione: ogni famiglia portata avanti insieme moltiplica i tuoi punti."
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "انشر قصة أو منشورًا أو مقطعًا أو ابدأ محادثة: كل عائلة تحافظ عليها في الوقت نفسه تضاعف نقاطك."
+            "value": "Publique um story, um post, um reel ou inicie uma conversa: cada família mantida ao mesmo tempo multiplica os seus pontos."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publique um story, um post, um reels ou inicie uma conversa: cada família mantida ao mesmo tempo multiplica seus pontos."
           }
         },
         "zh-Hans": {
@@ -128600,10 +128612,16 @@
     "progression.elans.hint": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tenez une famille de plus en même temps pour déclencher le multiplicateur."
+            "value": "حافظ على عائلة إضافية في الوقت نفسه لتفعيل المضاعف."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Halte eine weitere Familie gleichzeitig am Laufen, um den Multiplikator auszulösen."
           }
         },
         "en": {
@@ -128618,16 +128636,10 @@
             "value": "Mantén una familia más a la vez para activar el multiplicador."
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mantenha mais uma família ao mesmo tempo para ativar o multiplicador."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Halte eine weitere Familie gleichzeitig am Laufen, um den Multiplikator auszulösen."
+            "value": "Tenez une famille de plus en même temps pour déclencher le multiplicateur."
           }
         },
         "it": {
@@ -128636,10 +128648,16 @@
             "value": "Porta avanti un’altra famiglia allo stesso tempo per attivare il moltiplicatore."
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "حافظ على عائلة إضافية في الوقت نفسه لتفعيل المضاعف."
+            "value": "Mantenha mais uma família ao mesmo tempo para ativar o multiplicador."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantenha mais uma família ao mesmo tempo para ativar o multiplicador."
           }
         },
         "zh-Hans": {
@@ -128653,10 +128671,16 @@
     "progression.elans.title": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos élans"
+            "value": "زخمك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Schwung"
           }
         },
         "en": {
@@ -128671,16 +128695,10 @@
             "value": "Tus impulsos"
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Os seus impulsos"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dein Schwung"
+            "value": "Vos élans"
           }
         },
         "it": {
@@ -128689,10 +128707,16 @@
             "value": "I tuoi slanci"
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "زخمك"
+            "value": "Os seus impulsos"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus impulsos"
           }
         },
         "zh-Hans": {
@@ -128941,10 +128965,16 @@
     "progression.hero.first": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Premier succès"
+            "value": "أول إنجاز"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erster Erfolg"
           }
         },
         "en": {
@@ -128959,16 +128989,10 @@
             "value": "Primer logro"
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Primeira conquista"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erster Erfolg"
+            "value": "Premier succès"
           }
         },
         "it": {
@@ -128977,10 +129001,16 @@
             "value": "Primo successo"
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "أول إنجاز"
+            "value": "Primeira conquista"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Primeira conquista"
           }
         },
         "zh-Hans": {
@@ -128994,10 +129024,16 @@
     "progression.hero.first.hint": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Envoyez un message — le premier tombe tout de suite."
+            "value": "أرسل رسالة — يأتي الإنجاز الأول فورًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schreib eine Nachricht – der erste Erfolg kommt sofort."
           }
         },
         "en": {
@@ -129012,16 +129048,10 @@
             "value": "Envía un mensaje: el primero llega enseguida."
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Envie uma mensagem — a primeira chega logo."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Schreib eine Nachricht – der erste Erfolg kommt sofort."
+            "value": "Envoyez un message — le premier tombe tout de suite."
           }
         },
         "it": {
@@ -129030,10 +129060,16 @@
             "value": "Invia un messaggio: il primo arriva subito."
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "أرسل رسالة — يأتي الإنجاز الأول فورًا."
+            "value": "Envie uma mensagem — a primeira chega logo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envie uma mensagem — a primeira chega na hora."
           }
         },
         "zh-Hans": {
@@ -129047,10 +129083,16 @@
     "progression.hero.last": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dernier succès"
+            "value": "آخر إنجاز"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letzter Erfolg"
           }
         },
         "en": {
@@ -129065,16 +129107,10 @@
             "value": "Último logro"
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Última conquista"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Letzter Erfolg"
+            "value": "Dernier succès"
           }
         },
         "it": {
@@ -129083,10 +129119,16 @@
             "value": "Ultimo successo"
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "آخر إنجاز"
+            "value": "Última conquista"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Última conquista"
           }
         },
         "zh-Hans": {
@@ -129100,10 +129142,16 @@
     "progression.hero.reveal.hint": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Revoir la célébration de ce succès"
+            "value": "إعادة مشاهدة احتفال هذا الإنجاز"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Feier dieses Erfolgs erneut ansehen"
           }
         },
         "en": {
@@ -129118,16 +129166,10 @@
             "value": "Volver a ver la celebración de este logro"
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rever a celebração desta conquista"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Feier dieses Erfolgs erneut ansehen"
+            "value": "Revoir la célébration de ce succès"
           }
         },
         "it": {
@@ -129136,10 +129178,16 @@
             "value": "Rivedi la celebrazione di questo successo"
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "إعادة مشاهدة احتفال هذا الإنجاز"
+            "value": "Rever a celebração desta conquista"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rever a celebração desta conquista"
           }
         },
         "zh-Hans": {
@@ -129294,10 +129342,16 @@
     "progression.meesh.entry.a11y": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld Meesh — voir le détail"
+            "value": "%lld Meesh — عرض التفاصيل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Meesh – Details anzeigen"
           }
         },
         "en": {
@@ -129312,16 +129366,10 @@
             "value": "%lld Meesh: ver detalles"
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld Meesh — ver detalhes"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld Meesh – Details anzeigen"
+            "value": "%lld Meesh — voir le détail"
           }
         },
         "it": {
@@ -129330,10 +129378,16 @@
             "value": "%lld Meesh — vedi dettagli"
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld Meesh — عرض التفاصيل"
+            "value": "%lld Meesh — ver detalhes"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Meesh — ver detalhes"
           }
         },
         "zh-Hans": {
@@ -129347,10 +129401,16 @@
     "progression.meesh.first_mint": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Première frappe"
+            "value": "أول سكّ"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erste Prägung"
           }
         },
         "en": {
@@ -129365,16 +129425,10 @@
             "value": "Primera acuñación"
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Primeira cunhagem"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erste Prägung"
+            "value": "Première frappe"
           }
         },
         "it": {
@@ -129383,10 +129437,16 @@
             "value": "Primo conio"
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "أول سكّ"
+            "value": "Primeira cunhagem"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Primeira cunhagem"
           }
         },
         "zh-Hans": {
@@ -129400,10 +129460,16 @@
     "progression.meesh.floor": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos %lld points de conversation seront repris en dernier, sans éteindre aucun badge."
+            "value": "سيتم أخذ نقاط المحادثة الـ %lld الخاصة بك في الأخير، دون إطفاء أي شارة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine %lld Gesprächspunkte werden zuletzt herangezogen, ohne ein Abzeichen zu löschen."
           }
         },
         "en": {
@@ -129418,16 +129484,10 @@
             "value": "Tus %lld puntos de conversación se tomarán en último lugar, sin apagar ningún distintivo."
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Os teus %lld pontos de conversa serão usados por último, sem apagar nenhum emblema."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine %lld Gesprächspunkte werden zuletzt herangezogen, ohne ein Abzeichen zu löschen."
+            "value": "Vos %lld points de conversation seront repris en dernier, sans éteindre aucun badge."
           }
         },
         "it": {
@@ -129436,10 +129496,16 @@
             "value": "I tuoi %lld punti di conversazione saranno presi per ultimi, senza spegnere alcun badge."
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "سيتم أخذ نقاط المحادثة الـ %lld الخاصة بك في الأخير، دون إطفاء أي شارة."
+            "value": "Os teus %lld pontos de conversa serão usados por último, sem apagar nenhum emblema."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus %lld pontos de conversa serão usados por último, sem apagar nenhum emblema."
           }
         },
         "zh-Hans": {
@@ -129453,10 +129519,16 @@
     "progression.meesh.last_mint": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dernière frappe"
+            "value": "آخر سكّ"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letzte Prägung"
           }
         },
         "en": {
@@ -129471,16 +129543,10 @@
             "value": "Última acuñación"
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Última cunhagem"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Letzte Prägung"
+            "value": "Dernière frappe"
           }
         },
         "it": {
@@ -129489,10 +129555,16 @@
             "value": "Ultimo conio"
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "آخر سكّ"
+            "value": "Última cunhagem"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Última cunhagem"
           }
         },
         "zh-Hans": {
@@ -129506,7 +129578,13 @@
     "progression.meesh.many": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Meesh"
+          }
+        },
+        "de": {
           "stringUnit": {
             "state": "translated",
             "value": "%lld Meeshes"
@@ -129524,13 +129602,7 @@
             "value": "%lld Meeshes"
           }
         },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld Meeshes"
-          }
-        },
-        "de": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "%lld Meeshes"
@@ -129542,10 +129614,16 @@
             "value": "%lld Meeshes"
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld Meesh"
+            "value": "%lld Meeshes"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Meeshes"
           }
         },
         "zh-Hans": {
@@ -129559,10 +129637,16 @@
     "progression.meesh.mint": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Convertir %lld points en une Meesh"
+            "value": "حوّل %lld نقطة إلى Meesh"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Punkte in eine Meesh umwandeln"
           }
         },
         "en": {
@@ -129577,16 +129661,10 @@
             "value": "Convertir %lld puntos en una Meesh"
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Converter %lld pontos numa Meesh"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld Punkte in eine Meesh umwandeln"
+            "value": "Convertir %lld points en une Meesh"
           }
         },
         "it": {
@@ -129595,10 +129673,16 @@
             "value": "Converti %lld punti in una Meesh"
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "حوّل %lld نقطة إلى Meesh"
+            "value": "Converter %lld pontos numa Meesh"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Converter %lld pontos em uma Meesh"
           }
         },
         "zh-Hans": {
@@ -129612,10 +129696,16 @@
     "progression.meesh.mint_error": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "La frappe n'a pas abouti — réessayez"
+            "value": "لم يكتمل السكّ — أعد المحاولة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Prägen hat nicht geklappt – versuch es erneut"
           }
         },
         "en": {
@@ -129630,16 +129720,10 @@
             "value": "La acuñación no se completó: inténtalo de nuevo"
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "A cunhagem não foi concluída — tenta de novo"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das Prägen hat nicht geklappt – versuch es erneut"
+            "value": "La frappe n'a pas abouti — réessayez"
           }
         },
         "it": {
@@ -129648,10 +129732,16 @@
             "value": "Il conio non è andato a buon fine — riprova"
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "لم يكتمل السكّ — أعد المحاولة"
+            "value": "A cunhagem não foi concluída — tenta de novo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A cunhagem não foi concluída — tente de novo"
           }
         },
         "zh-Hans": {
@@ -129665,10 +129755,16 @@
     "progression.meesh.minted.many": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld frappées depuis toujours"
+            "value": "تم سكّ %lld منذ البداية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld seit jeher geprägt"
           }
         },
         "en": {
@@ -129683,16 +129779,10 @@
             "value": "%lld acuñadas desde siempre"
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld cunhadas desde sempre"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld seit jeher geprägt"
+            "value": "%lld frappées depuis toujours"
           }
         },
         "it": {
@@ -129701,10 +129791,16 @@
             "value": "%lld coniate da sempre"
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "تم سكّ %lld منذ البداية"
+            "value": "%lld cunhadas desde sempre"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld cunhadas desde sempre"
           }
         },
         "zh-Hans": {
@@ -129718,10 +129814,16 @@
     "progression.meesh.minted.one": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "1 frappée depuis toujours"
+            "value": "تم سكّ 1 منذ البداية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 seit jeher geprägt"
           }
         },
         "en": {
@@ -129736,16 +129838,10 @@
             "value": "1 acuñada desde siempre"
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "1 cunhada desde sempre"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 seit jeher geprägt"
+            "value": "1 frappée depuis toujours"
           }
         },
         "it": {
@@ -129754,10 +129850,16 @@
             "value": "1 coniata da sempre"
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "تم سكّ 1 منذ البداية"
+            "value": "1 cunhada desde sempre"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 cunhada desde sempre"
           }
         },
         "zh-Hans": {
@@ -129771,10 +129873,16 @@
     "progression.meesh.minting": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frappe en cours…"
+            "value": "جارٍ السكّ…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird geprägt…"
           }
         },
         "en": {
@@ -129789,16 +129897,10 @@
             "value": "Acuñando…"
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "A cunhar…"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wird geprägt…"
+            "value": "Frappe en cours…"
           }
         },
         "it": {
@@ -129807,10 +129909,16 @@
             "value": "Conio in corso…"
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "جارٍ السكّ…"
+            "value": "A cunhar…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cunhando…"
           }
         },
         "zh-Hans": {
@@ -129824,10 +129932,16 @@
     "progression.meesh.missing": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encore %lld points convertibles avant une Meesh."
+            "value": "تبقّى %lld نقطة قابلة للتحويل قبل Meesh."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch %lld umwandelbare Punkte bis zu einer Meesh."
           }
         },
         "en": {
@@ -129842,16 +129956,10 @@
             "value": "Faltan %lld puntos convertibles para una Meesh."
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Faltam %lld pontos convertíveis para uma Meesh."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Noch %lld umwandelbare Punkte bis zu einer Meesh."
+            "value": "Encore %lld points convertibles avant une Meesh."
           }
         },
         "it": {
@@ -129860,10 +129968,16 @@
             "value": "Ancora %lld punti convertibili prima di una Meesh."
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "تبقّى %lld نقطة قابلة للتحويل قبل Meesh."
+            "value": "Faltam %lld pontos convertíveis para uma Meesh."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faltam %lld pontos conversíveis para uma Meesh."
           }
         },
         "zh-Hans": {
@@ -129877,10 +129991,16 @@
     "progression.meesh.never_minted": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune frappe pour l’instant."
+            "value": "لا يوجد سكّ حتى الآن."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch keine Prägung."
           }
         },
         "en": {
@@ -129895,16 +130015,10 @@
             "value": "Ninguna acuñación por ahora."
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nenhuma cunhagem por agora."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Noch keine Prägung."
+            "value": "Aucune frappe pour l’instant."
           }
         },
         "it": {
@@ -129913,10 +130027,16 @@
             "value": "Nessun conio per ora."
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يوجد سكّ حتى الآن."
+            "value": "Nenhuma cunhagem por agora."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhuma cunhagem por enquanto."
           }
         },
         "zh-Hans": {
@@ -129930,10 +130050,16 @@
     "progression.meesh.none": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune Meesh"
+            "value": "لا توجد Meesh"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Meesh"
           }
         },
         "en": {
@@ -129948,16 +130074,10 @@
             "value": "Ninguna Meesh"
           }
         },
-        "pt": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nenhuma Meesh"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Keine Meesh"
+            "value": "Aucune Meesh"
           }
         },
         "it": {
@@ -129966,10 +130086,16 @@
             "value": "Nessuna Meesh"
           }
         },
-        "ar": {
+        "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا توجد Meesh"
+            "value": "Nenhuma Meesh"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhuma Meesh"
           }
         },
         "zh-Hans": {
@@ -129983,7 +130109,13 @@
     "progression.meesh.one": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Meesh"
+          }
+        },
+        "de": {
           "stringUnit": {
             "state": "translated",
             "value": "1 Meesh"
@@ -130001,13 +130133,7 @@
             "value": "1 Meesh"
           }
         },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 Meesh"
-          }
-        },
-        "de": {
+        "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "1 Meesh"
@@ -130019,7 +130145,13 @@
             "value": "1 Meesh"
           }
         },
-        "ar": {
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Meesh"
+          }
+        },
+        "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "1 Meesh"
