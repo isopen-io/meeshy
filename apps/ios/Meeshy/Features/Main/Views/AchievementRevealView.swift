@@ -43,7 +43,19 @@ struct AchievementRevealView: View {
 
     let reveal: EngagementReveal
     var occasion: Occasion = .celebration
+    /// Ferme la célébration — et ne fait QUE ça.
     let onContinue: () -> Void
+    /// **Mène au tableau de bord.** Séparée de `onContinue` depuis #5903 : le
+    /// bouton « Voir ma progression » les confondait, et ne faisait donc que
+    /// refermer. Ça marchait par UNE porte — l'hôte de notification pousse
+    /// `.progression` AVANT d'ouvrir la vue, si bien que la refermer y arrive —
+    /// et par elle seule. Depuis toute autre, le bouton promettait une
+    /// navigation et rendait l'écran qu'on regardait déjà.
+    ///
+    /// `nil` ⇒ la vue n'offre pas cette sortie : c'est le cas de la
+    /// consultation, où l'on VIENT du tableau de bord et où y « aller » n'aurait
+    /// aucun sens.
+    var onVoirProgression: (() -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -148,13 +160,19 @@ struct AchievementRevealView: View {
         occasion.estObtenu ? reveal.symbolName : "lock.fill"
     }
 
-    /// Ce que la sortie PROMET. Depuis une notification, elle mène au tableau
-    /// de bord — la vue le couvre, la refermer y arrive. Depuis ce même
-    /// tableau de bord, promettre d'y aller serait faux : on en revient.
+    /// Ce que la sortie FAIT — elle ferme, et son mot le dit.
+    ///
+    /// Il disait « Voir ma progression » en célébration, pour une action qui ne
+    /// faisait que refermer. Ce mot appartient désormais au bouton qui mène
+    /// VRAIMENT (ci-dessous) ; celui-ci reprend le sien.
     private var libelleSortie: String {
         occasion.estCelebration
-            ? String(localized: "reveal.continue", defaultValue: "Voir ma progression", bundle: .main)
+            ? String(localized: "reveal.ok", defaultValue: "OK", bundle: .main)
             : String(localized: "reveal.close", defaultValue: "Fermer", bundle: .main)
+    }
+
+    private var libelleProgression: String {
+        String(localized: "reveal.continue", defaultValue: "Voir ma progression", bundle: .main)
     }
 
     var body: some View {
@@ -250,17 +268,45 @@ struct AchievementRevealView: View {
     }
 
     private var sortie: some View {
-        Button {
-            HapticFeedback.light()
-            onContinue()
-        } label: {
-            Text(libelleSortie)
-                .font(MeeshyFont.relative(16, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity, minHeight: 52)
-                .background(Capsule().fill(teinte))
+        VStack(spacing: MeeshySpacing.sm) {
+            // L'action OFFERTE en premier, remplie : c'est elle qu'on propose.
+            if let onVoirProgression {
+                Button {
+                    HapticFeedback.light()
+                    onVoirProgression()
+                } label: {
+                    Text(libelleProgression)
+                        .font(MeeshyFont.relative(16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(Capsule().fill(teinte))
+                }
+                .buttonStyle(.plain)
+            }
+
+            // La fermeture. Pleine quand elle est SEULE (consultation), en
+            // retrait quand elle accompagne l'action offerte : deux capsules
+            // pleines côte à côte ne diraient pas laquelle est proposée.
+            Button {
+                HapticFeedback.light()
+                onContinue()
+            } label: {
+                Text(libelleSortie)
+                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .foregroundColor(onVoirProgression == nil ? .white : teinte)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(
+                        Capsule().fill(onVoirProgression == nil ? teinte : Color.clear)
+                    )
+                    .overlay(
+                        Capsule().stroke(
+                            onVoirProgression == nil ? Color.clear : teinte.opacity(0.5),
+                            lineWidth: 1
+                        )
+                    )
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
         .opacity(apparu ? 1 : 0)
     }
 
