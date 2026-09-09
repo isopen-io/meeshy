@@ -30179,3 +30179,27 @@ l'autre.** J'ai donné l'ordre de merge et la mauvaise formulation dans le même
 message, sans voir que le premier invalidait la seconde ; c'est la session
 d'en face qui l'a attrapé. Un ordre de merge n'est pas qu'un calendrier : il
 décide de la vérité des phrases écrites de part et d'autre.
+
+SECOND COROLLAIRE, DU MÊME JOUR ET DE LA MÊME CAUSE — **« relire le fichier pour
+choisir le suivant libre » ne tranche que si les deux écrivains partagent le
+FICHIER.** Deux sessions se sont donné cette règle pour allouer un numéro de
+leçon, chacune l'a appliquée honnêtement, et **les deux ont écrit une 560** :
+`dev` s'arrêtait à 559, et le fichier que chacune relisait ne contenait pas les
+leçons de l'autre, restées sur sa branche.
+
+C'est le même défaut de raisonnement que ci-dessus, appliqué à un identifiant
+plutôt qu'à une phrase : on a traité comme PARTAGÉ un substrat qui ne l'est
+qu'après le merge. Une branche non mergée est invisible à la relecture de
+l'autre — c'est même sa définition.
+
+Ce qui a tranché n'est pas la relecture mais la règle d'asymétrie du dépôt
+(§ « La branche poussée tôt ») : les deux leçons POUSSÉES gardent leurs
+numéros, celle qui n'avait pas encore atteint le distant se déplace. Aucune
+négociation — la décision se lit depuis ce que git montre.
+
+> **La parade n'est pas de mieux communiquer, c'est de NE PAS ALLOUER.** Un
+> titre daté et nommé — « Leçon — `idb ui text` avale un caractère (2026-09-09) »
+> — ne collisionne avec rien, et le numéro se pose au merge, quand le substrat
+> est enfin commun. C'est le § « un identifiant qui ne s'alloue pas ne
+> collisionne pas » (#5102) rejoué sur le seul espace de noms que ce fichier
+> possède : sa numérotation.
