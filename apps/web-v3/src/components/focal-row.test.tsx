@@ -192,3 +192,42 @@ describe('FocalRow — protection (D-23, #5676)', () => {
     expect(render({ ...unveiled, isBlurred: false }, { tail: true })).toContain('aria-pressed');
   });
 });
+
+/**
+ * L'ÉCHEC D'ENVOI, DANS LA RANGÉE PLATE (revue-correction #5813) — MÊME
+ * matrice que `bubble.test.tsx` : la cible tactile de la bande (défaut
+ * majeur 7) et le retrait du geste sur un refus permanent (défaut majeur 2).
+ */
+const renderFailed = (props: { readonly sendFailureReason?: string; readonly onRetry?: () => void }) =>
+  renderToStaticMarkup(
+    <FocalRow
+      mode="focal"
+      place={placeOf({ ...BASE_MESSAGE, senderId: 'u-viewer', deliveredCount: 0, readCount: 0 })}
+      languages={['fr', 'en']}
+      viewerId="u-viewer"
+      onJumpToMessage={() => {}}
+      localDelivery="failed"
+      {...props}
+    />,
+  );
+
+describe('FocalRow — l’échec d’envoi (#5813)', () => {
+  test('la bande de reprise couvre au moins 44 px de haut, en text-mini (jamais text-check, 10 px)', () => {
+    const html = renderFailed({ onRetry: () => {} });
+    expect(html).toContain('min-height:44px');
+    expect(html).toContain('text-mini');
+    expect(html).not.toContain('text-check');
+  });
+
+  test('sans onRetry (refus permanent) : la cause reste affichée, « Réessayer » a disparu, plus de bouton', () => {
+    const html = renderFailed({ sendFailureReason: 'envoi refusé pour cette conversation' });
+    expect(html).toContain('Non envoyé — envoi refusé pour cette conversation');
+    expect(html).not.toContain('Réessayer');
+    expect(html).not.toContain('<button');
+  });
+
+  test('avec onRetry (échec transient) : le geste « Réessayer » est offert', () => {
+    const html = renderFailed({ onRetry: () => {} });
+    expect(html).toContain('Réessayer');
+  });
+});

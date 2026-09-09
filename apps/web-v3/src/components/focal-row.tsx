@@ -1,6 +1,6 @@
 import { memo, useState } from 'react';
 
-import { deliveryOf, isMineOf, translationsOf } from '@/lib/view/message';
+import { checkStatusOf, isMineOf, translationsOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
 import { initialsOf } from '@/lib/view/conversation';
 import { served } from '@/lib/api/prism';
@@ -20,12 +20,12 @@ import {
 } from '@/lib/reading-mode/metrics';
 
 import { Avatar } from './avatar';
-import { Glyph } from './glyph';
 import { FocusCard, FocusIdentity, FocusStamp, FocusStrip } from './focal-focus-overlays';
 import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
 import {
   Attachments,
   Check,
+  FailedSendBand,
   Flags,
   PrismPastille,
   Quote,
@@ -100,6 +100,8 @@ export const FocalRow = memo(function FocalRow({
   languages,
   viewerId,
   localDelivery,
+  sendStartedAt,
+  sendFailureReason,
   onRetry,
   onJumpToMessage,
   highlighted = false,
@@ -115,6 +117,13 @@ export const FocalRow = memo(function FocalRow({
   viewerId: string;
   /** L'opinion de CE client sur l'envoi, tant que le transport n'a pas tranché. */
   localDelivery?: LocalDelivery;
+  /** Epoch ms du début de la tentative en cours — l'horloge des 200 ms
+   * (§5 étape 9 de la spécification #5813), transmise à la fois à la
+   * colonne méta ordinaire et à `FocusStamp` (rangée élue). */
+  sendStartedAt?: number;
+  /** LA CAUSE de l'échec, en clair (`sendFailureReason`) — portée par la
+   * bande elle-même : `lastError` était capturé et lu par PERSONNE. */
+  sendFailureReason?: string;
   onRetry?: () => void;
   /** Saute au message cité (défaut #5566 défaut 10 : le bouton ne faisait rien). */
   onJumpToMessage: (messageId: string) => void;
@@ -234,7 +243,11 @@ export const FocalRow = memo(function FocalRow({
     hasReactions: reactions.length > 0,
   });
 
-  const delivery = localDelivery === 'pending' ? 'pending' : deliveryOf(message);
+  /** `checkStatusOf` et non `deliveryOf` (revue-correction #5813) : `null`
+   * sur un envoi ÉCHOUÉ — sa bande dit déjà « Non envoyé », et
+   * `deliveredCount: 0` ferait sinon peindre la coche « envoyé » juste à
+   * côté. Site unique, partagé avec `Bubble` (`lib/view/message.ts`). */
+  const delivery = checkStatusOf(message, localDelivery);
 
   // Le tampon n'est calculé QUE quand il est rendu (§5.6 de la spécification
   // #5648) — cette rangée ne re-rend que sur un changement de `elected`
@@ -350,20 +363,12 @@ export const FocalRow = memo(function FocalRow({
             {/* La bande de reprise reste DANS la rangée du message concerné,
                 et HORS voile : un échec d'envoi se voit même sur un message
                 protégé (`FocalRow.swift:224-238`, même parti que la bulle). */}
-            {localDelivery === 'failed' && onRetry !== undefined ? (
-              <button
-                type="button"
-                onClick={onRetry}
-                className="mb-1.5 flex w-full items-center gap-1.5 rounded-quote px-2 py-1.5 text-left text-check font-semibold"
-                style={{
-                  backgroundColor: 'color-mix(in srgb, var(--color-error) 18%, transparent)',
-                  color: 'var(--color-error)',
-                }}
-              >
-                <Glyph name="warningCircle" size={12} />
-                <span className="flex-1">Non envoyé</span>
-                <span style={{ textDecoration: 'underline' }}>Réessayer</span>
-              </button>
+            {localDelivery === 'failed' ? (
+              <FailedSendBand
+                {...(sendFailureReason === undefined ? {} : { reason: sendFailureReason })}
+                {...(onRetry === undefined ? {} : { onRetry })}
+                textColor="var(--color-error)"
+              />
             ) : null}
 
             {isProtected ? (
@@ -492,7 +497,9 @@ export const FocalRow = memo(function FocalRow({
             >
               {time(message.createdAt)}
             </time>
-            <Check status={delivery} isMine={isMine} />
+            {delivery === null ? null : (
+              <Check status={delivery} isMine={isMine} {...(sendStartedAt === undefined ? {} : { sendStartedAt })} />
+            )}
           </div>
 
           {elected && nowMoment !== null ? (
@@ -527,6 +534,7 @@ export const FocalRow = memo(function FocalRow({
                 locale={languages[0] ?? 'fr'}
                 delivery={delivery}
                 isMine={isMine}
+                {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
               />
             </>
           ) : null}

@@ -35,11 +35,11 @@ import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf, withAccent } from '@/lib/accent';
 import { initialsOf, isGroup, peerOf, presenceOf, titleOf, unreadOf } from '@/lib/view/conversation';
 import { useParams } from '@/lib/router';
-import { dayLabel, place } from '@/lib/grouping';
+import { dayLabel, mergeTimeline, place } from '@/lib/grouping';
 import { Link } from '@/routes/route-table';
 import { useReaderLanguages } from '@/lib/view/use-reader';
+import { useSend } from '@/lib/view/use-send';
 import { useOnline } from '@/lib/net/online';
-import type { LocalDelivery } from '@/lib/view/message';
 import { menuRows } from '@/lib/reading-mode/catalog';
 import {
   resolveThreadMode,
@@ -91,15 +91,6 @@ export default function ThreadScreen() {
   const conversation = threadData.conversation;
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
-
-  /**
-   * `pendingSends` — les envois OPTIMISTES de CETTE session, jamais
-   * confirmés par le serveur (#5493 : pas de transport d'écriture ce tour).
-   * `messages` (plus bas) les COMPOSE avec `threadData.messages` — le
-   * domaine CONFIRMÉ, qui vit désormais dans le cache TanStack.
-   */
-  const [pendingSends, setPendingSends] = useState<readonly Message[]>([]);
-  const messages = useMemo(() => [...threadData.messages, ...pendingSends], [threadData.messages, pendingSends]);
   const online = useOnline();
 
   /**
@@ -112,24 +103,24 @@ export default function ThreadScreen() {
   const viewer = useMemo(() => resolveViewer({ source: apiConfig.source, session }), [session]);
 
   /**
+   * LE `Participant` DU LECTEUR DANS cette conversation (#5813, étape 8) —
+   * calculé ICI, AVANT les retours anticipés (`useSend` en a besoin) : la
+   * charge que `sender` exige sur un message ENVOYÉ (avatar, présence…).
+   * `conversation` peut être `undefined` pendant `pending`/`refused`/`error`
+   * (F8) — le résultat est alors `undefined`, sans conséquence tant que le
+   * rendu final ne montre pas encore le fil réel.
+   */
+  const viewerParticipant = useMemo(
+    () => conversation?.participants.find((p) => p.userId === viewer.id),
+    [conversation, viewer.id],
+  );
+
+  /**
    * LA FENÊTRE COUVRE-T-ELLE TOUT LE NON-LU ? — `threadData.hasOlder` mime
    * `cursorPagination.hasMore` : c'est ce qui rend « Sur les N derniers
    * messages » (Résumé Vivant) atteignable sans mentir.
    */
   const windowCoversUnread = !threadData.hasOlder;
-
-  /**
-   * L'ÉTAT LOCAL D'UN ENVOI — à CÔTÉ du domaine, jamais dedans.
-   *
-   * « en attente » et « échoué » ne sont pas des champs de `Message` : le
-   * serveur ne les sert pas, il ne les connaît même pas. Ce sont des états de
-   * CE client, pour CE message, jusqu'à ce que le transport tranche. Les
-   * graver dans la charge en ferait des données, et une charge remise à un
-   * autre lecteur porterait un « échec » qui n'est pas le sien.
-   */
-  const [localDelivery, setLocalDelivery] = useState<ReadonlyMap<string, LocalDelivery>>(new Map());
-  const setDelivery = (messageId: string, state: LocalDelivery) =>
-    setLocalDelivery((previous) => new Map(previous).set(messageId, state));
 
   /**
    * LA PROTECTION (D-23, #5676).
@@ -205,6 +196,32 @@ export default function ThreadScreen() {
   const conversationId = conversation?.id ?? id;
   const { languages: readerLanguages, locale: readerLocale } = useReaderLanguages();
   const scope = useMemo(() => readingModeScopeOf(viewer), [viewer.id]);
+
+  /**
+   * L'ENVOI (#5813) — `send/perform-send.ts` porte la RÈGLE (débounce,
+   * accusé, reprise, upsert idempotent) ; ce hook n'est qu'un abonnement à
+   * l'outbox (§ 4.10 de la spécification). `originalLanguage` = rang 1 du
+   * Prisme du lecteur (Q3 : jamais de détection on-device ce lot), figée à
+   * l'envoi et préservée au renvoi (`entry.message` repris tel quel).
+   */
+  const { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry, announcement } = useSend({
+    conversationId: id,
+    viewerId: viewer.id ?? '',
+    ...(viewerParticipant === undefined ? {} : { sender: viewerParticipant }),
+    originalLanguage: readerLocale,
+  });
+  /**
+   * `messages` COMPOSE le domaine CONFIRMÉ (`threadData.messages`, le cache
+   * TanStack) avec les locaux de CETTE session (`pending`, l'outbox) — le
+   * même geste qu'avant #5813, `pending` remplaçant `pendingSends`. FUSIONNÉ
+   * PUIS TRIÉ par `mergeTimeline` (`lib/grouping.ts`), jamais concaténé —
+   * revue-correction #5813, défaut majeur 5 (voir le doc-comment de
+   * `mergeTimeline` pour le scénario qu'une concaténation inverse).
+   */
+  const messages = useMemo(
+    () => mergeTimeline(threadData.messages, pending),
+    [threadData.messages, pending],
+  );
   const placed = useMemo(() => place(messages, { locale: readerLocale }), [messages, readerLocale]);
   const group = conversation !== undefined && isGroup(conversation);
 
@@ -497,9 +514,9 @@ export default function ThreadScreen() {
   /** Le `Participant` du lecteur DANS cette conversation — distinct de
    * `viewer` (l'identité résolue par `resolveViewer`, ci-dessus) : celui-ci
    * porte la charge que `sender` exige (avatar, présence…), jamais confondu
-   * avec « qui lit ». Depuis le domaine SERVI (`conversation.participants`),
-   * jamais la fixture `PARTICIPANTS` en direct (#5650, §5 étape 10). */
-  const viewerParticipant = conversation.participants.find((p) => p.userId === viewer.id);
+   * avec « qui lit ». Calculé plus haut (`viewerParticipant`, avant les
+   * retours anticipés) : `useSend` (#5813) en a besoin AVANT que `conversation`
+   * ne soit narrowée non-optionnelle ici. */
 
   /**
    * LE CADRAGE DES DATES DU RÉSUMÉ (#5695, étape 11) — `lang` est RÉSOLU
@@ -537,64 +554,6 @@ export default function ThreadScreen() {
              sert (`lang`), comme `bubble.tsx` et `focal-row.tsx`. */
           ...(replyToServed.language === '' ? {} : { language: replyToServed.language }),
         };
-
-  const send = (text: string, replyToId: string | null = null) => {
-    /**
-     * OPTIMISTIC UPDATE : le message apparait AVANT le reseau, en etat
-     * « en-attente ». C'est non negociable sur la 3G visee — attendre l'accuse
-     * du serveur avant de peindre ferait un composeur qui semble ne rien faire
-     * pendant deux secondes.
-     */
-    const now = new Date();
-    const localId = `local-${now.getTime()}`;
-    /**
-     * `navigator.onLine === false` est FIABLE : le système sait qu'aucune
-     * interface n'est disponible. On marque donc l'échec TOUT DE SUITE plutôt
-     * que de laisser une horloge tourner sur un envoi qui ne partira pas —
-     * c'est la différence entre une application qui dit la vérité et une qui
-     * fait semblant, et sur le réseau visé c'est le cas nominal.
-     *
-     * En ligne, l'état reste « en attente » : sans transport (#5493), aucune
-     * confirmation n'existe, et peindre « remis » serait un mensonge. Le
-     * manque se VOIT plutôt que de se cacher.
-     */
-    setDelivery(localId, online ? 'pending' : 'failed');
-    setPendingSends((previous) => [
-      ...previous,
-      {
-        id: localId,
-        conversationId: conversation.id,
-        senderId: viewer.id ?? '',
-        ...(viewerParticipant === undefined ? {} : { sender: viewerParticipant }),
-        ...(replyToId === null ? {} : { replyToId }),
-        content: text,
-        originalLanguage: 'fr',
-        messageType: 'text',
-        messageSource: 'user',
-        isEdited: false,
-        isViewOnce: false,
-        viewOnceCount: 0,
-        isBlurred: false,
-        // Rien n'est encore parti : `deliveredCount` à 0 est ce que
-        // `deliveryOf` lit comme « en attente », sans champ inventé.
-        deliveredCount: 0,
-        readCount: 0,
-        reactionCount: 0,
-        isEncrypted: false,
-        translations: [],
-        createdAt: now,
-        timestamp: now,
-      },
-    ]);
-  };
-
-  /**
-   * LA REPRISE. Elle ne PROMET rien : elle remet le message en attente si le
-   * réseau est revenu, et le laisse en échec sinon. Un bouton « Réessayer »
-   * qui repasse en « en attente » alors que l'appareil est toujours coupé
-   * ferait tourner une horloge pour rien — l'utilisateur croirait que ça part.
-   */
-  const retry = (messageId: string) => setDelivery(messageId, online ? 'pending' : 'failed');
 
   return (
     /* `h-dvh` + `overflow-hidden`, et NON `min-h-dvh` : c'est ce qui fait la
@@ -722,10 +681,22 @@ export default function ThreadScreen() {
             }}
           >
             <Glyph name="warningCircle" size={11} />
-            Hors ligne — vos messages partiront à la reconnexion
+            Hors ligne — vos messages ne partiront pas maintenant
           </p>
         )}
       </header>
+      {/*
+        L'ANNONCE LECTEUR D'ÉCRAN (#5813, § 6.3) — un SEUL nœud, entre
+        l'en-tête et `<main>`, visuellement masqué : « Message non envoyé »
+        quand une entrée d'outbox passe `failed`, « Message envoyé » quand le
+        compteur de confirmations de CETTE conversation monte. DEUX signaux
+        distincts, tous deux projetés de l'outbox par `useSend` — jamais un
+        second état, et jamais l'un déduit de l'autre (une reprise qui
+        DÉMARRE fait baisser le compte d'échecs sans rien avoir envoyé).
+      */}
+      <div role="status" aria-live="polite" className="offscreen">
+        {announcement}
+      </div>
 
       <main
         id="contenu"
@@ -827,6 +798,28 @@ export default function ThreadScreen() {
             const p = placed[row.index];
             if (p === undefined) return null;
             const isElected = scene.elected === p.message.id;
+            /* L'opinion de CE client sur l'envoi (#5813) — UNE lecture par
+               rangée, réutilisée pour les deux peaux et pour l'horloge des
+               200 ms (`sendStartedAt`, § 5 étape 9). */
+            const rowDelivery = deliveryOf(p.message.id);
+            const rowStartedAt = startedAtOf(p.message.id);
+            const rowReason = reasonOf(p.message.id);
+            /* UN REFUS PERMANENT N'OFFRE PAS DE REJEU (revue-correction
+               #5813, défaut majeur 2) — 403/401 ne peuvent jamais aboutir en
+               rejouant le MÊME appel ; `onRetry` disparaît, la cause reste.
+               Hors ligne (`rowReason === undefined`, D-16) n'est jamais
+               permanent : `permanentOf` lit `lastError`, absent tant qu'aucun
+               appel n'est parti. */
+            const rowPermanent = rowDelivery === 'failed' && permanentOf(p.message.id);
+            const sendProps =
+              rowDelivery === undefined
+                ? {}
+                : {
+                    localDelivery: rowDelivery,
+                    ...(rowPermanent ? {} : { onRetry: () => retry(p.message.id) }),
+                    ...(rowStartedAt === undefined ? {} : { sendStartedAt: rowStartedAt }),
+                    ...(rowReason === undefined ? {} : { sendFailureReason: rowReason }),
+                  };
             return (
             <li
               key={p.message.id}
@@ -882,12 +875,7 @@ export default function ThreadScreen() {
                     expired={expiredIds.has(p.message.id)}
                     onConsumeViewOnce={consume}
                     onEphemeralExpired={onEphemeralExpired}
-                    {...(localDelivery.has(p.message.id)
-                      ? {
-                          localDelivery: localDelivery.get(p.message.id) as LocalDelivery,
-                          onRetry: () => retry(p.message.id),
-                        }
-                      : {})}
+                    {...sendProps}
                   />
                 ) : (
                   <Bubble
@@ -900,12 +888,7 @@ export default function ThreadScreen() {
                     expired={expiredIds.has(p.message.id)}
                     onConsumeViewOnce={consume}
                     onEphemeralExpired={onEphemeralExpired}
-                    {...(localDelivery.has(p.message.id)
-                      ? {
-                          localDelivery: localDelivery.get(p.message.id) as LocalDelivery,
-                          onRetry: () => retry(p.message.id),
-                        }
-                      : {})}
+                    {...sendProps}
                   />
                 )}
               </div>
@@ -947,15 +930,35 @@ export default function ThreadScreen() {
         )}
       </main>
 
-      <div className="shrink-0">
-        <Composer
-          onSend={(text) => {
-            send(text, replyTarget);
-            setReplyTarget(null);
-          }}
-          {...(replyTo ? { replyTo, onCancelReply: () => setReplyTarget(null) } : {})}
-        />
-      </div>
+      {/*
+        LE COMPOSEUR NE SE MONTE JAMAIS EN RÉSUMÉ (revue-correction #5813,
+        défaut BLOQUANT 4) — miroir du recouvrement iOS : `LivingSummaryHost`
+        est posé à `zIndex(80)`, AU-DESSUS du composeur (`zIndex(60)`,
+        `ConversationView.swift:1409-1418, 1516, 1967`), donc rien n'y est
+        jamais tapé ni envoyé. L'écran Résumé ne rend AUCUNE rangée de
+        message (`readingDecision.mode === 'summary'`, plus haut) : un
+        composeur monté ici enverrait un message RÉEL — la passerelle
+        confirmerait, `aria-live` dirait « Message envoyé » — sans qu'aucune
+        bulle ne l'affiche nulle part avant le prochain chargement complet du
+        fil. Le Résumé porte déjà son geste de sortie, « Reprendre le fil »
+        (`onResumeThread`) : composer d'abord.
+      */}
+      {readingDecision.mode === 'summary' ? null : (
+        <div className="shrink-0">
+          <Composer
+            onSend={(text) => {
+              /* LE MESSAGE CITÉ ENTIER, PAS SON SEUL IDENTIFIANT
+                 (revue-correction #5813, défaut majeur 6) — `replyToMessage`
+                 est déjà résolu plus haut pour la bande du composeur ; le
+                 réutiliser ici évite une seconde recherche ET porte la
+                 citation jusqu'à la bulle optimiste. */
+              send(text, replyToMessage ?? null);
+              setReplyTarget(null);
+            }}
+            {...(replyTo ? { replyTo, onCancelReply: () => setReplyTarget(null) } : {})}
+          />
+        </div>
+      )}
     </div>
   );
 }

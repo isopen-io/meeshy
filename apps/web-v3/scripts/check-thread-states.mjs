@@ -134,6 +134,17 @@ const failedShown = expect(
   (await page.getByText('Non envoyé').count()) > 0,
   "un message écrit hors ligne est marqué NON ENVOYÉ",
 );
+
+/**
+ * L'ANNONCE LECTEUR D'ÉCRAN (#5813, § 6.3) — `[aria-live="polite"]` porte
+ * « Message non envoyé » dès qu'une entrée d'outbox passe `failed`, dérivée
+ * de l'outbox (jamais un second état).
+ */
+expect(
+  (await page.locator('[aria-live="polite"]').innerText()).toLowerCase().includes('non envoyé'),
+  "l'annonce aria-live signale « non envoyé » après un envoi hors ligne",
+);
+
 /**
  * La bande de reprise doit être DANS la bulle du message concerné — pas
  * ailleurs sur l'écran. On le vérifie par la parenté, pas par la présence :
@@ -148,6 +159,24 @@ expect(
   }),
   "la bande de reprise est DANS la bulle, une seule fois",
 );
+
+/**
+ * LA CIBLE TACTILE DE LA BANDE DE REPRISE (revue-correction #5813, défaut
+ * majeur 7) — mesurée à 27 px de haut en police 10 px avant ce correctif :
+ * le SEUL contrôle de réparation du fil sous la règle « cibles >= 44 px »
+ * (dimension 5) que ce gate tient déjà pour l'erreur de LISTE
+ * (`routes/conversations.tsx`, `minHeight: 44`). Le geste qu'on rattrape est
+ * souvent tapé en marchant, sur un réseau qui coupe — il ne peut pas être le
+ * seul contrôle du chantier sous la règle.
+ */
+if (failedShown) {
+  const band = page.locator('main li button', { hasText: 'Non envoyé' }).first();
+  const box = await band.boundingBox();
+  expect(
+    box !== null && box.height >= 44,
+    `la bande de reprise du fil couvre au moins 44 px de haut (obtenu : ${box?.height ?? 'absent'})`,
+  );
+}
 
 /**
  * Les quatre vérifications suivantes DÉPENDENT de la précédente : sans bande

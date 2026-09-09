@@ -133,13 +133,18 @@ export function FocusStamp({
   locale,
   delivery,
   isMine,
+  sendStartedAt,
 }: {
   readonly sentAt: Date;
   readonly now: Date;
   readonly timeString: string;
   readonly locale: string;
-  readonly delivery: Delivery;
+  /** `null` ⇒ aucun accusé peint — un envoi ÉCHOUÉ, dont la bande de reprise
+   * porte seule l'état (`checkStatusOf`, `lib/view/message.ts`). */
+  readonly delivery: Delivery | null;
   readonly isMine: boolean;
+  /** #5813, étape 9 — même horloge des 200 ms que la colonne méta ordinaire. */
+  readonly sendStartedAt?: number;
 }) {
   return (
     <time
@@ -148,9 +153,9 @@ export function FocusStamp({
       style={{ color: 'var(--color-ios-ink)' }}
     >
       {focusStampLabel({ sentAt, now, timeString, locale })}
-      {isMine ? (
+      {isMine && delivery !== null ? (
         <span className="ml-1 inline-flex align-middle">
-          <Check status={delivery} isMine={isMine} />
+          <Check status={delivery} isMine={isMine} {...(sendStartedAt === undefined ? {} : { sendStartedAt })} />
         </span>
       ) : null}
     </time>

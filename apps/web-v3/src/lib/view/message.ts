@@ -54,6 +54,25 @@ export const deliveryOf = (message: Message): Delivery => {
 };
 
 /**
+ * L'ACCUSÉ QU'UNE PEAU A LE DROIT DE PEINDRE — le SITE UNIQUE qui compose
+ * l'opinion LOCALE (`LocalDelivery`) et l'accusé SERVI (`deliveryOf`). Les
+ * deux peaux l'appellent ; aucune ne recompose la règle chez elle.
+ *
+ * `null` ⇒ NE RIEN PEINDRE. Un envoi ÉCHOUÉ porte `deliveredCount: 0`, que
+ * `deliveryOf` lit — à raison — comme « envoyé » : la coche ✓ s'affichait
+ * donc à côté de la bande « Non envoyé · Réessayer », avec
+ * `title="envoyé"`. Deux affirmations contraires sur le MÊME message, dont
+ * l'une est fausse ; iOS ne peint jamais l'accusé d'un `.sendFailed`
+ * (`BubbleFooter.swift:186-197`). L'échec a déjà sa bande, qui le dit en
+ * toutes lettres et porte le geste de reprise : la colonne méta se tait.
+ */
+export const checkStatusOf = (message: Message, local: LocalDelivery | undefined): Delivery | null => {
+  if (local === 'failed') return null;
+  if (local === 'pending') return 'pending';
+  return deliveryOf(message);
+};
+
+/**
  * La CATÉGORIE d'une pièce jointe, déduite de son type MIME par la fonction du
  * dépôt — la même que celle qui décide du `messageType` à l'envoi. La déduire
  * ici avec un `startsWith('image/')` de plus produirait deux classements pour

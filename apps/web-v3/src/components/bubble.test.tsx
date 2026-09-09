@@ -186,3 +186,101 @@ describe('Bubble — protection (D-23, #5676)', () => {
     expect(render({ ...unveiled, isBlurred: false }, { tail: true })).toContain('aria-pressed');
   });
 });
+
+/**
+ * L'ÉCHEC D'ENVOI, DANS LA BULLE (#5813, revue-correction). Deux défauts que
+ * ces témoins tiennent fermés :
+ *
+ * 1. Un envoi ÉCHOUÉ porte `deliveredCount: 0`, que `deliveryOf` lit — à
+ *    raison — comme « envoyé » : la coche ✓ s'affichait donc, avec
+ *    `title="envoyé"`, à dix pixels de la bande « Non envoyé ». Deux
+ *    affirmations contraires sur le même message. iOS ne peint jamais
+ *    l'accusé d'un `.sendFailed` (`BubbleFooter.swift:186-197`).
+ * 2. `lastError` était capturé sur l'entrée d'outbox et lu par PERSONNE — le
+ *    défaut du cycle 122 du `CLAUDE.md` racine : « qui AFFICHE ce qu'il
+ *    élit ? ». La cause est désormais DANS la bande.
+ */
+const renderMine = (props: {
+  readonly localDelivery?: 'pending' | 'failed';
+  readonly sendFailureReason?: string;
+}) =>
+  renderToStaticMarkup(
+    <Bubble
+      place={placeOf({ ...BASE_MESSAGE, senderId: 'u-viewer', deliveredCount: 0, readCount: 0 })}
+      languages={['fr', 'en']}
+      isGrouped
+      viewerId="u-viewer"
+      onJumpToMessage={() => {}}
+      onRetry={() => {}}
+      {...props}
+    />,
+  );
+
+describe('Bubble — l’échec d’envoi (#5813)', () => {
+  test('échoué : AUCUN accusé peint, et jamais le libellé « envoyé »', () => {
+    const html = renderMine({ localDelivery: 'failed' });
+    expect(html).toContain('Non envoyé');
+    // `Glyph` sert son `title` en `aria-label` (`glyph.tsx`) : c'est CE nom
+    // accessible qui disait « envoyé » sur un message qui ne l'était pas.
+    expect(html).not.toContain('aria-label="envoyé"');
+  });
+
+  test('sans opinion locale, le MÊME message peint bien son accusé « envoyé » — le témoin ci-dessus mesure la GARDE, pas une absence de code', () => {
+    expect(renderMine({})).toContain('aria-label="envoyé"');
+  });
+
+  test('la CAUSE est dans la bande, à l’œil et en info-bulle — jamais un champ mort', () => {
+    const html = renderMine({ localDelivery: 'failed', sendFailureReason: 'envoi refusé pour cette conversation' });
+    expect(html).toContain('Non envoyé — envoi refusé pour cette conversation');
+    expect(html).toContain('title="envoi refusé pour cette conversation"');
+  });
+
+  test('hors ligne (aucune cause) : la bande reste sobre — le bandeau de coupure le dit déjà', () => {
+    const html = renderMine({ localDelivery: 'failed' });
+    expect(html).toContain('Non envoyé</span>');
+    expect(html).not.toContain('Non envoyé —');
+  });
+
+  /**
+   * LA CIBLE TACTILE DE LA BANDE (revue-correction #5813, défaut majeur 7) —
+   * mesurée à 27 px de haut en police 10 px (`text-check`,
+   * `--ios-font-caption`), le SEUL contrôle de réparation du fil sous la
+   * règle « cibles >= 44 px » que le dépôt tient déjà ailleurs
+   * (`routes/conversations.tsx`, l'erreur de liste).
+   */
+  test('la bande de reprise couvre au moins 44 px de haut, en text-mini (jamais text-check, 10 px)', () => {
+    const html = renderMine({ localDelivery: 'failed' });
+    expect(html).toContain('min-height:44px');
+    expect(html).toContain('text-mini');
+    expect(html).not.toContain('text-check');
+  });
+});
+
+/**
+ * UN REFUS PERMANENT N'OFFRE PAS DE REJEU (revue-correction #5813, défaut
+ * majeur 2) — un rejeu ne peut PAS aboutir en rejouant le MÊME appel (403,
+ * 401) : le geste « Réessayer » disparaît, la cause reste. `onRetry` absent
+ * de la bulle EST le signal (`thread.tsx` l'omet des `sendProps` sur
+ * `permanentOf` — pas une propriété booléenne séparée sur `Bubble`).
+ */
+describe('Bubble — un refus permanent perd le geste, jamais la cause (#5813)', () => {
+  const renderPermanent = (reason: string) =>
+    renderToStaticMarkup(
+      <Bubble
+        place={placeOf({ ...BASE_MESSAGE, senderId: 'u-viewer', deliveredCount: 0, readCount: 0 })}
+        languages={['fr', 'en']}
+        isGrouped
+        viewerId="u-viewer"
+        onJumpToMessage={() => {}}
+        localDelivery="failed"
+        sendFailureReason={reason}
+      />,
+    );
+
+  test('sans onRetry : la cause reste affichée, « Réessayer » a disparu, et la bande n’est plus un bouton', () => {
+    const html = renderPermanent('session expirée — reconnectez-vous');
+    expect(html).toContain('Non envoyé — session expirée — reconnectez-vous');
+    expect(html).not.toContain('Réessayer');
+    expect(html).not.toContain('<button');
+  });
+});

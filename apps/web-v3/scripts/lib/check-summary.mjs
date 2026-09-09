@@ -44,6 +44,26 @@ export async function checkLivingSummary({ browser, BASE, CAPTURES, setScheme, e
     expect((await page.locator('main li [data-reading-mode]').count()) === 0, 'aucune rangée plate en mode summary');
     expect((await page.locator('.rounded-bubble').count()) === 0, 'aucune bulle en mode summary');
 
+    /*
+      --- 14.2 bis : LE COMPOSEUR NE SE MONTE JAMAIS EN RÉSUMÉ
+      (revue-correction #5813, défaut BLOQUANT 4). Avant ce correctif, le
+      composeur restait monté SOUS le Résumé : un envoi y partait, la
+      passerelle confirmait, mais l'écran Résumé ne rend AUCUNE rangée de
+      message (14.2, juste au-dessus) — le message publié n'était visible
+      NULLE PART avant le prochain chargement complet du fil. Miroir du
+      recouvrement iOS : `LivingSummaryHost` est posé à `zIndex(80)`,
+      AU-DESSUS du composeur (`zIndex(60)`,
+      `ConversationView.swift:1409-1418, 1516, 1967`).
+    */
+    expect(
+      (await page.getByLabel('Écrire un message').count()) === 0,
+      'en Résumé, aucun champ de saisie n’est atteignable — le composeur ne se monte pas',
+    );
+    expect(
+      (await page.getByLabel('Envoyer').count()) === 0,
+      'en Résumé, aucun bouton d’envoi n’est atteignable',
+    );
+
     // --- 14.3 : en-tête du Résumé — comptes ET ligne partielle.
     const h2 = await page.locator('[data-summary] h2').first().textContent();
     expect((h2 ?? '').trim() === 'Résumé Vivant', `le titre est « Résumé Vivant » (lu : ${JSON.stringify(h2)})`);

@@ -647,6 +647,67 @@ const withConsumption = (messages: readonly Message[]): readonly Message[] => {
 };
 
 /**
+ * LES MESSAGES ENVOYÉS PAR CE POC (#5813, étape 2) — même motif que
+ * `consumedViewOnceIds` ci-dessus : les FIXTURES SONT le produit que tout le
+ * monde voit (staging non branché), donc cette carte EST la couche de
+ * données, la même que le réseau remplacera. `sendMessage` (`./messages.ts`)
+ * y écrit sur chaque envoi en source `fixtures` ; `messagesOf` la resert à
+ * CHAQUE montage de `/c/:conversation`, survivant au démontage de la route —
+ * sans elle, un message envoyé disparaîtrait au premier aller-retour vers `/`.
+ *
+ * `clientMessageId` voyage sur le message stocké (`SentFixtureMessage`, un
+ * SURENSEMBLE de `Message` — pas un champ du domaine partagé, § 3.4 de la
+ * spécification) : la même raison que `LocalMessage` (`lib/send/local-message.ts`).
+ */
+export type SentFixtureMessage = Message & { readonly clientMessageId: string };
+
+const sentMessages = new Map<string, SentFixtureMessage[]>();
+let sentMessageCounter = 0;
+
+export function recordSentMessage(
+  conversationId: string,
+  body: {
+    readonly content: string;
+    readonly originalLanguage: string;
+    readonly clientMessageId: string;
+    readonly replyToId?: string;
+  },
+): SentFixtureMessage {
+  sentMessageCounter += 1;
+  const created: SentFixtureMessage = {
+    ...message({
+      id: `fx-sent-${sentMessageCounter}`,
+      conversationId,
+      senderId: VIEWER_ID,
+      sender: viewer,
+      content: body.content,
+      originalLanguage: body.originalLanguage,
+      translations: [],
+      deliveredCount: 0,
+      readCount: 0,
+      ...(body.replyToId === undefined ? {} : { replyToId: body.replyToId }),
+      createdAt: new Date(),
+    }),
+    clientMessageId: body.clientMessageId,
+  };
+  const existing = sentMessages.get(conversationId) ?? [];
+  sentMessages.set(conversationId, [...existing, created]);
+  return created;
+}
+
+/** TÉMOIN SEUL — même discipline que `resetViewOnceConsumptionForTests`
+ * ci-dessus : `sentMessages` vit pour la durée du PROCESSUS `bun test`. */
+export function resetSentMessagesForTests(): void {
+  sentMessages.clear();
+  sentMessageCounter = 0;
+}
+
+const withSent = (conversationId: string, messages: readonly Message[]): readonly Message[] => {
+  const sent = sentMessages.get(conversationId);
+  return sent === undefined || sent.length === 0 ? messages : [...messages, ...sent];
+};
+
+/**
  * L'HISTORIQUE D'UNE CONVERSATION — vide par défaut, et c'est le point.
  *
  * Le POC servait la même liste de messages à toute adresse `/c/:id`, ce qui
@@ -656,12 +717,13 @@ const withConsumption = (messages: readonly Message[]): readonly Message[] => {
  * première page de résultats.
  */
 export const messagesOf = (conversationId: string): readonly Message[] => {
-  if (conversationId === CONVERSATION_ID) return withConsumption(THREAD_MESSAGES);
-  if (conversationId === RIVER_CONVERSATION_ID) return withConsumption(RIVER_MESSAGES);
-  if (conversationId === PROTECTION_CONVERSATION_ID) return withConsumption(PROTECTION_MESSAGES);
-  if (conversationId === CATCHUP_CONVERSATION_ID) return withConsumption(CATCHUP_MESSAGES);
+  if (conversationId === CONVERSATION_ID) return withSent(conversationId, withConsumption(THREAD_MESSAGES));
+  if (conversationId === RIVER_CONVERSATION_ID) return withSent(conversationId, withConsumption(RIVER_MESSAGES));
+  if (conversationId === PROTECTION_CONVERSATION_ID)
+    return withSent(conversationId, withConsumption(PROTECTION_MESSAGES));
+  if (conversationId === CATCHUP_CONVERSATION_ID) return withSent(conversationId, withConsumption(CATCHUP_MESSAGES));
   const last = CONVERSATIONS.find((c) => c.id === conversationId)?.lastMessage;
-  return last === undefined ? [] : withConsumption([last]);
+  return withSent(conversationId, last === undefined ? [] : withConsumption([last]));
 };
 
 /**
