@@ -31,7 +31,12 @@ final class EngagementProgressResolverTests: XCTestCase {
         XCTAssertEqual(progress.achievements.map(\.key), EngagementAchievementKey.allCases)
         XCTAssertTrue(progress.achievements.allSatisfy { !$0.unlocked && $0.reachedAt == nil })
         XCTAssertEqual(progress.badgesEarned, 0)
-        XCTAssertEqual(progress.badgesTotal, 65)
+        // Le total se CALCULE : 65 valait 13 axes × 5 paliers, et la famille
+        // sociale l'a porté à 85 (#5766). Un nombre en dur accuse le résolveur
+        // quand seul le catalogue a bougé — jumelle exacte du même correctif
+        // côté web (`progression.test.tsx`) et gateway (poids d'axe).
+        XCTAssertEqual(progress.badgesTotal,
+                       EngagementAxisKey.allCases.count * EngagementCatalog.badgeThresholds.count)
         XCTAssertEqual(progress.level.level, 0)
         XCTAssertEqual(progress.level.scale.nextThreshold, 10)
         XCTAssertEqual(progress.streak.scale.nextThreshold, 3)
@@ -113,7 +118,14 @@ final class EngagementProgressResolverTests: XCTestCase {
 
         XCTAssertEqual(groups.map(\.family), EngagementAxisFamily.allCases)
         XCTAssertEqual(groups.flatMap { $0.axes.map(\.axis) }, EngagementAxisKey.allCases)
-        XCTAssertEqual(groups.map { $0.axes.count }, [5, 2, 3, 3])
+        // Une famille par section, et le COMPTE de chacune vient du catalogue :
+        // l'écrire à la main ferait tomber ce témoin au premier axe ajouté, en
+        // accusant l'ordre alors que seul le nombre a changé.
+        XCTAssertEqual(
+            groups.map { $0.axes.count },
+            EngagementAxisFamily.allCases.map { famille in
+                EngagementAxisKey.allCases.filter { $0.family == famille }.count
+            })
     }
 
     // MARK: - Niveau et série
