@@ -65,10 +65,17 @@ final class EngagementRevealTests: XCTestCase {
                          + "catalogue : le badge serait bien dessiné et FAUX.")
     }
 
-    func test_missingMetadata_yieldsNil() {
-        XCTAssertNil(EngagementReveal.from(type: .achievementUnlocked, metadata: nil))
-        XCTAssertNil(EngagementReveal.from(type: .levelUp, metadata: nil))
-        XCTAssertNil(EngagementReveal.from(type: .streakMilestone, metadata: nil))
+    /// Le `nil` est TYPÉ, et ce n'est pas une coquetterie : les deux portes
+    /// n'ayant que le type de leur métadonnée pour se distinguer, un `nil` nu
+    /// est ambigu. Écrire les deux absences dit aussi ce qu'on veut prouver —
+    /// que ni l'une ni l'autre ne fabrique un palier.
+    func test_missingMetadata_yieldsNil_onBothDoors() {
+        let sansRest: NotificationMetadata? = nil
+        let sansSocket: SocketNotificationMetadata? = nil
+        for type in [MeeshyNotificationType.achievementUnlocked, .levelUp, .streakMilestone] {
+            XCTAssertNil(EngagementReveal.from(type: type, metadata: sansRest))
+            XCTAssertNil(EngagementReveal.from(type: type, metadata: sansSocket))
+        }
     }
 
     func test_aNonMilestoneNotification_neverReveals() throws {
