@@ -63,6 +63,16 @@ struct AchievementRevealView: View {
             // « achievement.cercles.conversation.join.size:1000 » ne dirait rien.
             return AchievementCopy.label(famille, tier: palier)
                 ?? AchievementCopy.sectionTitle(famille.section)
+        // Le MOT de l'axe et son seuil — « 100 messages texte ». Un axe que ce
+        // client ne connaît pas encore (ajouté au serveur avant la mise à jour)
+        // rend son seuil seul plutôt qu'une clé technique : « palier 100 » dit
+        // moins, mais ne ment pas et ne fait rien échouer.
+        case .badge(let axe, let seuil):
+            guard let clé = EngagementAxisKey(rawValue: axe) else {
+                return String(localized: "reveal.badge.tier",
+                              defaultValue: "Palier \(seuil)", bundle: .main)
+            }
+            return "\(seuil) \(ProgressionCopy.title(for: clé).lowercased())"
         case .streak(let jours): return ProgressionCopy.streak(jours)
         case .level(let rang): return ProgressionCopy.levelTitle(rang)
         }
@@ -79,6 +89,10 @@ struct AchievementRevealView: View {
             // rangée sur le tableau de bord.
             return String(localized: "reveal.composed.subtitle",
                           defaultValue: "Un palier de plus dans « \(AchievementCopy.sectionTitle(famille.section)) ».",
+                          bundle: .main)
+        case .badge:
+            return String(localized: "reveal.badgeAxis.subtitle",
+                          defaultValue: "Un palier de plus sur cet axe. Le suivant se débloque en continuant.",
                           bundle: .main)
         case .streak(let jours):
             return String(localized: "reveal.streak.subtitle",
@@ -102,6 +116,7 @@ struct AchievementRevealView: View {
         switch reveal {
         case .achievement, .composedAchievement:
             return String(localized: "reveal.badge.achievement", defaultValue: "Succès débloqué", bundle: .main)
+        case .badge: return String(localized: "reveal.badge.badge", defaultValue: "Badge gagné", bundle: .main)
         case .streak: return String(localized: "reveal.badge.streak", defaultValue: "Série tenue", bundle: .main)
         case .level: return String(localized: "reveal.badge.level", defaultValue: "Nouveau niveau", bundle: .main)
         }
@@ -120,6 +135,10 @@ struct AchievementRevealView: View {
         guard occasion.estObtenu else { return MeeshyColors.neutral500 }
         switch reveal {
         case .achievement, .composedAchievement: return MeeshyColors.purple500
+        // La teinte de la grille des badges (#5698) : la célébration et la
+        // grille doivent se reconnaître, sinon on ne retrouve pas ce qu'on
+        // vient de gagner.
+        case .badge: return MeeshyColors.brandPrimary
         case .streak: return MeeshyColors.warning
         case .level: return MeeshyColors.indigo500
         }

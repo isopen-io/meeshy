@@ -34,12 +34,16 @@ struct ProgressionView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
 
-    /// La PORTE ouverte, s'il y en a une (#5843).
+    /// **La PORTE est POUSSÉE, plus présentée** (#5843, directive porteur
+    /// 2026-09-09).
     ///
-    /// Une destination et non un booléen par section : trois booléens
-    /// autoriseraient deux pages ouvertes en même temps, un état que la
-    /// navigation ne sait pas rendre et que rien n'interdirait.
-    @State private var destination: ProgressionSection?
+    /// Les trois sections s'ouvraient en `.sheet` : une feuille INTERROMPT —
+    /// elle se ferme vers le bas, n'entre pas dans l'historique, et le
+    /// glissement depuis le bord gauche n'y fait rien. Poussée dans la pile,
+    /// la page reçoit les trois gratuitement, et c'est le modèle que servent
+    /// déjà l'Android et le web. L'état local disparaît avec la feuille : la
+    /// pile EST l'état, et deux pages ne peuvent pas s'y ouvrir en même temps.
+    @EnvironmentObject private var router: Router
 
     /// LE PALIER À CÉLÉBRER quand on touche le hero du dernier succès.
     ///
@@ -72,14 +76,6 @@ struct ProgressionView: View {
                 reveal: palier.reveal,
                 occasion: .consultation(unlocked: palier.unlocked, reachedAt: palier.reachedAt)
             ) { reveal = nil }
-        }
-        .sheet(item: $destination) { section in
-            ProgressionSectionPage(
-                section: section,
-                progress: viewModel.progress,
-                isDark: isDark,
-                onClose: { destination = nil }
-            )
         }
     }
 
@@ -187,7 +183,7 @@ struct ProgressionView: View {
                                 section: section,
                                 progress: progress,
                                 isDark: isDark,
-                                onOpen: { destination = section }
+                                onOpen: { router.push(.progressionSection(section)) }
                             )
                         }
                     }

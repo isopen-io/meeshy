@@ -156,6 +156,9 @@ struct iPadPanelDestination: View {
         case .progression:
             ProgressionView()
                                 .navigationBarHidden(true)
+        case .progressionSection(let section):
+            ProgressionSectionPage(section: section)
+                .navigationBarHidden(true)
         case .links:
             LinksHubView()
                         case .affiliate:

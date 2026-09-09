@@ -26,6 +26,10 @@ public enum EngagementReveal: Equatable, Sendable, Identifiable {
         // un même identifiant finiraient par ne plus désigner le même objet.
         case .composedAchievement(let famille, let palier):
             return "achievement:\(famille.key(tier: palier))"
+        // La clé de palier que la passerelle grave elle-même
+        // (`badgeMilestoneKey`) : deux recettes pour un identifiant finiraient
+        // par ne plus désigner le même objet.
+        case .badge(let axe, let seuil): return "badge:\(axe):\(seuil)"
         case .streak(let jours): return "streak:\(jours)"
         case .level(let rang): return "level:\(rang)"
         }
@@ -37,6 +41,12 @@ public enum EngagementReveal: Equatable, Sendable, Identifiable {
     /// a besoin des deux pour composer le libellé, et les redériver à chaque
     /// lecture ferait deux analyses de la même clé.
     case composedAchievement(family: AchievementFamily, tier: Int)
+    /// **Un BADGE — l'axe et son seuil.** Il ne porte pas de clé de succès : la
+    /// passerelle l'annonce par `axisKey` + `threshold`, et c'est cette paire
+    /// qui l'identifie. L'axe reste une CHAÎNE, comme partout ailleurs dans les
+    /// modèles d'engagement : un axe ajouté au serveur avant la mise à jour
+    /// d'un client doit pouvoir s'afficher, jamais faire échouer un décodage.
+    case badge(axis: String, threshold: Int)
     case streak(days: Int)
     case level(Int)
 
@@ -53,7 +63,7 @@ public enum EngagementReveal: Equatable, Sendable, Identifiable {
     /// `level_up` porte `threshold` ET `level`, et c'est le RANG qui se
     /// célèbre. Lire `threshold` d'abord en ferait une série de 400 jours.
     public static func from(type: MeeshyNotificationType, metadata: NotificationMetadata?) -> EngagementReveal? {
-        from(type: type, achievementKey: metadata?.achievementKey,
+        from(type: type, achievementKey: metadata?.achievementKey, axisKey: metadata?.axisKey,
              threshold: metadata?.threshold, level: metadata?.level)
     }
 
@@ -63,22 +73,32 @@ public enum EngagementReveal: Equatable, Sendable, Identifiable {
     /// ne font que la nourrir. Les laisser diverger ferait célébrer un palier
     /// reçu par la liste des notifications et pas le même reçu en direct.
     public static func from(type: MeeshyNotificationType, metadata: SocketNotificationMetadata?) -> EngagementReveal? {
-        from(type: type, achievementKey: metadata?.achievementKey,
+        from(type: type, achievementKey: metadata?.achievementKey, axisKey: metadata?.axisKey,
              threshold: metadata?.threshold, level: metadata?.level)
     }
 
     /// **La règle, à son site unique.**
     public static func from(
-        type: MeeshyNotificationType, achievementKey: String?, threshold: Int?, level: Int?
+        type: MeeshyNotificationType, achievementKey: String?, axisKey: String?, threshold: Int?, level: Int?
     ) -> EngagementReveal? {
         switch type {
-        case .achievementUnlocked, .legacyAchievementUnlocked, .badgeEarned:
+        case .achievementUnlocked, .legacyAchievementUnlocked:
             guard let brut = achievementKey else { return nil }
             // Les CINQ legacy d'abord : leur clé n'a pas la forme composée, donc
             // les deux lectures ne peuvent pas se disputer une même chaîne.
             if let clé = EngagementAchievementKey(rawValue: brut) { return .achievement(clé) }
             guard let lu = AchievementCatalog.parse(key: brut) else { return nil }
             return .composedAchievement(family: lu.family, tier: lu.tier)
+
+        // **Le badge a sa propre branche, et c'est le fond du défaut.** Il
+        // partageait celle des succès, qui commence par `guard let achievementKey` :
+        // une notification de badge n'en porte JAMAIS, donc la branche rendait
+        // `nil` à tous les coups pendant que `announcingTypes` déclarait le
+        // contraire. Un `case` dans un `switch` DÉCLARE que le cas est traité —
+        // il ne prouve pas qu'il l'est.
+        case .badgeEarned:
+            guard let axe = axisKey, !axe.isEmpty, let seuil = threshold, seuil > 0 else { return nil }
+            return .badge(axis: axe, threshold: seuil)
 
         case .levelUp:
             guard let rang = level, rang > 0 else { return nil }
@@ -98,6 +118,8 @@ public enum EngagementReveal: Equatable, Sendable, Identifiable {
     public var symbolName: String {
         switch self {
         case .achievement, .composedAchievement: return "rosette"
+        // Le symbole que la grille des badges emploie déjà pour eux (#5698).
+        case .badge: return "medal.fill"
         case .streak: return "flame.fill"
         case .level: return "star.circle.fill"
         }
@@ -118,7 +140,7 @@ public enum EngagementReveal: Equatable, Sendable, Identifiable {
     public var celebratesUnprompted: Bool {
         switch self {
         case .achievement, .composedAchievement: return true
-        case .streak, .level: return false
+        case .badge, .streak, .level: return false
         }
     }
 }
