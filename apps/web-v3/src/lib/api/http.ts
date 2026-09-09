@@ -66,6 +66,17 @@ export type ApiFailure = {
 export type ApiSuccess<T> = {
   readonly ok: true;
   readonly data: T;
+  /**
+   * LE CODE HTTP DU SUCCÈS (#5814) — optionnel : un appelant qui construit
+   * un `ApiResult` à la main (un témoin, `fixtures-reactions.ts`) n'a rien à
+   * fournir qu'il n'a pas. `createHttpTransport` le pose TOUJOURS
+   * (`response.status`, connu à cet instant). Le SEUL consommateur qui en a
+   * besoin aujourd'hui : `reactionOutcome` (`api/reactions.ts`) distingue
+   * 201 (créée) de 200 (`addResult.unchanged`,
+   * `services/gateway/src/routes/reactions.ts:181-187`) — une distinction
+   * que ni `data` ni `pagination` ne portent.
+   */
+  readonly status?: number;
   readonly pagination?: PaginationMeta;
   /**
    * #5650 (F2/§3.3) — la pagination CURSEUR d'une route qui la sert à côté de
@@ -83,7 +94,7 @@ export type ApiSuccess<T> = {
 export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
 
 export type HttpRequest = {
-  readonly method: 'GET' | 'PUT' | 'POST';
+  readonly method: 'GET' | 'PUT' | 'POST' | 'DELETE';
   readonly path: string;
   readonly body?: unknown;
   /** Transmis tel quel à `fetch` — l'appelant (TanStack Query, un effet de
@@ -283,6 +294,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
       return {
         ok: true,
         data: envelope.data as T,
+        status: response.status,
         ...(envelope.pagination !== undefined ? { pagination: envelope.pagination as PaginationMeta } : {}),
         ...(envelope.cursorPagination !== undefined
           ? { cursorPagination: envelope.cursorPagination as CursorPaginationMeta }

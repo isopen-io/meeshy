@@ -230,8 +230,12 @@ services:
       - ZMQ_TRANSLATOR_SUB_PORT=5558
       - NODE_ENV=production
       - DOMAIN=staging.${DOMAIN:-meeshy.me}
-      - CORS_ORIGINS=https://staging.${DOMAIN:-meeshy.me},https://gate.staging.${DOMAIN:-meeshy.me}
-      - ALLOWED_ORIGINS=https://staging.${DOMAIN:-meeshy.me},https://gate.staging.${DOMAIN:-meeshy.me}
+      # Les deux origines VIRTUELLES des coques Capacitor de web-v3 (#5815) — iOS
+      # `capacitor://localhost` (`CAPInstanceDescriptor.m`), Android `https://localhost`
+      # (`CapConfig.java`, `androidScheme: https`). Gardées par `cors-origins.test.ts`.
+      # Jamais dans `DEFAULT_ALLOWED_ORIGINS`.
+      - CORS_ORIGINS=https://staging.${DOMAIN:-meeshy.me},https://gate.staging.${DOMAIN:-meeshy.me},capacitor://localhost,https://localhost
+      - ALLOWED_ORIGINS=https://staging.${DOMAIN:-meeshy.me},https://gate.staging.${DOMAIN:-meeshy.me},capacitor://localhost,https://localhost
       - FRONTEND_URL=https://staging.${DOMAIN:-meeshy.me}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET absente sur l hote. Vide, la passerelle signerait avec un secret publie dans le depot}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}

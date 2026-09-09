@@ -115,9 +115,11 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
     /// generous enough to clear the widest call site (six labelled arguments).
     /// Les quatre feuilles, nommées. La liste est ADDITIVE : en retirer une
     /// entrée sans la remplacer perd une présentation de la mesure, en silence.
+    // Depuis #5837 la republication depuis la bulle est UN site pour les deux
+    // racines : `RootStatusBubbleLayer` (RootLayers/RootSharedLayers.swift),
+    // que RootView et iPadRootView montent toutes deux.
     private static let presentationFiles = [
-        "Meeshy/Features/Main/Views/RootView.swift",
-        "Meeshy/Features/Main/Views/iPadRootView.swift",
+        "Meeshy/Features/Main/Views/RootLayers/RootSharedLayers.swift",
         "Meeshy/Features/Main/Views/RootViewComponents.swift",
         "Meeshy/Features/Main/Views/ConversationListView.swift",
     ]
@@ -153,11 +155,18 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
         // covering it. C'est un `XCTAssertEqual(…, 4)` : zéro site le fait ROUGIR,
         // pas verdir — il n'a besoin d'aucun renfort.
         XCTAssertEqual(
-            try presentationSites().count, 4,
-            "Expected exactly four MoodComposerDoor presentations (one in RootView, one in " +
-            "iPadRootView, one in RootViewComponents, one in ConversationListView). Update this " +
-            "suite when an entry point is added."
+            try presentationSites().count, 3,
+            "Expected exactly three MoodComposerDoor presentations (one in RootStatusBubbleLayer, " +
+            "shared by RootView and iPadRootView; one in RootViewComponents; one in " +
+            "ConversationListView). Update this suite when an entry point is added."
         )
+        for root in ["Meeshy/Features/Main/Views/RootView.swift",
+                     "Meeshy/Features/Main/Views/iPadRootView.swift"] {
+            XCTAssertTrue(
+                try code(root).contains(".modifier(RootStatusBubbleLayer("),
+                "\(root) doit monter RootStatusBubbleLayer — sinon la republication depuis la bulle n'a plus de porte."
+            )
+        }
     }
 
     /// **Le recâblage du lot 4.6, gardé du bon côté.** Les quatre feuilles ne
@@ -189,8 +198,7 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
     /// silencieux, et aucun compilateur ne les voit.
     func test_everyPresentationSeedsWhatItKnows_andNothingElse() throws {
         let republication = [
-            "Meeshy/Features/Main/Views/RootView.swift",
-            "Meeshy/Features/Main/Views/iPadRootView.swift",
+            "Meeshy/Features/Main/Views/RootLayers/RootSharedLayers.swift",
         ]
         for file in republication {
             let swift = try code(file)

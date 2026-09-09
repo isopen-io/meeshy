@@ -185,6 +185,19 @@ enum ProgressionCopy {
             : String(localized: "progression.meesh.minted.many", defaultValue: "\(minted) frappées depuis toujours", bundle: .main)
     }
 
+    /// Ce que l'entrée de l'en-tête ANNONCE au lecteur d'écran (#5839).
+    ///
+    /// Le solde y est REDIT alors qu'il est déjà à l'écran : la capsule montre
+    /// un chiffre nu à côté d'une médaille, ce qui ne dit pas de quoi il est le
+    /// nombre. Un libellé qui se contente de « Meesh » perdrait la valeur.
+    static func meeshEntryA11y(_ balance: Int) -> String {
+        String(
+            localized: "progression.meesh.entry.a11y",
+            defaultValue: "\(balance) Meesh — voir le détail",
+            bundle: .main
+        )
+    }
+
     /// L'action de conversion — le prix vient du SERVEUR, jamais d'une constante locale.
     static func meeshMintAction(_ cost: Int) -> String {
         String(
@@ -210,17 +223,27 @@ enum ProgressionCopy {
         return "\(manque) \(plancher)"
     }
 
-    /// « 5 jours d’affilée » / « Aucune série en cours ».
+    /// « 5 jours d’affilée » / « 1 jour d’affilée » / « Aucune série en cours ».
+    ///
+    /// Le singulier a sa propre clé, comme le solde de Meeshes : une forme
+    /// unique écrivait « 1 jours d’affilée » sur le hero de la flamme, et aucun
+    /// témoin ne le disait — toutes les fixtures valaient 5, 6 ou 11.
     static func streak(_ currentDays: Int) -> String {
         guard currentDays > 0 else {
             return String(localized: "progression.streak.none", defaultValue: "Aucune série en cours", bundle: .main)
+        }
+        if currentDays == 1 {
+            return String(localized: "progression.streak.days.one", defaultValue: "1 jour d’affilée", bundle: .main)
         }
         return String(localized: "progression.streak.days", defaultValue: "\(currentDays) jours d’affilée", bundle: .main)
     }
 
     /// « Record : 12 jours » — la série la plus longue, qui tient les jalons pour atteints.
     static func streakRecord(_ longestDays: Int) -> String {
-        String(localized: "progression.streak.record", defaultValue: "Record : \(longestDays) jours", bundle: .main)
+        if longestDays == 1 {
+            return String(localized: "progression.streak.record.one", defaultValue: "Record : 1 jour", bundle: .main)
+        }
+        return String(localized: "progression.streak.record", defaultValue: "Record : \(longestDays) jours", bundle: .main)
     }
 
     /// La phrase de la barre — ce qu'il reste AVANT le prochain palier, depuis
@@ -240,6 +263,9 @@ enum ProgressionCopy {
             let nextLevel = (level ?? scale.reachedCount) + 1
             return String(localized: "progression.next.level", defaultValue: "Encore \(remaining) points avant le niveau \(nextLevel)", bundle: .main)
         case .streak:
+            if remaining == 1 {
+                return String(localized: "progression.next.streak.one", defaultValue: "Encore 1 jour avant le jalon de \(next)", bundle: .main)
+            }
             return String(localized: "progression.next.streak", defaultValue: "Encore \(remaining) jours avant le jalon de \(next)", bundle: .main)
         }
     }
@@ -247,6 +273,14 @@ enum ProgressionCopy {
     /// « Obtenu le 3 septembre 2026 », ou `nil` quand aucune trace gravée ne date le palier.
     static func obtained(_ reachedAt: String?) -> String? {
         guard let date = EngagementProgressResolver.reachedDate(reachedAt) else { return nil }
+        return obtained(date: date)
+    }
+
+    /// La même phrase à partir d'une `Date` déjà décodée — pour les appelants
+    /// qui en tiennent une. Sans cette porte, ils ré-encodaient en ISO pour
+    /// faire re-décoder ici, un aller-retour qui reperdait la fraction de
+    /// seconde en chemin.
+    static func obtained(date: Date) -> String {
         let formatted = date.formatted(date: .long, time: .omitted)
         return String(localized: "progression.obtained", defaultValue: "Obtenu le \(formatted)", bundle: .main)
     }
@@ -259,4 +293,52 @@ enum ProgressionCopy {
         }
         return String(localized: "progression.a11y.tier.pending", defaultValue: "Palier \(tier.threshold) à atteindre", bundle: .main)
     }
+
+    // MARK: - Le hub (#5838, #5839, #5841, #5842)
+
+    /// L'en-tête du hero quand un succès a DÉJÀ été décroché.
+    static let heroLastTitle = String(localized: "progression.hero.last", defaultValue: "Dernier succès", bundle: .main)
+
+    /// Et quand il n'y en a AUCUN — le hero ne disparaît pas, il change de propos.
+    static let heroFirstTitle = String(localized: "progression.hero.first", defaultValue: "Premier succès", bundle: .main)
+
+    /// Le bandeau quand le hero montre un palier PAS ENCORE obtenu (#5831).
+    /// Même clé que la carte qu'il remplace : le mot ne change pas parce que
+    /// la vue qui le rend a changé.
+    static let heroNextTitle = String(localized: "progression.hero.next", defaultValue: "Prochain succès", bundle: .main)
+
+    static let heroFirstHint = String(
+        localized: "progression.hero.first.hint",
+        defaultValue: "Envoyez un message — le premier tombe tout de suite.",
+        bundle: .main
+    )
+
+    /// L'indice VoiceOver du hero touchable — il annonce l'EFFET, pas le geste.
+    static let heroRevealHint = String(
+        localized: "progression.hero.reveal.hint",
+        defaultValue: "Revoir la célébration de ce succès",
+        bundle: .main
+    )
+
+    static let elansTitle = String(localized: "progression.elans.title", defaultValue: "Vos élans", bundle: .main)
+
+    static let elansEmpty = String(
+        localized: "progression.elans.empty",
+        defaultValue: "Publiez une story, un post, un réel ou lancez une conversation : chaque famille tenue en même temps multiplie vos points.",
+        bundle: .main
+    )
+
+    static let elansHint = String(
+        localized: "progression.elans.hint",
+        defaultValue: "Tenez une famille de plus en même temps pour déclencher le multiplicateur.",
+        bundle: .main
+    )
+
+    static let badgesTitle = String(localized: "progression.section.badges", defaultValue: "Badges", bundle: .main)
+
+    static let achievementsTitle = String(
+        localized: "progression.section.achievements",
+        defaultValue: "Succès",
+        bundle: .main
+    )
 }

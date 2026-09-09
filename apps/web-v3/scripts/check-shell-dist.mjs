@@ -36,11 +36,12 @@
  */
 import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { readFileSync, readdirSync, rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
+import { allFiles } from './lib/files.mjs';
 import { INSTITUTIONAL_ROUTES } from './lib/institutional-routes.mjs';
 
 const APP = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
@@ -148,13 +149,6 @@ export function auditShellDist(html, files) {
   }
 
   return violations;
-}
-
-function allFiles(dir) {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(dir, entry.name);
-    return entry.isDirectory() ? allFiles(path) : [path];
-  });
 }
 
 const MIME = {

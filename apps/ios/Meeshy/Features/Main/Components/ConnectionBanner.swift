@@ -218,7 +218,13 @@ struct ConnectionBanner: View {
                 dotStyle: isTerminalFailure ? .error : .brand,
                 source: item.source,
                 // A permanently-failed row is not in flight — no activity dots.
-                showsActivityDots: !isTerminalFailure
+                showsActivityDots: !isTerminalFailure,
+                // **Une ligne terminale se RELANCE d'un doigt** (#5830).
+                // `item.id` EST l'identifiant de la ligne outbox : la pastille
+                // le portait déjà sans jamais s'en servir, et le tap tombait
+                // dans `case .unknown: break` chez les deux racines — une
+                // publication échouée était un mur.
+                retryOutboxId: StuckPublicationRetry.retryableOutboxId(for: item)
             ))
         }
 
@@ -283,7 +289,9 @@ struct ConnectionBanner: View {
             EmptyView()
         } else {
             ZStack(alignment: .top) {
-                SyncPill(entries: entries, onTap: onItemTap)
+                SyncPill(entries: entries,
+                         onTap: onItemTap,
+                         onRetry: { StuckPublicationRetry.retry(outboxId: $0) })
                     .opacity(announcement == nil ? 1 : 0)
 
                 if let announcement {

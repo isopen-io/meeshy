@@ -30,6 +30,8 @@ import { extname, join, normalize } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
+import { allFiles } from './lib/files.mjs';
+import { FIXTURE_MARKERS } from './lib/fixture-markers.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const OUT_DIR = 'dist-gateway';
@@ -111,6 +113,32 @@ async function main() {
     if (ok) console.log(`  ok    ${what}`);
     else failures.push(what);
   };
+
+  /**
+   * AUCUNE FIXTURE NE VOYAGE DANS UNE CONSTRUCTION `gateway` (revue #5815).
+   *
+   * `__FIXTURES__` (`vite.config.ts` § `define`) + la règle d'élagage qui
+   * déclare `src/lib/api/fixtures*.ts` sans effet de bord font disparaître le
+   * jeu de données ENTIER — mesuré : le morceau partagé par la liste et le
+   * fil passe de 16,53 à 10,03 Ko gzip. C'est ce gate qui le TIENT : la
+   * mesure manuelle qui le précédait ne regardait que `{index,core}-*.js` et
+   * ratait `thread-*.js` et `use-reader-*.js`, où les fixtures vivaient.
+   *
+   * Balayage de TOUT le dist (jamais d'un motif de nom : un morceau neuf
+   * s'appellerait autrement, et c'est précisément le morceau neuf qu'on veut
+   * attraper), sur la liste PARTAGÉE avec `build-shells.mjs`.
+   */
+  const carriers = [];
+  for (const file of allFiles(OUT)) {
+    if (!/\.(?:js|html|json)$/.test(file)) continue;
+    const text = await readFile(file, 'utf8');
+    const marker = FIXTURE_MARKERS.find((m) => text.includes(m));
+    if (marker !== undefined) carriers.push(`${file.slice(OUT.length + 1)} (« ${marker} »)`);
+  }
+  check(
+    carriers.length === 0,
+    `aucun marqueur de fixture dans le dist gateway${carriers.length === 0 ? '' : ` — ${carriers.join(', ')}`}`,
+  );
 
   /** Le haut de `#contenu` sur un corpus PEUPLÉ — la référence contre
    * laquelle le corpus VIDE se mesure (bloc 4) : sans le rail, l'écran doit

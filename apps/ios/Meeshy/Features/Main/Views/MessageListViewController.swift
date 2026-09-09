@@ -3380,7 +3380,8 @@ extension MessageListViewController {
     }
 
     private func reconfigureFocalDetailsNow() {
-        guard let dataSource else { return }
+        // La VALEUR ne sert pas — seule son existence conditionne la suite.
+        guard dataSource != nil else { return }
         if focalReconfigureInFlight {
             focalDetailsPendingAfterApply = true
             return

@@ -231,3 +231,99 @@ describe('FocalRow — l’échec d’envoi (#5813)', () => {
     expect(html).toContain('Réessayer');
   });
 });
+
+/**
+ * `displayLanguage` / `myReactions` / `selected` (#5814, T12) — le menu du
+ * message (Traduire, la capsule « mienne », le mode sélection).
+ */
+describe('FocalRow — displayLanguage, myReactions, selected (#5814, T12)', () => {
+  const translated: Message = {
+    ...BASE_MESSAGE,
+    id: 'm2',
+    originalLanguage: 'fr',
+    content: 'Oui, tout est passé vers 3 h.',
+    translations: [
+      {
+        id: 't-m2-en',
+        messageId: 'm2',
+        targetLanguage: 'en',
+        translatedContent: 'Yes, everything went through around 3am.',
+        translationModel: 'medium',
+        createdAt: new Date('2026-09-08T09:00:00.000Z'),
+      },
+    ],
+    reactionSummary: { '👍': 1 },
+  };
+
+  const renderWith = (extra: {
+    displayLanguage?: string;
+    myReactions?: readonly string[];
+    selected?: boolean;
+    onToggleSelect?: (id: string) => void;
+  }) =>
+    renderToStaticMarkup(
+      <FocalRow
+        mode="focal"
+        place={placeOf(translated)}
+        languages={['es', 'en']}
+        viewerId="u-viewer"
+        onJumpToMessage={() => {}}
+        {...extra}
+      />,
+    );
+
+  test('sans displayLanguage : servi au rang du Prisme (en), lang="en"', () => {
+    const html = renderWith({});
+    expect(html).toContain('lang="en"');
+    expect(html).toContain('Yes, everything went through around 3am.');
+  });
+
+  test('displayLanguage="fr" ⇒ lang="fr" et l’ORIGINAL, même si le Prisme servirait "en"', () => {
+    const html = renderWith({ displayLanguage: 'fr' });
+    expect(html).toContain('lang="fr"');
+    expect(html).toContain('Oui, tout est passé vers 3 h.');
+  });
+
+  test('displayLanguage = la langue DÉJÀ servie ⇒ rendu identique (aucun panneau de plus)', () => {
+    expect(renderWith({ displayLanguage: 'en' })).toBe(renderWith({}));
+  });
+
+  test('myReactions inclut l’emoji ⇒ la capsule se dit « la vôtre »', () => {
+    expect(renderWith({ myReactions: ['👍'] })).toContain('la vôtre');
+  });
+
+  test('myReactions ne contient PAS l’emoji ⇒ aucune mention « la vôtre »', () => {
+    expect(renderWith({ myReactions: ['❤️'] })).not.toContain('la vôtre');
+  });
+
+  /**
+   * `aria-pressed` A ÉTÉ RETIRÉ DE LA CAPSULE (revue #5814) — il n'est défini
+   * que sur `role="button"` : sur le `<span>` de la capsule il annonçait un
+   * bouton bascule que rien ne bascule, sur CHAQUE capsule du fil. Le témoin
+   * COMPTE les occurrences plutôt que de chercher la chaîne : les drapeaux du
+   * pied sont, eux, de vrais `<button aria-pressed>` — un `not.toContain`
+   * global mesurerait ceux-là et ne pourrait jamais tomber.
+   */
+  test('la capsule n’ajoute AUCUN aria-pressed (les drapeaux gardent le leur)', () => {
+    const countOf = (html: string) => html.split('aria-pressed').length - 1;
+    expect(countOf(renderWith({ myReactions: ['👍'] }))).toBe(countOf(renderWith({})));
+  });
+
+  test('selected=true ⇒ une coche role="checkbox" aria-checked="true"', () => {
+    const html = renderWith({ selected: true, onToggleSelect: () => {} });
+    expect(html).toContain('role="checkbox"');
+    expect(html).toContain('aria-checked="true"');
+  });
+
+  test('selected=false ⇒ la coche existe, décochée', () => {
+    const html = renderWith({ selected: false, onToggleSelect: () => {} });
+    expect(html).toContain('role="checkbox"');
+    expect(html).toContain('aria-checked="false"');
+  });
+
+  test('selected non fourni ⇒ aucune coche, et aucun aria-selected (invalide ici)', () => {
+    const html = renderWith({});
+    expect(html).not.toContain('role="checkbox"');
+    expect(html).not.toContain('aria-selected');
+  });
+});

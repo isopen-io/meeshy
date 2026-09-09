@@ -922,9 +922,11 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
                 )
             }
         }
+        // Depuis #5837 les deux racines partagent UN montage de republication
+        // (`RootStatusBubbleLayer`) : un seul site mesuré est le compte réel.
         XCTAssertGreaterThanOrEqual(
-            republicationsMesurees, 2,
-            "Moins de deux montages de republication trouvés — la garde ne mesurerait presque RIEN."
+            republicationsMesurees, 1,
+            "Aucun montage de republication trouvé — la garde ne mesurerait RIEN."
         )
     }
 

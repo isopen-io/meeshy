@@ -30,7 +30,8 @@ import {
   elanInputsFromRows,
   ELAN_WINDOW_DAYS,
 } from '@meeshy/shared/utils/engagement-elan';
-import { engagementAxisFamily, isEngagementAxisKey } from '@meeshy/shared/types/engagement';
+import { engagementAxisFamily, isEngagementAxisKey, maxEngagementMilestonesPerUser } from '@meeshy/shared/types/engagement';
+import { ACHIEVEMENT_FAMILIES } from '@meeshy/shared/types/achievement-families';
 import { AchievementReachService } from '../../services/achievements/AchievementReachService';
 import { GlobalAchievements } from '../../services/achievements/GlobalAchievements';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -141,12 +142,17 @@ const engagementResponseSchema = {
             floorPoints: { type: 'number' },
             missingPoints: { type: 'number' },
             mintCost: { type: 'number' },
+            firstMintedAt: { type: ['string', 'null'] },
+            lastMintedAt: { type: ['string', 'null'] },
           },
         },
       },
     },
   },
 } as const;
+
+/** Tout ce qu'un compte PEUT porter — calculé, donc jamais périmé. */
+const PLAFOND_PALIERS = maxEngagementMilestonesPerUser(ACHIEVEMENT_FAMILIES);
 
 export async function meEngagementRoutes(fastify: FastifyInstance) {
   fastify.get(
@@ -184,7 +190,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
         // fermer un écran de consultation.
         await new GlobalAchievements(fastify.prisma).sweep(userId).catch(() => undefined);
 
-        const [user, counters, milestones] = await Promise.all([
+        const [user, counters, milestones, frappes] = await Promise.all([
           fastify.prisma.user.findUnique({ where: { id: userId }, select: USER_ENGAGEMENT_SELECT }),
           // `take` borné, jamais retiré (#4165 critère 4) — même si le
           // maximum THÉORIQUE tient déjà sous la borne : au plus
@@ -198,15 +204,34 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
             select: { axisKey: true, count: true, points: true, updatedAt: true },
             take: 100,
           }),
-          // Idem : au plus (nb axes × BADGE_THRESHOLDS) + STREAK_THRESHOLDS +
-          // LEVEL_THRESHOLDS + ENGAGEMENT_ACHIEVEMENT_KEYS lignes par
-          // utilisateur (13×5 + 6 + 6 + 5 = 82 aujourd'hui) — `take` large
-          // devant ce plafond réel, pas un chiffre choisi au hasard.
+          // `take` DÉRIVÉ du catalogue, jamais écrit à la main (#5847). Le
+          // commentaire d'origine annonçait « 82 aujourd'hui » et la borne
+          // valait 200 : justes au moment de leur écriture, faux depuis que
+          // quatre axes sociaux (#5766) et cent quatorze succès composés
+          // (#5758) sont arrivés — plafond réel 216. Avec `desc`, c'étaient
+          // les paliers les plus ANCIENS qui tombaient : les tout premiers
+          // succès de l'utilisateur, absents de son tableau de bord sans que
+          // rien ne le signale.
           fastify.prisma.engagementMilestone.findMany({
             where: { userId },
             select: { milestoneType: true, milestoneKey: true, reachedAt: true },
             orderBy: { reachedAt: 'desc' },
-            take: 200,
+            take: PLAFOND_PALIERS,
+          }),
+          // LES BORNES DU REGISTRE DE FRAPPE (#5839).
+          //
+          // `reason: 'mint'` n'est pas un détail : le registre porte AUSSI les
+          // dons reçus, les octrois et les sanctions. Sans ce filtre, le
+          // sous-menu annoncerait « première frappe » la date d'un cadeau — un
+          // mensonge que rien ne signalerait, puisque la date, elle, serait
+          // vraie.
+          //
+          // Un `aggregate` plutôt que deux `findFirst` : un seul aller-retour,
+          // servi par l'index `[userId, createdAt]` déjà déclaré au modèle.
+          fastify.prisma.meeshLedger.aggregate({
+            where: { userId, reason: 'mint' },
+            _min: { createdAt: true },
+            _max: { createdAt: true },
           }),
         ]);
 
@@ -277,6 +302,8 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
             floorPoints: plan.floorPoints,
             missingPoints: plan.missingPoints,
             mintCost: MEESH_MINT_COST,
+            firstMintedAt: frappes._min.createdAt?.toISOString() ?? null,
+            lastMintedAt: frappes._max.createdAt?.toISOString() ?? null,
           },
 });
       } catch (error) {

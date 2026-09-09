@@ -132,6 +132,10 @@ const USED = [
  * et le gate de poids ne le compte pas dans la première peinture.
  */
 const PROGRESSION = [
+  // `caret-right` n'entre PAS au socle : il ne sert qu'aux entrées de section
+  // du hub (#5843). Même règle que les autres — un glyphe d'un seul écran ne
+  // se paie pas au démarrage à froid de tous les autres.
+  'caret-right',
   'fire',
   'star',
   'medal',
@@ -211,4 +215,42 @@ emit({
   constant: 'PROGRESSION_GLYPHS',
   type: 'ProgressionGlyphName',
   role: "LE JEU D'ECRAN de /me/progression (#5547) : charge avec sa route, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DU MENU DU MESSAGE (#5814) — miroir
+ * `MessageActionsMenu.swift:96-111` : Selectionner (check-circle), Traduire
+ * (globe), Copier (copy), Composer (magic-wand), Plus... (dots-three).
+ * `magic-wand` et `globe` existent deja dans le jeu PROGRESSION : deux jeux
+ * d'ecran distincts peuvent extraire le meme glyphe phosphor, chacun dans SON
+ * module — ils ne se chargent jamais ensemble (le fil et /me/progression ne
+ * sont pas la meme route), donc aucun octet n'est paye deux fois au meme
+ * demarrage.
+ */
+const THREAD_MENU = ['check-circle', 'globe', 'copy', 'magic-wand', 'dots-three'];
+
+emit({
+  ids: THREAD_MENU,
+  output: join(HERE, '../src/components/glyphs-thread-menu.ts'),
+  constant: 'THREAD_MENU_GLYPHS',
+  type: 'ThreadMenuGlyphName',
+  role: "LE JEU D'ECRAN du menu du message (#5814) : charge avec le chunk du fil, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DES ROUTES D'AUTHENTIFICATION (#5816) — le heros de
+ * MagicLinkView (`wand.and.stars`), l'icone d'email du champ (`envelope`,
+ * distinct de `envelope-open` du socle, qui reste l'etat "attente") et le
+ * bouton "Renvoyer" (`arrow.clockwise`). Charge avec `/auth/magic-link` et
+ * `/forgot-password`, jamais dans le socle : ces trois glyphes ne servent
+ * qu'a un visiteur SANS session, un chemin rare compare au fil.
+ */
+const AUTH = ['envelope', 'magic-wand', 'arrow-clockwise'];
+
+emit({
+  ids: AUTH,
+  output: join(HERE, '../src/components/glyphs-auth.ts'),
+  constant: 'AUTH_GLYPHS',
+  type: 'AuthGlyphName',
+  role: "LE JEU D'ECRAN des routes d'authentification (#5816) : charge avec elles, jamais dans le socle.",
 });

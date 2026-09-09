@@ -14,6 +14,12 @@
 [define]
 "__SHELL__" = "false"
 "__BENCH__" = "0"
+# `__FIXTURES__` — vrai sous `bun test` : c'est la valeur du build NORMAL
+# (`VITE_DATA_SOURCE` absente ⇒ `fixtures`), et tous les témoins lisent la
+# source `fixtures`. Un témoin qui a besoin de la construction `gateway`
+# bouchonne son propre appel (`source: 'gateway'` en paramètre), ce que la
+# garde `__FIXTURES__ && source === 'fixtures'` laisse passer à l'identique.
+"__FIXTURES__" = "true"
 # `__APP_VERSION__` porte ici une valeur SENTINELLE, jamais la vraie version :
 # recopier `package.json` dans ce fichier rejouerait exactement le defaut que
 # le litteral de construction corrige. Les temoins comparent au SYMBOLE, pas a

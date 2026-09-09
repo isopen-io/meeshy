@@ -284,3 +284,68 @@ describe('Bubble — un refus permanent perd le geste, jamais la cause (#5813)',
     expect(html).not.toContain('<button');
   });
 });
+
+/** `displayLanguage` / `myReactions` / `selected` (#5814, T12). */
+describe('Bubble — displayLanguage, myReactions, selected (#5814, T12)', () => {
+  const translated: Message = {
+    ...BASE_MESSAGE,
+    id: 'm2',
+    originalLanguage: 'fr',
+    content: 'Oui, tout est passé vers 3 h.',
+    translations: [
+      {
+        id: 't-m2-en',
+        messageId: 'm2',
+        targetLanguage: 'en',
+        translatedContent: 'Yes, everything went through around 3am.',
+        translationModel: 'medium',
+        createdAt: new Date('2026-09-08T09:00:00.000Z'),
+      },
+    ],
+    reactionSummary: { '👍': 1 },
+  };
+
+  const renderWith = (extra: {
+    displayLanguage?: string;
+    myReactions?: readonly string[];
+    selected?: boolean;
+    onToggleSelect?: (id: string) => void;
+  }) =>
+    renderToStaticMarkup(
+      <Bubble
+        place={placeOf(translated)}
+        languages={['es', 'en']}
+        isGrouped
+        viewerId="u-viewer"
+        onJumpToMessage={() => {}}
+        {...extra}
+      />,
+    );
+
+  test('displayLanguage="fr" ⇒ lang="fr" et l’ORIGINAL, même si le Prisme servirait "en"', () => {
+    const html = renderWith({ displayLanguage: 'fr' });
+    expect(html).toContain('lang="fr"');
+    expect(html).toContain('Oui, tout est passé vers 3 h.');
+  });
+
+  test('myReactions inclut l’emoji ⇒ la capsule se dit « la vôtre », sans aria-pressed', () => {
+    const html = renderWith({ myReactions: ['👍'] });
+    expect(html).toContain('la vôtre');
+    // Compté, jamais cherché : les drapeaux du pied sont de vrais
+    // `<button aria-pressed>` — un `not.toContain` global les mesurerait.
+    const countOf = (markup: string) => markup.split('aria-pressed').length - 1;
+    expect(countOf(html)).toBe(countOf(renderWith({})));
+  });
+
+  test('selected=true ⇒ une coche role="checkbox" aria-checked="true"', () => {
+    const html = renderWith({ selected: true, onToggleSelect: () => {} });
+    expect(html).toContain('role="checkbox"');
+    expect(html).toContain('aria-checked="true"');
+  });
+
+  test('selected non fourni ⇒ aucune coche, et aucun aria-selected (invalide ici)', () => {
+    const html = renderWith({});
+    expect(html).not.toContain('role="checkbox"');
+    expect(html).not.toContain('aria-selected');
+  });
+});

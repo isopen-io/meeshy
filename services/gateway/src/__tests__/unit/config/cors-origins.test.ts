@@ -270,3 +270,102 @@ describe('la liste d\'origines CORS décide vraiment (#4480)', () => {
     });
   });
 });
+
+/**
+ * Les coques Capacitor de web-v3 sont des origines NOMMÉES du staging
+ * (#5815, compagnon gateway #5651).
+ *
+ * Une WebView Capacitor envoie un en-tête `Origin`, contrairement à une app
+ * native — et c'est l'origine VIRTUELLE de la coque, lue dans les sources
+ * installées de `@capacitor` (8.5.1), jamais configurée dans ce dépôt :
+ *
+ *   · iOS      `capacitor://localhost` — `CAPInstanceDescriptor.m:10-11`
+ *              (`DefaultScheme = "capacitor"`, `DefaultHostname = "localhost"`)
+ *   · Android  `https://localhost`     — `CapConfig.java:38-39` (`hostname =
+ *              "localhost"`, `androidScheme = CAPACITOR_HTTPS_SCHEME`),
+ *              confirmé par `apps/web-v3/capacitor.config.ts:44`
+ *              (`androidScheme: 'https'`)
+ *
+ * `docker-compose.staging.yml` déclare la liste effective — ce test lit le
+ * FICHIER du dépôt et vérifie que `resolveAllowedOrigins` accepte bien les
+ * deux origines sur cette liste, sans jamais les faire entrer dans
+ * `DEFAULT_ALLOWED_ORIGINS` (la production ne les ouvre pas ici, #5651 reste
+ * ouverte pour la livraison de l'APK — § 9 Q3 de la spécification #5815).
+ */
+describe('les coques Capacitor de la v3.1 sont des origines NOMMÉES du staging (#5815, #5651)', () => {
+  const COQUE_IOS = 'capacitor://localhost';
+  const COQUE_ANDROID = 'https://localhost';
+
+  const STAGING_COMPOSE = path.resolve(
+    SRC,
+    '..',
+    '..',
+    '..',
+    'infrastructure',
+    'docker',
+    'compose',
+    'docker-compose.staging.yml'
+  );
+
+  /**
+   * Lit le compose comme du TEXTE et prend la valeur déclarée pour `cle`
+   * (`CORS_ORIGINS` ou `ALLOWED_ORIGINS`) — pas de parseur YAML : la forme
+   * est une seule ligne `- <cle>=…`, et un parseur ajouterait une dépendance
+   * pour lire une ligne. `${DOMAIN:-meeshy.me}` est la SEULE substitution
+   * présente dans ce fichier ; elle est résolue littéralement.
+   */
+  function origineDeclareesParLeCompose(fichier: string, cle: string): string {
+    const source = fs.readFileSync(fichier, 'utf8');
+    const ligne = source
+      .split('\n')
+      .find((l) => l.trim().startsWith(`- ${cle}=`));
+    if (ligne === undefined) {
+      throw new Error(`${cle} absente de ${path.relative(SRC, fichier)}`);
+    }
+    return ligne
+      .trim()
+      .slice(`- ${cle}=`.length)
+      .replace(/\$\{DOMAIN:-meeshy\.me\}/g, 'meeshy.me');
+  }
+
+  it('le compose de staging DÉCLARE les deux origines de coque, dans CORS_ORIGINS et dans ALLOWED_ORIGINS', () => {
+    for (const cle of ['CORS_ORIGINS', 'ALLOWED_ORIGINS']) {
+      const declaree = origineDeclareesParLeCompose(STAGING_COMPOSE, cle);
+      const liste = resolveAllowedOrigins({ NODE_ENV: 'production', CORS_ORIGINS: declaree });
+      expect({ cle, contientIos: liste.includes(COQUE_IOS), contientAndroid: liste.includes(COQUE_ANDROID) }).toEqual(
+        { cle, contientIos: true, contientAndroid: true }
+      );
+    }
+  });
+
+  it('porte HTTP — sert exactement l\'origine de chaque coque sur la liste du compose', async () => {
+    const declaree = origineDeclareesParLeCompose(STAGING_COMPOSE, 'CORS_ORIGINS');
+    const env = { NODE_ENV: 'production', CORS_ORIGINS: declaree };
+    await expect(origineServieParHttp(env, COQUE_IOS)).resolves.toBe(COQUE_IOS);
+    await expect(origineServieParHttp(env, COQUE_ANDROID)).resolves.toBe(COQUE_ANDROID);
+  });
+
+  it('porte Socket.IO — accepte les deux coques sur la même liste', () => {
+    const declaree = origineDeclareesParLeCompose(STAGING_COMPOSE, 'CORS_ORIGINS');
+    const env = { NODE_ENV: 'production', CORS_ORIGINS: declaree };
+    expect(verdictSocketIo(env, COQUE_IOS)).toBe('accepte');
+    expect(verdictSocketIo(env, COQUE_ANDROID)).toBe('accepte');
+  });
+
+  it('rien de plus n\'entre : une tierce origine, un jumeau http:// et un jumeau de schéma sont refusés', async () => {
+    const declaree = origineDeclareesParLeCompose(STAGING_COMPOSE, 'CORS_ORIGINS');
+    const env = { NODE_ENV: 'production', CORS_ORIGINS: declaree };
+
+    for (const intruse of ['https://evil.example', 'http://localhost', 'capacitor://evil.example', 'https://localhost:3100']) {
+      await expect(origineServieParHttp(env, intruse)).resolves.toBeUndefined();
+      expect(verdictSocketIo(env, intruse)).toBe('refuse');
+    }
+  });
+
+  it('les origines de coque n\'entrent PAS dans les défauts de production', () => {
+    expect(DEFAULT_ALLOWED_ORIGINS).not.toContain(COQUE_IOS);
+    expect(DEFAULT_ALLOWED_ORIGINS).not.toContain(COQUE_ANDROID);
+    expect(originIsAllowed(COQUE_IOS, { NODE_ENV: 'production' })).toBe(false);
+    expect(originIsAllowed(COQUE_ANDROID, { NODE_ENV: 'production' })).toBe(false);
+  });
+});

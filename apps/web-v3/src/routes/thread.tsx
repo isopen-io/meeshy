@@ -12,6 +12,7 @@ import { useStore } from 'zustand/react';
  */
 import '@/styles/thread-scene.css';
 import '@/styles/thread-protection.css';
+import '@/styles/thread-menu.css';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
@@ -19,8 +20,12 @@ import { Avatar } from '@/components/avatar';
 import { Bubble } from '@/components/bubble';
 import { Composer } from '@/components/composer';
 import { FocalRow } from '@/components/focal-row';
-import { Glyph } from '@/components/glyph';
-import { ReadingModeChip } from '@/components/reading-mode-chip';
+import { MessageDetailSheet } from '@/components/message-detail-sheet';
+import { MessageMenu } from '@/components/message-menu';
+import { reactionEntries } from '@/components/message-blocks';
+import { ReactionSheet } from '@/components/reaction-sheet';
+import { SelectionToolbar } from '@/components/selection-toolbar';
+import { ThreadHeader } from '@/components/thread-header';
 import { SummarySkeleton } from '@/components/summary/summary-skeleton';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiConfig } from '@/lib/api/config';
@@ -33,12 +38,15 @@ import { served } from '@/lib/api/prism';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf, withAccent } from '@/lib/accent';
-import { initialsOf, isGroup, peerOf, presenceOf, titleOf, unreadOf } from '@/lib/view/conversation';
+import { initialsOf, isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
 import { useParams } from '@/lib/router';
 import { dayLabel, mergeTimeline, place } from '@/lib/grouping';
-import { Link } from '@/routes/route-table';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useSend } from '@/lib/view/use-send';
+import { useMessageMenu } from '@/lib/view/use-message-menu';
+import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
+import { translationChoices } from '@/lib/view/message-actions';
+import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
 import { useOnline } from '@/lib/net/online';
 import { menuRows } from '@/lib/reading-mode/catalog';
 import {
@@ -116,6 +124,21 @@ export default function ThreadScreen() {
   );
 
   /**
+   * QUI ÉCRIT — DÉRIVÉ, jamais écrit en dur (revue #5815). L'indicateur
+   * portait « AD » et « Amina écrit » en LITTÉRAL : le nom d'une FIXTURE
+   * gravé dans un composant de production, que le jour du socket (#5494,
+   * `query.ts:91`) aurait servi à tous les lecteurs pour tous leurs
+   * correspondants — et le seul marqueur de fixture de `thread-*.js` qui ne
+   * venait pas d'un import (`build-shells.mjs::auditShellBundle`).
+   * Aucun typist connu ⇒ aucun indicateur : on n'invente pas de copie, la
+   * forme iOS est « <Auteur> écrit » (`ConversationListViewModel.swift:966`).
+   */
+  const typist = useMemo(
+    () => conversation?.participants.find((p) => p.userId !== viewer.id),
+    [conversation, viewer.id],
+  );
+
+  /**
    * LA FENÊTRE COUVRE-T-ELLE TOUT LE NON-LU ? — `threadData.hasOlder` mime
    * `cursorPagination.hasMore` : c'est ce qui rend « Sur les N derniers
    * messages » (Résumé Vivant) atteignable sans mentir.
@@ -148,7 +171,7 @@ export default function ThreadScreen() {
   const consume = useCallback(
     async (messageId: string): Promise<boolean> => {
       if (!online) return false;
-      if (apiConfig.source === 'fixtures') recordViewOnceConsumption(messageId);
+      if (__FIXTURES__ && apiConfig.source === 'fixtures') recordViewOnceConsumption(messageId);
       queryClient.setQueryData<{ readonly messages: readonly Message[]; readonly hasOlder: boolean }>(
         messagesQueryKey(id),
         (page) =>
@@ -198,17 +221,30 @@ export default function ThreadScreen() {
   const scope = useMemo(() => readingModeScopeOf(viewer), [viewer.id]);
 
   /**
+   * LA RÉGION LIVE UNIQUE DE L'ÉCRAN (revue #5814, défaut majeur 9) — UN
+   * seul possesseur d'état, partagé par `useSend` (« Message envoyé » /
+   * « Message non envoyé ») ET `useMessageMenu` (« Message copié », refus de
+   * réaction, « Message protégé »…). Avant ce hook, les deux sources
+   * portaient chacune son propre état, combinées par `announcement ||
+   * messageMenu.actionNotice` : `announcement` n'était jamais remis à `''`,
+   * masquant TOUT `actionNotice` pour le reste de la session dès le premier
+   * envoi confirmé (mesuré, `recette6.mjs`). Voir `use-live-announcer.ts`.
+   */
+  const announcer = useLiveAnnouncer();
+
+  /**
    * L'ENVOI (#5813) — `send/perform-send.ts` porte la RÈGLE (débounce,
    * accusé, reprise, upsert idempotent) ; ce hook n'est qu'un abonnement à
    * l'outbox (§ 4.10 de la spécification). `originalLanguage` = rang 1 du
    * Prisme du lecteur (Q3 : jamais de détection on-device ce lot), figée à
    * l'envoi et préservée au renvoi (`entry.message` repris tel quel).
    */
-  const { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry, announcement } = useSend({
+  const { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry } = useSend({
     conversationId: id,
     viewerId: viewer.id ?? '',
     ...(viewerParticipant === undefined ? {} : { sender: viewerParticipant }),
     originalLanguage: readerLocale,
+    announce: announcer.announce,
   });
   /**
    * `messages` COMPOSE le domaine CONFIRMÉ (`threadData.messages`, le cache
@@ -421,6 +457,24 @@ export default function ThreadScreen() {
   const [replyTarget, setReplyTarget] = useState<string | null>(null);
 
   /**
+   * LE MENU DU MESSAGE (#5814) — appui long / clic droit / `ContextMenu` sur
+   * une rangée ouvrent le rail de réactions et la liste Sélectionner ·
+   * Traduire · Copier · Composer · Plus… ; toute la RÈGLE (état, effets)
+   * vit dans `useMessageMenu` (`lib/view/use-message-menu.ts`) — cet écran
+   * ne fait plus que CÂBLER le JSX sur ce qu'il rend (§5 étape 0 : le budget
+   * de taille interdit d'ajouter une seconde machine ici).
+   */
+  const messageMenu = useMessageMenu({
+    conversationId: id,
+    messages,
+    readerLanguages,
+    readerLocale,
+    viewerId: viewer.id ?? '',
+    onCompose: (messageId) => setReplyTarget(messageId),
+    announce: announcer.announce,
+  });
+
+  /**
    * LES TROIS SORTIES DU RÉSUMÉ VIVANT (#5695) — miroir
    * `ConversationView.swift:1527-1547` : visage → script + saut sur la
    * PREMIÈRE preuve + pré-adressage ; épisode → script + saut sur son
@@ -562,140 +616,33 @@ export default function ThreadScreen() {
        composeur sont des bords fixes). Avec `min-h-dvh` le composeur recouvrait
        les derniers messages — le defaut le plus visible du premier rendu. */
     <div className="flex h-dvh flex-col overflow-hidden pt-safe" style={withAccent(accent)}>
-      <header
-        className="z-10 shrink-0 backdrop-blur-xl"
-        style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-surface) 80%, transparent)' }}
-      >
-        <div className="flex items-center gap-2 px-4 py-2">
-          <Link
-            to="list"
-            className="relative grid size-11 shrink-0 place-items-center rounded-chip"
-            style={{ color: 'var(--accent)' }}
-            aria-label={otherUnread > 0 ? `Retour — ${otherUnread} messages non lus ailleurs` : 'Retour'}
-          >
-            <Glyph name="caretLeft" size={22} />
-            {otherUnread > 0 ? (
-              <span
-                className="absolute top-0 right-0 grid min-h-4 min-w-4 place-items-center rounded-chip px-1 text-[9px] font-semibold text-white"
-                style={{ backgroundColor: 'var(--color-error)' }}
-                aria-hidden
-              >
-                {otherUnread}
-              </span>
-            ) : null}
-          </Link>
-
-          {expanded ? (
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <h1 className="truncate text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-                {title}
-              </h1>
-              <p className="flex items-center gap-1 text-mini" style={{ color: 'var(--color-ios-ink-2)' }}>
-                <Glyph name="lock" size={9} style={{ color: 'var(--color-ok)' }} />
-                {group ? `${conversation.memberCount} participants` : 'Chiffré de bout en bout'}
-              </p>
-            </div>
-          ) : (
-            <>
-              <span className="flex-1" />
-              {/* LE CHIP DE MODE — SOUS DRAPEAU UNIQUEMENT (D-20, miroir
-                  `ConversationView.swift:2391-2430`) : `apiConfig.readingModesEnabled`
-                  est un paramètre de CONSTRUCTION, figé au déploiement — quand il
-                  est faux, `readingDecision.mode` vaut toujours `bubbles`
-                  (`resolveThreadMode`), donc ce chip n'aurait jamais rien d'autre
-                  à proposer que le mode déjà affiché. Clic ouvre le menu
-                  (§1.7 : écart assumé vs iOS, voir `reading-mode-chip.tsx`).
-                  Dans la grappe d'action, comme prescrit par la spécification
-                  #5566. */}
-              {apiConfig.readingModesEnabled ? (
-                <ReadingModeChip
-                  label={currentRow?.title ?? ''}
-                  isAuto={readingDecision.reason !== 'sticky'}
-                  rows={readingMenuRows}
-                  onSelect={selectReadingMode}
-                  onAuto={resetReadingModeToAuto}
-                />
-              ) : null}
-              <button
-                type="button"
-                /* `shrink-0` : ces deux cibles ne cèdent JAMAIS. Sur un écran
-                   étroit, c'est le chip qui tronque (voir `reading-mode-chip`). */
-                className="grid size-11 shrink-0 place-items-center"
-                style={{ color: 'var(--accent)' }}
-                aria-label="Appeler"
-              >
-                <span
-                  className="grid size-7 place-items-center rounded-chip"
-                  style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 18%, transparent)' }}
-                >
-                  <Glyph name="phone" size={13} />
-                </span>
-              </button>
-              <button
-                type="button"
-                /* `shrink-0` : ces deux cibles ne cèdent JAMAIS. Sur un écran
-                   étroit, c'est le chip qui tronque (voir `reading-mode-chip`). */
-                className="grid size-11 shrink-0 place-items-center"
-                style={{ color: 'var(--accent)' }}
-                aria-label="Rechercher dans la conversation"
-              >
-                <span
-                  className="grid size-7 place-items-center rounded-chip"
-                  style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 18%, transparent)' }}
-                >
-                  <Glyph name="magnifyingGlass" size={13} />
-                </span>
-              </button>
-            </>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-            aria-label={expanded ? 'Replier l’en-tête' : 'Déplier l’en-tête'}
-            className="shrink-0"
-          >
-            <Avatar
-              initials={initialsOf(title)}
-              color={accent}
-              size={44}
-              {...(group ? {} : { presence: presenceOf(peerOf(conversation, viewer.id ?? '')) })}
-            />
-          </button>
-        </div>
-        {/*
-          LE BANDEAU DE COUPURE. Discret et NON bloquant : l'application lit
-          parfaitement hors ligne (précache), donc annoncer la coupure par un
-          voile ou une modale punirait l'utilisateur pour un état où tout ce
-          qu'il veut lire est déjà là. Ce qu'il doit savoir tient en une
-          phrase : ce qu'il ÉCRIT ne partira pas maintenant.
-        */}
-        {online ? null : (
-          <p
-            role="status"
-            className="flex items-center justify-center gap-1.5 px-4 py-1 text-check font-semibold"
-            style={{
-              backgroundColor: 'color-mix(in srgb, var(--color-warn) 22%, transparent)',
-              color: 'var(--color-ios-ink)',
-            }}
-          >
-            <Glyph name="warningCircle" size={11} />
-            Hors ligne — vos messages ne partiront pas maintenant
-          </p>
-        )}
-      </header>
+      <ThreadHeader
+        title={title}
+        accent={accent}
+        conversation={conversation}
+        viewerId={viewer.id ?? ''}
+        group={group}
+        otherUnread={otherUnread}
+        expanded={expanded}
+        onToggleExpanded={() => setExpanded((v) => !v)}
+        online={online}
+        currentRowTitle={currentRow?.title ?? ''}
+        isAuto={readingDecision.reason !== 'sticky'}
+        readingMenuRows={readingMenuRows}
+        onSelectReadingMode={selectReadingMode}
+        onResetReadingModeToAuto={resetReadingModeToAuto}
+      />
       {/*
-        L'ANNONCE LECTEUR D'ÉCRAN (#5813, § 6.3) — un SEUL nœud, entre
-        l'en-tête et `<main>`, visuellement masqué : « Message non envoyé »
-        quand une entrée d'outbox passe `failed`, « Message envoyé » quand le
-        compteur de confirmations de CETTE conversation monte. DEUX signaux
-        distincts, tous deux projetés de l'outbox par `useSend` — jamais un
-        second état, et jamais l'un déduit de l'autre (une reprise qui
-        DÉMARRE fait baisser le compte d'échecs sans rien avoir envoyé).
+        L'ANNONCE LECTEUR D'ÉCRAN (#5813, § 6.3 ; #5814, § 5 étape 5 ;
+        revue #5814, défauts majeurs 9/10) — UN SEUL texte
+        (`announcer.text`, `use-live-announcer.ts`), DEUX rendus : ce nœud
+        visuellement masqué pour VoiceOver/NVDA, et la pilule VISIBLE
+        au-dessus du composeur plus bas. Avant l'unification, `announcement
+        || messageMenu.actionNotice` masquait tout `actionNotice` après le
+        premier envoi confirmé — voir `use-live-announcer.ts`.
       */}
       <div role="status" aria-live="polite" className="offscreen">
-        {announcement}
+        {announcer.text}
       </div>
 
       <main
@@ -820,6 +767,13 @@ export default function ThreadScreen() {
                     ...(rowStartedAt === undefined ? {} : { sendStartedAt: rowStartedAt }),
                     ...(rowReason === undefined ? {} : { sendFailureReason: rowReason }),
                   };
+            /* LE MENU DU MESSAGE (#5814) — trois lectures par rangée, motif
+               `rowDelivery` ci-dessus : Traduire (langue explorée pour CE
+               message), « la mienne » (réactions), et l'état de sélection. */
+            const rowDisplayLanguage = messageMenu.displayLanguageOf(p.message.id);
+            const rowMyReactions = messageMenu.myReactionsOf(p.message.id);
+            const rowSelected =
+              messageMenu.selection === null ? undefined : messageMenu.selection.ids.includes(p.message.id);
             return (
             <li
               key={p.message.id}
@@ -861,8 +815,32 @@ export default function ThreadScreen() {
                   rangée plate, `bubbles` reste la bulle historique — D-7,
                   D-8. `data-row` est le CANDIDAT d'élection de
                   `reading-mode/scene.ts` (#5648) — posé sur CHAQUE rangée,
-                  candidat SEULEMENT quand la scène est armée (mode focal). */}
-              <div data-row={p.message.id}>
+                  candidat SEULEMENT quand la scène est armée (mode focal) —
+                  et l'ANCRE du menu du message (#5814) : `useLongPress` vit
+                  UNE fois dans cet écran (`messageMenu.longPress`, motif
+                  délégation) et lit `dataset.row` au geste, jamais une
+                  instance par rangée virtualisée. En SÉLECTION (#5814,
+                  question 5), un tap bascule la coche au lieu d'ouvrir le
+                  menu (`onRowTap`, gardé côté hook). */}
+              {/* `exactOptionalPropertyTypes` (CLAUDE.md racine) : les trois
+                  props du menu ne se POSENT que quand elles ont une valeur —
+                  un `displayLanguage={undefined}` explicite est refusé au
+                  type-check, même discipline que `sendProps` deux blocs plus
+                  haut. */}
+              {/* PAS d'`aria-selected` (revue #5814) — l'attribut n'existe pas
+                  sur `role="article"`, et il était posé DEUX fois (ici et sur
+                  la racine de la rangée). L'état de sélection est porté par
+                  la COCHE de la rangée : un `role="checkbox"` réel, seul
+                  chemin CLAVIER vers la bascule. Le clic sur la rangée
+                  ENTIÈRE reste une commodité de souris/doigt. */}
+              <div
+                data-row={p.message.id}
+                tabIndex={0}
+                role="article"
+                aria-label={`Message de ${p.message.sender?.displayName ?? 'Vous'}`}
+                {...(rowSelected === undefined ? {} : { onClick: () => messageMenu.onRowTap(p.message.id) })}
+                {...messageMenu.longPress}
+              >
                 {usesFlatRow(readingDecision.mode) ? (
                   <FocalRow
                     mode={readingDecision.mode}
@@ -875,6 +853,10 @@ export default function ThreadScreen() {
                     expired={expiredIds.has(p.message.id)}
                     onConsumeViewOnce={consume}
                     onEphemeralExpired={onEphemeralExpired}
+                    {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
+                    onPickLanguage={(code) => messageMenu.onPickLanguage(p.message.id, code)}
+                    {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
+                    {...(rowSelected === undefined ? {} : { selected: rowSelected, onToggleSelect: messageMenu.onRowTap })}
                     {...sendProps}
                   />
                 ) : (
@@ -888,6 +870,10 @@ export default function ThreadScreen() {
                     expired={expiredIds.has(p.message.id)}
                     onConsumeViewOnce={consume}
                     onEphemeralExpired={onEphemeralExpired}
+                    {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
+                    onPickLanguage={(code) => messageMenu.onPickLanguage(p.message.id, code)}
+                    {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
+                    {...(rowSelected === undefined ? {} : { selected: rowSelected, onToggleSelect: messageMenu.onRowTap })}
                     {...sendProps}
                   />
                 )}
@@ -897,18 +883,18 @@ export default function ThreadScreen() {
           })}
         </ol>
 
-        {threadData.typing ? (
+        {threadData.typing && typist !== undefined ? (
           /* L'indicateur de frappe est une VRAIE cellule du flux, en queue —
              pas un overlay : il pousse le fil comme le ferait un message, donc
              l'arrivee du vrai message ne fait sauter aucune ligne. */
           <div className="flex items-end gap-1.5 py-1">
-            <Avatar initials="AD" color={accent} size={18} />
+            <Avatar initials={initialsOf(typist.displayName)} color={accent} size={18} />
             <span
               className="flex items-center gap-1.5 rounded-chip px-3 py-2"
               style={{ backgroundColor: 'var(--color-ios-card)' }}
             >
               <span className="text-time" style={{ color: 'var(--color-ios-ink-2)' }}>
-                Amina écrit
+                {typist.displayName} écrit
               </span>
               <span className="flex gap-[3px]" aria-hidden>
                 {[0, 1, 2].map((i) => (
@@ -931,6 +917,30 @@ export default function ThreadScreen() {
       </main>
 
       {/*
+        LA PILULE VISIBLE (revue #5814, défaut majeur 10) — le refus d'une
+        réaction (plafond de 5), « Message copié », « Message protégé »
+        n'avaient AUCUN retour à l'œil : leur seul canal était la région
+        `role="status"` ci-dessus, `className="offscreen"` — visuellement
+        masquée. `aria-hidden` ICI : le MÊME texte est déjà lu par cette
+        région-là, l'annoncer deux fois doublerait la lecture au lecteur
+        d'écran. Motif `dayLabel` (rondeur, flou) au-dessus du composeur.
+      */}
+      {announcer.text !== '' ? (
+        <div className="flex justify-center px-4 pb-1.5" aria-hidden>
+          <span
+            className="rounded-chip px-3 py-1.5 text-mini font-semibold backdrop-blur-md"
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--color-ios-card) 92%, transparent)',
+              color: 'var(--color-ios-ink)',
+              border: '0.5px solid var(--color-edge)',
+            }}
+          >
+            {announcer.text}
+          </span>
+        </div>
+      ) : null}
+
+      {/*
         LE COMPOSEUR NE SE MONTE JAMAIS EN RÉSUMÉ (revue-correction #5813,
         défaut BLOQUANT 4) — miroir du recouvrement iOS : `LivingSummaryHost`
         est posé à `zIndex(80)`, AU-DESSUS du composeur (`zIndex(60)`,
@@ -943,7 +953,15 @@ export default function ThreadScreen() {
         fil. Le Résumé porte déjà son geste de sortie, « Reprendre le fil »
         (`onResumeThread`) : composer d'abord.
       */}
-      {readingDecision.mode === 'summary' ? null : (
+      {readingDecision.mode === 'summary' ? null : messageMenu.selection !== null ? (
+        /* LE MODE SÉLECTION REMPLACE LE COMPOSEUR (#5814, question 5) —
+           miroir `ConversationView.swift:1986` : jamais les deux à la fois. */
+        <SelectionToolbar
+          count={messageMenu.selection.ids.length}
+          onEnd={messageMenu.onEndSelection}
+          onCopy={() => messageMenu.onCopySelection(placed)}
+        />
+      ) : (
         <div className="shrink-0">
           <Composer
             onSend={(text) => {
@@ -959,6 +977,66 @@ export default function ThreadScreen() {
           />
         </div>
       )}
+
+      {/* LE MENU DU MESSAGE (#5814) — portail conditionnel : monté SEULEMENT
+          quand `useLongPress`/le clic droit/`ContextMenu` ont ciblé un
+          message ET que ce message existe encore dans le fil. */}
+      {((target, data) =>
+        target === null || data === undefined ? null : (
+          /* L'ID EST CAPTURÉ, PAS RÉ-ASSERTÉ (revue #5814) — `menuTarget!`
+             dans chaque fermeture était une assertion de type par fermeture,
+             que la garde d'au-dessus ne justifie pas (TypeScript ne narrow
+             pas à travers un callback). Un paramètre le fige une fois. */
+          <MessageMenu
+            target={target}
+            items={data.items}
+            choices={data.choices}
+            subjectLabel={data.subjectLabel}
+            onClose={messageMenu.onCloseMenu}
+            onReact={(emoji) => messageMenu.onMenuReact(target.messageId, emoji)}
+            onExpandReactions={() => messageMenu.setReactionSheetFor(target.messageId)}
+            onAction={(actionId) => messageMenu.onMenuAction(target.messageId, actionId)}
+            onPickLanguage={(code) => messageMenu.onPickLanguage(target.messageId, code)}
+          />
+        ))(messageMenu.menuTarget, messageMenu.menuData)}
+
+      {/* « ＋ Ajouter une réaction » (rail) et « Plus… » (détails) — deux
+          feuilles indépendantes, jamais montées en même temps que le menu
+          (celui-ci se referme déjà avant de les ouvrir, `use-message-menu.ts`). */}
+      {((messageId) =>
+        messageId === null ? null : (
+          <ReactionSheet
+            onPick={(emoji) => {
+              messageMenu.onMenuReact(messageId, emoji);
+              messageMenu.setReactionSheetFor(null);
+            }}
+            onClose={() => messageMenu.setReactionSheetFor(null)}
+          />
+        ))(messageMenu.reactionSheetFor)}
+      {((detailFor) => {
+        if (detailFor === null) return null;
+        const detailMessage = messages.find((m) => m.id === detailFor);
+        if (detailMessage === undefined) return null;
+        const servedDetail = messageMenu.servedOf(detailFor);
+        return (
+          <MessageDetailSheet
+            choices={translationChoices({
+              message: detailMessage,
+              preferredLanguages: readerLanguages,
+              servedLanguage: servedDetail?.language ?? '',
+            })}
+            reactions={reactionEntries(detailMessage.reactionSummary)}
+            sentAt={new Date(detailMessage.createdAt)}
+            delivery={isMineOf(detailMessage, viewer.id ?? '') ? deliveryStatusOf(detailMessage) : null}
+            locale={readerLocale}
+            onPickLanguage={(code) => {
+              messageMenu.onPickLanguage(detailFor, code);
+              messageMenu.setDetailFor(null);
+            }}
+            onClose={() => messageMenu.setDetailFor(null)}
+          />
+        );
+      })(messageMenu.detailFor)}
     </div>
   );
 }

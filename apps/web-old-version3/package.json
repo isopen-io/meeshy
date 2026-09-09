@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/web-old-version3",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3300",
@@ -62,5 +62,5 @@
     "socket.io": "^4.8.3",
     "typescript": "^6.0.3"
   },
-  "description": "D\u00c9COMMISSIONN\u00c9E (2026-09-07) \u2014 ancienne refonte v3, jamais servie en production. Conserv\u00e9e pour son historique et sa conception ; remplac\u00e9e par apps/web-v3 (ex web-v4)."
+  "description": "DÉCOMMISSIONNÉE (2026-09-07) — ancienne refonte v3, jamais servie en production. Conservée pour son historique et sa conception ; remplacée par apps/web-v3 (ex web-v4)."
 }

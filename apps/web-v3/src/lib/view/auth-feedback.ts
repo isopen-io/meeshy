@@ -1,4 +1,4 @@
-import type { ApiFailure } from '../api/http';
+import type { ApiFailure, ApiResult } from '../api/http';
 
 /**
  * LE PLACEMENT D'UN REFUS DE CONNEXION / D'INSCRIPTION (#5555, E5) — pur,
@@ -35,6 +35,10 @@ const PHONE_INVALID_CODE = 'PHONE_INVALID';
 const PHONE_OWNERSHIP_CONFLICT_MESSAGE = 'Ce numéro est déjà rattaché à un compte. Laissez-le vide pour continuer.';
 const NETWORK_UNAVAILABLE_MESSAGE = 'Pas de connexion. Vérifiez votre réseau et réessayez.';
 const REJECTION_GENERIC_MESSAGE = "L'inscription a été refusée — réessayez dans un instant.";
+/** Le repli générique des trois flux neufs (#5816) — `MagicLinkView.swift`'s
+ * `auth.magiclink.error.generic` : « Une erreur est survenue. Veuillez
+ * réessayer. », le code/statut adjoint entre parenthèses (#5325). */
+const AUTH_GENERIC_FAILURE_MESSAGE = 'Une erreur est survenue. Veuillez réessayer.';
 
 /**
  * Le champ SERVEUR → la saisie qui le porte à l'écran — miroir EXACT de
@@ -140,4 +144,52 @@ export function placeLoginFailure(failure: ApiFailure): LoginFeedback {
     return { message: 'Identifiants invalides.' };
   }
   return { message: `La connexion a échoué — réessayez dans un instant. (${failure.code ?? failure.status})` };
+}
+
+// --- Mot de passe oublié (#5816, T5) ------------------------------------
+
+/** `POST /auth/forgot-password` (`password-reset.ts:110-215`) : nominal
+ * `data` ABSENT, erreur interne `{ message }` — aucun champ que ce client
+ * consulte. */
+export type ForgotPasswordData = { readonly message?: string } | undefined;
+
+export type ForgotPasswordOutcome =
+  | { readonly kind: 'sent' }
+  | { readonly kind: 'invalid-email' }
+  | { readonly kind: 'offline' }
+  | { readonly kind: 'failed'; readonly message: string };
+
+const FORGOT_PASSWORD_RATE_LIMITED_MESSAGE = 'Trop de demandes. Réessayez dans quelques minutes.';
+
+/**
+ * `200` ET `404` rendent la MÊME issue — la route ne sert jamais de 404
+ * aujourd'hui (§ 3.3 de la spécification), mais un client qui en ferait un
+ * texte distinct révélerait l'existence du compte le jour où un proxy ou une
+ * version en introduirait un. Cette garde de NON-RÉVÉLATION est le sens du
+ * critère (2) : « le MÊME écran pour 200 et 404 ».
+ */
+export function resolveForgotPasswordOutcome(result: ApiResult<ForgotPasswordData>): ForgotPasswordOutcome {
+  if (result.ok || result.status === 404) return { kind: 'sent' };
+  if (result.status === 400) return { kind: 'invalid-email' };
+  if (result.status === 429) return { kind: 'failed', message: FORGOT_PASSWORD_RATE_LIMITED_MESSAGE };
+  if (result.status === 0) return { kind: 'offline' };
+  return { kind: 'failed', message: `${AUTH_GENERIC_FAILURE_MESSAGE} (${result.code ?? result.status})` };
+}
+
+// --- Validation d'un lien magique (#5816, T5b) --------------------------
+
+export type MagicLinkValidationFeedback = { readonly message: string };
+
+const MAGIC_LINK_INVALID_MESSAGE = 'Lien invalide ou expiré';
+
+/**
+ * UN SEUL texte pour les CINQ phrases anglaises que sert la passerelle
+ * (`MagicLinkService.ts:309, 318, 324, 334, 348` : invalide / déjà utilisé /
+ * expiré / révoqué) — on ne révèle jamais LEQUEL de ces cas s'est produit,
+ * même doctrine que `placeLoginFailure` pour les identifiants.
+ */
+export function placeMagicLinkValidationFailure(failure: ApiFailure): MagicLinkValidationFeedback {
+  if (failure.status === 0) return { message: NETWORK_UNAVAILABLE_MESSAGE };
+  if (failure.status === 400) return { message: MAGIC_LINK_INVALID_MESSAGE };
+  return { message: `${AUTH_GENERIC_FAILURE_MESSAGE} (${failure.code ?? failure.status})` };
 }

@@ -85,19 +85,27 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
     // MARK: - Guards
 
     func test_iPadRootView_rightPanel_isWrappedInNavigationStack() throws {
-        let code = try source(of: "iPadRootView.swift")
+        // Depuis #5837 la colonne droite monte `iPadRightPanel` (vue nominale,
+        // iPadRootView+Panels.swift), qui porte le NavigationStack et rend
+        // `iPadPanelDestination` — sortis du type de `iPadRootView.body`.
+        let root = try source(of: "iPadRootView.swift")
         XCTAssertTrue(
-            code.contains("NavigationStack {"),
+            root.contains("iPadRightPanel("),
+            "La colonne droite doit monter iPadRightPanel pour toute route hors conversation."
+        )
+        let panel = try source(of: "iPadRootView+Panels.swift")
+        XCTAssertTrue(
+            panel.contains("NavigationStack {"),
             "Le panneau droit iPad doit héberger un NavigationStack, sinon les NavigationLink de ses écrans sont inertes."
         )
         XCTAssertTrue(
-            code.contains("rightPanelContent(for: route)"),
-            "Le contenu du panneau doit rester rendu par rightPanelContent(for:)."
+            panel.contains("iPadPanelDestination("),
+            "Le contenu du panneau doit rester rendu par iPadPanelDestination."
         )
     }
 
     func test_iPadRootView_exposesPanelDismissToItsScreens() throws {
-        let code = try source(of: "iPadRootView.swift")
+        let code = try source(of: "iPadRootView+Panels.swift")
         XCTAssertTrue(
             code.contains("meeshyPanelDismiss"),
             "Sans meeshyPanelDismiss, le bouton retour des écrans racine du panneau n'a aucun effet."
@@ -113,18 +121,23 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
     /// revenu par erreur.
     func test_iPadPanels_noLongerMountsConnectionBannerPerPanel() throws {
         let code = try source(of: "iPadRootView+Panels.swift")
-        XCTAssertFalse(code.contains("ConnectionBanner("), "Le SyncPill ne doit plus être monté par panneau — un seul point de montage sur iPadRootView+Sheets.swift")
+        XCTAssertFalse(code.contains("ConnectionBanner("), "Le SyncPill ne doit plus être monté par panneau — un seul point de montage, iPadCoversAndChromeLayer (RootLayers/iPadRootViewLayers.swift)")
     }
 
     func test_iPadRootView_mountsConnectionBannerOnce_routingTapsToHandleSyncPillTap() throws {
-        let code = try source(of: "iPadRootView+Sheets.swift")
+        let layer = try source(of: "RootLayers/iPadRootViewLayers.swift")
         XCTAssertEqual(
-            occurrences(of: "ConnectionBanner(", in: code), 1,
-            "iPadRootView+Sheets.swift doit monter le SyncPill EXACTEMENT une fois — le point de montage est unique."
+            occurrences(of: "ConnectionBanner(", in: layer), 1,
+            "RootLayers/iPadRootViewLayers.swift doit monter le SyncPill EXACTEMENT une fois — le point de montage est unique."
         )
         XCTAssertTrue(
-            code.contains("onItemTap: handleSyncPillTap"),
-            "Le point de montage unique doit router le tap vers handleSyncPillTap, comme RootView (iPhone)."
+            layer.contains("onItemTap: onSyncPillTap"),
+            "Le point de montage unique route le tap vers la fermeture que la racine lui remet."
+        )
+        let root = try source(of: "iPadRootView.swift")
+        XCTAssertTrue(
+            root.contains("onSyncPillTap: handleSyncPillTap"),
+            "La racine iPad doit remettre handleSyncPillTap à la couche, comme RootView (iPhone)."
         )
     }
 

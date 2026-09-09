@@ -25,8 +25,10 @@ function makePrisma(params: {
   user?: { currentStreakDays?: number; longestStreakDays?: number; engagementScore?: number } | null;
   counters?: Array<{ axisKey: string; count: number }>;
   milestones?: Array<{ milestoneType: string; milestoneKey: string; reachedAt: Date }>;
+  /** Bornes du registre de frappe (#5839) — `null` quand rien n'a été frappé. */
+  mintDates?: { first: Date | null; last: Date | null };
 }) {
-  const { user, counters = [], milestones = [] } = params;
+  const { user, counters = [], milestones = [], mintDates } = params;
   return {
     user: {
       findUnique: jest.fn<any>().mockResolvedValue(user === undefined ? null : user),
@@ -36,6 +38,12 @@ function makePrisma(params: {
     },
     engagementMilestone: {
       findMany: jest.fn<any>().mockResolvedValue(milestones),
+    },
+    meeshLedger: {
+      aggregate: jest.fn<any>().mockResolvedValue({
+        _min: { createdAt: mintDates?.first ?? null },
+        _max: { createdAt: mintDates?.last ?? null },
+      }),
     },
   } as any;
 }
@@ -159,6 +167,73 @@ describe('GET /me/engagement', () => {
       expect.objectContaining({ where: { userId: OTHER_USER_ID } })
     );
 
+    await app.close();
+  });
+});
+
+/**
+ * LES DATES DE FRAPPE (#5839) — ce que le sous-menu de l'entrée Meesh raconte.
+ *
+ * Elles ne se dérivent NI du solde NI du compte à vie : un solde à 1 peut venir
+ * d'un don reçu, jamais d'une frappe. Seul `MeeshLedger` filtré sur
+ * `reason: 'mint'` distingue frapper de recevoir — et c'est exactement le
+ * filtre que ces témoins vérifient, parce qu'un `aggregate` sans lui rendrait
+ * la date d'un don avec le même aplomb.
+ */
+describe('GET /me/engagement — les bornes du registre de frappe', () => {
+  it('sert la première et la dernière frappe', async () => {
+    const prisma = makePrisma({
+      user: { currentStreakDays: 1, longestStreakDays: 1, engagementScore: 10 },
+      mintDates: {
+        first: new Date('2026-07-01T10:00:00.000Z'),
+        last: new Date('2026-09-01T10:00:00.000Z'),
+      },
+    });
+    const app = await buildApp(prisma);
+    const res = await getEngagement(app, USER_ID);
+    const body = JSON.parse(res.body);
+
+    expect(res.statusCode).toBe(200);
+    expect(body.data.meesh.firstMintedAt).toBe('2026-07-01T10:00:00.000Z');
+    expect(body.data.meesh.lastMintedAt).toBe('2026-09-01T10:00:00.000Z');
+    await app.close();
+  });
+
+  it("n'interroge QUE les frappes — un don reçu n'est pas une frappe", async () => {
+    const prisma = makePrisma({
+      user: { currentStreakDays: 1, longestStreakDays: 1, engagementScore: 10 },
+    });
+    const app = await buildApp(prisma);
+    await getEngagement(app, USER_ID);
+
+    expect(prisma.meeshLedger.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: USER_ID, reason: 'mint' } }),
+    );
+    await app.close();
+  });
+
+  it('rend `null` des deux côtés quand rien n\'a jamais été frappé', async () => {
+    const prisma = makePrisma({
+      user: { currentStreakDays: 0, longestStreakDays: 0, engagementScore: 0 },
+    });
+    const app = await buildApp(prisma);
+    const body = JSON.parse((await getEngagement(app, USER_ID)).body);
+
+    expect(body.data.meesh.firstMintedAt).toBeNull();
+    expect(body.data.meesh.lastMintedAt).toBeNull();
+    await app.close();
+  });
+
+  it("lit le registre de l'utilisateur AUTHENTIFIÉ, jamais d'un autre", async () => {
+    const prisma = makePrisma({
+      user: { currentStreakDays: 1, longestStreakDays: 1, engagementScore: 10 },
+    });
+    const app = await buildApp(prisma);
+    await getEngagement(app, OTHER_USER_ID);
+
+    expect(prisma.meeshLedger.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ userId: OTHER_USER_ID }) }),
+    );
     await app.close();
   });
 });

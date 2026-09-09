@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Glyph } from './glyph';
+import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
 import type { GlyphName } from './glyphs';
 
 /**
@@ -8,8 +8,10 @@ import type { GlyphName } from './glyphs';
  *
  * Miroir de la composition répétée dans `LoginView.swift`/`SignupView.swift` :
  * icône violette à 70 % à gauche, surface `theme.inputBackground`, coin
- * `MeeshyRadius.md` (14 px), bord `inputBorder` à 30 % — teinté et à 60 %
- * quand focus. Le refus se pose SOUS le champ, en `role="alert"`.
+ * `MeeshyRadius.md` (14 px), bord `inputBorder` à 30 % — teinté à 60 % ET
+ * épaissi (1px → 2px, #5894) quand focus : la règle 17 interdit qu'un signal
+ * ne tienne qu'à une couleur, y compris ici où l'anneau lui-même est exclu
+ * (#5816). Le refus se pose SOUS le champ, en `role="alert"`.
  *
  * PRIMITIVES EN PROPS, AUCUN MAGASIN GLOBAL (Zero Unnecessary Re-render) :
  * `focused` est un booléen que l'écran porte lui-même (`useState`) — ce
@@ -19,6 +21,7 @@ export function Field({
   id,
   label,
   icon,
+  glyph,
   tint,
   focused,
   error,
@@ -27,6 +30,15 @@ export function Field({
   id: string;
   label?: string | undefined;
   icon?: GlyphName | undefined;
+  /**
+   * Un tracé du SOCLE porté par sa FORME plutôt que par son nom — alternative
+   * à `icon` pour un jeu d'écran (#5816, `AUTH_GLYPHS.envelope` : le champ
+   * e-mail du lien magique et du mot de passe oublié). Même dispositif que
+   * `axisGlyph` (`routes/progression.tsx:72-74`) : `Field` reste agnostique
+   * du jeu qui a produit le tracé. `icon` et `glyph` ne se posent jamais
+   * ensemble — au plus l'un des deux.
+   */
+  glyph?: GlyphShape | undefined;
   /** La couleur du bord au focus — `var(--ios-purple-600)` (connexion) ou
    * `var(--ios-indigo-500)` (inscription) : DEUX écrans, deux teintes,
    * jamais une troisième source de vérité pour le focus. */
@@ -39,6 +51,7 @@ export function Field({
   children: (ids: { id: string; describedBy: string | undefined }) => ReactNode;
 }) {
   const errorId = `${id}-error`;
+  const iconStyle = { color: `color-mix(in srgb, ${tint} 70%, transparent)`, flexShrink: 0 };
   return (
     <div className="grid gap-1">
       {label !== undefined ? (
@@ -47,18 +60,23 @@ export function Field({
         </label>
       ) : null}
       <div
-        className="flex items-center gap-3 rounded-[14px] px-4 transition-colors"
+        className="field-box flex items-center gap-3 rounded-[14px] px-4 transition-colors"
         style={{
           minHeight: 48,
           backgroundColor: 'var(--color-ios-card)',
-          border: `1px solid ${
+          /* Le focus est un COUPLE teinte + FORME (#5894, corollaire de la
+             règle 17) : la boîte double aussi l'épaisseur de son bord
+             (1px → 2px), jamais la seule teinte — sans quoi le signal ne
+             tient pas sur un fond dont le contraste de couleur est faible.
+             `box-sizing: border-box` (préflight Tailwind) absorbe le pixel
+             de plus DANS la boîte : ni ses voisins ni sa hauteur ne bougent. */
+          border: `${focused ? '2px' : '1px'} solid ${
             focused ? `color-mix(in srgb, ${tint} 60%, transparent)` : 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)'
           }`,
         }}
       >
-        {icon !== undefined ? (
-          <Glyph name={icon} size={20} style={{ color: `color-mix(in srgb, ${tint} 70%, transparent)`, flexShrink: 0 }} />
-        ) : null}
+        {icon !== undefined ? <Glyph name={icon} size={20} style={iconStyle} /> : null}
+        {icon === undefined && glyph !== undefined ? <GlyphSvg glyph={glyph} size={20} style={iconStyle} /> : null}
         {children({ id, describedBy: error !== undefined ? errorId : undefined })}
       </div>
       {error !== undefined ? (

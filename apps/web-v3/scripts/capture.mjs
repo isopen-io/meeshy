@@ -32,6 +32,16 @@ const SCREENS = [
   { name: 'thread-protected', path: '/c/c-protection' },
   /** LE RÉSUMÉ VIVANT (#5695, D-21) — le SEUL corpus qui ATTEINT `summary`. */
   { name: 'thread-summary', path: '/c/c-rattrapage' },
+  /** LES QUATRE PORTES D'ENTRÉE (#5816) — capturées SANS session : `/welcome`
+      renvoie vers `/` dès qu'il y en a une, et c'est précisément l'écran du
+      visiteur qu'on veut voir. `/auth/magic-link` est ici dans son état de
+      SAISIE (aucun `?token=`) ; l'attente et son compte à rebours sont tenus
+      par les témoins de `magic-link.test.tsx`, qu'une capture figée ne saurait
+      montrer sans mentir sur le temps. */
+  { name: 'welcome', path: '/welcome' },
+  { name: 'magic-link', path: '/auth/magic-link' },
+  { name: 'magic-link-validate', path: '/auth/magic-link/validate' },
+  { name: 'forgot-password', path: '/forgot-password' },
 ];
 
 const browser = await launchChromium();
@@ -195,6 +205,109 @@ for (const scheme of ['dark', 'light']) {
   }
 
   await context.close();
+}
+
+/**
+ * LE MENU DU MESSAGE (#5814) — quatre captures, comparees a
+ * `targets/thread.message-menu.{light,dark}.png` : la RANGEE PLATE (Focal, la
+ * cible claire) et la BULLE (la cible sombre), plus le mode SELECTION que le
+ * menu ouvre. Le geste est le CLIC DROIT (`contextmenu`) : Playwright ne sait
+ * pas tenir un doigt 500 ms de facon fiable, et les deux portes ouvrent le
+ * MEME menu (`useLongPress`).
+ */
+for (const scheme of ['dark', 'light']) {
+  /**
+   * UN CONTEXTE PAR CAPTURE, pas un par schema (revue #5814) : le mode de
+   * lecture est PERSISTE (localStorage), et une capture « Bulles » teignait
+   * donc toutes les suivantes du meme contexte — mesure : `thread-selection`
+   * et `thread-message-menu-translate` sortaient en Bulles alors que le
+   * script demandait Focal. Un contexte neuf par page rend chaque capture
+   * INDEPENDANTE de l'ordre du script.
+   */
+  const openThread = async (skin) => {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 2,
+      colorScheme: scheme === 'light' ? 'light' : 'dark',
+    });
+    const page = await context.newPage();
+    await page.clock.setFixedTime(INSTANT);
+    await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(300);
+    if (skin === 'bubbles') {
+      await page.getByRole('button', { name: /Mode de lecture/ }).click();
+      await page.waitForTimeout(150);
+      await page.getByRole('menuitemradio', { name: /Bulles/ }).click();
+      await page.waitForTimeout(300);
+    }
+    page.__context = context;
+    return page;
+  };
+  const closeThread = async (page) => {
+    await page.close();
+    await page.__context.close();
+  };
+
+  // thread-message-menu — la rangee plate (Focal), la 3e rangee.
+  {
+    const page = await openThread('focal');
+    await page.locator('[data-row]').nth(2).click({ button: 'right' });
+    await page.waitForTimeout(350);
+    await page.screenshot({ path: `${OUTPUT}thread-message-menu.${scheme}.png` });
+    console.log(`  thread-message-menu · ${scheme}`);
+    await closeThread(page);
+  }
+
+  // thread-message-menu-bubbles — la meme action sur une BULLE.
+  {
+    const page = await openThread('bubbles');
+    await page.locator('[data-row]').nth(2).click({ button: 'right' });
+    await page.waitForTimeout(350);
+    await page.screenshot({ path: `${OUTPUT}thread-message-menu-bubbles.${scheme}.png` });
+    console.log(`  thread-message-menu-bubbles · ${scheme}`);
+    await closeThread(page);
+  }
+
+  // thread-message-menu-last — la DERNIERE rangee : le cas ou la loi de
+  // placement RABAT le cluster, donc celui ou un aperçu et sa rangee vive se
+  // dedoubleraient si la source ne s'effaçait pas.
+  {
+    const page = await openThread('focal');
+    await page.locator('[data-row]').last().click({ button: 'right' });
+    await page.waitForTimeout(350);
+    await page.screenshot({ path: `${OUTPUT}thread-message-menu-last.${scheme}.png` });
+    console.log(`  thread-message-menu-last · ${scheme}`);
+    await closeThread(page);
+  }
+
+  // thread-message-menu-translate — le sous-menu Traduire, ouvert. Sur la
+  // PREMIERE rangee : la 3e est une piece jointe SANS texte, donc sans
+  // « Traduire » ni « Copier » (garde `hasText`, message-actions.ts).
+  {
+    const page = await openThread('focal');
+    await page.locator('[data-row]').nth(0).click({ button: 'right' });
+    await page.waitForTimeout(300);
+    await page.getByRole('menuitem', { name: 'Traduire' }).click();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${OUTPUT}thread-message-menu-translate.${scheme}.png` });
+    console.log(`  thread-message-menu-translate · ${scheme}`);
+    await closeThread(page);
+  }
+
+  // thread-selection — la barre de selection REMPLACE le composeur.
+  {
+    const page = await openThread('focal');
+    await page.locator('[data-row]').nth(0).click({ button: 'right' });
+    await page.waitForTimeout(300);
+    await page.getByRole('menuitem', { name: 'Sélectionner' }).click();
+    await page.waitForTimeout(300);
+    await page.locator('[data-row]').nth(3).click();
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: `${OUTPUT}thread-selection.${scheme}.png` });
+    console.log(`  thread-selection · ${scheme}`);
+    await closeThread(page);
+  }
+
 }
 
 await browser.close();

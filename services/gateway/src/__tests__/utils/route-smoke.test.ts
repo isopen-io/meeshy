@@ -27,6 +27,18 @@ describe('resolveRoutePath', () => {
   it('leaves a path without params untouched', () => {
     expect(resolveRoutePath('/api/v1/auth/login')).toBe('/api/v1/auth/login');
   });
+
+  /**
+   * Un segment JOKER n'est pas un `:param` et échappait donc à la
+   * substitution : la sonde interrogeait `/api/v1/attachments/file/*` avec un
+   * astérisque LITTÉRAL (#5857). L'URL n'avait aucun sens, et le verdict qui
+   * en sortait n'en avait pas davantage.
+   */
+  it('replaces a wildcard segment too — a literal * is not a path', () => {
+    expect(resolveRoutePath('/api/v1/attachments/file/*')).toBe(
+      '/api/v1/attachments/file/000000000000000000000000'
+    );
+  });
 });
 
 describe('selectSmokeRoutes', () => {
@@ -44,9 +56,52 @@ describe('selectSmokeRoutes', () => {
   });
 });
 
+/**
+ * **Deux 404 se ressemblent au STATUT et se distinguent au CORPS (#5857).**
+ *
+ * La sonde interroge chaque `:param` avec un ObjectId qui n'existe pas. Une
+ * route PUBLIQUE de lecture-par-identifiant répond donc légitimement 404 —
+ * mesuré sur staging le 2026-09-09, douze routes déclarées « absentes » alors
+ * qu'elles servaient :
+ *
+ *     GET /api/v1/users/000…0   404 {"success":false,"error":"User not found"}
+ *     GET /api/v1/inexistante   404 {"error":"Not Found","statusCode":404}
+ *
+ * Le premier corps est celui de `sendError()` — le producteur UNIQUE des
+ * réponses du gateway (§ « API Response Format ») : le voir PROUVE que notre
+ * handler a tourné, donc que la route existe. Le second est le
+ * `notFoundHandler` de Fastify.
+ *
+ * La règle est donc POSITIVE et fail-closed : un 404 n'est « présent » que
+ * s'il porte la signature de notre propre producteur. Tout autre 404 — la
+ * forme Fastify, un corps vide, du HTML de proxy — n'a rien prouvé et reste
+ * « absent ». Se fier à la forme de Fastify pour conclure à l'absence
+ * pencherait dans l'autre sens : le jour où elle change, une route vraiment
+ * disparue passerait pour présente.
+ */
 describe('classifySmokeStatus', () => {
-  it('classifies 404 as absent — the route is not registered on the running revision', () => {
-    expect(classifySmokeStatus(404)).toBe('absent');
+  const erreurApplicative = { success: false, error: 'User not found', message: 'User not found' };
+  const erreurFastify = {
+    message: 'Route GET:/api/v1/inexistante not found',
+    error: 'Not Found',
+    statusCode: 404
+  };
+
+  it('classifies 404 as absent when Fastify itself answered — the route is not registered', () => {
+    expect(classifySmokeStatus(404, erreurFastify)).toBe('absent');
+  });
+
+  it('classifies 404 as PRESENT when our own handler answered — the entity is missing, not the route', () => {
+    expect(classifySmokeStatus(404, erreurApplicative)).toBe('present');
+  });
+
+  it.each([
+    ['un corps absent', undefined],
+    ['un corps vide', {}],
+    ['du HTML de proxy', '<html>404</html>'],
+    ['un tableau', []]
+  ])('classifies 404 as absent on %s — rien ne PROUVE que la route a tourné', (_nom, corps) => {
+    expect(classifySmokeStatus(404, corps)).toBe('absent');
   });
 
   it.each([200, 400, 401, 403, 422, 429, 500])(
@@ -78,13 +133,25 @@ describe('runRouteSmokeTest', () => {
   ];
 
   it('proves RED: a route absent from the deployed revision (404) fails the smoke test — this is #5644 reproduced', async () => {
-    const fetchImpl = jest.fn().mockResolvedValue({ status: 404 });
+    const fetchImpl = jest.fn().mockResolvedValue({
+      status: 404,
+      body: { message: 'Route POST:/api/v1/directory/friend-requests not found', error: 'Not Found', statusCode: 404 }
+    });
     const results = await runRouteSmokeTest({ baseUrl: 'https://gate.staging.meeshy.me', routes: target, fetchImpl });
     expect(summarizeSmokeResults(results).absent).toHaveLength(1);
   });
 
   it('passes GREEN once the route answers with anything but 404 (401 = present, auth required)', async () => {
     const fetchImpl = jest.fn().mockResolvedValue({ status: 401 });
+    const results = await runRouteSmokeTest({ baseUrl: 'https://gate.staging.meeshy.me', routes: target, fetchImpl });
+    expect(summarizeSmokeResults(results).absent).toHaveLength(0);
+  });
+
+  it("ne rougit PAS sur un 404 de notre propre handler — c'est l'entité qui manque, pas la route (#5857)", async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({
+      status: 404,
+      body: { success: false, error: 'User not found', message: 'User not found' }
+    });
     const results = await runRouteSmokeTest({ baseUrl: 'https://gate.staging.meeshy.me', routes: target, fetchImpl });
     expect(summarizeSmokeResults(results).absent).toHaveLength(0);
   });

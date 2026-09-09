@@ -58,6 +58,17 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
     /// reconnecting); `false` for terminal / static states (offline, online,
     /// permanently failed) so a finished operation never reads as ongoing.
     let showsActivityDots: Bool
+    /// **L'identifiant de la ligne outbox à RELANCER** quand cette entrée dit
+    /// un échec définitif (#5830). `nil` partout ailleurs.
+    ///
+    /// Il vit ICI plutôt que dans `source` parce que ce n'est pas une
+    /// destination : relancer une publication ne mène nulle part, ça agit sur
+    /// place. Et il vit sur l'ENTRÉE plutôt que chez les deux racines parce que
+    /// `RootView` et `iPadRootView` montent des arbres différents — un geste
+    /// écrit deux fois diverge, et la divergence ne rougit nulle part (mesurée
+    /// le 2026-09-08 sur « Publier un post »). La pastille est le seul étage
+    /// que les deux racines partagent.
+    let retryOutboxId: String?
 
     init(
         id: String,
@@ -65,7 +76,8 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
         iconName: String?,
         dotStyle: SyncPillDotStyle,
         source: OutboxUIItem.Source?,
-        showsActivityDots: Bool = true
+        showsActivityDots: Bool = true,
+        retryOutboxId: String? = nil
     ) {
         self.id = id
         self.label = label
@@ -73,6 +85,29 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
         self.dotStyle = dotStyle
         self.source = source
         self.showsActivityDots = showsActivityDots
+        self.retryOutboxId = retryOutboxId
+    }
+
+    /// **Ce qu'un doigt sur CETTE entrée déclenche** — une seule question, une
+    /// seule réponse, hors de la vue pour être jouable sans écran.
+    ///
+    /// L'ordre n'est pas arbitraire : sur une ligne définitivement échouée,
+    /// RELANCER est ce que le doigt veut. Naviguer vers « l'emplacement de
+    /// l'opération » n'a d'ailleurs pas de sens pour une publication — le post
+    /// n'existe pas encore, et c'est bien pour ça que `mapCreatePost` rend
+    /// `.unknown` et que le tap tombait dans un `break` (#5830).
+    enum TapOutcome: Equatable {
+        case retry(outboxId: String)
+        case navigate(OutboxUIItem.Source)
+        /// Ligne de statut pure (hors ligne, reconnexion, synchronisation) :
+        /// le tap fait juste avancer la rotation.
+        case advance
+    }
+
+    var tapOutcome: TapOutcome {
+        if let retryOutboxId { return .retry(outboxId: retryOutboxId) }
+        if let source { return .navigate(source) }
+        return .advance
     }
 }
 
@@ -105,6 +140,8 @@ nonisolated enum SyncPillVisibility {
 /// Behaviour highlights:
 /// - Rotates one entry per 2.7 s; pauses 5 s on manual tap.
 /// - Auto-hides after `SyncPillRotator.maxCycles` (3) complete passes.
+/// - Tap on an entry with `retryOutboxId != nil` invokes `onRetry(id)` —
+///   une publication définitivement échouée se RELANCE d'un doigt (#5830).
 /// - Tap on an entry with `source != nil` invokes `onTap(source)` so the
 ///   caller can route to the conversation / post / story where the
 ///   operation is taking place.
@@ -123,7 +160,10 @@ nonisolated enum SyncPillVisibility {
 /// quelqu'un qui écrit. Aucune n'expire sans avoir été vue (`entries` est
 /// recalculée à chaque rendu, donc à la fermeture de la feuille la pastille dit
 /// la vérité du moment, jamais un retard), et aucune n'est ACTIONNABLE depuis
-/// une feuille — on n'y répond pas à une frappe, on n'y relance pas un envoi.
+/// une feuille — on n'y répond pas à une frappe, et la relance d'une
+/// publication échouée (#5830), seule entrée ACTIONNABLE, attend sans
+/// s'évaporer : la ligne reste `.exhausted` jusqu'à ce qu'on la touche, donc
+/// rien n'est perdu à la voir une feuille plus tard.
 ///
 /// Ce n'est donc pas « ne rien faire » : c'est la MÊME règle que ses deux
 /// points de montage appliquent déjà en l'éteignant sous le viewer de story
@@ -140,6 +180,11 @@ struct SyncPill: View {
     /// entry has a non-nil `source`. The caller is expected to push onto
     /// the navigation stack (`Router.push(.conversation/.postDetail/...)`).
     let onTap: ((OutboxUIItem.Source) -> Void)?
+    /// Invoked when the user taps an entry carrying a `retryOutboxId` — a
+    /// publication or a send that has definitively failed. Prioritaire sur
+    /// `onTap` : sur une ligne épuisée, RELANCER est ce que le doigt veut, pas
+    /// naviguer vers un contenu qui n'existe pas encore.
+    let onRetry: ((String) -> Void)?
 
     @StateObject private var rotator = SyncPillRotator()
     @Environment(\.colorScheme) private var colorScheme
@@ -201,10 +246,12 @@ struct SyncPill: View {
 
     init(
         entries: [SyncPillEntry],
-        onTap: ((OutboxUIItem.Source) -> Void)? = nil
+        onTap: ((OutboxUIItem.Source) -> Void)? = nil,
+        onRetry: ((String) -> Void)? = nil
     ) {
         self.entries = entries
         self.onTap = onTap
+        self.onRetry = onRetry
     }
 
     private var isDark: Bool { colorScheme == .dark }
@@ -339,9 +386,7 @@ struct SyncPill: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
-        .accessibilityHint(visibleEntry?.source != nil
-            ? String(localized: "sync.pill.a11y.openLocation.hint", defaultValue: "Touchez pour ouvrir l'emplacement de l'opération.", bundle: .main)
-            : "")
+        .accessibilityHint(accessibilityHintText)
         .accessibilityAction(named: isPausedByUser
             ? String(localized: "sync.pill.a11y.resume", defaultValue: "Reprendre", bundle: .main)
             : String(localized: "sync.pill.a11y.pause", defaultValue: "Mettre en pause", bundle: .main)
@@ -524,11 +569,31 @@ struct SyncPill: View {
         AnyShapeStyle(isDark ? Color(white: 0.17) : Color.white)
     }
 
+    /// Ce que le doigt fera, DIT à voix haute — et il ne dit « ouvrir » que
+    /// quand le tap ouvre. Une ligne épuisée se relance ; annoncer l'ouverture
+    /// d'un emplacement qui n'existe pas encore serait un indice MENTEUR, pire
+    /// qu'un silence.
+    private var accessibilityHintText: String {
+        switch visibleEntry?.tapOutcome {
+        case .retry:
+            return String(localized: "sync.pill.a11y.retry.hint", defaultValue: "Touchez pour réessayer l’opération.", bundle: .main)
+        case .navigate:
+            return String(localized: "sync.pill.a11y.openLocation.hint", defaultValue: "Touchez pour ouvrir l'emplacement de l'opération.", bundle: .main)
+        case .advance, .none:
+            return ""
+        }
+    }
+
     private func handleTap() {
         guard let entry = visibleEntry else { return }
-        if let source = entry.source, let onTap {
+        switch entry.tapOutcome {
+        case .retry(let outboxId):
+            guard let onRetry else { return rotator.advance() }
+            onRetry(outboxId)
+        case .navigate(let source):
+            guard let onTap else { return rotator.advance() }
             onTap(source)
-        } else {
+        case .advance:
             // Pure status row (offline/syncing/reconnecting) — single tap
             // just advances the rotation manually.
             rotator.advance()

@@ -15,6 +15,13 @@ declare module 'bun:test' {
   export function describe(name: string, body: () => void): void;
   export function afterEach(body: () => void | Promise<void>): void;
   /**
+   * `beforeEach` (#5814) — remet un état de MODULE (magasin, bouchon) à son
+   * défaut avant CHAQUE témoin, symétrique à `afterEach` déjà déclaré
+   * ci-dessus. Requis dès qu'un fichier de témoins partage un état mutable
+   * entre plusieurs `test()` (`reactionStore`, `fixtures-reactions.ts`).
+   */
+  export function beforeEach(body: () => void | Promise<void>): void;
+  /**
    * `beforeAll`/`afterAll` (#5813, revue-correction) — le SEUL couple de ce
    * fichier qui enregistre/désenregistre une ressource GLOBALE scopée à un
    * `describe` (happy-dom, `composer.test.tsx`) plutôt qu'un état par test.
@@ -64,6 +71,20 @@ declare const __BENCH__: number;
  * constante, elle ne la RÉSOUT pas.
  */
 declare const __SHELL__: boolean;
+
+/**
+ * `__FIXTURES__` — `false` sous `VITE_DATA_SOURCE=gateway`, `true` partout
+ * ailleurs (revue #5815). Même mécanique que `__SHELL__` : un littéral posé
+ * par `vite.config.ts`, fourni sous `bun test` par `bunfig.toml`.
+ *
+ * Il ne DÉCIDE rien — `apiConfig.source` reste la source de vérité du
+ * comportement, et `__FIXTURES__ && source === 'fixtures'` rend exactement ce
+ * que rendait `source === 'fixtures'`. Il DIT à Rollup ce que la construction
+ * sait déjà, pour qu'elle puisse élaguer `src/lib/api/fixtures*.ts` : sans
+ * lui, une coque de recette construite contre la passerelle embarquait quand
+ * même tout le jeu de fixtures (`build-shells.mjs::auditShellBundle`).
+ */
+declare const __FIXTURES__: boolean;
 
 /**
  * `__APP_VERSION__` — la version de `package.json`, LUE par `vite.config.ts`
