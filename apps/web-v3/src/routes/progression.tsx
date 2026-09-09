@@ -158,17 +158,6 @@ export function LevelHero({ progress, mintCost }: { progress: EngagementProgress
 
       <ProgressBar progress={progress.level.progress} tint={BRAND} label="Progression vers le niveau suivant" />
 
-      {/* LA SÉRIE reste ICI, dans le hero du niveau.
-          Elle occupait une carte jumelle avant le hub ; la cible n'en parle
-          pas, et un silence de la cible n'est pas une interdiction — ce qui
-          existe et complète l'écran s'AGRÈGE, il ne se supprime pas. Sa place
-          naturelle est le niveau : les deux répondent à « où j'en suis ». */}
-      <p className="flex items-center gap-1.5 text-caption" style={{ color: INK_2 }}>
-        <span style={{ color: STREAK_TINT }} aria-hidden="true">
-          <GlyphSvg glyph={PROGRESSION_GLYPHS.fire} size={13} />
-        </span>
-        {streakLabel(progress.streak.value)} · {streakRecordLabel(progress.streak.longestDays)}
-      </p>
       {manque === null ? null : (
         <p className="text-caption" style={{ color: INK_2 }}>
           Encore {scoreLabel(manque)} avant le niveau {progress.level.level + 1}
@@ -258,6 +247,47 @@ export function ElansHero({ progress }: { progress: EngagementProgress }) {
           )}
         </>
       )}
+    </section>
+  );
+}
+
+/**
+ * LE HERO DE LA FLAMME — la série de jours, seule (directive porteur, #5838).
+ *
+ * Elle était repliée dans le hero du niveau. Le porteur a tranché : « 1 Hero
+ * Niveau, 1 Hero Élan, 1 Hero Flamme » (`packages/shared/utils/progression-layout.ts`,
+ * qui déclare désormais le bloc `flamme` séparément) — trois questions
+ * distinctes, où j'en suis / ce qui multiplie / ce que je tiens, méritent
+ * trois blocs. Miroir de `ProgressionFlammeHero` (iOS, `ProgressionHub.swift`).
+ */
+export function FlammeHero({ progress }: { progress: EngagementProgress }) {
+  return (
+    <section
+      aria-labelledby="progression-flamme"
+      className="flex items-center gap-3 rounded-card px-4 py-4"
+      style={{
+        backgroundColor: `color-mix(in srgb, ${STREAK_TINT} 12%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${STREAK_TINT} 28%, transparent)`,
+      }}
+    >
+      <span
+        className="grid size-12 shrink-0 place-items-center rounded-card"
+        style={{ backgroundColor: `color-mix(in srgb, ${STREAK_TINT} 22%, transparent)`, color: STREAK_TINT }}
+        aria-hidden="true"
+      >
+        <GlyphSvg glyph={PROGRESSION_GLYPHS.fire} size={24} />
+      </span>
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <h2 id="progression-flamme" className="text-check font-semibold uppercase tracking-wide" style={{ color: INK_2 }}>
+          Série
+        </h2>
+        <p className="text-body font-bold" style={{ color: INK }}>
+          {streakLabel(progress.streak.value)}
+        </p>
+        <p className="text-caption" style={{ color: INK_2 }}>
+          {streakRecordLabel(progress.streak.longestDays)}
+        </p>
+      </div>
     </section>
   );
 }
@@ -470,6 +500,7 @@ export function ProgressionBody({ progress }: { progress: EngagementProgress }) 
           return <LevelHero key="niveau" progress={progress} mintCost={progress.meesh?.mintCost ?? null} />;
         }
         if (bloc.kind === 'elans') return <ElansHero key="elans" progress={progress} />;
+        if (bloc.kind === 'flamme') return <FlammeHero key="flamme" progress={progress} />;
         return <SectionLink key={bloc.section} section={bloc.section} progress={progress} />;
       })}
     </div>
