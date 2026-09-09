@@ -161,6 +161,13 @@ const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
     label: 'Inviter des amis',
     hint: 'Partagez votre lien Meeshy : c’est ainsi que naît une première conversation.',
     glyph: 'linkSimple',
+    // HÉROS, alors qu'iOS range `invite` en TUILE. L'écart est assumé et
+    // TEMPORAIRE : les trois héros d'iOS — chercher des membres, ses contacts,
+    // ses affiliations — n'ont aucune porte sur la v3.1 (#5765). Laisser le
+    // rang vacant montrerait une seule petite tuile à qui démarre, là où la
+    // directive demande un gros bouton. Le jour où les trois héros arrivent,
+    // celui-ci reprend son rang de tuile.
+    hero: true,
     run: async () => RETOUR_INVITATION[await partagerInvitation(window.location.origin)],
   },
 ];
@@ -499,12 +506,29 @@ export default function ConversationsScreen() {
           VIDE — et elle cesse donc d'être `aria-hidden`, puisqu'elle porte
           maintenant quelque chose à lire.
         */}
-        {visible.length > 0 ? (
-          <li style={{ minHeight: '50dvh', flexShrink: 0 }}>
+        {/*
+          ELLE EST RENDUE DÈS QU'ON A UNE CONVERSATION — jamais conditionnée à
+          ce que le FILTRE laisse voir (correction porteur 2026-09-09).
+
+          Mesuré sur iOS : `listTail` vit à l'indentation de `if
+          groupedConversations.isEmpty { … } else { … }`, donc DEHORS — la queue
+          se rend dans TOUTES les branches, y compris « la recherche ne rend
+          rien ». La v3.1 la conditionnait à `visible.length > 0`, le compte
+          FILTRÉ : chercher un mot absent effaçait d'un coup la seule aide de
+          l'écran, exactement au moment où l'on ne trouve pas ce qu'on cherche.
+
+          La HAUTEUR, elle, reste conditionnée aux rangées : c'est une cale de
+          magnification, et elle n'a rien à caler quand rien n'est affiché.
+          Sans cette distinction, l'état filtré vide repartait 50 dvh plus bas —
+          le défaut que le commentaire ci-dessus a déjà corrigé une fois.
+        */}
+        {conversations.length > 0 ? (
+          <li style={{ minHeight: visible.length > 0 ? '50dvh' : 0, flexShrink: 0 }}>
             <QuickActions
               title="Et maintenant ?"
               subtitle="Meeshy s’écrit à plusieurs — invitez quelqu’un à vous rejoindre."
               actions={ACTIONS_DE_DEMARRAGE}
+              conversationCount={conversations.length}
             />
           </li>
         ) : null}
@@ -540,6 +564,7 @@ export default function ConversationsScreen() {
               title="Commencez ici"
               subtitle="Meeshy s’écrit à plusieurs — invitez quelqu’un à vous rejoindre."
               actions={ACTIONS_DE_DEMARRAGE}
+              conversationCount={0}
             />
           </li>
         ) : null}
