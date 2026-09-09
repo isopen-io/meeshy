@@ -399,11 +399,25 @@ describe('DELETE /communities/:id/members/:memberId', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 200 on successful member removal', async () => {
+  it('returns 200 on successful member removal, sets isActive:false + leftAt instead of deleting the row (#5800)', async () => {
     // Default: community.members[0].role = 'admin'
+    (app as any).prisma.communityMember.findFirst.mockResolvedValueOnce({
+      id: MEMBER_ID, communityId: COMM_ID, userId: MEMBER_ID, isActive: true,
+    });
     const res = await app.inject({ method: 'DELETE', url: '/communities/' + COMM_ID + '/members/' + MEMBER_ID });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    expect((app as any).prisma.communityMember.deleteMany).not.toHaveBeenCalled();
+    expect((app as any).prisma.communityMember.update).toHaveBeenCalledWith({
+      where: { id: MEMBER_ID },
+      data: { isActive: false, leftAt: expect.any(Date) },
+    });
+  });
+
+  it('returns 404 when the target is not an active member', async () => {
+    const res = await app.inject({ method: 'DELETE', url: '/communities/' + COMM_ID + '/members/' + MEMBER_ID });
+    expect(res.statusCode).toBe(404);
+    expect((app as any).prisma.communityMember.deleteMany).not.toHaveBeenCalled();
   });
 });
 
