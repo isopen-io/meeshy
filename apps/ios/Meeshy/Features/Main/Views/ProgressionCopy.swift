@@ -281,21 +281,6 @@ enum ProgressionCopy {
         bundle: .main
     )
 
-    static let howToEarn = String(
-        localized: "progression.level.howToEarn",
-        defaultValue: "Comment gagner des points",
-        bundle: .main
-    )
-
-    /// Le prix vient du SERVEUR (`meesh.mintCost`) : aucun client ne le code en dur.
-    static func mintPrice(_ cost: Int) -> String {
-        String(
-            localized: "progression.level.mintPrice",
-            defaultValue: "\(cost) points se convertissent en une Meesh — la monnaie rare de Meeshy.",
-            bundle: .main
-        )
-    }
-
     static let elansTitle = String(localized: "progression.elans.title", defaultValue: "Vos élans", bundle: .main)
 
     static let elansEmpty = String(
