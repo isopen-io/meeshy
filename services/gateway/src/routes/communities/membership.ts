@@ -23,6 +23,7 @@ import {
 import { CommunityRole } from './types';
 import { gateCoMemberPresence } from './member-presence';
 import { viewerFromRequest } from '../users/presence-gate';
+import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembershipRoutes' });
 
@@ -233,6 +234,15 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
               }
             }
           });
+
+      // Succès « cercles » (#5759) — APRÈS l'ACK métier, jamais avant : on ne
+      // grave pas un palier pour une adhésion qui n'a pas eu lieu. Best-effort
+      // et idempotent, donc une panne ici ne coûte que le prochain geste.
+      void new CerclesAchievements(fastify.prisma).recordEvent({
+        kind: 'community.join',
+        userId,
+        communityId: id,
+      }).catch(() => undefined);
 
       // Pas de gate ici : le membre rendu est l'APPELANT lui-même, et une
       // préférence de visibilité ne se cache pas à celui qui l'a posée.
@@ -495,6 +505,14 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
               }
             }
           });
+
+      // Le succès revient à l'INVITÉ, pas à celui qui invite : c'est lui qui
+      // rejoint le cercle (#5759).
+      void new CerclesAchievements(fastify.prisma).recordEvent({
+        kind: 'community.join',
+        userId: inviteeId,
+        communityId: id,
+      }).catch(() => undefined);
 
       // Critère STRICT avec le viewer réel (l'inviteur) — être membre de la
       // même communauté que l'invité ne vaut plus d'accès à sa présence.

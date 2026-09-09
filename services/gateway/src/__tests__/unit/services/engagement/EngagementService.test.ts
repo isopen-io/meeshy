@@ -16,6 +16,17 @@ const mockGetSharedNotificationService = getSharedNotificationService as jest.Mo
   typeof getSharedNotificationService
 >;
 
+/**
+ * Le crédit de score passe par `$runCommandRaw` depuis #5742 : `increment` nu
+ * échouait sur un `engagementScore` valant `null` en base. Ces fabriques
+ * rendent donc la forme d'une réponse `findAndModify` — `{ value: { … } }` —
+ * et `scoreAfter` est le score APRÈS l'incrément, celui dont le service déduit
+ * les paliers franchis.
+ */
+function makeRawScore(scoreAfter = 0) {
+  return jest.fn().mockResolvedValue({ ok: 1, value: { engagementScore: scoreAfter } });
+}
+
 function makePrisma(overrides: Partial<{
   upsert: jest.Mock;
   create: jest.Mock;
@@ -27,12 +38,25 @@ function makePrisma(overrides: Partial<{
   return {
     engagementCounter: {
       upsert: overrides.upsert ?? jest.fn(),
-      // Default: no other axis of any composed condition has been reached yet
-      // (empty counter table) — harmless for every test that isn't about achievements.
-      findMany: overrides.findMany ?? jest.fn().mockResolvedValue([]),
+      // `findMany` sert désormais DEUX questions, et un mock qui ignore son
+      // `where` répondrait la même chose aux deux :
+      //  - `hasAllAxes` (succès composés) filtre sur `axisKey` + `count > 0` ;
+      //  - `loadElanInputs` (#5749) filtre sur `updatedAt >= fenêtre`.
+      // Servir les axes d'un succès à la résolution d'élan ferait croire à
+      // plusieurs familles actives et multiplierait les points d'un test qui
+      // ne parle pas d'élan. Le mock DISCRIMINE donc, comme la base.
+      findMany: jest.fn(async (args: unknown) => {
+        const where = (args as { where?: { updatedAt?: unknown } } | undefined)?.where;
+        if (where?.updatedAt !== undefined) return [];
+        const surcharge = overrides.findMany;
+        return surcharge ? await surcharge(args as never) : [];
+      }),
     },
     engagementMilestone: {
       create: overrides.create ?? jest.fn(),
+      // Lu par la résolution d'élan (#5749) : aucun palier gravé ⇒ pas
+      // d'assise, donc facteur porté par les seules familles actives.
+      findMany: jest.fn().mockResolvedValue([]),
     },
     engagementConversationCredit: {
       create: overrides.conversationCreditCreate ?? jest.fn().mockResolvedValue({}),
@@ -45,6 +69,7 @@ function makePrisma(overrides: Partial<{
       findUnique: overrides.findUnique ?? jest.fn().mockResolvedValue({ systemLanguage: 'fr' }),
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({}),
     },
+    $runCommandRaw: makeRawScore(),
   } as unknown as PrismaClient;
 }
 
@@ -61,9 +86,14 @@ function makeStreakPrisma(streakState: {
   return {
     engagementCounter: {
       upsert: jest.fn().mockResolvedValue({ count: 2 }), // 1 -> 2, crosses no badge threshold (isolates the streak logic under test)
+      // Lu par la résolution d'élan (#5749) : aucune activité récente ⇒ seule
+      // la famille du geste courant compte, donc facteur neutre — ce qui laisse
+      // les assertions de série et de niveau lire des poids non multipliés.
+      findMany: jest.fn().mockResolvedValue([]),
     },
     engagementMilestone: {
       create: overrides.create ?? jest.fn().mockResolvedValue({}),
+      findMany: jest.fn().mockResolvedValue([]),
     },
     engagementConversationCredit: {
       create: jest.fn().mockResolvedValue({}),
@@ -72,6 +102,7 @@ function makeStreakPrisma(streakState: {
       findUnique,
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({}),
     },
+    $runCommandRaw: makeRawScore(),
   } as unknown as PrismaClient;
 }
 
@@ -87,13 +118,16 @@ function makeLevelPrisma(overrides: Partial<{
   create: jest.Mock;
   userUpdate: jest.Mock;
   upsert: jest.Mock;
+  runCommandRaw: jest.Mock;
 }> = {}) {
   return {
     engagementCounter: {
       upsert: overrides.upsert ?? jest.fn().mockResolvedValue({ count: 2 }), // 1 -> 2, no badge threshold crossed
+      findMany: jest.fn().mockResolvedValue([]),
     },
     engagementMilestone: {
       create: overrides.create ?? jest.fn().mockResolvedValue({}),
+      findMany: jest.fn().mockResolvedValue([]),
     },
     engagementConversationCredit: {
       create: jest.fn().mockResolvedValue({}),
@@ -102,6 +136,7 @@ function makeLevelPrisma(overrides: Partial<{
       findUnique: jest.fn().mockResolvedValue(null),
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({ engagementScore: 0 }),
     },
+    $runCommandRaw: overrides.runCommandRaw ?? makeRawScore(),
   } as unknown as PrismaClient;
 }
 
@@ -133,8 +168,11 @@ describe('EngagementService.recordActivity', () => {
 
     expect(upsert).toHaveBeenCalledWith({
       where: { userId_axisKey: { userId: 'user-1', axisKey: 'content.text_message' } },
-      create: { userId: 'user-1', axisKey: 'content.text_message', count: 1 },
-      update: { count: { increment: 1 } },
+      // `points` à côté de `count` depuis #5742 : deux colonnes, deux questions —
+      // `count` compte des ACTIONS et pilote les badges, `points` porte ce que
+      // l'axe crédite au score et pilote le niveau puis la frappe des Meeshes.
+      create: { userId: 'user-1', axisKey: 'content.text_message', count: 1, points: 3 },
+      update: { count: { increment: 1 }, points: { increment: 3 } },
       select: { count: true },
     });
   });
@@ -257,8 +295,8 @@ describe('EngagementService.recordConversationActivity', () => {
     });
     expect(upsert).toHaveBeenCalledWith({
       where: { userId_axisKey: { userId: 'user-1', axisKey: 'conversation.public' } },
-      create: { userId: 'user-1', axisKey: 'conversation.public', count: 1 },
-      update: { count: { increment: 1 } },
+      create: { userId: 'user-1', axisKey: 'conversation.public', count: 1, points: 5 },
+      update: { count: { increment: 1 }, points: { increment: 5 } },
       select: { count: true },
     });
   });
@@ -436,27 +474,32 @@ describe('EngagementService level tracking (#5545)', () => {
   /**
    * Le poids lu est celui du CATALOGUE, jamais un nombre recopié ici.
    *
-   * La version précédente épinglait `increment: 3` en dur, et le porteur a
-   * réglé les poids trois fois le 2026-09-09 (contenu 3→9, commentaire 2→3,
-   * plus la famille sociale à 7). Un témoin qui casse à chaque réglage d'un
-   * paramètre TUNABLE ne protège rien : il ne dit plus si le service ajoute le
-   * BON poids, il dit seulement que le barème n'a pas bougé. Ce qui est sous
-   * test ici est la mécanique — « le poids de l'axe est ajouté » — et elle se
-   * vérifie contre la source de vérité.
+   * La version précédente épinglait `3` en dur, et le porteur a réglé les
+   * poids trois fois le 2026-09-09 (contenu 3→9, commentaire 2→3, plus la
+   * famille sociale à 7). Un témoin qui casse à chaque réglage d'un paramètre
+   * TUNABLE ne protège rien : il ne dit plus si le service ajoute le BON
+   * poids, il dit seulement que le barème n'a pas bougé.
+   *
+   * Ce qui est sous test ici est la MÉCANIQUE — le pipeline `$ifNull` de
+   * #5742 : l'`increment` nu échouait sur un `engagementScore` à `null`, et
+   * c'est ce qui a tué le score en production pendant trois mois. Le poids,
+   * lui, se lit à la source de vérité.
    */
-  it('adds the axis family weight to the engagement score via an atomic $inc', async () => {
+  it('adds the axis family weight to the engagement score, null-safely (#5742)', async () => {
     const attendu = ENGAGEMENT_AXIS_WEIGHTS['content.text_message'];
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: attendu });
-    const prisma = makeLevelPrisma({ userUpdate });
+    const runCommandRaw = makeRawScore(attendu);
+    const prisma = makeLevelPrisma({ runCommandRaw });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
     await svc.recordActivity('user-1', 'content.text_message');
 
-    expect(userUpdate).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
-      data: { engagementScore: { increment: attendu } },
-      select: { engagementScore: true },
+    expect(runCommandRaw).toHaveBeenCalledWith({
+      findAndModify: 'User',
+      query: { _id: { $oid: 'user-1' } },
+      update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, attendu] } } }],
+      new: true,
+      fields: { engagementScore: 1 },
     });
   });
 
@@ -477,24 +520,23 @@ describe('EngagementService level tracking (#5545)', () => {
   });
 
   it('weighs a tool axis at 1, distinct from a content axis at 3', async () => {
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 1 });
-    const prisma = makeLevelPrisma({ userUpdate });
+    const runCommandRaw = makeRawScore(1);
+    const prisma = makeLevelPrisma({ runCommandRaw });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
     await svc.recordActivity('user-1', 'tool.sticker');
 
-    expect(userUpdate).toHaveBeenCalledWith({
-      where: { id: 'user-1' },
-      data: { engagementScore: { increment: 1 } },
-      select: { engagementScore: true },
-    });
+    const command = runCommandRaw.mock.calls[0][0] as {
+      update: Array<{ $set: { engagementScore: { $add: [unknown, number] } } }>;
+    };
+    expect(command.update[0].$set.engagementScore.$add[1]).toBe(1);
   });
 
   it('does not create a level milestone or notify when the increment crosses no level threshold', async () => {
     const create = jest.fn();
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 20 }); // 17 -> 20, no threshold in ]17,20]
-    const prisma = makeLevelPrisma({ create, userUpdate });
+    const runCommandRaw = makeRawScore(20); // 17 -> 20, no threshold in ]17,20]
+    const prisma = makeLevelPrisma({ create, runCommandRaw });
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -507,8 +549,8 @@ describe('EngagementService level tracking (#5545)', () => {
 
   it('awards LEVEL_UP and notifies exactly once when the increment lands on a threshold', async () => {
     const create = jest.fn().mockResolvedValue({});
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 10 }); // 5 -> 10, crosses threshold 10
-    const prisma = makeLevelPrisma({ create, userUpdate });
+    const runCommandRaw = makeRawScore(10); // 5 -> 10, crosses threshold 10
+    const prisma = makeLevelPrisma({ create, runCommandRaw });
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -532,8 +574,7 @@ describe('EngagementService level tracking (#5545)', () => {
 
   it('replays the same level threshold with zero notifications (anti-replay via unique constraint)', async () => {
     const create = jest.fn().mockRejectedValue(p2002Error());
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 10 });
-    const prisma = makeLevelPrisma({ create, userUpdate });
+    const prisma = makeLevelPrisma({ create, runCommandRaw: makeRawScore(10) });
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -546,8 +587,7 @@ describe('EngagementService level tracking (#5545)', () => {
 
   it('lands exactly on a threshold boundary and still crosses it (inclusive upper bound)', async () => {
     const create = jest.fn().mockResolvedValue({});
-    const userUpdate = jest.fn().mockResolvedValue({ engagementScore: 50 }); // 45 -> 50, crosses 50
-    const prisma = makeLevelPrisma({ create, userUpdate });
+    const prisma = makeLevelPrisma({ create, runCommandRaw: makeRawScore(50) }); // 45 -> 50, crosses 50
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 

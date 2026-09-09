@@ -252,6 +252,18 @@ model User {
   /// `currentStreakDays` ci-dessus) : `$inc` sur un champ Mongo absent le
   /// crée à la valeur de l'incrément, ce qui est déjà le comportement voulu.
   engagementScore   Int       @default(0)
+  /// Solde de Meeshes — PROJECTION de lecture du registre `MeeshLedger`, pas
+  /// la vérité (#5743). La vérité est `Σ(MeeshLedger.delta)`, réconciliable ;
+  /// ce champ existe pour qu'un écran n'ait pas à sommer un journal.
+  meeshBalance      Int       @default(0)
+  /// Meeshes FRAPPÉES à vie — monotone croissant, jamais décrémenté, même
+  /// quand une Meesh est offerte, dépensée ou retirée par sanction.
+  ///
+  /// C'est LUI que le rang d'ancienneté interroge (#5744), jamais le solde :
+  /// un succès ne peut pas diminuer (règle porteur), or le solde baisse dès
+  /// qu'on offre. Adosser le rang au solde rétrograderait un vétéran au moment
+  /// précis où il fait le geste le plus généreux du produit.
+  meeshMintedLifetime Int     @default(0)
 
   // ============================================
   // E2EE / SIGNAL PROTOCOL ENCRYPTION FIELDS
@@ -4540,6 +4552,20 @@ model EngagementCounter {
   /// `EngagementAxisKey` (@meeshy/shared/types/engagement).
   axisKey   String
   count     Int      @default(0)
+  /// Les POINTS que cet axe a crédités au score agrégé — distincts de `count`,
+  /// qui compte des ACTIONS (#5742, #5749).
+  ///
+  /// Deux colonnes parce que deux questions : `count` pilote les BADGES
+  /// (« cinquante messages vocaux » veut dire cinquante, quel que soit l'élan
+  /// du jour), `points` pilote le SCORE, le niveau et la frappe des Meeshes.
+  /// Les confondre ferait obtenir ses badges cinq fois plus vite à qui joue
+  /// avec un multiplicateur ×5, ce qui viderait toute comparaison entre
+  /// comptes de son sens.
+  ///
+  /// L'invariant tenu par le service est `User.engagementScore == Σ(points)`.
+  /// Il remplace `Σ(count × poids)`, que l'accélérateur d'élan (#5749) rendra
+  /// faux dès qu'un point sera crédité à un facteur autre que 1.
+  points    Int      @default(0)
   updatedAt DateTime @updatedAt
 
   @@unique([userId, axisKey])
@@ -4588,4 +4614,40 @@ model EngagementConversationCredit {
 
   @@unique([userId, axisKey, conversationId])
   @@index([userId, axisKey])
+}
+
+/// LE REGISTRE DES MEESHES — journal en AJOUT SEUL (#5743).
+///
+/// Une valeur qu'on peut ENVOYER, PERDRE par sanction et DÉPENSER n'est pas un
+/// compteur : c'est une monnaie. Quatre besoins l'exigent, tous exprimés par le
+/// porteur : envoyer demande de savoir qui a envoyé quoi à qui et de le
+/// prouver ; sanctionner demande un acteur, un motif et une trace opposable —
+/// un solde décrémenté sans journal est indéfendable le jour où l'utilisateur
+/// conteste ; acheter demande l'idempotence ; réconcilier demande que
+/// `User.meeshBalance == Σ(delta)`, vérifiable et jamais supposé.
+///
+/// Aucune ligne n'est jamais modifiée ni supprimée : une correction s'écrit par
+/// une ligne INVERSE, qui se lit.
+model MeeshLedger {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  /// Positif (frappe, don reçu, octroi) ou négatif (don envoyé, dépense,
+  /// sanction) — jamais zéro.
+  delta     Int
+  /// "mint" | "transfer_in" | "transfer_out" | "spend" | "sanction" | "grant"
+  reason    String
+  /// L'auteur de l'écriture quand ce n'est pas `userId` : l'expéditeur d'un
+  /// don, le modérateur d'une sanction. Absent pour une frappe.
+  actorId   String?  @db.ObjectId
+  /// Identifiant fourni par l'appelant — l'IDEMPOTENCE. Un double-tap, un retry
+  /// réseau ou une reprise d'application ne frappent qu'une fois.
+  requestId String
+  /// Le détail que la ligne doit pouvoir rendre plus tard : pour une frappe, les
+  /// axes débités et ce qu'ils ont rendu — la MÉMOIRE de ce qui a été dépensé,
+  /// dont les badges éteints ne gardent plus trace.
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, requestId])
+  @@index([userId, createdAt])
 }

@@ -27,6 +27,17 @@ final class ProgressionViewModel: ObservableObject {
 
     @Published private(set) var progress: EngagementProgress?
     @Published private(set) var loadState: LoadState = .idle
+    /// Une frappe est en vol (#5743) — le bouton reste affiché, avec son état
+    /// dit : le faire disparaître au tap donnerait l'impression d'un échec.
+    @Published private(set) var isMinting = false
+
+    /**
+     * L'identifiant d'IDEMPOTENCE, généré une fois par INTENTION de frappe et
+     * non par requête : sinon un réessai deviendrait une seconde frappe, ce que
+     * cet identifiant est justement là pour empêcher. Il n'est renouvelé
+     * qu'après une frappe qui a abouti.
+     */
+    private var mintRequestId = UUID().uuidString
 
     private let service: EngagementProgressProviding
     private let networkMonitor: any NetworkMonitorProviding
@@ -85,5 +96,33 @@ final class ProgressionViewModel: ObservableObject {
             return
         }
         revalidationTask = await loader.load(fetch: fetch, setLoadState: setLoadState, apply: apply)
+    }
+
+    /// Frappe une Meesh, puis RELIT depuis le réseau.
+    ///
+    /// La relecture est forcée : la frappe change les compteurs, le score, les
+    /// badges et le solde d'un seul coup, et servir le cache après elle
+    /// montrerait un écran qui contredit l'action qu'on vient de faire.
+    ///
+    /// Un échec ne bloque rien et ne renouvelle PAS l'identifiant : réessayer
+    /// avec le même reste idempotent, ce qui est exactement ce qu'on veut quand
+    /// on ne sait pas si la première tentative a abouti.
+    func mint() async {
+        guard !isMinting else { return }
+        isMinting = true
+        defer { isMinting = false }
+        do {
+            _ = try await service.mintMeesh(requestId: mintRequestId)
+            mintRequestId = UUID().uuidString
+            await load(forceNetwork: true)
+        } catch {
+            loadState = .error(
+                String(
+                    localized: "progression.meesh.mint_error",
+                    defaultValue: "La frappe n'a pas abouti — réessayez",
+                    bundle: .main
+                )
+            )
+        }
     }
 }

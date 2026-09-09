@@ -225,7 +225,23 @@ export const parseCatalogBlock = (blockLines) => {
 // route gateway et son exposition dans les catalogues générés ; l'écran de
 // ré-acceptation (iOS/Android/web) qui l'appellera est un travail client à
 // part, ouvert séparément (#5716).
-const BASELINE_DEAD_ENTRIES = 268;
+//
+// 268 → 269 (#5743) : `me.meeshMint` (`POST /me/meesh/mint`, la frappe d'une
+// Meesh). La raison DIFFÈRE des deux précédentes, et c'est pourquoi elle est
+// écrite plutôt que rangée sous « même forme que » : cette route A un appelant
+// client — `mintMeesh` dans `apps/web-v3/src/lib/api/engagement.ts` — mais il
+// ne passe PAS par ce catalogue. La v3.1 n'importe `@meeshy/shared/api/endpoints`
+// nulle part : ses 444 adresses se paieraient avant le premier pixel (D-14), et
+// chaque kilo-octet y est mesuré par un gate. Elle adresse donc ses routes par
+// un chemin littéral, ce qui rend MORTE au sens de ce cliquet toute entrée
+// `me.*` qu'elle consomme — `me.engagement` l'est déjà pour exactement ce
+// motif, et le sera tant que la v3.1 ne pourra pas importer un sous-ensemble
+// du catalogue.
+//
+// Ce qu'il faudrait pour la ressusciter, et qui n'est pas de ce lot : un
+// catalogue SCINDABLE, dont un client puisse tirer trois adresses sans en
+// embarquer 444.
+const BASELINE_DEAD_ENTRIES = 269;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

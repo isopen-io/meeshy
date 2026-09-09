@@ -141,6 +141,75 @@ enum ProgressionCopy {
         String(localized: "progression.points", defaultValue: "\(score) points", bundle: .main)
     }
 
+    /// L'élan courant, et CE QUI LE PORTE (#5749) — un multiplicateur dont on
+    /// ignore la cause ne se pilote pas, il se subit.
+    static func elan(factor: Double, families: Int, windowDays: Int, hasStanding: Bool) -> String {
+        // Le facteur est entier par construction (1 + crans) ; on l'affiche tel
+        // quel plutôt qu'en « ×2,0 », qui suggérerait une précision inexistante.
+        let f = Int(factor.rounded())
+        let familles = families == 1
+            ? String(localized: "progression.elan.family.one", defaultValue: "1 famille active", bundle: .main)
+            : String(localized: "progression.elan.family.many", defaultValue: "\(families) familles actives", bundle: .main)
+        let base = String(
+            localized: "progression.elan.base",
+            defaultValue: "Élan ×\(f) — \(familles) sur \(windowDays) jours",
+            bundle: .main
+        )
+        let assise = hasStanding
+            ? String(localized: "progression.elan.standing", defaultValue: ", plus votre assise", bundle: .main)
+            : ""
+        let effet = String(
+            localized: "progression.elan.effect",
+            defaultValue: "Vos prochains gestes rapportent \(f) fois plus.",
+            bundle: .main
+        )
+        return "\(base)\(assise). \(effet)"
+    }
+
+    /// « 2 Meeshes » / « 1 Meesh » / « Aucune Meesh » — le solde (#5743).
+    /// Le singulier est traité à part : « 1 Meeshes » se lirait comme un bogue.
+    static func meeshBalance(_ balance: Int) -> String {
+        if balance <= 0 {
+            return String(localized: "progression.meesh.none", defaultValue: "Aucune Meesh", bundle: .main)
+        }
+        if balance == 1 {
+            return String(localized: "progression.meesh.one", defaultValue: "1 Meesh", bundle: .main)
+        }
+        return String(localized: "progression.meesh.many", defaultValue: "\(balance) Meeshes", bundle: .main)
+    }
+
+    /// « 5 frappées depuis toujours » — le compteur À VIE, jamais le solde.
+    static func meeshMintedLifetime(_ minted: Int) -> String {
+        minted == 1
+            ? String(localized: "progression.meesh.minted.one", defaultValue: "1 frappée depuis toujours", bundle: .main)
+            : String(localized: "progression.meesh.minted.many", defaultValue: "\(minted) frappées depuis toujours", bundle: .main)
+    }
+
+    /// L'action de conversion — le prix vient du SERVEUR, jamais d'une constante locale.
+    static func meeshMintAction(_ cost: Int) -> String {
+        String(
+            localized: "progression.meesh.mint",
+            defaultValue: "Convertir \(cost) points en une Meesh",
+            bundle: .main
+        )
+    }
+
+    /// Ce qui manque, et pourquoi le plancher n'y répond pas.
+    static func meeshMissing(missing: Int, floor: Int) -> String {
+        let manque = String(
+            localized: "progression.meesh.missing",
+            defaultValue: "Encore \(missing) points convertibles avant une Meesh.",
+            bundle: .main
+        )
+        guard floor > 0 else { return manque }
+        let plancher = String(
+            localized: "progression.meesh.floor",
+            defaultValue: "Vos \(floor) points de conversation seront repris en dernier, sans éteindre aucun badge.",
+            bundle: .main
+        )
+        return "\(manque) \(plancher)"
+    }
+
     /// « 5 jours d’affilée » / « Aucune série en cours ».
     static func streak(_ currentDays: Int) -> String {
         guard currentDays > 0 else {

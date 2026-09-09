@@ -14,10 +14,12 @@ import type { EngagementProgressPayload } from '@meeshy/shared/types/engagement'
  * est acquis rendrait vert n'importe quel écran.
  *
  * Le score est CELUI que `EngagementService.updateEngagementScore` aurait
- * accumulé sur ces compteurs (contenu ×3, commentaires ×2, conversations ×5,
- * outils ×1 — § 7 du modèle) : 87 × 3 + 8 × 2 + 9 × 5 + 28 × 1 = 350. Une
- * fixture dont le score contredirait ses compteurs ferait mentir la barre de
- * niveau sans qu'aucun témoin ne rougisse.
+ * accumulé sur ces compteurs, au barème COURANT (contenu ×9, social ×7,
+ * conversations ×5, commentaires ×3, outils ×1 — le porteur l'a réglé le
+ * 2026-09-09) : 87 × 9 + 52 × 7 + 9 × 5 + 8 × 3 + 28 × 1 = 1244. Une fixture
+ * dont le score contredirait ses compteurs ferait mentir la barre de niveau
+ * sans qu'aucun témoin ne rougisse — c'est exactement ce qui était arrivé :
+ * elle valait encore 350, calculé sur le barème d'avant le réglage.
  *
  * Les DATES sont ancrées sur MAINTENANT (`daysAgo`), jamais écrites en dur —
  * même raison que les horaires de `fixtures.ts` : une capture qui dit « obtenu
@@ -38,6 +40,10 @@ export const ENGAGEMENT_PROGRESS_FIXTURE: EngagementProgressPayload = {
     { axisKey: 'tool.sticker', count: 15 },
     { axisKey: 'tool.in_app_edit', count: 4 },
     { axisKey: 'tool.direct_publish', count: 9 },
+    { axisKey: 'social.tracked_link', count: 26 },
+    { axisKey: 'social.share', count: 14 },
+    { axisKey: 'social.friendship', count: 9 },
+    { axisKey: 'social.invite_joined', count: 3 },
   ],
   milestones: [
     { milestoneType: 'badge', milestoneKey: 'content.text_message:1', reachedAt: daysAgo(40) },
@@ -55,6 +61,13 @@ export const ENGAGEMENT_PROGRESS_FIXTURE: EngagementProgressPayload = {
     { milestoneType: 'badge', milestoneKey: 'tool.sticker:10', reachedAt: daysAgo(11) },
     { milestoneType: 'badge', milestoneKey: 'tool.in_app_edit:1', reachedAt: daysAgo(6) },
     { milestoneType: 'badge', milestoneKey: 'tool.direct_publish:1', reachedAt: daysAgo(38) },
+    { milestoneType: 'badge', milestoneKey: 'social.tracked_link:1', reachedAt: daysAgo(28) },
+    { milestoneType: 'badge', milestoneKey: 'social.tracked_link:10', reachedAt: daysAgo(8) },
+    { milestoneType: 'badge', milestoneKey: 'social.share:1', reachedAt: daysAgo(26) },
+    { milestoneType: 'badge', milestoneKey: 'social.share:10', reachedAt: daysAgo(4) },
+    { milestoneType: 'badge', milestoneKey: 'social.friendship:1', reachedAt: daysAgo(37) },
+    { milestoneType: 'badge', milestoneKey: 'social.invite_joined:1', reachedAt: daysAgo(19) },
+    { milestoneType: 'achievement', milestoneKey: 'achievement.parole.message.send.count:100', reachedAt: daysAgo(7) },
     { milestoneType: 'streak', milestoneKey: 'streak:3', reachedAt: daysAgo(3) },
     { milestoneType: 'streak', milestoneKey: 'streak:7', reachedAt: daysAgo(25) },
     { milestoneType: 'level', milestoneKey: 'level:10', reachedAt: daysAgo(39) },
@@ -66,5 +79,46 @@ export const ENGAGEMENT_PROGRESS_FIXTURE: EngagementProgressPayload = {
     { milestoneType: 'achievement', milestoneKey: 'achievement.three_conversation_kinds', reachedAt: daysAgo(14) },
   ],
   streak: { currentStreakDays: 5, longestStreakDays: 12 },
-  level: { engagementScore: 350 },
+  level: { engagementScore: 1244 },
+  /**
+   * La CARTE D'ATTEIGNABILITÉ — partielle À DESSEIN.
+   *
+   * `conversation.join.size` et `community.join.size` sont mesurées, donc leurs
+   * paliers d'ampleur s'affichent jusqu'à la mesure ; `community.create.size`
+   * l'est à peine ; `call.start.size` est ABSENTE, donc ses paliers d'ampleur
+   * se taisent pendant que ses paliers de volume vivent. Une carte complète
+   * rendrait vert un écran qui ignorerait `isAttainable`.
+   */
+  achievementReach: {
+    'conversation.join.size': 1000,
+    'community.join.size': 10000,
+    'community.create.size': 100,
+  },
+  /**
+   * L'ÉLAN à ×3 : trois familles tenues sur la fenêtre, sans l'assise
+   * permanente. Ni le neutre (qui ne montrerait pas la bannière) ni le plafond
+   * (qui cacherait le fait qu'elle COMPTE) — le cran du milieu est le seul qui
+   * fasse tomber une vue qui afficherait un facteur figé.
+   */
+  elan: { factor: 3, activeFamilyCount: 3, hasStanding: false, windowDays: 7 },
+  /**
+   * Une Meesh DÉJÀ frappée, et de quoi en frapper une seconde.
+   *
+   * Le porteur a demandé le bouton de conversion « quand les points le
+   * permettent, sinon pas de bouton ». Une fixture SOUS le prix ne pourrait pas
+   * distinguer « bouton correctement absent » de « bouton manquant » : l'absence
+   * se lit comme la panne. La démonstration est donc frappable, et le solde
+   * non nul prouve en plus que le hero sait afficher autre chose que zéro.
+   *
+   * `debitablePoints` exclut le plancher des conversations (9 actions × 5 = 45),
+   * `floorPoints` le porte.
+   */
+  meesh: {
+    balance: 1,
+    mintedLifetime: 1,
+    debitablePoints: 1244,
+    floorPoints: 45,
+    missingPoints: 0,
+    mintCost: 1221,
+  },
 };

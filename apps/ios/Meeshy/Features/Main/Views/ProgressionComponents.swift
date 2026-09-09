@@ -340,3 +340,212 @@ struct ProgressionSkeleton: View {
         .accessibilityLabel(String(localized: "progression.loading", defaultValue: "Progression en cours de chargement", bundle: .main))
     }
 }
+
+/// LE HÉROS DES MEESHES (#5743) — la première chose qu'on voit sur l'écran.
+///
+/// Trois refus, tous délibérés :
+///
+///  - **rien du tout** quand la passerelle ne sert pas le bloc (`meesh == nil`) :
+///    l'hôte ne monte pas cette vue, plutôt que de peindre un solde inventé à
+///    quelqu'un dont l'application parle à un serveur antérieur ;
+///  - **pas de bouton grisé** — directive porteur : « le bouton pour convertir
+///    quand les points le permettent, sinon pas de bouton ». Un contrôle qui
+///    existe sans effet est un contrôle qui ment ;
+///  - **la barre se mesure sur les points DÉBITABLES**, jamais sur le score
+///    total : une barre nourrie par le plancher conversationnel promettrait une
+///    Meesh qui n'arriverait jamais.
+///
+/// Et quand la frappe est impossible, la vue DIT pourquoi — le plancher est une
+/// promesse (« ce qu'on a bâti en parlant aux autres ne se vend pas »), et une
+/// promesse muette ne rassure personne.
+struct ProgressionMeeshHero: View {
+    let meesh: EngagementMeeshProgress
+    let isMinting: Bool
+    let onMint: () -> Void
+
+    private var theme: ThemeManager { ThemeManager.shared }
+    private let tint = MeeshyColors.warning
+
+    var body: some View {
+        ProgressionCard(tint: tint) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                HStack(spacing: MeeshySpacing.sm) {
+                    Image(systemName: "medal.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(tint)
+                        .accessibilityHidden(true)
+                    Text(ProgressionCopy.meeshBalance(meesh.balance))
+                        .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
+                        .foregroundColor(theme.textPrimary)
+                }
+
+                if meesh.mintedLifetime > 0 {
+                    Text(ProgressionCopy.meeshMintedLifetime(meesh.mintedLifetime))
+                        .font(MeeshyFont.relative(11, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                }
+
+                ProgressionBar(
+                    progress: meesh.progress,
+                    tint: tint,
+                    label: String(
+                        localized: "progression.a11y.bar.meesh",
+                        defaultValue: "Vers la prochaine Meesh",
+                        bundle: .main
+                    )
+                )
+                .padding(.top, MeeshySpacing.xs)
+
+                if meesh.canMint {
+                    // Le bouton RESTE pendant la frappe, avec son état dit : le
+                    // faire disparaître au moment du tap donnerait l'impression
+                    // que l'action a échoué, alors qu'elle est en cours.
+                    Button {
+                        HapticFeedback.light()
+                        onMint()
+                    } label: {
+                        Text(
+                            isMinting
+                                ? String(localized: "progression.meesh.minting", defaultValue: "Frappe en cours…", bundle: .main)
+                                : ProgressionCopy.meeshMintAction(meesh.mintCost)
+                        )
+                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .foregroundColor(theme.backgroundPrimary)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(tint))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isMinting)
+                    .opacity(isMinting ? 0.6 : 1)
+                    .padding(.top, MeeshySpacing.xs)
+                } else {
+                    Text(ProgressionCopy.meeshMissing(missing: meesh.missingPoints, floor: meesh.floorPoints))
+                        .font(MeeshyFont.relative(11, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+/// L'ÉLAN COURANT (#5749) — montré SEULEMENT quand il change quelque chose.
+///
+/// Au neutre (×1) l'hôte ne monte pas cette vue : un badge « ×1 » n'apprend
+/// rien et occupe la place de ce qui compte. Et le texte dit ce qui PORTE le
+/// multiplicateur — un accélérateur dont on ignore la cause ne se pilote pas,
+/// il se subit.
+struct ProgressionElanBanner: View {
+    let elan: EngagementElanProgress
+
+    private var theme: ThemeManager { ThemeManager.shared }
+    private let tint = MeeshyColors.brandPrimary
+
+    var body: some View {
+        HStack(alignment: .top, spacing: MeeshySpacing.sm) {
+            Image(systemName: "wand.and.stars")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(tint)
+                .accessibilityHidden(true)
+            Text(
+                ProgressionCopy.elan(
+                    factor: elan.factor,
+                    families: elan.activeFamilyCount,
+                    windowDays: elan.windowDays,
+                    hasStanding: elan.hasStanding
+                )
+            )
+            .font(MeeshyFont.relative(11, weight: .semibold))
+            .foregroundColor(theme.textPrimary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                .fill(tint.opacity(0.14))
+        )
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// LES SUCCÈS GÉNÉRÉS, EN RANGÉES HORIZONTALES (#5759).
+///
+/// La vue ne TRIE rien, ne FILTRE rien, ne TRONQUE rien : l'ordre de
+/// difficulté, le retrait des paliers inatteignables et la fenêtre
+/// `max(7, acquis + 2)` sont appliqués par `AchievementResolver`, miroir de la
+/// loi partagée et gardé par `achievement-catalog-mirror-parity`. Refaire l'un
+/// des trois ici ferait diverger iOS du web — le mécanisme exact qui a produit
+/// trois familles de Prisme divergentes en trois cycles.
+struct ProgressionGeneratedAchievements: View {
+    let sections: [AchievementSectionView]
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        if sections.isEmpty {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                ForEach(sections) { vue in
+                    VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                        HStack {
+                            Text(AchievementCopy.sectionTitle(vue.section))
+                                .font(MeeshyFont.relative(13, weight: .semibold))
+                                .foregroundColor(theme.textPrimary)
+                            Spacer()
+                            Text("\(vue.unlockedCount) / \(vue.attainableCount)")
+                                .font(MeeshyFont.relative(11, weight: .medium))
+                                .foregroundColor(theme.textMuted)
+                        }
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: MeeshySpacing.sm) {
+                                ForEach(vue.entries) { entry in
+                                    ProgressionAchievementChip(entry: entry)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+private struct ProgressionAchievementChip: View {
+    let entry: AchievementEntry
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Image(systemName: entry.unlocked ? "star.fill" : "medal")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(entry.unlocked ? MeeshyColors.success : theme.textMuted)
+                .accessibilityHidden(true)
+            // Une famille hors catalogue rend `nil` : on montre alors RIEN
+            // plutôt qu'une clé technique.
+            Text(AchievementCopy.label(entry.family, tier: entry.tier) ?? "")
+                .font(MeeshyFont.relative(11, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            if entry.unlocked {
+                Text(AchievementCopy.earned)
+                    .font(MeeshyFont.relative(10, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+            }
+        }
+        .frame(width: 132, alignment: .leading)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                .fill(entry.unlocked ? MeeshyColors.success.opacity(0.14) : theme.textMuted.opacity(0.08))
+        )
+        .accessibilityElement(children: .combine)
+    }
+}

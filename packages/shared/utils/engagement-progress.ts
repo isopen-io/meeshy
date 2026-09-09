@@ -53,6 +53,12 @@ import {
   type EngagementMilestoneType,
   type EngagementProgressPayload,
 } from '../types/engagement.js';
+import { ACHIEVEMENT_FAMILIES } from '../types/achievement-families.js';
+import {
+  expandCatalog,
+  sectionViews,
+  type AchievementSectionView,
+} from './achievement-view.js';
 
 /** Un palier d'une échelle (badge, série ou niveau), atteint ou à venir. */
 export type EngagementTier = {
@@ -103,6 +109,49 @@ export type EngagementAchievementProgress = {
   readonly reachedAt: string | null;
 };
 
+/**
+ * L'ÉLAN, tel que l'écran le rend (#5749) — ce que le PROCHAIN geste créditera.
+ *
+ * `isAccelerated` est dérivé plutôt que servi : au neutre (×1) l'écran ne doit
+ * rien montrer. Un badge « ×1 » n'apprend rien et occupe la place de ce qui
+ * compte ; l'élan ne se montre qu'à partir du moment où il change quelque chose.
+ */
+export type EngagementElanProgress = {
+  readonly factor: number;
+  readonly activeFamilyCount: number;
+  readonly hasStanding: boolean;
+  readonly windowDays: number;
+  /** `true` dès ×2 — la seule condition d'affichage. */
+  readonly isAccelerated: boolean;
+};
+
+/**
+ * Les Meeshes, tels que l'écran les rend (#5743).
+ *
+ * `canMint` est DÉRIVÉ ici, jamais servi par le fil : le serveur envoie des
+ * faits (points débitables, prix), le client en tire la décision d'AFFICHER le
+ * bouton. Deux règles qui en découlent :
+ *  - un serveur antérieur ne sert pas le bloc ⇒ `meesh` est absent ⇒ l'écran
+ *    ne montre RIEN, ni solde ni bouton ;
+ *  - le bouton n'apparaît QUE si `canMint` — pas de bouton grisé (directive
+ *    porteur : « le bouton pour convertir quand les points le permettent,
+ *    sinon pas de bouton »).
+ */
+export type EngagementMeeshProgress = {
+  readonly balance: number;
+  readonly mintedLifetime: number;
+  /** Ce qui peut servir à frapper — les conversations en sont exclues. */
+  readonly debitablePoints: number;
+  /** Le plancher inaliénable : compté dans le niveau, jamais dépensable. */
+  readonly floorPoints: number;
+  readonly missingPoints: number;
+  readonly mintCost: number;
+  /** Vrai quand les points débitables couvrent le prix. */
+  readonly canMint: boolean;
+  /** Fraction parcourue vers la prochaine Meesh — `1` quand la frappe est possible. */
+  readonly progress: number;
+};
+
 export type EngagementProgress = {
   readonly level: EngagementLevelProgress;
   readonly streak: EngagementStreakProgress;
@@ -114,6 +163,20 @@ export type EngagementProgress = {
   readonly badgesTotal: number;
   /** Aucune activité comptée, aucun palier gravé — l'ÉTAT VIDE de l'écran (dimension 8). */
   readonly isEmpty: boolean;
+  /** Absent quand la passerelle ne sert pas encore le bloc — l'écran n'affiche alors rien. */
+  readonly meesh?: EngagementMeeshProgress;
+  /** Idem pour l'élan (#5749). */
+  readonly elan?: EngagementElanProgress;
+  /**
+   * Les succès du catalogue GÉNÉRATIF (#5758/#5759), rangés par section et
+   * déjà tronqués à leur fenêtre `max(7, acquis + 2)`.
+   *
+   * Distinct de `achievements` ci-dessus, qui porte les cinq succès composés
+   * historiques (#5530) : ceux-là sont nommés un par un, ceux-ci sont produits
+   * par la grammaire. La fusion des deux listes est un lot à part — les mêler
+   * ici mélangerait deux vocabulaires sans que rien ne le signale.
+   */
+  readonly achievementSections?: readonly AchievementSectionView[];
 };
 
 export type EngagementFamilyGroup = {
@@ -231,6 +294,69 @@ export function resolveEngagementProgress(payload: EngagementProgressPayload): E
     badgesEarned,
     badgesTotal: ENGAGEMENT_AXES.length * BADGE_THRESHOLDS.length,
     isEmpty: !hasActivity,
+    ...(payload.meesh !== undefined ? { meesh: resolveMeesh(payload.meesh) } : {}),
+    ...(payload.elan !== undefined ? { elan: resolveElan(payload.elan) } : {}),
+    ...(payload.achievementReach !== undefined
+      ? { achievementSections: resolveAchievementSections(payload) }
+      : {}),
+  };
+}
+
+/**
+ * Les sections de succès générés, prêtes à rendre.
+ *
+ * La carte d'atteignabilité vient du SERVEUR (elle mesure la réalité du
+ * produit) ; le développement, l'ordre et la fenêtre sont calculés ICI, par la
+ * loi partagée — c'est ce qui garantit que le web et iOS montrent exactement
+ * les mêmes entrées dans le même ordre.
+ */
+function resolveAchievementSections(payload: EngagementProgressPayload): readonly AchievementSectionView[] {
+  const reach = new Map(Object.entries(payload.achievementReach ?? {}));
+  const unlocked = new Map<string, string | null>();
+  for (const milestone of payload.milestones) {
+    if (milestone.milestoneType !== 'achievement') continue;
+    unlocked.set(milestone.milestoneKey, milestone.reachedAt);
+  }
+  return sectionViews(expandCatalog({ families: ACHIEVEMENT_FAMILIES, reach, unlocked }));
+}
+
+function resolveElan(elan: NonNullable<EngagementProgressPayload['elan']>): EngagementElanProgress {
+  // Borné à [1, 5] ici AUSSI : le plafond est une règle de produit, pas une
+  // convention de sérialisation — un serveur qui servirait 9 ne doit pas faire
+  // afficher 9.
+  const factor = Number.isFinite(elan.factor) ? Math.min(5, Math.max(1, elan.factor)) : 1;
+  return {
+    factor,
+    activeFamilyCount: safeCount(elan.activeFamilyCount),
+    hasStanding: elan.hasStanding === true,
+    windowDays: safeCount(elan.windowDays),
+    isAccelerated: factor > 1,
+  };
+}
+
+/**
+ * `canMint` et `progress` sont DÉRIVÉS ici, jamais servis par le fil : le
+ * serveur envoie des faits, le client en tire la décision d'afficher — c'est ce
+ * qui garantit que les trois plateformes prennent la MÊME décision sur les
+ * MÊMES chiffres.
+ *
+ * `progress` se mesure sur les points DÉBITABLES, pas sur le score total : une
+ * barre qui monterait grâce à des points de conversation — que la frappe ne
+ * peut pas reprendre (#5743) — promettrait une Meesh qui n'arriverait jamais.
+ */
+function resolveMeesh(meesh: NonNullable<EngagementProgressPayload['meesh']>): EngagementMeeshProgress {
+  const mintCost = safeCount(meesh.mintCost);
+  const debitablePoints = safeCount(meesh.debitablePoints);
+  const canMint = mintCost > 0 && debitablePoints >= mintCost;
+  return {
+    balance: safeCount(meesh.balance),
+    mintedLifetime: safeCount(meesh.mintedLifetime),
+    debitablePoints,
+    floorPoints: safeCount(meesh.floorPoints),
+    missingPoints: safeCount(meesh.missingPoints),
+    mintCost,
+    canMint,
+    progress: mintCost === 0 ? 0 : clamp01(debitablePoints / mintCost),
   };
 }
 
