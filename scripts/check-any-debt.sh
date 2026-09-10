@@ -114,10 +114,15 @@ readonly ANY_PATTERN=': *any\b|\bas any\b|<any>|Array<any>|any\[\]'
 # spécifiquement.
 readonly SHARED_BASELINE=0
 
-# `services/gateway/src` — dette réelle, mesurée aujourd'hui. Ne peut que
-# descendre. Pour la baisser : lancer ce script, il nomme la valeur à écrire
-# ici.
-readonly GATEWAY_BASELINE=650
+# `services/gateway/src` — dette réelle. Ne peut que descendre. Pour la
+# baisser : lancer ce script, il nomme la valeur à écrire ici.
+#
+# 651, pas 650 (#5945) : le commit d'introduction (`ebbb5fc8dd`, #3679)
+# enregistrait 650 comme « mesurée aujourd'hui », mais une mesure
+# indépendante sur ce MÊME commit — avant tout autre changement gateway —
+# rend 651. Le self-test du script passe ; c'est la valeur enregistrée qui
+# était fausse dès l'introduction, pas une dérive de dette réelle depuis.
+readonly GATEWAY_BASELINE=651
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly REPO_ROOT
