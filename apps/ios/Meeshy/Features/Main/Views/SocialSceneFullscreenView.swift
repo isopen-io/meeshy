@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MeeshySDK
 import MeeshyUI
 
@@ -276,9 +277,9 @@ struct SocialSceneFullscreenView: View {
             HStack {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(MeeshyFont.relative(16, weight: .bold))
                         .foregroundColor(.white)
-                        .frame(width: 40, height: 40)
+                        .frame(width: UIFontMetrics.default.scaledValue(for: 40), height: UIFontMetrics.default.scaledValue(for: 40))
                         .adaptiveGlass(in: Circle(), interactive: true)
                         .padding()
                 }
@@ -309,7 +310,7 @@ struct SocialSceneFullscreenView: View {
                         }
                     ) { texte, taille in
                         Text(texte)
-                            .font(.system(size: taille))
+                            .font(MeeshyFont.relative(taille))
                             .foregroundColor(.white)
                     }
                 }
@@ -342,9 +343,9 @@ struct SocialSceneFullscreenView: View {
             isPlaying.toggle()
         } label: {
             Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 16, weight: .bold))
+                .font(MeeshyFont.relative(16, weight: .bold))
                 .foregroundColor(.white)
-                .frame(width: 40, height: 40)
+                .frame(width: UIFontMetrics.default.scaledValue(for: 40), height: UIFontMetrics.default.scaledValue(for: 40))
                 .adaptiveGlass(in: Circle(), interactive: true)
                 .padding()
         }
@@ -361,7 +362,7 @@ struct SocialSceneFullscreenView: View {
     /// scène le dit déjà, et le lire deux fois ferait bégayer le lecteur.
     private var compteurDeScene: some View {
         Text("\(sceneIndex + 1) / \(document.scenes.count)")
-            .font(.system(size: 12, weight: .bold, design: .monospaced))
+            .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
             .foregroundColor(.white)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -381,10 +382,10 @@ struct SocialSceneFullscreenView: View {
             )
             VStack(alignment: .leading, spacing: 2) {
                 Text(post.author)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(.white)
                 Text(post.timestamp.formatted(date: .abbreviated, time: .shortened))
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(.white.opacity(0.7))
             }
             Spacer(minLength: 0)

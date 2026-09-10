@@ -5,7 +5,7 @@ import { BADGE_THRESHOLDS, ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES, ENGAGEM
 import { axesByFamily, resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
-import { ACHIEVEMENT_COPY, AXIS_LABELS } from '@/lib/view/progression';
+import { ACHIEVEMENT_COPY, AXIS_LABELS, FAMILY_LABELS } from '@/lib/view/progression';
 
 import { ElansHero, MeeshDetail, ProgressionBody } from './progression';
 import { AchievementsSection, AxisRow, GeneratedAchievements, ProgressionError, ProgressionSkeleton } from './progression-parts';
@@ -323,6 +323,7 @@ const rendreAvecElan = (elan: {
   activeFamilyCount: number;
   hasStanding: boolean;
   windowDays: number;
+  activeFamilies?: readonly string[];
 }) =>
   renderToStaticMarkup(
     <ElansHero progress={resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, elan })} />,
@@ -330,7 +331,13 @@ const rendreAvecElan = (elan: {
 
 describe('ElanBanner', () => {
   test('n’affiche RIEN au neutre — un badge « ×1 » n’apprend rien', () => {
-    const rendu = rendreAvecElan({ factor: 1, activeFamilyCount: 1, hasStanding: false, windowDays: 7 });
+    const rendu = rendreAvecElan({
+      factor: 1,
+      activeFamilyCount: 1,
+      hasStanding: false,
+      windowDays: 7,
+      activeFamilies: ['content'],
+    });
     expect(rendu).not.toContain('Élan');
   });
 
@@ -339,7 +346,13 @@ describe('ElanBanner', () => {
   });
 
   test('dit le facteur ET ce qui le porte — sinon il se subit au lieu de se piloter', () => {
-    const rendu = rendreAvecElan({ factor: 3, activeFamilyCount: 3, hasStanding: false, windowDays: 7 });
+    const rendu = rendreAvecElan({
+      factor: 3,
+      activeFamilyCount: 3,
+      hasStanding: false,
+      windowDays: 7,
+      activeFamilies: ['content', 'comment', 'conversation'],
+    });
     expect(rendu).toContain('Élan ×3');
     expect(rendu).toContain('3 familles actives');
     expect(rendu).toContain('sur 7 jours');
@@ -347,21 +360,92 @@ describe('ElanBanner', () => {
   });
 
   test('nomme l’assise quand elle porte le dernier cran', () => {
-    const rendu = rendreAvecElan({ factor: 5, activeFamilyCount: 4, hasStanding: true, windowDays: 7 });
+    const rendu = rendreAvecElan({
+      factor: 5,
+      activeFamilyCount: 4,
+      hasStanding: true,
+      windowDays: 7,
+      activeFamilies: ['content', 'comment', 'conversation', 'tool'],
+    });
     expect(rendu).toContain('Élan ×5');
     expect(rendu).toContain('plus votre assise');
   });
 
   test('accorde le singulier — « 1 famille active »', () => {
-    const rendu = rendreAvecElan({ factor: 2, activeFamilyCount: 1, hasStanding: true, windowDays: 7 });
+    const rendu = rendreAvecElan({
+      factor: 2,
+      activeFamilyCount: 1,
+      hasStanding: true,
+      windowDays: 7,
+      activeFamilies: ['content'],
+    });
     expect(rendu).toContain('1 famille active');
   });
 
   test('borne un facteur aberrant servi par la passerelle', () => {
     // Le plafond est une règle de PRODUIT, pas une convention de sérialisation.
-    const rendu = rendreAvecElan({ factor: 9, activeFamilyCount: 4, hasStanding: true, windowDays: 7 });
+    const rendu = rendreAvecElan({
+      factor: 9,
+      activeFamilyCount: 4,
+      hasStanding: true,
+      windowDays: 7,
+      activeFamilies: ['content', 'comment', 'conversation', 'tool'],
+    });
     expect(rendu).toContain('Élan ×5');
     expect(rendu).not.toContain('Élan ×9');
+  });
+});
+
+/**
+ * LES CHIPS SERVENT LA FENÊTRE, PAS LE CUMUL (#5897).
+ *
+ * `ENGAGEMENT_PROGRESS_FIXTURE` porte des compteurs CUMULÉS positifs pour les
+ * cinq familles (`content`, `comment`, `conversation`, `tool`, `social`) — le
+ * score qui ne redescend jamais. Avant ce lot, les chips venaient de
+ * `axes.filter(value > 0)` : elles auraient donc affiché les CINQ familles
+ * quel que soit `elan.activeFamilies`. Ce témoin le fait ROUGIR sur l'ancienne
+ * implémentation en servant un élan dont la fenêtre ne retient qu'UNE
+ * famille — le cas nominal dès qu'une famille est délaissée depuis plus de
+ * `windowDays`.
+ */
+describe('ElansHero — les chips servent la fenêtre, jamais le score cumulé', () => {
+  test('une famille au cumul positif mais HORS de la fenêtre ne figure pas dans les chips', () => {
+    const rendu = rendreAvecElan({
+      factor: 2,
+      activeFamilyCount: 1,
+      hasStanding: false,
+      windowDays: 7,
+      // Le cumul de la fixture couvre aussi `comment`/`conversation`/`tool`/
+      // `social` — la fenêtre ne retient que `content`.
+      activeFamilies: ['content'],
+    });
+    expect(rendu).toContain(FAMILY_LABELS.content);
+    expect(rendu).not.toContain(FAMILY_LABELS.comment);
+    expect(rendu).not.toContain(FAMILY_LABELS.conversation);
+    expect(rendu).not.toContain(FAMILY_LABELS.tool);
+    expect(rendu).not.toContain(FAMILY_LABELS.social);
+  });
+
+  test('aucune chip, jamais le repli sur le cumul, quand la passerelle ne sert pas encore le champ', () => {
+    // `elan` est présent (l'écran doit donc dire « Élan ×3 ») mais son champ
+    // `activeFamilies` est ABSENT — un serveur antérieur à #5897.
+    const rendu = rendreAvecElan({ factor: 3, activeFamilyCount: 3, hasStanding: false, windowDays: 7 });
+    expect(rendu).toContain('Élan ×3');
+    for (const label of Object.values(FAMILY_LABELS)) {
+      expect(rendu).not.toContain(label);
+    }
+  });
+
+  test('ignore une famille inconnue plutôt que de la peindre — un axe neuf côté serveur', () => {
+    const rendu = rendreAvecElan({
+      factor: 1,
+      activeFamilyCount: 1,
+      hasStanding: false,
+      windowDays: 7,
+      activeFamilies: ['content', 'famille-du-futur'],
+    });
+    expect(rendu).toContain(FAMILY_LABELS.content);
+    expect(rendu).not.toContain('famille-du-futur');
   });
 });
 

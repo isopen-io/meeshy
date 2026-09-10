@@ -61,6 +61,12 @@ export type ApiFailure = {
    * RACINE de l'enveloppe (`register.ts:401-407`, `409` § champ conflit). Sans
    * lui, aucun refus d'inscription ne peut se poser SOUS son champ (#5555, T1). */
   readonly field?: string;
+  /** Le délai RÉEL, en secondes, avant qu'un 429 ne se rouvre — posé par
+   * `RateLimiter.middleware()` (`rate-limiter.ts:307`) à la racine de
+   * l'enveloppe. Sans lui, un texte de refus ne peut que MENTIR un délai en
+   * dur ou rester vague (#5912) : la fenêtre d'un limiteur est une donnée du
+   * serveur, jamais une constante du client. */
+  readonly retryAfter?: number;
 };
 
 export type ApiSuccess<T> = {
@@ -104,6 +110,18 @@ export type HttpRequest = {
    * `APIClient.swift`, réservé aux appels qui doivent nommer une identité
    * hors du crédential courant (`logout()` § `X-Session-Token`). */
   readonly headers?: Readonly<Record<string, string>>;
+  /**
+   * REMPLACE le délai de garde du transport POUR CET APPEL (revue-correction
+   * #5668). `DEFAULT_TIMEOUT_MS` est arbitré contre le p95 d'un appel JSON
+   * (voir son doc-comment) : il ne dit RIEN d'un téléversement, dont la durée
+   * est proportionnelle aux OCTETS et non à la latence. Une photo de 4 Mo sur
+   * le profil Fast 3G que ce dépôt budgète (`budgets.json § network_note`,
+   * ~400 kbit/s en montée) demande plus de quatre-vingts secondes : avec les
+   * 15 s du défaut, AUCUN envoi de photo n'aboutissait sur ce profil, et
+   * l'échec se lisait « la passerelle n'a pas répondu ». `0` ou négatif
+   * DÉSACTIVE le délai — seul le signal de l'appelant tranche alors.
+   */
+  readonly timeoutMs?: number;
 };
 
 export type HttpTransportOptions = {
@@ -253,14 +271,22 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
     const locale = options.deviceLocale?.() ?? null;
     const credential = options.credential?.() ?? null;
     const presentsIdentity = credential !== null || namesAnIdentity(req.headers);
+    /**
+     * UN CORPS `FormData` (#5668, upload multipart) NE POSE JAMAIS SON PROPRE
+     * `Content-Type` : c'est le NAVIGATEUR qui doit l'écrire, `boundary`
+     * compris — un en-tête posé ICI le fige SANS le `boundary`, et la
+     * passerelle (`@fastify/multipart`) ne peut alors plus découper les
+     * parties (`upload.ts:59-207`, `consumes: ['multipart/form-data']`).
+     */
+    const formBody = req.body instanceof FormData ? req.body : undefined;
     const headers: Record<string, string> = {
       ...credentialHeaders(credential),
       ...(locale ? { 'X-Device-Locale': locale } : {}),
-      ...(req.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(req.body !== undefined && formBody === undefined ? { 'Content-Type': 'application/json' } : {}),
       ...req.headers,
     };
 
-    const { signal, timeoutSignal } = composeSignal(req.signal, timeoutMs);
+    const { signal, timeoutSignal } = composeSignal(req.signal, req.timeoutMs ?? timeoutMs);
 
     let response: Response;
     try {
@@ -268,7 +294,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
         method: req.method,
         headers,
         ...(signal !== undefined ? { signal } : {}),
-        ...(req.body !== undefined ? { body: JSON.stringify(req.body) } : {}),
+        ...(req.body !== undefined ? { body: formBody ?? JSON.stringify(req.body) } : {}),
       });
     } catch (error) {
       const code = abortCode(error, { callerSignal: req.signal, timeoutSignal });
@@ -309,6 +335,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
       error: typeof envelope.error === 'string' ? envelope.error : GENERIC_ERROR(response.status),
       ...(typeof envelope.code === 'string' ? { code: envelope.code } : {}),
       ...(field !== undefined ? { field } : {}),
+      ...(typeof envelope.retryAfter === 'number' ? { retryAfter: envelope.retryAfter } : {}),
     };
   }
 

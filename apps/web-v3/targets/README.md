@@ -101,6 +101,52 @@ dépôt.
 - Clair et sombre : `xcrun simctl ui $U appearance light|dark`, puis relance
   de l'app.
 
+## Se connecter sur « Meeshy Ref-Native » — la voie MESURÉE (directive porteur, 2026-09-09)
+
+**Le compte est `atabeth`, ses identifiants vivent HORS du dépôt dans
+`apps/ios/fastlane/.env`** (clés `DEMO_USER` et `DEMO_PASSWORD` — c'est la
+source que le `CLAUDE.md` racine désigne pour les identifiants de test, § Test
+Credentials). Mesuré le 2026-09-09 : `POST /api/v1/auth/login` sur
+`gate.staging.meeshy.me` rend **200** et un jeton pour ce couple.
+
+Relever les valeurs sans jamais les afficher, les recopier dans un rapport, un
+commit, une capture ou un corps d'issue :
+```sh
+U=$(grep '^DEMO_USER=' apps/ios/fastlane/.env | cut -d= -f2- | tr -d '"')
+P=$(grep '^DEMO_PASSWORD=' apps/ios/fastlane/.env | cut -d= -f2- | tr -d '"')
+```
+
+**Ne PAS taper ce mot de passe avec `idb ui text`.** Il porte des MAJUSCULES,
+et `idb ui text` avale ou corrompt silencieusement un caractère à SHIFT dans un
+champ SÉCURISÉ — aucune exception, juste une longueur inférieure de 1, de façon
+non reproductible (leçon dédiée dans `tasks/lessons.md`). Le même texte passe
+intact dans un champ en clair : c'est le champ sécurisé qui est en cause.
+
+**La voie qui ne peut pas perdre de caractère est le PRESSE-PAPIERS** — aucune
+frappe, donc aucune perte :
+```sh
+printf %s "$P" | xcrun simctl pbcopy 3E761BC1-845D-49D2-8E4D-E0606E04D3E2
+# puis : appui long sur le champ mot de passe → « Coller »
+```
+
+**Ce qui ne marche PAS, mesuré, pour ne pas y revenir** : la clé
+`ATABETH_PASSWORD` de `infrastructure/envs/.env.example` est une valeur
+d'EXEMPLE — refusée en 401 sur staging **et** en production. Un fichier
+`.env.example` ne porte pas de secret, même quand sa valeur n'a pas l'air d'un
+gabarit.
+
+**Si le compte manque sur l'environnement visé, le créer est autorisé**
+(directive porteur) : `POST /api/v1/auth/register` sur `gate.staging.meeshy.me`,
+avec un mot de passe **sans majuscule ni ponctuation** — il se tapera alors
+directement par `idb ui text`. Noter l'identifiant dans `targets/seed.md` ; le
+mot de passe reste hors du dépôt.
+
+**Vérifier la connexion par la MESURE, jamais par la longueur du champ** : une
+suggestion « QuickType » d'iOS pré-remplit le champ sécurisé au focus (longueur
+12 observée avant toute frappe), et la première frappe réelle la dissout. Ce qui
+prouve la connexion est l'écran d'après — la liste de conversations du compte,
+avec les données semées de `seed.md`.
+
 ## Ce que les analyses établissent — les écarts les plus visibles
 
 Les tableaux complets (élément iOS `fichier:ligne` → web-v3 `fichier:ligne` →

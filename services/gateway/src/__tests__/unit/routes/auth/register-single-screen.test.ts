@@ -8,7 +8,9 @@
  * Trois familles :
  *
  * 1. **l'identité DÉRIVÉE** — pseudo généré, prénom/nom découpés, CGU gravées ;
- * 2. **le remboursement de tentative** — un 400 la rend, un 409 la garde ;
+ * 2. **le remboursement de tentative** — un 400 et un 409 USERNAME_TAKEN la
+ *    rendent, un 409 EMAIL_TAKEN la garde (#5912, détail dans
+ *    `auth/register.test.ts`) ;
  * 3. **ce qui n'attend PAS la réponse** — e-mail de vérification, annonce
  *    d'arrivée, reprise de la géolocalisation.
  *

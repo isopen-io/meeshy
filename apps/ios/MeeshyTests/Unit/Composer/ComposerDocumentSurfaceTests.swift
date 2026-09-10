@@ -189,13 +189,13 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         // **Le réel a rejoint le meuble le 2026-09-01** (#4751) là où l'auteur
         // choisit et à la caméra du tray ; il garde la scène là où de la
         // MATIÈRE arrive, comme la story.
-        for opening in [ComposerOpening.videoCameraReady, .resume, .mediaSeeded] {
+        for opening in [ComposerOpening.videoCameraReady, .resume] {
             XCTAssertEqual(
                 ComposerSurfaceRouting.surface(opening: opening, format: .reel), .scene,
                 "réel sous \(nom(opening)) arrive avec du contenu : la scène le tient déjà."
             )
         }
-        for opening in [ComposerOpening.videoCameraReady, .resume, .mediaSeeded] {
+        for opening in [ComposerOpening.videoCameraReady, .resume] {
             XCTAssertEqual(
                 ComposerSurfaceRouting.surface(opening: opening, format: .story), .scene,
                 "story sous \(nom(opening)) arrive avec du contenu : la scène le tient déjà."
@@ -398,9 +398,15 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
              surface: .mood),
             (nom: "draft", origine: .draft(id: "brouillon-42"), surface: .scene),
             (nom: "share", origine: .share, surface: .scene),
+            // **`.scene` → `.document` le 2026-09-06** (#5409), même patron que
+            // `storyTray` ci-dessus : la porte reste dans la table, seule sa
+            // surface change. Son ancien argument — « le document ne porte ni
+            // média ni fichier » — est devenu faux le jour où
+            // `ComposerDocumentDraft.localMedia` est né, et c'est ce lot-là qui
+            // l'a livré (« sa graine ne se perd plus »).
             (nom: "conversationMedia",
              origine: .conversationMedia(messageId: "msg-7", attachmentId: "piece-3"),
-             surface: .scene)
+             surface: .document)
         ]
 
         for porte in portesDuMeuble {
@@ -755,7 +761,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// porte vient de semer disparaîtrait de l'écran ET de la publication —
     /// un aperçu qui ment sur ce qui part, exactement ce que la loi 6 interdit.
     /// Le chip change le `publishTargetType` ; il ne change jamais la surface.
-    func test_leMediaSeme_faitAtterrirTousSesFormats_surLaScene() {
+    func test_leMediaSeme_faitAtterrirTousSesFormats_surLeDOCUMENT() {
         let profil = ComposerProfile.profile(
             for: .conversationMedia(messageId: "msg-1", attachmentId: "att-1"),
             compositionQualifiesAsReel: true
@@ -769,9 +775,9 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         for format in [ComposerFormat.story, .post, .reel] {
             XCTAssertEqual(
                 ComposerSurfaceRouting.surface(opening: .mediaSeeded, format: format),
-                .scene,
-                "\(nom(format)) sous une graine média doit rester dans l'ATELIER : le document ne porte "
-                    + "aucun média, et y router ferait disparaître la photo de la publication."
+                .document,
+                "\(nom(format)) sous une graine média se compose dans le MEUBLE : "
+                    + "`ComposerDocumentDraft.localMedia` porte la photo depuis #5409."
             )
         }
     }

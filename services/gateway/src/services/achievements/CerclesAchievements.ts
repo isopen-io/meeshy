@@ -40,6 +40,12 @@ const log = enhancedLogger.child({ module: 'CerclesAchievements' });
  * Directive porteur : « hors conversations générales ». Y appartenir n'est pas
  * un geste — tout le monde y est —, et un succès qui tombe sans qu'on ait rien
  * fait ne récompense rien.
+ *
+ * `direct` rejoint la liste au titre d'une AUTRE raison (#5940, directive
+ * porteur) : « rejoindre une conversation, c'est quand on n'est pas créateur
+ * de la conversation, et on parle de rejoindre les conversations autres que
+ * les conversations à deux ». Ouvrir un tête-à-tête n'est pas rejoindre un
+ * cercle — il n'a pas de cercle, il a un seul autre membre.
  */
 /**
  * Types de conversation qui ne comptent pas comme « rejoindre un cercle ».

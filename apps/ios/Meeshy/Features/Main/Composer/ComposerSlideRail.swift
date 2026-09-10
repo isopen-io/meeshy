@@ -88,7 +88,7 @@ struct ComposerSlideRail: View {
                                            sceneCount: slides.count) {
             Button { onDelete(index) } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(MeeshyFont.relative(8, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(3)
                     .background(Circle().fill(Color.black.opacity(0.55)))

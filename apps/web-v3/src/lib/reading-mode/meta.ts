@@ -55,7 +55,12 @@ export function mountsBottomLine(input: {
 export function languageBand(input: {
   readonly originalLanguage: string;
   readonly preferredLanguages: readonly string[];
-  /** Les langues pour lesquelles une traduction existe (texte, aujourd'hui — l'audio rejoindra avec son lot). */
+  /**
+   * Les langues pour lesquelles une traduction existe — texte ET pièces
+   * jointes (#5805) : `translatedLanguagesOf` (`view/message.ts`) en fait
+   * l'union, miroir `BubbleContentBuilder.buildAvailableFlags` (`:376-379`).
+   * Un vocal traduit SANS traduction texte alimente donc cette bande aussi.
+   */
   readonly translations: readonly string[];
   readonly servedLanguage: string;
 }): readonly string[] {

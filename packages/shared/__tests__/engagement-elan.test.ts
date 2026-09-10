@@ -50,6 +50,29 @@ describe('computeEngagementElan — les trois crans d\'activité', () => {
   });
 });
 
+describe('computeEngagementElan — activeFamilies, la LISTE derrière le cardinal (#5897)', () => {
+  it('rend la liste dédupliquée, pas seulement son cardinal', () => {
+    const elan = computeEngagementElan({
+      activeFamilies: ['content', 'comment', 'content'],
+      ...sansAssise,
+    });
+    expect([...elan.activeFamilies].sort()).toEqual(['comment', 'content']);
+    expect(elan.activeFamilies.length).toBe(elan.activeFamilyCount);
+  });
+
+  it('exclut du catalogue une famille inconnue, dans la liste comme dans le cardinal', () => {
+    const elan = computeEngagementElan({
+      activeFamilies: ['content', 'famille-du-futur' as never],
+      ...sansAssise,
+    });
+    expect(elan.activeFamilies).toEqual(['content']);
+  });
+
+  it('rend une liste vide quand aucune famille n\'est active', () => {
+    expect(computeEngagementElan({ activeFamilies: [], ...sansAssise }).activeFamilies).toEqual([]);
+  });
+});
+
 describe('computeEngagementElan — l\'assise ne vaut qu\'UN cran', () => {
   it('s\'acquiert par dix succès', () => {
     const elan = computeEngagementElan({

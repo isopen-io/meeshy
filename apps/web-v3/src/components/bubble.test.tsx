@@ -1,7 +1,11 @@
-import { describe, expect, test } from 'bun:test';
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { Bubble } from './bubble';
+import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { Message } from '@/lib/api/types';
 import type { PlacedMessage } from '@/lib/grouping';
 
@@ -347,5 +351,128 @@ describe('Bubble — displayLanguage, myReactions, selected (#5814, T12)', () =>
     const html = renderWith({});
     expect(html).not.toContain('role="checkbox"');
     expect(html).not.toContain('aria-selected');
+  });
+});
+
+/**
+ * RETIRER UNE RÉACTION EN TAPANT SA CAPSULE (#5865, suivi de #5814 T12) —
+ * iOS le permet déjà (`BubbleReactionsOverlay.swift`), seul le rail du menu
+ * du message (appui long) le permettait ici. `onReact` n'est câblé QUE sur
+ * les capsules `mine` (`bubble.tsx`) : taper la capsule d'autrui reste un
+ * `<span>` inerte, jamais un bouton qui basculerait une réaction qui n'est
+ * pas la sienne.
+ */
+describe('Bubble — retirer une réaction en tapant sa capsule (#5865)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    GlobalRegistrator.register();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+  afterAll(async () => {
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await GlobalRegistrator.unregister();
+  });
+
+  let container: HTMLDivElement;
+  let root: Root;
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  const withReactions: Message = {
+    ...BASE_MESSAGE,
+    id: 'm-reactions',
+    reactionSummary: { '👍': 1, '❤️': 2 },
+  };
+
+  const mount = (onReact: (emoji: string) => void): HTMLDivElement => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <Bubble
+          place={placeOf(withReactions)}
+          languages={['fr', 'en']}
+          isGrouped
+          viewerId="u-viewer"
+          onJumpToMessage={() => {}}
+          myReactions={['👍']}
+          onReact={onReact}
+        />,
+      );
+    });
+    return container;
+  };
+
+  test('tap sur SA capsule 👍 ⇒ onReact("👍"), sans passer par le menu long-appui', () => {
+    const seen: string[] = [];
+    const el = mount((emoji) => seen.push(emoji));
+    const mine = el.querySelector('button[aria-label="Retirer votre réaction 👍"]') as HTMLButtonElement;
+    expect(mine).not.toBeNull();
+    act(() => {
+      mine.click();
+    });
+    expect(seen).toEqual(['👍']);
+  });
+
+  test('la capsule ❤️ (pas la mienne) reste un <span> inerte — aucun bouton', () => {
+    const el = mount(() => {});
+    expect(el.querySelector('button[aria-label*="❤️"]')).toBeNull();
+  });
+
+  test('la cible tactile de la capsule est étendue (`tap-target-chip`), sans grandir le dessin', () => {
+    const el = mount(() => {});
+    const mine = el.querySelector('button[aria-label="Retirer votre réaction 👍"]') as HTMLButtonElement;
+    expect(mine.className).toContain('tap-target-chip');
+  });
+});
+
+
+/**
+ * L'IMAGE D'UNE BULLE (revue-correction #5668) — la bulle OPTIMISTE d'une
+ * photo qu'on vient de choisir porte un `fileUrl` en `blob:`
+ * (`attachmentPreviewOf`, `send/attachments.ts`) que RIEN ne lisait : le
+ * tiroir du composeur en montrait la vignette et la bulle envoyée juste
+ * au-dessus un rectangle gris. « Qui AFFICHE ce qu'il élit ? » — cycle 122 du
+ * `CLAUDE.md`.
+ *
+ * Le second cas est le rang AUTRE que le premier : une charge SANS URL (les
+ * fixtures posent `fileUrl: ''`) ne doit produire AUCUN `<img>` — `src=""`
+ * redemanderait la page courante, et le glyphe reste le fond légitime.
+ */
+describe('Bubble — la pièce jointe IMAGE (#5668, revue-correction)', () => {
+  const withImage = (fileUrl: string): Message => ({
+    ...BASE_MESSAGE,
+    messageType: 'image',
+    attachments: [
+      {
+        ...attachmentDefaults,
+        id: 'att-1',
+        messageId: BASE_MESSAGE.id,
+        fileName: 'plage.jpg',
+        originalName: 'plage.jpg',
+        mimeType: 'image/jpeg',
+        fileSize: 1234,
+        fileUrl,
+        uploadedBy: 'u-amina',
+        createdAt: '2026-09-08T09:00:00.000Z',
+      },
+    ],
+  });
+
+  test('une URL servie ⇒ un <img> qui la porte, avec son texte de remplacement', () => {
+    const html = render(withImage('blob:http://localhost/abc'));
+    expect(html).toContain('<img');
+    expect(html).toContain('blob:http://localhost/abc');
+    expect(html).toContain('alt="plage.jpg"');
+  });
+
+  test('AUCUNE URL ⇒ AUCUN <img> (jamais `src=""`), le glyphe reste seul et nommé', () => {
+    const html = render(withImage(''));
+    expect(html).not.toContain('<img');
+    expect(html).toContain('aria-label="plage.jpg"');
   });
 });

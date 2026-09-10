@@ -192,11 +192,17 @@ export function LevelHero({ progress, mintCost }: { progress: EngagementProgress
  * pluriel — ce sur quoi on est en train de tenir. Tant que `content.mood`
  * n'existe pas comme axe (#5735), le hero se compose sans lui et l'accueillera
  * sans renumérotation : il lit les familles ACTIVES, jamais une liste écrite.
+ *
+ * **Les chips servent `elan.activeFamilies` — la fenêtre glissante, jamais
+ * `axes.filter(value > 0)` (#5897).** Le score cumulé reste `> 0` pour une
+ * famille abandonnée depuis des mois ; les deux nombres divergent alors que
+ * la phrase juste en dessous cite `activeFamilyCount`, mesuré sur la MÊME
+ * fenêtre que la liste. Un serveur qui ne sert pas encore le champ rend une
+ * liste vide : aucune chip plutôt qu'une liste fausse.
  */
 export function ElansHero({ progress }: { progress: EngagementProgress }) {
   const elan = progress.elan;
-  const actives = progress.axes.filter((a) => a.value > 0);
-  const familles = [...new Set(actives.map((a) => a.family))];
+  const familles = elan?.activeFamilies ?? [];
 
   return (
     <section

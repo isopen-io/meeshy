@@ -208,6 +208,24 @@ describe('isEngagementProgressPayload — la garde de frontière est fail-closed
   ])('refuse %s', (_label, value) => {
     expect(isEngagementProgressPayload(value)).toBe(false);
   });
+
+  const elanDeBase = { factor: 2, activeFamilyCount: 1, hasStanding: false, windowDays: 7 };
+
+  it("accepte un bloc `elan` dont `activeFamilies` (#5897) est ABSENT — serveur antérieur au champ", () => {
+    expect(isEngagementProgressPayload({ ...EMPTY, elan: elanDeBase })).toBe(true);
+  });
+
+  it('accepte un bloc `elan` dont `activeFamilies` est un tableau de chaînes', () => {
+    expect(
+      isEngagementProgressPayload({ ...EMPTY, elan: { ...elanDeBase, activeFamilies: ['content'] } }),
+    ).toBe(true);
+  });
+
+  it('refuse un bloc `elan` dont `activeFamilies` porte une valeur NON textuelle', () => {
+    expect(
+      isEngagementProgressPayload({ ...EMPTY, elan: { ...elanDeBase, activeFamilies: [1, 2] } }),
+    ).toBe(false);
+  });
 });
 
 /**
@@ -314,6 +332,32 @@ describe("l'élan servi — le plafond est une règle de PRODUIT, pas de sérial
 
   it("n'est pas servi du tout quand la passerelle ne le donne pas", () => {
     expect(resolveEngagementProgress(payload({ elan: undefined })).elan).toBeUndefined();
+  });
+});
+
+describe("l'élan servi — activeFamilies, la LISTE derrière le cardinal (#5897)", () => {
+  const avecFamilies = (activeFamilies?: readonly string[]) =>
+    resolveEngagementProgress(
+      payload({
+        elan: { factor: 2, activeFamilyCount: 2, hasStanding: false, windowDays: 7, activeFamilies },
+      }),
+    ).elan;
+
+  it('reporte la liste telle que servie', () => {
+    expect(avecFamilies(['content', 'comment'])?.activeFamilies).toEqual(['content', 'comment']);
+  });
+
+  it('déduplique une famille répétée', () => {
+    expect(avecFamilies(['content', 'content'])?.activeFamilies).toEqual(['content']);
+  });
+
+  it('ignore une famille hors catalogue plutôt que de la propager', () => {
+    expect(avecFamilies(['content', 'famille-du-futur'])?.activeFamilies).toEqual(['content']);
+  });
+
+  it("rend une liste VIDE — jamais un repli sur le cumul — quand le champ est ABSENT", () => {
+    // Un serveur antérieur à #5897 sert le reste du bloc `elan` sans ce champ.
+    expect(avecFamilies(undefined)?.activeFamilies).toEqual([]);
   });
 });
 

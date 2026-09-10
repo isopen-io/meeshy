@@ -21,7 +21,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 557,
+  "routeCount": 560,
   "routes": [
     {
       "method": "DELETE",
@@ -741,6 +741,20 @@
     {
       "method": "DELETE",
       "path": "/api/v1/posts/:postId/like",
+      "module": "anonyme~10",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/posts/:postId/objects/:objectId/responses",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -3424,6 +3438,20 @@
     {
       "method": "GET",
       "path": "/api/v1/posts/:postId/media/:mediaId/export",
+      "module": "anonyme~10",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/posts/:postId/objects/:objectId/responses",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -6823,6 +6851,20 @@
     {
       "method": "POST",
       "path": "/api/v1/posts/:postId/like",
+      "module": "anonyme~10",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/posts/:postId/objects/:objectId/responses",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",

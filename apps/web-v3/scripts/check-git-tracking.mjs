@@ -37,7 +37,17 @@ const ROOT = new URL('../../..', import.meta.url).pathname.replace(/\/$/, '');
  * Ce qui n'a pas à être suivi : ce que la construction PRODUIT, ce que
  * l'installation POSE, et la coque native, qui a son propre cycle.
  */
-const OUT_OF_SCOPE = new Set(['dist', 'node_modules', 'android', 'ios', '.turbo', 'render', 'test-results']);
+/*
+ * `.cache` a rejoint la liste en revue de #5774, pour la MÊME raison que
+ * `render` y était déjà : c'est un répertoire de SORTIE. Les gates visuels y
+ * déposent leurs captures (`join(APP, '..', '..', '.cache', 'web-v3-workflow',
+ * 'rendus')`), et une session lancée depuis `apps/web-v3` y écrit sa recette
+ * — dix PNG de recette du composeur y traînaient et faisaient rougir CE
+ * témoin, qui réclamait qu'on SUIVE des captures de débogage. Élargir la
+ * portée n'était pas l'affaiblir : le témoin garde les SOURCES avalées par
+ * une règle générique, et une capture n'en est pas une.
+ */
+const OUT_OF_SCOPE = new Set(['dist', 'node_modules', 'android', 'ios', '.turbo', 'render', 'test-results', '.cache']);
 
 const files = (dir) =>
   readdirSync(dir, { withFileTypes: true }).flatMap((e) => {

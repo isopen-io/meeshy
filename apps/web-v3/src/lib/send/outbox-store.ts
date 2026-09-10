@@ -3,6 +3,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { ApiFailure } from '@/lib/api/http';
 import type { LocalDelivery } from '@/lib/view/message';
 
+import type { PendingAttachment } from './attachments';
 import type { LocalMessage } from './local-message';
 
 /**
@@ -25,6 +26,18 @@ export type OutboxEntry = {
   /** Epoch ms de la tentative COURANTE — l'horloge des 200 ms (§5 étape 9). */
   readonly startedAt: number;
   readonly lastError?: ApiFailure;
+  /**
+   * LA PHASE D'UPLOAD DE CETTE ENTRÉE (#5668) — absente pour un envoi sans
+   * pièce jointe. `files` est la SÉLECTION D'ORIGINE (jamais rejouée deux
+   * fois : `attachmentIds`, une fois posé, la remplace pour toute reprise
+   * suivante — « aucune régénération au renvoi », même règle que le texte,
+   * spécification #5668 § 0 « Reprise »). `attachmentIds` reste `undefined`
+   * tant que `POST /attachments/upload` n'a pas RÉUSSI pour cette tentative.
+   */
+  readonly upload?: {
+    readonly files: readonly PendingAttachment[];
+    readonly attachmentIds?: readonly string[];
+  };
 };
 
 export type OutboxState = {
@@ -47,6 +60,13 @@ export type OutboxState = {
   enqueue(conversationId: string, entry: OutboxEntry): void;
   markPending(conversationId: string, clientMessageId: string, startedAt: number): void;
   markFailed(conversationId: string, clientMessageId: string, failure?: ApiFailure): void;
+  /**
+   * L'UPLOAD DE CETTE ENTRÉE A RÉUSSI (#5668) — pose `upload.attachmentIds`,
+   * pour qu'une reprise ultérieure (`retrySend`) saute la re-upload et
+   * n'appelle QUE `POST …/messages`. N'existe que si `enqueue` a posé
+   * `upload` (un envoi sans pièce jointe n'appelle jamais ce geste).
+   */
+  markUploaded(conversationId: string, clientMessageId: string, attachmentIds: readonly string[]): void;
   /** LE GESTE DE LA CONFIRMATION — appelé par `perform-send.ts` sur un 2xx,
    * et de nulle part ailleurs : il incrémente `confirmed`. */
   remove(conversationId: string, clientMessageId: string): void;
@@ -104,6 +124,19 @@ export function createOutboxStore(): StoreApi<OutboxState> {
               attempts: entry.attempts + 1,
               ...(failure === undefined ? {} : { lastError: failure }),
             })),
+          },
+        };
+      }),
+    markUploaded: (conversationId, clientMessageId, attachmentIds) =>
+      set((state) => {
+        const current = state.entries[conversationId];
+        if (current === undefined) return state;
+        return {
+          entries: {
+            ...state.entries,
+            [conversationId]: replaceEntry(current, clientMessageId, (entry) =>
+              entry.upload === undefined ? entry : { ...entry, upload: { ...entry.upload, attachmentIds } },
+            ),
           },
         };
       }),

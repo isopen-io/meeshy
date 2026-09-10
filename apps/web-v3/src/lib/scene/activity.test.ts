@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { SCROLL_ACTIVITY_LINGER_MS } from '@meeshy/shared/utils/scroll-activity';
 
-import { initialState, isArmed, isRevealed, isSceneActive, flatten, reduce, type SceneEvent } from './activity';
+import { initialState, isArmed, isGestureHeld, isRevealed, isSceneActive, flatten, reduce, type SceneEvent } from './activity';
 
 /**
  * LES VECTEURS PARTAGÉS DU RÉVÉLÉ — la loi de `SCROLL_ACTIVITY_LINGER_MS`
@@ -190,6 +190,96 @@ describe('sceneActivity — scene et aplatissement', () => {
     expect(isRevealed(state, 0)).toBe(false);
     expect(isArmed(state)).toBe(false);
     expect(isSceneActive(state, 0)).toBe(false);
+  });
+});
+
+describe('sceneActivity — le doigt (grab / release) (#5774, travail 3/3, T1)', () => {
+  const drag = (at: number) => {
+    let state = reduce(initialState(), { type: 'grab', at }, { mode: 'focal' });
+    return reduce(state, { type: 'scrolled', at, y: 10 }, { mode: 'focal' });
+  };
+
+  test('"grab" pose touching:true, origin:"touch", et ouvre l intention', () => {
+    const state = reduce(initialState(), { type: 'grab', at: 0 }, { mode: 'focal' });
+    expect(state.touching).toBe(true);
+    expect(state.origin).toBe('touch');
+    expect(state.intent).toBe(true);
+  });
+
+  /**
+   * LE DÉFAUT DE REVUE (#5774) : `touchstart` SEUL escamotait tout le chrome.
+   * `isDragging` (`MessageListViewController.swift:585-592`) ne devient vrai
+   * qu'à `scrollViewWillBeginDragging` — un APPUI qui ne tire rien ne cache
+   * rien. Ce témoin est le seul du fichier qui rougissait avant la
+   * correction.
+   */
+  test('un APPUI qui ne fait rien defiler ne TIENT aucun geste', () => {
+    const state = reduce(initialState(), { type: 'grab', at: 0 }, { mode: 'focal' });
+    expect(state.held).toBe(false);
+    expect(isGestureHeld(state, 0)).toBe(false);
+    expect(isGestureHeld(state, 240)).toBe(false);
+  });
+
+  test('un "scrolled" pendant le contact TIRE la liste (held) et compte comme intention', () => {
+    const state = drag(0);
+    expect(state.held).toBe(true);
+    expect(isRevealed(state, 0)).toBe(true);
+  });
+
+  test('"release" pose touching:false et held:false', () => {
+    let state = drag(0);
+    state = reduce(state, { type: 'release', at: 50 }, { mode: 'focal' });
+    expect(state.touching).toBe(false);
+    expect(state.held).toBe(false);
+  });
+
+  test('isGestureHeld vaut true entre le premier defilement du doigt et release', () => {
+    const state = drag(0);
+    expect(isGestureHeld(state, 0)).toBe(true);
+    expect(isGestureHeld(state, 10_000)).toBe(true);
+  });
+
+  test('isGestureHeld vaut false juste apres release, meme si un "scrolled" suit 50ms plus tard', () => {
+    let state = drag(0);
+    state = reduce(state, { type: 'release', at: 100 }, { mode: 'focal' });
+    expect(isGestureHeld(state, 100)).toBe(false);
+    state = reduce(state, { type: 'scrolled', at: 150, y: 20 }, { mode: 'focal' });
+    expect(isGestureHeld(state, 150)).toBe(false);
+  });
+
+  test('"programmatic" pendant un tirage ne relache pas le doigt (le doigt est un FAIT)', () => {
+    let state = drag(0);
+    state = reduce(state, { type: 'programmatic' }, { mode: 'focal' });
+    expect(state.held).toBe(true);
+    expect(isGestureHeld(state, 0)).toBe(true);
+  });
+});
+
+describe('sceneActivity — geste indirect (molette, clavier) (#5774, travail 3/3, T2)', () => {
+  test('"intent" origin indirect puis "scrolled" -> isGestureHeld vrai tant que isRevealed', () => {
+    let state = reduce(initialState(), { type: 'intent', at: 0, origin: 'indirect' }, { mode: 'focal' });
+    state = reduce(state, { type: 'scrolled', at: 0, y: 0 }, { mode: 'focal' });
+    expect(state.origin).toBe('indirect');
+    expect(isGestureHeld(state, 0)).toBe(true);
+    expect(isGestureHeld(state, 899)).toBe(true);
+    expect(isGestureHeld(state, 900)).toBe(false);
+  });
+
+  test('jamais vrai sur un "scrolled" sans intention (defilement programme)', () => {
+    const state = reduce(initialState(), { type: 'scrolled', at: 0, y: 10 }, { mode: 'focal' });
+    expect(isGestureHeld(state, 0)).toBe(false);
+  });
+
+  test('mode "bubbles" accepte par reduce() : n arme jamais, meme apres 5s de scroll soutenu', () => {
+    let state = reduce(initialState(), { type: 'intent', at: 0, origin: 'indirect' }, { mode: 'bubbles' });
+    let at = 0;
+    let y = 0;
+    for (let i = 0; i < 50; i += 1) {
+      at += 100;
+      y += 200;
+      state = reduce(state, { type: 'scrolled', at, y }, { mode: 'bubbles' });
+    }
+    expect(isArmed(state)).toBe(false);
   });
 });
 

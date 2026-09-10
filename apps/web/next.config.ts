@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import { nonCspSecurityHeaders } from './next.config.security.js';
+import { nonCspSecurityHeaders, reportOnlyCspHeader } from './next.config.security.js';
 // Plugin next-intl désactivé pour éviter les redirections d'URL
 // L'internationalisation est gérée côté client via le LanguageContext
 // import createNextIntlPlugin from 'next-intl/plugin';
@@ -145,10 +145,11 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // CSP exclue ici — voir le commentaire de nonCspSecurityHeaders dans
-        // next.config.security.js (audit du domaine à faire d'abord).
+        // CSP servie en Report-Only ici — voir le commentaire de
+        // reportOnlyCspHeader dans next.config.security.js (#5728 : bascule
+        // en mode bloquant réservée à une vérification staging bout en bout).
         source: '/:path*',
-        headers: nonCspSecurityHeaders,
+        headers: [...nonCspSecurityHeaders, ...reportOnlyCspHeader],
       },
       {
         source: '/sw.js',

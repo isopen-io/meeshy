@@ -223,9 +223,22 @@ final class DependencyContainer {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.sessionWasInvalidated = true }
             .store(in: &cancellables)
+        // #5913 — PAS de `.dropFirst()`. Il écartait la valeur INITIALE, donc la
+        // purge n'avait lieu que sur une transition `true → false` observée EN
+        // VOL. Or les fins de session les plus courantes n'en émettent aucune :
+        // l'app tuée pendant la session, le jeton expiré constaté au démarrage,
+        // la session invalidée côté serveur entre deux lancements. Dans ces trois
+        // cas l'app démarre déjà déconnectée — première valeur `false`, jetée —
+        // et la file du compte sortant survivait jusqu'au compte suivant (mesuré :
+        // 7 lignes de 12 h, dont 2 `blockUser` et 1 `unblockUser`).
+        //
+        // Le `filter { !$0 }` suffit à garder un démarrage CONNECTÉ hors de la
+        // purge ; sur un démarrage déconnecté avec une file vide, le coût est une
+        // lecture `pendingOutboxCount()` et rien d'autre. Le toast, lui, reste
+        // gouverné par `sessionWasInvalidated` — faux au démarrage à froid, donc
+        // aucun message ne s'affiche pour une purge de résidus.
         AuthManager.shared.$isAuthenticated
             .removeDuplicates()
-            .dropFirst()
             .filter { !$0 }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -235,6 +248,16 @@ final class DependencyContainer {
                     do {
                         let pendingCount = try await persistence.pendingOutboxCount()
                         try await persistence.clearAllMessagesForLogout()
+                        // #5913 — la purge SQL ci-dessus vide la TABLE ; l'acteur
+                        // `OfflineQueue` garde, lui, ses `items` et ses
+                        // `outcomeTombstones` EN MÉMOIRE. Sans cette ligne, le
+                        // bandeau continue d'afficher les lignes du compte sortant
+                        // et `retryAll()` — qui n'a aucun filtre de statut et se
+                        // déclenche au retour du réseau — peut encore les rejouer,
+                        // sous le jeton du compte SUIVANT. `clearAll()` fait les
+                        // trois (mémoire, tombstones, base) ; elle n'avait jusqu'ici
+                        // aucun appelant dans le dépôt.
+                        await OfflineQueue.shared.clearAll()
                         if DependencyContainer.shouldSurfaceOutboxLossToast(
                             sessionWasInvalidated: invalidated, pendingCount: pendingCount
                         ) {

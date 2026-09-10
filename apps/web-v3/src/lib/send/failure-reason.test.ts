@@ -31,4 +31,26 @@ describe('sendFailureReason', () => {
     expect(sendFailureReason(failure(422))).toBe('message refusé');
     expect(sendFailureReason(failure(503))).toBe('la passerelle est indisponible');
   });
+
+  /**
+   * #5668 — la SEULE cause spécifique aux pièces jointes que ce client peut
+   * VOIR : `UPLOAD_PARTIAL`, qu'il synthétise lui-même
+   * (`perform-send.ts § uploadPhase`). Le `code`
+   * `ATTACHMENT_RIGHT_NOT_PERMITTED` n'a PAS de branche ici — mesuré : la
+   * route le lit pour choisir son statut puis appelle
+   * `sendForbidden(reply, result.error)` sans `options.code`
+   * (`messages-send.ts:364`), et `sendError` pose `code: undefined`
+   * (`response.ts:89`), supprimé à la sérialisation. Un témoin écrit sur ce
+   * code n'aurait mesuré que sa propre fixture.
+   */
+  test('UPLOAD_PARTIAL (statut 200 synthétique) ⇒ cause dédiée, jamais confondue avec un succès', () => {
+    expect(sendFailureReason(failure(200, { code: 'UPLOAD_PARTIAL' }))).toBe('une pièce n’a pas pu être téléversée');
+  });
+
+  test('un 403 de la passerelle reste le refus générique — aucun code ne voyage avec lui', () => {
+    expect(sendFailureReason(failure(403))).toBe('envoi refusé pour cette conversation');
+    expect(sendFailureReason(failure(403, { code: 'ATTACHMENT_RIGHT_NOT_PERMITTED' }))).toBe(
+      'envoi refusé pour cette conversation',
+    );
+  });
 });

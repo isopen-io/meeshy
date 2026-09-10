@@ -331,6 +331,19 @@ jobs:
           restore-keys: |
             ios-spm-
 
+      # #5084 — the `xc26_1_1` prefix names the Xcode *marketing* version, not
+      # the SDK build inside it. The runner image was republished without that
+      # label changing, so every `.pcm` module precompiled against the OLD SDK
+      # header mtimes got restored under an SDK that had moved on — a
+      # deterministic "Clang dependency scanner failure: … mtime changed" on
+      # EVERY run, on `dev` included, not a flake and not fixed by a re-run.
+      # `ProductBuildVersion` is the one thing that must coincide for a `.pcm`
+      # to stay valid; folding it into the key means a republished image starts
+      # a fresh lineage instead of poisoning the rolling one.
+      - name: SDK build version (clé de lignée du ModuleCache, #5084)
+        id: sdkver
+        run: echo "v=$(xcodebuild -version -sdk iphonesimulator ProductBuildVersion)" >> "$GITHUB_OUTPUT"
+
       # Compiled modules / build products. RESTORE-ONLY; the save is explicit,
       # after the compile step (see "Save DerivedData build cache"), because the
       # post-job save is skipped on a timeout-cancellation exactly like the SPM
@@ -342,10 +355,10 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/DerivedData
-          key: ios-dd-macos15-xc26_1_1-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
+          key: ios-dd-macos15-sdk${{ steps.sdkver.outputs.v }}-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
           restore-keys: |
-            ios-dd-macos15-xc26_1_1-${{ hashFiles('apps/ios/project.yml') }}-
-            ios-dd-macos15-xc26_1_1-
+            ios-dd-macos15-sdk${{ steps.sdkver.outputs.v }}-${{ hashFiles('apps/ios/project.yml') }}-
+            ios-dd-macos15-sdk${{ steps.sdkver.outputs.v }}-
 
       # XcodeGen owns project generation (see commit dropping hand-edited
       # pbxproj entries). The committed Meeshy.xcodeproj/project.pbxproj is a
@@ -449,7 +462,15 @@ jobs:
             DESTINATION='generic/platform=iOS Simulator'
             ARCH_SETTINGS=(ARCHS=arm64)
           else
-            DESTINATION='platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}'
+            # `id=<udid>` alone is not enough to pick a single destination:
+            # xcodebuild resolves the SAME simulator UDID under both `arch:arm64`
+            # and `arch:x86_64` variants and picks "the first" of the two, an
+            # order nothing fixes (see #5909 — observed picking x86_64 on an
+            # Apple Silicon runner, which then hangs ~13 min before `TEST
+            # EXECUTE FAILED` with zero test named). Pinning `arch=arm64`
+            # removes the ambiguity outright — macos-15 runners are Apple
+            # Silicon, so it is also the only arch that can actually run here.
+            DESTINATION='platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }},arch=arm64'
             ARCH_SETTINGS=(ONLY_ACTIVE_ARCH=YES)
           fi
           # Les erreurs du compilateur partent AUSSI en annotations : le log
@@ -548,7 +569,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/DerivedData
-          key: ios-dd-macos15-xc26_1_1-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
+          key: ios-dd-macos15-sdk${{ steps.sdkver.outputs.v }}-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
 
       # The other half the PR gate skips (~8 min). It is also the half that needs
       # the simulator provisioned above, so the two are gated together or not at
@@ -583,10 +604,14 @@ jobs:
           # valuable as LOCAL/on-device guards for the film+validate SIGTRAP
           # (see the file header) but a CI simulator cannot execute photo-library
           # writes reliably — same reason the XCTMetric perf suites are gated out.
+          # `arch=arm64` pinned for the same reason as the build step above
+          # (see #5909): `id=<udid>` alone resolves to two destinations, one
+          # per architecture, and xcodebuild's unspecified tie-break can pick
+          # the one this Apple Silicon runner cannot actually run.
           xcodebuild test-without-building \
             -project apps/ios/Meeshy.xcodeproj \
             -scheme Meeshy \
-            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }},arch=arm64" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
             -only-testing:MeeshyTests \

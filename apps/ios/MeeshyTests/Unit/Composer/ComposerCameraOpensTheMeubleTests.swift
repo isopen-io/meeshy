@@ -94,7 +94,7 @@ final class ComposerCameraOpensTheMeubleTests: XCTestCase {
     /// doit donc pas se lire comme attendant une implémentation décidée : il
     /// garde un état de fait, et le document dit lequel.
     func test_lesTroisAutresOuvertures_restentSurLAtelier_dettesNOMMEES() {
-        for opening in [ComposerOpening.resume, .mediaSeeded, .videoCameraReady] {
+        for opening in [ComposerOpening.resume, .videoCameraReady] {
             XCTAssertEqual(
                 ComposerSurfaceRouting.surface(opening: opening, format: .story),
                 .scene,
