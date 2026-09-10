@@ -410,19 +410,6 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
         }
         .frame(maxWidth: .infinity)
         .background(headerBackground)
-        // **L'hôte DÉCLARE ce qu'il pose en haut** (#5944). La pastille de
-        // synchronisation est un overlay haut-aligné de la RACINE : elle ne
-        // peut pas savoir qu'un écran a posé une barre sous la zone sûre, et
-        // elle se posait donc à 8 pt — par-dessus « Meeshy Chats ».
-        //
-        // La hauteur DÉPLIÉE, pas la hauteur courante : une préférence qui
-        // suivrait `headerHeight` se réécrirait à chaque image du défilement
-        // (~120 Hz) pour faire sautiller la pastille. Une constante borne le
-        // pire cas, ne coûte aucune propagation, et laisse au plus 20 pt d'air
-        // une fois la barre repliée — le même compromis que la conversation
-        // assume déjà pour son chrome flottant.
-        .preference(key: SyncPillHostChromeKey.self,
-                    value: CollapsibleHeaderMetrics.expandedHeight)
     }
 
     /// Header surface — generalised for ALL screens using this header: an
@@ -581,32 +568,5 @@ extension CollapsibleHeader where LeadingContent == EmptyView, TitleContent == E
         self.centerReveal = centerReveal
         self.accessory = nil
         self.titleAccessory = nil
-    }
-}
-
-
-// MARK: - Ce que l'hôte pose en haut
-
-/// **La hauteur de chrome qu'un écran déclare occuper sous la zone sûre**, pour
-/// que les overlays de la RACINE — la pastille de synchronisation en tête — se
-/// posent DESSOUS au lieu de le recouvrir (#5944).
-///
-/// La marge de la pastille se décidait sur un booléen : « suis-je dans une
-/// conversation ? » (114 + 8) ou non (8). Hors conversation il y a pourtant au
-/// moins deux géographies — sept écrans montent un `CollapsibleHeader` de 64 pt,
-/// une vingtaine de routes ne montent rien — et un booléen ne peut pas dire
-/// trois cas. C'est l'HÔTE qui sait ; il le dit ici.
-///
-/// **Zéro est un repli, pas une déclaration** : un écran qui ne pose rien laisse
-/// la valeur par défaut, et la racine garde l'assise d'origine. Un correctif
-/// qui servirait la marge de l'en-tête à tout le monde ferait flotter la
-/// pastille en plein vide sur les routes nues.
-///
-/// La réduction est un MAXIMUM : deux hôtes empilés ne s'annulent pas, c'est le
-/// plus haut qui borne.
-public struct SyncPillHostChromeKey: PreferenceKey {
-    public static let defaultValue: CGFloat = 0
-    public static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
     }
 }

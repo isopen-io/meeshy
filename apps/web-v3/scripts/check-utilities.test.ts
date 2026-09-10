@@ -20,24 +20,44 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * en silence.
  */
 /**
- * LE TÉMOIN DU FAUX-POSITIF DE COMMENTAIRE (régression CI 2026-09-10).
+ * LE TÉMOIN DU FAUX-POSITIF DE COMMENTAIRE (régression CI 2026-09-10, #5958).
  *
- * `usedClasses` lit le TEXTE BRUT du fichier (c'est la méthode documentée en
- * tête du module : comparer à la feuille produite plutôt qu'à une liste
- * d'utilitaires tenue à la main) — y compris à l'intérieur d'un commentaire
- * JSDoc. Un commentaire qui CITE un extrait JSX d'un AUTRE fichier, avec un
- * `className="…"` qui franchit un saut de ligne, fait capturer par la regex
- * le marqueur de continuation ` * ` du commentaire comme un TOKEN de classe
- * à part entière : `className="flex\n * justify-center py-1.5"` rend les
- * tokens `flex`, `*`, `justify-center`, `py-1.5` — `*` n'a jamais été une
- * classe, et n'a donc aucune règle dans la feuille produite, ce qui a fait
+ * Un commentaire JSDoc qui CITE un extrait JSX d'un AUTRE fichier, avec un
+ * `className="…"` qui franchit un saut de ligne, faisait capturer par la
+ * regex le marqueur de continuation ` * ` comme un TOKEN de classe à part
+ * entière : `className="flex\n * justify-center py-1.5"` rendait les tokens
+ * `flex`, `*`, `justify-center`, `py-1.5` — `*` n'a jamais été une classe,
+ * et n'avait donc aucune règle dans la feuille produite, ce qui a fait
  * échouer `Gates web-v3` sur `dev` pour TOUTE PR (pas seulement celle qui
- * touchait le fichier). Le fichier réel documente désormais l'extrait sans
- * la syntaxe d'attribut JSX entre guillemets ; ce témoin verrouille qu'il
- * ne produit plus aucun token de classe utilisateur.
+ * touchait le fichier). Deux correctifs complémentaires ont atterri côte à
+ * côte (#5958, le commentaire réel reformulé sans guillemets JSX ; #5960,
+ * `usedClasses` dépouille désormais les commentaires avant de scanner) :
+ * ce témoin verrouille le second, sur un fixture qui reproduit EXACTEMENT
+ * le motif fautif — il doit rendre zéro token, quelle que soit la forme du
+ * commentaire qui le porte.
  */
 describe('usedClasses — un commentaire ne doit jamais injecter de faux token', () => {
-  test('un className="…" multi-lignes à l’intérieur d’un JSDoc produit un token "*" fautif', () => {
+  /**
+   * **CE TÉMOIN A ÉTÉ RETOURNÉ le 2026-09-10, et son titre disait déjà pourquoi.**
+   *
+   * Deux sessions ont corrigé le même défaut à une heure d'écart, par deux
+   * chemins DIFFÉRENTS et complémentaires :
+   * - #5958 a reformaté le commentaire de `thread-chrome.ts` pour qu'il ne
+   *   porte plus la syntaxe d'attribut JSX — le fichier réel cesse de piéger
+   *   l'extracteur ;
+   * - #5960 a fait DÉPOUILLER les commentaires par `usedClasses` — l'extracteur
+   *   cesse de trébucher sur n'importe quel fichier, présent ou futur.
+   *
+   * Le premier soigne un site, le second la classe entière. Ce témoin épinglait
+   * l'ancien comportement (`toContain('*')`) : il caractérisait le DÉFAUT, alors
+   * que le titre de son bloc énonce la RÈGLE — « un commentaire ne doit jamais
+   * injecter de faux token ». Les deux se contredisaient ; c'est la règle qui
+   * gagne, et l'assertion la rejoint.
+   *
+   * > Un témoin qui ÉPINGLE un défaut au lieu d'affirmer la règle devient faux
+   * > le jour où le défaut est corrigé — et il fait alors rougir la correction.
+   */
+  test('un className="…" multi-lignes à l’intérieur d’un JSDoc n’injecte AUCUN token', () => {
     const fixture = [
       '/**',
       ' * au navigateur (`thread-modes.tsx`, le `<div className="flex',
@@ -50,7 +70,7 @@ describe('usedClasses — un commentaire ne doit jamais injecter de faux token',
     writeFileSync(file, fixture);
     try {
       const found = usedClasses([file]);
-      expect([...found.keys()]).toContain('*');
+      expect([...found.keys()]).toEqual([]);
     } finally {
       unlinkSync(file);
     }

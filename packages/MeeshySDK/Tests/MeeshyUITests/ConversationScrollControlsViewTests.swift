@@ -301,6 +301,23 @@ final class ConversationScrollControlsViewTests: XCTestCase {
         }
     }
 
+    // MARK: - contentColor (#5950 — le seuil d'égalité de contraste WCAG,
+    // pas le seuil arrondi 0.6 qui se trompait sur la plage 0,179 → 0,6)
+
+    func test_contentColor_doesNotHardcodeFormerWrongThreshold() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Conversation/ConversationScrollControlsView.swift")
+        XCTAssertFalse(
+            source.contains("luminance > 0.6"),
+            "contentColor doit déléguer à Color.readableInk (seuil d'égalité WCAG), " +
+            "pas comparer la luminance à 0.6 — cette comparaison élit l'encre illisible " +
+            "sur toute la plage 0,179 → 0,6 (ex. #46BDCA)."
+        )
+        XCTAssertTrue(
+            source.contains("Color(hex: accentColor).readableInk"),
+            "contentColor doit consommer Color.readableInk."
+        )
+    }
+
     func test_typingDotTimer_isDeclaredAsState() throws {
         let source = try sdkSource("Sources/MeeshyUI/Conversation/ConversationScrollControlsView.swift")
         XCTAssertTrue(

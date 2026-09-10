@@ -208,6 +208,24 @@ struct RootChromeLayer: ViewModifier {
     let showFeed: Bool
     let showMenu: Bool
 
+    /// Marge haute de la pastille hors conversation. Fonction pure — c'est la
+    /// DÉCISION qui se teste, pas le rendu (#5944).
+    ///
+    /// `currentRoute == nil` désigne la racine (liste de conversations ou
+    /// flux, tous deux montés avec leur propre `CollapsibleHeader` — « Meeshy
+    /// Chats » ou « Meeshy Feed »), qui réclame donc le même dégagement
+    /// qu'une route poussée qui en déclare un. Une route qui n'en déclare
+    /// aucun garde l'assise minimale.
+    static func syncPillTopPadding(currentRoute: Route?) -> CGFloat {
+        guard let currentRoute else {
+            return CollapsibleHeaderMetrics.expandedHeight + MeeshySpacing.sm
+        }
+        guard let headerHeight = currentRoute.collapsibleHeaderHeight else {
+            return MeeshySpacing.sm
+        }
+        return headerHeight + MeeshySpacing.sm
+    }
+
     func body(content: Content) -> some View {
         content
             // Point de montage unique du SyncPill (indicateur de frappe global +
@@ -223,12 +241,7 @@ struct RootChromeLayer: ViewModifier {
             // Masqué pendant le lecteur de réels immersif (frère de ZStack, pas
             // un fullScreenCover — contrairement au story viewer déjà gated via
             // isStoryViewerPresenting, il n'avait aucune garde équivalente).
-            // `overlayPreferenceValue` et non `.overlay` : la marge haute de la
-            // pastille se lit sur ce que l'HÔTE déclare poser en haut
-            // (`SyncPillHostChromeKey`, posée par `CollapsibleHeader`), pas sur
-            // la route (#5944). La POSITION dans la chaîne est inchangée —
-            // §B2 de la spec d'empilement en dépend.
-            .overlayPreferenceValue(SyncPillHostChromeKey.self, alignment: .top) { hostChromeBottom in
+            .overlay(alignment: .top) {
                 if reelsPresenter.launch == nil {
                     ConnectionBanner(
                         conversationListViewModel: conversationViewModel,
@@ -242,18 +255,11 @@ struct RootChromeLayer: ViewModifier {
                     // rendait toujours 0 — `topLift` vaut 88, la soustraction est
                     // négative, la borne la ramène à zéro — et la bannière
                     // recouvrait les boutons Appeler / Rechercher / Mode de lecture.
-                    //
-                    // Hors conversation, l'assise n'est PLUS un littéral (#5944).
-                    // Elle valait 8 pt pour tout le monde, « la valeur que le
-                    // viewer de story portait » — un hôte où la pastille est
-                    // gatée et n'est plus rendue du tout. Sept écrans montent un
-                    // `CollapsibleHeader` de 64 pt, et la pastille se posait en
-                    // plein dans « Meeshy Chats ». C'est désormais l'HÔTE qui
-                    // déclare sa hauteur ; les routes qui ne déclarent rien
-                    // gardent les 8 pt d'origine.
-                    .padding(.top, ConnectionBanner.topPadding(
-                        inConversation: router.currentConversationId != nil,
-                        hostChromeBottom: hostChromeBottom))
+                    // Hors conversation, ce qui décide n'est pas un booléen mais
+                    // ce que l'hôte courant DÉCLARE — `syncPillTopPadding` (#5944).
+                    .padding(.top, router.currentConversationId != nil
+                        ? ConnectionBanner.conversationTopPadding
+                        : Self.syncPillTopPadding(currentRoute: router.currentRoute))
                 }
             }
             // Présentation d'appel (cover plein écran + PiP + pastille + bulle +

@@ -305,34 +305,6 @@ struct ConnectionBanner: View {
     /// 8 pt plus bas reste parfaitement visible.
     static let conversationTopPadding: CGFloat = conversationChromeBottom + MeeshySpacing.sm
 
-    /// **La marge haute de la pastille, décidée par l'HÔTE** (#5944).
-    ///
-    /// Le site d'appel branchait sur un booléen : en conversation
-    /// `conversationTopPadding`, partout ailleurs 8 pt. « Partout ailleurs »
-    /// recouvre pourtant deux géographies incompatibles — sept écrans montent
-    /// un `CollapsibleHeader` (barre dépliée : 64 pt) et une vingtaine de
-    /// routes n'en montent aucun. La pastille tombait donc EN PLEIN DANS le
-    /// titre « Meeshy Chats », constaté à l'écran.
-    ///
-    /// La valeur de repli était de surcroît justifiée par un hôte qui ne la
-    /// reçoit jamais : le commentaire invoquait « la valeur que le viewer de
-    /// story portait », alors que la pastille y est GATÉE
-    /// (`isStoryViewerPresenting`) et n'y est plus rendue du tout. Un
-    /// commentaire d'origine ne se périme jamais tout seul.
-    ///
-    /// **La conversation GAGNE sur une déclaration d'hôte**, et ce n'est pas un
-    /// ordre arbitraire : la liste reste montée sous la conversation poussée,
-    /// donc sa préférence continue de remonter. La laisser l'emporter
-    /// ramènerait la pastille à 72 pt par-dessus le chrome flottant — le défaut
-    /// exact que #5941 vient de fermer.
-    ///
-    /// Fonction pure : c'est la DÉCISION qui se teste, pas le rendu.
-    static func topPadding(inConversation: Bool, hostChromeBottom: CGFloat) -> CGFloat {
-        if inConversation { return conversationTopPadding }
-        guard hostChromeBottom > 0 else { return MeeshySpacing.sm }
-        return hostChromeBottom + MeeshySpacing.sm
-    }
-
     var body: some View {
         // Skip rendering when StoryViewerView est présenté plein écran —
         // le fullScreenCover du root ne supprime pas les safeAreaInset /

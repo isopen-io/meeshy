@@ -113,6 +113,7 @@
   --ios-edge: color-mix(in srgb, white 6%, transparent); /* ThemedConversationRow.swift:202-241 — strokeBorder de la carte, 0,5 px */
   --ios-day-ink: var(--ios-indigo-200); /* MessageDaySeparator.swift */
   --ios-day-hairline: var(--ios-indigo-900); /* MessageDaySeparator.swift — strokeBorder */
+  --ios-self-name-ink: var(--ios-indigo-200); /* FocalIdentityHeader.swift:90-92 — nameColor quand isMe (indigo500 mesuré sous AA, #5935) */
   --ios-summary-surface-tint: color-mix(in srgb, white 6%, transparent); /* FocalMetrics.swift:385-386 — SurfaceTint, fond des cartes d’épisode du Résumé Vivant */
   --ios-summary-skeleton-fill: color-mix(in srgb, white 8%, transparent); /* Focal/Summary/LivingSummaryView.swift:151-164 — remplissage des trois barres du squelette */
 }
@@ -133,6 +134,7 @@
   --ios-edge: color-mix(in srgb, black 6%, transparent);
   --ios-day-ink: var(--ios-indigo-700);
   --ios-day-hairline: var(--ios-indigo-200);
+  --ios-self-name-ink: var(--ios-indigo-700);
   --ios-summary-surface-tint: color-mix(in srgb, black 4%, transparent);
   --ios-summary-skeleton-fill: color-mix(in srgb, black 6%, transparent);
 }

@@ -8,7 +8,9 @@ import {
   PARTICIPANTS,
   VIEWER_ID,
   amina,
+  anonymousGuest,
   attachmentDefaults,
+  bruno,
   conversationDefaults,
   fatou,
   kwame,
@@ -156,6 +158,24 @@ export const MESSAGES: readonly Message[] = [
       },
     ],
   }),
+  /**
+   * LA PRÉSENCE NON SERVIE, RENDUE PAR LA PASSERELLE (revue #5935, défaut
+   * majeur 3) — `bruno` (`fixtures-base.ts`) est `offline` depuis deux
+   * heures : `presenceOf(bruno)` rend `'offline'`, et `Avatar` ne pose ALORS
+   * aucun `[data-presence]` (« offline = pas de pastille »). AVANT ce
+   * message, la moitié « présence NON servie ⇒ AUCUNE pastille » du critère
+   * de fin de #5935 n'était mesurable sur AUCUNE conversation servie par le
+   * navigateur (voir D-32 §5).
+   */
+  message({
+    id: 'm5b',
+    senderId: bruno.userId ?? 'u-bruno',
+    sender: bruno,
+    content: 'Je repasse dessus demain matin, désolé pour le retard.',
+    originalLanguage: 'fr',
+    translations: [],
+    createdAt: threadMoment(84),
+  }),
   message({
     id: 'm6',
     senderId: VIEWER_ID,
@@ -174,6 +194,22 @@ export const MESSAGES: readonly Message[] = [
     replyTo: kwameQuestion,
     reactionSummary: { '👍': 2 },
     reactionCount: 2,
+  }),
+  /**
+   * « SANS COMPTE », RENDU PAR LA PASSERELLE (revue #5935, défaut majeur 3)
+   * — `anonymousGuest` (`fixtures-base.ts`, `type: 'anonymous'`) est le
+   * PREMIER participant `anonymous` du corpus : AVANT ce message, le glyphe
+   * `mask-happy` de `FocalRow` (D-32 §1) n'était rendu par AUCUN gate
+   * navigateur ni AUCUNE capture livrée.
+   */
+  message({
+    id: 'm6b',
+    senderId: anonymousGuest.userId ?? 'ano_7f3',
+    sender: anonymousGuest,
+    content: 'Je viens de rejoindre via le lien, tout a l’air stable de mon côté.',
+    originalLanguage: 'fr',
+    translations: [],
+    createdAt: threadMoment(82.5),
   }),
   message({
     id: 'm7',
@@ -421,8 +457,19 @@ export const CONVERSATIONS: readonly Conversation[] = [
     id: CONVERSATION_ID,
     title: 'Équipe déploiement',
     type: 'group',
+    /* `memberCount` reste 3 — `assertRiverBelowThreshold` (`lib/check-
+       river-menu.mjs`) en dépend MOT POUR MOT (« S'ouvrira à 5 personnes
+       actives — 3 aujourd'hui ») pour prouver que la Rivière reste SOUS LE
+       SEUIL sur CETTE conversation, par opposition à `c-salon-riviere`
+       (`memberCount: 5`, déjà éligible). `bruno` (m5b) et `anonymousGuest`
+       (m6b) parlent désormais dans ce fil (revue #5935, défaut majeur 3)
+       SANS être comptés parmi les membres actifs — même écart que la
+       passerelle réelle admet déjà (un participant `anonymous` ou reparti
+       peut avoir laissé un message sans peser sur l'effectif affiché).
+       `participants` s'étend ICI, jamais à la source PARTAGÉE
+       (`PARTICIPANTS`, `fixtures-catchup.test.ts` compris). */
     memberCount: 3,
-    participants: PARTICIPANTS,
+    participants: [...PARTICIPANTS, bruno, anonymousGuest],
     unreadCount: 2,
     lastMessage,
     lastMessageAt: lastMessage.createdAt,
