@@ -204,6 +204,8 @@ const FOCAL_MAPPINGS = [
   ['fadeDurationMs', 'REVEAL_FADE_DURATION_MS', 'durée du fondu du révélé (Pill.fadeDurationMs)'],
   // --- #5774 (travail 3/3) : le CHROME du fil (HiddenChrome).
   ['edgeTravel', 'HIDDEN_CHROME_EDGE_TRAVEL', "course de l'escamotage vers le bord (HiddenChrome.edgeTravel)"],
+  // --- #5936 : le sticker de la rangée plate (Sticker.side).
+  ['side', 'STICKER_SIDE', 'côté du sticker en rangée plate (Sticker.side)'],
 ];
 
 for (const [swiftName, downstreamName, what] of FOCAL_MAPPINGS) {
@@ -671,6 +673,76 @@ for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
     failures.push(`fond clair, second mélange accent : Swift ${secondLightTint}, dérivée ${actualLightTintEnd}`);
 }
 
+/**
+ * PARTIE 9 — LES ÉTATS DU MESSAGE (#5936). Le brief de la spécification
+ * nomme cette section « PARTIE 6 », déjà prise par la typographie de la
+ * Lentille (ci-dessus) : renumérotée ici, dans l'ordre réel du fichier.
+ *
+ * DEUX SOURCES SWIFT DISTINCTES, ni l'une ni l'autre `FocalMetrics.swift` :
+ * `EmojiDetector.swift` (les trois tailles d'emoji seul, un ENUM dont
+ * `focalNumber` ne sait pas lire les `case` — lu par une regex DÉDIÉE, même
+ * dispositif que PARTIE 8) et `BubbleSticker.swift` (le côté du sticker EN
+ * BULLE et la boîte de son repli emoji — hors `FocalMetrics`, comme
+ * `FocalScrollPerspective.swift` l'était déjà pour PARTIE 4).
+ */
+{
+  const emojiDetectorSwift = readFileSync(
+    `${ROOT}packages/MeeshySDK/Sources/MeeshyUI/Utilities/EmojiDetector.swift`,
+    'utf8',
+  );
+  const bubbleStickerSwift = readFileSync(`${ROOT}apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleSticker.swift`, 'utf8');
+  const messageBodyDerived = readFileSync(`${ROOT}apps/web-v3/src/lib/view/message-body.ts`, 'utf8');
+  const metricsDerived2 = readFileSync(`${ROOT}apps/web-v3/src/lib/reading-mode/metrics.ts`, 'utf8');
+
+  const EMOJI_CASE_MAPPINGS = [
+    ['single', 'single'],
+    ['double', 'double'],
+    ['triple', 'triple'],
+  ];
+  for (const [swiftCase, tsKey] of EMOJI_CASE_MAPPINGS) {
+    const swiftValue = (() => {
+      const m = new RegExp(`case \\.${swiftCase}: return (-?[0-9.]+)`).exec(emojiDetectorSwift);
+      return m === null ? null : Number(m[1]);
+    })();
+    const derivedValue = (() => {
+      const m = new RegExp(`${tsKey}:\\s*(-?[0-9.]+)`).exec(messageBodyDerived);
+      return m === null ? null : Number(m[1]);
+    })();
+    if (swiftValue === null) failures.push(`taille d'emoji seul (${swiftCase}) : introuvable dans EmojiDetector.swift`);
+    else if (derivedValue === null) failures.push(`taille d'emoji seul (${swiftCase}) : « ${tsKey} » introuvable dans EMOJI_ONLY_FONT_SIZES`);
+    else if (swiftValue !== derivedValue)
+      failures.push(`taille d'emoji seul (${swiftCase}) : Swift ${swiftValue}, dérivée ${derivedValue}`);
+  }
+
+  const bubbleStickerNumber = (name) => {
+    const m = new RegExp(`\\b${name}\\s*(?::\\s*\\w+\\s*)?=\\s*(-?[0-9.]+)`).exec(bubbleStickerSwift);
+    return m === null ? null : Number(m[1]);
+  };
+  const STICKER_MAPPINGS = [
+    ['side', 'BUBBLE_STICKER_SIDE', 'côté du sticker en bulle (BubbleSticker.side)'],
+  ];
+  for (const [swiftName, downstreamName, what] of STICKER_MAPPINGS) {
+    const expectedSticker = bubbleStickerNumber(swiftName);
+    const actualSticker = count(metricsDerived2, downstreamName);
+    if (expectedSticker === null) failures.push(`${what} : « ${swiftName} » introuvable dans BubbleSticker.swift`);
+    else if (actualSticker === null) failures.push(`${what} : « ${downstreamName} » introuvable dans reading-mode/metrics.ts`);
+    else if (expectedSticker !== actualSticker) failures.push(`${what} : Swift ${expectedSticker}, dérivée ${actualSticker}`);
+  }
+
+  // `emojiBox` est une FORMULE (`CGSize(width: 60, height: 60)`), pas un
+  // littéral `nom = valeur` — lue par une regex dédiée plutôt qu'un
+  // `bubbleStickerNumber` générique qui la manquerait.
+  const emojiBoxSwift = (() => {
+    const m = /emojiBox\s*=\s*CGSize\(width:\s*(-?[0-9.]+),\s*height:\s*(-?[0-9.]+)\)/.exec(bubbleStickerSwift);
+    return m === null ? null : Number(m[1]);
+  })();
+  const emojiBoxDerived = count(metricsDerived2, 'STICKER_EMOJI_BOX');
+  if (emojiBoxSwift === null) failures.push('boîte emoji du sticker : « emojiBox = CGSize(width:…) » introuvable dans BubbleSticker.swift');
+  else if (emojiBoxDerived === null) failures.push('boîte emoji du sticker : « STICKER_EMOJI_BOX » introuvable dans reading-mode/metrics.ts');
+  else if (emojiBoxSwift !== emojiBoxDerived)
+    failures.push(`boîte emoji du sticker : Swift ${emojiBoxSwift}, dérivée ${emojiBoxDerived}`);
+}
+
 if (failures.length > 0) {
   console.error('\n  La loi de la Lentille a DÉRIVÉ de packages/shared/utils/focus-curve.ts :\n');
   for (const e of failures) console.error(`    · ${e}`);
@@ -696,5 +768,7 @@ console.log(
     `\n  La typographie de la rangée de la Lentille est conforme à lentille-tokens.json` +
     ` (${TYPOGRAPHY_MAPPINGS.length} chaînes complètes : jeton → ios.css → alias Tailwind → classe posée).` +
     `\n  Le menu du message est conforme à MessageOverlayMenu.swift/MessageActionsMenu.swift` +
-    ` (${MENU_MAPPINGS.length} cotes + le chrome de la liste + les 6/20 emojis du rail).`,
+    ` (${MENU_MAPPINGS.length} cotes + le chrome de la liste + les 6/20 emojis du rail).` +
+    `\n  Les états du message sont conformes à EmojiDetector.swift/BubbleSticker.swift` +
+    ` (3 tailles d'emoji seul + 2 cotes de sticker en bulle).`,
 );

@@ -1,4 +1,6 @@
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
+import { badgesOf, editedOf, ephemeralBadgeOf, systemRowOf } from '@/lib/view/message-badges';
+import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, presenceOf } from '@/lib/view/conversation';
 import type { LocalDelivery } from '@/lib/view/message';
 import { served } from '@/lib/api/prism';
@@ -6,12 +8,17 @@ import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
 import { ephemeralOf, protectionOf } from '@/lib/reading-mode/protection';
+import { BUBBLE_STICKER_SIDE } from '@/lib/reading-mode/metrics';
 
 import { Avatar } from './avatar';
 import { Attachments } from './attachment-blocks';
+import { EmojiOnly, LocationCard, StickerArtwork, StoryCitationCard } from './message-body-blocks';
 import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
+import { SystemNotice } from './system-notice';
 import {
+  Badges,
   Check,
+  EditedMark,
   FailedSendBand,
   Flags,
   PrismPastille,
@@ -65,6 +72,7 @@ export function Bubble({
   sendFailureReason,
   onRetry,
   onJumpToMessage,
+  onOpenStory,
   highlighted = false,
   expired = false,
   onConsumeViewOnce,
@@ -116,6 +124,8 @@ export function Bubble({
   onRetry?: () => void;
   /** Saute au message cité (#5566 défaut 10 : le bouton de citation ne faisait rien). */
   onJumpToMessage: (messageId: string) => void;
+  /** Ouvre la story citée (#5936) — voir `focal-row.tsx`, même contrat. */
+  onOpenStory?: (messageId: string) => void;
   /** Mis en évidence brièvement après un saut de citation. */
   highlighted?: boolean;
   /** FORCÉ par l'hôte quand `EphemeralBadge.onExpired` s'est déclenché pour CE message. */
@@ -135,6 +145,20 @@ export function Bubble({
   const checkStatus = checkStatusOf(message, localDelivery);
 
   if (kind === 'expired') return null;
+
+  /**
+   * LA RANGÉE SYSTÈME (#5936) — testée AVANT la protection, comme la
+   * rangée plate : `BubbleSystemViews.swift`, capsule CENTRÉE, AUCUNE
+   * `.rounded-bubble`, aucun pied.
+   */
+  const systemRow = systemRowOf(message);
+  if (systemRow !== null) {
+    return (
+      <div data-message={message.id} style={{ marginBottom: tail ? 6 : 2 }}>
+        <SystemNotice row={systemRow} timeString={time(message.createdAt)} surface="bubble" />
+      </div>
+    );
+  }
 
   /**
    * `deleted` SEUL prend la vue à part, SANS bulle. `burned` REJOINT
@@ -218,6 +242,24 @@ export function Bubble({
   const reactions = reactionEntries(message.reactionSummary);
   const ephemeral = ephemeralOf(message.expiresAt, nowMs);
 
+  /**
+   * LES BADGES DE TÊTE, LE CORPS ET LA STORY CITÉE (#5936) — `badgesOf`
+   * porte l'ORDRE complet (l'éphémère et « modifié » restent
+   * `EphemeralBadge`/`EditedMark`, chacun à sa place) ; `bodyKindOf` décide
+   * sticker → emoji seul → texte ; un sticker ou un emoji seul n'a AUCUNE
+   * `.rounded-bubble` (`bareBody`, BSL:998-1011 / `BubbleSticker.swift:9-11`).
+   *
+   * `ephemeralBadge`/`isEdited` LISENT CETTE SORTIE (revue-correction #5936,
+   * défaut majeur 1) — voir le même doc-comment côté `focal-row.tsx`.
+   */
+  const badges = badgesOf(message, nowMs);
+  const ephemeralBadge = ephemeralBadgeOf(badges);
+  const isEdited = editedOf(badges);
+  const storyCitation = storyCitationOf(message);
+  const sharedPlace = placeOf(message);
+  const body = bodyKindOf(message);
+  const bareBody = body.kind === 'sticker' || body.kind === 'emoji-only';
+
   /** LE PIED — la loi (D-23, #5676) : jamais de drapeau en clair sur un message voilé, un seul jeu par suite. */
   const showsBottomLine = mountsBottomLine({
     hasTranslation: translatedLanguages.length > 0,
@@ -231,10 +273,18 @@ export function Bubble({
 
   const contentBlock = (
     <>
-      {message.replyTo ? (
+      {/* La story citée REMPLACE la citation ordinaire — « une scène ne
+          tient pas dans une bulle » : elle vit HORS de la boîte (voir plus
+          bas, juste sous les badges), donc ni l'une ni l'autre ici. */}
+      {storyCitation === null && message.replyTo ? (
         <Quote quote={message.replyTo} isMine={isMine} onJump={() => onJumpToMessage(message.replyTo!.id)} />
       ) : null}
-      {message.attachments ? (
+      {/* « MODIFIÉ » — INLINE dans le corps, entre la citation et le texte
+          (#5936, `BubbleStandardLayout.swift:1064-1066`). `EditedMark` porte
+          déjà `aria-hidden` (revue-correction #5936, défaut majeur 8) : le
+          mot est dans `rowLabel`, il ne se prononce pas une seconde fois. */}
+      {isEdited ? <EditedMark onBrandBubble={isMine && !bareBody} /> : null}
+      {message.attachments && body.kind !== 'sticker' ? (
         <Attachments
           attachments={message.attachments}
           languages={languages}
@@ -242,8 +292,14 @@ export function Bubble({
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}
+      {/* Le lieu est HÉBERGÉ dans la boîte (`BubbleContentBuilder.swift:134-137`). */}
+      {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" /> : null}
 
-      {rendered.text ? (
+      {body.kind === 'sticker' ? (
+        <StickerArtwork sticker={body.sticker} picture={body.picture} side={BUBBLE_STICKER_SIDE} />
+      ) : body.kind === 'emoji-only' ? (
+        <EmojiOnly text={body.text} fontSize={body.fontSize} />
+      ) : rendered.text ? (
         /* Le contenu AFFICHE est deja la traduction preferee, rendu
            exactement comme du contenu natif — ni encadre, ni italique, ni
            annonce. C'est le Prisme : la traduction ne se signale que par
@@ -254,6 +310,24 @@ export function Bubble({
         </p>
       ) : null}
     </>
+  );
+
+  const protectedContentBlock = isProtected ? (
+    <ProtectedContent
+      messageId={message.id}
+      kind={kind}
+      isViewOnce={message.isViewOnce}
+      contentLength={message.content.length}
+      attachmentCount={message.attachments?.length ?? 0}
+      surface="bubble"
+      isMine={isMine}
+      onConsumeViewOnce={onConsumeViewOnce}
+      now={now}
+    >
+      {contentBlock}
+    </ProtectedContent>
+  ) : (
+    contentBlock
   );
 
   return (
@@ -310,120 +384,76 @@ export function Bubble({
             <span className="offscreen">Sélectionner ce message</span>
           </button>
         ) : null}
+        {/* LES BADGES DE TÊTE (#5936) — AU-DESSUS de la bulle, HORS du fond
+            coloré, alignés du côté de la bulle (`BubbleStandardLayout
+            .swift:522-541`). */}
+        <div className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+          <Badges badges={badges} />
+        </div>
+
         {/* LE BADGE ÉPHÉMÈRE — AU-DESSUS de la bulle, HORS du fond coloré
             (`BubbleStandardLayout.swift:543-550`). Aligné du côté de la bulle. */}
-        {ephemeral.state === 'running' && message.expiresAt !== undefined ? (
+        {ephemeral.state === 'running' && ephemeralBadge !== undefined ? (
           <div className={`mb-1 flex ${isMine ? 'justify-end' : 'justify-start'}`}>
             <EphemeralBadge
-              expiresAt={message.expiresAt}
+              expiresAt={ephemeralBadge.expiresAt}
               now={now}
               onExpired={() => onEphemeralExpired?.(message.id)}
             />
           </div>
         ) : null}
 
-        <div
-          className="rounded-bubble px-3.5 py-2.5 transition-shadow duration-500"
-          style={{
-            ...(isMine
-              ? { backgroundColor: 'var(--color-bubble-mine)', color: 'white' }
-              : { backgroundColor: receivedBg, border: `1px solid ${receivedHairline}`, color: 'var(--color-ios-ink)' }),
-            /* Mise en évidence temporaire après un saut de citation — un
-               anneau plutôt qu'un fond, pour ne jamais menacer le contraste
-               du texte qu'il entoure (#5566 défaut 10). */
-            boxShadow: highlighted ? '0 0 0 2.5px var(--accent)' : 'none',
-          }}
-        >
-          {/*
-            LA BANDE DE REPRISE EST **DANS** LA BULLE, pas sous le fil — c'est
-            le parti d'iOS, et il vaut mieux que le nôtre : un bandeau global
-            dirait « un envoi a échoué » sans dire LEQUEL, et sur un fil de
-            cinquante messages c'est une information inutilisable. Ici l'échec
-            est attaché au message qui a échoué, et le geste de reprise est à
-            l'endroit où le regard se pose déjà. HORS VOILE (D-23) : un échec
-            se voit même sur un message protégé.
-          */}
-          {localDelivery === 'failed' ? (
-            <FailedSendBand
-              {...(sendFailureReason === undefined ? {} : { reason: sendFailureReason })}
-              {...(onRetry === undefined ? {} : { onRetry })}
-              textColor={isMine ? 'white' : 'var(--color-error)'}
+        {/* LA STORY CITÉE — HORS de la boîte colorée (« une scène ne tient
+            pas dans une bulle », `BubbleStandardLayout.swift:557-565`). */}
+        {storyCitation !== null ? (
+          <div className={`mb-1 flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+            <StoryCitationCard
+              citation={storyCitation}
+              accent="var(--accent)"
+              now={new Date(nowMs)}
+              {...(onOpenStory === undefined ? {} : { onOpen: onOpenStory })}
             />
-          ) : null}
+          </div>
+        ) : null}
 
-          {isProtected ? (
-            <ProtectedContent
-              messageId={message.id}
-              kind={kind}
-              isViewOnce={message.isViewOnce}
-              contentLength={message.content.length}
-              attachmentCount={message.attachments?.length ?? 0}
-              surface="bubble"
-              isMine={isMine}
-              onConsumeViewOnce={onConsumeViewOnce}
-              now={now}
-            >
-              {contentBlock}
-            </ProtectedContent>
-          ) : (
-            contentBlock
-          )}
-
-          <div
-            className={`flex items-start gap-2 ${showsIdentity ? 'pt-2' : 'pt-1'}`}
-            style={{ color: isMine ? 'var(--color-meta-mine)' : 'var(--color-meta)' }}
-          >
-            {showsIdentity ? (
-              <Avatar
-                initials={initialsOf(message.sender?.displayName ?? '')}
-                color="var(--accent)"
-                size={32}
-                name={message.sender?.displayName ?? ''}
-                /* `nowMs`, jamais `Date.now()` — l'horloge de cette bulle est
-                   INJECTABLE (prop `now`, ci-dessus) et `presenceOf` prend la
-                   sienne en paramètre précisément pour que la loi 1/3/5 se
-                   mesure sans dépendre de l'horloge réelle (revue #5935). */
-                presence={presenceOf(message.sender, nowMs)}
+        {bareBody ? (
+          /* UN STICKER OU UN EMOJI SEUL N'A NI FOND, NI COIN, NI BORDURE
+             (#5936, `BubbleSticker.swift:9-11`, `BubbleStandardLayout
+             .swift:998-1011` pour l'emoji) : le pied compact (heure +
+             accusé) se pose À CÔTÉ de l'artwork, jamais dans une boîte.
+             LA BANDE DE REPRISE — HORS voile (D-23) — n'a ICI aucun fond
+             indigo à côté duquel se lire : `textColor` reste l'erreur, comme
+             la rangée plate (`focal-row.tsx`), jamais le blanc réservé à la
+             boîte colorée. */
+          <>
+            {localDelivery === 'failed' ? (
+              <FailedSendBand
+                {...(sendFailureReason === undefined ? {} : { reason: sendFailureReason })}
+                {...(onRetry === undefined ? {} : { onRetry })}
+                textColor="var(--color-error)"
               />
             ) : null}
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              {showsIdentity ? (
-                <span className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-                  {message.sender?.displayName ?? ''}
-                </span>
-              ) : null}
-              <div className="flex items-center gap-1">
-                {/* PrismPastille/Flags N'APPARAISSENT QUE quand la loi du pied
-                    l'autorise (D-23, critère c) — la bulle IGNORAIT cette loi
-                    avant ce lot et rendait ces contrôles sur CHAQUE message,
-                    voilé compris (`bulle.md` § 9 écart 5). */}
-                {showsBottomLine ? (
-                  <>
-                    <PrismPastille
-                      servedLanguage={naturalServedLanguage}
-                      originalLanguage={message.originalLanguage}
-                      active={activeLanguage}
-                      onToggle={() => onPickLanguage?.(message.originalLanguage)}
-                    />
-                    <Flags
-                      languages={footerLanguages}
-                      active={activeLanguage}
-                      onPick={(code) => onPickLanguage?.(code)}
-                    />
-                  </>
-                ) : null}
-                <span className="flex-1" />
+            <div className={`flex items-end gap-1.5 ${isMine ? 'justify-end' : 'justify-start'}`}>
+              {protectedContentBlock}
+              <div
+                className="flex items-center gap-1 pb-0.5"
+                /* LA MÉTA NEUTRE, QUEL QUE SOIT L'EXPÉDITEUR — `BubbleFooter
+                   .compactMetaColor` (`:62-66`) le dit mot pour mot : « le
+                   compact footer s'affiche TOUJOURS hors d'une bulle
+                   (free-floating emoji), donc on n'a pas de fond brand à
+                   contraster ». `--color-meta-mine` vaut `white 70%` (dérivée
+                   de `BubbleFooter.swift:283`, `ios.css:99`) : posée ICI, sur
+                   le fond de conversation d'un schéma CLAIR, elle rendait
+                   l'heure d'un emoji ou d'un sticker ENVOYÉ illisible —
+                   mesuré 1,3:1 (revue-correction #5936). */
+                style={{ color: 'var(--color-meta)' }}
+              >
                 <time
                   className="text-time font-medium tabular-nums"
                   dateTime={new Date(message.createdAt).toISOString()}
                 >
                   {time(message.createdAt)}
                 </time>
-                {/* `checkStatusOf` et non `deliveryOf` (revue-correction #5813) :
-                    `null` sur un envoi ÉCHOUÉ, dont la bande dit déjà « Non
-                    envoyé ». Peindre là la coche « envoyé » (ce que
-                    `deliveredCount: 0` produit) contredirait la bande à dix
-                    pixels de distance, `title` compris. */}
                 {checkStatus === null ? null : (
                   <Check
                     status={checkStatus}
@@ -433,8 +463,103 @@ export function Bubble({
                 )}
               </div>
             </div>
+          </>
+        ) : (
+          <div
+            className="rounded-bubble px-3.5 py-2.5 transition-shadow duration-500"
+            style={{
+              ...(isMine
+                ? { backgroundColor: 'var(--color-bubble-mine)', color: 'white' }
+                : { backgroundColor: receivedBg, border: `1px solid ${receivedHairline}`, color: 'var(--color-ios-ink)' }),
+              /* Mise en évidence temporaire après un saut de citation — un
+                 anneau plutôt qu'un fond, pour ne jamais menacer le contraste
+                 du texte qu'il entoure (#5566 défaut 10). */
+              boxShadow: highlighted ? '0 0 0 2.5px var(--accent)' : 'none',
+            }}
+          >
+            {/*
+              LA BANDE DE REPRISE EST **DANS** LA BULLE, pas sous le fil —
+              c'est le parti d'iOS : un bandeau global dirait « un envoi a
+              échoué » sans dire LEQUEL. HORS VOILE (D-23) : un échec se voit
+              même sur un message protégé.
+            */}
+            {localDelivery === 'failed' ? (
+              <FailedSendBand
+                {...(sendFailureReason === undefined ? {} : { reason: sendFailureReason })}
+                {...(onRetry === undefined ? {} : { onRetry })}
+                textColor={isMine ? 'white' : 'var(--color-error)'}
+              />
+            ) : null}
+
+            {protectedContentBlock}
+
+            <div
+              className={`flex items-start gap-2 ${showsIdentity ? 'pt-2' : 'pt-1'}`}
+              style={{ color: isMine ? 'var(--color-meta-mine)' : 'var(--color-meta)' }}
+            >
+              {showsIdentity ? (
+                <Avatar
+                  initials={initialsOf(message.sender?.displayName ?? '')}
+                  color="var(--accent)"
+                  size={32}
+                  name={message.sender?.displayName ?? ''}
+                  /* `nowMs`, jamais `Date.now()` — l'horloge de cette bulle est
+                     INJECTABLE (prop `now`, ci-dessus) et `presenceOf` prend la
+                     sienne en paramètre précisément pour que la loi 1/3/5 se
+                     mesure sans dépendre de l'horloge réelle (revue #5935). */
+                  presence={presenceOf(message.sender, nowMs)}
+                />
+              ) : null}
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                {showsIdentity ? (
+                  <span className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+                    {message.sender?.displayName ?? ''}
+                  </span>
+                ) : null}
+                <div className="flex items-center gap-1">
+                  {/* PrismPastille/Flags N'APPARAISSENT QUE quand la loi du pied
+                      l'autorise (D-23, critère c) — la bulle IGNORAIT cette loi
+                      avant ce lot et rendait ces contrôles sur CHAQUE message,
+                      voilé compris (`bulle.md` § 9 écart 5). */}
+                  {showsBottomLine ? (
+                    <>
+                      <PrismPastille
+                        servedLanguage={naturalServedLanguage}
+                        originalLanguage={message.originalLanguage}
+                        active={activeLanguage}
+                        onToggle={() => onPickLanguage?.(message.originalLanguage)}
+                      />
+                      <Flags
+                        languages={footerLanguages}
+                        active={activeLanguage}
+                        onPick={(code) => onPickLanguage?.(code)}
+                      />
+                    </>
+                  ) : null}
+                  <span className="flex-1" />
+                  <time
+                    className="text-time font-medium tabular-nums"
+                    dateTime={new Date(message.createdAt).toISOString()}
+                  >
+                    {time(message.createdAt)}
+                  </time>
+                  {/* `checkStatusOf` et non `deliveryOf` (revue-correction #5813) :
+                      `null` sur un envoi ÉCHOUÉ, dont la bande dit déjà « Non
+                      envoyé ». Peindre là la coche « envoyé » (ce que
+                      `deliveredCount: 0` produit) contredirait la bande à dix
+                      pixels de distance, `title` compris. */}
+                  {checkStatus === null ? null : (
+                    <Check
+                      status={checkStatus}
+                      isMine={isMine}
+                      {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
         {reactions.length > 0 ? (
           /* Les reactions se posent en DEBORD du coin bas, du cote OPPOSE au

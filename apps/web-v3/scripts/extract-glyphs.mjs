@@ -324,3 +324,28 @@ emit({
   type: 'MediaGlyphName',
   role: "LE JEU D'ECRAN des pieces jointes du fil (#5805) : charge avec attachment-blocks.tsx, jamais dans le socle.",
 });
+
+/**
+ * LE JEU D'ECRAN DES ETATS DU MESSAGE (#5936) — miroir
+ * `BubbleMetaBadges.swift` (transfere : `arrowshape.turn.up.right.fill`,
+ * modifie : `pencil`), `LocationMessageView` (lieu : `mappin.and.ellipse`),
+ * `BubbleStoryCitationCard.swift` (bande de citation :
+ * `arrowshape.turn.up.backward.fill`) et `FocalCallNoticeRow`/
+ * `BubbleCallNoticeView` (appel video : `video.fill`). `push-pin` et `phone`
+ * (l'appel AUDIO) restent au SOCLE, deja consommes ailleurs — pas de
+ * duplication d'octets.
+ *
+ * `user-plus` s'y AJOUTE (ecart avec le brief de la specification, qui le
+ * disait deja present dans le jeu IDENTITE `THREAD_IDENTITY` : verifie,
+ * seul `mask-happy` y vit) — l'avis d'arrivee (`person.badge.plus` cote iOS)
+ * en a besoin et n'a pas d'autre domicile dans le chunk du fil.
+ */
+const THREAD_STATES = ['arrow-bend-up-right', 'pencil-simple', 'map-pin', 'arrow-bend-up-left', 'video-camera', 'user-plus'];
+
+emit({
+  ids: THREAD_STATES,
+  output: join(HERE, '../src/components/glyphs-thread-states.ts'),
+  constant: 'THREAD_STATES_GLYPHS',
+  type: 'ThreadStatesGlyphName',
+  role: "LE JEU D'ECRAN des etats du message (#5936) : transfere, modifie, lieu, citation de story, appel video, avis d'arrivee — charge avec le chunk du fil, jamais dans le socle.",
+});

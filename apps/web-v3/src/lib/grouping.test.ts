@@ -46,6 +46,20 @@ test('un auteur different rompt le groupe', () => {
   expect(continues(msg('a', 'u1', '2026-09-06T08:00:00'), msg('b', 'u2', '2026-09-06T08:01:00'))).toBe(false);
 });
 
+/**
+ * T10 (#5936) — un message SYSTÈME n'entre dans AUCUNE suite, ni comme
+ * prédécesseur ni comme successeur (`MessageDayGrouping.swift:97`).
+ */
+test('un message SYSTEME rompt le groupe, dans les deux sens', () => {
+  const user = msg('a', 'u1', '2026-09-06T08:00:00');
+  const system: Message = { ...msg('sys', 'u1', '2026-09-06T08:01:00'), messageType: 'system', messageSource: 'system' };
+  const userAfter = msg('c', 'u1', '2026-09-06T08:02:00');
+
+  expect(continues(user, system)).toBe(false);
+  expect(continues(system, userAfter)).toBe(false);
+  expect(continues(user, userAfter)).toBe(true);
+});
+
 test("c'est le DERNIER d'une suite qui porte l'identite, pas le premier", () => {
   const placed = place(
     [

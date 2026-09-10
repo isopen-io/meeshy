@@ -1,5 +1,7 @@
 import { kindOf } from './message';
 import type { Delivery } from './message';
+import { forwardAttributionOf, forwardLabelOf, systemRowOf, systemRowText } from './message-badges';
+import { bodyKindOf, placeOf, storyCitationOf } from './message-body';
 import { time } from '@/lib/grouping';
 import type { ProtectionKind } from '@/lib/reading-mode/protection';
 import type { Attachment, Message } from '@/lib/api/types';
@@ -58,6 +60,11 @@ const PROTECTED_LABEL: Readonly<Record<Exclude<ProtectionKind, 'standard'>, stri
 
 const pluralize = (count: number, singular: string, plural: string): string =>
   `${count} ${count === 1 ? singular : plural}`;
+
+/** Minuscule le PREMIER caractère seul — un nom de groupe transféré (« Salon »)
+ * ne doit pas perdre sa majuscule au milieu de la phrase. */
+const lowerFirst = (text: string): string =>
+  text.length === 0 ? text : text.charAt(0).toLocaleLowerCase('fr-FR') + text.slice(1);
 
 /** Compte les pièces jointes PAR CATÉGORIE, dans l'ordre iOS : images, vidéos, audios, fichiers. */
 function attachmentSegments(attachments: readonly Attachment[] | undefined): readonly string[] {
@@ -120,6 +127,16 @@ export type MessageLabelInput = {
  */
 export function composeMessageLabel({ message, isMine, servedText, delivery, protection }: MessageLabelInput): string {
   /**
+   * UN MESSAGE SYSTÈME EST SYSTÈME AVANT D'ÊTRE SUPPRIMÉ (#5936, même loi que
+   * `systemRowOf` — « un message système est système AVANT d'être
+   * supprimé », `BubbleContentBuilder.swift:52`) : son libellé est le TEXTE
+   * de la notice SEUL, jamais l'auteur ni l'heure — la rangée qu'il peint
+   * (`SystemNotice`) ne montre rien d'autre.
+   */
+  const systemRow = systemRowOf(message);
+  if (systemRow !== null) return systemRowText(systemRow);
+
+  /**
    * TROIS ÉTATS NE PEIGNENT AUCUN CHROME — un tombstone plat, ou rien du
    * tout (`focal-row.tsx:192` rend un nœud VIDE pour l'expiré). Leur libellé
    * est le tombstone SEUL : ni auteur, ni heure, ni pièce jointe — rien de ce
@@ -149,7 +166,15 @@ export function composeMessageLabel({ message, isMine, servedText, delivery, pro
   const author = message.sender?.displayName;
   if (!isMine && author !== undefined && author !== '') segments.push(author);
 
-  if (message.replyTo) {
+  /**
+   * UNE STORY CITÉE REMPLACE LA CITATION ORDINAIRE (#5936) — « réponse à sa
+   * story », jamais « réponse à {auteur} » : c'est une SCÈNE, pas la parole
+   * de quelqu'un (`storyCitationOf`, miroir `BubbleStoryCitationCard`).
+   */
+  const storyCitation = storyCitationOf(message);
+  if (storyCitation !== null) {
+    segments.push('réponse à sa story');
+  } else if (message.replyTo) {
     const quotedAuthor = message.replyTo.sender?.displayName ?? 'expéditeur inconnu';
     segments.push(`réponse à ${quotedAuthor}`);
   }
@@ -161,8 +186,26 @@ export function composeMessageLabel({ message, isMine, servedText, delivery, pro
   if (protection === 'veiled') {
     segments.push(PROTECTED_LABEL.veiled);
   } else {
-    if (servedText !== '') segments.push(servedText);
+    /**
+     * STICKER / EMOJI SEUL (#5936) — `bodyKindOf` est la MÊME loi que la
+     * rangée consomme pour peindre : un sticker prend un segment dédié
+     * (« sticker 🔥 »), un emoji seul rend le texte BRUT (jamais `servedText`
+     * traduit — un emoji n'a pas de langue).
+     */
+    const body = bodyKindOf(message);
+    if (body.kind === 'sticker') {
+      segments.push(body.sticker.emoji !== undefined ? `sticker ${body.sticker.emoji}` : 'sticker');
+    } else if (body.kind === 'emoji-only') {
+      segments.push(message.content);
+    } else if (servedText !== '') {
+      segments.push(servedText);
+    }
     segments.push(...attachmentSegments(message.attachments));
+
+    /** Le LIEU (#5936, `a11y.message.location`) — APRÈS les pièces jointes,
+     * miroir `nonMediaAccessibilityParts` (`:152-158`). */
+    const place = placeOf(message);
+    if (place !== null) segments.push(`Position : ${place.name ?? 'lieu partagé'}`);
   }
 
   segments.push(time(message.createdAt));
@@ -174,6 +217,14 @@ export function composeMessageLabel({ message, isMine, servedText, delivery, pro
 
   if (message.isEdited) segments.push('modifié');
   if (message.pinnedAt !== undefined) segments.push('épinglé');
+  /**
+   * « TRANSFÉRÉ » APRÈS « ÉPINGLÉ » (#5936, § 9 Q8 de la spécification) —
+   * ÉCART ASSUMÉ avec iOS : `MessageAccessibilityLabelComposer.swift:82-90`
+   * ne le prononce pas du tout. Ce que l'œil voit (`Badges`), l'oreille
+   * l'entend aussi.
+   */
+  const attribution = forwardAttributionOf(message);
+  if (attribution !== null) segments.push(lowerFirst(forwardLabelOf(attribution)));
   if (message.expiresAt !== undefined) segments.push('éphémère');
 
   const reactions = reactionsSegment(message.reactionSummary);

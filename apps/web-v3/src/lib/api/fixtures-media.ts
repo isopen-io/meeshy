@@ -46,7 +46,10 @@ const mediaMessage = (partial: Parameters<typeof message>[0]): Message =>
  * "
  * ```
  */
-const MEDIA_IMAGE_DATA_URI =
+/** EXPORTÉ (#5936, § 6 étape 6 de la spécification) — `fixtures-states.ts`
+ * réutilise ce MÊME pixel indigo pour la pièce jointe PNG d'un sticker,
+ * plutôt que d'en fabriquer un second. */
+export const MEDIA_IMAGE_DATA_URI =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mNITvsIAALqAbsneUV/AAAAAElFTkSuQmCC';
 
 /**
