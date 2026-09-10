@@ -35,16 +35,21 @@ const CONV_ID = '507f1f77bcf86cd799439022';
 const PARTICIPANT_ID = '507f1f77bcf86cd799439033';
 
 type Harness = {
-  prisma: { message: { create: jest.Mock } };
+  prisma: { message: { create: jest.Mock }; conversation: { update: jest.Mock } };
   broadcast: jest.Mock;
 };
+
+/** L'horloge du message créé — celle que le client compare, et donc la seule
+ *  valeur qui puisse rendre `lastMessageAt` cohérent avec `lastMessage`. */
+const CREATED_AT = new Date('2026-09-10T00:01:03.212Z');
 
 function harness(): Harness {
   return {
     prisma: {
       message: {
-        create: jest.fn<any>().mockImplementation(async ({ data }: any) => ({ id: 'msg-1', ...data })),
+        create: jest.fn<any>().mockImplementation(async ({ data }: any) => ({ id: 'msg-1', createdAt: CREATED_AT, ...data })),
       },
+      conversation: { update: jest.fn<any>().mockResolvedValue(undefined) },
     },
     broadcast: jest.fn<any>().mockResolvedValue(undefined),
   };
@@ -189,5 +194,55 @@ describe('postJoinSystemMessage', () => {
     const second = (h.prisma.message.create.mock.calls[1][0] as any).data.metadata;
     expect(first.viaShareLink).toBe(true);
     expect(second.viaShareLink).toBe(false);
+  });
+
+  /**
+   * L'HORLOGE DE LA CONVERSATION SUIT SON DERNIER MESSAGE — y compris quand ce
+   * dernier message est un avis d'arrivée (#5914).
+   *
+   * Mesuré sur staging : un compte créé sept minutes plus tôt voyait « Meeshy
+   * Global » datée d'UN JOUR. La passerelle servait, dans la même charge,
+   * `lastMessage.createdAt` à l'instant et `lastMessageAt` à la veille — deux
+   * champs décrivant deux messages différents.
+   *
+   * Le client ne peut pas réparer : `conversation-sections.ts` porte la garde
+   * E11 (« lastMessageAt, repli updatedAt — JAMAIS lastMessage.createdAt »),
+   * parce que ce champ est la CLÉ DE TRI de la liste et la borne des passes de
+   * delta-sync. Un `lastMessageAt` en retard ne fausse donc pas seulement une
+   * date : il range la conversation au mauvais rang.
+   *
+   * La cause était structurelle : cette fonction appelle `message.create()` en
+   * direct, court-circuitant `messagePostSaveEffects` — le seul site qui
+   * maintenait l'invariant sur le chemin d'un message ordinaire.
+   */
+  it('avance lastMessageAt sur la conversation, avec l’horloge du message créé', async () => {
+    await postJoinSystemMessage(h as never, registeredJoin);
+
+    expect(h.prisma.conversation.update).toHaveBeenCalledTimes(1);
+    const call = h.prisma.conversation.update.mock.calls[0][0] as any;
+    expect(call.where).toEqual({ id: CONV_ID });
+    expect(call.data).toEqual({ lastMessageAt: CREATED_AT });
+  });
+
+  it('n’avance rien quand le message n’a pas pu être écrit', async () => {
+    h.prisma.message.create.mockRejectedValue(new Error('mongo down'));
+
+    await postJoinSystemMessage(h as never, anonymousJoin);
+
+    expect(h.prisma.conversation.update).not.toHaveBeenCalled();
+  });
+
+  /**
+   * MÊME CONTRAT QUE LA DIFFUSION : l'avis est un ACCESSOIRE de l'entrée. Un
+   * anonyme admis par lien n'a pas de seconde tentative — une panne d'horloge
+   * ne doit pas le renvoyer, et ne doit pas non plus effacer l'avis déjà écrit.
+   */
+  it('rend quand même le message quand le bump d’horloge échoue', async () => {
+    h.prisma.conversation.update.mockRejectedValue(new Error('write concern'));
+
+    const message = await postJoinSystemMessage(h as never, anonymousJoin);
+
+    expect(message).not.toBeNull();
+    expect(h.broadcast).toHaveBeenCalledTimes(1);
   });
 });
