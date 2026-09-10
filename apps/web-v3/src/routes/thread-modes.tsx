@@ -75,6 +75,7 @@ export function ThreadModes({
   onRowTap,
   longPress,
   onPickLanguage,
+  onReact,
   typing,
   typist,
   accent,
@@ -112,6 +113,9 @@ export function ThreadModes({
   readonly onRowTap: (messageId: string) => void;
   readonly longPress: ReturnType<typeof useLongPress>;
   readonly onPickLanguage: (messageId: string, code: string) => void;
+  /** Retire une réaction MIENNE en tapant sa capsule (#5865) — même geste
+   * que `onPickLanguage`, une seule loi vers `useMessageMenu.onMenuReact`. */
+  readonly onReact: (messageId: string, emoji: string) => void;
   // L'indicateur de frappe, en queue du fil
   readonly typing: boolean;
   readonly typist: Participant | undefined;
@@ -291,6 +295,7 @@ export function ThreadModes({
                     {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
                     onPickLanguage={(code) => onPickLanguage(p.message.id, code)}
                     {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
+                    onReact={(emoji) => onReact(p.message.id, emoji)}
                     {...(rowSelected === undefined ? {} : { selected: rowSelected, onToggleSelect: onRowTap })}
                     {...sendProps}
                   />
@@ -308,6 +313,7 @@ export function ThreadModes({
                     {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
                     onPickLanguage={(code) => onPickLanguage(p.message.id, code)}
                     {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
+                    onReact={(emoji) => onReact(p.message.id, emoji)}
                     {...(rowSelected === undefined ? {} : { selected: rowSelected, onToggleSelect: onRowTap })}
                     {...sendProps}
                   />
