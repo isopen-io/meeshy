@@ -353,13 +353,49 @@ DECISIONS DU PORTEUR EN VIGUEUR — ne les rediscute pas : applique-les.
    L'ordre compte : (a) sans (b) rend un fil reel mais muet ; (b) sans (a) n'a rien a
    ecouter. Si un seul des deux passe, c'est (a).
 
-3. LES ASSETS iOS SE RECUPERENT, ILS NE SE REDESSINENT PAS (directive 2026-09-07 soir — cle
+3. LE COMPOSEUR DE PUBLICATION EST UN SEUL OBJET A TROIS FORMES — story, reel, post
+   (directive porteur 2026-09-10). Il n'est PAS encore ecrit dans web-v3 : c'est donc un
+   premier jet, et le porteur exige qu'il soit bon DES CE PREMIER JET plutot que factorise
+   plus tard. Ce qui suit n'est pas un conseil de style, c'est le cadrage du travail.
+
+   a. UNE abstraction, trois formes. story / reel / post partagent la scene, la timeline,
+      l'etagere, les viewers, le brouillon, l'envoi. Ce qui DIFFERE — duree, ratio, pistes
+      autorisees, audience — se declare en DONNEE, jamais en branche `if (kind === 'story')`
+      recopiee dans quinze composants. Trois copies d'un composeur divergent en trois
+      semaines : c'est mesure ailleurs dans ce depot (les trois familles de resolveurs du
+      Prisme, qui ont diverge sur trois clients faute d'un site UNIQUE).
+
+   b. LA SEMANTIQUE PORTE LES NOMS. Un type SOMME plutot qu'un booleen quand il y a trois
+      etats ; le nom dit CE QUE C'EST, pas ou il est affiche. `PublicationDraft`,
+      `SceneTrack`, `AudienceRule` — jamais `Data2`, `Helper`, `Utils`, ni un `kind: string`
+      qu'aucun compilateur ne verifie. Le vocabulaire est celui de
+      `docs/product/meeshy-composer-modele.md`, qui en est l'AUTORITE declaree : un nom qui
+      s'en ecarte cree une seconde langue pour la meme chose.
+
+   c. LA COHERENCE EST DOUBLE, et la seconde est celle qu'on oublie. VISUELLE : memes
+      gestes, memes rails, memes couleurs de contexte que le fil deja livre — l'utilisateur
+      ne doit pas sentir qu'il change d'application. STRUCTURELLE : les objets du code se
+      composent comme les objets de l'ecran. Si la scene contient des pistes qui contiennent
+      des elements, le TYPE le dit ; si deux ecrans montrent la meme chose, ils lisent le
+      meme type et le meme resolveur. Une hierarchie visuelle qui ne se retrouve pas dans le
+      code est une dette qui se paiera au premier ecran de plus.
+
+   d. OPTIMISE VEUT DIRE MESURE. Pas de re-rendu inutile (Zero Unnecessary Re-render), pas de
+      spinner sur un cache non vide (Cache-First), feedback instantane sur chaque geste
+      (Optimistic Updates) — les principes du CLAUDE.md racine, appliques ICI et prouves par
+      une mesure, pas affirmes dans un rapport.
+
+   > La complexite se paie dans le CODE, jamais chez l'utilisateur (dimension 12). Un
+   > composeur qui demande a l'utilisateur de comprendre la difference entre une story et un
+   > reel a echoue, meme s'il fonctionne.
+
+4. LES ASSETS iOS SE RECUPERENT, ILS NE SE REDESSINENT PAS (directive 2026-09-07 soir — cle
    \`assets\`) : icones d'app, logo, signature, splashscreen, stickers viennent de
    ${IOS}/Meeshy/Assets.xcassets et ${IOS}/Meeshy/Resources ; le pipeline existe deja —
    ${V3}/scripts/generate-icons.py et extract-glyphs.mjs — on l'ETEND, on ne le double pas.
    Les coques Capacitor (icone, splash, fond #0b0c14) et le manifest PWA servent les MEMES actifs.
 
-4. TROIS DEFAUTS DE COQUE RELEVES LE 2026-09-07, a corriger en priorite (cle \`shells\`), chacun
+5. TROIS DEFAUTS DE COQUE RELEVES LE 2026-09-07, a corriger en priorite (cle \`shells\`), chacun
    avec son temoin :
    a) iOS : la safe-area BASSE n'est pas respectee — le composeur et la barre de recherche passent
       sous l'indicateur home (viewport-fit / env(safe-area-inset-bottom) a poser dans le dist,
@@ -370,7 +406,7 @@ DECISIONS DU PORTEUR EN VIGUEUR — ne les rediscute pas : applique-les.
    c) iOS : la bascule clair/sombre A CHAUD n'est pas repercutee (elle ne prend qu'au relancement —
       lis src/lib/scheme.ts : l'ecoute de prefers-color-scheme doit vivre, pas une lecture unique).
 
-5. LE FIL EST UN CHAT VIVANT, JAMAIS UN FORMULAIRE (directives 2026-09-03/04, reconduites) :
+6. LE FIL EST UN CHAT VIVANT, JAMAIS UN FORMULAIRE (directives 2026-09-03/04, reconduites) :
    toute action a un effet IMMEDIAT et OPTIMISTE ; citation/reponse avec saut et mise en evidence,
    plein ecran sur tout media, transcription au Prisme, avatar et nom dans le pied de la DERNIERE
    bulle d'une suite (jamais la premiere, regle iOS), groupement meme auteur + meme jour SANS
