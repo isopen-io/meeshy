@@ -386,7 +386,6 @@ struct ConnectionBanner: View {
         )
 
         IslandEmergingBanner(
-            tint: MeeshyColors.brandPrimary,
             settledSize: size,
             reduceMotion: reduceMotion
         ) {
