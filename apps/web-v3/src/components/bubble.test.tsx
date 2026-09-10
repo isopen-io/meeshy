@@ -505,3 +505,116 @@ describe('Bubble — identité au pied de la dernière bulle : présence servie 
     expect(html).not.toContain('#34D399');
   });
 });
+
+/**
+ * T13 (#5936) — LES ÉTATS DU MESSAGE, en BULLE : mêmes sept vérités que
+ * `focal-row.test.tsx`, avec les différences de peau (badges AVANT
+ * `.rounded-bubble`, « modifié » INLINE dans la boîte, aucune boîte pour un
+ * emoji seul ou un sticker).
+ */
+describe('Bubble — les états du message (#5936)', () => {
+  const renderFull = (message: Message, onOpenStory?: (messageId: string) => void) =>
+    renderToStaticMarkup(
+      <Bubble
+        place={placeOf(message)}
+        languages={['fr', 'en']}
+        isGrouped
+        viewerId="u-viewer"
+        onJumpToMessage={() => {}}
+        {...(onOpenStory === undefined ? {} : { onOpenStory })}
+      />,
+    );
+
+  test('(i) badges AVANT .rounded-bubble ; « modifié » DANS .rounded-bubble, AVANT le <p> du texte', () => {
+    const html = renderFull({
+      ...BASE_MESSAGE,
+      pinnedAt: new Date('2026-09-10T09:00:00.000Z'),
+      forwardedFromId: 'm-far',
+      forwardedFromConversation: { id: 'c1', title: 'Salon', type: 'public' },
+      isEdited: true,
+    });
+    const badgesIndex = html.indexOf('data-badges');
+    const bubbleIndex = html.indexOf('rounded-bubble');
+    expect(badgesIndex).toBeGreaterThan(-1);
+    expect(badgesIndex).toBeLessThan(bubbleIndex);
+
+    const editedIndex = html.indexOf('data-badge="edited"');
+    const textIndex = html.indexOf('Bonjour, comment vas-tu');
+    expect(editedIndex).toBeGreaterThan(bubbleIndex);
+    expect(editedIndex).toBeLessThan(textIndex);
+  });
+
+  test('(ii) système ⇒ data-system avec la capsule system-notice, aucune .rounded-bubble, aucun pied', () => {
+    const html = renderFull({
+      ...BASE_MESSAGE,
+      messageType: 'system',
+      messageSource: 'system',
+      content: 'Le chiffrement de bout en bout est activé',
+    });
+    expect(html).toContain('data-system="notice"');
+    expect(html).toContain('system-notice');
+    expect(html).not.toContain('rounded-bubble');
+    expect(html).not.toContain('avatar-root');
+  });
+
+  test('(iii) emoji seul ⇒ aucune .rounded-bubble', () => {
+    const html = renderFull({ ...BASE_MESSAGE, content: '👍' });
+    expect(html).toContain('data-emoji-only="1"');
+    expect(html).not.toContain('rounded-bubble');
+  });
+
+  test('(iv) sticker ⇒ côté 160, aucune .rounded-bubble', () => {
+    const html = renderFull({ ...BASE_MESSAGE, content: '🔥', metadata: { sticker: { emoji: '🔥' } } });
+    expect(html).toContain('data-sticker-emoji');
+    expect(html).not.toContain('rounded-bubble');
+  });
+
+  test('(vi) story citée : bouton armé seulement avec id ET onOpenStory, HORS de la boîte colorée', () => {
+    const messageWithStory: Message = {
+      ...BASE_MESSAGE,
+      storyReplyToId: 'p1',
+      metadata: { postReplyTo: { id: 'p1', type: 'STORY', moodEmoji: null, previewText: 'x', thumbnailUrl: null, createdAt: '' } },
+    };
+    const armed = renderFull(messageWithStory, () => {});
+    /* UN libellé, l'aperçu de scène compris (revue-correction #5936, défaut
+       majeur 8) — miroir de l'assertion de `focal-row.test.tsx`. */
+    expect(armed).toContain('aria-label="réponse à sa story, x"');
+    const citationIndex = armed.indexOf('data-story-citation');
+    const bubbleIndex = armed.indexOf('rounded-bubble');
+    expect(citationIndex).toBeGreaterThan(-1);
+    expect(citationIndex).toBeLessThan(bubbleIndex);
+  });
+});
+
+/**
+ * REVUE-CORRECTION #5936 — LE CORPS NU SORT DE LA BOÎTE, DONC DE SA TEINTE.
+ * Un emoji seul ou un sticker ENVOYÉ n'a plus d'indigo derrière lui : ni son
+ * heure ni son « modifié » ne peuvent porter `--color-meta-mine`
+ * (`white 70%`) — iOS sert « la couleur meta neutre quel que soit isMe »
+ * exactement là (`BubbleFooter.compactMetaColor:62-66`).
+ */
+describe('Bubble — le corps nu d’un message envoyé reste lisible', () => {
+  const renderMineBare = (message: Message) =>
+    renderToStaticMarkup(
+      <Bubble
+        place={placeOf(message)}
+        languages={['fr']}
+        isGrouped
+        viewerId="u-viewer"
+        onJumpToMessage={() => {}}
+      />,
+    );
+
+  test('un emoji seul envoyé ne sert aucune teinte de bulle', () => {
+    const html = renderMineBare({ ...BASE_MESSAGE, senderId: 'u-viewer', content: '👏', isEdited: true });
+    expect(html).toContain('data-emoji-only="1"');
+    expect(html).not.toContain('rounded-bubble');
+    expect(html).not.toContain('var(--color-meta-mine)');
+  });
+
+  test('la bulle BOÎTÉE d’un message envoyé garde, elle, la teinte de marque', () => {
+    const html = renderMineBare({ ...BASE_MESSAGE, senderId: 'u-viewer', isEdited: true });
+    expect(html).toContain('rounded-bubble');
+    expect(html).toContain('var(--color-meta-mine)');
+  });
+});

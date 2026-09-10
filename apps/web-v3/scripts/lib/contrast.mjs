@@ -67,3 +67,49 @@ export const contrastOf = (page, selector) =>
     const [a, b] = [luminance(text), luminance(backdrop)].sort((x, y) => y - x);
     return Math.round(((a + 0.05) / (b + 0.05)) * 100) / 100;
   }, selector);
+
+/**
+ * LA LUMINANCE RELATIVE WCAG d'un fond PEINT — pas d'un texte dessus.
+ * MÊME composition que `contrastOf` (fonds des ancêtres jusqu'au premier
+ * opaque), pour un témoin qui juge un FOND seul : « ce fond est-il plus
+ * clair en schéma clair qu'en schéma sombre ? » se pose sur une luminance,
+ * pas sur un rapport de contraste avec un texte qui n'existe pas toujours
+ * (revue-correction #5936, défaut majeur 7 — le fond de secours d'une
+ * carte de story citée sans aperçu textuel).
+ *
+ * Rend `null` quand l'élément est absent, comme `contrastOf`.
+ */
+export const luminanceOf = (page, selector) =>
+  page.evaluate((sel) => {
+    const parse = (value) => {
+      const n = (value.match(/[\d.]+/g) ?? []).map(Number);
+      if (n.length < 3) return null;
+      const scale = value.trimStart().startsWith('color(') ? 255 : 1;
+      return { r: n[0] * scale, g: n[1] * scale, b: n[2] * scale, a: n.length > 3 ? n[3] : 1 };
+    };
+    const over = (top, bottom) => ({
+      r: top.r * top.a + bottom.r * (1 - top.a),
+      g: top.g * top.a + bottom.g * (1 - top.a),
+      b: top.b * top.a + bottom.b * (1 - top.a),
+      a: 1,
+    });
+    const luminance = (c) => {
+      const f = (v) => {
+        const s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+    };
+    const backdropOf = (el) => {
+      const layers = [];
+      for (let node = el; node; node = node.parentElement) {
+        const bg = parse(getComputedStyle(node).backgroundColor);
+        if (bg && bg.a > 0) layers.push(bg);
+        if (bg && bg.a === 1) break;
+      }
+      return layers.reduceRight((under, layer) => over(layer, under), { r: 255, g: 255, b: 255, a: 1 });
+    };
+    const el = document.querySelector(sel);
+    if (!el) return null;
+    return Math.round(luminance(backdropOf(el)) * 1000) / 1000;
+  }, selector);

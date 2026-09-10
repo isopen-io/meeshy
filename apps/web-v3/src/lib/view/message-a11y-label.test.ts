@@ -250,3 +250,102 @@ describe('composeMessageLabel — « Sans compte »', () => {
     expect(label).not.toContain('Sans compte');
   });
 });
+
+/**
+ * T14 — LES ÉTATS DU LOT (#5936) ENTRENT DANS LE LIBELLÉ, sans doubler la
+ * lecture : système ⇒ le texte de la notice SEUL ; sticker ⇒ un segment à la
+ * place du texte ; lieu ⇒ après les pièces ; story citée ⇒ à la place de
+ * « réponse à X » ; transféré ⇒ après épinglé (écart assumé, § 9 Q8).
+ */
+describe('composeMessageLabel — les états du lot (#5936)', () => {
+  test('système : le libellé est le TEXTE de la notice seul, jamais l’auteur', () => {
+    const label = composeMessageLabel({
+      message: message({
+        messageType: 'system',
+        messageSource: 'system',
+        content: 'Le chiffrement de bout en bout est activé',
+      }),
+      isMine: false,
+      servedText: 'Le chiffrement de bout en bout est activé',
+      delivery: null,
+      protection: 'standard',
+    });
+    expect(label).toBe('Le chiffrement de bout en bout est activé');
+    expect(label).not.toContain('Bruno');
+  });
+
+  test('sticker : un segment « sticker 🔥 » remplace le texte', () => {
+    const label = composeMessageLabel({
+      message: message({ content: '🔥', metadata: { sticker: { emoji: '🔥' } } }),
+      isMine: false,
+      servedText: '🔥',
+      delivery: 'sent',
+      protection: 'standard',
+    });
+    expect(label).toContain('sticker 🔥');
+  });
+
+  test('lieu : « Position : Tour Eiffel » après les pièces jointes', () => {
+    const label = composeMessageLabel({
+      message: message({
+        content: '',
+        messageType: 'location',
+        attachments: [attachment()],
+        metadata: { location: { latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel' } },
+      }),
+      isMine: false,
+      servedText: '',
+      delivery: 'sent',
+      protection: 'standard',
+    });
+    const attachmentsIndex = label.indexOf('1 image');
+    const positionIndex = label.indexOf('Position : Tour Eiffel');
+    expect(attachmentsIndex).toBeGreaterThan(-1);
+    expect(positionIndex).toBeGreaterThan(attachmentsIndex);
+  });
+
+  test('story citée : « réponse à sa story » remplace « réponse à X »', () => {
+    const label = composeMessageLabel({
+      message: message({
+        storyReplyToId: 'p1',
+        metadata: { postReplyTo: { id: 'p1', type: 'STORY', moodEmoji: null, previewText: '', thumbnailUrl: null, createdAt: '' } },
+      }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: 'sent',
+      protection: 'standard',
+    });
+    expect(label).toContain('réponse à sa story');
+    expect(label).not.toContain('réponse à Bruno');
+  });
+
+  test('transféré : « transféré depuis Salon » après « épinglé »', () => {
+    const label = composeMessageLabel({
+      message: message({
+        pinnedAt: new Date('2026-09-10T09:00:00.000Z'),
+        forwardedFromId: 'm-far',
+        forwardedFromConversation: { id: 'c1', title: 'Salon', type: 'public' },
+      }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: 'sent',
+      protection: 'standard',
+    });
+    const pinnedIndex = label.indexOf('épinglé');
+    const forwardedIndex = label.indexOf('transféré depuis Salon');
+    expect(pinnedIndex).toBeGreaterThan(-1);
+    expect(forwardedIndex).toBeGreaterThan(pinnedIndex);
+  });
+
+  test('emoji seul : le texte brut, jamais une traduction', () => {
+    const label = composeMessageLabel({
+      message: message({ content: '👍' }),
+      isMine: false,
+      servedText: 'pouce levé',
+      delivery: 'sent',
+      protection: 'standard',
+    });
+    expect(label).toContain('👍');
+    expect(label).not.toContain('pouce levé');
+  });
+});

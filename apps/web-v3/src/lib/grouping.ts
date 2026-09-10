@@ -1,11 +1,15 @@
 import type { Message } from './api/types';
+import { isSystemMessage } from './view/message-badges';
 
 /**
  * LE REGROUPEMENT DES MESSAGES — la meme loi que iOS
  * (`Bubble/MessageDayGrouping.swift`), le web (`utils/message-grouping.ts`) et
  * Android (`MessageGrouping.kt`).
  *
- * DEUX criteres, et deux seulement : MEME AUTEUR et MEME JOUR LOCAL.
+ * TROIS criteres (#5936, MessageDayGrouping.swift:97) : MEME AUTEUR, MEME
+ * JOUR LOCAL, et AUCUN des deux n'est un message SYSTEME — « un message
+ * systeme n'est pas une prise de parole : il n'entre dans aucune suite, ni
+ * comme predecesseur ni comme successeur ».
  *
  * Il n'y a PAS de fenetre temporelle, contrairement a iMessage : deux messages
  * du meme auteur separes de six heures dans la meme journee restent groupes.
@@ -22,6 +26,7 @@ type Clock = Date | string;
 
 export function continues(previous: Message | undefined, next: Message | undefined): boolean {
   if (!previous || !next) return false;
+  if (isSystemMessage(previous) || isSystemMessage(next)) return false;
   if (previous.senderId === '' || previous.senderId !== next.senderId) return false;
   return sameLocalDay(previous.createdAt, next.createdAt);
 }
