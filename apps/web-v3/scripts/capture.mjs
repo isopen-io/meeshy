@@ -204,6 +204,41 @@ for (const scheme of ['dark', 'light']) {
     await page.close();
   }
 
+  /**
+   * thread-media / thread-media-bubbles — le corpus « Médias » (#5805), les
+   * DEUX peaux.
+   *
+   * DYNAMIQUES, et non une entrée de `SCREENS` (revue #5805) : le fil ouvre
+   * EN BAS, et l'image du corpus est le PREMIER message — la capture censée
+   * prouver « une image s'affiche » ne montrait aucune image (mesuré sur les
+   * quatre rendus du lot). On amène donc la pièce `media-1-a1` dans le cadre :
+   * le rendu porte alors l'image RÉELLE, le vocal anglais servi en français
+   * (rang 1) et le vocal allemand servi en anglais (rang 2) — les trois
+   * choses que ce lot livre, dans une seule vue.
+   */
+  for (const [name, skin] of [
+    ['thread-media', 'focal'],
+    ['thread-media-bubbles', 'bulles'],
+  ]) {
+    const page = await context.newPage();
+    await page.clock.setFixedTime(INSTANT);
+    await page.goto(`${BASE}/c/c-medias`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(300);
+    if (skin === 'bulles') {
+      await page.getByRole('button', { name: /Mode de lecture/ }).click();
+      await page.waitForTimeout(150);
+      await page.getByRole('menuitemradio', { name: /Bulles/ }).click();
+      await page.waitForTimeout(300);
+    }
+    await page.evaluate(() =>
+      document.querySelector('[data-attachment="media-1-a1"]')?.scrollIntoView({ block: 'start' }),
+    );
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${OUTPUT}${name}.${scheme}.png` });
+    console.log(`  ${name} · ${scheme}`);
+    await page.close();
+  }
+
   await context.close();
 }
 

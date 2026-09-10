@@ -61,6 +61,12 @@ const OVERRIDES = {
    * DEUX variants sont donc extraits, même dispositif que `fill-play`.
    */
   'flame-fill': join(CORE, 'fill/flame-fill.svg'),
+  /**
+   * `pause` (#5805) — le widget vocal du fil bascule `fillPlay` (socle) ⇄
+   * `pause` : le PLEIN, même dispositif que `fill-play`/`stop` — un contour
+   * seul lirait mal à 13-18 px sur le fond dégradé du bouton.
+   */
+  pause: join(CORE, 'fill/pause-fill.svg'),
 };
 
 /**
@@ -280,4 +286,21 @@ emit({
   constant: 'COMPOSER_GLYPHS',
   type: 'ComposerGlyphName',
   role: "LE JEU D'ECRAN du tiroir du composeur (#5668) : charge avec le chunk composer-tray, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DES PIECES JOINTES DU FIL (#5805) — `pause` (le widget
+ * vocal bascule `fillPlay` (socle) ⇄ `pause` selon `AudioPlaybackStatus`,
+ * `fill/pause-fill.svg`, meme dispositif que `fill-play`). Charge avec
+ * `attachment-blocks.tsx`, deja dans le chunk du fil (monte par bubble.tsx
+ * et focal-row.tsx) — jamais dans le socle.
+ */
+const MEDIA = ['pause'];
+
+emit({
+  ids: MEDIA,
+  output: join(HERE, '../src/components/glyphs-media.ts'),
+  constant: 'MEDIA_GLYPHS',
+  type: 'MediaGlyphName',
+  role: "LE JEU D'ECRAN des pieces jointes du fil (#5805) : charge avec attachment-blocks.tsx, jamais dans le socle.",
 });

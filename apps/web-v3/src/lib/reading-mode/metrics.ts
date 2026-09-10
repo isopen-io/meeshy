@@ -41,6 +41,40 @@ export const QUOTE_RAIL_WIDTH = 2.5;
 export const META_TEXT_OPACITY = 0.55;
 
 /**
+ * L'OPACITÉ DE LA TRANSCRIPTION D'UN VOCAL (revue #5805) — PAS
+ * `META_TEXT_OPACITY`.
+ *
+ * La transcription est du CONTENU (c'est le texte que le Prisme sert), pas
+ * de la méta : lui appliquer l'opacité de l'heure la rendait illisible.
+ * Mesuré au navigateur sur `/c/c-medias`, encre `--color-ios-ink` sur le fond
+ * de la rangée plate : **3,74:1 en schéma clair** à 0,55 — sous le 4,5:1 de
+ * l'AA pour du 13 px. À 0,7 : **6,03:1 en clair, 8,79:1 en sombre**.
+ *
+ * DÉRIVÉE, pas choisie : c'est l'opacité que `inlineSegmentColor(isPast:)`
+ * donne au segment DÉJÀ LU (`AudioPlayerView+Transcription.swift`,
+ * `white.opacity(0.7)`). iOS peut descendre à 0,25/0,35 sur les segments
+ * NON LUS parce que son karaoké rallume le segment actif en pleine couleur ;
+ * la v3.1 rend UN paragraphe, sans karaoké (hors tranche) — il doit donc être
+ * lisible AU REPOS, et c'est la teinte « lu » qui décrit cet état-là.
+ * Le gate `check-thread-states.mjs` (§ 8, médias) MESURE le rapport dans les
+ * deux schémas : ce n'est pas une intention.
+ */
+export const TRANSCRIPT_TEXT_OPACITY = 0.7;
+
+/**
+ * `gridMaxWidth` — LA GRILLE DE VISUELS D'UN MESSAGE (#5805). Cote DÉRIVÉE,
+ * mais PAS un littéral de `FocalMetrics.swift` (Q5, § 9 de la spécification
+ * #5805) : elle vit dans `FocalAttachmentBlock.swift:46`
+ * (`FocalMediaGridLayout.gridMaxWidth`) et `BubbleStandardLayout.swift:177`
+ * (`gridMaxWidth`), les DEUX à `300`. Elle n'entre donc PAS dans
+ * `FOCAL_MAPPINGS` de `scripts/check-curve.mjs` (qui ne lit que
+ * `FocalMetrics.swift`) — une partie dédiée lisant `FocalAttachmentBlock.swift`
+ * est laissée au lot « grille 2/3/4+ » (issue compagnon), qui y trouvera
+ * quatre cotes à garder plutôt qu'une seule.
+ */
+export const MEDIA_GRID_MAX_WIDTH = 300;
+
+/**
  * LES COTES DE LA SCÈNE DU FIL (#5648) — l'ÉLECTION d'une rangée au
  * défilement soutenu, DÉRIVÉES de deux sources Swift distinctes et gardées
  * par `scripts/check-curve.mjs` (PARTIE 2 pour `FocalMetrics.swift`, PARTIE 4

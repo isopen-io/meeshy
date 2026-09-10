@@ -1,5 +1,7 @@
 import { messageTypeFromMimeTypes } from '@meeshy/shared/utils/attachment-message-type';
+import { transcriptTranslationTexts } from '@meeshy/shared/types/attachment-audio';
 
+import { servedTranscript, type Served } from '@/lib/api/prism';
 import type { Attachment, Message } from '@/lib/api/types';
 
 /**
@@ -100,4 +102,85 @@ export const translationsOf = (
 export const waveformOf = (attachment: Attachment, bars = 22): readonly number[] => {
   const seed = [...attachment.id].reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) % 9973, 7);
   return Array.from({ length: bars }, (_, i) => 6 + ((seed * (i + 3)) % 17));
+};
+
+/**
+ * LES LANGUES DANS LESQUELLES UN MESSAGE A UNE TRADUCTION — texte ET pièces
+ * jointes (#5805), miroir `BubbleContentBuilder.buildAvailableFlags`
+ * (`:376-379`) : iOS compte l'audio traduit dans la même bande que le texte,
+ * pas une bande à part. Avant ce lot, `languageBand` (`reading-mode/meta.ts`)
+ * n'était nourrie QUE par `translationsOf` (le texte) — un vocal traduit
+ * SANS traduction texte ne montrait donc AUCUN drapeau (`targets/bulle.md`
+ * § 3.11, écart « audio traduit : ignoré »).
+ *
+ * `transcriptTranslationTexts` (site UNIQUE du dépouillement, `@meeshy/shared`)
+ * est la MÊME fonction que `servedTranscript` (`api/prism.ts`) — pas une
+ * seconde boucle. Ordre STABLE (texte d'abord, puis chaque pièce dans
+ * l'ordre), sans doublon.
+ */
+export const translatedLanguagesOf = (message: Message): readonly string[] => {
+  const seen = new Set<string>();
+  const languages: string[] = [];
+  const push = (language: string): void => {
+    if (seen.has(language)) return;
+    seen.add(language);
+    languages.push(language);
+  };
+
+  for (const t of message.translations) push(t.targetLanguage);
+  for (const attachment of message.attachments ?? []) {
+    // AUDIO SEULEMENT — `translatedAudios`, jamais « toute pièce traduite »
+    // (revue #5805). `buildAvailableFlags` prend DEUX sources et deux
+    // seulement : `translations` (le texte) et `translatedAudios`. Compter
+    // aussi la carte d'une IMAGE ferait monter un drapeau dont le seul effet
+    // serait de changer l'`alt` — invisible à l'écran, donc un contrôle qui
+    // n'a pas d'effet OBSERVABLE (loi 4). L'`alt` descend le Prisme quoi
+    // qu'il arrive (`ImageTile`, `attachment-blocks.tsx`) : c'est la BANDE
+    // qui n'a rien à en dire, pas la résolution.
+    if (kindOf(attachment) !== 'audio') continue;
+    for (const language of Object.keys(transcriptTranslationTexts(attachment.translations))) push(language);
+  }
+  return languages;
+};
+
+/**
+ * LA LANGUE QUE LA RANGÉE SERT VRAIMENT — le TEXTE quand il y en a, sinon la
+ * PIÈCE JOINTE (revue #5805).
+ *
+ * `served(message.content).language` décrit le TEXTE, et lui seul. Sur un
+ * message MÉDIA-SEUL (`content: ''`, `translations: []` — la forme nominale
+ * d'une photo ou d'un vocal, `fixtures-media.ts`) cette langue est TOUJOURS
+ * l'originale, alors que le seul contenu à l'écran — la transcription — est
+ * servi, lui, dans la langue du lecteur. Le pied lisait donc la mauvaise
+ * moitié du message : `languageBand` retirait la langue du TEXTE au lieu de
+ * celle du CONTENU SERVI, si bien que le drapeau proposé était celui de la
+ * traduction DÉJÀ affichée. Cliquer dessus ne changeait rien — un contrôle
+ * INERTE (loi 4), mesuré au navigateur : ni le texte, ni la piste, ni
+ * `aria-pressed` ne bougeaient. Pire, `aria-pressed="false"` niait la langue
+ * effectivement servie.
+ *
+ * Avec cette règle, la bande d'un vocal traduit propose l'ORIGINAL — et le
+ * clic a un effet : la transcription ET la piste repassent à l'original
+ * (`resolveAudioTrack` suit la langue du texte servi, cycle 128).
+ *
+ * `servedTranscript` est le MÊME résolveur que celui du widget
+ * (`attachment-blocks.tsx`), jamais une seconde descente.
+ */
+export const servedRowLanguage = (params: {
+  readonly served: Served;
+  readonly preferredLanguages: readonly string[];
+  readonly attachments: readonly Attachment[] | undefined;
+  readonly fallbackLanguage: string;
+}): string => {
+  if (params.served.text !== '') return params.served.language;
+  for (const attachment of params.attachments ?? []) {
+    if (kindOf(attachment) !== 'audio') continue;
+    const transcript = servedTranscript({
+      preferredLanguages: params.preferredLanguages,
+      attachment,
+      fallbackLanguage: params.fallbackLanguage,
+    });
+    if (transcript.text !== '') return transcript.language;
+  }
+  return params.served.language;
 };

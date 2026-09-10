@@ -1,8 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react';
 
-import type { Message, Attachment } from '@/lib/api/types';
-import { attachmentSrc } from '@/lib/api/media-url';
-import { kindOf, waveformOf } from '@/lib/view/message';
+import type { Message } from '@/lib/api/types';
 import type { Delivery } from '@/lib/view/message';
 import { languageColor, flag, languageName } from '@/lib/languages';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
@@ -13,14 +11,20 @@ import type { GlyphName } from './glyphs';
 /**
  * LES BLOCS DE CONTENU D'UN MESSAGE — extraits de `bubble.tsx` (#5566, étape 0
  * de la spécification) pour que la rangée plate du Fil (`focal-row.tsx`) et la
- * bulle (`bubble.tsx`) rendent le MÊME contenu : citation, pièces jointes
- * (vocal, image, fichier), bande de langues et coche d'envoi.
+ * bulle (`bubble.tsx`) rendent le MÊME contenu : citation, bande de langues,
+ * réactions et coche d'envoi.
+ *
+ * `Voice` et `Attachments` (pièces jointes — vocal, image, fichier) ont
+ * DÉMÉNAGÉ vers `attachment-blocks.tsx` (#5805, § 5 étape 0 de la
+ * spécification) : leur RESPONSABILITÉ a changé (« widgets de média », que
+ * les stories, le feed et les commentaires monteront aussi), et ce fichier
+ * ne les réexporte pas — une seule adresse pour les importer.
  *
  * Deux PEAUX, un seul contenu — sans cette extraction, `focal-row.tsx`
- * deviendrait la jumelle de `bubble.tsx` sur exactement l'audio et les
- * langues (règle du dépôt : « UNE source de vérité, aucune jumelle
- * divergente »). Ce que ce fichier NE PORTE PAS : le rayon de bulle, le fond,
- * l'alignement gauche/droite — ça reste le métier de chaque peau.
+ * deviendrait la jumelle de `bubble.tsx` sur exactement les langues (règle du
+ * dépôt : « UNE source de vérité, aucune jumelle divergente »). Ce que ce
+ * fichier NE PORTE PAS : le rayon de bulle, le fond, l'alignement
+ * gauche/droite — ça reste le métier de chaque peau.
  */
 
 export const CHECKS: Record<Delivery, { readonly name: GlyphName; readonly size: number; readonly read: boolean } | null> = {
@@ -309,114 +313,6 @@ export function Quote({
         </span>
       </span>
     </button>
-  );
-}
-
-export function Voice({ attachment }: { attachment: Attachment }) {
-  const [playing, setPlaying] = useState(false);
-  const waves = waveformOf(attachment);
-  // `duration` voyage en MILLISECONDES sur la charge du dépôt.
-  const seconds = Math.round((attachment.duration ?? 0) / 1000);
-  return (
-    <div className="flex items-center gap-2.5 py-1">
-      <button
-        type="button"
-        onClick={() => setPlaying((v) => !v)}
-        /* `tap-target-34` (`app.css`) porte la zone tactile de ce bouton de
-           34 px de dessin a 44x44, meme dispositif que `tap-target-22`. */
-        className="tap-target-34 grid size-[34px] shrink-0 place-items-center rounded-chip"
-        style={{ background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, transparent))' }}
-        aria-label={playing ? 'Mettre en pause' : 'Lire le message vocal'}
-      >
-        <Glyph name="fillPlay" size={13} className="text-white" />
-      </button>
-      {/* La forme d'onde est DÉRIVÉE de l'identifiant de la pièce, donc stable
-          et honnête : la passerelle n'en sert pas encore. Côté iOS elle est
-          réelle (48 barres) et sa silhouette sert à repérer un passage à
-          l'oreille — c'est ce qu'il faudra servir ici aussi. */}
-      <span className="flex h-6 flex-1 items-center gap-px" aria-hidden>
-        {waves.map((h, i) => (
-          <span
-            key={i}
-            className="flex-1 rounded-full"
-            style={{
-              height: `${Math.max(12, h * 4)}%`,
-              backgroundColor: 'currentColor',
-              opacity: playing && i < waves.length / 3 ? 1 : 0.45,
-            }}
-          />
-        ))}
-      </span>
-      <span className="shrink-0 text-time tabular-nums">
-        {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
-      </span>
-    </div>
-  );
-}
-
-export function Attachments({ attachments }: { attachments: readonly Attachment[] }) {
-  return (
-    <>
-      {attachments.map((attachment, i) => {
-        const kind = kindOf(attachment);
-        if (kind === 'audio') return <Voice key={i} attachment={attachment} />;
-        if (kind === 'image') {
-          return (
-            <div
-              key={i}
-              /* 300 x 240 pour une image seule, rayon 16 — la grille iOS.
-                 `aspect-ratio` tient la place AVANT que l'image arrive : c'est
-                 la moitie du CLS sur un reseau lent. */
-              className="grid max-w-[300px] place-items-center overflow-hidden rounded-card bg-black/40"
-              style={{ aspectRatio: '300 / 240' }}
-              {...(attachment.fileUrl === '' ? { role: 'img', 'aria-label': attachment.alt ?? attachment.originalName } : {})}
-            >
-              {/* L'IMAGE, QUAND ON EN A UNE (revue-correction #5668) — la
-                  bulle OPTIMISTE d'une photo qu'on vient de choisir portait un
-                  `fileUrl` en `blob:` (`attachmentPreviewOf`,
-                  `send/attachments.ts`) que RIEN ne lisait : le composeur en
-                  montrait la vignette, et la bulle envoyée juste au-dessus un
-                  rectangle gris. Un producteur sans consommateur — la question
-                  du cycle 122 du `CLAUDE.md`, « qui AFFICHE ce qu'il élit ? ».
-                  Le glyphe reste DERRIÈRE : il est le fond tant que l'image
-                  n'est pas arrivée (chargement) et le repli si elle échoue
-                  (`onError`), et il reste seul quand la charge ne porte aucune
-                  URL — ce que les fixtures font (`fileUrl: ''`).
-
-                  `attachmentSrc` RÉSOUT le chemin RELATIF que sert la
-                  passerelle (`/api/v1/attachments/file/…`) contre
-                  `apiConfig.base` (défaut 2, revue-correction #5668,
-                  `lib/api/media-url.ts`) — sans lui, le navigateur le résout
-                  contre l'origine du DOCUMENT, valide seulement derrière le
-                  proxy Vite du dev, jamais en PWA déployée ni dans une coque. */}
-              <Glyph name="image" size={40} className="col-start-1 row-start-1 opacity-40" />
-              {attachment.fileUrl === '' ? null : (
-                <img
-                  src={attachmentSrc(attachment.fileUrl)}
-                  alt={attachment.alt ?? attachment.originalName}
-                  loading="lazy"
-                  decoding="async"
-                  className="col-start-1 row-start-1 size-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.hidden = true;
-                  }}
-                />
-              )}
-            </div>
-          );
-        }
-        if (kind === 'file') {
-          return (
-            <div key={i} className="flex items-center gap-2 py-1">
-              <Glyph name="file" size={24} />
-              <span className="min-w-0 flex-1 truncate text-title">{attachment.originalName}</span>
-              <span className="text-time opacity-70">{Math.round(attachment.fileSize / 1024)} Ko</span>
-            </div>
-          );
-        }
-        return null;
-      })}
-    </>
   );
 }
 

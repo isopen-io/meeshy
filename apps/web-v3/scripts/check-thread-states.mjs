@@ -29,6 +29,7 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
+import { checkThreadMedia } from './lib/check-media.mjs';
 
 const DIST = join(fileURLToPath(new URL('..', import.meta.url)), 'dist');
 const TYPES = {
@@ -73,6 +74,20 @@ const expect = (ok, what) => {
   console.log(`  ${ok ? 'ok   ' : 'ECHEC'} ${what}`);
   return ok;
 };
+
+/** LE SCHÉMA D'UN CONTEXTE — même pose que `check-reading-mode.mjs`
+ * (`meeshy.scheme`, lu par `src/lib/scheme.ts`), jamais une seconde loi. */
+const setScheme = (context, scheme) =>
+  context.addInitScript((s) => {
+    try {
+      localStorage.setItem('meeshy.scheme', s);
+    } catch {
+      /* navigation privée : le schéma tient pour la page seule (repli HTML). */
+    }
+  }, scheme);
+
+/** La barre AA (#5625) — la MÊME que `check-reading-mode.mjs`. */
+const AA_THRESHOLD = 4.5;
 
 /**
  * Cliquer une cible qui peut légitimement manquer — parce que le défaut qu'on
@@ -974,6 +989,18 @@ await runProtectionSuite('bulles');
   await composerContext.close();
 }
 
+/**
+ * 8 — LES MÉDIAS (#5805) — `lib/check-media.mjs` (l'hôte est à 51 lignes du
+ * plafond dur de 1 200 et chaque écran ajoute sa suite : on extrait AVANT
+ * d'ajouter, § Code Style du `CLAUDE.md`).
+ *
+ * DEUX PEAUX × DEUX SCHÉMAS : Focal en clair, Bulles en sombre — le défaut de
+ * contraste trouvé en revue (transcription à 3,74:1) ne se voyait qu'en
+ * clair, et une suite jouée dans un seul schéma ne pouvait pas le rougir.
+ */
+await checkThreadMedia({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'focal', scheme: 'light' });
+await checkThreadMedia({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'bulles', scheme: 'dark' });
+
 await browser.close();
 server.close();
 
@@ -988,4 +1015,4 @@ if (failures.length > 0) {
   console.error('');
   process.exit(1);
 }
-console.log('\n  Les états du fil tiennent : vide dessiné, coupure annoncée sans bloquer, échec attaché à sa bulle et reprise honnête,\n  et la protection (flou, vue unique, éphémère, supprimé) ne fuit jamais sur les deux peaux.\n');
+console.log('\n  Les états du fil tiennent : vide dessiné, coupure annoncée sans bloquer, échec attaché à sa bulle et reprise honnête,\n  et la protection (flou, vue unique, éphémère, supprimé) ne fuit jamais sur les deux peaux —\n  et une image s’affiche, un vocal se joue dans la langue du lecteur, un seul à la fois.\n');

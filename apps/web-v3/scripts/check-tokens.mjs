@@ -104,6 +104,43 @@ for (const [scheme, table] of Object.entries(EXPECTED)) {
   }
   await context.close();
 }
+
+/**
+ * `.rounded-media` (#5805, Q4) — LA VALEUR RÉSOLUE, pas une propriété
+ * intermédiaire : `--radius-media` (`styles/ios.css`) est un jeton
+ * `@theme inline`, INLINÉ par Tailwind DIRECTEMENT dans l'utilitaire
+ * (`.rounded-media{border-radius:var(--ios-radius-lg)}`, mesuré) — il ne pose
+ * AUCUNE déclaration `--radius-media` autonome sur `:root` (seuls les jetons
+ * référencés par un `var(--radius-X)` EXPLICITE ailleurs dans le CSS, comme
+ * `--radius-bubble` dans `thread-protection.css`, survivent comme propriété
+ * séparée). Lire `--radius-media` sur `documentElement`, comme la boucle
+ * ci-dessus le fait pour les couleurs, rendrait donc TOUJOURS « vide », quelle
+ * que soit la valeur réellement peinte — un témoin qui ne peut jamais rougir
+ * ne prouve rien. On sonde à la place un élément RÉEL portant la classe :
+ * c'est la question que ce script pose déjà pour les couleurs — qui AFFICHE
+ * le jeton, pas seulement qui le déclare. Deux moitiés vérifiées manuellement
+ * pour ce lot (§4.8 de la spécification #5805) : `--radius-media` mué à
+ * `var(--ios-radius-bubble)` (18px) fait rougir ce probe ; remis à
+ * `var(--ios-radius-lg)`, il reverdit.
+ */
+{
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+  const radius = await page.evaluate(() => {
+    const probe = document.createElement('div');
+    probe.className = 'rounded-media';
+    document.body.appendChild(probe);
+    const value = getComputedStyle(probe).borderRadius;
+    probe.remove();
+    return value;
+  });
+  const ok = radius === '16px';
+  if (!ok) failures += 1;
+  console.log(`\n  .rounded-media (#5805)  ${ok ? 'ok  ' : 'ECHEC'} border-radius résolu : ${radius}${ok ? '' : ' != 16px'}`);
+  await context.close();
+}
+
 await browser.close();
 
 console.log(

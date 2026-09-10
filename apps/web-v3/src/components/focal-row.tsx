@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-import { checkStatusOf, isMineOf, translationsOf } from '@/lib/view/message';
+import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
 import { initialsOf } from '@/lib/view/conversation';
 import { served } from '@/lib/api/prism';
@@ -20,10 +20,10 @@ import {
 } from '@/lib/reading-mode/metrics';
 
 import { Avatar } from './avatar';
+import { Attachments } from './attachment-blocks';
 import { FocusCard, FocusIdentity, FocusStamp, FocusStrip } from './focal-focus-overlays';
 import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
 import {
-  Attachments,
   Check,
   FailedSendBand,
   Flags,
@@ -221,11 +221,17 @@ export const FocalRow = memo(function FocalRow({
     );
   }
 
-  const translations = translationsOf(message);
+  // Texte ET pistes AUDIO traduites (#5805) — miroir `BubbleContentBuilder
+  // .buildAvailableFlags(translations:translatedAudios:)` (`:365-395`) : un
+  // vocal traduit SANS traduction texte monte lui aussi la bande de drapeaux,
+  // une image dont seul l'`alt` est traduit ne la monte PAS (revue #5805).
+  const translatedLanguages = translatedLanguagesOf(message);
+  /** `displayLanguage` est une INSERTION au rang 0 (#5814, § 5 étape 4) —
+   * UN résolveur (`resolvePrismTranslation`, D-14), jamais un second. Le MÊME
+   * prisme nourrit `Attachments` et `servedRowLanguage`. */
+  const preferredLanguages = displayLanguage === undefined ? languages : [displayLanguage, ...languages];
   const rendered = served({
-    // `displayLanguage` est une INSERTION au rang 0 (#5814, § 5 étape 4) —
-    // UN résolveur (`resolvePrismTranslation`, D-14), jamais un second.
-    preferredLanguages: displayLanguage === undefined ? languages : [displayLanguage, ...languages],
+    preferredLanguages,
     originalLanguage: message.originalLanguage,
     translations: message.translations,
     original: message.content,
@@ -243,27 +249,40 @@ export const FocalRow = memo(function FocalRow({
    * l'ORIGINE offre quelque chose à explorer, quel que soit ce qui est
    * actuellement affiché.
    */
-  const naturalServedLanguage = served({
+  const naturalServedLanguage = servedRowLanguage({
+    served: served({
+      preferredLanguages: languages,
+      originalLanguage: message.originalLanguage,
+      translations: message.translations,
+      original: message.content,
+    }),
     preferredLanguages: languages,
-    originalLanguage: message.originalLanguage,
-    translations: message.translations,
-    original: message.content,
-  }).language;
+    attachments: message.attachments,
+    fallbackLanguage: message.originalLanguage,
+  });
+
+  /**
+   * LA LANGUE ACTIVE DU PIED (revue #5814, défaut majeur 12) — la langue
+   * RÉELLEMENT servie par la rangée, jamais un état local, et jamais
+   * `rendered.language` seul (revue #5805) : sur un message MÉDIA-SEUL
+   * (`content: ''`) cette langue est l'ORIGINALE, alors que la transcription
+   * affichée est traduite — la bande retirait alors la mauvaise langue et
+   * proposait un drapeau sans effet. `servedRowLanguage` lit le texte quand
+   * il existe, la pièce sinon.
+   */
+  const activeLanguage = servedRowLanguage({
+    served: rendered,
+    preferredLanguages,
+    attachments: message.attachments,
+    fallbackLanguage: message.originalLanguage,
+  });
 
   const footerLanguages = languageBand({
     originalLanguage: message.originalLanguage,
     preferredLanguages: languages,
-    translations: translations.map((t) => t.language),
-    servedLanguage: rendered.language,
+    translations: translatedLanguages,
+    servedLanguage: activeLanguage,
   });
-  /**
-   * LA LANGUE ACTIVE DU PIED (revue #5814, défaut majeur 12) — `rendered
-   * .language`, jamais un état local : c'est la langue RÉELLEMENT affichée
-   * (celle que le Prisme a effectivement servie, `displayLanguage` compris),
-   * donc la pastille/les drapeaux ne peuvent plus se désynchroniser du texte
-   * qu'ils décrivent.
-   */
-  const activeLanguage = rendered.language;
 
   // Le viewer n'a pas toujours de `sender` peuplé sur ses propres messages
   // (fixture, charge socket allégée) — « Vous » comble l'identité, jamais un
@@ -285,7 +304,7 @@ export const FocalRow = memo(function FocalRow({
    * couvre désormais TOUTE protection (D-23), pas seulement `isBlurred`.
    */
   const showsBottomLine = mountsBottomLine({
-    hasTranslation: translations.length > 0,
+    hasTranslation: translatedLanguages.length > 0,
     isVeiled: isProtected,
     isLastInGroup: tail,
     hasReactions: reactions.length > 0,
@@ -316,7 +335,14 @@ export const FocalRow = memo(function FocalRow({
       {message.replyTo ? (
         <Quote quote={message.replyTo} isMine={false} onJump={() => onJumpToMessage(message.replyTo!.id)} />
       ) : null}
-      {message.attachments ? <Attachments attachments={message.attachments} /> : null}
+      {message.attachments ? (
+        <Attachments
+          attachments={message.attachments}
+          languages={languages}
+          fallbackLanguage={message.originalLanguage}
+          {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+        />
+      ) : null}
 
       {rendered.text ? (
         <p
