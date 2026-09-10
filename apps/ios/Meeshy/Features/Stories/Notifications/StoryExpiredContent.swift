@@ -72,10 +72,12 @@ public struct StoryExpiredContent: View {
     // MARK: - Adaptive foreground (pure, exposed for tests)
 
     /// Picks the legible foreground colour for arbitrary backgrounds based on
-    /// WCAG relative luminance. The 0.6 threshold matches the design tokens
-    /// used by the story canvases.
+    /// WCAG relative luminance — delegates to `Color.readableInk` (#5950),
+    /// which switches at the WCAG contrast-equality point rather than a
+    /// hand-picked `0.6` (that threshold misjudged the whole `0.179 → 0.6`
+    /// range, e.g. story backgrounds like `#46BDCA`).
     public static func foregroundOnBackground(_ bg: Color) -> Color {
-        bg.luminance > 0.6 ? .black : .white
+        bg.readableInk
     }
 
     // MARK: - Sub-views
