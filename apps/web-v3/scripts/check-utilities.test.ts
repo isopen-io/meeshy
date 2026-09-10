@@ -20,24 +20,26 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * en silence.
  */
 /**
- * LE TÉMOIN DU FAUX-POSITIF DE COMMENTAIRE (régression CI 2026-09-10).
+ * LE TÉMOIN DU FAUX-POSITIF DE COMMENTAIRE (régression CI 2026-09-10, #5966).
  *
- * `usedClasses` lit le TEXTE BRUT du fichier (c'est la méthode documentée en
- * tête du module : comparer à la feuille produite plutôt qu'à une liste
- * d'utilitaires tenue à la main) — y compris à l'intérieur d'un commentaire
- * JSDoc. Un commentaire qui CITE un extrait JSX d'un AUTRE fichier, avec un
- * `className="…"` qui franchit un saut de ligne, fait capturer par la regex
- * le marqueur de continuation ` * ` du commentaire comme un TOKEN de classe
- * à part entière : `className="flex\n * justify-center py-1.5"` rend les
- * tokens `flex`, `*`, `justify-center`, `py-1.5` — `*` n'a jamais été une
- * classe, et n'a donc aucune règle dans la feuille produite, ce qui a fait
- * échouer `Gates web-v3` sur `dev` pour TOUTE PR (pas seulement celle qui
- * touchait le fichier). Le fichier réel documente désormais l'extrait sans
- * la syntaxe d'attribut JSX entre guillemets ; ce témoin verrouille qu'il
- * ne produit plus aucun token de classe utilisateur.
+ * `usedClasses` lisait le TEXTE BRUT du fichier — y compris à l'intérieur
+ * d'un commentaire JSDoc. Un commentaire qui CITE un extrait JSX d'un AUTRE
+ * fichier, avec un `className="…"` qui franchit un saut de ligne, faisait
+ * capturer par la regex le marqueur de continuation ` * ` du commentaire
+ * comme un TOKEN de classe à part entière : `className="flex\n *
+ * justify-center py-1.5"` rendait les tokens `flex`, `*`, `justify-center`,
+ * `py-1.5` — `*` n'a jamais été une classe, et n'avait donc aucune règle
+ * dans la feuille produite, ce qui a fait échouer `Gates web-v3` sur `dev`
+ * pour TOUTE PR (pas seulement celle qui touchait le fichier).
+ *
+ * `usedClasses` dépouille désormais les commentaires (blocs JSDoc entiers et
+ * lignes entièrement commentées) AVANT de chercher `className=` — le bloc
+ * JSDoc de la fixture ci-dessous disparaît donc en entier avant le balayage,
+ * et ne produit plus AUCUN token. Ce témoin verrouille ce comportement,
+ * indépendant de ce que la prose de `thread-chrome.ts` dira à l'avenir.
  */
 describe('usedClasses — un commentaire ne doit jamais injecter de faux token', () => {
-  test('un className="…" multi-lignes à l’intérieur d’un JSDoc produit un token "*" fautif', () => {
+  test('un className="…" multi-lignes à l’intérieur d’un JSDoc ne produit plus aucun token', () => {
     const fixture = [
       '/**',
       ' * au navigateur (`thread-modes.tsx`, le `<div className="flex',
@@ -50,7 +52,7 @@ describe('usedClasses — un commentaire ne doit jamais injecter de faux token',
     writeFileSync(file, fixture);
     try {
       const found = usedClasses([file]);
-      expect([...found.keys()]).toContain('*');
+      expect([...found.keys()]).toEqual([]);
     } finally {
       unlinkSync(file);
     }
