@@ -60,6 +60,45 @@ enum AppSourceGuard {
 
     /// Variante en LIGNES, pour les gardes qui raisonnent ligne à ligne
     /// (remontée de constructeur, comptages locaux).
+    /// **Compte un IDENTIFIANT, jamais une sous-chaîne.**
+    ///
+    /// `components(separatedBy:)` compte des sous-chaînes, et une sous-chaîne ne
+    /// distingue pas `slideRail` de `slideRailSlot`. Le jour où le rail est passé
+    /// en SLOT injecté (`slideRailSlot: AnyView?`), la garde « le rail vit dans la
+    /// barre haute, et là seulement » a compté cinq sites au lieu de deux et a
+    /// rougi — alors que le rail, lui, allait très bien : `slideRail` y était
+    /// toujours déclaré une fois et monté une fois.
+    ///
+    /// C'est la forme la plus discrète d'un piège que ce dépôt a déjà payé : un
+    /// lot qui RENOMME n'éteint pas les gardes qui reconnaissent par le nom, il
+    /// les INVERSE. Ici le lot n'a même rien renommé — il a introduit un nom
+    /// VOISIN, dont l'ancien est le préfixe. Une garde qui reconnaît par
+    /// sous-chaîne n'a aucun moyen de voir la différence.
+    ///
+    /// Un identifiant Swift ne se poursuit ni par une lettre, ni par un chiffre,
+    /// ni par `_` : on ne compte donc que les occurrences que ni le caractère
+    /// précédent ni le suivant ne prolongent.
+    static func occurrences(ofIdentifier identifiant: String, in source: String) -> Int {
+        func prolonge(_ caractere: Character) -> Bool {
+            caractere.isLetter || caractere.isNumber || caractere == "_"
+        }
+        var compte = 0
+        var curseur = source.startIndex
+        while let plage = source.range(of: identifiant, range: curseur..<source.endIndex) {
+            let avant = plage.lowerBound == source.startIndex
+                ? nil
+                : source[source.index(before: plage.lowerBound)]
+            let apres = plage.upperBound == source.endIndex
+                ? nil
+                : source[plage.upperBound]
+            if !(avant.map(prolonge) ?? false), !(apres.map(prolonge) ?? false) {
+                compte += 1
+            }
+            curseur = plage.upperBound
+        }
+        return compte
+    }
+
     static func strippedLines(_ source: String) -> [String] {
         stripComments(source).components(separatedBy: "\n")
     }
