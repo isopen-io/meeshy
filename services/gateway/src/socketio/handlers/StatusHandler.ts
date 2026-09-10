@@ -267,7 +267,26 @@ export class StatusHandler {
         // code is needed for the refusal to become visible.
         // La room est une autorisation mise en cache (#5947) : une non-appartenance
         // PROUVÉE ici l'expire, sinon l'ancien membre reçoit encore le fil.
-        await socket.leave(ROOMS.conversation(normalizedId));
+        //
+        // **Dans son PROPRE try** (#6051). Cette expiration a été insérée en
+        // AMONT du signal qu'elle accompagne, sous un `catch` englobant qui se
+        // contente de journaliser : un adapter qui refuse, un socket déjà
+        // parti, et le refus n'était plus signalé DU TOUT — le silence exact
+        // que #5947 existait pour finir.
+        //
+        // Les deux gestes n'ont pas la même raison et ne doivent donc pas
+        // partager un sort : le `leave` est une mesure de SÉCURITÉ (cesser de
+        // livrer le fil à un ancien membre), l'`emit` est ce qui rend le refus
+        // VISIBLE et déclenche la purge de cache côté web et iOS
+        // (`isMembershipDeniedJoinError`). L'échec du premier ne peut pas
+        // emporter le second.
+        try {
+          await socket.leave(ROOMS.conversation(normalizedId));
+        } catch (error) {
+          logger.error('typing:start — expiration de la room échouée, le refus est signalé quand même', {
+            error, userId: userIdOrToken, conversationId: normalizedId
+          });
+        }
         const reason = await resolveMembershipDenialReason({
           prisma: this.prisma,
           conversationId: normalizedId,
