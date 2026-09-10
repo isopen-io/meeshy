@@ -1,5 +1,110 @@
 # @meeshy/gateway
 
+## 1.42.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le focus d'un champ épaissit sa bordure, pas seulement sa teinte (#5894)
+  - le socle web-v3 dit comment se connecter à la référence iOS, et par quelle voie
+  - le témoin de l'annonceur ne laisse plus courir un minuteur après sa dernière assertion (#5888)
+  - FocalRow réserve une hauteur sous le texte de la rangée élue sans ligne basse
+  - la bordure d'un champ survit à son focus, et un garde le tient
+  - on entre dans Meeshy comme sur iOS — accueil à deux portes, lien magique, mot de passe oublié
+  - le cliquet des couleurs ignore les commentaires (#5883)
+  - la flamme devient son propre hero de la progression (#5838)
+  - la coque Android atteint le staging et liste les conversations du compte de recette
+  - un en-tête de scène sonore sans accent servi n'est plus peint en noir (#5874)
+  - les deux témoins de surcharge vide n'utilisent plus test.each (#5872)
+  - VITE_API_BASE traverse enfin le workflow et le Dockerfile (#5872)
+  - une construction de production ne rend plus une base d'API relative (#5872)
+  - un message a ses actions — appui long, clic droit et touche Menu ouvrent le rail de réactions et Sélectionner · Traduire · Copier · Composer · Plus…
+  - le contrôle de dérive compare chaque hôte à SA branche, pas tous à main
+  - le hero « Dernier succès » était VIDE pour tout le monde, toujours (#5840)
+  - les deux racines descendent sous le budget de profondeur — 66→21 et 69→24 niveaux (#5837)
+  - pt-BR manquait sur les 22 clés de Progression de cette branche
+  - l'entrée Meesh remplace le trophée, et son détail s'ouvre en verre (#5839)
+  - les bornes du registre de frappe atteignent le natif (#5839)
+  - les sept chaînes neuves entrent au catalogue, en huit langues
+  - la file de célébration est nonisolated, et la seconde porte a sa garde (#5847)
+  - l'écran natif parcourt la séquence — quatre heros simples et trois portes
+  - un succès s'affiche AU GESTE ; la borne des paliers se calcule (#5847)
+  - le miroir Swift de la composition, et la garde qui les compare (#5838)
+  - la frappe de démonstration a sa date — le sous-menu se contredisait
+  - « Progression » devient un HUB — trois heros, trois portes
+  - l'indice de relance dit « l'opération », pas « la publication » (#5830)
+  - un palier verrouillé se peint neutre et ne rayonne pas (#5831)
+  - un message écrit dans le fil part vers la passerelle, se confirme, et se relance quand il a échoué
+  - l'absence s'OMET, elle ne se pose pas à undefined
+  - la relance réveille le flusher et le catalogue reçoit ses 15 clés (#5830, #5831)
+  - le héros du tableau de bord et l'ouverture en grand (#5831)
+  - la démonstration MONTRE le lot neuf — hero, élan et défis
+  - un démarrage sans repli LLM avertit (WARN), plus n'informe (#5827)
+  - un lien profond vers un fil s'ouvre dans les deux coques au lieu d'une page blanche
+  - une conversation sans historique dit « Nouvelle conversation »
+  - la famille SOCIALE atteint la vue — quatre glyphes, un libellé (#5766)
+  - text-footnote était une classe MORTE — elle ne peignait rien
+  - l'engagement mesure le LIEN SOCIAL, et le barème est réordonné (#5766)
+  - le chemin SOCKET porte le palier lui aussi — une règle, deux portes
+  - vitest, promesses gardées, surfaces déclarées, canari relevé (#5743, #5759)
+  - la référence iOS de web-v3 a son simulateur, que la coque Capacitor ne remplace jamais
+  - le témoin d'ordre lit sa source par node:fs, pas par le global Bun
+  - le mock conforme au protocole, et l'entrée de catalogue documentée (#5743)
+  - UN bloc d'accès rapides, toujours en fin de liste — le doublon de l'état vide disparaît
+  - la queue d'accès rapides suit iOS — rendue dès UNE conversation, et sur le compte BRUT
+  - une classe qui ne peint rien, et un ViewModel incomplet (#5743, #5759)
+  - sections.test.ts partage l'instant de l'ancre du fil au lieu d'un second new Date() (#5798)
+  - sitemap.xml et robots.txt publiés (#3672) (#5796)
+  - SPM cache key on Package.resolved instead of project.yml (#3609) (#5795)
+  - la liste et le fil lisent la passerelle de staging quand la construction le déclare
+  - garder l'extension .js dans les specifieurs (convention ESM du dépôt)
+  - la garde Node redevient importable sous ESM (#5757)
+  - les SEPT sections livrables — 22 familles, ~120 succès, 176 chaînes (#5759)
+  - les deux derniers sites de conversation, et la frappe iOS compile (#5759)
+  - l'écran de démarrage a enfin une sortie, et la queue de liste cesse d'être un vide
+  - « Publier un post » ouvre enfin le composeur sur iPad
+  - les rangées iOS, le miroir Swift gardé, et le générateur d'endpoints réparé (#5759, #5757)
+  - les succès générés en rangées horizontales, une par section (#5759)
+  - deux travaux d'une même surface ne partagent plus leur numéro d'issue dans le workflow web-v3
+  - le producteur, la carte d'atteignabilité, et une famille retirée faute de signal (#5759)
+  - l'élan se VOIT — servi par la route, montré par les deux clients (#5749)
+  - les conversations se dépensent en POINTS, jamais en ACTIONS (option C, #5743)
+  - la loi de la Rivière est câblée et prouvée sur le web — 61 vecteurs partagés verts, l'éligibilité lit memberCount comme iOS, le menu dit « N aujourd'hui »
+  - la monnaie rare — registre, frappe manuelle, et le héros qui la montre (#5743)
+  - l'ÉLAN — le poids multiplié au MOMENT du crédit (#5749)
+  - le garde de lockfile n'exige plus l'alignement du champ version des workspaces
+  - le score s'incrémente enfin — `$ifNull` en une écriture atomique
+  - le Résumé Vivant s'ouvre de lui-même dès 26 non-lus — épisodes, digest et rampe « Ils t'attendent » calculés localement
+  - serve non-CSP security headers on every route (#3628) (#5730)
+  - la Lentille se lit comme sur iOS — sections et stickers collants, liste aplatie au repos, hiérarchie 15/13/12
+  - use ESM import for security headers, not require()
+  - serve non-CSP security headers on every route (#3628)
+  - la sonde de fumée distingue une route absente d'une entité absente
+  - align EngagementService test on the content axis weight of 9 (#5853)
+  - un succès gravé par un GESTE s'annonce ; le balayage reste muet (#5847)
+  - les bornes du registre de frappe sont servies (#5839)
+  - la purge de compte désactive ses adhésions aux communautés (#5801)
+  - le retrait d'un membre par un admin de communauté laisse une trace
+  - quitter une communauté laisse une trace, la ré-adhésion réactive la ligne (#5760)
+  - l'engagementScore ne meurt plus sur un $inc contre null (#5742)
+  - la série d'engagement se compte dans le fuseau de l'utilisateur
+  - keep admin-routes-group2.test.ts within its frozen line-count debt
+  - keep report_resolved off the frozen shared-package size budget, fix admin-routes-group2 regression
+  - notify reporter when their report reaches a terminal status (#3718)
+  - les 18 langues fantômes NLLB-200 sont mappées, plus de repli silencieux (#3659)
+  - le hero montre le DERNIER succès, et les dates de frappe voyagent
+  - l'ordre des blocs de Progression est DÉCLARÉ, une fois (#5838)
+  - la frappe débite INTÉGRALEMENT — la famille sociale manquait à l'ordre
+  - la section « cercles » — neuf familles, neuf gabarits, huit langues (#5759)
+  - la GRAMMAIRE des succès — des milliers d'entrées, pas des milliers de traductions (#5758)
+  - drop duplicate 'engagement.badgeEarned' key entry
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.19.0
+
 ## 1.41.0
 
 ### Minor Changes
