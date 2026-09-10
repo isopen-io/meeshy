@@ -46,6 +46,13 @@ const OUTPUT = join(HERE, '../src/components/glyphs.ts');
 const OVERRIDES = {
   'fill-play': join(CORE, 'fill/play-fill.svg'),
   /**
+   * `stop` (#5668) — le bouton « Arrêter et ajouter aux pièces jointes » de la
+   * barre d'enregistrement rend `stop.fill` côté iOS
+   * (`UniversalComposerBar+Recording.swift:215-239`) : le variant PLEIN,
+   * même dispositif que `fill-play`.
+   */
+  stop: join(CORE, 'fill/stop-fill.svg'),
+  /**
    * `flame-fill` (D-23, #5676) — iOS emploie `flame.fill` pour le badge
    * éphémère et le tombstone « Vu et supprimé »
    * (`BubbleMetaBadges.swift:146-171`, `BubbleSystemViews.swift:50-85`) et
@@ -54,6 +61,12 @@ const OVERRIDES = {
    * DEUX variants sont donc extraits, même dispositif que `fill-play`.
    */
   'flame-fill': join(CORE, 'fill/flame-fill.svg'),
+  /**
+   * `pause` (#5805) — le widget vocal du fil bascule `fillPlay` (socle) ⇄
+   * `pause` : le PLEIN, même dispositif que `fill-play`/`stop` — un contour
+   * seul lirait mal à 13-18 px sur le fond dégradé du bouton.
+   */
+  pause: join(CORE, 'fill/pause-fill.svg'),
 };
 
 /**
@@ -253,4 +266,41 @@ emit({
   constant: 'AUTH_GLYPHS',
   type: 'AuthGlyphName',
   role: "LE JEU D'ECRAN des routes d'authentification (#5816) : charge avec elles, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DU TIROIR DU COMPOSEUR (#5668) — `stop` (le bouton
+ * « Arreter et ajouter aux pieces jointes » de la barre d'enregistrement).
+ * `image`, `file`, `microphone` et `x` (tuiles, aperçu, annuler) restent au
+ * SOCLE : ils y sont deja pour d'autres usages (rangee du composeur, blocs de
+ * message), les dupliquer ici paierait leurs octets deux fois. Charge avec le
+ * chunk `composer-tray` (#5668, § 7 de la specification), jamais dans le
+ * socle ni dans le chunk du fil : la barre d'enregistrement n'entre qu'au
+ * premier tap sur le micro ou le "+".
+ */
+const COMPOSER = ['stop'];
+
+emit({
+  ids: COMPOSER,
+  output: join(HERE, '../src/components/glyphs-composer.ts'),
+  constant: 'COMPOSER_GLYPHS',
+  type: 'ComposerGlyphName',
+  role: "LE JEU D'ECRAN du tiroir du composeur (#5668) : charge avec le chunk composer-tray, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DES PIECES JOINTES DU FIL (#5805) — `pause` (le widget
+ * vocal bascule `fillPlay` (socle) ⇄ `pause` selon `AudioPlaybackStatus`,
+ * `fill/pause-fill.svg`, meme dispositif que `fill-play`). Charge avec
+ * `attachment-blocks.tsx`, deja dans le chunk du fil (monte par bubble.tsx
+ * et focal-row.tsx) — jamais dans le socle.
+ */
+const MEDIA = ['pause'];
+
+emit({
+  ids: MEDIA,
+  output: join(HERE, '../src/components/glyphs-media.ts'),
+  constant: 'MEDIA_GLYPHS',
+  type: 'MediaGlyphName',
+  role: "LE JEU D'ECRAN des pieces jointes du fil (#5805) : charge avec attachment-blocks.tsx, jamais dans le socle.",
 });

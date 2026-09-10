@@ -38,4 +38,9 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- #5668 — sans elles, getUserMedia() de la WebView échoue AVANT toute
+         demande à l'utilisateur : le composeur n'atteint jamais l'état
+         "requesting" (recette QEMU, socle du prompt). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 </manifest>

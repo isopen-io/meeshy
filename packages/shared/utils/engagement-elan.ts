@@ -67,6 +67,14 @@ export type EngagementElan = {
   readonly factor: number;
   /** Familles distinctes actives, bornées au catalogue — ce qui porte les trois premiers crans. */
   readonly activeFamilyCount: number;
+  /**
+   * La LISTE des familles qui composent `activeFamilyCount` (#5897). Un client
+   * qui n'a que le cardinal ne peut afficher que le score CUMULÉ (tous axes
+   * jamais > 0) — une approximation FAUSSE dès qu'une famille est abandonnée
+   * depuis plus de `ELAN_WINDOW_DAYS`. Cette liste EST la fenêtre ; son
+   * cardinal égale toujours `activeFamilyCount`.
+   */
+  readonly activeFamilies: readonly EngagementAxisFamily[];
   /** L'assise est-elle acquise — le quatrième cran. */
   readonly hasStanding: boolean;
 };
@@ -100,6 +108,7 @@ export function computeEngagementElan(input: EngagementElanInput): EngagementEla
   return {
     factor: Math.min(ELAN_MAX, Math.max(ELAN_MIN, brut)),
     activeFamilyCount,
+    activeFamilies: [...familles],
     hasStanding,
   };
 }

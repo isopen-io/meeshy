@@ -20,9 +20,20 @@
  */
 export const contrastOf = (page, selector) =>
   page.evaluate((sel) => {
+    /**
+     * DEUX SÉRIALISATIONS, PAS UNE (#5774, revue). `rgb()/rgba()` rend des
+     * canaux 0..255 ; `color(srgb …)` — la forme que Chromium rend pour tout
+     * `color-mix(in srgb, …)`, donc pour la teinte d'accent du bouton
+     * « revenir en bas » — rend des canaux 0..1. Les lire de la même façon
+     * faisait passer un fond clair pour du noir absolu, et un contraste
+     * catastrophique pour un contraste parfait : le gate aurait été VERT sur
+     * le défaut qu'il est censé attraper.
+     */
     const parse = (value) => {
       const n = (value.match(/[\d.]+/g) ?? []).map(Number);
-      return n.length >= 3 ? { r: n[0], g: n[1], b: n[2], a: n.length > 3 ? n[3] : 1 } : null;
+      if (n.length < 3) return null;
+      const scale = value.trimStart().startsWith('color(') ? 255 : 1;
+      return { r: n[0] * scale, g: n[1] * scale, b: n[2] * scale, a: n.length > 3 ? n[3] : 1 };
     };
     const over = (top, bottom) => ({
       r: top.r * top.a + bottom.r * (1 - top.a),

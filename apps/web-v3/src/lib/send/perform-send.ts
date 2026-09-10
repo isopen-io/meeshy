@@ -1,11 +1,14 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
+import { uploadAttachments } from '@/lib/api/attachments';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import { patchConversation, type ConversationsDeps } from '@/lib/api/conversations';
+import type { ApiFailure } from '@/lib/api/http';
 import { messagesQueryKey, sendMessage, type MessagesPage, type SendMessageBody } from '@/lib/api/messages';
 import type { Message, Participant } from '@/lib/api/types';
 
+import { messageTypeOfPending, type PendingAttachment } from './attachments';
 import { confirmedMessageOf, localMessageOf, type LocalMessage } from './local-message';
 import { entriesOf, type OutboxState } from './outbox-store';
 
@@ -31,6 +34,14 @@ export type Draft = {
    * défaut majeur 6, revue-correction #5813) : porté à côté de `replyToId`
    * pour que la bulle optimiste affiche sa citation avant tout accusé. */
   readonly replyTo?: Message;
+  /**
+   * LA SÉLECTION DU COMPOSEUR (#5668) — `undefined`/liste vide pour un envoi
+   * texte pur (comportement INCHANGÉ, tous les témoins historiques de ce
+   * module continuent de passer sans cette clé). Non vide ⇒ `performSend`
+   * pose `entry.upload` et `attempt()` téléverse AVANT d'appeler
+   * `POST …/messages`.
+   */
+  readonly attachments?: readonly PendingAttachment[];
 };
 
 /**
@@ -57,9 +68,26 @@ const lastAccepted = new Map<string, number>();
  * seul NUL dans le fichier suffit à faire classer la source BINAIRE par git
  * (`git diff` rend « Bin 0 -> 9232 bytes », plus aucune revue possible) —
  * mesuré sur ce fichier même. La valeur produite est identique.
+ *
+ * LA SIGNATURE DES PIÈCES JOINTES (#5668) — `content` seul dédoublonnait déjà
+ * deux ENVOIS DE TEXTE identiques ; un envoi de pièces PURES (`content`
+ * toujours `''`) aurait sinon confondu deux photos DISTINCTES tapées à moins
+ * de 600 ms d'écart. `name:size` suffit (jamais le `File` lui-même, non
+ * sérialisable en clé) — deux fichiers homonymes de même poids restent une
+ * collision acceptée, exactement la même tolérance que le texte (`content`
+ * identique = même clé).
  */
-function debounceKeyOf(conversationId: string, content: string, replyToId: string | undefined): string {
-  return `${conversationId}\u0000${content}\u0000${replyToId ?? ''}`;
+function attachmentsSignatureOf(attachments: readonly PendingAttachment[] | undefined): string {
+  return (attachments ?? []).map((a) => `${a.name}:${a.size}`).join('\u0000');
+}
+
+function debounceKeyOf(
+  conversationId: string,
+  content: string,
+  replyToId: string | undefined,
+  attachments: readonly PendingAttachment[] | undefined,
+): string {
+  return `${conversationId}\u0000${content}\u0000${replyToId ?? ''}\u0000${attachmentsSignatureOf(attachments)}`;
 }
 
 function pruneDebounce(nowMs: number): void {
@@ -74,13 +102,42 @@ export function debounceEntryCountForTests(): number {
   return lastAccepted.size;
 }
 
-function bodyOf(message: LocalMessage): SendMessageBody {
+/**
+ * `attachmentIds` REÇUS séparément du `message` (#5668) : ils viennent de la
+ * PHASE D'UPLOAD de `attempt()` (ou d'une reprise qui les a déjà obtenus),
+ * jamais de `message.attachments` — qui porte des `Attachment` LOCAUX
+ * (`fileUrl` en `blob:`, pour la bulle optimiste), pas des ids serveur.
+ * `content` est OMIS quand le texte est vide (§ 0 de la spécification #5668,
+ * un vocal PUR part sans la clé) ; `messageType` OMIS à `'text'` (le défaut
+ * serveur, `messages-send.ts:59`).
+ */
+function bodyOf(message: LocalMessage, attachmentIds: readonly string[]): SendMessageBody {
+  const declared = declaredAttachmentType(message.messageType);
   return {
-    content: message.content,
+    ...(message.content.trim().length > 0 ? { content: message.content } : {}),
     originalLanguage: message.originalLanguage,
     clientMessageId: message.clientMessageId,
+    ...(declared === undefined ? {} : { messageType: declared }),
+    ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
     ...(message.replyToId === undefined ? {} : { replyToId: message.replyToId }),
   };
+}
+
+/**
+ * LE TYPE QU'ON A LE DROIT DE DÉCLARER, sans assertion (revue-correction
+ * #5668) — `LocalMessage['messageType']` porte AUSSI `'system'` et
+ * `'location'`, que ce lot ne produit jamais : un `as` les aurait laissés
+ * passer en silence si un futur appelant en posait un. Rendre `undefined`
+ * laisse alors le défaut serveur (`'text'`, `messages-send.ts:220`)
+ * s'appliquer, plutôt que d'écrire une déclaration que le serveur, lui, ne
+ * corrigera PAS (`attachment-message-type.ts:112-113`).
+ */
+function declaredAttachmentType(
+  messageType: LocalMessage['messageType'],
+): 'image' | 'file' | 'audio' | 'video' | undefined {
+  return messageType === 'image' || messageType === 'file' || messageType === 'audio' || messageType === 'video'
+    ? messageType
+    : undefined;
 }
 
 /**
@@ -132,17 +189,93 @@ async function dispatch(params: {
  * (doctrine `http.ts`), `unwrap` n'est PAS appelé — ce n'est pas un
  * `queryFn` ; ce qui pourrait tout de même lever est rattrapé par `dispatch`.
  */
+/**
+ * LA PHASE D'UPLOAD (#5668) — appelée par `attempt()` AVANT `POST …/messages`
+ * quand l'entrée porte `upload`. Rend les `attachmentIds` à poser sur le
+ * corps, ou `null` si l'upload a échoué (`markFailed` déjà posé par cette
+ * fonction — l'appelant s'arrête alors sans rien tenter d'autre).
+ *
+ * REPRISE SANS RE-UPLOAD (§ 0 « Reprise » de la spécification) :
+ * `upload.attachmentIds` déjà posé (un `POST …/messages` précédent a échoué
+ * APRÈS un upload réussi) ⇒ cette phase ne rappelle PAS
+ * `POST /attachments/upload`, elle rend directement les ids mémorisés.
+ *
+ * RÉCONCILIATION PAR COMPTE (§ 0 « UPLOAD_PARTIAL ») : `uploadMultiple` avale
+ * les échecs PAR FICHIER sous `success: true` — moins d'attachements que de
+ * fichiers envoyés est un ÉCHEC d'envoi, jamais un envoi partiel silencieux.
+ */
+async function uploadPhase(params: {
+  readonly conversationId: string;
+  readonly message: LocalMessage;
+  readonly deps: SendDeps;
+}): Promise<readonly string[] | null> {
+  const { conversationId, message, deps } = params;
+  const entry = entriesOf(deps.outbox.getState(), conversationId).find(
+    (e) => e.message.clientMessageId === message.clientMessageId,
+  );
+  const upload = entry?.upload;
+  if (upload === undefined) {
+    /**
+     * L'ENTRÉE NE PORTE PLUS SA PHASE D'UPLOAD, MAIS LE MESSAGE DÉCLARE DES
+     * PIÈCES (revue-correction #5668) — rendre `[]` enverrait le message
+     * AMPUTÉ : la bulle montrerait la photo en local, le serveur
+     * enregistrerait un message vide, et personne ne verrait jamais l'écart.
+     * La direction de l'erreur se choisit par le COÛT DE RÉPARATION
+     * (`tasks/lessons.md`) : un « Réessayer » de trop se rejoue, une pièce
+     * perdue en silence ne se répare pas.
+     */
+    if ((message.attachments?.length ?? 0) > 0) {
+      deps.outbox
+        .getState()
+        .markFailed(conversationId, message.clientMessageId, {
+          ok: false,
+          status: 0,
+          error: 'Pièces jointes introuvables pour cet envoi',
+          code: 'UPLOAD_PARTIAL',
+        });
+      return null;
+    }
+    return [];
+  }
+  if (upload.attachmentIds !== undefined) return upload.attachmentIds;
+  if (upload.files.length === 0) return [];
+
+  const result = await uploadAttachments({
+    source: deps.source,
+    transport: deps.transport,
+    pending: upload.files,
+  });
+
+  if (!result.ok) {
+    deps.outbox.getState().markFailed(conversationId, message.clientMessageId, result);
+    return null;
+  }
+  if (result.data.attachments.length < upload.files.length) {
+    const failure: ApiFailure = { ok: false, status: 200, error: 'Lot de pièces jointes incomplet', code: 'UPLOAD_PARTIAL' };
+    deps.outbox.getState().markFailed(conversationId, message.clientMessageId, failure);
+    return null;
+  }
+
+  const attachmentIds = result.data.attachments.map((a) => a.id);
+  deps.outbox.getState().markUploaded(conversationId, message.clientMessageId, attachmentIds);
+  return attachmentIds;
+}
+
 async function attempt(params: {
   readonly conversationId: string;
   readonly message: LocalMessage;
   readonly deps: SendDeps;
 }): Promise<void> {
   const { conversationId, message, deps } = params;
+
+  const attachmentIds = await uploadPhase(params);
+  if (attachmentIds === null) return; // markFailed déjà posé par uploadPhase.
+
   const result = await sendMessage({
     source: deps.source,
     transport: deps.transport,
     conversationId,
-    body: bodyOf(message),
+    body: bodyOf(message, attachmentIds),
   });
 
   if (!result.ok) {
@@ -186,13 +319,14 @@ export async function performSend(params: {
   const now = deps.now ?? Date.now;
   const nowMs = now();
 
-  const key = debounceKeyOf(conversationId, draft.content, draft.replyToId);
+  const key = debounceKeyOf(conversationId, draft.content, draft.replyToId, draft.attachments);
   const previous = lastAccepted.get(key);
   pruneDebounce(nowMs);
   if (previous !== undefined && nowMs - previous < DEBOUNCE_MS) return;
   lastAccepted.set(key, nowMs);
 
   const clientMessageId = newClientMessageId();
+  const messageType = messageTypeOfPending(draft.attachments ?? []);
   const message = localMessageOf({
     clientMessageId,
     conversationId,
@@ -200,8 +334,10 @@ export async function performSend(params: {
     ...(sender === undefined ? {} : { sender }),
     content: draft.content,
     originalLanguage: draft.originalLanguage,
+    messageType,
     ...(draft.replyToId === undefined ? {} : { replyToId: draft.replyToId }),
     ...(draft.replyTo === undefined ? {} : { replyTo: draft.replyTo }),
+    ...(draft.attachments === undefined || draft.attachments.length === 0 ? {} : { attachments: draft.attachments }),
     now: new Date(nowMs),
   });
 
@@ -210,6 +346,9 @@ export async function performSend(params: {
     delivery: deps.online ? 'pending' : 'failed',
     attempts: deps.online ? 1 : 0,
     startedAt: nowMs,
+    ...(draft.attachments === undefined || draft.attachments.length === 0
+      ? {}
+      : { upload: { files: draft.attachments } }),
   });
 
   if (!deps.online) return; // hors ligne (D-16) : aucun appel.

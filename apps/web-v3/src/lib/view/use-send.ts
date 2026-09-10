@@ -5,6 +5,7 @@ import { isPermanentFailure } from '@/lib/api/outcome';
 import { retrySendAction, sendAction } from '@/lib/api/query';
 import type { Message, Participant } from '@/lib/api/types';
 import { useOnline } from '@/lib/net/online';
+import type { PendingAttachment } from '@/lib/send/attachments';
 import { confirmedCountOf, entriesOf, outboxStore } from '@/lib/send/outbox-store';
 import { sendFailureReason } from '@/lib/send/failure-reason';
 
@@ -57,8 +58,11 @@ export function useSend(params: {
    * `localMessageOf` pose sur la bulle optimiste pour qu'elle affiche sa
    * citation ET son saut avant tout accusé serveur ; seul `replyTo.id` part
    * dans le corps du POST (`replyToId`, `bodyOf`, `perform-send.ts`).
+   *
+   * `attachments` (#5668) — la sélection du composeur (`send/attachments.ts`) ;
+   * liste vide pour un envoi texte pur, comportement INCHANGÉ.
    */
-  readonly send: (text: string, replyTo: Message | null) => void;
+  readonly send: (text: string, attachments: readonly PendingAttachment[], replyTo: Message | null) => void;
   readonly retry: (messageId: string) => void;
 } {
   const { conversationId, viewerId, sender, originalLanguage, announce } = params;
@@ -91,13 +95,14 @@ export function useSend(params: {
   );
 
   const send = useCallback(
-    (text: string, replyTo: Message | null) => {
+    (text: string, attachments: readonly PendingAttachment[], replyTo: Message | null) => {
       void sendAction({
         conversationId,
         draft: {
           content: text,
           originalLanguage,
           ...(replyTo === null ? {} : { replyToId: replyTo.id, replyTo }),
+          ...(attachments.length === 0 ? {} : { attachments }),
         },
         viewerId,
         ...(sender === undefined ? {} : { sender }),

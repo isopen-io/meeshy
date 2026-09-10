@@ -145,3 +145,106 @@ main[data-scene='idle'] .focus-stamp {
 :root.light .focus-chip {
   --focus-chip-fill: var(--focus-chip-fill-light);
 }
+
+/*
+ * LE CHROME DU FIL (#5774, travail 3/3) — miroir
+ * `ConversationView.hidesHeaderActions` / `.hidesEntireHeader` /
+ * `.hidesComposerChrome` (`ConversationView.swift:2074-2141`) et
+ * `EdgeHiddenChrome.swift` : glisse vers SON bord en fondant, une seule
+ * animation symétrique (`easeOut`), jamais un démontage — la hauteur
+ * mesurée du composant ne bouge pas. `--chrome-edge-travel` /
+ * `--chrome-ease-out-ms` viennent de `reading-mode/metrics.ts::chromeStyleVars()`,
+ * posées sur l'HÔTE COMMUN (le conteneur d'écran, `routes/thread.tsx`) —
+ * jamais de valeur numérique ici (même règle que le reste du fichier).
+ *
+ * `[data-chrome-header]` / `[data-chrome-composer]` sont posés HORS REACT
+ * par `lib/view/use-thread-chrome.ts`.
+ */
+.thread-header {
+  transition:
+    transform var(--chrome-ease-out-ms, 250ms) ease-out,
+    opacity var(--chrome-ease-out-ms, 250ms) ease-out;
+}
+.thread-header-actions {
+  transition: opacity var(--chrome-ease-out-ms, 250ms) ease-out;
+}
+[data-chrome-header='entire'] > .thread-header {
+  transform: translateY(calc(-1 * var(--chrome-edge-travel)));
+  opacity: 0;
+  pointer-events: none;
+}
+[data-chrome-header='actions'] > .thread-header .thread-header-actions {
+  opacity: 0;
+  pointer-events: none;
+}
+/*
+ * `.thread-composer-chrome` ET `.thread-scroll-to-bottom` PARTAGENT cette
+ * règle — miroir `ConversationView.swift:1918-1928` : le bouton « revenir
+ * en bas » est posé sous le MÊME modificateur que le composeur
+ * (`.hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)`), pas une
+ * règle voisine qui aurait pu diverger.
+ */
+[data-chrome-composer='hidden'] .thread-composer-chrome,
+[data-chrome-composer='hidden'] .thread-scroll-to-bottom {
+  transform: translateY(var(--chrome-edge-travel));
+  opacity: 0;
+  pointer-events: none;
+}
+.thread-composer-chrome {
+  transition:
+    transform var(--chrome-ease-out-ms, 250ms) ease-out,
+    opacity var(--chrome-ease-out-ms, 250ms) ease-out;
+}
+
+/*
+ * LA PILULE DE JOUR COLLANTE — miroir `MessageDayStickyOverlay.swift` (§
+ * commentaire de tête) : « 60 = padding haut du header (8) + rangée de
+ * contrôles (~44) + marge (8) — la pill démarre SOUS le header ». RESTE
+ * pendant le geste (`MessageListViewController.swift:597-605`) : aucune
+ * règle de ce fichier ne la masque au défilement — seul `DayPill` (React,
+ * `label === null || headerExpanded`) décide de son montage.
+ */
+.thread-day-pill {
+  top: var(--day-pill-top);
+  transition: opacity var(--day-pill-fade-ms, 180ms) ease-in-out;
+}
+
+/* LE BOUTON « DÉFILER VERS LE BAS » — cible tactile ≥ 44 px
+   (`min-h-11 min-w-11`, Tailwind), capsule qui s'élargit pour l'aperçu
+   riche (`ConversationScrollControlsView.swift`, « repos = cercle parfait ;
+   contenu riche = capsule ovale »). */
+.thread-scroll-to-bottom {
+  transition:
+    transform var(--chrome-ease-out-ms, 250ms) ease-out,
+    opacity var(--chrome-ease-out-ms, 250ms) ease-out;
+}
+.thread-scroll-to-bottom:active {
+  transform: scale(0.96);
+}
+
+/* LE FOND DU FIL — dégradé statique, DÉRIVÉ de
+   `ConversationAnimatedBackground.swift:213-221` (`lib/view/thread-backdrop.ts`).
+   Sombre par défaut (même convention que `.focus-card` ci-dessus),
+   `:root.light` surcharge. Aucune animation : `animationsEnabled = false`
+   côté iOS (décision produit batterie), D-1 prime sur toute intention
+   d'animer ce fond. */
+.thread-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    var(--backdrop-dark-start) 0%,
+    color-mix(in srgb, var(--accent) calc(var(--backdrop-dark-tint) * 100%), var(--backdrop-dark-start)) 50%,
+    var(--backdrop-dark-end) 100%
+  );
+}
+:root.light .thread-backdrop {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) calc(var(--backdrop-light-tint-start) * 100%), var(--backdrop-light-base)) 0%,
+    var(--backdrop-light-base) 50%,
+    color-mix(in srgb, var(--accent) calc(var(--backdrop-light-tint-end) * 100%), var(--backdrop-light-base)) 100%
+  );
+}

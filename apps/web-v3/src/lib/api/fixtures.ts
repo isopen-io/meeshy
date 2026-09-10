@@ -1,6 +1,8 @@
 import type { ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 
-import type { Conversation, Message, Participant } from './types';
+import { previewUrlFor } from '@/lib/send/attachment-preview-url';
+
+import type { Attachment, Conversation, Message, Participant } from './types';
 import {
   CONVERSATION_ID,
   PARTICIPANTS,
@@ -17,6 +19,7 @@ import {
   viewer,
 } from './fixtures-base';
 import { CATCHUP_CONVERSATION, CATCHUP_CONVERSATION_ID, CATCHUP_MESSAGES } from './fixtures-catchup';
+import { MEDIA_CONVERSATION, MEDIA_CONVERSATION_ID, MEDIA_MESSAGES } from './fixtures-media';
 import {
   RIVER_CONTINUATION_WITNESS_ID,
   RIVER_CONVERSATION,
@@ -574,6 +577,7 @@ export const CONVERSATIONS: readonly Conversation[] = [
     lastMessageOriginalLanguage: 'fr',
   },
   CATCHUP_CONVERSATION,
+  MEDIA_CONVERSATION,
 ];
 
 
@@ -664,27 +668,84 @@ export type SentFixtureMessage = Message & { readonly clientMessageId: string };
 const sentMessages = new Map<string, SentFixtureMessage[]>();
 let sentMessageCounter = 0;
 
+/**
+ * L'UPLOAD MULTIPART, EN FIXTURES (#5668) — mime
+ * `POST /api/v1/attachments/upload` (`upload.ts:201`, `sendSuccess(reply, {
+ * attachments })`) : chaque fichier reçu devient un `Attachment` du domaine,
+ * indexé par SON id pour que `recordSentMessage` puisse l'associer au message
+ * qu'il accompagne — le même geste que `associateAttachmentsToMessage`
+ * (`MessageProcessor.ts:712-718`) côté serveur.
+ */
+const uploadedAttachmentsById = new Map<string, Attachment>();
+let uploadedAttachmentCounter = 0;
+
+export function uploadedAttachmentsOf(
+  files: readonly { readonly file: File; readonly durationMs?: number; readonly localId?: string }[],
+): readonly Attachment[] {
+  return files.map(({ file, durationMs, localId }) => {
+    uploadedAttachmentCounter += 1;
+    const attachment: Attachment = {
+      ...attachmentDefaults,
+      id: `fx-att-${uploadedAttachmentCounter}`,
+      messageId: '',
+      fileName: file.name,
+      originalName: file.name,
+      mimeType: file.type,
+      fileSize: file.size,
+      // Défaut 7 (revue #5668) : RÉUTILISE l'URL déjà créée pour cette pièce
+      // (`previewUrlFor`, partagée avec la tuile du plateau ET la bulle
+      // optimiste) plutôt que d'en créer une TROISIÈME — la vraie passerelle
+      // sert une URL `https://`, jamais un blob : ce repli n'existe que
+      // pour les fixtures, qui simulent la réponse serveur avec le fichier
+      // déjà en main. `localId` absent (appelant hors `PendingAttachment`,
+      // témoin direct) ⇒ repli sur une URL dédiée, comme avant.
+      fileUrl: localId === undefined ? URL.createObjectURL(file) : previewUrlFor(localId, file),
+      uploadedBy: VIEWER_ID,
+      createdAt: new Date().toISOString(),
+      ...(durationMs === undefined ? {} : { duration: durationMs }),
+    };
+    uploadedAttachmentsById.set(attachment.id, attachment);
+    return attachment;
+  });
+}
+
+/** TÉMOIN SEUL — même discipline que `resetSentMessagesForTests` ci-dessous. */
+export function resetUploadedAttachmentsForTests(): void {
+  uploadedAttachmentsById.clear();
+  uploadedAttachmentCounter = 0;
+}
+
 export function recordSentMessage(
   conversationId: string,
   body: {
-    readonly content: string;
+    readonly content?: string;
     readonly originalLanguage: string;
     readonly clientMessageId: string;
+    readonly messageType?: 'image' | 'file' | 'audio' | 'video';
+    readonly attachmentIds?: readonly string[];
     readonly replyToId?: string;
   },
 ): SentFixtureMessage {
   sentMessageCounter += 1;
+  // Les ids INCONNUS de `uploadedAttachmentsById` sont IGNORÉS, jamais une
+  // charge fabriquée à leur place — miroir `associateAttachmentsToMessage`,
+  // qui n'associe que des pièces réellement téléversées.
+  const attachments = (body.attachmentIds ?? [])
+    .map((id) => uploadedAttachmentsById.get(id))
+    .filter((a): a is Attachment => a !== undefined);
   const created: SentFixtureMessage = {
     ...message({
       id: `fx-sent-${sentMessageCounter}`,
       conversationId,
       senderId: VIEWER_ID,
       sender: viewer,
-      content: body.content,
+      content: body.content ?? '',
       originalLanguage: body.originalLanguage,
+      messageType: body.messageType ?? 'text',
       translations: [],
       deliveredCount: 0,
       readCount: 0,
+      ...(attachments.length > 0 ? { attachments } : {}),
       ...(body.replyToId === undefined ? {} : { replyToId: body.replyToId }),
       createdAt: new Date(),
     }),
@@ -722,6 +783,7 @@ export const messagesOf = (conversationId: string): readonly Message[] => {
   if (conversationId === PROTECTION_CONVERSATION_ID)
     return withSent(conversationId, withConsumption(PROTECTION_MESSAGES));
   if (conversationId === CATCHUP_CONVERSATION_ID) return withSent(conversationId, withConsumption(CATCHUP_MESSAGES));
+  if (conversationId === MEDIA_CONVERSATION_ID) return withSent(conversationId, withConsumption(MEDIA_MESSAGES));
   const last = CONVERSATIONS.find((c) => c.id === conversationId)?.lastMessage;
   return withSent(conversationId, last === undefined ? [] : withConsumption([last]));
 };

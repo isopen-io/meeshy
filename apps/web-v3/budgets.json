@@ -28,6 +28,14 @@
         "status": "CIBLE -- MESUREE PAR #5695, NON ARBITREE",
         "source": "Mesure de measure-weight.mjs le 2026-09-08 (`bun run build` puis `node scripts/measure-weight.mjs`) : 5,93 Ko gzip -9, arrondi au Ko SUPERIEUR (6) + 1 Ko de marge, meme discipline que first_paint.kb ci-dessus."
       }
+    },
+    "composer_tray": {
+      "pattern": "^assets/composer-tray-",
+      "kb": {
+        "value": 4,
+        "status": "CIBLE -- MESUREE PAR #5668, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-09 (`bun run build` puis `node scripts/measure-weight.mjs`) : 2,52 Ko gzip -9 apres la revue-correction (panneau de pieces jointes, bande d'apercu, barre d'enregistrement, bande de refus micro -- `glyphs-composer.ts` compris), arrondi au Ko SUPERIEUR (3) + 1 Ko de marge, meme discipline que le chunk `summary` ci-dessus. `use-recorder.ts` (le moteur MediaRecorder/AudioContext) reste dans le chunk du fil (`thread-*.js`), pas dans celui-ci : lui seul est CHARGE A LA DEMANDE par un second `lazy()`, le hook restant une dependance STATIQUE de `composer.tsx` (spec #5668 S 7, \"le socle ne bouge pas ... tout ce lot vit dans le chunk du fil ou plus loin\")."
+      }
     }
   },
   "network_note": "Le profil est REPRIS TEL QUEL de apps/web-v3/budgets.json — deux chiffres mesures sur deux profils differents ne se comparent pas, et la comparaison v3 / v4 est precisement ce que ce POC doit rendre.",

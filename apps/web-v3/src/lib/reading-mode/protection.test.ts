@@ -59,6 +59,23 @@ describe("protectionOf — le kind, dans l'ordre d'iOS", () => {
   test('tout à false/absent ⇒ standard', () => {
     expect(protectionOf(fields(), 1000)).toBe('standard');
   });
+
+  /**
+   * Second verrou (défaut 4, revue #5668) : `protectionOf` reste
+   * fail-closed même si une charge NON DÉCODÉE — un `null` explicite tel
+   * que la passerelle le sert, que `decodeMessage` est censé retirer —
+   * l'atteint malgré tout. `!= null` plutôt que `!== undefined`.
+   */
+  test("charge NON décodée : deletedAt/expiresAt à `null` (jamais `undefined`) ⇒ standard, pas deleted/expired", () => {
+    const rawFromGateway = { ...fields(), deletedAt: null, expiresAt: null } as unknown as {
+      deletedAt?: Date;
+      isViewOnce: boolean;
+      viewOnceCount: number;
+      isBlurred: boolean;
+      expiresAt?: Date;
+    };
+    expect(protectionOf(rawFromGateway, 1000)).toBe('standard');
+  });
 });
 
 describe('ephemeralOf / formatRemaining', () => {

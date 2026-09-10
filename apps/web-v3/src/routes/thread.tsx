@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useStore } from 'zustand/react';
 
@@ -16,17 +16,14 @@ import '@/styles/thread-menu.css';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
-import { Avatar } from '@/components/avatar';
-import { Bubble } from '@/components/bubble';
 import { Composer } from '@/components/composer';
-import { FocalRow } from '@/components/focal-row';
 import { MessageDetailSheet } from '@/components/message-detail-sheet';
 import { MessageMenu } from '@/components/message-menu';
 import { reactionEntries } from '@/components/message-blocks';
 import { ReactionSheet } from '@/components/reaction-sheet';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import { ThreadHeader } from '@/components/thread-header';
-import { SummarySkeleton } from '@/components/summary/summary-skeleton';
+import { DayPill, ScrollToBottomButton } from '@/components/thread-chrome';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiConfig } from '@/lib/api/config';
 import { recordViewOnceConsumption } from '@/lib/api/fixtures';
@@ -38,9 +35,9 @@ import { served } from '@/lib/api/prism';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf, withAccent } from '@/lib/accent';
-import { initialsOf, isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
+import { isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
 import { useParams } from '@/lib/router';
-import { dayLabel, mergeTimeline, place } from '@/lib/grouping';
+import { mergeTimeline, place } from '@/lib/grouping';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useSend } from '@/lib/view/use-send';
 import { useMessageMenu } from '@/lib/view/use-message-menu';
@@ -58,16 +55,11 @@ import {
 import { readingModeStore } from '@/lib/reading-mode/store';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { useThreadScene } from '@/lib/reading-mode/scene';
-import { sceneStyleVars } from '@/lib/reading-mode/metrics';
-
-/**
- * LE RÉSUMÉ VIVANT (#5695) — module À LA DEMANDE : `SummaryHost` n'entre
- * dans le CHUNK DU FIL qu'au moment où `readingDecision.mode === 'summary'`
- * demande son premier rendu (`import()`), jamais dans la première peinture.
- * `SummarySkeleton`, lui, reste un import STATIQUE (voir son doc-comment) :
- * c'est le `fallback` de la `Suspense` qui attend ce module.
- */
-const SummaryHost = lazy(() => import('@/components/summary/summary-host'));
+import { chromeStyleVars, sceneStyleVars } from '@/lib/reading-mode/metrics';
+import { backdropStyleVars } from '@/lib/view/thread-backdrop';
+import { BOTTOM_ANCHOR_FRAMES, pinToBottom } from '@/lib/view/pin-to-bottom';
+import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
+import { ThreadModes } from './thread-modes';
 
 /**
  * LE FIL.
@@ -81,10 +73,10 @@ const SummaryHost = lazy(() => import('@/components/summary/summary-host'));
  * Le bouton de retour porte le compte de non-lus des AUTRES conversations.
  *
  * Depuis #5695, `<main>` rend soit la rangée plate/bulle (Focal/Script/
- * Bulles), soit le Résumé Vivant (`mode === 'summary'`) — la prochaine
- * surface (Rivière, D-21) EXTRAIT le montage des modes dans
- * `src/routes/thread-modes.tsx` avant d'y ajouter la sienne : ce fichier
- * reste sous le budget de taille, mais il ne le restera pas une quatrième fois.
+ * Bulles), soit le Résumé Vivant (`mode === 'summary'`) — le montage des
+ * modes est extrait dans `ThreadModes` (`src/routes/thread-modes.tsx`,
+ * #5878) : ce fichier reste sous le budget de taille pour la prochaine
+ * surface (Rivière, D-21), qui s'ajoute LÀ, pas ici.
  */
 export default function ThreadScreen() {
   const { conversation: id } = useParams<'/c/$conversation'>();
@@ -398,6 +390,29 @@ export default function ThreadScreen() {
   const scene = useThreadScene(scroller, { mode: readingDecision.mode, ready: placed.length > 0 });
 
   /**
+   * LE CHROME DU FIL (#5774, travail 3/3) — `host` est l'HÔTE COMMUN de
+   * l'en-tête, du fil et du composeur (le conteneur d'écran, tout en bas de
+   * ce composant) : c'est LUI qui porte `data-chrome-header`/
+   * `data-chrome-composer` (`use-thread-chrome.ts`, hors React), les
+   * variables CSS de `chromeStyleVars()`/`backdropStyleVars()`, la pilule
+   * de jour collante et le bouton « revenir en bas » — composés par
+   * `useThreadChromeSignals` (extrait, budget de taille CLAUDE.md § Code
+   * Style : ce fichier l'avait déjà payé une fois, `thread-header.tsx`
+   * §revue #5814, `thread-modes.tsx` §#5878).
+   */
+  const chrome = useThreadChromeSignals({
+    scroller,
+    mode: readingDecision.mode,
+    placed,
+    virtualizer,
+    messages,
+    viewerId: viewer.id ?? '',
+    group,
+    readerLanguages,
+    noteProgrammaticScroll: scene.noteProgrammaticScroll,
+  });
+
+  /**
    * LE SAUT DE CITATION (#5566, défaut 10) — le bouton de citation promettait
    * une navigation par son nom accessible et ne faisait rien. `scrollToIndex`
    * amène le message cité dans la fenêtre virtualisée ; la mise en évidence
@@ -518,29 +533,20 @@ export default function ThreadScreen() {
      * suit l'ouverture serait impossible : le fil reviendrait en bas sous le
      * doigt, ce qui est pire que de s'ouvrir au mauvais endroit.
      */
-    let armed = true;
-    let frames = 0;
-    let raf = 0;
-    const release = () => {
-      armed = false;
-    };
-    const pin = () => {
-      if (!armed) return;
-      // ANNONCE au premier pin : l'ancrage en bas ne doit ni révéler ni
-      // armer la scène du fil (§5.8 de la spécification #5648) — l'unique
-      // intention qui la RELÂCHE (`release`, même écouteurs) rouvre la
-      // scène par le même événement, sans course possible entre les deux
-      // effets.
-      if (frames === 0) scene.noteProgrammaticScroll();
-      el.scrollTop = el.scrollHeight;
-      if (++frames < 20) raf = requestAnimationFrame(pin);
-    };
-    raf = requestAnimationFrame(pin);
+    // ANNONCE au premier pin : l'ancrage en bas ne doit ni révéler ni armer
+    // la scène du fil (§5.8 de la spécification #5648) — l'unique intention
+    // qui le RELÂCHE (`release`, mêmes écouteurs) rouvre la scène par le même
+    // événement, sans course possible entre les deux effets.
+    //
+    // La loi elle-même vit dans `lib/view/pin-to-bottom.ts` (#5774, revue) :
+    // le bouton « revenir en bas » demande EXACTEMENT le même geste, et deux
+    // formulations pour un seul geste sont une jumelle.
+    const release = pinToBottom(el, { frames: BOTTOM_ANCHOR_FRAMES, onFirstFrame: scene.noteProgrammaticScroll });
     for (const event of ['wheel', 'touchstart', 'keydown'] as const) {
       el.addEventListener(event, release, { passive: true });
     }
     return () => {
-      cancelAnimationFrame(raf);
+      release();
       for (const event of ['wheel', 'touchstart', 'keydown'] as const) {
         el.removeEventListener(event, release);
       }
@@ -615,7 +621,12 @@ export default function ThreadScreen() {
        et une APPLICATION (seule la zone des messages defile, l'en-tete et le
        composeur sont des bords fixes). Avec `min-h-dvh` le composeur recouvrait
        les derniers messages — le defaut le plus visible du premier rendu. */
-    <div className="flex h-dvh flex-col overflow-hidden pt-safe" style={withAccent(accent)}>
+    <div
+      ref={chrome.host}
+      className="relative flex h-dvh flex-col overflow-hidden pt-safe"
+      style={{ ...withAccent(accent), ...chromeStyleVars(), ...backdropStyleVars() } as CSSProperties}
+    >
+      <div className="thread-backdrop" aria-hidden />
       <ThreadHeader
         title={title}
         accent={accent}
@@ -645,9 +656,21 @@ export default function ThreadScreen() {
         {announcer.text}
       </div>
 
-      <main
-        id="contenu"
-        ref={scroller}
+      {/*
+        L'ENVELOPPE DU DÉFILEUR (#5774, travail 3/3) — `position: relative`
+        entre le header et le composeur : la pilule de jour et le bouton
+        « revenir en bas » sont des FRÈRES ABSOLUS de `<main>`, jamais des
+        DESCENDANTS — un enfant `position: absolute` d'un conteneur qui
+        défile DÉFILE AVEC LUI (il reste dans le flux de rendu de son
+        ancêtre positionné) ; posés ICI, ils restent ancrés au VIEWPORT du
+        défileur, borné par le header au-dessus et le composeur en dessous
+        (« la géométrie fait le travail », §1.5 de la spécification).
+      */}
+      <div className="relative flex flex-1 flex-col overflow-hidden">
+        <DayPill label={chrome.dayPillLabel} headerExpanded={expanded} />
+        <main
+          id="contenu"
+          ref={scroller}
         /* `tabIndex={-1}` — focalisable PROGRAMMATIQUEMENT (jamais dans
            l'ordre de tabulation naturel) : c'est ce qui permet à `PageUp` /
            `PageDown` de défiler CE conteneur au clavier — l'intention que
@@ -687,234 +710,52 @@ export default function ThreadScreen() {
           payé sur ses rangées ; il est venu deux fois parce qu'il ne se voit
           ni au type-check ni à l'œil, seulement à la mesure.
         */}
-        {readingDecision.mode === 'summary' ? (
-          /*
-            LE RÉSUMÉ VIVANT (#5695) — SOUS l'en-tête (le `<main>` du fil est
-            déjà un FRÈRE de `<header>`, jamais en dessous en z-order) :
-            correction du défaut #5682 de la cible iOS, pas sa recopie.
-            La scène (`useThreadScene`) est INERTE sur ce mode
-            (`reading-mode/scene.ts`) — le virtualiseur reste construit
-            (`useVirtualizer` ne peut pas être conditionnel) mais rien ne
-            monte de rangée `[data-row]` ici.
-          */
-          <Suspense fallback={<SummarySkeleton />}>
-            <SummaryHost
-              conversationId={conversation.id}
-              messages={messages}
-              participants={conversation.participants}
-              viewer={viewer}
-              windowCoversUnread={windowCoversUnread}
-              locale={readerLocale}
-              {...(summaryLang !== undefined ? { lang: summaryLang } : {})}
-              onReplyToPerson={onReplyToPerson}
-              onOpenEpisode={onOpenEpisode}
-              onResumeThread={onResumeThread}
-            />
-          </Suspense>
-        ) : (
-          <>
-            {placed.length === 0 ? (
-              /*
-                L'ÉTAT VIDE EST UN ÉTAT, pas une absence d'écran. Un fil sans
-                historique qui rend du blanc laisse croire à un chargement qui ne
-                finit pas — sur un réseau lent, c'est l'interprétation la plus
-                naturelle et la plus fausse.
-              */
-              <div className="grid flex-1 place-items-center px-8 text-center">
-                <div className="grid gap-2">
-                  <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-                    Aucun message pour l’instant
-                  </p>
-                  <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-                    Écrivez le premier — il sera traduit dans la langue de chacun.
-                  </p>
-                </div>
-              </div>
-            ) : null}
-
-        <ol
-          style={{
-            position: 'relative',
-            width: '100%',
-            flexShrink: 0,
-            marginBlockStart: 'auto',
-            height: virtualizer.getTotalSize(),
-          }}
-        >
-          {virtualizer.getVirtualItems().map((row) => {
-            const p = placed[row.index];
-            if (p === undefined) return null;
-            const isElected = scene.elected === p.message.id;
-            /* L'opinion de CE client sur l'envoi (#5813) — UNE lecture par
-               rangée, réutilisée pour les deux peaux et pour l'horloge des
-               200 ms (`sendStartedAt`, § 5 étape 9). */
-            const rowDelivery = deliveryOf(p.message.id);
-            const rowStartedAt = startedAtOf(p.message.id);
-            const rowReason = reasonOf(p.message.id);
-            /* UN REFUS PERMANENT N'OFFRE PAS DE REJEU (revue-correction
-               #5813, défaut majeur 2) — 403/401 ne peuvent jamais aboutir en
-               rejouant le MÊME appel ; `onRetry` disparaît, la cause reste.
-               Hors ligne (`rowReason === undefined`, D-16) n'est jamais
-               permanent : `permanentOf` lit `lastError`, absent tant qu'aucun
-               appel n'est parti. */
-            const rowPermanent = rowDelivery === 'failed' && permanentOf(p.message.id);
-            const sendProps =
-              rowDelivery === undefined
-                ? {}
-                : {
-                    localDelivery: rowDelivery,
-                    ...(rowPermanent ? {} : { onRetry: () => retry(p.message.id) }),
-                    ...(rowStartedAt === undefined ? {} : { sendStartedAt: rowStartedAt }),
-                    ...(rowReason === undefined ? {} : { sendFailureReason: rowReason }),
-                  };
-            /* LE MENU DU MESSAGE (#5814) — trois lectures par rangée, motif
-               `rowDelivery` ci-dessus : Traduire (langue explorée pour CE
-               message), « la mienne » (réactions), et l'état de sélection. */
-            const rowDisplayLanguage = messageMenu.displayLanguageOf(p.message.id);
-            const rowMyReactions = messageMenu.myReactionsOf(p.message.id);
-            const rowSelected =
-              messageMenu.selection === null ? undefined : messageMenu.selection.ids.includes(p.message.id);
-            return (
-            <li
-              key={p.message.id}
-              data-index={row.index}
-              ref={virtualizer.measureElement}
-              style={{
-                position: 'absolute',
-                insetInlineStart: 0,
-                top: 0,
-                width: '100%',
-                transform: `translateY(${row.start}px)`,
-                /* CHAQUE rangée est un CONTEXTE D'EMPILEMENT (`transform`), et
-                   les rangées se peignent dans l'ordre du DOM : les
-                   superpositions de l'élue qui DÉBORDENT vers le bas (bande de
-                   focus, tampon) passaient donc SOUS la rangée suivante.
-                   Mesuré : `elementFromPoint` au centre du drapeau de la bande
-                   rendait la rangée d'APRÈS — le contrôle était INATTEIGNABLE
-                   au doigt et à la souris, quoique présent et fonctionnel
-                   (correction de revue #5648). Élever la SEULE rangée élue
-                   suffit ; aucune autre ne porte de débord. */
-                ...(isElected ? { zIndex: 1 } : {}),
-              }}
-            >
-              {p.opensDay ? (
-                <div className="flex justify-center py-1.5">
-                  <span
-                    className="rounded-chip px-3 py-1 text-time font-semibold backdrop-blur-md"
-                    style={{
-                      color: 'var(--color-day-ink)',
-                      border: '0.5px solid var(--color-day-hairline)',
-                      backgroundColor: 'color-mix(in srgb, var(--color-ios-card) 70%, transparent)',
-                    }}
-                  >
-                    {dayLabel(p.message.createdAt, { locale: readerLocale })}
-                  </span>
-                </div>
-              ) : null}
-              {/* LE MODE DE LECTURE (#5566) : `focal`/`script` rendent la
-                  rangée plate, `bubbles` reste la bulle historique — D-7,
-                  D-8. `data-row` est le CANDIDAT d'élection de
-                  `reading-mode/scene.ts` (#5648) — posé sur CHAQUE rangée,
-                  candidat SEULEMENT quand la scène est armée (mode focal) —
-                  et l'ANCRE du menu du message (#5814) : `useLongPress` vit
-                  UNE fois dans cet écran (`messageMenu.longPress`, motif
-                  délégation) et lit `dataset.row` au geste, jamais une
-                  instance par rangée virtualisée. En SÉLECTION (#5814,
-                  question 5), un tap bascule la coche au lieu d'ouvrir le
-                  menu (`onRowTap`, gardé côté hook). */}
-              {/* `exactOptionalPropertyTypes` (CLAUDE.md racine) : les trois
-                  props du menu ne se POSENT que quand elles ont une valeur —
-                  un `displayLanguage={undefined}` explicite est refusé au
-                  type-check, même discipline que `sendProps` deux blocs plus
-                  haut. */}
-              {/* PAS d'`aria-selected` (revue #5814) — l'attribut n'existe pas
-                  sur `role="article"`, et il était posé DEUX fois (ici et sur
-                  la racine de la rangée). L'état de sélection est porté par
-                  la COCHE de la rangée : un `role="checkbox"` réel, seul
-                  chemin CLAVIER vers la bascule. Le clic sur la rangée
-                  ENTIÈRE reste une commodité de souris/doigt. */}
-              <div
-                data-row={p.message.id}
-                tabIndex={0}
-                role="article"
-                aria-label={`Message de ${p.message.sender?.displayName ?? 'Vous'}`}
-                {...(rowSelected === undefined ? {} : { onClick: () => messageMenu.onRowTap(p.message.id) })}
-                {...messageMenu.longPress}
-              >
-                {usesFlatRow(readingDecision.mode) ? (
-                  <FocalRow
-                    mode={readingDecision.mode}
-                    place={p}
-                    languages={readerLanguages}
-                    viewerId={viewer.id ?? ''}
-                    onJumpToMessage={jumpToMessage}
-                    highlighted={highlightedId === p.message.id}
-                    elected={isElected}
-                    expired={expiredIds.has(p.message.id)}
-                    onConsumeViewOnce={consume}
-                    onEphemeralExpired={onEphemeralExpired}
-                    {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
-                    onPickLanguage={(code) => messageMenu.onPickLanguage(p.message.id, code)}
-                    {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
-                    {...(rowSelected === undefined ? {} : { selected: rowSelected, onToggleSelect: messageMenu.onRowTap })}
-                    {...sendProps}
-                  />
-                ) : (
-                  <Bubble
-                    place={p}
-                    languages={readerLanguages}
-                    isGrouped={group}
-                    viewerId={viewer.id ?? ''}
-                    onJumpToMessage={jumpToMessage}
-                    highlighted={highlightedId === p.message.id}
-                    expired={expiredIds.has(p.message.id)}
-                    onConsumeViewOnce={consume}
-                    onEphemeralExpired={onEphemeralExpired}
-                    {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
-                    onPickLanguage={(code) => messageMenu.onPickLanguage(p.message.id, code)}
-                    {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
-                    {...(rowSelected === undefined ? {} : { selected: rowSelected, onToggleSelect: messageMenu.onRowTap })}
-                    {...sendProps}
-                  />
-                )}
-              </div>
-            </li>
-            );
-          })}
-        </ol>
-
-        {threadData.typing && typist !== undefined ? (
-          /* L'indicateur de frappe est une VRAIE cellule du flux, en queue —
-             pas un overlay : il pousse le fil comme le ferait un message, donc
-             l'arrivee du vrai message ne fait sauter aucune ligne. */
-          <div className="flex items-end gap-1.5 py-1">
-            <Avatar initials={initialsOf(typist.displayName)} color={accent} size={18} />
-            <span
-              className="flex items-center gap-1.5 rounded-chip px-3 py-2"
-              style={{ backgroundColor: 'var(--color-ios-card)' }}
-            >
-              <span className="text-time" style={{ color: 'var(--color-ios-ink-2)' }}>
-                {typist.displayName} écrit
-              </span>
-              <span className="flex gap-[3px]" aria-hidden>
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className="size-[5px] rounded-full"
-                    style={{
-                      backgroundColor: 'var(--accent)',
-                      animation: 'typingDot 1s ease-in-out infinite',
-                      animationDelay: `${i * 0.18}s`,
-                    }}
-                  />
-                ))}
-              </span>
-            </span>
-          </div>
-        ) : null}
-          </>
-        )}
-      </main>
+        <ThreadModes
+          mode={readingDecision.mode}
+          conversation={conversation}
+          messages={messages}
+          viewer={viewer}
+          windowCoversUnread={windowCoversUnread}
+          readerLocale={readerLocale}
+          {...(summaryLang !== undefined ? { summaryLang } : {})}
+          onReplyToPerson={onReplyToPerson}
+          onOpenEpisode={onOpenEpisode}
+          onResumeThread={onResumeThread}
+          placed={placed}
+          virtualizer={virtualizer}
+          scene={scene}
+          readerLanguages={readerLanguages}
+          group={group}
+          highlightedId={highlightedId}
+          expiredIds={expiredIds}
+          jumpToMessage={jumpToMessage}
+          consume={consume}
+          onEphemeralExpired={onEphemeralExpired}
+          deliveryOf={deliveryOf}
+          startedAtOf={startedAtOf}
+          reasonOf={reasonOf}
+          permanentOf={permanentOf}
+          retry={retry}
+          displayLanguageOf={messageMenu.displayLanguageOf}
+          myReactionsOf={messageMenu.myReactionsOf}
+          selection={messageMenu.selection}
+          onRowTap={messageMenu.onRowTap}
+          longPress={messageMenu.longPress}
+          onPickLanguage={messageMenu.onPickLanguage}
+          onReact={messageMenu.onMenuReact}
+          typing={threadData.typing}
+          typist={typist}
+          accent={accent}
+        />
+        </main>
+        <ScrollToBottomButton
+          visible={chrome.scrollButtonVisible}
+          unreadCount={chrome.scrollButtonUnreadCount}
+          senderName={chrome.scrollButtonSenderName}
+          previewText={chrome.scrollButtonPreviewText}
+          onClick={chrome.onScrollToBottom}
+        />
+      </div>
 
       {/*
         LA PILULE VISIBLE (revue #5814, défaut majeur 10) — le refus d'une
@@ -962,17 +803,29 @@ export default function ThreadScreen() {
           onCopy={() => messageMenu.onCopySelection(placed)}
         />
       ) : (
-        <div className="shrink-0">
+        /*
+          LE COMPOSEUR ENGAGÉ (#5774, travail 3/3) — équivalent structurel
+          des exceptions iOS `isEmojiPanelOpen`/`hasMentionSuggestions`
+          (`ConversationView.swift:2124-2141`, « on ne retire pas l'outil en
+          main ») : web-v3 n'a ni panneau emoji ni suggestions de mention
+          dans `composer.tsx` (tenu par #5890, on n'y touche pas) — le focus
+          sur l'ENVELOPPE, lu par bulle native (`onFocus`/`onBlur`), en est
+          le signal. `relatedTarget` : un focus qui reste À L'INTÉRIEUR de
+          l'enveloppe (bascule micro → champ, ouverture du tiroir de pièces
+          jointes) ne désengage rien.
+        */
+        <div className="thread-composer-chrome shrink-0" onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
           <Composer
-            onSend={(text) => {
+            onSend={({ text, attachments }) => {
               /* LE MESSAGE CITÉ ENTIER, PAS SON SEUL IDENTIFIANT
                  (revue-correction #5813, défaut majeur 6) — `replyToMessage`
                  est déjà résolu plus haut pour la bande du composeur ; le
                  réutiliser ici évite une seconde recherche ET porte la
                  citation jusqu'à la bulle optimiste. */
-              send(text, replyToMessage ?? null);
+              send(text, attachments, replyToMessage ?? null);
               setReplyTarget(null);
             }}
+            {...(viewerParticipant ? { rights: viewerParticipant.permissions } : {})}
             {...(replyTo ? { replyTo, onCancelReply: () => setReplyTarget(null) } : {})}
           />
         </div>

@@ -77,7 +77,26 @@ struct EngagementRevealHost: ViewModifier {
                 file.enfile(palier)
             }
             .fullScreenCover(item: lien) { courant in
-                AchievementRevealView(reveal: courant.reveal) { lien.wrappedValue = nil }
+                AchievementRevealView(
+                    reveal: courant.reveal,
+                    onContinue: { lien.wrappedValue = nil },
+                    // **La sortie qui MÈNE, et qui mène vraiment** (#5903).
+                    // Elle était confondue avec la fermeture : « Voir ma
+                    // progression » ne faisait que refermer, et n'arrivait au
+                    // tableau de bord que parce que le TAP d'une notification
+                    // l'avait poussé derrière la vue. Par la seconde porte —
+                    // le succès célébré tout seul, sans que personne n'ait rien
+                    // touché — rien n'était poussé : le bouton promettait un
+                    // écran et rendait celui qu'on regardait.
+                    //
+                    // `push` avant la fermeture : la destination est en place
+                    // quand la vue se retire, donc on ARRIVE au lieu de voir la
+                    // pile bouger.
+                    onVoirProgression: {
+                        router.push(.progression)
+                        lien.wrappedValue = nil
+                    }
+                )
             }
     }
 }

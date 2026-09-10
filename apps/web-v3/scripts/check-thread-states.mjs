@@ -29,6 +29,7 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
+import { checkThreadMedia } from './lib/check-media.mjs';
 
 const DIST = join(fileURLToPath(new URL('..', import.meta.url)), 'dist');
 const TYPES = {
@@ -73,6 +74,20 @@ const expect = (ok, what) => {
   console.log(`  ${ok ? 'ok   ' : 'ECHEC'} ${what}`);
   return ok;
 };
+
+/** LE SCHÉMA D'UN CONTEXTE — même pose que `check-reading-mode.mjs`
+ * (`meeshy.scheme`, lu par `src/lib/scheme.ts`), jamais une seconde loi. */
+const setScheme = (context, scheme) =>
+  context.addInitScript((s) => {
+    try {
+      localStorage.setItem('meeshy.scheme', s);
+    } catch {
+      /* navigation privée : le schéma tient pour la page seule (repli HTML). */
+    }
+  }, scheme);
+
+/** La barre AA (#5625) — la MÊME que `check-reading-mode.mjs`. */
+const AA_THRESHOLD = 4.5;
 
 /**
  * Cliquer une cible qui peut légitimement manquer — parce que le défaut qu'on
@@ -902,6 +917,90 @@ await runProtectionSuite('bulles');
   await touchContext.close();
 }
 
+/**
+ * 7 — LE COMPOSEUR TIENT CE QU'IL PROMET (#5668, critère (1)).
+ *
+ * Le § 6.2 ci-dessus applique « 0 contrôle sans gestionnaire » au MENU du
+ * message ; le composeur en avait besoin autant, et pour la même raison : ce
+ * sont les deux surfaces du fil dont chaque élément est une PORTE. La mesure
+ * est la même — un contrôle atteignable qui n'est ni un `<button
+ * type="button">` actif, ni un `<label>` portant un `<input type="file">`,
+ * ni le champ de saisie, est un contrôle qui ment — plus l'EFFET du seul
+ * geste qui ouvre le tiroir : le « + » doit CHANGER quelque chose.
+ *
+ * Le micro N'EST PAS exigé ici : Chromium sans permission média peut ne pas
+ * exposer `navigator.mediaDevices` sur un contexte http, et la loi 4 dit
+ * alors de NE PAS le rendre (`use-recorder.ts § recordingSupported`). Ce qui
+ * est exigé, c'est que TOUT CE QUI EST RENDU ait un gestionnaire.
+ */
+{
+  const composerContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const composerPage = await composerContext.newPage();
+  await composerPage.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
+  await composerPage.waitForSelector('[data-message]');
+  await composerPage.waitForTimeout(300);
+
+  const inertInComposer = () =>
+    composerPage.evaluate(() => {
+      const composer = document.querySelector('[data-composer]');
+      if (composer === null) return ['aucun composeur'];
+      const controls = Array.from(composer.querySelectorAll('button, a, [role="button"], input, textarea, label'));
+      return controls
+        .filter((el) => {
+          if (el.tagName === 'TEXTAREA') return false;
+          if (el.tagName === 'LABEL') return el.querySelector('input[type="file"]') === null;
+          if (el.tagName === 'INPUT') return el.getAttribute('type') !== 'file' || el.getAttribute('aria-label') === null;
+          return (
+            el.tagName !== 'BUTTON' ||
+            el.hasAttribute('disabled') ||
+            el.getAttribute('type') !== 'button' ||
+            (el.getAttribute('aria-label') ?? el.textContent ?? '').trim() === ''
+          );
+        })
+        .map((el) => `${el.tagName}/${el.getAttribute('aria-label') ?? el.textContent}`);
+    });
+
+  const inertClosed = await inertInComposer();
+  expect(inertClosed.length === 0, `0 contrôle du composeur sans gestionnaire, tiroir fermé (${inertClosed.join(', ')})`);
+
+  const plus = composerPage.getByRole('button', { name: 'Ouvrir le menu des pièces jointes' });
+  expect((await plus.count()) === 1, 'le composeur offre la porte des pièces jointes');
+  const tilesBefore = await composerPage.locator('[role="group"][aria-label="Types de pièces jointes"]').count();
+  await plus.click();
+  await composerPage.waitForTimeout(350);
+  const tilesAfter = await composerPage.locator('[role="group"][aria-label="Types de pièces jointes"]').count();
+  expect(tilesBefore === 0 && tilesAfter === 1, 'le « + » OUVRE le tiroir (le geste a un effet, loi 4)');
+
+  const inertOpen = await inertInComposer();
+  expect(inertOpen.length === 0, `0 contrôle du composeur sans gestionnaire, tiroir OUVERT (${inertOpen.join(', ')})`);
+
+  // Les tuiles portent une cible d'au moins 44 px (dimension 5).
+  const smallTargets = await composerPage.evaluate(() => {
+    const panel = document.querySelector('[role="group"][aria-label="Types de pièces jointes"]');
+    if (panel === null) return ['aucun panneau'];
+    return Array.from(panel.querySelectorAll('label, button'))
+      .map((el) => ({ name: el.getAttribute('aria-label') ?? el.textContent, box: el.getBoundingClientRect() }))
+      .filter(({ box }) => box.height < 44 || box.width < 44)
+      .map(({ name, box }) => `${name} ${Math.round(box.width)}x${Math.round(box.height)}`);
+  });
+  expect(smallTargets.length === 0, `chaque tuile du tiroir mesure au moins 44 px (${smallTargets.join(', ')})`);
+
+  await composerPage.close();
+  await composerContext.close();
+}
+
+/**
+ * 8 — LES MÉDIAS (#5805) — `lib/check-media.mjs` (l'hôte est à 51 lignes du
+ * plafond dur de 1 200 et chaque écran ajoute sa suite : on extrait AVANT
+ * d'ajouter, § Code Style du `CLAUDE.md`).
+ *
+ * DEUX PEAUX × DEUX SCHÉMAS : Focal en clair, Bulles en sombre — le défaut de
+ * contraste trouvé en revue (transcription à 3,74:1) ne se voyait qu'en
+ * clair, et une suite jouée dans un seul schéma ne pouvait pas le rougir.
+ */
+await checkThreadMedia({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'focal', scheme: 'light' });
+await checkThreadMedia({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'bulles', scheme: 'dark' });
+
 await browser.close();
 server.close();
 
@@ -916,4 +1015,4 @@ if (failures.length > 0) {
   console.error('');
   process.exit(1);
 }
-console.log('\n  Les états du fil tiennent : vide dessiné, coupure annoncée sans bloquer, échec attaché à sa bulle et reprise honnête,\n  et la protection (flou, vue unique, éphémère, supprimé) ne fuit jamais sur les deux peaux.\n');
+console.log('\n  Les états du fil tiennent : vide dessiné, coupure annoncée sans bloquer, échec attaché à sa bulle et reprise honnête,\n  et la protection (flou, vue unique, éphémère, supprimé) ne fuit jamais sur les deux peaux —\n  et une image s’affiche, un vocal se joue dans la langue du lecteur, un seul à la fois.\n');

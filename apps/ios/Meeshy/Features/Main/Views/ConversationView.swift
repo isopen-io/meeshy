@@ -8,52 +8,10 @@ import MeeshySDK
 import MeeshyUI
 
 // MARK: - Swipe-to-go-back enabler
-// Réactive le geste de retour par bord gauche d'iOS quand la nav bar est masquée.
-
-private struct InteractivePopEnabler: UIViewControllerRepresentable {
-    /// **La Rivière défile HORIZONTALEMENT — le geste de bord doit lui céder.**
-    /// Retour produit 2026-08-21 : « aucune possibilité de naviguer librement
-    /// horizontalement ». Le geste de retour par bord gauche d'iOS, réactivé
-    /// ici pour toutes les autres vues du fil, s'emparait de chaque balayage
-    /// latéral : mesuré au simulateur, un glissement dans la Rivière fermait
-    /// la conversation au lieu de changer de couloir. Le fil vertical, lui,
-    /// n'a jamais eu d'axe horizontal à défendre — d'où l'activation d'origine,
-    /// conservée intégralement partout ailleurs. Le bouton « Retour » de
-    /// l'en-tête reste, dans les deux cas, le chemin explicite.
-    let allowsEdgeSwipe: Bool
-
-    func makeUIViewController(context: Context) -> PopEnablerVC {
-        let vc = PopEnablerVC()
-        vc.allowsEdgeSwipe = allowsEdgeSwipe
-        return vc
-    }
-
-    func updateUIViewController(_ vc: PopEnablerVC, context: Context) {
-        vc.allowsEdgeSwipe = allowsEdgeSwipe
-        vc.applyEdgeSwipePolicy()
-    }
-
-    final class PopEnablerVC: UIViewController {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-        var allowsEdgeSwipe: Bool = true
-
-        override func viewWillAppear(_ animated: Bool) {
-            super.viewWillAppear(animated)
-            applyEdgeSwipePolicy()
-        }
-
-        func applyEdgeSwipePolicy() {
-            guard let recognizer = navigationController?.interactivePopGestureRecognizer else { return }
-            recognizer.isEnabled = allowsEdgeSwipe
-            // delegate = nil permet le geste même sans barre de navigation visible
-            recognizer.delegate = allowsEdgeSwipe ? nil : recognizer.delegate
-        }
-    }
-}
+// `InteractivePopEnabler` vit désormais dans
+// `Features/Main/Navigation/InteractivePopEnabler.swift` — les sections du
+// hub de progression en ont besoin aussi (#5843), et une jumelle recopiée
+// aurait perdu la politique `allowsEdgeSwipe` dont la Rivière dépend.
 
 // MARK: - Active Member (for conversation detail header)
 struct ConversationActiveMember: Identifiable { // internal for cross-file extension access

@@ -179,7 +179,7 @@ chemin. Recette :
 
 ```bash
 MEESHY_TARGET=capacitor bunx vite build && bunx cap sync
-MEESHY_SHELL_START_PATH=/c/c-deploiement bunx cap sync android   # ou ios
+MEESHY_SHELL_START_PATH=/c/c-deploiement MEESHY_SHELL_SYNC_TARGET=android bunx cap sync android
 ```
 
 `resolveCapacitorConfig` refuse (lève) deux FORMES, chacune tirée d'une
@@ -187,9 +187,18 @@ source lue : une valeur sans `/` initial (Android, `Bridge.java`, concatène le
 chemin SANS séparateur — elle fusionnerait avec l'hôte) et une valeur qui
 porte une extension de fichier (iOS ne réécrit vers `index.html` que les
 chemins SANS extension, `CapacitorRouter.route(for:)` — elle serait servie
-littéralement, donc 404). La garde porte sur la forme, jamais sur une route :
-les surfaces à venir emploieront la même recette sans modifier ce fichier
-livré. Voir `capacitor.config.test.ts` et `scripts/shell-deeplink-probe.mjs`
+littéralement, donc 404). Une TROISIÈME garde (revue #5774) exige
+`MEESHY_SHELL_SYNC_TARGET` (`"android"` ou `"ios"`) dès que
+`MEESHY_SHELL_START_PATH` est posé — la plateforme visée se DÉCLARE,
+jamais déduite d'un fichier voisin (`ios/App/App.xcodeproj` existant ou non) :
+une version antérieure sondait le disque et bloquait `cap sync android` dès
+que le dossier `ios/` existait, quelle que soit la plateforme réellement
+synchronisée. `MEESHY_SHELL_SYNC_TARGET=ios` lève TOUJOURS (§ ci-dessous) ;
+`MEESHY_SHELL_SYNC_TARGET=android` est TOUJOURS accepté. Les gardes portent
+sur la forme et la cible, jamais sur une route : les surfaces à venir
+emploieront la même recette sans modifier ce fichier livré. Voir
+`capacitor.config.test.ts`, `scripts/check-capacitor-config.mjs` (le VRAI
+chargeur CJS de la CLI, `bunx cap ls`) et `scripts/shell-deeplink-probe.mjs`
 (CDP BRUT sur la cible `page` de la WebView — `connectOverCDP` de Playwright
 échoue contre une WebView, qui n'expose aucun navigateur complet).
 

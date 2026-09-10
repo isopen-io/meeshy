@@ -144,6 +144,10 @@ public struct SocketNotificationMetadata: Decodable, Sendable {
     // n'aurait jamais été célébré, pendant que le même palier reçu par la
     // liste des notifications l'aurait été. Deux chemins, un seul comportement.
     public let achievementKey: String?
+    /// L'AXE d'un badge — la moitié que la passe #5809 avait laissée dehors des
+    /// DEUX décodeurs. Un badge n'a pas de `achievementKey` : sans `axisKey`,
+    /// le chemin direct comme le chemin REST rendaient `nil`.
+    public let axisKey: String?
     public let threshold: Int?
     public let level: Int?
 }

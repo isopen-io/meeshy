@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react';
 
-import type { Message, Attachment } from '@/lib/api/types';
-import { kindOf, waveformOf } from '@/lib/view/message';
+import type { Message } from '@/lib/api/types';
 import type { Delivery } from '@/lib/view/message';
 import { languageColor, flag, languageName } from '@/lib/languages';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
@@ -12,14 +11,20 @@ import type { GlyphName } from './glyphs';
 /**
  * LES BLOCS DE CONTENU D'UN MESSAGE — extraits de `bubble.tsx` (#5566, étape 0
  * de la spécification) pour que la rangée plate du Fil (`focal-row.tsx`) et la
- * bulle (`bubble.tsx`) rendent le MÊME contenu : citation, pièces jointes
- * (vocal, image, fichier), bande de langues et coche d'envoi.
+ * bulle (`bubble.tsx`) rendent le MÊME contenu : citation, bande de langues,
+ * réactions et coche d'envoi.
+ *
+ * `Voice` et `Attachments` (pièces jointes — vocal, image, fichier) ont
+ * DÉMÉNAGÉ vers `attachment-blocks.tsx` (#5805, § 5 étape 0 de la
+ * spécification) : leur RESPONSABILITÉ a changé (« widgets de média », que
+ * les stories, le feed et les commentaires monteront aussi), et ce fichier
+ * ne les réexporte pas — une seule adresse pour les importer.
  *
  * Deux PEAUX, un seul contenu — sans cette extraction, `focal-row.tsx`
- * deviendrait la jumelle de `bubble.tsx` sur exactement l'audio et les
- * langues (règle du dépôt : « UNE source de vérité, aucune jumelle
- * divergente »). Ce que ce fichier NE PORTE PAS : le rayon de bulle, le fond,
- * l'alignement gauche/droite — ça reste le métier de chaque peau.
+ * deviendrait la jumelle de `bubble.tsx` sur exactement les langues (règle du
+ * dépôt : « UNE source de vérité, aucune jumelle divergente »). Ce que ce
+ * fichier NE PORTE PAS : le rayon de bulle, le fond, l'alignement
+ * gauche/droite — ça reste le métier de chaque peau.
  */
 
 export const CHECKS: Record<Delivery, { readonly name: GlyphName; readonly size: number; readonly read: boolean } | null> = {
@@ -100,34 +105,72 @@ export function reactionEntries(
 /**
  * UNE pilule de réaction — la bulle la pose en débord, la rangée plate en
  * ligne basse. `mine` (#5814, T12) marque « CE lecteur a posé cet emoji » —
- * un contour d'accent, miroir `BubbleReactionsOverlay.swift:189-199` — SANS
- * en faire un `<button>` : la BASCULE par la capsule reste hors de ce lot
- * (`bulle.md` écart 8), seul le rail du menu du message réagit
- * (`message-menu.tsx`).
+ * un contour d'accent, miroir `BubbleReactionsOverlay.swift:189-199`.
  *
- * LA MARQUE EST TEXTUELLE, PAS `aria-pressed` (revue #5814) : `aria-pressed`
- * n'est défini QUE sur `role="button"`. Posé sur ce `<span>` sans rôle, il
- * était ignoré par la norme — et, chez les lecteurs d'écran qui le prennent
- * quand même, il annonçait un BOUTON BASCULE que rien ne bascule : très
- * exactement le contrôle qui ment que la loi 4 du dépôt interdit, et sur
- * CHAQUE capsule du fil (`aria-pressed="false"` était rendu partout). La
- * ligne hors écran porte déjà l'information, elle seule reste.
+ * DEVIENT UN `<button>` QUAND `onToggle` EST FOURNI (#5865, suivi de #5814
+ * — `bulle.md` écart 8) : iOS retire déjà une réaction en tapant directement
+ * sa propre capsule (`BubbleReactionsOverlay.swift`), seul le rail du menu
+ * du message (appui long) le permettait ici. L'hôte (`bubble.tsx`,
+ * `focal-row.tsx`) ne câble `onToggle` QUE sur les capsules `mine` — taper
+ * la capsule d'AUTRUI n'a pas de sens (on ne bascule pas la réaction de
+ * quelqu'un d'autre), donc `onToggle` reste `undefined` pour elles et la
+ * capsule garde son rendu `<span>` d'origine.
+ *
+ * LA MARQUE RESTE TEXTUELLE, PAS `aria-pressed` (revue #5814) :
+ * `aria-pressed` n'est défini QUE sur `role="button"`. Posé sur un `<span>`
+ * sans rôle, il était ignoré par la norme — et, chez les lecteurs d'écran
+ * qui le prennent quand même, il annonçait un BOUTON BASCULE que rien ne
+ * bascule : très exactement le contrôle qui ment que la loi 4 du dépôt
+ * interdit. Devenu un vrai `<button>`, son EFFET est nommé par `aria-label`
+ * (« Retirer votre réaction … »), jamais par `aria-pressed` — retirer n'est
+ * pas basculer entre deux états visibles du même contrôle.
  */
-export function ReactionChip({ glyph, count, mine = false }: { glyph: string; count: number; mine?: boolean }) {
-  return (
-    <span
-      className="flex items-center gap-0.5 rounded-chip px-1.5 py-0.5 text-check"
-      style={{
-        backgroundColor: mine ? 'color-mix(in srgb, var(--accent) 16%, var(--color-ios-card))' : 'var(--color-ios-card)',
-        border: mine ? '1px solid var(--accent)' : '1px solid var(--color-edge)',
-      }}
-    >
+export function ReactionChip({
+  glyph,
+  count,
+  mine = false,
+  onToggle,
+}: {
+  glyph: string;
+  count: number;
+  mine?: boolean;
+  /** Retire la réaction en tapant la capsule — fourni par l'hôte SEULEMENT
+   * quand `mine` est vrai (#5865). */
+  onToggle?: () => void;
+}) {
+  const style = {
+    backgroundColor: mine ? 'color-mix(in srgb, var(--accent) 16%, var(--color-ios-card))' : 'var(--color-ios-card)',
+    border: mine ? '1px solid var(--accent)' : '1px solid var(--color-edge)',
+  };
+  const content = (
+    <>
       <span aria-hidden>{glyph}</span>
       <span className="tabular-nums opacity-70">{count}</span>
       <span className="offscreen">
         {count} réaction{count > 1 ? 's' : ''} {glyph}
         {mine ? ' — la vôtre' : ''}
       </span>
+    </>
+  );
+  if (onToggle !== undefined) {
+    return (
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={`Retirer votre réaction ${glyph}`}
+        /* `tap-target-chip` (`app.css`) étend la zone TACTILE à 44 px sans
+           grandir le DESSIN de la capsule (même dispositif que
+           `tap-target-22`/`tap-target-34` plus haut dans ce fichier). */
+        className="tap-target-chip flex items-center gap-0.5 rounded-chip px-1.5 py-0.5 text-check"
+        style={style}
+      >
+        {content}
+      </button>
+    );
+  }
+  return (
+    <span className="flex items-center gap-0.5 rounded-chip px-1.5 py-0.5 text-check" style={style}>
+      {content}
     </span>
   );
 }
@@ -308,85 +351,6 @@ export function Quote({
         </span>
       </span>
     </button>
-  );
-}
-
-export function Voice({ attachment }: { attachment: Attachment }) {
-  const [playing, setPlaying] = useState(false);
-  const waves = waveformOf(attachment);
-  // `duration` voyage en MILLISECONDES sur la charge du dépôt.
-  const seconds = Math.round((attachment.duration ?? 0) / 1000);
-  return (
-    <div className="flex items-center gap-2.5 py-1">
-      <button
-        type="button"
-        onClick={() => setPlaying((v) => !v)}
-        /* `tap-target-34` (`app.css`) porte la zone tactile de ce bouton de
-           34 px de dessin a 44x44, meme dispositif que `tap-target-22`. */
-        className="tap-target-34 grid size-[34px] shrink-0 place-items-center rounded-chip"
-        style={{ background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, transparent))' }}
-        aria-label={playing ? 'Mettre en pause' : 'Lire le message vocal'}
-      >
-        <Glyph name="fillPlay" size={13} className="text-white" />
-      </button>
-      {/* La forme d'onde est DÉRIVÉE de l'identifiant de la pièce, donc stable
-          et honnête : la passerelle n'en sert pas encore. Côté iOS elle est
-          réelle (48 barres) et sa silhouette sert à repérer un passage à
-          l'oreille — c'est ce qu'il faudra servir ici aussi. */}
-      <span className="flex h-6 flex-1 items-center gap-px" aria-hidden>
-        {waves.map((h, i) => (
-          <span
-            key={i}
-            className="flex-1 rounded-full"
-            style={{
-              height: `${Math.max(12, h * 4)}%`,
-              backgroundColor: 'currentColor',
-              opacity: playing && i < waves.length / 3 ? 1 : 0.45,
-            }}
-          />
-        ))}
-      </span>
-      <span className="shrink-0 text-time tabular-nums">
-        {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
-      </span>
-    </div>
-  );
-}
-
-export function Attachments({ attachments }: { attachments: readonly Attachment[] }) {
-  return (
-    <>
-      {attachments.map((attachment, i) => {
-        const kind = kindOf(attachment);
-        if (kind === 'audio') return <Voice key={i} attachment={attachment} />;
-        if (kind === 'image') {
-          return (
-            <div
-              key={i}
-              /* 300 x 240 pour une image seule, rayon 16 — la grille iOS.
-                 `aspect-ratio` tient la place AVANT que l'image arrive : c'est
-                 la moitie du CLS sur un reseau lent. */
-              className="grid max-w-[300px] place-items-center overflow-hidden rounded-card bg-black/40"
-              style={{ aspectRatio: '300 / 240' }}
-              role="img"
-              aria-label={attachment.alt ?? attachment.originalName}
-            >
-              <Glyph name="image" size={40} className="opacity-40" />
-            </div>
-          );
-        }
-        if (kind === 'file') {
-          return (
-            <div key={i} className="flex items-center gap-2 py-1">
-              <Glyph name="file" size={24} />
-              <span className="min-w-0 flex-1 truncate text-title">{attachment.originalName}</span>
-              <span className="text-time opacity-70">{Math.round(attachment.fileSize / 1024)} Ko</span>
-            </div>
-          );
-        }
-        return null;
-      })}
-    </>
   );
 }
 

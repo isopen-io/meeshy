@@ -53,6 +53,15 @@
   --radius-field-ios: var(--ios-radius-field);
   --radius-quote: var(--ios-radius-quote);
   --radius-row-ios: var(--ios-radius-md);
+  /**
+   * `rounded-media` (#5805) — la grille de visuels d'un message : rayon 16
+   * (`--ios-radius-lg`, BSL:817 `MeeshyRadius.lg`, `FocalMetrics.Media.radius`,
+   * `Focal/Core/FocalMetrics.swift:225-227`), JAMAIS 18 (`--ios-radius-bubble`) :
+   * la grille est un FRÈRE de la bulle de texte (`VStack(spacing: 4)`,
+   * BSL:794), donc jamais teintée par son fond. Un jeton dérivé, pas une
+   * constante TS sans consommateur (Q4, § 9 de la spécification #5805).
+   */
+  --radius-media: var(--ios-radius-lg);
   --size-avatar-row: var(--ios-avatar-row);
   --size-avatar-bubble: var(--ios-avatar-bubble);
   --size-avatar-header: var(--ios-avatar-header);

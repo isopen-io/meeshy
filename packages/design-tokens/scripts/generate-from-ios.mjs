@@ -198,6 +198,26 @@ const HORS_TABLE_IOS = [
   ['--ios-text-summary-title', '20px', 'Focal/Summary/LivingSummaryView.swift:64 — relative(20, .heavy), « Résumé Vivant »'],
   ['--ios-text-summary-counts', '14px', 'Focal/Summary/LivingSummaryView.swift:68 — relative(14, .semibold), « N messages · P personnes »'],
   ['--ios-text-summary-partial', '12px', 'Focal/Summary/LivingSummaryView.swift:73 — relative(12, .medium), « Sur les N derniers messages »'],
+  /**
+   * LES TUILES DU TIROIR DU COMPOSEUR (#5668) — trois littéraux Swift, pas de
+   * l'indigo de marque : `UniversalComposerBar+Attachments.swift:250-278`
+   * pose `color: "9B59B6"` (photo) / `"45B7D1"` (fichier) / `"E74C3C"`
+   * (vocal) sur `CarouselTile`, hors de toute table `MeeshyColors` — mêmes
+   * dans les deux schémas (aucune branche claire/sombre dans Swift).
+   */
+  ['--ios-tile-photo', '#9B59B6', 'UniversalComposerBar+Attachments.swift:250 — CarouselTile(id: "photo").color'],
+  ['--ios-tile-file', '#45B7D1', 'UniversalComposerBar+Attachments.swift:262 — CarouselTile(id: "file").color'],
+  ['--ios-tile-voice', '#E74C3C', 'UniversalComposerBar+Attachments.swift:274 — CarouselTile(id: "voice").color'],
+  /**
+   * L'ENCRE DE LA BARRE D'ENREGISTREMENT EN SCHÉMA SOMBRE (#5668,
+   * revue-correction) — `UniversalComposerBar+Recording.swift:148` pose
+   * `waveformColor = isDark ? "FFFFFF" : accentColor`, et les quatre autres
+   * couleurs de cette barre suivent la même bascule (`:144-152`, `:220-225`).
+   * Seule la moitié SOMBRE est une valeur : la moitié CLAIRE est l'accent de
+   * la conversation, que seule l'application connaît — `app.css` compose les
+   * deux (`--recording-ink`).
+   */
+  ['--ios-recording-ink-dark', '#FFFFFF', 'UniversalComposerBar+Recording.swift:148 — waveformColor = isDark ? "FFFFFF" : accentColor'],
 ];
 
 /**

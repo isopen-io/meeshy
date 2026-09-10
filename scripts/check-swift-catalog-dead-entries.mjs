@@ -184,7 +184,18 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // exposition dans les catalogues générés. L'écran de ré-acceptation
 // iOS/Android/Web qui l'appellera est un travail client à part, ouvert
 // séparément (#5716).
-const BASELINE_DEAD_ENTRIES = 250;
+//
+// 250 → 251 (#3954) : `PostsEndpoint.byPostIdObjectsByObjectIdResponses`
+// (nouvelles routes `POST`/`DELETE`/`GET
+// /posts/:postId/objects/:objectId/responses`, table légère votes/réponses
+// des stickers interactifs, O10) — morte à la naissance PAR CONSTRUCTION,
+// même cas que `MeEndpoint.terms` (#3635) ci-dessus : le kind `interactive`
+// du canvas reste RÉSERVÉ au contrat (`RESERVED_KINDS`, #3953, non traité
+// ici), donc aucun client ne peut encore poser un sticker interactif ni
+// appeler ces routes. #3954 livre le contrat serveur et son exposition dans
+// les catalogues générés ; l'appelant iOS (posé/lu depuis la scène) est le
+// périmètre de #3953, une issue distincte.
+const BASELINE_DEAD_ENTRIES = 251;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

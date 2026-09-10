@@ -25,6 +25,20 @@ import MeeshySDK
 @MainActor
 final class ProgressionLastAchievementHeroTests: XCTestCase {
 
+    /// Les libellés du hero, résolus par LA MÊME CLÉ que la vue — voir la note
+    /// de `ProgressionMeeshEntryTests` : un littéral français ne peut pas être
+    /// trouvé dans un arbre rendu en anglais, et l'hôte de test n'a pas de
+    /// langue garantie.
+    private var premierSucces: String {
+        String(localized: "progression.hero.first", defaultValue: "Premier succès", bundle: .main)
+    }
+    private var dernierSucces: String {
+        String(localized: "progression.hero.last", defaultValue: "Dernier succès", bundle: .main)
+    }
+    private var prochainSucces: String {
+        String(localized: "progression.hero.next", defaultValue: "Prochain succès", bundle: .main)
+    }
+
     /// La forme que la passerelle sert RÉELLEMENT — fractions comprises.
     private func progres(reachedAt: String) -> EngagementProgress {
         EngagementProgressResolver.resolve(APIEngagementProgress(
@@ -90,11 +104,11 @@ final class ProgressionLastAchievementHeroTests: XCTestCase {
         let phrases = dit(root).joined(separator: " | ")
 
         XCTAssertFalse(
-            phrases.contains("Premier succès"),
+            phrases.contains(premierSucces),
             "Le hero montre son ÉTAT VIDE alors qu'un succès est débloqué : « \(phrases) »"
         )
         XCTAssertTrue(
-            phrases.contains("Dernier succès"),
+            phrases.contains(dernierSucces),
             "Le hero n'annonce pas le dernier succès : « \(phrases) »"
         )
     }
@@ -108,7 +122,7 @@ final class ProgressionLastAchievementHeroTests: XCTestCase {
             isDark: false
         ))
         XCTAssertTrue(
-            dit(root).joined(separator: " | ").contains("Dernier succès"),
+            dit(root).joined(separator: " | ").contains(dernierSucces),
             "La forme sans fraction de seconde n'est plus lue."
         )
     }
@@ -125,11 +139,11 @@ final class ProgressionLastAchievementHeroTests: XCTestCase {
         let root = render(ProgressionLastAchievementHero(progress: vide, isDark: false))
         let lu = dit(root).joined(separator: " | ")
         XCTAssertTrue(
-            lu.contains("Prochain succès"),
+            lu.contains(prochainSucces),
             "Rien d'obtenu ⇒ le hero doit VISER : un trou à cet endroit-là est le pire des états vides."
         )
         XCTAssertFalse(
-            lu.contains("Dernier succès"),
+            lu.contains(dernierSucces),
             "Annoncer « dernier » sur un palier qu'on n'a pas obtenu est un mensonge de bandeau."
         )
     }

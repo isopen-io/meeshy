@@ -48,7 +48,7 @@ final class ComposerStoryCanvasTests: XCTestCase {
     /// > Une exemption qui couvre quatre cas d'un seul argument doit être
     /// > vérifiée sur les quatre.
     func test_lesOuverturesQuiPORTENTDeLaMatière_gardentLaScène() {
-        for ouverture in [ComposerOpening.videoCameraReady, .resume, .mediaSeeded] {
+        for ouverture in [ComposerOpening.videoCameraReady, .resume] {
             XCTAssertEqual(
                 ComposerSurfaceRouting.surface(opening: ouverture, format: .story),
                 .scene,

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MeeshySDK
 import MeeshyUI
 
@@ -241,9 +242,9 @@ struct PostSceneMosaic: View {
             // Glyphe dans un cercle de dimension FIXE : il déborderait s'il
             // scalait. La cible tactile reste à 44.
             Image(systemName: glyphe)
-                .font(.system(size: 14, weight: .bold))
+                .font(MeeshyFont.relative(14, weight: .bold))
                 .foregroundColor(.white)
-                .frame(width: 34, height: 34)
+                .frame(width: UIFontMetrics.default.scaledValue(for: 34), height: UIFontMetrics.default.scaledValue(for: 34))
                 .background(Circle().fill(.black.opacity(0.45)))
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
@@ -482,9 +483,9 @@ struct PostSceneMosaic: View {
     private func indicateurDeSonCoupe(_ document: CanvasV3) -> some View {
         if montreLIndicateurDeSonCoupe {
             Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: true))
-                .font(.system(size: 10, weight: .bold))
+                .font(MeeshyFont.relative(10, weight: .bold))
                 .foregroundColor(.white)
-                .frame(width: 22, height: 22)
+                .frame(width: UIFontMetrics.default.scaledValue(for: 22), height: UIFontMetrics.default.scaledValue(for: 22))
                 .background(Circle().fill(.black.opacity(0.45)))
                 .padding(8)
                 .allowsHitTesting(false)
@@ -497,9 +498,9 @@ struct PostSceneMosaic: View {
 
     private var glypheDeLecture: some View {
         Image(systemName: "play.fill")
-            .font(.system(size: 10, weight: .bold))
+            .font(MeeshyFont.relative(10, weight: .bold))
             .foregroundColor(.black.opacity(0.75))
-            .frame(width: 22, height: 22)
+            .frame(width: UIFontMetrics.default.scaledValue(for: 22), height: UIFontMetrics.default.scaledValue(for: 22))
             .background(Circle().fill(.white.opacity(0.85)))
             .padding(8)
             .allowsHitTesting(false)

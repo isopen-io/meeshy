@@ -69,6 +69,25 @@ public nonisolated extension Color {
         return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
     }
 
+    /// L'encre lisible (noire ou blanche) sur une surface peinte de cette
+    /// couleur — celle des deux qui rend le PLUS de contraste WCAG. Bascule
+    /// au point d'ÉGALITÉ de contraste entre noir et blanc :
+    /// `(L+0,05)/0,05 = 1,05/(L+0,05)` ⇒ `L = √(0,05 × 1,05) − 0,05 ≈ 0,179`.
+    /// Écrit comme la FORMULE, jamais comme le nombre arrondi — c'est une
+    /// conséquence de la définition WCAG du contraste, pas une constante de
+    /// design à dériver. Pendant Swift exact de `inkOnAccent`
+    /// (`apps/web-v3/src/lib/accent.ts`).
+    ///
+    /// Toute surface teintée (bouton « revenir en bas », badges, capsules)
+    /// DOIT consommer ce point unique plutôt que comparer sa `luminance` à un
+    /// seuil arrondi en dur (`0.6`, `0.5`…) — ce seuil élit la mauvaise encre
+    /// sur toute la plage `0,179 → seuil` (#5950).
+    var readableInk: Color {
+        luminance > Color.inkSwitchLuminance ? .black : .white
+    }
+
+    private static let inkSwitchLuminance: CGFloat = (0.05 * 1.05).squareRoot() - 0.05
+
     /// Parse zéro-allocation de la forme canonique "RRGGBB" / "#RRGGBB"
     /// (insensible à la casse). Retourne la valeur RGB 24-bit, ou `nil` pour
     /// toute autre forme afin que l'appelant retombe sur le chemin legacy exact.

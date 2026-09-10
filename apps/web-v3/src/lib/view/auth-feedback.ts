@@ -86,6 +86,26 @@ function rejectionBannerMessage(failure: ApiFailure): string {
 }
 
 /**
+ * Le délai RÉEL d'un 429 à l'inscription (#5912) — jamais « dans un instant »
+ * (faux, l'attente mesurée est de cinq minutes) ni `RATE_LIMIT_EXCEEDED` (un
+ * jeton machine servi à un lecteur humain, alors que le fichier applique déjà
+ * la règle inverse pour la connexion et le mot de passe oublié).
+ *
+ * Composé depuis `failure.retryAfter` — jamais un texte en dur — pour que le
+ * message ne puisse pas mentir si la fenêtre du limiteur change côté serveur.
+ * Repli SEULEMENT si la passerelle omet le champ (ne devrait pas arriver sur
+ * la vraie 429 de `createRegisterRateLimiter`, `rate-limiter.ts:307`).
+ */
+function signupRateLimitedMessage(retryAfter: number | undefined): string {
+  if (retryAfter === undefined || retryAfter <= 0) {
+    return "Trop de tentatives d'inscription. Réessayez plus tard.";
+  }
+  const minutes = Math.ceil(retryAfter / 60);
+  const delai = minutes <= 1 ? 'une minute' : `${minutes} minutes`;
+  return `Trop de tentatives d'inscription. Réessayez dans ${delai}.`;
+}
+
+/**
  * Range un refus là où l'utilisateur le cherchera : sous le champ qu'il
  * vise, ou dans le bandeau quand il n'en vise aucun.
  *
@@ -108,6 +128,14 @@ export function placeSignupFailure(failure: ApiFailure | PhoneConflict): SignupF
 
   if (failure.status === 0) {
     return { fieldErrors: {}, bannerError: NETWORK_UNAVAILABLE_MESSAGE, showSignIn };
+  }
+
+  // Avant le calcul de `field` : un 429 ne vise aucune saisie à corriger, et
+  // `RATE_LIMIT_EXCEEDED` ne matche `fieldForCode` sur AUCUN cas — sans ce
+  // retour anticipé il tombait déjà au bandeau générique, juste avec le
+  // mauvais texte (#5912).
+  if (failure.status === 429) {
+    return { fieldErrors: {}, bannerError: signupRateLimitedMessage(failure.retryAfter), showSignIn: false };
   }
 
   const field = (failure.field !== undefined ? fieldForServerName(failure.field) : null) ?? fieldForCode(failure.code);

@@ -58,6 +58,13 @@ jest.mock('../../../services/SessionService', () => ({
   cleanupExpiredSessions: jest.fn<any>().mockResolvedValue(0),
 }));
 
+// `anonymizeUserIdentity` (#5691) tourne en VRAI ici, comme sa jumelle
+// `purgeAccountIsolatedData` (#3632) — seul son collaborateur bcrypt est
+// mocké, pour la vitesse et le déterminisme.
+jest.mock('../../../utils/password-hash', () => ({
+  hashPassword: jest.fn(async () => '$2b$12$hash-de-test'),
+}));
+
 import { MaintenanceService } from '../../../services/MaintenanceService';
 import { logger } from '../../../utils/logger';
 import { anonymizeMessagesOfDeletedAccount } from '../../../services/messaging/anonymizeDeletedAccountMessages';
@@ -703,6 +710,34 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
     await expect(sweepDeletions(sut)).resolves.toBeUndefined();
 
     expect(purgeMediaOfDeletedAccount).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
+  });
+
+  // L'identité de la ligne `User` (#5691) — dernière des quatre catégories
+  // promises par `privacy.json`, même moment que ses voisines ci-dessus.
+  it("anonymise l'identité de CHAQUE compte expiré (#5691)", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+    sut.setSessionRevoker(makeRevoker([]));
+
+    await sweepDeletions(sut);
+
+    expect(prisma.user.updateMany).toHaveBeenCalledWith({
+      where: { id: 'user-a', username: { not: 'compte-supprime-user-a' } },
+      data: expect.objectContaining({ username: 'compte-supprime-user-a', displayName: null }),
+    });
+  });
+
+  it("un échec de l'anonymisation d'identité ne fait pas compter l'expiration comme ratée — le lot continue", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    prisma.user.updateMany.mockRejectedValueOnce(new Error('mongo down'));
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+    sut.setSessionRevoker(makeRevoker([]));
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
   });
 

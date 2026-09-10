@@ -75,8 +75,14 @@ function resolvePreferredLanguage(config: {
  * était exactement la jumelle d'ADAPTATEUR que le § Prisme du `CLAUDE.md`
  * racine interdit — elle ne fait pas servir une mauvaise langue, elle fait
  * servir l'ORIGINAL, ce qui ressemble à une traduction absente.
+ *
+ * Exportée pour être golden-testée indépendamment du hook (issue #3677 —
+ * garde de parité du Prisme pour ses quatre familles de résolveurs) : voir
+ * `apps/web/__tests__/hooks/use-post-translation.prism-vectors.test.ts`, qui
+ * rejoue le même `packages/shared/fixtures/reading-modes/prism-translation.vectors.json`
+ * que les trois autres familles.
  */
-function findTranslation(
+export function findTranslation(
   translations: unknown,
   orderedLanguages: readonly string[],
   originalLanguage: string | null,

@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 /** MÊME DURÉE que l'ancien `actionNotice` de `useMessageMenu` avant
- * l'unification — « Message copié » de la capture cible tient 1,5 s. */
-const ANNOUNCEMENT_DURATION_MS = 1500;
+ * l'unification — « Message copié » de la capture cible tient 1,5 s.
+ *
+ * EXPORTÉE pour que son témoin puisse l'ÉPINGLER (« la durée du produit est
+ * bien 1,5 s ») sans avoir à l'ATTENDRE : attendre 1,5 s en horloge réelle
+ * laissait un minuteur en vol après la dernière assertion, et sous charge le
+ * `setText` d'expiration retombait hors de tout `act()` — voir #5888. */
+export const ANNOUNCEMENT_DURATION_MS = 1500;
 
 export type Announcer = {
   /** Le texte À LIRE en ce moment — `''` hors annonce, jamais `undefined` :
@@ -35,16 +40,26 @@ export type Announcer = {
  * appeler est donc TOUJOURS celle qu'un lecteur d'écran entend, quelle
  * qu'elle soit. Aucune fusion à écrire ailleurs : un seul possesseur d'état,
  * jamais une seconde loi de préséance.
+ *
+ * `durationMs` n'existe que pour les TÉMOINS, et sa valeur par défaut est la
+ * seule employée en production — aucun appelant ne la passe (`thread.tsx:233`
+ * est l'unique site). Elle évite qu'un témoin ait à laisser courir 1,5 s
+ * d'horloge réelle : c'est ce minuteur en vol après la dernière assertion qui
+ * produisait, sous charge, une mise à jour d'état hors `act()` puis une
+ * exception du scheduler React APRÈS le démontage de happy-dom (#5888).
  */
-export function useLiveAnnouncer(): Announcer {
+export function useLiveAnnouncer(durationMs: number = ANNOUNCEMENT_DURATION_MS): Announcer {
   const [text, setText] = useState('');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const announce = useCallback((message: string) => {
-    if (timerRef.current !== null) clearTimeout(timerRef.current);
-    setText(message);
-    timerRef.current = setTimeout(() => setText(''), ANNOUNCEMENT_DURATION_MS);
-  }, []);
+  const announce = useCallback(
+    (message: string) => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+      setText(message);
+      timerRef.current = setTimeout(() => setText(''), durationMs);
+    },
+    [durationMs],
+  );
 
   /** LE MINUTEUR NE SURVIT PAS AU DÉMONTAGE — sans ce nettoyage, un
    * `setText('')` tardif après démontage (l'écran change avant les 1,5 s)

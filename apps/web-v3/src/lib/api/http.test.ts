@@ -249,6 +249,30 @@ describe('createHttpTransport — le champ d’un refus (#5555, T1)', () => {
     if (result.ok) throw new Error('unreachable');
     expect('field' in result).toBe(false);
   });
+
+  test('un 429 rend `retryAfter` — forme rate-limiter.ts:307 (#5912)', async () => {
+    const { impl } = fakeFetch({
+      status: 429,
+      body: { success: false, error: 'RATE_LIMIT_EXCEEDED', message: "Trop de tentatives d'inscription (limite: 3/5min).", retryAfter: 300, limit: 3 },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await transport.request({ method: 'POST', path: '/api/v1/auth/register' });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect(result.retryAfter).toBe(300);
+  });
+
+  test('un corps sans retryAfter rend un échec SANS la clé', async () => {
+    const { impl } = fakeFetch({
+      status: 409,
+      body: { success: false, error: 'Adresse déjà utilisée', code: 'EMAIL_TAKEN', field: 'email' },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await transport.request({ method: 'POST', path: '/api/v1/auth/register' });
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('unreachable');
+    expect('retryAfter' in result).toBe(false);
+  });
 });
 
 describe('createHttpTransport — l’annulation', () => {
@@ -400,5 +424,70 @@ describe('createHttpTransport — le verbe GET du contrat Transport (T5)', () =>
     // générique de retour) — c'est le contrat que `net/transport.ts` déclare.
     await transport({ method: 'GET', path: '/api/v1/me' });
     expect(calls[0]?.url).toBe('/api/v1/me');
+  });
+});
+
+/**
+ * UN CORPS `FormData` (#5668) — `POST /api/v1/attachments/upload`
+ * (`services/gateway/src/routes/attachments/upload.ts:59-207`,
+ * `consumes: ['multipart/form-data']`). Le témoin qui compte : AUCUN
+ * `Content-Type` posé par ce transport — c'est le navigateur qui doit
+ * l'écrire avec son `boundary`, un en-tête figé ici l'en empêcherait.
+ */
+describe('createHttpTransport — un corps FormData ne pose JAMAIS son propre Content-Type', () => {
+  test('req.body instanceof FormData ⇒ aucun Content-Type, le FormData transmis TEL QUEL', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: { attachments: [] } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const form = new FormData();
+    form.append('files', new Blob(['x'], { type: 'image/png' }), 'a.png');
+
+    await transport.request({ method: 'POST', path: '/api/v1/attachments/upload', body: form });
+
+    expect(headerOf(calls[0]!.init, 'Content-Type')).toBeNull();
+    expect(calls[0]!.init.body).toBe(form);
+  });
+
+  test('un corps JSON ordinaire pose TOUJOURS Content-Type: application/json (non-régression)', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: {} } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    await transport.request({ method: 'POST', path: '/api/v1/conversations/c-a/messages', body: { content: 'x' } });
+
+    expect(headerOf(calls[0]!.init, 'Content-Type')).toBe('application/json');
+  });
+});
+
+
+/**
+ * LE DÉLAI PAR APPEL (revue-correction #5668) — `DEFAULT_TIMEOUT_MS` (15 s)
+ * est arbitré contre le p95 d'un appel JSON ; un TÉLÉVERSEMENT dure en
+ * proportion des OCTETS. Sans cette porte, `POST /attachments/upload`
+ * héritait des 15 s et AUCUNE photo n'aboutissait sur le profil Fast 3G que
+ * `budgets.json` déclare — l'échec se lisant « la passerelle n'a pas répondu »,
+ * qui accuse le serveur d'une horloge cliente.
+ *
+ * Le témoin s'écrit sur le SIGNAL passé à `fetch`, pas sur une attente réelle :
+ * un `AbortSignal.timeout(1)` est déjà avorté au tour de boucle suivant, un
+ * `AbortSignal.timeout(600_000)` ne l'est jamais. On mesure donc lequel des
+ * deux délais a été composé.
+ */
+describe('createHttpTransport — le délai de garde PAR APPEL', () => {
+  const abortedAfterATick = async (init: RequestInit): Promise<boolean> => {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    return init.signal?.aborted === true;
+  };
+
+  test('sans `timeoutMs` sur la requête, le délai du TRANSPORT s’applique', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: {} } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl, timeoutMs: 1 });
+    await transport.request({ method: 'GET', path: '/api/v1/conversations' });
+    expect(await abortedAfterATick(calls[0]!.init)).toBe(true);
+  });
+
+  test('`timeoutMs` sur la requête REMPLACE celui du transport — un téléversement a le sien', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: {} } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl, timeoutMs: 1 });
+    await transport.request({ method: 'POST', path: '/api/v1/attachments/upload', body: new FormData(), timeoutMs: 600_000 });
+    expect(await abortedAfterATick(calls[0]!.init)).toBe(false);
   });
 });

@@ -2,6 +2,12 @@ import {
   buildTranslationRecord,
   resolvePrismTranslation,
 } from '@meeshy/shared/utils/conversation-helpers';
+import {
+  transcriptTranslationTexts,
+  transcriptTranslationTracks,
+} from '@meeshy/shared/types/attachment-audio';
+
+import type { Attachment } from './types';
 
 /**
  * LE PRISME LINGUISTIQUE — servi par `@meeshy/shared`, jamais réécrit ici.
@@ -60,4 +66,103 @@ export function served(params: {
   // DÉJÀ écrit dans une de ses langues, à son rang.
   if (resolved === null) return { text: original, language: originalLanguage ?? '', translated: false };
   return { text: resolved.text, language: resolved.language, translated: true };
+}
+
+/**
+ * LE TEXTE D'UNE TRANSCRIPTION, QUEL QUE SOIT SON DISCRIMINANT.
+ *
+ * `Attachment.transcription` (`packages/shared/types/attachment.ts`) porte le
+ * type V1 — l'union `AudioTranscription | VideoTranscription |
+ * DocumentTranscription | ImageTranscription` de `attachment-transcription.ts`
+ * — PAS le type V2 de `attachment-audio.ts` dont la spécification de ce lot
+ * s'inspirait (`transcription?.text` uniforme). Les DEUX types partagent le
+ * même nom `AttachmentTranscription` dans deux modules différents ; seul le
+ * premier atteint le champ réel. Sur cette union, UNE seule variante
+ * (`AudioTranscription`) nomme son texte `transcribedText` — les trois autres
+ * (vidéo, document, image) le nomment `text`. Site UNIQUE de ce détour :
+ * `servedTranscript` ci-dessous, jamais un `.text` direct sur la valeur du
+ * champ.
+ */
+const transcriptionTextOf = (
+  transcription: NonNullable<Attachment['transcription']> | undefined,
+): string | undefined => {
+  if (transcription === undefined) return undefined;
+  return transcription.type === 'audio' ? transcription.transcribedText : transcription.text;
+};
+
+/**
+ * LA DESCENTE DU TEXTE D'UNE PIÈCE JOINTE (#5805, cycle 128 du CLAUDE.md) —
+ * une projection de `served()` sur les jumelles de dépouillement de
+ * `attachment-audio.ts` (site UNIQUE : `transcriptTranslationTexts`).
+ *
+ * `Message.translations` traduit `Message.content` ; une pièce jointe a SA
+ * PROPRE transcription et SES PROPRES traductions (colonne `translations` de
+ * l'attachment), un décalage documenté au CLAUDE.md comme la raison pour
+ * laquelle la bannière d'un vocal est restée hors du Prisme jusqu'au cycle
+ * 123. `servedTranscript` DIT la langue — c'est elle qui alimente `lang=`, le
+ * texte affiché sous l'onde, et le rang que `resolveAudioTrack` reçoit
+ * ci-dessous, jamais qu'il ne redescend.
+ *
+ * `original` retombe sur `alt` puis `originalName` : une pièce SANS
+ * transcription (un fichier, une image sans description) n'a rien à
+ * traduire, mais garde un texte de repli non vide pour l'accessibilité — sauf
+ * si l'appelant n'a lui-même rien à offrir (ni alt, ni nom), auquel cas le
+ * texte est vide plutôt qu'inventé.
+ */
+export function servedTranscript(params: {
+  readonly preferredLanguages: readonly string[];
+  readonly attachment: Pick<Attachment, 'transcription' | 'translations' | 'alt' | 'originalName'>;
+  readonly fallbackLanguage: string;
+}): Served {
+  const { preferredLanguages, attachment, fallbackLanguage } = params;
+  const original = transcriptionTextOf(attachment.transcription) ?? attachment.alt ?? attachment.originalName ?? '';
+  const originalLanguage = attachment.transcription?.language ?? fallbackLanguage;
+  return served({
+    preferredLanguages,
+    originalLanguage,
+    translations: transcriptTranslationTexts(attachment.translations),
+    original,
+  });
+}
+
+/** Une piste audio SERVIE — la paire fichier/langue, plus les métadonnées que la piste élue porte. */
+export type ServedTrack = {
+  readonly url: string;
+  readonly language: string;
+  /** Vrai quand la piste servie n'est PAS l'originale. */
+  readonly translated: boolean;
+  readonly mimeType?: string;
+  readonly durationMs?: number;
+};
+
+/**
+ * L'ÉLECTION DE LA PISTE (#5805, cycle 128) — REÇOIT la langue du texte déjà
+ * servi (`servedTranscript` ci-dessus, ou `displayLanguage`), ne la
+ * redescend JAMAIS : deux descentes indépendantes serviraient une
+ * transcription française au-dessus d'une piste espagnole, un défaut PIRE
+ * qu'une traduction absente (CLAUDE.md § Prisme, cycle 128 ; `tasks/lessons.md`
+ * § 284). Miroir de `AudioTrackLanguageResolver.url(for:)`
+ * (`:86-95`) : la langue servie SANS piste retombe sur l'original, exactement
+ * comme la langue servie ÉGALE à l'originale.
+ */
+export function resolveAudioTrack(params: {
+  readonly servedLanguage: string;
+  readonly originalLanguage: string;
+  readonly originalUrl: string;
+  readonly translations: unknown;
+}): ServedTrack {
+  const { servedLanguage, originalLanguage, originalUrl, translations } = params;
+  const original: ServedTrack = { url: originalUrl, language: originalLanguage, translated: false };
+  if (servedLanguage === originalLanguage) return original;
+
+  const track = transcriptTranslationTracks(translations)[servedLanguage];
+  if (track === undefined) return original;
+
+  return {
+    url: track.url,
+    language: servedLanguage,
+    translated: true,
+    ...(track.mimeType !== undefined ? { mimeType: track.mimeType } : {}),
+    ...(track.durationMs !== undefined ? { durationMs: track.durationMs } : {}),
+  };
 }

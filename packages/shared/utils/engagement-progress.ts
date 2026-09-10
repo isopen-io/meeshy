@@ -123,6 +123,14 @@ export type EngagementElanProgress = {
   readonly windowDays: number;
   /** `true` dès ×2 — la seule condition d'affichage. */
   readonly isAccelerated: boolean;
+  /**
+   * La LISTE derrière `activeFamilyCount` (#5897), filtrée au catalogue connu
+   * — jamais le score CUMULÉ (`axes.filter(value > 0)`), qui reste positif
+   * pour une famille abandonnée depuis longtemps. `[]` quand le serveur ne
+   * sert pas encore ce champ : un consommateur affiche alors AUCUNE chip
+   * plutôt que d'approximer avec le cumul.
+   */
+  readonly activeFamilies: readonly EngagementAxisFamily[];
 };
 
 /**
@@ -339,12 +347,25 @@ function resolveElan(elan: NonNullable<EngagementProgressPayload['elan']>): Enga
   // convention de sérialisation — un serveur qui servirait 9 ne doit pas faire
   // afficher 9.
   const factor = Number.isFinite(elan.factor) ? Math.min(5, Math.max(1, elan.factor)) : 1;
+  // Fail-safe au CATALOGUE, comme `computeEngagementElan` côté serveur — une
+  // famille inconnue (axe ajouté avant la mise à jour de ce client) est
+  // ignorée plutôt que de faire échouer l'affichage. `elan.activeFamilies`
+  // ABSENT (serveur antérieur à #5897) rend `[]` : aucune chip plutôt qu'un
+  // repli sur le score cumulé.
+  const activeFamilies = [
+    ...new Set(
+      (elan.activeFamilies ?? []).filter((famille): famille is EngagementAxisFamily =>
+        (ENGAGEMENT_AXIS_FAMILIES as readonly string[]).includes(famille),
+      ),
+    ),
+  ];
   return {
     factor,
     activeFamilyCount: safeCount(elan.activeFamilyCount),
     hasStanding: elan.hasStanding === true,
     windowDays: safeCount(elan.windowDays),
     isAccelerated: factor > 1,
+    activeFamilies,
   };
 }
 

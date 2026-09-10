@@ -253,3 +253,63 @@ describe('sameRowProps compare TOUS les drapeaux, pas une liste écrite à la ma
     expect(sameRowProps(props(FLAGS), props(withExtra(false)))).toBe(false);
   });
 });
+
+/**
+ * REVUE #5805 — UN DERNIER MESSAGE SANS TEXTE. `served()` rend une chaîne
+ * vide, et la ligne 2 se rendait VIDE : la rangée « Médias » disait
+ * « Kwame Mensah : » suivi de rien (mesuré sur la coque Android). iOS compose
+ * un libellé depuis la pièce (`LentilleConversationRow.standardPreview`,
+ * `:635-676`) : glyphe + `AttachmentKind.shortLabel`, `+N` au-delà d'une.
+ */
+describe('la rangée de la Lentille — un dernier message SANS TEXTE (revue #5805)', () => {
+  const withMedia = (mimeType: string, count = 1): Conversation =>
+    conversation({
+      type: 'group',
+      title: 'Médias',
+      lastMessage: {
+        id: 'm-media',
+        content: '',
+        createdAt: new Date('2026-01-01T10:00:00Z'),
+        sender: { displayName: 'Kwame Mensah' },
+        attachments: Array.from({ length: count }, (_, i) => ({ id: `a${i}`, mimeType })),
+      } as never,
+      lastMessageOriginalLanguage: 'fr',
+    });
+
+  test('un VOCAL : le libellé « Audio », jamais une ligne vide', () => {
+    const html = renderToStaticMarkup(<LensRow {...baseProps({ conversation: withMedia('audio/wav') })} />);
+    expect(html).toContain('Kwame Mensah : ');
+    expect(html).toContain('Audio');
+  });
+
+  test('une PHOTO : le libellé « Photo »', () => {
+    const html = renderToStaticMarkup(<LensRow {...baseProps({ conversation: withMedia('image/png') })} />);
+    expect(html).toContain('Photo');
+  });
+
+  test('un FICHIER : le libellé « Fichier »', () => {
+    const html = renderToStaticMarkup(<LensRow {...baseProps({ conversation: withMedia('application/pdf') })} />);
+    expect(html).toContain('Fichier');
+  });
+
+  test('trois pièces : « +2 » derrière le libellé de la première', () => {
+    const html = renderToStaticMarkup(<LensRow {...baseProps({ conversation: withMedia('image/png', 3) })} />);
+    expect(html).toContain('Photo');
+    expect(html).toContain('+2');
+  });
+
+  test('un message AVEC texte garde son aperçu — la pièce ne parle jamais à sa place', () => {
+    const withBoth = conversation({
+      lastMessage: {
+        id: 'm-both',
+        content: 'Voici la capture',
+        createdAt: new Date('2026-01-01T10:00:00Z'),
+        attachments: [{ id: 'a0', mimeType: 'image/png' }],
+      } as never,
+      lastMessageOriginalLanguage: 'fr',
+    });
+    const html = renderToStaticMarkup(<LensRow {...baseProps({ conversation: withBoth })} />);
+    expect(html).toContain('Voici la capture');
+    expect(html).not.toContain('Photo');
+  });
+});

@@ -261,6 +261,13 @@ export type EngagementProgressPayload = {
     readonly hasStanding: boolean;
     /** La fenêtre glissante, en jours — servie pour qu'aucun client ne la code en dur. */
     readonly windowDays: number;
+    /**
+     * La LISTE derrière `activeFamilyCount` (#5897) — OPTIONNELLE : un serveur
+     * antérieur à ce champ ne la sert pas. Un client qui la reçoit ABSENTE
+     * n'affiche AUCUNE chip plutôt que d'approximer avec le score cumulé — une
+     * absence se voit, une liste fausse non.
+     */
+    readonly activeFamilies?: readonly string[];
   };
   /**
    * Les Meeshes (#5743) — OPTIONNEL, délibérément.
@@ -328,7 +335,11 @@ const isElanBlock = (value: unknown): boolean =>
   isNonNegativeInteger(value.windowDays) &&
   typeof value.factor === 'number' &&
   Number.isFinite(value.factor) &&
-  value.factor >= 1;
+  value.factor >= 1 &&
+  // `activeFamilies` (#5897) est OPTIONNEL au sein d'un bloc par ailleurs
+  // complet — un serveur antérieur au champ sert encore le reste de l'élan.
+  (value.activeFamilies === undefined ||
+    (Array.isArray(value.activeFamilies) && value.activeFamilies.every((f) => typeof f === 'string')));
 
 const isMeeshBlock = (value: unknown): boolean =>
   isRecord(value) &&

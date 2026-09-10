@@ -62,6 +62,10 @@ extension Route {
         case .notifications: return "Notifications"
         case .userStats: return "UserStats"
         case .progression: return "Progression"
+        // Le NOM de la section, pas un « Progression » de plus : trois pages
+        // qui rendraient le même écran d'analytique ne diraient laquelle est
+        // ouverte, et c'est précisément la question qu'on posera à cette mesure.
+        case .progressionSection(let section): return "Progression.\(section.rawValue)"
         case .links: return "Links"
         case .affiliate: return "Affiliate"
         case .trackingLinks: return "TrackingLinks"

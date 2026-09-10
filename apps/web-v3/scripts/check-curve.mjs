@@ -202,6 +202,8 @@ const FOCAL_MAPPINGS = [
   ['flagLimitPlain', 'FLAG_LIMIT_PLAIN', 'plafond de drapeaux sur une rangée ordinaire (FocusStrip.flagLimitPlain)'],
   ['flagLimitMagnified', 'FLAG_LIMIT_MAGNIFIED', 'plafond de drapeaux sur la bande de la rangée élue (FocusStrip.flagLimitMagnified)'],
   ['fadeDurationMs', 'REVEAL_FADE_DURATION_MS', 'durée du fondu du révélé (Pill.fadeDurationMs)'],
+  // --- #5774 (travail 3/3) : le CHROME du fil (HiddenChrome).
+  ['edgeTravel', 'HIDDEN_CHROME_EDGE_TRAVEL', "course de l'escamotage vers le bord (HiddenChrome.edgeTravel)"],
 ];
 
 for (const [swiftName, downstreamName, what] of FOCAL_MAPPINGS) {
@@ -229,6 +231,8 @@ const SCENE_MS_MAPPINGS = [
    * consommateurs (`reading-mode/metrics.ts`, `lens/scene.ts` qui l'importe).
    */
   ['enterDuration', 'SCENE_ENTER_DURATION_MS', "durée de l'entrée en scène (Scene.enterDuration)"],
+  // --- #5774 (travail 3/3) : `HiddenChrome.easeOut` est en SECONDES.
+  ['easeOut', 'HIDDEN_CHROME_EASE_OUT_MS', "durée de l'escamotage/révélation (HiddenChrome.easeOut)"],
 ];
 for (const [swiftName, downstreamName, what] of SCENE_MS_MAPPINGS) {
   const expectedSeconds = focalNumber(swiftName);
@@ -579,6 +583,92 @@ for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
       failures.push(`les 6 emojis du rail ne sont pas les 6 premiers de defaultEmojis (Swift « ${swiftEmojis.slice(0, 6).join('')} », dérivée « ${quick.join('')} »)`);
     }
   }
+}
+
+/**
+ * PARTIE 8 — LA PILULE DE JOUR COLLANTE ET LE FOND DU FIL (#5774, travail
+ * 3/3). Deux sources Swift DISTINCTES de `FocalMetrics.swift` :
+ * `MessageDayStickyOverlay.swift` (position, fondu) et
+ * `ConversationAnimatedBackground.swift` (dégradé, `lib/view/thread-backdrop.ts`).
+ *
+ * `topOffset` est une DÉCLARATION (`nom: Type = valeur`, le dispositif
+ * générique) ; la durée du fondu (`0.18`) et les hexadécimaux/pourcentages
+ * du fond sont des ARGUMENTS D'APPEL (`duration: 0.18`, `Color(hex:
+ * "0F0C29")`, `amount: 0.12`) — hors de portée de `focalNumber`, donc lus
+ * par des regex DÉDIÉES, documentées ici plutôt que contournées (§ note
+ * PARTIE 5).
+ */
+{
+  const stickyOverlaySwift = readFileSync(
+    `${ROOT}apps/ios/Meeshy/Features/Main/Views/Bubble/MessageDayStickyOverlay.swift`,
+    'utf8',
+  );
+  const backgroundSwift = readFileSync(`${ROOT}apps/ios/Meeshy/Features/Main/Views/ConversationAnimatedBackground.swift`, 'utf8');
+  const metricsDerived = readFileSync(`${ROOT}apps/web-v3/src/lib/reading-mode/metrics.ts`, 'utf8');
+  const backdropDerived = readFileSync(`${ROOT}apps/web-v3/src/lib/view/thread-backdrop.ts`, 'utf8');
+
+  const topOffsetSwift = (() => {
+    const m = /\btopOffset\s*(?::\s*\w+\s*)?=\s*(-?[0-9.]+)/.exec(stickyOverlaySwift);
+    return m === null ? null : Number(m[1]);
+  })();
+  const topOffsetDerived = count(metricsDerived, 'DAY_PILL_TOP');
+  if (topOffsetSwift === null) failures.push('pilule de jour : « topOffset » introuvable dans MessageDayStickyOverlay.swift');
+  else if (topOffsetDerived === null) failures.push('pilule de jour : « DAY_PILL_TOP » introuvable dans reading-mode/metrics.ts');
+  else if (topOffsetSwift !== topOffsetDerived)
+    failures.push(`pilule de jour, décalage du haut : Swift ${topOffsetSwift}, dérivée ${topOffsetDerived}`);
+
+  const fadeSwift = (() => {
+    const m = /easeInOut\(duration:\s*(-?[0-9.]+)\)/.exec(stickyOverlaySwift);
+    return m === null ? null : Number(m[1]);
+  })();
+  const fadeDerivedMs = count(metricsDerived, 'DAY_PILL_FADE_MS');
+  if (fadeSwift === null) failures.push('pilule de jour : aucun « .easeInOut(duration: …) » trouvé dans MessageDayStickyOverlay.swift');
+  else if (fadeDerivedMs === null) failures.push('pilule de jour : « DAY_PILL_FADE_MS » introuvable dans reading-mode/metrics.ts');
+  else if (Math.round(fadeSwift * 1000) !== fadeDerivedMs)
+    failures.push(`pilule de jour, fondu : Swift ${fadeSwift}s (×1000 = ${fadeSwift * 1000}), dérivée ${fadeDerivedMs}`);
+
+  const tintedAmount = (base) => {
+    const m = new RegExp(`tinted\\("${base}", with: accent, amount: ([0-9.]+)\\)`).exec(backgroundSwift);
+    return m === null ? null : Number(m[1]);
+  };
+  const HEX_MAPPINGS = [
+    [() => /Color\(hex:\s*"0F0C29"\)/.test(backgroundSwift), 'BACKDROP_DARK_START', '0F0C29', 'fond sombre, premier arrêt'],
+    [() => /Color\(hex:\s*"24243E"\)/.test(backgroundSwift), 'BACKDROP_DARK_END', '24243E', 'fond sombre, dernier arrêt'],
+    [() => /Color\(hex:\s*"FFFFFF"\)/.test(backgroundSwift), 'BACKDROP_LIGHT_BASE', 'FFFFFF', 'fond clair, base'],
+  ];
+  for (const [presentInSwift, downstreamName, expectedHex, what] of HEX_MAPPINGS) {
+    const actualHex = (() => {
+      const m = new RegExp(`${downstreamName}\\s*=\\s*'([0-9A-Fa-f]{6})'`).exec(backdropDerived);
+      return m === null ? null : m[1].toUpperCase();
+    })();
+    if (!presentInSwift()) failures.push(`${what} : « ${expectedHex} » introuvable dans ConversationAnimatedBackground.swift`);
+    else if (actualHex === null) failures.push(`${what} : « ${downstreamName} » introuvable dans lib/view/thread-backdrop.ts`);
+    else if (actualHex !== expectedHex) failures.push(`${what} : Swift ${expectedHex}, dérivée ${actualHex}`);
+  }
+
+  const TINT_MAPPINGS = [
+    ['0F0C29', 'BACKDROP_DARK_TINT', 'fond sombre, mélange accent'],
+    ['FFFFFF', 'BACKDROP_LIGHT_TINT_START', 'fond clair, premier mélange accent'],
+  ];
+  for (const [base, downstreamName, what] of TINT_MAPPINGS) {
+    const expectedTint = tintedAmount(base);
+    const actualTint = count(backdropDerived, downstreamName);
+    if (expectedTint === null) failures.push(`${what} : « tinted("${base}", …, amount:) » introuvable dans ConversationAnimatedBackground.swift`);
+    else if (actualTint === null) failures.push(`${what} : « ${downstreamName} » introuvable dans lib/view/thread-backdrop.ts`);
+    else if (expectedTint !== actualTint) failures.push(`${what} : Swift ${expectedTint}, dérivée ${actualTint}`);
+  }
+  // Le second mélange clair (`amount: 0.05`) est le SECOND appel à `tinted("FFFFFF", …)`
+  // dans le fichier : la regex générique ne capture que le premier — vérifié
+  // à la main ici plutôt que d'écrire une troisième regex à motif variable.
+  const secondLightTint = (() => {
+    const all = [...backgroundSwift.matchAll(/tinted\("FFFFFF", with: accent, amount: ([0-9.]+)\)/g)];
+    return all.length < 2 ? null : Number(all[1][1]);
+  })();
+  const actualLightTintEnd = count(backdropDerived, 'BACKDROP_LIGHT_TINT_END');
+  if (secondLightTint === null) failures.push('fond clair, second mélange accent : second appel « tinted("FFFFFF", …) » introuvable');
+  else if (actualLightTintEnd === null) failures.push('fond clair, second mélange accent : « BACKDROP_LIGHT_TINT_END » introuvable dans lib/view/thread-backdrop.ts');
+  else if (secondLightTint !== actualLightTintEnd)
+    failures.push(`fond clair, second mélange accent : Swift ${secondLightTint}, dérivée ${actualLightTintEnd}`);
 }
 
 if (failures.length > 0) {

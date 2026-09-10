@@ -5,10 +5,11 @@ import nextConfig from '../../next.config';
  * gateway Traefik ne les posait pas non plus (#3628). Ce témoin épingle le
  * SEUL point d'entrée réel : `next.config.ts` → `headers()`.
  *
- * CSP est délibérément absente de ce que ce témoin exige : elle nécessite un
- * audit des domaines externes réels (gateway, translator, Firebase…) avant
- * d'être une allowlist sûre à expédier — voir le commentaire de
- * `nonCspSecurityHeaders` dans `next.config.security.js`.
+ * La CSP est désormais construite depuis l'audit de domaine réel (#5728,
+ * suite de #3628) et servie en `Content-Security-Policy-Report-Only` —
+ * jamais encore en mode bloquant (`Content-Security-Policy`), réservé à une
+ * vérification staging bout en bout. Voir le commentaire de
+ * `reportOnlyCspHeader` dans `next.config.security.js`.
  */
 describe('next.config headers — en-têtes de sécurité (#3628)', () => {
   type HeaderRule = { source: string; headers: { key: string; value: string }[] };
@@ -33,9 +34,10 @@ describe('next.config headers — en-têtes de sécurité (#3628)', () => {
         'X-Download-Options',
       ]),
     );
-    // CSP a un défaut distinct (domaine non résolu) — pas encore prête à être
-    // servie ; elle ne doit pas apparaître ici tant que #3628 n'est pas soldée.
+    // La bascule en mode bloquant exige une vérification staging bout en
+    // bout (#5728) — jamais le header bloquant tant qu'elle n'est pas faite.
     expect(keys).not.toContain('Content-Security-Policy');
+    expect(keys).toContain('Content-Security-Policy-Report-Only');
   });
 
   it("n'interdit jamais camera/microphone/geolocation en self — Meeshy appelle, enregistre des vocaux et partage la position", async () => {

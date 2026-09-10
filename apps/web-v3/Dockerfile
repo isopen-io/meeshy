@@ -93,11 +93,26 @@ RUN test -s packages/shared/dist/utils/conversation-helpers.js \
 ARG VITE_API_BASE=""
 ENV VITE_API_BASE=${VITE_API_BASE}
 
-# `VITE_DATA_SOURCE` suit la même logique (#5880) : `resolveSource` exige
-# l'égalité STRICTE à `gateway`, donc une valeur vide vaut `fixtures` — le
-# défaut, et le comportement de toute construction qui ne la déclare pas.
-ARG VITE_DATA_SOURCE="fixtures"
+# **LA SOURCE DE DONNÉES SE FIGE ICI AUSSI, et pour la même raison (#5929).**
+# `config.ts` rend `env.VITE_DATA_SOURCE === 'gateway' ? 'gateway' : 'fixtures'` :
+# sans cet `ARG`, l'image se construit sur les FIXTURES — Kwame Mensah, Amina
+# Diallo — tout en pointant la vraie passerelle. C'est le pire des deux mondes :
+# l'application A L'AIR branchée, et `staging.meeshy.me` a servi des données
+# fabriquées jusqu'au 2026-09-10 sans que rien ne rougisse.
+#
+# Le défaut reste `fixtures` : un `bun run build` local n'exige alors aucune
+# passerelle. C'est le workflow qui pose `gateway` sur les images DÉPLOYÉES
+# (`docker.yml`, § build-args de `web-v31`), là où une passerelle existe.
+ARG VITE_DATA_SOURCE=""
 ENV VITE_DATA_SOURCE=${VITE_DATA_SOURCE}
+
+# Le troisième levier de construction, DÉCLARÉ pour être réglable — même s'il
+# n'est surchargé nulle part aujourd'hui : `vite.config.ts` lit
+# `VITE_READING_MODES !== 'off'`, donc son absence VAUT « activés ». Un
+# interrupteur qu'aucun `ARG` n'expose ne peut pas être actionné au
+# déploiement, quelle que soit la valeur qu'on croit lui donner.
+ARG VITE_READING_MODES=""
+ENV VITE_READING_MODES=${VITE_READING_MODES}
 
 # Le build EST le préchauffage : le greffon de `vite.config.ts` écrit les cinq
 # documents avant que `vite-plugin-pwa` ne scelle son manifeste de précache.

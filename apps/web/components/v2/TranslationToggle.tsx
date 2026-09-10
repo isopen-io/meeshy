@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/use-i18n';
 import { getFlag } from './flags';
 import { isSameLanguage } from '@meeshy/shared/utils/language-normalize';
+import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 
 export interface TranslationItem {
   languageCode: string;
@@ -44,6 +45,41 @@ export interface TranslationToggleProps {
    */
   onDisplayedChange?: (version: { languageCode: string; content: string; isOriginal: boolean }) => void;
   className?: string;
+}
+
+/**
+ * Cœur PUR de l'auto-résolution Prisme des posts/commentaires (issue #3677 —
+ * garde de parité du Prisme pour ses quatre familles de résolveurs). Extrait
+ * pour être golden-testé indépendamment du composant
+ * (`apps/web/__tests__/components/v2/TranslationToggle.prism-vectors.test.tsx`,
+ * rejeu du même `packages/shared/fixtures/reading-modes/prism-translation.vectors.json`
+ * que les trois autres familles).
+ *
+ * Délègue la DESCENTE à `resolvePrismTranslation` (`@meeshy/shared`), la SSOT
+ * du Prisme — l'ancienne boucle manuscrite réimplémentait la même règle avec
+ * `isSameLanguage` : deux exemplaires de la même descente, exactement la
+ * réécriture que CLAUDE.md nomme comme cause des trois familles divergentes.
+ * Parité iOS `APIPost.resolveTranslation` / Android
+ * `LanguageResolver.preferredTranslation`.
+ */
+export function resolveAutoTranslation(
+  order: readonly string[],
+  originalLanguage: string,
+  translations: readonly TranslationItem[],
+): TranslationItem | null {
+  const record: Record<string, string> = {};
+  for (const t of translations) {
+    if (t.content && t.content.trim() !== '') record[t.languageCode] = t.content;
+  }
+
+  const resolved = resolvePrismTranslation({
+    translations: record,
+    originalLanguage,
+    preferredLanguages: order,
+  });
+  if (!resolved) return null;
+
+  return translations.find((t) => t.languageCode === resolved.language) ?? null;
 }
 
 function ChevronIcon({ className = 'w-3 h-3', direction = 'down' }: { className?: string; direction?: 'down' | 'up' }) {
@@ -99,12 +135,8 @@ function TranslationToggle({
       : userLanguage
         ? [userLanguage]
         : [];
-    for (const lang of order) {
-      if (isSameLanguage(originalLanguage, lang)) return originalVersion;
-      const match = translations.find((t) => isSameLanguage(t.languageCode, lang));
-      if (match) return { ...match, isOriginal: false as const };
-    }
-    return originalVersion;
+    const match = resolveAutoTranslation(order, originalLanguage, translations);
+    return match ? { ...match, isOriginal: false as const } : originalVersion;
   }, [preferredLanguages, userLanguage, translations, originalVersion, originalLanguage]);
 
   // Only the user's explicit exploration is stored (language + original flag, never the

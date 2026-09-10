@@ -399,19 +399,30 @@ struct ProgressionFlammeHero: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
+                // La SÉMANTIQUE d'abord, comme ses deux voisins : le hero
+                // s'ouvrait sur un chiffre sans nom.
+                Text(ProgressionCopy.heroStreakTitle)
+                    .font(.caption2.weight(.semibold))
+                    .textCase(.uppercase)
+                    .foregroundStyle(theme.textMuted)
                 Text(ProgressionCopy.streak(progress.streak.scale.value))
                     .font(.body.weight(.bold))
                     .foregroundStyle(theme.textPrimary)
                 Text(ProgressionCopy.streakRecord(progress.streak.longestDays))
                     .font(.caption)
                     .foregroundStyle(theme.textMuted)
+                // Le jalon passe en DERNIÈRE LIGNE (directive porteur
+                // 2026-09-09). À droite, il était cadré à l'opposé de ce qu'il
+                // qualifie et se lisait comme une colonne à part ; en dessous,
+                // il termine la phrase que les deux lignes commencent — où j'en
+                // suis, mon record, ce qui reste. C'est aussi la forme qu'a
+                // déjà `ProgressionStreakCard`, dont ce hero est le résumé.
+                Text(ProgressionCopy.nextStep(for: progress.streak.scale, kind: .streak))
+                    .font(.caption)
+                    .foregroundStyle(theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
-
-            Text(ProgressionCopy.nextStep(for: progress.streak.scale, kind: .streak))
-                .font(.caption)
-                .multilineTextAlignment(.trailing)
-                .foregroundStyle(theme.textMuted)
         }
         .padding(16)
         .background(
@@ -461,14 +472,25 @@ struct ProgressionWrap: View {
 struct ProgressionSectionPage: View {
 
     let section: ProgressionSection
-    let progress: EngagementProgress?
-    let isDark: Bool
-    let onClose: () -> Void
 
-    /// La célébration est portée ICI, pas chez l'hôte : cette page est
-    /// présentée en `sheet`, et un `fullScreenCover` attaché à `ProgressionView`
-    /// s'ouvrirait DERRIÈRE elle. Une porte qui existe et ne se voit pas est
-    /// une porte qui n'existe pas.
+    /// **La page est AUTONOME dans la pile** (directive porteur 2026-09-09).
+    ///
+    /// Présentée en feuille, elle recevait l'état de son parent. Poussée, elle
+    /// peut être atteinte sans lui — un lien profond, une notification, un
+    /// retour depuis plus loin — et un état passé en paramètre serait alors
+    /// vide sans que rien ne le dise. Elle lit donc le sien, et le cache le
+    /// rend instantané : aucun spinner ne s'ajoute (Cache-First).
+    @StateObject private var viewModel = ProgressionViewModel()
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+    private var progress: EngagementProgress? { viewModel.progress }
+
+    /// La célébration est portée ICI, pas chez l'hôte : c'est depuis les lignes
+    /// de CETTE page qu'on ouvre un succès, et la porte doit rester là où le
+    /// doigt se pose. Une porte qui existe et ne se voit pas est une porte qui
+    /// n'existe pas.
     @State private var reveal: ProgressionRevealRequest?
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -508,13 +530,20 @@ struct ProgressionSectionPage: View {
 
             VStack(spacing: 0) {
                 HStack {
-                    Button(action: onClose) {
+                    // Le retour passe par la PILE — pas par une fermeture de
+                    // feuille. Le glissement depuis le bord gauche fait donc le
+                    // même geste, sans qu'aucun code ne le porte.
+                    Button {
+                        HapticFeedback.light()
+                        dismiss()
+                    } label: {
                         Image(systemName: "chevron.backward")
                             .font(MeeshyFont.relative(16, weight: .semibold))
                             .foregroundColor(MeeshyColors.brandPrimary)
                             .frame(width: 44, height: 44)
                     }
-                    .accessibilityLabel(Text(verbatim: "Retour"))
+                    .adaptiveGlass(in: Circle(), interactive: true)
+                    .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
                     Text(titre)
                         .font(.title3.weight(.bold))
@@ -523,10 +552,16 @@ struct ProgressionSectionPage: View {
 
                     Spacer(minLength: MeeshySpacing.sm)
 
+                    // La VALEUR est du verre elle aussi : posée nue sur le
+                    // dégradé, elle flottait sans matière, et rien ne disait
+                    // qu'elle appartenait au chrome plutôt qu'au contenu.
                     if let progress {
                         Text(compte(progress))
                             .font(.body.weight(.bold))
                             .foregroundStyle(teinte)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .adaptiveGlass(in: Capsule(), tint: teinte.opacity(0.18))
                     }
                 }
                 .padding(.horizontal, 16)
@@ -544,6 +579,12 @@ struct ProgressionSectionPage: View {
                 }
             }
         }
+        // Le geste de bord, que `navigationBarHidden(true)` retire en silence.
+        // Sans lui, la page est bien POUSSÉE mais ne se quitte qu'au bouton —
+        // et l'utilisateur qui glisse depuis le bord n'obtient rien, ce qui se
+        // lit comme une page bloquée plutôt que comme un geste non servi.
+        .background(InteractivePopEnabler())
+        .task { await viewModel.load() }
         .fullScreenCover(item: $reveal) { palier in
             AchievementRevealView(
                 reveal: palier.reveal,

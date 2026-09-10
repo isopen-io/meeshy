@@ -241,7 +241,18 @@ export const parseCatalogBlock = (blockLines) => {
 // Ce qu'il faudrait pour la ressusciter, et qui n'est pas de ce lot : un
 // catalogue SCINDABLE, dont un client puisse tirer trois adresses sans en
 // embarquer 444.
-const BASELINE_DEAD_ENTRIES = 269;
+//
+// 269 → 270 (#3954) : `posts.byPostIdObjectsByObjectIdResponses`
+// (`POST`/`DELETE`/`GET /posts/:postId/objects/:objectId/responses`, table
+// légère votes/réponses des stickers interactifs, O10) — morte à la
+// naissance PAR CONSTRUCTION, même forme que `users.meReferralCode` (#3690)
+// et `me.engagement` (#5547) ci-dessus : le kind `interactive` du canvas
+// reste RÉSERVÉ au contrat (`RESERVED_KINDS`, #3953, non traité ici) — aucun
+// client ne peut encore poser un tel sticker, donc aucun n'appelle ces
+// routes. #3954 livre le contrat serveur et son exposition dans les
+// catalogues générés ; les appelants (iOS/web/Android) sont le périmètre de
+// #3953, une issue distincte.
+const BASELINE_DEAD_ENTRIES = 270;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

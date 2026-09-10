@@ -282,11 +282,27 @@ jobs:
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
           node scripts/check-utilities.mjs
           node scripts/measure-weight.mjs
+          # #5910 — maillon du composite `bun run gate` qui ne s'exécutait
+          # NULLE PART. Il lit `dist/index.html`, donc il vient après le build
+          # ci-dessus ; il n'ouvre aucun navigateur, donc il a sa place ici et
+          # non dans le travail Playwright.
+          node scripts/check-scheme-bootstrap.mjs
           node scripts/check-docker-context.mjs
           node scripts/check-git-tracking.mjs
 
       - name: Type-check (apps/web — debt ratchet)
         run: bash scripts/check-type-debt.sh --self-test && bash scripts/check-type-debt.sh
+
+      # #3679 — jumeau des deux cliquets ci-dessus, appliqué à l'usage
+      # explicite de `any` plutôt qu'aux erreurs de compilation ou de lint.
+      # `services/gateway/src` et `packages/shared` n'ont pas de config
+      # ESLint (rien à demander à `@typescript-eslint/no-explicit-any`), donc
+      # ce script mesure par motif plutôt que par AST — cf. son en-tête pour
+      # ce que ça couvre et ce que ça ne couvre pas. `packages/shared` est
+      # tenu à zéro (CLAUDE.md l'exige déjà pour ce paquet) ; `gateway` porte
+      # une baseline qui ne peut que descendre.
+      - name: any debt ratchet (gateway + shared)
+        run: bash scripts/check-any-debt.sh --self-test && bash scripts/check-any-debt.sh
 
       # #5372, suite de #4889 — une entrée de catalogue d'endpoints CLIENT
       # sans appelant se compte comme un lecteur : un décideur qui cherche qui
@@ -559,6 +575,57 @@ jobs:
         run: |
           cd apps/web-v3
           node scripts/check-thread-states.mjs
+
+      # #5910 — CINQ MAILLONS DU COMPOSITE QUI NE S'EXÉCUTAIENT NULLE PART.
+      # Tous ouvrent un chromium sur le `dist` déjà construit : ils ont leur
+      # place dans CE travail, qui a payé l'installation du navigateur, et pas
+      # dans `quality`. Placés AVANT le pas de virtualisation ci-dessous, qui
+      # doit rester le dernier pour la raison qu'il donne lui-même.
+      #
+      # `check-shell-dist` et `check-gateway-build` reconstruisent chacun leur
+      # propre sortie (`dist-capacitor`, `dist-gateway`) : ils ne touchent pas
+      # au `dist` que les pas précédents ont mesuré.
+      - name: Gate actions de rangée (un contrôle existe s'il a un EFFET)
+        run: |
+          cd apps/web-v3
+          node scripts/check-list-actions.mjs
+
+      - name: Gate mode de lecture (l'EFFET, pas le rendu du contrôle)
+        run: |
+          cd apps/web-v3
+          node scripts/check-reading-mode.mjs
+
+      # #5774 — LE CHROME DU FIL : escamotage au geste, pilule de jour
+      # collante, bouton « revenir en bas ». Mesure des `opacity`,
+      # `pointer-events`, positions et `scrollTop` RÉELS, dans les deux
+      # schémas — rien de tout cela n'est visible d'un test unitaire.
+      - name: Gate chrome du fil (escamotage, pilule de jour, retour en bas)
+        run: |
+          cd apps/web-v3
+          node scripts/check-thread-chrome.mjs
+
+      - name: Gate couple de focus des champs (l'anneau et son contre-anneau)
+        run: |
+          cd apps/web-v3
+          node scripts/check-field-focus.mjs
+
+      - name: Gate dist de la coque Capacitor (variante B)
+        run: |
+          cd apps/web-v3
+          node scripts/check-shell-dist.mjs
+
+      # #5774 revue — capacitor.config.ts se charge en CJS (require.extensions)
+      # par la CLI, jamais en ESM : `bun test` ne peut pas voir un `import.meta`
+      # qui casse ce chargeur-là. Ce gate rejoue le VRAI chargeur (`bunx cap ls`).
+      - name: Gate capacitor.config.ts (chargeur CJS réel de la CLI)
+        run: |
+          cd apps/web-v3
+          node scripts/check-capacitor-config.mjs
+
+      - name: Gate build passerelle (VITE_DATA_SOURCE=gateway parle vraiment)
+        run: |
+          cd apps/web-v3
+          node scripts/check-gateway-build.mjs
 
       # EN DERNIER, et pas par hasard : ce témoin RECONSTRUIT `dist` en variante
       # de banc (500 messages) pour mesurer la virtualisation, puis le
