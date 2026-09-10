@@ -80,6 +80,10 @@ function makeSocket(overrides: Record<string, any> = {}): Socket {
   // excluded) — mirrors the real Socket.IO BroadcastOperator API.
   return {
     id: SOCKET_ID,
+    // `leave` : la room est une AUTORISATION MISE EN CACHE, et `typing:start`
+    // est le seul site qui repaie la vérification d'appartenance à chaque
+    // événement — donc le seul qui puisse la révoquer sans coût (#5947).
+    leave: jest.fn<any>().mockResolvedValue(undefined),
     to: jest.fn<any>().mockReturnValue({
       emit: jest.fn(),
       except: jest.fn<any>().mockReturnValue({ emit: jest.fn() }),
@@ -306,6 +310,86 @@ describe('StatusHandler', () => {
       expect(mockResolveParticipant).toHaveBeenCalledWith(
         expect.objectContaining({ userIdOrToken: USER_ID, conversationId: CONV_ID })
       );
+    });
+
+    /**
+     * **La room est une AUTORISATION MISE EN CACHE, et rien ne l'expirait** (#5947).
+     *
+     * `AuthHandler._joinUserConversations` place la socket dans toutes les rooms
+     * de l'utilisateur UNE fois, à l'authentification. La diffusion de
+     * `message:new` vise la room et ne revérifie rien : une appartenance qui
+     * cesse ensuite par un chemin qui ne passe pas par `endConversationMembership`
+     * laisse donc un abonnement VIVANT — l'ancien membre continue de recevoir le
+     * fil pour toute la durée de vie de sa socket.
+     *
+     * `typing:start` est le SEUL site qui prouve la non-appartenance à chaque
+     * événement, et il se contentait d'un `return`. Il paie déjà la requête :
+     * révoquer ici ne coûte rien et referme la fenêtre au premier signe de vie
+     * de l'ancien membre.
+     *
+     * Mesuré en production le 2026-09-10 : un compte sorti d'une conversation
+     * y recevait toujours les messages en direct, pendant que les trois portes
+     * REST rendaient 403 et que `conversation:join` rendait `not_a_member`.
+     */
+    it('évince la socket de la room quand l\'appartenance est PROUVÉE absente', async () => {
+      mockResolveParticipant.mockResolvedValue(null);
+      const socket = makeSocket();
+      const handler = makeHandler();
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      expect(socket.leave).toHaveBeenCalledWith(ROOMS.conversation(CONV_ID));
+    });
+
+    /**
+     * **Un refus que le client n'entend pas ne corrige rien.** Le serveur
+     * journalisait déjà l'écart ; côté client, l'absence d'indicateur de frappe
+     * était le SEUL symptôme — le plus discret de tous.
+     *
+     * L'événement réutilisé est `conversation:join-error`, PAS un nom neuf : les
+     * trois clients le décodent déjà, et la règle qui décide s'il établit une
+     * non-appartenance (`isMembershipDenied` / `isMembershipDeniedJoinError`)
+     * existe des deux côtés depuis le cycle 99. Un nom neuf n'aurait aucun
+     * lecteur dans le parc déployé.
+     *
+     * Le `conversationId` échoué est celui que le CLIENT a envoyé, jamais le
+     * normalisé : le puits iOS filtre sur l'id qu'il détient
+     * (`.filter { $0.conversationId == convId }`), et lui servir l'autre le
+     * rendrait muet.
+     */
+    it('dit au client qu\'il n\'est plus membre, sous le contrat que les trois clients décodent', async () => {
+      mockResolveParticipant.mockResolvedValue(null);
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: { conversationId: 'mon-identifiant-lisible' } });
+      const socket = makeSocket();
+      const handler = makeHandler();
+
+      await handler.handleTypingStart(socket, { conversationId: 'mon-identifiant-lisible' });
+
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
+        expect.objectContaining({
+          conversationId: 'mon-identifiant-lisible',
+          reason: 'not_a_member',
+        })
+      );
+    });
+
+    /**
+     * La révocation ne doit PAS se déclencher sur un membre légitime : ce serait
+     * lui retirer le fil vivant jusqu'à sa prochaine reconnexion. Le témoin garde
+     * le sens de la garde, pas seulement son existence.
+     */
+    it('ne révoque RIEN quand l\'appelant est bien membre', async () => {
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      expect(socket.leave).not.toHaveBeenCalled();
+      expect(socket.emit).not.toHaveBeenCalled();
     });
 
     it('resolves identity from Participant table for anonymous user', async () => {
