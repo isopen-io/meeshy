@@ -69,6 +69,23 @@ public nonisolated extension Color {
         return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
     }
 
+    /// The luminance where black and white ink yield EXACTLY the same WCAG
+    /// contrast ratio against `self`: `(L+0.05)/0.05 = 1.05/(L+0.05)`, so
+    /// `L = √(0.05 × 1.05) − 0.05 ≈ 0.179`. A formula, not a hand-picked
+    /// constant (D-4) — mirrors `INK_SWITCH_LUMINANCE`
+    /// (`apps/web-v3/src/lib/accent.ts`). A prior `0.6` threshold used across
+    /// the codebase misjudged the whole `0.179 → 0.6` range (#5950).
+    private static let inkSwitchLuminance: CGFloat = (0.05 * 1.05).squareRoot() - 0.05
+
+    /// The legible ink (black or white) over a surface painted with `self` —
+    /// whichever of the two contrasts MORE. Every surface tinted by an
+    /// arbitrary color (accent buttons, badges, capsules, story canvases)
+    /// should consume this rather than comparing `luminance` to an ad-hoc
+    /// threshold.
+    var readableInk: Color {
+        luminance > Color.inkSwitchLuminance ? .black : .white
+    }
+
     /// Parse zéro-allocation de la forme canonique "RRGGBB" / "#RRGGBB"
     /// (insensible à la casse). Retourne la valeur RGB 24-bit, ou `nil` pour
     /// toute autre forme afin que l'appelant retombe sur le chemin legacy exact.
