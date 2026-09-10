@@ -37,7 +37,27 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * commentaire qui le porte.
  */
 describe('usedClasses — un commentaire ne doit jamais injecter de faux token', () => {
-  test('un className="…" multi-lignes à l’intérieur d’un JSDoc ne produit plus aucun token', () => {
+  /**
+   * **CE TÉMOIN A ÉTÉ RETOURNÉ le 2026-09-10, et son titre disait déjà pourquoi.**
+   *
+   * Deux sessions ont corrigé le même défaut à une heure d'écart, par deux
+   * chemins DIFFÉRENTS et complémentaires :
+   * - #5958 a reformaté le commentaire de `thread-chrome.ts` pour qu'il ne
+   *   porte plus la syntaxe d'attribut JSX — le fichier réel cesse de piéger
+   *   l'extracteur ;
+   * - #5960 a fait DÉPOUILLER les commentaires par `usedClasses` — l'extracteur
+   *   cesse de trébucher sur n'importe quel fichier, présent ou futur.
+   *
+   * Le premier soigne un site, le second la classe entière. Ce témoin épinglait
+   * l'ancien comportement (`toContain('*')`) : il caractérisait le DÉFAUT, alors
+   * que le titre de son bloc énonce la RÈGLE — « un commentaire ne doit jamais
+   * injecter de faux token ». Les deux se contredisaient ; c'est la règle qui
+   * gagne, et l'assertion la rejoint.
+   *
+   * > Un témoin qui ÉPINGLE un défaut au lieu d'affirmer la règle devient faux
+   * > le jour où le défaut est corrigé — et il fait alors rougir la correction.
+   */
+  test('un className="…" multi-lignes à l’intérieur d’un JSDoc n’injecte AUCUN token', () => {
     const fixture = [
       '/**',
       ' * au navigateur (`thread-modes.tsx`, le `<div className="flex',
