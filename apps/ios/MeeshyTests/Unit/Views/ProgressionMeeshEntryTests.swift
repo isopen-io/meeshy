@@ -18,6 +18,32 @@ final class ProgressionMeeshEntryTests: XCTestCase {
 
     // MARK: - Fixture
 
+
+    // MARK: - Les libellés, résolus par le MÊME chemin que la vue
+
+    /// **Ces témoins affirmaient des littéraux FRANÇAIS** — `contains("Première
+    /// frappe")` — alors que `String(localized:)` résout contre les langues
+    /// préférées de l'HÔTE, et que l'hôte de test EST l'app. Sur un simulateur
+    /// créé par `simctl create`, sans langue configurée, l'arbre rend
+    /// « First mint, 19 Aug 2026 » : les assertions cherchaient un mot qui ne
+    /// pouvait pas s'y trouver. Rouges sur `main` depuis leur écriture, et
+    /// invisibles depuis `dev`, dont le travail s'arrête à `Build for testing`.
+    ///
+    /// La parade n'est pas de pincer la locale (le dépôt l'a déjà tranché dans
+    /// `ComposerSelectionMarkerWiringGuardTests`) : c'est de demander au
+    /// catalogue LA MÊME CLÉ que la vue. Le témoin parle alors la langue de
+    /// l'hôte, quelle qu'elle soit, et continue de garder le CÂBLAGE — qui est
+    /// son sujet.
+    private var premiereFrappe: String {
+        String(localized: "progression.meesh.first_mint", defaultValue: "Première frappe", bundle: .main)
+    }
+    private var derniereFrappe: String {
+        String(localized: "progression.meesh.last_mint", defaultValue: "Dernière frappe", bundle: .main)
+    }
+    private var aucuneFrappe: String {
+        String(localized: "progression.meesh.never_minted", defaultValue: "Aucune frappe pour l’instant.", bundle: .main)
+    }
+
     /// Un compte qui a frappé deux fois — assez pour que les deux bornes
     /// diffèrent, ce qui est le seul cas où la seconde ligne s'affiche.
     private func payload(
@@ -225,8 +251,8 @@ final class ProgressionMeeshEntryTests: XCTestCase {
         )
 
         let dit = labels(in: root).joined(separator: " | ")
-        XCTAssertTrue(dit.contains("Première frappe"), "La première borne manque : « \(dit) »")
-        XCTAssertTrue(dit.contains("Dernière frappe"), "La seconde borne manque : « \(dit) »")
+        XCTAssertTrue(dit.contains(premiereFrappe), "La première borne manque : « \(dit) »")
+        XCTAssertTrue(dit.contains(derniereFrappe), "La seconde borne manque : « \(dit) »")
     }
 
     /// **Une frappe UNIQUE a la même date des deux côtés** : la répéter
@@ -245,8 +271,8 @@ final class ProgressionMeeshEntryTests: XCTestCase {
         )
 
         let dit = labels(in: root).joined(separator: " | ")
-        XCTAssertTrue(dit.contains("Première frappe"), "La première borne manque : « \(dit) »")
-        XCTAssertFalse(dit.contains("Dernière frappe"), "La seconde borne répète la première : « \(dit) »")
+        XCTAssertTrue(dit.contains(premiereFrappe), "La première borne manque : « \(dit) »")
+        XCTAssertFalse(dit.contains(derniereFrappe), "La seconde borne répète la première : « \(dit) »")
     }
 
     /// Aucune frappe ⇒ on le DIT, plutôt que deux lignes vides.
@@ -260,8 +286,8 @@ final class ProgressionMeeshEntryTests: XCTestCase {
         )
 
         let dit = labels(in: root).joined(separator: " | ")
-        XCTAssertTrue(dit.contains("Aucune frappe"), "L'absence de frappe n'est pas dite : « \(dit) »")
-        XCTAssertFalse(dit.contains("Première frappe"), "Une borne est annoncée sans frappe : « \(dit) »")
+        XCTAssertTrue(dit.contains(aucuneFrappe), "L'absence de frappe n'est pas dite : « \(dit) »")
+        XCTAssertFalse(dit.contains(premiereFrappe), "Une borne est annoncée sans frappe : « \(dit) »")
     }
 
     /// **La frappe ne s'offre QUE si les points la permettent** — la directive
@@ -278,8 +304,10 @@ final class ProgressionMeeshEntryTests: XCTestCase {
         )
 
         let dit = labels(in: root).joined(separator: " | ")
-        XCTAssertFalse(dit.contains("Convertir"), "La conversion est proposée sans les points : « \(dit) »")
-        XCTAssertTrue(dit.contains("Encore"), "Ce qui manque n'est pas dit : « \(dit) »")
+        XCTAssertFalse(dit.contains(ProgressionCopy.meeshMintAction(meesh.mintCost)),
+                       "La conversion est proposée sans les points : « \(dit) »")
+        XCTAssertTrue(dit.contains(ProgressionCopy.meeshMissing(missing: meesh.missingPoints, floor: meesh.floorPoints)),
+                      "Ce qui manque n'est pas dit : « \(dit) »")
     }
 
     func test_withEnoughPoints_theMintActionIsOffered() {
@@ -293,7 +321,7 @@ final class ProgressionMeeshEntryTests: XCTestCase {
         )
 
         XCTAssertTrue(
-            labels(in: root).joined(separator: " | ").contains("Convertir"),
+            labels(in: root).joined(separator: " | ").contains(ProgressionCopy.meeshMintAction(meesh.mintCost)),
             "La conversion n'est pas proposée alors que les points la permettent."
         )
     }
