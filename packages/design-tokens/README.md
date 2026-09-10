@@ -78,9 +78,21 @@ Vérification :
 
 ```bash
 grep -rn 'prefers-color-scheme' packages/design-tokens/*.css   # rien
-cd apps/web-old-version3 && node scripts/check-jetons.mjs
-cd apps/web-old-version3 && bunx jest --testPathPatterns='(jetons|moteur-de-theme|theme-script)'
+cd packages/design-tokens && node scripts/check-jetons.mjs
+cd packages/design-tokens && bun test scripts/
 ```
+
+**Note (#6000)** — `check-jetons.mjs` vivait dans `apps/web-old-version3/scripts/`
+et n'auditait alors que la moitié TABLE (parité de schémas, contrastes WCAG,
+ordre des plans, disjonction du focus, valeur cascade servie). Il a déménagé
+ici quand l'app annulée a quitté le dépôt (#5994) : la table, elle, reste
+importée par `apps/web-v3` et gardée par `bun run check:tokens` de ce
+consommateur. La moitié SOURCES de l'ancien script (`moteursParalleles` —
+« un seul moteur de thème », couleurs écrites en dur dans les composants) n'a
+pas été portée : elle dépendait de la géographie de l'app annulée
+(`app/theme-script.tsx`), et `apps/web-v3` a un bootstrap de thème différent
+(`src/lib/scheme.ts` + `src/lib/inline-scheme-bootstrap.js`, scindé à
+dessein). Voir l'issue de suivi pour ce volet.
 
 ## Pourquoi le schéma sombre est porté par `:root`, et pourquoi ça ne suffit pas
 
