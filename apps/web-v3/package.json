@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/web-v3",
-  "version": "3.1.2",
+  "version": "3.1.3",
   "private": true,
   "type": "module",
   "description": "La v3.1 web — une application TypeScript unique, servie en web, installable en PWA, empaquetable Android/iOS par Capacitor. Interface reprise de l'app iOS.",
