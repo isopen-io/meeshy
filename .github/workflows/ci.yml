@@ -293,6 +293,17 @@ jobs:
       - name: Type-check (apps/web — debt ratchet)
         run: bash scripts/check-type-debt.sh --self-test && bash scripts/check-type-debt.sh
 
+      # #3679 — jumeau des deux cliquets ci-dessus, appliqué à l'usage
+      # explicite de `any` plutôt qu'aux erreurs de compilation ou de lint.
+      # `services/gateway/src` et `packages/shared` n'ont pas de config
+      # ESLint (rien à demander à `@typescript-eslint/no-explicit-any`), donc
+      # ce script mesure par motif plutôt que par AST — cf. son en-tête pour
+      # ce que ça couvre et ce que ça ne couvre pas. `packages/shared` est
+      # tenu à zéro (CLAUDE.md l'exige déjà pour ce paquet) ; `gateway` porte
+      # une baseline qui ne peut que descendre.
+      - name: any debt ratchet (gateway + shared)
+        run: bash scripts/check-any-debt.sh --self-test && bash scripts/check-any-debt.sh
+
       # #5372, suite de #4889 — une entrée de catalogue d'endpoints CLIENT
       # sans appelant se compte comme un lecteur : un décideur qui cherche qui
       # consomme un champ voit la déclaration `case foo(...)` /
