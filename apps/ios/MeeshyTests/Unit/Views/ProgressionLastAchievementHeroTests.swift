@@ -51,57 +51,40 @@ final class ProgressionLastAchievementHeroTests: XCTestCase {
         ))
     }
 
-    private var window: UIWindow?
+    // MARK: - Montage
 
-    private func render(_ vue: some View) -> UIView {
-        let scene = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first { $0.activationState == .foregroundActive }
-        let taille = CGSize(width: 402, height: 300)
-        let window = scene.map { UIWindow(windowScene: $0) } ?? UIWindow(frame: .zero)
-        window.frame = CGRect(origin: .zero, size: taille)
-        let host = UIHostingController(rootView: vue.frame(width: taille.width))
-        window.rootViewController = host
-        window.isHidden = false
-        window.makeKeyAndVisible()
-        self.window = window
-        host.view.frame = CGRect(origin: .zero, size: taille)
-        window.setNeedsLayout(); window.layoutIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
-        return host.view
+    /// Le dernier écran monté — retenu pour que `tearDown` le démonte : une
+    /// fenêtre laissée clé retient son hôte, et l'hôte retient le ViewModel.
+    private var ecran: RenderedScreen?
+
+    /// Monte une vue et retient l'écran. Tout le harnais — fenêtre rattachée à
+    /// la scène, attente CONDITIONNELLE, descente des deux arbres — vit dans
+    /// `RenderedScreen`, site UNIQUE partagé avec les autres témoins de rendu.
+    @discardableResult
+    private func monter(
+        _ vue: some View,
+        size: CGSize = CGSize(width: 402, height: 300),
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> RenderedScreen {
+        let e = RenderedScreen(vue, size: size, file: file, line: line)
+        ecran = e
+        return e
     }
 
     override func tearDown() {
-        window?.rootViewController = nil
-        window?.isHidden = true
-        window = nil
+        ecran?.dismount()
+        ecran = nil
         super.tearDown()
-    }
-
-    private func elements(de objet: NSObject) -> [NSObject] {
-        if let listes = objet.accessibilityElements as? [NSObject], !listes.isEmpty { return listes }
-        let compte = objet.accessibilityElementCount()
-        guard compte != NSNotFound, compte > 0 else { return [] }
-        return (0..<compte).compactMap { objet.accessibilityElement(at: $0) as? NSObject }
-    }
-
-    private func dit(_ objet: NSObject, profondeur: Int = 0) -> [String] {
-        guard profondeur < 60 else { return [] }
-        var trouves = objet.accessibilityLabel.map { [$0] } ?? []
-        for element in elements(de: objet) { trouves += dit(element, profondeur: profondeur + 1) }
-        if let vue = objet as? UIView {
-            for sous in vue.subviews { trouves += dit(sous, profondeur: profondeur + 1) }
-        }
-        return trouves
     }
 
     /// LE témoin central — la forme que la passerelle sert vraiment.
     func test_aFractionalDate_stillReachesTheHero() {
-        let root = render(ProgressionLastAchievementHero(
+        let ecran = monter(ProgressionLastAchievementHero(
             progress: progres(reachedAt: "2026-09-06T18:20:00.000Z"),
             isDark: false
         ))
-        let phrases = dit(root).joined(separator: " | ")
+        let phrases = ecran.labels.joined(separator: " | ")
 
         XCTAssertFalse(
             phrases.contains(premierSucces),
@@ -117,12 +100,12 @@ final class ProgressionLastAchievementHeroTests: XCTestCase {
     /// doit rester lue. Corriger un format en cassant l'autre n'aurait fait que
     /// déplacer le défaut.
     func test_aPlainDate_isStillRead() {
-        let root = render(ProgressionLastAchievementHero(
+        let ecran = monter(ProgressionLastAchievementHero(
             progress: progres(reachedAt: "2026-09-06T18:20:00Z"),
             isDark: false
         ))
         XCTAssertTrue(
-            dit(root).joined(separator: " | ").contains(dernierSucces),
+            ecran.labels.joined(separator: " | ").contains(dernierSucces),
             "La forme sans fraction de seconde n'est plus lue."
         )
     }
@@ -136,8 +119,8 @@ final class ProgressionLastAchievementHeroTests: XCTestCase {
     /// jamais » — reste gardé, sur la bonne phrase.
     func test_withoutAnyUnlockedAchievement_theHeroNamesTheNextOne() {
         let vide = EngagementProgressResolver.resolve(.empty)
-        let root = render(ProgressionLastAchievementHero(progress: vide, isDark: false))
-        let lu = dit(root).joined(separator: " | ")
+        let ecran = monter(ProgressionLastAchievementHero(progress: vide, isDark: false))
+        let lu = ecran.labels.joined(separator: " | ")
         XCTAssertTrue(
             lu.contains(prochainSucces),
             "Rien d'obtenu ⇒ le hero doit VISER : un trou à cet endroit-là est le pire des états vides."
