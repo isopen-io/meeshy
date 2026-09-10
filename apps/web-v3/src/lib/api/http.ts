@@ -61,6 +61,12 @@ export type ApiFailure = {
    * RACINE de l'enveloppe (`register.ts:401-407`, `409` § champ conflit). Sans
    * lui, aucun refus d'inscription ne peut se poser SOUS son champ (#5555, T1). */
   readonly field?: string;
+  /** Le délai RÉEL, en secondes, avant qu'un 429 ne se rouvre — posé par
+   * `RateLimiter.middleware()` (`rate-limiter.ts:307`) à la racine de
+   * l'enveloppe. Sans lui, un texte de refus ne peut que MENTIR un délai en
+   * dur ou rester vague (#5912) : la fenêtre d'un limiteur est une donnée du
+   * serveur, jamais une constante du client. */
+  readonly retryAfter?: number;
 };
 
 export type ApiSuccess<T> = {
@@ -329,6 +335,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
       error: typeof envelope.error === 'string' ? envelope.error : GENERIC_ERROR(response.status),
       ...(typeof envelope.code === 'string' ? { code: envelope.code } : {}),
       ...(field !== undefined ? { field } : {}),
+      ...(typeof envelope.retryAfter === 'number' ? { retryAfter: envelope.retryAfter } : {}),
     };
   }
 
