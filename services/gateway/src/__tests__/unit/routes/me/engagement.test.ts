@@ -23,7 +23,7 @@ const OTHER_USER_ID = '68a000000000000000000002';
 
 function makePrisma(params: {
   user?: { currentStreakDays?: number; longestStreakDays?: number; engagementScore?: number } | null;
-  counters?: Array<{ axisKey: string; count: number }>;
+  counters?: Array<{ axisKey: string; count: number; updatedAt?: Date }>;
   milestones?: Array<{ milestoneType: string; milestoneKey: string; reachedAt: Date }>;
   /** Bornes du registre de frappe (#5839) — `null` quand rien n'a été frappé. */
   mintDates?: { first: Date | null; last: Date | null };
@@ -167,6 +167,54 @@ describe('GET /me/engagement', () => {
       expect.objectContaining({ where: { userId: OTHER_USER_ID } })
     );
 
+    await app.close();
+  });
+});
+
+/**
+ * `elan.activeFamilies` (#5897) — la LISTE derrière le cardinal.
+ *
+ * Avant ce lot, la route ne servait que `activeFamilyCount` : un client ne
+ * pouvait approximer les chips qu'avec le score CUMULÉ (tous axes jamais
+ * touchés), qui reste `> 0` pour une famille abandonnée depuis longtemps. Le
+ * témoin ci-dessous prouve que la fenêtre glissante l'exclut correctement —
+ * une famille au compteur positif mais HORS FENÊTRE ne doit apparaître ni
+ * dans `activeFamilies`, ni dans son cardinal.
+ */
+describe('GET /me/engagement — elan.activeFamilies, la fenêtre plutôt que le cumul', () => {
+  it('exclut une famille au score positif mais HORS de la fenêtre de 7 jours', async () => {
+    const ilYA = (jours: number) => new Date(Date.now() - jours * 24 * 60 * 60 * 1000);
+    const prisma = makePrisma({
+      user: { currentStreakDays: 1, longestStreakDays: 1, engagementScore: 10 },
+      counters: [
+        // Active récemment — reste dans la fenêtre.
+        { axisKey: 'content.text_message', count: 7, updatedAt: ilYA(1) },
+        // Compteur POSITIF (le score cumulé la compterait) mais délaissée
+        // depuis longtemps — la fenêtre doit l'exclure.
+        { axisKey: 'comment.text', count: 3, updatedAt: ilYA(30) },
+      ],
+    });
+    const app = await buildApp(prisma);
+
+    const body = JSON.parse((await getEngagement(app, USER_ID)).body);
+
+    expect(body.data.elan.activeFamilies).toEqual(['content']);
+    expect(body.data.elan.activeFamilyCount).toBe(1);
+    await app.close();
+  });
+
+  it('rend une liste vide, jamais le score cumulé, quand tout est hors fenêtre', async () => {
+    const ilYA = (jours: number) => new Date(Date.now() - jours * 24 * 60 * 60 * 1000);
+    const prisma = makePrisma({
+      user: { currentStreakDays: 0, longestStreakDays: 0, engagementScore: 0 },
+      counters: [{ axisKey: 'content.post', count: 4, updatedAt: ilYA(40) }],
+    });
+    const app = await buildApp(prisma);
+
+    const body = JSON.parse((await getEngagement(app, USER_ID)).body);
+
+    expect(body.data.elan.activeFamilies).toEqual([]);
+    expect(body.data.elan.activeFamilyCount).toBe(0);
     await app.close();
   });
 });

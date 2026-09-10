@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Developper la v3.1 web (apps/web-v3, Vite + Preact + Capacitor) a parite avec l app iOS, pour le web ET Android en une fois : dev resynchronise a chaque tour, etat des lieux ecran par ecran CONTRE apps/ios, issues, une SPECIFICATION par travail, TDD, revue-correction systematique, gates (gate composite + coques QEMU/simulateur), LIVRAISON INCREMENTALE (chaque travail vert part vers dev dans l heure, le staging suit pas a pas) — fable DECRIT et LIVRE, sonnet et haiku DEVELOPPENT, opus RELIT ET CORRIGE',
   whenToUse:
-    "Lancer un tour de developpement de la v3.1 web (apps/web-v3 — directive porteur 2026-09-07 soir : une application similaire a apps/ios pour le web et Android en une fois, en boucle jusqu'a maturite feature par feature). D'abord les coques et le reseau (assets, shells, staging), puis les ecrans dans l'ordre de l'app iOS : conversations, thread, composer, stories, feed, contacts, search, notifs, profile, settings. Args : { branche, depuis, focus, dabord, phares, plafond, tours, sans_issues, pr, base, date, attribution, modeles, repo, sauter }.",
+    "Lancer un tour de developpement de la v3.1 web (apps/web-v3 — directive porteur 2026-09-07 soir : une application similaire a apps/ios pour le web et Android en une fois, en boucle jusqu'a maturite feature par feature). D'abord les coques et le reseau (assets, shells, staging), puis les ecrans dans l'ordre de l'app iOS : conversations, thread, composeur-du-fil, stories, feed, contacts, search, notifs, profile, settings. Args : { branche, depuis, focus, dabord, phares, plafond, tours, sans_issues, pr, base, date, attribution, modeles, repo, sauter }.",
   phases: [
     { title: 'Synchroniser', detail: "fetch + merge origin/dev avant tout travail, et releve de ce que les autres sessions tiennent", model: 'haiku' },
     { title: 'Cadrer', detail: "etat des lieux surface par surface CONTRE apps/ios (parity.md, route-inventory), choix des travaux — fable DECRIT", model: 'fable' },
@@ -72,7 +72,7 @@ const DEPUIS = typeof A.depuis === 'string' && A.depuis ? A.depuis : 'dev'
 const FOCUS = Array.isArray(A.focus) && A.focus.length
   ? A.focus
   : ['assets', 'shells', 'staging',
-     'auth', 'conversations', 'thread', 'composer',
+     'auth', 'conversations', 'thread', 'composeur-du-fil',
      'stories', 'feed', 'contacts', 'search', 'notifs', 'profile', 'settings', 'calls', 'links']
 const PLAFOND = Number.isInteger(A.plafond) && A.plafond > 0 ? A.plafond : 6
 const TOURS = Number.isInteger(A.tours) && A.tours > 0 ? A.tours : 1
@@ -319,13 +319,83 @@ DECISIONS DU PORTEUR EN VIGUEUR — ne les rediscute pas : applique-les.
    verifiee le 2026-09-07 sur les trois plateformes (liste + fil identiques au pixel pres, accent
    par conversation, Prisme, schemas clair/sombre) est le niveau attendu de tout ecran nouveau.
 
-2. LES ASSETS iOS SE RECUPERENT, ILS NE SE REDESSINENT PAS (directive 2026-09-07 soir — cle
+2. LA DONNEE REELLE ET L'INDICATEUR DE FRAPPE — PRIORITE DU TOUR (directive porteur
+   2026-09-10). Mesure du 2026-09-10 sur le bundle SERVI par staging.meeshy.me :
+   l'environnement grave est { BASE_URL, DEV, MODE, PROD, SSR, VITE_API_BASE } — il n'y a
+   AUCUNE cle VITE_DATA_SOURCE. Or config.ts rend
+   \`env.VITE_DATA_SOURCE === 'gateway' ? 'gateway' : 'fixtures'\`. **staging sert donc la
+   v3.1 sur des FIXTURES** : l'adresse de la passerelle est juste, les conversations et les
+   messages affiches sont fabriques.
+
+   CE N'EST PAS DU CODE MANQUANT. \`api/conversations.ts\` et \`api/messages.ts\` portent
+   tous deux \`if (__FIXTURES__ && params.source === 'fixtures') return …\` puis retombent
+   sur le transport HTTP REEL ; \`scripts/check-gateway-build.mjs\` construit un
+   VITE_DATA_SOURCE=gateway et PROUVE au navigateur que l'app parle a la passerelle. Ce qui
+   manque est qu'AUCUN build deploye ne pose la variable — verifie : zero occurrence dans les
+   Dockerfile, dans infrastructure/ et dans .github/workflows/docker.yml.
+
+   > Le mecanisme est ecrit, teste, et jamais active. Meme motif que le garde
+   > check-gateway-build lui-meme, qui ne tournait dans aucune CI avant #5921.
+
+   CE QUE LE TOUR DOIT LIVRER :
+   a. le build deploye pose VITE_DATA_SOURCE=gateway, et la conversation + les messages
+      affiches viennent de la passerelle. PREUVE EXIGEE : une capture de staging (ou de la
+      coque) montrant un contenu qui n'existe PAS dans src/lib/api/fixtures.ts — un nom de
+      conversation, un texte de message. Une capture qui montre Kwame Mensah ou Amina Diallo
+      prouve le contraire de ce qu'elle affirme.
+   b. l'INDICATEUR DE FRAPPE. Aujourd'hui \`query.ts:91\` pose
+      \`typing: apiConfig.source === 'fixtures'\` — il n'existe QUE sous fixtures, et vaut
+      \`false\` des qu'on branche la vraie donnee. Le brancher au socket reel
+      (\`typing:start\` / \`typing:stop\`, packages/shared/types/socketio-events.ts), issue
+      #5494. PREUVE EXIGEE : deux sessions, l'une frappe, l'autre voit — jamais un booleen
+      lu dans le code.
+
+   L'ordre compte : (a) sans (b) rend un fil reel mais muet ; (b) sans (a) n'a rien a
+   ecouter. Si un seul des deux passe, c'est (a).
+
+3. LE COMPOSEUR DE PUBLICATION EST UN SEUL OBJET A TROIS FORMES — story, reel, post
+   (directive porteur 2026-09-10). Il n'est PAS encore ecrit dans web-v3 : c'est donc un
+   premier jet, et le porteur exige qu'il soit bon DES CE PREMIER JET plutot que factorise
+   plus tard. Ce qui suit n'est pas un conseil de style, c'est le cadrage du travail.
+
+   a. UNE abstraction, trois formes. story / reel / post partagent la scene, la timeline,
+      l'etagere, les viewers, le brouillon, l'envoi. Ce qui DIFFERE — duree, ratio, pistes
+      autorisees, audience — se declare en DONNEE, jamais en branche `if (kind === 'story')`
+      recopiee dans quinze composants. Trois copies d'un composeur divergent en trois
+      semaines : c'est mesure ailleurs dans ce depot (les trois familles de resolveurs du
+      Prisme, qui ont diverge sur trois clients faute d'un site UNIQUE).
+
+   b. LA SEMANTIQUE PORTE LES NOMS. Un type SOMME plutot qu'un booleen quand il y a trois
+      etats ; le nom dit CE QUE C'EST, pas ou il est affiche. `PublicationDraft`,
+      `SceneTrack`, `AudienceRule` — jamais `Data2`, `Helper`, `Utils`, ni un `kind: string`
+      qu'aucun compilateur ne verifie. Le vocabulaire est celui de
+      `docs/product/meeshy-composer-modele.md`, qui en est l'AUTORITE declaree : un nom qui
+      s'en ecarte cree une seconde langue pour la meme chose.
+
+   c. LA COHERENCE EST DOUBLE, et la seconde est celle qu'on oublie. VISUELLE : memes
+      gestes, memes rails, memes couleurs de contexte que le fil deja livre — l'utilisateur
+      ne doit pas sentir qu'il change d'application. STRUCTURELLE : les objets du code se
+      composent comme les objets de l'ecran. Si la scene contient des pistes qui contiennent
+      des elements, le TYPE le dit ; si deux ecrans montrent la meme chose, ils lisent le
+      meme type et le meme resolveur. Une hierarchie visuelle qui ne se retrouve pas dans le
+      code est une dette qui se paiera au premier ecran de plus.
+
+   d. OPTIMISE VEUT DIRE MESURE. Pas de re-rendu inutile (Zero Unnecessary Re-render), pas de
+      spinner sur un cache non vide (Cache-First), feedback instantane sur chaque geste
+      (Optimistic Updates) — les principes du CLAUDE.md racine, appliques ICI et prouves par
+      une mesure, pas affirmes dans un rapport.
+
+   > La complexite se paie dans le CODE, jamais chez l'utilisateur (dimension 12). Un
+   > composeur qui demande a l'utilisateur de comprendre la difference entre une story et un
+   > reel a echoue, meme s'il fonctionne.
+
+4. LES ASSETS iOS SE RECUPERENT, ILS NE SE REDESSINENT PAS (directive 2026-09-07 soir — cle
    \`assets\`) : icones d'app, logo, signature, splashscreen, stickers viennent de
    ${IOS}/Meeshy/Assets.xcassets et ${IOS}/Meeshy/Resources ; le pipeline existe deja —
    ${V3}/scripts/generate-icons.py et extract-glyphs.mjs — on l'ETEND, on ne le double pas.
    Les coques Capacitor (icone, splash, fond #0b0c14) et le manifest PWA servent les MEMES actifs.
 
-3. TROIS DEFAUTS DE COQUE RELEVES LE 2026-09-07, a corriger en priorite (cle \`shells\`), chacun
+5. TROIS DEFAUTS DE COQUE RELEVES LE 2026-09-07, a corriger en priorite (cle \`shells\`), chacun
    avec son temoin :
    a) iOS : la safe-area BASSE n'est pas respectee — le composeur et la barre de recherche passent
       sous l'indicateur home (viewport-fit / env(safe-area-inset-bottom) a poser dans le dist,
@@ -336,7 +406,7 @@ DECISIONS DU PORTEUR EN VIGUEUR — ne les rediscute pas : applique-les.
    c) iOS : la bascule clair/sombre A CHAUD n'est pas repercutee (elle ne prend qu'au relancement —
       lis src/lib/scheme.ts : l'ecoute de prefers-color-scheme doit vivre, pas une lecture unique).
 
-4. LE FIL EST UN CHAT VIVANT, JAMAIS UN FORMULAIRE (directives 2026-09-03/04, reconduites) :
+6. LE FIL EST UN CHAT VIVANT, JAMAIS UN FORMULAIRE (directives 2026-09-03/04, reconduites) :
    toute action a un effet IMMEDIAT et OPTIMISTE ; citation/reponse avec saut et mise en evidence,
    plein ecran sur tout media, transcription au Prisme, avatar et nom dans le pied de la DERNIERE
    bulle d'une suite (jamais la premiere, regle iOS), groupement meme auteur + meme jour SANS
@@ -422,7 +492,7 @@ const TRAVAIL = {
   additionalProperties: false,
   required: ['cle', 'genre', 'titre_issue', 'critere_de_fin'],
   properties: {
-    cle: { type: 'string', description: "la cle de surface (assets, shells, staging, conversations, thread, composer, stories, feed…) ou infra-N" },
+    cle: { type: 'string', description: "la cle de surface (assets, shells, staging, conversations, thread, composeur-du-fil, stories, feed…) ou infra-N" },
     genre: { type: 'string', enum: ['ecran', 'infra', 'style'] },
     titre_issue: { type: 'string', description: 'SEMANTIQUE : le resultat attendu, jamais un code interne' },
     route: { type: 'string' },

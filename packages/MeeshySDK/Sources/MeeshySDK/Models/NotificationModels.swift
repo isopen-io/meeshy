@@ -446,7 +446,11 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
     // pas savoir QUOI célébrer : le palier voyageait, personne ne le lisait.
     /// La clé stable du succès débloqué (`achievement.first_voice`…).
     public let achievementKey: String?
-    /// Le palier atteint — jours de série, ou score du niveau.
+    /// L'AXE du badge gagné (`content.message.text`…). Un badge ne porte pas
+    /// `achievementKey` : sa paire est `axisKey` + `threshold`, et sans elle
+    /// une notification de badge ne désigne aucun palier.
+    public let axisKey: String?
+    /// Le palier atteint — seuil du badge, jours de série, ou score du niveau.
     public let threshold: Int?
     /// Le RANG du niveau, déjà calculé par la passerelle (`levelIndexOf`).
     public let level: Int?
@@ -482,6 +486,12 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
         city = try container.decodeIfPresent(String.self, forKey: .city)
         location = try container.decodeIfPresent(String.self, forKey: .location)
         achievementKey = try container.decodeIfPresent(String.self, forKey: .achievementKey)
+        // L'AXE d'un badge. `tryAwardBadge` pose `axisKey` là où
+        // `tryAwardAchievement` pose `achievementKey` : la passe qui a fait
+        // entrer les trois autres champs a laissé celui-ci dehors, et une
+        // notification de badge n'avait donc RIEN à célébrer (#5809, moitié
+        // badge).
+        axisKey = try container.decodeIfPresent(String.self, forKey: .axisKey)
         threshold = try container.decodeIfPresent(Int.self, forKey: .threshold)
         level = try container.decodeIfPresent(Int.self, forKey: .level)
     }
@@ -492,7 +502,7 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
         case contentType, postPreview, parentCommentPreview, excerpt, mediaType, postThumbnailUrl, attachments
         case deviceName, deviceVendor, deviceOS, deviceOSVersion, deviceType
         case ipAddress, country, countryName, city, location
-        case achievementKey, threshold, level
+        case achievementKey, axisKey, threshold, level
     }
 }
 

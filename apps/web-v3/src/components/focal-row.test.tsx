@@ -1,4 +1,7 @@
-import { describe, expect, test } from 'bun:test';
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { FocalRow } from './focal-row';
@@ -325,5 +328,71 @@ describe('FocalRow — displayLanguage, myReactions, selected (#5814, T12)', () 
     const html = renderWith({});
     expect(html).not.toContain('role="checkbox"');
     expect(html).not.toContain('aria-selected');
+  });
+});
+
+/**
+ * RETIRER UNE RÉACTION EN TAPANT SA CAPSULE (#5865, suivi de #5814 T12) —
+ * même comportement que `bubble.test.tsx`, sur la rangée plate.
+ */
+describe('FocalRow — retirer une réaction en tapant sa capsule (#5865)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    GlobalRegistrator.register();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+  afterAll(async () => {
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await GlobalRegistrator.unregister();
+  });
+
+  let container: HTMLDivElement;
+  let root: Root;
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  const withReactions: Message = {
+    ...BASE_MESSAGE,
+    id: 'm-reactions',
+    reactionSummary: { '👍': 1, '❤️': 2 },
+  };
+
+  const mount = (onReact: (emoji: string) => void): HTMLDivElement => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <FocalRow
+          mode="focal"
+          place={placeOf(withReactions)}
+          languages={['fr', 'en']}
+          viewerId="u-viewer"
+          onJumpToMessage={() => {}}
+          myReactions={['👍']}
+          onReact={onReact}
+        />,
+      );
+    });
+    return container;
+  };
+
+  test('tap sur SA capsule 👍 ⇒ onReact("👍"), sans passer par le menu long-appui', () => {
+    const seen: string[] = [];
+    const el = mount((emoji) => seen.push(emoji));
+    const mine = el.querySelector('button[aria-label="Retirer votre réaction 👍"]') as HTMLButtonElement;
+    expect(mine).not.toBeNull();
+    act(() => {
+      mine.click();
+    });
+    expect(seen).toEqual(['👍']);
+  });
+
+  test('la capsule ❤️ (pas la mienne) reste un <span> inerte — aucun bouton', () => {
+    const el = mount(() => {});
+    expect(el.querySelector('button[aria-label*="❤️"]')).toBeNull();
   });
 });

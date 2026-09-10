@@ -83,6 +83,27 @@ describe('placeSignupFailure — hors ligne', () => {
   });
 });
 
+describe('placeSignupFailure — 429, le VRAI délai, jamais le jeton machine (#5912)', () => {
+  test('retryAfter:300 ⇒ « 5 minutes », jamais « instant » ni RATE_LIMIT_EXCEEDED', () => {
+    const result = placeSignupFailure(failure({ status: 429, code: 'RATE_LIMIT_EXCEEDED', error: 'RATE_LIMIT_EXCEEDED', retryAfter: 300 }));
+    expect(result.bannerError).toContain('5 minutes');
+    expect(result.bannerError).not.toContain('instant');
+    expect(result.bannerError).not.toContain('RATE_LIMIT_EXCEEDED');
+    expect(Object.keys(result.fieldErrors)).toHaveLength(0);
+  });
+
+  test('retryAfter:45 (moins d’une minute, arrondi au-dessus) ⇒ « une minute »', () => {
+    const result = placeSignupFailure(failure({ status: 429, code: 'RATE_LIMIT_EXCEEDED', error: 'RATE_LIMIT_EXCEEDED', retryAfter: 45 }));
+    expect(result.bannerError).toContain('une minute');
+  });
+
+  test('retryAfter ABSENT ⇒ repli sans délai inventé, toujours pas le jeton machine', () => {
+    const result = placeSignupFailure(failure({ status: 429, code: 'RATE_LIMIT_EXCEEDED', error: 'RATE_LIMIT_EXCEEDED' }));
+    expect(result.bannerError).not.toContain('RATE_LIMIT_EXCEEDED');
+    expect(result.bannerError).not.toContain('instant');
+  });
+});
+
 describe('placeSignupFailure — conflit de numéro (register.ts:301-331)', () => {
   test('⇒ message SOUS téléphone, jamais le bandeau', () => {
     const conflict: PhoneConflict = { kind: 'phone-conflict' };

@@ -68,6 +68,13 @@ enum Route: Hashable {
     /// réengagement (`badge_earned`, `streak_milestone`, `level_up`,
     /// `achievement_unlocked`).
     case progression
+    /// UNE section du hub — Badges, Défis ou Succès (directive porteur
+    /// 2026-09-09). Elle était présentée en `.sheet` : une feuille INTERROMPT,
+    /// se ferme vers le bas, n'entre pas dans l'historique, et le glissement
+    /// depuis le bord gauche n'y fait rien. Poussée dans la pile, elle reçoit
+    /// les trois gratuitement — c'est le modèle que servent déjà l'Android et
+    /// le web.
+    case progressionSection(ProgressionSection)
     case links
     case affiliate
     case trackingLinks
@@ -136,6 +143,16 @@ extension Route {
             return String(localized: "route.title.stats", defaultValue: "Statistiques", bundle: .main)
         case .progression:
             return String(localized: "route.title.progression", defaultValue: "Progression", bundle: .main)
+        case .progressionSection(let section):
+            // Le titre de la PAGE, pas celui du hub : c'est lui que la barre
+            // de navigation d'iPad affiche et que VoiceOver annonce à
+            // l'arrivée. Les trois libellés vivent déjà dans le catalogue de
+            // l'écran — les recopier ici en ferait des jumeaux qui divergent.
+            switch section {
+            case .badges: return ProgressionCopy.badgesTitle
+            case .defis: return AchievementCopy.sectionsHeader
+            case .succes: return ProgressionCopy.achievementsTitle
+            }
         case .links:
             return String(localized: "route.title.links", defaultValue: "Liens", bundle: .main)
         case .affiliate:

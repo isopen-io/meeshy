@@ -60,12 +60,28 @@ function localeDeLaRequete(request: FastifyRequest): string | undefined {
 }
 
 /**
- * REND la tentative comptée par le limiteur — sur un 400, et sur lui seul.
+ * REND la tentative comptée par le limiteur — sur un 400, et sur un 409
+ * USERNAME_TAKEN (#5912).
  *
  * Un 400 dit « ta saisie est mal formée » : rien n'a été touché, rien n'a été
- * appris sur autrui. Un 409 apprend au contraire qu'un pseudo ou une adresse
- * EXISTE — c'est un oracle, et un oracle remboursable est un oracle gratuit,
- * donc énumérable à volonté. Un 200 et un 429 comptent évidemment.
+ * appris sur autrui — remboursé de tout temps.
+ *
+ * Un 409 apprend qu'un identifiant EXISTE, et un oracle remboursable est en
+ * général un oracle gratuit — MAIS ce raisonnement ne vaut que pour un refus
+ * dont ce limiteur est la SEULE porte. `EMAIL_TAKEN` l'est encore (#4158 a
+ * fermé toute autre surface publique qui répond `taken` sur un e-mail) : il
+ * reste payant, sans exception.
+ *
+ * `USERNAME_TAKEN` ne l'est plus depuis `GET /directory/availability`, qui
+ * répond `taken`/`available` sur un pseudo avec son PROPRE limiteur (20/min
+ * par IP, `directory/availability.ts`) — l'oracle de pseudo est déjà borné
+ * là, à un tarif plus généreux que celui-ci. Faire payer CE limiteur en plus
+ * ne protège donc plus rien : la collision de pseudo est l'issue la plus
+ * COURANTE d'une inscription humaine (les trois suggestions rendues par le
+ * refus invitent explicitement à réessayer), et le compter comme un abus
+ * fermait la porte cinq minutes à quelqu'un qui n'avait rien créé — la
+ * confusion nommée par le commentaire original de ce module, tenue depuis
+ * pour une conséquence acceptée plutôt que pour un défaut.
  *
  * Best-effort et DÉTACHÉ : le remboursement ne doit pas retarder la réponse
  * d'un aller-retour Redis. La garde `.catch` est obligatoire — un rejet sans
@@ -421,9 +437,11 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         logger.info('Registration refused', { code: error.code, field: error.field });
 
         // Un 400 rend la tentative (la saisie est à corriger, rien n'a été
-        // touché) ; un 409 la garde — il APPREND qu'un identifiant existe, et
-        // un oracle remboursable est un oracle gratuit.
-        if (error.status === 400) rembourserLaTentative(limiteurs, request);
+        // touché). USERNAME_TAKEN la rend aussi (#5912) : l'oracle de pseudo
+        // est déjà borné par le limiteur DÉDIÉ de `GET /directory/availability`
+        // — voir le doc-comment de `rembourserLaTentative`. EMAIL_TAKEN reste
+        // payant : lui seul apprend qu'un e-mail existe (#4158).
+        if (error.status === 400 || error.code === 'USERNAME_TAKEN') rembourserLaTentative(limiteurs, request);
 
         return sendError(reply, error.status, error.message, {
           code: error.code,

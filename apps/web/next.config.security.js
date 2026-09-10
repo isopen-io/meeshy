@@ -9,16 +9,66 @@
  */
 
 /**
+ * Extracts "scheme://host[:port]" from a full URL, dropping any path/query
+ * (e.g. `NEXT_PUBLIC_TRANSLATION_URL=https://ml.meeshy.me/translate` in
+ * prod — CSP source expressions want the origin, not the path). Returns
+ * `null` on an unset or malformed value so callers can fall back.
+ */
+function originOf(url) {
+  if (!url) return null;
+  try {
+    const { protocol, host } = new URL(url);
+    return `${protocol}//${host}`;
+  } catch {
+    return null;
+  }
+}
+
+// Google/Firebase domains used by `firebase/app` + `firebase/messaging`
+// (see apps/web/firebase-config.ts, utils/fcm-manager.ts) — the project ID
+// varies by env (NEXT_PUBLIC_FIREBASE_*), but the API/CDN hosts do not.
+const GOOGLE_API_ORIGIN = 'https://*.googleapis.com';
+const GOOGLE_STATIC_ORIGIN = 'https://www.gstatic.com';
+
+/**
+ * The service origins this app calls over `fetch`/WebSocket: gateway (API +
+ * WS), translator, static assets. Every compose file (dev, local, prod —
+ * `infrastructure/docker/compose/*.yml`) sets `NEXT_PUBLIC_API_URL` /
+ * `NEXT_PUBLIC_WS_URL` / `NEXT_PUBLIC_TRANSLATION_URL` /
+ * `NEXT_PUBLIC_STATIC_URL` to the exact origin of that deployment. Reading
+ * them here means the CSP always matches what the browser actually calls,
+ * with no domain-pattern guessing — unlike the previous `NEXT_PUBLIC_API_DOMAIN`,
+ * which is not set by any compose file and would have resolved to the
+ * `localhost:3001` fallback in every real environment (#5728).
+ * Defaults below cover a bare `next dev` / tmux "meeshy" run with no
+ * compose file and no `.env` (translator :8000, gateway :3000 — see root
+ * CLAUDE.md "Local Services").
+ */
+const apiOrigin = originOf(process.env.NEXT_PUBLIC_API_URL) || 'http://localhost:3000';
+const wsOrigin = originOf(process.env.NEXT_PUBLIC_WS_URL) || 'ws://localhost:3000';
+const translationOrigin = originOf(process.env.NEXT_PUBLIC_TRANSLATION_URL) || 'http://localhost:8000';
+const staticOrigin = originOf(process.env.NEXT_PUBLIC_STATIC_URL);
+
+const connectSrcOrigins = [
+  "'self'",
+  apiOrigin,
+  wsOrigin,
+  translationOrigin,
+  ...(staticOrigin ? [staticOrigin] : []),
+  GOOGLE_API_ORIGIN,
+].join(' ');
+
+/**
  * Content Security Policy
  * Prevents XSS, clickjacking, and other code injection attacks
  */
 const ContentSecurityPolicy = `
   default-src 'self';
-  script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.socket.io;
+  script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.socket.io ${GOOGLE_STATIC_ORIGIN};
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob: https:;
   font-src 'self' data:;
-  connect-src 'self' wss://${process.env.NEXT_PUBLIC_API_DOMAIN || 'localhost:3001'} https://${process.env.NEXT_PUBLIC_API_DOMAIN || 'localhost:3001'};
+  connect-src ${connectSrcOrigins};
   media-src 'self' blob:;
   object-src 'none';
   base-uri 'self';
@@ -98,19 +148,29 @@ const securityHeaders = [
  *
  * CSP is an ALLOWLIST: shipping it wrong doesn't warn anyone, it silently
  * blocks whatever it forgot (a WebSocket to the real gateway domain, a
- * Firebase call, an image host) — and this file's `connect-src` already read
- * `NEXT_PUBLIC_API_DOMAIN`, an env var that does not exist anywhere in this
- * repo (production sets `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_WS_URL`, see
- * `docker-compose.prod.yml`), so it would have resolved to the `localhost:3001`
- * fallback in every real environment and blocked the app's own API/WS traffic.
- * Wiring CSP in needs a real allowlist audit (gateway, translator, static
- * asset host, Firebase/FCM domains, image remote patterns) verified against a
- * running environment — tracked separately (#3628 follow-up). Until then,
- * only the non-CSP hardening headers below are wired into `next.config.ts`.
+ * Firebase call, an image host). Wired unconditionally into `next.config.ts`.
  */
 const nonCspSecurityHeaders = securityHeaders.filter(
   (header) => header.key !== 'Content-Security-Policy'
 );
+
+/**
+ * CSP served as `Content-Security-Policy-Report-Only` — logs violations
+ * instead of blocking (#5728). The allowlist above is now built from the
+ * real per-deployment env vars rather than a nonexistent one, but it has
+ * only been verified by reading code, never against a running staging
+ * environment (connexion, appel, notification push, upload — see #5728
+ * critère de fin). Report-only is the safe first step this repo's own issue
+ * names: promoting it to the blocking `Content-Security-Policy` header
+ * belongs to whoever can watch the report endpoint / browser console on a
+ * real environment first.
+ */
+const reportOnlyCspHeader = [
+  {
+    key: 'Content-Security-Policy-Report-Only',
+    value: ContentSecurityPolicy,
+  },
+];
 
 /**
  * Export security headers configuration
@@ -132,5 +192,6 @@ const nonCspSecurityHeaders = securityHeaders.filter(
 module.exports = {
   securityHeaders,
   nonCspSecurityHeaders,
+  reportOnlyCspHeader,
   ContentSecurityPolicy
 };

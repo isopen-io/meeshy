@@ -273,7 +273,12 @@ jobs:
             else
               API_BASE=''
             fi
-            SERVICES+='{"service":"web-v31","context":".","dockerfile":"./apps/web-v3/Dockerfile","image":"meeshy-web-v31","version":"'$VERSION'","viteApiBase":"'$API_BASE'"}'
+            # **LA SOURCE DE DONNÉES, décidée ici comme l'origine (#5929).**
+            # `gateway` INCONDITIONNELLEMENT : une image déployée qui sert des
+            # fixtures montre Kwame Mensah à de vrais utilisateurs. Le défaut du
+            # `Dockerfile` reste `fixtures` pour qu'un build local n'exige aucune
+            # passerelle ; une image, elle, en a toujours une.
+            SERVICES+='{"service":"web-v31","context":".","dockerfile":"./apps/web-v3/Dockerfile","image":"meeshy-web-v31","version":"'$VERSION'","viteApiBase":"'$API_BASE'","viteDataSource":"gateway"}'
             FIRST=false
           fi
 
@@ -431,6 +436,7 @@ jobs:
             BUN_VERSION=${{ env.BUN_VERSION }}
             TORCH_BACKEND=${{ matrix.torch_backend || 'cpu' }}
             VITE_API_BASE=${{ matrix.viteApiBase || '' }}
+            VITE_DATA_SOURCE=${{ matrix.viteDataSource || '' }}
 
       - name: Build summary
         run: |

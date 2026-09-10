@@ -105,34 +105,72 @@ export function reactionEntries(
 /**
  * UNE pilule de réaction — la bulle la pose en débord, la rangée plate en
  * ligne basse. `mine` (#5814, T12) marque « CE lecteur a posé cet emoji » —
- * un contour d'accent, miroir `BubbleReactionsOverlay.swift:189-199` — SANS
- * en faire un `<button>` : la BASCULE par la capsule reste hors de ce lot
- * (`bulle.md` écart 8), seul le rail du menu du message réagit
- * (`message-menu.tsx`).
+ * un contour d'accent, miroir `BubbleReactionsOverlay.swift:189-199`.
  *
- * LA MARQUE EST TEXTUELLE, PAS `aria-pressed` (revue #5814) : `aria-pressed`
- * n'est défini QUE sur `role="button"`. Posé sur ce `<span>` sans rôle, il
- * était ignoré par la norme — et, chez les lecteurs d'écran qui le prennent
- * quand même, il annonçait un BOUTON BASCULE que rien ne bascule : très
- * exactement le contrôle qui ment que la loi 4 du dépôt interdit, et sur
- * CHAQUE capsule du fil (`aria-pressed="false"` était rendu partout). La
- * ligne hors écran porte déjà l'information, elle seule reste.
+ * DEVIENT UN `<button>` QUAND `onToggle` EST FOURNI (#5865, suivi de #5814
+ * — `bulle.md` écart 8) : iOS retire déjà une réaction en tapant directement
+ * sa propre capsule (`BubbleReactionsOverlay.swift`), seul le rail du menu
+ * du message (appui long) le permettait ici. L'hôte (`bubble.tsx`,
+ * `focal-row.tsx`) ne câble `onToggle` QUE sur les capsules `mine` — taper
+ * la capsule d'AUTRUI n'a pas de sens (on ne bascule pas la réaction de
+ * quelqu'un d'autre), donc `onToggle` reste `undefined` pour elles et la
+ * capsule garde son rendu `<span>` d'origine.
+ *
+ * LA MARQUE RESTE TEXTUELLE, PAS `aria-pressed` (revue #5814) :
+ * `aria-pressed` n'est défini QUE sur `role="button"`. Posé sur un `<span>`
+ * sans rôle, il était ignoré par la norme — et, chez les lecteurs d'écran
+ * qui le prennent quand même, il annonçait un BOUTON BASCULE que rien ne
+ * bascule : très exactement le contrôle qui ment que la loi 4 du dépôt
+ * interdit. Devenu un vrai `<button>`, son EFFET est nommé par `aria-label`
+ * (« Retirer votre réaction … »), jamais par `aria-pressed` — retirer n'est
+ * pas basculer entre deux états visibles du même contrôle.
  */
-export function ReactionChip({ glyph, count, mine = false }: { glyph: string; count: number; mine?: boolean }) {
-  return (
-    <span
-      className="flex items-center gap-0.5 rounded-chip px-1.5 py-0.5 text-check"
-      style={{
-        backgroundColor: mine ? 'color-mix(in srgb, var(--accent) 16%, var(--color-ios-card))' : 'var(--color-ios-card)',
-        border: mine ? '1px solid var(--accent)' : '1px solid var(--color-edge)',
-      }}
-    >
+export function ReactionChip({
+  glyph,
+  count,
+  mine = false,
+  onToggle,
+}: {
+  glyph: string;
+  count: number;
+  mine?: boolean;
+  /** Retire la réaction en tapant la capsule — fourni par l'hôte SEULEMENT
+   * quand `mine` est vrai (#5865). */
+  onToggle?: () => void;
+}) {
+  const style = {
+    backgroundColor: mine ? 'color-mix(in srgb, var(--accent) 16%, var(--color-ios-card))' : 'var(--color-ios-card)',
+    border: mine ? '1px solid var(--accent)' : '1px solid var(--color-edge)',
+  };
+  const content = (
+    <>
       <span aria-hidden>{glyph}</span>
       <span className="tabular-nums opacity-70">{count}</span>
       <span className="offscreen">
         {count} réaction{count > 1 ? 's' : ''} {glyph}
         {mine ? ' — la vôtre' : ''}
       </span>
+    </>
+  );
+  if (onToggle !== undefined) {
+    return (
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={`Retirer votre réaction ${glyph}`}
+        /* `tap-target-chip` (`app.css`) étend la zone TACTILE à 44 px sans
+           grandir le DESSIN de la capsule (même dispositif que
+           `tap-target-22`/`tap-target-34` plus haut dans ce fichier). */
+        className="tap-target-chip flex items-center gap-0.5 rounded-chip px-1.5 py-0.5 text-check"
+        style={style}
+      >
+        {content}
+      </button>
+    );
+  }
+  return (
+    <span className="flex items-center gap-0.5 rounded-chip px-1.5 py-0.5 text-check" style={style}>
+      {content}
     </span>
   );
 }

@@ -73,6 +73,7 @@ export function Bubble({
   displayLanguage,
   onPickLanguage,
   myReactions,
+  onReact,
   selected,
   onToggleSelect,
 }: {
@@ -92,8 +93,13 @@ export function Bubble({
    */
   onPickLanguage?: (code: string) => void;
   /** Les emojis que CE lecteur a posés sur CE message — marque `ReactionChip
-   * mine` (#5814, T12), sans en faire un bouton. */
+   * mine` (#5814, T12). */
   myReactions?: readonly string[];
+  /** Retire une réaction MIENNE en tapant sa capsule (#5865) — jamais câblé
+   * sur une capsule d'autrui (`ReactionChip`, `onToggle`). `undefined` ⇒ la
+   * capsule reste un `<span>` inerte (loi 4 : pas de bouton qui promet un
+   * effet qu'il n'a pas). */
+  onReact?: (emoji: string) => void;
   /** Mode sélection ACTIF (`undefined` hors sélection). */
   selected?: boolean;
   /** VA AVEC `selected` — sans elle la coche serait INERTE (loi 4).
@@ -433,9 +439,18 @@ export function Bubble({
             className={`absolute flex gap-1 ${isMine ? 'left-0 -translate-x-1' : 'right-0 translate-x-1'}`}
             style={{ bottom: -8 }}
           >
-            {reactions.map(([glyph, count]) => (
-              <ReactionChip key={glyph} glyph={glyph} count={count} mine={myReactions?.includes(glyph) ?? false} />
-            ))}
+            {reactions.map(([glyph, count]) => {
+              const mine = myReactions?.includes(glyph) ?? false;
+              return (
+                <ReactionChip
+                  key={glyph}
+                  glyph={glyph}
+                  count={count}
+                  mine={mine}
+                  {...(mine && onReact !== undefined ? { onToggle: () => onReact(glyph) } : {})}
+                />
+              );
+            })}
           </div>
         ) : null}
       </div>
