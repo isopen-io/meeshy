@@ -20,21 +20,21 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * en silence.
  */
 /**
- * LE TÉMOIN DU FAUX-POSITIF DE COMMENTAIRE (régression CI 2026-09-10).
+ * LE TÉMOIN DU FAUX-POSITIF DE COMMENTAIRE (régression CI 2026-09-10, #5958).
  *
- * `usedClasses` lit le TEXTE BRUT du fichier (c'est la méthode documentée en
- * tête du module : comparer à la feuille produite plutôt qu'à une liste
- * d'utilitaires tenue à la main) — y compris à l'intérieur d'un commentaire
- * JSDoc. Un commentaire qui CITE un extrait JSX d'un AUTRE fichier, avec un
- * `className="…"` qui franchit un saut de ligne, fait capturer par la regex
- * le marqueur de continuation ` * ` du commentaire comme un TOKEN de classe
- * à part entière : `className="flex\n * justify-center py-1.5"` rend les
- * tokens `flex`, `*`, `justify-center`, `py-1.5` — `*` n'a jamais été une
- * classe, et n'a donc aucune règle dans la feuille produite, ce qui a fait
+ * Un commentaire JSDoc qui CITE un extrait JSX d'un AUTRE fichier, avec un
+ * `className="…"` qui franchit un saut de ligne, faisait capturer par la
+ * regex le marqueur de continuation ` * ` comme un TOKEN de classe à part
+ * entière : `className="flex\n * justify-center py-1.5"` rendait les tokens
+ * `flex`, `*`, `justify-center`, `py-1.5` — `*` n'a jamais été une classe,
+ * et n'avait donc aucune règle dans la feuille produite, ce qui a fait
  * échouer `Gates web-v3` sur `dev` pour TOUTE PR (pas seulement celle qui
- * touchait le fichier). Le fichier réel documente désormais l'extrait sans
- * la syntaxe d'attribut JSX entre guillemets ; ce témoin verrouille qu'il
- * ne produit plus aucun token de classe utilisateur.
+ * touchait le fichier). Deux correctifs complémentaires ont atterri côte à
+ * côte (#5958, le commentaire réel reformulé sans guillemets JSX ; #5960,
+ * `usedClasses` dépouille désormais les commentaires avant de scanner) :
+ * ce témoin verrouille le second, sur un fixture qui reproduit EXACTEMENT
+ * le motif fautif — il doit rendre zéro token, quelle que soit la forme du
+ * commentaire qui le porte.
  */
 describe('usedClasses — un commentaire ne doit jamais injecter de faux token', () => {
   /**
