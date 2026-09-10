@@ -16,11 +16,9 @@
 // `_generate-certs` le génère avec mkcert pour `*.meeshy.local`, `meeshy.local`,
 // `*.meeshy.home`, `$(HOST_IP)`, `localhost`, `127.0.0.1`, `::1`, et le copie
 // sous `$(CERTS_DIR)` (`infrastructure/docker/compose/certs/{cert,key}.pem`),
-// d'où Traefik le sert déjà. C'est l'emplacement PARTAGÉ, hors des deux zones
-// web (legacy et v3) : le consommer ici n'ajoute aucune autorité locale à
-// faire confiance et ne duplique aucun secret. Patron : `apps/web-old-version3/scripts/
-// dev-https.mjs`, le même script pour la zone v3, gardé par
-// `apps/web-old-version3/__tests__/dev-https.test.ts`.
+// d'où Traefik le sert déjà. C'est l'emplacement PARTAGÉ, hors des
+// applications web : le consommer ici n'ajoute aucune autorité locale à
+// faire confiance et ne duplique aucun secret.
 //
 // CE QUE CE FICHIER NE TOUCHE PAS
 //
