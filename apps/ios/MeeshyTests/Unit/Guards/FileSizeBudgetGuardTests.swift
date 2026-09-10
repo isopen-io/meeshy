@@ -269,7 +269,21 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// dans le `body`, a suivi. Net : le fichier est plus COURT qu'avant le lot.
     ///
     /// REMESURÉ sur les 29 noms restants, jamais soustrait de tête.
-    private static let legacyLineCeiling = 60_862
+    // #6016 — 60 862 → 60 235 (−627). Le composer inline du fil quitte
+    // `FeedView+Attachments.swift` : dix-huit fonctions et une `var` de 44
+    // lignes que rien ne montait. Le fichier RESTE en dette (1 391 > 1 200),
+    // donc son nom reste dans la liste ; seul le plafond baisse, et il baisse
+    // d'exactement ce que le lot a retiré.
+    //
+    // **Il baisse de 627, pas de 1 253.** Le cumul MESURÉ ce jour est 59 609,
+    // soit 626 lignes de mou DÉJÀ présentes avant ce lot — quelqu'un a allégé
+    // sans faire descendre le cran. Les reprendre ici serait juste au sens du
+    // cliquet et faux au sens de la coordination : une PR en vol peut avoir
+    // légitimement écrit dans ce mou, et la lui retirer après coup ferait
+    // rougir `dev` pour un ajout que rien n'interdisait au moment où il a été
+    // écrit. Ce mou est donc une issue à lui seul (#6046), pas une prise de
+    // guerre de ce lot.
+    private static let legacyLineCeiling = 60_235
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
