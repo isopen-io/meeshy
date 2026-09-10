@@ -7,7 +7,7 @@
 // Le dépôt DÉCLARE la dépendance de build à deux endroits, et correctement :
 //
 //   turbo.json                  "build": { "dependsOn": ["^build"], … }
-//   apps/web-old-version3/package.json    "@meeshy/shared": "workspace:*"
+//   apps/web-v3/package.json    "@meeshy/shared": "workspace:*"
 //
 // `turbo run build --filter=@meeshy/web-v3` construirait donc `packages/shared`
 // d'abord, tout seul. Mesuré sur les 1 638 lignes du fichier, au 2026-09-02 :
@@ -32,27 +32,22 @@
 // la commande du graphe qui l'aurait déduite.
 //
 // Ce que la recopie a coûté : `01c49fcfee` a fait importer `@meeshy/shared` par
-// `apps/web-old-version3`. Les trois jobs qui construisent la v3 (`a11y-v3`,
-// `lifecycle-v3`, `chaines-v3`) n'avaient pas leur étape à la main — trois jobs
-// rouges, réparés par `b975ec3c7e` en AJOUTANT les trois étapes manquantes,
-// c'est-à-dire la neuvième, dixième et onzième copie de la même ligne.
+// l'ancienne refonte v3 (retirée du dépôt depuis, #5994). Ses trois jobs de CI
+// n'avaient pas leur étape à la main — trois jobs rouges, réparés par
+// `b975ec3c7e` en AJOUTANT les trois étapes manquantes, c'est-à-dire la
+// neuvième, dixième et onzième copie de la même ligne.
 // `packages/shared/dist` étant gitignore (`packages/shared/.gitignore:2`), rien
 // ne peut compenser l'oubli, et LE JOB QUI CASSE N'EST PAS CELUI QUI A AJOUTÉ
 // L'IMPORT : la personne qui écrit l'`import` ne touche aucun fichier de CI.
 //
-// REJOUÉ SUR LE DÉFAUT LUI-MÊME, et pas seulement raconté : remis
-// `.github/workflows/ci.yml` et `apps/web-old-version3/package.json` dans l'état de
-// `f73f3c525e^` — l'arbre exact qui a rougi — ce garde rend rc=1 et NOMME les
-// trois jobs, les trois étapes et la raison :
-//
-//   job « a11y-v3 » · étape « Build apps/web-old-version3 (le manifeste que le balayage
-//   lit) » (l.308) : construit @meeshy/web-v3 sans qu'aucune étape antérieure
-//   n'ait construit @meeshy/shared, déclaré workspace:* et PRODUCTEUR
-//   (scripts.build → tsc --project tsconfig.json).
-//
-// … puis les mêmes lignes pour `lifecycle-v3` et `chaines-v3`, dans les deux
-// scénarios. Six défauts, dans le job `quality`, avant qu'un seul `next build`
-// n'ait tourné.
+// REJOUÉ SUR LE DÉFAUT LUI-MÊME, et pas seulement raconté : `ci.yml` et le
+// manifeste de l'application remis dans l'état de `f73f3c525e^` — l'arbre exact
+// qui a rougi —, ce garde rendait rc=1 et NOMMAIT les trois jobs, les trois
+// étapes et la raison (« construit le workspace sans qu'aucune étape antérieure
+// n'ait construit @meeshy/shared, déclaré workspace:* et PRODUCTEUR »), dans les
+// deux scénarios : six défauts, dans le job `quality`, avant qu'un seul
+// `next build` n'ait tourné. Ce rejeu a quitté le dépôt avec l'application ;
+// les mutations du --self-test en tiennent lieu.
 //
 // Ce garde ne change RIEN à la façon dont les jobs s'exécutent — c'est
 // délibéré : basculer `ci.yml` sur `turbo run` changerait le mode d'exécution
@@ -74,14 +69,13 @@
 //
 // CE QU'IL LIT, ET SUR QUELLE SURFACE
 //
-// Les SEIZE workflows de `.github/workflows/`, pas seulement `ci.yml` — parce
+// TOUS les workflows de `.github/workflows/`, pas seulement `ci.yml` — parce
 // que « les autres ne construisent rien sur le runner » est une mesure du jour,
 // pas une propriété. Mesuré au 2026-09-02 : `ci.yml` porte les 34 étapes de
-// construction du dépôt, les quinze autres n'en portent AUCUNE. `docker.yml` et
+// construction du dépôt, les autres n'en portent AUCUNE. `docker.yml` et
 // `release.yml` bâtissent par `docker/build-push-action`, où l'ordre est tenu
-// par les Dockerfiles et non par des étapes de runner ; `v3-baseline.yml` mesure
-// la PRODUCTION (`https://meeshy.me`) et n'a même pas d'étape d'installation ;
-// les douze autres sont iOS, Android, SDK ou pilotage. Aucune exclusion à
+// par les Dockerfiles et non par des étapes de runner ; le reste est iOS,
+// Android, SDK ou pilotage. Aucune exclusion à
 // écrire, donc — et le jour où l'un d'eux gagne un
 // `cd services/gateway && bun run build`, il entre sous la même règle sans
 // qu'une ligne d'ici n'ait été touchée.
@@ -89,21 +83,14 @@
 // LA NUANCE QUI DÉCIDE DE LA QUALITÉ DE CE GARDE
 //
 // Une dépendance `workspace:*` n'a besoin d'être CONSTRUITE que si elle PRODUIT
-// quelque chose que le consommateur importe. Mesuré sur les trois paquets que
-// `apps/web-old-version3` déclare :
+// quelque chose que le consommateur importe. Mesuré sur les deux paquets que
+// `apps/web-v3` déclare :
 //
 //   @meeshy/shared         scripts.build = "tsc --project tsconfig.json"
 //                          main/exports  → ./dist/…            ⇒ PRODUIT
-//   @meeshy/design-tokens  aucun script  (le manifeste n'a pas de "scripts")
-//                          exports       → ./tokens.css, ./dark.css, ./light.css
-//                          — trois fichiers COMMITÉS, lus comme des fichiers  ⇒ NE PRODUIT PAS
-//   @meeshy/icons          scripts = { sprite, verifie } — pas de "build"
-//                          exports       → ./sprite.svg, ./critical.svg, …
-//                          — également commités                 ⇒ NE PRODUIT PAS
-//
-// (`apps/web-old-version3/next.config.ts` lit d'ailleurs
-// `./node_modules/@meeshy/icons/critical.svg` comme un FICHIER SUR LE DISQUE,
-// jamais comme un module.)
+//   @meeshy/design-tokens  scripts = { generate:ios, check } — pas de "build"
+//                          exports       → ./tokens.css, ./dark.css, ./light.css, ./ios.css
+//                          — quatre fichiers COMMITÉS, lus comme des fichiers  ⇒ NE PRODUIT PAS
 //
 // Un garde qui exigerait de construire un paquet d'actifs crierait au loup sur
 // les trois quarts de ses cas et serait désarmé dans le mois. Le critère retenu
@@ -113,9 +100,9 @@
 // aujourd'hui `dist/**` et `.next/**`). Un paquet produit donc si — et seulement
 // si — il a un script `build` ET qu'au moins un de ses points d'entrée
 // (`main`, `module`, `types`, `typings`, `bin`, feuilles d'`exports`) tombe sous
-// l'un de ces globs. Le jour où `@meeshy/icons` gagnera un `build` qui émet
-// `dist/sprite.svg` et pointera ses `exports` dessus, ce garde réclamera son
-// étape sans qu'une ligne d'ici n'ait été touchée.
+// l'un de ces globs. Le jour où `@meeshy/design-tokens` gagnera un `build` qui
+// émet `dist/tokens.css` et pointera ses `exports` dessus, ce garde réclamera
+// son étape sans qu'une ligne d'ici n'ait été touchée.
 //
 // POURQUOI « LE MÊME JOB », ET PAS « UN JOB DONT CELUI-CI DÉPEND »
 //
@@ -649,15 +636,15 @@ const inJob = (world, job, needle, replacement) => {
 
 const MUTATIONS = [
   [
-    "l'étape « Build packages/shared » retirée du job a11y-v3 (le défaut de 01c49fcfee)",
+    "l'étape « Build packages/shared » retirée du job institutionnel-v3 (le défaut de 01c49fcfee)",
     (world) =>
       inJob(
         world,
-        'a11y-v3',
+        'institutionnel-v3',
         /      - name: Build packages\/shared[^\n]*\n        run: \|\n          cd packages\/shared\n[^\n]*\n/,
         '',
       ),
-    'job « a11y-v3 » · scénario bun · étape « Build apps/web-old-version3',
+    'job « institutionnel-v3 » · scénario bun · étape « Build apps/web-v3',
   ],
   [
     'une dépendance workspace:* PRODUCTRICE ajoutée sans son étape (le scénario que #4761 ferme)',
@@ -706,13 +693,13 @@ const MUTATIONS = [
     "invoque bun, qu'aucune étape antérieure du job n'installe",
   ],
   [
-    "la v3 construite par un `cd` pris dans une branche de shell",
+    "la v3.1 construite par un `cd` pris dans une branche de shell",
     (world) =>
       inJob(
         world,
-        'a11y-v3',
-        /      - name: Build apps\/web-old-version3[^\n]*\n        run: \|\n          cd apps\/web-old-version3\n/,
-        '      - name: Build apps/web-old-version3 (branche)\n        run: |\n          if true; then cd apps/web-old-version3; fi\n',
+        'institutionnel-v3',
+        /      - name: Build apps\/web-v3[^\n]*\n        run: \|\n          cd apps\/web-v3\n/,
+        '      - name: Build apps/web-v3 (branche)\n        run: |\n          if true; then cd apps/web-v3; fi\n',
       ),
     "n'est pas lisible",
   ],
@@ -742,7 +729,9 @@ const MUTATIONS = [
     'ci.yml amputé de tous ses jobs sauf le premier',
     (world) => {
       const ci = ciOf(world);
-      ci.text = ci.text.slice(0, ci.text.indexOf('\n  a11y-v3:\n') + 1);
+      const first = ci.text.indexOf('\n  quality:\n');
+      const second = ci.text.slice(first + 1).search(/\n {2}[A-Za-z0-9_-]+:\n/);
+      ci.text = ci.text.slice(0, first + 1 + second + 1);
     },
     'non-vacuité',
   ],

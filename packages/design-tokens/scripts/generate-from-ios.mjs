@@ -256,6 +256,22 @@ const HORS_TABLE_PAR_SCHEMA = [
   ],
   ['--ios-day-ink', 'var(--ios-indigo-200)', 'var(--ios-indigo-700)', 'MessageDaySeparator.swift'],
   ['--ios-day-hairline', 'var(--ios-indigo-900)', 'var(--ios-indigo-200)', 'MessageDaySeparator.swift — strokeBorder'],
+  /**
+   * LE NOM DE SOI EN TÊTE DE RANGÉE (revue #5935, défaut majeur 2) —
+   * `FocalIdentityHeader.swift:90-92` peint `nameColor = isMe ?
+   * MeeshyColors.indigo500 : textPrimary` sur la ligne d'identité (13 px,
+   * poids 800). `--ios-indigo-500` servi TEL QUEL y mesure 4,47:1 (clair) et
+   * 4,45:1 (sombre) — SOUS la barre AA de 4,5:1, et 13 px n'ouvre pas
+   * l'exemption « grand texte » (18,5 px). Méthode D-18/#5625 : le cran
+   * suivant qui PASSE, pas un plancher inventé — indigo700/indigo200,
+   * exactement la paire déjà dérivée pour `--ios-day-ink` (7,90:1 / 13,34:1),
+   * mais nommée pour SA fonction : un séparateur de jour et un nom de soi ne
+   * sont pas la même chose, même si leur cran de contraste coïncide
+   * aujourd'hui. iOS lui-même reste sous AA sur ce point précis — c'est un
+   * défaut de la CIBLE (famille #5681-#5683, issue compagnon), pas une
+   * dérivation web qui invente une couleur.
+   */
+  ['--ios-self-name-ink', 'var(--ios-indigo-200)', 'var(--ios-indigo-700)', 'FocalIdentityHeader.swift:90-92 — nameColor quand isMe (indigo500 mesuré sous AA, #5935)'],
   [
     '--ios-summary-surface-tint',
     'color-mix(in srgb, white 6%, transparent)',

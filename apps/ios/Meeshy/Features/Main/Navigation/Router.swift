@@ -111,6 +111,21 @@ extension Route {
         }
     }
 
+    /// Hauteur du `CollapsibleHeader` que l'écran de cette route monte, ou
+    /// `nil` s'il n'en monte aucun. Sert à la pastille de synchronisation
+    /// (`RootChromeLayer.syncPillTopPadding`) : ce qui décide de sa marge
+    /// haute hors conversation n'est pas « suis-je sur telle route ? » mais
+    /// « qu'est-ce que l'hôte pose en haut ? » — un booléen ne peut dire que
+    /// deux cas là où il y en a trois (#5944).
+    var collapsibleHeaderHeight: CGFloat? {
+        switch self {
+        case .settings, .profile, .postDetail, .links, .contacts, .peopleDiscovery:
+            return CollapsibleHeaderMetrics.expandedHeight
+        default:
+            return nil
+        }
+    }
+
     var displayTitle: String {
         switch self {
         case .conversation(let conv):

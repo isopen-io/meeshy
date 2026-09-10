@@ -251,6 +251,26 @@ emit({
 });
 
 /**
+ * LE JEU D'ECRAN DE L'IDENTITE DE RANGEE (#5935) — miroir
+ * `FocalIdentityHeader.swift:129-139` : le fantome `theatermasks.fill`
+ * (iOS, `.purple`) qui precede le nom d'un visiteur SANS COMPTE. Phosphor ne
+ * publie pas de `theatermasks` : `mask-happy` en est le plus proche
+ * visuellement (un masque, jamais deux) et le seul disponible dans
+ * `regular/`. Charge avec le chunk du fil (`focal-row.tsx`), jamais dans le
+ * socle — un sans-compte reste un cas RARE face au volume d'identites
+ * ordinaires que le socle paie a chaque premier pixel.
+ */
+const THREAD_IDENTITY = ['mask-happy'];
+
+emit({
+  ids: THREAD_IDENTITY,
+  output: join(HERE, '../src/components/glyphs-thread-identity.ts'),
+  constant: 'THREAD_IDENTITY_GLYPHS',
+  type: 'ThreadIdentityGlyphName',
+  role: "LE JEU D'ECRAN de l'identite de rangee (#5935) : le masque du sans-compte (theatermasks.fill iOS), charge avec le chunk du fil, jamais dans le socle.",
+});
+
+/**
  * LE JEU D'ECRAN DES ROUTES D'AUTHENTIFICATION (#5816) — le heros de
  * MagicLinkView (`wand.and.stars`), l'icone d'email du champ (`envelope`,
  * distinct de `envelope-open` du socle, qui reste l'etat "attente") et le

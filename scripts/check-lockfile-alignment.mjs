@@ -5,10 +5,10 @@
 //
 // L'invariant porte sur le `bun.lock` de la RACINE et sur TOUS les manifestes
 // que la racine déclare comme workspaces. Sa surface est donc le dépôt, pas une
-// app. Sa première écriture vivait dans `apps/web-old-version3/__tests__/` : elle sortait
-// de son propre workspace (`join(__dirname,'..','..','..')`), ne tournait dans
-// AUCUNE CI (`grep web-v3 .github/workflows/ci.yml` = rien), et serait morte en
-// silence au premier renommage de `apps/web-v3`. Un garde d'infrastructure
+// app. Sa première écriture vivait dans les tests de l'ancienne refonte v3
+// (retirée du dépôt depuis, #5994) : elle sortait de son propre workspace
+// (`join(__dirname,'..','..','..')`), ne tournait dans AUCUNE CI, et serait
+// morte en silence au premier renommage de son application. Un garde d'infrastructure
 // hébergé par l'app la plus jeune du dépôt. Précédent retenu :
 // `scripts/check-type-debt.sh`, gate de racine appelé par le job `quality`.
 //
