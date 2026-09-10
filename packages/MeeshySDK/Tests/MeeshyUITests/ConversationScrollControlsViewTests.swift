@@ -125,6 +125,52 @@ final class ConversationScrollControlsViewTests: XCTestCase {
     // locking the property wrapper (no ViewInspector dependency in this repo,
     // cf. `AvatarBannerNoRetryWiringTests`).
 
+    // MARK: - L'ŒIL voit des POINTS, VoiceOver entend un NOM (#5963)
+
+    /// **La frappe s'annonce par `(avatar) …`, pas par un nom** (directive
+    /// porteur 2026-09-10).
+    ///
+    /// La rangée de frappe posait la pile de visages PUIS `Text(typingLabel)`.
+    /// Le nom y était redondant à deux titres : la pile porte déjà la photo et
+    /// les initiales de celui qui écrit, et le libellé d'accessibilité du
+    /// bouton entier (`ConversationView.scrollToBottomAccessibilityLabel`)
+    /// annonce déjà « <nom>, Défiler vers le bas ». Le texte volait la largeur
+    /// de la capsule à l'aperçu du dernier message, qui vit sur la même ligne.
+    ///
+    /// `typingLabel(for:)` reste — c'est lui que le libellé VoiceOver consomme.
+    /// Ce qui disparaît, c'est son rendu VISUEL : une même chaîne ne peut pas
+    /// servir l'œil et le lecteur d'écran quand les deux n'ont pas besoin de la
+    /// même chose.
+    ///
+    /// Garde de SOURCE, assumée : le rendu SwiftUI n'est pas inspectable dans
+    /// ce dépôt (pas de ViewInspector, cf. `AvatarBannerNoRetryWiringTests`).
+    func test_laRangeeDeFrappeNAfficheAucunNom() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Conversation/ConversationScrollControlsView.swift")
+        XCTAssertFalse(
+            source.contains("Text(typingLabel)"),
+            "La frappe s'annonce par les visages et les points ; le nom appartient à VoiceOver."
+        )
+    }
+
+    /// Et la pile RESTE montée : retirer le texte ne doit pas retirer l'annonce.
+    /// Sans cette moitié, le témoin ci-dessus passerait au vert sur une rangée
+    /// de frappe entièrement supprimée.
+    func test_laPileDeVisagesResteMontee() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Conversation/ConversationScrollControlsView.swift")
+        XCTAssertTrue(source.contains("if hasTypingIndicator {"))
+        let apresGarde = source.components(separatedBy: "if hasTypingIndicator {")[1].prefix(1600)
+        XCTAssertTrue(
+            apresGarde.contains("typingAvatarStack"),
+            "La rangée de frappe doit continuer de poser les visages et les points animés."
+        )
+    }
+
+    /// Le NOM survit là où il sert : la fonction pure que le libellé
+    /// d'accessibilité consomme.
+    func test_leNomResteDisponiblePourVoiceOver() {
+        XCTAssertEqual(ConversationScrollControlsView.typingLabel(for: ["André"]), "André")
+    }
+
     private func sdkSource(_ relativePath: String) throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // MeeshyUITests/

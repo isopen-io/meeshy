@@ -344,12 +344,19 @@ public struct ConversationScrollControlsView: View {
                     // Y loger les visages faisait disparaître la miniature pendant
                     // toute la durée d'une frappe, alors que les deux
                     // informations sont vraies en même temps.
-                    HStack(spacing: 6) {
-                        typingAvatarStack
-                        Text(typingLabel)
-                            .font(.system(size: 11, weight: .semibold))
-                            .lineLimit(1)
-                    }
+                    //
+                    // **Les visages et les points, PAS le nom** (directive
+                    // porteur 2026-09-10). Le nom y était redondant à deux
+                    // titres : la pile porte déjà la photo — ou les initiales —
+                    // de celui qui écrit, et le libellé d'accessibilité du
+                    // bouton entier annonce déjà « <nom>, Défiler vers le bas ».
+                    // Il volait en prime la largeur de la capsule à l'aperçu du
+                    // dernier message, qui vit sur la même ligne.
+                    //
+                    // `typingLabel(for:)` reste : c'est VoiceOver qui le
+                    // consomme. Une même chaîne ne sert pas l'œil et le lecteur
+                    // d'écran quand les deux n'ont pas besoin de la même chose.
+                    typingAvatarStack
                 }
 
                 // Count headline — only past the 5-message threshold (#3921).
@@ -365,7 +372,15 @@ public struct ConversationScrollControlsView: View {
                 }
             }
 
-            Spacer(minLength: 0)
+            // **Le ressort ne pousse que s'il y a quelque chose à pousser**
+            // (#5963). Il étalait la capsule à sa largeur maximale même quand
+            // elle ne portait plus que les visages et les points : une pastille
+            // large et vide, avec le chevron seul à trois cents points de son
+            // contenu. Sans lui, la rangée ÉPOUSE ce qu'elle montre — une
+            // annonce de frappe est compacte, un aperçu de message reste large.
+            if unreadCount > 0 {
+                Spacer(minLength: 0)
+            }
 
             // Right: chevron / offline glyph.
             if isOffline {
@@ -379,7 +394,13 @@ public struct ConversationScrollControlsView: View {
         .foregroundColor(contentColor)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .frame(maxWidth: 260)
+        // **Une BORNE, pas une largeur** (#5963). `maxWidth` s'ÉTEND à ce que
+        // le parent offre : posée sans condition, elle donnait 260 pt à une
+        // rangée qui ne porte que des visages et des points, et la capsule
+        // s'affichait large et creuse. Elle ne borne donc que ce qui peut
+        // vraiment déborder — l'aperçu du dernier message ; sans aperçu, la
+        // rangée épouse son contenu.
+        .frame(maxWidth: unreadCount > 0 ? 260 : nil)
     }
 
     /// Single-line preview of the last received message: its text when present,
