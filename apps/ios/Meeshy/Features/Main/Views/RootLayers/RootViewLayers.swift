@@ -238,8 +238,15 @@ struct RootChromeLayer: ViewModifier {
                     // dépôt plutôt qu'une constante de plus. 72 pt fixe compense le
                     // floatingHeaderSection propre à ConversationView (compromis
                     // assumé plutôt qu'un couplage à cet état privé, spec §C1).
+                    // En conversation, la pastille se pose SOUS le chrome
+                    // flottant (#5941) : `liftedTopPadding(base: 72)` rendait
+                    // toujours 0 — `topLift` vaut 88, la soustraction est
+                    // négative, la borne la ramène à zéro — et la bannière
+                    // recouvrait les boutons Appeler / Rechercher / Mode de
+                    // lecture. La valeur est désormais NOMMÉE et épinglée par
+                    // un témoin.
                     .padding(.top, router.currentConversationId != nil
-                        ? ConnectionBanner.liftedTopPadding(base: 72)
+                        ? ConnectionBanner.conversationTopPadding
                         : MeeshySpacing.sm)
                 }
             }
