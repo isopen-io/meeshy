@@ -361,9 +361,33 @@ jobs:
       # `ProductBuildVersion` is the one thing that must coincide for a `.pcm`
       # to stay valid; folding it into the key means a republished image starts
       # a fresh lineage instead of poisoning the rolling one.
+      # **La lignée se compte en MTIME, pas seulement en VERSION (#5084, corrigé
+      # ici).** `ProductBuildVersion` seule ne suffit pas : Clang invalide un
+      # `.pcm` en comparant l'HORODATAGE des en-têtes qu'il a lus, et une image
+      # de runner reconstruite change ces horodatages sans toucher la version du
+      # SDK. La clé servait alors un ModuleCache périmé, et le build tombait sur
+      #
+      #     Clang dependency scanner failure: file '…/AvailabilityVersions.h' has
+      #     been modified since the module file '…/_AvailabilityInternal-….pcm'
+      #     was built: mtime changed (was 1787976491, now 1788754383)
+      #
+      # puis, en cascade, sur `could not build module '_DarwinFoundation1'` — un
+      # message qui n'accuse RIEN de ce que la PR contient et qu'on a d'abord pris
+      # pour une corruption aléatoire du runner.
+      #
+      # On ajoute donc à la lignée l'horodatage de l'en-tête que le scanner cite,
+      # et celui de la racine du SDK, qui bouge à toute reconstruction d'image.
+      # Deux `stat`, instantanés — et une clé qui discrimine enfin sur ce que
+      # Clang regarde vraiment.
       - name: SDK build version (clé de lignée du ModuleCache, #5084)
         id: sdkver
-        run: echo "v=$(xcodebuild -version -sdk iphonesimulator ProductBuildVersion)" >> "$GITHUB_OUTPUT"
+        run: |
+          SDK=$(xcodebuild -version -sdk iphonesimulator ProductBuildVersion)
+          ROOT=$(xcrun --sdk iphonesimulator --show-sdk-path)
+          RACINE=$(stat -f %m "$ROOT" 2>/dev/null || echo 0)
+          ENTETE=$(stat -f %m "$ROOT/usr/include/AvailabilityVersions.h" 2>/dev/null || echo 0)
+          echo "v=${SDK}-${RACINE}-${ENTETE}" >> "$GITHUB_OUTPUT"
+          echo "lignée du ModuleCache : ${SDK}-${RACINE}-${ENTETE}"
 
       # Compiled modules / build products. RESTORE-ONLY; the save is explicit,
       # after the compile step (see "Save DerivedData build cache"), because the
