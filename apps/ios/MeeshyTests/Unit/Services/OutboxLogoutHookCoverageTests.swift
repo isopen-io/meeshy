@@ -28,8 +28,19 @@ import XCTest
 ///
 /// > La question à poser à tout nettoyage de déconnexion n'est pas « est-il
 /// > branché ? » mais **« quelles façons de terminer une session ne passent pas
-/// > par ce fil ? »**. Un `filter { !$0 }` suffit à garder le démarrage CONNECTÉ
-/// > hors de la purge : la première valeur n'a donc pas à être jetée.
+/// > par ce fil ? »**.
+///
+/// ⚠️ **La conclusion d'origine était FAUSSE, et elle a coûté des données**
+/// (#5968). Elle disait : « un `filter { !$0 }` suffit à garder le démarrage
+/// CONNECTÉ hors de la purge ». Or `isAuthenticated` naît `false`,
+/// `checkExistingSession()` est async, et `DependencyContainer` s'abonne à la
+/// CONSTRUCTION de l'`App` : un `@Published` rejoue sa valeur courante au
+/// nouvel abonné, donc `false` traversait le filtre. Mesuré au simulateur,
+/// session parfaitement valide, un seul lancement à froid : **62 messages
+/// effacés sur 62**. Le booléen SEUL ne peut pas distinguer « pas encore
+/// regardé » de « regardé, personne » — il faut le troisième état
+/// (`AuthManager.hasResolvedStoredSession`), et c'est `SessionPurgeDecision`
+/// qui les compose.
 ///
 /// SECOND DÉFAUT, DISTINCT : la purge SQL vide la base, pas l'acteur.
 /// `OfflineQueue` garde ses `items` et ses `outcomeTombstones` en mémoire — le
