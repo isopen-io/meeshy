@@ -47,7 +47,16 @@ const log = enhancedLogger.child({ module: 'CerclesAchievements' });
  * les conversations à deux ». Ouvrir un tête-à-tête n'est pas rejoindre un
  * cercle — il n'a pas de cercle, il a un seul autre membre.
  */
-const CONVERSATION_TYPES_HORS_CATALOGUE = ['global', 'public', 'direct'] as const;
+/**
+ * Types de conversation qui ne comptent pas comme « rejoindre un cercle ».
+ *
+ * `global` et `public` en sont exclus depuis l'origine : on n'y entre pas, on y
+ * est. **`direct` les rejoint le 2026-09-10 (#5940)** — directive porteur :
+ * « on parle de rejoindre les conversations AUTRES que les conversations à
+ * deux ». Un tête-à-tête n'est pas un cercle qu'on rejoint, c'est un lien qu'on
+ * noue, et le catalogue le mesure ailleurs.
+ */
+export const CONVERSATION_TYPES_HORS_CATALOGUE = ['global', 'public', 'direct'] as const;
 
 export type CercleEvent =
   | { readonly kind: 'conversation.join'; readonly userId: string; readonly conversationId: string }
@@ -81,12 +90,21 @@ export class CerclesAchievements {
     await graveEtAnnonce({ prisma: this.prisma, userId, family: f, valeur, origin });
   }
 
+  /** Conversations rejointes, hors générales — le VOLUME. */
   /**
-   * Conversations rejointes, hors générales et hors tête-à-tête — le VOLUME.
+   * Les conversations REJOINTES — celles qu'on n'a pas créées (#5940).
    *
-   * `role: { not: 'creator' }` exclut le créateur : créer un groupe grave déjà
-   * `conversation.create.count` (#5759) — le compter aussi ici récompenserait
-   * le geste inverse de celui que la famille nomme (#5940).
+   * Elle comptait toutes les participations, donc aussi celles dont
+   * l'utilisateur est CRÉATEUR : il y est participant. Un seul geste — créer un
+   * groupe — faisait avancer `conversation.create.count` ET
+   * `conversation.join.count`, deux familles qui nomment pourtant deux faits
+   * opposés. Les défis « rejoindre N conversations » se débloquaient sans qu'on
+   * ait rejoint quoi que ce soit.
+   *
+   * `role: { not: 'creator' }` est la SEULE façon de les rendre disjointes ici,
+   * et c'est exactement le prédicat que `conversation.create` emploie en
+   * positif — les deux mesures lisent désormais la même colonne, dans les deux
+   * sens.
    */
   private async conversationsRejointes(userId: string): Promise<number> {
     return this.prisma.participant.count({
