@@ -15,10 +15,12 @@ import type { Attachment, Message } from '@/lib/api/types';
  *
  * Port de `MessageAccessibilityLabelComposer.compose`
  * (`apps/ios/Meeshy/Features/Main/Focal/Preferences/MessageAccessibilityLabelComposer.swift:36-93`),
- * DANS L'ORDRE iOS : auteur (ou « Vous » pour un message à soi — le NOM est
- * alors ABSENT, pas remplacé) → citation → texte SERVI → pièces jointes
- * (images/vidéos/audios/fichiers) → heure → accusé de réception (SEULEMENT
- * sur un message à soi) → modifié → épinglé → éphémère → réactions.
+ * DANS L'ORDRE iOS : « Sans compte » (participant `anonymous`, jamais pour
+ * soi — écart ASSUMÉ ajouté par la revue #5935, voir plus bas) → auteur (ou
+ * « Vous » pour un message à soi — le NOM est alors ABSENT, pas remplacé) →
+ * citation → texte SERVI → pièces jointes (images/vidéos/audios/fichiers) →
+ * heure → accusé de réception (SEULEMENT sur un message à soi) → modifié →
+ * épinglé → éphémère → réactions.
  *
  * Chaque segment est OMIS quand il n'a rien à dire — jamais une virgule
  * flottante ni un « undefined » : un message texte simple sans historique
@@ -128,6 +130,21 @@ export function composeMessageLabel({ message, isMine, servedText, delivery, pro
   }
 
   const segments: string[] = [];
+
+  /**
+   * « SANS COMPTE » ENTRE DANS LE LIBELLÉ (revue #5935, défauts 1/4) — un
+   * écart ASSUMÉ avec iOS, documenté en D-32. `FocalIdentityHeader.swift`
+   * pose le fantôme `theatermasks.fill` comme un NŒUD SÉPARÉ, absorbé sans
+   * reste par `.accessibilityElement(children: .combine)` — sur iOS le
+   * marqueur est donc PRONONCÉ, lui aussi, juste avant le nom. Le web pose
+   * la même information en `aria-label` du glyphe (`GlyphSvg`,
+   * `focal-row.tsx`) ; masquer tout `[data-identity]` pour éviter la
+   * double lecture (voir `thread-modes.tsx`) le ferait taire. Le composer
+   * ICI, dans le même ordre visuel (avant le nom), tient donc la parité que
+   * l'iconographie seule ne suffit plus à porter.
+   */
+  const isAnonymous = !isMine && message.sender?.type === 'anonymous';
+  if (isAnonymous) segments.push('Sans compte');
 
   const author = message.sender?.displayName;
   if (!isMine && author !== undefined && author !== '') segments.push(author);

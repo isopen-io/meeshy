@@ -78,9 +78,11 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
+import { checkRowIdentityAndLabel } from './lib/check-identity.mjs';
 import { checkLivingSummary } from './lib/check-summary.mjs';
 import { assertRiverBelowThreshold, checkEligibleRiverRow } from './lib/check-river-menu.mjs';
 import { contrastOf } from './lib/contrast.mjs';
+import { scrollRowIntoView } from './lib/scroll-row.mjs';
 import { waitForFlattenFade, waitForRevealedOpacity } from './lib/scene-polling.mjs';
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
@@ -226,16 +228,7 @@ const electedMessageId = (page) =>
  * geste, quoi que la phase (1) ait pu élire en passant.
  */
 const electRow = async (page, rowId, { ms = 4200, step = 3, tick = 100 } = {}) => {
-  await page.locator('main').hover();
-  for (let i = 0; i < 80; i += 1) {
-    if ((await page.locator(`main [data-row="${rowId}"]`).count()) > 0) break;
-    await page.mouse.wheel(0, -80);
-    await page.waitForTimeout(50);
-  }
-  await page.evaluate((id) => {
-    document.querySelector(`main [data-row="${id}"]`)?.scrollIntoView({ block: 'center' });
-  }, rowId);
-  await page.waitForTimeout(50);
+  await scrollRowIntoView(page, rowId);
   const ticks = Math.ceil(ms / tick);
   for (let i = 0; i < ticks; i += 1) {
     await page.mouse.wheel(0, i % 2 === 0 ? -step : step);
@@ -1288,6 +1281,10 @@ await checkEligibleRiverRow({ browser, BASE, setScheme, expect });
 // --- 14 : LE RÉSUMÉ VIVANT (#5695) — `lib/check-summary.mjs` (l'hôte est hors
 // budget de taille) ; il reçoit LE compteur de défauts et LA pose de schéma.
 await checkLivingSummary({ browser, BASE, CAPTURES, setScheme, expect, AA_THRESHOLD });
+
+// --- 15 : L'IDENTITÉ DE RANGÉE PORTE role="article" + son libellé (#5935) —
+// `lib/check-identity.mjs` (l'hôte est hors budget de taille).
+await checkRowIdentityAndLabel({ browser, BASE, CAPTURES, setScheme, expect });
 
 await browser.close();
 server.close();
