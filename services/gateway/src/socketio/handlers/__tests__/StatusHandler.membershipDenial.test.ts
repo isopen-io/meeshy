@@ -70,6 +70,13 @@ function makeSocket(): Socket {
     id: SOCKET_ID,
     to: jest.fn<any>().mockReturnValue({ emit: jest.fn(), except: jest.fn<any>().mockReturnValue({ emit: jest.fn() }) }),
     emit: jest.fn(),
+    // `handleTypingStart`'s membership-denial branch expires the cached room
+    // authorization (`socket.leave(ROOMS.conversation(...))`, harden commit
+    // 4c24fac05b) before signaling the caller. This double predates that call
+    // and left it undefined, so every denial path threw a TypeError the outer
+    // try/catch swallowed as "typing:start failed" — silently short-circuiting
+    // before `resolveMembershipDenialReason`/`socket.emit` were ever reached.
+    leave: jest.fn<any>().mockResolvedValue(undefined),
   } as unknown as Socket;
 }
 
