@@ -1,5 +1,51 @@
 # @meeshy/gateway
 
+## 1.43.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le témoin du faux token affirme la RÈGLE, il n'épingle plus le défaut
+  - le garde des utilitaires cesse d'accuser la prose qui l'explique
+  - un commentaire JSDoc cesse d'injecter une fausse classe « \* » (#5958)
+  - le fil escamote son chrome pendant le geste, garde une pilule de jour collante et offre « revenir en bas » avec le compte de non-lus
+  - les huit dernières tailles figées suivent Dynamic Type, cadre compris
+  - dix tailles de police figées redeviennent relatives — la dette recule
+  - six témoins du composeur rattrapent la règle posée par #5409
+  - douze témoins cessent d'affirmer du français à un hôte anglais
+  - un drapeau de construction VIDE est une absence, pas une valeur
+  - l'image déployée sert les VRAIES conversations, plus les fixtures
+  - les chips de l'Élan servent la fenêtre, pas le cumul (#5897) (#5928)
+  - une CSP réelle en Report-Only, plus de domaine inexistant (#5728) (#5926)
+  - la file d'envoi ne survit plus à une session finie sans transition (#5917)
+  - six gardes de web-v3 cessent d'être verts parce qu'ils ne tournaient nulle part (#5921)
+  - un pseudo déjà pris n'épuise plus le quota d'inscription (#5915)
+  - retirer une réaction en tapant sa propre capsule (#5865) (#5924)
+  - extraire le montage des modes du fil dans thread-modes.tsx (#5922)
+  - pin arch=arm64 on id-based iOS simulator destinations (#5909)
+  - les défis survivent à l'absence de leur mesure, et l'entrée Meesh porte la marque
+  - le composeur du fil tient ce qu'il promet — pièce jointe, vocal, envoi vers la passerelle
+  - le garde de dérive compare au contexte de build, pas à la tête (#5908)
+  - deux suites arrivées par dev entrent enfin dans le projet Xcode
+  - AchievementCopy accorde le singulier du palier 1 (#5859) (#5886)
+  - golden partagé du Prisme pour ses quatre familles de résolveurs (#5904)
+  - les 48 clés du lot engagement quittent le français forcé — run test (#5852) (#5858)
+  - un succès ne se célèbre plus deux fois, et « Voir ma progression » y mène vraiment
+  - le numéro de build d'un binaire Xcode Cloud vient enfin de Xcode Cloud
+  - la série se nomme, et l'app rappelle six fois par jour de la tenir
+  - les sections de la progression sont des pages, et un badge se montre enfin
+  - « rejoindre une conversation » exclut le créateur et le DM (#5940)
+  - table légère votes/réponses pour stickers interactifs (O10) (#5933)
+  - un compte supprimé n'est plus interrogeable en clair (#5691) (#5925)
+  - un avis d'arrivée avance l'horloge de sa conversation (#5918)
+  - accorder le singulier du palier 1 des succès de volume (#5846)
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.19.1
+
 ## 1.42.0
 
 ### Minor Changes
