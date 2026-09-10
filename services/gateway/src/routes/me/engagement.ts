@@ -23,7 +23,7 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { ENGAGEMENT_AXES, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import { ENGAGEMENT_AXES, ENGAGEMENT_AXIS_FAMILIES, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { computeMeeshMintPlan, MEESH_MINT_COST } from '@meeshy/shared/utils/meesh';
 import {
   computeEngagementElan,
@@ -127,6 +127,10 @@ const engagementResponseSchema = {
           properties: {
             factor: { type: 'number' },
             activeFamilyCount: { type: 'number' },
+            // La LISTE derrière le cardinal (#5897) : sans elle, un client
+            // n'a que le score CUMULÉ pour approximer les chips — faux dès
+            // qu'une famille est abandonnée depuis plus de `windowDays`.
+            activeFamilies: { type: 'array', items: { type: 'string', enum: [...ENGAGEMENT_AXIS_FAMILIES] } },
             hasStanding: { type: 'boolean' },
             windowDays: { type: 'number' },
           },
@@ -292,6 +296,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
           elan: {
             factor: elan.factor,
             activeFamilyCount: elan.activeFamilyCount,
+            activeFamilies: elan.activeFamilies,
             hasStanding: elan.hasStanding,
             windowDays: ELAN_WINDOW_DAYS,
           },
