@@ -94,85 +94,29 @@ final class ProgressionMeeshEntryTests: XCTestCase {
 
     // MARK: - Montage
 
-    /// **La fenêtre n'est pas une précaution, c'est une condition** : hors
-    /// fenêtre, `UIHostingController` ne matérialise pas toute sa hiérarchie et
-    /// l'arbre parcouru serait muet — vert par omission garanti.
-    private var window: UIWindow?
+    /// Le dernier écran monté — retenu pour que `tearDown` le démonte : une
+    /// fenêtre laissée clé retient son hôte, et l'hôte retient le ViewModel.
+    private var ecran: RenderedScreen?
 
-    private func render(_ vue: some View, size: CGSize = CGSize(width: 402, height: 874)) -> UIView {
-        let host = UIHostingController(rootView: vue)
-        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
-        window.rootViewController = host
-        window.isHidden = false
-        window.makeKeyAndVisible()
-        self.window = window
-        host.view.frame = CGRect(origin: .zero, size: size)
-        window.setNeedsLayout()
-        window.layoutIfNeeded()
-        host.view.setNeedsLayout()
-        host.view.layoutIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.35))
-        return host.view
+    /// Monte une vue et retient l'écran. Tout le harnais — fenêtre rattachée à
+    /// la scène, attente CONDITIONNELLE, descente des deux arbres — vit dans
+    /// `RenderedScreen`, site UNIQUE partagé avec les autres témoins de rendu.
+    @discardableResult
+    private func monter(
+        _ vue: some View,
+        size: CGSize = CGSize(width: 402, height: 874),
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> RenderedScreen {
+        let e = RenderedScreen(vue, size: size, file: file, line: line)
+        ecran = e
+        return e
     }
 
     override func tearDown() {
-        window?.rootViewController = nil
-        window?.isHidden = true
-        window = nil
+        ecran?.dismount()
+        ecran = nil
         super.tearDown()
-    }
-
-    /// **SwiftUI ne pose ni identifiant ni libellé sur les `UIView`.** Son
-    /// texte est dessiné, pas encapsulé dans des `UILabel`, et
-    /// `.accessibilityIdentifier` atterrit sur des ÉLÉMENTS d'accessibilité
-    /// synthétisés — invisibles pour une descente qui ne parcourt que
-    /// `subviews`. Une telle descente rend toujours `nil` : les témoins
-    /// d'ABSENCE passent alors au vert sans rien mesurer, ce qui est
-    /// exactement ce qui est arrivé à la première version de ce fichier.
-    ///
-    /// La descente ci-dessous interroge donc les DEUX arbres — les sous-vues
-    /// ET `accessibilityElementCount()` / `accessibilityElement(at:)`, l'API
-    /// que SwiftUI implémente réellement.
-    private struct Noeud {
-        let identifiant: String?
-        let libelle: String?
-    }
-
-    private func elements(de objet: NSObject) -> [NSObject] {
-        if let listes = objet.accessibilityElements as? [NSObject], !listes.isEmpty { return listes }
-        let compte = objet.accessibilityElementCount()
-        guard compte != NSNotFound, compte > 0 else { return [] }
-        return (0..<compte).compactMap { objet.accessibilityElement(at: $0) as? NSObject }
-    }
-
-    private func noeuds(_ objet: NSObject, profondeur: Int = 0) -> [Noeud] {
-        guard profondeur < 60 else { return [] }
-        // Les éléments que SwiftUI synthétise ne DÉCLARENT pas
-        // `UIAccessibilityIdentification` : le cast échouait en silence et
-        // rendait `nil` pour tout l'arbre, alors que les objets répondent bien
-        // au sélecteur. On interroge donc la réponse, pas le type.
-        let identifiant: String? = objet.responds(to: Selector(("accessibilityIdentifier")))
-            ? objet.value(forKey: "accessibilityIdentifier") as? String
-            : nil
-        var trouves = [Noeud(identifiant: identifiant, libelle: objet.accessibilityLabel)]
-        for element in elements(de: objet) {
-            trouves.append(contentsOf: noeuds(element, profondeur: profondeur + 1))
-        }
-        if let vue = objet as? UIView {
-            for sous in vue.subviews {
-                trouves.append(contentsOf: noeuds(sous, profondeur: profondeur + 1))
-            }
-        }
-        return trouves
-    }
-
-    private func node(_ identifiant: String, in root: UIView) -> Noeud? {
-        noeuds(root).first { $0.identifiant == identifiant }
-    }
-
-    /// Tout ce que l'écran DIT, dans l'ordre de l'arbre.
-    private func labels(in root: UIView) -> [String] {
-        noeuds(root).compactMap(\.libelle)
     }
 
     /// **Le harnais doit pouvoir ÉCHOUER.** Un arbre muet rendrait les témoins
@@ -180,10 +124,10 @@ final class ProgressionMeeshEntryTests: XCTestCase {
     /// avant les autres, et tombe si la descente ne voit plus rien.
     func test_theHarnessActuallyReadsTheRenderedTree() async {
         let vm = await loadedViewModel(payload())
-        let root = render(ProgressionView(viewModel: vm))
+        let ecran = monter(ProgressionView(viewModel: vm))
 
         XCTAssertFalse(
-            labels(in: root).isEmpty,
+            ecran.labels.isEmpty,
             "La descente ne lit aucun libellé : tout témoin d'absence de ce fichier serait vert par omission."
         )
     }
@@ -196,11 +140,11 @@ final class ProgressionMeeshEntryTests: XCTestCase {
         // Deux causes rendraient l'entrée absente — un modèle sans bloc Meesh,
         // ou un en-tête qui ne le monte pas. On les sépare AVANT d'accuser.
         XCTAssertNotNil(vm.progress?.meesh, "Le modèle n'a pas de bloc Meesh : ce n'est pas la vue qui est en cause.")
-        let root = render(ProgressionView(viewModel: vm))
+        let ecran = monter(ProgressionView(viewModel: vm))
 
-        let identifiants = noeuds(root).compactMap(\.identifiant)
+        let identifiants = ecran.identifiers
         XCTAssertNotNil(
-            node("progression.meesh.entry", in: root),
+            ecran.node("progression.meesh.entry"),
             "L'entrée Meesh n'est pas dans l'arbre rendu. Identifiants vus : \(identifiants)"
         )
     }
@@ -209,13 +153,13 @@ final class ProgressionMeeshEntryTests: XCTestCase {
     /// nombre est une icône, pas ce que le porteur a demandé.
     func test_theEntryAnnouncesTheBalance() async {
         let vm = await loadedViewModel(payload(balance: 3))
-        let root = render(ProgressionView(viewModel: vm))
+        let ecran = monter(ProgressionView(viewModel: vm))
 
         // Interroger TOUT l'arbre laisserait « 3 » venir du niveau ou d'un
         // compteur : la première version de ce témoin passait ainsi au vert
         // alors que l'entrée n'existait pas. On interroge l'entrée SEULE.
-        let entree = node("progression.meesh.entry", in: root)
-        let dit = entree?.libelle ?? ""
+        let entree = ecran.node("progression.meesh.entry")
+        let dit = entree?.label ?? ""
         XCTAssertTrue(dit.contains("3"), "Le solde n'est pas dans ce que l'entrée annonce : « \(dit) ».")
     }
 
@@ -229,10 +173,10 @@ final class ProgressionMeeshEntryTests: XCTestCase {
             level: .init(engagementScore: 10)
         )
         let vm = await loadedViewModel(sans)
-        let root = render(ProgressionView(viewModel: vm))
+        let ecran = monter(ProgressionView(viewModel: vm))
 
         XCTAssertNil(
-            node("progression.meesh.entry", in: root),
+            ecran.node("progression.meesh.entry"),
             "Une entrée Meesh est montée alors que la passerelle ne sert pas le bloc."
         )
     }
@@ -244,13 +188,13 @@ final class ProgressionMeeshEntryTests: XCTestCase {
     /// qui est DIT.
     func test_theDetail_tellsBothMintBounds() {
         let meesh = EngagementProgressResolver.resolve(payload()).meesh!
-        let root = render(
+        let ecran = monter(
             ProgressionMeeshDetail(meesh: meesh, isMinting: false, onMint: {})
                 .frame(width: 300),
             size: CGSize(width: 320, height: 420)
         )
 
-        let dit = labels(in: root).joined(separator: " | ")
+        let dit = ecran.labels.joined(separator: " | ")
         XCTAssertTrue(dit.contains(premiereFrappe), "La première borne manque : « \(dit) »")
         XCTAssertTrue(dit.contains(derniereFrappe), "La seconde borne manque : « \(dit) »")
     }
@@ -264,13 +208,13 @@ final class ProgressionMeeshEntryTests: XCTestCase {
             lastMintedAt: "2026-08-19T10:30:00.000Z"
         )
         let meesh = EngagementProgressResolver.resolve(uneSeule).meesh!
-        let root = render(
+        let ecran = monter(
             ProgressionMeeshDetail(meesh: meesh, isMinting: false, onMint: {})
                 .frame(width: 300),
             size: CGSize(width: 320, height: 420)
         )
 
-        let dit = labels(in: root).joined(separator: " | ")
+        let dit = ecran.labels.joined(separator: " | ")
         XCTAssertTrue(dit.contains(premiereFrappe), "La première borne manque : « \(dit) »")
         XCTAssertFalse(dit.contains(derniereFrappe), "La seconde borne répète la première : « \(dit) »")
     }
@@ -279,13 +223,13 @@ final class ProgressionMeeshEntryTests: XCTestCase {
     func test_withoutAnyMint_theDetailSaysSo() {
         let jamais = payload(balance: 0, firstMintedAt: nil, lastMintedAt: nil)
         let meesh = EngagementProgressResolver.resolve(jamais).meesh!
-        let root = render(
+        let ecran = monter(
             ProgressionMeeshDetail(meesh: meesh, isMinting: false, onMint: {})
                 .frame(width: 300),
             size: CGSize(width: 320, height: 420)
         )
 
-        let dit = labels(in: root).joined(separator: " | ")
+        let dit = ecran.labels.joined(separator: " | ")
         XCTAssertTrue(dit.contains(aucuneFrappe), "L'absence de frappe n'est pas dite : « \(dit) »")
         XCTAssertFalse(dit.contains(premiereFrappe), "Une borne est annoncée sans frappe : « \(dit) »")
     }
@@ -297,13 +241,13 @@ final class ProgressionMeeshEntryTests: XCTestCase {
         let pauvre = payload(debitablePoints: 300)
         let meesh = EngagementProgressResolver.resolve(pauvre).meesh!
         XCTAssertFalse(meesh.canMint, "La fixture ne décrit pas le cas visé.")
-        let root = render(
+        let ecran = monter(
             ProgressionMeeshDetail(meesh: meesh, isMinting: false, onMint: {})
                 .frame(width: 300),
             size: CGSize(width: 320, height: 420)
         )
 
-        let dit = labels(in: root).joined(separator: " | ")
+        let dit = ecran.labels.joined(separator: " | ")
         XCTAssertFalse(dit.contains(ProgressionCopy.meeshMintAction(meesh.mintCost)),
                        "La conversion est proposée sans les points : « \(dit) »")
         XCTAssertTrue(dit.contains(ProgressionCopy.meeshMissing(missing: meesh.missingPoints, floor: meesh.floorPoints)),
@@ -314,14 +258,14 @@ final class ProgressionMeeshEntryTests: XCTestCase {
         let riche = payload(debitablePoints: 1300)
         let meesh = EngagementProgressResolver.resolve(riche).meesh!
         XCTAssertTrue(meesh.canMint, "La fixture ne décrit pas le cas visé.")
-        let root = render(
+        let ecran = monter(
             ProgressionMeeshDetail(meesh: meesh, isMinting: false, onMint: {})
                 .frame(width: 300),
             size: CGSize(width: 320, height: 420)
         )
 
         XCTAssertTrue(
-            labels(in: root).joined(separator: " | ").contains(ProgressionCopy.meeshMintAction(meesh.mintCost)),
+            ecran.labels.joined(separator: " | ").contains(ProgressionCopy.meeshMintAction(meesh.mintCost)),
             "La conversion n'est pas proposée alors que les points la permettent."
         )
     }
