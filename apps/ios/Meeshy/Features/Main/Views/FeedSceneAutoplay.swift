@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MeeshySDK
 import MeeshyUI
 
@@ -176,9 +177,9 @@ struct PostSceneCard: View {
         .overlay(alignment: .bottomTrailing) {
             if isActive, SceneMotion.isAudible(document) {
                 Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: true))
-                    .font(.system(size: 11, weight: .bold))
+                    .font(MeeshyFont.relative(11, weight: .bold))
                     .foregroundColor(.white)
-                    .frame(width: 26, height: 26)
+                    .frame(width: UIFontMetrics.default.scaledValue(for: 26), height: UIFontMetrics.default.scaledValue(for: 26))
                     .background(Circle().fill(.black.opacity(0.45)))
                     .padding(10)
                     .allowsHitTesting(false)

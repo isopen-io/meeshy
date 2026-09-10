@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MeeshySDK
 import MeeshyUI
 
@@ -276,9 +277,9 @@ struct SocialSceneFullscreenView: View {
             HStack {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(MeeshyFont.relative(16, weight: .bold))
                         .foregroundColor(.white)
-                        .frame(width: 40, height: 40)
+                        .frame(width: UIFontMetrics.default.scaledValue(for: 40), height: UIFontMetrics.default.scaledValue(for: 40))
                         .adaptiveGlass(in: Circle(), interactive: true)
                         .padding()
                 }
@@ -342,9 +343,9 @@ struct SocialSceneFullscreenView: View {
             isPlaying.toggle()
         } label: {
             Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 16, weight: .bold))
+                .font(MeeshyFont.relative(16, weight: .bold))
                 .foregroundColor(.white)
-                .frame(width: 40, height: 40)
+                .frame(width: UIFontMetrics.default.scaledValue(for: 40), height: UIFontMetrics.default.scaledValue(for: 40))
                 .adaptiveGlass(in: Circle(), interactive: true)
                 .padding()
         }

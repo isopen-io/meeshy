@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MeeshySDK
 import MeeshyUI
 
@@ -163,9 +164,9 @@ struct ProgressionAxisRow: View {
     var body: some View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: ProgressionCopy.symbol(for: axis.axis))
-                .font(.system(size: 15, weight: .semibold))
+                .font(MeeshyFont.relative(15, weight: .semibold))
                 .foregroundColor(tint)
-                .frame(width: 36, height: 36)
+                .frame(width: UIFontMetrics.default.scaledValue(for: 36), height: UIFontMetrics.default.scaledValue(for: 36))
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                         .fill(tint.opacity(0.12))
@@ -212,9 +213,9 @@ struct ProgressionAchievementRow: View {
     var body: some View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: achievement.unlocked ? "trophy.fill" : "lock.fill")
-                .font(.system(size: 15, weight: .semibold))
+                .font(MeeshyFont.relative(15, weight: .semibold))
                 .foregroundColor(tint)
-                .frame(width: 36, height: 36)
+                .frame(width: UIFontMetrics.default.scaledValue(for: 36), height: UIFontMetrics.default.scaledValue(for: 36))
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                         .fill(tint.opacity(achievement.unlocked ? 0.14 : 0.10))
