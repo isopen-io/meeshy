@@ -1139,7 +1139,7 @@ struct ConversationView: View {
                 Task { await consumePendingHighlightMessage() }
             }
             .onAppear {
-                if let context = replyContext { composerState.pendingReplyReference = context.toReplyReference }
+                if let context = replyContext { applyReplyContext(context, openingConversation: true) }
                 // Language priority (Prisme Linguistique): the user's primary
                 // configured content language is the source of truth and wins
                 // the compose default. The active keyboard layout is only a
@@ -1237,7 +1237,7 @@ struct ConversationView: View {
                 guard isDirect,
                       let ctx = router.pendingReplyContext,
                       ctx.authorId == conversation?.participantUserId else { return }
-                composerState.pendingReplyReference = ctx.toReplyReference
+                applyReplyContext(ctx, openingConversation: false)
                 router.pendingReplyContext = nil
             }
             .adaptiveOnChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: composerText.text) }
