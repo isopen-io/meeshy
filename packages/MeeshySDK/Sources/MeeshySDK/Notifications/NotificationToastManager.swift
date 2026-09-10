@@ -510,7 +510,22 @@ public final class NotificationToastManager: ObservableObject {
         }
     }
 
-    public func onConversationClosed() {
+    /// **Ferme UNE conversation nommée — et seulement si c'est elle** (#5938).
+    ///
+    /// Elle effaçait `activeConversationId` sans savoir ce qu'elle fermait, et
+    /// elle part d'un `deinit`, donc d'une `Task` DIFFÉRÉE. En passant d'une
+    /// conversation à l'autre, l'ordre réel est : on quitte A (fermeture
+    /// planifiée), on ouvre B (synchrone), puis la fermeture de A s'exécute —
+    /// et remettait tout à `nil`. On était dans B pendant que l'app se croyait
+    /// nulle part, si bien que le garde de `handleNewNotification` ne filtrait
+    /// plus rien : chaque message de B s'affichait en toast par-dessus le fil
+    /// qu'on lisait.
+    ///
+    /// Une fermeture arrivée après l'ouverture de la suivante devient donc un
+    /// no-op, ce qu'elle aurait toujours dû être. Un `deinit` ne dit pas
+    /// seulement SI l'on ferme : il doit dire QUOI.
+    public func onConversationClosed(_ conversationId: String) {
+        guard conversationId == activeConversationId else { return }
         activeConversationId = nil
         MessageSocketManager.shared.activeConversationId = nil
     }

@@ -198,8 +198,17 @@ final class ConversationSocketHandler {
         // il publie `onConversationClosed` et relance la boucle.
         if didActivate {
             leaveRoom()
+            // Capturé AVANT la `Task` : `deinit` est nonisolé et `self` ne
+            // survit pas à la fermeture — lire `conversationId` dedans ne
+            // compilerait pas, et le capturer implicitement retiendrait `self`.
+            let id = conversationId
             Task { @MainActor in
-                NotificationToastManager.shared.onConversationClosed()
+                // La conversation NOMMÉE (#5938) : cette `Task` est différée,
+                // donc elle peut s'exécuter APRÈS l'ouverture de la suivante.
+                // Sans son nom, elle effaçait la conversation où l'on venait
+                // d'entrer — et toutes ses notifications se remettaient à
+                // s'afficher par-dessus le fil qu'on lisait.
+                NotificationToastManager.shared.onConversationClosed(id)
             }
             if isEmittingTyping {
                 MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
