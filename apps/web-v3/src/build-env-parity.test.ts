@@ -38,6 +38,17 @@ import { describe, expect, test } from 'bun:test';
 
 const V3 = dirname(fileURLToPath(import.meta.url)) + '/..';
 
+/**
+ * Les COMMENTAIRES sont ôtés avant de chercher — et ce témoin l'a appris de
+ * lui-même : le doc-comment de `lib/build-flag.ts` cite `VITE_X` comme EXEMPLE,
+ * et le témoin exigeait alors du `Dockerfile` qu'il déclare une variable qui
+ * n'existe pas. Un témoin qui compte des MENTIONS au lieu de LECTURES rougit sur
+ * la prose qui l'explique — même piège que son jumeau `gate-ci-parity`.
+ */
+function sansCommentaires(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+}
+
 /** Toute occurrence `VITE_XXX` dans les sources et la configuration de build. */
 function variablesLues(): Set<string> {
   const vues = new Set<string>();
@@ -55,11 +66,14 @@ function variablesLues(): Set<string> {
          `Dockerfile` qu'il déclare des variables qui n'existent que dans des
          fixtures — un rouge sur un produit sain. */
       if (/\.test\.tsx?$/.test(nom)) continue;
-      for (const m of readFileSync(chemin, 'utf8').matchAll(/\bVITE_[A-Z0-9_]+/g)) vues.add(m[0]);
+      for (const m of sansCommentaires(readFileSync(chemin, 'utf8')).matchAll(/\bVITE_[A-Z0-9_]+/g)) {
+        vues.add(m[0]);
+      }
     }
   };
   balayer(join(V3, 'src'));
-  for (const m of readFileSync(join(V3, 'vite.config.ts'), 'utf8').matchAll(/\bVITE_[A-Z0-9_]+/g)) {
+  const config = sansCommentaires(readFileSync(join(V3, 'vite.config.ts'), 'utf8'));
+  for (const m of config.matchAll(/\bVITE_[A-Z0-9_]+/g)) {
     vues.add(m[0]);
   }
   return vues;
