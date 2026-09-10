@@ -265,6 +265,9 @@ export class StatusHandler {
         // their cache / close the open thread on a membership-denying reason,
         // via the shared `isMembershipDeniedJoinError()` policy. No new client
         // code is needed for the refusal to become visible.
+        // La room est une autorisation mise en cache (#5947) : une non-appartenance
+        // PROUVÉE ici l'expire, sinon l'ancien membre reçoit encore le fil.
+        await socket.leave(ROOMS.conversation(normalizedId));
         const reason = await resolveMembershipDenialReason({
           prisma: this.prisma,
           conversationId: normalizedId,
