@@ -187,10 +187,21 @@ export const PARTICIPANTS: readonly Participant[] = [viewer, amina, kwame];
 /**
  * LE CINQUIÈME MEMBRE DU SALON RIVIÈRE (#5648, `targets/seed.md` §« Salon
  * Rivière » : `memberCount: 5`) — au mot près de la cible semée sur staging.
- * Il ne parle dans AUCUN des 40 messages (l'alternance A/B suffit à faire
- * défiler le fil) : sa seule fonction est de porter le compte de membres à
- * cinq, condition d'éligibilité de la Rivière (`conversation.memberCount`,
- * D-21) que ce lot ne rend pas encore mais ne doit pas fermer par erreur.
+ * Il ne parle dans AUCUN des 40 messages de CE salon (l'alternance A/B
+ * suffit à faire défiler le fil) : là, sa seule fonction est de porter le
+ * compte de membres à cinq, condition d'éligibilité de la Rivière
+ * (`conversation.memberCount`, D-21) que ce lot ne rend pas encore mais ne
+ * doit pas fermer par erreur.
+ *
+ * IL PARLE AILLEURS (revue #5935, défaut majeur 3) : `fixtures.ts` lui
+ * donne un message dans « Équipe déploiement » (`c-deploiement`) — la
+ * CONVERSATION QUE LE GATE NAVIGATEUR OUVRE. `lastActiveAt: minutesAgo(120)`
+ * (deux heures) le range hors de la fenêtre `idle` (5 min) de la loi 1/3/5 :
+ * `presenceOf(bruno)` rend `'offline'`, et `Avatar` ne pose ALORS aucun
+ * `[data-presence]` (« offline = pas de pastille sur les avatars »). C'est
+ * la moitié « présence NON servie ⇒ AUCUNE pastille » du critère de fin de
+ * #5935 — introuvable ailleurs dans le navigateur avant ce lot (voir D-32
+ * §5, qui documentait cette absence).
  */
 export const bruno: Participant = {
   ...participantDefaults,
@@ -199,6 +210,28 @@ export const bruno: Participant = {
   displayName: 'Bruno Bêta',
   isOnline: false,
   lastActiveAt: minutesAgo(120),
+};
+
+/**
+ * UN PARTICIPANT `anonymous` SERVI PAR LE NAVIGATEUR (revue #5935, défaut
+ * majeur 3) — jusqu'ici AUCUNE fixture ne portait `type: 'anonymous'`
+ * (`participantDefaults.type` vaut `'user'`), donc le glyphe « Sans compte »
+ * de `FocalRow` (`focal-row.tsx`, miroir `FocalIdentityHeader.swift:99-161`)
+ * n'était rendu par AUCUN gate navigateur ni AUCUNE capture livrée — seule
+ * une preuve UNITAIRE le couvrait (`focal-row.test.tsx`). `userId` porte le
+ * préfixe `ano_` — « l'anonymat est décidé par le TYPE, jamais par le
+ * pseudo » (`FocalIdentityHeader.swift:39-43`, « `ano_` est un préfixe
+ * lisible, pas un espace réservé »). Envoie son message dans « Équipe
+ * déploiement » (`c-deploiement`), la conversation que le gate ouvre.
+ */
+export const anonymousGuest: Participant = {
+  ...participantDefaults,
+  type: 'anonymous',
+  id: 'p-ano-guest',
+  userId: 'ano_7f3',
+  displayName: 'Invité',
+  isOnline: false,
+  lastActiveAt: minutesAgo(30),
 };
 
 /**

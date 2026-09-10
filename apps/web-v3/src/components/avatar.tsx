@@ -75,7 +75,16 @@ export function Avatar({
         {initials}
       </span>
       {showsDot ? (
+        /* `data-presence` — L'ANCRE de la pastille (revue #5935). Les gates
+           navigateur la comptaient par le NOMBRE d'enfants de `.avatar-root`
+           (« 2 = dégradé + pastille ») : l'anneau de story et le badge
+           d'humeur annoncés par D-32 §4 en auraient fait 3 ou 4, et le gate
+           serait passé au ROUGE en disant « présence absente » — un témoin
+           qui ment sur la cause est pire qu'un témoin absent. L'attribut PORTE
+           en plus l'ÉTAT servi (`online`/`away`/`idle`), donc « point VERT »
+           se mesure vraiment plutôt que « un enfant de plus ». */
         <span
+          data-presence={presence}
           className="absolute rounded-chip"
           style={{
             width: dot,

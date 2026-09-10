@@ -564,3 +564,32 @@ describe('Bubble — badges et rangée système (#5936)', () => {
     expect(editedAt).toBeGreaterThan(forwardedAt);
   });
 });
+
+/**
+ * L'IDENTITÉ AU PIED DE LA BULLE PORTE LA PRÉSENCE (#5935, parité 1.3) —
+ * miroir `BubbleStandardLayout.swift:1195-1203` : le pied de la DERNIÈRE
+ * bulle d'une suite rend `SenderIdentity` avec `presence: presenceState`, la
+ * même loi 1/3/5 que la rangée plate (`presenceOf`, `view/conversation.ts`,
+ * déjà câblée sur `FocalRow` par #5774). La bulle en était l'unique lacune :
+ * `bubble.tsx` posait un `<Avatar>` de pied SANS `presence`.
+ */
+describe('Bubble — identité au pied de la dernière bulle : présence servie (#5935)', () => {
+  test('expéditeur EN LIGNE, groupé, tail, pas à moi ⇒ la pastille verte est rendue', () => {
+    const html = render({ ...BASE_MESSAGE, sender: { ...BASE_MESSAGE.sender!, isOnline: true } }, { tail: true });
+    expect(html).toContain('#34D399');
+  });
+
+  test('expéditeur HORS LIGNE ⇒ aucune pastille (ni verte ni grise)', () => {
+    const html = render({ ...BASE_MESSAGE, sender: { ...BASE_MESSAGE.sender!, isOnline: false } }, { tail: true });
+    expect(html).not.toContain('#34D399');
+    expect(html).not.toContain('#9CA3AF');
+  });
+
+  test('message à SOI ⇒ aucun avatar de pied, donc aucune pastille', () => {
+    const html = render(
+      { ...BASE_MESSAGE, senderId: 'u-viewer', sender: { ...BASE_MESSAGE.sender!, isOnline: true } },
+      { tail: true },
+    );
+    expect(html).not.toContain('#34D399');
+  });
+});

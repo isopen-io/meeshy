@@ -22,7 +22,7 @@ import type { Message } from '@/lib/api/types';
  * précisément de ne JAMAIS nommer une personne — le repli « Transféré » seul
  * est donc TOUJOURS le bon choix quand le titre du groupe manque, jamais un
  * repli sur `forwardedFromConversation.identifier` (que
- * `apps/web/lib/forward-badge.ts` fait à tort, D-32).
+ * `apps/web/lib/forward-badge.ts` fait à tort, D-33).
  */
 
 export type MessageBadge =

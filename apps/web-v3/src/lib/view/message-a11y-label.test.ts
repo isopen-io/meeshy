@@ -6,8 +6,8 @@ import { composeMessageLabel } from './message-a11y-label';
 
 type Sender = NonNullable<Message['sender']>;
 
-const senderOf = (name: string): Sender =>
-  ({ userId: 'u-x', displayName: name, isOnline: false }) as unknown as Sender;
+const senderOf = (name: string, type: 'user' | 'anonymous' = 'user'): Sender =>
+  ({ userId: 'u-x', displayName: name, isOnline: false, type }) as unknown as Sender;
 
 const message = (partial: Partial<Message> = {}): Message =>
   ({
@@ -228,5 +228,52 @@ describe('composeMessageLabel — la protection', () => {
       protection: 'standard',
     });
     expect(label).toBe('Bruno Bêta, Bonjour, 09:02');
+  });
+});
+
+/**
+ * « SANS COMPTE » DANS LE LIBELLÉ (revue #5935, défauts majeurs 1/4) — le
+ * masque `aria-hidden` posé sur `[data-identity]` (`focal-row.tsx`) retire
+ * du sous-arbre le glyphe qui portait seul cette information
+ * (`role="img"` / `aria-label="Sans compte"`, `GlyphSvg`) : le libellé
+ * composé doit donc la porter lui-même, dans l'ordre visuel iOS — AVANT le
+ * nom, jamais après (« le fantôme précède le nom », `FocalIdentityHeader
+ * .swift:125-128`).
+ */
+describe('composeMessageLabel — « Sans compte »', () => {
+  test('un participant anonymous porte « Sans compte » AVANT son nom', () => {
+    const label = composeMessageLabel({ protection: 'standard',
+      message: message({ sender: senderOf('Invité', 'anonymous') }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: 'sent',
+    });
+
+    expect(label).toBe('Sans compte, Invité, Bonjour, 09:02');
+  });
+
+  test('un participant `user` ordinaire ne porte JAMAIS « Sans compte »', () => {
+    const label = composeMessageLabel({ protection: 'standard',
+      message: message(),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: 'sent',
+    });
+
+    expect(label).not.toContain('Sans compte');
+  });
+
+  test('un message à SOI ne porte jamais « Sans compte », même si `sender.type` est `anonymous`', () => {
+    // Cas impossible en pratique (on n'est jamais anonyme de soi-même), mais
+    // la garde `!isMine` doit tenir : le segment ne doit dépendre que de
+    // `isMine`, jamais uniquement du type du sender.
+    const label = composeMessageLabel({ protection: 'standard',
+      message: message({ sender: senderOf('Invité', 'anonymous') }),
+      isMine: true,
+      servedText: 'Bonjour',
+      delivery: 'read',
+    });
+
+    expect(label).not.toContain('Sans compte');
   });
 });

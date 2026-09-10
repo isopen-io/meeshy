@@ -58,18 +58,18 @@ const BASE_MESSAGE: Message = {
   },
 };
 
-const placeOf = (message: Message, tail = true): PlacedMessage => ({
+const placeOf = (message: Message, tail = true, head = true): PlacedMessage => ({
   message,
-  head: true,
+  head,
   tail,
   opensDay: null,
 });
 
-const render = (message: Message, opts: { tail?: boolean; now?: () => number } = {}) =>
+const render = (message: Message, opts: { tail?: boolean; head?: boolean; now?: () => number } = {}) =>
   renderToStaticMarkup(
     <FocalRow
       mode="focal"
-      place={placeOf(message, opts.tail ?? true)}
+      place={placeOf(message, opts.tail ?? true, opts.head ?? true)}
       languages={['fr', 'en']}
       viewerId="u-viewer"
       onJumpToMessage={() => {}}
@@ -433,6 +433,152 @@ describe('FocalRow — identité de tête de groupe : présence et « Sans compt
     const withoutDot = render(BASE_MESSAGE);
     expect(withDot).toContain('min-height:34px');
     expect(withoutDot).toContain('min-height:34px');
+  });
+
+  /**
+   * LA COULEUR DU NOM DE SOI (revue #5935, défaut majeur 2) — un message à
+   * SOI porte `--color-self-name-ink` (indigo700 clair / indigo200 sombre,
+   * dérivé — voir `generate-from-ios.mjs`), jamais `--color-ios-ink`
+   * (l'encre PARTAGÉE avec tout autre expéditeur, qui rendrait sa tête
+   * indiscernable) NI `--ios-indigo-500` servi tel quel (mesuré sous AA,
+   * 4,47:1 / 4,45:1).
+   */
+  test('un message à SOI porte `--color-self-name-ink` sur son NOM ; un message d’autrui porte `--color-ios-ink`', () => {
+    // Le `<p>` du texte servi porte TOUJOURS `--color-ios-ink` (`isMine` ne le
+    // change pas) — la couleur qui compte est celle du NOM, dans
+    // `[data-identity]` seul, jamais l'intégralité de la rangée.
+    const nameColorOf = (html: string): string => {
+      const start = html.indexOf('data-identity');
+      const end = html.indexOf('</div>', start);
+      const block = html.slice(start, end);
+      const match = block.match(/font-extrabold[^>]*style="([^"]*)"/);
+      return match?.[1] ?? '';
+    };
+
+    const mine = render({ ...BASE_MESSAGE, senderId: 'u-viewer', sender: { ...BASE_MESSAGE.sender!, userId: 'u-viewer', displayName: 'Vous' } });
+    expect(nameColorOf(mine)).toContain('color:var(--color-self-name-ink)');
+    expect(nameColorOf(mine)).not.toContain('var(--color-ios-ink)');
+
+    const theirs = render(BASE_MESSAGE);
+    expect(nameColorOf(theirs)).toContain('color:var(--color-ios-ink)');
+    expect(nameColorOf(theirs)).not.toContain('self-name-ink');
+  });
+});
+
+/**
+ * UN SEUL LIBELLÉ, PAS DEUX (revue #5935, défauts majeurs 1/4) —
+ * `[data-row]` porte déjà `role="article"` + `aria-label` composé
+ * (`thread-modes.tsx`) ; `role="article"` ne réduit PAS son sous-arbre.
+ * Sans `aria-hidden` sur les nœuds PRÉSENTATIONNELS qui redisent ce que le
+ * libellé dit déjà (identité, texte servi, heure/accusé), un lecteur
+ * d'écran annonçait chaque rangée DEUX FOIS (mesuré, arbre AX réel CDP :
+ * `[article]` PUIS `[StaticText] "Amina Diallo"` / `[paragraph]` /
+ * `[time]`, aucun `ignored`). Les CONTRÔLES (pastille du Prisme, drapeaux,
+ * citation, réactions) restent HORS de ce masque — ce test vérifie qu'ils
+ * ne portent PAS `aria-hidden`, exactement l'inverse des trois nœuds
+ * statiques.
+ */
+describe('FocalRow — un seul libellé au lecteur d’écran (revue #5935)', () => {
+  const identityBlock = (html: string): string => {
+    const start = html.indexOf('data-identity');
+    const end = html.indexOf('</div>', start);
+    return html.slice(start, end);
+  };
+
+  test('la ligne d’identité (`[data-identity]`) est `aria-hidden`', () => {
+    const html = render(BASE_MESSAGE);
+    expect(identityBlock(html)).toContain('aria-hidden="true"');
+  });
+
+  test('le texte SERVI (le `<p>` du contenu) est `aria-hidden`', () => {
+    const html = render(BASE_MESSAGE);
+    const pStart = html.indexOf('<p ');
+    const pEnd = html.indexOf('</p>', pStart);
+    const paragraph = html.slice(pStart, pEnd);
+    expect(paragraph).toContain('Bonjour');
+    expect(paragraph).toContain('aria-hidden="true"');
+  });
+
+  test('la colonne méta (heure + accusé) est `aria-hidden`, rangée ordinaire ET rangée élue', () => {
+    const ordinary = render(BASE_MESSAGE);
+    const ordinaryStart = ordinary.indexOf('focal-meta');
+    expect(ordinary.slice(ordinaryStart - 80, ordinaryStart + 20)).toContain('aria-hidden="true"');
+  });
+
+  test('la pastille du Prisme et les drapeaux restent HORS du masque (ce sont des CONTRÔLES)', () => {
+    const translated: Message = {
+      ...BASE_MESSAGE,
+      originalLanguage: 'en',
+      content: 'Hello there!',
+      translations: [
+        {
+          id: 't1',
+          messageId: BASE_MESSAGE.id,
+          targetLanguage: 'fr',
+          translatedContent: 'Bonjour !',
+          translationModel: 'medium',
+          createdAt: new Date('2026-09-08T09:00:00.000Z'),
+        },
+      ],
+    };
+    const html = render(translated);
+    expect(html).toContain('langue d’origine');
+    // La pastille et les drapeaux sont des `<button>` : aucun `aria-hidden`
+    // ne doit précéder leur `aria-label`/`aria-pressed` immédiat.
+    const buttonStart = html.indexOf('<button');
+    const buttonEnd = html.indexOf('>', buttonStart);
+    expect(html.slice(buttonStart, buttonEnd)).not.toContain('aria-hidden');
+  });
+
+  /**
+   * LE GLYPHE, PAS LE TEXTE (#5935) — miroir `FocalIdentityHeader.swift:129-139` :
+   * le fantôme précède le nom, il ne se lit pas deux fois. `GlyphSvg` pose
+   * `role="img"` + `aria-label` depuis SON `title` (`glyph.tsx:36-38`) — le
+   * texte « Sans compte » n'apparaît donc plus qu'UNE fois dans le HTML,
+   * porté par l'attribut, jamais par un `<span>` visible.
+   */
+  test('un SANS COMPTE porte le GLYPHE masque (role="img" aria-label="Sans compte") AVANT le nom, et plus aucun badge textuel', () => {
+    const html = render({
+      ...BASE_MESSAGE,
+      sender: { ...BASE_MESSAGE.sender!, type: 'anonymous', displayName: 'Visiteur' },
+    });
+    expect(html).toContain('role="img"');
+    expect(html).toContain('aria-label="Sans compte"');
+    expect(html.indexOf('aria-label="Sans compte"')).toBeLessThan(html.indexOf('Visiteur'));
+    expect((html.match(/Sans compte/g) ?? []).length).toBe(1);
+  });
+
+  /**
+   * L'ANCRE DE GATE (#5935) — `data-identity` marque la ligne d'identité
+   * pour `scripts/lib/check-identity.mjs`, qui n'a aucun autre moyen fiable
+   * de la distinguer du reste de la rangée. Posée SEULEMENT en tête de
+   * groupe : une continuation n'a pas d'en-tête à mesurer.
+   */
+  /**
+   * LE NOM DIT « SOI » DEUX FOIS (revue #5935) — miroir
+   * `FocalIdentityHeader.swift:87-92` : le TEXTE est le littéral de soi
+   * (`focal.row.you`, « Toi » côté iOS, « Vous » côté web — la prose du web
+   * vouvoie déjà partout), sa COULEUR est `MeeshyColors.indigo500`, et
+   * l'AVATAR garde les initiales de la PERSONNE (`senderDisplayName`), que
+   * la passerelle sert réellement dès `VITE_DATA_SOURCE=gateway`.
+   */
+  test('un message à SOI affiche « Vous », mais l’avatar garde les INITIALES de la personne', () => {
+    const html = render({
+      ...BASE_MESSAGE,
+      senderId: 'u-viewer',
+      sender: { ...BASE_MESSAGE.sender!, userId: 'u-viewer', displayName: 'Jeanne Kouassi' },
+    });
+    expect(html).toContain('>Vous</span>');
+    expect(html).not.toContain('Jeanne Kouassi');
+    expect(html).toContain('>JK</span>');
+  });
+
+  test('la ligne d’identité porte data-identity sur une TÊTE de groupe, et n’existe pas sur une continuation', () => {
+    const head = render(BASE_MESSAGE, { head: true });
+    expect(head).toContain('data-identity');
+
+    const continuation = render(BASE_MESSAGE, { head: false });
+    expect(continuation).not.toContain('data-identity');
   });
 });
 

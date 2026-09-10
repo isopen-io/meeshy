@@ -1,5 +1,5 @@
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
-import { initialsOf } from '@/lib/view/conversation';
+import { initialsOf, presenceOf } from '@/lib/view/conversation';
 import type { LocalDelivery } from '@/lib/view/message';
 import { badgesOf, bodyKindOf, systemRowOf } from '@/lib/view/message-badges';
 import { served } from '@/lib/api/prism';
@@ -417,6 +417,11 @@ export function Bubble({
                 color="var(--accent)"
                 size={32}
                 name={message.sender?.displayName ?? ''}
+                /* `nowMs`, jamais `Date.now()` — l'horloge de cette bulle est
+                   INJECTABLE (prop `now`, ci-dessus) et `presenceOf` prend la
+                   sienne en paramètre précisément pour que la loi 1/3/5 se
+                   mesure sans dépendre de l'horloge réelle (revue #5935). */
+                presence={presenceOf(message.sender, nowMs)}
               />
             ) : null}
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">

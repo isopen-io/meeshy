@@ -24,6 +24,8 @@ import {
 import { Avatar } from './avatar';
 import { Attachments } from './attachment-blocks';
 import { FocusCard, FocusIdentity, FocusStamp, FocusStrip } from './focal-focus-overlays';
+import { GlyphSvg } from './glyph';
+import { THREAD_IDENTITY_GLYPHS } from './glyphs-thread-identity';
 import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
 import {
   Check,
@@ -329,16 +331,42 @@ export const FocalRow = memo(function FocalRow({
     servedLanguage: activeLanguage,
   });
 
-  // Le viewer n'a pas toujours de `sender` peuplé sur ses propres messages
-  // (fixture, charge socket allégée) — « Vous » comble l'identité, jamais un
-  // nom vide en tête de groupe.
-  const senderName = message.sender?.displayName ?? (isMine ? 'Vous' : '');
-  /* SANS COMPTE (#5774, travail 2/3) — miroir `FocalIdentityHeader.swift:99-161` :
-   * un visiteur entré par lien porte un marqueur AVANT son nom. Le fantôme
-   * `theatermasks.fill` d'iOS n'a pas d'équivalent extrait côté web
-   * (`scripts/extract-glyphs.mjs` n'a pas ce tracé) — la marque reste
-   * TEXTUELLE ici ; extraire le glyphe est une issue compagnon, jamais un
-   * blocage de ce lot. */
+  /* DEUX NOMS, PAS UN (revue #5935) — miroir `FocalIdentityHeader.swift:87-92` :
+   * iOS passe `senderDisplayName` à l'AVATAR (ses initiales restent celles de
+   * la personne) et n'échange que le TEXTE contre le littéral de soi
+   * (`focal.row.you`). Un seul nom ici faisait, sur la donnée RÉELLE de la
+   * passerelle, afficher au lecteur son PROPRE nom là où iOS écrit « soi » —
+   * invisible sur fixture (`viewer.displayName === 'Vous'`), visible dès que
+   * VITE_DATA_SOURCE=gateway. Le viewer n'a pas toujours de `sender` peuplé
+   * sur ses propres messages (fixture, charge socket allégée) : le repli
+   * comble l'identité, jamais un nom vide en tête de groupe. */
+  const senderAvatarName = message.sender?.displayName ?? (isMine ? 'Vous' : '');
+  const senderName = isMine ? 'Vous' : senderAvatarName;
+  /* LA COULEUR DU NOM DE SOI — un jeton GÉNÉRÉ, pas l'encre primaire
+   * (revue #5935, défaut majeur 2, SOLDÉ). `FocalIdentityHeader.swift:90-92`
+   * peint le nom de SOI en `MeeshyColors.indigo500` ; servi TEL QUEL sur la
+   * ligne d'identité de 13 px, il MESURE 4,47:1 en clair et 4,45:1 en sombre
+   * (Chromium, `lib/contrast.mjs` sur `/c/c-deploiement`) — sous la barre AA
+   * de 4,5:1, et le gras 800 n'ouvre pas l'exemption « grand texte »
+   * (13 px < 18,5 px). D-4 interdit d'inventer une couleur ici : l'encre
+   * primaire tenait AA (15,99:1 / 17,79:1) mais rendait la tête d'un message
+   * à SOI indiscernable de celle d'un autre — la distinction que la cible
+   * iOS porte. `--color-self-name-ink` (méthode D-18/#5625,
+   * `packages/design-tokens/scripts/generate-from-ios.mjs`) sert désormais
+   * le cran suivant qui PASSE — indigo700 en clair, indigo200 en sombre
+   * (7,90:1 / 13,34:1), la MÊME paire que `--color-day-ink` mais nommée pour
+   * SA fonction : un séparateur de jour et un nom de soi ne sont pas la
+   * même chose, même si leur cran de contraste coïncide aujourd'hui.
+   * **iOS lui-même reste sous AA sur ce point précis** — un défaut de la
+   * CIBLE (famille #5681-#5683), pas une dérivation qui invente une
+   * couleur : issue compagnon ouverte côté iOS, pas ici. */
+  const senderNameColor = isMine ? 'var(--color-self-name-ink)' : 'var(--color-ios-ink)';
+  /* SANS COMPTE (#5774, travail 2/3 ; glyphe #5935) — miroir
+   * `FocalIdentityHeader.swift:99-161` : un visiteur entré par lien porte un
+   * marqueur AVANT son nom. Le fantôme `theatermasks.fill` d'iOS est
+   * ICONOGRAPHIQUE ici (`mask-happy`, `scripts/extract-glyphs.mjs`), pas un
+   * badge textuel — l'écart avec le tracé exact d'iOS (Phosphor ne publie
+   * pas `theatermasks`) est assumé, D-32. */
   const isAnonymousSender = message.sender?.type === 'anonymous';
   const reactions = reactionEntries(message.reactionSummary);
 
@@ -414,6 +442,15 @@ export const FocalRow = memo(function FocalRow({
           className={emojiOnly ? 'leading-[1.2] whitespace-pre-wrap' : 'text-bubble leading-[1.35] whitespace-pre-wrap'}
           lang={rendered.language}
           style={{ color: 'var(--color-ios-ink)', fontSize: emojiOnly ? 40 : undefined }}
+          /* `aria-hidden` (revue #5935, défauts majeurs 1/4) — ce texte est
+             DÉJÀ le `servedText` que `composeMessageLabel` a posé dans
+             `aria-label={rowLabel}` (`thread-modes.tsx`) : sans ce masque,
+             l'arbre AX réel le portait DEUX fois, en frère non `ignored`
+             du libellé de l'`article`. `lang` reste porté ICI pour l'affichage
+             visuel ET sur `[data-row]` (`rowServed.language`) pour le
+             libellé — un lecteur d'écran qui commute de langue au fil du
+             DOM n'a donc plus rien à lire sous ce nœud. */
+          aria-hidden
         >
           {rendered.text}
         </p>
@@ -492,10 +529,10 @@ export const FocalRow = memo(function FocalRow({
           </button>
         ) : head ? (
           <Avatar
-            initials={initialsOf(senderName)}
+            initials={initialsOf(senderAvatarName)}
             color="var(--accent)"
             size={AVATAR_SIZE}
-            presence={presenceOf(message.sender)}
+            presence={presenceOf(message.sender, nowMs)}
           />
         ) : null}
       </div>
@@ -513,7 +550,7 @@ export const FocalRow = memo(function FocalRow({
       <div className="min-w-0 relative">
         {elected ? <FocusCard /> : null}
         {elected ? (
-          <FocusIdentity initials={initialsOf(senderName)} name={senderName} accent="var(--accent)" />
+          <FocusIdentity initials={initialsOf(senderAvatarName)} name={senderName} accent="var(--accent)" />
         ) : null}
 
         {/* LE BADGE ÉPHÉMÈRE — AU-DESSUS de l'identité (F11,
@@ -535,6 +572,7 @@ export const FocalRow = memo(function FocalRow({
              rangée, tête comme continuation. S'EFFACE en focus (:269) —
              `FocusIdentity` la remplace en overlay. */
           <div
+            data-identity
             className="pb-0.5 flex items-center gap-1.5"
             /* `minHeight: AVATAR_FRAME` (34) — le CADRE réservé par
                `Focus.avatarSize` (revue #5648, `FocusIdentity` débordait
@@ -542,19 +580,34 @@ export const FocalRow = memo(function FocalRow({
                la MÊME hauteur, pastille de présence posée ou non — la
                présence NE DOIT PAS faire grandir la rangée. */
             style={{ opacity: elected ? 0 : 1, minHeight: AVATAR_FRAME }}
+            /* `aria-hidden` (revue #5935, défauts majeurs 1/4) —
+               `role="article"` + `aria-label` sur `[data-row]`
+               (`thread-modes.tsx`) NE réduit PAS le sous-arbre : sans ce
+               masque, un lecteur d'écran annonçait le libellé COMPOSÉ puis
+               relisait ce nom (arbre AX réel : `[article]` PUIS
+               `[StaticText] "Amina Diallo"`, ni l'un ni l'autre `ignored`).
+               `composeMessageLabel` porte désormais « Sans compte » lui-même
+               (`message-a11y-label.ts`) — masquer ce nœud ne perd donc plus
+               rien que `aria-label={rowLabel}` ne dise déjà. Le glyphe garde
+               son `role="img"` PROPRE ; il disparaît de l'arbre avec le
+               reste, sans perte puisque son nom est désormais DANS le
+               libellé de la rangée. */
+            aria-hidden
           >
             {isAnonymousSender ? (
-              <span
-                className="text-mini font-semibold rounded-chip px-1.5 py-0.5"
-                style={{
-                  color: 'var(--color-ios-ink-2)',
-                  backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 20%, transparent)',
-                }}
-              >
-                Sans compte
-              </span>
+              <GlyphSvg
+                glyph={THREAD_IDENTITY_GLYPHS.maskHappy}
+                title="Sans compte"
+                /* `text-title` — LA MÊME taille que le nom, pour que `0.8em`
+                   soit bien `nameSize × 0.8` (iOS, `:130-131`). Sans elle,
+                   l'`em` se résolvait sur la police HÉRITÉE du conteneur
+                   (16 px) et le fantôme mesurait 12,8 px contre les 10,4 px
+                   d'iOS — mesuré au navigateur, revue #5935. */
+                className="shrink-0 text-title"
+                style={{ width: '0.8em', height: '0.8em', color: 'var(--ios-purple-500)' }}
+              />
             ) : null}
-            <span className="text-title font-extrabold" style={{ color: 'var(--color-ios-ink)' }}>
+            <span className="text-title font-extrabold" style={{ color: senderNameColor }}>
               {senderName}
             </span>
           </div>
@@ -693,11 +746,18 @@ export const FocalRow = memo(function FocalRow({
               s'efface en plus (`FocusStamp` la remplace en overlay). */}
           <div
             className="focal-meta flex shrink-0 items-center gap-1 pb-0.5"
-            /* `opacity: 0` ne retire RIEN de l'arbre d'accessibilité : sans
-               cette garde, la rangée élue annonçait son heure DEUX fois (la
-               colonne méta masquée, puis `FocusStamp` qui la porte en clair
-               avec sa date et son accusé). */
-            aria-hidden={elected ? true : undefined}
+            /* `aria-hidden` INCONDITIONNEL (revue #5935, défauts majeurs
+               1/4 — élargi depuis le seul cas `elected`). L'heure et
+               l'accusé sont DÉJÀ dans `rowLabel` (`time(...)` et
+               `deliveryWord`, `message-a11y-label.ts`) : sur une rangée
+               ORDINAIRE, `<time>` n'était pas encore masqué et l'arbre AX
+               réel le portait deux fois (`[time] → [StaticText] "11:43"`,
+               frère non `ignored` de l'`article`). `Check` ne porte qu'un
+               `role="img"` déjà absorbé par le même libellé (`deliveryWord`)
+               — rien de focalisable ici, seulement du texte redondant. Sur
+               la rangée ÉLUE, cela tient l'ancienne garde (`FocusStamp` la
+               remplace en clair) sans avoir plus besoin de la condition. */
+            aria-hidden
           >
             <time
               className="text-time font-medium tabular-nums"
