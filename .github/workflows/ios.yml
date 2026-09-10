@@ -295,12 +295,33 @@ jobs:
     # is what closed the door in July. That measurement now exists — see
     # "PR GATE RESTORED" in the header — and it is what wired the gate below.
     #
-    # 30 stays the PR cap; 50 stays the cap for the full suite. The first
-    # measured gate run took 10m02 end to end (see the header), so 30 is ~3x the
-    # observed cost — deliberately loose, because the two variable posts it
-    # keeps (SPM resolve, compile) are network- and contention-sensitive. A
-    # compile that overruns 30 min is hung, not slow.
-    timeout-minutes: ${{ needs.scope.outputs.run_tests == 'true' && 50 || 30 }}
+    # 30 stays the PR cap. The first measured gate run took 10m02 end to end
+    # (see the header), so 30 is ~3x the observed cost — deliberately loose,
+    # because the two variable posts it keeps (SPM resolve, compile) are network-
+    # and contention-sensitive. A compile that overruns 30 min is hung, not slow.
+    #
+    # THE FULL SUITE'S CAP WAS 50, AND IT HAD NEVER BEEN MEASURED (#5996). The
+    # 10m02 above is the PR gate's cost; 50 was extrapolated from it. Run
+    # 34475852519 gave the real figure — 50m49 — so the cap cut a job that had
+    # already finished its work: build green, 26 red tests found, every one of
+    # them annotated by the last declared step, which reports success at 13:34:57.
+    # The axe fell at 13:35:22, inside the post-actions.
+    #
+    # What that costs is not a lost run, it is a LIE ABOUT ITS NATURE. This
+    # workflow declares `cancel-in-progress: true` (see `concurrency` above), so
+    # `cancelled` is the label of a run SUPERSEDED by a newer one — nothing to
+    # read. A run carrying a complete verdict wore that label, and a session
+    # spent several exchanges hunting the concurrent push that never existed. A
+    # monitor filtering on `success|failure` renders, faced with it, exactly the
+    # silence of a run still in progress.
+    #
+    # 75 is the measured cost plus ~48%. The margin is not decoration: the two
+    # heaviest posts vary with the runner — compile (22m40) and the on-demand
+    # download of the iOS 18.2 runtime (7m49, paid on EVERY run since hosted
+    # runners are ephemeral, whatever the step's comment says about "first run
+    # only"). A suite that overruns 75 min is hung, not slow — and it will then
+    # say so under its own name.
+    timeout-minutes: ${{ needs.scope.outputs.run_tests == 'true' && 75 || 30 }}
     steps:
       - uses: actions/checkout@v7
 
@@ -340,9 +361,33 @@ jobs:
       # `ProductBuildVersion` is the one thing that must coincide for a `.pcm`
       # to stay valid; folding it into the key means a republished image starts
       # a fresh lineage instead of poisoning the rolling one.
+      # **La lignée se compte en MTIME, pas seulement en VERSION (#5084, corrigé
+      # ici).** `ProductBuildVersion` seule ne suffit pas : Clang invalide un
+      # `.pcm` en comparant l'HORODATAGE des en-têtes qu'il a lus, et une image
+      # de runner reconstruite change ces horodatages sans toucher la version du
+      # SDK. La clé servait alors un ModuleCache périmé, et le build tombait sur
+      #
+      #     Clang dependency scanner failure: file '…/AvailabilityVersions.h' has
+      #     been modified since the module file '…/_AvailabilityInternal-….pcm'
+      #     was built: mtime changed (was 1787976491, now 1788754383)
+      #
+      # puis, en cascade, sur `could not build module '_DarwinFoundation1'` — un
+      # message qui n'accuse RIEN de ce que la PR contient et qu'on a d'abord pris
+      # pour une corruption aléatoire du runner.
+      #
+      # On ajoute donc à la lignée l'horodatage de l'en-tête que le scanner cite,
+      # et celui de la racine du SDK, qui bouge à toute reconstruction d'image.
+      # Deux `stat`, instantanés — et une clé qui discrimine enfin sur ce que
+      # Clang regarde vraiment.
       - name: SDK build version (clé de lignée du ModuleCache, #5084)
         id: sdkver
-        run: echo "v=$(xcodebuild -version -sdk iphonesimulator ProductBuildVersion)" >> "$GITHUB_OUTPUT"
+        run: |
+          SDK=$(xcodebuild -version -sdk iphonesimulator ProductBuildVersion)
+          ROOT=$(xcrun --sdk iphonesimulator --show-sdk-path)
+          RACINE=$(stat -f %m "$ROOT" 2>/dev/null || echo 0)
+          ENTETE=$(stat -f %m "$ROOT/usr/include/AvailabilityVersions.h" 2>/dev/null || echo 0)
+          echo "v=${SDK}-${RACINE}-${ENTETE}" >> "$GITHUB_OUTPUT"
+          echo "lignée du ModuleCache : ${SDK}-${RACINE}-${ENTETE}"
 
       # Compiled modules / build products. RESTORE-ONLY; the save is explicit,
       # after the compile step (see "Save DerivedData build cache"), because the
