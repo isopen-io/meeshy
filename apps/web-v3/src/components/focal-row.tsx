@@ -2,7 +2,7 @@ import { memo } from 'react';
 
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
-import { initialsOf } from '@/lib/view/conversation';
+import { initialsOf, presenceOf } from '@/lib/view/conversation';
 import { served } from '@/lib/api/prism';
 import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
@@ -10,6 +10,7 @@ import type { FlatRowMode } from '@/lib/reading-mode/decision';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
 import { ephemeralOf, protectionOf } from '@/lib/reading-mode/protection';
 import {
+  AVATAR_FRAME,
   AVATAR_SIZE,
   FLAG_LIMIT_PLAIN,
   GROUP_TOP_PADDING,
@@ -293,6 +294,13 @@ export const FocalRow = memo(function FocalRow({
   // (fixture, charge socket allégée) — « Vous » comble l'identité, jamais un
   // nom vide en tête de groupe.
   const senderName = message.sender?.displayName ?? (isMine ? 'Vous' : '');
+  /* SANS COMPTE (#5774, travail 2/3) — miroir `FocalIdentityHeader.swift:99-161` :
+   * un visiteur entré par lien porte un marqueur AVANT son nom. Le fantôme
+   * `theatermasks.fill` d'iOS n'a pas d'équivalent extrait côté web
+   * (`scripts/extract-glyphs.mjs` n'a pas ce tracé) — la marque reste
+   * TEXTUELLE ici ; extraire le glyphe est une issue compagnon, jamais un
+   * blocage de ce lot. */
+  const isAnonymousSender = message.sender?.type === 'anonymous';
   const reactions = reactionEntries(message.reactionSummary);
 
   // `kind === 'veiled' | 'burned'` toutes deux passent par `ProtectedContent`
@@ -431,7 +439,12 @@ export const FocalRow = memo(function FocalRow({
             <span className="offscreen">Sélectionner ce message</span>
           </button>
         ) : head ? (
-          <Avatar initials={initialsOf(senderName)} color="var(--accent)" size={AVATAR_SIZE} />
+          <Avatar
+            initials={initialsOf(senderName)}
+            color="var(--accent)"
+            size={AVATAR_SIZE}
+            presence={presenceOf(message.sender)}
+          />
         ) : null}
       </div>
 
@@ -469,7 +482,26 @@ export const FocalRow = memo(function FocalRow({
              L'heure vit désormais dans la colonne méta, accolée à CHAQUE
              rangée, tête comme continuation. S'EFFACE en focus (:269) —
              `FocusIdentity` la remplace en overlay. */
-          <div className="pb-0.5" style={{ opacity: elected ? 0 : 1 }}>
+          <div
+            className="pb-0.5 flex items-center gap-1.5"
+            /* `minHeight: AVATAR_FRAME` (34) — le CADRE réservé par
+               `Focus.avatarSize` (revue #5648, `FocusIdentity` débordait
+               dans le texte sans lui) : la ligne d'identité a maintenant
+               la MÊME hauteur, pastille de présence posée ou non — la
+               présence NE DOIT PAS faire grandir la rangée. */
+            style={{ opacity: elected ? 0 : 1, minHeight: AVATAR_FRAME }}
+          >
+            {isAnonymousSender ? (
+              <span
+                className="text-mini font-semibold rounded-chip px-1.5 py-0.5"
+                style={{
+                  color: 'var(--color-ios-ink-2)',
+                  backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 20%, transparent)',
+                }}
+              >
+                Sans compte
+              </span>
+            ) : null}
             <span className="text-title font-extrabold" style={{ color: 'var(--color-ios-ink)' }}>
               {senderName}
             </span>
