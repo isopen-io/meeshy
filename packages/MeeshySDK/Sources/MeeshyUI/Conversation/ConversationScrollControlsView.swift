@@ -144,11 +144,13 @@ public struct ConversationScrollControlsView: View {
 
     /// Couleur de contenu lisible sur la teinte glass. L'accent est déterministe
     /// par conversation et peut tomber sur une couleur claire (jaune/cyan/vert) —
-    /// un contenu blanc y serait illisible (WCAG < 3:1). On choisit blanc ou sombre
-    /// selon la luminance WCAG de l'accent (seuil 0.6, convention repo). Offline :
-    /// la teinte neutral500 est sombre, le blanc reste lisible.
+    /// un contenu blanc y serait illisible (WCAG < 3:1). `Color.readableInk`
+    /// choisit noir/blanc au point d'égalité de contraste WCAG (#5950 — l'ancien
+    /// seuil arrondi `0.6` élisait l'encre blanche sur toute la plage 0,179 → 0,6,
+    /// ex. `#46BDCA` : 1,98:1 en schéma clair, sous la barre AA). Offline : la
+    /// teinte neutral500 est sombre, le blanc reste lisible.
     private var contentColor: Color {
-        isOffline ? .white : (Color(hex: accentColor).luminance > 0.6 ? .black : .white)
+        isOffline ? .white : Color(hex: accentColor).readableInk
     }
 
     /// Repos = cercle parfait ; contenu riche/hors-ligne/recherche = capsule
