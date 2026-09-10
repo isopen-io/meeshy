@@ -87,13 +87,11 @@ const KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE = new Set([
   // `apps/web/components/common/bubble-message/MessageNameDate.tsx`,
   // `apps/web/components/v2/MessageBubble.tsx`.
   'u.byUsername',
-  // `PATCH`/`DELETE /api/v1/guest-sessions/me` — appelée par
-  // `apps/web-old-version3/lib/api/invite.ts:84` via un chemin construit à la main
-  // (`CHEMIN_BATTEMENT`). `apps/web-v3` est HORS du périmètre `SEARCH_ROOTS`
-  // de ce script (`apps/web`, `packages/shared`) : élargir le périmètre à
-  // toute l'arborescence `web-v3` déplacerait le compte de dette de façon non
-  // mesurée pour cette issue (cf. « toute baisse doit être MESURÉE, jamais
-  // supposée ») — l'exception documentée est le correctif proportionné.
+  // `PATCH`/`DELETE /api/v1/guest-sessions/me` — appelée en production par le
+  // SDK iOS (`ShareLinkService` → `GuestSessionsEndpoint.me`), hors du périmètre
+  // `SEARCH_ROOTS` de ce script (`apps/web`, `packages/shared`). Son appelant web
+  // construisait le chemin à la main dans l'ancienne refonte v3, retirée du dépôt
+  // depuis (#5994) : la route reste appelée, l'exception reste juste.
   'guestSessions.me',
 ]);
 
