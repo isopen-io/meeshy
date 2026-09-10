@@ -30,6 +30,7 @@ import { fileURLToPath } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
 import { checkThreadMedia } from './lib/check-media.mjs';
+import { checkThreadBadges } from './lib/check-badges.mjs';
 
 const DIST = join(fileURLToPath(new URL('..', import.meta.url)), 'dist');
 const TYPES = {
@@ -1000,6 +1001,13 @@ await runProtectionSuite('bulles');
  */
 await checkThreadMedia({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'focal', scheme: 'light' });
 await checkThreadMedia({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'bulles', scheme: 'dark' });
+
+/**
+ * 9 — BADGES ET RANGÉE SYSTÈME (#5936) — même répartition que § 8 ci-dessus :
+ * Focal en clair, Bulles en sombre. Voir `scripts/lib/check-badges.mjs`.
+ */
+await checkThreadBadges({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'focal', scheme: 'light' });
+await checkThreadBadges({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'bulles', scheme: 'dark' });
 
 await browser.close();
 server.close();

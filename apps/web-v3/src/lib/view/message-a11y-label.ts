@@ -1,5 +1,6 @@
 import { kindOf } from './message';
 import type { Delivery } from './message';
+import { badgesOf } from './message-badges';
 import { time } from '@/lib/grouping';
 import type { ProtectionKind } from '@/lib/reading-mode/protection';
 import type { Attachment, Message } from '@/lib/api/types';
@@ -156,6 +157,18 @@ export function composeMessageLabel({ message, isMine, servedText, delivery, pro
   }
 
   if (message.isEdited) segments.push('modifié');
+  /**
+   * TRANSFÉRÉ — segment absent avant #5936 (constat D-31 : « composeMessageLabel
+   * n'a AUCUN segment "transféré" »). `badgesOf` (site UNIQUE,
+   * `message-badges.ts`) tranche le libellé — jamais recalculé ici. Le
+   * libellé est mis en bas de casse pour rejoindre les autres segments d'état
+   * (« modifié », « épinglé »), qui ne portent jamais de majuscule au milieu
+   * de la phrase composée.
+   */
+  const forwardedBadge = badgesOf(message).find((badge) => badge.kind === 'forwarded');
+  if (forwardedBadge !== undefined) {
+    segments.push(forwardedBadge.label.charAt(0).toLowerCase() + forwardedBadge.label.slice(1));
+  }
   if (message.pinnedAt !== undefined) segments.push('épinglé');
   if (message.expiresAt !== undefined) segments.push('éphémère');
 

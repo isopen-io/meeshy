@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactElement } from 'react';
 
 import type { Message } from '@/lib/api/types';
 import type { Delivery } from '@/lib/view/message';
+import type { MessageBadge } from '@/lib/view/message-badges';
 import { languageColor, flag, languageName } from '@/lib/languages';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
 
@@ -408,5 +409,123 @@ export function FailedSendBand({
       <span className="flex-1">{label}</span>
       <span style={{ textDecoration: 'underline' }}>Réessayer</span>
     </button>
+  );
+}
+
+/**
+ * LES BADGES « ÉPINGLÉ » / « TRANSFÉRÉ » — AU-DESSUS du contenu, avant la
+ * citation (miroir `FocalRow.contentColumn` : `badgesSection` se monte avant
+ * `FocalIdentityHeader` ; `BubbleStandardLayout.body` : les deux indicateurs
+ * ouvrent la colonne de contenu, avant le texte). `badgesOf` (site UNIQUE,
+ * `lib/view/message-badges.ts`) décide QUELS badges existent ; ce composant
+ * ne filtre que ceux qui se peignent ICI — « modifié » vit dans la colonne
+ * méta (`EditedMark`), « éphémère » a son propre widget vivant
+ * (`EphemeralBadge`, `protected-content.tsx`) : les peindre une seconde fois
+ * ici doublerait l'affichage du même fait.
+ */
+export function MessageBadges({ badges }: { readonly badges: readonly MessageBadge[] }) {
+  const visible = badges.filter((badge) => badge.kind === 'pinned' || badge.kind === 'forwarded');
+  if (visible.length === 0) return null;
+  return (
+    <div className="mb-1 flex flex-col items-start gap-0.5">
+      {visible.map((badge) =>
+        badge.kind === 'pinned' ? (
+          /* `--color-ios-ink-2`, JAMAIS `--accent` (revue, `check-thread-states
+             .mjs` § 9) : l'accent est DÉRIVÉ par conversation
+             (`ColorGeneration.swift`) et n'offre AUCUNE garantie de contraste
+             contre le fond — mesuré 2,24:1 sur `c-states` en clair, sous
+             l'AA (4,5). iOS fixe `MeeshyColors.pinnedBlue`, theme-invariant ;
+             web-v3 réutilise le ton méta déjà AA partout ailleurs plutôt que
+             d'introduire une quatrième teinte fixe. */
+          <span
+            key="pinned"
+            data-badge="pinned"
+            className="flex items-center gap-1 text-check font-medium"
+            style={{ color: 'var(--color-ios-ink-2)' }}
+          >
+            <Glyph name="pushPin" size={11} />
+            <span>épinglé</span>
+          </span>
+        ) : (
+          /* Pas de glyphe « transféré » : `scripts/extract-glyphs.mjs` n'a pas
+             extrait d'équivalent à `arrowshape.turn.up.right.fill`
+             (`BubbleForwardedIndicator.swift:111`) — écart assumé, issue
+             compagnon à ouvrir, même famille que le glyphe « Sans compte »
+             manquant de D-31. */
+          <span
+            key="forwarded"
+            data-badge="forwarded"
+            className="flex items-center gap-1 text-check italic"
+            style={{ color: 'var(--color-ios-ink-2)' }}
+          >
+            <span className="line-clamp-1">{badge.label}</span>
+          </span>
+        ),
+      )}
+    </div>
+  );
+}
+
+/**
+ * « modifié » — dans la colonne MÉTA (heure + accusé), jamais dans
+ * `MessageBadges` : sur iOS `BubbleEditedIndicator` vit au même rang que le
+ * pied de bulle, pas dans `badgesSection` (`BubbleStandardLayout.swift:1274`).
+ *
+ * `color` reste OPTIONNEL et sans défaut forcé : la bulle « mine » teint
+ * TOUTE sa colonne méta en blanc par HÉRITAGE CSS (`bubble.tsx`,
+ * `color: isMine ? 'var(--color-meta-mine)' : 'var(--color-meta)'` posé sur
+ * l'ancêtre) — un défaut posé ici casserait ce contraste sur fond indigo
+ * (miroir `BubbleEditedIndicator.swift:19-21`, `isMe ? white.opacity(0.6) :
+ * textSecondary.opacity(0.5)`). La rangée plate, qui n'a AUCUNE couleur
+ * ambiante, passe `color` explicitement (`focal-row.tsx`).
+ *
+ * PAS de `META_TEXT_OPACITY` ICI (revue, `check-thread-states.mjs` § 9) :
+ * l'heure voisine la porte pour rester DISCRÈTE, mais « modifié » est un état
+ * du message que le critère de fin exige LISIBLE (AA 4,5) — mesuré 2,21:1
+ * (clair) / 1,89:1 (sombre) avec l'opacité 0,55 appliquée, sous l'AA dans les
+ * DEUX schémas. Pleine opacité : la couleur seule (`--color-ios-ink-2` /
+ * l'héritage bulle) suffit déjà à la distinguer visuellement de l'heure.
+ */
+export function EditedMark({ color }: { readonly color?: string } = {}) {
+  return (
+    <span
+      data-badge="edited"
+      className="text-time font-medium italic"
+      style={color === undefined ? undefined : { color }}
+    >
+      modifié
+    </span>
+  );
+}
+
+/**
+ * UNE RANGÉE SYSTÈME — miroir `FocalSystemRows.swift` / `BubbleSystemViews
+ * .BubbleSystemNoticeView` : centrée, sans avatar ni méta d'auteur. La peau
+ * `row` (Focal/Script) reste PLATE, comme tout le reste de cette rangée
+ * (critère de fin #5 : « rangée système plate en Focal/Script + capsule en
+ * Bulles ») ; la peau `bubble` porte la capsule que `BubbleSystemNoticeView`
+ * dessine. `text` est déjà le contenu SERVI par le Prisme — recomposé ici
+ * ferait une seconde résolution (D-14 : un seul résolveur).
+ */
+export function SystemNotice({ text, surface }: { readonly text: string; readonly surface: 'row' | 'bubble' }) {
+  if (surface === 'row') {
+    return (
+      <p className="text-check italic text-center w-full" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {text}
+      </p>
+    );
+  }
+  return (
+    <div className="flex justify-center py-0.5">
+      <span
+        className="rounded-chip px-2.5 py-1 text-check italic text-center"
+        style={{
+          backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)',
+          color: 'var(--color-ios-ink-2)',
+        }}
+      >
+        {text}
+      </span>
+    </div>
   );
 }

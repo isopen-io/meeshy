@@ -1,6 +1,7 @@
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import { initialsOf } from '@/lib/view/conversation';
 import type { LocalDelivery } from '@/lib/view/message';
+import { badgesOf, bodyKindOf, systemRowOf } from '@/lib/view/message-badges';
 import { served } from '@/lib/api/prism';
 import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
@@ -12,11 +13,14 @@ import { Attachments } from './attachment-blocks';
 import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
 import {
   Check,
+  EditedMark,
   FailedSendBand,
   Flags,
+  MessageBadges,
   PrismPastille,
   Quote,
   ReactionChip,
+  SystemNotice,
   reactionEntries,
 } from './message-blocks';
 
@@ -154,6 +158,27 @@ export function Bubble({
     );
   }
 
+  /**
+   * LA RANGÉE SYSTÈME — CENTRÉE, jamais alignée du côté de l'expéditeur
+   * (miroir `BubbleSystemNoticeView.swift:103-104`, `Spacer` des DEUX
+   * côtés — distincte de `BubbleDeletedView`, qui reste du côté de
+   * l'expéditeur). Voir `focal-row.tsx` pour le même garde `kind ===
+   * 'standard'` et sa raison (D-23).
+   */
+  if (kind === 'standard' && systemRowOf(message) !== null) {
+    const systemText = served({
+      preferredLanguages: languages,
+      originalLanguage: message.originalLanguage,
+      translations: message.translations,
+      original: message.content,
+    }).text;
+    return (
+      <div data-message={message.id} data-system-row style={{ marginBottom: tail ? 6 : 2 }}>
+        <SystemNotice text={systemText} surface="bubble" />
+      </div>
+    );
+  }
+
   // Texte ET pistes AUDIO traduites (#5805) — miroir `BubbleContentBuilder
   // .buildAvailableFlags(translations:translatedAudios:)` (`:365-395`) : un
   // vocal traduit SANS traduction texte monte lui aussi la bande de drapeaux,
@@ -229,8 +254,16 @@ export function Bubble({
   const receivedBg = 'color-mix(in srgb, var(--accent) var(--ios-bubble-other-opacity), transparent)';
   const receivedHairline = 'color-mix(in srgb, var(--accent) var(--ios-bubble-other-hairline-opacity), transparent)';
 
+  /** `badgesOf` (site UNIQUE, `lib/view/message-badges.ts`) — même contrat que `focal-row.tsx`. */
+  const badges = badgesOf(message);
+
+  /* UN EMOJI SEUL s'affiche EN GRAND — voir `focal-row.tsx` pour la même
+   * garde, sur le texte SERVI plutôt que `message.content` brut. */
+  const emojiOnly = rendered.text !== '' && bodyKindOf(rendered.text) === 'emoji-only';
+
   const contentBlock = (
     <>
+      <MessageBadges badges={badges} />
       {message.replyTo ? (
         <Quote quote={message.replyTo} isMine={isMine} onJump={() => onJumpToMessage(message.replyTo!.id)} />
       ) : null}
@@ -249,7 +282,12 @@ export function Bubble({
            annonce. C'est le Prisme : la traduction ne se signale que par
            la pastille du pied. `lang` porte la langue REELLEMENT servie,
            pour que la synthese vocale la prononce juste. */
-        <p className="text-bubble leading-[1.35] whitespace-pre-wrap" lang={rendered.language}>
+        <p
+          data-body-kind={emojiOnly ? 'emoji-only' : 'text'}
+          className={emojiOnly ? 'leading-[1.2] whitespace-pre-wrap' : 'text-bubble leading-[1.35] whitespace-pre-wrap'}
+          lang={rendered.language}
+          style={{ fontSize: emojiOnly ? 40 : undefined }}
+        >
           {rendered.text}
         </p>
       ) : null}
@@ -426,6 +464,7 @@ export function Bubble({
                     {...(sendStartedAt === undefined ? {} : { sendStartedAt })}
                   />
                 )}
+                {message.isEdited ? <EditedMark /> : null}
               </div>
             </div>
           </div>

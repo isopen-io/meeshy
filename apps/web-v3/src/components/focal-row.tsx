@@ -3,6 +3,7 @@ import { memo } from 'react';
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
 import { initialsOf, presenceOf } from '@/lib/view/conversation';
+import { badgesOf, bodyKindOf, systemRowOf } from '@/lib/view/message-badges';
 import { served } from '@/lib/api/prism';
 import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
@@ -26,11 +27,14 @@ import { FocusCard, FocusIdentity, FocusStamp, FocusStrip } from './focal-focus-
 import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
 import {
   Check,
+  EditedMark,
   FailedSendBand,
   Flags,
+  MessageBadges,
   PrismPastille,
   Quote,
   ReactionChip,
+  SystemNotice,
   reactionEntries,
 } from './message-blocks';
 
@@ -227,6 +231,41 @@ export const FocalRow = memo(function FocalRow({
     );
   }
 
+  /**
+   * LA RANGÉE SYSTÈME — `messageSource: 'system'` seulement, et seulement au
+   * cas `standard` (`kind`) : un message système PROTÉGÉ (rare, jamais
+   * produit aujourd'hui) reste un tombstone, fail-closed, la loi de D-23 ne
+   * l'exclut pas explicitement (voir `message-badges.ts`, doc-comment de
+   * `systemRowOf`). Ni avatar ni colonne méta — même grille que le
+   * tombstone `deleted` ci-dessus, texte SERVI par le Prisme
+   * (`served({...}).text`, jamais `message.content` brut).
+   */
+  if (kind === 'standard' && systemRowOf(message) !== null) {
+    const systemText = served({
+      preferredLanguages: languages,
+      originalLanguage: message.originalLanguage,
+      translations: message.translations,
+      original: message.content,
+    }).text;
+    return (
+      <div
+        data-reading-mode={mode}
+        data-message={message.id}
+        data-system-row
+        className="grid"
+        style={{
+          gridTemplateColumns: `${TEXT_INDENT}px 1fr`,
+          paddingInline: ROW_PADDING_HORIZONTAL,
+          paddingBlockStart: head ? GROUP_TOP_PADDING : ROW_PADDING_VERTICAL,
+          paddingBlockEnd: ROW_PADDING_VERTICAL,
+        }}
+      >
+        <div aria-hidden />
+        <SystemNotice text={systemText} surface="row" />
+      </div>
+    );
+  }
+
   // Texte ET pistes AUDIO traduites (#5805) — miroir `BubbleContentBuilder
   // .buildAvailableFlags(translations:translatedAudios:)` (`:365-395`) : un
   // vocal traduit SANS traduction texte monte lui aussi la bande de drapeaux,
@@ -336,6 +375,17 @@ export const FocalRow = memo(function FocalRow({
 
   const ephemeral = ephemeralOf(message.expiresAt, nowMs);
 
+  /** `badgesOf` (site UNIQUE, `lib/view/message-badges.ts`) — épinglé et
+   * transféré ouvrent la colonne de contenu, `MessageBadges` filtrant ceux
+   * qui se peignent ICI (« modifié »/« éphémère » vivent ailleurs). */
+  const badges = badgesOf(message);
+
+  /* UN EMOJI SEUL s'affiche EN GRAND, sans les contraintes de paragraphe du
+   * texte ordinaire — `bodyKindOf` (`message-badges.ts`) juge le texte SERVI,
+   * jamais `message.content` brut (un contenu original « Hello 👋 » traduit
+   * en un seul emoji doit grandir, l'inverse aussi). */
+  const emojiOnly = rendered.text !== '' && bodyKindOf(rendered.text) === 'emoji-only';
+
   const contentBlock = (
     <>
       {/* `isMine={false}` DÉLIBÉRÉMENT, et ce n'est pas un oubli : la peau
@@ -345,6 +395,7 @@ export const FocalRow = memo(function FocalRow({
           devenait du blanc sur du blanc en schéma clair, donc INVISIBLE
           (mesuré : contraste 1,0:1). Une peau ne se choisit pas sur
           l'expéditeur mais sur la SURFACE qui la porte. */}
+      <MessageBadges badges={badges} />
       {message.replyTo ? (
         <Quote quote={message.replyTo} isMine={false} onJump={() => onJumpToMessage(message.replyTo!.id)} />
       ) : null}
@@ -359,9 +410,10 @@ export const FocalRow = memo(function FocalRow({
 
       {rendered.text ? (
         <p
-          className="text-bubble leading-[1.35] whitespace-pre-wrap"
+          data-body-kind={emojiOnly ? 'emoji-only' : 'text'}
+          className={emojiOnly ? 'leading-[1.2] whitespace-pre-wrap' : 'text-bubble leading-[1.35] whitespace-pre-wrap'}
           lang={rendered.language}
-          style={{ color: 'var(--color-ios-ink)' }}
+          style={{ color: 'var(--color-ios-ink)', fontSize: emojiOnly ? 40 : undefined }}
         >
           {rendered.text}
         </p>
@@ -661,6 +713,7 @@ export const FocalRow = memo(function FocalRow({
             {delivery === null ? null : (
               <Check status={delivery} isMine={isMine} {...(sendStartedAt === undefined ? {} : { sendStartedAt })} />
             )}
+            {message.isEdited ? <EditedMark color="var(--color-ios-ink-2)" /> : null}
           </div>
 
           {elected && nowMoment !== null ? (

@@ -476,3 +476,91 @@ describe('Bubble — la pièce jointe IMAGE (#5668, revue-correction)', () => {
     expect(html).toContain('aria-label="plage.jpg"');
   });
 });
+
+describe('Bubble — badges et rangée système (#5936)', () => {
+  test('épinglé : le badge « épinglé » se peint', () => {
+    const html = render({ ...BASE_MESSAGE, pinnedAt: new Date('2026-09-08T08:00:00.000Z') });
+    expect(html).toContain('épinglé');
+  });
+
+  test('transféré, titre servi : « Transféré depuis {titre} », jamais un identifiant', () => {
+    const html = render({
+      ...BASE_MESSAGE,
+      forwardedFromId: 'm0',
+      forwardedFromConversationId: 'c-source',
+      forwardedFromConversation: { id: 'c-source', title: 'Salon', identifier: 'salon-slug' },
+    });
+    expect(html).toContain('Transféré depuis Salon');
+    expect(html).not.toContain('salon-slug');
+  });
+
+  test('transféré, titre absent : « Transféré » seul', () => {
+    const html = render({ ...BASE_MESSAGE, forwardedFromConversationId: 'c-source' });
+    expect(html).toContain('Transféré');
+    expect(html).not.toContain('Transféré depuis');
+  });
+
+  test('modifié : « modifié » se peint dans la colonne méta', () => {
+    const html = render({ ...BASE_MESSAGE, isEdited: true });
+    expect(html).toContain('modifié');
+  });
+
+  test('un message ordinaire ne porte AUCUN badge', () => {
+    const html = render(BASE_MESSAGE);
+    expect(html).not.toContain('épinglé');
+    expect(html).not.toContain('Transféré');
+    expect(html).not.toContain('modifié');
+  });
+
+  test('rangée système : CENTRÉE (capsule), sans fond indigo/accent ni pied de bulle', () => {
+    const html = render({
+      ...BASE_MESSAGE,
+      messageSource: 'system',
+      content: 'Amina Diallo a rejoint la conversation.',
+      translations: [],
+    });
+    expect(html).toContain('data-system-row');
+    expect(html).toContain('rejoint la conversation');
+    expect(html).not.toContain('var(--color-bubble-mine)');
+  });
+
+  test('rangée système supprimée : le tombstone GARDE priorité sur la rangée système (D-23)', () => {
+    const html = render({
+      ...BASE_MESSAGE,
+      messageSource: 'system',
+      deletedAt: new Date('2026-09-08T09:05:00.000Z'),
+      content: 'JAMAIS',
+    });
+    expect(html).toContain('Message supprimé');
+    expect(html).not.toContain('data-system-row');
+    expect(html).not.toContain('JAMAIS');
+  });
+
+  test('emoji seul : le corps rend en grand (40 px), le texte SERVI décide — pas le contenu brut', () => {
+    const html = render({ ...BASE_MESSAGE, content: '🎉🎊', translations: [] });
+    expect(html).toContain('data-body-kind="emoji-only"');
+    expect(html).toContain('font-size:40px');
+  });
+
+  test('texte ordinaire : `data-body-kind="text"`, pas de taille forcée', () => {
+    const html = render(BASE_MESSAGE);
+    expect(html).toContain('data-body-kind="text"');
+    expect(html).not.toContain('font-size:40px');
+  });
+
+  test('les trois badges ensemble, dans l’ordre iOS : épinglé, transféré, modifié', () => {
+    const html = render({
+      ...BASE_MESSAGE,
+      pinnedAt: new Date('2026-09-08T08:00:00.000Z'),
+      forwardedFromConversationId: 'c-source',
+      forwardedFromConversation: { id: 'c-source', title: 'Salon' },
+      isEdited: true,
+    });
+    const pinnedAt = html.indexOf('épinglé');
+    const forwardedAt = html.indexOf('Transféré depuis Salon');
+    const editedAt = html.indexOf('modifié');
+    expect(pinnedAt).toBeGreaterThan(-1);
+    expect(forwardedAt).toBeGreaterThan(pinnedAt);
+    expect(editedAt).toBeGreaterThan(forwardedAt);
+  });
+});

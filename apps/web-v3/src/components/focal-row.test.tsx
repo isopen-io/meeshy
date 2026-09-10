@@ -435,3 +435,139 @@ describe('FocalRow — identité de tête de groupe : présence et « Sans compt
     expect(withoutDot).toContain('min-height:34px');
   });
 });
+
+describe('FocalRow — badges et rangée système (#5936)', () => {
+  test('épinglé : le badge « épinglé » se peint', () => {
+    const html = render({ ...BASE_MESSAGE, pinnedAt: new Date('2026-09-08T08:00:00.000Z') });
+    expect(html).toContain('épinglé');
+  });
+
+  test('transféré, titre servi : « Transféré depuis {titre} », jamais un identifiant', () => {
+    const html = render({
+      ...BASE_MESSAGE,
+      forwardedFromId: 'm0',
+      forwardedFromConversationId: 'c-source',
+      forwardedFromConversation: { id: 'c-source', title: 'Salon', identifier: 'salon-slug' },
+    });
+    expect(html).toContain('Transféré depuis Salon');
+    expect(html).not.toContain('salon-slug');
+  });
+
+  test('transféré, titre absent : « Transféré » seul', () => {
+    const html = render({ ...BASE_MESSAGE, forwardedFromConversationId: 'c-source' });
+    expect(html).toContain('Transféré');
+    expect(html).not.toContain('Transféré depuis');
+  });
+
+  test('modifié : « modifié » se peint dans la colonne méta', () => {
+    const html = render({ ...BASE_MESSAGE, isEdited: true });
+    expect(html).toContain('modifié');
+  });
+
+  test('un message ordinaire ne porte AUCUN badge', () => {
+    const html = render(BASE_MESSAGE);
+    expect(html).not.toContain('épinglé');
+    expect(html).not.toContain('Transféré');
+    expect(html).not.toContain('modifié');
+  });
+
+  test('rangée système : PLATE (aucune classe `.bubble`), sans avatar, et le contenu original ne fuit pas si une traduction existe', () => {
+    const html = render({
+      ...BASE_MESSAGE,
+      messageSource: 'system',
+      content: 'Amina Diallo a rejoint la conversation.',
+      originalLanguage: 'fr',
+      translations: [
+        {
+          id: 't-sys',
+          messageId: BASE_MESSAGE.id,
+          targetLanguage: 'en',
+          translatedContent: 'Amina Diallo joined the conversation.',
+          translationModel: 'medium',
+          createdAt: new Date('2026-09-08T09:00:00.000Z'),
+        },
+      ],
+    });
+    expect(html).toContain('data-system-row');
+    expect(html).toContain('rejoint la conversation');
+    // Aucune identité de tête (avatar + nom en span.text-title) — une
+    // rangée système ne porte ni avatar ni méta d'auteur (critère de fin #5).
+    expect(html).not.toContain('text-title font-extrabold');
+  });
+
+  test('rangée système, langue préférée EN : le texte SERVI est la traduction, jamais l’original', () => {
+    const html = renderToStaticMarkup(
+      <FocalRow
+        mode="focal"
+        place={placeOf({
+          ...BASE_MESSAGE,
+          messageSource: 'system',
+          content: 'Amina Diallo a rejoint la conversation.',
+          originalLanguage: 'fr',
+          translations: [
+            {
+              id: 't-sys-2',
+              messageId: BASE_MESSAGE.id,
+              targetLanguage: 'en',
+              translatedContent: 'Amina Diallo joined the conversation.',
+              translationModel: 'medium',
+              createdAt: new Date('2026-09-08T09:00:00.000Z'),
+            },
+          ],
+        })}
+        languages={['en']}
+        viewerId="u-viewer"
+        onJumpToMessage={() => {}}
+      />,
+    );
+    expect(html).toContain('joined the conversation');
+    expect(html).not.toContain('a rejoint la conversation');
+  });
+
+  test('emoji seul : le corps rend en grand (40 px), le texte SERVI décide — pas le contenu brut', () => {
+    const html = render({ ...BASE_MESSAGE, content: '🎉🎊', translations: [] });
+    expect(html).toContain('data-body-kind="emoji-only"');
+    expect(html).toContain('font-size:40px');
+  });
+
+  test('emoji seul PAR TRADUCTION : original en mots, traduction préférée en emoji seul ⇒ grand', () => {
+    const html = render({
+      ...BASE_MESSAGE,
+      originalLanguage: 'en',
+      content: 'Congrats!',
+      translations: [
+        {
+          id: 't-emoji',
+          messageId: BASE_MESSAGE.id,
+          targetLanguage: 'fr',
+          translatedContent: '🎉',
+          translationModel: 'medium',
+          createdAt: new Date('2026-09-08T09:00:00.000Z'),
+        },
+      ],
+    });
+    expect(html).toContain('data-body-kind="emoji-only"');
+  });
+
+  test('texte ordinaire : `data-body-kind="text"`, pas de taille forcée', () => {
+    const html = render(BASE_MESSAGE);
+    expect(html).toContain('data-body-kind="text"');
+    expect(html).not.toContain('font-size:40px');
+  });
+
+  test('les trois badges ensemble, dans l’ordre iOS : épinglé, transféré, modifié', () => {
+    const html = render({
+      ...BASE_MESSAGE,
+      pinnedAt: new Date('2026-09-08T08:00:00.000Z'),
+      forwardedFromConversationId: 'c-source',
+      forwardedFromConversation: { id: 'c-source', title: 'Salon' },
+      isEdited: true,
+    });
+    const pinnedAt = html.indexOf('épinglé');
+    const forwardedAt = html.indexOf('Transféré depuis Salon');
+    const editedAt = html.indexOf('modifié');
+    expect(pinnedAt).toBeGreaterThan(-1);
+    expect(forwardedAt).toBeGreaterThan(pinnedAt);
+    expect(editedAt).toBeGreaterThan(forwardedAt);
+  });
+});

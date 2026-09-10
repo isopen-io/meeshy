@@ -117,6 +117,33 @@ describe('composeMessageLabel — l’ordre iOS', () => {
     expect(label).toContain('éphémère');
   });
 
+  test('transféré : le libellé de `badgesOf` rejoint la phrase, en bas de casse', () => {
+    const label = composeMessageLabel({ protection: 'standard',
+      message: message({
+        forwardedFromId: 'm0',
+        forwardedFromConversationId: 'c-salon',
+        forwardedFromConversation: { id: 'c-salon', title: 'Salon' },
+      }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: 'sent',
+    });
+
+    expect(label).toBe('Bruno Bêta, Bonjour, 09:02, transféré depuis Salon');
+  });
+
+  test('transféré sans titre servi : « transféré » seul', () => {
+    const label = composeMessageLabel({ protection: 'standard',
+      message: message({ forwardedFromConversationId: 'c-salon' }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: 'sent',
+    });
+
+    expect(label).toContain('transféré');
+    expect(label).not.toContain('depuis');
+  });
+
   test('un texte SERVI vide (média-seul) n’ajoute AUCUN segment texte vide', () => {
     const label = composeMessageLabel({ protection: 'standard',
       message: message({ attachments: [attachment({ mimeType: 'video/mp4' })] }),
