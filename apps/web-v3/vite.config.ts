@@ -9,6 +9,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
 import { INLINE_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
+import { declaredBuildFlag } from './src/lib/build-flag';
 
 /**
  * `index.html` ne porte plus le TEXTE du script d'amorçage du schéma, mais un
@@ -124,14 +125,10 @@ const appVersion = JSON.parse(
  * garde-ci comme précédent. On refuse donc toujours de construire sur une
  * valeur inconnue ; on accepte désormais les deux qui existent.
  */
-const declaredDataSource = process.env.VITE_DATA_SOURCE;
-if (declaredDataSource !== undefined && declaredDataSource !== 'fixtures' && declaredDataSource !== 'gateway') {
-  throw new Error(
-    `VITE_DATA_SOURCE=${declaredDataSource} : valeur inconnue. Les seules valeurs admises sont ` +
-      '« fixtures » (défaut), « gateway », ou la variable absente (⇒ « fixtures »). Une valeur ' +
-      'inconnue servirait les fixtures en silence, dans une construction qui se croit branchée.',
-  );
-}
+const declaredDataSource = declaredBuildFlag('VITE_DATA_SOURCE', process.env.VITE_DATA_SOURCE, [
+  'fixtures',
+  'gateway',
+]);
 
 /**
  * LES MODES DE LECTURE DU FIL — PARAMÈTRE DE CONSTRUCTION, jamais un toggle
@@ -147,13 +144,10 @@ if (declaredDataSource !== undefined && declaredDataSource !== 'fixtures' && dec
  * pour un déploiement entier en croyant avoir choisi une valeur qui n'existe
  * pas. On refuse ici de CONSTRUIRE plutôt que de laisser passer le malentendu.
  */
-const declaredReadingModes = process.env.VITE_READING_MODES;
-if (declaredReadingModes !== undefined && declaredReadingModes !== 'on' && declaredReadingModes !== 'off') {
-  throw new Error(
-    `VITE_READING_MODES=${declaredReadingModes} : valeur inconnue. Les seules valeurs admises sont ` +
-      '« on » (défaut), « off », ou la variable absente (⇒ « on »).',
-  );
-}
+/* Aucune liaison : contrairement à `VITE_DATA_SOURCE`, cette valeur n'est
+   relue nulle part dans ce fichier — l'appel est ici pour REFUSER DE
+   CONSTRUIRE sur une faute de frappe, et c'est tout ce qu'on lui demande. */
+void declaredBuildFlag('VITE_READING_MODES', process.env.VITE_READING_MODES, ['on', 'off']);
 
 /**
  * LE PRÉCHAUFFAGE ENTRE DANS LA CONSTRUCTION, et il n'y est pas par commodité.
