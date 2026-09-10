@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Developper la v3.1 web (apps/web-v3, Vite + Preact + Capacitor) a parite avec l app iOS, pour le web ET Android en une fois : dev resynchronise a chaque tour, etat des lieux ecran par ecran CONTRE apps/ios, issues, une SPECIFICATION par travail, TDD, revue-correction systematique, gates (gate composite + coques QEMU/simulateur), LIVRAISON INCREMENTALE (chaque travail vert part vers dev dans l heure, le staging suit pas a pas) — fable DECRIT et LIVRE, sonnet et haiku DEVELOPPENT, opus RELIT ET CORRIGE',
   whenToUse:
-    "Lancer un tour de developpement de la v3.1 web (apps/web-v3 — directive porteur 2026-09-07 soir : une application similaire a apps/ios pour le web et Android en une fois, en boucle jusqu'a maturite feature par feature). D'abord les coques et le reseau (assets, shells, staging), puis les ecrans dans l'ordre de l'app iOS : conversations, thread, composer, stories, feed, contacts, search, notifs, profile, settings. Args : { branche, depuis, focus, dabord, phares, plafond, tours, sans_issues, pr, base, date, attribution, modeles, repo, sauter }.",
+    "Lancer un tour de developpement de la v3.1 web (apps/web-v3 — directive porteur 2026-09-07 soir : une application similaire a apps/ios pour le web et Android en une fois, en boucle jusqu'a maturite feature par feature). D'abord les coques et le reseau (assets, shells, staging), puis les ecrans dans l'ordre de l'app iOS : conversations, thread, composeur-du-fil, stories, feed, contacts, search, notifs, profile, settings. Args : { branche, depuis, focus, dabord, phares, plafond, tours, sans_issues, pr, base, date, attribution, modeles, repo, sauter }.",
   phases: [
     { title: 'Synchroniser', detail: "fetch + merge origin/dev avant tout travail, et releve de ce que les autres sessions tiennent", model: 'haiku' },
     { title: 'Cadrer', detail: "etat des lieux surface par surface CONTRE apps/ios (parity.md, route-inventory), choix des travaux — fable DECRIT", model: 'fable' },
@@ -72,7 +72,7 @@ const DEPUIS = typeof A.depuis === 'string' && A.depuis ? A.depuis : 'dev'
 const FOCUS = Array.isArray(A.focus) && A.focus.length
   ? A.focus
   : ['assets', 'shells', 'staging',
-     'auth', 'conversations', 'thread', 'composer',
+     'auth', 'conversations', 'thread', 'composeur-du-fil',
      'stories', 'feed', 'contacts', 'search', 'notifs', 'profile', 'settings', 'calls', 'links']
 const PLAFOND = Number.isInteger(A.plafond) && A.plafond > 0 ? A.plafond : 6
 const TOURS = Number.isInteger(A.tours) && A.tours > 0 ? A.tours : 1
@@ -319,13 +319,47 @@ DECISIONS DU PORTEUR EN VIGUEUR — ne les rediscute pas : applique-les.
    verifiee le 2026-09-07 sur les trois plateformes (liste + fil identiques au pixel pres, accent
    par conversation, Prisme, schemas clair/sombre) est le niveau attendu de tout ecran nouveau.
 
-2. LES ASSETS iOS SE RECUPERENT, ILS NE SE REDESSINENT PAS (directive 2026-09-07 soir — cle
+2. LA DONNEE REELLE ET L'INDICATEUR DE FRAPPE — PRIORITE DU TOUR (directive porteur
+   2026-09-10). Mesure du 2026-09-10 sur le bundle SERVI par staging.meeshy.me :
+   l'environnement grave est { BASE_URL, DEV, MODE, PROD, SSR, VITE_API_BASE } — il n'y a
+   AUCUNE cle VITE_DATA_SOURCE. Or config.ts rend
+   \`env.VITE_DATA_SOURCE === 'gateway' ? 'gateway' : 'fixtures'\`. **staging sert donc la
+   v3.1 sur des FIXTURES** : l'adresse de la passerelle est juste, les conversations et les
+   messages affiches sont fabriques.
+
+   CE N'EST PAS DU CODE MANQUANT. \`api/conversations.ts\` et \`api/messages.ts\` portent
+   tous deux \`if (__FIXTURES__ && params.source === 'fixtures') return …\` puis retombent
+   sur le transport HTTP REEL ; \`scripts/check-gateway-build.mjs\` construit un
+   VITE_DATA_SOURCE=gateway et PROUVE au navigateur que l'app parle a la passerelle. Ce qui
+   manque est qu'AUCUN build deploye ne pose la variable — verifie : zero occurrence dans les
+   Dockerfile, dans infrastructure/ et dans .github/workflows/docker.yml.
+
+   > Le mecanisme est ecrit, teste, et jamais active. Meme motif que le garde
+   > check-gateway-build lui-meme, qui ne tournait dans aucune CI avant #5921.
+
+   CE QUE LE TOUR DOIT LIVRER :
+   a. le build deploye pose VITE_DATA_SOURCE=gateway, et la conversation + les messages
+      affiches viennent de la passerelle. PREUVE EXIGEE : une capture de staging (ou de la
+      coque) montrant un contenu qui n'existe PAS dans src/lib/api/fixtures.ts — un nom de
+      conversation, un texte de message. Une capture qui montre Kwame Mensah ou Amina Diallo
+      prouve le contraire de ce qu'elle affirme.
+   b. l'INDICATEUR DE FRAPPE. Aujourd'hui \`query.ts:91\` pose
+      \`typing: apiConfig.source === 'fixtures'\` — il n'existe QUE sous fixtures, et vaut
+      \`false\` des qu'on branche la vraie donnee. Le brancher au socket reel
+      (\`typing:start\` / \`typing:stop\`, packages/shared/types/socketio-events.ts), issue
+      #5494. PREUVE EXIGEE : deux sessions, l'une frappe, l'autre voit — jamais un booleen
+      lu dans le code.
+
+   L'ordre compte : (a) sans (b) rend un fil reel mais muet ; (b) sans (a) n'a rien a
+   ecouter. Si un seul des deux passe, c'est (a).
+
+3. LES ASSETS iOS SE RECUPERENT, ILS NE SE REDESSINENT PAS (directive 2026-09-07 soir — cle
    \`assets\`) : icones d'app, logo, signature, splashscreen, stickers viennent de
    ${IOS}/Meeshy/Assets.xcassets et ${IOS}/Meeshy/Resources ; le pipeline existe deja —
    ${V3}/scripts/generate-icons.py et extract-glyphs.mjs — on l'ETEND, on ne le double pas.
    Les coques Capacitor (icone, splash, fond #0b0c14) et le manifest PWA servent les MEMES actifs.
 
-3. TROIS DEFAUTS DE COQUE RELEVES LE 2026-09-07, a corriger en priorite (cle \`shells\`), chacun
+4. TROIS DEFAUTS DE COQUE RELEVES LE 2026-09-07, a corriger en priorite (cle \`shells\`), chacun
    avec son temoin :
    a) iOS : la safe-area BASSE n'est pas respectee — le composeur et la barre de recherche passent
       sous l'indicateur home (viewport-fit / env(safe-area-inset-bottom) a poser dans le dist,
@@ -336,7 +370,7 @@ DECISIONS DU PORTEUR EN VIGUEUR — ne les rediscute pas : applique-les.
    c) iOS : la bascule clair/sombre A CHAUD n'est pas repercutee (elle ne prend qu'au relancement —
       lis src/lib/scheme.ts : l'ecoute de prefers-color-scheme doit vivre, pas une lecture unique).
 
-4. LE FIL EST UN CHAT VIVANT, JAMAIS UN FORMULAIRE (directives 2026-09-03/04, reconduites) :
+5. LE FIL EST UN CHAT VIVANT, JAMAIS UN FORMULAIRE (directives 2026-09-03/04, reconduites) :
    toute action a un effet IMMEDIAT et OPTIMISTE ; citation/reponse avec saut et mise en evidence,
    plein ecran sur tout media, transcription au Prisme, avatar et nom dans le pied de la DERNIERE
    bulle d'une suite (jamais la premiere, regle iOS), groupement meme auteur + meme jour SANS
@@ -422,7 +456,7 @@ const TRAVAIL = {
   additionalProperties: false,
   required: ['cle', 'genre', 'titre_issue', 'critere_de_fin'],
   properties: {
-    cle: { type: 'string', description: "la cle de surface (assets, shells, staging, conversations, thread, composer, stories, feed…) ou infra-N" },
+    cle: { type: 'string', description: "la cle de surface (assets, shells, staging, conversations, thread, composeur-du-fil, stories, feed…) ou infra-N" },
     genre: { type: 'string', enum: ['ecran', 'infra', 'style'] },
     titre_issue: { type: 'string', description: 'SEMANTIQUE : le resultat attendu, jamais un code interne' },
     route: { type: 'string' },
