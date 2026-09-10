@@ -1,7 +1,7 @@
-# apps/web-v3 — POC : une application TypeScript unique, web + Android + iOS
+# apps/web-v2 — POC : une application TypeScript unique, web + Android + iOS
 
 > **Statut : PROTOTYPE À ARBITRER.** Rien ici n'est en production, rien ne
-> remplace `apps/web-v3`, `apps/android` ni `apps/ios`. Le POC répond à une
+> remplace `apps/web-v2`, `apps/android` ni `apps/ios`. Le POC répond à une
 > question et à une seule : *peut-on avoir une application unique en TypeScript,
 > stylée par Tailwind, qui reprenne l'interface iOS, reste installable en PWA,
 > s'empaquette pour les stores — et tienne le coût data d'une zone rurale ?*
@@ -9,7 +9,7 @@
 ## Ce qui a été mesuré
 
 Profil réseau : **Fast 3G** (188 743 bps, 562,5 ms de latence) — le même que
-`apps/web-v3/budgets.json`, pour que la comparaison v3/v4 ait un sens.
+`apps/web-v2/budgets.json`, pour que la comparaison v3/v4 ait un sens.
 
 ### Le runtime : Preact contre React, code source identique
 

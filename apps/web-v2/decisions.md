@@ -1,4 +1,4 @@
-# apps/web-v3 — décisions
+# apps/web-v2 — décisions
 
 Les choix d'architecture et de produit de la v4 web, avec leur raison et leur
 date. Convention du dépôt : chaque répertoire actif tient son `decisions.md`.
@@ -652,8 +652,8 @@ configurations — rayon 18 uniforme, `BubbleBackground.swift:20-23` — ce que
 la capture drapeaux éteints montrait comme « queue » était un texte stylé,
 pas la peau de bulle — le run `wf_81ad007f-ceb` l'a fait, et son
 propre rapport l'écrivait (« preuve vivante que le drapeau iOS est désactivé »).
-Le dossier `apps/web-v3/targets/` (captures clair/sombre, arbres
-d'accessibilité, analyses par vue avec tableau iOS → web-v3) est la source de
+Le dossier `apps/web-v2/targets/` (captures clair/sombre, arbres
+d'accessibilité, analyses par vue avec tableau iOS → web-v2) est la source de
 vérité des phases Cadrer, Concevoir et Spécifier ; il PRIME sur toute
 spécification antérieure.
 
@@ -707,7 +707,7 @@ TypeScript partagé (`packages/shared/utils/river-lanes.ts`, 1 044 lignes,
 61 vecteurs inter-plateformes que l'iOS rejoue) : portage zéro. La donnée
 d'éligibilité n'est pas `activeParticipantCount` (que la passerelle sert
 `null` à dessein) mais `conversation.memberCount`, ce qu'iOS lit
-(`ConversationView.swift:569`) et que web-v3 affiche déjà — une ligne dans
+(`ConversationView.swift:569`) et que web-v2 affiche déjà — une ligne dans
 `decision.ts`. Aucun endpoint : c'est le mode le plus compatible avec le
 précache, et le seul accordé aux invités. Une peau React complète existe
 dans le legacy (`apps/web/components/conversations/riviere/`), jamais montée :
@@ -883,7 +883,7 @@ trois témoins qui suivent ne prouveraient rien.
 ## D-23 · Un message protégé a UN site de rendu, partagé par la rangée plate et la bulle — 2026-09-08
 
 `isBlurred`, `isViewOnce`, `expiresAt` et `deletedAt` ne sont lus par AUCUN
-composant web-v3 aujourd'hui (`focal-row.tsx:119` ne lit `isBlurred` que pour
+composant web-v2 aujourd'hui (`focal-row.tsx:119` ne lit `isBlurred` que pour
 décider si la ligne basse se monte ; `bubble.tsx` ne lit aucun des quatre).
 Un message flouté ou à vue unique s'affiche donc **en clair** sur les deux
 peaux — la régression que `targets/focal-script.md` § 6 et `bulle.md` § 3.11
@@ -1194,7 +1194,7 @@ reproduit ici).
 de pixels), `metrics.ts` (les cotes, dérivées de `lentille-tokens.json` →
 `RiverMetrics.swift`, gardées par `scripts/check-river-metrics.mjs`, un
 fichier À PART de `check-curve.mjs` parce que la Rivière a TROIS sources).
-Les 61 vecteurs partagés (24 + 22 + 15) sont rejoués DEPUIS web-v3, À
+Les 61 vecteurs partagés (24 + 22 + 15) sont rejoués DEPUIS web-v2, À
 TRAVERS le mapping — pas seulement la loi nue. L'ouverture du Salon
 Rivière (`RIVER_OPENING_MESSAGES`, `fixtures-river-opening.ts`) est le corpus qui
 ATTEINT les couloirs (`layout: 'lanes'`, `voiceCount: 9`) là où les 40
@@ -1362,7 +1362,7 @@ et ce qui le corrige.**
    jamais existé** (`ls targets/ | grep shell` vide, `git status` propre au
    moment de l'écrire) — une absence DÉDUITE écrite comme si elle était
    mesurée. Les preuves de coque de ce travail vivent HORS dépôt
-   (`<racine>/.cache/web-v3-workflow/recette/`, produites par
+   (`<racine>/.cache/web-v2-workflow/recette/`, produites par
    `scripts/shell-deeplink-probe.mjs`) et sont JOINTES à l'issue plutôt que
    versionnées : `targets/` reste réservé aux captures iOS NATIVES drapeaux
    ON (`targets/captures.md`), jamais aux captures de la coque testée.
@@ -1474,7 +1474,7 @@ debug, CDP réel : `/c/c-deploiement` → `hasThreadMain: true`,
 (il RESTE sur le fil) ; `/c/zzz-inconnu` → refus (D-6). Simulateur
 `Meeshy Poc-Web-V31` (54438823), build Xcode réel, `MEESHY_SHELL_START_PATH`
 + placeholder iOS : la coque démarre directement dans le fil. Captures hors
-dépôt (`<racine>/.cache/web-v3-workflow/recette/`), jointes à l'issue.
+dépôt (`<racine>/.cache/web-v2-workflow/recette/`), jointes à l'issue.
 
 **Complément 2026-09-09 ter (revue #5812) — le prérendu institutionnel
 écrivait dans la sortie de L'AUTRE variante ; le gate ne pouvait pas le voir
@@ -1558,7 +1558,7 @@ Sites uniques réutilisés, aucune jumelle : `outcomeOf` (extrait de `conversati
 
 **La géométrie est une loi PURE** — `placeMessageMenuCluster` (`src/lib/view/popover.ts`), port de `MessageOverlayMenu.swift:230-289`. Ses cotes vivent dans `src/lib/view/message-menu-metrics.ts` et sont **gardées** par `check-curve.mjs` PARTIE 7 (rail 52, gap 12, menu-gap 6, marge 16, largeur 240, rangée 44, chrome 20, et les 6/20 emojis comparés à `defaultEmojis`). Le plancher de réduction (`max(0.4, …)`) et `nlEmojiWidth = 300` ne sont pas gardables — dit en commentaire, jamais contourné par une regex permissive.
 
-**Ce que chaque entrée FAIT** (loi 4 : un contrôle existe s'il a un effet, mesuré par `check-thread-states.mjs` § 6) : Copier écrit le texte **servi** dans `navigator.clipboard` · Traduire ouvre le panneau des langues et change le texte **et** l'attribut `lang` de la rangée · Composer pré-adresse le composeur · Sélectionner remplace le composeur par la barre de sélection · Plus… ouvre « Détails du message » · le rail pose une réaction optimiste. **Aucune entrée sans transport n'est listée** : `edit`, `saveMedia`, `callDetail`, Transférer, Supprimer, Épingler, Signaler n'ont pas de port web-v3 — issues compagnons, jamais un bouton mort.
+**Ce que chaque entrée FAIT** (loi 4 : un contrôle existe s'il a un effet, mesuré par `check-thread-states.mjs` § 6) : Copier écrit le texte **servi** dans `navigator.clipboard` · Traduire ouvre le panneau des langues et change le texte **et** l'attribut `lang` de la rangée · Composer pré-adresse le composeur · Sélectionner remplace le composeur par la barre de sélection · Plus… ouvre « Détails du message » · le rail pose une réaction optimiste. **Aucune entrée sans transport n'est listée** : `edit`, `saveMedia`, `callDetail`, Transférer, Supprimer, Épingler, Signaler n'ont pas de port web-v2 — issues compagnons, jamais un bouton mort.
 
 **Traduire est une INSERTION AU RANG 0 du Prisme, pas un second résolveur** — `served({ preferredLanguages: [forcé, ...langues] })` (D-14). Un seul `resolvePrismTranslation` dans tout le dépôt ; la rangée sert le texte ET pose `lang`, les deux venant de la même paire.
 
@@ -1574,7 +1574,7 @@ Sites uniques réutilisés, aucune jumelle : `outcomeOf` (extrait de `conversati
 
 **Revue-correction (2026-09-09) — treize défauts trouvés, neuf corrigés dans le même lot, sept issues compagnons ouvertes (#5863-#5869), une refutée.**
 
-- **Le drapeau du pied et le sous-menu Traduire partagent DÉSORMAIS UNE SEULE loi.** Avant ce correctif, taper un drapeau du pied (`Flags`/`PrismPastille`, `focal-row.tsx`/`bubble.tsx`) ouvrait un panneau `SecondaryText` LOCAL à la rangée — un état séparé de `useMessageMenu.displayLanguages`, que le sous-menu Traduire lit pour cocher sa langue. Cliquer le drapeau révélait une traduction SOUS le texte pendant que le sous-menu continuait de cocher la langue précédente : deux réponses à « quelle langue je lis ? ». `SecondaryText` est RETIRÉ (dette éteinte, plus aucun consommateur) ; le pied appelle désormais `onPickLanguage` — la MÊME fonction que le sous-menu, via `useMessageMenu.onPickLanguage` (devenu une BASCULE : reposer la langue déjà imposée l'efface). Ce mouvement clôt de lui-même la moitié « rang 0 » de l'issue compagnon (f) de la spécification (« les drapeaux du pied appliquent `displayLanguage` ») — **aucune issue n'a donc été ouverte pour elle**. La portée PAR GROUPE (iOS l'applique à toute la suite via `onSetActiveDisplayLanguageForGroup`, `FocalRow.swift:1082` ; web-v3 reste par rangée) demeure l'écart 4 tracé dans `targets/focal-script.md` § 10 — hors périmètre de ce correctif.
+- **Le drapeau du pied et le sous-menu Traduire partagent DÉSORMAIS UNE SEULE loi.** Avant ce correctif, taper un drapeau du pied (`Flags`/`PrismPastille`, `focal-row.tsx`/`bubble.tsx`) ouvrait un panneau `SecondaryText` LOCAL à la rangée — un état séparé de `useMessageMenu.displayLanguages`, que le sous-menu Traduire lit pour cocher sa langue. Cliquer le drapeau révélait une traduction SOUS le texte pendant que le sous-menu continuait de cocher la langue précédente : deux réponses à « quelle langue je lis ? ». `SecondaryText` est RETIRÉ (dette éteinte, plus aucun consommateur) ; le pied appelle désormais `onPickLanguage` — la MÊME fonction que le sous-menu, via `useMessageMenu.onPickLanguage` (devenu une BASCULE : reposer la langue déjà imposée l'efface). Ce mouvement clôt de lui-même la moitié « rang 0 » de l'issue compagnon (f) de la spécification (« les drapeaux du pied appliquent `displayLanguage` ») — **aucune issue n'a donc été ouverte pour elle**. La portée PAR GROUPE (iOS l'applique à toute la suite via `onSetActiveDisplayLanguageForGroup`, `FocalRow.swift:1082` ; web-v2 reste par rangée) demeure l'écart 4 tracé dans `targets/focal-script.md` § 10 — hors périmètre de ce correctif.
 - **L'aperçu du menu est désormais SOULEVÉ** — `filter: drop-shadow` (halo à l'accent + ombre noire, miroir `MessageOverlayMenu.swift:414-441`) posé sur l'HÔTE du clone, jamais sur le clone ; une surface opaque s'ajoute SEULEMENT sur la rangée plate (Focal/Script, détectée par `[data-reading-mode]` dans le DOM cloné), qui n'a ni fond ni rayon propres — une bulle porte déjà les siens.
 - **Le clone porte `inert`**, pas seulement `aria-hidden` : ses `<button>` (drapeaux du pied) restaient focalisables au clavier malgré `aria-hidden`. Le menu NOMME son sujet (`aria-label` = auteur + extrait SERVI, gardé par la protection D-23 via `copyableTextOf` — jamais `servedOf` en direct, qui aurait fui un extrait protégé).
 - **Le retour matériel Android ferme désormais le menu, pas l'écran** — `useBackDismiss` (`src/lib/view/use-back-dismiss.ts`), extrait du mécanisme `pushState`/`popstate` de `Sheet` pour que toute couche modale future le partage. `.message-menu-cluster` porte aussi `-webkit-touch-callout: none`/`user-select: none` (pas seulement `[data-row]`) : la WebView Android démarrait une sélection de texte native SUR la liste d'actions quand le doigt s'y trouvait au relâchement.
@@ -1583,7 +1583,7 @@ Sites uniques réutilisés, aucune jumelle : `outcomeOf` (extrait de `conversati
 - **Une réaction posée hors ligne est ANNONCÉE** (`REACTION_PENDING_MESSAGE`, `reactions.ts`) plutôt que de rendre silencieusement `{ ok: true }` — indiscernable d'une confirmation. La FILE de reprise elle-même reste hors périmètre (#5868).
 - **`reactionStore.mine` survit désormais sur la MÊME horloge que le cache des messages persisté** (`query-client.ts` : un champ `reactions` voyage dans le MÊME JSON, sous le MÊME `buster`, purgé au même changement d'identité, D-6) — sans quoi un compte de réactions persisté (`reactionSummary`) survivait à un rechargement pendant que « qui a réagi » repartait à vide : la réaction restait affichée mais plus reconnue comme sienne, un second tap la DOUBLAIT, et le retrait devenait définitivement inerte.
 - **`routes/thread.tsx` est redescendu sous le seuil de découpage** (1092 → ~1026 lignes) — l'en-tête du fil (retour, non-lus ailleurs, puce de mode, appel, recherche, avatar, bandeau hors ligne) vit désormais dans `components/thread-header.tsx`, motif `Sheet`/`FocusStrip` (composant sans état propre) : c'est l'extraction que l'étape 0 de la spécification prévoyait avant tout ajout.
-- **Défaut « aucune recette en coque » REFUSÉ** : la revue elle-même cite des captures Android (`AND-1` à `AND-9`) et iOS (`IOS-1` à `IOS-5`) prises sur l'AVD `Meeshy_Poc_Web-v31` et le simulateur `Meeshy Poc-Web-V31` — résolutions `1080×2400`/`1206×2622` confirmées, exactement ce qui a permis de mesurer les défauts « retour matériel » et « sélection native » ci-dessus. Le sur/sous-dossier `render/` cité en preuve ne contient QUE des captures web (Playwright) ; les captures d'appareil vivent ailleurs (`.cache/web-v3-workflow/recette/thread/`) — l'absence dans UN dossier n'est pas l'absence de la recette.
+- **Défaut « aucune recette en coque » REFUSÉ** : la revue elle-même cite des captures Android (`AND-1` à `AND-9`) et iOS (`IOS-1` à `IOS-5`) prises sur l'AVD `Meeshy_Poc_Web-v31` et le simulateur `Meeshy Poc-Web-V31` — résolutions `1080×2400`/`1206×2622` confirmées, exactement ce qui a permis de mesurer les défauts « retour matériel » et « sélection native » ci-dessus. Le sur/sous-dossier `render/` cité en preuve ne contient QUE des captures web (Playwright) ; les captures d'appareil vivent ailleurs (`.cache/web-v2-workflow/recette/thread/`) — l'absence dans UN dossier n'est pas l'absence de la recette.
 
 ## D-30 · Les coques parlent à la passerelle par des origines NOMMÉES, en DONNÉE — 2026-09-09 (#5815)
 
@@ -1626,7 +1626,7 @@ Mesure : `use-reader-*.js` (le morceau que la LISTE et le FIL chargent tous deux
 
 3. **`data-identity` est l'ANCRE DE GATE de la ligne d'identité.** Elle n'avait aucun marqueur stable ; `scripts/lib/check-identity.mjs` (extrait de `check-reading-mode.mjs`, hors budget de taille) en dépend pour mesurer la hauteur réservée (34 px, `AVATAR_FRAME`) et pour distinguer une tête de groupe d'une continuation. Posée SEULEMENT sur `head` — une continuation n'a pas d'en-tête à mesurer.
 
-4. **RECTIFICATION DE D-31 — l'anneau de story et l'humeur SONT servis, mais pas sur `sender`.** D-31 affirmait une capacité NON exposée par la passerelle ; c'est FAUX à la lettre, VRAI à la forme. Mesuré sur `services/gateway/src/routes/posts/feed.ts` : `GET /api/v1/social/posts?scope=stories&projection=tray` (alias déprécié `GET /api/v1/posts/feed/stories`) sert l'état d'anneau (via `isViewedByMe` sur les posts `STORY` d'un auteur, loi iOS `.none`/`.unread`/`.read` dans `StoryViewModel+Viewing.swift:314-318`) et `?scope=statuses` (alias `GET /api/v1/posts/feed/statuses`) sert `moodEmoji` sur les posts `STATUS`. **Ni l'un ni l'autre ne voyage sur `Message.sender` ni sur `Participant`** (vérifié : `core-selects.ts`, `messages-list-query.ts`, `packages/shared/types/participant.ts` — zéro hit) : côté iOS, `MessageListViewController.swift:1613-1616` les résout par DEUX services d'écran indexés par `userId` (`StoryViewModel.storyRingState(forUserId:)`, `StatusViewModel.statusForUser(userId:)`), jamais depuis la charge du message elle-même. Câbler ces deux signaux côté web-v3 est donc un travail de SERVICE D'ÉCRAN (deux requêtes supplémentaires par fil, ou un enrichissement de `sender` à discuter côté gateway) — pas un champ absent à réclamer, et pas dans ce lot : issue compagnon.
+4. **RECTIFICATION DE D-31 — l'anneau de story et l'humeur SONT servis, mais pas sur `sender`.** D-31 affirmait une capacité NON exposée par la passerelle ; c'est FAUX à la lettre, VRAI à la forme. Mesuré sur `services/gateway/src/routes/posts/feed.ts` : `GET /api/v1/social/posts?scope=stories&projection=tray` (alias déprécié `GET /api/v1/posts/feed/stories`) sert l'état d'anneau (via `isViewedByMe` sur les posts `STORY` d'un auteur, loi iOS `.none`/`.unread`/`.read` dans `StoryViewModel+Viewing.swift:314-318`) et `?scope=statuses` (alias `GET /api/v1/posts/feed/statuses`) sert `moodEmoji` sur les posts `STATUS`. **Ni l'un ni l'autre ne voyage sur `Message.sender` ni sur `Participant`** (vérifié : `core-selects.ts`, `messages-list-query.ts`, `packages/shared/types/participant.ts` — zéro hit) : côté iOS, `MessageListViewController.swift:1613-1616` les résout par DEUX services d'écran indexés par `userId` (`StoryViewModel.storyRingState(forUserId:)`, `StatusViewModel.statusForUser(userId:)`), jamais depuis la charge du message elle-même. Câbler ces deux signaux côté web-v2 est donc un travail de SERVICE D'ÉCRAN (deux requêtes supplémentaires par fil, ou un enrichissement de `sender` à discuter côté gateway) — pas un champ absent à réclamer, et pas dans ce lot : issue compagnon.
 
 5. **DÉCOUVERTE — la moitié « présence NON servie » du critère de fin n'est reproductible NULLE PART dans le navigateur, avec les fixtures actuelles.** La spécification visait `riv-open-5` (Bruno, hors ligne) sur `/c/c-salon-riviere` ; mesuré : `fixtures-river-opening.ts` (qui porte `riv-open-5`) déclare dans son propre doc-comment n'être « IMPORTÉ PAR AUCUN MODULE DE PRODUCTION », et `messagesOf('c-salon-riviere')` — ce que la route sert réellement — ne l'inclut jamais. Dans `RIVER_MESSAGES` (les 40 messages RÉELLEMENT servis), l'auteur alterne STRICTEMENT entre `viewer` et `amina` (`fixtures-river.ts`) : Bruno n'y prononce AUCUN message, sa seule fonction étant de porter `memberCount` à 5 (doc-comment de `bruno`, `fixtures-base.ts`). Élargir `RIVER_MESSAGES` casserait `fixtures-river.test.ts` (« deux voix en stricte alternance ⇒ serialized/belowMinimum ») — un corpus d'une autre loi (#5696). `scripts/lib/check-identity.mjs` documente ce constat en tête de fichier et se limite, pour cette moitié, à la preuve UNITAIRE déjà tenue (`bubble.test.tsx`, `focal-row.test.tsx:408-410`) — le même repli que le critère de fin admet déjà explicitement pour le cas « Sans compte » (« sinon le témoin unitaire suffit »). Suivi : une issue compagnon donne à UN participant réellement `offline` un message SERVI par une conversation existante, pour que ce cas redevienne mesurable au navigateur.
 
@@ -1634,7 +1634,7 @@ Mesure : `use-reader-*.js` (le morceau que la LISTE et le FIL chargent tous deux
 
 6. **Le nom d'un message à SOI est un LITTÉRAL ; sa COULEUR reste un écart, MESURÉ.** `FocalIdentityHeader.swift:87-92` porte DEUX lois que la première rédaction avait laissées.
 
-   La première est portée : `displayName = isMe ? "Toi" : senderDisplayName` — iOS échange le TEXTE contre le littéral de soi mais garde `senderDisplayName` pour les INITIALES de l'avatar. web-v3 n'avait qu'UN nom : invisible sur fixture (`viewer.displayName === 'Vous'`), la donnée réelle de la passerelle aurait affiché au lecteur son PROPRE nom en tête de ses propres messages dès `VITE_DATA_SOURCE=gateway` (directive du tour). D'où `senderAvatarName` (la personne, pour les initiales) et `senderName` (« Vous », pour le texte — la prose du web vouvoie).
+   La première est portée : `displayName = isMe ? "Toi" : senderDisplayName` — iOS échange le TEXTE contre le littéral de soi mais garde `senderDisplayName` pour les INITIALES de l'avatar. web-v2 n'avait qu'UN nom : invisible sur fixture (`viewer.displayName === 'Vous'`), la donnée réelle de la passerelle aurait affiché au lecteur son PROPRE nom en tête de ses propres messages dès `VITE_DATA_SOURCE=gateway` (directive du tour). D'où `senderAvatarName` (la personne, pour les initiales) et `senderName` (« Vous », pour le texte — la prose du web vouvoie).
 
    La seconde ne l'était PAS, et c'était une décision : `nameColor = isMe ? MeeshyColors.indigo500 : …`. Servie (`--ios-indigo-500`, #6366f1) sur la ligne d'identité de 13 px, elle MESURE **4,47:1 en clair et 4,45:1 en sombre** (Chromium, `scripts/lib/contrast.mjs`, `/c/c-deploiement`, les deux schémas) — **sous la barre AA de 4,5:1**, et le gras 800 n'ouvre pas l'exemption « grand texte » (13 px < 18,5 px). L'encre primaire tenait 15,99:1 / 17,79:1 mais rendait la tête d'un message à soi indiscernable de celle d'un autre. **SOLDÉ le 2026-09-10 (revue #5935, §11 ci-dessous)** par la méthode D-18/#5625 : `--ios-self-name-ink` (`packages/design-tokens/scripts/generate-from-ios.mjs`, `HORS_TABLE_PAR_SCHEMA`) sert indigo700 en clair / indigo200 en sombre — la MÊME paire que `--ios-day-ink`, mais NOMMÉE pour sa fonction propre (un séparateur de jour et un nom de soi ne sont pas la même chose). Mesuré 7,90:1 (clair) / 13,34:1 (sombre), gardé par `check-identity.mjs` (contraste réel, pas le nom du jeton) et par `focal-row.test.tsx` (le jeton NOMMÉ, pour qu'une régression vers `--color-ios-ink` — qui tient AA aussi — rougisse quand même). **iOS lui-même reste à ce contraste** : c'est un défaut de la CIBLE, famille #5681-#5683, pas un retard du web. Issue compagnon côté iOS.
 
@@ -1662,7 +1662,7 @@ Preuve de bout en bout de ce paragraphe : `bun run type-check` (0 erreur), `bun 
 
 ## D-33 · Le chrome du fil s'escamote au geste tenu, revient 4,5 s après, et le retour en bas porte le compte réel de non-lus — 2026-09-10 (#5774)
 
-**Le constat.** Le fil web-v3 gardait en-tête et composeur opaques pendant tout défilement, n'avait ni pilule de jour collante ni bouton de retour en bas — trois éléments qu'iOS porte (`ConversationView`, `EdgeHiddenChrome`, `MessageDayStickyOverlay`, `ConversationScrollControlsView`) et que D-19 avait explicitement laissés hors périmètre (§ 13 « restantes »).
+**Le constat.** Le fil web-v2 gardait en-tête et composeur opaques pendant tout défilement, n'avait ni pilule de jour collante ni bouton de retour en bas — trois éléments qu'iOS porte (`ConversationView`, `EdgeHiddenChrome`, `MessageDayStickyOverlay`, `ConversationScrollControlsView`) et que D-19 avait explicitement laissés hors périmètre (§ 13 « restantes »).
 
 **La règle.** UN signal partagé « le geste est tenu » — doigt posé OU liste tirée, `use-thread-chrome-signals.ts` — nourrit un état de chrome DÉRIVÉ (`src/lib/view/thread-chrome.ts`, cotes dérivées des jetons iOS) que `components/thread-chrome.tsx` peint. Les DEUX attributs qui pilotent l'escamotage vivent HORS React : mutation DOM directe sur `style.opacity`/`pointerEvents`, jamais un `useState` — au rythme du défilement (jusqu'à 8 images mesurées par geste), un état React aurait re-rendu la scène complète à chaque frame (dimension 4, Zero Unnecessary Re-render). La pilule de jour est peinte sur le FOND du fil (`thread-backdrop`), pas dans le flux des messages — elle reste collante sans recalcul de position au scroll.
 
@@ -1680,7 +1680,7 @@ Preuve de bout en bout de ce paragraphe : `bun run type-check` (0 erreur), `bun 
 
 **Le constat.** Un message épinglé, transféré ou modifié se rendait comme un texte ordinaire (aucun badge), un sticker/lieu/emoji seul comme du texte brut, un message système comme une bulle d'auteur normale, et une réponse citant une story sans sa citation.
 
-**La règle — deux sites, jamais un troisième.** `src/lib/view/message-badges.ts` résout les badges de métadonnées (épinglé, transféré, modifié) dans un ORDRE FIXE et les porte dans le libellé d'accessibilité (`composeMessageLabel`, D-31) — jamais un second calcul dans `FocalRow`/`Bubble`. `src/lib/view/message-body.ts` résout le CORPS : sticker, lieu, emoji seul (agrandi — la forme iOS d'un message qui n'est QUE des emojis), citation de story — rendu par `message-body-blocks.tsx`. `src/components/system-notice.tsx` rend la notice système CENTRÉE, hors regroupement d'auteur : `src/lib/grouping.ts` gagne un troisième critère (jamais à travers un message système), le seul que `MessageDayGrouping.swift:97` porte et que web-v3 n'avait pas encore.
+**La règle — deux sites, jamais un troisième.** `src/lib/view/message-badges.ts` résout les badges de métadonnées (épinglé, transféré, modifié) dans un ORDRE FIXE et les porte dans le libellé d'accessibilité (`composeMessageLabel`, D-31) — jamais un second calcul dans `FocalRow`/`Bubble`. `src/lib/view/message-body.ts` résout le CORPS : sticker, lieu, emoji seul (agrandi — la forme iOS d'un message qui n'est QUE des emojis), citation de story — rendu par `message-body-blocks.tsx`. `src/components/system-notice.tsx` rend la notice système CENTRÉE, hors regroupement d'auteur : `src/lib/grouping.ts` gagne un troisième critère (jamais à travers un message système), le seul que `MessageDayGrouping.swift:97` porte et que web-v2 n'avait pas encore.
 
 **Le transfert échoue FERMÉ.** `ForwardBadgePolicy` est une liste blanche de types connus — un type de transfert inconnu ou absent rend « Transféré » SANS nom, jamais un nom mal résolu qui prétendrait connaître l'origine.
 
@@ -1691,3 +1691,21 @@ Preuve de bout en bout de ce paragraphe : `bun run type-check` (0 erreur), `bun 
 **Ce qui reste hors de ce lot** (issues compagnons) : la méta du fil (heure, badges) reste SOUS AA (2,21:1 rangée plate, 3,02:1 sur l'indigo) — fidèle à iOS, qui l'avoue dans son propre doc-comment, donc à corriger dans les DEUX produits par un jeton dérivé plutôt qu'ici ; l'état VIDE d'une citation de story n'est pas dessiné (iOS s'en tire par un repli producteur, « 📷 Story », que le décodeur du dépôt n'applique pas) ; le lien de LIEU ouvre `maps.apple.com` en `target="_blank"` — le seul lien externe du dépôt, jamais rejoué sur coque QEMU/simulateur ; côté passerelle, le lieu et la citation de story restent inertes sur l'événement socket `message:new`, faute de hoist serveur — issue gateway compagnon à ouvrir.
 
 **Mesuré.** Poids avant le premier pixel INCHANGÉ (36,91 Ko), tout le code neuf dans le chunk `thread` (34,73 Ko gzip). Aucune hauteur ne bouge après montage (`<img>` du sticker à `width`/`height` posés avant décodage, scène de story en `aspect-ratio` — `assertStableHeights` sur 9 témoins × 4 runs peau/schéma).
+
+## D-35 · Le renommage du 2026-09-10 — `web-v3` devient `web-v2`, en version 2.0.0 (#6042)
+
+Directive du porteur : le legacy `apps/web` reste en production ; le chantier s'appelle `apps/web-v2` et deviendra `apps/web` quand il sera mûr en staging. Le legacy est en 1.x : l'application qui lui succédera prend la version majeure suivante, **2.0.0**. La « v3.1 » ne correspondait à aucune version servie.
+
+| avant | après |
+|---|---|
+| `apps/web-v3`, `@meeshy/web-v3` 3.1.3 | **`apps/web-v2`**, **`@meeshy/web-v2` 2.0.0** |
+
+Le déplacement est parti SEUL dans son commit, avant toute réécriture, pour que git suive chaque fichier comme un renommage à 100 %. Les chemins, le nom du paquet, les jobs de CI, les gardes, les lockfiles (régénérés) et les pointeurs de commentaire du gateway, d'iOS et du SDK ont suivi au commit suivant. Le dossier de captures local devient `.cache/web-v2-workflow` ; les captures déjà prises sous l'ancien nom ne sont pas déplacées.
+
+**Ce qui NE bouge pas, délibérément** :
+- les identifiants de DÉPLOIEMENT — `web-v31` et `web_v31` dans `docker.yml`, l'image `isopen/meeshy-web-v31`, le service `frontend-staging`. L'hôte de staging tire l'image depuis son propre compose ; les renommer est un geste d'hôte, suivi par #6043 ;
+- le label GitHub `web-v3` (104 issues, dont celles de l'ancienne refonte) et les noms de branches cités par les dossiers de cibles (`claude/web-v3-parite`) : ce sont des identifiants PUBLIÉS, pas des chemins ;
+- le nom du workflow `meeshy-web-v3-bout-en-bout`, qu'on invoque par ce nom — ses chemins, eux, désignent `apps/web-v2` ;
+- D-12 ci-dessus, qui raconte le renommage précédent avec les noms de son jour.
+
+> **Piège de lecture, qui se superpose à celui de D-12.** Dans les journaux (`tasks/`, CHANGELOG), `apps/web-v3` désigne l'ancienne refonte AVANT le 2026-09-07, et ce chantier entre le 2026-09-07 et le 2026-09-10. Ils ne sont pas réécrits.

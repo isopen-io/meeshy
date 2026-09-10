@@ -81,7 +81,7 @@ export function applyFilter(params: {
  * puisqu'il ne connaît que ce qu'on lui fournit.
  *
  * Ni `categoryId` ni `liveCall` ne sont posés aujourd'hui (§1.4 : aucune des
- * deux dimensions n'est câblée côté web-v3) — `sortConversations` dégénère
+ * deux dimensions n'est câblée côté web-v2) — `sortConversations` dégénère
  * alors naturellement sur `lastMessageAt` desc, repli `updatedAt`, `id`.
  */
 export function orderConversations(

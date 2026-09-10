@@ -16,7 +16,7 @@
  * Il énumère les DEUX legs, et pas seulement la v3 :
  *   apps/web        — le legacy, ce qui sert meeshy.me AUJOURD'HUI
  *   apps/web-old-version3 — l'ancienne refonte, ANNULÉE le 2026-09-07
- *   apps/web-v3     — la v3.1, le chantier (ex web-v4)
+ *   apps/web-v2     — la v3.1, le chantier (ex web-v4)
  * Le risque de casser un lien existant vient du PREMIER. Cadrer l'inventaire
  * sur la v3 seule laisserait tomber `/signup/affiliate/:token`,
  * `/auth/magic-link` et les quatre adresses de conversation du legacy — dont
@@ -90,7 +90,7 @@ if (process.argv.includes('--json')) {
   console.log(`  apps/web-old-version3  ${cancelled.length} routes  (l'ancienne refonte, ANNULÉE)`);
   const ecrans = v31.filter((r) => r.kind === 'écran').length;
   console.log(
-    `  apps/web-v3      ${v31.length} routes  (la v3.1 — le chantier : ` +
+    `  apps/web-v2      ${v31.length} routes  (la v3.1 — le chantier : ` +
       `${ecrans} écrans + ${v31.length - ecrans} documents pré-rendus)`,
   );
   console.log(`  union            ${urls.size} adresses distinctes\n`);

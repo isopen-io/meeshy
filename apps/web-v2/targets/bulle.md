@@ -1,6 +1,6 @@
 > Dossier des cibles de la v3.1 (issue #5672) — analyse de conception produite le 2026-09-08 sur `claude/web-v3-parite` à `fa980709f0`, en lecture seule, contre l'app iOS DRAPEAUX BÊTA ACTIVÉS. Les numéros de ligne cités valent pour ce commit ; `git log --since=2026-09-08 -- <fichier>` dit s'ils ont bougé. Les captures de référence sont dans ce même dossier (`*.png`, `*.a11y.txt`), listées par `README.md`.
 
-# Le mode BULLES — analyse de conception iOS → web-v3.1
+# Le mode BULLES — analyse de conception iOS → web-v2
 
 Analyse en lecture seule, arrêtée au 2026-09-08, sur le worktree
 `/Users/smpceo/Documents/v2_meeshy-w3` (branche `claude/web-v3-parite`).
@@ -11,7 +11,7 @@ la phrase dit « à lire dans … » plutôt que d'avancer un chiffre.
 
 > **L'arbre a bougé pendant l'analyse.** Entre 09:03 et 09:05, une session
 > concurrente sur la même branche a livré `VITE_READING_MODES` (D-20) —
-> `apps/web-v3/src/lib/api/config.ts`, `src/lib/reading-mode/decision.ts`,
+> `apps/web-v2/src/lib/api/config.ts`, `src/lib/reading-mode/decision.ts`,
 > `src/routes/thread.tsx`, `vite.config.ts`, `README.md`. Le § 2.2, le tableau
 > du § 8 et l'écart n° 14 ont été **relus contre l'arbre d'après** ; tout le
 > reste du document a été établi contre l'arbre d'avant, sur des fichiers que ce
@@ -20,7 +20,7 @@ la phrase dit « à lire dans … » plutôt que d'avancer un chiffre.
 **L'ordre de grandeur, mesuré.** Le chemin bulle iOS pèse **14 747 lignes**
 (`apps/ios/Meeshy/Features/Main/Views/Bubble/*.swift` = 9 852, plus
 `ThemedMessageBubble.swift` 674, `MessageListViewController.swift` 3 421,
-`MessageListView.swift` 800). Le chemin bulle web-v3 en pèse **644**
+`MessageListView.swift` 800). Le chemin bulle web-v2 en pèse **644**
 (`src/components/bubble.tsx` 226, `src/components/message-blocks.tsx` 342,
 `src/lib/grouping.ts` 76). Le rapport est de 1 à 23 ; il ne dit pas que la
 v3.1 est en retard de 23, il dit où chercher ce qui manque.
@@ -85,14 +85,14 @@ v3.1 est en retard de 23, il dit où chercher ce qui manque.
 `packages/shared/types/{conversation,reading-modes,message-effect-flags,attachment}.ts` ·
 `packages/design-tokens/{ios.css,tokens.css}`.
 
-**web-v3.**
-`apps/web-v3/src/components/{bubble,message-blocks,focal-row,avatar,glyphs,reading-mode-chip}.tsx` ·
+**web-v2.**
+`apps/web-v2/src/components/{bubble,message-blocks,focal-row,avatar,glyphs,reading-mode-chip}.tsx` ·
 `src/routes/thread.tsx` · `src/lib/{grouping,accent,reader,languages}.ts` ·
 `src/lib/view/message.ts` · `src/lib/api/{prism,types,fixtures}.ts` ·
 `src/lib/reading-mode/{decision,catalog,store,meta,metrics}.ts` ·
 `src/styles/{app,ios}.css` ·
 `scripts/{check-thread-states,check-reading-mode,check-curve}.mjs` ·
-`README.md` · `decisions.md` · `.cache/web-v3-workflow/specs/thread.md`.
+`README.md` · `decisions.md` · `.cache/web-v2-workflow/specs/thread.md`.
 
 **Documentation normative.** `apps/ios/CLAUDE.md` § « Bubble Component
 Architecture » (l.150-165), § « Prisme Linguistique — Implementation iOS »
@@ -145,7 +145,7 @@ identiques :
   (`Focal/Preferences/ReadingModeController.swift:120-127`) :
   `guard isFlagEnabled, stickyMode == .bubbles else { return lawDecision }` puis
   `OrchestratorDecision(mode: .bubbles, reason: .sticky)`.
-- web-v3 — `resolveThreadMode` (`apps/web-v3/src/lib/reading-mode/decision.ts:106-108`) :
+- web-v2 — `resolveThreadMode` (`apps/web-v2/src/lib/reading-mode/decision.ts:106-108`) :
   `if (input.sticky === 'bulles') return { mode: 'bubbles', reason: 'sticky' }`,
   avec un doc-comment qui cite explicitement `ReadingModeController.swift:120-127`
   (`decision.ts:82-88`).
@@ -166,7 +166,7 @@ BULLES ». Dans ce cas la puce de mode **n'existe pas** :
 `ConversationView.readingModeAffordanceCluster` rend `EmptyView()` dès que le
 catalogue ne contient que `.bubbles` (`ConversationView.swift:2405-2407`).
 
-**web-v3 modélise cette branche depuis le lot D-20 du 2026-09-08** (voir
+**web-v2 modélise cette branche depuis le lot D-20 du 2026-09-08** (voir
 l'encadré liminaire). Le drapeau y est un **paramètre de CONSTRUCTION**, pas une
 préférence utilisateur : `VITE_READING_MODES`, résolu une seule fois par
 `resolveReadingModes` (`src/lib/api/config.ts:85-90`, `!== 'off'` — donc **allumé
@@ -187,7 +187,7 @@ qu'au cas d'un mode listé hors catalogue de rendu.
 **Deux écarts subsistent, et ils ne sont pas du même ordre.**
 
 1. **Le DÉFAUT reste inversé.** iOS naît drapeau ÉTEINT
-   (`MeeshyFeatureFlags.swift:22-30`) donc en bulles ; web-v3 naît drapeau
+   (`MeeshyFeatureFlags.swift:22-30`) donc en bulles ; web-v2 naît drapeau
    ALLUMÉ (`config.ts:90`, `!== 'off'`) donc en focal. D-7
    (`decisions.md:92-100`) l'assume : « C'est un écart assumé avec iOS **en
    pratique** — pas en droit […] La v4 applique la loi telle qu'elle est
@@ -209,7 +209,7 @@ qu'au cas d'un mode listé hors catalogue de rendu.
 
 ### 2.3 Entrer et sortir du mode
 
-| | iOS | web-v3 |
+| | iOS | web-v2 |
 |---|---|---|
 | affordance | puce `ReadingModeChip` dans la grappe d'actions de l'en-tête replié (`ConversationView.swift:2413-2432`) | puce `ReadingModeChip` au même endroit (`thread.tsx:370-376`) |
 | geste primaire | **tap = CYCLE** (`ConversationView.swift:2420-2429`) sur `ReadingModeLensCatalog.cycleOrder` = `[.focal, .script, .bubbles]` (`ReadingModeLensSheet.swift:56`) | **clic = MENU** (`reading-mode-chip.tsx:9-15`) — écart assumé et documenté (pas d'équivalent accessible de l'appui long au clavier) |
@@ -224,7 +224,7 @@ La feuille Lentille est morte des deux côtés : `ReadingModeLensSheet.swift:188
 dit « la feuille Lentille est REMPLACÉE par le menu d'appui long du chip » ; le
 web n'en a jamais eu.
 
-Le témoin de l'EFFET existe : `apps/web-v3/scripts/check-reading-mode.mjs:364-372`
+Le témoin de l'EFFET existe : `apps/web-v2/scripts/check-reading-mode.mjs:364-372`
 sélectionne « Bulles », vérifie qu'au moins un nœud `.rounded-bubble` apparaît
 dans `main li`, qu'aucune rangée plate ne subsiste, puis **recharge la page** et
 revérifie. C'est la seule preuve automatisée que le mode Bulles existe côté web —
@@ -270,7 +270,7 @@ une pièce jointe `.location`, l'initialiseur le garantissant au partitionnement
 seule fois**, au site d'affichage, contre `recipientCount` et les préférences de
 confidentialité (`:285-303`).
 
-**web-v3 n'a pas de modèle de valeur** : `bubble.tsx` lit `Message` directement.
+**web-v2 n'a pas de modèle de valeur** : `bubble.tsx` lit `Message` directement.
 Sur 226 lignes ce n'est pas un défaut ; sur les 14 747 du côté iOS, ç'en serait
 un, et le `CLAUDE.md` iOS l'interdit explicitement (`:158-161` : « ne JAMAIS
 réintroduire de logique inline »). C'est le point d'architecture à trancher
@@ -296,7 +296,7 @@ return min(containerWidth * ratio, cap)
 Le conteneur est la **fenêtre**, jamais l'écran (`DeviceLayout.swift:106-108`,
 `:65-67` — l'argument est Split View sur iPad).
 
-**web-v3** — `bubble.tsx:97` pose `justify-end` / `justify-start`, `:104`
+**web-v2** — `bubble.tsx:97` pose `justify-end` / `justify-start`, `:104`
 `max-w-[70%]`, `:105` `marginInlineStart/End: 50`. Le ratio compact 0,70 et la
 gouttière 50 sont donc **conformes** ; la branche `regular` (0,62 plafonné à
 560) n'existe pas — sur une fenêtre large, la bulle web continue de suivre 70 %
@@ -335,7 +335,7 @@ milieu et en queue de suite.
 montre pas cette base de code.** Aucun chemin de `BubbleStandardLayout` ne peut
 la produire.
 
-**web-v3** applique `rounded-bubble` (`bubble.tsx:108`), aliasé sur
+**web-v2** applique `rounded-bubble` (`bubble.tsx:108`), aliasé sur
 `--ios-radius-bubble` (`src/styles/ios.css:52`) lui-même généré depuis Swift :
 `packages/design-tokens/ios.css:86` porte
 `--ios-radius-bubble: 18px; /* Bubble/BubbleBackground.swift — cornerRadius: 18, littéral */`.
@@ -368,7 +368,7 @@ Trois conséquences, toutes invisibles depuis la seule lecture de
    (`packages/MeeshySDK/Sources/MeeshySDK/Models/MessageModels.swift:742`), un
    tirage déterministe DJB2 dans une palette de 40 teintes
    (`ColorGeneration.swift:234-237`, commentaire `:91`). Dans un groupe de six,
-   iOS peint six teintes de reçu ; web-v3 en peint une.
+   iOS peint six teintes de reçu ; web-v2 en peint une.
 3. `contactColor` n'intervient qu'en repli, et il vaut bien l'accent de
    conversation (`ConversationView.swift:464-466` → `MessageListViewController.swift:1214, 1459`).
 
@@ -384,7 +384,7 @@ commentaire BSL:1172-1174 : « Les bulles sont désormais plates et nettes. » L
 ombres qui subsistent dans le dossier sont sur des sous-éléments (médias,
 pastilles de réaction, citation), jamais sur le fond de bulle.
 
-**web-v3** — `bubble.tsx:92-93, 111-112` :
+**web-v2** — `bubble.tsx:92-93, 111-112` :
 
 ```
 receivedBg       = color-mix(in srgb, var(--accent) var(--ios-bubble-other-opacity), transparent)
@@ -407,7 +407,7 @@ après un saut de citation (`bubble.tsx:116`, `boxShadow: '0 0 0 2.5px var(--acc
 
 ### 3.4 Les rembourrages
 
-| | iOS | web-v3 | verdict |
+| | iOS | web-v2 | verdict |
 |---|---|---|---|
 | horizontal du corps | `14` (BSL:1124) | `px-3.5` = 14 px (`bubble.tsx:108`) | conforme |
 | vertical du corps | `10`, ou `4` sans texte (BSL:1125) | `py-2.5` = 10 px, sans variante | conforme au cas nominal |
@@ -441,7 +441,7 @@ Piège pour un portage : le paramètre `showAvatar` **existe et n'est jamais lu*
 (BSL:59 ; `MessageListViewController.swift:1471` le calcule, `BubbleStyle.swift:14`
 le transporte, personne ne le consomme). La vraie porte est `showIdentityBar`.
 
-**web-v3** — `bubble.tsx:80` :
+**web-v2** — `bubble.tsx:80` :
 
 ```ts
 const showsIdentity = isGrouped && !isMine && tail;
@@ -476,7 +476,7 @@ d'affichage, hashtags, URL auto-détectées, réécriture des liens tracés, et
 surlignage de recherche. Taille par défaut 15 pt (`BubbleExpandableText.swift:52`),
 couleur `isMe ? .white : MeeshyColors.textPrimary(isDark:)` (`:85`).
 
-**web-v3** — `bubble.tsx:147-156` : un `<p className="text-bubble
+**web-v2** — `bubble.tsx:147-156` : un `<p className="text-bubble
 leading-[1.35] whitespace-pre-wrap" lang={rendered.language}>`. `text-bubble` =
 `--ios-font-body` = 15 px (`src/styles/ios.css:66`, `ios.css:78`). Le `lang`
 porté par le texte servi est un point que iOS n'a pas besoin de traiter et que
@@ -515,7 +515,7 @@ et non automatique en conversation (`autoLoad` défaut `false`,
 48/36 pt, badge de durée `m:ss` en capsule noire 0,6 (`+Media:690-726`), barre de
 consommation de 3 pt en pied (`MediaConsumptionProgressBar.swift:23-41`).
 
-**web-v3** — `message-blocks.tsx:307-342`. Chaque pièce est rendue
+**web-v2** — `message-blocks.tsx:307-342`. Chaque pièce est rendue
 indépendamment ; il n'y a **pas de grille** : une image seule donne un cadre
 `max-w-[300px]` avec `aspect-ratio: 300 / 240` et `rounded-card`
 (`:320-321`) — les bonnes cotes pour le cas 1, et le seul cas traité. Deux
@@ -524,7 +524,7 @@ images donnent deux tuiles 300×240 empilées, là où iOS en fait une paire
 
 Et surtout : **aucune image n'est affichée.** Le contenu de la tuile est
 `<Glyph name="image" size={40} className="opacity-40" />` (`:325`). Un balayage
-de `apps/web-v3/src` ne trouve **aucun** `<img>`, `<audio>` ni `<video>` hors de
+de `apps/web-v2/src` ne trouve **aucun** `<img>`, `<audio>` ni `<video>` hors de
 la page institutionnelle. Les fixtures posent d'ailleurs `fileUrl: ''`
 (`src/lib/api/fixtures.ts:205`), donc la donnée elle-même est absente. Le
 `role="img"` + `aria-label` (`:322-323`) est honnête sur l'intention et
@@ -554,7 +554,7 @@ gagnant **à son rang** (retour `nil`). Note utile pour toute suite :
 `resolveTranslatedAudio` — nommé dans le `CLAUDE.md` racine — **n'existe pas
 dans ce dépôt** ; le site unique iOS est `AudioTrackLanguageResolver`.
 
-**web-v3** — `message-blocks.tsx:265-305`. Un bouton `size-[34px]` (la bonne
+**web-v2** — `message-blocks.tsx:265-305`. Un bouton `size-[34px]` (la bonne
 cote : `AudioPlayerView.swift:1357` donne 34 en compact), une onde de **22
 barres DÉRIVÉES DE L'ID** (`view/message.ts:81-84`, honnêtement documentée
 comme telle), une durée `m:ss` depuis `duration` en millisecondes. Le bouton
@@ -601,7 +601,7 @@ Ces cinq surfaces ont chacune leur vue iOS, et une seule a un équivalent web.
   `wordTruncated` **n'ajoute aucun points de suspension quand le texte tient**
   (`QuotedReplyPresentation.swift:285-287, 295`).
 
-  **web-v3** : `message-blocks.tsx:218-263` — bouton pleine largeur
+  **web-v2** : `message-blocks.tsx:218-263` — bouton pleine largeur
   `rounded-quote`, filet `w-1` (**4 px**, conforme), nom et texte **dans le même
   paragraphe** (directive #5103, `:250-259`), `onJump` câblé jusqu'à
   `virtualizer.scrollToIndex` (`thread.tsx:174-181`). **Le plus fidèle des
@@ -737,7 +737,7 @@ Ce que le pied ne porte PAS : édité, épinglé, transféré, éphémère. « �
 le `VStack(spacing: 4)` de BSL:520 (BSL:522, 535, 548 ;
 `BubbleMetaBadges.swift:75-92, 110-135, 150-169`).
 
-**web-v3** — `bubble.tsx:162-207`. L'ordre est le bon : `PrismPastille` (:181),
+**web-v2** — `bubble.tsx:162-207`. L'ordre est le bon : `PrismPastille` (:181),
 `Flags` (:189), `<span className="flex-1" />` (:194), `<time>` (:195), `Check`
 (:201). Les cotes de texte sont dérivées (`text-time` = `--ios-text-time` = 12 px,
 `ios.css:89`). Les coches : `message-blocks.tsx:24-29` — `clock` 10, `check` 10,
@@ -754,9 +754,9 @@ taille→couleur est exacte**, y compris le passage de 10 à 11 px sur `read`.
 - **Aucun débounce de 200 ms** sur `pending`.
 - **Aucun marqueur « modifié »**, aucun badge épinglé / transféré / éphémère —
   et pourtant `isEdited`, `effectFlags`, `expiresAt`, `isViewOnce`, `isBlurred`,
-  `deletedAt` sont **tous présents** sur le type partagé consommé par web-v3
+  `deletedAt` sont **tous présents** sur le type partagé consommé par web-v2
   (`packages/shared/types/conversation.ts:119-174`). Un balayage de
-  `apps/web-v3/src/components` ne trouve aucune lecture de ces champs par
+  `apps/web-v2/src/components` ne trouve aucune lecture de ces champs par
   `bubble.tsx`.
 - L'échec, lui, est traité, et bien : la bande de reprise est **DANS la bulle**
   (`bubble.tsx:131-145`), parti explicitement repris d'iOS et défendu en D-16
@@ -794,7 +794,7 @@ correspondance exacte dans `translations` (`:349`) ; sinon `preferredTranslation
 **seulement si sa cible est la langue active** (`:352`) ; sinon **l'ORIGINAL**
 (`:361`). Le commentaire `:356-360` interdit explicitement de retomber sur la
 traduction préférée, « ce qui montrerait un contenu dans une langue que
-l'utilisateur n'a pas choisie ». web-v3 obtient la même garantie par un autre
+l'utilisateur n'a pas choisie ». web-v2 obtient la même garantie par un autre
 chemin — l'appel au site partagé `resolvePrismTranslation`
 (`src/lib/api/prism.ts:52`, `packages/shared/utils/conversation-helpers.ts:284-315`),
 dont le `null` signifie « servir l'original » (`prism.ts:58-61`).
@@ -829,7 +829,7 @@ langue en `.caption2.weight(.semibold)` teinté langue (`:39-43`), le corps rend
 par `MessageTextRenderer` à 13 pt (`:46-55`), fond `langColor.opacity(0.12)`
 (`:60`), transition `.opacity + .move(edge: .top)` (`:62`).
 
-**web-v3** — `message-blocks.tsx:130-186` pour `Flags`, `:189-216` pour
+**web-v2** — `message-blocks.tsx:130-186` pour `Flags`, `:189-216` pour
 `SecondaryText`, `bubble.tsx:82` pour la liste.
 
 Ce qui est conforme : le cap à 4 (`:148`, `slice(0, 4)`), le dessin 22 px
@@ -842,7 +842,7 @@ qu'iOS n'a pas et dont le raisonnement est meilleur que le sien).
 
 Ce qui diverge :
 
-| règle | iOS | web-v3 |
+| règle | iOS | web-v2 |
 |---|---|---|
 | composition | original → préférée → régionale → custom → locale, les 3 derniers **gated sur une traduction existante** (`BubbleContentBuilder.swift:386-394`) | `[originalLanguage, ...toutes les traductions]` (`bubble.tsx:82`) — l'ordre du PRISME n'est pas respecté |
 | langue servie | **retirée** de la bande (`:395`) | **présente** ; on peut cliquer le drapeau de ce qu'on lit déjà |
@@ -855,7 +855,7 @@ Ce qui diverge :
 Les deux dernières lignes méritent d'être lues ensemble : `mountsBottomLine`
 porte deux gardes **nommées et documentées** (`meta.ts:12-21`), et la peau
 bulle — plus ancienne — ne les a jamais reçues. C'est une jumelle divergente à
-l'intérieur même de web-v3.
+l'intérieur même de web-v2.
 
 ### 3.12 Les réactions
 
@@ -886,7 +886,7 @@ l'intérieur même de web-v3.
   `31 : 6` en fin de suite et `32 : 2` au milieu, selon qu'une bande déborde ou
   non (BSL:223-236).
 
-**web-v3** — `bubble.tsx:210-222` + `message-blocks.tsx:100-113`. Le
+**web-v2** — `bubble.tsx:210-222` + `message-blocks.tsx:100-113`. Le
 positionnement est juste (`isMine ? 'left-0 -translate-x-1' : 'right-0
 translate-x-1'`, `bottom: -8`) et le commentaire explique la même intention.
 `reactionEntries` lit `reactionSummary` (`{emoji: n}`), forme dénormalisée du
@@ -928,7 +928,7 @@ que le dispatch ne rende `EmptyView()` (`:322-323`).
 Vue unique consommée ⇒ `kind == .burned` ⇒ `BubbleBurnedView`
 (`ThemedMessageBubble.swift:319-320`). Supprimé ⇒ `BubbleDeletedView` (`:317-318`).
 
-**web-v3 : rien de tout cela.** `bubble.tsx` ne lit ni `isBlurred`, ni
+**web-v2 : rien de tout cela.** `bubble.tsx` ne lit ni `isBlurred`, ni
 `isViewOnce`, ni `expiresAt`, ni `deletedAt`. Un message flouté s'affiche **en
 clair**, avec ses drapeaux (§ 3.11). C'est le seul écart de cette analyse qui
 touche la dimension 1 (sécurité) plutôt que la dimension 13 (complétude).
@@ -958,7 +958,7 @@ délibérément (`:73-77`).
 En bulles, seul `isLastInGroup` est calculé
 (`MessageListViewController.swift:1437-1455`, passé en `:1516`).
 
-**web-v3** — `grouping.ts:23-27` reprend exactement les deux dernières
+**web-v2** — `grouping.ts:23-27` reprend exactement les deux dernières
 conditions et l'absence de fenêtre, avec le raisonnement écrit (`:8-14` :
 « deux messages du même auteur séparés de six heures dans la même journée
 restent groupés »). `place()` (`:47-59`) calcule `head`, `tail` et `opensDay`
@@ -966,7 +966,7 @@ en une passe. **Il manque la première condition** : `isSystem`. Un avis
 d'arrivée porte l'identifiant de l'arrivant
 (`MessageDayGrouping.swift:44-46`), donc le web groupera la première vraie
 bulle d'un nouveau venu avec son propre avis d'arrivée — et cette bulle perdra
-son avatar et son nom. Le défaut est latent tant que web-v3 n'a pas de messages
+son avatar et son nom. Le défaut est latent tant que web-v2 n'a pas de messages
 système, ce qui est le cas des fixtures.
 
 ### 4.2 Espacement et séparateurs
@@ -974,12 +974,12 @@ système, ce qui est le cas des fixtures.
 `bottomSpacing` (BSL:223-236) : **2 pt à l'intérieur d'une suite, 6 pt en fin de
 suite** (32 / 31 avec une bande de réactions en débord). Le commentaire `:231`
 date le passage de 10 à 6 au 2026-08-21.
-**web-v3** : `marginBottom: tail ? 6 : 2` (`bubble.tsx:101`) — **conforme**,
+**web-v2** : `marginBottom: tail ? 6 : 2` (`bubble.tsx:101`) — **conforme**,
 sauf la variante « débord de réactions » (§ 3.12).
 
 Les insets de section iOS valent `top 8, leading 12, bottom 8, trailing 12`
 (`MessageListViewController.swift:1009-1014`) avec `interGroupSpacing = 0`
-(`:1005`). web-v3 : `px-3.5 pt-2 pb-2` sur le `<main>` (`thread.tsx:461`) —
+(`:1005`). web-v2 : `px-3.5 pt-2 pb-2` sur le `<main>` (`thread.tsx:461`) —
 14 px horizontaux au lieu de 12, 8 px verticaux, conforme à 2 px près.
 
 **Séparateurs de date.** iOS insère un `.dayHeader(dayStart:)` **après** chaque
@@ -987,7 +987,7 @@ groupe du tableau inversé, ce qui le place visuellement au-dessus
 (`MessageListSnapshotPrep.swift:116-128`). Le libellé
 (`MessageDayLabel.swift:38-48`) a six paliers :
 
-| écart | iOS | web-v3 (`grouping.ts:61-72`) |
+| écart | iOS | web-v2 (`grouping.ts:61-72`) |
 |---|---|---|
 | 0 (y compris futur du jour) | « Aujourd'hui » | « Aujourd'hui » ✓ |
 | 1 | « Hier » | « Hier » ✓ |
@@ -1008,7 +1008,7 @@ semibold, `padding(.horizontal, 12)` / `.vertical, 5`, `Capsule` en
 `.ultraThinMaterial` + `strokeBorder(lineWidth: 0.5)`, `padding(.vertical, 6)`
 autour, encre `indigo200`/`indigo700`, filet `indigo900`/`indigo200`, et un trait
 d'accessibilité `.isHeader` (`:32`).
-**web-v3** (`thread.tsx:517-530`) : `rounded-chip px-3 py-1 text-time
+**web-v2** (`thread.tsx:517-530`) : `rounded-chip px-3 py-1 text-time
 font-semibold backdrop-blur-md`, filet `0.5px solid var(--color-day-hairline)`,
 fond `color-mix(--color-ios-card 70%)`, conteneur `py-1.5`. Encres et filets
 sont **dérivés** (`ios.css:107-108, 125-126`). Cotes conformes à 1 px près
@@ -1048,7 +1048,7 @@ message est réellement neuf, que la vue n'est pas près du bas, et que
 **l'auteur n'est pas moi** (`:2059-2072`). Il se remet à zéro au retour près du
 bas (`:2891-2894`) et dans `scrollToBottom` (`:2517-2520`).
 
-**web-v3 n'a ni séparateur, ni bouton flottant, ni compteur de non-lus dans le
+**web-v2 n'a ni séparateur, ni bouton flottant, ni compteur de non-lus dans le
 fil.** Le seul compte de non-lus affiché est celui des **autres** conversations,
 sur le bouton retour (`thread.tsx:342-351`).
 
@@ -1067,7 +1067,7 @@ geste n'est en cours (`:2052-2058`), puis se fait **sans animation** (`:2117-211
 Le seuil « près du bas » vaut **200 pt** (`:452`). Directive « ROULEAU »
 (`:2086-2091`) : aucune animation d'insertion, jamais.
 
-**web-v3** ne peut pas inverser (le virtualiseur `@tanstack/react-virtual` ne le
+**web-v2** ne peut pas inverser (le virtualiseur `@tanstack/react-virtual` ne le
 propose pas) et remplace l'inversion par un **mécanisme d'ancrage** documenté en
 D-15 (`decisions.md:335-342`) : `margin-block-start: auto` sur la liste
 (`thread.tsx:497`, jamais `justify-content: flex-end`, dont le débordement par
@@ -1077,7 +1077,7 @@ le haut serait injoignable — mesuré, `:450-460`), plus une ré-ancre sur
 répond à la même exigence.
 
 Ce qui manque : le désarmement par geste **n'a pas d'équivalent du seuil de
-200 pt** — web-v3 ne suit jamais un nouveau message une fois l'ancre désarmée,
+200 pt** — web-v2 ne suit jamais un nouveau message une fois l'ancre désarmée,
 puisqu'il n'y a pas d'auto-défilement sur arrivée (il n'y a pas de temps réel,
 #5493).
 
@@ -1102,7 +1102,7 @@ l'auto-défilement (`:2052`). En mode bulles la variante est la **capsule** :
 accent 0,25/0,18 (`:3129-3153, 3093-3115`). Les libellés distinguent 1, 2 et 3+
 personnes (`:3063-3070`).
 
-**web-v3** — `thread.tsx:574-602` : hors du `<ol>`, en fin de `<main>`. Avatar
+**web-v2** — `thread.tsx:574-602` : hors du `<ol>`, en fin de `<main>`. Avatar
 18 (`--ios-avatar-typing`), trois points de 5 px, délai `i * 0.18` s, capsule
 `rounded-chip px-3 py-2`. Les cotes sont **exactes**. Deux écarts : le libellé
 est **codé en dur** (`Amina écrit`, `:585`) et l'indicateur est
@@ -1124,14 +1124,14 @@ position est obtenue par un **verrou de scène** qui annule tout déplacement
 d'offset non provoqué par l'utilisateur
 (`MessageListViewController.swift:2144-2158, 2859-2865`).
 
-**web-v3 : aucune pagination.** `messagesOf(id)` rend la totalité de la fixture
+**web-v2 : aucune pagination.** `messagesOf(id)` rend la totalité de la fixture
 (`thread.tsx:56`).
 
 ---
 
 ## 5. Les états
 
-| état | iOS | web-v3 |
+| état | iOS | web-v2 |
 |---|---|---|
 | **chargement à froid** | squelette de 6 bulles, `VStack(spacing: 12)`, `padding(.top, 96)` (`ConversationView.swift:1369-1382`), gated `isBlockingSpinnerNeeded && messages.isEmpty` (`:1395-1406`) | **absent** — les fixtures sont synchrones |
 | **vide** | pas d'état vide dédié (fin d'historique ⇒ bloc de notice E2E, `ConversationView.swift:631-654`) | **présent et meilleur** : « Aucun message pour l'instant » + sous-titre (`thread.tsx:473-490`), gaté par `check-thread-states.mjs:95-102`, motivé en D-16 (`decisions.md:368-374`) |
@@ -1148,7 +1148,7 @@ d'offset non provoqué par l'utilisateur
 
 ## 6. Les gestes
 
-| geste | iOS | web-v3 |
+| geste | iOS | web-v2 |
 |---|---|---|
 | **tap drapeau** | 3 issues (§ 3.11), haptique, ressort `(0.3, 0.8)` | bascule du panneau seul (`bubble.tsx:192`) |
 | **tap pastille translate** | ouvre la vue Langue du `MessageMoreSheet` (BSL:1229) | bascule le panneau de l'original (`message-blocks.tsx:57`) |
@@ -1245,7 +1245,7 @@ les mesures de l'overlay passent par `UIFontMetrics.default.scaledValue(for: 44)
 est lui-même fonction du `DynamicTypeSize`
 (`QuotedReplyPresentation+DynamicType.swift:28-43`).
 
-**web-v3 n'a aucun équivalent.** Toutes les cotes de texte sont des jetons en
+**web-v2 n'a aucun équivalent.** Toutes les cotes de texte sont des jetons en
 **pixels** (`--ios-font-body: 15px`, `--ios-text-time: 12px`,
 `packages/design-tokens/ios.css:75-89`), donc insensibles au réglage de taille
 de police du navigateur (qui n'agit que sur `rem`/`em`). `html` pose
@@ -1254,7 +1254,7 @@ l'ajustement automatique de WebKit. Sur une coque Capacitor, le réglage
 d'accessibilité du système n'aura donc **aucun effet** sur le fil — c'est un
 écart de dimension 5 qui ne se voit sur aucune capture.
 
-**web-v3.** La bulle n'est **pas** un élément composé : c'est un `<li>` sans
+**web-v2.** La bulle n'est **pas** un élément composé : c'est un `<li>` sans
 libellé, contenant jusqu'à huit nœuds atteignables (bouton de citation, tuile
 `role="img"`, bouton de reprise, `<p>`, panneau secondaire, avatar `role="img"`,
 pastille, jusqu'à quatre drapeaux, `<time>`, glyphe de coche). Un lecteur
@@ -1281,7 +1281,7 @@ absents, ce dernier point est cohérent.
 
 ## 8. Tableau de conformité
 
-| élément | iOS (fichier:ligne) | web-v3 (fichier:ligne) | verdict |
+| élément | iOS (fichier:ligne) | web-v2 (fichier:ligne) | verdict |
 |---|---|---|---|
 | loi de choix du mode | `ReadingModeOrchestrator.swift:288-318` | `decision.ts:89-122` (consomme `@meeshy/shared`) | **conforme** |
 | règle de rendu `bulles` | `ReadingModeController.swift:120-127` | `decision.ts:106-108` | **conforme** |
@@ -1402,7 +1402,7 @@ donnée en petit / moyen / grand.
    Swift : `BubbleStandardLayout+Media.swift:54-101` (grille) et
    `packages/MeeshySDK/Sources/MeeshyUI/Primitives/CachedAsyncImage.swift:457-504`
    (échelle ThumbHash → vignette → complet).
-   Web : `apps/web-v3/src/components/message-blocks.tsx:313-327`.
+   Web : `apps/web-v2/src/components/message-blocks.tsx:313-327`.
    Témoin : étendre `scripts/check-reading-mode.mjs` avec un cas bulles qui
    compte les `main li img` sur une fixture portant un `fileUrl` servi par le
    serveur local du gate. **Grand** (grille 1/2/3/4+, `+N`, ThumbHash, politique
@@ -1560,7 +1560,7 @@ donnée en petit / moyen / grand.
     (`MeeshyFont.relative` projette sur un style relatif), avec sa garde
     `MeeshyTests/Unit/Guards/FixedFontSizeGuardTests.swift`.
     Web : `packages/design-tokens/ios.css:75-89` (jetons en `px`) et
-    `apps/web-v3/src/styles/app.css:147` (`-webkit-text-size-adjust: 100%`).
+    `apps/web-v2/src/styles/app.css:147` (`-webkit-text-size-adjust: 100%`).
     Témoin : un gate qui pose `document.documentElement.style.fontSize = '24px'`
     et vérifie que la hauteur d'une bulle change.
     **Moyen** — la bascule `px → rem` est mécanique, mais elle touche la table
@@ -1570,7 +1570,7 @@ donnée en petit / moyen / grand.
 
 ## 10. Ce que la charte du README affirme, et ce que le Swift en dit
 
-Les quatre affirmations de `apps/web-v3/README.md:112-118` ont été vérifiées une
+Les quatre affirmations de `apps/web-v2/README.md:112-118` ont été vérifiées une
 par une contre le Swift.
 
 **1. « Bulle à rayon uniforme 18 px : ni queue, ni coin asymétrique, ni ombre,
@@ -1686,7 +1686,7 @@ protège la première bulle d'un nouveau venu.
   LISTE et sur le mode par défaut du fil, **pas sur la bulle** — qui est
   exactement la même vue, au pixel près, dans les deux configurations. Une
   session qui lirait D-20 littéralement pourrait « corriger » vers une queue que
-  le produit n'a jamais eue ; le README de web-v3, lui, a raison
+  le produit n'a jamais eue ; le README de web-v2, lui, a raison
   (`:112-114`).
 
 - **D-7 (`decisions.md:92-100`) est désormais une décision de VALEUR PAR DÉFAUT,
@@ -1733,7 +1733,7 @@ protège la première bulle d'un nouveau venu.
 3. **`resolvePrismTranslation` court-circuite quand la préférence de tête est la
    langue d'origine** (`packages/shared/utils/conversation-helpers.ts:308-309`) :
    elle rend `null` immédiatement au lieu de descendre vers un rang inférieur.
-   web-v3 hérite gratuitement de ce comportement en appelant le site partagé
+   web-v2 hérite gratuitement de ce comportement en appelant le site partagé
    (`src/lib/api/prism.ts:52`) ; toute réécriture locale le perdrait, et le
    symptôme ne serait pas une erreur mais l'ORIGINAL servi à la place d'une
    traduction qui existe. Le pendant Swift est

@@ -212,7 +212,7 @@ export const parseCatalogBlock = (blockLines) => {
 // consultation « Progression ») — morte à la naissance PAR CONSTRUCTION,
 // même forme que `users.meReferralCode` (#3690) ci-dessus : cette issue
 // livre la route gateway (lecture des compteurs/paliers/streak, #5530) et
-// son exposition dans les catalogues générés ; l'appelant web-v3 (l'écran
+// son exposition dans les catalogues générés ; l'appelant web-v2 (l'écran
 // « Progression ») est un travail d'écran séparé, pas encore ouvert — voir
 // le corps de la PR qui livre cette route pour le détail du périmètre
 // différé.
@@ -227,7 +227,7 @@ export const parseCatalogBlock = (blockLines) => {
 // 268 → 269 (#5743) : `me.meeshMint` (`POST /me/meesh/mint`, la frappe d'une
 // Meesh). La raison DIFFÈRE des deux précédentes, et c'est pourquoi elle est
 // écrite plutôt que rangée sous « même forme que » : cette route A un appelant
-// client — `mintMeesh` dans `apps/web-v3/src/lib/api/engagement.ts` — mais il
+// client — `mintMeesh` dans `apps/web-v2/src/lib/api/engagement.ts` — mais il
 // ne passe PAS par ce catalogue. La v3.1 n'importe `@meeshy/shared/api/endpoints`
 // nulle part : ses 444 adresses se paieraient avant le premier pixel (D-14), et
 // chaque kilo-octet y est mesuré par un gate. Elle adresse donc ses routes par

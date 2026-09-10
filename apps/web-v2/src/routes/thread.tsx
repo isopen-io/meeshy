@@ -808,7 +808,7 @@ export default function ThreadScreen() {
           LE COMPOSEUR ENGAGÉ (#5774, travail 3/3) — équivalent structurel
           des exceptions iOS `isEmojiPanelOpen`/`hasMentionSuggestions`
           (`ConversationView.swift:2124-2141`, « on ne retire pas l'outil en
-          main ») : web-v3 n'a ni panneau emoji ni suggestions de mention
+          main ») : web-v2 n'a ni panneau emoji ni suggestions de mention
           dans `composer.tsx` (tenu par #5890, on n'y touche pas) — le focus
           sur l'ENVELOPPE, lu par bulle native (`onFocus`/`onBlur`), en est
           le signal. `relatedTarget` : un focus qui reste À L'INTÉRIEUR de

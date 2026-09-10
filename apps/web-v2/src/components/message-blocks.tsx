@@ -304,10 +304,10 @@ export function Flags({
 // toujours le français). Le pied et le sous-menu partagent désormais UN
 // SEUL état (`displayLanguage`/`onPickLanguage`, D-14 : `served()` reste
 // l'UNIQUE résolveur), qui SUBSTITUE le texte plutôt que de le doubler d'un
-// panneau — rapprochant du même mouvement web-v3 de la cible iOS
+// panneau — rapprochant du même mouvement web-v2 de la cible iOS
 // (`FocalRow.swift:1082`, `onSetActiveDisplayLanguageForGroup`, qui change
 // le texte SERVI). La portée PAR GROUPE (iOS l'applique à toute la suite,
-// web-v3 reste par rangée) demeure un écart ASSUMÉ, tracé en dehors de ce
+// web-v2 reste par rangée) demeure un écart ASSUMÉ, tracé en dehors de ce
 // lot (`targets/focal-script.md` § 10 écart 4).
 
 /**
@@ -347,11 +347,11 @@ export function Flags({
  * `--ios-pinned` (#3b82f6) mesure 3,68:1 en clair sur le fond de rangée —
  * sous la barre AA de 4,5:1 pour du texte de 11 px. Aucun cran plus sombre
  * n'existe côté Swift pour ce bleu (constante UNIQUE, theme-invariant,
- * aucune rampe 600-900) : en inventer un QUATRIÈME jeton web-v3 divergerait
+ * aucune rampe 600-900) : en inventer un QUATRIÈME jeton web-v2 divergerait
  * de la palette DÉRIVÉE (D-4) plutôt que de réparer sa source. Écart CONNU
  * de la cible iOS elle-même (comme `textSecondary.opacity(0.5)` pour
  * « modifié », voir `EditedMark`) — issue compagnon #6010 sur le JETON iOS,
- * pas un raccourci pris dans web-v3.
+ * pas un raccourci pris dans web-v2.
  */
 export function Badges({ badges }: { readonly badges: readonly MessageBadge[] }) {
   const head = badges.filter((badge) => badge.kind === 'pinned' || badge.kind === 'forwarded');
@@ -419,7 +419,7 @@ export function EditedMark({ onBrandBubble }: { readonly onBrandBubble: boolean 
      un badge n'emprunte pas la teinte d'un AUTRE objet). Ce cran mesure
      3,98:1 en clair — sous AA, mais c'est la valeur EXACTE qu'iOS porte
      (aveu `FocalMetaRow.swift:16-24`) : un écart CONNU de la cible, pas un
-     raccourci de web-v3 — issue compagnon #6010 sur le JETON. */
+     raccourci de web-v2 — issue compagnon #6010 sur le JETON. */
   /* `aria-hidden` (revue #5936, défaut majeur 8) — « modifié » est déjà dans
      `rowLabel` (`composeMessageLabel`) : la rangée plate le masquait déjà,
      la bulle ne le faisait pas — asymétrie corrigée en posant le masque ICI,

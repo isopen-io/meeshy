@@ -35,7 +35,7 @@ const UPSTREAM = `${ROOT}packages/shared/utils/focus-curve.ts`;
  * jetons, qui va chercher la palette dans `MeeshyColors.swift`.
  */
 const UPSTREAM_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Main/Lentille/Core/LentilleMetrics.swift`;
-const DOWNSTREAM = `${ROOT}apps/web-v3/src/lib/lens/law.ts`;
+const DOWNSTREAM = `${ROOT}apps/web-v2/src/lib/lens/law.ts`;
 
 /**
  * PARTIE 2 — la rangée plate du FIL (#5566). Même dispositif, autre écran :
@@ -44,7 +44,7 @@ const DOWNSTREAM = `${ROOT}apps/web-v3/src/lib/lens/law.ts`;
  * `lens/law.ts` ci-dessus. Deux peaux, un seul gate de dérivation.
  */
 const UPSTREAM_FOCAL_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Main/Focal/Core/FocalMetrics.swift`;
-const DOWNSTREAM_FOCAL = `${ROOT}apps/web-v3/src/lib/reading-mode/metrics.ts`;
+const DOWNSTREAM_FOCAL = `${ROOT}apps/web-v2/src/lib/reading-mode/metrics.ts`;
 
 /**
  * PARTIE 3 — la PERSPECTIVE du Fil (#5566, correction de revue : « Focal » et
@@ -55,8 +55,8 @@ const DOWNSTREAM_FOCAL = `${ROOT}apps/web-v3/src/lib/reading-mode/metrics.ts`;
  * production) mais `reading-mode/election.ts` — la source amont reste
  * `focus-curve.ts`, seul l'aval change.
  */
-const DOWNSTREAM_THREAD = `${ROOT}apps/web-v3/src/lib/reading-mode/perspective.ts`;
-const DOWNSTREAM_ELECTION = `${ROOT}apps/web-v3/src/lib/reading-mode/election.ts`;
+const DOWNSTREAM_THREAD = `${ROOT}apps/web-v2/src/lib/reading-mode/perspective.ts`;
+const DOWNSTREAM_ELECTION = `${ROOT}apps/web-v2/src/lib/reading-mode/election.ts`;
 
 /**
  * PARTIE 4 — L'ÉLECTION du Fil (#5648 : « Focal se distingue de Script par
@@ -392,7 +392,7 @@ for (const [casePattern, downstreamName, what] of CHIP_FILL_CASES) {
  * raison (§ note PARTIE 1 sur `new Function`).
  */
 const UPSTREAM_REVEAL_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleBlurRevealLifecycle.swift`;
-const DOWNSTREAM_PROTECTION = `${ROOT}apps/web-v3/src/lib/reading-mode/protection.ts`;
+const DOWNSTREAM_PROTECTION = `${ROOT}apps/web-v2/src/lib/reading-mode/protection.ts`;
 const revealSwift = readFileSync(UPSTREAM_REVEAL_SWIFT, 'utf8');
 const protectionDerived = readFileSync(DOWNSTREAM_PROTECTION, 'utf8');
 const revealNumber = (name) => {
@@ -425,9 +425,9 @@ for (const [swiftName, downstreamName, what] of REVEAL_MAPPINGS) {
  */
 const UPSTREAM_LENTILLE_TOKENS = `${ROOT}packages/shared/design/lentille-tokens.json`;
 const IOS_CSS = `${ROOT}packages/design-tokens/ios.css`;
-const THEME_CSS = `${ROOT}apps/web-v3/src/styles/ios.css`;
-const LENS_ROW = `${ROOT}apps/web-v3/src/components/lens-row.tsx`;
-const LENS_TIME = `${ROOT}apps/web-v3/src/components/lens-time.tsx`;
+const THEME_CSS = `${ROOT}apps/web-v2/src/styles/ios.css`;
+const LENS_ROW = `${ROOT}apps/web-v2/src/components/lens-row.tsx`;
+const LENS_TIME = `${ROOT}apps/web-v2/src/components/lens-time.tsx`;
 
 const lentilleTokens = JSON.parse(readFileSync(UPSTREAM_LENTILLE_TOKENS, 'utf8'));
 const iosCss = readFileSync(IOS_CSS, 'utf8');
@@ -526,7 +526,7 @@ for (const { cssVarName, utility, tokenKey, source, what } of TYPOGRAPHY_MAPPING
  */
 const UPSTREAM_OVERLAY_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Main/Components/MessageOverlayMenu.swift`;
 const UPSTREAM_ACTIONS_SWIFT = `${ROOT}apps/ios/Meeshy/Features/Main/Components/MessageActionsMenu.swift`;
-const DOWNSTREAM_MENU_METRICS = `${ROOT}apps/web-v3/src/lib/view/message-menu-metrics.ts`;
+const DOWNSTREAM_MENU_METRICS = `${ROOT}apps/web-v2/src/lib/view/message-menu-metrics.ts`;
 const overlaySwift = readFileSync(UPSTREAM_OVERLAY_SWIFT, 'utf8');
 const actionsSwift = readFileSync(UPSTREAM_ACTIONS_SWIFT, 'utf8');
 const menuMetrics = readFileSync(DOWNSTREAM_MENU_METRICS, 'utf8');
@@ -566,7 +566,7 @@ for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
 // dériveraient en silence : on les compare.
 {
   const block = /private let defaultEmojis = \[([\s\S]*?)\]/.exec(overlaySwift);
-  const DOWNSTREAM_ACTIONS = `${ROOT}apps/web-v3/src/lib/view/message-actions.ts`;
+  const DOWNSTREAM_ACTIONS = `${ROOT}apps/web-v2/src/lib/view/message-actions.ts`;
   const actionsSource = readFileSync(DOWNSTREAM_ACTIONS, 'utf8');
   const emojisOf = (text) => (text.match(/'([^']+)'|"([^"]+)"/g) ?? []).map((t) => t.slice(1, -1));
   const quickBlock = /export const QUICK_REACTIONS = \[([\s\S]*?)\]/.exec(actionsSource);
@@ -606,8 +606,8 @@ for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
     'utf8',
   );
   const backgroundSwift = readFileSync(`${ROOT}apps/ios/Meeshy/Features/Main/Views/ConversationAnimatedBackground.swift`, 'utf8');
-  const metricsDerived = readFileSync(`${ROOT}apps/web-v3/src/lib/reading-mode/metrics.ts`, 'utf8');
-  const backdropDerived = readFileSync(`${ROOT}apps/web-v3/src/lib/view/thread-backdrop.ts`, 'utf8');
+  const metricsDerived = readFileSync(`${ROOT}apps/web-v2/src/lib/reading-mode/metrics.ts`, 'utf8');
+  const backdropDerived = readFileSync(`${ROOT}apps/web-v2/src/lib/view/thread-backdrop.ts`, 'utf8');
 
   const topOffsetSwift = (() => {
     const m = /\btopOffset\s*(?::\s*\w+\s*)?=\s*(-?[0-9.]+)/.exec(stickyOverlaySwift);
@@ -691,8 +691,8 @@ for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
     'utf8',
   );
   const bubbleStickerSwift = readFileSync(`${ROOT}apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleSticker.swift`, 'utf8');
-  const messageBodyDerived = readFileSync(`${ROOT}apps/web-v3/src/lib/view/message-body.ts`, 'utf8');
-  const metricsDerived2 = readFileSync(`${ROOT}apps/web-v3/src/lib/reading-mode/metrics.ts`, 'utf8');
+  const messageBodyDerived = readFileSync(`${ROOT}apps/web-v2/src/lib/view/message-body.ts`, 'utf8');
+  const metricsDerived2 = readFileSync(`${ROOT}apps/web-v2/src/lib/reading-mode/metrics.ts`, 'utf8');
 
   const EMOJI_CASE_MAPPINGS = [
     ['single', 'single'],

@@ -53,7 +53,7 @@ const VECTORS_PATH = new URL(
   import.meta.url,
 );
 
-describe('les vecteurs partagés de sectionnement (rejoués depuis web-v3)', () => {
+describe('les vecteurs partagés de sectionnement (rejoués depuis web-v2)', () => {
   const vectors = JSON.parse(readFileSync(VECTORS_PATH, 'utf8')) as readonly Vector[];
   test('au moins 14 vecteurs sont chargés', () => {
     expect(vectors.length).toBeGreaterThanOrEqual(14);
@@ -101,7 +101,7 @@ describe('les vecteurs partagés de sectionnement (rejoués depuis web-v3)', () 
   }
 });
 
-describe('resolveLensSections — sur les fixtures web-v3', () => {
+describe('resolveLensSections — sur les fixtures web-v2', () => {
   /**
    * `FIXTURES_LOADED_AT` plutôt qu'un second `new Date()` (#5797) : le fil
    * « Équipe déploiement » (`THREAD_ANCHOR`, `fixtures-base.ts`) est ancré

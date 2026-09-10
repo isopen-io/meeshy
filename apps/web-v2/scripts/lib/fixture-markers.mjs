@@ -1,7 +1,7 @@
 /**
  * LES MARQUEURS DE FIXTURE — noms qui ne doivent JAMAIS apparaître dans un
  * dist construit en `VITE_DATA_SOURCE=gateway` (#5815, leçon 554 : une
- * capture peut montrer web-v3 sur ses fixtures sans que rien ne le dise).
+ * capture peut montrer web-v2 sur ses fixtures sans que rien ne le dise).
  *
  * Noms de personnes tirés de `src/lib/api/fixtures-base.ts` (Amina Diallo,
  * Kwame Mensah, Fatou Bâ) et de l'identifiant du lecteur de fixture

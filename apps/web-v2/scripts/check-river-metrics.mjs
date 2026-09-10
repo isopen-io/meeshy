@@ -27,10 +27,10 @@ import { readFileSync } from 'node:fs';
 const ROOT = new URL('../../..', import.meta.url).pathname;
 const TOKENS_PATH = `${ROOT}packages/shared/design/lentille-tokens.json`;
 const SWIFT_PATH = `${ROOT}apps/ios/Meeshy/Features/Main/Riviere/Core/RiverMetrics.swift`;
-const TS_PATH = `${ROOT}apps/web-v3/src/lib/river/metrics.ts`;
-const COLUMNS_PATH = `${ROOT}apps/web-v3/src/lib/river/columns.ts`;
-const FOCUS_PATH = `${ROOT}apps/web-v3/src/lib/river/focus.ts`;
-const GEOMETRY_PATH = `${ROOT}apps/web-v3/src/lib/river/geometry.ts`;
+const TS_PATH = `${ROOT}apps/web-v2/src/lib/river/metrics.ts`;
+const COLUMNS_PATH = `${ROOT}apps/web-v2/src/lib/river/columns.ts`;
+const FOCUS_PATH = `${ROOT}apps/web-v2/src/lib/river/focus.ts`;
+const GEOMETRY_PATH = `${ROOT}apps/web-v2/src/lib/river/geometry.ts`;
 
 const tokens = JSON.parse(readFileSync(TOKENS_PATH, 'utf8'));
 const swift = readFileSync(SWIFT_PATH, 'utf8');

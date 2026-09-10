@@ -103,7 +103,7 @@ export const FOCUS_CARD_FILL_LIGHT = 0.10;
  * `FocalScrollPerspective.focusChipFillOpacity(isDark:isActive:)` — les
  * QUATRE cas du switch (:206-213). Ce lot n'emploie que les deux cas
  * `isActive: false` (le voile des chips de la bande et du tampon, § D-22
- * `apps/web-v3/decisions.md`) : l'ORDRE et l'EFFET du chip « langue
+ * `apps/web-v2/decisions.md`) : l'ORDRE et l'EFFET du chip « langue
  * affichée » (`isActive: true`) restent l'écart 4 de la spécification #5648
  * (§1.5), hors périmètre — les deux constantes ACTIVE sont gardées par
  * `check-curve.mjs` dès maintenant pour que la dérivation ne se perde pas

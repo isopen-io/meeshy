@@ -10,7 +10,7 @@ import type { Conversation } from '@/lib/api/types';
  * emploie déjà pour le TRI, ici étendu au PARTITIONNEMENT.
  *
  * `categories: []` TOUJOURS (§3 de la spécification — aucune catégorie n'est
- * câblée côté web-v3 cette itération) : un `categoryId` qui existerait sur le
+ * câblée côté web-v2 cette itération) : un `categoryId` qui existerait sur le
  * wire retombe alors mécaniquement sur le temporel, exactement le repli que
  * la loi documente pour une catégorie inconnue (`conversation-sections.ts`
  * commentaire de `classify`). `liveCall` n'est jamais posé non plus — AUCUNE

@@ -52,7 +52,7 @@
 // touchait l'autre, et chaque liste d'origines servait :3300. Elles sont parties
 // avec cette application (#5994) : une symétrie avec une zone qui n'existe plus
 // ne garde rien, et la tenir obligerait à lancer un répertoire absent. Le
-// chantier web (`apps/web-v3`, Vite) ne passe pas par ces cibles.
+// chantier web (`apps/web-v2`, Vite) ne passe pas par ces cibles.
 //
 // POURQUOI LES INVENTAIRES SONT DÉRIVÉS, ET PLUS ÉCRITS À LA MAIN
 //

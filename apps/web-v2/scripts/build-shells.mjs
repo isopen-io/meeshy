@@ -3,7 +3,7 @@
  * UNE COMMANDE UNIQUE CONSTRUIT LES DEUX COQUES CONTRE UNE PASSERELLE RÉELLE
  * (#5815, compagnon gateway #5651).
  *
- * `apps/web-v3` sait déjà résoudre une base d'API absolue en coque
+ * `apps/web-v2` sait déjà résoudre une base d'API absolue en coque
  * (`src/lib/api/config.ts::resolveBase`, fail-closed sur la production) et
  * câbler `VITE_DATA_SOURCE=gateway` (#5650, D-26) : rien ne manquait côté
  * application. Ce qui manquait était une commande de RECETTE qui ne puisse
@@ -17,7 +17,7 @@
  *        ainsi démarre TOUJOURS sur cet identifiant de FIXTURE, et en source
  *        `gateway` c'est un `ThreadRefused` (D-26 F8) au premier écran.
  *   M2 — la comparaison de soi à soi (leçon 554) : une capture « iOS » peut
- *        montrer web-v3 sur SES fixtures. Les noms des fixtures
+ *        montrer web-v2 sur SES fixtures. Les noms des fixtures
  *        (`scripts/lib/fixture-markers.mjs`) ne doivent apparaître dans
  *        AUCUN fichier du dist embarqué construit en `gateway` — mesuré à la
  *        main jusqu'ici (D-26 F9), sans gate.

@@ -6,7 +6,7 @@ import { FIXTURES_LOADED_AT, parisCalendarDay, resolveThreadAnchor } from './fix
  * `resolveThreadAnchor` (#5797) — extraite de l'IIFE qui calculait
  * `THREAD_ANCHOR` pour pouvoir figer artificiellement, de part et d'autre
  * d'une frontière de jour parisienne, l'instant `at` qui lui est passé.
- * `sections.test.ts` (« resolveLensSections — sur les fixtures web-v3 »)
+ * `sections.test.ts` (« resolveLensSections — sur les fixtures web-v2 »)
  * flakait quand ce même calcul — fait UNE fois au chargement du module, sur
  * son propre `new Date()` — retombait d'un jour calendaire parisien
  * différent de celui capturé, plus tard, par le second `new Date()` du

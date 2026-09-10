@@ -207,7 +207,7 @@ describe('useThreadChrome — deux attributs, hors React (T8)', () => {
    * l'écran réel, l'hôte rend `<ThreadSkeleton />` (donc `scroller.current
    * === null`) au premier rendu, PUIS son arbre final une fois le fil
    * résolu. `subscribeGesture` capturait `null` pour TOUTE LA SESSION —
-   * mesuré au navigateur (capture `.cache/web-v3-workflow/rendus/
+   * mesuré au navigateur (capture `.cache/web-v2-workflow/rendus/
    * thread-chrome-hidden-v2.*.png`, chrome jamais escamoté malgré un geste
    * réel) — parce que l'effet d'abonnement ne dépendait QUE de
    * `subscribeGesture` (identité stable, ne redéclenche jamais l'effet).

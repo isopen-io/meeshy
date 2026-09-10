@@ -4,7 +4,7 @@ import Foundation
 ///
 /// ## Pourquoi ce fichier existe
 ///
-/// L'iOS natif rendait `Meesh → badges → succès → défis` ; web-v3 rendait
+/// L'iOS natif rendait `Meesh → badges → succès → défis` ; web-v2 rendait
 /// `élan → Meesh → niveau → défis → badges → succès`. `resolveEngagementProgress`
 /// décidait déjà du CONTENU des deux côtés ; personne ne décidait de l'ORDRE,
 /// alors chaque client a composé le sien.

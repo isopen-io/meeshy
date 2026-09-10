@@ -1,6 +1,6 @@
 {
-  "role": "Les PLAFONDS de la v4. Les valeurs MESUREES vivent dans budgets-measured.json — ce fichier-ci n'en porte aucune, exactement comme apps/web-v3/budgets.json dont il reprend la discipline.",
-  "read_by": ["apps/web-v3/scripts/measure-weight.mjs"],
+  "role": "Les PLAFONDS de la v4. Les valeurs MESUREES vivent dans budgets-measured.json — ce fichier-ci n'en porte aucune, exactement comme apps/web-v2/budgets.json dont il reprend la discipline.",
+  "read_by": ["apps/web-v2/scripts/measure-weight.mjs"],
   "note": "Le modele de cout a CHANGE entre la v3 et la v4, et c'est la seule raison pour laquelle ces plafonds ne sont pas ceux du § 8.3. La v3 sert un DOCUMENT par ecran : le lecteur paie ~8 Ko a chaque ecran, a chaque session. La v4 sert UNE application : le lecteur paie une fois, puis plus rien tant que le hash ne bouge pas (service worker, variante A). Un plafond exprime par ECRAN n'a donc pas de sujet ici — celui qui compte est la PREMIERE PEINTURE, payee une fois.",
   "first_paint": {
     "subject": "document + feuille + modules que le document reference lui-meme, gzip -9. Les chunks d'ecran charges a la demande n'y sont pas : c'est ce que le decoupage par route achete.",
@@ -12,7 +12,7 @@
   },
   "institutional_page": {
     "subject": "chaque document institutionnel PRECHAUFFE (about/contact/partners/privacy/terms), gzip -9 — le document HTML complet, feuille INLINEE comprise (scripts/prerender-institutional.tsx). Une page a la fois : ces adresses ne se composent jamais.",
-    "read_by": ["apps/web-v3/scripts/prerender-institutional.tsx"],
+    "read_by": ["apps/web-v2/scripts/prerender-institutional.tsx"],
     "kb": {
       "value": 10,
       "status": "CIBLE — PROPOSEE PAR LA REVUE DE #5606 (defaut 3), NON ARBITREE",
@@ -38,7 +38,7 @@
       }
     }
   },
-  "network_note": "Le profil est REPRIS TEL QUEL de apps/web-v3/budgets.json — deux chiffres mesures sur deux profils differents ne se comparent pas, et la comparaison v3 / v4 est precisement ce que ce POC doit rendre.",
+  "network_note": "Le profil est REPRIS TEL QUEL de apps/web-v2/budgets.json — deux chiffres mesures sur deux profils differents ne se comparent pas, et la comparaison v3 / v4 est precisement ce que ce POC doit rendre.",
   "network": {
     "profile": {
       "name": "Fast 3G — prereglage de Chrome DevTools, applique par Network.emulateNetworkConditions",

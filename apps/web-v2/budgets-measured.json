@@ -71,7 +71,7 @@
   },
   "documents_institutionnels": {
     "quoi": "Ce que chaque page institutionnelle REMET EN UNE FOIS : le HTML, sa feuille dédiée inlinée et son script de thème. Zéro script externe, zéro feuille externe — mesuré par les invariants du producteur.",
-    "produit_par": "cd apps/web-v3 && bun run build (l'étape scripts/prerender-institutional.tsx)",
+    "produit_par": "cd apps/web-v2 && bun run build (l'étape scripts/prerender-institutional.tsx)",
     "date": "2026-09-07",
     "unite": "octets gzip -9 du document servi",
     "feuille_dediee_gzip_octets": 4628,
@@ -94,7 +94,7 @@
   },
   "cache_institutionnel": {
     "quoi": "Ce que l'INSTALLATION du service worker télécharge pour les cinq pages institutionnelles, et ce qu'une visite ultérieure leur coûte. Le porteur a demandé qu'elles soient « entièrement cachées, elles ne changent que très rarement » (2026-09-07) ; la demande a révélé qu'elles n'étaient pas seulement hors cache, mais MASQUÉES — la NavigationRoute du service worker servait la coquille de l'application à leur place dès la deuxième visite.",
-    "produit_par": "cd apps/web-v3 && bun run build && node scripts/check-institutional.mjs",
+    "produit_par": "cd apps/web-v2 && bun run build && node scripts/check-institutional.mjs",
     "date": "2026-09-07",
     "avant_le_correctif": {
       "entrees_de_precache": 16,
@@ -129,7 +129,7 @@
   },
   "lentille": {
     "quoi": "La peau LENTILLE de l'écran / — ligne PLATE de 84 px, perspective au défilement, magnification en place. Elle REMPLACE la peau carte, retirée : #5567 la déclare seule peau de la v3.1.",
-    "produit_par": "cd apps/web-v3 && bun run build && node scripts/measure-weight.mjs && node scripts/check-lens.mjs",
+    "produit_par": "cd apps/web-v2 && bun run build && node scripts/measure-weight.mjs && node scripts/check-lens.mjs",
     "date": "2026-09-07",
     "first_paint_kb": 25.22,
     "premiere_peinture_avant_ko": 25.13,

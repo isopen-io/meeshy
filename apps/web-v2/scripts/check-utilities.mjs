@@ -95,7 +95,7 @@ export const sourceFiles = (dir) =>
  *
  * > **Un garde de source qui ne dépouille pas les commentaires accuse la prose
  * > qui l'explique.** Le dépôt le sait ailleurs — `AppSourceGuard.stripComments`
- * > côté Swift, et les deux témoins de parité de `apps/web-v3` — ce site-ci
+ * > côté Swift, et les deux témoins de parité de `apps/web-v2` — ce site-ci
  * > l'ignorait.
  *
  * L'ordre compte : les blocs d'abord, sinon un `//` À L'INTÉRIEUR d'un bloc

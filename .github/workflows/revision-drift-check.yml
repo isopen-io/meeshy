@@ -46,7 +46,7 @@ jobs:
         # que `detect` (docker.yml) lit pour décider de reconstruire l'image
         # gateway (`services/gateway/**`, `packages/shared/**`). Les deux
         # décisions se prennent ainsi sur la même donnée (#5907) : un commit
-        # hors de ce périmètre (ex. `apps/web-v3` pendant #5491) ne peut pas
+        # hors de ce périmètre (ex. `apps/web-v2` pendant #5491) ne peut pas
         # faire rougir la cible, puisqu'il n'aurait de toute façon pas
         # déclenché de nouvelle image ni de redéploiement.
         target:

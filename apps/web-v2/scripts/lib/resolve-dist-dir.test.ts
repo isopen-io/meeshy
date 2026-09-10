@@ -14,30 +14,30 @@ import { resolveDistDir } from './resolve-dist-dir.mjs';
  */
 describe('resolveDistDir — le préchauffage écrit là où le build a construit', () => {
   test('sans argument explicite, retombe sur ../dist relatif au script', () => {
-    expect(resolveDistDir('/repo/web-v3/scripts', [])).toBe(resolve('/repo/web-v3/scripts', '../dist'));
+    expect(resolveDistDir('/repo/web-v2/scripts', [])).toBe(resolve('/repo/web-v2/scripts', '../dist'));
   });
 
   test('un troisième argv absent (bun run script.tsx) retombe aussi sur ../dist', () => {
-    expect(resolveDistDir('/repo/web-v3/scripts', ['bun', 'script.tsx'])).toBe(
-      resolve('/repo/web-v3/scripts', '../dist'),
+    expect(resolveDistDir('/repo/web-v2/scripts', ['bun', 'script.tsx'])).toBe(
+      resolve('/repo/web-v2/scripts', '../dist'),
     );
   });
 
   test('un troisième argv EXPLICITE gagne — la sortie réelle de vite build --outDir', () => {
-    expect(resolveDistDir('/repo/web-v3/scripts', ['bun', 'script.tsx', '/repo/web-v3/dist-capacitor'])).toBe(
-      '/repo/web-v3/dist-capacitor',
+    expect(resolveDistDir('/repo/web-v2/scripts', ['bun', 'script.tsx', '/repo/web-v2/dist-capacitor'])).toBe(
+      '/repo/web-v2/dist-capacitor',
     );
   });
 
   test('un argv EXPLICITE relatif se résout contre le cwd, pas contre `here`', () => {
-    const relatif = resolveDistDir('/repo/web-v3/scripts', ['bun', 'script.tsx', 'dist-capacitor']);
+    const relatif = resolveDistDir('/repo/web-v2/scripts', ['bun', 'script.tsx', 'dist-capacitor']);
     expect(relatif).toBe(resolve('dist-capacitor'));
-    expect(relatif).not.toContain('/repo/web-v3/scripts');
+    expect(relatif).not.toContain('/repo/web-v2/scripts');
   });
 
   test('une chaîne VIDE ne déguise pas une absence — retombe sur ../dist', () => {
-    expect(resolveDistDir('/repo/web-v3/scripts', ['bun', 'script.tsx', ''])).toBe(
-      resolve('/repo/web-v3/scripts', '../dist'),
+    expect(resolveDistDir('/repo/web-v2/scripts', ['bun', 'script.tsx', ''])).toBe(
+      resolve('/repo/web-v2/scripts', '../dist'),
     );
   });
 });

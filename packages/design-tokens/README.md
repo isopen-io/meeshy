@@ -1,6 +1,6 @@
 # `@meeshy/design-tokens` — les jetons CSS du web
 
-Le paquet que la v3.1 (`apps/web-v3`) importe pour se peindre.
+Le paquet que la v3.1 (`apps/web-v2`) importe pour se peindre.
 
 ```
 package.json  le manifeste — c'est lui qui rend le paquet ATTEIGNABLE
@@ -12,13 +12,13 @@ light.css     schéma clair  — porté par .light seulement
 
 | feuille | importée par |
 |---|---|
-| `ios.css` | `apps/web-v3/src/styles/ios.css` |
-| `tokens.css` (donc `dark.css` et `light.css`) | `apps/web-v3/src/styles/app.css`, `apps/web-v3/src/styles/institutional.css` |
+| `ios.css` | `apps/web-v2/src/styles/ios.css` |
+| `tokens.css` (donc `dark.css` et `light.css`) | `apps/web-v2/src/styles/app.css`, `apps/web-v2/src/styles/institutional.css` |
 
 Un franchissement de frontière de paquet se **déclare** : `@meeshy/design-tokens`
 est un workspace, la v3.1 le porte en dépendance, et `docker.yml` reconstruit son
 image quand ce paquet change (`packages/design-tokens/` figure dans la détection
-de `web_v31`). `apps/web-v3/scripts/check-docker-context.mjs` vérifie que
+de `web_v31`). `apps/web-v2/scripts/check-docker-context.mjs` vérifie que
 `.dockerignore` laisse entrer les cinq fichiers.
 
 ## `ios.css` — la palette dérivée
@@ -29,8 +29,8 @@ se régénère.
 
 ```bash
 cd packages/design-tokens && bun run generate:ios   # régénérer
-cd apps/web-v3 && bun run check:tokens              # le CSS généré n'a pas dérivé de Swift — en CI (« Gates web-v3 »)
-cd apps/web-v3 && bun run check:tokens-resolved     # le navigateur PEINT ces valeurs, dans les deux schémas — à la main
+cd apps/web-v2 && bun run check:tokens              # le CSS généré n'a pas dérivé de Swift — en CI (« Gates web-v2 »)
+cd apps/web-v2 && bun run check:tokens-resolved     # le navigateur PEINT ces valeurs, dans les deux schémas — à la main
 ```
 
 ## `tokens.css`, `dark.css`, `light.css` — la table héritée
@@ -53,8 +53,8 @@ un gate :
 - **La table ne bascule pas toute seule.** Aucune feuille ne contient de
   `prefers-color-scheme` (`grep -c prefers-color-scheme packages/design-tokens/*.css`
   rend 0 partout) : le schéma suit la CLASSE, posée par la coquille
-  (`apps/web-v3/index.html`) et corrigée par
-  `apps/web-v3/src/lib/inline-scheme-bootstrap.js`.
+  (`apps/web-v2/index.html`) et corrigée par
+  `apps/web-v2/src/lib/inline-scheme-bootstrap.js`.
 - **Le sombre est porté par `:root`.** Un lecteur sans JavaScript, donc sans
   classe, reçoit un thème complet — le sombre, rendu de référence de la planche
   d'origine. `:root.light` l'emporte par spécificité quel que soit l'ordre des

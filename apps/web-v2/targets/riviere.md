@@ -1,6 +1,6 @@
 > Dossier des cibles de la v3.1 (issue #5672) — analyse de faisabilité produite le 2026-09-08 sur `claude/web-v3-parite` à `0c4141b444`, en lecture seule, contre l'app iOS DRAPEAUX BÊTA ACTIVÉS. Les numéros de ligne cités valent pour ce commit. Captures : `thread.river.*`, `river.scrolled.*`, `river.time-handle.*` dans ce dossier.
 
-# La Rivière — analyse de conception et de faisabilité pour `apps/web-v3` (v3.1)
+# La Rivière — analyse de conception et de faisabilité pour `apps/web-v2` (v3.1)
 
 > Lecture seule ; aucun fichier du dépôt écrit. Dépôt : `/Users/smpceo/Documents/v2_meeshy-w3`,
 > branche `claude/web-v3-parite`. Directive porteur 2026-09-08 : « si c'est possible d'avoir
@@ -18,7 +18,7 @@ dépôt.** Ce n'est pas une écriture, c'est un portage.
 
 La condition n'est ni la donnée ni la loi : c'est **D-15**. La peau React existante monte *toutes* les bulles et
 mesure le `getBoundingClientRect()` de chacune (`apps/web/components/conversations/riviere/RiverThread.tsx:180-200`,
-`:305-330`). Sur le fil de 500 messages que D-15 impose de tenir (`apps/web-v3/decisions.md:308-320`), c'est
+`:305-330`). Sur le fil de 500 messages que D-15 impose de tenir (`apps/web-v2/decisions.md:308-320`), c'est
 exactement le défaut que la virtualisation vient de corriger. **La Rivière entre au périmètre le jour où son tracé
 sait vivre sur une fenêtre virtualisée** — mécanisme qu'iOS possède déjà (`RiverCanvasRankPlacement`,
 `apps/ios/Meeshy/Features/Main/Riviere/View/RiverLaneCanvas.swift:38-51`) et que la peau legacy n'a pas.
@@ -28,14 +28,14 @@ sait vivre sur une fenêtre virtualisée** — mécanisme qu'iOS possède déjà
 | ce qu'il faut | où ça vit | la v3.1 peut-elle le lire ? |
 |---|---|---|
 | `activeParticipantCount` (éligibilité) | **n'existe pas** — la passerelle sert `activeParticipantCount: null` (`services/gateway/src/routes/conversations/core-list.ts:665`, commenté `:664` « aucun décompte serveur honnête d'"actif" — JAMAIS 0 ») | non, et **ce n'est pas ce qu'iOS lit** |
-| `memberCount` (ce qu'iOS lit RÉELLEMENT dans le fil) | `packages/shared/types/conversation.ts:330` ; servi par `GET /conversations/:id` (`core-detail.ts:191`, `:218` `memberCount: ['_count']`) ; au schéma `packages/shared/types/api-schemas/conversation.ts:244` | **OUI, déjà lu** : `apps/web-v3/src/routes/thread.tsx:361` l'affiche, `src/lib/api/fixtures.ts:331` le porte |
-| messages (`id`, `senderId`, `createdAt`, `replyToId`, `messageSource`, `isDeleted`) | `@meeshy/shared/types/conversation` → `Message`, réexporté par `apps/web-v3/src/lib/api/types.ts:24` | **OUI** — `fixtures.ts:126` (`messageSource`), `:255-256` (`replyToId` + `replyTo`) |
+| `memberCount` (ce qu'iOS lit RÉELLEMENT dans le fil) | `packages/shared/types/conversation.ts:330` ; servi par `GET /conversations/:id` (`core-detail.ts:191`, `:218` `memberCount: ['_count']`) ; au schéma `packages/shared/types/api-schemas/conversation.ts:244` | **OUI, déjà lu** : `apps/web-v2/src/routes/thread.tsx:361` l'affiche, `src/lib/api/fixtures.ts:331` le porte |
+| messages (`id`, `senderId`, `createdAt`, `replyToId`, `messageSource`, `isDeleted`) | `@meeshy/shared/types/conversation` → `Message`, réexporté par `apps/web-v2/src/lib/api/types.ts:24` | **OUI** — `fixtures.ts:126` (`messageSource`), `:255-256` (`replyToId` + `replyTo`) |
 | participants (graine de couleur) | **aucun fetch** : iOS les dérive des EXPÉDITEURS (`RiverConversationMapping.swift:78-81`) | **OUI**, et heureusement : `participants` est tronqué à cinq par la passerelle (`src/lib/view/conversation.ts:49`) |
 | couloirs par participant | **calculés**, jamais servis — `resolveRiverLanes()` (`packages/shared/utils/river-lanes.ts:603`) | **OUI** |
 
 **G-123 ne bloque pas la Rivière.** G-123 est le lot passerelle du « pont ✦ »
 (`packages/shared/types/conversation.ts:405`, `core-list.ts:571`) ; il porte `activeParticipantCount: null` faute de
-définition serveur d'« actif ». Le commentaire de `apps/web-v3/src/lib/reading-mode/decision.ts:42-46` (« la v3.1 n'a
+définition serveur d'« actif ». Le commentaire de `apps/web-v2/src/lib/reading-mode/decision.ts:42-46` (« la v3.1 n'a
 AUCUNE source de ce compte aujourd'hui — comme iOS avant G-123 ») est **exact pour les surfaces de LISTE**
 (`LentilleReadingModeContext.activeParticipantCount(for:)` rend `nil`,
 `apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleReadingModeContext.swift:65-67`, qui se déclare « INERTE EN
@@ -124,7 +124,7 @@ d'arbitrage. **Découpable en quatre travaux** (§ 8.4).
 
 **iOS** — les 14 fichiers de `apps/ios/Meeshy/Features/Main/Riviere/` (4 284 l ; volumes par fichier en § 0.2), dont `Core/RiverLaneResolver.swift` **lu en entier** ; le montage et la porte : `Views/ConversationView.swift:540-600`, `:603`, `:1144`, `:1415-1512`, `:2029` ; `Focal/Core/ReadingModeOrchestrator.swift:142`, `:405-460` ; `Lentille/Mode/LentilleReadingModeContext.swift:45-99` ; `Lentille/Core/LentilleFeatureFlag.swift:1-80`.
 
-**Partagé** — `utils/river-lanes.ts` (1 044, **lu en entier**), `utils/reading-modes.ts:200-360`, `design/lentille-tokens.json` → `river`, `fixtures/reading-modes/river-*.vectors.json`, `__tests__/river-lanes.test.ts`, `__tests__/vectors/river-*.vectors.test.ts`, `types/conversation.ts:330`, `types/api-schemas/conversation.ts:244`, `package.json`. **Passerelle** — `routes/conversations/core-list.ts:571`, `:664-665` ; `core-detail.ts:118`, `:191`, `:208-233`. **Legacy web** — les 9 fichiers de `apps/web/components/conversations/riviere/` (1 252 l) + 952 l de témoins ; `apps/web/styles/lentille-tokens.css:160-205`. **v3.1** — `src/lib/reading-mode/{decision,catalog,metrics}.ts`, `src/routes/thread.tsx` (610), `decisions.md` (D-8 `:102`, D-13 `:208`, D-14 `:253`, D-15 `:308`, D-19 `:586`), `budgets.json`, `vite.config.ts:363-380`, `src/lib/api/{types,fixtures,prism}.ts`, `src/styles/ios.css:23` ; `.cache/web-v3-workflow/specs/thread.md` (`:24`, `:30-33`, `:69-74`, `:123-124`, `:225-229`).
+**Partagé** — `utils/river-lanes.ts` (1 044, **lu en entier**), `utils/reading-modes.ts:200-360`, `design/lentille-tokens.json` → `river`, `fixtures/reading-modes/river-*.vectors.json`, `__tests__/river-lanes.test.ts`, `__tests__/vectors/river-*.vectors.test.ts`, `types/conversation.ts:330`, `types/api-schemas/conversation.ts:244`, `package.json`. **Passerelle** — `routes/conversations/core-list.ts:571`, `:664-665` ; `core-detail.ts:118`, `:191`, `:208-233`. **Legacy web** — les 9 fichiers de `apps/web/components/conversations/riviere/` (1 252 l) + 952 l de témoins ; `apps/web/styles/lentille-tokens.css:160-205`. **v3.1** — `src/lib/reading-mode/{decision,catalog,metrics}.ts`, `src/routes/thread.tsx` (610), `decisions.md` (D-8 `:102`, D-13 `:208`, D-14 `:253`, D-15 `:308`, D-19 `:586`), `budgets.json`, `vite.config.ts:363-380`, `src/lib/api/{types,fixtures,prism}.ts`, `src/styles/ios.css:23` ; `.cache/web-v2-workflow/specs/thread.md` (`:24`, `:30-33`, `:69-74`, `:123-124`, `:225-229`).
 
 ---
 
@@ -387,7 +387,7 @@ servirait "Hello" alors que "Bonjour" vient d'arriver : **c'est le pire des troi
 lui-même** ». `ContentsKey` porte donc les RÉSULTATS des trois closures (texte, présence, anneau), jamais les
 closures.
 
-**Pour la v3.1, la descente existe déjà** : `apps/web-v3/src/lib/api/prism.ts:52` appelle `resolvePrismTranslation` de
+**Pour la v3.1, la descente existe déjà** : `apps/web-v2/src/lib/api/prism.ts:52` appelle `resolvePrismTranslation` de
 `@meeshy/shared` (D-14, `decisions.md:253-270`). **Le portage du Prisme en Rivière coûte zéro ligne nouvelle** — c'est
 l'appel que `thread.tsx` fait déjà. Un manque à noter : la bulle de rivière iOS **ne rend que du texte** — aucun
 conteneur média, aucun lecteur audio, explicitement et assumé (`RiverConversationMapping.swift:256-273`, « la bulle de
@@ -398,7 +398,7 @@ sur iOS ni sur le web.
 
 ## 7. Élément iOS → v3.1 : où en est-on
 
-| élément | iOS | legacy `apps/web` | **`apps/web-v3`** |
+| élément | iOS | legacy `apps/web` | **`apps/web-v2`** |
 |---|---|---|---|
 | la loi (`resolveRiverLanes`) | miroir Swift 1 047 l | **importée** de `@meeshy/shared` | ✅ **importée** (`geometry.ts`, 2026-09-08, #5696) |
 | `resolveRiverStep` / `…LaneHeaders` | ✅ | ✅ (`RiverThread.tsx:80`, `:216`) | ✅ consommées par les vecteurs (`geometry.test.ts`, 2026-09-08) — pas encore par un rendu |
@@ -444,7 +444,7 @@ aujourd'hui », le libellé FAUX qu'iOS montre drapeau `riviere_mode` OFF sur un
 ### 8.1 Fichiers web à créer (noms anglais, D-13)
 
 ```
-apps/web-v3/src/lib/river/          (pur, sans DOM — le pendant de Core/ iOS)
+apps/web-v2/src/lib/river/          (pur, sans DOM — le pendant de Core/ iOS)
   geometry.ts  ~150   messages → resolveRiverLanes() ; RECHERCHE de fenêtre de silence
                       (RiverConversationMapping.swift:127-164) ; groupPositions ;
                       initialCursor ; cursorForMessageId ; isAtPresent
@@ -456,7 +456,7 @@ apps/web-v3/src/lib/river/          (pur, sans DOM — le pendant de Core/ iOS)
   navigation.ts ~ 90  curseur : resolveRiverStep + moveTo + edgeBounce
   *.test.ts    ~380   dont les 61 VECTEURS partagés rejoués
 
-apps/web-v3/src/components/river/   (la peau — le pendant de View/ iOS)
+apps/web-v2/src/components/river/   (la peau — le pendant de View/ iOS)
   river-thread.tsx  ~380  hôte : grille, role=grid, VIRTUALISATION, gestes
   river-bubble.tsx  ~260  bulle + groupe partagé + avis système + identité
   river-lanes.tsx   ~140  overlay SVG
@@ -474,7 +474,7 @@ la garde R15 fait respecter côté iOS.
 les quatre constantes et tous les types depuis `@meeshy/shared/utils/river-lanes` ; `FOCUS_BAND_OFFSET`
 (`utils/focus-curve`) ; `colorForName` (`utils/conversation-colors`) ; `resolvePrismTranslation`
 (`utils/conversation-helpers`). Le sous-chemin `./utils/*` est exporté (`packages/shared/package.json`), et
-`apps/web-v3/src/lib/api/prism.ts:3` prouve que la chaîne fonctionne déjà.
+`apps/web-v2/src/lib/api/prism.ts:3` prouve que la chaîne fonctionne déjà.
 
 **Les cotes de peau demandent un arbitrage.** Elles vivent dans `lentille-tokens.json` → `river`, que le legacy
 consomme via `apps/web/styles/lentille-tokens.css:163-205` — mais **la v3.1 n'importe pas ce fichier** : elle importe

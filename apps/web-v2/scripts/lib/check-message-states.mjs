@@ -127,7 +127,7 @@ export async function checkMessageStates({ browser, BASE, expect, setScheme, AA_
     /* `pinned` (`--ios-pinned`) ET `edited` (le cran méta) sont QUANTIFIÉS,
        jamais exigés à l'AA_THRESHOLD (revue-correction #5936, défaut majeur
        9) — mesuré 3,68:1 / 2,21:1 en clair, un défaut de la CIBLE iOS, pas
-       de web-v3 (`expectQuantifiedContrast`, § doc-comment). Seul
+       de web-v2 (`expectQuantifiedContrast`, § doc-comment). Seul
        `forwarded` (le cran `textMuted`) tient l'AA — c'est le cran que la
        revue a laissé passer. */
     await expectQuantifiedContrast(page, `[data-message="st-badges"] [data-badge="pinned"]`, label, 'contraste du badge épinglé', expect);
@@ -214,7 +214,7 @@ export async function checkMessageStates({ browser, BASE, expect, setScheme, AA_
        (`--color-ios-ink-2` × `META_TEXT_OPACITY`, remplaçant le littéral
        `--color-meta` de la régression F-083) — le MÊME cran que « modifié »
        ci-dessus, donc `expectQuantifiedContrast` : QUANTIFIÉ, pas exigé à
-       l'AA (défaut majeur 9, un gap de la CIBLE iOS, pas de web-v3). */
+       l'AA (défaut majeur 9, un gap de la CIBLE iOS, pas de web-v2). */
     await expectQuantifiedContrast(page, `[data-message="${id}"] [data-system] time`, label, `${id} : contraste de l'heure système`, expect);
     await expectQuantifiedContrast(page, `[data-message="${id}"] [data-system] > span`, label, `${id} : contraste du texte système`, expect);
   }

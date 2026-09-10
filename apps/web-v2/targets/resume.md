@@ -1,10 +1,10 @@
 > Dossier des cibles de la v3.1 (issue #5672) — analyse de faisabilité produite le 2026-09-08 sur `claude/web-v3-parite` à `fa980709f0`, en lecture seule, contre l'app iOS DRAPEAUX BÊTA ACTIVÉS. Les numéros de ligne cités valent pour ce commit. Captures : `thread.summary.*` dans ce dossier.
 
-# Le Résumé Vivant (`summary`) — analyse de conception et de faisabilité pour `apps/web-v3`
+# Le Résumé Vivant (`summary`) — analyse de conception et de faisabilité pour `apps/web-v2`
 
 Analyse en LECTURE SEULE. Dépôt `/Users/smpceo/Documents/v2_meeshy-w3`, branche `claude/web-v3-parite`.
 Objet : décider si le mode de lecture RÉSUMÉ de l'app iOS peut entrer TOUT DE SUITE au périmètre de la v3.1
-web, et donc si D-8 (`apps/web-v3/decisions.md:102`) se rouvre.
+web, et donc si D-8 (`apps/web-v2/decisions.md:102`) se rouvre.
 
 ---
 
@@ -123,10 +123,10 @@ mode-de-lecture du tour 1 (`decision.ts` 172 + `catalog.ts` 113 + `store.ts` 143
 `shared/utils/{reading-modes,mention-parser,conversation-helpers,user-presence}.ts`,
 `shared/types/{reading-modes,conversation}.ts`, `shared/prisma/schema.prisma:4112-4133`,
 `shared/fixtures/reading-modes/` (13 vecteurs).
-**web-v3** : `src/lib/reading-mode/*`, `src/routes/thread.tsx`, `src/lib/api/*`,
+**web-v2** : `src/lib/reading-mode/*`, `src/routes/thread.tsx`, `src/lib/api/*`,
 `src/lib/{reader,grouping,accent}.ts`, `src/lib/view/conversation.ts`,
 `src/components/{avatar,reading-mode-chip}.tsx`, `scripts/check-reading-mode.mjs`, `decisions.md`,
-`package.json`, `budgets*.json`, et la spécification du tour 1 `.cache/web-v3-workflow/specs/thread.md`.
+`package.json`, `budgets*.json`, et la spécification du tour 1 `.cache/web-v2-workflow/specs/thread.md`.
 
 > État de l'arbre : SALE — un autre agent écrit `config.ts`, `decision.ts`, `thread.tsx`,
 > `vite.config.ts`, `decisions.md`, `README.md`. Les citations de ces fichiers portent sur le
@@ -357,9 +357,9 @@ c'est le genre de détail que le § Prisme du `CLAUDE.md` demande d'énumérer p
 
 ---
 
-## 7. Élément iOS → web-v3
+## 7. Élément iOS → web-v2
 
-| élément iOS | équivalent web-v3 |
+| élément iOS | équivalent web-v2 |
 |---|---|
 | `EpisodeSegmenter`, `DeterministicDigestBuilder`, `FaceRampRanking`, `LivingSummaryAssembly`, les 9 types de `LivingSummaryModels` | **ABSENTS** — et absents aussi de `@meeshy/shared` (grep = 0) |
 | `LivingSummaryView`, `FaceRampView`, `EpisodeListView`, `LivingSummaryViewModel`, `LivingSummaryHost`, `ConversationAnalysisProviding` | **ABSENTS** — et aucun client HTTP de conversation dans la v3.1 (fixtures) |
@@ -425,7 +425,7 @@ n'existe aucun `*.vectors.json` de digest** — la parité se prouve par la tran
 
 ### Le gate
 
-`bun run gate` (`apps/web-v3/package.json:11`) enchaîne 15 vérifications. Deux touchent le Résumé :
+`bun run gate` (`apps/web-v2/package.json:11`) enchaîne 15 vérifications. Deux touchent le Résumé :
 - **`scripts/check-reading-mode.mjs:287-293` DEVIENDRA ROUGE** : il exige aujourd'hui
   `(await summaryRow.isDisabled()) === true` et « Résumé porte une raison NON VIDE ». À **inverser
   dans le même commit** — sinon on livre un gate qui ment. Nouvelle forme : Résumé ACTIF pour un

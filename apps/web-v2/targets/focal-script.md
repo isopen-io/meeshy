@@ -46,13 +46,13 @@ ciblées : mux bulle/rangée, construction de `FocalRowInput`, passe de défilem
 §3.6 entrée de rangée, §4 la passe, §5 invité/inscrit), `tasks/lentille-focal-workshop.md`,
 `tasks/lentille-workshop-execution.md`. Vocabulaire et intentions ; jamais la cible.
 
-**web-v3.** `src/routes/thread.tsx` (610 l), `src/components/{focal-row, message-blocks,
+**web-v2.** `src/routes/thread.tsx` (610 l), `src/components/{focal-row, message-blocks,
 reading-mode-chip, bubble}.tsx`, `src/lib/reading-mode/{decision, catalog, store, sync, perspective,
 scene, meta, metrics}.ts` **et leurs tests** (`scene.ts` et `metrics.ts` sont les deux seuls sans
 témoin dédié), `src/lib/{grouping, reader}.ts`, `src/lib/view/{message, conversation}.ts`,
 `src/lib/api/{prism, types}.ts`, `scripts/check-reading-mode.mjs` (+ inventaire des 23 scripts et du
-gate composite `package.json:16`), `apps/web-v3/decisions.md` (615 l), `apps/web-v3/README.md`,
-`.cache/web-v3-workflow/specs/thread.md` (449 l), `.github/workflows/ci.yml` (jobs web-v3).
+gate composite `package.json:16`), `apps/web-v2/decisions.md` (615 l), `apps/web-v2/README.md`,
+`.cache/web-v2-workflow/specs/thread.md` (449 l), `.github/workflows/ci.yml` (jobs web-v2).
 
 ## 2. Le drapeau et la loi
 
@@ -70,7 +70,7 @@ gate composite `package.json:16`), `apps/web-v3/decisions.md` (615 l), `apps/web
 
 ⇒ **Sur une installation neuve, le drapeau est OFF et le tap normal ouvre en BULLES.**
 C'est très exactement l'état que D-7 qualifie d'« écart assumé avec iOS **en pratique** »
-(`apps/web-v3/decisions.md:98-100`) — voir § 11.
+(`apps/web-v2/decisions.md:98-100`) — voir § 11.
 
 Drapeau ON, `ConversationView.init` monte tout en **une seule fois**
 (`Views/ConversationView.swift:555-582`) :
@@ -143,14 +143,14 @@ La traduction mode rendu ⇄ préférence a UN domicile : `ReadingModePreference
 
 ### 2.4 L'écriture serveur (D-10)
 
-`apps/web-v3/src/lib/reading-mode/sync.ts` définit la FORME du port :
+`apps/web-v2/src/lib/reading-mode/sync.ts` définit la FORME du port :
 `pushPreference(transport, conversationId, preference)` compose le `PUT
 /api/v1/user-preferences/conversations/:id` avec le corps `{ readingMode }` seul (`sync.ts:31-41`), et
 `applyRemotePreference` arbitre par version (`incoming.version <= local ⇒ drop`, `:65-72`).
 Les deux routes citées existent réellement (`services/gateway/src/routes/conversation-preferences.ts:191` et `:349`).
 
 > **Mais `sync.ts` n'a AUCUN consommateur** : `grep -rn "reading-mode/sync\|pushPreference\|applyRemotePreference"`
-> sur `apps/web-v3/src` et `apps/web-v3/scripts` ne rend que le fichier lui-même et son test.
+> sur `apps/web-v2/src` et `apps/web-v2/scripts` ne rend que le fichier lui-même et son test.
 > D-10 (`decisions.md:131-139`, « la v4 devient le premier client qui écrit ») est donc, à ce jour,
 > **une promesse de forme, pas un comportement** : rien n'écrit vers le serveur, et le magasin local
 > `localStorage` (`store.ts:35-38`, clés `meeshy.reading-mode.<scope>.<id>`) est seul.
@@ -533,7 +533,7 @@ indisponible pour TOUT lecteur avec la raison « Pas encore disponible sur le we
 
 ## 6. États
 
-| état | iOS (drapeau ON) | web-v3 |
+| état | iOS (drapeau ON) | web-v2 |
 |---|---|---|
 | fil vide | `FocalConversationStartRow` (`Row/FocalConversationStartRow.swift:11-49`) : glyphe, « Début de la conversation avec X », libellé de jour du 1ᵉʳ message | écran vide dédié `thread.tsx:473-490` (titre + phrase) — **pas** de rangée « début de conversation » |
 | chargement | hauteur estimée + auto-dimensionnement ; `estimatedFlatRowLayoutHeight = 150`, apprise ensuite (`MessageListViewController.swift:416`, `:3000-3009`) | **absent** (fixtures synchrones) — aucun squelette |
@@ -559,7 +559,7 @@ indisponible pour TOUT lecteur avec la raison « Pas encore disponible sur le we
 
 ## 7. Gestes
 
-| geste | iOS | web-v3 |
+| geste | iOS | web-v2 |
 |---|---|---|
 | tap avatar / nom | `Button(.plain)` → `onOpenProfile(profileSheetUser)` (`FocalIdentityHeader.swift:101-108`), routé vers profil ou fiche de participation | **inerte** — `Avatar` est un `<span>` (`avatar.tsx`), aucun `onClick` |
 | tap drapeau | `LanguageFlagChip` → `onSetActiveDisplayLanguageForGroup` (groupe entier) (`FocalRow.swift:1075-1083`) | `Flags` → `setOpenLanguage` **local à la rangée** (`message-blocks.tsx:151-182`) : ouvre un panneau `SecondaryText` SOUS le texte au lieu de remplacer le texte servi |
@@ -591,7 +591,7 @@ Les drapeaux portent trait `.isSelected` + « Afficher en <langue> » via `.lang
 Dynamic Type : toutes les tailles passent par `MeeshyFont.relative(...)`, et `minWidth` (jamais
 `width`) sur la colonne méta est motivé par XXL (`FocalMetrics.swift:355-364`).
 
-**web-v3.** Points forts, dont certains **absents d'iOS** : `lang={rendered.language}` sur le
+**web-v2.** Points forts, dont certains **absents d'iOS** : `lang={rendered.language}` sur le
 paragraphe servi (`focal-row.tsx:197`) et sur le texte secondaire (`message-blocks.tsx:208`) — un
 lecteur d'écran ne prononce plus du français avec une voix anglaise ; `<time dateTime>` (`:245`) ;
 `aria-label` sur la citation (`message-blocks.tsx:241`), `aria-pressed` sur la pastille (`:66`) et les
@@ -609,7 +609,7 @@ les actions nommées, tout rôle sur la rangée elle-même, et le pendant du `ac
 
 Verdict exigeant : **un contrôle sans effet est « absent ».**
 
-| élément | iOS (`fichier:ligne`) | web-v3 (`fichier:ligne`) | verdict |
+| élément | iOS (`fichier:ligne`) | web-v2 (`fichier:ligne`) | verdict |
 |---|---|---|---|
 | loi d'orchestration | `ReadingModeOrchestrator.swift:288-318` | importée : `decision.ts:2,97-104` | **conforme** |
 | catalogue de capacités | `ReadingModeOrchestrator.swift:411-451` | importé + intersecté `decision.ts:48-62` | **conforme** |
@@ -693,7 +693,7 @@ Verdict exigeant : **un contrôle sans effet est « absent ».**
 
 ---
 
-## 11. Contradictions avec `apps/web-v3/decisions.md`
+## 11. Contradictions avec `apps/web-v2/decisions.md`
 
 ### 11.1 D-7 — « écart assumé avec iOS EN PRATIQUE » ne tient plus tel quel
 

@@ -11,11 +11,11 @@
 |---|---|---|
 | `apps/web` (legacy) | **80** | **la PRODUCTION, seule — 100 % du trafic utilisateur** |
 | `apps/web-old-version3` | 48 | n'a jamais servi un écran ; **annulée** le 2026-09-07, quitte le dépôt avec #5882 |
-| `apps/web-v3` (la v3.1) | **14** — 9 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
+| `apps/web-v2` (la v3.1) | **14** — 9 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
 
 **L'ancienne refonte n'a jamais servi un seul écran à un utilisateur réel.**
 
-> **Correction du 2026-09-08 (#5669).** Ce tableau a porté « `apps/web-v3` — 0 —
+> **Correction du 2026-09-08 (#5669).** Ce tableau a porté « `apps/web-v2` — 0 —
 > nulle part encore » pendant tout le cadrage de #5492, et c'était FAUX : la
 > v3.1 servait déjà quatre écrans et cinq documents. Le script n'énumérait que
 > la convention Next.js (`page.tsx` / `route.ts`), que la v3.1 n'a pas — ses
@@ -90,7 +90,7 @@ Trois conséquences, et elles portent tout le reste de ce document :
 tourner et reçoit tout ce que la v4 ne réclame pas nommément.
 
 ```
-Traefik  ──▸ apps/web-v3   sur les chemins de la V4.0.0 (priority haute)
+Traefik  ──▸ apps/web-v2   sur les chemins de la V4.0.0 (priority haute)
          └─▸ apps/web      TOUT LE RESTE  (défaut, inchangé)
 ```
 

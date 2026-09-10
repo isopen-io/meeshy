@@ -1,4 +1,4 @@
-> Captures de RÉFÉRENCE de la v3.1 (issue #5672, D-20) — prises le 2026-09-08 sur l'app iOS NATIVE (build 1800, version 1.0.7) au simulateur « Meeshy Poc-Web-V31 » (iPhone 16 Pro, iOS 26.1), DRAPEAUX BÊTA ACTIVÉS (preuve : `settings.beta.*.png`). Les PNG de ce dossier sont réduits à 388 × 844 (l'échelle logique de l'appareil) ; les originaux à 3× vivent hors dépôt (`.cache/web-v3-workflow/cibles-on/`, non versionné). Chaque `*.png` a son `*.a11y.txt` : l'arbre d'accessibilité complet pris au même instant (`idb ui describe-all`).
+> Captures de RÉFÉRENCE de la v3.1 (issue #5672, D-20) — prises le 2026-09-08 sur l'app iOS NATIVE (build 1800, version 1.0.7) au simulateur « Meeshy Poc-Web-V31 » (iPhone 16 Pro, iOS 26.1), DRAPEAUX BÊTA ACTIVÉS (preuve : `settings.beta.*.png`). Les PNG de ce dossier sont réduits à 388 × 844 (l'échelle logique de l'appareil) ; les originaux à 3× vivent hors dépôt (`.cache/web-v2-workflow/cibles-on/`, non versionné). Chaque `*.png` a son `*.a11y.txt` : l'arbre d'accessibilité complet pris au même instant (`idb ui describe-all`).
 
 # Écrans CIBLES de l'app iOS Meeshy — drapeaux bêta **ACTIVÉS**
 
@@ -12,7 +12,7 @@ définit : « la vue Lentille, les messages Focal, Script et Bulle, avec les der
 - **Compte** : `cible-web-trois` (A) sur **staging**, session déjà ouverte, conservée.
 - **Données** : voir `seed.md` (7 conversations + « Salon Rivière » à 5 membres et 40 messages).
 - **Langue de l'app** : française (le compte a `systemLanguage: fr`). Les captures drapeaux ÉTEINTS de
-  `.cache/web-v3-workflow/cibles/` sont en ANGLAIS — c'est un écart de session, pas un effet des drapeaux ;
+  `.cache/web-v2-workflow/cibles/` sont en ANGLAIS — c'est un écart de session, pas un effet des drapeaux ;
   ne pas le lire comme une différence ON/OFF.
 
 ---
@@ -112,7 +112,7 @@ Le fil de référence est **Équipe Produit** (4 messages, groupe de 2) pour Foc
 
 ## 3. Ce qui DIFFÈRE des captures drapeaux ÉTEINTS
 
-Référence lue : `.cache/web-v3-workflow/cibles/conversations.light.png` et `…/thread.message.light.png`.
+Référence lue : `.cache/web-v2-workflow/cibles/conversations.light.png` et `…/thread.message.light.png`.
 
 ### La liste — `conversations.light.png` (OFF) → `lentille.light.png` (ON)
 

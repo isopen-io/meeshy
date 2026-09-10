@@ -6,7 +6,7 @@ Analyse de conception, **lecture seule**, produite le 2026-09-08 sur le worktree
 `/Users/smpceo/Documents/v2_meeshy-w3`, branche `claude/web-v3-parite`. Aucun fichier du dépôt n'a
 été écrit. La directive porteur du 2026-09-08 pose que la cible de la v3.1 est **l'app iOS avec ses
 dernières features ACTIVÉES** — Lentille, Focal, Script, Bulles. Ce document décrit donc la liste de
-conversations iOS **drapeau `lentille_list` ON**, puis mesure ce que `apps/web-v3` en implémente.
+conversations iOS **drapeau `lentille_list` ON**, puis mesure ce que `apps/web-v2` en implémente.
 
 Toute cote citée vient de `LentilleMetrics.swift`, de `packages/shared/design/lentille-tokens.json`
 ou de `packages/design-tokens/` ; là où aucune source n'existe, le texte écrit « à lire dans … »
@@ -70,7 +70,7 @@ plutôt que d'inventer un chiffre.
 - `packages/design-tokens/` — `ios.css` (127 l), `tokens.css` (118 l), `light.css`, `dark.css` :
   **aucun jeton `lentille`/`lens` n'y existe** (grep sans résultat).
 
-### web-v3
+### web-v2
 
 `src/routes/conversations.tsx` (1–302, intégral) · `src/components/lens-row.tsx` (1–322, intégral) ·
 `src/components/row-actions.tsx` (1–266, intégral) · `src/components/avatar.tsx` (1–93, intégral) ·
@@ -80,9 +80,9 @@ plutôt que d'inventer un chiffre.
 `src/lib/api/prism.ts` (1–63) · `src/lib/api/preferences.ts` (:7–80, survol) ·
 `src/lib/api/fixtures.ts` (:317–450 + inventaire de champs) · `src/lib/grouping.ts` (:74–76) ·
 `scripts/check-lens.mjs` (1–184, intégral) · `scripts/check-curve.mjs` (1–60 + cibles) ·
-`scripts/check-list-actions.mjs` (survol structurel) · `apps/web-v3/decisions.md` (D-9, D-14, D-17,
-+ index D-1→D-19) · `apps/web-v3/README.md` (survol) ·
-`.cache/web-v3-workflow/specs/conversations.md` (1–40, 104–175, 402–468).
+`scripts/check-list-actions.mjs` (survol structurel) · `apps/web-v2/decisions.md` (D-9, D-14, D-17,
++ index D-1→D-19) · `apps/web-v2/README.md` (survol) ·
+`.cache/web-v2-workflow/specs/conversations.md` (1–40, 104–175, 402–468).
 
 ### Histoire (survol, jamais comme cible)
 
@@ -616,9 +616,9 @@ UNIQUE, optimiste.
 
 ---
 
-## 8. Ce que web-v3 a DÉJÀ, élément par élément
+## 8. Ce que web-v2 a DÉJÀ, élément par élément
 
-| élément iOS (fichier:ligne) | web-v3 (fichier:ligne) | verdict |
+| élément iOS (fichier:ligne) | web-v2 (fichier:ligne) | verdict |
 |---|---|---|
 | Drapeau `lentille_list`, défaut OFF, programme bêta (`LentilleFeatureFlag.swift:173-192`) | aucun drapeau — la Lentille est la seule peau (`decisions.md:111-129`) | divergent (assumé, D-9 — voir §10) |
 | Hauteur de layout 84, hauteur visuelle 100, double `frame` (`LentilleMetrics.swift:35`, `:211` ; `LentilleConversationRow.swift:166-167`) | `ROW_HEIGHT = 84`, `VISUAL_HEIGHT = 100`, `OVERHANG = 8`, `top: -8` (`lens-row.tsx:45-49`, `:171-174`) | **conforme** |
@@ -660,7 +660,7 @@ UNIQUE, optimiste.
 | Prisme sur l'aperçu de liste (`resolvedLastMessagePreview`, `:574-576`) | `served()` sur `lastMessageTranslations` + `lang` sur le texte servi (`lens-row.tsx:122-127`, `:284` ; `prism.ts:38-63`) | **conforme, et plus complet** (l'attribut `lang`) |
 | Prisme du lecteur, 4 rangs ordonnés | `resolveUserLanguagesOrdered` (`reader.ts:49-52`) | **conforme** |
 | Accent de conversation calculé par la loi partagée | `conversationAccentPalette` (`accent.ts:26-30`), posé en `--accent` | **conforme** |
-| Pont ✦ complet (`LentilleBridgeLine.swift`, `LentilleBridgeFormatter.swift`, providers) | **rien** (grep `bridge` dans `apps/web-v3/src` : zéro) | **absent** |
+| Pont ✦ complet (`LentilleBridgeLine.swift`, `LentilleBridgeFormatter.swift`, providers) | **rien** (grep `bridge` dans `apps/web-v2/src` : zéro) | **absent** |
 | Magnification : catégorie ACTIONNABLE (`LentilleMagnification.swift:120-179`) | chip statique « Groupe »/« Direct » (`lens-row.tsx:213-218`) | **absent** — un libellé de type, pas un contrôle |
 | Magnification : étiquettes NOMMÉES actionnables (`:187-248`) | absent ; un glyphe « Archivée » à la place (`lens-row.tsx:219-221`) | **absent** |
 | Magnification : pastille de mode de lecture (`:263-342`) | absent de la liste (`ReadingModeChip` existe mais n'est monté qu'au fil) | **absent** |
@@ -669,7 +669,7 @@ UNIQUE, optimiste.
 | Magnification : aperçu sur 2 lignes (`:655`) | `line-clamp-2` quand magnifiée (`lens-row.tsx:272`) | **conforme** |
 | Supplément non lu / non cliquable au repos | `aria-hidden`, `pointerEvents: none`, `height: 0`, `opacity: 0` (`lens-row.tsx:204-222`, `:288-300`) | **conforme, et bien fait** |
 | Swipes leading/trailing (9 actions max) (`ConversationListView.swift:945-1040`) | menu ancré, 4 actions (`row-actions.ts:32-43` ; `row-actions.tsx:76-266`) | divergent **assumé** (D-17) ; verrou / blocage / masquage **absents** |
-| Menu contextuel d'appui long, 10 items + aperçu des derniers messages (`+Overlays.swift:79-210` ; `+Rows.swift:139-174`) | **absent** (aucun `contextmenu`/long-press dans `apps/web-v3/src`) | **absent** |
+| Menu contextuel d'appui long, 10 items + aperçu des derniers messages (`+Overlays.swift:79-210` ; `+Rows.swift:139-174`) | **absent** (aucun `contextmenu`/long-press dans `apps/web-v2/src`) | **absent** |
 | Actions à EFFET | store optimiste zustand (`conversation-store.ts:61-77`) ; effet prouvé par `check-list-actions.mjs` | **conforme** |
 | Glisser-déposer vers une section | absent (pas de sections) | absent |
 | Rail stories : entrée « moi » + (+) + humeur, ≤ 6, anneau non-vu/live, couverture (`StoriesVivantsRail.swift:170-460`) | rail d'**accès rapide** : toutes les conversations non archivées, avatar 72 dans une tuile de 88, anneau si non lu, lien vers le fil (`conversations.tsx:121-153`) | **absent** — objet différent, pas des stories |
@@ -823,7 +823,7 @@ sur sa propre troisième ligne (`:383-418`) ; le préfixe « Auteur : » teinté
 
 ### D-9 — ce que la directive du 2026-09-08 change à son texte
 
-D-9 se termine ainsi (`apps/web-v3/decisions.md:128-129`) :
+D-9 se termine ainsi (`apps/web-v2/decisions.md:128-129`) :
 
 > *« Écart assumé avec iOS, où le drapeau `lentille_list` est désactivé par défaut : les
 > utilisateurs iOS ne voient pas la lentille, les utilisateurs web la verront. »*
@@ -872,12 +872,12 @@ La conclusion de D-17 (mettre un glyphe) est donc **plus juste que son raisonnem
 raisonnement, tel qu'écrit, justifie aussi l'abandon des sections, et c'est cette moitié-là qui
 tombe avec la directive du 2026-09-08 (§9, écart 6).
 
-Même remarque, plus nette, sur **la sourdine**. `apps/web-v3/src/lib/lens/law.ts:149-155` affirme :
+Même remarque, plus nette, sur **la sourdine**. `apps/web-v2/src/lib/lens/law.ts:149-155` affirme :
 
 > *« le SEUL rendu de la sourdine sur la peau Lentille (contrat §4.3, cité par
 > `LentilleConversationRow.rowOpacity`) : pas de glyphe cloche sur le rang plat »*
 
-et la spécification du tour 1 le répète mot pour mot (`.cache/web-v3-workflow/specs/conversations.md`
+et la spécification du tour 1 le répète mot pour mot (`.cache/web-v2-workflow/specs/conversations.md`
 l. 108-109). **C'est faux** : `LentilleConversationRow.swift:305-309` rend `Text("🔕")` après le nom,
 avec le commentaire « affordance manquante à l'audit, contrat §4.3 “muted” ». Les deux textes web
 citent le contrat, pas le code — et le contrat est antérieur au correctif.

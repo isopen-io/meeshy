@@ -87,7 +87,7 @@ import { waitForFlattenFade, waitForRevealedOpacity } from './lib/scene-polling.
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
 const DIST = join(APP, 'dist');
-const CAPTURES = join(APP, '..', '..', '.cache', 'web-v3-workflow', 'rendus');
+const CAPTURES = join(APP, '..', '..', '.cache', 'web-v2-workflow', 'rendus');
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript',
@@ -851,7 +851,7 @@ const noRowCarriesContinuousPerspective = (page) =>
    * ci-dessus ne pouvait faire échouer AUCUNE garde sur une rangée SANS
    * ligne basse — exactement la forme où le recouvrement de 9 px a été
    * mesuré. `RIVER_CONTINUATION_WITNESS_ID` (`riv-5`, miroir de la
-   * constante EXPORTÉE `apps/web-v3/src/lib/api/fixtures.ts`) est une
+   * constante EXPORTÉE `apps/web-v2/src/lib/api/fixtures.ts`) est une
    * CONTINUATION (`tail === false`, traduite, sans réaction) ;
    * `RIVER_NO_TRANSLATION_WITNESS_ID` (`riv-12`) ne porte NI traduction NI
    * réaction. `electRow` les ÉLIT explicitement (défilement gradué jusqu'à

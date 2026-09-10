@@ -2,7 +2,7 @@
 # =============================================================================
 # MEESHY WEB v3.1 — l'application à page unique, servie en STATIQUE
 # Contexte de construction : la racine du monorepo (../../)
-# Dockerfile : apps/web-v3/Dockerfile
+# Dockerfile : apps/web-v2/Dockerfile
 # =============================================================================
 # CE QUI CHANGE PAR RAPPORT À apps/web-old-version3/Dockerfile, et pourquoi :
 #
@@ -15,7 +15,7 @@
 #     déclare : `@meeshy/design-tokens` (la palette dérivée d'iOS) et
 #     `@meeshy/shared` (les types du domaine et trois lois — Prisme, présence,
 #     accent de conversation). La règle du dépôt est la même dans les deux
-#     sens : tout ce que l'application importe hors de `apps/web-v3/` doit
+#     sens : tout ce que l'application importe hors de `apps/web-v2/` doit
 #     entrer dans l'image ET dans les déclencheurs de `docker.yml`, et rien
 #     d'autre n'y entre « au cas où ». `packages/shared` a rejoint cette liste
 #     avec #5493, quand la projection locale des types a été retirée.
@@ -43,7 +43,7 @@ WORKDIR /app
 # Corollaire, pour la même raison : PAS de `--frozen-lockfile`. Le lockfile du
 # dépôt décrit les neuf workspaces ; l'image n'en porte qu'un, donc un gel
 # échouerait sur un écart qui est voulu.
-COPY apps/web-v3/package.json ./
+COPY apps/web-v2/package.json ./
 COPY packages/design-tokens/ ./packages/design-tokens/
 # `@meeshy/shared` est la source de vérité des types ET de trois lois que
 # l'application ne réécrit pas (Prisme, présence, accent de conversation). Son
@@ -69,7 +69,7 @@ RUN bun install --ignore-scripts --no-save
 # ne rougit tant que personne ne relance une résolution. On le referme en
 # rejouant le patch, et on VÉRIFIE que le lien du seul paquet du monorepo est
 # bien là avant de construire.
-COPY apps/web-v3/ ./
+COPY apps/web-v2/ ./
 
 RUN bun -e "const f=require('fs');const p=JSON.parse(f.readFileSync('package.json','utf8'));p.workspaces=['packages/design-tokens','packages/shared'];f.writeFileSync('package.json',JSON.stringify(p,null,2));" \
     && test -e node_modules/@meeshy/design-tokens \
@@ -133,7 +133,7 @@ FROM docker.io/nginx:1.29-alpine AS runner
 
 RUN apk add --no-cache tini curl
 
-COPY apps/web-v3/nginx.conf /etc/nginx/conf.d/default.conf
+COPY apps/web-v2/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist/ /usr/share/nginx/html/
 
 # 3400 : 3100 est au legacy, 3300 à l'ancienne refonte. Les trois peuvent

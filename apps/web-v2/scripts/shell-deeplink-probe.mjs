@@ -45,10 +45,10 @@ import { join } from 'node:path';
 import { auditDeepLinkPage, readDeepLinkSnapshot } from './check-shell-dist.mjs';
 
 /* MÊME dossier de captures que les autres scripts de recette du dépôt
-   (`check-reading-mode.mjs` : `<racine>/.cache/web-v3-workflow/…`) — une
+   (`check-reading-mode.mjs` : `<racine>/.cache/web-v2-workflow/…`) — une
    convention, jamais deux. */
 const APP = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
-const OUT_DIR = join(APP, '..', '..', '.cache', 'web-v3-workflow', 'recette');
+const OUT_DIR = join(APP, '..', '..', '.cache', 'web-v2-workflow', 'recette');
 
 function parseArgs(argv) {
   const args = { cdp: 'http://127.0.0.1:9222', path: '/c/c-deploiement', expect: 'thread' };

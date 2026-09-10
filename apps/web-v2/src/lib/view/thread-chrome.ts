@@ -34,7 +34,7 @@ export type ChromeHidingInput = {
   readonly searchOpen: boolean;
   /**
    * Le composeur est ENGAGÉ — équivalent structurel des exceptions
-   * `isEmojiPanelOpen` / `hasMentionSuggestions` iOS (:2124-2141) : web-v3 n'a
+   * `isEmojiPanelOpen` / `hasMentionSuggestions` iOS (:2124-2141) : web-v2 n'a
    * ni panneau emoji ni suggestions de mention (`composer.tsx:24-31`), donc
    * « l'outil en main » se lit au FOCUS de l'enveloppe du composeur.
    */

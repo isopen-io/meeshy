@@ -33,7 +33,7 @@ import { chromeHiding, type ChromeHiding } from './thread-chrome';
  * `subscribeGesture` capture `element = null` sur le rendu squelette, rend
  * l'unsubscribe no-op `() => {}`, et plus AUCUN geste n'atteint jamais
  * `createScrollerGestureSubscriber` (vérifié au navigateur, capture
- * `.cache/web-v3-workflow/rendus/thread-chrome-hidden-v2.*.png`, revue de
+ * `.cache/web-v2-workflow/rendus/thread-chrome-hidden-v2.*.png`, revue de
  * ce lot).
  */
 

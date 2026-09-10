@@ -13,7 +13,7 @@ import { sectionLabelOf } from '@/lib/lens/sections';
  *
  * AUCUNE cote n'est écrite ici en littéral (D-4) — elles viennent TOUTES de
  * `packages/shared/design/lentille-tokens.json` (`list.sticker`), exposé au
- * web-v3 par l'export `./design/*` de `@meeshy/shared` (JSON brut, pas
+ * web-v2 par l'export `./design/*` de `@meeshy/shared` (JSON brut, pas
  * `dist` — même mécanique que `packages/design-tokens/ios.css`, une SEULE
  * table dont ce fichier lit les valeurs plutôt que les recopier). Muter une
  * cote du JSON fait dériver ce composant SANS qu'aucune ligne d'ici ne
@@ -21,7 +21,7 @@ import { sectionLabelOf } from '@/lib/lens/sections';
  *
  * UN EN-TÊTE, PAS UN BOUTON (§1.1 de la spécification) : iOS rend `pinned`
  * repliable (le pliage PERSISTE côté serveur, `PATCH …/categories/:id`) ;
- * aucun port web-v3 ne l'écrit encore — un bouton sans effet observable est
+ * aucun port web-v2 ne l'écrit encore — un bouton sans effet observable est
  * inerte (charte, § contrôle = effet), un `<h2>` dit exactement ce qu'il
  * fait. Il est monté PLEINE LARGEUR (`-mx-2`), sans la marge horizontale des
  * rangées — même géométrie que `LazyVStack(spacing: 8, pinnedViews:

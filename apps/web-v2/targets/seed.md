@@ -1,4 +1,4 @@
-> Données SEMÉES sur STAGING pour les captures (issue #5672) — comptes jetables, jamais la production. Les mots de passe sont hors dépôt (`.cache/web-v3-workflow/captures/signup-creds.txt`, non versionné).
+> Données SEMÉES sur STAGING pour les captures (issue #5672) — comptes jetables, jamais la production. Les mots de passe sont hors dépôt (`.cache/web-v2-workflow/captures/signup-creds.txt`, non versionné).
 
 # Données semées sur STAGING — cibles v3.1 (drapeaux bêta ON)
 
@@ -53,7 +53,7 @@ Trois comptes de plus ont donc été créés, et un salon à cinq membres avec e
 | riv2 | `cible-web-riv2` | `webv3.cible.riv2@meeshy-test.example.com` | `6a9fb2d16248cfa007f2b18c` |
 | riv3 | `cible-web-riv3` | `webv3.cible.riv3@meeshy-test.example.com` | `6a9fb2d56248cfa007f2b192` |
 
-Même mot de passe que A (hors dépôt : `.cache/web-v3-workflow/captures/signup-creds.txt`), `systemLanguage: fr`.
+Même mot de passe que A (hors dépôt : `.cache/web-v2-workflow/captures/signup-creds.txt`), `systemLanguage: fr`.
 
 | conversation | type | id | membres | messages |
 |---|---|---|---|

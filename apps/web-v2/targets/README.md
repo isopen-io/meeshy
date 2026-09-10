@@ -46,7 +46,7 @@ construction `VITE_READING_MODES` (#5674, D-20).
 | `thread.message-menu.*` | l'appui long sur un message : rail de réactions, message soulevé avec son pied, Sélectionner · Traduire · Copier · Composer · Plus… |
 | `*.a11y.txt` | l'arbre d'accessibilité complet de chaque capture (`idb ui describe-all`), pris au même instant |
 | `seed.md` | les comptes jetables et les conversations semés sur STAGING (mots de passe hors dépôt) |
-| `lentille.md` | l'analyse de la Lentille : drapeau, anatomie, lois, états, gestes, accessibilité, tableau iOS → web-v3, écarts, contradictions |
+| `lentille.md` | l'analyse de la Lentille : drapeau, anatomie, lois, états, gestes, accessibilité, tableau iOS → web-v2, écarts, contradictions |
 | `focal-script.md` | l'analyse de Focal et Script : loi, rangée plate, scène, puce et menu, états, gestes, tableau, écarts, contradictions |
 | `bulle.md` | l'analyse de la Bulle : loi du mode, anatomie, fil en bulles, états, gestes, tableau, écarts, ce que la charte du README affirmait |
 | `resume.md` | l'analyse de faisabilité du Résumé Vivant — verdict : **intégrable sous condition** (digest calculé localement, aucun endpoint ; il manque un corpus de fixtures qui rende le mode atteignable, et l'inversion du gate) |
@@ -61,10 +61,10 @@ dépôt.
 - Le 2026-09-08, sur le simulateur nommé par le porteur, « Meeshy Poc-Web-V31 »
   (`54438823-4ADC-4536-88D2-FC441395FA04`, iPhone 16 Pro, iOS 26.1), qui portait
   alors l'app native. **Depuis le 2026-09-09, deux simulateurs, jamais un seul** :
-  l'app native `apps/ios` (la référence) et la coque Capacitor de web-v3 (l'objet
+  l'app native `apps/ios` (la référence) et la coque Capacitor de web-v2 (l'objet
   testé) partagent l'identifiant `me.meeshy.app`, et installer l'une remplace
   l'autre sans un mot — les gates du tour 2 ont posé la coque sur ce simulateur,
-  et la conception du tour suivant y a « capturé l'écran iOS » : c'était web-v3
+  et la conception du tour suivant y a « capturé l'écran iOS » : c'était web-v2
   sur ses fixtures (Kwame Mensah, Amina Diallo). La référence vit désormais sur
   **« Meeshy Ref-Native »** (`3E761BC1-845D-49D2-8E4D-E0606E04D3E2`, iPhone 16 Pro,
   iOS 26.1), qui ne reçoit jamais la coque ; la coque vit sur « Meeshy Poc-Web-V31 »
@@ -79,7 +79,7 @@ dépôt.
   une WKWebView, donc la coque, ou une feuille système posée par-dessus
   (permission, « Save Password? ») : la fermer, puis redemander ; l'écran montre les comptes semés de `seed.md`
   (`cible-web-trois`, Bruno Beta, le Salon Rivière), jamais les fixtures de
-  web-v3 (Kwame Mensah, Amina Diallo, Fatou Ba, « Équipe déploiement », la puce
+  web-v2 (Kwame Mensah, Amina Diallo, Fatou Ba, « Équipe déploiement », la puce
   « AUTO Focal », l'auteur « Vous »). La troisième ne dépend d'aucun outil.
 - Activation, sans passer par l'interface :
 
@@ -149,7 +149,7 @@ avec les données semées de `seed.md`.
 
 ## Ce que les analyses établissent — les écarts les plus visibles
 
-Les tableaux complets (élément iOS `fichier:ligne` → web-v3 `fichier:ligne` →
+Les tableaux complets (élément iOS `fichier:ligne` → web-v2 `fichier:ligne` →
 verdict) sont dans chaque analyse ; un contrôle sans effet y est « absent ».
 
 **Lentille** (`lentille.md`) — conformes et mesurés : courbe, élection à
@@ -168,7 +168,7 @@ pull-to-refresh, ni pagination ; texte non échelonnable.
 
 **Focal et Script** (`focal-script.md`) — conformes : loi importée de
 `@meeshy/shared`, catalogue, règle de rendu `bulles`, retrait 41, paddings,
-`mountsBottomLine`, virtualisation. Le fait le plus lourd : **web-v3 applique
+`mountsBottomLine`, virtualisation. Le fait le plus lourd : **web-v2 applique
 une courbe d'estompage qu'iOS a retirée le 2026-08-24** ; ce qui distingue
 Focal de Script sur iOS est l'élection d'une rangée avec sa carte, son chip
 et son tampon, armée à ≥ 1 200 pt/s ou ≥ 4 s de défilement, aplatie 4,5 s
@@ -222,7 +222,7 @@ casse une suite ; `QUOTE_RAIL_WIDTH` dérivé, gardé, et servi nulle part.
   la loi (`packages/shared/utils/river-lanes.ts`, 1 044 l, 61 vecteurs
   inter-plateformes) se porte à zéro ; `activeParticipantCount` est
   `conversation.memberCount` sur iOS (`ConversationView.swift:569`), déjà servi
-  et affiché par web-v3 (une ligne dans `decision.ts:56`) ; aucun endpoint ;
+  et affiché par web-v2 (une ligne dans `decision.ts:56`) ; aucun endpoint ;
   une peau React complète existe dans le legacy, jamais montée ; la condition
   unique est la virtualisation du tracé (D-15, miroir de
   `RiverCanvasRankPlacement`) ; manquent les gestes tactiles, la poignée du
@@ -252,9 +252,9 @@ l'overlay bas (`focusStrip`/`focusStampChip`) SANS AUCUNE condition sur la
 présence d'une ligne basse** — sur un message qui n'est ni le dernier de son
 groupe ni traduit ni réagi, iOS n'a donc RIEN pour réserver la place que
 l'overhang de `focusStampChip` suppose, et le même recouvrement du texte que
-le web a mesuré (9 px, `apps/web-v3/src/components/focal-row.tsx`) doit s'y
+le web a mesuré (9 px, `apps/web-v2/src/components/focal-row.tsx`) doit s'y
 reproduire à l'identique — non revérifié au simulateur par ce lot, à faire
-avant de fermer le suivi. `web-v3` DIVERGE ici DÉLIBÉRÉMENT (jamais en
+avant de fermer le suivi. `web-v2` DIVERGE ici DÉLIBÉRÉMENT (jamais en
 silence) : la rangée ÉLUE sans ligne basse réserve désormais un placeholder
 invisible de la même hauteur (`[data-focus-reserve]`,
 `fixtures.test.ts::RIVER_CONTINUATION_WITNESS_ID` /

@@ -120,7 +120,7 @@ describe('stickyDayOf — la regle updateStickyDayLabel (:896-957) (T5)', () => 
    * scrollOffset dépassait 200 — le séparateur EN FLUX restait pourtant
    * visible jusqu'à 240. Les deux capsules portaient alors le MÊME libellé,
    * simultanément à l'écran (mesuré au navigateur : fenêtre de ~40px de
-   * défilement, `.cache/web-v3-workflow/recette/thread/DEF-doublon-pilule-jour.light.png`).
+   * défilement, `.cache/web-v2-workflow/recette/thread/DEF-doublon-pilule-jour.light.png`).
    */
   test('DANS la fenetre du doublon (200 <= scrollOffset < 240) -> la sticky reste masquee', () => {
     const placed = [placedOf('Hier'), placedOf(null), placedOf(null), placedOf('Aujourd’hui'), placedOf(null)];

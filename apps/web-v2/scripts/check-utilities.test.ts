@@ -28,7 +28,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * entière : `className="flex\n * justify-center py-1.5"` rendait les tokens
  * `flex`, `*`, `justify-center`, `py-1.5` — `*` n'a jamais été une classe,
  * et n'avait donc aucune règle dans la feuille produite, ce qui a fait
- * échouer `Gates web-v3` sur `dev` pour TOUTE PR (pas seulement celle qui
+ * échouer `Gates web-v2` sur `dev` pour TOUTE PR (pas seulement celle qui
  * touchait le fichier). Deux correctifs complémentaires ont atterri côte à
  * côte (#5958, le commentaire réel reformulé sans guillemets JSX ; #5960,
  * `usedClasses` dépouille désormais les commentaires avant de scanner) :

@@ -67,7 +67,7 @@ import { contrastOf } from './lib/contrast.mjs';
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
 const DIST = join(APP, 'dist');
-const CAPTURES = join(APP, '..', '..', '.cache', 'web-v3-workflow', 'rendus');
+const CAPTURES = join(APP, '..', '..', '.cache', 'web-v2-workflow', 'rendus');
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript',

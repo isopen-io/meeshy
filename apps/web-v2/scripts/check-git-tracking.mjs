@@ -40,8 +40,8 @@ const ROOT = new URL('../../..', import.meta.url).pathname.replace(/\/$/, '');
 /*
  * `.cache` a rejoint la liste en revue de #5774, pour la MÊME raison que
  * `render` y était déjà : c'est un répertoire de SORTIE. Les gates visuels y
- * déposent leurs captures (`join(APP, '..', '..', '.cache', 'web-v3-workflow',
- * 'rendus')`), et une session lancée depuis `apps/web-v3` y écrit sa recette
+ * déposent leurs captures (`join(APP, '..', '..', '.cache', 'web-v2-workflow',
+ * 'rendus')`), et une session lancée depuis `apps/web-v2` y écrit sa recette
  * — dix PNG de recette du composeur y traînaient et faisaient rougir CE
  * témoin, qui réclamait qu'on SUIVE des captures de débogage. Élargir la
  * portée n'était pas l'affaiblir : le témoin garde les SOURCES avalées par

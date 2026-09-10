@@ -68,7 +68,7 @@ function maillonsDeLaCI(): Set<string> {
   /* `ci.yml` lance AUSSI des scripts de la RACINE, écrits exactement pareil
      (`node scripts/check-lockfile-alignment.mjs`). Rien dans la ligne ne dit
      de quel dossier il s'agit : le seul discriminant est l'EXISTENCE du
-     fichier sous `apps/web-v3/scripts/`. Sa validité tient à l'absence de nom
+     fichier sous `apps/web-v2/scripts/`. Sa validité tient à l'absence de nom
      partagé entre les deux dossiers — précondition gardée par le témoin
      ci-dessous, sans quoi ce filtre deviendrait faux en silence. */
   return new Set(cites.filter((n) => existsSync(join(V3, 'scripts', n))));
@@ -77,12 +77,12 @@ function maillonsDeLaCI(): Set<string> {
 describe('les gardes du composite tournent en CI — sinon ils sont verts par omission', () => {
   /**
    * LA PRÉCONDITION DU FILTRE CI-DESSUS. `maillonsDeLaCI()` distingue un garde
-   * de web-v3 d'un script de la racine par la seule existence du fichier. Un
+   * de web-v2 d'un script de la racine par la seule existence du fichier. Un
    * nom présent des DEUX côtés rendrait ce départage faux — et faux en
    * silence, ce qui est la pire forme. Ce témoin échoue le jour où la
    * collision apparaît, plutôt que de laisser le témoin principal mentir.
    */
-  test('aucun nom de script n’est partagé entre scripts/ (racine) et apps/web-v3/scripts/', () => {
+  test('aucun nom de script n’est partagé entre scripts/ (racine) et apps/web-v2/scripts/', () => {
     const nomsDe = (dir: string) =>
       existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith('.mjs')) : [];
     const racine = new Set(nomsDe(join(V3, '..', '..', 'scripts')));
