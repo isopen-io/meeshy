@@ -13,9 +13,13 @@ import { dayLabel, type PlacedMessage } from '@/lib/grouping';
 import type { ConversationEpisode, FaceRampEntry } from '@/lib/summary/types';
 import { initialsOf } from '@/lib/view/conversation';
 import type { useLongPress } from '@/lib/view/long-press';
+import { checkStatusOf, isMineOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
+import { composeMessageLabel } from '@/lib/view/message-a11y-label';
+import { served } from '@/lib/api/prism';
 import type { SelectionState } from '@/lib/view/selection';
 import { usesFlatRow } from '@/lib/reading-mode/decision';
+import { protectionOf } from '@/lib/reading-mode/protection';
 import type { ThreadScene } from '@/lib/reading-mode/scene';
 
 /**
@@ -213,6 +217,36 @@ export function ThreadModes({
           const rowDisplayLanguage = displayLanguageOf(p.message.id);
           const rowMyReactions = myReactionsOf(p.message.id);
           const rowSelected = selection === null ? undefined : selection.ids.includes(p.message.id);
+          /*
+           * LE LIBELLÉ D'ACCESSIBILITÉ (#5774, travail 2/3) — UN SEUL site,
+           * partagé par la rangée plate ET la bulle : `composeMessageLabel`
+           * (`lib/view/message-a11y-label.ts`), nourri du MÊME texte SERVI
+           * que celui que la rangée peint (`rowDisplayLanguage` inclus — un
+           * témoin de RANG se lit sur un rang ≠ 1 du Prisme, CLAUDE.md
+           * racine, leçon 261). Avant ce lot : `Message de ${sender}`, sans
+           * texte, sans citation, sans média, sans accusé, sans badge.
+           */
+          const rowPreferredLanguages =
+            rowDisplayLanguage === undefined ? readerLanguages : [rowDisplayLanguage, ...readerLanguages];
+          const rowServed = served({
+            preferredLanguages: rowPreferredLanguages,
+            originalLanguage: p.message.originalLanguage,
+            translations: p.message.translations,
+            original: p.message.content,
+          });
+          /* LA PROTECTION GOUVERNE LE LIBELLÉ (revue #5774) — la MÊME loi et
+             le MÊME `expiredIds` que les deux peaux consomment plus bas
+             (`FocalRow`/`Bubble`, `expired={expiredIds.has(...)}`) : sans
+             elle, `aria-label` annonçait EN CLAIR le texte que la rangée
+             floute ou remplace par un tombstone. */
+          const rowProtection = expiredIds.has(p.message.id) ? 'expired' : protectionOf(p.message, Date.now());
+          const rowLabel = composeMessageLabel({
+            message: p.message,
+            isMine: isMineOf(p.message, viewerId),
+            servedText: rowServed.text,
+            delivery: checkStatusOf(p.message, rowDelivery),
+            protection: rowProtection,
+          });
           return (
             <li
               key={p.message.id}
@@ -276,7 +310,8 @@ export function ThreadModes({
                 data-row={p.message.id}
                 tabIndex={0}
                 role="article"
-                aria-label={`Message de ${p.message.sender?.displayName ?? 'Vous'}`}
+                aria-label={rowLabel}
+                {...(rowServed.language === '' ? {} : { lang: rowServed.language })}
                 {...(rowSelected === undefined ? {} : { onClick: () => onRowTap(p.message.id) })}
                 {...longPress}
               >

@@ -1,4 +1,4 @@
-import { checkStatusOf, isMineOf, translationsOf } from '@/lib/view/message';
+import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import { initialsOf } from '@/lib/view/conversation';
 import type { LocalDelivery } from '@/lib/view/message';
 import { served } from '@/lib/api/prism';
@@ -8,9 +8,9 @@ import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
 import { ephemeralOf, protectionOf } from '@/lib/reading-mode/protection';
 
 import { Avatar } from './avatar';
+import { Attachments } from './attachment-blocks';
 import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
 import {
-  Attachments,
   Check,
   FailedSendBand,
   Flags,
@@ -154,11 +154,18 @@ export function Bubble({
     );
   }
 
-  const translations = translationsOf(message);
+  // Texte ET pistes AUDIO traduites (#5805) — miroir `BubbleContentBuilder
+  // .buildAvailableFlags(translations:translatedAudios:)` (`:365-395`) : un
+  // vocal traduit SANS traduction texte monte lui aussi la bande de drapeaux,
+  // une image dont seul l'`alt` est traduit ne la monte PAS (revue #5805).
+  const translatedLanguages = translatedLanguagesOf(message);
+  /** `displayLanguage` est une INSERTION au rang 0 (#5814) — UN résolveur
+   * (`resolvePrismTranslation`, D-14), jamais un second. Le MÊME prisme est
+   * remis à `Attachments` (qui le recompose à l'identique depuis les deux
+   * props) et à `servedRowLanguage` ci-dessous. */
+  const preferredLanguages = displayLanguage === undefined ? languages : [displayLanguage, ...languages];
   const rendered = served({
-    // `displayLanguage` est une INSERTION au rang 0 (#5814) — UN résolveur
-    // (`resolvePrismTranslation`, D-14), jamais un second.
-    preferredLanguages: displayLanguage === undefined ? languages : [displayLanguage, ...languages],
+    preferredLanguages,
     originalLanguage: message.originalLanguage,
     translations: message.translations,
     original: message.content,
@@ -166,12 +173,18 @@ export function Bubble({
   /** LA RÉSOLUTION NATURELLE, SANS `displayLanguage` — voir `focal-row.tsx`,
    * même correction, même raison : `PrismPastille` ne doit pas se démonter
    * en réponse au clic qui vient de le presser. */
-  const naturalServedLanguage = served({
+  const naturalServed = served({
     preferredLanguages: languages,
     originalLanguage: message.originalLanguage,
     translations: message.translations,
     original: message.content,
-  }).language;
+  });
+  const naturalServedLanguage = servedRowLanguage({
+    served: naturalServed,
+    preferredLanguages: languages,
+    attachments: message.attachments,
+    fallbackLanguage: message.originalLanguage,
+  });
 
   /**
    * L'identite ne se montre QUE : en groupe, en reception, et sur la QUEUE
@@ -183,22 +196,31 @@ export function Bubble({
 
   // `kind === 'veiled' | 'burned'` toutes deux passent par `ProtectedContent`.
   const isProtected = kind !== 'standard';
+  /** LA LANGUE ACTIVE DU PIED (revue #5814, défaut majeur 12) — la langue
+   * RÉELLEMENT servie par la rangée, jamais un état local. `servedRowLanguage`
+   * (revue #5805) et non `rendered.language` : sur un message MÉDIA-SEUL le
+   * texte est vide, donc `rendered.language` vaut l'originale alors que la
+   * transcription à l'écran, elle, est traduite — la bande proposait alors
+   * la langue DÉJÀ servie, un contrôle sans effet. */
+  const activeLanguage = servedRowLanguage({
+    served: rendered,
+    preferredLanguages,
+    attachments: message.attachments,
+    fallbackLanguage: message.originalLanguage,
+  });
   const footerLanguages = languageBand({
     originalLanguage: message.originalLanguage,
     preferredLanguages: languages,
-    translations: translations.map((t) => t.language),
-    servedLanguage: rendered.language,
+    translations: translatedLanguages,
+    servedLanguage: activeLanguage,
   });
-  /** LA LANGUE ACTIVE DU PIED (revue #5814, défaut majeur 12) — `rendered
-   * .language`, jamais un état local : voir `focal-row.tsx`, même loi. */
-  const activeLanguage = rendered.language;
 
   const reactions = reactionEntries(message.reactionSummary);
   const ephemeral = ephemeralOf(message.expiresAt, nowMs);
 
   /** LE PIED — la loi (D-23, #5676) : jamais de drapeau en clair sur un message voilé, un seul jeu par suite. */
   const showsBottomLine = mountsBottomLine({
-    hasTranslation: translations.length > 0,
+    hasTranslation: translatedLanguages.length > 0,
     isVeiled: isProtected,
     isLastInGroup: tail,
     hasReactions: reactions.length > 0,
@@ -212,7 +234,14 @@ export function Bubble({
       {message.replyTo ? (
         <Quote quote={message.replyTo} isMine={isMine} onJump={() => onJumpToMessage(message.replyTo!.id)} />
       ) : null}
-      {message.attachments ? <Attachments attachments={message.attachments} /> : null}
+      {message.attachments ? (
+        <Attachments
+          attachments={message.attachments}
+          languages={languages}
+          fallbackLanguage={message.originalLanguage}
+          {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+        />
+      ) : null}
 
       {rendered.text ? (
         /* Le contenu AFFICHE est deja la traduction preferee, rendu

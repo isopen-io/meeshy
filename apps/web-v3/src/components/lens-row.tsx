@@ -7,6 +7,7 @@ import { accentOf, withAccent } from '@/lib/accent';
 import { MUTED_OPACITY } from '@/lib/lens/law';
 import type { RowActionId } from '@/lib/view/row-actions';
 import { initialsOf, isGroup, peerOf, previewKindOf, presenceOf, titleOf } from '@/lib/view/conversation';
+import { kindOf } from '@/lib/view/message';
 import { Link } from '@/routes/route-table';
 
 import { Avatar } from './avatar';
@@ -44,6 +45,21 @@ import { RowActions } from './row-actions';
  */
 
 /** La case de mise en page. Elle ne change JAMAIS. */
+/**
+ * LE LIBELLÉ D'UN DERNIER MESSAGE SANS TEXTE (revue #5805) — les MOTS et les
+ * GLYPHES d'iOS, un pour un : `AttachmentKind.shortLabel`
+ * (`packages/MeeshySDK/Sources/MeeshySDK/Models/AttachmentKind.swift:140-154`)
+ * pour « Photo » / « Vidéo » / « Audio » / « Fichier ». `kindOf`
+ * (`view/message.ts`) classe la pièce par son MIME — la MÊME fonction que le
+ * fil, jamais un second classement.
+ */
+const MEDIA_PREVIEW = {
+  image: { glyph: 'image', label: 'Photo' },
+  video: { glyph: 'image', label: 'Vidéo' },
+  audio: { glyph: 'microphone', label: 'Audio' },
+  file: { glyph: 'file', label: 'Fichier' },
+} as const;
+
 export const ROW_HEIGHT = 84;
 
 /** Le conteneur visuel, qui déborde de 8 de chaque côté. */
@@ -176,6 +192,34 @@ function LensRowImpl({
         original: conversation.lastMessage?.content ?? '',
       })
     : null;
+
+  /**
+   * UN DERNIER MESSAGE SANS TEXTE — une photo, un vocal, un fichier (revue
+   * #5805). `served()` rend alors une chaîne VIDE, et la ligne 2 se rendait
+   * comme un `<span>` vide : la rangée « Médias » affichait « Kwame Mensah : »
+   * suivi de RIEN (mesuré sur la coque Android, la liste étant l'écran phare).
+   * Ce n'était pas visible avant ce lot — aucun corpus n'avait de message
+   * média-seul en dernier.
+   *
+   * iOS compose exactement ce libellé quand l'aperçu est vide
+   * (`LentilleConversationRow.standardPreview`,
+   * `apps/ios/.../Lentille/Row/LentilleConversationRow.swift:635-676`) :
+   * `senderLabel` + le glyphe de la pièce + son `shortLabel`
+   * (`AttachmentKind.shortLabel` — « Photo », « Vidéo », « Audio »,
+   * « Fichier ») + `+N` au-delà d'une pièce. Les mêmes mots, les mêmes
+   * glyphes (déjà dans le socle : la liste ne paie rien de plus).
+   *
+   * Le COMPTE vient du tableau servi. La passerelle expose aussi
+   * `lastMessageAttachmentCount` sur la charge d'aperçu socket
+   * (`services/gateway/src/socketio/utils/lastMessagePreviewPrism.ts:228-263`,
+   * qui ne remet QUE la première pièce) — à lire le jour où la liste vit sur
+   * le réseau, sans quoi « +N » sous-comptera un message à plusieurs pièces.
+   */
+  const previewAttachments = conversation.lastMessage?.attachments ?? [];
+  const previewMedia =
+    preview !== null && preview.text === '' && previewAttachments.length > 0
+      ? { first: previewAttachments[0]!, extra: previewAttachments.length - 1 }
+      : null;
 
   return (
     <li
@@ -404,7 +448,15 @@ function LensRowImpl({
                     `originalLanguage`) : `lang=""` signifie « langue indéterminée »
                     et fait quitter au lecteur d'écran la voix du document — dire
                     « je ne sais pas » est ici pire que se taire. */}
-                <span {...(preview?.language ? { lang: preview.language } : {})}>{preview?.text ?? ''}</span>
+                {previewMedia === null ? (
+                  <span {...(preview?.language ? { lang: preview.language } : {})}>{preview?.text ?? ''}</span>
+                ) : (
+                  <>
+                    <Glyph name={MEDIA_PREVIEW[kindOf(previewMedia.first)].glyph} size={13} className="mr-1 inline-block align-[-2px]" />
+                    <span>{MEDIA_PREVIEW[kindOf(previewMedia.first)].label}</span>
+                    {previewMedia.extra > 0 ? <span className="ml-1 font-semibold" style={{ color: accent }}>{`+${previewMedia.extra}`}</span> : null}
+                  </>
+                )}
               </>
             )}
           </span>

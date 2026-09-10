@@ -19,6 +19,11 @@ import { resolveCapacitorConfig } from './capacitor.config';
  * servi littéralement (404). Les gardes portent sur la FORME, jamais sur une
  * route particulière : les 40+ surfaces à porter emploieront la même recette
  * sur leur propre chemin sans modifier ce fichier LIVRÉ.
+ *
+ * `resolveCapacitorConfig` est une fonction PURE de `env` (revue #5774,
+ * défauts bloquant 1 et majeur 2) : plus aucune injection de dépendance ni
+ * sondage du disque — la plateforme visée se DÉCLARE par
+ * `MEESHY_SHELL_SYNC_TARGET`, jamais déduite de `ios/App/App.xcodeproj`.
  */
 describe('resolveCapacitorConfig — le chemin de départ n’est qu’un paramètre de RECETTE', () => {
   test('un environnement vide ne pose PAS server.appStartPath', () => {
@@ -27,8 +32,11 @@ describe('resolveCapacitorConfig — le chemin de départ n’est qu’un param�
     expect(config.server?.appStartPath).toBeUndefined();
   });
 
-  test('MEESHY_SHELL_START_PATH="/c/c-deploiement" pose server.appStartPath', () => {
-    const config = resolveCapacitorConfig({ MEESHY_SHELL_START_PATH: '/c/c-deploiement' });
+  test('MEESHY_SHELL_START_PATH="/c/c-deploiement" + cible android pose server.appStartPath', () => {
+    const config = resolveCapacitorConfig({
+      MEESHY_SHELL_START_PATH: '/c/c-deploiement',
+      MEESHY_SHELL_SYNC_TARGET: 'android',
+    });
     expect(config.server?.appStartPath).toBe('/c/c-deploiement');
   });
 
@@ -45,8 +53,58 @@ describe('resolveCapacitorConfig — le chemin de départ n’est qu’un param�
   });
 
   test('une autre surface que le fil est ACCEPTÉE — la garde porte sur la forme, pas sur la route', () => {
-    const config = resolveCapacitorConfig({ MEESHY_SHELL_START_PATH: '/settings' });
+    const config = resolveCapacitorConfig({
+      MEESHY_SHELL_START_PATH: '/settings',
+      MEESHY_SHELL_SYNC_TARGET: 'android',
+    });
     expect(config.server?.appStartPath).toBe('/settings');
+  });
+
+  /**
+   * RÉGRESSION revue #5774, défaut majeur 1 — `server.appStartPath` charge
+   * un FICHIER sous `public/` au premier lancement iOS (`WKWebView`),
+   * jamais une route SPA : une synchronisation iOS avec ce paramètre posé
+   * sort au lancement, sans rapport de plantage. La garde lève dès que la
+   * cible DÉCLARÉE est iOS — jamais en sondant le disque (revue #5774,
+   * défaut majeur 2 : la version précédente bloquait `cap sync android` dès
+   * que `ios/App/App.xcodeproj` existait, quelle que soit la plateforme
+   * réellement synchronisée).
+   */
+  test('cible iOS + MEESHY_SHELL_START_PATH -> lève, avec l’explication du chemin FICHIER', () => {
+    expect(() =>
+      resolveCapacitorConfig({
+        MEESHY_SHELL_START_PATH: '/c/c-deploiement',
+        MEESHY_SHELL_SYNC_TARGET: 'ios',
+      }),
+    ).toThrow(/iOS/);
+  });
+
+  test('cible Android + MEESHY_SHELL_START_PATH -> accepté, INDÉPENDAMMENT de ios/App/App.xcodeproj', () => {
+    const config = resolveCapacitorConfig({
+      MEESHY_SHELL_START_PATH: '/c/c-deploiement',
+      MEESHY_SHELL_SYNC_TARGET: 'android',
+    });
+    expect(config.server?.appStartPath).toBe('/c/c-deploiement');
+  });
+
+  test('MEESHY_SHELL_START_PATH SANS MEESHY_SHELL_SYNC_TARGET -> lève (la cible se déclare, ne se devine pas)', () => {
+    expect(() => resolveCapacitorConfig({ MEESHY_SHELL_START_PATH: '/c/c-deploiement' })).toThrow(
+      /MEESHY_SHELL_SYNC_TARGET/,
+    );
+  });
+
+  test('MEESHY_SHELL_START_PATH + cible invalide -> lève', () => {
+    expect(() =>
+      resolveCapacitorConfig({
+        MEESHY_SHELL_START_PATH: '/c/c-deploiement',
+        MEESHY_SHELL_SYNC_TARGET: 'windows',
+      }),
+    ).toThrow(/MEESHY_SHELL_SYNC_TARGET/);
+  });
+
+  test('aucun paramètre -> aucune garde ne s’arme', () => {
+    const config = resolveCapacitorConfig({});
+    expect(config.server?.appStartPath).toBeUndefined();
   });
 
   test('la forme SANS paramètre reste identique à celle livrée jusqu’ici', () => {

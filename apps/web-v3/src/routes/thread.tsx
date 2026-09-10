@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useStore } from 'zustand/react';
 
@@ -23,6 +23,7 @@ import { reactionEntries } from '@/components/message-blocks';
 import { ReactionSheet } from '@/components/reaction-sheet';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import { ThreadHeader } from '@/components/thread-header';
+import { DayPill, ScrollToBottomButton } from '@/components/thread-chrome';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiConfig } from '@/lib/api/config';
 import { recordViewOnceConsumption } from '@/lib/api/fixtures';
@@ -54,7 +55,10 @@ import {
 import { readingModeStore } from '@/lib/reading-mode/store';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { useThreadScene } from '@/lib/reading-mode/scene';
-import { sceneStyleVars } from '@/lib/reading-mode/metrics';
+import { chromeStyleVars, sceneStyleVars } from '@/lib/reading-mode/metrics';
+import { backdropStyleVars } from '@/lib/view/thread-backdrop';
+import { BOTTOM_ANCHOR_FRAMES, pinToBottom } from '@/lib/view/pin-to-bottom';
+import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { ThreadModes } from './thread-modes';
 
 /**
@@ -386,6 +390,29 @@ export default function ThreadScreen() {
   const scene = useThreadScene(scroller, { mode: readingDecision.mode, ready: placed.length > 0 });
 
   /**
+   * LE CHROME DU FIL (#5774, travail 3/3) — `host` est l'HÔTE COMMUN de
+   * l'en-tête, du fil et du composeur (le conteneur d'écran, tout en bas de
+   * ce composant) : c'est LUI qui porte `data-chrome-header`/
+   * `data-chrome-composer` (`use-thread-chrome.ts`, hors React), les
+   * variables CSS de `chromeStyleVars()`/`backdropStyleVars()`, la pilule
+   * de jour collante et le bouton « revenir en bas » — composés par
+   * `useThreadChromeSignals` (extrait, budget de taille CLAUDE.md § Code
+   * Style : ce fichier l'avait déjà payé une fois, `thread-header.tsx`
+   * §revue #5814, `thread-modes.tsx` §#5878).
+   */
+  const chrome = useThreadChromeSignals({
+    scroller,
+    mode: readingDecision.mode,
+    placed,
+    virtualizer,
+    messages,
+    viewerId: viewer.id ?? '',
+    group,
+    readerLanguages,
+    noteProgrammaticScroll: scene.noteProgrammaticScroll,
+  });
+
+  /**
    * LE SAUT DE CITATION (#5566, défaut 10) — le bouton de citation promettait
    * une navigation par son nom accessible et ne faisait rien. `scrollToIndex`
    * amène le message cité dans la fenêtre virtualisée ; la mise en évidence
@@ -506,29 +533,20 @@ export default function ThreadScreen() {
      * suit l'ouverture serait impossible : le fil reviendrait en bas sous le
      * doigt, ce qui est pire que de s'ouvrir au mauvais endroit.
      */
-    let armed = true;
-    let frames = 0;
-    let raf = 0;
-    const release = () => {
-      armed = false;
-    };
-    const pin = () => {
-      if (!armed) return;
-      // ANNONCE au premier pin : l'ancrage en bas ne doit ni révéler ni
-      // armer la scène du fil (§5.8 de la spécification #5648) — l'unique
-      // intention qui la RELÂCHE (`release`, même écouteurs) rouvre la
-      // scène par le même événement, sans course possible entre les deux
-      // effets.
-      if (frames === 0) scene.noteProgrammaticScroll();
-      el.scrollTop = el.scrollHeight;
-      if (++frames < 20) raf = requestAnimationFrame(pin);
-    };
-    raf = requestAnimationFrame(pin);
+    // ANNONCE au premier pin : l'ancrage en bas ne doit ni révéler ni armer
+    // la scène du fil (§5.8 de la spécification #5648) — l'unique intention
+    // qui le RELÂCHE (`release`, mêmes écouteurs) rouvre la scène par le même
+    // événement, sans course possible entre les deux effets.
+    //
+    // La loi elle-même vit dans `lib/view/pin-to-bottom.ts` (#5774, revue) :
+    // le bouton « revenir en bas » demande EXACTEMENT le même geste, et deux
+    // formulations pour un seul geste sont une jumelle.
+    const release = pinToBottom(el, { frames: BOTTOM_ANCHOR_FRAMES, onFirstFrame: scene.noteProgrammaticScroll });
     for (const event of ['wheel', 'touchstart', 'keydown'] as const) {
       el.addEventListener(event, release, { passive: true });
     }
     return () => {
-      cancelAnimationFrame(raf);
+      release();
       for (const event of ['wheel', 'touchstart', 'keydown'] as const) {
         el.removeEventListener(event, release);
       }
@@ -603,7 +621,12 @@ export default function ThreadScreen() {
        et une APPLICATION (seule la zone des messages defile, l'en-tete et le
        composeur sont des bords fixes). Avec `min-h-dvh` le composeur recouvrait
        les derniers messages — le defaut le plus visible du premier rendu. */
-    <div className="flex h-dvh flex-col overflow-hidden pt-safe" style={withAccent(accent)}>
+    <div
+      ref={chrome.host}
+      className="relative flex h-dvh flex-col overflow-hidden pt-safe"
+      style={{ ...withAccent(accent), ...chromeStyleVars(), ...backdropStyleVars() } as CSSProperties}
+    >
+      <div className="thread-backdrop" aria-hidden />
       <ThreadHeader
         title={title}
         accent={accent}
@@ -633,9 +656,21 @@ export default function ThreadScreen() {
         {announcer.text}
       </div>
 
-      <main
-        id="contenu"
-        ref={scroller}
+      {/*
+        L'ENVELOPPE DU DÉFILEUR (#5774, travail 3/3) — `position: relative`
+        entre le header et le composeur : la pilule de jour et le bouton
+        « revenir en bas » sont des FRÈRES ABSOLUS de `<main>`, jamais des
+        DESCENDANTS — un enfant `position: absolute` d'un conteneur qui
+        défile DÉFILE AVEC LUI (il reste dans le flux de rendu de son
+        ancêtre positionné) ; posés ICI, ils restent ancrés au VIEWPORT du
+        défileur, borné par le header au-dessus et le composeur en dessous
+        (« la géométrie fait le travail », §1.5 de la spécification).
+      */}
+      <div className="relative flex flex-1 flex-col overflow-hidden">
+        <DayPill label={chrome.dayPillLabel} headerExpanded={expanded} />
+        <main
+          id="contenu"
+          ref={scroller}
         /* `tabIndex={-1}` — focalisable PROGRAMMATIQUEMENT (jamais dans
            l'ordre de tabulation naturel) : c'est ce qui permet à `PageUp` /
            `PageDown` de défiler CE conteneur au clavier — l'intention que
@@ -712,7 +747,15 @@ export default function ThreadScreen() {
           typist={typist}
           accent={accent}
         />
-      </main>
+        </main>
+        <ScrollToBottomButton
+          visible={chrome.scrollButtonVisible}
+          unreadCount={chrome.scrollButtonUnreadCount}
+          senderName={chrome.scrollButtonSenderName}
+          previewText={chrome.scrollButtonPreviewText}
+          onClick={chrome.onScrollToBottom}
+        />
+      </div>
 
       {/*
         LA PILULE VISIBLE (revue #5814, défaut majeur 10) — le refus d'une
@@ -760,7 +803,18 @@ export default function ThreadScreen() {
           onCopy={() => messageMenu.onCopySelection(placed)}
         />
       ) : (
-        <div className="shrink-0">
+        /*
+          LE COMPOSEUR ENGAGÉ (#5774, travail 3/3) — équivalent structurel
+          des exceptions iOS `isEmojiPanelOpen`/`hasMentionSuggestions`
+          (`ConversationView.swift:2124-2141`, « on ne retire pas l'outil en
+          main ») : web-v3 n'a ni panneau emoji ni suggestions de mention
+          dans `composer.tsx` (tenu par #5890, on n'y touche pas) — le focus
+          sur l'ENVELOPPE, lu par bulle native (`onFocus`/`onBlur`), en est
+          le signal. `relatedTarget` : un focus qui reste À L'INTÉRIEUR de
+          l'enveloppe (bascule micro → champ, ouverture du tiroir de pièces
+          jointes) ne désengage rien.
+        */
+        <div className="thread-composer-chrome shrink-0" onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
           <Composer
             onSend={({ text, attachments }) => {
               /* LE MESSAGE CITÉ ENTIER, PAS SON SEUL IDENTIFIANT

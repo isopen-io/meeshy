@@ -19,6 +19,7 @@ import {
   viewer,
 } from './fixtures-base';
 import { CATCHUP_CONVERSATION, CATCHUP_CONVERSATION_ID, CATCHUP_MESSAGES } from './fixtures-catchup';
+import { MEDIA_CONVERSATION, MEDIA_CONVERSATION_ID, MEDIA_MESSAGES } from './fixtures-media';
 import {
   RIVER_CONTINUATION_WITNESS_ID,
   RIVER_CONVERSATION,
@@ -576,6 +577,7 @@ export const CONVERSATIONS: readonly Conversation[] = [
     lastMessageOriginalLanguage: 'fr',
   },
   CATCHUP_CONVERSATION,
+  MEDIA_CONVERSATION,
 ];
 
 
@@ -781,6 +783,7 @@ export const messagesOf = (conversationId: string): readonly Message[] => {
   if (conversationId === PROTECTION_CONVERSATION_ID)
     return withSent(conversationId, withConsumption(PROTECTION_MESSAGES));
   if (conversationId === CATCHUP_CONVERSATION_ID) return withSent(conversationId, withConsumption(CATCHUP_MESSAGES));
+  if (conversationId === MEDIA_CONVERSATION_ID) return withSent(conversationId, withConsumption(MEDIA_MESSAGES));
   const last = CONVERSATIONS.find((c) => c.id === conversationId)?.lastMessage;
   return withSent(conversationId, last === undefined ? [] : withConsumption([last]));
 };

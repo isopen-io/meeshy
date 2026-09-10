@@ -771,6 +771,15 @@ jobs:
           cd apps/web-v3
           node scripts/check-reading-mode.mjs
 
+      # #5774 — LE CHROME DU FIL : escamotage au geste, pilule de jour
+      # collante, bouton « revenir en bas ». Mesure des `opacity`,
+      # `pointer-events`, positions et `scrollTop` RÉELS, dans les deux
+      # schémas — rien de tout cela n'est visible d'un test unitaire.
+      - name: Gate chrome du fil (escamotage, pilule de jour, retour en bas)
+        run: |
+          cd apps/web-v3
+          node scripts/check-thread-chrome.mjs
+
       - name: Gate couple de focus des champs (l'anneau et son contre-anneau)
         run: |
           cd apps/web-v3
@@ -780,6 +789,14 @@ jobs:
         run: |
           cd apps/web-v3
           node scripts/check-shell-dist.mjs
+
+      # #5774 revue — capacitor.config.ts se charge en CJS (require.extensions)
+      # par la CLI, jamais en ESM : `bun test` ne peut pas voir un `import.meta`
+      # qui casse ce chargeur-là. Ce gate rejoue le VRAI chargeur (`bunx cap ls`).
+      - name: Gate capacitor.config.ts (chargeur CJS réel de la CLI)
+        run: |
+          cd apps/web-v3
+          node scripts/check-capacitor-config.mjs
 
       - name: Gate build passerelle (VITE_DATA_SOURCE=gateway parle vraiment)
         run: |

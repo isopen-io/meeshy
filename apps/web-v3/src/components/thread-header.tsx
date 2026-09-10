@@ -53,7 +53,7 @@ export function ThreadHeader({
 }) {
   return (
     <header
-      className="z-10 shrink-0 backdrop-blur-xl"
+      className="thread-header z-10 shrink-0 backdrop-blur-xl"
       style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-surface) 80%, transparent)' }}
     >
       <div className="flex items-center gap-2 px-4 py-2">
@@ -86,7 +86,12 @@ export function ThreadHeader({
             </p>
           </div>
         ) : (
-          <>
+          /* GRAPPE D'ACTIONS (#5774, travail 3/3) — c'est ELLE seule qui
+             s'efface en mode Bulles pendant le geste
+             (`[data-chrome-header="actions"] .thread-header-actions`,
+             `thread-scene.css`) ; en rangée plate, c'est l'EN-TÊTE ENTIER
+             qui part (`> header`), cette classe n'y ajoute rien de plus. */
+          <div className="thread-header-actions flex flex-1 items-center gap-2">
             <span className="flex-1" />
             {/* LE CHIP DE MODE — SOUS DRAPEAU UNIQUEMENT (D-20, miroir
                 `ConversationView.swift:2391-2430`) : `apiConfig.readingModesEnabled`
@@ -136,7 +141,7 @@ export function ThreadHeader({
                 <Glyph name="magnifyingGlass" size={13} />
               </span>
             </button>
-          </>
+          </div>
         )}
 
         <button

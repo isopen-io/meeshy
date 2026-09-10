@@ -41,6 +41,40 @@ export const QUOTE_RAIL_WIDTH = 2.5;
 export const META_TEXT_OPACITY = 0.55;
 
 /**
+ * L'OPACITÉ DE LA TRANSCRIPTION D'UN VOCAL (revue #5805) — PAS
+ * `META_TEXT_OPACITY`.
+ *
+ * La transcription est du CONTENU (c'est le texte que le Prisme sert), pas
+ * de la méta : lui appliquer l'opacité de l'heure la rendait illisible.
+ * Mesuré au navigateur sur `/c/c-medias`, encre `--color-ios-ink` sur le fond
+ * de la rangée plate : **3,74:1 en schéma clair** à 0,55 — sous le 4,5:1 de
+ * l'AA pour du 13 px. À 0,7 : **6,03:1 en clair, 8,79:1 en sombre**.
+ *
+ * DÉRIVÉE, pas choisie : c'est l'opacité que `inlineSegmentColor(isPast:)`
+ * donne au segment DÉJÀ LU (`AudioPlayerView+Transcription.swift`,
+ * `white.opacity(0.7)`). iOS peut descendre à 0,25/0,35 sur les segments
+ * NON LUS parce que son karaoké rallume le segment actif en pleine couleur ;
+ * la v3.1 rend UN paragraphe, sans karaoké (hors tranche) — il doit donc être
+ * lisible AU REPOS, et c'est la teinte « lu » qui décrit cet état-là.
+ * Le gate `check-thread-states.mjs` (§ 8, médias) MESURE le rapport dans les
+ * deux schémas : ce n'est pas une intention.
+ */
+export const TRANSCRIPT_TEXT_OPACITY = 0.7;
+
+/**
+ * `gridMaxWidth` — LA GRILLE DE VISUELS D'UN MESSAGE (#5805). Cote DÉRIVÉE,
+ * mais PAS un littéral de `FocalMetrics.swift` (Q5, § 9 de la spécification
+ * #5805) : elle vit dans `FocalAttachmentBlock.swift:46`
+ * (`FocalMediaGridLayout.gridMaxWidth`) et `BubbleStandardLayout.swift:177`
+ * (`gridMaxWidth`), les DEUX à `300`. Elle n'entre donc PAS dans
+ * `FOCAL_MAPPINGS` de `scripts/check-curve.mjs` (qui ne lit que
+ * `FocalMetrics.swift`) — une partie dédiée lisant `FocalAttachmentBlock.swift`
+ * est laissée au lot « grille 2/3/4+ » (issue compagnon), qui y trouvera
+ * quatre cotes à garder plutôt qu'une seule.
+ */
+export const MEDIA_GRID_MAX_WIDTH = 300;
+
+/**
  * LES COTES DE LA SCÈNE DU FIL (#5648) — l'ÉLECTION d'une rangée au
  * défilement soutenu, DÉRIVÉES de deux sources Swift distinctes et gardées
  * par `scripts/check-curve.mjs` (PARTIE 2 pour `FocalMetrics.swift`, PARTIE 4
@@ -133,6 +167,49 @@ export const SUSTAINED_SCROLL_MS = 4000;
 export const HIGH_VELOCITY_THRESHOLD = 1200;
 
 /**
+ * LE CHROME DU FIL (#5774, travail 3/3) — DÉRIVÉES de
+ * `Focal/Chrome/EdgeHiddenChrome.swift` + `Focal/Core/FocalMetrics.swift:278-286`
+ * (`HiddenChrome`) : la course et la durée de l'escamotage vers SON bord
+ * (en-tête, composeur, bouton « revenir en bas »). `opacityEnd` (0) n'entre
+ * PAS ici — un état pleinement transparent n'est pas une cote à dériver,
+ * `thread-scene.css` l'écrit en dur comme il le fait déjà pour `.focal-meta`
+ * au repos (ligne 40).
+ */
+export const HIDDEN_CHROME_EDGE_TRAVEL = 28;
+export const HIDDEN_CHROME_EASE_OUT_MS = 250;
+
+/**
+ * `MessageDayStickyPlacement.topOffset` (`MessageDayStickyOverlay.swift:19`)
+ * — « 60 = padding haut du header (8) + rangée de contrôles (~44) + marge
+ * (8) — la pill démarre SOUS le header ». `MessageDayStickyOverlay.swift:65`
+ * fixe le fondu à `0.18` s.
+ */
+export const DAY_PILL_TOP = 60;
+export const DAY_PILL_FADE_MS = 180;
+
+/**
+ * L'EN-TÊTE DE LA v3.1 EST EN FLUX (`routes/thread.tsx:57-61`) — celui d'iOS
+ * FLOTTE au-dessus de la liste, et c'est toute la différence : `topOffset`
+ * y est mesuré depuis le haut du CADRE, donc il DOIT franchir la hauteur du
+ * header ; ici l'enveloppe du défileur COMMENCE déjà au bord bas du header,
+ * cette hauteur est donc DÉJÀ DÉPENSÉE.
+ *
+ * Ce qui reste à poser dans l'enveloppe est le TROISIÈME terme de
+ * l'arithmétique iOS — la marge, et elle seule. Poser `topOffset` entier y
+ * descendait la pilule 52 px trop bas : mesuré à `y = 120` au navigateur
+ * pendant la revue de #5774, contre `y = 76` sur la cible iOS
+ * (`targets/thread.focal.scene.light.a11y.txt`).
+ *
+ * Les deux premiers termes sont DÉRIVÉS du même doc-comment, jamais
+ * ré-inventés : `8` (le padding haut du header) et `44` (la rangée de
+ * contrôles) — ce sont exactement `py-2` et `size-11` de
+ * `components/thread-header.tsx`.
+ */
+export const DAY_PILL_HEADER_PADDING = 8;
+export const DAY_PILL_HEADER_ROW = 44;
+export const DAY_PILL_MARGIN = DAY_PILL_TOP - DAY_PILL_HEADER_PADDING - DAY_PILL_HEADER_ROW;
+
+/**
  * LA SEULE PORTE par laquelle une cote de la scène atteint le CSS — posée
  * sur `<main>` par `thread.tsx`, elle descend par héritage de variable CSS à
  * toute la sous-arborescence (`focal-focus-overlays.tsx`, `app.css`).
@@ -172,5 +249,23 @@ export function sceneStyleVars(): CSSProperties {
     '--focus-text-indent': `${TEXT_INDENT}px`,
     '--focus-identity-overhang': `${IDENTITY_OVERHANG}px`,
     '--focus-strip-overhang': `${FOCUS_STRIP_OVERHANG}px`,
+  } as CSSProperties;
+}
+
+/**
+ * LES COTES DU CHROME DU FIL (#5774, travail 3/3) — porte SÉPARÉE de
+ * `sceneStyleVars()` : le chrome (en-tête, composeur) vit HORS de `<main>`
+ * (des FRÈRES, jamais des descendants — `routes/thread.tsx`), donc ces
+ * variables se posent sur l'HÔTE COMMUN des trois (le conteneur d'écran qui
+ * porte déjà `--accent`, `withAccent()`), jamais sur `<main>` : une variable
+ * CSS personnalisée n'atteint que la sous-arborescence de l'élément qui la
+ * déclare.
+ */
+export function chromeStyleVars(): CSSProperties {
+  return {
+    '--chrome-edge-travel': `${HIDDEN_CHROME_EDGE_TRAVEL}px`,
+    '--chrome-ease-out-ms': `${HIDDEN_CHROME_EASE_OUT_MS}ms`,
+    '--day-pill-top': `${DAY_PILL_MARGIN}px`,
+    '--day-pill-fade-ms': `${DAY_PILL_FADE_MS}ms`,
   } as CSSProperties;
 }

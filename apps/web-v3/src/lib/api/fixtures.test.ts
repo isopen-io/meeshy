@@ -31,6 +31,7 @@ const ALL_MESSAGES = [
   ...THREAD_MESSAGES,
   ...messagesOf('c-salon-riviere'),
   ...messagesOf('c-rattrapage'),
+  ...messagesOf('c-medias'),
   ...CONVERSATIONS.flatMap((c) => (c.lastMessage ? [c.lastMessage] : [])),
 ];
 
