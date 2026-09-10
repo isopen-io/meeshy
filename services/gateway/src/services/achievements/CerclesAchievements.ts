@@ -40,8 +40,14 @@ const log = enhancedLogger.child({ module: 'CerclesAchievements' });
  * Directive porteur : « hors conversations générales ». Y appartenir n'est pas
  * un geste — tout le monde y est —, et un succès qui tombe sans qu'on ait rien
  * fait ne récompense rien.
+ *
+ * `direct` rejoint la liste au titre d'une AUTRE raison (#5940, directive
+ * porteur) : « rejoindre une conversation, c'est quand on n'est pas créateur
+ * de la conversation, et on parle de rejoindre les conversations autres que
+ * les conversations à deux ». Ouvrir un tête-à-tête n'est pas rejoindre un
+ * cercle — il n'a pas de cercle, il a un seul autre membre.
  */
-const CONVERSATION_TYPES_HORS_CATALOGUE = ['global', 'public'] as const;
+const CONVERSATION_TYPES_HORS_CATALOGUE = ['global', 'public', 'direct'] as const;
 
 export type CercleEvent =
   | { readonly kind: 'conversation.join'; readonly userId: string; readonly conversationId: string }
@@ -75,10 +81,20 @@ export class CerclesAchievements {
     await graveEtAnnonce({ prisma: this.prisma, userId, family: f, valeur, origin });
   }
 
-  /** Conversations rejointes, hors générales — le VOLUME. */
+  /**
+   * Conversations rejointes, hors générales et hors tête-à-tête — le VOLUME.
+   *
+   * `role: { not: 'creator' }` exclut le créateur : créer un groupe grave déjà
+   * `conversation.create.count` (#5759) — le compter aussi ici récompenserait
+   * le geste inverse de celui que la famille nomme (#5940).
+   */
   private async conversationsRejointes(userId: string): Promise<number> {
     return this.prisma.participant.count({
-      where: { userId, conversation: { type: { notIn: [...CONVERSATION_TYPES_HORS_CATALOGUE] } } },
+      where: {
+        userId,
+        role: { not: 'creator' },
+        conversation: { type: { notIn: [...CONVERSATION_TYPES_HORS_CATALOGUE] } },
+      },
     });
   }
 
