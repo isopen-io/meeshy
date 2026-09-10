@@ -83,11 +83,40 @@ export const sourceFiles = (dir) =>
     return /\.(tsx|ts)$/.test(e.name) ? [p] : [];
   });
 
+/**
+ * Le texte d'un fichier, COMMENTAIRES ÔTÉS.
+ *
+ * Sans ce dépouillement, un `className=` cité en PROSE est extrait comme s'il
+ * était du code — et sa chaîne, non refermée sur la ligne, court jusqu'au
+ * guillemet suivant en emportant l'astérisque du doc-comment. C'est ce qui a
+ * fait rougir `dev` le 2026-09-10 : `thread-chrome.ts` documente le chrome du
+ * fil par « le `<div className="flex …` », et le garde réclamait une règle pour
+ * une classe nommée `*`.
+ *
+ * > **Un garde de source qui ne dépouille pas les commentaires accuse la prose
+ * > qui l'explique.** Le dépôt le sait ailleurs — `AppSourceGuard.stripComments`
+ * > côté Swift, et les deux témoins de parité de `apps/web-v3` — ce site-ci
+ * > l'ignorait.
+ *
+ * L'ordre compte : les blocs d'abord, sinon un `//` À L'INTÉRIEUR d'un bloc
+ * (une URL, un chemin) couperait la ligne et laisserait la fin du bloc en
+ * pâture au balayage.
+ */
+const sansCommentaires = (source) =>
+  source
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    /* Uniquement les lignes ENTIÈREMENT commentées. Couper à partir d'un `//`
+       trouvé n'importe où retirerait la fin d'une ligne de CODE — et un `//`
+       vit aussi dans `https://`. Un garde qui cesse de voir des classes passe
+       au vert sans rien mesurer : c'est la direction d'erreur à ne pas
+       prendre. */
+    .replace(/^\s*\/\/[^\n]*$/gm, ' ');
+
 /** Les classes écrites dans les fichiers donnés, variantes ôtées. */
 export const usedClasses = (files) => {
   const found = new Map();
   for (const file of files) {
-    const text = readFileSync(file, 'utf8');
+    const text = sansCommentaires(readFileSync(file, 'utf8'));
     for (const m of text.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\}|\{'([^']*)'\})/g)) {
       const raw = (m[1] ?? m[2] ?? m[3]).replace(/\$\{[^}]*\}/g, ' ');
       for (const token of raw.split(/\s+/).filter(Boolean)) {
