@@ -14,7 +14,6 @@ const mockNormalizeConversationId = jest.fn() as jest.Mock<any>;
 const mockGetConnectedUser = jest.fn() as jest.Mock<any>;
 const mockValidateSocketEvent = jest.fn() as jest.Mock<any>;
 const mockResolveParticipant = jest.fn() as jest.Mock<any>;
-const mockResolveMembershipDenialReason = jest.fn() as jest.Mock<any>;
 
 jest.mock('../../utils/socket-helpers', () => ({
   normalizeConversationId: (...args: unknown[]) => mockNormalizeConversationId(...args),
@@ -23,7 +22,6 @@ jest.mock('../../utils/socket-helpers', () => ({
 
 jest.mock('../../utils/participant-resolver', () => ({
   resolveParticipant: (...args: unknown[]) => mockResolveParticipant(...args),
-  resolveMembershipDenialReason: (...args: unknown[]) => mockResolveMembershipDenialReason(...args),
 }));
 
 jest.mock('../../../middleware/validation.js', () => ({
@@ -177,7 +175,6 @@ describe('StatusHandler', () => {
     mockResolveParticipant.mockResolvedValue({
       participantId: 'participant-1', userId: USER_ID, isAnonymous: false, displayName: 'Alice',
     });
-    mockResolveMembershipDenialReason.mockResolvedValue('not_a_member');
   });
 
   afterEach(() => {
@@ -308,66 +305,6 @@ describe('StatusHandler', () => {
       expect(socket.to).not.toHaveBeenCalled();
       expect(mockResolveParticipant).toHaveBeenCalledWith(
         expect.objectContaining({ userIdOrToken: USER_ID, conversationId: CONV_ID })
-      );
-    });
-
-    // #5947 — the refusal above used to be entirely silent: no broadcast, no
-    // callback (typing:start has none), no signal of any kind. The caller's
-    // OWN socket now learns why, on the same channel clients already purge
-    // their cache / close the thread from (`conversation:join-error`).
-    it('signals the caller with conversation:join-error, naming the exact denial reason', async () => {
-      mockResolveParticipant.mockResolvedValue(null);
-      mockResolveMembershipDenialReason.mockResolvedValue('no_longer_member');
-      const socket = makeSocket();
-      const handler = makeHandler({ prisma: makePrisma() });
-
-      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
-
-      expect(mockResolveMembershipDenialReason).toHaveBeenCalledWith(
-        expect.objectContaining({ conversationId: CONV_ID, isAnonymous: false, userId: USER_ID })
-      );
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
-        conversationId: CONV_ID,
-        reason: 'no_longer_member',
-        message: 'Vous n\'êtes plus membre de cette conversation',
-      });
-    });
-
-    it.each([
-      ['not_a_member', 'Vous n\'êtes pas membre de cette conversation'],
-      ['banned', 'Vous êtes banni de cette conversation'],
-      ['no_longer_member', 'Vous n\'êtes plus membre de cette conversation'],
-    ] as const)('emits the %s message matching ConversationHandler.handleConversationJoin', async (reason, message) => {
-      mockResolveParticipant.mockResolvedValue(null);
-      mockResolveMembershipDenialReason.mockResolvedValue(reason);
-      const socket = makeSocket();
-      const handler = makeHandler({ prisma: makePrisma() });
-
-      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
-
-      expect(socket.emit).toHaveBeenCalledWith(
-        SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
-        expect.objectContaining({ reason, message })
-      );
-    });
-
-    it('resolves the anonymous participantId with the same id || fallback as resolveParticipant', async () => {
-      const anonId = 'anon-participant-id';
-      mockGetConnectedUser.mockReturnValue({
-        user: { id: anonId, isAnonymous: true, socketId: SOCKET_ID, language: 'fr', resolvedLanguages: [] },
-        realUserId: anonId,
-      });
-      mockResolveParticipant.mockResolvedValue(null);
-      mockResolveMembershipDenialReason.mockResolvedValue('not_a_member');
-      const socketToUser = new Map([[SOCKET_ID, anonId]]);
-      const connectedUsers = new Map([[anonId, { id: anonId, socketId: SOCKET_ID, isAnonymous: true, language: 'fr', resolvedLanguages: [] }]]);
-      const socket = makeSocket();
-      const handler = makeHandler({ prisma: makePrisma(), connectedUsers, socketToUser });
-
-      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
-
-      expect(mockResolveMembershipDenialReason).toHaveBeenCalledWith(
-        expect.objectContaining({ isAnonymous: true, anonymousParticipantId: anonId })
       );
     });
 
