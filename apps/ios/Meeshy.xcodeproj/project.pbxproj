@@ -617,6 +617,7 @@
 		5818969FDAF2370C6E127361 /* AnyCodable.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB7EF20E03E9BD245BAC704A /* AnyCodable.swift */; };
 		58449FA65454A4DD3AD7CDB6 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F52D4DD36D01276DA42A395 /* Models.swift */; };
 		5844B1DBAB034B6BA4A6F722 /* BubbleStickerMountingGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E968EAAA13FDCB23300ADC9D /* BubbleStickerMountingGuardTests.swift */; };
+		585E8CAEE6B09121C8A60DCC /* MessageListViewController+ChromeFade.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8084862038E5E2F126BEA4C /* MessageListViewController+ChromeFade.swift */; };
 		5871168FCCFEA93D11C43D43 /* LiveActivityBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13C968F035CE4576468CBA02 /* LiveActivityBridge.swift */; };
 		589BF41242218858AD4F463D /* ShareTusClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34C1148B98F4E9602B799743 /* ShareTusClientTests.swift */; };
 		58A0550B4A73C4391DA1C090 /* FeedTranslationPatchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 018B39325606DCAC9388AFC6 /* FeedTranslationPatchTests.swift */; };
@@ -3307,6 +3308,7 @@
 		C72F872E3BCB01D314B7DFFE /* FeedViewModelDiscoverabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedViewModelDiscoverabilityTests.swift; sourceTree = "<group>"; };
 		C7725B065C08523A8B4E8D63 /* LocalizationDefaultValueCatalogGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationDefaultValueCatalogGuardTests.swift; sourceTree = "<group>"; };
 		C7AB3B8CB75430A502646AC8 /* CallDetailRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallDetailRoutingTests.swift; sourceTree = "<group>"; };
+		C8084862038E5E2F126BEA4C /* MessageListViewController+ChromeFade.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageListViewController+ChromeFade.swift"; sourceTree = "<group>"; };
 		C81A638139B8CC1FFDF92235 /* BubbleStoryCitationGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleStoryCitationGuardTests.swift; sourceTree = "<group>"; };
 		C82C756A23C34C23F2CBA615 /* DiscoverViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverViewModelTests.swift; sourceTree = "<group>"; };
 		C83758F8E8BD422CF1E9551E /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
@@ -5327,6 +5329,7 @@
 				CB12F2FFBC52EFBFEEC20570 /* MessageListSnapshotPrep.swift */,
 				6A8232A5AC3E5A7E537A259C /* MessageListView.swift */,
 				CA8F52CA9F8649E69DFA4CA4 /* MessageListViewController.swift */,
+				C8084862038E5E2F126BEA4C /* MessageListViewController+ChromeFade.swift */,
 				7E77851961D937288E1EB6C1 /* MessageListViewController+Insets.swift */,
 				C4890E00C943F348D701BAA7 /* MessageListViewController+SeenTracking.swift */,
 				894FBB9F357FE901EA504623 /* MessageListViewController+Snapshot.swift */,
@@ -7013,6 +7016,7 @@
 				60C4BEA8131D319F30336E4E /* MessageListLayout.swift in Sources */,
 				4158A7DBB08822B14A52E68B /* MessageListSnapshotPrep.swift in Sources */,
 				FA98AEDA092D7450C8C2BFD7 /* MessageListView.swift in Sources */,
+				585E8CAEE6B09121C8A60DCC /* MessageListViewController+ChromeFade.swift in Sources */,
 				5EAB761D82373617A242DC64 /* MessageListViewController+Insets.swift in Sources */,
 				8489A5A69018F3BA70EAC494 /* MessageListViewController+SeenTracking.swift in Sources */,
 				C32BBE9CCFFDAD44C07CD586 /* MessageListViewController+Snapshot.swift in Sources */,

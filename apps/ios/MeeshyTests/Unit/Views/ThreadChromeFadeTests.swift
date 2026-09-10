@@ -6,10 +6,13 @@ import UIKit
 ///
 /// Le chrome de la conversation est transparent par décision produit — l'en-tête
 /// (2026-08-22), le composeur (#3920) — et le fil défile dessous jusqu'au bord de
-/// l'écran (2026-08-12). En Bulles, chaque message est une CARTE : elle passe
-/// derrière le verre des boutons. En Script et en Focal, la rangée est du TEXTE
-/// NU : au repos, il se peignait sous l'heure, sous le bouton Retour et dans le
-/// champ du composeur, lisible et superposé à ce qu'on y tape.
+/// l'écran (2026-08-12). En Script et en Focal, la rangée est du TEXTE NU : au
+/// repos, il se peignait sous l'heure, sous le bouton Retour et dans le champ
+/// du composeur, lisible et superposé à ce qu'on y tape.
+///
+/// Bulles montre la même collision (#6046) mais garde son chrome posé pendant
+/// le défilement : un masque y tiendrait à chaque frame du geste, et ce coût
+/// se mesure avant de l'étendre.
 ///
 /// Ni scrim ni fond : le fil s'EFFACE (masque) dans la bande du chrome tant que
 /// ce chrome est posé, et retrouve le bord de l'écran dès que le défilement
@@ -41,7 +44,7 @@ final class ThreadChromeFadeTests: XCTestCase {
             bottomRest: bottomRest,
             visibility: visible
         )
-        XCTAssertEqual(fade, .none, "Bulles : une carte passe derrière le verre, rien à effacer")
+        XCTAssertEqual(fade, .none, "Bulles garde son chrome en défilant : hors de ce voile (#6046)")
         XCTAssertEqual(ThreadChromeFade.headClearance(usesFlatRow: false), 0)
     }
 
