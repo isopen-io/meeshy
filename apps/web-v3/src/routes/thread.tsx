@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useStore } from 'zustand/react';
 
@@ -16,17 +16,13 @@ import '@/styles/thread-menu.css';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
-import { Avatar } from '@/components/avatar';
-import { Bubble } from '@/components/bubble';
 import { Composer } from '@/components/composer';
-import { FocalRow } from '@/components/focal-row';
 import { MessageDetailSheet } from '@/components/message-detail-sheet';
 import { MessageMenu } from '@/components/message-menu';
 import { reactionEntries } from '@/components/message-blocks';
 import { ReactionSheet } from '@/components/reaction-sheet';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import { ThreadHeader } from '@/components/thread-header';
-import { SummarySkeleton } from '@/components/summary/summary-skeleton';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiConfig } from '@/lib/api/config';
 import { recordViewOnceConsumption } from '@/lib/api/fixtures';
@@ -38,9 +34,9 @@ import { served } from '@/lib/api/prism';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf, withAccent } from '@/lib/accent';
-import { initialsOf, isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
+import { isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
 import { useParams } from '@/lib/router';
-import { dayLabel, mergeTimeline, place } from '@/lib/grouping';
+import { mergeTimeline, place } from '@/lib/grouping';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useSend } from '@/lib/view/use-send';
 import { useMessageMenu } from '@/lib/view/use-message-menu';
@@ -59,15 +55,7 @@ import { readingModeStore } from '@/lib/reading-mode/store';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { useThreadScene } from '@/lib/reading-mode/scene';
 import { sceneStyleVars } from '@/lib/reading-mode/metrics';
-
-/**
- * LE RÉSUMÉ VIVANT (#5695) — module À LA DEMANDE : `SummaryHost` n'entre
- * dans le CHUNK DU FIL qu'au moment où `readingDecision.mode === 'summary'`
- * demande son premier rendu (`import()`), jamais dans la première peinture.
- * `SummarySkeleton`, lui, reste un import STATIQUE (voir son doc-comment) :
- * c'est le `fallback` de la `Suspense` qui attend ce module.
- */
-const SummaryHost = lazy(() => import('@/components/summary/summary-host'));
+import { ThreadModes } from './thread-modes';
 
 /**
  * LE FIL.
@@ -81,10 +69,10 @@ const SummaryHost = lazy(() => import('@/components/summary/summary-host'));
  * Le bouton de retour porte le compte de non-lus des AUTRES conversations.
  *
  * Depuis #5695, `<main>` rend soit la rangée plate/bulle (Focal/Script/
- * Bulles), soit le Résumé Vivant (`mode === 'summary'`) — la prochaine
- * surface (Rivière, D-21) EXTRAIT le montage des modes dans
- * `src/routes/thread-modes.tsx` avant d'y ajouter la sienne : ce fichier
- * reste sous le budget de taille, mais il ne le restera pas une quatrième fois.
+ * Bulles), soit le Résumé Vivant (`mode === 'summary'`) — le montage des
+ * modes est extrait dans `ThreadModes` (`src/routes/thread-modes.tsx`,
+ * #5878) : ce fichier reste sous le budget de taille pour la prochaine
+ * surface (Rivière, D-21), qui s'ajoute LÀ, pas ici.
  */
 export default function ThreadScreen() {
   const { conversation: id } = useParams<'/c/$conversation'>();
@@ -687,233 +675,42 @@ export default function ThreadScreen() {
           payé sur ses rangées ; il est venu deux fois parce qu'il ne se voit
           ni au type-check ni à l'œil, seulement à la mesure.
         */}
-        {readingDecision.mode === 'summary' ? (
-          /*
-            LE RÉSUMÉ VIVANT (#5695) — SOUS l'en-tête (le `<main>` du fil est
-            déjà un FRÈRE de `<header>`, jamais en dessous en z-order) :
-            correction du défaut #5682 de la cible iOS, pas sa recopie.
-            La scène (`useThreadScene`) est INERTE sur ce mode
-            (`reading-mode/scene.ts`) — le virtualiseur reste construit
-            (`useVirtualizer` ne peut pas être conditionnel) mais rien ne
-            monte de rangée `[data-row]` ici.
-          */
-          <Suspense fallback={<SummarySkeleton />}>
-            <SummaryHost
-              conversationId={conversation.id}
-              messages={messages}
-              participants={conversation.participants}
-              viewer={viewer}
-              windowCoversUnread={windowCoversUnread}
-              locale={readerLocale}
-              {...(summaryLang !== undefined ? { lang: summaryLang } : {})}
-              onReplyToPerson={onReplyToPerson}
-              onOpenEpisode={onOpenEpisode}
-              onResumeThread={onResumeThread}
-            />
-          </Suspense>
-        ) : (
-          <>
-            {placed.length === 0 ? (
-              /*
-                L'ÉTAT VIDE EST UN ÉTAT, pas une absence d'écran. Un fil sans
-                historique qui rend du blanc laisse croire à un chargement qui ne
-                finit pas — sur un réseau lent, c'est l'interprétation la plus
-                naturelle et la plus fausse.
-              */
-              <div className="grid flex-1 place-items-center px-8 text-center">
-                <div className="grid gap-2">
-                  <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-                    Aucun message pour l’instant
-                  </p>
-                  <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-                    Écrivez le premier — il sera traduit dans la langue de chacun.
-                  </p>
-                </div>
-              </div>
-            ) : null}
-
-        <ol
-          style={{
-            position: 'relative',
-            width: '100%',
-            flexShrink: 0,
-            marginBlockStart: 'auto',
-            height: virtualizer.getTotalSize(),
-          }}
-        >
-          {virtualizer.getVirtualItems().map((row) => {
-            const p = placed[row.index];
-            if (p === undefined) return null;
-            const isElected = scene.elected === p.message.id;
-            /* L'opinion de CE client sur l'envoi (#5813) — UNE lecture par
-               rangée, réutilisée pour les deux peaux et pour l'horloge des
-               200 ms (`sendStartedAt`, § 5 étape 9). */
-            const rowDelivery = deliveryOf(p.message.id);
-            const rowStartedAt = startedAtOf(p.message.id);
-            const rowReason = reasonOf(p.message.id);
-            /* UN REFUS PERMANENT N'OFFRE PAS DE REJEU (revue-correction
-               #5813, défaut majeur 2) — 403/401 ne peuvent jamais aboutir en
-               rejouant le MÊME appel ; `onRetry` disparaît, la cause reste.
-               Hors ligne (`rowReason === undefined`, D-16) n'est jamais
-               permanent : `permanentOf` lit `lastError`, absent tant qu'aucun
-               appel n'est parti. */
-            const rowPermanent = rowDelivery === 'failed' && permanentOf(p.message.id);
-            const sendProps =
-              rowDelivery === undefined
-                ? {}
-                : {
-                    localDelivery: rowDelivery,
-                    ...(rowPermanent ? {} : { onRetry: () => retry(p.message.id) }),
-                    ...(rowStartedAt === undefined ? {} : { sendStartedAt: rowStartedAt }),
-                    ...(rowReason === undefined ? {} : { sendFailureReason: rowReason }),
-                  };
-            /* LE MENU DU MESSAGE (#5814) — trois lectures par rangée, motif
-               `rowDelivery` ci-dessus : Traduire (langue explorée pour CE
-               message), « la mienne » (réactions), et l'état de sélection. */
-            const rowDisplayLanguage = messageMenu.displayLanguageOf(p.message.id);
-            const rowMyReactions = messageMenu.myReactionsOf(p.message.id);
-            const rowSelected =
-              messageMenu.selection === null ? undefined : messageMenu.selection.ids.includes(p.message.id);
-            return (
-            <li
-              key={p.message.id}
-              data-index={row.index}
-              ref={virtualizer.measureElement}
-              style={{
-                position: 'absolute',
-                insetInlineStart: 0,
-                top: 0,
-                width: '100%',
-                transform: `translateY(${row.start}px)`,
-                /* CHAQUE rangée est un CONTEXTE D'EMPILEMENT (`transform`), et
-                   les rangées se peignent dans l'ordre du DOM : les
-                   superpositions de l'élue qui DÉBORDENT vers le bas (bande de
-                   focus, tampon) passaient donc SOUS la rangée suivante.
-                   Mesuré : `elementFromPoint` au centre du drapeau de la bande
-                   rendait la rangée d'APRÈS — le contrôle était INATTEIGNABLE
-                   au doigt et à la souris, quoique présent et fonctionnel
-                   (correction de revue #5648). Élever la SEULE rangée élue
-                   suffit ; aucune autre ne porte de débord. */
-                ...(isElected ? { zIndex: 1 } : {}),
-              }}
-            >
-              {p.opensDay ? (
-                <div className="flex justify-center py-1.5">
-                  <span
-                    className="rounded-chip px-3 py-1 text-time font-semibold backdrop-blur-md"
-                    style={{
-                      color: 'var(--color-day-ink)',
-                      border: '0.5px solid var(--color-day-hairline)',
-                      backgroundColor: 'color-mix(in srgb, var(--color-ios-card) 70%, transparent)',
-                    }}
-                  >
-                    {dayLabel(p.message.createdAt, { locale: readerLocale })}
-                  </span>
-                </div>
-              ) : null}
-              {/* LE MODE DE LECTURE (#5566) : `focal`/`script` rendent la
-                  rangée plate, `bubbles` reste la bulle historique — D-7,
-                  D-8. `data-row` est le CANDIDAT d'élection de
-                  `reading-mode/scene.ts` (#5648) — posé sur CHAQUE rangée,
-                  candidat SEULEMENT quand la scène est armée (mode focal) —
-                  et l'ANCRE du menu du message (#5814) : `useLongPress` vit
-                  UNE fois dans cet écran (`messageMenu.longPress`, motif
-                  délégation) et lit `dataset.row` au geste, jamais une
-                  instance par rangée virtualisée. En SÉLECTION (#5814,
-                  question 5), un tap bascule la coche au lieu d'ouvrir le
-                  menu (`onRowTap`, gardé côté hook). */}
-              {/* `exactOptionalPropertyTypes` (CLAUDE.md racine) : les trois
-                  props du menu ne se POSENT que quand elles ont une valeur —
-                  un `displayLanguage={undefined}` explicite est refusé au
-                  type-check, même discipline que `sendProps` deux blocs plus
-                  haut. */}
-              {/* PAS d'`aria-selected` (revue #5814) — l'attribut n'existe pas
-                  sur `role="article"`, et il était posé DEUX fois (ici et sur
-                  la racine de la rangée). L'état de sélection est porté par
-                  la COCHE de la rangée : un `role="checkbox"` réel, seul
-                  chemin CLAVIER vers la bascule. Le clic sur la rangée
-                  ENTIÈRE reste une commodité de souris/doigt. */}
-              <div
-                data-row={p.message.id}
-                tabIndex={0}
-                role="article"
-                aria-label={`Message de ${p.message.sender?.displayName ?? 'Vous'}`}
-                {...(rowSelected === undefined ? {} : { onClick: () => messageMenu.onRowTap(p.message.id) })}
-                {...messageMenu.longPress}
-              >
-                {usesFlatRow(readingDecision.mode) ? (
-                  <FocalRow
-                    mode={readingDecision.mode}
-                    place={p}
-                    languages={readerLanguages}
-                    viewerId={viewer.id ?? ''}
-                    onJumpToMessage={jumpToMessage}
-                    highlighted={highlightedId === p.message.id}
-                    elected={isElected}
-                    expired={expiredIds.has(p.message.id)}
-                    onConsumeViewOnce={consume}
-                    onEphemeralExpired={onEphemeralExpired}
-                    {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
-                    onPickLanguage={(code) => messageMenu.onPickLanguage(p.message.id, code)}
-                    {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
-                    {...(rowSelected === undefined ? {} : { selected: rowSelected, onToggleSelect: messageMenu.onRowTap })}
-                    {...sendProps}
-                  />
-                ) : (
-                  <Bubble
-                    place={p}
-                    languages={readerLanguages}
-                    isGrouped={group}
-                    viewerId={viewer.id ?? ''}
-                    onJumpToMessage={jumpToMessage}
-                    highlighted={highlightedId === p.message.id}
-                    expired={expiredIds.has(p.message.id)}
-                    onConsumeViewOnce={consume}
-                    onEphemeralExpired={onEphemeralExpired}
-                    {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
-                    onPickLanguage={(code) => messageMenu.onPickLanguage(p.message.id, code)}
-                    {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
-                    {...(rowSelected === undefined ? {} : { selected: rowSelected, onToggleSelect: messageMenu.onRowTap })}
-                    {...sendProps}
-                  />
-                )}
-              </div>
-            </li>
-            );
-          })}
-        </ol>
-
-        {threadData.typing && typist !== undefined ? (
-          /* L'indicateur de frappe est une VRAIE cellule du flux, en queue —
-             pas un overlay : il pousse le fil comme le ferait un message, donc
-             l'arrivee du vrai message ne fait sauter aucune ligne. */
-          <div className="flex items-end gap-1.5 py-1">
-            <Avatar initials={initialsOf(typist.displayName)} color={accent} size={18} />
-            <span
-              className="flex items-center gap-1.5 rounded-chip px-3 py-2"
-              style={{ backgroundColor: 'var(--color-ios-card)' }}
-            >
-              <span className="text-time" style={{ color: 'var(--color-ios-ink-2)' }}>
-                {typist.displayName} écrit
-              </span>
-              <span className="flex gap-[3px]" aria-hidden>
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className="size-[5px] rounded-full"
-                    style={{
-                      backgroundColor: 'var(--accent)',
-                      animation: 'typingDot 1s ease-in-out infinite',
-                      animationDelay: `${i * 0.18}s`,
-                    }}
-                  />
-                ))}
-              </span>
-            </span>
-          </div>
-        ) : null}
-          </>
-        )}
+        <ThreadModes
+          mode={readingDecision.mode}
+          conversation={conversation}
+          messages={messages}
+          viewer={viewer}
+          windowCoversUnread={windowCoversUnread}
+          readerLocale={readerLocale}
+          {...(summaryLang !== undefined ? { summaryLang } : {})}
+          onReplyToPerson={onReplyToPerson}
+          onOpenEpisode={onOpenEpisode}
+          onResumeThread={onResumeThread}
+          placed={placed}
+          virtualizer={virtualizer}
+          scene={scene}
+          readerLanguages={readerLanguages}
+          group={group}
+          highlightedId={highlightedId}
+          expiredIds={expiredIds}
+          jumpToMessage={jumpToMessage}
+          consume={consume}
+          onEphemeralExpired={onEphemeralExpired}
+          deliveryOf={deliveryOf}
+          startedAtOf={startedAtOf}
+          reasonOf={reasonOf}
+          permanentOf={permanentOf}
+          retry={retry}
+          displayLanguageOf={messageMenu.displayLanguageOf}
+          myReactionsOf={messageMenu.myReactionsOf}
+          selection={messageMenu.selection}
+          onRowTap={messageMenu.onRowTap}
+          longPress={messageMenu.longPress}
+          onPickLanguage={messageMenu.onPickLanguage}
+          typing={threadData.typing}
+          typist={typist}
+          accent={accent}
+        />
       </main>
 
       {/*
