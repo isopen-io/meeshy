@@ -121,12 +121,9 @@ export type StickyDayInput = {
 
 /**
  * LA HAUTEUR DU SÉPARATEUR EN FLUX (revue #5774, défaut majeur 5) — MESURÉE
- * au navigateur (`thread-modes.tsx`, l'enveloppe `flex justify-center py-1.5`
- * du séparateur — le `className` n'est PAS cité en entier ici : replié sur
- * deux lignes, l'étoile de continuation du bloc entrait dans la citation et
- * `check-utilities.mjs` la lisait comme une classe `*` sans règle, un ÉCHEC
- * de gate né d'un commentaire) qui précède chaque rangée dont `opensDay`
- * n'est pas nul : `getBoundingClientRect().height` du pourtour de la pastille,
+ * au navigateur (`thread-modes.tsx`, le conteneur `flex justify-center
+ * py-1.5` qui précède chaque rangée dont `opensDay` n'est
+ * pas nul : `getBoundingClientRect().height` du pourtour de la pastille,
  * relative au haut de sa `<li>`) : 40px, stable (police/rayons du design
  * system, jamais un contenu qui varie en hauteur — le libellé tient sur une
  * seule ligne). C'est cette valeur, et non le SEUL bord haut de la rangée,

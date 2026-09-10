@@ -2,7 +2,12 @@ import { describe, expect, test } from 'bun:test';
 
 // @ts-expect-error — module .mjs sans déclaration de types ; ce témoin
 // interroge son API publique exactement comme le pilote le fait.
-import { findRuleBody, sizelessTextClasses, textSizeRoles } from './check-utilities.mjs';
+import { findRuleBody, sizelessTextClasses, textSizeRoles, usedClasses } from './check-utilities.mjs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { unlinkSync, writeFileSync } from 'node:fs';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 /**
  * LE TÉMOIN DU GATE DE TAILLE MASQUÉE (#5606, revue-correction, défaut 1).
@@ -14,6 +19,70 @@ import { findRuleBody, sizelessTextClasses, textSizeRoles } from './check-utilit
  * qui a manqué le défaut, pour qu'une future collision de nom ne repasse plus
  * en silence.
  */
+/**
+ * LE TÉMOIN DU FAUX-POSITIF DE COMMENTAIRE (régression CI 2026-09-10).
+ *
+ * `usedClasses` lit le TEXTE BRUT du fichier (c'est la méthode documentée en
+ * tête du module : comparer à la feuille produite plutôt qu'à une liste
+ * d'utilitaires tenue à la main) — y compris à l'intérieur d'un commentaire
+ * JSDoc. Un commentaire qui CITE un extrait JSX d'un AUTRE fichier, avec un
+ * `className="…"` qui franchit un saut de ligne, fait capturer par la regex
+ * le marqueur de continuation ` * ` du commentaire comme un TOKEN de classe
+ * à part entière : `className="flex\n * justify-center py-1.5"` rend les
+ * tokens `flex`, `*`, `justify-center`, `py-1.5` — `*` n'a jamais été une
+ * classe, et n'a donc aucune règle dans la feuille produite, ce qui a fait
+ * échouer `Gates web-v3` sur `dev` pour TOUTE PR (pas seulement celle qui
+ * touchait le fichier). Le fichier réel documente désormais l'extrait sans
+ * la syntaxe d'attribut JSX entre guillemets ; ce témoin verrouille qu'il
+ * ne produit plus aucun token de classe utilisateur.
+ */
+describe('usedClasses — un commentaire ne doit jamais injecter de faux token', () => {
+  /**
+   * **CE TÉMOIN A ÉTÉ RETOURNÉ le 2026-09-10, et son titre disait déjà pourquoi.**
+   *
+   * Deux sessions ont corrigé le même défaut à une heure d'écart, par deux
+   * chemins DIFFÉRENTS et complémentaires :
+   * - #5958 a reformaté le commentaire de `thread-chrome.ts` pour qu'il ne
+   *   porte plus la syntaxe d'attribut JSX — le fichier réel cesse de piéger
+   *   l'extracteur ;
+   * - #5960 a fait DÉPOUILLER les commentaires par `usedClasses` — l'extracteur
+   *   cesse de trébucher sur n'importe quel fichier, présent ou futur.
+   *
+   * Le premier soigne un site, le second la classe entière. Ce témoin épinglait
+   * l'ancien comportement (`toContain('*')`) : il caractérisait le DÉFAUT, alors
+   * que le titre de son bloc énonce la RÈGLE — « un commentaire ne doit jamais
+   * injecter de faux token ». Les deux se contredisaient ; c'est la règle qui
+   * gagne, et l'assertion la rejoint.
+   *
+   * > Un témoin qui ÉPINGLE un défaut au lieu d'affirmer la règle devient faux
+   * > le jour où le défaut est corrigé — et il fait alors rougir la correction.
+   */
+  test('un className="…" multi-lignes à l’intérieur d’un JSDoc n’injecte AUCUN token', () => {
+    const fixture = [
+      '/**',
+      ' * au navigateur (`thread-modes.tsx`, le `<div className="flex',
+      ' * justify-center py-1.5">` qui précède chaque rangée)',
+      ' */',
+      'export const x = 1;',
+      '',
+    ].join('\n');
+    const file = join(HERE, '__fixtures-regression-comment.tsx');
+    writeFileSync(file, fixture);
+    try {
+      const found = usedClasses([file]);
+      expect([...found.keys()]).toEqual([]);
+    } finally {
+      unlinkSync(file);
+    }
+  });
+
+  test('thread-chrome.ts (réel) ne contient plus aucun className littéral — zéro token', () => {
+    const file = join(HERE, '..', 'src', 'lib', 'view', 'thread-chrome.ts');
+    const found = usedClasses([file]);
+    expect([...found.keys()]).toEqual([]);
+  });
+});
+
 describe('textSizeRoles — les rôles de taille déclarés par une source de thème', () => {
   test('extrait le nom qui suit chaque `--text-<rôle>:`', () => {
     const source = '@theme inline {\n  --text-meta: var(--text-sm);\n  --text-chip: var(--text-xs);\n}';
