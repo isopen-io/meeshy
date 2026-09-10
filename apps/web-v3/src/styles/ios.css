@@ -46,6 +46,10 @@
   --color-edge: var(--ios-edge);
   --color-day-ink: var(--ios-day-ink);
   --color-day-hairline: var(--ios-day-hairline);
+  /* Le nom de SOI en tête de rangée (revue #5935, défaut majeur 2) —
+     `FocalIdentityHeader.swift:90-92`, `--ios-indigo-500` servi tel quel y
+     mesure sous AA (4,47:1 / 4,45:1). Voir `focal-row.tsx`. */
+  --color-self-name-ink: var(--ios-self-name-ink);
 
   /* Les géométries : celles que Swift DÉCLARE, et celles qu'il porte en
      littéral — le générateur distingue les deux et cite le site de chacune. */
