@@ -4,8 +4,8 @@
  * `apps/web` enregistre son Service Worker sur `scope: '/'` — DEUX sites, même
  * script, même portée (`utils/service-worker.ts:28-31`, monté sans condition
  * par `app/layout.tsx:93` ; `utils/service-worker-registration.ts:95-97`, pour
- * FCM) : il voit donc TOUTE l'origine, la zone `/__v3` de `apps/web-old-version3`
- * comprise. Sa branche « App Shell » est un cache-first qui attrape les
+ * FCM) : il voit donc TOUTE l'origine, la zone `/__v3` de l'ancienne refonte v3
+ * comprise (retirée du dépôt depuis, #5994). Sa branche « App Shell » est un cache-first qui attrape les
  * navigations, le JS, le CSS, les polices et les images. Traefik n'est donc pas
  * le seul aiguilleur de `meeshy.me` — ce worker en est un SECOND, non déclaré,
  * et il survit exactement à l'opération dont il fausse le résultat : ajouter ou
@@ -59,39 +59,25 @@ const swSource = fs.readFileSync(SW_SOURCE_PATH, 'utf8');
 const RACINE_DU_DEPOT = path.join(__dirname, '../../../..');
 
 /**
- * LES DEUX DÉPLOIEMENTS QUI PEUVENT SERVIR LA ZONE, et non le seul qui a été
- * écrit le premier. La bascule du § 4.9 se joue d'abord sur STAGING : ne lire
- * que la production revenait à gager l'environnement où rien ne bouge encore.
+ * LA ZONE A QUITTÉ LES DÉPLOIEMENTS (#5994).
+ *
+ * `frontend-v3` (production) et `frontend-v3-staging` servaient l'ancienne
+ * refonte v3, annulée puis retirée du dépôt : leurs routeurs sont partis avec
+ * elle. Le témoin JUMEAU qui vivait ici — « chaque chemin réclamé par un
+ * routeur de la zone échappe au worker » — n'a plus de chemin à lire, et il
+ * exigeait d'en trouver au moins un : il ne pouvait plus être vert.
+ *
+ * La frontière de `public/sw.js` (`belongsToV3Zone`) survit sans occupant. La
+ * retirer change l'octet du worker servi à tous les utilisateurs : c'est un
+ * geste de production, suivi à part (#6001). Les témoins de comportement
+ * ci-dessous restent justes tant qu'elle est là.
+ *
+ * Ce qui reste gardé est l'INVERSE, pour que la question ne se perde pas : un
+ * routeur de zone qui reviendrait dans un compose rouvre la juridiction du
+ * worker sur ses chemins, et le témoin rougit pour la faire reposer.
  */
-const DEPLOIEMENTS = [
-  { fichier: 'docker-compose.prod.yml', routeur: 'frontend-v3' },
-  { fichier: 'docker-compose.staging.yml', routeur: 'frontend-v3-staging' },
-] as const;
-
-/**
- * CE TÉMOIN N'A DE SUJET QUE LÀ OÙ LE LEGACY EST DÉPLOYÉ.
- *
- * `public/sw.js` n'aiguille que l'origine qui le SERT : sa juridiction sur la
- * zone v3 suppose DEUX occupants de la même origine — le legacy qui pose le
- * worker, la zone qui lui échappe. Staging n'en a plus qu'un depuis la
- * directive porteur du 2026-09-07 (§ « UN SEUL frontend sur staging, et c'est
- * la v3.1 ») : le conteneur `meeshy-frontend-v3-staging` a été retiré AVEC son
- * routeur, et `frontend-staging` sert désormais `isopen/meeshy-web-v31`. Il n'y
- * a plus de frontière à garder là-bas — il n'y a plus de second occupant.
- *
- * D'où la forme, qui reste à DEUX SENS et non un simple retrait de la ligne :
- * l'absence du routeur de zone n'est tolérée QUE si le déploiement ne sert plus
- * l'image du legacy. **Redéployer `apps/web` sur staging sans rendre son
- * routeur de zone fait rougir de nouveau** — c'est-à-dire exactement le cas où
- * la frontière redevient nécessaire. Un `return []` inconditionnel, lui, aurait
- * rendu le témoin muet sur ce déploiement pour toujours, et son silence
- * ressemblerait à un verdict favorable.
- *
- * On lit l'IMAGE et non le nom du service : `frontend-staging` a gardé son nom
- * en changeant d'occupant, donc le nom ne dit plus qui est là. Les mentions du
- * legacy en COMMENTAIRE ne comptent pas — l'ancre `image:` les écarte.
- */
-const IMAGE_DU_LEGACY = /^\s*image:.*isopen\/meeshy-(?:frontend|web):/m;
+const COMPOSES_DEPLOYES = ['docker-compose.prod.yml', 'docker-compose.staging.yml'] as const;
+const ROUTEUR_DE_ZONE = /traefik\.http\.routers\.frontend-v3[\w-]*\.rule=/;
 
 class FakeResponse {
   readonly ok: boolean;
@@ -253,43 +239,6 @@ function neverCalled(): (request: FakeRequest) => Promise<FakeResponse> {
   return jest.fn(async () => new FakeResponse('LEGACY_WORKER_SHOULD_NOT_FETCH', { ok: true }));
 }
 
-/**
- * Les chemins que les règles Traefik de la zone revendiquent AUJOURD'HUI, lus
- * dans les DEUX composes. Ce témoin garde le COMPORTEMENT — chaque chemin
- * réclamé échappe vraiment au listener ; l'anti-divergence, elle, est gardée
- * par `scripts/check-v3-pipeline.mjs`, qui EXÉCUTE `belongsToV3Zone` au lieu
- * de la recopier et pose l'invariant une fois par déploiement.
- *
- * `Path` ET `PathPrefix` : les deux matchers que Traefik distingue sur un
- * chemin. Cette extraction ne connaissait que le second et jetait le premier
- * SANS UN MOT — or `Path(`/`)` est la forme exacte employée quand la vitrine a
- * basculé sur staging, donc le seul chemin humain de la zone était invisible
- * ici. Un parseur qui n'en connaît qu'un rend le même verdict qu'un parseur
- * qui n'a rien à juger.
- */
-type CheminReclame = { readonly matcher: string; readonly valeur: string };
-
-function traefikV3Paths(): readonly CheminReclame[] {
-  return DEPLOIEMENTS.flatMap(({ fichier, routeur }) => {
-    const compose = fs.readFileSync(path.join(RACINE_DU_DEPOT, fichier), 'utf8');
-    const rule = compose
-      .split('\n')
-      .map((line) => line.trim())
-      .find((line) => line.includes(`traefik.http.routers.${routeur}.rule=`));
-    if (rule === undefined) {
-      if (!IMAGE_DU_LEGACY.test(compose)) return [];
-      throw new Error(
-        `la règle du routeur ${routeur} est absente de ${fichier}, qui sert pourtant encore ` +
-          `l'image du legacy : la zone v3 y retomberait sous la juridiction de public/sw.js`
-      );
-    }
-    return [...rule.matchAll(/(PathPrefix|Path)\(`([^`]+)`\)/g)].map(([, matcher, valeur]) => ({
-      matcher: matcher ?? '',
-      valeur: valeur ?? '',
-    }));
-  });
-}
-
 describe('public/sw.js — la zone v3 échappe entièrement au Service Worker legacy', () => {
   it('une NAVIGATION dans la zone n’est pas interceptée : le routeur redevient seul juge', () => {
     const cache = createFakeCache();
@@ -408,29 +357,15 @@ describe('public/sw.js — la zone v3 échappe entièrement au Service Worker le
     }
   );
 
-  it(
-    'JUMEAU — chaque chemin revendiqué par un routeur de la zone, en production ' +
-      'comme en staging, échappe au worker',
-    () => {
-      const chemins = traefikV3Paths();
-      expect(chemins.length).toBeGreaterThan(0);
-
-      const cache = createFakeCache();
-      const sw = loadServiceWorker({ fetchImpl: neverCalled(), cache });
-
-      for (const { matcher, valeur } of chemins) {
-        expect(sw.dispatchFetch(makeRequest(`${ORIGIN}${valeur}`, { mode: 'navigate' }))).toBeNull();
-
-        // `Path` est une ÉGALITÉ : il ne réclame AUCUN sous-chemin, et en
-        // exiger un ici ferait porter au worker une frontière que le routeur
-        // ne trace pas. Seul `PathPrefix` en réclame.
-        if (matcher !== 'PathPrefix') continue;
-        expect(
-          sw.dispatchFetch(makeRequest(`${ORIGIN}${valeur}/quelque-chose`, { mode: 'navigate' }))
-        ).toBeNull();
-      }
+  it('INVERSE du jumeau retiré — aucun compose déployé ne redéclare de routeur de zone (#5994)', () => {
+    for (const fichier of COMPOSES_DEPLOYES) {
+      const compose = fs.readFileSync(path.join(RACINE_DU_DEPOT, fichier), 'utf8');
+      expect({ fichier, routeurDeZone: ROUTEUR_DE_ZONE.test(compose) }).toEqual({
+        fichier,
+        routeurDeZone: false,
+      });
     }
-  );
+  });
 });
 
 /**

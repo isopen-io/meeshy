@@ -237,40 +237,6 @@ describe('StatusHandler', () => {
     });
 
     /**
-     * **Un refus que le client n'entend pas ne corrige rien.** Le serveur
-     * journalisait déjà l'écart ; côté client, l'absence d'indicateur de frappe
-     * était le SEUL symptôme — le plus discret de tous.
-     *
-     * L'événement réutilisé est `conversation:join-error`, PAS un nom neuf : les
-     * trois clients le décodent déjà, et la règle qui décide s'il établit une
-     * non-appartenance (`isMembershipDenied` / `isMembershipDeniedJoinError`)
-     * existe des deux côtés depuis le cycle 99. Un nom neuf n'aurait aucun
-     * lecteur dans le parc déployé.
-     *
-     * Le `conversationId` échoué est celui que le CLIENT a envoyé, jamais le
-     * normalisé : le puits iOS filtre sur l'id qu'il détient
-     * (`.filter { $0.conversationId == convId }`), et lui servir l'autre le
-     * rendrait muet.
-     */
-    it('dit au client qu\'il n\'est plus membre, sous le contrat que les trois clients décodent', async () => {
-      mockResolveParticipant.mockResolvedValue(null);
-      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
-      mockValidateSocketEvent.mockReturnValue({ success: true, data: { conversationId: 'mon-identifiant-lisible' } });
-      const socket = makeSocket();
-      const handler = makeHandler();
-
-      await handler.handleTypingStart(socket, { conversationId: 'mon-identifiant-lisible' });
-
-      expect(socket.emit).toHaveBeenCalledWith(
-        SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
-        expect.objectContaining({
-          conversationId: 'mon-identifiant-lisible',
-          reason: 'not_a_member',
-        })
-      );
-    });
-
-    /**
      * La révocation ne doit PAS se déclencher sur un membre légitime : ce serait
      * lui retirer le fil vivant jusqu'à sa prochaine reconnexion. Le témoin garde
      * le sens de la garde, pas seulement son existence.

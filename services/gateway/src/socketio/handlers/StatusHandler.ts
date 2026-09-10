@@ -11,7 +11,11 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
-import { resolveParticipant } from '../utils/participant-resolver';
+import {
+  resolveParticipant,
+  resolveMembershipDenialReason,
+  type MembershipDenialReason,
+} from '../utils/participant-resolver';
 import type { TypingEvent } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
@@ -39,6 +43,15 @@ const IDENTITY_CACHE_MAX_SIZE = 5_000;
 type CachedIdentity = { username: string; displayName: string };
 
 type ActiveTyper = { conversationId: string; userId: string; username: string; displayName: string };
+
+// Mêmes trois libellés que `ConversationHandler.handleConversationJoin` pour
+// ces trois motifs — le client affiche `message` tel quel (voir
+// `ConversationSocketHandler.handleSocketAccessRevoked` côté iOS).
+const MEMBERSHIP_DENIAL_MESSAGE: Record<MembershipDenialReason, string> = {
+  not_a_member: 'Vous n\'êtes pas membre de cette conversation',
+  banned: 'Vous êtes banni de cette conversation',
+  no_longer_member: 'Vous n\'êtes plus membre de cette conversation',
+};
 
 export class StatusHandler {
   private prisma: PrismaClient;
@@ -237,52 +250,37 @@ export class StatusHandler {
         connectedUsers: this.connectedUsers,
       });
       if (!participant) {
-        // **La room est une AUTORISATION MISE EN CACHE, et rien ne l'expirait**
-        // (#5947). `AuthHandler._joinUserConversations` place la socket dans
-        // toutes les rooms de l'utilisateur UNE fois, à l'authentification, et
-        // la diffusion de `message:new` vise la room sans jamais revérifier.
-        // Une appartenance qui cesse ensuite par un chemin qui ne passe pas par
-        // `endConversationMembership` — les cinq portes connues l'appellent,
-        // mais une écriture directe ou un nettoyage de données, non — laisse
-        // donc un abonnement VIVANT : l'ancien membre continue de recevoir le
-        // fil pour toute la durée de vie de sa socket.
+        // `resolveParticipant` filters `isActive: true` in its query: a `null`
+        // here does not distinguish "never a member" from "removed/banned/left".
+        // `typing:start` was the ONE membership-gated handler with no callback
+        // to report that back — message/reaction/location handlers all answer
+        // an ack. The room the socket joined at auth time (`_joinUserConversations`)
+        // is never re-verified either, so a removed member keeps receiving
+        // `message:new` in a conversation it can no longer type into: the ONLY
+        // client-visible tell was the missing typing indicator, silently.
         //
-        // Ce site est le SEUL qui prouve la non-appartenance à CHAQUE événement,
-        // et il se contentait d'un `return`. Il paie déjà la requête : révoquer
-        // ici ne coûte rien et referme la fenêtre au premier signe de vie de
-        // l'ancien membre.
-        //
-        // **Le verdict est une PREUVE, pas une ignorance.** `getConnectedUser` a
-        // déjà réussi vingt lignes plus haut, et une requête Prisma qui LÈVE
-        // remonte au `catch` de la méthode. Un `null` ici veut donc dire « la
-        // base a répondu, il n'y a pas de ligne active » — le seul état sur
-        // lequel il soit légitime d'évincer. Évincer sur une ignorance
-        // retirerait le fil vivant à un membre parfaitement légitime jusqu'à sa
-        // prochaine reconnexion.
-        logger.warn('typing:start — not a participant in conversation, revoking stale room subscription', {
-          userId,
-          conversationId: normalizedId,
-        });
+        // Reusing `conversation:join-error` — not inventing a new channel — is
+        // deliberate: web (`use-socket-cache-sync.ts`) and iOS
+        // (`ConversationSocketHandler`/`MessageSocketManager`) already purge
+        // their cache / close the open thread on a membership-denying reason,
+        // via the shared `isMembershipDeniedJoinError()` policy. No new client
+        // code is needed for the refusal to become visible.
+        // La room est une autorisation mise en cache (#5947) : une non-appartenance
+        // PROUVÉE ici l'expire, sinon l'ancien membre reçoit encore le fil.
         await socket.leave(ROOMS.conversation(normalizedId));
-
-        // **Le refus est DIT au client, sous un contrat qu'il décode déjà.**
-        // Le serveur journalisait l'écart depuis toujours ; côté client,
-        // l'absence d'indicateur de frappe en était le SEUL symptôme — le plus
-        // discret possible. `conversation:join-error` est réutilisé plutôt
-        // qu'un nom neuf : les trois clients le décodent, et la règle qui
-        // décide s'il établit une non-appartenance (`isMembershipDenied` /
-        // `isMembershipDeniedJoinError`) existe des deux côtés depuis le
-        // cycle 99. Un événement neuf n'aurait aucun lecteur dans le parc
-        // déployé.
-        //
-        // L'id échoué est celui que le CLIENT a envoyé, jamais le normalisé :
-        // le puits iOS filtre sur l'id qu'il détient
-        // (`.filter { $0.conversationId == convId }`), et lui servir l'autre le
-        // rendrait muet.
+        const reason = await resolveMembershipDenialReason({
+          prisma: this.prisma,
+          conversationId: normalizedId,
+          isAnonymous: connectedUser.isAnonymous,
+          // Même repli que `resolveParticipant` ci-dessus, pour la même raison.
+          anonymousParticipantId: connectedUser.participantId || connectedUser.id,
+          userId,
+        });
+        logger.warn('typing:start — not a participant in conversation', { userId, conversationId: normalizedId, reason });
         socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
-          conversationId: validated.conversationId,
-          reason: 'not_a_member',
-          message: 'Vous n\'êtes pas membre de cette conversation',
+          conversationId: normalizedId,
+          reason,
+          message: MEMBERSHIP_DENIAL_MESSAGE[reason],
         });
         return;
       }
