@@ -79,6 +79,94 @@ final class LocalizationCatalogGuardTests: XCTestCase {
         ]
     }
 
+    // MARK: - Doublons de clé (mesure sur le TEXTE, jamais sur le JSON parsé)
+
+    /// Chemins des catalogues, relatifs à la racine du dépôt — mêmes fichiers
+    /// que `catalogs()`, mais lus comme du TEXTE.
+    private static let catalogPaths = [
+        "apps/ios/Meeshy/Localizable.xcstrings",
+        "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings",
+    ]
+
+    /// Compte les occurrences de chaque clé de PREMIER NIVEAU dans le texte brut
+    /// du catalogue (l'objet `strings`), sans jamais passer par un parseur JSON.
+    ///
+    /// Un parseur JSON garde la DERNIÈRE valeur d'une clé répétée : le dictionnaire
+    /// qu'il produit ne peut donc jamais révéler qu'une clé était en double — c'est
+    /// exactement ce qui a laissé 68 doublons invisibles au catalogue de l'app
+    /// (#6021). Le comptage ci-dessous reproduit la forme que Xcode écrit pour
+    /// une entrée de premier niveau — 4 espaces d'indentation, la clé, puis `{` —
+    /// qu'elle ouvre un bloc multi-ligne (`"clé": {`) ou une entrée vide sur une
+    /// seule ligne (`"clé": {}`, ~130 occurrences dans le catalogue SDK).
+    private func topLevelKeyOccurrences(inRawText text: String) -> [String] {
+        var occurrences: [String] = []
+        let pattern = "^    \"((?:[^\"\\\\]|\\\\.)*)\":\\s*\\{"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        text.enumerateLines { line, _ in
+            let nsLine = line as NSString
+            guard let match = regex.firstMatch(
+                in: line, range: NSRange(location: 0, length: nsLine.length)
+            ) else { return }
+            occurrences.append(nsLine.substring(with: match.range(at: 1)))
+        }
+        return occurrences
+    }
+
+    /// Zéro doublon, mesuré sur le texte — le seul terrain où un doublon peut se
+    /// voir, puisque tout dictionnaire construit depuis le JSON les a déjà
+    /// silencieusement résolus à la dernière valeur.
+    func test_aucuneCléDePremierNiveauNestEnDouble() throws {
+        for relativePath in Self.catalogPaths {
+            let url = repoRoot().appendingPathComponent(relativePath)
+            let data = try Data(contentsOf: url)
+            let text = try XCTUnwrap(String(data: data, encoding: .utf8), "Encodage illisible : \(relativePath)")
+            let occurrences = topLevelKeyOccurrences(inRawText: text)
+            XCTAssertGreaterThan(occurrences.count, 1000, "Balayage texte quasi vide : \(relativePath)")
+
+            var counts: [String: Int] = [:]
+            for key in occurrences { counts[key, default: 0] += 1 }
+            let duplicates = counts.filter { $0.value > 1 }.keys.sorted()
+
+            XCTAssertTrue(
+                duplicates.isEmpty,
+                """
+                [\(relativePath)] \(duplicates.count) clé(s) de premier niveau en double — \
+                seule la DERNIÈRE occurrence est servie, la ou les précédentes sont un \
+                doublon mort qu'un outil qui réécrit le catalogue supprimera en silence :
+                \(duplicates.prefix(25).joined(separator: "\n"))
+                """
+            )
+        }
+    }
+
+    /// L'analyse doit reconnaître les deux formes qu'écrit Xcode pour une entrée
+    /// de premier niveau, et ignorer tout ce qui n'en est pas une.
+    func test_lAnalyseDesOccurrencesReconnaîtLesDeuxFormes() {
+        let sample = """
+        {
+          "sourceLanguage": "fr",
+          "strings": {
+            "a.b": {
+              "localizations": {
+                "en": {
+                  "stringUnit": {
+                    "state": "translated",
+                    "value": "hello"
+                  }
+                }
+              }
+            },
+            "c.d": {},
+            "a.b": {
+              "localizations": {}
+            }
+          },
+          "version": "1.0"
+        }
+        """
+        XCTAssertEqual(topLevelKeyOccurrences(inRawText: sample), ["a.b", "c.d", "a.b"])
+    }
+
     // MARK: - Marqueurs de format
 
     /// `%@`, `%lld`, `%1$@`… avec leur éventuel index de position.
