@@ -13,9 +13,10 @@
  *   2. les lignes du tableau — une ligne absente ne se voit pas, et une ligne
  *      dont le statut est un MOT EN DUR se voit encore moins.
  *
- * Les deux avaient dérivé au 2026-09-02. `chaines-v3` (le gate des chaînes
- * web-v3, écrit exprès, avec son étape nommée « Gate chaînes ») ne figurait
- * dans aucune des deux ; `test-python`, RALLUMÉ au sprint 0.3, était annoncé
+ * Les deux avaient dérivé au 2026-09-02. Le gate des chaînes de l'ancienne
+ * refonte v3 — écrit exprès, avec son étape nommée « Gate chaînes », et retiré
+ * depuis avec elle (#5994) — ne figurait dans aucune des deux ; `test-python`,
+ * RALLUMÉ au sprint 0.3, était annoncé
  * « disabled » par un mot écrit à la main, pendant qu'il consommait un runner
  * à chaque poussée.
  *
@@ -173,7 +174,7 @@ export const violations = (workflow) => {
 const MUTATIONS = [
   {
     nom: 'règle 1 — un job retiré du needs',
-    muter: (texte) => texte.replace('lifecycle-v3, chaines-v3,', 'lifecycle-v3,'),
+    muter: (texte) => texte.replace('test-python, test-audio-pipeline,', 'test-python,'),
     attendu: /n'est pas dans le needs/,
   },
   {

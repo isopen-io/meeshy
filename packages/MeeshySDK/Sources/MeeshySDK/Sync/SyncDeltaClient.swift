@@ -14,8 +14,8 @@ public protocol SyncDeltaTransporting: Sendable {
     func executer(_ requete: URLRequest) async throws -> (Data, HTTPURLResponse)
 }
 
-/// CE QUE LE CLIENT DEMANDE — le miroir du client web
-/// (`apps/web-old-version3/lib/realtime/sync/delta-client.ts`), paramètre pour paramètre.
+/// CE QUE LE CLIENT DEMANDE — les paramètres que la route `/sync` de la passerelle
+/// lit (`services/gateway/src/routes/sync/index.ts`).
 public struct SyncDeltaRequest: Sendable, Equatable {
     /// Le dernier `checkpoint` reçu, ou l'instant de la dernière ligne peinte au premier tour.
     public let since: String
