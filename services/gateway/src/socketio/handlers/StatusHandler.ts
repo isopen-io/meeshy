@@ -11,7 +11,11 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
-import { resolveParticipant } from '../utils/participant-resolver';
+import {
+  resolveParticipant,
+  resolveMembershipDenialReason,
+  type MembershipDenialReason,
+} from '../utils/participant-resolver';
 import type { TypingEvent } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
@@ -39,6 +43,15 @@ const IDENTITY_CACHE_MAX_SIZE = 5_000;
 type CachedIdentity = { username: string; displayName: string };
 
 type ActiveTyper = { conversationId: string; userId: string; username: string; displayName: string };
+
+// Mêmes trois libellés que `ConversationHandler.handleConversationJoin` pour
+// ces trois motifs — le client affiche `message` tel quel (voir
+// `ConversationSocketHandler.handleSocketAccessRevoked` côté iOS).
+const MEMBERSHIP_DENIAL_MESSAGE: Record<MembershipDenialReason, string> = {
+  not_a_member: 'Vous n\'êtes pas membre de cette conversation',
+  banned: 'Vous êtes banni de cette conversation',
+  no_longer_member: 'Vous n\'êtes plus membre de cette conversation',
+};
 
 export class StatusHandler {
   private prisma: PrismaClient;
@@ -237,7 +250,38 @@ export class StatusHandler {
         connectedUsers: this.connectedUsers,
       });
       if (!participant) {
-        logger.warn('typing:start — not a participant in conversation', { userId, conversationId: normalizedId });
+        // `resolveParticipant` filters `isActive: true` in its query: a `null`
+        // here does not distinguish "never a member" from "removed/banned/left".
+        // `typing:start` was the ONE membership-gated handler with no callback
+        // to report that back — message/reaction/location handlers all answer
+        // an ack. The room the socket joined at auth time (`_joinUserConversations`)
+        // is never re-verified either, so a removed member keeps receiving
+        // `message:new` in a conversation it can no longer type into: the ONLY
+        // client-visible tell was the missing typing indicator, silently.
+        //
+        // Reusing `conversation:join-error` — not inventing a new channel — is
+        // deliberate: web (`use-socket-cache-sync.ts`) and iOS
+        // (`ConversationSocketHandler`/`MessageSocketManager`) already purge
+        // their cache / close the open thread on a membership-denying reason,
+        // via the shared `isMembershipDeniedJoinError()` policy. No new client
+        // code is needed for the refusal to become visible.
+        // La room est une autorisation mise en cache (#5947) : une non-appartenance
+        // PROUVÉE ici l'expire, sinon l'ancien membre reçoit encore le fil.
+        await socket.leave(ROOMS.conversation(normalizedId));
+        const reason = await resolveMembershipDenialReason({
+          prisma: this.prisma,
+          conversationId: normalizedId,
+          isAnonymous: connectedUser.isAnonymous,
+          // Même repli que `resolveParticipant` ci-dessus, pour la même raison.
+          anonymousParticipantId: connectedUser.participantId || connectedUser.id,
+          userId,
+        });
+        logger.warn('typing:start — not a participant in conversation', { userId, conversationId: normalizedId, reason });
+        socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+          conversationId: normalizedId,
+          reason,
+          message: MEMBERSHIP_DENIAL_MESSAGE[reason],
+        });
         return;
       }
 

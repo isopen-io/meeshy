@@ -279,6 +279,32 @@ struct ConnectionBanner: View {
         max(0, base - SyncPillMetrics.topLift)
     }
 
+    /// **Le bas du chrome flottant d'une conversation**, mesuré au simulateur
+    /// (`idb ui describe-all`, 2026-09-10) : les boutons Retour / Appeler /
+    /// Rechercher / Mode de lecture / avatar occupent `y = 70…114`.
+    ///
+    /// Une constante plutôt qu'un couplage à l'état privé de `ConversationView`
+    /// — c'est le compromis que le site d'appel assumait déjà. Ce qui change,
+    /// c'est qu'elle est NOMMÉE et épinglée par un témoin : la valeur d'avant
+    /// (72) était écrite en littéral, et rien ne disait à quoi elle se
+    /// comparait.
+    static let conversationChromeBottom: CGFloat = 114
+
+    /// **La marge haute de la pastille DANS une conversation** (#5941).
+    ///
+    /// Le site d'appel passait `liftedTopPadding(base: 72)`. Or `topLift` vaut
+    /// 88 : la soustraction est négative, la borne la ramène à `0`, et la
+    /// bannière se posait donc à `y = 0` — sur le chrome, qu'elle recouvrait.
+    /// Le bandeau « @pseudo » masquait le bouton « Mode de lecture », constaté
+    /// à l'écran.
+    ///
+    /// **La remontée sous la Dynamic Island et le respect du chrome sont
+    /// incompatibles ici** : le chrome commence à 70 pt, l'île est au-dessus.
+    /// Il faut choisir, et c'est le chrome qui gagne — un contrôle recouvert
+    /// est un contrôle qu'on ne peut plus lire, alors qu'une annonce posée
+    /// 8 pt plus bas reste parfaitement visible.
+    static let conversationTopPadding: CGFloat = conversationChromeBottom + MeeshySpacing.sm
+
     var body: some View {
         // Skip rendering when StoryViewerView est présenté plein écran —
         // le fullScreenCover du root ne supprime pas les safeAreaInset /
@@ -332,7 +358,6 @@ struct ConnectionBanner: View {
         )
 
         IslandEmergingBanner(
-            tint: MeeshyColors.brandPrimary,
             settledSize: size,
             reduceMotion: reduceMotion
         ) {

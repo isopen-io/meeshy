@@ -155,8 +155,17 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         connectionState = .disconnected
     }
 
+    /// Ce que la PASSERELLE fait au moment où la jonction lui parvient (#5947).
+    ///
+    /// Sans ce crochet, aucun témoin ne peut reproduire la seule fenêtre qui
+    /// compte : celle où le serveur a DÉJÀ répondu et où le client n'a pas
+    /// encore branché son puits. Un témoin qui envoie la réponse « plus tard »
+    /// mesure un ordre que la production n'a pas.
+    var onJoinConversation: ((String) -> Void)?
+
     func joinConversation(_ conversationId: String) {
         joinConversationIds.append(conversationId)
+        onJoinConversation?(conversationId)
     }
 
     func leaveConversation(_ conversationId: String) {
