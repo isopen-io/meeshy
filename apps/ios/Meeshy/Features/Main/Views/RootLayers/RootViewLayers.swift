@@ -223,7 +223,12 @@ struct RootChromeLayer: ViewModifier {
             // Masqué pendant le lecteur de réels immersif (frère de ZStack, pas
             // un fullScreenCover — contrairement au story viewer déjà gated via
             // isStoryViewerPresenting, il n'avait aucune garde équivalente).
-            .overlay(alignment: .top) {
+            // `overlayPreferenceValue` et non `.overlay` : la marge haute de la
+            // pastille se lit sur ce que l'HÔTE déclare poser en haut
+            // (`SyncPillHostChromeKey`, posée par `CollapsibleHeader`), pas sur
+            // la route (#5944). La POSITION dans la chaîne est inchangée —
+            // §B2 de la spec d'empilement en dépend.
+            .overlayPreferenceValue(SyncPillHostChromeKey.self, alignment: .top) { hostChromeBottom in
                 if reelsPresenter.launch == nil {
                     ConnectionBanner(
                         conversationListViewModel: conversationViewModel,
@@ -232,22 +237,23 @@ struct RootChromeLayer: ViewModifier {
                         activeConversationId: activeConversationId
                     )
                     // La remontée sous la Dynamic Island est RÉSERVÉE à la
-                    // conversation (#4066). Hors conversation la pastille reprend
-                    // une assise explicite : 8 pt est la valeur que le viewer de
-                    // story portait avant la remontée du 25 août, et un jeton du
-                    // dépôt plutôt qu'une constante de plus. 72 pt fixe compense le
-                    // floatingHeaderSection propre à ConversationView (compromis
-                    // assumé plutôt qu'un couplage à cet état privé, spec §C1).
-                    // En conversation, la pastille se pose SOUS le chrome
-                    // flottant (#5941) : `liftedTopPadding(base: 72)` rendait
-                    // toujours 0 — `topLift` vaut 88, la soustraction est
+                    // conversation (#4066). En conversation, la pastille se pose
+                    // SOUS le chrome flottant (#5941) : `liftedTopPadding(base: 72)`
+                    // rendait toujours 0 — `topLift` vaut 88, la soustraction est
                     // négative, la borne la ramène à zéro — et la bannière
-                    // recouvrait les boutons Appeler / Rechercher / Mode de
-                    // lecture. La valeur est désormais NOMMÉE et épinglée par
-                    // un témoin.
-                    .padding(.top, router.currentConversationId != nil
-                        ? ConnectionBanner.conversationTopPadding
-                        : MeeshySpacing.sm)
+                    // recouvrait les boutons Appeler / Rechercher / Mode de lecture.
+                    //
+                    // Hors conversation, l'assise n'est PLUS un littéral (#5944).
+                    // Elle valait 8 pt pour tout le monde, « la valeur que le
+                    // viewer de story portait » — un hôte où la pastille est
+                    // gatée et n'est plus rendue du tout. Sept écrans montent un
+                    // `CollapsibleHeader` de 64 pt, et la pastille se posait en
+                    // plein dans « Meeshy Chats ». C'est désormais l'HÔTE qui
+                    // déclare sa hauteur ; les routes qui ne déclarent rien
+                    // gardent les 8 pt d'origine.
+                    .padding(.top, ConnectionBanner.topPadding(
+                        inConversation: router.currentConversationId != nil,
+                        hostChromeBottom: hostChromeBottom))
                 }
             }
             // Présentation d'appel (cover plein écran + PiP + pastille + bulle +
