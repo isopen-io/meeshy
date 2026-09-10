@@ -191,7 +191,9 @@ extension ConversationView {
             showViewOnce: previewMode,
             pendingEffects: $viewModel.pendingEffects,
             onRequestEffectsPicker: { viewModel.showEffectsPicker = true },
-            hideEffects: composerState.editingMessageId != nil
+            hideEffects: composerState.editingMessageId != nil,
+            // Porte de focus (#6003) : une réponse lève le clavier sans tap.
+            focusTrigger: $composerState.focusRequested
             )
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.ephemeralDuration != nil)

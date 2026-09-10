@@ -125,6 +125,123 @@ final class ConversationScrollControlsViewTests: XCTestCase {
     // locking the property wrapper (no ViewInspector dependency in this repo,
     // cf. `AvatarBannerNoRetryWiringTests`).
 
+    // MARK: - L'ŒIL voit des POINTS, VoiceOver entend un NOM (#5963)
+
+    /// **La frappe s'annonce par `(avatar) …`, pas par un nom** (directive
+    /// porteur 2026-09-10).
+    ///
+    /// La rangée de frappe posait la pile de visages PUIS `Text(typingLabel)`.
+    /// Le nom y était redondant à deux titres : la pile porte déjà la photo et
+    /// les initiales de celui qui écrit, et le libellé d'accessibilité du
+    /// bouton entier (`ConversationView.scrollToBottomAccessibilityLabel`)
+    /// annonce déjà « <nom>, Défiler vers le bas ». Le texte volait la largeur
+    /// de la capsule à l'aperçu du dernier message, qui vit sur la même ligne.
+    ///
+    /// `typingLabel(for:)` reste — c'est lui que le libellé VoiceOver consomme.
+    /// Ce qui disparaît, c'est son rendu VISUEL : une même chaîne ne peut pas
+    /// servir l'œil et le lecteur d'écran quand les deux n'ont pas besoin de la
+    /// même chose.
+    ///
+    /// Garde de SOURCE, assumée : le rendu SwiftUI n'est pas inspectable dans
+    /// ce dépôt (pas de ViewInspector, cf. `AvatarBannerNoRetryWiringTests`).
+    func test_laRangeeDeFrappeNAfficheAucunNom() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Conversation/ConversationScrollControlsView.swift")
+        XCTAssertFalse(
+            source.contains("Text(typingLabel)"),
+            "La frappe s'annonce par les visages et les points ; le nom appartient à VoiceOver."
+        )
+    }
+
+    /// Et la pile RESTE montée : retirer le texte ne doit pas retirer l'annonce.
+    /// Sans cette moitié, le témoin ci-dessus passerait au vert sur une rangée
+    /// de frappe entièrement supprimée.
+    func test_laPileDeVisagesResteMontee() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Conversation/ConversationScrollControlsView.swift")
+        XCTAssertTrue(source.contains("if hasTypingIndicator {"))
+        let apresGarde = source.components(separatedBy: "if hasTypingIndicator {")[1].prefix(2600)
+        XCTAssertTrue(
+            apresGarde.contains("typingAvatarStack"),
+            "La rangée de frappe doit continuer de poser les visages et les points animés."
+        )
+    }
+
+    /// Le NOM survit là où il sert : la fonction pure que le libellé
+    /// d'accessibilité consomme.
+    func test_leNomResteDisponiblePourVoiceOver() {
+        XCTAssertEqual(ConversationScrollControlsView.typingLabel(for: ["André"]), "André")
+    }
+
+    // MARK: - Les points APRÈS le visage, sans cadre (#5987)
+
+    /// **Les trois points étaient posés SUR les visages, dans une pastille
+    /// sombre** — un cadre dans un cadre, qui masquait la photo même qu'il
+    /// annonce.
+    ///
+    /// Directive porteur (2026-09-10) : « Les `...` de la frappe doivent être
+    /// APRÈS l'avatar de l'auteur et ne pas être dans un cadre, juste sans fond
+    /// et animé ».
+    ///
+    /// La pastille sombre n'était pas décorative : elle existait pour garder les
+    /// points BLANCS lisibles par-dessus une photo quelconque. Les sortir du
+    /// cadre retire cette raison — et rend les points illisibles s'ils restent
+    /// blancs sur une capsule claire. Ils prennent donc `contentColor`, l'encre
+    /// que la capsule élit déjà pour tout son contenu (`readableInk`, #5950).
+    func test_lesPointsNeSontPlusDansUnCadre() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Conversation/ConversationScrollControlsView.swift")
+        XCTAssertFalse(
+            source.contains("typingDotsBadge"),
+            "La pastille sombre posait un cadre par-dessus le visage qu'elle annonce."
+        )
+        XCTAssertFalse(
+            source.contains(".overlay(typingDotsBadge)"),
+            "Les points ne se superposent plus aux visages : ils les SUIVENT."
+        )
+    }
+
+    /// Et sans fond, ils doivent prendre l'encre de la capsule — blancs, ils
+    /// disparaîtraient sur un accent clair, exactement le défaut que #5950 a
+    /// fermé pour le reste du contenu.
+    func test_lesPointsPrennentLEncreDeLaCapsule() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Conversation/ConversationScrollControlsView.swift")
+        let dots = source.components(separatedBy: "private var typingDotsView")[1].prefix(300)
+        XCTAssertTrue(
+            dots.contains("contentColor"),
+            "Hors de sa pastille sombre, un point blanc est invisible sur un accent clair."
+        )
+    }
+
+    // MARK: - Le détail du média SOUS la miniature (#5987)
+
+    /// **Le détail suivait le libellé sur la même ligne** — « Photo · 1280×720
+    /// · 2,3 Mo » — au lieu de se poser sous la miniature qu'il décrit.
+    ///
+    /// Directive porteur : « met les détails du média en bas de la miniature
+    /// (image, vidéo, son, lien) et non à la suite directement ».
+    ///
+    /// Ce n'est pas qu'une place : la ligne de texte partage sa largeur avec
+    /// l'aperçu du dernier message, et le détail la lui volait. Sous la
+    /// miniature, il occupe une place que rien d'autre ne réclame.
+    func test_leDetailNeSuitPlusLeLibelleSurLaMemeLigne() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Conversation/ConversationScrollControlsView.swift")
+        XCTAssertFalse(
+            source.contains("attachmentSummary"),
+            "Joindre le détail au libellé par « · » est précisément la mise en ligne que le porteur retire."
+        )
+    }
+
+    /// Et il doit être RENDU quelque part : retirer la jonction sans reposer le
+    /// détail le ferait disparaître, ce qui passerait le témoin ci-dessus au
+    /// vert pour la mauvaise raison.
+    func test_leDetailEstPoseSousLaMiniature() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Conversation/ConversationScrollControlsView.swift")
+        let colonne = source.components(separatedBy: "private var unreadAttachmentColumn")
+        XCTAssertEqual(colonne.count, 2, "La miniature et son détail vivent désormais dans une colonne nommée.")
+        XCTAssertTrue(
+            colonne[1].prefix(700).contains("unreadAttachmentDetail"),
+            "Le détail se pose SOUS la miniature, dans la même colonne qu'elle."
+        )
+    }
+
     private func sdkSource(_ relativePath: String) throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // MeeshyUITests/

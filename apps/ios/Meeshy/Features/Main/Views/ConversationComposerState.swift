@@ -96,6 +96,10 @@ struct ConversationComposerState {
 
     // Reply & Edit
     var pendingReplyReference: ReplyReference? = nil
+    /// **La porte de focus du composer** (#6003), liée à
+    /// `UniversalComposerBar.focusTrigger`. Levée par `requestReplyFocus`,
+    /// remise à `false` par la barre dès qu'elle a pris le focus.
+    var focusRequested = false
     var editingMessageId: String? = nil
     var editingOriginalContent: String? = nil
     /// **Le brouillon en cours au moment d'entrer en édition (#4003).** Sans
@@ -119,6 +123,14 @@ struct ConversationComposerState {
 }
 
 extension ConversationComposerState {
+    /// Délai avant de lever le clavier pour une réponse (#6003). Nul pour un
+    /// geste sur la conversation déjà à l'écran ; à l'ouverture d'une
+    /// conversation poussée pour répondre, il laisse la transition de
+    /// navigation se terminer — un focus posé pendant la poussée est perdu.
+    static func replyFocusDelay(openingConversation: Bool) -> TimeInterval {
+        openingConversation ? 0.45 : 0
+    }
+
     /// Replaces the audio attachment `attachmentId` in place with the freshly
     /// edited recording. Editing a media attachment must never spawn a second
     /// tray chip — this mirrors the image editor's replace-by-id contract

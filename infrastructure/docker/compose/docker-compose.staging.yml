@@ -336,12 +336,10 @@ services:
   # ===========================================================================
   # **UN SEUL frontend sur staging, et c'est la v3.1** (directive porteur
   # 2026-09-07). Deux conteneurs y vivaient : `meeshy-frontend-staging`
-  # (`isopen/meeshy-web:staging`, le legacy) et `meeshy-frontend-v3-staging`
-  # (`isopen/meeshy-web-v3:staging`, l'ancienne refonte). Cette dernière est
-  # ANNULÉE et ne reçoit plus rien (§ GEL DE LA V3 du CLAUDE.md racine) : la
-  # garder déployée occupait un port, une règle Traefik de vingt chemins et une
-  # place dans chaque diagnostic, pour servir du code que personne ne modifie
-  # plus.
+  # (`isopen/meeshy-web:staging`, le legacy) et celui de l'ancienne refonte v3,
+  # annulée puis retirée du dépôt (#5994). La garder déployée occupait un port,
+  # une règle Traefik de vingt chemins et une place dans chaque diagnostic,
+  # pour servir du code que personne ne modifiait plus.
   #
   # La v3.1 (`apps/web-v3`) est le SEUL chantier web. `docker.yml` construit
   # déjà son image (`meeshy-web-v31`) et la tague `staging` sur `dev` : il ne
@@ -385,7 +383,7 @@ services:
       - "traefik.http.routers.frontend-staging.tls.certresolver=letsencrypt"
       - "traefik.http.services.frontend-staging.loadbalancer.server.port=3400"
       # Plus aucun routeur ne partage la zone : la priorité explicite qui
-      # arbitrait avec `frontend-v3-staging` n'a plus d'arbitrage à rendre. Un
+      # arbitrait avec le conteneur de l'ancienne refonte v3 n'a plus d'arbitrage à rendre. Un
       # `priority` laissé là déclarerait une concurrence qui n'existe plus.
 
   # ===========================================================================

@@ -32,7 +32,13 @@ const log = enhancedLogger.child({ module: 'AchievementReachService' });
 /** Une heure : la plus grande conversation du produit ne bouge pas plus vite. */
 export const REACH_CACHE_TTL_MS = 60 * 60 * 1000;
 
-const CONVERSATION_TYPES_HORS_CATALOGUE = ['global', 'public'] as const;
+// **Importée, plus recopiée** (#5940). Ce fichier en tenait sa propre copie —
+// `['global', 'public']` — pendant que `CerclesAchievements` tenait la sienne.
+// Les deux mesurent la MÊME famille (`conversation.join`) : l'une son volume,
+// l'autre son ampleur atteignable. Deux listes homonymes qui divergent font
+// répondre « rejoindre » et « jusqu'où » sur des ensembles différents, et rien
+// ne le signale — c'est arrivé le jour où `direct` est entré dans l'une.
+import { CONVERSATION_TYPES_HORS_CATALOGUE } from './CerclesAchievements';
 
 type Cache = { readonly reach: AchievementReach; readonly expiresAt: number };
 

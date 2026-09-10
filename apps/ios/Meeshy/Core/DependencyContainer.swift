@@ -237,9 +237,29 @@ final class DependencyContainer {
         // lecture `pendingOutboxCount()` et rien d'autre. Le toast, lui, reste
         // gouverné par `sessionWasInvalidated` — faux au démarrage à froid, donc
         // aucun message ne s'affiche pour une purge de résidus.
-        AuthManager.shared.$isAuthenticated
-            .removeDuplicates()
-            .filter { !$0 }
+        // #5968 — le booléen SEUL confond « pas encore regardé » et « regardé,
+        // personne ». `isAuthenticated` naît `false`, `checkExistingSession()`
+        // est async, et ce conteneur s'abonne à la CONSTRUCTION de l'`App` : un
+        // `@Published` rejoue sa valeur courante au nouvel abonné, donc `false`
+        // traversait `filter { !$0 }` et la purge partait à CHAQUE démarrage à
+        // froid — 25 messages et 7 lignes d'outbox effacés sur une session
+        // parfaitement valide, mesuré au simulateur de recette.
+        //
+        // Le commentaire de #5913 concluait « un `filter { !$0 }` suffit à
+        // garder le démarrage CONNECTÉ hors de la purge ». C'est cette phrase
+        // que la mesure réfute : au moment où le filtre s'applique, personne
+        // n'a encore regardé s'il y a une session.
+        //
+        // `hasResolvedStoredSession` apporte le troisième état. Le cas de #5913
+        // — app tuée, jeton expiré, session invalidée entre deux lancements —
+        // reste couvert : il se présente comme « résolu, personne », et purge.
+        Publishers.CombineLatest(
+            AuthManager.shared.$hasResolvedStoredSession,
+            AuthManager.shared.$isAuthenticated
+        )
+        .map { SessionPurgeDecision.shouldPurgeLocalMessages(sessionResolved: $0, isAuthenticated: $1) }
+        .removeDuplicates()
+        .filter { $0 }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 let invalidated = self?.sessionWasInvalidated ?? false
