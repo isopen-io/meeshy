@@ -745,41 +745,40 @@ export class MaintenanceService {
   }
 
   /**
-   * Purge, à l'expiration AUTOMATIQUE de la période de grâce, les trois
-   * tables ISOLÉES d'un compte supprimé (#3632) — sessions, profil vocal,
-   * liens de partage créés. Ne dépend PAS d'un clic sur le lien « supprimer
-   * maintenant » du rappel hebdomadaire : la promesse publique (« après 30
-   * jours, suppression définitive ») est une échéance, pas une action que
-   * l'utilisateur doit encore déclencher lui-même.
-   *
-   * Best-effort, après l'écriture qui a déjà fait passer la ligne en
-   * `GRACE_PERIOD_EXPIRED` — un échec ici ne doit pas faire compter
-   * l'expiration elle-même comme ratée par l'appelant ; la prochaine passe
-   * horaire rejouera la purge (`deleteMany` est idempotent).
+   * Motif commun aux cinq catégories de purge/anonymisation d'un compte
+   * expiré, ci-dessous : un appel best-effort, après l'écriture qui a déjà
+   * fait passer la ligne en `GRACE_PERIOD_EXPIRED` — un échec ne doit jamais
+   * faire compter l'expiration elle-même comme ratée par l'appelant, la
+   * prochaine passe horaire rejouera l'étape (chacune est idempotente par
+   * construction, cf. son propre module).
    */
-  private async purgeIsolatedDataOfExpiredAccount(userId: string): Promise<void> {
+  private async bestEffortDeletionStep(userId: string, label: string, step: () => Promise<unknown>): Promise<void> {
     try {
-      await purgeAccountIsolatedData(this.prisma, userId);
+      await step();
     } catch (error) {
-      logger.warn(`⚠️ [DELETION] Isolated-data purge failed for expired account user=${userId}:`, error);
+      logger.warn(`⚠️ [DELETION] ${label} failed for expired account user=${userId}:`, error);
     }
+  }
+
+  /**
+   * Les trois tables ISOLÉES d'un compte supprimé (#3632) — sessions, profil
+   * vocal, liens de partage créés. Ne dépend PAS d'un clic sur le lien
+   * « supprimer maintenant » du rappel hebdomadaire : la promesse publique
+   * (« après 30 jours, suppression définitive ») est une échéance, pas une
+   * action que l'utilisateur doit encore déclencher lui-même.
+   */
+  private purgeIsolatedDataOfExpiredAccount(userId: string): Promise<void> {
+    return this.bestEffortDeletionStep(userId, 'Isolated-data purge', () => purgeAccountIsolatedData(this.prisma, userId));
   }
 
   /**
    * `privacy.json` promet, à la fin de la grâce : « les messages dans les
    * conversations partagées sont anonymisés » — une exception NOMMÉE à
    * « suppression définitive de toutes vos données personnelles », pas une
-   * omission. Après l'écriture, jamais avant, même raison que
-   * `revokeSessionsOfDeletedAccount` : la ligne `User` est déjà posée, et un
-   * échec ici ne doit pas être compté comme une expiration ratée par
-   * l'appelant. Détail : `services/messaging/anonymizeDeletedAccountMessages.ts`.
+   * omission. Détail : `services/messaging/anonymizeDeletedAccountMessages.ts`.
    */
-  private async purgeMessagesOfDeletedAccount(userId: string): Promise<void> {
-    try {
-      await anonymizeMessagesOfDeletedAccount(this.prisma, userId);
-    } catch (error) {
-      logger.warn(`⚠️ [DELETION] Message anonymization failed for deleted account user=${userId}:`, error);
-    }
+  private purgeMessagesOfDeletedAccount(userId: string): Promise<void> {
+    return this.bestEffortDeletionStep(userId, 'Message anonymization', () => anonymizeMessagesOfDeletedAccount(this.prisma, userId));
   }
 
   /**
@@ -789,31 +788,20 @@ export class MaintenanceService {
    * `purgeMessagesOfDeletedAccount` : les attachments des messages du compte
    * sont déjà supprimés par #5689 à ce stade, ce balayage-ci couvre ce qui
    * reste (attachments en attente, messages déjà `deletedAt` avant #5689,
-   * tout `PostMedia`). Best-effort, même raison que ses voisins ci-dessus.
-   * Détail : `services/purgeDeletedAccountMedia.ts`.
+   * tout `PostMedia`). Détail : `services/purgeDeletedAccountMedia.ts`.
    */
-  private async purgeMediaOfExpiredAccount(userId: string): Promise<void> {
-    try {
-      await purgeMediaOfDeletedAccount(this.prisma, this.attachmentService, this.mediaService, userId);
-    } catch (error) {
-      logger.warn(`⚠️ [DELETION] Media purge failed for deleted account user=${userId}:`, error);
-    }
+  private purgeMediaOfExpiredAccount(userId: string): Promise<void> {
+    return this.bestEffortDeletionStep(userId, 'Media purge', () => purgeMediaOfDeletedAccount(this.prisma, this.attachmentService, this.mediaService, userId));
   }
 
   /**
-   * Anonymise, dans le même mouvement, l'identité (#5691) de la ligne `User` —
-   * même contrat best-effort/idempotent que ses voisins ci-dessus (`updateMany`
-   * filtré sur le marqueur déjà posé, rejouable sans effet de bord par la
-   * prochaine passe horaire). Dernière des quatre catégories promises par
-   * `privacy.json` (#4183 critère 7) : après cet appel, la ligne `User` ne
-   * porte plus aucun champ PII identifiant.
+   * L'identité (#5691) de la ligne `User` — `updateMany` filtré sur le
+   * marqueur déjà posé, rejouable sans effet de bord. Dernière des quatre
+   * catégories promises par `privacy.json` (#4183 critère 7) : après cet
+   * appel, la ligne `User` ne porte plus aucun champ PII identifiant.
    */
-  private async anonymizeIdentityOfExpiredAccount(userId: string): Promise<void> {
-    try {
-      await anonymizeUserIdentity(this.prisma, userId);
-    } catch (error) {
-      logger.warn(`⚠️ [DELETION] Identity anonymization failed for expired account user=${userId}:`, error);
-    }
+  private anonymizeIdentityOfExpiredAccount(userId: string): Promise<void> {
+    return this.bestEffortDeletionStep(userId, 'Identity anonymization', () => anonymizeUserIdentity(this.prisma, userId));
   }
 
   /**
@@ -823,14 +811,9 @@ export class MaintenanceService {
    * départ volontaire et le retrait admin (#5760/#5799/#5800) —
    * `isActive: false` + `leftAt` — jamais un `deleteMany`, pour la même
    * raison qu'eux : l'historique de modération de la communauté survit.
-   * Best-effort, même posture que ses voisins ci-dessus.
    */
-  private async deactivateCommunityMembershipsOfExpiredAccount(userId: string): Promise<void> {
-    try {
-      await deactivateCommunityMembershipsOfDeletedAccount(this.prisma, userId);
-    } catch (error) {
-      logger.warn(`⚠️ [DELETION] Community membership deactivation failed for deleted account user=${userId}:`, error);
-    }
+  private deactivateCommunityMembershipsOfExpiredAccount(userId: string): Promise<void> {
+    return this.bestEffortDeletionStep(userId, 'Community membership deactivation', () => deactivateCommunityMembershipsOfDeletedAccount(this.prisma, userId));
   }
 
   /**
