@@ -208,6 +208,24 @@ struct RootChromeLayer: ViewModifier {
     let showFeed: Bool
     let showMenu: Bool
 
+    /// Marge haute de la pastille hors conversation. Fonction pure — c'est la
+    /// DÉCISION qui se teste, pas le rendu (#5944).
+    ///
+    /// `currentRoute == nil` désigne la racine (liste de conversations ou
+    /// flux, tous deux montés avec leur propre `CollapsibleHeader` — « Meeshy
+    /// Chats » ou « Meeshy Feed »), qui réclame donc le même dégagement
+    /// qu'une route poussée qui en déclare un. Une route qui n'en déclare
+    /// aucun garde l'assise minimale.
+    static func syncPillTopPadding(currentRoute: Route?) -> CGFloat {
+        guard let currentRoute else {
+            return CollapsibleHeaderMetrics.expandedHeight + MeeshySpacing.sm
+        }
+        guard let headerHeight = currentRoute.collapsibleHeaderHeight else {
+            return MeeshySpacing.sm
+        }
+        return headerHeight + MeeshySpacing.sm
+    }
+
     func body(content: Content) -> some View {
         content
             // Point de montage unique du SyncPill (indicateur de frappe global +
@@ -232,15 +250,14 @@ struct RootChromeLayer: ViewModifier {
                         activeConversationId: activeConversationId
                     )
                     // La remontée sous la Dynamic Island est RÉSERVÉE à la
-                    // conversation (#4066). Hors conversation la pastille reprend
-                    // une assise explicite : 8 pt est la valeur que le viewer de
-                    // story portait avant la remontée du 25 août, et un jeton du
-                    // dépôt plutôt qu'une constante de plus. 72 pt fixe compense le
+                    // conversation (#4066). 72 pt fixe compense le
                     // floatingHeaderSection propre à ConversationView (compromis
                     // assumé plutôt qu'un couplage à cet état privé, spec §C1).
+                    // Hors conversation, ce qui décide n'est pas un booléen mais
+                    // ce que l'hôte courant DÉCLARE — `syncPillTopPadding` (#5944).
                     .padding(.top, router.currentConversationId != nil
                         ? ConnectionBanner.liftedTopPadding(base: 72)
-                        : MeeshySpacing.sm)
+                        : Self.syncPillTopPadding(currentRoute: router.currentRoute))
                 }
             }
             // Présentation d'appel (cover plein écran + PiP + pastille + bulle +
