@@ -87,7 +87,7 @@ struct ProgressionLevelCard: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "star.fill")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundColor(tint)
                         .accessibilityHidden(true)
                     Text(ProgressionCopy.levelTitle(level.level))
@@ -125,7 +125,7 @@ struct ProgressionStreakCard: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "flame.fill")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundColor(tint)
                         .accessibilityHidden(true)
                     Text(ProgressionCopy.streak(streak.currentDays))
@@ -292,7 +292,7 @@ struct ProgressionNotice: View {
     var body: some View {
         HStack(alignment: .top, spacing: MeeshySpacing.md) {
             Image(systemName: symbol)
-                .font(.system(size: 16, weight: .semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundColor(tint)
                 .accessibilityHidden(true)
             Text(text)
@@ -356,7 +356,7 @@ struct ProgressionElanBanner: View {
     var body: some View {
         HStack(alignment: .top, spacing: MeeshySpacing.sm) {
             Image(systemName: "wand.and.stars")
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(tint)
                 .accessibilityHidden(true)
             Text(
@@ -435,7 +435,7 @@ private struct ProgressionAchievementChip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Image(systemName: entry.unlocked ? "star.fill" : "medal")
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(entry.unlocked ? MeeshyColors.success : theme.textMuted)
                 .accessibilityHidden(true)
             // Une famille hors catalogue rend `nil` : on montre alors RIEN
