@@ -112,6 +112,7 @@ export const FocalRow = memo(function FocalRow({
   displayLanguage,
   onPickLanguage,
   myReactions,
+  onReact,
   selected,
   onToggleSelect,
 }: {
@@ -135,8 +136,12 @@ export const FocalRow = memo(function FocalRow({
    */
   onPickLanguage?: (code: string) => void;
   /** Les emojis que CE lecteur a posés sur CE message (`reaction-store.ts`)
-   * — marque `ReactionChip mine` (#5814, T12), sans en faire un bouton. */
+   * — marque `ReactionChip mine` (#5814, T12). */
   myReactions?: readonly string[];
+  /** Retire une réaction MIENNE en tapant sa capsule (#5865) — jamais câblé
+   * sur une capsule d'autrui (`ReactionChip`, `onToggle`). `undefined` ⇒ la
+   * capsule reste un `<span>` inerte (loi 4). */
+  onReact?: (emoji: string) => void;
   /** Mode sélection ACTIF (`undefined` hors sélection) — `false` = rangée
    * non cochée, `true` = cochée (#5814, question 5). */
   selected?: boolean;
@@ -521,9 +526,18 @@ export const FocalRow = memo(function FocalRow({
                   onPick={(code) => onPickLanguage?.(code)}
                   limit={FLAG_LIMIT_PLAIN}
                 />
-                {reactions.map(([glyph, count]) => (
-                  <ReactionChip key={glyph} glyph={glyph} count={count} mine={myReactions?.includes(glyph) ?? false} />
-                ))}
+                {reactions.map(([glyph, count]) => {
+                  const mine = myReactions?.includes(glyph) ?? false;
+                  return (
+                    <ReactionChip
+                      key={glyph}
+                      glyph={glyph}
+                      count={count}
+                      mine={mine}
+                      {...(mine && onReact !== undefined ? { onToggle: () => onReact(glyph) } : {})}
+                    />
+                  );
+                })}
               </div>
             ) : elected ? (
               /* DÉFAUT 1 (#5648, correction de revue) — le recouvrement du
