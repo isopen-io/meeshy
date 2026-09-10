@@ -19,6 +19,7 @@ import { composeMessageLabel } from '@/lib/view/message-a11y-label';
 import { served } from '@/lib/api/prism';
 import type { SelectionState } from '@/lib/view/selection';
 import { usesFlatRow } from '@/lib/reading-mode/decision';
+import { protectionOf } from '@/lib/reading-mode/protection';
 import type { ThreadScene } from '@/lib/reading-mode/scene';
 
 /**
@@ -233,11 +234,18 @@ export function ThreadModes({
             translations: p.message.translations,
             original: p.message.content,
           });
+          /* LA PROTECTION GOUVERNE LE LIBELLÉ (revue #5774) — la MÊME loi et
+             le MÊME `expiredIds` que les deux peaux consomment plus bas
+             (`FocalRow`/`Bubble`, `expired={expiredIds.has(...)}`) : sans
+             elle, `aria-label` annonçait EN CLAIR le texte que la rangée
+             floute ou remplace par un tombstone. */
+          const rowProtection = expiredIds.has(p.message.id) ? 'expired' : protectionOf(p.message, Date.now());
           const rowLabel = composeMessageLabel({
             message: p.message,
             isMine: isMineOf(p.message, viewerId),
             servedText: rowServed.text,
             delivery: checkStatusOf(p.message, rowDelivery),
+            protection: rowProtection,
           });
           return (
             <li

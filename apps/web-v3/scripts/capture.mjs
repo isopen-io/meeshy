@@ -114,6 +114,54 @@ for (const scheme of ['dark', 'light']) {
     await page.close();
   }
 
+  /**
+   * thread-focal-chrome-hidden (#5774, travail 3/3) — LE CHROME ESCAMOTÉ,
+   * pendant le geste. Un contexte À PART parce qu'il lui faut `hasTouch` :
+   * l'escamotage suit le DOIGT (`isDragging`), jamais la molette
+   * (`MessageListViewController.swift:585-611`) — une capture à la molette
+   * montrerait le fil au repos et mentirait sur ce que le lot livre.
+   * `c-rattrapage` est le corpus (trois jours, assez de rangées) ; son mode
+   * est POSÉ à `focal`, sans quoi il s'ouvrirait en Résumé Vivant.
+   */
+  {
+    const touchContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 2,
+      hasTouch: true,
+      colorScheme: scheme === 'light' ? 'light' : 'dark',
+    });
+    await touchContext.addInitScript(() => {
+      try {
+        localStorage.setItem('meeshy.reading-mode.u_u-viewer.c-rattrapage', 'focal');
+      } catch {
+        /* navigation privée */
+      }
+    });
+    const page = await touchContext.newPage();
+    await page.clock.setFixedTime(INSTANT);
+    await page.goto(`${BASE}/c/c-rattrapage`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(500);
+    await page.evaluate(() => {
+      const el = document.querySelector('main');
+      const rect = el.getBoundingClientRect();
+      const x = Math.round(rect.left + rect.width / 2);
+      const y = Math.round(rect.top + rect.height / 2);
+      const point = (clientY) => new Touch({ identifier: 1, target: el, clientX: x, clientY });
+      const start = point(y);
+      el.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, touches: [start], targetTouches: [start], changedTouches: [start] }));
+      for (let i = 0; i < 8; i += 1) {
+        el.scrollTop -= 60;
+        const move = point(y + 60);
+        el.dispatchEvent(new TouchEvent('touchmove', { bubbles: true, touches: [move], targetTouches: [move], changedTouches: [move] }));
+      }
+    });
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${OUTPUT}thread-focal-chrome-hidden.${scheme}.png` });
+    console.log(`  thread-focal-chrome-hidden · ${scheme}`);
+    await page.close();
+    await touchContext.close();
+  }
+
   // thread-focal-scene — après 4,2 s de `wheel` soutenu (< 4,5 s d'aplatissement).
   {
     const page = await context.newPage();

@@ -1,6 +1,7 @@
 import { kindOf } from './message';
 import type { Delivery } from './message';
 import { time } from '@/lib/grouping';
+import type { ProtectionKind } from '@/lib/reading-mode/protection';
 import type { Attachment, Message } from '@/lib/api/types';
 
 /**
@@ -22,7 +23,36 @@ import type { Attachment, Message } from '@/lib/api/types';
  * Chaque segment est OMIS quand il n'a rien à dire — jamais une virgule
  * flottante ni un « undefined » : un message texte simple sans historique
  * rend `"Bruno Bêta, Bonjour, 09:02"`, pas plus.
+ *
+ * ET LA PROTECTION GOUVERNE CE LIBELLÉ (revue #5774). La première forme de ce
+ * module composait `servedText` SANS regarder `protectionOf` : la rangée
+ * peignait « Message supprimé » ou un contenu FLOUTÉ pendant que
+ * `aria-label` annonçait le texte EN CLAIR à tout lecteur d'écran — mesuré
+ * sur `/c/c-protection` : `aria-label="Amina Diallo, Le code du coffre est
+ * 4817-2290., 10:14"`, et `check-thread-states.mjs` rouge sur ses quatre
+ * assertions « nulle part dans le DOM — attributs compris ».
+ *
+ * C'est la leçon 275 du `CLAUDE.md` racine, rejouée sur une autre charge :
+ * « une protection de CONTENU se mesure sur tout ce que la charge
+ * TRANSPORTE ». Ici la charge est le NOM ACCESSIBLE, et ce qui partait à
+ * côté du pixel gardé était le secret lui-même. La règle a donc UN site :
+ * `composeMessageLabel` prend la PROTECTION et sert le même placeholder que
+ * la surface, jamais le texte.
  */
+
+/**
+ * LE VOCABULAIRE DU PLACEHOLDER — celui que les surfaces PEIGNENT déjà
+ * (`components/protected-content.tsx` : `ProtectionNotice` pour
+ * supprimé/brûlé, `aria-label="Contenu masqué"` pour le voile) : un second
+ * vocabulaire ferait dire deux choses différentes à l'œil et à l'oreille
+ * pour un même état.
+ */
+const PROTECTED_LABEL: Readonly<Record<Exclude<ProtectionKind, 'standard'>, string>> = {
+  deleted: 'Message supprimé',
+  burned: 'Message vu et supprimé',
+  expired: 'Message éphémère expiré',
+  veiled: 'Contenu masqué',
+};
 
 const pluralize = (count: number, singular: string, plural: string): string =>
   `${count} ${count === 1 ? singular : plural}`;
@@ -73,13 +103,30 @@ export type MessageLabelInput = {
   readonly servedText: string;
   /** `checkStatusOf(message, localDelivery)` — `null` hors accusé à peindre (message d'autrui, envoi échoué). */
   readonly delivery: Delivery | null;
+  /**
+   * `protectionOf(message, now)` — la MÊME loi que la surface consomme
+   * (`lib/reading-mode/protection.ts`), jamais recalculée ici. OBLIGATOIRE :
+   * un défaut à `'standard'` rendrait la fuite silencieuse au premier
+   * appelant qui l'oublie.
+   */
+  readonly protection: ProtectionKind;
 };
 
 /**
  * Compose le libellé complet d'une rangée de message — appelé UNE fois par
  * rangée montée (Focal, Script ou Bulles), jamais recalculé par sous-partie.
  */
-export function composeMessageLabel({ message, isMine, servedText, delivery }: MessageLabelInput): string {
+export function composeMessageLabel({ message, isMine, servedText, delivery, protection }: MessageLabelInput): string {
+  /**
+   * TROIS ÉTATS NE PEIGNENT AUCUN CHROME — un tombstone plat, ou rien du
+   * tout (`focal-row.tsx:192` rend un nœud VIDE pour l'expiré). Leur libellé
+   * est le tombstone SEUL : ni auteur, ni heure, ni pièce jointe — rien de ce
+   * que la rangée ne montre pas.
+   */
+  if (protection === 'deleted' || protection === 'burned' || protection === 'expired') {
+    return PROTECTED_LABEL[protection];
+  }
+
   const segments: string[] = [];
 
   const author = message.sender?.displayName;
@@ -90,9 +137,16 @@ export function composeMessageLabel({ message, isMine, servedText, delivery }: M
     segments.push(`réponse à ${quotedAuthor}`);
   }
 
-  if (servedText !== '') segments.push(servedText);
-
-  segments.push(...attachmentSegments(message.attachments));
+  /**
+   * LE VOILE remplace le TEXTE **et** l'inventaire des pièces jointes : « 1
+   * image » sur un message à vue unique dit déjà ce que le flou cache.
+   */
+  if (protection === 'veiled') {
+    segments.push(PROTECTED_LABEL.veiled);
+  } else {
+    if (servedText !== '') segments.push(servedText);
+    segments.push(...attachmentSegments(message.attachments));
+  }
 
   segments.push(time(message.createdAt));
 

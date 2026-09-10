@@ -18,6 +18,9 @@ import { SCENE_REST_DELAY_MS } from '@/lib/reading-mode/metrics';
 
 export type SceneMode = 'focal' | 'script';
 
+/** D'où vient le geste ouvert — le DOIGT (`touch`) ou un périphérique indirect (molette, clavier). */
+export type GestureOrigin = 'touch' | 'indirect';
+
 export type SceneActivityState = {
   /** La loi PARTAGÉE du révélé (`@meeshy/shared/utils/scroll-activity`) — jamais recopiée. */
   readonly reveal: ScrollActivityState;
@@ -29,14 +32,41 @@ export type SceneActivityState = {
   readonly lastAt: number | null;
   /** L'armement de l'élection (Focal seul) — SURVIT à la fermeture de la fenêtre de révélé. */
   readonly armed: boolean;
+  /**
+   * LE DOIGT EST POSÉ SUR LE VERRE (#5774, travail 3/3) — `touchstart` a eu
+   * lieu, `touchend`/`touchcancel` pas encore. NE SUFFIT PAS à dire que la
+   * liste est TIRÉE : un simple appui (ouvrir le menu d'un message, poser
+   * une réaction) pose ce fait et ne fait défiler RIEN.
+   */
+  readonly touching: boolean;
+  /**
+   * LA LISTE EST TIRÉE (#5774, travail 3/3) — miroir EXACT d'`isDragging`
+   * (`MessageListViewController.swift:585-592`), qui côté UIKit ne devient
+   * vrai qu'à `scrollViewWillBeginDragging`, c'est-à-dire quand le doigt a
+   * franchi le seuil de panoramique — JAMAIS au simple contact.
+   *
+   * Le web n'a pas cet événement : son équivalent mesuré est « le doigt est
+   * posé ET la liste a bougé depuis ». Sans cette seconde moitié, un TAP
+   * escamotait tout le chrome le temps de l'appui puis le ramenait — mesuré
+   * au navigateur pendant la revue de ce lot : `touchstart` seul suffisait à
+   * poser `data-chrome-header="entire"` et à faire tomber l'en-tête à
+   * `opacity: 0` en 250 ms, sur chaque tape d'une bulle.
+   */
+  readonly held: boolean;
+  /** D'où vient le geste ACTUELLEMENT ouvert (`grab`/`intent`) — `null` avant tout geste. */
+  readonly origin: GestureOrigin | null;
 };
 
 export type SceneEvent =
-  | { readonly type: 'intent'; readonly at: number }
+  | { readonly type: 'intent'; readonly at: number; readonly origin?: GestureOrigin }
   | { readonly type: 'scrolled'; readonly at: number; readonly y: number }
   | { readonly type: 'tick'; readonly at: number }
   | { readonly type: 'programmatic' }
-  | { readonly type: 'flatten' };
+  | { readonly type: 'flatten' }
+  /** Le doigt se POSE (`touchstart`) — miroir `isDragging = true`. */
+  | { readonly type: 'grab'; readonly at: number }
+  /** Le doigt se LÈVE (`touchend`/`touchcancel`) — miroir `isDragging = false`. */
+  | { readonly type: 'release'; readonly at: number };
 
 export const initialState = (): SceneActivityState => ({
   reveal: scrollActivityLaw.initialState(),
@@ -45,6 +75,9 @@ export const initialState = (): SceneActivityState => ({
   lastY: null,
   lastAt: null,
   armed: false,
+  touching: false,
+  held: false,
+  origin: null,
 });
 
 /**
@@ -62,11 +95,31 @@ export const flatten = (state: SceneActivityState): SceneActivityState => ({
 export const reduce = (
   state: SceneActivityState,
   event: SceneEvent,
-  { mode }: { readonly mode: SceneMode },
+  /**
+   * Élargi à `'bubbles' | 'summary'` (#5774, travail 3/3) : le CHROME du
+   * fil (`view/use-thread-chrome.ts`) consomme cette loi dans TOUS les
+   * modes, y compris ceux où l'ÉLECTION (`armed`) ne joue aucun rôle —
+   * `armed` reste `false` pour ces modes (`mode === 'focal'` seul arme),
+   * `SceneMode` continue de nommer les DEUX modes armables.
+   */
+  { mode }: { readonly mode: SceneMode | 'bubbles' | 'summary' },
 ): SceneActivityState => {
   switch (event.type) {
     case 'intent':
-      return { ...state, intent: true };
+      return { ...state, intent: true, origin: event.origin ?? state.origin ?? 'indirect' };
+
+    case 'grab':
+      // Le doigt se pose : un geste TOUCH s'ouvre, comme un `intent`. `held`
+      // reste FAUX — il faut encore que la liste BOUGE (`scrolled` ci-dessous)
+      // pour que ce contact devienne un TIRAGE, seul état qu'`isDragging`
+      // nomme côté iOS (:585-592).
+      return { ...state, intent: true, origin: 'touch', touching: true, held: false };
+
+    case 'release':
+      // « Le doigt est un FAIT » (#5774) — `release` referme le contact ET le
+      // tirage, jamais `intent` : la fenêtre de révélé partagée continue de
+      // fermer l'intention à l'heure (`tick`), exactement comme avant ce geste.
+      return { ...state, touching: false, held: false };
 
     case 'programmatic':
       return { ...state, intent: false };
@@ -87,7 +140,9 @@ export const reduce = (
         mode === 'focal' &&
         armingLaw.isArmed({ alreadyArmed: state.armed, scrollStartedAt, now: event.at, velocity });
 
-      return { ...state, reveal, scrollStartedAt, armed, lastY: event.y, lastAt: event.at };
+      // LA SECONDE MOITIÉ D'`isDragging` : la liste a bougé pendant que le
+      // doigt est posé — ce contact est un TIRAGE, plus un appui.
+      return { ...state, reveal, scrollStartedAt, armed, held: state.touching, lastY: event.y, lastAt: event.at };
     }
 
     case 'tick': {
@@ -121,6 +176,21 @@ export const isRevealed = (state: SceneActivityState, at: number): boolean =>
 export const isArmed = (state: SceneActivityState): boolean => state.armed;
 
 /**
+ * LE GESTE EST TENU (#5774, travail 3/3) — le signal que le chrome du fil
+ * escamote/révèle (`view/thread-chrome.ts::chromeHiding`). Un geste TOUCH
+ * (`origin: 'touch'`) est un FAIT binaire (`held`) : vrai depuis le premier
+ * `scrolled` d'un contact jusqu'à sa levée, faux immédiatement après — même
+ * si un `scrolled` de décélération arrive ensuite (« la liste file, le
+ * chrome est revenu », `MessageListViewController.swift:589-592`), et faux
+ * pendant un simple APPUI, qui ne tire rien. Un geste INDIRECT (molette,
+ * clavier) n'a pas de « levée » : il suit la fenêtre de révélé PARTAGÉE
+ * (900 ms, D-22) — même dispositif que `isRevealed`, jamais une seconde
+ * horloge.
+ */
+export const isGestureHeld = (state: SceneActivityState, at: number): boolean =>
+  state.origin === 'touch' ? state.held : isRevealed(state, at);
+
+/**
  * La scène est ACTIVE : armée, et le dernier `scrolled` compté remonte à
  * moins de `SCENE_REST_DELAY_MS` (4,5 s, miroir `FocalMetrics.Scene.restDelay`).
  */
@@ -134,4 +204,5 @@ export const sceneActivity = {
   isRevealed,
   isArmed,
   isSceneActive,
+  isGestureHeld,
 };

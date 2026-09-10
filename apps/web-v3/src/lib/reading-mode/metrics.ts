@@ -167,6 +167,49 @@ export const SUSTAINED_SCROLL_MS = 4000;
 export const HIGH_VELOCITY_THRESHOLD = 1200;
 
 /**
+ * LE CHROME DU FIL (#5774, travail 3/3) — DÉRIVÉES de
+ * `Focal/Chrome/EdgeHiddenChrome.swift` + `Focal/Core/FocalMetrics.swift:278-286`
+ * (`HiddenChrome`) : la course et la durée de l'escamotage vers SON bord
+ * (en-tête, composeur, bouton « revenir en bas »). `opacityEnd` (0) n'entre
+ * PAS ici — un état pleinement transparent n'est pas une cote à dériver,
+ * `thread-scene.css` l'écrit en dur comme il le fait déjà pour `.focal-meta`
+ * au repos (ligne 40).
+ */
+export const HIDDEN_CHROME_EDGE_TRAVEL = 28;
+export const HIDDEN_CHROME_EASE_OUT_MS = 250;
+
+/**
+ * `MessageDayStickyPlacement.topOffset` (`MessageDayStickyOverlay.swift:19`)
+ * — « 60 = padding haut du header (8) + rangée de contrôles (~44) + marge
+ * (8) — la pill démarre SOUS le header ». `MessageDayStickyOverlay.swift:65`
+ * fixe le fondu à `0.18` s.
+ */
+export const DAY_PILL_TOP = 60;
+export const DAY_PILL_FADE_MS = 180;
+
+/**
+ * L'EN-TÊTE DE LA v3.1 EST EN FLUX (`routes/thread.tsx:57-61`) — celui d'iOS
+ * FLOTTE au-dessus de la liste, et c'est toute la différence : `topOffset`
+ * y est mesuré depuis le haut du CADRE, donc il DOIT franchir la hauteur du
+ * header ; ici l'enveloppe du défileur COMMENCE déjà au bord bas du header,
+ * cette hauteur est donc DÉJÀ DÉPENSÉE.
+ *
+ * Ce qui reste à poser dans l'enveloppe est le TROISIÈME terme de
+ * l'arithmétique iOS — la marge, et elle seule. Poser `topOffset` entier y
+ * descendait la pilule 52 px trop bas : mesuré à `y = 120` au navigateur
+ * pendant la revue de #5774, contre `y = 76` sur la cible iOS
+ * (`targets/thread.focal.scene.light.a11y.txt`).
+ *
+ * Les deux premiers termes sont DÉRIVÉS du même doc-comment, jamais
+ * ré-inventés : `8` (le padding haut du header) et `44` (la rangée de
+ * contrôles) — ce sont exactement `py-2` et `size-11` de
+ * `components/thread-header.tsx`.
+ */
+export const DAY_PILL_HEADER_PADDING = 8;
+export const DAY_PILL_HEADER_ROW = 44;
+export const DAY_PILL_MARGIN = DAY_PILL_TOP - DAY_PILL_HEADER_PADDING - DAY_PILL_HEADER_ROW;
+
+/**
  * LA SEULE PORTE par laquelle une cote de la scène atteint le CSS — posée
  * sur `<main>` par `thread.tsx`, elle descend par héritage de variable CSS à
  * toute la sous-arborescence (`focal-focus-overlays.tsx`, `app.css`).
@@ -206,5 +249,23 @@ export function sceneStyleVars(): CSSProperties {
     '--focus-text-indent': `${TEXT_INDENT}px`,
     '--focus-identity-overhang': `${IDENTITY_OVERHANG}px`,
     '--focus-strip-overhang': `${FOCUS_STRIP_OVERHANG}px`,
+  } as CSSProperties;
+}
+
+/**
+ * LES COTES DU CHROME DU FIL (#5774, travail 3/3) — porte SÉPARÉE de
+ * `sceneStyleVars()` : le chrome (en-tête, composeur) vit HORS de `<main>`
+ * (des FRÈRES, jamais des descendants — `routes/thread.tsx`), donc ces
+ * variables se posent sur l'HÔTE COMMUN des trois (le conteneur d'écran qui
+ * porte déjà `--accent`, `withAccent()`), jamais sur `<main>` : une variable
+ * CSS personnalisée n'atteint que la sous-arborescence de l'élément qui la
+ * déclare.
+ */
+export function chromeStyleVars(): CSSProperties {
+  return {
+    '--chrome-edge-travel': `${HIDDEN_CHROME_EDGE_TRAVEL}px`,
+    '--chrome-ease-out-ms': `${HIDDEN_CHROME_EASE_OUT_MS}ms`,
+    '--day-pill-top': `${DAY_PILL_MARGIN}px`,
+    '--day-pill-fade-ms': `${DAY_PILL_FADE_MS}ms`,
   } as CSSProperties;
 }

@@ -29,6 +29,53 @@ export const accentOf = (conversation: Conversation): string =>
     type: conversation.type,
   }).primary;
 
+/**
+ * LA LUMINANCE RELATIVE WCAG — miroir EXACT de `Color.luminance`
+ * (`packages/MeeshySDK/Sources/MeeshyUI/Theme/ColorExtensions.swift:62-70`),
+ * la même formule aux mêmes coefficients. Rendue ici plutôt qu'importée : la
+ * loi vit côté Swift, sa transcription est de trois lignes, et `@meeshy/shared`
+ * n'en expose aucune.
+ */
+const relativeLuminance = (hex: string): number => {
+  const value = hex.replace('#', '');
+  const channel = (offset: number): number => {
+    const c = Number.parseInt(value.slice(offset, offset + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
+};
+
+/**
+ * LE SEUIL DE BASCULE ENCRE NOIRE / ENCRE BLANCHE — le point où les deux
+ * rendent EXACTEMENT le même rapport de contraste : `(L+0,05)/0,05 =
+ * 1,05/(L+0,05)`, donc `L = √(0,05 × 1,05) − 0,05 ≈ 0,179`. Écrit comme la
+ * FORMULE, jamais comme le nombre : c'est une conséquence de la définition
+ * WCAG du contraste, pas une constante de design à dériver (D-4).
+ *
+ * ÉCART ASSUMÉ AVEC iOS, ET LA MESURE QUI LE MOTIVE.
+ * `ConversationScrollControlsView.swift:150-152` bascule à `luminance > 0,6`.
+ * Sur le PREMIER accent du jeu de fixtures (`#46BDCA`, L = 0,4196) cette
+ * règle élit le BLANC — mesuré pendant la revue de #5774 : 1,98:1 en schéma
+ * clair et 2,98:1 en sombre sur la teinte à 85 % du bouton « revenir en
+ * bas », sous la barre AA (4,5:1) ET sous celle des objets graphiques
+ * (3:1) ; l'encre noire y vaut 10,61:1 et 7,04:1. L'INTENTION d'iOS est de
+ * servir l'encre LISIBLE ; `0,6` en est une implémentation qui se trompe sur
+ * toute la plage 0,179 → 0,6. La v3.1 garde l'intention et corrige le seuil,
+ * comme #5625 l'a fait pour `textSecondary` — le défaut iOS correspondant
+ * est à ouvrir en issue compagnon (revue #5774).
+ */
+const INK_SWITCH_LUMINANCE = Math.sqrt(0.05 * 1.05) - 0.05;
+
+/**
+ * L'ENCRE LISIBLE SUR UNE SURFACE PEINTE À L'ACCENT — le noir ou le blanc,
+ * celui des deux qui contraste le PLUS. Un seul site : toute surface teintée
+ * par `--accent` (bouton « revenir en bas », badges, capsules à venir) lit
+ * `var(--accent-ink)` plutôt que d'écrire `#fff` en dur — c'est le motif que
+ * les trente écrans qui suivent copieront.
+ */
+export const inkOnAccent = (accent: string): string =>
+  relativeLuminance(accent) > INK_SWITCH_LUMINANCE ? '#000000' : '#FFFFFF';
+
 export function withAccent(accent: string, rest?: CSSProperties): CSSProperties {
-  return { ...rest, '--accent': accent } as CSSProperties;
+  return { ...rest, '--accent': accent, '--accent-ink': inkOnAccent(accent) } as CSSProperties;
 }
