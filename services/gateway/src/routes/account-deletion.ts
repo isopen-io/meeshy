@@ -7,7 +7,7 @@ import { sendSuccess, sendGone, sendInternalError } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { disconnectRevokedSessions } from '../socketio/disconnectRevokedSessions';
 import { createCustomRateLimiter } from '../utils/rate-limiter.js';
-import { purgeAccountIsolatedData } from '../services/AccountPurgeService';
+import { purgeAccountIsolatedData, anonymizeUserIdentity } from '../services/AccountPurgeService';
 
 const logger = enhancedLogger.child({ module: 'AccountDeletionResolve' });
 
@@ -106,12 +106,15 @@ export async function accountDeletionRoutes(fastify: FastifyInstance) {
                   gracePeriodEndsAt: { type: 'string', nullable: true },
                   canCancelUntil: { type: 'string', nullable: true },
                   /**
-                   * Ce que la suppression FAIT réellement aujourd'hui : le
-                   * compte est désactivé et daté, sessions/profil vocal/liens
-                   * de partage sont purgés (#3632) — messages, médias et
-                   * identité ne le sont PAS encore, chacun son suivi. Reste
-                   * `false` tant que ces trois catégories survivent : la page
-                   * ne doit pas affirmer une purge totale qui n'a pas eu lieu.
+                   * Ce que la suppression FAIT réellement : le compte est
+                   * désactivé et daté, sessions/profil vocal/liens de partage
+                   * sont purgés (#3632), messages anonymisés (#5689), médias
+                   * purgés (#5690) et identité anonymisée (#5691) — les
+                   * quatre catégories promises par `privacy.json`
+                   * (« suppression définitive » + son exception nommée sur
+                   * les messages, « anonymisés » plutôt que supprimés). `true`
+                   * uniquement sur l'action `purge`, qui les déclenche toutes ;
+                   * `confirm`/`cancel` ne purgent rien et restent `false`.
                    */
                   dataPurged: { type: 'boolean' },
                 },
@@ -268,6 +271,12 @@ export async function accountDeletionRoutes(fastify: FastifyInstance) {
           logger.warn(`[Deletion] purge des données isolées échouée user=${demande.userId}`, error)
         );
 
+        // Idem pour l'identité (#5691) — best-effort, défense en profondeur :
+        // la bascule automatique l'a déjà anonymisée depuis `MaintenanceService`.
+        await anonymizeUserIdentity(fastify.prisma, demande.userId).catch((error) =>
+          logger.warn(`[Deletion] anonymisation de l'identité échouée user=${demande.userId}`, error)
+        );
+
         // Le compte n'existe plus : ses sockets tombent, APRÈS l'écriture — un
         // socket resté ouvert recevrait encore les fils temps réel d'un compte
         // supprimé. Best-effort par construction.
@@ -285,15 +294,16 @@ export async function accountDeletionRoutes(fastify: FastifyInstance) {
           status: 'COMPLETED',
           gracePeriodEndsAt: null,
           canCancelUntil: null,
-          // DIT LA VÉRITÉ. Sessions, profil vocal et liens de partage SONT
-          // purgés (ci-dessus, #3632) ; les messages envoyés (visibles par
-          // d'autres participants), les médias et l'identité (`User.username`
-          // / `email` / …) ne le sont PAS encore — chacun est un suivi séparé
-          // ouvert depuis #3632, avec sa propre revue (#4183 critère 7). Tant
-          // que ces trois catégories restent vivantes, `dataPurged` reste
-          // `false` : la page ne doit pas affirmer une purge totale qui n'a
-          // pas eu lieu.
-          dataPurged: false,
+          // DIT LA VÉRITÉ. `purge` n'est atteignable qu'au statut
+          // GRACE_PERIOD_EXPIRED (`etatAttendu`, ci-dessus) — une transition
+          // que seule la passe automatique de `MaintenanceService` pose, et
+          // qui a DÉJÀ purgé, dans l'ordre, les données isolées (#3632), les
+          // messages (#5689) et les médias (#5690) avant que cette route ne
+          // soit joignable. L'identité (#5691) l'est ci-dessus, en défense en
+          // profondeur du même geste automatique. Les quatre catégories
+          // promises par `privacy.json` (#4183 critère 7) sont donc purgées :
+          // `dataPurged: true` dit enfin le vrai.
+          dataPurged: true,
         });
       } catch (error) {
         logger.error('[Deletion] échec de résolution', error as Error);
