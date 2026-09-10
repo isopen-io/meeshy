@@ -381,6 +381,7 @@ model User {
   postComments       PostComment[]     @relation("UserPostComments")
   commentReactions   CommentReaction[] @relation("UserPostCommentReactions")
   postReactionsAuthored PostReaction[] @relation("UserPostReactionsAuthored")
+  postInteractiveResponsesAuthored PostInteractiveResponse[] @relation("UserPostInteractiveResponsesAuthored")
   messageMentions    Mention[]         @relation("UserMessageMentions")
   commentMentions    CommentMention[]  @relation("UserCommentMentions")
   postMentions       PostMention[]     @relation("UserPostMentions")
@@ -1484,6 +1485,49 @@ model PostReaction {
   @@index([userId])
   @@index([emoji])
   @@index([userId, postId])
+}
+
+/// Réponse à un sticker interactif (sondage, question, quiz, curseur emoji,
+/// « à vous ») posé par le composer — table légère À CÔTÉ du blob
+/// `Post.storyEffects` (O10), jamais dedans : le blob de scène est immuable
+/// une fois publié, une réponse ne l'est pas (#3954).
+///
+/// `objectId` désigne le `MeeshySceneObject.id` du sticker À L'INTÉRIEUR du
+/// canvas — une chaîne libre attribuée par le client à la composition
+/// (`packages/shared/types/canvas-v3.ts`), PAS un ObjectId Mongo. Un `postId`
+/// seul ne suffit pas à désigner un sticker : un post porte jusqu'à 60 objets
+/// sur 10 scènes.
+///
+/// `choice` / `numericValue` / `text` sont indépendamment optionnels — un
+/// sondage/quiz pose `choice`, un curseur emoji `numericValue`, une question
+/// ou « à vous » `text`. Cette table ne valide PAS la forme d'une réponse
+/// contre le sous-type de son sticker : le kind `interactive` reste RÉSERVÉ au
+/// contrat (`RESERVED_KINDS`, #3953) — aucun client ne peut encore poser un
+/// tel sticker, donc `objectId` ne peut pas être confronté à un objet publié.
+///
+/// Une personne a AU PLUS une réponse par sticker : un nouveau vote REMPLACE
+/// le précédent (upsert sur la clé unique), y compris pour un texte libre —
+/// décision de portée prise avec l'issue, à revisiter si un sous-type exige
+/// des réponses multiples.
+model PostInteractiveResponse {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  postId       String   @db.ObjectId
+  objectId     String
+  userId       String   @db.ObjectId
+  choice       String?
+  numericValue Float?
+  text         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  post Post @relation("PostInteractiveResponsesTable", fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation("UserPostInteractiveResponsesAuthored", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, objectId, userId], name: "post_object_user_response_unique")
+  @@index([postId])
+  @@index([objectId])
+  @@index([userId])
+  @@index([postId, objectId])
 }
 
 /// Mention d'un utilisateur dans un message — jumeau de `CommentMention` et
@@ -3433,6 +3477,8 @@ model Post {
   engagements PostEngagement[]
   /// Réactions table (Phase 3 — source de vérité moderne, remplace progressivement reactions: Json[])
   postReactions PostReaction[] @relation("PostReactionsTable")
+  /// Réponses aux stickers interactifs (O10) — table légère à côté du blob storyEffects, #3954
+  postInteractiveResponses PostInteractiveResponse[] @relation("PostInteractiveResponsesTable")
   /// Mentions dans le corps du post
   postMentions  PostMention[]  @relation("PostMentions")
   postHashtags  PostHashtag[]  @relation("PostHashtags")
