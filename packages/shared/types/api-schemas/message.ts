@@ -484,6 +484,29 @@ export const messageMinimalSchema = {
     senderId: { type: 'string', nullable: true, description: 'Sender ID' },
     messageType: { type: 'string', description: 'Message type' },
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+    /**
+     * LES QUATRE DRAPEAUX DE PROTECTION (audit de cohérence iOS ↔ passerelle,
+     * 2026-09-11) — ils étaient CHARGÉS par le select
+     * (`conversationLastMessagePreviewSelect`), RÉPANDUS par le mapper
+     * (`...msgRest`, `core-list.ts`) et DÉCODÉS par iOS
+     * (`APIConversationLastMessage`), mais absents d'ICI : `fast-json-stringify`
+     * retire en silence toute propriété non déclarée, donc ils n'arrivaient
+     * jamais par REST.
+     *
+     * Le client ne pouvait donc pas savoir qu'un aperçu était protégé, et il
+     * rendait le texte en clair d'un message à VUE UNIQUE, FLOUTÉ ou PÉRIMÉ —
+     * jusqu'à la première mise à jour temps réel, le socket transportant les
+     * mêmes drapeaux en clés plates.
+     *
+     * Le texte lui-même ne part plus pour ces messages
+     * (`lastMessageTextMayTravel`, `utils/last-message-protection.ts`) : ces
+     * drapeaux disent au client QUEL placeholder peindre, ils ne sont plus ce
+     * qui l'empêche de peindre un secret.
+     */
+    isViewOnce: { type: 'boolean', nullable: true, description: 'View-once — le contenu ne doit pas être exposé' },
+    isBlurred: { type: 'boolean', nullable: true, description: 'Flouté — le contenu ne doit pas être exposé' },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Éphémère : périmé ⇒ contenu non exposé' },
+    effectFlags: { type: 'number', nullable: true, description: 'Bitfield des effets (flou / éphémère / vue unique)' },
     // Lot 3 (partage de position) — hissé depuis metadata.location. Un
     // message géolocalisé sans légende a un `content` vide ; ce champ est
     // ce qui permet au client de rendre malgré tout un aperçu pertinent.

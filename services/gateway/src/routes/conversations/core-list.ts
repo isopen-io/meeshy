@@ -9,6 +9,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
+import { lastMessageTextMayTravel } from '@meeshy/shared/utils/last-message-protection';
 import {
   generateDefaultConversationTitle,
   resolveUserLanguagesOrdered
@@ -762,7 +763,16 @@ export function registerConversationListRoute(
                 ));
 
         const latestMessage = conversation.messages[0] as
-          | { translations?: unknown; originalLanguage?: string | null }
+          | {
+              translations?: unknown;
+              originalLanguage?: string | null;
+              /* La protection de l'aperçu gouverne AUSSI la carte du Prisme
+                 (voir `lastMessageTranslations` plus bas) : ce cast décrit ce
+                 que le site LIT, et il lit désormais les drapeaux. */
+              isBlurred?: boolean | null;
+              isViewOnce?: boolean | null;
+              expiresAt?: Date | string | null;
+            }
           | undefined;
 
         // `_count` est retiré du spread : c'est une forme d'agrégat Prisma que
@@ -797,11 +807,24 @@ export function registerConversationListRoute(
           // `Message.translations` (un tableau de `MessageTranslation`) : deux
           // formes sous un même nom auraient dérivé.
           lastMessageOriginalLanguage: latestMessage?.originalLanguage ?? null,
-          lastMessageTranslations: buildLastMessagePreviewTranslations({
-            translations: latestMessage?.translations,
-            originalLanguage: latestMessage?.originalLanguage,
-            viewerLanguages: viewerLanguages
-          }),
+          /**
+           * **LA CARTE DU PRISME SE TAIT AUSSI POUR UN APERÇU PROTÉGÉ**
+           * (audit iOS ↔ passerelle, 2026-09-11).
+           *
+           * C'est le piège exact que `CLAUDE.md` § Prisme décrit au cycle 125 :
+           * « qu'est-ce qui part À CÔTÉ du texte qu'on vient de corriger ? ».
+           * Masquer `lastMessage.content` sans toucher à cette carte aurait
+           * laissé le TEXTE TRADUIT du même message à vue unique partir sur la
+           * ligne voisine, sous un autre nom — et le client, lui, préfère la
+           * traduction au texte d'origine (c'est tout le propos du Prisme).
+           */
+          lastMessageTranslations: lastMessageTextMayTravel(latestMessage)
+            ? buildLastMessagePreviewTranslations({
+                translations: latestMessage?.translations,
+                originalLanguage: latestMessage?.originalLanguage,
+                viewerLanguages: viewerLanguages
+              })
+            : {},
           lastMessage: (() => {
             const msg = conversation.messages[0];
             if (!msg) return null;
@@ -822,6 +845,59 @@ export function registerConversationListRoute(
             // de décider comment rendre l'aperçu (ex. via `messageType` ou la
             // seule présence de `location`), pas au serveur.
             const place = sharedPlaceFromMetadata((msg as { metadata?: unknown }).metadata);
+
+            /**
+             * **UN APERÇU PROTÉGÉ NE TRANSPORTE RIEN DE SON CONTENU** (audit
+             * iOS ↔ passerelle, 2026-09-11).
+             *
+             * Avant ce correctif, cette route servait le texte SANS CONDITION et
+             * s'en remettait au client pour le cacher — alors que les quatre
+             * drapeaux qui le lui auraient permis étaient STRIPPÉS par
+             * `fast-json-stringify`, faute d'être déclarés dans
+             * `messageMinimalSchema`. Résultat mesurable : au démarrage à froid,
+             * la liste affichait en clair le dernier message d'une conversation
+             * à VUE UNIQUE, FLOUTÉE ou PÉRIMÉE, et ne le masquait qu'à la
+             * première mise à jour temps réel.
+             *
+             * Les deux moitiés sont réparées, et l'ordre compte : les drapeaux
+             * partent (le client sait QUEL placeholder peindre), le contenu
+             * reste (le client ne PEUT plus peindre un secret, même s'il oublie
+             * de regarder les drapeaux). **Le client peut se tromper ; la
+             * charge, non.**
+             *
+             * Ce qui se tait : le texte, le lieu, le sticker, les pièces jointes
+             * et leur compte. Ce qui parle encore : l'identité, l'horloge, le
+             * type et les drapeaux — ce sont eux qui QUALIFIENT le placeholder,
+             * et sans eux le client rendrait une ligne vide là où il doit lire
+             * « Message à vue unique » (même distinction qu'au cycle 126 côté
+             * notifications : ce qui qualifie n'est pas ce qui révèle).
+             *
+             * `ephemeral-active` n'est PAS protégé : un éphémère non encore
+             * expiré se lit, c'est tout son propos.
+             */
+            if (!lastMessageTextMayTravel(msg)) {
+              const { content: _c, sticker: _s, attachments: _a, _count: _n, ...identite } =
+                msgRest as typeof msgRest & { sticker?: unknown; attachments?: unknown; _count?: unknown };
+              return {
+                ...identite,
+                content: '',
+                sender: sender && senderVis ? {
+                  ...sender,
+                  username: sender.user?.username ?? sender.username ?? null,
+                  firstName: sender.user?.firstName ?? null,
+                  lastName: sender.user?.lastName ?? null,
+                  displayName: resolveParticipantDisplayName(sender),
+                  avatar: resolveParticipantAvatar(sender),
+                  isOnline: senderVis.showOnline
+                    ? (senderLiveOnline ?? sender.user?.isOnline ?? sender.isOnline ?? null)
+                    : false,
+                  lastActiveAt: senderVis.showLastSeenTimestamp
+                    ? (sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null)
+                    : null,
+                } : null
+              };
+            }
+
             return {
               ...msgRest,
               content: truncateMessagePreview(msg.content),
