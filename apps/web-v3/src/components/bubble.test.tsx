@@ -1,9 +1,9 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { Bubble } from './bubble';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { Message } from '@/lib/api/types';
@@ -366,12 +366,12 @@ describe('Bubble — retirer une réaction en tapant sa capsule (#5865)', () => 
   const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
   beforeAll(() => {
-    GlobalRegistrator.register();
+    ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });
   afterAll(async () => {
     delete globals.IS_REACT_ACT_ENVIRONMENT;
-    await GlobalRegistrator.unregister();
+    await releaseHappyDomIfRegistered();
   });
 
   let container: HTMLDivElement;

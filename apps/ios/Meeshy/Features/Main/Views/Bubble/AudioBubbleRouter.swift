@@ -50,6 +50,10 @@ struct AudioBubbleRouter: View {
     let transcription: MessageTranscription?
     let translatedAudios: [MessageTranslatedAudio]
     let initialTranscriptionLanguage: String?
+    /// #4956 — résolu par l'appelant (`isMe || UserPreferencesManager.shared
+    /// .audio.autoTranscribeIncoming`) et transmis tel quel : le SDK reste
+    /// agnostique de la préférence nommée qui le produit (SDK Purity).
+    let autoRevealTranscription: Bool
     let onFullscreen: (() -> Void)?
     let onRequestTranscription: (() -> Void)?
     let onRetranscribe: (() -> Void)?
@@ -99,6 +103,7 @@ struct AudioBubbleRouter: View {
         transcription: MessageTranscription? = nil,
         translatedAudios: [MessageTranslatedAudio] = [],
         initialTranscriptionLanguage: String? = nil,
+        autoRevealTranscription: Bool = true,
         onFullscreen: (() -> Void)? = nil,
         onRequestTranscription: (() -> Void)? = nil,
         onRetranscribe: (() -> Void)? = nil,
@@ -118,6 +123,7 @@ struct AudioBubbleRouter: View {
         self.transcription = transcription
         self.translatedAudios = translatedAudios
         self.initialTranscriptionLanguage = initialTranscriptionLanguage
+        self.autoRevealTranscription = autoRevealTranscription
         self.onFullscreen = onFullscreen
         self.onRequestTranscription = onRequestTranscription
         self.onRetranscribe = onRetranscribe
@@ -170,6 +176,7 @@ struct AudioBubbleRouter: View {
             translatedAudios: translatedAudios,
             initialTranscriptionLanguage: initialTranscriptionLanguage,
             reserveTranscriptionHeight: reserveTranscriptionHeight,
+            autoRevealTranscription: autoRevealTranscription,
             onFullscreen: onFullscreen,
             onRequestTranscription: onRequestTranscription,
             onRetranscribe: onRetranscribe,
@@ -207,6 +214,7 @@ private struct AudioBubbleContent: View {
     let translatedAudios: [MessageTranslatedAudio]
     let initialTranscriptionLanguage: String?
     let reserveTranscriptionHeight: Bool
+    let autoRevealTranscription: Bool
     let onFullscreen: (() -> Void)?
     let onRequestTranscription: (() -> Void)?
     let onRetranscribe: (() -> Void)?
@@ -236,6 +244,7 @@ private struct AudioBubbleContent: View {
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: initialTranscriptionLanguage,
                 reserveTranscriptionHeight: reserveTranscriptionHeight,
+                autoRevealTranscription: autoRevealTranscription,
                 onFullscreen: onFullscreen,
                 onRequestTranscription: onRequestTranscription,
                 onRetranscribe: onRetranscribe,
@@ -258,6 +267,7 @@ private struct AudioBubbleContent: View {
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: initialTranscriptionLanguage,
                 reserveTranscriptionHeight: reserveTranscriptionHeight,
+                autoRevealTranscription: autoRevealTranscription,
                 onFullscreen: onFullscreen,
                 onRequestTranscription: onRequestTranscription,
                 onRetranscribe: onRetranscribe,
@@ -279,6 +289,7 @@ private struct AudioBubbleContent: View {
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: initialTranscriptionLanguage,
                 reserveTranscriptionHeight: reserveTranscriptionHeight,
+                autoRevealTranscription: autoRevealTranscription,
                 onFullscreen: onFullscreen,
                 onRequestTranscription: onRequestTranscription,
                 onRetranscribe: onRetranscribe,
@@ -300,6 +311,7 @@ private struct AudioBubbleContent: View {
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: initialTranscriptionLanguage,
                 reserveTranscriptionHeight: reserveTranscriptionHeight,
+                autoRevealTranscription: autoRevealTranscription,
                 onFullscreen: onFullscreen,
                 onRequestTranscription: onRequestTranscription,
                 onRetranscribe: onRetranscribe,

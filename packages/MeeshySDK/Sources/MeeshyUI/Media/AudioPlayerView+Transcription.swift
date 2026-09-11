@@ -108,6 +108,38 @@ extension AudioPlayerView {
             }
             .padding(.bottom, 6)
             .transition(.opacity)
+        } else if AudioTranscriptionReveal.shouldShowRevealCTA(
+            hasSegments: !displaySegments.isEmpty,
+            autoReveal: autoRevealTranscription,
+            manuallyRevealed: hasManuallyRevealedTranscription
+        ) {
+            // #4956 — la transcription existe déjà (le serveur l'a produite,
+            // au besoin pour les traductions) mais l'utilisateur a désactivé
+            // son affichage automatique sur les messages reçus. Même CTA que
+            // l'absence de transcription (même mot, même icône — cohérence
+            // de positionnement) ; le tap ne fait que révéler, aucune requête
+            // n'est émise.
+            VStack(spacing: 0) {
+                slotDivider
+
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        hasManuallyRevealedTranscription = true
+                    }
+                    HapticFeedback.light()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "text.badge.plus")
+                            .font(.system(size: 10, weight: .medium))
+                        Text(String(localized: "media.audio.transcribe", defaultValue: "Transcrire", bundle: .module))
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                }
+            }
+            .transition(.opacity)
         } else if !displaySegments.isEmpty {
             VStack(spacing: 0) {
                 slotDivider
@@ -583,5 +615,30 @@ public nonisolated enum AudioTranscriptionPending {
     ) -> Bool {
         guard !hasTranscription, !isLocalDraft else { return false }
         return now.timeIntervalSince(receivedAt) < nominalTimeout
+    }
+}
+
+// MARK: - AudioTranscriptionReveal
+
+/// **La règle pure de l'opt-out d'affichage — #4956.**
+///
+/// `autoRevealTranscription == false` ne retire jamais la transcription : le
+/// serveur l'a déjà produite (au besoin pour les traductions), et le réglage
+/// ne porte que sur son AFFICHAGE automatique dans la bulle d'un message
+/// reçu. Une fois révélée localement (`manuallyRevealed`), elle le reste pour
+/// le reste de la vie de la vue — pas de bascule involontaire au tick
+/// suivant.
+public nonisolated enum AudioTranscriptionReveal {
+
+    /// `true` quand le CTA « Transcrire » doit remplacer le texte transcrit
+    /// alors qu'une transcription existe (`hasSegments`) : l'affichage auto
+    /// est désactivé (`!autoReveal`) et l'utilisateur n'a pas encore tapé
+    /// pour la révéler (`!manuallyRevealed`).
+    public static func shouldShowRevealCTA(
+        hasSegments: Bool,
+        autoReveal: Bool,
+        manuallyRevealed: Bool
+    ) -> Bool {
+        hasSegments && !autoReveal && !manuallyRevealed
     }
 }

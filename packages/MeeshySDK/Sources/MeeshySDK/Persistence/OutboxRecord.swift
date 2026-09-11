@@ -95,6 +95,60 @@ extension OutboxKind {
             return true
         }
     }
+
+    /// **Une ligne TERMINALE de ce genre peut-elle être jetée sans rien perdre ?**
+    /// (#5965)
+    ///
+    /// Quand le budget de rejeu est épuisé, la ligne ne partira plus jamais :
+    /// la garder ne sert qu'à ce qu'une surface puisse encore en faire quelque
+    /// chose. Deux surfaces le font, et elles décident de cette liste :
+    ///
+    /// - **la bulle en échec** relit la ligne `.sendMessage` pour rejouer un
+    ///   envoi qui PORTE DES MÉDIAS — elle seule tient les identifiants
+    ///   d'attachments réellement téléversés
+    ///   (`ConversationViewModel.retryMessage`) ;
+    /// - **la reprise de brouillon** relit les lignes `.createPost`
+    ///   `.exhausted` pour reproposer un post, un réel ou un mood non parti
+    ///   (`OfflineQueue.recoverLastUnsentPost`).
+    ///
+    /// L'énumération va donc dans le sens JETABLE, jamais dans le sens gardé :
+    /// un genre qui naît demain est GARDÉ par défaut. Une ligne gardée pour
+    /// rien coûte une ligne de base ; une ligne jetée à tort coûte à
+    /// l'utilisateur ce qu'il avait écrit — les deux erreurs n'ont pas le même
+    /// prix de réparation.
+    ///
+    /// Ne dit RIEN de ce que la pastille affiche : celle-ci borne toute entrée
+    /// terminale à une minute, jetable ou non
+    /// (`SyncPillViewModel.terminalDisplayWindow`).
+    public var isDiscardableWhenTerminal: Bool {
+        switch self {
+        case .sendReaction,
+             .markAsRead,
+             .markStoryViewed,
+             .reportAttachmentStatus,
+             .sendFriendRequest,
+             .respondFriendRequest,
+             .blockUser,
+             .unblockUser,
+             .toggleLikePost,
+             .toggleLikeComment,
+             .deleteMessage,
+             .deleteComment:
+            return true
+        case .sendMessage,
+             .editMessage,
+             .createConversation,
+             .updateConversation,
+             .updateProfile,
+             .updateSettings,
+             .publishStory,
+             .repostStory,
+             .createPost,
+             .repostPost,
+             .createComment:
+            return false
+        }
+    }
 }
 
 public enum OutboxStatus: String, Codable, Sendable {

@@ -30157,3 +30157,70 @@ un flake du lot que je venais de corriger.
 Voisine de la 564 (« un rouge qui nomme un chemin déformé mesure la MACHINE »)
 par sa forme : dans les deux cas, le rouge ne parle pas du code qu'on croit
 mesurer. Ici il parle de la garde ; là, de l'atelier.
+## Leçon 564 — Un worktree sous `/tmp` rend ROUGE toute garde qui soustrait la racine du dépôt d'un chemin
+
+2026-09-10, iOS (#6017). `test_everyPerTargetCatalogIsMapped` a rougi en
+nommant quatre catalogues introuvables — `/privateapps/ios/Meeshy/Localizable.xcstrings`.
+Une heure perdue à chercher ce que mon diff avait cassé dans le catalogue :
+rien. La garde calcule un chemin relatif au dépôt par soustraction de
+préfixe,
+
+```swift
+$0.path.replacingOccurrences(of: env.repoRoot.path + "/", with: "")
+```
+
+et ses deux termes ne viennent pas de la même source : `repoRoot` dérive de
+`#filePath`, que le compilateur rend TEL QU'ÉCRIT (`/tmp/conformite/…`),
+pendant que l'énumération vient de `FileManager`, qui RÉSOUT les liens
+(`/private/tmp/conformite/…`). Sur macOS `/tmp` est un lien vers
+`/private/tmp` : la soustraction retire `/tmp/conformite/` du MILIEU de la
+chaîne et laisse `/private` collé au reste.
+
+> **Un rouge qui nomme un chemin déformé mesure la MACHINE, pas le code.**
+> Avant de chercher ce que le diff a cassé, relire le chemin que le message
+> imprime : s'il n'est pas celui qu'on attendrait, la garde ne parle pas de
+> nous.
+
+Le correctif n'a touché aucune ligne : `git worktree move` vers
+`~/Documents/v2_meeshy-conformite` — **la convention que `CLAUDE.md` écrit
+déjà** (« ../v2_meeshy-{branch-name}, sibling du repo principal ») — et la
+garde est passée verte. J'avais adopté `/tmp` pour la commodité ; la
+convention avait une raison que je n'avais pas cherchée.
+
+Corollaire pour qui voudrait « durcir » la garde : `resolvingSymlinksInPath()`
+sur les deux termes la rendrait insensible au problème, mais ce serait
+corriger le témoin pour une faute de l'atelier. La garde a raison en CI, où
+le dépôt est à son vrai chemin.
+
+## Leçon 565 — Retirer une feuille morte ne TUE pas la fonction d'en dessous : elle la rend VISIBLE
+
+2026-09-10, iOS (#6016). Après avoir retiré dix-huit fonctions du composer
+inline du fil, la garde d'atteignabilité en a nommé une DIX-NEUVIÈME —
+`FeedViewModel.supersedeRecoveredPost`, dont la seule citation vivait dans
+`publishPostWithAttachments` que je venais de supprimer. Le réflexe est de se
+croire responsable : « je viens de l'orpheliner, je dois la retirer aussi ».
+
+C'était faux, et la mesure le disait. Son garde d'entrée est
+`if let cmid = recoveredPostCmid`, et le seul site posant `recoveredPostCmid`
+à une valeur non nulle était `recoverStuckPostDraftIfNeeded` — **déjà inscrite
+dans l'allowlist de cette même garde, donc attestée sans appelant.** La
+branche ne pouvait jamais s'ouvrir. Elle était morte depuis le MÊME commit que
+celle que je venais de retirer ; ma suppression n'a fait que déplacer la
+mesure d'un cran dans l'arbre.
+
+> **Une garde d'atteignabilité par RÉFÉRENCE attrape la feuille, pas
+> l'arbre** — son propre doc-comment le dit. Le corollaire pratique n'y était
+> pas : chaque retrait fait donc DESCENDRE la mesure d'un cran, et ce qui
+> apparaît au cran suivant a la même ancienneté que ce qu'on vient de
+> retirer. Ne pas dater une mort d'après le commit qui l'a révélée.
+
+Ce qui l'établit, dans les deux sens, c'est de suivre l'ÉTAT plutôt que
+l'appel : qui écrit la variable que le garde d'entrée lit ? Si le seul
+écrivain est lui-même mort, la fonction l'était avant qu'on y touche.
+
+Même famille que la garde qui ne cherche que `func` : dans le même lot,
+`feedPendingAttachmentsRow` — 44 lignes de SwiftUI, une seule occurrence dans
+tout le dépôt, sa déclaration — était INVISIBLE à la mesure parce que c'est
+une `var`. Elle portait à elle seule trois des fonctions signalées. **La
+racine d'un arbre mort n'a pas nécessairement la forme que la garde sait
+lire.**
