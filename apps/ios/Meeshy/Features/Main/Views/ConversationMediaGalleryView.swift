@@ -65,6 +65,21 @@ struct ConversationMediaGalleryView: View {
     /// même lot peuvent porter des légendes de provenances différentes, et une
     /// langue choisie sur l'une ne dit rien de l'autre.
     @State private var captionLanguage: [String: String] = [:]
+    /// Le sélecteur complet d'émojis, ouvert par le « + » de la rangée. Un `Bool`
+    /// et non la pièce elle-même : la rangée ne s'affiche QUE pour la page
+    /// courante, donc la cible se relit au moment du choix — deux états
+    /// parallèles auraient permis à l'un de viser une page que l'autre a quittée.
+    @State private var showFullEmojiPicker = false
+    /// **La rangée d'émojis est OUVERTE** (révision porteur 2026-09-11 : « les
+    /// réactions […] doivent s'activer comme pour répondre ou composer, il faut
+    /// mettre un bouton réagir (emoji +) qui affiche la traille des emojis »).
+    ///
+    /// Au repos le visualiseur est NU — rien ne se pose sur l'image. Cet état
+    /// répond à une question qui n'est PAS celle de la loi : la loi dit si la
+    /// pièce offre de réagir, celui-ci dit si l'utilisateur l'a demandé. Il se
+    /// remet à `false` au changement de pièce (`handlePageChange`) : la rangée
+    /// appartient au média qu'on regardait.
+    @State private var reactionBarOpen = false
     /// Maps attachment.id → sender info (name, avatar, color, date)
     var senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
 
@@ -86,6 +101,22 @@ struct ConversationMediaGalleryView: View {
     /// Même forme que ci-dessus, et pour la même raison : la galerie ne connaît
     /// pas le porteur. `nil` ⇒ aucun bouton.
     var onReplyToMedia: ((MessageAttachment) -> Void)?
+
+    /// **Réagir à la PIÈCE, depuis le plein écran** (#6084).
+    ///
+    /// La pièce voyage AVEC l'émoji : la galerie sait quelle page est ouverte,
+    /// l'hôte non. Un rappel qui ne porterait que l'émoji laisserait l'hôte
+    /// deviner la cible — et il devinerait le message, ce qui ferait mentir la
+    /// rangée sur ce qu'elle vise.
+    ///
+    /// `nil` ⇒ **ni bouton ni rangée** (loi 4, appliquée par
+    /// `AttachmentReactionOffer.offersReaction`). C'est le cas des hôtes
+    /// SOCIAUX — post, story, réel, commentaire : le serveur n'expose aucune
+    /// réaction par MÉDIA pour eux (`AttachmentReaction` est indexée sur un
+    /// `messageId` de conversation, et `PostMedia` ne porte aucune relation de
+    /// réaction). Ils n'affichent donc pas une barre inerte : ils n'en
+    /// affichent pas.
+    var onReactToMedia: ((MessageAttachment, String) -> Void)?
 
     /// `id → position`, construite une fois à la présentation. Remplace les
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
@@ -112,7 +143,8 @@ struct ConversationMediaGalleryView: View {
         captionMap: [String: String] = [:],
         senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:],
         onComposeWithMedia: ((MessageAttachment) -> Void)? = nil,
-        onReplyToMedia: ((MessageAttachment) -> Void)? = nil
+        onReplyToMedia: ((MessageAttachment) -> Void)? = nil,
+        onReactToMedia: ((MessageAttachment, String) -> Void)? = nil
     ) {
         self.allAttachments = allAttachments
         self.startAttachmentId = startAttachmentId
@@ -122,6 +154,7 @@ struct ConversationMediaGalleryView: View {
         self.senderInfoMap = senderInfoMap
         self.onComposeWithMedia = onComposeWithMedia
         self.onReplyToMedia = onReplyToMedia
+        self.onReactToMedia = onReactToMedia
         let positions = Dictionary(
             allAttachments.enumerated().map { ($0.element.id, $0.offset) },
             uniquingKeysWith: { first, _ in first }
@@ -228,6 +261,18 @@ struct ConversationMediaGalleryView: View {
             galleryPager
 
             overlayLayer
+
+            // **La traînée d'émojis est la couche la PLUS HAUTE du visualiseur**
+            // (précision porteur 2026-09-11 : « les réactions doivent apparaître
+            // par-dessus tous les autres contrôleurs »).
+            //
+            // DERNIER enfant du `ZStack` racine, et non un `.zIndex()` posé plus
+            // bas : `zIndex` n'ordonne qu'entre FRÈRES d'un même conteneur. La
+            // traînée vivait dans la pile de `controlsOverlay`, où elle
+            // PARTAGEAIT la hauteur avec le bloc bas — aucun `zIndex` ne l'aurait
+            // sortie de cette pile, et rien n'aurait empêché le bloc bas de la
+            // comprimer. Le rang se gagne par la COUCHE.
+            reactionLayer
         }
         .statusBar(hidden: true)
         .onAppear {
@@ -241,6 +286,7 @@ struct ConversationMediaGalleryView: View {
         }
         .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
         .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
+        .sheet(isPresented: $showFullEmojiPicker) { fullEmojiPickerSheet }
     }
 
     /// L'animation de `showControls` est portée ICI et non sur la racine :
@@ -288,6 +334,14 @@ struct ConversationMediaGalleryView: View {
         // d'atteindre. C'est l'inverse du volet de description du composer, qui
         // est une préférence d'écran parce qu'il commente TOUTE la publication.
         if oldID != newID, captionExpanded { captionExpanded = false }
+
+        // **La rangée d'émojis appartient à la pièce qu'on REGARDAIT** (#6084,
+        // révision porteur). La laisser ouverte la ferait surgir sur un média que
+        // personne n'a demandé à commenter, et un émoji tapé par réflexe
+        // atterrirait sur la mauvaise pièce — le pire des deux, parce qu'il
+        // aurait l'air d'avoir marché. Même contrat que le repli de légende juste
+        // au-dessus, et pour la même raison.
+        if oldID != newID, reactionBarOpen { reactionBarOpen = false }
 
         if let oldID, oldID != newID, let oldIndex = indexByID[oldID] {
             let oldAtt = allAttachments[oldIndex]
@@ -344,8 +398,20 @@ struct ConversationMediaGalleryView: View {
         }
     }
 
+    /// **Masquer le chrome emporte la traînée.**
+    ///
+    /// Elle recouvre désormais la rangée d'actions (précision porteur : « par-dessus
+    /// tous les autres contrôleurs »), donc le bouton « Réagir » n'est plus
+    /// atteignable pendant qu'elle est ouverte : le « second appui referme » de
+    /// l'amendement précédent passe par CE geste-ci, le tap sur le média, qui
+    /// reste le geste universel de ce visualiseur. Les deux autres sorties sont
+    /// inchangées — choisir un émoji, changer de pièce.
+    ///
+    /// Sans cette ligne, rouvrir le chrome ferait resurgir une traînée que
+    /// personne n'aurait redemandée.
     private func toggleControls() {
         showControls.toggle()
+        if !showControls, reactionBarOpen { reactionBarOpen = false }
     }
 
     private func dismissGallery() {
@@ -501,6 +567,132 @@ struct ConversationMediaGalleryView: View {
         }
     }
 
+    // MARK: - Couche haute : la traînée d'émojis
+
+    /// **Rien ne passe devant elle, rien ne la rogne** (précision porteur
+    /// 2026-09-11).
+    ///
+    /// Montée en DERNIER dans le `ZStack` racine — voir `body`. Aucun ancêtre de
+    /// cette chaîne ne porte `.clipped()`, `.mask()` ni `.cornerRadius()` :
+    /// vérifié ligne à ligne, la contrainte qu'elle subissait n'était pas un
+    /// rognage mais un PARTAGE DE HAUTEUR (le `VStack` de `controlsOverlay`
+    /// distribuait la même colonne entre elle et le bloc bas).
+    ///
+    /// **Le `Spacer` ne teste aucune touche** : quand la traînée est fermée,
+    /// `attachmentReactionBar` ne rend rien et cette couche laisse passer
+    /// INTÉGRALEMENT le doigt vers le pager. `allowsHitTesting(reactionBarOpen)`
+    /// est la ceinture par-dessus la bretelle — il lit l'état d'interaction, pas
+    /// la loi, donc il ne peut pas contredire la garde de protection qui, elle,
+    /// reste dans `attachmentReactionBar`.
+    ///
+    /// La couche RESPECTE la zone sûre (seuls le fond noir et le pager
+    /// l'ignorent), donc la traînée ne se glisse jamais sous l'indicateur
+    /// d'accueil ni sous une encoche.
+    @ViewBuilder
+    private var reactionLayer: some View {
+        if currentIndex < allAttachments.count {
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                attachmentReactionBar(allAttachments[currentIndex])
+                    .padding(.bottom, reactionBarBottomInset)
+            }
+            .allowsHitTesting(reactionBarOpen)
+        }
+    }
+
+    /// Marge basse de la traînée : elle flotte AU-DESSUS de la pellicule, donc
+    /// par-dessus le bloc auteur / actions / dimensions — c'est le recouvrement
+    /// que la précision porteur demande de montrer. La pellicule, elle, reste
+    /// libre : c'est le seul contrôle du bas qui sert à NAVIGUER, et le couvrir
+    /// enfermerait le lecteur sur la pièce courante.
+    private var reactionBarBottomInset: CGFloat {
+        allAttachments.count > 1 ? ConversationMediaFilmstrip.reservedHeight + 8 : 8
+    }
+
+    // MARK: - Réaction sur la pièce
+
+    /// **La rangée de réactions rapides du plein écran** (#6084, directive
+    /// porteur 2026-09-11 : « lorsqu'on affiche une image pièce jointe en plein
+    /// écran, il faut pouvoir ajouter une réaction à l'attachement directement » ;
+    /// révision du même jour : « il faut mettre un bouton réagir (emoji +) qui
+    /// affiche la traille des emojis de réaction »).
+    ///
+    /// **Elle n'existe qu'OUVERTE.** Le bouton « Réagir » de `mediaActionBar` la
+    /// révèle ; un second appui, un choix d'émoji ou un changement de page la
+    /// retire. Au repos rien ne se pose sur l'image — c'est ce que la révision
+    /// porteur demande, et c'est aussi ce qui rend le visualiseur cohérent avec
+    /// ses voisins Répondre et Composer, qui sont des actions et non des
+    /// ornements.
+    ///
+    /// Gabarit de la story (#6083) : **échelle 2, aucun habillage**. Le média
+    /// remplit l'écran et EST le fond — une capsule y ajouterait un cadre là où
+    /// la story vient justement d'en retirer un. `scrollable` est le COROLLAIRE
+    /// de l'échelle et non une option : à 2, six émojis plus le « + » demandent
+    /// ~450 pt, et un `ScrollView` ne défile que dans une largeur bornée — ici
+    /// celle de la pile de contrôles, qui occupe l'écran.
+    ///
+    /// **Elle vit dans la couche des CONTRÔLES**, ancrée juste au-dessus du bloc
+    /// bas (auteur, légende, pellicule) : elle s'efface donc avec eux au tap sur
+    /// le média, comme tout le reste du chrome. Posée à la racine, elle serait
+    /// restée sur une image qu'on regarde sans rien d'autre.
+    ///
+    /// **Aucun geste de cession n'est nécessaire ici**, contrairement à la story
+    /// (`StoryReactionStripGesture`). Le pager de la galerie est un
+    /// `UIScrollView` SŒUR dans le `ZStack` racine, pas un ancêtre montant un
+    /// `.simultaneousGesture` : une touche qui atterrit sur la rangée ne lui
+    /// parvient jamais, et les deux `UIScrollView` imbriqués s'arbitrent seuls.
+    /// Y recopier la loi de la story aurait gardé un conflit qui n'existe pas.
+    @ViewBuilder
+    private func attachmentReactionBar(_ att: MessageAttachment) -> some View {
+        if AttachmentReactionOffer.showsPicker(surface: .fullscreen,
+                                               attachment: att,
+                                               hasHandler: onReactToMedia != nil,
+                                               isOpen: reactionBarOpen) {
+            EmojiReactionPicker(
+                quickEmojis: MeeshyQuickReactions.standard,
+                style: .dark,
+                scale: 2,
+                scrollable: true,
+                chrome: .none,
+                onReact: { emoji in
+                    onReactToMedia?(att, emoji)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        reactionBarOpen = false
+                    }
+                },
+                onExpandFullPicker: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        reactionBarOpen = false
+                    }
+                    showFullEmojiPicker = true
+                }
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, 4)
+            .transition(.asymmetric(
+                insertion: .scale(scale: 0.85, anchor: .bottomLeading).combined(with: .opacity),
+                removal: .opacity
+            ))
+        }
+    }
+
+    /// **Le sélecteur complet vit sur la RACINE, jamais sur la rangée.**
+    ///
+    /// Le « + » referme la rangée et ouvre cette feuille dans la même
+    /// transaction : montée sur la rangée, elle serait présentée par une vue en
+    /// train d'être retirée — et SwiftUI ne présente rien. La cible se relit à la
+    /// page COURANTE au moment du choix, ce qui est la seule lecture juste : la
+    /// feuille survit au feuilletage, l'ancienne pièce non.
+    @ViewBuilder
+    private var fullEmojiPickerSheet: some View {
+        EmojiPickerSheet(quickReactions: MeeshyQuickReactions.standard) { emoji in
+            if currentIndex < allAttachments.count {
+                onReactToMedia?(allAttachments[currentIndex], emoji)
+            }
+            showFullEmojiPicker = false
+        }
+    }
+
     /// Bas de l'écran : auteur du média, légende, puis — sur TOUTE la rangée,
     /// par-dessous — la pellicule de toute la conversation.
     @ViewBuilder
@@ -591,6 +783,51 @@ struct ConversationMediaGalleryView: View {
     /// Aucune action câblée ⇒ la barre ne rend RIEN, pas même son espace.
     @ViewBuilder
     private func mediaActionBar(_ att: MessageAttachment) -> some View {
+        // **« Réagir » est une ACTION, pas un ornement** (#6084, révision porteur
+        // 2026-09-11 : « les réactions sur les attachements en plein écran
+        // doivent s'activer comme pour répondre ou composer, il faut mettre un
+        // bouton réagir (emoji +) qui affiche la traille des emojis »).
+        //
+        // Il rejoint donc CETTE rangée — même rang, même gabarit 40 pt, même
+        // verre que Répondre et Composer — au lieu de poser sa rangée d'émojis
+        // sur l'image en permanence.
+        //
+        // **La garde remonte d'un cran** : c'est l'EXISTENCE du bouton que la loi
+        // décide, pas seulement celle de la rangée. Plus simple et plus sûr — une
+        // pièce protégée n'a alors même pas d'entrée vers le geste, et il n'y a
+        // plus qu'un endroit où la protection pourrait être oubliée.
+        if AttachmentReactionOffer.offersReaction(surface: .fullscreen,
+                                                  attachment: att,
+                                                  hasHandler: onReactToMedia != nil) {
+            Button {
+                HapticFeedback.light()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    reactionBarOpen.toggle()
+                }
+            } label: {
+                // Chrome : glyphe figé dans un cercle glass 40 pt (doctrine 82i)
+                // — ne pas scaler, glass APRÈS le sizing. Le « + » est un BADGE
+                // sur l'émoji, écho du « + » que la rangée porte en fin de course :
+                // le même signe pour la même promesse, « il y en a plus ».
+                Image(systemName: "face.smiling")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(reactionBarOpen ? MeeshyColors.indigo400 : .white)
+                    .overlay(alignment: .topTrailing) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 9, weight: .black))
+                            .foregroundColor(reactionBarOpen ? MeeshyColors.indigo400 : .white)
+                            .offset(x: 6, y: -5)
+                    }
+                    .frame(width: 40, height: 40)
+                    .adaptiveGlass(in: Circle(), interactive: true)
+            }
+            .accessibilityLabel(String(localized: "media.react.title",
+                                       defaultValue: "Réagir", bundle: .main))
+            .accessibilityHint(String(localized: "media.react.hint",
+                                      defaultValue: "Affiche la rangée d'émojis pour réagir à ce média.",
+                                      bundle: .main))
+            .accessibilityAddTraits(reactionBarOpen ? [.isSelected] : [])
+        }
         if let onReplyToMedia, !ComposableAttachment.isProtected(att) {
             // **Un média PROTÉGÉ ne se cite pas** (#4013) : la bannière de
             // citation porte la vignette du média, ce qui ferait sortir de la

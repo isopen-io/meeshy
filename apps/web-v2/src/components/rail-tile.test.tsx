@@ -141,7 +141,14 @@ describe('RailTile — une tuile, deux tailles', () => {
   test('les deux tailles rendent le MÊME balisage — un seul composant', () => {
     const formes = [RAIL_TILE_GRANDE, RAIL_TILE_COMPACT].map((t) => {
       const el = monter(t);
-      const forme = el.innerHTML.replace(/\d+(\.\d+)?px/g, 'N').replace(/Amina Diallo/g, '');
+      const forme = el.innerHTML
+        .replace(/\d+(\.\d+)?px/g, 'N')
+        .replace(/Amina Diallo/g, '')
+        // `data-rail-tile` PORTE la cote (#6070, mesurée par check-lens.mjs
+        // pour prouver que le rail compacte réellement) — elle DIFFÈRE par
+        // construction entre les deux tailles, et c'est la seule chose que
+        // ce témoin neutralise sans y voir une divergence de STRUCTURE.
+        .replace(/data-rail-tile="\d+"/g, 'data-rail-tile="N"');
       demonter();
       return forme;
     });

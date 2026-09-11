@@ -352,21 +352,39 @@ export default function ConversationsScreen() {
         revanche, il se peint avec sa tuile fantôme : c'est ce qui tient
         l'`offsetTop` du contenu identique avant et après la résolution.
       */}
+      {/*
+        LA COMPACTION NE DÉPLACE JAMAIS LA LISTE (#6070) — voir le
+        doc-comment de `RailTile` pour l'arbitrage. Une tuile fantôme,
+        TOUJOURS à la cote GRANDE, réserve la hauteur EN FLUX (le `<ul>`
+        `invisible` ci-dessous) ; le rail RÉEL — celui qui compacte de
+        `RAIL_TILE_GRANDE` à `RAIL_TILE_COMPACT` au défilement — est peint
+        PAR-DESSUS, `absolute inset-0`, dans la même boîte que le fantôme
+        (`section` porte `position: relative`, son seul ancêtre positionné).
+        Sa propre hauteur peut donc varier librement : elle ne pousse plus
+        jamais `<ul id="contenu">` sous elle. `check-lens.mjs` mesure les
+        deux faces de cet invariant : le rail compacte bien (la tuile
+        `[data-rail-tile]` rétrécit), et pourtant AUCUNE rangée ne bouge.
+      */}
       {loading || railConversations.length > 0 ? (
-      <section aria-label="Accès rapide aux conversations" className="shrink-0 overflow-x-auto pb-1">
-        <ul className="flex gap-3 px-4 py-2">
-          {railConversations.length === 0 ? <RailPlaceholderTile /> : null}
-          {railConversations.map((c) => (
-            <RailTile
-              key={c.id}
-              conversationId={c.id}
-              title={titleOf(c, viewer.id ?? '')}
-              accent={accentOf(c)}
-              unread={effectiveUnreadOf(c, overrides)}
-              size={railCompact ? RAIL_TILE_COMPACT : RAIL_TILE_GRANDE}
-            />
-          ))}
+      <section aria-label="Accès rapide aux conversations" className="relative shrink-0 pb-1">
+        <ul aria-hidden="true" className="invisible flex gap-3 px-4 py-2">
+          <RailPlaceholderTile />
         </ul>
+        <div className="absolute inset-0 overflow-x-auto">
+          <ul className="flex gap-3 px-4 py-2">
+            {railConversations.length === 0 ? <RailPlaceholderTile /> : null}
+            {railConversations.map((c) => (
+              <RailTile
+                key={c.id}
+                conversationId={c.id}
+                title={titleOf(c, viewer.id ?? '')}
+                accent={accentOf(c)}
+                unread={effectiveUnreadOf(c, overrides)}
+                size={railCompact ? RAIL_TILE_COMPACT : RAIL_TILE_GRANDE}
+              />
+            ))}
+          </ul>
+        </div>
       </section>
       ) : null}
 
