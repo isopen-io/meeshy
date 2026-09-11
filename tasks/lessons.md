@@ -30596,10 +30596,14 @@ Un workflow déclenché par `pull_request` construit le **commit de fusion**
 AUCUN run — pas un run rouge, pas un run annulé : rien. Le verdict manquant
 n'était pas perdu, il n'avait jamais été demandé.
 
-> **Devant une PR sans verdict, lire `mergeable` AVANT de regarder la CI.** « Pas
+> **« Aucun check » se lit toujours avec `mergeable` à côté, jamais seul.** « Pas
 > de run » et « run en échec » se ressemblent dans un tableau de bord et n'ont
 > pas la même cause : le premier est presque toujours un conflit, et il se
 > corrige avec `git merge`, pas avec `gh run rerun`.
+
+C'est la forme la plus discrète de « ce qui ne s'exécute pas ne se signale
+pas » : `no checks reported` ressemble à « la CI n'a pas encore démarré » et dit
+en réalité **« la CI ne démarrera jamais tant que le conflit tient »**.
 
 Deux pièges de lecture s'ajoutent, et ils tirent en sens inverse :
 
