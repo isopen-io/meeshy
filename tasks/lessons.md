@@ -30439,3 +30439,190 @@ typer (une garde qui devine un type produit des rouges illisibles, et finit
 désarmée). Falsifiabilité mesurée : vert sur le catalogue corrigé, ROUGE dès
 qu'on remet `%@` sur UNE seule des sept langues, vert de nouveau après
 restauration.
+
+
+## Leçon 577 — Un témoin qui FABRIQUE sa donnée ne mesure qu'une moitié de la chaîne, et affirme l'autre
+
+2026-09-11, passerelle (audit de cohérence iOS ↔ passerelle).
+`conversation-wire-fields.test.ts` est un bon témoin : il sérialise une ligne de
+liste et regarde ce qui survit à `fast-json-stringify`, qui retire en silence
+toute propriété non déclarée. Il est né d'un vrai défaut de production, il est
+bien écrit, et il est **vert depuis des mois sur quatre champs que la base ne
+chargeait pas**.
+
+L'objet qu'il sérialise est un littéral, sous un commentaire qui dit « ce que le
+handler de liste pose réellement ». Le commentaire affirme ; le test, lui, ne
+mesure que ce qui se passe APRÈS que le handler a posé. `description`,
+`defaultWriteRole`, `slowModeSeconds` et `autoTranslateEnabled` étaient déclarés
+au schéma, présents dans le littéral — et absents du `select` Prisma. Servis
+`undefined` sur chaque ligne, pour toujours.
+
+Les deux pièges sont symétriques, et un seul des deux se voit :
+
+| | déclaré au schéma | chargé par la requête | ce qui part |
+|---|---|---|---|
+| piège 2026-08-24 | ✗ | ✓ | rien (strippé) |
+| piège 2026-09-11 | ✓ | ✗ | rien (jamais lu) |
+
+> **Une donnée fabriquée dans un test est une HYPOTHÈSE, pas une mesure.** Le
+> test prouve « si le handler pose ceci, alors le fil rend cela » — jamais que
+> le handler le pose. Devant un témoin qui construit son entrée, demander :
+> *quelle moitié de la chaîne reste non mesurée, et qui la mesure ?*
+
+Parade : un témoin qui lit les DEUX SOURCES DE VÉRITÉ et les confronte, plutôt
+qu'une donnée écrite à la main. Ici : les colonnes de `model Conversation` lues
+dans `schema.prisma` à l'exécution, ∩ les propriétés de `conversationMinimalSchema`,
+⊆ les clefs du `select` — avec une liste d'exceptions qui coûte une phrase
+chacune. La loi attrape le prochain champ ; un littéral n'attrape que celui
+qu'on a pensé à y écrire.
+
+Corollaire d'outillage : une sélection Prisma **inline dans un `findMany` est
+illisible pour tout témoin**. L'extraire en constante exportée n'est pas
+cosmétique — c'est ce qui rend la moitié amont mesurable.
+
+
+## Leçon 578 — La graphie du FIL n'est pas la graphie du MAGASIN, et ce qui se perd entre les deux est ce qui ne se regarde pas
+
+2026-09-11, passerelle (audit de cohérence iOS ↔ passerelle).
+`POST /posts` accepte une transcription faite sur l'appareil dans la graphie du
+client — `duration_ms`, `segments[].start`/`.end` en **secondes**, `speaker_id`.
+Les deux services la persistaient **verbatim** (`{ ...data.mobileTranscription,
+segments, source: 'mobile' }`) dans `PostMedia.transcription`, dont la graphie
+canonique est `durationMs`, `startMs`/`endMs` en **millisecondes**, `speakerId`.
+
+Le texte, lui, porte le même nom des deux côtés. Un audio transcrit sur
+l'appareil rendait donc sa transcription — et des segments **sans aucun
+horodatage** : pas de surlignage au fil de la lecture, pas de saut à un segment,
+durée lue à `0`. Le même enregistrement transcrit par Whisper s'affichait
+entièrement.
+
+> **Quand on vérifie qu'une transcription « marche », on lit le texte.** Ce qui
+> se perd dans une conversion de graphie est exactement ce que ce regard ne
+> couvre pas : le TEMPS, l'unité, l'identité du locuteur. La question à poser à
+> tout site qui persiste une charge reçue n'est pas « le champ principal est-il
+> là ? » mais **« ce document a-t-il une graphie à lui, et qui la lui donne ? »**
+
+Le dépôt savait. Le chemin TUS l'écrit noir sur blanc — « la forme validée est
+celle que le translator lit (`startMs`/`endMs`), pas celle de `POST /posts`
+[…] : c'est le lecteur final qui dicte la forme ». La règle était juste et
+publiée ; elle n'avait jamais été appliquée là où le lecteur final voulait la
+même chose. **Un doc-comment qui NOMME une divergence est un aveu : aller voir
+si l'autre moitié a été traitée.**
+
+Parade : un site UNIQUE de conversion, dont le témoin est que sa sortie passe le
+validateur du magasin (`parseAttachmentTranscription`) — et dont la
+contre-épreuve est que la charge du fil, elle, est refusée. Une garde qui
+compare des clefs se contente de décrire ; une garde qui fait valider sa sortie
+par le lecteur mesure.
+
+Et l'unité est le piège dans le piège : `start: 12.4` relu comme des
+millisecondes donne un segment de 12 ms au lieu de 12,4 s — un décalage qui a
+l'air d'un bug de LECTEUR, jamais d'un bug de format.
+
+
+## Leçon 579 — Un décodage strict sur un champ que PERSONNE ne lit coûte la PAGE entière
+
+2026-09-11, iOS + passerelle (audit de cohérence).
+`Message.translations` est une colonne JSON Mongo, relue par la passerelle avec
+un CAST — aucune validation. Le type décrit ce que les écrivains d'aujourd'hui
+posent, jamais ce que la base contient : écriture partielle, version antérieure,
+translator tombé entre deux champs.
+
+La chaîne complète, pour UNE ligne malformée :
+
+1. l'entrée sans `text` produit `translatedContent: undefined` ;
+2. le schéma wire ne le déclare pas `nullable` ⇒ `fast-json-stringify` OMET la
+   clé ;
+3. `APITextTranslation.translatedContent` est non optionnel ⇒ le message échoue ;
+4. `MessagesResponse.data` est un `[APIMessage]` décodé d'un bloc ⇒ **la page
+   entière échoue**.
+
+La conversation s'ouvre VIDE, et rien dans le journal ne nomme la ligne fautive.
+
+> **La rigueur d'un type se paie au NIVEAU où l'échec remonte, jamais au niveau
+> où il est écrit.** Un champ non optionnel dans un élément de tableau est une
+> décision sur le TABLEAU. Demander : *si cet élément est refusé, qu'est-ce qui
+> disparaît ?* — si la réponse est « plus que l'élément », le décodage doit être
+> tolérant par élément.
+
+`translationModel` n'était lu par AUCUNE surface (relevé sur tout le dépôt :
+seuls des tests), et le web le traitait déjà comme absent (`|| 'basic'`). Un
+champ que personne ne lit ne mérite pas de faire tomber quoi que ce soit.
+
+Parade, en DEUX moitiés qui ne se remplacent pas :
+- côté serveur, ne pas servir ce qu'on ne peut pas décrire honnêtement — une
+  entrée sans texte n'est pas une traduction (« le client peut se tromper ; la
+  charge, non ») ;
+- côté client, tolérance par ÉLÉMENT (`decodeLossyArrayIfPresent`, déjà dans le
+  SDK), pour la malformation que personne n'a prévue.
+
+Et surtout **ne pas rendre facultatif le champ de CONTENU** pour faire taire le
+symptôme : `translatedContent` reste obligatoire, parce qu'une traduction sans
+texte n'a rien à faire dans la liste. C'est le champ de MÉTADONNÉE qui devient
+facultatif — il dit alors ce qui est vrai plutôt que ce qu'on espérait.
+
+
+## Leçon 580 — Une erreur de DÉCODAGE tombe dans le `catch` de la panne RÉSEAU, et la file se rejoue pour toujours
+
+2026-09-11, iOS (audit de cohérence iOS ↔ passerelle).
+`SettingsActionQueue` rejoue une modification de profil faite hors-ligne. Le
+gestionnaire décodait la réponse en `APIResponse<MeeshyUser>` ; `PATCH /users/me`
+sert `data: { user, message }`. Le décodage échouait **à tous les coups**, sur
+`keyNotFound(id)`.
+
+Ce qui rend le défaut invisible n'est pas l'échec : c'est OÙ il atterrit.
+
+```swift
+} catch {                     // 5xx, connectivité… et keyNotFound
+    return false              // « garder en file, on rejouera »
+}
+```
+
+La doctrine de ce `catch` est juste pour une panne réseau. Appliquée à une
+erreur de FORME, elle produit : le serveur a écrit, le client croit avoir
+échoué, l'action reste en file, et chaque retour en ligne la rejoue. Le seul
+symptôme visible est un compteur « en attente de synchronisation » qui ne
+redescend jamais — jamais une erreur.
+
+> **Un `catch` fourre-tout classe par DÉFAUT, et son défaut encode une
+> hypothèse : « ce qui a échoué est le transport ».** Devant un rejeu, demander
+> *quelles autres erreurs finissent ici, et le verdict leur convient-il ?* Une
+> erreur de décodage est TERMINALE au sens de la file (rejouer n'y changera
+> rien) tout en étant indistinguable d'une erreur transitoire.
+
+Parade de forme, plus solide que d'énumérer un cas de plus : **un rejeu ne doit
+exiger aucune forme de réponse.** Le chemin persiste une adresse écrite par une
+version possiblement antérieure de l'app ; parier sur la forme de ce qu'elle
+rend est un pari sur une route qu'on ne connaît pas. `SimpleAPIResponse` —
+l'enveloppe, sans son `data` — ne peut pas tomber sur un changement de route.
+
+Le jumeau du site avait déjà la bonne forme (`OutboxDispatcher.updateProfile`,
+`APIResponse<[String: AnyCodable]>`) avec, en commentaire, exactement cette
+raison. **Deux sites qui font la même requête ne partagent pas pour autant ce
+qu'on a appris sur elle** — chercher le jumeau fait partie du correctif.
+
+
+## Leçon 581 — Un témoin qui lit le SOURCE rougit sur le commentaire qui l'explique
+
+2026-09-11, iOS. Le correctif de la leçon 580 s'accompagne d'un témoin
+d'inspection de source (le gestionnaire est une fermeture en ligne dans le bloc
+`.task` de `MeeshyApp` : aucun test ne peut l'invoquer). Il asserte que le corps
+ne contient plus `APIResponse<MeeshyUser>`.
+
+Il est tombé ROUGE sur le correctif juste — parce que le commentaire que je
+venais d'écrire pour EXPLIQUER le correctif nomme la forme fautive :
+
+```swift
+// Ce site exigeait `APIResponse<MeeshyUser>` ; PATCH /users/me sert …
+let _: SimpleAPIResponse = try await APIClient.shared.replayPersistedRequest(
+```
+
+> **Un témoin de source ne distingue pas le code de ce qui le documente.** Et
+> la documentation d'un correctif NOMME, par construction, ce qu'il retire —
+> les deux se contredisent donc mécaniquement. Le réflexe « je reformule le
+> commentaire » est le mauvais : il fait payer à l'explication le prix de
+> l'outil de mesure.
+
+Parade : retirer les lignes de commentaire AVANT de mesurer. Trois lignes de
+`filter`, et le commentaire peut dire la vérité entière.
+
