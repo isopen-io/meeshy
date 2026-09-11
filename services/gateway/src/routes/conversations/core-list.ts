@@ -23,7 +23,6 @@ import {
   conversationListResponseSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { conversationActiveMemberCountSelect } from './utils/active-member-count';
 import { loadConversationTombstones } from './utils/delta-tombstones';
 import { sendUnauthorized, sendInternalError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
@@ -43,8 +42,7 @@ import { resolveCapabilities } from '@meeshy/shared/utils/reading-modes';
 import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 import type { ConversationType } from '@meeshy/shared/types/conversation';
 import {
-  conversationListParticipantSelect,
-  conversationUserPreferencesSelect,
+  conversationListSelect,
   conversationLastMessagePreviewSelect
 } from './core-selects';
 
@@ -330,49 +328,7 @@ export function registerConversationListRoute(
         where: whereClause,
         skip: beforeCursor ? 0 : offset,
         take: limit,
-        select: {
-          id: true,
-          title: true,
-          type: true,
-          identifier: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true,
-          lastMessageAt: true,
-          banner: true,
-          avatar: true,
-          communityId: true,
-          // Effectif compté par la base, PAS la colonne dénormalisée du même
-          // nom : voir `conversationActiveMemberCountSelect`. La ligne de liste
-          // en dépend visiblement (badge de groupe iOS `memberCount > 1`,
-          // saturation de la couleur d'accent `min(memberCount/100, 1) × 0.2`),
-          // et la colonne rendait `0` pour toute conversation créée depuis la
-          // migration héritée : badge absent, et couleur d'accent différente
-          // entre la liste et le fil ouvert, qui lui compte.
-          _count: { select: conversationActiveMemberCountSelect },
-          isAnnouncementChannel: true,
-          participants: {
-            take: 5,
-            where: {
-              isActive: true
-            },
-            select: conversationListParticipantSelect
-          },
-          // User preferences (pin/mute/archive/tags/catégorie/customName/reaction)
-          userPreferences: {
-            where: { userId: userId },
-            take: 1,
-            select: conversationUserPreferencesSelect
-          },
-          messages: {
-            where: {
-              deletedAt: null
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-            select: conversationLastMessagePreviewSelect
-          }
-        },
+        select: conversationListSelect(userId),
         orderBy
       });
       perfTimings.conversationsQuery = performance.now() - t0;
