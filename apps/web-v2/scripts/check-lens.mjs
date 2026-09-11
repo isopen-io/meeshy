@@ -143,6 +143,24 @@ constate(
   'la rangée « c-nouvelle » ne montre aucune heure — lastMessageAt devrait pourtant toujours être servi',
 );
 
+/**
+ * LE RAIL COMPACTE, SANS DÉPLACER LA LISTE (#6070). L'invariant de MISE EN
+ * PAGE ci-dessus (`moves.length === 0`) serait trivialement vert sur un
+ * rail qui ne compacte PLUS DU TOUT — la régression inverse d'un rail figé
+ * à la cote GRANDE. On mesure donc la LARGEUR de la tuile `[data-rail-tile]`
+ * (`RailTile`, `cellule = round(size * 1.222)`) avant tout défilement — elle
+ * doit valoir la cote GRANDE (`RAIL_TILE_GRANDE` = 72 px → 88 px) — et on la
+ * revérifie après, une fois le seuil de compaction (48 px) franchi.
+ */
+const railWidthBefore = await page.evaluate(
+  () => document.querySelector('[data-rail-tile]')?.getBoundingClientRect().width ?? null,
+);
+constate(railWidthBefore !== null, "aucune tuile de rail trouvée ([data-rail-tile]) avant défilement");
+constate(
+  railWidthBefore !== null && railWidthBefore >= 80,
+  `la tuile de rail ne part pas de la cote GRANDE (~88 px) : ${railWidthBefore}`,
+);
+
 /** On défile PAR PALIERS, en relevant la géométrie à chaque, et on la compare. */
 const readings = [];
 for (const y of [40, 120, 240, 400, 600]) {
@@ -159,6 +177,16 @@ for (const { y, geo } of readings) {
       `${JSON.stringify(moves.slice(0, 3))}`,
   );
 }
+
+/** Après défilement (seuil 48 px largement franchi), le rail a bien compacté. */
+const railWidthAfter = await page.evaluate(
+  () => document.querySelector('[data-rail-tile]')?.getBoundingClientRect().width ?? null,
+);
+constate(railWidthAfter !== null, "aucune tuile de rail trouvée ([data-rail-tile]) après défilement");
+constate(
+  railWidthAfter !== null && railWidthAfter < 45,
+  `la tuile de rail ne compacte pas à la cote COMPACTE (~37 px) après défilement : ${railWidthAfter}`,
+);
 
 /**
  * Le témoin 3 : la magnification opère. Sans lui, tout ce qui précède serait

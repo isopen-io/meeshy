@@ -95,7 +95,7 @@ settings:
   # Cloud — les lanes fastlane prennent `max(dépôt, dernier TestFlight) + 1`,
   # donc une valeur juste rend le prochain build prévisible. Maintenue par
   # `./meeshy.sh build-number`.
-  CURRENT_PROJECT_VERSION: "1817"
+  CURRENT_PROJECT_VERSION: "1820"
   # Alignée sur la version App Store Connect. Passée à 1.0.1 le 2026-07-31 :
   # la 1.0.0 avait été rejetée (déclaration Age Rating `ageAssurance` à true
   # sans mécanisme de vérification d'âge dans l'app), et l'enregistrement ASC a
