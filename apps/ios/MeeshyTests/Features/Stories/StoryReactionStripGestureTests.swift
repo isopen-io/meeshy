@@ -95,17 +95,28 @@ final class StoryReactionStripGestureTests: XCTestCase {
                             + "les gardes suivantes ne mesureraient plus rien.")
     }
 
-    func test_laBarreDeLaStory_estAlEchelleDeuxEtSansHabillage() throws {
+    /// L'ÉCHELLE A ÉTÉ RAMENÉE À 1,5 le 2026-09-11 au soir — « ×0,75, elles sont
+    /// trop grosses » (directive porteur, sur capture). Le 2 de l'après-midi
+    /// répondait à « agrandir la taille des emojis » ; le porteur a mesuré le
+    /// résultat à l'écran et a corrigé son propre ordre.
+    ///
+    /// Cette garde épingle donc une DIRECTIVE, pas une implémentation : elle doit
+    /// suivre la directive quand celle-ci change, et rougir quand c'est le CODE
+    /// qui dérive. Le nom de la fonction porte l'échelle pour que le prochain
+    /// lecteur ne cherche pas laquelle fait foi.
+    func test_laBarreDeLaStory_estAlEchelleUnEtDemiEtSansHabillage() throws {
         let code = try sidebarSource()
         guard let site = pickerCallSite(in: code) else { return XCTFail("site introuvable") }
         let plat = compact(site)
 
-        XCTAssertTrue(plat.contains("scale:2"),
-                      "Échelle 2 — « agrandir la taille des emojis » (directive porteur 2026-09-11).")
+        XCTAssertTrue(plat.contains("scale:1.5"),
+                      "Échelle 1,5 — « ×0,75 » sur le 2 de la directive du 2026-09-11 après-midi.")
+        XCTAssertFalse(plat.contains("scale:2,"),
+                       "L'échelle 2 a été explicitement RETIRÉE : la barre était trop grosse à l'écran.")
         XCTAssertTrue(plat.contains("chrome:.none"),
                       "Sans capsule ni fond — « pas de contour ».")
         XCTAssertTrue(plat.contains("scrollable:true"),
-                      "À l'échelle 2 la rangée dépasse la largeur du viewer : elle DÉFILE, elle ne déborde pas.")
+                      "Même à 1,5 la rangée dépasse la largeur du viewer : elle DÉFILE, elle ne déborde pas.")
         XCTAssertTrue(plat.contains("onExpandFullPicker:"),
                       "Le « + » reste — il ouvre le sélecteur complet.")
         XCTAssertFalse(plat.contains(".fixedSize()"),

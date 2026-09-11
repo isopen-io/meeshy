@@ -651,7 +651,18 @@ struct ConversationMediaGalleryView: View {
             EmojiReactionPicker(
                 quickEmojis: MeeshyQuickReactions.standard,
                 style: .dark,
-                scale: 2,
+                // ÉCHELLE 1,5 — le gabarit de la story, dont celui-ci DÉRIVE
+                // (#6083 pour la forme, #6084 pour ce site). Le 2 posé
+                // l'après-midi du 2026-09-11 a été ramené à 1,5 le soir même :
+                // « ×0,75, elles sont trop grosses » (directive porteur, sur
+                // capture, les deux barres nommées dans la même phrase).
+                //
+                // Les deux barres bougent ENSEMBLE, et c'est le point : ce
+                // site n'a pas d'échelle à lui, il rend le gabarit arrêté pour
+                // la story. Deux valeurs différentes ici et dans
+                // `StoryViewerView+Sidebar.swift` ne seraient pas deux
+                // décisions, ce serait un oubli.
+                scale: 1.5,
                 scrollable: true,
                 chrome: .none,
                 onReact: { emoji in
