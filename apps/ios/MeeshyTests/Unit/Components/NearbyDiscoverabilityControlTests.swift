@@ -376,8 +376,13 @@ final class NearbyDiscoverabilityControlTests: XCTestCase {
     /// production, et l'écran de découverte restait muet sans que rien ne le
     /// dise. La règle ne connaît plus les pièces jointes du tout.
     func test_offers_doesNotDependOnAttachments() throws {
-        let source = try String(contentsOf: Self.appRoot
-            .appendingPathComponent("Features/Main/Views/FeedView+Attachments.swift"), encoding: .utf8)
+        // La condition fautive vivait sur la FEUILLE, qui a quitté
+        // `FeedView+Attachments.swift` en #6040 — les deux fichiers sont lus,
+        // pour qu'un retour de la forme interdite soit vu où qu'il se pose.
+        let source = try [ "Features/Main/Views/FeedComposerSheet.swift",
+                           "Features/Main/Views/FeedView+Attachments.swift" ]
+            .map { try String(contentsOf: Self.appRoot.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
 
         XCTAssertFalse(
             source.contains("pendingPlace != nil && pendingAttachments.isEmpty"),
@@ -414,9 +419,10 @@ final class NearbyDiscoverabilityControlTests: XCTestCase {
             }
         }
         XCTAssertEqual(
-            hotes, ["FeedView+Attachments.swift", "MeeshyComposerHost+Intake.swift"],
+            hotes, ["FeedComposerSheet.swift", "MeeshyComposerHost+Intake.swift"],
             "Les hôtes du second opt-in ont changé. La feuille historique le peint depuis "
-                + "`FeedView+Attachments`, le meuble depuis `MeeshyComposerHost+Intake` — et le "
+                + "`FeedComposerSheet` (sortie de `FeedView+Attachments` en #6040), le meuble depuis "
+                + "`MeeshyComposerHost+Intake` — et le "
                 + "composer INLINE du fil, troisième hôte jusqu'à #6016, n'existe plus. Un hôte "
                 + "de plus qui recopierait la condition au lieu d'appeler la règle divergerait au "
                 + "premier ajustement ; un hôte de moins est une surface qui a perdu le contrôle."

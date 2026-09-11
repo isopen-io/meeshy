@@ -212,6 +212,19 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/DataExportView.swift",
         "Features/Main/Views/DeleteAccountView.swift",
         "Features/Main/Views/FeedCommentsSheet.swift",
+        // #6040 — RELOCALISATION pure, même forme qu'au #4084 et au #4102 : la
+        // FEUILLE de composition quitte `FeedView+Attachments.swift` (1 391
+        // lignes pour une extension que son nom annonçait bien plus étroite) et
+        // emporte AVEC ELLE ses sites figés. La POPULATION ne bouge pas — ni
+        // `totalCeiling` ni `textCeiling` — seul le NOM change ; l'extension
+        // n'en porte plus aucun, elle sort de la liste et n'y revient jamais.
+        //
+        // C'est la JUMELLE de la règle que le doc-comment de `bearingFiles`
+        // énonce en tête : « toute extraction hors d'un fichier de la liste doit
+        // inscrire sa DESTINATION dans le MÊME commit ». Inscrire la
+        // destination ne suffit pas — la source VIDÉE doit sortir, sinon la
+        // liste garde un nom sans site et cesse de dire la vérité (règle 4).
+        "Features/Main/Views/FeedComposerSheet.swift",
         "Features/Main/Views/FeedPostCard+Media.swift",
         // #4096 — la vue `3f` remplace la mosaïque par un carrousel. Le fichier
         // porte DEUX sites figés dont les origines sont opposées, et les
@@ -228,7 +241,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         //     scalait, exactement la doctrine 86i. La cible tactile reste à 44,
         //     posée par-dessus.
         "Features/Main/Views/FeedPostCardCarousel.swift",
-        "Features/Main/Views/FeedView+Attachments.swift",
         "Features/Main/Views/FeedView.swift",
         "Features/Main/Views/GlobalSearchView.swift",
         "Features/Main/Views/IncomingCallView.swift",
