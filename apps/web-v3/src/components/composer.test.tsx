@@ -1,4 +1,3 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -6,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { DEFAULT_USER_PERMISSIONS } from '@meeshy/shared/types/participant';
 
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { Composer } from './composer';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
 
@@ -63,13 +63,13 @@ describe('Composer — le focus après un envoi au doigt (revue-correction #5813
   const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
   beforeAll(() => {
-    GlobalRegistrator.register();
+    ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });
 
   afterAll(async () => {
     delete globals.IS_REACT_ACT_ENVIRONMENT;
-    await GlobalRegistrator.unregister();
+    await releaseHappyDomIfRegistered();
   });
 
   let container: HTMLDivElement;
@@ -217,13 +217,13 @@ describe('Composer — « Composer » met le curseur dans le champ (revue #5814,
   const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
   beforeAll(() => {
-    GlobalRegistrator.register();
+    ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });
 
   afterAll(async () => {
     delete globals.IS_REACT_ACT_ENVIRONMENT;
-    await GlobalRegistrator.unregister();
+    await releaseHappyDomIfRegistered();
   });
 
   let container: HTMLDivElement;
@@ -320,13 +320,13 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
   const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
   beforeAll(() => {
-    GlobalRegistrator.register();
+    ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });
 
   afterAll(async () => {
     delete globals.IS_REACT_ACT_ENVIRONMENT;
-    await GlobalRegistrator.unregister();
+    await releaseHappyDomIfRegistered();
   });
 
   let container: HTMLDivElement;

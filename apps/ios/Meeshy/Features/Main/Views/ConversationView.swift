@@ -1553,10 +1553,10 @@ struct ConversationView: View {
                 // le repos du fil ne bouge pas d'un point.
                 bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
                 bottomInsetTransition: listInsetTransition,
-                // 0 en preview : la vue y est hébergée dans une `.sheet` à
-                // détentes, dont le bord haut est déjà sous la status bar —
-                // réserver la bande îlot y décalerait le flux dans le vide.
+                // 0 en preview, ni voile : hébergée dans une `.sheet` à détentes, déjà
+                // sous la status bar, la vue décalerait le flux dans le vide.
                 topInset: previewMode ? 0 : DeviceLayout.safeAreaTop,
+                chromeVisibility: previewMode ? .hidden : ThreadChromeFade.Visibility(header: !hidesEntireHeaderForScroll, composer: !hidesComposerChromeForScroll),
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,

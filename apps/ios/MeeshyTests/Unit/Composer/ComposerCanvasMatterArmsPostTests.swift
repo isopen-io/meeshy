@@ -68,10 +68,28 @@ final class ComposerCanvasMatterArmsPostTests: XCTestCase {
     /// **Le réel reste dehors, et c'est la raison d'origine, intacte.** Son
     /// canal est `.unsupported` : armer sa flèche promettrait ce que rien ne
     /// livre — le défaut exact que #4869 évitait.
-    func test_leReel_neSArmePas() {
-        XCTAssertEqual(ComposerPublishChannel.channel(for: .reel), .unsupported,
-                       "si le réel gagne un canal, ce témoin tombe — et c'est le bon moment " +
-                       "pour relire l'élargissement plutôt que de le subir")
+    /// **Le réel publie par le DOCUMENT, et ce cliquet enregistre la réponse
+    /// qu'il exigeait** (#4869, directive porteur 2026-09-06 ; relevé #6011).
+    ///
+    /// Sa version d'avant gelait `.unsupported` en disant : « si le réel gagne
+    /// un canal, ce témoin tombe — et c'est le bon moment pour relire
+    /// l'élargissement plutôt que de le subir ». Il est tombé, la mesure a été
+    /// relue, et `ComposerPublishChannel` porte le raisonnement en toutes
+    /// lettres : le canal de la SCÈNE publie un post par slide — juste pour une
+    /// story, dont chaque unité EST une publication, faux pour un réel qui est
+    /// UNE publication à plusieurs médias. Le document publie une fois et porte
+    /// tout ce qu'un réel emporte.
+    ///
+    /// Ce qui reste gardé est donc l'inverse, et c'est ce qui compte : le réel
+    /// ne doit PAS retomber sur le canal de la scène. Un cliquet qu'on abaisse
+    /// sans écrire pourquoi ne garde plus rien la fois d'après.
+    func test_leReel_publieParLeDocument_jamaisParLaScene() {
+        XCTAssertEqual(ComposerPublishChannel.channel(for: .reel), .document,
+                       "Le réel a perdu le canal du document — sans lui, la flèche redevient muette, " +
+                       "ce qui est le défaut que la directive porteur du 2026-09-06 a signalé.")
+        XCTAssertNotEqual(ComposerPublishChannel.channel(for: .reel), .scene,
+                          "Le canal de la scène publie UN POST PAR SLIDE : un réel de deux photos y " +
+                          "produirait deux publications, ce que la mesure de #4869 a écarté.")
     }
 
     /// Les trois formats dont le canal livre s'arment, et le témoin le dit par

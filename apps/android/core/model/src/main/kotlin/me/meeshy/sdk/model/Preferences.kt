@@ -191,7 +191,7 @@ data class PrivacyPreferences(
 data class AudioPreferences(
     val transcriptionEnabled: Boolean = true,
     val transcriptionSource: TranscriptionSource = TranscriptionSource.AUTO,
-    val autoTranscribeIncoming: Boolean = false,
+    val autoTranscribeIncoming: Boolean = true,
     val audioTranslationEnabled: Boolean = true,
     val translatedAudioFormat: TranslatedAudioFormat = TranslatedAudioFormat.MP3,
     val ttsEnabled: Boolean = true,

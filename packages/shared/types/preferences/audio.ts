@@ -29,7 +29,17 @@ export const AudioPreferenceSchema = z.object({
   // Transcription
   transcriptionEnabled: z.boolean().default(true),
   transcriptionSource: z.enum(['auto', 'mobile', 'server']).default('auto'),
-  autoTranscribeIncoming: z.boolean().default(false),
+  /**
+   * Opt-out d'AFFICHAGE, sans coût serveur (#4956) : le serveur transcrit déjà
+   * un audio reçu (au besoin pour ses traductions) quelle que soit cette
+   * valeur — elle gouverne uniquement si la bulle affiche le texte transcrit
+   * automatiquement (`true`) ou un CTA « Transcrire » qui le révèle sans
+   * requête réseau (`false`). Défaut `true` depuis la décision porteur du
+   * 2026-09-03 : masquer une transcription déjà là serait un contrôle inerte
+   * (loi 4) pour l'écrasante majorité des utilisateurs qui n'ont jamais eu de
+   * raison de le désactiver.
+   */
+  autoTranscribeIncoming: z.boolean().default(true),
 
   // Traduction audio
   audioTranslationEnabled: z.boolean().default(true),
@@ -92,7 +102,7 @@ export type AudioPreference = z.infer<typeof AudioPreferenceSchema>;
 export const AUDIO_PREFERENCE_DEFAULTS: AudioPreference = {
   transcriptionEnabled: true,
   transcriptionSource: 'auto',
-  autoTranscribeIncoming: false,
+  autoTranscribeIncoming: true,
   audioTranslationEnabled: true,
   translatedAudioFormat: 'mp3',
   ttsEnabled: true,
