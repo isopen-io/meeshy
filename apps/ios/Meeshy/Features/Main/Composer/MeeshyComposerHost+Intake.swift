@@ -233,25 +233,6 @@ extension MeeshyComposerHost {
         ) { _, neuf in neuf }
     }
 
-    /// **Le sélecteur de lieu (T2.5)**, monté ICI plutôt que dans
-    /// `ComposerDocumentSurface` — même patron que `documentCameraSheet` juste
-    /// au-dessus : le picker est le même composant que le composer inline du
-    /// fil (`FeedView+Attachments.handleFeedLocationSelection`), qui se
-    /// referme lui-même (`LocationPickerView.dismiss()`) après `onSelect`.
-    ///
-    /// **Un lieu choisi recalcule le second opt-in DEPUIS LA MÉMOIRE**, jamais
-    /// depuis l'état courant : `FeedNearbyDiscoverability.choiceForNewPlace()`
-    /// lit `LocationSharingPreferencesStore` à cet instant précis, exactement
-    /// ce que fait le composer inline sur le même geste — un second lieu choisi
-    /// dans la même session doit repartir du dernier palier RETENU, pas d'un
-    /// toggle resté ouvert pour le lieu précédent.
-    var documentLocationPickerSheet: some View {
-        LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { place in
-            documentLocation = place
-            documentDiscoverability = FeedNearbyDiscoverability.choiceForNewPlace()
-        }
-    }
-
     /// **Le SECOND opt-in n'est offert que sous la MÊME garde que le composer
     /// inline** — `FeedNearbyDiscoverability.offers(hasPlace:visibility:)`,
     /// APPELÉE et jamais recopiée (`hasPlace && visibility == .public`) : une
@@ -261,76 +242,6 @@ extension MeeshyComposerHost {
         FeedNearbyDiscoverability.offers(
             hasPlace: documentLocation != nil,
             visibility: composerVisibility
-        )
-    }
-
-    /// **La capsule de langue (T2.2)** — le septième contrôle que la feuille
-    /// historique porte dans la même barre que les six outils d'attache
-    /// (`FeedComposerSheet`, `composerLanguage`), et que la porte du document
-    /// n'avait ni en champ, ni en contrôle, ni en canal sur
-    /// `ComposerDocumentDraft` avant ce lot.
-    ///
-    /// Même capsule, même sélecteur que la feuille : `ComposerLanguageFlag` et
-    /// `AudioLanguagePickerView` tournent déjà en production, et en fabriquer
-    /// une seconde paire ici donnerait deux listes de langues et deux mémoires
-    /// à faire diverger.
-    /// Le nom LOCALISÉ de la langue déclarée, pour VoiceOver — un emoji drapeau
-    /// ne se lit pas utilement (contrat de `ComposerLanguageFlag`). Miroir de
-    /// `composerLanguageDisplayName` de la feuille.
-    var documentLanguageDisplayName: String {
-        let name = Locale.current.localizedString(forLanguageCode: documentLanguage) ?? documentLanguage
-        return name.prefix(1).uppercased() + name.dropFirst()
-    }
-
-    var documentLanguageCapsule: some View {
-        Button {
-            presentedPortal = .language
-            HapticFeedback.light()
-        } label: {
-            Text(ComposerLanguageFlag.label(for: documentLanguage))
-                .font(MeeshyFont.relative(13, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo400)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(MeeshyColors.indigo400.opacity(0.15))
-                        .overlay(
-                            Capsule()
-                                .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 1)
-                        )
-                )
-        }
-        .accessibilityLabel(Text(ComposerDocumentCopy.language))
-        .accessibilityValue(documentLanguageDisplayName)
-        // Même correctif que l'ancienne tuile de lieu (#4034, retirée) :
-        // `.padding(16)` datait
-        // de l'ancien `.overlay(alignment: .bottomTrailing)` et doublait la
-        // marge une fois la capsule devenue enfant du `HStack` de `toolRow`
-        // — cause du débordement horizontal mesuré au simulateur.
-    }
-
-    /// Le sélecteur du dépôt, monté tel quel — même raison que
-    /// `emojiPickerSheet` deux zones plus haut : `AudioLanguagePickerView`
-    /// tourne déjà en production sous la feuille historique, avec ses
-    /// catégories, sa recherche et son bouton « afficher toutes les langues ».
-    /// En fabriquer un second ici serait deux listes de langues à faire
-    /// diverger.
-    var documentLanguagePickerSheet: some View {
-        AudioLanguagePickerView(
-            selectedLocale: Binding(
-                get: { Locale(identifier: documentLanguage) },
-                set: { newLocale in
-                    documentLanguage = newLocale.language.languageCode?.identifier ?? newLocale.identifier
-                }
-            ),
-            // L'IDENTIFIANT, pas la phrase (#4621) : `"Langue du post"` était une
-            // clé-PHRASE, retirée du catalogue quand les soixante et une phrases
-            // françaises ont cessé de servir de clé. La feuille affichait donc sa
-            // clé brute, en français, dans les sept locales. Le défaut était déjà
-            // nommé douze lignes plus bas dans `ComposerDocumentRules.language` :
-            // « sa clé contient des espaces et échappe au cliquet français ».
-            title: "feed.post.language"
         )
     }
 
@@ -370,7 +281,16 @@ extension MeeshyComposerHost {
     /// ferait diverger la porte de la rangée qui fait déjà la même chose.
     func handleRailDoor(_ door: ComposerRailDoor) {
         switch door {
-        case .media:   railPosesNextMedia = true; presentMediaSources()
+        case .media:
+            // **L'intention se pose AVEC le sélecteur, jamais avant** (#6008).
+            // `presentMediaSources` peut ne RIEN présenter — la règle des
+            // sources peut en offrir zéro, un cas que son propre doc-comment
+            // déclare traitable plutôt qu'impossible à écrire. Une intention
+            // armée devant une feuille qui n'apparaît pas n'a plus aucune
+            // sortie : ni consommation, ni annulation à laquelle se raccrocher.
+            // La faire DÉPENDRE de la présentation supprime le cas au lieu de
+            // lui ajouter une branche défensive que rien n'exécute.
+            railPosesNextMedia = presentMediaSources()
         case .sound:   presentSoundSources()
         case .mention: handleDocumentTool(.mention)
         case .place:   handleDocumentTool(.place)
@@ -548,6 +468,13 @@ extension MeeshyComposerHost {
             presentedPortal = .reference
         case .attachesLocalMedia(let intake):
             HapticFeedback.light()
+            // **La rangée du document n'est pas le rail** (#6008). Une intention
+            // du rail restée armée — sa feuille de choix annulée, sa photothèque
+            // refermée — poserait sur la scène courante le média que l'auteur
+            // vient de demander À LA RANGÉE. Les deux portes DISENT donc leur
+            // géographie au même endroit : `handleRailDoor(.media)` arme, celle-ci
+            // désarme.
+            abandonRailPosing()
             presentMediaIntake(intake)
         case .attachesLocation:
             HapticFeedback.light()
@@ -616,14 +543,19 @@ extension MeeshyComposerHost {
         }
     }
 
-    func presentMediaSources() {
+    /// Rend VRAI si un sélecteur est effectivement à l'écran — c'est ce que la
+    /// porte du rail lit pour savoir si son intention a une sortie (#6008).
+    @discardableResult
+    func presentMediaSources() -> Bool {
         HapticFeedback.light()
         let sources = ComposerMediaSourcePolicy.offered(allowsCapture: profile.allowsCapture)
         guard sources.count > 1 else {
-            if let seule = sources.first { presentMediaIntake(seule) }
-            return
+            guard let seule = sources.first else { return false }
+            presentMediaIntake(seule)
+            return true
         }
         showsMediaSourceChooser = true
+        return true
     }
 
     /// **La porte son ouvre l'ÉTAGÈRE autant que le micro.**
@@ -812,6 +744,23 @@ extension MeeshyComposerHost {
         railPosesNextMedia = false
     }
 
+    /// **Jumelle de `consumeRailPosing` : elle JETTE l'intention au lieu de la
+    /// poser** (#6008).
+    ///
+    /// Une intention encore armée quand un média arrive par une AUTRE porte est
+    /// forcément périmée : la porte du rail présente son sélecteur dans la même
+    /// instruction qu'elle arme (`handleRailDoor(.media)`), donc rien ne peut
+    /// s'intercaler tant que ce sélecteur est à l'écran. Si quelque chose s'est
+    /// intercalé, c'est que le sélecteur est parti sans rien rendre.
+    ///
+    /// C'est le même geste que `disarmSceneCamera` fait déjà pour le viseur —
+    /// « quitter sans prendre RETIRE la marque ». Le chemin du sélecteur n'avait
+    /// pas son équivalent : le bouton d'annulation de la feuille de choix a un
+    /// corps VIDE, et refermer la photothèque ne produit aucun signal.
+    func abandonRailPosing() {
+        railPosesNextMedia = false
+    }
+
     /// **LE site unique où une porte d'ingestion écrit dans
     /// `documentLocalMedia` — et il marque le rail AVANT d'écrire** (#4879).
     ///
@@ -895,13 +844,43 @@ extension MeeshyComposerHost {
             ?? viewModel.currentSlide.effects.resolvedBackgroundMedia?.id {
             documentMediaObjectIdBySource[plan.media.url] = objectId
         }
-        documentLocalMedia.append(plan.media)
+        ecrireDansLaListeDuDocument([plan.media], rail: .roleDejaPose)
+    }
+
+    /// **LE site unique où quoi que ce soit écrit dans `documentLocalMedia`**
+    /// (#4879 posait la règle, #6008 la rend vraie).
+    ///
+    /// Le doc-comment de `ingestIntoDocument` déclarait « LE site unique » et
+    /// ils étaient QUATRE — deux ici, deux dans `+Sound.swift`, que la garde ne
+    /// lisait même pas. Les deux portes son ne touchaient pas l'intention du
+    /// rail : ni la consommer, ni la jeter. Elles n'avaient rien fait de mal —
+    /// **la règle vivait dans un fichier qu'elles n'ouvraient pas.**
+    ///
+    /// L'entonnoir remplace la discipline par une QUESTION que le compilateur
+    /// pose : `ComposerRailPosing` n'a pas de `default`, donc une porte neuve
+    /// ne peut pas hériter en silence d'une intention qu'elle n'a pas posée.
+    ///
+    /// L'ordre est load-bearing, et c'est le défaut d'origine : `documentLocalMedia`
+    /// déclenche `syncPostMediaIntoSlides` par `adaptiveOnChange`, et cet
+    /// observateur LIT `railPosedMediaURLs`. Marquer après l'écriture le
+    /// laisserait vide au moment du verdict — le média serait classé « rangée du
+    /// document », une slide à lui, au lieu d'être posé sur la scène courante.
+    func ecrireDansLaListeDuDocument(_ medias: [ComposerDocumentMedia],
+                                     rail: ComposerRailPosing) {
+        guard !medias.isEmpty else { return }
+        switch rail {
+        case .consomme:
+            consumeRailPosing(medias.map(\.url))
+        case .abandonne:
+            abandonRailPosing()
+        case .roleDejaPose:
+            break
+        }
+        documentLocalMedia.append(contentsOf: medias)
     }
 
     func ingestIntoDocument(_ medias: [ComposerDocumentMedia]) {
-        guard !medias.isEmpty else { return }
-        consumeRailPosing(medias.map(\.url))
-        documentLocalMedia.append(contentsOf: medias)
+        ecrireDansLaListeDuDocument(medias, rail: .consomme)
     }
 
     func ingestPhotoLibraryItems(_ items: [PhotosPickerItem]) async {
@@ -1087,109 +1066,4 @@ extension MeeshyComposerHost {
         ingestIntoDocument(medias)
         HapticFeedback.light()
     }
-
-    var emojiPickerSheet: some View {
-        EmojiPickerSheet(quickReactions: Self.quickEmojis, title: "composer.attach.emoji") { emoji in
-            documentText += emoji
-            presentedPortal = nil
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-    }
-
-    /// **La porte STICKER de la scène** — et ce qu'elle ne fait PAS.
-    ///
-    /// Elle ne se confond pas avec `emojiPickerSheet`, sa voisine d'apparence :
-    /// celle-là INSÈRE un glyphe dans le texte du document, celle-ci POSE un
-    /// `StorySticker` sur la scène — un objet déplaçable, ordonnable et
-    /// minutable, qui survit à la publication et au reader. Deux gestes, deux
-    /// niveaux du modèle ; les confondre était le raccourci qui a tenu la porte
-    /// fermée (« `showsEmojiPicker` insère dans le TEXTE, ce qui n'est pas la
-    /// même chose » — la phrase était juste, la conclusion non).
-    ///
-    /// **La feuille se REFERME sur la pose** (directive porteur 2026-08-30).
-    ///
-    /// Elle restait ouverte, par emprunt à l'atelier : « on pose rarement un
-    /// seul sticker ». C'était un raisonnement de PLANCHE de stickers, pas de
-    /// scène — sur un plateau, poser un sticker et le PLACER sont un seul
-    /// geste, et une feuille qui recouvre la moitié basse empêche la seconde
-    /// moitié. Refermer rend la scène au doigt immédiatement.
-    ///
-    /// **Et le sticker se pose en GRAND.** Le défaut de la taille par défaut
-    /// donne un glyphe minuscule au centre, que l'auteur doit agrandir avant de
-    /// le placer — deux gestes pour un. `StorySticker.posedScale` le pose à la
-    /// taille où il se voit.
-    ///
-    /// Les deux rappels vont au VIEWMODEL, jamais au canvas : muter par le
-    /// modèle est ce qui garde publication, reader et export d'accord — et le
-    /// meuble n'a aucune référence à la vue UIKit.
-    var stickerPickerSheet: some View {
-        StickerPickerView(onStickerSelected: { emoji in
-            viewModel.addSticker(emoji: emoji, scale: StorySticker.posedScale)
-            presentedPortal = nil
-            HapticFeedback.light()
-        }, onLibraryStickerSelected: { item in
-            // Le bitmap suffit à la pose : il vit sous l'id de l'ÉLÉMENT dans
-            // `loadedImages` jusqu'à ce que la publication le téléverse et
-            // remplisse `postMediaId`. Les octets animés le suivent (#3956) —
-            // un GIF posé sans eux perdrait son mouvement entre la grille et
-            // la scène, sans qu'aucun site rougisse.
-            viewModel.addSticker(image: item.thumbnail,
-                                 provider: StoryStickerLibraryItem.provider,
-                                 scale: StorySticker.posedScale,
-                                 animatedData: item.animatedData)
-            presentedPortal = nil
-            HapticFeedback.light()
-        }, onTemplateSelected: { gabarit, emplacements in
-            // **L'échelle vient du GABARIT**, pas de `posedScale` : ce 2,2
-            // agrandit un glyphe NU, et ferait déborder un cartouche qui mesure
-            // déjà son contenu. `addSticker(template:slots:)` la lit lui-même.
-            viewModel.addSticker(template: gabarit, slots: emplacements)
-            presentedPortal = nil
-            HapticFeedback.light()
-        }, onLocationTemplateSelected: { lieu, gabarit in
-            // **Un lieu décoré reste un `StoryLocationObject`**, jamais un
-            // sticker jumeau : lui seul porte les coordonnées et l'id de POI
-            // que la plateforme LIT (`/posts/nearby`). Le gabarit n'en décore
-            // que l'apparence.
-            viewModel.addLocation(place: lieu, styleId: gabarit.id)
-            presentedPortal = nil
-            HapticFeedback.light()
-        })
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
-    }
-
-    /// **La SECONDE porte pour nommer** — celle qui n'écrit pas.
-    ///
-    /// La première reste la frappe `@`, servie inline par la surface
-    /// (`ComposerMentionControllerBox` → `ComposerMentionStrip`) : elle écrit le
-    /// nom DANS le texte, pendant la saisie. Celle-ci cherche la personne
-    /// correctement, puis laisse choisir COMMENT elle paraît — `INLINE`,
-    /// `NOTE` (« Avec … » sous le contenu) ou `SILENT` (notifiée, invisible aux
-    /// tiers). Le mode ne se choisit pas à la frappe, et c'est toute la raison
-    /// d'être de cette feuille.
-    ///
-    /// `forCanvas: false` — un post n'a aucune couche de positionnement : lui
-    /// proposer le badge `PINNED` promettrait un affichage qui n'arriverait
-    /// jamais. C'est `StoryMentionPickerSheet` qui porte cette règle, on ne fait
-    /// que lui dire de quelle matière il s'agit.
-    ///
-    /// Exactement la feuille que `ReferenceComposerBar` ouvre depuis le mood :
-    /// une seconde aurait été une seconde vérité sur « comment on nomme ».
-    var referencePickerSheet: some View {
-        StoryMentionPickerSheet(
-            references: composerReferences,
-            modes: PostReferenceDisplay.declarable(forCanvas: false)
-        ) { updated in
-            composerReferences = updated
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-    }
-
-    /// Les six emojis de tête, ceux que le composer du fil propose déjà. Écrits
-    /// ici plutôt qu'en ligne pour que la liste reste une donnée nommée le jour
-    /// où elle deviendra une mémoire de récents.
-    static let quickEmojis = ["\u{1F600}", "\u{2764}\u{FE0F}", "\u{1F525}", "\u{1F44D}", "\u{1F602}", "\u{1F389}"]
 }

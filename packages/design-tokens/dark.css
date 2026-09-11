@@ -1,8 +1,8 @@
 /* Schéma SOMBRE — le rendu de référence de la v3 (la planche est « nocturne »).
    Porté par :root SANS classe : un navigateur qui n'exécute aucun JavaScript
    n'a pas de classe posée et doit tout de même être servi. La coquille
-   (`apps/web-v3/index.html`) porte `<html class="dark">` et le script de schéma
-   (`apps/web-v3/src/lib/inline-scheme-bootstrap.js`) ne fait que CORRIGER cette
+   (`apps/web-v2/index.html`) porte `<html class="dark">` et le script de schéma
+   (`apps/web-v2/src/lib/inline-scheme-bootstrap.js`) ne fait que CORRIGER cette
    classe ; aucune requête de média n'apparaît ici — un jeton ne bascule jamais
    tout seul.
 

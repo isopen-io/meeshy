@@ -30118,3 +30118,324 @@ Voisine directe de la leçon 558 (« un gate qui ne peut pas distinguer deux
 causes ne garde rien ») mais un vice DIFFÉRENT : celui-ci ne manquait pas de
 discriminant dans ses données d'entrée — il comparait une valeur à
 ELLE-MÊME.
+
+## Leçon 566 — Une garde négative qui écrit son aiguille en clair se compte elle-même, et ne peut JAMAIS être verte
+
+2026-09-11, SDK (#6057). J'ai remplacé neuf `Task.sleep` fixes par des
+attentes sur condition, puis posé le témoin négatif qui interdit leur retour :
+
+```swift
+let sommeils = source.components(separatedBy: "try await Task.sleep").count - 1
+XCTAssertEqual(sommeils, 0, "Un `try await Task.sleep` est réapparu…")
+```
+
+Verdict au premier run : **9 tests, 1 échec** — le mien. L'aiguille apparaît
+TROIS fois dans le fichier qu'elle inspecte : le littéral de recherche, le
+message d'échec, et le doc-comment qui explique la règle. Une garde qui lit
+son propre fichier inclut sa propre définition.
+
+> **Avant d'écrire une garde qui cherche une chaîne dans un fichier, demander
+> si ce fichier est dans sa propre portée.** Si oui, l'aiguille doit être
+> ASSEMBLÉE (`"try await " + "Task" + ".sleep"`) ou le fichier dépouillé de ses
+> commentaires — sinon le témoin ne mesure plus le code, il mesure sa propre
+> prose.
+
+Le dépôt avait déjà payé la moitié de cette leçon par l'autre bout : le
+cliquet des couleurs (#5883) comptait `Color(hex:` TEXTUELLEMENT et a rougi le
+jour où un commit a ajouté la phrase qui justifiait sa propre correction —
+« un garde qui punit la phrase qui le justifie apprend aux gens à ne plus
+écrire la phrase ». Sa parade fut `stripComments`. La mienne est l'assemblage,
+faute d'un dépouilleur dans cette cible de test (`ComposerSourceGuard` vit dans
+`MeeshyUITests`, pas dans `MeeshySDKTests`).
+
+**Ce qui a rendu le défaut visible tout de suite est une habitude, pas une
+intuition** : le script de validation compile PUIS exécute, et le compte de
+tests imprimé est passé de 8 à 9 — donc le témoin neuf tournait bien — avec
+« 1 failure ». Sans cette ligne de compte, j'aurais pu lire « 1 échec » comme
+un flake du lot que je venais de corriger.
+
+Voisine de la 564 (« un rouge qui nomme un chemin déformé mesure la MACHINE »)
+par sa forme : dans les deux cas, le rouge ne parle pas du code qu'on croit
+mesurer. Ici il parle de la garde ; là, de l'atelier.
+## Leçon 564 — Un worktree sous `/tmp` rend ROUGE toute garde qui soustrait la racine du dépôt d'un chemin
+
+2026-09-10, iOS (#6017). `test_everyPerTargetCatalogIsMapped` a rougi en
+nommant quatre catalogues introuvables — `/privateapps/ios/Meeshy/Localizable.xcstrings`.
+Une heure perdue à chercher ce que mon diff avait cassé dans le catalogue :
+rien. La garde calcule un chemin relatif au dépôt par soustraction de
+préfixe,
+
+```swift
+$0.path.replacingOccurrences(of: env.repoRoot.path + "/", with: "")
+```
+
+et ses deux termes ne viennent pas de la même source : `repoRoot` dérive de
+`#filePath`, que le compilateur rend TEL QU'ÉCRIT (`/tmp/conformite/…`),
+pendant que l'énumération vient de `FileManager`, qui RÉSOUT les liens
+(`/private/tmp/conformite/…`). Sur macOS `/tmp` est un lien vers
+`/private/tmp` : la soustraction retire `/tmp/conformite/` du MILIEU de la
+chaîne et laisse `/private` collé au reste.
+
+> **Un rouge qui nomme un chemin déformé mesure la MACHINE, pas le code.**
+> Avant de chercher ce que le diff a cassé, relire le chemin que le message
+> imprime : s'il n'est pas celui qu'on attendrait, la garde ne parle pas de
+> nous.
+
+Le correctif n'a touché aucune ligne : `git worktree move` vers
+`~/Documents/v2_meeshy-conformite` — **la convention que `CLAUDE.md` écrit
+déjà** (« ../v2_meeshy-{branch-name}, sibling du repo principal ») — et la
+garde est passée verte. J'avais adopté `/tmp` pour la commodité ; la
+convention avait une raison que je n'avais pas cherchée.
+
+Corollaire pour qui voudrait « durcir » la garde : `resolvingSymlinksInPath()`
+sur les deux termes la rendrait insensible au problème, mais ce serait
+corriger le témoin pour une faute de l'atelier. La garde a raison en CI, où
+le dépôt est à son vrai chemin.
+
+## Leçon 565 — Retirer une feuille morte ne TUE pas la fonction d'en dessous : elle la rend VISIBLE
+
+2026-09-10, iOS (#6016). Après avoir retiré dix-huit fonctions du composer
+inline du fil, la garde d'atteignabilité en a nommé une DIX-NEUVIÈME —
+`FeedViewModel.supersedeRecoveredPost`, dont la seule citation vivait dans
+`publishPostWithAttachments` que je venais de supprimer. Le réflexe est de se
+croire responsable : « je viens de l'orpheliner, je dois la retirer aussi ».
+
+C'était faux, et la mesure le disait. Son garde d'entrée est
+`if let cmid = recoveredPostCmid`, et le seul site posant `recoveredPostCmid`
+à une valeur non nulle était `recoverStuckPostDraftIfNeeded` — **déjà inscrite
+dans l'allowlist de cette même garde, donc attestée sans appelant.** La
+branche ne pouvait jamais s'ouvrir. Elle était morte depuis le MÊME commit que
+celle que je venais de retirer ; ma suppression n'a fait que déplacer la
+mesure d'un cran dans l'arbre.
+
+> **Une garde d'atteignabilité par RÉFÉRENCE attrape la feuille, pas
+> l'arbre** — son propre doc-comment le dit. Le corollaire pratique n'y était
+> pas : chaque retrait fait donc DESCENDRE la mesure d'un cran, et ce qui
+> apparaît au cran suivant a la même ancienneté que ce qu'on vient de
+> retirer. Ne pas dater une mort d'après le commit qui l'a révélée.
+
+Ce qui l'établit, dans les deux sens, c'est de suivre l'ÉTAT plutôt que
+l'appel : qui écrit la variable que le garde d'entrée lit ? Si le seul
+écrivain est lui-même mort, la fonction l'était avant qu'on y touche.
+
+Même famille que la garde qui ne cherche que `func` : dans le même lot,
+`feedPendingAttachmentsRow` — 44 lignes de SwiftUI, une seule occurrence dans
+tout le dépôt, sa déclaration — était INVISIBLE à la mesure parce que c'est
+une `var`. Elle portait à elle seule trois des fonctions signalées. **La
+racine d'un arbre mort n'a pas nécessairement la forme que la garde sait
+lire.**
+
+
+
+## Leçon 567 — Un rapport de validation se lit par la présence de ce qu'il DEVAIT produire, jamais par l'absence d'erreur
+
+2026-09-11, iOS (#6040). Mon script de validation lance onze suites. La tâche
+de fond s'est annoncée « completed (exit code 0) » ; j'ai ouvert son fichier de
+sortie, lu `RC build=0`, et annoncé au porteur que le découpage était validé.
+
+Le fichier contenait, une fois complet : `RC test=65`, **trois échecs**.
+
+Deux défauts se sont additionnés, et le second est le mien :
+
+1. le script se termine par un `grep` de résumé, **donc il rend le code de
+   sortie du `grep`**, jamais celui des tests. `exit 0` ne disait rien de ce
+   qu'il enveloppait ;
+2. j'ai conclu VERT sur deux lignes, alors que onze suites avaient été
+   demandées. **Aucune des onze lignes `Executed N tests` n'était là.**
+
+> Le premier défaut est une ligne de shell. Le second est une manière de lire,
+> et c'est celle qui coûte : **on ne vérifie pas qu'un rapport ne contient pas
+> d'erreur, on vérifie qu'il contient les mesures qu'on a demandées.** Onze
+> suites ⇒ onze lignes `Executed`. Zéro ligne n'est pas « rien à signaler »,
+> c'est « rien n'a été mesuré ».
+
+Jumelle exacte de la série C (« un chiffre absurde dans un rapport est plus
+souvent l'outil de lecture que la mesure ») et de la mémoire « un code de
+sortie lu sans son journal est non lu » — ici dans l'autre sens : un journal lu
+sans son code, et tronqué de surcroît. Les deux se ferment de la même façon :
+faire dire au script COMBIEN de mesures il attendait, et comparer.
+
+Corollaire pour les scripts : terminer par `exit $RC_TEST`, jamais par la
+commande d'affichage.
+
+
+## Leçon 568 — Une extraction a DEUX moitiés, et le doc-comment n'en énonce qu'une
+
+2026-09-11, iOS (#6040). `FixedFontSizeGuardTests.bearingFiles` porte en tête
+la règle : « toute extraction hors d'un fichier de la liste doit inscrire sa
+DESTINATION dans le MÊME commit ». Je l'ai lue, citée au porteur comme le
+piège que je m'apprêtais à éviter — et je l'ai appliquée à moitié : la feuille
+extraite est entrée dans la liste, le fichier VIDÉ y est resté.
+
+Sa règle 4 (`test_unFichierQuiQuitteLaListeEnEstRetire`) a rougi, avec le
+message exact : « ces fichiers n'ont plus aucune taille figée — les RETIRER ».
+
+> **Une liste de fichiers porteurs a deux modes de panne symétriques** : elle
+> perd une surface (la destination manquante) ou elle garde un nom sans site
+> (la source vidée). Le doc-comment d'en-tête n'énonce que le premier, parce
+> qu'il a été écrit le jour où le premier a mordu. Le second vit dans le
+> message d'échec de la règle qui l'attrape — c'est-à-dire là où on ne le lit
+> qu'APRÈS.
+
+Et une relocalisation n'est pas une disparition : la population ne bouge pas,
+donc **ni `totalCeiling` ni `textCeiling` ne baissent** — seul le NOM change.
+Le fichier documentait déjà ce cas trois fois (#4014, #4084, #4102) sous le
+terme « RELOCALISATION pure ». La règle était écrite, datée, et exemplifiée ;
+ce qui manquait n'était pas la connaissance mais la LECTURE des deux sens.
+
+Applicable à toute liste tenue à la main dont les entrées sont des chemins :
+`bearingFiles`, `legacyOverBudget`, `moodComposerFiles`, `fullyLocalizedScreens`
+— à chaque déménagement, se demander les DEUX questions, pas la première.
+
+
+## Leçon 569 — Un lot ne peut énumérer que les témoins qui le NOMMENT, jamais ceux qui le MESURENT
+
+2026-09-11, iOS (#6069). Deuxième rouge fusionné dans `dev` en deux jours, et
+celui-ci par l'autre bout que la leçon 565 : un AJOUT, pas un retrait.
+
+#6047 a ajouté 70 lignes à `MeeshyComposerHost+Intake.swift`, qui en pesait
+1 195. Le plafond dur est 1 200. Deux règles de `FileSizeBudgetGuardTests` sont
+devenues rouges — et la PR ne pouvait pas le savoir, pour une raison plus
+profonde que la portée compile-only de la CI iOS :
+
+> **Le témoin ne compte pas des identifiants, il compte des LIGNES.** Il n'a
+> aucun lien lexical avec quoi que ce soit du lot — ni avec ce qu'il ajoute,
+> ni avec le fichier touché. Un fichier qui franchit un seuil ne mentionne
+> nulle part le cliquet qui le garde. Il n'y a rien à chercher.
+
+La 565 disait « chercher un retrait dans ce qui COMPTE, pas seulement dans ce
+qui NOMME ». La forme générale est plus dure :
+
+> Un lot peut énumérer les témoins qui le nomment. Il ne peut pas énumérer
+> ceux qui le mesurent — parce qu'un seuil, un cumul ou une population n'ont
+> de lien avec le code que par une VALEUR, et une valeur ne se grep pas.
+
+Ce qui reste actionnable, à défaut de l'énumération :
+
+- faire tourner la suite entière dès qu'on touche le domaine, plutôt que les
+  suites qu'on sait concernées (#6065) — le seul filet qui ne demande pas de
+  deviner la forme du témoin ;
+- connaître les cliquets NUMÉRIQUES du domaine (taille, population figée,
+  clés de catalogue, cumul de dette) et mesurer *avant de pousser* les deux ou
+  trois chiffres qu'ils lisent. Ils sont peu nombreux et ne changent pas ;
+- se méfier particulièrement des lots qui ajoutent « juste quelques lignes » à
+  un fichier déjà gros : le plafond de 1 200 n'a pas d'alarme à 1 190.
+
+
+## Leçon 570 — Un opt-in porté par le commit de TÊTE se retire tout seul dès qu'on pousse autre chose derrière
+
+2026-09-11, iOS (#6071). J'ai écrit le lot avec « — run test » au sujet,
+précisément pour que la suite iOS complète tourne sur la PR. Puis j'ai poussé,
+dans la même PR, un commit `docs(lessons): …` sans mot-clé.
+
+Le job s'est appelé **« Build app (app + cibles de test) »** — la portée
+compile-seule. L'adhésion avait disparu, et rien ne l'a signalé : il n'y a
+aucun avertissement à donner, le workflow a fait exactement ce qui est écrit
+dans son doc-comment :
+
+> *« Le sujet est lu sur le commit de TÊTE de la branche. »*
+
+> **Un opt-in porté par le commit de tête n'est pas une propriété de la PR :
+> c'est une propriété du DERNIER commit poussé.** Tout ce qu'on ajoute ensuite
+> le retire — et ce qu'on ajoute après coup est, par construction, ce qui a
+> l'air le moins risqué : une correction de commentaire, une leçon, un
+> `.gitignore`. Le commit qui annule la vérification est celui dont on est le
+> plus sûr.
+
+**Troisième forme, constatée deux heures plus tard dans la même session, et la
+plus insidieuse des trois : METTRE SA BRANCHE À JOUR suffit.** `git merge dev`
+crée un commit dont le sujet est « Merge origin/dev into <branche> » — aucun
+mot-clé, et il devient la tête. On n'a rien poussé de neuf ; on a seulement
+intégré `dev`, c'est-à-dire fait exactement ce qu'on demande à un lot avant de
+le fusionner. La PR retombe en compile-seule au moment précis où elle contient
+le plus de code qu'elle n'a jamais testé — celui des lots qu'on vient
+d'intégrer.
+
+> Les trois formes ont la même racine : **l'adhésion est portée par le SUJET du
+> dernier commit, et le dernier commit d'une branche saine est presque toujours
+> un commit qu'on n'a pas rédigé pour lui-même** — une leçon, un correctif de
+> commentaire, un merge de mise à jour.
+
+Parades, dans l'ordre de fiabilité :
+
+1. mettre le mot-clé au sujet de **chaque** commit d'un lot qui en a besoin —
+   coûteux à écrire, mais insensible à l'ordre ;
+2. vérifier le NOM DU JOB après chaque poussée (« Build app + tests unitaires »
+   = la suite tourne ; « Build app (app + cibles de test) » = elle ne tourne
+   pas). Le nom dit la portée, c'est fait pour ;
+3. ne rien pousser après le commit porteur — une discipline, donc la plus
+   fragile des trois.
+
+Corollaire pour #6065 : une levée automatique sur le DIFF n'aurait pas ce
+défaut, puisqu'un commit de documentation ne change pas le diff iOS de la PR.
+C'est un argument de plus pour la lever sur ce que la PR TOUCHE plutôt que sur
+ce que son dernier sujet DIT.
+
+
+## Leçon 571 — `-only-testing:` cible une CLASSE, pas un FICHIER
+
+2026-09-11, iOS (#6073). Pour valider #6047, j'avais lancé
+`-only-testing:MeeshyTests/ComposerRailDoorTests`, convaincu de couvrir « le
+fichier des portes du rail ». Le rapport était VERT.
+
+`ComposerRailDoorTests.swift` contient **dix-sept classes**. Deux d'entre elles
+— `ComposerMediaSourceWiringGuardTests` et `ComposerSoundSourceWiringGuardTests`
+— portaient les témoins que le lot cassait. Elles n'ont jamais été exécutées.
+
+> **Un fichier de tests n'est pas une unité d'exécution.** `-only-testing:`
+> prend un identifiant de CLASSE (ou de méthode) ; le nom du fichier n'apparaît
+> nulle part dans la commande. Nommer la classe qui porte le même nom que le
+> fichier n'exécute que celle-là, et le rapport dit « passed » — pour la
+> fraction qu'il a mesurée.
+
+Le signe qui aurait dû alerter est le même qu'à la leçon 567, et je ne l'ai pas
+vu deux fois dans la même session : **dix-neuf millisecondes** pour ce que je
+croyais être quatre-vingt-onze tests. Le temps est un chiffre de rapport comme
+un autre, et un chiffre absurde est plus souvent l'outil de lecture que la
+mesure.
+
+Parade : dériver la liste des classes du FICHIER avant de composer la commande —
+`grep '^final class' <fichier>` — plutôt que de supposer qu'un fichier porte une
+classe. Un fichier de témoins de dépôt en porte souvent dix ou vingt, parce que
+les gardes de source se rangent par SUJET, pas par type testé.
+
+
+## Leçon 572 — Un spécificateur de format qui ment sur le TYPE ne traduit pas mal : il CRASHE
+
+2026-09-11, iOS (#6073). #6039 a introduit `streak.reminder.body` et
+`reveal.badge.tier` dans le catalogue, avec `%@` dans les sept langues. Les deux
+sites d'appel interpolent un `Int` :
+
+```swift
+String(localized: "streak.reminder.body",
+       defaultValue: "\(joursTenus) jours tenus…")   // joursTenus: Int → %lld
+```
+
+`%@` appliqué à un entier 64 bits fait lire la valeur comme un POINTEUR d'objet
+et la déréférencer : **SIGSEGV**. Sept tests de `StreakReminderPlanTests`
+mouraient — le processus redémarrant à chaque fois —, et l'APP aurait crashé
+chez tout utilisateur tenant une série, au moment précis où elle planifie ses
+rappels.
+
+> **Une erreur de catalogue n'est pas toujours cosmétique.** L'intuition dit
+> « au pire, un texte faux » ; pour un désaccord de TYPE entre le spécificateur
+> et l'argument, la conséquence est un crash. Un catalogue est du CODE — c'est
+> lui qui porte la chaîne de format que le runtime exécute.
+
+Deux détails qui font la différence entre trouver et ne pas trouver :
+
+- **les tests qui passaient le cachaient.** Seuls ceux qui PRODUISENT un rappel
+  formatent le corps ; ceux qui vérifient les listes vides passaient très bien.
+  Une classe à moitié verte sur un crash ressemble à un test fragile ;
+- **la clé n'existait pas avant.** Tant qu'elle manque au catalogue,
+  `String(localized:defaultValue:)` sert la `defaultValue` et son format est
+  celui que Swift a généré — donc juste. **Ajouter une traduction est ce qui
+  arme le défaut.** Un lot de localisation peut donc casser du code qu'il ne
+  touche pas, et aucune garde de source ne le voit.
+
+Témoin : `CatalogFormatSpecifierGuardTests` — il lit la déclaration du symbole
+interpolé dans le même fichier, et n'exige rien des symboles qu'il ne sait pas
+typer (une garde qui devine un type produit des rouges illisibles, et finit
+désarmée). Falsifiabilité mesurée : vert sur le catalogue corrigé, ROUGE dès
+qu'on remet `%@` sur UNE seule des sept langues, vert de nouveau après
+restauration.

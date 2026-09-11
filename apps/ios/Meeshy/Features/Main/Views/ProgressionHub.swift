@@ -5,7 +5,7 @@ import MeeshyUI
 /// LES TROIS HEROS ET LES TROIS PORTES DU HUB (#5838, #5843).
 ///
 /// L'écran empilait badges, défis et succès dans un seul défilement, et
-/// web-v3 empilait les mêmes pièces dans un AUTRE ordre. La séquence est
+/// web-v2 empilait les mêmes pièces dans un AUTRE ordre. La séquence est
 /// désormais déclarée dans `ProgressionLayout` (miroir de `progression-layout.ts`,
 /// gardé par `progression-layout-mirror-parity`) et la vue la PARCOURT.
 ///
@@ -360,7 +360,12 @@ struct ProgressionSectionLink: View {
                 Text(titre).font(.body.weight(.semibold)).foregroundStyle(theme.textPrimary)
                 Spacer(minLength: MeeshySpacing.sm)
                 Text(compte).font(.body.weight(.bold)).foregroundStyle(teinte)
-                Image(systemName: "chevron.right").font(.footnote).foregroundStyle(theme.textMuted)
+                // `forward`, pas `right` : ce chevron dit « ouvre cette section »,
+                // pas « va vers la droite de l'écran ». En arabe la lecture court
+                // de droite à gauche, et un chevron nommé par un côté PHYSIQUE y
+                // pointe à rebours du geste qu'il annonce. La variante sémantique
+                // se retourne avec la langue ; garde : `RightToLeftLayoutGuardTests`.
+                Image(systemName: "chevron.forward").font(.footnote).foregroundStyle(theme.textMuted)
             }
             .padding(.horizontal, 16)
             .frame(minHeight: 56)
@@ -463,7 +468,7 @@ struct ProgressionWrap: View {
 /// Le hub n'annonce qu'un COMPTE ; le détail vit ici, où il a la place de
 /// respirer. Les trois partagent ce cadre : le retour, le titre, et le compte
 /// en haut à droite que le porteur a demandé. Écrit une fois, sinon les trois
-/// dériveraient exactement comme le hub et web-v3 ont dérivé.
+/// dériveraient exactement comme le hub et web-v2 ont dérivé.
 ///
 /// **Aucune requête.** La progression est déjà chargée par le hub et passée
 /// telle quelle : ouvrir une page ne montre ni spinner ni squelette. Un écran

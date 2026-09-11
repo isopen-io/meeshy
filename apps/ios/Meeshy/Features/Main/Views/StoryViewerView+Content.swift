@@ -172,13 +172,22 @@ extension StoryViewerView {
 
     // MARK: - Unified Drag Gesture (horizontal = groups, vertical = dismiss)
 
-    // (clé de préférence + décision de zone de départ : voir en bas de fichier,
-    // `StoryReaderScrollableSurfaceTopKey` et `StoryReaderDragStartZone`.)
+    // Les DEUX lois de cession de ce drag — et la clé qui alimente la première —
+    // vivent dans `StoryReaderDragOwnership.swift` : `StoryReaderDragStartZone`
+    // (cède sur le point de départ, aux panneaux défilants) et
+    // `StoryReactionStripGesture` (cède sur la direction, à la barre de
+    // réactions). Elles y disent aussi pourquoi les deux critères ne sont pas
+    // interchangeables.
 
     var unifiedDragGesture: some Gesture {
         DragGesture(minimumDistance: 15, coordinateSpace: .global)
             .onChanged { value in
                 guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }
+                // CESSION À LA BARRE DE RÉACTIONS (#6083, cf.
+                // `StoryReactionStripGesture`) : ce drag est simultané, donc
+                // insubordonnable par priorité — la barre ne peut gagner que
+                // s'il CÈDE, et il ne le sait qu'en lisant cet état.
+                guard !reactionStripOwnsDrag else { return }
                 // GARDE DE POINT DE DÉPART — ce drag est monté sur un ANCÊTRE de
                 // tout le contenu du lecteur, donc aussi des `ScrollView` que
                 // portent certaines surfaces (liste de commentaires, sélecteurs
@@ -419,6 +428,9 @@ extension StoryViewerView {
         gestureAxis = 0
         hadActiveFeatureAtDragStart = false
         readerFeatureConsumedByTouch = false
+        // Même raison que les deux lignes précédentes : la revendication de la
+        // barre de réactions ne vaut que pour LE geste qui vient de finir.
+        reactionStripOwnsDrag = false
         gestureResetToken &+= 1
     }
 
@@ -3162,62 +3174,5 @@ struct StoryProgressBarsView: View {
         } else {
             return 0
         }
-    }
-}
-
-// MARK: - Zone de départ du drag parent vs surfaces scrollables
-
-/// Bord SUPÉRIEUR, en coordonnées `.global`, de la surface scrollable ouverte
-/// par-dessus la story (liste de commentaires, sélecteurs plein écran).
-///
-/// À PUBLIER DEPUIS LE CONTENEUR PARENT DU `ScrollView`, jamais depuis
-/// l'intérieur du contenu défilant : sous iOS 18+, `onPreferenceChange` ne
-/// re-tire plus pour une valeur pilotée par le défilement, et la mise à jour
-/// n'arriverait jamais. Ce qu'on publie ici est un cadre de LAYOUT — il ne bouge
-/// qu'au (re)positionnement de la surface (ouverture, montée du clavier,
-/// rotation), pas au scroll.
-///
-/// iOS 16 compatible : `GeometryReader` + `PreferenceKey`, aucune API scroll
-/// iOS 17/18 (`onGeometryChange` est interdit sur cette cible).
-struct StoryReaderScrollableSurfaceTopKey: PreferenceKey {
-    static var defaultValue: CGFloat? { nil }
-    /// Plusieurs surfaces peuvent être montées simultanément : on garde la plus
-    /// HAUTE (minY le plus petit), c'est-à-dire la zone interdite la plus large.
-    /// Céder trop est sans danger (le drag parent ne fait rien) ; céder trop peu
-    /// laisse un geste naître dans un `ScrollView`, et là `onEnded` n'arrive
-    /// jamais.
-    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
-        guard let next = nextValue() else { return }
-        value = value.map { Swift.min($0, next) } ?? next
-    }
-}
-
-/// Décide si le drag parent doit rendre la main à la surface scrollable ouverte,
-/// en fonction du POINT DE DÉPART du geste. Pur et testable — `unifiedDragGesture`
-/// est un `some Gesture` piloté par des `@State`, injouable en XCTest.
-enum StoryReaderDragStartZone {
-
-    /// - Parameters:
-    ///   - hasScrollableSurface: une surface embarquant son propre `ScrollView`
-    ///     est ouverte.
-    ///   - surfaceTopY: bord supérieur mesuré de cette surface (`.global`), ou
-    ///     `nil` si inconnu.
-    ///   - dragStartY: `value.startLocation.y` du drag parent (`.global`).
-    /// - Returns: `true` si le geste appartient à la surface (le drag parent doit
-    ///   sortir immédiatement).
-    ///
-    /// RÈGLE : aucune surface ouverte ⇒ le drag parent s'exécute INTÉGRALEMENT
-    /// (cas nominal, la très grande majorité des gestes du lecteur). Surface
-    /// ouverte et bord connu ⇒ seuls les gestes nés à l'intérieur lui reviennent ;
-    /// ceux nés dans la story encore visible au-dessus restent au drag parent, qui
-    /// peut ainsi refermer la surface d'un glissement. Bord INCONNU ⇒ tout lui
-    /// revient (fail-safe : un swipe inerte vaut mieux qu'un `onEnded` jamais
-    /// délivré, qui laisse `gestureAxis` collé et la lecture gelée).
-    static func yieldsToScrollableSurface(hasScrollableSurface: Bool,
-                                          surfaceTopY: CGFloat?,
-                                          dragStartY: CGFloat) -> Bool {
-        guard hasScrollableSurface else { return false }
-        guard let top = surfaceTopY else { return true }
-        return dragStartY >= top
     }
 }

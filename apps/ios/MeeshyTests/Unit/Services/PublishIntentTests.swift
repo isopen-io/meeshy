@@ -394,11 +394,18 @@ final class PublishIntentTests: XCTestCase {
                 + "retourner cette garde dans l'autre sens. Trois : un geste de plus s'écrit tout seul, et "
                 + "il divergera. Appelants trouvés — \(fichiersAppelants)."
         )
+        // **Trié** : `fichiersAppelants` se remplit dans l'ordre où l'énumérateur
+        // du système de fichiers rend les URL, qui n'est garanti par rien. Tant
+        // que les deux appelants vivaient dans UN fichier, la liste ne pouvait
+        // pas se réordonner ; depuis #6040 elle en porte deux, et une assertion
+        // sur une liste non triée deviendrait un flake d'ordre de lecture.
         XCTAssertEqual(
-            fichiersAppelants, ["FeedView+Attachments.swift"],
-            "Les deux appelants doivent vivre dans le fichier des deux jumeaux. Un modèle, une porte ou "
-                + "une autre vue qui composerait sa propre intention de vocal serait le troisième site que "
-                + "ce lot existe pour empêcher."
+            fichiersAppelants.sorted(), ["FeedComposerSheet.swift", "FeedView+Attachments.swift"],
+            "Les deux appelants doivent vivre dans les deux fichiers des jumeaux — `publishAudioPost` "
+                + "dans l'extension `FeedView+Attachments`, `publishAudioFromSheet` dans la feuille "
+                + "`FeedComposerSheet` sortie en #6040. Un modèle, une porte ou une autre vue qui "
+                + "composerait sa propre intention de vocal serait le troisième site que ce lot existe "
+                + "pour empêcher."
         )
     }
 

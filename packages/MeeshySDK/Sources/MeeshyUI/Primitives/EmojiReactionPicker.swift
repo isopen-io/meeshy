@@ -65,6 +65,27 @@ public struct ScrubTileFramesKey: PreferenceKey {
     }
 }
 
+/// **L'habillage de la barre de réaction rapide — une décision de l'HÔTE.**
+///
+/// La capsule `QuickReactionStripChrome` était une propriété du composant : tout
+/// appelant recevait la pilule, sans moyen de la refuser. Elle est juste partout
+/// où la barre flotte AU-DESSUS d'un contenu qu'elle doit trancher (liste de
+/// messages, scrim d'appui long) — elle y sépare la rangée de ce qu'elle
+/// survole. Elle a tort sur une story plein écran, où la scène EST le fond et où
+/// la pilule ajoute un cadre que la directive porteur refuse (#6083,
+/// 2026-09-11 : « pas de contour »).
+///
+/// `nonisolated` : un habillage est une VALEUR. Le paquet est sous
+/// `defaultIsolation(MainActor)` ; sans ce mot-clé, décider de l'habillage hors
+/// du main actor serait impossible alors que rien dans le type ne touche l'UI.
+nonisolated public enum EmojiReactionPickerChrome: Equatable, Sendable {
+    /// La pilule flottante (Liquid Glass sur iOS 26, voile de matière avant) —
+    /// le DÉFAUT, pour que les sites existants ne changent pas d'un pixel.
+    case capsule
+    /// Ni capsule ni fond : la rangée se pose nue sur ce qui est déjà là.
+    case none
+}
+
 public struct EmojiReactionPicker: View {
     public var quickEmojis: [String]
     public enum Style { case dark, light }
@@ -76,6 +97,9 @@ public struct EmojiReactionPicker: View {
     /// The capsule background is rendered around the visible viewport so the strip
     /// keeps its anchored "pill" look even with overflow content.
     public var scrollable: Bool
+    /// Habillage de la rangée. `.capsule` par défaut — cf.
+    /// `EmojiReactionPickerChrome`.
+    public var chrome: EmojiReactionPickerChrome
     public var onReact: ((String) -> Void)?
     public var onDismiss: (() -> Void)?
     /// When nil, the "+" expand button is hidden.
@@ -98,6 +122,7 @@ public struct EmojiReactionPicker: View {
         style: Style = .dark,
         scale: CGFloat = 1.0,
         scrollable: Bool = false,
+        chrome: EmojiReactionPickerChrome = .capsule,
         onReact: ((String) -> Void)? = nil,
         onDismiss: (() -> Void)? = nil,
         onExpandFullPicker: (() -> Void)? = nil,
@@ -107,6 +132,7 @@ public struct EmojiReactionPicker: View {
     ) {
         self.quickEmojis = quickEmojis; self.style = style; self.scale = scale
         self.scrollable = scrollable
+        self.chrome = chrome
         self.onReact = onReact; self.onDismiss = onDismiss
         self.onExpandFullPicker = onExpandFullPicker
         self.highlightedIndex = highlightedIndex
@@ -180,14 +206,28 @@ public struct EmojiReactionPicker: View {
         }
     }
 
-    private var quickEmojiStrip: some View {
-        HStack(spacing: 6 * scale) {
-            emojiList
-            expandButton
+    /// **Le point de décision UNIQUE de l'habillage.** Les deux rangées passent
+    /// par lui — sans quoi `chrome: .none` retirerait la capsule d'une seule des
+    /// deux, et le défaut ne se verrait que dans le mode qu'on n'a pas relu.
+    @ViewBuilder
+    private func chromed<Content: View>(_ content: Content) -> some View {
+        switch chrome {
+        case .capsule:
+            content.modifier(QuickReactionStripChrome(style: style))
+        case .none:
+            content
         }
-        .padding(.horizontal, 10 * scale)
-        .padding(.vertical, 6 * scale)
-        .modifier(QuickReactionStripChrome(style: style))
+    }
+
+    private var quickEmojiStrip: some View {
+        chromed(
+            HStack(spacing: 6 * scale) {
+                emojiList
+                expandButton
+            }
+            .padding(.horizontal, 10 * scale)
+            .padding(.vertical, 6 * scale)
+        )
     }
 
     private var scrollableQuickEmojiStrip: some View {
@@ -196,29 +236,30 @@ public struct EmojiReactionPicker: View {
         // pour qu'il reste accessible meme apres avoir scrolle. Un fade
         // mask sur le bord droit du ScrollView indique visuellement qu'il
         // y a plus de contenu apres.
-        HStack(spacing: 6 * scale) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                emojiList
-                    .padding(.vertical, 6 * scale)
-                    .padding(.leading, 10 * scale)
-                    .padding(.trailing, 4 * scale)
-            }
-            .mask(
-                LinearGradient(
-                    stops: [
-                        .init(color: .black, location: 0),
-                        .init(color: .black, location: 0.92),
-                        .init(color: .black.opacity(0.0), location: 1.0)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
+        chromed(
+            HStack(spacing: 6 * scale) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    emojiList
+                        .padding(.vertical, 6 * scale)
+                        .padding(.leading, 10 * scale)
+                        .padding(.trailing, 4 * scale)
+                }
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black, location: 0.92),
+                            .init(color: .black.opacity(0.0), location: 1.0)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
                 )
-            )
 
-            expandButton
-                .padding(.trailing, 10 * scale)
-        }
-        .modifier(QuickReactionStripChrome(style: style))
+                expandButton
+                    .padding(.trailing, 10 * scale)
+            }
+        )
     }
 
     private func reactToEmoji(_ emoji: String) {

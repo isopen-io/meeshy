@@ -272,7 +272,7 @@ describe('la liste d\'origines CORS décide vraiment (#4480)', () => {
 });
 
 /**
- * Les coques Capacitor de web-v3 sont des origines NOMMÉES du staging
+ * Les coques Capacitor de web-v2 sont des origines NOMMÉES du staging
  * (#5815, compagnon gateway #5651).
  *
  * Une WebView Capacitor envoie un en-tête `Origin`, contrairement à une app
@@ -283,7 +283,7 @@ describe('la liste d\'origines CORS décide vraiment (#4480)', () => {
  *              (`DefaultScheme = "capacitor"`, `DefaultHostname = "localhost"`)
  *   · Android  `https://localhost`     — `CapConfig.java:38-39` (`hostname =
  *              "localhost"`, `androidScheme = CAPACITOR_HTTPS_SCHEME`),
- *              confirmé par `apps/web-v3/capacitor.config.ts:44`
+ *              confirmé par `apps/web-v2/capacitor.config.ts:44`
  *              (`androidScheme: 'https'`)
  *
  * `docker-compose.staging.yml` déclare la liste effective — ce test lit le

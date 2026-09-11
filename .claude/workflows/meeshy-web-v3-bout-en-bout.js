@@ -1,9 +1,9 @@
 export const meta = {
   name: 'meeshy-web-v3-bout-en-bout',
   description:
-    'Developper la v3.1 web (apps/web-v3, Vite + Preact + Capacitor) a parite avec l app iOS, pour le web ET Android en une fois : dev resynchronise a chaque tour, etat des lieux ecran par ecran CONTRE apps/ios, issues, une SPECIFICATION par travail, TDD, revue-correction systematique, gates (gate composite + coques QEMU/simulateur), LIVRAISON INCREMENTALE (chaque travail vert part vers dev dans l heure, le staging suit pas a pas) — fable DECRIT et LIVRE, sonnet et haiku DEVELOPPENT, opus RELIT ET CORRIGE',
+    'Developper la v3.1 web (apps/web-v2, Vite + Preact + Capacitor) a parite avec l app iOS, pour le web ET Android en une fois : dev resynchronise a chaque tour, etat des lieux ecran par ecran CONTRE apps/ios, issues, une SPECIFICATION par travail, TDD, revue-correction systematique, gates (gate composite + coques QEMU/simulateur), LIVRAISON INCREMENTALE (chaque travail vert part vers dev dans l heure, le staging suit pas a pas) — fable DECRIT et LIVRE, sonnet et haiku DEVELOPPENT, opus RELIT ET CORRIGE',
   whenToUse:
-    "Lancer un tour de developpement de la v3.1 web (apps/web-v3 — directive porteur 2026-09-07 soir : une application similaire a apps/ios pour le web et Android en une fois, en boucle jusqu'a maturite feature par feature). D'abord les coques et le reseau (assets, shells, staging), puis les ecrans dans l'ordre de l'app iOS : conversations, thread, composeur-du-fil, stories, feed, contacts, search, notifs, profile, settings. Args : { branche, depuis, focus, dabord, phares, plafond, tours, sans_issues, pr, base, date, attribution, modeles, repo, sauter }.",
+    "Lancer un tour de developpement de la v3.1 web (apps/web-v2 — directive porteur 2026-09-07 soir : une application similaire a apps/ios pour le web et Android en une fois, en boucle jusqu'a maturite feature par feature). D'abord les coques et le reseau (assets, shells, staging), puis les ecrans dans l'ordre de l'app iOS : conversations, thread, composeur-du-fil, stories, feed, contacts, search, notifs, profile, settings. Args : { branche, depuis, focus, dabord, phares, plafond, tours, sans_issues, pr, base, date, attribution, modeles, repo, sauter }.",
   phases: [
     { title: 'Synchroniser', detail: "fetch + merge origin/dev avant tout travail, et releve de ce que les autres sessions tiennent", model: 'haiku' },
     { title: 'Cadrer', detail: "etat des lieux surface par surface CONTRE apps/ios (parity.md, route-inventory), choix des travaux — fable DECRIT", model: 'fable' },
@@ -25,14 +25,14 @@ export const meta = {
 
 const A = args && typeof args === 'object' ? args : {}
 const REPO = typeof A.repo === 'string' && A.repo ? A.repo : '/Users/smpceo/Documents/v2_meeshy'
-const V3 = `${REPO}/apps/web-v3`
+const V3 = `${REPO}/apps/web-v2`
 const IOS = `${REPO}/apps/ios`
 const SDK = `${REPO}/packages/MeeshySDK`
-const SCRATCH = `${REPO}/.cache/web-v3-workflow`
+const SCRATCH = `${REPO}/.cache/web-v2-workflow`
 // DEUX SIMULATEURS, JAMAIS UN SEUL (2026-09-09) : l'app NATIVE apps/ios (LA REFERENCE) et la coque
-// Capacitor de web-v3 (L'OBJET TESTE) portent le meme identifiant me.meeshy.app — installer l'une
+// Capacitor de web-v2 (L'OBJET TESTE) portent le meme identifiant me.meeshy.app — installer l'une
 // REMPLACE l'autre en silence. Les gates du tour 2 ont pose la coque sur le simulateur du chantier,
-// et la conception du tour 3 y a « capture l'ecran iOS » : c'etait web-v3 sur ses fixtures.
+// et la conception du tour 3 y a « capture l'ecran iOS » : c'etait web-v2 sur ses fixtures.
 const SIM_REF = typeof A.sim_ref === 'string' && A.sim_ref ? A.sim_ref : '3E761BC1-845D-49D2-8E4D-E0606E04D3E2'
 const SIM_CHANTIER = typeof A.sim_chantier === 'string' && A.sim_chantier ? A.sim_chantier : '54438823-4ADC-4536-88D2-FC441395FA04'
 
@@ -93,7 +93,7 @@ const BASE = typeof A.base === 'string' && A.base ? A.base : 'dev'
 // ---------------------------------------------------------------------------
 
 const SOCLE = `
-TU TRAVAILLES SUR LA V3.1 WEB DE MEESHY (\`apps/web-v3\` — Vite + Preact via preact/compat +
+TU TRAVAILLES SUR LA V3.1 WEB DE MEESHY (\`apps/web-v2\` — Vite + Preact via preact/compat +
 Tailwind 4 + TanStack Query + zustand + routeur maison, empaquetable Android/iOS par Capacitor 8),
 monorepo ${REPO}, sur ${NOM_DE_BRANCHE}. Date : ${DATE}.
 
@@ -106,7 +106,7 @@ ta mission, litteralement : \`cd ${REPO} && git branch --show-current\` — elle
 branche attendue. NE CHANGE JAMAIS DE BRANCHE, ne cree pas de worktree.
 
 LA DIRECTIVE DU PORTEUR (2026-09-07 soir), qui gouverne ce chantier :
-« developper dans apps/web-v3 une application similaire a la version iOS (apps/ios) pour le web ET
+« developper dans apps/web-v2 une application similaire a la version iOS (apps/ios) pour le web ET
 Android en une fois ; organiser une boucle de developpement qui atteint la maturite feature par
 feature ; recuperer les icones, logo, signature, splashscreen, stickers, features ; verifier la
 coherence generale sur l'emulateur Android (QEMU) et tester sur Chrome en local connecte a
@@ -119,13 +119,13 @@ SOURCES DE VERITE, dans cet ordre — lis-les AVANT d'ecrire quoi que ce soit :
    et decrites par targets/captures.md — la preuve drapeaux ON est settings.beta.*), les arbres
    d'accessibilite (*.a11y.txt), les donnees semees sur staging (targets/seed.md) et les analyses
    (targets/lentille.md, focal-script.md, bulle.md, resume.md, riviere.md : anatomie citee
-   fichier:ligne, lois, etats, gestes, tableau iOS → web-v3 avec verdict par element, ecarts
+   fichier:ligne, lois, etats, gestes, tableau iOS → web-v2 avec verdict par element, ecarts
    ordonnes par visibilite avec leur temoin). targets/README.md en est la synthese : ce qui est
    tranche, ce qui reste a trancher (#5680), les defauts de la cible iOS (#5681-#5683). Ce dossier
    PRIME sur toute specification anterieure et sur toute capture faite drapeaux eteints.
    Le fait le plus lourd qu'il etablit : sur iOS, ce qui distingue Focal de Script n'est PAS une
    courbe d'estompage (retiree le 2026-08-24) mais l'ELECTION d'une rangee — carte teintee, chip
-   d'identite agrandi, tampon date — armee au defilement soutenu et aplatie 4,5 s apres ; web-v3
+   d'identite agrandi, tampon date — armee au defilement soutenu et aplatie 4,5 s apres ; web-v2
    applique aujourd'hui la courbe retiree et n'a pas l'election (targets/focal-script.md § 4). UNE CAPTURE iOS N'EST UNE CIBLE QUE DRAPEAUX ON : iOS porte trois drapeaux
    (lentille_list, reading_modes, riviere_mode — Lentille/Core/LentilleFeatureFlag.swift) qu'un
    seul interrupteur allume, Reglages › Beta (cle UserDefaults meeshy.pref.beta_features_enabled,
@@ -137,7 +137,7 @@ SOURCES DE VERITE, dans cet ordre — lis-les AVANT d'ecrire quoi que ce soit :
    meeshy.pref.beta_features_enabled -bool true && xcrun simctl launch <udid> me.meeshy.app\`.
 1. ${IOS}/Meeshy/Features/** et ${SDK}/Sources/**   LA REFERENCE (decision D-1) : disposition,
    hierarchie, etats et gestes de CHAQUE ecran se lisent dans le code SwiftUI — jamais dans la
-   planche web de l'ancienne v3. Un ecran web-v3 se specifie en CITANT les fichiers Swift qui
+   planche web de l'ancienne v3. Un ecran web-v2 se specifie en CITANT les fichiers Swift qui
    font foi (Features/Main/Views/*, Features/Main/Lentille/*, Features/Main/Focal/*,
    Features/Main/Riviere/*, Features/Main/Composer/*, Features/Stories/*, Features/Auth/*,
    Features/Contacts/*).
@@ -190,9 +190,9 @@ LES TROIS PLATEFORMES, UN SEUL CODE :
   SYMROOT — ne cherche pas dans DerivedData).
 
 DEUX SIMULATEURS, DEUX APPS, UN SEUL IDENTIFIANT — la regle qui empeche de se comparer a soi-meme
-(2026-09-09). L'app NATIVE ${IOS} (LA REFERENCE de tout ecran, D-1) et la coque Capacitor de web-v3
+(2026-09-09). L'app NATIVE ${IOS} (LA REFERENCE de tout ecran, D-1) et la coque Capacitor de web-v2
 (L'OBJET TESTE) portent toutes deux \`me.meeshy.app\` : installer l'une REMPLACE l'autre sans un
-mot. Le 2026-09-09, la « capture de l'ecran iOS » d'un tour a montre web-v3 sur ses fixtures.
+mot. Le 2026-09-09, la « capture de l'ecran iOS » d'un tour a montre web-v2 sur ses fixtures.
 - LA REFERENCE vit sur « Meeshy Ref-Native » (${SIM_REF}) : apps/ios NATIF, drapeaux beta ON,
   compte \`cible-web-trois\` de targets/seed.md sur STAGING. Ce simulateur NE RECOIT JAMAIS la
   coque — ni \`xcodebuild\` du projet ${V3}/ios, ni \`cap run\`, ni \`simctl install\` d'un App.app.
@@ -234,7 +234,7 @@ mot. Le 2026-09-09, la « capture de l'ecran iOS » d'un tour a montre web-v3 su
      facon : ferme-la (Not Now / Allow), redemande, et regarde la capture (outil Read) ;
   3. l'ecran montre les comptes SEMES de targets/seed.md (cible-web-trois, Bruno Beta, le Salon
      Riviere…). Kwame Mensah, Amina Diallo, Fatou Ba, « Equipe deploiement », la puce « AUTO Focal »,
-     l'auteur « Vous » sont les FIXTURES de web-v3 : si tu les vois, tu regardes web-v3, pas iOS.
+     l'auteur « Vous » sont les FIXTURES de web-v2 : si tu les vois, tu regardes web-v2, pas iOS.
 - CAPTURES WEB : \`cd ${V3} && BASE=http://localhost:5173 CHROMIUM='' node scripts/capture.mjs\`
   (le script epingle un chemin CI Linux ; CHROMIUM vide fait retomber Playwright sur son cache
   local). Captures Android : \`adb exec-out screencap -p > f.png\` ; iOS : \`xcrun simctl io <udid>
@@ -354,22 +354,22 @@ DECISIONS DU PORTEUR EN VIGUEUR — ne les rediscute pas : applique-les.
    ecouter. Si un seul des deux passe, c'est (a).
 
 3. LE COMPOSEUR DE PUBLICATION EST UN SEUL OBJET A TROIS FORMES — story, reel, post
-   (directive porteur 2026-09-10). Il n'est PAS encore ecrit dans web-v3 : c'est donc un
+   (directive porteur 2026-09-10). Il n'est PAS encore ecrit dans web-v2 : c'est donc un
    premier jet, et le porteur exige qu'il soit bon DES CE PREMIER JET plutot que factorise
    plus tard. Ce qui suit n'est pas un conseil de style, c'est le cadrage du travail.
 
    a. UNE abstraction, trois formes. story / reel / post partagent la scene, la timeline,
       l'etagere, les viewers, le brouillon, l'envoi. Ce qui DIFFERE — duree, ratio, pistes
-      autorisees, audience — se declare en DONNEE, jamais en branche `if (kind === 'story')`
+      autorisees, audience — se declare en DONNEE, jamais en branche \`if (kind === 'story')\`
       recopiee dans quinze composants. Trois copies d'un composeur divergent en trois
       semaines : c'est mesure ailleurs dans ce depot (les trois familles de resolveurs du
       Prisme, qui ont diverge sur trois clients faute d'un site UNIQUE).
 
    b. LA SEMANTIQUE PORTE LES NOMS. Un type SOMME plutot qu'un booleen quand il y a trois
-      etats ; le nom dit CE QUE C'EST, pas ou il est affiche. `PublicationDraft`,
-      `SceneTrack`, `AudienceRule` — jamais `Data2`, `Helper`, `Utils`, ni un `kind: string`
+      etats ; le nom dit CE QUE C'EST, pas ou il est affiche. \`PublicationDraft\`,
+      \`SceneTrack\`, \`AudienceRule\` — jamais \`Data2\`, \`Helper\`, \`Utils\`, ni un \`kind: string\`
       qu'aucun compilateur ne verifie. Le vocabulaire est celui de
-      `docs/product/meeshy-composer-modele.md`, qui en est l'AUTORITE declaree : un nom qui
+      \`docs/product/meeshy-composer-modele.md\`, qui en est l'AUTORITE declaree : un nom qui
       s'en ecarte cree une seconde langue pour la meme chose.
 
    c. LA COHERENCE EST DOUBLE, et la seconde est celle qu'on oublie. VISUELLE : memes
@@ -501,7 +501,7 @@ const TRAVAIL = {
     critere_de_fin: { type: 'string', description: 'OBSERVABLE : une commande, une mesure, une assertion' },
     corps_issue: { type: 'string' },
     reference_ios: { type: 'string', description: "les fichiers Swift qui font foi pour cette surface (Features/…), ou '(infra)' si aucun ecran" },
-    existe_deja: { type: 'string', description: "ce qui existe deja dans apps/web-v3 pour ce travail (fichiers), s'il y a lieu" },
+    existe_deja: { type: 'string', description: "ce qui existe deja dans apps/web-v2 pour ce travail (fichiers), s'il y a lieu" },
     detail: { type: 'string' },
   },
 }
@@ -544,7 +544,7 @@ const CADRAGE = {
           surface: { type: 'string' },
           reference_ios: { type: 'string', description: 'les fichiers Swift qui rendent cette surface dans apps/ios' },
           routes: { type: 'array', items: { type: 'string' } },
-          existe: { type: 'string', description: 'fichiers web-v3 (avec wc -l) et ce qu ils font deja' },
+          existe: { type: 'string', description: 'fichiers web-v2 (avec wc -l) et ce qu ils font deja' },
           a_jour_dans_dev: { type: 'boolean', description: 'true si origin/dev porte le meme etat que la branche pour ces fichiers' },
           dernier_commit_dev: { type: 'string' },
           manque: { type: 'string', description: 'ce qui manque par rapport a l ecran iOS (fichiers Swift cites) et aux directives' },
@@ -731,7 +731,7 @@ A. LA REINTEGRATION
 3. \`git fetch origin ${DEPUIS}\` (sur echec RESEAU seulement, 4 essais : 2s, 4s, 8s, 16s).
 4. \`git log --oneline HEAD..origin/${DEPUIS}\` : compte les commits repris et lis leurs titres.
    \`git diff --stat HEAD...origin/${DEPUIS}\` : note les chemins que dev vient de bouger, en
-   particulier sous apps/web-v3, apps/ios, packages/shared et packages/design-tokens.
+   particulier sous apps/web-v2, apps/ios, packages/shared et packages/design-tokens.
 5. \`git merge origin/${DEPUIS}\` — **JAMAIS** \`git pull --rebase\` ni \`git rebase\` (lecon 324).
    Un conflit se resout en gardant les DEUX apports quand les fichiers le permettent (lecons,
    decisions) ou en reconciliant le CODE par sa logique. Si un conflit demande un arbitrage
@@ -741,7 +741,7 @@ A. LA REINTEGRATION
 
 B. LE RELEVE — CE QUE LES AUTRES SESSIONS TIENNENT
 1. \`gh pr list --state open --limit 30\` : pour chaque PR ouverte, titre, branche head, et les
-   fichiers touches si le titre ne suffit pas. Une PR qui touche apps/web-v3 TIENT son sujet.
+   fichiers touches si le titre ne suffit pas. Une PR qui touche apps/web-v2 TIENT son sujet.
 2. \`git branch -r --sort=-committerdate | head -30\` + \`git log --oneline -1 --format='%ci %s' <branche>\`
    sur les branches claude/* de moins de 48 h : une branche vivante qui n'est pas la tienne TIENT son sujet.
 3. \`gh issue list --state open --label web-v3 --limit 30\` (et sans label si vide) : une issue
@@ -792,12 +792,12 @@ TA MISSION — CADRER ce tour. Tu ne modifies AUCUN fichier de production.
 1 bis. L'ETAT DES LIEUX PAR SURFACE, CONTRE L'APP iOS : pour chaque cle du focus —
    ${focusDuTour.join(', ')} — rends une entree d'\`inventaire\` : les fichiers Swift qui rendent
    cette surface dans ${IOS}/Meeshy/Features/** (lis-les : c'est la REFERENCE, D-1), les fichiers
-   web-v3 qui la portent deja (wc -l, ce qu'ils font — lis-les, cite fichier:ligne), si origin/dev
+   web-v2 qui la portent deja (wc -l, ce qu'ils font — lis-les, cite fichier:ligne), si origin/dev
    porte le meme etat que la branche, et ce qui MANQUE par rapport a l'ecran iOS et aux
    directives — verdict : livre / a-completer / a-styliser / absent.
    Pour \`conversations\` (Lentille) et \`thread\` (Focal, Script, Bulles, Resume, Riviere) :
    l'etat des lieux CONTRE iOS drapeaux ON est DEJA FAIT dans ${V3}/targets/ (lentille.md,
-   focal-script.md, bulle.md, resume.md, riviere.md — tableau element iOS → web-v3, ecarts
+   focal-script.md, bulle.md, resume.md, riviere.md — tableau element iOS → web-v2, ecarts
    ordonnes par visibilite, temoins ; README.md en tete) : PARS de
    ses ecarts, ne le refais pas ; complete-le seulement si \`git log --since=<date du dossier>
    -- ${IOS}/Meeshy/Features/Main/{Lentille,Focal,Views/Bubble} ${V3}/src\` montre du mouvement.
@@ -868,7 +868,7 @@ L'ECRAN iOS QUI EXISTE (D-1) — pas une maquette web.
 
 1. LES CAPTURES CIBLES iOS. Pour chaque travail de genre "ecran" ci-dessous, capture l'ecran de
    REFERENCE dans l'app iOS NATIVE au simulateur de REFERENCE « Meeshy Ref-Native » (${SIM_REF}) —
-   JAMAIS sur « Meeshy Poc-Web-V31 » (${SIM_CHANTIER}), qui porte la coque Capacitor de web-v3 :
+   JAMAIS sur « Meeshy Poc-Web-V31 » (${SIM_CHANTIER}), qui porte la coque Capacitor de web-v2 :
    installe l'app native si elle manque (\`xcrun simctl install ${SIM_REF} ${IOS}/Build/Products/Debug-iphonesimulator/Meeshy.app\`,
    build par \`${IOS}/meeshy.sh build\` — lis apps/ios/CLAUDE.md ;
    si le build iOS est trop long ou casse, dis-le et capture ce qui est atteignable), navigue
@@ -892,7 +892,7 @@ L'ECRAN iOS QUI EXISTE (D-1) — pas une maquette web.
    Sign in › Staging › identifiant cible-web-trois, mot de passe = 2e ligne du fichier de comptes
    (idb ui tap / idb ui text), et la ligne « Connected to » doit dire gate.staging.meeshy.me.
    Si l'ecran iOS n'existe pas (travail purement web), dis-le : la cible est alors la coherence
-   avec les ecrans web-v3 existants.
+   avec les ecrans web-v2 existants.
 2. LES DECISIONS. Si un travail impose une DIRECTION nouvelle (une regle, un placement, un
    mecanisme) qui n'est dans aucune D-n de ${V3}/decisions.md, ECRIS-LA : un « ## D-<suivant> ·
    <titre> — ${DATE} » au format des existantes (la regle, pourquoi, ce que ca coute). Une
@@ -985,7 +985,7 @@ l'etre sur l'arbre FUSIONNE.
    \`cd ${REPO} && git status --short\` : si l'arbre
    porte du travail non commite, c'est un POINT D'ETAPE — commite-le D'ABORD, tel quel (\`git add -A\`
    apres avoir retire les artefacts generes : ${V3}/rendu/, ${V3}/dist/, ${V3}/ios/App/Build/,
-   ${V3}/android/app/build/, .cache/), message \`wip(web-v3): point d'etape — <ce que l'arbre porte> (Refs #n)\`,
+   ${V3}/android/app/build/, .cache/), message \`wip(web-v2): point d'etape — <ce que l'arbre porte> (Refs #n)\`,
    termine par les lignes :
 ${ATTRIBUTION}
    JAMAIS \`git stash\` : dans un arbre partage, un pop rejoue le stash d'un AUTRE lot (lecon 527).
@@ -1042,7 +1042,7 @@ CE QUE LA SPECIFICATION CONTIENT, dans cet ordre :
    specification CITE ses sections et son tableau d'ecarts, et ne recopie ni ne rediscute ce qu'il
    a deja tranche ; une capture drapeaux eteints n'est pas une reference. Pour un travail d'infra (assets, shells, staging) : la
    source iOS des actifs ou du comportement, citee de la meme facon.
-2. L'ETAT DES LIEUX web-v3, mesure : les fichiers qui portent DEJA cette surface (wc -l), ce
+2. L'ETAT DES LIEUX web-v2, mesure : les fichiers qui portent DEJA cette surface (wc -l), ce
    qu'ils font (fichier:ligne), ce qui MANQUE par rapport au critere de fin et a la reference iOS.
 3. LES ROUTES ET EVENEMENTS REELS de la passerelle que le travail consomme (fichier:ligne dans
    services/gateway/src, methode, chemin /api/v1, auth, forme de charge, codes d'erreur) ; et ce
@@ -1142,8 +1142,8 @@ A. PRENDRE EN DEFAUT — LA SURFACE (git diff, git status, fichiers) :
   hierarchie, memes etats, memes gestes ? (l'ecart typographique web/iOS est assume, pas l'ecart
   de structure) ;
 - LA CIBLE EST-ELLE iOS ? Une capture cible prise sur ${SIM_CHANTIER} (la coque), dont le
-  \`.a11y.txt\` jumeau n'a qu'UN noeud, ou qui montre les fixtures de web-v3 (Kwame Mensah, Amina
-  Diallo, « AUTO Focal », « Vous ») est web-v3 compare a lui-meme : BLOQUANT — le travail se
+  \`.a11y.txt\` jumeau n'a qu'UN noeud, ou qui montre les fixtures de web-v2 (Kwame Mensah, Amina
+  Diallo, « AUTO Focal », « Vous ») est web-v2 compare a lui-meme : BLOQUANT — le travail se
   reprend depuis une capture NATIVE sur ${SIM_REF} (regle « deux simulateurs » du socle) ;
 - un NOM francais nouveau (fichier, identifiant, jeton, cle) : defaut D-13 ;
 - du 'any', une donnee mutee, un fichier hors budget qu'on a grossi ;
@@ -1289,10 +1289,10 @@ VERDICT DE LA REVUE : ${revue ? revue.verdict : '(aucun)'} — ${aCorriger.lengt
 2. \`git status --short\` : retire des chemins a commiter tout artefact genere (dist/, rendu/,
    ios/App/Build/, android/app/build/, android/.gradle/, .cache/).
 3. SI les gates rapides sont VERTS et le verdict n'est pas « a-refaire » : commit du travail —
-   titre \`feat(web-v3): <le resultat>\` (ou fix/style selon la nature), corps bref (ce qui etait
+   titre \`feat(web-v2): <le resultat>\` (ou fix/style selon la nature), corps bref (ce qui etait
    absent, la forme retenue)${num ? `, \`Closes #${num}\`` : ''}, fin de message EXACTEMENT :
 ${ATTRIBUTION}
-   SINON : commit en \`wip(web-v3): <etat> (Refs #${num || 'n'})\` — le travail part quand meme
+   SINON : commit en \`wip(web-v2): <etat> (Refs #${num || 'n'})\` — le travail part quand meme
    comme point d'etape, mais l'issue ne se ferme pas ; dis pourquoi.
 4. \`git push -u origin ${REF_PUSH}\` (4 essais sur echec RESEAU ; sur rejet non fast-forward,
    \`git fetch origin ${NOM_SHELL} && git merge origin/${NOM_SHELL}\`, jamais de rebase, rejoue les
@@ -1446,7 +1446,7 @@ SI TOUS LES GATES SONT VERTS OU NON-APPLICABLES, et dans le cas (b) :
    build) n'entrent dans le commit QUE si le tour a decide de les tracker — sinon verifie que
    ${V3}/.gitignore les couvre et dis-le.
 2. Commits : UN commit par travail livre quand les fichiers se separent proprement. Message dans la
-   forme du depot : titre en francais qui dit le RESULTAT (\`feat(web-v3): …\`), corps qui dit ce
+   forme du depot : titre en francais qui dit le RESULTAT (\`feat(web-v2): …\`), corps qui dit ce
    qui etait absent et pourquoi la forme retenue, \`Closes #<n>\` par issue livree (JAMAIS
    \`Closes #0\`), et en fin de message, EXACTEMENT ces lignes :
 ${ATTRIBUTION}

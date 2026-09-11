@@ -8,7 +8,7 @@ import MeeshyUI
 /// score, la série qui court et son record, les badges par famille d'axe avec
 /// le palier suivant, les succès débloqués et ceux qu'il reste à débloquer.
 ///
-/// Même anatomie que la v3.1 web (`apps/web-v3/src/routes/progression.tsx`,
+/// Même anatomie que la v3.1 web (`apps/web-v2/src/routes/progression.tsx`,
 /// #5547), dessinés ensemble : en-tête flottant sans barre de navigation
 /// système, deux cartes de résumé, des sections en cartes teintées — la
 /// hiérarchie de `UserStatsView` / `SettingsView`. Ce que l'écran REFUSE :
@@ -154,7 +154,7 @@ struct ProgressionView: View {
                      * LA VUE PARCOURT la séquence, elle ne la compose plus.
                      *
                      * Avant : Meesh → badges → succès → défis, écrit ici ; et
-                     * web-v3 écrivait le sien, différent. `ProgressionLayout`
+                     * web-v2 écrivait le sien, différent. `ProgressionLayout`
                      * (miroir de `progression-layout.ts`, gardé par
                      * `progression-layout-mirror-parity`) décide pour les deux.
                      *

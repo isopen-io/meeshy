@@ -230,7 +230,7 @@ services:
       - ZMQ_TRANSLATOR_SUB_PORT=5558
       - NODE_ENV=production
       - DOMAIN=staging.${DOMAIN:-meeshy.me}
-      # Les deux origines VIRTUELLES des coques Capacitor de web-v3 (#5815) — iOS
+      # Les deux origines VIRTUELLES des coques Capacitor de web-v2 (#5815) — iOS
       # `capacitor://localhost` (`CAPInstanceDescriptor.m`), Android `https://localhost`
       # (`CapConfig.java`, `androidScheme: https`). Gardées par `cors-origins.test.ts`.
       # Jamais dans `DEFAULT_ALLOWED_ORIGINS`.
@@ -341,7 +341,7 @@ services:
   # une règle Traefik de vingt chemins et une place dans chaque diagnostic,
   # pour servir du code que personne ne modifiait plus.
   #
-  # La v3.1 (`apps/web-v3`) est le SEUL chantier web. `docker.yml` construit
+  # La v3.1 (`apps/web-v2`) est le SEUL chantier web. `docker.yml` construit
   # déjà son image (`meeshy-web-v31`) et la tague `staging` sur `dev` : il ne
   # manquait que ce raccordement pour qu'elle soit SERVIE. Une image construite
   # et déployée nulle part est un build qui ne prouve rien.

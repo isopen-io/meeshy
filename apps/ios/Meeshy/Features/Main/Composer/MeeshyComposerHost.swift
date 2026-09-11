@@ -778,10 +778,10 @@ struct MeeshyComposerHost: View {
     /// **T2.5 — la POSITION posée sur le brouillon.** Vit dans le MEUBLE, comme
     /// `documentLocalMedia` juste au-dessus : `ComposerDocumentDraft.location`
     /// (T2.1) ne portait encore le résultat d'aucun geste, faute de picker
-    /// câblé. `LocationPickerView` — le même sélecteur que le composer inline
-    /// du fil (`FeedView+Attachments.handleFeedLocationSelection`) — l'écrit
-    /// ici ; en fabriquer un second aurait donné deux flux de lieu à faire
-    /// diverger.
+    /// câblé. `LocationPickerView` — le même sélecteur que montait le composer
+    /// inline du fil (`handleFeedLocationSelection`, retirée en #6016 une fois
+    /// ce meuble en place) — l'écrit ici ; en fabriquer un second aurait donné
+    /// deux flux de lieu à faire diverger.
     @State var documentLocation: SharedPlace?
 
     /// **T2.5 — le SECOND opt-in**, indépendant du lieu lui-même : « rendre ce

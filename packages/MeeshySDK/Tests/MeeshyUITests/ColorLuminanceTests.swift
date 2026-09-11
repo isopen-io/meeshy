@@ -33,7 +33,7 @@ final class ColorLuminanceTests: XCTestCase {
     // MARK: - readableInk (#5950 — le seuil d'égalité de contraste WCAG,
     // pas un seuil arrondi en dur)
 
-    /// Premier accent du jeu de fixtures web-v3 (L = 0,4196, dans la plage
+    /// Premier accent du jeu de fixtures web-v2 (L = 0,4196, dans la plage
     /// fautive 0,179 → 0,6) : l'ancien seuil `0.6` élisait le blanc (1,98:1,
     /// sous AA) ; le point d'égalité WCAG élit le noir (10,61:1).
     func test_readableInk_accentInFormerlyWrongRange_isBlack() {
