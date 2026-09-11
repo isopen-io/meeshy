@@ -9,6 +9,12 @@ import UIKit
 /// hors écran pendant le geste.
 final class ThreadChromeFadeContainer: UIView {
 
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+
     private let fadeMask = FadeMask()
     private var fade = ThreadChromeFade.none
 
@@ -108,6 +114,12 @@ final class ThreadChromeFadeContainer: UIView {
     /// bandes à leur bord pendant un changement de taille animé.
     private final class FadeMask: UIView {
 
+        // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+        // défaut) → double-free `pointer being freed was not allocated` (abrt)
+        // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+        // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+        nonisolated deinit {}
+
         let topBand = Band(edge: .top)
         let bottomBand = Band(edge: .bottom)
         private let middle = UIView()
@@ -166,6 +178,12 @@ final class ThreadChromeFadeContainer: UIView {
     /// Une bande : un dégradé transparent → plein depuis son bord, et un plein
     /// dont l'opacité LÈVE le voile (1 = le fil se lit jusqu'au bord).
     private final class Band: UIView {
+
+        // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+        // défaut) → double-free `pointer being freed was not allocated` (abrt)
+        // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+        // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+        nonisolated deinit {}
 
         enum Edge { case top, bottom }
 
