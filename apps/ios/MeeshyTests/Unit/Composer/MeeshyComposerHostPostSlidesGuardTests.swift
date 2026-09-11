@@ -100,12 +100,18 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
     /// Taper une vignette amène SA slide sur la scène. Sans le relais, la bande
     /// resterait un inventaire et le carrousel ne serait pas navigable depuis
     /// l'écran document (loi 4 : un contrôle existe s'il a un effet).
+    ///
+    /// **#5599 — le rail s'adresse par INDEX de slide, plus par URL de média.**
+    /// Le relais `onSelectMedia:` n'existe plus : le rail rend un `Int`, et le
+    /// meuble le passe tel quel. Ce que ce témoin garde est INCHANGÉ — taper
+    /// une vignette change l'écran —, seul le vocabulaire de l'adresse a
+    /// changé. Garder `onSelectMedia:` reviendrait à exiger le retour d'une
+    /// indirection que le modèle des slides a rendue inutile.
     func test_thumbnailTap_selectsTheSlideOfThatMedia() throws {
         let compacted = compact(try hostSource())
-        XCTAssertTrue(compacted.contains("onSelectMedia:{mediain"),
-            "Le meuble doit relayer le tap d'une vignette…")
-        XCTAssertTrue(compacted.contains("viewModel.selectSlide(at:index)"),
-            "…jusqu'à `selectSlide`, sans quoi taper une vignette ne changerait rien à l'écran.")
+        XCTAssertTrue(compacted.contains("onSelect:{viewModel.selectSlide(at:$0)}"),
+            "Taper une vignette doit amener SA slide sur la scène — sans ce relais, le rail "
+                + "est un inventaire et le carrousel n'est pas navigable (loi 4).")
     }
 
     // MARK: - Le rôle d'un média posé (#4724)
@@ -248,15 +254,18 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
     /// rail, ne le confirme : un contrôle dont l'effet est ailleurs ET
     /// invisible ici. La résolution appartient au MEUBLE — lui seul tient la
     /// carte `média → slide` et la slide courante.
+    ///
+    /// **#5599 — la slide courante se dit par son INDEX.** Le meuble n'a plus à
+    /// résoudre `média → slide` pour répondre « laquelle cercler » : les slides
+    /// SONT le modèle, et `viewModel.currentSlideIndex` est la réponse. La
+    /// vieille résolution par carte inverse a disparu avec le besoin qui la
+    /// justifiait — elle traduisait une adresse (l'URL) dans une autre (la
+    /// position), ce que plus personne ne demande.
     func test_theRailKnowsWhichSlideIsOnScreen() throws {
         let compacted = compact(try hostSource())
-        XCTAssertTrue(compacted.contains("selectedMediaURL:selectedSlideMediaURL"),
-            "Le meuble doit dire à la surface QUELLE vignette cercler.")
-        XCTAssertTrue(
-            compacted.contains("slideIdByMediaURL.first(where:{$0.value==current})?.key"),
-            "La résolution passe par l'INDEX, jamais par l'ordre des tableaux — l'ordre ment dès qu'un "
-                + "média est retiré au milieu."
-        )
+        XCTAssertTrue(compacted.contains("currentIndex:viewModel.currentSlideIndex"),
+            "Le meuble doit dire au rail QUELLE vignette cercler — sans anneau, taper une "
+                + "vignette change la scène sans que rien, dans le rail, ne le confirme.")
     }
 
     /// **Le rail vit dans la BARRE HAUTE, et en UN seul exemplaire.** Deux
