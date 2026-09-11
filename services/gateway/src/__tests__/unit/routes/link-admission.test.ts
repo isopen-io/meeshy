@@ -292,6 +292,67 @@ describe('POST /links/:key/members — inscrit (S2)', () => {
   });
 });
 
+/**
+ * #6091 — `canSendVideos`/`canSendAudios` suivent le LIEN, jamais un `false`
+ * inventé par le site qui recopie.
+ *
+ * `ConversationShareLink` ne porte aucun drapeau vidéo ni audio : la loi vit
+ * une couche plus bas, dans `classifyAnonymousAttachment`
+ * (`services/attachments/ContentSignature.ts`) — une vidéo EST un fichier
+ * (`allowAnonymousFiles`), et la voix suit le droit d'écrire
+ * (`allowAnonymousMessages`), jamais `allowAnonymousFiles`/`allowAnonymousImages`.
+ * Ces témoins rendent l'instantané cohérent avec cette loi, côté invité ET
+ * côté utilisateur nommé.
+ */
+describe('POST /links/:key/members — vidéo et audio suivent le lien, jamais `false` en dur (#6091)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => { app = await buildApp(); });
+  afterAll(async () => { await app.close(); });
+
+  it('invité anonyme, lien qui autorise les fichiers ⇒ `canSendVideos: true` — une vidéo EST un fichier', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
+      ...mockShareLink, allowAnonymousFiles: true, allowAnonymousMessages: true,
+    });
+    const res = await postMembers(app, { nickname: 'Ana' });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.entry.rights).toMatchObject({ canSendVideos: true, canSendAudios: true });
+  });
+
+  it('invité anonyme, lien qui refuse les fichiers ⇒ `canSendVideos: false` — l\'hôte a dit non, pas « jamais demandé »', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
+      ...mockShareLink, allowAnonymousFiles: false, allowAnonymousMessages: false,
+    });
+    const res = await postMembers(app, { nickname: 'Ana' });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.entry.rights).toMatchObject({ canSendVideos: false, canSendAudios: false });
+  });
+
+  it('invité anonyme : `canSendAudios` suit `allowAnonymousMessages`, indépendamment de `allowAnonymousFiles`', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
+      ...mockShareLink, allowAnonymousFiles: false, allowAnonymousMessages: true,
+    });
+    const res = await postMembers(app, { nickname: 'Ana' });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.entry.rights).toMatchObject({ canSendVideos: false, canSendAudios: true });
+  });
+
+  it('utilisateur nommé entrant par lien : naît avec vidéo et audio ouverts — membre à part entière (NEW_MEMBER_PERMISSIONS)', async () => {
+    (app as any).prisma.participant.findMany = jest.fn().mockResolvedValue([]);
+    (app as any).prisma.participant.create.mockClear();
+
+    const res = await postMembers(app, {}, asRegistered);
+
+    expect(res.statusCode).toBe(201);
+    const created = (app as any).prisma.participant.create.mock.calls.at(-1)?.[0];
+    expect(created.data.permissions.canSendVideos).toBe(true);
+    expect(created.data.permissions.canSendAudios).toBe(true);
+    // Critère « ce que ça ne fait PAS » — les deux droits déjà ouverts ne bougent pas.
+    expect(created.data.permissions.canSendFiles).toBe(true);
+    expect(created.data.permissions.canSendImages).toBe(true);
+    (app as any).prisma.participant.findMany = jest.fn().mockResolvedValue([]);
+  });
+});
+
 // ─── PATCH /guest-sessions/me ─────────────────────────────────────────────────
 
 describe('PATCH /guest-sessions/me', () => {
