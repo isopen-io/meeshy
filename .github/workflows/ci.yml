@@ -196,9 +196,9 @@ jobs:
 
       # PAS D'ÉTAPE DE LINT DÉDIÉE À `@meeshy/web-v3` (2026-09-07).
       #
-      # Elle existait pour l'ANCIENNE refonte, aujourd'hui `@meeshy/web-old-version3`
-      # et annulée. Le nom `@meeshy/web-v3` désigne désormais la NOUVELLE
-      # application (ex `web-v4`), qui n'a pas encore de configuration ESLint :
+      # Elle existait pour l'ancienne refonte v3, annulée puis retirée du dépôt
+      # (#5994). Le nom `@meeshy/web-v3` désigne la v3.1 (ex `web-v4`), qui
+      # n'a pas encore de configuration ESLint :
       # rebrancher l'étape telle quelle rendrait une case VERTE qui ne linte
       # rien — un signal pire que l'absence de signal, parce qu'on le croit.
       #
@@ -236,10 +236,9 @@ jobs:
       # avoir. La v3 naît à zéro erreur, et cette étape est la seule qui puisse
       # le garantir — elle ne porte pas `continue-on-error`.
       # `@meeshy/web-v3` désigne, depuis le 2026-09-07, la NOUVELLE application
-      # (ex `web-v4`, version 3.1.0) — l'ancienne refonte est `web-old-version3` et
-      # ne passe plus par la CI, étant annulée. La nouvelle naît à zéro erreur,
-      # donc elle reste dans l'étape BLOQUANTE et hors du ratchet gagé sur la
-      # dette du legacy.
+      # (ex `web-v4`, version 3.1.0) — l'ancienne refonte, annulée, a quitté le
+      # dépôt (#5994). La nouvelle naît à zéro erreur, donc elle reste dans
+      # l'étape BLOQUANTE et hors du ratchet gagé sur la dette du legacy.
       #
       # Elle n'y était pas avant ce jour : sous son ancien nom, aucun filtre de
       # ce fichier ne la citait, et sa PR pouvait être verte avec l'application
@@ -346,9 +345,9 @@ jobs:
 
       # Même raison de placement que le garde ci-dessus : l'invariant porte sur
       # le `Makefile` de la RACINE, donc il est appelé ici et non depuis les
-      # tests d'une app. Sa première écriture vivait dans
-      # `apps/web-old-version3/__tests__/` — elle remontait de trois crans pour atteindre
-      # sa surface et ne tournait dans AUCUN job — la matrice `test:` ne portait
+      # tests d'une app. Sa première écriture vivait dans les tests de l'ancienne
+      # refonte v3 (retirée depuis, #5994) — elle remontait de trois crans pour
+      # atteindre sa surface et ne tournait dans AUCUN job — la matrice `test:` ne portait
       # alors que shared/web/gateway/agent : un contrôle inerte, qui laissait
       # rouvrir au commit suivant la régression qu'il prétendait fermer.
       # (`web-v3` A depuis rejoint la matrice ; cette phrase décrit le passé, et
@@ -372,26 +371,6 @@ jobs:
       - name: Live-branch contention survey self-test
         run: node scripts/releve-branches-vivantes.mjs --self-test
 
-      # Même raison de placement : l'invariant porte sur `ci.yml`, `docker.yml`
-      # et `docker-compose.prod.yml` — trois fichiers de la RACINE. Il DÉROULE
-      # les deux étapes de détection de `docker.yml` avec bash plutôt que de les
-      # relire : « un push qui ne touche que apps/web-old-version3 construit-il la v3 sans
-      # réveiller le legacy ? » ne se lit pas dans le texte d'un `[[ == *"…"* ]]`.
-      # RETIRÉ le 2026-09-07 avec le renommage (#5554). Ce garde vérifie qu'UNE
-      # application Next est câblée de bout en bout — type-check, lint, matrice
-      # de tests, docker, compose. Son sujet est `apps/web-old-version3`, ANNULÉE : la
-      # directive porteur lui retire précisément ces trois câblages, donc le
-      # garde ne peut plus être vert sans remettre en CI l'application qu'on
-      # décommissionne. Et il ne peut pas non plus viser `apps/web-v3` (la
-      # v3.1), qui est en Vite : il lit `app/`, les réécritures `/__v3/` et
-      # `next.config.ts`, qui n'y existent pas.
-      #
-      # Le script reste dans l'arbre — il fait foi sur ce que la chaîne de
-      # l'ancienne application contenait, et c'est lui qu'on supprimera AVEC
-      # elle. Le remplaçant de la v3.1 est l'étape « Gates web-v3 » du job
-      # `quality` ci-dessus (jetons dérivés + poids de la première peinture).
-      # Suivi : #5496 (décommissionnement).
-
       # Même raison de placement que les gardes ci-dessus : l'invariant porte sur
       # `ci.yml`, sur `turbo.json` et sur les manifestes des workspaces — la
       # surface est le DÉPÔT. Il ferme #4761.
@@ -403,7 +382,7 @@ jobs:
       # entrent dans un workspace par `cd` et y lancent un script de paquet — donc
       # HORS du graphe — et 11 copies écrites à la main de « construis le paquet
       # partagé ». Le jour où `01c49fcfee` a fait importer `@meeshy/shared` par
-      # `apps/web-old-version3`, les trois jobs de la v3 sont devenus rouges — et LE JOB QUI
+      # l'ancienne refonte v3, ses trois jobs sont devenus rouges — et LE JOB QUI
       # CASSE N'EST PAS CELUI QUI A AJOUTÉ L'IMPORT, puisque la personne qui écrit
       # l'`import` ne touche aucun fichier de CI.
       #
@@ -412,16 +391,17 @@ jobs:
       # aux étapes qui les construisent plus haut. « Productrice » n'est pas une
       # liste recopiée : c'est « a un script `build` dont la sortie, déclarée par
       # `turbo.json`, est ce que le consommateur importe » — ce qui laisse
-      # `@meeshy/design-tokens` et `@meeshy/icons` tranquilles, deux paquets
-      # d'actifs commités sans étape de build.
+      # `@meeshy/design-tokens` tranquille, paquet d'actifs commité sans étape
+      # de build.
       - name: CI build-order guard
         run: node scripts/check-ci-build-order.mjs --self-test && node scripts/check-ci-build-order.mjs
 
       # Même placement, même raison : la surface est le DÉPÔT — ici le fichier
       # de workflow lui-même. Le garde confronte les jobs DÉCLARÉS de `ci.yml`
       # aux deux listes écrites à la main dont vit son résumé (le `needs:` de
-      # l'agrégateur, et les lignes de son tableau). Il ferme #4860 : `chaines-v3`
-      # — un gate écrit exprès — ne figurait dans aucune des deux, et
+      # l'agrégateur, et les lignes de son tableau). Il ferme #4860 : le gate des
+      # chaînes de l'ancienne refonte v3 — écrit exprès — ne figurait dans aucune
+      # des deux, et
       # `test-python`, rallumé au sprint 0.3, y était annoncé « disabled » par
       # un mot écrit à la main pendant qu'il consommait un runner à chaque
       # poussée. L'agrégateur est reconnu par ce qu'il FAIT (`if: always()` +
@@ -475,184 +455,12 @@ jobs:
       - name: Deployment validator derivation witness
         run: bash scripts/deployment/deploy-validate-config.sh --self-test
 
-      # Le rapport unique de la machine de vérification (§ 9 de la conception)
-      # agrège cinq mesures dont quatre ont un prérequis (un build, un serveur,
-      # un navigateur pour le gate axe — dont l'INVOCATION vit dans le job
-      # `a11y-v3` ci-dessous, un agrégateur ne remplaçant pas un porteur).
-      # Ce qui est BLOQUANT en CI est donc son agrégation, pas son verdict : une
-      # mesure non exécutée doit sortir en « rapport incomplet » (rc=2), jamais
-      # en vert. C'est exactement ce que les mutations du --self-test sondent.
-      # Le rapport complet se lance à la main, avec la v3 servie :
-      #   node scripts/v3-rapport.mjs --base http://127.0.0.1:3300
-      - name: web-v3 verification report aggregation
-        run: node scripts/v3-rapport.mjs --self-test
-
       # Casse de compilation Swift détectable sans compilateur. Ici (ubuntu,
       # quelques secondes) plutôt que sur le runner macOS : `xcodebuild` coûte
       # ~15 min et meurt à la première erreur, alors que ce garde les liste
       # toutes avant même que le job iOS ne démarre.
       - name: ViewBuilder statement-chaining guard
         run: bash scripts/check-swift-viewbuilder.sh --self-test && bash scripts/check-swift-viewbuilder.sh
-
-  # ===========================================================================
-  # apps/web-old-version3 est ANNULÉE (directive porteur 2026-09-07, CLAUDE.md
-  # racine § « LA V3 EN DÉVELOPPEMENT EST ANNULÉE ») et ne reçoit plus aucune
-  # feature, aucun correctif, aucun portage d'écran. Les trois jobs `a11y-v3`,
-  # `lifecycle-v3` et `chaines-v3` ci-dessous la construisent et l'éprouvent
-  # malgré tout, en gate BLOQUANT, à CHAQUE PR du dépôt — qu'elle touche ou non
-  # ce répertoire (#5686). Constaté sur #5678, dont le diff est un seul fichier
-  # de test du gateway : `chaines-v3` y était rouge sur un fichier de
-  # `apps/web-old-version3` inchangé depuis 19 h.
-  #
-  # Ce job les rend CONDITIONNELS à un changement RÉEL de
-  # `apps/web-old-version3/**` — l'option la MOINS destructrice des trois que
-  # #5686 posait (retirer les jobs, les rendre non-bloquants, ou les
-  # conditionner aux chemins) : elle rend immédiatement le temps de CI aux
-  # lots qui n'ont rien à voir avec cette application, sans préjuger de si/quand
-  # elle sera décommissionnée — une décision hors de portée de cette session.
-  # `workflow_dispatch` (déclenchement manuel) les force toujours à tourner :
-  # un run demandé explicitement n'a pas à deviner ce qu'on voulait éprouver.
-  # ===========================================================================
-  detect-legacy-v3-changes:
-    name: Détecter les changements de apps/web-old-version3 (annulée, #5686)
-    runs-on: ubuntu-latest
-    outputs:
-      touched: ${{ steps.filter.outputs.legacy == 'true' || github.event_name == 'workflow_dispatch' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Filtrer les chemins modifiés
-        uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            legacy:
-              - 'apps/web-old-version3/**'
-
-  # ===========================================================================
-  # A11Y: le gate axe du § 8.5 de la conception v3 — SON PORTEUR
-  # ===========================================================================
-  # « 0 erreur axe serious/critical sur toute route (public) ». L'instrument
-  # vivait déjà (`apps/web-old-version3/e2e/visual/v3-a11y.spec.ts`, son verdict dans
-  # `lib/a11y.ts`, gagé par `__tests__/a11y-gate.test.ts`) — et RIEN ne le
-  # lançait : la chaîne `test:a11y` n'apparaissait que deux fois dans le dépôt,
-  # sa définition et le témoin qui vérifiait sa définition. Un instrument
-  # déclaré n'est pas un instrument lancé, et le gage de la DÉCLARATION rendait
-  # exactement le vert qu'il prétendait interdire.
-  #
-  # Un job À PART plutôt qu'une étape de `quality` : il lui faut un `next build`
-  # et un Chromium, que les onze gardes textuels de `quality` n'ont pas à payer.
-  # Il ne porte PAS `continue-on-error` — la v3 naît sans dette, même règle que
-  # son lint et son type-check.
-  a11y-v3:
-    name: A11y web-v3 (axe serious/critical)
-    runs-on: ubuntu-latest
-    needs: [quality, detect-legacy-v3-changes]
-    if: needs.detect-legacy-v3-changes.outputs.touched == 'true'
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
-
-      # Ce que le balayage prend pour entrée est ce que `next build` a ÉMIS
-      # (`.next/app-build-manifest.json`), jamais ce que le disque porte : sans
-      # cette étape le manifeste est absent et la garde de non-vacuité de
-      # `exigeUnManifesteLu` fait échouer le gate, au lieu de le laisser sortir
-      # vert sur zéro route.
-      # `bun` EN DUR ici était un trou : `Setup bun` ci-dessus porte
-      # `if: env.PACKAGE_MANAGER == 'bun'`, donc sous
-      # `workflow_dispatch(package_manager: pnpm)` le binaire n'est pas installé
-      # et l'étape qui construit la DÉPENDANCE échoue — pendant que l'étape
-      # suivante, elle, s'adapte au gestionnaire. Trouvé par
-      # `scripts/check-ci-build-order.mjs` [#4761], qui rend chaque étape une
-      # fois par scénario déclaré au lieu de la lire à plat.
-      - name: Build packages/shared (la v3 en importe depuis 01c49fcfee)
-        run: |
-          cd packages/shared
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
-
-      - name: Build apps/web-old-version3 (le manifeste que le balayage lit)
-        run: |
-          cd apps/web-old-version3
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      # `playwright.config.ts` lève lui-même `next start` (webServer) : la
-      # preuve d'un build se prend sur le serveur de production, jamais sur
-      # `next dev`.
-      #
-      # LE PROJET ENTIER, JAMAIS TROIS SUITES NOMMÉES — et c'est la CINQUIÈME
-      # fois que cette leçon se paie ici (2026-09-04, #5093). Cette étape
-      # lançait `test:a11y`, `test:cibles` et `test:fil-a11y`, c'est-à-dire
-      # TROIS des ONZE suites du projet `pages`. Les huit autres —
-      # `v3-nouvelle-conversation`, `v3-nouveau-lien` et les six `*-a11y` de
-      # commentaires, contacts, feed, liens, recherche et réglages — n'étaient
-      # lancées par AUCUN job : `test:chaines` les ignore par construction
-      # (`testIgnore`), et aucune étape ne les nommait. Elles portent les
-      # critères de fin de huit issues qu'aucun gate ne pouvait donc prouver.
-      #
-      # Une étape qui nommait `test:a11y`, `test:cibles` et `test:fil-a11y`
-      # (trois des onze suites du projet `pages`) laissait les huit autres —
-      # `v3-nouvelle-conversation`, `v3-nouveau-lien` et six `*-a11y` — sans
-      # aucun job pour les lancer : `test:chaines` les ignore par construction
-      # (`testIgnore`), et aucune étape ne les nommait. Le correctif de fond
-      # est ici : **une étape lance un PROJET, pas une énumération** — c'est la
-      # seule forme qui fasse entrer d'office la suite écrite demain.
-      - name: Gate pages — axe, cibles tactiles, surimpressions (projet ENTIER)
-        run: |
-          cd apps/web-old-version3
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:pages
-
-      # PAS de `continue-on-error` ici : le job est de toute façon déjà rouge
-      # quand l'étape précédente échoue, et masquer celle-ci retirerait le seul
-      # artefact qui explique pourquoi.
-      - name: Upload Playwright traces
-        uses: actions/upload-artifact@v7
-        if: failure()
-        with:
-          name: web-v3-a11y-traces
-          path: apps/web-old-version3/test-results/
-          retention-days: 7
 
   # ===========================================================================
   # CACHE INSTITUTIONNEL: les cinq pages restent ELLES-MÊMES à la deuxième visite
@@ -811,217 +619,6 @@ jobs:
         run: |
           cd apps/web-v3
           node scripts/check-thread-virtualization.mjs
-
-  # ===========================================================================
-  # LIFECYCLE: le gate de cycle de vie du § 8.5 de la conception v3 — SON PORTEUR
-  # ===========================================================================
-  # « 0 requête pendant que l'onglet est hidden ; 1 seule requête de battement
-  # pour N onglets sur 10 min ». Même leçon que le gate axe ci-dessus, payée une
-  # fois : un instrument déclaré n'est pas un instrument lancé. L'instrument vit
-  # dans `apps/web-old-version3/e2e/visual/v3-lifecycle.spec.ts`, son verdict dans
-  # `lib/lifecycle.ts`, gagé sans navigateur par `__tests__/lifecycle-gate.test.ts`
-  # — et ce job est l'une de ses deux invocations, l'autre étant la sixième mesure
-  # de `scripts/v3-rapport.mjs`.
-  #
-  # Un job À PART de `a11y-v3` : le gate axe balaie ce que `next build` a émis et
-  # rougit sur une page sans budget ; celui-ci mesure un cycle de vie sur un
-  # scénario fabriqué. Deux verdicts distincts, deux lignes de résultat distinctes
-  # dans le récapitulatif — les fondre rendrait « web-v3 rouge » sans dire lequel
-  # des deux gates est tombé.
-  lifecycle-v3:
-    name: Cycle de vie web-v3 (0 requête onglet caché)
-    runs-on: ubuntu-latest
-    needs: [quality, detect-legacy-v3-changes]
-    if: needs.detect-legacy-v3-changes.outputs.touched == 'true'
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
-
-      # Le scénario fabriqué est servi par l'interception de Playwright, jamais
-      # par le serveur — mais `playwright.config.ts` lève quand même `next start`
-      # (la preuve d'un build se prend sur le serveur de production, leçon 339),
-      # qui exige ce build.
-      # Même trou que dans `a11y-v3` : `bun` en dur alors que `Setup bun` est
-      # réservé au scénario `bun` (#4761).
-      - name: Build packages/shared (la v3 en importe depuis 01c49fcfee)
-        run: |
-          cd packages/shared
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
-
-      - name: Build apps/web-old-version3 (le serveur que playwright.config.ts lève)
-        run: |
-          cd apps/web-old-version3
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Gate cycle de vie — 0 requête mutante pendant que l'onglet est caché
-        run: |
-          cd apps/web-old-version3
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:lifecycle
-
-      - name: Upload Playwright traces
-        uses: actions/upload-artifact@v7
-        if: failure()
-        with:
-          name: web-v3-lifecycle-traces
-          path: apps/web-old-version3/test-results/
-          retention-days: 7
-
-  # ===========================================================================
-  # CHAÎNES: les suites de CHAÎNE de la v3 — LEUR PORTEUR
-  # ===========================================================================
-  # Troisième fois que cette leçon se paie ici. Les deux jobs ci-dessus la
-  # portent déjà dans leurs commentaires — « un instrument déclaré n'est pas un
-  # instrument lancé » — et pourtant `v3-network-vitals.spec.ts` et
-  # `v3-lien-expire.spec.ts` n'étaient lancés par AUCUN job : `test:chaines`
-  # n'apparaissait que dans sa propre définition. Les deux portent les critères
-  # de fin de #4495 (une seule requête avant la 302, zéro `<script>` hors
-  # ThemeScript) et #4496 (quatre raisons distinctes, aucun composant client
-  # monté) — donc deux issues qu'aucun gate ne pouvait prouver.
-  #
-  # Ce job invoque le PROJET, jamais les fichiers. `playwright.config.ts` donne
-  # à `chaines` un `testIgnore` et non un `testMatch` : le projet prend tout ce
-  # qui n'est pas une suite de PAGE, si bien qu'une suite neuve y entre d'office
-  # et se trouve lancée sans que personne ait à penser à elle. Nommer les deux
-  # fichiers ici rouvrirait le trou au premier fichier suivant.
-  #
-  # Séparé des deux autres parce que la contrainte est d'EXÉCUTION, pas de
-  # worker : les suites de page importent `routes-emises.mjs` statiquement et
-  # installent le chargeur de Playwright pour tout `.mjs`, ce que le chargement
-  # dynamique des suites de chaîne ne supporte pas (#4510).
-  chaines-v3:
-    name: Chaînes web-v3 (lien partagé, vitals réseau)
-    runs-on: ubuntu-latest
-    needs: [quality, detect-legacy-v3-changes]
-    if: needs.detect-legacy-v3-changes.outputs.touched == 'true'
-    # 20 → 30 (suivi #5163 § 12.12) : ce job installe désormais WebKit et
-    # Firefox EN PLUS de Chromium, et rejoue la suite des gestes du fil sur
-    # les deux — mesuré en local ~2 min pour l'installation des deux
-    # navigateurs et sous la minute pour chaque suite, mais `--with-deps` sur
-    # un runner GitHub (paquets système) peut coûter plus que sur un poste
-    # déjà équipé.
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Cache bun dependencies
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
-
-      - name: Install dependencies (bun with retry)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          for i in 1 2 3; do
-            bun install && break || {
-              echo "Attempt $i failed, retrying in 10s..."
-              sleep 10
-            }
-          done
-
-      - name: Install dependencies (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: pnpm install --no-frozen-lockfile
-
-      # Même trou que dans `a11y-v3` : `bun` en dur alors que `Setup bun` est
-      # réservé au scénario `bun` (#4761).
-      - name: Build packages/shared (la v3 en importe depuis 01c49fcfee)
-        run: |
-          cd packages/shared
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
-
-      - name: Build apps/web-old-version3 (le serveur que les suites mesurent)
-        run: |
-          cd apps/web-old-version3
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Gate chaînes — lien partagé, causes de clôture, vitals réseau
-        run: |
-          cd apps/web-old-version3
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:chaines
-
-      # Suivi #5163 § 12.12 — la réplique des gestes du fil (répondre, modifier,
-      # retirer + la fenêtre d'annulation) doit tourner sur WebKit et Firefox,
-      # pas seulement Chromium : un instrument DÉCLARÉ (les deux projets de
-      # `playwright.config.ts`) n'est pas un instrument LANCÉ tant qu'aucun pas
-      # ne l'exécute — c'est ce trou, précisément, que ce pas comble.
-      - name: Install Playwright browsers (WebKit, Firefox)
-        run: npx playwright install --with-deps webkit firefox
-
-      - name: Gate gestes du fil — WebKit et Firefox
-        run: |
-          cd apps/web-old-version3
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:gestes-moteurs
-
-      - name: Upload Playwright traces
-        uses: actions/upload-artifact@v7
-        if: failure()
-        with:
-          name: web-v3-chaines-traces
-          path: apps/web-old-version3/test-results/
-          retention-days: 7
 
   # ===========================================================================
   # TEST: Unit Tests with Coverage (Parallel by package)
@@ -2071,7 +1668,7 @@ jobs:
   summary:
     name: Summary
     runs-on: ubuntu-latest
-    needs: [quality, detect-legacy-v3-changes, a11y-v3, lifecycle-v3, chaines-v3, institutionnel-v3, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
+    needs: [quality, institutionnel-v3, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
       - name: Pipeline Summary
@@ -2083,11 +1680,7 @@ jobs:
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Détection apps/web-old-version3 (#5686) | ${{ needs.detect-legacy-v3-changes.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| A11y web-v3 (axe) | ${{ needs.a11y-v3.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Cycle de vie web-v3 | ${{ needs.lifecycle-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Peaux web-v3 (institutionnel + Lentille + fil) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Chaînes web-v3 | ${{ needs.chaines-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Python) | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Audio Pipeline | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY

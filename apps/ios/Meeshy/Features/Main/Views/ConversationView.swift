@@ -244,10 +244,15 @@ struct ConversationView: View {
     @State private var focalFullscreenPlace: BubbleFullscreenPlace?
     /// Lot 3.2 — fichier à partager depuis la rangée plate (ShareSheet).
     @State private var focalShareFileItem: FocalShareFileItem?
-    /// Observes ONLY typing state — avoids full-view re-render on every keystroke.
-    /// `internal` (not `private`): accessed by the `ConversationView+ScrollIndicators`
-    /// extension, which lives in a separate file (private is file-scoped).
-    @ObservedObject var typingObserver: ConversationStateStore
+    // `typingObserver` a été RETIRÉ (#5961). Il était capturé à l'`init` depuis
+    // le `vm` LOCAL — une instance neuve à chaque évaluation du parent, que
+    // `@StateObject` jette — si bien qu'il observait le store d'un ViewModel
+    // mort, qu'aucun `typing:start` n'alimente. Il ne faisait donc pas ce que
+    // son commentaire promettait : il ne rendait RIEN vivant.
+    //
+    // Ce qui a besoin du roster le reçoit désormais par
+    // `ConversationTypingRosterHost`, alimenté par `viewModel.stateStore` — le
+    // survivant — au moment du rendu, jamais capturé à l'`init`.
     /// Observe le blocage pour réafficher la zone composer « débloquer » dès
     /// qu'un block/unblock change. Événement rare (action explicite), hors hot
     /// path — safe (même pattern que ConversationListView). Seuls les blocages
@@ -501,9 +506,6 @@ struct ConversationView: View {
             anonymousSession: anonymousSession
         )
         _viewModel = StateObject(wrappedValue: vm)
-        // Wire the typing observer separately so typing changes don't re-evaluate
-        // the full conversation body — only typing-specific sub-views update.
-        _typingObserver = ObservedObject(wrappedValue: vm.stateStore)
 
         // WS-7 (F-086, A6) — décision de l'orchestrateur, ICI, UNE SEULE
         // FOIS. `identity`/`capabilities`/`isFlagEnabled` sont les mêmes
@@ -1137,7 +1139,7 @@ struct ConversationView: View {
                 Task { await consumePendingHighlightMessage() }
             }
             .onAppear {
-                if let context = replyContext { composerState.pendingReplyReference = context.toReplyReference }
+                if let context = replyContext { applyReplyContext(context, openingConversation: true) }
                 // Language priority (Prisme Linguistique): the user's primary
                 // configured content language is the source of truth and wins
                 // the compose default. The active keyboard layout is only a
@@ -1235,7 +1237,7 @@ struct ConversationView: View {
                 guard isDirect,
                       let ctx = router.pendingReplyContext,
                       ctx.authorId == conversation?.participantUserId else { return }
-                composerState.pendingReplyReference = ctx.toReplyReference
+                applyReplyContext(ctx, openingConversation: false)
                 router.pendingReplyContext = nil
             }
             .adaptiveOnChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: composerText.text) }
@@ -1406,10 +1408,16 @@ struct ConversationView: View {
                     // cellule de frappe du Fil. Même source que le Fil
                     // (`typingParticipants`, avec leur visage), même vue (`TypingIndicatorBubble`).
                     //
-                    // La lecture est VIVANTE sans rien ajouter : le roster est
-                    // porté par `ConversationStateStore`, que cette vue observe
-                    // déjà (`typingObserver`, câblé dans l'init) — c'est ce qui
-                    // fait repasser le body à chaque `typing:start`/`stop`.
+                    // ⚠️ Cette lecture n'est PAS vivante (#5961, suivi #5962).
+                    // Elle s'appuyait sur `typingObserver`, dont on a mesuré
+                    // qu'il observait le store d'un ViewModel jeté : le corps ne
+                    // repasse pas sur `typing:start`/`stop`, donc la Rivière
+                    // affiche le roster figé de son dernier rendu. Le correctif
+                    // est le même que pour la pastille de retour en bas —
+                    // `ConversationTypingRosterHost` — mais il se pose ici DANS
+                    // un `AnyView` imbriqué d'un corps déjà lourd, et se livre
+                    // à part pour ne pas mêler un risque de profondeur de type
+                    // à un correctif mesuré.
                     typingParticipants: viewModel.typingParticipants,
                     // R-5 : identité vivante — les MÊMES sources que le Fil
                     // (`MessageListViewController` : présence par expéditeur,
@@ -1545,10 +1553,10 @@ struct ConversationView: View {
                 // le repos du fil ne bouge pas d'un point.
                 bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
                 bottomInsetTransition: listInsetTransition,
-                // 0 en preview : la vue y est hébergée dans une `.sheet` à
-                // détentes, dont le bord haut est déjà sous la status bar —
-                // réserver la bande îlot y décalerait le flux dans le vide.
+                // 0 en preview, ni voile : hébergée dans une `.sheet` à détentes, déjà
+                // sous la status bar, la vue décalerait le flux dans le vide.
                 topInset: previewMode ? 0 : DeviceLayout.safeAreaTop,
+                chromeVisibility: previewMode ? .hidden : ThreadChromeFade.Visibility(header: !hidesEntireHeaderForScroll, composer: !hidesComposerChromeForScroll),
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,
@@ -1920,7 +1928,9 @@ struct ConversationView: View {
                 // plus proche) en fondant pendant le défilement et en revient
                 // (`EdgeHiddenChrome`) ; ses propres entrées/sorties (proximité
                 // du bas) suivent la même direction.
-                VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, MeeshySpacing.lg).padding(.bottom, composerScrollButtonAnchor + MeeshySpacing.sm) } }
+                ConversationTypingRosterHost(store: viewModel.stateStore) { typing in
+                    VStack { Spacer(); HStack { Spacer(); scrollToBottomButton(typing: typing).padding(.trailing, MeeshySpacing.lg).padding(.bottom, composerScrollButtonAnchor + MeeshySpacing.sm) } }
+                }
                     .hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)
                     .zIndex(60)
                     .transition(.move(edge: .bottom).combined(with: .opacity))

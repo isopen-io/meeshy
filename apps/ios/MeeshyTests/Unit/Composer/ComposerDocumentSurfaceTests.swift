@@ -2260,7 +2260,15 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// que rien à l'écran n'aurait annoncé. Refuser plutôt que supposer : un
     /// format sans publieur sur ce chemin n'a pas de traduction raisonnable.
     func test_lePlan_refuseUnBrouillonQuiNestPasUnPost() {
-        for format in [ComposerFormat.status, .story, .reel] {
+        // **`.reel` a QUITTÉ cette liste au #4869** (relevé #6011). Il a
+        // désormais un publieur sur ce chemin — la directive porteur du
+        // 2026-09-06 disait qu'on ne pouvait pas publier de réels — et le plan
+        // le refuse pour une raison PLUS PRÉCISE, gardée par le témoin suivant :
+        // un réel sans média qualifiant n'est pas un « mauvais format », c'est
+        // un réel auquel il manque son média. Le laisser ici ferait rougir la
+        // garde sur un refus devenu juste, et pousserait à « réparer » en
+        // rendant au réel un refus grossier.
+        for format in [ComposerFormat.status, .story] {
             let brouillon = ComposerDocumentDraft.document(
                 format: format, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:], mediaObjectIds: [:], allowSoundExtraction: nil
             )
@@ -2271,6 +2279,29 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
                     + "un contenu d'un AUTRE type que celui que l'auteur a composé."
             )
         }
+    }
+
+    /// **Ce que `.reel` a gagné en quittant la liste ci-dessus : un refus qui
+    /// dit VRAI** (#4869, relevé #6011).
+    ///
+    /// Un réel sans média n'est pas mal formaté — il est incomplet, et c'est une
+    /// nuance que l'auteur voit : « il manque une vidéo » se répare, « ce format
+    /// n'a pas de publieur » ne se répare pas. Ce témoin garde donc que le refus
+    /// reste un refus, ET qu'il nomme la bonne cause.
+    func test_unReelSansMediaQualifiant_estRefusePourCetteRaison() {
+        let brouillon = ComposerDocumentDraft.document(
+            format: .reel, forcePlainPost: false, text: "bonjour", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil,
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil,
+            references: [], storyEffects: nil, mediaCaptions: [:], mediaAlts: [:],
+            mediaObjectIds: [:], allowSoundExtraction: nil
+        )
+        XCTAssertEqual(
+            ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
+            .refuse(.reelWithoutQualifyingMedia),
+            "Un réel sans média doit être refusé POUR CE MOTIF — pas en « mauvais format », qui "
+                + "dirait à l'auteur que son format est impossible alors qu'il lui manque une vidéo."
+        )
     }
 
     /// Un brouillon sans matière ne part pas — et ce n'est PAS une redite du
@@ -2541,8 +2572,16 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
         XCTAssertTrue(aiguillage.contains("switch draft.format"),
                       "L'envoi doit AIGUILLER sur le format — le bloc lu n'est pas celui de l'aiguillage.")
-        XCTAssertTrue(aiguillage.contains("case .post: return await publishDocument(draft)"),
-                      "Le POST garde son publieur — celui que gardent les quatre témoins ci-dessous.")
+        // **Le RÉEL a rejoint ce publieur au #4869** (relevé #6011). L'ancre
+        // d'avant — `case .post:` seul — a rougi sur un aiguillage devenu JUSTE,
+        // et pousser à la « réparer » en rendant au réel sa branche perdue
+        // aurait défait la directive porteur du 2026-09-06.
+        //
+        // Ce que la garde protège n'a pas bougé d'un mot : le POST et le RÉEL
+        // partent par le MÊME publieur, et il est nommé ici. Ce sont bien DEUX
+        // publieurs distincts que l'assertion suivante sépare — pas trois.
+        XCTAssertTrue(aiguillage.contains("case .post, .reel: return await publishDocument(draft)"),
+                      "Le POST et le RÉEL partagent leur publieur — celui que gardent les témoins ci-dessous.")
         XCTAssertTrue(aiguillage.contains("case .status: return await publishMood(draft)"),
                       "Le MOOD doit avoir le SIEN : le plan du document le refuserait sur `draft.format == .post`.")
         XCTAssertFalse(aiguillage.contains("ComposerDocumentSendPlan"),
@@ -2718,6 +2757,16 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// plus bas — plus rien ne RETIENT la porte au sens de cette garde, mais
     /// aucun site de production ne la MONTE pour autant : le câblage effectif
     /// (T3.1) reste une décision distincte, non prise ici.
+    /// La RACINE d'un fichier Swift : son nom, amputé de l'extension de type.
+    ///
+    /// `FeedView+Composer.swift` et `FeedView+Attachments.swift` sont deux
+    /// tranches de `FeedView` — les compter comme des fichiers distincts fait
+    /// disparaître la racine dès qu'un découpage déplace la ligne cherchée.
+    private func racineDeFichier(_ url: URL) -> String {
+        let nom = url.deletingPathExtension().lastPathComponent
+        return nom.components(separatedBy: "+").first ?? nom
+    }
+
     /// `@MainActor` : le bundle de tests est compilé en isolation `nonisolated`,
     /// et `DefaultComposerLanguage.resolve()` — dont cette garde mesure la
     /// constance — est épinglée au main actor.
@@ -2744,7 +2793,18 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             declarations += occurrences(of: "struct DocumentComposerDoor", in: source)
             let n = occurrences(of: "DocumentComposerDoor(", in: source)
             montages += n
-            if n > 0 { racinesQuiMontent.insert(url.lastPathComponent) }
+            // **La RACINE, jamais le fichier** (relevé #6011). Une extension
+            // Swift `Type+Chose.swift` appartient au type `Type` : collecter
+            // `lastPathComponent` faisait disparaître `FeedView` le jour où son
+            // montage est passé dans `FeedView+Composer.swift`.
+            //
+            // Le renversement était complet — le montage y est arrivé par
+            // 74a14b85a5, « « Publier un post » ouvre enfin le composeur sur
+            // iPad », c'est-à-dire par le lot qui SATISFAIT la directive porteur
+            // que cette garde vérifie. Elle accusait celui qui lui donnait
+            // raison, et « réparer » en retirant `FeedView` de l'assertion
+            // aurait cessé de garder l'iPad.
+            if n > 0 { racinesQuiMontent.insert(racineDeFichier(url)) }
             // L'ancien composer : sa DÉCLARATION survit (code mort, lot de
             // suppression à part), mais plus aucun site ne doit le MONTER.
             //
@@ -2781,8 +2841,8 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             "Aucun site de production ne monte `DocumentComposerDoor` — le câblage a régressé."
         )
         XCTAssertTrue(
-            racinesQuiMontent.contains("RootViewComponents.swift")
-                && racinesQuiMontent.contains("FeedView.swift"),
+            racinesQuiMontent.contains("RootViewComponents")
+                && racinesQuiMontent.contains("FeedView"),
             "Les DEUX racines doivent monter la porte : `RootViewComponents` (iPhone) et `FeedView` "
                 + "(iPad, monté par `iPadRootView`). Directive porteur 2026-09-06 : « dans tous les cas "
                 + "iPad et iOS doivent utiliser le nouveau composer ». Une racine qui la perd fabrique "

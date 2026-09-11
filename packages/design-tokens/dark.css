@@ -1,10 +1,10 @@
 /* Schéma SOMBRE — le rendu de référence de la v3 (la planche est « nocturne »).
    Porté par :root SANS classe : un navigateur qui n'exécute aucun JavaScript
-   n'a pas de classe posée et doit tout de même être servi. La coquille racine
-   rend `<html class="dark">` côté SERVEUR (apps/web-old-version3/app/layout.tsx) et le
-   moteur de thème (apps/web-old-version3/app/theme-script.tsx) ne fait que CORRIGER
-   cette classe ; aucune requête de média n'apparaît ici — un jeton ne bascule
-   jamais tout seul.
+   n'a pas de classe posée et doit tout de même être servi. La coquille
+   (`apps/web-v3/index.html`) porte `<html class="dark">` et le script de schéma
+   (`apps/web-v3/src/lib/inline-scheme-bootstrap.js`) ne fait que CORRIGER cette
+   classe ; aucune requête de média n'apparaît ici — un jeton ne bascule jamais
+   tout seul.
 
    `color-scheme` est déclaré ICI, avec les jetons qu'il accompagne, et pas
    dans le script : sans JavaScript, une page peinte en jetons sombres sous un
@@ -34,8 +34,9 @@
   /* HORS de la rampe, et c'est mesuré : `--color-neutral-600` (#75798c) rend
      3,53:1 sur `--color-surface-raised`, sous les 4,5:1 que WCAG demande à du
      texte. La rampe reste la rampe (elle est reconstituée de la planche) ;
-     le RÔLE prend la valeur qui tient sa loi. Témoin : le contrôle de
-     contraste de scripts/check-jetons.mjs. */
+     le RÔLE prend la valeur qui tient sa loi. Mesuré par le contrôle de
+     contraste de l'ancienne refonte v3, parti avec elle (#5994) : plus rien
+     ne le rejoue (#6000). */
   --color-text-subtle: #8a8ea6;
   --color-border: var(--color-neutral-800);
   --color-border-strong: var(--color-neutral-700);
@@ -57,8 +58,8 @@
      (règle 4) peint le survol de l'action principale avec `strong`, sous encre
      `--color-on-primary` — #6366f1 y rendait 4,37:1, sous les 4,5:1 dus à du
      texte de 17 px, sur la plus grosse cible de l'écran. Le cran juste : 9,38:1.
-     Témoin : la paire `--color-on-primary` / `--color-primary-strong` de
-     scripts/check-jetons.mjs, qui mesure désormais le SURVOL comme le repos. */
+     Mesuré par la paire `--color-on-primary` / `--color-primary-strong` du
+     contrôle de l'ancienne refonte v3, parti avec elle (#5994, #6000). */
   --color-primary-strong: var(--color-accent-300);
   --color-primary-soft: #6366f1;
   --color-primary-softer: #4f46e5;
@@ -75,9 +76,9 @@
      (6,66 en sombre, 6,29 en clair), sur les plans de page c'est l'anneau
      (16,63 / 16,65). Ce qui se mesure n'est donc pas « chacun tient 3:1 » —
      aucun couple ne le tiendrait — mais « pour chaque fond, AU MOINS UN des
-     deux » : c'est la DISJONCTION de scripts/check-jetons.mjs
-     (`focusInvisiblesDans`), en plus des 3:1 que les deux anneaux se doivent
-     l'un à l'autre. */
+     deux » : c'était la DISJONCTION du contrôle de l'ancienne refonte v3
+     (`focusInvisiblesDans`, parti avec elle — #5994, #6000), en plus des 3:1
+     que les deux anneaux se doivent l'un à l'autre. */
   --color-focus: var(--color-text);
   --color-focus-contra: var(--color-bg-sunken);
 

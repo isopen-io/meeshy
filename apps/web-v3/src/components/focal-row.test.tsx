@@ -581,3 +581,229 @@ describe('FocalRow — un seul libellé au lecteur d’écran (revue #5935)', ()
     expect(continuation).not.toContain('data-identity');
   });
 });
+
+/**
+ * T12 (#5936) — LES ÉTATS DU MESSAGE : épinglé, transféré, modifié, système,
+ * sticker, emoji seul, lieu, story citée — sur la rangée PLATE.
+ */
+describe('FocalRow — les états du message (#5936)', () => {
+  const renderFull = (message: Message, onOpenStory?: (messageId: string) => void) =>
+    renderToStaticMarkup(
+      <FocalRow
+        mode="focal"
+        place={placeOf(message)}
+        languages={['fr', 'en']}
+        viewerId="u-viewer"
+        onJumpToMessage={() => {}}
+        {...(onOpenStory === undefined ? {} : { onOpenStory })}
+      />,
+    );
+
+  test('(i) épinglé + transféré + modifié : les DEUX badges sont AVANT data-identity, « modifié » est DANS .focal-meta', () => {
+    const html = renderFull({
+      ...BASE_MESSAGE,
+      pinnedAt: new Date('2026-09-10T09:00:00.000Z'),
+      forwardedFromId: 'm-far',
+      forwardedFromConversation: { id: 'c1', title: 'Salon', type: 'public' },
+      isEdited: true,
+    });
+    const pinnedIndex = html.indexOf('data-badge="pinned"');
+    const forwardedIndex = html.indexOf('data-badge="forwarded"');
+    const identityIndex = html.indexOf('data-identity');
+    expect(pinnedIndex).toBeGreaterThan(-1);
+    expect(forwardedIndex).toBeGreaterThan(pinnedIndex);
+    expect(identityIndex).toBeGreaterThan(forwardedIndex);
+
+    /* HORS de `.focal-meta` — cette colonne vaut `opacity: 0` au repos
+       (`thread-scene.css:39-43`) et `opacity: 0 !important` sur la rangée
+       ÉLUE (`:51-61`). iOS ne gate QUE le tampon et les coches
+       (`FocalMetaRow.swift:83-99`) ; « modifié » reste visible. Le badge
+       PRÉCÈDE donc la colonne méta, en sœur, au lieu d'y être enfermé
+       (revue-correction #5936). */
+    const focalMetaIndex = html.indexOf('focal-meta');
+    const editedIndex = html.indexOf('data-badge="edited"');
+    expect(editedIndex).toBeGreaterThan(-1);
+    expect(editedIndex).toBeLessThan(focalMetaIndex);
+  });
+
+  test('(ii) messageSource:"system" ⇒ data-system, aucune identité/méta/avatar, heure avant le texte', () => {
+    const html = renderFull({
+      ...BASE_MESSAGE,
+      messageType: 'system',
+      messageSource: 'system',
+      content: 'Le chiffrement de bout en bout est activé',
+    });
+    expect(html).toContain('data-system="notice"');
+    expect(html).not.toContain('data-identity');
+    expect(html).not.toContain('focal-meta');
+    expect(html).not.toContain('avatar-root');
+    expect(html).not.toContain('rounded-bubble');
+    const timeIndex = html.indexOf('09:00');
+    expect(timeIndex).toBeGreaterThan(-1);
+  });
+
+  test('(iii) emoji seul : le texte ORIGINAL même si une traduction existe (témoin de RANG)', () => {
+    const html = renderFull({
+      ...BASE_MESSAGE,
+      content: '🔥🔥🔥',
+      originalLanguage: 'en',
+      translations: [
+        { id: 't1', messageId: BASE_MESSAGE.id, targetLanguage: 'fr', translatedContent: 'feu feu feu', translationModel: 'medium', createdAt: new Date() },
+      ],
+    });
+    expect(html).toContain('data-emoji-only="1"');
+    expect(html).toContain('font-size:45px');
+    expect(html).toContain('🔥🔥🔥');
+    expect(html).not.toContain('feu feu feu');
+  });
+
+  test('(iv) sticker : SANS gabarit + emoji ⇒ le GLYPHE natif, même AVEC une pièce jointe (revue-correction #5936, défaut majeur 6a)', () => {
+    /* `RenderSource.resolve` (`BubbleSticker.swift:60-70`) : un sticker SANS
+       gabarit qui porte un emoji rend TOUJOURS le glyphe natif — le PNG
+       n'est que le repli des clients qui ne dessinent pas. L'ancienne
+       assertion (`alt="Sticker 🔥"`, la forme `<img>`) ENTÉRINAIT la
+       priorité inversée. */
+    const withPicture = renderFull({
+      ...BASE_MESSAGE,
+      content: '🔥',
+      metadata: { sticker: { emoji: '🔥' } },
+      attachments: [
+        {
+          id: 'a1',
+          messageId: BASE_MESSAGE.id,
+          fileName: 's.png',
+          originalName: 's.png',
+          mimeType: 'image/png',
+          fileSize: 4,
+          fileUrl: 'data:image/png;base64,AAAA',
+          uploadedBy: 'u-amina',
+          createdAt: new Date().toISOString(),
+          isViewOnce: false,
+          viewOnceCount: 0,
+          isBlurred: false,
+          viewedCount: 0,
+          downloadedCount: 0,
+          consumedCount: 0,
+          isEncrypted: false,
+          isForwarded: false,
+          isAnonymous: false,
+          capturedInApp: false,
+        },
+      ],
+    });
+    expect(withPicture).toContain('data-sticker-emoji');
+    expect(withPicture).toContain('aria-label="Sticker 🔥"');
+    expect(withPicture).not.toContain('<img');
+    /* La boîte du glyphe (60) est CONSTANTE, indépendante de `side` (112 en
+       rangée plate) — défaut majeur 6b. */
+    expect(withPicture).toContain('width:60px');
+    expect(withPicture).toContain('font-size:90px');
+
+    const bare = renderFull({ ...BASE_MESSAGE, content: '🔥', metadata: { sticker: { emoji: '🔥' } } });
+    expect(bare).toContain('data-sticker-emoji');
+
+    /* SANS emoji, un GABARIT inconnu de web ⇒ la pièce jointe, à `side` (112). */
+    const pictureOnly = renderFull({
+      ...BASE_MESSAGE,
+      content: '',
+      metadata: { sticker: { templateId: 'gabarit-inconnu' } },
+      attachments: [
+        {
+          id: 'a2',
+          messageId: BASE_MESSAGE.id,
+          fileName: 's.png',
+          originalName: 's.png',
+          mimeType: 'image/png',
+          fileSize: 4,
+          fileUrl: 'data:image/png;base64,AAAA',
+          uploadedBy: 'u-amina',
+          createdAt: new Date().toISOString(),
+          isViewOnce: false,
+          viewOnceCount: 0,
+          isBlurred: false,
+          viewedCount: 0,
+          downloadedCount: 0,
+          consumedCount: 0,
+          isEncrypted: false,
+          isForwarded: false,
+          isAnonymous: false,
+          capturedInApp: false,
+        },
+      ],
+    });
+    expect(pictureOnly).toContain('<img');
+    expect(pictureOnly).toContain('width="112"');
+    expect(pictureOnly).not.toContain('data-sticker-emoji');
+  });
+
+  test('(v) lieu : lien Plans nommé, aria-label composé', () => {
+    const html = renderFull({
+      ...BASE_MESSAGE,
+      content: '',
+      messageType: 'location',
+      metadata: { location: { latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel' } },
+    });
+    expect(html).toContain('href="https://maps.apple.com/?ll=48.85840,2.29450&amp;q=Tour%20Eiffel"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(html).toContain('aria-label="Position : Tour Eiffel"');
+  });
+
+  test('(vi) story citée : bouton armé seulement avec id ET onOpenStory', () => {
+    const messageWithStory: Message = {
+      ...BASE_MESSAGE,
+      storyReplyToId: 'p1',
+      metadata: { postReplyTo: { id: 'p1', type: 'STORY', moodEmoji: null, previewText: 'x', thumbnailUrl: null, createdAt: '' } },
+    };
+    const armed = renderFull(messageWithStory, () => {});
+    expect(armed).toContain('<button');
+    /* UN libellé, l'aperçu de scène compris (revue-correction #5936, défaut
+       majeur 8) — jamais un texte générique dont l'aperçu de story serait
+       absent, ce qui masquerait à VoiceOver la scène qu'iOS restitue. */
+    expect(armed).toContain('aria-label="réponse à sa story, x"');
+
+    const unarmed = renderFull(messageWithStory);
+    expect(unarmed).not.toContain('<button');
+    expect(unarmed).toContain('data-story-citation');
+
+    const emptyId: Message = {
+      ...BASE_MESSAGE,
+      storyReplyToId: 'p1',
+      metadata: { postReplyTo: { id: '', type: 'STORY', moodEmoji: null, previewText: '', thumbnailUrl: null, createdAt: '' } },
+    };
+    const emptyIdArmed = renderFull(emptyId, () => {});
+    expect(emptyIdArmed).not.toContain('<button');
+  });
+
+  test('(vii) transfert depuis un groupe SOUS le seuil : « Transféré » sans nom', () => {
+    const html = renderFull({
+      ...BASE_MESSAGE,
+      forwardedFromId: 'm-far',
+      forwardedFromConversation: { id: 'c1', title: 'Privé', type: 'group' },
+    });
+    expect(html).toContain('Transféré<');
+    expect(html).not.toContain('Privé');
+  });
+});
+
+/**
+ * REVUE-CORRECTION #5936 — LA TEINTE SUIT LA SURFACE, JAMAIS L'EXPÉDITEUR.
+ * `--color-meta-mine` vaut `white 70%` : elle n'est lisible que POSÉE SUR
+ * l'indigo de marque. La rangée plate n'a jamais de bulle — elle ne doit
+ * donc jamais la servir, quel que soit l'auteur.
+ */
+describe('FocalRow — « modifié » d’un message ENVOYÉ reste lisible', () => {
+  test('aucun blanc de bulle sur la rangée plate', () => {
+    const html = renderToStaticMarkup(
+      <FocalRow
+        mode="focal"
+        place={placeOf({ ...BASE_MESSAGE, senderId: 'u-viewer', isEdited: true })}
+        languages={['fr']}
+        viewerId="u-viewer"
+        onJumpToMessage={() => {}}
+      />,
+    );
+    expect(html).toContain('data-badge="edited"');
+    expect(html).not.toContain('var(--color-meta-mine)');
+  });
+});

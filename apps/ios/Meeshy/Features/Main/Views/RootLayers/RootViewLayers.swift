@@ -250,13 +250,15 @@ struct RootChromeLayer: ViewModifier {
                         activeConversationId: activeConversationId
                     )
                     // La remontée sous la Dynamic Island est RÉSERVÉE à la
-                    // conversation (#4066). 72 pt fixe compense le
-                    // floatingHeaderSection propre à ConversationView (compromis
-                    // assumé plutôt qu'un couplage à cet état privé, spec §C1).
+                    // conversation (#4066). En conversation, la pastille se pose
+                    // SOUS le chrome flottant (#5941) : `liftedTopPadding(base: 72)`
+                    // rendait toujours 0 — `topLift` vaut 88, la soustraction est
+                    // négative, la borne la ramène à zéro — et la bannière
+                    // recouvrait les boutons Appeler / Rechercher / Mode de lecture.
                     // Hors conversation, ce qui décide n'est pas un booléen mais
                     // ce que l'hôte courant DÉCLARE — `syncPillTopPadding` (#5944).
                     .padding(.top, router.currentConversationId != nil
-                        ? ConnectionBanner.liftedTopPadding(base: 72)
+                        ? ConnectionBanner.conversationTopPadding
                         : Self.syncPillTopPadding(currentRoute: router.currentRoute))
                 }
             }

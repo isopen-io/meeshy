@@ -4,6 +4,7 @@ import { parseMentions, type MentionParticipant } from '@meeshy/shared/utils/men
 
 import type { Message, Participant } from '@/lib/api/types';
 import { presenceOf } from '@/lib/view/conversation';
+import { isSystemMessage } from '@/lib/view/message-badges';
 
 import { buildDigest } from './digest';
 import { segmentEpisodes } from './episodes';
@@ -56,7 +57,10 @@ function episodeInput(message: Message): EpisodeInputMessage {
     senderId: message.senderId,
     createdAt: new Date(message.createdAt).getTime(),
     replyToId: message.replyToId ?? null,
-    isSystem: message.messageSource === 'system',
+    /* `isSystemMessage` (#5936, site UNIQUE) — remplace la lecture locale
+       `messageSource === 'system'`, qui manquait la notice de chiffrement
+       (`messageType:'system'` SEUL, `conversation-encryption.ts:252-259`). */
+    isSystem: isSystemMessage(message),
   };
 }
 

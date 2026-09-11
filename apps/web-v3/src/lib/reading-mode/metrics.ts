@@ -162,6 +162,17 @@ export const SCENE_ENTER_DURATION_MS = 250;
 /** `FocalMetrics.Pill.fadeDurationMs` — le fondu du révélé (heure, coches). */
 export const REVEAL_FADE_DURATION_MS = 280;
 
+/**
+ * LE STICKER (#5936) — DEUX sources Swift distinctes, comme la SCÈNE
+ * ci-dessus (PARTIE 2 vs PARTIE 4 de `check-curve.mjs`) : `Sticker.side`
+ * vit dans `FocalMetrics.swift:222-223` (rangée plate), `side`/`emojiBox`
+ * dans `BubbleSticker.swift:38,44` (bulle — HORS `FocalMetrics`, une
+ * SECONDE source que `check-curve.mjs` PARTIE 9 lit séparément).
+ */
+export const STICKER_SIDE = 112;
+export const BUBBLE_STICKER_SIDE = 160;
+export const STICKER_EMOJI_BOX = 60;
+
 /** `FocalScrollPerspective.FocalMagnificationLaw.sustainedScrollMs` / `.highVelocityThreshold`. */
 export const SUSTAINED_SCROLL_MS = 4000;
 export const HIGH_VELOCITY_THRESHOLD = 1200;

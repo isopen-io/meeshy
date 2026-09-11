@@ -180,6 +180,23 @@ final class ConversationSocketHandler {
     func activate() {
         guard !didActivate else { return }
         didActivate = true
+        // **L'oreille AVANT la question** (#5947). `joinConversation` pose au
+        // serveur la seule question dont la réponse dit « tu n'es plus membre » ;
+        // le puits qui l'écoute (`conversationJoinError`, plus bas dans
+        // `subscribeToSocket`) n'était armé qu'ensuite, par `loadMessages()`.
+        // Entre les deux : une lecture GRDB, le drain NSE, les réconciliations —
+        // bien plus que les ~90 ms d'aller-retour mesurés.
+        //
+        // `PassthroughSubject` ne rejoue RIEN. La réponse tombait donc dans le
+        // vide, et le mémo de `joinConversation` interdisait de reposer la
+        // question : une conversation dont le serveur avait retiré l'utilisateur
+        // restait ouverte, lisible et INSCRIPTIBLE, y compris après relance
+        // complète de l'app.
+        //
+        // L'armement est idempotent (`guard cancellables.isEmpty`) et ne coûte
+        // rien — c'est exactement l'argument qui l'avait déjà fait remonter
+        // avant la garde d'idempotence de `loadMessages` (#4943).
+        armSocketSubscriptions()
         messageSocket.joinConversation(conversationId)
         NotificationToastManager.shared.onConversationOpened(conversationId)
         NotificationCoordinator.shared.markConversationRead(conversationId)
@@ -198,8 +215,17 @@ final class ConversationSocketHandler {
         // il publie `onConversationClosed` et relance la boucle.
         if didActivate {
             leaveRoom()
+            // Capturé AVANT la `Task` : `deinit` est nonisolé et `self` ne
+            // survit pas à la fermeture — lire `conversationId` dedans ne
+            // compilerait pas, et le capturer implicitement retiendrait `self`.
+            let id = conversationId
             Task { @MainActor in
-                NotificationToastManager.shared.onConversationClosed()
+                // La conversation NOMMÉE (#5938) : cette `Task` est différée,
+                // donc elle peut s'exécuter APRÈS l'ouverture de la suivante.
+                // Sans son nom, elle effaçait la conversation où l'on venait
+                // d'entrer — et toutes ses notifications se remettaient à
+                // s'afficher par-dessus le fil qu'on lisait.
+                NotificationToastManager.shared.onConversationClosed(id)
             }
             if isEmittingTyping {
                 MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)

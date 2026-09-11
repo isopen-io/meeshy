@@ -13,6 +13,7 @@ import { useStore } from 'zustand/react';
 import '@/styles/thread-scene.css';
 import '@/styles/thread-protection.css';
 import '@/styles/thread-menu.css';
+import '@/styles/thread-system.css';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 

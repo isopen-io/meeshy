@@ -30,6 +30,7 @@ import { fileURLToPath } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
 import { checkThreadMedia } from './lib/check-media.mjs';
+import { checkMessageStates } from './lib/check-message-states.mjs';
 
 const DIST = join(fileURLToPath(new URL('..', import.meta.url)), 'dist');
 const TYPES = {
@@ -1000,6 +1001,16 @@ await runProtectionSuite('bulles');
  */
 await checkThreadMedia({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'focal', scheme: 'light' });
 await checkThreadMedia({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'bulles', scheme: 'dark' });
+
+/**
+ * 9 — LES ÉTATS DU MESSAGE (#5936) — `lib/check-message-states.mjs`, QUATRE
+ * runs : un badge se juge sur son propre fond, qui change avec la peau ET
+ * le schéma (contraste AA mesuré dans chacun des quatre).
+ */
+await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'focal', scheme: 'light' });
+await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'focal', scheme: 'dark' });
+await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'bulles', scheme: 'light' });
+await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'bulles', scheme: 'dark' });
 
 await browser.close();
 server.close();

@@ -171,6 +171,86 @@ final class MessageListViewControllerTests: XCTestCase {
         return store
     }
 
+    /// **Le ViewModel arrive APRÈS `viewDidLoad`, et ses observations ne se
+    /// rejouaient jamais** (#5947).
+    ///
+    /// `observeStore()` s'exécute une seule fois, au chargement de la vue. En
+    /// son MILIEU vit un `guard let vm = conversationViewModel else { return }`,
+    /// et tout ce qui suit dépend du ViewModel : le roster de frappe, les
+    /// traductions, les transcriptions, les audios traduits, les surcharges de
+    /// langue, les anneaux de story. Quand le ViewModel n'est pas encore posé à
+    /// cet instant, la fonction sort — et **rien ne la rappelle**.
+    ///
+    /// Mesuré au simulateur le 2026-09-10, en instrumentant le chemin complet :
+    /// la socket reçoit `typing:start`, le décodeur le rend, le puits du
+    /// handler s'exécute, le roster est publié avec un frappeur — et
+    /// l'abonnement de la VUE à ce roster n'avait jamais été créé. L'indicateur
+    /// de frappe ne pouvait donc apparaître dans AUCUNE conversation.
+    ///
+    /// L'abonnement d'AVANT le `guard` (`store.messagesDidChange`), lui,
+    /// existait : c'est ce qui rendait le défaut invisible — les messages
+    /// s'affichaient normalement.
+    func test_leViewModelPoseApresLeChargement_etablitQuandMemeSesObservations() async throws {
+        let store = try makeEmptyStore()
+        let vc = makeSUT(store: store)
+
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = vc
+        window.makeKeyAndVisible()
+        vc.view.layoutIfNeeded()   // viewDidLoad, ViewModel encore nil
+
+        XCTAssertFalse(
+            vc.didObserveConversationViewModel,
+            "Sans ViewModel, il n'y a rien à observer — c'est l'état de départ, pas le défaut."
+        )
+
+        vc.conversationViewModel = try await makeConversationViewModel()
+
+        XCTAssertTrue(
+            vc.didObserveConversationViewModel,
+            "Le ViewModel est arrivé après le chargement : ses observations doivent être établies, sinon frappe, traductions et transcriptions ne remontent JAMAIS."
+        )
+    }
+
+    /// La pose est IDEMPOTENTE : `updateUIViewController` réassigne le même
+    /// ViewModel à chaque passe de rendu SwiftUI, et un second abonnement
+    /// doublerait chaque re-snapshot.
+    func test_reposerLeMemeViewModelNAbonnePasUneSecondeFois() async throws {
+        let store = try makeEmptyStore()
+        let vc = makeSUT(store: store)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = vc
+        window.makeKeyAndVisible()
+        vc.view.layoutIfNeeded()
+
+        let vm = try await makeConversationViewModel()
+        vc.conversationViewModel = vm
+        let apresPremiere = vc.conversationViewModelObservationCount
+        vc.conversationViewModel = vm
+        vc.conversationViewModel = vm
+
+        XCTAssertEqual(vc.conversationViewModelObservationCount, apresPremiere)
+    }
+
+    private func makeConversationViewModel() async throws -> ConversationViewModel {
+        let auth = MockAuthManager()
+        auth.simulateLoggedIn(user: MeeshyUser(id: "user_me", username: "moi", displayName: "Moi"))
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        return ConversationViewModel(
+            conversationId: "c1",
+            authManager: auth,
+            messageService: MockMessageService(),
+            conversationService: MockConversationService(),
+            reactionService: MockReactionService(),
+            reportService: MockReportService(),
+            messageSocket: MockMessageSocket(),
+            dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)),
+            networkMonitor: FakeNetworkMonitor(isOnline: true),
+            offlineQueue: FakeOfflineMessageQueue()
+        )
+    }
+
     private func makeSUT(store: MessageStore) -> MessageListViewController {
         MessageListViewController(
             store: store,

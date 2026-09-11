@@ -313,7 +313,30 @@ final class MessageListViewController: UIViewController {
     /// must not retain its parent's state. When nil (deallocating), cells
     /// render with empty translation state — the next `applySnapshot` after
     /// re-attachment will refresh them.
-    weak var conversationViewModel: ConversationViewModel?
+    /// **Le ViewModel peut arriver APRÈS `viewDidLoad`** (#5947). Toutes les
+    /// observations qui en dépendent vivaient derrière un `guard let` au milieu
+    /// d'`observeStore()`, appelée une seule fois au chargement : quand il
+    /// n'était pas encore posé, la fonction sortait et **rien ne la rappelait**.
+    /// Le roster de frappe, les traductions, les transcriptions, les audios
+    /// traduits et les anneaux de story n'étaient alors JAMAIS observés — sans
+    /// le moindre signe, l'abonnement d'avant le `guard` continuant de rendre
+    /// les messages.
+    weak var conversationViewModel: ConversationViewModel? {
+        didSet {
+            guard isViewLoaded else { return }
+            observeConversationViewModel()
+        }
+    }
+
+    /// `true` une fois les observations dépendantes du ViewModel établies.
+    /// Porte l'idempotence — `updateUIViewController` réassigne le même
+    /// ViewModel à chaque passe de rendu SwiftUI — et donne aux témoins un état
+    /// à interroger plutôt qu'une chaîne de source.
+    private(set) var didObserveConversationViewModel = false
+
+    /// Combien de fois les observations ont été RÉELLEMENT établies. Un second
+    /// abonnement doublerait chaque re-snapshot ; le témoin le garde.
+    private(set) var conversationViewModelObservationCount = 0
 
     // MARK: - Mode de lecture rendu (Script/bulles)
 
@@ -539,7 +562,7 @@ final class MessageListViewController: UIViewController {
     /// sous `ignoresSafeArea`, SwiftUI ne propage plus l'inset au contrôleur
     /// hébergé, la vue croirait la bande inexistante et poserait la pill de
     /// jour sous l'îlot.
-    private var topInset: CGFloat = 0
+    private(set) var topInset: CGFloat = 0
 
     /// Réserve, AU REPOS, la hauteur de cette bande. Liste inversée : le HAUT
     /// visuel est `contentInset.bottom`. Le contenu la TRAVERSE au défilement
@@ -553,11 +576,11 @@ final class MessageListViewController: UIViewController {
 
     private func applyTopInsetToViews() {
         guard collectionView != nil else { return }
-        // RETRAIT FOCAL iOS (2026-08-18) : plus d'inset de tête §4.5 — le
-        // HAUT visuel ne réserve que la bande îlot/barre d'état.
-        if collectionView.contentInset.bottom != topInset {
-            collectionView.contentInset.bottom = topInset
-            collectionView.verticalScrollIndicatorInsets.bottom = topInset
+        // Rangée plate : le repos réserve la rangée de l'en-tête (#6013).
+        let restTop = topInset + ThreadChromeFade.headClearance(usesFlatRow: readingMode.usesFlatRow)
+        if collectionView.contentInset.bottom != restTop {
+            collectionView.contentInset.bottom = restTop
+            collectionView.verticalScrollIndicatorInsets.bottom = restTop
         }
         // INCHANGÉ — garde source ConversationTopChromeFadeTests:119
         stickyDayTopConstraint?.constant = topInset + MessageDayStickyPlacement.topOffset
@@ -1038,7 +1061,7 @@ final class MessageListViewController: UIViewController {
         // the oldest (visual top). We handle status-bar taps manually if needed.
         collectionView.scrollsToTop = false
         collectionView.delegate = self
-        view.addSubview(collectionView)
+        view.addSubview(ThreadChromeFadeContainer(hosting: collectionView))
     }
 
     // MARK: - Groupe de rangées (Script/Focal, #3919)
@@ -2280,7 +2303,17 @@ final class MessageListViewController: UIViewController {
         // up. Coalesce by 80ms to absorb multilingual bursts (the SDK
         // already collects translation events on that interval, so two
         // collapsed re-snapshots is the worst case).
+        observeConversationViewModel()
+    }
+
+    /// Les observations qui EXIGENT un ViewModel. Extraites d'`observeStore()`
+    /// (#5947) pour être rappelables : la seule chose qui manquait au `guard`
+    /// d'origine était quelqu'un pour le rejouer quand la dépendance arrive.
+    private func observeConversationViewModel() {
+        guard !didObserveConversationViewModel else { return }
         guard let vm = conversationViewModel else { return }
+        didObserveConversationViewModel = true
+        conversationViewModelObservationCount += 1
 
         observePerMessageDictionary(vm.$messageTranslations, initial: vm.messageTranslations)
         observePerMessageDictionary(vm.$messageTranscriptions, initial: vm.messageTranscriptions)

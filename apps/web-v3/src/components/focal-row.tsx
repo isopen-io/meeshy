@@ -2,6 +2,8 @@ import { memo } from 'react';
 
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
+import { badgesOf, editedOf, ephemeralBadgeOf, systemRowOf } from '@/lib/view/message-badges';
+import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, presenceOf } from '@/lib/view/conversation';
 import { served } from '@/lib/api/prism';
 import type { PlacedMessage } from '@/lib/grouping';
@@ -17,6 +19,7 @@ import {
   META_TEXT_OPACITY,
   ROW_PADDING_HORIZONTAL,
   ROW_PADDING_VERTICAL,
+  STICKER_SIDE,
   TEXT_INDENT,
 } from '@/lib/reading-mode/metrics';
 
@@ -25,9 +28,13 @@ import { Attachments } from './attachment-blocks';
 import { FocusCard, FocusIdentity, FocusStamp, FocusStrip } from './focal-focus-overlays';
 import { GlyphSvg } from './glyph';
 import { THREAD_IDENTITY_GLYPHS } from './glyphs-thread-identity';
+import { EmojiOnly, LocationCard, StickerArtwork, StoryCitationCard } from './message-body-blocks';
 import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
+import { SystemNotice } from './system-notice';
 import {
+  Badges,
   Check,
+  EditedMark,
   FailedSendBand,
   Flags,
   PrismPastille,
@@ -106,6 +113,7 @@ export const FocalRow = memo(function FocalRow({
   sendFailureReason,
   onRetry,
   onJumpToMessage,
+  onOpenStory,
   highlighted = false,
   elected = false,
   expired = false,
@@ -165,6 +173,12 @@ export const FocalRow = memo(function FocalRow({
   onRetry?: () => void;
   /** Saute au message cité (défaut #5566 défaut 10 : le bouton ne faisait rien). */
   onJumpToMessage: (messageId: string) => void;
+  /**
+   * Ouvre la story citée (#5936) — `undefined` ⇒ la carte se rend quand même
+   * (« la citation qui subsiste »), mais AUCUN geste ne s'arme (loi 4,
+   * `StoryCitationCard`) : aucune route story n'existe encore côté hôte.
+   */
+  onOpenStory?: (messageId: string) => void;
   /** Mis en évidence brièvement après un saut de citation. */
   highlighted?: boolean;
   /** Élue par la scène du fil (`reading-mode/scene.ts`) — Focal seul, jamais Script. */
@@ -192,6 +206,35 @@ export const FocalRow = memo(function FocalRow({
   // (`data-message`) pour que les gates puissent constater l'absence.
   if (kind === 'expired') {
     return <div data-reading-mode={mode} data-message={message.id} data-protected="expired" />;
+  }
+
+  /**
+   * LA RANGÉE SYSTÈME (#5936) — testée AVANT la protection (« un message
+   * système est système AVANT d'être supprimé »,
+   * `BubbleContentBuilder.swift:52`) : `FocalSystemRows.swift`, rangée PLATE
+   * centrée SUR LES DEUX COLONNES (`FocalSystemNoticeRow` n'a pas de
+   * retrait, contrairement à une parole ordinaire), sans avatar ni identité
+   * ni colonne méta.
+   */
+  const systemRow = systemRowOf(message);
+  if (systemRow !== null) {
+    return (
+      <div
+        data-reading-mode={mode}
+        data-message={message.id}
+        className="grid"
+        style={{
+          gridTemplateColumns: `${TEXT_INDENT}px 1fr`,
+          paddingInline: ROW_PADDING_HORIZONTAL,
+          paddingBlockStart: head ? GROUP_TOP_PADDING : ROW_PADDING_VERTICAL,
+          paddingBlockEnd: ROW_PADDING_VERTICAL,
+        }}
+      >
+        <div style={{ gridColumn: '1 / -1' }}>
+          <SystemNotice row={systemRow} timeString={time(message.createdAt)} surface="row" />
+        </div>
+      </div>
+    );
   }
 
   /**
@@ -364,6 +407,32 @@ export const FocalRow = memo(function FocalRow({
 
   const ephemeral = ephemeralOf(message.expiresAt, nowMs);
 
+  /**
+   * LES BADGES DE TÊTE (#5936) — `badgesOf` porte l'ORDRE complet
+   * (épinglé, transféré, éphémère, modifié) ; `Badges` n'en peint que les
+   * deux premiers (l'éphémère reste `EphemeralBadge`, « modifié »
+   * `EditedMark` — chacun a sa propre place, § doc-comment de `Badges`).
+   *
+   * `ephemeralBadge`/`isEdited` LISENT CETTE SORTIE, jamais `message.expiresAt`
+   * / `message.isEdited` en direct (revue-correction #5936, défaut majeur 1) —
+   * sans quoi la moitié de ce que `badgesOf` calcule n'atteignait aucun
+   * pixel, et rien ne garantissait plus que la rangée montre exactement ce
+   * que la loi a décidé.
+   */
+  const badges = badgesOf(message, nowMs);
+  const ephemeralBadge = ephemeralBadgeOf(badges);
+  const isEdited = editedOf(badges);
+
+  /**
+   * LE CORPS (#5936) — `textOrEmojiBlock` (`FocalRow.swift:604-615`) :
+   * story citée à la place de la citation ordinaire, pièce jointe SAUF
+   * sticker (le PNG joint EST le sticker), lieu, puis sticker → emoji seul
+   * → texte, dans cet ordre.
+   */
+  const storyCitation = storyCitationOf(message);
+  const sharedPlace = placeOf(message);
+  const body = bodyKindOf(message);
+
   const contentBlock = (
     <>
       {/* `isMine={false}` DÉLIBÉRÉMENT, et ce n'est pas un oubli : la peau
@@ -373,10 +442,17 @@ export const FocalRow = memo(function FocalRow({
           devenait du blanc sur du blanc en schéma clair, donc INVISIBLE
           (mesuré : contraste 1,0:1). Une peau ne se choisit pas sur
           l'expéditeur mais sur la SURFACE qui la porte. */}
-      {message.replyTo ? (
+      {storyCitation !== null ? (
+        <StoryCitationCard
+          citation={storyCitation}
+          accent="var(--accent)"
+          now={new Date(nowMs)}
+          {...(onOpenStory === undefined ? {} : { onOpen: onOpenStory })}
+        />
+      ) : message.replyTo ? (
         <Quote quote={message.replyTo} isMine={false} onJump={() => onJumpToMessage(message.replyTo!.id)} />
       ) : null}
-      {message.attachments ? (
+      {message.attachments && body.kind !== 'sticker' ? (
         <Attachments
           attachments={message.attachments}
           languages={languages}
@@ -384,8 +460,13 @@ export const FocalRow = memo(function FocalRow({
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}
+      {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" /> : null}
 
-      {rendered.text ? (
+      {body.kind === 'sticker' ? (
+        <StickerArtwork sticker={body.sticker} picture={body.picture} side={STICKER_SIDE} />
+      ) : body.kind === 'emoji-only' ? (
+        <EmojiOnly text={body.text} fontSize={body.fontSize} />
+      ) : rendered.text ? (
         <p
           className="text-bubble leading-[1.35] whitespace-pre-wrap"
           lang={rendered.language}
@@ -501,13 +582,17 @@ export const FocalRow = memo(function FocalRow({
           <FocusIdentity initials={initialsOf(senderAvatarName)} name={senderName} accent="var(--accent)" />
         ) : null}
 
+        {/* LES BADGES DE TÊTE — épinglé, transféré (#5936) — AU-DESSUS de
+            l'identité, `FocalRow.swift:233`. */}
+        <Badges badges={badges} />
+
         {/* LE BADGE ÉPHÉMÈRE — AU-DESSUS de l'identité (F11,
             `FocalEphemeralBadge.swift:22-37`, `FocalRow.swift:365-376`),
             monté SEULEMENT quand le minuteur tourne. Tient SON PROPRE
             intervalle (`memo`) — cette rangée ne re-rend jamais pour lui. */}
-        {ephemeral.state === 'running' && message.expiresAt !== undefined ? (
+        {ephemeral.state === 'running' && ephemeralBadge !== undefined ? (
           <EphemeralBadge
-            expiresAt={message.expiresAt}
+            expiresAt={ephemeralBadge.expiresAt}
             now={now}
             onExpired={() => onEphemeralExpired?.(message.id)}
           />
@@ -683,6 +768,28 @@ export const FocalRow = memo(function FocalRow({
               </div>
             ) : null}
           </div>
+
+          {/* « MODIFIÉ » — HORS DU RÉVÉLÉ, et c'est la loi iOS elle-même
+              (revue-correction #5936). `FocalMetaRow.body`
+              (`FocalMetaRow.swift:83-99`) compose
+              `HStack { Spacer · editedIndicator · stamp · checks }` : SEULS
+              le tampon (`FocalRevealedTime`) et les coches
+              (`FocalRevealedDetail`) sont gatés par le révélé —
+              `editedIndicator` ne l'est PAS, et le doc-comment du fichier le
+              dit mot pour mot (« F-083ter — F10, libellé « modifié »
+              visible … l'œil le voit désormais aussi »). Monté DANS
+              `.focal-meta`, il héritait de `opacity: 0`
+              (`thread-scene.css:39-43`) et de l'`opacity: 0 !important` de
+              la rangée ÉLUE (`:51-61`) : présent au DOM, mesurable au
+              contraste, INVISIBLE à l'œil — la forme la plus fréquente de
+              défaut du dépôt. Il vit donc dans SA propre boîte, sœur de la
+              colonne méta et posée juste avant elle, comme sur iOS.
+              `aria-hidden` : `composeMessageLabel` porte déjà « modifié ». */}
+          {isEdited ? (
+            <div className="flex shrink-0 items-center pb-0.5" aria-hidden>
+              <EditedMark onBrandBubble={false} />
+            </div>
+          ) : null}
 
           {/* LA COLONNE MÉTA — heure puis accusé, sur CHAQUE rangée (défaut
               6). `Check` est déjà silencieux (`isMine === false` ⇒ `null`) :

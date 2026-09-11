@@ -16,6 +16,7 @@ import type { useLongPress } from '@/lib/view/long-press';
 import { checkStatusOf, isMineOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
 import { composeMessageLabel } from '@/lib/view/message-a11y-label';
+import { isSystemMessage } from '@/lib/view/message-badges';
 import { served } from '@/lib/api/prism';
 import type { SelectionState } from '@/lib/view/selection';
 import { usesFlatRow } from '@/lib/reading-mode/decision';
@@ -306,14 +307,30 @@ export function ThreadModes({
                   la COCHE de la rangée : un `role="checkbox"` réel, seul
                   chemin CLAVIER vers la bascule. Le clic sur la rangée
                   ENTIÈRE reste une commodité de souris/doigt. */}
+              {/* UN MESSAGE SYSTÈME NE PORTE NI `data-row`, NI `tabIndex`, NI
+                  LES GESTIONNAIRES D'APPUI LONG (revue-correction #5936,
+                  défaut BLOQUANT 4) — `data-row` est l'ANCRE que
+                  `useMessageMenu.openMenuFor` lit (`anchor.element.dataset
+                  .row`) et le CANDIDAT d'élection de la scène (§ doc-comment
+                  ci-dessus) : sans lui, aucun des deux n'atteint une rangée
+                  système, exactement comme iOS délègue les rangées système à
+                  `FocalSystemRows.view(…)`, jamais au menu de message
+                  (`FocalRow.swift:131-141`). Un appui long y ouvrait le MÊME
+                  menu « 😂 ❤️ 👍 😮 😢 🔥 ＋ · Sélectionner · Copier ·
+                  Composer · Plus… » qu'une prise de parole — dont AUCUN
+                  bouton n'avait d'effet (loi 4 prise en défaut : « un
+                  contrôle existe s'il a un EFFET »). Le geste propre à un
+                  résumé d'appel (détail d'appel, iOS) reste HORS tranche —
+                  ce lot fait seulement SORTIR les rangées système de la
+                  surface de gestes du message. `isSystemMessage` est le
+                  SITE UNIQUE de cette loi (`lib/view/message-badges.ts`),
+                  déjà consommé par `systemRowOf`/`composeMessageLabel`. */}
               <div
-                data-row={p.message.id}
-                tabIndex={0}
+                {...(isSystemMessage(p.message) ? {} : { 'data-row': p.message.id, tabIndex: 0, ...longPress })}
                 role="article"
                 aria-label={rowLabel}
                 {...(rowServed.language === '' ? {} : { lang: rowServed.language })}
                 {...(rowSelected === undefined ? {} : { onClick: () => onRowTap(p.message.id) })}
-                {...longPress}
               >
                 {usesFlatRow(mode) ? (
                   <FocalRow

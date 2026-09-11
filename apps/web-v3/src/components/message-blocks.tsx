@@ -2,11 +2,14 @@ import { useEffect, useState, type ReactElement } from 'react';
 
 import type { Message } from '@/lib/api/types';
 import type { Delivery } from '@/lib/view/message';
+import { forwardLabelOf, type MessageBadge } from '@/lib/view/message-badges';
 import { languageColor, flag, languageName } from '@/lib/languages';
+import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
 
-import { Glyph } from './glyph';
+import { Glyph, GlyphSvg } from './glyph';
 import type { GlyphName } from './glyphs';
+import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
 
 /**
  * LES BLOCS DE CONTENU D'UN MESSAGE — extraits de `bubble.tsx` (#5566, étape 0
@@ -306,6 +309,137 @@ export function Flags({
 // le texte SERVI). La portée PAR GROUPE (iOS l'applique à toute la suite,
 // web-v3 reste par rangée) demeure un écart ASSUMÉ, tracé en dehors de ce
 // lot (`targets/focal-script.md` § 10 écart 4).
+
+/**
+ * LES BADGES DE TÊTE — épinglé, transféré (#5936). Miroir
+ * `FocalRow.badgesSection` / `BubbleStandardLayout` : deux peaux, un seul
+ * rendu — la loi qui les ORDONNE et les CALCULE vit dans `badgesOf`
+ * (`lib/view/message-badges.ts`), ce composant ne fait qu'AFFICHER ce
+ * qu'elle rend.
+ *
+ * `ephemeral` et `edited` (aussi présents dans `badgesOf`, pour que l'ORDRE
+ * complet d'un message reste décidé à UN site) ne sont PAS peints ici :
+ * `ephemeral` reste porté par `EphemeralBadge` (son propre minuteur,
+ * `protected-content.tsx`, monté par chaque peau juste au-dessus de ces
+ * badges) et `edited` par `EditedMark` ci-dessous (méta côté rangée plate,
+ * inline côté bulle — jamais un badge de tête sur aucune des deux peaux,
+ * `FocalMetaRow.swift:86`, `BubbleStandardLayout.swift:1064-1066`).
+ *
+ * `isMine`/`surface` n'entrent PAS dans la signature (bien que le brief les
+ * nomme) : ni `BubblePinnedIndicator` ni `BubbleForwardedIndicator` ne
+ * varient sur l'un ou l'autre (lu dans `ForwardBadgePolicy.swift` et
+ * `BubbleMetaBadges.swift` — `isMe` y est déclaré mais jamais lu par le
+ * corps), et `noUnusedParameters` (`tsconfig.json`) refuse un paramètre
+ * mort.
+ *
+ * LA TEINTE (revue-correction #5936, défaut majeur 9) — CHAQUE badge reprend
+ * la teinte iOS DE SA PROPRE SOURCE, jamais l'indigo de marque emprunté à un
+ * AUTRE objet (`--color-day-ink` est le jeton du SÉPARATEUR DE JOUR — un
+ * essai précédent l'avait servi ici pour contourner un défaut AA, ce que la
+ * revue a refusé au regard de D-1) :
+ * - épinglé — `--ios-pinned` sur le GLYPHE **et** le TEXTE, mono-teinte
+ *   (`BubbleMetaBadges.swift:78-85`, `MeeshyColors.pinnedBlue` entier) ;
+ * - transféré — `--color-ios-ink-3` (le cran `textMuted` DÉJÀ dérivé,
+ *   `generate-from-ios.mjs:348/375`), miroir `theme.textMuted`
+ *   (`BubbleMetaBadges.swift:111-118`) ;
+ * - modifié — voir `EditedMark`, le cran MÉTA (`textSecondary.opacity(0.5)`).
+ *
+ * `--ios-pinned` (#3b82f6) mesure 3,68:1 en clair sur le fond de rangée —
+ * sous la barre AA de 4,5:1 pour du texte de 11 px. Aucun cran plus sombre
+ * n'existe côté Swift pour ce bleu (constante UNIQUE, theme-invariant,
+ * aucune rampe 600-900) : en inventer un QUATRIÈME jeton web-v3 divergerait
+ * de la palette DÉRIVÉE (D-4) plutôt que de réparer sa source. Écart CONNU
+ * de la cible iOS elle-même (comme `textSecondary.opacity(0.5)` pour
+ * « modifié », voir `EditedMark`) — issue compagnon #6010 sur le JETON iOS,
+ * pas un raccourci pris dans web-v3.
+ */
+export function Badges({ badges }: { readonly badges: readonly MessageBadge[] }) {
+  const head = badges.filter((badge) => badge.kind === 'pinned' || badge.kind === 'forwarded');
+  if (head.length === 0) return null;
+  return (
+    /* `aria-hidden` (revue #5936, défaut majeur 8) — CE QUE CES BADGES
+       DISENT EST DÉJÀ DANS `rowLabel` (`composeMessageLabel`, « … modifié,
+       épinglé, transféré depuis X »), exactement comme le `<p>` de texte
+       voisin ou la colonne méta : sans ce masque, un lecteur d'écran
+       prononçait « épinglé » et « transféré depuis Salon » DEUX FOIS par
+       message. */
+    <div data-badges className="flex flex-wrap items-center gap-1" aria-hidden>
+      {head.map((badge) =>
+        badge.kind === 'pinned' ? (
+          <span
+            key="pinned"
+            data-badge="pinned"
+            className="flex items-center gap-1 text-check font-medium"
+            style={{ color: 'var(--ios-pinned)' }}
+            aria-label="Message épinglé"
+          >
+            <Glyph name="pushPin" size={11} style={{ transform: 'rotate(45deg)' }} />
+            épinglé
+          </span>
+        ) : (
+          <em
+            key="forwarded"
+            data-badge="forwarded"
+            className="line-clamp-1 flex items-center gap-1 text-check italic"
+            style={{ color: 'var(--color-ios-ink-3)' }}
+          >
+            <GlyphSvg glyph={THREAD_STATES_GLYPHS.arrowBendUpRight} size={11} />
+            {forwardLabelOf(badge.attribution)}
+          </em>
+        ),
+      )}
+    </div>
+  );
+}
+
+/**
+ * « MODIFIÉ » — `BubbleMetaBadges.swift:13-61` : glyphe crayon + texte
+ * italique, teinte MÉTA (blanche 60 % sur ma bulle, `--color-meta` sinon).
+ * Côté rangée plate elle vit dans `.focal-meta`, AVANT `<time>`
+ * (`FocalMetaRow.swift:86`) ; côté bulle, INLINE dans le corps, entre la
+ * citation et le texte (`BubbleStandardLayout.swift:1064-1066`) — chaque
+ * peau choisit où la monter, ce composant ne fait que la DESSINER.
+ */
+export function EditedMark({ onBrandBubble }: { readonly onBrandBubble: boolean }) {
+  /* LA SURFACE DÉCIDE, PAS L'EXPÉDITEUR (revue-correction #5936).
+     `--color-meta-mine` vaut `white 70%` (`ios.css:99`, dérivé de
+     `BubbleFooter.swift:283`) : elle n'est AA que posée SUR l'indigo de
+     marque. Un `isMine` la servait aussi à la rangée PLATE (qui n'a jamais
+     de bulle) et au corps NU d'un emoji seul ou d'un sticker (qui sort de la
+     boîte) — blanc sur fond clair, mesuré 1,3:1. iOS le tranche au même
+     endroit : `BubbleFooter.compactMetaColor` (`:62-66`) sert « la couleur
+     meta neutre quel que soit isMe » dès que le pied s'affiche hors d'une
+     bulle.
+     SINON (revue #5936, défaut majeur 9) : le cran MÉTA — `--color-ios-ink-2`
+     (`textSecondary`) à `META_TEXT_OPACITY` (0,55, la même cote que
+     `.focal-meta`, `reading-mode/metrics.ts`) — miroir
+     `theme.textSecondary.opacity(0.5)` (`BubbleMetaBadges.swift:19-21`),
+     JAMAIS `--color-day-ink` (le jeton du séparateur de JOUR, emprunté par
+     un essai précédent pour contourner ce même défaut AA — refusé en revue :
+     un badge n'emprunte pas la teinte d'un AUTRE objet). Ce cran mesure
+     3,98:1 en clair — sous AA, mais c'est la valeur EXACTE qu'iOS porte
+     (aveu `FocalMetaRow.swift:16-24`) : un écart CONNU de la cible, pas un
+     raccourci de web-v3 — issue compagnon #6010 sur le JETON. */
+  /* `aria-hidden` (revue #5936, défaut majeur 8) — « modifié » est déjà dans
+     `rowLabel` (`composeMessageLabel`) : la rangée plate le masquait déjà,
+     la bulle ne le faisait pas — asymétrie corrigée en posant le masque ICI,
+     au site UNIQUE des deux peaux, plutôt qu'à chaque appelant. */
+  return (
+    <span
+      data-badge="edited"
+      aria-hidden
+      className="flex items-center gap-1 text-check italic"
+      style={
+        onBrandBubble
+          ? { color: 'var(--color-meta-mine)' }
+          : { color: 'var(--color-ios-ink-2)', opacity: META_TEXT_OPACITY }
+      }
+    >
+      <GlyphSvg glyph={THREAD_STATES_GLYPHS.pencilSimple} size={11} />
+      modifié
+    </span>
+  );
+}
 
 export function Quote({
   quote,

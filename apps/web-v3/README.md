@@ -61,6 +61,17 @@ change (base relative, service worker retiré). C'est la condition pour que
 Rejouer : `bun run gate`, `node scripts/check-offline.mjs`,
 `node scripts/capture.mjs` (captures dans `render/`, non versionnées).
 
+Mesuré au 2026-09-10 (`node scripts/check-offline.mjs` contre `vite preview`) :
+
+| visite | réseau | cache SW |
+|---|---|---|
+| 1 (froide) | 11 req · 125,3 Ko | 0 req · 0 octet |
+| 2 (SW installé) | 0 req · 0 octet | 11 req · 127,8 Ko |
+| 3 (hors ligne) | — | fil ouvert, titre « Meeshy Chats » |
+
+Precache PWA (variante A, `dist/`) : **50 entrées, 720,96 KiB** — mesuré par
+le même gate, jamais un chiffre du manifest Workbox lu à l'œil.
+
 Les captures figent l'horloge de la page (`page.clock.setFixedTime`) : sans
 ça, deux captures du même code diffèrent par leurs horodatages et comparer un
 rendu avant/après devient impossible.
@@ -290,6 +301,22 @@ Rejouer : `VITE_DATA_SOURCE=gateway bun run build && node
 scripts/check-gateway-build.mjs` pour le poids et la garde de session ; le
 délai se rejoue à la main (`curl -w '%{time_total}'`) contre un compte de
 recette staging — aucun gate n'y dépend, voir `decisions.md` § D-26.
+
+**Poids par morceau, mesuré au 2026-09-10** (`dist-gateway/`, construction
+`gateway` réelle, après D-33/D-34) :
+
+| morceau | brut | gzip |
+|---|---|---|
+| `index-*.js` | 17,35 Ko | 6,85 Ko |
+| `core-*.js` | 60,47 Ko | 19,65 Ko |
+| `use-reader-*.js` | 37,67 Ko | 13,97 Ko |
+| `conversations-*.js` | 32,78 Ko | 12,00 Ko |
+| `thread-*.js` | 108,44 Ko | 34,87 Ko |
+
+`thread-*.js` porte tout le lot chrome (D-33) et badges/corps de message
+(D-34) — sa croissance depuis la mesure `#5650` ci-dessus est attendue et
+reste dans le chunk du fil, jamais dans `core`/`index` (vérifié par `grep`
+des marqueurs `data-elected`/`data-identity`/`badges-of` dans chaque morceau).
 
 ## L'interface
 

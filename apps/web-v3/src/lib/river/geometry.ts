@@ -37,6 +37,7 @@ import {
 } from '@meeshy/shared/utils/river-lanes';
 
 import type { Message } from '@/lib/api/types';
+import { isSystemMessage } from '@/lib/view/message-badges';
 
 export type RiverLanesOptions = {
   readonly silenceWindowMs?: number;
@@ -48,9 +49,13 @@ export type RiverLanesOptions = {
   readonly dayBoundaryOffsetMinutes?: number;
 };
 
-/** Une VOIX : ni un avis système, ni un message supprimé. Miroir de `RiverConversationMapping.isVoice`. */
-export const isRiverVoice = (message: Message): boolean =>
-  message.messageSource !== 'system' && message.deletedAt === undefined;
+/**
+ * Une VOIX : ni un avis système, ni un message supprimé. Miroir de
+ * `RiverConversationMapping.isVoice`. `isSystemMessage` (#5936, site UNIQUE)
+ * remplace la lecture locale `messageSource === 'system'` — qui manquait la
+ * notice de chiffrement (`messageType:'system'` SEUL).
+ */
+export const isRiverVoice = (message: Message): boolean => !isSystemMessage(message) && message.deletedAt === undefined;
 
 /** Miroir de `RiverConversationMapping.displayName(of:)` — `senderName ?? senderUsername ?? senderId` devient `sender?.displayName ?? senderId`. */
 export const riverDisplayName = (message: Message): string => message.sender?.displayName ?? message.senderId;
@@ -93,7 +98,7 @@ export function riverLanesInput(
       senderId: message.senderId,
       createdAt: message.createdAt,
       replyToMessageId: message.replyToId ?? null,
-      isSystem: message.messageSource === 'system',
+      isSystem: isSystemMessage(message),
     })),
     participants: riverParticipants(ranked),
     viewerId,
