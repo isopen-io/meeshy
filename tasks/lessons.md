@@ -30342,6 +30342,20 @@ dans son doc-comment :
 > `.gitignore`. Le commit qui annule la vérification est celui dont on est le
 > plus sûr.
 
+**Troisième forme, constatée deux heures plus tard dans la même session, et la
+plus insidieuse des trois : METTRE SA BRANCHE À JOUR suffit.** `git merge dev`
+crée un commit dont le sujet est « Merge origin/dev into <branche> » — aucun
+mot-clé, et il devient la tête. On n'a rien poussé de neuf ; on a seulement
+intégré `dev`, c'est-à-dire fait exactement ce qu'on demande à un lot avant de
+le fusionner. La PR retombe en compile-seule au moment précis où elle contient
+le plus de code qu'elle n'a jamais testé — celui des lots qu'on vient
+d'intégrer.
+
+> Les trois formes ont la même racine : **l'adhésion est portée par le SUJET du
+> dernier commit, et le dernier commit d'une branche saine est presque toujours
+> un commit qu'on n'a pas rédigé pour lui-même** — une leçon, un correctif de
+> commentaire, un merge de mise à jour.
+
 Parades, dans l'ordre de fiabilité :
 
 1. mettre le mot-clé au sujet de **chaque** commit d'un lot qui en a besoin —
