@@ -248,7 +248,7 @@ export function resolveLastMessagePreview(params: {
  *
  * IL VIT ICI, ET PLUS DANS `apps/web`. Il y a été écrit d'abord, avec la
  * mention « SSOT UNIQUE de cet adaptateur CÔTÉ WEB » — une portée qui était
- * juste tant qu'une seule application lisait des messages. `apps/web-v3` en est
+ * juste tant qu'une seule application lisait des messages. `apps/web-v2` en est
  * la seconde : l'y recopier aurait fabriqué la jumelle que le § Prisme du
  * `CLAUDE.md` racine passe son temps à démonter, et une jumelle d'ADAPTATEUR est
  * la plus sournoise — elle ne dit pas la règle, elle décide seulement quelles

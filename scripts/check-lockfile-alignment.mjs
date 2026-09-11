@@ -28,7 +28,7 @@
 // La première écriture itérait les workspaces que `bun.lock` connaît DÉJÀ, puis
 // lisait leur manifeste. Un manifeste que le lock n'a jamais vu n'était donc
 // contrôlé par personne — le sens « manifeste → lock », c'est-à-dire le sens
-// que le critère de fin nomme. Ce n'était pas théorique : `apps/web-v3` était
+// que le critère de fin nomme. Ce n'était pas théorique : `apps/web-v2` était
 // exactement dans cet état, et le garde certifiait « aligné ».
 //
 // Les deux sens ensemble ont un effet de bord voulu : un `bun.lock` commité

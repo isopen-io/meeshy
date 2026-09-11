@@ -307,8 +307,13 @@ extension MeeshyComposerHost {
             // seconde existe. L'inverse ferait clignoter la pastille.
             let duree = fond?.duration.map { Int($0 * 1000) }
             viewModel.deleteElement(id: id)
-            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
-                url: url, declaredMimeType: "audio/mp4", durationMs: duree))
+            // `.abandonne` : un son ne se pose sur aucune scène — la boucle de
+            // placement saute l'audio (`where media.kind != .audio`). Une
+            // intention du rail encore armée ici est donc périmée, et la laisser
+            // vivre la ferait s'appliquer au média VISUEL d'après (#6008).
+            ecrireDansLaListeDuDocument([ComposerDocumentMediaFactory.media(
+                url: url, declaredMimeType: "audio/mp4", durationMs: duree)],
+                rail: .abandonne)
         }
     }
 
@@ -724,8 +729,10 @@ extension MeeshyComposerHost {
                 case .sceneChip:
                     viewModel.attachPastedAudio(url: destination, role: .foreground)
                 case .contentCard:
-                    documentLocalMedia.append(ComposerDocumentMediaFactory.media(
-                        url: destination, declaredMimeType: "audio/mp4"))
+                    // `.abandonne`, même raison que la démotion du fond (#6008).
+                    ecrireDansLaListeDuDocument([ComposerDocumentMediaFactory.media(
+                        url: destination, declaredMimeType: "audio/mp4")],
+                        rail: .abandonne)
                 }
             }
             HapticFeedback.light()

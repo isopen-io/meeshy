@@ -4,7 +4,7 @@
  * Les 233 lignes de règles qui vivaient ici sont remontées dans
  * `@meeshy/shared/utils/notification-banner` (#4454) : elles avaient DEUX
  * auteurs (ici et `NotificationBannerPresentation` côté iOS) et en gagnaient un
- * TROISIÈME avec `apps/web-old-version3`. Une règle écrite trois fois diverge trois fois ;
+ * TROISIÈME avec une seconde application web. Une règle écrite trois fois diverge trois fois ;
  * l'issue le dit en toutes lettres — « le lot commence par remonter la loi web,
  * pas par la recopier ».
  *

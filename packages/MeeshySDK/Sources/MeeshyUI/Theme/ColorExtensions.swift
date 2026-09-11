@@ -76,7 +76,7 @@ public nonisolated extension Color {
     /// Écrit comme la FORMULE, jamais comme le nombre arrondi — c'est une
     /// conséquence de la définition WCAG du contraste, pas une constante de
     /// design à dériver. Pendant Swift exact de `inkOnAccent`
-    /// (`apps/web-v3/src/lib/accent.ts`).
+    /// (`apps/web-v2/src/lib/accent.ts`).
     ///
     /// Toute surface teintée (bouton « revenir en bas », badges, capsules)
     /// DOIT consommer ce point unique plutôt que comparer sa `luminance` à un

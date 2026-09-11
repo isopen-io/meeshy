@@ -5,7 +5,7 @@ import MeeshySDK
 /// les phrases de palier, à côté de la loi de progression (`EngagementProgressResolver`)
 /// qui, elle, ne connaît aucun mot : elle rend des clés et des nombres, ce
 /// fichier les fait parler. Les mots sont ceux de la v3.1 web
-/// (`apps/web-v3/src/lib/view/progression.ts`, #5547) — « même mot, même
+/// (`apps/web-v2/src/lib/view/progression.ts`, #5547) — « même mot, même
 /// icône » (dimension 6) — et vivent dans `Localizable.xcstrings` en sept langues.
 ///
 /// Les `switch` sont EXHAUSTIFS sur les énumérations du catalogue : un axe ou

@@ -387,9 +387,11 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     // MARK: - T2.5 — Un lieu SEUL, sans texte ni média, peut partir
 
     /// Mutation nommée par le plan : exiger un texte ferait refuser
-    /// exactement ce que `FeedView+Attachments.publishPostWithAttachments`
-    /// accepte déjà (`pendingPlace != nil` dans son garde d'entrée) — parité
-    /// de plan entre le meuble et la feuille historique.
+    /// exactement ce qu'acceptait `FeedView+Attachments.publishPostWithAttachments`
+    /// (`pendingPlace != nil` dans son garde d'entrée) — parité de plan entre le
+    /// meuble et la feuille historique. Ce chemin inline est RETIRÉ (#6016) ; la
+    /// règle vit désormais dans `ComposerDocumentSendRules.emptyDraft`, et c'est
+    /// elle que ce témoin mesure.
     func test_unLieuSeul_sansTexteNiMedia_peutPartir() {
         let lieu = SharedPlace(latitude: 48.8583736, longitude: 2.2944813, name: "Tour Eiffel")
         let brouillon = ComposerDocumentDraft.document(

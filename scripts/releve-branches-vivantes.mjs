@@ -2,7 +2,7 @@
 // Le relevé des branches VIVANTES qui écrivent les chemins qu'on s'apprête à écrire [#5242]
 //
 //   node scripts/releve-branches-vivantes.mjs --chemins tasks/lessons.md
-//   node scripts/releve-branches-vivantes.mjs --chemins apps/web-v3 packages/shared --fetch
+//   node scripts/releve-branches-vivantes.mjs --chemins apps/web-v2 packages/shared --fetch
 //   node scripts/releve-branches-vivantes.mjs                 # les fichiers les plus disputés
 //   node scripts/releve-branches-vivantes.mjs --json          # la même chose, à donner à une machine
 //   node scripts/releve-branches-vivantes.mjs --self-test     # les mutations que le relevé doit voir
@@ -117,7 +117,7 @@ const PLAFOND_FICHIERS = 40;
 
 // Un chemin DEMANDÉ couvre un fichier s'il le désigne, ou s'il est le répertoire
 // qui le contient. La barre est obligatoire : sans elle, `apps/web` couvrirait
-// `apps/web-v3/...`, et le relevé rendrait une contention qui n'existe pas.
+// `apps/web-v2/...`, et le relevé rendrait une contention qui n'existe pas.
 export const couvre = (fichier, chemin) => {
   const c = String(chemin).replace(/\/\*\*$/, '').replace(/\/+$/, '');
   if (c === '' || c === '.') return true;
@@ -280,8 +280,8 @@ const MUTATIONS = [
     ajoute('claude/perimee', 49, ['tasks/lessons.md']), 'ignore', 'claude/perimee'],
   ['MA PROPRE branche écrit le chemin — je ne me dispute pas avec moi-même',
     (monde) => { monde.branches[0].ajoutes.push('apps/web/hooks/mien.ts'); monde.branches[0].divergents.push('apps/web/hooks/mien.ts'); }, 'ignore', 'claude/la-mienne'],
-  ['un préfixe TROMPEUR : `apps/web-v3/…` ne répond pas au chemin `apps/web`',
-    ajoute('claude/faux-prefixe', 1, ['apps/web-v3/lib/z.ts']), 'ignore', 'claude/faux-prefixe'],
+  ['un préfixe TROMPEUR : `apps/web-v2/…` ne répond pas au chemin `apps/web`',
+    ajoute('claude/faux-prefixe', 1, ['apps/web-v2/lib/z.ts']), 'ignore', 'claude/faux-prefixe'],
   ['une branche déjà fusionnée n\'ajoute aucun fichier',
     ajoute('claude/fusionnee', 1, []), 'ignore', 'claude/fusionnee'],
   ['une branche SQUASHÉE — son diff trois-points l\'annonce encore, son contenu est dans la base',

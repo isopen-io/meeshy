@@ -90,7 +90,7 @@ export async function resolveCallerParticipant(
  * un fil voyait ses messages refusés, sans jamais déclencher de
  * rafraîchissement de session. `apps/web` rafraîchit sur 401 (`api.service.ts`)
  * et ne fait rien du 403 de ces routes. Android est NEUTRE — son
- * `AuthExpiryInterceptor.EXPIRY_CODES` contient déjà `{401, 403}`. `web-v3` ne
+ * `AuthExpiryInterceptor.EXPIRY_CODES` contient déjà `{401, 403}`. `web-v2` ne
  * vise aucune de ces cinq adresses.
  *
  * ─── Pourquoi un VERDICT, et pas un booléen de plus ─────────────────────────

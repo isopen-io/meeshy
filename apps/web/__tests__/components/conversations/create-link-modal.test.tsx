@@ -1,6 +1,32 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, configure } from '@testing-library/react';
 import '@testing-library/jest-dom';
+
+/**
+ * **#6054 — le 1 000 ms de RTL est un anti-blocage, pas un budget.**
+ *
+ * `should generate link on create` a rougi sur `dev` en ne trouvant pas
+ * « Group Conversation 1 » — la PREMIÈRE attente du test, celle que DOUZE
+ * autres tests de ce même fichier franchissent sans broncher, sur exactement
+ * le même chemin (mock résolu dans `beforeEach`, effet React, rendu de la
+ * liste).
+ *
+ * Mesuré : 25 exécutions locales vertes (seule, puis avec les 39 suites
+ * voisines du répertoire). Le rouge n'est pas reproductible ici, et l'arbre
+ * DOM du rapport CI montre le dialogue rendu SANS sa liste — l'état d'avant la
+ * résolution, pas un état d'erreur.
+ *
+ * Ce que ces assertions mesurent est CE QUI se rend, jamais en combien de
+ * temps : aucune n'a été écrite comme un budget de latence. Sur un runner qui
+ * porte 24 000 tests gateway et 15 000 tests web en parallèle, une seconde
+ * pour une micro-tâche plus un effet n'est pas une marge.
+ *
+ * > **C'est une ATTÉNUATION, pas une cause trouvée.** Elle est défendable
+ * > seule — un anti-blocage à 5 s attrape toujours un rendu qui ne vient
+ * > jamais — mais si ce rouge revient malgré elle, la piste n'est plus le
+ * > temps et il faut chercher la pollution entre suites.
+ */
+configure({ asyncUtilTimeout: 5000 });
 import { CreateLinkModalV2 } from '../../../components/conversations/create-link-modal';
 import { conversationsService } from '@/services/conversations.service';
 import { authManager } from '@/services/auth-manager.service';

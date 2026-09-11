@@ -9,7 +9,7 @@
  *    y mettait la CLÉ STABLE de l'axe (« Badge débloqué : conversation.private
  *    · palier 10 », relevé en production le 2026-09-08) : une clé de catalogue
  *    est faite pour survivre à un renommage, pas pour être lue ;
- *  - la v3.1 web (`apps/web-v3/src/lib/view/progression.ts`), qui les importe ;
+ *  - la v3.1 web (`apps/web-v2/src/lib/view/progression.ts`), qui les importe ;
  *  - iOS (`Localizable.xcstrings`, clés `progression.axis.*` /
  *    `progression.achievement.*.title`), MIROIR gardé par
  *    `engagement-labels-mirror-parity.test.ts` — le catalogue Xcode ne peut

@@ -9,7 +9,7 @@
 
    Rien ici ne lit le schéma de couleurs de l'OS : `color-scheme` suit la CLASSE,
    déclaré dans chacun des deux schémas, et le script de schéma de la v3.1
-   (`apps/web-v3/src/lib/inline-scheme-bootstrap.js`) ne fait que corriger la
+   (`apps/web-v2/src/lib/inline-scheme-bootstrap.js`) ne fait que corriger la
    classe posée par la coquille. Plus aucun gate ne tient cette table (#6000). */
 @import './dark.css';
 @import './light.css';

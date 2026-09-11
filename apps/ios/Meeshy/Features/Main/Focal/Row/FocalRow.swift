@@ -321,7 +321,7 @@ struct FocalRow: View {
                     .opacity(input.isFocused ? 0 : 1)
             } else if input.isFocused {
                 // Miroir iOS du défaut 1 fermé côté web (#5648,
-                // `apps/web-v3/src/components/focal-row.tsx:528-558`,
+                // `apps/web-v2/src/components/focal-row.tsx:528-558`,
                 // `data-focus-reserve`) : sans ligne basse, la rangée n'a
                 // aucune hauteur réservée sous son texte, et `focusStrip`/
                 // `focusStampChip` (overlay `.bottom`, `offset(y: overhang)`)
