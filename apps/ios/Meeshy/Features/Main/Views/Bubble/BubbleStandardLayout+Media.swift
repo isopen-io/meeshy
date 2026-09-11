@@ -335,7 +335,7 @@ fileprivate struct BubbleGridCell: View {
     /// local ci-dessus, qui gouverne encore le RENDU (révélation d'une vidéo
     /// protégée), ne connaît que la vue unique et le flou.
     private var canReactPerImage: Bool {
-        AttachmentReactionOffer.offersQuickBar(surface: .bubbleGrid(isSolo: solo),
+        AttachmentReactionOffer.offersReaction(surface: .bubbleGrid(isSolo: solo),
                                                attachment: attachment,
                                                hasHandler: onReactToAttachment != nil)
     }

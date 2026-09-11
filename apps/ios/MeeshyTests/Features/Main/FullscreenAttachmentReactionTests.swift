@@ -7,13 +7,22 @@ import MeeshySDK
 /// plein écran, il faut pouvoir ajouter une réaction à l'attachement
 /// directement »).
 ///
+/// **La rangée se RÉVÈLE, elle ne se pose pas** (révision porteur du même jour) :
+/// « les réactions sur les attachements en plein écran doivent s'activer comme
+/// pour répondre ou composer, il faut mettre un bouton réagir (emoji +) qui
+/// affiche la traille des emojis de réaction ». Au repos, rien ne se pose sur
+/// l'image ; un bouton rejoint la rangée d'actions qui porte déjà Répondre et
+/// Composer, et c'est lui qui ouvre.
+///
 /// Trois moitiés, gardées ensemble parce qu'aucune ne vaut seule :
-///  1. la LOI — à quelle pièce, sur quelle surface, offre-t-on la barre. Pure et
-///     `nonisolated`, donc jouable en XCTest, contrairement à la condition qui
-///     vivait dans le `body` de la tuile de grille ;
-///  2. le SITE d'AFFICHAGE — que le plein écran monte bien la barre, au gabarit
-///     de la story, et qu'il la demande à la LOI plutôt que de réécrire la
-///     conjonction ;
+///  1. la LOI — DEUX questions distinctes, deux fonctions : « cette pièce
+///     offre-t-elle de réagir ? » (protection, contexte) et « la rangée est-elle
+///     montée ? » (la première, PLUS l'état d'ouverture). Pures et `nonisolated`,
+///     donc jouables en XCTest, contrairement à la condition qui vivait dans le
+///     `body` de la tuile de grille ;
+///  2. les SITES d'AFFICHAGE — que le bouton rejoigne la rangée d'actions, que la
+///     rangée d'émojis n'existe qu'ouverte, au gabarit de la story, et que
+///     changer de pièce la referme ;
 ///  3. le SITE de ROUTAGE — que l'émoji parte vers la PIÈCE (le rappel
 ///     par-image de la conversation) et jamais vers le message qui la porte.
 ///
@@ -38,17 +47,17 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
         )
     }
 
-    // MARK: - 1 · La loi
+    // MARK: - 1 · La loi — question 1 : cette pièce offre-t-elle de réagir ?
 
     /// **Le critère 3 de l'issue.** Le plein écran ne montre QU'UNE pièce à la
     /// fois : « seule » n'y décrit pas une situation exceptionnelle mais le cas
     /// nominal. La règle de la grille (`!solo`, qui laisse la réaction
     /// message-level aux bulles à une seule image) n'a donc rien à y faire.
-    func test_lePleinEcran_offreLaBarre_memeQuandLaPieceEstSeule() {
+    func test_lePleinEcran_offreDeReagir_memeQuandLaPieceEstSeule() {
         XCTAssertTrue(
-            AttachmentReactionOffer.offersQuickBar(
+            AttachmentReactionOffer.offersReaction(
                 surface: .fullscreen, attachment: piece(), hasHandler: true),
-            "Une pièce seule ouverte en plein écran DOIT porter la barre — c'est le geste "
+            "Une pièce seule ouverte en plein écran DOIT offrir de réagir — c'est le geste "
                 + "que l'issue #6084 demande, et le plein écran n'a pas d'autre pièce à côté."
         )
     }
@@ -56,43 +65,60 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
     /// **Le critère 4 — et il se lit au niveau de la PIÈCE.**
     ///
     /// `Message.isViewOnce` ne dit que la protection du porteur ; une pièce
-    /// déclare la sienne (`isViewOnce` / `isBlurred` / `isEncrypted`). Poser une
-    /// barre sur une vue unique inviterait à la garder à l'écran le temps de
+    /// déclare la sienne (`isViewOnce` / `isBlurred` / `isEncrypted`). Offrir de
+    /// réagir sur une vue unique inviterait à la garder à l'écran le temps de
     /// choisir un émoji — exactement ce qu'une vue unique refuse.
-    func test_uneProtegee_nOffreAucuneBarre_surAucuneSurface() {
+    ///
+    /// La garde a REMONTÉ d'un cran avec la révision porteur : elle décide
+    /// désormais de l'existence du BOUTON, pas seulement de la rangée.
+    func test_uneProtegee_nOffreRien_surAucuneSurface() {
         for surface: AttachmentReactionOffer.Surface in [.fullscreen, .bubbleGrid(isSolo: false)] {
             XCTAssertFalse(
-                AttachmentReactionOffer.offersQuickBar(
+                AttachmentReactionOffer.offersReaction(
                     surface: surface, attachment: piece(viewOnce: true), hasHandler: true),
-                "Vue unique ⇒ aucune barre (\(surface))."
+                "Vue unique ⇒ aucun bouton (\(surface))."
             )
             XCTAssertFalse(
-                AttachmentReactionOffer.offersQuickBar(
+                AttachmentReactionOffer.offersReaction(
                     surface: surface, attachment: piece(blurred: true), hasHandler: true),
-                "Floutée ⇒ aucune barre (\(surface))."
+                "Floutée ⇒ aucun bouton (\(surface))."
             )
             XCTAssertFalse(
-                AttachmentReactionOffer.offersQuickBar(
+                AttachmentReactionOffer.offersReaction(
                     surface: surface, attachment: piece(encrypted: true), hasHandler: true),
-                "Chiffrée ⇒ aucune barre (\(surface)). Le chiffrement est la troisième "
+                "Chiffrée ⇒ aucun bouton (\(surface)). Le chiffrement est la troisième "
                     + "protection que `ComposableAttachment.isProtected` déclare, et la tuile "
                     + "de grille ne la lisait PAS."
             )
         }
     }
 
+    /// **Fail-closed : un état d'ouverture RESTÉ vrai ne rouvre pas une pièce
+    /// protégée.** La seconde question COMPOSE la première plutôt que de vivre à
+    /// côté d'elle — c'est la seule forme où un drapeau d'interaction collé (une
+    /// pièce protégée feuilletée alors que la rangée était ouverte) ne peut pas
+    /// contourner la protection.
+    func test_uneProtegee_neMontreAucuneRangee_memeOuverte() {
+        XCTAssertFalse(
+            AttachmentReactionOffer.showsPicker(
+                surface: .fullscreen, attachment: piece(viewOnce: true),
+                hasHandler: true, isOpen: true),
+            "Un drapeau d'ouverture ne doit JAMAIS pouvoir rouvrir une pièce protégée."
+        )
+    }
+
     /// La grille garde sa règle : une bulle à UNE seule image laisse la réaction
     /// au MESSAGE (le double-tap et l'appui long y restent libres, et le simple
-    /// tap n'y paie pas la fenêtre de désambiguïsation d'iOS). Ce lot n'ouvre le
+    /// tap n'y paie pas la fenêtre de désambiguïsation d'iOS). Ce lot ouvre le
     /// plein écran, pas la bulle.
     func test_laGrille_gardeSaRegle_uneImageSeuleResteAuMessage() {
         XCTAssertFalse(
-            AttachmentReactionOffer.offersQuickBar(
+            AttachmentReactionOffer.offersReaction(
                 surface: .bubbleGrid(isSolo: true), attachment: piece(), hasHandler: true),
             "Une image SEULE dans sa bulle garde la réaction message-level."
         )
         XCTAssertTrue(
-            AttachmentReactionOffer.offersQuickBar(
+            AttachmentReactionOffer.offersReaction(
                 surface: .bubbleGrid(isSolo: false), attachment: piece(), hasHandler: true),
             "En grille multi-images, la réaction par-image reste offerte — comportement "
                 + "existant, que ce lot déplace sans le changer."
@@ -101,14 +127,32 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
 
     /// **Loi 4 : un contrôle existe s'il a un EFFET.** Un hôte qui ne sait pas
     /// router l'émoji (post, story, commentaire — aucune réaction par média côté
-    /// serveur) ne doit pas peindre une barre inerte.
-    func test_sansRappel_aucuneBarre_jamaisUnControleInerte() {
+    /// serveur) ne doit peindre ni bouton ni rangée.
+    func test_sansRappel_rienNEstOffert_jamaisUnControleInerte() {
         XCTAssertFalse(
-            AttachmentReactionOffer.offersQuickBar(
+            AttachmentReactionOffer.offersReaction(
                 surface: .fullscreen, attachment: piece(), hasHandler: false))
         XCTAssertFalse(
-            AttachmentReactionOffer.offersQuickBar(
+            AttachmentReactionOffer.offersReaction(
                 surface: .bubbleGrid(isSolo: false), attachment: piece(), hasHandler: false))
+    }
+
+    // MARK: - 1 bis · La loi — question 2 : la rangée est-elle montée ?
+
+    /// **Au repos, le visualiseur est NU** (révision porteur) : rien ne se pose
+    /// sur l'image tant que le bouton n'a pas été touché.
+    func test_auRepos_aucuneRangeeNEstMontee() {
+        XCTAssertFalse(
+            AttachmentReactionOffer.showsPicker(
+                surface: .fullscreen, attachment: piece(), hasHandler: true, isOpen: false),
+            "Rangée fermée ⇒ rien au-dessus de l'image. C'est tout l'objet de la révision."
+        )
+    }
+
+    func test_uneFoisOuverte_laRangeeEstMontee() {
+        XCTAssertTrue(
+            AttachmentReactionOffer.showsPicker(
+                surface: .fullscreen, attachment: piece(), hasHandler: true, isOpen: true))
     }
 
     /// La protection n'est pas réécrite ici : elle est LUE au prédicat que le
@@ -123,19 +167,66 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
         )
     }
 
-    // MARK: - 2 · Le site d'affichage — le plein écran
+    /// La seconde question COMPOSE la première : `showsPicker` doit passer par
+    /// `offersReaction` plutôt que de relire la protection une seconde fois.
+    func test_lesDeuxQuestions_neSontPasDeuxLecturesDeLaProtection() throws {
+        let loi = try loiSource()
+        guard let seconde = corps("static func showsPicker(", dans: loi) else {
+            return XCTFail("`showsPicker` introuvable — la seconde question n'existe pas.")
+        }
+        XCTAssertTrue(
+            compact(seconde).contains("offersReaction("),
+            "`showsPicker` doit composer `offersReaction`, sinon les deux questions "
+                + "peuvent diverger sur la protection."
+        )
+    }
 
-    /// Non-vacuité : la barre existe là où les gardes suivantes regardent.
-    func test_leSite_estBienLaOuLesGardesRegardent() throws {
+    // MARK: - 2 · Le site d'affichage — le bouton, puis la rangée
+
+    /// Non-vacuité : les deux sites existent là où les gardes suivantes regardent.
+    func test_lesSites_sontBienLaOuLesGardesRegardent() throws {
         let code = try gallerieSource()
         XCTAssertNotNil(
             corps("private func attachmentReactionBar(", dans: code),
             "`attachmentReactionBar` introuvable dans `ConversationMediaGalleryView` — "
-                + "le plein écran n'offre aucune barre de réaction (#6084, critère 1)."
+                + "le plein écran n'offre aucune rangée de réaction (#6084, critère 1)."
+        )
+        XCTAssertNotNil(
+            corps("private func mediaActionBar(", dans: code),
+            "`mediaActionBar` introuvable — le bouton n'a pas de rangée d'actions à rejoindre."
         )
     }
 
-    func test_laBarreDuPleinEcran_estAuGabaritDeLaStory() throws {
+    /// **Le bouton REJOINT la rangée d'actions existante** (révision porteur) :
+    /// même rang que Répondre et Composer, jamais un ornement posé ailleurs.
+    func test_leBoutonReagir_rejointLaRangeeDActions() throws {
+        let code = try gallerieSource()
+        guard let rangee = corps("private func mediaActionBar(", dans: code) else {
+            return XCTFail("`mediaActionBar` introuvable")
+        }
+        let plat = compact(rangee)
+
+        XCTAssertTrue(
+            plat.contains("AttachmentReactionOffer.offersReaction(surface:.fullscreen"),
+            "L'EXISTENCE du bouton est gardée par la loi — la protection remonte d'un "
+                + "cran : elle décide du bouton, pas seulement de la rangée d'émojis."
+        )
+        XCTAssertTrue(
+            plat.contains("hasHandler:onReactToMedia!=nil"),
+            "Pas de rappel ⇒ pas de bouton (loi 4 : un contrôle existe s'il a un effet)."
+        )
+        XCTAssertTrue(
+            plat.contains("reactionBarOpen.toggle()"),
+            "L'appui doit BASCULER l'ouverture : un second appui referme."
+        )
+        XCTAssertTrue(
+            plat.contains("\"face.smiling\"") && plat.contains("\"plus\""),
+            "L'icône est un émoji AVEC un « + » (motif `emoji +` demandé par le porteur), "
+                + "cohérente avec le « + » que la rangée porte déjà en fin de course."
+        )
+    }
+
+    func test_laRangeeDuPleinEcran_estAuGabaritDeLaStory() throws {
         let code = try gallerieSource()
         guard let site = corps("private func attachmentReactionBar(", dans: code) else {
             return XCTFail("site introuvable")
@@ -143,49 +234,157 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
         let plat = compact(site)
 
         XCTAssertTrue(plat.contains("EmojiReactionPicker("),
-                      "La barre est la brique SDK partagée, pas une rangée réécrite.")
+                      "La rangée est la brique SDK partagée, pas une rangée réécrite.")
         XCTAssertTrue(plat.contains("scale:2"),
                       "Échelle 2 — le gabarit arrêté pour la story (#6083).")
         XCTAssertTrue(plat.contains("chrome:.none"),
                       "Sans fond ni contour : le média EST le fond, comme la scène d'une story.")
         XCTAssertTrue(plat.contains("scrollable:true"),
                       "À l'échelle 2 la rangée dépasse la largeur de l'écran : elle DÉFILE.")
+        XCTAssertTrue(plat.contains("onExpandFullPicker:"),
+                      "Le « + » de fin de rangée garde son rôle : ouvrir le sélecteur complet.")
     }
 
-    /// La barre se DEMANDE à la loi. Une condition réécrite sur place aurait
-    /// divergé de la grille au premier ajustement de l'une des deux.
-    func test_laBarreDuPleinEcran_consulteLaLoi() throws {
+    /// La rangée n'existe QU'OUVERTE, et elle le demande à la loi — une
+    /// conjonction réécrite sur place aurait divergé de la grille au premier
+    /// ajustement de l'une des deux.
+    func test_laRangee_nExistePasSansOuverture() throws {
         let code = try gallerieSource()
         guard let site = corps("private func attachmentReactionBar(", dans: code) else {
             return XCTFail("site introuvable")
         }
         let plat = compact(site)
         XCTAssertTrue(
-            plat.contains("AttachmentReactionOffer.offersQuickBar(surface:.fullscreen"),
-            "Le plein écran doit interroger la LOI, sur la surface `.fullscreen`."
+            plat.contains("AttachmentReactionOffer.showsPicker(surface:.fullscreen"),
+            "Le plein écran doit interroger la SECONDE question, sur `.fullscreen`."
         )
         XCTAssertTrue(
-            plat.contains("hasHandler:onReactToMedia!=nil"),
-            "L'absence de rappel doit RETIRER la barre — pas la griser (loi 4)."
+            plat.contains("isOpen:reactionBarOpen"),
+            "L'état d'ouverture doit ENTRER dans la décision — sinon la rangée est "
+                + "de nouveau permanente, ce que la révision porteur retire."
         )
     }
 
-    /// **Ancrée au-dessus de ses contrôles** (critère 1). La barre vit dans la
-    /// couche des contrôles : elle s'efface avec eux au tap sur le média, et se
-    /// pose juste au-dessus du bloc bas (auteur, légende, pellicule).
-    func test_laBarre_estAncreeAuDessusDesControlesDuBas() throws {
+    /// **Changer de pièce referme la rangée** (révision porteur, point 5). Un
+    /// drapeau resté ouvert ferait surgir la rangée sur un média que personne
+    /// n'a demandé à commenter — et sur une pièce protégée, la loi la retiendrait
+    /// mais l'intention serait déjà fausse.
+    func test_changerDePage_refermeLaRangee() throws {
+        let code = try gallerieSource()
+        guard let relais = corps("private func handlePageChange(", dans: code) else {
+            return XCTFail("`handlePageChange` introuvable")
+        }
+        XCTAssertTrue(
+            compact(relais).contains("reactionBarOpen=false"),
+            "Feuilleter doit refermer la rangée : elle appartient à la pièce qu'on "
+                + "regardait, pas à l'écran."
+        )
+    }
+
+    // MARK: - 2 bis · La COUCHE — rien ne passe devant la traînée
+
+    /// **L'ORDRE DE COMPOSITION, pas la seule présence** (précision porteur
+    /// 2026-09-11 : « les réactions doivent apparaître par-dessus tous les autres
+    /// contrôleurs »).
+    ///
+    /// Ce témoin lit le `ZStack` racine et exige que `reactionLayer` soit monté
+    /// APRÈS le pager ET après la couche des contrôles — dans un `ZStack`, le
+    /// dernier enfant est le plus haut. C'est un test de composition sur la
+    /// SOURCE : la profondeur réelle d'un arbre SwiftUI n'est pas observable
+    /// depuis XCTest sans rendu, et je préfère le dire que le laisser croire.
+    /// La preuve du RENDU est la capture simulateur, pas ce témoin.
+    func test_laTrainee_estLaCoucheLaPlusHauteDuVisualiseur() throws {
+        let code = try gallerieSource()
+        guard let racine = corps("var body: some View {", dans: code) else {
+            return XCTFail("`body` introuvable")
+        }
+        let plat = compact(racine)
+        guard let pager = plat.range(of: "galleryPager"),
+              let controles = plat.range(of: "overlayLayer"),
+              let trainee = plat.range(of: "reactionLayer") else {
+            return XCTFail("Les trois couches du ZStack racine ne se lisent pas — "
+                           + "la garde d'ordre ne mesurerait rien.")
+        }
+        XCTAssertLessThan(controles.lowerBound, trainee.lowerBound,
+                          "La traînée doit être montée APRÈS `overlayLayer` : dans un ZStack, "
+                              + "le dernier enfant est le plus haut.")
+        XCTAssertLessThan(pager.lowerBound, trainee.lowerBound,
+                          "Et après le pager, évidemment.")
+    }
+
+    /// **Elle a QUITTÉ la pile des contrôles** — c'est la moitié du correctif que
+    /// l'ordre seul ne dit pas. Tant qu'elle vivait dans le `VStack` de
+    /// `controlsOverlay`, elle PARTAGEAIT la colonne avec le bloc bas, et aucun
+    /// `.zIndex()` n'aurait pu l'en sortir : `zIndex` n'ordonne qu'entre frères
+    /// du MÊME conteneur.
+    func test_laTrainee_neVitPlusDansLaPileDesControles() throws {
         let code = try gallerieSource()
         guard let controles = corps("private var controlsOverlay: some View {", dans: code) else {
             return XCTFail("`controlsOverlay` introuvable")
         }
-        let plat = compact(controles)
-        guard let barre = plat.range(of: "attachmentReactionBar("),
-              let bas = plat.range(of: "bottomOverlay") else {
-            return XCTFail("La barre n'est pas montée dans la couche des contrôles — "
-                           + "elle ne s'effacerait pas avec eux.")
+        XCTAssertFalse(
+            compact(controles).contains("attachmentReactionBar("),
+            "La traînée ne doit plus être un enfant du `VStack` des contrôles : elle y "
+                + "partageait la hauteur avec le bloc bas, qui pouvait la comprimer."
+        )
+    }
+
+    /// **Le rang se gagne par la COUCHE, jamais par `zIndex`.** Un `.zIndex()`
+    /// posé sur la traînée serait le signe qu'on a essayé de la faire monter sans
+    /// la sortir de sa pile — et il ne marcherait pas.
+    func test_laTrainee_neSAppuiePasSurUnZIndex() throws {
+        let code = try gallerieSource()
+        guard let site = corps("private func attachmentReactionBar(", dans: code),
+              let couche = corps("private var reactionLayer: some View {", dans: code) else {
+            return XCTFail("sites introuvables")
         }
-        XCTAssertLessThan(barre.lowerBound, bas.lowerBound,
-                          "La barre se pose AU-DESSUS du bloc bas, pas en dessous.")
+        XCTAssertFalse(compact(site).contains(".zIndex("),
+                       "Pas de `zIndex` sur la traînée — c'est la couche qui la place.")
+        XCTAssertFalse(compact(couche).contains(".zIndex("),
+                       "Ni sur sa couche.")
+    }
+
+    /// **Masquer le chrome emporte la traînée.** Elle recouvre la rangée
+    /// d'actions, donc le bouton n'est plus atteignable pendant qu'elle est
+    /// ouverte : le tap sur le média devient sa sortie. Sans cette remise à zéro,
+    /// rouvrir le chrome ferait resurgir une traînée que personne n'a redemandée.
+    func test_masquerLesControles_refermeLaTrainee() throws {
+        let code = try gallerieSource()
+        guard let bascule = corps("private func toggleControls() {", dans: code) else {
+            return XCTFail("`toggleControls` introuvable")
+        }
+        XCTAssertTrue(
+            compact(bascule).contains("reactionBarOpen=false"),
+            "Masquer le chrome doit refermer la traînée."
+        )
+    }
+
+    /// **Une couche fermée ne vole aucune touche.** Quand la traînée n'est pas
+    /// ouverte, le doigt doit atteindre le pager comme si cette couche n'existait
+    /// pas — sinon on aurait rendu le visualiseur inerte pour ajouter un geste.
+    func test_laCoucheFermee_neVolePasLeDoigt() throws {
+        let code = try gallerieSource()
+        guard let couche = corps("private var reactionLayer: some View {", dans: code) else {
+            return XCTFail("`reactionLayer` introuvable")
+        }
+        XCTAssertTrue(
+            compact(couche).contains(".allowsHitTesting(reactionBarOpen)"),
+            "La couche ne teste les touches que lorsque la traînée est ouverte."
+        )
+    }
+
+    /// La traînée flotte au-dessus de la PELLICULE, jamais dessus : la pellicule
+    /// est le seul contrôle du bas qui sert à NAVIGUER, et la couvrir enfermerait
+    /// le lecteur sur la pièce courante.
+    func test_laTrainee_laisseLaPelliculeLibre() throws {
+        let code = try gallerieSource()
+        guard let marge = corps("private var reactionBarBottomInset: CGFloat {", dans: code) else {
+            return XCTFail("`reactionBarBottomInset` introuvable")
+        }
+        XCTAssertTrue(
+            compact(marge).contains("ConversationMediaFilmstrip.reservedHeight"),
+            "La marge basse doit dégager la pellicule quand elle est montée."
+        )
     }
 
     /// La grille cesse d'écrire sa propre conjonction : une seule loi, deux
@@ -196,7 +395,7 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
             return XCTFail("`canReactPerImage` introuvable")
         }
         XCTAssertTrue(
-            compact(regle).contains("AttachmentReactionOffer.offersQuickBar(surface:.bubbleGrid(isSolo:solo)"),
+            compact(regle).contains("AttachmentReactionOffer.offersReaction(surface:.bubbleGrid(isSolo:solo)"),
             "La tuile de grille doit LIRE la loi — sinon les deux surfaces divergeront."
         )
     }
@@ -210,9 +409,30 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
         }
         let plat = compact(site)
         XCTAssertTrue(
-            plat.contains("onReact:{emojiinonReactToMedia?(att,emoji)}"),
+            plat.contains("onReactToMedia?(att,emoji)"),
             "L'émoji doit partir avec LA PIÈCE en main. Un rappel qui ne porterait que "
                 + "l'émoji laisserait l'hôte deviner la cible — et il devinerait le message."
+        )
+        XCTAssertTrue(
+            plat.contains("onReact:{emojiin"),
+            "Le choix se fait dans `onReact`, la seule entrée que la rangée expose."
+        )
+    }
+
+    /// **Un choix d'émoji RETIRE la rangée** (révision porteur, point 2). Sans
+    /// cette fermeture, la rangée resterait ouverte sur une pièce déjà commentée
+    /// et masquerait l'image qu'on venait regarder.
+    func test_choisirUnEmoji_refermeLaRangee() throws {
+        let code = try gallerieSource()
+        guard let site = corps("private func attachmentReactionBar(", dans: code) else {
+            return XCTFail("site introuvable")
+        }
+        guard let choix = corps("onReact: { emoji in", dans: site) else {
+            return XCTFail("`onReact` introuvable")
+        }
+        XCTAssertTrue(
+            compact(choix).contains("reactionBarOpen=false"),
+            "Après l'émoji, la rangée se referme — elle a fait son travail."
         )
     }
 
