@@ -267,7 +267,23 @@ export class StatusHandler {
         // code is needed for the refusal to become visible.
         // La room est une autorisation mise en cache (#5947) : une non-appartenance
         // PROUVÉE ici l'expire, sinon l'ancien membre reçoit encore le fil.
-        await socket.leave(ROOMS.conversation(normalizedId));
+        //
+        // DANS SON PROPRE try/catch, et c'est la leçon de #6059 : l'éviction et
+        // le signalement répondent à deux exigences distinctes — ne plus servir
+        // le fil, et DIRE au client pourquoi il est refusé. Sous le try/catch de
+        // la méthode, un `leave` qui jette (adaptateur Redis en panne, socket
+        // déjà fermée) emportait le signalement avec lui : le client restait sur
+        // un refus muet, exactement le défaut que #5999 vient de corriger. La
+        // panne de l'une ne doit pas annuler l'autre.
+        try {
+          await socket.leave(ROOMS.conversation(normalizedId));
+        } catch (error) {
+          logger.warn('typing:start — room eviction failed, refusal still reported', {
+            userId,
+            conversationId: normalizedId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
         const reason = await resolveMembershipDenialReason({
           prisma: this.prisma,
           conversationId: normalizedId,

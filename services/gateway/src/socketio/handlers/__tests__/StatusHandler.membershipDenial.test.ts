@@ -65,11 +65,21 @@ function makePrisma(): any {
   };
 }
 
-function makeSocket(): Socket {
+/**
+ * `leave` FAIT PARTIE de la surface qu'un refus exerce (#5947 / #6059) : le
+ * handler évince la socket de la room avant de signaler. Une fixture sans
+ * `leave` ne rend pas le témoin plus simple — elle le rend FAUX : l'appel jette
+ * un TypeError, le try/catch de la méthode l'avale, et les cinq témoins de
+ * signalement ci-dessous constatent « aucun appel à emit » sans pouvoir dire
+ * pourquoi.
+ */
+function makeSocket(overrides: Partial<Record<'leave', unknown>> = {}): Socket {
   return {
     id: SOCKET_ID,
     to: jest.fn<any>().mockReturnValue({ emit: jest.fn(), except: jest.fn<any>().mockReturnValue({ emit: jest.fn() }) }),
     emit: jest.fn(),
+    leave: jest.fn<any>().mockResolvedValue(undefined),
+    ...overrides,
   } as unknown as Socket;
 }
 
@@ -139,6 +149,34 @@ describe('StatusHandler.handleTypingStart — membership denial (#5947)', () => 
     expect(socket.emit).toHaveBeenCalledWith(
       SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
       expect.objectContaining({ reason, message })
+    );
+  });
+
+  it('évince la socket de la room de la conversation : la room est une autorisation en cache', async () => {
+    const socket = makeSocket();
+    const handler = makeHandler();
+
+    await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+    expect(socket.leave).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
+  });
+
+  /**
+   * Évincer et SIGNALER répondent à deux exigences distinctes. Sous le seul
+   * try/catch de la méthode, une éviction qui jette emportait le signalement :
+   * le client restait sur un refus muet — le défaut même que #5999 corrige.
+   */
+  it('signale le refus même quand l’éviction de la room échoue', async () => {
+    const socket = makeSocket({
+      leave: jest.fn<any>().mockRejectedValue(new Error('adapter unavailable')),
+    });
+    const handler = makeHandler();
+
+    await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+    expect(socket.emit).toHaveBeenCalledWith(
+      SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
+      expect.objectContaining({ reason: 'not_a_member' })
     );
   });
 
