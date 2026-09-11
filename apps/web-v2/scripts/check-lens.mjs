@@ -164,9 +164,9 @@ constate(
  * attrapent les deux régressions — un rail qui regrossit, et un rail qui se
  * remet à varier.
  *
- * (La bande compacte épinglée d'iOS — `PinnedStoryTrailBand`, qui remplace le
- * plateau dans l'en-tête replié — n'est portée par aucune des deux versions :
- * question de produit ouverte, pas une régression de ce lot.)
+ * (La bande compacte épinglée d'iOS — `PinnedStoryTrailBand`, anneaux à 36 dans
+ * l'en-tête replié — n'est portée par aucune des deux versions : c'est l'écart
+ * restant, suivi par #6121, pas une régression de ce lot.)
  */
 const COTE_RAIL_IOS = 48;
 const railWidthBefore = await page.evaluate(
