@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 
@@ -28,12 +28,33 @@ import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
  * sur tous les écrans pour un objet invisible la quasi-totalité du temps. Le
  * gate du poids l'a refusée. Seul `useSyncPillArmed` reste en statique : il ne
  * connaît ni glyphe, ni libellé, ni la loi de priorité, et c'est sa réponse OUI
- * qui va chercher le reste.
+ * qui la REND.
+ *
+ * **Mais son chunk est CHERCHÉ dès le premier rendu, pas au moment du besoin.**
+ * « À la demande » se retourne contre cette pastille et contre elle seule : le
+ * moment où elle sert est précisément celui où le réseau est tombé. Mesuré —
+ * `net::ERR_INTERNET_DISCONNECTED` sur le chunk, `Suspense` jamais résolu,
+ * `fallback={null}`, donc AUCUN signe de coupure à l'écran. L'indicateur
+ * d'absence de réseau allait le chercher sur le réseau.
+ *
+ * Le préchargement sépare les deux questions que `lazy()` confondait : ce qui
+ * pèse AVANT LE PREMIER PIXEL (le budget — le chunk reste hors du point
+ * d'entrée) et ce qui est DISPONIBLE quand on en a besoin (la fiabilité — il
+ * est résolu pendant qu'on est encore en ligne).
  */
-const SyncPill = lazy(() => import('./sync-pill').then((m) => ({ default: m.SyncPill })));
+const chargerPastille = () => import('./sync-pill').then((m) => ({ default: m.SyncPill }));
+const SyncPill = lazy(chargerPastille);
 
 export default function Shell({ children }: { children: ReactNode }) {
   const pastilleArmee = useSyncPillArmed();
+
+  /* APRÈS le premier pixel, pendant qu'on est encore en ligne. L'effet ne
+     s'exécute pas au rendu serveur, donc le préchauffage institutionnel n'en
+     paie rien ; et `import()` est idempotent — le rendu de la pastille réutilise
+     le module déjà résolu au lieu de rouvrir une requête. */
+  useEffect(() => {
+    void chargerPastille();
+  }, []);
 
   return (
     <div className="min-h-dvh">
