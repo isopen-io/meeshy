@@ -192,14 +192,25 @@ final class OutboxUploadContextGuardTests: XCTestCase {
 
     /// La file durable dit désormais POUR QUI elle téléverse.
     func test_laFileDurable_declareLeContexteDeSonTeleversement() throws {
-        let dispatcher = try sourcesDeProduction()
-            .first { $0.fichier == "OutboxDispatcher.swift" }
-        let code = try XCTUnwrap(dispatcher?.code, "OutboxDispatcher.swift est introuvable")
+        // **#5599 — la méthode a changé de FICHIER et perdu son `private`.**
+        // `OutboxDispatcher.swift` a été découpé ; `dispatchCreatePost` vit
+        // désormais dans `OutboxDispatcher+Publications.swift`, et n'est plus
+        // `private` pour une raison de langage, pas de style : Swift ne rend un
+        // `private` visible qu'aux extensions du MÊME fichier.
+        //
+        // Cette garde lisait UN fichier par son nom ; elle lit maintenant
+        // l'UNITÉ — le type et ses extensions —, ce qui la rend insensible au
+        // prochain découpage. Chercher le fichier plutôt que la déclaration,
+        // c'est faire dépendre une garde de comportement d'un choix de rangement.
+        let unite = try sourcesDeProduction()
+            .filter { $0.fichier.hasPrefix("OutboxDispatcher") }
+        XCTAssertFalse(unite.isEmpty, "l'unité OutboxDispatcher est introuvable")
+        let code = unite.map(\.code).joined(separator: "\n")
 
         guard let corps = corpsDeDeclaration(
-            commencantPar: "private func dispatchCreatePost(", dans: code
+            commencantPar: "func dispatchCreatePost(", dans: code
         ) else {
-            throw AncreIntrouvable(ancre: "private func dispatchCreatePost(")
+            throw AncreIntrouvable(ancre: "func dispatchCreatePost(")
         }
 
         XCTAssertTrue(
