@@ -109,14 +109,24 @@ export function mediaRightsOpeningFor(current: MediaRights, target: MediaRights)
  * poignée en mémoire. `shareLinkId` non nul : ce rattrapage ne vise QUE les
  * entrées par lien (anonymes et nommées portent toutes deux ce champ, cf.
  * `joinAsGuest`/`joinAsRegistered` dans `link-admission.ts`).
+ *
+ * Le type vient de `findMany` LUI-MÊME plutôt que d'un `as const` : un tuple
+ * figé par `as const` ne s'assigne pas au `ParticipantWhereInput[]` mutable
+ * qu'attend `OR`, et l'erreur ne se voyait qu'au `tsc` de l'image Docker —
+ * jamais dans les suites ciblées, dont le faux Prisma accepte n'importe quelle
+ * forme. Annoter avec le type RÉEL rend la vérification au compilateur.
  */
-export const LINK_ADMISSION_MEDIA_RIGHTS_CANDIDATE_WHERE = {
+type ParticipantFindManyWhere = NonNullable<
+  NonNullable<Parameters<PrismaClient['participant']['findMany']>[0]>['where']
+>;
+
+export const LINK_ADMISSION_MEDIA_RIGHTS_CANDIDATE_WHERE: ParticipantFindManyWhere = {
   shareLinkId: { not: null },
   OR: [
     { permissions: { is: { canSendVideos: { equals: false } } } },
     { permissions: { is: { canSendAudios: { equals: false } } } },
   ],
-} as const;
+};
 
 export type LinkAdmissionMediaRightsBackfillReport = {
   /** Lignes examinées — celles que le filtre coarse a ramenées. */
