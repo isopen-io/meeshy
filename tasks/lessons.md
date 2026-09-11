@@ -30186,3 +30186,73 @@ tout le dépôt, sa déclaration — était INVISIBLE à la mesure parce que c'e
 une `var`. Elle portait à elle seule trois des fonctions signalées. **La
 racine d'un arbre mort n'a pas nécessairement la forme que la garde sait
 lire.**
+
+
+## Leçon 571 — `-only-testing:` cible une CLASSE, pas un FICHIER
+
+2026-09-11, iOS (#6073). Pour valider #6047, j'avais lancé
+`-only-testing:MeeshyTests/ComposerRailDoorTests`, convaincu de couvrir « le
+fichier des portes du rail ». Le rapport était VERT.
+
+`ComposerRailDoorTests.swift` contient **dix-sept classes**. Deux d'entre elles
+— `ComposerMediaSourceWiringGuardTests` et `ComposerSoundSourceWiringGuardTests`
+— portaient les témoins que le lot cassait. Elles n'ont jamais été exécutées.
+
+> **Un fichier de tests n'est pas une unité d'exécution.** `-only-testing:`
+> prend un identifiant de CLASSE (ou de méthode) ; le nom du fichier n'apparaît
+> nulle part dans la commande. Nommer la classe qui porte le même nom que le
+> fichier n'exécute que celle-là, et le rapport dit « passed » — pour la
+> fraction qu'il a mesurée.
+
+Le signe qui aurait dû alerter est le même qu'à la leçon 567, et je ne l'ai pas
+vu deux fois dans la même session : **dix-neuf millisecondes** pour ce que je
+croyais être quatre-vingt-onze tests. Le temps est un chiffre de rapport comme
+un autre, et un chiffre absurde est plus souvent l'outil de lecture que la
+mesure.
+
+Parade : dériver la liste des classes du FICHIER avant de composer la commande —
+`grep '^final class' <fichier>` — plutôt que de supposer qu'un fichier porte une
+classe. Un fichier de témoins de dépôt en porte souvent dix ou vingt, parce que
+les gardes de source se rangent par SUJET, pas par type testé.
+
+
+## Leçon 572 — Un spécificateur de format qui ment sur le TYPE ne traduit pas mal : il CRASHE
+
+2026-09-11, iOS (#6073). #6039 a introduit `streak.reminder.body` et
+`reveal.badge.tier` dans le catalogue, avec `%@` dans les sept langues. Les deux
+sites d'appel interpolent un `Int` :
+
+```swift
+String(localized: "streak.reminder.body",
+       defaultValue: "\(joursTenus) jours tenus…")   // joursTenus: Int → %lld
+```
+
+`%@` appliqué à un entier 64 bits fait lire la valeur comme un POINTEUR d'objet
+et la déréférencer : **SIGSEGV**. Sept tests de `StreakReminderPlanTests`
+mouraient — le processus redémarrant à chaque fois —, et l'APP aurait crashé
+chez tout utilisateur tenant une série, au moment précis où elle planifie ses
+rappels.
+
+> **Une erreur de catalogue n'est pas toujours cosmétique.** L'intuition dit
+> « au pire, un texte faux » ; pour un désaccord de TYPE entre le spécificateur
+> et l'argument, la conséquence est un crash. Un catalogue est du CODE — c'est
+> lui qui porte la chaîne de format que le runtime exécute.
+
+Deux détails qui font la différence entre trouver et ne pas trouver :
+
+- **les tests qui passaient le cachaient.** Seuls ceux qui PRODUISENT un rappel
+  formatent le corps ; ceux qui vérifient les listes vides passaient très bien.
+  Une classe à moitié verte sur un crash ressemble à un test fragile ;
+- **la clé n'existait pas avant.** Tant qu'elle manque au catalogue,
+  `String(localized:defaultValue:)` sert la `defaultValue` et son format est
+  celui que Swift a généré — donc juste. **Ajouter une traduction est ce qui
+  arme le défaut.** Un lot de localisation peut donc casser du code qu'il ne
+  touche pas, et aucune garde de source ne le voit.
+
+Témoin : `CatalogFormatSpecifierGuardTests` — il lit la déclaration du symbole
+interpolé dans le même fichier, et n'exige rien des symboles qu'il ne sait pas
+typer (une garde qui devine un type produit des rouges illisibles, et finit
+désarmée). Falsifiabilité mesurée : vert sur le catalogue corrigé, ROUGE dès
+qu'on remet `%@` sur UNE seule des sept langues, vert de nouveau après
+restauration.
+

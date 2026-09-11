@@ -833,13 +833,34 @@ final class ComposerMediaSourceWiringGuardTests: XCTestCase {
     /// **La garde du défaut d'origine.** La porte média n'appelle plus l'outil
     /// PHOTO en direct : c'était le raccourci qui faisait disparaître deux
     /// sources sur trois dès qu'une scène existait.
+    ///
+    /// **#6073 — la règle a changé de FORME au #6047, et ce témoin gardait la
+    /// lettre.** Il exigeait `railPosesNextMedia = true; presentMediaSources()`,
+    /// c'est-à-dire l'intention armée AVANT la présentation. #6008 a lié
+    /// l'intention au RETOUR de la présentation, pour une raison que son
+    /// doc-comment porte : `presentMediaSources` peut ne RIEN présenter (la
+    /// règle des sources peut en offrir zéro), et une intention armée devant
+    /// une feuille qui n'apparaît pas n'a plus aucune sortie — ni consommation,
+    /// ni annulation à laquelle se raccrocher.
+    ///
+    /// La forme neuve est donc PLUS forte que celle que ce témoin gardait. Ce
+    /// qu'il doit garder n'est pas l'ordre des deux instructions mais les deux
+    /// propriétés qui comptent : l'intention est LIÉE à la présentation (par
+    /// l'affectation du retour), et la porte ne court-circuite pas vers l'outil
+    /// PHOTO. Écrire l'assertion sur la LETTRE d'une implémentation, c'est
+    /// s'engager à rougir à chaque amélioration de cette implémentation.
     func test_laPorteMedia_neVaPlusDroitALaPhototheque() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("case.media:railPosesNextMedia=true;presentMediaSources()"),
-                      "La porte MARQUE l'origine avant d'ouvrir le choix — c'est ce qui garde "
-                        + "sa pose sur la scène courante (directive porteur 2026-08-30).")
+        XCTAssertTrue(source.contains("case.media:railPosesNextMedia=presentMediaSources()"),
+                      "La porte LIE l'intention de pose au RETOUR de la présentation : une "
+                        + "feuille qui ne s'ouvre pas ne laisse aucune intention armée derrière "
+                        + "elle (#6008), et une intention posée garde la pose sur la scène "
+                        + "courante (directive porteur 2026-08-30).")
         XCTAssertFalse(source.contains("case.media:handleDocumentTool(.photo)"),
                        "Ce raccourci retire la caméra et l'import de fichier sans qu'aucune règle les refuse.")
+        XCTAssertFalse(source.contains("railPosesNextMedia=true;presentMediaSources()"),
+                       "L'intention ne s'arme plus AVANT la présentation : cette forme laissait "
+                         + "un drapeau posé devant une feuille qui peut n'offrir aucune source.")
     }
 
     /// Le choix a son lecteur AU-DESSUS de l'aiguillage, comme tout portail du
@@ -1040,8 +1061,19 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
         // publication.
         XCTAssertTrue(source.contains("case.sceneChip:viewModel.attachPastedAudio(url:destination,role:.foreground)"),
                       "…et placé en CONTENU sur une SCÈNE, devenir une puce posée dessus")
-        XCTAssertTrue(source.contains("case.contentCard:documentLocalMedia.append("),
-                      "…ou, sans scène, une pièce jointe du document")
+        // **#6073 — l'écriture dans la liste du document passe par l'ENTONNOIR
+        // depuis le #6047.** Ce témoin cherchait `documentLocalMedia.append(`
+        // en direct ; ce site n'existe plus, et c'est le but du lot : aucun
+        // appelant n'écrit dans la liste sans DÉCLARER ce que le rail fait de
+        // ce média (`.consomme` / `.abandonne` / `.roleDejaPose`). Garder la
+        // lettre ici reviendrait à exiger le retour du contournement que
+        // l'entonnoir a fermé.
+        XCTAssertTrue(source.contains("case.contentCard:ecrireDansLaListeDuDocument("),
+                      "…ou, sans scène, une pièce jointe du document — écrite par l'entonnoir, "
+                        + "seul site autorisé à toucher la liste (#6047)")
+        XCTAssertTrue(source.contains("rail:.abandonne"),
+                      "…et le placement en CARTE DE CONTENU abandonne la pose sur la scène : "
+                        + "le média part dans le document, pas sur le canvas.")
     }
 
     /// La sélection affichée est ce que la règle ferait SANS choix — jamais un

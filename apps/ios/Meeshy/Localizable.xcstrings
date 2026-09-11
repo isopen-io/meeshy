@@ -17812,43 +17812,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المستوى %@"
+            "value": "المستوى %lld"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stufe %@"
+            "value": "Stufe %lld"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tier %@"
+            "value": "Tier %lld"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nivel %@"
+            "value": "Nivel %lld"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Palier %@"
+            "value": "Palier %lld"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Livello %@"
+            "value": "Livello %lld"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nível %@"
+            "value": "Nível %lld"
           }
         }
       }
@@ -168892,43 +168892,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ يومًا متتاليًا. رسالة أو قصة أو منشور اليوم، وتستمر السلسلة."
+            "value": "%lld يومًا متتاليًا. رسالة أو قصة أو منشور اليوم، وتستمر السلسلة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ Tage gehalten. Eine Nachricht, eine Story oder ein Beitrag heute, und die Serie geht weiter."
+            "value": "%lld Tage gehalten. Eine Nachricht, eine Story oder ein Beitrag heute, und die Serie geht weiter."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ days kept. A message, a story or a post today, and the streak goes on."
+            "value": "%lld days kept. A message, a story or a post today, and the streak goes on."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ días mantenidos. Un mensaje, una historia o una publicación hoy, y la racha continúa."
+            "value": "%lld días mantenidos. Un mensaje, una historia o una publicación hoy, y la racha continúa."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ jours tenus. Un message, une story ou un post aujourd'hui, et la série continue."
+            "value": "%lld jours tenus. Un message, une story ou un post aujourd'hui, et la série continue."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ giorni mantenuti. Un messaggio, una storia o un post oggi, e la serie continua."
+            "value": "%lld giorni mantenuti. Un messaggio, una storia o un post oggi, e la serie continua."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ dias mantidos. Uma mensagem, um story ou um post hoje, e a sequência continua."
+            "value": "%lld dias mantidos. Uma mensagem, um story ou um post hoje, e a sequência continua."
           }
         }
       }
