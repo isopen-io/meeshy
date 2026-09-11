@@ -117,7 +117,7 @@ export function registerConversationListRoute(
        * reconnexion proposée. `apps/web` rafraîchit sur 401. Android est NEUTRE
        * (`AuthExpiryInterceptor.EXPIRY_CODES = {401, 403}` contient déjà 401 —
        * il JUSTIFIE d'ailleurs son 403 en citant la phrase de CE site, ce qui
-       * fait de ce commentaire-là un suivi). `apps/web-v3` portait une ligne
+       * fait de ce commentaire-là un suivi). `apps/web-v2` portait une ligne
        * `status === 403` écrite POUR ce défaut (`lib/api/compte.ts`) ; elle
        * disparaît avec lui.
        *

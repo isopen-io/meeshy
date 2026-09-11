@@ -22,7 +22,7 @@ on:
     tags: ['v*.*.*']
     paths:
       - 'apps/web/**'
-      - 'apps/web-v3/**'
+      - 'apps/web-v2/**'
       - 'packages/design-tokens/**'
       - 'services/gateway/**'
       - 'services/translator/**'
@@ -152,7 +152,7 @@ jobs:
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             # **La v3.1 manquait à cette liste** (#5619). Une release taguée
             # construisait le legacy, la passerelle, le translator et l'agent —
-            # et pas `apps/web-v3`, la seule
+            # et pas `apps/web-v2`, la seule
             # application web en développement. Une omission dans une
             # énumération ne rougit nulle part : elle produit une release
             # complète en apparence, amputée en fait.
@@ -169,7 +169,7 @@ jobs:
             # rend alors « fatal: bad object » (mesuré). L'ancien repli
             # `HEAD~1 HEAD` ne regardait plus que le DERNIER commit — une
             # poussée de cinq commits dont seul le premier touche
-            # `apps/web-v3/` ne construisait rien, et la livraison était
+            # `apps/web-v2/` ne construisait rien, et la livraison était
             # perdue SANS QUE RIEN NE ROUGISSE.
             #
             # La direction de l'erreur se choisit par son coût de réparation :
@@ -194,7 +194,7 @@ jobs:
               echo "agent=true" >> $GITHUB_OUTPUT
             else
             echo "web=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-            echo "web_v31=$([[ "$CHANGED" == *"apps/web-v3/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "web_v31=$([[ "$CHANGED" == *"apps/web-v2/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "translator=$([[ "$CHANGED" == *"services/translator/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "agent=$([[ "$CHANGED" == *"services/agent/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -227,7 +227,7 @@ jobs:
           # été construite. Son renommage est un geste coordonné avec l'hôte.
           if [[ "${{ steps.changes.outputs.web_v31 }}" == "true" ]]; then
             HAS_CHANGES=true
-            VERSION=$(node -p "require('./apps/web-v3/package.json').version" 2>/dev/null || echo "0.0.0")
+            VERSION=$(node -p "require('./apps/web-v2/package.json').version" 2>/dev/null || echo "0.0.0")
             [[ "$FIRST" == "false" ]] && SERVICES+=','
             # **L'origine de l'API se fige au BUILD, pas au démarrage (#5872).**
             # `import.meta.env` est remplacé par Vite à la construction : une
@@ -249,7 +249,7 @@ jobs:
             # fixtures montre Kwame Mensah à de vrais utilisateurs. Le défaut du
             # `Dockerfile` reste `fixtures` pour qu'un build local n'exige aucune
             # passerelle ; une image, elle, en a toujours une.
-            SERVICES+='{"service":"web-v31","context":".","dockerfile":"./apps/web-v3/Dockerfile","image":"meeshy-web-v31","version":"'$VERSION'","viteApiBase":"'$API_BASE'","viteDataSource":"gateway"}'
+            SERVICES+='{"service":"web-v31","context":".","dockerfile":"./apps/web-v2/Dockerfile","image":"meeshy-web-v31","version":"'$VERSION'","viteApiBase":"'$API_BASE'","viteDataSource":"gateway"}'
             FIRST=false
           fi
 

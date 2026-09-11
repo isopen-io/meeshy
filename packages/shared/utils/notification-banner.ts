@@ -11,7 +11,7 @@ import type { Notification, NotificationTypeEnum } from '../types/notification.j
  * ELLE VIT ICI, ET PAS DANS UN CLIENT, parce qu'elle en a désormais TROIS :
  * iOS (`NotificationBannerPresentation`), le web legacy
  * (`apps/web/utils/notification-banner.ts`, qui l'a portée le premier) et la v3
- * (`apps/web-v3`). Elle était écrite deux fois quand le troisième est arrivé —
+ * (`apps/web-v2`). Elle était écrite deux fois quand le troisième est arrivé —
  * l'écrire une troisième aurait garanti la divergence, et l'issue le dit en
  * toutes lettres : « le lot commence par remonter la loi web, pas par la
  * recopier ».

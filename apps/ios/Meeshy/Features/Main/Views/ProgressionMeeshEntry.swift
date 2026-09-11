@@ -14,7 +14,7 @@ import MeeshyUI
 /// témoin qui cherche l'ABSENCE, jamais par une capture qui montre le cas
 /// heureux (`ProgressionMeeshEntryTests`).
 ///
-/// Jumelle de `MeeshEntry` / `MeeshDetail` (`apps/web-v3/src/routes/progression.tsx`) :
+/// Jumelle de `MeeshEntry` / `MeeshDetail` (`apps/web-v2/src/routes/progression.tsx`) :
 /// mêmes mots, même ordre, même règle sur la seconde borne.
 struct ProgressionMeeshEntry: View {
     let meesh: EngagementMeeshProgress

@@ -43,8 +43,8 @@ services/translator/models/*
 # L'image web ne lit rien de ces projets natifs (Android/iOS) : le Dockerfile
 # ne copie que `dist/`. Versionnees depuis #5604 (D-18), elles seraient sinon
 # copiees en pure perte a chaque construction d'image.
-apps/web-v3/android/
-apps/web-v3/ios/
+apps/web-v2/android/
+apps/web-v2/ios/
 
 # === IDE ===
 .vscode/
@@ -94,8 +94,8 @@ docker-compose*.yml
 # un chemin JUSTE vers un fichier qui EXISTE dans le dépôt — rien n'aurait dit
 # qu'il avait été filtré à l'entrée. L'image FINALE n'en porte rien : l'étage
 # `runner` ne copie que `dist/`.
-!apps/web-v3/scripts
-!apps/web-v3/scripts/**
+!apps/web-v2/scripts
+!apps/web-v2/scripts/**
 !services/gateway/docker-entrypoint.sh
 !services/translator/docker-entrypoint.sh
 !services/translator/docker-entrypoint-mongodb.sh

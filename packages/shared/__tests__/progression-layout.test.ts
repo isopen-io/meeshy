@@ -3,7 +3,7 @@
  *
  * Ce fichier existe parce que deux clients ont composé le même écran chacun de
  * son côté et ont divergé sans que rien ne rougisse : l'iOS natif rendait
- * Meesh → badges → succès → défis, web-v3 rendait élan → Meesh → niveau →
+ * Meesh → badges → succès → défis, web-v2 rendait élan → Meesh → niveau →
  * défis → badges → succès. `resolveEngagementProgress` décidait déjà du
  * CONTENU ; personne ne décidait de la COMPOSITION.
  *

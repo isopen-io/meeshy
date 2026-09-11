@@ -6,7 +6,7 @@ import MeeshyUI
 
 /// D-18 bis (2026-09-08, #5625, revue-correction #5559 défaut 1) —
 /// `MeeshyColors.textSecondary(isDark: false)` alimente `--color-ios-ink-2`
-/// côté web-v3 (`packages/design-tokens/scripts/generate-from-ios.mjs:293,320`),
+/// côté web-v2 (`packages/design-tokens/scripts/generate-from-ios.mjs:293,320`),
 /// lui-même l'encre de l'APERÇU (dernier message) sur la liste des
 /// conversations — la ligne la plus lue de l'écran phare. Elle valait
 /// `indigo700.opacity(0.6)` : **2,70–3,12:1** selon le fond, sous AA (4,5:1)
