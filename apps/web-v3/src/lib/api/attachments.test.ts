@@ -1,16 +1,16 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { uploadAttachments } from './attachments';
 import { createHttpTransport } from './http';
 import { resetUploadedAttachmentsForTests } from './fixtures';
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  ensureHappyDomRegistered();
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await releaseHappyDomIfRegistered();
 });
 
 const file = (name: string, type: string, bytes = 3): File => new File([new Uint8Array(bytes)], name, { type });

@@ -34,10 +34,13 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
  * `beforeAll` et de le libérer dans son `afterAll`, restaurant
  * l'environnement natif pour les fichiers suivants — c'est le double appel
  * qui levait, pas la portée qui était fausse.
+ *
+ * `options` passe tel quel à `register()` : `router.test.tsx` et
+ * `magic-link.test.tsx` servent une `url` au document.
  */
-export const ensureHappyDomRegistered = (): void => {
+export const ensureHappyDomRegistered = (options?: Parameters<typeof GlobalRegistrator.register>[0]): void => {
   if (!GlobalRegistrator.isRegistered) {
-    GlobalRegistrator.register();
+    GlobalRegistrator.register(options);
   }
 };
 

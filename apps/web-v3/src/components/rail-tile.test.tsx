@@ -1,8 +1,8 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { RAIL_TILE_COMPACT, RAIL_TILE_GRANDE, RailTile } from './rail-tile';
 
 /**
@@ -26,7 +26,7 @@ import { RAIL_TILE_COMPACT, RAIL_TILE_GRANDE, RailTile } from './rail-tile';
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
 
@@ -35,7 +35,7 @@ afterAll(async () => {
     await new Promise((r) => setTimeout(r, 0));
   });
   delete globals.IS_REACT_ACT_ENVIRONMENT;
-  await GlobalRegistrator.unregister();
+  await releaseHappyDomIfRegistered();
 });
 
 /* `undefined` tant qu'un témoin n'a rien monté — le premier n'interroge que des

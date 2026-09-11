@@ -1,8 +1,8 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { ApiResult } from '@/lib/api/http';
 import { createIntervalClock, type IntervalClockScheduler } from '@/lib/view/interval-clock';
 import type { MagicLinkRequestData } from '@/lib/view/magic-link';
@@ -17,13 +17,13 @@ import { MagicLinkFlow, type MagicLinkFlowDeps } from '@/components/magic-link-f
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 beforeAll(() => {
-  GlobalRegistrator.register({ url: 'http://localhost/' });
+  ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
 
 afterAll(async () => {
   delete globals.IS_REACT_ACT_ENVIRONMENT;
-  await GlobalRegistrator.unregister();
+  await releaseHappyDomIfRegistered();
 });
 
 let container: HTMLDivElement;
