@@ -71,6 +71,7 @@ struct BubbleAttachmentView: View {
                     accentColorHex: accentHex,
                     transcription: transcription,
                     translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
+                    autoRevealTranscription: isMe || UserPreferencesManager.shared.audio.autoTranscribeIncoming,
                     onRequestTranscription: {
                         Task {
                             try? await AttachmentService.shared.requestTranscription(

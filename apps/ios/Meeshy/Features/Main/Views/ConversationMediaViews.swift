@@ -615,6 +615,15 @@ struct AudioMediaView: View, Equatable {
         isMe && voiceConsentMissing
     }
 
+    /// #4956 — mes propres messages restent toujours révélés (c'est ma voix) ;
+    /// pour un message REÇU, la règle suit la préférence
+    /// `audio.autoTranscribeIncoming`. Lu directement (pas d'`@ObservedObject`
+    /// — leaf view, Zero Unnecessary Re-render), même patron que
+    /// `BubbleContentBuilder` pour `privacy.showReadReceipts`.
+    private var autoRevealTranscription: Bool {
+        message.isMe || UserPreferencesManager.shared.audio.autoTranscribeIncoming
+    }
+
     static func == (lhs: AudioMediaView, rhs: AudioMediaView) -> Bool {
         lhs.attachment.id == rhs.attachment.id
             && lhs.attachment.fileUrl == rhs.attachment.fileUrl
@@ -987,6 +996,7 @@ struct AudioMediaView: View, Equatable {
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage,
+                autoRevealTranscription: autoRevealTranscription,
                 onFullscreen: { showAudioFullscreen = true },
                 onRequestTranscription: {
                     Task {
@@ -1021,6 +1031,7 @@ struct AudioMediaView: View, Equatable {
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage,
+                autoRevealTranscription: autoRevealTranscription,
                 onFullscreen: { showAudioFullscreen = true },
                 onRequestTranscription: {
                     Task {
@@ -1054,6 +1065,7 @@ struct AudioMediaView: View, Equatable {
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage,
+                autoRevealTranscription: autoRevealTranscription,
                 onFullscreen: { showAudioFullscreen = true },
                 onRequestTranscription: {
                     Task {
