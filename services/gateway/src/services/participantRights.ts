@@ -126,6 +126,120 @@ export const NEW_MEMBER_PERMISSIONS: Readonly<ParticipantPermissions> = Object.f
 });
 
 /**
+ * Les droits d'un membre FONDATEUR — celui qui naît AVEC la conversation.
+ *
+ * Trois portes en écrivent : l'acceptation d'une demande d'ami (la conversation
+ * directe des deux amis), `POST /conversations`, et la création d'une
+ * conversation NEUVE par un lien de partage. Les trois posaient leur propre
+ * littéral, fermé sur `canSendVideos`/`canSendAudios` — et depuis #5151 un
+ * droit de type explicitement `false` REFUSE la pièce jointe correspondante
+ * (`attachmentSendRightForMimeType`). Une vidéo, un vocal et un document
+ * étaient donc refusés dans toute conversation directe ou créée dans l'app
+ * (#6080).
+ *
+ * ## Pourquoi une constante PLUTÔT que `NEW_MEMBER_PERMISSIONS` tel quel
+ *
+ * Sur les SEPT droits d'émission, la table est la même — c'est tout le sujet
+ * de #6080, et la raison pour laquelle celle-ci est DÉRIVÉE de celle-là plutôt
+ * que recopiée : un huitième droit d'émission ajouté là-haut arrive ici sans
+ * que personne n'ait à y penser.
+ *
+ * Le seul champ qui diffère est `canViewHistory`, et il diffère parce que la
+ * QUESTION diffère. `NEW_MEMBER_PERMISSIONS` répond pour un membre AJOUTÉ à une
+ * conversation qui existait avant lui : il lit depuis son arrivée, et un hôte
+ * lui ouvre l'avant par `historyVisibleFrom`. Un FONDATEUR n'a pas d'avant —
+ * la conversation et sa participation sont écrites par le même `create`. Les
+ * trois portes n'écrivaient d'ailleurs pas ce champ du tout, laissant le défaut
+ * de schéma (`ParticipantPermissions.canViewHistory @default(true)`) s'appliquer,
+ * ce dont `historyFloorFor` tire un plancher `null`. Le poser à `false` ici
+ * ferait passer ce plancher à `joinedAt` et ferait dire à la fiche de
+ * participant (`resolveEntryRights`) un fait de modération FAUX, sans qu'aucun
+ * besoin produit ne le demande. La valeur d'origine du site est donc préservée,
+ * et elle est écrite EXPLICITEMENT : un défaut de schéma n'est pas une décision
+ * lisible.
+ */
+export const FOUNDING_MEMBER_PERMISSIONS: Readonly<ParticipantPermissions> = Object.freeze({
+  ...NEW_MEMBER_PERMISSIONS,
+  canViewHistory: true,
+});
+
+/**
+ * Les droits qui gouvernent ce qu'on ÉMET, par opposition à `canViewHistory`
+ * qui gouverne ce qu'on LIT. Dérivés de l'énumération, jamais recopiés : un
+ * droit d'émission ajouté à `PARTICIPANT_RIGHT_NAMES` entre ici tout seul.
+ */
+export const PARTICIPANT_SEND_RIGHT_NAMES = PARTICIPANT_RIGHT_NAMES.filter(
+  (name): name is Exclude<ParticipantRightName, 'canViewHistory'> => name !== 'canViewHistory',
+);
+
+/**
+ * La SIGNATURE de la table héritée — celle que les trois portes de création
+ * écrivaient avant #6080, et qu'un rattrapage doit reconnaître pour rouvrir les
+ * lignes déjà écrites.
+ *
+ * Elle est énoncée EN ENTIER, et le rattrapage l'exige champ par champ, parce
+ * que c'est la seule façon de distinguer « né fermé » d'« explicitement
+ * restreint ». Un hôte qui aurait retiré `canSendImages` à quelqu'un aurait
+ * produit une table qui ressemble à celle-ci sur six champs sur sept : rouvrir
+ * sur une correspondance PARTIELLE effacerait sa décision.
+ *
+ * `canViewHistory` n'en fait pas partie : les trois portes ne l'écrivaient pas,
+ * si bien que la valeur persistée dépend du défaut de schéma et non du geste —
+ * l'exiger ferait rater des lignes que ce rattrapage vise, sans rien distinguer
+ * de plus.
+ */
+export const INHERITED_CLOSED_MEMBER_PERMISSIONS: Readonly<
+  Record<Exclude<ParticipantRightName, 'canViewHistory'>, boolean>
+> = Object.freeze({
+  canSendMessages: true,
+  canSendFiles: true,
+  canSendImages: true,
+  canSendVideos: false,
+  canSendAudios: false,
+  canSendLocations: false,
+  canSendLinks: false,
+});
+
+/** Ce qu'il faut d'une ligne `Participant` pour répondre à la question du rattrapage. */
+export type ClosedBirthCandidate = {
+  readonly permissions?: ParticipantRightsOverride | null;
+  /** Présente ⇒ le participant est un visiteur ANONYME ; ses droits viennent du lien. */
+  readonly anonymousSession?: unknown;
+  /** Posé ⇒ le participant est entré PAR un lien ; sa table est la décision du lien. */
+  readonly shareLinkId?: string | null;
+};
+
+/**
+ * **Cette ligne est-elle née de la table fermée des trois portes de création ?**
+ *
+ * Prédicat PUR — le rattrapage de #6080 ne réécrit que ce qu'il rend `true`.
+ * Trois conditions, et les deux premières comptent autant que la troisième :
+ *
+ * 1. **Aucune session anonyme.** Un visiteur anonyme tient ses droits du lien
+ *    qu'il a suivi (`routes/conversations/link-admission.ts`) : sa restriction
+ *    est la décision d'un hôte, pas un accident de naissance.
+ * 2. **Aucun `shareLinkId`.** Un INSCRIT entré par un lien porte lui aussi la
+ *    table du lien, sans session anonyme pour le signaler — le seul discriminant
+ *    est le lien qu'il a emprunté. Sans cette condition, le rattrapage rouvrirait
+ *    des membres que le porteur du lien a délibérément bornés.
+ * 3. **La signature EXACTE**, champ par champ, y compris les droits à `true` :
+ *    une correspondance partielle effacerait une restriction posée par un hôte
+ *    (`PATCH …/rights` écrit dans `anonymousSession.rights`, mais un hôte peut
+ *    aussi avoir été servi par une porte qui écrit `permissions`).
+ */
+export function wasBornWithClosedMemberTable(participant: ClosedBirthCandidate): boolean {
+  if (participant.anonymousSession !== null && participant.anonymousSession !== undefined) return false;
+  if (participant.shareLinkId) return false;
+
+  const permissions = participant.permissions;
+  if (!permissions) return false;
+
+  return PARTICIPANT_SEND_RIGHT_NAMES.every(
+    (name) => permissions[name] === INHERITED_CLOSED_MEMBER_PERMISSIONS[name],
+  );
+}
+
+/**
  * Les droits d'entrée résolus, `canViewHistory` compris, tels qu'une fiche ou un
  * événement doivent les énoncer.
  *
