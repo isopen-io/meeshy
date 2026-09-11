@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
-import { Avatar } from '@/components/avatar';
-import { RAIL_TILE_COMPACT, RAIL_TILE_GRANDE, RailTile } from '@/components/rail-tile';
+import { StoryRail } from '@/components/story-rail';
+import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from '@/components/chrome-action';
 import { Glyph } from '@/components/glyph';
 import { LensRow } from '@/components/lens-row';
 import { LensSection } from '@/components/lens-sticker';
@@ -13,7 +13,6 @@ import { rowAction, useConversations } from '@/lib/api/query';
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
-import { accentOf } from '@/lib/accent';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
 import { partagerInvitation, RETOUR_INVITATION } from '@/lib/view/invitation';
@@ -22,7 +21,6 @@ import { resolveLensSections } from '@/lib/lens/sections';
 import { useOnline } from '@/lib/net/online';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useMinute } from '@/lib/view/use-minute';
-import { titleOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -36,33 +34,6 @@ import { Link } from '@/routes/route-table';
  * haut de l'ecran est hors de portee du pouce.
  */
 
-/**
- * LA HAUTEUR RÉSERVÉE DU RAIL (#5650, F5/§5 étape 9, revue-correction) —
- * `check-gateway-build.mjs` comparait l'`offsetTop` de la première rangée
- * avant/après résolution et rougissait de 130 px : le rail (avatar 72 +
- * liséré + libellé) se PEIGNAIT VIDE tant que `list.data === undefined`
- * (`conversations` vaut `[]`), puis SAUTAIT à sa hauteur réelle une fois les
- * conversations arrivées.
- *
- * La hauteur se réserve par une TUILE FANTÔME — la MÊME boîte que la vraie,
- * rendue invisible — jamais par un nombre écrit à la main (même discipline
- * que `SkeletonSectionStub`, `components/lens-skeleton.tsx`, et D-4 : aucune
- * cote de géométrie ne s'écrit ici). Un `minHeight: 130` aurait deux torts
- * qu'une tuile n'a pas : il fige une cote qui dérive dès que l'avatar ou la
- * typographie du libellé bougent, et il creuse un TROU de 130 px au-dessus
- * de l'état vide d'un compte qui n'a encore AUCUNE conversation — le tout
- * premier écran d'un nouvel arrivant.
- */
-function RailPlaceholderTile() {
-  return (
-    <li aria-hidden="true" className="flex w-[88px] shrink-0 flex-col items-center gap-1.5" style={{ visibility: 'hidden' }}>
-      <span className="grid place-items-center rounded-chip p-[2.5px]">
-        <Avatar initials="" color="var(--color-ios-card)" size={72} />
-      </span>
-      <span className="w-full truncate text-center text-check">&nbsp;</span>
-    </li>
-  );
-}
 
 /**
  * `rowAction` (#5650, F2/F4/§5 étape 9) — RÉFÉRENCE DE MODULE STABLE
@@ -179,30 +150,28 @@ export default function ConversationsScreen() {
   const frame = useRef<HTMLUListElement | null>(null);
 
   /**
-   * **LE TRAIL SE COMPACTE QUAND ON DÉFILE** (#5946, directive porteur) — la
-   * tuile passe de 72 à 30 px, comme l'app iOS passe de `.storyTray` (88 pt) à
-   * `.storyTrayCompact` (36 pt).
+   * **LA COMPACTION AU DÉFILEMENT EST RETIRÉE** (#6070, #6080).
    *
-   * iOS obtient l'effet autrement : son trail vit DANS la vue défilante, sort
-   * du champ, et une bande épinglée le remplace en miniature. Notre disposition
-   * ne le permet pas — le rail est `shrink-0` au-dessus d'une liste qui défile
-   * dans son propre conteneur, donc il ne sort jamais. On compacte SUR PLACE,
-   * ce qui vaut mieux pour le geste : le trail reste atteignable en
-   * permanence, là où iOS le perd et doit le réintroduire.
+   * Le rail passait de 72 à 30 px en défilant, ce qui poussait les neuf cases
+   * du dessous : le gate de la Lentille relève `offsetTop` à cinq paliers et
+   * exige qu'aucune ne bouge — il était rouge sur `dev` depuis #5946, donc sur
+   * TOUTE PR du dépôt, y compris purement iOS.
    *
-   * **L'observation vit ICI, dans le montage** — jamais dans la tuile, qui
-   * reste une vue PURE. C'est la règle qu'iOS écrit noir sur blanc pour son
-   * propre rail (« aucun `@State` de défilement, aucun observateur »).
+   * La cible iOS a tranché la contradiction, et pas dans le sens qu'on croyait :
+   * là-bas ce ne sont pas les mêmes tuiles qui rétrécissent. `StoryTrayView`
+   * (88 pt) vit DANS la zone défilante et sort du champ ; `PinnedStoryTrailBand`
+   * (36 pt) est une AUTRE vue, montée dans l'en-tête replié — hors flux. Le
+   * contenu ne remonte donc jamais d'un cran : il défile, ce qui n'est pas la
+   * même chose.
    *
-   * HYSTÉRÉSIS de 24 px : sans elle, un doigt posé pile sur le seuil ferait
-   * clignoter la bande à chaque micro-mouvement. On compacte à 48, on rouvre à
-   * 24 — jamais au même point.
+   * Le doc-comment de cette bande épinglée nomme même la forme abandonnée :
+   * « it used to render as a second row BELOW a title that stayed on screen for
+   * nothing » — c'est-à-dire exactement ce que faisait ce rail.
+   *
+   * Ce qui reste à faire (issue compagnon) : la bande compacte ÉPINGLÉE, qui
+   * rendra au geste ce que la compaction sur place lui donnait, sans toucher au
+   * flux. La retirer d'abord est ce qui rend `dev` vert pour tout le monde.
    */
-  const [railCompact, setRailCompact] = useState(false);
-  const onListScroll = (): void => {
-    const y = frame.current?.scrollTop ?? 0;
-    setRailCompact((etait) => (etait ? y > 24 : y > 48));
-  };
   const { focus, level } = useScene(frame);
   const online = useOnline();
 
@@ -226,14 +195,6 @@ export default function ConversationsScreen() {
   const { languages: readerLanguages } = useReaderLanguages();
   const conversations = list.data ?? EMPTY_CONVERSATIONS;
   const overrides = useStore(conversationStore, (s) => s.overrides);
-  /** Le corpus du RAIL — même précédence iOS que `applyFilter` (l'archivé
-   * sort), mémorisé parce qu'il se lit DEUX fois par rendu (la décision de
-   * peindre la région, puis les tuiles). */
-  const railConversations = useMemo(
-    () => conversations.filter((c) => !effectiveFlagsOf(c, overrides).isArchived),
-    [conversations, overrides],
-  );
-
   /**
    * LES SECTIONS (#5694, écart 6) — `resolveLensSections` re-partitionne le
    * corpus FILTRÉ (recherche et archives déjà réglées par `applyFilter`) en
@@ -295,18 +256,20 @@ export default function ConversationsScreen() {
           le savoir. Un `Link`, jamais un bouton qui navigue : `href`, nouvel
           onglet, préchargement à l'intention (`router.tsx` § Link).
         */}
+        {/* La MÊME cible ronde que les actions du fil (#6080) : elle mesurait
+            ici 32 de disque et 14 % de teinte, là-bas 28 et 18 % — deux
+            dessins pour un seul rôle, sur les deux écrans que l'utilisateur
+            enchaîne le plus. Le disque vient maintenant du jeton généré
+            depuis iOS, la teinte se dérive de `currentColor`. */}
         <Link
           to="progression"
           aria-label="Progression — badges, niveau et série"
-          className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+          className={`${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`}
           style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
         >
-          <span
-            className="grid size-8 place-items-center rounded-chip"
-            style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 14%, transparent)' }}
-          >
+          <ChromeActionDisc>
             <Glyph name="trophy" size={16} />
-          </span>
+          </ChromeActionDisc>
         </Link>
         {/*
           #5559 revue-correction, défaut 2 : « Créer un lien de partage » et
@@ -324,53 +287,38 @@ export default function ConversationsScreen() {
       </header>
 
       {/*
-        LE RAIL D'ACCÈS RAPIDE : avatars 88 px, anneau de marque quand non lu.
-        #5559 revue-correction, défauts 3 et 9.
+        LE RAIL DES STORIES (#6080) — de VRAIES stories, un cercle par AUTEUR.
 
-        (3) CE N'ÉTAIT NI DES STORIES NI UN CONTRÔLE : quatre `<li>` nus,
-        aucun `<a>` ni `<button>`, un anneau qui promettait un contenu que
-        rien n'ouvrait. En l'absence d'une route « stories » (issue
-        compagnon à ouvrir), la seule destination RÉELLE de chaque avatar
-        aujourd'hui est SON FIL — chaque tuile est donc un `Link` vers
-        `thread`, exactement ce qu'elle ouvre déjà si on tape la ligne
-        correspondante plus bas.
+        Ce qu'il remplace : un rail d'« accès rapide » qui peignait des
+        CONVERSATIONS sous un anneau de story. Son propre commentaire l'avouait
+        — « en l'absence d'une route stories, la seule destination RÉELLE de
+        chaque avatar aujourd'hui est SON FIL ». Un anneau qui promet un contenu
+        que rien n'ouvre est un contrôle qui ment (loi 4).
 
-        (9) LE RAIL LIT DÉSORMAIS LA MÊME SOURCE QUE LA LISTE — `CONVERSATIONS`
-        filtrées du corpus ARCHIVÉ (`effectiveFlagsOf(...).isArchived`, même
-        précédence iOS `:598-601` que `applyFilter`) et `effectiveUnreadOf`
-        pour l'anneau. Avant ce correctif, le rail lisait le fil BRUT et
-        `unreadOf` seul : marquer « Lu » vidait le badge de la ligne sans
-        jamais éteindre l'anneau du rail, archiver sortait la conversation de
-        la liste sans jamais la retirer du rail — deux vérités pour un même
-        état, sur le MÊME écran.
+        Les deux routes existent désormais (`stories`, `storyCompose`), et les
+        deux boutons FLOTTANTS du rail y mènent : composer, et tout voir.
+
+        Le composant décide seul de se peindre ou non — l'écran n'a plus à
+        connaître ni le corpus ni l'état de chargement du plateau.
       */}
+      <StoryRail viewerId={viewer.id} />
+
       {/*
-        LE RAIL NE SE PEINT PAS QUAND IL N'A RIEN À MONTRER (revue-correction
-        #5650) — un compte sans conversation, ou dont tout est archivé, ne
-        garde ni région étiquetée vide pour le lecteur d'écran ni bande
-        blanche au-dessus de son état vide. Pendant le CHARGEMENT en
-        revanche, il se peint avec sa tuile fantôme : c'est ce qui tient
-        l'`offsetTop` du contenu identique avant et après la résolution.
-      */}
-      {loading || railConversations.length > 0 ? (
-      <section aria-label="Accès rapide aux conversations" className="shrink-0 overflow-x-auto pb-1">
-        <ul className="flex gap-3 px-4 py-2">
-          {railConversations.length === 0 ? <RailPlaceholderTile /> : null}
-          {railConversations.map((c) => (
-            <RailTile
-              key={c.id}
-              conversationId={c.id}
-              title={titleOf(c, viewer.id ?? '')}
-              accent={accentOf(c)}
-              unread={effectiveUnreadOf(c, overrides)}
-              size={railCompact ? RAIL_TILE_COMPACT : RAIL_TILE_GRANDE}
-            />
-          ))}
-        </ul>
-      </section>
-      ) : null}
+        AUCUN INDICATEUR DE DÉFILEMENT (#6080) — `scrollbar-none`, comme le
+        rail des stories au-dessus.
 
-      <nav aria-label="Filtres" className="shrink-0 overflow-x-auto">
+        Mesuré sur l'ÉMULATEUR Android, jamais visible sur macOS : le moteur
+        Android peint des barres de défilement CLASSIQUES, c'est-à-dire un
+        rail gris PERMANENT, là où WebKit et les navigateurs de bureau posent
+        un indicateur transitoire qui s'efface au repos. Sur la capture, une
+        barre grise horizontale traversait tout l'écran sous les chips et une
+        seconde, verticale, doublait le bord droit de la liste — deux traits
+        que personne n'avait dessinés et que rien n'explique à l'utilisateur.
+        iOS n'en montre aucun (`showsIndicators: false` sur le rail, indicateur
+        transitoire ailleurs) : c'est le repère de section COLLANT qui dit où
+        l'on est, pas un rail.
+      */}
+      <nav aria-label="Filtres" className="scrollbar-none shrink-0 overflow-x-auto">
         <ul className="flex gap-2 px-4 py-1.5">
           {LIST_FILTERS.map((f) => {
             const active = f === filter;
@@ -422,8 +370,7 @@ export default function ConversationsScreen() {
       <ul
         ref={frame}
         id="contenu"
-        onScroll={onListScroll}
-        className="flex flex-1 flex-col overflow-y-auto px-2"
+        className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-2"
         {...(loading ? { 'aria-busy': true, 'aria-label': 'Chargement des conversations' } : {})}
       >
         {/*

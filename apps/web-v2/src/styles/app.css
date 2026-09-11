@@ -443,3 +443,42 @@
   }
 }
 
+
+/**
+ * **UN RAIL NE MONTRE PAS SA BARRE DE DÉFILEMENT** (#6080).
+ *
+ * Le plateau des stories défile horizontalement sur 72 px de haut : une barre
+ * réservée y mange le libellé sous les tuiles, et elle n'apparaît pas sur les
+ * mêmes plateformes (macOS la superpose, Windows et plusieurs environnements
+ * Linux la RÉSERVENT) — deux rendus pour un même écran, dont un seul a été
+ * dessiné. L'affordance de défilement est portée par les tuiles elles-mêmes,
+ * qui débordent visiblement du cadre.
+ *
+ * Les deux déclarations sont nécessaires et ne se remplacent pas :
+ * `scrollbar-width` est la propriété standard (Firefox, Chrome ≥ 121),
+ * `::-webkit-scrollbar` couvre WebKit et les Chromium plus anciens. Le
+ * défilement lui-même reste INTACT — au doigt, à la molette et au clavier.
+ */
+/**
+ * LA POSE DE LA PASTILLE DE SYNCHRONISATION (#6080) — voir le doc-comment de
+ * `components/sync-pill.tsx` pour l'arbitrage, qui vient d'iOS :
+ * « le chrome gagne — un contrôle recouvert est un contrôle qu'on ne peut plus
+ * lire, alors qu'une annonce posée 8 pt plus bas reste parfaitement visible ».
+ *
+ * La cote est MESURÉE, jamais estimée : relevé au navigateur à 390 × 844 le
+ * 2026-09-11, le bas de l'en-tête de LISTE est à 64 px et celui du FIL à 60 px
+ * (hors encoche, que chaque écran porte lui-même en `pt-safe`). On prend le
+ * plus haut des deux, plus les 8 px d'air d'iOS — sur-dégager est le sens
+ * SÛR de l'erreur, sous-dégager recouvre un bouton.
+ */
+.sync-pill {
+  top: calc(env(safe-area-inset-top, 0px) + 72px);
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

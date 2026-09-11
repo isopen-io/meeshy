@@ -237,8 +237,15 @@ async function main() {
     await page.goto(`${base}/`, { waitUntil: 'networkidle' });
     await page.waitForSelector('#contenu:not([aria-busy])', { timeout: 5000 });
 
-    const rails = await page.locator('[aria-label="Accès rapide aux conversations"]').count();
-    check(rails === 0, `corpus VIDE : aucune région « Accès rapide » peinte (obtenu : ${rails})`);
+    /* LE RAIL A CHANGÉ DE NOM ET D'OBJET (#6080) : « Accès rapide aux
+       conversations » n'existe plus — ce rail peignait des CONVERSATIONS sous
+       un anneau de story et a été remplacé par le rail des STORIES, région
+       « Stories ». Le gate interrogeait donc une étiquette morte : il passait
+       par ABSENCE, ce qui est la façon la plus discrète qu'a un témoin de
+       cesser de mesurer (leçon 561). L'invariant, lui, est inchangé — à corpus
+       vide, aucun rail ne prend de place au-dessus de l'état vide. */
+    const rails = await page.locator('[aria-label="Stories"]').count();
+    check(rails === 0, `corpus VIDE : aucune région « Stories » peinte (obtenu : ${rails})`);
 
     const emptyContentTop = await page.locator('#contenu').evaluate((e) => Math.round(e.getBoundingClientRect().top));
     check(

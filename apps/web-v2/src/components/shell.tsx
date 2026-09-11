@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { SyncPill } from './sync-pill';
+
 /**
  * LA COQUILLE — deliberement mince.
  *
@@ -11,6 +13,14 @@ import type { ReactNode } from 'react';
  * Ce qu'elle porte, et qu'aucun ecran ne doit reimplementer : le lien
  * d'evitement, VISIBLE au clavier — un lien d'evitement invisible n'evite
  * rien.
+ *
+ * ...et LA PASTILLE DE SYNCHRONISATION (#6080), seule exception à la minceur
+ * ci-dessus — fondée sur la MÊME raison qu'elle. iOS n'a ni barre d'onglets ni
+ * barre de navigation, mais il a bien UNE couche de chrome flottant au-dessus
+ * de tous les écrans (`RootChromeLayer`), et c'est exactement là que vit sa
+ * pastille. La poser dans chaque écran la ferait diverger d'un écran à
+ * l'autre ; la poser ici la rend identique partout, ce que la coquille
+ * cherchait déjà.
  */
 export default function Shell({ children }: { children: ReactNode }) {
   return (
@@ -21,6 +31,7 @@ export default function Shell({ children }: { children: ReactNode }) {
       >
         Aller au contenu
       </a>
+      <SyncPill />
       {children}
     </div>
   );

@@ -13,6 +13,7 @@ import { Link } from '@/routes/route-table';
 import { Avatar } from './avatar';
 import { Glyph } from './glyph';
 import { LensTime } from './lens-time';
+import { UnreadBadge } from './unread-badge';
 import { RowActions } from './row-actions';
 
 /**
@@ -316,7 +317,12 @@ function LensRowImpl({
             ) : null}
           </span>
 
-          <span className="flex items-baseline gap-2">
+          {/* `items-center`, PLUS `items-baseline` (#6080) : la ligne porte
+              maintenant une capsule de 24 px de haut à côté d'un texte de 15 —
+              alignées sur la LIGNE DE BASE, la capsule pendait sous le nom.
+              iOS aligne son `HStack` au centre (`line1`, alignement par
+              défaut). */}
+          <span className="flex items-center gap-2">
             {/*
               LA HIÉRARCHIE TYPOGRAPHIQUE (#5694, écart 1) — `LentilleMetrics.
               Name.size` = `MeeshyFont.bodySize` (15), poids `.heavy` (800 CSS)
@@ -366,19 +372,27 @@ function LensRowImpl({
                 aucun pixel ; il n'a donc, lui, aucune raison de se fondre. */}
             {flags.isMuted ? <span className="sr-only">En sourdine</span> : null}
             {/*
-              L'HEURE (#5694, écarts 1 et 8) — `LentilleMetrics.Time.size` = 12
-              poids `.bold` (700), et `LentilleConversationRow.timestampColor`
-              rend TOUJOURS l'encre TERTIAIRE (`:458-471` — « le timestamp
-              rouge sur non-lu est supprimé ») : `LensTime` ne prend même pas
-              de prop `unread`, la règle est structurelle. RELATIVE
-              (`shortRelativeTime`), vivante à la minute (`minuteClock`), et
-              fondue avec le reste du CHROME sous sourdine (`chromeFade`).
+              LA PILE DE NON-LUS FINIT LA LIGNE DU NOM (#6080) — et l'HEURE a
+              quitté cette ligne.
+
+              C'est la composition iOS, énoncée par la cote elle-même
+              (`LentilleMetrics.Row.height`, 64 → 84 le 2026-08-22) : « la
+              rangée porte TROIS lignes — nom (avec la pile de non-lus en fin
+              de ligne), "auteur : message", puis la date seule à droite ».
+              `LentilleConversationRow.line1` pose `Spacer(minLength: 0)` puis
+              `UnreadCountBadge` ; `dateLine`, deux lignes plus bas, pousse
+              l'horodatage à droite et RIEN d'autre.
+
+              Ce que la v3.1 faisait à la place : l'heure en fin de ligne de
+              nom, et la pastille dans une colonne à part, centrée sur toute la
+              hauteur. Les deux repères de DROITE étaient donc portés par deux
+              colonnes différentes, et le bord droit de l'heure se déplaçait
+              selon que la rangée avait une pastille ou non — mesuré à la
+              capture : « 1h » de la section Épingles finissait 68 px plus à
+              droite que le « 1 min » de la rangée suivante. Rien ne
+              s'alignait, parce que rien n'avait de colonne.
             */}
-            {at === undefined ? null : (
-              <span style={{ opacity: chromeFade }}>
-                <LensTime at={at} />
-              </span>
-            )}
+            <UnreadBadge count={unreadCount} opacity={chromeFade} />
           </span>
 
           {/*
@@ -461,36 +475,50 @@ function LensRowImpl({
             )}
           </span>
 
-          {/* Le supplément, second volet : la date pleine et le compte de membres. */}
-          <span
-            className="lens-extra flex items-center gap-2 overflow-hidden text-check"
-            aria-hidden={!status.magnified}
-            style={{
-              height: status.magnified ? 14 : 0,
-              opacity: status.magnified ? chromeFade : 0,
-              pointerEvents: status.magnified ? undefined : 'none',
-              color: 'var(--color-ios-ink-3)',
-            }}
-          >
-            <span>{at === undefined ? '' : new Date(at).toISOString().slice(0, 10)}</span>
-            {group ? <span>· {conversation.memberCount} membres</span> : null}
+          {/*
+            LA TROISIÈME LIGNE — `LentilleConversationRow.dateLine` : à gauche
+            ce que la magnification AJOUTE (la date pleine, le compte de
+            membres), à droite l'HEURE, seule, TOUJOURS.
+
+            « La date a QUITTÉ [la ligne du nom] le 2026-08-22 : elle vit
+            seule, en bas à droite (`dateLine`). Le nom possède donc toute la
+            ligne » — le doc-comment d'iOS décrit exactement le défaut que
+            cette ligne corrige : chez nous le nom cédait sa fin à l'heure,
+            donc se tronquait plus tôt, et l'heure se déplaçait avec lui.
+
+            La ligne est RENDUE en permanence — pas seulement magnifiée : c'est
+            ce qui donne à l'heure une colonne fixe, dont le bord droit est
+            celui de la rangée. Le supplément, lui, garde son fondu.
+          */}
+          <span className="flex items-center gap-2 overflow-hidden text-check">
+            <span
+              className="lens-extra flex min-w-0 flex-1 items-center gap-2 overflow-hidden"
+              aria-hidden={!status.magnified}
+              style={{
+                opacity: status.magnified ? chromeFade : 0,
+                pointerEvents: status.magnified ? undefined : 'none',
+                color: 'var(--color-ios-ink-3)',
+              }}
+            >
+              <span>{at === undefined ? '' : new Date(at).toISOString().slice(0, 10)}</span>
+              {group ? <span>· {conversation.memberCount} membres</span> : null}
+            </span>
+            {/*
+              L'HEURE (#5694, écarts 1 et 8) — `LentilleMetrics.Time.size` = 12
+              poids `.bold` (700), et `LentilleConversationRow.timestampColor`
+              rend TOUJOURS l'encre TERTIAIRE (`:458-471` — « le timestamp
+              rouge sur non-lu est supprimé ») : `LensTime` ne prend même pas
+              de prop `unread`, la règle est structurelle. RELATIVE
+              (`shortRelativeTime`), vivante à la minute (`minuteClock`), et
+              fondue avec le reste du CHROME sous sourdine (`chromeFade`).
+            */}
+            {at === undefined ? null : (
+              <span style={{ opacity: chromeFade }}>
+                <LensTime at={at} />
+              </span>
+            )}
           </span>
         </span>
-
-        {unread ? (
-          /* `data-unread` : le crochet STABLE que `check-list-actions.mjs`
-             interroge pour prouver que « Lu »/« Non lu » a un effet — même
-             parti que `data-row`, lu par `check-lens.mjs`. Compter sur la
-             position de ce `<span>` dans le lien rendrait le témoin faux au
-             premier remaniement de la rangée. */
-          <span
-            data-unread={unreadCount}
-            className="grid min-w-[20px] shrink-0 place-items-center rounded-chip px-1.5 text-check font-bold text-white"
-            style={{ backgroundColor: 'var(--accent)', height: 20, opacity: chromeFade }}
-          >
-            {unreadCount}
-          </span>
-        ) : null}
       </Link>
 
       <RowActions

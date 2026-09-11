@@ -30439,3 +30439,72 @@ typer (une garde qui devine un type produit des rouges illisibles, et finit
 désarmée). Falsifiabilité mesurée : vert sur le catalogue corrigé, ROUGE dès
 qu'on remet `%@` sur UNE seule des sept langues, vert de nouveau après
 restauration.
+
+## Leçon 575 — Un jeton GÉNÉRÉ que personne ne consomme ne protège rien : la dérive se produit à côté de lui
+
+*(Les numéros 573 et 574 sont réservés par des lots iOS non encore fusionnés —
+un identifiant qui ne s'alloue pas ne collisionne pas, #5102 : on saute plutôt
+que de risquer deux leçons portant le même numéro dans un fichier partagé.)*
+
+`packages/design-tokens/ios.css` porte `--ios-header-circle: 28px`, **généré
+depuis la source Swift** (`ConversationView+Header.swift`, « cercle visuel des
+actions (cible 44) »), et `apps/web-v2/src/styles/ios.css` le republie en
+`--size-header-circle`. Le gate `check:tokens` était vert depuis le premier
+jour : il vérifie que le jeton CORRESPOND à sa source Swift.
+
+Mesuré au moment d'aligner les vues (#6080) : **aucune surface ne lisait ce
+jeton.** Les trois familles de boutons ronds du chrome l'avaient chacune
+réécrit à la main — `size-7` (28, juste par accident) dans l'en-tête du fil,
+`size-8` (32) dans l'en-tête de la liste, un disque plein de 44 dans le rail
+des stories. Trois dessins pour un seul rôle, sur trois écrans que
+l'utilisateur enchaîne.
+
+> **Un gate de génération mesure la FIDÉLITÉ du jeton, jamais son ADOPTION.**
+> Tant que rien ne le consomme, il se régénère parfaitement pendant que les
+> surfaces dérivent à côté de lui — et la dérive est invisible au gate, par
+> construction : elle n'est pas dans le jeton, elle est dans son absence.
+
+C'est la forme, sur un jeton de design, de la leçon « une vue sans
+CONSOMMATEUR ne rougit nulle part ». La question à poser à toute table générée
+n'est donc pas « est-elle juste ? » mais **« qui la LIT ? »** — et la réponse
+se cherche par `grep` du nom du jeton dans `src/`, pas dans le gate.
+
+Correctif : `components/chrome-action.tsx`, consommateur UNIQUE, qui lit
+`var(--size-header-circle)` et dérive sa teinte de `currentColor` — donc juste
+dans un fil (accent de conversation) comme dans la liste (marque), sans que
+l'appelant ait à le dire, donc sans qu'il puisse se tromper.
+
+## Leçon 576 — Un défaut visuel peut n'exister que sur UN moteur : le rendu se juge là où il est servi
+
+Les captures de recette de `apps/web-v2` sont prises par Chromium sur macOS, à
+390 × 844 (`scripts/capture.mjs`). Après l'alignement des vues, elles étaient
+propres.
+
+Lancée sur l'**émulateur Android** — la coque Capacitor étant la cible réelle
+du chantier —, la même liste montrait **deux barres grises permanentes** :
+l'une horizontale sous les chips de filtre, l'autre verticale le long du bord
+droit de la liste. Personne ne les avait dessinées.
+
+La cause n'est pas dans le code : **le moteur Android peint des barres de
+défilement CLASSIQUES**, c'est-à-dire un rail gris qui occupe de la place et
+reste visible au repos, là où WebKit et les navigateurs de bureau modernes
+posent un indicateur SUPERPOSÉ qui s'efface. Le même CSS, deux rendus — et
+celui qu'on regardait était celui qui ne montrait pas le défaut.
+
+> **Une capture prise sur le moteur de la machine de build mesure la machine de
+> build.** C'est la parente exacte de « un ROUGE des deux côtés du diff mesure
+> aussi la MACHINE » : ici c'est un VERT, et il mesure le moteur. Tant qu'une
+> application est servie par plusieurs moteurs, un seul d'entre eux ne fait pas
+> une recette.
+
+Deux corollaires pratiques :
+
+- **`overflow-*: auto` n'est pas une décision neutre.** Chaque conteneur
+  défilant est un endroit où un moteur PEUT peindre un rail. Les rails
+  HORIZONTAUX (rails de stories, chips de filtre, tiroir du composeur) ne
+  doivent jamais en montrer — iOS pose `showsIndicators: false` sur les siens.
+- **La validation d'une coque se fait DANS la coque.** `build-shells.mjs`
+  refuse, à raison, de construire une coque sur fixtures ; pour juger le RENDU
+  sans identifiants, on sert le serveur de développement à l'émulateur
+  (`--host`, `http://10.0.2.2:<port>`) — c'est le même moteur, le même écran,
+  et aucun artefact mal étiqueté n'est produit.

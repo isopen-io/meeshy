@@ -52,6 +52,19 @@ function dateFieldOf<K extends string>(key: K, value: Date | string | null | und
  * fichier ne garde pas déjà explicitement — fail-closed, jamais une
  * exception qui viderait tout l'écran pour un champ absent.
  */
+/**
+ * Retire les clés dont la valeur est `null` — elles n'existent pas dans le type
+ * partagé, où l'absence s'écrit `undefined`. Le cast est le seul moyen de dire
+ * en TypeScript « je n'ai enlevé que des clés absentes du type » : le filtre ne
+ * peut RIEN produire qui ne soit déjà assignable, puisqu'il ne fait que
+ * soustraire des entrées que le type déclare optionnelles.
+ */
+function sansNull<T extends object>(valeur: T): T {
+  return Object.fromEntries(
+    Object.entries(valeur).filter(([, v]) => v !== null)
+  ) as T;
+}
+
 export function decodeMessage(raw: Message): Message {
   // `null` RETIRÉ, jamais recopié (#5650, revue-correction ; durci défaut 4
   // de la revue #5668 — les SEPT clés de date portaient le même piège que
@@ -98,7 +111,24 @@ export function decodeMessage(raw: Message): Message {
         : { ...rawSender, lastActiveAt: toDate(senderLastActiveAt) };
 
   return {
-    ...rest,
+    // **#6080 — l'ÉNUMÉRATION ci-dessus portait deux affirmations, et la
+    // seconde était fausse.** « Ces clés sont défaites » : vrai. « Ce sont les
+    // clés à défaire » : faux. `Message` compte TRENTE champs optionnels ; dix
+    // seulement étaient déballés, et `...rest` reposait les vingt autres à
+    // `null` — exactement ce que le commentaire d'en-tête promet d'empêcher.
+    //
+    // Le premier à mordre fut `reactionSummary` : servi `null` par la
+    // passerelle, il atteignait `Object.entries()` dans le label a11y d'une
+    // bulle et jetait « Cannot convert undefined or null to object » — un fil
+    // ENTIER blanc, pour une réaction absente.
+    //
+    // Le filtre est GÉNÉRIQUE plutôt qu'une vingt-et-unième ligne d'une liste :
+    // une énumération tenue à la main est un inventaire qui retient en silence
+    // chaque champ ajouté en amont, et `Message` en gagne à chaque lot. Les
+    // champs qui demandent une TRANSFORMATION (les dates, `sender`, `replyTo`,
+    // `translations`) gardent leur traitement nominal ci-dessous : eux ne se
+    // contentent pas d'être dénullifiés.
+    ...sansNull(rest),
     ...(sender === undefined ? {} : { sender }),
     translations: (raw.translations ?? []).map((t) => ({ ...t, createdAt: toDate(t.createdAt) })),
     ...(rawReplyTo === undefined || rawReplyTo === null ? {} : { replyTo: decodeMessage(rawReplyTo) }),

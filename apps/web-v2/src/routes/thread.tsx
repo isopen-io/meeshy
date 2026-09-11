@@ -637,7 +637,6 @@ export default function ThreadScreen() {
         otherUnread={otherUnread}
         expanded={expanded}
         onToggleExpanded={() => setExpanded((v) => !v)}
-        online={online}
         currentRowTitle={currentRow?.title ?? ''}
         isAuto={readingDecision.reason !== 'sticky'}
         readingMenuRows={readingMenuRows}
@@ -689,7 +688,7 @@ export default function ThreadScreen() {
           liste : même effet quand le contenu est court, et un débordement
           normal quand il est long.
         */
-        className="flex flex-1 flex-col overflow-y-auto px-3.5 pt-2 pb-2"
+        className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-3.5 pt-2 pb-2"
         /*
           LES COTES DE LA SCÈNE DU FIL (#5648) — la SEULE porte par laquelle
           `reading-mode/metrics.ts::sceneStyleVars()` atteint le CSS,

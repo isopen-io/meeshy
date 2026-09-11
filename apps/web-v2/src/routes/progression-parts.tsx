@@ -352,7 +352,7 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
             </span>
           </div>
           <ul
-            className="flex gap-2 overflow-x-auto pb-1"
+            className="scrollbar-none flex gap-2 overflow-x-auto pb-1"
             aria-label={`${ACHIEVEMENT_SECTION_TITLES[vue.section]} — ${vue.unlockedCount} sur ${vue.attainableCount}`}
           >
             {vue.entries.map((entry) => (
