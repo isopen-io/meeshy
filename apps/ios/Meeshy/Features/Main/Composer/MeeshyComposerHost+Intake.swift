@@ -235,14 +235,15 @@ extension MeeshyComposerHost {
 
     /// **Le sélecteur de lieu (T2.5)**, monté ICI plutôt que dans
     /// `ComposerDocumentSurface` — même patron que `documentCameraSheet` juste
-    /// au-dessus : le picker est le même composant que le composer inline du
-    /// fil (`FeedView+Attachments.handleFeedLocationSelection`), qui se
-    /// referme lui-même (`LocationPickerView.dismiss()`) après `onSelect`.
+    /// au-dessus : le picker est le même composant que montait le composer
+    /// inline du fil (`handleFeedLocationSelection`, RETIRÉE en #6016 — ce
+    /// meuble EST ce qui l'a remplacée), et il se referme lui-même
+    /// (`LocationPickerView.dismiss()`) après `onSelect`.
     ///
     /// **Un lieu choisi recalcule le second opt-in DEPUIS LA MÉMOIRE**, jamais
     /// depuis l'état courant : `FeedNearbyDiscoverability.choiceForNewPlace()`
     /// lit `LocationSharingPreferencesStore` à cet instant précis, exactement
-    /// ce que fait le composer inline sur le même geste — un second lieu choisi
+    /// ce que faisait le composer inline sur le même geste — un second lieu choisi
     /// dans la même session doit repartir du dernier palier RETENU, pas d'un
     /// toggle resté ouvert pour le lieu précédent.
     var documentLocationPickerSheet: some View {
@@ -370,7 +371,16 @@ extension MeeshyComposerHost {
     /// ferait diverger la porte de la rangée qui fait déjà la même chose.
     func handleRailDoor(_ door: ComposerRailDoor) {
         switch door {
-        case .media:   railPosesNextMedia = true; presentMediaSources()
+        case .media:
+            // **L'intention se pose AVEC le sélecteur, jamais avant** (#6008).
+            // `presentMediaSources` peut ne RIEN présenter — la règle des
+            // sources peut en offrir zéro, un cas que son propre doc-comment
+            // déclare traitable plutôt qu'impossible à écrire. Une intention
+            // armée devant une feuille qui n'apparaît pas n'a plus aucune
+            // sortie : ni consommation, ni annulation à laquelle se raccrocher.
+            // La faire DÉPENDRE de la présentation supprime le cas au lieu de
+            // lui ajouter une branche défensive que rien n'exécute.
+            railPosesNextMedia = presentMediaSources()
         case .sound:   presentSoundSources()
         case .mention: handleDocumentTool(.mention)
         case .place:   handleDocumentTool(.place)
@@ -548,6 +558,13 @@ extension MeeshyComposerHost {
             presentedPortal = .reference
         case .attachesLocalMedia(let intake):
             HapticFeedback.light()
+            // **La rangée du document n'est pas le rail** (#6008). Une intention
+            // du rail restée armée — sa feuille de choix annulée, sa photothèque
+            // refermée — poserait sur la scène courante le média que l'auteur
+            // vient de demander À LA RANGÉE. Les deux portes DISENT donc leur
+            // géographie au même endroit : `handleRailDoor(.media)` arme, celle-ci
+            // désarme.
+            abandonRailPosing()
             presentMediaIntake(intake)
         case .attachesLocation:
             HapticFeedback.light()
@@ -616,14 +633,19 @@ extension MeeshyComposerHost {
         }
     }
 
-    func presentMediaSources() {
+    /// Rend VRAI si un sélecteur est effectivement à l'écran — c'est ce que la
+    /// porte du rail lit pour savoir si son intention a une sortie (#6008).
+    @discardableResult
+    func presentMediaSources() -> Bool {
         HapticFeedback.light()
         let sources = ComposerMediaSourcePolicy.offered(allowsCapture: profile.allowsCapture)
         guard sources.count > 1 else {
-            if let seule = sources.first { presentMediaIntake(seule) }
-            return
+            guard let seule = sources.first else { return false }
+            presentMediaIntake(seule)
+            return true
         }
         showsMediaSourceChooser = true
+        return true
     }
 
     /// **La porte son ouvre l'ÉTAGÈRE autant que le micro.**
@@ -812,6 +834,23 @@ extension MeeshyComposerHost {
         railPosesNextMedia = false
     }
 
+    /// **Jumelle de `consumeRailPosing` : elle JETTE l'intention au lieu de la
+    /// poser** (#6008).
+    ///
+    /// Une intention encore armée quand un média arrive par une AUTRE porte est
+    /// forcément périmée : la porte du rail présente son sélecteur dans la même
+    /// instruction qu'elle arme (`handleRailDoor(.media)`), donc rien ne peut
+    /// s'intercaler tant que ce sélecteur est à l'écran. Si quelque chose s'est
+    /// intercalé, c'est que le sélecteur est parti sans rien rendre.
+    ///
+    /// C'est le même geste que `disarmSceneCamera` fait déjà pour le viseur —
+    /// « quitter sans prendre RETIRE la marque ». Le chemin du sélecteur n'avait
+    /// pas son équivalent : le bouton d'annulation de la feuille de choix a un
+    /// corps VIDE, et refermer la photothèque ne produit aucun signal.
+    func abandonRailPosing() {
+        railPosesNextMedia = false
+    }
+
     /// **LE site unique où une porte d'ingestion écrit dans
     /// `documentLocalMedia` — et il marque le rail AVANT d'écrire** (#4879).
     ///
@@ -895,13 +934,43 @@ extension MeeshyComposerHost {
             ?? viewModel.currentSlide.effects.resolvedBackgroundMedia?.id {
             documentMediaObjectIdBySource[plan.media.url] = objectId
         }
-        documentLocalMedia.append(plan.media)
+        ecrireDansLaListeDuDocument([plan.media], rail: .roleDejaPose)
+    }
+
+    /// **LE site unique où quoi que ce soit écrit dans `documentLocalMedia`**
+    /// (#4879 posait la règle, #6008 la rend vraie).
+    ///
+    /// Le doc-comment de `ingestIntoDocument` déclarait « LE site unique » et
+    /// ils étaient QUATRE — deux ici, deux dans `+Sound.swift`, que la garde ne
+    /// lisait même pas. Les deux portes son ne touchaient pas l'intention du
+    /// rail : ni la consommer, ni la jeter. Elles n'avaient rien fait de mal —
+    /// **la règle vivait dans un fichier qu'elles n'ouvraient pas.**
+    ///
+    /// L'entonnoir remplace la discipline par une QUESTION que le compilateur
+    /// pose : `ComposerRailPosing` n'a pas de `default`, donc une porte neuve
+    /// ne peut pas hériter en silence d'une intention qu'elle n'a pas posée.
+    ///
+    /// L'ordre est load-bearing, et c'est le défaut d'origine : `documentLocalMedia`
+    /// déclenche `syncPostMediaIntoSlides` par `adaptiveOnChange`, et cet
+    /// observateur LIT `railPosedMediaURLs`. Marquer après l'écriture le
+    /// laisserait vide au moment du verdict — le média serait classé « rangée du
+    /// document », une slide à lui, au lieu d'être posé sur la scène courante.
+    func ecrireDansLaListeDuDocument(_ medias: [ComposerDocumentMedia],
+                                     rail: ComposerRailPosing) {
+        guard !medias.isEmpty else { return }
+        switch rail {
+        case .consomme:
+            consumeRailPosing(medias.map(\.url))
+        case .abandonne:
+            abandonRailPosing()
+        case .roleDejaPose:
+            break
+        }
+        documentLocalMedia.append(contentsOf: medias)
     }
 
     func ingestIntoDocument(_ medias: [ComposerDocumentMedia]) {
-        guard !medias.isEmpty else { return }
-        consumeRailPosing(medias.map(\.url))
-        documentLocalMedia.append(contentsOf: medias)
+        ecrireDansLaListeDuDocument(medias, rail: .consomme)
     }
 
     func ingestPhotoLibraryItems(_ items: [PhotosPickerItem]) async {

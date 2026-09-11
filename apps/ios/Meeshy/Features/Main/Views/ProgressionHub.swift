@@ -360,7 +360,12 @@ struct ProgressionSectionLink: View {
                 Text(titre).font(.body.weight(.semibold)).foregroundStyle(theme.textPrimary)
                 Spacer(minLength: MeeshySpacing.sm)
                 Text(compte).font(.body.weight(.bold)).foregroundStyle(teinte)
-                Image(systemName: "chevron.right").font(.footnote).foregroundStyle(theme.textMuted)
+                // `forward`, pas `right` : ce chevron dit « ouvre cette section »,
+                // pas « va vers la droite de l'écran ». En arabe la lecture court
+                // de droite à gauche, et un chevron nommé par un côté PHYSIQUE y
+                // pointe à rebours du geste qu'il annonce. La variante sémantique
+                // se retourne avec la langue ; garde : `RightToLeftLayoutGuardTests`.
+                Image(systemName: "chevron.forward").font(.footnote).foregroundStyle(theme.textMuted)
             }
             .padding(.horizontal, 16)
             .frame(minHeight: 56)

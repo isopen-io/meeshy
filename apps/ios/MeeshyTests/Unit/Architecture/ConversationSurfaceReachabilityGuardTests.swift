@@ -114,6 +114,39 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
         // réel à trois scènes, une « reprise » qui rend la composition à plat.
         "recoverStuckPostDraftIfNeeded",
 
+        // ── 2026-09-10 (#6016) · l'AUTRE moitié de la même reprise dormante ──
+        //
+        // `supersedeRecoveredPost` remplace la ligne bloquée quand l'auteur
+        // renvoie le brouillon restauré, au lieu de la dupliquer à la
+        // reconnexion. C'est le PARTENAIRE de `recoverStuckPostDraftIfNeeded`
+        // ci-dessus : l'une rouvre, l'autre solde.
+        //
+        // Elle apparaît ici le jour où #6016 a retiré le composer inline du
+        // fil, qui portait sa seule citation. **Mais elle était déjà
+        // inatteignable, et la mesure le dit** : son garde d'entrée est
+        // `if let cmid = recoveredPostCmid`, et le SEUL site qui posait
+        // `recoveredPostCmid` à une valeur non nulle était
+        // `recoverStuckPostDraftIfNeeded` — cette liste atteste qu'elle n'a
+        // aucun appelant. La branche ne pouvait donc jamais s'ouvrir.
+        //
+        // > **Le retrait n'a pas TUÉ cette fonction, il l'a RENDUE VISIBLE.**
+        // > C'est exactement la limite que le doc-comment de cette garde
+        // > annonce — « une fonction citée une seule fois depuis une autre
+        // > fonction elle-même morte reste verte ici ». Retirer la feuille fait
+        // > descendre la mesure d'un cran dans l'arbre, et ce cran-là était
+        // > mort depuis le même commit que le premier.
+        //
+        // Elle reste, pour la raison qui garde sa partenaire : le canal de
+        // graine du meuble n'existe pas encore, et le jour où il s'ouvrira,
+        // rouvrir un brouillon SANS solder la ligne d'origine la publierait
+        // deux fois. La jeter serait jeter la moitié qu'on remarquerait le
+        // moins à la réécriture.
+        //
+        // `FeedViewModelTests` l'exerce — donc « code testé, jamais expédié »,
+        // la même forme que `likePost` / `bookmarkPost` plus bas, et le même
+        // coût : une suite verte qui n'atteste rien du produit.
+        "supersedeRecoveredPost",
+
         // ── 244i · le fil : trois méthodes dont le SEUL appelant est la SUITE ──
         //
         // `likePost`, `bookmarkPost` et `clearTranslationOverride` sont
