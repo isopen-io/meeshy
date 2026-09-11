@@ -30186,3 +30186,133 @@ tout le dépôt, sa déclaration — était INVISIBLE à la mesure parce que c'e
 une `var`. Elle portait à elle seule trois des fonctions signalées. **La
 racine d'un arbre mort n'a pas nécessairement la forme que la garde sait
 lire.**
+
+## Leçon 567 — Un rapport de validation se lit par la présence de ce qu'il DEVAIT produire, jamais par l'absence d'erreur
+
+2026-09-11, iOS (#6040). Mon script de validation lance onze suites. La tâche
+de fond s'est annoncée « completed (exit code 0) » ; j'ai ouvert son fichier de
+sortie, lu `RC build=0`, et annoncé au porteur que le découpage était validé.
+
+Le fichier contenait, une fois complet : `RC test=65`, **trois échecs**.
+
+Deux défauts se sont additionnés, et le second est le mien :
+
+1. le script se termine par un `grep` de résumé, **donc il rend le code de
+   sortie du `grep`**, jamais celui des tests. `exit 0` ne disait rien de ce
+   qu'il enveloppait ;
+2. j'ai conclu VERT sur deux lignes, alors que onze suites avaient été
+   demandées. **Aucune des onze lignes `Executed N tests` n'était là.**
+
+> Le premier défaut est une ligne de shell. Le second est une manière de lire,
+> et c'est celle qui coûte : **on ne vérifie pas qu'un rapport ne contient pas
+> d'erreur, on vérifie qu'il contient les mesures qu'on a demandées.** Onze
+> suites ⇒ onze lignes `Executed`. Zéro ligne n'est pas « rien à signaler »,
+> c'est « rien n'a été mesuré ».
+
+Jumelle exacte de la série C (« un chiffre absurde dans un rapport est plus
+souvent l'outil de lecture que la mesure ») et de la mémoire « un code de
+sortie lu sans son journal est non lu » — ici dans l'autre sens : un journal lu
+sans son code, et tronqué de surcroît. Les deux se ferment de la même façon :
+faire dire au script COMBIEN de mesures il attendait, et comparer.
+
+Corollaire pour les scripts : terminer par `exit $RC_TEST`, jamais par la
+commande d'affichage.
+
+
+## Leçon 568 — Une extraction a DEUX moitiés, et le doc-comment n'en énonce qu'une
+
+2026-09-11, iOS (#6040). `FixedFontSizeGuardTests.bearingFiles` porte en tête
+la règle : « toute extraction hors d'un fichier de la liste doit inscrire sa
+DESTINATION dans le MÊME commit ». Je l'ai lue, citée au porteur comme le
+piège que je m'apprêtais à éviter — et je l'ai appliquée à moitié : la feuille
+extraite est entrée dans la liste, le fichier VIDÉ y est resté.
+
+Sa règle 4 (`test_unFichierQuiQuitteLaListeEnEstRetire`) a rougi, avec le
+message exact : « ces fichiers n'ont plus aucune taille figée — les RETIRER ».
+
+> **Une liste de fichiers porteurs a deux modes de panne symétriques** : elle
+> perd une surface (la destination manquante) ou elle garde un nom sans site
+> (la source vidée). Le doc-comment d'en-tête n'énonce que le premier, parce
+> qu'il a été écrit le jour où le premier a mordu. Le second vit dans le
+> message d'échec de la règle qui l'attrape — c'est-à-dire là où on ne le lit
+> qu'APRÈS.
+
+Et une relocalisation n'est pas une disparition : la population ne bouge pas,
+donc **ni `totalCeiling` ni `textCeiling` ne baissent** — seul le NOM change.
+Le fichier documentait déjà ce cas trois fois (#4014, #4084, #4102) sous le
+terme « RELOCALISATION pure ». La règle était écrite, datée, et exemplifiée ;
+ce qui manquait n'était pas la connaissance mais la LECTURE des deux sens.
+
+Applicable à toute liste tenue à la main dont les entrées sont des chemins :
+`bearingFiles`, `legacyOverBudget`, `moodComposerFiles`, `fullyLocalizedScreens`
+— à chaque déménagement, se demander les DEUX questions, pas la première.
+
+
+## Leçon 569 — Un lot ne peut énumérer que les témoins qui le NOMMENT, jamais ceux qui le MESURENT
+
+2026-09-11, iOS (#6069). Deuxième rouge fusionné dans `dev` en deux jours, et
+celui-ci par l'autre bout que la leçon 565 : un AJOUT, pas un retrait.
+
+#6047 a ajouté 70 lignes à `MeeshyComposerHost+Intake.swift`, qui en pesait
+1 195. Le plafond dur est 1 200. Deux règles de `FileSizeBudgetGuardTests` sont
+devenues rouges — et la PR ne pouvait pas le savoir, pour une raison plus
+profonde que la portée compile-only de la CI iOS :
+
+> **Le témoin ne compte pas des identifiants, il compte des LIGNES.** Il n'a
+> aucun lien lexical avec quoi que ce soit du lot — ni avec ce qu'il ajoute,
+> ni avec le fichier touché. Un fichier qui franchit un seuil ne mentionne
+> nulle part le cliquet qui le garde. Il n'y a rien à chercher.
+
+La 565 disait « chercher un retrait dans ce qui COMPTE, pas seulement dans ce
+qui NOMME ». La forme générale est plus dure :
+
+> Un lot peut énumérer les témoins qui le nomment. Il ne peut pas énumérer
+> ceux qui le mesurent — parce qu'un seuil, un cumul ou une population n'ont
+> de lien avec le code que par une VALEUR, et une valeur ne se grep pas.
+
+Ce qui reste actionnable, à défaut de l'énumération :
+
+- faire tourner la suite entière dès qu'on touche le domaine, plutôt que les
+  suites qu'on sait concernées (#6065) — le seul filet qui ne demande pas de
+  deviner la forme du témoin ;
+- connaître les cliquets NUMÉRIQUES du domaine (taille, population figée,
+  clés de catalogue, cumul de dette) et mesurer *avant de pousser* les deux ou
+  trois chiffres qu'ils lisent. Ils sont peu nombreux et ne changent pas ;
+- se méfier particulièrement des lots qui ajoutent « juste quelques lignes » à
+  un fichier déjà gros : le plafond de 1 200 n'a pas d'alarme à 1 190.
+
+
+## Leçon 570 — Un opt-in porté par le commit de TÊTE se retire tout seul dès qu'on pousse autre chose derrière
+
+2026-09-11, iOS (#6071). J'ai écrit le lot avec « — run test » au sujet,
+précisément pour que la suite iOS complète tourne sur la PR. Puis j'ai poussé,
+dans la même PR, un commit `docs(lessons): …` sans mot-clé.
+
+Le job s'est appelé **« Build app (app + cibles de test) »** — la portée
+compile-seule. L'adhésion avait disparu, et rien ne l'a signalé : il n'y a
+aucun avertissement à donner, le workflow a fait exactement ce qui est écrit
+dans son doc-comment :
+
+> *« Le sujet est lu sur le commit de TÊTE de la branche. »*
+
+> **Un opt-in porté par le commit de tête n'est pas une propriété de la PR :
+> c'est une propriété du DERNIER commit poussé.** Tout ce qu'on ajoute ensuite
+> le retire — et ce qu'on ajoute après coup est, par construction, ce qui a
+> l'air le moins risqué : une correction de commentaire, une leçon, un
+> `.gitignore`. Le commit qui annule la vérification est celui dont on est le
+> plus sûr.
+
+Parades, dans l'ordre de fiabilité :
+
+1. mettre le mot-clé au sujet de **chaque** commit d'un lot qui en a besoin —
+   coûteux à écrire, mais insensible à l'ordre ;
+2. vérifier le NOM DU JOB après chaque poussée (« Build app + tests unitaires »
+   = la suite tourne ; « Build app (app + cibles de test) » = elle ne tourne
+   pas). Le nom dit la portée, c'est fait pour ;
+3. ne rien pousser après le commit porteur — une discipline, donc la plus
+   fragile des trois.
+
+Corollaire pour #6065 : une levée automatique sur le DIFF n'aurait pas ce
+défaut, puisqu'un commit de documentation ne change pas le diff iOS de la PR.
+C'est un argument de plus pour la lever sur ce que la PR TOUCHE plutôt que sur
+ce que son dernier sujet DIT.
