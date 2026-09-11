@@ -12,7 +12,7 @@ import type { EngagementProgress } from './engagement-progress.js';
  * | client | ordre |
  * |---|---|
  * | iOS natif | Meesh → badges → succès → défis |
- * | web-v3 | élan → Meesh → niveau/série → défis → badges → succès |
+ * | web-v2 | élan → Meesh → niveau/série → défis → badges → succès |
  *
  * Deux jumelles pour un écran, ce que le CLAUDE.md interdit. La divergence
  * n'était pas détectable par un témoin par client : chacun listait SES sections

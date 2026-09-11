@@ -4,7 +4,7 @@
  *
  * Pourquoi ce script existe : la v4 web doit reprendre l'interface iOS
  * (directive porteur 2026-09-06, #5444). Elle a d'abord recopié la palette iOS
- * à la main dans `apps/web-v3/src/styles/ios.css` — c'est-à-dire une SECONDE
+ * à la main dans `apps/web-v2/src/styles/ios.css` — c'est-à-dire une SECONDE
  * TABLE, ce que la charte interdit (§ 12.5 règle 1), et le défaut exact que
  * #5445 demande de solder : une couleur corrigée d'un côté dérive de l'autre
  * en SILENCE, chaque table restant cohérente avec elle-même.
@@ -329,7 +329,7 @@ const output = `/* GÉNÉRÉ — ne pas éditer à la main.
  * assignent les mêmes couleurs à des RÔLES DIFFÉRENTS (design-tokens fait de
  * indigo400 sa primaire, iOS de indigo500 ; les neutres de la v3 sont violacés,
  * ceux d'iOS sont des gris vrais). Unifier ces rôles changerait le rendu de
- * web-v3, ce qu'aucune décision n'a demandé — c'est le reste de #5445.
+ * web-v2, ce qu'aucune décision n'a demandé — c'est le reste de #5445.
  */
 
 :root,

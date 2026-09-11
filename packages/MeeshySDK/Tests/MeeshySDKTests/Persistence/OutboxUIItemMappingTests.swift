@@ -43,7 +43,8 @@ struct OutboxUIItemMappingTests {
         kind: OutboxKind,
         payload: Data,
         status: OutboxStatus = .pending,
-        createdAt: Date = Date(timeIntervalSince1970: 1_750_000_000)
+        createdAt: Date = Date(timeIntervalSince1970: 1_750_000_000),
+        updatedAt: Date? = nil
     ) -> OutboxRecord {
         OutboxRecord(
             id: UUID().uuidString,
@@ -55,7 +56,7 @@ struct OutboxUIItemMappingTests {
             attempts: 0,
             lastError: nil,
             createdAt: createdAt,
-            updatedAt: createdAt,
+            updatedAt: updatedAt ?? createdAt,
             nextAttemptAt: createdAt
         )
     }
@@ -479,5 +480,47 @@ struct OutboxUIItemMappingTests {
         let item = OutboxUIItem.from(record: record(kind: .editMessage,
                                                     payload: Data("pas du JSON".utf8)))
         #expect(item.source == .conversation(id: "conv-1", messageId: nil))
+    }
+
+    // MARK: - L'horloge de la ligne (#4660)
+
+    /// **L'instant où la ligne a RENONCÉ, pas celui où elle est née.** La
+    /// pastille de synchronisation borne l'affichage d'une entrée terminale à
+    /// une courte fenêtre : sans cette horloge, elle ne pourrait la mesurer que
+    /// sur `createdAt`, et un message mis en file il y a une heure qui échoue
+    /// MAINTENANT naîtrait déjà périmé — l'utilisateur ne saurait jamais que
+    /// son envoi vient d'échouer.
+    @Test func test_updatedAt_carriesTheRowClock_notItsCreation() {
+        let born = Date(timeIntervalSince1970: 1_750_000_000)
+        let gaveUp = born.addingTimeInterval(3_600)
+        let item = OutboxUIItem.from(record: record(
+            kind: .sendMessage,
+            payload: sendMessagePayload(content: "coucou"),
+            status: .exhausted,
+            createdAt: born,
+            updatedAt: gaveUp
+        ))
+        #expect(item.createdAt == born)
+        #expect(item.updatedAt == gaveUp)
+    }
+
+    /// **L'horloge voyage pour TOUS les genres, pas seulement le message.** Les
+    /// dix mappeurs composent l'APPARENCE d'une entrée (icône, aperçu, ancre) ;
+    /// l'horloge de la ligne ne les regarde pas. Ce témoin interdit qu'un
+    /// onzième mappeur l'oublie en silence — le blocage était précisément le
+    /// genre resté figé sept jours dans la pastille.
+    @Test func test_updatedAt_travelsForEveryKind_includingTheOtherFamily() {
+        let born = Date(timeIntervalSince1970: 1_750_000_000)
+        let gaveUp = born.addingTimeInterval(120)
+        for kind in [OutboxKind.blockUser, .unblockUser, .markAsRead, .sendReaction] {
+            let item = OutboxUIItem.from(record: record(
+                kind: kind,
+                payload: Data("{}".utf8),
+                status: .exhausted,
+                createdAt: born,
+                updatedAt: gaveUp
+            ))
+            #expect(item.updatedAt == gaveUp, "\(kind.rawValue) a perdu l'horloge de sa ligne")
+        }
     }
 }

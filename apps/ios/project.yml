@@ -95,7 +95,7 @@ settings:
   # Cloud — les lanes fastlane prennent `max(dépôt, dernier TestFlight) + 1`,
   # donc une valeur juste rend le prochain build prévisible. Maintenue par
   # `./meeshy.sh build-number`.
-  CURRENT_PROJECT_VERSION: "1817"
+  CURRENT_PROJECT_VERSION: "1820"
   # Alignée sur la version App Store Connect. Passée à 1.0.1 le 2026-07-31 :
   # la 1.0.0 avait été rejetée (déclaration Age Rating `ageAssurance` à true
   # sans mécanisme de vérification d'âge dans l'app), et l'enregistrement ASC a
@@ -123,7 +123,20 @@ settings:
   # (Ne vaut QUE pour la version commerciale : le build number, lui, est imposé
   # par le compteur CI_BUILD_NUMBER de Xcode Cloud — cf. le bloc
   # CURRENT_PROJECT_VERSION ci-dessus.)
-  MARKETING_VERSION: "1.0.8"
+  #
+  # 1.0.9 le 2026-09-11 (#6066) : la 1.0.8 est READY_FOR_DISTRIBUTION, et 69
+  # commits d'`apps/ios` + `packages/MeeshySDK` se sont accumulés derrière elle
+  # sans atteindre personne.
+  #
+  # PIÈGE D'OUTILLAGE, mesuré ici. `andp version set` ne CRÉE une version que
+  # si la plateforme n'en a AUCUNE : dès qu'une version verrouillée existe, il
+  # rend « No editable IOS version to rename » et conseille « create the next
+  # version instead » — une commande qui n'existe pas. Sa fonction
+  # `managers.appstore.ensure_version(app_id, version, platform)` fait
+  # pourtant exactement cela ; c'est la CLI qui ne l'atteint pas. Créer la
+  # version sur ASC d'abord, puis relancer `version set` pour les fichiers :
+  # il constate alors « already reads 1.0.9 » et écrit les trois sites.
+  MARKETING_VERSION: "1.0.9"
 
   # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
   # (déploiement sur appareil réel) : sans DEVELOPMENT_TEAM, la signature

@@ -49,7 +49,7 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
 
 import { StatusHandler } from '../StatusHandler';
 import type { Socket } from 'socket.io';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
 // ─── Factories ───────────────────────────────────────────────────────────────
 
@@ -65,17 +65,22 @@ function makePrisma(): any {
   };
 }
 
+/**
+ * `leave` fait partie du contrat (#6051) : la branche de refus EXPIRE
+ * l'autorisation en cache qu'est la room avant de signaler. Un double qui ne
+ * le porte pas fait lever `TypeError: socket.leave is not a function` dans le
+ * `try` du handler — dont le `catch` se contente de journaliser. Les cinq
+ * témoins de cette suite tombaient alors sur `Number of calls: 0`, en accusant
+ * le signal alors que rien n'y était arrivé.
+ *
+ * Ses trois voisins le portent depuis toujours : `ConversationHandler`,
+ * `AdminAgentHandler`, `PostReactionHandler`.
+ */
 function makeSocket(): Socket {
   return {
     id: SOCKET_ID,
     to: jest.fn<any>().mockReturnValue({ emit: jest.fn(), except: jest.fn<any>().mockReturnValue({ emit: jest.fn() }) }),
     emit: jest.fn(),
-    // `handleTypingStart`'s membership-denial branch expires the cached room
-    // authorization (`socket.leave(ROOMS.conversation(...))`, harden commit
-    // 4c24fac05b) before signaling the caller. This double predates that call
-    // and left it undefined, so every denial path threw a TypeError the outer
-    // try/catch swallowed as "typing:start failed" — silently short-circuiting
-    // before `resolveMembershipDenialReason`/`socket.emit` were ever reached.
     leave: jest.fn<any>().mockResolvedValue(undefined),
   } as unknown as Socket;
 }
@@ -146,6 +151,42 @@ describe('StatusHandler.handleTypingStart — membership denial (#5947)', () => 
     expect(socket.emit).toHaveBeenCalledWith(
       SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
       expect.objectContaining({ reason, message })
+    );
+  });
+
+  /**
+   * L'expiration de l'autorisation en cache (#5947) n'était mesurée par RIEN :
+   * le double n'avait pas de `leave`, donc aucune assertion ne pouvait porter
+   * dessus. Son jumeau `ConversationHandler` a même un témoin d'ORDRE.
+   */
+  it('expires the cached room authorization before answering', async () => {
+    const socket = makeSocket();
+    const handler = makeHandler();
+
+    await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+    expect(socket.leave).toHaveBeenCalledWith(ROOMS.conversation(CONV_ID));
+  });
+
+  /**
+   * **Le témoin qui aurait attrapé #6051.** Le `leave` a été inséré en amont du
+   * signal, sous un `catch` qui journalise : son échec emportait le refus avec
+   * lui, et l'ancien membre retrouvait le silence complet de #5947.
+   *
+   * L'expiration est de la SÉCURITÉ, le signal est ce que le client VOIT. Rater
+   * la première ne peut pas annuler le second.
+   */
+  it('still signals the refusal when expiring the room fails', async () => {
+    const socket = makeSocket();
+    (socket.leave as jest.Mock<any>).mockRejectedValue(new Error('adapter refused'));
+    mockResolveMembershipDenialReason.mockResolvedValue('banned');
+    const handler = makeHandler();
+
+    await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+    expect(socket.emit).toHaveBeenCalledWith(
+      SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
+      expect.objectContaining({ reason: 'banned' })
     );
   });
 

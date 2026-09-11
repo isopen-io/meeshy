@@ -67,7 +67,13 @@
 // ligne, commentaire de bloc). Effet de bord révélateur : la référence de
 // 956 comptait ONZE mentions qui n'étaient que des commentaires ; elle est
 // réancrée à 945, qui est le nombre d'usages RÉELS.
-const BASELINE_HARDCODED_COLOR_COUNT = 945;
+//
+// 2026-09-10 (#6016) — 945 → 943. Deux usages sont partis avec le composer
+// inline du fil : les vignettes `feedAttachmentTile` et `feedPlaceTile`
+// peignaient chacune leur pastille en `Color(hex:)`. Le cliquet à DEUX SENS a
+// exigé l'enregistrement, et c'est sa moitié la moins évidente qui a raison :
+// une amélioration non consignée se laisse reperdre en silence au lot suivant.
+const BASELINE_HARDCODED_COLOR_COUNT = 943;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

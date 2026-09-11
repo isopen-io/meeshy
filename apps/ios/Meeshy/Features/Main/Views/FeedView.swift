@@ -68,8 +68,9 @@ struct FeedView: View {
     @State var composerText = ""
     /// Les personnes que ce post nomme SANS que son texte le dise. Aucune n'est
     /// INLINE : celles-là, le serveur les relit du contenu lui-même. `var` non
-    /// privée — `publishPostWithAttachments()` vit dans l'extension
-    /// `FeedView+Attachments`.
+    /// privée — `feedDeclaredReferences` vit dans l'extension
+    /// `FeedView+Attachments`, et c'est elle qui les remet aux deux chemins de
+    /// publication restants (`publishAudioPost`, `publishBorrowedSoundPost`).
     @State var composerReferences: [ComposerReference] = []
     @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
@@ -182,8 +183,10 @@ struct FeedView: View {
 
     var composerHasContent: Bool {
         // pendingPlace inclus : sinon le bouton Publier reste desactive pour une
-        // position seule et publishPostWithAttachments() (dont le garde autorise
-        // deja ce cas) ne devient jamais atteignable (Task 13, 2026-07-29).
+        // position seule et le chemin de publication ne devient jamais
+        // atteignable (Task 13, 2026-07-29). La règle est portée aujourd'hui par
+        // `ComposerDocumentSendRules` (`emptyDraft` accepte un lieu seul) ;
+        // `publishPostWithAttachments`, qui l'appliquait ici, est retirée (#6016).
         !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty || pendingPlace != nil
     }
 

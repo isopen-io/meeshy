@@ -7,15 +7,15 @@
 // Le dépôt DÉCLARE la dépendance de build à deux endroits, et correctement :
 //
 //   turbo.json                  "build": { "dependsOn": ["^build"], … }
-//   apps/web-v3/package.json    "@meeshy/shared": "workspace:*"
+//   apps/web-v2/package.json    "@meeshy/shared": "workspace:*"
 //
-// `turbo run build --filter=@meeshy/web-v3` construirait donc `packages/shared`
+// `turbo run build --filter=@meeshy/web-v2` construirait donc `packages/shared`
 // d'abord, tout seul. Mesuré sur les 1 638 lignes du fichier, au 2026-09-02 :
 //
 //   • zéro invocation DIRECTE de l'orchestrateur dans les seize workflows du
 //     dépôt (`turbo run`, `npx turbo`, `bunx turbo`, `turbo --`) ;
 //   • mais il EST atteint, indirectement, par cinq étapes qui lancent un script
-//     de la RACINE : `lint`, `lint --filter=@meeshy/web-v3`,
+//     de la RACINE : `lint`, `lint --filter=@meeshy/web-v2`,
 //     `type-check --filter=…` et les deux `test:coverage --filter=…`. Les trois
 //     tâches correspondantes déclarent `dependsOn: ["^build"]` dans `turbo.json`,
 //     donc CELLES-LÀ construisent `packages/shared` toutes seules ;
@@ -84,7 +84,7 @@
 //
 // Une dépendance `workspace:*` n'a besoin d'être CONSTRUITE que si elle PRODUIT
 // quelque chose que le consommateur importe. Mesuré sur les deux paquets que
-// `apps/web-v3` déclare :
+// `apps/web-v2` déclare :
 //
 //   @meeshy/shared         scripts.build = "tsc --project tsconfig.json"
 //                          main/exports  → ./dist/…            ⇒ PRODUIT
@@ -644,7 +644,7 @@ const MUTATIONS = [
         /      - name: Build packages\/shared[^\n]*\n        run: \|\n          cd packages\/shared\n[^\n]*\n/,
         '',
       ),
-    'job « institutionnel-v3 » · scénario bun · étape « Build apps/web-v3',
+    'job « institutionnel-v3 » · scénario bun · étape « Build apps/web-v2',
   ],
   [
     'une dépendance workspace:* PRODUCTRICE ajoutée sans son étape (le scénario que #4761 ferme)',
@@ -698,8 +698,8 @@ const MUTATIONS = [
       inJob(
         world,
         'institutionnel-v3',
-        /      - name: Build apps\/web-v3[^\n]*\n        run: \|\n          cd apps\/web-v3\n/,
-        '      - name: Build apps/web-v3 (branche)\n        run: |\n          if true; then cd apps/web-v3; fi\n',
+        /      - name: Build apps\/web-v2[^\n]*\n        run: \|\n          cd apps\/web-v2\n/,
+        '      - name: Build apps/web-v2 (branche)\n        run: |\n          if true; then cd apps/web-v2; fi\n',
       ),
     "n'est pas lisible",
   ],

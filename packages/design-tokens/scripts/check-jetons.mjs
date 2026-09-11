@@ -2,7 +2,7 @@
 // Gate de la TABLE de jetons (`tokens.css`, `dark.css`, `light.css`) — moitié
 // TABLE de l'ancien `apps/web-old-version3/scripts/check-jetons.mjs` (801 lignes),
 // porté ici après le retrait de l'app annulée (#5994) qui l'emportait alors que
-// la table elle-même reste importée par `apps/web-v3` (issue #6000).
+// la table elle-même reste importée par `apps/web-v2` (issue #6000).
 //
 //   node scripts/check-jetons.mjs
 //   node scripts/check-jetons.mjs --json
@@ -13,7 +13,7 @@
 // SOURCES d'une application pour des couleurs écrites en dur et un second
 // moteur de thème (`moteursParalleles`). La seconde moitié dépendait de la
 // géographie de l'ancienne app (`app/theme-script.tsx` comme moteur unique) —
-// `apps/web-v3` a une architecture différente (bootstrap scindé en
+// `apps/web-v2` a une architecture différente (bootstrap scindé en
 // `src/lib/scheme.ts` + `src/lib/inline-scheme-bootstrap.js`, à dessein, pour
 // éviter le FOUC) et la modéliser correctement demande sa propre
 // investigation pour ne pas produire de faux positifs sur ce split délibéré.
