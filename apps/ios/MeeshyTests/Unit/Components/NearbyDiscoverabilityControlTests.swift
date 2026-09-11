@@ -376,22 +376,57 @@ final class NearbyDiscoverabilityControlTests: XCTestCase {
     /// production, et l'écran de découverte restait muet sans que rien ne le
     /// dise. La règle ne connaît plus les pièces jointes du tout.
     func test_offers_doesNotDependOnAttachments() throws {
-        let attachments = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/FeedView+Attachments.swift")
-        let source = try String(contentsOf: attachments, encoding: .utf8)
+        let source = try String(contentsOf: Self.appRoot
+            .appendingPathComponent("Features/Main/Views/FeedView+Attachments.swift"), encoding: .utf8)
 
         XCTAssertFalse(
             source.contains("pendingPlace != nil && pendingAttachments.isEmpty"),
             "le consentement redevient invisible dès qu'un média est joint — " +
             "c'est-à-dire pour tout REEL, que la spec range pourtant dans le périmètre"
         )
+    }
+
+    /// **Les hôtes de la règle se disent par leur NOM, plus par un compte.**
+    ///
+    /// Ce témoin comptait `FeedNearbyDiscoverability.offers(` dans UN fichier et
+    /// exigeait `2`. #6016 a retiré le composer inline du fil, donc l'un des
+    /// deux hôtes — et ce compte est tombé à 1 sans que rien ne le dise : **la
+    /// suite iOS ne s'exécute pas sur les PR**, seule la compilation des cibles
+    /// de test y tourne (`Run iOS tests (without building)` : `skipped`).
+    ///
+    /// > **Un retrait se cherche aussi dans ce qui COMPTE, pas seulement dans
+    /// > ce qui NOMME.** Le balayage qui a accompagné #6016 cherchait les
+    /// > identifiants retirés à travers le dépôt ; il ne pouvait pas trouver
+    /// > celui-ci, qui ne cite aucun d'eux — il compte les occurrences d'une
+    /// > chaîne VOISINE dans un fichier. Une garde par compte est invisible à
+    /// > la recherche qui protège habituellement une suppression.
+    ///
+    /// Un SET de noms, lui, dit ce qui a changé : un hôte qui part le fait
+    /// SORTIR, un hôte qui naît l'y fait ENTRER, et le message nomme les deux
+    /// cas au lieu d'annoncer « attendu 2, obtenu 1 ».
+    func test_lesHotesDeLaRegle_sontNommes_jamaisComptes() throws {
+        let fm = FileManager.default
+        var hotes: Set<String> = []
+        if let it = fm.enumerator(at: Self.appRoot, includingPropertiesForKeys: nil) {
+            for case let url as URL in it where url.pathExtension == "swift" {
+                let code = AppSourceGuard.stripComments((try? String(contentsOf: url, encoding: .utf8)) ?? "")
+                if code.contains("FeedNearbyDiscoverability.offers(") { hotes.insert(url.lastPathComponent) }
+            }
+        }
         XCTAssertEqual(
-            source.components(separatedBy: "FeedNearbyDiscoverability.offers(").count - 1, 2,
-            "les DEUX hôtes du composer doivent partager la même règle"
+            hotes, ["FeedView+Attachments.swift", "MeeshyComposerHost+Intake.swift"],
+            "Les hôtes du second opt-in ont changé. La feuille historique le peint depuis "
+                + "`FeedView+Attachments`, le meuble depuis `MeeshyComposerHost+Intake` — et le "
+                + "composer INLINE du fil, troisième hôte jusqu'à #6016, n'existe plus. Un hôte "
+                + "de plus qui recopierait la condition au lieu d'appeler la règle divergerait au "
+                + "premier ajustement ; un hôte de moins est une surface qui a perdu le contrôle."
         )
     }
+
+    private static let appRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()   // .../Unit/Components
+        .deletingLastPathComponent()   // .../Unit
+        .deletingLastPathComponent()   // .../MeeshyTests
+        .deletingLastPathComponent()   // .../apps/ios
+        .appendingPathComponent("Meeshy")
 }
