@@ -52,7 +52,12 @@ struct ProgressionBar: View {
         .frame(height: 6)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
-        .accessibilityValue("\(Int((min(1, max(0, progress)) * 100).rounded())) %")
+        // **Le glyphe « % » et son espacement viennent de la LOCALE**, jamais
+        // d'un littéral : le français veut une espace insécable avant le signe,
+        // l'anglais n'en veut aucune, et un arabe attend ses propres chiffres.
+        // `LocalizedNumber.percent` est le site unique qui le sait — le même que
+        // `MessageOverlayMenu` sert déjà à sa barre de lecture.
+        .accessibilityValue(LocalizedNumber.percent(Int((min(1, max(0, progress)) * 100).rounded())))
     }
 }
 
