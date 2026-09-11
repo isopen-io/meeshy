@@ -235,10 +235,10 @@ nonisolated enum ComposerDocumentSendPlan: Equatable {
         // Un média SEUL suffit à faire partir un post — la feuille historique
         // l'accepte, et T2.1 aligne le meuble dessus. Un LIEU seul le fait
         // partir de même (T2.5, parité avec `hasContent` de la feuille
-        // historique, `FeedView+Attachments.publishPostWithAttachments`) :
-        // `handleFeedLocationSelection` range un lieu dans `pendingPlace` sans
-        // texte ni média, et `emptyDraft` ne doit se refuser que quand il n'y a
-        // NI texte NI média NI lieu.
+        // historique — et avec `publishPostWithAttachments`, le chemin inline
+        // du fil, RETIRÉ en #6016 : `handleFeedLocationSelection` y rangeait un
+        // lieu dans `pendingPlace` sans texte ni média). `emptyDraft` ne doit
+        // donc se refuser que quand il n'y a NI texte NI média NI lieu.
         let texteVide = draft.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
         // **Un CANVAS est de la matière** (2026-09-05). L'énumération ci-dessus
         // disait « NI texte NI média NI lieu » et le canvas n'y figurait pas :

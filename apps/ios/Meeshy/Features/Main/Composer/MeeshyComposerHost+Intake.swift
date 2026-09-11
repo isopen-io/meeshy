@@ -235,14 +235,15 @@ extension MeeshyComposerHost {
 
     /// **Le sélecteur de lieu (T2.5)**, monté ICI plutôt que dans
     /// `ComposerDocumentSurface` — même patron que `documentCameraSheet` juste
-    /// au-dessus : le picker est le même composant que le composer inline du
-    /// fil (`FeedView+Attachments.handleFeedLocationSelection`), qui se
-    /// referme lui-même (`LocationPickerView.dismiss()`) après `onSelect`.
+    /// au-dessus : le picker est le même composant que montait le composer
+    /// inline du fil (`handleFeedLocationSelection`, RETIRÉE en #6016 — ce
+    /// meuble EST ce qui l'a remplacée), et il se referme lui-même
+    /// (`LocationPickerView.dismiss()`) après `onSelect`.
     ///
     /// **Un lieu choisi recalcule le second opt-in DEPUIS LA MÉMOIRE**, jamais
     /// depuis l'état courant : `FeedNearbyDiscoverability.choiceForNewPlace()`
     /// lit `LocationSharingPreferencesStore` à cet instant précis, exactement
-    /// ce que fait le composer inline sur le même geste — un second lieu choisi
+    /// ce que faisait le composer inline sur le même geste — un second lieu choisi
     /// dans la même session doit repartir du dernier palier RETENU, pas d'un
     /// toggle resté ouvert pour le lieu précédent.
     var documentLocationPickerSheet: some View {
