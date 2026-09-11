@@ -92,6 +92,7 @@ jest.mock('../../../utils/logger', () => ({
 import { MessagingService } from '../../../services/MessagingService';
 import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import { resetParticipantLookupCache } from '../../../utils/participant-lookup-cache';
+import { FOUNDING_MEMBER_PERMISSIONS, NEW_MEMBER_PERMISSIONS } from '../../../services/participantRights';
 
 describe('MessagingService.handleMessage — droits DE PIÈCE JOINTE (#5151)', () => {
   let service: MessagingService;
@@ -337,5 +338,128 @@ describe('MessagingService.handleMessage — droits DE PIÈCE JOINTE (#5151)', (
     const response = await service.handleMessage(requestWithAttachments(), testParticipantId);
 
     expect(response.success).toBe(true);
+  });
+
+  /**
+   * #6080 — **la garde de #5151 reste entière ; c'est la table par DÉFAUT qui
+   * change.**
+   *
+   * Les deux témoins forment une paire, et aucun des deux ne suffit : le
+   * premier prouve qu'un membre né par les tables du site unique n'est plus
+   * refusé, le second qu'une restriction EXPLICITE d'hôte refuse toujours.
+   * Sans le second, « ouvrir la table » et « désarmer la garde » rendraient le
+   * même verdict vert.
+   */
+  describe('#6080 — un membre né par la table du site unique joint ce qu\'il veut', () => {
+    const parLaTable = (table: Record<string, boolean>) => ({
+      id: testParticipantId,
+      conversationId: testConversationId,
+      isActive: true,
+      type: 'user',
+      permissions: { ...table }
+    });
+
+    it.each([
+      ['video/mp4', 'une VIDÉO'],
+      ['audio/m4a', 'un VOCAL'],
+      ['application/pdf', 'un DOCUMENT']
+    ])('laisse partir %s (%s) pour un membre FONDATEUR', async (mimeType) => {
+      mockPrisma.participant.findUnique.mockResolvedValue(parLaTable(FOUNDING_MEMBER_PERMISSIONS as never));
+      mockPrisma.messageAttachment.findMany.mockResolvedValue([{ mimeType }]);
+
+      const response = await service.handleMessage(requestWithAttachments(), testParticipantId);
+
+      expect(response.success).toBe(true);
+      expect(mockPrisma.message.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('laisse partir une VIDÉO pour un membre AJOUTÉ (la table de #4174)', async () => {
+      mockPrisma.participant.findUnique.mockResolvedValue(parLaTable(NEW_MEMBER_PERMISSIONS as never));
+      mockPrisma.messageAttachment.findMany.mockResolvedValue([{ mimeType: 'video/mp4' }]);
+
+      const response = await service.handleMessage(requestWithAttachments(), testParticipantId);
+
+      expect(response.success).toBe(true);
+    });
+
+    it('REFUSE toujours celui à qui un hôte a explicitement retiré canSendVideos — la garde #5151 n\'est pas affaiblie', async () => {
+      mockPrisma.participant.findUnique.mockResolvedValue({
+        ...parLaTable(FOUNDING_MEMBER_PERMISSIONS as never),
+        anonymousSession: { rights: { canSendVideos: false } }
+      });
+      mockPrisma.messageAttachment.findMany.mockResolvedValue([{ mimeType: 'video/mp4' }]);
+
+      const response = await service.handleMessage(requestWithAttachments(), testParticipantId);
+
+      expect(response.success).toBe(false);
+      expect((response as unknown as { code?: string }).code).toBe('ATTACHMENT_RIGHT_NOT_PERMITTED');
+      expect(mockPrisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it('REFUSE aussi quand la restriction est posée sur la table elle-même', async () => {
+      mockPrisma.participant.findUnique.mockResolvedValue(
+        parLaTable({ ...FOUNDING_MEMBER_PERMISSIONS, canSendAudios: false } as never)
+      );
+      mockPrisma.messageAttachment.findMany.mockResolvedValue([{ mimeType: 'audio/m4a' }]);
+
+      const response = await service.handleMessage(requestWithAttachments(), testParticipantId);
+
+      expect(response.success).toBe(false);
+      expect(mockPrisma.message.create).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * #6080 — **la QUATRIÈME porte : la migration d'une ligne `ConversationMember`
+   * héritée, faite DANS le chemin d'envoi.**
+   *
+   * `ensureParticipantFromMember` écrit une ligne `Participant` dont
+   * `permissions` alimente, dans la MÊME requête, `senderRights` — donc la garde
+   * de #5151. Ses replis `?? false` sur `canSendVideos`/`canSendAudios` ne
+   * projetaient pas une valeur : ils GOUVERNAIENT un refus, pour un membre
+   * NOMMÉ dont le document hérité ne dit rien de ces deux droits (le cas
+   * nominal : la collection legacy est antérieure à leur existence).
+   */
+  describe('#6080 — la migration legacy ne fait plus naître un membre fermé', () => {
+    const LEGACY_USER_ID = '507f1f77bcf86cd799439077';
+
+    const armerLaMigration = (memberDoc: Record<string, unknown>) => {
+      mockPrisma.participant.findUnique.mockResolvedValue(null);
+      mockPrisma.participant.findFirst.mockResolvedValue(null);
+      mockPrisma.user.findUnique.mockResolvedValue({
+        id: LEGACY_USER_ID, username: 'legacy', displayName: 'Legacy',
+        firstName: 'Le', lastName: 'Gacy', avatar: null, systemLanguage: 'fr'
+      });
+      mockPrisma.$runCommandRaw = jest.fn().mockResolvedValue({ cursor: { firstBatch: [memberDoc] } });
+      mockPrisma.participant.create = jest.fn(async (args: any) => ({
+        id: testParticipantId,
+        conversationId: testConversationId,
+        isActive: true,
+        permissions: args.data.permissions,
+        anonymousSession: null
+      }));
+    };
+
+    it('ouvre vidéo et audio quand le document hérité ne les nomme pas', async () => {
+      armerLaMigration({ role: 'MEMBER', joinedAt: new Date().toISOString() });
+      mockPrisma.messageAttachment.findMany.mockResolvedValue([{ mimeType: 'video/mp4' }]);
+
+      const response = await service.handleMessage(requestWithAttachments(), LEGACY_USER_ID);
+
+      const ecrite = mockPrisma.participant.create.mock.calls[0][0].data.permissions;
+      expect(ecrite.canSendVideos).toBe(true);
+      expect(ecrite.canSendAudios).toBe(true);
+      expect(response.success).toBe(true);
+    });
+
+    it('respecte toujours un refus EXPLICITE du document hérité', async () => {
+      armerLaMigration({ role: 'MEMBER', canSendVideos: false, joinedAt: new Date().toISOString() });
+      mockPrisma.messageAttachment.findMany.mockResolvedValue([{ mimeType: 'video/mp4' }]);
+
+      const response = await service.handleMessage(requestWithAttachments(), LEGACY_USER_ID);
+
+      expect(mockPrisma.participant.create.mock.calls[0][0].data.permissions.canSendVideos).toBe(false);
+      expect(response.success).toBe(false);
+    });
   });
 });
