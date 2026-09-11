@@ -1,5 +1,21 @@
 # @meeshy/gateway
 
+## 1.44.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la lignée du ModuleCache se compte en MTIME, pas seulement en version de SDK
+  - douze témoins de rendu cessent de mesurer le passé du simulateur (#5998)
+  - un run iOS qui a produit son verdict cesse de le rendre « cancelled » (#5996)
+  - l'écran « story expirée » élit une encre lisible (seuil WCAG, pas 0.6)
+  - la pastille couleur du composer de texte élit une encre lisible
+  - la rangée plate porte l'identité entière de son auteur et se lit d'un seul libellé au lecteur d'écran
+  - la pastille de synchronisation ne recouvre plus les CollapsibleHeader (#5944)
+  - la régression #5958 suit le dépouillement de commentaires fusionné en parallèle (#5960)
+  - la pastille « revenir en bas » sert enfin une encre lisible (#5950)
+
 ## 1.43.0
 
 ### Minor Changes
