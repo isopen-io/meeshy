@@ -108,7 +108,9 @@ export type ParticipantRightName = (typeof PARTICIPANT_RIGHT_NAMES)[number];
  * Elle n'est pas RÉTROACTIVE : les lignes `Participant` déjà écrites gardent
  * leur table. Un membre entré par `invite` avant #4174 conserve donc
  * `canSendVideos: false` jusqu'à ce qu'un hôte le lui ouvre par
- * `PATCH …/rights`.
+ * `PATCH …/rights` — ou jusqu'à ce que le rattrapage de #6080
+ * (`services/conversations/namedMemberRightsBackfill.ts`) le reconnaisse à la
+ * SIGNATURE de sa table et le rouvre.
  *
  * `Object.freeze` n'est pas décoratif : les deux appelants étalent cet objet
  * dans un `data` Prisma, et un appelant qui muterait le littéral partagé
@@ -217,7 +219,13 @@ export type ClosedBirthCandidate = {
  *
  * 1. **Aucune session anonyme.** Un visiteur anonyme tient ses droits du lien
  *    qu'il a suivi (`routes/conversations/link-admission.ts`) : sa restriction
- *    est la décision d'un hôte, pas un accident de naissance.
+ *    est la décision d'un hôte, pas un accident de naissance. Et c'est AUSSI
+ *    là que `PATCH …/rights` écrit le delta d'un hôte — cette route n'écrit
+ *    jamais `permissions`, y compris pour un membre inscrit
+ *    (`routes/conversations/participant-rights-core.ts`). Cette seule condition
+ *    met donc toute restriction d'hôte hors d'atteinte du rattrapage ; le prix
+ *    assumé est qu'un membre né fermé à qui un hôte a posé n'importe quelle
+ *    surcharge n'est pas rouvert par le script.
  * 2. **Aucun `shareLinkId`.** Un INSCRIT entré par un lien porte lui aussi la
  *    table du lien, sans session anonyme pour le signaler — le seul discriminant
  *    est le lien qu'il a emprunté. Sans cette condition, le rattrapage rouvrirait

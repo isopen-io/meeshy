@@ -32,6 +32,7 @@
  * Sans écriture par défaut : `apply` est OBLIGATOIRE pour corriger.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import {
   NEW_MEMBER_PERMISSIONS,
   wasBornWithClosedMemberTable,
@@ -66,19 +67,23 @@ export type NamedMemberRightsBackfillOptions = {
   readonly onReopen?: (row: { readonly participantId: string; readonly conversationId: string }) => void;
 };
 
-type ScannedRow = ClosedBirthCandidate & {
-  readonly id: string;
-  readonly conversationId: string;
-};
-
 const DEFAULT_BATCH_SIZE = 200;
+
+/** La projection minimale dont `wasBornWithClosedMemberTable` a besoin, plus l'identité. */
+const SCANNED_SELECT = {
+  id: true,
+  conversationId: true,
+  permissions: true,
+  anonymousSession: true,
+  shareLinkId: true,
+} as const;
 
 /**
  * La table à écrire pour une ligne donnée — `canViewHistory` venant de la LIGNE,
  * jamais de la table. Pure, pour que le choix se lise et se teste seul.
  */
-export function reopenedPermissionsFor(row: ClosedBirthCandidate): Record<string, boolean> {
-  const frozenHistory = (row.permissions as { canViewHistory?: boolean | null } | null | undefined)?.canViewHistory;
+export function reopenedPermissionsFor(row: ClosedBirthCandidate): ParticipantPermissions {
+  const frozenHistory = row.permissions?.canViewHistory;
 
   return {
     ...NEW_MEMBER_PERMISSIONS,
@@ -99,13 +104,15 @@ export async function backfillNamedMemberAttachmentRights(
   let cursor: string | undefined;
 
   for (;;) {
-    const page = (await prisma.participant.findMany({
+    const pageArgs = {
       where: CLOSED_BIRTH_CANDIDATE_WHERE,
-      select: { id: true, conversationId: true, permissions: true, anonymousSession: true, shareLinkId: true },
-      orderBy: { id: 'asc' },
+      select: SCANNED_SELECT,
+      orderBy: { id: 'asc' as const },
       take: batchSize,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    } as never)) as unknown as ScannedRow[];
+    };
+    const page = cursor
+      ? await prisma.participant.findMany({ ...pageArgs, cursor: { id: cursor }, skip: 1 })
+      : await prisma.participant.findMany(pageArgs);
 
     if (page.length === 0) break;
 
@@ -119,7 +126,7 @@ export async function backfillNamedMemberAttachmentRights(
 
       await prisma.participant.update({
         where: { id: row.id },
-        data: { permissions: reopenedPermissionsFor(row) as never },
+        data: { permissions: reopenedPermissionsFor(row) },
       });
       reopened += 1;
     }
