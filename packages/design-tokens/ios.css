@@ -13,7 +13,7 @@
  * assignent les mêmes couleurs à des RÔLES DIFFÉRENTS (design-tokens fait de
  * indigo400 sa primaire, iOS de indigo500 ; les neutres de la v3 sont violacés,
  * ceux d'iOS sont des gris vrais). Unifier ces rôles changerait le rendu de
- * web-v3, ce qu'aucune décision n'a demandé — c'est le reste de #5445.
+ * web-v2, ce qu'aucune décision n'a demandé — c'est le reste de #5445.
  */
 
 :root,

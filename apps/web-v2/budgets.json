@@ -1,0 +1,53 @@
+{
+  "role": "Les PLAFONDS de la v4. Les valeurs MESUREES vivent dans budgets-measured.json — ce fichier-ci n'en porte aucune, exactement comme apps/web-v2/budgets.json dont il reprend la discipline.",
+  "read_by": ["apps/web-v2/scripts/measure-weight.mjs"],
+  "note": "Le modele de cout a CHANGE entre la v3 et la v4, et c'est la seule raison pour laquelle ces plafonds ne sont pas ceux du § 8.3. La v3 sert un DOCUMENT par ecran : le lecteur paie ~8 Ko a chaque ecran, a chaque session. La v4 sert UNE application : le lecteur paie une fois, puis plus rien tant que le hash ne bouge pas (service worker, variante A). Un plafond exprime par ECRAN n'a donc pas de sujet ici — celui qui compte est la PREMIERE PEINTURE, payee une fois.",
+  "first_paint": {
+    "subject": "document + feuille + modules que le document reference lui-meme, gzip -9. Les chunks d'ecran charges a la demande n'y sont pas : c'est ce que le decoupage par route achete.",
+    "kb": {
+      "value": 40,
+      "status": "CIBLE — PROPOSEE PAR LE POC, NON ARBITREE",
+      "source": "Aucune directive du porteur ne donne ce chiffre : il est propose par le POC et attend l'arbitrage. DESCENDU de 120 a 40 apres #5447 (le remplacement de TanStack Router), qui a fait passer la mesure de 50,85 a 24,53 Ko. Un plafond suit la mesure DANS LES DEUX SENS quand la baisse est STRUCTURELLE — ici une dependance retiree, pas un jeu de donnees allege. Les ~15 Ko d'ecart avec la mesure ne sont pas une autorisation de croissance : ils absorbent les ecrans a venir dont une part atterrit forcement dans le socle (composants partages, table de jetons). Un plafond laisse a 120 aurait laisse rentrer une seconde dependance de 25 Ko sans qu'aucun gate ne rougisse — c'est precisement ce que #5447 a du trouver a la main."
+    }
+  },
+  "institutional_page": {
+    "subject": "chaque document institutionnel PRECHAUFFE (about/contact/partners/privacy/terms), gzip -9 — le document HTML complet, feuille INLINEE comprise (scripts/prerender-institutional.tsx). Une page a la fois : ces adresses ne se composent jamais.",
+    "read_by": ["apps/web-v2/scripts/prerender-institutional.tsx"],
+    "kb": {
+      "value": 10,
+      "status": "CIBLE — PROPOSEE PAR LA REVUE DE #5606 (defaut 3), NON ARBITREE",
+      "source": "Le doc-comment de src/styles/institutional.css citait deja un plafond de 9 Ko (mesure de rejet de l'alternative -- inliner la feuille de l'application aurait coute 11,28 Ko) sans qu'aucun gate ne le fasse respecter : /about mesurait 9,28 Ko avant ce lot, 9,59 apres son ajout de logo+signature -- deja AU-DESSUS de 9. 10 est le plafond le plus proche qui absorbe la mesure ACTUELLE (9,59-9,69 selon les jetons ajoutes) avec une marge round, sur le meme modele que first_paint.kb ci-dessus : une CIBLE proposee, jamais arbitree par le porteur, qui attend sa decision (alleger la page ou relever le plafond)."
+    }
+  },
+  "on_demand_chunks": {
+    "subject": "chunks CHARGES A LA DEMANDE (import() differe), gzip -9 -- hors premiere peinture par construction (#5695). Chaque entree nomme le PATTERN de fichier qu'elle borne (prefixe du chunk produit par Vite) ; measure-weight.mjs rougit si AUCUN fichier ne matche (un lazy() casse inline le module, sans erreur ailleurs) ou si la somme depasse la valeur.",
+    "summary": {
+      "pattern": "^assets/summary-host-",
+      "kb": {
+        "value": 7,
+        "status": "CIBLE -- MESUREE PAR #5695, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-08 (`bun run build` puis `node scripts/measure-weight.mjs`) : 5,93 Ko gzip -9, arrondi au Ko SUPERIEUR (6) + 1 Ko de marge, meme discipline que first_paint.kb ci-dessus."
+      }
+    },
+    "composer_tray": {
+      "pattern": "^assets/composer-tray-",
+      "kb": {
+        "value": 4,
+        "status": "CIBLE -- MESUREE PAR #5668, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-09 (`bun run build` puis `node scripts/measure-weight.mjs`) : 2,52 Ko gzip -9 apres la revue-correction (panneau de pieces jointes, bande d'apercu, barre d'enregistrement, bande de refus micro -- `glyphs-composer.ts` compris), arrondi au Ko SUPERIEUR (3) + 1 Ko de marge, meme discipline que le chunk `summary` ci-dessus. `use-recorder.ts` (le moteur MediaRecorder/AudioContext) reste dans le chunk du fil (`thread-*.js`), pas dans celui-ci : lui seul est CHARGE A LA DEMANDE par un second `lazy()`, le hook restant une dependance STATIQUE de `composer.tsx` (spec #5668 S 7, \"le socle ne bouge pas ... tout ce lot vit dans le chunk du fil ou plus loin\")."
+      }
+    }
+  },
+  "network_note": "Le profil est REPRIS TEL QUEL de apps/web-v2/budgets.json — deux chiffres mesures sur deux profils differents ne se comparent pas, et la comparaison v3 / v4 est precisement ce que ce POC doit rendre.",
+  "network": {
+    "profile": {
+      "name": "Fast 3G — prereglage de Chrome DevTools, applique par Network.emulateNetworkConditions",
+      "download_bps": 188743,
+      "upload_bps": 86400,
+      "latency_ms": 562.5,
+      "repeats": 5,
+      "percentile": 75,
+      "source": "conception v3 § 8.3 — « 3G Fast simule, p75 »"
+    }
+  }
+}
