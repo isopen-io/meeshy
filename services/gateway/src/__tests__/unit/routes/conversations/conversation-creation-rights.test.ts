@@ -37,13 +37,6 @@ jest.mock('../../../../utils/response', () => ({
   sendInternalError: jest.fn<any>((reply: any) => reply),
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  conversationResponseSchema: { type: 'object' },
-  errorResponseSchema: { type: 'object' },
-  createConversationRequestSchema: { type: 'object' },
-  updateConversationRequestSchema: { type: 'object' },
-}));
-
 jest.mock('../../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: jest.fn<any>().mockReturnValue({
     resolveForTargets: jest.fn<any>().mockResolvedValue(new Map()),
