@@ -11,6 +11,7 @@ import { getSharedNotificationService } from './notifications/notification-servi
 import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
 import { retractCommentNotifications } from './posts/retractCommentNotifications';
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
+import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 
 const log = enhancedLogger.child({ module: 'PostCommentService' });
@@ -122,13 +123,14 @@ export class PostCommentService {
         where: { id: mediaId, ...claimableMediaWhere(authorId) },
         data: {
           commentId: comment.id,
+          // La charge du fil ne se persiste pas telle quelle : le document a sa
+          // propre graphie, et un seul site la produit
+          // (`attachmentTranscriptionFromMobile`).
           ...(mobileTranscription
             ? {
-                transcription: {
-                  ...mobileTranscription,
-                  segments: mobileTranscription.segments ?? [],
-                  source: 'mobile',
-                } as Prisma.InputJsonValue,
+                transcription: attachmentTranscriptionFromMobile(
+                  mobileTranscription,
+                ) as Prisma.InputJsonValue,
               }
             : {}),
         },

@@ -45,6 +45,8 @@ import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
 import { quantizeCoordinate, resolveDiscoverabilityPrecision, type DiscoverabilityPrecision } from './location/geoDiscoverability';
 import { isAdult } from '@meeshy/shared/utils/age';
 import { translationTargetId } from './zmq-translation/utils/zmq-helpers';
+import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
+import { parseAttachmentTranscription } from '@meeshy/shared/utils/attachment-validators';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -390,11 +392,20 @@ export class PostService {
 
       // If a mobileTranscription is provided, persist it in the audio PostMedia
       if (data.mobileTranscription && audioMedia) {
-        const transcriptionPayload: Prisma.InputJsonValue = {
-          ...data.mobileTranscription,
-          segments: data.mobileTranscription.segments ?? [],
-          source: 'mobile',
-        };
+        // La graphie du FIL n'est pas celle du MAGASIN — un seul site convertit
+        // (`attachmentTranscriptionFromMobile`), et sa sortie est validée par le
+        // même schéma que le chemin serveur.
+        const transcriptionPayload = attachmentTranscriptionFromMobile(
+          data.mobileTranscription,
+        ) as Prisma.InputJsonValue;
+        const verdict = parseAttachmentTranscription(transcriptionPayload);
+        if (verdict.ok === false) {
+          // Fail-soft, comme `PostAudioService.handleTranscriptionReady` : une
+          // transcription facultative ne doit jamais empêcher la publication.
+          log.warn('Mobile transcription failed validation — persisting anyway', {
+            postId: post.id, postMediaId: audioMedia.id, issues: verdict.issues,
+          });
+        }
         await this.prisma.postMedia.update({
           where: { id: audioMedia.id },
           data: { transcription: transcriptionPayload },
