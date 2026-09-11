@@ -342,6 +342,9 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         for path in ["Meeshy/Features/Main/Views/ConversationView+Composer.swift",
                      "Meeshy/Features/Main/Views/FeedView.swift",
                      "Meeshy/Features/Main/Views/FeedView+Attachments.swift",
+                     // La feuille est sortie de `FeedView+Attachments` en #6040 ;
+                     // le site du feed sheet vit là désormais.
+                     "Meeshy/Features/Main/Views/FeedComposerSheet.swift",
                      "Meeshy/Features/Main/Views/FeedCommentsSheet.swift"] {
             let src = try source(path)
             XCTAssertFalse(src.contains("LocationPickerView(accentColor: accentColor) { coordinate, _ in"),
@@ -373,7 +376,9 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// `FeedComposerSheetRetirementInventoryTests` tant que cinq capacités n'ont
     /// pas rejoint le meuble.
     func test_theSheetPublishPathCarriesTheLocation() throws {
-        let src = try source("Meeshy/Features/Main/Views/FeedView+Attachments.swift")
+        // `FeedComposerSheet.swift` depuis #6040 : la feuille a quitté le
+        // fichier qui annonçait une extension de `FeedView`.
+        let src = try source("Meeshy/Features/Main/Views/FeedComposerSheet.swift")
         let publish = try body(from: "private func publishPost()", to: "// MARK:", in: src)
         XCTAssertTrue(publish.contains("location: pendingPlace"),
                       "publishPost perd la position dans sa branche sans fichier.")
@@ -387,7 +392,12 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// la divergence que #6016 vient de fermer — deux implémentations de
     /// « publier un post », dont une seule reçoit les corrections.
     func test_theInlineFeedPublishPath_staysRetired() throws {
-        let src = try source("Meeshy/Features/Main/Views/FeedView+Attachments.swift")
+        // Les DEUX moitiés du fichier d'origine : le chemin inline ne doit
+        // renaître ni dans l'extension, ni dans la feuille qui en est sortie.
+        let src = try [ "Meeshy/Features/Main/Views/FeedView+Attachments.swift",
+                        "Meeshy/Features/Main/Views/FeedComposerSheet.swift" ]
+            .map { try source($0) }
+            .joined(separator: "\n")
         XCTAssertFalse(AppSourceGuard.stripComments(src).contains("func publishPostWithAttachments"),
                        "Le chemin inline du fil est retire (#6016) : la publication d'un post passe par "
                            + "`ComposerDocumentSurface.publishDocument`. Le faire revenir ici redonne deux "

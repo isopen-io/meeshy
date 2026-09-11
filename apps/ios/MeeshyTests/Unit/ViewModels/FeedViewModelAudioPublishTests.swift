@@ -331,7 +331,14 @@ final class FeedViewModelAudioPublishTests: XCTestCase {
     /// TUS, et une garde ancrée sur le fichier les condamnerait en croyant
     /// protéger l'audio.
     func test_lesDeuxJumeauxAudio_neMontentPlusEtNEffacentPlus() throws {
-        let code = try source("Features/Main/Views/FeedView+Attachments.swift")
+        // **Un jumeau par FICHIER depuis #6040** : `publishAudioPost` est resté
+        // dans l'extension, `publishAudioFromSheet` est parti avec la feuille.
+        // La garde vise toujours le CORPS de chaque fonction — c'est le corpus
+        // qu'elle lit qui s'élargit, jamais la portée de l'assertion.
+        let code = try [ "Features/Main/Views/FeedView+Attachments.swift",
+                         "Features/Main/Views/FeedComposerSheet.swift" ]
+            .map { try source($0) }
+            .joined(separator: "\n")
 
         for ancre in ["func publishAudioPost(", "private func publishAudioFromSheet("] {
             guard let corps = corpsDeDeclaration(commencantPar: ancre, dans: code) else {
@@ -388,7 +395,14 @@ final class FeedViewModelAudioPublishTests: XCTestCase {
     /// rend le littéral pire que l'oubli : un défaut est un trou, un littéral
     /// est une décision apparente que personne n'a prise.
     func test_lesDeuxJumeauxAudio_honorentLAudienceChoisie() throws {
-        let code = try source("Features/Main/Views/FeedView+Attachments.swift")
+        // **Un jumeau par FICHIER depuis #6040** : `publishAudioPost` est resté
+        // dans l'extension, `publishAudioFromSheet` est parti avec la feuille.
+        // La garde vise toujours le CORPS de chaque fonction — c'est le corpus
+        // qu'elle lit qui s'élargit, jamais la portée de l'assertion.
+        let code = try [ "Features/Main/Views/FeedView+Attachments.swift",
+                         "Features/Main/Views/FeedComposerSheet.swift" ]
+            .map { try source($0) }
+            .joined(separator: "\n")
 
         for ancre in ["func publishAudioPost(", "private func publishAudioFromSheet("] {
             guard let corps = corpsDeDeclaration(commencantPar: ancre, dans: code) else {

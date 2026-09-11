@@ -323,7 +323,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ParticipantsView.swift",  // 38
         "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView.swift",  // 37
         "apps/ios/Meeshy/Features/Main/Components/ConversationPreferencesTab.swift",  // 31
-        "apps/ios/Meeshy/Features/Main/Views/FeedView+Attachments.swift",  // 31
+        // #6040 — la feuille est sortie de `FeedView+Attachments.swift` : les
+        // deux moitiés portent des littéraux, les deux restent dans la liste.
+        "apps/ios/Meeshy/Features/Main/Views/FeedView+Attachments.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/FeedComposerSheet.swift",  // 26
         "apps/ios/Meeshy/Features/Main/Components/MessageMoreSheet.swift",  // 29
         "apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift",  // 29
         "apps/ios/Meeshy/Features/Main/Views/VoiceProfileWizardView.swift",  // 29

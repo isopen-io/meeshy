@@ -58,7 +58,10 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "ConversationView.swift",
         "FeedCommentsSheet.swift",
         "FeedPostCard.swift",
-        "FeedView+Attachments.swift",
+        // #6040 — `FeedView+Attachments.swift` a QUITTÉ la dette : 207 lignes,
+        // contre 1 391 avant le découpage. La feuille qui en est sortie
+        // (`FeedComposerSheet.swift`, 1 166) n'y ENTRE pas : elle est sous le
+        // plafond. Le nom sort ENTIER, plafond compris — voir ci-dessous.
         "FeedView.swift",
         "FeedViewModel.swift",
         "MeeshyApp.swift",
@@ -283,7 +286,19 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // rougir `dev` pour un ajout que rien n'interdisait au moment où il a été
     // écrit. Ce mou est donc une issue à lui seul (#6046), pas une prise de
     // guerre de ce lot.
-    private static let legacyLineCeiling = 60_235
+    // #6040 — 60 235 → 58 844 (−1 391). `FeedView+Attachments.swift` sort de
+    // `legacyOverBudget` : il tombe de 1 391 à 207 lignes, la feuille partant
+    // dans son propre fichier (1 166, sous le plafond, donc hors dette).
+    //
+    // **Le plafond baisse de tout ce que le fichier PESAIT, pas de sa seule
+    // part au-dessus de 1 200** — la règle que ce cliquet applique depuis
+    // #4102 : « un nom qui sort de la liste en sort ENTIER, sinon le cliquet
+    // garderait du mou au nom d'un fichier qu'il ne mesure plus. »
+    //
+    // Cumul mesuré après le découpage : 58 218. Les 626 de marge qui restent
+    // sont le mou PRÉEXISTANT de #6050, que ce lot ne reprend pas plus que
+    // #6016 ne l'avait fait — pour la même raison de coordination.
+    private static let legacyLineCeiling = 58_844
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
