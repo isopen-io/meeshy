@@ -289,10 +289,22 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
         let barre = try source("ComposerTopBar.swift")
         XCTAssertTrue(barre.contains("struct ComposerTopBar"),
             "La source de la barre haute est introuvable — la garde ne mesurerait RIEN.")
+        // **On compte l'IDENTIFIANT, jamais la sous-chaîne — et cette garde a payé
+        // la différence.** Le jour où le rail est passé en SLOT injecté
+        // (`slideRailSlot: AnyView?`, 2eefee7aae), `components(separatedBy:)` en a
+        // compté CINQ au lieu de deux et la garde a rougi, alors que le rail allait
+        // très bien : `slideRail` y était toujours déclaré une fois et monté une
+        // fois, et les trois occurrences de trop appartenaient à un identifiant
+        // VOISIN dont il n'est que le préfixe.
+        //
+        // C'est la forme la plus discrète d'un piège déjà payé ici : un lot qui
+        // RENOMME n'éteint pas les gardes qui reconnaissent par le nom, il les
+        // INVERSE. Celui-ci n'a même rien renommé — un nom voisin a suffi.
         XCTAssertEqual(
-            barre.components(separatedBy: "slideRail").count - 1, 2,
+            AppSourceGuard.occurrences(ofIdentifier: "slideRail", in: barre), 2,
             "`slideRail` doit apparaître EXACTEMENT deux fois : sa déclaration et son unique montage, "
-                + "dans le `body` de la barre haute. Un troisième site est un second rail."
+                + "dans le `body` de la barre haute. Un troisième site est un second rail. "
+                + "(`slideRailSlot` est le contenu INJECTÉ par l'hôte — une autre chose, qui ne compte pas ici.)"
         )
 
         guard let corps = barre.range(of: "var body: some View"),
@@ -312,7 +324,15 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
             let code = try source(surface)
             XCTAssertTrue(code.contains("ComposerTopBar("),
                 "\(surface) doit CONSOMMER la barre — sinon cette garde ne dit rien de cette surface.")
-            XCTAssertFalse(code.contains("slideRail"),
+            // Là encore l'IDENTIFIANT, pas la sous-chaîne — et ici la nuance PORTE
+            // l'architecture : les deux surfaces déclarent bien `slideRailSlot`,
+            // un slot OPAQUE qu'elles relaient sans rien savoir du rail (une
+            // mini-preview demande les effets vivants et les bitmaps chargés,
+            // donc le ViewModel, que ces surfaces ne connaissent pas). Relayer un
+            // slot n'est pas déclarer un rail ; c'est même ce qui garantit qu'il
+            // n'en existe qu'un.
+            XCTAssertEqual(
+                AppSourceGuard.occurrences(ofIdentifier: "slideRail", in: code), 0,
                 "\(surface) redéclare un rail de slides : c'est le second inventaire que #4047 interdit.")
         }
     }
