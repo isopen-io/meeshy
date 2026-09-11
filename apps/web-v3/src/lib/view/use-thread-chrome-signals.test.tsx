@@ -1,4 +1,3 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useRef } from 'react';
@@ -7,6 +6,7 @@ import type { Virtualizer } from '@tanstack/react-virtual';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { useThreadChromeSignals, type ThreadChromeSignals } from './use-thread-chrome-signals';
 import type { Message } from '@/lib/api/types';
 import type { PlacedMessage } from '@/lib/grouping';
@@ -27,14 +27,14 @@ import type { PlacedMessage } from '@/lib/grouping';
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
 
 afterAll(async () => {
   await act(async () => {});
   delete globals.IS_REACT_ACT_ENVIRONMENT;
-  await GlobalRegistrator.unregister();
+  await releaseHappyDomIfRegistered();
 });
 
 let container: HTMLDivElement;

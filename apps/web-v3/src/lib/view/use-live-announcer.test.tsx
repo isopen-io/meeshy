@@ -1,8 +1,8 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { ANNOUNCEMENT_DURATION_MS, useLiveAnnouncer } from './use-live-announcer';
 
 /**
@@ -21,7 +21,7 @@ import { ANNOUNCEMENT_DURATION_MS, useLiveAnnouncer } from './use-live-announcer
  * **sous charge, il arrive après** : le `setText('')` d'expiration s'exécute
  * alors hors de tout `act()` (React le dit : « An update to Harness inside a
  * test was not wrapped in act(...) »), et le travail de rendu qu'il planifie
- * retombe en macrotâche APRÈS `GlobalRegistrator.unregister()` — sur un global
+ * retombe en macrotâche APRÈS `releaseHappyDomIfRegistered()` — sur un global
  * sans `window`, d'où `TypeError: undefined is not an object (evaluating
  * 'window.event')` dans `performWorkOnRootViaSchedulerTask`. Bun compte cette
  * exception en `error` sans l'attribuer à un test : RC=1 avec « 0 fail », la
@@ -45,7 +45,7 @@ const SHORT_MS = 60;
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
 
@@ -59,7 +59,7 @@ afterAll(async () => {
     await new Promise((r) => setTimeout(r, 0));
   });
   delete globals.IS_REACT_ACT_ENVIRONMENT;
-  await GlobalRegistrator.unregister();
+  await releaseHappyDomIfRegistered();
 });
 
 let container: HTMLDivElement;

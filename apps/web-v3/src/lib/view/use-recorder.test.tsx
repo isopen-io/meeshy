@@ -1,8 +1,8 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { PendingAttachment } from '@/lib/send/attachments';
 
 import type { RecorderEngine, RecorderEngineResult, RecorderState } from './use-recorder';
@@ -18,7 +18,7 @@ import { MIN_SENDABLE_DURATION_MS, useRecorder } from './use-recorder';
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
 
@@ -27,17 +27,17 @@ afterAll(async () => {
   // désenregistrer `window` : `bun test` enchaîne les fichiers dans le même
   // process, et une tâche `performWorkOnRootViaSchedulerTask` posée par le
   // DERNIER `act()` de ce fichier peut survivre au-delà du dernier `await`
-  // synchrone visible ici. Sans ce drain, `GlobalRegistrator.unregister()`
+  // synchrone visible ici. Sans ce drain, `releaseHappyDomIfRegistered()`
   // efface `window` PENDANT que cette tâche s'exécute encore, et elle lève
   // `TypeError: undefined is not an object (evaluating 'window.event')` —
   // observé de façon INTERMITTENTE (5/5, 20/20 machine au repos) sous
   // charge, jamais un défaut du fichier qui l'exécute (10/10 seul). Ce
-  // fichier suit le même patron que les onze autres (`GlobalRegistrator`
-  // par fichier) ; eux restent HORS de ce lot — issue compagnon dédiée pour
+  // fichier suit le même patron que les onze autres (un enregistrement
+  // par fichier, via `happy-dom-environment.ts` depuis #5888) ; eux restent HORS de ce lot — issue compagnon dédiée pour
   // le préchargement UNIQUE (`bunfig.toml [test] preload`).
   await act(async () => {});
   delete globals.IS_REACT_ACT_ENVIRONMENT;
-  await GlobalRegistrator.unregister();
+  await releaseHappyDomIfRegistered();
 });
 
 let container: HTMLDivElement;

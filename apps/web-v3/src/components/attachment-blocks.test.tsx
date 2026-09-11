@@ -1,9 +1,9 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { messagesOf } from '@/lib/api/fixtures';
 import {
   MEDIA_BROKEN_IMAGE_WITNESS_ID,
@@ -222,14 +222,14 @@ describe('Attachments — l’image en ÉCHEC de décodage (#5805)', () => {
   const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
   beforeAll(() => {
-    GlobalRegistrator.register();
+    ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });
 
   afterAll(async () => {
     await act(async () => {});
     delete globals.IS_REACT_ACT_ENVIRONMENT;
-    await GlobalRegistrator.unregister();
+    await releaseHappyDomIfRegistered();
   });
 
   let container: HTMLDivElement;

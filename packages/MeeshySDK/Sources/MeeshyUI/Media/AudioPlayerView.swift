@@ -819,6 +819,18 @@ public struct AudioPlayerView: View {
     /// d'avant (aucune réservation hors `isTranscribing`).
     public var reserveTranscriptionHeight: Bool = false
 
+    /// Opt-out d'AFFICHAGE (#4956) : quand `false`, une transcription déjà
+    /// disponible n'est pas montrée automatiquement — la bulle rend le même
+    /// CTA « Transcrire » que l'absence de transcription, et un tap RÉVÈLE le
+    /// texte déjà là (aucun appel réseau, `onRequestTranscription` n'est pas
+    /// invoqué). Paramètre OPAQUE : le SDK ne sait pas que ce booléen vient
+    /// d'une préférence nommée `autoTranscribeIncoming` ni de la règle
+    /// "toujours vrai pour mes propres messages" — c'est `AudioBubbleRouter`
+    /// (app) qui la résout et transmet le résultat (SDK Purity). Défaut
+    /// `true` : tout site d'appel existant garde le comportement d'avant
+    /// (affichage dès que `displaySegments` n'est pas vide).
+    public var autoRevealTranscription: Bool = true
+
     public var onFullscreen: (() -> Void)? = nil
     public var onRequestTranscription: (() -> Void)? = nil
     public var onRetranscribe: (() -> Void)? = nil
@@ -923,6 +935,13 @@ public struct AudioPlayerView: View {
     /// Internal — read by `body` (`.animation(value:)`) here AND by
     /// `transcriptionBlock`/`expandToggleButton` in the extension file.
     @State internal var isTranscriptionExpanded = false
+    /// Opt-out d'affichage (#4956) : posé par un tap sur le CTA « Transcrire »
+    /// rendu quand `autoRevealTranscription == false` alors qu'une
+    /// transcription existe déjà. Ne déclenche aucune requête réseau — la
+    /// transcription est déjà là, ce tap ne fait que la révéler pour le
+    /// reste de la vie de cette vue. Internal — lu et posé par
+    /// `transcriptionBlock` (AudioPlayerView+Transcription.swift).
+    @State internal var hasManuallyRevealedTranscription = false
     /// Toggled in `onAppear` of the skeleton view to drive the pulse.
     /// Internal — `transcriptionShimmer` (extension file) owns it.
     @State internal var transcriptionPulsePhase = false
@@ -980,6 +999,7 @@ public struct AudioPlayerView: View {
         translatedAudios: [MessageTranslatedAudio] = [],
         initialTranscriptionLanguage: String? = nil,
         reserveTranscriptionHeight: Bool = false,
+        autoRevealTranscription: Bool = true,
         onFullscreen: (() -> Void)? = nil,
         onRequestTranscription: (() -> Void)? = nil,
         onRetranscribe: (() -> Void)? = nil,
@@ -998,6 +1018,7 @@ public struct AudioPlayerView: View {
         self.transcription = transcription; self.translatedAudios = translatedAudios
         self.initialTranscriptionLanguage = initialTranscriptionLanguage
         self.reserveTranscriptionHeight = reserveTranscriptionHeight
+        self.autoRevealTranscription = autoRevealTranscription
         self._selectedAudioLanguage = State(
             initialValue: AudioPlayerView.resolveInitialTranscriptionLanguage(initialTranscriptionLanguage)
         )

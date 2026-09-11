@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { Avatar } from '@/components/avatar';
+import { RAIL_TILE_COMPACT, RAIL_TILE_GRANDE, RailTile } from '@/components/rail-tile';
 import { Glyph } from '@/components/glyph';
 import { LensRow } from '@/components/lens-row';
 import { LensSection } from '@/components/lens-sticker';
@@ -21,7 +22,7 @@ import { resolveLensSections } from '@/lib/lens/sections';
 import { useOnline } from '@/lib/net/online';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useMinute } from '@/lib/view/use-minute';
-import { initialsOf, titleOf } from '@/lib/view/conversation';
+import { titleOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -176,6 +177,32 @@ export default function ConversationsScreen() {
   const [filter, setFilter] = useState<ListFilter>('all');
   const [search, setSearch] = useState('');
   const frame = useRef<HTMLUListElement | null>(null);
+
+  /**
+   * **LE TRAIL SE COMPACTE QUAND ON DÉFILE** (#5946, directive porteur) — la
+   * tuile passe de 72 à 30 px, comme l'app iOS passe de `.storyTray` (88 pt) à
+   * `.storyTrayCompact` (36 pt).
+   *
+   * iOS obtient l'effet autrement : son trail vit DANS la vue défilante, sort
+   * du champ, et une bande épinglée le remplace en miniature. Notre disposition
+   * ne le permet pas — le rail est `shrink-0` au-dessus d'une liste qui défile
+   * dans son propre conteneur, donc il ne sort jamais. On compacte SUR PLACE,
+   * ce qui vaut mieux pour le geste : le trail reste atteignable en
+   * permanence, là où iOS le perd et doit le réintroduire.
+   *
+   * **L'observation vit ICI, dans le montage** — jamais dans la tuile, qui
+   * reste une vue PURE. C'est la règle qu'iOS écrit noir sur blanc pour son
+   * propre rail (« aucun `@State` de défilement, aucun observateur »).
+   *
+   * HYSTÉRÉSIS de 24 px : sans elle, un doigt posé pile sur le seuil ferait
+   * clignoter la bande à chaque micro-mouvement. On compacte à 48, on rouvre à
+   * 24 — jamais au même point.
+   */
+  const [railCompact, setRailCompact] = useState(false);
+  const onListScroll = (): void => {
+    const y = frame.current?.scrollTop ?? 0;
+    setRailCompact((etait) => (etait ? y > 24 : y > 48));
+  };
   const { focus, level } = useScene(frame);
   const online = useOnline();
 
@@ -329,35 +356,16 @@ export default function ConversationsScreen() {
       <section aria-label="Accès rapide aux conversations" className="shrink-0 overflow-x-auto pb-1">
         <ul className="flex gap-3 px-4 py-2">
           {railConversations.length === 0 ? <RailPlaceholderTile /> : null}
-          {railConversations.map((c) => {
-            const title = titleOf(c, viewer.id ?? '');
-            return (
-              <li key={c.id} className="flex w-[88px] shrink-0 flex-col items-center gap-1.5">
-                <Link
-                  to="thread"
-                  params={{ conversation: c.id }}
-                  aria-label={title}
-                  className="flex flex-col items-center gap-1.5 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-                  style={{ outlineColor: 'var(--color-ios-brand)' }}
-                >
-                  <span
-                    className="grid place-items-center rounded-chip p-[2.5px]"
-                    style={{
-                      background:
-                        effectiveUnreadOf(c, overrides) > 0
-                          ? 'var(--color-ios-brand)'
-                          : 'color-mix(in srgb, var(--color-ios-ink-3) 40%, transparent)',
-                    }}
-                  >
-                    <Avatar initials={initialsOf(title)} color={accentOf(c)} size={72} />
-                  </span>
-                  <span className="w-full truncate text-center text-check" style={{ color: 'var(--color-ios-ink-2)' }}>
-                    {title}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
+          {railConversations.map((c) => (
+            <RailTile
+              key={c.id}
+              conversationId={c.id}
+              title={titleOf(c, viewer.id ?? '')}
+              accent={accentOf(c)}
+              unread={effectiveUnreadOf(c, overrides)}
+              size={railCompact ? RAIL_TILE_COMPACT : RAIL_TILE_GRANDE}
+            />
+          ))}
         </ul>
       </section>
       ) : null}
@@ -414,6 +422,7 @@ export default function ConversationsScreen() {
       <ul
         ref={frame}
         id="contenu"
+        onScroll={onListScroll}
         className="flex flex-1 flex-col overflow-y-auto px-2"
         {...(loading ? { 'aria-busy': true, 'aria-label': 'Chargement des conversations' } : {})}
       >
