@@ -112,6 +112,10 @@ nonisolated struct StoryExportRailButtons: Equatable {
 /// ~9-button `VStack` becomes its own type-metadata unit.
 struct StoryActionSidebarView: View {
     let isOwnStory: Bool
+    /// Largeur du VIEWPORT (pas celle du ZStack du canvas, qui le dépasse).
+    /// Seule la barre de réactions s'en sert : elle doit se borner pour
+    /// DÉFILER au lieu de sortir de l'écran à l'échelle 2.
+    let viewportWidth: CGFloat
     let storyReactionCount: Int
     /// True only when the *current viewer* has personally reacted to this
     /// story — drives the heart's indigo active state. Decoupled from
@@ -168,6 +172,10 @@ struct StoryActionSidebarView: View {
     /// l'ancien repost un-tap côté serveur.
     @Binding var republishStorySource: RepostPostSourceWrapper?
     @Binding var isPresented: Bool
+    /// **La barre de réactions revendique le glissé en cours.** Écrit ici,
+    /// lu par `unifiedDragGesture` (`StoryViewerView+Content.swift`), qui sort
+    /// alors sans paginer. Cf. `StoryReactionStripGesture`.
+    @Binding var reactionStripOwnsDrag: Bool
 
     /// Envoie la réaction ; le CGRect est le cadre (dans StoryScrubSpace) de la
     /// tuile d'origine du vol — nil = pop sur place depuis le cœur (tap direct).
@@ -271,6 +279,50 @@ struct StoryActionSidebarView: View {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             showLanguageOptions = true
         }
+    }
+
+    /// Largeur de la barre de réactions dépliée.
+    ///
+    /// La barre est un `.overlay(alignment: .trailing)` du cœur, décalé de 56 pt
+    /// vers la gauche ; le rail garde 16 pt de marge droite. Son bord droit tombe
+    /// donc à `viewportWidth - 72`, et on lui laisse 12 pt de marge gauche.
+    ///
+    /// **Cette largeur est ce qui remplace `.fixedSize()`.** À l'échelle 2, six
+    /// émojis plus le « + » demandent ~450 pt de large : `.fixedSize()` les
+    /// aurait tous rendus, et la rangée serait sortie de l'écran par la gauche au
+    /// lieu de défiler. Un `ScrollView` ne défile que dans une largeur BORNÉE.
+    private var reactionStripWidth: CGFloat {
+        max(160, viewportWidth - 84)
+    }
+
+    /// **Le glissé horizontal appartient à la rangée, pas au lecteur** (#6083).
+    ///
+    /// `.simultaneousGesture` et NON `.highPriorityGesture`, pour deux raisons
+    /// qui pointent dans le même sens :
+    ///  1. la rangée embarque un `ScrollView` horizontal, dont le pan est un
+    ///     recognizer UIKit. Une priorité haute le préempterait — la barre
+    ///     cesserait de défiler, c'est-à-dire exactement la capacité que ce lot
+    ///     ajoute ;
+    ///  2. elle préempterait aussi le tap des tuiles, et réagir deviendrait
+    ///     impossible.
+    /// En simultané, chacun fait son travail : l'`UIScrollView` défile, ce
+    /// geste-ci se contente de DIRE qui possède le glissé. Il ne peut pas faire
+    /// taire le drag parent par priorité — celui-ci est lui-même monté en
+    /// `.simultaneousGesture` sur un ancêtre, donc insubordonnable ; c'est le
+    /// drapeau qu'il lit, et rien d'autre, qui le fait céder.
+    ///
+    /// `minimumDistance` = `horizontalClaimDistance` : le verdict tombe avant le
+    /// réveil du drag parent (15 pt), et le tremblement d'un appui ne l'atteint
+    /// jamais.
+    private var reactionStripDragGesture: some Gesture {
+        DragGesture(minimumDistance: StoryReactionStripGesture.horizontalClaimDistance)
+            .onChanged { value in
+                reactionStripOwnsDrag =
+                    StoryReactionStripGesture.owner(translation: value.translation) == .strip
+            }
+            .onEnded { _ in
+                reactionStripOwnsDrag = false
+            }
     }
 
     private var languageScrubGesture: some Gesture {
@@ -488,6 +540,14 @@ struct StoryActionSidebarView: View {
                         EmojiReactionPicker(
                             quickEmojis: quickEmojis,
                             style: .dark,
+                            // Échelle 2 + aucun habillage : la rangée se pose NUE
+                            // sur la scène, qui est déjà son fond (directive
+                            // porteur 2026-09-11, #6083). `scrollable` est le
+                            // COROLLAIRE de l'échelle, pas une option : à 2, six
+                            // émojis et le « + » demandent ~450 pt de large.
+                            scale: 2,
+                            scrollable: true,
+                            chrome: .none,
                             onReact: { emoji in
                                 let index = quickEmojis.firstIndex(of: emoji)
                                 triggerStoryReaction(emoji, index.flatMap { reactionTileFrames[$0] })
@@ -507,7 +567,9 @@ struct StoryActionSidebarView: View {
                             scrubFrameSpace: StoryScrubSpace.name,
                             onTileFrames: { reactionTileFrames = $0 }
                         )
-                        .fixedSize()
+                        .frame(width: reactionStripWidth)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .simultaneousGesture(reactionStripDragGesture)
                         .transition(.asymmetric(
                             insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
                             removal: .opacity

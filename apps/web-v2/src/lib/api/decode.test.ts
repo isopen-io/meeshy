@@ -3,6 +3,9 @@ import { describe, expect, test } from 'bun:test';
 import { decodeConversation, decodeMessage, toDate } from './decode';
 import { CONVERSATION_ID, VIEWER_ID, amina, conversationDefaults, message, translation, viewer } from './fixtures-base';
 import { protectionOf } from '../reading-mode/protection';
+import { composeMessageLabel } from '../view/message-a11y-label';
+import { forwardAttributionOf } from '../view/message-badges';
+import { storyCitationOf } from '../view/message-body';
 import type { Conversation, Message } from './types';
 
 describe('toDate — idempotent', () => {
@@ -313,5 +316,78 @@ describe('decodeMessage — les sept clés de date optionnelles, servies `null` 
   test('un message avec `deletedAt: null` ⇒ protection STANDARD, jamais « deleted »', () => {
     const decoded = decodeMessage(rawNullDates);
     expect(protectionOf(decoded, Date.now())).toBe('standard');
+  });
+});
+
+/**
+ * #6086 — LE MÊME DÉFAUT QUE #5668, SUR LES CLÉS QUI NE SONT PAS DES DATES.
+ *
+ * Le lot #5668 a défait le `null` de SEPT clés, et le doc-comment de
+ * `decode.ts` en a tiré une promesse générale : « on DÉFAIT TOUTES les clés
+ * que la passerelle peut servir à `null` […] aucune vue n'a plus à le
+ * connaître ». Le code ne tenait cette promesse que pour les DATES — le seul
+ * outil disponible s'appelait `dateFieldOf`. Tout champ nullable d'un AUTRE
+ * type traversait donc intact.
+ *
+ * Ce que ça coûtait, mesuré sur `staging.meeshy.me` le 2026-09-11 :
+ * `reactionSummary Json?` (`schema.prisma:872`) vaut `null` pour tout message
+ * SANS réaction — le cas nominal. `reactionsSegment`
+ * (`lib/view/message-a11y-label.ts`) testait `=== undefined` puis appelait
+ * `Object.entries` : **ouvrir n'importe quelle conversation jetait
+ * `TypeError: Cannot convert undefined or null to object`**, et le fil ne se
+ * rendait pas du tout.
+ *
+ * `forwardedFromId`/`forwardedFromConversationId` portent le même piège avec
+ * un symptôme INVERSE — pas une exception, un faux positif silencieux : le
+ * doc-comment de `forwardAttributionOf` annonce « `null` ⇒ ce message n'est
+ * pas un transfert » pendant que son code teste `=== undefined`, si bien
+ * qu'un message ORDINAIRE sautait l'early-return et repartait en
+ * `{ kind: 'anonymous' }` — le badge « Transféré » sur un message qui ne l'est
+ * pas. Un crash se voit ; celui-là non.
+ */
+describe('decodeMessage — les clés NON-DATE servies `null` par la passerelle réelle (#6086)', () => {
+  const rawNullNonDates = {
+    ...message({
+      id: 'm12',
+      senderId: VIEWER_ID,
+      sender: viewer,
+      content: 'aucune réaction, aucun transfert',
+      originalLanguage: 'fr',
+      translations: [],
+      createdAt: '2026-09-11T09:00:00.000Z' as unknown as Date,
+    }),
+    reactionSummary: null,
+    forwardedFromId: null,
+    forwardedFromConversationId: null,
+    storyReplyToId: null,
+  } as unknown as Message;
+
+  test('aucune des quatre clés ne survit à `null` — toutes ABSENTES du message décodé', () => {
+    const decoded = decodeMessage(rawNullNonDates);
+    expect('reactionSummary' in decoded).toBe(false);
+    expect('forwardedFromId' in decoded).toBe(false);
+    expect('forwardedFromConversationId' in decoded).toBe(false);
+    expect('storyReplyToId' in decoded).toBe(false);
+  });
+
+  test('le libellé d’accessibilité se compose — c’est le crash du fil, reproduit', () => {
+    const decoded = decodeMessage(rawNullNonDates);
+    expect(() =>
+      composeMessageLabel({
+        message: decoded,
+        isMine: true,
+        servedText: 'aucune réaction, aucun transfert',
+        delivery: 'sent',
+        protection: 'standard',
+      }),
+    ).not.toThrow();
+  });
+
+  test('un message ordinaire ne porte AUCUNE attribution de transfert', () => {
+    expect(forwardAttributionOf(decodeMessage(rawNullNonDates))).toBeNull();
+  });
+
+  test('un message ordinaire ne cite AUCUNE story', () => {
+    expect(storyCitationOf(decodeMessage(rawNullNonDates))).toBeNull();
   });
 });

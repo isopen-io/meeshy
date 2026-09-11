@@ -16,6 +16,7 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { EngagementService } from '../../services/engagement/EngagementService';
+import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 
 /** Le plafond d'une page de demandes. */
 export const LIMITE_MAX_DEMANDES = 100;
@@ -464,10 +465,12 @@ async function conversationDirecte(
     fastify.prisma.user.findUnique({ where: { id: bId }, select: { displayName: true, username: true } }),
   ]);
 
-  const permissions = {
-    canSendMessages: true, canSendFiles: true, canSendImages: true,
-    canSendVideos: false, canSendAudios: false, canSendLocations: false, canSendLinks: false,
-  };
+  // #6080 — la table vient du site UNIQUE (`services/participantRights.ts`).
+  // Le littéral écrit ici fermait `canSendVideos`/`canSendAudios`, ce que la
+  // garde de pièce jointe (#5151) lit comme un REFUS : deux amis ne pouvaient
+  // s'envoyer ni vidéo, ni vocal, ni document dans le fil que leur amitié
+  // venait d'ouvrir.
+  const permissions = { ...FOUNDING_MEMBER_PERMISSIONS };
 
   const conversation = await fastify.prisma.conversation.create({
     data: {

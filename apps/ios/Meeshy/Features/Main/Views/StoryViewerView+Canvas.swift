@@ -843,6 +843,9 @@ struct StoryCardView: View {
     /// du toucher courant, information que le drag parent ne peut pas observer
     /// lui-même (il ne s'éveille qu'à 15 pt de déplacement).
     @Binding var readerFeatureConsumedByTouch: Bool
+    /// Relayé tel quel au rail : la barre de réactions y revendique le glissé
+    /// horizontal (cf. `StoryReactionStripGesture`), le drag parent y cède.
+    @Binding var reactionStripOwnsDrag: Bool
 
     @ObservedObject var keyboard: KeyboardObserver
 
@@ -1696,6 +1699,10 @@ struct StoryCardView: View {
                 Spacer()
                 StoryActionSidebarView(
                     isOwnStory: isOwnStory,
+                    // Largeur RÉELLE du viewport (le ZStack parent la dépasse —
+                    // cf. la note du Layer 8) : la barre de réactions s'y borne
+                    // pour DÉFILER au lieu de sortir par la gauche.
+                    viewportWidth: geometry.size.width,
                     storyReactionCount: storyReactionCount,
                     storyCurrentUserHasReacted: storyCurrentUserHasReacted,
                     heartBouncePulse: heartBouncePulse,
@@ -1727,6 +1734,7 @@ struct StoryCardView: View {
                     sharedContentWrapper: $sharedContentWrapper,
                     republishStorySource: $republishStorySource,
                     isPresented: $isPresented,
+                    reactionStripOwnsDrag: $reactionStripOwnsDrag,
                     triggerStoryReaction: triggerStoryReaction,
                     onScrubStateChanged: onScrubStateChanged,
                     pauseTimer: pauseTimer,

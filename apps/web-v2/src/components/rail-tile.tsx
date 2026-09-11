@@ -24,12 +24,24 @@ import { Link } from '@/routes/route-table';
  * son propre rail (« vue PURE : aucun `@State` de défilement, aucun
  * observateur »), et elle garde ce composant testable sans simuler un scroll.
  *
- * OÙ NOTRE ÉCRAN DIFFÈRE D'iOS, et pourquoi c'est assumé : là-bas le trail vit
- * DANS la vue défilante, sort du champ, et une bande épinglée le remplace en
- * miniature. Ici le rail est `shrink-0` au-dessus d'une liste qui défile dans
- * son propre conteneur — il ne sort jamais. On compacte donc SUR PLACE, ce qui
- * vaut mieux pour le geste : le trail reste atteignable en permanence, là où
- * iOS le perd et doit le réintroduire.
+ * OÙ NOTRE ÉCRAN DIFFÈRE D'iOS, ASSUMÉ POUR LE GESTE, JAMAIS POUR LA
+ * STABILITÉ DE LA LISTE (révisé #6070) : là-bas le trail vit DANS la vue
+ * défilante, sort du champ, et une bande épinglée (`PinnedStoryTrailBand`)
+ * le remplace en miniature DANS L'EN-TÊTE replié. Ici le rail est `shrink-0`
+ * au-dessus d'une liste qui défile dans son propre conteneur — il ne sort
+ * jamais, et cette différence reste : le trail est atteignable en
+ * permanence, là où iOS le perd et doit le réintroduire.
+ *
+ * Ce qui NE reste PAS assumé : la première version compactait « sur place »
+ * en réduisant la hauteur réelle de la région du rail — exactement ce
+ * qu'iOS n'accepte jamais, puisque `PinnedStoryTrailBand` occupe une bande
+ * d'en-tête à hauteur FIXE. Réduire la région faisait varier la hauteur du
+ * conteneur défilant lui-même à chaque bascule, provoquant un saut mesuré
+ * par `check-lens.mjs` (9 rangées déplacées en MISE EN PAGE). Le montage
+ * (`routes/conversations.tsx`) réserve donc la hauteur GRANDE en flux, par
+ * une tuile fantôme TOUJOURS présente, et peint le rail RÉEL — celui qui
+ * compacte — par-dessus, hors flux, dans la même boîte : sa hauteur peut
+ * varier librement, elle ne pousse plus jamais rien.
  */
 
 /** La grande — celle de la tête de liste. Cote de l'avatar, en pixels. */
@@ -81,6 +93,7 @@ export function RailTile({ conversationId, title, accent, unread, size }: RailTi
 
   return (
     <li
+      data-rail-tile={size}
       className="flex shrink-0 flex-col items-center gap-1.5"
       style={{ width: `${cellule}px` }}
     >
