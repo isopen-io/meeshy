@@ -15,7 +15,7 @@ import MeeshyUI
 /// audio que l'atelier ne sait pas placer — un objet sans actif chargé, que
 /// `runStoryUpload` saute en journalisant « layer will be invisible to
 /// viewers ». Le geste aurait l'air de marcher, et rien ne partirait.
-enum ConversationMediaSeeding {
+enum ComposerMediaSeeding {
 
     /// `nil` quand le média n'est pas composable, ou quand sa matérialisation
     /// échoue. L'appelant n'ouvre alors RIEN : une scène sans son média serait
@@ -111,48 +111,104 @@ enum ConversationMediaSeeding {
 
 // MARK: - Ce que la porte a besoin de savoir
 
-/// **L'état de présentation de la porte, qui ne peut pas exister sans sa pièce
-/// jointe.**
+/// **L'état de présentation de la porte, qui ne peut pas exister sans quelque
+/// chose à semer.**
 ///
 /// Porter un `Message` seul aurait laissé le montage résoudre lui-même « quelle
 /// pièce ? » — donc laisser un cas où l'on présente un composer sur une pièce
-/// introuvable, écran noir sans issue. L'`init?` LIT la même règle que le menu
-/// et la feuille (`ComposableAttachment.target`), une fois, et rend `nil` sinon.
+/// introuvable, écran noir sans issue. Chaque `init?` LIT la règle d'offre
+/// (`ComposableAttachment.seedPlan`), une fois, et rend `nil` sinon.
 ///
 /// C'est le TROISIÈME verrou de la protection, et il vaut par ce qu'il survit :
-/// un quatrième déclencheur qui oublierait le gate d'offre ne pourrait toujours
+/// un déclencheur de plus qui oublierait le gate d'offre ne pourrait toujours
 /// pas construire de cible sur un média à vue unique, flouté ou chiffré.
-/// Renommé de `ComposableMessageTarget` au #4025 : la cible n'est plus
-/// nécessairement un MÉDIA. Un message texte en construit une, dont le semis
-/// est sa seule description — et garder l'ancien nom aurait fait dire au type
-/// l'inverse de ce qu'il porte.
-struct ComposableMessageTarget: Identifiable {
-    let messageId: String
-    /// Ce que ce message sème : le canvas ET la description, ensemble.
+/// Renommée de `ComposableMessageTarget` au #6085, après l'avoir déjà été au
+/// #4025 quand la cible a cessé d'être nécessairement un MÉDIA : elle n'est plus
+/// nécessairement un MESSAGE.
+/// Garder l'ancien nom aurait fait dire au type l'inverse de ce qu'il porte —
+/// c'est la raison exacte du premier renommage, rejouée un cran plus haut.
+///
+/// **L'ORIGINE voyage avec la cible, et pas dans la porte.** Trois surfaces
+/// montent désormais le MÊME meuble ; une porte qui composerait l'origine
+/// elle-même devrait demander « d'où viens-tu ? » à sa cible, c'est-à-dire
+/// refaire le `switch` que ces trois fabriques viennent de trancher.
+struct ComposerSeedTarget: Identifiable {
+
+    /// L'identité pour `.fullScreenCover(item:)`. Préfixée par la surface : deux
+    /// cibles de surfaces différentes peuvent partager l'identifiant d'un média
+    /// (rien ne l'interdit côté serveur), et un `item:` qui ne change pas ne
+    /// re-présente rien.
+    let id: String
+
+    /// Ce que le porteur sème : le canvas ET la description, ensemble.
     let plan: ComposableAttachment.SeedPlan
 
+    /// D'où la porte est ouverte — le contexte que le meuble transporte, jamais
+    /// une donnée de décision (cf. `ComposerOrigin`).
+    let origin: ComposerOrigin
+
     /// La pièce à poser, pour les lecteurs qui n'ont besoin que d'elle.
-    /// `nil` pour un message texte.
+    /// `nil` pour un porteur sans média composable.
     var attachment: MessageAttachment? { plan.media }
 
-    /// L'identité pour `.fullScreenCover(item:)`. Un message texte n'a pas
-    /// d'id de pièce : le sien tient au message seul, et le suffixe le DIT
-    /// plutôt que de laisser deux cibles distinctes partager un id.
-    var id: String {
-        plan.media.map { "\(messageId)/\($0.id)" } ?? "\(messageId)/description"
+    /// Le seul assembleur, PRIVÉ : déclarer un `init` dans le corps de la
+    /// structure supprime le membre à membre synthétisé, et les trois fabriques
+    /// ci-dessous ont besoin d'un point de passage commun — c'est lui qui rend
+    /// « une cible = un plan + une origine + une identité » indissociable.
+    private init(id: String, plan: ComposableAttachment.SeedPlan, origin: ComposerOrigin) {
+        self.id = id
+        self.plan = plan
+        self.origin = origin
     }
 
     init?(message: Message) {
         guard let plan = ComposableAttachment.seedPlan(in: message) else { return nil }
-        self.messageId = message.id
-        self.plan = plan
+        self.init(id: "message/\(message.id)/\(plan.media?.id ?? "description")",
+                  plan: plan,
+                  origin: .conversationMedia(messageId: message.id, attachmentId: plan.media?.id))
     }
+
+    /// **Le média d'un POST** (#6085). La règle d'offre est la MÊME : un post à
+    /// deux photos n'ouvre pas d'atelier, parce qu'un lot mentirait sur ce qui
+    /// part.
+    init?(post: FeedPost) {
+        guard let plan = ComposableAttachment.seedPlan(inPost: post) else { return nil }
+        self.init(id: "post/\(post.id)/\(plan.media?.id ?? "description")",
+                  plan: plan,
+                  origin: .socialMedia(postId: post.id, mediaId: plan.media?.id))
+    }
+
+    /// **La slide d'une STORY** (#6085). `preferredLanguages` descend le Prisme
+    /// du lecteur sur le texte qui pré-remplira la description.
+    init?(story: StoryItem, preferredLanguages: [String]) {
+        guard let plan = ComposableAttachment.seedPlan(inStory: story,
+                                                       preferredLanguages: preferredLanguages)
+        else { return nil }
+        self.init(id: "story/\(story.id)/\(plan.media?.id ?? "description")",
+                  plan: plan,
+                  origin: .socialMedia(postId: story.id, mediaId: plan.media?.id))
+    }
+}
+
+/// **Les trois modèles que l'APERÇU réclame, et rien d'autre.**
+///
+/// `StoryViewerView` les lit en `@EnvironmentObject`, et un cover ne recopie pas
+/// l'environnement de son hôte — il faut donc les lui remettre. Toutes les
+/// surfaces ne les ont pas sous la main : les grouper en un optionnel rend
+/// l'aperçu CÂBLÉ ou ABSENT, jamais à moitié (loi 4 — un œil qui n'ouvre rien
+/// est un contrôle inerte, et c'est précisément le défaut que #5053 a payé sur
+/// les deux portes de story).
+struct MediaComposerPreviewHosts {
+    let router: Router
+    let conversationListViewModel: ConversationListViewModel
+    let statusViewModel: StatusViewModel
 }
 
 // MARK: - La PORTE
 
-/// **La porte du média REÇU** (e9 / O13) — quatrième porte de production du
-/// meuble, et la première dont le profil existait avant elle.
+/// **LA porte du média DÉJÀ PUBLIÉ OU REÇU** (e9 / O13, généralisée au #6085) —
+/// un seul montage pour les TROIS surfaces : le message d'une conversation, le
+/// média d'un post, la slide d'une story.
 ///
 /// `ComposerProfile` décrit `.conversationMedia` depuis C1 : format d'ouverture,
 /// éventail, capture. Aucun site ne le construisait. Une porte définie et
@@ -160,19 +216,21 @@ struct ComposableMessageTarget: Identifiable {
 /// passe au vert dans toutes les gardes de la table, parce qu'une table se
 /// mesure sans qu'on l'atteigne (loi 4).
 ///
-/// ## Pourquoi une PORTE, et pas un montage dans `ConversationView`
+/// ## Pourquoi UNE porte, et pas trois
 ///
 /// Le montage porte l'envoi, la reprise et la sortie. Posé dans une feuille de
 /// présentation, il aurait été recopié au premier second site — et ce second
-/// site existe déjà dans ce lot : la feuille de forward, qui déclenche le MÊME
-/// chemin. `MeeshyComposerHostGuardTests` retient nommément cette règle : seules
-/// des portes montent le meuble.
+/// site existait déjà au lot 5 : la feuille de forward, qui déclenche le MÊME
+/// chemin. Le #6085 en apporte deux de plus (le fil social, le lecteur de
+/// story) ; les servir par trois portes jumelles aurait donné trois publieurs à
+/// tenir d'accord. `MeeshyComposerHostGuardTests` retient nommément cette
+/// règle : seules des portes montent le meuble.
 ///
 /// ## Ce que la porte fait, dans cet ordre
 ///
 /// 1. **matérialise** — par `MediaSaveSourceResolving`, injecté par le PROTOCOLE
 ///    (seam de test), jamais par le type concret ;
-/// 2. **décode** hors du main actor pour une image (`ConversationMediaSeeding`) ;
+/// 2. **décode** hors du main actor pour une image (`ComposerMediaSeeding`) ;
 /// 3. **présente** le meuble avec sa graine ;
 /// 4. **publie** par `StoryViewModel.publishStoryInBackground`, qui porte déjà
 ///    le format choisi dans l'éventail — jamais par un service, qui perdrait la
@@ -187,22 +245,20 @@ struct ComposableMessageTarget: Identifiable {
 /// divulgation, pas une politesse. Ces deux refus vivent dans la GRAINE
 /// (`StoryComposerViewModel(seeding:)`), qui est l'endroit où on pourrait être
 /// tenté de les ajouter par symétrie avec le repost.
-struct ConversationMediaComposerDoor: View {
+struct MediaComposerDoor: View {
 
-    /// Le message et sa pièce jointe UNIQUE. Un lot hétérogène mentirait sur ce
-    /// qui partirait, et l'`init?` de la cible a déjà refusé ce cas.
-    let target: ComposableMessageTarget
+    /// Ce que la surface a résolu : le plan, son identité, son origine. Un lot
+    /// hétérogène mentirait sur ce qui partirait, et l'`init?` de la cible a
+    /// déjà refusé ce cas — pour les trois surfaces, par la même règle.
+    let target: ComposerSeedTarget
 
-    /// **L'INTENTION naît ICI, et nulle part ailleurs.** Une porte est le site
-    /// qui construit son intention : la laisser à son hôte en ferait un second
-    /// site à tenir d'accord — et ce lot livre justement DEUX déclencheurs pour
-    /// une seule présentation. C'est la table (`ComposerProfile`) qui décide
-    /// ensuite du format d'ouverture et de la surface ; la porte ne les recopie
-    /// pas.
-    private var intent: ComposerIntent {
-        ComposerIntent(origin: .conversationMedia(
-            messageId: target.messageId, attachmentId: target.attachment?.id))
-    }
+    /// **L'INTENTION naît de la CIBLE, et nulle part ailleurs.** La porte ne
+    /// redemande pas « d'où viens-tu ? » : les trois fabriques de
+    /// `ComposerSeedTarget` l'ont déjà tranché, et un `switch` ici en ferait un
+    /// second site à tenir d'accord. C'est la table (`ComposerProfile`) qui
+    /// décide ensuite du format d'ouverture et de la surface ; la porte ne les
+    /// recopie pas.
+    private var intent: ComposerIntent { ComposerIntent(origin: target.origin) }
 
     /// Le modèle des stories, **sans `@ObservedObject`** : la porte n'affiche
     /// rien qui en dépende, elle l'utilise pour publier. L'observer ferait
@@ -214,9 +270,13 @@ struct ConversationMediaComposerDoor: View {
     /// Réinjectés à travers la frontière du cover d'APERÇU : `StoryViewerView`
     /// les lit en `@EnvironmentObject`, et un cover ne recopie pas
     /// l'environnement de son hôte.
-    let router: Router
-    let conversationListViewModel: ConversationListViewModel
-    let statusViewModel: StatusViewModel
+    ///
+    /// **`nil` ⇒ aucun aperçu** (loi 4). Les surfaces sociales de #6085 ne
+    /// tiennent pas ces trois modèles sans les faire traverser un cover de plus,
+    /// et un `onPreview` qui n'ouvre rien armerait l'œil du socle sur le vide —
+    /// exactement le défaut que #5053 a payé sur les deux portes de story.
+    /// DETTE NOMMÉE, identique à celle de `ShareComposeDoor` : lot séparé.
+    var preview: MediaComposerPreviewHosts? = nil
 
     /// Le seam. Défaut de PRODUCTION seulement — un test injecte le sien.
     var resolver: MediaSaveSourceResolving = AttachmentMediaSaveResolver()
@@ -269,11 +329,11 @@ struct ConversationMediaComposerDoor: View {
             Color.black.ignoresSafeArea()
             ProgressView()
                 .tint(.white)
-                .accessibilityLabel(Text(ConversationMediaComposerCopy.preparing))
+                .accessibilityLabel(Text(MediaComposerCopy.preparing))
         }
         .overlay(alignment: .topLeading) {
             Button(action: onDismiss) {
-                Text(ConversationMediaComposerCopy.cancel)
+                Text(MediaComposerCopy.cancel)
                     .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
@@ -329,7 +389,12 @@ struct ConversationMediaComposerDoor: View {
             // mood est sans scène — y router une graine la ferait disparaître.
             moodSeed: nil,
             mediaSeed: graine,
+            // **L'œil n'arme QUE ce qui s'ouvre** (loi 4). Sans hôtes de
+            // lecture, la fermeture ne pose rien : `previewAssets` reste `nil`,
+            // donc le cover ci-dessous n'existe pas — au lieu d'un plein écran
+            // vide que rien ne pourrait peindre.
             onPreview: { slides, images, loadedImgs, videoURLs, audioURLs in
+                guard preview != nil else { return }
                 previewAssets = StoryPreviewAssets(
                     slides: slides,
                     backgroundImages: images,
@@ -350,40 +415,43 @@ struct ConversationMediaComposerDoor: View {
     /// L'aperçu est rendu par le LECTEUR (`StoryViewerView`), pas par un
     /// composant maison — loi 6, tenue par le même registre de rendu que le
     /// composer. Un troisième chemin d'aperçu mentirait tôt ou tard.
+    @ViewBuilder
     private func apercu(_ assets: StoryPreviewAssets) -> some View {
-        let items = assets.slides.map { $0.toPreviewStoryItem() }
-        let group = StoryGroup(
-            id: "preview",
-            username: String(localized: "story.preview.username", defaultValue: "Aperçu", bundle: .main),
-            avatarColor: MeeshyColors.brandPrimaryHex,
-            stories: items
-        )
-        return StoryViewerView(
-            viewModel: storyViewModel,
-            groups: [group],
-            currentGroupIndex: 0,
-            isPresented: Binding(
-                get: { previewAssets != nil },
-                set: { if !$0 { previewAssets = nil } }
-            ),
-            isPreviewMode: true,
-            preloadedImages: assets.loadedImages.merging(assets.backgroundImages) { fg, _ in fg },
-            preloadedVideoURLs: assets.videoURLs,
-            preloadedAudioURLs: assets.audioURLs
-        )
-        .environmentObject(router)
-        .environmentObject(conversationListViewModel)
-        .environmentObject(statusViewModel)
+        if let preview {
+            let items = assets.slides.map { $0.toPreviewStoryItem() }
+            let group = StoryGroup(
+                id: "preview",
+                username: String(localized: "story.preview.username", defaultValue: "Aperçu", bundle: .main),
+                avatarColor: MeeshyColors.brandPrimaryHex,
+                stories: items
+            )
+            StoryViewerView(
+                viewModel: storyViewModel,
+                groups: [group],
+                currentGroupIndex: 0,
+                isPresented: Binding(
+                    get: { previewAssets != nil },
+                    set: { if !$0 { previewAssets = nil } }
+                ),
+                isPreviewMode: true,
+                preloadedImages: assets.loadedImages.merging(assets.backgroundImages) { fg, _ in fg },
+                preloadedVideoURLs: assets.videoURLs,
+                preloadedAudioURLs: assets.audioURLs
+            )
+            .environmentObject(preview.router)
+            .environmentObject(preview.conversationListViewModel)
+            .environmentObject(preview.statusViewModel)
+        }
     }
 
     private func materialise() async {
         guard case .pending = materialisation else { return }
-        guard let graine = await ConversationMediaSeeding.seed(for: target.plan, resolver: resolver) else {
+        guard let graine = await ComposerMediaSeeding.seed(for: target.plan, resolver: resolver) else {
             materialisation = .failed
             // `showError` porte DÉJÀ sa vibration d'erreur (`FeedbackToastManager`
             // la pose à chaque point d'entrée, parce qu'elle diffère par type de
             // toast). En rejouer une ici en donnerait deux pour un seul échec.
-            FeedbackToastManager.shared.showError(ConversationMediaComposerCopy.unavailable)
+            FeedbackToastManager.shared.showError(MediaComposerCopy.unavailable)
             onDismiss()
             return
         }
@@ -394,7 +462,7 @@ struct ConversationMediaComposerDoor: View {
 /// Libellés de la porte, résolus par le catalogue `.main` — écrits ici plutôt
 /// qu'en littéraux dans la vue : un libellé posé en ligne échappe au cliquet de
 /// complétude et n'est jamais traduit.
-nonisolated enum ConversationMediaComposerCopy {
+nonisolated enum MediaComposerCopy {
     static var preparing: String {
         String(localized: "composer.media.preparing",
                defaultValue: "Préparation du média…", bundle: .main)

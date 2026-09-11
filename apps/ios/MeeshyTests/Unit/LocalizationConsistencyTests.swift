@@ -233,7 +233,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+Selection.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",  // 5
         "apps/ios/Meeshy/Features/Contacts/PeopleDiscoveryView.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Composer/ConversationMediaComposerDoor.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Composer/MediaComposerDoor.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Composer/UpgradeGateView.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift",  // 4

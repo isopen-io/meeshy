@@ -21,7 +21,7 @@ import MeeshyUI
 ///
 /// **Elle ne compose pas non plus la graine.** `ShareComposeHandoffConsumer` la
 /// matérialise depuis le conteneur App Group, par les MÊMES trois branches que
-/// `ConversationMediaSeeding` — une vidéo reste un fichier, une image se décode
+/// `ComposerMediaSeeding` — une vidéo reste un fichier, une image se décode
 /// hors du main actor au plafond de 1080 px.
 ///
 /// ## Le publieur

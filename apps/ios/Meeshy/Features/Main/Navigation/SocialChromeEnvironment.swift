@@ -36,6 +36,14 @@ private struct MeeshyStoryViewerPresentKey: EnvironmentKey {
     static let defaultValue: ((StoryViewerRequest) -> Void)? = nil
 }
 
+private struct MeeshyStoryComposerKey: EnvironmentKey {
+    static let defaultValue: StoryViewModel? = nil
+}
+
+private struct MeeshyComposeSeedRequestKey: EnvironmentKey {
+    static let defaultValue: ((ComposerSeedTarget) -> Void)? = nil
+}
+
 extension EnvironmentValues {
     /// Emoji d'humeur d'un utilisateur, ou `nil` s'il n'en a pas / si le
     /// résolveur n'est pas posé (hors hiérarchie applicative, previews, tests).
@@ -63,6 +71,44 @@ extension EnvironmentValues {
         get { self[MeeshyStoryViewerPresentKey.self] }
         set { self[MeeshyStoryViewerPresentKey.self] = newValue }
     }
+
+    /// **Le publieur de la porte « Composer »** (#6085) — le modèle qui possède
+    /// la file durable et la réconciliation optimiste des stories.
+    ///
+    /// Une valeur d'ENVIRONNEMENT, et pas un `@EnvironmentObject` : « Composer »
+    /// s'ouvre depuis le média d'un post, et `FeedPostCard` est monté dans des
+    /// FEUILLES qui ne portent pas les objets de la racine (`UserProfileSheet`
+    /// → `ProfileUserPostsList`, `FeedCommentsSheet`, `BookmarksView`). Lire un
+    /// objet absent fait trapper `EnvironmentObject.wrappedValue` — c'est le
+    /// crash que l'en-tête de ce fichier raconte, et qui se serait rejoué ici à
+    /// l'identique. `nil` DÉGRADE : l'entrée « Composer » n'est pas peinte
+    /// (loi 4 — un contrôle sans effet est ABSENT), elle ne trappe jamais.
+    var meeshyStoryComposer: StoryViewModel? {
+        get { self[MeeshyStoryComposerKey.self] }
+        set { self[MeeshyStoryComposerKey.self] = newValue }
+    }
+
+    /// **Ouvre l'atelier sur une graine** (#6085) — une DEMANDE, pas un modèle.
+    ///
+    /// Le lecteur de stories ne pouvait pas présenter la porte depuis son
+    /// en-tête : l'en-tête est reconstruit à chaque tick de la barre de
+    /// progression, et le `@State` qui portait la cible mourait avec l'identité
+    /// de la vue, entre le tap du menu et la passe de rendu suivante. Mesuré au
+    /// simulateur : l'entrée s'affichait, le tap posait la cible, et RIEN ne
+    /// s'ouvrait.
+    ///
+    /// > **Un état de présentation doit vivre au-dessus de ce qui le
+    /// > reconstruit.** C'est la règle de l'inventaire des portails (#4120),
+    /// > prise par l'autre bout : là il s'agissait de LIRE l'état au-dessus de
+    /// > l'aiguillage ; ici de l'ÉCRIRE au-dessus de l'horloge.
+    ///
+    /// `nil` ⇒ la surface n'a pas d'hôte de présentation, donc pas d'entrée
+    /// (loi 4). C'est le même contrat de dégradation que les résolveurs
+    /// voisins : l'absence retire, elle ne trappe pas.
+    var meeshyComposeSeedRequest: ((ComposerSeedTarget) -> Void)? {
+        get { self[MeeshyComposeSeedRequestKey.self] }
+        set { self[MeeshyComposeSeedRequestKey.self] = newValue }
+    }
 }
 
 extension View {
@@ -79,5 +125,11 @@ extension View {
             .environment(\.meeshyStoryRingResolver, { story.storyRingState(forUserId: $0) })
             .environment(\.meeshyMoodTapResolver, { status.moodTapHandler(for: $0) })
             .environment(\.meeshyStoryViewerPresent, { storyViewer.present($0) })
+            // #6085 — le MODÈLE lui-même, pas un résolveur : la porte publie par
+            // `publishStoryInBackground`, dont la signature a treize arguments.
+            // Les emballer dans une fermeture aurait recopié ici le contrat du
+            // publieur, c'est-à-dire créé la seconde vérité que la porte existe
+            // pour éviter.
+            .environment(\.meeshyStoryComposer, story)
     }
 }
