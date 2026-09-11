@@ -324,8 +324,20 @@ fileprivate struct BubbleGridCell: View {
     /// Réaction par-image active seulement en grille multi-images (`!solo`), sur
     /// image non protégée, avec callback câblé. L'image solo garde la réaction
     /// message-level ; les protégées gardent le long-press de révélation.
+    ///
+    /// **La conjonction a quitté ce `body` pour `AttachmentReactionOffer`**
+    /// (#6084) : le plein écran pose désormais la MÊME question sur la MÊME
+    /// pièce, et une condition enfouie dans une vue n'est interrogeable par
+    /// aucun témoin — c'est ce qui a laissé le plein écran sans barre sans que
+    /// rien ne rougisse. Le verdict de la grille est inchangé à une chose près,
+    /// qui est un resserrement : la loi lit `ComposableAttachment.isProtected`,
+    /// donc une pièce CHIFFRÉE n'offre plus de réaction par-image — le prédicat
+    /// local ci-dessus, qui gouverne encore le RENDU (révélation d'une vidéo
+    /// protégée), ne connaît que la vue unique et le flou.
     private var canReactPerImage: Bool {
-        !solo && !attachmentIsProtected && onReactToAttachment != nil
+        AttachmentReactionOffer.offersQuickBar(surface: .bubbleGrid(isSolo: solo),
+                                               attachment: attachment,
+                                               hasHandler: onReactToAttachment != nil)
     }
 
     private var isRevealed: Bool {

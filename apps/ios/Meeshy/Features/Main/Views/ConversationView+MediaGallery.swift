@@ -44,7 +44,8 @@ struct ConversationMediaGalleryLayer: ViewModifier {
                 captionMap: viewModel.mediaCaptionMap,
                 senderInfoMap: viewModel.mediaSenderInfoMap,
                 onComposeWithMedia: armCompose,
-                onReplyToMedia: replyToCarrier
+                onReplyToMedia: replyToCarrier,
+                onReactToMedia: reactToMedia
             )
         }
     }
@@ -83,6 +84,29 @@ struct ConversationMediaGalleryLayer: ViewModifier {
         }) else { return }
         onReply(porteur)
         scrollState.galleryStartAttachment = nil
+    }
+
+    /// **Réagir au MÉDIA, c'est réagir à la PIÈCE — jamais à son porteur**
+    /// (#6084, critère 2).
+    ///
+    /// Le chemin est celui que le fil emprunte déjà pour la réaction par-image
+    /// (`onReactToAttachment` → `toggleAttachmentReaction`) : optimiste, écrit
+    /// en base, poussé par `attachment:reaction-add`. La galerie RESTE ouverte —
+    /// à la différence de `armCompose` et de `replyToCarrier`, qui partent
+    /// ailleurs : on réagit à plusieurs pièces d'affilée en feuilletant, et
+    /// refermer après chaque émoji ferait de la barre un aller-retour.
+    ///
+    /// Le porteur n'est résolu que pour son `messageId`, que le socket exige
+    /// (`AttachmentReaction` est indexée sur le couple pièce + message). Il ne
+    /// devient jamais la CIBLE : `toggleReaction(messageId:)` — la réaction du
+    /// message — n'est pas appelée ici.
+    private func reactToMedia(_ attachment: MessageAttachment, _ emoji: String) {
+        guard let porteur = viewModel.messages.first(where: { message in
+            message.attachments.contains { $0.id == attachment.id }
+        }) else { return }
+        viewModel.toggleAttachmentReaction(attachmentId: attachment.id,
+                                           messageId: porteur.id,
+                                           emoji: emoji)
     }
 
     /// La galerie est DÉMONTÉE : le meuble peut prendre sa place.

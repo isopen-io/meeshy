@@ -65,6 +65,11 @@ struct ConversationMediaGalleryView: View {
     /// même lot peuvent porter des légendes de provenances différentes, et une
     /// langue choisie sur l'une ne dit rien de l'autre.
     @State private var captionLanguage: [String: String] = [:]
+    /// Le sélecteur complet d'émojis, ouvert par le « + » de la barre. Un `Bool`
+    /// et non la pièce elle-même : la barre ne s'affiche QUE pour la page
+    /// courante, donc la cible se relit au moment du choix — deux états
+    /// parallèles auraient permis à l'un de viser une page que l'autre a quittée.
+    @State private var showFullEmojiPicker = false
     /// Maps attachment.id → sender info (name, avatar, color, date)
     var senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
 
@@ -86,6 +91,22 @@ struct ConversationMediaGalleryView: View {
     /// Même forme que ci-dessus, et pour la même raison : la galerie ne connaît
     /// pas le porteur. `nil` ⇒ aucun bouton.
     var onReplyToMedia: ((MessageAttachment) -> Void)?
+
+    /// **Réagir à la PIÈCE, depuis le plein écran** (#6084).
+    ///
+    /// La pièce voyage AVEC l'émoji : la galerie sait quelle page est ouverte,
+    /// l'hôte non. Un rappel qui ne porterait que l'émoji laisserait l'hôte
+    /// deviner la cible — et il devinerait le message, ce qui ferait mentir la
+    /// barre sur ce qu'elle vise.
+    ///
+    /// `nil` ⇒ **aucune barre** (loi 4, appliquée par
+    /// `AttachmentReactionOffer.offersQuickBar`). C'est le cas des hôtes
+    /// SOCIAUX — post, story, réel, commentaire : le serveur n'expose aucune
+    /// réaction par MÉDIA pour eux (`AttachmentReaction` est indexée sur un
+    /// `messageId` de conversation, et `PostMedia` ne porte aucune relation de
+    /// réaction). Ils n'affichent donc pas une barre inerte : ils n'en
+    /// affichent pas.
+    var onReactToMedia: ((MessageAttachment, String) -> Void)?
 
     /// `id → position`, construite une fois à la présentation. Remplace les
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
@@ -112,7 +133,8 @@ struct ConversationMediaGalleryView: View {
         captionMap: [String: String] = [:],
         senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:],
         onComposeWithMedia: ((MessageAttachment) -> Void)? = nil,
-        onReplyToMedia: ((MessageAttachment) -> Void)? = nil
+        onReplyToMedia: ((MessageAttachment) -> Void)? = nil,
+        onReactToMedia: ((MessageAttachment, String) -> Void)? = nil
     ) {
         self.allAttachments = allAttachments
         self.startAttachmentId = startAttachmentId
@@ -122,6 +144,7 @@ struct ConversationMediaGalleryView: View {
         self.senderInfoMap = senderInfoMap
         self.onComposeWithMedia = onComposeWithMedia
         self.onReplyToMedia = onReplyToMedia
+        self.onReactToMedia = onReactToMedia
         let positions = Dictionary(
             allAttachments.enumerated().map { ($0.element.id, $0.offset) },
             uniquingKeysWith: { first, _ in first }
@@ -497,7 +520,62 @@ struct ConversationMediaGalleryView: View {
 
             Spacer(minLength: 0)
 
+            if currentIndex < allAttachments.count {
+                attachmentReactionBar(allAttachments[currentIndex])
+            }
+
             bottomOverlay
+        }
+    }
+
+    // MARK: - Réaction sur la pièce
+
+    /// **La barre de réactions rapides du plein écran** (#6084, directive
+    /// porteur 2026-09-11 : « lorsqu'on affiche une image pièce jointe en plein
+    /// écran, il faut pouvoir ajouter une réaction à l'attachement
+    /// directement »).
+    ///
+    /// Gabarit de la story (#6083) : **échelle 2, aucun habillage**. Le média
+    /// remplit l'écran et EST le fond — une capsule y ajouterait un cadre là où
+    /// la story vient justement d'en retirer un. `scrollable` est le COROLLAIRE
+    /// de l'échelle et non une option : à 2, six émojis plus le « + » demandent
+    /// ~450 pt, et un `ScrollView` ne défile que dans une largeur bornée — ici
+    /// celle de la pile de contrôles, qui occupe l'écran.
+    ///
+    /// **Elle vit dans la couche des CONTRÔLES**, ancrée juste au-dessus du bloc
+    /// bas (auteur, légende, pellicule) : elle s'efface donc avec eux au tap sur
+    /// le média, comme tout le reste du chrome. Posée à la racine, elle serait
+    /// restée sur une image qu'on regarde sans rien d'autre.
+    ///
+    /// **Aucun geste de cession n'est nécessaire ici**, contrairement à la story
+    /// (`StoryReactionStripGesture`). Le pager de la galerie est un
+    /// `UIScrollView` SŒUR dans le `ZStack` racine, pas un ancêtre montant un
+    /// `.simultaneousGesture` : une touche qui atterrit sur la barre ne lui
+    /// parvient jamais, et les deux `UIScrollView` imbriqués s'arbitrent seuls.
+    /// Y recopier la loi de la story aurait gardé un conflit qui n'existe pas.
+    @ViewBuilder
+    private func attachmentReactionBar(_ att: MessageAttachment) -> some View {
+        if AttachmentReactionOffer.offersQuickBar(surface: .fullscreen,
+                                                  attachment: att,
+                                                  hasHandler: onReactToMedia != nil) {
+            EmojiReactionPicker(
+                quickEmojis: MeeshyQuickReactions.standard,
+                style: .dark,
+                scale: 2,
+                scrollable: true,
+                chrome: .none,
+                onReact: { emoji in onReactToMedia?(att, emoji) },
+                onExpandFullPicker: { showFullEmojiPicker = true }
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, 4)
+            .transition(.opacity)
+            .sheet(isPresented: $showFullEmojiPicker) {
+                EmojiPickerSheet(quickReactions: MeeshyQuickReactions.standard) { emoji in
+                    onReactToMedia?(att, emoji)
+                    showFullEmojiPicker = false
+                }
+            }
         }
     }
 
