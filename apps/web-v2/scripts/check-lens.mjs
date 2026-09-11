@@ -143,6 +143,41 @@ constate(
   'la rangée « c-nouvelle » ne montre aucune heure — lastMessageAt devrait pourtant toujours être servi',
 );
 
+/**
+ * LE RAIL NE DÉPLACE PAS LA LISTE, PARCE QUE SA HAUTEUR NE VARIE JAMAIS
+ * (#6070, révisé #6080).
+ *
+ * L'invariant de MISE EN PAGE ci-dessous (`moves.length === 0`) serait
+ * trivialement vert sur un rail qui prendrait toute la place et n'en
+ * bougerait plus — c'est la régression inverse, et elle a EU LIEU : le rail
+ * partait à 88 px de tuile, soit un huitième de l'écran pour trois entrées,
+ * et la liste commençait sous la ligne de flottaison.
+ *
+ * #6070 y répondait par une COMPACTION au défilement (88 → 37 px), compensée
+ * par une tuile fantôme pour que le flux ne bouge pas. #6080 tranche par la
+ * cote : le rail des stories porte celle d'iOS — `LentilleMetrics.Rail.size`
+ * = 48 px — et ne compacte plus du tout. Une hauteur qui ne varie pas ne peut
+ * rien pousser ; il n'y a plus de fantôme à tenir.
+ *
+ * Ce qui reste à GARDER est donc la PROPRIÉTÉ, pas le mécanisme : la tuile
+ * part à la cote iOS, et elle y RESTE après défilement. Les deux bornes
+ * attrapent les deux régressions — un rail qui regrossit, et un rail qui se
+ * remet à varier.
+ *
+ * (La bande compacte épinglée d'iOS — `PinnedStoryTrailBand`, qui remplace le
+ * plateau dans l'en-tête replié — n'est portée par aucune des deux versions :
+ * question de produit ouverte, pas une régression de ce lot.)
+ */
+const COTE_RAIL_IOS = 48;
+const railWidthBefore = await page.evaluate(
+  () => document.querySelector('[data-story-tile]')?.getBoundingClientRect().width ?? null,
+);
+constate(railWidthBefore !== null, "aucune tuile de story trouvée ([data-story-tile]) avant défilement");
+constate(
+  railWidthBefore !== null && Math.abs(railWidthBefore - COTE_RAIL_IOS) <= 1,
+  `la tuile du rail ne porte pas la cote iOS (${COTE_RAIL_IOS} px) : ${railWidthBefore}`,
+);
+
 /** On défile PAR PALIERS, en relevant la géométrie à chaque, et on la compare. */
 const readings = [];
 for (const y of [40, 120, 240, 400, 600]) {
@@ -159,6 +194,17 @@ for (const { y, geo } of readings) {
       `${JSON.stringify(moves.slice(0, 3))}`,
   );
 }
+
+/** Après défilement, la cote n'a pas bougé — c'est ce qui rend le fantôme inutile. */
+const railWidthAfter = await page.evaluate(
+  () => document.querySelector('[data-story-tile]')?.getBoundingClientRect().width ?? null,
+);
+constate(railWidthAfter !== null, "aucune tuile de story trouvée ([data-story-tile]) après défilement");
+constate(
+  railWidthAfter !== null && railWidthAfter === railWidthBefore,
+  `la cote du rail a varié pendant le défilement (${railWidthBefore} → ${railWidthAfter}) — ` +
+    `une hauteur qui varie repousse la liste`,
+);
 
 /**
  * Le témoin 3 : la magnification opère. Sans lui, tout ce qui précède serait

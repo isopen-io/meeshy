@@ -27,10 +27,23 @@ export function toDate(value: Date | string): Date {
 
 /** N'écrit la clé QUE si la valeur source est définie — `exactOptionalPropertyTypes`
  * (`tsconfig.json:15`) : une clé absente doit le RESTER, jamais devenir une
- * clé posée à `undefined`. */
+ * clé posée à `undefined`.
+ *
+ * GÉNÉRIQUE SUR LA VALEUR, et c'est le correctif de #6086 : ce module n'a
+ * longtemps eu que `dateFieldOf`, si bien que « défaire le `null` de la
+ * passerelle » n'était OUTILLÉ que pour les dates. Les clés nullables d'un
+ * autre type — `reactionSummary Json?`, `forwardedFromId String?` — n'avaient
+ * aucun moyen d'être défaites, et traversaient intactes malgré la promesse
+ * générale du commentaire de `decodeMessage`. `dateFieldOf` en est désormais
+ * une projection : la règle a UN site, la conversion reste au sien. */
+function fieldOf<K extends string, V>(key: K, value: V | null | undefined): Record<K, V> | Record<string, never> {
+  if (value === null || value === undefined) return {};
+  return { [key]: value } as Record<K, V>;
+}
+
 function dateFieldOf<K extends string>(key: K, value: Date | string | null | undefined): Record<K, Date> | Record<string, never> {
   if (value === null || value === undefined) return {};
-  return { [key]: toDate(value) } as Record<K, Date>;
+  return fieldOf(key, toDate(value));
 }
 
 /**
@@ -80,6 +93,26 @@ export function decodeMessage(raw: Message): Message {
   // que la passerelle peut servir à `null` avant de recomposer — c'est le
   // seul endroit du chemin de données qui connaît le `null` du fil, et
   // aucune vue n'a plus à le connaître.
+  //
+  // #6086 — CETTE PHRASE N'ÉTAIT VRAIE QUE DES DATES, et le dire ne suffisait
+  // pas à le faire. Les quatre dernières clés ci-dessous ne sont pas des
+  // dates ; elles manquaient parce que le seul outil du module était
+  // `dateFieldOf`, et qu'une règle qu'aucun outil n'exprime ne s'applique
+  // qu'aux cas déjà outillés. `reactionSummary Json?` (`schema.prisma:872`)
+  // vaut `null` sur tout message SANS réaction — le cas NOMINAL : ouvrir une
+  // conversation jetait `Object.entries(null)` depuis `reactionsSegment`
+  // (`lib/view/message-a11y-label.ts`) et le fil ne se rendait pas.
+  // `forwardedFromId`/`forwardedFromConversationId` donnaient le symptôme
+  // INVERSE, silencieux : `forwardAttributionOf`
+  // (`lib/view/message-badges.ts`) rendait `{ kind: 'anonymous' }` sur un
+  // message ordinaire — le badge « Transféré » sur ce qui n'est pas un
+  // transfert.
+  //
+  // CES DEUX LOIS TESTENT `=== undefined`, ET C'EST JUSTE : leur contrat est
+  // de lire un `Message` DÉCODÉ. Elles dépendent donc de ce module, pas d'une
+  // garde locale dupliquée — mais tout nouveau chemin qui construirait un
+  // `Message` sans passer par `select: decodeMessage(s)` les remettrait en
+  // face du `null`.
   const {
     sender: rawSender,
     replyTo: rawReplyTo,
@@ -90,6 +123,10 @@ export function decodeMessage(raw: Message): Message {
     pinnedAt: rawPinnedAt,
     deliveredToAllAt: rawDeliveredToAllAt,
     readByAllAt: rawReadByAllAt,
+    reactionSummary: rawReactionSummary,
+    forwardedFromId: rawForwardedFromId,
+    forwardedFromConversationId: rawForwardedFromConversationId,
+    storyReplyToId: rawStoryReplyToId,
     ...rest
   } = raw as Message & {
     readonly sender?: Message['sender'] | null;
@@ -101,6 +138,10 @@ export function decodeMessage(raw: Message): Message {
     readonly pinnedAt?: Message['pinnedAt'] | null;
     readonly deliveredToAllAt?: Message['deliveredToAllAt'] | null;
     readonly readByAllAt?: Message['readByAllAt'] | null;
+    readonly reactionSummary?: Message['reactionSummary'] | null;
+    readonly forwardedFromId?: Message['forwardedFromId'] | null;
+    readonly forwardedFromConversationId?: Message['forwardedFromConversationId'] | null;
+    readonly storyReplyToId?: Message['storyReplyToId'] | null;
   };
   const senderLastActiveAt = rawSender?.lastActiveAt;
   const sender =
@@ -140,6 +181,10 @@ export function decodeMessage(raw: Message): Message {
     ...dateFieldOf('pinnedAt', rawPinnedAt),
     ...dateFieldOf('deliveredToAllAt', rawDeliveredToAllAt),
     ...dateFieldOf('readByAllAt', rawReadByAllAt),
+    ...fieldOf('reactionSummary', rawReactionSummary),
+    ...fieldOf('forwardedFromId', rawForwardedFromId),
+    ...fieldOf('forwardedFromConversationId', rawForwardedFromConversationId),
+    ...fieldOf('storyReplyToId', rawStoryReplyToId),
   };
 }
 

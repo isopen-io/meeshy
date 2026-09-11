@@ -58,7 +58,14 @@ function StoryTile({ group }: { readonly group: StoryTrayGroup }) {
   const combien = group.stories.length;
 
   return (
-    <li className="flex shrink-0 flex-col items-center gap-1" style={{ width: RAIL.tile }}>
+    /* `data-story-tile` porte la COTE, pour que le gate de la Lentille puisse
+       la mesurer : un composant sans prise mesurable ne peut être gardé par
+       rien, et la cote redérive en silence (leçon 575). */
+    <li
+      data-story-tile={RAIL.tile}
+      className="flex shrink-0 flex-col items-center gap-1"
+      style={{ width: RAIL.tile }}
+    >
       <Link
         to="stories"
         search={{ author: group.authorId }}

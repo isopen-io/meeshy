@@ -42,6 +42,7 @@ import { announceConversationClosed } from '../../socketio/announceConversationC
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
+import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
 
@@ -265,15 +266,12 @@ export function registerCreateConversationRoute(
         select: { id: true, displayName: true, username: true, avatar: true }
       });
       const userMap = new Map(allUsers.map(u => [u.id, u]));
-      const defaultPermissions = {
-        canSendMessages: true,
-        canSendFiles: true,
-        canSendImages: true,
-        canSendVideos: false,
-        canSendAudios: false,
-        canSendLocations: false,
-        canSendLinks: false
-      };
+      // #6080 — la table vient du site UNIQUE (`services/participantRights.ts`),
+      // pour le créateur comme pour chaque membre initial. Le littéral écrit ici
+      // fermait `canSendVideos`/`canSendAudios`, ce que la garde de pièce jointe
+      // (#5151) lit comme un REFUS : dans tout groupe créé depuis l'app, une
+      // vidéo, un vocal et un document étaient rejetés.
+      const defaultPermissions = { ...FOUNDING_MEMBER_PERMISSIONS };
 
       const creatorUser = userMap.get(userId);
       // Broadcast = announcement channel with admin-only write

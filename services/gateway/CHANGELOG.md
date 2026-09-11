@@ -1,5 +1,40 @@
 # @meeshy/gateway
 
+## 1.45.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le JUMEAU du témoin de placement suit l'entonnoir lui aussi — trouvé par le motif, pas par son nom — run test
+  - un rappel de série cesse de faire CRASHER l'app — %@ sur un entier déréférence la valeur — run test
+  - les six sélecteurs du composer quittent l'admission, qui repasse sous son plafond — run test
+  - la feuille de composition quitte l'extension dont le nom annonçait autre chose — run test
+  - les hôtes de la découvrabilité se disent par leur nom — run test
+  - les sites de test ajoutés depuis #5888 passent par le point unique d'enregistrement de happy-dom
+  - le site unique d'écriture dans la liste média redevient unique, et l'intention du rail ne survit plus à son sélecteur
+  - en Script et en Focal, le fil s'efface sous le chrome posé (#6013)
+  - les chemins, le paquet, la CI et les gardes suivent le nouveau nom, en 2.0.0
+  - le composer inline du fil quitte le dépôt, et les huit doc-comments qui le citaient parlent au passé
+  - le chantier web s'appelle apps/web-v2 — déplacement seul
+  - la zone de l'ancienne refonte quitte le service worker du legacy (#6001)
+  - le chevron des sections de progression se retourne en arabe
+  - le catalogue et le code se rejoignent, par les deux bouts
+  - StreakReminderScheduler cesse de double-libérer au démontage
+  - le pourcentage annoncé à VoiceOver vient de la locale, plus d'un littéral
+  - sept témoins enregistrent une décision qui a déjà été prise et relue (#6011)
+  - un message épinglé, transféré, modifié, système, sticker, lieu, emoji seul ou citant une story se reconnaît dans le fil
+  - une garde du rail cesse de compter un nom VOISIN pour le nom qu'elle garde
+  - une mutation définitivement morte sort de la file, sauf si elle en porte le dernier exemplaire
+  - la pastille de synchronisation dit un ÉTAT, plus un journal de sept jours
+  - le trail des stories se compacte au défilement — une tuile, deux tailles
+  - la bulle audio respecte enfin autoTranscribeIncoming (#5948)
+  - échapper les backticks du bloc composeur — ils fermaient le socle
+  - la file d'envoi ne survit plus à une session finie sans transition
+  - un seul point d'enregistrement de happy-dom en test (#5888)
+  - modernize date formatting and concurrency in MeeshySDK
+  - le refus de typing:start cesse d'être muet quand l'expiration de la room échoue
+
 ## 1.44.0
 
 ### Minor Changes
