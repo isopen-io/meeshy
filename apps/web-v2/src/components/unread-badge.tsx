@@ -1,5 +1,5 @@
 /**
- * **LA PASTILLE DE NON-LUS — UN CHIFFRE, DEUX POSES, UNE SEULE LOI** (#6080).
+ * **LA PASTILLE DE NON-LUS — UN CHIFFRE, UNE SEULE LOI** (#6080).
  *
  * Trois pastilles de non-lus vivaient dans cette application, écrites à trois
  * endroits, et elles avaient déjà divergé sur les trois axes qui comptent :
@@ -24,12 +24,27 @@
  * pastille ne rend RIEN et n'occupe aucune place. C'est ce qui garantit
  * qu'aucune peau ne pourra jamais peindre un disque rouge vide.
  *
- * **Deux poses, et elles sont DIFFÉRENTES pour une raison.** iOS sépare
- * `UnreadCountBadge` (objet de FLUX, posé dans une ligne, plancher 24) de
- * `NotificationBadge` (pastille de COIN, posée sur un bouton, plancher 18) :
- * une pastille de coin empiète sur ce qu'elle annote, elle doit donc être plus
- * petite que celle qui occupe sa propre place. Ce qui reste COMMUN — le rouge,
- * le blanc, la capsule, le « 99+ » — vit ici une seule fois.
+ * **iOS a DEUX poses ; ce module n'en porte qu'une, et c'est voulu.** Là-bas,
+ * `UnreadCountBadge` est un objet de FLUX (posé dans une ligne, plancher 24) et
+ * `NotificationBadge` une pastille de COIN (posée SUR un bouton flottant,
+ * plancher 18, décalée de `(+16, −16)`) : une pastille de coin empiète sur ce
+ * qu'elle annote, elle doit donc être plus petite que celle qui occupe sa
+ * propre place.
+ *
+ * La pose de COIN a été écrite ici, puis RETIRÉE : son seul site candidat — le
+ * compte « non lus ailleurs » du bouton retour — s'est révélé être un site de
+ * FLUX. Le chevron vit au bord d'une barre dense, pas au milieu de l'air d'un
+ * bouton flottant ; empilée à son coin, la pastille montait au ras du bord
+ * supérieur de l'en-tête et ne s'alignait avec rien (retour porteur, capture
+ * de l'émulateur). Elle est donc redevenue voisine du chevron, sur la même
+ * ligne — la convention de la barre de navigation d'iOS, « ‹ 30 ».
+ *
+ * Un atome sans consommateur ne protège rien et finit par diverger de ce qu'il
+ * prétend garder : ce dépôt l'a déjà payé une fois, sur CET atome précisément
+ * (« l'atome existait, testé, sans un seul consommateur » —
+ * `LentilleConversationRow.swift`). La pose de coin reviendra avec son premier
+ * appelant réel, dans le même commit que lui ; ses cotes sont écrites
+ * ci-dessus pour qu'il n'ait pas à les rechercher.
  */
 
 /** Cotes de la pose de FLUX — `UnreadCountBadge.swift`, trait pour trait. */
@@ -40,15 +55,6 @@ export const UNREAD_BADGE_FLOW = {
   verticalPadding: 4,
   shadowRadius: 3,
   shadowOpacity: 0.25,
-} as const;
-
-/** Cotes de la pose de COIN — `NotificationBadge` (`FloatingButtons.swift`). */
-export const UNREAD_BADGE_CORNER = {
-  minimumSize: 18,
-  horizontalPadding: 6,
-  verticalPadding: 0,
-  shadowRadius: 3,
-  shadowOpacity: 0.5,
 } as const;
 
 /**
@@ -95,43 +101,6 @@ export function UnreadBadge({
         backgroundColor: 'var(--color-error)',
         boxShadow: `0 0 ${UNREAD_BADGE_FLOW.shadowRadius}px color-mix(in srgb, var(--color-error) ${UNREAD_BADGE_FLOW.shadowOpacity * 100}%, transparent)`,
         ...(opacity === undefined ? {} : { opacity }),
-      }}
-    >
-      {text}
-    </span>
-  );
-}
-
-/**
- * La pastille de COIN — posée sur un bouton qu'elle annote (le retour du fil,
- * qui dit « il reste du non-lu AILLEURS »).
- *
- * **Elle ne déborde plus du chrome.** Posée `top-0 right-0` sur une cible de
- * 44, elle sortait par le haut de l'en-tête et la marge de sécurité la
- * TRONQUAIT — mesuré à la capture, 390 × 844 : la moitié haute du disque était
- * coupée par le bord de l'écran. iOS décale la sienne de `(+16, −16)` depuis
- * le CENTRE d'un bouton flottant qui, lui, a de l'air autour. Dans une barre
- * dense, la pose juste est l'inverse : la pastille rentre, ancrée au coin
- * intérieur de la cible.
- */
-export function UnreadCornerBadge({ count, label }: { readonly count: number; readonly label?: string }) {
-  const text = unreadBadgeText(count);
-  if (text === '') return null;
-
-  return (
-    <span
-      data-unread-corner={count}
-      aria-hidden={label === undefined ? true : undefined}
-      {...(label === undefined ? {} : { 'aria-label': label })}
-      className="absolute grid place-items-center rounded-chip text-check font-semibold text-white tabular-nums"
-      style={{
-        top: 2,
-        insetInlineEnd: 0,
-        minWidth: UNREAD_BADGE_CORNER.minimumSize,
-        minHeight: UNREAD_BADGE_CORNER.minimumSize,
-        paddingInline: UNREAD_BADGE_CORNER.horizontalPadding,
-        backgroundColor: 'var(--color-error)',
-        boxShadow: `0 0 ${UNREAD_BADGE_CORNER.shadowRadius}px color-mix(in srgb, var(--color-error) ${UNREAD_BADGE_CORNER.shadowOpacity * 100}%, transparent)`,
       }}
     >
       {text}

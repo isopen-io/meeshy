@@ -1,13 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup as render } from 'react-dom/server';
 
-import {
-  UNREAD_BADGE_CORNER,
-  UNREAD_BADGE_FLOW,
-  UnreadBadge,
-  UnreadCornerBadge,
-  unreadBadgeText,
-} from './unread-badge';
+import { UNREAD_BADGE_FLOW, UnreadBadge, unreadBadgeText } from './unread-badge';
 
 /**
  * **LE PORTILLON VIT DANS L'ATOME** — aucun appelant n'écrit `count > 0`.
@@ -24,7 +18,6 @@ describe('le portillon', () => {
     expect(unreadBadgeText(-3)).toBe('');
     expect(unreadBadgeText(Number.NaN)).toBe('');
     expect(render(<UnreadBadge count={0} />)).toBe('');
-    expect(render(<UnreadCornerBadge count={0} />)).toBe('');
   });
 
   test('une pastille dès un', () => {
@@ -68,11 +61,10 @@ describe('la borne haute', () => {
  * « moi ».
  */
 describe('le rouge', () => {
-  test('les deux poses peignent l’erreur, aucune ne peint l’accent', () => {
-    for (const html of [render(<UnreadBadge count={2} />), render(<UnreadCornerBadge count={2} />)]) {
-      expect(html).toContain('var(--color-error)');
-      expect(html).not.toContain('var(--accent)');
-    }
+  test('la pastille peint l’erreur, jamais l’accent', () => {
+    const html = render(<UnreadBadge count={2} />);
+    expect(html).toContain('var(--color-error)');
+    expect(html).not.toContain('var(--accent)');
   });
 });
 
@@ -83,21 +75,10 @@ describe('le rouge', () => {
  * (`UnreadCountBadge.minimumSize = 24`, `NotificationBadge.minimumSize = 18`).
  */
 describe('les cotes', () => {
-  test('le flux plancher à 24, le coin à 18', () => {
+  test('le plancher est CARRÉ à 24 — à un chiffre, la pastille reste un disque', () => {
     expect(UNREAD_BADGE_FLOW.minimumSize).toBe(24);
-    expect(UNREAD_BADGE_CORNER.minimumSize).toBe(18);
-    expect(render(<UnreadBadge count={1} />)).toContain('min-width:24px');
-    expect(render(<UnreadCornerBadge count={1} />)).toContain('min-width:18px');
-  });
-
-  /**
-   * La pastille de coin sortait par le HAUT de l'en-tête et s'y faisait
-   * tronquer par la marge de sécurité (mesuré à la capture, 390 × 844). Elle
-   * rentre : `top` positif, ancrée au coin INTÉRIEUR de la cible.
-   */
-  test('la pastille de coin ne déborde pas par le haut', () => {
-    const html = render(<UnreadCornerBadge count={30} />);
-    expect(html).toContain('top:2px');
-    expect(html).not.toContain('top:0');
+    const html = render(<UnreadBadge count={1} />);
+    expect(html).toContain('min-width:24px');
+    expect(html).toContain('min-height:24px');
   });
 });

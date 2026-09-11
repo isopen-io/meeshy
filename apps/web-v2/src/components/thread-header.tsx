@@ -4,7 +4,7 @@ import { Avatar } from './avatar';
 import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { Glyph } from './glyph';
 import { ReadingModeChip } from './reading-mode-chip';
-import { UnreadCornerBadge } from './unread-badge';
+import { UnreadBadge } from './unread-badge';
 import type { Conversation } from '@/lib/api/types';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
 import { apiConfig } from '@/lib/api/config';
@@ -58,23 +58,50 @@ export function ThreadHeader({
     >
       <div className="flex items-center gap-2 px-4 py-2">
         {/*
-          LE RETOUR ET SA PASTILLE (#6080) — la cible tactile vient du module
-          unique (`CHROME_ACTION_HIT_CLASS`), la pastille de l'atome unique
-          (`UnreadCornerBadge`, rouge sémantique, « 99+ » au-delà de 99).
+          LE RETOUR ET SON COMPTE — SUR LA MÊME LIGNE (#6080, retour porteur).
 
-          Ce qu'elle était : un `min-h-4 min-w-4` en `text-[9px]` — un littéral
-          de taille écrit nulle part ailleurs (D-4), un plancher de 16 quand
-          iOS pose 18, et une pose `top-0 right-0` qui la faisait TRONQUER par
-          le bord haut de l'écran, mesuré à la capture 390 × 844.
+          **Ce site n'a pas de référence iOS** : l'app native n'affiche aucun
+          compte « non lus ailleurs » sur son retour, parce qu'elle n'a pas de
+          barre de navigation système à décorer. C'est une invention du web, et
+          l'alignement se décide donc par la CONVENTION de la plateforme —
+          celle de la barre de navigation d'iOS : « ‹ 30 », le chevron et le
+          compte sur une seule ligne de base.
+
+          **Ce qu'elle était : la mauvaise POSE de l'atome.** `UnreadCornerBadge`
+          l'empilait au coin haut-droit de la cible de 44 : la pastille montait
+          au ras du bord supérieur de l'en-tête pendant que le chevron restait
+          centré 20 px plus bas, si bien que le couple ne s'alignait ni avec
+          lui-même, ni avec la ligne médiane où vivent le chip de mode, les deux
+          disques d'action et l'avatar. Une pastille de COIN annote un objet qui
+          a de l'air autour de lui ; ici la cible est collée au bord d'une barre
+          dense, et c'est la pose de FLUX qu'il fallait — celle qui occupe sa
+          propre place, à côté du chevron, sur le même centre.
+
+          La cible tactile GRANDIT avec le contenu (`h-11` et non `size-11`) :
+          le compte fait partie du bouton, pas de sa décoration, donc il est
+          cliquable comme lui.
+
+          **Et elle ne RÉTRÉCIT jamais sous 44** (`min-w-11`). Première écriture
+          sans cette borne : sans compte à afficher — le cas NOMINAL — le
+          bouton retombait à 26 × 44, sous le minimum tactile d'Apple.
+          `check-reading-mode.mjs` l'a mesuré à 320 px de large et refusé ; il
+          avait raison, et c'est la garde qui a rattrapé ce que la capture ne
+          montrait pas (une cible trop petite se VOIT très bien, elle se
+          manque seulement au doigt).
+
+          `justify-start` implicite, jamais `place-items-center` : ainsi le
+          chevron reste à la MÊME abscisse selon qu'il y a un compte ou non.
+          Centré dans ses 44, il aurait sauté de 11 px d'une conversation à
+          l'autre — un repère de navigation qui se déplace tout seul.
         */}
         <Link
           to="list"
-          className={CHROME_ACTION_HIT_CLASS}
+          className="flex h-11 min-w-11 shrink-0 items-center gap-1 rounded-chip pe-1"
           style={{ color: 'var(--accent)' }}
           aria-label={otherUnread > 0 ? `Retour — ${otherUnread} messages non lus ailleurs` : 'Retour'}
         >
           <Glyph name="caretLeft" size={22} />
-          <UnreadCornerBadge count={otherUnread} />
+          <UnreadBadge count={otherUnread} />
         </Link>
 
         {expanded ? (
