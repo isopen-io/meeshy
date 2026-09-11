@@ -1,9 +1,9 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { MAX_ATTACHMENTS_PER_MESSAGE, SMALL_FILE_THRESHOLD } from '@meeshy/shared/types/attachment';
 import { DEFAULT_USER_PERMISSIONS } from '@meeshy/shared/types/participant';
 
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { previewUrlFor, releasePreviewUrl } from './attachment-preview-url';
 import {
   acceptPendingFiles,
@@ -21,11 +21,11 @@ import {
 // `File`/`URL.createObjectURL` n'existent que dans un DOM — happy-dom, jamais
 // le moteur `bun:test` nu (même dispositif que `composer.test.tsx`).
 beforeAll(() => {
-  GlobalRegistrator.register();
+  ensureHappyDomRegistered();
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await releaseHappyDomIfRegistered();
 });
 
 const file = (name: string, type: string, bytes = 3): File => new File([new Uint8Array(bytes)], name, { type });

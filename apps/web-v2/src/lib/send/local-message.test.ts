@@ -1,6 +1,6 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { Message, Participant } from '@/lib/api/types';
 
 import { pendingAttachmentOf } from './attachments';
@@ -8,11 +8,11 @@ import { confirmedMessageOf, localMessageOf } from './local-message';
 
 // `File`/`URL.createObjectURL`, requis par `attachmentPreviewOf` — DOM réel.
 beforeAll(() => {
-  GlobalRegistrator.register();
+  ensureHappyDomRegistered();
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await releaseHappyDomIfRegistered();
 });
 
 const sender: Participant = {

@@ -3201,9 +3201,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 rtt = hint * 2 // hint is one-way; double for round-trip
             } else {
                 // No server-computed hint: approximate from current wall time vs serverTime.
-                let isoFormatter = ISO8601DateFormatter()
-                isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                if let serverDate = isoFormatter.date(from: serverTimeStr) {
+                if let serverDate = (try? Date(serverTimeStr, strategy: .iso8601.time(includingFractionalSeconds: true))) ?? (try? Date(serverTimeStr, strategy: .iso8601)) {
                     rtt = abs(Date().timeIntervalSince(serverDate)) * 1000 // ms
                 } else {
                     return

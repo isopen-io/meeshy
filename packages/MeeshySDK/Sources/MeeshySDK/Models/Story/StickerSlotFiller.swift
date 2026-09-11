@@ -66,15 +66,12 @@ public enum StickerSlotFiller {
 
         let composantes = calendrier.dateComponents([.hour, .minute], from: instant)
 
-        let formateur = DateFormatter()
-        formateur.locale = locale
-        formateur.timeZone = timeZone
-        formateur.calendar = calendrier
-        formateur.timeStyle = .short
-        formateur.dateStyle = .none
+        let timeString = instant.formatted(
+            Date.FormatStyle(date: .none, time: .shortened, locale: locale, calendar: calendrier, timeZone: timeZone)
+        )
 
         return [
-            timeSlot: formateur.string(from: instant),
+            timeSlot: timeString,
             hourSlot: deuxChiffres(composantes.hour),
             minuteSlot: deuxChiffres(composantes.minute),
         ]
@@ -90,14 +87,11 @@ public enum StickerSlotFiller {
         calendrier.timeZone = timeZone
         calendrier.locale = locale
 
-        let formateur = DateFormatter()
-        formateur.locale = locale
-        formateur.timeZone = timeZone
-        formateur.calendar = calendrier
-        formateur.dateStyle = .long
-        formateur.timeStyle = .none
+        let dateString = instant.formatted(
+            Date.FormatStyle(date: .long, time: .none, locale: locale, calendar: calendrier, timeZone: timeZone)
+        )
 
-        return [dateSlot: formateur.string(from: instant)]
+        return [dateSlot: dateString]
     }
 
     // MARK: Le lieu

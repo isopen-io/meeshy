@@ -1153,7 +1153,10 @@ public actor OfflineQueue {
     /// touchpoint. Falls back to the in-memory mirror if no pool is wired.
     /// Also refreshes the `pendingUIItemsSubject` snapshot so the SyncPill UI
     /// re-renders on the same touchpoints.
-    private func refreshPendingCount() async {
+    /// `internal` et non `private` : `OfflineQueue+TerminalRetention.swift` en
+    /// est une extension du MÊME type, séparée par le seul budget de taille de
+    /// fichier — pas par une frontière de responsabilité.
+    func refreshPendingCount() async {
         guard let pool = outboxPool else {
             let inMemoryCount = items.count
             pendingCountSubject.send(inMemoryCount)
@@ -2908,6 +2911,12 @@ public actor OfflineQueue {
         if report.inflightReset > 0 || report.audioOrphanFailed > 0 {
             logger.info("Boot recovery: reset \(report.inflightReset) inflight, marked \(report.audioOrphanFailed) audio orphans failed")
         }
+        // #5965 — la file se BORNE ici, et pas seulement au démarrage : ce point
+        // est le seul que le boot ET le retour en avant-plan traversent tous
+        // les deux. Une ligne définitivement morte y sort de la file (voir
+        // `purgeDiscardableTerminalRows`, qui ne jette que ce qu'aucune surface
+        // ne relit plus).
+        await purgeDiscardableTerminalRows()
         return report
     }
 

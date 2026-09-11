@@ -360,16 +360,16 @@ DECISIONS DU PORTEUR EN VIGUEUR — ne les rediscute pas : applique-les.
 
    a. UNE abstraction, trois formes. story / reel / post partagent la scene, la timeline,
       l'etagere, les viewers, le brouillon, l'envoi. Ce qui DIFFERE — duree, ratio, pistes
-      autorisees, audience — se declare en DONNEE, jamais en branche `if (kind === 'story')`
+      autorisees, audience — se declare en DONNEE, jamais en branche \`if (kind === 'story')\`
       recopiee dans quinze composants. Trois copies d'un composeur divergent en trois
       semaines : c'est mesure ailleurs dans ce depot (les trois familles de resolveurs du
       Prisme, qui ont diverge sur trois clients faute d'un site UNIQUE).
 
    b. LA SEMANTIQUE PORTE LES NOMS. Un type SOMME plutot qu'un booleen quand il y a trois
-      etats ; le nom dit CE QUE C'EST, pas ou il est affiche. `PublicationDraft`,
-      `SceneTrack`, `AudienceRule` — jamais `Data2`, `Helper`, `Utils`, ni un `kind: string`
+      etats ; le nom dit CE QUE C'EST, pas ou il est affiche. \`PublicationDraft\`,
+      \`SceneTrack\`, \`AudienceRule\` — jamais \`Data2\`, \`Helper\`, \`Utils\`, ni un \`kind: string\`
       qu'aucun compilateur ne verifie. Le vocabulaire est celui de
-      `docs/product/meeshy-composer-modele.md`, qui en est l'AUTORITE declaree : un nom qui
+      \`docs/product/meeshy-composer-modele.md\`, qui en est l'AUTORITE declaree : un nom qui
       s'en ecarte cree une seconde langue pour la meme chose.
 
    c. LA COHERENCE EST DOUBLE, et la seconde est celle qu'on oublie. VISUELLE : memes

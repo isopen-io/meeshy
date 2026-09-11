@@ -1,23 +1,23 @@
-import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useRef, useState } from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { createScrollerGestureSubscriber, useThreadChrome, type GestureListener } from './use-thread-chrome';
 
 /** Patron `use-audio-playback.test.tsx` (happy-dom + `createRoot` + `act`). */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
 
 afterAll(async () => {
   await act(async () => {});
   delete globals.IS_REACT_ACT_ENVIRONMENT;
-  await GlobalRegistrator.unregister();
+  await releaseHappyDomIfRegistered();
 });
 
 let container: HTMLDivElement;
@@ -440,7 +440,7 @@ describe('useThreadChrome — deux attributs, hors React (T8)', () => {
  * (seul `now` l'est), donc une horloge simulée n'aurait rien à avancer.
  */
 describe('createScrollerGestureSubscriber — la levee d un geste indirect (T9, #5774 defaut 8)', () => {
-  // `EventTarget`/`Event` référencés ICI, APRÈS `GlobalRegistrator.register()`
+  // `EventTarget`/`Event` référencés ICI, APRÈS `ensureHappyDomRegistered()`
   // (`beforeAll` du fichier) : une classe déclarée au chargement du module
   // capturerait le `EventTarget` NATIF de Node, avant le remplacement par
   // celui de happy-dom — realm mismatch avec `new Event(...)` créé plus tard.

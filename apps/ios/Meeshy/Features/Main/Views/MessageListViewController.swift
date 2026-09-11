@@ -562,7 +562,7 @@ final class MessageListViewController: UIViewController {
     /// sous `ignoresSafeArea`, SwiftUI ne propage plus l'inset au contrôleur
     /// hébergé, la vue croirait la bande inexistante et poserait la pill de
     /// jour sous l'îlot.
-    private var topInset: CGFloat = 0
+    private(set) var topInset: CGFloat = 0
 
     /// Réserve, AU REPOS, la hauteur de cette bande. Liste inversée : le HAUT
     /// visuel est `contentInset.bottom`. Le contenu la TRAVERSE au défilement
@@ -576,11 +576,11 @@ final class MessageListViewController: UIViewController {
 
     private func applyTopInsetToViews() {
         guard collectionView != nil else { return }
-        // RETRAIT FOCAL iOS (2026-08-18) : plus d'inset de tête §4.5 — le
-        // HAUT visuel ne réserve que la bande îlot/barre d'état.
-        if collectionView.contentInset.bottom != topInset {
-            collectionView.contentInset.bottom = topInset
-            collectionView.verticalScrollIndicatorInsets.bottom = topInset
+        // Rangée plate : le repos réserve la rangée de l'en-tête (#6013).
+        let restTop = topInset + ThreadChromeFade.headClearance(usesFlatRow: readingMode.usesFlatRow)
+        if collectionView.contentInset.bottom != restTop {
+            collectionView.contentInset.bottom = restTop
+            collectionView.verticalScrollIndicatorInsets.bottom = restTop
         }
         // INCHANGÉ — garde source ConversationTopChromeFadeTests:119
         stickyDayTopConstraint?.constant = topInset + MessageDayStickyPlacement.topOffset
@@ -1061,7 +1061,7 @@ final class MessageListViewController: UIViewController {
         // the oldest (visual top). We handle status-bar taps manually if needed.
         collectionView.scrollsToTop = false
         collectionView.delegate = self
-        view.addSubview(collectionView)
+        view.addSubview(ThreadChromeFadeContainer(hosting: collectionView))
     }
 
     // MARK: - Groupe de rangées (Script/Focal, #3919)
