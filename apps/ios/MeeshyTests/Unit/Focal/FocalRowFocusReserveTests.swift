@@ -7,7 +7,7 @@ import SwiftUI
 /// bas de la carte de focus) débordent alors dessus.
 ///
 /// Miroir iOS du défaut 1 déjà fermé côté web par #5648
-/// (`apps/web-v3/src/components/focal-row.tsx:528-558`, `data-focus-reserve`) :
+/// (`apps/web-v2/src/components/focal-row.tsx:528-558`, `data-focus-reserve`) :
 /// même géométrie (`overlay(alignment: .bottom)` + `offset(y: overhang)`),
 /// même défaut (rien n'absorbe le débord quand `flagAndReactionsRow` ne se
 /// monte pas), même correction (réserver, sur la rangée élue SEULEMENT, la

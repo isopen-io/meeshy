@@ -975,7 +975,7 @@ story est une BRANCHE (`type: 'STORY'` + le blob). Les « deux corps » du § 6 
 sont deux types SWIFT reçus par un seul contrat.
 
 Repo entier, en production : **12 sites** construisent un corps de `POST /posts`,
-dont **cinq à la main sans aucun type** (web ×3, web-v3 ×1, outbox iOS ×1).
+dont **cinq à la main sans aucun type** (web ×3, web-v2 ×1, outbox iOS ×1).
 
 #### Le 19e champ du contrat n'est dans AUCUN des deux corps (2026-09-05)
 
@@ -1076,9 +1076,9 @@ lecture** · rendu par lecteur.
 
 | profil | accepté à la création | persisté | rendu par la projection | rendu chez le lecteur |
 |---|---|---|---|---|
-| **POST** | oui — `CreatePostSchema` n'a **aucune garde de type** | oui | oui (`postInclude` est un `include`, pas un `select`) | **carte de fil iOS seulement** — le DÉTAIL ne sait pas rendre une scène (#5192) ; web, web-v3, Android : non |
+| **POST** | oui — `CreatePostSchema` n'a **aucune garde de type** | oui | oui (`postInclude` est un `include`, pas un `select`) | **carte de fil iOS seulement** — le DÉTAIL ne sait pas rendre une scène (#5192) ; web, web-v2, Android : non |
 | **REEL** | oui, même branche | oui | oui | **carte de fil iOS seulement** — `ReelsPlayerView` ne lit `storyEffects` que pour la piste audio (#5192) |
-| **STORY** | oui, quatre écrivains | oui | oui en corps complet · **NON sous `?projection=tray`** (`trayStorySelect` l'omet par conception) | iOS ✅ · web ✅ · Android ✅ · **web-v3 non** (#5195) |
+| **STORY** | oui, quatre écrivains | oui | oui en corps complet · **NON sous `?projection=tray`** (`trayStorySelect` l'omet par conception) | iOS ✅ · web ✅ · Android ✅ · **web-v2 non** (#5195) |
 | **STATUS** | oui **au schéma**, aucun producteur mesuré | oui | oui | aucun |
 
 Trois choses se lisent dans ce tableau, et ce sont les trois questions à poser à
@@ -1086,7 +1086,7 @@ tout champ de publication :
 
 1. **Un champ accepté et persisté mais absent de la projection de LECTURE est
    perdu aussi sûrement que s'il n'était jamais parti.** `?projection=tray` est
-   exactement ce cas, et c'est le chemin que web-v3 emprunte pour lister ses
+   exactement ce cas, et c'est le chemin que web-v2 emprunte pour lister ses
    stories.
 2. **Un champ rendu sur UNE surface et pas sur sa destination naturelle inverse
    le sens du geste** : la carte d'un post composé montre la scène, le tap
@@ -1246,7 +1246,7 @@ grep -h "public func" packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerVie
 > `social.md` ne comptent : `CreatePostBody` (`OutboxDispatcher.swift:965`, 16
 > champs, `encode(to:)` écrit à la main) — le corps de la voie DURABLE, celle que
 > prend tout post du meuble. Repo entier, en production : **12 sites** construisent
-> ce corps, dont cinq à la main sans aucun type (web ×3, web-v3 ×1, outbox iOS ×1).
+> ce corps, dont cinq à la main sans aucun type (web ×3, web-v2 ×1, outbox iOS ×1).
 >
 > Enfin, la table de justification ci-dessous a **cinq lignes pour six champs** :
 > `discoverabilityPrecision` n'y est pas expliqué, et il n'a aucun logement dans

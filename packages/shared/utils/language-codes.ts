@@ -4,7 +4,7 @@
  * Ce module existe pour le POIDS D'UN NAVIGATEUR (#5396) : `language-normalize`
  * n'a besoin que des CODES, et l'importer depuis `languages.ts` embarquait la
  * table entière — noms, drapeaux, capacités TTS/STT/voice-cloning — soit
- * ~30 Ko minifiés dans CHAQUE module temps réel de la web-v3 (participate,
+ * ~30 Ko minifiés dans CHAQUE module temps réel de la web-v2 (participate,
  * liste, feed, notifs) via `conversation-helpers` (le Prisme).
  *
  * LA SOURCE DE VÉRITÉ NE BOUGE PAS : `languages.ts` reste l'autorité des
