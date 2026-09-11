@@ -389,8 +389,8 @@ vus rougir sur une valeur falsifiée.
 1. **Les deux tables n'ont jamais divergé sur les couleurs, mais sur les
    RÔLES.** `design-tokens` fait de `indigo400` sa primaire, iOS de
    `indigo500` ; les neutres de la v3 sont violacés (`#b9bcd0`), ceux d'iOS
-   sont des gris vrais (`#9CA3AF`). Les unifier changerait le rendu de
-   `web-v3`, une application en service : c'est une décision du porteur, pas un
+   sont des gris vrais (`#9CA3AF`). Les unifier changerait le rendu de ce
+   chantier, servi en staging : c'est une décision du porteur, pas un
    refactor. `tokens.css` est donc **intact** — vérifié.
 2. **iOS porte lui-même des valeurs hors de ses propres tables.** Le rayon 18
    de la bulle n'est ni `MeeshyRadius.md` (14) ni `.lg` (16) ; le champ du
