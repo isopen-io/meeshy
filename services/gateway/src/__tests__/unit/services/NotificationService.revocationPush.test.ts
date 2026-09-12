@@ -217,7 +217,7 @@ describe('NotificationService — push de révocation des bannières déjà livr
       });
       prisma.notification.delete.mockResolvedValue({});
 
-      await service.deleteNotification(NOTIF_ID);
+      await service.deleteNotification(NOTIF_ID, AUTHOR_ID);
       await flushAsync();
 
       expect(mockIO.emit).toHaveBeenCalledWith('notification:deleted', { notificationId: NOTIF_ID });
@@ -233,7 +233,7 @@ describe('NotificationService — push de révocation des bannières déjà livr
       prisma.notification.findUnique.mockResolvedValue({ userId: AUTHOR_ID, context: {} });
       prisma.notification.delete.mockRejectedValue(new Error('gone'));
 
-      await service.deleteNotification(NOTIF_ID);
+      await service.deleteNotification(NOTIF_ID, AUTHOR_ID);
       await flushAsync();
 
       expect(sendToUser).not.toHaveBeenCalled();

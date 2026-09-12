@@ -39,7 +39,23 @@ import { describe, it, expect, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
 import { conversationListResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { lastMessageTextMayTravel } from '@meeshy/shared/utils/last-message-protection';
+/**
+ * LA LOI PORTE UN SEUL NOM (#6157). Ce témoin arrivait de #6112 en important
+ * `lastMessageTextMayTravel` — la MÊME loi, écrite à l'affirmative, dans une
+ * jumelle du module que #6136 avait déjà écrit de son côté. La résolution de
+ * l'add/add a gardé le module le plus strict (celui qui masque aussi
+ * `lastMessageOriginalLanguage`) et laissé ce consommateur pointer vers une
+ * API disparue : la suite ÉCHOUAIT À SE CHARGER, donc elle ne mesurait plus
+ * RIEN — 24 043 tests verts et un témoin de confidentialité muet.
+ *
+ * On n'ajoute pas l'alias négatif : deux noms pour une loi, c'est exactement ce
+ * que cette résolution vient de payer (leçon 586). Le témoin adopte le
+ * vocabulaire du dépôt — `isLastMessageProtected` et son classement.
+ */
+import {
+  isLastMessageProtected,
+  resolveLastMessageSummaryKind,
+} from '@meeshy/shared/utils/last-message-protection';
 
 const SECRET = 'le code du coffre est 4731';
 
@@ -121,13 +137,21 @@ describe('la loi que le serveur applique couvre les trois formes protégées', (
   const maintenant = new Date('2026-09-11T12:00:00Z');
 
   it('vue unique, flouté et éphémère périmé : le texte ne voyage pas', () => {
-    expect(lastMessageTextMayTravel({ isViewOnce: true }, maintenant)).toBe(false);
-    expect(lastMessageTextMayTravel({ isBlurred: true }, maintenant)).toBe(false);
-    expect(lastMessageTextMayTravel({ expiresAt: '2026-09-11T11:00:00Z' }, maintenant)).toBe(false);
+    expect(isLastMessageProtected({ isViewOnce: true }, maintenant)).toBe(true);
+    expect(isLastMessageProtected({ isBlurred: true }, maintenant)).toBe(true);
+    expect(isLastMessageProtected({ expiresAt: '2026-09-11T11:00:00Z' }, maintenant)).toBe(true);
   });
 
   it('éphémère encore valide : le texte voyage — c’est tout son propos', () => {
-    expect(lastMessageTextMayTravel({ expiresAt: '2026-09-11T13:00:00Z' }, maintenant)).toBe(true);
+    expect(isLastMessageProtected({ expiresAt: '2026-09-11T13:00:00Z' }, maintenant)).toBe(false);
+  });
+
+  it('et le CLASSEMENT nomme chaque forme, pas seulement son verdict', () => {
+    expect(resolveLastMessageSummaryKind({ isViewOnce: true }, maintenant)).toBe('viewOnce');
+    expect(resolveLastMessageSummaryKind({ isBlurred: true }, maintenant)).toBe('hidden');
+    expect(resolveLastMessageSummaryKind({ expiresAt: '2026-09-11T11:00:00Z' }, maintenant)).toBe('expired');
+    expect(resolveLastMessageSummaryKind({ expiresAt: '2026-09-11T13:00:00Z' }, maintenant)).toBe('ephemeralActive');
+    expect(resolveLastMessageSummaryKind({}, maintenant)).toBe('standard');
   });
 });
 

@@ -5338,12 +5338,23 @@ export class NotificationService {
   }
 
   /**
-   * Marque une notification comme lue
+   * Marque une notification comme lue.
+   *
+   * **`userId` est EXIGÉ et entre dans la requête (#6166).** La propriété d'une
+   * notification était vérifiée par la route seule depuis `77b39f5cdd`
+   * (2026-01-28) — donc par la DISCIPLINE de l'appelant, et un appelant qui
+   * oublie ne fait rougir personne : le service acceptait, et le témoin de la
+   * route ne voit pas passer un appel qui ne traverse pas la route.
+   *
+   * La route GARDE sa vérification préalable : c'est elle qui distingue le 404
+   * du 403, deux codes que l'utilisateur doit continuer de recevoir
+   * distinctement. Ici, c'est de la défense en profondeur — la portée rend le
+   * contournement impossible par oubli, pas par convention.
    */
-  async markAsRead(notificationId: string): Promise<Notification | null> {
+  async markAsRead(notificationId: string, userId: string): Promise<Notification | null> {
     try {
       const notification = await this.prisma.notification.update({
-        where: { id: notificationId },
+        where: { id: notificationId, userId },
         data: {
           isRead: true,
           readAt: new Date(),
@@ -5660,18 +5671,26 @@ export class NotificationService {
   }
 
   /**
-   * Supprime une notification
+   * Supprime une notification.
+   *
+   * **`userId` est EXIGÉ et entre dans les DEUX requêtes (#6166)** — la
+   * relecture comme la suppression. Même raison que `markAsRead` : la garde de
+   * propriété vivait dans la route seule, donc dans la mémoire de l'appelant.
    */
-  async deleteNotification(notificationId: string): Promise<boolean> {
+  async deleteNotification(notificationId: string, userId: string): Promise<boolean> {
     try {
       // Fetch userId before deletion so we can emit counts update after
       const existing = await this.prisma.notification.findUnique({
-        where: { id: notificationId },
+        where: { id: notificationId, userId },
         // `context` (sa `conversationId`) et `type` : la révocation push les
         // lit pour dire au client sous quel index la bannière a été posée ;
         // `delivery` dit s'il y a seulement une bannière à retirer.
         select: { userId: true, type: true, context: true, delivery: true },
       });
+
+      // La relecture ci-dessus est déjà portée par `userId` : si elle ne rend
+      // rien, la suppression ne doit pas partir « au cas où ».
+      if (existing === null) return false;
 
       await this.prisma.notification.delete({
         where: { id: notificationId },

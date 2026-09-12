@@ -31131,3 +31131,275 @@ Trouvée par la session `v2-meeshy-c7`, qui a laissé l'allocation du numéro à
 session tenant `tasks/lessons.md` — son propre fichier s'arrêtant à 574, y écrire
 une 580 aurait rejoué exactement la 561.
 
+## Leçon 586 — Deux gardes peuvent affirmer l'INVERSE l'une de l'autre sur la même chaîne : l'une des deux ne peut alors qu'être rouge
+
+2026-09-12, #6117 (`9070e21996`). `ConversationMenuSystemDesignGuardTests`
+exigeait, dans le source de `MessageListViewController.swift`, la présence de
+`enableLongPress: nativeMenu == nil` — pendant que `ThreadRowGestureParityTests`
+en exigeait l'ABSENCE. Une seule commande le montre, et elle tient en deux lignes :
+
+```
+$ git grep -n 'enableLongPress: nativeMenu == nil' 9070e21996^ -- apps/ios
+…/ConversationMenuSystemDesignGuardTests.swift:376:  XCTAssertTrue(  … contains(…)
+…/ThreadRowGestureParityTests.swift:130:            XCTAssertFalse(vc.contains(…)
+```
+
+**Ce n'est pas une garde PÉRIMÉE, et c'est ce que le mot « périmé » fait manquer :
+c'est un témoin NEUF ajouté sans retirer celui qu'il remplace.** Le pivot du
+2026-07-14 (« sur iOS 26 la bulle attache un `.contextMenu` natif, et la cellule
+COUPE le long-press custom ») était juste quand il a été écrit ; la directive
+porteur du 2026-09-12 l'a supplanté — appui long = menu Meeshy de iOS 16 à
+iOS 26 — et le témoin de la loi neuve s'est posé à côté de l'ancien, pas à sa
+place. À cet instant précis, le dépôt CONTENAIT sa propre contradiction, et rien
+ne pouvait la rendre verte.
+
+> **Ce qui attrape ce défaut n'est pas de relire la garde rouge — c'est de grepper
+> la CHAÎNE qu'elle assère.** En lisant les deux fichiers séparément on ne voit
+> rien : chacun est parfaitement cohérent CHEZ LUI, avec son `MARK`, sa
+> justification et son message d'échec. La contradiction n'existe qu'à
+> l'intersection, et l'intersection est une sous-chaîne — donc un `grep`, jamais
+> une lecture.
+
+RÈGLE D'ÉCRITURE, qui rend la leçon préventive au lieu de diagnostique : **à
+l'ajout d'un témoin qui assère un texte SOURCE, chercher d'abord qui d'autre
+assère déjà ce texte.** Un `XCTAssertTrue` et un `XCTAssertFalse` sur la même
+sous-chaîne se voient en une commande ; ils ne se voient JAMAIS autrement.
+
+COROLLAIRE, mesuré par le même lot : **deux gardes qui affirment la MÊME règle
+divergent au premier changement** — c'est exactement ce qui vient d'arriver. La
+résolution n'est donc pas de retourner l'assertion fautive (ce qui redoublerait la
+loi neuve et reprogrammerait la divergence suivante), mais de ne garder, dans le
+fichier dépossédé, que l'invariant qui n'est dit NULLE PART ailleurs. Ici :
+`nativeMenu` reste DÉCLARÉ à `nil`, et ce `nil` n'est pas un reste — c'est lui qui
+commande le retrait de l'`UIContextMenuInteraction` que le système pose sur la
+cellule. Le supprimer au motif qu'il « ne sert plus » rouvrirait la pression
+système que #6117 vient de fermer.
+
+Trois voisines, et les distinguer évite de chercher au mauvais endroit :
+- la **560** — un lot RENOMME, et la garde qui reconnaissait par le nom devient
+  anti-corrélée : le texte de la garde n'a pas bougé, son sujet a bougé sous elle ;
+- la **584** — un DÉCOUPAGE éteint les gardes ancrées sur un FICHIER : la garde
+  cesse de mesurer (une garde de présence rougit, une garde d'absence VERDIT) ;
+- la **586**, ici — les deux gardes mesurent bien, le même texte, et se
+  contredisent : le défaut est dans le DÉPÔT, pas dans le dispositif de mesure.
+
+Défaut trouvé, corrigé ET formulé par la session `Longpress` (Bulle, Focal,
+Script, Rivière) : les quatre commits en cause — le témoin neuf `e024cca040`, la
+loi `eb96625445`, le retrait `9070e21996` — vivent tous sur
+`claude/double-tap-menu-6117`, mesuré par `git branch -r --contains`. Elle a
+laissé l'ALLOCATION du numéro à la session tenant `tasks/lessons.md`, comme la 585
+et pour la même raison : un identifiant qu'on n'alloue pas ne collisionne pas
+(#5102). Note d'attribution, utile ici : `git log --format=%an` ne discrimine
+AUCUNE de ces sessions — elles committent toutes sous le même auteur. Ce qui
+distingue qui a fait quoi est la BRANCHE, jamais le nom.
+
+## Leçon 587 — Un job ROUGE avec ZÉRO test en échec dit qu'une suite ne s'est pas CHARGÉE — et le typecheck ne pouvait pas le voir
+
+2026-09-12, #6157. « Test gateway » rouge sur `dev`, avec ce verdict :
+
+```
+Test Suites: 1 failed, 1249 passed, 1250 total
+Tests:       24043 passed, 24043 total
+```
+
+**Aucun test en échec, et pourtant rouge.** La signature est celle-là, et elle se
+lit en une seconde une fois qu'on la connaît : une suite qui ne se CHARGE pas ne
+contribue aucun test au décompte. Ici un `import` vers une API disparue (la
+jumelle d'une résolution add/add), donc `TS2305` au chargement.
+
+> **Une suite qui ne se charge pas ne mesure RIEN, et c'est PIRE qu'un test
+> rouge.** Un test rouge nomme ce qui casse ; une suite muette laisse croire que
+> sa garde veille. Celle-ci était le témoin de confidentialité du FIL — un
+> dernier message à vue unique ne doit pas partir en clair dans le corps
+> SÉRIALISÉ. Le rouge était visible, la garde était morte.
+
+## La moitié qui coûte le plus : la vérification ne POUVAIT pas voir le défaut
+
+J'avais annoncé « `tsc --noEmit` du gateway : 0 erreur » comme preuve de la
+résolution. Mesuré après coup :
+
+```jsonc
+// services/gateway/tsconfig.json
+"include": ["src/**/*", "shared/**/*"],
+"exclude": ["node_modules", "dist", "…/encryption/**/*",
+            "src/**/__tests__/**/*", "src/**/*.test.ts", "src/**/*.spec.ts"]
+```
+
+**Le typecheck et l'exécution des tests couvrent des ensembles de fichiers
+DISJOINTS.** Une erreur de type dans un test est invisible à `tsc` (exclu) et
+FATALE à jest (qui typecheck chaque suite au chargement). « J'ai lancé le
+typecheck » ne vérifie donc JAMAIS un fichier de test — et c'est exactement là
+que vivent les consommateurs de l'API qu'on vient de supprimer.
+
+### CORRECTION mesurée le même jour (#6160) — c'est plus fin, et le trou est ailleurs
+
+La phrase ci-dessus est vraie et INCOMPLÈTE. Relevé exact du gateway :
+
+| couche | config | ce qu'elle couvre |
+|---|---|---|
+| `tsc --noEmit` | `tsconfig.json` | exclut les tests ⇒ **rien** |
+| ts-jest | `tsconfig.test.json` (`include: src/**/*`) | les tests, **mais seulement les fichiers qu'une exécution CHARGE**, et `diagnostics.ignoreCodes: [2307, 2322, 2339, 2345, 2740]` |
+| personne | — | les fichiers de test qu'aucune exécution ne charge |
+
+```
+npx tsc -p tsconfig.test.json --noEmit --pretty false | grep -c 'error TS'  →  3562
+  3467  dans les cinq codes que ts-jest IGNORE  → invisibles à tsc ET à jest
+    95  hors de ces cinq codes                  → dans des fichiers jamais chargés
+```
+
+ts-jest typecheck donc bien les tests — **à la demande, fichier par fichier, et
+sourd à cinq codes.** Mon `TS2305` a été attrapé parce qu'il n'est pas dans la
+liste muette ET que la suite était chargée ; un `TS2345` au même endroit ne
+l'aurait pas été. **Le trou a deux moitiés** : cinq codes muets PARTOUT, et TOUT ce
+qu'aucune exécution ne charge.
+
+Et la faute de mesure, à garder pour elle-même : mon premier comptage a rendu
+**0 erreur** parce que je grepais `error TS` sur la sortie PRETTY de `tsc`, où les
+codes ANSI coupent la chaîne. J'ai failli conclure « ce gate coûte zéro » depuis un
+format que je n'avais pas vérifié — la faute même que cette leçon dénonce, commise
+en la dénonçant. **`--pretty false` avant tout comptage.**
+
+Troisième garde, la moins chère et orthogonale (session `andp-00`) : le signal
+manqué n'était pas le rouge, c'était le COMPTE. Dans
+`Tests: 24043 passed, 24043 total`, les tests de la suite morte ne sont pas comptés
+*en échec* — ils ne sont **pas comptés du tout**, et le corpus rétrécit en silence.
+Un cliquet sur le nombre de suites CHARGÉES attrape aussi le cas où le job reste
+VERT (une suite qu'un `testPathIgnorePatterns` avale).
+
+> **Avant de tirer une preuve d'un outil, lire son `include`/`exclude`.** Un
+> outil vert sur un ensemble qui ne contient pas le fichier douteux n'a rien
+> mesuré. C'est la 583 posée sur l'espace au lieu du temps : un témoin ne mesure
+> son sujet que si son sujet est dans son champ.
+
+Ce qui attrape ce défaut-là, après une suppression d'export, ne coûte qu'une
+commande — et elle doit balayer TOUTES les refs, pas le clone (leçon 561) :
+
+```bash
+grep -rn '<NomSupprimé>' --include='*.ts' packages services apps   # le clone
+git for-each-ref --format='%(refname)' refs/remotes/origin refs/heads \
+  | while read -r r; do git grep -l '<NomSupprimé>' "$r" 2>/dev/null; done
+```
+
+Mesuré ici : le clone rendait UN consommateur (celui de dev, réparé) ; les
+1 707 refs en rendaient un SECOND — `packages/shared/__tests__/utils/
+last-message-protection.test.ts` sur `claude/ios-reactions-coherence`, le test
+unitaire de la jumelle. Il rejouerait le défaut à la fusion de cette branche.
+
+Et la résolution elle-même suit la 586 : on n'AJOUTE PAS l'alias négatif
+(`lastMessageTextMayTravel` = `!isLastMessageProtected`). Deux noms pour une loi,
+c'est ce que cette résolution venait de payer — le consommateur adopte le
+vocabulaire du dépôt.
+
+## Leçon 588 — Une PR dont la preuve a été effacée par la résolution de son propre conflit garde TOUS les signes d'une PR prouvée
+
+2026-09-12, #6154 / #6152. La PR livrait un rail de stories et citait ses gates
+comme preuve : « `check-lens.mjs` § 7, `check-list-actions.mjs` § 10,
+`check-curve.mjs` (cote 36) ». La résolution de son conflit contre `dev` a pris
+`check-lens.mjs` **du côté de dev, à l'octet** :
+
+```
+check-lens.mjs            dansEnveloppeDuPlateau (dev)   § 7 stories (branche)   sha
+  d76b5468d7 (dev)                    2                          0            6e276e8f
+  76a657eacc (branche)                0                       présent         bf63ec7a
+  05b07720c5 (résolution)             2                          0            6e276e8f
+```
+
+La garde d'a11y de `dev` survit — c'était le risque que l'issue nommait. **Mais
+les 134 lignes que la branche ajoutait au même fichier ont disparu, et ce sont
+celles qui prouvaient sa propre feature.** Le rail neuf (`stories-rail.tsx`) est
+absent de l'arbre du merge, proprement : aucune référence pendante, l'arbre
+compile.
+
+> **Prendre un côté VERBATIM sur un fichier en conflit n'est pas une résolution,
+> c'est un choix de camp.** Deux moitiés d'un fichier de gardes gardent des
+> invariants DIFFÉRENTS : il n'existe pas de côté à garder, seulement deux
+> moitiés à réunir.
+
+Ce qui rend ce défaut plus coûteux que celui d'une branche à moitié fusionnée (où
+les signaux visibles restent intacts par ACCIDENT) : ici ils restent intacts **par
+construction**. Le corps de la PR cite un gate ; le gate porte toujours son nom,
+côté `dev` ; le code compile ; la CI est verte. Rien de ce qu'on relit d'habitude
+ne bouge. Ce qui a disparu est la seule chose que personne ne relit après un
+merge : **le CONTENU du témoin.**
+
+## Le discriminant, en deux nombres
+
+Après résolution, pour chaque fichier qui était EN CONFLIT et qui porte des
+invariants, compter les invariants de CHAQUE côté dans le résultat :
+
+```bash
+for r in <dev> <branche> <résolution>; do
+  printf '%-14s ' "$r"
+  git show "${r}:<fichier>" | grep -c '<invariant de dev>' | tr '\n' ' '
+  git show "${r}:<fichier>" | grep -c '<invariant de la branche>'
+done
+```
+
+Deux colonnes, trois lignes, et « un seul côté » se voit. Corollaire plus rapide
+encore : **pour un fichier de gardes, un `sha` identique à l'un des parents EST le
+signal** — un fichier en conflit qui ressort à l'octet identique à un parent n'a
+pas été résolu, il a été choisi.
+
+Et le même relevé sépare les DEUX questions qu'un merge pose, qu'on confond
+toujours : ce qui a été ARBITRÉ et ce qui a été BALAYÉ. La seconde ne se lit pas
+dans le `--stat` d'un merge — il est GROS et normal par nature — mais dans une
+soustraction :
+
+```
+diffèrent des deux parents   : 16 fichiers
+étaient en conflit           :  8 fichiers
+donc ÉTRANGERS au merge      : 11 fichiers   ← le travail vivant d'autres sessions
+```
+
+Une résolution de conflit diffère des deux parents **par construction** : « diffère
+des deux parents » ne discrimine donc RIEN à lui seul. Mesuré sur ce même merge :
+sept des onze appartenaient au lot en cours d'écriture d'une autre session, quatre
+au chantier de l'auteur lui-même, non annoncés par son titre. Signature d'un
+`git commit -a` pendant la résolution. **Un `--stat` se lit avant CHAQUE commit, et
+un merge n'est pas une exception : c'est le cas où l'on est le plus sûr de savoir
+ce qu'il contient, donc celui où l'on regarde le moins.**
+
+## TROIS causes pour ce symptôme, et trois remèdes — mesuré quelques heures plus tard
+
+Le symptôme « le corps de la PR décrit ce qu'elle ne livre plus » a trois causes
+distinctes, et les confondre fait appliquer le mauvais remède :
+
+| cause | ce qui s'est passé | remède |
+|---|---|---|
+| **effacée** par accident | la résolution a pris un côté verbatim, le témoin de l'autre est parti | **reprendre le témoin** |
+| rendue **caduque** par décision | l'auteur a convergé vers l'autre jumelle ; le témoin de la sienne n'a plus de sujet | **réécrire le corps** (dette de rédaction, pas défaut) |
+| **orpheline** | le témoin est RESTÉ et assère une feature qui n'est plus livrée | **retirer le témoin avec son sujet** |
+
+Le troisième cas s'est mesuré sur cette même PR, et il est le plus net : la
+résolution a gardé **le rail de `dev` ET le témoin du rail de la branche.** Les
+deux gates ont rougi, et ce sont les deux faces d'un seul geste :
+
+```
+Gate « flux de la Lentille » (check-lens.mjs, version de dev)   1 invariant rompu
+  · le premier Tab depuis la dernière tuile ne rejoint plus « Progression »
+    (le bouton neuf « Créer un lien de partage » s'est inséré dans l'ordre)
+
+Gate « actions de rangée » (check-list-actions.mjs, de la branche)  3 en défaut
+  · anneaux: 3, accentues: 0, moods: 0
+    — les trois assertions qui gardent le rail de stories ABANDONNÉ
+```
+
+> **Le gate de `dev` rougit parce que la branche a CHANGÉ ce qu'il garde ; le gate
+> de la branche rougit parce qu'elle a RETIRÉ ce qu'il garde.** Une résolution qui
+> mélange les deux moitiés sans arbitrer produit exactement cette paire — et la
+> paire est le diagnostic : elle dit qu'on a gardé un sujet d'un côté et son témoin
+> de l'autre.
+
+Et **un témoin ne survit pas à son sujet** : abandonner une jumelle (D-11) oblige
+à retirer les assertions qui la gardaient, sans quoi le gate mesure une absence
+qu'il prend pour un défaut.
+
+Note d'outillage : ces deux verdicts n'apparaissent ENSEMBLE que depuis #6137
+(`if: ${{ !cancelled() }}` sur les onze gates). Avant, le job s'arrêtait au premier
+et il aurait fallu deux tours pour voir la paire — donc pour voir le diagnostic,
+qui n'existe que dans la paire.
+
+Formulée par la session `v2-meeshy-c7`, sur des mesures de la session tenant
+`dev` ; numéro alloué par cette dernière (1 707 refs balayées). Attribution par la
+BRANCHE, jamais par `%an` — nous committons toutes sous le même auteur.
+

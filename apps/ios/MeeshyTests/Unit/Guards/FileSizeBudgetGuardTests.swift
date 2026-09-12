@@ -298,7 +298,36 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // Cumul mesuré après le découpage : 58 218. Les 626 de marge qui restent
     // sont le mou PRÉEXISTANT de #6050, que ce lot ne reprend pas plus que
     // #6016 ne l'avait fait — pour la même raison de coordination.
-    private static let legacyLineCeiling = 58_844
+    //
+    // #6050 — 58 844 → 58 302 (−542). Remesuré sur les 28 noms restants (aucun
+    // n'a quitté `legacyOverBudget` : tous dépassent toujours le budget, règle
+    // 2 vérifiée). Le mou signalé par #6050 (626 lignes au moment de l'issue)
+    // a évolué entre-temps sous l'effet de découpes voisines livrées ailleurs
+    // dans le dépôt ; 542 lignes de marge étaient réellement mesurables ce
+    // jour, et ce commit les reprend intégralement — le cran suit le cumul
+    // RÉEL, jamais un chiffre lu dans un commentaire.
+    //
+    // La règle 3 reste À SENS UNIQUE (`XCTAssertLessThanOrEqual`), par décision
+    // explicite et non par oubli. #6050 proposait de la rendre symétrique,
+    // comme le cliquet des couleurs (`check-accent-color-hardcoding.mjs`, qui
+    // rougit aussi sur une amélioration non enregistrée) : cela aurait fermé
+    // la fenêtre qui a laissé ce mou s'accumuler. Mais un sens unique est
+    // actuellement exploité ailleurs, à dessein :
+    // `docs/superpowers/plans/2026-09-10-appui-long-rendu-du-mode.md` (D4)
+    // baisse volontiers `ConversationView.swift`, `MessageListViewController.swift`
+    // et `MessageOverlayMenu.swift` sur PLUSIEURS commits avant de remesurer le
+    // plafond une seule fois, à sa dernière tâche — et sa propre doc-comment le
+    // dit : « la garde est à sens unique : une baisse ne la fait pas rougir. »
+    // La branche qui porte ce plan (`claude/appui-long-rendu-du-mode`) est
+    // encore vivante au 2026-09-12 ; la rendre symétrique aujourd'hui ferait
+    // rougir chacun de ses commits intermédiaires pour un mou que ce lot
+    // compte lui-même reprendre à sa Tâche 24. Le vrai défaut de #6050 n'était
+    // pas l'absence de symétrie — c'était un cran non remesuré depuis deux
+    // lots — et c'est ce que ce commit corrige, sans toucher au sens de la
+    // règle. Le prix de cette asymétrie reste entier : une baisse non suivie
+    // d'un abaissement du plafond DANS LE MÊME COMMIT redevient du mou
+    // silencieux jusqu'au prochain remesurage.
+    private static let legacyLineCeiling = 58_302
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
@@ -343,6 +372,12 @@ final class FileSizeBudgetGuardTests: XCTestCase {
 
     // MARK: - Règle 3 — et elle ne grossit pas de l'intérieur
 
+    /// À SENS UNIQUE par décision explicite (#6050) : une baisse du cumul ne
+    /// fait pas rougir ce test, elle ne fait qu'ouvrir du mou. C'est ce mou
+    /// qu'un lot doit reprendre lui-même, DANS LE MÊME COMMIT que la baisse
+    /// qui l'a créé — voir le doc-comment de `legacyLineCeiling` pour la raison
+    /// (un cliquet symétrique casserait le séquencement d'un lot en cours qui
+    /// compte sur cette asymétrie).
     func test_leCumulDeLaDetteHeriteeNeMonteJamais() throws {
         let total = try sources()
             .filter { Self.legacyOverBudget.contains($0.lastPathComponent) }

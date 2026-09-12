@@ -145,7 +145,52 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
     await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
   });
 
-  const paintedCore = await (async () => {
+  /**
+   * LA COULEUR ATTENDUE SE LIT DANS L'IMAGE SERVIE, ELLE NE S'ÉCRIT PAS ICI
+   * (#6155). Le témoin ne vérifiait QUE l'uniformité du cœur (`shareProche >=
+   * 0,999`) — jamais QUELLE couleur. Or le fond de la figure est lui aussi un
+   * aplat : un cœur parfaitement uniforme montrant `229,246,248` (l'accent à
+   * 12 %, l'image ABSENTE) passait le seuil et rendait le gate VERT, sous un
+   * message qui appelait ce fond « la couleur servie ». Le témoin pouvait donc
+   * confirmer l'exact défaut qu'il garde.
+   *
+   * On dessine l'`<img>` de la page dans un canvas et on compte sa dominante :
+   * l'attente vient ainsi de l'image RÉELLEMENT servie, pas d'une constante à
+   * tenir à jour — et le témoin attrape en prime « une AUTRE image a été
+   * servie », qu'aucune constante écrite ici n'aurait vu.
+   */
+  const couleurServie = await mediaPage.evaluate((id) => {
+    const el = document.querySelector(`img[data-attachment-image="${id}"]`);
+    if (el === null || el.naturalWidth === 0) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = el.naturalWidth;
+    canvas.height = el.naturalHeight;
+    const context = canvas.getContext('2d');
+    context.drawImage(el, 0, 0);
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    const counts = new Map();
+    for (let i = 0; i < pixels.length; i += 4) {
+      const key = `${pixels[i]},${pixels[i + 1]},${pixels[i + 2]}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  }, MEDIA_IMAGE_ATTACHMENT_ID);
+
+  /* ±6 pour l'IDENTITÉ (composition, gestion de couleur du runner), ±2 pour
+     l'UNIFORMITÉ. Mesuré : le pixel de `MEDIA_IMAGE_DATA_URI` est exactement
+     99,102,241 (PNG 1×1, type 2, octets [0, 99, 102, 241]) ; le fond de figure
+     observé en CI est 229,246,248, à une distance de 144 ; le glyphe de repli
+     fondu sur l'indigo donne 71,71,174, distance 67. Le seuil est donc onze
+     fois sous le plus proche des deux défauts gardés. */
+  const DISTANCE_SERVIE = 6;
+  const estCouleurServie = (mesuree) => {
+    if (couleurServie === null || mesuree === null) return false;
+    const attendue = couleurServie.split(',').map(Number);
+    const trouvee = mesuree.split(',').map(Number);
+    return attendue.every((canal, i) => Math.abs(canal - trouvee[i]) <= DISTANCE_SERVIE);
+  };
+
+  const mesurerCoeurPeint = async () => {
     const shot = await attachmentOf(MEDIA_IMAGE_ATTACHMENT_ID).screenshot();
     return mediaPage.evaluate(async (data) => {
       const bitmap = new Image();
@@ -208,7 +253,39 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
         coeur: side,
       };
     }, shot.toString('base64'));
-  })();
+  };
+
+  /**
+   * ON ATTEND QUE LA PEINTURE ARRIVE, ON NE PARIE PLUS SUR DEUX `rAF` (#6155).
+   *
+   * `decode()` + deux `requestAnimationFrame` garantissent qu'une frame a été
+   * PRODUITE par le fil principal après le décodage — jamais que le compositeur
+   * a rasterisé la tuile que `locator.screenshot()` va lire. Mesuré : vert sur
+   * `dev` et ROUGE sur une branche qui ne touche que `apps/web`, dans le même
+   * quart d'heure (run 34688594256) — donc ni une fenêtre d'horloge, ni le
+   * diff : une COURSE, que la machine gagne ou perd.
+   *
+   * Reboucler est sûr ICI, et la raison se dit en une phrase : **le défaut
+   * gardé est PERSISTANT.** Un glyphe de repli peint par-dessus l'image y
+   * reste ; une image pas encore peinte, non. Une attente généreuse ne peut
+   * donc verdir que le second — c'est le même renversement que la 583 (un état
+   * qui ARRIVE se laisse attendre, un état qui PART doit s'enregistrer).
+   *
+   * Et la boucle ne remplace pas l'assertion : elle sort dès que le cœur est
+   * uniforme ET porte la couleur servie. Sur épuisement, le message rend la
+   * suite des essais — un relevé qui dit si la couleur a bougé (course perdue)
+   * ou jamais changé (défaut réel).
+   */
+  const ESSAIS_MAX = 12;
+  const ATTENTE_ENTRE_ESSAIS = 250;
+  const essais = [];
+  let paintedCore = null;
+  for (let essai = 1; essai <= ESSAIS_MAX; essai += 1) {
+    paintedCore = await mesurerCoeurPeint();
+    essais.push(`#${essai} ${paintedCore.colour} ${(paintedCore.shareProche * 100).toFixed(1)}%`);
+    if (paintedCore.shareProche >= 0.999 && estCouleurServie(paintedCore.colour)) break;
+    if (essai < ESSAIS_MAX) await mediaPage.waitForTimeout(ATTENTE_ENTRE_ESSAIS);
+  }
 
   /**
    * CE QUE LE TÉMOIN DIT QUAND IL TOMBE (#6135) — relevé pris APRÈS la capture,
@@ -253,10 +330,11 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
   }, MEDIA_IMAGE_ATTACHMENT_ID);
 
   expect(
-    paintedCore.shareProche >= 0.999,
-    `[${skin}/${scheme}] aucun repli ne peint par-dessus l'image décodée — le cœur de la boîte est la couleur servie (${paintedCore.colour}) à ${(paintedCore.shareProche * 100).toFixed(2)} % à ±2 (${(paintedCore.share * 100).toFixed(2)} % à l'exact), en ${paintedCore.tones} teinte(s)` +
+    paintedCore.shareProche >= 0.999 && estCouleurServie(paintedCore.colour),
+    `[${skin}/${scheme}] aucun repli ne peint par-dessus l'image décodée — le cœur de la boîte porte ${paintedCore.colour} (servie attendue : ${couleurServie ?? 'illisible'} à ±${DISTANCE_SERVIE}) à ${(paintedCore.shareProche * 100).toFixed(2)} % à ±2 (${(paintedCore.share * 100).toFixed(2)} % à l'exact), en ${paintedCore.tones} teinte(s)` +
       ` · cinq premières : ${paintedCore.cinqPremieres.join(' | ')}` +
       ` · capture ${paintedCore.taille}, cœur ${paintedCore.coeur}` +
+      ` · ${essais.length} essai(s) : ${essais.join(' · ')}` +
       ` · image : ${JSON.stringify(imageState)}`,
   );
 
