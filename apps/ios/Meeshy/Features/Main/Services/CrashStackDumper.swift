@@ -134,9 +134,20 @@ enum CrashStackDumper {
                             while fp != 0, level < 192 {
                                 let next = UInt(UnsafeRawPointer(bitPattern: fp)?.load(as: UInt.self) ?? 0)
                                 let span = next > fp ? next &- fp : 0
+                                /* L'ADRESSE DE RETOUR, pour un appariement EXACT.
+                                   Apparier deux listes parcourues séparément — la
+                                   chaîne de fp et `backtrace()` — par leur RANG est
+                                   un pari : les deux ne comptent pas les mêmes
+                                   cadres, et le décalage dérive en cours de pile.
+                                   Mesuré : « bodyContent » attribué à trois niveaux
+                                   différents. Avec l'adresse, chaque cadre se
+                                   raccroche à SA ligne de symbole, sans offset. */
+                                let ra = UInt(UnsafeRawPointer(bitPattern: fp &+ 8)?.load(as: UInt.self) ?? 0)
                                 i = CrashStackDumper.writeHex(UInt(level), into: base, at: 0)
                                 i = CrashStackDumper.writeASCII(" fp=", into: base, at: i)
                                 i = CrashStackDumper.writeHex(fp, into: base, at: i)
+                                i = CrashStackDumper.writeASCII(" ra=", into: base, at: i)
+                                i = CrashStackDumper.writeHex(ra, into: base, at: i)
                                 i = CrashStackDumper.writeASCII(" size=", into: base, at: i)
                                 i = CrashStackDumper.writeHex(span, into: base, at: i)
                                 i = CrashStackDumper.writeASCII("\n", into: base, at: i)
@@ -162,6 +173,20 @@ enum CrashStackDumper {
         sigaction(SIGSEGV, &action, nil)
         sigaction(SIGBUS, &action, nil)
         NSLog("[CrashStackDumper] installed (Documents/segv_backtrace.txt)")
+        /* LA TAILLE DES TYPES DE VALEUR DU FIL (#6213 bis) — un cadre de pile
+           n'est grand que parce qu'un type l'est. `ConversationView` est
+           CAPTURÉ PAR VALEUR par chaque closure de son `body` ; si son état
+           inline pèse des dizaines de kilo-octets, chaque capture les recopie.
+           Trois nombres valent mieux que trois hypothèses. */
+        NSLog("[sizes] ConversationView=%d composerState=%d headerState=%d overlayState=%d scrollState=%d frameTracker=%d Conversation=%d composerText=%d",
+              MemoryLayout<ConversationView>.size,
+              MemoryLayout<ConversationComposerState>.size,
+              MemoryLayout<ConversationHeaderState>.size,
+              MemoryLayout<ConversationOverlayState>.size,
+              MemoryLayout<ConversationScrollState>.size,
+              MemoryLayout<MessageFrameBox>.size,
+              MemoryLayout<Conversation>.size,
+              MemoryLayout<ConversationComposerTextModel>.size)
     }
 }
 #endif
