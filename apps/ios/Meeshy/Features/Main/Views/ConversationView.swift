@@ -2202,47 +2202,33 @@ struct ConversationView: View {
         AnyView(floatingHeaderSectionBody)
     }
 
-    @ViewBuilder
+    /// Remplacé par la frontière NOMINALE `ConversationFloatingHeaderSection`
+    /// (#6213 bis) — ce cadre pesait **565 712 octets**, 55 % de la pile
+    /// principale, parce qu'en `-Onone` un appelant réserve la place du type
+    /// concret de CHAQUE branche `some View`, y compris celles qu'il
+    /// n'exécutera pas. Les quatre branches passent désormais en closures
+    /// `() -> AnyView` : elles se succèdent au lieu de s'additionner.
+    /// Mesure et raisonnement complets dans le doc-comment de la struct.
     private var floatingHeaderSectionBody: some View {
-        VStack {
-            if isAnonymous {
-                AnyView(anonymousHeaderBar)
-            } else if isTyping {
-                AnyView(typingHeaderBar)
-            } else {
-                // Oubliée lors de la coupe "leçon 5cdde93c4" (commentaire
-                // ci-dessus) : seule branche de ce VStack encore renvoyée en
-                // `some View` nu. `expandedHeaderBand` a depuis grossi (chip
-                // de mode de lecture, §WS-7/Focal) jusqu'à redevenir la
-                // branche la plus complexe — et donc la nouvelle cause du
-                // même débordement de pile au décodage de mangled name
-                // (2026-08-17, `ReadingModeController.decision` puis
-                // `__swift_instantiateConcreteTypeFromMangledNameV2`,
-                // toujours sous `expandedHeaderBand → … →
-                // readingModeAffordanceCluster`). Même traitement que ses
-                // branches sœurs.
-                // Focal/Script + défilement : le header entier glisse vers le
-                // bord HAUT en fondant et en revient (loi `hidesEntireHeader`,
-                // rendu `EdgeHiddenChrome`) — plus de démontage ; les touches
-                // passent au fil pendant l'escamotage (`allowsHitTesting`).
-                AnyView(expandedHeaderBand.hiddenTowardsEdge(hidesEntireHeaderForScroll, .top))
-            }
-
-            if headerState.showSearch {
-                AnyView(searchBar.transition(.move(edge: .top).combined(with: .opacity)))
-            }
-
-            Spacer()
-        }
-        .zIndex(100)
-        // Le mouvement est PUBLIÉ ici, consommé plus bas par les seuls
-        // `.hiddenWhileScrolling()` des grappes de boutons : le header garde
-        // son opacité, ses branches gardent leur type-erasure individuelle
-        // (note "leçon 5cdde93c4" au-dessus sur le crash de mangled name).
-        .scrollMotionActive(hidesHeaderActionsForScroll)
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: composerState.showOptions)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: headerState.showSearch)
+        ConversationFloatingHeaderSection(
+            isAnonymous: isAnonymous,
+            isTyping: isTyping,
+            showSearch: headerState.showSearch,
+            showOptions: composerState.showOptions,
+            hidesHeaderActions: hidesHeaderActionsForScroll,
+            anonymousBar: { AnyView(anonymousHeaderBar) },
+            typingBar: { AnyView(typingHeaderBar) },
+            // Focal/Script + défilement : le header entier glisse vers le bord
+            // HAUT en fondant et en revient (loi `hidesEntireHeader`, rendu
+            // `EdgeHiddenChrome`) — plus de démontage ; les touches passent au
+            // fil pendant l'escamotage (`allowsHitTesting`). Conservé DANS la
+            // closure : c'est la branche qu'il habille, pas la section.
+            expandedBand: { AnyView(expandedHeaderBand.hiddenTowardsEdge(hidesEntireHeaderForScroll, .top)) },
+            searchBar: { AnyView(searchBar.transition(.move(edge: .top).combined(with: .opacity))) }
+        )
+        // Cette animation-ci reste à l'HÔTE : sa valeur (`hidesEntireHeaderForScroll`)
+        // ne gouverne aucune branche de la section — elle accompagne
+        // l'escamotage déjà posé dans la closure `expandedBand`.
         .animation(.easeOut(duration: FocalMetrics.HiddenChrome.easeOut), value: hidesEntireHeaderForScroll)
     }
 

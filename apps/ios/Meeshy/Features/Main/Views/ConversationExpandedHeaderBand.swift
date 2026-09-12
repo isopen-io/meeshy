@@ -135,3 +135,86 @@ struct ConversationHeaderActionsCluster: View {
         .hiddenWhileScrolling()
     }
 }
+
+/// **La section d'en-tête flottante, en type NOMINAL** (#6213 bis).
+///
+/// ## Ce qu'elle ferme, et pourquoi #6194 ne suffisait pas
+///
+/// #6194 a supprimé la récursion du démangleur : la trace du 2026-09-12 22:50
+/// ne contient plus une seule frame `swift_getTypeByMangledName`, et la pile
+/// est passée de 211 à 149 cadres. L'app plantait pourtant toujours à
+/// l'ouverture d'une conversation, du même `signal 11`.
+///
+/// **Parce que la cause n'a jamais été le démangleur — c'était la TAILLE des
+/// cadres, et le démangleur n'en était qu'un symptôme.** Mesuré sur
+/// `Services CEO i16pm` (pile principale de 1008 Ko) par `CrashStackDumper`,
+/// qui écrit désormais l'adresse fautive et le palmarès des cadres :
+///
+///     signal 0xb  si_addr=0x16b4579e0  stack_low=0x16b458000
+///     → l'adresse fautive est 1 568 octets SOUS le plancher : page de garde.
+///
+///     565 712 o   floatingHeaderSectionBody   ← 55 % de la pile, UN cadre
+///     116 752 o   bodyWithLifecycle
+///      81 872 o   bodyContent
+///      64 656 o   copie de State<ConversationComposerState>
+///         176 o   expandedHeaderBand          ← la struct nominale de #6194
+///
+/// La dernière ligne est la démonstration : le maillon converti en type
+/// nominal ne pèse plus **176 octets**, quand son parent resté propriété
+/// calculée en pèse **565 712**. Le remède de #6194 était le bon ; il n'avait
+/// simplement pas été appliqué assez haut dans la chaîne.
+///
+/// ## Le mécanisme, en une phrase
+///
+/// En `-Onone`, une propriété qui rend `some View` est retournée
+/// INDIRECTEMENT : l'APPELANT réserve la place du type concret. Quand cet
+/// appelant porte trois branches (`if/else if/else`) plus une conditionnelle,
+/// il réserve la place de TOUTES — celles qui ne s'exécuteront pas comprises.
+/// Une closure `() -> AnyView` renverse cela : la construction se fait dans le
+/// cadre de la CLOSURE, entré puis quitté, et l'appelant ne voit passer que
+/// seize octets. Les branches ne s'additionnent plus, elles se succèdent.
+///
+/// C'est pourquoi `AnyView` posé sur la branche (`AnyView(anonymousHeaderBar)`)
+/// ne servait à rien ici : l'érasure a lieu APRÈS que l'appelant a réservé la
+/// place du type opaque. Elle borne ce qui SORT, jamais ce qui a été réservé
+/// pour entrer.
+struct ConversationFloatingHeaderSection: View {
+
+    let isAnonymous: Bool
+    let isTyping: Bool
+    let showSearch: Bool
+    /// Passés en valeurs PRIMITIVES pour les `.animation(_:value:)` : la vue
+    /// n'observe aucun objet, elle reçoit ce dont ses transitions dépendent.
+    let showOptions: Bool
+    let hidesHeaderActions: Bool
+
+    let anonymousBar: () -> AnyView
+    let typingBar: () -> AnyView
+    let expandedBand: () -> AnyView
+    let searchBar: () -> AnyView
+
+    var body: some View {
+        VStack {
+            if isAnonymous {
+                anonymousBar()
+            } else if isTyping {
+                typingBar()
+            } else {
+                expandedBand()
+            }
+
+            if showSearch {
+                searchBar()
+            }
+
+            Spacer()
+        }
+        .zIndex(100)
+        // Le mouvement est PUBLIÉ ici, consommé plus bas par les seuls
+        // `.hiddenWhileScrolling()` des grappes de boutons (inchangé).
+        .scrollMotionActive(hidesHeaderActions)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showOptions)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showSearch)
+    }
+}
