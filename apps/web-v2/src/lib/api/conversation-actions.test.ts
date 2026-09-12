@@ -3,7 +3,7 @@ import { createStore } from 'zustand/vanilla';
 import { describe, expect, test } from 'bun:test';
 
 import { performRowAction } from './conversation-actions';
-import { CONVERSATIONS_QUERY_KEY } from './conversations';
+import { CONVERSATIONS_QUERY_KEY, findCachedConversation } from './conversations';
 import { createHttpTransport } from './http';
 import { effectiveFlagsOf, effectiveUnreadOf, type ConversationStoreState } from '@/lib/conversation-store';
 import type { Conversation } from './types';
@@ -62,9 +62,25 @@ function fakeFetch(response: { readonly status: number; readonly body?: unknown 
   return impl;
 }
 
+/**
+ * `seededClient` (#6195) — sème le cache dans la forme PAGINÉE
+ * (`ConversationsInfiniteData`, une seule page) : `performRowAction` lit
+ * désormais `findCachedConversation`, qui ne reconnaît plus l'ancienne forme
+ * (tableau) — voir son doc-comment (`conversations.ts`). Les assertions de ce
+ * fichier restent inchangées, seule cette fabrique de cache change de forme.
+ */
 function seededClient(conversations: readonly Conversation[]): QueryClient {
   const queryClient = new QueryClient();
-  queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, conversations);
+  queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, {
+    pages: [
+      {
+        conversations,
+        pagination: { limit: 30, offset: 0, total: conversations.length, hasMore: false },
+        cursorPagination: { limit: 30, hasMore: false, nextCursor: null },
+      },
+    ],
+    pageParams: [undefined],
+  });
   return queryClient;
 }
 
@@ -90,8 +106,8 @@ describe("performRowAction('pin') — 4xx", () => {
     await promise;
 
     expect(effectiveFlagsOf(c, store.getState().overrides).isPinned).toBe(false);
-    const cached = queryClient.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY);
-    expect(cached?.[0]?.userPreferences).toEqual([{ isPinned: false }]);
+    const cached = findCachedConversation(queryClient, 'c1');
+    expect(cached?.userPreferences).toEqual([{ isPinned: false }]);
   });
 });
 
@@ -107,9 +123,9 @@ describe("performRowAction('pin') — 2xx", () => {
 
     await performRowAction({ conversationId: 'c1', action: 'pin', deps: { source: 'gateway', transport, store, queryClient } });
 
-    const cached = queryClient.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY);
-    expect(effectiveFlagsOf(cached![0]!, store.getState().overrides).isPinned).toBe(true);
-    expect((cached?.[0]?.userPreferences as [{ isPinned: boolean }])[0]?.isPinned).toBe(true);
+    const cached = findCachedConversation(queryClient, 'c1');
+    expect(effectiveFlagsOf(cached!, store.getState().overrides).isPinned).toBe(true);
+    expect((cached?.userPreferences as [{ isPinned: boolean }])[0]?.isPinned).toBe(true);
     expect(store.getState().overrides['c1']?.flags?.isPinned).toBeUndefined();
   });
 });
@@ -190,7 +206,7 @@ describe('mute / archive / read / unread — corps EXACTS', () => {
 
     expect(calls[0]?.url).toBe('/api/v1/conversations/c1/receipts');
     expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ type: 'read' });
-    expect(queryClient.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.[0]?.unreadCount).toBe(0);
+    expect(findCachedConversation(queryClient, 'c1')?.unreadCount).toBe(0);
   });
 
   test('read (conversation déjà lue) ⇒ POST …/mark-unread SANS corps', async () => {

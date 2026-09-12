@@ -400,7 +400,19 @@ describe('LensRow après applyConversationUpdated (#6171, T6) — l’aperçu SE
       memberCount: 3,
       lastMessage: { id: 'm-2', content: 'Oui, jeudi 14h.', createdAt: new Date('2026-01-01T10:00:00Z') } as never,
     });
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [before]);
+    // Le cache de liste porte des PAGES (`InfiniteData`, #6195) — une seule
+    // page suffit ici, `applyConversationUpdated`/`patchConversation`
+    // absorbent la forme sans qu'aucune règle testée ne change.
+    client.setQueryData(CONVERSATIONS_QUERY_KEY, {
+      pages: [
+        {
+          conversations: [before],
+          pagination: { limit: 30, offset: 0, total: 1, hasMore: false },
+          cursorPagination: { limit: 30, hasMore: false, nextCursor: null },
+        },
+      ],
+      pageParams: [undefined],
+    });
 
     applyConversationUpdated(client, {
       conversationId: 'c-a',
@@ -416,8 +428,9 @@ describe('LensRow après applyConversationUpdated (#6171, T6) — l’aperçu SE
     });
 
     const after = client
-      .getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)
-      ?.find((c) => c.id === 'c-a') as Conversation;
+      .getQueryData<{ readonly pages: readonly { readonly conversations: readonly Conversation[] }[] }>(CONVERSATIONS_QUERY_KEY)
+      ?.pages.flatMap((p) => p.conversations)
+      .find((c) => c.id === 'c-a') as Conversation;
 
     const beforeProps = baseProps({ conversation: before });
     const afterProps = baseProps({ conversation: after });

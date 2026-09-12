@@ -27,6 +27,33 @@ import type { Conversation, Message } from './types';
  * (motif `createTypingStore()` dans `socket.test.ts`). */
 const freshOutbox = (): StoreApi<OutboxState> => createOutboxStore();
 
+/**
+ * `seedConversations`/`readConversations` (#6195) — le cache de liste change
+ * de FORME (tableau → `InfiniteData`) ; ces deux fabriques de témoin
+ * ISOLENT ce changement des ~25 sites de ce fichier qui semaient/lisaient
+ * directement `CONVERSATIONS_QUERY_KEY` — aucune règle testée ne change,
+ * seule la forme du cache qui la porte.
+ */
+function seedConversations(client: QueryClient, conversations: readonly Conversation[]): void {
+  client.setQueryData(CONVERSATIONS_QUERY_KEY, {
+    pages: [
+      {
+        conversations,
+        pagination: { limit: 30, offset: 0, total: conversations.length, hasMore: false },
+        cursorPagination: { limit: 30, hasMore: false, nextCursor: null },
+      },
+    ],
+    pageParams: [undefined],
+  });
+}
+
+function readConversations(client: QueryClient): readonly Conversation[] | undefined {
+  const data = client.getQueryData<{ readonly pages: readonly { readonly conversations: readonly Conversation[] }[] }>(
+    CONVERSATIONS_QUERY_KEY,
+  );
+  return data?.pages.flatMap((p) => p.conversations);
+}
+
 const conv = (partial: Partial<Conversation>): Conversation =>
   ({
     id: 'c-a',
@@ -204,14 +231,14 @@ describe('applyMessageNew (#5793) — le puits unique de message:new', () => {
 
   test('patch la conversation de LISTE — dernier message, horodatage, langue — pour réordonner la Lentille', () => {
     const client = new QueryClient();
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+    seedConversations(client, [
       conv({ id: 'c-a', lastMessageTranslations: { en: 'ancienne traduction' } }),
       conv({ id: 'c-b' }),
     ]);
 
     applyMessageNew(client, freshOutbox(), socketMessage({ content: 'nouveau dernier message', originalLanguage: 'es' }));
 
-    const list = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY);
+    const list = readConversations(client);
     const patched = list?.find((c) => c.id === 'c-a');
     expect(patched?.lastMessage?.content).toBe('nouveau dernier message');
     expect(patched?.lastMessageOriginalLanguage).toBe('es');
@@ -236,7 +263,7 @@ describe('applyMessageNew (#5793) — le puits unique de message:new', () => {
    */
   test('les traductions QUE LA CHARGE TRANSPORTE alimentent `lastMessageTranslations` (Prisme, cycle 121)', () => {
     const client = new QueryClient();
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [conv({ id: 'c-a' })]);
+    seedConversations(client, [conv({ id: 'c-a' })]);
 
     applyMessageNew(
       client,
@@ -251,8 +278,7 @@ describe('applyMessageNew (#5793) — le puits unique de message:new', () => {
       }),
     );
 
-    const patched = client
-      .getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)
+    const patched = readConversations(client)
       ?.find((c) => c.id === 'c-a');
     expect(patched?.lastMessageOriginalLanguage).toBe('es');
     // LE MÊME APPEL QUE LA RANGÉE (`components/lens-row.tsx` § `preview`) —
@@ -269,12 +295,11 @@ describe('applyMessageNew (#5793) — le puits unique de message:new', () => {
 
   test('une charge SANS traduction retire la clé, jamais un `undefined` (exactOptionalPropertyTypes)', () => {
     const client = new QueryClient();
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [conv({ id: 'c-a', lastMessageTranslations: { en: 'stale' } })]);
+    seedConversations(client, [conv({ id: 'c-a', lastMessageTranslations: { en: 'stale' } })]);
 
     applyMessageNew(client, freshOutbox(), socketMessage({ content: 'sans traduction' }));
 
-    const patched = client
-      .getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)
+    const patched = readConversations(client)
       ?.find((c) => c.id === 'c-a');
     expect(Object.prototype.hasOwnProperty.call(patched ?? {}, 'lastMessageTranslations')).toBe(false);
   });
@@ -289,13 +314,13 @@ describe('applyMessageNew (#5793) — le puits unique de message:new', () => {
 describe('applyConversationUnreadUpdated (#5793)', () => {
   test('remplace le compte de la ligne et efface l’override optimiste', () => {
     const client = new QueryClient();
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [conv({ id: 'c-a', unreadCount: 0 })]);
+    seedConversations(client, [conv({ id: 'c-a', unreadCount: 0 })]);
     conversationStore.getState().markUnread('c-a');
     expect(conversationStore.getState().overrides['c-a']?.unreadCount).toBe(1);
 
     applyConversationUnreadUpdated(client, conversationStore, { conversationId: 'c-a', unreadCount: 7 });
 
-    const list = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY);
+    const list = readConversations(client);
     expect(list?.find((c) => c.id === 'c-a')?.unreadCount).toBe(7);
     expect(conversationStore.getState().overrides['c-a']?.unreadCount).toBeUndefined();
   });
@@ -324,17 +349,17 @@ describe('isConversationUpdated (#5793, revue-correction défaut 1) — décodag
 describe('applyConversationUpdated (#5793, revue-correction défaut 1) — la QUATRIÈME famille du Prisme', () => {
   test('clé `lastMessageId` ABSENTE : rien à toucher (renommage, réglage)', () => {
     const client = new QueryClient();
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [conv({ id: 'c-a', unreadCount: 3 })]);
+    seedConversations(client, [conv({ id: 'c-a', unreadCount: 3 })]);
 
     applyConversationUpdated(client, { conversationId: 'c-a', updatedBy: { id: 'u-1' }, updatedAt: '2026-09-12T10:00:00.000Z' });
 
-    const list = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY);
+    const list = readConversations(client);
     expect(list?.find((c) => c.id === 'c-a')?.unreadCount).toBe(3);
   });
 
   test('`lastMessageId: null` — plus AUCUN message visible : la ligne perd son groupe d’aperçu', () => {
     const client = new QueryClient();
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+    seedConversations(client, [
       conv({
         id: 'c-a',
         lastMessage: localMessage({}),
@@ -350,7 +375,7 @@ describe('applyConversationUpdated (#5793, revue-correction défaut 1) — la QU
       lastMessageId: null,
     });
 
-    const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
+    const patched = readConversations(client)?.find((c) => c.id === 'c-a');
     expect(patched?.lastMessage).toBeUndefined();
     expect(Object.prototype.hasOwnProperty.call(patched ?? {}, 'lastMessageTranslations')).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(patched ?? {}, 'lastMessageOriginalLanguage')).toBe(false);
@@ -364,7 +389,7 @@ describe('applyConversationUpdated (#5793, revue-correction défaut 1) — la QU
    */
   test('la carte SERVEUR prime sur ce que `message:new` avait déduit — même `lastMessageId`', () => {
     const client = new QueryClient();
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+    seedConversations(client, [
       conv({
         id: 'c-a',
         lastMessage: localMessage({ id: 'm-1', content: 'Hola, ¿todo bien?' }),
@@ -383,14 +408,14 @@ describe('applyConversationUpdated (#5793, revue-correction défaut 1) — la QU
       lastMessageTranslations: { fr: 'Salut, tout va bien ?' },
     });
 
-    const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
+    const patched = readConversations(client)?.find((c) => c.id === 'c-a');
     expect(patched?.lastMessageTranslations).toEqual({ fr: 'Salut, tout va bien ?' });
     expect(patched?.lastMessage?.content).toBe('Hola, ¿todo bien?');
   });
 
   test('`lastMessageTranslations: null` (édition) PÉRIME la carte — jamais `translations.first` en repli', () => {
     const client = new QueryClient();
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+    seedConversations(client, [
       conv({ id: 'c-a', lastMessage: localMessage({ id: 'm-1' }), lastMessageTranslations: { en: 'stale' } }),
     ]);
 
@@ -402,7 +427,7 @@ describe('applyConversationUpdated (#5793, revue-correction défaut 1) — la QU
       lastMessageTranslations: null,
     });
 
-    const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
+    const patched = readConversations(client)?.find((c) => c.id === 'c-a');
     expect(Object.prototype.hasOwnProperty.call(patched ?? {}, 'lastMessageTranslations')).toBe(false);
   });
 
@@ -414,7 +439,7 @@ describe('applyConversationUpdated (#5793, revue-correction défaut 1) — la QU
    */
   test('`lastMessageId` NE CORRESPOND PAS au `lastMessage` connu : la ligne ADOPTE le nouveau (#6171, G3)', () => {
     const client = new QueryClient();
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+    seedConversations(client, [
       conv({ id: 'c-a', lastMessage: localMessage({ id: 'm-1', content: 'ancien contenu' }) }),
     ]);
 
@@ -426,7 +451,7 @@ describe('applyConversationUpdated (#5793, revue-correction défaut 1) — la QU
       lastMessagePreview: 'un aperçu que la charge ne peut pas étayer',
     });
 
-    const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
+    const patched = readConversations(client)?.find((c) => c.id === 'c-a');
     expect(patched?.lastMessage?.id).toBe('m-2');
     expect(patched?.lastMessage?.content).toBe('un aperçu que la charge ne peut pas étayer');
   });
@@ -438,7 +463,7 @@ describe('applyConversationUpdated (#5793, revue-correction défaut 1) — la QU
    */
   test('T5 — adoption COMPLÈTE : id, contenu, langue, auteur, `isViewOnce` qui ne survit PAS, `lastMessageAt`', () => {
     const client = new QueryClient();
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+    seedConversations(client, [
       conv({
         id: 'c-a',
         lastMessage: {
@@ -464,7 +489,7 @@ describe('applyConversationUpdated (#5793, revue-correction défaut 1) — la QU
       previewRecalculated: true,
     });
 
-    const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
+    const patched = readConversations(client)?.find((c) => c.id === 'c-a');
     expect(patched?.lastMessage?.id).toBe('m-1');
     expect(patched?.lastMessage?.content).toBe('Hola, ¿la revisión sigue el jueves?');
     expect(patched?.lastMessage?.originalLanguage).toBe('es');
@@ -505,7 +530,7 @@ describe('applyConversationUpdated (#5793, revue-correction défaut 1) — la QU
    */
   test('MÊME `lastMessageId` : pas d’adoption, seule la carte SERVEUR change', () => {
     const client = new QueryClient();
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+    seedConversations(client, [
       conv({ id: 'c-a', lastMessage: localMessage({ id: 'm-1', content: 'contenu original' }) }),
     ]);
 
@@ -517,7 +542,7 @@ describe('applyConversationUpdated (#5793, revue-correction défaut 1) — la QU
       lastMessageTranslations: { fr: 'traduit' },
     });
 
-    const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
+    const patched = readConversations(client)?.find((c) => c.id === 'c-a');
     expect(patched?.lastMessage?.id).toBe('m-1');
     expect(patched?.lastMessage?.content).toBe('contenu original');
     expect(patched?.lastMessageTranslations).toEqual({ fr: 'traduit' });
@@ -575,7 +600,7 @@ describe('applyConversationUpdated — la garde monotone du RANG (revue-correcti
 
   test('un horodatage qui RECULE sans `previewRecalculated` (diffusion désordonnée) NE change PAS le rang', () => {
     const client = new QueryClient();
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+    seedConversations(client, [
       conv({
         id: 'c-a',
         lastMessage: localMessage({ id: 'm-2', content: 'le plus récent' }),
@@ -592,7 +617,7 @@ describe('applyConversationUpdated — la garde monotone du RANG (revue-correcti
       lastMessagePreview: 'un message plus ancien',
     });
 
-    const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
+    const patched = readConversations(client)?.find((c) => c.id === 'c-a');
     expect(new Date(patched?.lastMessageAt as unknown as string).toISOString()).toBe('2026-09-12T10:05:00.000Z');
     // L'ADOPTION, elle, s'applique — miroir iOS, qui adopte dans la branche
     // « pas de bump » et ne garde QUE le rang.
@@ -601,7 +626,7 @@ describe('applyConversationUpdated — la garde monotone du RANG (revue-correcti
 
   test('adopter un AUTRE message JETTE la carte de l’ancien — jamais une traduction périmée sur un original neuf', () => {
     const client = new QueryClient();
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+    seedConversations(client, [
       conv({
         id: 'c-a',
         lastMessage: localMessage({ id: 'm-2', content: 'Oui, jeudi 14h.', originalLanguage: 'fr' }),
@@ -620,7 +645,7 @@ describe('applyConversationUpdated — la garde monotone du RANG (revue-correcti
       lastMessageId: 'm-1',
     });
 
-    const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
+    const patched = readConversations(client)?.find((c) => c.id === 'c-a');
     expect(Object.prototype.hasOwnProperty.call(patched ?? {}, 'lastMessageTranslations')).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(patched ?? {}, 'lastMessageOriginalLanguage')).toBe(false);
     expect(
@@ -635,7 +660,7 @@ describe('applyConversationUpdated — la garde monotone du RANG (revue-correcti
 
   test('`previewRecalculated: true` FAIT reculer le rang (suppression pour tous, masquage personnel)', () => {
     const client = new QueryClient();
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+    seedConversations(client, [
       conv({ id: 'c-a', lastMessage: localMessage({ id: 'm-2' }), lastMessageAt: new Date('2026-09-12T10:05:00.000Z') }),
     ]);
 
@@ -649,13 +674,13 @@ describe('applyConversationUpdated — la garde monotone du RANG (revue-correcti
       previewRecalculated: true,
     });
 
-    const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
+    const patched = readConversations(client)?.find((c) => c.id === 'c-a');
     expect(patched?.lastMessageAt as unknown as string).toBe('2026-09-12T10:00:00.000Z');
   });
 
   test('un horodatage qui AVANCE change le rang, et une ligne SANS rang connu l’accepte', () => {
     const client = new QueryClient();
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+    seedConversations(client, [
       conv({ id: 'c-a', lastMessage: localMessage({ id: 'm-1' }), lastMessageAt: new Date('2026-09-12T10:00:00.000Z') }),
       conv({ id: 'c-b', lastMessage: localMessage({ id: 'm-9' }) }),
     ]);
@@ -675,7 +700,7 @@ describe('applyConversationUpdated — la garde monotone du RANG (revue-correcti
       lastMessageAt: at('2026-09-12T09:00:00.000Z'),
     });
 
-    const rows = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY);
+    const rows = readConversations(client);
     expect(rows?.find((c) => c.id === 'c-a')?.lastMessageAt as unknown as string).toBe('2026-09-12T10:06:00.000Z');
     expect(rows?.find((c) => c.id === 'c-b')?.lastMessageAt as unknown as string).toBe('2026-09-12T09:00:00.000Z');
   });
@@ -759,14 +784,14 @@ describe('applyMessageTranslation (#5793, revue-correction défaut 2) — le pip
     const client = new QueryClient();
     const original = localMessage({ id: 'm-1', translations: [] });
     client.setQueryData<MessagesPage>(messagesQueryKey('c-a'), { messages: [original], hasOlder: false });
-    client.setQueryData(CONVERSATIONS_QUERY_KEY, [conv({ id: 'c-a', lastMessage: localMessage({ id: 'm-1' }) })]);
+    seedConversations(client, [conv({ id: 'c-a', lastMessage: localMessage({ id: 'm-1' }) })]);
 
     applyMessageTranslation(client, {
       messageId: 'm-1',
       translations: [translationEntry({ targetLanguage: 'fr', translatedContent: 'Salut' })],
     });
 
-    const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
+    const patched = readConversations(client)?.find((c) => c.id === 'c-a');
     expect(patched?.lastMessageTranslations).toEqual({ fr: 'Salut' });
   });
 

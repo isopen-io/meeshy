@@ -865,6 +865,101 @@ constate(
   'mouvement réduit : une case ne mesure plus 84',
 );
 
+// ---------------------------------------------------- §9 pagination (#6195)
+/**
+ * §9 — LE DÉFILEMENT INFINI NE BOUGE AUCUNE RANGÉE DE LA PAGE 1 (#6195).
+ * Même critère binaire que le reste du fichier, étendu à la PAGE 2 : les 30
+ * premières rangées, une fois la page 2 arrivée (45 au total), gardent
+ * EXACTEMENT le même `offsetTop`/`offsetHeight` qu'avant le chargement — le
+ * pied de pagination est un `<li>` APRÈS les sections, jamais une insertion
+ * qui repousserait ce qui précède. Passé en CLAIR ET EN SOMBRE (motif
+ * `capture.mjs`), contrairement au reste de ce fichier (un seul schéma).
+ */
+const pagination = [];
+for (const colorScheme of ['light', 'dark']) {
+  const pgContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme });
+  const pgPage = await pgContext.newPage();
+  await pgPage.goto(`${BASE}/`, { waitUntil: 'load' });
+  await pgPage.waitForSelector('[data-row]');
+  await pgPage.waitForTimeout(300);
+
+  // `c-kwame` (archivée) est FETCHÉE dans la page 1 (30) mais MASQUÉE par le
+  // filtre « all » (`applyFilter`, précédence iOS `:598-601` — une conversation
+  // archivée n'apparaît que sous l'onglet « archived ») : 29 rangées RENDUES
+  // pour 30 FETCHÉES, 44 pour 45 une fois la page 2 arrivée. C'est un
+  // comportement EXISTANT, pas un effet de la pagination.
+  const RENDERED_PAGE_1 = 29;
+  const RENDERED_TOTAL = 44;
+
+  const page1 = await geometrie(pgPage);
+  constate(page1.length === RENDERED_PAGE_1, `§9 (${colorScheme}) : la page 1 ne porte pas ${RENDERED_PAGE_1} rangées rendues (${page1.length})`);
+
+  await pgPage.evaluate(() => {
+    const el = document.getElementById('contenu');
+    el?.scrollTo({ top: el.scrollHeight });
+  });
+  await pgPage
+    .waitForFunction(
+      (n) => document.querySelectorAll('[data-row]').length === n,
+      RENDERED_TOTAL,
+      { timeout: 5_000 },
+    )
+    .catch(() => undefined);
+
+  const page2 = await geometrie(pgPage);
+  constate(page2.length === RENDERED_TOTAL, `§9 (${colorScheme}) : après défilement, ${RENDERED_TOTAL} rangées attendues (${page2.length})`);
+  constate(
+    page2.every((r) => r.height === 84),
+    `§9 (${colorScheme}) : une case ne mesure plus 84 après la page 2`,
+  );
+  for (const before of page1) {
+    const after = page2.find((r) => r.id === before.id);
+    constate(
+      after !== undefined && after.haut === before.haut,
+      `§9 (${colorScheme}) : la rangée « ${before.id} » a bougé après la page 2 (${before.haut} → ${after?.haut})`,
+    );
+  }
+
+  const footerAndTail = await pgPage.evaluate(() => {
+    const footer = document.querySelector('[data-pagination-footer]');
+    const sentinel = document.querySelector('[data-load-more-sentinel]');
+    const rows = [...document.querySelectorAll('[data-row]')];
+    const lastRow = rows[rows.length - 1] ?? null;
+    const tailAfterFooter =
+      footer !== null && lastRow !== null
+        ? Boolean(lastRow.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING)
+        : null;
+    return { footerState: footer?.getAttribute('data-pagination-footer') ?? null, sentinelPresent: sentinel !== null, tailAfterFooter };
+  });
+  constate(
+    footerAndTail.footerState === 'exhausted',
+    `§9 (${colorScheme}) : le pied n'est pas « exhausted » après 45 rangées (${footerAndTail.footerState})`,
+  );
+  constate(!footerAndTail.sentinelPresent, `§9 (${colorScheme}) : la sentinelle de défilement infini est encore présente`);
+  constate(
+    footerAndTail.tailAfterFooter === true,
+    `§9 (${colorScheme}) : le pied de pagination ne SUIT pas la dernière rangée dans le document`,
+  );
+  // Ce que la §9 a mesuré, DIT — sans cette ligne, une section entière du gate
+  // ne laissait aucune trace dans sa sortie : impossible de voir qu'elle a
+  // tourné, donc impossible de distinguer « verte » de « sautée ».
+  pagination.push(`${colorScheme} : ${page1.length} → ${page2.length} rangées, pied « ${footerAndTail.footerState} », aucune rangée déplacée`);
+
+  // Aplatissement (§6 du fichier) — l'invariant tient aussi après immobilité.
+  await pgPage.waitForTimeout(5_000);
+  const page2AfterRest = await geometrie(pgPage);
+  for (const before of page1) {
+    const after = page2AfterRest.find((r) => r.id === before.id);
+    constate(
+      after !== undefined && after.haut === before.haut,
+      `§9 (${colorScheme}), après immobilité : la rangée « ${before.id} » a bougé (${before.haut} → ${after?.haut})`,
+    );
+  }
+
+  await pgPage.close();
+  await pgContext.close();
+}
+
 await browser.close();
 server.close();
 
@@ -873,7 +968,8 @@ console.log(`
   paliers de défilement ${readings.map((r) => `${r.y}`).join(', ')} px
   opacités distinctes   ${seenOpacities.size}
   transformations       ${seenTransforms.size} distinctes
-  mouvement réduit      opacités toutes à 1, élection conservée`);
+  mouvement réduit      opacités toutes à 1, élection conservée
+  §9 pagination         ${pagination.join('\n                        ')}`);
 
 if (failures.length > 0) {
   console.error(`\n  ${failures.length} invariant(s) rompu(s) :`);

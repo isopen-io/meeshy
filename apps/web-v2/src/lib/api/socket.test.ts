@@ -225,20 +225,30 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
    */
   test('`conversation:updated` fusionne la carte SERVEUR dans la ligne de LISTE', () => {
     const { deps, socket, queryClient } = buildDeps();
-    queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, [
-      {
-        id: 'c-a',
-        type: 'direct',
-        status: 'active',
-        visibility: 'private',
-        isActive: true,
-        memberCount: 2,
-        participants: [],
-        createdAt: new Date(),
-        lastMessage: { id: 'm-1', content: 'Hola', conversationId: 'c-a' } as unknown as Message,
-        lastMessageOriginalLanguage: 'es',
-      },
-    ]);
+    // Le cache de liste porte des PAGES (`InfiniteData`, #6195).
+    queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, {
+      pages: [
+        {
+          conversations: [
+            {
+              id: 'c-a',
+              type: 'direct',
+              status: 'active',
+              visibility: 'private',
+              isActive: true,
+              memberCount: 2,
+              participants: [],
+              createdAt: new Date(),
+              lastMessage: { id: 'm-1', content: 'Hola', conversationId: 'c-a' } as unknown as Message,
+              lastMessageOriginalLanguage: 'es',
+            },
+          ],
+          pagination: { limit: 30, offset: 0, total: 1, hasMore: false },
+          cursorPagination: { limit: 30, hasMore: false, nextCursor: null },
+        },
+      ],
+      pageParams: [undefined],
+    });
 
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
     socket.fire(SERVER_EVENTS.CONVERSATION_UPDATED, {
@@ -249,9 +259,10 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       lastMessageTranslations: { fr: 'Salut' },
     });
 
-    const list = queryClient.getQueryData<{ readonly id: string; readonly lastMessageTranslations?: unknown }[]>(
-      CONVERSATIONS_QUERY_KEY,
-    );
+    const data = queryClient.getQueryData<{
+      readonly pages: readonly { readonly conversations: readonly { readonly id: string; readonly lastMessageTranslations?: unknown }[] }[];
+    }>(CONVERSATIONS_QUERY_KEY);
+    const list = data?.pages.flatMap((p) => p.conversations);
     expect(list?.find((c) => c.id === 'c-a')?.lastMessageTranslations).toEqual({ fr: 'Salut' });
   });
 

@@ -6,10 +6,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { conversationQueryKey } from './conversations';
+import { CONVERSATIONS_QUERY_KEY, conversationQueryKey } from './conversations';
 import { messagesQueryKey } from './messages';
 import { applyMessageTranslation } from './realtime-apply';
-import { useThreadData } from './query';
+import { refreshListAction, useThreadData } from './query';
+import { appQueryClient } from './query-client';
+import { STATUS_MOODS_QUERY_KEY, STORY_TRAY_QUERY_KEY } from './stories';
 import type { Conversation } from './types';
 
 /**
@@ -249,5 +251,67 @@ describe('useThreadData — une traduction reçue re-rend le fil SANS refetch (#
     expect(fetchStarts).toBe(1); // INCHANGÉ : la traduction n'a déclenché AUCUN refetch.
 
     unsubscribe();
+  });
+});
+
+/**
+ * `refreshListAction` (#6195) — le tirer-pour-rafraîchir : conversations
+ * (page 1) ET stories/humeurs partent EN PARALLÈLE, sur les instances
+ * PARTAGÉES (`appQueryClient`, `apiDeps` — même motif que `rowAction`).
+ */
+describe('refreshListAction — #6195', () => {
+  test('la requête de conversations et l’invalidation des stories partent EN PARALLÈLE — l’invalidation précède la résolution', async () => {
+    // Sème un cache CONNU pour observer qu'il ne passe jamais par `undefined`.
+    await appQueryClient.fetchInfiniteQuery({
+      queryKey: CONVERSATIONS_QUERY_KEY,
+      queryFn: () => ({
+        conversations: [],
+        pagination: { limit: 30, offset: 0, total: 0, hasMore: false },
+        cursorPagination: { limit: 30, hasMore: false, nextCursor: null },
+      }),
+      initialPageParam: undefined,
+      getNextPageParam: () => undefined,
+    });
+
+    const invalidateSpy = appQueryClient.invalidateQueries.bind(appQueryClient);
+    const invalidatedKeys: unknown[] = [];
+    /**
+     * L'ORDRE, PAS SEULEMENT LES APPELS (revue-correction #6195). Compter les
+     * invalidations laisse une implémentation SÉQUENTIELLE
+     * (`await refreshConversations(…)` PUIS `invalidateQueries(…)`) passer
+     * verte : les deux appels ont bien lieu, seulement l'un après l'autre. Ce
+     * qui les distingue est le RANG de l'invalidation par rapport à la
+     * RÉSOLUTION des conversations — en parallèle elle la précède, en
+     * séquentiel elle la suit.
+     */
+    const trace: string[] = [];
+    appQueryClient.invalidateQueries = (((filters: { readonly queryKey?: readonly unknown[] }) => {
+      invalidatedKeys.push(filters.queryKey);
+      trace.push('stories-invalidated');
+      return invalidateSpy(filters as never);
+    }) as unknown) as typeof appQueryClient.invalidateQueries;
+
+    let observedUndefined = false;
+    const unsubscribe = appQueryClient.getQueryCache().subscribe((event) => {
+      if (JSON.stringify(event.query.queryKey) === JSON.stringify(CONVERSATIONS_QUERY_KEY)) {
+        if (event.query.state.data === undefined) observedUndefined = true;
+        if (event.query.state.fetchStatus === 'idle' && event.query.state.status === 'success' && !trace.includes('conversations-settled')) {
+          trace.push('conversations-settled');
+        }
+      }
+    });
+
+    await refreshListAction();
+
+    unsubscribe();
+    appQueryClient.invalidateQueries = invalidateSpy;
+
+    expect(invalidatedKeys).toEqual([['stories']]);
+    expect(trace).toEqual(['stories-invalidated', 'conversations-settled']);
+    expect(observedUndefined).toBe(false);
+    // `STORY_TRAY_QUERY_KEY`/`STATUS_MOODS_QUERY_KEY` sont des PROJECTIONS du
+    // même préfixe : une seule invalidation les couvre toutes les deux.
+    expect(STORY_TRAY_QUERY_KEY.slice(0, 1)).toEqual(['stories']);
+    expect(STATUS_MOODS_QUERY_KEY.slice(0, 1)).toEqual(['stories']);
   });
 });

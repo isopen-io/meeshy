@@ -4,13 +4,17 @@ import { useStore } from 'zustand/react';
 import { ListHeader } from '@/components/list-header';
 import { StoryRail } from '@/components/story-rail';
 import { Glyph } from '@/components/glyph';
-import { LensRow } from '@/components/lens-row';
+import { LensRow, ROW_HEIGHT } from '@/components/lens-row';
+import { LensPaginationFooter } from '@/components/lens-pagination-footer';
 import { LensSection } from '@/components/lens-sticker';
 import { LensSkeletonRows } from '@/components/lens-skeleton';
+import { PullIndicator } from '@/components/pull-indicator';
 import { useScene } from '@/lib/lens/scene';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
+import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { apiDeps } from '@/lib/api/deps';
-import { rowAction, useConversations, useStatusMoods, useStoryTray } from '@/lib/api/query';
+import { PAGE_SIZE } from '@/lib/api/conversations';
+import { refreshListAction, rowAction, useConversations, useStatusMoods, useStoryTray } from '@/lib/api/query';
 import type { StatusMoodPost } from '@/lib/api/stories';
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
@@ -23,7 +27,10 @@ import { groupStoriesByAuthor, railTientLaPlace, withMoods } from '@/lib/view/st
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { resolveLensSections } from '@/lib/lens/sections';
 import { useOnline } from '@/lib/net/online';
+import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useOutOfView } from '@/lib/view/use-out-of-view';
+import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
+import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useMinute } from '@/lib/view/use-minute';
 
@@ -232,6 +239,18 @@ export default function ConversationsScreen() {
    * conversations » au-dessus d'un `role="alert"` masquerait l'alerte pour
    * un lecteur d'écran, qui n'annonce pas le contenu d'une région occupée. */
   const loading = list.data === undefined && !list.isError;
+  /**
+   * LA PAGINATION (#6195) — `paginationStateOf` DÉRIVE les quatre cas des
+   * drapeaux de `useInfiniteQuery`, jamais tenus à part. La SENTINELLE qui
+   * s'en sert est déclarée plus bas, après `visible` (voir son doc-comment).
+   */
+  const paginationState = paginationStateOf(list);
+  /**
+   * TIRER-POUR-RAFRAÎCHIR (#6195) — le MÊME scrollport que la sentinelle et
+   * `useScene` : `refreshListAction` (conversations page 1 + stories/humeurs
+   * en parallèle, `lib/api/query.ts`).
+   */
+  const pull = usePullToRefresh({ root: frame, onRefresh: refreshListAction, threshold: PULL_THRESHOLD });
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const { languages: readerLanguages } = useReaderLanguages();
@@ -328,12 +347,35 @@ export default function ConversationsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, filter, search, viewer.id, overrides, timeZone, minute]);
 
+  /**
+   * LA SENTINELLE DE DÉFILEMENT INFINI (#6195) — déclarée APRÈS `visible`
+   * parce qu'elle en DÉPEND : iOS déclenche `loadMore()` depuis l'`onAppear`
+   * d'une RANGÉE (`triggerLoadMoreIfNeeded`,
+   * `ConversationListView.swift:1045-1060`), donc une liste qui n'affiche
+   * AUCUNE rangée ne charge rien. Sans `visible.length > 0`
+   * (revue-correction #6195), un filtre qui ne rend aucune rangée posait la
+   * sentinelle en HAUT du champ, immédiatement intersectée : chaque page
+   * arrivée la remontait, et l'écran vidait le corpus ENTIER du compte en
+   * autant de requêtes séquentielles — un orage de requêtes qu'iOS ne produit
+   * jamais, pour un écran qui restera vide de toute façon.
+   *
+   * ARMÉE au seul état `idle` (`hasNextPage` sans page en vol ni erreur) : une
+   * page en cours ou en erreur ne doit pas en redéclencher une seconde.
+   */
+  const { observe: observeTail } = useLoadMoreSentinel({
+    root: frame,
+    rootMargin: loadMoreRootMargin(ROW_HEIGHT),
+    enabled: paginationState === 'idle' && visible.length > 0,
+    onReach: () => void list.fetchNextPage(),
+  });
+
   return (
     /* `pt-safe` : l'encoche HAUTE est portee par le CADRE de l'ecran, dans ses
        100dvh (box-sizing: border-box) — jamais par `<body>`, qui l'AJOUTAIT
        et poussait la barre de recherche hors du cadre (#5604, app.css). */
-    <div className="flex h-dvh flex-col overflow-hidden pt-safe">
+    <div className="relative flex h-dvh flex-col overflow-hidden pt-safe">
       <ListHeader pinned={pinned} railProps={railProps} conversations={conversations} viewerId={viewer.id ?? ''} />
+      <PullIndicator phase={pull.phase} offsetPx={pull.offsetPx} reducedMotion={pull.reducedMotion} />
 
       {/*
         AUCUN `gap` : l'espacement des cartes est ce qui les faisait lire comme
@@ -366,8 +408,16 @@ export default function ConversationsScreen() {
            grise doublait le bord droit de la liste : un trait que personne
            n'avait dessiné et que rien n'explique à l'utilisateur. iOS n'en
            montre aucun — c'est le repère de section COLLANT qui dit où l'on est,
-           pas un rail. */
-        className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-2"
+           pas un rail. `overscroll-contain` (#6195) empêche le REBOND natif de
+           voler le geste de tirer sur mobile (WKWebView / WebView Android). */
+        className="scrollbar-none overscroll-contain flex flex-1 flex-col overflow-y-auto px-2"
+        /* `pullTransform` (`lib/view/pull-to-refresh.ts`) : `transform`, JAMAIS
+           `padding`/`margin` (#6195) — `offsetTop` de chaque rangée reste
+           INVARIANT pendant le tirer (l'invariant que `check-lens.mjs` § 9
+           mesure) et `useScene`/`useOutOfView` ne voient aucun changement de
+           géométrie. La loi porte les DEUX régimes — doigt posé sans
+           transition, retour animé — voir son doc-comment. */
+        style={pullTransform(pull.phase, pull.offsetPx)}
         {...(loading ? { 'aria-busy': true, 'aria-label': 'Chargement des conversations' } : {})}
       >
         {/*
@@ -490,6 +540,33 @@ export default function ConversationsScreen() {
             ))}
           </LensSection>
         ))}
+        {/*
+          LE PIED DE PAGINATION (#6195) — APRÈS les sections, AVANT les états
+          vides (miroir iOS `ConversationListView.swift:1851` →
+          `ConversationPaginationFooter()` puis `:1859` `listTail`). Rendu
+          uniquement sur la branche « contenu réel » — jamais sous
+          `ListError`/le squelette, et jamais sur une liste FILTRÉE vide
+          (revue-correction #6195, défaut 5) : `visible.length > 0` est la
+          MÊME condition que celle qui garde déjà la sentinelle juste
+          au-dessus (`enabled: paginationState === 'idle' && visible.length >
+          0`), pour que les deux ne puissent plus diverger. Miroir du
+          doc-comment iOS sur `ConversationPaginationFooter()`
+          (`ConversationListView.swift:1829-1851`) : « Rendered ONLY inside
+          this `else` (non-empty list): an empty list already surfaces its OWN
+          error/empty state […] Pagination is only meaningful when there is
+          content to page through. » Sans cette garde, une recherche
+          infructueuse affichait « Toutes les conversations sont chargées »
+          au-dessus d'« Aucune conversation ne correspond à… » — le pendant
+          du double « Réessayer » qu'iOS documente explicitement éviter.
+        */}
+        {visible.length > 0 ? (
+          <LensPaginationFooter
+            state={paginationState}
+            showsAllLoadedHint={showsAllLoadedHint(conversations.length, PAGE_SIZE)}
+            onRetry={() => void list.fetchNextPage()}
+            sentinelRef={observeTail}
+          />
+        ) : null}
         {/*
           DEUX états VIDES DISTINCTS (#5559 T15) : `empty-corpus` (aucune
           conversation du tout — l'écran de DÉMARRAGE) contre `empty-filter`

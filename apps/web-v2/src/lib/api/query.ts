@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { conversationStore } from '@/lib/conversation-store';
 import { performSend, retrySend, type Draft } from '@/lib/send/perform-send';
@@ -7,16 +7,23 @@ import type { RowActionId } from '@/lib/view/row-actions';
 
 import { ApiError } from './client';
 import { performRowAction } from './conversation-actions';
-import { conversationQuery, conversationsQuery } from './conversations';
+import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import { apiDeps } from './deps';
 import type { Conversation, Participant } from './types';
 import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
 import { performReaction, type PerformReactionResult } from './reactions';
-import { statusMoodsQueryOptions, storyTrayQueryOptions } from './stories';
+import { STORIES_QUERY_PREFIX, statusMoodsQueryOptions, storyTrayQueryOptions } from './stories';
 
+/**
+ * `useConversations` (#6195) — `useInfiniteQuery` : la Lentille défile
+ * au-delà de la première page serveur (§0 de la spécification). `.data` est
+ * APLATI par `select` (`flattenConversationPages`) ; `.hasNextPage` /
+ * `.isFetchingNextPage` / `.isFetchNextPageError` alimentent
+ * `paginationStateOf` (`lib/lens/pagination.ts`) côté écran.
+ */
 export function useConversations() {
-  return useQuery(conversationsQuery(apiDeps));
+  return useInfiniteQuery(conversationsQuery(apiDeps));
 }
 
 /**
@@ -30,7 +37,25 @@ export function useConversations() {
  * une conversation marquée lue ailleurs gardait son compte pour toujours.
  */
 export function useConversationsSnapshot(): readonly Conversation[] | undefined {
-  return useQuery({ ...conversationsQuery(apiDeps), enabled: false }).data;
+  return useInfiniteQuery({ ...conversationsQuery(apiDeps), enabled: false }).data;
+}
+
+/**
+ * `refreshListAction` (#6195) — RÉFÉRENCE DE MODULE STABLE (motif
+ * `rowAction` ci-dessous) : le tirer-pour-rafraîchir de la Lentille. Les
+ * conversations (page 1 seule, `refreshConversations`) ET les stories/humeurs
+ * (`STORIES_QUERY_PREFIX`, une invalidation qui couvre les DEUX clés) partent
+ * EN PARALLÈLE — miroir des quatre travaux `async let` d'iOS (`:1638-1642`),
+ * réduits à ce que la v3.1 sert réellement (Q9/Q10, § 1.8 de la
+ * spécification). Un échec des conversations PROPAGE (c'est
+ * `usePullToRefresh` qui le traduit en `completing failed`) ; l'invalidation
+ * des stories ne rejette jamais (`invalidateQueries` ne lève pas).
+ */
+export function refreshListAction(): Promise<void> {
+  return Promise.all([
+    refreshConversations(appQueryClient, apiDeps),
+    appQueryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX }),
+  ]).then(() => undefined);
 }
 
 /**
