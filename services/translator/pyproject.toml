@@ -101,7 +101,7 @@ dependencies = [
     # anyio 4.15.0 rend `anyio.abc` inatteignable depuis `import anyio` seul, et
     # httpcore 0.17.3 l'annote à la création de classe : plafond obligatoire tant
     # que la paire httpx/httpcore ci-dessus tient. Détail : requirements.txt.
-    "anyio>=4.0.0,<4.15.0",
+    "anyio>=4.0.0,<4.16.0",
 
     # HuggingFace transfer acceleration
     "hf_transfer>=0.1.0",
