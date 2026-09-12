@@ -57,6 +57,7 @@ function makeTopic(overrides: Partial<TopicCatalogItem> = {}): TopicCatalogItem 
     searchHintTemplate: 'greeting hint',
     examples: [],
     cooldownMinutes: 60,
+    priority: 0,
     isActive: true,
     createdAt: '2024-01-01T00:00:00Z',
     updatedAt: '2024-01-01T00:00:00Z',
@@ -90,6 +91,13 @@ describe('AgentTopicsTab — topics render', () => {
     mockListTopics.mockResolvedValue({ success: true, data: [makeTopic({ cooldownMinutes: 120 })] });
     render(<AgentTopicsTab />);
     await waitFor(() => expect(screen.getByText('120 min')).toBeInTheDocument());
+  });
+
+  it('shows the admin priority of each topic (#6192)', async () => {
+    mockListTopics.mockResolvedValue({ success: true, data: [makeTopic({ priority: 7 })] });
+    render(<AgentTopicsTab />);
+    expect(await screen.findByText('agent.topics.colPriority')).toBeInTheDocument();
+    expect(screen.getByText('7')).toBeInTheDocument();
   });
 
   it('shows keyword pattern count', async () => {

@@ -55,8 +55,15 @@ Le service utilise `LangGraph` pour gérer le flux de décision:
 3.  **Impersonate/Animate**: Génère la réponse brute.
 4.  **QualityGate**: Valide la réponse avant envoi.
 
+## 🗞 Archétypes de kongossa, sujets de faits divers et image du sujet lancé (#6192, 2026-09-12)
+
+- **Archétypes** : `packages/shared/agent/archetypes.ts` en porte treize — les sept historiques et six taillés pour les faits divers et les ragots (`gossip` la commère, `chronicler` le chroniqueur, `joker` le blagueur, `diaspora`, `elder` le sage, `hustler` le débrouillard). Ces six ont des `topicsOfExpertise` REMPLIS (faits divers, kongossa, people, Cameroun, Côte d'Ivoire, Gabon, Congo, France, USA, Canada) : c'est par eux que le stratège élit qui lance un tel sujet. Leurs tons (`complice`, `journalistique`, `moqueur`, `nostalgique`, `posé`) ont chacun leur guide dans `generator.ts` (`TONE_GUIDES`) — un ton sans guide tombe sur « naturel et équilibré », donc **ajouter un ton, c'est ajouter son guide**.
+- **Sujets** : `topics/seeds/initial-topics.ts` seed un sujet de faits divers par pays cible, le people d'Afrique et le buzz des réseaux, chacun avec ses motifs (villes, gentilés, indicatifs, quartiers), sa consigne (nommer le site lu) et sa requête de recherche RÉGIONALE. `TopicSeedService` insère les slugs ABSENTS à chaque boot et ne réécrit jamais un sujet existant : un sujet ajouté au seed atteint la prod, une édition admin y survit.
+- **Sélection** : `rankProvocationTopics` (strategist) = occurrences regex + `AgentTopicCatalog.priority` (0-10, admin), ex æquo MÉLANGÉS avant le tri. Les faits divers sont seedés à 2, le tech à 0 : dans une conversation sans signal, ce sont eux qui partent ; une conversation qui parle clairement de Kubernetes garde le tech.
+- **Image** : le fournisseur OpenAI remonte les `url_citation` de la recherche web (`LlmChatResponse.citations`) ; `generator.pickIllustration` attache la PREMIÈRE page http(s) citée au message qui OUVRE un sujet (jamais une réponse, jamais sans recherche) — `PendingMessage.illustration.sourceUrl`, transporté tel quel par `AgentResponse`. La passerelle (`services/gateway/src/services/zmq-agent/agent-illustration.ts`) résout l'image Open Graph de l'article sous garde SSRF et la joint au message ; tout refus rend un message texte. **Seule l'URL voyage** : ne jamais faire télécharger ni encoder un fichier par ce service.
+
 ---
-*Dernière mise à jour: Mars 2026*
+*Dernière mise à jour: Septembre 2026*
 
 ## Pilotage & maturité (règle transverse — détail dans le `CLAUDE.md` racine)
 - **Le pilotage se fait EXCLUSIVEMENT sur GitHub** (projet « Meeshy — pilotage », milestones, issues) : toute tâche de ce répertoire est une issue au titre sémantique, passée `In Progress` au démarrage et fermée par le commit qui la livre (`Closes #n`). Pas de `todo.md`, pas de page « progress » ; les artifacts servent aux brouillons, au design et aux comptes rendus — jamais à l'état.

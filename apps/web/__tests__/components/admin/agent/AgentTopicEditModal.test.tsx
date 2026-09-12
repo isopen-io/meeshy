@@ -44,12 +44,22 @@ function makeTopic(overrides = {}) {
     examples: [],
     cooldownMinutes: 60,
     isActive: true,
+    priority: 0,
     ...overrides,
   };
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
+});
+
+describe('AgentTopicEditModal — priority in edit mode (#6192)', () => {
+  it('pre-fills the priority of an existing topic', () => {
+    render(
+      <AgentTopicEditModal topic={makeTopic({ priority: 2 })} onClose={jest.fn()} onSaved={jest.fn()} />,
+    );
+    expect((screen.getByLabelText('agent.topicEditModal.fieldPriority') as HTMLInputElement).value).toBe('2');
+  });
 });
 
 describe('AgentTopicEditModal — create mode (topic=null)', () => {
@@ -168,6 +178,30 @@ describe('AgentTopicEditModal — create mode (topic=null)', () => {
     });
     expect(mockCreateTopic).toHaveBeenCalledTimes(1);
     expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends the admin priority (0-10) with the created topic, 0 by default (#6192)', async () => {
+    mockCreateTopic.mockResolvedValue({ success: true, data: makeTopic() });
+    render(
+      <AgentTopicEditModal topic={null} onClose={jest.fn()} onSaved={jest.fn()} />,
+    );
+    const priorityInput = screen.getByLabelText('agent.topicEditModal.fieldPriority') as HTMLInputElement;
+    expect(priorityInput.value).toBe('0');
+    expect(priorityInput.max).toBe('10');
+
+    fireEvent.change(screen.getByPlaceholderText('agent.topicEditModal.placeholderSlug'), {
+      target: { value: 'faits-divers-cameroun' },
+    });
+    const textareas = screen.getAllByRole('textbox');
+    fireEvent.change(textareas[3], { target: { value: '\\bdouala\\b' } });
+    fireEvent.change(screen.getByPlaceholderText('agent.topicEditModal.placeholderInstruction'), {
+      target: { value: 'Lance un fait divers récent du Cameroun lu sur un site local.' },
+    });
+    fireEvent.change(priorityInput, { target: { value: '3' } });
+    await act(async () => {
+      fireEvent.click(screen.getByText('agent.topicEditModal.save'));
+    });
+    expect(mockCreateTopic).toHaveBeenCalledWith(expect.objectContaining({ priority: 3 }));
   });
 
   it('shows error when createTopic returns success=false', async () => {
