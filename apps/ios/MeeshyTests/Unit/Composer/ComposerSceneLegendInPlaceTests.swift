@@ -86,15 +86,28 @@ final class ComposerSceneLegendInPlaceTests: XCTestCase {
                       "Le CORPS du post garde sa zone du bas — c'est le contraste que la directive décrit.")
     }
 
-    /// **La réserve du canvas ne peut plus valoir zéro en silence.** La légende
-    /// s'écrivant en place, ce qui menace de la couvrir est le CLAVIER, pas une
-    /// zone dont on mesure la hauteur. Reprendre `sceneDescriptionEditorHeight`
-    /// pour elle aurait servi `0` sans que rien ne rougisse : la mesure existe
-    /// toujours, la zone qui l'écrivait n'existe plus.
-    func test_laReserveDeLaLegendeEstCelleDuClavier() throws {
+    /// **La légende ne réserve RIEN en bas, et c'est une mesure.**
+    ///
+    /// Le lot avait d'abord câblé `keyboardTransition?.height` ici : la légende
+    /// s'écrivant en place, ce qui menace de la couvrir est le clavier. Le
+    /// raisonnement se tenait et il était faux deux fois — voir le doc-comment
+    /// de `canvasBottomReservation`, qui porte les deux captures :
+    ///
+    /// 1. le clavier comprime déjà la colonne du meuble, donc la couche ancrée
+    ///    en bas remonte toute seule — la légende reste visible, coche comprise ;
+    /// 2. forcée à 260 pt, la réserve ne déplaçait **rien** sur ce chemin.
+    ///
+    /// > Ce témoin garde donc une ABSENCE, et pour une raison précise : une
+    /// > réserve inerte se relit comme une protection. La prochaine session qui
+    /// > verra la légende menacée par le clavier doit d'abord MESURER, pas
+    /// > re-câbler la branche que celle-ci a retirée.
+    func test_laLegendeNeReserveRienEnBas() throws {
         let code = compact(try hostCode())
-        XCTAssertTrue(code.contains("ifeditsSceneDescription{returnkeyboardTransition?.height??0}"),
-                      "La légende doit réserver la hauteur du CLAVIER (#6126).")
+        XCTAssertFalse(code.contains("ifeditsSceneDescription{return"),
+                       "Aucune réserve basse pour la légende : elle remonte avec le clavier (#6126).")
+        XCTAssertTrue(code.contains("ifeditsPostContent{returnsceneDescriptionEditorHeight}"),
+                      "Le CORPS du post garde la sienne, inchangée — sans quoi la garde ci-dessus "
+                        + "serait verte parce que la propriété entière a disparu.")
     }
 
     // MARK: - #6126 · Les portes qui mènent à la légende agissent encore

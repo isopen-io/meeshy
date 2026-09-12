@@ -169,7 +169,6 @@ extension MeeshyComposerHost {
         // `textEditingZones` garantit qu'elles sont exclusives : la hauteur
         // servie est toujours celle de la zone montée.
         .storyComposerCanvasBottomReservation(canvasBottomReservation)
-        .observingKeyboardTransition($keyboardTransition)
     }
 
     /// **Ce que le bas de l'écran occupe, et que le canvas doit libérer.**
@@ -180,19 +179,36 @@ extension MeeshyComposerHost {
     /// - **le CORPS du post** s'écrit dans une zone montée en bas ; ce qu'elle
     ///   occupe est sa hauteur MESURÉE (`sceneDescriptionEditorHeight`), posée
     ///   par son propre `onHeightChange` ;
-    /// - **la LÉGENDE** s'écrit EN PLACE, sur la scène. Aucune zone ne monte,
-    ///   donc aucune hauteur à mesurer — ce qui menace de la couvrir est le
-    ///   CLAVIER, et c'est sa hauteur qu'il faut rendre.
+    /// - **la LÉGENDE n'en prend AUCUNE**, et c'est une mesure, pas un choix.
     ///
-    /// > Reprendre `sceneDescriptionEditorHeight` pour la légende aurait servi
-    /// > `0` en silence : la mesure existe toujours, la zone qui l'écrivait
-    /// > n'existe plus. Une réserve qui vaut zéro ne rougit nulle part — elle
-    /// > laisse simplement le clavier passer par-dessus ce qu'on écrit.
+    /// ## Ce qui a été mesuré, et pourquoi la branche a disparu (#6126)
     ///
-    /// L'exclusion reste garantie par `textEditingZones` et par `handleRailDoor`
-    /// (ouvrir l'une ferme l'autre), donc l'ordre des branches ne décide rien.
+    /// Le lot avait d'abord câblé ici `keyboardTransition?.height` — la légende
+    /// s'écrivant en place, ce qui menace de la couvrir est le CLAVIER et non
+    /// une zone dont on mesure la hauteur. Le raisonnement se tenait ; **il
+    /// était faux deux fois**, et seul le simulateur pouvait le dire :
+    ///
+    /// 1. **la légende n'a pas besoin d'être soulevée.** `StoryComposerView`
+    ///    déclare `.ignoresSafeArea(.keyboard)`, ce qui empêche le CANVAS d'être
+    ///    poussé — mais la colonne du meuble, elle, est bien comprimée par la
+    ///    zone sûre du clavier, et la couche de contrôles ancrée en bas remonte
+    ///    avec elle. Capture 2026-09-12 11:12 : clavier levé, champ au tiers
+    ///    haut de l'écran, coche et capsule de langue visibles.
+    /// 2. **la réserve n'avait de toute façon aucun effet sur ce chemin.**
+    ///    Forcée à une constante de 260 pt, l'écran est resté STRICTEMENT
+    ///    identique (captures 11:12 et 11:13, binaire réinstallé et horodaté
+    ///    entre les deux). `composerSurface` — qui porte
+    ///    `.storyComposerCanvasBottomReservation(…)` — n'est pas le montage de
+    ///    l'atelier Story.
+    ///
+    /// > Une réserve qu'on ne peut pas voir agir n'est pas une précaution, c'est
+    /// > un contrôle inerte (loi 4) — et elle aurait fait croire, à la relecture,
+    /// > que la légende est protégée par elle.
+    ///
+    /// Le CORPS du post garde la sienne, telle qu'elle était avant le lot. Si
+    /// elle est inerte elle aussi, c'est un défaut ANTÉRIEUR et distinct : il se
+    /// mesure et se corrige à part.
     var canvasBottomReservation: CGFloat {
-        if editsSceneDescription { return keyboardTransition?.height ?? 0 }
         if editsPostContent { return sceneDescriptionEditorHeight }
         return 0
     }

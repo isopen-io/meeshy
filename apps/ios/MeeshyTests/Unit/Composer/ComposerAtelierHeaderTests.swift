@@ -159,16 +159,17 @@ final class ComposerAtelierHeaderTests: XCTestCase {
         // > ci-dessous survivent à un troisième état, et tombent sur ce qui
         // > compte : une constante à la place de la mesure, ou une réserve qui
         // > ne retombe pas à zéro.
-        // **La réserve a changé de NATURE au #6126, pas seulement de valeur.**
-        // Le ternaire `? sceneDescriptionEditorHeight : 0` servait les deux
-        // zones ; la légende n'en a plus. Ce qui menace de la couvrir est le
-        // CLAVIER, et c'est sa hauteur que le meuble déclare pour elle. La
-        // mesure `sceneDescriptionEditorHeight` demeure — pour le CORPS du
-        // post, qui a gardé sa zone.
+        // **Ce que la réserve garde a rétréci au #6126.** Le ternaire
+        // `? sceneDescriptionEditorHeight : 0` servait les deux zones ; la
+        // légende n'en a plus, et la réserve qu'on lui avait câblée (la hauteur
+        // du clavier) ne déplaçait rien au simulateur. Ce qui reste est la
+        // réserve du CORPS du post, et c'est elle que ce témoin protège : une
+        // CONSTANTE à sa place ferait remonter la scène du mauvais nombre de
+        // points dès la deuxième ligne.
         XCTAssertTrue(
-            compacte.contains("keyboardTransition?.height??0"),
-            "… et la réserve de la LÉGENDE est la hauteur du CLAVIER (#6126) : reprendre la "
-                + "hauteur mesurée d'une zone qui n'existe plus servirait `0` en silence."
+            compacte.contains("ifeditsPostContent{returnsceneDescriptionEditorHeight}"),
+            "… et la réserve du CORPS du post est la hauteur MESURÉE de sa zone, jamais une "
+                + "constante — c'est ce que la directive du 2026-09-05 demande."
         )
         XCTAssertTrue(
             compacte.contains("editsSceneDescription"),

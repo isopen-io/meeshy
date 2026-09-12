@@ -769,15 +769,6 @@ struct MeeshyComposerHost: View {
     /// (#4993) — sauf pendant la frappe, où replier emporterait le champ.
     @State var sceneDescriptionCollapsed = false
 
-    /// **La transition du clavier, pour la réserve basse du canvas** (#6126).
-    ///
-    /// La légende s'écrivant désormais SUR la scène, ce qui menace de la
-    /// couvrir n'est plus une zone dont on mesure la hauteur — c'est le clavier
-    /// lui-même. `KeyboardTransition` est le site UNIQUE de ce décodage dans le
-    /// dépôt (`ConversationView+Keyboard.swift`) ; le meuble le consomme plutôt
-    /// que d'observer `UIResponder` une seconde fois.
-    @State var keyboardTransition: KeyboardTransition?
-
     /// **Le jeton qui ouvre la légende depuis AILLEURS** (#6126).
     ///
     /// Deux portes mènent à la description sans passer par elle : le bouton de

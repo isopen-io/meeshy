@@ -55,17 +55,22 @@ final class ComposerBottomReservationGuardTests: XCTestCase {
         let corps = block(from: "var canvasBottomReservation: CGFloat {", to: "\n    }", in: text)
         XCTAssertFalse(corps.isEmpty, "`canvasBottomReservation` introuvable — la garde ne mesurerait rien.")
 
+        // **Le titre de ce témoin a changé de sens au #6126, et c'est mesuré.**
+        // La directive du 2026-09-05 demandait que la réserve vaille pour les
+        // DEUX zones — elle avait raison : les deux s'ancraient en bas. La
+        // légende n'a plus de zone, donc plus rien à réserver ; et la réserve
+        // qu'on lui avait câblée (la hauteur du clavier) s'est révélée SANS
+        // EFFET au simulateur, forcée à 260 pt. Voir le doc-comment de
+        // `canvasBottomReservation`.
         XCTAssertTrue(
-            corps.contains("editsSceneDescription") && corps.contains("editsPostContent"),
-            "La réserve doit s'appliquer aux DEUX modes d'écriture. Ne tester que la " +
-            "description laisse la zone de CONTENU passer par-dessus la scène, sans que " +
-            "rien ne le signale : la hauteur est bien mesurée, elle n'est simplement pas servie."
+            corps.contains("editsPostContent"),
+            "La zone du CORPS du post doit toujours réserver sa hauteur : sans elle, " +
+            "elle passe par-dessus la scène — le défaut que la directive 2026-09-05 corrige."
         )
-        XCTAssertTrue(
-            corps.contains("keyboardTransition"),
-            "La LÉGENDE réserve la hauteur du CLAVIER (#6126) : elle s'écrit en place, aucune " +
-            "zone ne monte pour elle. Reprendre `sceneDescriptionEditorHeight` servirait `0` " +
-            "sans que rien ne rougisse — la mesure existe toujours, la zone qui l'écrivait non."
+        XCTAssertFalse(
+            corps.contains("editsSceneDescription"),
+            "La LÉGENDE ne réserve plus rien (#6126) : elle s'écrit en place et remonte avec " +
+            "le clavier. Re-câbler une branche pour elle rajouterait une réserve MESURÉE inerte."
         )
     }
 
@@ -97,9 +102,9 @@ final class ComposerBottomReservationGuardTests: XCTestCase {
         )
         let corps = block(from: "var canvasBottomReservation: CGFloat {", to: "\n    }", in: text)
         XCTAssertEqual(
-            corps.components(separatedBy: "return").count - 1, 3,
-            "Chaque branche de la réserve doit RETOURNER (légende, corps, repos) : c'est ce qui " +
-            "rend les deux hauteurs incapables de s'additionner ou de se confondre."
+            corps.components(separatedBy: "return").count - 1, 2,
+            "La réserve a DEUX sorties depuis le #6126 — le corps du post, et le repos. " +
+            "Une troisième signalerait le retour d'une branche pour la légende."
         )
     }
 
