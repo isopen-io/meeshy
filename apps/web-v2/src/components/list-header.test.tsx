@@ -4,8 +4,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { ListHeader } from './list-header';
-import { ConversationRail } from './conversation-rail';
-import type { Conversation } from '@/lib/api/types';
+import { StoryRail } from './story-rail';
+import type { StoryTrayGroup } from '@/lib/view/story-tray';
 
 /**
  * `ListHeader` — la bande épinglée prend la place du titre (#6103).
@@ -39,23 +39,23 @@ afterEach(() => {
   container = undefined;
 });
 
-const conversation = (partial: Partial<Conversation>): Conversation =>
-  ({
-    id: 'c1',
-    title: 'Sans titre',
-    type: 'direct',
-    status: 'active',
-    visibility: 'private',
-    isActive: true,
-    memberCount: 2,
-    participants: [],
-    createdAt: new Date('2026-01-01'),
-    updatedAt: new Date('2026-01-01'),
-    unreadCount: 0,
-    ...partial,
-  }) as Conversation;
+/**
+ * LE CORPUS DU RAIL EST DÉSORMAIS CELUI DES STORIES (fusion #6080 ↔ #6103,
+ * 2026-09-12) — ces témoins mesuraient la même géographie sur un corpus de
+ * CONVERSATIONS ; seule la nature des tuiles a changé, pas ce qu'ils affirment.
+ * L'identité de la tuile focalisable est passée de `data-conversation` à
+ * `data-story-author`, pour la même raison et au même endroit.
+ */
+const group = (authorId: string, displayName: string): StoryTrayGroup => ({
+  authorId,
+  author: { id: authorId, displayName } as StoryTrayGroup['author'],
+  stories: [],
+  latestAt: 0,
+  hasUnseen: true,
+  isMine: false,
+});
 
-const CONVERSATIONS: readonly Conversation[] = [conversation({ id: 'c-1', title: 'Amina Diallo' })];
+const GROUPS: readonly StoryTrayGroup[] = [group('c-1', 'Amina Diallo')];
 
 function mount(pinned: boolean): HTMLDivElement {
   const c = document.createElement('div');
@@ -67,7 +67,7 @@ function mount(pinned: boolean): HTMLDivElement {
     r.render(
       <ListHeader
         pinned={pinned}
-        railProps={{ conversations: CONVERSATIONS, viewerId: 'u-viewer', overrides: {}, loading: false }}
+        railProps={{ groups: GROUPS, loading: false }}
       />,
     );
   });
@@ -80,7 +80,7 @@ function rerender(el: HTMLDivElement, pinned: boolean): void {
     root!.render(
       <ListHeader
         pinned={pinned}
-        railProps={{ conversations: CONVERSATIONS, viewerId: 'u-viewer', overrides: {}, loading: false }}
+        railProps={{ groups: GROUPS, loading: false }}
       />,
     );
   });
@@ -141,15 +141,9 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
         <div>
           <ListHeader
             pinned={pinned}
-            railProps={{ conversations: CONVERSATIONS, viewerId: 'u-viewer', overrides: {}, loading: false }}
+            railProps={{ groups: GROUPS, loading: false }}
           />
-          <ConversationRail
-            variant="grande"
-            conversations={CONVERSATIONS}
-            viewerId="u-viewer"
-            overrides={{}}
-            loading={false}
-          />
+          <StoryRail variant="grande" groups={GROUPS} loading={false} />
         </div>,
       );
     });
@@ -158,7 +152,7 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
 
   test('un focus dans la bande, puis un retrait de la bande, retrouve la tuile du grand rail', () => {
     const el = mountWithGrandRail(true);
-    const pinnedTile = el.querySelector('[data-rail="pinned"] a[data-conversation="c-1"]') as HTMLElement;
+    const pinnedTile = el.querySelector('[data-rail="pinned"] a[data-story-author="c-1"]') as HTMLElement;
     act(() => {
       pinnedTile.focus();
     });
@@ -169,20 +163,14 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
         <div>
           <ListHeader
             pinned={false}
-            railProps={{ conversations: CONVERSATIONS, viewerId: 'u-viewer', overrides: {}, loading: false }}
+            railProps={{ groups: GROUPS, loading: false }}
           />
-          <ConversationRail
-            variant="grande"
-            conversations={CONVERSATIONS}
-            viewerId="u-viewer"
-            overrides={{}}
-            loading={false}
-          />
+          <StoryRail variant="grande" groups={GROUPS} loading={false} />
         </div>,
       );
     });
 
-    const grandeTile = el.querySelector('[data-rail="grande"] a[data-conversation="c-1"]');
+    const grandeTile = el.querySelector('[data-rail="grande"] a[data-story-author="c-1"]');
     expect(document.activeElement).toBe(grandeTile);
   });
 
@@ -198,7 +186,7 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
    */
   test('un focus PARTI ailleurs avant le retrait n’est jamais arraché', () => {
     const el = mountWithGrandRail(true);
-    const pinnedTile = el.querySelector('[data-rail="pinned"] a[data-conversation="c-1"]') as HTMLElement;
+    const pinnedTile = el.querySelector('[data-rail="pinned"] a[data-story-author="c-1"]') as HTMLElement;
     act(() => {
       pinnedTile.focus();
     });
@@ -217,15 +205,9 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
         <div>
           <ListHeader
             pinned={false}
-            railProps={{ conversations: CONVERSATIONS, viewerId: 'u-viewer', overrides: {}, loading: false }}
+            railProps={{ groups: GROUPS, loading: false }}
           />
-          <ConversationRail
-            variant="grande"
-            conversations={CONVERSATIONS}
-            viewerId="u-viewer"
-            overrides={{}}
-            loading={false}
-          />
+          <StoryRail variant="grande" groups={GROUPS} loading={false} />
         </div>,
       );
     });
@@ -245,15 +227,9 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
         <div>
           <ListHeader
             pinned={false}
-            railProps={{ conversations: CONVERSATIONS, viewerId: 'u-viewer', overrides: {}, loading: false }}
+            railProps={{ groups: GROUPS, loading: false }}
           />
-          <ConversationRail
-            variant="grande"
-            conversations={CONVERSATIONS}
-            viewerId="u-viewer"
-            overrides={{}}
-            loading={false}
-          />
+          <StoryRail variant="grande" groups={GROUPS} loading={false} />
         </div>,
       );
     });

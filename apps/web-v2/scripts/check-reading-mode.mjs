@@ -79,6 +79,13 @@ import { fileURLToPath } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
 import { checkRowIdentityAndLabel } from './lib/check-identity.mjs';
+/* L'HORLOGE ÉPINGLÉE (#6130) — les fixtures datent le fil en `minutesAgo(…)`,
+   donc les tampons de jour (« Aujourd'hui HH:MM ») dépendent de l'heure à
+   laquelle le gate TOURNE. Sans cet épinglage, ce gate était rouge de minuit à
+   dix heures. La raison du choix de `setFixedTime` — et pas de `clock.install`,
+   qui figerait la scène et rendrait l'élection inatteignable — est écrite au
+   site unique. */
+import { pageÀInstantFigé } from './lib/instant.mjs';
 import { checkLivingSummary } from './lib/check-summary.mjs';
 import { assertRiverBelowThreshold, checkEligibleRiverRow } from './lib/check-river-menu.mjs';
 import { contrastOf } from './lib/contrast.mjs';
@@ -302,7 +309,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await setScheme(context, 'dark');
-  const page = await context.newPage();
+  const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
   await page.waitForTimeout(400);
@@ -609,7 +616,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await setScheme(context, 'dark');
-  const page = await context.newPage();
+  const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
   await page.waitForTimeout(400);
@@ -973,7 +980,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await setScheme(context, 'dark');
-  const page = await context.newPage();
+  const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
   await page.waitForTimeout(400);
@@ -1045,7 +1052,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await setScheme(context, 'light');
-  const page = await context.newPage();
+  const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
   await page.waitForTimeout(400);
@@ -1077,7 +1084,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 320, height: 780 } });
   await setScheme(context, 'dark');
-  const page = await context.newPage();
+  const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
   await page.waitForTimeout(400);
@@ -1107,7 +1114,7 @@ const noRowCarriesContinuousPerspective = (page) =>
 {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   await setScheme(context, 'dark');
-  const page = await context.newPage();
+  const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
   await page.waitForTimeout(400);
