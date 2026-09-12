@@ -107,7 +107,7 @@ export function resolveShellBuildEnv(env) {
   if (env.MEESHY_SHELL_START_PATH !== undefined) {
     throw new Error(
       `MEESHY_SHELL_START_PATH="${env.MEESHY_SHELL_START_PATH}" est posé — une coque LIVRÉE ne porte ` +
-        'jamais un chemin de RECETTE (`capacitor.config.ts:15-31` : « chemin de RECETTE : ne jamais ' +
+        'jamais un chemin de RECETTE (`capacitor.config.ts:26-112` : « chemin de RECETTE : ne jamais ' +
         'synchroniser une coque livrée avec ce paramètre posé »). Le retirer avant de construire.',
     );
   }
@@ -167,7 +167,7 @@ export function auditSyncedShellConfig(json) {
   if (server.appStartPath !== undefined) {
     violations.push(
       `server.appStartPath="${server.appStartPath}" est présent dans la coque SYNCHRONISÉE — un ` +
-        'paramètre de RECETTE (`capacitor.config.ts:15-31`), jamais dans une coque livrée (fuite ' +
+        'paramètre de RECETTE (`capacitor.config.ts:26-112`), jamais dans une coque livrée (fuite ' +
         'mesurée le 2026-09-09, M1).',
     );
   }
@@ -257,7 +257,7 @@ async function main() {
   console.log(`  base d'API : ${apiBase}`);
 
   // 1. Construction de la variante B DANS dist/ — jamais dist-capacitor/ :
-  //    capacitor.config.ts:70 (webDir: 'dist') est le contrat que `cap sync`
+  //    capacitor.config.ts:167 (webDir: 'dist') est le contrat que `cap sync`
   //    lit, et c'est exactement le piège documenté au README § coques que ce
   //    script rend impossible à rejouer par erreur.
   rmSync(join(APP, 'dist'), { recursive: true, force: true });

@@ -191,47 +191,63 @@ chemin. Recette :
 ```bash
 MEESHY_TARGET=capacitor bunx vite build && bunx cap sync
 MEESHY_SHELL_START_PATH=/c/c-deploiement MEESHY_SHELL_SYNC_TARGET=android bunx cap sync android
+MEESHY_SHELL_START_PATH=/c/c-deploiement MEESHY_SHELL_SYNC_TARGET=ios     bunx cap sync ios
 ```
 
-`resolveCapacitorConfig` refuse (lève) deux FORMES, chacune tirée d'une
+`resolveCapacitorConfig` refuse (lève) trois FORMES, chacune tirée d'une
 source lue : une valeur sans `/` initial (Android, `Bridge.java`, concatène le
-chemin SANS séparateur — elle fusionnerait avec l'hôte) et une valeur qui
+chemin SANS séparateur — elle fusionnerait avec l'hôte), une valeur qui
 porte une extension de fichier (iOS ne réécrit vers `index.html` que les
 chemins SANS extension, `CapacitorRouter.route(for:)` — elle serait servie
-littéralement, donc 404). Une TROISIÈME garde (revue #5774) exige
+littéralement, donc 404) et une valeur qui porte un segment `..` (revue
+#6027 : le hook iOS en dérive un chemin de FICHIER que `path.join` normalise
+— le placeholder atterrirait HORS de `public/` pendant que le journal
+annoncerait « placeholder posé »). Une QUATRIÈME garde (revue #5774) exige
 `MEESHY_SHELL_SYNC_TARGET` (`"android"` ou `"ios"`) dès que
 `MEESHY_SHELL_START_PATH` est posé — la plateforme visée se DÉCLARE,
 jamais déduite d'un fichier voisin (`ios/App/App.xcodeproj` existant ou non) :
 une version antérieure sondait le disque et bloquait `cap sync android` dès
 que le dossier `ios/` existait, quelle que soit la plateforme réellement
-synchronisée. `MEESHY_SHELL_SYNC_TARGET=ios` lève TOUJOURS (§ ci-dessous) ;
-`MEESHY_SHELL_SYNC_TARGET=android` est TOUJOURS accepté. Les gardes portent
-sur la forme et la cible, jamais sur une route : les surfaces à venir
-emploieront la même recette sans modifier ce fichier livré. Voir
-`capacitor.config.test.ts`, `scripts/check-capacitor-config.mjs` (le VRAI
-chargeur CJS de la CLI, `bunx cap ls`) et `scripts/shell-deeplink-probe.mjs`
-(CDP BRUT sur la cible `page` de la WebView — `connectOverCDP` de Playwright
-échoue contre une WebView, qui n'expose aucun navigateur complet).
+synchronisée. **Les DEUX cibles sont désormais ACCEPTÉES** (#6027) : les
+gardes portent sur la forme et la cible, jamais sur une route ni sur une
+dérogation de plateforme — les surfaces à venir emploieront la même recette
+sans modifier ce fichier livré. Voir `capacitor.config.test.ts`,
+`scripts/check-capacitor-config.mjs` (le VRAI chargeur CJS de la CLI,
+`bunx cap ls`, ET le rejeu de `MEESHY_SHELL_START_PATH` sur les deux cibles)
+et `scripts/shell-deeplink-probe.mjs` (CDP BRUT sur la cible `page` de la
+WebView — `connectOverCDP` de Playwright échoue contre une WebView, qui
+n'expose aucun navigateur complet).
 
-**Asymétrie mesurée entre les deux coques (#5812).** Sur Android, la recette
-ci-dessus suffit seule. **Sur iOS, `appStartPath` seul CRASHE la coque**
-(`⚡️ ERROR: Unable to load …/App.app/public//c/c-deploiement`, arrêt propre,
-`exit(1)`, aucun rapport dans `CrashReporter`) : `CAPBridgeViewController.loadWebView()`
-(`@capacitor/ios` 8.5.1) exige qu'un FICHIER LITTÉRAL existe à ce chemin
-sous `public/` avant même de charger l'URL — une garde qui précède
-`Router.swift` (son repli SPA ne s'applique qu'aux navigations qui suivent
-CE premier chargement, jamais à lui). Pour la recette iOS, poser un
-placeholder AVANT de construire dans Xcode (jamais commité — `public/` est
-exclu par `ios/.gitignore` généré et réécrit à chaque `cap sync`) :
+**Asymétrie mesurée entre les deux coques (#5812), refermée par un mécanisme
+(#6027).** Sur Android, la recette ci-dessus a toujours suffi seule. Sur iOS,
+`server.appStartPath` seul CRASHAIT la coque (`⚡️ ERROR: Unable to load
+…/App.app/public//c/c-deploiement`, arrêt propre, `exit(1)`, aucun rapport
+dans `CrashReporter`) : `CAPBridgeViewController.loadWebView()` (`@capacitor/ios`
+8.5.1) exige qu'un FICHIER LITTÉRAL existe à ce chemin sous `public/` avant
+même de charger l'URL — une garde qui précède `Router.swift` (son repli SPA
+ne s'applique qu'aux navigations qui suivent CE premier chargement, jamais à
+lui). Un hook Capacitor (`capacitor:{copy,sync}:{before,after}` de
+`package.json`, `scripts/shell-start-path-hook.mjs`) pose désormais ce
+placeholder AUTOMATIQUEMENT, APRÈS que `cap sync ios` a réécrit
+`ios/App/App/public/` (`public/` est exclu par `ios/.gitignore` généré et
+réécrit à chaque `cap sync` — le placeholder ne survit donc jamais à une
+synchronisation SANS la variable, comme sur Android) : la recette ci-dessus
+suffit désormais, seule, sur les DEUX plateformes.
 
 ```bash
-mkdir -p ios/App/App/public/c && : > ios/App/App/public/c/c-deploiement
+MEESHY_TARGET=capacitor bunx vite build
+MEESHY_SHELL_START_PATH=/c/c-deploiement MEESHY_SHELL_SYNC_TARGET=ios bunx cap sync ios
+ls ios/App/App/public/c/c-deploiement   # posé par le hook, jamais à la main
 xcodebuild -project ios/App/App.xcodeproj -scheme App -destination 'id=<udid>' build
 ```
 
 `Router.swift` réécrit ensuite ce chemin vers `/index.html` sans jamais LIRE
-le placeholder — sa présence suffit à passer la garde. Détail :
-`decisions.md` § D-27 « Complément 2026-09-09 ».
+le placeholder — sa présence suffit à passer la garde. Le hook refuse AVANT
+toute écriture si `MEESHY_SHELL_SYNC_TARGET` ne correspond pas à la
+plateforme réellement synchronisée (`CAPACITOR_PLATFORM_NAME`, fournie par la
+CLI) — il n'y a plus de sondage du disque, ni côté `capacitor.config.ts`, ni
+côté hook. Détail : `decisions.md` § D-27 « Complément 2026-09-09 » et
+« Complément 2026-09-12 (#6027) ».
 
 ### Les paramètres de construction (`VITE_*`)
 

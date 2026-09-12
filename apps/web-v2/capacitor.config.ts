@@ -35,7 +35,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * sur ce chemin — d'où l'avertissement : c'est une commande de recette,
  * jamais un `cap sync` livré.
  *
- * Les deux gardes de FORME ne sont pas cosmétiques, et chacune vient d'une
+ * Les trois gardes de FORME ne sont pas cosmétiques, et chacune vient d'une
  * source LUE :
  *
  *   · `/` initial — Android (`Bridge.java`) concatène `appUrl += appUrlPath`
@@ -44,23 +44,50 @@ import type { CapacitorConfig } from '@capacitor/cli';
  *   · AUCUNE extension de fichier — iOS ne réécrit vers `index.html` que les
  *     chemins SANS extension (`CapacitorRouter.route(for:)`,
  *     `@capacitor/ios` 8.5.1 `Router.swift` : `if pathUrl.pathExtension.isEmpty`).
- *     Un `/c/x.json` serait servi littéralement, donc 404.
+ *     Un `/c/x.json` serait servi littéralement, donc 404 ;
+ *   · AUCUN segment `..` (revue #6027) — depuis #6027 ce chemin n'est plus
+ *     seulement une URL : `scripts/shell-start-path-hook.mjs` en DÉRIVE un
+ *     chemin de fichier, que `path.join` NORMALISE. `/c/../../../tmp/x`
+ *     posait le placeholder dans `apps/web-v2/tmp/x`, HORS de `public/`,
+ *     pendant que le journal du hook annonçait « placeholder posé » et que la
+ *     coque sortait quand même au lancement. La garde vit ICI plutôt que dans
+ *     le hook parce qu'elle vaut pour les DEUX plateformes et refuse AVANT
+ *     que quoi que ce soit ne soit écrit.
  *
  * La garde porte sur la FORME, jamais sur une route particulière : les 40+
  * surfaces à porter emploieront la même recette sur leur propre chemin, et
  * aucune ne doit avoir à modifier ce fichier — qui est, lui, LIVRÉ.
  *
- * QUATRIÈME GARDE (revue #5774, défaut majeur 1) — `server.appStartPath`
- * NE FONCTIONNE PAS sur iOS, quelle que soit la forme du chemin : au premier
- * lancement, `WKWebView` charge le chemin de départ comme un FICHIER sous
- * `public/` (`App.app/public/` + `appStartPath`, d'où le `public//c/…` à
- * double barre observé) — seule la navigation QUI SUIT passe par
+ * QUATRIÈME GARDE, INVERSÉE AU PROFIT D'UN MÉCANISME (#6027) — `server.appStartPath`
+ * NE FONCTIONNAIT PAS sur iOS, quelle que soit la forme du chemin : au
+ * premier lancement, `WKWebView` charge le chemin de départ comme un FICHIER
+ * sous `public/` (`App.app/public/` + `appStartPath`, d'où le `public//c/…`
+ * à double barre observé) — seule la navigation QUI SUIT passe par
  * `CapacitorRouter.route(for:)`, qui aurait réécrit vers `index.html`. La
- * coque sort donc immédiatement après le lancement, SANS rapport de
+ * coque sortait donc immédiatement après le lancement, SANS rapport de
  * plantage (`SpringBoard` ne journalise qu'une sortie volontaire) ; le seul
  * signe est `xcrun simctl launch --console-pty` : « Unable to load
  * …/public//c/… — This file is the root of your web app and must exist
  * before Capacitor can run ».
+ *
+ * Revue #5774 avait donc fait LEVER cette fonction dès que la cible
+ * déclarée était iOS — un refus sûr, mais qui laissait la coque iOS
+ * INDÉMARRABLE par cette recette. `scripts/shell-start-path-hook.mjs`
+ * (hooks `capacitor:{copy,sync}:{before,after}` de `package.json`) pose
+ * désormais, APRÈS que `cap sync ios` a réécrit `ios/App/App/public/`, le
+ * FICHIER LITTÉRAL que `CAPBridgeViewController.loadWebView()` exige — le
+ * même effet que Android (`Bridge.java`), obtenu autrement : cette fonction
+ * n'a donc plus besoin de connaître la plateforme visée pour refuser, elle
+ * pose `server.appStartPath` pour LES DEUX et se contente d'avertir. La
+ * validation « la cible déclarée correspond-elle à la plateforme réellement
+ * synchronisée ? » VIT DÉSORMAIS DANS LE HOOK (`planStartPathHook`), invoqué
+ * par la CLI avec `CAPACITOR_PLATFORM_NAME` — une donnée que la CLI fournit
+ * et que ce module, chargé AVANT que la plateforme soit sélectionnée, n'a
+ * jamais eue. `MEESHY_SHELL_SYNC_TARGET` reste néanmoins EXIGÉE ici (garde
+ * ci-dessous) : elle n'est plus ce qui décide du refus dans CE fichier, mais
+ * la DÉCLARATION que le hook vérifie ensuite contre la réalité — sans elle,
+ * l'appelant pourrait poser un chemin sans jamais dire pour quelle
+ * plateforme, et le hook n'aurait rien à comparer.
  *
  * CETTE GARDE PORTE SUR LA PLATEFORME VISÉE, JAMAIS SUR CE QUI EXISTE SUR LE
  * DISQUE (revue #5774, défaut majeur 2 — corrige la version qui sondait
@@ -69,19 +96,19 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * `cap sync android` dès que `ios/` existait, y compris quand Android seul
  * était visé). `MEESHY_SHELL_START_PATH` exige donc `MEESHY_SHELL_SYNC_TARGET`
  * (`"android"` ou `"ios"`) : l'appelant DÉCLARE la plateforme qu'il
- * synchronise plutôt que ce module ne la DÉDUISE d'un fichier voisin — et la
- * déclaration explicite est aussi ce qui a permis de retirer `node:fs` /
- * `node:path` / `node:url`, source du défaut bloquant 1. Recette :
+ * synchronise plutôt que ce module (ou le hook, en aval) ne la DÉDUISE d'un
+ * fichier voisin — et la déclaration explicite est aussi ce qui a permis de
+ * retirer `node:fs` / `node:path` / `node:url` de CE fichier, source du
+ * défaut bloquant 1 de revue #5774. Recette (symétrique désormais) :
  *
  *   MEESHY_SHELL_START_PATH=/c/c-deploiement MEESHY_SHELL_SYNC_TARGET=android bunx cap sync android
  *   MEESHY_SHELL_START_PATH=/c/c-deploiement MEESHY_SHELL_SYNC_TARGET=ios     bunx cap sync ios
  *
- * `MEESHY_SHELL_SYNC_TARGET=ios` lève TOUJOURS (le chemin FICHIER ci-dessus) ;
- * `MEESHY_SHELL_SYNC_TARGET=android` est TOUJOURS accepté (`Bridge.java`
- * réécrit correctement) ; toute autre valeur (absente, mal orthographiée)
- * lève aussi — refuser tôt plutôt que deviner. Porter le paramètre sur iOS
- * (fragment d'URL lu par le routeur maison, ou un `WKURLSchemeHandler`
- * dédié) reste une issue compagnon, hors périmètre de #5774.
+ * Les DEUX cibles sont désormais ACCEPTÉES ici ; toute valeur de
+ * `MEESHY_SHELL_SYNC_TARGET` absente ou mal orthographiée lève toujours —
+ * refuser tôt plutôt que deviner. Détail du mécanisme iOS : voir le
+ * doc-comment de `scripts/shell-start-path-hook.mjs` et `decisions.md` § D-27
+ * « Complément 2026-09-12 (#6027) ».
  */
 export function resolveCapacitorConfig(env: Readonly<Record<string, string | undefined>>): CapacitorConfig {
   const startPath = env.MEESHY_SHELL_START_PATH;
@@ -102,6 +129,14 @@ export function resolveCapacitorConfig(env: Readonly<Record<string, string | und
           '(CapacitorRouter.route(for:)) ; celui-ci serait servi littéralement, donc 404.',
       );
     }
+    if (startPath.split('/').includes('..')) {
+      throw new Error(
+        `MEESHY_SHELL_START_PATH ne doit contenir aucun segment ".." ("${startPath}" donné) — le hook ` +
+          'iOS en dérive un chemin de FICHIER (join(CAPACITOR_ROOT_DIR, "ios/App/App/public", chemin), ' +
+          'que join NORMALISE) : le placeholder serait posé HORS de public/, le journal annoncerait ' +
+          '« placeholder posé » et la coque sortirait quand même au lancement.',
+      );
+    }
     const target = env.MEESHY_SHELL_SYNC_TARGET;
     if (target !== 'android' && target !== 'ios') {
       throw new Error(
@@ -112,14 +147,11 @@ export function resolveCapacitorConfig(env: Readonly<Record<string, string | und
       );
     }
     if (target === 'ios') {
-      throw new Error(
-        `MEESHY_SHELL_START_PATH="${startPath}" ne peut pas être posé sur une synchronisation iOS ` +
-          "(MEESHY_SHELL_SYNC_TARGET=ios) : au premier lancement, iOS charge ce chemin comme un " +
-          "FICHIER sous public/ (WKWebView), pas comme une route SPA — la coque sort immédiatement " +
-          'après le lancement, sans rapport de plantage (« Unable to load …/public//… — This file is ' +
-          'the root of your web app and must exist before Capacitor can run »). Retirer ' +
-          'MEESHY_SHELL_START_PATH avant `cap sync ios`, ou recetter ce chemin sur Android seul ' +
-          '(MEESHY_SHELL_SYNC_TARGET=android), où Bridge.java le réécrit correctement.',
+      console.warn(
+        `  MEESHY_SHELL_START_PATH="${startPath}" sur iOS — le placeholder que ` +
+          'CAPBridgeViewController.loadWebView() exige sous public/ est posé par le hook ' +
+          '`capacitor:{copy,sync}:{before,after}` (scripts/shell-start-path-hook.mjs), APRÈS que ' +
+          '`cap sync ios` a réécrit ce dossier — jamais par ce fichier.',
       );
     }
     console.warn(
