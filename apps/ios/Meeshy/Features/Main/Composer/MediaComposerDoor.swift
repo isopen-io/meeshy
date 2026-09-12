@@ -68,6 +68,7 @@ enum ComposerMediaSeeding {
 
         let request = MediaSaveRequest(
             kind: attachment.kind,
+            origin: .transmitted,
             remoteURLString: attachment.fileUrl,
             suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
             attachmentId: attachment.id.isEmpty ? nil : attachment.id

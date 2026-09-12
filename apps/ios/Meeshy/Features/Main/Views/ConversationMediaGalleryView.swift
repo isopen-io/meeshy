@@ -983,6 +983,7 @@ struct ConversationMediaGalleryView: View {
         HapticFeedback.light()
         saveCoordinator.requestSave(MediaSaveRequest(
             kind: att.type == .video ? .video : .image,
+            origin: .transmitted,
             remoteURLString: urlStr,
             suggestedFileName: att.originalName.isEmpty ? nil : att.originalName,
             attachmentId: att.id.isEmpty ? nil : att.id

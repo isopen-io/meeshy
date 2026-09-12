@@ -15,6 +15,13 @@ private let mediaSaveLog = Logger(subsystem: "me.meeshy.app", category: "media-s
 struct MediaSaveRequest: Identifiable, Equatable {
     let id: UUID
     let kind: AttachmentKind
+    /// Œuvre composée dans Meeshy, ou média seulement transmis — ce qui décide
+    /// de la marque (directive porteur 2026-09-12, cf. `MediaOrigin`).
+    ///
+    /// **Sans valeur par défaut, délibérément.** Seul le point d'entrée sait sur
+    /// quelle surface il se trouve ; un défaut le dispenserait de le dire et
+    /// ferait sortir un média sous une règle qu'aucun auteur n'aurait choisie.
+    let origin: MediaOrigin
     let remoteURLString: String
     let suggestedFileName: String?
     /// Attachment id serveur — pour le report best-effort « downloaded »
@@ -22,11 +29,13 @@ struct MediaSaveRequest: Identifiable, Equatable {
     let attachmentId: String?
 
     init(kind: AttachmentKind,
+         origin: MediaOrigin,
          remoteURLString: String,
          suggestedFileName: String? = nil,
          attachmentId: String? = nil) {
         self.id = UUID()
         self.kind = kind
+        self.origin = origin
         self.remoteURLString = remoteURLString
         self.suggestedFileName = suggestedFileName
         self.attachmentId = attachmentId
@@ -152,13 +161,15 @@ final class MediaSaveCoordinator: ObservableObject {
         defer { isProcessing = false }
         do {
             let localFile = try await resolver.resolveLocalFile(for: request)
-            // Un média qui quitte Meeshy porte sa marque — filigrane sur les
-            // images et les vidéos, signature sonore sur les audios. Le
-            // marquage produit TOUJOURS une copie : `localFile` est très
-            // souvent le fichier du cache disque, qui doit rester la copie
-            // fidèle de l'original. Un marquage impossible retombe sur
-            // l'original (cf. `MeeshyMediaSaveBranding`).
-            let branded = await branding.stamp(localFile, kind: request.kind)
+            // On marque ce que Meeshy a COMPOSÉ — story, scène de post, scène
+            // de réel —, jamais ce que l'utilisateur a seulement TRANSMIS
+            // (directive porteur 2026-09-12, cf. `MeeshyMediaSaveBranding`).
+            // Quand marque il y a, elle produit TOUJOURS une copie : `localFile`
+            // est très souvent le fichier du cache disque, qui doit rester la
+            // copie fidèle de l'original. Un marquage impossible, comme un média
+            // transmis, retombe sur ce fichier d'origine — et `isStamped`
+            // interdit alors de le supprimer.
+            let branded = await branding.stamp(localFile, kind: request.kind, origin: request.origin)
             defer { if branded.isStamped { Self.discardStagingDirectory(of: branded.url) } }
             switch destination {
             case .photoLibrary:
