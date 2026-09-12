@@ -17,24 +17,64 @@ import { pageÀInstantFigé } from './instant.mjs';
  * vert au même contenu. Même loi que `check-media.mjs:161` — ne jamais confondre
  * un DÉCALAGE avec une ABSENCE d'effet.
  *
- * La borne reste SOUS 1600 ms : au-delà, l'attente survivrait à l'effacement et
- * mesurerait autre chose. Et cette fonction rend un BOOLÉEN plutôt que de lever,
- * pour que l'hôte garde son compteur de défauts et son message d'assertion.
+ * ON ENREGISTRE L'ÉTAT, ON NE LE GUETTE PLUS (revue du 2026-09-12, #6148). Lire
+ * en PREMIER et borner SOUS 1600 ms réduisait la course sans la fermer : la borne
+ * de 1200 ms court depuis le clic, donc elle suppose que la mise en évidence
+ * ARRIVE en moins de 1200 ms. Sur un runner chargé elle arrive plus tard — l'écran
+ * a parfaitement sauté, et le témoin a déjà renoncé. Mesuré : VERT sur `dev` à
+ * 23:49 (`da280ca2f5`), ROUGE sur le même contenu quelques heures plus tard.
  *
- * Les deux sorties du Résumé qui SAUTENT — le visage et l'épisode — l'appellent ;
- * l'expression du fond n'est écrite qu'ici.
+ * Un observateur ARMÉ AVANT le geste convertit un état qui PART en un fait qui
+ * EST ARRIVÉ : il note la transition au moment où elle se produit, et l'on peut
+ * alors attendre ce FAIT aussi longtemps qu'on veut — l'effacement à 1600 ms ne
+ * l'efface plus. C'est ce qui renverse la règle de bornage : la générosité
+ * devient sûre parce que la cible ne peut plus disparaître.
+ *
+ * Le fond est posé en style INLINE sur la rangée (`focal-row.tsx:508`,
+ * `backgroundColor: highlighted ? … : …`), d'où `attributeFilter: ['style']` ;
+ * `childList` couvre le cas où un rendu REMPLACE le nœud plutôt que de le muter.
+ *
+ * Les deux sorties du Résumé qui SAUTENT — le visage et l'épisode — s'arment
+ * avant leur clic ; l'expression du fond n'est écrite qu'ici.
  */
-async function rowIsHighlighted(page) {
+async function armHighlightRecorder(page) {
+  await page.evaluate(() => {
+    /* L'EXPRESSION DU FOND, écrite UNE fois — et écrite ICI, dans la page, parce
+       qu'une fonction ne se sérialise pas jusqu'à `evaluate`. La passer en CHAÎNE
+       à `new Function` marcherait et serait un mauvais motif : une expression
+       reconstruite depuis du texte ne se relit pas, ne se type pas, et invite
+       l'interpolation le jour où quelqu'un voudra la paramétrer. */
+    const voit = () =>
+      [...document.querySelectorAll('main li [data-reading-mode]')].some((row) => {
+        const bg = getComputedStyle(row).backgroundColor;
+        return bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent';
+      });
+
+    const état = { vu: false, observateur: null };
+    window.__miseEnEvidence = état;
+    if (voit() === true) {
+      état.vu = true;
+      return;
+    }
+    état.observateur = new MutationObserver(() => {
+      if (voit() === true) {
+        état.vu = true;
+        état.observateur?.disconnect();
+      }
+    });
+    état.observateur.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['style', 'class'],
+      childList: true,
+      subtree: true,
+    });
+  });
+}
+
+/** Attend le FAIT enregistré — borne généreuse, puisque le fait ne s'efface pas. */
+async function highlightWasRecorded(page) {
   return page
-    .waitForFunction(
-      () =>
-        [...document.querySelectorAll('main li [data-reading-mode]')].some((row) => {
-          const bg = getComputedStyle(row).backgroundColor;
-          return bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent';
-        }),
-      null,
-      { timeout: 1200 },
-    )
+    .waitForFunction(() => window.__miseEnEvidence?.vu === true, null, { timeout: 5000 })
     .then(() => true)
     .catch(() => false);
 }
@@ -125,14 +165,17 @@ export async function checkLivingSummary({ browser, BASE, CAPTURES, setScheme, e
     expect(!/\d\.\d/.test(rampText), `aucun score (needScore) n'est écrit dans la Rampe — seul le compte affiché (badge) l'est (lu : ${JSON.stringify(rampText)})`);
 
     // --- 14.6 : SORTIE 1 — tap d'un visage ⇒ script + saut + citation pré-adressée.
-    await page.locator('[data-face-ramp] [data-face]').first().click();
     /*
-      L'ÉVIDENCE SE LIT EN PREMIER (#6115, `rowIsHighlighted` ci-dessus) — sa
-      fenêtre de 1600 ms se ferme pendant que les autres mesures de cette sortie
-      s'exécutent, et elles n'en ont aucune : la puce et la rangée plate peuvent
-      attendre, elle non. Lue en quatrième position, elle rougissait sans défaut.
+      L'ÉVIDENCE S'ENREGISTRE AVANT LE GESTE (#6115, puis #6148) — sa fenêtre de
+      1600 ms se fermait pendant que les autres mesures de cette sortie
+      s'exécutaient. La lire en PREMIER (#6115) a réduit la course sans la
+      fermer : la borne courait depuis le clic, donc elle supposait une arrivée
+      en moins de 1200 ms. L'observateur est armé AVANT le clic, et l'on attend
+      ensuite un FAIT qui ne s'efface plus.
     */
-    const highlightedAfterFace = await rowIsHighlighted(page);
+    await armHighlightRecorder(page);
+    await page.locator('[data-face-ramp] [data-face]').first().click();
+    const highlightedAfterFace = await highlightWasRecorded(page);
     expect(highlightedAfterFace, 'sortie « visage » : une rangée est mise en évidence (même mesure que le défaut 10)');
     await page.waitForTimeout(300);
     expect((await page.locator('main li [data-reading-mode="script"]').count()) > 0, 'sortie « visage » : le fil rend la rangée plate SCRIPT');
@@ -164,12 +207,14 @@ export async function checkLivingSummary({ browser, BASE, CAPTURES, setScheme, e
     await page.waitForTimeout(300);
     expect((await page.locator('main [data-summary]').count()) === 1, 'le menu ramène au Résumé Vivant');
 
+    // MÊME FENÊTRE FUGACE QUE LA SORTIE « visage » (#6115, puis #6148) :
+    // l'épisode saute aussi, donc met aussi en évidence, donc courait aussi
+    // contre les 1600 ms. Elle était un aller-retour plus près de la limite —
+    // jamais tombée, mais du même défaut, et une seule loi les couvre. Elle
+    // s'arme donc avant son clic, comme l'autre.
+    await armHighlightRecorder(page);
     await page.locator('[data-episode]').first().click();
-    // MÊME FENÊTRE FUGACE QUE LA SORTIE « visage » (#6115) : l'épisode saute
-    // aussi, donc met aussi en évidence, donc court aussi contre les 1600 ms.
-    // Elle était un aller-retour plus près de la limite — pas encore tombée,
-    // mais du même défaut, et une seule loi les couvre.
-    const highlightedAfterEpisode = await rowIsHighlighted(page);
+    const highlightedAfterEpisode = await highlightWasRecorded(page);
     expect(highlightedAfterEpisode, 'sortie « épisode » : une rangée est mise en évidence');
     await page.waitForTimeout(300);
     expect((await page.locator('main li [data-reading-mode="script"]').count()) > 0, 'sortie « épisode » : le fil rend la rangée plate SCRIPT');
