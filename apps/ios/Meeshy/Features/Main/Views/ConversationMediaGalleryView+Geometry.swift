@@ -100,6 +100,33 @@ enum MediaGalleryStage {
         )
     }
 
+    /// **Ce qui se peint DERRIÈRE le média, dans son cadre** (#6143, spec § 2.1).
+    ///
+    /// Le hors-champ est habillé, jamais noir par défaut : le ThumbHash du média
+    /// quand il en porte un, le noir sinon. Le noir n'est pas un repli honteux —
+    /// c'est la réponse JUSTE quand il n'y a aucune matière à étirer (première
+    /// image non décodée, média sans hachage). Inventer une couleur moyenne
+    /// serait peindre ce que personne n'a mesuré.
+    ///
+    /// ## Le piège, et pourquoi la question se pose sur le RÉSULTAT
+    ///
+    /// `letterboxes` est une propriété du résultat de l'état COURANT, et c'est
+    /// tout l'intérêt de la lui demander : le plein cadre fabrique son propre
+    /// hors-champ. Une 4:5 remplit sa carte (366 × 457,5) et flotte une fois
+    /// l'écran pris (390 × 487,5 dans 390 × 844) ; **aucune nature ne remplit
+    /// l'écran**, pas même une scène 9:16, l'écran d'un iPhone 16 Pro étant plus
+    /// étroit qu'elle. Conditionner l'habillage au letterbox du seul état cadré
+    /// garantirait donc du noir exactement là où on voulait l'éviter.
+    ///
+    /// La cascade des sources, elle, n'est pas réécrite ici : elle vit dans
+    /// `StoryLetterboxFill`, qui l'a portée pour le canvas de story. Deux tables
+    /// pour une même question divergeraient le jour où l'une changerait.
+    static func backdrop(stage: MediaStageFraming.Result,
+                         thumbHash: String?) -> StoryLetterboxFill.Source {
+        guard stage.letterboxes else { return .none }
+        return StoryLetterboxFill.source(thumbHash: thumbHash)
+    }
+
     private static func freeRegionRatio(viewport: CGSize,
                                         presentation: MediaStageFraming.Presentation,
                                         corridors: MediaStageFraming.Corridors) -> CGFloat {
@@ -109,6 +136,55 @@ enum MediaGalleryStage {
                      height: viewport.height - corridors.reservedHeight)
         guard region.width > 0, region.height > 0 else { return 0 }
         return region.width / region.height
+    }
+}
+
+// MARK: - Le hors-champ, habillé
+
+/// **La couche qui habille le hors-champ d'un média** (#6143).
+///
+/// Elle se pose SOUS le média, à l'intérieur du cadre : ce qui déborde est
+/// clippé par le cadre arrondi de la page. Le noir d'abord — c'est le fond du
+/// cadre, et il reste seul quand le média n'a aucun hachage à étirer — puis le
+/// ThumbHash par-dessus, à l'opacité que le SDK a fixée pour les bandes d'une
+/// story. Une seule opacité pour les deux surfaces : deux valeurs voisines
+/// feraient deux produits.
+///
+/// **Le flou ne coûte aucun filtre.** Un ThumbHash décodé fait trente-deux
+/// pixels de côté ; c'est le rééchantillonnage qui le lisse. Pas de `CIFilter`,
+/// pas de rendu hors écran, pas une image de plus à charger — la bande coûte ce
+/// que coûte une couche.
+struct MediaStageBackdrop: View {
+    let source: StoryLetterboxFill.Source
+
+    var body: some View {
+        ZStack {
+            Color.black
+
+            if let fill {
+                // `.scaledToFill` : la bande doit être PLEINE. Un `.fit` y
+                // laisserait ses propres bandes — un letterbox dans un letterbox.
+                Image(uiImage: fill)
+                    .resizable()
+                    .interpolation(.low)
+                    .scaledToFill()
+                    .opacity(Double(StoryLetterboxFill.fillOpacity))
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    /// Le décodage (~1 ms) n'a lieu qu'au changement de source : les deux pages
+    /// qui montent cette couche sont `Equatable` et ne reconstruisent leur corps
+    /// que lorsque leur média ou leur cadre bouge.
+    ///
+    /// `.stampedBitmap` ne peut pas arriver ici — c'est la source de l'ATELIER,
+    /// où le canvas tient déjà le bitmap de fond en mémoire. La galerie n'a que
+    /// le hachage, et `StoryLetterboxFill.source(thumbHash:)` ne rend jamais
+    /// autre chose.
+    private var fill: UIImage? {
+        guard case .thumbHash(let hash) = source else { return nil }
+        return UIImage.fromThumbHash(hash)
     }
 }
 

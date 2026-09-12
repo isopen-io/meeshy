@@ -89,12 +89,15 @@ struct GalleryImagePage: View, Equatable {
     }
 
     var body: some View {
-        // **Le cadre arrondi** (#6141). Le noir est celui du CADRE, pas de
-        // l'écran : au-delà de lui c'est le plateau qui se voit. Le hors-champ
-        // habillé par le ThumbHash est #6143 ; d'ici là ce noir reste le fond
-        // honnête d'un média qui n'a pas encore décodé.
+        // **Le cadre arrondi** (#6141), et son hors-champ HABILLÉ (#6143) : le
+        // fond est celui du CADRE, pas de l'écran — au-delà de lui c'est le
+        // plateau qui se voit. Il porte le ThumbHash flouté du média quand
+        // celui-ci en a un, le noir sinon.
         ZStack {
-            Color.black
+            MediaStageBackdrop(
+                source: MediaGalleryStage.backdrop(stage: stage,
+                                                   thumbHash: attachment.thumbHash)
+            )
 
             if hasRenderableSource {
                 imageLayer
@@ -388,11 +391,17 @@ struct GalleryVideoPage: View, Equatable {
     }
 
     var body: some View {
-        // **Le cadre arrondi** (#6141) — voir `GalleryImagePage.body`. La couche
-        // `AVPlayerLayer` cesse d'ignorer la zone sûre : elle vit maintenant DANS
-        // le cadre, et c'est lui qui la borne.
+        // **Le cadre arrondi** (#6141) et son hors-champ habillé (#6143) — voir
+        // `GalleryImagePage.body`. La couche `AVPlayerLayer` cesse d'ignorer la
+        // zone sûre : elle vit maintenant DANS le cadre, et c'est lui qui la
+        // borne. Une vidéo est d'ailleurs la nature qui en profite le plus : un
+        // 16:9 pose son cadre au plancher et laisse deux bandes dans les DEUX
+        // états.
         ZStack {
-            Color.black
+            MediaStageBackdrop(
+                source: MediaGalleryStage.backdrop(stage: stage,
+                                                   thumbHash: attachment.thumbHash)
+            )
 
             if !isPlayerActive || !surfaceReady {
                 thumbnailLayer
