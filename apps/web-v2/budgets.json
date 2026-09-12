@@ -1,6 +1,8 @@
 {
   "role": "Les PLAFONDS de la v4. Les valeurs MESUREES vivent dans budgets-measured.json — ce fichier-ci n'en porte aucune, exactement comme apps/web-v2/budgets.json dont il reprend la discipline.",
-  "read_by": ["apps/web-v2/scripts/measure-weight.mjs"],
+  "read_by": [
+    "apps/web-v2/scripts/measure-weight.mjs"
+  ],
   "note": "Le modele de cout a CHANGE entre la v3 et la v4, et c'est la seule raison pour laquelle ces plafonds ne sont pas ceux du § 8.3. La v3 sert un DOCUMENT par ecran : le lecteur paie ~8 Ko a chaque ecran, a chaque session. La v4 sert UNE application : le lecteur paie une fois, puis plus rien tant que le hash ne bouge pas (service worker, variante A). Un plafond exprime par ECRAN n'a donc pas de sujet ici — celui qui compte est la PREMIERE PEINTURE, payee une fois.",
   "first_paint": {
     "subject": "document + feuille + modules que le document reference lui-meme, gzip -9. Les chunks d'ecran charges a la demande n'y sont pas : c'est ce que le decoupage par route achete.",
@@ -12,7 +14,9 @@
   },
   "institutional_page": {
     "subject": "chaque document institutionnel PRECHAUFFE (about/contact/partners/privacy/terms), gzip -9 — le document HTML complet, feuille INLINEE comprise (scripts/prerender-institutional.tsx). Une page a la fois : ces adresses ne se composent jamais.",
-    "read_by": ["apps/web-v2/scripts/prerender-institutional.tsx"],
+    "read_by": [
+      "apps/web-v2/scripts/prerender-institutional.tsx"
+    ],
     "kb": {
       "value": 10,
       "status": "CIBLE — PROPOSEE PAR LA REVUE DE #5606 (defaut 3), NON ARBITREE",
@@ -68,6 +72,14 @@
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #5828, NON ARBITREE",
         "source": "Mesure de measure-weight.mjs le 2026-09-12 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,95 Ko gzip -9 (l'heuristique ecriture + mots-outils de secours, `src/lib/send/stopword-language-detector.ts` — 1,16 Ko a la premiere forme, 1,95 apres l'enrichissement des six tables en revue-correction, qui a fait passer es/it/pt de 0/15 phrases servies a 8/15 sans aucun verdict faux), arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks `summary`/`composer_tray`/`socketio`/`realtime` ci-dessus. Charge en `import()` UNIQUEMENT par `src/lib/send/language-detector.ts` (`defaultLanguageDetector()`), quand l'API navigateur `LanguageDetector` est absente ou pas encore `available` -- jamais au chargement du fil (`thread-*.js` ne l'importe pas statiquement, mesure : `first_paint` inchange a 37,19 Ko avant/apres ce lot)."
+      }
+    },
+    "floating_menus": {
+      "pattern": "^assets/floating-menus-",
+      "kb": {
+        "value": 4,
+        "status": "CIBLE -- MESUREE PAR #6104 ET #6215, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-13, sur l'arbre FUSIONNE avec dev (`bun run build` puis `node scripts/measure-weight.mjs`) : 2,88 Ko gzip -9 -- le JS du composant des menus flottants (2,40) et sa FEUILLE (0,48 ; `src/styles/floating-menus.css`, importee par le composant donc decoupee avec lui, jamais dans `app.css`). Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge, meme discipline que les chunks voisins. CORRECTION D'UN CHIFFRE PERIME, et il faut dire lequel : la premiere ecriture de cette entree annoncait 1,76 Ko avec un plafond de 3. Elle etait juste au moment ou elle a ete prise -- apres #6104 -- et FAUSSE a la livraison, parce que #6215 a ajoute le geste de deplacement au meme chunk sans que la mesure soit rejouee. Le plafond restant tenait avec 0,17 Ko de marge : la premiere modification innocente l'aurait fait rougir pour une mauvaise raison. C'est exactement le defaut que la prose de `first_paint.kb.source` ci-dessus porte encore, et le rejouer une ligne plus bas aurait ete impardonnable. Charge en `import()` par `components/shell.tsx`, comme la pastille de synchronisation et pour la meme raison MESUREE : monte en statique il entrerait dans la premiere peinture. La TABLE des destinations (`lib/view/floating-menu.ts`) est un chunk SEPARE (`assets/floating-menu-`, singulier -- 2,10 Ko gzip) parce qu'elle est partagee avec les huit chunks de route de #6214 ; elle n'est volontairement pas bornee ici, son plafond appartiendrait aux deux lots a la fois. BASE REMESUREE, a citer avant tout autre chiffre : `origin/dev` (9f168de750) mesure 38,46 Ko avant le premier pixel -- et non 37,19 comme l'ecrit encore `first_paint.kb.source`. L'arbre fusionne mesure 39,21 Ko : le lot complet (#6214 + #6104 + #6215) coute +0,75 Ko. La marge sous le plafond de 40 etait deja de 1,54 Ko AVANT ce lot ; elle est de 0,79 apres. Ce resserrement PRECEDE le lot, il ne vient pas de lui."
       }
     }
   },

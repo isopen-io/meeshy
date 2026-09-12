@@ -4,6 +4,8 @@ import { useStore } from 'zustand/react';
 import { isPermanentFailure } from '@/lib/api/outcome';
 import { retrySendAction, sendAction } from '@/lib/api/query';
 import type { Message, Participant } from '@/lib/api/types';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import type { PendingAttachment } from '@/lib/send/attachments';
 import { confirmedCountOf, entriesOf, outboxStore } from '@/lib/send/outbox-store';
@@ -151,7 +153,8 @@ export function useSend(params: {
       );
       announce(reason === undefined ? 'Message non envoyé' : `Message non envoyé — ${reason}`);
     }
-    else if (confirmedCount > previousConfirmedCount.current) announce('Message envoyé');
+    else if (confirmedCount > previousConfirmedCount.current)
+      announce(translate(currentInterfaceLanguage(), 'announce.messageSent'));
     previousFailedCount.current = failedCount;
     previousConfirmedCount.current = confirmedCount;
   }, [failedCount, confirmedCount, entries, announce]);

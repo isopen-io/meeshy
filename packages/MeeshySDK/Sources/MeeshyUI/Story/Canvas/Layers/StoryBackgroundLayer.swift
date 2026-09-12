@@ -902,6 +902,8 @@ extension StoryBackgroundLayer {
         item.preferredForwardBufferDuration = 2.0
         if looping {
             let queuePlayer = AVQueuePlayer()
+            // Fond de canvas en boucle : décor, jamais un contenu regardé (#6221).
+            queuePlayer.preventsDisplaySleepDuringVideoPlayback = false
             self.avPlayerLooper = AVPlayerLooper(player: queuePlayer, templateItem: item)
             self.avPlayer = queuePlayer
         } else {

@@ -302,7 +302,8 @@ struct ConversationListView: View {
 
     /// Renommage : conversation cible + texte en cours d'édition (action
     /// « Renommer » du menu contextuel, groupes/communautés uniquement).
-    @State var renameTarget: Conversation? = nil
+    /// (#6221) `sheetTargets.rename` a rejoint `sheetTargets` — c'est une cible de
+    /// feuille comme les sept autres, et elle était restée en ligne pour 992 o.
     @State var renameText: String = ""
 
     // Drag & Drop : le `.onDrag` natif est RÉACTIVÉ sur le chemin iOS 26
@@ -313,7 +314,13 @@ struct ConversationListView: View {
     // posé par personne (un drag annulé ne laisse aucun état) — conservé
     // uniquement pour le plumbing `isDragging` des rows (poignée dédiée /
     // mode édition futur).
-    @State private var draggingConversation: Conversation? = nil
+    /// (#6221) L'IDENTIFIANT, PAS LA CONVERSATION. Le commentaire ci-dessus le
+    /// dit : ce champ « n'est plus posé par personne ». Il pesait pourtant 992
+    /// octets EN LIGNE dans la vue — et une vue SwiftUI est un type valeur que
+    /// chaque closure de son `body` copie. Le seul usage est une comparaison
+    /// d'id (`isDragging`) ; le plumbing documenté est conservé intact, à seize
+    /// octets au lieu de neuf cent quatre-vingt-douze.
+    @State private var draggingConversationId: String? = nil
     /// Section surlignée comme cible de drop. Alimenté par le morph drag de
     /// l'overlay (chip sous le doigt — voir `previewCollapseGesture`,
     /// +Overlays) en plus du `SectionDropDelegate` historique. Pas `private` :
@@ -798,7 +805,7 @@ struct ConversationListView: View {
             conversation: conversation,
             community: community,
             rowWidth: rowWidth,
-            isDragging: draggingConversation?.id == conversation.id,
+            isDragging: draggingConversationId == conversation.id,
             presenceState: presenceManager.presenceState(for: conversation.participantUserId ?? ""),
             isDark: theme.mode.isDark,
             storyRingState: storyRingState(for: conversation),
@@ -1183,19 +1190,19 @@ struct ConversationListView: View {
             .alert(
                 String(localized: "conversation.rename.title", defaultValue: "Renommer la conversation", bundle: .main),
                 isPresented: Binding(
-                    get: { renameTarget != nil },
-                    set: { if !$0 { renameTarget = nil } }
+                    get: { sheetTargets.rename != nil },
+                    set: { if !$0 { sheetTargets.rename = nil } }
                 )
             ) {
                 TextField(String(localized: "conversation.rename.placeholder", defaultValue: "Nom", bundle: .main), text: $renameText)
                 Button(String(localized: "common.save", defaultValue: "Enregistrer", bundle: .main)) {
-                    if let target = renameTarget {
+                    if let target = sheetTargets.rename {
                         Task { await conversationViewModel.renameConversation(conversationId: target.id, title: renameText) }
                     }
-                    renameTarget = nil
+                    sheetTargets.rename = nil
                 }
                 Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {
-                    renameTarget = nil
+                    sheetTargets.rename = nil
                 }
             }
             .sheet(isPresented: $showWidgetPreview) {
@@ -1854,7 +1861,7 @@ struct ConversationListView: View {
                     // l'écran (sans cette queue, la magnificence ne touchait
                     // jamais la fin de la liste). Drapeau OFF : queue neutre.
                     listTail
-                        .adaptiveOnChange(of: draggingConversation) { oldValue, newValue in
+                        .adaptiveOnChange(of: draggingConversationId) { oldValue, newValue in
                             if oldValue != nil && newValue == nil {
                                 withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
                                     dropTargetSection = nil
