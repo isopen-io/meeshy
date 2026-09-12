@@ -45,6 +45,25 @@ import Foundation
 struct Indirect<Value> {
 
     private final class Box {
+        /* DEINIT NON ISOLÉE, OBLIGATOIRE (#6226, crash mesuré).
+           Ce dépôt compile sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`
+           (SE-0466) : une classe non marquée `nonisolated` est @MainActor, et
+           sa deinit SYNTHÉTISÉE l'est aussi. Libérée hors d'une tâche — au
+           démontage d'une vue, dans un test XCTest synchrone — elle
+           double-libère :
+
+               POINTER_BEING_FREED_WAS_NOT_ALLOCATED
+               Indirect.Box.__deallocating_deinit
+                 ← swift_task_deinitOnExecutorMainActorBackDeploy
+
+           Le processus de test a AVORTÉ après que le témoin soit passé au vert
+           — c'est la signature de ce défaut : il tue au démontage, pas à
+           l'exécution. `ConversationComposerTextModel` porte la même ligne et
+           la même explication, à trois fichiers d'ici. La garde
+           `MainActorDeinitSourceGuardTests` existe pour ça ; cette classe
+           IMBRIQUÉE lui avait échappé. */
+        nonisolated deinit {}
+
         var value: Value
         init(_ value: Value) { self.value = value }
     }
