@@ -204,7 +204,7 @@ ffmpeg-python==0.2.0
 pyannote.audio==3.4.0  # ✅ ACTIVÉ - Compatible torch 2.6.0 (4.0+ exige torch>=2.8.0)
 
 # Priorité 2: SpeechBrain - Alternative à pyannote (SANS token HuggingFace requis)
-speechbrain==1.1.0  # ✅ ACTIVÉ - Fallback si pyannote indisponible
+speechbrain==1.1.1  # ✅ ACTIVÉ - Fallback si pyannote indisponible
 scikit-learn==1.7.2  # Requis pour clustering et nettoyage (DiarizationCleaner)
 # librosa déjà inclus dans requirements.txt via chatterbox-tts
 
