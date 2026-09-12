@@ -111,6 +111,40 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
   //     fautive 96,27 % / 36 couleurs, la seconde étant `71,71,174`, soit
   //     exactement le glyphe (encre `30,27,75`) à 0,4 fondu sur l'indigo.
   //     Si la fixture cesse d'être un aplat, c'est CE seuil qu'il faut revoir.
+  /**
+   * LA PIÈCE ENTRE DANS LE CHAMP, ET L'ON ATTEND SA PEINTURE — PAS SON
+   * CHARGEMENT (#6135). Ce témoin était ROUGE en CI et VERT en local depuis sa
+   * naissance, onze heures durant, en faisant sauter les neuf gates suivants.
+   *
+   * `media-1-a1` est le PREMIER message du fil : au repos sa boîte est à
+   * `top = -462`, très au-dessus du champ. Son `<img>` porte `loading="lazy"`
+   * et `decoding="async"` (`attachment-blocks.tsx:103-104`), donc hors champ
+   * elle n'est ni chargée ni décodée. `locator.screenshot()` fait défiler
+   * l'élément dans le champ PUIS capture — la capture tombe dans la même
+   * séquence que le chargement que son propre défilement vient de déclencher.
+   * Sur macOS la peinture arrive avant la capture ; sur le runner Linux, non.
+   *
+   * Mesuré en CI (run 34686050796) — et c'est un état que le message ne savait
+   * pas décrire : le cœur portait `229,246,248` à 21,20 % en 106 teintes,
+   * c'est-à-dire le FOND de la figure elle-même
+   * (`color(srgb 0.27451 0.741176 0.792157 / 0.12)`, l'accent à 12 %),
+   * pendant que l'`<img>` relevée juste après la capture rendait
+   * `complete: true, naturalWidth: 1, hidden: false, couvre: true,
+   * opacity: 1, objectFit: cover, visible`. Décodée, opaque, couvrant
+   * exactement sa boîte — et absente de la frame capturée. Une seule chose
+   * réconcilie ces deux relevés : la capture a précédé la PEINTURE.
+   *
+   * `complete` ne suffit donc pas comme condition d'attente : il dit que les
+   * octets sont là, jamais qu'un pixel a été posé. On attend `decode()` puis
+   * DEUX `requestAnimationFrame` — le premier rend la main au compositeur, le
+   * second garantit qu'une frame a été produite APRÈS le décodage.
+   */
+  await attachmentOf(MEDIA_IMAGE_ATTACHMENT_ID).scrollIntoViewIfNeeded();
+  await mediaPage.locator(`img[data-attachment-image="${MEDIA_IMAGE_ATTACHMENT_ID}"]`).evaluate(async (el) => {
+    if (typeof el.decode === 'function') await el.decode().catch(() => {});
+    await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+  });
+
   const paintedCore = await (async () => {
     const shot = await attachmentOf(MEDIA_IMAGE_ATTACHMENT_ID).screenshot();
     return mediaPage.evaluate(async (data) => {
@@ -140,9 +174,34 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
       const total = pixels.length / 4;
       const classees = [...counts.entries()].sort((a, b) => b[1] - a[1]);
       const [colour, count] = classees[0];
+
+      /* LA PART SE MESURE À UNE DISTANCE, JAMAIS À L'ÉGALITÉ STRICTE (#6135).
+         Un aplat composité peut être TRAMÉ de ±1 par canal : chaque pixel
+         devient alors une clé distincte, et un champ parfaitement uniforme à
+         l'œil rend « dominante 21 %, 106 teintes ». Mesuré en CI sur le fond
+         de la figure — les cinq premières couleurs y étaient 229,246,248 /
+         228,245,247 / 228,245,248 / 230,246,248 / 229,245,248, soit la même
+         couleur à ±2, et l'égalité stricte les comptait pour cinq.
+         La tolérance reste MINUSCULE devant ce que le témoin doit attraper :
+         le glyphe de repli fondu à 0,4 sur l'indigo donne `71,71,174` contre
+         `99,102,241`, une distance de 67 — vingt-deux fois le seuil. On gagne
+         en robustesse sans rien céder sur le défaut visé. */
+      const [dr, dg, db] = colour.split(',').map(Number);
+      let proches = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (
+          Math.abs(pixels[i] - dr) <= 2 &&
+          Math.abs(pixels[i + 1] - dg) <= 2 &&
+          Math.abs(pixels[i + 2] - db) <= 2
+        ) {
+          proches += 1;
+        }
+      }
+
       return {
         colour,
         share: count / total,
+        shareProche: proches / total,
         tones: counts.size,
         cinqPremieres: classees.slice(0, 5).map(([c, n]) => `${c} ${((n / total) * 100).toFixed(1)}%`),
         taille: `${bitmap.width}×${bitmap.height}`,
@@ -194,8 +253,8 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
   }, MEDIA_IMAGE_ATTACHMENT_ID);
 
   expect(
-    paintedCore.share >= 0.999,
-    `[${skin}/${scheme}] aucun repli ne peint par-dessus l'image décodée — le cœur de la boîte est la couleur servie (${paintedCore.colour}) à ${(paintedCore.share * 100).toFixed(2)} %, en ${paintedCore.tones} teinte(s)` +
+    paintedCore.shareProche >= 0.999,
+    `[${skin}/${scheme}] aucun repli ne peint par-dessus l'image décodée — le cœur de la boîte est la couleur servie (${paintedCore.colour}) à ${(paintedCore.shareProche * 100).toFixed(2)} % à ±2 (${(paintedCore.share * 100).toFixed(2)} % à l'exact), en ${paintedCore.tones} teinte(s)` +
       ` · cinq premières : ${paintedCore.cinqPremieres.join(' | ')}` +
       ` · capture ${paintedCore.taille}, cœur ${paintedCore.coeur}` +
       ` · image : ${JSON.stringify(imageState)}`,
