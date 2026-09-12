@@ -36,3 +36,13 @@ export declare function auditShellBundle(
   files: readonly ShellBundleFile[],
   options: Readonly<{ readonly apiBase: string }>,
 ): readonly string[];
+
+export declare function resolveShellVersion(packageJsonRaw: string): string;
+
+export declare function auditAndroidVersionName(gradleText: string, version: string): readonly string[];
+
+export declare function deriveAndroidVersionName(gradleText: string, version: string): string;
+
+export declare function auditIosMarketingVersion(pbxprojText: string, version: string): readonly string[];
+
+export declare function deriveIosMarketingVersion(pbxprojText: string, version: string): string;
