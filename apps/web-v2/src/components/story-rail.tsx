@@ -332,14 +332,42 @@ export const StoryRail = forwardRef<
     </ul>
   );
 
-  /* La bande épinglée est montée DANS l'en-tête, qui porte déjà sa région et
-     son étiquette : l'envelopper d'un second `<section aria-label>` ajouterait
-     un repère de navigation en double. Le grand plateau, lui, est un contenu du
-     flux et a besoin du sien — plus du positionnement de ses deux boutons. */
+  /* La bande épinglée est montée DANS l'en-tête, qui porte déjà sa région :
+     l'envelopper d'un second conteneur étiqueté ajouterait un repère de
+     navigation en double. Le grand plateau, lui, a besoin du sien — pour
+     POSITIONNER ses deux boutons flottants (`position: relative`). */
   if (!grande) return rail;
 
+  /**
+   * L'ENVELOPPE EST UN POSITIONNEMENT, PAS UN REPÈRE — et elle porte `inert`
+   * avec le rail (revue du 2026-09-12, rouge « Peaux web-v2 » sur #6100).
+   *
+   * Deux défauts vivaient ici, et le second explique le premier :
+   *
+   *  1. `<section aria-label="Stories">` faisait de cette enveloppe un
+   *     LANDMARK nommé, en plus du `<ul aria-label="Stories">` qu'elle
+   *     contient — une région « Stories » enveloppant une liste « Stories ».
+   *     Pendant que la bande épinglée est active, `inert` retirait bien le
+   *     `<ul>` des deux arbres, mais PAS son enveloppe : le doublon que la
+   *     garde de #6103 existe pour empêcher se reconstituait un cran plus
+   *     haut, sur le nœud que `inert` ne couvrait pas. L'étiquette tombe donc
+   *     ici : le `<ul>` nomme déjà la liste, et il le fait dans les DEUX
+   *     géographies.
+   *
+   *  2. `RailActions` — « Créer une story » et « Voir toutes les stories » —
+   *     restait TABULABLE hors champ. Un `Tab` depuis la bande y atterrissait,
+   *     et le navigateur ramenait le plateau DANS la vue pour honorer le
+   *     focus, faisant sauter le défilement : exactement le symptôme que
+   *     #6103 a corrigé pour les tuiles, laissé intact pour les deux portes
+   *     parce que `inert` vivait sur le `<ul>`, leur voisin, jamais sur leur
+   *     parent commun.
+   *
+   * `inert` reste AUSSI sur le `<ul>` : il y est la prise que `check-lens.mjs`
+   * mesure (`[data-rail="grande"]` porte-t-il l'attribut ?), et l'inertie
+   * s'hérite — les deux déclarations disent la même chose sans se contredire.
+   */
   return (
-    <section aria-label="Stories" className="relative shrink-0">
+    <section inert={inert} className="relative shrink-0">
       {rail}
       <RailActions />
     </section>

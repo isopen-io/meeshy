@@ -54,11 +54,21 @@
  *        titre, jamais un flux qui pousserait quoi que ce soit.
  *
  * 8.  LE GRAND RAIL HORS CHAMP NE DOUBLE PAS LA BANDE (#6103, revue-
- *     correction) — pendant que la bande est active, une SEULE région porte
- *     l'`aria-label` « Accès rapide aux conversations », et deux `Tab` depuis
- *     sa dernière tuile ne rejoignent ni le grand rail ni ne déplacent le
- *     `scrollTop` du scrollport (`inert={pinned}`,
- *     `components/conversation-rail.tsx`).
+ *     correction) — pendant que la bande est active, un SEUL nœud porte
+ *     l'`aria-label` « Stories », et deux `Tab` depuis sa dernière tuile ne
+ *     rejoignent ni le grand rail ni ne déplacent le `scrollTop` du scrollport
+ *     (`inert={pinned}`, `components/story-rail.tsx`).
+ *
+ *     L'ÉTIQUETTE ET LA PRISE ONT CHANGÉ DE NOM À LA FUSION DE #6080 (2026-09-
+ *     12) : ce rail peignait des CONVERSATIONS sous un anneau qui promettait
+ *     une story, il peint désormais les STORIES — « Accès rapide aux
+ *     conversations » → « Stories », `a[data-conversation]` →
+ *     `a[data-story-author]`. Le gate a d'abord rougi pour la BONNE raison
+ *     (l'enveloppe du grand plateau gardait son étiquette hors de portée de
+ *     `inert`, reconstituant le doublon), et pour une MAUVAISE en même temps :
+ *     ses deux sélecteurs interrogeaient des noms morts. Un témoin qui cherche
+ *     un nom mort ne mesure plus rien — ici il rougissait, ce qui est la
+ *     chance ; l'autre moitié du temps il passe par ABSENCE (leçon 561).
  */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -657,16 +667,19 @@ await headerContext.close();
  * le DOM — il défile simplement hors du scrollport — et sans garde, ses
  * liens restaient à la fois dans l'ordre de TABULATION et exposés sous le
  * MÊME `aria-label` que la bande qui le remplace : un lecteur d'écran
- * annonçait les conversations deux fois, et un `Tab` depuis la dernière
+ * annonçait les stories deux fois, et un `Tab` depuis la dernière
  * tuile de la bande retombait dans le grand rail hors champ — que le
  * navigateur ramène alors DANS la vue pour honorer le focus, faisant sauter
  * le défilement (749 → 0 mesuré) et perdre la position de lecture pour rien
  * de plus qu'un `Tab`.
  *
- * Le correctif (`inert={pinned}`, `components/conversation-rail.tsx`) doit
+ * Le correctif (`inert={pinned}`, `components/story-rail.tsx`) doit
  * tenir TROIS faits, mesurés ici plutôt qu'assumés :
- *  · une SEULE région porte l'`aria-label` « Accès rapide aux conversations »
- *    pendant que la bande est active — jamais deux ;
+ *  · un SEUL nœud porte l'`aria-label` « Stories » pendant que la bande est
+ *    active — jamais deux. LA MESURE COMPTE LES NŒUDS, PAS LES `<ul>` : au
+ *    premier passage de #6080 l'enveloppe `<section>` du grand plateau
+ *    portait l'étiquette, hors de portée de `inert` posé sur son enfant, et
+ *    le doublon se reformait sur le seul nœud que la garde ne couvrait pas ;
  *  · un premier `Tab` depuis la dernière tuile de la bande rejoint
  *    « Progression » SANS bouger le scrollport — elle vit dans l'en-tête,
  *    jamais dans le flux qui défile ;
@@ -700,18 +713,18 @@ await kbdPage.waitForTimeout(400);
 const kbdBefore = await kbdPage.evaluate(() => ({
   pinnedPresent: document.querySelector('[data-rail="pinned"]') !== null,
   grandeInert: document.querySelector('[data-rail="grande"]')?.hasAttribute('inert') ?? null,
-  regions: document.querySelectorAll('[aria-label="Accès rapide aux conversations"]').length,
+  regions: document.querySelectorAll('[aria-label="Stories"]').length,
   scrollTop: document.getElementById('contenu')?.scrollTop ?? null,
 }));
 constate(kbdBefore.pinnedPresent, "la bande épinglée n'est pas apparue — impossible de mesurer le doublon clavier");
 constate(kbdBefore.grandeInert === true, `le grand rail n'est pas \`inert\` pendant que la bande est active (${kbdBefore.grandeInert})`);
 constate(
   kbdBefore.regions === 1,
-  `${kbdBefore.regions} région(s) portent l'aria-label « Accès rapide aux conversations » en même temps — une seule le devrait`,
+  `${kbdBefore.regions} nœud(s) portent l'aria-label « Stories » en même temps — un seul le devrait`,
 );
 
 await kbdPage.evaluate(() => {
-  const liens = [...document.querySelectorAll('[data-rail="pinned"] a[data-conversation]')];
+  const liens = [...document.querySelectorAll('[data-rail="pinned"] a[data-story-author]')];
   (liens[liens.length - 1])?.focus();
 });
 const scrollTopAvantTab = await kbdPage.evaluate(() => document.getElementById('contenu')?.scrollTop ?? null);
@@ -733,15 +746,26 @@ constate(
 await kbdPage.keyboard.press('Tab');
 const apresSecondTab = await kbdPage.evaluate(() => ({
   dansGrandRail: document.activeElement?.closest('[data-rail="grande"]') !== null,
-  conversationId: document.activeElement?.getAttribute('data-conversation') ?? null,
+  /* L'ENVELOPPE, PAS SEULEMENT LE `<ul>` : les deux portes flottantes (« Créer
+     une story », « Voir toutes les stories ») vivent DANS la `<section>` du
+     grand plateau, à CÔTÉ du rail — un `closest('[data-rail="grande"]')` ne les
+     voit pas. Elles tabulaient donc hors champ en toute impunité, et ramenaient
+     le plateau dans la vue exactement comme les tuiles. */
+  dansEnveloppeDuPlateau: document.activeElement?.closest('section:has([data-rail="grande"])') !== null,
+  storyAuthor: document.activeElement?.getAttribute('data-story-author') ?? null,
 }));
 constate(
   !apresSecondTab.dansGrandRail,
   'le second `Tab` depuis « Progression » entre dans le grand rail hors champ — il devrait être `inert`',
 );
 constate(
-  apresSecondTab.conversationId === null,
-  `le second \`Tab\` atterrit sur une tuile de conversation (${apresSecondTab.conversationId}) — un doublon de la bande, ` +
+  !apresSecondTab.dansEnveloppeDuPlateau,
+  'le second `Tab` atteint une porte flottante du grand plateau hors champ (« Créer une story » / « Voir toutes ») — ' +
+    "l'enveloppe doit être `inert` avec son rail",
+);
+constate(
+  apresSecondTab.storyAuthor === null,
+  `le second \`Tab\` atterrit sur une tuile de story (${apresSecondTab.storyAuthor}) — un doublon de la bande, ` +
     'jamais un contrôle nouveau',
 );
 
