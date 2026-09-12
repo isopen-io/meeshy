@@ -120,6 +120,8 @@ struct ComposerObjectEditorView: View {
     /// réglait. Le rendre optionnel aurait cassé l'invariant de #4936 pour
     /// exprimer un état que ce booléen dit sans y toucher.
     @State private var optionsAreCollapsed = false
+    /// Ce que le clavier vient d'annoncer — lu par l'exclusion de #6156.
+    @State private var keyboardTransition: KeyboardTransition?
 
     /// La hauteur du CONTENU du panneau d'options, remontée par
     /// `ComposerObjectEditorOptionsHeightKey` (#5083). Le panneau s'y ajuste
@@ -219,6 +221,10 @@ struct ComposerObjectEditorView: View {
                 historyRail
             }
         }
+        // **Le clavier du canvas et le panneau s'excluent** (#6156).
+        .excludingOptionsWhileTyping(keyboardTransition: $keyboardTransition,
+                                     optionsAreCollapsed: $optionsAreCollapsed,
+                                     section: selectedTool)
         // **Les options s'ANCRENT au bas, elles ne suivent pas la pile** (#5083,
         // directive porteur 2026-09-04 : « dans la page plein écran d'ajout de
         // texte il faut que les options soient en bas et non en milieu de
@@ -507,6 +513,14 @@ struct ComposerObjectEditorView: View {
                             afterTapping: entree,
                             selected: selectedTool,
                             wasCollapsed: optionsAreCollapsed)
+                        // **Choisir un outil rend le clavier** (#6156) : le
+                        // panneau qu'on ouvre et le clavier du canvas se
+                        // disputent le même bas d'écran. Le prédicat vit sur la
+                        // SECTION — DÉCRIRE porte son propre champ et garde donc
+                        // le sien.
+                        if ComposerObjectEditorRail.dismissesKeyboard(afterTapping: entree) {
+                            yieldKeyboard()
+                        }
                         selectedTool = entree
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
                             optionsAreCollapsed = range
@@ -627,12 +641,20 @@ struct ComposerObjectEditorView: View {
     /// demandé — il sortirait de l'édition, alors que le geste ne demande que
     /// de la place.
     private func yieldScreenToScene() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
-                                        to: nil, from: nil, for: nil)
+        yieldKeyboard()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
             optionsAreCollapsed = true
         }
         HapticFeedback.light()
+    }
+
+    /// **Rendre le clavier, sans rien décider d'autre.** Le champ n'est pas à
+    /// nous — le texte s'édite EN LIGNE dans le canvas UIKit — donc la
+    /// dismission passe par le responder GLOBAL. Deux appelants depuis #6156 :
+    /// le geste qui rend l'écran à la scène, et le choix d'un outil.
+    private func yieldKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
     }
 
     /// **Le panneau bas — UNE boîte, quelle que soit la famille qu'elle montre**
