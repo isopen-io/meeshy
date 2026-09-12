@@ -69,9 +69,33 @@ extension ConversationView {
             : DynamicColorGenerator.hueShiftedHex(composerAccent, degrees: 30)
     }
 
-    private var composerCore: AnyView { AnyView(composerCoreBody) }
+    /// **LE VUMÈTRE NE FAIT PLUS BATTRE TOUTE LA CONVERSATION** (#6226).
+    ///
+    /// `AudioRecorderManager` publie `duration` ET `audioLevels` (quinze
+    /// valeurs) **vingt fois par seconde** (`Timer` à 0,05 s,
+    /// `AudioRecorderManager.swift:131`). Tenu en `@StateObject` par la RACINE
+    /// — 2 746 lignes, le pont `MessageListView` compris — il ré-évaluait tout
+    /// l'écran de conversation vingt fois par seconde pendant l'enregistrement
+    /// d'un vocal, alors que seule la barre de composition lit ces valeurs.
+    ///
+    /// Même remède que pour le TEXTE, écrit juste à côté et pour la même
+    /// raison (`ConversationComposerTextModel`, #4105) : la racine tient
+    /// l'objet en `@State` — elle le POSSÈDE sans s'y ABONNER — et un hôte
+    /// minuscule en est l'unique observateur. `startRecording`,
+    /// `stopRecording`, `cancelRecording` et la lecture de `duration` à
+    /// l'arrêt continuent de passer par la racine : appeler une méthode
+    /// n'exige aucun abonnement.
+    private var composerCore: AnyView {
+        AnyView(ComposerAudioHost(recorder: audioRecorder) { isRecording, recordingDuration, audioLevels in
+            AnyView(composerCoreBody(isRecording: isRecording, recordingDuration: recordingDuration, audioLevels: audioLevels))
+        })
+    }
 
-    @ViewBuilder private var composerCoreBody: some View {
+    @ViewBuilder private func composerCoreBody(
+        isRecording: Bool,
+        recordingDuration: TimeInterval,
+        audioLevels: [CGFloat]
+    ) -> some View {
         ComposerTextHost(model: composerText) { textBinding in
             UniversalComposerBar(
             style: .light,
@@ -131,13 +155,13 @@ extension ConversationView {
             onCancelRecording: {
                 audioRecorder.cancelRecording()
             },
-            externalIsRecording: audioRecorder.isRecording,
-            externalRecordingDuration: audioRecorder.duration,
-            externalAudioLevels: audioRecorder.audioLevels,
+            externalIsRecording: isRecording,
+            externalRecordingDuration: recordingDuration,
+            externalAudioLevels: audioLevels,
             // `pendingPlace` inclus (parité PostDetailView / StoryViewerView) :
             // sans lui le bouton d'envoi reste inactif pour un message
             // « lieu seul », que les gardes acceptent pourtant désormais.
-            externalHasContent: !composerState.pendingAttachments.isEmpty || audioRecorder.isRecording || composerState.pendingPlace != nil,
+            externalHasContent: !composerState.pendingAttachments.isEmpty || isRecording || composerState.pendingPlace != nil,
             // ⚠️ NE PAS câbler `viewModel.isSending` ici : il reste true pendant
             // tout le cycle REST(12s)+fallback socket(10s) d'UN message — le
             // bouton d'envoi serait mort ~22s par message en réseau dégradé

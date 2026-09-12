@@ -101,6 +101,7 @@ struct ThreadedCommentSection: View {
                 storyState: storyState,
                 presenceState: presenceState
             )
+                .equatable()
 
             // Auto-show first 2 replies (no toggle needed)
             if !autoPreviewReplies.isEmpty && !isExpanded {
@@ -121,6 +122,7 @@ struct ThreadedCommentSection: View {
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
                         presenceState: replyPresenceResolver?(reply.authorId) ?? nil
                     )
+                        .equatable()
                     .padding(.leading, 36)
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
@@ -159,6 +161,7 @@ struct ThreadedCommentSection: View {
                         storyState: replyStoryResolver?(reply.authorId) ?? .none,
                         presenceState: replyPresenceResolver?(reply.authorId) ?? nil
                     )
+                        .equatable()
                     .padding(.leading, 36)
                     // Même style que le tint de section (les deux appelants) —
                     // au niveau de la rangée pour cibler UNE réponse précise.

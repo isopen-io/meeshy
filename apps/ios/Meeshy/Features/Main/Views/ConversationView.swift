@@ -266,7 +266,12 @@ struct ConversationView: View {
     /// Lecture/écriture depuis les handlers (send, mention, edit) via
     /// `composerText.text` — hors body, donc sans créer de dépendance.
     @State var composerText = ConversationComposerTextModel()
-    @StateObject var audioRecorder = AudioRecorderManager()
+    /// POSSÉDÉ, PAS OBSERVÉ (#6226) — `@State` et non `@StateObject` : le
+    /// vumètre publie vingt fois par seconde et la racine n'en lit aucune
+    /// valeur dans son `body`. Elle appelle des MÉTHODES, ce qui n'exige aucun
+    /// abonnement ; `ComposerAudioHost` est l'unique observateur. Même
+    /// dispositif que `composerText` deux lignes plus haut (#4105).
+    @State var audioRecorder = AudioRecorderManager()
     @State var scrollButtonAudioIsPlaying = false
     @StateObject var pendingAudioPlayer = AudioPlaybackManager()
     /// Composant unifié « Enregistrer » au niveau écran — sert l'action

@@ -176,7 +176,9 @@ struct FeedView: View {
     @State var isUploading = false
     @State var uploadProgress: UploadQueueProgress?
     @State var isLoadingMedia = false
-    @StateObject var audioRecorder = AudioRecorderManager()
+    // (#6226) `audioRecorder` retiré : déclaré ici, il n'était LU nulle part
+    // dans `FeedView*` — un abonnement à vingt hertz et une instance
+    // d'enregistreur vivante pour personne.
     @State private var pendingAttachmentType: String?
     @State var showEmojiPicker = false
     @State private var quoteTargetPost: FeedPost?

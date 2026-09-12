@@ -50,6 +50,7 @@ private struct ProfilePostsFallback: View {
                 VStack(spacing: 12) {
                     ForEach(posts, id: \.id) { post in
                         ProfilePostRow(post: post, accentColor: accentColor)
+                            .equatable()
                             .padding(.horizontal, 20)
                     }
                 }
