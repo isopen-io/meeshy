@@ -182,6 +182,12 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Models/ConversationFilterLabel.swift",  // 9
         "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift",  // 9
+        // #6145 — le menu ⋯ a emporté quatre clés hors du fichier épinglé (les
+        // deux verbes, la note de marque, le libellé VoiceOver du glyphe). Un
+        // cliquet ancré sur un CHEMIN cesse de voir ce qu'une découpe déplace,
+        // et il cesse de le voir EN SILENCE : sa destination s'inscrit donc
+        // dans le même commit (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Menu.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift",  // 9
         "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 8
         "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8

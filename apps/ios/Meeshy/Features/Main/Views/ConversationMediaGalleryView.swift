@@ -137,7 +137,10 @@ struct ConversationMediaGalleryView: View {
     /// s'écrit qu'en un endroit — `onEnterStage`, `+Presentation.swift` — et il
     /// commande DEUX choses : le plateau, et les cotes que le solveur rend.
     @State var stagePresentation: StagePresentation = .carded
-    @StateObject private var saveCoordinator = MediaSaveCoordinator()
+    /// `internal` — le menu ⋯ le PILOTE depuis `+Menu.swift`, et `private` est
+    /// une portée de FICHIER. Même prix que celui payé par `currentPageID`
+    /// au-dessus, et pour la même raison.
+    @StateObject var saveCoordinator = MediaSaveCoordinator()
     // Plain reference (NOT @ObservedObject): only `activeURL`/`player` identity
     // drive this root's rendering (`videoTransportLayer`) — the manager also
     // publishes `currentTime` at 5-10Hz, which used to re-render the WHOLE
@@ -189,13 +192,6 @@ struct ConversationMediaGalleryView: View {
     var currentIndex: Int {
         guard let currentPageID, let index = indexByID[currentPageID] else { return 0 }
         return index
-    }
-
-    /// Annonce VoiceOver de l'état du bouton d'enregistrement. Vide au repos.
-    private var saveStateAccessibilityValue: String {
-        saveCoordinator.isProcessing
-            ? String(localized: "common.saving", defaultValue: "Enregistrement…", bundle: .main)
-            : ""
     }
 
     /// **Le texte de la légende, dans la langue courante** — source UNIQUE pour
@@ -531,32 +527,11 @@ struct ConversationMediaGalleryView: View {
                 // chaque vignette du rail (`FilmstripThumbnail`).
                 Spacer()
 
-                if currentIndex < allAttachments.count {
-                    Button { requestSaveCurrent() } label: {
-                        Group {
-                            if saveCoordinator.isProcessing {
-                                ProgressView().tint(.white)
-                            } else {
-                                Image(systemName: "arrow.down.to.line")
-                            }
-                        }
-                        // Chrome : glyphe d'état figé dans un cadre tap fixe
-                        // 40×40 (doctrine 82i) — ne pas scaler.
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
-                        .frame(width: 40, height: 40)
-                        .adaptiveGlass(in: Circle(), interactive: true)
-                    }
-                    .disabled(saveCoordinator.isProcessing)
-                    .accessibilityLabel(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main))
-                    .accessibilityValue(saveStateAccessibilityValue)
-                    // Composant UNIFIÉ « Enregistrer » : même sheet de
-                    // destinations pour image et vidéo (Photos / Fichiers /
-                    // Partager), issue via toast + haptics.
-                    .mediaSaveFlow(saveCoordinator)
-                } else {
-                    Color.clear.frame(width: 40, height: 40)
-                }
+                // La flèche d'enregistrement direct a cédé la place au menu ⋯
+                // (#6145, directive porteur) : l'enregistrement y est devenu une
+                // ENTRÉE, à côté du partage hors de l'application. Le menu et
+                // ses deux transports vivent dans `+Menu.swift`.
+                overflowMenu
             }
             .padding(.horizontal, MediaGalleryStage.gutter + 2)
             .frame(height: MediaGalleryStage.topCorridorHeight)
@@ -970,20 +945,5 @@ struct ConversationMediaGalleryView: View {
         guard let range = GalleryRenderWindow.prefetchRange(around: index, count: allAttachments.count)
         else { return }
         range.forEach { cacheAttachment(allAttachments[$0]) }
-    }
-
-    private func requestSaveCurrent() {
-        guard currentIndex < allAttachments.count else { return }
-        let att = allAttachments[currentIndex]
-        let urlStr = att.fileUrl.isEmpty ? (att.thumbnailUrl ?? "") : att.fileUrl
-        guard !urlStr.isEmpty else { return }
-        HapticFeedback.light()
-        saveCoordinator.requestSave(MediaSaveRequest(
-            kind: att.type == .video ? .video : .image,
-            origin: .transmitted,
-            remoteURLString: urlStr,
-            suggestedFileName: att.originalName.isEmpty ? nil : att.originalName,
-            attachmentId: att.id.isEmpty ? nil : att.id
-        ))
     }
 }
