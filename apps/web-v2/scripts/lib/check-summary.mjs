@@ -1,6 +1,9 @@
 import { join } from 'node:path';
 
 import { contrastOf } from './contrast.mjs';
+/* L'HORLOGE ÉPINGLÉE (#6130) — voir `instant.mjs`. Ce module partage le corpus
+   du fil, donc la même fenêtre de rouge nocturne que son hôte. */
+import { pageÀInstantFigé } from './instant.mjs';
 
 /**
  * LA MISE EN ÉVIDENCE D'UN SAUT SE MESURE PAR CONDITION, JAMAIS AU CHRONOMÈTRE
@@ -63,7 +66,7 @@ export async function checkLivingSummary({ browser, BASE, CAPTURES, setScheme, e
   {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     await setScheme(context, 'dark');
-    const page = await context.newPage();
+    const page = await pageÀInstantFigé(context);
     await page.goto(`${BASE}/c/c-rattrapage`, { waitUntil: 'load' });
     await page.waitForSelector('main [data-summary]');
     await page.waitForTimeout(200);
@@ -311,7 +314,7 @@ export async function checkLivingSummary({ browser, BASE, CAPTURES, setScheme, e
   {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     await setScheme(context, 'light');
-    const page = await context.newPage();
+    const page = await pageÀInstantFigé(context);
     await page.goto(`${BASE}/c/c-rattrapage`, { waitUntil: 'load' });
     await page.waitForSelector('main [data-summary]');
     await page.waitForTimeout(200);
@@ -343,7 +346,7 @@ export async function checkLivingSummary({ browser, BASE, CAPTURES, setScheme, e
   {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     await setScheme(context, 'dark');
-    const page = await context.newPage();
+    const page = await pageÀInstantFigé(context);
     await page.goto(`${BASE}/c/c-rattrapage`, { waitUntil: 'load' });
     await page.waitForSelector('main [data-summary]');
     await context.setOffline(true);
