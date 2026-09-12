@@ -98,3 +98,75 @@ export function ladderRungOffset(index: number, expandsDown: boolean): number {
  */
 export const FLOATING_SIDE = 20;
 export const FLOATING_RESERVE = FLOATING_SIDE + FLOATING_BUTTON;
+
+/**
+ * **CE QUE LE BOUTON PEUT ATTEINDRE** — les trois couloirs, lus depuis le CSS
+ * plutôt que recopiés ici.
+ *
+ * Ils vivent dans `styles/floating-menus.css`, où ils sont MESURÉS et où
+ * `env(safe-area-inset-top)` les résout. Une seconde table de nombres en
+ * JavaScript aurait été la jumelle divergente que ce dépôt interdit — et elle
+ * aurait divergé au pire endroit : le bouton se serait posé à un endroit et
+ * dessiné à un autre.
+ */
+export type FloatingBounds = {
+  readonly width: number;
+  readonly height: number;
+  readonly side: number;
+  readonly top: number;
+  readonly bottom: number;
+};
+
+/**
+ * **Le seuil qui départage un APPUI d'un DÉPLACEMENT**, en pixels.
+ *
+ * iOS n'en a pas besoin : `DragGesture` et `TapGesture` y cohabitent par
+ * `simultaneousGesture`. Le web n'a pas d'équivalent — c'est la DISTANCE
+ * parcourue qui tranche, exactement comme `LONG_PRESS_MAX_DISTANCE_PX` le fait
+ * déjà dans `long-press.ts`, et la valeur est la même pour que deux gestes de
+ * la même application n'aient pas deux tolérances au tremblement.
+ */
+export const FLOATING_DRAG_THRESHOLD = 6;
+
+export function isFloatingDrag(distance: number): boolean {
+  return distance > FLOATING_DRAG_THRESHOLD;
+}
+
+const borne = (valeur: number) => Math.min(1, Math.max(0, valeur));
+
+/**
+ * **Un point de l'écran devient une FRACTION du couloir** — miroir de
+ * `normalizedPosition` (`FloatingButtons.swift:277-306`).
+ *
+ * Deux règles, et elles ne sont pas symétriques :
+ *
+ * - **l'horizontale S'ACCROCHE** (`x < 0.5 ? 0 : 1`) : un bouton laissé au
+ *   milieu d'un bord mangerait le contenu des deux côtés, et l'échelle n'aurait
+ *   plus d'axe ;
+ * - **la verticale reste LIBRE**, simplement bornée : c'est ce qui permet de
+ *   poser le bouton à la hauteur de son pouce, et c'est toute la différence
+ *   entre un objet déplaçable et quatre coins.
+ *
+ * Le cadre DÉGÉNÉRÉ — une fenêtre plus courte que ses propres couloirs, ce
+ * qu'un clavier logiciel produit — rend une division par zéro. Sans la garde,
+ * le `NaN` traverse jusqu'au `calc()`, où il ne lève AUCUNE erreur : il fait
+ * simplement disparaître le bouton.
+ */
+export function normalizeFloating(
+  centre: { readonly x: number; readonly y: number },
+  bounds: FloatingBounds,
+): FloatingFraction {
+  const rayon = FLOATING_BUTTON / 2;
+  const minX = bounds.side + rayon;
+  const maxX = bounds.width - bounds.side - rayon;
+  const minY = bounds.top + rayon;
+  const maxY = bounds.height - bounds.bottom - rayon;
+
+  const largeur = maxX - minX;
+  const hauteur = maxY - minY;
+
+  const x = largeur <= 0 ? 0 : borne((centre.x - minX) / largeur);
+  const y = hauteur <= 0 ? 0 : borne((centre.y - minY) / hauteur);
+
+  return { x: x < 0.5 ? 0 : 1, y };
+}

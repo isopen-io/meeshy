@@ -17,6 +17,7 @@ import {
   ladderExpandsDown,
   ladderRungOffset,
 } from '@/lib/view/floating-pose';
+import { useFloatingDrag } from '@/lib/view/use-floating-drag';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { Link, href, navigate } from '@/routes/route-table';
@@ -65,7 +66,9 @@ const MENU_GRADIENT_OPEN = 'linear-gradient(135deg, #F87171, #A5B4FC)';
 
 export function FloatingMenus() {
   const session = useStore(sessionStore, (s) => s.session);
-  const expandsDown = ladderExpandsDown(MENU_DEFAULT.y);
+  const flux = useFloatingDrag('feed', FEED_DEFAULT);
+  const menu = useFloatingDrag('menu', MENU_DEFAULT);
+  const expandsDown = ladderExpandsDown(menu.position.y);
 
   const roving = useRovingMenu({ itemCount: MENU_LADDER.length });
   const { open, setOpen, closeAndFocusButton, activeIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown } = roving;
@@ -85,6 +88,7 @@ export function FloatingMenus() {
    * instant : « Ouvrir le menu » puis « Ouvrir mon profil ».
    */
   const onMenuButton = () => {
+    if (menu.consumeClick()) return;
     if (open) {
       setOpen(false);
       navigate(href('profile'));
@@ -97,19 +101,61 @@ export function FloatingMenus() {
     <div className="floating-menus pointer-events-none fixed inset-0 z-30">
       {open ? <LadderDismissLayer onClose={closeAndFocusButton} /> : null}
 
+      {/* LES DEUX TÉMOINS DE POSITION — voir `use-floating-drag.ts`. Ils
+          portent la MÊME pose que les boutons, aux deux extrêmes de la
+          course : c'est d'eux que le geste tire les quatre bornes, plutôt
+          que d'une seconde table de nombres qui aurait divergé. */}
+      <span
+        data-floating-probe="start"
+        aria-hidden="true"
+        className="absolute"
+        style={{ left: floatingLeft({ x: 0, y: 0 }), top: floatingTop({ x: 0, y: 0 }), width: 0, height: 0 }}
+      />
+      <span
+        data-floating-probe="end"
+        aria-hidden="true"
+        className="absolute"
+        style={{ left: floatingLeft({ x: 1, y: 1 }), top: floatingTop({ x: 1, y: 1 }), width: 0, height: 0 }}
+      />
+
       {/* LE BOUTON DE GAUCHE — un LIEN, parce qu'il navigue et rien d'autre. */}
       <Link
         to="feed"
         data-floating-feed
+        data-dragging={flux.dragging ? 'true' : undefined}
         aria-label={FEED_DESTINATION.label}
-        className="floating-disc pointer-events-auto absolute grid place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+        onPointerDown={flux.onPointerDown}
+        onPointerMove={flux.onPointerMove}
+        onPointerUp={flux.onPointerUp}
+        onPointerCancel={flux.onPointerCancel}
+        /* **UN LIEN EST NATIVEMENT DÉPLAÇABLE**, et c'est ce qui cassait le
+           geste : le glisser-déposer du navigateur démarrait au premier
+           mouvement, emportait la suite des événements de pointeur, et le
+           disque se figeait à mi-course sans que rien ne soit enregistré.
+           Mesuré à la recette. Le défaut n'existe QUE sur le bouton de gauche,
+           parce qu'il est le seul des deux à être un lien. */
+        draggable={false}
+        onDragStart={(event) => event.preventDefault()}
+        /* UN DÉPLACEMENT N'OUVRE RIEN. `Link` consulte `defaultPrevented`
+           après avoir appelé ce gestionnaire : c'est la porte par laquelle un
+           geste de déplacement avale la navigation qu'il aurait déclenchée. */
+        onClick={(event) => {
+          if (flux.consumeClick()) event.preventDefault();
+        }}
+        className="floating-disc pointer-events-auto absolute grid touch-none place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{
-          left: floatingLeft(FEED_DEFAULT),
-          top: floatingTop(FEED_DEFAULT),
+          left: floatingLeft(flux.position),
+          top: floatingTop(flux.position),
           width: FLOATING_BUTTON,
           height: FLOATING_BUTTON,
           backgroundImage: FEED_GRADIENT,
           outlineColor: 'var(--color-ios-brand)',
+          /* `scale(1.15)` accompagne le déplacement — `FloatingButtons.swift:332`.
+             Il dit « c'est bien CE disque que tu tiens », au moment précis où le
+             doigt le recouvre entièrement. */
+          ...(flux.offset === null
+            ? {}
+            : { transform: `translate(${flux.offset.x}px, ${flux.offset.y}px) scale(1.15)` }),
         }}
       >
         <MenuGlyph glyph={FEED_DESTINATION.glyph} size={22} />
@@ -120,10 +166,13 @@ export function FloatingMenus() {
       <div
         className="pointer-events-none absolute"
         style={{
-          left: floatingLeft(MENU_DEFAULT),
-          top: floatingTop(MENU_DEFAULT),
+          left: floatingLeft(menu.position),
+          top: floatingTop(menu.position),
           width: FLOATING_BUTTON,
           height: FLOATING_BUTTON,
+          ...(menu.offset === null
+            ? {}
+            : { transform: `translate(${menu.offset.x}px, ${menu.offset.y}px) scale(1.15)` }),
         }}
       >
         {open ? (
@@ -170,12 +219,17 @@ export function FloatingMenus() {
           /* La PRISE des gates et des recettes. Sans elle, `aria-haspopup` ne
              désigne rien : chaque rangée de la liste en porte un aussi. */
           data-floating-menu={open ? 'open' : 'closed'}
+          data-dragging={menu.dragging ? 'true' : undefined}
           type="button"
+          onPointerDown={menu.onPointerDown}
+          onPointerMove={menu.onPointerMove}
+          onPointerUp={menu.onPointerUp}
+          onPointerCancel={menu.onPointerCancel}
           onClick={onMenuButton}
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={open ? PROFILE_DESTINATION.label : 'Menu'}
-          className="floating-disc pointer-events-auto absolute inset-0 grid place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="floating-disc pointer-events-auto absolute inset-0 grid touch-none place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{
             backgroundImage: open ? MENU_GRADIENT_OPEN : MENU_GRADIENT,
             outlineColor: 'var(--color-ios-brand)',

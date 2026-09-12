@@ -84,6 +84,26 @@
 }
 
 /**
+ * PENDANT LE GESTE, AUCUNE TRANSITION.
+ *
+ * `.floating-disc` amortit `transform` sur 160 ms — juste pour l'enfoncement,
+ * faux pour un déplacement : le disque suivrait le doigt avec un sixième de
+ * seconde de retard, ce qui se lit comme une application qui rame (dimension 4)
+ * alors que rien n'est perdu. Le décalage vivant est posé en ligne par
+ * `use-floating-drag.ts` à chaque `pointermove` ; il doit s'appliquer SEC.
+ *
+ * Et l'enfoncement `:active` est neutralisé du même coup : il vaut pour un
+ * appui, jamais pour une course — sans quoi le disque rapetisserait pendant
+ * qu'on le traîne, à l'exact opposé du `scale(1.15)` d'iOS.
+ */
+[data-dragging] .floating-disc,
+.floating-disc[data-dragging],
+.floating-disc[data-dragging]:active {
+  transition: none;
+  transform: none;
+}
+
+/**
  * LA CASCADE DES BARREAUX — `menuAnimation` d'iOS (`RootView.swift:1756-1767`) :
  * chaque barreau naît à 30 % de sa taille, tourné de −30°, avec 0,04 s de
  * retard par rang.
