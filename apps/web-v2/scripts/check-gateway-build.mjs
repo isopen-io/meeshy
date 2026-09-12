@@ -19,6 +19,8 @@
  *     `[data-row]` APRÈS — et le premier `offsetTop` ne bouge PAS entre les
  *     deux (la géométrie du squelette est celle de la rangée réelle, F5).
  *  3. `/login` avec une session déjà active redirige vers `/`.
+ *  4. `/conversations/new` est PRIVÉE (un visiteur sans session en est sorti) et
+ *     une recherche en ÉCHEC y peint une ALERTE, jamais un écran blanc (#5652).
  *
  * Construit dans `dist-gateway` (couvert par le motif `dist-*` du
  * `.gitignore`, jamais commité) — même discipline que `check-shell-dist.mjs`.
@@ -440,6 +442,81 @@ async function main() {
     check(
       pinnedOnError === 0,
       `échec à cache vide : aucune bande épinglée ne se matérialise sans grand rail (obtenu : ${pinnedOnError})`,
+    );
+    await context.close();
+  }
+
+  // --- 6. `/conversations/new` : route PRIVÉE, et un échec de recherche ------
+  //        se VOIT (jamais un écran blanc) — #5652 ---------------------------
+  {
+    /* SANS session : la garde sort le visiteur (`PRIVATE_ROUTES`,
+       `lib/session-guard.ts`). La route est arrivée avec son écran sans être
+       déclarée privée — un visiteur anonyme y trouvait une recherche que la
+       passerelle refuse, au lieu de l'écran de connexion. */
+    const anonContext = await browser.newContext();
+    const anonPage = await anonContext.newPage();
+    await anonPage.route('**/api/v1/conversations', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: [], pagination: { limit: 30, offset: 0, total: 0, hasMore: false } }),
+      });
+    });
+    await anonPage.route('**/api/v1/posts/feed/stories**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: [] }) });
+    });
+    await anonPage.route('**/socket.io/**', (route) => route.abort());
+    await anonPage.goto(`${base}/conversations/new`, { waitUntil: 'networkidle' });
+    const anonPath = await anonPage.evaluate(() => window.location.pathname);
+    check(anonPath !== '/conversations/new', `sans session, /conversations/new ne s'ouvre pas (obtenu : ${anonPath})`);
+    await anonContext.close();
+
+    /* AVEC session, recherche en ÉCHEC : une ALERTE et un « Réessayer », jamais
+       une liste vide — « erreur avalée en VIDE = vide légitime ». */
+    const context = await browser.newContext();
+    await context.addInitScript((session) => {
+      window.localStorage.setItem('meeshy.session', JSON.stringify(session));
+    }, SESSION);
+    const page = await context.newPage();
+    await page.route('**/api/v1/conversations', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: [], pagination: { limit: 30, offset: 0, total: 0, hasMore: false } }),
+      });
+    });
+    await page.route('**/api/v1/posts/feed/stories**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: [] }) });
+    });
+    await page.route('**/socket.io/**', (route) => route.abort());
+    await page.route('**/api/v1/directory/people**', async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: false, error: 'Internal server error' }),
+      });
+    });
+    await page.goto(`${base}/conversations/new`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('input[aria-label="Rechercher un contact"]', { timeout: 5000 });
+    await page.fill('input[aria-label="Rechercher un contact"]', 'ami');
+    /* L'ATTENTE EST PEINTE AVANT L'ALERTE — sinon l'écran est blanc pendant
+       toute la politique de reprise (`shouldRetry` : deux reprises, délai qui
+       double, ~10 s mesurées). */
+    const attente = await page
+      .waitForSelector('li[aria-live="polite"]', { timeout: 3000 })
+      .then(() => true)
+      .catch(() => false);
+    check(attente, "recherche en cours : l'attente est PEINTE, jamais un écran blanc");
+    /* 15 s : le budget de `shouldRetry` (3 tentatives, délai doublant) plus la
+       marge d'une CI chargée — jamais un nombre choisi au hasard. */
+    await page.waitForSelector('[role="alert"]', { timeout: 15000 }).catch(() => {});
+    const alerte = await page.locator('[role="alert"]').count();
+    check(alerte >= 1, `recherche en échec : une ALERTE est peinte, jamais un écran blanc (obtenu : ${alerte})`);
+    const retry = page.locator('[role="alert"] button');
+    const retryBox = (await retry.count()) === 0 ? null : await retry.first().boundingBox();
+    check(
+      retryBox !== null && Math.round(retryBox.height) >= 44,
+      `recherche en échec : « Réessayer » est offert à 44 px au moins (obtenu : ${retryBox === null ? 'absent' : Math.round(retryBox.height)})`,
     );
     await context.close();
   }

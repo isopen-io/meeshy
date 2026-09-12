@@ -1,4 +1,4 @@
-import type { StoryTrayPost } from './stories';
+import type { StatusMoodPost, StoryTrayPost } from './stories';
 
 /**
  * **LE PLATEAU EN FIXTURES** (#6080) — servi par le MÊME chemin que la
@@ -45,5 +45,21 @@ export const STORY_TRAY: readonly StoryTrayPost[] = [
     viewCount: 8,
     author: { id: 'u-poc', username: 'moi', displayName: 'Moi' },
     media: [{ id: 'm4', thumbnailUrl: '', mimeType: 'image/jpeg' }],
+  },
+];
+
+/**
+ * **LE CORPUS DES HUMEURS EN FIXTURES** (#5652) — même règle que `STORY_TRAY` :
+ * servi par le MÊME chemin que la passerelle (`loadStatusMoods`), jamais par
+ * une branche de l'écran. Inès porte une humeur active ET une story : sa
+ * pastille du rail exerce donc les DEUX signaux à la fois (anneau + badge),
+ * exactement le cas qu'iOS nomme dans `StoriesVivantsRail.swift`.
+ */
+export const STATUS_MOODS: readonly StatusMoodPost[] = [
+  {
+    id: 'st-humeur-ines',
+    authorId: 'u-ines',
+    moodEmoji: '🎉',
+    author: { id: 'u-ines', username: 'ines', firstName: 'Inès', lastName: 'Baraka' },
   },
 ];

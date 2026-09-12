@@ -50,6 +50,30 @@ nonisolated enum ComposerHashtags {
         return ordonnes
     }
 
+    /// **Ce qu'il faut BASCULER pour revenir à `avant`.**
+    ///
+    /// La feuille des hashtags ne tient aucune liste : elle bascule, et la
+    /// bascule est son propre inverse. Revenir en arrière, c'est donc rejouer
+    /// exactement la différence symétrique — ni plus (on détruirait ce que
+    /// l'auteur n'a pas touché), ni moins (le « Annuler » mentirait).
+    ///
+    /// > Écrit ici, et pas dans la vue, pour une raison précise : un « Annuler »
+    /// > qui ne défait rien FERME quand même la feuille, donc il a l'air de
+    /// > marcher. Seul un test de VALEUR distingue le contrat du mensonge, et
+    /// > un test de valeur a besoin d'une fonction à appeler.
+    ///
+    /// Comparée en minuscules comme tout le reste du fichier : `#Voyage` et
+    /// `#voyage` sont la même balise, et les compter pour deux ferait retirer
+    /// une balise que personne n'a touchée. RENDUE telle qu'écrite, parce que
+    /// c'est ce que la bascule attend.
+    static func togglesRestoring(_ actuel: [String], to avant: [String]) -> [String] {
+        let clesAvant = Set(avant.map { $0.lowercased() })
+        let clesActuel = Set(actuel.map { $0.lowercased() })
+        let ajoutees = actuel.filter { !clesAvant.contains($0.lowercased()) }
+        let retirees = avant.filter { !clesActuel.contains($0.lowercased()) }
+        return ajoutees + retirees
+    }
+
     /// **Ce que l'outil INSÈRE.** Il ne pose pas un objet : il écrit dans le
     /// texte de la publication, à la fin, précédé d'une espace s'il en manque
     /// une. C'est ce qui garde la dérivation ci-dessus comme SEULE source.

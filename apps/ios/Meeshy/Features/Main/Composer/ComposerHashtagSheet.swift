@@ -30,6 +30,16 @@ struct ComposerHashtagSheet: View {
     @State private var saisie: String = ""
     @FocusState private var champActif: Bool
 
+    @Environment(\.dismiss) private var dismiss
+
+    /// **Les balises d'avant l'ouverture, retenues pour pouvoir les RENDRE**
+    /// (#6134). Cette feuille écrit dans le TEXTE à chaque tap ; « Annuler » ne
+    /// peut donc pas se contenter de fermer, sinon il ment.
+    ///
+    /// Posé une seule fois : réécrire l'instantané à chaque affichage ferait
+    /// oublier le point de départ dès le premier retour de plan.
+    @State private var instantane: [String]?
+
     private var propre: String {
         saisie.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
     }
@@ -42,14 +52,15 @@ struct ComposerHashtagSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(ComposerAudienceCopy.hashtagsSection.capitalized)
-                    .font(MeeshyFont.relative(17, weight: .semibold))
-                    .foregroundStyle(.white)
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            // Le MÊME en-tête que la feuille Mention (#6134) — et son titre a
+            // désormais sa propre clé : réutiliser le libellé de la section
+            // interne faisait porter deux rôles à un seul mot, que le premier
+            // ajustement de l'un aurait cassé chez l'autre.
+            MeeshySheetHeader(
+                title: ComposerHashtagCopy.sheetTitle,
+                onCancel: { annuler() },
+                onDone: { dismiss() }
+            )
 
             champ
 
@@ -70,7 +81,26 @@ struct ComposerHashtagSheet: View {
         }
         .background(MeeshyColors.indigo950.ignoresSafeArea())
         .preferredColorScheme(.dark)
-        .onAppear { champActif = true }
+        // La MÊME présentation que la feuille Mention, par le MÊME modifieur
+        // (#6134 : « la feuille s'affiche en moitié d'écran comme la feuille
+        // mentionner en ce moment »). Recopier `[.medium, …]` ici donnerait deux
+        // déclarations du même fait, que le premier ajustement ferait diverger.
+        .modifier(AudiencePickerPresentationStyle())
+        .onAppear {
+            instantane = instantane ?? current
+            champActif = true
+        }
+    }
+
+    /// **Refuser, c'est REVENIR** — et la bascule étant son propre inverse, il
+    /// suffit de rejouer la différence symétrique. La règle est pure et vit
+    /// chez `ComposerHashtags`, parce qu'un « Annuler » qui ne défait rien
+    /// ferme quand même la feuille : seul un test de VALEUR l'attrape.
+    private func annuler() {
+        for tag in ComposerHashtags.togglesRestoring(current, to: instantane ?? current) {
+            onToggle(tag)
+        }
+        dismiss()
     }
 
     private var champ: some View {
@@ -175,6 +205,12 @@ nonisolated enum ComposerHashtagCopy {
 
     static var add: String {
         String(localized: "composer.hashtag.add", defaultValue: "Ajouter", bundle: .main)
+    }
+
+    /// Le titre de la FEUILLE — distinct du libellé de la section interne, qui
+    /// nomme un bloc de contenu et non l'écran (#6134).
+    static var sheetTitle: String {
+        String(localized: "composer.hashtag.sheetTitle", defaultValue: "Hashtags", bundle: .main)
     }
 
     static var trending: String {

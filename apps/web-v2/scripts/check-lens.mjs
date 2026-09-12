@@ -719,9 +719,9 @@ await headerContext.close();
  *    poursuit dans l'ordre du DOM jusqu'au prochain contrôle RÉEL (les
  *    filtres), pas jusqu'à un doublon des NEUF mêmes conversations.
  *
- * CE QUE CE TÉMOIN NE PROUVE PAS, ET POURQUOI CE N'EST PAS UN DÉFAUT : ce
- * second `Tab` fait tout de même sauter le `scrollTop` à 0 — mesuré, la
- * cible du DEUXIÈME `Tab` est le premier bouton de filtre (`aria-pressed`),
+ * CE QUE CE TÉMOIN NE PROUVE PAS, ET POURQUOI CE N'EST PAS UN DÉFAUT : le
+ * dernier `Tab` de la chaîne fait tout de même sauter le `scrollTop` à 0 —
+ * mesuré, la cible finale est le premier bouton de filtre (`aria-pressed`),
  * pas une tuile du grand rail, et ce bouton vit lui aussi dans le flux
  * défilant (décision #6070, filtres EN FLUX, comme sur iOS). Faire défiler
  * la page jusqu'au prochain contrôle atteint par tabulation est le
@@ -734,6 +734,19 @@ await headerContext.close();
  * régression, pas une correction. Suivi séparé, HORS PÉRIMÈTRE de #6103 : si
  * ce saut doit un jour disparaître, il porte sur les DEUX (rail ET filtres),
  * pas sur ce correctif de duplication.
+ *
+ * LA CHAÎNE COMPTE TROIS ARRÊTS, PAS UN (#6117, revue). Le MÊME commit qui a
+ * écrit ce témoin (#5652, « les deux boutons d'en-tête ont leur effet ») a
+ * posé « Créer un lien de partage » DEVANT « Nouvelle conversation » dans le
+ * DOM de l'en-tête — les deux boutons vivent entre le rail et « Progression »
+ * (`components/list-header.tsx`). Le témoin, écrit dans la même passe,
+ * attendait encore « Progression » au PREMIER `Tab` : il rougissait pour la
+ * même raison que la ligne 62 ci-dessus documente déjà pour une autre paire
+ * de sélecteurs — deux morceaux d'un même lot qui divergent parce que l'un
+ * décrit un DOM que l'autre vient de changer. La chaîne réelle est donc
+ * bande → partage → nouvelle conversation → progression, et chacun des TROIS
+ * arrêts doit éviter le grand rail hors champ et toute tuile de story — pas
+ * seulement le dernier.
  */
 const kbdContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const kbdPage = await kbdContext.newPage();
@@ -761,45 +774,49 @@ await kbdPage.evaluate(() => {
 });
 const scrollTopAvantTab = await kbdPage.evaluate(() => document.getElementById('contenu')?.scrollTop ?? null);
 
-await kbdPage.keyboard.press('Tab');
-const apresPremierTab = await kbdPage.evaluate(() => ({
-  ariaLabel: document.activeElement?.getAttribute('aria-label') ?? null,
-  scrollTop: document.getElementById('contenu')?.scrollTop ?? null,
-}));
-constate(
-  apresPremierTab.ariaLabel?.startsWith('Progression') === true,
-  `le premier \`Tab\` depuis la dernière tuile de la bande ne rejoint pas « Progression » (${apresPremierTab.ariaLabel})`,
-);
-constate(
-  apresPremierTab.scrollTop === scrollTopAvantTab,
-  `le premier \`Tab\` a déplacé le scrollport (${scrollTopAvantTab} → ${apresPremierTab.scrollTop})`,
-);
-
-await kbdPage.keyboard.press('Tab');
-const apresSecondTab = await kbdPage.evaluate(() => ({
-  dansGrandRail: document.activeElement?.closest('[data-rail="grande"]') !== null,
-  /* L'ENVELOPPE, PAS SEULEMENT LE `<ul>` : les deux portes flottantes (« Créer
-     une story », « Voir toutes les stories ») vivent DANS la `<section>` du
-     grand plateau, à CÔTÉ du rail — un `closest('[data-rail="grande"]')` ne les
-     voit pas. Elles tabulaient donc hors champ en toute impunité, et ramenaient
-     le plateau dans la vue exactement comme les tuiles. */
-  dansEnveloppeDuPlateau: document.activeElement?.closest('section:has([data-rail="grande"])') !== null,
-  storyAuthor: document.activeElement?.getAttribute('data-story-author') ?? null,
-}));
-constate(
-  !apresSecondTab.dansGrandRail,
-  'le second `Tab` depuis « Progression » entre dans le grand rail hors champ — il devrait être `inert`',
-);
-constate(
-  !apresSecondTab.dansEnveloppeDuPlateau,
-  'le second `Tab` atteint une porte flottante du grand plateau hors champ (« Créer une story » / « Voir toutes ») — ' +
-    "l'enveloppe doit être `inert` avec son rail",
-);
-constate(
-  apresSecondTab.storyAuthor === null,
-  `le second \`Tab\` atterrit sur une tuile de story (${apresSecondTab.storyAuthor}) — un doublon de la bande, ` +
-    'jamais un contrôle nouveau',
-);
+/* Les trois arrêts réels de la chaîne, dans l'ordre du DOM de
+   `list-header.tsx` : « Créer un lien de partage », « Nouvelle
+   conversation », « Progression ». Chacun doit éviter le grand rail hors
+   champ ET toute tuile de story — jamais seulement le dernier arrêt. */
+const CHAINE = ['Créer un lien de partage', 'Nouvelle conversation', 'Progression'];
+for (const [index, attendu] of CHAINE.entries()) {
+  await kbdPage.keyboard.press('Tab');
+  const apres = await kbdPage.evaluate(() => ({
+    ariaLabel: document.activeElement?.getAttribute('aria-label') ?? null,
+    scrollTop: document.getElementById('contenu')?.scrollTop ?? null,
+    dansGrandRail: document.activeElement?.closest('[data-rail="grande"]') !== null,
+    /* L'ENVELOPPE, PAS SEULEMENT LE `<ul>` : les deux portes flottantes (« Créer
+       une story », « Voir toutes les stories ») vivent DANS la `<section>` du
+       grand plateau, à CÔTÉ du rail — un `closest('[data-rail="grande"]')` ne les
+       voit pas. Elles tabulaient donc hors champ en toute impunité, et ramenaient
+       le plateau dans la vue exactement comme les tuiles. */
+    dansEnveloppeDuPlateau: document.activeElement?.closest('section:has([data-rail="grande"])') !== null,
+    storyAuthor: document.activeElement?.getAttribute('data-story-author') ?? null,
+  }));
+  const rang = index + 1;
+  constate(
+    apres.ariaLabel?.startsWith(attendu) === true,
+    `le ${rang}e \`Tab\` depuis la dernière tuile de la bande ne rejoint pas « ${attendu} » (${apres.ariaLabel})`,
+  );
+  constate(
+    apres.scrollTop === scrollTopAvantTab,
+    `le ${rang}e \`Tab\` a déplacé le scrollport (${scrollTopAvantTab} → ${apres.scrollTop})`,
+  );
+  constate(
+    !apres.dansGrandRail,
+    `le ${rang}e \`Tab\` entre dans le grand rail hors champ — il devrait être \`inert\``,
+  );
+  constate(
+    !apres.dansEnveloppeDuPlateau,
+    `le ${rang}e \`Tab\` atteint une porte flottante du grand plateau hors champ (« Créer une story » / « Voir toutes ») — ` +
+      "l'enveloppe doit être `inert` avec son rail",
+  );
+  constate(
+    apres.storyAuthor === null,
+    `le ${rang}e \`Tab\` atterrit sur une tuile de story (${apres.storyAuthor}) — un doublon de la bande, ` +
+      'jamais un contrôle nouveau',
+  );
+}
 
 await kbdPage.close();
 await kbdContext.close();

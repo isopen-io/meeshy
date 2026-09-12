@@ -8,22 +8,15 @@ import type { RowActionId } from '@/lib/view/row-actions';
 import { ApiError } from './client';
 import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery } from './conversations';
-import { apiDeps as deps } from './deps';
+import { apiDeps } from './deps';
 import type { Conversation, Participant } from './types';
 import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
 import { performReaction, type PerformReactionResult } from './reactions';
-import { storyTrayQueryOptions } from './stories';
-
-/**
- * `deps` — alias LOCAL de l'adaptateur unique `apiDeps` (`./deps`, #6151).
- * Le renommage garde ce fichier inchangé partout où `deps` était déjà écrit ;
- * `apiDeps` reste le SEUL endroit qui résout `apiConfig.source`
- * (`scripts/check-api-source.mjs` le garde).
- */
+import { statusMoodsQueryOptions, storyTrayQueryOptions } from './stories';
 
 export function useConversations() {
-  return useQuery(conversationsQuery(deps));
+  return useQuery(conversationsQuery(apiDeps));
 }
 
 /**
@@ -37,28 +30,39 @@ export function useConversations() {
  * une conversation marquée lue ailleurs gardait son compte pour toujours.
  */
 export function useConversationsSnapshot(): readonly Conversation[] | undefined {
-  return useQuery({ ...conversationsQuery(deps), enabled: false }).data;
+  return useQuery({ ...conversationsQuery(apiDeps), enabled: false }).data;
 }
 
 /**
- * **LE RAIL DE STORIES** (#6080) — même adaptateur, même `deps`, donc la même
- * règle de source : fixtures ou passerelle, résolu à la CONSTRUCTION.
+ * **LE RAIL DE STORIES** (#6080) — même adaptateur, même `apiDeps`, donc la
+ * même règle de source : fixtures ou passerelle, résolu à la CONSTRUCTION.
  *
  * `staleTime` de 60 s : une story vit vingt-quatre heures et le plateau n'a
  * aucune raison d'être refetché à chaque retour sur la liste. Au-delà, c'est
  * le socket qui doit prévenir — issue compagnon, comme pour les messages.
  */
 export function useStoryTray() {
-  return useQuery({ ...storyTrayQueryOptions(deps), staleTime: 60_000 });
+  return useQuery({ ...storyTrayQueryOptions(apiDeps), staleTime: 60_000 });
+}
+
+/**
+ * **LE CORPUS DES HUMEURS** (#5652) — même `apiDeps`, même règle de source
+ * que `useStoryTray`, un corpus DISTINCT (`?scope=statuses`, jamais
+ * `stories`). Même `staleTime` : une humeur, comme une story, vit une
+ * fenêtre courte (une heure — `PostType.STATUS`, `schema.prisma`) et n'a
+ * aucune raison d'être refetchée à chaque retour sur la liste.
+ */
+export function useStatusMoods() {
+  return useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000 });
 }
 
 export function useConversation(id: string) {
   const queryClient = useQueryClient();
-  return useQuery(conversationQuery(deps, id, { queryClient }));
+  return useQuery(conversationQuery(apiDeps, id, { queryClient }));
 }
 
 export function useMessages(id: string) {
-  return useQuery(messagesQuery(deps, id));
+  return useQuery(messagesQuery(apiDeps, id));
 }
 
 export type ThreadDataStatus = 'pending' | 'success' | 'refused' | 'error';
@@ -135,16 +139,16 @@ export function rowAction(conversationId: string, action: RowActionId): void {
   void performRowAction({
     conversationId,
     action,
-    deps: { ...deps, store: conversationStore, queryClient: appQueryClient },
+    deps: { ...apiDeps, store: conversationStore, queryClient: appQueryClient },
   });
 }
 
 /**
  * `sendAction`/`retrySendAction` (#5813, étape 6) — RÉFÉRENCES DE MODULE
  * STABLES, motif `rowAction` ci-dessus : liées aux instances PARTAGÉES
- * (`appQueryClient`, `outboxStore`) et à `deps` (la SEULE résolution de
- * `apiConfig.source`, `:20`). `online` est REÇU — ce module n'appelle pas
- * `useOnline()` (un hook), c'est `use-send.ts` qui le fournit.
+ * (`appQueryClient`, `outboxStore`) et à `apiDeps` (la SEULE résolution de
+ * `apiConfig.source`, `./deps.ts`). `online` est REÇU — ce module n'appelle
+ * pas `useOnline()` (un hook), c'est `use-send.ts` qui le fournit.
  */
 export function sendAction(params: {
   readonly conversationId: string;
@@ -159,7 +163,7 @@ export function sendAction(params: {
     draft,
     viewerId,
     ...(sender === undefined ? {} : { sender }),
-    deps: { ...deps, queryClient: appQueryClient, outbox: outboxStore, online },
+    deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online },
   });
 }
 
@@ -172,7 +176,7 @@ export function retrySendAction(params: {
   return retrySend({
     conversationId,
     clientMessageId,
-    deps: { ...deps, queryClient: appQueryClient, outbox: outboxStore, online },
+    deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online },
   });
 }
 
@@ -183,5 +187,5 @@ export function retrySendAction(params: {
  * jamais une seconde écriture du plan optimiste.
  */
 export function reactAction(conversationId: string, messageId: string, emoji: string): Promise<PerformReactionResult> {
-  return performReaction({ conversationId, messageId, emoji, deps: { ...deps, queryClient: appQueryClient } });
+  return performReaction({ conversationId, messageId, emoji, deps: { ...apiDeps, queryClient: appQueryClient } });
 }

@@ -1,7 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { StoryRail, type StoryRailProps } from '@/components/story-rail';
+import { ShareLinkSheet } from '@/components/share-link-sheet';
 import { Glyph } from '@/components/glyph';
+import { apiDeps } from '@/lib/api/deps';
+import type { Conversation } from '@/lib/api/types';
 import { HIDDEN_CHROME_EASE_OUT_MS } from '@/lib/reading-mode/metrics';
 import { Link } from '@/routes/route-table';
 
@@ -59,16 +62,31 @@ import { Link } from '@/routes/route-table';
  * se voyait ARRACHER le curseur du champ pour le poser sur une tuile du
  * rail. Le seul fait qui autorise la reprise est donc celui qui la motive :
  * que le retrait ait laissé le focus sur `<body>`.
+ *
+ * LES DEUX BOUTONS D'EN-TÊTE (#5652, bloc D, réaccordés à la fusion #6080) —
+ * miroir des deux cercles `AdaptiveGlassContainer`
+ * (`ConversationListView+Overlays.swift:1056-1087`) : « Créer un lien de
+ * partage » (a besoin du corpus complet pour en filtrer les conversations
+ * ÉLIGIBLES, `canCreateShareLink`) et « Nouvelle conversation » (une route,
+ * aucun corpus requis). Reçus en props plutôt que dérivés de `railProps` — ce
+ * ne sont PLUS les mêmes objets depuis que le rail porte des STORIES (écart 7
+ * de `targets/lentille.md`).
  */
 export function ListHeader({
   pinned,
   railProps,
+  conversations,
+  viewerId,
 }: {
   readonly pinned: boolean;
   readonly railProps: StoryRailProps;
+  readonly conversations: readonly Conversation[];
+  readonly viewerId: string;
 }) {
   const lastFocusedIdRef = useRef<string | null>(null);
   const wasPinnedRef = useRef(pinned);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     const id = lastFocusedIdRef.current;
@@ -126,6 +144,39 @@ export function ListHeader({
         ) : null}
       </div>
       {/*
+        LES DEUX BOUTONS D'EN-TÊTE (#5652, bloc D) — miroir des deux cercles
+        d'iOS (`ConversationListView+Overlays.swift:1056-1087`), à la cote
+        `size-11` (44 px, charte dimension 5 — l'original iOS est à 40, un
+        écart de la cible que la charte du dépôt ne recopie pas).
+      */}
+      <button
+        type="button"
+        onClick={() => setShareSheetOpen(true)}
+        aria-label="Créer un lien de partage"
+        className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+      >
+        <span
+          className="grid size-8 place-items-center rounded-chip"
+          style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 14%, transparent)' }}
+        >
+          <Glyph name="linkSimple" size={16} />
+        </span>
+      </button>
+      <Link
+        to="conversationsNew"
+        aria-label="Nouvelle conversation"
+        className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+      >
+        <span
+          className="grid size-8 place-items-center rounded-chip"
+          style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 14%, transparent)' }}
+        >
+          <Glyph name="plus" size={16} />
+        </span>
+      </Link>
+      {/*
         L'ENTRÉE DU TABLEAU DE BORD « PROGRESSION » (#5547, déplacée ici
         depuis `routes/conversations.tsx` — #6103). Sur iOS elle vit dans le
         profil et les réglages (#5698) ; la v3.1 n'a pas encore de `/me`
@@ -145,6 +196,23 @@ export function ListHeader({
           <Glyph name="trophy" size={16} />
         </span>
       </Link>
+
+      {/* Le retour d'un geste INVISIBLE (copie de lien) — annoncé au lecteur
+          d'écran, motif `QuickActions`. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {feedback ?? ''}
+      </p>
+
+      {shareSheetOpen ? (
+        <ShareLinkSheet
+          conversations={conversations}
+          viewerId={viewerId}
+          deps={apiDeps}
+          origin={window.location.origin}
+          onClose={() => setShareSheetOpen(false)}
+          onFeedback={setFeedback}
+        />
+      ) : null}
     </header>
   );
 }
