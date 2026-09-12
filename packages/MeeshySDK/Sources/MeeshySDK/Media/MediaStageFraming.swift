@@ -65,7 +65,11 @@ public nonisolated enum MediaStageFraming {
             self.gutter = gutter
         }
 
-        var reservedHeight: CGFloat { safeTop + top + rail + safeBottom + gutter }
+        /// Ce que les couloirs prennent à la hauteur AVANT que le cadre ne
+        /// prenne le reste. Publique parce que l'hôte doit poser SES bandes sur
+        /// la même arithmétique : recomposer la somme dans une vue, c'est
+        /// écrire la loi une seconde fois — et la voir dériver d'une gouttière.
+        public var reservedHeight: CGFloat { safeTop + top + rail + safeBottom + gutter }
     }
 
     public struct Input: Equatable, Sendable {

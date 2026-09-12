@@ -25,6 +25,11 @@ import MeeshyUI
 /// toutes les autres pages réalisées — à la fréquence d'affichage.
 struct GalleryImagePage: View, Equatable {
     let attachment: MessageAttachment
+    /// **Le cadre de CETTE page**, résolu par `MediaStageFraming` (#6141). La
+    /// page ne calcule aucune cote : elle reçoit celles du plateau, les mêmes
+    /// que l'overlay pose une couche plus haut — c'est ce qui garantit que le
+    /// texte se pose exactement sur l'image et non à côté.
+    let stage: MediaStageFraming.Result
     /// La page visible. Seule l'active répond aux gestes et rend l'image plein
     /// format en priorité ; les autres se contentent d'être prêtes.
     let isActive: Bool
@@ -40,6 +45,7 @@ struct GalleryImagePage: View, Equatable {
     /// deux drapeaux de position suffit à décider d'un re-rendu.
     static func == (lhs: GalleryImagePage, rhs: GalleryImagePage) -> Bool {
         lhs.attachment.id == rhs.attachment.id
+            && lhs.stage == rhs.stage
             && lhs.isActive == rhs.isActive
             && lhs.rendersFullPixels == rhs.rendersFullPixels
             && lhs.accessibilityLabel == rhs.accessibilityLabel
@@ -83,6 +89,10 @@ struct GalleryImagePage: View, Equatable {
     }
 
     var body: some View {
+        // **Le cadre arrondi** (#6141). Le noir est celui du CADRE, pas de
+        // l'écran : au-delà de lui c'est le plateau qui se voit. Le hors-champ
+        // habillé par le ThumbHash est #6143 ; d'ici là ce noir reste le fond
+        // honnête d'un média qui n'a pas encore décodé.
         ZStack {
             Color.black
 
@@ -103,6 +113,9 @@ struct GalleryImagePage: View, Equatable {
                 emptyStateGlyph
             }
         }
+        .frame(width: stage.frame.width, height: stage.frame.height)
+        .clipShape(RoundedRectangle(cornerRadius: stage.cornerRadius, style: .continuous))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture { onToggleControls() }
         .adaptiveOnChange(of: isActive) { _, active in
@@ -256,6 +269,8 @@ struct GalleryImagePage: View, Equatable {
 /// traverser une conversation de vingt vidéos en lançait vingt.
 struct GalleryVideoPage: View, Equatable {
     let attachment: MessageAttachment
+    /// Le cadre de cette page — voir `GalleryImagePage.stage` (#6141).
+    let stage: MediaStageFraming.Result
     let accentColor: String
     /// La page que l'utilisateur REGARDE (distance nulle), par opposition aux
     /// deux voisines que la fenêtre rend sans que personne ne les ait
@@ -269,6 +284,7 @@ struct GalleryVideoPage: View, Equatable {
 
     static func == (lhs: GalleryVideoPage, rhs: GalleryVideoPage) -> Bool {
         lhs.attachment.id == rhs.attachment.id
+            && lhs.stage == rhs.stage
             && lhs.accentColor == rhs.accentColor
             && lhs.isActive == rhs.isActive
             && lhs.isWindowed == rhs.isWindowed
@@ -276,6 +292,7 @@ struct GalleryVideoPage: View, Equatable {
 
     init(
         attachment: MessageAttachment,
+        stage: MediaStageFraming.Result,
         accentColor: String,
         isActive: Bool,
         isWindowed: Bool,
@@ -284,6 +301,7 @@ struct GalleryVideoPage: View, Equatable {
         onDismiss: @escaping () -> Void
     ) {
         self.attachment = attachment
+        self.stage = stage
         self.accentColor = accentColor
         self.isActive = isActive
         self.isWindowed = isWindowed
@@ -370,7 +388,12 @@ struct GalleryVideoPage: View, Equatable {
     }
 
     var body: some View {
+        // **Le cadre arrondi** (#6141) — voir `GalleryImagePage.body`. La couche
+        // `AVPlayerLayer` cesse d'ignorer la zone sûre : elle vit maintenant DANS
+        // le cadre, et c'est lui qui la borne.
         ZStack {
+            Color.black
+
             if !isPlayerActive || !surfaceReady {
                 thumbnailLayer
             }
@@ -382,7 +405,6 @@ struct GalleryVideoPage: View, Equatable {
                         gravity: .resizeAspect,
                         onReadyForDisplay: { surfaceReady = true }
                     )
-                        .ignoresSafeArea()
                 }
             }
 
@@ -395,6 +417,9 @@ struct GalleryVideoPage: View, Equatable {
                 playOrDownloadButton
             }
         }
+        .frame(width: stage.frame.width, height: stage.frame.height)
+        .clipShape(RoundedRectangle(cornerRadius: stage.cornerRadius, style: .continuous))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture { onToggleControls() }
         .offset(y: offset.height)

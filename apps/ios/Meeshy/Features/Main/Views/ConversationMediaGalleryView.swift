@@ -124,7 +124,10 @@ struct ConversationMediaGalleryView: View {
     private let indexByID: [String: Int]
 
     @Environment(\.dismiss) private var dismiss
-    @State private var currentPageID: String?
+    /// `internal` — le couloir bas du plateau le PILOTE depuis
+    /// `+Geometry.swift`, et `private` est une portée de FICHIER. Même prix que
+    /// celui payé par les pages au #4014, et pour la même raison.
+    @State var currentPageID: String?
     @State private var showControls = true
     @StateObject private var saveCoordinator = MediaSaveCoordinator()
     // Plain reference (NOT @ObservedObject): only `activeURL`/`player` identity
@@ -170,7 +173,7 @@ struct ConversationMediaGalleryView: View {
     /// Position courante, DÉRIVÉE de `currentPageID` — plus de `@State`
     /// miroir à tenir synchronisé (et donc plus d'écriture d'état, donc plus
     /// d'invalidation racine, à chaque page traversée).
-    private var currentIndex: Int {
+    var currentIndex: Int {
         guard let currentPageID, let index = indexByID[currentPageID] else { return 0 }
         return index
     }
@@ -295,14 +298,10 @@ struct ConversationMediaGalleryView: View {
     private var overlayLayer: some View {
         ZStack {
             if showControls {
+                // Le plateau ENTIER — les deux couloirs et ce qui se pose sur le
+                // cadre, transport vidéo compris (#6141) : il commande le média,
+                // donc il vit sur le cadre, plus dans une couche flottante à lui.
                 controlsOverlay
-                    .transition(.opacity)
-                // Contrôles de transport vidéo (play/pause/scrub/skip/speed/mute/pip)
-                // pour la vidéo en cours de lecture. Avant : la galerie rendait une
-                // couche AVPlayerLayer brute SANS aucun contrôle ("AUCUN CONTROLEUR").
-                // Composant SDK partagé `VideoTransportControls` piloté par le même
-                // `SharedAVPlayerManager`. Posé au-dessus des métadonnées (z-order).
-                videoTransportLayer
                     .transition(.opacity)
             }
         }
@@ -311,6 +310,9 @@ struct ConversationMediaGalleryView: View {
 
     // MARK: - Pager
 
+    /// **Le pager occupe la ZONE LIBRE, jamais l'écran entier** (#6141). Ses
+    /// deux retraits sont ceux que le solveur a réservés — lui et le plateau
+    /// lisent la MÊME table (`stageCorridors`, `+Geometry.swift`).
     private var galleryPager: some View {
         AdaptiveHorizontalPager(
             items: allAttachments,
@@ -319,6 +321,8 @@ struct ConversationMediaGalleryView: View {
         ) { index, attachment in
             galleryPage(attachment, index: index)
         }
+        .padding(.top, plateauTopInset)
+        .padding(.bottom, plateauBottomInset)
         .ignoresSafeArea()
         .adaptiveOnChange(of: currentPageID) { oldID, newID in
             handlePageChange(from: oldID, to: newID)
@@ -373,6 +377,7 @@ struct ConversationMediaGalleryView: View {
         case .image:
             GalleryImagePage(
                 attachment: attachment,
+                stage: stage(for: attachment),
                 isActive: distance == 0,
                 rendersFullPixels: GalleryRenderWindow.rendersFullPixels(distance: distance),
                 accessibilityLabel: imageAccessibilityLabel(attachment),
@@ -384,6 +389,7 @@ struct ConversationMediaGalleryView: View {
         case .video:
             GalleryVideoPage(
                 attachment: attachment,
+                stage: stage(for: attachment),
                 accentColor: accentColor,
                 isActive: distance == 0,
                 isWindowed: GalleryRenderWindow.rendersFullPixels(distance: distance),
@@ -481,6 +487,7 @@ struct ConversationMediaGalleryView: View {
         MediaCaptionOverlay(caption: text,
                             isExpanded: captionExpanded,
                             horizontalInset: 16,
+                            maxExpandedHeight: cadreCaptionMaxHeight,
                             // **« JUSTE afficher le texte déplié avec effet
                             // ombre »** — donc pas de voile en plus. Le
                             // dégradé noir du composant sert les hôtes qui
@@ -511,7 +518,6 @@ struct ConversationMediaGalleryView: View {
                         .foregroundColor(.white)
                         .frame(width: 40, height: 40)
                         .adaptiveGlass(in: Circle(), interactive: true)
-                        .padding()
                 }
                 .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
@@ -546,8 +552,6 @@ struct ConversationMediaGalleryView: View {
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: 40, height: 40)
                         .adaptiveGlass(in: Circle(), interactive: true)
-                        .padding(.trailing, 12)
-                        .padding(.top, 8)
                     }
                     .disabled(saveCoordinator.isProcessing)
                     .accessibilityLabel(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main))
@@ -557,14 +561,22 @@ struct ConversationMediaGalleryView: View {
                     // Partager), issue via toast + haptics.
                     .mediaSaveFlow(saveCoordinator)
                 } else {
-                    Color.clear.frame(width: 52, height: 40).padding(.trailing, 12)
+                    Color.clear.frame(width: 40, height: 40)
                 }
             }
+            .padding(.horizontal, MediaGalleryStage.gutter + 2)
+            .frame(height: MediaGalleryStage.topCorridorHeight)
 
-            Spacer(minLength: 0)
+            // LE CADRE, puis LE COULOIR BAS. Ce qui se pose sur le cadre part
+            // avec lui ; le rail reste au plateau (`+Geometry.swift`).
+            cadreRegion
+                .padding(.bottom, MediaGalleryStage.gutter)
 
-            bottomOverlay
+            railCorridor
         }
+        .padding(.top, stageCorridors.safeTop)
+        .padding(.bottom, stageCorridors.safeBottom)
+        .ignoresSafeArea()
     }
 
     // MARK: - Couche haute : la traînée d'émojis
@@ -704,10 +716,14 @@ struct ConversationMediaGalleryView: View {
         }
     }
 
-    /// Bas de l'écran : auteur du média, légende, puis — sur TOUTE la rangée,
-    /// par-dessous — la pellicule de toute la conversation.
+    /// Bas du CADRE : auteur du média, sa date, ses actions, puis la légende.
+    ///
+    /// **La pellicule n'est plus là** (#6141) : elle a rejoint le couloir bas du
+    /// plateau (`railCorridor`, `+Geometry.swift`), où plus aucune légende
+    /// dépliée ne peut la comprimer. Le voile, lui, a monté d'un cran
+    /// (`cadreOverlay`) : un dégradé par étage ferait deux lisières.
     @ViewBuilder
-    private var bottomOverlay: some View {
+    var bottomOverlay: some View {
         if currentIndex < allAttachments.count {
             let att = allAttachments[currentIndex]
             VStack(alignment: .leading, spacing: 0) {
@@ -744,31 +760,19 @@ struct ConversationMediaGalleryView: View {
                     captionLanguageRow(att.id)
                     captionOverlay(caption)
                 }
-                if allAttachments.count > 1 {
-                    ConversationMediaFilmstrip(
-                        attachments: allAttachments,
-                        currentPageID: $currentPageID,
-                        accentColor: accentColor
-                    )
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom)
-            )
         }
     }
 
     // MARK: - Video Transport Controls (for the currently playing video)
 
-    /// Marge basse du transport vidéo : il doit rester au-dessus du bloc bas,
-    /// dont la hauteur change selon que la pellicule est montée ou non.
-    private var videoTransportBottomInset: CGFloat {
-        allAttachments.count > 1 ? 132 + ConversationMediaFilmstrip.reservedHeight : 132
-    }
-
+    /// **Le transport se pose sur le CADRE**, juste au-dessus de la légende
+    /// (#6141) — il commande le média, donc il part avec lui. Les deux retraits
+    /// qu'il portait (64 en haut, 132 + la pellicule en bas) mesuraient la
+    /// distance à des bandes d'un plateau qui n'existait pas encore.
     @ViewBuilder
-    private var videoTransportLayer: some View {
+    var videoTransportLayer: some View {
         if currentIndex < allAttachments.count {
             let att = allAttachments[currentIndex]
             if att.type == .video,
@@ -779,9 +783,8 @@ struct ConversationMediaGalleryView: View {
                     accentColor: accentColor,
                     controls: [.playPause, .scrubber, .duration, .speed, .mute, .pip]
                 )
-                // Ancré entre la top bar (close/save) et les métadonnées bas.
-                .padding(.top, 64)
-                .padding(.bottom, videoTransportBottomInset)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 4)
             }
         }
     }
