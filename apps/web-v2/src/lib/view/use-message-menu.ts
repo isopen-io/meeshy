@@ -6,6 +6,8 @@ import { protectionOf } from '@/lib/reading-mode/protection';
 import { reactAction } from '@/lib/api/query';
 import { reactionStore } from '@/lib/api/reaction-store';
 import type { Message } from '@/lib/api/types';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import {
   messageMenuContextOf,
@@ -175,7 +177,7 @@ export function useMessageMenu(params: {
           return;
         }
         if (typeof navigator === 'object' && navigator.clipboard) void navigator.clipboard.writeText(text);
-        announce('Message copié');
+        announce(translate(currentInterfaceLanguage(), 'announce.messageCopied'));
         return;
       }
       if (id === 'compose') {
@@ -224,7 +226,8 @@ export function useMessageMenu(params: {
         return;
       }
       if (typeof navigator === 'object' && navigator.clipboard) void navigator.clipboard.writeText(text);
-      announce(text.includes('\n') ? 'Messages copiés' : 'Message copié');
+      const lang = currentInterfaceLanguage();
+      announce(text.includes('\n') ? translate(lang, 'announce.messagesCopied') : translate(lang, 'announce.messageCopied'));
     },
     [selection, copyableTextOf, announce],
   );
