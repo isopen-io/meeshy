@@ -36,6 +36,12 @@ struct PostReactionPalette: View {
             EmojiReactionPicker(
                 quickEmojis: MeeshyQuickReactions.standard,
                 style: style,
+                // **`scrollable` est OBLIGATOIRE ici depuis #6117** : c'était
+                // le SEUL des huit hôtes à ne pas faire défiler sa rangée, et
+                // la liste partagée est passée de six à quinze émojis. Sans
+                // lui, les neuf derniers seraient rognés — invisibles, donc
+                // inatteignables, sans qu'aucun témoin ne le dise.
+                scrollable: true,
                 onReact: { emoji in
                     HapticFeedback.light()
                     onPick(emoji)

@@ -342,9 +342,17 @@ struct ThemedMessageBubble: View {
                 // brûlé, et `isEphemeralExpired` vient d'écarter le
                 // quatrième. La règle est tout de même consultée — elle
                 // reste la SOURCE, l'aiguillage n'en est qu'un chemin.
-                .modifier(QuickReactionDoubleTap(
-                    isEnabled: QuickReactionGesture.acceptsDoubleTap(kind: content.kind),
-                    onOpen: { onAddReaction?(message.id) }))
+                // **Le double tap du MESSAGE a quitté ce fichier** (#6117).
+                //
+                // Il ouvrait la barre de réaction rapide, à l'INTÉRIEUR de la
+                // bulle — donc il n'existait ni en `.script` ni en `.focal`,
+                // rendus par `FocalRow`. Il vit désormais sur
+                // `BubbleSwipeContainer`, le conteneur commun aux trois peaux,
+                // et ouvre le menu SYSTÈME (directive porteur du 2026-09-12).
+                //
+                // `QuickReactionDoubleTap` et `QuickReactionGesture` RESTENT :
+                // la grille média s'en sert pour la réaction sur UNE PIÈCE,
+                // qui n'est pas le même geste sur le même objet.
                 // Pas de `.messageEffects` ici : monté à ce niveau, il
                 // s'appliquait au `HStack` de rangée de `BubbleStandardLayout`
                 // — avatar, bulle, réactions et tout l'espace vide jusqu'au
