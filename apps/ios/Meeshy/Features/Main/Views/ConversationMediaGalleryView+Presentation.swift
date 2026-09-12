@@ -76,10 +76,11 @@ extension ConversationMediaGalleryView {
     /// `enum` — la définition d'un état décoratif.
     ///
     /// La couche ne teste aucune touche : la pastille ANNONCE, elle ne commande
-    /// pas. Reprendre la lecture se fait par le transport du plateau, qu'un tap
-    /// ramène ; poser ici un second play/pause ferait deux contrôleurs pour une
-    /// seule lecture, le défaut que le poster central de la page vidéo a déjà
-    /// coûté une fois.
+    /// pas. Reprendre la lecture se fait par le play/pause du cadre, qu'un tap
+    /// ramène (`cadreCenterPlayPause`, `+Transport.swift`, #6162) ; poser ici un
+    /// second play/pause ferait deux contrôleurs pour une seule lecture, au
+    /// MÊME endroit de l'écran — le défaut que le poster central de la page
+    /// vidéo a déjà coûté une fois.
     @ViewBuilder
     var pausedBadgeLayer: some View {
         if MediaStagePause.showsBadge(presentation: stagePresentation,

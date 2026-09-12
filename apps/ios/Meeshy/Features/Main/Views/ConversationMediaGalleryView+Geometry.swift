@@ -52,16 +52,48 @@ enum MediaGalleryStage {
     /// Le cadre ne descend jamais sous trois fois son overlay.
     static var minimumFrameHeight: CGFloat { overlayHeight * 3 }
 
+    /// **La bande de progression, elle non plus, n'est pas un nombre** (#6162).
+    ///
+    /// Elle vaut ce que la barre du SDK occupe réellement
+    /// (`TransportLayout.barHeight`). Recopier 48 marcherait aujourd'hui et
+    /// désaccorderait le cadre et la bande le jour où la barre change de
+    /// gabarit — en silence, puisque les deux resteraient individuellement
+    /// justes. C'est la leçon du rail, une bande plus haut.
+    static var transportBandHeight: CGFloat { TransportLayout.barHeight }
+
+    /// **Y a-t-il un TEMPS à montrer dans ce lot ?**
+    ///
+    /// La question se pose au LOT, jamais à la page ouverte — c'est tout le
+    /// piège de l'issue. Une réserve conditionnée au média courant ferait
+    /// changer le cadre de taille en glissant d'une vidéo vers une image, et un
+    /// cadre qui saute sous le doigt coûte plus cher que quarante-huit points
+    /// perdus sur les pages sans durée.
+    ///
+    /// Une durée NULLE n'est pas une durée : un attachement dont le serveur n'a
+    /// pas encore calculé la durée ne fait pas naître une bande vide.
+    static func carriesDuration(_ attachments: [MessageAttachment]) -> Bool {
+        attachments.contains { ($0.duration ?? 0) > 0 }
+    }
+
     /// **Un média seul ne réserve aucun couloir bas.** Il n'y a rien à
     /// parcourir, donc rien à montrer — et la hauteur que le rail ne prend pas
     /// revient au cadre, qui est la seule chose qu'on est venu regarder.
+    ///
+    /// La bande de progression ne suit PAS cette règle, et c'est voulu : un rail
+    /// sert à parcourir une SÉRIE, une progression à parcourir UN média. Un
+    /// vocal ou une vidéo seuls gardent donc leur bande.
+    ///
+    /// Le lot entier entre ici plutôt qu'un compte et un drapeau : deux
+    /// décisions posées côte à côte au site d'appel finissent par diverger, et
+    /// c'est celle du milieu — « ce lot porte-t-il une durée ? » — qu'on oublie.
     static func corridors(safeTop: CGFloat,
                           safeBottom: CGFloat,
-                          mediaCount: Int) -> MediaStageFraming.Corridors {
+                          attachments: [MessageAttachment]) -> MediaStageFraming.Corridors {
         MediaStageFraming.Corridors(
             safeTop: safeTop,
             top: topCorridorHeight,
-            rail: mediaCount > 1 ? FilmstripMetrics.reservedHeight : 0,
+            rail: attachments.count > 1 ? FilmstripMetrics.reservedHeight : 0,
+            transport: carriesDuration(attachments) ? transportBandHeight : 0,
             safeBottom: safeBottom,
             gutter: gutter
         )
@@ -80,11 +112,13 @@ enum MediaGalleryStage {
         presentation.showsPlateau ? corridors.safeTop + corridors.top : 0
     }
 
-    /// Et EN BAS — le rail, la zone sûre, plus la gouttière qui décolle le cadre
-    /// de la pellicule.
+    /// Et EN BAS — le rail, la bande de progression (#6162), la zone sûre, plus
+    /// la gouttière qui décolle le cadre de ce qui le suit.
     static func bottomInset(presentation: StagePresentation,
                             corridors: MediaStageFraming.Corridors) -> CGFloat {
-        presentation.showsPlateau ? corridors.rail + corridors.safeBottom + corridors.gutter : 0
+        presentation.showsPlateau
+            ? corridors.rail + corridors.transport + corridors.safeBottom + corridors.gutter
+            : 0
     }
 
     /// Les proportions du média, ou `nil` quand la pièce jointe ne les porte
@@ -219,7 +253,7 @@ extension ConversationMediaGalleryView {
         MediaGalleryStage.corridors(
             safeTop: DeviceLayout.safeAreaTop,
             safeBottom: DeviceLayout.safeAreaBottom,
-            mediaCount: allAttachments.count
+            attachments: allAttachments
         )
     }
 
@@ -288,38 +322,53 @@ extension ConversationMediaGalleryView {
     /// légende. Ancrée au-dessus du bloc d'informations, elle MONTE avec lui
     /// quand la légende se déplie — la pile ancrée en bas fait le travail, il
     /// n'y a aucune cote à tenir d'accord.
+    ///
+    /// **Le play/pause est le troisième occupant, et le seul qui soit CENTRÉ**
+    /// (#6162). Il ne rejoint pas la pile ancrée en bas : c'est l'affordance
+    /// première d'un lecteur, elle se pose au milieu de l'image — là où l'œil
+    /// est déjà, et là où aucun joueur au monde ne met autre chose. Le cadre
+    /// centre son média, donc le centre du cadre EST le centre du média : la
+    /// couche n'a aucune cote à tenir d'accord avec le solveur.
     var cadreRegion: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            cadreActionColumn
-            cadreOverlay
+        ZStack {
+            cadreCenterPlayPause
+
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                cadreActionColumn
+                cadreOverlay
+            }
         }
         .frame(width: currentStage.frame.width, height: currentStage.frame.height)
         .clipShape(RoundedRectangle(cornerRadius: currentStage.cornerRadius, style: .continuous))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// **Ce qui se pose sur le cadre part avec lui** (spec § 2.2) : le transport
-    /// vidéo, la légende, l'auteur et sa date, la ligne format / dimensions /
-    /// poids. Les actions réagir · répondre · composer restent sur le cadre
-    /// elles aussi, mais dans leur propre couche — `cadreActionColumn`, montée
-    /// au-dessus de ce bloc (#6161) : elles sont une COLONNE, et les mettre dans
-    /// ce `VStack` les remettrait en ligne.
+    /// **Ce qui se pose sur le cadre part avec lui** (spec § 2.2) : la légende,
+    /// l'auteur et sa date, la ligne format / dimensions / poids. Les actions
+    /// réagir · répondre · composer restent sur le cadre elles aussi, mais dans
+    /// leur propre couche — `cadreActionColumn`, montée au-dessus de ce bloc
+    /// (#6161) : elles sont une COLONNE, et les mettre dans ce `VStack` les
+    /// remettrait en ligne.
     ///
-    /// Le voile est ici et non sur le bloc bas : il doit détacher le transport
-    /// autant que la légende, et un dégradé par étage ferait deux lisières.
+    /// **La progression, elle, est descendue au couloir** (#6162) : elle
+    /// commande le TEMPS, pas le cadrage, et posée ici elle couvrait l'image
+    /// qu'on est venu regarder. Ce qui reste au cadre est ce qui DÉCRIT le
+    /// média ; ce qui le PARCOURT est au plateau, avec le rail.
+    ///
+    /// Le voile reste ici plutôt que sur le bloc bas lui-même : il n'a plus qu'un
+    /// étage à détacher depuis que le transport est parti, mais le poser un cran
+    /// plus bas ferait migrer la lisière chaque fois que le contenu du bloc
+    /// change — un dégradé se pose sur la COUCHE, pas sur ce qui l'occupe.
     @ViewBuilder
     var cadreOverlay: some View {
         if currentIndex < allAttachments.count {
-            VStack(alignment: .leading, spacing: 0) {
-                videoTransportLayer
-                bottomOverlay
-            }
-            .background(
-                LinearGradient(colors: [.clear, .black.opacity(0.75)],
-                               startPoint: .top,
-                               endPoint: .bottom)
-            )
+            bottomOverlay
+                .background(
+                    LinearGradient(colors: [.clear, .black.opacity(0.75)],
+                                   startPoint: .top,
+                                   endPoint: .bottom)
+                )
         }
     }
 

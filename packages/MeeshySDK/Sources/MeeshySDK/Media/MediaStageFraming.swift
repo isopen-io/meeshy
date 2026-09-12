@@ -47,20 +47,36 @@ public nonisolated enum MediaStageFraming {
     /// Chaque valeur vient de l'hôte, aucune n'est écrite ici : la hauteur du
     /// rail est celle que la pellicule réserve réellement
     /// (`FilmstripMetrics.reservedHeight`), et la recopier ferait dériver le
-    /// cadre le jour où une vignette change de taille.
+    /// cadre le jour où une vignette change de taille. La bande de transport
+    /// suit la même règle : c'est l'hôte qui sait si son lot porte une durée.
     public struct Corridors: Equatable, Sendable {
         public let safeTop: CGFloat
         public let top: CGFloat
         public let rail: CGFloat
+        /// **La bande de progression, juste au-dessus du rail** (#6162).
+        ///
+        /// Elle est une réserve du PLATEAU, au même titre que le rail : la
+        /// progression d'une vidéo commande le temps, pas le cadrage, et la
+        /// poser SUR le média couvrait l'image qu'on est venu regarder.
+        ///
+        /// **Elle se réserve pour le LOT, jamais pour la page ouverte.** Une
+        /// bande qui n'existerait que sur les médias à durée ferait changer le
+        /// cadre de taille en glissant d'une vidéo vers une image — un cadre qui
+        /// saute pendant le geste coûte plus cher que la hauteur d'une bande.
+        /// C'est l'hôte qui tranche (il connaît son lot) ; le solveur
+        /// se contente d'en prendre la hauteur, et de n'en prendre aucune dès
+        /// que les couloirs disparaissent.
+        public let transport: CGFloat
         public let safeBottom: CGFloat
         /// Marge latérale de chaque côté, ET jeu vertical entre le cadre et le rail.
         public let gutter: CGFloat
 
-        public init(safeTop: CGFloat, top: CGFloat, rail: CGFloat,
+        public init(safeTop: CGFloat, top: CGFloat, rail: CGFloat, transport: CGFloat,
                     safeBottom: CGFloat, gutter: CGFloat) {
             self.safeTop = safeTop
             self.top = top
             self.rail = rail
+            self.transport = transport
             self.safeBottom = safeBottom
             self.gutter = gutter
         }
@@ -69,7 +85,9 @@ public nonisolated enum MediaStageFraming {
         /// prenne le reste. Publique parce que l'hôte doit poser SES bandes sur
         /// la même arithmétique : recomposer la somme dans une vue, c'est
         /// écrire la loi une seconde fois — et la voir dériver d'une gouttière.
-        public var reservedHeight: CGFloat { safeTop + top + rail + safeBottom + gutter }
+        public var reservedHeight: CGFloat {
+            safeTop + top + rail + transport + safeBottom + gutter
+        }
     }
 
     public struct Input: Equatable, Sendable {

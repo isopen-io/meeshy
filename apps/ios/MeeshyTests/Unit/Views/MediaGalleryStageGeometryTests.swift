@@ -27,7 +27,7 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
     private static let viewport = CGSize(width: 390, height: 844)
 
     private func corridors(mediaCount: Int = 6) -> MediaStageFraming.Corridors {
-        MediaGalleryStage.corridors(safeTop: 59, safeBottom: 34, mediaCount: mediaCount)
+        MediaGalleryStage.corridors(safeTop: 59, safeBottom: 34, attachments: MediaGalleryLot.imagesOnly(mediaCount))
     }
 
     private func resolve(
@@ -231,9 +231,17 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
                           "et le rail après lui")
     }
 
-    /// **Ce qui se pose sur le cadre part avec lui.** La légende, l'auteur, ses
-    /// actions et le transport vidéo appartiennent au média : ils vivent dans
-    /// l'overlay du cadre, jamais dans un couloir.
+    /// **Ce qui se pose sur le cadre part avec lui.** La légende, l'auteur et
+    /// leur ligne de format appartiennent au média : ils vivent dans l'overlay
+    /// du cadre, jamais dans un couloir.
+    ///
+    /// **Ce témoin affirmait aussi le transport vidéo jusqu'au 2026-09-12**, et
+    /// il avait raison tant que la progression, la durée et le play/pause
+    /// étaient UNE vue posée sur le média. #6162 les sépare sur la directive
+    /// porteur — la progression descend au couloir (elle PARCOURT le média,
+    /// comme le rail parcourt la série), le play/pause reste au centre (il
+    /// COMMANDE). La distinction que le témoin tient devient donc plus fine :
+    /// le cadre porte ce qui DÉCRIT, le plateau ce qui PARCOURT.
     func test_theCadre_carriesItsOwnOverlay() throws {
         let code = try unit()
         guard let cadre = corps("var cadreOverlay: some View {", dans: code),
@@ -241,10 +249,10 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
             return XCTFail("`cadreOverlay` ou `bottomOverlay` introuvable")
         }
 
-        XCTAssertTrue(cadre.contains("videoTransportLayer"),
-                      "le transport vidéo se pose sur le cadre, au-dessus de la légende")
+        XCTAssertFalse(cadre.contains("transportCorridor"),
+                       "la progression a quitté le cadre pour le couloir bas (#6162)")
         XCTAssertTrue(cadre.contains("bottomOverlay"),
-                      "et le bloc légende / auteur / actions avec lui")
+                      "le bloc légende / auteur / format, lui, reste sur le cadre")
         for porte in ["bottomMetadataOverlay(", "captionOverlay("] {
             XCTAssertTrue(blocBas.contains(porte),
                           "`\(porte)` doit rester dans le bloc porté par le cadre")

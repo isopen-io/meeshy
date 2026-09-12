@@ -53,7 +53,7 @@ final class MediaGalleryActionColumnTests: XCTestCase {
             viewport: Self.viewport,
             mediaRatio: ratio,
             presentation: .carded,
-            corridors: MediaGalleryStage.corridors(safeTop: 59, safeBottom: 34, mediaCount: mediaCount)
+            corridors: MediaGalleryStage.corridors(safeTop: 59, safeBottom: 34, attachments: MediaGalleryLot.imagesOnly(mediaCount))
         )
     }
 

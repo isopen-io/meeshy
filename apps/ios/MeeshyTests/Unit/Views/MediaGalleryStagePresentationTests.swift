@@ -20,7 +20,7 @@ final class MediaGalleryStagePresentationTests: XCTestCase {
     private static let viewport = CGSize(width: 390, height: 844)
 
     private func corridors(mediaCount: Int = 6) -> MediaStageFraming.Corridors {
-        MediaGalleryStage.corridors(safeTop: 59, safeBottom: 34, mediaCount: mediaCount)
+        MediaGalleryStage.corridors(safeTop: 59, safeBottom: 34, attachments: MediaGalleryLot.imagesOnly(mediaCount))
     }
 
     // MARK: - Le pager reprend ce que le plateau lui réservait
@@ -46,7 +46,9 @@ final class MediaGalleryStagePresentationTests: XCTestCase {
         XCTAssertEqual(MediaGalleryStage.topInset(presentation: .carded, corridors: reserves),
                        reserves.safeTop + reserves.top)
         XCTAssertEqual(MediaGalleryStage.bottomInset(presentation: .carded, corridors: reserves),
-                       reserves.rail + reserves.safeBottom + reserves.gutter)
+                       reserves.rail + reserves.transport + reserves.safeBottom + reserves.gutter,
+                       "le couloir bas porte DEUX bandes depuis #6162 : la progression, "
+                           + "puis le rail")
     }
 
     /// **En cadré, le rail garde sa hauteur pleine** — c'est ce qui le rend

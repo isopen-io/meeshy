@@ -20,7 +20,7 @@ struct MediaStageFramingTests {
     static let viewport = CGSize(width: 390, height: 844)
 
     static let corridors = MediaStageFraming.Corridors(
-        safeTop: 59, top: 56, rail: 80, safeBottom: 34, gutter: 12
+        safeTop: 59, top: 56, rail: 80, transport: 0, safeBottom: 34, gutter: 12
     )
 
     static func input(
@@ -178,11 +178,59 @@ struct MediaStageFramingTests {
                 ratio: 0.5625,
                 presentation: .carded,
                 corridors: MediaStageFraming.Corridors(
-                    safeTop: 59, top: 56, rail: 120, safeBottom: 34, gutter: 12
+                    safeTop: 59, top: 56, rail: 120, transport: 0, safeBottom: 34, gutter: 12
                 )
             )
         )
 
         #expect(Self.close(base.frame.height - thicker.frame.height, 40), "120 − 80")
+    }
+
+    // MARK: - La bande de transport (#6162)
+
+    /// **La progression d'une vidéo vit dans le COULOIR, pas sur le cadre.**
+    ///
+    /// Elle est donc une réserve du plateau comme le rail : elle se prend à la
+    /// hauteur AVANT que le cadre ne prenne le reste. Le témoin le mesure sur une
+    /// 9:16 — la seule nature contrainte par la hauteur, donc la seule où une
+    /// réserve mal comptée se VOIT. Sur une 4:5 (contrainte par la largeur), la
+    /// règle juste et la règle absente rendraient le même cadre.
+    @Test("La bande de transport rétrécit le cadre de sa propre hauteur")
+    func aTransportBand_shrinksTheFrameByItsOwnHeight() {
+        let sans = MediaStageFraming.resolve(Self.input(ratio: 0.5625, presentation: .carded))
+        let avec = MediaStageFraming.resolve(
+            Self.input(
+                ratio: 0.5625,
+                presentation: .carded,
+                corridors: MediaStageFraming.Corridors(
+                    safeTop: 59, top: 56, rail: 80, transport: 44, safeBottom: 34, gutter: 12
+                )
+            )
+        )
+
+        #expect(Self.close(sans.frame.height - avec.frame.height, 44),
+                "la bande prend à la hauteur ce qu'elle occupe, ni plus ni moins")
+        #expect(Self.close(avec.frame.height, 559), "603 − 44")
+    }
+
+    /// **En plein cadre, la bande ne réserve RIEN.** Les couloirs n'existent plus
+    /// — le média a pris l'écran — et une réserve qui survivrait à la bascule
+    /// laisserait une bande noire de 44 pt exactement là où l'on vient de tout
+    /// rendre au média.
+    @Test("En plein cadre, la bande de transport ne prend rien")
+    func full_ignoresTheTransportBand() {
+        let sans = MediaStageFraming.resolve(Self.input(ratio: 0.5625, presentation: .full))
+        let avec = MediaStageFraming.resolve(
+            Self.input(
+                ratio: 0.5625,
+                presentation: .full,
+                corridors: MediaStageFraming.Corridors(
+                    safeTop: 59, top: 56, rail: 80, transport: 44, safeBottom: 34, gutter: 12
+                )
+            )
+        )
+
+        #expect(sans == avec, "la bande ne change rien à un cadre qui n'a plus de couloirs")
+        #expect(avec.frame == Self.viewport)
     }
 }

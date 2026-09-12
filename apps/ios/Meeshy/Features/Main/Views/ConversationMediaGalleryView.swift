@@ -146,12 +146,17 @@ struct ConversationMediaGalleryView: View {
     /// au-dessus, et pour la même raison.
     @StateObject var saveCoordinator = MediaSaveCoordinator()
     // Plain reference (NOT @ObservedObject): only `activeURL`/`player` identity
-    // drive this root's rendering (`videoTransportLayer`) — the manager also
-    // publishes `currentTime` at 5-10Hz, which used to re-render the WHOLE
-    // gallery root continuously. Scoped via onReceive($activeURL/$player).
+    // drive this root's rendering (the band and the centred play/pause,
+    // `+Transport.swift`) — the manager also publishes `currentTime` at 5-10Hz,
+    // which used to re-render the WHOLE gallery root continuously. Scoped via
+    // onReceive($activeURL/$player); the band is the only view that observes
+    // the manager, so the ticking stays inside it.
     let videoManager = SharedAVPlayerManager.shared
-    @State private var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
-    @State private var videoManagerPlayer: AVPlayer?
+    /// `internal` — la bande du couloir et la couche centrale les LISENT depuis
+    /// `+Transport.swift`, et `private` est une portée de FICHIER. Même prix que
+    /// celui payé par `currentPageID`, et pour la même raison.
+    @State var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
+    @State var videoManagerPlayer: AVPlayer?
     /// Lu par la seule pastille « en pause » : `pausedOnEntry` se souvient du
     /// GESTE, et une pastille qui survivrait à la reprise affirmerait le
     /// contraire de ce qu'on voit. `isPlaying` ne publie qu'aux TRANSITIONS,
@@ -540,10 +545,16 @@ struct ConversationMediaGalleryView: View {
             .padding(.horizontal, MediaGalleryStage.gutter + 2)
             .frame(height: MediaGalleryStage.topCorridorHeight)
 
-            // LE CADRE, puis LE COULOIR BAS. Ce qui se pose sur le cadre part
-            // avec lui ; le rail reste au plateau (`+Geometry.swift`).
+            // LE CADRE, puis LES DEUX BANDES DU COULOIR BAS. Ce qui se pose sur
+            // le cadre part avec lui ; ce qui PARCOURT reste au plateau
+            // (`+Geometry.swift`, `+Transport.swift`) — la progression du média
+            // d'abord, le rail de la série ensuite. L'ordre est la directive
+            // porteur mot pour mot : « la progression […] en bas juste
+            // au-dessus du rail de défilement ».
             cadreRegion
                 .padding(.bottom, MediaGalleryStage.gutter)
+
+            transportCorridor
 
             railCorridor
         }
@@ -606,28 +617,14 @@ struct ConversationMediaGalleryView: View {
     }
 
     // MARK: - Video Transport Controls (for the currently playing video)
-
-    /// **Le transport se pose sur le CADRE**, juste au-dessus de la légende
-    /// (#6141) — il commande le média, donc il part avec lui. Les deux retraits
-    /// qu'il portait (64 en haut, 132 + la pellicule en bas) mesuraient la
-    /// distance à des bandes d'un plateau qui n'existait pas encore.
-    @ViewBuilder
-    var videoTransportLayer: some View {
-        if currentIndex < allAttachments.count {
-            let att = allAttachments[currentIndex]
-            if att.type == .video,
-               videoManagerActiveURL == att.fileUrl,
-               videoManagerPlayer != nil {
-                VideoTransportControls(
-                    manager: videoManager,
-                    accentColor: accentColor,
-                    controls: [.playPause, .scrubber, .duration, .speed, .mute, .pip]
-                )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 4)
-            }
-        }
-    }
+    //
+    // **Le transport a quitté ce fichier au #6162.** Il s'était posé sur le
+    // cadre au #6141 — le bon endroit tant que la progression, la durée et le
+    // play/pause étaient UNE vue. Ils ne le sont plus : la progression est
+    // descendue au couloir du plateau (`transportCorridor`) et le play/pause
+    // est resté au centre du média (`cadreCenterPlayPause`), les deux dans
+    // `+Transport.swift`. Ce commentaire reste pour que la prochaine recherche
+    // de « videoTransportLayer » atterrisse quelque part.
 
     /// **Les actions quittent le bas du cadre pour une COLONNE VERTICALE à
     /// droite** (#6161, directive porteur 2026-09-12 : « il faut placer les

@@ -37,7 +37,7 @@ final class MediaGalleryLetterboxDressingTests: XCTestCase {
             viewport: Self.viewport,
             mediaRatio: ratio,
             presentation: presentation,
-            corridors: MediaGalleryStage.corridors(safeTop: 59, safeBottom: 34, mediaCount: 6)
+            corridors: MediaGalleryStage.corridors(safeTop: 59, safeBottom: 34, attachments: MediaGalleryLot.imagesOnly(6))
         )
     }
 
