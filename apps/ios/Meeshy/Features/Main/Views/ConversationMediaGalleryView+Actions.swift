@@ -127,13 +127,29 @@ extension ConversationMediaGalleryView {
         }
     }
 
-    /// Marge basse de la traînée : elle flotte AU-DESSUS de la pellicule, donc
+    /// Marge basse de la traînée : elle flotte AU-DESSUS du couloir bas, donc
     /// par-dessus le bloc auteur / dimensions — c'est le recouvrement que la
-    /// précision porteur demande de montrer. La pellicule, elle, reste libre :
-    /// c'est le seul contrôle du bas qui sert à NAVIGUER, et le couvrir
-    /// enfermerait le lecteur sur la pièce courante.
+    /// précision porteur demande de montrer. **Le couloir, lui, reste libre en
+    /// ENTIER** : ses deux bandes sont les seuls contrôles du bas qui servent à
+    /// PARCOURIR — le rail parcourt la série, la bande de transport parcourt le
+    /// média (#6162) — et les couvrir enfermerait le lecteur sur l'instant
+    /// courant de la pièce courante.
+    ///
+    /// **Elle se LIT sur les couloirs, elle ne les recompose pas.** La marge
+    /// recopiait la conjonction du rail (`count > 1 ? …`) et ignorait purement la
+    /// bande réservée depuis #6162 : son bas tombait 8 pt au-dessus du rail,
+    /// c'est-à-dire exactement dans les 48 pt du transport — scrubber, muet et
+    /// menu ⋯ couverts pendant que la traînée est ouverte, puisque
+    /// `allowsHitTesting(reactionBarOpen)` rend alors la couche opaque au doigt.
+    /// C'était le défaut que le commentaire de ce site prétendait éviter, mot
+    /// pour mot. `stageCorridors` porte déjà les deux hauteurs, chacune avec sa
+    /// condition ; une seconde conjonction ici serait une seconde loi.
+    ///
+    /// La couche respecte la zone sûre alors que les couloirs la réservent à
+    /// part — `safeBottom` n'entre donc PAS dans cette somme, sans quoi la
+    /// traînée flotterait une encoche trop haut.
     private var reactionBarBottomInset: CGFloat {
-        allAttachments.count > 1 ? ConversationMediaFilmstrip.reservedHeight + 8 : 8
+        stageCorridors.rail + stageCorridors.transport + 8
     }
 
     // MARK: - Réaction sur la pièce

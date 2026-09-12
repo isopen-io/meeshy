@@ -398,17 +398,33 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
         )
     }
 
-    /// La traînée flotte au-dessus de la PELLICULE, jamais dessus : la pellicule
-    /// est le seul contrôle du bas qui sert à NAVIGUER, et la couvrir enfermerait
-    /// le lecteur sur la pièce courante.
-    func test_laTrainee_laisseLaPelliculeLibre() throws {
+    /// La traînée flotte au-dessus des DEUX bandes du couloir bas, jamais
+    /// dessus : ce sont les seuls contrôles du bas qui servent à PARCOURIR — le
+    /// rail parcourt la série, la bande de transport parcourt le média — et les
+    /// couvrir enfermerait le lecteur sur l'instant courant de la pièce
+    /// courante.
+    ///
+    /// **La marge se LIT sur les couloirs, elle ne les recompose pas.** Elle
+    /// recopiait la conjonction du rail (`count > 1 ? …`) et ignorait
+    /// purement la bande réservée par #6162 : le bas de la traînée tombait alors
+    /// 8 pt au-dessus du rail, c'est-à-dire exactement dans les 48 pt du
+    /// transport — scrubber, muet et menu ⋯ couverts pendant que la traînée est
+    /// ouverte, `allowsHitTesting(reactionBarOpen)` rendant la couche opaque au
+    /// doigt. La garde précédente ne pouvait pas l'attraper : écrite avant
+    /// #6162, elle n'exigeait que la présence de la hauteur de la pellicule.
+    func test_laTrainee_laisseLesDeuxBandesDuCouloirLibres() throws {
         let code = try gallerieSource()
         guard let marge = corps("private var reactionBarBottomInset: CGFloat {", dans: code) else {
             return XCTFail("`reactionBarBottomInset` introuvable")
         }
+        let plat = compact(marge)
         XCTAssertTrue(
-            compact(marge).contains("ConversationMediaFilmstrip.reservedHeight"),
-            "La marge basse doit dégager la pellicule quand elle est montée."
+            plat.contains("stageCorridors.rail"),
+            "La marge basse doit dégager la pellicule — et la lire là où elle est RÉSERVÉE."
+        )
+        XCTAssertTrue(
+            plat.contains("stageCorridors.transport"),
+            "La marge basse doit dégager la bande de progression du #6162, sinon la traînée la couvre."
         )
     }
 

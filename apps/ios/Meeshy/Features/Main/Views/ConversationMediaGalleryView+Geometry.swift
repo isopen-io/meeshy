@@ -360,6 +360,17 @@ extension ConversationMediaGalleryView {
     /// étage à détacher depuis que le transport est parti, mais le poser un cran
     /// plus bas ferait migrer la lisière chaque fois que le contenu du bloc
     /// change — un dégradé se pose sur la COUCHE, pas sur ce qui l'occupe.
+    ///
+    /// **Et il ne prend AUCUNE touche.** Un `LinearGradient` est une vue rendue,
+    /// donc testée aux touches au même titre qu'un `Color.clear` — c'est
+    /// exactement l'argument que `cadreRegion` écrit dix lignes plus haut pour
+    /// refuser une couleur transparente à la place de son `Spacer`. Posé en fond
+    /// d'un bloc monté dans une couche hit-testable AU-DESSUS du pager, il
+    /// faisait des ~110 pt du bas du cadre une zone morte : ni la porte du tap
+    /// (#6142) ni le glissement horizontal qui feuillette n'y atteignaient plus
+    /// le pager. Le composant de légende partagé refuse ce comportement pour
+    /// lui-même (« le canvas garde ses gestes de navigation sous la légende ») ;
+    /// l'hôte le réintroduisait une couche plus haut, hors de portée de sa garde.
     @ViewBuilder
     var cadreOverlay: some View {
         if currentIndex < allAttachments.count {
@@ -368,6 +379,7 @@ extension ConversationMediaGalleryView {
                     LinearGradient(colors: [.clear, .black.opacity(0.75)],
                                    startPoint: .top,
                                    endPoint: .bottom)
+                        .allowsHitTesting(false)
                 )
         }
     }

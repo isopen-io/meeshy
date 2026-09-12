@@ -44,12 +44,36 @@ import MeeshyUI
 /// `test_theArmedZones_andTheDecision_readTheSameThird` (SDK) lie les deux. Une
 /// géographie posée au jugé couvrirait une bande que la règle ne reconnaîtrait
 /// pas, et le geste y serait inerte sans qu'aucune moitié ne soit fausse.
+///
+/// ## Pourquoi la zone porte AUSSI le tap simple de #6142
+///
+/// Parce que sinon les deux taps vivent sur deux vues différentes — le double
+/// ici, le simple sur l'ancêtre de la page — et c'est exactement l'arrangement
+/// que `GalleryImagePage` nomme comme fautif douze lignes plus haut : **SwiftUI
+/// n'établit la dépendance d'échec entre un tap `count: 1` et un tap `count: 2`
+/// que lorsque les deux sont déclarés sur la MÊME vue.** Laissés séparés, soit
+/// l'enfant consomme le toucher et la porte du plein cadre meurt sur les deux
+/// tiers latéraux d'une vidéo attachée — la porte la plus fréquente du lot,
+/// perdue sur 66 % de la surface —, soit les deux tirent et un saut de ±10 s
+/// fait AUSSI basculer le cadrage, deux fois, le cadre changeant de cotes entre
+/// les deux taps.
+///
+/// La réunion se fait donc sur la ZONE et non sur la page : c'est le seul
+/// arrangement qui satisfasse les deux doctrines ensemble — le centre garde son
+/// tap IMMÉDIAT (il ne porte toujours aucun geste et laisse le tap de la page
+/// passer), et les deux latérales diffèrent le leur le temps de la fenêtre du
+/// double, ce que le critère de #6163 demande mot pour mot : « le tap simple
+/// garde son effet dans les trois zones (il est seulement différé sur les deux
+/// latérales) ».
 struct MediaStageSeekZones: View {
 
     /// Les cotes du CADRE — celles que `MediaStageFraming` a rendues, pas celles
     /// de l'écran : « à gauche ou à droite de la scène où se trouve la vidéo »
     /// désigne le média, et le plateau autour de lui appartient aux couloirs.
     let size: CGSize
+    /// **La porte de #6142, relayée.** La zone ne compose rien : elle rend le
+    /// tap simple que la page aurait reçu si la zone n'était pas là.
+    let onSingleTap: () -> Void
     let onDoubleTap: (CGPoint) -> Void
 
     /// L'espace commun aux deux régions. Sans lui, chacune rendrait une
@@ -74,6 +98,12 @@ struct MediaStageSeekZones: View {
     /// `SpatialTapGesture` et non `onTapGesture(count:coordinateSpace:)` : la
     /// seconde ne rend la position qu'à partir d'iOS 17, et la cible du projet
     /// est iOS 16.
+    ///
+    /// **Les deux taps sont déclarés ICI, le double d'abord**, dans l'ordre
+    /// exact que `GalleryImagePage` a éprouvé pour son zoom (#6142) : c'est cet
+    /// ordre, sur cette même vue, qui fait attendre le simple. La latence est le
+    /// prix, et elle ne se paie que sur les deux tiers latéraux d'un média à
+    /// durée — jamais au centre, jamais sur une image.
     private func zone(width: CGFloat) -> some View {
         Color.clear
             .frame(width: width)
@@ -82,6 +112,7 @@ struct MediaStageSeekZones: View {
                 SpatialTapGesture(count: 2, coordinateSpace: .named(Self.space))
                     .onEnded { onDoubleTap($0.location) }
             )
+            .onTapGesture { onSingleTap() }
     }
 }
 

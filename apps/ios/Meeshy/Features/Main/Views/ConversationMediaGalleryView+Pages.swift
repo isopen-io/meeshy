@@ -76,7 +76,26 @@ struct GalleryImagePage: View, Equatable {
     /// n'a donc aucun pixel à fournir au zoom.
     private static let previewSize = CGSize(width: 320, height: 320)
 
+    /// Le zoom **COMMIS** : ce que la page garde une fois le pincement fini.
+    /// C'est lui qui décide du déplacement — le pan est un
+    /// `highPriorityGesture` à 1 pt, et l'armer au milieu d'un pincement le
+    /// ferait arbitrer contre la magnification à chaque image.
     private var isZoomed: Bool { committedScale > 1 }
+
+    /// **Le média est-il transformé MAINTENANT ?**
+    ///
+    /// `committedScale` ne s'écrit qu'en FIN de geste (`zoomGesture.onEnded`).
+    /// Pendant le PREMIER pincement, `scale` bouge déjà pendant qu'il vaut
+    /// encore 1 : l'appui long restait donc armé, et un pincement lent — doigts
+    /// posés ≥ 0,4 s, moins de 10 pt de dérive sur le toucher suivi — franchissait
+    /// la porte du plein cadre au milieu d'un zoom, pause comprise.
+    ///
+    /// La règle partagée dit « un média déjà TRANSFORMÉ a pris le doigt », pas
+    /// « déjà commis » (`MediaStageGestures.longPressArmed`, SDK). Le prédicat
+    /// qu'on lui remet lit donc l'état VIVANT, et le glissement du cadre se
+    /// désarme avec lui : un pincement qui dérive de 30 pt vers le bas n'est pas
+    /// une demande de fermeture.
+    private var isTransformed: Bool { scale > 1 || committedScale > 1 }
 
     private var thumbnailURL: String? {
         attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
@@ -116,7 +135,6 @@ struct GalleryImagePage: View, Equatable {
                     .offset(offset)
                     .gesture(zoomGesture, including: isActive ? .all : .none)
                     .highPriorityGesture(panGesture, including: isActive && isZoomed ? .all : .none)
-                    .gesture(stageDragGesture, including: isActive && !isZoomed ? .all : .none)
                     // Sans label, l'image plein écran est un élément VoiceOver muet quand
                     // on balaie la galerie. Caption si fournie, sinon libellé générique.
                     .accessibilityLabel(accessibilityLabel)
@@ -129,6 +147,18 @@ struct GalleryImagePage: View, Equatable {
         .clipShape(RoundedRectangle(cornerRadius: stage.cornerRadius, style: .continuous))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
+        // **Le glissement appartient au CADRE, pas au média ajusté.** Il était
+        // monté sur `imageLayer`, c'est-à-dire sur la vue déjà `.fit` : il ne
+        // couvrait donc que le média, jamais le hors-champ — alors que le cadre
+        // letterboxe par CONSTRUCTION dès que le plancher de 330 pt mord (une
+        // 16:9 rend ~206 pt de média dans 330 pt de cadre, soit ~124 pt de
+        // bandes). Le haut n'y ouvrait rien et le bas n'y fermait rien, pendant
+        // que l'appui long et les deux taps, montés ici, y répondaient ; et une
+        // page SANS source exploitable ne se fermait plus du tout au doigt.
+        // La page vidéo le monte sur son conteneur depuis #6142 — « la vidéo et
+        // l'image ne peuvent pas répondre différemment au même geste » est une
+        // phrase de son doc-comment, pas une intention.
+        .gesture(stageDragGesture, including: isActive && !isTransformed ? .all : .none)
         .gesture(longPressGesture, including: longPressArmed ? .all : .none)
         // **Les deux taps vivent sur la MÊME vue, le double déclaré en
         // premier** (#6142). Le tap ne bascule plus seulement du chrome : il
@@ -274,7 +304,7 @@ struct GalleryImagePage: View, Equatable {
     /// monté en `highPriorityGesture` à 1 pt de distance minimale : les armer
     /// ensemble ferait décider la première dérive d'un point laquelle gagne.
     private var longPressArmed: Bool {
-        MediaStageGestures.longPressArmed(isActive: isActive, isTransformed: isZoomed)
+        MediaStageGestures.longPressArmed(isActive: isActive, isTransformed: isTransformed)
     }
 
     /// `maximumDistance` borne la dérive tolérée : au-delà, l'appui long échoue
@@ -483,12 +513,23 @@ struct GalleryVideoPage: View, Equatable {
             // évite de retarder le tap d'un point de vue où le bouton central
             // de lecture est encore là : les deux ne sont jamais montés
             // ensemble, `!isPlayerAttached` gouvernant l'un et l'autre.
+            //
+            // **La zone reçoit AUSSI la porte du tap** (`onSingleTap`), et c'est
+            // ce qui réunit les deux gestes sur la MÊME vue là où ils se
+            // disputent le doigt — la règle que le corps de `GalleryImagePage`
+            // écrit dix lignes plus haut. Le `.onTapGesture` posé sur cette page
+            // ne disparaît pas pour autant : il sert le tiers CENTRAL, qui ne
+            // porte aucun geste et garde donc son tap immédiat.
             if isActive, isPlayerAttached {
-                MediaStageSeekZones(size: stage.frame) { point in
-                    MediaStageSeekAction.apply(at: point,
-                                               in: stage.frame,
-                                               manager: videoManager)
-                }
+                MediaStageSeekZones(
+                    size: stage.frame,
+                    onSingleTap: { onEnterStage(.tap) },
+                    onDoubleTap: { point in
+                        MediaStageSeekAction.apply(at: point,
+                                                   in: stage.frame,
+                                                   manager: videoManager)
+                    }
+                )
             }
         }
         .frame(width: stage.frame.width, height: stage.frame.height)
@@ -497,7 +538,16 @@ struct GalleryVideoPage: View, Equatable {
         .contentShape(Rectangle())
         .onTapGesture { onEnterStage(.tap) }
         .offset(y: offset.height)
-        .gesture(stageDragGesture)
+        // **`isActive` désarme les pages VOISINES**, exactement comme il le fait
+        // pour la jumelle image une page plus haut et pour l'appui long de la
+        // ligne suivante — la raison est écrite au SDK (`longPressArmed`) : le
+        // pager réalise deux pages à l'écran pendant le défilement, et un geste
+        // armé sur celle que personne ne regarde décide pour elle. La
+        // conséquence dépasse ici le cadrage : la branche `.dismisses` lit
+        // `videoManager.activeURL` pour choisir entre le passage au PiP et la
+        // libération du player, donc une page voisine trancherait le sort d'une
+        // piste qui n'est pas la sienne.
+        .gesture(stageDragGesture, including: isActive ? .all : .none)
         // **`isTransformed: false` n'est pas un raccourci** : une page vidéo n'a
         // ni zoom ni déplacement, donc rien ne dispute le doigt à l'appui long.
         // Le dire par le paramètre plutôt que d'omettre la garde laisse la
@@ -578,6 +628,17 @@ struct GalleryVideoPage: View, Equatable {
     ///
     /// La sortie par le bas garde intégralement son passage de témoin au PiP,
     /// qui est ce qui distingue cette page de sa jumelle.
+    ///
+    /// **L'appui long CHANGE ce que la sortie par le bas produit, et c'est
+    /// voulu.** Le contrat n'était écrit que dans un sens (`maximumDistance: 10`
+    /// : au-delà, l'appui long échoue et le doigt revient au glissement) ; voici
+    /// l'autre. Une fois l'appui long reconnu, `onEnterStage(.longPress)` met la
+    /// piste en PAUSE — c'est ce que la porte promet, et la pastille l'annonce.
+    /// Un glissement vers le bas qui suit tombe donc sur la branche `else if` et
+    /// LIBÈRE le player au lieu de passer au PiP. Ce n'est pas une course entre
+    /// recognizers : c'est la conséquence d'un arrêt que le lecteur vient de
+    /// demander, et une fenêtre d'image-dans-l'image sur une image GELÉE serait
+    /// un moins bon produit que la bulle qui retrouve sa vignette.
     private var stageDragGesture: some Gesture {
         DragGesture(minimumDistance: 30)
             .onChanged { value in
