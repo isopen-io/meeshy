@@ -65,6 +65,29 @@ const NINE_CONVERSATIONS = Array.from({ length: 9 }, (_, i) => ({
   updatedAt: new Date(Date.now() - i * 60_000).toISOString(),
 }));
 
+/* Trois stories, deux auteurs — assez pour que le rail se peigne et que
+   `groupStoriesByAuthor` ait quelque chose à grouper. */
+const TRAY_STORIES = [
+  {
+    id: 's-gw-1', type: 'STORY',
+    createdAt: new Date(Date.now() - 3 * 60_000).toISOString(),
+    expiresAt: new Date(Date.now() + 21 * 60 * 60_000).toISOString(),
+    author: { id: 'u-camille', username: 'camille', displayName: 'Camille Roy' },
+  },
+  {
+    id: 's-gw-2', type: 'STORY',
+    createdAt: new Date(Date.now() - 9 * 60_000).toISOString(),
+    expiresAt: new Date(Date.now() + 20 * 60 * 60_000).toISOString(),
+    author: { id: 'u-camille', username: 'camille', displayName: 'Camille Roy' },
+  },
+  {
+    id: 's-gw-3', type: 'STORY',
+    createdAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+    expiresAt: new Date(Date.now() + 19 * 60 * 60_000).toISOString(),
+    author: { id: 'u-ines', username: 'ines', displayName: 'Inès Baraka' },
+  },
+];
+
 const SESSION = {
   token: 'jwt-check-gateway-build',
   sessionToken: 'sess-check-gateway-build',
@@ -212,6 +235,19 @@ async function main() {
         }),
       });
     });
+    /* L'ÉCRAN A DEUX CORPUS DEPUIS #6080, et ce gate n'en bouchonnait qu'un.
+       Le rail des stories interroge sa propre route ; non bouchonnée, elle
+       partait vers un hôte inexistant et la requête restait EN VOL pendant
+       les tentatives de react-query — le rail peignait son squelette tout ce
+       temps, dans les deux blocs. Le bloc « corpus VIDE » mesurait donc un
+       corpus à moitié vide, et il l'a dit. */
+    await page.route('**/api/v1/posts/feed/stories**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: TRAY_STORIES }),
+      });
+    });
 
     // Le socket est ABANDONNÉ (jamais un octet réel vers `gate.meeshy.me`
     // depuis ce gate), mais la REQUÊTE elle-même doit PARTIR : c'est la
@@ -288,11 +324,27 @@ async function main() {
         body: JSON.stringify({ success: true, data: [], pagination: { limit: 30, offset: 0, total: 0, hasMore: false } }),
       });
     });
+    /* VIDE des DEUX côtés — sans quoi « corpus vide » ne décrit que la moitié
+       de l'écran (voir le bloc 2). */
+    await page.route('**/api/v1/posts/feed/stories**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: [] }),
+      });
+    });
     await page.goto(`${base}/`, { waitUntil: 'networkidle' });
     await page.waitForSelector('#contenu:not([aria-busy])', { timeout: 5000 });
 
-    const rails = await page.locator('[aria-label="Accès rapide aux conversations"]').count();
-    check(rails === 0, `corpus VIDE : aucune région « Accès rapide » peinte (obtenu : ${rails})`);
+    /* LE RAIL A CHANGÉ DE NOM ET D'OBJET (#6080) : « Accès rapide aux
+       conversations » n'existe plus — ce rail peignait des CONVERSATIONS sous
+       un anneau de story et a été remplacé par le rail des STORIES, région
+       « Stories ». Le gate interrogeait donc une étiquette morte : il passait
+       par ABSENCE, ce qui est la façon la plus discrète qu'a un témoin de
+       cesser de mesurer (leçon 560). L'invariant, lui, est inchangé — à corpus
+       vide, aucun rail ne prend de place au-dessus de l'état vide. */
+    const rails = await page.locator('[aria-label="Stories"]').count();
+    check(rails === 0, `corpus VIDE : aucune région « Stories » peinte (obtenu : ${rails})`);
 
     /**
      * RÉANCRÉ DANS LE SCROLLPORT (#6103) — le rail vivant désormais À

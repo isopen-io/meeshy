@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { ConversationRail, type ConversationRailProps } from '@/components/conversation-rail';
+import { StoryRail, type StoryRailProps } from '@/components/story-rail';
 import { Glyph } from '@/components/glyph';
 import { HIDDEN_CHROME_EASE_OUT_MS } from '@/lib/reading-mode/metrics';
 import { Link } from '@/routes/route-table';
@@ -19,7 +19,7 @@ import { Link } from '@/routes/route-table';
  * `render/list-scrolled.*.png` avant correction).
  *
  * CE QUI EST REPRIS D'iOS : une bande, la MÊME cellule que le grand rail
- * (`ConversationRail`, `variant="pinned"`), qui prend la place du titre
+ * (`StoryRail`, `variant="pinned"`), qui prend la place du titre
  * dans SA fente — jamais une seconde ligne — et qui ne se matérialise
  * qu'une fois le grand rail sorti (`pinned`, calculé par l'appelant via
  * `useOutOfView`).
@@ -65,7 +65,7 @@ export function ListHeader({
   railProps,
 }: {
   readonly pinned: boolean;
-  readonly railProps: ConversationRailProps;
+  readonly railProps: StoryRailProps;
 }) {
   const lastFocusedIdRef = useRef<string | null>(null);
   const wasPinnedRef = useRef(pinned);
@@ -77,7 +77,7 @@ export function ListHeader({
       const orphelin = document.activeElement === null || document.activeElement === document.body;
       if (orphelin) {
         const jumelle = document.querySelector<HTMLElement>(
-          `[data-rail="grande"] [data-conversation="${CSS.escape(id)}"]`,
+          `[data-rail="grande"] [data-story-author="${CSS.escape(id)}"]`,
         );
         jumelle?.focus();
       }
@@ -118,10 +118,10 @@ export function ListHeader({
             className="absolute inset-0 flex items-center"
             onFocusCapture={(e) => {
               const target = e.target as HTMLElement;
-              lastFocusedIdRef.current = target.closest('[data-conversation]')?.getAttribute('data-conversation') ?? null;
+              lastFocusedIdRef.current = target.closest('[data-story-author]')?.getAttribute('data-story-author') ?? null;
             }}
           >
-            <ConversationRail variant="pinned" {...railProps} />
+            <StoryRail variant="pinned" {...railProps} />
           </div>
         ) : null}
       </div>

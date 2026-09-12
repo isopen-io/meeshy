@@ -13,6 +13,7 @@ import type { Conversation, Participant } from './types';
 import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
 import { performReaction, type PerformReactionResult } from './reactions';
+import { storyTrayQueryOptions } from './stories';
 
 /**
  * L'ADAPTATEUR UNIQUE (#5650, F2/F3) — le SEUL endroit qui résout
@@ -38,6 +39,18 @@ export function useConversations() {
  */
 export function useConversationsSnapshot(): readonly Conversation[] | undefined {
   return useQuery({ ...conversationsQuery(deps), enabled: false }).data;
+}
+
+/**
+ * **LE RAIL DE STORIES** (#6080) — même adaptateur, même `deps`, donc la même
+ * règle de source : fixtures ou passerelle, résolu à la CONSTRUCTION.
+ *
+ * `staleTime` de 60 s : une story vit vingt-quatre heures et le plateau n'a
+ * aucune raison d'être refetché à chaque retour sur la liste. Au-delà, c'est
+ * le socket qui doit prévenir — issue compagnon, comme pour les messages.
+ */
+export function useStoryTray() {
+  return useQuery({ ...storyTrayQueryOptions(deps), staleTime: 60_000 });
 }
 
 export function useConversation(id: string) {

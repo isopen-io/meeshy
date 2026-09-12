@@ -24,6 +24,11 @@
  */
 
 /** Le libellé de la quatrième forme — `RIVER_NOT_RENDERED_REASON` de `src/lib/reading-mode/catalog.ts`. */
+/* L'HORLOGE ÉPINGLÉE (#6130) — voir `instant.mjs`. Ce module ouvre le menu de
+   lecture sur le même corpus daté que son hôte : il partageait donc sa fenêtre
+   de rouge nocturne, sans porter lui-même la moindre assertion de date. */
+import { pageÀInstantFigé } from './instant.mjs';
+
 export const RIVER_NOT_RENDERED_REASON = 'Bientôt disponible';
 
 /**
@@ -48,7 +53,7 @@ export async function assertRiverBelowThreshold({ riverRow, expect }) {
 export async function checkEligibleRiverRow({ browser, BASE, setScheme, expect }) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await setScheme(context, 'dark');
-  const page = await context.newPage();
+  const page = await pageÀInstantFigé(context);
   await page.goto(`${BASE}/c/c-salon-riviere`, { waitUntil: 'load' });
   await page.waitForSelector('main li');
   await page.waitForTimeout(400);

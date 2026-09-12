@@ -2,6 +2,9 @@ import { join } from 'node:path';
 
 import { contrastOf } from './contrast.mjs';
 import { scrollRowIntoView } from './scroll-row.mjs';
+/* L'HORLOGE ÉPINGLÉE (#6130) — voir `instant.mjs`. Ce module lit les libellés
+   composés d'une rangée, tampon de jour compris. */
+import { pageÀInstantFigé } from './instant.mjs';
 
 /**
  * L'IDENTITÉ DE RANGÉE PORTE `role="article"` + SON LIBELLÉ (#5935) — extrait
@@ -125,7 +128,7 @@ export async function checkRowIdentityAndLabel({ browser, BASE, CAPTURES, setSch
   for (const scheme of ['dark', 'light']) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     await setScheme(context, scheme);
-    const page = await context.newPage();
+    const page = await pageÀInstantFigé(context);
     await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
     await page.waitForSelector('main li [data-row]');
     await page.waitForTimeout(300);

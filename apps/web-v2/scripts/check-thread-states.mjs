@@ -153,12 +153,19 @@ const failedShown = expect(
 );
 
 /**
- * L'ANNONCE LECTEUR D'ÉCRAN (#5813, § 6.3) — `[aria-live="polite"]` porte
- * « Message non envoyé » dès qu'une entrée d'outbox passe `failed`, dérivée
- * de l'outbox (jamais un second état).
+ * L'ANNONCE LECTEUR D'ÉCRAN (#5813, § 6.3) — la région HORS ÉCRAN du fil
+ * (`routes/thread.tsx`, `role="status" aria-live="polite" class="offscreen"`)
+ * porte « Message non envoyé » dès qu'une entrée d'outbox passe `failed`,
+ * dérivée de l'outbox (jamais un second état).
+ *
+ * LE SÉLECTEUR EST SCOPÉ DEPUIS #6080 : `[aria-live="polite"]` nu résolvait
+ * désormais DEUX nœuds — celui-ci et la pastille de synchronisation, qui
+ * annonce elle aussi, et qui vit dans la coquille. Une annonce de plus sur
+ * l'écran n'est pas une régression ; un témoin qui ne sait plus lequel des
+ * deux il interroge en est une.
  */
 expect(
-  (await page.locator('[aria-live="polite"]').innerText()).toLowerCase().includes('non envoyé'),
+  (await page.locator('.offscreen[aria-live="polite"]').innerText()).toLowerCase().includes('non envoyé'),
   "l'annonce aria-live signale « non envoyé » après un envoi hors ligne",
 );
 

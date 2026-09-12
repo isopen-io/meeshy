@@ -428,7 +428,7 @@ function PreviewStrip({
     <div
       role="group"
       aria-label="Pièces jointes en attente"
-      className="flex gap-3 overflow-x-auto px-3 py-2.5"
+      className="scrollbar-none flex gap-3 overflow-x-auto px-3 py-2.5"
       style={{
         height: 100,
         borderRadius: 16,

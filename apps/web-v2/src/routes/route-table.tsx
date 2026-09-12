@@ -23,6 +23,16 @@ export const ROUTES = {
   progressionBadges: { pattern: '/me/progression/badges', screen: () => import('@/routes/progression-badges') },
   progressionDefis: { pattern: '/me/progression/defis', screen: () => import('@/routes/progression-defis') },
   progressionSucces: { pattern: '/me/progression/succes', screen: () => import('@/routes/progression-succes') },
+  /* LES STORIES (#6080) — le rail de la liste ouvre ces DEUX adresses, et
+     c'est ce qui en fait des contrôles plutôt que des promesses. Jusqu'ici
+     chaque tuile du rail pointait vers un FIL sous un anneau de story, faute
+     de route ; le doc-comment de l'écran l'avouait en toutes lettres.
+
+     `?author=` filtre le plateau sur un auteur — la même adresse sert « tout
+     voir » et « voir les siennes », parce que c'est le même écran avec un
+     filtre, jamais deux écrans à faire diverger. */
+  stories: { pattern: '/stories', screen: () => import('@/routes/stories') },
+  storyCompose: { pattern: '/stories/new', screen: () => import('@/routes/story-compose') },
   /* L'ACCUEIL À DEUX PORTES (#5816) — soldé une fois par appareil
      (`welcomeStore`), miroir `WelcomeView.swift`. */
   welcome: { pattern: '/welcome', screen: () => import('@/routes/welcome') },

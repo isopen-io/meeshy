@@ -1,6 +1,9 @@
 import { join } from 'node:path';
 
 import { contrastOf } from './contrast.mjs';
+/* L'HORLOGE ÉPINGLÉE (#6130) — voir `instant.mjs`. Ce module partage le corpus
+   du fil, donc la même fenêtre de rouge nocturne que son hôte. */
+import { pageÀInstantFigé } from './instant.mjs';
 
 /**
  * LA MISE EN ÉVIDENCE D'UN SAUT SE MESURE PAR CONDITION, JAMAIS AU CHRONOMÈTRE
@@ -63,7 +66,7 @@ export async function checkLivingSummary({ browser, BASE, CAPTURES, setScheme, e
   {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     await setScheme(context, 'dark');
-    const page = await context.newPage();
+    const page = await pageÀInstantFigé(context);
     await page.goto(`${BASE}/c/c-rattrapage`, { waitUntil: 'load' });
     await page.waitForSelector('main [data-summary]');
     await page.waitForTimeout(200);
@@ -311,7 +314,7 @@ export async function checkLivingSummary({ browser, BASE, CAPTURES, setScheme, e
   {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     await setScheme(context, 'light');
-    const page = await context.newPage();
+    const page = await pageÀInstantFigé(context);
     await page.goto(`${BASE}/c/c-rattrapage`, { waitUntil: 'load' });
     await page.waitForSelector('main [data-summary]');
     await page.waitForTimeout(200);
@@ -327,13 +330,23 @@ export async function checkLivingSummary({ browser, BASE, CAPTURES, setScheme, e
   }
 
   /**
-   * --- 14.10 : HORS LIGNE — le digest est LOCAL, il reste affiché ; le
-   * bandeau de coupure du fil reste au-dessus.
+   * --- 14.10 : HORS LIGNE — le digest est LOCAL, il reste affiché ; et la
+   * coupure est ANNONCÉE.
+   *
+   * L'annonce ne vient plus d'un bandeau dans l'en-tête du fil (retiré #6080 :
+   * il ne disait rien qu'un écran voisin ne disait autrement) mais de la
+   * PASTILLE de synchronisation de la coquille, identique sur tous les écrans.
+   * Ce témoin n'a pas changé de propriété pour autant — « hors ligne, quelque
+   * chose le dit » — et c'est lui qui a attrapé le piège : chargée
+   * paresseusement, la pastille allait chercher son chunk SUR LE RÉSEAU au
+   * moment précis où il n'y en a plus (`net::ERR_INTERNET_DISCONNECTED`,
+   * `Suspense` jamais résolu, `fallback={null}` — donc rien à l'écran, et
+   * aucune erreur). Elle est désormais préchargée pendant qu'on est en ligne.
    */
   {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     await setScheme(context, 'dark');
-    const page = await context.newPage();
+    const page = await pageÀInstantFigé(context);
     await page.goto(`${BASE}/c/c-rattrapage`, { waitUntil: 'load' });
     await page.waitForSelector('main [data-summary]');
     await context.setOffline(true);
