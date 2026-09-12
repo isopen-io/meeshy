@@ -1,8 +1,8 @@
-import { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
-import { ComposerLanguagePill } from './composer-language-pill';
+import { ComposerTopRow } from './composer-top-row';
 import { Glyph } from './glyph';
 import type { ComposerNotice } from './composer-tray';
 import {
@@ -13,9 +13,21 @@ import {
   type PendingAttachment,
 } from '@/lib/send/attachments';
 import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
+import { composerAccentOf, decorativeEffectCountOf, type ComposeProtection } from '@/lib/send/compose-protection';
+import { composerChromeAccentStyle } from '@/lib/send/composer-accent';
+import type { ComposerDraft } from '@/lib/send/draft-store';
+import type { ComposerDraftReport } from '@/lib/view/use-draft';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
+import { useSentiment } from '@/lib/view/use-sentiment';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
 import { recordingSupported, useRecorder } from '@/lib/view/use-recorder';
+
+/**
+ * LA FEUILLE D'EFFETS, CHARGÉE À LA DEMANDE (#6175) — même discipline que
+ * `LanguageSheet` ci-dessous : elle ne pèse sur le chunk du fil que si un
+ * lecteur touche la capsule « effets ».
+ */
+const EffectsSheet = lazy(() => import('./effects-sheet').then((m) => ({ default: m.EffectsSheet })));
 
 /**
  * LA FEUILLE DE LANGUE, CHARGÉE À LA DEMANDE (#5828) — même discipline que
@@ -72,13 +84,27 @@ const QUICK_EMOJIS = QUICK_REACTIONS.slice(0, 2);
  * le construit en ligne »). */
 const NO_PREFERRED_LANGUAGES: readonly string[] = [];
 
-export function Composer({
+/**
+ * `memo` (revue-correction #6175, défaut majeur 3) — `thread.tsx` re-rend à
+ * CHAQUE image de défilement d'une liste virtualisée (son propre
+ * doc-comment le dit) ; sans `memo`, `Composer` — la partie la plus dense de
+ * l'arbre du composeur, rangée haute comprise — repassait par un rendu
+ * complet à chaque frame de scroll, alors qu'AUCUNE de ses props n'avait
+ * changé. Effectif seulement parce que `thread.tsx` stabilise désormais
+ * `onSend`/`onCancelReply` (`useCallback`) et `replyTo` (`useMemo`) : un
+ * `memo` posé sur des props reconstruites en ligne ne sert à rien — c'est le
+ * motif que les 40+ écrans à venir copieront, il doit être juste ICI.
+ */
+export const Composer = memo(function Composer({
   preferred = NO_PREFERRED_LANGUAGES,
   onSend,
   onTextChange,
   replyTo,
   onCancelReply,
   rights,
+  draft,
+  onDraftChange,
+  maxLength,
 }: {
   /** LE PRISME DU LECTEUR (#5828) — repli de la langue d'écriture quand
    * aucune détection ne tranche : `useComposeLanguage` lit `preferred[0]`,
@@ -86,7 +112,14 @@ export function Composer({
    * (`useReaderLanguages`, `thread.tsx`), jamais reconstruit en ligne
    * (CLAUDE.md § Prisme, cycle 123). */
   preferred?: readonly string[];
-  onSend: (payload: { text: string; attachments: readonly PendingAttachment[]; language: string }) => void;
+  onSend: (payload: {
+    text: string;
+    attachments: readonly PendingAttachment[];
+    language: string;
+    /** LA PROTECTION CHOISIE (#6175) — éphémère / flou / effets décoratifs,
+     * composée par la rangée haute. `{}` quand rien n'est armé. */
+    protection: ComposeProtection;
+  }) => void;
   /**
    * LA SORTIE DE FRAPPE (#5793) — appelée à CHAQUE changement du champ
    * (texte courant, ou `''` juste après un envoi) : `thread.tsx` la branche
@@ -111,8 +144,24 @@ export function Composer({
    * tuile du tiroir ne se rend que si son geste a un effet (loi 4). Absent ⇒
    * tout est autorisé (aucun participant chargé encore). */
   rights?: ParticipantPermissions;
+  /**
+   * LA GRAINE DU BROUILLON RESTAURÉ (#6175) — lue UNE fois au montage
+   * (`useState` paresseux ci-dessous), jamais relue après : c'est l'hôte
+   * (`thread.tsx`, `useComposerDraft`) qui possède la persistance, ce
+   * composant ne fait que SEMER son état local avec cette valeur, exactement
+   * comme `usePersistedReadingMode` sème `stickyMode`. `null`/`undefined` ⇒
+   * aucun brouillon.
+   */
+  draft?: ComposerDraft | null;
+  /** Appelée à CHAQUE changement (texte, langue, protection) — la politique
+   * de débounce vit chez l'hôte (`useComposerDraft`), jamais ici. */
+  onDraftChange?: (report: ComposerDraftReport) => void;
+  /** Absent en conversation standard (§1.2 point 2, #6175) — aucun appelant
+   * ne le fournit cette itération, faute de source honnête de la limite
+   * serveur (issue gateway compagnon). Le compteur ne se rend QUE si fourni. */
+  maxLength?: number;
 }) {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(() => draft?.text ?? '');
   const [focused, setFocused] = useState(false);
   const [pending, setPending] = useState<readonly PendingAttachment[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -130,10 +179,64 @@ export function Composer({
    * LA LANGUE D'ÉCRITURE (#5828) — décide ce qui PART, jamais le rang 1 du
    * Prisme du LECTEUR. `compose.language` est LA valeur envoyée ; la pastille
    * n'affiche jamais autre chose (loi 4 : elle ne ment pas).
+   *
+   * `initialLanguage: draft?.language` (#6175) — le brouillon restauré pose
+   * la langue COURANTE au montage, jamais ÉPINGLÉE : une détection franche
+   * la déplace encore (§ T7 de la spécification).
    */
-  const compose = useComposeLanguage({ preferred });
+  const compose = useComposeLanguage({ preferred, ...(draft?.language === undefined ? {} : { initialLanguage: draft.language }) });
   const [languageSheetOpen, setLanguageSheetOpen] = useState(false);
   const languagePillRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * LA PROTECTION (#6175) — les trois bascules de la rangée haute, seedées
+   * depuis le brouillon restauré. `viewOnce` n'a aucun contrôle ici (§ 1.2
+   * point 1 : réservé au composeur de prévisualisation de notification) —
+   * la loi le porte quand même (`ComposeProtection.viewOnce`), jamais armé
+   * depuis cet écran.
+   */
+  const [ephemeralSeconds, setEphemeralSeconds] = useState<number | undefined>(draft?.protection.ephemeralSeconds);
+  const [ephemeralPickerOpen, setEphemeralPickerOpen] = useState(false);
+  const [blurred, setBlurred] = useState(draft?.protection.blurred === true);
+  const [effectFlags, setEffectFlags] = useState(draft?.protection.effectFlags ?? 0);
+  const [effectsSheetOpen, setEffectsSheetOpen] = useState(false);
+  const protection: ComposeProtection = useMemo(
+    () => ({
+      ...(ephemeralSeconds === undefined ? {} : { ephemeralSeconds }),
+      ...(blurred ? { blurred: true } : {}),
+      ...(effectFlags === 0 ? {} : { effectFlags }),
+    }),
+    [ephemeralSeconds, blurred, effectFlags],
+  );
+
+  /** LA TONALITÉ — INDICATEUR PASSIF, débounce 300 ms (`use-sentiment.ts`,
+   * miroir `TextAnalyzer`). */
+  const sentiment = useSentiment(text);
+
+  /**
+   * L'ACCENT SUBSTITUÉ (#6175, revue-correction défaut majeur 2) — éphémère
+   * armé > flou > effets > `undefined` (l'accent de la conversation, hérité
+   * du parent). Voir `composer-accent.ts` pour ce que cette substitution
+   * couvre et ce qu'elle diffère. Posé sur la RACINE du composeur : toute
+   * surface qui lit déjà `var(--accent)` (le champ, le bouton d'envoi, la
+   * pastille de langue…) en hérite sans qu'aucune n'ait à le savoir — le même
+   * mécanisme que `withAccent` au niveau de l'écran (`thread.tsx`).
+   */
+  const chromeAccentStyle = composerChromeAccentStyle(composerAccentOf(protection));
+
+  /**
+   * LE RAPPORT DE BROUILLON (#6175) — à CHAQUE changement de texte, de
+   * langue ou de protection, l'hôte est informé ; LUI seul décide QUAND
+   * l'écriture atteint le magasin (`useComposerDraft`, fin de mot / 400 ms /
+   * vidage immédiat). `replyToId` n'est PAS reporté par ce composant — il
+   * n'a que la citation PRÉ-ADRESSÉE (`replyTo.author`/`excerpt`), jamais
+   * l'identifiant ; c'est `thread.tsx`, qui possède `replyTarget`, qui le
+   * composera dans une itération à venir (§1.2 point 6).
+   */
+  useEffect(() => {
+    onDraftChange?.({ text, language: compose.language, protection });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `onDraftChange` est fourni par l'hôte, pas une dépendance de CE rapport (motif `onTextChange`/`onSend` du fichier).
+  }, [text, compose.language, protection]);
 
   /**
    * LOI 4 SUR LE MICRO DE LA RANGÉE (revue-correction #5668) — il n'était
@@ -215,6 +318,14 @@ export function Composer({
          ici. */
       if (opts?.keepFocus) field.current.focus();
     }
+    // LA PROTECTION EST REMISE À ZÉRO APRÈS L'ENVOI (#6175) — miroir
+    // `ConversationViewModel+Send.swift:156-159` : éphémère, flou et effets
+    // ne survivent PAS au message qui vient de partir, contrairement à la
+    // LANGUE (qui reste COLLANTE, `compose.noteSent()`).
+    setEphemeralSeconds(undefined);
+    setEphemeralPickerOpen(false);
+    setBlurred(false);
+    setEffectFlags(0);
   };
 
   const send = (value: string, attachments: readonly PendingAttachment[] = pending) => {
@@ -225,7 +336,7 @@ export function Composer({
     // `resetAfterSend`, qui vide le texte et donc changerait ce que
     // `compose.language` rendrait si on le relisait après.
     const language = compose.language;
-    onSend({ text: own, attachments, language });
+    onSend({ text: own, attachments, language, protection });
     compose.noteSent(); // Le choix cesse d'être ÉPINGLÉ, mais reste COLLANT (Q3).
     resetAfterSend({ keepFocus });
   };
@@ -283,7 +394,7 @@ export function Composer({
        `data-message` : sans elle, le script doit deviner la racine du
        composeur en remontant le DOM, et il attrape le lien « Retour » de
        l'en-tête. Une ancre nommée est moins chère qu'un sélecteur fragile. */
-    <div data-composer className="flex flex-col pb-safe">
+    <div data-composer className="flex flex-col pb-safe" style={chromeAccentStyle}>
       {replyTo ? (
         <div
           data-composer-reply
@@ -324,24 +435,44 @@ export function Composer({
         </Suspense>
       ) : null}
 
-      {/* LA RANGÉE HAUTE (#5828) — miroir `topToolbar`
+      {/* LA RANGÉE HAUTE (#5828, #6175) — miroir `topToolbar`
           (`UniversalComposerBar+Toolbar.swift:25-81`) : posée AU-DESSUS du
           champ, jamais DANS lui, et DÉMONTÉE pendant un enregistrement
           (`+Layout.swift:200-206`, « aucun outil en main pendant le vocal »).
-          Pour l'instant, seule occupante — éphémère/flou/effets la
-          rejoindront (surfaces à venir, D-1 disposition).
 
           ANCRÉE EN TÊTE DE RANGÉE, jamais à droite (revue-correction) — iOS
           range ses outils dans le groupe MENANT (`◎ 👁 ✦ 😐 [🇫🇷 FR ⌄]`, la
-          pastille à x≈158 pt APRÈS quatre icônes, `topToolbar` finissant par
-          `Spacer()` + le compteur de caractères ; capture de référence
-          `ref-native-02-thread.png`). L'ancrer à droite plaçait la seule
-          occupante d'aujourd'hui à l'OPPOSÉ de sa place iOS et condamnait les
-          quatre contrôles à venir à s'y aligner faux. */}
+          pastille APRÈS quatre icônes, `topToolbar` finissant par `Spacer()`
+          + le compteur de caractères conditionnel ; capture de référence
+          `targets/thread.composer-top-row.{light,dark}.png`, 25 nœuds). */}
       {!isRecording ? (
-        <div data-composer-toolbar className="flex items-center justify-start gap-1 px-3 pt-1.5">
-          <ComposerLanguagePill code={compose.language} onOpen={() => setLanguageSheetOpen(true)} buttonRef={languagePillRef} />
-        </div>
+        <ComposerTopRow
+          {...(ephemeralSeconds === undefined ? {} : { ephemeralSeconds })}
+          ephemeralPickerOpen={ephemeralPickerOpen}
+          onToggleEphemeral={() => {
+            if (ephemeralSeconds !== undefined) {
+              // ARMÉ ⇒ tap DÉSARME (miroir `+Protections.swift:26-34`).
+              setEphemeralSeconds(undefined);
+              setEphemeralPickerOpen(false);
+              return;
+            }
+            setEphemeralPickerOpen((v) => !v);
+          }}
+          onSelectEphemeral={(seconds) => {
+            setEphemeralSeconds(seconds);
+            setEphemeralPickerOpen(false);
+          }}
+          blurred={blurred}
+          onToggleBlur={() => setBlurred((v) => !v)}
+          effectCount={decorativeEffectCountOf(effectFlags)}
+          onOpenEffects={() => setEffectsSheetOpen(true)}
+          sentiment={sentiment}
+          languageCode={compose.language}
+          onOpenLanguage={() => setLanguageSheetOpen(true)}
+          languagePillRef={languagePillRef}
+          text={text}
+          {...(maxLength === undefined ? {} : { maxLength })}
+        />
       ) : null}
 
       {languageSheetOpen ? (
@@ -359,6 +490,12 @@ export function Composer({
               languagePillRef.current?.focus();
             }}
           />
+        </Suspense>
+      ) : null}
+
+      {effectsSheetOpen ? (
+        <Suspense fallback={null}>
+          <EffectsSheet flags={effectFlags} onChange={setEffectFlags} onClose={() => setEffectsSheetOpen(false)} />
         </Suspense>
       ) : null}
 
@@ -511,4 +648,4 @@ export function Composer({
       ) : null}
     </div>
   );
-}
+});

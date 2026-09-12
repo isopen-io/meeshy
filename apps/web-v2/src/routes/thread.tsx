@@ -31,7 +31,6 @@ import { messagesQueryKey } from '@/lib/api/messages';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
 import { applyConsumption } from '@/lib/api/view-once';
 import type { Message } from '@/lib/api/types';
-import { served } from '@/lib/api/prism';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf, withAccent } from '@/lib/accent';
@@ -39,6 +38,7 @@ import { isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
 import { useParams } from '@/lib/router';
 import { mergeTimeline, place } from '@/lib/grouping';
 import { useReaderLanguages } from '@/lib/view/use-reader';
+import { useReplyToPreview } from '@/lib/view/use-reply-preview';
 import { useSend } from '@/lib/view/use-send';
 import { useMessageMenu } from '@/lib/view/use-message-menu';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -56,6 +56,10 @@ import {
 import { readingModeStore } from '@/lib/reading-mode/store';
 import { usePersistedReadingMode } from '@/lib/reading-mode/use-persisted-mode';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
+import { draftStore } from '@/lib/send/draft-store';
+import type { PendingAttachment } from '@/lib/send/attachments';
+import type { ComposeProtection } from '@/lib/send/compose-protection';
+import { useThreadDraft } from '@/lib/view/use-draft';
 import { useThreadScene } from '@/lib/reading-mode/scene';
 import { chromeStyleVars, sceneStyleVars } from '@/lib/reading-mode/metrics';
 import { backdropStyleVars } from '@/lib/view/thread-backdrop';
@@ -294,6 +298,20 @@ export default function ThreadScreen() {
   });
 
   /**
+   * LE BROUILLON DU COMPOSEUR, CITATION COMPRISE (#6175) — même clé
+   * (lecteur, conversation) que le mode de lecture ci-dessus, et la MÊME
+   * discipline de lecture. Ce hook POSSÈDE `replyTarget` : la persistance de
+   * la citation ne peut pas dépendre d'une frappe, et son annulation doit
+   * atteindre le magasin (§ doc-comment de `useThreadDraft`, qui porte le
+   * détail et la mesure).
+   */
+  const { initial: initialDraft, replyTarget, setReplyTarget, reportComposerDraft } = useThreadDraft({
+    store: draftStore,
+    scope,
+    conversationId: conversation?.id,
+  });
+
+  /**
    * MÉMORISÉS, parce que le virtualiseur re-rend cet écran à chaque image de
    * défilement : sans `useMemo`, la loi, les capacités et les CINQ lignes du
    * menu (objets neufs, libellés interpolés) étaient reconstruites soixante
@@ -488,12 +506,11 @@ export default function ThreadScreen() {
     setPendingJump(null);
   }, [pendingJump, readingDecision.mode, jumpToMessage]);
 
-  /**
-   * LE PRÉ-ADRESSAGE DU COMPOSEUR (#5695, écart 8 §1.4) — au tap d'un
-   * visage de la Rampe, le composeur s'ouvre déjà adressé à cette personne :
-   * la citation ET `replyToId` à l'envoi.
-   */
-  const [replyTarget, setReplyTarget] = useState<string | null>(null);
+  /* LE PRÉ-ADRESSAGE DU COMPOSEUR (#5695, écart 8 §1.4) — au tap d'un visage
+     de la Rampe, le composeur s'ouvre déjà adressé : la citation ET
+     `replyToId` à l'envoi. Si le message cité a quitté le cache entre-temps,
+     `replyToMessage` (plus bas) rend `undefined` et le bandeau ne se monte
+     pas — fail-closed, jamais une citation FANTÔME. */
 
   /**
    * LE MENU DU MESSAGE (#5814) — appui long / clic droit / `ContextMenu` sur
@@ -580,6 +597,66 @@ export default function ThreadScreen() {
   }, [count]);
 
   /**
+   * LA CITATION DU COMPOSEUR PRÉ-ADRESSÉ (#5695, écart 8 ; revue-correction
+   * #6175, défauts bloquant 1 et majeur 2) — DÉCLARÉE ICI, AVANT les retours
+   * anticipés plus bas : un `useMemo` après un retour anticipé viole les
+   * Rules of Hooks dès que le premier rendu est `pending` (aucun hook après)
+   * et le second rendu réel (N hooks de plus) — React lève « Rendered more
+   * hooks than during the previous render. » exactement à cette transition.
+   * `replyToMessage` ne dépend que de `messages` (mémoïsé plus haut) et de
+   * `replyTarget` (issu de `useThreadDraft`, également plus haut) : aucune
+   * des deux valeurs n'exige `conversation` narrowée non-optionnelle.
+   *
+   * Le memo lui-même vit dans `useReplyToPreview`
+   * (`lib/view/use-reply-preview.ts`), EXTRAIT pour être testable seul : le
+   * témoin qui en prouve la stabilité d'identité
+   * (`use-reply-preview.test.tsx`) n'a pas à monter tout `ThreadScreen`
+   * (routeur, TanStack Query, virtualiseur…) pour rougir sur ce défaut.
+   */
+  const replyToMessage = replyTarget === null ? undefined : messages.find((m) => m.id === replyTarget);
+  const replyTo = useReplyToPreview({ message: replyToMessage, readerLanguages });
+
+  /**
+   * `handleComposerSend`/`handleCancelReply` (revue-correction #6175, défaut
+   * bloquant 1) — également remontés ICI : ils ne dépendent que de `send`
+   * (plus haut), `replyToMessage` (ci-dessus) et `setReplyTarget`
+   * (`useThreadDraft`, plus haut), donc aucune contrainte ne les retenait
+   * après les retours anticipés — les y laisser aurait recréé la même
+   * violation des Rules of Hooks que celle corrigée ci-dessus.
+   */
+  const handleComposerSend = useCallback(
+    ({
+      text,
+      attachments,
+      language,
+      protection,
+    }: {
+      text: string;
+      attachments: readonly PendingAttachment[];
+      language: string;
+      protection: ComposeProtection;
+    }) => {
+      /* LE MESSAGE CITÉ ENTIER, PAS SON SEUL IDENTIFIANT
+         (revue-correction #5813, défaut majeur 6) — `replyToMessage`
+         est déjà résolu plus haut pour la bande du composeur ; le
+         réutiliser ici évite une seconde recherche ET porte la
+         citation jusqu'à la bulle optimiste.
+         `language` (#5828) — décidée PAR MESSAGE par le composeur
+         (détection locale → choix → rang 1 du Prisme du LECTEUR),
+         jamais `readerLocale` : c'est la langue de l'ÉCRIVAIN qui
+         doit partir en `originalLanguage`, jamais celle du lecteur.
+         `protection` (#6175) — éphémère / flou / effets choisis par
+         la rangée haute, composée en champs `Message` par
+         `localMessageOf` (`protectionFieldsOf`). */
+      send(text, attachments, replyToMessage ?? null, language, protection);
+      setReplyTarget(null);
+    },
+    [send, replyToMessage, setReplyTarget],
+  );
+
+  const handleCancelReply = useCallback(() => setReplyTarget(null), [setReplyTarget]);
+
+  /**
    * LES TROIS ÉTATS AVANT LE RENDU RÉEL (#5650, F5/F8/§5 étape 10) — TOUS les
    * HOOKS ci-dessus se sont déjà exécutés (règle des Hooks : jamais un hook
    * après un retour anticipé) ; tout ce qui suit est du calcul SIMPLE, en
@@ -610,34 +687,6 @@ export default function ThreadScreen() {
    */
   const summaryLang =
     typeof document === 'object' && readerLocale !== document.documentElement.lang ? readerLocale : undefined;
-
-  /**
-   * LA CITATION DU COMPOSEUR PRÉ-ADRESSÉ (#5695, écart 8) — l'extrait passe
-   * par le PRISME (`served()`, jamais `content` brut) : citer quelqu'un dans
-   * une langue qu'il n'a pas écrite serait exactement le défaut que le
-   * Prisme existe pour éviter.
-   */
-  const replyToMessage = replyTarget === null ? undefined : messages.find((m) => m.id === replyTarget);
-  const replyToServed =
-    replyToMessage === undefined
-      ? undefined
-      : served({
-          preferredLanguages: readerLanguages,
-          originalLanguage: replyToMessage.originalLanguage,
-          translations: replyToMessage.translations,
-          original: replyToMessage.content,
-        });
-  const replyTo =
-    replyToMessage === undefined || replyToServed === undefined
-      ? undefined
-      : {
-          author: replyToMessage.sender?.displayName ?? replyToMessage.senderId,
-          excerpt: replyToServed.text,
-          /* La PAIRE, jamais le seul texte : `served()` rend `language`
-             précisément pour que l'hôte puisse DIRE dans quelle langue il
-             sert (`lang`), comme `bubble.tsx` et `focal-row.tsx`. */
-          ...(replyToServed.language === '' ? {} : { language: replyToServed.language }),
-        };
 
   return (
     /* `h-dvh` + `overflow-hidden`, et NON `min-h-dvh` : c'est ce qui fait la
@@ -888,22 +937,15 @@ export default function ThreadScreen() {
         <div className="thread-composer-chrome" onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
           <Composer
             preferred={readerLanguages}
-            onSend={({ text, attachments, language }) => {
-              /* LE MESSAGE CITÉ ENTIER, PAS SON SEUL IDENTIFIANT
-                 (revue-correction #5813, défaut majeur 6) — `replyToMessage`
-                 est déjà résolu plus haut pour la bande du composeur ; le
-                 réutiliser ici évite une seconde recherche ET porte la
-                 citation jusqu'à la bulle optimiste.
-                 `language` (#5828) — décidée PAR MESSAGE par le composeur
-                 (détection locale → choix → rang 1 du Prisme du LECTEUR),
-                 jamais `readerLocale` : c'est la langue de l'ÉCRIVAIN qui
-                 doit partir en `originalLanguage`, jamais celle du lecteur. */
-              send(text, attachments, replyToMessage ?? null, language);
-              setReplyTarget(null);
-            }}
+            onSend={handleComposerSend}
             onTextChange={typing.onTextChange}
+            draft={initialDraft}
+            /* `replyToId` COMPOSÉ PAR `useThreadDraft` (#6175) — `Composer`
+               ne connaît que la citation PRÉ-ADRESSÉE
+               (`replyTo.author`/`excerpt`), jamais l'identifiant. */
+            onDraftChange={reportComposerDraft}
             {...(viewerParticipant ? { rights: viewerParticipant.permissions } : {})}
-            {...(replyTo ? { replyTo, onCancelReply: () => setReplyTarget(null) } : {})}
+            {...(replyTo ? { replyTo, onCancelReply: handleCancelReply } : {})}
           />
         </div>
       )}

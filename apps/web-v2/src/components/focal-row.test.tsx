@@ -3,6 +3,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { FocalRow } from './focal-row';
 import type { Message } from '@/lib/api/types';
@@ -899,5 +901,24 @@ describe('FocalRow — « modifié » d’un message ENVOYÉ reste lisible', () 
     );
     expect(html).toContain('data-badge="edited"');
     expect(html).not.toContain('var(--color-meta-mine)');
+  });
+});
+
+/**
+ * L'INDICATEUR D'EFFETS DÉCORATIFS (#6175, revue-correction défaut majeur 1)
+ * — même loi que `bubble.test.tsx`, une seule fois (`EffectsIndicator`,
+ * `message-blocks.tsx`).
+ */
+describe('FocalRow — l’indicateur d’effets décoratifs (#6175, défaut majeur 1)', () => {
+  test('aucun effet ⇒ aucun badge « effects »', () => {
+    const html = render({ ...BASE_MESSAGE });
+    expect(html).not.toContain('data-badge="effects"');
+  });
+
+  test('RAINBOW actif ⇒ badge « effects » rendu, aria-hidden', () => {
+    const html = render({ ...BASE_MESSAGE, effectFlags: MESSAGE_EFFECT_FLAGS.RAINBOW });
+    expect(html).toContain('data-badge="effects"');
+    expect(html).toContain('aria-hidden');
+    expect(html).toContain('title="Arc-en-ciel"');
   });
 });

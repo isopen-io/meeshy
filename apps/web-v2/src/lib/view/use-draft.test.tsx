@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { createDraftStore, type StorageLike } from '@/lib/send/draft-store';
 
-import { DRAFT_DEBOUNCE_MS, useComposerDraft } from './use-draft';
+import { DRAFT_DEBOUNCE_MS, useComposerDraft, useThreadDraft } from './use-draft';
 import type { ComposerDraftReport } from './use-draft';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -176,5 +176,109 @@ describe('useComposerDraft — politique de persistance (fin de mot / milieu de 
       protection: { blurred: true },
       replyToId: 'm1',
     });
+  });
+});
+
+/**
+ * LA CITATION EST PERSISTÉE AU MÊME RANG QUE LE TEXTE (revue-correction
+ * #6175) — les trois témoins ci-dessous ROUGISSENT sur la forme livrée, où
+ * `replyTarget` vivait en `useState` dans `routes/thread.tsx` et n'atteignait
+ * le magasin que si une FRAPPE suivait : citation posée sans frappe perdue,
+ * citation ANNULÉE ressuscitée à la réouverture, citation restaurée jamais
+ * semée quand la conversation se résout après le premier rendu (le cas réel,
+ * mesuré au navigateur).
+ */
+describe('useThreadDraft — la citation est persistée comme le texte', () => {
+  type ThreadHandle = ReturnType<typeof useThreadDraft>;
+
+  function mountThread(props: { readonly conversationId: string | undefined; readonly backend?: ReturnType<typeof fakeStorage> }) {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    const backend = props.backend ?? fakeStorage();
+    const store = createDraftStore(backend);
+    let captured!: ThreadHandle;
+
+    function Harness(p: { readonly conversationId: string | undefined }) {
+      captured = useThreadDraft({ store, scope: 'u_a', conversationId: p.conversationId });
+      return null;
+    }
+
+    act(() => {
+      root.render(<Harness conversationId={props.conversationId} />);
+    });
+
+    return {
+      rerender: (next: { readonly conversationId: string | undefined }) => {
+        act(() => {
+          root.render(<Harness conversationId={next.conversationId} />);
+        });
+      },
+      handle: () => captured,
+      backend,
+    };
+  }
+
+  const stored = (backend: ReturnType<typeof fakeStorage>) =>
+    JSON.parse(backend.data.get('meeshy.draft.u_a.c1') ?? 'null') as { readonly replyToId?: string } | null;
+
+  test('citer SANS rien taper écrit quand même la citation', () => {
+    const { handle, backend } = mountThread({ conversationId: 'c1' });
+    act(() => {
+      handle().reportComposerDraft(reportOf({ text: 'bonjour ' }));
+    });
+    act(() => {
+      handle().setReplyTarget('m-42');
+    });
+    expect(stored(backend)?.replyToId).toBe('m-42');
+  });
+
+  test('ANNULER la citation la retire du magasin — elle ne ressuscite pas', () => {
+    const { handle, backend } = mountThread({ conversationId: 'c1' });
+    act(() => {
+      handle().reportComposerDraft(reportOf({ text: 'bonjour ' }));
+    });
+    act(() => {
+      handle().setReplyTarget('m-42');
+    });
+    expect(stored(backend)?.replyToId).toBe('m-42');
+    act(() => {
+      handle().setReplyTarget(null);
+    });
+    expect(stored(backend)?.replyToId).toBeUndefined();
+  });
+
+  test('une citation SEULE (aucun texte) garde le brouillon vivant', () => {
+    const { handle, backend } = mountThread({ conversationId: 'c1' });
+    act(() => {
+      handle().reportComposerDraft(reportOf({ text: '' }));
+    });
+    expect(backend.data.has('meeshy.draft.u_a.c1')).toBe(false);
+    act(() => {
+      handle().setReplyTarget('m-42');
+    });
+    expect(stored(backend)).toEqual({ text: '', language: 'fr', protection: {}, replyToId: 'm-42' });
+  });
+
+  test('la citation restaurée est SEMÉE quand la conversation se résout APRÈS le premier rendu', () => {
+    const backend = fakeStorage();
+    backend.setItem(
+      'meeshy.draft.u_a.c1',
+      JSON.stringify({ text: 'reprise', language: 'fr', protection: {}, replyToId: 'm-7' }),
+    );
+    const { rerender, handle } = mountThread({ conversationId: undefined, backend });
+    expect(handle().replyTarget).toBeNull();
+    rerender({ conversationId: 'c1' });
+    expect(handle().replyTarget).toBe('m-7');
+  });
+
+  test('changer de conversation reprend la citation de SON brouillon, jamais celle de la précédente', () => {
+    const backend = fakeStorage();
+    backend.setItem('meeshy.draft.u_a.c1', JSON.stringify({ text: 'a', language: 'fr', protection: {}, replyToId: 'm-1' }));
+    const { rerender, handle } = mountThread({ conversationId: 'c1', backend });
+    expect(handle().replyTarget).toBe('m-1');
+    rerender({ conversationId: 'c2' });
+    expect(handle().replyTarget).toBeNull();
   });
 });

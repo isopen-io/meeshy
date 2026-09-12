@@ -3,6 +3,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { Bubble } from './bubble';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
@@ -722,5 +724,40 @@ describe('Bubble — le corps nu d’un message envoyé reste lisible', () => {
     const html = renderMineBare({ ...BASE_MESSAGE, senderId: 'u-viewer', isEdited: true });
     expect(html).toContain('rounded-bubble');
     expect(html).toContain('var(--color-meta-mine)');
+  });
+});
+
+/**
+ * L'INDICATEUR D'EFFETS DÉCORATIFS (#6175, revue-correction défaut majeur 1)
+ * — `message.effectFlags` voyageait jusqu'au serveur sans qu'aucune surface
+ * ne le rende. Voir le doc-comment de `EffectsIndicator` (`message-blocks.tsx`)
+ * pour ce que ce lot rend (un badge statique) et diffère (le célébratoire
+ * animé, sous réserve de la règle 32 de la charte).
+ */
+describe('Bubble — l’indicateur d’effets décoratifs (#6175, défaut majeur 1)', () => {
+  test('aucun effet ⇒ aucun badge « effects »', () => {
+    const html = render({ ...BASE_MESSAGE });
+    expect(html).not.toContain('data-badge="effects"');
+  });
+
+  test('un bit de CYCLE DE VIE seul (BLURRED) ⇒ aucun badge « effects »', () => {
+    const html = render({ ...BASE_MESSAGE, effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED, isBlurred: true });
+    expect(html).not.toContain('data-badge="effects"');
+  });
+
+  test('CONFETTI actif ⇒ badge « effects » rendu, aria-hidden (le libellé vit dans rowLabel)', () => {
+    const html = render({ ...BASE_MESSAGE, effectFlags: MESSAGE_EFFECT_FLAGS.CONFETTI });
+    expect(html).toContain('data-badge="effects"');
+    expect(html).toContain('aria-hidden');
+    expect(html).toContain('title="Confettis"');
+    expect(html).toContain('>1<');
+  });
+
+  test('deux bits décoratifs ⇒ le compte est 2, pas 1', () => {
+    const html = render({
+      ...BASE_MESSAGE,
+      effectFlags: MESSAGE_EFFECT_FLAGS.SHAKE | MESSAGE_EFFECT_FLAGS.SPARKLE,
+    });
+    expect(html).toContain('>2<');
   });
 });

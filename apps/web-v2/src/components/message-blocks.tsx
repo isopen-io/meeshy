@@ -7,8 +7,11 @@ import { languageColor, flag, languageName } from '@/lib/languages';
 import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
 
+import { activeDecorativeEffects } from '@/lib/effects';
+
 import { Glyph, GlyphSvg } from './glyph';
 import type { GlyphName } from './glyphs';
+import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
 
 /**
@@ -389,6 +392,54 @@ export function Badges({ badges }: { readonly badges: readonly MessageBadge[] })
         ),
       )}
     </div>
+  );
+}
+
+/**
+ * L'INDICATEUR D'EFFETS DÉCORATIFS (#6175, revue-correction défaut majeur 1)
+ * — `message.effectFlags` voyageait jusqu'au serveur sans qu'AUCUNE surface
+ * web ne le rende : l'auteur qui cochait « Confettis » ne voyait jamais rien,
+ * ni sur sa bulle optimiste ni après confirmation (CLAUDE.md racine, cycle
+ * 122, « qui AFFICHE ce que le résolveur élit ? »).
+ *
+ * CE QUE CE LOT REND, ET CE QU'IL NE REND PAS ENCORE — assumé, pas oublié :
+ * la charte v3 (règle 32, `app.css:202-224`, `decisions.md:988-990`)
+ * n'autorise qu'UN SEUL `@keyframes` dans tout le dépôt (déjà pris par
+ * `typingDot`) et n'anime QUE `opacity`/`scale`, jamais la géométrie. Les dix
+ * effets d'iOS (`MessageEffectModifiers.swift`) sont pour la moitié des
+ * secousses, des particules (confettis, feux d'artifice) ou une comète qui
+ * parcourt le contour — un TRAVAIL DE PARTICULES que `règle 32` interdit
+ * tel quel, et que le web LEGACY (`apps/web/components/common/
+ * MessageEffects.tsx`, ~360 lignes à deux fichiers) réalise avec ses propres
+ * `@keyframes` sous une charte différente, sans cette contrainte.
+ * Repeindre dix animations SANS décision produit sur `règle 32` serait
+ * exactement le défaut que #6175 corrige déjà ailleurs (composeurAccentOf,
+ * défaut 2) : trancher une peinture sans sa cible. Ce badge rend donc
+ * VISIBLE, de façon STATIQUE (zéro animation, zéro risque de saccade au
+ * défilement d'une liste virtualisée), lequel effet l'auteur a choisi — glyphe
+ * + libellés au survol/`title` — et diffère le CÉLÉBRATOIRE animé à une issue
+ * compagnon qui statue d'abord sur l'exception à `règle 32`.
+ *
+ * `aria-hidden` (même discipline que `Badges`/`EditedMark` juste au-dessus) —
+ * CE QUE CE BADGE DIT EST DÉJÀ DANS `rowLabel` (`composeMessageLabel`,
+ * `message-a11y-label.ts`) : sans ce masque, un lecteur d'écran prononcerait
+ * « effets actifs, confettis » une seconde fois après le libellé de la rangée.
+ */
+export function EffectsIndicator({ effectFlags }: { readonly effectFlags: number | undefined }) {
+  const active = activeDecorativeEffects(effectFlags);
+  if (active.length === 0) return null;
+  const labels = active.map((effect) => effect.label).join(', ');
+  return (
+    <span
+      data-badge="effects"
+      aria-hidden
+      className="flex items-center gap-1 text-check font-medium"
+      style={{ color: 'var(--accent)' }}
+      title={labels}
+    >
+      <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={11} />
+      {active.length}
+    </span>
   );
 }
 

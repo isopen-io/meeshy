@@ -1,4 +1,5 @@
 import type { ReadingModePreference } from '@meeshy/shared/types/reading-modes';
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { previewUrlFor } from '@/lib/send/attachment-preview-url';
 
@@ -784,6 +785,12 @@ export function recordSentMessage(
     readonly messageType?: 'image' | 'file' | 'audio' | 'video';
     readonly attachmentIds?: readonly string[];
     readonly replyToId?: string;
+    /** LA PROTECTION (#6175) — mime la recomposition SERVEUR
+     * (`messages-send.ts:240-245`), copiée dans le doc-comment ci-dessous. */
+    readonly isBlurred?: boolean;
+    readonly expiresAt?: string;
+    readonly effectFlags?: number;
+    readonly isViewOnce?: boolean;
   },
 ): SentFixtureMessage {
   sentMessageCounter += 1;
@@ -793,6 +800,14 @@ export function recordSentMessage(
   const attachments = (body.attachmentIds ?? [])
     .map((id) => uploadedAttachmentsById.get(id))
     .filter((a): a is Attachment => a !== undefined);
+  // MÊME RECOMPOSITION que le serveur (`messages-send.ts:240-245`) — un
+  // bouchon de fixtures qui se contenterait de RECOPIER `effectFlags` sans y
+  // ajouter les bits de cycle de vie mentirait sur ce que la vraie
+  // passerelle stocke.
+  let effectFlags = body.effectFlags ?? 0;
+  if (body.isBlurred === true) effectFlags |= MESSAGE_EFFECT_FLAGS.BLURRED;
+  if (body.expiresAt !== undefined) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
+  if (body.isViewOnce === true) effectFlags |= MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
   const created: SentFixtureMessage = {
     ...message({
       id: `fx-sent-${sentMessageCounter}`,
@@ -807,6 +822,10 @@ export function recordSentMessage(
       readCount: 0,
       ...(attachments.length > 0 ? { attachments } : {}),
       ...(body.replyToId === undefined ? {} : { replyToId: body.replyToId }),
+      isBlurred: body.isBlurred === true,
+      isViewOnce: body.isViewOnce === true,
+      ...(effectFlags === 0 ? {} : { effectFlags }),
+      ...(body.expiresAt === undefined ? {} : { expiresAt: new Date(body.expiresAt) }),
       createdAt: new Date(),
     }),
     clientMessageId: body.clientMessageId,

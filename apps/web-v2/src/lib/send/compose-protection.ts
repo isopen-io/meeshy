@@ -1,5 +1,7 @@
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
+import { DECORATIVE_EFFECTS } from '@/lib/effects';
+
 /**
  * LA LOI DE PROTECTION D'UN MESSAGE À L'ENVOI (#6175) — miroir de la
  * recomposition serveur (`messages-send.ts:240-245`) : le SITE UNIQUE qui
@@ -122,26 +124,14 @@ export function composerAccentOf(protection: ComposeProtection): ComposerAccentS
  */
 export type CharacterCounter = { readonly text: string; readonly overflow: boolean };
 
-/** Les DIX bits décoratifs (`MESSAGE_EFFECT_FLAGS.SHAKE` à `SPARKLE`) — ni les
- * trois bits de cycle de vie (composés séparément, voir plus haut). */
-const DECORATIVE_EFFECT_BITS: readonly number[] = [
-  MESSAGE_EFFECT_FLAGS.SHAKE,
-  MESSAGE_EFFECT_FLAGS.ZOOM,
-  MESSAGE_EFFECT_FLAGS.EXPLODE,
-  MESSAGE_EFFECT_FLAGS.CONFETTI,
-  MESSAGE_EFFECT_FLAGS.FIREWORKS,
-  MESSAGE_EFFECT_FLAGS.WAOO,
-  MESSAGE_EFFECT_FLAGS.GLOW,
-  MESSAGE_EFFECT_FLAGS.PULSE,
-  MESSAGE_EFFECT_FLAGS.RAINBOW,
-  MESSAGE_EFFECT_FLAGS.SPARKLE,
-];
-
 /** Le NOMBRE d'effets décoratifs actifs — la capsule de la rangée haute
  * l'affiche, jamais un booléen (miroir `effectsToggleButton`,
- * `+Toolbar.swift`, `nonzeroBitCount`). */
+ * `+Toolbar.swift`, `nonzeroBitCount`). Compte depuis `DECORATIVE_EFFECTS`
+ * (`lib/effects.ts`) — le SITE UNIQUE des dix bits décoratifs, aussi lu par
+ * `effects-sheet.tsx` (le choix) et par le rendu du fil (`message-blocks.tsx`,
+ * revue-correction #6175 défaut majeur 1). */
 export function decorativeEffectCountOf(effectFlags: number): number {
-  return DECORATIVE_EFFECT_BITS.filter((bit) => (effectFlags & bit) !== 0).length;
+  return DECORATIVE_EFFECTS.filter((effect) => (effectFlags & effect.flag) !== 0).length;
 }
 
 export function characterCounterOf(input: { readonly text: string; readonly maxLength?: number }): CharacterCounter | null {
