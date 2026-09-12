@@ -492,6 +492,18 @@ for (const scheme of ['light', 'dark']) {
     const context = await browser.newContext({
       viewport: { width: 390, height: 844 },
       colorScheme: scheme === 'light' ? 'light' : 'dark',
+      /**
+       * FRANÇAIS EXPLICITE (#6206) — `spokenLanguageName()` (`lib/view/language-name.ts`)
+       * cadre le nom d'une langue dans `document.documentElement.lang`, que le
+       * socle i18n d'interface (#6206) résout désormais RÉELLEMENT depuis
+       * `navigator.languages` au lieu du littéral `fr` figé d'avant. Sans ce
+       * `locale`, Playwright ouvre en `en-US` par défaut : l'assertion
+       * ci-dessous (« anglais », pas « English ») dépendait donc d'un
+       * accident d'environnement, jamais d'un choix explicite du scénario —
+       * ce test suppose un lecteur français partout ailleurs (le titre de la
+       * feuille reste « Langue d'écriture », jamais traduit).
+       */
+      locale: 'fr-FR',
     });
     await context.addInitScript((s) => {
       try {
