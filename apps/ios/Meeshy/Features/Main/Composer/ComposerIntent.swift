@@ -105,6 +105,21 @@ nonisolated enum ComposerOrigin: Equatable {
     /// sans jamais lier l'identifiant, qui voyage comme contexte et non comme
     /// donnée de décision.
     case conversationMedia(messageId: String, attachmentId: String?)
+    /// **Le média d'un POST ou la slide d'une STORY** (#6085, directive porteur
+    /// 2026-09-11 : « il faut permettre de pouvoir composer les pièces jointes
+    /// d'une conversation, d'un poste ou d'une story »).
+    ///
+    /// Une porte DISTINCTE de `.conversationMedia`, et pas un réemploi : le
+    /// contexte qui voyage n'est pas le même — un post n'a pas de `messageId`,
+    /// et une origine qui MENT sur ce qu'elle transporte est ce que le
+    /// doc-comment de `repostedPostId` interdit quelques lignes plus bas. Le
+    /// PROFIL, lui, est le même que celui du média reçu : la question produite
+    /// est identique (« que fait-on d'un média qu'on vient de voir ? »), et
+    /// c'est la table — pas la porte — qui la tranche.
+    ///
+    /// `mediaId` est optionnel, comme `attachmentId` ci-dessus : une story ou un
+    /// post sans média sème sa seule description.
+    case socialMedia(postId: String, mediaId: String?)
 }
 
 nonisolated extension ComposerFormat {
@@ -151,7 +166,7 @@ nonisolated extension ComposerOrigin {
         switch self {
         case .repost(let postId, _):
             return postId
-        case .storyTray, .feedComposer, .moodChip, .edit, .draft, .share, .conversationMedia:
+        case .storyTray, .feedComposer, .moodChip, .edit, .draft, .share, .conversationMedia, .socialMedia:
             return nil
         }
     }
@@ -179,7 +194,7 @@ nonisolated extension ComposerOrigin {
         switch self {
         case .draft(let id):
             return id
-        case .storyTray, .feedComposer, .moodChip, .edit, .repost, .share, .conversationMedia:
+        case .storyTray, .feedComposer, .moodChip, .edit, .repost, .share, .conversationMedia, .socialMedia:
             return nil
         }
     }
@@ -759,9 +774,9 @@ nonisolated extension ComposerProfile {
                 routesToLegacy: nil
             )
 
-        case .conversationMedia:
+        case .conversationMedia, .socialMedia:
             // e9/O13 : le média reçu est DÉJÀ posé par la porte
-            // (`ConversationMediaComposerDoor` → `StoryComposerViewModel(seeding:)`).
+            // (`MediaComposerDoor` → `StoryComposerViewModel(seeding:)`).
             //
             // Le format d'ouverture est une STORY, pas un post (directive du
             // 2026-08-23, doctrine alignée en rév. 3). Le coût de l'erreur est

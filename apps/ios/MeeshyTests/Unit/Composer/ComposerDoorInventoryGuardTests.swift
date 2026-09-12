@@ -12,7 +12,7 @@ import XCTest
 /// | `.feedComposer` | `RootViewComponents.swift` |
 /// | `.moodChip` | `RootViewComponents.swift`, `ConversationListView.swift` |
 /// | `.repost` | `RootView.swift`, `iPadRootView.swift` |
-/// | `.conversationMedia` | `ConversationMediaComposerDoor.swift` |
+/// | `.conversationMedia` | `MediaComposerDoor.swift` |
 ///
 /// Les trois autres — `.edit`, `.draft`, `.share` — n'ont aucun appelant. Elles
 /// ont pourtant un profil complet.

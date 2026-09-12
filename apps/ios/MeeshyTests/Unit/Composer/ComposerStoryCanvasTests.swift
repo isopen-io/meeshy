@@ -34,7 +34,7 @@ final class ComposerStoryCanvasTests: XCTestCase {
     /// capture vidéo, reprise de brouillon, média reçu d'une conversation —
     /// gardent la scène. Elles n'ouvrent sur aucun choix : elles ARRIVENT avec
     /// un contenu, et l'atelier est le seul écran qui le tienne déjà.
-    /// `ConversationMediaComposerDoor` le documente pour son propre cas — son
+    /// `MediaComposerDoor` le documente pour son propre cas — son
     /// média semé disparaîtrait de l'écran ET de la publication, le brouillon
     /// du document n'ayant ni `mediaIds` ni fichier.
     ///

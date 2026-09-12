@@ -61,14 +61,14 @@ struct ConversationMediaGalleryLayer: ViewModifier {
     /// divergé au premier ajustement de l'un.
     ///
     /// Le porteur est résolu ICI parce que la galerie ne connaît que des pièces
-    /// jointes. `ComposableMessageTarget.init?` applique la règle d'offre — vue
+    /// jointes. `ComposerSeedTarget.init?` applique la règle d'offre — vue
     /// unique, flouté, chiffré, lot — donc un média non composable n'arme rien,
     /// et le plein écran se referme simplement.
     private func armCompose(_ attachment: MessageAttachment) {
         let porteur = viewModel.messages.first { message in
             message.attachments.contains { $0.id == attachment.id }
         }
-        composerState.pendingComposeTarget = porteur.flatMap(ComposableMessageTarget.init(message:))
+        composerState.pendingComposeTarget = porteur.flatMap(ComposerSeedTarget.init(message:))
         scrollState.galleryStartAttachment = nil
     }
 

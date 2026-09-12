@@ -42,7 +42,8 @@ final class ComposerIntentTests: XCTestCase {
         .edit(postId: "post-a-moi", documentFormat: .post),
         .draft(id: "brouillon-42"),
         .share,
-        .conversationMedia(messageId: "msg-7", attachmentId: "piece-3")
+        .conversationMedia(messageId: "msg-7", attachmentId: "piece-3"),
+        .socialMedia(postId: "post-9", mediaId: "media-2")
     ]
 
     private func nom(de origin: ComposerOrigin) -> String {
@@ -55,6 +56,7 @@ final class ComposerIntentTests: XCTestCase {
         case .draft: return "draft"
         case .share: return "share"
         case .conversationMedia: return "conversationMedia"
+        case .socialMedia: return "socialMedia"
         }
     }
 
@@ -304,7 +306,7 @@ final class ComposerIntentTests: XCTestCase {
     /// entrer ici avec son profil, jamais s'ajouter en silence** — et une porte
     /// retirée doit en sortir, sinon le corpus prétend éprouver un profil qui
     /// n'existe plus.
-    func test_corpus_couvreLesHuitPortes_uneSeuleFoisChacune() {
+    func test_corpus_couvreLesNeufPortes_uneSeuleFoisChacune() {
         let noms = Self.toutesLesOrigines.map(nom(de:))
 
         XCTAssertEqual(
@@ -312,9 +314,10 @@ final class ComposerIntentTests: XCTestCase {
             "Deux entrées du corpus désignent la même porte : une porte resterait sans profil éprouvé."
         )
         XCTAssertEqual(
-            noms.count, 8,
-            "Huit portes sont spécifiées. Une porte ajoutée à `ComposerOrigin` doit entrer ici "
-            + "avec son profil, jamais s'ajouter en silence."
+            noms.count, 9,
+            "Neuf portes sont spécifiées (#6085 a ajouté `.socialMedia`, le média d'un post ou la "
+            + "slide d'une story). Une porte ajoutée à `ComposerOrigin` doit entrer ici avec son "
+            + "profil, jamais s'ajouter en silence."
         )
     }
 
@@ -358,7 +361,7 @@ final class ComposerIntentTests: XCTestCase {
         switch origin {
         case .repost, .edit:
             return true
-        case .storyTray, .feedComposer, .moodChip, .draft, .share, .conversationMedia:
+        case .storyTray, .feedComposer, .moodChip, .draft, .share, .conversationMedia, .socialMedia:
             return false
         }
     }
@@ -465,7 +468,7 @@ final class ComposerIntentTests: XCTestCase {
         switch origin {
         case .draft, .share, .edit:
             return true
-        case .storyTray, .feedComposer, .moodChip, .repost, .conversationMedia:
+        case .storyTray, .feedComposer, .moodChip, .repost, .conversationMedia, .socialMedia:
             return false
         }
     }
@@ -627,16 +630,17 @@ final class ComposerIntentTests: XCTestCase {
     /// **Le nom du test a changé avec l'ensemble.** Un nom qui dirait « six » sur
     /// un ensemble de sept est un mensonge silencieux : il passe au vert, et la
     /// session suivante le lit comme la loi.
-    func test_leMeuble_sertLesSeptPortesDeSonPerimetre_dontLaPlusUtiliseeEtLeMood() {
+    func test_leMeuble_sertLesHuitPortesDeSonPerimetre_dontLeMediaSocial() {
         let serviesParLeMeuble = Set(
             Self.toutesLesOrigines.filter { profil($0).routesToLegacy == nil }.map(nom(de:))
         )
 
         XCTAssertEqual(
             serviesParLeMeuble,
-            ["storyTray", "feedComposer", "moodChip", "draft", "share", "conversationMedia", "repost"],
-            "Périmètre après #5053 : le tray, LE FIL, les réels, LE MOOD, le brouillon, le partage, le "
-            + "média de conversation — et le REPOST, qui rejoint la liste. `edit` n'y figure pas parce "
+            ["storyTray", "feedComposer", "moodChip", "draft", "share", "conversationMedia",
+             "socialMedia", "repost"],
+            "Périmètre après #6085 : le tray, LE FIL, les réels, LE MOOD, le brouillon, le partage, le "
+            + "média de conversation, LE MÉDIA SOCIAL (post / story) — et le REPOST. `edit` n'y figure pas parce "
             + "que le corpus l'instancie sur un format de DOCUMENT (post/réel), toujours servi par "
             + "`EditPostSheet` ; l'édition d'une STORY, elle, monte le meuble — c'est "
             + "`test_lEdition_routeParFORMAT…` qui tient cette moitié, format par format."

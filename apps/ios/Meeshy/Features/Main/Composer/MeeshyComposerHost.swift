@@ -126,7 +126,7 @@ struct MeeshyComposerHost: View {
     let moodSeed: ComposerMoodSeed?
 
     /// **La graine de la SCÈNE** — le média qu'une porte a déjà posé sur le
-    /// canvas (`ConversationMediaComposerDoor`, lot 5).
+    /// canvas (`MediaComposerDoor`, lot 5).
     ///
     /// Elle est la JUMELLE de `moodSeed` et n'en partage pourtant ni le moment
     /// ni le mécanisme, et il faut le dire pour que la prochaine session ne les

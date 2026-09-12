@@ -94,7 +94,7 @@ nonisolated enum ComposerSurfaceRouting {
         //
         // Elles arrivent avec un média reçu d'une conversation ou un brouillon
         // repeuplé, et l'atelier est le seul écran qui les tienne déjà.
-        // `.mediaSeeded` en fait la démonstration : `ConversationMediaComposerDoor`
+        // `.mediaSeeded` en fait la démonstration : `MediaComposerDoor`
         // documente que router son média ailleurs le ferait disparaître de
         // l'écran ET de la publication, `ComposerDocumentDraft` n'ayant ni
         // `mediaIds`, ni fichier. Leur retirer la scène ferait perdre à

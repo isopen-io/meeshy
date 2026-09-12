@@ -220,21 +220,20 @@ nonisolated enum ComposableAttachment {
     /// que la chose masquée soit une image ou une phrase. Les poser ici, en
     /// tête, est ce qui empêche l'extension au texte de rouvrir une porte que le
     /// média avait fermée.
+    /// **Elle n'implémente plus la conjonction : elle la PROJETTE** (#6085).
+    ///
+    /// Le post et la slide de story posent exactement la même question, et la
+    /// recopier une deuxième puis une troisième fois l'aurait fait diverger au
+    /// premier ajustement de l'une. La règle vit désormais dans
+    /// `seedPlan(for:)` (`ComposableAttachmentSurfaces.swift`) ; ce qui reste
+    /// ici est ce que ce projeteur est SEUL à savoir — les trois façons dont un
+    /// MESSAGE déclare qu'il est masqué.
     static func seedPlan(in message: Message) -> SeedPlan? {
-        guard message.isForwardable, !message.isBlurred, !message.isEncrypted else { return nil }
-
-        let composables = message.attachments.filter { form(mimeType: $0.mimeType) != nil }
-        let aucuneProtegee = !message.attachments.contains(where: Self.isProtected)
-        let media = (composables.count == 1 && aucuneProtegee) ? composables.first : nil
-
-        let texte = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        let description = texte.isEmpty ? nil : texte
-
-        // Un message qui ne sème RIEN n'ouvre pas d'atelier : sans ce refus,
-        // « offert sur tout message » se lirait « offert toujours », et la porte
-        // s'ouvrirait sur une scène vide.
-        guard media != nil || description != nil else { return nil }
-        return SeedPlan(media: media, description: description)
+        seedPlan(for: SeedSource(
+            pieces: message.attachments,
+            text: message.content,
+            carrierIsProtected: !message.isForwardable || message.isBlurred || message.isEncrypted
+        ))
     }
 
     /// Le même verdict, sous la forme que lisent les surfaces qui n'ont pas
