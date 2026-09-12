@@ -979,6 +979,7 @@ struct ConversationView: View {
                         HapticFeedback.light()
                         mediaSaveCoordinator.requestSave(MediaSaveRequest(
                             kind: attachment.kind,
+                            origin: .transmitted,
                             remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
                             suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
                             attachmentId: attachment.id.isEmpty ? nil : attachment.id
@@ -2628,6 +2629,7 @@ struct ConversationView: View {
                     HapticFeedback.light()
                     mediaSaveCoordinator.requestSave(MediaSaveRequest(
                         kind: attachment.kind,
+                        origin: .transmitted,
                         remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
                         suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
                         attachmentId: attachment.id.isEmpty ? nil : attachment.id
@@ -2801,6 +2803,7 @@ struct ConversationView: View {
                 HapticFeedback.light()
                 mediaSaveCoordinator.requestSave(MediaSaveRequest(
                     kind: attachment.kind,
+                    origin: .transmitted,
                     remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
                     suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
                     attachmentId: attachment.id.isEmpty ? nil : attachment.id

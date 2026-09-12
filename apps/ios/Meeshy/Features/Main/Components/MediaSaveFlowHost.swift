@@ -159,6 +159,7 @@ struct SavableMediaFullscreen<Content: View>: View {
         HapticFeedback.light()
         saveCoordinator.requestSave(MediaSaveRequest(
             kind: attachment.kind,
+            origin: .transmitted,
             remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
             suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
             attachmentId: attachment.id.isEmpty ? nil : attachment.id

@@ -27,13 +27,24 @@ final class ImageFullscreenAutoLoadWiringTests: XCTestCase {
                       "ImageFullscreen must force autoLoad:true — a manual tap overrides the network policy gate (contract §14.1); otherwise Low Data Mode leaves the fullscreen viewer spinning forever.")
     }
 
-    func test_imageFullscreen_savesTheStampedImage_withRawBytesFallback() throws {
+    /// **Directive porteur du 2026-09-12 — elle SUPPLANTE celle du 2026-08-12**
+    /// (« un média qui quitte Meeshy porte sa marque »), sous laquelle ce témoin
+    /// exigeait l'INVERSE : que le viewer passe par `MeeshyImageWatermark.stamped`
+    /// avant d'écrire en photothèque.
+    ///
+    /// La marque est désormais réservée aux œuvres COMPOSÉES (story enregistrée
+    /// ou exportée, scène de post, scène de réel) ; les originaux d'une
+    /// conversation sortent nus. Or ce chemin direct n'est atteint que lorsque
+    /// l'hôte ne fournit pas `onSaveRequested`, c'est-à-dire depuis les deux
+    /// surfaces de conversation — il n'avait donc plus aucun média à marquer.
+    ///
+    /// L'assertion est écrite en NÉGATIF à dessein : un filigrane qui reviendrait
+    /// ici ne casserait rien d'autre, et ne se verrait pas.
+    func test_imageFullscreen_savesTheImageAsReceived_withoutAnyWatermark() throws {
         let source = try sdkSource("Sources/MeeshyUI/Media/ImageViewerView.swift")
-        XCTAssertTrue(source.contains("MeeshyImageWatermark.stamped("),
-                      "ImageFullscreen enregistre l'image MARQUÉE — même règle que le flux unifié de l'app (MediaSaveBranding) : le viewer passe par l'atome de filigrane avant d'écrire en photothèque.")
-        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.saveImage(stamped)"),
-                      "Le chemin nominal écrit l'image marquée via saveImage — plus de saveFromURL : les octets viennent du cache partagé, pas d'un aller-retour réseau.")
+        XCTAssertFalse(source.contains("MeeshyImageWatermark"),
+                       "Le chemin direct d'ImageFullscreen ne sert que des médias de CONVERSATION : la directive 2026-09-12 leur interdit la marque.")
         XCTAssertTrue(source.contains("PhotoLibraryManager.shared.saveImage(data)"),
-                      "Un marquage impossible (format animé, décodage raté) n'empêche JAMAIS l'enregistrement : repli sur les octets d'origine.")
+                      "Le chemin nominal écrit les octets REÇUS via saveImage — pas de saveFromURL : ils viennent du cache partagé, pas d'un aller-retour réseau.")
     }
 }

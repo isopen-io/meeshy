@@ -25,6 +25,16 @@ import MeeshyUI
 /// toutes les autres pages réalisées — à la fréquence d'affichage.
 struct GalleryImagePage: View, Equatable {
     let attachment: MessageAttachment
+    /// **Le cadre de CETTE page**, résolu par `MediaStageFraming` (#6141). La
+    /// page ne calcule aucune cote : elle reçoit celles du plateau, les mêmes
+    /// que l'overlay pose une couche plus haut — c'est ce qui garantit que le
+    /// texte se pose exactement sur l'image et non à côté.
+    let stage: MediaStageFraming.Result
+    /// **L'état d'immersion, pour les GESTES** (#6142). Le cadre en porte déjà
+    /// les cotes, mais la règle du glissement a besoin de l'état lui-même : vers
+    /// le haut, un doigt OUVRE le plein cadre depuis la carte et n'ouvre plus
+    /// rien une fois dedans.
+    let presentation: StagePresentation
     /// La page visible. Seule l'active répond aux gestes et rend l'image plein
     /// format en priorité ; les autres se contentent d'être prêtes.
     let isActive: Bool
@@ -32,14 +42,20 @@ struct GalleryImagePage: View, Equatable {
     /// page ne rend qu'un aperçu léger — le décodage plein format est LIBÉRÉ.
     let rendersFullPixels: Bool
     let accessibilityLabel: String
-    let onToggleControls: () -> Void
+    /// La page dit par quelle PORTE le doigt est passé ; l'hôte décide ce que
+    /// la porte produit (`onEnterStage`, `+Presentation.swift`). Une page qui
+    /// composerait elle-même l'état ferait une seconde écriture, et la
+    /// distinction des portes deviendrait indécidable.
+    let onEnterStage: (StageEntry) -> Void
     let onDismiss: () -> Void
 
     /// Les fermetures ne participent pas : elles n'encapsulent que des actions
-    /// stables (bascule des contrôles, fermeture). Comparer l'identité + les
-    /// deux drapeaux de position suffit à décider d'un re-rendu.
+    /// stables (franchir une porte, fermer). Comparer l'identité + les drapeaux
+    /// de position suffit à décider d'un re-rendu.
     static func == (lhs: GalleryImagePage, rhs: GalleryImagePage) -> Bool {
         lhs.attachment.id == rhs.attachment.id
+            && lhs.stage == rhs.stage
+            && lhs.presentation == rhs.presentation
             && lhs.isActive == rhs.isActive
             && lhs.rendersFullPixels == rhs.rendersFullPixels
             && lhs.accessibilityLabel == rhs.accessibilityLabel
@@ -60,7 +76,26 @@ struct GalleryImagePage: View, Equatable {
     /// n'a donc aucun pixel à fournir au zoom.
     private static let previewSize = CGSize(width: 320, height: 320)
 
+    /// Le zoom **COMMIS** : ce que la page garde une fois le pincement fini.
+    /// C'est lui qui décide du déplacement — le pan est un
+    /// `highPriorityGesture` à 1 pt, et l'armer au milieu d'un pincement le
+    /// ferait arbitrer contre la magnification à chaque image.
     private var isZoomed: Bool { committedScale > 1 }
+
+    /// **Le média est-il transformé MAINTENANT ?**
+    ///
+    /// `committedScale` ne s'écrit qu'en FIN de geste (`zoomGesture.onEnded`).
+    /// Pendant le PREMIER pincement, `scale` bouge déjà pendant qu'il vaut
+    /// encore 1 : l'appui long restait donc armé, et un pincement lent — doigts
+    /// posés ≥ 0,4 s, moins de 10 pt de dérive sur le toucher suivi — franchissait
+    /// la porte du plein cadre au milieu d'un zoom, pause comprise.
+    ///
+    /// La règle partagée dit « un média déjà TRANSFORMÉ a pris le doigt », pas
+    /// « déjà commis » (`MediaStageGestures.longPressArmed`, SDK). Le prédicat
+    /// qu'on lui remet lit donc l'état VIVANT, et le glissement du cadre se
+    /// désarme avec lui : un pincement qui dérive de 30 pt vers le bas n'est pas
+    /// une demande de fermeture.
+    private var isTransformed: Bool { scale > 1 || committedScale > 1 }
 
     private var thumbnailURL: String? {
         attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
@@ -83,8 +118,15 @@ struct GalleryImagePage: View, Equatable {
     }
 
     var body: some View {
+        // **Le cadre arrondi** (#6141), et son hors-champ HABILLÉ (#6143) : le
+        // fond est celui du CADRE, pas de l'écran — au-delà de lui c'est le
+        // plateau qui se voit. Il porte le ThumbHash flouté du média quand
+        // celui-ci en a un, le noir sinon.
         ZStack {
-            Color.black
+            MediaStageBackdrop(
+                source: MediaGalleryStage.backdrop(stage: stage,
+                                                   thumbHash: attachment.thumbHash)
+            )
 
             if hasRenderableSource {
                 imageLayer
@@ -93,8 +135,6 @@ struct GalleryImagePage: View, Equatable {
                     .offset(offset)
                     .gesture(zoomGesture, including: isActive ? .all : .none)
                     .highPriorityGesture(panGesture, including: isActive && isZoomed ? .all : .none)
-                    .gesture(dismissGesture, including: isActive && !isZoomed ? .all : .none)
-                    .onTapGesture(count: 2) { toggleZoom() }
                     // Sans label, l'image plein écran est un élément VoiceOver muet quand
                     // on balaie la galerie. Caption si fournie, sinon libellé générique.
                     .accessibilityLabel(accessibilityLabel)
@@ -103,8 +143,33 @@ struct GalleryImagePage: View, Equatable {
                 emptyStateGlyph
             }
         }
+        .frame(width: stage.frame.width, height: stage.frame.height)
+        .clipShape(RoundedRectangle(cornerRadius: stage.cornerRadius, style: .continuous))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
-        .onTapGesture { onToggleControls() }
+        // **Le glissement appartient au CADRE, pas au média ajusté.** Il était
+        // monté sur `imageLayer`, c'est-à-dire sur la vue déjà `.fit` : il ne
+        // couvrait donc que le média, jamais le hors-champ — alors que le cadre
+        // letterboxe par CONSTRUCTION dès que le plancher de 330 pt mord (une
+        // 16:9 rend ~206 pt de média dans 330 pt de cadre, soit ~124 pt de
+        // bandes). Le haut n'y ouvrait rien et le bas n'y fermait rien, pendant
+        // que l'appui long et les deux taps, montés ici, y répondaient ; et une
+        // page SANS source exploitable ne se fermait plus du tout au doigt.
+        // La page vidéo le monte sur son conteneur depuis #6142 — « la vidéo et
+        // l'image ne peuvent pas répondre différemment au même geste » est une
+        // phrase de son doc-comment, pas une intention.
+        .gesture(stageDragGesture, including: isActive && !isTransformed ? .all : .none)
+        .gesture(longPressGesture, including: longPressArmed ? .all : .none)
+        // **Les deux taps vivent sur la MÊME vue, le double déclaré en
+        // premier** (#6142). Le tap ne bascule plus seulement du chrome : il
+        // emporte le CADRAGE. Laissés sur deux vues distinctes — le double sur
+        // l'image, le simple sur le conteneur — un double tap de zoom aurait
+        // aussi franchi la porte, et le média aurait sauté deux fois. Réunis et
+        // dans cet ordre, SwiftUI diffère le simple le temps de la fenêtre du
+        // double : la latence est le prix, et elle coûte moins cher qu'un
+        // cadrage qui change quand on voulait agrandir.
+        .onTapGesture(count: 2) { toggleZoom() }
+        .onTapGesture { onEnterStage(.tap) }
         .adaptiveOnChange(of: isActive) { _, active in
             guard !active else { return }
             resetTransform()
@@ -202,26 +267,52 @@ struct GalleryImagePage: View, Equatable {
             .onEnded { _ in committedOffset = offset }
     }
 
-    /// Glissement VERTICAL de fermeture. `minimumDistance: 30` est délibéré :
-    /// il laisse la pagination horizontale gagner l'arbitrage.
-    private var dismissGesture: some Gesture {
+    /// **Le glissement vertical, DEUX sens et deux sens seulement** (#6142).
+    ///
+    /// `minimumDistance: 30` est délibéré et inchangé : il laisse la pagination
+    /// horizontale gagner l'arbitrage. Ce qui change est la décision de fin de
+    /// course, qui ne se prend plus sur `abs(height)` — cette valeur absolue
+    /// rendait la fermeture identique dans les deux sens, et la loi donne
+    /// maintenant le HAUT à l'entrée en plein cadre. La règle est au SDK, donc
+    /// les quatre surfaces du lot la partageront sans la réécrire.
+    private var stageDragGesture: some Gesture {
         DragGesture(minimumDistance: 30)
             .onChanged { value in
-                // Only respond to primarily vertical drags
-                guard abs(value.translation.height) > abs(value.translation.width) else { return }
+                guard resolveDrag(value.translation) != .ignored else { return }
                 offset = CGSize(width: 0, height: value.translation.height)
             }
             .onEnded { value in
-                guard abs(value.translation.height) > abs(value.translation.width) else {
-                    withAnimation(.spring()) { offset = .zero }
-                    return
-                }
-                if abs(value.translation.height) > Self.dismissThreshold {
+                switch resolveDrag(value.translation) {
+                case .dismisses:
                     onDismiss()
-                } else {
+                case .entersFull:
+                    withAnimation(.spring()) { offset = .zero }
+                    onEnterStage(.swipeUp)
+                case .follows, .ignored:
                     withAnimation(.spring()) { offset = .zero }
                 }
             }
+    }
+
+    private func resolveDrag(_ translation: CGSize) -> MediaStageGestures.DragOutcome {
+        MediaStageGestures.resolveDrag(translation: translation,
+                                       presentation: presentation,
+                                       threshold: Self.dismissThreshold)
+    }
+
+    /// **L'appui long cède au déplacement d'un média AGRANDI.** Ce dernier est
+    /// monté en `highPriorityGesture` à 1 pt de distance minimale : les armer
+    /// ensemble ferait décider la première dérive d'un point laquelle gagne.
+    private var longPressArmed: Bool {
+        MediaStageGestures.longPressArmed(isActive: isActive, isTransformed: isTransformed)
+    }
+
+    /// `maximumDistance` borne la dérive tolérée : au-delà, l'appui long échoue
+    /// et le doigt appartient de nouveau au glissement — c'est ce qui laisse la
+    /// porte du haut atteignable sans lâcher.
+    private var longPressGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.4, maximumDistance: 10)
+            .onEnded { _ in onEnterStage(.longPress) }
     }
 
     private func toggleZoom() {
@@ -256,6 +347,10 @@ struct GalleryImagePage: View, Equatable {
 /// traverser une conversation de vingt vidéos en lançait vingt.
 struct GalleryVideoPage: View, Equatable {
     let attachment: MessageAttachment
+    /// Le cadre de cette page — voir `GalleryImagePage.stage` (#6141).
+    let stage: MediaStageFraming.Result
+    /// Voir `GalleryImagePage.presentation` (#6142).
+    let presentation: StagePresentation
     let accentColor: String
     /// La page que l'utilisateur REGARDE (distance nulle), par opposition aux
     /// deux voisines que la fenêtre rend sans que personne ne les ait
@@ -263,12 +358,14 @@ struct GalleryVideoPage: View, Equatable {
     /// page active paie le Mo d'une extraction en politique restrictive.
     let isActive: Bool
     let isWindowed: Bool
-    let onToggleControls: () -> Void
+    let onEnterStage: (StageEntry) -> Void
     let onCacheActivation: () -> Void
     let onDismiss: () -> Void
 
     static func == (lhs: GalleryVideoPage, rhs: GalleryVideoPage) -> Bool {
         lhs.attachment.id == rhs.attachment.id
+            && lhs.stage == rhs.stage
+            && lhs.presentation == rhs.presentation
             && lhs.accentColor == rhs.accentColor
             && lhs.isActive == rhs.isActive
             && lhs.isWindowed == rhs.isWindowed
@@ -276,18 +373,22 @@ struct GalleryVideoPage: View, Equatable {
 
     init(
         attachment: MessageAttachment,
+        stage: MediaStageFraming.Result,
+        presentation: StagePresentation,
         accentColor: String,
         isActive: Bool,
         isWindowed: Bool,
-        onToggleControls: @escaping () -> Void,
+        onEnterStage: @escaping (StageEntry) -> Void,
         onCacheActivation: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) {
         self.attachment = attachment
+        self.stage = stage
+        self.presentation = presentation
         self.accentColor = accentColor
         self.isActive = isActive
         self.isWindowed = isWindowed
-        self.onToggleControls = onToggleControls
+        self.onEnterStage = onEnterStage
         self.onCacheActivation = onCacheActivation
         self.onDismiss = onDismiss
         // Poster NET déjà persisté : lu de façon SYNCHRONE au montage — la page
@@ -370,7 +471,18 @@ struct GalleryVideoPage: View, Equatable {
     }
 
     var body: some View {
+        // **Le cadre arrondi** (#6141) et son hors-champ habillé (#6143) — voir
+        // `GalleryImagePage.body`. La couche `AVPlayerLayer` cesse d'ignorer la
+        // zone sûre : elle vit maintenant DANS le cadre, et c'est lui qui la
+        // borne. Une vidéo est d'ailleurs la nature qui en profite le plus : un
+        // 16:9 pose son cadre au plancher et laisse deux bandes dans les DEUX
+        // états.
         ZStack {
+            MediaStageBackdrop(
+                source: MediaGalleryStage.backdrop(stage: stage,
+                                                   thumbHash: attachment.thumbHash)
+            )
+
             if !isPlayerActive || !surfaceReady {
                 thumbnailLayer
             }
@@ -382,7 +494,6 @@ struct GalleryVideoPage: View, Equatable {
                         gravity: .resizeAspect,
                         onReadyForDisplay: { surfaceReady = true }
                     )
-                        .ignoresSafeArea()
                 }
             }
 
@@ -394,11 +505,56 @@ struct GalleryVideoPage: View, Equatable {
             if !isPlayerAttached {
                 playOrDownloadButton
             }
+
+            // **La quatrième porte** (#6163) : double tap à gauche ⇒ −10 s, à
+            // droite ⇒ +10 s. Armée seulement quand une piste est ATTACHÉE à
+            // cette page — sans piste il n'y a rien à parcourir, et la loi 4
+            // refuse un contrôle sans effet. Cette condition est aussi ce qui
+            // évite de retarder le tap d'un point de vue où le bouton central
+            // de lecture est encore là : les deux ne sont jamais montés
+            // ensemble, `!isPlayerAttached` gouvernant l'un et l'autre.
+            //
+            // **La zone reçoit AUSSI la porte du tap** (`onSingleTap`), et c'est
+            // ce qui réunit les deux gestes sur la MÊME vue là où ils se
+            // disputent le doigt — la règle que le corps de `GalleryImagePage`
+            // écrit dix lignes plus haut. Le `.onTapGesture` posé sur cette page
+            // ne disparaît pas pour autant : il sert le tiers CENTRAL, qui ne
+            // porte aucun geste et garde donc son tap immédiat.
+            if isActive, isPlayerAttached {
+                MediaStageSeekZones(
+                    size: stage.frame,
+                    onSingleTap: { onEnterStage(.tap) },
+                    onDoubleTap: { point in
+                        MediaStageSeekAction.apply(at: point,
+                                                   in: stage.frame,
+                                                   manager: videoManager)
+                    }
+                )
+            }
         }
+        .frame(width: stage.frame.width, height: stage.frame.height)
+        .clipShape(RoundedRectangle(cornerRadius: stage.cornerRadius, style: .continuous))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
-        .onTapGesture { onToggleControls() }
+        .onTapGesture { onEnterStage(.tap) }
         .offset(y: offset.height)
-        .gesture(dismissGesture)
+        // **`isActive` désarme les pages VOISINES**, exactement comme il le fait
+        // pour la jumelle image une page plus haut et pour l'appui long de la
+        // ligne suivante — la raison est écrite au SDK (`longPressArmed`) : le
+        // pager réalise deux pages à l'écran pendant le défilement, et un geste
+        // armé sur celle que personne ne regarde décide pour elle. La
+        // conséquence dépasse ici le cadrage : la branche `.dismisses` lit
+        // `videoManager.activeURL` pour choisir entre le passage au PiP et la
+        // libération du player, donc une page voisine trancherait le sort d'une
+        // piste qui n'est pas la sienne.
+        .gesture(stageDragGesture, including: isActive ? .all : .none)
+        // **`isTransformed: false` n'est pas un raccourci** : une page vidéo n'a
+        // ni zoom ni déplacement, donc rien ne dispute le doigt à l'appui long.
+        // Le dire par le paramètre plutôt que d'omettre la garde laisse la
+        // MÊME règle répondre pour les deux natures.
+        .gesture(longPressGesture,
+                 including: MediaStageGestures.longPressArmed(isActive: isActive,
+                                                              isTransformed: false) ? .all : .none)
         // La clé inclut `isWindowed` : la tâche ne tourne QUE dans la fenêtre,
         // et rejoue dès qu'une page y entre.
         .task(id: "\(attachment.id)#\(isWindowed)") {
@@ -465,18 +621,33 @@ struct GalleryVideoPage: View, Equatable {
         .onReceive(videoManager.$isPlaying) { videoManagerIsPlaying = $0 }
     }
 
-    private var dismissGesture: some Gesture {
+    /// **Le glissement vertical : le bas ferme, le haut ouvre** (#6142). Voir
+    /// `GalleryImagePage.stageDragGesture` — même règle, même seuil, et c'est le
+    /// point : la vidéo et l'image ne peuvent pas répondre différemment au même
+    /// geste.
+    ///
+    /// La sortie par le bas garde intégralement son passage de témoin au PiP,
+    /// qui est ce qui distingue cette page de sa jumelle.
+    ///
+    /// **L'appui long CHANGE ce que la sortie par le bas produit, et c'est
+    /// voulu.** Le contrat n'était écrit que dans un sens (`maximumDistance: 10`
+    /// : au-delà, l'appui long échoue et le doigt revient au glissement) ; voici
+    /// l'autre. Une fois l'appui long reconnu, `onEnterStage(.longPress)` met la
+    /// piste en PAUSE — c'est ce que la porte promet, et la pastille l'annonce.
+    /// Un glissement vers le bas qui suit tombe donc sur la branche `else if` et
+    /// LIBÈRE le player au lieu de passer au PiP. Ce n'est pas une course entre
+    /// recognizers : c'est la conséquence d'un arrêt que le lecteur vient de
+    /// demander, et une fenêtre d'image-dans-l'image sur une image GELÉE serait
+    /// un moins bon produit que la bulle qui retrouve sa vignette.
+    private var stageDragGesture: some Gesture {
         DragGesture(minimumDistance: 30)
             .onChanged { value in
-                guard abs(value.translation.height) > abs(value.translation.width) else { return }
+                guard resolveDrag(value.translation) != .ignored else { return }
                 offset = CGSize(width: 0, height: value.translation.height)
             }
             .onEnded { value in
-                guard abs(value.translation.height) > abs(value.translation.width) else {
-                    withAnimation(.spring()) { offset = .zero }
-                    return
-                }
-                if abs(value.translation.height) > 150 {
+                switch resolveDrag(value.translation) {
+                case .dismisses:
                     if videoManager.isPlaying && videoManager.activeURL == attachment.fileUrl {
                         videoManager.startPip()
                     } else if videoManager.activeURL == attachment.fileUrl {
@@ -487,10 +658,24 @@ struct GalleryVideoPage: View, Equatable {
                         videoManager.release(urlString: attachment.fileUrl)
                     }
                     onDismiss()
-                } else {
+                case .entersFull:
+                    withAnimation(.spring()) { offset = .zero }
+                    onEnterStage(.swipeUp)
+                case .follows, .ignored:
                     withAnimation(.spring()) { offset = .zero }
                 }
             }
+    }
+
+    private func resolveDrag(_ translation: CGSize) -> MediaStageGestures.DragOutcome {
+        MediaStageGestures.resolveDrag(translation: translation,
+                                       presentation: presentation,
+                                       threshold: 150)
+    }
+
+    private var longPressGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.4, maximumDistance: 10)
+            .onEnded { _ in onEnterStage(.longPress) }
     }
 
     /// Ce qui tient l'écran avant la première frame composée : le poster NET

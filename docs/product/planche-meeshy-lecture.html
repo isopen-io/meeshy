@@ -375,12 +375,14 @@
     height: 844px;
     border-radius: 0;
     /*
-     * Les deux couloirs ne sont pas symétriques — 115 pt au-dessus (safe 59 +
-     * barre 56), 118 pt en dessous (rail 84 + safe 34). Le centre de la zone
-     * libre est donc 1,5 pt au-dessus du centre de l'écran : on le rattrape ici
-     * pour que le plein cadre touche vraiment les quatre bords.
+     * Les couloirs ne sont pas symétriques, et ils le sont moins depuis que la
+     * bande de progression est descendue (#6162) : 115 pt au-dessus (safe 59 +
+     * barre 56), 162 pt en dessous (progression 48 + rail 80 + safe 34). Le
+     * centre de la zone libre est donc 23,5 pt au-dessus du centre de l'écran :
+     * on le rattrape ici pour que le plein cadre touche vraiment les quatre
+     * bords.
      */
-    top: calc(50% + 1.5px);
+    top: calc(50% + 23.5px);
   }
 
   .stage-wrap {
@@ -401,15 +403,29 @@
   }
 
   .phone[data-state="full"] .corridor-top { transform: translateY(-14px); }
+  .phone[data-state="full"] .corridor-band { transform: translateY(14px); }
   .phone[data-state="full"] .corridor-bottom { transform: translateY(14px); }
 
-  /* ---------- l'overlay POSÉ sur le cadre ---------- */
+  /* ---------- ce qui est POSÉ sur le cadre ----------
+   *
+   * Une pile ancrée en bas, et non deux couches absolues : la colonne d'actions
+   * doit MONTER avec le bloc d'informations quand la légende se déplie (#6161).
+   * C'est la pile qui fait ce travail — il n'y a aucune cote à tenir d'accord.
+   */
+
+  .frame-stack {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    pointer-events: none;
+  }
+
+  .frame-stack > * { pointer-events: auto; }
 
   .frame-overlay {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    position: relative;
     padding: 40px 12px 12px;
     background: linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.44) 46%, transparent 100%);
     display: flex;
@@ -417,11 +433,55 @@
     gap: 9px;
   }
 
-  .caption {
+  /*
+   * La légende se REPLIE à deux lignes et se déplie PAR-DESSUS le contenu.
+   * Le voile s'épaissit pendant qu'elle est ouverte — c'est le même geste que
+   * le dégradé du bas, poussé jusqu'à rendre le texte lisible sur n'importe
+   * quelle image.
+   */
+  .caption { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+
+  .caption-text {
     font-size: 13.5px;
-    line-height: 1.35;
+    line-height: 1.38;
     color: rgba(255,255,255,0.94);
     margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .frame-overlay[data-caption="open"] .caption-text {
+    display: block;
+    -webkit-line-clamp: unset;
+    max-height: 46vh;
+    overflow-y: auto;
+  }
+
+  .caption-more {
+    border: none;
+    padding: 1px 0 0;
+    background: transparent;
+    color: rgba(255,255,255,0.82);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .frame-overlay[data-caption="open"] {
+    background: linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.82) 52%, rgba(0,0,0,0.55) 100%);
+    padding-top: 64px;
+  }
+
+  /* La taille et le format, sous la date : ce que le fichier EST. */
+  .specs {
+    font-size: 10.5px;
+    color: rgba(255,255,255,0.5);
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
   }
 
   .author-row {
@@ -447,11 +507,25 @@
   .author-id .name { font-size: 13px; font-weight: 600; line-height: 1.25; }
   .author-id .when { font-size: 11px; color: rgba(255,255,255,0.62); line-height: 1.25; }
 
-  .actions { display: flex; gap: 7px; flex: none; }
+  /* ---------- la colonne d'actions, à DROITE du cadre (#6161) ----------
+   *
+   * Verre de 40 pt (`MediaStageActionColumn.glass`), cible de 44 pt (`.target`,
+   * que `mediaStageActionTarget()` rend pleine), 8 pt entre deux (`.spacing`,
+   * le gabarit de la barre latérale du lecteur de story). La colonne se POSE
+   * sur le cadre : elle ne lui retire aucune largeur.
+   */
+
+  .action-col {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 0 12px 10px 0;
+  }
 
   .act {
-    width: 34px;
-    height: 34px;
+    width: 40px;
+    height: 40px;
     border-radius: 999px;
     background: rgba(255,255,255,0.15);
     backdrop-filter: blur(16px);
@@ -461,21 +535,36 @@
     border: none;
     color: #fff;
     padding: 0;
+    flex: none;
   }
 
-  .act svg { width: 16px; height: 16px; }
+  .act svg { width: 17px; height: 17px; }
 
-  /* transport vidéo, posé sur le cadre au-dessus de la légende */
-  .transport {
+  /* ---------- couloir bas, première bande : la progression (#6162) ----------
+   *
+   * Large comme le CADRE et non comme l'écran, sans capsule de verre : le
+   * couloir est un fond noir CONNU, et une capsule y dessinerait un objet
+   * flottant sur rien (`TransportLayout.wrapsBarInGlass`).
+   *
+   * La bande garde sa hauteur même vide : elle est réservée pour le LOT.
+   */
+
+  .corridor-band {
+    height: 48px;
     display: flex;
     align-items: center;
-    gap: 9px;
-    font-size: 10.5px;
-    font-variant-numeric: tabular-nums;
-    color: rgba(255,255,255,0.82);
+    justify-content: center;
+    flex: none;
   }
 
-  .transport .bar {
+  .band-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 100%;
+  }
+
+  .band-inner .bar {
     flex: 1;
     height: 3px;
     border-radius: 999px;
@@ -483,14 +572,14 @@
     position: relative;
   }
 
-  .transport .bar i {
+  .band-inner .bar i {
     position: absolute;
-    inset: 0 62% 0 0;
+    inset: 0 57% 0 0;
     border-radius: 999px;
     background: #fff;
   }
 
-  .transport .bar i::after {
+  .band-inner .bar i::after {
     content: "";
     position: absolute;
     right: -4px;
@@ -501,10 +590,21 @@
     background: #fff;
   }
 
-  /* ---------- couloir bas : le rail ---------- */
+  /* La durée : petite, tabulaire, faible opacité, à droite — et lue sur
+     l'ATTACHEMENT, donc lisible avant la première image décodée. */
+  .band-inner .dur {
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255,255,255,0.55);
+    flex: none;
+    padding-right: 12px;
+  }
+
+  /* ---------- couloir bas, seconde bande : le rail ---------- */
 
   .corridor-bottom {
-    height: 84px;
+    height: 80px;
     padding: 10px 12px 0;
     display: flex;
     align-items: center;
@@ -694,12 +794,12 @@
 
 <div class="wrap">
 
-  <p class="eyebrow">Meeshy · lecture · révision 2 · arbitrée le 2026-09-12</p>
+  <p class="eyebrow">Meeshy · lecture · révision 3 · rattrape le code livré le 2026-09-12</p>
   <h1>Le plateau de lecture</h1>
   <p class="lede">
     Un média ne s'affiche plus bord à bord sous un chrome flottant. Il se pose dans un <strong>cadre
-    arrondi centré</strong>, et le plateau qui l'entoure — deux couloirs, haut et bas — porte tout ce
-    qui n'est pas le média.
+    arrondi centré</strong>, et le plateau qui l'entoure — un couloir en haut, <strong>deux bandes</strong>
+    en bas — porte tout ce qui n'est pas le média.
   </p>
   <p class="lede">
     <strong>Un tap fait grandir le cadre jusqu'aux bords ; un second le repose</strong>, avec ses
@@ -714,14 +814,54 @@
   </p>
   <p class="lede">
     Les quatre planches ci-dessous sont vivantes. <strong>Touchez, ou appuyez longuement.</strong>
+    Sur la vidéo, <strong>double-tapez à gauche ou à droite</strong> de l'image.
   </p>
 
   <div class="meta-row">
     <span>390 × 844 pt · iPhone 16 Pro</span>
     <span>ressort 430 ms · 0.22, 1, 0.36, 1</span>
     <span>palette dérivée de MeeshyColors.swift</span>
-    <span>4 points arbitrés · 0 ouvert</span>
+    <span>4 points arbitrés · 3 rattrapages livrés</span>
   </div>
+
+  <section class="law" style="grid-template-columns:1fr">
+    <div>
+      <h2>Ce que la révision 3 rattrape</h2>
+      <p>
+        La révision 2 décrivait une intention ; celle-ci décrit <b>ce que le code fait</b>. Trois
+        issues, livrées le 2026-09-12 sur directives porteur du même jour, ont déplacé trois choses
+        que les planches montraient encore à leur ancienne place. <b>Là où la planche et le code
+        divergeaient, c'est le code qui avait raison</b> — la planche le rattrape.
+      </p>
+      <p>
+        <b>#6161 — les actions passent en colonne verticale à droite.</b> Réagir · répondre ·
+        composer étaient en ligne, au bas du cadre, à droite de l'auteur. Elles prennent le gabarit
+        de la barre latérale du lecteur de story : verre de 40 pt, cible de 44, 8 pt entre deux.
+        <b>La colonne se POSE sur le cadre, elle ne lui prend pas de largeur</b> — l'arbitrage
+        « on garde l'aspect des story mais ce ne sont pas des story » a écarté le couloir latéral
+        réservé, qui coûtait 356 × 633 → 322 × 572 sur une scène 9:16. Restent en bas, sous le
+        voile : l'auteur, sa date, la légende dépliable, la ligne format / dimensions / poids.
+      </p>
+      <p>
+        <b>#6162 — la progression descend au couloir, le play/pause reste au centre.</b> Le
+        transport était UNE vue posée sur le cadre ; il devient deux, parce que ses moitiés ne font
+        pas la même chose. Ce qui <b>parcourt</b> rejoint les couloirs — la bande de 48 pt se range
+        juste au-dessus du rail, la durée servie petite, tabulaire, en faible opacité, à droite, et
+        <b>lue sur l'attachement</b>, jamais sur le player. Ce qui <b>commande</b> reste au centre
+        de l'image, à 55 % d'opacité. La bande se réserve <b>pour le LOT</b> : dès qu'un média porte
+        une durée, la hauteur est prise, et les pages sans durée la laissent vide — sinon le cadre
+        sauterait en glissant d'une vidéo vers une image.
+      </p>
+      <p>
+        <b>#6163 — les ±10 s deviennent un geste.</b> Les deux boutons ont quitté la barre ; un
+        <b>double tap dans le tiers gauche recule de dix secondes, dans le tiers droit avance</b>.
+        Le tiers central ne porte aucun geste et laisse passer ce qu'il reçoit : un double tap
+        retarde le tap simple de 250 à 300 ms, et le tap est la porte la plus fréquente du plein
+        cadre. Le geste n'est armé que sur un média <b>à durée</b> dont la piste est attachée —
+        sur une image, les trois tiers gardent leur tap immédiat.
+      </p>
+    </div>
+  </section>
 
   <section class="law">
     <div>
@@ -743,15 +883,31 @@
         que la story emploie déjà pour son hors-champ.
       </p>
       <p>
+        <b>Le couloir bas porte deux bandes</b> (#6162) : la progression du média d'abord, le rail
+        de la série ensuite. Elles se suivent parce qu'elles font la même chose à deux échelles —
+        l'une parcourt UN média, l'autre parcourt la SÉRIE. Le rail, lui, ne se réserve que s'il y a
+        plusieurs médias : un média seul n'a rien à parcourir, et la hauteur revient au cadre.
+      </p>
+      <p>
         Ce que le plateau porte ne se pose <b>jamais</b> sur le cadre. Ce qui appartient au média
-        — sa légende, son auteur, les actions qui le visent — se pose <b>sur lui</b>, et part avec lui.
+        — sa légende, son auteur, les actions qui le visent, le play/pause qui le commande — se pose
+        <b>sur lui</b>, et part avec lui. Les actions y sont une <b>colonne verticale à droite</b>
+        (#6161), ancrée au-dessus du bloc d'informations : elle monte avec lui quand la légende se
+        déplie, et les coins arrondis du cadre la rognent comme ils rognent la légende.
+      </p>
+      <p>
+        Une légende longue se replie à <b>deux lignes</b> et offre « plus », qui la déplie
+        par-dessus l'image en épaississant le voile. Une légende courte n'offre rien : un contrôle
+        n'existe que s'il a un effet. Et <b>sous la date</b>, le fichier dit ce qu'il est — format,
+        dimensions, poids, durée.
       </p>
     </div>
     <div class="stack-diagram">
       <div class="zone corridor"><span>safe area</span><span>59 pt</span></div>
       <div class="zone corridor"><span>couloir haut — ✕ · ⋯</span><span>56 pt</span></div>
       <div class="zone cadre"><span>LE CADRE — média + son overlay</span><span>ce qui reste</span></div>
-      <div class="zone corridor"><span>couloir bas — rail des médias</span><span>84 pt</span></div>
+      <div class="zone corridor"><span>couloir bas — progression + durée</span><span>48 pt</span></div>
+      <div class="zone corridor"><span>couloir bas — rail des médias</span><span>80 pt</span></div>
       <div class="zone corridor"><span>safe area</span><span>34 pt</span></div>
     </div>
   </section>
@@ -760,7 +916,7 @@
     <button class="tgl" id="t-annot" aria-pressed="true">cotes</button>
     <button class="tgl" id="t-menu" aria-pressed="false">menu ⋯</button>
     <button class="tgl" id="t-full" aria-pressed="false">tout en plein cadre</button>
-    <span class="hint">tap = entrer / sortir · appui long = entrer + pause · glisser vers le haut = entrer sans pause</span>
+    <span class="hint">tap = entrer / sortir · appui long = entrer + pause · glisser vers le haut = entrer sans pause · double tap latéral (vidéo) = ∓10 s</span>
   </div>
 
   <div class="boards" id="boards"></div>
@@ -814,6 +970,14 @@
           qu'on veut continuer d'écouter (glissement). Le tap, lui, reste le geste sans intention —
           celui qu'on fait pour voir plus grand.
         </p>
+        <p>
+          <b>Une quatrième porte s'est ajoutée depuis (#6163)</b>, et elle se paie sur les trois
+          autres : le <b>double tap latéral</b> d'un média à durée recule ou avance de dix secondes.
+          C'est pour cela qu'il est borné aux tiers gauche et droit — au centre, et sur toute image,
+          le tap garde son effet immédiat. La collision avec le double tap de ZOOM d'une image ne
+          peut pas se produire : les deux gestes sont séparés par la NATURE du média, le zoom
+          appartenant à ce qui a des pixels à inspecter et aucune durée.
+        </p>
       </div>
 
       <div class="decision">
@@ -848,9 +1012,12 @@
   </section>
 
   <p class="foot">
-    Révision 2 — les quatre arbitrages du 2026-09-12 y sont appliqués.<br>
-    Prochaine étape : elle devient <code>docs/product/planche-meeshy-lecture.html</code> dans le dépôt,
-    la spécification en dérive, et l'issue parapluie s'ouvre sur elle. Aucune ligne de code avant.
+    Révision 3 — elle ne dessine plus une intention : elle décrit <b>ce que le code fait</b>, après
+    #6161, #6162 et #6163, livrés le 2026-09-12.<br>
+    Les cotes viennent des constantes du dépôt et non de l'estime : <code>MediaGalleryStage</code>,
+    <code>TransportLayout.barHeight</code>, <code>FilmstripMetrics.reservedHeight</code>,
+    <code>MediaStageActionColumn</code>, <code>MediaStageSeek</code>. En cas d'écart, c'est le code
+    qui a raison — cette planche le rattrape.
   </p>
 
 </div>
@@ -876,11 +1043,20 @@
     pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5.5" width="3.4" height="13" rx="1"/><rect x="13.6" y="5.5" width="3.4" height="13" rx="1"/></svg>'
   };
 
-  /* Les cotes de la loi de cadrage — une seule table, comme dans le code. */
-  var SAFE_TOP = 59, TOP = 56, RAIL = 84, SAFE_BOTTOM = 34, GUTTER = 12;
+  /* Les cotes de la loi de cadrage — une seule table, comme dans le code.
+   *
+   * BAND est la bande de progression descendue au couloir (#6162). Elle vaut
+   * `TransportLayout.barHeight` (48) et RAIL vaut `FilmstripMetrics.reservedHeight`
+   * (itemSide 54 + 2 × 10 + 6 = 80) : aucun des deux n'est un nombre choisi ici.
+   *
+   * Elle se réserve pour le LOT et non pour la page ouverte — les quatre
+   * planches partagent le même rail, qui porte une vidéo : la bande est donc
+   * prise sur les quatre, et reste VIDE sur celles qui n'ont pas de durée.
+   */
+  var SAFE_TOP = 59, TOP = 56, BAND = 48, RAIL = 80, SAFE_BOTTOM = 34, GUTTER = 12;
   var W = 390, H = 844;
-  var availH = H - SAFE_TOP - TOP - RAIL - SAFE_BOTTOM - GUTTER;   /* 599 */
-  var availW = W - GUTTER * 2;                                      /* 366 */
+  var availH = H - SAFE_TOP - TOP - BAND - RAIL - SAFE_BOTTOM - GUTTER;   /* 555 */
+  var availW = W - GUTTER * 2;                                            /* 366 */
   var MIN_H = 330;   /* trois fois la hauteur de l'overlay */
 
   /*
@@ -924,39 +1100,116 @@
     }).join('');
   }
 
-  function overlay(cfg) {
-    var transport = cfg.transport
-      ? '<div class="transport">' +
-          '<span style="width:16px;height:16px;display:grid;place-items:center">' + ICON.pause + '</span>' +
-          '<span>0:06</span><span class="bar"><i></i></span><span>0:14</span>' +
-        '</div>'
+  /*
+   * LA COLONNE D'ACTIONS (#6161) — verticale, à droite, POSÉE sur le cadre.
+   *
+   * Elle était une rangée horizontale au bas du cadre, à droite de l'auteur.
+   * Directive porteur 2026-09-12 : « il faut placer les contrôleurs du bas sur
+   * le côté en vertical sur la zone sombre du plateau ». Gabarit de la barre
+   * latérale du lecteur de story — verre 40 pt, cible 44, 8 pt entre deux.
+   *
+   * Elle ne prend AUCUNE largeur au cadre : `MediaStageFraming` n'a gagné aucun
+   * champ au #6161, et la lecture opposée (un vrai couloir latéral réservé
+   * avant le cadre) a été écartée — elle coûtait un cinquième de la surface sur
+   * une scène 9:16.
+   *
+   * Ancrée au-dessus du bloc d'informations, elle MONTE avec lui quand la
+   * légende se déplie : c'est la pile ancrée en bas qui fait le travail, il n'y
+   * a aucune cote à tenir d'accord.
+   */
+  function actionColumn() {
+    return '<div class="action-col">' +
+      '<span class="act">' + ICON.react + '</span>' +
+      '<span class="act">' + ICON.reply + '</span>' +
+      '<span class="act">' + ICON.compose + '</span>' +
+    '</div>';
+  }
+
+  /*
+   * LE PLAY/PAUSE reste au CENTRE du média, à 55 % d'opacité (#6162).
+   *
+   * Il ne descend pas avec la progression : celle-ci RAPPORTE où l'on en est,
+   * lui COMMANDE. Une commande se pose là où l'œil et le doigt sont déjà, et
+   * aucun lecteur du marché ne la met ailleurs.
+   */
+  function centerPlayPause(cfg) {
+    if (cfg.nature !== 'video') return '';
+    return '<div class="center-play">' + ICON.play + '</div>';
+  }
+
+  /*
+   * LA BANDE DE PROGRESSION, descendue au couloir bas (#6162).
+   *
+   * Large comme le CADRE, pas comme l'écran. La durée y est servie petite,
+   * tabulaire, en faible opacité, à droite — et elle vient de l'ATTACHEMENT,
+   * jamais du player : `manager.duration` vaut zéro tant que l'`AVPlayerItem`
+   * n'a pas chargé ses pistes, donc « 0:00 » sur exactement la page qu'on vient
+   * d'ouvrir.
+   *
+   * Plus aucun bouton ±10 s : `TransportLayout.showsSkip` les refuse à tout
+   * placement autre qu'empilé, et #6163 les remplace par un geste.
+   */
+  function transportBand(cfg, box) {
+    var inner = cfg.transport
+      ? '<span class="bar"><i></i></span><span class="dur">' + cfg.duration + '</span>'
       : '';
-    return '<div class="frame-overlay">' +
-      transport +
-      '<p class="caption">' + cfg.caption + '</p>' +
+    return '<div class="corridor-band chrome">' +
+      '<div class="band-inner" style="width:' + box.w + 'px">' + inner + '</div>' +
+    '</div>';
+  }
+
+  function overlay(cfg) {
+    /* Une légende longue se REPLIE et offre « plus » ; une courte n'offre rien
+       — un contrôle n'existe que s'il a un effet (loi 4). */
+    /* Le « plus » vit HORS du texte replié : à l'intérieur, le clamp l'avale
+       avec la troisième ligne — un contrôle invisible n'est pas un contrôle. */
+    var longue = cfg.caption.length > 74;
+    var caption = '<div class="caption" data-long="' + longue + '">' +
+      '<p class="caption-text">' + cfg.caption + '</p>' +
+      (longue ? '<button class="caption-more" type="button">plus</button>' : '') +
+    '</div>';
+
+    /* Ce qui RESTE en bas du cadre, sous le voile — l'auteur, sa date, la
+       légende dépliable, la ligne format / dimensions / poids. Les actions n'y
+       sont plus (#6161), le transport non plus (#6162) : ce qui DÉCRIT le média
+       reste avec lui, ce qui le PARCOURT ou le vise a déménagé. */
+    return '<div class="frame-overlay" data-caption="closed">' +
+      caption +
       '<div class="author-row">' +
         '<div class="avatar">' + cfg.initials + '</div>' +
-        '<div class="author-id"><div class="name">' + cfg.author + '</div><div class="when">' + cfg.when + '</div></div>' +
-        '<div class="actions">' +
-          '<span class="act">' + ICON.react + '</span>' +
-          '<span class="act">' + ICON.reply + '</span>' +
-          '<span class="act">' + ICON.compose + '</span>' +
+        '<div class="author-id">' +
+          '<div class="name">' + cfg.author + '</div>' +
+          '<div class="when">' + cfg.when + '</div>' +
+          '<div class="specs">' + cfg.specs + '</div>' +
         '</div>' +
       '</div>' +
     '</div>';
   }
 
-  function annotations(box) {
+  function annotations(cfg, box) {
     /* Le centre de la zone libre, en coordonnées écran — voir la note sur
        l'asymétrie des couloirs dans la feuille de style. */
-    var centreY = SAFE_TOP + TOP + (H - SAFE_TOP - TOP - RAIL - SAFE_BOTTOM) / 2;
+    var centreY = SAFE_TOP + TOP + (H - SAFE_TOP - TOP - BAND - RAIL - SAFE_BOTTOM) / 2;
     var cadreTop = Math.round(centreY - box.h / 2 + 9);
+
+    /* Les deux tiers ARMÉS du double tap (#6163) — montrés seulement là où le
+       geste existe : un média à durée dont la piste est attachée. La largeur
+       vient de `MediaStageSeek.lateralWidth` (un tiers), la même arithmétique
+       qui décide ensuite du sens. */
+    var tiers = cfg.transport
+      ? '<div class="seek-annot" style="width:' + Math.round(box.w / 3) + 'px;left:calc(50% - ' + Math.round(box.w / 2) + 'px);top:' + cadreTop + 'px;height:' + box.h + 'px"><span>−10 s</span></div>' +
+        '<div class="seek-annot" style="width:' + Math.round(box.w / 3) + 'px;left:calc(50% + ' + Math.round(box.w / 2 - box.w / 3) + 'px);top:' + cadreTop + 'px;height:' + box.h + 'px"><span>+10 s</span></div>'
+      : '';
+
     return '<div class="annots">' +
       '<div class="band" style="top:' + SAFE_TOP + 'px;height:' + TOP + 'px"></div>' +
       '<div class="annot" style="top:' + (SAFE_TOP + 17) + 'px;left:62px">couloir haut · 56 pt</div>' +
+      '<div class="band" style="bottom:' + (SAFE_BOTTOM + RAIL) + 'px;height:' + BAND + 'px"></div>' +
+      '<div class="annot" style="bottom:' + (SAFE_BOTTOM + RAIL + 15) + 'px;right:14px">progression · 48 pt</div>' +
       '<div class="band" style="bottom:' + SAFE_BOTTOM + 'px;height:' + RAIL + 'px"></div>' +
-      '<div class="annot" style="bottom:' + (SAFE_BOTTOM + 31) + 'px;right:14px">couloir bas · rail · 84 pt</div>' +
+      '<div class="annot" style="bottom:' + (SAFE_BOTTOM + 31) + 'px;right:14px">rail des médias · 80 pt</div>' +
       '<div class="annot" style="top:' + cadreTop + 'px;left:50%;transform:translateX(-50%);background:rgba(30,20,60,0.88);border-color:rgba(165,180,252,0.6);color:#c7d2fe">cadre ' + box.w + ' × ' + box.h + ' pt · r22</div>' +
+      tiers +
     '</div>';
   }
 
@@ -1009,7 +1262,8 @@
     var skin = cfg.nature === 'scene' ? SKINS.scene : SKINS[cfg.skin];
     var inner = cfg.nature === 'scene'
       ? '<div class="scene-text">Six heures<br>au quai nord</div><div class="scene-sticker">📍 Quai nord</div>'
-      : (cfg.nature === 'video' ? '<div class="video-badge">' + ICON.play + '</div>' : '');
+      : '';   /* le play/pause d'une vidéo est posé par `centerPlayPause` (#6162),
+                 une couche plus haut : il COMMANDE, il n'appartient pas au média. */
 
     /*
      * Le ThumbHash flouté est TOUJOURS peint sous un média à pixels — pas
@@ -1043,40 +1297,50 @@
           '<div class="frame" style="--fw:' + box.w + 'px;--fh:' + box.h + 'px">' +
             mediaBody(cfg, box) +
             '<div class="paused-pill">⏸ en pause</div>' +
-            '<div class="chrome">' + overlay(cfg) + '</div>' +
+            '<div class="seek-flash"></div>' +
+            // Le play/pause entre dans la MÊME couche que le reste du plateau :
+            // `controlsOverlay` le porte, donc il s'efface en plein cadre comme
+            // la légende et les actions. Il est centré, elles sont ancrées en
+            // bas — c'est la seule chose qui les distingue ici.
+            '<div class="chrome frame-stack">' + centerPlayPause(cfg) + actionColumn() + overlay(cfg) + '</div>' +
           '</div>' +
         '</div>' +
+        transportBand(cfg, box) +
         '<div class="corridor-bottom chrome">' + railStrip(cfg.railActive) + '</div>' +
         '<div class="safe-bottom"></div>' +
       '</div>' +
       '<div class="chrome">' + menu(cfg) + '</div>' +
-      annotations(box);
+      annotations(cfg, box);
   }
 
   var PLANCHES = [
     {
       key: 'image', nature: 'image', title: 'Image', ratioLabel: '4:5', ratio: 0.8, skin: 'quai', railActive: 0,
-      note: 'Le cas nominal. Le cadre prend toute la largeur utile, le reste de la hauteur revient aux couloirs. Enregistrée <em>sans marque</em> : c’est un original.',
-      caption: 'Le quai nord, juste avant que la lumière tombe.',
-      author: 'Camille Roux', initials: 'CR', when: 'aujourd’hui à 18:42'
+      note: 'Le cas nominal. Sa légende est longue : elle se replie à deux lignes et offre <em>« plus »</em>, qui la déplie par-dessus l’image — et la colonne d’actions monte avec elle. Sa bande de progression est <em>réservée mais vide</em> : le lot porte une vidéo, et un cadre qui saute en glissant coûterait plus cher que 48 pt.',
+      caption: 'Le quai nord, juste avant que la lumière tombe. On avait attendu deux heures que les grues s’arrêtent, et elles se sont arrêtées toutes ensemble — c’est la seule photo où le bassin est immobile.',
+      author: 'Camille Roux', initials: 'CR', when: 'aujourd’hui à 18:42',
+      specs: 'JPEG · 3024 × 4032 · 2,4 Mo'
     },
     {
       key: 'video', nature: 'video', title: 'Vidéo', ratioLabel: '16:9', ratio: 1.7778, skin: 'grue', railActive: 1,
-      note: 'Trop courte pour son overlay, elle est posée dans un cadre de 330 pt sur <em>son propre ThumbHash flouté</em> — le hors-champ est habillé, jamais noir.',
+      note: 'Trop courte pour son overlay, elle est posée dans un cadre de 330 pt sur <em>son propre ThumbHash flouté</em>. Sa progression est <em>dans le couloir</em>, sa durée en petit à droite, son play/pause translucide au centre — et <em>un double tap latéral</em> remplace les ±10 s.',
       caption: 'La grue nord, six heures.',
-      author: 'Arto Lehtinen', initials: 'AL', when: 'hier à 06:12', transport: true
+      author: 'Arto Lehtinen', initials: 'AL', when: 'hier à 06:12', transport: true, duration: '0:14',
+      specs: 'MP4 · 1920 × 1080 · 0:14 · 8,1 Mo'
     },
     {
       key: 'audio', nature: 'audio', title: 'Vocal', ratioLabel: 'sans pixels', ratio: 1, skin: 'nuit', railActive: 2,
       note: 'Transcription et langues sont là <em>dans les deux états</em> — c’est du contenu, pas du chrome. Le plein cadre les agrandit au lieu de les révéler.',
       caption: 'Message vocal · 0:27',
-      author: 'Lina Mercier', initials: 'LM', when: 'il y a 12 minutes'
+      author: 'Lina Mercier', initials: 'LM', when: 'il y a 12 minutes',
+      specs: 'M4A · 0:27 · 412 Ko'
     },
     {
       key: 'scene', nature: 'scene', title: 'Scène', ratioLabel: '9:16', ratio: 0.5625, skin: 'scene', railActive: 4,
       note: 'Le cas limite : à 9:16 le cadre perd de la largeur pour que le rail tienne. Seule nature <em>marquée à l’enregistrement</em> — c’est une œuvre composée.',
       caption: 'Six heures au quai nord',
-      author: 'Camille Roux', initials: 'CR', when: 'il y a 2 heures'
+      author: 'Camille Roux', initials: 'CR', when: 'il y a 2 heures',
+      specs: 'Scène 9:16 · 3 objets · 1,1 Mo'
     }
   ];
 
@@ -1091,7 +1355,10 @@
     '.phone[data-state="full"] .media{width:var(--mw2);height:var(--mh2)}',
 
     /* le vocal : onde, durée, transcription, langues — présents dans les deux états */
-    '.audio-face{position:absolute;inset:0;background:linear-gradient(155deg,#312e81 0%,#4f46e5 55%,#1e1b4b 100%);display:flex;flex-direction:column;justify-content:center;gap:12px;padding:22px 18px 104px}',
+    /* Le retrait de droite (44 de cible + 12 de gouttière) dégage la colonne
+       d'actions : la transcription est du CONTENU, et rien ne doit passer
+       par-dessus ce qu'on est en train de lire. */
+    '.audio-face{position:absolute;inset:0;background:linear-gradient(155deg,#312e81 0%,#4f46e5 55%,#1e1b4b 100%);display:flex;flex-direction:column;justify-content:center;gap:12px;padding:22px 56px 104px 18px}',
     '.audio-head{display:flex;align-items:center;gap:13px}',
     '.audio-play{width:48px;height:48px;border-radius:999px;background:rgba(255,255,255,0.94);color:#312e81;display:grid;place-items:center;flex:none;transition:width 380ms var(--spring),height 380ms var(--spring)}',
     '.phone[data-state="full"] .audio-play{width:64px;height:64px}',
@@ -1113,8 +1380,29 @@
     '.paused-pill{position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:9;font-size:11px;font-weight:600;letter-spacing:0.02em;padding:5px 11px;border-radius:999px;background:rgba(0,0,0,0.55);backdrop-filter:blur(14px);color:#fff;opacity:0;transition:opacity 220ms ease;pointer-events:none}',
     '.phone[data-state="full"][data-paused="true"] .paused-pill{opacity:1}',
 
-    '.video-badge{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:56px;height:56px;border-radius:999px;background:rgba(0,0,0,0.42);backdrop-filter:blur(10px);display:grid;place-items:center;color:#fff}',
-    '.video-badge svg{width:24px;height:24px;margin-left:3px}',
+    /* Le play/pause CENTRÉ, à 55 % d'opacité (#6162, directive porteur : « le
+       bouton pause/play plus transparent au centre »). Il reste le verre
+       prominent du SDK — seule l'opacité change : un bouton opaque au centre
+       d'une photo cache précisément ce qu'on regarde, un bouton absent ne se
+       retrouve pas. Il ne s'efface PAS en plein cadre : il commande la lecture,
+       ce n'est pas du chrome de plateau. */
+    '.center-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:62px;height:62px;border-radius:999px;background:rgba(0,0,0,0.45);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);display:grid;place-items:center;color:#fff;opacity:0.55;z-index:8}',
+    '.center-play svg{width:26px;height:26px;margin-left:3px}',
+
+    /* Les deux tiers armés du double tap (#6163), montrés avec les cotes. Le
+       tiers central n'est pas dessiné parce qu'il ne porte AUCUN geste : il
+       laisse passer ce qu'il reçoit, et c'est ce qui rend au tap son effet
+       immédiat là où il est le plus fréquent. */
+    /* Le libellé se pose EN HAUT du tiers, pas en son centre : au centre il
+       viendrait sur la colonne d'actions, qu'il ne remplace pas. */
+    '.seek-annot{position:absolute;border:1px dashed rgba(165,180,252,0.55);background:rgba(99,102,241,0.10);border-radius:14px;display:flex;align-items:flex-start;justify-content:center;padding-top:14px;z-index:28}',
+    '.seek-annot span{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:#c7d2fe;background:rgba(30,20,60,0.88);padding:3px 9px;border-radius:999px}',
+
+    /* Ce que le geste RÉPOND, le temps d'un battement. Le retour est posé même
+       quand le saut est borné : se taire à la butée ferait croire à un double
+       tap raté exactement là où l'utilisateur insiste. */
+    '.seek-flash{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:12;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;padding:9px 16px;border-radius:999px;background:rgba(0,0,0,0.62);backdrop-filter:blur(14px);color:#fff;opacity:0;transition:opacity 160ms ease;pointer-events:none}',
+    '.seek-flash[data-on="true"]{opacity:1}',
     '.scene-text{position:absolute;top:34%;left:0;right:0;text-align:center;font-size:26px;font-weight:700;line-height:1.15;letter-spacing:-0.02em;color:#fff;text-shadow:0 2px 18px rgba(0,0,0,0.45)}',
     '.scene-sticker{position:absolute;top:58%;left:50%;transform:translateX(-50%) rotate(-4deg);background:rgba(255,255,255,0.92);color:#1e1b4b;font-size:12px;font-weight:600;padding:5px 11px;border-radius:999px;white-space:nowrap}'
   ].join('');
@@ -1165,6 +1453,7 @@
     phone.dataset.state = 'full';
     phone.dataset.paused = withPause ? 'true' : 'false';
     closeMenu(phone);
+    closeCaption(phone);
   }
 
   function leave(phone) { phone.dataset.state = 'carded'; }
@@ -1174,12 +1463,23 @@
 
   var press = null;
 
+  /* La légende et les actions sont des CONTRÔLES posés sur le cadre : elles ne
+     déclenchent pas la bascule du plateau sous elles. */
   function pressable(target) {
     if (!target.closest) return null;
     var phone = target.closest('.phone');
     if (!phone) return null;
     if (target.closest('.corridor-top') || target.closest('.menu')) return null;
+    if (target.closest('.caption') || target.closest('.action-col')) return null;
+    /* Le couloir de progression et le play/pause central sont des CONTRÔLES :
+       ils ne déclenchent pas la bascule du plateau sous eux. */
+    if (target.closest('.corridor-band') || target.closest('.center-play')) return null;
     return phone;
+  }
+
+  function closeCaption(phone) {
+    var ov = phone.querySelector('.frame-overlay');
+    if (ov) ov.dataset.caption = 'closed';
   }
 
   document.addEventListener('pointerdown', function (e) {
@@ -1217,9 +1517,57 @@
   document.addEventListener('pointerup', endPress);
   document.addEventListener('pointercancel', endPress);
 
+  /* ---------- la quatrième porte : le double tap latéral (#6163) ----------
+   *
+   * Tiers gauche ⇒ −10 s, tiers droit ⇒ +10 s, tiers central ⇒ rien. La
+   * largeur d'un tiers et la décision viennent de la MÊME arithmétique
+   * (`MediaStageSeek.lateralWidth` / `.zone`) : des zones posées au jugé
+   * couvriraient une bande que la règle ne reconnaîtrait pas, et le geste y
+   * serait inerte sans qu'aucune moitié ne soit fausse.
+   *
+   * Le geste n'existe que sur un média à DURÉE. Sur une image, les trois tiers
+   * gardent leur tap immédiat — c'est aussi ce qui écarte toute collision avec
+   * le double tap de zoom, que seule l'image porte.
+   */
+  var LATERAL = 1 / 3;
+
+  function seekZone(x, width) {
+    var lateral = width * LATERAL;
+    if (x < lateral) return 'backward';
+    if (x > width - lateral) return 'forward';
+    return null;
+  }
+
+  document.addEventListener('dblclick', function (e) {
+    var frame = e.target.closest && e.target.closest('.frame');
+    if (!frame) return;
+    var phone = frame.closest('.phone');
+    if (!phone || !PLANCHES.some(function (c) { return c.key === phone.dataset.key && c.transport; })) return;
+
+    var rect = frame.getBoundingClientRect();
+    var zone = seekZone(e.clientX - rect.left, rect.width);
+    if (!zone) return;
+
+    var flash = frame.querySelector('.seek-flash');
+    if (!flash) return;
+    flash.textContent = zone === 'backward' ? '⏪ −10 s' : '+10 s ⏩';
+    flash.dataset.on = 'true';
+    clearTimeout(flash._t);
+    flash._t = setTimeout(function () { flash.dataset.on = 'false'; }, 620);
+  });
+
   document.addEventListener('click', function (e) {
     var solo = e.target.closest('[data-solo]');
     if (solo) { openSolo(solo.getAttribute('data-solo')); return; }
+
+    var cap = e.target.closest('.caption[data-long="true"]');
+    if (cap) {
+      var ov = cap.closest('.frame-overlay');
+      ov.dataset.caption = ov.dataset.caption === 'open' ? 'closed' : 'open';
+      var btn = cap.querySelector('.caption-more');
+      if (btn) btn.textContent = ov.dataset.caption === 'open' ? 'moins' : 'plus';
+      return;
+    }
 
     var moreBtn = e.target.closest('.corridor-top .glass-btn:last-child');
     if (moreBtn) {
@@ -1289,6 +1637,7 @@
     soloHost.setAttribute('tabindex', '0');
     soloHost.dataset.state = 'carded';
     soloHost.dataset.annot = 'off';
+    soloHost.dataset.key = cfg.key;
     soloHost.innerHTML = phoneHTML(cfg);
     soloLayer.appendChild(soloHost);
     soloLayer.dataset.open = 'true';

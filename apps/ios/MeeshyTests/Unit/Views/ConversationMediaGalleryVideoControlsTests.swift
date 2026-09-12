@@ -35,25 +35,69 @@ final class ConversationMediaGalleryVideoControlsTests: XCTestCase {
         }
     }
 
+    /// **Le chrome du couloir haut est en Liquid Glass.**
+    ///
+    /// ## Ce témoin mesurait une FENÊTRE D'OCTETS, et il a fini par le payer
+    ///
+    /// Il découpait 2 600 caractères à partir de `controlsOverlay` et y comptait
+    /// trois `.adaptiveGlass(` — « X, compteur et save ». Deux de ces trois
+    /// contrôles n'existent plus : le compteur « n / N » est parti au #6144
+    /// (directive porteur) et la flèche d'enregistrement est devenue une entrée
+    /// du menu ⋯ au #6145. Le témoin restait vert parce que sa fenêtre DÉBORDAIT
+    /// sur les déclarations suivantes du fichier, où la colonne d'actions porte
+    /// ses propres cercles de verre.
+    ///
+    /// > **Une garde qui découpe au caractère ne mesure pas ce qu'elle nomme.**
+    /// > Elle est verte tant que le voisinage veut bien fournir le compte, et
+    /// > elle rougit au premier commentaire ajouté — c'est exactement ce que le
+    /// > #6162 a produit. Le témoin lit désormais le CORPS de la déclaration, et
+    /// > suit le second contrôle jusqu'au fichier où il vit réellement.
     func test_controlsOverlay_chrome_usesAdaptiveGlass() throws {
         let source = try gallerySource()
-        guard let start = source.range(of: "private var controlsOverlay") else {
-            XCTFail("controlsOverlay not found"); return
+        guard let body = declarationBody("private var controlsOverlay", in: source),
+              let glyphe = declarationBody("private var overflowGlyph: some View {", in: source)
+        else {
+            XCTFail("controlsOverlay ou overflowGlyph introuvable"); return
         }
-        let end = source.index(start.lowerBound, offsetBy: 2600, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[start.lowerBound..<end])
         XCTAssertFalse(
             body.contains("xmark.circle.fill"),
             "Le X doit être un glyphe xmark dans un cercle .adaptiveGlass, pas le xmark.circle.fill plein."
         )
-        XCTAssertGreaterThanOrEqual(
-            body.components(separatedBy: ".adaptiveGlass(").count - 1, 3,
-            "X, compteur et save doivent porter chacun leur surface .adaptiveGlass."
+        XCTAssertTrue(
+            body.contains(".adaptiveGlass("),
+            "Le X du couloir haut porte sa surface .adaptiveGlass."
+        )
+        // Le ⋯ porte sa surface sur son GLYPHE (`overflowGlyph`), pas sur le
+        // `Menu` qui l'ouvre — le verre habille un cercle de 40 pt, et le menu
+        // n'est qu'un présentateur. Suivre le contrôle jusqu'à la déclaration
+        // qui le PEINT, c'est la même remonte que celle des gardes de muet :
+        // s'arrêter au nom qui l'ouvre, c'est mesurer une indirection.
+        XCTAssertTrue(
+            glyphe.contains(".adaptiveGlass("),
+            "Et le ⋯, qui a remplacé la flèche d'enregistrement au #6145, porte la sienne — "
+            + "les deux occupants du couloir haut sont en verre, pas un seul."
         )
         XCTAssertFalse(
             body.contains("Circle().fill(Color.white.opacity(0.2))"),
             "Plus de cercle blanc opaque 0.2 : chrome Liquid Glass uniquement."
         )
+    }
+
+    /// Le corps d'une déclaration, accolades équilibrées — jamais un nombre de
+    /// caractères, qui fait dépendre le verdict de la longueur des commentaires.
+    private func declarationBody(_ ancre: String, in code: String) -> String? {
+        guard let debut = code.range(of: ancre) else { return nil }
+        var profondeur = 0
+        var resultat = ""
+        for caractere in code[debut.lowerBound...] {
+            resultat.append(caractere)
+            if caractere == "{" { profondeur += 1 }
+            if caractere == "}" {
+                profondeur -= 1
+                if profondeur == 0 { return resultat }
+            }
+        }
+        return nil
     }
 
     func test_galleryVideoPage_posterButton_usesAdaptiveGlass() throws {

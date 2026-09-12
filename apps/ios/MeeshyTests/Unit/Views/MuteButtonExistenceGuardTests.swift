@@ -495,11 +495,34 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
         )
     }
 
+    /// **La chaîne a gagné un SECOND maillon le 2026-09-12, et la garde le suit
+    /// une fois de plus.**
+    ///
+    /// Le #6162 a descendu la barre de transport dans le couloir du plateau, donc
+    /// dans `ConversationMediaGalleryView+Transport.swift` — un frère du fichier
+    /// racine. La garde rougissait à nouveau sur un littéral qui avait déménagé,
+    /// exactement comme au 2026-09-06 pour `.socialMediaGallery(`.
+    ///
+    /// > Le correctif est le MÊME que la fois précédente, et il n'est pas
+    /// > d'affaiblir : la galerie est un type DÉCOUPÉ, donc son adresse est son
+    /// > UNITÉ (`AppSourceGuard.unit`, qui glob les frères `+*.swift`). Lire un
+    /// > seul fichier d'un type découpé est le mode de panne que cette garde a
+    /// > maintenant rencontré deux fois.
+    ///
+    /// `.mute` doit de plus être dans le JEU de contrôles monté : le composant
+    /// présent avec un jeu qui l'omet laisserait la garde verte sans aucun muet
+    /// à l'écran. C'est la même remonte, un cran plus bas.
     func test_postFullscreenGallery_mountsVideoTransportControls_noRegression() throws {
-        let text = try source("Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift")
+        let text = try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift")
         XCTAssertTrue(
             text.contains("VideoTransportControls("),
             "La galerie doit monter le composant SDK qui porte réellement le muet plein écran."
+        )
+        XCTAssertTrue(
+            text.contains(".mute"),
+            "et le monter avec `.mute` dans son jeu de contrôles — sinon le composant est là "
+            + "et le muet, lui, n'existe nulle part."
         )
     }
 

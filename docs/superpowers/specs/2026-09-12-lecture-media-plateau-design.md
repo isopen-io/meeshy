@@ -45,12 +45,24 @@ Le média se pose dans un **cadre arrondi centré**. Autour de lui, le **plateau
 deux couloirs qui portent tout ce qui n'est pas le média.
 
 ```
-safe area                         59 pt
-couloir haut   ✕ · ⋯              56 pt
-LE CADRE       média + overlay    ce qui reste
-couloir bas    rail des médias    84 pt
-safe area                         34 pt
+safe area                                  59 pt
+couloir haut   ✕ · ⋯                       56 pt
+LE CADRE       média + overlay             ce qui reste
+couloir bas    progression + durée         48 pt   (si le LOT a une durée)
+couloir bas    rail des médias             84 pt
+safe area                                  34 pt
 ```
+
+**Le couloir bas porte DEUX bandes depuis le #6162** (directive porteur 2026-09-12) :
+la progression du média d'abord, le rail de la série ensuite. Elles se suivent parce
+qu'elles font la même chose à deux échelles — l'une parcourt UN média, l'autre parcourt
+la SÉRIE. Ce qui COMMANDE (le play/pause) reste, lui, au centre de l'image.
+
+> **La bande se réserve pour le LOT, jamais pour la page ouverte.** Conditionnée au
+> média courant, elle ferait changer le cadre de taille en glissant d'une vidéo vers une
+> image — et un cadre qui saute sous le doigt coûte plus cher que quarante-huit points
+> perdus sur les pages sans durée. Dès qu'un média du lot porte une durée, la hauteur
+> est prise ; les autres pages la laissent vide.
 
 **Les couloirs sont réservés d'abord ; le cadre prend ce qui reste.** L'équilibre ne
 dépend donc pas du ratio : une vidéo 16:9 et une scène 9:16 gardent exactement les mêmes
@@ -58,7 +70,7 @@ couloirs, seul le cadre change de taille entre eux. Le cadre est ensuite **ajust
 ratio puis centré** dans la zone libre — jamais rogné, jamais étiré.
 
 **Le cadre ne descend jamais sous 330 pt.** Le chiffre se DÉRIVE, il ne se choisit pas :
-l'overlay (transport + légende + auteur + actions) mesure ~110 pt, et la règle est qu'il
+l'overlay (légende + auteur + actions) mesure ~110 pt, et la règle est qu'il
 ne couvre jamais plus du **tiers** du cadre — d'où 3 × 110. Si l'overlay change de
 hauteur, le plancher suit ; il n'y a pas deux constantes à tenir d'accord.
 
@@ -80,10 +92,28 @@ média sans hash). Jamais de couleur inventée, jamais un fond par défaut — c
 | la légende | ✕ (fermer), couloir haut à gauche |
 | l'auteur + la date d'envoi | ⋯ (menu vertical), couloir haut à droite |
 | réagir · répondre · composer | le rail des autres médias, couloir bas |
-| le transport vidéo | |
+| le play / pause, au CENTRE du média | la progression + la durée, couloir bas |
 
 **Le compteur « n / N » disparaît du centre haut** (directive porteur) : le rail du
 couloir bas dit déjà où l'on est dans la série, et il le dit mieux — il le montre.
+
+**Le transport vidéo se SÉPARE** (#6162, directive porteur 2026-09-12 : *« la
+progression […] doit être en bas juste au-dessus du rail de défilement […] la durée […]
+plus discrètement et le bouton pause/play plus transparent au centre »*). Il était une
+seule vue posée sur le cadre ; il devient deux, parce que ses moitiés ne font pas la
+même chose :
+
+- la **progression** RAPPORTE où l'on en est — elle parcourt, donc elle descend au
+  couloir avec le rail, et elle emmène la durée, servie **petite, tabulaire, en faible
+  opacité, à droite**. Cette durée vient de l'**attachement**, jamais du player : elle
+  doit être lisible avant que la première image ne soit décodée, et `manager.duration`
+  vaut zéro tant que l'`AVPlayerItem` n'a pas chargé ses pistes.
+- le **play / pause** COMMANDE — il reste au centre de l'image, à 55 % d'opacité. Aucun
+  lecteur du marché ne le met ailleurs, et le déplacer coûterait la seule chose que
+  l'utilisateur n'a jamais à apprendre.
+- les **±10 s partent** ; #6163 les remplace par un geste. Leur disparition est portée
+  par le PLACEMENT (`TransportLayout.showsSkip`), pas par le retrait d'une option du
+  `ControlSet` — sans quoi le prochain hôte les ferait revenir sans le savoir.
 
 ### 2.3 Les gestes
 
