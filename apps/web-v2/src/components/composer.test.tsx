@@ -350,15 +350,43 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
     return container;
   };
 
-  /** Laisse l'`import()` de `./composer-tray` résoudre ET React peindre le
-   * résultat — plusieurs tours de micro-tâches, sous `act()` pour que React
-   * n'avertisse pas d'une mise à jour hors `act`. */
-  const flush = async (): Promise<void> => {
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      for (let i = 0; i < 5; i += 1) await Promise.resolve();
-    });
+  /** Laisse React peindre, sous `act()` pour qu'il n'avertisse pas d'une mise à
+   * jour hors `act`.
+   *
+   * **Une attente par BUDGET ne peut pas attendre un `import()` (#6187).**
+   * `Composer` monte `ComposerTray` en `lazy(() => import('./composer-tray'))` :
+   * la présence du panneau est ASYNCHRONE, et « un tour de macro-tâche plus cinq
+   * de micro-tâches » est une CONSTANTE que la contention dépasse. Mesuré le
+   * 2026-09-12 : ce témoin rougissait sur le runner à 2 094 verts pendant que la
+   * même fusion passait 3/3 en local — et le diff de la PR ne touchait aucun
+   * module de la chaîne du panneau.
+   *
+   * Sans prédicat, `flush()` reste l'attente courte d'une mise à jour d'état
+   * déjà montée. Avec un prédicat, la boucle est BORNÉE EN TEMPS et rend la main
+   * dès que la condition tient : l'assertion qui suit garde tout son sens, et
+   * une borne épuisée la fait rougir.
+   *
+   * Attendre la condition qu'on va ASSERTER n'est pas un vert par construction,
+   * et c'est mesuré : `role="group"` retiré du groupe des types rend 2 rouges, et
+   * la suite passe de 3,07 s à 16,33 s — sept boucles épuisant chacune sa borne.
+   * En nominal, une sonde compte **1 tour** sur les sept sites : la borne
+   * n'allonge aucun run vert. */
+  const ATTENTE_MAX_MS = 2000;
+  const flush = async (condition?: () => boolean): Promise<void> => {
+    const limite = Date.now() + ATTENTE_MAX_MS;
+    for (;;) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        for (let i = 0; i < 5; i += 1) await Promise.resolve();
+      });
+      if (condition === undefined || condition() || Date.now() >= limite) return;
+    }
   };
+
+  /** « Le panneau est MONTÉ » — la condition que `import('./composer-tray')` doit
+   * avoir satisfaite avant qu'un témoin lise quoi que ce soit dedans. */
+  const tiroirMonte = (el: HTMLElement) => (): boolean =>
+    el.querySelector('[role="group"][aria-label="Types de pièces jointes"]') !== null;
 
   test('le bouton « + » BASCULE le panneau — aria-label et glyphe changent, AUCUN état intermédiaire mort', async () => {
     const el = mount(() => {});
@@ -367,7 +395,7 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
     act(() => {
       plus.click();
     });
-    await flush();
+    await flush(tiroirMonte(el));
 
     expect(el.querySelector('[aria-label="Fermer le menu des pièces jointes"]')).not.toBeNull();
     expect(el.querySelector('[role="group"][aria-label="Types de pièces jointes"]')).not.toBeNull();
@@ -386,7 +414,7 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Ouvrir le menu des pièces jointes"]')!.click();
     });
-    await flush();
+    await flush(tiroirMonte(el));
 
     const input = el.querySelector<HTMLInputElement>('[aria-label="Choisir des photos"]')!;
     const file = new File([new Uint8Array([1, 2, 3])], 'plage.jpg', { type: 'image/jpeg' });
@@ -410,7 +438,7 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Ouvrir le menu des pièces jointes"]')!.click();
     });
-    await flush();
+    await flush(tiroirMonte(el));
     const input = el.querySelector<HTMLInputElement>('[aria-label="Choisir un fichier"]')!;
     const file = new File([new Uint8Array([1])], 'notes.pdf', { type: 'application/pdf' });
     const transfer = new DataTransfer();
@@ -439,7 +467,7 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Ouvrir le menu des pièces jointes"]')!.click();
     });
-    await flush();
+    await flush(tiroirMonte(el));
     const input = el.querySelector<HTMLInputElement>('[aria-label="Choisir des photos"]')!;
     const transfer = new DataTransfer();
     transfer.items.add(new File([new Uint8Array([1])], 'a.png', { type: 'image/png' }));
@@ -478,7 +506,7 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Ouvrir le menu des pièces jointes"]')!.click();
     });
-    await flush();
+    await flush(tiroirMonte(el));
 
     expect(el.querySelector('[role="group"][aria-label="Types de pièces jointes"]')).not.toBeNull();
     expect(el.querySelector('[aria-label="Enregistrer un message vocal"]')).toBeNull();
@@ -583,7 +611,7 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Ouvrir le menu des pièces jointes"]')!.click();
     });
-    await flush();
+    await flush(tiroirMonte(el));
 
     const input = el.querySelector<HTMLInputElement>('[aria-label="Choisir un fichier"]')!;
     const huge = new File([new Uint8Array([1])], 'film.mov', { type: 'video/quicktime' });
@@ -619,7 +647,7 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
     act(() => {
       container.querySelector<HTMLButtonElement>('[aria-label="Ouvrir le menu des pièces jointes"]')!.click();
     });
-    await flush();
+    await flush(tiroirMonte(container));
     expect(container.querySelector('[aria-label="Choisir des photos"]')).toBeNull();
     expect(container.querySelector('[aria-label="Choisir un fichier"]')).not.toBeNull();
 

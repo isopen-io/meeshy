@@ -5,34 +5,15 @@ import { performSend, retrySend, type Draft } from '@/lib/send/perform-send';
 import { outboxStore } from '@/lib/send/outbox-store';
 import type { RowActionId } from '@/lib/view/row-actions';
 
-import { ApiError, httpTransport } from './client';
-import { apiConfig } from './config';
+import { ApiError } from './client';
 import { performRowAction } from './conversation-actions';
-import { conversationQuery, conversationsQuery, type ConversationsDeps } from './conversations';
+import { conversationQuery, conversationsQuery } from './conversations';
+import { apiDeps } from './deps';
 import type { Conversation, Participant } from './types';
 import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
 import { performReaction, type PerformReactionResult } from './reactions';
 import { statusMoodsQueryOptions, storyTrayQueryOptions } from './stories';
-
-/**
- * `apiDeps` — LA `ConversationsDeps` DE MODULE (#5650, F2/F3 ; #5652
- * revue-correction défaut 4) : la source est figée à la CONSTRUCTION
- * (`VITE_DATA_SOURCE`), jamais relue à l'exécution — donc jamais recalculée
- * à chaque rendu. EXPORTÉE pour que tout appelant qui a besoin d'une
- * `ConversationsDeps` (un port sous `lib/api/*` déjà typé ainsi) l'IMPORTE
- * d'ici plutôt que de reconstruire `{ source: apiConfig.source, transport:
- * httpTransport }` à son propre site — c'est exactement la jumelle que
- * `list-header.tsx` et `conversation-new.tsx` recomposaient avant ce
- * correctif ; les deux l'importent désormais. Ce n'est PAS encore le SEUL
- * site qui lit `apiConfig.source` du dépôt : `summary-host.tsx`,
- * `use-reader.ts`, `progression.tsx`/`progression-page.tsx`, `realtime.ts`,
- * `main.tsx`, `conversations.tsx` et `thread.tsx` la lisent chacun pour leur
- * propre requête ou décision — leur convergence vers cet export, ou la
- * preuve qu'elle ne s'applique pas, est #6151 ; ne pas rouvrir cette
- * exclusivité tant que #6151 n'est pas close.
- */
-export const apiDeps: ConversationsDeps = { source: apiConfig.source, transport: httpTransport };
 
 export function useConversations() {
   return useQuery(conversationsQuery(apiDeps));
@@ -53,8 +34,8 @@ export function useConversationsSnapshot(): readonly Conversation[] | undefined 
 }
 
 /**
- * **LE RAIL DE STORIES** (#6080) — même adaptateur, même `deps`, donc la même
- * règle de source : fixtures ou passerelle, résolu à la CONSTRUCTION.
+ * **LE RAIL DE STORIES** (#6080) — même adaptateur, même `apiDeps`, donc la
+ * même règle de source : fixtures ou passerelle, résolu à la CONSTRUCTION.
  *
  * `staleTime` de 60 s : une story vit vingt-quatre heures et le plateau n'a
  * aucune raison d'être refetché à chaque retour sur la liste. Au-delà, c'est
@@ -65,11 +46,11 @@ export function useStoryTray() {
 }
 
 /**
- * **LE CORPUS DES HUMEURS** (#5652) — même `deps`, même règle de source que
- * `useStoryTray`, un corpus DISTINCT (`?scope=statuses`, jamais `stories`).
- * Même `staleTime` : une humeur, comme une story, vit une fenêtre courte
- * (une heure — `PostType.STATUS`, `schema.prisma`) et n'a aucune raison
- * d'être refetchée à chaque retour sur la liste.
+ * **LE CORPUS DES HUMEURS** (#5652) — même `apiDeps`, même règle de source
+ * que `useStoryTray`, un corpus DISTINCT (`?scope=statuses`, jamais
+ * `stories`). Même `staleTime` : une humeur, comme une story, vit une
+ * fenêtre courte (une heure — `PostType.STATUS`, `schema.prisma`) et n'a
+ * aucune raison d'être refetchée à chaque retour sur la liste.
  */
 export function useStatusMoods() {
   return useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000 });
@@ -166,8 +147,8 @@ export function rowAction(conversationId: string, action: RowActionId): void {
  * `sendAction`/`retrySendAction` (#5813, étape 6) — RÉFÉRENCES DE MODULE
  * STABLES, motif `rowAction` ci-dessus : liées aux instances PARTAGÉES
  * (`appQueryClient`, `outboxStore`) et à `apiDeps` (la SEULE résolution de
- * `apiConfig.source`, `:20`). `online` est REÇU — ce module n'appelle pas
- * `useOnline()` (un hook), c'est `use-send.ts` qui le fournit.
+ * `apiConfig.source`, `./deps.ts`). `online` est REÇU — ce module n'appelle
+ * pas `useOnline()` (un hook), c'est `use-send.ts` qui le fournit.
  */
 export function sendAction(params: {
   readonly conversationId: string;

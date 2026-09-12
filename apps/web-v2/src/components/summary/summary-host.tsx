@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { httpTransport } from '@/lib/api/client';
-import { apiConfig } from '@/lib/api/config';
+import { apiDeps } from '@/lib/api/deps';
 import { loadConversationAnalysis, type ConversationAnalysisSummary } from '@/lib/api/conversation-analysis';
 import type { Message, Participant } from '@/lib/api/types';
 import type { Viewer } from '@/lib/api/viewer';
@@ -96,8 +95,7 @@ export function SummaryHost({
     if (viewer.isAnonymous) return;
     const controller = new AbortController();
     loadConversationAnalysis({
-      source: apiConfig.source,
-      transport: httpTransport,
+      ...apiDeps,
       conversationId,
       signal: controller.signal,
     })

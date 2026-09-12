@@ -543,37 +543,18 @@ export function protectedPreview(input: {
 }
 
 /**
- * La JUMELLE de {@link protectedPreview}, pour le MÉDIA — cycle 125.
+ * LE DOMICILE DE CETTE LOI EST `@meeshy/shared/utils/attachment-protection`
+ * depuis #6189 — elle gouverne TROIS clients, donc elle ne pouvait pas rester
+ * dans un service du gateway : `apps/web-v2` ne pouvait pas l'importer, et ne
+ * la lisait donc nulle part (une pièce `isViewOnce` sur un message non protégé
+ * rendait son `<img>` et l'URL en clair).
  *
- * `protectedPreview` dit ce que le CORPS d'une bannière a le droit de montrer.
- * Rien ne disait ce que sa CHARGE a le droit de transporter, et la charge
- * transporte un fichier : la NSE iOS télécharge `attachmentUrl` et l'attache en
- * `UNNotificationAttachment`, que l'écran verrouillé rend en grand. Une photo à
- * vue unique s'affichait donc ENTIÈRE sous une bannière disant « 👁️ 🖼️ ».
- *
- * Elle répond à la protection de la PIÈCE JOINTE elle-même, le niveau que
- * l'éventail ne lisait pas du tout — `MessageAttachment` porte ses propres
- * `isViewOnce` / `isBlurred` / `effectFlags`, indépendants de ceux du message
- * qui la porte. Le niveau MESSAGE reste tranché par `protectedPreview`, qui le
- * fait déjà pour le corps : une seule lecture, deux conséquences.
- *
- * Ne lit PAS `isEncrypted` : le chiffrement d'une pièce jointe est un mode de
- * TRANSPORT (le chemin de téléchargement le dénoue), pas un masque d'affichage.
- * Le message chiffré, lui, est bien retenu — par la quatrième branche de
- * `protectedPreview`.
+ * Réexportée ici, et SEULEMENT réexportée : un second corps serait deux lois
+ * pour une règle, ce que `tasks/lessons.md` § 586 fait payer. Les appelants du
+ * gateway peuvent continuer à l'importer d'ici ; les nouveaux la prennent à son
+ * domicile.
  */
-export function maskedAttachment(input: {
-  isViewOnce?: boolean | null;
-  isBlurred?: boolean | null;
-  effectFlags?: number | null;
-} | null | undefined): boolean {
-  if (!input) return false;
-  const flags = input.effectFlags ?? 0;
-  const maskingFlags = MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED;
-  return input.isViewOnce === true
-    || input.isBlurred === true
-    || (flags & maskingFlags) !== 0;
-}
+export { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
 function extractExtension(filename: string | null | undefined): string | null {
   if (!filename) return null;
@@ -5340,16 +5321,10 @@ export class NotificationService {
   /**
    * Marque une notification comme lue.
    *
-   * **`userId` est EXIGÉ et entre dans la requête (#6166).** La propriété d'une
-   * notification était vérifiée par la route seule depuis `77b39f5cdd`
-   * (2026-01-28) — donc par la DISCIPLINE de l'appelant, et un appelant qui
-   * oublie ne fait rougir personne : le service acceptait, et le témoin de la
-   * route ne voit pas passer un appel qui ne traverse pas la route.
-   *
-   * La route GARDE sa vérification préalable : c'est elle qui distingue le 404
-   * du 403, deux codes que l'utilisateur doit continuer de recevoir
-   * distinctement. Ici, c'est de la défense en profondeur — la portée rend le
-   * contournement impossible par oubli, pas par convention.
+   * **`userId` est EXIGÉ et entre dans la requête (#6166)** : la propriété était
+   * vérifiée par la route SEULE depuis `77b39f5cdd` (2026-01-28), donc par la
+   * discipline de l'appelant. La route garde sa vérification préalable — elle
+   * seule distingue le 404 du 403 ; ici c'est de la défense en profondeur.
    */
   async markAsRead(notificationId: string, userId: string): Promise<Notification | null> {
     try {
@@ -5670,13 +5645,7 @@ export class NotificationService {
     }
   }
 
-  /**
-   * Supprime une notification.
-   *
-   * **`userId` est EXIGÉ et entre dans les DEUX requêtes (#6166)** — la
-   * relecture comme la suppression. Même raison que `markAsRead` : la garde de
-   * propriété vivait dans la route seule, donc dans la mémoire de l'appelant.
-   */
+  /** Supprime une notification. `userId` EXIGÉ et porté par la relecture (#6166). */
   async deleteNotification(notificationId: string, userId: string): Promise<boolean> {
     try {
       // Fetch userId before deletion so we can emit counts update after

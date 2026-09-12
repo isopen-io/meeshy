@@ -31440,3 +31440,184 @@ Trouvée en revue-correction sur #5793 (`apps/web-v2`, le câblage temps réel
 socket.io/`typing:start`), avant toute fuite en production — le gate a rougi
 en local avant le premier build livré.
 
+
+---
+
+## Leçon 590 — Une attente par BUDGET ne peut pas attendre un `import()` : la constante mesure la machine, jamais le produit
+
+**Mesuré le 2026-09-12, #6187** (rouge observé sur la PR #6167, `apps/web-v2`).
+
+Un témoin rougit sur le runner — **1 fail sur 2 095** — dans un job dont le diff
+ne touchait rien de ce que le témoin traverse. En local, la MÊME fusion passait
+**3 fois sur 3**. La tentation est de classer « flake » et de relancer ; c'était
+un défaut de témoin, et il se nomme.
+
+`Composer` monte son panneau en différé :
+
+```tsx
+const ComposerTray = lazy(() => import('./composer-tray'));
+```
+
+Le témoin l'attendait par un BUDGET :
+
+```tsx
+// la forme fautive
+const flush = async (): Promise<void> => {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+  });
+};
+```
+
+> **Un tour de macro-tâche plus cinq de micro-tâches est une CONSTANTE ; la
+> résolution d'un module est un TRAVAIL.** Aucune constante ne borne un travail
+> dont la durée dépend de la contention. Le témoin ne mesurait donc pas le
+> produit — il mesurait la machine, et rendait un verdict différent selon qui
+> d'autre tournait dessus.
+
+Le doc-comment de la forme fautive **avouait le mécanisme** (« laisse l'`import()`
+de `./composer-tray` résoudre ») sans en tirer la conséquence. C'est
+[[reference_grep_the_confessions_a_doc_comment_names_its_own_gap]] appliqué à une
+attente : un commentaire qui nomme une asynchronie et un code qui l'attend par
+une constante sont en contradiction, et la contradiction est lisible à l'œil.
+
+### La signature qui l'identifie en trente secondes
+
+Deux assertions CONSÉCUTIVES, la première verte et la seconde rouge :
+
+```tsx
+expect(el.querySelector('[aria-label="Fermer le menu des pièces jointes"]')).not.toBeNull();  // PASSE
+expect(el.querySelector('[role="group"][aria-label="Types de pièces jointes"]')).not.toBeNull(); // ÉCHOUE
+```
+
+Elles n'ont pas la même DÉPENDANCE : la première porte sur un attribut rendu par
+le composant PARENT (état local, synchrone), la seconde sur un contenu du module
+DIFFÉRÉ. **Une seule attente couvrait deux natures.** Devant un rouge de cette
+forme, demander de chaque assertion : *de quoi dépend-elle, et l'attente qui la
+précède borne-t-elle bien ÇA ?*
+
+Le trio de mesures qui écarte définitivement « le diff est coupable » :
+
+| mesure | verdict |
+|---|---|
+| rouge en CI, 3/3 vert en local sur la MÊME fusion | ce n'est pas le diff |
+| aucun fichier du diff dans la chaîne d'imports du témoin | ce n'est pas le diff, prouvé |
+| durée d'un run local **de 12 s à 32 s** selon la charge | c'est la contention |
+
+La troisième ligne est la preuve POSITIVE, et elle vaut mieux que les deux
+négatives : le même travail varie d'un facteur 2,7 pendant que l'attente reste
+une constante. **Quand un gate rougit par intermittence, mesurer la VARIANCE de
+sa durée avant de mesurer son code.**
+
+### La correction : borner en TEMPS, pas en tours
+
+```tsx
+const ATTENTE_MAX_MS = 2000;
+const flush = async (condition?: () => boolean): Promise<void> => {
+  const limite = Date.now() + ATTENTE_MAX_MS;
+  for (;;) {
+    await act(async () => { /* … un tour … */ });
+    if (condition === undefined || condition() || Date.now() >= limite) return;
+  }
+};
+```
+
+Sans prédicat, l'attente courte d'une mise à jour déjà montée reste ce qu'elle
+était (dix sites) ; avec prédicat, la boucle attend la CONDITION (sept sites).
+
+### Le corollaire qui vaut pour tout `waitFor`
+
+Attendre la condition qu'on va ensuite ASSERTER **n'est pas** un vert par
+construction — mais il faut le PROUVER, sinon la critique est juste :
+
+- **contre-épreuve** — la forme fautive rejouée (`role="group"` retiré du groupe
+  des types) rend **2 rouges / 29 verts** ;
+- **la DURÉE est la signature arithmétique** — la suite passe de **3,07 s à
+  16,33 s**, soit sept boucles épuisant chacune leur borne de 2 s. C'est la
+  preuve que la boucle TOURNE, et non qu'un raccourci la court-circuite ;
+- **coût nul en nominal** — une sonde instrumentée compte **1 tour** sur les sept
+  sites (`SONDE tours=1 satisfait=true` ×7). La borne n'allonge aucun run vert.
+
+> **Une boucle d'attente se prouve par sa DURÉE autant que par son verdict.** Un
+> `waitFor` dont on ne sait pas combien de tours il consomme est indistinguable
+> d'un `waitFor` qui rend la main au premier tour parce que son prédicat est
+> toujours vrai — c'est-à-dire d'un témoin mort. Instrumenter le compteur une
+> fois, l'écrire dans le commit, le retirer.
+
+Voisins : [[reference_a_pixel_witness_must_await_the_paint_not_the_load]] (la
+même loi sur la PEINTURE : attendre l'état, jamais `complete`) ·
+[[reference_a_red_on_both_sides_of_the_diff_also_measures_the_machine]] ·
+[[reference_a_green_on_both_sides_of_the_diff_measures_the_machine]] · leçon 589
+(un budget qui NOMME un chunk ne le garantit pas — ici un budget qui NOMME une
+attente ne la borne pas : deux faces d'une même erreur, croire qu'écrire une
+intention la réalise).
+
+---
+
+## Leçon 591 — Une loi qui gouverne trois clients et habite UN service n'est pas mal câblée : elle est INATTEIGNABLE
+
+**Mesuré le 2026-09-12, #6189.** Cherchant si `apps/web-v2` lisait la protection
+déclarée sur une PIÈCE JOINTE (la jumelle du cycle 125), la réponse fut nette :
+
+```
+src/components/bubble.tsx:319      isViewOnce={message.isViewOnce}
+src/components/focal-row.tsx:670   isViewOnce={message.isViewOnce}
+src/lib/view/conversation.ts:116   if (last.isBlurred) …
+src/lib/view/conversation.ts:117   if (last.isViewOnce) …
+```
+
+Quatre lectures, toutes au niveau MESSAGE. Aucune au niveau PIÈCE. Sonde :
+
+```
+SONDE url_en_clair=true img=true voile=false
+```
+
+Une pièce `isViewOnce: true` sur un message ordinaire rendait son `<img>` et
+l'URL du fichier en clair, pendant qu'iOS la retenait
+(`FocalAttachmentBlock.swift:130`) et que le gateway composait DÉJÀ le verdict
+des deux niveaux par un OU.
+
+**Le réflexe est d'écrire « le web a oublié de lire ce champ ». C'est faux.** La
+loi vivait dans `services/gateway/src/services/notifications/NotificationService.ts`.
+Un client ne peut pas importer un service. Le web ne pouvait donc pas la lire
+même en le voulant : ce n'était pas un oubli, c'était une IMPOSSIBILITÉ.
+
+> **Quand une loi gouverne plusieurs clients et qu'un seul l'applique, mesurer où
+> elle HABITE avant d'accuser ceux qui ne l'appliquent pas.** Une loi dans un
+> service est un privilège d'accès : le service l'a, les clients ne l'ont pas. Le
+> correctif n'est pas de la recopier — deux corps pour une règle, c'est la leçon
+> 586 — mais de la DÉPLACER dans le paquet partagé, le service la réexportant.
+
+Cette forme se reconnaît à un symptôme précis : **le doc-comment de la loi parle
+déjà des clients**. Celui de `maskedAttachment` nommait la NSE iOS et l'écran
+verrouillé — il DÉCRIVAIT un monde à trois clients depuis un fichier qu'un seul
+pouvait ouvrir. Un commentaire qui parle plus large que son import est le signe
+que la loi est mal logée.
+
+Effet de bord à ne pas négliger : le déplacement a allégé de 19 lignes le fichier
+le plus lourd du gateway (6 108 → 6 089 contre un cliquet de 6 119). **Sortir une
+loi d'un fichier obèse est un découpage PAR RESPONSABILITÉ**, donc exactement ce
+que le budget de taille demande — pas une tranche arbitraire.
+
+### Deux corollaires de méthode, payés dans le même lot
+
+**1. Un bitmask recopié dans un témoin est une seconde source de vérité qui se
+trompe.** J'ai écrit `VIEW_ONCE = 1 << 0` et `BLURRED = 1 << 1` dans le test.
+Les vraies valeurs sont `1 << 2` et `1 << 1` : `1 << 0` est `EPHEMERAL`. Le
+témoin a rougi sur MA constante, et il avait raison. **Les bits s'importent
+(`MESSAGE_EFFECT_FLAGS`), jamais ne se réécrivent** — et le témoin qui distingue
+`EPHEMERAL` (non masquant) des deux autres est celui qui aurait attrapé une loi
+écrite `effectFlags !== 0`.
+
+**2. Une absence affirmée sur une valeur numérique COURTE croise le bruit.**
+`expect(html).not.toContain(String(piece.fileSize))` — `fileSize` vaut 96, et
+« 96 » apparaît dans les coordonnées des chemins SVG (`M144,100…96,57`).
+L'assertion rougissait sur un GLYPHE, pas sur une fuite. Il faut restreindre le
+sujet avant d'affirmer une absence (ici : retirer les `<svg>`), sinon
+l'assertion est ininterprétable dans les deux sens — elle peut aussi passer pour
+une raison fausse.
+
+Voisins : leçon 586 (deux gardes opposées sur la même chaîne — ici deux CORPS
+pour une loi, le même mal), leçon 590 (mesurer avant d'accuser le diff),
+`CLAUDE.md` § Prisme cycle 125 et § Single Source of Truth.

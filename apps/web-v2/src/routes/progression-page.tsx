@@ -2,8 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Glyph } from '@/components/glyph';
 import { GlassBack } from '@/components/glass-surface';
-import { httpTransport, unwrap } from '@/lib/api/client';
-import { apiConfig } from '@/lib/api/config';
+import { unwrap } from '@/lib/api/client';
+import { apiDeps } from '@/lib/api/deps';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress } from '@/lib/api/engagement';
 import { useOnline } from '@/lib/net/online';
 import { Link } from '@/routes/route-table';
@@ -41,7 +41,7 @@ export function ProgressionPage({
   const query = useQuery({
     queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY,
     queryFn: async ({ signal }) =>
-      unwrap(await loadEngagementProgress({ source: apiConfig.source, transport: httpTransport, signal })),
+      unwrap(await loadEngagementProgress({ ...apiDeps, signal })),
   });
 
   const total = query.data === undefined ? null : compte(query.data);

@@ -25,6 +25,7 @@ import { ThreadHeader } from '@/components/thread-header';
 import { DayPill, ScrollToBottomButton } from '@/components/thread-chrome';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiConfig } from '@/lib/api/config';
+import { apiDeps } from '@/lib/api/deps';
 import { recordViewOnceConsumption } from '@/lib/api/fixtures';
 import { messagesQueryKey } from '@/lib/api/messages';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
@@ -111,7 +112,7 @@ export default function ThreadScreen() {
    * (inchangé, observable nulle part) ; en `gateway`, la session RÉELLE tranche.
    */
   const session = useStore(sessionStore, (s) => s.session);
-  const viewer = useMemo(() => resolveViewer({ source: apiConfig.source, session }), [session]);
+  const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
 
   /**
    * LE `Participant` DU LECTEUR DANS cette conversation (#5813, étape 8) —

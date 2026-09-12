@@ -4,6 +4,7 @@ import type { SocketFactory } from '@/lib/net/socket';
 import { outboxStore } from '@/lib/send/outbox-store';
 
 import { apiConfig } from './config';
+import { apiDeps } from './deps';
 import { createFixturesSocketClient } from './fixtures-realtime';
 import { appQueryClient } from './query-client';
 import { setTypingEmitter } from './typing-emit';
@@ -34,7 +35,7 @@ let connection: RealtimeConnection | null = null;
 let connectedToken: string | null = null;
 
 function currentViewerId(): string {
-  return resolveViewer({ source: apiConfig.source, session: sessionStore.getState().session }).id ?? '';
+  return resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? '';
 }
 
 function syncConnection(): void {

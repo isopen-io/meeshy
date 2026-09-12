@@ -634,6 +634,15 @@ jobs:
           cd apps/web-v2
           node scripts/check-gateway-build.mjs
 
+      # #6151 — un seul site résout `apiConfig.source` en dépendances d'appel
+      # (`src/lib/api/deps.ts`). Un huitième site qui reconstruirait
+      # `{ source: apiConfig.source, … }` divergerait en silence sans ce gate.
+      - name: Gate adaptateur unique de apiConfig.source (#6151)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-api-source.mjs
+
       # EN DERNIER, et pas par hasard : ce témoin RECONSTRUIT `dist` en variante
       # de banc (500 messages) pour mesurer la virtualisation, puis le
       # reconstruit normalement. Le placer avant les deux autres leur ferait

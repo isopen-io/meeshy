@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Glyph } from '@/components/glyph';
 import { Avatar } from '@/components/avatar';
 import { createDirectConversation, CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
-import { apiDeps } from '@/lib/api/query';
+import { apiDeps } from '@/lib/api/deps';
 import { searchUsers, type UserSearchResult } from '@/lib/api/users-search';
 import { useOnline } from '@/lib/net/online';
 import { initialsOf } from '@/lib/view/conversation';

@@ -9,7 +9,7 @@ import { LensSection } from '@/components/lens-sticker';
 import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { useScene } from '@/lib/lens/scene';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
-import { apiConfig } from '@/lib/api/config';
+import { apiDeps } from '@/lib/api/deps';
 import { rowAction, useConversations, useStatusMoods, useStoryTray } from '@/lib/api/query';
 import type { StatusMoodPost } from '@/lib/api/stories';
 import type { Conversation } from '@/lib/api/types';
@@ -233,7 +233,7 @@ export default function ConversationsScreen() {
    * un lecteur d'écran, qui n'annonce pas le contenu d'une région occupée. */
   const loading = list.data === undefined && !list.isError;
   const session = useStore(sessionStore, (s) => s.session);
-  const viewer = useMemo(() => resolveViewer({ source: apiConfig.source, session }), [session]);
+  const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const { languages: readerLanguages } = useReaderLanguages();
   const conversations = list.data ?? EMPTY_CONVERSATIONS;
   const overrides = useStore(conversationStore, (s) => s.overrides);
