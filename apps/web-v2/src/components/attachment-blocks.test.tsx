@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import { messagesOf } from '@/lib/api/fixtures';
 import {
   MEDIA_BROKEN_IMAGE_WITNESS_ID,
@@ -216,6 +217,67 @@ describe('Attachments — le vocal, la piste suit le TEXTE servi (#5805, cycle 1
     };
     const html = renderOne(barely, { languages: ['fr'] });
     expect(html).not.toContain('data-consumption');
+  });
+});
+
+/**
+ * LA VIDÉO (#6193) — `kindOf` sait rendre `'video'` depuis toujours ;
+ * `Attachments` retombait sur `return null`, une perte SILENCIEUSE (le
+ * message existe, l'auteur croit avoir envoyé quelque chose, le lecteur ne
+ * voit AUCUNE trace). La lecture (poster, `<video>`, plein écran) reste
+ * hors tranche — ce witness porte seulement le repli.
+ */
+describe('Attachments — la vidéo, un repli LISIBLE plutôt qu’un vide (#6193)', () => {
+  const video: Attachment = {
+    ...attachmentDefaults,
+    id: 'a-video-1',
+    messageId: 'm-video-1',
+    fileName: 'trajet.mp4',
+    originalName: 'trajet-vers-la-gare.mp4',
+    mimeType: 'video/mp4',
+    fileSize: 4_200_000,
+    fileUrl: 'https://cdn.meeshy.test/trajet.mp4',
+    duration: 12_000,
+    uploadedBy: 'u-amina',
+    createdAt: new Date().toISOString(),
+  };
+  // Sans métadonnées connues (`duration` ABSENTE, jamais `undefined` explicite
+  // — `exactOptionalPropertyTypes` distingue les deux) : le repli doit encore
+  // porter le type, avec la taille en dernier recours.
+  const { duration: _duration, ...videoWithoutDuration } = video;
+  const videoWithoutMetadata: Attachment = { ...videoWithoutDuration, originalName: '', fileSize: 0 };
+
+  test('rend un repli non vide : jamais null', () => {
+    const html = renderOne(video, { languages: ['fr'] });
+    expect(html).not.toBe('');
+    expect(html).toContain('data-video-fallback');
+  });
+
+  test('porte le TYPE (glyphe vidéo) — même sans nom ni durée connus', () => {
+    const html = renderOne(videoWithoutMetadata, { languages: ['fr'] });
+    expect(html).toContain('data-video-fallback');
+    expect(html).toContain('>Vidéo<');
+    expect(html).toContain('>0 Ko<');
+  });
+
+  test('porte le NOM d’origine quand il existe', () => {
+    const html = renderOne(video, { languages: ['fr'] });
+    expect(html).toContain('trajet-vers-la-gare.mp4');
+  });
+
+  test('porte la DURÉE (m:ss) quand `duration` est connue, plutôt que la taille', () => {
+    const html = renderOne(video, { languages: ['fr'] });
+    expect(html).toContain('>0:12<');
+    expect(html).not.toContain('4102 Ko');
+  });
+
+  test('CONTRE-ÉPREUVE : `kindOf` déciderait `video`, un `return null` laisserait le fil vide (leçon 261)', () => {
+    // Une régression qui réintroduirait `return null` pour `kind === 'video'`
+    // ferait retomber ce witness — le même que celui du gate `sansGlyphes`
+    // employé plus bas pour la protection : une absence affirmée seule ne
+    // suffit jamais, il faut la présence positive du repli en face.
+    const html = renderOne(video, { languages: ['fr'] });
+    expect(html.trim().length).toBeGreaterThan(0);
   });
 });
 
