@@ -1896,3 +1896,55 @@ Preuves : `rail-policy.test.ts`, `stories.test.ts`, `stories-rail.test.tsx`, `li
 **Ce qui reste hors de ce lot** (issues compagnons, dimension 3/5/9/13) : rien n'a été profilé sur ce que la connexion retient après un changement d'identité ou une longue session (le magasin de frappe n'est borné que par son minuteur) ; l'indicateur de frappe n'est annoncé à aucun lecteur d'écran (verser « X écrit » dans la région live du fil doublerait une annonce déjà visible — D-11) ; aucune session n'a ouvert de connexion depuis une coque (QEMU, simulateur dédié) — une coque viserait la PRODUCTION (`apiConfig.base`), jamais essayé ; `conversation:updated` (Prisme d'aperçu résolu serveur), `message:translation` (un message reçu reste dans la langue de l'expéditeur jusqu'au prochain refetch) et le roster multi-frappeurs (une seule personne annoncée par conversation) manquent encore au fil ; un lien direct `/c/<identifier>` désaccorde le paramètre de route et l'ObjectId attendu par le socket.
 
 **Mesuré.** `socket.io-client` + dépendances : 12,41 Ko gzip (chunk `socketio`, vendor, plafond 14) ; amorçage temps réel propre (`realtime.ts` et ses dépendances, hors vendor) : 4,41 Ko gzip (chunk `realtime`, plafond 6, `dynamic_only`). Première peinture INCHANGÉE (37,05 Ko, sous le plafond 40) : les deux chunks sont chargés en `import()` après le premier rendu, jamais dans le socle — désormais gardé par l'arête d'import, pas seulement affirmé. Aucune requête réseau déclenchée par une écriture socket (compteur de `fetch` = 0, témoin).
+
+## D-41 · La protection déclarée sur une PIÈCE JOINTE masque la PIÈCE, pas le message — et sa loi descend dans `packages/shared` — 2026-09-12 (#6189)
+
+**Le constat.** `MessageAttachment` porte ses PROPRES `isViewOnce` / `isBlurred` /
+`effectFlags`, indépendants de ceux du message qui la porte. Le gateway compose
+depuis toujours le verdict des deux niveaux par un OU (`routes/posts/core.ts` :
+`protectedPreview(message) !== null || maskedAttachment(attachment)`), iOS lit la
+déclaration de la pièce (`FocalAttachmentBlock.swift:130`), et `apps/web-v2` ne
+la lisait **nulle part** : sonde du 2026-09-12, une pièce `isViewOnce: true` sur
+un message ordinaire rendait son `<img>` et l'URL du fichier en clair
+(`url_en_clair=true img=true voile=false`). C'est la jumelle du cycle 125 —
+« une protection de contenu se mesure sur tout ce que la charge TRANSPORTE ».
+
+**Trois décisions, et leurs raisons.**
+
+**1. La loi descend dans `packages/shared/utils/attachment-protection.ts`.** Elle
+vivait dans `services/gateway/src/services/notifications/NotificationService.ts`,
+donc hors de portée des clients — c'est CE domicile, et non un oubli de câblage,
+qui rendait la garde web impossible à écrire. Une loi qui gouverne trois clients
+ne peut pas habiter un service (§ Single Source of Truth). Le gateway la
+RÉEXPORTE, et seulement la réexporte : un second corps serait deux lois pour une
+règle (`tasks/lessons.md` § 586). Effet de bord mesuré, et bienvenu :
+`NotificationService.ts` passe de 6 108 à 6 089 lignes contre un cliquet de 6 119.
+
+**2. Le masque porte sur la PIÈCE, jamais sur le message entier.** Voiler tout le
+bloc de contenu quand une seule pièce est déclarée serait plus restrictif — donc
+tentant — mais cacherait un TEXTE que rien ne protège, et divergerait d'iOS, qui
+voile le bloc de la pièce. La question se pose donc **pièce par pièce** : une
+pièce déclarée parmi cinq est la seule retenue. Deux fautes symétriques sont
+gardées par témoin : `attachments.some(masked)` retiendrait les cinq,
+`attachments[0]` en laisserait sortir quatre.
+
+**3. Le substitut ne transporte que le TYPE, et sa taille est FIXE.** Ne sortent
+ni le fichier, ni son URL, ni sa vignette, ni son NOM d'origine, ni sa TAILLE, ni
+sa durée — la liste du cycle 125. Sort le type (photo, vocal, fichier), qui ne
+dit rien du contenu et rend le substitut lisible, comme la bannière serveur qui
+sert « 👁️ 🖼️ ». La tuile est un carré de 140 pt : réserver le ratio réel
+éviterait un saut de mise en page (dimension 4), mais ferait sortir une mesure de
+la pièce — et un carré ne saute pas non plus, puisqu'il ne dépend de rien qui
+arrive plus tard.
+
+**Ce que ce lot NE fait pas, délibérément.** Aucune affordance de révélation. La
+fenêtre de 5 s d'iOS (`isRevealed`) suppose une consommation serveur PAR PIÈCE
+que le web n'appelle pas encore ; un bouton qui ne révèle rien serait un contrôle
+inerte, ce que la loi 4 interdit. Le suivi est dans #6189.
+
+**Et `EPHEMERAL` ne masque pas une pièce** — le masque est exactement
+`VIEW_ONCE | BLURRED`. L'éphémère se juge au niveau MESSAGE, sur son horloge
+(`protectionOf` → `expired`) : une pièce d'un message éphémère encore valide se
+lit normalement. Une loi écrite `effectFlags !== 0` passerait tous les autres
+témoins et retiendrait ces médias-là ; c'est pourquoi le témoin de discrimination
+existe.

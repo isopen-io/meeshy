@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
+
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { electAudio, electDescription } from '@/lib/view/media';
@@ -260,6 +262,57 @@ function VoiceAttachment({
   );
 }
 
+/**
+ * LE SUBSTITUT D'UNE PIÈCE MASQUÉE (#6189) — ce qu'on rend À LA PLACE du média.
+ *
+ * Ce qui ne sort PAS, et c'est la liste du cycle 125 : le fichier, son URL, sa
+ * vignette, son NOM d'origine, sa TAILLE, sa DURÉE. « Une protection de contenu
+ * se mesure sur tout ce que la charge TRANSPORTE, jamais sur sa seule chaîne. »
+ *
+ * Ce qui sort : le TYPE (une photo, un vocal, un fichier) et le fait qu'elle est
+ * protégée. Le type seul ne dit rien du contenu et rend le substitut lisible —
+ * c'est ce que fait la bannière serveur, qui sert « 👁️ 🖼️ ».
+ *
+ * TAILLE FIXE, jamais dérivée du ratio réel : réserver les dimensions vraies
+ * éviterait un saut de mise en page (dimension 4), mais ferait sortir une mesure
+ * de la pièce. Le carré est le choix fail-closed, et il ne saute pas non plus
+ * puisqu'il ne dépend de rien qui arrive plus tard.
+ *
+ * PAS D'AFFORDANCE DE RÉVÉLATION dans ce lot : la fenêtre de 5 s d'iOS
+ * (`FocalAttachmentBlock.swift`, `isRevealed`) suppose une consommation serveur
+ * par PIÈCE que le web n'appelle pas encore. Un bouton qui ne révèle rien serait
+ * un contrôle inerte — la loi 4 l'interdit. Suivi dans #6189.
+ */
+function MaskedAttachment({ attachment }: { readonly attachment: Attachment }) {
+  const kind = kindOf(attachment);
+  const libelle = kind === 'audio' ? 'Vocal protégé' : kind === 'image' ? 'Photo protégée' : 'Pièce protégée';
+  const glyphe = kind === 'audio' ? 'microphone' : kind === 'image' ? 'image' : 'file';
+
+  return (
+    <div
+      data-protected-attachment="hidden"
+      role="img"
+      aria-label={libelle}
+      className="flex items-center justify-center gap-2 rounded-2xl"
+      style={{
+        width: MASKED_TILE_SIZE,
+        height: MASKED_TILE_SIZE,
+        maxWidth: '100%',
+        backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+      }}
+    >
+      <span className="flex flex-col items-center gap-1" style={{ opacity: TRANSCRIPT_TEXT_OPACITY }}>
+        <Glyph name={glyphe} size={24} />
+        <Glyph name="eyeSlash" size={14} />
+        <span className="text-mini">{libelle}</span>
+      </span>
+    </div>
+  );
+}
+
+/** Le côté du substitut, en points — un carré, indépendant de la pièce. */
+const MASKED_TILE_SIZE = 140;
+
 export function Attachments({
   attachments,
   languages,
@@ -277,6 +330,21 @@ export function Attachments({
   return (
     <>
       {attachments.map((attachment, i) => {
+        // LA PIÈCE DÉCLARÉE PROTÉGÉE NE REND PAS SON MÉDIA (#6189, cycle 125).
+        //
+        // La protection du MESSAGE est gardée un cran plus haut — `bubble.tsx`
+        // et `focal-row.tsx` enveloppent tout le bloc de contenu dans
+        // `ProtectedContent`, attesté par gate depuis #6184. Mais une pièce
+        // porte ses PROPRES `isViewOnce` / `isBlurred` / `effectFlags`,
+        // indépendants de ceux du message : mesuré le 2026-09-12, une pièce à
+        // vue unique sur un message ordinaire rendait son `<img>` et l'URL du
+        // fichier en clair, pendant qu'iOS la retenait
+        // (`FocalAttachmentBlock.swift:130`).
+        //
+        // La question se pose PIÈCE PAR PIÈCE, jamais pour la première : une
+        // seule pièce déclarée masquée parmi cinq doit être la seule retenue.
+        if (maskedAttachment(attachment)) return <MaskedAttachment key={i} attachment={attachment} />;
+
         const kind = kindOf(attachment);
         if (kind === 'audio') {
           return (

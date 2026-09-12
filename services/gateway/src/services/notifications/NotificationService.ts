@@ -543,37 +543,18 @@ export function protectedPreview(input: {
 }
 
 /**
- * La JUMELLE de {@link protectedPreview}, pour le MÉDIA — cycle 125.
+ * LE DOMICILE DE CETTE LOI EST `@meeshy/shared/utils/attachment-protection`
+ * depuis #6189 — elle gouverne TROIS clients, donc elle ne pouvait pas rester
+ * dans un service du gateway : `apps/web-v2` ne pouvait pas l'importer, et ne
+ * la lisait donc nulle part (une pièce `isViewOnce` sur un message non protégé
+ * rendait son `<img>` et l'URL en clair).
  *
- * `protectedPreview` dit ce que le CORPS d'une bannière a le droit de montrer.
- * Rien ne disait ce que sa CHARGE a le droit de transporter, et la charge
- * transporte un fichier : la NSE iOS télécharge `attachmentUrl` et l'attache en
- * `UNNotificationAttachment`, que l'écran verrouillé rend en grand. Une photo à
- * vue unique s'affichait donc ENTIÈRE sous une bannière disant « 👁️ 🖼️ ».
- *
- * Elle répond à la protection de la PIÈCE JOINTE elle-même, le niveau que
- * l'éventail ne lisait pas du tout — `MessageAttachment` porte ses propres
- * `isViewOnce` / `isBlurred` / `effectFlags`, indépendants de ceux du message
- * qui la porte. Le niveau MESSAGE reste tranché par `protectedPreview`, qui le
- * fait déjà pour le corps : une seule lecture, deux conséquences.
- *
- * Ne lit PAS `isEncrypted` : le chiffrement d'une pièce jointe est un mode de
- * TRANSPORT (le chemin de téléchargement le dénoue), pas un masque d'affichage.
- * Le message chiffré, lui, est bien retenu — par la quatrième branche de
- * `protectedPreview`.
+ * Réexportée ici, et SEULEMENT réexportée : un second corps serait deux lois
+ * pour une règle, ce que `tasks/lessons.md` § 586 fait payer. Les appelants du
+ * gateway peuvent continuer à l'importer d'ici ; les nouveaux la prennent à son
+ * domicile.
  */
-export function maskedAttachment(input: {
-  isViewOnce?: boolean | null;
-  isBlurred?: boolean | null;
-  effectFlags?: number | null;
-} | null | undefined): boolean {
-  if (!input) return false;
-  const flags = input.effectFlags ?? 0;
-  const maskingFlags = MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED;
-  return input.isViewOnce === true
-    || input.isBlurred === true
-    || (flags & maskingFlags) !== 0;
-}
+export { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
 function extractExtension(filename: string | null | undefined): string | null {
   if (!filename) return null;
