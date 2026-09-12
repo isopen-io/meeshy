@@ -286,6 +286,7 @@ export class RedisDeliveryQueue {
       replyToId: action.replyToId,
       mentionedUsernames: action.mentionedUsernames.length > 0 ? action.mentionedUsernames : undefined,
       messageSource: 'agent',
+      ...(action.illustration ? { illustration: action.illustration } : {}),
       metadata: {
         agentType: 'orchestrator',
         roleConfidence: 1.0,

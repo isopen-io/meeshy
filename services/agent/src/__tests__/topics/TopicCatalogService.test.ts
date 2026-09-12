@@ -56,6 +56,7 @@ function makeTopic(overrides: Partial<TopicCatalogEntry> = {}): TopicCatalogEntr
     examples: [],
     cooldownMinutes: 60,
     isActive: true,
+    priority: 0,
     ...overrides,
   };
 }

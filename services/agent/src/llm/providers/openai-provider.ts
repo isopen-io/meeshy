@@ -1,18 +1,45 @@
 import OpenAI from 'openai';
-import type { LlmProvider, LlmChatParams, LlmChatResponse, LlmProviderConfig } from '../types';
+import type { LlmProvider, LlmChatParams, LlmChatResponse, LlmCitation, LlmProviderConfig } from '../types';
+
+type ResponsesBlock = Record<string, unknown> & { annotations?: unknown };
+
+function outputTextBlocks(output: Array<Record<string, unknown>>): ResponsesBlock[] {
+  return output.flatMap((item) =>
+    item.type === 'message' && Array.isArray(item.content)
+      ? (item.content as ResponsesBlock[]).filter((block) => block.type === 'output_text')
+      : [],
+  );
+}
 
 function extractResponsesContent(output: Array<Record<string, unknown>>): string {
-  const parts: string[] = [];
-  for (const item of output) {
-    if (item.type === 'message' && Array.isArray(item.content)) {
-      for (const block of item.content as Array<Record<string, unknown>>) {
-        if (block.type === 'output_text' && typeof block.text === 'string') {
-          parts.push(block.text);
-        }
-      }
-    }
-  }
-  return parts.join('\n').trim();
+  return outputTextBlocks(output)
+    .map((block) => block.text)
+    .filter((text): text is string => typeof text === 'string')
+    .join('\n')
+    .trim();
+}
+
+/**
+ * Les annotations `url_citation` d'une réponse avec recherche web nomment les
+ * pages sur lesquelles le modèle s'est appuyé. Elles étaient jetées : c'est
+ * pourtant la seule source SÛRE d'une URL d'article — demander l'URL au modèle
+ * en texte l'invite à l'inventer (#6192).
+ */
+function extractCitations(output: Array<Record<string, unknown>>): LlmCitation[] {
+  const seen = new Set<string>();
+  return outputTextBlocks(output)
+    .flatMap((block) => (Array.isArray(block.annotations) ? (block.annotations as Array<Record<string, unknown>>) : []))
+    .filter((annotation) => annotation.type === 'url_citation' && typeof annotation.url === 'string')
+    .filter((annotation) => {
+      const url = annotation.url as string;
+      if (seen.has(url)) return false;
+      seen.add(url);
+      return true;
+    })
+    .map((annotation) => ({
+      url: annotation.url as string,
+      ...(typeof annotation.title === 'string' ? { title: annotation.title } : {}),
+    }));
 }
 
 export function createOpenAiProvider(config: LlmProviderConfig): LlmProvider {
@@ -54,6 +81,7 @@ export function createOpenAiProvider(config: LlmProviderConfig): LlmProvider {
         });
 
         const content = extractResponsesContent(response.output ?? []);
+        const citations = extractCitations(response.output ?? []);
 
         return {
           content,
@@ -63,6 +91,7 @@ export function createOpenAiProvider(config: LlmProviderConfig): LlmProvider {
           },
           model: response.model ?? config.model,
           latencyMs: Date.now() - startTime,
+          ...(citations.length > 0 ? { citations } : {}),
         };
       }
 
