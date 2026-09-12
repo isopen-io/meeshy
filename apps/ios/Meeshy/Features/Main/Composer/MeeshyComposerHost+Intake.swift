@@ -324,7 +324,7 @@ extension MeeshyComposerHost {
             // avec ce qui est peint, sans quoi refermer la description
             // rouvrirait le contenu par surprise.
             editsPostContent = false
-            editsSceneDescription = true
+            openSceneDescriptionEditing()
         case .content:
             // **Le CORPS du post** (#4890) — jamais la légende, que
             // `.description` ouvre juste au-dessus. Deux portes voisines, deux

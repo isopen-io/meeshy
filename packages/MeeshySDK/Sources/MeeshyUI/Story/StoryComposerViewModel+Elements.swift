@@ -635,6 +635,24 @@ extension StoryComposerViewModel {
         var medias = targetEffects.mediaObjects ?? []
         medias.append(obj)
         targetEffects.mediaObjects = medias
+        // **Un fond entre AJUSTÉ** (#6125, directive porteur 2026-09-12 : « le
+        // Meeshy Composer doit intégrer dans canvas la pièce pour fit dans le
+        // canvas par défaut, et l'auteur zoom ou dézoom pour rogner »).
+        //
+        // Le cadrage se pose ICI, à l'ingestion, et non dans le renderer : le
+        // défaut du renderer gouverne aussi les stories DÉJÀ publiées, qu'aucune
+        // directive ne demande de recadrer. Ce que ce site change ne concerne
+        // que les compositions neuves.
+        //
+        // `posedFitMode` ne réécrit pas un cadrage déjà déclaré sur la slide :
+        // le choix de l'auteur porte sur la SCÈNE, pas sur le fichier qui
+        // l'occupe, et le remplacer à chaque média posé lui ferait reprendre
+        // indéfiniment le même geste.
+        if shouldBeBackground {
+            var bg = targetEffects.backgroundTransform ?? StoryBackgroundTransform()
+            bg.videoFitMode = StoryBackgroundFraming.posedFitMode(declared: bg.videoFitMode)
+            targetEffects.backgroundTransform = bg
+        }
         slides[targetSlideIndex].effects = targetEffects
         // Selection / z-index state is composer-global; only mutate it when we're
         // actually adding to the currently-visible slide so the UI doesn't jump.

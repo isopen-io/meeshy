@@ -259,7 +259,13 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// suit la luminance RÉELLE de son bitmap (2e vague de captures : capture
     /// d'écran BLANCHE en Background → chrome blanc invisible avec un `.dark`
     /// forfaitaire) ; sans bitmap mesurable, convention viewer → `.dark`.
-    var canvasChromeScheme: ColorScheme {
+    /// **`public` depuis le #6127** : le meuble de l'app (`MeeshyComposerHost`)
+    /// monte ses propres surfaces PAR-DESSUS le canvas — la légende de scène en
+    /// tête — et doit donc lire le même scheme que le chrome interne. Le laisser
+    /// `internal` obligeait l'app à re-résoudre la luminance depuis ses propres
+    /// lectures du fond : une seconde descente, à faire diverger de celle-ci au
+    /// premier ajustement de seuil.
+    public var canvasChromeScheme: ColorScheme {
         CanvasChromeScheme.scheme(
             background: backgroundColor,
             hasMediaBackground: hasBackgroundImage || currentEffects.hasVisualBackgroundMedia,

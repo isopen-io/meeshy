@@ -168,9 +168,33 @@ extension MeeshyComposerHost {
         //
         // `textEditingZones` garantit qu'elles sont exclusives : la hauteur
         // servie est toujours celle de la zone montée.
-        .storyComposerCanvasBottomReservation(
-            (editsSceneDescription || editsPostContent) ? sceneDescriptionEditorHeight : 0
-        )
+        .storyComposerCanvasBottomReservation(canvasBottomReservation)
+        .observingKeyboardTransition($keyboardTransition)
+    }
+
+    /// **Ce que le bas de l'écran occupe, et que le canvas doit libérer.**
+    ///
+    /// Les deux textes ne le prennent plus de la même façon depuis #6126, et
+    /// c'est ce que ce calcul rend visible :
+    ///
+    /// - **le CORPS du post** s'écrit dans une zone montée en bas ; ce qu'elle
+    ///   occupe est sa hauteur MESURÉE (`sceneDescriptionEditorHeight`), posée
+    ///   par son propre `onHeightChange` ;
+    /// - **la LÉGENDE** s'écrit EN PLACE, sur la scène. Aucune zone ne monte,
+    ///   donc aucune hauteur à mesurer — ce qui menace de la couvrir est le
+    ///   CLAVIER, et c'est sa hauteur qu'il faut rendre.
+    ///
+    /// > Reprendre `sceneDescriptionEditorHeight` pour la légende aurait servi
+    /// > `0` en silence : la mesure existe toujours, la zone qui l'écrivait
+    /// > n'existe plus. Une réserve qui vaut zéro ne rougit nulle part — elle
+    /// > laisse simplement le clavier passer par-dessus ce qu'on écrit.
+    ///
+    /// L'exclusion reste garantie par `textEditingZones` et par `handleRailDoor`
+    /// (ouvrir l'une ferme l'autre), donc l'ordre des branches ne décide rien.
+    var canvasBottomReservation: CGFloat {
+        if editsSceneDescription { return keyboardTransition?.height ?? 0 }
+        if editsPostContent { return sceneDescriptionEditorHeight }
+        return 0
     }
 
     /// **L'icône qui ouvre la description de la slide** (#4124).
@@ -195,7 +219,7 @@ extension MeeshyComposerHost {
     var atelierDescriptionButton: some View {
         Button {
             HapticFeedback.light()
-            editsSceneDescription = true
+            openSceneDescriptionEditing()
         } label: {
             // **La FORME est celle de la rangée, pas celle de l'en-tête**
             // (#4136). Elle portait une pastille de verre, juste parce qu'elle
@@ -671,76 +695,84 @@ extension MeeshyComposerHost {
     /// et ce n'est pas un rangement : monté en fermeture d'`.overlay` dans
     /// `body`, il plantait à l'ouverture — débordement de pile par profondeur de
     /// type SwiftUI. Le fichier du type porte la trace et la leçon.
-    /// **Le volet de description servi à la surface** (#4742).
+    /// **Le volet de description servi à la surface** (#4742, puis #6126).
     ///
-    /// Il LIT ; la saisie reste l'affaire de `sceneDescriptionEditor`, qui
-    /// monte au-dessus du clavier. Deux champs pour un même texte auraient
-    /// divergé au premier réglage — ici il n'y en a qu'un, et le volet ouvre
-    /// celui-là.
+    /// Il LIT **et** il ÉCRIT depuis #6126. Il ne s'efface plus pendant la
+    /// saisie, et cette ligne de garde partie est tout le lot : elle existait
+    /// parce qu'une SECONDE surface — la zone du bas — affichait le même texte,
+    /// et que les laisser toutes deux à l'écran l'aurait montré en double. Il
+    /// n'y a plus de seconde surface.
     ///
-    /// Pendant la SAISIE le volet s'efface : l'éditeur affiche déjà le texte,
-    /// et le laisser derrière montrerait la description en double.
+    /// L'argument qui justifiait la lecture seule — « deux champs pour un même
+    /// texte auraient divergé au premier réglage » — vaut encore, dans l'autre
+    /// sens : il n'y en a toujours qu'un, c'est celui-ci.
+    ///
+    /// **`editsSceneDescription` survit, avec un autre sens.** Il ne dit plus
+    /// « une zone est montée en bas » mais « l'auteur écrit la légende », et
+    /// c'est le volet qui le pose, depuis le calque. Un seul lecteur en
+    /// dépend désormais : `canvasBottomReservation`, qui rend au canvas la
+    /// hauteur du clavier.
     var sceneDescriptionPanel: AnyView? {
-        guard !editsSceneDescription else { return nil }
-        return AnyView(
+        AnyView(
             ComposerSceneDescriptionPanel(
-                text: sceneDescriptionBinding.wrappedValue,
+                text: sceneDescriptionBinding,
                 placeholder: String(localized: "composer.description.placeholder",
                                     defaultValue: "Ajouter une description",
                                     bundle: .main),
                 isCollapsed: $sceneDescriptionCollapsed,
-                onEdit: {
-                    // Ouvrir la saisie DÉPLIE : écrire dans un volet rangé
+                // **L'encre suit le FOND** (#6127). Même loi que le reste du
+                // chrome de l'atelier — `CanvasChromeScheme`, résolue une fois
+                // par le modèle et servie ici. Le volet n'en décide aucune.
+                chromeScheme: viewModel.canvasChromeScheme,
+                // La MÊME capsule que le document — jamais une seconde : deux
+                // sélecteurs pour une seule `documentLanguage` auraient deux
+                // mémoires à faire diverger (#5137).
+                languageAccessory: AnyView(documentLanguageCapsule),
+                onEditingChange: { enCours in
+                    // Écrire DÉPLIE : ouvrir le champ dans un volet rangé
                     // laisserait l'auteur taper sans voir ce qu'il écrit.
-                    sceneDescriptionCollapsed = false
-                    editsSceneDescription = true
-                }
+                    if enCours { sceneDescriptionCollapsed = false }
+                    editsSceneDescription = enCours
+                },
+                editingRequest: sceneDescriptionEditingRequest
             )
         )
     }
 
-    var sceneDescriptionEditor: some View {
-        ComposerSceneDescriptionEditor(
-            text: sceneDescriptionBinding,
-            placeholder: String(localized: "composer.scene.description.placeholder",
-                                defaultValue: "Ajoutez une description…", bundle: .main),
-            plateauTint: tint.color,
-            onDone: { editsSceneDescription = false },
-            onHeightChange: { sceneDescriptionEditorHeight = $0 },
-            // **La langue se déclare où le texte se valide** (#5137). La MÊME
-            // capsule que le document — jamais une seconde : deux sélecteurs
-            // pour une seule `documentLanguage` auraient deux mémoires à faire
-            // diverger, et c'est exactement ce que #4621 a déjà payé sur la
-            // clé de son titre.
-            languageAccessory: AnyView(documentLanguageCapsule)
-        )
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+    /// **Ouvrir la légende depuis une porte qui n'est pas elle** (#6126).
+    ///
+    /// Déplie d'abord — un champ ouvert dans un volet rangé ne serait pas
+    /// visible —, puis demande le focus par le jeton. Les deux gestes dans cet
+    /// ordre, à un seul endroit : les deux portes (bouton d'atelier, rail
+    /// `.description`) appellent ceci plutôt que d'en porter chacune une copie,
+    /// qui aurait divergé sur l'ordre au premier ajustement.
+    func openSceneDescriptionEditing() {
+        sceneDescriptionCollapsed = false
+        sceneDescriptionEditingRequest &+= 1
     }
 
-    /// **Les DEUX zones d'écriture du bas, et l'exclusion qui les sépare**
-    /// (#4890).
+    /// **Ce qui s'écrit EN BAS — le corps du post, et lui seul** (#4890, réduit
+    /// au #6126).
     ///
-    /// En Post, la description est la LÉGENDE du média courant et le contenu
-    /// est le corps de la publication : deux textes réels, deux zones. Elles
-    /// s'ancrent au MÊME bord bas — ouvertes ensemble, elles se recouvriraient
-    /// et l'auteur taperait dans celle qu'il ne regarde pas.
+    /// En Post, la description est la LÉGENDE du média courant et le contenu est
+    /// le corps de la publication : deux textes réels. Ils avaient deux zones,
+    /// ancrées au MÊME bord bas, et le `if / else if` d'ici rendait leur
+    /// superposition impossible par construction.
     ///
-    /// Le `if / else if` rend la superposition impossible par CONSTRUCTION, et
-    /// c'est une seconde ceinture : `handleRailDoor` ferme déjà l'une en
-    /// ouvrant l'autre. Les deux se répondent — l'état reste d'accord avec ce
-    /// qui est peint, et ce qui est peint ne dépend pas de l'ordre des
-    /// affectations.
+    /// **La légende a quitté le bas** (directive porteur 2026-09-12) : elle
+    /// s'écrit sur la scène, à l'endroit exact où elle se lit. Il ne reste donc
+    /// qu'une zone, et l'exclusion qu'arbitrait ce site n'a plus deux termes.
     ///
-    /// **Sortie du `body` au 2026-09-04, budget de fichier** : le meuble passait
-    /// à 1209 lignes contre un plafond DUR de 1200, et la directive du
-    /// 2026-08-28 dit d'extraire AVANT d'ajouter. La coupe suit une question
-    /// entière — « qu'est-ce qui s'écrit en bas, et lequel » — et rejoint les
-    /// deux zones qu'elle arbitre, déjà voisines dans ce fichier.
+    /// > Ce qui disparaît ici n'est pas une garde devenue inutile par
+    /// > négligence : c'est une garde dont le CONFLIT qu'elle prévenait a été
+    /// > supprimé. Les deux textes ne se disputent plus le même bord.
+    ///
+    /// `handleRailDoor` continue de fermer l'une en ouvrant l'autre — l'état
+    /// reste d'accord avec ce qui est peint, et c'est désormais la seule
+    /// ceinture nécessaire.
     @ViewBuilder
     var textEditingZones: some View {
-        if editsSceneDescription {
-            sceneDescriptionEditor
-        } else if editsPostContent {
+        if editsPostContent {
             postContentEditor
         }
     }

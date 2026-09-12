@@ -735,22 +735,58 @@ struct MeeshyComposerHost: View {
     /// ancrage bas, elles se recouvriraient.
     @State var editsPostContent = false
 
-    /// **Le repli du volet de description** (#4742, défaut RETOURNÉ au #5138).
+    /// **Le repli du volet de description** (#4742, défaut retourné au #5138,
+    /// puis RETOURNÉ À NOUVEAU au #6126).
     ///
     /// Une préférence d'ÉCRAN, pas une propriété de la slide : changer d'unité
     /// d'histoire ne doit pas rouvrir un volet que l'auteur vient de ranger.
     ///
-    /// **Replié par défaut** (directive porteur 2026-09-04 : « par défaut
-    /// l'espace de contenu du caption doit être replié »). Il naissait déplié,
-    /// et la raison écrite ici — « la description existe pour être relue » —
-    /// valait tant que le volet était le SEUL endroit où le texte se voyait
-    /// (#4742). Depuis #4993 il se peint PAR-DESSUS la scène : déplié d'entrée,
-    /// il couvre la bande basse du canvas à l'instant précis où l'auteur
-    /// compose — c'est-à-dire avant qu'il y ait la moindre légende à relire.
+    /// ## Le va-et-vient du défaut, et ce qui le tranche
     ///
-    /// Replié n'est pas caché : le chevron reste disponible en permanence
-    /// (#4993), et ouvrir la saisie déplie (`sceneDescriptionPanel.onEdit`).
-    @State var sceneDescriptionCollapsed = true
+    /// **2026-09-04 — replié** : « par défaut l'espace de contenu du caption
+    /// doit être replié ». La raison tenait : depuis #4993 le volet se peint
+    /// PAR-DESSUS la scène, donc déplié d'entrée il couvrait la bande basse du
+    /// canvas à l'instant précis où l'auteur compose — et il la couvrait pour
+    /// afficher un texte VIDE, puisqu'il n'y avait encore rien à relire.
+    ///
+    /// **2026-09-12 — déplié** : « La légende […] affichée par défaut quand la
+    /// scène s'affiche avec un placeholder invitant à s'exprimer ». La directive
+    /// postérieure l'emporte, et elle ne se contente pas d'être postérieure :
+    /// elle répond à l'objection du 09-04 en changeant ce que le volet MONTRE.
+    /// Replié, il ne coûtait rien mais n'invitait à rien — il fallait trouver le
+    /// chevron pour découvrir qu'une légende existe. Déplié sur une INVITE, la
+    /// bande basse qu'il occupe ne cache plus un vide : elle porte l'amorce, qui
+    /// est le seul contenu utile tant que rien n'est écrit.
+    ///
+    /// > Un état vide DESSINÉ vaut mieux qu'un état vide ABSENT : le premier
+    /// > dit ce qu'on peut faire, le second laisse chercher.
+    ///
+    /// Et depuis #6126 l'écriture se fait EN PLACE : déplier n'ouvre plus une
+    /// zone qui reprend la scène, donc le coût que le 09-04 voulait éviter a
+    /// changé de nature en même temps que le défaut.
+    ///
+    /// Déplié n'est pas figé : le chevron reste disponible en permanence
+    /// (#4993) — sauf pendant la frappe, où replier emporterait le champ.
+    @State var sceneDescriptionCollapsed = false
+
+    /// **La transition du clavier, pour la réserve basse du canvas** (#6126).
+    ///
+    /// La légende s'écrivant désormais SUR la scène, ce qui menace de la
+    /// couvrir n'est plus une zone dont on mesure la hauteur — c'est le clavier
+    /// lui-même. `KeyboardTransition` est le site UNIQUE de ce décodage dans le
+    /// dépôt (`ConversationView+Keyboard.swift`) ; le meuble le consomme plutôt
+    /// que d'observer `UIResponder` une seconde fois.
+    @State var keyboardTransition: KeyboardTransition?
+
+    /// **Le jeton qui ouvre la légende depuis AILLEURS** (#6126).
+    ///
+    /// Deux portes mènent à la description sans passer par elle : le bouton de
+    /// l'atelier et la porte `.description` du rail. Elles posaient
+    /// `editsSceneDescription = true`, ce qui montait une zone en bas ; la
+    /// saisie étant désormais en place, ce drapeau ne commande plus l'ouverture
+    /// — il la CONSTATE. Sans ce jeton, les deux portes seraient devenues des
+    /// contrôles inertes, et rien ne l'aurait signalé.
+    @State var sceneDescriptionEditingRequest = 0
 
     /// La hauteur RENDUE de la zone de saisie (#4361) — déclarée à l'atelier en
     /// réserve basse pour que le canvas se rétracte AU-DESSUS d'elle au lieu
