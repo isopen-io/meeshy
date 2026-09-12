@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { ListHeader } from '@/components/list-header';
@@ -186,6 +186,37 @@ export default function ConversationsScreen() {
   const [filter, setFilter] = useState<ListFilter>('all');
   const [search, setSearch] = useState('');
   const frame = useRef<HTMLUListElement | null>(null);
+
+  /**
+   * LA RÉSERVE DE LA BARRE DE RECHERCHE (#6220) — MESURÉE, jamais supposée,
+   * miroir de `useThreadInsets`/`bottomEdgeRef` (`lib/view/use-thread-insets.ts`)
+   * qui réserve la même façon la place du composeur sous le fil.
+   *
+   * La barre flotte SUR le scrollport (`absolute inset-x-0 bottom-0`) plutôt
+   * que de lui disputer sa hauteur en flux : posée en flux, elle réduisait la
+   * boîte de `#contenu` d'autant, et la DERNIÈRE rangée qui tombait pile sur
+   * cette frontière avait son centre — et celui de son bouton « Actions de
+   * conversation » — VOLÉ par cette même barre (`elementFromPoint`), sans
+   * qu'aucun défilement ne puisse jamais l'en sortir : la frontière de
+   * défilement ÉTAIT la barre elle-même. `#contenu` réserve donc sa hauteur en
+   * `padding-block-end`, exactement la doctrine du rail de stories pour ses
+   * boutons flottants (`story-rail.tsx`, `RAIL_ACTIONS_WIDTH`) : le contenu ne
+   * s'arrête jamais SOUS un flotteur, il lui laisse sa place.
+   */
+  const [searchBarHeight, setSearchBarHeight] = useState(0);
+  const observedSearchBar = useRef<ResizeObserver | null>(null);
+  const searchBarRef = useCallback((node: HTMLDivElement | null) => {
+    observedSearchBar.current?.disconnect();
+    observedSearchBar.current = null;
+    if (node === null) {
+      setSearchBarHeight(0);
+      return;
+    }
+    const observer = new ResizeObserver(() => setSearchBarHeight(node.offsetHeight));
+    observer.observe(node);
+    observedSearchBar.current = observer;
+    setSearchBarHeight(node.offsetHeight);
+  }, []);
 
   /**
    * **LA BANDE ÉPINGLÉE PREND LA PLACE DU TITRE QUAND LE GRAND RAIL EST
@@ -417,7 +448,7 @@ export default function ConversationsScreen() {
            mesure) et `useScene`/`useOutOfView` ne voient aucun changement de
            géométrie. La loi porte les DEUX régimes — doigt posé sans
            transition, retour animé — voir son doc-comment. */
-        style={pullTransform(pull.phase, pull.offsetPx)}
+        style={{ paddingBottom: searchBarHeight, ...pullTransform(pull.phase, pull.offsetPx) }}
         {...(loading ? { 'aria-busy': true, 'aria-label': 'Chargement des conversations' } : {})}
       >
         {/*
@@ -693,8 +724,16 @@ export default function ConversationsScreen() {
         )}
       </ul>
 
-      {/* La barre de recherche EN BAS — a portee du pouce (cf. doc-comment). */}
-      <div className="shrink-0 px-4 pt-2 pb-safe">
+      {/*
+        La barre de recherche EN BAS — a portee du pouce (cf. doc-comment).
+        FLOTTANTE (#6220) : `absolute inset-x-0 bottom-0` la sort du flux
+        plutôt que de lui laisser réduire la boîte de `#contenu` — c'est cette
+        réduction qui volait, pile à sa frontière, le centre de la dernière
+        rangée visible et de son bouton d'actions. `#contenu` réserve sa
+        hauteur MESURÉE en `padding-block-end` (voir `searchBarRef` ci-dessus)
+        : le contenu s'arrête toujours AU-DESSUS d'elle, jamais dessous.
+      */}
+      <div ref={searchBarRef} data-search-bar className="absolute inset-x-0 bottom-0 z-10 px-4 pt-2 pb-safe">
         <div
           className="flex items-center gap-3 px-4 py-3 backdrop-blur-xl"
           style={{

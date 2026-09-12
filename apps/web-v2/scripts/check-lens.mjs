@@ -523,20 +523,27 @@ await stickyContext.close();
 
 // ------------------------------------------- rythme vertical vs. barre de recherche
 /**
- * LA JONCTION AJOUTÉE PAR CHAQUE EN-TÊTE (#5694, correction défaut 3 — revue
- * défaut 2) NE PEUT PAS DÉPLACER LA BARRE DE RECHERCHE. `check-lens.mjs`
- * mesure déjà que la MISE EN PAGE des rangées ne bouge jamais au défilement
- * (témoin 1) ; celui-ci mesure la question SŒUR posée en revue — la
- * hauteur AJOUTÉE par les sections (stickers + jonctions, #5694 écart 6)
- * pousse-t-elle la barre de recherche, ou la dernière rangée sous elle ?
+ * LA BARRE DE RECHERCHE EST FLOTTANTE, PAS UNE FRONTIÈRE DE DÉFILEMENT
+ * (#6220, révise l'invariant posé par #5694). Elle vivait comme un FRÈRE
+ * `shrink-0` de `<div id="contenu">` dans la colonne flex : le scrollport ne
+ * pouvait alors ni la recouvrir ni être recouvert par elle — structurellement
+ * vrai, et c'est ce que ce témoin mesurait. Mais cette même frontière ÉTAIT
+ * le bord de clip du scrollport : la rangée qui tombait pile dessus avait son
+ * centre — et celui de son bouton d'actions — VOLÉ par la barre elle-même
+ * (`elementFromPoint`), sans qu'aucun défilement supplémentaire ne puisse
+ * jamais l'en sortir, puisque la frontière DE DÉFILEMENT ÉTAIT la barre.
  *
- * Structurellement NON : `<div id="contenu">` (`flex-1 overflow-y-auto`) et
- * la barre (`shrink-0`) sont des FRÈRES d'une colonne flex de hauteur FIXE
- * (`h-dvh`) — la hauteur de CONTENU de la liste, quelle qu'elle soit, est
- * bornée par `flex-1` et défile en interne ; elle ne peut redimensionner un
- * frère `shrink-0`. Mesuré ici plutôt qu'assumé : un futur qui romprait
- * cette garantie (ex. `overflow: visible`, un frère qui redevient `flex:
- * auto`) romprait ce témoin, jamais seulement une capture manuelle.
+ * `#6220` inverse la géographie, comme le rail de stories réserve sa
+ * gouttière pour ses propres boutons flottants (`story-rail.tsx`,
+ * `RAIL_ACTIONS_WIDTH`) : la barre flotte désormais SUR le scrollport
+ * (`absolute inset-x-0 bottom-0`, `routes/conversations.tsx`), qui reçoit
+ * TOUTE la hauteur disponible et réserve la place de la barre en
+ * `padding-block-end` — MESURÉE (`searchBarRef`), jamais supposée. Ce que ce
+ * témoin garde n'est donc plus « jamais de recouvrement » (une barre
+ * flottante recouvre par nature ce qui n'a pas encore défilé au-dessus
+ * d'elle — c'est attendu, et réversible d'un geste) mais l'invariant qui
+ * compte réellement : au bord RÉEL du défilement — là où plus aucun geste ne
+ * peut rien révéler de plus — aucune rangée ne reste bloquée SOUS elle.
  */
 const layoutContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const layoutPage = await layoutContext.newPage();
@@ -544,38 +551,60 @@ await layoutPage.goto(`${BASE}/`, { waitUntil: 'load' });
 await layoutPage.waitForSelector('[data-row]');
 await layoutPage.waitForTimeout(200);
 
-const layoutSweep = await layoutPage.evaluate(async () => {
+const searchBarMetrics = await layoutPage.evaluate(() => {
   const scrollport = document.getElementById('contenu');
-  const searchBar = document.querySelector('input[type="search"]')?.closest('div.shrink-0');
-  if (scrollport === null || searchBar === null || searchBar === undefined) return null;
-  const settle = () => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
-  const searchTop = searchBar.getBoundingClientRect().top;
-  const readings = [];
-  for (const top of [0, scrollport.scrollHeight]) {
-    scrollport.scrollTo({ top });
-    await settle();
-    const scrollportBottom = scrollport.getBoundingClientRect().bottom;
-    const probeY = Math.round((scrollportBottom + searchTop) / 2);
-    const overRow = document
-      .elementFromPoint(Math.round(scrollport.getBoundingClientRect().left + scrollport.clientWidth / 2), probeY)
-      ?.closest('[data-row]');
-    readings.push({
-      top,
-      scrollportBottom,
-      searchTop,
-      rowUnderSearch: overRow?.getAttribute('data-row') ?? null,
-    });
-  }
-  return { searchTop, readings };
+  const searchBar = document.querySelector('[data-search-bar]');
+  if (scrollport === null || searchBar === null) return null;
+  return {
+    searchBarHeight: searchBar.getBoundingClientRect().height,
+    padBottom: parseFloat(getComputedStyle(scrollport).paddingBottom) || 0,
+  };
 });
-constate(layoutSweep !== null, "la barre de recherche ou le scrollport sont introuvables — impossible de mesurer leur jonction");
+/* Le bord RÉEL du défilement — un `wheel` RÉEL, jamais un `scrollTop`
+   programmé assigné ou passé à `scrollTo` : les deux se sont mesurés
+   instables ici (une valeur inférieure au maximum, reprise avant même la
+   lecture suivante) — le même geste que #5648 impose déjà pour armer une
+   scène, pour la même raison : seul un défilement REÇU COMME UNE INTENTION
+   vaut le geste d'un doigt (`check-list-actions.mjs`, section #6220). */
+await layoutPage.hover('#contenu');
+for (let i = 0; i < 40; i += 1) {
+  await layoutPage.mouse.wheel(0, 400);
+  await layoutPage.waitForTimeout(30);
+}
+await layoutPage.waitForTimeout(400);
+
+const layoutSweep = await layoutPage.evaluate((metrics) => {
+  const scrollport = document.getElementById('contenu');
+  const searchBar = document.querySelector('[data-search-bar]');
+  if (scrollport === null || searchBar === null || metrics === null) return null;
+  const { searchBarHeight, padBottom } = metrics;
+  const searchTop = searchBar.getBoundingClientRect().top;
+  const scrollportBottom = scrollport.getBoundingClientRect().bottom;
+  const probeY = Math.round((searchTop + scrollportBottom) / 2);
+  const overRow = document
+    .elementFromPoint(Math.round(scrollport.getBoundingClientRect().left + scrollport.clientWidth / 2), probeY)
+    ?.closest('[data-row]');
+  return {
+    searchBarHeight,
+    padBottom,
+    searchTop,
+    scrollportBottom,
+    atMax: scrollport.scrollTop >= scrollport.scrollHeight - scrollport.clientHeight - 1,
+    rowUnderSearch: overRow?.getAttribute('data-row') ?? null,
+  };
+}, searchBarMetrics);
+constate(layoutSweep !== null, 'la barre de recherche (`[data-search-bar]`) ou le scrollport sont introuvables');
 constate(
-  layoutSweep !== null && layoutSweep.readings.every((r) => r.scrollportBottom <= r.searchTop + 1),
-  `le scrollport de la liste déborde sur la barre de recherche — ${JSON.stringify(layoutSweep?.readings)}`,
+  layoutSweep !== null && layoutSweep.atMax,
+  `le défilement RÉEL (wheel) atteint bien le bord RÉEL du scrollport — ${JSON.stringify(layoutSweep)}`,
 );
 constate(
-  layoutSweep !== null && layoutSweep.readings.every((r) => r.rowUnderSearch === null),
-  `une rangée est peinte SOUS la barre de recherche (zone entre le bas du scrollport et le haut de la barre) — ${JSON.stringify(layoutSweep?.readings)}`,
+  layoutSweep !== null && layoutSweep.padBottom >= layoutSweep.searchBarHeight - 1,
+  `le scrollport réserve AU MOINS la hauteur RENDUE de la barre en padding-block-end — ${JSON.stringify(layoutSweep)}`,
+);
+constate(
+  layoutSweep !== null && layoutSweep.rowUnderSearch === null,
+  `au bord RÉEL du défilement, une rangée reste peinte SOUS la barre de recherche (zone entre le bas du scrollport et le haut de la barre) — ${JSON.stringify(layoutSweep)}`,
 );
 
 await layoutPage.close();
