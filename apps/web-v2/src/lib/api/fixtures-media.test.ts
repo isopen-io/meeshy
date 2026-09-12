@@ -6,12 +6,14 @@
 import { expect, test } from 'bun:test';
 
 import {
+  MEDIA_BLURRED_WITNESS_ID,
   MEDIA_BROKEN_IMAGE_WITNESS_ID,
   MEDIA_BROKEN_VOICE_WITNESS_ID,
   MEDIA_CONVERSATION,
   MEDIA_CONVERSATION_ID,
   MEDIA_IMAGE_WITNESS_ID,
   MEDIA_NULL_METADATA_WITNESS_ID,
+  MEDIA_VIEW_ONCE_WITNESS_ID,
   MEDIA_VOICE_DE_WITNESS_ID,
   MEDIA_VOICE_EN_WITNESS_ID,
   wavDataUri,
@@ -19,6 +21,8 @@ import {
 import { decodeMessages } from './decode';
 import { electDescription } from '../view/media';
 import { messagesOf } from './fixtures';
+import { dayAt } from './fixtures-base';
+import { protectionOf } from '@/lib/reading-mode/protection';
 
 const attachmentOf = (id: string) => {
   const message = messagesOf(MEDIA_CONVERSATION_ID).find((m) => m.id === id);
@@ -111,14 +115,45 @@ test('wavDataUri : deux tons différents rendent deux URIs différentes', () => 
   expect(wavDataUri({ seconds: 1, tone: 440 })).not.toBe(wavDataUri({ seconds: 1, tone: 523 }));
 });
 
-test('les sept messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique', () => {
+test('les neuf messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique', () => {
   const messages = messagesOf(MEDIA_CONVERSATION_ID);
-  expect(messages).toHaveLength(7);
+  expect(messages).toHaveLength(9);
   const times = messages.map((m) => new Date(m.createdAt).getTime());
   expect(times).toEqual([...times].sort((a, b) => a - b));
   expect(messages.some((m) => m.id === MEDIA_BROKEN_IMAGE_WITNESS_ID)).toBe(true);
   expect(messages.some((m) => m.id === MEDIA_BROKEN_VOICE_WITNESS_ID)).toBe(true);
   expect(messages.some((m) => m.id === MEDIA_NULL_METADATA_WITNESS_ID)).toBe(true);
+  expect(messages.some((m) => m.id === MEDIA_BLURRED_WITNESS_ID)).toBe(true);
+  expect(messages.some((m) => m.id === MEDIA_VIEW_ONCE_WITNESS_ID)).toBe(true);
+});
+
+/**
+ * LES DEUX MÉDIAS PROTÉGÉS (#6184) — ce témoin ne garde pas le RENDU (c'est le
+ * travail du gate navigateur, `scripts/lib/check-media.mjs`), il garde la
+ * FIXTURE : que les deux formes de la loi « l'un OU l'autre » soient présentes,
+ * et qu'elles rendent bien `veiled` et non `burned`. Sans lui, un lot pourrait
+ * poser `viewOnceCount: 1` par inadvertance — la fixture deviendrait un
+ * tombstone, le gate navigateur resterait VERT, et il ne mesurerait plus rien
+ * de ce pour quoi il a été écrit.
+ */
+test('les deux médias protégés sont VOILÉS, l’un par le flou et l’autre par la vue unique NON consommée', () => {
+  const maintenant = new Date(dayAt(0, 12, 0)).getTime();
+  const floute = messagesOf(MEDIA_CONVERSATION_ID).find((m) => m.id === MEDIA_BLURRED_WITNESS_ID)!;
+  const vueUnique = messagesOf(MEDIA_CONVERSATION_ID).find((m) => m.id === MEDIA_VIEW_ONCE_WITNESS_ID)!;
+
+  expect(floute.isBlurred).toBe(true);
+  expect(floute.isViewOnce).toBe(false);
+  expect(protectionOf(floute, maintenant)).toBe('veiled');
+
+  expect(vueUnique.isViewOnce).toBe(true);
+  expect(vueUnique.viewOnceCount).toBe(0);
+  expect(vueUnique.isBlurred).toBe(false);
+  expect(protectionOf(vueUnique, maintenant)).toBe('veiled');
+
+  // Et chacun porte BIEN une pièce jointe image : un témoin de rétention posé
+  // sur un message sans média serait vert par absence de sujet.
+  expect(attachmentOf(MEDIA_BLURRED_WITNESS_ID).mimeType).toBe('image/png');
+  expect(attachmentOf(MEDIA_VIEW_ONCE_WITNESS_ID).mimeType).toBe('image/png');
 });
 
 test('MEDIA_BROKEN_IMAGE_WITNESS_ID : aucune dimension déclarée (ratio de repli 300/240)', () => {

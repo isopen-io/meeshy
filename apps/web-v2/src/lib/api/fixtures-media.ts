@@ -138,6 +138,64 @@ const imageAttachment = (id: string, createdAt: Date): Attachment => ({
   },
 });
 
+/**
+ * media-8 et media-9 — LES DEUX MÉDIAS PROTÉGÉS (#6184, dimension 1).
+ *
+ * Le cycle 125 de `CLAUDE.md` a coûté « une photo à VUE UNIQUE affichée ENTIÈRE
+ * sur l'écran verrouillé sous une bannière disant 👁️ 🖼️ » : la garde retenait
+ * le TEXTE, et le fichier partait à côté. Côté web-v2 la propriété TIENT — les
+ * pièces jointes voyagent dans les `children` de `ProtectedContent`, que la
+ * phase voilée ne rend jamais — mais **rien ne l'attestait** : aucun message du
+ * corpus n'était protégé, donc aucun gate ne pouvait rougir si un lot sortait
+ * `<Attachments>` de `contentBlock`.
+ *
+ * **DEUX messages, parce que la loi dit « l'un OU l'autre »** (`protectionOf`,
+ * `lib/reading-mode/protection.ts:63` — forme SDK `declaredProtection`) : un
+ * témoin posé sur `isBlurred` seul laisserait régresser la moitié VUE UNIQUE,
+ * qui est précisément celle du cycle 125 (leçon 261 — un témoin de rang ne
+ * s'écrit pas sur le rang qui rendrait le même verdict par accident).
+ *
+ * **Placés AVANT `media-1` dans l'horloge** (8:50 et 8:55) pour deux raisons
+ * mesurées, pas par goût : `MEDIA_CONVERSATION.lastMessage` reste `media7` —
+ * l'aperçu de liste et son Prisme ne bougent pas d'un octet — et le cadrage des
+ * captures de référence, ancré sur `media-1-a1` en `block: 'start'`
+ * (`scripts/capture.mjs:283`), laisse ces deux bulles HORS champ.
+ */
+const media8CreatedAt = dayAt(0, 8, 50);
+export const MEDIA_BLURRED_WITNESS_ID = 'media-8';
+const media8 = mediaMessage({
+  id: MEDIA_BLURRED_WITNESS_ID,
+  senderId: 'u-kwame',
+  sender: kwame,
+  content: '',
+  originalLanguage: 'fr',
+  messageType: 'image',
+  translations: [],
+  isBlurred: true,
+  createdAt: media8CreatedAt,
+  attachments: [imageAttachment(MEDIA_BLURRED_WITNESS_ID, media8CreatedAt)],
+});
+
+/** `isViewOnce` avec `viewOnceCount: 0` ⇒ `veiled`, jamais `burned` : la vue
+ * unique n'a PAS encore été consommée, donc c'est bien la phase où le média ne
+ * doit pas atteindre le DOM. Consommée (`viewOnceCount > 0`), elle rendrait un
+ * tombstone — un autre verdict, qui ne mesure pas la même chose. */
+const media9CreatedAt = dayAt(0, 8, 55);
+export const MEDIA_VIEW_ONCE_WITNESS_ID = 'media-9';
+const media9 = mediaMessage({
+  id: MEDIA_VIEW_ONCE_WITNESS_ID,
+  senderId: 'u-amina',
+  sender: amina,
+  content: '',
+  originalLanguage: 'fr',
+  messageType: 'image',
+  translations: [],
+  isViewOnce: true,
+  viewOnceCount: 0,
+  createdAt: media9CreatedAt,
+  attachments: [imageAttachment(MEDIA_VIEW_ONCE_WITNESS_ID, media9CreatedAt)],
+});
+
 // ===== media-1 — l'IMAGE, alt traduit en et de =====
 export const MEDIA_IMAGE_WITNESS_ID = 'media-1';
 const media1CreatedAt = dayAt(0, 9, 0);
@@ -404,7 +462,7 @@ const media7 = mediaMessage({
   ],
 } as unknown as Parameters<typeof mediaMessage>[0]);
 
-export const MEDIA_MESSAGES: readonly Message[] = [media1, media2, media3, media4, media5, media6, media7];
+export const MEDIA_MESSAGES: readonly Message[] = [media8, media9, media1, media2, media3, media4, media5, media6, media7];
 
 export const MEDIA_CONVERSATION: Conversation = {
   ...conversationDefaults,

@@ -594,6 +594,125 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
     `[${skin}/${scheme}] CONTRÔLE : retirer la réservation DÉPLACE la rangée suivante (${offsetPainted}px → ${offsetWithoutReservation}px) — sans quoi le témoin ci-dessus ne prouverait rien`,
   );
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // (n) LA PIÈCE JOINTE D'UN MESSAGE PROTÉGÉ N'ATTEINT PAS LE DOM (#6184)
+  //
+  //     Le cycle 125 de `CLAUDE.md` a coûté « une photo à VUE UNIQUE affichée
+  //     ENTIÈRE sur l'écran verrouillé sous une bannière disant 👁️ 🖼️ » : les
+  //     quatre gardes retenaient du TEXTE, et le fichier partait à côté, dans
+  //     l'objet voisin. Côté web-v2 la propriété TIENT — `<Attachments>` vit
+  //     dans `contentBlock`, que `bubble.tsx:315` enveloppe dans
+  //     `ProtectedContent`, qui ne rend `children` ni en `veiled`, ni en
+  //     `burned`, ni en `deleted`. Mais RIEN ne l'attestait : aucun message du
+  //     corpus n'était protégé.
+  //
+  //     Ce que le témoin garde n'est donc pas une garde À ÉCRIRE, c'est une
+  //     garde à ne pas PERDRE : un lot qui sortirait `<Attachments>` de
+  //     `contentBlock` — ce qu'une extraction de fichier hors budget rend
+  //     tentant — la retirerait sans qu'aucun gate ne tombe.
+  //
+  //     L'assertion porte sur le DOM (`img`, `audio`, `source`), jamais sur une
+  //     classe CSS : un `filter: blur()` n'est pas une rétention — les octets
+  //     sont dans la page, une capture ou un `devtools` les rend, et c'est
+  //     exactement ce que le cycle 125 dénonce.
+  //
+  //     CE QUE CE TÉMOIN NE COUVRE PAS, et c'est mesuré : la protection
+  //     déclarée sur la PIÈCE elle-même (`Attachment.isViewOnce` /
+  //     `isBlurred`, la jumelle du cycle 125) n'est lue par AUCUNE peau web —
+  //     sonde : `url_en_clair=true img=true voile=false`. iOS la lit
+  //     (`FocalAttachmentBlock.swift:130`). Suivi : #6189.
+  const protegesAttendus = [
+    ['media-8', 'floutée (isBlurred)'],
+    ['media-9', 'à vue unique NON consommée (isViewOnce, viewOnceCount 0)'],
+  ];
+
+  //     LE FIL EST VIRTUALISÉ et s'ouvre EN BAS (`pin-to-bottom.ts`,
+  //     `thread.tsx:385`) : les deux rangées protégées vivent en TÊTE du corpus
+  //     (8:50 et 8:55, avant `media-1`) et ne sont donc PAS montées à
+  //     l'ouverture. Un `waitFor({ state: 'attached' })` posé sans remonter
+  //     rougirait par EXPIRATION, et le rouge dirait « la pièce jointe est
+  //     retenue » alors qu'il ne dirait que « la rangée n'est pas rendue ».
+  //     On remonte donc explicitement, puis on attend que le virtualiseur ait
+  //     monté la rangée — attendre la CONDITION, jamais un budget (leçon 590).
+  //     La remontée est RÉPÉTÉE tant que les rangées ne sont pas là : le
+  //     virtualiseur CORRIGE `scrollTop` quand les mesures des rangées voisines
+  //     arrivent (`check-thread-virtualization.mjs:29`), donc un seul
+  //     `scrollTop = 0` peut être défait sous les pieds du gate.
+  const scroller = mediaPage.locator('main#contenu');
+  const idsAttendus = [...protegesAttendus.map(([id]) => id), 'media-1'];
+  const montees = () =>
+    mediaPage.evaluate(
+      (ids) => ids.filter((id) => document.querySelector(`[data-message="${id}"]`) !== null).length,
+      idsAttendus,
+    );
+  const ESSAIS_REMONTEE = 40;
+  let presentes = 0;
+  for (let essai = 1; essai <= ESSAIS_REMONTEE; essai += 1) {
+    presentes = await montees();
+    if (presentes === idsAttendus.length) break;
+    await scroller.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    await mediaPage.waitForTimeout(150);
+  }
+  expect(
+    presentes === idsAttendus.length,
+    `[${skin}/${scheme}] les ${idsAttendus.length} rangées de tête sont montées après remontée ` +
+      `(${presentes}/${idsAttendus.length}) — sans elles, un « aucune <img> » ne mesurerait qu'une virtualisation`,
+  );
+
+  for (const [id, forme] of protegesAttendus) {
+    const rangee = rowOf(id);
+    await rangee.waitFor({ state: 'attached' });
+    const medias = await rangee.evaluate((el) => ({
+      img: el.querySelectorAll('img').length,
+      audio: el.querySelectorAll('audio').length,
+      source: el.querySelectorAll('source').length,
+      video: el.querySelectorAll('video').length,
+    }));
+    const total = medias.img + medias.audio + medias.source + medias.video;
+    expect(
+      total === 0,
+      `[${skin}/${scheme}] la pièce jointe du message ${id}, ${forme}, n'atteint PAS le DOM ` +
+        `(img=${medias.img} audio=${medias.audio} source=${medias.source} video=${medias.video})`,
+    );
+  }
+
+  //     LA CONTRE-ÉPREUVE, sans laquelle le témoin serait vert par immobilité :
+  //     le MÊME média, sur un message NON protégé, est bien rendu. Sans elle, un
+  //     fil qui ne rendrait plus AUCUNE image ferait passer les deux assertions
+  //     ci-dessus (leçon 261 — un témoin ne s'écrit pas sur le rang qui rendrait
+  //     le même verdict par accident).
+  const imagesDuNonProtege = await rowOf('media-1').evaluate((el) => el.querySelectorAll('img').length);
+  expect(
+    imagesDuNonProtege > 0,
+    `[${skin}/${scheme}] CONTRÔLE : le MÊME média sur un message NON protégé rend bien son <img> ` +
+      `(${imagesDuNonProtege}) — sans quoi les deux témoins ci-dessus seraient verts par absence de sujet`,
+  );
+
+  //     ET LE SECOND CONTRÔLE, celui qui distingue « RETENU » de « PAS ENCORE
+  //     ARRIVÉ » : une rangée absente, ou montée mais vide, rendrait zéro `img`
+  //     elle aussi, et les deux témoins ci-dessus passeraient sur une page
+  //     blanche. La rangée doit donc porter la marque du voile —
+  //     `data-protected="hidden"`, posée par `protected-content.tsx:164`, dont
+  //     ce fichier est l'unique producteur pour la phase voilée.
+  //
+  //     La marque, jamais le TEXTE : le substitut est dérivé de la seule
+  //     LONGUEUR du contenu (`surrogateOf`), et ces deux messages ont un contenu
+  //     VIDE (ce sont des images) — un contrôle écrit sur le texte serait vert
+  //     ici pour une raison qui n'a rien à voir avec la protection.
+  for (const [id, forme] of protegesAttendus) {
+    const marque = await rowOf(id).evaluate((el) => {
+      const porteur = el.matches('[data-protected]') ? el : el.querySelector('[data-protected]');
+      return porteur === null ? null : porteur.getAttribute('data-protected');
+    });
+    expect(
+      marque === 'hidden',
+      `[${skin}/${scheme}] CONTRÔLE : la rangée ${id} (${forme}) est MONTÉE et se déclare voilée ` +
+        `(data-protected=${marque ?? 'absent'}) — sinon l'absence d'<img> ne mesurerait qu'une rangée manquante`,
+    );
+  }
+
   await mediaPage.close();
   await mediaContext.close();
 }

@@ -87,6 +87,64 @@ describe('FocalRow — protection (D-23, #5676)', () => {
     expect(html).not.toContain('langue d’origine');
   });
 
+  /**
+   * LA PIÈCE JOINTE D'UN MESSAGE PROTÉGÉ N'ATTEINT PAS LE DOM (#6184) — jumelle
+   * du témoin de `bubble.test.tsx`, la loi ayant DEUX hôtes et `protection.ts`
+   * un seul domicile. Le cas flouté existait déjà au-dessus, mais toujours avec
+   * du TEXTE : c'est le trou du cycle 125 de `CLAUDE.md`, où les gardes
+   * retenaient une CHAÎNE pendant que le fichier partait à côté.
+   */
+  const MEDIA_MESSAGE: Message = {
+    ...BASE_MESSAGE,
+    content: '',
+    messageType: 'image',
+    translations: [],
+    attachments: [
+      {
+        id: 'a-secrete',
+        messageId: BASE_MESSAGE.id,
+        fileName: 'plan.png',
+        originalName: 'plan.png',
+        mimeType: 'image/png',
+        fileSize: 96,
+        fileUrl: 'data:image/png;base64,SECRET-PIXEL',
+        uploadedBy: 'u-amina',
+        createdAt: '2026-09-08T09:00:00.000Z',
+        isViewOnce: false,
+        viewOnceCount: 0,
+        isBlurred: false,
+        viewedCount: 0,
+        downloadedCount: 0,
+        consumedCount: 0,
+        isEncrypted: false,
+        isForwarded: false,
+        isAnonymous: false,
+        capturedInApp: false,
+      },
+    ],
+  } as unknown as Message;
+
+  for (const [forme, protection] of [
+    ['floutée', { isBlurred: true }],
+    ['à vue unique NON consommée', { isViewOnce: true, viewOnceCount: 0 }],
+  ] as const) {
+    test(`pièce jointe ${forme} : ni <img> ni l’URL du fichier dans le HTML, et la marque du voile est posée`, () => {
+      const html = render({ ...MEDIA_MESSAGE, ...protection });
+      expect(html).not.toContain('SECRET-PIXEL');
+      expect(html).not.toContain('<img');
+      expect(html).not.toContain('<audio');
+      expect(html).not.toContain('data-attachment');
+      expect(html).toContain('data-protected="hidden"');
+    });
+  }
+
+  test('CONTRÔLE : le MÊME média NON protégé rend bien son <img> et l’URL du fichier', () => {
+    const html = render(MEDIA_MESSAGE);
+    expect(html).toContain('SECRET-PIXEL');
+    expect(html).toContain('<img');
+    expect(html).not.toContain('data-protected="hidden"');
+  });
+
   test('traduit, tail, non voilé ⇒ au moins un drapeau (aria-pressed) ; le MÊME message tail:false ⇒ aucun (#3919)', () => {
     const translated: Message = {
       ...BASE_MESSAGE,

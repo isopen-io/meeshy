@@ -90,6 +90,75 @@ describe('Bubble — protection (D-23, #5676)', () => {
     expect(html).not.toContain('langue d’origine');
   });
 
+  /**
+   * LA PIÈCE JOINTE D'UN MESSAGE PROTÉGÉ N'ATTEINT PAS LE DOM (#6184) — le cas
+   * flouté existait déjà juste au-dessus, mais TOUJOURS avec du TEXTE. C'est
+   * précisément le trou du cycle 125 de `CLAUDE.md` : les quatre gardes
+   * retenaient une CHAÎNE, et le fichier partait à côté, dans l'objet voisin.
+   * Une garde vérifiée sur du texte ne dit rien de ce qui TRANSPORTE.
+   *
+   * Le témoin porte sur le MÉDIA, sur les deux formes de la loi « l'un OU
+   * l'autre » (`protectionOf:63`), et sur le balisage plutôt que sur une classe :
+   * un `filter: blur()` n'est pas une rétention — les octets seraient dans la
+   * page. Sa jumelle vit dans `focal-row.test.tsx`, la loi ayant deux hôtes.
+   */
+  const MEDIA_MESSAGE: Message = {
+    ...BASE_MESSAGE,
+    content: '',
+    messageType: 'image',
+    translations: [],
+    attachments: [
+      {
+        id: 'a-secrete',
+        messageId: BASE_MESSAGE.id,
+        fileName: 'plan.png',
+        originalName: 'plan.png',
+        mimeType: 'image/png',
+        fileSize: 96,
+        fileUrl: 'data:image/png;base64,SECRET-PIXEL',
+        uploadedBy: 'u-amina',
+        createdAt: '2026-09-08T09:00:00.000Z',
+        isViewOnce: false,
+        viewOnceCount: 0,
+        isBlurred: false,
+        viewedCount: 0,
+        downloadedCount: 0,
+        consumedCount: 0,
+        isEncrypted: false,
+        isForwarded: false,
+        isAnonymous: false,
+        capturedInApp: false,
+      },
+    ],
+  } as unknown as Message;
+
+  for (const [forme, protection] of [
+    ['floutée', { isBlurred: true }],
+    ['à vue unique NON consommée', { isViewOnce: true, viewOnceCount: 0 }],
+  ] as const) {
+    test(`pièce jointe ${forme} : ni <img> ni l’URL du fichier dans le HTML, et la marque du voile est posée`, () => {
+      const html = render({ ...MEDIA_MESSAGE, ...protection });
+      expect(html).not.toContain('SECRET-PIXEL');
+      expect(html).not.toContain('<img');
+      expect(html).not.toContain('<audio');
+      expect(html).not.toContain('data-attachment');
+      expect(html).toContain('data-protected="hidden"');
+    });
+  }
+
+  /**
+   * LA CONTRE-ÉPREUVE — le MÊME média, non protégé, est bien rendu. Sans elle,
+   * un `Bubble` qui cesserait de rendre TOUTE pièce jointe ferait passer les
+   * deux témoins ci-dessus (leçon 261 : un témoin ne s'écrit pas sur le rang qui
+   * rendrait le même verdict par accident).
+   */
+  test('CONTRÔLE : le MÊME média NON protégé rend bien son <img> et l’URL du fichier', () => {
+    const html = render(MEDIA_MESSAGE);
+    expect(html).toContain('SECRET-PIXEL');
+    expect(html).toContain('<img');
+    expect(html).not.toContain('data-protected="hidden"');
+  });
+
   test('traduit, tail, non voilé ⇒ au moins un drapeau (aria-pressed) ; le MÊME message tail:false ⇒ aucun (#3919)', () => {
     const translated: Message = {
       ...BASE_MESSAGE,
