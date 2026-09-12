@@ -104,10 +104,16 @@ extension ConversationMediaGalleryView {
 struct MediaStagePausedBadge: View {
     var body: some View {
         HStack(spacing: 8) {
-            // Glyphe figé dans une capsule de chrome (doctrine 82i) — il dit
-            // l'état, le texte le nomme, et VoiceOver lit le second.
+            // Le glyphe SUIT le texte, il ne se fige pas — et la doctrine 82i
+            // ne le couvre pas : elle autorise une taille figée quand un CADRE
+            // FIXE déborderait en scalant. Ici la capsule est dimensionnée par
+            // son contenu (deux paddings autour du `HStack`), donc rien ne peut
+            // déborder ; un glyphe figé à côté d'un texte relatif se contenterait
+            // de rapetisser à vue d'œil dès que la personne monte son Dynamic
+            // Type. Les deux montent ensemble. Il dit l'état, le texte le nomme,
+            // et VoiceOver lit le second.
             Image(systemName: "pause.fill")
-                .font(.system(size: 15, weight: .bold))
+                .font(MeeshyFont.relative(15, weight: .bold))
                 .accessibilityHidden(true)
             Text(String(localized: "media.stage.paused",
                         defaultValue: "En pause",
