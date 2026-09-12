@@ -39,7 +39,7 @@
  * POINT D'ENTRÉE.
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync, rmSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -219,6 +219,87 @@ export function auditShellBundle(files, { apiBase }) {
   return violations;
 }
 
+/**
+ * Résout la version du produit depuis `package.json` (#6196) — jamais une
+ * littérale recopiée à la main dans une coque. Prend le TEXTE, pas un chemin :
+ * même discipline que `auditSyncedShellConfig`, testable sans toucher au
+ * disque.
+ */
+export function resolveShellVersion(packageJsonRaw) {
+  let parsed;
+  try {
+    parsed = JSON.parse(packageJsonRaw);
+  } catch (err) {
+    throw new Error(`package.json illisible : ${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (typeof parsed.version !== 'string' || parsed.version.trim() === '') {
+    throw new Error(
+      `package.json ne porte aucune "version" exploitable — reçu ${JSON.stringify(parsed.version ?? null)}.`,
+    );
+  }
+  return parsed.version;
+}
+
+const ANDROID_VERSION_NAME_RE = /versionName\s+"([^"]*)"/;
+
+/**
+ * Audite `android/app/build.gradle` — ferme #6196 côté Android : `versionName`
+ * doit égaler la version de `package.json`, jamais une littérale recopiée à
+ * la main (le gabarit Capacitor pose "1.0" une fois pour toutes à `cap add`).
+ */
+export function auditAndroidVersionName(gradleText, version) {
+  const match = ANDROID_VERSION_NAME_RE.exec(gradleText);
+  if (match === null) {
+    return ['aucun "versionName" trouvé dans build.gradle — le fichier a-t-il changé de forme ?'];
+  }
+  if (match[1] !== version) {
+    return [
+      `versionName="${match[1]}" ne correspond pas à la version de package.json ("${version}") — la ` +
+        'coque Android doit DÉRIVER son numéro, jamais le recopier à la main (#6196).',
+    ];
+  }
+  return [];
+}
+
+/** Réécrit `versionName` avec la version DÉRIVÉE de `package.json` (#6196). */
+export function deriveAndroidVersionName(gradleText, version) {
+  if (ANDROID_VERSION_NAME_RE.exec(gradleText) === null) {
+    throw new Error('aucun "versionName" trouvé dans build.gradle — impossible de dériver la version.');
+  }
+  return gradleText.replace(ANDROID_VERSION_NAME_RE, `versionName "${version}"`);
+}
+
+const IOS_MARKETING_VERSION_RE = /MARKETING_VERSION = [^;]+;/g;
+
+/**
+ * Audite `project.pbxproj` — ferme #6196 côté iOS : `MARKETING_VERSION` doit
+ * égaler la version de `package.json` sur CHAQUE configuration (Debug ET
+ * Release), jamais une littérale recopiée à la main.
+ */
+export function auditIosMarketingVersion(pbxprojText, version) {
+  const matches = [...pbxprojText.matchAll(IOS_MARKETING_VERSION_RE)];
+  if (matches.length === 0) {
+    return ['aucun "MARKETING_VERSION" trouvé dans project.pbxproj — le fichier a-t-il changé de forme ?'];
+  }
+  const expected = `MARKETING_VERSION = ${version};`;
+  return matches
+    .filter((m) => m[0] !== expected)
+    .map(
+      (m) =>
+        `"${m[0]}" ne correspond pas à la version de package.json ("${version}") — la coque iOS doit ` +
+        'DÉRIVER son numéro, jamais le recopier à la main (#6196).',
+    );
+}
+
+/** Réécrit CHAQUE `MARKETING_VERSION` avec la version DÉRIVÉE de `package.json` (#6196). */
+export function deriveIosMarketingVersion(pbxprojText, version) {
+  const matches = [...pbxprojText.matchAll(IOS_MARKETING_VERSION_RE)];
+  if (matches.length === 0) {
+    throw new Error('aucun "MARKETING_VERSION" trouvé dans project.pbxproj — impossible de dériver la version.');
+  }
+  return pbxprojText.replace(IOS_MARKETING_VERSION_RE, `MARKETING_VERSION = ${version};`);
+}
+
 // ---------------------------------------------------------------------------
 // Le pilote — non testé en bun (spawnSync réel, gradle/xcodebuild) ; les
 // fonctions pures ci-dessus le sont, via `build-shells.test.ts`.
@@ -308,6 +389,21 @@ async function main() {
     process.exit(1);
   }
   console.log('  audit des coques synchronisées : ok');
+
+  // 4.5. Dérivation du numéro de version (#6196) — les deux coques ne
+  //      portent JAMAIS "1.0" en littéral, elles LISENT package.json à
+  //      chaque construction (source unique, jamais recopiée à la main).
+  const shellVersion = resolveShellVersion(readFileSync(join(APP, 'package.json'), 'utf8'));
+  console.log(`  version dérivée de package.json : ${shellVersion}`);
+
+  if (target !== 'ios') {
+    const gradlePath = join(APP, 'android/app/build.gradle');
+    writeFileSync(gradlePath, deriveAndroidVersionName(readFileSync(gradlePath, 'utf8'), shellVersion));
+  }
+  if (target !== 'android') {
+    const pbxprojPath = join(APP, 'ios/App/App.xcodeproj/project.pbxproj');
+    writeFileSync(pbxprojPath, deriveIosMarketingVersion(readFileSync(pbxprojPath, 'utf8'), shellVersion));
+  }
 
   if (noNative) {
     console.log('\n  --no-native : construction native sautée.\n');
