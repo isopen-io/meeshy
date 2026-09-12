@@ -279,7 +279,30 @@ extension MeeshyComposerHost {
     /// Une porte du rail délègue au chemin d'ingestion EXISTANT — le rail est
     /// une autre GÉOGRAPHIE, pas un second pipeline. Y écrire un chemin neuf
     /// ferait diverger la porte de la rangée qui fait déjà la même chose.
+    /// **Rendre le clavier, où qu'il soit accroché** (#6132).
+    ///
+    /// Le premier répondant peut être le champ de la légende, celui du corps du
+    /// post ou un éditeur inline du canvas — trois propriétaires, trois états
+    /// privés. Les fermer un par un depuis ici demanderait de les connaître
+    /// tous ; renvoyer le répondant courant le fait sans en nommer aucun, et
+    /// chacun se referme ensuite par sa propre règle (le calque de description
+    /// écoute déjà la perte de focus pour se ranger).
+    func dismissTextEditing() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
+    }
+
     func handleRailDoor(_ door: ComposerRailDoor) {
+        // **Choisir un outil fait tomber le clavier** (#6132, directive porteur
+        // 2026-09-12). Une porte qui ne prend pas de texte n'a aucune raison de
+        // laisser le clavier occuper la moitié de l'écran : ses réglages y
+        // passeraient dessous, et l'auteur devrait le renvoyer lui-même avant de
+        // voir ce qu'il vient d'ouvrir.
+        //
+        // Le prédicat vit sur la PORTE (`keepsKeyboard`), pas ici : c'est elle
+        // qui sait si elle écrit, et une onzième porte héritera du bon défaut
+        // sans que ce site ait à changer.
+        if !door.keepsKeyboard { dismissTextEditing() }
         switch door {
         case .media:
             // **L'intention se pose AVEC le sélecteur, jamais avant** (#6008).
