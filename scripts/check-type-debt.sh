@@ -229,7 +229,16 @@ NC='\033[0m'
 # ait ete abaissee — il refuse qu'une marge regagnee redevienne depensable. Mais
 # une amelioration s'enregistre a sa valeur MESUREE, jamais a zero : ecrire zero
 # n'enregistre pas un progres, il affirme une fin.
-readonly WEB_BASELINE=1144
+#
+# 1144 -> 1128 le 2026-09-12 (#6203). `1b2e6057` (#6192) a fait porter
+# `createdAt`/`updatedAt` par la fabrique de test du sujet du modal admin,
+# retirant 16 erreurs sans resserrer cette valeur — le cliquet est reste rouge
+# sur `dev` depuis ce commit (« AMELIORATION NON ENREGISTREE »).
+#
+# Ancrage : CI (run 34700349484, job « Quality (bun) », tete e7c8916a — la
+# base de dev au moment du releve) et mesure locale s'accordent exactement sur
+# 1128 ; aucun fichier d'`apps/web` n'est touche par ce commit-ci.
+readonly WEB_BASELINE=1128
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #
