@@ -639,7 +639,7 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
   //     arrivent (`check-thread-virtualization.mjs:29`), donc un seul
   //     `scrollTop = 0` peut être défait sous les pieds du gate.
   const scroller = mediaPage.locator('main#contenu');
-  const idsAttendus = [...protegesAttendus.map(([id]) => id), 'media-1'];
+  const idsAttendus = [...protegesAttendus.map(([id]) => id), 'media-10', 'media-1'];
   const montees = () =>
     mediaPage.evaluate(
       (ids) => ids.filter((id) => document.querySelector(`[data-message="${id}"]`) !== null).length,
@@ -688,6 +688,35 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
     imagesDuNonProtege > 0,
     `[${skin}/${scheme}] CONTRÔLE : le MÊME média sur un message NON protégé rend bien son <img> ` +
       `(${imagesDuNonProtege}) — sans quoi les deux témoins ci-dessus seraient verts par absence de sujet`,
+  );
+
+  //     (o) LA PIÈCE DÉCLARÉE PROTÉGÉE SUR UN MESSAGE ORDINAIRE (#6189).
+  //
+  //         `media-10` n'est PAS un message protégé — `protectionOf` rend
+  //         `standard`, donc `ProtectedContent` n'est même pas monté. C'est sa
+  //         PIÈCE qui porte `isViewOnce`, et c'est la forme que le web servait
+  //         en clair avant #6189 : la JUMELLE du cycle 125, mesurée par sonde
+  //         (`url_en_clair=true img=true voile=false`) pendant qu'iOS la
+  //         retenait (`FocalAttachmentBlock.swift:130`).
+  //
+  //         Ce témoin ne doublonne pas les deux précédents : il distingue
+  //         « le web retient la PIÈCE déclarée » de « le web retient tout
+  //         MESSAGE protégé », qui était déjà vrai (#6184). Sans lui, poser la
+  //         protection sur le message dans la fixture laisserait le gate vert
+  //         en ne mesurant plus que l'autre loi.
+  const pieceMasquee = await rowOf('media-10').evaluate((el) => ({
+    img: el.querySelectorAll('img').length,
+    audio: el.querySelectorAll('audio').length,
+    substitut: el.querySelector('[data-protected-attachment="hidden"]') !== null,
+    // La rangée n'est PAS voilée au niveau message : la marque de #6184 doit
+    // être absente, sinon le témoin mesurerait la mauvaise loi.
+    voileDuMessage: el.querySelector('[data-protected]') !== null,
+  }));
+  expect(
+    pieceMasquee.img === 0 && pieceMasquee.audio === 0 && pieceMasquee.substitut && !pieceMasquee.voileDuMessage,
+    `[${skin}/${scheme}] media-10 : la PIÈCE déclarée protégée ne rend aucun média et porte son substitut, ` +
+      `sur un message qui n'est PAS voilé (img=${pieceMasquee.img} audio=${pieceMasquee.audio} ` +
+      `substitut=${pieceMasquee.substitut} voileDuMessage=${pieceMasquee.voileDuMessage})`,
   );
 
   //     ET LE SECOND CONTRÔLE, celui qui distingue « RETENU » de « PAS ENCORE

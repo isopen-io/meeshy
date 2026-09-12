@@ -196,6 +196,32 @@ const media9 = mediaMessage({
   attachments: [imageAttachment(MEDIA_VIEW_ONCE_WITNESS_ID, media9CreatedAt)],
 });
 
+/**
+ * media-10 — LA PIÈCE DÉCLARÉE PROTÉGÉE SUR UN MESSAGE ORDINAIRE (#6189).
+ *
+ * Le message n'est PAS protégé : `protectionOf` rend `standard`, donc
+ * `ProtectedContent` n'est même pas monté. C'est la PIÈCE qui porte
+ * `isViewOnce`, et c'est exactement la forme que le web servait en clair avant
+ * ce lot — la jumelle du cycle 125, mesurée le 2026-09-12.
+ *
+ * Sans ce message, le gate ne pourrait pas distinguer « le web retient la pièce
+ * déclarée » de « le web retient tout message protégé », qui est l'autre loi
+ * (#6184) et qui était déjà vraie.
+ */
+const media10CreatedAt = dayAt(0, 8, 57);
+export const MEDIA_MASKED_PIECE_WITNESS_ID = 'media-10';
+const media10 = mediaMessage({
+  id: MEDIA_MASKED_PIECE_WITNESS_ID,
+  senderId: 'u-kwame',
+  sender: kwame,
+  content: '',
+  originalLanguage: 'fr',
+  messageType: 'image',
+  translations: [],
+  createdAt: media10CreatedAt,
+  attachments: [{ ...imageAttachment(MEDIA_MASKED_PIECE_WITNESS_ID, media10CreatedAt), isViewOnce: true }],
+});
+
 // ===== media-1 — l'IMAGE, alt traduit en et de =====
 export const MEDIA_IMAGE_WITNESS_ID = 'media-1';
 const media1CreatedAt = dayAt(0, 9, 0);
@@ -462,7 +488,7 @@ const media7 = mediaMessage({
   ],
 } as unknown as Parameters<typeof mediaMessage>[0]);
 
-export const MEDIA_MESSAGES: readonly Message[] = [media8, media9, media1, media2, media3, media4, media5, media6, media7];
+export const MEDIA_MESSAGES: readonly Message[] = [media8, media9, media10, media1, media2, media3, media4, media5, media6, media7];
 
 export const MEDIA_CONVERSATION: Conversation = {
   ...conversationDefaults,

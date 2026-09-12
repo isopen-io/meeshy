@@ -14,7 +14,13 @@ import {
 } from '@/lib/api/fixtures-media';
 import type { Attachment } from '@/lib/api/types';
 
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+
 import { Attachments } from './attachment-blocks';
+
+/** Retire les `<svg>` — leurs chemins portent des nombres qui croisent toute
+ * absence affirmée sur une valeur numérique courte. */
+const sansGlyphes = (html: string): string => html.replace(/<svg[\s\S]*?<\/svg>/g, '');
 
 /**
  * « L'API PUBLIQUE DES DEUX PEAUX » — `renderToStaticMarkup` (même patron que
@@ -263,5 +269,110 @@ describe('Attachments — l’image en ÉCHEC de décodage (#5805)', () => {
     expect(img.hidden).toBe(true);
     expect(figure.getAttribute('role')).toBe('img');
     expect(figure.getAttribute('aria-label')).toBe('Capture indisponible, fichier corrompu à l’envoi');
+  });
+});
+
+/**
+ * LA PROTECTION DÉCLARÉE SUR LA PIÈCE ELLE-MÊME (#6189, cycle 125).
+ *
+ * La protection du MESSAGE est gardée un cran plus haut (`bubble.test.tsx`,
+ * `focal-row.test.tsx`, #6184). Ici on garde l'autre niveau, celui que la
+ * mesure du 2026-09-12 a trouvé ouvert : une pièce `isViewOnce` sur un message
+ * ORDINAIRE rendait son `<img>` et l'URL du fichier en clair
+ * (`url_en_clair=true img=true voile=false`), pendant qu'iOS la retenait
+ * (`FocalAttachmentBlock.swift:130`) et que le gateway composait déjà le verdict
+ * des deux niveaux par un OU (`routes/posts/core.ts`).
+ *
+ * TROIS canaux, parce que la loi en lit trois — `isViewOnce`, `isBlurred` et le
+ * bitmask `effectFlags`. Le troisième est celui qu'aucun témoin écrit « à vue »
+ * ne couvrirait : il ne ressemble pas à une protection, c'est un entier.
+ */
+describe('Attachments — la pièce DÉCLARÉE protégée (#6189)', () => {
+  // LES BITS SONT IMPORTÉS, JAMAIS RECOPIÉS. Écrits à la main dans ce témoin,
+  // ils valaient `1 << 0` et `1 << 1` — c'est-à-dire EPHEMERAL et BLURRED, pas
+  // VIEW_ONCE (`1 << 2`). Le témoin a rougi sur MA constante, et il avait
+  // raison : un bitmask recopié est une seconde source de vérité qui se trompe
+  // en silence dès que la première bouge.
+  const { VIEW_ONCE, BLURRED, EPHEMERAL } = MESSAGE_EFFECT_FLAGS;
+
+  const image = () => attachmentOf(MEDIA_IMAGE_WITNESS_ID);
+  const langues = { languages: ['fr'] as const };
+
+  for (const [canal, declaration] of [
+    ['isViewOnce', { isViewOnce: true }],
+    ['isBlurred', { isBlurred: true }],
+    ['effectFlags (bit VIEW_ONCE)', { effectFlags: VIEW_ONCE }],
+    ['effectFlags (bit BLURRED)', { effectFlags: BLURRED }],
+  ] as const) {
+    test(`${canal} ⇒ ni <img>, ni URL, ni nom de fichier, ni taille — et la marque est posée`, () => {
+      const piece = image();
+      const html = renderOne({ ...piece, ...declaration } as Attachment, langues);
+
+      expect(html).not.toContain('<img');
+      expect(html).not.toContain('<audio');
+      expect(html).not.toContain(piece.fileUrl);
+      // Le cycle 125 liste le NOM et la TAILLE parmi ce que la charge ne doit
+      // pas transporter : « une protection se mesure sur tout ce que la charge
+      // TRANSPORTE, jamais sur sa seule chaîne ».
+      expect(html).not.toContain(piece.originalName);
+      // La TAILLE se cherche hors des SVG : `fileSize` vaut 96 sur cette
+      // fixture, et « 96 » apparaît dans les coordonnées des chemins d'icônes.
+      // Une absence affirmée sur une chaîne courte et numérique croise le bruit
+      // — elle rougissait ici sur un glyphe, pas sur une fuite.
+      expect(sansGlyphes(html)).not.toContain(String(piece.fileSize));
+      expect(html).toContain('data-protected-attachment="hidden"');
+    });
+  }
+
+  /**
+   * LE TÉMOIN QUI DISCRIMINE — `EPHEMERAL` (`1 << 0`) ne masque PAS une pièce.
+   *
+   * Sans lui, une loi écrite `effectFlags !== 0` passerait les quatre témoins
+   * ci-dessus, et retiendrait le média de tout message éphémère ENCORE VALIDE :
+   * l'éphémère se juge au niveau MESSAGE, sur son horloge (`protectionOf`
+   * → `expired`), et une pièce d'un message éphémère non échu se lit
+   * normalement. C'est aussi ce que dit la loi partagée : son masque est
+   * exactement `VIEW_ONCE | BLURRED`.
+   */
+  test('effectFlags (bit EPHEMERAL) ⇒ la pièce est RENDUE : l’éphémère se juge au niveau MESSAGE', () => {
+    const html = renderOne({ ...image(), effectFlags: EPHEMERAL } as Attachment, langues);
+
+    expect(html).toContain('<img');
+    expect(html).not.toContain('data-protected-attachment');
+  });
+
+  /**
+   * LA CONTRE-ÉPREUVE — la MÊME pièce, sans déclaration, rend bien son média.
+   * Sans elle, un `Attachments` qui cesserait de rendre TOUTE pièce ferait
+   * passer les quatre témoins ci-dessus (leçon 261).
+   */
+  test('CONTRÔLE : la MÊME pièce SANS déclaration rend son <img> et son URL', () => {
+    const piece = image();
+    const html = renderOne(piece, langues);
+
+    expect(html).toContain('<img');
+    expect(html).toContain('data-attachment');
+    expect(html).not.toContain('data-protected-attachment');
+  });
+
+  /**
+   * LA QUESTION SE POSE PIÈCE PAR PIÈCE, jamais pour la première. Une garde
+   * écrite `if (attachments.some(masked)) return notice` retiendrait les cinq
+   * pièces d'un message dont une seule est déclarée — et une garde écrite sur
+   * `attachments[0]` laisserait sortir les quatre autres. Ce témoin distingue
+   * les deux fautes de la forme juste : DEUX pièces, UNE seule retenue.
+   */
+  test('deux pièces, une seule déclarée : la déclarée est retenue, l’autre est rendue', () => {
+    const claire = image();
+    const masquee = { ...claire, id: 'a-masquee', isViewOnce: true } as Attachment;
+    const html = renderToStaticMarkup(
+      <Attachments attachments={[masquee, claire]} languages={['fr']} fallbackLanguage="fr" />,
+    );
+
+    expect(html).toContain('data-protected-attachment="hidden"');
+    // La pièce claire est bien rendue : son <img> est là, une seule fois.
+    expect(html.split('<img').length - 1).toBe(1);
+    expect(html).toContain(`data-attachment="${claire.id}"`);
+    expect(html).not.toContain('data-attachment="a-masquee"');
   });
 });

@@ -12,6 +12,7 @@ import {
   MEDIA_CONVERSATION,
   MEDIA_CONVERSATION_ID,
   MEDIA_IMAGE_WITNESS_ID,
+  MEDIA_MASKED_PIECE_WITNESS_ID,
   MEDIA_NULL_METADATA_WITNESS_ID,
   MEDIA_VIEW_ONCE_WITNESS_ID,
   MEDIA_VOICE_DE_WITNESS_ID,
@@ -115,9 +116,9 @@ test('wavDataUri : deux tons différents rendent deux URIs différentes', () => 
   expect(wavDataUri({ seconds: 1, tone: 440 })).not.toBe(wavDataUri({ seconds: 1, tone: 523 }));
 });
 
-test('les neuf messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique', () => {
+test('les dix messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique', () => {
   const messages = messagesOf(MEDIA_CONVERSATION_ID);
-  expect(messages).toHaveLength(9);
+  expect(messages).toHaveLength(10);
   const times = messages.map((m) => new Date(m.createdAt).getTime());
   expect(times).toEqual([...times].sort((a, b) => a - b));
   expect(messages.some((m) => m.id === MEDIA_BROKEN_IMAGE_WITNESS_ID)).toBe(true);
@@ -125,6 +126,22 @@ test('les neuf messages du corpus médias sont servis par messagesOf, dans l’o
   expect(messages.some((m) => m.id === MEDIA_NULL_METADATA_WITNESS_ID)).toBe(true);
   expect(messages.some((m) => m.id === MEDIA_BLURRED_WITNESS_ID)).toBe(true);
   expect(messages.some((m) => m.id === MEDIA_VIEW_ONCE_WITNESS_ID)).toBe(true);
+  expect(messages.some((m) => m.id === MEDIA_MASKED_PIECE_WITNESS_ID)).toBe(true);
+});
+
+/**
+ * media-10 (#6189) — le message est ORDINAIRE, la PIÈCE est déclarée. Ce témoin
+ * garde la DISTINCTION : si un lot posait la protection sur le message, le gate
+ * navigateur resterait vert en ne mesurant plus que la loi de #6184.
+ */
+test('media-10 : le MESSAGE est standard, et c’est la PIÈCE qui porte isViewOnce', () => {
+  const maintenant = new Date(dayAt(0, 12, 0)).getTime();
+  const message = messagesOf(MEDIA_CONVERSATION_ID).find((m) => m.id === MEDIA_MASKED_PIECE_WITNESS_ID)!;
+
+  expect(message.isViewOnce).toBe(false);
+  expect(message.isBlurred).toBe(false);
+  expect(protectionOf(message, maintenant)).toBe('standard');
+  expect(attachmentOf(MEDIA_MASKED_PIECE_WITNESS_ID).isViewOnce).toBe(true);
 });
 
 /**
