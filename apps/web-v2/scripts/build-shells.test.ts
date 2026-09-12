@@ -1,11 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  auditAndroidVersionName,
+  auditIosMarketingVersion,
   auditShellBundle,
   auditSyncedShellConfig,
+  deriveAndroidVersionName,
+  deriveIosMarketingVersion,
   REFERENCE_IOS_SIMULATOR_UDID,
   resolveShellBuildEnv,
   resolveShellSimulatorUdid,
+  resolveShellVersion,
   SHELL_IOS_SIMULATOR_UDID,
 } from './build-shells.mjs';
 
@@ -153,6 +158,124 @@ describe('auditShellBundle — ferme M2 (comparaison de soi à soi, leçon 554)'
 
     const avecBase = [{ path: 'assets/index-abc.js', text: `const b="${API_BASE}";` }];
     expect(auditShellBundle(avecBase, { apiBase: API_BASE })).toEqual([]);
+  });
+});
+
+describe('resolveShellVersion — la version des coques vient de package.json, jamais 1.0 en littéral (#6196)', () => {
+  test('lit "version" depuis un package.json valide', () => {
+    expect(resolveShellVersion(JSON.stringify({ name: 'web-v2', version: '2.0.0' }))).toBe('2.0.0');
+  });
+
+  test('un package.json illisible lève, en le nommant', () => {
+    expect(() => resolveShellVersion('{ pas du json')).toThrow(/illisible/);
+  });
+
+  test('une "version" absente ou vide lève', () => {
+    expect(() => resolveShellVersion(JSON.stringify({ name: 'web-v2' }))).toThrow(/version/);
+    expect(() => resolveShellVersion(JSON.stringify({ version: '' }))).toThrow(/version/);
+  });
+});
+
+describe('auditAndroidVersionName — ferme #6196 côté Android', () => {
+  const GRADLE_AVEC_LITTERALE = [
+    'android {',
+    '    defaultConfig {',
+    '        versionCode 1',
+    '        versionName "1.0"',
+    '    }',
+    '}',
+  ].join('\n');
+
+  test('versionName divergent de package.json ROUGIT, nommant les deux valeurs', () => {
+    const violations = auditAndroidVersionName(GRADLE_AVEC_LITTERALE, '2.0.0');
+    expect(violations.length).toBeGreaterThan(0);
+    expect(violations[0]).toContain('1.0');
+    expect(violations[0]).toContain('2.0.0');
+  });
+
+  test('versionName aligné sur package.json ne porte aucune violation (contre-épreuve)', () => {
+    const gradleAligne = GRADLE_AVEC_LITTERALE.replace('"1.0"', '"2.0.0"');
+    expect(auditAndroidVersionName(gradleAligne, '2.0.0')).toEqual([]);
+  });
+
+  test('un build.gradle sans "versionName" ROUGIT plutôt que de lever', () => {
+    const violations = auditAndroidVersionName('android { defaultConfig { } }', '2.0.0');
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('aucun');
+  });
+});
+
+describe('deriveAndroidVersionName — dérive versionName de package.json (#6196)', () => {
+  const GRADLE_AVEC_LITTERALE = 'defaultConfig {\n    versionCode 1\n    versionName "1.0"\n}';
+
+  test('remplace la littérale par la version dérivée, sans toucher versionCode', () => {
+    const derived = deriveAndroidVersionName(GRADLE_AVEC_LITTERALE, '2.0.0');
+    expect(derived).toContain('versionName "2.0.0"');
+    expect(derived).toContain('versionCode 1');
+    expect(auditAndroidVersionName(derived, '2.0.0')).toEqual([]);
+  });
+
+  test('un build.gradle sans "versionName" lève — rien à dériver', () => {
+    expect(() => deriveAndroidVersionName('defaultConfig { }', '2.0.0')).toThrow(/versionName/);
+  });
+});
+
+describe('auditIosMarketingVersion — ferme #6196 côté iOS (Debug ET Release)', () => {
+  const PBXPROJ_AVEC_LITTERALE = [
+    '			97C146E61CF9000F007C117D /* Debug */ = {',
+    '				buildSettings = {',
+    '					CURRENT_PROJECT_VERSION = 1;',
+    '					MARKETING_VERSION = 1.0;',
+    '				};',
+    '			};',
+    '			97C146E71CF9000F007C117D /* Release */ = {',
+    '				buildSettings = {',
+    '					CURRENT_PROJECT_VERSION = 1;',
+    '					MARKETING_VERSION = 1.0;',
+    '				};',
+    '			};',
+  ].join('\n');
+
+  test('les DEUX MARKETING_VERSION divergents de package.json ROUGISSENT', () => {
+    const violations = auditIosMarketingVersion(PBXPROJ_AVEC_LITTERALE, '2.0.0');
+    expect(violations).toHaveLength(2);
+    expect(violations.every((v) => v.includes('MARKETING_VERSION = 1.0') && v.includes('2.0.0'))).toBe(true);
+  });
+
+  test('un SEUL des deux alignés — l’autre configuration ROUGIT encore', () => {
+    const uneSeuleAlignee = PBXPROJ_AVEC_LITTERALE.replace('MARKETING_VERSION = 1.0;', 'MARKETING_VERSION = 2.0.0;');
+    expect(auditIosMarketingVersion(uneSeuleAlignee, '2.0.0')).toHaveLength(1);
+  });
+
+  test('les deux configurations alignées ne portent aucune violation (contre-épreuve)', () => {
+    const pbxprojAligne = PBXPROJ_AVEC_LITTERALE.replaceAll('MARKETING_VERSION = 1.0;', 'MARKETING_VERSION = 2.0.0;');
+    expect(auditIosMarketingVersion(pbxprojAligne, '2.0.0')).toEqual([]);
+  });
+
+  test('un project.pbxproj sans "MARKETING_VERSION" ROUGIT plutôt que de lever', () => {
+    const violations = auditIosMarketingVersion('buildSettings = { CURRENT_PROJECT_VERSION = 1; };', '2.0.0');
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toContain('aucun');
+  });
+});
+
+describe('deriveIosMarketingVersion — dérive CHAQUE MARKETING_VERSION de package.json (#6196)', () => {
+  const PBXPROJ_AVEC_LITTERALE = [
+    'buildSettings = { CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; };',
+    'buildSettings = { CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; };',
+  ].join('\n');
+
+  test('remplace les DEUX occurrences, sans toucher CURRENT_PROJECT_VERSION', () => {
+    const derived = deriveIosMarketingVersion(PBXPROJ_AVEC_LITTERALE, '2.0.0');
+    expect(derived.match(/MARKETING_VERSION = 2\.0\.0;/g)).toHaveLength(2);
+    expect(derived.match(/CURRENT_PROJECT_VERSION = 1;/g)).toHaveLength(2);
+    expect(auditIosMarketingVersion(derived, '2.0.0')).toEqual([]);
+  });
+
+  test('un project.pbxproj sans "MARKETING_VERSION" lève — rien à dériver', () => {
+    expect(() =>
+      deriveIosMarketingVersion('buildSettings = { CURRENT_PROJECT_VERSION = 1; };', '2.0.0'),
+    ).toThrow(/MARKETING_VERSION/);
   });
 });
 
