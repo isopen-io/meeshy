@@ -673,6 +673,8 @@ export type TopicCatalogItem = {
   examples: string[];
   cooldownMinutes: number;
   isActive: boolean;
+  /** Poids admin (0-10) ajouté au score regex à la sélection du sujet (#6192). */
+  priority: number;
   createdAt: string;
   updatedAt: string;
 };

@@ -176,6 +176,41 @@ describe('startListening', () => {
     expect(responseHandler.mock.calls[0][0]).toMatchObject({ type: 'agent:response', conversationId: 'conv-1' });
   });
 
+  it('hands the illustration source of a fresh-topic response to the handler (#6192)', async () => {
+    const client = new ZmqAgentClient();
+    await client.initialize();
+
+    const responseHandler = jest.fn<any>().mockResolvedValue(undefined);
+    client.onResponse(responseHandler);
+
+    const payload = Buffer.from(JSON.stringify(makeAgentResponse({
+      illustration: { sourceUrl: 'https://www.camerounweb.com/faits-divers/bonaberi' },
+    })));
+    Object.assign(mockSubSocket, makeAsyncIterable([[payload]]));
+
+    await client.startListening();
+
+    expect(responseHandler).toHaveBeenCalledTimes(1);
+    expect(responseHandler.mock.calls[0][0]).toMatchObject({
+      illustration: { sourceUrl: 'https://www.camerounweb.com/faits-divers/bonaberi' },
+    });
+  });
+
+  it('drops a response whose illustration source is not a URL', async () => {
+    const client = new ZmqAgentClient();
+    await client.initialize();
+
+    const responseHandler = jest.fn<any>().mockResolvedValue(undefined);
+    client.onResponse(responseHandler);
+
+    const payload = Buffer.from(JSON.stringify(makeAgentResponse({ illustration: { sourceUrl: 'not a url' } })));
+    Object.assign(mockSubSocket, makeAsyncIterable([[payload]]));
+
+    await client.startListening();
+
+    expect(responseHandler).not.toHaveBeenCalled();
+  });
+
   it('calls the reaction handler for a valid agent:reaction message', async () => {
     const client = new ZmqAgentClient();
     await client.initialize();

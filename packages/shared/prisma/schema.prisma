@@ -4389,6 +4389,10 @@ model AgentTopicCatalog {
   cooldownMinutes     Int      @default(60)
   /// Kill switch admin sans suppression hard
   isActive            Boolean  @default(true)
+  /// Poids admin (0-10) AJOUTÉ au score regex à la sélection du sujet à provoquer
+  /// (#6192). À score regex nul — conversation sans signal — c'est lui qui
+  /// départage : les faits divers par pays sont seedés à 2, le tech à 0.
+  priority            Int      @default(0)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

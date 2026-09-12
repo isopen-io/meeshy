@@ -91,6 +91,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { socketIoCorsOrigin } from '../config/cors-origins';
 import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
+import { handleAgentResponse, type AgentResponsePayload } from './agent-response-bridge';
 import { MentionService, resolveUsernamesToIds } from '../services/MentionService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
@@ -236,6 +237,7 @@ export class MeeshySocketIOManager {
   private privacyPreferencesService: PrivacyPreferencesService;
   private presenceVisibilityService: PresenceVisibilityService;
   private agentClient: ZmqAgentClient | null = null;
+  private agentAttachmentService?: AttachmentService;
   private mentionService: MentionService;
   private deliveryQueue: RedisDeliveryQueue | null = null;
   private readStatusService!: MessageReadStatusService;
@@ -3427,112 +3429,23 @@ export class MeeshySocketIOManager {
     logger.info('[Agent] ZmqAgentClient wired to SocketIOManager');
   }
 
-  async handleAgentResponse(response: {
-    type: 'agent:response';
-    conversationId: string;
-    asUserId: string;
-    content: string;
-    originalLanguage: string;
-    replyToId?: string;
-    mentionedUsernames?: string[];
-    messageSource: 'agent';
-    metadata: { agentType: 'impersonator' | 'animator' | 'orchestrator'; roleConfidence: number; archetypeId?: string };
-  }): Promise<void> {
-    try {
-      // Resolve mentionedUsernames to mentionedUserIds for the full mention pipeline
-      let mentionedUserIds: string[] | undefined;
-      if (response.mentionedUsernames && response.mentionedUsernames.length > 0) {
-        const ids = await resolveUsernamesToIds(this.prisma, response.mentionedUsernames);
-        if (ids.length > 0) {
-          mentionedUserIds = ids;
-        }
-      } else if (response.content?.includes('@')) {
-        // Résolution @DisplayName depuis les participants de la conversation
-        const participants = await this.getConversationParticipantsForMention(response.conversationId);
-        if (participants.length > 0) {
-          const usernames = this.mentionService.extractMentionsWithParticipants(response.content, participants);
-          if (usernames.length > 0) {
-            const userMap = await this.mentionService.resolveUsernames(usernames);
-            const resolved = [...userMap.values()].map((u) => u.id);
-            if (resolved.length > 0) {
-              mentionedUserIds = resolved;
-            }
-          }
-        }
-      }
-
-      // Use MessagingService full pipeline: DB save + mention extraction + translation + broadcast
-      const messageRequest = {
-        conversationId: response.conversationId,
-        content: response.content,
-        originalLanguage: response.originalLanguage,
-        messageType: 'text' as const,
-        messageSource: 'agent' as const,
-        replyToId: response.replyToId,
-        mentionedUserIds,
-        isAnonymous: false,
-        metadata: { source: 'api' as const },
-      };
-
-      // Résout le Participant.id du sender AVANT d'appeler handleMessage — mirroring
-      // handleAgentReaction just below. MessagingService attend un Participant.id ;
-      // lui passer asUserId (un User.id) ne fonctionnait que via son fallback
-      // DEPRECATED (query supplémentaire + log d'erreur à chaque réponse d'agent).
-      const senderParticipant = await this.prisma.participant.findFirst({
-        where: { userId: response.asUserId, conversationId: response.conversationId, isActive: true },
-        select: { id: true },
-      });
-      if (!senderParticipant) {
-        logger.warn(`[Agent] No active participant for userId=${response.asUserId} in conv=${response.conversationId}`);
-        return;
-      }
-
-      const result = await this.messagingService.handleMessage(
-        messageRequest,
-        senderParticipant.id
-      );
-
-      if (!result.success || !result.data) {
-        logger.error(`[Agent] handleMessage failed — conv=${response.conversationId}`, result.error);
-        return;
-      }
-
-      // Broadcast to all members (translation arrives asynchronously via translationReady event)
-      // Note: Notifications are already triggered inside messagingService.handleMessage -> processor.triggerAllNotifications
-      const messageWithTimestamp = { ...result.data, timestamp: result.data.createdAt } as Message;
-      await this._broadcastNewMessage(messageWithTimestamp, response.conversationId);
-
-      logger.info(`[Agent] Response sent — conv=${response.conversationId} user=${response.asUserId} type=${response.metadata.agentType} msgId=${result.data.id}`);
-    } catch (error) {
-      logger.error('[Agent] handleAgentResponse error:', error);
-    }
-  }
-
-  private async getConversationParticipantsForMention(
-    conversationId: string
-  ): Promise<import('@meeshy/shared/utils/mention-parser').MentionParticipant[]> {
-    try {
-      const participants = await this.prisma.participant.findMany({
-        where: { conversationId, isActive: true, userId: { not: null } },
-        select: {
-          userId: true,
-          displayName: true,
-          user: {
-            select: { id: true, username: true, displayName: true }
-          }
-        }
-      });
-
-      return participants
-        .filter((p): p is typeof p & { user: NonNullable<typeof p.user> } => p.user !== null)
-        .map((p) => ({
-          userId: p.user.id,
-          username: p.user.username,
-          displayName: p.user.displayName ?? p.user.username,
-        }));
-    } catch {
-      return [];
-    }
+  /**
+   * Réponse de l'agent (ZMQ). Le pont vit dans `agent-response-bridge.ts`
+   * (#6192) : mentions, participant émetteur, image de l'article jointe.
+   */
+  async handleAgentResponse(response: AgentResponsePayload): Promise<void> {
+    this.agentAttachmentService ??= new AttachmentService(this.prisma);
+    await handleAgentResponse(
+      {
+        prisma: this.prisma,
+        messagingService: this.messagingService,
+        mentionService: this.mentionService,
+        resolveUsernamesToIds: (usernames) => resolveUsernamesToIds(this.prisma, usernames),
+        attachmentService: this.agentAttachmentService,
+        broadcastNewMessage: (message, conversationId) => this._broadcastNewMessage(message, conversationId),
+      },
+      response,
+    );
   }
 
   async handleAgentReaction(reaction: {

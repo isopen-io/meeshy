@@ -466,6 +466,37 @@ describe('RedisDeliveryQueue — poll delivers ready items', () => {
       metadata: { agentType: 'orchestrator', roleConfidence: 1.0 },
     });
   });
+
+  it('carries the illustration source of a fresh-topic message to the gateway', async () => {
+    const redis = createMockRedis();
+    const publisher = makePublisher();
+    const queue = new RedisDeliveryQueue(redis as any, publisher, makePersistence());
+
+    await queue.enqueue('conv-1', makeMessage({
+      content: 'Vous avez vu ça à Douala ?',
+      asUserId: 'bot1',
+      illustration: { sourceUrl: 'https://www.camerounweb.com/faits-divers/douala-1' },
+    }));
+
+    await queue.poll();
+
+    expect(publisher.publish.mock.calls[0][0]).toMatchObject({
+      type: 'agent:response',
+      content: 'Vous avez vu ça à Douala ?',
+      illustration: { sourceUrl: 'https://www.camerounweb.com/faits-divers/douala-1' },
+    });
+  });
+
+  it('omits the illustration key entirely when the message has none', async () => {
+    const redis = createMockRedis();
+    const publisher = makePublisher();
+    const queue = new RedisDeliveryQueue(redis as any, publisher, makePersistence());
+
+    await queue.enqueue('conv-1', makeMessage({ content: 'Oui', asUserId: 'bot1' }));
+    await queue.poll();
+
+    expect(publisher.publish.mock.calls[0][0]).not.toHaveProperty('illustration');
+  });
 });
 
 describe('RedisDeliveryQueue — getAll', () => {

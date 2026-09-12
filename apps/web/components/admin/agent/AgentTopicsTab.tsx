@@ -10,7 +10,7 @@ import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
 /**
  * Catalogue dynamique des topics utilisés par le strategist agent pour
  * provoquer de nouveaux sujets dans les conversations. CRUD complet :
- *   - Liste tabulaire (slug, label, état actif, cooldown, nb patterns)
+ *   - Liste tabulaire (slug, label, état actif, priorité, cooldown, nb patterns)
  *   - Bouton + Nouveau topic → ouvre AgentTopicEditModal en mode create
  *   - Éditer → AgentTopicEditModal en mode edit avec testeur regex
  *   - Désactiver → soft delete (isActive=false, garde l'historique)
@@ -104,6 +104,7 @@ export function AgentTopicsTab() {
                 <th className="text-left px-3 py-2 font-medium">{t('agent.topics.colActive')}</th>
                 <th className="text-left px-3 py-2 font-medium">{t('agent.topics.colSlug')}</th>
                 <th className="text-left px-3 py-2 font-medium">{t('agent.topics.colLabel')}</th>
+                <th className="text-left px-3 py-2 font-medium">{t('agent.topics.colPriority')}</th>
                 <th className="text-left px-3 py-2 font-medium">{t('agent.topics.colCooldown')}</th>
                 <th className="text-left px-3 py-2 font-medium">{t('agent.topics.colPatterns')}</th>
                 <th className="text-right px-3 py-2 font-medium">{t('agent.topics.colActions')}</th>
@@ -112,7 +113,7 @@ export function AgentTopicsTab() {
             <tbody>
               {topics.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={6} className="text-center p-6 text-slate-500">
+                  <td colSpan={7} className="text-center p-6 text-slate-500">
                     {t('agent.topics.emptyState')}
                   </td>
                 </tr>
@@ -129,6 +130,7 @@ export function AgentTopicsTab() {
                   </td>
                   <td className="px-3 py-2 font-mono text-xs">{topic.slug}</td>
                   <td className="px-3 py-2">{topic.label}</td>
+                  <td className="px-3 py-2 text-slate-600 dark:text-slate-400">{topic.priority ?? 0}</td>
                   <td className="px-3 py-2 text-slate-600 dark:text-slate-400">{topic.cooldownMinutes} min</td>
                   <td className="px-3 py-2 text-slate-600 dark:text-slate-400">{topic.keywordPatterns.length}</td>
                   <td className="px-3 py-2 text-right">

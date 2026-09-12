@@ -17,6 +17,7 @@ export type TopicCatalogEntry = Pick<
   | 'examples'
   | 'cooldownMinutes'
   | 'isActive'
+  | 'priority'
 >;
 
 export type TopicInput = Omit<TopicCatalogEntry, 'id'>;

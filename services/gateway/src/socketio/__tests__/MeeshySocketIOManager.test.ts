@@ -6252,16 +6252,9 @@ describe('MeeshySocketIOManager', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 66. getConversationParticipantsForMention - error catch (covers 1917)
+  // 66. getConversationParticipantsForMention — parti dans agent-response-bridge.ts
+  //     (#6192) ; ses témoins vivent dans unit/socketio/agent-response-bridge.test.ts
   // -------------------------------------------------------------------------
-
-  describe('getConversationParticipantsForMention - error catch', () => {
-    it('returns empty array when participant.findMany throws', async () => {
-      prisma.participant.findMany.mockRejectedValue(new Error('DB exploded in mention'));
-      const result = await (manager as any).getConversationParticipantsForMention('conv-123456789012');
-      expect(result).toEqual([]);
-    });
-  });
 
   // -------------------------------------------------------------------------
   // 67. _broadcastNewMessage - stats.catch warn (covers 1463-1466)
@@ -7731,25 +7724,6 @@ describe('MeeshySocketIOManager', () => {
       // participant.findUnique should NOT have been called (senderId is null)
       // And no notification should be created
       expect(mockNotificationServiceInstance.createReactionNotification).not.toHaveBeenCalled();
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // 96. getConversationParticipantsForMention - displayName null fallback (line 1914)
-  // -------------------------------------------------------------------------
-
-  describe('getConversationParticipantsForMention - displayName null fallback', () => {
-    it('uses username when displayName is null (line 1914 idx 1)', async () => {
-      prisma.participant.findMany.mockResolvedValue([
-        {
-          userId: 'u-disp-null',
-          displayName: null,
-          user: { id: 'u-disp-null', username: 'usernameonly', displayName: null },  // displayName null → uses username
-        },
-      ]);
-      const result = await (manager as any).getConversationParticipantsForMention('conv-disp-null');
-      expect(result).toHaveLength(1);
-      expect(result[0].displayName).toBe('usernameonly');
     });
   });
 
