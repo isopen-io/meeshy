@@ -30046,6 +30046,173 @@ retire, jamais ne se tolère. Deux gates morts, c'est tout le dispositif d'une
 issue de fiabilité qui ne dit plus rien — et personne ne s'en aperçoit, puisque
 le rouge fait partie du décor.
 
+<!-- LEÇONS 560 ET 561 — RAPATRIÉES LE 2026-09-12 depuis la branche
+     `claude/bascule-v11-5882`, dont la PR #5887 a été FERMÉE sans merge le
+     2026-09-10. Le travail de CI qu'elle portait a été refait ailleurs ; ces
+     deux leçons, elles, n'avaient aucun jumeau et laissaient un TROU dans la
+     numérotation (559 → 562) — la trace même du défaut que la 561 décrit.
+     Aucun mot n'est retouché : ce qui suit est le texte tel qu'il avait été
+     écrit et relu. -->
+
+## Leçon 560 — Un lot qui RENOMME rend ANTI-CORRÉLÉ tout garde qui reconnaissait par le nom
+
+`apps/web/__tests__/public/sw.v3-zone.test.ts` gardait la frontière entre le
+service worker du legacy et la zone `/__v3/` d'une seconde application servie
+sur la même origine. Il reconnaissait le legacy par son NOM D'IMAGE :
+
+```js
+const IMAGE_DU_LEGACY = /^\s*image:.*isopen\/meeshy-(?:frontend|web):/m;
+```
+
+Son doc-comment était juste, explicite, et anticipait déjà un piège voisin :
+« On lit l'IMAGE et non le nom du service : `frontend-staging` a gardé son nom
+en changeant d'occupant, donc le nom ne dit plus qui est là. »
+
+#5882 a fait exactement ce que ce raisonnement n'avait pas prévu, un cran plus
+loin : donner le nom d'image du LEGACY à la v3.1 qui le remplace. Le
+discriminant n'est pas devenu imprécis — il est devenu **anti-corrélé** : sur
+un staging qui sert la v3.1, il déclarait le legacy PRÉSENT, et exigeait donc
+là-bas un routeur de zone que la directive du 2026-09-07 avait précisément
+supprimé. Il aurait fait rougir la conformité et passer la non-conformité.
+
+> **Un garde qui reconnaît une chose par son NOM tombe le jour où un lot déplace
+> le nom.** Et il ne tombe pas en s'éteignant — il continue de rendre un verdict,
+> à l'envers. C'est pire qu'un garde muet : un garde muet se remarque au premier
+> vert suspect, un garde inversé se croit.
+
+CE QUI SAUVE, ET COMMENT ON LE TROUVE. Le témoin portait sa propre réponse dans
+la phrase qui justifiait son existence : « sa juridiction sur la zone v3 suppose
+DEUX occupants de la même origine ». Le discriminant juste n'était donc pas
+« quelle image est là ? » mais **« combien de routeurs revendiquent cet hôte ? »**
+— une propriété STRUCTURELLE, que renommer une image ne touche pas :
+
+```js
+const partagees = originesPartagees(compose);   // hôtes réclamés par ≥ 2 routeurs
+if (partagees.size === 0) return [];            // pas deux occupants ⇒ rien à garder
+```
+
+**La raison d'être d'un garde, écrite dans son doc-comment, est en général un
+meilleur discriminant que celui qu'il utilise** — parce qu'elle nomme le
+mécanisme, pendant que le code nomme un indice observable de ce mécanisme. Quand
+un lot casse l'indice, relire la raison d'être avant de bricoler l'indice.
+
+COROLLAIRE — LA NON-VACUITÉ A UN TROISIÈME ÉTAT. Le même fichier gardait
+`expect(chemins.length).toBeGreaterThan(0)` : le refus de sortir vert sans avoir
+rien éprouvé. Le sujet ayant disparu (plus aucune origine partagée nulle part),
+cette assertion tombait sur du CONFORME. Le retirer aurait rendu le témoin muet
+pour toujours ; le garder aurait interdit un état légitime. La sortie est un
+troisième état qui **assère la raison de son vide** — et qui rougit encore si
+une origine redevient partagée sans que le témoin en tire un chemin.
+
+DEUX AUTRES FORMES DU MÊME DÉFAUT, DANS LE MÊME LOT — les sondes de self-test
+de `check-ci-summary-coverage.mjs` et `check-ci-build-order.mjs` mutaient des
+jobs supprimés (`lifecycle-v3, chaines-v3,`, `a11y-v3`). Une sonde dont la cible
+a disparu ne mute RIEN : `String.replace` d'un motif absent rend la chaîne
+intacte, le garde ne voit aucune violation, et la sonde **sort verte**. L'une
+des deux l'a dit (« la mutation n'a RIEN changé — elle ne prouve rien ») parce
+que son auteur avait prévu le cas ; l'autre a JETÉ (« job introuvable »), ce qui
+est mieux. Les deux se réancrent sur une cible vivante — jamais on ne retire la
+sonde.
+
+> **Après tout lot qui supprime, renomme ou déplace : chercher les gardes dont
+> l'ANCRE textuelle visait ce qui vient de bouger.** `grep` le nom disparu dans
+> TOUT le dépôt est de trente secondes ; un garde inversé vit des mois. Le lot
+> qui déplace est le seul moment où l'on sait quoi chercher.
+
+QUATRIÈME OCCURRENCE, ET ELLE CORRIGE LA CONSIGNE CI-DESSUS. J'avais écrit
+« grep dans `scripts/` et `__tests__/` » — deux endroits choisis parce que c'est
+là que VIVAIENT les trois premiers. La CI en a rendu un quatrième depuis
+`services/gateway/src/__tests__/security/claude-md-paths-exist-guard.test.ts` :
+un cliquet qui compte les chemins cités par les `CLAUDE.md` et qui n'existent
+pas, dette déclarée **7**, mesurée **8**.
+
+Le huitième était `scripts/v3-rapport.mjs` — **le fichier que le lot supprimait,
+cité dans la phrase du `CLAUDE.md` qui annonçait sa suppression.** Écrire « son
+agrégateur `scripts/v3-rapport.mjs` est parti avec elle » apprend au lecteur un
+chemin mort ; le garde a raison, et la phrase se dit sans le chemin (« son
+agrégateur des sept mesures »).
+
+> **Un document qui ANNONCE une suppression est le premier endroit où un chemin
+> mort apparaît** — on nomme ce qu'on retire, au présent, dans le même geste. Et
+> le garde qui l'attrape n'est pas dans le territoire du lot : il est chez le
+> service qui a écrit le cliquet, ici le gateway. La consigne juste est donc
+> « grep le nom disparu dans TOUT le dépôt », sans présumer d'où un garde
+> surveille — un garde de DOCUMENT peut vivre à côté d'un service qui n'a
+> aucun rapport avec le document.
+
+## Leçon 561 — Une phrase au passé écrite par la branche PRIORITAIRE sur le fait porté par l'AUTRE naît fausse, et le devient vraie plus tard
+
+Deux branches vivantes, deux faits liés. #5887 fait SORTIR `apps/web-old-version3`
+du dépôt ; #5889 retouche `apps/web-v3/parity.md`, dont une ligne décrit cette
+application. L'ordre de merge est décidé : **#5889 d'abord**.
+
+J'ai proposé d'écrire, dans #5889 :
+
+> `apps/web-old-version3` — 48 routes — **sortie du dépôt le 2026-09-09 (#5882)**
+
+C'est faux, et pas « imprécis » : entre le merge de #5889 et celui de #5887, `dev`
+sert un arbre où le répertoire **est encore là**, sous une ligne qui déclare qu'il
+est parti. L'intervalle n'est pas une abstraction de raisonnement — c'est l'état
+que le dépôt sert réellement, à quiconque clone pendant ce temps.
+
+La formulation retenue, proposée par la session qui portait #5889 :
+
+> **quitte le dépôt avec #5882**
+
+Vraie AVANT le merge de #5887 (c'est une promesse tenue par une PR ouverte),
+vraie APRÈS (c'est un fait accompli), et impossible à lire comme un état présent.
+
+> **Le test à poser n'est pas « cette phrase sera-t-elle vraie ? » mais « est-elle
+> vraie dans CHACUN des deux ordres de merge possibles, ET pendant l'intervalle
+> entre les deux ? »** La forme qui survit nomme l'ÉVÉNEMENT et son ISSUE, jamais
+> sa date : « quitte le dépôt avec #5882 », pas « sorti le 2026-09-09 ».
+
+CE QUI REND LE DÉFAUT DUR À VOIR. Il n'existe qu'à partir du moment où l'on
+CHOISIT un ordre de merge — c'est-à-dire au moment le plus tardif du lot, quand
+les deux diffs sont écrits et relus. La phrase était juste tant que les deux PR
+étaient symétriques ; c'est la décision d'ordonnancement qui la rend fausse, et
+elle ne touche aucune ligne de code. Aucun gate ne peut la voir : elle est dans
+un document, et elle est syntaxiquement irréprochable.
+
+C'est le PENDANT, entre branches, de « un corps d'issue est DATÉ, le code non » :
+- là, une phrase vraie à l'écriture **vieillit** et devient fausse ;
+- ici, une phrase **naît fausse** et le devient vraie plus tard.
+
+Les deux se soignent pareil — dater l'événement par son ISSUE, qui ne bouge pas,
+plutôt que par une horloge, qui bouge par rapport à l'arbre servi.
+
+COROLLAIRE POUR TOUTE SESSION QUI COORDONNE — dès qu'on répond « merge celle-ci
+en premier », **relire ce que la branche prioritaire AFFIRME du travail de
+l'autre.** J'ai donné l'ordre de merge et la mauvaise formulation dans le même
+message, sans voir que le premier invalidait la seconde ; c'est la session
+d'en face qui l'a attrapé. Un ordre de merge n'est pas qu'un calendrier : il
+décide de la vérité des phrases écrites de part et d'autre.
+
+SECOND COROLLAIRE, DU MÊME JOUR ET DE LA MÊME CAUSE — **« relire le fichier pour
+choisir le suivant libre » ne tranche que si les deux écrivains partagent le
+FICHIER.** Deux sessions se sont donné cette règle pour allouer un numéro de
+leçon, chacune l'a appliquée honnêtement, et **les deux ont écrit une 560** :
+`dev` s'arrêtait à 559, et le fichier que chacune relisait ne contenait pas les
+leçons de l'autre, restées sur sa branche.
+
+C'est le même défaut de raisonnement que ci-dessus, appliqué à un identifiant
+plutôt qu'à une phrase : on a traité comme PARTAGÉ un substrat qui ne l'est
+qu'après le merge. Une branche non mergée est invisible à la relecture de
+l'autre — c'est même sa définition.
+
+Ce qui a tranché n'est pas la relecture mais la règle d'asymétrie du dépôt
+(§ « La branche poussée tôt ») : les deux leçons POUSSÉES gardent leurs
+numéros, celle qui n'avait pas encore atteint le distant se déplace. Aucune
+négociation — la décision se lit depuis ce que git montre.
+
+> **La parade n'est pas de mieux communiquer, c'est de NE PAS ALLOUER.** Un
+> titre daté et nommé — « Leçon — `idb ui text` avale un caractère (2026-09-09) »
+> — ne collisionne avec rien, et le numéro se pose au merge, quand le substrat
+> est enfin commun. C'est le § « un identifiant qui ne s'alloue pas ne
+> collisionne pas » (#5102) rejoué sur le seul espace de noms que ce fichier
+> possède : sa numérotation.
+
+
 ## Leçon 562 — `idb ui text` sur un champ SÉCURISÉ peut avaler ou corrompre un caractère à SHIFT, sans jamais lever d'erreur — vérifier par la LONGUEUR ne suffit pas
 
 En posant la cible iOS de la v3.1 (simulateur « Meeshy Ref-Native »), taper un

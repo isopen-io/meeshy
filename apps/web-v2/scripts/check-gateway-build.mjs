@@ -341,7 +341,7 @@ async function main() {
        un anneau de story et a été remplacé par le rail des STORIES, région
        « Stories ». Le gate interrogeait donc une étiquette morte : il passait
        par ABSENCE, ce qui est la façon la plus discrète qu'a un témoin de
-       cesser de mesurer (leçon 561). L'invariant, lui, est inchangé — à corpus
+       cesser de mesurer (leçon 560). L'invariant, lui, est inchangé — à corpus
        vide, aucun rail ne prend de place au-dessus de l'état vide. */
     const rails = await page.locator('[aria-label="Stories"]').count();
     check(rails === 0, `corpus VIDE : aucune région « Stories » peinte (obtenu : ${rails})`);

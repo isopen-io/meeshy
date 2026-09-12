@@ -68,7 +68,9 @@
  *     `inert`, reconstituant le doublon), et pour une MAUVAISE en même temps :
  *     ses deux sélecteurs interrogeaient des noms morts. Un témoin qui cherche
  *     un nom mort ne mesure plus rien — ici il rougissait, ce qui est la
- *     chance ; l'autre moitié du temps il passe par ABSENCE (leçon 561).
+ *     chance ; l'autre moitié du temps il passe par ABSENCE (leçon 560, « un
+ *     lot qui RENOMME rend anti-corrélé tout garde qui reconnaissait par le
+ *     nom » — et sa sonde dont la cible a disparu, qui sort VERTE).
  */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
