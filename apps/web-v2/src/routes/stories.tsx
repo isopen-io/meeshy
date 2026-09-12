@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useStore } from 'zustand';
 
 import { Avatar } from '@/components/avatar';
-import { apiConfig } from '@/lib/api/config';
+import { apiDeps } from '@/lib/api/deps';
 import { useStoryTray } from '@/lib/api/query';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
@@ -27,7 +27,7 @@ export default function StoriesScreen() {
   const [search] = useSearch();
   const filtreAuteur = search.get('author') ?? undefined;
   const session = useStore(sessionStore, (s) => s.session);
-  const viewer = useMemo(() => resolveViewer({ source: apiConfig.source, session }), [session]);
+  const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const tray = useStoryTray();
 
   const groups = useMemo(

@@ -6,7 +6,7 @@ import { useStore } from 'zustand/react';
 import './styles/app.css';
 
 import Shell from '@/components/shell';
-import { apiConfig } from '@/lib/api/config';
+import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { useRoute } from '@/lib/router';
@@ -65,7 +65,7 @@ if (import.meta.env.DEV) void import('@/lib/api/dev-harness');
 function SessionGate({ children }: { children: ReactNode }) {
   const { key } = useRoute();
   const status = useStore(sessionStore, (s) => s.session.status);
-  const decision = resolveRouteAccess({ sessionStatus: status, source: apiConfig.source, routeKey: key });
+  const decision = resolveRouteAccess({ sessionStatus: status, source: apiDeps.source, routeKey: key });
 
   useEffect(() => {
     if (decision === 'redirect-login') navigate(href('login'), true);

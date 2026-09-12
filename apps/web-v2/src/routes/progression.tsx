@@ -7,7 +7,7 @@ import { GLYPHS } from '@/components/glyphs';
 import { GlassSurface, GlassBack } from '@/components/glass-surface';
 import { ProgressBar } from '@/components/progress-bar';
 import { httpTransport, unwrap } from '@/lib/api/client';
-import { apiConfig } from '@/lib/api/config';
+import { apiDeps } from '@/lib/api/deps';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, mintMeesh } from '@/lib/api/engagement';
 import { useOnline } from '@/lib/net/online';
 import { Link } from '@/routes/route-table';
@@ -535,7 +535,7 @@ export default function ProgressionScreen() {
   const query = useQuery({
     queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY,
     queryFn: async ({ signal }) =>
-      unwrap(await loadEngagementProgress({ source: apiConfig.source, transport: httpTransport, signal })),
+      unwrap(await loadEngagementProgress({ ...apiDeps, signal })),
   });
 
   const meesh = query.data?.meesh;

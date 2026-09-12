@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { StoryRail, type StoryRailProps } from '@/components/story-rail';
 import { ShareLinkSheet } from '@/components/share-link-sheet';
 import { Glyph } from '@/components/glyph';
-import { apiDeps } from '@/lib/api/query';
+import { apiDeps } from '@/lib/api/deps';
 import type { Conversation } from '@/lib/api/types';
 import { HIDDEN_CHROME_EASE_OUT_MS } from '@/lib/reading-mode/metrics';
 import { Link } from '@/routes/route-table';
