@@ -1948,3 +1948,42 @@ inerte, ce que la loi 4 interdit. Le suivi est dans #6189.
 lit normalement. Une loi écrite `effectFlags !== 0` passerait tous les autres
 témoins et retiendrait ces médias-là ; c'est pourquoi le témoin de discrimination
 existe.
+
+## D-42 · Une pièce VIDÉO rend un repli lisible ; la LECTURE reste hors tranche, à sa propre issue — 2026-09-12 (#6193)
+
+**Le constat.** `kindOf` (`lib/view/message.ts`) sait rendre le verdict `'video'`
+depuis toujours ; `Attachments` (`attachment-blocks.tsx`) ne traitait que
+`audio` / `image` / `file` et finissait par `return null`. Une pièce vidéo
+reçue dans un fil ne rendait donc **rien** : pas de widget, pas de repli, pas
+de libellé — la bulle affichait un vide, et rien ne disait qu'un média avait
+existé. La vidéo était déclarée HORS TRANCHE par le doc-comment du fichier
+(#5805 §9), et c'était un choix défendable ; mais `return null` n'est pas une
+mise hors tranche, c'est une perte SILENCIEUSE — les deux se distinguent par
+ce que voit l'utilisateur.
+
+**La décision : `VideoFallback` rend le repli MAINTENANT ; la LECTURE reste
+hors tranche, et entre dans le LOT SUIVANT (une issue à part).** Le repli
+porte ce que le dépôt connaît déjà sans rien décoder : le TYPE (glyphe
+`videoCamera` du jeu d'écran `glyphs-thread-states.ts`, déjà chargé avec le
+chunk du fil — aucun octet neuf au socle), le NOM d'origine quand il existe,
+et la DURÉE (`attachment.duration`, en `m:ss`) quand elle est connue, la
+TAILLE servant de dernier recours sinon. Aucun de ces trois champs ne
+suppose un poster, un `<video>` ou une visionneuse plein écran — les
+construire est un lot distinct (poster, lecture inline, plein écran), suivi
+par une issue compagnon plutôt que mêlé à ce correctif borné.
+
+**Pourquoi ne pas construire la lecture ici plutôt que d'ouvrir un suivi.**
+La lecture vidéo touche une surface bien plus large que ce fichier —
+`<video>` inline, poster généré, visionneuse plein écran, éventuellement le
+même pipeline Prisme que l'audio pour une piste sous-titrée — et le mélanger
+à un correctif de perte silencieuse aurait fait grossir un lot borné en
+chantier ouvert. Le repli, lui, ne ment à personne : il ne prétend jamais
+pouvoir lire le fichier, il dit seulement qu'il existe.
+
+**Ce que le repli ne fait PAS, et pourquoi ce n'est pas un mensonge.** Il
+n'affiche aucune vignette ni aucune image de prévisualisation — la
+génération d'un poster suppose de décoder la première frame, hors de portée
+d'un composant qui ne fait que lire les métadonnées déjà servies par
+l'API. Un glyphe générique + un nom + une durée ne prétend pas être une
+vignette : contrairement à un `<video>` sans `src` ou une image cassée, il
+n'affirme rien qu'il ne tienne pas.
