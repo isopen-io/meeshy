@@ -54,38 +54,29 @@
  *        titre, jamais un flux qui pousserait quoi que ce soit.
  *
  * 8.  LE GRAND RAIL HORS CHAMP NE DOUBLE PAS LA BANDE (#6103, revue-
- *     correction ; réaccordé par #5652) — pendant que la bande est active, une
- *     SEULE région porte l'`aria-label` « Stories », la bande ne contient
- *     AUCUN élément focalisable (une pastille de story n'a pas encore de
- *     porte, règle #5765) et un `Tab` depuis le dernier contrôle de l'en-tête
- *     ne rejoint pas le grand rail (`inert={pinned}`,
- *     `components/stories-rail.tsx`).
+ *     correction) — pendant que la bande est active, un SEUL nœud porte
+ *     l'`aria-label` « Stories », et deux `Tab` depuis sa dernière tuile ne
+ *     rejoignent ni le grand rail ni ne déplacent le `scrollTop` du scrollport
+ *     (`inert={pinned}`, `components/story-rail.tsx`).
+ *
+ *     L'ÉTIQUETTE ET LA PRISE ONT CHANGÉ DE NOM À LA FUSION DE #6080 (2026-09-
+ *     12) : ce rail peignait des CONVERSATIONS sous un anneau qui promettait
+ *     une story, il peint désormais les STORIES — « Accès rapide aux
+ *     conversations » → « Stories », `a[data-conversation]` →
+ *     `a[data-story-author]`. Le gate a d'abord rougi pour la BONNE raison
+ *     (l'enveloppe du grand plateau gardait son étiquette hors de portée de
+ *     `inert`, reconstituant le doublon), et pour une MAUVAISE en même temps :
+ *     ses deux sélecteurs interrogeaient des noms morts. Un témoin qui cherche
+ *     un nom mort ne mesure plus rien — ici il rougissait, ce qui est la
+ *     chance ; l'autre moitié du temps il passe par ABSENCE (leçon 560, « un
+ *     lot qui RENOMME rend anti-corrélé tout garde qui reconnaissait par le
+ *     nom » — et sa sonde dont la cible a disparu, qui sort VERTE).
  */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
-
-/**
- * LES DEUX COTES DU RAIL VIENNENT DE LA TABLE, JAMAIS D'UN SEUIL ÉCRIT ICI
- * (#5652, revue). Ce gate comparait la largeur de la tuile à `>= 80` et
- * `< 45` — des bornes calibrées sur le rail de CONVERSATIONS (cellule =
- * avatar × 1,222, avatar 72/30) : le rail de STORIES pose la cellule à la
- * cote EXACTE du jeton (`list.rail.size` = 48, miroir
- * `LentilleMetrics.Rail.size`, `.frame(width:)` côté iOS), et les trois
- * assertions rougissaient sur un rendu JUSTE. Un seuil recopié à la main est
- * une seconde table : celle qui dérive dès que la première bouge (D-4).
- */
-const lentilleTokens = JSON.parse(
-  await readFile(new URL('../../../packages/shared/design/lentille-tokens.json', import.meta.url), 'utf8'),
-);
-const RAIL_SIZE_GRANDE = lentilleTokens.list.rail.size;
-/** `.storyTrayCompact` (`MeeshyAvatar.swift:9`) — la bande épinglée n'a pas de
- * jeton généré (`packages/design-tokens/ios.css` ne liste que row/header/
- * bubble/stacked/typing) : la cote est GARDÉE par extraction Swift dans
- * `check-curve.mjs`, c'est elle qui interdit la dérive, pas ce fichier. */
-const RAIL_SIZE_COMPACT = 36;
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const TYPES = {
@@ -203,14 +194,33 @@ constate(
  * cote GRANDE tout le défilement, exactement comme n'importe quel autre
  * contenu du flux — c'est une BANDE distincte (`[data-rail="pinned"]`), DANS
  * l'en-tête, qui prend le relais en miniature une fois le grand rail sorti.
+ *
+ * **LA COTE 48 ÉTAIT CELLE D'UN AUTRE RAIL** (fusion #6080 ↔ #6103,
+ * 2026-09-12). Ce bloc a porté, le temps d'une branche, une borne à 48 px
+ * justifiée par `LentilleMetrics.Rail.size`. La constante est réelle et la
+ * citation était de bonne foi — mais elle décrit `list.rail`, le rail des
+ * LIVES : « pastille 48, anneau 3.5 (pulsé si live), ≤ 6 entrées », et son
+ * propre commentaire renvoie à `LivesRail.tsx`. Le plateau des STORIES est un
+ * objet distinct, et ses deux cotes sont écrites ailleurs :
+ * `MeeshyAvatar.storyTray` = **88** (« doubled 2026-05-27 — story trail =
+ * primary CTA ») et `.storyTrayCompact` = **36** (`StoryTrayView.swift:226`,
+ * « `context` drives the size »).
+ *
+ * Et le grief qui motivait la réduction — « 88 px de tuile, un huitième de
+ * l'écran, la liste commence sous la ligne de flottaison » — est JUSTE, et
+ * c'est exactement ce que la bande épinglée résout chez iOS : le plateau est
+ * grand parce qu'il est l'appel à l'action principal, et il sort du champ au
+ * défilement au lieu de rétrécir. Les deux moitiés ne se contredisaient pas ;
+ * elles répondaient à la même question, l'une par la cote, l'autre par la
+ * géographie. La géographie gagne parce qu'elle est celle de la cible.
  */
 const grandRailWidthBefore = await page.evaluate(
   () => document.querySelector('[data-rail="grande"] [data-rail-tile]')?.getBoundingClientRect().width ?? null,
 );
 constate(grandRailWidthBefore !== null, 'aucune tuile trouvée dans [data-rail="grande"] avant défilement');
 constate(
-  grandRailWidthBefore !== null && Math.round(grandRailWidthBefore) === RAIL_SIZE_GRANDE,
-  `le grand rail ne part pas de la cote GRANDE du jeton (list.rail.size = ${RAIL_SIZE_GRANDE}) : ${grandRailWidthBefore}`,
+  grandRailWidthBefore !== null && grandRailWidthBefore >= 80,
+  `le grand rail ne part pas de la cote GRANDE (~88 px) : ${grandRailWidthBefore}`,
 );
 constate(
   await page.evaluate(() => document.querySelector('[data-rail="pinned"]') === null),
@@ -261,11 +271,11 @@ const afterScroll = await page.evaluate(() => {
   };
 });
 constate(
-  afterScroll.pinnedTileWidth !== null && Math.round(afterScroll.pinnedTileWidth) === RAIL_SIZE_COMPACT,
-  `la bande épinglée ne compacte pas à la cote COMPACTE (.storyTrayCompact = ${RAIL_SIZE_COMPACT} px) après défilement : ${afterScroll.pinnedTileWidth}`,
+  afterScroll.pinnedTileWidth !== null && afterScroll.pinnedTileWidth < 45,
+  `la bande épinglée ne compacte pas à la cote COMPACTE (~37 px) après défilement : ${afterScroll.pinnedTileWidth}`,
 );
 constate(
-  afterScroll.grandeTileWidth !== null && Math.round(afterScroll.grandeTileWidth) === RAIL_SIZE_GRANDE,
+  afterScroll.grandeTileWidth !== null && afterScroll.grandeTileWidth >= 80,
   `le GRAND rail a changé de cote après défilement — il ne devrait plus jamais compacter lui-même : ${afterScroll.grandeTileWidth}`,
 );
 constate(
@@ -273,6 +283,16 @@ constate(
   `le grand rail n'est pas sorti du scrollport (bas ${afterScroll.grandeBottom}, haut du scrollport ${afterScroll.contenuTop}) — ` +
     'il devrait avoir défilé hors champ comme tout contenu ordinaire',
 );
+/**
+ * CE QUE LA BRANCHE #6080 MESURAIT ICI EST SUBSUMÉ, pas perdu (fusion
+ * 2026-09-12). Elle tenait « la cote du rail n'a pas varié pendant le
+ * défilement », par `railWidthAfter === railWidthBefore`. C'est exactement ce
+ * que dit `grandeTileWidth >= 80` ci-dessus, au même instant du même
+ * défilement : un grand rail qui aurait compacté n'y serait plus. La borne de
+ * dev est de plus STRICTEMENT plus forte — elle nomme la cote attendue au lieu
+ * de comparer deux mesures entre elles, donc elle tombe aussi si les DEUX
+ * bougent ensemble.
+ */
 
 /**
  * Le témoin 3 : la magnification opère. Sans lui, tout ce qui précède serait
@@ -679,32 +699,25 @@ await headerContext.close();
  * le DOM — il défile simplement hors du scrollport — et sans garde, ses
  * liens restaient à la fois dans l'ordre de TABULATION et exposés sous le
  * MÊME `aria-label` que la bande qui le remplace : un lecteur d'écran
- * annonçait les conversations deux fois, et un `Tab` depuis la dernière
+ * annonçait les stories deux fois, et un `Tab` depuis la dernière
  * tuile de la bande retombait dans le grand rail hors champ — que le
  * navigateur ramène alors DANS la vue pour honorer le focus, faisant sauter
  * le défilement (749 → 0 mesuré) et perdre la position de lecture pour rien
  * de plus qu'un `Tab`.
  *
- * DEPUIS #5652, LE RAIL PORTE DES STORIES ET SES PASTILLES NE SONT PAS DES
- * CONTRÔLES. Le viewer `/story/:postId` n'existe pas encore : une pastille
- * sans porte reste une FIGURE (règle #5765, la forme qu'iOS rend lui-même
- * quand `onSelect == nil`). La bande n'a donc AUCUN élément focalisable, et
- * les deux `Tab` « depuis la dernière tuile de la bande » n'ont plus de point
- * de départ — ce qui se mesure change avec le produit, jamais l'invariant :
- * ce qui restait à garder, c'est qu'un `Tab` ne tombe pas dans le grand rail
- * HORS CHAMP.
- *
- * Le correctif (`inert={pinned}`, `components/stories-rail.tsx`) doit donc
+ * Le correctif (`inert={pinned}`, `components/story-rail.tsx`) doit
  * tenir TROIS faits, mesurés ici plutôt qu'assumés :
- *  · une SEULE région porte l'`aria-label` « Stories » pendant que la bande
- *    est active — jamais deux ;
- *  · la bande ne contient AUCUN élément focalisable aujourd'hui. Cette
- *    assertion est un CLIQUET : le jour où une pastille reçoit sa porte, elle
- *    rougit et impose de rétablir ici la mesure du report de focus (le
- *    mécanisme, lui, est resté armé dans `ListHeader` et ses témoins) ;
- *  · un `Tab` depuis le DERNIER contrôle de l'en-tête (« Progression ») ne
- *    retombe PAS dans le grand rail hors champ — il poursuit dans l'ordre du
- *    DOM jusqu'au prochain contrôle RÉEL (les filtres).
+ *  · un SEUL nœud porte l'`aria-label` « Stories » pendant que la bande est
+ *    active — jamais deux. LA MESURE COMPTE LES NŒUDS, PAS LES `<ul>` : au
+ *    premier passage de #6080 l'enveloppe `<section>` du grand plateau
+ *    portait l'étiquette, hors de portée de `inert` posé sur son enfant, et
+ *    le doublon se reformait sur le seul nœud que la garde ne couvrait pas ;
+ *  · un premier `Tab` depuis la dernière tuile de la bande rejoint
+ *    « Progression » SANS bouger le scrollport — elle vit dans l'en-tête,
+ *    jamais dans le flux qui défile ;
+ *  · un second `Tab` ne retombe PLUS dans le grand rail hors champ — il
+ *    poursuit dans l'ordre du DOM jusqu'au prochain contrôle RÉEL (les
+ *    filtres), pas jusqu'à un doublon des NEUF mêmes conversations.
  *
  * CE QUE CE TÉMOIN NE PROUVE PAS, ET POURQUOI CE N'EST PAS UN DÉFAUT : ce
  * second `Tab` fait tout de même sauter le `scrollTop` à 0 — mesuré, la
@@ -729,59 +742,63 @@ await kbdPage.waitForSelector('[data-row]');
 await kbdPage.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 600 }));
 await kbdPage.waitForTimeout(400);
 
-/**
- * Le sélecteur est appliqué DEPUIS la bande (`bande.querySelectorAll`), jamais
- * concaténé en `'[data-rail="pinned"] ' + liste` : une liste de sélecteurs
- * séparée par des virgules ne se PRÉFIXE pas — `A B,C` vaut « B dans A » OU
- * « C n'importe où ». La première écriture de ce cliquet comptait ainsi les 18
- * contrôles de la page entière et accusait la bande.
- */
-const FOCALISABLES = 'a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])';
-const kbdBefore = await kbdPage.evaluate((selecteur) => {
-  const bande = document.querySelector('[data-rail="pinned"]');
-  return {
-    pinnedPresent: bande !== null,
-    grandeInert: document.querySelector('[data-rail="grande"]')?.hasAttribute('inert') ?? null,
-    regions: document.querySelectorAll('[aria-label="Stories"]').length,
-    focalisablesDansLaBande: bande === null ? null : bande.querySelectorAll(selecteur).length,
-    scrollTop: document.getElementById('contenu')?.scrollTop ?? null,
-  };
-}, FOCALISABLES);
+const kbdBefore = await kbdPage.evaluate(() => ({
+  pinnedPresent: document.querySelector('[data-rail="pinned"]') !== null,
+  grandeInert: document.querySelector('[data-rail="grande"]')?.hasAttribute('inert') ?? null,
+  regions: document.querySelectorAll('[aria-label="Stories"]').length,
+  scrollTop: document.getElementById('contenu')?.scrollTop ?? null,
+}));
 constate(kbdBefore.pinnedPresent, "la bande épinglée n'est pas apparue — impossible de mesurer le doublon clavier");
 constate(kbdBefore.grandeInert === true, `le grand rail n'est pas \`inert\` pendant que la bande est active (${kbdBefore.grandeInert})`);
 constate(
   kbdBefore.regions === 1,
-  `${kbdBefore.regions} région(s) portent l'aria-label « Stories » en même temps — une seule le devrait`,
-);
-constate(
-  kbdBefore.focalisablesDansLaBande === 0,
-  `${kbdBefore.focalisablesDansLaBande} élément(s) focalisable(s) dans la bande épinglée — une pastille de story n'a pas de porte ` +
-    '(#5765). CLIQUET : si une porte vient d’arriver, rétablis ici la mesure du report de focus vers la tuile jumelle du grand rail ' +
-    '(le mécanisme est resté armé dans `ListHeader`).',
+  `${kbdBefore.regions} nœud(s) portent l'aria-label « Stories » en même temps — un seul le devrait`,
 );
 
 await kbdPage.evaluate(() => {
-  document.querySelector('header a[aria-label^="Progression"]')?.focus();
+  const liens = [...document.querySelectorAll('[data-rail="pinned"] a[data-story-author]')];
+  (liens[liens.length - 1])?.focus();
 });
-const departClavier = await kbdPage.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? null);
+const scrollTopAvantTab = await kbdPage.evaluate(() => document.getElementById('contenu')?.scrollTop ?? null);
+
+await kbdPage.keyboard.press('Tab');
+const apresPremierTab = await kbdPage.evaluate(() => ({
+  ariaLabel: document.activeElement?.getAttribute('aria-label') ?? null,
+  scrollTop: document.getElementById('contenu')?.scrollTop ?? null,
+}));
 constate(
-  departClavier?.startsWith('Progression') === true,
-  `impossible de poser le focus sur « Progression » pour mesurer le \`Tab\` suivant (${departClavier})`,
+  apresPremierTab.ariaLabel?.startsWith('Progression') === true,
+  `le premier \`Tab\` depuis la dernière tuile de la bande ne rejoint pas « Progression » (${apresPremierTab.ariaLabel})`,
+);
+constate(
+  apresPremierTab.scrollTop === scrollTopAvantTab,
+  `le premier \`Tab\` a déplacé le scrollport (${scrollTopAvantTab} → ${apresPremierTab.scrollTop})`,
 );
 
 await kbdPage.keyboard.press('Tab');
-const apresTab = await kbdPage.evaluate(() => ({
+const apresSecondTab = await kbdPage.evaluate(() => ({
   dansGrandRail: document.activeElement?.closest('[data-rail="grande"]') !== null,
-  storyId: document.activeElement?.getAttribute('data-story') ?? null,
-  ariaLabel: document.activeElement?.getAttribute('aria-label') ?? null,
+  /* L'ENVELOPPE, PAS SEULEMENT LE `<ul>` : les deux portes flottantes (« Créer
+     une story », « Voir toutes les stories ») vivent DANS la `<section>` du
+     grand plateau, à CÔTÉ du rail — un `closest('[data-rail="grande"]')` ne les
+     voit pas. Elles tabulaient donc hors champ en toute impunité, et ramenaient
+     le plateau dans la vue exactement comme les tuiles. */
+  dansEnveloppeDuPlateau: document.activeElement?.closest('section:has([data-rail="grande"])') !== null,
+  storyAuthor: document.activeElement?.getAttribute('data-story-author') ?? null,
 }));
 constate(
-  !apresTab.dansGrandRail,
-  `le \`Tab\` depuis « Progression » entre dans le grand rail hors champ (${apresTab.ariaLabel}) — il devrait être \`inert\``,
+  !apresSecondTab.dansGrandRail,
+  'le second `Tab` depuis « Progression » entre dans le grand rail hors champ — il devrait être `inert`',
 );
 constate(
-  apresTab.storyId === null,
-  `le \`Tab\` atterrit sur une pastille du rail (${apresTab.storyId}) — un doublon de la bande, jamais un contrôle nouveau`,
+  !apresSecondTab.dansEnveloppeDuPlateau,
+  'le second `Tab` atteint une porte flottante du grand plateau hors champ (« Créer une story » / « Voir toutes ») — ' +
+    "l'enveloppe doit être `inert` avec son rail",
+);
+constate(
+  apresSecondTab.storyAuthor === null,
+  `le second \`Tab\` atterrit sur une tuile de story (${apresSecondTab.storyAuthor}) — un doublon de la bande, ` +
+    'jamais un contrôle nouveau',
 );
 
 await kbdPage.close();

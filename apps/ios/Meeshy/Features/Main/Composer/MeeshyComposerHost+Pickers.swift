@@ -211,8 +211,11 @@ extension MeeshyComposerHost {
         ) { updated in
             composerReferences = updated
         }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        // Aucune `presentationDetents` ici : la feuille porte la sienne
+        // (`AudiencePickerPresentationStyle`), et c'est ce que font déjà ses
+        // deux autres montages côté SDK. Ce site était le seul à la redéclarer
+        // — deux déclarations du même fait, dont l'une gagnait en silence
+        // (#6134).
     }
 
     /// Les six emojis de tête, ceux que le composer du fil propose déjà. Écrits

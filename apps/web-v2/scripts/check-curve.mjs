@@ -411,34 +411,20 @@ for (const [swiftName, downstreamName, what] of REVEAL_MAPPINGS) {
 }
 
 /**
- * PARTIE 5 bis — LA COTE COMPACTE DU RAIL DE STORIES (#5652).
- * `AvatarContext.storyTrayCompact` (`MeeshyUI/Primitives/MeeshyAvatar.swift`)
- * est la cote de la bande épinglée — 36 pt — et c'est la SEULE cote du rail
- * que `packages/shared/design/lentille-tokens.json` ne porte pas : la table
- * générée ne liste que les contextes row/header/bubble/stacked/typing
- * (`packages/design-tokens/ios.css`). `RAIL_SIZE_COMPACT`
- * (`components/stories-rail.tsx`) en est donc une dérivation TEXTUELLE, et
- * sans ce gate ce serait un littéral libre — exactement ce que D-4 interdit.
- *
- * La valeur est un `case … return 36` (pas une affectation `nom = valeur`) :
- * le lecteur générique `count()` ne l'attrape pas, d'où la regex dédiée
- * ci-dessous, ancrée sur le NOM du cas.
+ * PARTIE 5 bis — RETIRÉE (fusion #6080 ↔ #6103, 2026-09-12). Cette section
+ * gardait `RAIL_SIZE_COMPACT` (`components/stories-rail.tsx`, la branche
+ * `#5652` de cette fusion) en parité TEXTUELLE stricte avec
+ * `AvatarContext.storyTrayCompact` (36 pt, `MeeshyAvatar.swift`). La bande
+ * épinglée retenue par la fusion (`components/story-rail.tsx`, doc-comment
+ * « LA COTE — DEUX CONSTANTES iOS ») ne reprend PAS cette cote : elle sert la
+ * cote COMPACTE de `rail-tile.tsx` (`RAIL_TILE_COMPACT` = 30), partagée avec
+ * la tuile de conversation, un choix ASSUMÉ et non tranché par cette fusion
+ * (« l'écart qui reste… n'est pas tranché par cette fusion »). Un gate qui
+ * exigeait l'égalité stricte avec 36 pt rougirait donc sur un écart QUI EST
+ * la décision, pas un défaut — et son fichier source (`stories-rail.tsx`) a
+ * disparu avec la branche qu'il gardait. Si la cote 36 doit un jour redevenir
+ * la référence, elle se regarde à `rail-tile.tsx`, jamais ici.
  */
-const UPSTREAM_AVATAR_SWIFT = `${ROOT}packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyAvatar.swift`;
-const DOWNSTREAM_RAIL = `${ROOT}apps/web-v2/src/components/stories-rail.tsx`;
-const avatarSwift = readFileSync(UPSTREAM_AVATAR_SWIFT, 'utf8');
-const railDerived = readFileSync(DOWNSTREAM_RAIL, 'utf8');
-const storyTrayCompactSwift = (() => {
-  const m = /case\s+\.storyTrayCompact\s*:\s*(?:\/\/[^\n]*\n\s*)*return\s+(-?[0-9.]+)/.exec(avatarSwift);
-  return m === null ? null : Number(m[1]);
-})();
-const storyTrayCompactDerived = count(railDerived, 'RAIL_SIZE_COMPACT');
-if (storyTrayCompactSwift === null)
-  failures.push('cote compacte du rail de stories : « case .storyTrayCompact: return … » introuvable dans MeeshyAvatar.swift');
-else if (storyTrayCompactDerived === null)
-  failures.push('cote compacte du rail de stories : « RAIL_SIZE_COMPACT » introuvable dans components/stories-rail.tsx');
-else if (storyTrayCompactSwift !== storyTrayCompactDerived)
-  failures.push(`cote compacte du rail de stories : Swift ${storyTrayCompactSwift}, dérivée ${storyTrayCompactDerived}`);
 
 /**
  * PARTIE 6 — LA TYPOGRAPHIE DE LA RANGÉE DE LA LENTILLE (#5694, écart 1).
@@ -795,8 +781,6 @@ console.log(
     ` (${PERSPECTIVE_MAPPINGS.length + CHIP_FILL_CASES.length} cotes ; les valeurs sont gardées par election.test.ts).` +
     `\n  La protection du Fil est conforme à BubbleBlurRevealLifecycle.swift` +
     ` (${REVEAL_MAPPINGS.length} cote ; les valeurs sont gardées par protection.test.ts).` +
-    `\n  La cote compacte du rail de stories est conforme à MeeshyAvatar.swift` +
-    ` (.storyTrayCompact = ${storyTrayCompactSwift} pt → RAIL_SIZE_COMPACT).` +
     `\n  La typographie de la rangée de la Lentille est conforme à lentille-tokens.json` +
     ` (${TYPOGRAPHY_MAPPINGS.length} chaînes complètes : jeton → ios.css → alias Tailwind → classe posée).` +
     `\n  Le menu du message est conforme à MessageOverlayMenu.swift/MessageActionsMenu.swift` +

@@ -48,7 +48,11 @@ public struct APIMessageReplyTo: Decodable, Sendable {
         sender = try c.decodeIfPresent(APIMessageSender.self, forKey: .sender)
         attachments = try c.decodeIfPresent([APIMessageAttachment].self, forKey: .attachments)
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
-        translations = (try? c.decodeIfPresent([APITextTranslation].self, forKey: .translations)) ?? nil
+        // Tolérant par ÉLÉMENT, pas par tableau : le `try?` d'avant perdait
+        // TOUTES les traductions de la citation dès qu'une seule était
+        // malformée — la citation repassait alors dans la langue de son
+        // auteur, sans que rien ne le signale.
+        translations = c.decodeLossyArrayIfPresent([APITextTranslation].self, forKey: .translations)
         isViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce)
         isBlurred = try c.decodeIfPresent(Bool.self, forKey: .isBlurred)
         // La date suit la stratégie du décodeur appelant ; une forme qu'elle

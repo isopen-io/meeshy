@@ -34,7 +34,14 @@ import {
 
 const CONV_ID = '507f1f77bcf86cd7994390bb';
 
-/** Ce que le handler de liste pose réellement pour une ligne de conversation. */
+/**
+ * Ce que le handler de liste POSE, une fois qu'il l'a — c'est-à-dire la moitié
+ * AVAL de la chaîne, et elle seule. Cet objet est fabriqué ici : il ne prouve
+ * rien de ce que la REQUÊTE charge. Quatre de ses champs ont été verts pendant
+ * des mois alors que le `select` Prisma ne les demandait pas (2026-09-11).
+ * L'autre moitié est gardée par `conversation-list-select-parity.test.ts` ; les
+ * deux témoins ne se remplacent pas, ils se referment l'un sur l'autre.
+ */
 const listRowFromHandler = {
   id: CONV_ID,
   type: 'group',

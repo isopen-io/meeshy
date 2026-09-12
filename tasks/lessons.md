@@ -30046,6 +30046,173 @@ retire, jamais ne se tolère. Deux gates morts, c'est tout le dispositif d'une
 issue de fiabilité qui ne dit plus rien — et personne ne s'en aperçoit, puisque
 le rouge fait partie du décor.
 
+<!-- LEÇONS 560 ET 561 — RAPATRIÉES LE 2026-09-12 depuis la branche
+     `claude/bascule-v11-5882`, dont la PR #5887 a été FERMÉE sans merge le
+     2026-09-10. Le travail de CI qu'elle portait a été refait ailleurs ; ces
+     deux leçons, elles, n'avaient aucun jumeau et laissaient un TROU dans la
+     numérotation (559 → 562) — la trace même du défaut que la 561 décrit.
+     Aucun mot n'est retouché : ce qui suit est le texte tel qu'il avait été
+     écrit et relu. -->
+
+## Leçon 560 — Un lot qui RENOMME rend ANTI-CORRÉLÉ tout garde qui reconnaissait par le nom
+
+`apps/web/__tests__/public/sw.v3-zone.test.ts` gardait la frontière entre le
+service worker du legacy et la zone `/__v3/` d'une seconde application servie
+sur la même origine. Il reconnaissait le legacy par son NOM D'IMAGE :
+
+```js
+const IMAGE_DU_LEGACY = /^\s*image:.*isopen\/meeshy-(?:frontend|web):/m;
+```
+
+Son doc-comment était juste, explicite, et anticipait déjà un piège voisin :
+« On lit l'IMAGE et non le nom du service : `frontend-staging` a gardé son nom
+en changeant d'occupant, donc le nom ne dit plus qui est là. »
+
+#5882 a fait exactement ce que ce raisonnement n'avait pas prévu, un cran plus
+loin : donner le nom d'image du LEGACY à la v3.1 qui le remplace. Le
+discriminant n'est pas devenu imprécis — il est devenu **anti-corrélé** : sur
+un staging qui sert la v3.1, il déclarait le legacy PRÉSENT, et exigeait donc
+là-bas un routeur de zone que la directive du 2026-09-07 avait précisément
+supprimé. Il aurait fait rougir la conformité et passer la non-conformité.
+
+> **Un garde qui reconnaît une chose par son NOM tombe le jour où un lot déplace
+> le nom.** Et il ne tombe pas en s'éteignant — il continue de rendre un verdict,
+> à l'envers. C'est pire qu'un garde muet : un garde muet se remarque au premier
+> vert suspect, un garde inversé se croit.
+
+CE QUI SAUVE, ET COMMENT ON LE TROUVE. Le témoin portait sa propre réponse dans
+la phrase qui justifiait son existence : « sa juridiction sur la zone v3 suppose
+DEUX occupants de la même origine ». Le discriminant juste n'était donc pas
+« quelle image est là ? » mais **« combien de routeurs revendiquent cet hôte ? »**
+— une propriété STRUCTURELLE, que renommer une image ne touche pas :
+
+```js
+const partagees = originesPartagees(compose);   // hôtes réclamés par ≥ 2 routeurs
+if (partagees.size === 0) return [];            // pas deux occupants ⇒ rien à garder
+```
+
+**La raison d'être d'un garde, écrite dans son doc-comment, est en général un
+meilleur discriminant que celui qu'il utilise** — parce qu'elle nomme le
+mécanisme, pendant que le code nomme un indice observable de ce mécanisme. Quand
+un lot casse l'indice, relire la raison d'être avant de bricoler l'indice.
+
+COROLLAIRE — LA NON-VACUITÉ A UN TROISIÈME ÉTAT. Le même fichier gardait
+`expect(chemins.length).toBeGreaterThan(0)` : le refus de sortir vert sans avoir
+rien éprouvé. Le sujet ayant disparu (plus aucune origine partagée nulle part),
+cette assertion tombait sur du CONFORME. Le retirer aurait rendu le témoin muet
+pour toujours ; le garder aurait interdit un état légitime. La sortie est un
+troisième état qui **assère la raison de son vide** — et qui rougit encore si
+une origine redevient partagée sans que le témoin en tire un chemin.
+
+DEUX AUTRES FORMES DU MÊME DÉFAUT, DANS LE MÊME LOT — les sondes de self-test
+de `check-ci-summary-coverage.mjs` et `check-ci-build-order.mjs` mutaient des
+jobs supprimés (`lifecycle-v3, chaines-v3,`, `a11y-v3`). Une sonde dont la cible
+a disparu ne mute RIEN : `String.replace` d'un motif absent rend la chaîne
+intacte, le garde ne voit aucune violation, et la sonde **sort verte**. L'une
+des deux l'a dit (« la mutation n'a RIEN changé — elle ne prouve rien ») parce
+que son auteur avait prévu le cas ; l'autre a JETÉ (« job introuvable »), ce qui
+est mieux. Les deux se réancrent sur une cible vivante — jamais on ne retire la
+sonde.
+
+> **Après tout lot qui supprime, renomme ou déplace : chercher les gardes dont
+> l'ANCRE textuelle visait ce qui vient de bouger.** `grep` le nom disparu dans
+> TOUT le dépôt est de trente secondes ; un garde inversé vit des mois. Le lot
+> qui déplace est le seul moment où l'on sait quoi chercher.
+
+QUATRIÈME OCCURRENCE, ET ELLE CORRIGE LA CONSIGNE CI-DESSUS. J'avais écrit
+« grep dans `scripts/` et `__tests__/` » — deux endroits choisis parce que c'est
+là que VIVAIENT les trois premiers. La CI en a rendu un quatrième depuis
+`services/gateway/src/__tests__/security/claude-md-paths-exist-guard.test.ts` :
+un cliquet qui compte les chemins cités par les `CLAUDE.md` et qui n'existent
+pas, dette déclarée **7**, mesurée **8**.
+
+Le huitième était `scripts/v3-rapport.mjs` — **le fichier que le lot supprimait,
+cité dans la phrase du `CLAUDE.md` qui annonçait sa suppression.** Écrire « son
+agrégateur `scripts/v3-rapport.mjs` est parti avec elle » apprend au lecteur un
+chemin mort ; le garde a raison, et la phrase se dit sans le chemin (« son
+agrégateur des sept mesures »).
+
+> **Un document qui ANNONCE une suppression est le premier endroit où un chemin
+> mort apparaît** — on nomme ce qu'on retire, au présent, dans le même geste. Et
+> le garde qui l'attrape n'est pas dans le territoire du lot : il est chez le
+> service qui a écrit le cliquet, ici le gateway. La consigne juste est donc
+> « grep le nom disparu dans TOUT le dépôt », sans présumer d'où un garde
+> surveille — un garde de DOCUMENT peut vivre à côté d'un service qui n'a
+> aucun rapport avec le document.
+
+## Leçon 561 — Une phrase au passé écrite par la branche PRIORITAIRE sur le fait porté par l'AUTRE naît fausse, et le devient vraie plus tard
+
+Deux branches vivantes, deux faits liés. #5887 fait SORTIR `apps/web-old-version3`
+du dépôt ; #5889 retouche `apps/web-v3/parity.md`, dont une ligne décrit cette
+application. L'ordre de merge est décidé : **#5889 d'abord**.
+
+J'ai proposé d'écrire, dans #5889 :
+
+> `apps/web-old-version3` — 48 routes — **sortie du dépôt le 2026-09-09 (#5882)**
+
+C'est faux, et pas « imprécis » : entre le merge de #5889 et celui de #5887, `dev`
+sert un arbre où le répertoire **est encore là**, sous une ligne qui déclare qu'il
+est parti. L'intervalle n'est pas une abstraction de raisonnement — c'est l'état
+que le dépôt sert réellement, à quiconque clone pendant ce temps.
+
+La formulation retenue, proposée par la session qui portait #5889 :
+
+> **quitte le dépôt avec #5882**
+
+Vraie AVANT le merge de #5887 (c'est une promesse tenue par une PR ouverte),
+vraie APRÈS (c'est un fait accompli), et impossible à lire comme un état présent.
+
+> **Le test à poser n'est pas « cette phrase sera-t-elle vraie ? » mais « est-elle
+> vraie dans CHACUN des deux ordres de merge possibles, ET pendant l'intervalle
+> entre les deux ? »** La forme qui survit nomme l'ÉVÉNEMENT et son ISSUE, jamais
+> sa date : « quitte le dépôt avec #5882 », pas « sorti le 2026-09-09 ».
+
+CE QUI REND LE DÉFAUT DUR À VOIR. Il n'existe qu'à partir du moment où l'on
+CHOISIT un ordre de merge — c'est-à-dire au moment le plus tardif du lot, quand
+les deux diffs sont écrits et relus. La phrase était juste tant que les deux PR
+étaient symétriques ; c'est la décision d'ordonnancement qui la rend fausse, et
+elle ne touche aucune ligne de code. Aucun gate ne peut la voir : elle est dans
+un document, et elle est syntaxiquement irréprochable.
+
+C'est le PENDANT, entre branches, de « un corps d'issue est DATÉ, le code non » :
+- là, une phrase vraie à l'écriture **vieillit** et devient fausse ;
+- ici, une phrase **naît fausse** et le devient vraie plus tard.
+
+Les deux se soignent pareil — dater l'événement par son ISSUE, qui ne bouge pas,
+plutôt que par une horloge, qui bouge par rapport à l'arbre servi.
+
+COROLLAIRE POUR TOUTE SESSION QUI COORDONNE — dès qu'on répond « merge celle-ci
+en premier », **relire ce que la branche prioritaire AFFIRME du travail de
+l'autre.** J'ai donné l'ordre de merge et la mauvaise formulation dans le même
+message, sans voir que le premier invalidait la seconde ; c'est la session
+d'en face qui l'a attrapé. Un ordre de merge n'est pas qu'un calendrier : il
+décide de la vérité des phrases écrites de part et d'autre.
+
+SECOND COROLLAIRE, DU MÊME JOUR ET DE LA MÊME CAUSE — **« relire le fichier pour
+choisir le suivant libre » ne tranche que si les deux écrivains partagent le
+FICHIER.** Deux sessions se sont donné cette règle pour allouer un numéro de
+leçon, chacune l'a appliquée honnêtement, et **les deux ont écrit une 560** :
+`dev` s'arrêtait à 559, et le fichier que chacune relisait ne contenait pas les
+leçons de l'autre, restées sur sa branche.
+
+C'est le même défaut de raisonnement que ci-dessus, appliqué à un identifiant
+plutôt qu'à une phrase : on a traité comme PARTAGÉ un substrat qui ne l'est
+qu'après le merge. Une branche non mergée est invisible à la relecture de
+l'autre — c'est même sa définition.
+
+Ce qui a tranché n'est pas la relecture mais la règle d'asymétrie du dépôt
+(§ « La branche poussée tôt ») : les deux leçons POUSSÉES gardent leurs
+numéros, celle qui n'avait pas encore atteint le distant se déplace. Aucune
+négociation — la décision se lit depuis ce que git montre.
+
+> **La parade n'est pas de mieux communiquer, c'est de NE PAS ALLOUER.** Un
+> titre daté et nommé — « Leçon — `idb ui text` avale un caractère (2026-09-09) »
+> — ne collisionne avec rien, et le numéro se pose au merge, quand le substrat
+> est enfin commun. C'est le § « un identifiant qui ne s'alloue pas ne
+> collisionne pas » (#5102) rejoué sur le seul espace de noms que ce fichier
+> possède : sa numérotation.
+
+
 ## Leçon 562 — `idb ui text` sur un champ SÉCURISÉ peut avaler ou corrompre un caractère à SHIFT, sans jamais lever d'erreur — vérifier par la LONGUEUR ne suffit pas
 
 En posant la cible iOS de la v3.1 (simulateur « Meeshy Ref-Native »), taper un
@@ -30440,7 +30607,259 @@ désarmée). Falsifiabilité mesurée : vert sur le catalogue corrigé, ROUGE d�
 qu'on remet `%@` sur UNE seule des sept langues, vert de nouveau après
 restauration.
 
+## Leçon 575 — Un jeton GÉNÉRÉ que personne ne consomme ne protège rien : la dérive se produit à côté de lui
 
+*(Les numéros 573 et 574 sont réservés par des lots iOS non encore fusionnés —
+un identifiant qui ne s'alloue pas ne collisionne pas, #5102 : on saute plutôt
+que de risquer deux leçons portant le même numéro dans un fichier partagé.)*
+
+`packages/design-tokens/ios.css` porte `--ios-header-circle: 28px`, **généré
+depuis la source Swift** (`ConversationView+Header.swift`, « cercle visuel des
+actions (cible 44) »), et `apps/web-v2/src/styles/ios.css` le republie en
+`--size-header-circle`. Le gate `check:tokens` était vert depuis le premier
+jour : il vérifie que le jeton CORRESPOND à sa source Swift.
+
+Mesuré au moment d'aligner les vues (#6080) : **aucune surface ne lisait ce
+jeton.** Les trois familles de boutons ronds du chrome l'avaient chacune
+réécrit à la main — `size-7` (28, juste par accident) dans l'en-tête du fil,
+`size-8` (32) dans l'en-tête de la liste, un disque plein de 44 dans le rail
+des stories. Trois dessins pour un seul rôle, sur trois écrans que
+l'utilisateur enchaîne.
+
+> **Un gate de génération mesure la FIDÉLITÉ du jeton, jamais son ADOPTION.**
+> Tant que rien ne le consomme, il se régénère parfaitement pendant que les
+> surfaces dérivent à côté de lui — et la dérive est invisible au gate, par
+> construction : elle n'est pas dans le jeton, elle est dans son absence.
+
+C'est la forme, sur un jeton de design, de la leçon « une vue sans
+CONSOMMATEUR ne rougit nulle part ». La question à poser à toute table générée
+n'est donc pas « est-elle juste ? » mais **« qui la LIT ? »** — et la réponse
+se cherche par `grep` du nom du jeton dans `src/`, pas dans le gate.
+
+Correctif : `components/chrome-action.tsx`, consommateur UNIQUE, qui lit
+`var(--size-header-circle)` et dérive sa teinte de `currentColor` — donc juste
+dans un fil (accent de conversation) comme dans la liste (marque), sans que
+l'appelant ait à le dire, donc sans qu'il puisse se tromper.
+
+## Leçon 576 — Un défaut visuel peut n'exister que sur UN moteur : le rendu se juge là où il est servi
+
+Les captures de recette de `apps/web-v2` sont prises par Chromium sur macOS, à
+390 × 844 (`scripts/capture.mjs`). Après l'alignement des vues, elles étaient
+propres.
+
+Lancée sur l'**émulateur Android** — la coque Capacitor étant la cible réelle
+du chantier —, la même liste montrait **deux barres grises permanentes** :
+l'une horizontale sous les chips de filtre, l'autre verticale le long du bord
+droit de la liste. Personne ne les avait dessinées.
+
+La cause n'est pas dans le code : **le moteur Android peint des barres de
+défilement CLASSIQUES**, c'est-à-dire un rail gris qui occupe de la place et
+reste visible au repos, là où WebKit et les navigateurs de bureau modernes
+posent un indicateur SUPERPOSÉ qui s'efface. Le même CSS, deux rendus — et
+celui qu'on regardait était celui qui ne montrait pas le défaut.
+
+> **Une capture prise sur le moteur de la machine de build mesure la machine de
+> build.** C'est la parente exacte de « un ROUGE des deux côtés du diff mesure
+> aussi la MACHINE » : ici c'est un VERT, et il mesure le moteur. Tant qu'une
+> application est servie par plusieurs moteurs, un seul d'entre eux ne fait pas
+> une recette.
+
+Deux corollaires pratiques :
+
+- **`overflow-*: auto` n'est pas une décision neutre.** Chaque conteneur
+  défilant est un endroit où un moteur PEUT peindre un rail. Les rails
+  HORIZONTAUX (rails de stories, chips de filtre, tiroir du composeur) ne
+  doivent jamais en montrer — iOS pose `showsIndicators: false` sur les siens.
+- **La validation d'une coque se fait DANS la coque.** `build-shells.mjs`
+  refuse, à raison, de construire une coque sur fixtures ; pour juger le RENDU
+  sans identifiants, on sert le serveur de développement à l'émulateur
+  (`--host`, `http://10.0.2.2:<port>`) — c'est le même moteur, le même écran,
+  et aucun artefact mal étiqueté n'est produit.
+
+## Leçon 577 — Un témoin qui FABRIQUE sa donnée ne mesure qu'une moitié de la chaîne, et affirme l'autre
+
+2026-09-11, passerelle (audit de cohérence iOS ↔ passerelle).
+`conversation-wire-fields.test.ts` est un bon témoin : il sérialise une ligne de
+liste et regarde ce qui survit à `fast-json-stringify`, qui retire en silence
+toute propriété non déclarée. Il est né d'un vrai défaut de production, il est
+bien écrit, et il est **vert depuis des mois sur quatre champs que la base ne
+chargeait pas**.
+
+L'objet qu'il sérialise est un littéral, sous un commentaire qui dit « ce que le
+handler de liste pose réellement ». Le commentaire affirme ; le test, lui, ne
+mesure que ce qui se passe APRÈS que le handler a posé. `description`,
+`defaultWriteRole`, `slowModeSeconds` et `autoTranslateEnabled` étaient déclarés
+au schéma, présents dans le littéral — et absents du `select` Prisma. Servis
+`undefined` sur chaque ligne, pour toujours.
+
+Les deux pièges sont symétriques, et un seul des deux se voit :
+
+| | déclaré au schéma | chargé par la requête | ce qui part |
+|---|---|---|---|
+| piège 2026-08-24 | ✗ | ✓ | rien (strippé) |
+| piège 2026-09-11 | ✓ | ✗ | rien (jamais lu) |
+
+> **Une donnée fabriquée dans un test est une HYPOTHÈSE, pas une mesure.** Le
+> test prouve « si le handler pose ceci, alors le fil rend cela » — jamais que
+> le handler le pose. Devant un témoin qui construit son entrée, demander :
+> *quelle moitié de la chaîne reste non mesurée, et qui la mesure ?*
+
+Parade : un témoin qui lit les DEUX SOURCES DE VÉRITÉ et les confronte, plutôt
+qu'une donnée écrite à la main. Ici : les colonnes de `model Conversation` lues
+dans `schema.prisma` à l'exécution, ∩ les propriétés de `conversationMinimalSchema`,
+⊆ les clefs du `select` — avec une liste d'exceptions qui coûte une phrase
+chacune. La loi attrape le prochain champ ; un littéral n'attrape que celui
+qu'on a pensé à y écrire.
+
+Corollaire d'outillage : une sélection Prisma **inline dans un `findMany` est
+illisible pour tout témoin**. L'extraire en constante exportée n'est pas
+cosmétique — c'est ce qui rend la moitié amont mesurable.
+
+
+## Leçon 578 — La graphie du FIL n'est pas la graphie du MAGASIN, et ce qui se perd entre les deux est ce qui ne se regarde pas
+
+2026-09-11, passerelle (audit de cohérence iOS ↔ passerelle).
+`POST /posts` accepte une transcription faite sur l'appareil dans la graphie du
+client — `duration_ms`, `segments[].start`/`.end` en **secondes**, `speaker_id`.
+Les deux services la persistaient **verbatim** (`{ ...data.mobileTranscription,
+segments, source: 'mobile' }`) dans `PostMedia.transcription`, dont la graphie
+canonique est `durationMs`, `startMs`/`endMs` en **millisecondes**, `speakerId`.
+
+Le texte, lui, porte le même nom des deux côtés. Un audio transcrit sur
+l'appareil rendait donc sa transcription — et des segments **sans aucun
+horodatage** : pas de surlignage au fil de la lecture, pas de saut à un segment,
+durée lue à `0`. Le même enregistrement transcrit par Whisper s'affichait
+entièrement.
+
+> **Quand on vérifie qu'une transcription « marche », on lit le texte.** Ce qui
+> se perd dans une conversion de graphie est exactement ce que ce regard ne
+> couvre pas : le TEMPS, l'unité, l'identité du locuteur. La question à poser à
+> tout site qui persiste une charge reçue n'est pas « le champ principal est-il
+> là ? » mais **« ce document a-t-il une graphie à lui, et qui la lui donne ? »**
+
+Le dépôt savait. Le chemin TUS l'écrit noir sur blanc — « la forme validée est
+celle que le translator lit (`startMs`/`endMs`), pas celle de `POST /posts`
+[…] : c'est le lecteur final qui dicte la forme ». La règle était juste et
+publiée ; elle n'avait jamais été appliquée là où le lecteur final voulait la
+même chose. **Un doc-comment qui NOMME une divergence est un aveu : aller voir
+si l'autre moitié a été traitée.**
+
+Parade : un site UNIQUE de conversion, dont le témoin est que sa sortie passe le
+validateur du magasin (`parseAttachmentTranscription`) — et dont la
+contre-épreuve est que la charge du fil, elle, est refusée. Une garde qui
+compare des clefs se contente de décrire ; une garde qui fait valider sa sortie
+par le lecteur mesure.
+
+Et l'unité est le piège dans le piège : `start: 12.4` relu comme des
+millisecondes donne un segment de 12 ms au lieu de 12,4 s — un décalage qui a
+l'air d'un bug de LECTEUR, jamais d'un bug de format.
+
+
+## Leçon 579 — Un décodage strict sur un champ que PERSONNE ne lit coûte la PAGE entière
+
+2026-09-11, iOS + passerelle (audit de cohérence).
+`Message.translations` est une colonne JSON Mongo, relue par la passerelle avec
+un CAST — aucune validation. Le type décrit ce que les écrivains d'aujourd'hui
+posent, jamais ce que la base contient : écriture partielle, version antérieure,
+translator tombé entre deux champs.
+
+La chaîne complète, pour UNE ligne malformée :
+
+1. l'entrée sans `text` produit `translatedContent: undefined` ;
+2. le schéma wire ne le déclare pas `nullable` ⇒ `fast-json-stringify` OMET la
+   clé ;
+3. `APITextTranslation.translatedContent` est non optionnel ⇒ le message échoue ;
+4. `MessagesResponse.data` est un `[APIMessage]` décodé d'un bloc ⇒ **la page
+   entière échoue**.
+
+La conversation s'ouvre VIDE, et rien dans le journal ne nomme la ligne fautive.
+
+> **La rigueur d'un type se paie au NIVEAU où l'échec remonte, jamais au niveau
+> où il est écrit.** Un champ non optionnel dans un élément de tableau est une
+> décision sur le TABLEAU. Demander : *si cet élément est refusé, qu'est-ce qui
+> disparaît ?* — si la réponse est « plus que l'élément », le décodage doit être
+> tolérant par élément.
+
+`translationModel` n'était lu par AUCUNE surface (relevé sur tout le dépôt :
+seuls des tests), et le web le traitait déjà comme absent (`|| 'basic'`). Un
+champ que personne ne lit ne mérite pas de faire tomber quoi que ce soit.
+
+Parade, en DEUX moitiés qui ne se remplacent pas :
+- côté serveur, ne pas servir ce qu'on ne peut pas décrire honnêtement — une
+  entrée sans texte n'est pas une traduction (« le client peut se tromper ; la
+  charge, non ») ;
+- côté client, tolérance par ÉLÉMENT (`decodeLossyArrayIfPresent`, déjà dans le
+  SDK), pour la malformation que personne n'a prévue.
+
+Et surtout **ne pas rendre facultatif le champ de CONTENU** pour faire taire le
+symptôme : `translatedContent` reste obligatoire, parce qu'une traduction sans
+texte n'a rien à faire dans la liste. C'est le champ de MÉTADONNÉE qui devient
+facultatif — il dit alors ce qui est vrai plutôt que ce qu'on espérait.
+
+
+## Leçon 580 — Une erreur de DÉCODAGE tombe dans le `catch` de la panne RÉSEAU, et la file se rejoue pour toujours
+
+2026-09-11, iOS (audit de cohérence iOS ↔ passerelle).
+`SettingsActionQueue` rejoue une modification de profil faite hors-ligne. Le
+gestionnaire décodait la réponse en `APIResponse<MeeshyUser>` ; `PATCH /users/me`
+sert `data: { user, message }`. Le décodage échouait **à tous les coups**, sur
+`keyNotFound(id)`.
+
+Ce qui rend le défaut invisible n'est pas l'échec : c'est OÙ il atterrit.
+
+```swift
+} catch {                     // 5xx, connectivité… et keyNotFound
+    return false              // « garder en file, on rejouera »
+}
+```
+
+La doctrine de ce `catch` est juste pour une panne réseau. Appliquée à une
+erreur de FORME, elle produit : le serveur a écrit, le client croit avoir
+échoué, l'action reste en file, et chaque retour en ligne la rejoue. Le seul
+symptôme visible est un compteur « en attente de synchronisation » qui ne
+redescend jamais — jamais une erreur.
+
+> **Un `catch` fourre-tout classe par DÉFAUT, et son défaut encode une
+> hypothèse : « ce qui a échoué est le transport ».** Devant un rejeu, demander
+> *quelles autres erreurs finissent ici, et le verdict leur convient-il ?* Une
+> erreur de décodage est TERMINALE au sens de la file (rejouer n'y changera
+> rien) tout en étant indistinguable d'une erreur transitoire.
+
+Parade de forme, plus solide que d'énumérer un cas de plus : **un rejeu ne doit
+exiger aucune forme de réponse.** Le chemin persiste une adresse écrite par une
+version possiblement antérieure de l'app ; parier sur la forme de ce qu'elle
+rend est un pari sur une route qu'on ne connaît pas. `SimpleAPIResponse` —
+l'enveloppe, sans son `data` — ne peut pas tomber sur un changement de route.
+
+Le jumeau du site avait déjà la bonne forme (`OutboxDispatcher.updateProfile`,
+`APIResponse<[String: AnyCodable]>`) avec, en commentaire, exactement cette
+raison. **Deux sites qui font la même requête ne partagent pas pour autant ce
+qu'on a appris sur elle** — chercher le jumeau fait partie du correctif.
+
+
+## Leçon 581 — Un témoin qui lit le SOURCE rougit sur le commentaire qui l'explique
+
+2026-09-11, iOS. Le correctif de la leçon 580 s'accompagne d'un témoin
+d'inspection de source (le gestionnaire est une fermeture en ligne dans le bloc
+`.task` de `MeeshyApp` : aucun test ne peut l'invoquer). Il asserte que le corps
+ne contient plus `APIResponse<MeeshyUser>`.
+
+Il est tombé ROUGE sur le correctif juste — parce que le commentaire que je
+venais d'écrire pour EXPLIQUER le correctif nomme la forme fautive :
+
+```swift
+// Ce site exigeait `APIResponse<MeeshyUser>` ; PATCH /users/me sert …
+let _: SimpleAPIResponse = try await APIClient.shared.replayPersistedRequest(
+```
+
+> **Un témoin de source ne distingue pas le code de ce qui le documente.** Et
+> la documentation d'un correctif NOMME, par construction, ce qu'il retire —
+> les deux se contredisent donc mécaniquement. Le réflexe « je reformule le
+> commentaire » est le mauvais : il fait payer à l'explication le prix de
+> l'outil de mesure.
+
+Parade : retirer les lignes de commentaire AVANT de mesurer. Trois lignes de
+`filter`, et le commentaire peut dire la vérité entière.
 ## Leçon 573 — Une liste d'annotations CI est plafonnée, et le rapport dit son propre total juste à côté
 
 2026-09-11, iOS (#6078). Pour attribuer les rouges de `dev`, j'ai comparé la
@@ -30509,4 +30928,206 @@ ensemble par négligence individuelle. Ils dérivent parce que **la suite iOS ne
 tourne ni sur `dev` ni sur les PR sans mot-clé** : un témoin cassé n'est vu par
 personne pendant des semaines, et le lot qui l'a cassé est parti depuis
 longtemps. C'est #6065, mesuré une fois de plus.
+
+
+
+## Leçon 582 — Une PR en CONFLIT ne produit aucun run : l'absence de verdict n'est pas une panne de CI
+
+2026-09-11, #6100. `gh pr checks 6100` répondait « no checks reported on the
+branch » après deux poussées d'affilée, et j'ai cherché du côté de la CI :
+relancer un run, pousser à vide, comparer les SHA. Le relevé disait pourtant
+tout ce qu'il fallait :
+
+```
+gh pr view 6100 --json mergeable  →  CONFLICTING
+```
+
+Un workflow déclenché par `pull_request` construit le **commit de fusion**
+(`refs/pull/N/merge`). Une PR en conflit n'en a pas. GitHub ne crée donc
+AUCUN run — pas un run rouge, pas un run annulé : rien. Le verdict manquant
+n'était pas perdu, il n'avait jamais été demandé.
+
+> **« Aucun check » se lit toujours avec `mergeable` à côté, jamais seul.** « Pas
+> de run » et « run en échec » se ressemblent dans un tableau de bord et n'ont
+> pas la même cause : le premier est presque toujours un conflit, et il se
+> corrige avec `git merge`, pas avec `gh run rerun`.
+
+C'est la forme la plus discrète de « ce qui ne s'exécute pas ne se signale
+pas » : `no checks reported` ressemble à « la CI n'a pas encore démarré » et dit
+en réalité **« la CI ne démarrera jamais tant que le conflit tient »**.
+
+Deux pièges de lecture s'ajoutent, et ils tirent en sens inverse :
+
+- **`gh pr checks` / `gh pr view` servent un `mergeable` CALCULÉ, et il reste
+  collé.** Sur #6112, l'API disait `CONFLICTING` alors que
+  `git merge-tree --write-tree` rendait un arbre propre et qu'une vraie fusion
+  dans un worktree jetable ne laissait aucun fichier `U`. Sur #6100, l'inverse :
+  `gh pr view` disait encore `CONFLICTING` quand `gh api .../pulls/6100` disait
+  déjà `mergeable: true, mergeable_state: unstable`. **Git a raison, l'API
+  rattrape.** Mesurer soi-même coûte une commande.
+- **`dev` bouge.** Entre le `merge origin/dev` et la poussée, trois PR y sont
+  entrées ; la branche fusionnée ne contenait déjà plus `dev`
+  (`git merge-base --is-ancestor origin/dev <branche>` → faux) et le conflit
+  restait ANNONCÉ parce qu'il restait VRAI. Refetch avant de conclure que
+  l'outil se trompe.
+
+Parade : `git merge-base --is-ancestor origin/dev origin/<branche>` répond en
+une commande à la seule question qui compte — *cette branche contient-elle dev
+tel qu'il est MAINTENANT ?* — et `gh api repos/.../pulls/N -q .mergeable_state`
+donne l'état non mis en cache quand on veut l'avis de GitHub plutôt que le sien.
+
+
+## Leçon 583 — Un témoin qui CAPTURE un pixel doit attendre la PEINTURE, jamais le chargement — et `complete` ne dit rien de la peinture
+
+2026-09-12, #6135. `check-media.mjs` garde un défaut de PEINTURE : le glyphe de
+repli ne doit pas se poser par-dessus une image décodée. Il capture la pièce
+jointe, échantillonne le cœur de sa boîte, et exige une seule couleur. Il était
+**vert en local et rouge en CI depuis sa naissance**, onze heures durant — et
+comme le job s'arrête au premier rouge, il faisait sauter les neuf gates
+suivants.
+
+Le message ne disait pas assez pour trancher :
+
+```
+le cœur de la boîte est la couleur servie (229,246,248) à 21,20 %, en 106 teintes
+```
+
+**Trois hypothèses ont été falsifiées à la main, à un run de quinze minutes par
+tour** : le composeur qui recouvrirait la pièce (la marge de 11 px concernait une
+AUTRE pièce, 1 169 px plus bas) ; `loading="lazy"` qui différerait le chargement
+(`complete=true` au repos, en local) ; la rastérisation logicielle du runner
+(trois lancements, dont `--use-angle=swiftshader` : les trois rendaient 100,00 %
+sur une teinte). Aucune ne tenait, et le gate restait vert en local sur les trois.
+
+CE QUI A TRANCHÉ : FAIRE DIRE AU TÉMOIN CE QU'IL A VU. Enrichi de l'état de
+l'`<img>` au moment de la capture et des CINQ premières couleurs, il a rendu en
+CI deux relevés que seule une explication réconcilie :
+
+```
+cinq premières : 229,246,248 21.2% | 228,245,247 16.0% | 228,245,248 15.3%
+                 | 230,246,248 11.8% | 229,245,248 10.4%
+image APRÈS la capture : complete=true naturalWidth=1 hidden=false couvre=true
+                 opacity=1 objectFit=cover visible
+fond de la figure : color(srgb 0.27451 0.741176 0.792157 / 0.12)
+```
+
+`229,246,248` est l'accent de la conversation à 12 % composité — **le fond de la
+figure**, pas l'image indigo `99,102,241`. Le cœur montrait donc la boîte VIDE,
+pendant que l'`<img>` relevée juste après se déclarait décodée, opaque et
+couvrant exactement cette boîte. **La capture avait précédé la peinture.**
+
+La pièce mesurée est le PREMIER message du fil (`top = -462` au repos) et son
+`<img>` porte `loading="lazy"` + `decoding="async"`. `locator.screenshot()` fait
+défiler l'élément dans le champ **puis** capture : la capture tombe dans la même
+séquence que le chargement que son propre défilement vient de déclencher. Sur
+macOS la peinture arrive avant ; sur le runner Linux, non.
+
+> **`complete` dit que les octets sont là, jamais qu'un pixel a été posé.** Un
+> témoin qui lit des PIXELS attend `scrollIntoViewIfNeeded()` → `decode()` →
+> DEUX `requestAnimationFrame` (le premier rend la main au compositeur, le second
+> garantit qu'une frame a été produite après le décodage). Et il ne se repose
+> jamais sur le défilement IMPLICITE de la capture : ce défilement est la cause
+> du chargement qu'on attend.
+
+SECONDE MOITIÉ, ET ELLE RENDAIT LE MESSAGE TROMPEUR : **une part de pixels ne se
+mesure pas à l'ÉGALITÉ STRICTE.** Les cinq couleurs ci-dessus sont la même à ±2 :
+un aplat composité est TRAMÉ, et compter des clés `"r,g,b"` exactes fragmentait un
+champ uniforme à l'œil en 106 clés — d'où « 21,20 % » pour un aplat. Le témoin
+annonçait un recouvrement là où il n'y avait qu'une trame. La part se calcule à
+une DISTANCE de la dominante (ici ±2).
+
+LA TOLÉRANCE SE JUSTIFIE PAR UNE MESURE, JAMAIS PAR UN SENTIMENT. Un témoin
+desserré qui ne tombe plus ne garde rien : la faute d'origine a été rejouée (le
+glyphe repeint APRÈS l'`<img>`, donc par-dessus), reconstruite, mesurée.
+
+|  | à ±2 | à l'exact | teintes | |
+|---|---|---|---|---|
+| forme fautive, clair | 92,16 % | 92,13 % | 54 | ROUGE |
+| forme fautive, sombre | 90,47 % | 90,36 % | 65 | ROUGE |
+| forme correcte | 100,00 % | 100,00 % | 1 | VERT |
+
+**La tolérance ne déplace le verdict que de 0,03 point sur la forme fautive** :
+elle est orthogonale au défaut gardé, et le glyphe fondu (`71,71,174` contre
+`99,102,241`) en est à une distance de 67 — trente-trois fois le seuil. C'est
+cette mesure-là, pas l'intuition, qui autorise à desserrer.
+
+Et deux de mes propres hypothèses, corrigées pour qu'elles ne traînent pas : le
+schéma SOMBRE n'était pas un faux vert (il rougit à 90,47 % sur la forme fautive,
+il mesure donc bien) ; le CADRAGE n'était pas en cause (capture CI 251×168,
+locale 247×165 — la CI est même légèrement plus grande).
+
+> **Un témoin qui rougit sans dire ce qu'il a vu coûte un run par hypothèse.**
+> Lui faire rendre son relevé dans le message d'ÉCHEC — jamais au repos — est
+> moins cher que la première hypothèse qu'on aurait explorée sans lui.
+
+Mécanique du comptage par égalité stricte identifiée par la session `andp-00`.
+Voir aussi la 576 (un défaut visuel peut n'exister que sur UN moteur).
+
+## Leçon 584 — Un DÉCOUPAGE éteint toute garde ancrée sur un FICHIER plutôt que sur l'unité — et l'asymétrie décide si on l'apprend
+
+2026-09-12, #6117 / #6125-6127. `MeeshyComposerHost.swift` passait le plafond dur
+de 1 200 lignes ; le découpage a déplacé `presentCamera` vers `+Intake` et
+`composerStack` vers `+Surfaces`. Trois gardes ont rougi — dont
+`ComposerSceneCaptureGestureTests`, qui lisait une **liste en dur de deux
+fichiers** et a annoncé « le fichier lu n'est pas le meuble » : exact, et
+parfaitement inutile.
+
+Son propre doc-comment avait nommé le risque sans le refermer : « un
+armement-au-montage réintroduit dans le fichier EXTRAIT n'aurait fait rougir
+personne ». Elles lisent désormais `AppSourceGuard.composerHostSource()`, qui
+suit le meuble ET ses extensions.
+
+> **L'ASYMÉTRIE EST LA LEÇON, pas le rougissement.** Une garde qui cherche une
+> PRÉSENCE rougit quand son ancre déménage — bruyant, mais on l'apprend le jour
+> même. Une garde qui cherche une ABSENCE passe au VERT : son motif n'est plus
+> dans le fichier qu'elle lit, donc elle ne trouve rien, donc elle est contente.
+> Après tout découpage, ce sont les gardes d'ABSENCE qu'il faut relire — ce sont
+> les seules dont le silence ne prouve rien.
+
+Corollaire de forme : une garde s'ancre sur l'UNITÉ (le type et ses extensions),
+jamais sur une liste de chemins. Un chemin est un fait d'aujourd'hui ; l'unité est
+ce que la règle voulait dire. Même famille que la 560 (un lot qui RENOMME rend
+anti-corrélé tout garde qui reconnaissait par le nom) : là c'est le NOM qui bouge
+sous la garde, ici la POSITION dans l'arborescence.
+
+Trouvée et corrigée par la session `v2-meeshy-c7`, qui a laissé l'allocation du
+numéro à la session qui tenait `tasks/lessons.md` — précisément à cause de la 561.
+
+
+## Leçon 585 — Un gate qui ÉCRIT un état qui survit au run se sabote avec un tour de retard
+
+2026-09-12, #6138. `ExplicitPluralLabelTests` (5 assertions) attendait le repli
+anglais du catalogue et recevait du français, **sans qu'une ligne ait changé**.
+
+La cause n'est pas dans le code : l'app écrit sa surcharge de langue dans SON
+domaine de préférences — `me.meeshy.app.plist` → `AppleLanguages = ["fr"]`,
+`meeshy.ui.language = "fr"` — et ce fichier SURVIT au run. Or la **phase 3 du
+gate**, dont la raison d'être est « laisser l'app connectée », la pose elle-même.
+Le gate est donc **vert au premier passage sur un appareil neuf, rouge à partir du
+second**. L'appareil, lui, est bien en `en-US` : ce n'est pas l'environnement
+qu'on croit interroger.
+
+> **La question à poser à un gate n'est pas seulement « que lit-il ? » mais
+> « qu'ÉCRIT-il, et où cela survit-il ? »** Un gate qui laisse un état derrière
+> lui ne mesure plus son sujet : il mesure la trace de son passage précédent.
+
+COROLLAIRE DE DIAGNOSTIC, et c'est lui qui fait gagner l'heure : **devant un rouge
+qu'aucun diff n'explique, chercher ce que le run PRÉCÉDENT a laissé derrière lui
+avant de chercher dans le code.** Un `git log` sur les fichiers concernés ne
+rendra jamais rien, par construction — l'état fautif n'est pas versionné.
+
+C'est le PENDANT, sur l'état PERSISTANT, de ce que la 583 dit du TEMPS : là un
+témoin lisait avant que la peinture n'arrive, ici il lit après qu'un run a écrit.
+Les deux mesurent autre chose que leur sujet, et aucune des deux ne se voit dans
+un diff. La formule vaut pour les deux : **un témoin ne mesure son sujet que si
+l'on sait ce qui le précède et ce qui l'entoure.**
+
+Distinction utile pour ne pas confondre avec la 560 : là, un lot déplaçait le NOM
+sous une garde ; ici, c'est le gate lui-même qui fabrique la condition de son
+propre échec. Le premier est un accident de refactor, le second un défaut de
+conception du dispositif.
+
+Trouvée par la session `v2-meeshy-c7`, qui a laissé l'allocation du numéro à la
+session tenant `tasks/lessons.md` — son propre fichier s'arrêtant à 574, y écrire
+une 580 aurait rejoué exactement la 561.
 

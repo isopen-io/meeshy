@@ -4,12 +4,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { ListHeader } from './list-header';
-import { StoriesRail, type StoriesRailProps } from './stories-rail';
-import type { RailEntry } from '@/lib/lens/rail-policy';
+import { StoryRail } from './story-rail';
+import type { StoryTrayGroup } from '@/lib/view/story-tray';
 
 /**
- * `ListHeader` — la bande épinglée prend la place du titre (#6103), et porte
- * désormais le rail de STORIES (#5652) au lieu du rail de conversations.
+ * `ListHeader` — la bande épinglée prend la place du titre (#6103).
  * Voir le doc-comment du module pour le miroir iOS (`PinnedStoryTrailBand`).
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -40,17 +39,23 @@ afterEach(() => {
   container = undefined;
 });
 
-const entry = (partial: Partial<RailEntry> & { readonly id: string }): RailEntry => ({
-  displayName: partial.id,
-  hasUnviewed: false,
-  isLive: false,
-  accentColor: '#000000',
-  ...partial,
+/**
+ * LE CORPUS DU RAIL EST DÉSORMAIS CELUI DES STORIES (fusion #6080 ↔ #6103,
+ * 2026-09-12) — ces témoins mesuraient la même géographie sur un corpus de
+ * CONVERSATIONS ; seule la nature des tuiles a changé, pas ce qu'ils affirment.
+ * L'identité de la tuile focalisable est passée de `data-conversation` à
+ * `data-story-author`, pour la même raison et au même endroit.
+ */
+const group = (authorId: string, displayName: string): StoryTrayGroup => ({
+  authorId,
+  author: { id: authorId, displayName } as StoryTrayGroup['author'],
+  stories: [],
+  latestAt: 0,
+  hasUnseen: true,
+  isMine: false,
 });
 
-const ENTRIES: readonly RailEntry[] = [entry({ id: 'u-amina', displayName: 'Amina Diallo' })];
-const noop = (): void => {};
-const railProps: Omit<StoriesRailProps, 'variant'> = { entries: ENTRIES, loading: false, onSelect: noop };
+const GROUPS: readonly StoryTrayGroup[] = [group('c-1', 'Amina Diallo')];
 
 function mount(pinned: boolean): HTMLDivElement {
   const c = document.createElement('div');
@@ -59,7 +64,14 @@ function mount(pinned: boolean): HTMLDivElement {
   container = c;
   root = r;
   act(() => {
-    r.render(<ListHeader pinned={pinned} railProps={railProps} conversations={[]} viewerId="u-viewer" />);
+    r.render(
+      <ListHeader
+        pinned={pinned}
+        railProps={{ groups: GROUPS, loading: false }}
+        conversations={[]}
+        viewerId="u-viewer"
+      />,
+    );
   });
   return c;
 }
@@ -67,7 +79,14 @@ function mount(pinned: boolean): HTMLDivElement {
 function rerender(el: HTMLDivElement, pinned: boolean): void {
   void el;
   act(() => {
-    root!.render(<ListHeader pinned={pinned} railProps={railProps} conversations={[]} viewerId="u-viewer" />);
+    root!.render(
+      <ListHeader
+        pinned={pinned}
+        railProps={{ groups: GROUPS, loading: false }}
+        conversations={[]}
+        viewerId="u-viewer"
+      />,
+    );
   });
 }
 
@@ -114,7 +133,7 @@ describe('ListHeader — la bande épinglée prend la place du titre', () => {
   });
 });
 
-describe('ListHeader — les deux boutons d’en-tête (#5652)', () => {
+describe('ListHeader — les deux boutons d’en-tête (#5652, réaccordés #6080)', () => {
   test('« Créer un lien de partage » et « Nouvelle conversation » sont rendus, à côté de Progression', () => {
     const el = mount(false);
     expect(el.querySelector('button[aria-label="Créer un lien de partage"]')).not.toBeNull();
@@ -131,43 +150,6 @@ describe('ListHeader — les deux boutons d’en-tête (#5652)', () => {
   });
 });
 
-/**
- * CE QUE CE BLOC MESURE, ET CE QU'IL NE PROUVE PAS (revue #5652).
- *
- * `railProps` y porte `onSelect` — donc des pastilles FOCALISABLES. **Ce n'est
- * pas la forme que la production monte aujourd'hui** : `routes/conversations
- * .tsx` ne passe aucun `onSelect` tant que le viewer `/story/:postId` n'existe
- * pas (règle #5765), la bande n'a donc aucun élément focalisable et le report
- * de focus n'a rien à reporter. Le mécanisme reste ARMÉ et mesuré ici parce
- * qu'il est la leçon de #6103 — un focus orphelin sur `<body>` après le
- * démontage de la bande — et qu'il devra fonctionner du premier coup le jour
- * où la porte arrive. Le CLIQUET qui empêche d'oublier ce couplage vit dans
- * `check-lens.mjs` § 7 (« 0 élément focalisable dans la bande ») et dans le
- * témoin ci-dessous, qui mesure, lui, la forme RÉELLE.
- */
-describe('ListHeader — la bande, sans porte, ne porte aucun contrôle (#5652)', () => {
-  test('sans `onSelect` (la forme de production), la bande n’a AUCUN élément focalisable', () => {
-    const c = document.createElement('div');
-    document.body.appendChild(c);
-    const r = createRoot(c);
-    container = c;
-    root = r;
-    act(() => {
-      r.render(
-        <ListHeader
-          pinned
-          railProps={{ entries: ENTRIES, loading: false }}
-          conversations={[]}
-          viewerId="u-viewer"
-        />,
-      );
-    });
-    const bande = c.querySelector('[data-rail="pinned"]') as HTMLElement;
-    expect(bande).not.toBeNull();
-    expect(bande.querySelectorAll('a[href],button,[tabindex]:not([tabindex="-1"])').length).toBe(0);
-  });
-});
-
 describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () => {
   function mountWithGrandRail(pinned: boolean): HTMLDivElement {
     const c = document.createElement('div');
@@ -178,8 +160,13 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
     act(() => {
       r.render(
         <div>
-          <ListHeader pinned={pinned} railProps={railProps} conversations={[]} viewerId="u-viewer" />
-          <StoriesRail variant="grande" entries={ENTRIES} loading={false} onSelect={noop} />
+          <ListHeader
+            pinned={pinned}
+            railProps={{ groups: GROUPS, loading: false }}
+            conversations={[]}
+            viewerId="u-viewer"
+          />
+          <StoryRail variant="grande" groups={GROUPS} loading={false} />
         </div>,
       );
     });
@@ -188,7 +175,7 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
 
   test('un focus dans la bande, puis un retrait de la bande, retrouve la tuile du grand rail', () => {
     const el = mountWithGrandRail(true);
-    const pinnedTile = el.querySelector('[data-rail="pinned"] [data-story="u-amina"]') as HTMLElement;
+    const pinnedTile = el.querySelector('[data-rail="pinned"] a[data-story-author="c-1"]') as HTMLElement;
     act(() => {
       pinnedTile.focus();
     });
@@ -197,13 +184,18 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
     act(() => {
       root!.render(
         <div>
-          <ListHeader pinned={false} railProps={railProps} conversations={[]} viewerId="u-viewer" />
-          <StoriesRail variant="grande" entries={ENTRIES} loading={false} onSelect={noop} />
+          <ListHeader
+            pinned={false}
+            railProps={{ groups: GROUPS, loading: false }}
+            conversations={[]}
+            viewerId="u-viewer"
+          />
+          <StoryRail variant="grande" groups={GROUPS} loading={false} />
         </div>,
       );
     });
 
-    const grandeTile = el.querySelector('[data-rail="grande"] [data-story="u-amina"]');
+    const grandeTile = el.querySelector('[data-rail="grande"] a[data-story-author="c-1"]');
     expect(document.activeElement).toBe(grandeTile);
   });
 
@@ -219,7 +211,7 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
    */
   test('un focus PARTI ailleurs avant le retrait n’est jamais arraché', () => {
     const el = mountWithGrandRail(true);
-    const pinnedTile = el.querySelector('[data-rail="pinned"] [data-story="u-amina"]') as HTMLElement;
+    const pinnedTile = el.querySelector('[data-rail="pinned"] a[data-story-author="c-1"]') as HTMLElement;
     act(() => {
       pinnedTile.focus();
     });
@@ -236,8 +228,13 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
     act(() => {
       root!.render(
         <div>
-          <ListHeader pinned={false} railProps={railProps} conversations={[]} viewerId="u-viewer" />
-          <StoriesRail variant="grande" entries={ENTRIES} loading={false} onSelect={noop} />
+          <ListHeader
+            pinned={false}
+            railProps={{ groups: GROUPS, loading: false }}
+            conversations={[]}
+            viewerId="u-viewer"
+          />
+          <StoryRail variant="grande" groups={GROUPS} loading={false} />
         </div>,
       );
     });
@@ -255,8 +252,13 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
     act(() => {
       root!.render(
         <div>
-          <ListHeader pinned={false} railProps={railProps} conversations={[]} viewerId="u-viewer" />
-          <StoriesRail variant="grande" entries={ENTRIES} loading={false} onSelect={noop} />
+          <ListHeader
+            pinned={false}
+            railProps={{ groups: GROUPS, loading: false }}
+            conversations={[]}
+            viewerId="u-viewer"
+          />
+          <StoryRail variant="grande" groups={GROUPS} loading={false} />
         </div>,
       );
     });

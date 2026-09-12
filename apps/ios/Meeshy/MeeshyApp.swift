@@ -344,14 +344,21 @@ struct MeeshyApp: App {
                     }
                     await SettingsActionQueue.shared.setFlushHandler { @Sendable action in
                         do {
-                            // Most settings endpoints return the updated user.
-                            // We only care that the request succeeded; the
-                            // optimistic UI already reflects the new value.
                             // Le chemin vient d'un enregistrement PERSISTÉ, écrit
                             // par une version possiblement antérieure de l'app :
                             // aucun type ne lui survit. C'est le seul appelant
                             // légitime de cette entrée, et son nom le dit (#4282).
-                            let _: APIResponse<MeeshyUser> = try await APIClient.shared.replayPersistedRequest(
+                            //
+                            // L'ENVELOPPE SEULE, et rien de `data`. Ce site exigeait
+                            // `APIResponse<MeeshyUser>` ; `PATCH /users/me` sert
+                            // `data: { user, message }` (profile-updates.ts), donc le
+                            // décodage tombait TOUJOURS — après une écriture réussie,
+                            // dans le catch générique, action gardée en file, rejouée
+                            // à chaque retour en ligne, compteur jamais redescendu.
+                            // Un rejeu ne veut rien de la réponse sinon son acceptation :
+                            // exiger une forme de `data` est un pari sur une route qu'on
+                            // ne connaît pas (`SettingsReplayEnvelopeTests`).
+                            let _: SimpleAPIResponse = try await APIClient.shared.replayPersistedRequest(
                                 persistedPath: action.endpoint,
                                 method: action.httpMethod,
                                 body: action.payload

@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
-import { StoriesRail } from '@/components/stories-rail';
 import { ListHeader } from '@/components/list-header';
+import { StoryRail } from '@/components/story-rail';
 import { Glyph } from '@/components/glyph';
 import { LensRow } from '@/components/lens-row';
 import { LensSection } from '@/components/lens-sticker';
@@ -10,7 +10,7 @@ import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { useScene } from '@/lib/lens/scene';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { apiConfig } from '@/lib/api/config';
-import { rowAction, useConversations, useStoryRail } from '@/lib/api/query';
+import { rowAction, useConversations, useStoryTray } from '@/lib/api/query';
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
 import { useTypistNames } from '@/lib/api/use-typists';
@@ -18,6 +18,7 @@ import { resolveViewer } from '@/lib/api/viewer';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
 import { partagerInvitation, RETOUR_INVITATION } from '@/lib/view/invitation';
+import { groupStoriesByAuthor, railTientLaPlace } from '@/lib/view/story-tray';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { resolveLensSections } from '@/lib/lens/sections';
 import { useOnline } from '@/lib/net/online';
@@ -37,15 +38,23 @@ import { useMinute } from '@/lib/view/use-minute';
  */
 
 /**
- * LE RAIL ET SA BANDE ÉPINGLÉE VIVENT DÉSORMAIS DANS LEURS PROPRES MODULES
- * (#6103, décision #6070) — `components/stories-rail.tsx` (la cellule,
- * la tuile fantôme de chargement, l'exclusion des archivées) et
- * `components/list-header.tsx` (la bascule titre ↔ bande). Voir leurs
- * doc-comments pour la géographie complète : le grand rail vit DANS la vue
+ * LE RAIL ET SA BANDE ÉPINGLÉE VIVENT DANS LEURS PROPRES MODULES (#6103,
+ * décision #6070 ; fusionné avec #6080 le 2026-09-12) —
+ * `components/story-rail.tsx` porte le rail LUI-MÊME dans ses DEUX
+ * géographies (`variant`, la cellule, le squelette de chargement, la garde
+ * `inert`) et `components/list-header.tsx` la bascule titre ↔ bande. Voir
+ * leurs doc-comments pour le détail : le grand plateau vit DANS la vue
  * défilante (`<ul id="contenu">` ci-dessous), la bande compacte DANS
  * l'en-tête — jamais superposés au même endroit, contrairement à l'ancienne
  * forme qui compactait le rail SUR PLACE et laissait une réserve de hauteur
  * vide une fois défilé.
+ *
+ * Ce que la fusion a changé : le corpus. Le rail montrait des CONVERSATIONS
+ * sous un anneau qui promettait une story et ne menait qu'au fil ; il montre
+ * désormais de VRAIES stories, un cercle par auteur, avec deux portes réelles.
+ * `components/conversation-rail.tsx` a disparu — sa géographie est passée dans
+ * `story-rail.tsx`, ligne à ligne, et son corpus de conversations n'avait plus
+ * de raison d'être.
  */
 
 /**
@@ -75,6 +84,11 @@ import { useMinute } from '@/lib/view/use-minute';
 /** Référence STABLE — un `[]` littéral par rendu changerait l'identité de
  * `conversations` à chaque image et défairait les mémos qui en dépendent. */
 const EMPTY_CONVERSATIONS: readonly Conversation[] = [];
+
+/** Même règle, pour le regroupement des stories : un `new Set()` écrit en ligne
+ * change d'identité à chaque rendu et ferait recalculer le mémo pour rien —
+ * exactement le piège que `CLAUDE.md` § Prisme décrit sur `preferredLanguages`. */
+const EMPTY_VIEWED: ReadonlySet<string> = new Set<string>();
 
 /**
  * `content-center` ET NON `place-items-center` SEUL (#5650, revue-correction)
@@ -165,16 +179,31 @@ export default function ConversationsScreen() {
   /**
    * **LA BANDE ÉPINGLÉE PREND LA PLACE DU TITRE QUAND LE GRAND RAIL EST
    * SORTI DU SCROLLPORT** (#6103, décision #6070) — voir `ListHeader` et
-   * `StoriesRail` pour la géographie complète, et `pinned-rail.ts` pour
-   * les deux seuils. `useOutOfView` délègue la mesure à un
-   * `IntersectionObserver` : aucun `scrollTop` lu à la main ici, contrairement
-   * à `useScene` juste en dessous, qui a besoin d'une valeur CONTINUE (la
-   * perspective) là où cette bascule n'est qu'un booléen.
+   * `StoryRail` pour la géographie complète, et `pinned-rail.ts` pour les deux
+   * seuils. `useOutOfView` délègue la mesure à un `IntersectionObserver` :
+   * aucun `scrollTop` lu à la main ici, contrairement à `useScene` juste en
+   * dessous, qui a besoin d'une valeur CONTINUE (la perspective) là où cette
+   * bascule n'est qu'un booléen.
    *
    * `observeGrandRail` est une réf de RAPPEL, jamais un `RefObject` : le grand
    * rail QUITTE le DOM sur le chemin d'échec (cache vide + erreur) et y
    * REVIENT à la reprise — voir le doc-comment de `useOutOfView` pour les deux
    * défauts que le `RefObject` laissait passer.
+   *
+   * **LA COMPACTION SUR PLACE EST RETIRÉE, ET LES DEUX LOTS L'AVAIENT CONCLU**
+   * (fusion #6080 ↔ #6103, 2026-09-12). Le rail passait de 72 à 30 px en
+   * défilant, ce qui poussait les neuf cases du dessous : le gate de la
+   * Lentille relève `offsetTop` à cinq paliers et exige qu'aucune ne bouge — il
+   * était rouge sur `dev` depuis #5946, donc sur TOUTE PR du dépôt, y compris
+   * purement iOS. #6080 avait mesuré ce rouge et nommé la bonne cause : « là-bas
+   * ce ne sont pas les mêmes tuiles qui rétrécissent — `StoryTrayView` (88 pt)
+   * vit DANS la zone défilante et sort du champ ; `PinnedStoryTrailBand` (36 pt)
+   * est une AUTRE vue, montée dans l'en-tête replié ». Il en avait tiré une
+   * issue compagnon pour la bande ; #6103 l'a livrée. Les deux branches
+   * disaient la même chose, l'une en la constatant, l'autre en la construisant.
+   *
+   * Le doc-comment iOS de cette bande nomme même la forme abandonnée : « it used
+   * to render as a second row BELOW a title that stayed on screen for nothing ».
    */
   const { pinned, observe: observeGrandRail } = useOutOfView({
     root: frame,
@@ -213,21 +242,39 @@ export default function ConversationsScreen() {
    */
   const typists = useTypistNames(viewer.id ?? '');
   /**
-   * LE RAIL DE STORIES (#5652) — `StoriesRail` applique lui-même la loi
-   * (`rail-policy.ts`, miroir `LentilleRailPolicy`) sur le corpus déjà
-   * FONDU (`useStoryRail`) : un seul site, pour les DEUX géographies (grande
-   * et épinglée). Il ne partage plus le corpus de la liste (`conversations`)
-   * — c'est un rail de STORIES, plus un raccourci vers des conversations
-   * (écart 7 de `targets/lentille.md`, issue #5652).
+   * LE CORPUS DU RAIL — une seule prop, partagée par les DEUX géographies
+   * (grande et épinglée) pour qu'elles ne puissent PAS diverger.
+   *
+   * Ce n'est pas une commodité : `ListHeader` rend le focus à la tuile JUMELLE
+   * du grand plateau quand la bande se retire, et deux abonnements indépendants
+   * pourraient, à l'instant de la bascule, ne pas porter les mêmes auteurs — la
+   * jumelle n'existerait pas et le focus resterait sur `<body>`. Un seul calcul,
+   * ici, rend la divergence impossible.
+   *
+   * Ce corpus était celui des CONVERSATIONS jusqu'à la fusion du 2026-09-12 ;
+   * il est désormais celui des STORIES (#6080). Le filtrage des archivées n'a
+   * donc plus lieu d'être — une story n'est pas une conversation — et le plafond
+   * de six entrées vit dans le rail, avec sa porte « tout voir ».
    */
-  const rail = useStoryRail({
-    id: viewer.id,
-    displayName: viewer.displayName,
-    ...(viewer.avatar === undefined ? {} : { avatar: viewer.avatar }),
-  });
+  const tray = useStoryTray();
+  const storyGroups = useMemo(
+    () =>
+      groupStoriesByAuthor(tray.data ?? [], {
+        viewerId: viewer.id ?? undefined,
+        // « Vu par moi » n'est pas servi par la passerelle (`viewCount` est un
+        // COMPTE, qui ne dit pas QUI) : issue compagnon, même forme que
+        // `reaction-store.ts`. D'ici là tout est non vu — un anneau allumé à
+        // tort se corrige d'un regard, un anneau éteint à tort cache une story.
+        viewedIds: EMPTY_VIEWED,
+      }),
+    [tray.data, viewer.id],
+  );
+  /** `railTientLaPlace` borne la promesse à la PREMIÈRE tentative : un corpus
+   * LENT garde sa place, un corpus qui répond NON la perd immédiatement
+   * (`lib/view/story-tray.ts`, témoins `story-tray-place.test.ts`). */
   const railProps = useMemo(
-    () => ({ ...(rail.selfEntry === undefined ? {} : { selfEntry: rail.selfEntry }), entries: rail.entries, loading: rail.loading }),
-    [rail.selfEntry, rail.entries, rail.loading],
+    () => ({ groups: storyGroups, loading: railTientLaPlace(tray) }),
+    [storyGroups, tray],
   );
 
   /**
@@ -296,7 +343,16 @@ export default function ConversationsScreen() {
       <ul
         ref={frame}
         id="contenu"
-        className="flex flex-1 flex-col overflow-y-auto px-2"
+        /* `scrollbar-none` vient de #6080, et c'est un apport MESURÉ, pas un
+           goût : sur l'ÉMULATEUR Android — jamais visible sur macOS — le moteur
+           peint des barres de défilement CLASSIQUES, c'est-à-dire un rail gris
+           PERMANENT, là où WebKit et les navigateurs de bureau posent un
+           indicateur transitoire qui s'efface au repos. À la capture, une barre
+           grise doublait le bord droit de la liste : un trait que personne
+           n'avait dessiné et que rien n'explique à l'utilisateur. iOS n'en
+           montre aucun — c'est le repère de section COLLANT qui dit où l'on est,
+           pas un rail. */
+        className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-2"
         {...(loading ? { 'aria-busy': true, 'aria-label': 'Chargement des conversations' } : {})}
       >
         {/*
@@ -306,7 +362,7 @@ export default function ConversationsScreen() {
           sont les DEUX PREMIERS enfants du contenu qui défile, AVANT les
           sections. `-mx-2` neutralise le `px-2` de ce scrollport — même
           technique que `LensSection` pour un plein-bord — puisque
-          `StoriesRail`/le `<nav>` posent leur propre `px-4`.
+          `StoryRail`/le `<nav>` posent leur propre `px-4`.
 
           Le rail GRANDE ne compacte plus JAMAIS lui-même : seule la bande
           `pinned` de `ListHeader`, ailleurs dans le DOM, prend cette forme.
@@ -322,13 +378,13 @@ export default function ConversationsScreen() {
           dernière tuile de la bande y retombait — forçant le navigateur à
           faire défiler ce rail hors champ DANS la vue, ce qui ramenait la
           liste en tête et démontait la bande pour rien de plus qu'un
-          `Tab`. Voir le doc-comment de `StoriesRail` pour le détail.
+          `Tab`. Voir le doc-comment de `StoryRail` pour le détail.
         */}
         <li className="-mx-2 shrink-0">
-          <StoriesRail ref={observeGrandRail} variant="grande" inert={pinned} {...railProps} />
+          <StoryRail ref={observeGrandRail} variant="grande" inert={pinned} {...railProps} />
         </li>
         <li className="-mx-2 shrink-0">
-          <nav aria-label="Filtres" className="overflow-x-auto">
+          <nav aria-label="Filtres" className="scrollbar-none overflow-x-auto">
             <ul className="flex gap-2 px-4 py-1.5">
               {LIST_FILTERS.map((f) => {
                 const active = f === filter;

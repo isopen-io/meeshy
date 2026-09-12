@@ -17,6 +17,7 @@ import {
   buildLastMessagePreviewTranslations,
   truncateMessagePreview
 } from './utils/last-message-preview';
+import { isLastMessageProtected } from '@meeshy/shared/utils/last-message-protection';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationListResponseSchema,
@@ -762,8 +763,29 @@ export function registerConversationListRoute(
                 ));
 
         const latestMessage = conversation.messages[0] as
-          | { translations?: unknown; originalLanguage?: string | null }
+          | {
+              translations?: unknown;
+              originalLanguage?: string | null;
+              isBlurred?: boolean | null;
+              isViewOnce?: boolean | null;
+              /* `Date | string` et non `Date` seul (porté de #6112 à la fusion
+                 du 2026-09-12) : ce site LIT une valeur qui peut arriver déjà
+                 sérialisée selon le chemin — un cast trop étroit décrit mal ce
+                 qu'on lit, et `isLastMessageProtected` accepte les deux. */
+              expiresAt?: Date | string | null;
+            }
           | undefined;
+        // #6111 — un dernier message à vue unique, flouté ou éphémère périmé
+        // ne transporte plus rien de son contenu, carte du Prisme comprise :
+        // masquer `lastMessage.content` sans y toucher aurait laissé partir
+        // la traduction du même message sous un autre nom.
+        const lastMessageProtected = latestMessage
+          ? isLastMessageProtected({
+              isBlurred: latestMessage.isBlurred,
+              isViewOnce: latestMessage.isViewOnce,
+              expiresAt: latestMessage.expiresAt
+            })
+          : false;
 
         // `_count` est retiré du spread : c'est une forme d'agrégat Prisma que
         // le schéma wire ne déclare pas, et le champ que les clients lisent est
@@ -796,8 +818,8 @@ export function registerConversationListRoute(
           // carte compacte `{ langue: aperçu }` n'a pas la forme de
           // `Message.translations` (un tableau de `MessageTranslation`) : deux
           // formes sous un même nom auraient dérivé.
-          lastMessageOriginalLanguage: latestMessage?.originalLanguage ?? null,
-          lastMessageTranslations: buildLastMessagePreviewTranslations({
+          lastMessageOriginalLanguage: lastMessageProtected ? null : (latestMessage?.originalLanguage ?? null),
+          lastMessageTranslations: lastMessageProtected ? null : buildLastMessagePreviewTranslations({
             translations: latestMessage?.translations,
             originalLanguage: latestMessage?.originalLanguage,
             viewerLanguages: viewerLanguages
@@ -821,10 +843,23 @@ export function registerConversationListRoute(
             // la position ne fabrique aucun texte de repli ; c'est au client
             // de décider comment rendre l'aperçu (ex. via `messageType` ou la
             // seule présence de `location`), pas au serveur.
-            const place = sharedPlaceFromMetadata((msg as { metadata?: unknown }).metadata);
+            //
+            // #6111 — un aperçu PROTÉGÉ (vue unique, flouté, éphémère périmé)
+            // ne calcule ni ne sert le lieu : la métadonnée brute peut aussi
+            // bien porter un lieu qu'un sticker ou un résumé — rien de ce
+            // qu'elle transporte n'a le droit de sortir.
+            const place = lastMessageProtected ? null : sharedPlaceFromMetadata((msg as { metadata?: unknown }).metadata);
             return {
               ...msgRest,
-              content: truncateMessagePreview(msg.content),
+              content: lastMessageProtected ? '' : truncateMessagePreview(msg.content),
+              // Identité, horloge, type et drapeaux (déjà dans `msgRest`)
+              // continuent de partir : ce sont eux qui qualifient le
+              // placeholder que le client compose (« Message à vue unique »).
+              // Tout le reste du contenu — métadonnée brute, pièces jointes,
+              // leur compte — est retiré pour un aperçu protégé.
+              ...(lastMessageProtected
+                ? { metadata: null, attachments: null, _count: { attachments: 0 } }
+                : {}),
               ...(place ? { location: place } : {}),
               sender: sender && senderVis ? {
                 ...sender,

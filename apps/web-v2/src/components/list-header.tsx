@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { StoriesRail, type StoriesRailProps } from '@/components/stories-rail';
+import { StoryRail, type StoryRailProps } from '@/components/story-rail';
 import { ShareLinkSheet } from '@/components/share-link-sheet';
 import { Glyph } from '@/components/glyph';
 import { apiDeps } from '@/lib/api/query';
@@ -22,7 +22,7 @@ import { Link } from '@/routes/route-table';
  * `render/list-scrolled.*.png` avant correction).
  *
  * CE QUI EST REPRIS D'iOS : une bande, la MÊME cellule que le grand rail
- * (`StoriesRail`, `variant="pinned"`), qui prend la place du titre
+ * (`StoryRail`, `variant="pinned"`), qui prend la place du titre
  * dans SA fente — jamais une seconde ligne — et qui ne se matérialise
  * qu'une fois le grand rail sorti (`pinned`, calculé par l'appelant via
  * `useOutOfView`).
@@ -62,6 +62,15 @@ import { Link } from '@/routes/route-table';
  * se voyait ARRACHER le curseur du champ pour le poser sur une tuile du
  * rail. Le seul fait qui autorise la reprise est donc celui qui la motive :
  * que le retrait ait laissé le focus sur `<body>`.
+ *
+ * LES DEUX BOUTONS D'EN-TÊTE (#5652, bloc D, réaccordés à la fusion #6080) —
+ * miroir des deux cercles `AdaptiveGlassContainer`
+ * (`ConversationListView+Overlays.swift:1056-1087`) : « Créer un lien de
+ * partage » (a besoin du corpus complet pour en filtrer les conversations
+ * ÉLIGIBLES, `canCreateShareLink`) et « Nouvelle conversation » (une route,
+ * aucun corpus requis). Reçus en props plutôt que dérivés de `railProps` — ce
+ * ne sont PLUS les mêmes objets depuis que le rail porte des STORIES (écart 7
+ * de `targets/lentille.md`).
  */
 export function ListHeader({
   pinned,
@@ -70,16 +79,7 @@ export function ListHeader({
   viewerId,
 }: {
   readonly pinned: boolean;
-  readonly railProps: Omit<StoriesRailProps, 'variant'>;
-  /**
-   * LES DEUX BOUTONS D'EN-TÊTE (#5652, bloc D) — miroir des deux cercles
-   * `AdaptiveGlassContainer` (`ConversationListView+Overlays.swift:1056-
-   * 1087`) : « Créer un lien de partage » (a besoin du corpus complet pour en
-   * filtrer les conversations ÉLIGIBLES, `canCreateShareLink`) et « Nouvelle
-   * conversation » (une route, aucun corpus requis). Reçus ici plutôt que
-   * dérivés de `railProps` — ce ne sont PLUS les mêmes objets depuis que le
-   * rail porte des STORIES (écart 7 de `targets/lentille.md`).
-   */
+  readonly railProps: StoryRailProps;
   readonly conversations: readonly Conversation[];
   readonly viewerId: string;
 }) {
@@ -95,7 +95,7 @@ export function ListHeader({
       const orphelin = document.activeElement === null || document.activeElement === document.body;
       if (orphelin) {
         const jumelle = document.querySelector<HTMLElement>(
-          `[data-rail="grande"] [data-story="${CSS.escape(id)}"]`,
+          `[data-rail="grande"] [data-story-author="${CSS.escape(id)}"]`,
         );
         jumelle?.focus();
       }
@@ -136,10 +136,10 @@ export function ListHeader({
             className="absolute inset-0 flex items-center"
             onFocusCapture={(e) => {
               const target = e.target as HTMLElement;
-              lastFocusedIdRef.current = target.closest('[data-story]')?.getAttribute('data-story') ?? null;
+              lastFocusedIdRef.current = target.closest('[data-story-author]')?.getAttribute('data-story-author') ?? null;
             }}
           >
-            <StoriesRail variant="pinned" {...railProps} />
+            <StoryRail variant="pinned" {...railProps} />
           </div>
         ) : null}
       </div>

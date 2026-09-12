@@ -330,7 +330,20 @@ public struct APITextTranslation: Decodable, Identifiable, Sendable {
     public let messageId: String
     public let targetLanguage: String
     public let translatedContent: String
-    public let translationModel: String
+    /// **Métadonnée, et facultative — le fil ne la garantit pas.**
+    ///
+    /// `Message.translations` est un document Mongo relu SANS validation par
+    /// `transformTranslationsToArray` : une entrée écrite par une version
+    /// antérieure, ou par un translator tombé à mi-chemin, n'a pas de modèle.
+    /// Le schéma wire ne la déclare pas `nullable`, donc fast-json-stringify
+    /// l'OMET dans ce cas — et une propriété non optionnelle faisait alors
+    /// échouer le décodage du message, puis de la PAGE entière (`data` est un
+    /// tableau décodé d'un bloc).
+    ///
+    /// Aucune surface ne la lit (relevé : seuls des tests) ; le web la traite
+    /// déjà comme absente (`t.translationModel || 'basic'`). La rendre
+    /// facultative dit ce qui est vrai plutôt que ce qu'on espérait.
+    public let translationModel: String?
     public let confidenceScore: Double?
     public let sourceLanguage: String?
     /// `true` quand `translatedContent` est un CRYPTOGRAMME et non du texte.
@@ -582,7 +595,10 @@ extension APIMessage: Decodable {
         readCount = try c.decodeIfPresent(Int.self, forKey: .readCount)
         recipientCount = try c.decodeIfPresent(Int.self, forKey: .recipientCount)
         effectFlags = try c.decodeIfPresent(UInt32.self, forKey: .effectFlags)
-        translations = try c.decodeIfPresent([APITextTranslation].self, forKey: .translations)
+        // Tolérant par ÉLÉMENT, comme `callSummary`/`trackingLinks` plus haut :
+        // une traduction malformée est perdue, jamais le message — et surtout
+        // jamais la page, que `MessagesResponse.data` décode d'un seul bloc.
+        translations = c.decodeLossyArrayIfPresent([APITextTranslation].self, forKey: .translations)
         mentionedUsers = try c.decodeIfPresent([MentionedUser].self, forKey: .mentionedUsers)
         // Tolerant: a present-but-non-call metadata object must not fail the
         // whole message decode, so swallow shape mismatches into nil.

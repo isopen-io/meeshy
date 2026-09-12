@@ -19,14 +19,8 @@
  *     `[data-row]` APRÈS — et le premier `offsetTop` ne bouge PAS entre les
  *     deux (la géométrie du squelette est celle de la rangée réelle, F5).
  *  3. `/login` avec une session déjà active redirige vers `/`.
- *  4. CORPUS VIDE (ni conversation ni story) : aucun rail peint, et la bande
- *     qu'il occupait revient à l'état de démarrage.
- *  5. ÉCHEC à cache vide : une ALERTE, jamais « Chargement », et l'en-tête
- *     garde son titre.
- *  6. `/conversations/new` est PRIVÉE (un visiteur sans session en est sorti) et
+ *  4. `/conversations/new` est PRIVÉE (un visiteur sans session en est sorti) et
  *     une recherche en ÉCHEC y peint une ALERTE, jamais un écran blanc (#5652).
- *  7. AUCUN octet ne part vers la PRODUCTION (#5652) — tout ce qui vise
- *     `gate.meeshy.me` est stubbé ou abandonné-et-relevé (`armerPasserelle`).
  *
  * Construit dans `dist-gateway` (couvert par le motif `dist-*` du
  * `.gitignore`, jamais commité) — même discipline que `check-shell-dist.mjs`.
@@ -73,81 +67,35 @@ const NINE_CONVERSATIONS = Array.from({ length: 9 }, (_, i) => ({
   updatedAt: new Date(Date.now() - i * 60_000).toISOString(),
 }));
 
+/* Trois stories, deux auteurs — assez pour que le rail se peigne et que
+   `groupStoriesByAuthor` ait quelque chose à grouper. */
+const TRAY_STORIES = [
+  {
+    id: 's-gw-1', type: 'STORY',
+    createdAt: new Date(Date.now() - 3 * 60_000).toISOString(),
+    expiresAt: new Date(Date.now() + 21 * 60 * 60_000).toISOString(),
+    author: { id: 'u-camille', username: 'camille', displayName: 'Camille Roy' },
+  },
+  {
+    id: 's-gw-2', type: 'STORY',
+    createdAt: new Date(Date.now() - 9 * 60_000).toISOString(),
+    expiresAt: new Date(Date.now() + 20 * 60 * 60_000).toISOString(),
+    author: { id: 'u-camille', username: 'camille', displayName: 'Camille Roy' },
+  },
+  {
+    id: 's-gw-3', type: 'STORY',
+    createdAt: new Date(Date.now() - 30 * 60_000).toISOString(),
+    expiresAt: new Date(Date.now() + 19 * 60 * 60_000).toISOString(),
+    author: { id: 'u-ines', username: 'ines', displayName: 'Inès Baraka' },
+  },
+];
+
 const SESSION = {
   token: 'jwt-check-gateway-build',
   sessionToken: 'sess-check-gateway-build',
   user: { id: 'u-check', username: 'check' },
   expiresAt: Date.now() + 24 * 60 * 60 * 1000,
 };
-
-/**
- * LE RAIL DE STORIES (#5652) — sa charge, et surtout SON INTERCEPTION.
- *
- * L'écran de la Lentille émet DEUX requêtes de plus depuis #5652
- * (`?scope=stories&projection=tray` et `?scope=statuses`, `api/stories.ts`).
- * Ce gate ne routait que `/api/v1/conversations` et `/socket.io/` : les deux
- * nouvelles partaient donc pour de VRAI vers `https://gate.meeshy.me` — la
- * base de PRODUCTION, puisque cette construction ne pose aucune surcharge —
- * ce que la doctrine de ce fichier interdit explicitement (« ne JAMAIS
- * laisser partir un octet réel vers un serveur de production depuis ce gate »,
- * #5793). `armerPasserelle` ferme la porte : tout ce qui vise la production
- * est soit STUBBÉ ici, soit ABANDONNÉ et RELEVÉ — et la liste des fuites est
- * une assertion, pas une trace qu'on lit à l'œil.
- *
- * La forme est celle que `envoyerFeedUnifie` sert (`routes/posts/feed.ts:147`)
- * : `data` = le TABLEAU des posts, `pagination.form = 'keyset'`, `meta` avec
- * ses tombstones. Le corps d'un post de tray suit `trayStorySelect`
- * (`services/posts/postIncludes.ts:275-296`) + `isViewedByMe`, ajouté par
- * `PostFeedService:510`.
- */
-const storyPost = ({ id, authorId, displayName, isViewedByMe, minutesAgo }) => ({
-  id,
-  type: 'STORY',
-  visibility: 'FRIENDS',
-  createdAt: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
-  updatedAt: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
-  expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
-  viewCount: 0,
-  author: { id: authorId, username: authorId, displayName },
-  media: [],
-  isViewedByMe,
-});
-
-const UN_AUTEUR_AVEC_UNE_STORY = [
-  storyPost({ id: 's-gw-1', authorId: 'u-gw-bruno', displayName: 'Bruno Bêta', isViewedByMe: false, minutesAgo: 30 }),
-];
-
-const feedBody = (items) =>
-  JSON.stringify({
-    success: true,
-    data: items,
-    pagination: { limit: 20, hasMore: false, nextCursor: null, form: 'keyset' },
-    meta: { deletedIds: [], deletedIdsTruncated: false },
-  });
-
-/**
- * `stories` : ce que `?scope=stories` sert. `fuites` : le tableau où sont
- * relevées les requêtes vers la production qu'aucun stub n'attendait — il doit
- * rester VIDE, c'est vérifié en fin de course.
- */
-async function armerPasserelle(page, { stories, fuites }) {
-  await page.route('**/api/v1/social/posts**', async (route) => {
-    const url = route.request().url();
-    const body = url.includes('scope=statuses') ? feedBody([]) : feedBody(stories);
-    await route.fulfill({ status: 200, contentType: 'application/json', body });
-  });
-  await page.route(
-    (url) =>
-      url.hostname === 'gate.meeshy.me' &&
-      !url.pathname.startsWith('/api/v1/conversations') &&
-      !url.pathname.startsWith('/api/v1/social/posts') &&
-      !url.pathname.startsWith('/socket.io/'),
-    async (route) => {
-      fuites.push(route.request().url());
-      await route.abort();
-    },
-  );
-}
 
 async function serve(dist) {
   const server = createServer(async (req, res) => {
@@ -186,9 +134,6 @@ async function main() {
   const base = `http://127.0.0.1:${server.address().port}`;
 
   const failures = [];
-  /** Les requêtes vers la PRODUCTION qu'aucun stub n'attendait (#5652) —
-   * assertion en fin de course, jamais une trace à lire à l'œil. */
-  const fuites = [];
   const check = (ok, what) => {
     if (ok) console.log(`  ok    ${what}`);
     else failures.push(what);
@@ -254,7 +199,6 @@ async function main() {
     // dans cette construction) — abandonné ici pour ne JAMAIS laisser partir
     // un octet réel vers un serveur de production depuis ce gate (#5793).
     await page.route('**/socket.io/**', (route) => route.abort());
-    await armerPasserelle(page, { stories: UN_AUTEUR_AVEC_UNE_STORY, fuites });
     await page.goto(`${base}/`, { waitUntil: 'networkidle' });
     const path = await page.evaluate(() => window.location.pathname);
     check(path === '/login', `sans session, "/" redirige vers /login (obtenu : ${path})`);
@@ -293,6 +237,19 @@ async function main() {
         }),
       });
     });
+    /* L'ÉCRAN A DEUX CORPUS DEPUIS #6080, et ce gate n'en bouchonnait qu'un.
+       Le rail des stories interroge sa propre route ; non bouchonnée, elle
+       partait vers un hôte inexistant et la requête restait EN VOL pendant
+       les tentatives de react-query — le rail peignait son squelette tout ce
+       temps, dans les deux blocs. Le bloc « corpus VIDE » mesurait donc un
+       corpus à moitié vide, et il l'a dit. */
+    await page.route('**/api/v1/posts/feed/stories**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: TRAY_STORIES }),
+      });
+    });
 
     // Le socket est ABANDONNÉ (jamais un octet réel vers `gate.meeshy.me`
     // depuis ce gate), mais la REQUÊTE elle-même doit PARTIR : c'est la
@@ -300,10 +257,6 @@ async function main() {
     // session existe (#5793).
     const socketRequestPromise = page.waitForRequest((req) => req.url().includes('/socket.io/'), { timeout: 10000 });
     await page.route('**/socket.io/**', (route) => route.abort());
-    /* LE RAIL EST PEINT ICI — un auteur, une story non vue : c'est la
-       référence contre laquelle le bloc 4 mesure que son ABSENCE rend la
-       bande à l'état vide (#5652). */
-    await armerPasserelle(page, { stories: UN_AUTEUR_AVEC_UNE_STORY, fuites });
 
     await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
 
@@ -373,22 +326,27 @@ async function main() {
         body: JSON.stringify({ success: true, data: [], pagination: { limit: 30, offset: 0, total: 0, hasMore: false } }),
       });
     });
-    /* AUCUNE story non plus : c'est le corpus d'un compte NEUF, celui que
-       l'écran de démarrage adresse (#5652). Le rail n'a alors rien à montrer
-       — ni story d'un ami, ni la mienne (`useStoryRail` ne compose l'entrée
-       « moi » que quand elle porte une story ou une humeur) — et la bande
-       qu'il occupait doit revenir à l'état vide. */
-    await armerPasserelle(page, { stories: [], fuites });
+    /* VIDE des DEUX côtés — sans quoi « corpus vide » ne décrit que la moitié
+       de l'écran (voir le bloc 2). */
+    await page.route('**/api/v1/posts/feed/stories**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: [] }),
+      });
+    });
     await page.goto(`${base}/`, { waitUntil: 'networkidle' });
     await page.waitForSelector('#contenu:not([aria-busy])', { timeout: 5000 });
 
-    /* Le rail ne partage PLUS le corpus de la liste (#5652) : il ne disparaît
-       donc pas « parce qu'il n'y a pas de conversation » mais parce qu'il n'y
-       a pas de STORY. L'ancienne assertion visait `aria-label="Accès rapide
-       aux conversations"`, un libellé que plus rien ne pose — elle passait
-       donc en comptant zéro pour une raison FAUSSE. */
-    const rails = await page.locator('[data-rail="grande"]').count();
-    check(rails === 0, `corpus de stories VIDE : aucun rail peint (obtenu : ${rails})`);
+    /* LE RAIL A CHANGÉ DE NOM ET D'OBJET (#6080) : « Accès rapide aux
+       conversations » n'existe plus — ce rail peignait des CONVERSATIONS sous
+       un anneau de story et a été remplacé par le rail des STORIES, région
+       « Stories ». Le gate interrogeait donc une étiquette morte : il passait
+       par ABSENCE, ce qui est la façon la plus discrète qu'a un témoin de
+       cesser de mesurer (leçon 560). L'invariant, lui, est inchangé — à corpus
+       vide, aucun rail ne prend de place au-dessus de l'état vide. */
+    const rails = await page.locator('[aria-label="Stories"]').count();
+    check(rails === 0, `corpus VIDE : aucune région « Stories » peinte (obtenu : ${rails})`);
 
     /**
      * RÉANCRÉ DANS LE SCROLLPORT (#6103) — le rail vivant désormais À
@@ -437,11 +395,6 @@ async function main() {
         body: JSON.stringify({ success: false, error: 'Internal server error' }),
       });
     });
-    /* Ni conversation ni story : le SEUL état, atteignable par un navigateur,
-       où le grand rail quitte le DOM — donc le seul où « pas de rail » pourrait
-       se confondre avec « le rail est sorti du champ » (voir l'assertion
-       d'en-tête plus bas). */
-    await armerPasserelle(page, { stories: [], fuites });
     await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#contenu [role="alert"]', { timeout: 20000 });
 
@@ -502,7 +455,16 @@ async function main() {
        passerelle refuse, au lieu de l'écran de connexion. */
     const anonContext = await browser.newContext();
     const anonPage = await anonContext.newPage();
-    await armerPasserelle(anonPage, { stories: [], fuites });
+    await anonPage.route('**/api/v1/conversations', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: [], pagination: { limit: 30, offset: 0, total: 0, hasMore: false } }),
+      });
+    });
+    await anonPage.route('**/api/v1/posts/feed/stories**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: [] }) });
+    });
     await anonPage.route('**/socket.io/**', (route) => route.abort());
     await anonPage.goto(`${base}/conversations/new`, { waitUntil: 'networkidle' });
     const anonPath = await anonPage.evaluate(() => window.location.pathname);
@@ -516,7 +478,16 @@ async function main() {
       window.localStorage.setItem('meeshy.session', JSON.stringify(session));
     }, SESSION);
     const page = await context.newPage();
-    await armerPasserelle(page, { stories: [], fuites });
+    await page.route('**/api/v1/conversations', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: [], pagination: { limit: 30, offset: 0, total: 0, hasMore: false } }),
+      });
+    });
+    await page.route('**/api/v1/posts/feed/stories**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: [] }) });
+    });
     await page.route('**/socket.io/**', (route) => route.abort());
     await page.route('**/api/v1/directory/people**', async (route) => {
       await route.fulfill({
@@ -549,11 +520,6 @@ async function main() {
     );
     await context.close();
   }
-
-  check(
-    fuites.length === 0,
-    `AUCUNE requête réelle ne part vers la production depuis ce gate (fuites : ${fuites.length === 0 ? 'aucune' : fuites.join(', ')})`,
-  );
 
   await browser.close();
   server.close();

@@ -8,7 +8,7 @@
 >
 > | répertoire | ce que c'est | état |
 > |---|---|---|
-> | `apps/web` | le LEGACY | **sert meeshy.me**, 80 routes, 100 % du trafic |
+> | `apps/web` | le LEGACY | **sert meeshy.me**, 74 routes, 100 % du trafic |
 > | `apps/web-v2` | **le chantier**, version **2.0.0** — ex `apps/web-v3` (la v3.1), ex `apps/web-v4` | la seule application web en développement ; elle deviendra `apps/web` quand elle sera mûre en staging |
 >
 > **L'ancienne refonte v3 est ANNULÉE, et elle a quitté le dépôt (#5994).** Aucune feature, aucun correctif, aucun portage d'écran ne la ressuscite — y compris si une issue ouverte avant le 2026-09-07 le demande, y compris si son `ordre.md` ou sa matrice des 31 vues le prévoyait : **ces plans sont périmés, ils ne se rejouent pas.**
@@ -17,9 +17,9 @@
 >
 > **L'UNIQUE exception au gel : `apps/web` (le legacy) SERT les utilisateurs jusqu'à la bascule.** Un incident de production, une faille de sécurité ou une régression bloquante s'y corrige — au minimum, et sans rien ajouter d'autre.
 >
-> **La v3.1 suit l'interface iOS**, pas la planche web : `apps/ios` et `packages/MeeshySDK` sont la référence de disposition, de hiérarchie, d'états et de gestes. La palette est DÉRIVÉE de `MeeshyColors.swift` (`packages/design-tokens/ios.css`, généré — #5445) ; `tokens.css` est la table héritée de l'ancienne refonte, encore importée par la v3.1 (`src/styles/app.css`, `src/styles/institutional.css`), et plus gardée par aucun gate depuis son retrait (#6000).
+> **La v2.0 suit l'interface iOS**, pas la planche web : `apps/ios` et `packages/MeeshySDK` sont la référence de disposition, de hiérarchie, d'états et de gestes. La palette est DÉRIVÉE de `MeeshyColors.swift` (`packages/design-tokens/ios.css`, généré — #5445) ; `tokens.css` est la table héritée de l'ancienne refonte, encore importée par la v2.0 (`src/styles/app.css`, `src/styles/institutional.css`), et plus gardée par aucun gate depuis son retrait (#6000).
 >
-> **Ce que la bascule coûte, mesuré** : le legacy sert **80 routes** (487 fichiers, 109 196 lignes) ; la v3.1 en sert **2** (2 256 lignes, sur fixtures, sans API ni temps réel). La parité est un chantier — elle se pilote par #5491, jamais par ce fichier. Les décisions d'architecture et de produit de la v3.1 vivent dans `apps/web-v2/decisions.md`.
+> **Ce que la bascule coûte, remesuré le 2026-09-11 sur `dev`** : le legacy sert **74 routes** (1 252 fichiers, 243 681 lignes hors tests) ; le chantier en sert **16** (200 fichiers, 32 044 lignes hors tests, plus 133 fichiers de témoins). Il n'est plus « sur fixtures sans API ni temps réel » — 4 fichiers appellent le réseau et 11 touchent au socket, les 16 fixtures cohabitant avec ces branchements. **Tout chiffre de ce paragraphe se remesure avant d'être cité : il a déjà été faux dans les deux sens.** La parité est un chantier — elle se pilote par #5491, jamais par ce fichier. Les décisions d'architecture et de produit du chantier vivent dans `apps/web-v2/decisions.md`.
 
 ## Project Overview
 Meeshy is a high-performance real-time messaging platform with multi-language translation, voice cloning, and end-to-end encryption. It supports 100k+ messages/second with simultaneous multi-language translation.
