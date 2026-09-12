@@ -334,6 +334,41 @@ recette staging — aucun gate n'y dépend, voir `decisions.md` § D-26.
 reste dans le chunk du fil, jamais dans `core`/`index` (vérifié par `grep`
 des marqueurs `data-elected`/`data-identity`/`badges-of` dans chaque morceau).
 
+### Médias du fil (image + vocal, Prisme) — poids et garde (#5805)
+
+Le lecteur audio et l'élection d'image (D-39) vivent dans le chunk de ROUTE,
+jamais dans le socle : première peinture mesurée **36,91 Ko gzip** (plafond
+40), inchangée par ce lot. `measure-weight.mjs` garde l'EMPLACEMENT, pas
+seulement la somme — il cherche le littéral `"Lire l'audio"` dans les
+fichiers CRITIQUES et échoue s'il l'y trouve, quelle que soit la marge de
+poids restante :
+
+```
+bun run build && node scripts/measure-weight.mjs
+```
+
+### Le socket.io temps réel — deux chunks nommés, hors du chemin critique (#5793)
+
+| chunk | pattern | mesuré gzip | plafond | dynamic_only |
+|---|---|---|---|---|
+| `socketio` (vendor) | `^assets/socketio-` | 12,41 Ko | 14 Ko | non (vendor pur, atteint uniquement par `realtime`) |
+| `realtime` (application) | `^assets/realtime-` | 4,41 Ko | 6 Ko | **oui** |
+
+Première peinture avec le temps réel câblé : **37,05 Ko gzip** (plafond 40),
+6 requêtes, 0 requête `fetch` déclenchée par une écriture socket. Rejouer :
+
+```
+bun run build && node scripts/measure-weight.mjs
+```
+
+`dynamic_only: true` sur `realtime` est désormais GARDÉ, pas seulement
+affirmé par le libellé du budget : `measure-weight.mjs` relit les arêtes
+d'`import` STATIQUE de chaque fichier produit et échoue si un chunk marqué
+`dynamic_only` a un importeur statique. La revue-correction #5793 a mesuré
+que `routes/thread.tsx` importait `realtime` (donc `socket.io-client`) de
+façon statique via `view/use-typing-emitter.ts` — 17 Ko gzip de plus sur le
+chemin critique du fil pendant que `budgets.json` promettait le contraire.
+
 ## L'interface
 
 Reprise de l'app iOS, relevée dans `apps/ios` et `packages/MeeshySDK` — pas des

@@ -11,9 +11,20 @@
 |---|---|---|
 | `apps/web` (legacy) | **80** | **la PRODUCTION, seule — 100 % du trafic utilisateur** |
 | `apps/web-old-version3` | 48 | n'a jamais servi un écran ; **annulée** le 2026-09-07, quitte le dépôt avec #5882 |
-| `apps/web-v2` (la v3.1) | **14** — 9 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
+| `apps/web-v2` (la v3.1) | **20** — 15 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
 
 **L'ancienne refonte n'a jamais servi un seul écran à un utilisateur réel.**
+
+> **Correction du 2026-09-12.** Ce tableau est resté à « 14 » (relevé du
+> 2026-09-09) : la table de routes a gagné `/conversations/new` (le rail de
+> stories et ses deux boutons d'en-tête, #5652), `/stories`, `/stories/new` et
+> les trois sous-vues de progression (`/me/progression/badges`,
+> `/me/progression/defis`, `/me/progression/succes`) depuis lors. `node
+> scripts/route-inventory.mjs` rend désormais **20** routes v3.1 / **88**
+> adresses distinctes en union avec le legacy — ce document vient de se
+> réaligner dessus. Comme la correction du 2026-09-09 le disait déjà : c'est
+> le script qui fait foi, jamais ce tableau, et l'écart n'est gardé par aucun
+> gate sur son propre delta.
 
 > **Correction du 2026-09-08 (#5669).** Ce tableau a porté « `apps/web-v2` — 0 —
 > nulle part encore » pendant tout le cadrage de #5492, et c'était FAUX : la
@@ -30,14 +41,18 @@
 > et REJOUE l'extraction, si bien qu'une route ajoutée à la table que
 > l'inventaire ne verrait pas fait rougir `bun test`.
 
-### Ce que les 10 adresses de la v3.1 disent de la bascule
+### Ce que les 20 adresses de la v3.1 disent de la bascule
 
-`node scripts/route-inventory.mjs --json` : **huit des dix existent déjà dans
-le legacy** (`/`, `/login`, `/signup` et les cinq documents). Les deux adresses
-que la v3.1 introduit sont `/c/:conversation` — le fil — et `/me/progression`
-(badges, niveau, série, succès ; `legacy=false` dans l'inventaire). La parité d'URL n'est
-donc pas le chantier ; c'est la parité d'ÉCRANS qui l'est, et l'écart se compte
-sur les **80** routes du legacy, pas sur un espace de nommage à réconcilier.
+`node scripts/route-inventory.mjs --json` : la moitié existe déjà dans le
+legacy (`/`, `/login`, `/signup`, `/about`, `/contact`, `/partners`,
+`/privacy`, `/terms`, `/forgot-password`, `/auth/magic-link` (+ `/validate`)).
+Les adresses que la v3.1 introduit sans équivalent legacy (`legacy=false`
+dans l'inventaire) sont `/c/:conversation` (le fil), `/conversations/new`
+(#5652), `/stories` et `/stories/new` (le rail de la Lentille, #5652), `/welcome`
+et `/me/progression` + ses trois sous-vues `badges`/`defis`/`succes` (niveau,
+série, succès). La parité d'URL n'est donc pas le chantier ; c'est la parité
+d'ÉCRANS qui l'est, et l'écart se compte sur les **80** routes du legacy, pas
+sur un espace de nommage à réconcilier.
 
 > **Correction du 2026-09-09.** Ce document est resté à « 9 » (relevé du
 > 2026-09-08) alors que `/me/progression` (commit `beb7cffbfb`) avait déjà
