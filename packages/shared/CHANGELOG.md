@@ -1,5 +1,75 @@
 # @meeshy/shared
 
+## 1.19.2
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - l'import relatif de la loi de protection porte son extension .js (#6189)
+  - une pièce jointe DÉCLARÉE protégée ne rend plus son média — et sa loi descend dans shared (#6189)
+  - un seul site résout apiConfig.source en dépendances (#6151)
+  - le rail des stories porte l'humeur de son auteur, et chaque pastille ouvre sa story
+  - le témoin clavier de la Lentille compte les TROIS arrêts de l'en-tête, pas un
+  - le projet Xcode reprend les trois fichiers de #6156 — xcodegen regénéré
+  - le cliquet de dette de taille reprend son mou (#6050)
+  - dans l'éditeur d'objet, le clavier et le panneau d'options s'excluent (#6156)
+  - la purge de déconnexion vide le DERNIER QueryClient, pas celui capturé au premier montage
+  - retire l'invalidation du rail des statuts, superseded par la fusion story-rail
+  - le témoin de peinture exige l'IDENTITÉ de l'image servie, pas l'uniformité de son cœur
+  - purge Cache Storage, React Query cache and E2EE keys at logout (#3743)
+  - le rail de la Lentille porte les stories d'iOS, et les deux boutons d'en-tête ont leur effet
+  - le rail défile quand il ne tient pas, et choisir un outil rend le clavier (#6131, #6132)
+  - la mise en évidence d'un saut s'ENREGISTRE avant le geste, elle ne se guette plus (#6148)
+  - écrire n'est pas publier — le socle s'efface pendant la frappe (#6132)
+  - la légende en place solde ses dettes — gardes déplacées, réserve inerte retirée, hôte découpé (#6126)
+  - le témoin des médias attend la PEINTURE de l'image, pas son chargement (#6135)
+  - le gate du mode de lecture cesse de rougir entre minuit et dix heures (#6130)
+  - le composeur dit dans quelle langue on écrit et l'envoie comme langue d'origine
+  - l'enveloppe du grand plateau cède avec son rail, et le gate cesse d'interroger deux noms morts (#6080)
+  - éditer, sélectionner et composer passent en tête du menu système (#6117)
+  - le double tap ouvre le menu système, l'appui long le menu Meeshy (#6117)
+  - le fil et la liste reçoivent le temps réel de la passerelle (socket.io, message:new, typing)
+  - MEESHY_SHELL_START_PATH sert les deux coques, ou se refuse
+  - la compaction du trail des stories ne déplace plus les rangées de la Lentille
+  - une image s'affiche et un vocal se joue dans le fil, dans la langue du lecteur
+  - le rail des stories cesse de promettre un contenu qui ne vient pas
+  - la pastille de coupure cessait d'aller chercher son code SUR LE RÉSEAU
+  - le modèle d'une traduction est facultatif jusqu'au bout de la chaîne
+  - le bouton « Réagir » du plein écran parle les sept langues (#6114)
+  - une traduction malformée ne vide plus la conversation entière
+  - le rejeu hors-ligne d'un réglage cesse d'échouer à chaque tentative
+  - « Composer » s'ouvre depuis le média d'un post et la slide d'une story (#6085)
+  - les réactions de story et de plein écran reviennent à une taille tenable (×0,75)
+  - la pastille de synchronisation ne pèse plus avant le premier pixel
+  - le chevron du retour et son compte de non-lus vivent sur la MÊME ligne
+  - la réaction du plein écran s'ouvre par un bouton et se pose par-dessus tout
+  - les vues de conversation s'alignent sur iOS, et le rail montre de vraies stories
+  - une image ouverte en plein écran se réagit sur la pièce elle-même
+  - ouvrir une conversation cesse de casser le fil quand un message n'a aucune réaction (#6086)
+  - la barre de réactions d'une story grandit, perd son fond et garde son glissé
+  - l'habillage de la barre de réaction devient une option de l'hôte
+  - les huit rouges hérités de la suite iOS — sept témoins gardaient la lettre, un seul défaut de code — run test
+  - le catalogue perd ses 68 clés en double, et un témoin texte l'interdit
+  - la table de jetons a de nouveau un gate WCAG/parité/cascade
+  - un lien de partage qui EXPIRE retire enfin l'accès à ses invités
+  - mes doc-comments de #6166 faisaient remonter le cumul de dette de taille
+  - le seul TS2305 qui empêchait la suite de sécurité des notifications de se charger
+  - la propriété d'une notification passe de la DISCIPLINE de l'appelant à la signature
+  - la suite de protection du fil se CHARGE de nouveau — et ma preuve ne pouvait pas voir le défaut
+  - un dernier message protégé ne s'affiche plus en clair au démarrage à froid
+  - une transcription faite sur l'appareil garde ses horodatages
+  - la liste des conversations charge enfin les quatre réglages qu'elle promet
+  - le cliquet des bouchons de schéma de réponse redevient vert (#6092)
+  - un dernier message protégé ne part plus en clair dans la liste
+  - le filtre du rattrapage se fait vérifier par Prisma, pas par un as const
+  - un rattrapage rouvre la vidéo et la voix des entrées par lien déjà écrites
+  - l'entrée par lien laisse la vidéo et la voix suivre les drapeaux de l'hôte
+  - le rattrapage passe la requête à TypeScript, sans assertion
+  - la migration legacy n'ouvre plus un membre fermé, et un rattrapage rouvre l'existant
+  - les trois portes de création écrivent la table des droits d'un membre nommé
+  - StatusHandler's typing-denial test double gains socket.leave()
+
 ## 1.19.1
 
 ### Patch Changes
