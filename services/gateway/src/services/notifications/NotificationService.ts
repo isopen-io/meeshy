@@ -5340,16 +5340,10 @@ export class NotificationService {
   /**
    * Marque une notification comme lue.
    *
-   * **`userId` est EXIGÉ et entre dans la requête (#6166).** La propriété d'une
-   * notification était vérifiée par la route seule depuis `77b39f5cdd`
-   * (2026-01-28) — donc par la DISCIPLINE de l'appelant, et un appelant qui
-   * oublie ne fait rougir personne : le service acceptait, et le témoin de la
-   * route ne voit pas passer un appel qui ne traverse pas la route.
-   *
-   * La route GARDE sa vérification préalable : c'est elle qui distingue le 404
-   * du 403, deux codes que l'utilisateur doit continuer de recevoir
-   * distinctement. Ici, c'est de la défense en profondeur — la portée rend le
-   * contournement impossible par oubli, pas par convention.
+   * **`userId` est EXIGÉ et entre dans la requête (#6166)** : la propriété était
+   * vérifiée par la route SEULE depuis `77b39f5cdd` (2026-01-28), donc par la
+   * discipline de l'appelant. La route garde sa vérification préalable — elle
+   * seule distingue le 404 du 403 ; ici c'est de la défense en profondeur.
    */
   async markAsRead(notificationId: string, userId: string): Promise<Notification | null> {
     try {
@@ -5670,13 +5664,7 @@ export class NotificationService {
     }
   }
 
-  /**
-   * Supprime une notification.
-   *
-   * **`userId` est EXIGÉ et entre dans les DEUX requêtes (#6166)** — la
-   * relecture comme la suppression. Même raison que `markAsRead` : la garde de
-   * propriété vivait dans la route seule, donc dans la mémoire de l'appelant.
-   */
+  /** Supprime une notification. `userId` EXIGÉ et porté par la relecture (#6166). */
   async deleteNotification(notificationId: string, userId: string): Promise<boolean> {
     try {
       // Fetch userId before deletion so we can emit counts update after
