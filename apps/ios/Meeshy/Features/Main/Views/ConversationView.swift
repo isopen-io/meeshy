@@ -2300,25 +2300,29 @@ struct ConversationView: View {
     /// and crashed in `swift::SubstGenericParametersFromMetadata::buildDescriptorPath`.
     /// AnyView is a known escape hatch for this class of bug — its mangled
     /// name is a single fixed token, capping the chain depth.
+    /// **Frontière NOMINALE** — `ConversationExpandedHeaderBand` (#6194).
+    ///
+    /// Ce maillon était une propriété calculée (`expandedHeaderBandBody`) que
+    /// six `AnyView` successifs n'ont pas suffi à borner : c'est précisément
+    /// ici que la pile débordait, en résolvant le type de
+    /// `expandedHeaderMidContent`. Une struct `View` obtient son propre nœud
+    /// dans l'AttributeGraph, et le graphe déroule la pile avant d'évaluer son
+    /// `body` — une propriété calculée, jamais. Voir le doc-comment de la
+    /// struct pour la trace et le raisonnement complet.
     private var expandedHeaderBand: AnyView {
-        AnyView(expandedHeaderBandBody)
-    }
-
-    @ViewBuilder
-    private var expandedHeaderBandBody: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: MeeshySpacing.sm) {
-                ThemedBackButton(color: accentColor, compactMode: composerState.showOptions, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
-                expandedHeaderMidContent
-                headerAvatarView
-            }
-            .padding(.trailing, MeeshySpacing.sm)
-        }
-        .padding(.horizontal, composerState.showOptions ? MeeshySpacing.sm + 2 : 0)
-        .padding(.vertical, composerState.showOptions ? MeeshySpacing.sm - 2 : 0)
-        .background(expandedHeaderBackground)
-        .padding(.horizontal, composerState.showOptions ? MeeshySpacing.sm : MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.sm)
+        AnyView(ConversationExpandedHeaderBand(
+            showOptions: composerState.showOptions,
+            backButton: {
+                AnyView(ThemedBackButton(
+                    color: accentColor,
+                    compactMode: composerState.showOptions,
+                    unreadCount: viewModel.otherConversationsUnread
+                ) { HapticFeedback.light(); router.pop() })
+            },
+            midContent: { expandedHeaderMidContent },
+            avatar: { headerAvatarView },
+            background: { expandedHeaderBackground }
+        ))
     }
 
     /// Middle slot of the header band (between back button and avatar).
@@ -2327,19 +2331,16 @@ struct ConversationView: View {
     /// alongside the rest of the band produced an opaque return type that
     /// Swift's runtime metadata resolver couldn't materialize — `body` would
     /// crash at first render with a deep `swift_getTypeByMangledName` stack.
-    // AnyView : casse la récursion de type de `expandedHeaderBandBody` (crash
-    // stack-overflow du décodeur de métadonnées Swift au 1er rendu SUR DEVICE).
+    // Frontière NOMINALE — `ConversationHeaderMidContent` (#6194). L'`AnyView`
+    // posé ici en 2026-08 ne suffisait pas : c'est le getter de CE maillon que
+    // la trace du crash désigne, sous
+    // `__swift_instantiateConcreteTypeFromMangledNameV2`.
     private var expandedHeaderMidContent: AnyView {
-        if composerState.showOptions {
-            return AnyView(expandedHeaderTitleAndTags)
-        } else {
-            // Le bouton d'appel reste à côté de la recherche dans les 2 états
-            // (le collapse/expand ne bascule que la zone nom/tags).
-            return AnyView(HStack {
-                Spacer()
-                headerButtonsCluster
-            })
-        }
+        AnyView(ConversationHeaderMidContent(
+            showOptions: composerState.showOptions,
+            titleAndTags: { AnyView(expandedHeaderTitleAndTags) },
+            actionButtons: { headerButtonsCluster }
+        ))
     }
 
     /// Call + search buttons, grouped with zero extra spacing between them
@@ -2356,26 +2357,20 @@ struct ConversationView: View {
     /// `floatingHeaderSection`). Le retour, l'avatar et le titre ne la
     /// suivent pas — on doit pouvoir quitter la conversation et savoir où on
     /// est, même en plein défilement.
-    // AnyView : `some View` nu ici gardait la porte ouverte au même débordement
-    // que `expandedHeaderBand`/`expandedHeaderMidContent` (commentaires
-    // ci-dessus) — érasé un cran plus bas (le seul enfant
-    // `readingModeAffordanceCluster`) ne suffisait pas : l'APPELANT
-    // (`expandedHeaderMidContent`) doit quand même résoudre le type opaque
-    // COMPOSITE de `headerButtonsCluster` — TOUS ses enfants combinés,
-    // `headerCallButtons`/`expandedHeaderSearchButton` compris — avant de
-    // pouvoir appeler `AnyView(HStack { … headerButtonsCluster })` un cran
-    // plus haut. Seule l'érasure à LA DÉCLARATION de `headerButtonsCluster`
-    // coupe la chaîne au bon endroit (2026-08-17, même récursion
-    // `swift_getTypeByMangledName` malgré la première coupe).
+    // Frontière NOMINALE — `ConversationHeaderActionsCluster` (#6194).
+    //
+    // Le commentaire d'origine (2026-08-17) tenait le bon raisonnement : « érasé
+    // un cran plus bas ne suffisait pas — l'APPELANT doit quand même résoudre le
+    // type opaque COMPOSITE, TOUS ses enfants combinés ». Il en tirait le remède
+    // le plus proche, une érasure de plus. C'est exactement ce qu'un type
+    // NOMINAL supprime : son nom se substitue au sous-arbre entier dans le
+    // mangled name, donc le démangleur n'a plus à le parcourir.
     private var headerButtonsCluster: AnyView {
-        AnyView(
-            HStack(spacing: 0) {
-                headerCallButtons.layoutPriority(1)
-                expandedHeaderSearchButton
-                readingModeAffordanceCluster
-            }
-            .hiddenWhileScrolling()
-        )
+        AnyView(ConversationHeaderActionsCluster(
+            callButtons: { headerCallButtons },
+            searchButton: { expandedHeaderSearchButton },
+            readingModeCluster: { readingModeAffordanceCluster }
+        ))
     }
 
     /// Chip de mode + bouton Aa (§WS-7 travaux 3-4, arbitrage F-086bis) —

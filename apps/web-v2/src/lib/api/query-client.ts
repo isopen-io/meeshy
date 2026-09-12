@@ -279,10 +279,22 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
  * construction de ce client change déjà `sessionStore` par `restoreSession()`,
  * appelée avant ce module dans `main.tsx`).
  */
+/**
+ * `CACHE_SCHEMA` (#6195) — bumpé quand la FORME PERSISTÉE d'une requête
+ * change, ici `['conversations']` : `readonly Conversation[]` → `InfiniteData`.
+ * Un cache écrit AVANT ce lot et restauré APRÈS ferait lever `select`
+ * (`flattenConversationPages`) sur `.pages` d'un tableau qui n'en porte pas —
+ * le buster par IDENTITÉ (`currentBuster`) ne protège pas de ÇA, il protège
+ * du compte SUIVANT sur le même navigateur (D-6). Les deux causes de purge
+ * sont INDÉPENDANTES : celle-ci n'a pas besoin d'un changement d'identité
+ * pour se déclencher, une seule fois, au premier chargement qui suit ce lot.
+ */
+export const CACHE_SCHEMA = 2;
+
 function currentBuster(): string {
   const session = sessionStore.getState().session;
   const userId = session.status === 'authenticated' ? session.user.id : 'anonymous';
-  return `${__APP_VERSION__}:${userId}`;
+  return `${__APP_VERSION__}:${CACHE_SCHEMA}:${userId}`;
 }
 
 /**

@@ -21,6 +21,8 @@ import {
   viewer,
 } from './fixtures-base';
 import { CATCHUP_CONVERSATION, CATCHUP_CONVERSATION_ID, CATCHUP_MESSAGES } from './fixtures-catchup';
+import { LIVE_CONVERSATION, LIVE_CONVERSATION_ID, LIVE_MESSAGES } from './fixtures-live';
+import { PAGINATION_CONVERSATIONS } from './fixtures-pagination';
 import { MEDIA_CONVERSATION, MEDIA_CONVERSATION_ID, MEDIA_MESSAGES } from './fixtures-media';
 import { STATES_CONVERSATION, STATES_CONVERSATION_ID, STATES_MESSAGES } from './fixtures-states';
 import {
@@ -482,6 +484,7 @@ export const CONVERSATIONS: readonly Conversation[] = [
     lastMessageTranslations: { en: "I'll push the measurement tonight." },
     lastMessageOriginalLanguage: 'fr',
   },
+  LIVE_CONVERSATION,
   {
     ...conversationDefaults,
     id: 'c-amina',
@@ -627,6 +630,14 @@ export const CONVERSATIONS: readonly Conversation[] = [
   CATCHUP_CONVERSATION,
   MEDIA_CONVERSATION,
   STATES_CONVERSATION,
+  /**
+   * LE CORPUS DE PAGINATION (#6195) — 34 conversations STRICTEMENT plus
+   * anciennes que les 11 ci-dessus (`fixtures-pagination.ts`), pour que la
+   * Lentille ait de quoi défiler au-delà d'une page serveur (30). Les 11
+   * précédentes restent en TÊTE du tri `lastMessageAt desc` et en page 1 —
+   * une ligne d'étalement, aucun comportement changé pour elles.
+   */
+  ...PAGINATION_CONVERSATIONS,
 ];
 
 
@@ -834,6 +845,7 @@ export const messagesOf = (conversationId: string): readonly Message[] => {
   if (conversationId === CATCHUP_CONVERSATION_ID) return withSent(conversationId, withConsumption(CATCHUP_MESSAGES));
   if (conversationId === MEDIA_CONVERSATION_ID) return withSent(conversationId, withConsumption(MEDIA_MESSAGES));
   if (conversationId === STATES_CONVERSATION_ID) return withSent(conversationId, withConsumption(STATES_MESSAGES));
+  if (conversationId === LIVE_CONVERSATION_ID) return withSent(conversationId, withConsumption(LIVE_MESSAGES));
   const last = CONVERSATIONS.find((c) => c.id === conversationId)?.lastMessage;
   return withSent(conversationId, last === undefined ? [] : withConsumption([last]));
 };

@@ -94,10 +94,30 @@ function pngFile(name = 'a.png'): File {
   return new File([new Uint8Array([1, 2, 3])], name, { type: 'image/png' });
 }
 
+/** `readConversations` (#6195) — le cache de liste porte désormais des
+ * PAGES (`InfiniteData`) ; ce fichier n'écrit que par la seule page
+ * qu'il sème, jamais par `patchConversation` — c'est cette fonction de
+ * production qui absorbe le changement de forme (`conversations.ts`). */
+function readConversations(client: QueryClient): readonly Conversation[] | undefined {
+  const data = client.getQueryData<{ readonly pages: readonly { readonly conversations: readonly Conversation[] }[] }>(
+    CONVERSATIONS_QUERY_KEY,
+  );
+  return data?.pages.flatMap((p) => p.conversations);
+}
+
 function seededClient(): QueryClient {
   const queryClient = new QueryClient();
   queryClient.setQueryData(messagesQueryKey('c-a'), { messages: [m1], hasOlder: false });
-  queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, [conv({ id: 'c-a' }), conv({ id: 'c-b' })]);
+  queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, {
+    pages: [
+      {
+        conversations: [conv({ id: 'c-a' }), conv({ id: 'c-b' })],
+        pagination: { limit: 30, offset: 0, total: 2, hasMore: false },
+        cursorPagination: { limit: 30, hasMore: false, nextCursor: null },
+      },
+    ],
+    pageParams: [undefined],
+  });
   return queryClient;
 }
 
@@ -478,7 +498,7 @@ describe('performSend', () => {
     const { impl } = fakeFetch({ status: 200, body: ackBody('m9', 'x', { content: 'bonjour 9' }) });
     const outbox = createOutboxStore();
     const queryClient = seededClient();
-    const before = queryClient.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)!;
+    const before = readConversations(queryClient)!;
     const cB = before.find((c) => c.id === 'c-b')!;
     const deps: SendDeps = {
       source: 'gateway',
@@ -495,7 +515,7 @@ describe('performSend', () => {
       deps,
     });
 
-    const after = queryClient.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)!;
+    const after = readConversations(queryClient)!;
     const cA = after.find((c) => c.id === 'c-a')!;
     expect(cA.lastMessage?.id).toBe('m9');
     expect(cA.lastMessageAt as unknown).toBe('2026-09-09T10:00:00.000Z');

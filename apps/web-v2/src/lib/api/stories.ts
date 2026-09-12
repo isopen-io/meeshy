@@ -23,7 +23,16 @@ import type { ApiResult, HttpTransport } from './http';
  * demander plus haut ne sert à rien, et le demander plus bas priverait le rail
  * d'auteurs sans que rien ne le dise.
  */
-export const STORY_TRAY_QUERY_KEY = ['stories', 'tray'] as const;
+/**
+ * `STORIES_QUERY_PREFIX` (#6195) — le préfixe COMMUN aux deux corpus de ce
+ * fichier : le tirer-pour-rafraîchir de la Lentille (`refreshListAction`,
+ * `query.ts`) invalide CE préfixe, une fois, plutôt que d'énumérer les clés —
+ * un troisième corpus qui rejoindrait ce module n'aurait qu'à en DÉRIVER sa
+ * clé pour être rafraîchi avec les deux premiers, jamais une ligne de plus à
+ * ajouter au tirer.
+ */
+export const STORIES_QUERY_PREFIX = ['stories'] as const;
+export const STORY_TRAY_QUERY_KEY = [...STORIES_QUERY_PREFIX, 'tray'] as const;
 
 /** Un média de story, réduit à ce que le rail PEINT. */
 export type StoryTrayMedia = {
@@ -89,7 +98,7 @@ export function storyTrayQueryOptions(deps: StoriesDeps) {
  * le rail — les autres champs (contenu, réactions…) ne sont pas de son
  * ressort, `withMoods()` (`lib/view/story-tray.ts`) ne lit que ces deux-là.
  */
-export const STATUS_MOODS_QUERY_KEY = ['stories', 'moods'] as const;
+export const STATUS_MOODS_QUERY_KEY = [...STORIES_QUERY_PREFIX, 'moods'] as const;
 
 /** Une humeur, réduite à ce que le rail LIT — `Post.moodEmoji`
  * (`schema.prisma`, « Emoji mood (ex: "😴", "🎉", "💪", "☕") »). */

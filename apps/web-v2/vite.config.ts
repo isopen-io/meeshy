@@ -561,6 +561,28 @@ export default defineConfig({
             }
             return 'core';
           }
+          /**
+           * LES NOMS D'ÉVÉNEMENTS SOCKET.IO (revue-correction #6171, défaut 1)
+           * — `event-names.ts` (`@meeshy/shared`) est atteint à la fois par
+           * `lib/api/socket.ts` (le chunk `realtime`, chargé en `import()`
+           * statique depuis `lib/api/realtime.ts`) ET par
+           * `lib/api/fixtures-realtime.ts`, désormais lui-même en `import()`
+           * DEPUIS `realtime.ts` (§ défaut 1) — deux entrées asynchrones
+           * distinctes qui partagent ce petit module. Sans ce nom, Rollup
+           * range les exports dans LA PREMIÈRE des deux à les atteindre et
+           * fait importer l'autre depuis elle : `fixtures-realtime` se
+           * retrouvait à importer STATIQUEMENT le chunk `realtime`, ce que
+           * `budgets.json › on_demand_chunks.realtime.dynamic_only` refuse —
+           * à raison, ce chunk ne doit avoir qu'une seule voie d'accès, un
+           * `import()`. Le nommer casse l'arête : les deux chunks importent
+           * ce tiers, ni l'un ni l'autre ne s'importent entre eux.
+           */
+          /* Le nom NE COMMENCE PAS PAR `socketio-` : le motif du budget
+           * `socketio` (`^assets/socketio-`) matcherait ce chunk EN PLUS du
+           * client `socket.io-client` qu'il borne, et ferait déborder un
+           * plafond que ce lot ne doit pas toucher (mesuré : 14,56 Ko contre
+           * 14 avant ce renommage). */
+          if (id.includes('/socketio-events/event-names')) return 'socket-event-names';
           return undefined;
         },
       },

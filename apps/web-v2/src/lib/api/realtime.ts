@@ -1,11 +1,9 @@
 import { conversationStore } from '@/lib/conversation-store';
 import { createSocketIOClient } from '@/lib/net/socket-io-factory';
-import type { SocketFactory } from '@/lib/net/socket';
 import { outboxStore } from '@/lib/send/outbox-store';
 
 import { apiConfig } from './config';
 import { apiDeps } from './deps';
-import { createFixturesSocketClient } from './fixtures-realtime';
 import { appQueryClient } from './query-client';
 import { setTypingEmitter } from './typing-emit';
 import { sessionStore } from './session';
@@ -27,12 +25,24 @@ import { resolveViewer } from './viewer';
  * d'identité : un `establish()` qui pose un jeton DIFFÉRENT (changement de
  * compte sur le même navigateur, D-6) reconstruit la connexion plutôt que de
  * la réutiliser à tort.
+ *
+ * LE BOUCHON DE FIXTURES N'EST PLUS UNE DÉPENDANCE STATIQUE DE CE MODULE
+ * (revue-correction #6171, défaut 1) — `createFixturesSocketClient` et sa
+ * chronologie `LIVE_SCHEDULE` (`fixtures-realtime.ts` → `fixtures-live.ts`)
+ * sont du CORPUS DE RECETTE, jamais servis à un lecteur réel
+ * (`VITE_DATA_SOURCE=gateway` les élague déjà par `__FIXTURES__`), et un
+ * import STATIQUE les faisait payer par le chunk `realtime` — mesuré 5,92 Ko
+ * gzip pour un plafond de 6 (`budgets.json › on_demand_chunks.realtime`,
+ * marge de 0,08 Ko). Un `import()` LOCAL au seul branchement fixtures fait de
+ * ce bouchon un chunk À LUI (`budgets.json ›
+ * on_demand_chunks.fixtures_realtime`), qui n'entre dans AUCUN bundle
+ * `gateway` déployé.
  */
-const socketFactory: SocketFactory =
-  __FIXTURES__ && apiConfig.source === 'fixtures' ? createFixturesSocketClient : createSocketIOClient;
-
 let connection: RealtimeConnection | null = null;
 let connectedToken: string | null = null;
+/** Garde la course : un second `syncConnection()` pendant que le `import()`
+ * du bouchon résout ne doit pas ouvrir une SECONDE connexion de fixtures. */
+let fixturesConnecting = false;
 
 function currentViewerId(): string {
   return resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? '';
@@ -50,20 +60,25 @@ function syncConnection(): void {
    * (`fixtures-realtime.ts`) ne le lit jamais.
    */
   if (__FIXTURES__ && apiConfig.source === 'fixtures') {
-    if (connection !== null) return;
-    connection = createRealtimeConnection(
-      { token: 'fixtures', sessionToken: 'fixtures' },
-      {
-        base: apiConfig.base,
-        socketFactory,
-        queryClient: appQueryClient,
-        typing: typingStore,
-        conversationStore,
-        outbox: outboxStore,
-        viewerId: currentViewerId,
-        onClearSession: () => undefined,
-      },
-    );
+    if (connection !== null || fixturesConnecting) return;
+    fixturesConnecting = true;
+    void import('./fixtures-realtime').then(({ createFixturesSocketClient }) => {
+      fixturesConnecting = false;
+      if (connection !== null) return;
+      connection = createRealtimeConnection(
+        { token: 'fixtures', sessionToken: 'fixtures' },
+        {
+          base: apiConfig.base,
+          socketFactory: createFixturesSocketClient,
+          queryClient: appQueryClient,
+          typing: typingStore,
+          conversationStore,
+          outbox: outboxStore,
+          viewerId: currentViewerId,
+          onClearSession: () => undefined,
+        },
+      );
+    });
     return;
   }
 
@@ -81,7 +96,7 @@ function syncConnection(): void {
     { token: session.token, sessionToken: session.sessionToken },
     {
       base: apiConfig.base,
-      socketFactory,
+      socketFactory: createSocketIOClient,
       queryClient: appQueryClient,
       typing: typingStore,
       conversationStore,

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
 import { ApiError } from './client';
-import { createAppQueryClient, purgeReaderCaches, shouldRetry, type StorageLike } from './query-client';
+import { CACHE_SCHEMA, createAppQueryClient, purgeReaderCaches, shouldRetry, type StorageLike } from './query-client';
 import { reactionStore } from './reaction-store';
 import { createSessionStore } from './session';
 
@@ -60,6 +60,35 @@ describe('persistence — round trip', () => {
     const b = createAppQueryClient({ storage, buster: '0.0.0-test:u2' });
     expect(b.getQueryData(['conversations'])).toBeUndefined();
     expect(storage.raw.has('meeshy.query-cache')).toBe(false);
+  });
+
+  /**
+   * `CACHE_SCHEMA` (#6195) — un cache écrit sous le buster de la VERSION
+   * PRÉCÉDENTE de schéma (la FORME de `['conversations']` a changé : tableau
+   * → `InfiniteData`) est PURGÉ, jamais hydraté ; sous le buster COURANT, il
+   * l'est. Le buster composé réel (`currentBuster`, non exporté) place
+   * `CACHE_SCHEMA` entre la version applicative et l'identité — ce témoin
+   * fixe la même forme pour rester vrai quel que soit son emplacement exact,
+   * tant que le SCHÉMA fait partie du buster.
+   */
+  test('CACHE_SCHEMA bumpé ⇒ un cache de l’ancien schéma est purgé, du courant est hydraté', () => {
+    const previousSchema = CACHE_SCHEMA - 1;
+    const storage = fakeStorage();
+    const stale = createAppQueryClient({ storage, buster: `0.0.0-test:${previousSchema}:u1` });
+    stale.setQueryData(['conversations'], { pages: [{ conversations: [{ id: 'c-1' }] }], pageParams: ['seed'] });
+    stale.persist();
+
+    const afterBump = createAppQueryClient({ storage, buster: `0.0.0-test:${CACHE_SCHEMA}:u1` });
+    expect(afterBump.getQueryData(['conversations'])).toBeUndefined();
+    expect(storage.raw.has('meeshy.query-cache')).toBe(false);
+
+    afterBump.setQueryData(['conversations'], { pages: [{ conversations: [{ id: 'c-2' }] }], pageParams: ['seed'] });
+    afterBump.persist();
+    const reloaded = createAppQueryClient({ storage, buster: `0.0.0-test:${CACHE_SCHEMA}:u1` });
+    expect(reloaded.getQueryData(['conversations'])).toEqual({
+      pages: [{ conversations: [{ id: 'c-2' }] }],
+      pageParams: ['seed'],
+    });
   });
 
   test('JSON corrompu ⇒ undefined, aucune exception', () => {
