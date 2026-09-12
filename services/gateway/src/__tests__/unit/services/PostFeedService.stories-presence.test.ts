@@ -54,13 +54,15 @@ beforeEach(() => {
 });
 
 describe('PostFeedService.getStories — author presence (isOnline/lastActiveAt)', () => {
-  it('selects author presence fields on the full stories include', async () => {
+  it('selects author presence fields on the full stories select', async () => {
     const service = new PostFeedService(mockPrisma);
     await service.getStories('user-1');
 
+    // storyPostInclude moved from Prisma.PostInclude to Prisma.PostSelect
+    // (#4791) — the author sub-selection lives under `select`, not `include`.
     const args = mockPostFindMany.mock.calls[0][0];
-    expect(args.include?.author?.select?.isOnline).toBe(true);
-    expect(args.include?.author?.select?.lastActiveAt).toBe(true);
+    expect(args.select?.author?.select?.isOnline).toBe(true);
+    expect(args.select?.author?.select?.lastActiveAt).toBe(true);
   });
 
   it('selects author presence fields on the tray projection', async () => {
@@ -76,9 +78,13 @@ describe('PostFeedService.getStories — author presence (isOnline/lastActiveAt)
     const service = new PostFeedService(mockPrisma);
     await service.getFeed('user-1', 1, 20);
 
+    // Asserting on `args.include` here would pass vacuously now that
+    // `feedPostInclude` is a `select` (`args.include` is simply undefined) —
+    // read the real shape instead, or this test can never fail (#4791).
     const args = mockPostFindMany.mock.calls[0][0];
-    expect(args.include?.author?.select?.isOnline).toBeUndefined();
-    expect(args.include?.author?.select?.lastActiveAt).toBeUndefined();
+    expect(args.select?.author).toBeDefined();
+    expect(args.select?.author?.select?.isOnline).toBeUndefined();
+    expect(args.select?.author?.select?.lastActiveAt).toBeUndefined();
   });
 });
 
