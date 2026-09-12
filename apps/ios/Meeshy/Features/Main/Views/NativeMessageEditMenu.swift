@@ -61,27 +61,68 @@ struct MessageEditMenuAction: Identifiable {
 
 extension MessageEditMenuAction {
 
-    /// **Les opérations primaires d'un message**, dans l'ordre où la directive
-    /// les nomme : « répondre, transférer, modifier, sélectionner, copier,
-    /// supprimer et plus ».
+    /// **Les opérations primaires d'un message, dans l'ordre que le porteur a
+    /// fixé** (2026-09-12) : « les options qu'il faut en premier c'est editer,
+    /// selectionner et composer ».
     ///
-    /// Quatre sont servies ici, parce que ce sont celles dont le conteneur
-    /// tient déjà le rappel. **« Modifier », « copier » et « supprimer » ne le
-    /// sont pas encore** : leurs rappels vivent dans `MessageActionsMenu` et
-    /// n'ont jamais eu à descendre jusqu'au conteneur de cellule. Les router
-    /// est un lot à soi — et les inventer ici, en réécrivant ce que le menu
-    /// Meeshy décide déjà, serait un second site de décision pour les mêmes
-    /// verbes.
+    /// L'ordre n'est pas cosmétique — le menu système est une BARRE, et ce qui
+    /// dépasse se rejoint par un chevron. Les trois premières sont donc les
+    /// seules dont on garantit qu'elles sont visibles sans geste
+    /// supplémentaire.
     ///
-    /// « Plus… » n'est pas un bouchon : il ouvre le menu MEESHY, qui porte les
-    /// trois verbes manquants. Aucun n'est donc hors de portée de
-    /// l'utilisateur — ils sont à un geste de plus.
+    /// ## Aucun rappel n'est réécrit ici
+    ///
+    /// Les six viennent de `ConversationView`, qui les résout déjà pour le menu
+    /// Meeshy. Le menu système sert les MÊMES — sans quoi deux entrées du même
+    /// nom, dans deux menus du même message, feraient deux choses.
+    ///
+    /// **`peutEditer` est REMIS, jamais recalculé** : la règle
+    /// (`msg.isMe || isCurrentUserAdminOrMod`) est écrite trois fois dans
+    /// `ConversationView` ; une quatrième écriture ici garantirait la
+    /// divergence. Un message qu'on ne peut pas éditer n'affiche pas l'entrée
+    /// — plutôt qu'un grisé : la loi 4 se tient par la RÈGLE, pas par un
+    /// contrôle inerte.
+    ///
+    /// ## « Plus… » ouvre le GRAND menu
+    ///
+    /// Directive du même jour : « le plus doit ouvrir le grand menu et non le
+    /// menu longpress ». Les deux sont distincts et ce lot les sépare
+    /// définitivement — l'appui long ouvre l'overlay (réactions + actions),
+    /// « Plus… » ouvre `MessageMoreSheet`, la feuille complète. Les faire
+    /// coïncider rendrait le double tap redondant avec l'appui long, ce que la
+    /// directive écarte explicitement.
     static func primaires(messageId: String,
+                          peutEditer: Bool,
+                          editer: ((String) -> Void)?,
+                          selectionner: ((String) -> Void)?,
+                          composer: ((String) -> Void)?,
                           repondre: ((String) -> Void)?,
                           transferer: ((String) -> Void)?,
-                          selectionner: ((String) -> Void)?,
-                          plus: @escaping (String) -> Void) -> [MessageEditMenuAction] {
+                          plus: ((String) -> Void)?) -> [MessageEditMenuAction] {
         var actions: [MessageEditMenuAction] = []
+
+        // — Les trois premières, dans l'ordre de la directive —
+
+        if peutEditer, let editer {
+            actions.append(.init(id: "edit",
+                                 title: String(localized: "message.action.edit",
+                                               defaultValue: "Éditer", bundle: .main),
+                                 systemImage: "pencil") { editer(messageId) })
+        }
+        if let selectionner {
+            actions.append(.init(id: "select",
+                                 title: String(localized: "message.action.select",
+                                               defaultValue: "Sélectionner", bundle: .main),
+                                 systemImage: "checkmark.circle") { selectionner(messageId) })
+        }
+        if let composer {
+            actions.append(.init(id: "compose",
+                                 title: String(localized: "message.action.compose",
+                                               defaultValue: "Composer", bundle: .main),
+                                 systemImage: "wand.and.stars") { composer(messageId) })
+        }
+
+        // — Puis ce que la barre montre si la place le permet —
 
         if let repondre {
             actions.append(.init(id: "reply",
@@ -95,16 +136,12 @@ extension MessageEditMenuAction {
                                                defaultValue: "Transférer", bundle: .main),
                                  systemImage: "arrowshape.turn.up.right") { transferer(messageId) })
         }
-        if let selectionner {
-            actions.append(.init(id: "select",
-                                 title: String(localized: "message.action.select",
-                                               defaultValue: "Sélectionner", bundle: .main),
-                                 systemImage: "checkmark.circle") { selectionner(messageId) })
+        if let plus {
+            actions.append(.init(id: "more",
+                                 title: String(localized: "message.action.more",
+                                               defaultValue: "Plus…", bundle: .main),
+                                 systemImage: "ellipsis") { plus(messageId) })
         }
-        actions.append(.init(id: "more",
-                             title: String(localized: "message.action.more",
-                                           defaultValue: "Plus…", bundle: .main),
-                             systemImage: "ellipsis") { plus(messageId) })
 
         return actions
     }

@@ -584,6 +584,30 @@ struct MessageListView: UIViewControllerRepresentable {
     var isSelectionModeActive: Bool = false
     var selectedMessageIds: Set<String> = []
     var onToggleSelection: ((String) -> Void)?
+    /// **Les trois opérations que le menu SYSTÈME sert en premier** (#6117,
+    /// directive porteur : « les options qu'il faut en premier c'est editer,
+    /// selectionner et composer »), plus la porte du GRAND menu.
+    ///
+    /// Elles remontent chacune d'un cran — de `MessageOverlayMenu`, qui les
+    /// portait déjà, jusqu'ici. Aucune n'est réécrite au passage : le menu
+    /// système sert les MÊMES rappels que le menu Meeshy, sans quoi deux
+    /// entrées du même nom feraient deux choses.
+    var onEditMessage: ((String) -> Void)?
+    /// **ARME** le mode sélection en semant ce message — ce que fait
+    /// « Sélectionner » du menu Meeshy. Distinct de `onToggleSelection`,
+    /// qui BASCULE une coche dans un mode déjà actif : le menu doit armer.
+    var onSelectMessage: ((String) -> Void)?
+    var onComposeFromMessage: ((String) -> Void)?
+    /// « Plus… » ouvre le **GRAND** menu (`MessageMoreSheet`), pas l'overlay
+    /// d'appui long — directive porteur : « le plus doit ouvrir le grand menu
+    /// et non le menu longpress ». Les deux sont distincts : l'appui long
+    /// ouvre l'overlay (réactions + actions), celui-ci la feuille complète.
+    var onOpenMoreSheet: ((String) -> Void)?
+    /// **Le prédicat d'éditabilité est REMIS, jamais recalculé.** La règle
+    /// (`msg.isMe || isCurrentUserAdminOrMod`) est déjà écrite TROIS fois dans
+    /// `ConversationView` ; en poser une quatrième ici garantirait qu'elles
+    /// divergent au premier ajustement de l'une.
+    var canEditMessage: ((String) -> Bool)?
     /// User-initiated reaction add. Carries the message id and the tapped
     /// bubble cell's on-screen frame (window coords, `nil` when the cell is
     /// not realized) so the quick-reaction bar can anchor to the bubble.
@@ -676,6 +700,11 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.isSelectionModeActive = isSelectionModeActive
         vc.selectedMessageIds = selectedMessageIds
         vc.onToggleSelection = onToggleSelection
+        vc.onEditMessage = onEditMessage
+        vc.onSelectMessage = onSelectMessage
+        vc.onComposeFromMessage = onComposeFromMessage
+        vc.onOpenMoreSheet = onOpenMoreSheet
+        vc.canEditMessage = canEditMessage
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment
@@ -791,6 +820,11 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.isSelectionModeActive = isSelectionModeActive
         vc.selectedMessageIds = selectedMessageIds
         vc.onToggleSelection = onToggleSelection
+        vc.onEditMessage = onEditMessage
+        vc.onSelectMessage = onSelectMessage
+        vc.onComposeFromMessage = onComposeFromMessage
+        vc.onOpenMoreSheet = onOpenMoreSheet
+        vc.canEditMessage = canEditMessage
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment

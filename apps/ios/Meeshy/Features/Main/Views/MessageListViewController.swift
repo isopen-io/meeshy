@@ -265,6 +265,17 @@ final class MessageListViewController: UIViewController {
     /// mutation (plafond `ConversationOverlayState.selectionCap` compris),
     /// ce contrôleur ne fait que relayer l'id tapé.
     var onToggleSelection: ((String) -> Void)?
+    /// **Les trois opérations servies EN PREMIER par le menu système**
+    /// (#6117 — « les options qu'il faut en premier c'est editer, selectionner
+    /// et composer »), plus la porte du GRAND menu.
+    var onEditMessage: ((String) -> Void)?
+    var onSelectMessage: ((String) -> Void)?
+    var onComposeFromMessage: ((String) -> Void)?
+    /// « Plus… » ouvre `MessageMoreSheet` — la feuille COMPLÈTE — et non
+    /// l'overlay d'appui long. Les deux sont des menus distincts.
+    var onOpenMoreSheet: ((String) -> Void)?
+    /// Remis par `ConversationView`, jamais recalculé ici.
+    var canEditMessage: ((String) -> Bool)?
     /// Add reaction. Carries the message id and the tapped bubble cell's
     /// on-screen frame (window coords; `nil` when the cell is not realized)
     /// so the quick-reaction bar can anchor to the bubble.
@@ -1380,6 +1391,11 @@ final class MessageListViewController: UIViewController {
             let selectionModeActive = self.isSelectionModeActive
             let selectedIds = self.selectedMessageIds
             let toggleSelectionHandler = self.onToggleSelection
+            let editHandler = self.onEditMessage
+            let selectHandler = self.onSelectMessage
+            let composeHandler = self.onComposeFromMessage
+            let moreSheetHandler = self.onOpenMoreSheet
+            let canEdit = self.canEditMessage
             let openReactPickerHandler = self.onOpenReactPicker
             let showInfoHandler = self.onShowMessageInfo
             let showReadStatusHandler = self.onShowReadStatus
@@ -1799,10 +1815,13 @@ final class MessageListViewController: UIViewController {
                     // rappels déjà résolus par `ConversationView`.
                     editMenuActions: MessageEditMenuAction.primaires(
                         messageId: messageId,
+                        peutEditer: canEdit?(messageId) ?? false,
+                        editer: editHandler,
+                        selectionner: selectHandler,
+                        composer: composeHandler,
                         repondre: swipeReplyHandler,
                         transferer: swipeForwardHandler,
-                        selectionner: toggleSelectionHandler,
-                        plus: longPressHandler
+                        plus: moreSheetHandler
                     )
                 ) {
                     if let focalRow {
