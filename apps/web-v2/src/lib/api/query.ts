@@ -13,7 +13,7 @@ import type { Conversation, Participant } from './types';
 import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
 import { performReaction, type PerformReactionResult } from './reactions';
-import { storyTrayQueryOptions } from './stories';
+import { statusMoodsQueryOptions, storyTrayQueryOptions } from './stories';
 
 /**
  * `apiDeps` — LA `ConversationsDeps` DE MODULE (#5650, F2/F3 ; #5652
@@ -62,6 +62,17 @@ export function useConversationsSnapshot(): readonly Conversation[] | undefined 
  */
 export function useStoryTray() {
   return useQuery({ ...storyTrayQueryOptions(apiDeps), staleTime: 60_000 });
+}
+
+/**
+ * **LE CORPUS DES HUMEURS** (#5652) — même `deps`, même règle de source que
+ * `useStoryTray`, un corpus DISTINCT (`?scope=statuses`, jamais `stories`).
+ * Même `staleTime` : une humeur, comme une story, vit une fenêtre courte
+ * (une heure — `PostType.STATUS`, `schema.prisma`) et n'a aucune raison
+ * d'être refetchée à chaque retour sur la liste.
+ */
+export function useStatusMoods() {
+  return useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000 });
 }
 
 export function useConversation(id: string) {

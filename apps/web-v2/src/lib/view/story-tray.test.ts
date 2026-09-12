@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { groupStoriesByAuthor, storyAuthorLabel } from './story-tray';
-import type { StoryTrayPost } from '@/lib/api/stories';
+import { groupStoriesByAuthor, storyAuthorLabel, withMoods } from './story-tray';
+import type { StatusMoodPost, StoryTrayPost } from '@/lib/api/stories';
 
 const story = (id: string, authorId: string, createdAt: string, nom?: string): StoryTrayPost => ({
   id,
@@ -87,5 +87,58 @@ describe('storyAuthorLabel', () => {
     expect(avec({ displayName: 'Ada', username: 'ada42' })).toBe('Ada');
     expect(avec({ firstName: 'Ada', lastName: 'Lovelace', username: 'ada42' })).toBe('Ada Lovelace');
     expect(avec({ username: 'ada42' })).toBe('ada42');
+  });
+});
+
+describe('withMoods', () => {
+  const mood = (id: string, authorId: string, moodEmoji: string | null): StatusMoodPost => ({
+    id,
+    authorId,
+    moodEmoji,
+    author: { id: authorId, username: authorId },
+  });
+
+  test('un auteur qui a déjà une pastille reçoit son humeur', () => {
+    const groupes = groupStoriesByAuthor([story('s1', 'a', '2026-09-11T10:00:00Z')], {
+      viewerId: 'moi',
+      viewedIds: new Set(),
+    });
+    const [g] = withMoods(groupes, [mood('m1', 'a', '🎉')]);
+    expect(g?.moodEmoji).toBe('🎉');
+  });
+
+  test('un auteur sans humeur reste indéfini, jamais une chaîne vide', () => {
+    const groupes = groupStoriesByAuthor([story('s1', 'a', '2026-09-11T10:00:00Z')], {
+      viewerId: 'moi',
+      viewedIds: new Set(),
+    });
+    const [g] = withMoods(groupes, [mood('m1', 'autre', '🎉')]);
+    expect(g?.moodEmoji).toBeUndefined();
+  });
+
+  test('une humeur explicitement NULLE ne pose rien', () => {
+    const groupes = groupStoriesByAuthor([story('s1', 'a', '2026-09-11T10:00:00Z')], {
+      viewerId: 'moi',
+      viewedIds: new Set(),
+    });
+    const [g] = withMoods(groupes, [mood('m1', 'a', null)]);
+    expect(g?.moodEmoji).toBeUndefined();
+  });
+
+  test('seule la PREMIÈRE humeur du corpus compte — il est déjà trié du plus récent', () => {
+    const groupes = groupStoriesByAuthor([story('s1', 'a', '2026-09-11T10:00:00Z')], {
+      viewerId: 'moi',
+      viewedIds: new Set(),
+    });
+    const [g] = withMoods(groupes, [mood('récente', 'a', '🎉'), mood('ancienne', 'a', '😴')]);
+    expect(g?.moodEmoji).toBe('🎉');
+  });
+
+  test('un corpus vide rend les MÊMES groupes, jamais une copie', () => {
+    const groupes = groupStoriesByAuthor([story('s1', 'a', '2026-09-11T10:00:00Z')], {
+      viewerId: 'moi',
+      viewedIds: new Set(),
+    });
+    expect(withMoods(groupes, [])).toBe(groupes);
   });
 });

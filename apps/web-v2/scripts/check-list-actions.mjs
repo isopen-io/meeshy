@@ -52,9 +52,12 @@
  * 10. « 0 CONTRÔLE SANS GESTIONNAIRE » (#5652) — les trois boutons ronds de
  *     l'en-tête ont chacun leur effet MESURÉ (feuille ouverte + retour
  *     annoncé, route montée, route quittée), la recherche de contacts rend
- *     des résultats cliquables, et le rail de stories ne porte AUCUN contrôle
- *     tant qu'aucune porte de story n'existe (règle #5765) tout en SERVANT ce
- *     que ses ports résolvent (anneau, couverture, humeur).
+ *     des résultats cliquables, et CHAQUE pastille du rail de stories mène
+ *     RÉELLEMENT à la story de SON auteur (`/stories?author=…`, #6080) — la
+ *     règle #5765 (« un bouton sans porte est un bouton mort ») est un
+ *     CLIQUET : la porte est arrivée, ce témoin mesure désormais l'effet du
+ *     tap plutôt que l'absence de contrôle — tout en SERVANT ce que ses ports
+ *     résolvent (anneau, couverture, humeur).
  */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -613,9 +616,9 @@ check(
   `le rail de stories rend ses pastilles (${JSON.stringify(railControles)})`,
 );
 check(
-  railControles !== null && railControles.focalisables === 0,
-  `le rail ne porte AUCUN contrôle tant qu'aucune porte de story n'existe (#5765) : ${railControles?.focalisables} ` +
-    "— CLIQUET : si la porte vient d'arriver, mesure ici l'effet du tap au lieu de compter zéro",
+  railControles !== null && railControles.focalisables === railControles.pastilles,
+  `chaque pastille du rail est ATTEIGNABLE — la porte de story existe désormais (\`routes/stories.tsx\`, #6080) ` +
+    `(${JSON.stringify(railControles)})`,
 );
 
 /** Le rail SERT ce que ses ports résolvent (#5652, revue) : une couverture ou
@@ -643,6 +646,38 @@ check(
   "le badge d'humeur du corpus est PEINT — sinon le port ?scope=statuses ne sert aucun pixel " +
     `(${JSON.stringify(railVisuel)})`,
 );
+
+/**
+ * LE CLIQUET DU §10 EST TOMBÉ (#5765) — LA PORTE EST ARRIVÉE (#6080) : chaque
+ * pastille mène désormais à `/stories?author=…` (`routes/stories.tsx`). Ce
+ * que ce témoin mesure maintenant n'est plus « zéro contrôle » mais l'EFFET
+ * du tap — une pastille cliquable qui ne mène nulle part serait pire que
+ * l'ancien état sans porte du tout.
+ */
+const premierAuteur = await enTetePage.evaluate(
+  () => document.querySelector('[data-rail="grande"] a[data-story-author]')?.getAttribute('data-story-author') ?? null,
+);
+await enTetePage.click('[data-rail="grande"] a[data-story-author]');
+await enTetePage.waitForFunction(() => window.location.pathname === '/stories', undefined, { timeout: 3000 }).catch(() => {});
+/* La route `/stories` est chargée à la DEMANDE (`screen: () => import(...)`,
+   `route-table.tsx`) : le changement de `pathname` ci-dessus ne dit rien de
+   l'arrivée du chunk. Attendre le `<h1>` lui-même, pas seulement l'URL. */
+await enTetePage.waitForSelector('h1', { timeout: 3000 }).catch(() => {});
+const surStories = await enTetePage.evaluate(() => ({
+  pathname: window.location.pathname,
+  search: window.location.search,
+  titre: document.querySelector('h1')?.textContent ?? null,
+}));
+check(
+  surStories.pathname === '/stories' && premierAuteur !== null && surStories.search.includes(`author=${premierAuteur}`),
+  `un tap sur la première pastille du rail ouvre RÉELLEMENT la story de SON auteur (${JSON.stringify({ premierAuteur, ...surStories })})`,
+);
+check(
+  surStories.titre !== null && surStories.titre !== 'Stories' && surStories.titre !== "Aucune story pour l'instant",
+  `l'écran ouvert nomme l'auteur tapé, pas un titre générique (titre : « ${surStories.titre} »)`,
+);
+await enTetePage.goto(`${BASE}/`, { waitUntil: 'load' });
+await enTetePage.waitForSelector('[data-row]');
 
 /** 1) « Créer un lien de partage » ⇒ une feuille OUVERTE, et choisir une
  *     conversation éligible produit un RETOUR annoncé (`role="status"`). */

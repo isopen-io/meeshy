@@ -10,7 +10,8 @@ import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { useScene } from '@/lib/lens/scene';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { apiConfig } from '@/lib/api/config';
-import { rowAction, useConversations, useStoryTray } from '@/lib/api/query';
+import { rowAction, useConversations, useStatusMoods, useStoryTray } from '@/lib/api/query';
+import type { StatusMoodPost } from '@/lib/api/stories';
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
 import { useTypistNames } from '@/lib/api/use-typists';
@@ -18,7 +19,7 @@ import { resolveViewer } from '@/lib/api/viewer';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
 import { partagerInvitation, RETOUR_INVITATION } from '@/lib/view/invitation';
-import { groupStoriesByAuthor, railTientLaPlace } from '@/lib/view/story-tray';
+import { groupStoriesByAuthor, railTientLaPlace, withMoods } from '@/lib/view/story-tray';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { resolveLensSections } from '@/lib/lens/sections';
 import { useOnline } from '@/lib/net/online';
@@ -89,6 +90,9 @@ const EMPTY_CONVERSATIONS: readonly Conversation[] = [];
  * change d'identité à chaque rendu et ferait recalculer le mémo pour rien —
  * exactement le piège que `CLAUDE.md` § Prisme décrit sur `preferredLanguages`. */
 const EMPTY_VIEWED: ReadonlySet<string> = new Set<string>();
+
+/** Même règle : le repli du corpus d'humeurs, une seule fois. */
+const EMPTY_STATUS_MOODS: readonly StatusMoodPost[] = [];
 
 /**
  * `content-center` ET NON `place-items-center` SEUL (#5650, revue-correction)
@@ -257,17 +261,28 @@ export default function ConversationsScreen() {
    * de six entrées vit dans le rail, avec sa porte « tout voir ».
    */
   const tray = useStoryTray();
+  /**
+   * LE CORPUS DES HUMEURS (#5652) — un DEUXIÈME corpus, fusionné sur les
+   * groupes de stories par `withMoods` (`lib/view/story-tray.ts`). Une requête
+   * qui échoue ou n'a pas encore répondu laisse simplement les groupes SANS
+   * humeur (`moods.data ?? []`) — jamais un état de chargement à part : le
+   * badge d'humeur est un COMPLÉMENT de la pastille, pas sa condition.
+   */
+  const moods = useStatusMoods();
   const storyGroups = useMemo(
     () =>
-      groupStoriesByAuthor(tray.data ?? [], {
-        viewerId: viewer.id ?? undefined,
-        // « Vu par moi » n'est pas servi par la passerelle (`viewCount` est un
-        // COMPTE, qui ne dit pas QUI) : issue compagnon, même forme que
-        // `reaction-store.ts`. D'ici là tout est non vu — un anneau allumé à
-        // tort se corrige d'un regard, un anneau éteint à tort cache une story.
-        viewedIds: EMPTY_VIEWED,
-      }),
-    [tray.data, viewer.id],
+      withMoods(
+        groupStoriesByAuthor(tray.data ?? [], {
+          viewerId: viewer.id ?? undefined,
+          // « Vu par moi » n'est pas servi par la passerelle (`viewCount` est un
+          // COMPTE, qui ne dit pas QUI) : issue compagnon, même forme que
+          // `reaction-store.ts`. D'ici là tout est non vu — un anneau allumé à
+          // tort se corrige d'un regard, un anneau éteint à tort cache une story.
+          viewedIds: EMPTY_VIEWED,
+        }),
+        moods.data ?? EMPTY_STATUS_MOODS,
+      ),
+    [tray.data, viewer.id, moods.data],
   );
   /** `railTientLaPlace` borne la promesse à la PREMIÈRE tentative : un corpus
    * LENT garde sa place, un corpus qui répond NON la perd immédiatement

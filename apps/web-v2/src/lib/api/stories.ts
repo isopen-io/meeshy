@@ -80,3 +80,44 @@ export function storyTrayQueryOptions(deps: StoriesDeps) {
       loadStoryTray({ ...deps, signal }).then(unwrap),
   };
 }
+
+/**
+ * **LE CORPUS DES HUMEURS** (#5652) — `GET /social/posts?scope=statuses`
+ * (`services/gateway/src/routes/posts/feed.ts:823-831`, requiredAuth ; le
+ * même endroit qui sert `/posts/feed/stories` sous `?scope=stories`). Chaque
+ * ligne est un `Post` complet dont seuls `moodEmoji` et `author` intéressent
+ * le rail — les autres champs (contenu, réactions…) ne sont pas de son
+ * ressort, `withMoods()` (`lib/view/story-tray.ts`) ne lit que ces deux-là.
+ */
+export const STATUS_MOODS_QUERY_KEY = ['stories', 'moods'] as const;
+
+/** Une humeur, réduite à ce que le rail LIT — `Post.moodEmoji`
+ * (`schema.prisma`, « Emoji mood (ex: "😴", "🎉", "💪", "☕") »). */
+export type StatusMoodPost = {
+  readonly id: string;
+  readonly authorId?: string;
+  readonly moodEmoji?: string | null;
+  readonly author?: StoryTrayAuthor;
+};
+
+export async function loadStatusMoods(
+  params: StoriesDeps & { readonly signal?: AbortSignal },
+): Promise<ApiResult<readonly StatusMoodPost[]>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    const { STATUS_MOODS } = await import('./fixtures-stories');
+    return { ok: true, data: STATUS_MOODS };
+  }
+  return params.transport.request<readonly StatusMoodPost[]>({
+    method: 'GET',
+    path: '/api/v1/social/posts?scope=statuses&limit=50',
+    ...(params.signal !== undefined ? { signal: params.signal } : {}),
+  });
+}
+
+export function statusMoodsQueryOptions(deps: StoriesDeps) {
+  return {
+    queryKey: STATUS_MOODS_QUERY_KEY,
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      loadStatusMoods({ ...deps, signal }).then(unwrap),
+  };
+}
