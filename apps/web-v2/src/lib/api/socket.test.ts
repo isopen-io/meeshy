@@ -11,7 +11,7 @@ import { createOutboxStore, entriesOf } from '@/lib/send/outbox-store';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { messagesQueryKey, type MessagesPage } from './messages';
 import { createRealtimeConnection, type RealtimeDeps } from './socket';
-import { STATUSES_QUERY_KEY, STORY_TRAY_QUERY_KEY } from './stories';
+import { STORY_TRAY_QUERY_KEY } from './stories';
 import { createTypingStore, typistsOf } from './typing-store';
 import type { Message } from './types';
 
@@ -310,23 +310,6 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       socket.fire(event, payload);
 
       expect(queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(true);
-    });
-  }
-
-  const STATUS_EVENTS: readonly [string, unknown][] = [
-    [SERVER_EVENTS.STATUS_CREATED, { post: { id: 'st-1' } }],
-    [SERVER_EVENTS.STATUS_UPDATED, { post: { id: 'st-1' } }],
-    [SERVER_EVENTS.STATUS_DELETED, { postId: 'st-1', authorId: 'u-1' }],
-  ];
-  for (const [event, payload] of STATUS_EVENTS) {
-    test(`\`${event}\` invalide le rail des STATUTS`, () => {
-      const { deps, socket, queryClient } = buildDeps();
-      queryClient.setQueryData(STATUSES_QUERY_KEY, {});
-      createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
-
-      socket.fire(event, payload);
-
-      expect(queryClient.getQueryState(STATUSES_QUERY_KEY)?.isInvalidated).toBe(true);
     });
   }
 

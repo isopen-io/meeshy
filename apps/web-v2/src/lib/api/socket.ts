@@ -23,7 +23,7 @@ import {
   isMessageTranslationEvent,
   isSocketMessage,
 } from './realtime-apply';
-import { STATUSES_QUERY_KEY, STORY_TRAY_QUERY_KEY } from './stories';
+import { STORY_TRAY_QUERY_KEY } from './stories';
 import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
 
 /**
@@ -195,20 +195,17 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   /**
-   * `story:*` / `status:*` (#5652, bloc E) — LE RAIL SUIT LE FIL EN DIRECT :
+   * `story:*` (#5652, bloc E ; #6080) — LE RAIL SUIT LE FIL EN DIRECT :
    * `story:created`/`story:updated`/`story:deleted`/`story:viewed` invalident
-   * `STORY_TRAY_QUERY_KEY`, `status:created`/`status:updated`/`status:deleted`
-   * invalident `STATUSES_QUERY_KEY`. Miroir du motif `onAuthenticated`
-   * ci-dessous : UNE invalidation par famille, jamais une reconstruction
-   * locale du corpus depuis la charge de l'événement — `decodeStoryGroups`
-   * reste le SEUL site qui sait regrouper des stories par auteur (D-14),
-   * un événement isolé ne porte qu'UNE story, jamais le groupe entier.
+   * `STORY_TRAY_QUERY_KEY`. Miroir du motif `onAuthenticated` ci-dessous : UNE
+   * invalidation par famille, jamais une reconstruction locale du corpus
+   * depuis la charge de l'événement — `groupStoriesByAuthor`
+   * (`lib/view/story-tray.ts`) reste le SEUL site qui sait regrouper des
+   * stories par auteur (D-14), un événement isolé ne porte qu'UNE story,
+   * jamais le groupe entier.
    */
   const onStoryChanged = (): void => {
     void deps.queryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY });
-  };
-  const onStatusChanged = (): void => {
-    void deps.queryClient.invalidateQueries({ queryKey: STATUSES_QUERY_KEY });
   };
 
   /** Le MÊME geste qu'un 401 HTTP (§ doc-comment de `RealtimeDeps`) — les
@@ -257,9 +254,6 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryChanged);
-  socket.on<unknown>(SERVER_EVENTS.STATUS_CREATED, onStatusChanged);
-  socket.on<unknown>(SERVER_EVENTS.STATUS_UPDATED, onStatusChanged);
-  socket.on<unknown>(SERVER_EVENTS.STATUS_DELETED, onStatusChanged);
   socket.on<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
   socket.on<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
 
@@ -296,9 +290,6 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryChanged);
-      socket.off<unknown>(SERVER_EVENTS.STATUS_CREATED, onStatusChanged);
-      socket.off<unknown>(SERVER_EVENTS.STATUS_UPDATED, onStatusChanged);
-      socket.off<unknown>(SERVER_EVENTS.STATUS_DELETED, onStatusChanged);
       socket.off<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
       socket.off<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
       socket.disconnect();
