@@ -105,7 +105,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func pinPost(postId: String) async throws {}
     func unpinPost(postId: String) async throws {}
     func viewPost(postId: String, duration: Int?) async throws {}
-    func getPostViews(postId: String, limit: Int, offset: Int) async throws -> PostViewersResponse {
+    func getPostViews(postId: String, limit: Int, offset: Int) async throws -> OffsetPaginatedAPIResponse<[APIPostViewer]> {
         throw NSError(domain: "mock", code: -1)
     }
     func getUserPosts(userId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {

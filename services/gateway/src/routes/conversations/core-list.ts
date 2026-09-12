@@ -768,7 +768,11 @@ export function registerConversationListRoute(
               originalLanguage?: string | null;
               isBlurred?: boolean | null;
               isViewOnce?: boolean | null;
-              expiresAt?: Date | null;
+              /* `Date | string` et non `Date` seul (porté de #6112 à la fusion
+                 du 2026-09-12) : ce site LIT une valeur qui peut arriver déjà
+                 sérialisée selon le chemin — un cast trop étroit décrit mal ce
+                 qu'on lit, et `isLastMessageProtected` accepte les deux. */
+              expiresAt?: Date | string | null;
             }
           | undefined;
         // #6111 — un dernier message à vue unique, flouté ou éphémère périmé

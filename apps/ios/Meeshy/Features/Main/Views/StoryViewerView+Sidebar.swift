@@ -287,10 +287,16 @@ struct StoryActionSidebarView: View {
     /// vers la gauche ; le rail garde 16 pt de marge droite. Son bord droit tombe
     /// donc à `viewportWidth - 72`, et on lui laisse 12 pt de marge gauche.
     ///
-    /// **Cette largeur est ce qui remplace `.fixedSize()`.** À l'échelle 2, six
-    /// émojis plus le « + » demandent ~450 pt de large : `.fixedSize()` les
-    /// aurait tous rendus, et la rangée serait sortie de l'écran par la gauche au
-    /// lieu de défiler. Un `ScrollView` ne défile que dans une largeur BORNÉE.
+    /// **Cette largeur est ce qui remplace `.fixedSize()`.** À l'échelle 1,5, six
+    /// émojis plus le « + » demandent ~340 pt de large — davantage que les
+    /// ~318 pt utiles d'un iPhone de 390 : `.fixedSize()` les aurait tous rendus,
+    /// et la rangée serait sortie de l'écran par la gauche au lieu de défiler. Un
+    /// `ScrollView` ne défile que dans une largeur BORNÉE.
+    ///
+    /// La borne ne dépend PAS de l'échelle, et c'est voulu : elle dit la place
+    /// DISPONIBLE, pas la place demandée. Ramener l'échelle de 2 à 1,5 (×0,75,
+    /// directive porteur du 2026-09-11 au soir) fait donc tenir plus d'émojis
+    /// dans la même fenêtre, sans qu'aucune cote de mise en page ne bouge.
     private var reactionStripWidth: CGFloat {
         max(160, viewportWidth - 84)
     }
@@ -540,12 +546,15 @@ struct StoryActionSidebarView: View {
                         EmojiReactionPicker(
                             quickEmojis: quickEmojis,
                             style: .dark,
-                            // Échelle 2 + aucun habillage : la rangée se pose NUE
-                            // sur la scène, qui est déjà son fond (directive
-                            // porteur 2026-09-11, #6083). `scrollable` est le
-                            // COROLLAIRE de l'échelle, pas une option : à 2, six
-                            // émojis et le « + » demandent ~450 pt de large.
-                            scale: 2,
+                            // Échelle 1,5 + aucun habillage : la rangée se pose
+                            // NUE sur la scène, qui est déjà son fond (directive
+                            // porteur 2026-09-11, #6083 ; l'échelle a été RAMENÉE
+                            // de 2 à 1,5 le soir même — « ×0,75, elles sont trop
+                            // grosses »). `scrollable` reste le COROLLAIRE de
+                            // l'agrandissement, pas une option : même à 1,5, six
+                            // émojis et le « + » demandent ~340 pt de large, soit
+                            // plus que les ~318 pt utiles d'un iPhone de 390.
+                            scale: 1.5,
                             scrollable: true,
                             chrome: .none,
                             onReact: { emoji in
