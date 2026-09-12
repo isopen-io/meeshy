@@ -1600,6 +1600,7 @@
 		DD184FFA06075B29202C3C4C /* MessageForwardServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4689B4C1A63FF465B37947 /* MessageForwardServiceTests.swift */; };
 		DD1B9F7C1C815D55F4A67186 /* NotificationPayloadHelpersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF3403E2E73C0F000D1559FA /* NotificationPayloadHelpersTests.swift */; };
 		DD1DB876BE61DBC24DBD3365 /* ModeMenuModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0BAE660FFE8B4A59AF6BD9B /* ModeMenuModelTests.swift */; };
+		DD4C6F14E731758C4DE7772D /* DatabaseTuningReachesReadersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0034682201620ACAC59902D /* DatabaseTuningReachesReadersTests.swift */; };
 		DD8378FF6E02A0538B501165 /* FocalFocusedRowDetailsGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20B044E1B11A65B800CD010A /* FocalFocusedRowDetailsGuardTests.swift */; };
 		DD979DC759582A573BD04730 /* StorySaveProgressRingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E4112CEA92A41B6BDA53FD /* StorySaveProgressRingTests.swift */; };
 		DDAE8D68695F52AA33D07407 /* StoryViewerToastHostGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43063EC8538F7E75C0AC33ED /* StoryViewerToastHostGuardTests.swift */; };
@@ -3235,6 +3236,7 @@
 		AF6C2EBB3483ED23C1F79C1F /* CallQualityIndicatorPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallQualityIndicatorPolicyTests.swift; sourceTree = "<group>"; };
 		AF9C421B5F0BC90D2D4005D6 /* MessageAccessibilityLabelComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageAccessibilityLabelComposer.swift; sourceTree = "<group>"; };
 		AFCC70097A7ECD4ED83C1CB0 /* SyncPillTimerStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillTimerStateTests.swift; sourceTree = "<group>"; };
+		B0034682201620ACAC59902D /* DatabaseTuningReachesReadersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseTuningReachesReadersTests.swift; sourceTree = "<group>"; };
 		B02CA216E6DE4E162EDD3035 /* CameraModelPhotoLibrarySaveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraModelPhotoLibrarySaveTests.swift; sourceTree = "<group>"; };
 		B0545CFDFB3BB98A33C0B994 /* AudioMediaViewRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMediaViewRenderTests.swift; sourceTree = "<group>"; };
 		B07AD84B0E1EB2EE6D7E873D /* ConversationViewModel+StoreObservation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationViewModel+StoreObservation.swift"; sourceTree = "<group>"; };
@@ -4343,6 +4345,14 @@
 			path = Composer;
 			sourceTree = "<group>";
 		};
+		143C24725FE7000995B1AD86 /* Persistence */ = {
+			isa = PBXGroup;
+			children = (
+				B0034682201620ACAC59902D /* DatabaseTuningReachesReadersTests.swift */,
+			);
+			path = Persistence;
+			sourceTree = "<group>";
+		};
 		1461A198C99B7F6EB39E7DDB /* Core */ = {
 			isa = PBXGroup;
 			children = (
@@ -4801,6 +4811,7 @@
 				99D05C4BA7E9410758B4D89B /* Lentille */,
 				17A5536E8F1E3FAAEDE99C40 /* Models */,
 				9AC063369BA9538D33BB4CA7 /* Navigation */,
+				143C24725FE7000995B1AD86 /* Persistence */,
 				38F7BB57F26DB4AA0417542D /* Riviere */,
 				445AF6406EF9491E1A125D4A /* Services */,
 				B1279DF50808A525ED02A20E /* Share */,
@@ -7840,6 +7851,7 @@
 				48F020D5D48B96B5579BEEE9 /* CrashDiagnosticsManagerTests.swift in Sources */,
 				0B4B92161FA7FEED9E4DC73A /* CrossCatalogFrenchConsistencyGuardTests.swift in Sources */,
 				60B2F7A2E0749C34A3242AF9 /* DarkFrameDetectorTests.swift in Sources */,
+				DD4C6F14E731758C4DE7772D /* DatabaseTuningReachesReadersTests.swift in Sources */,
 				FFC52A43BD762E9875B44AFC /* DeclarationBodyScanner.swift in Sources */,
 				0300D0E26EEC3ECC6367856D /* DeclarationBodyScannerTests.swift in Sources */,
 				7C3A0EDC8965C0D4FEC7FC27 /* DeepLinkRouterDraftInjectionTests.swift in Sources */,
