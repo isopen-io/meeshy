@@ -1739,6 +1739,33 @@ struct ConversationView: View {
                 isSelectionModeActive: overlayState.isSelectionModeActive,
                 selectedMessageIds: overlayState.selectedMessageIds,
                 onToggleSelection: { messageId in toggleMessageSelection(messageId) },
+                // **Les rappels du menu SYSTÈME** (#6117, double tap).
+                // Chacun réutilise EXACTEMENT ce que le menu Meeshy appelle
+                // déjà : deux entrées du même nom, dans deux menus du même
+                // message, doivent faire la même chose.
+                onEditMessage: { messageId in
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    beginEdit(msg)
+                },
+                onSelectMessage: { messageId in beginSelectionMode(seedingWith: messageId) },
+                onComposeFromMessage: { messageId in
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    composerState.composeMediaTarget = ComposerSeedTarget(message: msg)
+                },
+                // « Plus… » ouvre le GRAND menu — `MessageMoreSheet`, présentée
+                // par `overlayState.detailSheetMessage` — et non l'overlay
+                // d'appui long. Directive porteur : « le plus doit ouvrir le
+                // grand menu et non le menu longpress ».
+                onOpenMoreSheet: { messageId in
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.detailSheetMessage = msg
+                },
+                // La règle d'éditabilité est REMISE, pas recopiée : c'est la
+                // même expression que les trois autres sites de ce fichier.
+                canEditMessage: { messageId in
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return false }
+                    return msg.isMe || isCurrentUserAdminOrMod
+                },
                 onAddReaction: { messageId, bubbleFrame in
                     // Exclusivité mutuelle : ouvrir la barre de quick-reaction
                     // ferme d'abord l'overlay d'appui-long s'il est visible.

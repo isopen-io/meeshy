@@ -158,6 +158,35 @@ describe('Les feuilles sont de VRAIES modales — `<dialog>`, pas une annonce', 
     expect(language).toContain('Deutsch');
     expect(language).toContain('🇩🇪');
   });
+
+  /**
+   * `title`/`selected` (#5828, § 4.8) — RÉUTILISÉE par le composeur, jamais
+   * une jumelle : sans `title`, l'inscription garde son libellé par défaut ;
+   * avec, le composeur peut la nommer « Langue d'écriture ».
+   */
+  test('sans `title`, le `<h2>` porte toujours « Langue de lecture » (l’inscription est inchangée)', () => {
+    expect(language).toContain('>Langue de lecture</h2>');
+  });
+
+  test('avec `title="Langue d’écriture"`, le `<h2>` le porte', () => {
+    const withTitle = renderToStaticMarkup(<LanguageSheet onSelect={noop} onClose={noop} title="Langue d’écriture" />);
+    expect(withTitle).toContain('>Langue d’écriture</h2>');
+  });
+
+  test('`selected="de"` marque la ligne allemande, et SEULEMENT elle', () => {
+    const withSelection = renderToStaticMarkup(<LanguageSheet onSelect={noop} onClose={noop} selected="de" />);
+    const rows = withSelection.split('<li>').slice(1); // le premier fragment est l'en-tête, avant toute ligne.
+    const markedRows = rows.filter((row) => row.includes('aria-current="true"'));
+    expect(markedRows).toHaveLength(1);
+    expect(markedRows[0]).toContain('lang="de"');
+    const frenchRow = rows.find((row) => row.includes('lang="fr"'));
+    expect(frenchRow).not.toBeUndefined();
+    expect(frenchRow).not.toContain('aria-current');
+  });
+
+  test('sans `selected`, aucune ligne ne porte `aria-current`', () => {
+    expect(language).not.toContain('aria-current');
+  });
 });
 
 describe('Field — le refus est DESSINÉ sous son champ, et le champ le DÉSIGNE', () => {

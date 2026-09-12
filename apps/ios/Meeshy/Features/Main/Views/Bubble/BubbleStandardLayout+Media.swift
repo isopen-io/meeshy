@@ -437,8 +437,14 @@ fileprivate struct BubbleGridCell: View {
                 Color.black.opacity(0.4)
                     .contentShape(Rectangle())
                     .onTapGesture { withAnimation { showReactionPicker = false } }
+                // **Aucune échelle écrite ici** (#6117) : la taille de la
+                // rangée est celle du composant, une seule pour toutes les
+                // surfaces où l'on réagit. Elle valait 0,78 — la plus petite
+                // des trois échelles du dépôt, quand le plein écran montait la
+                // même rangée à 2. `scrollable` reste : à 1,5 la rangée dépasse
+                // la largeur d'une tuile, donc elle DÉFILE plutôt que d'être
+                // rognée par le `.clipped()` de la grille.
                 EmojiReactionPicker(
-                    scale: 0.78,
                     scrollable: true,
                     onReact: { emoji in
                         onReactToAttachment?(attachment.id, emoji)
@@ -447,7 +453,11 @@ fileprivate struct BubbleGridCell: View {
                     onDismiss: { withAnimation { showReactionPicker = false } }
                 )
                 .padding(MeeshySpacing.sm)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+                // `adaptiveGlass` et non `.ultraThinMaterial` en dur : sous
+                // iOS 26 ce site rendait une matière PLATE là où le reste du
+                // chrome rend du verre système (#4997 — le site unique
+                // retombe de lui-même sur `.ultraThinMaterial` avant iOS 26).
+                .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                 .padding(.horizontal, MeeshySpacing.xs + 2)
             }
             .transition(.opacity)

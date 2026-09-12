@@ -53,6 +53,14 @@
         "status": "CIBLE -- MESUREE PAR #5793, NON ARBITREE",
         "source": "Mesure de measure-weight.mjs le 2026-09-12 : 4,41 Ko gzip -9 (`lib/api/realtime.ts` + ses dependances propres -- la connexion, l'application au cache, le magasin de frappe -- hors `socket.io-client` lui-meme, compte a part dans le chunk `socketio` ci-dessus), arrondi au Ko SUPERIEUR (5) + 1 Ko de marge. C'est le module que `main.tsx` charge en `import()` juste apres la premiere peinture (S 7 de la specification #5793). `dynamic_only` exige qu'AUCUN autre fichier produit ne l'importe statiquement : c'est ce qui tient `socketio` (sa seule dependance vendor) hors du chemin critique des routes, et c'est la garde qui manquait quand `use-typing-emitter.ts` importait le possesseur de la connexion au lieu du port `api/typing-emit.ts`."
       }
+    },
+    "stopword_language_detector": {
+      "pattern": "^assets/stopword-language-detector-",
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #5828, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-12 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,95 Ko gzip -9 (l'heuristique ecriture + mots-outils de secours, `src/lib/send/stopword-language-detector.ts` — 1,16 Ko a la premiere forme, 1,95 apres l'enrichissement des six tables en revue-correction, qui a fait passer es/it/pt de 0/15 phrases servies a 8/15 sans aucun verdict faux), arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks `summary`/`composer_tray`/`socketio`/`realtime` ci-dessus. Charge en `import()` UNIQUEMENT par `src/lib/send/language-detector.ts` (`defaultLanguageDetector()`), quand l'API navigateur `LanguageDetector` est absente ou pas encore `available` -- jamais au chargement du fil (`thread-*.js` ne l'importe pas statiquement, mesure : `first_paint` inchange a 37,19 Ko avant/apres ce lot)."
+      }
     }
   },
   "network_note": "Le profil est REPRIS TEL QUEL de apps/web-v2/budgets.json — deux chiffres mesures sur deux profils differents ne se comparent pas, et la comparaison v3 / v4 est precisement ce que ce POC doit rendre.",

@@ -69,6 +69,14 @@ struct BubbleSwipeContainer<Content: View>: View {
     var isSelectionModeActive: Bool = false
     var isSelected: Bool = false
     var onToggleSelection: (() -> Void)? = nil
+    /// **Les opérations primaires du menu SYSTÈME, ouvert au double tap**
+    /// (#6117 — « le menu natif avec effet systeme liquid glass […] se fait au
+    /// double tap ! Mais le menu meeshy se fait au longpress »).
+    ///
+    /// Vide ⇒ le double tap ne présente rien : `EditMenuHostView.present`
+    /// refuse un menu sans action, et un geste qui ouvrirait une barre vide
+    /// serait un contrôle qui n'a pas d'effet (loi 4).
+    var editMenuActions: [MessageEditMenuAction] = []
     @ViewBuilder let content: () -> Content
 
     @State private var offset: CGFloat = 0
@@ -196,6 +204,24 @@ struct BubbleSwipeContainer<Content: View>: View {
                 // pression ; ce geste custom est retiré pour éviter le
                 // double déclenchement (overlay custom + menu natif).
                 .modifier(ConditionalBubbleLongPress(enabled: enableLongPress && !isSelectionModeActive, action: onLongPress))
+                // **Le double tap ouvre le menu SYSTÈME** (#6117), posé ICI —
+                // sur le conteneur qui enveloppe les cellules des TROIS peaux
+                // (`.bubbles`, `.script`, `.focal`) — et non à l'intérieur
+                // d'une bulle. Le geste vivait dans `ThemedMessageBubble`,
+                // donc il n'existait pas en `.script` ni en `.focal`, qui sont
+                // rendus par `FocalRow`.
+                //
+                // **Même garde de sélection que l'appui long** : une seule
+                // intention à la fois (#4005). Une garde posée sur un seul des
+                // deux gestes est une garde qui a déjà commencé à diverger.
+                //
+                // Les vues INTERNES qui portent déjà leur propre double tap —
+                // la tuile d'une grille média (réaction sur CETTE pièce),
+                // l'avis d'appel (rappeler), la pastille d'entrée (ouvrir le
+                // profil) — le captent avant ce conteneur : SwiftUI donne la
+                // main à la vue la plus profonde.
+                .modifier(NativeMessageEditMenu(isEnabled: !isSelectionModeActive,
+                                                actions: editMenuActions))
 
             // **Capteur de sélection (#4005).** Par-dessus TOUT — fonctionne
             // quel que soit ce que fait la bulle en dessous (traduction,
@@ -558,6 +584,30 @@ struct MessageListView: UIViewControllerRepresentable {
     var isSelectionModeActive: Bool = false
     var selectedMessageIds: Set<String> = []
     var onToggleSelection: ((String) -> Void)?
+    /// **Les trois opérations que le menu SYSTÈME sert en premier** (#6117,
+    /// directive porteur : « les options qu'il faut en premier c'est editer,
+    /// selectionner et composer »), plus la porte du GRAND menu.
+    ///
+    /// Elles remontent chacune d'un cran — de `MessageOverlayMenu`, qui les
+    /// portait déjà, jusqu'ici. Aucune n'est réécrite au passage : le menu
+    /// système sert les MÊMES rappels que le menu Meeshy, sans quoi deux
+    /// entrées du même nom feraient deux choses.
+    var onEditMessage: ((String) -> Void)?
+    /// **ARME** le mode sélection en semant ce message — ce que fait
+    /// « Sélectionner » du menu Meeshy. Distinct de `onToggleSelection`,
+    /// qui BASCULE une coche dans un mode déjà actif : le menu doit armer.
+    var onSelectMessage: ((String) -> Void)?
+    var onComposeFromMessage: ((String) -> Void)?
+    /// « Plus… » ouvre le **GRAND** menu (`MessageMoreSheet`), pas l'overlay
+    /// d'appui long — directive porteur : « le plus doit ouvrir le grand menu
+    /// et non le menu longpress ». Les deux sont distincts : l'appui long
+    /// ouvre l'overlay (réactions + actions), celui-ci la feuille complète.
+    var onOpenMoreSheet: ((String) -> Void)?
+    /// **Le prédicat d'éditabilité est REMIS, jamais recalculé.** La règle
+    /// (`msg.isMe || isCurrentUserAdminOrMod`) est déjà écrite TROIS fois dans
+    /// `ConversationView` ; en poser une quatrième ici garantirait qu'elles
+    /// divergent au premier ajustement de l'une.
+    var canEditMessage: ((String) -> Bool)?
     /// User-initiated reaction add. Carries the message id and the tapped
     /// bubble cell's on-screen frame (window coords, `nil` when the cell is
     /// not realized) so the quick-reaction bar can anchor to the bubble.
@@ -650,6 +700,11 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.isSelectionModeActive = isSelectionModeActive
         vc.selectedMessageIds = selectedMessageIds
         vc.onToggleSelection = onToggleSelection
+        vc.onEditMessage = onEditMessage
+        vc.onSelectMessage = onSelectMessage
+        vc.onComposeFromMessage = onComposeFromMessage
+        vc.onOpenMoreSheet = onOpenMoreSheet
+        vc.canEditMessage = canEditMessage
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment
@@ -765,6 +820,11 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.isSelectionModeActive = isSelectionModeActive
         vc.selectedMessageIds = selectedMessageIds
         vc.onToggleSelection = onToggleSelection
+        vc.onEditMessage = onEditMessage
+        vc.onSelectMessage = onSelectMessage
+        vc.onComposeFromMessage = onComposeFromMessage
+        vc.onOpenMoreSheet = onOpenMoreSheet
+        vc.canEditMessage = canEditMessage
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment
