@@ -8,6 +8,8 @@ import {
   repostOfInclude,
   postInclude,
   postMentionInclude,
+  postScalarSelect,
+  storyPostInclude,
 } from '../postIncludes';
 
 describe('posts/postIncludes — canonical shared selects', () => {
@@ -257,17 +259,73 @@ describe('posts/postIncludes — canonical shared selects', () => {
     });
   });
 
+  describe('postScalarSelect — every Post scalar EXCEPT storyViews (#4791)', () => {
+    // `GET /posts/:id/views` (routes/posts/interactions.ts) reserves the
+    // embedded viewer list to the post's author, 403-ing every other reader.
+    // Before this select existed, `postInclude` was a `Prisma.PostInclude` —
+    // and Prisma returns EVERY scalar of a model under `include`, so
+    // `storyViews` travelled to every reader of a post through the feed,
+    // hashtag search, nearby, reposts, comments-attached posts — anywhere
+    // `postInclude` was used — regardless of the dedicated route's 403.
+    it('never selects storyViews', () => {
+      expect(postScalarSelect).not.toHaveProperty('storyViews');
+      expect(Object.keys(postScalarSelect)).not.toContain('storyViews');
+    });
+
+    it('selects the documented reach counters and content fields', () => {
+      expect(postScalarSelect).toEqual(
+        expect.objectContaining({
+          id: true,
+          content: true,
+          type: true,
+          visibility: true,
+          originalLanguage: true,
+          translations: true,
+          likeCount: true,
+          commentCount: true,
+          viewCount: true,
+          createdAt: true,
+          updatedAt: true,
+        }),
+      );
+    });
+  });
+
   describe('postInclude — canonical hydration', () => {
     // La relation s'appelle `postMentions` (le schéma nomme
     // `Post.postMentions`) ; la clé EXPOSÉE au client reste `mentions`, via le
     // remappage `withMentions`.
-    it('composes the five shared building blocks', () => {
+    it('composes every Post scalar (minus storyViews) with the five shared relation blocks', () => {
       expect(postInclude).toEqual({
+        ...postScalarSelect,
         author: { select: authorSelect },
         media: mediaInclude,
         comments: commentsPreviewInclude,
         repostOf: repostOfInclude,
         postMentions: postMentionInclude,
+      });
+    });
+
+    // The confidentiality guard itself: it's this shape — passed as `select:`,
+    // never `include:` — that every consumer (PostService, PostFeedService,
+    // PostAudioService, the feed/hashtag/nearby routes...) sends to Prisma.
+    // A `select` is the only Prisma shape that CAN express "every scalar
+    // except one" — an `include` cannot, it always returns every scalar of
+    // the model regardless of what relations it names.
+    it('never serves storyViews to a generic post reader', () => {
+      expect(postInclude).not.toHaveProperty('storyViews');
+    });
+  });
+
+  describe('storyPostInclude — story-scoped hydration', () => {
+    it('inherits the storyViews omission from postInclude', () => {
+      expect(storyPostInclude).not.toHaveProperty('storyViews');
+    });
+
+    it('swaps in the presence-carrying author shape only', () => {
+      expect(storyPostInclude).toEqual({
+        ...postInclude,
+        author: { select: storyAuthorSelect },
       });
     });
   });

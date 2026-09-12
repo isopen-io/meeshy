@@ -296,12 +296,76 @@ export const trayStorySelect = Prisma.validator<Prisma.PostSelect>()({
 });
 
 /**
- * Canonical post include — single source of truth used by every service that
- * needs a fully-hydrated Post (PostService, PostFeedService, PostAudioService,
- * etc.). DO NOT redeclare a local copy: drift between copies is what caused
- * R1 (feed missing Prisme fields) and R3 (audio service stripping reposts).
+ * Every Post scalar EXCEPT `storyViews` — the embedded viewer list reserved
+ * for the author-only `GET /posts/:id/views` route (`routes/posts/interactions.ts`).
+ *
+ * `postInclude` used to be a `Prisma.PostInclude` (a relations-only shape):
+ * Prisma always returns EVERY scalar of the model under `include`, so
+ * `storyViews` travelled to every reader of a post — feed, hashtag search,
+ * nearby, reposts, comments-attached posts, all of it — regardless of who's
+ * asking, while the dedicated route enforces "author only". `postInclude` is
+ * now built on top of THIS explicit `select`, so adding a scalar to the model
+ * requires a deliberate decision here instead of an automatic leak (#4791).
  */
-export const postInclude = Prisma.validator<Prisma.PostInclude>()({
+export const postScalarSelect = Prisma.validator<Prisma.PostSelect>()({
+  id: true,
+  authorId: true,
+  type: true,
+  visibility: true,
+  visibilityUserIds: true,
+  content: true,
+  originalLanguage: true,
+  detectedLanguage: true,
+  translations: true,
+  metadata: true,
+  geoPoint: true,
+  geoPrecision: true,
+  communityId: true,
+  repostOfId: true,
+  originalRepostOfId: true,
+  isQuote: true,
+  storyEffects: true,
+  allowSoundExtraction: true,
+  commentsDisabled: true,
+  moodEmoji: true,
+  audioUrl: true,
+  audioDuration: true,
+  expiresAt: true,
+  reactionSummary: true,
+  reactionCount: true,
+  reactions: true,
+  likeCount: true,
+  commentCount: true,
+  repostCount: true,
+  viewCount: true,
+  impressionCount: true,
+  bookmarkCount: true,
+  shareCount: true,
+  postOpenCount: true,
+  qualifiedViewCount: true,
+  playCount: true,
+  downloadCount: true,
+  isPinned: true,
+  isEdited: true,
+  contentEditedAt: true,
+  deletedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+/**
+ * Canonical post hydration — single source of truth used by every service
+ * that needs a fully-hydrated Post (PostService, PostFeedService,
+ * PostAudioService, etc.). DO NOT redeclare a local copy: drift between
+ * copies is what caused R1 (feed missing Prisme fields) and R3 (audio
+ * service stripping reposts).
+ *
+ * A `Prisma.PostSelect`, not a `Prisma.PostInclude`: every consumer passes it
+ * under `select:`, never `include:` — `include` cannot express "every scalar
+ * except one", it can only express "every scalar, plus these relations".
+ */
+export const postInclude = Prisma.validator<Prisma.PostSelect>()({
+  ...postScalarSelect,
   author: { select: authorSelect },
   media: mediaInclude,
   comments: commentsPreviewInclude,
@@ -315,7 +379,7 @@ export const postInclude = Prisma.validator<Prisma.PostInclude>()({
  * relation to `postInclude` flows through here automatically, so the two
  * shapes cannot drift apart.
  */
-export const storyPostInclude = Prisma.validator<Prisma.PostInclude>()({
+export const storyPostInclude = Prisma.validator<Prisma.PostSelect>()({
   ...postInclude,
   author: { select: storyAuthorSelect },
 });
@@ -331,4 +395,4 @@ export type AuthorPayload = Prisma.UserGetPayload<{ select: typeof authorSelect 
 export type MediaPayload = Prisma.PostMediaGetPayload<{ select: typeof mediaSelect }>;
 
 /** Fully-hydrated Post — author + media + top-3 comments + repostOf. */
-export type PostPayload = Prisma.PostGetPayload<{ include: typeof postInclude }>;
+export type PostPayload = Prisma.PostGetPayload<{ select: typeof postInclude }>;
