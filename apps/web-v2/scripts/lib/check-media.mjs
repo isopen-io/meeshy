@@ -138,13 +138,67 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
         counts.set(key, (counts.get(key) ?? 0) + 1);
       }
       const total = pixels.length / 4;
-      const [colour, count] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-      return { colour, share: count / total, tones: counts.size };
+      const classees = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+      const [colour, count] = classees[0];
+      return {
+        colour,
+        share: count / total,
+        tones: counts.size,
+        cinqPremieres: classees.slice(0, 5).map(([c, n]) => `${c} ${((n / total) * 100).toFixed(1)}%`),
+        taille: `${bitmap.width}×${bitmap.height}`,
+        coeur: side,
+      };
     }, shot.toString('base64'));
   })();
+
+  /**
+   * CE QUE LE TÉMOIN DIT QUAND IL TOMBE (#6135) — relevé pris APRÈS la capture,
+   * parce que la capture fait défiler l'élément dans le champ : l'état d'AVANT
+   * ne serait pas celui que la capture a vu.
+   *
+   * Le témoin rougissait en CI et pas en local, en ne donnant qu'UNE couleur
+   * dominante et un NOMBRE de teintes. Ces deux chiffres suffisent à savoir
+   * qu'il y a un défaut, jamais à savoir lequel : « 21,20 % en 106 teintes »
+   * décrit aussi bien un glyphe posé par-dessus qu'une image absente, qu'une
+   * image qui ne couvre pas sa boîte, ou qu'un voile translucide. Trois
+   * hypothèses ont dû être falsifiées à la main faute de ce relevé — le
+   * composeur qui recouvrirait la pièce, `loading="lazy"` qui différerait le
+   * chargement, la rastérisation logicielle du runner.
+   *
+   * Il rend donc l'ÉTAT de l'image et les CINQ premières couleurs : une
+   * dominante ne dit pas ce qu'il y a d'autre. Tout cela ne part que dans le
+   * message d'ÉCHEC — rien n'est imprimé quand le témoin passe.
+   */
+  const imageState = await mediaPage.evaluate((id) => {
+    const img = document.querySelector(`img[data-attachment-image="${id}"]`);
+    const fig = document.querySelector(`[data-attachment="${id}"]`);
+    if (img === null || fig === null) return { absent: true };
+    const ri = img.getBoundingClientRect();
+    const rf = fig.getBoundingClientRect();
+    const s = getComputedStyle(img);
+    return {
+      complete: img.complete,
+      naturalWidth: img.naturalWidth,
+      naturalHeight: img.naturalHeight,
+      hidden: img.hidden,
+      src: (img.currentSrc || img.src).slice(0, 44),
+      couvre: Math.round(ri.width) >= Math.round(rf.width) && Math.round(ri.height) >= Math.round(rf.height),
+      img: `${Math.round(ri.width)}×${Math.round(ri.height)}`,
+      figure: `${Math.round(rf.width)}×${Math.round(rf.height)}`,
+      opacity: s.opacity,
+      objectFit: s.objectFit,
+      visibility: s.visibility,
+      display: s.display,
+      fondFigure: getComputedStyle(fig).backgroundColor,
+    };
+  }, MEDIA_IMAGE_ATTACHMENT_ID);
+
   expect(
     paintedCore.share >= 0.999,
-    `[${skin}/${scheme}] aucun repli ne peint par-dessus l'image décodée — le cœur de la boîte est la couleur servie (${paintedCore.colour}) à ${(paintedCore.share * 100).toFixed(2)} %, en ${paintedCore.tones} teinte(s)`,
+    `[${skin}/${scheme}] aucun repli ne peint par-dessus l'image décodée — le cœur de la boîte est la couleur servie (${paintedCore.colour}) à ${(paintedCore.share * 100).toFixed(2)} %, en ${paintedCore.tones} teinte(s)` +
+      ` · cinq premières : ${paintedCore.cinqPremieres.join(' | ')}` +
+      ` · capture ${paintedCore.taille}, cœur ${paintedCore.coeur}` +
+      ` · image : ${JSON.stringify(imageState)}`,
   );
 
   // (d) l'effet : cliquer « Lire l'audio » bascule RÉELLEMENT `audio.paused`.
