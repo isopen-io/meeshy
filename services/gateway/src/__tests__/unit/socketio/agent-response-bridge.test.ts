@@ -128,6 +128,31 @@ describe('handleAgentResponse — texte', () => {
     expect(deps.messagingService.handleMessage.mock.calls[0][0]).toMatchObject({ mentionedUserIds: ['u-paul'] });
   });
 
+  it('falls back on the username when a participant has no display name', async () => {
+    const deps = makeDeps();
+    deps.prisma.participant.findMany.mockResolvedValue([
+      { userId: 'u-disp-null', displayName: null, user: { id: 'u-disp-null', username: 'usernameonly', displayName: null } },
+    ]);
+    deps.mentionService.extractMentionsWithParticipants.mockReturnValue([]);
+
+    await handleAgentResponse(deps, makeResponse({ content: '@usernameonly ?' }));
+
+    expect(deps.mentionService.extractMentionsWithParticipants).toHaveBeenCalledWith('@usernameonly ?', [
+      { userId: 'u-disp-null', username: 'usernameonly', displayName: 'usernameonly' },
+    ]);
+  });
+
+  it('posts the message without mentions when the participant lookup for @mentions fails', async () => {
+    const deps = makeDeps();
+    deps.prisma.participant.findMany.mockRejectedValue(new Error('DB exploded in mention'));
+
+    await handleAgentResponse(deps, makeResponse({ content: '@Paul tu as vu ?' }));
+
+    expect(deps.mentionService.extractMentionsWithParticipants).not.toHaveBeenCalled();
+    expect(deps.messagingService.handleMessage).toHaveBeenCalledTimes(1);
+    expect(deps.messagingService.handleMessage.mock.calls[0][0].mentionedUserIds).toBeUndefined();
+  });
+
   it('never throws: a pipeline crash is logged, not propagated', async () => {
     const deps = makeDeps();
     deps.messagingService.handleMessage.mockRejectedValue(new Error('boom'));
