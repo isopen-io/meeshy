@@ -44,6 +44,10 @@ const TopicInputSchema = z.object({
   examples: z.array(z.string().max(300)).max(5).default([]),
   cooldownMinutes: z.number().int().min(0).max(10080).default(60),
   isActive: z.boolean().default(true),
+  // Poids ajouté au score regex à la sélection (#6192) : c'est lui qui départage
+  // une conversation sans signal. Borné à 10 pour qu'aucun sujet n'écrase une
+  // conversation qui parle clairement d'autre chose.
+  priority: z.number().int().min(0).max(10).default(0),
 });
 
 const TopicPatchSchema = TopicInputSchema.partial();
