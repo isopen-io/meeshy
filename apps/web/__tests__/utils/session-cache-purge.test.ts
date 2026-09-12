@@ -122,11 +122,37 @@ describe('registerAccountScopedCachePurge', () => {
 
     mods.authManager.clearAllSessions();
 
-    // The module-level guard keeps only the FIRST registration — the second
-    // QueryClient is never wired, so only the first is cleared.
-    expect(first.clear).toHaveBeenCalledTimes(1);
-    expect(second.clear).not.toHaveBeenCalled();
-    // The purge itself still ran exactly once, not twice.
+    // The guard keeps ONE callback — the purge runs once, not twice.
     expect(mods.purgeOwnedCacheStorage).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * #6158 — le verrou d'idempotence garde le CALLBACK, jamais le CLIENT.
+   *
+   * `QueryProvider` crée son client par `useState(() => createQueryClient())` :
+   * un démontage suivi d'un remontage en fabrique un NEUF. Si la fermeture
+   * capturait le premier, la déconnexion viderait un client MORT pendant que le
+   * client VIVANT garderait en mémoire les conversations du compte précédent —
+   * le défaut exact que ce module ferme, réintroduit par sa propre garde.
+   *
+   * Ce témoin s'écrit donc sur le SECOND client, jamais sur le premier : au
+   * premier appel, la forme fautive et la forme juste rendent le même verdict.
+   */
+  it('clears the LATEST registered QueryClient, not the first one (remount)', async () => {
+    const mods = await loadModules();
+    mods.purgeOwnedCacheStorage.mockResolvedValue(undefined);
+    mods.indexedDBKeyStorageAdapter.clearAll.mockResolvedValue(undefined);
+    mods.indexedDbPersister.removeClient.mockResolvedValue(undefined);
+
+    const démonté = fakeQueryClient();
+    const vivant = fakeQueryClient();
+
+    mods.registerAccountScopedCachePurge(démonté as never);
+    mods.registerAccountScopedCachePurge(vivant as never);
+
+    mods.authManager.clearAllSessions();
+
+    expect(vivant.clear).toHaveBeenCalledTimes(1);
+    expect(démonté.clear).not.toHaveBeenCalled();
   });
 });

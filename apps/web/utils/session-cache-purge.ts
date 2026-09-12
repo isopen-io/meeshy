@@ -53,23 +53,38 @@ export async function purgeAccountScopedBrowserStorage(): Promise<void> {
 }
 
 let registered = false;
+let courant: QueryClient | null = null;
 
 /**
  * Câble la purge ci-dessus, plus le vidage du cache React Query EN MÉMOIRE
  * (`queryClient.clear()`), sur `AuthManager.registerOnClear`.
  *
  * Appelé une fois depuis `QueryProvider` — seul détenteur du `QueryClient`.
- * Idempotent : un second appel (remount en développement) n'enregistre pas
- * un second callback, ce qui aurait purgé deux fois sans le moindre risque
- * de correction mais aurait rendu `registerOnClear` en O(n) callbacks au
- * fil des remounts.
+ * Idempotent : un second appel (remount) n'enregistre pas un second callback,
+ * ce qui aurait purgé deux fois sans risque de correction mais aurait rendu
+ * `registerOnClear` en O(n) callbacks au fil des remounts.
+ *
+ * **Le verrou garde le CALLBACK, jamais le client (#6158).** `QueryProvider`
+ * crée son client par `useState(() => createQueryClient())` : un démontage
+ * suivi d'un remontage en fabrique un NEUF. Un verrou qui capture le premier
+ * client dans la fermeture viderait alors un client MORT pendant que le client
+ * VIVANT garde en mémoire les conversations du compte précédent — le défaut
+ * exact que ce module existe pour fermer, réintroduit par sa propre garde
+ * d'idempotence.
+ *
+ * La référence est donc remise à CHAQUE appel et le callback lit la dernière —
+ * `registered` ne gouverne que l'enregistrement. Dimension 1 : une purge de
+ * confidentialité se conçoit fail-closed, et « ce remontage n'arrive pas en
+ * production » n'est pas une garde, c'est un pari sur le montage d'un arbre
+ * React.
  */
 export function registerAccountScopedCachePurge(queryClient: QueryClient): void {
+  courant = queryClient;
   if (registered) return;
   registered = true;
 
   authManager.registerOnClear(() => {
-    queryClient.clear();
+    courant?.clear();
     void purgeAccountScopedBrowserStorage();
   });
 }
