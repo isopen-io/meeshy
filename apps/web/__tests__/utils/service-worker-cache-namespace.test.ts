@@ -25,6 +25,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
 import {
   LEGACY_CACHE_NAMESPACE,
   performFullAppInvalidationAndReload,
+  purgeOwnedCacheStorage,
 } from '@/utils/service-worker';
 
 type CacheStorageDouble = {
@@ -108,5 +109,31 @@ describe('performFullAppInvalidationAndReload — la purge reste dans le namespa
 
     expect(registration.waiting?.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
     storage.restore();
+  });
+});
+
+describe('purgeOwnedCacheStorage — la primitive partagée par la mise à jour ET la déconnexion (#3743)', () => {
+  const OBSOLETE_LEGACY = `${LEGACY_CACHE_NAMESPACE}BUILD_20260829_101500`;
+  const CURRENT_LEGACY = `${LEGACY_CACHE_NAMESPACE}BUILD_20260830_120000`;
+  const V3_ZONE_CACHE = 'meeshy-v3-cache-BUILD_20260830_090000';
+
+  it('supprime uniquement les caches du namespace de cette application', async () => {
+    const storage = fakeCacheStorage([OBSOLETE_LEGACY, CURRENT_LEGACY, V3_ZONE_CACHE]);
+    storage.install();
+
+    await purgeOwnedCacheStorage();
+
+    expect([...storage.deleted].sort()).toEqual([CURRENT_LEGACY, OBSOLETE_LEGACY].sort());
+    expect(storage.survivors).toEqual([V3_ZONE_CACHE]);
+    storage.restore();
+  });
+
+  it('ne lève pas quand `caches` est absent (SSR, navigateur sans Cache API)', async () => {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, 'caches');
+    delete (globalThis as { caches?: unknown }).caches;
+
+    await expect(purgeOwnedCacheStorage()).resolves.toBeUndefined();
+
+    if (previous) Object.defineProperty(globalThis, 'caches', previous);
   });
 });

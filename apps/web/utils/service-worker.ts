@@ -16,6 +16,23 @@
 export const LEGACY_CACHE_NAMESPACE = 'meeshy-cache-';
 
 /**
+ * Supprime les entrées du Cache Storage possédées par CETTE application —
+ * celles du namespace `LEGACY_CACHE_NAMESPACE`, et elles seules (cf. son
+ * doc-comment : le Cache Storage est à l'échelle de l'ORIGINE).
+ *
+ * Site unique, appelé par `performFullAppInvalidationAndReload` (mise à jour
+ * de build) et par la purge de déconnexion (`utils/session-cache-purge.ts`,
+ * #3743) : les deux détruisent le même Cache Storage pour la même raison de
+ * juridiction, et ne doivent pas diverger.
+ */
+export async function purgeOwnedCacheStorage(): Promise<void> {
+  if (!('caches' in globalThis)) return;
+  const cacheKeys = await caches.keys();
+  const owned = cacheKeys.filter((key) => key.startsWith(LEGACY_CACHE_NAMESPACE));
+  await Promise.all(owned.map((key) => caches.delete(key)));
+}
+
+/**
  * Enregistre le service worker et initialise la détection de mise à jour.
  */
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
@@ -93,12 +110,8 @@ export async function performFullAppInvalidationAndReload(registration: ServiceW
 
     // 1. Invalider les caches de CETTE application dans le CacheStorage —
     //    ceux du namespace, et eux seuls (cf. LEGACY_CACHE_NAMESPACE).
-    if ('caches' in window) {
-      const cacheKeys = await caches.keys();
-      const owned = cacheKeys.filter(key => key.startsWith(LEGACY_CACHE_NAMESPACE));
-      await Promise.all(owned.map(key => caches.delete(key)));
-      console.log('[SW] CacheStorage cleared.');
-    }
+    await purgeOwnedCacheStorage();
+    console.log('[SW] CacheStorage cleared.');
 
     // 2. Invalider l'IndexedDB (Données React Query / Meeshy)
     // On itère sur les bases de données connues ou on utilise une suppression brutale
