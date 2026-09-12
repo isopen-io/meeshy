@@ -30931,7 +30931,53 @@ longtemps. C'est #6065, mesuré une fois de plus.
 
 
 
-## Leçon 577 — Un témoin qui CAPTURE un pixel doit attendre la PEINTURE, jamais le chargement — et `complete` ne dit rien de la peinture
+## Leçon 582 — Une PR en CONFLIT ne produit aucun run : l'absence de verdict n'est pas une panne de CI
+
+2026-09-11, #6100. `gh pr checks 6100` répondait « no checks reported on the
+branch » après deux poussées d'affilée, et j'ai cherché du côté de la CI :
+relancer un run, pousser à vide, comparer les SHA. Le relevé disait pourtant
+tout ce qu'il fallait :
+
+```
+gh pr view 6100 --json mergeable  →  CONFLICTING
+```
+
+Un workflow déclenché par `pull_request` construit le **commit de fusion**
+(`refs/pull/N/merge`). Une PR en conflit n'en a pas. GitHub ne crée donc
+AUCUN run — pas un run rouge, pas un run annulé : rien. Le verdict manquant
+n'était pas perdu, il n'avait jamais été demandé.
+
+> **« Aucun check » se lit toujours avec `mergeable` à côté, jamais seul.** « Pas
+> de run » et « run en échec » se ressemblent dans un tableau de bord et n'ont
+> pas la même cause : le premier est presque toujours un conflit, et il se
+> corrige avec `git merge`, pas avec `gh run rerun`.
+
+C'est la forme la plus discrète de « ce qui ne s'exécute pas ne se signale
+pas » : `no checks reported` ressemble à « la CI n'a pas encore démarré » et dit
+en réalité **« la CI ne démarrera jamais tant que le conflit tient »**.
+
+Deux pièges de lecture s'ajoutent, et ils tirent en sens inverse :
+
+- **`gh pr checks` / `gh pr view` servent un `mergeable` CALCULÉ, et il reste
+  collé.** Sur #6112, l'API disait `CONFLICTING` alors que
+  `git merge-tree --write-tree` rendait un arbre propre et qu'une vraie fusion
+  dans un worktree jetable ne laissait aucun fichier `U`. Sur #6100, l'inverse :
+  `gh pr view` disait encore `CONFLICTING` quand `gh api .../pulls/6100` disait
+  déjà `mergeable: true, mergeable_state: unstable`. **Git a raison, l'API
+  rattrape.** Mesurer soi-même coûte une commande.
+- **`dev` bouge.** Entre le `merge origin/dev` et la poussée, trois PR y sont
+  entrées ; la branche fusionnée ne contenait déjà plus `dev`
+  (`git merge-base --is-ancestor origin/dev <branche>` → faux) et le conflit
+  restait ANNONCÉ parce qu'il restait VRAI. Refetch avant de conclure que
+  l'outil se trompe.
+
+Parade : `git merge-base --is-ancestor origin/dev origin/<branche>` répond en
+une commande à la seule question qui compte — *cette branche contient-elle dev
+tel qu'il est MAINTENANT ?* — et `gh api repos/.../pulls/N -q .mergeable_state`
+donne l'état non mis en cache quand on veut l'avis de GitHub plutôt que le sien.
+
+
+## Leçon 583 — Un témoin qui CAPTURE un pixel doit attendre la PEINTURE, jamais le chargement — et `complete` ne dit rien de la peinture
 
 2026-09-12, #6135. `check-media.mjs` garde un défaut de PEINTURE : le glyphe de
 repli ne doit pas se poser par-dessus une image décodée. Il capture la pièce
@@ -31017,7 +31063,7 @@ locale 247×165 — la CI est même légèrement plus grande).
 Mécanique du comptage par égalité stricte identifiée par la session `andp-00`.
 Voir aussi la 576 (un défaut visuel peut n'exister que sur UN moteur).
 
-## Leçon 578 — Un DÉCOUPAGE éteint toute garde ancrée sur un FICHIER plutôt que sur l'unité — et l'asymétrie décide si on l'apprend
+## Leçon 584 — Un DÉCOUPAGE éteint toute garde ancrée sur un FICHIER plutôt que sur l'unité — et l'asymétrie décide si on l'apprend
 
 2026-09-12, #6117 / #6125-6127. `MeeshyComposerHost.swift` passait le plafond dur
 de 1 200 lignes ; le découpage a déplacé `presentCamera` vers `+Intake` et
@@ -31048,48 +31094,40 @@ Trouvée et corrigée par la session `v2-meeshy-c7`, qui a laissé l'allocation 
 numéro à la session qui tenait `tasks/lessons.md` — précisément à cause de la 561.
 
 
-## Leçon 582 — Une PR en CONFLIT ne produit aucun run : l'absence de verdict n'est pas une panne de CI
+## Leçon 585 — Un gate qui ÉCRIT un état qui survit au run se sabote avec un tour de retard
 
-2026-09-11, #6100. `gh pr checks 6100` répondait « no checks reported on the
-branch » après deux poussées d'affilée, et j'ai cherché du côté de la CI :
-relancer un run, pousser à vide, comparer les SHA. Le relevé disait pourtant
-tout ce qu'il fallait :
+2026-09-12, #6138. `ExplicitPluralLabelTests` (5 assertions) attendait le repli
+anglais du catalogue et recevait du français, **sans qu'une ligne ait changé**.
 
-```
-gh pr view 6100 --json mergeable  →  CONFLICTING
-```
+La cause n'est pas dans le code : l'app écrit sa surcharge de langue dans SON
+domaine de préférences — `me.meeshy.app.plist` → `AppleLanguages = ["fr"]`,
+`meeshy.ui.language = "fr"` — et ce fichier SURVIT au run. Or la **phase 3 du
+gate**, dont la raison d'être est « laisser l'app connectée », la pose elle-même.
+Le gate est donc **vert au premier passage sur un appareil neuf, rouge à partir du
+second**. L'appareil, lui, est bien en `en-US` : ce n'est pas l'environnement
+qu'on croit interroger.
 
-Un workflow déclenché par `pull_request` construit le **commit de fusion**
-(`refs/pull/N/merge`). Une PR en conflit n'en a pas. GitHub ne crée donc
-AUCUN run — pas un run rouge, pas un run annulé : rien. Le verdict manquant
-n'était pas perdu, il n'avait jamais été demandé.
+> **La question à poser à un gate n'est pas seulement « que lit-il ? » mais
+> « qu'ÉCRIT-il, et où cela survit-il ? »** Un gate qui laisse un état derrière
+> lui ne mesure plus son sujet : il mesure la trace de son passage précédent.
 
-> **« Aucun check » se lit toujours avec `mergeable` à côté, jamais seul.** « Pas
-> de run » et « run en échec » se ressemblent dans un tableau de bord et n'ont
-> pas la même cause : le premier est presque toujours un conflit, et il se
-> corrige avec `git merge`, pas avec `gh run rerun`.
+COROLLAIRE DE DIAGNOSTIC, et c'est lui qui fait gagner l'heure : **devant un rouge
+qu'aucun diff n'explique, chercher ce que le run PRÉCÉDENT a laissé derrière lui
+avant de chercher dans le code.** Un `git log` sur les fichiers concernés ne
+rendra jamais rien, par construction — l'état fautif n'est pas versionné.
 
-C'est la forme la plus discrète de « ce qui ne s'exécute pas ne se signale
-pas » : `no checks reported` ressemble à « la CI n'a pas encore démarré » et dit
-en réalité **« la CI ne démarrera jamais tant que le conflit tient »**.
+C'est le PENDANT, sur l'état PERSISTANT, de ce que la 583 dit du TEMPS : là un
+témoin lisait avant que la peinture n'arrive, ici il lit après qu'un run a écrit.
+Les deux mesurent autre chose que leur sujet, et aucune des deux ne se voit dans
+un diff. La formule vaut pour les deux : **un témoin ne mesure son sujet que si
+l'on sait ce qui le précède et ce qui l'entoure.**
 
-Deux pièges de lecture s'ajoutent, et ils tirent en sens inverse :
+Distinction utile pour ne pas confondre avec la 560 : là, un lot déplaçait le NOM
+sous une garde ; ici, c'est le gate lui-même qui fabrique la condition de son
+propre échec. Le premier est un accident de refactor, le second un défaut de
+conception du dispositif.
 
-- **`gh pr checks` / `gh pr view` servent un `mergeable` CALCULÉ, et il reste
-  collé.** Sur #6112, l'API disait `CONFLICTING` alors que
-  `git merge-tree --write-tree` rendait un arbre propre et qu'une vraie fusion
-  dans un worktree jetable ne laissait aucun fichier `U`. Sur #6100, l'inverse :
-  `gh pr view` disait encore `CONFLICTING` quand `gh api .../pulls/6100` disait
-  déjà `mergeable: true, mergeable_state: unstable`. **Git a raison, l'API
-  rattrape.** Mesurer soi-même coûte une commande.
-- **`dev` bouge.** Entre le `merge origin/dev` et la poussée, trois PR y sont
-  entrées ; la branche fusionnée ne contenait déjà plus `dev`
-  (`git merge-base --is-ancestor origin/dev <branche>` → faux) et le conflit
-  restait ANNONCÉ parce qu'il restait VRAI. Refetch avant de conclure que
-  l'outil se trompe.
-
-Parade : `git merge-base --is-ancestor origin/dev origin/<branche>` répond en
-une commande à la seule question qui compte — *cette branche contient-elle dev
-tel qu'il est MAINTENANT ?* — et `gh api repos/.../pulls/N -q .mergeable_state`
-donne l'état non mis en cache quand on veut l'avis de GitHub plutôt que le sien.
+Trouvée par la session `v2-meeshy-c7`, qui a laissé l'allocation du numéro à la
+session tenant `tasks/lessons.md` — son propre fichier s'arrêtant à 574, y écrire
+une 580 aurait rejoué exactement la 561.
 
