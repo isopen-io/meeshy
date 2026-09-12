@@ -195,4 +195,33 @@ final class ComposerRailGeographyByFormatTests: XCTestCase {
                            "\(porte.rawValue) apparaît sur une toile qui n'existe pas")
         }
     }
+
+    // MARK: - #6131 · Le rail flottant défile quand il ne tient pas
+
+    /// **Une pile trop haute n'est pas clippée : elle DESSINE par-dessus les
+    /// bords.**
+    ///
+    /// Mesuré au simulateur le 2026-09-12 : clavier levé, la colonne du meuble
+    /// tombe à ~408 pt quand neuf portes en demandent `9 × 44 + 8 × 10 = 476`.
+    /// La pastille `@` se peignait sur « Public », le `#` passait sous le
+    /// clavier. C'est le même débordement arithmétique que la rangée
+    /// horizontale corrige depuis #4582 — transposé à la verticale.
+    ///
+    /// Le témoin lit la SOURCE parce que le rail n'est pas mesurable sans le
+    /// monter, et qu'il n'y a rien à calculer : ce qui se garde est la présence
+    /// des deux variantes et le fait que le choix entre elles soit une question
+    /// de PLACE (`ViewThatFits`) et non d'état.
+    func test_leRailVertical_defileQuandIlNeTientPas() throws {
+        let code = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerLeadingRail.swift"))
+        let compacte = code.components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertGreaterThan(code.count, 500, "source du rail vide — la garde ne garde rien")
+        XCTAssertTrue(compacte.contains("ViewThatFits(in:.vertical)"),
+                      "Le rail vertical doit CHOISIR entre tenir et défiler (#6131).")
+        XCTAssertTrue(compacte.contains("ScrollView(.vertical,showsIndicators:false)"),
+                      "… et la seconde variante doit être un vrai défilement.")
+        XCTAssertTrue(compacte.contains("axis==.vertical&&!pushesToThumb"),
+                      "Le rail à RESSORT en est exclu : son `Spacer` flexible tient toujours, "
+                        + "donc `ViewThatFits` y choisirait éternellement la première variante.")
+    }
 }
