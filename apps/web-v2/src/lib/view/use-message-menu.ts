@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
-import { served, type Served } from '@/lib/api/prism';
+import { prismFor, served, type Served } from '@/lib/api/prism';
 import { protectionOf } from '@/lib/reading-mode/protection';
 import { reactAction } from '@/lib/api/query';
 import { reactionStore } from '@/lib/api/reaction-store';
@@ -68,9 +68,10 @@ export function useMessageMenu(params: {
     (messageId: string): Served | undefined => {
       const message = messageOf(messageId);
       if (message === undefined) return undefined;
-      const forced = displayLanguages.get(messageId);
       return served({
-        preferredLanguages: forced === undefined ? readerLanguages : [forced, ...readerLanguages],
+        // `prismFor` (`api/prism.ts`) — SITE UNIQUE de l'insertion au rang 0
+        // depuis la revue #5805 ; ce ternaire en était la troisième copie.
+        preferredLanguages: prismFor({ readerLanguages, displayLanguage: displayLanguages.get(messageId) }),
         originalLanguage: message.originalLanguage,
         translations: message.translations,
         original: message.content,

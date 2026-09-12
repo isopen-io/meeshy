@@ -12,7 +12,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 
-import { resolveAudioTrack, served, servedTranscript } from './prism';
+import { prismFor, resolveAudioTrack, served, servedTranscript } from './prism';
 
 /** La forme que rend un message : un tableau de lignes `MessageTranslation`. */
 const rows = (targetLanguage: string, translatedContent: string) => [
@@ -236,5 +236,49 @@ describe('servedTranscript — la descente du texte d’une pièce', () => {
     };
     const overridden = servedTranscript({ preferredLanguages: ['en', 'de', 'fr'], attachment, fallbackLanguage: 'fr' });
     expect(overridden).toEqual({ text: 'Hello', language: 'en', translated: false });
+  });
+});
+
+/**
+ * `prismFor` — SITE UNIQUE de l'insertion au rang 0 (revue #5805). Le ternaire
+ * qu'elle remplace vivait en QUATRE copies (`bubble.tsx`, `focal-row.tsx`,
+ * `use-message-menu.ts`, `view/media.ts`) ; le témoin de RANG porte sur ce que
+ * l'insertion CHANGE pour la descente, jamais sur la forme du tableau.
+ */
+describe('prismFor — l’exploration prend la TÊTE du prisme, sans court-circuit (#5805)', () => {
+  test('au repos, le prisme du lecteur passe INTACT — jamais une copie réordonnée', () => {
+    const readerLanguages = ['fr', 'en'] as const;
+    expect(prismFor({ readerLanguages })).toBe(readerLanguages);
+  });
+
+  test('la langue explorée se place au rang 0 SANS retirer les rangs du lecteur', () => {
+    expect(prismFor({ readerLanguages: ['fr', 'en'], displayLanguage: 'de' })).toEqual(['de', 'fr', 'en']);
+  });
+
+  test('`displayLanguage` explicitement `undefined` équivaut au repos (exactOptionalPropertyTypes)', () => {
+    expect(prismFor({ readerLanguages: ['fr', 'en'], displayLanguage: undefined })).toEqual(['fr', 'en']);
+  });
+
+  test('RANG ≠ 1 : la langue explorée SANS traduction laisse la descente continuer, jamais l’original', () => {
+    // Le court-circuit interdit (« langue explorée absente ⇒ original ») et la
+    // règle juste diffèrent ICI et seulement ici : `de` n'a rien, `en` a une
+    // traduction — c'est `en` qui doit gagner, à son rang.
+    const servedText = served({
+      preferredLanguages: prismFor({ readerLanguages: ['en'], displayLanguage: 'de' }),
+      originalLanguage: 'fr',
+      translations: { en: 'Good morning' },
+      original: 'Bonjour',
+    });
+    expect(servedText).toEqual({ text: 'Good morning', language: 'en', translated: true });
+  });
+
+  test('la langue explorée ÉGALE à l’origine rend l’original à SON rang (règle 3)', () => {
+    const servedText = served({
+      preferredLanguages: prismFor({ readerLanguages: ['en'], displayLanguage: 'fr' }),
+      originalLanguage: 'fr',
+      translations: { en: 'Good morning' },
+      original: 'Bonjour',
+    });
+    expect(servedText).toEqual({ text: 'Bonjour', language: 'fr', translated: false });
   });
 });

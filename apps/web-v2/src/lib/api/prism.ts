@@ -36,6 +36,32 @@ export type Served = {
 };
 
 /**
+ * LE PRISME D'UNE RANGÉE — le prisme du LECTEUR, l'exploration en tête.
+ *
+ * SITE UNIQUE de l'insertion au rang 0 (revue #5805). Le ternaire
+ * `displayLanguage === undefined ? languages : [displayLanguage, ...languages]`
+ * était recopié à l'IDENTIQUE en quatre endroits — `bubble.tsx:190`,
+ * `focal-row.tsx:283`, `use-message-menu.ts:73` et, ajouté par le lot #5805,
+ * `view/media.ts` — dont un doc-comment AVOUAIT la jumelle : « le MÊME prisme
+ * est remis à `Attachments`, qui le RECOMPOSE à l'identique depuis les deux
+ * props ». Quatre copies d'une règle d'ORDRE sont quatre occasions de servir
+ * un rang différent du rang exploré, et la divergence ne se verrait que sur le
+ * site oublié — la forme exacte des trois familles de résolveurs qui ont
+ * divergé sur trois clients (CLAUDE.md § Prisme, cycle 120).
+ *
+ * Le rang 0 n'est PAS un court-circuit : la langue explorée prend la tête du
+ * prisme et concourt comme les autres — si elle n'a pas de traduction, la
+ * descente continue, et si elle est la langue d'ORIGINE, `served()` rend
+ * l'original à son rang (règle 3 du Prisme, `CLAUDE.md`).
+ */
+export const prismFor = (params: {
+  readonly readerLanguages: readonly string[];
+  /** La langue EXPLORÉE au geste (« Traduire », pastille, drapeau du pied) — absente au repos. */
+  readonly displayLanguage?: string | undefined;
+}): readonly string[] =>
+  params.displayLanguage === undefined ? params.readerLanguages : [params.displayLanguage, ...params.readerLanguages];
+
+/**
  * @param preferredLanguages le prisme du LECTEUR, ordonné — la sortie de
  *   `resolveUserLanguagesOrdered`, jamais une liste reconstruite à la main.
  * @param translations soit le tableau d'un message, soit la carte
@@ -77,17 +103,40 @@ export function served(params: {
  * — PAS le type V2 de `attachment-audio.ts` dont la spécification de ce lot
  * s'inspirait (`transcription?.text` uniforme). Les DEUX types partagent le
  * même nom `AttachmentTranscription` dans deux modules différents ; seul le
- * premier atteint le champ réel. Sur cette union, UNE seule variante
+ * premier atteint le champ réel. Sur cette union DÉCLARÉE, UNE seule variante
  * (`AudioTranscription`) nomme son texte `transcribedText` — les trois autres
- * (vidéo, document, image) le nomment `text`. Site UNIQUE de ce détour :
- * `servedTranscript` ci-dessous, jamais un `.text` direct sur la valeur du
- * champ.
+ * (vidéo, document, image) le nomment `text`.
+ *
+ * MAIS élire le champ PAR `type` est faux sur le wire réel (défaut majeur,
+ * revue #5805) : `type` est optionnel et AUCUN écrivain de production ne le
+ * pose (`AudioTranslateService.ts:790-797`, `AttachmentTranslateService.ts:
+ * 648-662`) ; et quand `type === 'audio'` est présent — la forme même que les
+ * tests du gateway anticipent (`sync.test.ts:1372`,
+ * `attachments-metadata-scope-guard.test.ts:60`) — le texte réel vit dans
+ * `text`, jamais dans `transcribedText`. La passerelle elle-même lit les DEUX
+ * sans regarder `type` (`messages-list.ts:579` : `att.transcription.text ||
+ * att.transcription.transcribedText`), et la RÉFÉRENCE iOS (D-1) fait de même
+ * (`MessageModels.swift:89` : `text ?? transcribedText`, repris par
+ * `MessagePersistenceActor.swift:1370,1580`). Site UNIQUE de ce détour
+ * TOLÉRANT : `servedTranscript` ci-dessous, jamais un `.text` ni un
+ * `.transcribedText` direct sur la valeur du champ. Le cast est nécessaire :
+ * le type partagé ne déclare `text` que sur les trois variantes non-audio,
+ * une forme que la passerelle ne respecte pas (même détour que
+ * `decodeAttachment`, `api/decode.ts`).
  */
 const transcriptionTextOf = (
-  transcription: NonNullable<Attachment['transcription']> | undefined,
+  transcription: NonNullable<Attachment['transcription']> | null | undefined,
 ): string | undefined => {
-  if (transcription === undefined) return undefined;
-  return transcription.type === 'audio' ? transcription.transcribedText : transcription.text;
+  // DURCI en `=== null` (défaut bloquant, revue #5805) : `decodeAttachment`
+  // (`api/decode.ts`) défait déjà ce `null` à la frontière — mesuré sur
+  // `gate.staging.meeshy.me`, la passerelle sert `transcription: null`
+  // explicite sur toute pièce SANS transcription — mais ce garde-fou tient
+  // pour tout appelant qui construirait une `MediaAttachment` sans passer
+  // par le décodeur (le type partagé ne déclare pas `| null`, `tsc` ne
+  // l'aurait pas signalé).
+  if (transcription === undefined || transcription === null) return undefined;
+  const wireShape = transcription as { readonly text?: string; readonly transcribedText?: string };
+  return wireShape.text ?? wireShape.transcribedText;
 };
 
 /**

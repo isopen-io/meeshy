@@ -51,6 +51,12 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
   }
 
   const attachmentOf = (id) => mediaPage.locator(`[data-attachment="${id}"]`);
+  const rowOf = (id) => mediaPage.locator(`[data-message="${id}"]`);
+  const flagOf = (id) => rowOf(id).locator('button[aria-pressed][title]').first();
+  const transcriptOf = (id) => rowOf(id).locator('[data-transcript]').first().innerText();
+  const trackOf = (id) => rowOf(id).locator('audio').first().getAttribute('data-track-language');
+  const srcOf = (id) => rowOf(id).locator('audio').first().getAttribute('src');
+  const transcriptLangOf = (id) => rowOf(id).locator('[data-transcript]').first().getAttribute('lang');
 
   // (a) l'image est RÉELLEMENT décodée.
   const img = attachmentOf(MEDIA_IMAGE_ATTACHMENT_ID).locator('img');
@@ -87,6 +93,60 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
     `[${skin}/${scheme}] l'image ne déborde jamais de la rangée (${JSON.stringify(overflow)})`,
   );
 
+  // (n) LE GLYPHE DE REPLI NE PEINT JAMAIS PAR-DESSUS L'IMAGE DÉCODÉE
+  //     (revue #5805). Le lot a corrigé exactement ce défaut — la grille
+  //     peignait le glyphe au-dessus de l'image — mais SANS témoin : toutes
+  //     les propriétés DOM étaient justes (`hidden: false`, `opacity: 1`,
+  //     `naturalWidth: 1`), et (a) comme (c) restaient vertes dessus. Un
+  //     défaut de PEINTURE ne se lit qu'en PIXELS, sinon il revient en silence.
+  //
+  //     La fixture est un pixel indigo UNIFORME (`MEDIA_IMAGE_DATA_URI`) : le
+  //     CŒUR de sa boîte — la moitié centrale, là où le glyphe de 40 px se
+  //     pose — doit donc être d'UNE seule couleur. On échantillonne ce cœur et
+  //     non la boîte entière, pour deux raisons mesurées : les coins arrondis
+  //     y mêlent leurs antialiasings, et la pastille de jour FLOTTE au-dessus
+  //     du fil (`thread-day-pill`, `position:absolute; z-index:10`) — deux
+  //     bruits qui n'ont rien à voir avec le repli. Mesuré des deux côtés du
+  //     correctif, MÊME cœur : forme corrigée 100,00 % / 1 couleur — forme
+  //     fautive 96,27 % / 36 couleurs, la seconde étant `71,71,174`, soit
+  //     exactement le glyphe (encre `30,27,75`) à 0,4 fondu sur l'indigo.
+  //     Si la fixture cesse d'être un aplat, c'est CE seuil qu'il faut revoir.
+  const paintedCore = await (async () => {
+    const shot = await attachmentOf(MEDIA_IMAGE_ATTACHMENT_ID).screenshot();
+    return mediaPage.evaluate(async (data) => {
+      const bitmap = new Image();
+      await new Promise((ok, ko) => {
+        bitmap.onload = ok;
+        bitmap.onerror = ko;
+        bitmap.src = `data:image/png;base64,${data}`;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext('2d');
+      context.drawImage(bitmap, 0, 0);
+      const side = Math.round(Math.min(bitmap.width, bitmap.height) * 0.5);
+      const pixels = context.getImageData(
+        Math.round((bitmap.width - side) / 2),
+        Math.round((bitmap.height - side) / 2),
+        side,
+        side,
+      ).data;
+      const counts = new Map();
+      for (let i = 0; i < pixels.length; i += 4) {
+        const key = `${pixels[i]},${pixels[i + 1]},${pixels[i + 2]}`;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+      const total = pixels.length / 4;
+      const [colour, count] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+      return { colour, share: count / total, tones: counts.size };
+    }, shot.toString('base64'));
+  })();
+  expect(
+    paintedCore.share >= 0.999,
+    `[${skin}/${scheme}] aucun repli ne peint par-dessus l'image décodée — le cœur de la boîte est la couleur servie (${paintedCore.colour}) à ${(paintedCore.share * 100).toFixed(2)} %, en ${paintedCore.tones} teinte(s)`,
+  );
+
   // (d) l'effet : cliquer « Lire l'audio » bascule RÉELLEMENT `audio.paused`.
   const enAudio = attachmentOf(MEDIA_VOICE_EN_ATTACHMENT_ID).locator('audio');
   const enButton = attachmentOf(MEDIA_VOICE_EN_ATTACHMENT_ID).locator('button').first();
@@ -112,6 +172,49 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
   expect(deTrackLanguage === 'en', `[${skin}/${scheme}] le témoin DE sert la piste "en" au rang 2 (obtenu : ${deTrackLanguage})`);
   const enTrackLanguage = await enAudio.getAttribute('data-track-language');
   expect(enTrackLanguage === 'fr', `[${skin}/${scheme}] le témoin EN sert la piste "fr" au rang 1 (obtenu : ${enTrackLanguage})`);
+
+  // (e bis) LE `src` SUIT LA PISTE ÉLUE — pas seulement l'attribut de service
+  //         `data-track-language` : c'est ce que le navigateur télécharge et
+  //         joue réellement. Mesuré AVANT tout clic sur le drapeau du pied
+  //         (témoin j, plus bas), pendant que le rang initial tient encore.
+  //
+  //         `startsWith('data:audio/wav')` NE SUFFIT PAS (revue #5805) : les
+  //         trois pistes du témoin sont des WAV `data:` (tons 440 / 523 / 659,
+  //         `fixtures-media.ts`), donc ce préfixe est VRAI de l'original comme
+  //         de la traduction — l'assertion passait sur le défaut même qu'elle
+  //         devait attraper. Ce qui distingue vraiment « la piste élue » de
+  //         « un fichier quelconque » est que le navigateur la DÉCODE : une
+  //         `duration` finie et non nulle prouve que l'octet servi est un
+  //         média réel, et non une URL qui échouerait en silence. Le lien
+  //         `src` ↔ langue élue, lui, est prouvé par (j) : changer la langue
+  //         change le `src`.
+  const enSrc = await enAudio.getAttribute('src');
+  expect(
+    enSrc !== null && enSrc.startsWith('data:audio/wav'),
+    `[${skin}/${scheme}] le témoin EN sert un src non vide pour sa piste "fr" (${enSrc?.slice(0, 24)}…)`,
+  );
+  const enDuration = await enAudio.evaluate((el) => el.duration);
+  expect(
+    Number.isFinite(enDuration) && enDuration > 0,
+    `[${skin}/${scheme}] et le navigateur DÉCODE ce src — durée ${enDuration}s, jamais une URL qui échoue en silence`,
+  );
+
+  // (e ter) `lang` EST POSÉ SUR LA TRANSCRIPTION SERVIE DANS UNE LANGUE ≠
+  //         DOCUMENT (`READER_LOCALE` = 'fr' sous ce prisme navigateur),
+  //         ABSENT quand elle est SERVIE dans la langue du document — jamais
+  //         un attribut redondant sur du contenu déjà en langue de page.
+  //         Mesuré au MÊME instant que (e) : media-2 sert "fr" (= document,
+  //         `lang` absent), media-3 sert "en" (≠ document, `lang="en"`).
+  const enTranscriptLang = await transcriptLangOf('media-2');
+  expect(
+    enTranscriptLang === null,
+    `[${skin}/${scheme}] la transcription de media-2, servie en "fr" (langue du document), ne porte AUCUN lang (obtenu : ${enTranscriptLang})`,
+  );
+  const deTranscriptLang = await transcriptLangOf('media-3');
+  expect(
+    deTranscriptLang === 'en',
+    `[${skin}/${scheme}] la transcription de media-3 porte lang="en" (rang 2, obtenu : ${deTranscriptLang})`,
+  );
 
   // (f) un seul à la fois : lire le témoin DE remet le témoin EN en pause.
   const deButton = attachmentOf(MEDIA_VOICE_DE_ATTACHMENT_ID).locator('button').first();
@@ -171,12 +274,7 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
   //     le drapeau offert était celui de la traduction DÉJÀ à l'écran —
   //     cliquer ne changeait RIEN (mesuré : ni le texte, ni la piste, ni
   //     `aria-pressed`). Le témoin lit l'EFFET, jamais l'étiquette.
-  const rowOf = (id) => mediaPage.locator(`[data-message="${id}"]`);
-  const flagOf = (id) => rowOf(id).locator('button[aria-pressed][title]').first();
-  const transcriptOf = (id) => rowOf(id).locator('[data-transcript]').first().innerText();
-  const trackOf = (id) => rowOf(id).locator('audio').first().getAttribute('data-track-language');
-
-  const beforePick = { text: await transcriptOf('media-2'), track: await trackOf('media-2') };
+  const beforePick = { text: await transcriptOf('media-2'), track: await trackOf('media-2'), src: await srcOf('media-2') };
   expect(
     (await flagOf('media-2').count()) > 0,
     `[${skin}/${scheme}] le pied d'un message MÉDIA-SEUL offre un drapeau (sa piste est traduite)`,
@@ -184,10 +282,14 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
   const pickedLabel = await flagOf('media-2').getAttribute('title');
   await flagOf('media-2').click();
   await mediaPage.waitForTimeout(250);
-  const afterPick = { text: await transcriptOf('media-2'), track: await trackOf('media-2') };
+  const afterPick = { text: await transcriptOf('media-2'), track: await trackOf('media-2'), src: await srcOf('media-2') };
   expect(
     afterPick.text !== beforePick.text && afterPick.track !== beforePick.track,
     `[${skin}/${scheme}] cliquer « ${pickedLabel} » CHANGE la transcription ET la piste (${beforePick.track} → ${afterPick.track}) — loi 4`,
+  );
+  expect(
+    afterPick.src !== beforePick.src,
+    `[${skin}/${scheme}] cliquer « ${pickedLabel} » CHANGE le src de l'élément <audio>, pas seulement data-track-language`,
   );
 
   // (k) LE BOUTON RESTE OPÉRANT APRÈS UN CHANGEMENT DE PISTE EN COURS DE
@@ -230,6 +332,75 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
   expect(
     transcriptContrast !== null && transcriptContrast >= AA_THRESHOLD,
     `[${skin}/${scheme}] la transcription du vocal atteint l'AA (${transcriptContrast}:1 >= ${AA_THRESHOLD})`,
+  );
+
+  // (m) LA PLACE EST RÉSERVÉE PAR LA FIGURE, JAMAIS PAR L'IMAGE (revue #5805).
+  //
+  //     OÙ SE MESURE « la rangée suivante ne saute pas », et pourquoi les deux
+  //     mesures évidentes sont AVEUGLES ici — mesuré, pas supposé :
+  //     - `offsetTop` d'une rangée vaut 0 : son `offsetParent` est le `<li>`
+  //       que le virtualiseur pose autour d'elle au pixel près ;
+  //     - `getBoundingClientRect().top` ne bouge PAS NON PLUS, même quand la
+  //       boîte média s'effondre entièrement : le fil est un scroller
+  //       virtualisé ANCRÉ (mesuré : en retirant la réservation, la figure
+  //       passe de 164 px à 0 px et le `top` de la rangée suivante reste à
+  //       -45 px — le virtualiseur corrige le `scrollTop`, donc la perte de
+  //       hauteur déplace ce qui est AU-DESSUS, pas ce qui est en dessous).
+  //     La position à lire est donc celle que le VIRTUALISEUR calcule depuis
+  //     les hauteurs MESURÉES : le `translateY` du `<li>` de la rangée
+  //     suivante. Elle bouge de 249 px à 105 px quand la réservation tombe.
+  //
+  //     Ce témoin porte DEUX assertions et son propre CONTRÔLE :
+  //     1. l'`<img>` ne participe PAS au flux (`position: absolute`) — c'est
+  //        la raison STRUCTURELLE pour laquelle son chargement ne peut rien
+  //        déplacer, et ce qui rend le « zéro saut » vrai par construction ;
+  //     2. le `translateY` de la rangée suivante est IDENTIQUE image peinte /
+  //        image retirée du rendu (`display:none`, plus fort que `hidden`) ;
+  //     3. CONTRÔLE, destructif : en retirant la réservation, ce même
+  //        `translateY` DOIT bouger. Sans lui, (2) serait une tautologie —
+  //        c'était le défaut de la première version de ce témoin, qui restait
+  //        VERTE sur une page dont la boîte média était effondrée à 0 px.
+  //        Destructif parce que le virtualiseur ne re-mesure pas au retour :
+  //        (m) est donc la DERNIÈRE section, juste avant la fermeture.
+  const nextRowOffset = () =>
+    mediaPage.evaluate(() => {
+      const li = document.querySelector('[data-message="media-2"]')?.closest('li');
+      return li === null || li === undefined ? null : new DOMMatrixReadOnly(getComputedStyle(li).transform).m42;
+    });
+  const imagePosition = await mediaPage.evaluate((id) => {
+    const el = document.querySelector(`[data-attachment="${id}"] img`);
+    return el === null ? null : getComputedStyle(el).position;
+  }, MEDIA_IMAGE_ATTACHMENT_ID);
+  expect(
+    imagePosition === 'absolute',
+    `[${skin}/${scheme}] l'image ne participe pas au flux (position ${imagePosition}) — son chargement ne peut déplacer aucune rangée`,
+  );
+
+  const offsetPainted = await nextRowOffset();
+  await mediaPage.evaluate((id) => {
+    const el = document.querySelector(`[data-attachment="${id}"] img`);
+    if (el !== null) el.style.display = 'none';
+  }, MEDIA_IMAGE_ATTACHMENT_ID);
+  await mediaPage.waitForTimeout(250);
+  const offsetWithoutImage = await nextRowOffset();
+  await mediaPage.evaluate((id) => {
+    const el = document.querySelector(`[data-attachment="${id}"] img`);
+    if (el !== null) el.style.display = '';
+  }, MEDIA_IMAGE_ATTACHMENT_ID);
+  expect(
+    offsetPainted !== null && Math.abs(offsetPainted - offsetWithoutImage) < 0.5,
+    `[${skin}/${scheme}] la rangée suivante ne bouge pas quand l'image quitte le rendu (${offsetPainted}px → ${offsetWithoutImage}px)`,
+  );
+
+  await mediaPage.evaluate((id) => {
+    const fig = document.querySelector(`[data-attachment="${id}"]`);
+    if (fig !== null) fig.style.aspectRatio = 'auto';
+  }, MEDIA_IMAGE_ATTACHMENT_ID);
+  await mediaPage.waitForTimeout(400);
+  const offsetWithoutReservation = await nextRowOffset();
+  expect(
+    offsetWithoutReservation !== null && Math.abs(offsetPainted - offsetWithoutReservation) > 1,
+    `[${skin}/${scheme}] CONTRÔLE : retirer la réservation DÉPLACE la rangée suivante (${offsetPainted}px → ${offsetWithoutReservation}px) — sans quoi le témoin ci-dessus ne prouverait rien`,
   );
 
   await mediaPage.close();

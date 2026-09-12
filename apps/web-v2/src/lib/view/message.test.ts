@@ -220,4 +220,34 @@ describe('servedRowLanguage — le texte quand il existe, la pièce sinon (revue
       }),
     ).toBe('fr');
   });
+
+  /**
+   * DÉFAUT MAJEUR, REVUE #5805 (second passage) — sur la forme RÉELLE du wire
+   * (`type: 'audio'` avec `text`, jamais `transcribedText` : voir
+   * `media.test.ts`, même revue), une élection PAR `type` rend `undefined`
+   * pour `transcriptionTextOf`, donc `transcript.text === ''` ici, et la
+   * bande de langue RETOMBE sur `served.language` — la langue du MESSAGE —
+   * exactement le contrôle INERTE que ce lot prétendait avoir corrigé.
+   */
+  test('rangée média-seule sur la forme RÉELLE du wire (`type` présent, `text` seul) : la bande reste EFFECTIVE', () => {
+    const attachments: Attachment[] = [
+      {
+        ...voiceAttachment({ fr: { type: 'audio', transcription: 'Bonjour équipe', url: 'data:audio/wav;base64,FR', createdAt: new Date() } }),
+        transcription: { type: 'audio', text: 'Hello team', language: 'en', confidence: 0.9, source: 'whisper' } as never,
+      },
+    ];
+    // Sans le correctif, `transcriptionTextOf` élit `undefined` sur cette
+    // charge (le vrai champ `text` n'est jamais lu quand `type === 'audio'`),
+    // `servedTranscript` retombe sur `originalName` ('note.wav', une chaîne
+    // non vide) — la bande resterait donc « effective » PAR ACCIDENT mais
+    // figée sur la langue ORIGINALE, jamais sur une traduction de rang
+    // inférieur : c'est CE rang que le témoin garde.
+    const language = servedRowLanguage({
+      served: textServed('', 'en', ['fr', 'en']),
+      preferredLanguages: ['fr', 'en'],
+      attachments,
+      fallbackLanguage: 'en',
+    });
+    expect(language).toBe('fr');
+  });
 });

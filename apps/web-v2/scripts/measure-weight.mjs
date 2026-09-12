@@ -78,6 +78,22 @@ walk(dist);
 const criticalNames = new Set(critical.map((c) => c.file));
 const onDemand = allAssets.filter((a) => !criticalNames.has(a.file));
 
+/**
+ * LE LECTEUR AUDIO EST HORS PREMIÈRE PEINTURE (#5805) — un widget « à la
+ * demande » qui finirait INLINÉ dans le socle (une dépendance statique mal
+ * placée, un import qui remonte au mauvais niveau) grossirait `first_paint`
+ * en silence tant que la somme reste sous le plafond : le gate de POIDS ne
+ * dit RIEN sur l'EMPLACEMENT. Ce témoin cherche le VOCABULAIRE du lecteur
+ * (`aria-label="Lire l'audio"`, `attachment-blocks.tsx`) dans les fichiers
+ * CRITIQUES eux-mêmes — sa présence prouverait qu'il n'a pas atteint le
+ * chunk de route (`route-table.tsx`), quelle que soit la marge restante.
+ */
+const AUDIO_PLAYER_LITERAL = "Lire l'audio";
+const audioPlayerLeaks = critical
+  .filter((c) => c.file.endsWith('.js'))
+  .filter((c) => readFileSync(join(dist, c.file), 'utf8').includes(AUDIO_PLAYER_LITERAL))
+  .map((c) => c.file);
+
 const criticalJs = critical.filter((c) => c.file.endsWith('.js')).reduce((s, c) => s + c.gzip, 0);
 const criticalCss = critical.filter((c) => c.file.endsWith('.css')).reduce((s, c) => s + c.gzip, 0);
 const firstPaint = documentGzip + criticalJs + criticalCss;
@@ -156,6 +172,14 @@ if (typeof cap === 'number') {
 
 if (onDemandChunkFailures.length > 0) {
   console.error(`\n${onDemandChunkFailures.join('\n')}\n`);
+  rc = 1;
+}
+
+if (audioPlayerLeaks.length > 0) {
+  console.error(
+    `\n  LE LECTEUR AUDIO A ATTEINT LA PREMIERE PEINTURE : le litteral "${AUDIO_PLAYER_LITERAL}" apparait dans ` +
+      `${audioPlayerLeaks.join(', ')} (fichier CRITIQUE) au lieu du chunk de route (#5805)\n`,
+  );
   rc = 1;
 }
 
