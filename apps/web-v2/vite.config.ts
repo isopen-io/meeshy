@@ -8,6 +8,7 @@ import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
+import { INLINE_INTERFACE_LANGUAGE_BOOTSTRAP } from './src/lib/inline-interface-language-bootstrap.js';
 import { INLINE_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
 import { declaredBuildFlag } from './src/lib/build-flag';
 
@@ -30,6 +31,30 @@ const inlineSchemeBootstrap = (): Plugin => ({
       );
     }
     return html.replace(SCHEME_BOOTSTRAP_MARKER, INLINE_SCHEME_BOOTSTRAP);
+  },
+});
+
+/**
+ * Même patron que ci-dessus, pour la langue d'INTERFACE (#6206) : `index.html`
+ * porte un marqueur, ce greffon l'injecte depuis
+ * `inline-interface-language-bootstrap.js` — la même constante que lit
+ * `src/lib/interface-language.ts` — pour que le HTML et le module applicatif
+ * ne puissent plus diverger sur la clé de stockage ni sur les langues
+ * supportées.
+ */
+const INTERFACE_LANGUAGE_BOOTSTRAP_MARKER = '/*@INLINE_INTERFACE_LANGUAGE_BOOTSTRAP@*/';
+
+const inlineInterfaceLanguageBootstrap = (): Plugin => ({
+  name: 'meeshy-inline-interface-language-bootstrap',
+  transformIndexHtml(html) {
+    if (!html.includes(INTERFACE_LANGUAGE_BOOTSTRAP_MARKER)) {
+      throw new Error(
+        `index.html ne porte plus le marqueur ${INTERFACE_LANGUAGE_BOOTSTRAP_MARKER} : le script ` +
+          "d'amorçage de la langue d'interface ne serait plus injecté, et <html lang> resterait figé sur " +
+          'la valeur statique du HTML (#6206).',
+      );
+    }
+    return html.replace(INTERFACE_LANGUAGE_BOOTSTRAP_MARKER, INLINE_INTERFACE_LANGUAGE_BOOTSTRAP);
   },
 });
 
@@ -364,6 +389,7 @@ export default defineConfig({
   plugins: [
     tailwind(),
     inlineSchemeBootstrap(),
+    inlineInterfaceLanguageBootstrap(),
     prerenderInstitutionalPages(),
     ...(forCapacitor ? [dropInstitutionalServiceWorker()] : []),
     /**
