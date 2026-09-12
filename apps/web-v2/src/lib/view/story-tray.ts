@@ -86,3 +86,30 @@ export function storyAuthorLabel(group: StoryTrayGroup): string {
   const complet = [a.firstName, a.lastName].filter((p) => p !== undefined && p !== '').join(' ');
   return a.displayName ?? (complet !== '' ? complet : (a.username ?? ''));
 }
+
+/**
+ * **LE RAIL TIENT-IL LA PLACE ?** — la loi, écrite une fois et mesurable.
+ *
+ * Le rail réserve sa hauteur pendant que son corpus est en vol : c'est ce qui
+ * tient l'`offsetTop` du contenu identique avant et après la résolution (gate
+ * de la passerelle, « AUCUN saut »). Rien de plus, et surtout pas plus
+ * longtemps.
+ *
+ * **Un squelette est une PROMESSE, et une tentative qui a déjà échoué ne
+ * promet plus rien.** Le prédicat d'origine — « aucune donnée ET pas d'erreur »
+ * — restait vrai pendant TOUTES les nouvelles tentatives de react-query (trois
+ * par défaut, en repli exponentiel). Corpus injoignable : le rail peignait sa
+ * bande plusieurs secondes au-dessus d'un écran vide, puis disparaissait. Le
+ * gate de la passerelle l'a chiffré — « peuplé 174 px, vide 174 px », quand
+ * l'écart attendu était justement la hauteur du rail.
+ *
+ * `failureCount === 0` borne la promesse à la PREMIÈRE tentative : un corpus
+ * LENT garde sa place, un corpus qui répond NON la perd immédiatement.
+ */
+export function railTientLaPlace(requete: {
+  readonly data: unknown;
+  readonly isError: boolean;
+  readonly failureCount: number;
+}): boolean {
+  return requete.data === undefined && !requete.isError && requete.failureCount === 0;
+}

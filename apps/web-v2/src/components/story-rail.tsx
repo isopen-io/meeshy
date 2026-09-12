@@ -5,7 +5,12 @@ import { ChromeActionDisc, CHROME_ACTION_HIT, CHROME_ACTION_HIT_CLASS } from '@/
 import { Glyph } from '@/components/glyph';
 import { useStoryTray } from '@/lib/api/query';
 import { initialsOf } from '@/lib/view/conversation';
-import { groupStoriesByAuthor, storyAuthorLabel, type StoryTrayGroup } from '@/lib/view/story-tray';
+import {
+  groupStoriesByAuthor,
+  railTientLaPlace,
+  storyAuthorLabel,
+  type StoryTrayGroup,
+} from '@/lib/view/story-tray';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -184,10 +189,10 @@ export function StoryRail({ viewerId }: { readonly viewerId: string | null | und
   );
 
   /* Rien à montrer ET rien en vol : ni bande blanche, ni région étiquetée vide
-     pour le lecteur d'écran. Pendant le CHARGEMENT le rail garde sa hauteur —
-     c'est ce qui tient l'`offsetTop` du contenu identique avant et après la
-     résolution (gate de la Lentille). */
-  const chargement = tray.data === undefined && !tray.isError;
+     pour le lecteur d'écran. La loi de la place — et la borne qui empêche le
+     squelette de survivre au refus du corpus — vit dans `railTientLaPlace`,
+     avec ses témoins (`story-tray-place.test.ts`). */
+  const chargement = railTientLaPlace(tray);
   if (!chargement && groups.length === 0) return null;
 
   const visibles = groups.slice(0, RAIL.maxEntries);
