@@ -25,7 +25,22 @@ export type FetchLike = (
   text(): Promise<string>;
 }>;
 
-export type LookupLike = (hostname: string) => Promise<{ address: string; family?: number }>;
+/**
+ * TOUTES les adresses d'un nom, jamais la première (#6201).
+ *
+ * L'ancienne forme rendait `{ address, family }` — une SEULE adresse — et
+ * `dnsLookup(hostname)` sans `{ all: true }` ne rend effectivement que la
+ * première. Un nom portant deux enregistrements A, un public et un privé,
+ * passait donc la validation sur le public pendant que la connexion pouvait
+ * prendre l'autre : pas de course à gagner, pas de TTL à régler, il suffisait
+ * de publier deux A.
+ *
+ * Le défaut vivait dans le TYPE : une signature qui ne peut pas exprimer
+ * plusieurs adresses rend la garde correcte inécrivable. C'est l'inverse de
+ * #6166, où la garde devait entrer dans la signature ; ici la signature
+ * l'interdisait.
+ */
+export type LookupLike = (hostname: string) => Promise<readonly { address: string; family?: number }[]>;
 
 export type ResolvedIllustration = {
   buffer: Buffer;
@@ -143,8 +158,12 @@ async function publicHttpUrl(raw: string, base: string | undefined, lookup: Look
   // décider de ce qu'on peut lire directement dans l'URL.
   if (isIP(host)) return isPublicAddress(host) ? url : null;
   try {
-    const { address } = await lookup(host);
-    return isPublicAddress(address) ? url : null;
+    const addresses = await lookup(host);
+    // Une résolution VIDE est refusée EXPLICITEMENT : `[].every(...)` rend
+    // `true`, donc sans cette ligne un nom qui ne résout rien passerait la
+    // garde — un vert à vide, exactement le contraire d'un fail-closed.
+    if (addresses.length === 0) return null;
+    return addresses.every((entry) => isPublicAddress(entry.address)) ? url : null;
   } catch {
     return null;
   }
@@ -220,7 +239,7 @@ async function downloadImage(
 export async function resolveAgentIllustration(options: ResolveIllustrationOptions): Promise<ResolvedIllustration | null> {
   const deps = {
     fetchImpl: options.fetchImpl ?? (fetch as unknown as FetchLike),
-    lookup: options.lookup ?? ((hostname: string) => dnsLookup(hostname)),
+    lookup: options.lookup ?? ((hostname: string) => dnsLookup(hostname, { all: true })),
     timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     maxRedirects: options.maxRedirects ?? DEFAULT_MAX_REDIRECTS,
     maxImageBytes: options.maxImageBytes ?? DEFAULT_MAX_IMAGE_BYTES,
