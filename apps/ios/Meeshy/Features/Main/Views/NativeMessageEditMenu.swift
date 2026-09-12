@@ -155,6 +155,15 @@ extension MessageEditMenuAction {
 /// la bulle ni le scrub d'un média.
 final class EditMenuHostView: UIView, UIEditMenuInteractionDelegate {
 
+    /// DEINIT NON ISOLÉE (#6226) — ce dépôt compile sous
+    /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` (SE-0466), donc la deinit
+    /// SYNTHÉTISÉE de cette classe est `@MainActor`. Or c'est une `UIView` :
+    /// UIKit la libère au recyclage de cellule, hors d'une tâche, et la
+    /// libération isolée double-libère (`pointer being freed was not
+    /// allocated`, abrt). Garde : `MainActorDeinitSourceGuardTests`, qui a
+    /// rougi dès l'arrivée de cette classe.
+    nonisolated deinit {}
+
     /// Remises à chaque présentation par l'hôte SwiftUI — jamais mémorisées
     /// au-delà : une action capturée une fois vaudrait pour un message que la
     /// cellule ne porte peut-être plus (les cellules se RECYCLENT).
