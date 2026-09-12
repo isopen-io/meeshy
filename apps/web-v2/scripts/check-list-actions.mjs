@@ -58,6 +58,16 @@
  *     CLIQUET : la porte est arrivée, ce témoin mesure désormais l'effet du
  *     tap plutôt que l'absence de contrôle — tout en SERVANT ce que ses ports
  *     résolvent (anneau, couverture, humeur).
+ * 11. LA BARRE DE RECHERCHE NE VOLE JAMAIS LE CENTRE D'UN CONTRÔLE AU BAS DE
+ *     LA LISTE (#6220) — posée EN FLUX, elle réduisait la boîte de
+ *     `#contenu` d'autant, et la rangée qui tombait pile sur cette frontière
+ *     avait son centre — et celui de son bouton « Actions de conversation »
+ *     — VOLÉ par la barre elle-même (`elementFromPoint`), une frontière
+ *     qu'AUCUN défilement supplémentaire ne pouvait plus jamais franchir
+ *     puisqu'elle EST le bas de la boîte défilante. La liste défilée
+ *     jusqu'à son maximum RÉEL (gestes `wheel`, jamais un `scrollTop`
+ *     programmé — seul un geste réel arme le même défilement qu'un doigt),
+ *     la dernière rangée et son bouton doivent retomber sur EUX-MÊMES.
  */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -736,6 +746,99 @@ check(
 );
 
 await enTeteContext.close();
+
+// --------------- 11. la barre de recherche ne vole jamais un contrôle en bas de liste
+/**
+ * LE DÉFAUT EXACT DE #6220 — la barre de recherche est posée EN BAS,
+ * FLOTTANTE au-dessus de `#contenu` (`routes/conversations.tsx`) : avant
+ * correction, elle occupait sa propre place EN FLUX, réduisant d'autant la
+ * boîte défilante — la rangée qui tombait pile sur cette frontière avait
+ * son centre, et celui de son bouton « Actions de conversation », VOLÉ par
+ * la barre elle-même, SANS qu'aucun défilement supplémentaire ne puisse
+ * jamais l'en sortir (la frontière DE DÉFILEMENT était la barre). `#contenu`
+ * réserve désormais sa hauteur MESURÉE en `padding-block-end` — le critère
+ * de fin de #6220 : au bas RÉEL du défilement, la dernière rangée et son
+ * bouton se touchent au centre.
+ *
+ * Un `wheel` RÉEL, jamais un `scrollTop` programmé assigné directement : ce
+ * dernier s'est mesuré instable ici (une valeur inférieure au maximum,
+ * vraisemblablement reprise par un écouteur de défilement de l'écran) — le
+ * même geste que #5648 impose déjà pour armer une scène, pour la même
+ * raison : seul un défilement REÇU COMME UNE INTENTION vaut le geste d'un
+ * doigt.
+ */
+const bottomContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
+const bottomPage = await bottomContext.newPage();
+await bottomPage.goto(`${BASE}/`, { waitUntil: 'load' });
+await bottomPage.waitForSelector('[data-row]');
+await bottomPage.waitForTimeout(300);
+
+/**
+ * LA RÉSERVE, MESURÉE DIRECTEMENT — le témoin de bout en bout ci-dessous ne
+ * ROUGIT PAS sur l'ancien code pour CE corpus précis : `QuickActions`
+ * (`components/quick-actions.tsx`, 50dvh dès qu'une rangée est visible)
+ * laisse toujours une marge géante après la dernière conversation, quel que
+ * soit le filtre — le défaut RÉEL (une frontière de défilement qui EST la
+ * barre, donc plus jamais franchissable) ne dépend pas de ce hasard de
+ * corpus. Cette assertion mesure la CAUSE structurelle, indépendamment de
+ * tout contenu : `#contenu` doit réserver AU MOINS la hauteur RENDUE de la
+ * barre en `padding-block-end`, sans quoi le défaut revient dès qu'un écran
+ * (une recherche à un seul résultat sans `QuickActions`, un autre corpus)
+ * n'offre plus cette marge fortuite.
+ */
+const reserve = await bottomPage.evaluate(() => {
+  const ul = document.getElementById('contenu');
+  const bar = document.querySelector('[data-search-bar]');
+  return {
+    barHeight: bar === null ? null : bar.getBoundingClientRect().height,
+    padBottom: parseFloat(getComputedStyle(ul).paddingBottom) || 0,
+  };
+});
+check(reserve.barHeight !== null, 'la barre de recherche (`[data-search-bar]`) est bien présente pour la mesure');
+check(
+  reserve.barHeight !== null && reserve.padBottom >= reserve.barHeight - 1,
+  `#contenu réserve AU MOINS la hauteur RENDUE de la barre en padding-block-end (${JSON.stringify(reserve)})`,
+);
+
+await bottomPage.hover('#contenu');
+for (let i = 0; i < 40; i += 1) {
+  await bottomPage.mouse.wheel(0, 400);
+  await bottomPage.waitForTimeout(30);
+}
+await bottomPage.waitForTimeout(500);
+/** Le bouton n'est peint QU'AU SURVOL/FOCUS d'une rangée non magnifiée (§2 ci-
+ *  dessus) — le survoler d'abord est la même précaution que la section 2. */
+await bottomPage.locator('[data-row]').last().hover();
+await bottomPage.waitForTimeout(150);
+
+const bottomOverlap = await bottomPage.evaluate(() => {
+  const ul = document.getElementById('contenu');
+  const rows = [...document.querySelectorAll('[data-row]')];
+  const last = rows[rows.length - 1];
+  const btn = last?.querySelector('button[aria-label="Actions de conversation"]');
+  const centerHitsSelf = (el) => {
+    if (el === null || el === undefined) return null;
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return hit === el || el.contains(hit);
+  };
+  return {
+    atMax: ul.scrollTop >= ul.scrollHeight - ul.clientHeight - 1,
+    rowOk: centerHitsSelf(last),
+    buttonOk: centerHitsSelf(btn),
+  };
+});
+check(bottomOverlap.atMax, 'le défilement RÉEL (wheel) atteint le bas MAXIMAL de la liste');
+check(
+  bottomOverlap.rowOk === true,
+  `au bas MAXIMAL du défilement, le centre de la DERNIÈRE rangée retombe sur elle-même, jamais sur la barre de recherche (${JSON.stringify(bottomOverlap)})`,
+);
+check(
+  bottomOverlap.buttonOk === true,
+  `au bas MAXIMAL du défilement, le centre du bouton d'actions de la DERNIÈRE rangée retombe sur LUI, jamais sur la barre de recherche (${JSON.stringify(bottomOverlap)})`,
+);
+
+await bottomContext.close();
 
 await browser.close();
 server.close();
