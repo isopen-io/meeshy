@@ -1066,4 +1066,59 @@ extension MeeshyComposerHost {
         ingestIntoDocument(medias)
         HapticFeedback.light()
     }
+
+    // MARK: - Ce qui entre par un GESTE du meuble
+
+    // **Extraits de `MeeshyComposerHost.swift` le 2026-09-12** (#6126), même
+    // découpe que `+Surfaces` : le viseur et la graine de mood font tous deux
+    // ENTRER de la matière dans la composition — c'est la responsabilité que
+    // ce fichier déclare en tête. Les laisser sur le type revenait à y ranger
+    // des gestes parce qu'ils y étaient nés, pas parce qu'ils y appartiennent.
+
+    /// **Le SEUL site qui ouvre le viseur** — et il porte son mode.
+    ///
+    /// Le mode voyage par un état du meuble plutôt que par le portail :
+    /// `ComposerPortal` est la clé d'un `.sheet(item:)`, et lui donner une
+    /// valeur associée changerait son identité — deux ouvertures de la caméra
+    /// dans deux modes deviendraient deux feuilles distinctes aux yeux de
+    /// SwiftUI, qui n'en honore qu'une.
+    ///
+    /// Il est REPOSÉ à chaque ouverture, jamais seulement à la fermeture : une
+    /// mémoire de mode qui survit rendrait tout appui suivant sur la porte
+    /// média dépendant de la façon dont le composer a été ouvert — un
+    /// comportement que rien à l'écran n'annoncerait.
+    func presentCamera(mode: CameraCaptureMode) {
+        pendingCameraMode = mode
+        presentedPortal = .camera
+    }
+
+    /// La graine entre par la RÈGLE, jamais par quatre affectations écrites
+    /// ici : `ComposerMoodSeeding.adopt` est éprouvable sans monter une vue, et
+    /// c'est elle qui tient l'invariant « une graine ne remplace jamais ce que
+    /// l'auteur a posé ».
+    /// Le `guard` n'est pas une redite de la règle : `adopt(nil, …)` rend la
+    /// composition intacte, mais la RÉÉCRIRE déclencherait une passe de rendu
+    /// pour rien à chaque apparition d'un composer de création — celui qui ne
+    /// sème jamais rien.
+    ///
+    /// L'état COURANT est relu au moment de l'adoption, jamais capturé plus tôt.
+    /// C'est ce qui rend l'ordre indifférent avec le sélecteur d'audience de la
+    /// surface : qu'il ait déjà appliqué la mémoire du format (loi 10) ou non,
+    /// une graine muette sur l'audience rend ce qu'elle trouve.
+    func adoptMoodSeed(_ graine: ComposerMoodSeed?) {
+        guard let graine else { return }
+        let adoptee = ComposerMoodSeeding.adopt(
+            graine,
+            into: ComposerMoodComposition(
+                emoji: moodEmoji,
+                text: documentText,
+                visibility: composerVisibility,
+                visibilityUserIds: composerVisibilityUserIds
+            )
+        )
+        moodEmoji = adoptee.emoji
+        documentText = adoptee.text
+        composerVisibility = adoptee.visibility
+        composerVisibilityUserIds = adoptee.visibilityUserIds
+    }
 }

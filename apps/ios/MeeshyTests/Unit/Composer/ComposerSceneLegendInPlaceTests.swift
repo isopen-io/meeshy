@@ -58,20 +58,16 @@ final class ComposerSceneLegendInPlaceTests: XCTestCase {
     }
 
     // MARK: - #6126 · La légende naît visible
-
-    /// **L'invite est là dès que la scène est là.** Repliée, la légende
-    /// n'invitait à rien : il fallait trouver le chevron pour découvrir qu'elle
-    /// existe.
-    ///
-    /// Le témoin porte sur la DÉCLARATION, pas sur un rendu : c'est la valeur
-    /// initiale de l'état qui décide, et elle est lisible une fois pour toutes.
-    func test_leVoletNaitDeplie() throws {
-        let code = compact(try hostCode())
-        XCTAssertTrue(code.contains("varsceneDescriptionCollapsed=false"),
-                      "Le volet doit naître DÉPLIÉ (directive porteur 2026-09-12).")
-        XCTAssertFalse(code.contains("varsceneDescriptionCollapsed=true"),
-                       "Le défaut « replié » du 2026-09-04 est supplanté — voir le doc-comment de la propriété.")
-    }
+    //
+    // **Cette loi n'est PAS gardée ici**, et c'est délibéré : la naissance du
+    // volet appartient au volet, et `ComposerSceneDescriptionPanelTests` la
+    // garde depuis #5138 — avec la lignée des deux directives qui se succèdent
+    // (2026-09-04 « replié par défaut » puis 2026-09-12 « affichée par défaut
+    // avec un placeholder invitant à s'exprimer »).
+    //
+    // > Une loi gardée à DEUX endroits n'est pas gardée deux fois : elle est
+    // > gardée une fois et contredite une fois le jour où l'un des deux sites
+    // > évolue seul. Ce qui suit garde ce qui est propre au MEUBLE.
 
     // MARK: - #6126 · Plus de zone en bas pour la légende
 

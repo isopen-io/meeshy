@@ -1062,4 +1062,90 @@ extension MeeshyComposerHost {
         ComposerSceneCapabilities.bands
     }
 
+    // MARK: - Ce que le `body` empile, et ce qu'il voile
+
+    // **Extraits de `MeeshyComposerHost.swift` le 2026-09-12** (#6126). Le lot
+    // de la légende en place a porté le type à 1 225 lignes — au-delà du
+    // plafond dur de 1 200 —, et la règle du dépôt est de DÉCOUPER, pas de
+    // relever le plafond. La coupe suit la responsabilité déjà écrite en tête
+    // de ce fichier : le type garde ce qu'il EST (ses entrées, ses états, son
+    // `body`) ; ce que le `body` MONTE vit ici.
+
+    /// La pile du meuble — plateau, surface, socle. Extraite du `body` le
+    /// 2026-09-04 pour que le viseur puisse l'ENVELOPPER : ce qui doit couvrir
+    /// le socle ne peut pas être un modificateur posé après lui.
+    @ViewBuilder
+    var composerStack: some View {
+        VStack(spacing: 0) {
+            // Le plateau coiffe les TROIS surfaces depuis le lot 4.7, sous la
+            // règle de placement. Il vivait dans `composerSurface`, ce qui le
+            // réservait de fait à la scène : le chip « Post » d'une
+            // republication de mood n'existait alors sur aucun écran. La
+            // disposition de la scène est inchangée — un `VStack` qui empile le
+            // plateau puis l'atelier —, et ce montage-ci est le SEUL.
+            // **La surface DOCUMENT porte le chip dans SA barre haute (#4047).**
+            // Il flottait ici, seul sur une rangée au-dessus de tout, pendant
+            // que la barre de la surface ne portait qu'un `✕`. Le header voulu
+            // est d'un seul tenant — `✕ · type · slides` — et une rangée
+            // au-dessus d'une barre est deux barres.
+            //
+            // **La condition n'est PAS écrite ici.** `ComposerFormatFanPlacement`
+            // porte les deux places (`paints` / `paintsInDocumentHeader`), et
+            // elles sont EXCLUSIVES par construction. Un `&& mountedSurface !=
+            // .document` ajouté sur cette ligne aurait été une seconde écriture
+            // de la règle, invisible aux tests — exactement ce que la garde de
+            // ce `body` interdit, et elle a rougi pour le dire.
+            if paintsFormatFan { plateauTools }
+            surfaceWithIntakePortals
+            // **La description a quitté le bas au #4124.** Elle y vivait en
+            // permanence — d'abord une barre à chevron, puis le calque de
+            // lecture — et prenait la place que la scène CENTRÉE réclame, pour
+            // un texte que l'auteur ne regarde pas la plupart du temps. Elle
+            // s'ouvre désormais par l'icône de la rangée haute, par-dessus tout
+            // (`sceneDescriptionLayer`), et n'occupe l'écran que quand on
+            // l'écrit.
+            // `assembles(.publish)` dit que l'ATELIER peint la flèche. Le socle
+            // peint donc les MÊMES trois zones seulement quand l'atelier les a
+            // cédées : deux barres de publication, dont une inerte, seraient
+            // une régression sèche sur la surface de création la plus utilisée.
+            //
+            // `!paintedSocleZones.isEmpty` s'y ajoute depuis le 2026-08-28 : le
+            // mood a cédé sa SEULE zone (`.publish`) à son propre en-tête
+            // (`ComposerMoodSurface.header`), et sans cette garde le socle se
+            // peindrait quand même — une `HStack` vide, juste un `Spacer` sous
+            // un padding, l'espace exact que la consolidation vise à rendre.
+            if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty {
+                socle
+            }
+        }
+    }
+
+    /// **Le voile de progression du bake** (#4996) — un type NOMMÉ hors du
+    /// `body`, comme `ComposerSceneDescriptionEditor` : monté en fermeture
+    /// d'`.overlay`, il ajoute un niveau à la profondeur de type SwiftUI de ce
+    /// corps, qui a déjà coûté un débordement de pile à cet écran.
+    @ViewBuilder
+    var composerExportProgress: some View {
+        if let fraction = sceneExport.progress {
+            ZStack {
+                Color.black.opacity(0.55).ignoresSafeArea()
+                VStack(spacing: 12) {
+                    ProgressView(value: fraction)
+                        .progressViewStyle(.linear)
+                        .tint(MeeshyColors.brandPrimary)
+                        .frame(width: 180)
+                    Text(ComposerExportCopy.inProgress)
+                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .foregroundStyle(.white)
+                }
+                .padding(24)
+                .adaptiveGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .transition(.opacity)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Text(ComposerExportCopy.inProgress))
+            .accessibilityValue(Text(LocalizedNumber.percent(Int((fraction * 100).rounded()))))
+            .accessibilityAddTraits(.updatesFrequently)
+        }
+    }
 }

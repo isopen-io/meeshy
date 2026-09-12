@@ -1947,7 +1947,11 @@ final class ComposerContentDoorWiringGuardTests: XCTestCase {
     /// laisserait la moitié du défaut.
     func test_lesDeuxZonesDeTexte_neSouvrentJamaisEnsemble() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("editsPostContent=falseeditsSceneDescription=true"),
+        // Depuis #6126, ouvrir la description ne pose plus de drapeau : le
+        // drapeau CONSTATE la frappe, il ne la commande plus. La porte passe par
+        // le site unique `openSceneDescriptionEditing()`. Ce que ce témoin garde
+        // est inchangé — la fermeture de l'AUTRE zone reste explicite ici.
+        XCTAssertTrue(source.contains("editsPostContent=falseopenSceneDescriptionEditing()"),
                       "Ouvrir la description doit fermer le contenu.")
         XCTAssertTrue(source.contains("editsSceneDescription=falseeditsPostContent=true"),
                       "Ouvrir le contenu doit fermer la description.")
