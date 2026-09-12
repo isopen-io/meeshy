@@ -31231,6 +31231,41 @@ FATALE à jest (qui typecheck chaque suite au chargement). « J'ai lancé le
 typecheck » ne vérifie donc JAMAIS un fichier de test — et c'est exactement là
 que vivent les consommateurs de l'API qu'on vient de supprimer.
 
+### CORRECTION mesurée le même jour (#6160) — c'est plus fin, et le trou est ailleurs
+
+La phrase ci-dessus est vraie et INCOMPLÈTE. Relevé exact du gateway :
+
+| couche | config | ce qu'elle couvre |
+|---|---|---|
+| `tsc --noEmit` | `tsconfig.json` | exclut les tests ⇒ **rien** |
+| ts-jest | `tsconfig.test.json` (`include: src/**/*`) | les tests, **mais seulement les fichiers qu'une exécution CHARGE**, et `diagnostics.ignoreCodes: [2307, 2322, 2339, 2345, 2740]` |
+| personne | — | les fichiers de test qu'aucune exécution ne charge |
+
+```
+npx tsc -p tsconfig.test.json --noEmit --pretty false | grep -c 'error TS'  →  3562
+  3467  dans les cinq codes que ts-jest IGNORE  → invisibles à tsc ET à jest
+    95  hors de ces cinq codes                  → dans des fichiers jamais chargés
+```
+
+ts-jest typecheck donc bien les tests — **à la demande, fichier par fichier, et
+sourd à cinq codes.** Mon `TS2305` a été attrapé parce qu'il n'est pas dans la
+liste muette ET que la suite était chargée ; un `TS2345` au même endroit ne
+l'aurait pas été. **Le trou a deux moitiés** : cinq codes muets PARTOUT, et TOUT ce
+qu'aucune exécution ne charge.
+
+Et la faute de mesure, à garder pour elle-même : mon premier comptage a rendu
+**0 erreur** parce que je grepais `error TS` sur la sortie PRETTY de `tsc`, où les
+codes ANSI coupent la chaîne. J'ai failli conclure « ce gate coûte zéro » depuis un
+format que je n'avais pas vérifié — la faute même que cette leçon dénonce, commise
+en la dénonçant. **`--pretty false` avant tout comptage.**
+
+Troisième garde, la moins chère et orthogonale (session `andp-00`) : le signal
+manqué n'était pas le rouge, c'était le COMPTE. Dans
+`Tests: 24043 passed, 24043 total`, les tests de la suite morte ne sont pas comptés
+*en échec* — ils ne sont **pas comptés du tout**, et le corpus rétrécit en silence.
+Un cliquet sur le nombre de suites CHARGÉES attrape aussi le cas où le job reste
+VERT (une suite qu'un `testPathIgnorePatterns` avale).
+
 > **Avant de tirer une preuve d'un outil, lire son `include`/`exclude`.** Un
 > outil vert sur un ensemble qui ne contient pas le fichier douteux n'a rien
 > mesuré. C'est la 583 posée sur l'espace au lieu du temps : un témoin ne mesure
