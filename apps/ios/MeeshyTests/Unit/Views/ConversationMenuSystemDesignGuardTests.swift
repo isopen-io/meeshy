@@ -341,40 +341,59 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Menu message NATIF (iOS 26 Liquid Glass) + fallback overlay
+    // MARK: - Menu message : la PRESSION est au menu Meeshy, le DOUBLE TAP au système
     //
-    // Pivot 2026-07-14 : sur iOS 26 la bulle attache un `.contextMenu` NATIF
-    // (Liquid Glass, comme les lignes de conversation) avec aperçu de la bulle
-    // d'origine ; < iOS 26 garde l'overlay custom (`MessageOverlayMenu`). Deux
-    // chemins par version d'OS, exactement comme `ConversationRowItem`.
+    // **Le pivot du 2026-07-14 est SUPPLANTÉ par la directive porteur du
+    // 2026-09-12 (#6117).**
+    //
+    // Il disait : « sur iOS 26 la bulle attache un `.contextMenu` NATIF avec
+    // aperçu ; < iOS 26 garde l'overlay custom — deux chemins par version
+    // d'OS ». Il tenait, et il a produit exactement ce que deux chemins par
+    // version produisent : **le même appui long rendait deux menus différents
+    // selon le téléphone**, le menu Meeshy disparaissant sur les récents.
+    //
+    // La directive du 2026-09-12 rend à chaque geste une identité stable de
+    // iOS 16 à iOS 26 — appui long = menu MEESHY partout, double tap = menu
+    // SYSTÈME, présenté PAR CODE (`UIEditMenuInteraction`), ce qu'un
+    // `.contextMenu` ne sait pas faire.
+    //
+    // Cette loi-là est gardée par `ThreadRowGestureParityTests`, et ce fichier
+    // ne la redouble pas : deux gardes qui affirment la même règle divergent au
+    // premier changement, et c'est déjà arrivé ici — le témoin retiré ci-dessous
+    // exigeait `enableLongPress: nativeMenu == nil` pendant que
+    // `ThreadRowGestureParityTests` l'INTERDISAIT. Deux gardes opposées sur une
+    // même chaîne : l'une des deux était forcément rouge.
 
-    /// iOS 26+ : `.contextMenu` natif + aperçu, long-press custom coupé ;
-    /// < iOS 26 : overlay custom conservé (ConditionalBubbleLongPress).
-    func test_messageRow_prefersNativeMenu_oniOS26_withCustomFallback() throws {
-        let listSource = try source("Meeshy/Features/Main/Views/MessageListView.swift")
-        XCTAssertTrue(
-            listSource.contains("if #available(iOS 26.0, *), let menu"),
-            "Le .contextMenu natif des bulles doit être gaté #available(iOS 26.0, *)."
-        )
-        XCTAssertTrue(
-            listSource.contains(".contextMenu { menu() } preview: { preview() }"),
-            "Le chemin iOS 26 doit attacher le .contextMenu NATIF AVEC preview " +
-            "(la vraie bulle d'origine)."
-        )
-        XCTAssertTrue(
-            listSource.contains("ConditionalBubbleLongPress"),
-            "Le long-press custom de la bulle doit être conditionnel (coupé quand " +
-            "le menu natif est actif, gardé < iOS 26)."
-        )
-
+    /// **La machinerie du menu natif reste en place, alimentée à `nil` — et ce
+    /// `nil` n'est pas un reste.**
+    ///
+    /// C'est lui qui commande le RETRAIT de l'`UIContextMenuInteraction` que le
+    /// système pose sur la cellule. Supprimer la déclaration au motif qu'elle ne
+    /// sert plus laisserait cette interaction en place et **rouvrirait la
+    /// pression système que #6117 vient de fermer** — le menu Meeshy
+    /// redisparaîtrait sous iOS 26, sans qu'aucune ligne de geste n'ait bougé.
+    ///
+    /// C'est donc l'invariant que ce fichier garde, et le seul : il n'est dit
+    /// nulle part ailleurs.
+    func test_messageRow_nativeMenuStaysDeclaredNil_soTheSystemPressIsRemoved() throws {
         let vcSource = try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
+
         XCTAssertTrue(
-            vcSource.contains(".nativeMessageContextMenu(menu: nativeMenu)"),
-            "La cellule doit attacher le menu natif via .nativeMessageContextMenu(menu:)."
+            vcSource.contains("let nativeMenu: (() -> AnyView)? = nil"),
+            "`nativeMenu` doit rester DÉCLARÉ à nil : c'est ce qui commande le " +
+            "retrait de l'UIContextMenuInteraction posée par le système."
         )
         XCTAssertTrue(
-            vcSource.contains("enableLongPress: nativeMenu == nil"),
-            "La cellule doit couper le long-press custom quand le menu natif est actif."
+            vcSource.contains("if nativeMenu == nil"),
+            "Le retrait de l'interaction système doit rester CONDITIONNÉ à " +
+            "`nativeMenu == nil` — sans quoi il ne se produirait plus si le " +
+            "chemin natif revenait."
+        )
+        XCTAssertTrue(
+            vcSource.contains("$0 is UIContextMenuInteraction"),
+            "La cellule doit retirer l'UIContextMenuInteraction du système : " +
+            "laissée en place, elle reprendrait la pression longue à iOS 26 et " +
+            "le menu Meeshy disparaîtrait de nouveau sur les téléphones récents."
         )
     }
 
