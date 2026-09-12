@@ -192,17 +192,23 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
                 + "le plein écran n'offre aucune rangée de réaction (#6084, critère 1)."
         )
         XCTAssertNotNil(
-            corps("private func mediaActionBar(", dans: code),
-            "`mediaActionBar` introuvable — le bouton n'a pas de rangée d'actions à rejoindre."
+            corps("private func mediaActions(", dans: code),
+            "`mediaActions` introuvable — le bouton n'a pas de rangée d'actions à rejoindre."
         )
     }
 
-    /// **Le bouton REJOINT la rangée d'actions existante** (révision porteur) :
-    /// même rang que Répondre et Composer, jamais un ornement posé ailleurs.
+    /// **Le bouton REJOINT les actions existantes** (révision porteur) : même
+    /// rang que Répondre et Composer, jamais un ornement posé ailleurs.
+    ///
+    /// `mediaActionBar` s'appelle `mediaActions` depuis le #6161, où les trois
+    /// actions ont quitté la rangée horizontale du bas pour une COLONNE
+    /// verticale à droite du cadre. Le nom a suivi la forme — « bar » décrivait
+    /// une disposition qui n'existe plus. Ce que cette garde tient n'a pas
+    /// bougé : la membership, le geste, l'icône.
     func test_leBoutonReagir_rejointLaRangeeDActions() throws {
         let code = try gallerieSource()
-        guard let rangee = corps("private func mediaActionBar(", dans: code) else {
-            return XCTFail("`mediaActionBar` introuvable")
+        guard let rangee = corps("private func mediaActions(", dans: code) else {
+            return XCTFail("`mediaActions` introuvable")
         }
         let plat = compact(rangee)
 
@@ -346,7 +352,7 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
     func test_laTrainee_neSAppuiePasSurUnZIndex() throws {
         let code = try gallerieSource()
         guard let site = corps("private func attachmentReactionBar(", dans: code),
-              let couche = corps("private var reactionLayer: some View {", dans: code) else {
+              let couche = corps("var reactionLayer: some View {", dans: code) else {
             return XCTFail("sites introuvables")
         }
         XCTAssertFalse(compact(site).contains(".zIndex("),
@@ -355,18 +361,26 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
                        "Ni sur sa couche.")
     }
 
-    /// **Masquer le chrome emporte la traînée.** Elle recouvre la rangée
-    /// d'actions, donc le bouton n'est plus atteignable pendant qu'elle est
-    /// ouverte : le tap sur le média devient sa sortie. Sans cette remise à zéro,
-    /// rouvrir le chrome ferait resurgir une traînée que personne n'a redemandée.
+    /// **Entrer en plein cadre emporte la traînée.** Elle flotte au-dessus du
+    /// bloc bas, qui n'existe plus une fois le média mis à nu : l'y laisser
+    /// poserait une rangée de contrôles sur l'image qu'on vient précisément de
+    /// dégager. Sans cette remise à zéro, ressortir du plein cadre ferait
+    /// resurgir une traînée que personne n'a redemandée.
+    ///
+    /// **Ancre repointée au #6161.** Elle cherchait `toggleControls`, la bascule
+    /// booléenne que #6142 a remplacée par `onEnterStage` — la seule écriture de
+    /// l'état d'immersion. Le témoin rendait donc « `toggleControls`
+    /// introuvable » depuis ce lot-là : il ne mesurait plus rien, sur un contrat
+    /// qui, lui, était toujours tenu. Un renommage n'éteint pas les gardes qui
+    /// reconnaissent par le nom — il les INVERSE.
     func test_masquerLesControles_refermeLaTrainee() throws {
         let code = try gallerieSource()
-        guard let bascule = corps("private func toggleControls() {", dans: code) else {
-            return XCTFail("`toggleControls` introuvable")
+        guard let bascule = corps("func onEnterStage(", dans: code) else {
+            return XCTFail("`onEnterStage` introuvable — la seule écriture de l'état d'immersion")
         }
         XCTAssertTrue(
-            compact(bascule).contains("reactionBarOpen=false"),
-            "Masquer le chrome doit refermer la traînée."
+            compact(bascule).contains("next.isFull,reactionBarOpen{reactionBarOpen=false}"),
+            "Entrer en plein cadre doit refermer la traînée."
         )
     }
 
@@ -375,7 +389,7 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
     /// pas — sinon on aurait rendu le visualiseur inerte pour ajouter un geste.
     func test_laCoucheFermee_neVolePasLeDoigt() throws {
         let code = try gallerieSource()
-        guard let couche = corps("private var reactionLayer: some View {", dans: code) else {
+        guard let couche = corps("var reactionLayer: some View {", dans: code) else {
             return XCTFail("`reactionLayer` introuvable")
         }
         XCTAssertTrue(
@@ -487,8 +501,18 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
         try strippedSource(at: "Meeshy/Features/Main/Views/AttachmentReactionOffer.swift")
     }
 
+    /// **L'UNITÉ, jamais le seul fichier racine** (#6161).
+    ///
+    /// La traînée d'émojis a déménagé dans `ConversationMediaGalleryView+Actions.swift`
+    /// quand les actions sont passées en colonne. Lue sur le fichier racine, la
+    /// moitié des gardes de cette suite serait passée « site introuvable » — le
+    /// mode de panne exact que `AppSourceGuard.unit` existe pour éviter : « un
+    /// type découpé garde UNE adresse ; sans cela, chaque découpage éteint en
+    /// SILENCE toutes les gardes négatives du type ».
     private func gallerieSource() throws -> String {
-        try strippedSource(at: "Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift")
+        Self.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift")
+        )
     }
 
     private func hoteSource() throws -> String {

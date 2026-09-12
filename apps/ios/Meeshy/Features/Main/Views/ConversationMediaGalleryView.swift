@@ -69,7 +69,11 @@ struct ConversationMediaGalleryView: View {
     /// et non la pièce elle-même : la rangée ne s'affiche QUE pour la page
     /// courante, donc la cible se relit au moment du choix — deux états
     /// parallèles auraient permis à l'un de viser une page que l'autre a quittée.
-    @State private var showFullEmojiPicker = false
+    ///
+    /// `internal` — la traînée d'émojis et sa feuille vivent dans
+    /// `+Actions.swift` depuis le #6161, et `private` est une portée de FICHIER.
+    /// Même prix que celui payé par `currentPageID` plus bas.
+    @State var showFullEmojiPicker = false
     /// **La rangée d'émojis est OUVERTE** (révision porteur 2026-09-11 : « les
     /// réactions […] doivent s'activer comme pour répondre ou composer, il faut
     /// mettre un bouton réagir (emoji +) qui affiche la traille des emojis »).
@@ -548,144 +552,11 @@ struct ConversationMediaGalleryView: View {
         .ignoresSafeArea()
     }
 
-    // MARK: - Couche haute : la traînée d'émojis
-
-    /// **Rien ne passe devant elle, rien ne la rogne** (précision porteur
-    /// 2026-09-11).
-    ///
-    /// Montée en DERNIER dans le `ZStack` racine — voir `body`. Aucun ancêtre de
-    /// cette chaîne ne porte `.clipped()`, `.mask()` ni `.cornerRadius()` :
-    /// vérifié ligne à ligne, la contrainte qu'elle subissait n'était pas un
-    /// rognage mais un PARTAGE DE HAUTEUR (le `VStack` de `controlsOverlay`
-    /// distribuait la même colonne entre elle et le bloc bas).
-    ///
-    /// **Le `Spacer` ne teste aucune touche** : quand la traînée est fermée,
-    /// `attachmentReactionBar` ne rend rien et cette couche laisse passer
-    /// INTÉGRALEMENT le doigt vers le pager. `allowsHitTesting(reactionBarOpen)`
-    /// est la ceinture par-dessus la bretelle — il lit l'état d'interaction, pas
-    /// la loi, donc il ne peut pas contredire la garde de protection qui, elle,
-    /// reste dans `attachmentReactionBar`.
-    ///
-    /// La couche RESPECTE la zone sûre (seuls le fond noir et le pager
-    /// l'ignorent), donc la traînée ne se glisse jamais sous l'indicateur
-    /// d'accueil ni sous une encoche.
-    @ViewBuilder
-    private var reactionLayer: some View {
-        if currentIndex < allAttachments.count {
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                attachmentReactionBar(allAttachments[currentIndex])
-                    .padding(.bottom, reactionBarBottomInset)
-            }
-            .allowsHitTesting(reactionBarOpen)
-        }
-    }
-
-    /// Marge basse de la traînée : elle flotte AU-DESSUS de la pellicule, donc
-    /// par-dessus le bloc auteur / actions / dimensions — c'est le recouvrement
-    /// que la précision porteur demande de montrer. La pellicule, elle, reste
-    /// libre : c'est le seul contrôle du bas qui sert à NAVIGUER, et le couvrir
-    /// enfermerait le lecteur sur la pièce courante.
-    private var reactionBarBottomInset: CGFloat {
-        allAttachments.count > 1 ? ConversationMediaFilmstrip.reservedHeight + 8 : 8
-    }
-
-    // MARK: - Réaction sur la pièce
-
-    /// **La rangée de réactions rapides du plein écran** (#6084, directive
-    /// porteur 2026-09-11 : « lorsqu'on affiche une image pièce jointe en plein
-    /// écran, il faut pouvoir ajouter une réaction à l'attachement directement » ;
-    /// révision du même jour : « il faut mettre un bouton réagir (emoji +) qui
-    /// affiche la traille des emojis de réaction »).
-    ///
-    /// **Elle n'existe qu'OUVERTE.** Le bouton « Réagir » de `mediaActionBar` la
-    /// révèle ; un second appui, un choix d'émoji ou un changement de page la
-    /// retire. Au repos rien ne se pose sur l'image — c'est ce que la révision
-    /// porteur demande, et c'est aussi ce qui rend le visualiseur cohérent avec
-    /// ses voisins Répondre et Composer, qui sont des actions et non des
-    /// ornements.
-    ///
-    /// Gabarit de la story (#6083) : **échelle 2, aucun habillage**. Le média
-    /// remplit l'écran et EST le fond — une capsule y ajouterait un cadre là où
-    /// la story vient justement d'en retirer un. `scrollable` est le COROLLAIRE
-    /// de l'échelle et non une option : à 2, six émojis plus le « + » demandent
-    /// ~450 pt, et un `ScrollView` ne défile que dans une largeur bornée — ici
-    /// celle de la pile de contrôles, qui occupe l'écran.
-    ///
-    /// **Elle vit dans la couche des CONTRÔLES**, ancrée juste au-dessus du bloc
-    /// bas (auteur, légende, pellicule) : elle s'efface donc avec eux au tap sur
-    /// le média, comme tout le reste du chrome. Posée à la racine, elle serait
-    /// restée sur une image qu'on regarde sans rien d'autre.
-    ///
-    /// **Aucun geste de cession n'est nécessaire ici**, contrairement à la story
-    /// (`StoryReactionStripGesture`). Le pager de la galerie est un
-    /// `UIScrollView` SŒUR dans le `ZStack` racine, pas un ancêtre montant un
-    /// `.simultaneousGesture` : une touche qui atterrit sur la rangée ne lui
-    /// parvient jamais, et les deux `UIScrollView` imbriqués s'arbitrent seuls.
-    /// Y recopier la loi de la story aurait gardé un conflit qui n'existe pas.
-    @ViewBuilder
-    private func attachmentReactionBar(_ att: MessageAttachment) -> some View {
-        if AttachmentReactionOffer.showsPicker(surface: .fullscreen,
-                                               attachment: att,
-                                               hasHandler: onReactToMedia != nil,
-                                               isOpen: reactionBarOpen) {
-            EmojiReactionPicker(
-                quickEmojis: MeeshyQuickReactions.standard,
-                style: .dark,
-                // ÉCHELLE 1,5 — le gabarit de la story, dont celui-ci DÉRIVE
-                // (#6083 pour la forme, #6084 pour ce site). Le 2 posé
-                // l'après-midi du 2026-09-11 a été ramené à 1,5 le soir même :
-                // « ×0,75, elles sont trop grosses » (directive porteur, sur
-                // capture, les deux barres nommées dans la même phrase).
-                //
-                // Les deux barres bougent ENSEMBLE, et c'est le point : ce
-                // site n'a pas d'échelle à lui, il rend le gabarit arrêté pour
-                // la story. Deux valeurs différentes ici et dans
-                // `StoryViewerView+Sidebar.swift` ne seraient pas deux
-                // décisions, ce serait un oubli.
-                scale: 1.5,
-                scrollable: true,
-                chrome: .none,
-                onReact: { emoji in
-                    onReactToMedia?(att, emoji)
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        reactionBarOpen = false
-                    }
-                },
-                onExpandFullPicker: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        reactionBarOpen = false
-                    }
-                    showFullEmojiPicker = true
-                }
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.bottom, 4)
-            .transition(.asymmetric(
-                insertion: .scale(scale: 0.85, anchor: .bottomLeading).combined(with: .opacity),
-                removal: .opacity
-            ))
-        }
-    }
-
-    /// **Le sélecteur complet vit sur la RACINE, jamais sur la rangée.**
-    ///
-    /// Le « + » referme la rangée et ouvre cette feuille dans la même
-    /// transaction : montée sur la rangée, elle serait présentée par une vue en
-    /// train d'être retirée — et SwiftUI ne présente rien. La cible se relit à la
-    /// page COURANTE au moment du choix, ce qui est la seule lecture juste : la
-    /// feuille survit au feuilletage, l'ancienne pièce non.
-    @ViewBuilder
-    private var fullEmojiPickerSheet: some View {
-        EmojiPickerSheet(quickReactions: MeeshyQuickReactions.standard) { emoji in
-            if currentIndex < allAttachments.count {
-                onReactToMedia?(allAttachments[currentIndex], emoji)
-            }
-            showFullEmojiPicker = false
-        }
-    }
-
-    /// Bas du CADRE : auteur du média, sa date, ses actions, puis la légende.
+    /// Bas du CADRE : auteur du média, sa date, sa ligne format / dimensions /
+    /// poids, puis la légende. **Plus ses actions** (#6161) : réagir · répondre ·
+    /// composer sont montées au-dessus de ce bloc, en colonne verticale à droite
+    /// (`cadreActionColumn`). Ce qui reste ici est exactement ce que le porteur a
+    /// demandé de garder sous le voile.
     ///
     /// **La pellicule n'est plus là** (#6141) : elle a rejoint le couloir bas du
     /// plateau (`railCorridor`, `+Geometry.swift`), où plus aucune légende
@@ -758,14 +629,49 @@ struct ConversationMediaGalleryView: View {
         }
     }
 
-    /// **La barre d'actions du média, à DROITE des informations de l'auteur**
-    /// (#4014) — la place que les deux issues du plein écran lui donnent.
+    /// **Les actions quittent le bas du cadre pour une COLONNE VERTICALE à
+    /// droite** (#6161, directive porteur 2026-09-12 : « il faut placer les
+    /// contrôleurs du bas sur le côté en vertical sur la zone sombre du
+    /// plateau »).
     ///
-    /// Verticale par destination : chaque action y entre par sa propre closure
-    /// optionnelle, si bien qu'un hôte n'en câble que ce qu'il sait servir.
-    /// Aucune action câblée ⇒ la barre ne rend RIEN, pas même son espace.
+    /// Elles étaient en ligne, à droite de l'auteur, sous le voile (#4014) ;
+    /// elles prennent le gabarit de la barre latérale du lecteur de story
+    /// (`StoryViewerView+Sidebar.swift`).
+    ///
+    /// ## Elle se POSE sur le cadre — elle ne lui prend pas de largeur
+    ///
+    /// La lecture opposée avait été retenue une heure plus tôt : un vrai couloir
+    /// latéral, réservé AVANT le cadre comme les couloirs haut et bas. Elle
+    /// coûtait **356 × 633 → 322 × 572** sur une scène 9:16, soit un cinquième
+    /// de la surface. Second arbitrage porteur du même jour — *« on va essayer
+    /// de garder l'aspect des story mais ce ne sont pas des story »* — et c'est
+    /// celui-ci qui vit : `MediaStageFraming` ne gagne AUCUN champ ici.
+    ///
+    /// **#4561 / #4633 ne l'interdisent pas**, et il faut le dire ici parce
+    /// qu'un lot futur les citera pour « corriger » ce choix : ces deux issues
+    /// gouvernent le COMPOSER, où un contrôle posé sur la scène entre en
+    /// concurrence avec le geste d'ÉDITION. En lecture il n'y a aucune édition à
+    /// protéger, et le lecteur de story a toujours posé sa colonne sur son
+    /// canvas.
+    ///
+    /// Le retrait bas n'existe pas : `bottomMetadataOverlay` porte déjà ses
+    /// 12 pt de `padding(.top)`, qui valent la gouttière. Une colonne vide ne
+    /// prend donc RIEN — ni largeur, ni hauteur (loi 4).
+    var cadreActionColumn: some View {
+        VStack(spacing: MediaStageActionColumn.spacing) {
+            if currentIndex < allAttachments.count {
+                mediaActions(allAttachments[currentIndex])
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.trailing, MediaGalleryStage.gutter)
+    }
+
+    /// Les trois actions, chacune derrière sa propre closure optionnelle : un
+    /// hôte n'en câble que ce qu'il sait servir, et ce qu'il ne câble pas
+    /// n'existe pas (loi 4).
     @ViewBuilder
-    private func mediaActionBar(_ att: MessageAttachment) -> some View {
+    private func mediaActions(_ att: MessageAttachment) -> some View {
         // **« Réagir » est une ACTION, pas un ornement** (#6084, révision porteur
         // 2026-09-11 : « les réactions sur les attachements en plein écran
         // doivent s'activer comme pour répondre ou composer, il faut mettre un
@@ -801,8 +707,10 @@ struct ConversationMediaGalleryView: View {
                             .foregroundColor(reactionBarOpen ? MeeshyColors.indigo400 : .white)
                             .offset(x: 6, y: -5)
                     }
-                    .frame(width: 40, height: 40)
+                    .frame(width: MediaStageActionColumn.glass,
+                           height: MediaStageActionColumn.glass)
                     .adaptiveGlass(in: Circle(), interactive: true)
+                    .mediaStageActionTarget()
             }
             .accessibilityLabel(String(localized: "media.react.title",
                                        defaultValue: "Réagir", bundle: .main))
@@ -825,8 +733,10 @@ struct ConversationMediaGalleryView: View {
                 Image(systemName: "arrowshape.turn.up.left.fill")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
-                    .frame(width: 40, height: 40)
+                    .frame(width: MediaStageActionColumn.glass,
+                           height: MediaStageActionColumn.glass)
                     .adaptiveGlass(in: Circle(), interactive: true)
+                    .mediaStageActionTarget()
             }
             .accessibilityLabel(String(localized: "media.reply.title",
                                        defaultValue: "Répondre", bundle: .main))
@@ -844,8 +754,10 @@ struct ConversationMediaGalleryView: View {
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.white)
-                    .frame(width: 40, height: 40)
+                    .frame(width: MediaStageActionColumn.glass,
+                           height: MediaStageActionColumn.glass)
                     .adaptiveGlass(in: Circle(), interactive: true)
+                    .mediaStageActionTarget()
             }
             .accessibilityLabel(String(localized: "media.compose.title",
                                        defaultValue: "Créer avec ce média", bundle: .main))
@@ -876,8 +788,12 @@ struct ConversationMediaGalleryView: View {
                             .font(MeeshyFont.relative(12, weight: .medium))
                             .foregroundColor(.white.opacity(0.6))
                     }
+                    // **Les actions ont quitté cette rangée** (#6161) : elles
+                    // sont une colonne verticale posée à droite du cadre
+                    // (`cadreActionColumn`). Ce qui reste ici est ce que le
+                    // porteur a explicitement gardé sous le voile — l'auteur, sa
+                    // date, la légende, la ligne format / dimensions / poids.
                     Spacer()
-                    mediaActionBar(att)
                 }
                 .accessibilityElement(children: .contain)
             }

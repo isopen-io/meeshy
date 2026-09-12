@@ -280,9 +280,18 @@ extension ConversationMediaGalleryView {
     /// Un `Spacer` et non un `Color.clear` pour pousser l'overlay en bas : une
     /// couleur, même transparente, teste les touches et volerait au pager tous
     /// les gestes du cadre.
+    ///
+    /// **La colonne d'actions est le second occupant du cadre** (#6161). Elle
+    /// est déclarée ICI, donc à l'INTÉRIEUR du `.frame` et du `.clipShape` qui
+    /// suivent : elle est dimensionnée par `currentStage.frame` comme tout le
+    /// reste du cadre, et les coins arrondis la rognent comme ils rognent la
+    /// légende. Ancrée au-dessus du bloc d'informations, elle MONTE avec lui
+    /// quand la légende se déplie — la pile ancrée en bas fait le travail, il
+    /// n'y a aucune cote à tenir d'accord.
     var cadreRegion: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
+            cadreActionColumn
             cadreOverlay
         }
         .frame(width: currentStage.frame.width, height: currentStage.frame.height)
@@ -292,7 +301,10 @@ extension ConversationMediaGalleryView {
 
     /// **Ce qui se pose sur le cadre part avec lui** (spec § 2.2) : le transport
     /// vidéo, la légende, l'auteur et sa date, la ligne format / dimensions /
-    /// poids, les actions réagir · répondre · composer.
+    /// poids. Les actions réagir · répondre · composer restent sur le cadre
+    /// elles aussi, mais dans leur propre couche — `cadreActionColumn`, montée
+    /// au-dessus de ce bloc (#6161) : elles sont une COLONNE, et les mettre dans
+    /// ce `VStack` les remettrait en ligne.
     ///
     /// Le voile est ici et non sur le bloc bas : il doit détacher le transport
     /// autant que la légende, et un dégradé par étage ferait deux lisières.
