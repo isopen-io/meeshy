@@ -1,0 +1,137 @@
+/**
+ * LES MENUS FLOTTANTS (#6104) — la feuille voyage avec le chunk du composant,
+ * jamais dans `app.css`.
+ *
+ * `app.css` est chargée AVANT LE PREMIER PIXEL et son budget est à 37,19 Ko
+ * pour un plafond de 40. Ces règles ne servent qu'à deux boutons qui ne
+ * paraissent que sur neuf écrans : les poser dans le socle ferait payer leurs
+ * octets à toute ouverture de l'application, y compris à l'écran de connexion.
+ * C'est le même arbitrage que `thread-menu.css`, importée par la route du fil.
+ */
+
+.floating-menus {
+  /** La marge latérale — `minEdgePadding` d'iOS (`FloatingButtons.swift:109`). */
+  --float-side: 20px;
+
+  /**
+   * LE COULOIR HAUT — 126, et le nombre est MESURÉ avant d'être justifié.
+   *
+   * La première écriture ne dégageait que l'EN-TÊTE, comme la pastille de
+   * synchronisation le fait (`app.css` § `.sync-pill`, 64 plus 8 d'air).
+   * Mesuré au navigateur à 390 × 844 : à 72, le centre de la première tuile
+   * du rail des stories renvoie le BOUTON DU FLUX et non la tuile — « Camille
+   * Roy, non vue » était INATTEIGNABLE, et rien dans le DOM ne le disait.
+   * C'est l'épreuve que `check-reading-mode.mjs` applique déjà à l'en-tête du
+   * fil.
+   *
+   * La cause : la liste porte PLUS de chrome haut que l'écran d'iOS — sous
+   * son en-tête viennent encore le rail des stories puis la rangée de
+   * filtres, tous deux faits de contrôles.
+   *
+   * Balayage des cotes candidates, au centre de chaque contrôle de la liste :
+   *
+   * | cote | ce qui est volé |
+   * |---|---|
+   * | 72 · 110 | la première tuile du rail, puis « Créer une story » |
+   * | **118 → 140** | **rien** |
+   * | 146 · 152 | « Tous », puis « Épinglés » |
+   * | 200 → 240 | rien |
+   * | 245 et au-delà | les « Actions de conversation » d'une rangée |
+   *
+   * 126 est pris au MILIEU de la première bande sûre. C'est aussi, sans que
+   * ce soit la raison, `FloatingButtonSafeZone.top` d'iOS
+   * (`FloatingButtons.swift:53-59` — 62 d'encoche maximale plus 64
+   * d'en-tête) : la coïncidence ne prouve rien, elle rend seulement ce
+   * nombre moins arbitraire que ses voisins.
+   *
+   * **Ce que cette mesure NE dit pas.** Elle est prise liste en HAUT. Une
+   * liste DÉFILÉE amène tôt ou tard le « ⋯ » d'une rangée sous un bouton, et
+   * aucune cote fixe ne l'évite — les rangées se répètent tous les 168 px et
+   * portent leur menu au bord droit. C'est pour cela que le déplacement
+   * (#6215) n'est pas un agrément : c'est la réponse d'iOS au même problème.
+   */
+  --float-top: calc(env(safe-area-inset-top, 0px) + 126px);
+
+  /**
+   * LE COULOIR BAS — `bottomSafeZoneWithSearch` d'iOS (110). La liste porte
+   * une barre de recherche en bas d'écran ; un bouton posé dessus volerait
+   * ses touches. Il ne sert qu'aux positions déplacées (#6215) : au repos les
+   * deux boutons sont en haut.
+   */
+  --float-bottom: 110px;
+}
+
+/**
+ * LE DISQUE — `.ultraThinMaterial` + l'anneau dégradé d'iOS
+ * (`FloatingButtons.swift:316-331`), traduits au verre du web.
+ *
+ * Le fond OPAQUE vient en premier et le `backdrop-filter` par-dessus :
+ * `backdrop-filter` n'est pas garanti, et un disque transparent sans flou
+ * laisserait lire le contenu à travers le glyphe. Même précaution que
+ * `glass-surface.tsx:10-14`.
+ */
+.floating-disc {
+  background-color: color-mix(in srgb, var(--color-ios-card) 88%, transparent);
+  box-shadow:
+    0 5px 10px color-mix(in srgb, #000 35%, transparent),
+    inset 0 0 0 1.5px color-mix(in srgb, #fff 22%, transparent);
+  backdrop-filter: blur(12px);
+  transition: transform 160ms ease;
+}
+
+.floating-disc:active {
+  transform: scale(0.94);
+}
+
+/**
+ * LA CASCADE DES BARREAUX — `menuAnimation` d'iOS (`RootView.swift:1756-1767`) :
+ * chaque barreau naît à 30 % de sa taille, tourné de −30°, avec 0,04 s de
+ * retard par rang.
+ *
+ * Une ANIMATION plutôt qu'une transition : les barreaux sont montés au moment
+ * où le menu s'ouvre (voir le doc-comment du composant — les laisser montés
+ * invisibles les aurait gardés dans le parcours de tabulation), et une
+ * transition n'a rien à interpoler depuis un élément qui vient de naître.
+ */
+@keyframes floating-rung-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3) rotate(-30deg);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  }
+}
+
+/**
+ * Le centrage vit dans le style de REPOS, pas seulement dans la keyframe.
+ *
+ * Défaut mesuré à la première écriture : `translate(-50%, -50%)` n'était écrit
+ * que dans l'animation. `animation-fill-mode: backwards` tient l'état de
+ * DÉPART avant le début ; il ne tient rien après la FIN — le barreau retombait
+ * donc sur un style sans transformation et SAUTAIT de 23 px au terme de sa
+ * propre animation. Relevé : premier barreau à `y = 213` là où la loi dit 190.
+ *
+ * Une animation ne doit jamais être le seul domicile d'une valeur de mise en
+ * page : elle a un début et une fin, la mise en page n'en a pas.
+ */
+.floating-rung {
+  transform: translate(-50%, -50%);
+  animation: floating-rung-in 320ms cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards;
+  animation-delay: calc(var(--rung) * 40ms);
+}
+
+/**
+ * L'animation EXPLIQUE d'où sort l'échelle ; elle n'est pas l'information.
+ * Coupée, les six barreaux sont là, à leur place, immédiatement.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .floating-rung {
+    animation: none;
+  }
+
+  .floating-disc {
+    transition: none;
+  }
+}

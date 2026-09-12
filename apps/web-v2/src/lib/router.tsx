@@ -276,6 +276,7 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
     replace = false,
     children,
     onClick: onClickProp,
+    anchorRef,
     ...rest
   }: {
     to: C;
@@ -293,6 +294,22 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
      * surfaces a venir ; deux lignes ici l'evitent partout.
      */
     replace?: boolean;
+    /**
+     * L'ANCRE ELLE-MEME, pour qui doit lui DONNER LE FOCUS (#6104).
+     *
+     * `ref` ne peut pas servir ici : ce composant est generique, et `ref` est
+     * extrait des props par le runtime — par React 19 comme par
+     * `preact/compat`, mais pas de la meme facon. Une porte NOMMEE se comporte
+     * identiquement dans les deux variantes que ce POC compare, ce qui est
+     * exactement sa raison d'etre.
+     *
+     * Elle existe parce qu'un menu ARIA doit pouvoir poser le focus sur ses
+     * lignes (fleches, Home/End, entree dans le menu a l'ouverture — voir
+     * `lib/view/roving-menu.ts`) et qu'une ligne qui NAVIGUE doit rester un
+     * lien. Sans elle, un menu de liens n'aurait eu le choix qu'entre perdre
+     * le clavier et perdre le `href`.
+     */
+    anchorRef?: (element: HTMLAnchorElement | null) => void;
     children: ReactNode;
   } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'children'>) {
     const url = href(to, params, search);
@@ -317,6 +334,7 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
     return (
       <a
         {...rest}
+        ref={anchorRef}
         href={url}
         onPointerEnter={armPrefetch}
         onPointerLeave={disarm}

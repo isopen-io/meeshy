@@ -1,5 +1,5 @@
-import { Glyph, GlyphSvg } from './glyph';
-import { FLOATING_GLYPHS } from './glyphs-floating';
+import { Glyph } from './glyph';
+import { MenuGlyph } from './menu-glyph';
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from './chrome-action';
 import type { FloatingDestination } from '@/lib/view/floating-menu';
 import { Link } from '@/routes/route-table';
@@ -62,11 +62,7 @@ export function PendingScreen({ destination }: { readonly destination: FloatingD
             backgroundColor: `color-mix(in srgb, ${tint} 14%, transparent)`,
           }}
         >
-          {glyph.set === 'socle' ? (
-            <Glyph name={glyph.name} size={30} />
-          ) : (
-            <GlyphSvg glyph={FLOATING_GLYPHS[glyph.name]} size={30} />
-          )}
+          <MenuGlyph glyph={glyph} size={30} />
         </span>
         <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink-1)' }}>
           {promise}
