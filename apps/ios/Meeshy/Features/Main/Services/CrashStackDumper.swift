@@ -178,15 +178,25 @@ enum CrashStackDumper {
            CAPTURÉ PAR VALEUR par chaque closure de son `body` ; si son état
            inline pèse des dizaines de kilo-octets, chaque capture les recopie.
            Trois nombres valent mieux que trois hypothèses. */
-        NSLog("[sizes] ConversationView=%d composerState=%d headerState=%d overlayState=%d scrollState=%d frameTracker=%d Conversation=%d composerText=%d",
+        /* LE RELEVÉ DES TAILLES DE VUES (#6221, suite) — une vue SwiftUI est un
+           type VALEUR que chaque closure de son `body` COPIE. Sa taille est
+           donc un coût de PILE payé à chaque rendu, invisible à tout profil
+           d'allocation. Ce relevé est l'instrument qui a trouvé les 15 Ko de
+           `ConversationView` ; il reste en place, en DEBUG, pour que la
+           prochaine vue qui grossit se voie avant de déborder. */
+        NSLog("[sizes] ConversationView=%d RootView=%d iPadRootView=%d ConversationListView=%d StoryViewerView=%d",
               MemoryLayout<ConversationView>.size,
-              MemoryLayout<ConversationComposerState>.size,
-              MemoryLayout<ConversationHeaderState>.size,
+              MemoryLayout<RootView>.size,
+              MemoryLayout<iPadRootView>.size,
+              MemoryLayout<ConversationListView>.size,
+              MemoryLayout<StoryViewerView>.size)
+        NSLog("[sizes-etats] overlay=%d composer=%d scroll=%d header=%d Message=%d Conversation=%d",
               MemoryLayout<ConversationOverlayState>.size,
+              MemoryLayout<ConversationComposerState>.size,
               MemoryLayout<ConversationScrollState>.size,
-              MemoryLayout<MessageFrameBox>.size,
-              MemoryLayout<Conversation>.size,
-              MemoryLayout<ConversationComposerTextModel>.size)
+              MemoryLayout<ConversationHeaderState>.size,
+              MemoryLayout<Message>.size,
+              MemoryLayout<Conversation>.size)
     }
 }
 #endif

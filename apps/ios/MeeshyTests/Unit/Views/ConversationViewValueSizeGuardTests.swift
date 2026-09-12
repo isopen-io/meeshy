@@ -86,6 +86,47 @@ final class ConversationViewValueSizeGuardTests: XCTestCase {
         )
     }
 
+    /// **LE BUDGET S'APPLIQUE À TOUTES LES VUES RACINES**, pas à la seule qui
+    /// a débordé (#6221, suite).
+    ///
+    /// Le relevé sur appareil a montré que `ConversationView` n'était pas la
+    /// plus lourde une fois corrigée — la Lentille l'était, à 10 256 octets,
+    /// avec sept `Conversation?` en ligne pour une feuille à la fois. Garder
+    /// la seule vue qui a planté aurait laissé passer la suivante :
+    ///
+    ///     ConversationListView  10 256 → 3 320   (sept `Conversation?`)
+    ///     ConversationView      15 088 → 5 064   (celle qui débordait)
+    ///     StoryViewerView        7 808           ← non traitée, sous budget
+    ///     iPadRootView           7 153           ← non traitée, sous budget
+    ///     RootView               4 009
+    ///
+    /// Les deux dernières lignes sont volontairement AU-DESSOUS du plafond
+    /// sans avoir été corrigées : ce témoin dit un budget, pas une cible. Il
+    /// rougira si elles grossissent, ce qui est exactement ce qu'on veut
+    /// savoir — et pas avant.
+    func test_everyRootView_staysWithinItsValueBudget() {
+        let mesures: [(String, Int)] = [
+            ("ConversationView", MemoryLayout<ConversationView>.size),
+            ("ConversationListView", MemoryLayout<ConversationListView>.size),
+            ("RootView", MemoryLayout<RootView>.size),
+            ("iPadRootView", MemoryLayout<iPadRootView>.size),
+            ("StoryViewerView", MemoryLayout<StoryViewerView>.size),
+        ]
+        let trop = mesures.filter { $0.1 > Self.viewBudget }
+        XCTAssertTrue(
+            trop.isEmpty,
+            """
+            Vues hors budget (\(Self.viewBudget) octets) : \(trop.map { "\($0.0)=\($0.1)" }.joined(separator: ", ")).
+            Une vue SwiftUI est un type VALEUR que chaque closure de son `body` \
+            COPIE. Un champ lourd (`Message` 1 384 o, `Conversation` 992 o) posé \
+            en `@State` se paie sur la PILE à chaque rendu — c'est ainsi que \
+            l'ouverture d'une conversation débordait les 1008 Ko du thread \
+            principal. Regroupez ces champs dans un sac d'état et marquez-les \
+            `@Indirect` (motif : `ConversationListSheetTargets`).
+            """
+        )
+    }
+
     /// LA PRÉMISSE de tout ce qui précède : `Message` est un type valeur lourd.
     /// Si un jour il devient léger, ce lot perd sa raison d'être — et cette
     /// ligne le dira, au lieu de laisser trois budgets arbitraires sans motif.
