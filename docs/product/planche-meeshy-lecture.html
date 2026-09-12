@@ -417,11 +417,55 @@
     gap: 9px;
   }
 
-  .caption {
+  /*
+   * La légende se REPLIE à deux lignes et se déplie PAR-DESSUS le contenu.
+   * Le voile s'épaissit pendant qu'elle est ouverte — c'est le même geste que
+   * le dégradé du bas, poussé jusqu'à rendre le texte lisible sur n'importe
+   * quelle image.
+   */
+  .caption { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+
+  .caption-text {
     font-size: 13.5px;
-    line-height: 1.35;
+    line-height: 1.38;
     color: rgba(255,255,255,0.94);
     margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .frame-overlay[data-caption="open"] .caption-text {
+    display: block;
+    -webkit-line-clamp: unset;
+    max-height: 46vh;
+    overflow-y: auto;
+  }
+
+  .caption-more {
+    border: none;
+    padding: 1px 0 0;
+    background: transparent;
+    color: rgba(255,255,255,0.82);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .frame-overlay[data-caption="open"] {
+    background: linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.82) 52%, rgba(0,0,0,0.55) 100%);
+    padding-top: 64px;
+  }
+
+  /* La taille et le format, sous la date : ce que le fichier EST. */
+  .specs {
+    font-size: 10.5px;
+    color: rgba(255,255,255,0.5);
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
   }
 
   .author-row {
@@ -504,7 +548,7 @@
   /* ---------- couloir bas : le rail ---------- */
 
   .corridor-bottom {
-    height: 84px;
+    height: 80px;
     padding: 10px 12px 0;
     display: flex;
     align-items: center;
@@ -746,12 +790,18 @@
         Ce que le plateau porte ne se pose <b>jamais</b> sur le cadre. Ce qui appartient au média
         — sa légende, son auteur, les actions qui le visent — se pose <b>sur lui</b>, et part avec lui.
       </p>
+      <p>
+        Une légende longue se replie à <b>deux lignes</b> et offre « plus », qui la déplie
+        par-dessus l'image en épaississant le voile. Une légende courte n'offre rien : un contrôle
+        n'existe que s'il a un effet. Et <b>sous la date</b>, le fichier dit ce qu'il est — format,
+        dimensions, poids, durée.
+      </p>
     </div>
     <div class="stack-diagram">
       <div class="zone corridor"><span>safe area</span><span>59 pt</span></div>
       <div class="zone corridor"><span>couloir haut — ✕ · ⋯</span><span>56 pt</span></div>
       <div class="zone cadre"><span>LE CADRE — média + son overlay</span><span>ce qui reste</span></div>
-      <div class="zone corridor"><span>couloir bas — rail des médias</span><span>84 pt</span></div>
+      <div class="zone corridor"><span>couloir bas — rail des médias</span><span>80 pt</span></div>
       <div class="zone corridor"><span>safe area</span><span>34 pt</span></div>
     </div>
   </section>
@@ -877,7 +927,7 @@
   };
 
   /* Les cotes de la loi de cadrage — une seule table, comme dans le code. */
-  var SAFE_TOP = 59, TOP = 56, RAIL = 84, SAFE_BOTTOM = 34, GUTTER = 12;
+  var SAFE_TOP = 59, TOP = 56, RAIL = 80, SAFE_BOTTOM = 34, GUTTER = 12;
   var W = 390, H = 844;
   var availH = H - SAFE_TOP - TOP - RAIL - SAFE_BOTTOM - GUTTER;   /* 599 */
   var availW = W - GUTTER * 2;                                      /* 366 */
@@ -931,12 +981,27 @@
           '<span>0:06</span><span class="bar"><i></i></span><span>0:14</span>' +
         '</div>'
       : '';
-    return '<div class="frame-overlay">' +
+
+    /* Une légende longue se REPLIE et offre « plus » ; une courte n'offre rien
+       — un contrôle n'existe que s'il a un effet (loi 4). */
+    /* Le « plus » vit HORS du texte replié : à l'intérieur, le clamp l'avale
+       avec la troisième ligne — un contrôle invisible n'est pas un contrôle. */
+    var longue = cfg.caption.length > 74;
+    var caption = '<div class="caption" data-long="' + longue + '">' +
+      '<p class="caption-text">' + cfg.caption + '</p>' +
+      (longue ? '<button class="caption-more" type="button">plus</button>' : '') +
+    '</div>';
+
+    return '<div class="frame-overlay" data-caption="closed">' +
       transport +
-      '<p class="caption">' + cfg.caption + '</p>' +
+      caption +
       '<div class="author-row">' +
         '<div class="avatar">' + cfg.initials + '</div>' +
-        '<div class="author-id"><div class="name">' + cfg.author + '</div><div class="when">' + cfg.when + '</div></div>' +
+        '<div class="author-id">' +
+          '<div class="name">' + cfg.author + '</div>' +
+          '<div class="when">' + cfg.when + '</div>' +
+          '<div class="specs">' + cfg.specs + '</div>' +
+        '</div>' +
         '<div class="actions">' +
           '<span class="act">' + ICON.react + '</span>' +
           '<span class="act">' + ICON.reply + '</span>' +
@@ -955,7 +1020,7 @@
       '<div class="band" style="top:' + SAFE_TOP + 'px;height:' + TOP + 'px"></div>' +
       '<div class="annot" style="top:' + (SAFE_TOP + 17) + 'px;left:62px">couloir haut · 56 pt</div>' +
       '<div class="band" style="bottom:' + SAFE_BOTTOM + 'px;height:' + RAIL + 'px"></div>' +
-      '<div class="annot" style="bottom:' + (SAFE_BOTTOM + 31) + 'px;right:14px">couloir bas · rail · 84 pt</div>' +
+      '<div class="annot" style="bottom:' + (SAFE_BOTTOM + 31) + 'px;right:14px">couloir bas · rail · 80 pt</div>' +
       '<div class="annot" style="top:' + cadreTop + 'px;left:50%;transform:translateX(-50%);background:rgba(30,20,60,0.88);border-color:rgba(165,180,252,0.6);color:#c7d2fe">cadre ' + box.w + ' × ' + box.h + ' pt · r22</div>' +
     '</div>';
   }
@@ -1056,27 +1121,31 @@
   var PLANCHES = [
     {
       key: 'image', nature: 'image', title: 'Image', ratioLabel: '4:5', ratio: 0.8, skin: 'quai', railActive: 0,
-      note: 'Le cas nominal. Le cadre prend toute la largeur utile, le reste de la hauteur revient aux couloirs. Enregistrée <em>sans marque</em> : c’est un original.',
-      caption: 'Le quai nord, juste avant que la lumière tombe.',
-      author: 'Camille Roux', initials: 'CR', when: 'aujourd’hui à 18:42'
+      note: 'Le cas nominal. Sa légende est longue : elle se replie à deux lignes et offre <em>« plus »</em>, qui la déplie par-dessus l’image.',
+      caption: 'Le quai nord, juste avant que la lumière tombe. On avait attendu deux heures que les grues s’arrêtent, et elles se sont arrêtées toutes ensemble — c’est la seule photo où le bassin est immobile.',
+      author: 'Camille Roux', initials: 'CR', when: 'aujourd’hui à 18:42',
+      specs: 'JPEG · 3024 × 4032 · 2,4 Mo'
     },
     {
       key: 'video', nature: 'video', title: 'Vidéo', ratioLabel: '16:9', ratio: 1.7778, skin: 'grue', railActive: 1,
       note: 'Trop courte pour son overlay, elle est posée dans un cadre de 330 pt sur <em>son propre ThumbHash flouté</em> — le hors-champ est habillé, jamais noir.',
       caption: 'La grue nord, six heures.',
-      author: 'Arto Lehtinen', initials: 'AL', when: 'hier à 06:12', transport: true
+      author: 'Arto Lehtinen', initials: 'AL', when: 'hier à 06:12', transport: true,
+      specs: 'MP4 · 1920 × 1080 · 0:14 · 8,1 Mo'
     },
     {
       key: 'audio', nature: 'audio', title: 'Vocal', ratioLabel: 'sans pixels', ratio: 1, skin: 'nuit', railActive: 2,
       note: 'Transcription et langues sont là <em>dans les deux états</em> — c’est du contenu, pas du chrome. Le plein cadre les agrandit au lieu de les révéler.',
       caption: 'Message vocal · 0:27',
-      author: 'Lina Mercier', initials: 'LM', when: 'il y a 12 minutes'
+      author: 'Lina Mercier', initials: 'LM', when: 'il y a 12 minutes',
+      specs: 'M4A · 0:27 · 412 Ko'
     },
     {
       key: 'scene', nature: 'scene', title: 'Scène', ratioLabel: '9:16', ratio: 0.5625, skin: 'scene', railActive: 4,
       note: 'Le cas limite : à 9:16 le cadre perd de la largeur pour que le rail tienne. Seule nature <em>marquée à l’enregistrement</em> — c’est une œuvre composée.',
       caption: 'Six heures au quai nord',
-      author: 'Camille Roux', initials: 'CR', when: 'il y a 2 heures'
+      author: 'Camille Roux', initials: 'CR', when: 'il y a 2 heures',
+      specs: 'Scène 9:16 · 3 objets · 1,1 Mo'
     }
   ];
 
@@ -1165,6 +1234,7 @@
     phone.dataset.state = 'full';
     phone.dataset.paused = withPause ? 'true' : 'false';
     closeMenu(phone);
+    closeCaption(phone);
   }
 
   function leave(phone) { phone.dataset.state = 'carded'; }
@@ -1174,12 +1244,20 @@
 
   var press = null;
 
+  /* La légende et les actions sont des CONTRÔLES posés sur le cadre : elles ne
+     déclenchent pas la bascule du plateau sous elles. */
   function pressable(target) {
     if (!target.closest) return null;
     var phone = target.closest('.phone');
     if (!phone) return null;
     if (target.closest('.corridor-top') || target.closest('.menu')) return null;
+    if (target.closest('.caption') || target.closest('.actions')) return null;
     return phone;
+  }
+
+  function closeCaption(phone) {
+    var ov = phone.querySelector('.frame-overlay');
+    if (ov) ov.dataset.caption = 'closed';
   }
 
   document.addEventListener('pointerdown', function (e) {
@@ -1220,6 +1298,15 @@
   document.addEventListener('click', function (e) {
     var solo = e.target.closest('[data-solo]');
     if (solo) { openSolo(solo.getAttribute('data-solo')); return; }
+
+    var cap = e.target.closest('.caption[data-long="true"]');
+    if (cap) {
+      var ov = cap.closest('.frame-overlay');
+      ov.dataset.caption = ov.dataset.caption === 'open' ? 'closed' : 'open';
+      var btn = cap.querySelector('.caption-more');
+      if (btn) btn.textContent = ov.dataset.caption === 'open' ? 'moins' : 'plus';
+      return;
+    }
 
     var moreBtn = e.target.closest('.corridor-top .glass-btn:last-child');
     if (moreBtn) {
