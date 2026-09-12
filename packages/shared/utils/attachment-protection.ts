@@ -29,7 +29,12 @@
  * même. Les trois canaux sont donc un OU, jamais une cascade.
  */
 
-import { MESSAGE_EFFECT_FLAGS } from '../types/message-effect-flags';
+// L'extension `.js` est EXIGÉE par `__tests__/esm-relative-imports.test.ts` :
+// sous le runtime ESM de `dist`, un import relatif sans extension ne résout pas.
+// La garde a rougi sur ce fichier neuf alors que ses neuf témoins passaient —
+// un fichier NEUF est soumis aux gardes STRUCTURELLES de son paquet, qu'aucun
+// test de son sujet ne mesure.
+import { MESSAGE_EFFECT_FLAGS } from '../types/message-effect-flags.js';
 
 export interface AttachmentProtectionFlags {
   isViewOnce?: boolean | null;
