@@ -5,6 +5,7 @@ import {
   CONVERSATIONS_QUERY_KEY,
   conversationQuery,
   conversationsQuery,
+  createDirectConversation,
   loadConversation,
   loadConversations,
   patchConversation,
@@ -195,5 +196,39 @@ describe('patchConversation', () => {
     const queryClient = new QueryClient();
     patchConversation(queryClient, 'c-a', (c) => c);
     expect(queryClient.getQueryData(CONVERSATIONS_QUERY_KEY)).toBeUndefined();
+  });
+});
+
+/**
+ * `createDirectConversation` (#5652, bloc D) — `POST /api/v1/conversations`
+ * (§ 3.5 de la spécification). Idempotent côté serveur : ce port ne fait
+ * qu'un appel réseau, la distinction « créé » vs « déjà existant » est
+ * invisible depuis ce client.
+ */
+describe('createDirectConversation', () => {
+  test('en gateway, POST /api/v1/conversations avec type direct + participantIds', async () => {
+    const { impl, calls } = fakeFetch({
+      status: 200,
+      body: { success: true, data: { id: 'c-new', title: null } },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl, credential: () => ({ kind: 'registered', token: 'jwt-1' }) });
+
+    const result = await createDirectConversation({ source: 'gateway', transport }, 'u-amina');
+
+    expect(result.ok).toBe(true);
+    expect(calls[0]?.url).toBe('/api/v1/conversations');
+    expect(calls[0]?.init.method).toBe('POST');
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ type: 'direct', participantIds: ['u-amina'] });
+  });
+
+  test('en fixtures, rend le direct existant avec ce participant', async () => {
+    const target = CONVERSATIONS.find((c) => c.type === 'direct');
+    if (target === undefined) return; // pas de fixture directe dans ce corpus — rien à prouver ici
+    const participant = target.participants[0]?.userId;
+    if (participant === undefined) return;
+    const { impl } = fakeFetch({ status: 200, body: CONVERSATIONS_LIST_BODY });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await createDirectConversation({ source: 'fixtures', transport }, participant);
+    expect(result.ok).toBe(true);
   });
 });

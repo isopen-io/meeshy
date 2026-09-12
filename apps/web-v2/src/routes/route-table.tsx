@@ -10,6 +10,9 @@ import { createRouter } from '@/lib/router';
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },
   thread: { pattern: '/c/$conversation', screen: () => import('@/routes/thread') },
+  /* NOUVELLE CONVERSATION (#5652) — nomenclature legacy reprise (D-5) :
+     `apps/web/app/conversations/new` porte déjà ce chemin. */
+  conversationsNew: { pattern: '/conversations/new', screen: () => import('@/routes/conversation-new') },
   login: { pattern: '/login', screen: () => import('@/routes/login') },
   signup: { pattern: '/signup', screen: () => import('@/routes/signup') },
   /* Le tableau de bord des streaks & badges (#5547) — sous `/me/`, l'espace

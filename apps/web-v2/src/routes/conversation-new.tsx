@@ -3,9 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Glyph } from '@/components/glyph';
 import { Avatar } from '@/components/avatar';
-import { httpTransport } from '@/lib/api/client';
-import { apiConfig } from '@/lib/api/config';
 import { createDirectConversation, CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
+import { apiDeps } from '@/lib/api/query';
 import { searchUsers, type UserSearchResult } from '@/lib/api/users-search';
 import { useOnline } from '@/lib/net/online';
 import { initialsOf } from '@/lib/view/conversation';
@@ -42,8 +41,6 @@ const SEARCH_DEBOUNCE_MS = 250;
  * elle rend 400, donc on ne l'appelle pas du tout. */
 const MIN_QUERY_LENGTH = 2;
 
-const deps = { source: apiConfig.source, transport: httpTransport };
-
 export default function ConversationNewScreen() {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -60,7 +57,7 @@ export default function ConversationNewScreen() {
   const results = useQuery({
     queryKey: ['users', 'search', trimmed],
     queryFn: async () => {
-      const result = await searchUsers(deps, trimmed);
+      const result = await searchUsers(apiDeps, trimmed);
       if (!result.ok) throw new Error(result.error);
       return result.data;
     },
@@ -68,7 +65,7 @@ export default function ConversationNewScreen() {
   });
 
   const create = useMutation({
-    mutationFn: (participantId: string) => createDirectConversation(deps, participantId),
+    mutationFn: (participantId: string) => createDirectConversation(apiDeps, participantId),
     onSuccess: (result) => {
       /* UN ÉCHEC SE VOIT (revue #5652) — `createDirectConversation` rend un
          `ApiResult`, jamais une exception : sans cette branche, un clic sur un
@@ -155,7 +152,22 @@ export default function ConversationNewScreen() {
               Réessayer
             </button>
           </li>
-        ) : results.isPending ? null : results.data?.length === 0 ? (
+        ) : results.isPending ? (
+          /*
+            LE TEMPS DE LA RECHERCHE EST UN ÉTAT (revue #5652) — `null` peignait
+            un écran BLANC, et pas pour 250 ms : la politique de reprise du
+            dépôt (`shouldRetry`, `api/query-client.ts`) retente DEUX fois un
+            échec non-refus, avec un délai qui double — MESURÉ à ~10 s entre la
+            frappe et l'alerte quand la passerelle ne répond pas. Dix secondes
+            de vide ressemblent à « personne ne correspond », c'est-à-dire à la
+            leçon « erreur avalée en VIDE » avant même l'erreur. Un texte, pas
+            un spinner : le cache est vide par construction ici (une recherche
+            neuve), et c'est exactement le cas où le squelette est permis.
+          */
+          <li aria-live="polite" className="px-4 py-6 text-center text-title" style={{ color: 'var(--color-ios-ink-3)' }}>
+            Recherche en cours…
+          </li>
+        ) : results.data?.length === 0 ? (
           <li className="px-4 py-6 text-center text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
             Personne ne correspond à « {trimmed} ».
           </li>

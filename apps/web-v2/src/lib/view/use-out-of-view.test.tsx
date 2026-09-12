@@ -83,7 +83,7 @@ afterEach(() => {
 
 /**
  * La cible est MONTÉE CONDITIONNELLEMENT — c'est le chemin d'échec réel de la
- * liste (cache vide + erreur ⇒ `ConversationRail` ne peint plus rien ⇒ le
+ * liste (cache vide + erreur ⇒ `StoriesRail` ne peint plus rien ⇒ le
  * grand rail quitte le DOM, puis y revient à la reprise). Un hôte qui garde
  * sa cible pour toujours ne peut PAS distinguer une réf de rappel d'un
  * `RefObject` : les deux passent. Voir le doc-comment de `useOutOfView`.

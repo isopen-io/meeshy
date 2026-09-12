@@ -1,7 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { ConversationRail, type ConversationRailProps } from '@/components/conversation-rail';
+import { StoriesRail, type StoriesRailProps } from '@/components/stories-rail';
+import { ShareLinkSheet } from '@/components/share-link-sheet';
 import { Glyph } from '@/components/glyph';
+import { apiDeps } from '@/lib/api/query';
+import type { Conversation } from '@/lib/api/types';
 import { HIDDEN_CHROME_EASE_OUT_MS } from '@/lib/reading-mode/metrics';
 import { Link } from '@/routes/route-table';
 
@@ -19,7 +22,7 @@ import { Link } from '@/routes/route-table';
  * `render/list-scrolled.*.png` avant correction).
  *
  * CE QUI EST REPRIS D'iOS : une bande, la MÊME cellule que le grand rail
- * (`ConversationRail`, `variant="pinned"`), qui prend la place du titre
+ * (`StoriesRail`, `variant="pinned"`), qui prend la place du titre
  * dans SA fente — jamais une seconde ligne — et qui ne se matérialise
  * qu'une fois le grand rail sorti (`pinned`, calculé par l'appelant via
  * `useOutOfView`).
@@ -63,12 +66,27 @@ import { Link } from '@/routes/route-table';
 export function ListHeader({
   pinned,
   railProps,
+  conversations,
+  viewerId,
 }: {
   readonly pinned: boolean;
-  readonly railProps: ConversationRailProps;
+  readonly railProps: Omit<StoriesRailProps, 'variant'>;
+  /**
+   * LES DEUX BOUTONS D'EN-TÊTE (#5652, bloc D) — miroir des deux cercles
+   * `AdaptiveGlassContainer` (`ConversationListView+Overlays.swift:1056-
+   * 1087`) : « Créer un lien de partage » (a besoin du corpus complet pour en
+   * filtrer les conversations ÉLIGIBLES, `canCreateShareLink`) et « Nouvelle
+   * conversation » (une route, aucun corpus requis). Reçus ici plutôt que
+   * dérivés de `railProps` — ce ne sont PLUS les mêmes objets depuis que le
+   * rail porte des STORIES (écart 7 de `targets/lentille.md`).
+   */
+  readonly conversations: readonly Conversation[];
+  readonly viewerId: string;
 }) {
   const lastFocusedIdRef = useRef<string | null>(null);
   const wasPinnedRef = useRef(pinned);
+  const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     const id = lastFocusedIdRef.current;
@@ -77,7 +95,7 @@ export function ListHeader({
       const orphelin = document.activeElement === null || document.activeElement === document.body;
       if (orphelin) {
         const jumelle = document.querySelector<HTMLElement>(
-          `[data-rail="grande"] [data-conversation="${CSS.escape(id)}"]`,
+          `[data-rail="grande"] [data-story="${CSS.escape(id)}"]`,
         );
         jumelle?.focus();
       }
@@ -118,13 +136,46 @@ export function ListHeader({
             className="absolute inset-0 flex items-center"
             onFocusCapture={(e) => {
               const target = e.target as HTMLElement;
-              lastFocusedIdRef.current = target.closest('[data-conversation]')?.getAttribute('data-conversation') ?? null;
+              lastFocusedIdRef.current = target.closest('[data-story]')?.getAttribute('data-story') ?? null;
             }}
           >
-            <ConversationRail variant="pinned" {...railProps} />
+            <StoriesRail variant="pinned" {...railProps} />
           </div>
         ) : null}
       </div>
+      {/*
+        LES DEUX BOUTONS D'EN-TÊTE (#5652, bloc D) — miroir des deux cercles
+        d'iOS (`ConversationListView+Overlays.swift:1056-1087`), à la cote
+        `size-11` (44 px, charte dimension 5 — l'original iOS est à 40, un
+        écart de la cible que la charte du dépôt ne recopie pas).
+      */}
+      <button
+        type="button"
+        onClick={() => setShareSheetOpen(true)}
+        aria-label="Créer un lien de partage"
+        className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+      >
+        <span
+          className="grid size-8 place-items-center rounded-chip"
+          style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 14%, transparent)' }}
+        >
+          <Glyph name="linkSimple" size={16} />
+        </span>
+      </button>
+      <Link
+        to="conversationsNew"
+        aria-label="Nouvelle conversation"
+        className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+      >
+        <span
+          className="grid size-8 place-items-center rounded-chip"
+          style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 14%, transparent)' }}
+        >
+          <Glyph name="plus" size={16} />
+        </span>
+      </Link>
       {/*
         L'ENTRÉE DU TABLEAU DE BORD « PROGRESSION » (#5547, déplacée ici
         depuis `routes/conversations.tsx` — #6103). Sur iOS elle vit dans le
@@ -145,6 +196,23 @@ export function ListHeader({
           <Glyph name="trophy" size={16} />
         </span>
       </Link>
+
+      {/* Le retour d'un geste INVISIBLE (copie de lien) — annoncé au lecteur
+          d'écran, motif `QuickActions`. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {feedback ?? ''}
+      </p>
+
+      {shareSheetOpen ? (
+        <ShareLinkSheet
+          conversations={conversations}
+          viewerId={viewerId}
+          deps={apiDeps}
+          origin={window.location.origin}
+          onClose={() => setShareSheetOpen(false)}
+          onFeedback={setFeedback}
+        />
+      ) : null}
     </header>
   );
 }

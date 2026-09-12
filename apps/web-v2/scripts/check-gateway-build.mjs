@@ -19,6 +19,14 @@
  *     `[data-row]` APRÈS — et le premier `offsetTop` ne bouge PAS entre les
  *     deux (la géométrie du squelette est celle de la rangée réelle, F5).
  *  3. `/login` avec une session déjà active redirige vers `/`.
+ *  4. CORPUS VIDE (ni conversation ni story) : aucun rail peint, et la bande
+ *     qu'il occupait revient à l'état de démarrage.
+ *  5. ÉCHEC à cache vide : une ALERTE, jamais « Chargement », et l'en-tête
+ *     garde son titre.
+ *  6. `/conversations/new` est PRIVÉE (un visiteur sans session en est sorti) et
+ *     une recherche en ÉCHEC y peint une ALERTE, jamais un écran blanc (#5652).
+ *  7. AUCUN octet ne part vers la PRODUCTION (#5652) — tout ce qui vise
+ *     `gate.meeshy.me` est stubbé ou abandonné-et-relevé (`armerPasserelle`).
  *
  * Construit dans `dist-gateway` (couvert par le motif `dist-*` du
  * `.gitignore`, jamais commité) — même discipline que `check-shell-dist.mjs`.
@@ -72,6 +80,75 @@ const SESSION = {
   expiresAt: Date.now() + 24 * 60 * 60 * 1000,
 };
 
+/**
+ * LE RAIL DE STORIES (#5652) — sa charge, et surtout SON INTERCEPTION.
+ *
+ * L'écran de la Lentille émet DEUX requêtes de plus depuis #5652
+ * (`?scope=stories&projection=tray` et `?scope=statuses`, `api/stories.ts`).
+ * Ce gate ne routait que `/api/v1/conversations` et `/socket.io/` : les deux
+ * nouvelles partaient donc pour de VRAI vers `https://gate.meeshy.me` — la
+ * base de PRODUCTION, puisque cette construction ne pose aucune surcharge —
+ * ce que la doctrine de ce fichier interdit explicitement (« ne JAMAIS
+ * laisser partir un octet réel vers un serveur de production depuis ce gate »,
+ * #5793). `armerPasserelle` ferme la porte : tout ce qui vise la production
+ * est soit STUBBÉ ici, soit ABANDONNÉ et RELEVÉ — et la liste des fuites est
+ * une assertion, pas une trace qu'on lit à l'œil.
+ *
+ * La forme est celle que `envoyerFeedUnifie` sert (`routes/posts/feed.ts:147`)
+ * : `data` = le TABLEAU des posts, `pagination.form = 'keyset'`, `meta` avec
+ * ses tombstones. Le corps d'un post de tray suit `trayStorySelect`
+ * (`services/posts/postIncludes.ts:275-296`) + `isViewedByMe`, ajouté par
+ * `PostFeedService:510`.
+ */
+const storyPost = ({ id, authorId, displayName, isViewedByMe, minutesAgo }) => ({
+  id,
+  type: 'STORY',
+  visibility: 'FRIENDS',
+  createdAt: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
+  updatedAt: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
+  expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+  viewCount: 0,
+  author: { id: authorId, username: authorId, displayName },
+  media: [],
+  isViewedByMe,
+});
+
+const UN_AUTEUR_AVEC_UNE_STORY = [
+  storyPost({ id: 's-gw-1', authorId: 'u-gw-bruno', displayName: 'Bruno Bêta', isViewedByMe: false, minutesAgo: 30 }),
+];
+
+const feedBody = (items) =>
+  JSON.stringify({
+    success: true,
+    data: items,
+    pagination: { limit: 20, hasMore: false, nextCursor: null, form: 'keyset' },
+    meta: { deletedIds: [], deletedIdsTruncated: false },
+  });
+
+/**
+ * `stories` : ce que `?scope=stories` sert. `fuites` : le tableau où sont
+ * relevées les requêtes vers la production qu'aucun stub n'attendait — il doit
+ * rester VIDE, c'est vérifié en fin de course.
+ */
+async function armerPasserelle(page, { stories, fuites }) {
+  await page.route('**/api/v1/social/posts**', async (route) => {
+    const url = route.request().url();
+    const body = url.includes('scope=statuses') ? feedBody([]) : feedBody(stories);
+    await route.fulfill({ status: 200, contentType: 'application/json', body });
+  });
+  await page.route(
+    (url) =>
+      url.hostname === 'gate.meeshy.me' &&
+      !url.pathname.startsWith('/api/v1/conversations') &&
+      !url.pathname.startsWith('/api/v1/social/posts') &&
+      !url.pathname.startsWith('/socket.io/'),
+    async (route) => {
+      fuites.push(route.request().url());
+      await route.abort();
+    },
+  );
+}
+
 async function serve(dist) {
   const server = createServer(async (req, res) => {
     const p = normalize(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '');
@@ -109,6 +186,9 @@ async function main() {
   const base = `http://127.0.0.1:${server.address().port}`;
 
   const failures = [];
+  /** Les requêtes vers la PRODUCTION qu'aucun stub n'attendait (#5652) —
+   * assertion en fin de course, jamais une trace à lire à l'œil. */
+  const fuites = [];
   const check = (ok, what) => {
     if (ok) console.log(`  ok    ${what}`);
     else failures.push(what);
@@ -174,6 +254,7 @@ async function main() {
     // dans cette construction) — abandonné ici pour ne JAMAIS laisser partir
     // un octet réel vers un serveur de production depuis ce gate (#5793).
     await page.route('**/socket.io/**', (route) => route.abort());
+    await armerPasserelle(page, { stories: UN_AUTEUR_AVEC_UNE_STORY, fuites });
     await page.goto(`${base}/`, { waitUntil: 'networkidle' });
     const path = await page.evaluate(() => window.location.pathname);
     check(path === '/login', `sans session, "/" redirige vers /login (obtenu : ${path})`);
@@ -219,6 +300,10 @@ async function main() {
     // session existe (#5793).
     const socketRequestPromise = page.waitForRequest((req) => req.url().includes('/socket.io/'), { timeout: 10000 });
     await page.route('**/socket.io/**', (route) => route.abort());
+    /* LE RAIL EST PEINT ICI — un auteur, une story non vue : c'est la
+       référence contre laquelle le bloc 4 mesure que son ABSENCE rend la
+       bande à l'état vide (#5652). */
+    await armerPasserelle(page, { stories: UN_AUTEUR_AVEC_UNE_STORY, fuites });
 
     await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
 
@@ -288,11 +373,22 @@ async function main() {
         body: JSON.stringify({ success: true, data: [], pagination: { limit: 30, offset: 0, total: 0, hasMore: false } }),
       });
     });
+    /* AUCUNE story non plus : c'est le corpus d'un compte NEUF, celui que
+       l'écran de démarrage adresse (#5652). Le rail n'a alors rien à montrer
+       — ni story d'un ami, ni la mienne (`useStoryRail` ne compose l'entrée
+       « moi » que quand elle porte une story ou une humeur) — et la bande
+       qu'il occupait doit revenir à l'état vide. */
+    await armerPasserelle(page, { stories: [], fuites });
     await page.goto(`${base}/`, { waitUntil: 'networkidle' });
     await page.waitForSelector('#contenu:not([aria-busy])', { timeout: 5000 });
 
-    const rails = await page.locator('[aria-label="Accès rapide aux conversations"]').count();
-    check(rails === 0, `corpus VIDE : aucune région « Accès rapide » peinte (obtenu : ${rails})`);
+    /* Le rail ne partage PLUS le corpus de la liste (#5652) : il ne disparaît
+       donc pas « parce qu'il n'y a pas de conversation » mais parce qu'il n'y
+       a pas de STORY. L'ancienne assertion visait `aria-label="Accès rapide
+       aux conversations"`, un libellé que plus rien ne pose — elle passait
+       donc en comptant zéro pour une raison FAUSSE. */
+    const rails = await page.locator('[data-rail="grande"]').count();
+    check(rails === 0, `corpus de stories VIDE : aucun rail peint (obtenu : ${rails})`);
 
     /**
      * RÉANCRÉ DANS LE SCROLLPORT (#6103) — le rail vivant désormais À
@@ -341,6 +437,11 @@ async function main() {
         body: JSON.stringify({ success: false, error: 'Internal server error' }),
       });
     });
+    /* Ni conversation ni story : le SEUL état, atteignable par un navigateur,
+       où le grand rail quitte le DOM — donc le seul où « pas de rail » pourrait
+       se confondre avec « le rail est sorti du champ » (voir l'assertion
+       d'en-tête plus bas). */
+    await armerPasserelle(page, { stories: [], fuites });
     await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#contenu [role="alert"]', { timeout: 20000 });
 
@@ -391,6 +492,68 @@ async function main() {
     );
     await context.close();
   }
+
+  // --- 6. `/conversations/new` : route PRIVÉE, et un échec de recherche ------
+  //        se VOIT (jamais un écran blanc) — #5652 ---------------------------
+  {
+    /* SANS session : la garde sort le visiteur (`PRIVATE_ROUTES`,
+       `lib/session-guard.ts`). La route est arrivée avec son écran sans être
+       déclarée privée — un visiteur anonyme y trouvait une recherche que la
+       passerelle refuse, au lieu de l'écran de connexion. */
+    const anonContext = await browser.newContext();
+    const anonPage = await anonContext.newPage();
+    await armerPasserelle(anonPage, { stories: [], fuites });
+    await anonPage.route('**/socket.io/**', (route) => route.abort());
+    await anonPage.goto(`${base}/conversations/new`, { waitUntil: 'networkidle' });
+    const anonPath = await anonPage.evaluate(() => window.location.pathname);
+    check(anonPath !== '/conversations/new', `sans session, /conversations/new ne s'ouvre pas (obtenu : ${anonPath})`);
+    await anonContext.close();
+
+    /* AVEC session, recherche en ÉCHEC : une ALERTE et un « Réessayer », jamais
+       une liste vide — « erreur avalée en VIDE = vide légitime ». */
+    const context = await browser.newContext();
+    await context.addInitScript((session) => {
+      window.localStorage.setItem('meeshy.session', JSON.stringify(session));
+    }, SESSION);
+    const page = await context.newPage();
+    await armerPasserelle(page, { stories: [], fuites });
+    await page.route('**/socket.io/**', (route) => route.abort());
+    await page.route('**/api/v1/directory/people**', async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: false, error: 'Internal server error' }),
+      });
+    });
+    await page.goto(`${base}/conversations/new`, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('input[aria-label="Rechercher un contact"]', { timeout: 5000 });
+    await page.fill('input[aria-label="Rechercher un contact"]', 'ami');
+    /* L'ATTENTE EST PEINTE AVANT L'ALERTE — sinon l'écran est blanc pendant
+       toute la politique de reprise (`shouldRetry` : deux reprises, délai qui
+       double, ~10 s mesurées). */
+    const attente = await page
+      .waitForSelector('li[aria-live="polite"]', { timeout: 3000 })
+      .then(() => true)
+      .catch(() => false);
+    check(attente, "recherche en cours : l'attente est PEINTE, jamais un écran blanc");
+    /* 15 s : le budget de `shouldRetry` (3 tentatives, délai doublant) plus la
+       marge d'une CI chargée — jamais un nombre choisi au hasard. */
+    await page.waitForSelector('[role="alert"]', { timeout: 15000 }).catch(() => {});
+    const alerte = await page.locator('[role="alert"]').count();
+    check(alerte >= 1, `recherche en échec : une ALERTE est peinte, jamais un écran blanc (obtenu : ${alerte})`);
+    const retry = page.locator('[role="alert"] button');
+    const retryBox = (await retry.count()) === 0 ? null : await retry.first().boundingBox();
+    check(
+      retryBox !== null && Math.round(retryBox.height) >= 44,
+      `recherche en échec : « Réessayer » est offert à 44 px au moins (obtenu : ${retryBox === null ? 'absent' : Math.round(retryBox.height)})`,
+    );
+    await context.close();
+  }
+
+  check(
+    fuites.length === 0,
+    `AUCUNE requête réelle ne part vers la production depuis ce gate (fuites : ${fuites.length === 0 ? 'aucune' : fuites.join(', ')})`,
+  );
 
   await browser.close();
   server.close();

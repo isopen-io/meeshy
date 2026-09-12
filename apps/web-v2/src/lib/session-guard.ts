@@ -36,6 +36,7 @@ import type { SessionState } from './api/session';
 export type RouteKey =
   | 'list'
   | 'thread'
+  | 'conversationsNew'
   | 'progression'
   | 'login'
   | 'signup'
@@ -46,7 +47,16 @@ export type RouteKey =
 
 export type RouteAccessDecision = 'allow' | 'redirect-login' | 'redirect-home' | 'redirect-welcome';
 
-const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['list', 'thread', 'progression']);
+/**
+ * `conversationsNew` (#5652, revue) — CRÉER une conversation est un geste de
+ * MEMBRE : la route est arrivée avec son écran mais n'a jamais été déclarée
+ * ici, donc un visiteur SANS SESSION y entrait et n'y trouvait qu'une
+ * recherche que la passerelle refuse (401 sur `GET /directory/people`). Une
+ * route privée non déclarée est la forme la plus discrète du défaut : rien ne
+ * rougit, l'écran s'ouvre, et c'est l'API qui dit non — trois écrans plus
+ * tard, on aura oublié pourquoi.
+ */
+const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['list', 'thread', 'conversationsNew', 'progression']);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 
 /**

@@ -269,7 +269,7 @@ dans une version ultérieure ·
 | `/` | **V4.0.0** | la liste |
 | `/conversation/:conversationId` | `legacy` | **conservée sans redirection** (porteur 2026-09-07) |
 | `/conversations/[[...id]]` | `legacy` | idem |
-| `/conversations/new` | `legacy` | création d'une conversation |
+| `/conversations/new` | **V4.0.0** | création d'une conversation — **servie par la v3.1 depuis #5652** (recherche `GET /directory/people`, `POST /conversations`, direct seul : le GROUPE reste au legacy) ; nomenclature du legacy reprise (D-5) |
 | `/chat/:id` | **V4.0.0** | c'est DÉJÀ l'adresse d'un lien de partage — `/chat/*` passe en bloc à la v4 |
 | `/groups`, `/groups/:identifier` | `legacy` | idem |
 | `/c/:conversation` | **V4.0.0** | **adresse neuve** — le fil du membre |

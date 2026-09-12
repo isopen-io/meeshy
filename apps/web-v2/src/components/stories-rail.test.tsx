@@ -233,3 +233,24 @@ describe('StoriesRail — la couverture et l’humeur atteignent le pixel', () =
     expect(el.querySelector('[data-rail-self] [data-mood]')?.textContent).toBe('😴');
   });
 });
+
+/**
+ * LE NOM SURVIT À LA COMPACTION (revue #5652) — la bande épinglée ne rend pas
+ * le libellé et ses pastilles ne sont pas des contrôles : sans nom accessible,
+ * un lecteur d'écran annonce une liste d'éléments VIDES. La cellule supprimée
+ * tenait cette propriété par l'`aria-label` de son lien ; elle n'avait plus de
+ * porteur.
+ */
+describe('StoriesRail — le nom est annoncé aux DEUX cotes', () => {
+  test('`pinned` : le nom passe par `role="img"` de l’avatar, à défaut de libellé', () => {
+    const el = mount({ variant: 'pinned', entries: [entry({ id: 'u-1', displayName: 'Amina Diallo' })] });
+    expect(el.textContent).not.toContain('Amina Diallo');
+    expect(el.querySelector('[role="img"][aria-label="Amina Diallo"]')).not.toBeNull();
+  });
+
+  test('`grande` : le libellé VISIBLE porte le nom — jamais annoncé deux fois', () => {
+    const el = mount({ variant: 'grande', entries: [entry({ id: 'u-1', displayName: 'Amina Diallo' })] });
+    expect(el.textContent).toContain('Amina Diallo');
+    expect(el.querySelector('[role="img"][aria-label="Amina Diallo"]')).toBeNull();
+  });
+});

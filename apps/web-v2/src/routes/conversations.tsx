@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
-import { ConversationRail } from '@/components/conversation-rail';
+import { StoriesRail } from '@/components/stories-rail';
 import { ListHeader } from '@/components/list-header';
 import { Glyph } from '@/components/glyph';
 import { LensRow } from '@/components/lens-row';
@@ -10,7 +10,7 @@ import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { useScene } from '@/lib/lens/scene';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { apiConfig } from '@/lib/api/config';
-import { rowAction, useConversations } from '@/lib/api/query';
+import { rowAction, useConversations, useStoryRail } from '@/lib/api/query';
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
 import { useTypistNames } from '@/lib/api/use-typists';
@@ -38,7 +38,7 @@ import { useMinute } from '@/lib/view/use-minute';
 
 /**
  * LE RAIL ET SA BANDE ÉPINGLÉE VIVENT DÉSORMAIS DANS LEURS PROPRES MODULES
- * (#6103, décision #6070) — `components/conversation-rail.tsx` (la cellule,
+ * (#6103, décision #6070) — `components/stories-rail.tsx` (la cellule,
  * la tuile fantôme de chargement, l'exclusion des archivées) et
  * `components/list-header.tsx` (la bascule titre ↔ bande). Voir leurs
  * doc-comments pour la géographie complète : le grand rail vit DANS la vue
@@ -165,7 +165,7 @@ export default function ConversationsScreen() {
   /**
    * **LA BANDE ÉPINGLÉE PREND LA PLACE DU TITRE QUAND LE GRAND RAIL EST
    * SORTI DU SCROLLPORT** (#6103, décision #6070) — voir `ListHeader` et
-   * `ConversationRail` pour la géographie complète, et `pinned-rail.ts` pour
+   * `StoriesRail` pour la géographie complète, et `pinned-rail.ts` pour
    * les deux seuils. `useOutOfView` délègue la mesure à un
    * `IntersectionObserver` : aucun `scrollTop` lu à la main ici, contrairement
    * à `useScene` juste en dessous, qui a besoin d'une valeur CONTINUE (la
@@ -212,12 +212,22 @@ export default function ConversationsScreen() {
    * change se re-rend.
    */
   const typists = useTypistNames(viewer.id ?? '');
-  /** Le corpus du RAIL — `ConversationRail` applique lui-même la même
-   * précédence iOS que `applyFilter` (l'archivé sort) : un seul site, pour
-   * les DEUX géographies (grande et épinglée). */
+  /**
+   * LE RAIL DE STORIES (#5652) — `StoriesRail` applique lui-même la loi
+   * (`rail-policy.ts`, miroir `LentilleRailPolicy`) sur le corpus déjà
+   * FONDU (`useStoryRail`) : un seul site, pour les DEUX géographies (grande
+   * et épinglée). Il ne partage plus le corpus de la liste (`conversations`)
+   * — c'est un rail de STORIES, plus un raccourci vers des conversations
+   * (écart 7 de `targets/lentille.md`, issue #5652).
+   */
+  const rail = useStoryRail({
+    id: viewer.id,
+    displayName: viewer.displayName,
+    ...(viewer.avatar === undefined ? {} : { avatar: viewer.avatar }),
+  });
   const railProps = useMemo(
-    () => ({ conversations, viewerId: viewer.id ?? '', overrides, loading }),
-    [conversations, viewer.id, overrides, loading],
+    () => ({ ...(rail.selfEntry === undefined ? {} : { selfEntry: rail.selfEntry }), entries: rail.entries, loading: rail.loading }),
+    [rail.selfEntry, rail.entries, rail.loading],
   );
 
   /**
@@ -261,7 +271,7 @@ export default function ConversationsScreen() {
        100dvh (box-sizing: border-box) — jamais par `<body>`, qui l'AJOUTAIT
        et poussait la barre de recherche hors du cadre (#5604, app.css). */
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
-      <ListHeader pinned={pinned} railProps={railProps} />
+      <ListHeader pinned={pinned} railProps={railProps} conversations={conversations} viewerId={viewer.id ?? ''} />
 
       {/*
         AUCUN `gap` : l'espacement des cartes est ce qui les faisait lire comme
@@ -296,7 +306,7 @@ export default function ConversationsScreen() {
           sont les DEUX PREMIERS enfants du contenu qui défile, AVANT les
           sections. `-mx-2` neutralise le `px-2` de ce scrollport — même
           technique que `LensSection` pour un plein-bord — puisque
-          `ConversationRail`/le `<nav>` posent leur propre `px-4`.
+          `StoriesRail`/le `<nav>` posent leur propre `px-4`.
 
           Le rail GRANDE ne compacte plus JAMAIS lui-même : seule la bande
           `pinned` de `ListHeader`, ailleurs dans le DOM, prend cette forme.
@@ -312,10 +322,10 @@ export default function ConversationsScreen() {
           dernière tuile de la bande y retombait — forçant le navigateur à
           faire défiler ce rail hors champ DANS la vue, ce qui ramenait la
           liste en tête et démontait la bande pour rien de plus qu'un
-          `Tab`. Voir le doc-comment de `ConversationRail` pour le détail.
+          `Tab`. Voir le doc-comment de `StoriesRail` pour le détail.
         */}
         <li className="-mx-2 shrink-0">
-          <ConversationRail ref={observeGrandRail} variant="grande" inert={pinned} {...railProps} />
+          <StoriesRail ref={observeGrandRail} variant="grande" inert={pinned} {...railProps} />
         </li>
         <li className="-mx-2 shrink-0">
           <nav aria-label="Filtres" className="overflow-x-auto">

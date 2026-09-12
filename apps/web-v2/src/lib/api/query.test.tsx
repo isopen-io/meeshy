@@ -2,9 +2,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import type { Post } from '@meeshy/shared/types/post';
+
 import { conversationQueryKey } from './conversations';
 import { messagesQueryKey } from './messages';
-import { useThreadData } from './query';
+import { useStoryRail, useThreadData } from './query';
+import { STATUSES_QUERY_KEY, STORY_TRAY_QUERY_KEY } from './stories';
 import type { Conversation } from './types';
 
 /**
@@ -120,5 +123,91 @@ describe('useThreadData — `conversationId` (#5793, revue-correction défaut 3)
     );
 
     expect(html).toContain('data-conversation-id="salon-riviere"');
+  });
+});
+
+/**
+ * `useStoryRail` — L'ENTRÉE « MOI » N'EXISTE QUE QUAND ELLE DIT QUELQUE CHOSE
+ * (revue #5652). iOS la rend dès qu'un compte est connecté parce que c'est un
+ * BOUTON à deux portes ; web-v2 n'en a aucune encore (règle #5765), donc une
+ * pastille « moi » sans story ni humeur ne porterait ni information ni geste —
+ * et elle volait la bande que l'écran de démarrage doit récupérer (mesuré par
+ * `check-gateway-build.mjs` bloc 4).
+ *
+ * Le cache est SEMÉ dans la forme BRUTE (des `Post`), jamais dans la forme
+ * décodée : c'est le `select` des fabriques (`storyTrayQuery`/`statusesQuery`)
+ * qui regroupe — le semer décodé testerait un chemin que la production n'a pas.
+ */
+describe('useStoryRail — l’entrée « moi » (#5652, revue)', () => {
+  const MOI = 'u-moi';
+
+  const storyPost = (authorId: string, id: string, expiresAt: string) =>
+    ({
+      id,
+      type: 'STORY',
+      authorId,
+      author: { id: authorId, username: authorId, displayName: 'Moi' },
+      createdAt: new Date('2026-09-12T10:00:00Z'),
+      updatedAt: new Date('2026-09-12T10:00:00Z'),
+      expiresAt,
+      media: [],
+      isViewedByMe: false,
+    }) as unknown as Post;
+
+  const statusPost = (authorId: string, moodEmoji: string) =>
+    ({
+      id: `st-${authorId}`,
+      type: 'STATUS',
+      authorId,
+      author: { id: authorId, username: authorId, displayName: 'Moi' },
+      createdAt: new Date('2026-09-12T10:00:00Z'),
+      updatedAt: new Date('2026-09-12T10:00:00Z'),
+      media: [],
+      moodEmoji,
+    }) as unknown as Post;
+
+  function renderRail(stories: readonly Post[], statuses: readonly Post[]): string {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(STORY_TRAY_QUERY_KEY, stories);
+    queryClient.setQueryData(STATUSES_QUERY_KEY, statuses);
+
+    function Probe() {
+      const rail = useStoryRail({ id: MOI, displayName: 'Moi' });
+      return (
+        <span
+          data-self={rail.selfEntry === undefined ? 'absente' : 'presente'}
+          data-story={rail.selfEntry?.hasActiveStory === true ? 'active' : 'aucune'}
+          data-mood={rail.selfEntry?.moodEmoji ?? 'aucune'}
+        />
+      );
+    }
+    return renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+      </QueryClientProvider>,
+    );
+  }
+
+  test('ni story ni humeur : AUCUNE entrée « moi » — la bande revient à l’écran', () => {
+    const html = renderRail([], []);
+    expect(html).toContain('data-self="absente"');
+  });
+
+  test('une story ACTIVE : l’entrée « moi » existe, anneau accentué', () => {
+    const html = renderRail([storyPost(MOI, 's-1', '2999-01-01T00:00:00Z')], []);
+    expect(html).toContain('data-self="presente"');
+    expect(html).toContain('data-story="active"');
+  });
+
+  test('une story ENTIÈREMENT EXPIRÉE ne compte pas — aucune entrée', () => {
+    const html = renderRail([storyPost(MOI, 's-1', '2020-01-01T00:00:00Z')], []);
+    expect(html).toContain('data-self="absente"');
+  });
+
+  test('une humeur SEULE suffit : entrée présente, anneau SOURD, mood servi', () => {
+    const html = renderRail([], [statusPost(MOI, '🎉')]);
+    expect(html).toContain('data-self="presente"');
+    expect(html).toContain('data-story="aucune"');
+    expect(html).toContain('data-mood="🎉"');
   });
 });

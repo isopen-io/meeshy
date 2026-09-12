@@ -176,7 +176,7 @@ describe('decodeStatusMoods — le PLUS RÉCENT par auteur', () => {
 describe('decodeStoryGroups — une URL VIDE est une ABSENCE, jamais une couverture', () => {
   test('`fileUrl: ""` ne produit AUCUNE previewUrl', () => {
     const raw: readonly Post[] = [
-      post({ id: 's-1', authorId: 'u-a', media: [{ id: 'm-1', mimeType: 'image/jpeg', fileUrl: '', order: 0 }] as Post['media'] }),
+      post({ id: 's-1', authorId: 'u-a', media: [{ id: 'm-1', mimeType: 'image/jpeg', fileUrl: '', order: 0 }] as NonNullable<Post['media']> }),
     ];
     const [group] = decodeStoryGroups(raw);
     expect(group && latestStoryOf(group)?.previewUrl).toBeUndefined();
@@ -187,7 +187,7 @@ describe('decodeStoryGroups — une URL VIDE est une ABSENCE, jamais une couvert
       post({
         id: 's-1',
         authorId: 'u-a',
-        media: [{ id: 'm-1', mimeType: 'image/jpeg', fileUrl: 'https://cdn.test/f.jpg', thumbnailUrl: '', order: 0 }] as Post['media'],
+        media: [{ id: 'm-1', mimeType: 'image/jpeg', fileUrl: 'https://cdn.test/f.jpg', thumbnailUrl: '', order: 0 }] as NonNullable<Post['media']>,
       }),
     ];
     const [group] = decodeStoryGroups(raw);
@@ -195,7 +195,7 @@ describe('decodeStoryGroups — une URL VIDE est une ABSENCE, jamais une couvert
   });
 
   test('un `avatar` VIDE sur l’auteur ne devient pas une image', () => {
-    const raw: readonly Post[] = [post({ id: 's-1', authorId: 'u-a', author: { id: 'u-a', username: 'a', avatar: '' } as Post['author'] })];
+    const raw: readonly Post[] = [post({ id: 's-1', authorId: 'u-a', author: { id: 'u-a', username: 'a', avatar: '' } as NonNullable<Post['author']> })];
     const [group] = decodeStoryGroups(raw);
     expect(group?.avatarUrl).toBeUndefined();
   });

@@ -106,18 +106,30 @@ function RailFace({
   color,
   url,
   size,
+  name,
 }: {
   readonly initials: string;
   readonly color: string;
   readonly url: string | undefined;
   readonly size: number;
+  /**
+   * LE NOM QUAND LE LIBELLÉ N'EST PAS ÉCRIT (revue #5652) — la bande compacte
+   * ne rend pas le nom (§ `SEUIL_LIBELLE`) et les pastilles n'y sont pas des
+   * contrôles : sans ce nom, un lecteur d'écran annonçait « Stories, liste, 2
+   * éléments » puis DEUX ÉLÉMENTS VIDES. La cellule supprimée tenait déjà
+   * cette propriété (« le nom ne DISPARAÎT pas pour autant : il reste sur
+   * l'`aria-label` du lien, donc un lecteur d'écran l'annonce à l'identique
+   * aux deux tailles ») — elle n'avait plus de porteur depuis que le lien a
+   * disparu. `Avatar` le sert en `role="img"`.
+   */
+  readonly name?: string;
 }) {
   const [broken, setBroken] = useState(false);
   const showsCover = url !== undefined && url !== '' && !broken;
 
   return (
     <span className="relative block shrink-0" style={{ width: size, height: size }}>
-      <Avatar initials={initials} color={color} size={size} />
+      <Avatar initials={initials} color={color} size={size} {...(name === undefined ? {} : { name })} />
       {showsCover ? (
         <img
           src={url}
@@ -211,6 +223,7 @@ function RailTile({
           color={entry.accentColor}
           url={entry.previewUrl ?? entry.avatarUrl}
           size={avatarSize}
+          {...(porteLibelle ? {} : { name: entry.displayName })}
         />
       </span>
       {porteLibelle && entry.moodEmoji !== undefined ? <MoodBadge emoji={entry.moodEmoji} ring={ring} /> : null}
@@ -286,6 +299,7 @@ function RailSelfTile({
           color={entry.accentColor}
           url={entry.previewUrl ?? entry.avatarUrl}
           size={avatarSize}
+          {...(porteLibelle ? {} : { name: entry.displayName })}
         />
       </span>
       {porteLibelle && entry.moodEmoji !== undefined ? <MoodBadge emoji={entry.moodEmoji} ring={ring} /> : null}

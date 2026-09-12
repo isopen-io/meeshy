@@ -411,6 +411,36 @@ for (const [swiftName, downstreamName, what] of REVEAL_MAPPINGS) {
 }
 
 /**
+ * PARTIE 5 bis — LA COTE COMPACTE DU RAIL DE STORIES (#5652).
+ * `AvatarContext.storyTrayCompact` (`MeeshyUI/Primitives/MeeshyAvatar.swift`)
+ * est la cote de la bande épinglée — 36 pt — et c'est la SEULE cote du rail
+ * que `packages/shared/design/lentille-tokens.json` ne porte pas : la table
+ * générée ne liste que les contextes row/header/bubble/stacked/typing
+ * (`packages/design-tokens/ios.css`). `RAIL_SIZE_COMPACT`
+ * (`components/stories-rail.tsx`) en est donc une dérivation TEXTUELLE, et
+ * sans ce gate ce serait un littéral libre — exactement ce que D-4 interdit.
+ *
+ * La valeur est un `case … return 36` (pas une affectation `nom = valeur`) :
+ * le lecteur générique `count()` ne l'attrape pas, d'où la regex dédiée
+ * ci-dessous, ancrée sur le NOM du cas.
+ */
+const UPSTREAM_AVATAR_SWIFT = `${ROOT}packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyAvatar.swift`;
+const DOWNSTREAM_RAIL = `${ROOT}apps/web-v2/src/components/stories-rail.tsx`;
+const avatarSwift = readFileSync(UPSTREAM_AVATAR_SWIFT, 'utf8');
+const railDerived = readFileSync(DOWNSTREAM_RAIL, 'utf8');
+const storyTrayCompactSwift = (() => {
+  const m = /case\s+\.storyTrayCompact\s*:\s*(?:\/\/[^\n]*\n\s*)*return\s+(-?[0-9.]+)/.exec(avatarSwift);
+  return m === null ? null : Number(m[1]);
+})();
+const storyTrayCompactDerived = count(railDerived, 'RAIL_SIZE_COMPACT');
+if (storyTrayCompactSwift === null)
+  failures.push('cote compacte du rail de stories : « case .storyTrayCompact: return … » introuvable dans MeeshyAvatar.swift');
+else if (storyTrayCompactDerived === null)
+  failures.push('cote compacte du rail de stories : « RAIL_SIZE_COMPACT » introuvable dans components/stories-rail.tsx');
+else if (storyTrayCompactSwift !== storyTrayCompactDerived)
+  failures.push(`cote compacte du rail de stories : Swift ${storyTrayCompactSwift}, dérivée ${storyTrayCompactDerived}`);
+
+/**
  * PARTIE 6 — LA TYPOGRAPHIE DE LA RANGÉE DE LA LENTILLE (#5694, écart 1).
  * `LentilleMetrics.Name.size`/`.Line2.size` ne sont PAS des littéraux Swift
  * (`MeeshyFont.bodySize`/`.subheadSize`) — leur aval n'est donc pas une
@@ -765,6 +795,8 @@ console.log(
     ` (${PERSPECTIVE_MAPPINGS.length + CHIP_FILL_CASES.length} cotes ; les valeurs sont gardées par election.test.ts).` +
     `\n  La protection du Fil est conforme à BubbleBlurRevealLifecycle.swift` +
     ` (${REVEAL_MAPPINGS.length} cote ; les valeurs sont gardées par protection.test.ts).` +
+    `\n  La cote compacte du rail de stories est conforme à MeeshyAvatar.swift` +
+    ` (.storyTrayCompact = ${storyTrayCompactSwift} pt → RAIL_SIZE_COMPACT).` +
     `\n  La typographie de la rangée de la Lentille est conforme à lentille-tokens.json` +
     ` (${TYPOGRAPHY_MAPPINGS.length} chaînes complètes : jeton → ios.css → alias Tailwind → classe posée).` +
     `\n  Le menu du message est conforme à MessageOverlayMenu.swift/MessageActionsMenu.swift` +

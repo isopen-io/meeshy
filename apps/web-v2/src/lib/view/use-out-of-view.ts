@@ -40,7 +40,7 @@ export type OutOfView = {
  * liste de dépendances DIT observer ne sont jamais la même chose.
  *
  * LE DÉFAUT MESURÉ (témoin « la cible qui DISPARAÎT relâche la bande ») —
- * la cible peut QUITTER le DOM : `ConversationRail` ne peint rien quand son
+ * la cible peut QUITTER le DOM : `StoriesRail` ne peint rien quand son
  * corpus visible est vide (échec à cache vide, dernière conversation
  * archivée). Rien, dans la forme livrée, ne RELÂCHAIT alors `pinned` : il
  * restait `true` sur un souvenir. L'en-tête effaçait donc son titre

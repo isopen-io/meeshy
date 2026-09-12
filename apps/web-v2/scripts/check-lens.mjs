@@ -54,17 +54,38 @@
  *        titre, jamais un flux qui pousserait quoi que ce soit.
  *
  * 8.  LE GRAND RAIL HORS CHAMP NE DOUBLE PAS LA BANDE (#6103, revue-
- *     correction) — pendant que la bande est active, une SEULE région porte
- *     l'`aria-label` « Accès rapide aux conversations », et deux `Tab` depuis
- *     sa dernière tuile ne rejoignent ni le grand rail ni ne déplacent le
- *     `scrollTop` du scrollport (`inert={pinned}`,
- *     `components/conversation-rail.tsx`).
+ *     correction ; réaccordé par #5652) — pendant que la bande est active, une
+ *     SEULE région porte l'`aria-label` « Stories », la bande ne contient
+ *     AUCUN élément focalisable (une pastille de story n'a pas encore de
+ *     porte, règle #5765) et un `Tab` depuis le dernier contrôle de l'en-tête
+ *     ne rejoint pas le grand rail (`inert={pinned}`,
+ *     `components/stories-rail.tsx`).
  */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
+
+/**
+ * LES DEUX COTES DU RAIL VIENNENT DE LA TABLE, JAMAIS D'UN SEUIL ÉCRIT ICI
+ * (#5652, revue). Ce gate comparait la largeur de la tuile à `>= 80` et
+ * `< 45` — des bornes calibrées sur le rail de CONVERSATIONS (cellule =
+ * avatar × 1,222, avatar 72/30) : le rail de STORIES pose la cellule à la
+ * cote EXACTE du jeton (`list.rail.size` = 48, miroir
+ * `LentilleMetrics.Rail.size`, `.frame(width:)` côté iOS), et les trois
+ * assertions rougissaient sur un rendu JUSTE. Un seuil recopié à la main est
+ * une seconde table : celle qui dérive dès que la première bouge (D-4).
+ */
+const lentilleTokens = JSON.parse(
+  await readFile(new URL('../../../packages/shared/design/lentille-tokens.json', import.meta.url), 'utf8'),
+);
+const RAIL_SIZE_GRANDE = lentilleTokens.list.rail.size;
+/** `.storyTrayCompact` (`MeeshyAvatar.swift:9`) — la bande épinglée n'a pas de
+ * jeton généré (`packages/design-tokens/ios.css` ne liste que row/header/
+ * bubble/stacked/typing) : la cote est GARDÉE par extraction Swift dans
+ * `check-curve.mjs`, c'est elle qui interdit la dérive, pas ce fichier. */
+const RAIL_SIZE_COMPACT = 36;
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const TYPES = {
@@ -188,8 +209,8 @@ const grandRailWidthBefore = await page.evaluate(
 );
 constate(grandRailWidthBefore !== null, 'aucune tuile trouvée dans [data-rail="grande"] avant défilement');
 constate(
-  grandRailWidthBefore !== null && grandRailWidthBefore >= 80,
-  `le grand rail ne part pas de la cote GRANDE (~88 px) : ${grandRailWidthBefore}`,
+  grandRailWidthBefore !== null && Math.round(grandRailWidthBefore) === RAIL_SIZE_GRANDE,
+  `le grand rail ne part pas de la cote GRANDE du jeton (list.rail.size = ${RAIL_SIZE_GRANDE}) : ${grandRailWidthBefore}`,
 );
 constate(
   await page.evaluate(() => document.querySelector('[data-rail="pinned"]') === null),
@@ -240,11 +261,11 @@ const afterScroll = await page.evaluate(() => {
   };
 });
 constate(
-  afterScroll.pinnedTileWidth !== null && afterScroll.pinnedTileWidth < 45,
-  `la bande épinglée ne compacte pas à la cote COMPACTE (~37 px) après défilement : ${afterScroll.pinnedTileWidth}`,
+  afterScroll.pinnedTileWidth !== null && Math.round(afterScroll.pinnedTileWidth) === RAIL_SIZE_COMPACT,
+  `la bande épinglée ne compacte pas à la cote COMPACTE (.storyTrayCompact = ${RAIL_SIZE_COMPACT} px) après défilement : ${afterScroll.pinnedTileWidth}`,
 );
 constate(
-  afterScroll.grandeTileWidth !== null && afterScroll.grandeTileWidth >= 80,
+  afterScroll.grandeTileWidth !== null && Math.round(afterScroll.grandeTileWidth) === RAIL_SIZE_GRANDE,
   `le GRAND rail a changé de cote après défilement — il ne devrait plus jamais compacter lui-même : ${afterScroll.grandeTileWidth}`,
 );
 constate(
@@ -664,16 +685,26 @@ await headerContext.close();
  * le défilement (749 → 0 mesuré) et perdre la position de lecture pour rien
  * de plus qu'un `Tab`.
  *
- * Le correctif (`inert={pinned}`, `components/conversation-rail.tsx`) doit
+ * DEPUIS #5652, LE RAIL PORTE DES STORIES ET SES PASTILLES NE SONT PAS DES
+ * CONTRÔLES. Le viewer `/story/:postId` n'existe pas encore : une pastille
+ * sans porte reste une FIGURE (règle #5765, la forme qu'iOS rend lui-même
+ * quand `onSelect == nil`). La bande n'a donc AUCUN élément focalisable, et
+ * les deux `Tab` « depuis la dernière tuile de la bande » n'ont plus de point
+ * de départ — ce qui se mesure change avec le produit, jamais l'invariant :
+ * ce qui restait à garder, c'est qu'un `Tab` ne tombe pas dans le grand rail
+ * HORS CHAMP.
+ *
+ * Le correctif (`inert={pinned}`, `components/stories-rail.tsx`) doit donc
  * tenir TROIS faits, mesurés ici plutôt qu'assumés :
- *  · une SEULE région porte l'`aria-label` « Accès rapide aux conversations »
- *    pendant que la bande est active — jamais deux ;
- *  · un premier `Tab` depuis la dernière tuile de la bande rejoint
- *    « Progression » SANS bouger le scrollport — elle vit dans l'en-tête,
- *    jamais dans le flux qui défile ;
- *  · un second `Tab` ne retombe PLUS dans le grand rail hors champ — il
- *    poursuit dans l'ordre du DOM jusqu'au prochain contrôle RÉEL (les
- *    filtres), pas jusqu'à un doublon des NEUF mêmes conversations.
+ *  · une SEULE région porte l'`aria-label` « Stories » pendant que la bande
+ *    est active — jamais deux ;
+ *  · la bande ne contient AUCUN élément focalisable aujourd'hui. Cette
+ *    assertion est un CLIQUET : le jour où une pastille reçoit sa porte, elle
+ *    rougit et impose de rétablir ici la mesure du report de focus (le
+ *    mécanisme, lui, est resté armé dans `ListHeader` et ses témoins) ;
+ *  · un `Tab` depuis le DERNIER contrôle de l'en-tête (« Progression ») ne
+ *    retombe PAS dans le grand rail hors champ — il poursuit dans l'ordre du
+ *    DOM jusqu'au prochain contrôle RÉEL (les filtres).
  *
  * CE QUE CE TÉMOIN NE PROUVE PAS, ET POURQUOI CE N'EST PAS UN DÉFAUT : ce
  * second `Tab` fait tout de même sauter le `scrollTop` à 0 — mesuré, la
@@ -698,52 +729,59 @@ await kbdPage.waitForSelector('[data-row]');
 await kbdPage.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 600 }));
 await kbdPage.waitForTimeout(400);
 
-const kbdBefore = await kbdPage.evaluate(() => ({
-  pinnedPresent: document.querySelector('[data-rail="pinned"]') !== null,
-  grandeInert: document.querySelector('[data-rail="grande"]')?.hasAttribute('inert') ?? null,
-  regions: document.querySelectorAll('[aria-label="Accès rapide aux conversations"]').length,
-  scrollTop: document.getElementById('contenu')?.scrollTop ?? null,
-}));
+/**
+ * Le sélecteur est appliqué DEPUIS la bande (`bande.querySelectorAll`), jamais
+ * concaténé en `'[data-rail="pinned"] ' + liste` : une liste de sélecteurs
+ * séparée par des virgules ne se PRÉFIXE pas — `A B,C` vaut « B dans A » OU
+ * « C n'importe où ». La première écriture de ce cliquet comptait ainsi les 18
+ * contrôles de la page entière et accusait la bande.
+ */
+const FOCALISABLES = 'a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])';
+const kbdBefore = await kbdPage.evaluate((selecteur) => {
+  const bande = document.querySelector('[data-rail="pinned"]');
+  return {
+    pinnedPresent: bande !== null,
+    grandeInert: document.querySelector('[data-rail="grande"]')?.hasAttribute('inert') ?? null,
+    regions: document.querySelectorAll('[aria-label="Stories"]').length,
+    focalisablesDansLaBande: bande === null ? null : bande.querySelectorAll(selecteur).length,
+    scrollTop: document.getElementById('contenu')?.scrollTop ?? null,
+  };
+}, FOCALISABLES);
 constate(kbdBefore.pinnedPresent, "la bande épinglée n'est pas apparue — impossible de mesurer le doublon clavier");
 constate(kbdBefore.grandeInert === true, `le grand rail n'est pas \`inert\` pendant que la bande est active (${kbdBefore.grandeInert})`);
 constate(
   kbdBefore.regions === 1,
-  `${kbdBefore.regions} région(s) portent l'aria-label « Accès rapide aux conversations » en même temps — une seule le devrait`,
+  `${kbdBefore.regions} région(s) portent l'aria-label « Stories » en même temps — une seule le devrait`,
+);
+constate(
+  kbdBefore.focalisablesDansLaBande === 0,
+  `${kbdBefore.focalisablesDansLaBande} élément(s) focalisable(s) dans la bande épinglée — une pastille de story n'a pas de porte ` +
+    '(#5765). CLIQUET : si une porte vient d’arriver, rétablis ici la mesure du report de focus vers la tuile jumelle du grand rail ' +
+    '(le mécanisme est resté armé dans `ListHeader`).',
 );
 
 await kbdPage.evaluate(() => {
-  const liens = [...document.querySelectorAll('[data-rail="pinned"] a[data-conversation]')];
-  (liens[liens.length - 1])?.focus();
+  document.querySelector('header a[aria-label^="Progression"]')?.focus();
 });
-const scrollTopAvantTab = await kbdPage.evaluate(() => document.getElementById('contenu')?.scrollTop ?? null);
-
-await kbdPage.keyboard.press('Tab');
-const apresPremierTab = await kbdPage.evaluate(() => ({
-  ariaLabel: document.activeElement?.getAttribute('aria-label') ?? null,
-  scrollTop: document.getElementById('contenu')?.scrollTop ?? null,
-}));
+const departClavier = await kbdPage.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? null);
 constate(
-  apresPremierTab.ariaLabel?.startsWith('Progression') === true,
-  `le premier \`Tab\` depuis la dernière tuile de la bande ne rejoint pas « Progression » (${apresPremierTab.ariaLabel})`,
-);
-constate(
-  apresPremierTab.scrollTop === scrollTopAvantTab,
-  `le premier \`Tab\` a déplacé le scrollport (${scrollTopAvantTab} → ${apresPremierTab.scrollTop})`,
+  departClavier?.startsWith('Progression') === true,
+  `impossible de poser le focus sur « Progression » pour mesurer le \`Tab\` suivant (${departClavier})`,
 );
 
 await kbdPage.keyboard.press('Tab');
-const apresSecondTab = await kbdPage.evaluate(() => ({
+const apresTab = await kbdPage.evaluate(() => ({
   dansGrandRail: document.activeElement?.closest('[data-rail="grande"]') !== null,
-  conversationId: document.activeElement?.getAttribute('data-conversation') ?? null,
+  storyId: document.activeElement?.getAttribute('data-story') ?? null,
+  ariaLabel: document.activeElement?.getAttribute('aria-label') ?? null,
 }));
 constate(
-  !apresSecondTab.dansGrandRail,
-  'le second `Tab` depuis « Progression » entre dans le grand rail hors champ — il devrait être `inert`',
+  !apresTab.dansGrandRail,
+  `le \`Tab\` depuis « Progression » entre dans le grand rail hors champ (${apresTab.ariaLabel}) — il devrait être \`inert\``,
 );
 constate(
-  apresSecondTab.conversationId === null,
-  `le second \`Tab\` atterrit sur une tuile de conversation (${apresSecondTab.conversationId}) — un doublon de la bande, ` +
-    'jamais un contrôle nouveau',
+  apresTab.storyId === null,
+  `le \`Tab\` atterrit sur une pastille du rail (${apresTab.storyId}) — un doublon de la bande, jamais un contrôle nouveau`,
 );
 
 await kbdPage.close();

@@ -49,6 +49,12 @@
  *     défaut 7 : sur un viewport de 390×640, le menu de la DERNIÈRE rangée
  *     se RETOURNE au-dessus de son ancre et ses QUATRE lignes restent
  *     atteignables.
+ * 10. « 0 CONTRÔLE SANS GESTIONNAIRE » (#5652) — les trois boutons ronds de
+ *     l'en-tête ont chacun leur effet MESURÉ (feuille ouverte + retour
+ *     annoncé, route montée, route quittée), la recherche de contacts rend
+ *     des résultats cliquables, et le rail de stories ne porte AUCUN contrôle
+ *     tant qu'aucune porte de story n'existe (règle #5765) tout en SERVANT ce
+ *     que ses ports résolvent (anneau, couverture, humeur).
  */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -569,6 +575,132 @@ check(
 );
 
 await shortContext.close();
+
+// --------------- 10. les contrôles de l'EN-TÊTE ont un effet, le rail n'en a aucun
+/**
+ * « 0 CONTRÔLE SANS GESTIONNAIRE » SUR L'ÉCRAN (#5652, critère de fin).
+ *
+ * L'en-tête de la Lentille porte TROIS boutons ronds (lien de partage,
+ * nouvelle conversation, Progression) et le rail de stories porte des
+ * pastilles. La question est la même pour les quatre — « cliquer change-t-il
+ * quelque chose ? » — et elle ne se répond pas dans le code : un `onClick`
+ * déclaré peut ouvrir une feuille qui ne se monte pas, une route peut ne pas
+ * être inscrite à la table. D'où la mesure DANS le navigateur.
+ *
+ * Le rail, lui, est mesuré par l'inverse : ses pastilles ne doivent porter
+ * AUCUN contrôle tant que le viewer `/story/:postId` n'existe pas (règle
+ * #5765 — un bouton sans porte est un bouton mort). CLIQUET : le jour où la
+ * porte arrive, cette assertion rougit et impose de mesurer l'effet du tap,
+ * plutôt que de laisser passer une pastille cliquable qui ne mène nulle part.
+ */
+const enTeteContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+const enTetePage = await enTeteContext.newPage();
+await enTetePage.goto(`${BASE}/`, { waitUntil: 'load' });
+await enTetePage.waitForSelector('[data-row]');
+await enTetePage.waitForTimeout(300);
+
+const railControles = await enTetePage.evaluate(() => {
+  const rail = document.querySelector('[data-rail="grande"]');
+  if (rail === null) return null;
+  return {
+    pastilles: rail.querySelectorAll('[data-rail-tile]').length,
+    focalisables: rail.querySelectorAll('a[href],button,[tabindex]:not([tabindex="-1"]),[role="button"]').length,
+  };
+});
+check(railControles !== null, 'le rail de stories est PRÉSENT dans la Lentille — ses contrôles sont mesurables');
+check(
+  railControles !== null && railControles.pastilles > 0,
+  `le rail de stories rend ses pastilles (${JSON.stringify(railControles)})`,
+);
+check(
+  railControles !== null && railControles.focalisables === 0,
+  `le rail ne porte AUCUN contrôle tant qu'aucune porte de story n'existe (#5765) : ${railControles?.focalisables} ` +
+    "— CLIQUET : si la porte vient d'arriver, mesure ici l'effet du tap au lieu de compter zéro",
+);
+
+/** Le rail SERT ce que ses ports résolvent (#5652, revue) : une couverture ou
+ *  des initiales dans chaque pastille, et le badge d'humeur du corpus. */
+const railVisuel = await enTetePage.evaluate(() => {
+  const rail = document.querySelector('[data-rail="grande"]');
+  return rail === null
+    ? null
+    : {
+        anneaux: rail.querySelectorAll('[data-anneau]').length,
+        accentues: rail.querySelectorAll('[data-anneau][data-accented="true"]').length,
+        moods: rail.querySelectorAll('[data-mood]').length,
+      };
+});
+check(
+  railVisuel !== null && railVisuel.anneaux === railControles?.pastilles,
+  `chaque pastille porte son anneau (${JSON.stringify(railVisuel)})`,
+);
+check(
+  railVisuel !== null && railVisuel.accentues >= 1,
+  `au moins un anneau est ACCENTUÉ — une story non vue existe dans le corpus (${JSON.stringify(railVisuel)})`,
+);
+check(
+  railVisuel !== null && railVisuel.moods >= 1,
+  "le badge d'humeur du corpus est PEINT — sinon le port ?scope=statuses ne sert aucun pixel " +
+    `(${JSON.stringify(railVisuel)})`,
+);
+
+/** 1) « Créer un lien de partage » ⇒ une feuille OUVERTE, et choisir une
+ *     conversation éligible produit un RETOUR annoncé (`role="status"`). */
+await enTetePage.click('header button[aria-label="Créer un lien de partage"]');
+await enTetePage.waitForSelector('dialog[open]', { timeout: 3000 }).catch(() => {});
+const feuilleOuverte = await enTetePage.locator('dialog[open]').count();
+check(feuilleOuverte === 1, `« Créer un lien de partage » ouvre une feuille (dialogues ouverts : ${feuilleOuverte})`);
+
+const eligibles = await enTetePage.locator('dialog[open] li button').count();
+check(eligibles >= 1, `la feuille liste au moins une conversation éligible (obtenu : ${eligibles})`);
+if (eligibles >= 1) {
+  await enTetePage.locator('dialog[open] li button').first().click();
+  await enTetePage
+    .waitForFunction(() => (document.querySelector('[role="status"]')?.textContent ?? '').trim().length > 0, undefined, {
+      timeout: 3000,
+    })
+    .catch(() => {});
+  const retour = await enTetePage.evaluate(() => (document.querySelector('[role="status"]')?.textContent ?? '').trim());
+  check(
+    retour.length > 0,
+    `choisir une conversation ANNONCE le résultat du lien (obtenu : « ${retour} ») — un geste invisible sans retour est un geste perdu`,
+  );
+  const feuilleFermee = await enTetePage.locator('dialog[open]').count();
+  check(feuilleFermee === 0, `la feuille se referme après le choix (dialogues ouverts : ${feuilleFermee})`);
+}
+
+/** 2) « Nouvelle conversation » ⇒ la route `/conversations/new` RÉPOND (elle
+ *     est inscrite à la table, son écran se monte, son champ existe). */
+await enTetePage.click('header a[aria-label="Nouvelle conversation"]');
+await enTetePage.waitForSelector('input[aria-label="Rechercher un contact"]', { timeout: 3000 }).catch(() => {});
+const apresNouvelle = await enTetePage.evaluate(() => ({
+  path: window.location.pathname,
+  champ: document.querySelector('input[aria-label="Rechercher un contact"]') !== null,
+}));
+check(
+  apresNouvelle.path === '/conversations/new' && apresNouvelle.champ,
+  `« Nouvelle conversation » ouvre son écran (${JSON.stringify(apresNouvelle)})`,
+);
+
+/** 3) La recherche de contacts a un EFFET : deux caractères rendent des
+ *     résultats cliquables, jamais un écran blanc. */
+await enTetePage.fill('input[aria-label="Rechercher un contact"]', 'am');
+await enTetePage.waitForSelector('ul li button', { timeout: 3000 }).catch(() => {});
+const resultats = await enTetePage.locator('ul li button').count();
+check(resultats >= 1, `deux caractères rendent au moins un contact cliquable (obtenu : ${resultats})`);
+
+/** 4) « Progression » ⇒ sa route répond aussi. */
+await enTetePage.goto(`${BASE}/`, { waitUntil: 'load' });
+await enTetePage.waitForSelector('[data-row]');
+await enTetePage.click('header a[aria-label^="Progression"]');
+await enTetePage.waitForTimeout(400);
+const apresProgression = await enTetePage.evaluate(() => window.location.pathname);
+check(
+  apresProgression !== '/',
+  `« Progression » quitte la liste (obtenu : ${apresProgression})`,
+);
+
+await enTeteContext.close();
 
 await browser.close();
 server.close();
