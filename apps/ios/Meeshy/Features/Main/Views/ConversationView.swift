@@ -832,7 +832,7 @@ struct ConversationView: View {
                     // dixième porte : la feuille se referme et rend la main,
                     // l'hôte pose le même état que l'appui long. Elle ne monte
                     // pas le meuble, ce qui en ferait un second contrat d'envoi.
-                    onCompose: { composerState.pendingComposeTarget = ComposableMessageTarget(message: msgToForward) },
+                    onCompose: { composerState.pendingComposeTarget = ComposerSeedTarget(message: msgToForward) },
                     onDismiss: { composerState.forwardMessage = nil }
                 )
                     .presentationDetents([.medium, .large])
@@ -907,16 +907,14 @@ struct ConversationView: View {
             // recopierait son envoi, sa reprise hors-ligne et sa sortie — et
             // ce lot livre justement un SECOND déclencheur du même chemin.
             .fullScreenCover(item: $composerState.composeMediaTarget) { cible in
-                ConversationMediaComposerDoor(
+                MediaComposerDoor(
                     // L'INTENTION naît dans la porte, pas ici : un second site
                     // qui la construirait serait un second contrat à tenir
                     // d'accord, et ce lot a DEUX déclencheurs pour une seule
                     // présentation. L'hôte ne remet que la cible.
                     target: cible,
                     storyViewModel: storyViewModel,
-                    router: router,
-                    conversationListViewModel: conversationListViewModel,
-                    statusViewModel: statusViewModel,
+                    preview: MediaComposerPreviewHosts(router: router, conversationListViewModel: conversationListViewModel, statusViewModel: statusViewModel),
                     onDismiss: { composerState.composeMediaTarget = nil }
                 )
             }
@@ -2616,7 +2614,7 @@ struct ConversationView: View {
                 onCompose: {
                     // L'overlay ne monte rien : il rend la main. Le même état
                     // que le second déclencheur, un seul chemin de présentation.
-                    composerState.composeMediaTarget = ComposableMessageTarget(message: msg)
+                    composerState.composeMediaTarget = ComposerSeedTarget(message: msg)
                 },
                 onSelect: { beginSelectionMode(seedingWith: msg.id) },
                 isDirect: isDirect,
@@ -2791,7 +2789,7 @@ struct ConversationView: View {
         case .compose:
             Button {
                 HapticFeedback.light()
-                composerState.composeMediaTarget = ComposableMessageTarget(message: msg)
+                composerState.composeMediaTarget = ComposerSeedTarget(message: msg)
             } label: {
                 Label(String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main), systemImage: "wand.and.stars")
             }

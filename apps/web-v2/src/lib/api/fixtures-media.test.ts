@@ -11,10 +11,13 @@ import {
   MEDIA_CONVERSATION,
   MEDIA_CONVERSATION_ID,
   MEDIA_IMAGE_WITNESS_ID,
+  MEDIA_NULL_METADATA_WITNESS_ID,
   MEDIA_VOICE_DE_WITNESS_ID,
   MEDIA_VOICE_EN_WITNESS_ID,
   wavDataUri,
 } from './fixtures-media';
+import { decodeMessages } from './decode';
+import { electDescription } from '../view/media';
 import { messagesOf } from './fixtures';
 
 const attachmentOf = (id: string) => {
@@ -108,13 +111,14 @@ test('wavDataUri : deux tons différents rendent deux URIs différentes', () => 
   expect(wavDataUri({ seconds: 1, tone: 440 })).not.toBe(wavDataUri({ seconds: 1, tone: 523 }));
 });
 
-test('les six messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique', () => {
+test('les sept messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique', () => {
   const messages = messagesOf(MEDIA_CONVERSATION_ID);
-  expect(messages).toHaveLength(6);
+  expect(messages).toHaveLength(7);
   const times = messages.map((m) => new Date(m.createdAt).getTime());
   expect(times).toEqual([...times].sort((a, b) => a - b));
   expect(messages.some((m) => m.id === MEDIA_BROKEN_IMAGE_WITNESS_ID)).toBe(true);
   expect(messages.some((m) => m.id === MEDIA_BROKEN_VOICE_WITNESS_ID)).toBe(true);
+  expect(messages.some((m) => m.id === MEDIA_NULL_METADATA_WITNESS_ID)).toBe(true);
 });
 
 test('MEDIA_BROKEN_IMAGE_WITNESS_ID : aucune dimension déclarée (ratio de repli 300/240)', () => {
@@ -122,4 +126,33 @@ test('MEDIA_BROKEN_IMAGE_WITNESS_ID : aucune dimension déclarée (ratio de repl
   expect(attachment.width).toBeUndefined();
   expect(attachment.height).toBeUndefined();
   expect(attachment.fileUrl).toBe('data:image/png;base64,AAAA');
+});
+
+/**
+ * MEDIA_NULL_METADATA_WITNESS_ID — LA CHARGE RÉELLE DE LA PASSERELLE (défaut
+ * bloquant, revue #5805) : `transcription`/`translations`/`alt`/
+ * `thumbnailUrl` servis `null`, jamais absents. Ce témoin fait ÉCHOUER le
+ * gate si `decodeAttachment` (`api/decode.ts`) régresse — c'est la SEULE
+ * fixture du dépôt qui porte cette forme, et `fixtures.test.ts:1-10` (leçon
+ * « une fixture bien formée ne peut pas faire échouer un résolveur faux »)
+ * s'applique ici à l'ENVERS : la fixture doit rester MAL formée, comme la
+ * passerelle.
+ */
+test('MEDIA_NULL_METADATA_WITNESS_ID : transcription/translations/alt/thumbnailUrl NULS, comme la passerelle réelle', () => {
+  const attachment = attachmentOf(MEDIA_NULL_METADATA_WITNESS_ID);
+  expect(attachment.transcription).toBeNull();
+  expect(attachment.translations).toBeNull();
+  expect(attachment.alt).toBeNull();
+  expect(attachment.thumbnailUrl).toBeNull();
+});
+
+test('MEDIA_NULL_METADATA_WITNESS_ID : décodé (comme le fil le fait toujours), l’élection ne lève pas et retombe sur le nom du fichier', () => {
+  const decoded = decodeMessages([
+    messagesOf(MEDIA_CONVERSATION_ID).find((m) => m.id === MEDIA_NULL_METADATA_WITNESS_ID)!,
+  ])[0]!;
+  const attachment = decoded.attachments?.[0];
+  expect(attachment).toBeDefined();
+  expect('transcription' in (attachment as object)).toBe(false);
+  const described = electDescription({ attachment: attachment!, readerLanguages: ['fr', 'en'], fallbackLanguage: 'fr' });
+  expect(described).toEqual({ text: 'sans-titre.png', language: 'fr', translated: false });
 });

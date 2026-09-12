@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
-import { resolveAudioTrack, servedTranscript } from '@/lib/api/prism';
+import { electAudio, electDescription } from '@/lib/view/media';
 import { kindOf, waveformOf } from '@/lib/view/message';
 import { useAudioPlayback } from '@/lib/view/use-audio-playback';
 import { READER_LOCALE } from '@/lib/reader';
@@ -41,8 +41,9 @@ function ImageTile({
   readonly displayLanguage?: string;
   readonly fallbackLanguage: string;
 }) {
-  const preferredLanguages = displayLanguage === undefined ? languages : [displayLanguage, ...languages];
-  const described = servedTranscript({ preferredLanguages, attachment, fallbackLanguage });
+  // `electDescription`, jamais `electAudio` (revue #5805) : une image n'a pas
+  // de piste, et le site qui lui en rendait une lui remettait son propre PNG.
+  const described = electDescription({ attachment, readerLanguages: languages, displayLanguage, fallbackLanguage });
   const hasDimensions = attachment.width !== undefined && attachment.height !== undefined;
   const aspectRatio = hasDimensions ? `${attachment.width} / ${attachment.height}` : `${MEDIA_GRID_MAX_WIDTH} / 240`;
   // `lang` est ABSENT ssi la langue servie est celle du document — jamais un
@@ -57,7 +58,28 @@ function ImageTile({
   return (
     <figure
       data-attachment={attachment.id}
-      className="grid max-w-full place-items-center overflow-hidden rounded-media"
+      /* `relative` + enfants `absolute inset-0` (revue #5805) — PAS `grid`
+         avec deux enfants au même `col-start-1 row-start-1`, qui peignait le
+         glyphe de repli PAR-DESSUS une image pourtant décodée et opaque.
+         Un défaut de PEINTURE, invisible à toute propriété DOM (`hidden`,
+         `opacity`, `naturalWidth` étaient tous justes) : seul un
+         échantillonnage de pixels le voit — d'où le témoin (n) de
+         `scripts/lib/check-media.mjs`, sans lequel il reviendrait en silence.
+
+         LA CAUSE N'EST PAS LA GRILLE, c'est `opacity-40` SUR LE GLYPHE, et
+         c'est la règle qu'il faut retenir : une opacité < 1 crée un CONTEXTE
+         D'EMPILEMENT, peint à l'étape des contextes d'empilement — donc APRÈS
+         (au-dessus de) ses frères EN FLUX non positionnés, quel que soit
+         l'ordre du DOM. Isolé sur trois boîtes minimales (Chromium, pixel
+         central sur une image indigo `99,102,241`) :
+           grille + glyphe OPAQUE ........... 99,102,241 (l'image gagne)
+           grille + glyphe `opacity:.4` ..... 59,61,144  (le GLYPHE gagne)
+           deux `absolute` + `opacity:.4` ... 99,102,241 (l'image gagne)
+         Poser les DEUX enfants en `absolute` les remet dans la même couche,
+         où l'ordre du DOM tranche — l'`<img>`, postérieure, gagne. Reposer un
+         voile translucide sur un frère en flux le ferait remonter au-dessus,
+         ici comme sur n'importe quelle autre surface. */
+      className="relative max-w-full overflow-hidden rounded-media"
       style={{
         width: MEDIA_GRID_MAX_WIDTH,
         aspectRatio,
@@ -68,7 +90,7 @@ function ImageTile({
       {...(showsFallbackLabel ? { role: 'img', 'aria-label': described.text } : {})}
     >
       {/* Le glyphe reste DERRIÈRE : fond de chargement ET repli d'erreur. */}
-      <Glyph name="image" size={40} className="col-start-1 row-start-1 opacity-40" />
+      <Glyph name="image" size={40} className="absolute inset-0 m-auto opacity-40" />
       {attachment.fileUrl === '' ? null : (
         <img
           data-attachment-image={attachment.id}
@@ -80,7 +102,7 @@ function ImageTile({
           {...(attachment.height !== undefined ? { height: attachment.height } : {})}
           loading="lazy"
           decoding="async"
-          className="col-start-1 row-start-1 size-full object-cover"
+          className="absolute inset-0 size-full object-cover"
           onError={() => setFailed(true)}
         />
       )}
@@ -102,13 +124,11 @@ function VoiceAttachment({
   readonly displayLanguage?: string;
   readonly fallbackLanguage: string;
 }) {
-  const preferredLanguages = displayLanguage === undefined ? languages : [displayLanguage, ...languages];
-  const transcript = servedTranscript({ preferredLanguages, attachment, fallbackLanguage });
-  const track = resolveAudioTrack({
-    servedLanguage: transcript.language,
-    originalLanguage: attachment.transcription?.language ?? fallbackLanguage,
-    originalUrl: attachment.fileUrl,
-    translations: attachment.translations,
+  const { described: transcript, track } = electAudio({
+    attachment,
+    readerLanguages: languages,
+    displayLanguage,
+    fallbackLanguage,
   });
   const { status, progress, toggle, bind } = useAudioPlayback({ attachmentId: attachment.id });
 

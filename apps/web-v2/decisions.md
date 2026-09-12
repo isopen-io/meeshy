@@ -1522,6 +1522,112 @@ parce qu'il ne regarde que le document racine, jamais les pages qu'il a fait
    (`bun run build`, sans `--outDir`) continue de recevoir ses cinq pages
    dans `dist/`, inchangée.
 
+**Complément 2026-09-12 (#6027) — la garde qui LEVAIT pour iOS cède la place
+à un mécanisme : la coque iOS SERT `MEESHY_SHELL_START_PATH`, comme Android.**
+
+1. **Le défaut résiduel, mesuré.** L'asymétrie du complément bis ci-dessus
+   (« autonome sur Android, il exige un placeholder manuel sous iOS ») avait
+   été refermée en apparence par une garde qui LEVAIT systématiquement pour
+   `MEESHY_SHELL_SYNC_TARGET=ios` (revue #5774) — un refus sûr, mais qui
+   rendait `bunx cap sync ios` avec ce paramètre TOUJOURS indémarrable, plutôt
+   que de le rendre possible. Le critère de #6027 demandait l'un OU l'autre
+   (servir, ou refuser en NOMMANT la cause) ; ce lot livre la forme « sert ».
+2. **Le mécanisme retenu : un hook Capacitor, pas une classe Swift.**
+   `CAPBridgeViewController.loadWebView()` est `public final` (`@capacitor/ios`
+   8.5.1, lu) — aucune sous-classe ne peut intercepter sa garde
+   `FileManager.fileExists`. `scripts/shell-start-path-hook.mjs` déclare
+   quatre scripts npm (`capacitor:copy:before`, `capacitor:copy:after`,
+   `capacitor:sync:before`, `capacitor:sync:after` — lus par
+   `@capacitor/cli/dist/common.js::runPlatformHook` depuis le `package.json`
+   de la racine du paquet) et pose le placeholder littéral sous
+   `ios/App/App/public/<chemin>` APRÈS que `copyWebDir` (`tasks/copy.js`,
+   `remove(nativeAbsDir)` puis `copy`) a réécrit ce dossier — le même effet
+   que `Bridge.java` sur Android, obtenu autrement.
+3. **Pourquoi QUATRE clés pour DEUX phases, mesuré sur le VRAI code de la
+   CLI.** `sync()` (`tasks/sync.js`) enveloppe son appel à `copy()` dans un
+   `try { … } catch (e) { logger.error(e) }` — une erreur levée PAR un hook
+   `capacitor:copy:*` pendant `cap sync` est donc AVALÉE (code de sortie 0
+   quand même). `capacitor:sync:before` et `capacitor:sync:after`, eux, sont
+   appelés directement dans `sync()`, HORS de ce `try/catch` : une levée y
+   remonte jusqu'à `syncCommand`, qui l'escalade en `FatalException`
+   (`errors.js::fatal`) — code de sortie non nul. Le refus (cible déclarée ≠
+   plateforme réellement synchronisée, fournie par `CAPACITOR_PLATFORM_NAME`)
+   vit donc en phase `before`, où `sync:before` le rend LOUD ; le placement
+   vit en phase `after`, où `copy:after` le fait tôt (juste après l'écriture
+   de `public/`) et `sync:after` le REJOUE (idempotent) — si la première pose
+   avait échoué en silence sous `copy:after`, la seconde le REMONTE. Les deux
+   clés `copy:*` restent nécessaires pour `cap copy` employé SEUL (qui
+   n'exécute jamais les hooks `sync:*`). Mesuré en direct (`bunx cap sync
+   android` sans variable : quatre lignes `skip` ; `MEESHY_SHELL_SYNC_TARGET=ios
+   bunx cap sync android` avec la variable posée : refus en `sync:before`,
+   AVANT toute écriture, RC 1 ; `bunx cap sync ios` avec la variable et la
+   cible alignées : placeholder posé par `copy:after`, confirmé « déjà
+   présent » par `sync:after`, RC 0 ; `bunx cap sync ios` SANS variable
+   ensuite : `public/` réécrit par `copyWebDir`, placeholder disparu,
+   `appStartPath` retiré de `capacitor.config.json` synchronisé, `git status`
+   propre — `ios/App/App/public` et `capacitor.config.json` synchronisé n'ont
+   jamais été des chemins suivis par git).
+4. **`capacitor.config.ts` ne connaît plus la plateforme visée pour refuser.**
+   `resolveCapacitorConfig` pose `server.appStartPath` pour Android ET iOS,
+   avertit (`console.warn`) sur les deux, et ne lève plus que sur la FORME
+   (barre initiale, extension) ou sur `MEESHY_SHELL_SYNC_TARGET` absente/
+   invalide — jamais sur la cible elle-même. La validation « cible déclarée
+   == plateforme réellement synchronisée » s'est déplacée dans le hook
+   (`planStartPathHook`), seul site à recevoir `CAPACITOR_PLATFORM_NAME` — une
+   donnée que la CLI ne fournit qu'AU MOMENT du hook, jamais au chargement de
+   `capacitor.config.ts`.
+5. **Le gate ne pouvait pas voir une régression qui retirerait le hook sans
+   toucher `capacitor.config.ts`.** `cap config --json` (lecture seule) rend
+   `server.appStartPath` pour iOS dès que `resolveCapacitorConfig` l'accepte
+   — que le hook soit câblé ou non. `scripts/check-capacitor-config.mjs` gagne
+   trois preuves qui referment cet angle mort quand iOS SERT le chemin :
+   `auditHookDeclaration` (les quatre clés de `package.json` pointent vers le
+   bon script et la bonne phase, `ios.webDir` — rendu par `cap config --json`
+   — vise le dossier natif attendu) et un rejeu RÉEL du hook dans un dossier
+   temporaire (jamais `ios/` du dépôt), qui pose puis refuse comme la CLI le
+   ferait. Une forme « iOS refuse en nommant `CAPBridgeViewController.loadWebView`
+   » reste admise par ce gate (le critère de #6027 l'autorise), mais un refus
+   MUET, comme une forme « sert » non ARMÉE, le fait rougir.
+6. **Le rejeu se juge sur le FICHIER POSÉ, jamais sur le code de sortie du
+   hook (revue #6027).** La première forme du gate ne vérifiait que « le hook
+   sort 0 » — or `skip` est son issue la plus FRÉQUENTE et sort 0 lui aussi.
+   Falsifié : `planStartPathHook` rendu `skip` en phase `after` laissait
+   `check-capacitor-config.mjs` VERT, en imprimant « le hook qui le pose sous
+   public/ est ARMÉ » pendant que rien n'était posé — le défaut même de #6027,
+   restauré sous un témoin qui affirmait le contraire. Le gate exige
+   désormais l'EXISTENCE du placeholder dans son dossier temporaire, puis
+   rejoue la phase `after` une SECONDE fois (idempotence de `copy:after` puis
+   `sync:after` dans un même `cap sync`).
+7. **Une TROISIÈME garde de FORME : aucun segment `..` (revue #6027).**
+   Depuis ce lot, `MEESHY_SHELL_START_PATH` n'est plus seulement une URL —
+   le hook en DÉRIVE un chemin de fichier que `path.join` NORMALISE :
+   `/c/../../../tmp/x` posait le placeholder dans `apps/web-v2/tmp/x`, HORS
+   de `public/`, pendant que le journal annonçait « placeholder posé » et que
+   la coque sortait quand même. La garde vit dans `capacitor.config.ts` avec
+   les deux autres gardes de forme — elle couvre les DEUX plateformes et
+   refuse AVANT toute écriture, ce qu'aucune garde en aval ne peut faire ; le
+   hook ne la redouble donc pas (un seul site).
+8. **Les quatre clés `capacitor:*` sont le POINT D'EXTENSION UNIQUE des
+   hooks Capacitor de ce paquet.** Un futur lot qui aurait besoin d'agir sur
+   `copy`/`sync` s'y CHAÎNE (`node scripts/shell-start-path-hook.mjs <phase>
+   && node scripts/<autre>.mjs`) plutôt que de remplacer la valeur d'une clé :
+   `auditHookDeclaration` compare la valeur à l'IDENTIQUE et rougirait — c'est
+   voulu, la substitution silencieuse d'un hook est exactement ce que ce gate
+   surveille. Le jour où un second hook existe, c'est la comparaison qui
+   s'assouplit (préfixe attendu), jamais le gate qu'on retire.
+9. **Ce qui reste hors de ce lot, avec son issue.** L'entrée système
+   (Universal Links / App Links, #5819) — ce lot arme un lien profond POSÉ
+   par la recette, pas reçu du système d'exploitation.
+
+Sites : `scripts/shell-start-path-hook.mjs` (`IOS_NATIVE_WEB_DIR`,
+`planStartPathHook`, `applyStartPathPlan`), les quatre clés `capacitor:*` de
+`package.json`, `scripts/check-capacitor-config.mjs` (`replayStartPath`,
+`judgeStartPathReplay`, `auditHookDeclaration`, `replayHookRoundtrip`).
+Témoins : `capacitor.config.test.ts` (inversion de la régression #5774),
+`scripts/shell-start-path-hook.test.ts` (20 cas), `scripts/check-capacitor-config.test.ts`
+(11 cas) — gate rejoué ROUGE (clé renommée, puis refus rendu muet) PUIS VERT
+à chaque mutation.
+
 ## D-28 · Un message part par REST avec son `clientMessageId`, se confirme par greffe de l'accusé, et se relance à la main — 2026-09-09 (#5813)
 
 **Amende D-16** : sa clause « en ligne, l'état reste "en attente"… sans transport (#5493) » n'est plus vraie — le transport existe. Les DEUX autres clauses de D-16 (hors ligne ⇒ échec immédiat sans horloge ; « Réessayer » hors ligne laisse en échec) restent inchangées et gardées par `check-thread-states.mjs`.
@@ -1587,7 +1693,7 @@ Sites uniques réutilisés, aucune jumelle : `outcomeOf` (extrait de `conversati
 
 ## D-30 · Les coques parlent à la passerelle par des origines NOMMÉES, en DONNÉE — 2026-09-09 (#5815)
 
-**(a) Les deux origines de coque sont une donnée d'exploitation, jamais un motif ni un défaut de `cors-origins.ts`.** Une WebView Capacitor envoie un en-tête `Origin` — contrairement à une app native, qu'aucun CORS ne protège (§ doc-comment du module) — et c'est l'origine VIRTUELLE de la coque, lue dans les sources installées de `@capacitor` 8.5.1 : iOS `capacitor://localhost` (`CAPInstanceDescriptor.m:10-11`), Android `https://localhost` (`CapConfig.java:38-39`, confirmé par `capacitor.config.ts:44` `androidScheme: 'https'`). Ni motif ni schéma générique dans `resolveAllowedOrigins` — la règle reste une égalité stricte de chaîne, et les deux origines rejoignent `CORS_ORIGINS`/`ALLOWED_ORIGINS` du staging comme n'importe quelle autre origine déclarée. **Ce que la liste élargie expose, mesuré (revue)** : `credentials: true` est posé sur les deux portes, mais la passerelle n'a AUCUN cookie (`grep -rn 'cookies\|@fastify/cookie' services/gateway/src` hors témoins = 0) — l'authentification est exclusivement `Authorization: Bearer` / `X-Session-Token`, des en-têtes qu'une page tierce servie sur `https://localhost` ne peut pas fabriquer. Élargir la liste n'ouvre donc l'accès à aucune donnée authentifiée ; une origine de coque n'obtient que ce qu'un `curl` sans `Origin` obtient déjà.
+**(a) Les deux origines de coque sont une donnée d'exploitation, jamais un motif ni un défaut de `cors-origins.ts`.** Une WebView Capacitor envoie un en-tête `Origin` — contrairement à une app native, qu'aucun CORS ne protège (§ doc-comment du module) — et c'est l'origine VIRTUELLE de la coque, lue dans les sources installées de `@capacitor` 8.5.1 : iOS `capacitor://localhost` (`CAPInstanceDescriptor.m:10-11`), Android `https://localhost` (`CapConfig.java:38-39`, confirmé par `capacitor.config.ts:116` `androidScheme: 'https'`). Ni motif ni schéma générique dans `resolveAllowedOrigins` — la règle reste une égalité stricte de chaîne, et les deux origines rejoignent `CORS_ORIGINS`/`ALLOWED_ORIGINS` du staging comme n'importe quelle autre origine déclarée. **Ce que la liste élargie expose, mesuré (revue)** : `credentials: true` est posé sur les deux portes, mais la passerelle n'a AUCUN cookie (`grep -rn 'cookies\|@fastify/cookie' services/gateway/src` hors témoins = 0) — l'authentification est exclusivement `Authorization: Bearer` / `X-Session-Token`, des en-têtes qu'une page tierce servie sur `https://localhost` ne peut pas fabriquer. Élargir la liste n'ouvre donc l'accès à aucune donnée authentifiée ; une origine de coque n'obtient que ce qu'un `curl` sans `Origin` obtient déjà.
 
 **(b) La liste vit dans le compose du dépôt ET sur l'hôte, à l'identique — deux preuves distinctes.** `infrastructure/docker/compose/docker-compose.staging.yml` porte les deux origines, gardé par `services/gateway/src/__tests__/unit/config/cors-origins.test.ts` (`describe` « les coques Capacitor de la v3.1 sont des origines NOMMÉES du staging ») qui LIT le fichier du dépôt comme texte et vérifie l'effet sur les deux portes (HTTP `@fastify/cors` réel, Socket.IO). L'hôte (`/opt/meeshy/staging/docker-compose.yml:217-218`) est patché à la main (sauvegarde datée, `sed` chirurgical sur les deux lignes, `docker compose up -d --no-deps gateway-staging`) — le témoin garde le dépôt, le `curl` des quatre origines (les deux coques, une tierce refusée, `staging.meeshy.me` intact) garde l'hôte. Aucun cliquet CI ne relie les deux ; une dérive future se détecte par la même recette `curl`.
 
@@ -1709,3 +1815,18 @@ Le déplacement est parti SEUL dans son commit, avant toute réécriture, pour q
 - D-12 ci-dessus, qui raconte le renommage précédent avec les noms de son jour.
 
 > **Piège de lecture, qui se superpose à celui de D-12.** Dans les journaux (`tasks/`, CHANGELOG), `apps/web-v3` désigne l'ancienne refonte AVANT le 2026-09-07, et ce chantier entre le 2026-09-07 et le 2026-09-10. Ils ne sont pas réécrits.
+
+## D-36 · Le rail de la Lentille compacte dans l'EN-TÊTE, jamais sur place — la géographie iOS reprise pour de vrai (2026-09-12, #6103, décision #6070)
+
+`#5946` avait fait compacter le rail SUR PLACE (72 → 30 px), hors flux, superposé à une tuile fantôme toujours GRANDE réservant la hauteur — un correctif qui tenait l'invariant « aucune rangée ne bouge » mais créait une bande VIDE (~130 px) entre l'en-tête et les filtres une fois défilé, que la cible iOS n'a pas. #6070 posait deux règles candidates ; celle-ci tranche : **le grand rail vit DANS la vue défilante et en SORT normalement**, comme tout contenu (`ConversationListView.swift:1659-1671`) ; **une bande compacte, la MÊME cellule (`ConversationRail`, `variant="pinned"`), prend la place du TITRE dans l'en-tête** une fois le grand rail sorti (`PinnedStoryTrailBand`, `StoryTrayView.swift:656-671`) — jamais les deux peints en même temps.
+
+| | |
+|---|---|
+| observation | `useOutOfView` (`lib/view/use-out-of-view.ts`) — un `IntersectionObserver` sur le grand rail, racine = le scrollport ; AUCUN `scrollTop` lu à la main (contrairement à `useScene`, qui a besoin d'une valeur continue) |
+| la cible arrive par une réf de RAPPEL | corrigé en revue : un `RefObject` en dépendance d'effet ne rend pas, et le grand rail QUITTE le DOM dès que son corpus visible est vide (échec à cache vide, dernière conversation archivée). Mesuré sur la première forme : `pinned` restait `true` sur un rail disparu ⇒ titre effacé (`opacity: 0`, `aria-hidden`) au-dessus d'une bande qui ne peint rien — un en-tête VIDE. **Pas de cible ⇒ pas d'épinglage**, et l'effet suit chaque commit. Témoins : `use-out-of-view.test.tsx` (la règle), `check-gateway-build.mjs` bloc 5 (ce que l'écran d'échec montre) |
+| bascule | `resolveOutOfView` (`lib/view/out-of-view.ts`) — hystérésis à deux seuils, JAMAIS un seul point (`PINNED_RAIL_REVEAL_RATIO = 0`, `PINNED_RAIL_RELEASE_RATIO = 0,25`, `lib/lens/pinned-rail.ts`) |
+| croisement titre ↔ bande | un fondu d'OPACITÉ seul (règle 32 — jamais la géométrie), `HIDDEN_CHROME_EASE_OUT_MS` (250 ms, réutilisé du chrome du fil — c'est aussi du chrome), coupé par `motion-reduce:` |
+| focus | `ListHeader` mémorise la conversation focalisée dans la bande AVANT son démontage (`onFocusCapture`, jamais `document.activeElement` après coup, déjà réinitialisé) et le reporte sur la tuile jumelle du grand rail, qui n'a lui jamais quitté le DOM |
+| cible tactile | `RailTile` porte désormais `min-width`/`min-height: 44px` avec marge NÉGATIVE compensant exactement l'écart à la cellule — jamais en élargissant `[data-rail-tile]`, que `check-lens.mjs` mesure pour la compaction. La FENTE du titre porte le plancher jumeau (`min-h-11`, `ListHeader`) : sans lui la bande, dont `overflow-x-auto` rend les DEUX axes défilants, débordait d'un pixel d'un `h1` de 42 px (mesuré `scrollHeight` 43 / `clientHeight` 42). L'en-tête reste à 64 px, déjà fixé par le bouton Progression |
+
+Deux extractions accompagnent la reprise (le fichier de route reculait plutôt qu'il n'avançait) : `components/conversation-rail.tsx` (une cellule, deux géographies — `grande`/`pinned` — et l'exclusion des archivées, un seul site) et `components/list-header.tsx` (la bascule). `check-lens.mjs` § 7 et `check-gateway-build.mjs` bloc 4 (réancré DANS le scrollport, `#contenu.top` invariant peuplé/vide) portent la preuve.

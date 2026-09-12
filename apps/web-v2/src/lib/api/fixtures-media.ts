@@ -359,7 +359,52 @@ const media6 = mediaMessage({
   ],
 });
 
-export const MEDIA_MESSAGES: readonly Message[] = [media1, media2, media3, media4, media5, media6];
+/**
+ * media-7 — LA CHARGE RÉELLE DE LA PASSERELLE (défaut bloquant, revue #5805) :
+ * `transcription: null`, `translations: null`, `alt: null`,
+ * `thumbnailUrl: null` — EXPLICITES, jamais absents. Relevé le 2026-09-12 sur
+ * `gate.staging.meeshy.me` (conv `690d64275c50e29d3c0c6f29`) : TOUTE pièce
+ * jointe SANS transcription sert cette forme, la MAJORITAIRE sur un fil réel.
+ * `attachmentDefaults` (comme les autres témoins) ne porte AUCUN de ces
+ * champs — ils sont ajoutés ici à `null`, `as unknown as Attachment` parce
+ * que le type partagé les déclare optionnels SANS `| null`
+ * (`packages/shared/types/attachment.ts:284` — le mensonge de type qui a
+ * laissé passer le défaut). Sans ce témoin, `decodeAttachment`
+ * (`api/decode.ts`) pourrait régresser en silence : aucune AUTRE fixture ne
+ * porte cette forme.
+ */
+export const MEDIA_NULL_METADATA_WITNESS_ID = 'media-7';
+const media7CreatedAt = dayAt(0, 9, 30);
+const media7 = mediaMessage({
+  id: MEDIA_NULL_METADATA_WITNESS_ID,
+  senderId: 'u-amina',
+  sender: amina,
+  content: '',
+  originalLanguage: 'fr',
+  messageType: 'image',
+  translations: [],
+  createdAt: media7CreatedAt,
+  attachments: [
+    {
+      ...attachmentDefaults,
+      id: `${MEDIA_NULL_METADATA_WITNESS_ID}-a1`,
+      messageId: MEDIA_NULL_METADATA_WITNESS_ID,
+      fileName: 'sans-titre.png',
+      originalName: 'sans-titre.png',
+      mimeType: 'image/png',
+      fileSize: 96,
+      fileUrl: MEDIA_IMAGE_DATA_URI,
+      uploadedBy: 'u-amina',
+      createdAt: media7CreatedAt.toISOString(),
+      transcription: null,
+      translations: null,
+      alt: null,
+      thumbnailUrl: null,
+    },
+  ],
+} as unknown as Parameters<typeof mediaMessage>[0]);
+
+export const MEDIA_MESSAGES: readonly Message[] = [media1, media2, media3, media4, media5, media6, media7];
 
 export const MEDIA_CONVERSATION: Conversation = {
   ...conversationDefaults,
@@ -369,7 +414,7 @@ export const MEDIA_CONVERSATION: Conversation = {
   memberCount: 3,
   participants: [viewer, amina, kwame],
   unreadCount: 0,
-  lastMessage: media6,
-  lastMessageAt: media6.createdAt,
+  lastMessage: media7,
+  lastMessageAt: media7.createdAt,
   lastMessageOriginalLanguage: 'fr',
 };

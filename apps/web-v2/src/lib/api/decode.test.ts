@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
 import { decodeConversation, decodeMessage, toDate } from './decode';
-import { CONVERSATION_ID, VIEWER_ID, amina, conversationDefaults, message, translation, viewer } from './fixtures-base';
+import { CONVERSATION_ID, VIEWER_ID, amina, attachmentDefaults, conversationDefaults, message, translation, viewer } from './fixtures-base';
 import { protectionOf } from '../reading-mode/protection';
 import { composeMessageLabel } from '../view/message-a11y-label';
 import { forwardAttributionOf } from '../view/message-badges';
 import { storyCitationOf } from '../view/message-body';
+import { electDescription } from '../view/media';
 import type { Conversation, Message } from './types';
 
 describe('toDate — idempotent', () => {
@@ -389,5 +390,125 @@ describe('decodeMessage — les clés NON-DATE servies `null` par la passerelle 
 
   test('un message ordinaire ne cite AUCUNE story', () => {
     expect(storyCitationOf(decodeMessage(rawNullNonDates))).toBeNull();
+  });
+});
+
+/**
+ * DÉFAUT BLOQUANT, REVUE #5805 — LA PIÈCE JOINTE N'A JAMAIS EU DE DÉCODEUR.
+ *
+ * `decodeMessage` défait `null` sur ONZE clés du MESSAGE (défaut 4 #5668,
+ * #6086) mais ne touchait JAMAIS `message.attachments` : chaque pièce
+ * jointe traversait BRUTE. Relevé le 2026-09-12 sur `gate.staging.meeshy.me`
+ * (conv `690d64275c50e29d3c0c6f29`) : TOUTE pièce SANS transcription sert
+ * `transcription: null`, `translations: null`, `alt: null`,
+ * `thumbnailUrl: null` — EXPLICITES, jamais absents — et
+ * `electDescription`/`electAudio` (`view/media.ts`) lèvent sur
+ * `transcription.type`. Sur un fil de 12 messages réels, UNE seule rangée
+ * survivait.
+ *
+ * `decodeAttachment` (`decode.ts`) est le site qui défait ces quatre `null` ;
+ * `decodeMessage` l'applique à `attachments` (et, RÉCURSIVEMENT, à celles de
+ * `replyTo` — même appel qui décode déjà `replyTo` lui-même).
+ */
+describe('decodeMessage — les pièces jointes, `null` explicite sur transcription/translations/alt/thumbnailUrl (#5805)', () => {
+  const attachmentAsServedByTheGateway = {
+    ...attachmentDefaults,
+    id: 'a1',
+    messageId: 'm13',
+    fileName: 'capture.png',
+    originalName: 'capture.png',
+    mimeType: 'image/png',
+    fileSize: 96,
+    fileUrl: 'data:image/png;base64,ABC',
+    uploadedBy: 'u-amina',
+    createdAt: '2026-09-12T09:00:00.000Z',
+    transcription: null,
+    translations: null,
+    alt: null,
+    thumbnailUrl: null,
+  };
+
+  const rawWithAttachment = {
+    ...message({
+      id: 'm13',
+      senderId: 'u-amina',
+      sender: amina,
+      content: '',
+      originalLanguage: 'fr',
+      translations: [],
+      createdAt: '2026-09-12T09:00:00.000Z' as unknown as Date,
+    }),
+    attachments: [attachmentAsServedByTheGateway],
+  } as unknown as Message;
+
+  test('aucune des quatre clés ne survit à `null` sur la pièce jointe — toutes ABSENTES', () => {
+    const decoded = decodeMessage(rawWithAttachment);
+    const attachment = decoded.attachments?.[0];
+    expect(attachment).toBeDefined();
+    expect('transcription' in (attachment as object)).toBe(false);
+    expect('translations' in (attachment as object)).toBe(false);
+    expect('alt' in (attachment as object)).toBe(false);
+    expect('thumbnailUrl' in (attachment as object)).toBe(false);
+  });
+
+  test('le fil ne s’effondre plus : électer la description de la pièce décodée ne lève pas', () => {
+    const decoded = decodeMessage(rawWithAttachment);
+    const attachment = decoded.attachments?.[0];
+    expect(attachment).toBeDefined();
+    expect(() =>
+      attachment === undefined
+        ? undefined
+        : electDescription({ attachment, readerLanguages: ['fr', 'en'], fallbackLanguage: 'fr' }),
+    ).not.toThrow();
+  });
+
+  test('une pièce SANS null (cas nominal des fixtures) reste intacte', () => {
+    const rawOrdinary = {
+      ...message({
+        id: 'm14',
+        senderId: 'u-amina',
+        sender: amina,
+        content: '',
+        originalLanguage: 'fr',
+        translations: [],
+        createdAt: '2026-09-12T09:00:00.000Z' as unknown as Date,
+      }),
+      attachments: [
+        {
+          ...attachmentDefaults,
+          id: 'a2',
+          messageId: 'm14',
+          fileName: 'capture.png',
+          originalName: 'capture.png',
+          mimeType: 'image/png',
+          fileSize: 96,
+          fileUrl: 'data:image/png;base64,ABC',
+          uploadedBy: 'u-amina',
+          createdAt: '2026-09-12T09:00:00.000Z',
+          alt: 'Une capture',
+        },
+      ],
+    } as unknown as Message;
+    const decoded = decodeMessage(rawOrdinary);
+    expect(decoded.attachments?.[0]?.alt).toBe('Une capture');
+  });
+
+  test('récursif — une pièce jointe `null` sur `replyTo` est décodée aussi', () => {
+    const rawWithReply = {
+      ...message({
+        id: 'm15',
+        senderId: VIEWER_ID,
+        sender: viewer,
+        content: 'réponse',
+        originalLanguage: 'fr',
+        translations: [],
+        createdAt: '2026-09-12T09:05:00.000Z' as unknown as Date,
+        replyTo: rawWithAttachment,
+      }),
+    } as unknown as Message;
+    const decoded = decodeMessage(rawWithReply);
+    const replyAttachment = decoded.replyTo?.attachments?.[0];
+    expect(replyAttachment).toBeDefined();
+    expect('transcription' in (replyAttachment as object)).toBe(false);
   });
 });

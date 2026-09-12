@@ -33,11 +33,13 @@
  * PREUVE iOS : la sonde ne pilote PAS le simulateur iOS — WKWebView ne parle
  * aucun CDP. La capture iOS se prend par `xcrun simctl io <udid> screenshot`,
  * après un lien profond posé par `MEESHY_SHELL_START_PATH` (README.md § « Le
- * lien profond dans une coque ») ET, sur iOS SEULEMENT, un placeholder posé
- * sous `ios/App/App/public/c/<id>` (jamais commis) : sans lui, `appStartPath`
- * seul CRASHE la coque (`CAPBridgeViewController.loadWebView()`, garde
- * `FileManager.fileExists` qui précède `Router.swift`). Android n'en a pas
- * besoin.
+ * lien profond dans une coque »). Le placeholder que
+ * `CAPBridgeViewController.loadWebView()` exige sous `ios/App/App/public/c/<id>`
+ * (garde `FileManager.fileExists` qui précède `Router.swift`) est posé
+ * AUTOMATIQUEMENT par le hook `capacitor:{copy,sync}:{before,after}`
+ * (`scripts/shell-start-path-hook.mjs`, #6027) — `bunx cap sync ios` avec la
+ * variable posée suffit désormais, aucun geste manuel avant `xcodebuild`.
+ * Android n'en a jamais eu besoin.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

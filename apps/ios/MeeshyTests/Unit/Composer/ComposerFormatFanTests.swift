@@ -131,7 +131,8 @@ final class ComposerFormatFanTests: XCTestCase {
             .repost(ofPostId: "p1", sourceFormat: .story),
             .edit(postId: "p2", documentFormat: .reel),
             .draft(id: "d1"), .share,
-            .conversationMedia(messageId: "m1", attachmentId: "a1")
+            .conversationMedia(messageId: "m1", attachmentId: "a1"),
+            .socialMedia(postId: "p9", mediaId: "m9")
         ]
 
         for door in doors {

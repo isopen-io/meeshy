@@ -15,6 +15,7 @@ import { Glyph } from './glyph';
 import { LensTime } from './lens-time';
 import { UnreadBadge } from './unread-badge';
 import { RowActions } from './row-actions';
+import { TypingDots } from './typing-dots';
 
 /**
  * LA LIGNE DE LA LENTILLE — plate, et c'est tout le sujet.
@@ -101,6 +102,22 @@ export type LensRowProps = {
    * cette rangée n'a plus besoin de fermer sur rien pour agir.
    */
   onRowAction: (conversationId: string, id: RowActionId) => void;
+  /**
+   * QUI ÉCRIT DANS CETTE CONVERSATION, MAINTENANT (#5793) — le nom du premier
+   * frappeur vivant qui n'est pas le lecteur, distribué par l'écran
+   * (`useTypistNames`, `lib/api/use-typists.ts`) : une rangée est rendue dans un
+   * `.map`, elle ne peut pas s'abonner elle-même.
+   *
+   * `undefined` ⇒ personne n'écrit : la ligne 2 retombe sur sa précédence
+   * normale, et rien n'est inventé. Deux effets, ceux d'iOS :
+   *  - la ligne 2 devient « X écrit » (`Line2Kind.resolve`, `typing` en TÊTE de
+   *    la précédence, `targets/lentille.md:502-511`) ;
+   *  - la présence est FORCÉE en ligne, au niveau du RANG et jamais dans
+   *    l'avatar (`LentilleConversationRow.swift:125-127`) — la frappe EST une
+   *    preuve d'activité (`CLAUDE.md` § « User Presence » : « une personne qui
+   *    écrit est TOUJOURS verte »).
+   */
+  typist?: string | undefined;
 };
 
 function LensRowImpl({
@@ -111,6 +128,7 @@ function LensRowImpl({
   flags,
   unreadCount,
   onRowAction,
+  typist,
 }: LensRowProps) {
   const unread = unreadCount > 0;
   /**
@@ -279,13 +297,21 @@ function LensRowImpl({
           opacity: status.alpha,
         })}
       >
+        {/* LA FRAPPE FORCE LA PRÉSENCE EN LIGNE, au niveau du RANG et jamais
+            dans l'avatar (`LentilleConversationRow.swift:125-127`) : une
+            personne qui écrit est TOUJOURS verte (`CLAUDE.md` § « User
+            Presence »), quel que soit ce que le serveur a servi — un
+            `lastActiveAt` périmé de trois minutes ne peut pas contredire une
+            frappe reçue à l'instant. Le forçage est LOCAL et ne fabrique aucune
+            donnée : il ne vaut que tant que le magasin de frappe a une entrée
+            vivante. */}
         <Avatar
           initials={initialsOf(title)}
           color={accent}
           size={44}
           name={title}
           opacity={chromeFade}
-          {...(group ? {} : { presence: presenceOf(peerOf(conversation, viewerId)) })}
+          {...(group ? {} : { presence: typist === undefined ? presenceOf(peerOf(conversation, viewerId)) : 'online' })}
         />
 
         <span className="flex min-w-0 flex-1 flex-col justify-center">
@@ -419,8 +445,22 @@ function LensRowImpl({
           <span
             data-line2
             className={`block min-w-0 text-title ${previewText}`}
-            style={{ color: previewKind === 'view-once' ? accent : 'var(--color-ios-ink-2)' }}
+            style={{ color: previewKind === 'view-once' && typist === undefined ? accent : 'var(--color-ios-ink-2)' }}
           >
+            {/* LA FRAPPE PREND LA TÊTE DE LA PRÉCÉDENCE (#5793) —
+                `Line2Kind.resolve(hasTyping:hasDraft:showsBridge:)` met
+                `typing` AVANT tout, y compris avant un aperçu PROTÉGÉ
+                (`targets/lentille.md:502-511`) : elle ne dit rien du CONTENU,
+                donc elle ne peut rien en laisser fuir — un message à vue unique
+                dont l'auteur écrit encore montre « X écrit », jamais son texte.
+
+                L'ENCRE RESTE `ink-2`, pas l'accent d'iOS : l'accent d'une
+                conversation ne franchit pas le plancher AA sur cette ligne dans
+                les deux schémas (mesuré par `checkRowInkMeetsAA`,
+                `scripts/check-list-actions.mjs`, la même dette de palette que
+                `focal-row.tsx:353` documente déjà). L'ITALIQUE et les trois
+                points pulsés — eux, à l'accent, car décoratifs et
+                `aria-hidden` — portent la distinction. */}
             {/* LES APERÇUS PROTÉGÉS (D-23, #5676) : aucune langue à annoncer,
                 aucun texte du message — mais le NOM de l'expéditeur reste,
                 comme iOS le sert (`senderLabel` précède le glyphe dans
@@ -431,7 +471,12 @@ function LensRowImpl({
                 actif, `timer` estompé pour l'expiré (`timer.badge.xmark`
                 n'ayant pas d'équivalent phosphor, le muet de la couleur porte
                 la nuance). */}
-            {previewKind === 'hidden' ? (
+            {typist !== undefined ? (
+              <>
+                <span className="italic">{`${typist} écrit`}</span>
+                <TypingDots color={accent} className="ml-1" />
+              </>
+            ) : previewKind === 'hidden' ? (
               <>
                 {senderPrefix}
                 <Glyph name="eyeSlash" size={13} className="mr-1 inline-block align-[-2px]" />
@@ -555,6 +600,13 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
   if (prev.viewerId !== next.viewerId) return false;
   if (prev.unreadCount !== next.unreadCount) return false;
   if (prev.onRowAction !== next.onRowAction) return false;
+  /* `typist` (#5793) — une CHAÎNE, donc comparable par valeur : l'écran
+     redistribue une carte d'identité neuve à chaque `typing:start`/`stop` de
+     n'importe quelle conversation, et sans cette ligne la rangée concernée
+     n'aurait PAS bougé (le reste de ses props étant identique) tandis que
+     toutes les autres se seraient re-rendues pour rien. C'est ce que le
+     doc-comment de `useTypistNames` promet de borner. */
+  if (prev.typist !== next.typist) return false;
 
   const s1 = prev.status ?? AT_REST;
   const s2 = next.status ?? AT_REST;

@@ -52,6 +52,32 @@ describe('resolveCapacitorConfig — le chemin de départ n’est qu’un param�
     expect(() => resolveCapacitorConfig({ MEESHY_SHELL_START_PATH: '//evil.example/c/x' })).toThrow();
   });
 
+  /**
+   * QUATRIÈME FORME REFUSÉE (revue #6027) — un segment `..` sort le chemin de
+   * `public/`. Depuis #6027, ce chemin n'est plus seulement une URL : le hook
+   * `scripts/shell-start-path-hook.mjs` en DÉRIVE un chemin de fichier
+   * (`join(CAPACITOR_ROOT_DIR, IOS_NATIVE_WEB_DIR, startPath)`), que `join`
+   * NORMALISE — `/c/../../../../tmp/x` posait le placeholder dans
+   * `apps/web-v2/tmp/x`, hors de `public/`, pendant que le journal du hook
+   * annonçait « placeholder posé » et que la coque sortait quand même au
+   * lancement. La garde vit ICI, avec les trois autres gardes de FORME : elle
+   * couvre les DEUX plateformes (sur Android le même chemin remonterait
+   * au-dessus de la racine de la WebView) et refuse AVANT que quoi que ce soit
+   * ne soit écrit, ce qu'aucune garde en aval ne peut faire.
+   */
+  test('un segment ".." lève — le hook en dériverait un fichier HORS de public/', () => {
+    expect(() => resolveCapacitorConfig({ MEESHY_SHELL_START_PATH: '/c/../../../tmp/evade' })).toThrow(/\.\./);
+    expect(() => resolveCapacitorConfig({ MEESHY_SHELL_START_PATH: '/..' })).toThrow(/\.\./);
+  });
+
+  test('un segment qui CONTIENT des points sans être ".." reste accepté', () => {
+    const config = resolveCapacitorConfig({
+      MEESHY_SHELL_START_PATH: '/c/salon..riviere/x',
+      MEESHY_SHELL_SYNC_TARGET: 'ios',
+    });
+    expect(config.server?.appStartPath).toBe('/c/salon..riviere/x');
+  });
+
   test('une autre surface que le fil est ACCEPTÉE — la garde porte sur la forme, pas sur la route', () => {
     const config = resolveCapacitorConfig({
       MEESHY_SHELL_START_PATH: '/settings',
@@ -61,22 +87,37 @@ describe('resolveCapacitorConfig — le chemin de départ n’est qu’un param�
   });
 
   /**
-   * RÉGRESSION revue #5774, défaut majeur 1 — `server.appStartPath` charge
-   * un FICHIER sous `public/` au premier lancement iOS (`WKWebView`),
-   * jamais une route SPA : une synchronisation iOS avec ce paramètre posé
-   * sort au lancement, sans rapport de plantage. La garde lève dès que la
-   * cible DÉCLARÉE est iOS — jamais en sondant le disque (revue #5774,
-   * défaut majeur 2 : la version précédente bloquait `cap sync android` dès
-   * que `ios/App/App.xcodeproj` existait, quelle que soit la plateforme
-   * réellement synchronisée).
+   * INVERSION #6027 — la garde qui levait TOUJOURS pour iOS (revue #5774)
+   * cède la place au mécanisme : un hook Capacitor (`capacitor:copy:after` /
+   * `capacitor:sync:after`, `scripts/shell-start-path-hook.mjs`) pose
+   * désormais le placeholder que `CAPBridgeViewController.loadWebView()`
+   * exige sous `public/`, APRÈS que `cap sync` a réécrit ce dossier — même
+   * effet que sur Android (`Bridge.java` réécrit `appStartPath`), pas de
+   * dérogation de plateforme dans `resolveCapacitorConfig` elle-même.
+   * `resolveCapacitorConfig` reste pure : elle pose `server.appStartPath`
+   * pour les DEUX cibles et se contente d'avertir (jamais lever) — c'est au
+   * hook, exécuté par la CLI, de refuser AVANT toute écriture si la cible
+   * déclarée ne correspond pas à la plateforme réellement synchronisée
+   * (`scripts/shell-start-path-hook.test.ts`).
    */
-  test('cible iOS + MEESHY_SHELL_START_PATH -> lève, avec l’explication du chemin FICHIER', () => {
-    expect(() =>
-      resolveCapacitorConfig({
-        MEESHY_SHELL_START_PATH: '/c/c-deploiement',
-        MEESHY_SHELL_SYNC_TARGET: 'ios',
-      }),
-    ).toThrow(/iOS/);
+  test('cible iOS + MEESHY_SHELL_START_PATH -> pose server.appStartPath, comme Android', () => {
+    const config = resolveCapacitorConfig({
+      MEESHY_SHELL_START_PATH: '/c/c-deploiement',
+      MEESHY_SHELL_SYNC_TARGET: 'ios',
+    });
+    expect(config.server?.appStartPath).toBe('/c/c-deploiement');
+  });
+
+  test('les DEUX cibles rendent la MÊME forme de server pour un même chemin', () => {
+    const android = resolveCapacitorConfig({
+      MEESHY_SHELL_START_PATH: '/c/c-deploiement',
+      MEESHY_SHELL_SYNC_TARGET: 'android',
+    });
+    const ios = resolveCapacitorConfig({
+      MEESHY_SHELL_START_PATH: '/c/c-deploiement',
+      MEESHY_SHELL_SYNC_TARGET: 'ios',
+    });
+    expect(ios.server).toEqual(android.server);
   });
 
   test('cible Android + MEESHY_SHELL_START_PATH -> accepté, INDÉPENDAMMENT de ios/App/App.xcodeproj', () => {

@@ -74,10 +74,27 @@ function isRefusal(error: unknown): boolean {
  * n'existe pas OU dont le lecteur n'est pas membre rend le MÊME refus,
  * jamais le contenu d'une autre conversation (F8 : plus de repli sur
  * `CONVERSATIONS[0]`).
+ *
+ * `conversationId` (revue-correction #5793, défaut MAJEUR 3) — LE paramètre
+ * de route n'est qu'un moyen de CHARGER (`GET /conversations/:id`, qui
+ * accepte « ID or identifier », `core-detail.ts:250`) : la passerelle
+ * NORMALISE tout identifiant lisible en ObjectId AVANT de diffuser quoi que
+ * ce soit (`normalizeConversationId`, `MeeshySocketIOManager.ts:2879`), donc
+ * `message:new`/`conversation:updated`/`message:translation` portent
+ * TOUJOURS l'ObjectId — jamais l'identifiant de la route. Clé le fil sur le
+ * paramètre de route AVANT que `conversation.data` n'arrive (rien à perdre,
+ * la passerelle résout aussi les deux formes pour `GET …/messages`), puis
+ * BASCULE sur `conversation.data.id` dès qu'il est connu : un lien direct
+ * `/c/<identifiant>` recevait alors ses temps réel sur une clé de cache que
+ * PERSONNE ne lisait, le fil ouvert restant muet et la Lentille ne se
+ * réordonnant jamais. Un lien déjà canonique (le cas nominal, navigation
+ * depuis la Lentille) ne change pas de clé : `conversation.data.id === id`,
+ * aucune requête de plus.
  */
 export function useThreadData(id: string) {
   const conversation = useConversation(id);
-  const messages = useMessages(id);
+  const conversationId = conversation.data?.id ?? id;
+  const messages = useMessages(conversationId);
 
   const error = conversation.error ?? messages.error ?? null;
   const refused = isRefusal(conversation.error) || isRefusal(messages.error);
@@ -87,6 +104,7 @@ export function useThreadData(id: string) {
   const status: ThreadDataStatus = refused ? 'refused' : failed ? 'error' : ready ? 'success' : 'pending';
 
   return {
+    conversationId,
     conversation: conversation.data,
     messages: messages.data?.messages ?? [],
     hasOlder: messages.data?.hasOlder ?? false,
@@ -97,11 +115,15 @@ export function useThreadData(id: string) {
       void messages.refetch();
     },
     /**
-     * `typing` — SOURCÉ, jamais deviné (écart de `targets/README.md`
-     * descendu d'un cran) : en `fixtures`, le seul signal disponible ;
-     * en `gateway`, `false` jusqu'au socket temps réel (#5494).
+     * `typing` A DISPARU D'ICI (#5793) — c'était un BOOLÉEN DE SOURCE
+     * (`apiConfig.source === 'fixtures'`), jamais une donnée : il valait
+     * `true` en fixtures quel que soit ce qui se passait, `false` en
+     * gateway quoi qu'il arrive. La frappe RÉELLE vit désormais dans
+     * `typing-store.ts`, alimenté par `api/socket.ts` (`typing:start`/
+     * `typing:stop`) et lu par `useTypists()` (`api/use-typists.ts`) —
+     * `routes/thread.tsx` la consomme directement, ce hook n'a plus à la
+     * transporter.
      */
-    typing: apiConfig.source === 'fixtures',
   };
 }
 

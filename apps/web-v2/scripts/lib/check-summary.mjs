@@ -3,6 +3,40 @@ import { join } from 'node:path';
 import { contrastOf } from './contrast.mjs';
 
 /**
+ * LA MISE EN ÉVIDENCE D'UN SAUT SE MESURE PAR CONDITION, JAMAIS AU CHRONOMÈTRE
+ * (#6115) — `routes/thread.tsx:444` l'efface au bout de **1600 ms**, à dessein
+ * (« elle s'efface d'elle-même, jamais un état qui s'accumule sans fin »).
+ *
+ * Une lecture SYNCHRONE placée derrière un délai fixe plus quelques allers-retours
+ * Playwright franchit cette fenêtre sur un runner chargé et rend un fond
+ * transparent alors que l'écran a parfaitement sauté : la PR #6079 en a fait les
+ * frais sans toucher un seul fichier de `apps/web-v2`, pendant que `dev` restait
+ * vert au même contenu. Même loi que `check-media.mjs:161` — ne jamais confondre
+ * un DÉCALAGE avec une ABSENCE d'effet.
+ *
+ * La borne reste SOUS 1600 ms : au-delà, l'attente survivrait à l'effacement et
+ * mesurerait autre chose. Et cette fonction rend un BOOLÉEN plutôt que de lever,
+ * pour que l'hôte garde son compteur de défauts et son message d'assertion.
+ *
+ * Les deux sorties du Résumé qui SAUTENT — le visage et l'épisode — l'appellent ;
+ * l'expression du fond n'est écrite qu'ici.
+ */
+async function rowIsHighlighted(page) {
+  return page
+    .waitForFunction(
+      () =>
+        [...document.querySelectorAll('main li [data-reading-mode]')].some((row) => {
+          const bg = getComputedStyle(row).backgroundColor;
+          return bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent';
+        }),
+      null,
+      { timeout: 1200 },
+    )
+    .then(() => true)
+    .catch(() => false);
+}
+
+/**
  * LE RÉSUMÉ VIVANT, SECTION 14 DU GATE DE MODE DE LECTURE (#5695) — EXTRAIT
  * de `check-reading-mode.mjs` (revue #5695).
  *
@@ -89,18 +123,19 @@ export async function checkLivingSummary({ browser, BASE, CAPTURES, setScheme, e
 
     // --- 14.6 : SORTIE 1 — tap d'un visage ⇒ script + saut + citation pré-adressée.
     await page.locator('[data-face-ramp] [data-face]').first().click();
+    /*
+      L'ÉVIDENCE SE LIT EN PREMIER (#6115, `rowIsHighlighted` ci-dessus) — sa
+      fenêtre de 1600 ms se ferme pendant que les autres mesures de cette sortie
+      s'exécutent, et elles n'en ont aucune : la puce et la rangée plate peuvent
+      attendre, elle non. Lue en quatrième position, elle rougissait sans défaut.
+    */
+    const highlightedAfterFace = await rowIsHighlighted(page);
+    expect(highlightedAfterFace, 'sortie « visage » : une rangée est mise en évidence (même mesure que le défaut 10)');
     await page.waitForTimeout(300);
     expect((await page.locator('main li [data-reading-mode="script"]').count()) > 0, 'sortie « visage » : le fil rend la rangée plate SCRIPT');
     const chipAfterFace = await page.getByRole('button', { name: /Mode de lecture/ }).textContent();
     expect(chipAfterFace?.includes('AUTO') === false, 'sortie « visage » : la puce ne porte plus AUTO (choix collant)');
     expect(chipAfterFace?.includes('Script') === true, 'sortie « visage » : la puce dit Script');
-    const highlightedAfterFace = await page.evaluate(() =>
-      [...document.querySelectorAll('main li [data-reading-mode]')].some((row) => {
-        const bg = getComputedStyle(row).backgroundColor;
-        return bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent';
-      }),
-    );
-    expect(highlightedAfterFace, 'sortie « visage » : une rangée est mise en évidence (même mesure que le défaut 10)');
     expect((await page.locator('[data-composer-reply]').count()) === 1, 'sortie « visage » : le composeur affiche la citation pré-adressée');
     /*
       LE PRISME VOYAGE AVEC SA LANGUE (revue #5695) — l'extrait est servi par
@@ -127,15 +162,14 @@ export async function checkLivingSummary({ browser, BASE, CAPTURES, setScheme, e
     expect((await page.locator('main [data-summary]').count()) === 1, 'le menu ramène au Résumé Vivant');
 
     await page.locator('[data-episode]').first().click();
+    // MÊME FENÊTRE FUGACE QUE LA SORTIE « visage » (#6115) : l'épisode saute
+    // aussi, donc met aussi en évidence, donc court aussi contre les 1600 ms.
+    // Elle était un aller-retour plus près de la limite — pas encore tombée,
+    // mais du même défaut, et une seule loi les couvre.
+    const highlightedAfterEpisode = await rowIsHighlighted(page);
+    expect(highlightedAfterEpisode, 'sortie « épisode » : une rangée est mise en évidence');
     await page.waitForTimeout(300);
     expect((await page.locator('main li [data-reading-mode="script"]').count()) > 0, 'sortie « épisode » : le fil rend la rangée plate SCRIPT');
-    const highlightedAfterEpisode = await page.evaluate(() =>
-      [...document.querySelectorAll('main li [data-reading-mode]')].some((row) => {
-        const bg = getComputedStyle(row).backgroundColor;
-        return bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent';
-      }),
-    );
-    expect(highlightedAfterEpisode, 'sortie « épisode » : une rangée est mise en évidence');
 
     await page.getByRole('button', { name: /Mode de lecture/ }).click();
     await page.waitForTimeout(150);

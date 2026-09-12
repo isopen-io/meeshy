@@ -12,6 +12,10 @@
     "type-check": "tsc --noEmit",
     "measure": "node scripts/measure-weight.mjs",
     "cap:sync": "cap sync",
+    "capacitor:copy:before": "node scripts/shell-start-path-hook.mjs before",
+    "capacitor:copy:after": "node scripts/shell-start-path-hook.mjs after",
+    "capacitor:sync:before": "node scripts/shell-start-path-hook.mjs before",
+    "capacitor:sync:after": "node scripts/shell-start-path-hook.mjs after",
     "test": "bun test",
     "gate": "bun run check:tokens && bun run check:countries && bun run check:brand-assets && node scripts/check-curve.mjs && node scripts/check-river-metrics.mjs && bun run type-check && bun test && bun run build && node scripts/check-utilities.mjs && node scripts/measure-weight.mjs && node scripts/check-institutional.mjs && node scripts/check-scheme-bootstrap.mjs && node scripts/check-lens.mjs && node scripts/check-list-actions.mjs && node scripts/check-thread-states.mjs && node scripts/check-thread-chrome.mjs && node scripts/check-thread-virtualization.mjs && node scripts/check-reading-mode.mjs && node scripts/check-field-focus.mjs && node scripts/check-docker-context.mjs && node scripts/check-git-tracking.mjs && node scripts/check-shell-dist.mjs && node scripts/check-gateway-build.mjs && node scripts/check-capacitor-config.mjs",
     "check:tokens": "node ../../packages/design-tokens/scripts/generate-from-ios.mjs --check && node ../../packages/design-tokens/scripts/check-jetons.mjs",
@@ -42,6 +46,7 @@
     "@tanstack/react-query": "5.102.8",
     "@tanstack/react-virtual": "3.14.10",
     "preact": "10.29.8",
+    "socket.io-client": "4.8.3",
     "zustand": "5.0.15"
   },
   "devDependencies": {

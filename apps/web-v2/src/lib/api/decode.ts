@@ -1,4 +1,4 @@
-import type { Conversation, Message } from './types';
+import type { Attachment, Conversation, Message } from './types';
 
 /**
  * LE DÉCODAGE DES DATES DU FIL (#5650, F1) — le cache TanStack tient la forme
@@ -44,6 +44,49 @@ function fieldOf<K extends string, V>(key: K, value: V | null | undefined): Reco
 function dateFieldOf<K extends string>(key: K, value: Date | string | null | undefined): Record<K, Date> | Record<string, never> {
   if (value === null || value === undefined) return {};
   return fieldOf(key, toDate(value));
+}
+
+/**
+ * `decodeAttachment` — LE DÉCODEUR QUI MANQUAIT (défaut bloquant, revue
+ * #5805). `decodeMessage` défait `null` sur ONZE clés du MESSAGE
+ * (#5668, #6086) mais ne touchait JAMAIS `message.attachments` : chaque
+ * pièce jointe traversait BRUTE.
+ *
+ * Mesuré en direct sur `gate.staging.meeshy.me` (conv
+ * `690d64275c50e29d3c0c6f29`) : TOUTE pièce jointe SANS transcription sert
+ * `transcription: null`, `translations: null`, `alt: null`,
+ * `thumbnailUrl: null` — EXPLICITES, jamais absents. Le type partagé
+ * (`packages/shared/types/attachment.ts:284`) les déclare optionnelles SANS
+ * `| null` : `tsc` est satisfait pendant que
+ * `electDescription`/`electAudio` (`view/media.ts`, via
+ * `transcriptionTextOf`, `api/prism.ts`) lèvent sur `transcription.type` —
+ * le motif « un `Json?` Prisma sérialise `null` » déjà payé par le dépôt.
+ * Sur un fil réel de 12 messages, UNE seule rangée survivait.
+ *
+ * Même régime que `decodeMessage` : le `null` est DÉFAIT à LA FRONTIÈRE,
+ * jamais reconnu au point d'usage — `fieldOf` est le même outil générique
+ * que `#6086` a introduit pour `reactionSummary`/`forwardedFromId`.
+ */
+function decodeAttachment(raw: Attachment): Attachment {
+  const {
+    transcription: rawTranscription,
+    translations: rawTranslations,
+    alt: rawAlt,
+    thumbnailUrl: rawThumbnailUrl,
+    ...rest
+  } = raw as Attachment & {
+    readonly transcription?: Attachment['transcription'] | null;
+    readonly translations?: Attachment['translations'] | null;
+    readonly alt?: Attachment['alt'] | null;
+    readonly thumbnailUrl?: Attachment['thumbnailUrl'] | null;
+  };
+  return {
+    ...rest,
+    ...fieldOf('transcription', rawTranscription),
+    ...fieldOf('translations', rawTranslations),
+    ...fieldOf('alt', rawAlt),
+    ...fieldOf('thumbnailUrl', rawThumbnailUrl),
+  };
 }
 
 /**
@@ -127,6 +170,7 @@ export function decodeMessage(raw: Message): Message {
     forwardedFromId: rawForwardedFromId,
     forwardedFromConversationId: rawForwardedFromConversationId,
     storyReplyToId: rawStoryReplyToId,
+    attachments: rawAttachments,
     ...rest
   } = raw as Message & {
     readonly sender?: Message['sender'] | null;
@@ -142,6 +186,7 @@ export function decodeMessage(raw: Message): Message {
     readonly forwardedFromId?: Message['forwardedFromId'] | null;
     readonly forwardedFromConversationId?: Message['forwardedFromConversationId'] | null;
     readonly storyReplyToId?: Message['storyReplyToId'] | null;
+    readonly attachments?: readonly Attachment[] | null;
   };
   const senderLastActiveAt = rawSender?.lastActiveAt;
   const sender =
@@ -185,6 +230,9 @@ export function decodeMessage(raw: Message): Message {
     ...fieldOf('forwardedFromId', rawForwardedFromId),
     ...fieldOf('forwardedFromConversationId', rawForwardedFromConversationId),
     ...fieldOf('storyReplyToId', rawStoryReplyToId),
+    ...(rawAttachments === undefined || rawAttachments === null
+      ? {}
+      : { attachments: rawAttachments.map(decodeAttachment) }),
   };
 }
 

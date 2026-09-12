@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { launchChromium } from './lib/browser.mjs';
 import { checkThreadMedia } from './lib/check-media.mjs';
 import { checkMessageStates } from './lib/check-message-states.mjs';
+import { checkTypingVisibility } from './lib/check-typing-visibility.mjs';
 
 const DIST = join(fileURLToPath(new URL('..', import.meta.url)), 'dist');
 const TYPES = {
@@ -423,8 +424,34 @@ const runProtectionSuite = async (skin) => {
   const before6 = await ephemeralBadge.count() > 0 ? await ephemeralBadge.first().innerText() : null;
   expect(before6 !== null, `[${skin}] le badge éphémère existe (${before6})`);
   if (before6 !== null) {
+    /*
+      AVANCER L'HORLOGE N'EST PAS AVOIR REPEINT (#6061) — `runFor` livre son tick
+      au composant, qui PROGRAMME un rendu ; `innerText` peut lire avant que ce
+      rendu ait atteint le DOM, et le gate accuse alors le minuteur de ne pas
+      décroître alors qu'il a parfaitement décru. Rouge mesuré sur des PR
+      strictement iOS (#6039, #6044), vert sur d'autres parties de la même base.
+
+      Une horloge factice supprime la dépendance au temps qui PASSE, pas celle au
+      travail qui RESTE à faire ; les deux se confondent tant que la machine est
+      rapide.
+
+      L'attente est donc CONDITIONNELLE, et sous horloge truquée elle ne peut pas
+      s'écrire avec `waitForFunction` : `clock.install` truque aussi `rAF` et
+      `setTimeout`, les deux seuls sondages dont Playwright dispose — l'attente
+      n'y serait jamais réveillée. Ce qui fait avancer le rendu ici, c'est
+      `runFor` lui-même, par pas de 250 ms : exactement le motif que le
+      doc-comment de ce fichier déclare déjà (« `runFor(≥250)` après chaque action
+      laisse Preact rejouer son `afterPaint` »). La borne est GÉNÉREUSE et
+      anti-blocage, pas un budget : contrairement à une mise en évidence fugace
+      (#6115), l'état visé ici n'est pas encore ARRIVÉ — il ne peut pas repartir,
+      donc attendre plus longtemps ne mesure jamais autre chose.
+    */
     await protectionPage.clock.runFor(1000);
-    const after6 = await ephemeralBadge.first().innerText();
+    let after6 = await ephemeralBadge.first().innerText();
+    for (let tick = 0; tick < 20 && after6 === before6; tick += 1) {
+      await protectionPage.clock.runFor(250);
+      after6 = await ephemeralBadge.first().innerText();
+    }
     expect(after6 !== before6, `[${skin}] le minuteur éphémère décroît (${before6} → ${after6})`);
     await protectionPage.clock.runFor(2 * 60 * 1000);
     // « vide OU absente » (§4.8 §6) : la bulle DÉMONTE (`kind === 'expired' → null`),
@@ -1018,6 +1045,8 @@ await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin:
 await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'focal', scheme: 'dark' });
 await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'bulles', scheme: 'light' });
 await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'bulles', scheme: 'dark' });
+
+await checkTypingVisibility({ browser, BASE, expect });
 
 await browser.close();
 server.close();

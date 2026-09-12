@@ -163,25 +163,54 @@ async function main() {
     `aucun marqueur de fixture dans le dist gateway${carriers.length === 0 ? '' : ` — ${carriers.join(', ')}`}`,
   );
 
-  /** Le haut de `#contenu` sur un corpus PEUPLÉ — la référence contre
-   * laquelle le corpus VIDE se mesure (bloc 4) : sans le rail, l'écran doit
-   * RÉCUPÉRER cette bande, jamais la garder vide. */
+  /**
+   * LES RÉFÉRENCES contre lesquelles le corpus VIDE se mesure (bloc 4) —
+   * réancrées DANS le scrollport depuis que le rail y vit (#6103, décision
+   * #6070). `populatedContentTop` (la position ABSOLUE de `#contenu`) ne
+   * dépend plus du corpus — le rail et les filtres sont désormais des
+   * ENFANTS de `#contenu`, jamais des frères qui déplaceraient son propre
+   * `top` en disparaissant — donc ce même repère DOIT rester identique,
+   * peuplé ou vide (assertion ci-dessous). `populatedFirstSectionOffset`
+   * (la distance ENTRE le haut de `#contenu` et sa première section, donc
+   * la hauteur du rail + des filtres) reste la référence de « sans le rail,
+   * l'état vide doit RÉCUPÉRER cette bande » : l'état vide n'a ni rail ni
+   * filtres visibles au-dessus de lui, donc son propre décalage interne
+   * doit être STRICTEMENT plus petit.
+   */
   let populatedContentTop = 0;
+  let populatedFirstSectionOffset = 0;
 
   const browser = await launchChromium();
 
-  // --- 1. SANS session : redirection, AUCUNE requête de conversations ----
+  // --- 1. SANS session : redirection, AUCUNE requête de conversations,   --
+  //        AUCUNE poignée de main socket -----------------------------------
   {
     const context = await browser.newContext();
     const page = await context.newPage();
     const requests = [];
+    const socketRequests = [];
     page.on('request', (req) => {
       if (req.url().includes('/api/v1/conversations')) requests.push(req.url());
+      if (req.url().includes('/socket.io/')) socketRequests.push(req.url());
     });
+    // Le socket VISE `gate.meeshy.me` (base de PRODUCTION, aucune surcharge
+    // dans cette construction) — abandonné ici pour ne JAMAIS laisser partir
+    // un octet réel vers un serveur de production depuis ce gate (#5793).
+    await page.route('**/socket.io/**', (route) => route.abort());
     await page.goto(`${base}/`, { waitUntil: 'networkidle' });
     const path = await page.evaluate(() => window.location.pathname);
     check(path === '/login', `sans session, "/" redirige vers /login (obtenu : ${path})`);
     check(requests.length === 0, `sans session, aucune requête /api/v1/conversations (obtenu : ${requests.length})`);
+    /**
+     * `main.tsx` amorce `lib/api/realtime.ts` INCONDITIONNELLEMENT (`import()`
+     * après la première peinture) — c'est `sessionStore` qui décide si une
+     * connexion s'ouvre (`syncConnection`, #5793) : sans session, AUCUNE
+     * poignée de main ne doit partir, quel que soit le module chargé.
+     */
+    check(
+      socketRequests.length === 0,
+      `sans session, aucune poignée de main /socket.io/ (obtenu : ${socketRequests.length})`,
+    );
     await context.close();
   }
 
@@ -220,6 +249,13 @@ async function main() {
       });
     });
 
+    // Le socket est ABANDONNÉ (jamais un octet réel vers `gate.meeshy.me`
+    // depuis ce gate), mais la REQUÊTE elle-même doit PARTIR : c'est la
+    // preuve que `lib/api/realtime.ts` ouvre une connexion dès qu'une
+    // session existe (#5793).
+    const socketRequestPromise = page.waitForRequest((req) => req.url().includes('/socket.io/'), { timeout: 10000 });
+    await page.route('**/socket.io/**', (route) => route.abort());
+
     await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
 
     // Le squelette doit être peint AVANT la résolution (800 ms) — on le
@@ -246,6 +282,24 @@ async function main() {
     );
 
     populatedContentTop = await page.locator('#contenu').evaluate((e) => Math.round(e.getBoundingClientRect().top));
+    populatedFirstSectionOffset = await page.evaluate(() => {
+      const contenu = document.getElementById('contenu');
+      const firstSection = document.querySelector('[data-section]');
+      if (contenu === null || firstSection === null) return null;
+      return Math.round(firstSection.getBoundingClientRect().top - contenu.getBoundingClientRect().top);
+    });
+    check(
+      populatedFirstSectionOffset !== null,
+      'corpus PEUPLÉ : aucune [data-section] trouvée pour mesurer le décalage du rail + des filtres',
+    );
+
+    const socketRequest = await socketRequestPromise.catch(() => null);
+    check(
+      socketRequest !== null,
+      'AVEC session, une poignée de main /socket.io/ PART (obtenu : ' +
+        (socketRequest === null ? 'aucune requête' : socketRequest.url()) +
+        ')',
+    );
 
     // --- 3. /login avec une session ⇒ /  ---------------------------------
     await page.goto(`${base}/login`, { waitUntil: 'networkidle' });
@@ -292,11 +346,35 @@ async function main() {
     const rails = await page.locator('[aria-label="Stories"]').count();
     check(rails === 0, `corpus VIDE : aucune région « Stories » peinte (obtenu : ${rails})`);
 
+    /**
+     * RÉANCRÉ DANS LE SCROLLPORT (#6103) — le rail vivant désormais À
+     * L'INTÉRIEUR de `#contenu`, sa disparition ne peut plus déplacer le
+     * `top` ABSOLU de `#contenu` lui-même (c'est le point que #5650 gardait
+     * à l'origine) : ce repère doit rester IDENTIQUE, peuplé ou vide. Ce qui
+     * doit RÉCUPÉRER la bande du rail, c'est le décalage INTERNE de l'état
+     * vide par rapport à ce même haut de scrollport — comparé à celui de la
+     * première section d'un corpus peuplé (bloc 2).
+     */
     const emptyContentTop = await page.locator('#contenu').evaluate((e) => Math.round(e.getBoundingClientRect().top));
     check(
-      emptyContentTop < populatedContentTop,
-      'corpus VIDE : la bande du rail est RÉCUPÉRÉE, jamais laissée vide au-dessus de l’état vide ' +
-        `(peuplé ${populatedContentTop} px, vide ${emptyContentTop} px)`,
+      emptyContentTop === populatedContentTop,
+      `corpus VIDE : le haut de #contenu a bougé sans le rail (peuplé ${populatedContentTop} px, vide ${emptyContentTop} px) — ` +
+        'il vit maintenant DANS le scrollport (#6103), son absence ne doit plus déplacer #contenu lui-même',
+    );
+
+    const emptyStateOffset = await page.evaluate(() => {
+      const contenu = document.getElementById('contenu');
+      const empty = [...(contenu?.querySelectorAll('li') ?? [])].find((li) =>
+        (li.textContent ?? '').includes('Aucune conversation pour l’instant.'),
+      );
+      if (contenu === null || empty === undefined) return null;
+      return Math.round(empty.getBoundingClientRect().top - contenu.getBoundingClientRect().top);
+    });
+    check(emptyStateOffset !== null, "corpus VIDE : l'état « Aucune conversation pour l’instant. » est introuvable");
+    check(
+      emptyStateOffset !== null && emptyStateOffset < populatedFirstSectionOffset,
+      'corpus VIDE : la bande du rail + des filtres est RÉCUPÉRÉE, jamais laissée vide au-dessus de l’état vide ' +
+        `(décalage peuplé ${populatedFirstSectionOffset} px, décalage vide ${emptyStateOffset} px)`,
     );
     await context.close();
   }
@@ -329,6 +407,39 @@ async function main() {
     check(
       box !== null && Math.round(box.height) >= 44,
       `« Réessayer » mesure au moins 44 px (obtenu : ${box === null ? 'absent' : Math.round(box.height)})`,
+    );
+
+    /**
+     * L'EN-TÊTE GARDE SON TITRE QUAND LE RAIL N'EXISTE PAS (#6103, revue).
+     * C'est le SEUL état, atteignable par un navigateur, où le grand rail
+     * QUITTE le DOM — `ConversationRail` ne peint rien sur un corpus vide —
+     * et donc le seul où « pas de rail » pourrait se confondre avec « le rail
+     * est sorti du champ ». La confusion a été MESURÉE en unitaire
+     * (`use-out-of-view.test.tsx`, témoin « la cible qui DISPARAÎT relâche la
+     * bande ») : la forme livrée gardait `pinned = true` après le démontage
+     * de la cible, ce qui efface le titre (`opacity: 0`, `aria-hidden`)
+     * au-dessus d'une bande qui, corpus vide, ne peint rien non plus — un
+     * en-tête VIDE sur l'écran qui doit précisément dire où l'on est.
+     *
+     * Ici on garde la CONSÉQUENCE, au niveau du rendu réel : sans rail, ni
+     * bande épinglée ni titre effacé. Le témoin unitaire garde la règle ;
+     * celui-ci garde ce que l'utilisateur voit.
+     */
+    const headerOnError = await page.evaluate(() => {
+      const h1 = document.querySelector('h1');
+      return h1 === null
+        ? null
+        : { text: (h1.textContent ?? '').trim(), opacity: Number(getComputedStyle(h1).opacity), hidden: h1.getAttribute('aria-hidden') };
+    });
+    check(
+      headerOnError !== null && headerOnError.opacity === 1 && headerOnError.hidden === null && headerOnError.text.length > 0,
+      "échec à cache vide : le titre de l'en-tête reste lisible — sans rail, rien ne doit épingler de bande à sa place " +
+        `(obtenu : ${JSON.stringify(headerOnError)})`,
+    );
+    const pinnedOnError = await page.locator('[data-rail="pinned"]').count();
+    check(
+      pinnedOnError === 0,
+      `échec à cache vide : aucune bande épinglée ne se matérialise sans grand rail (obtenu : ${pinnedOnError})`,
     );
     await context.close();
   }

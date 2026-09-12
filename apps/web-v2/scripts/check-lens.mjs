@@ -29,6 +29,36 @@
  * test unitaire : la loi peut être juste et la peau la trahir, en animant une
  * propriété de mise en page. C'est la mesure de `offsetTop` sous défilement
  * réel qui tranche, et elle seule.
+ *
+ * 7. LA COMPACTION DU TRAIL NE DÉPLACE PLUS LES RANGÉES (#6103, décision
+ *    #6070). Deux règles étaient candidates : (a) compacter le rail SUR
+ *    PLACE, hors flux, dans la même boîte qu'une réserve fantôme (l'ANCIENNE
+ *    forme, #5946) ; (b) reprendre la GÉOGRAPHIE iOS — le grand rail vit
+ *    DANS le flux qui défile et en SORT normalement
+ *    (`ConversationListView.swift:1659-1671`), une bande épinglée
+ *    compacte le remplaçant dans la fente du TITRE de l'en-tête
+ *    (`PinnedStoryTrailBand`, `StoryTrayView.swift:656-671`,
+ *    `CollapsibleHeader.swift:108-112`). **C'est (b) qui est retenue** :
+ *    (a) tenait l'invariant de MISE EN PAGE mais créait une réserve VIDE
+ *    entre l'en-tête et les filtres une fois défilé — un défaut visible que
+ *    (b) supprime en ne peignant JAMAIS les deux rails au même endroit à la
+ *    fois. Quatre faces mesurées :
+ *      · le grand rail (`[data-rail="grande"]`) ne compacte PLUS jamais
+ *        lui-même — sa tuile reste à la cote GRANDE tout le défilement ;
+ *      · il SORT normalement du scrollport (son rect passe sous le haut du
+ *        scrollport) — c'est du flux ordinaire, rien de plus ;
+ *      · une bande compacte (`[data-rail="pinned"]`) apparaît DANS l'en-tête
+ *        une fois le grand rail sorti, et DISPARAÎT quand il revient ;
+ *      · ni l'en-tête ni le scrollport ne changent de géométrie quand la
+ *        bande se révèle — elle est `position: absolute` DANS la fente du
+ *        titre, jamais un flux qui pousserait quoi que ce soit.
+ *
+ * 8.  LE GRAND RAIL HORS CHAMP NE DOUBLE PAS LA BANDE (#6103, revue-
+ *     correction) — pendant que la bande est active, une SEULE région porte
+ *     l'`aria-label` « Accès rapide aux conversations », et deux `Tab` depuis
+ *     sa dernière tuile ne rejoignent ni le grand rail ni ne déplacent le
+ *     `scrollTop` du scrollport (`inert={pinned}`,
+ *     `components/conversation-rail.tsx`).
  */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -144,38 +174,45 @@ constate(
 );
 
 /**
- * LE RAIL NE DÉPLACE PAS LA LISTE, PARCE QUE SA HAUTEUR NE VARIE JAMAIS
- * (#6070, révisé #6080).
+ * LE RAIL COMPACTE — MAIS PLUS LUI-MÊME (#6103, décision #6070 § point 7).
+ * L'invariant de MISE EN PAGE ci-dessus (`moves.length === 0`) serait
+ * trivialement vert sur un rail qui ne compacte PLUS DU TOUT — la régression
+ * inverse d'un rail figé. Depuis la reprise de la géographie iOS, ce n'est
+ * plus le GRAND rail (`[data-rail="grande"]`) qui rétrécit — il reste à la
+ * cote GRANDE tout le défilement, exactement comme n'importe quel autre
+ * contenu du flux — c'est une BANDE distincte (`[data-rail="pinned"]`), DANS
+ * l'en-tête, qui prend le relais en miniature une fois le grand rail sorti.
  *
- * L'invariant de MISE EN PAGE ci-dessous (`moves.length === 0`) serait
- * trivialement vert sur un rail qui prendrait toute la place et n'en
- * bougerait plus — c'est la régression inverse, et elle a EU LIEU : le rail
- * partait à 88 px de tuile, soit un huitième de l'écran pour trois entrées,
- * et la liste commençait sous la ligne de flottaison.
+ * **LA COTE 48 ÉTAIT CELLE D'UN AUTRE RAIL** (fusion #6080 ↔ #6103,
+ * 2026-09-12). Ce bloc a porté, le temps d'une branche, une borne à 48 px
+ * justifiée par `LentilleMetrics.Rail.size`. La constante est réelle et la
+ * citation était de bonne foi — mais elle décrit `list.rail`, le rail des
+ * LIVES : « pastille 48, anneau 3.5 (pulsé si live), ≤ 6 entrées », et son
+ * propre commentaire renvoie à `LivesRail.tsx`. Le plateau des STORIES est un
+ * objet distinct, et ses deux cotes sont écrites ailleurs :
+ * `MeeshyAvatar.storyTray` = **88** (« doubled 2026-05-27 — story trail =
+ * primary CTA ») et `.storyTrayCompact` = **36** (`StoryTrayView.swift:226`,
+ * « `context` drives the size »).
  *
- * #6070 y répondait par une COMPACTION au défilement (88 → 37 px), compensée
- * par une tuile fantôme pour que le flux ne bouge pas. #6080 tranche par la
- * cote : le rail des stories porte celle d'iOS — `LentilleMetrics.Rail.size`
- * = 48 px — et ne compacte plus du tout. Une hauteur qui ne varie pas ne peut
- * rien pousser ; il n'y a plus de fantôme à tenir.
- *
- * Ce qui reste à GARDER est donc la PROPRIÉTÉ, pas le mécanisme : la tuile
- * part à la cote iOS, et elle y RESTE après défilement. Les deux bornes
- * attrapent les deux régressions — un rail qui regrossit, et un rail qui se
- * remet à varier.
- *
- * (La bande compacte épinglée d'iOS — `PinnedStoryTrailBand`, anneaux à 36 dans
- * l'en-tête replié — n'est portée par aucune des deux versions : c'est l'écart
- * restant, suivi par #6121, pas une régression de ce lot.)
+ * Et le grief qui motivait la réduction — « 88 px de tuile, un huitième de
+ * l'écran, la liste commence sous la ligne de flottaison » — est JUSTE, et
+ * c'est exactement ce que la bande épinglée résout chez iOS : le plateau est
+ * grand parce qu'il est l'appel à l'action principal, et il sort du champ au
+ * défilement au lieu de rétrécir. Les deux moitiés ne se contredisaient pas ;
+ * elles répondaient à la même question, l'une par la cote, l'autre par la
+ * géographie. La géographie gagne parce qu'elle est celle de la cible.
  */
-const COTE_RAIL_IOS = 48;
-const railWidthBefore = await page.evaluate(
-  () => document.querySelector('[data-story-tile]')?.getBoundingClientRect().width ?? null,
+const grandRailWidthBefore = await page.evaluate(
+  () => document.querySelector('[data-rail="grande"] [data-rail-tile]')?.getBoundingClientRect().width ?? null,
 );
-constate(railWidthBefore !== null, "aucune tuile de story trouvée ([data-story-tile]) avant défilement");
+constate(grandRailWidthBefore !== null, 'aucune tuile trouvée dans [data-rail="grande"] avant défilement');
 constate(
-  railWidthBefore !== null && Math.abs(railWidthBefore - COTE_RAIL_IOS) <= 1,
-  `la tuile du rail ne porte pas la cote iOS (${COTE_RAIL_IOS} px) : ${railWidthBefore}`,
+  grandRailWidthBefore !== null && grandRailWidthBefore >= 80,
+  `le grand rail ne part pas de la cote GRANDE (~88 px) : ${grandRailWidthBefore}`,
+);
+constate(
+  await page.evaluate(() => document.querySelector('[data-rail="pinned"]') === null),
+  'la bande épinglée existe déjà AVANT tout défilement — elle ne devrait se matérialiser qu’une fois le grand rail sorti',
 );
 
 /** On défile PAR PALIERS, en relevant la géométrie à chaque, et on la compare. */
@@ -195,16 +232,47 @@ for (const { y, geo } of readings) {
   );
 }
 
-/** Après défilement, la cote n'a pas bougé — c'est ce qui rend le fantôme inutile. */
-const railWidthAfter = await page.evaluate(
-  () => document.querySelector('[data-story-tile]')?.getBoundingClientRect().width ?? null,
-);
-constate(railWidthAfter !== null, "aucune tuile de story trouvée ([data-story-tile]) après défilement");
+/**
+ * Après défilement (600 px, le grand rail et les filtres largement sortis) :
+ * la bande épinglée a pris le relais, EN MINIATURE, et le grand rail — lui —
+ * n'a ni compacté ni disparu : il est simplement sorti du champ, comme tout
+ * contenu ordinaire du flux.
+ */
+const afterScroll = await page.evaluate(() => {
+  const contenuTop = document.getElementById('contenu')?.getBoundingClientRect().top ?? null;
+  const grande = document.querySelector('[data-rail="grande"]');
+  const grandeTile = document.querySelector('[data-rail="grande"] [data-rail-tile]');
+  const pinnedTile = document.querySelector('[data-rail="pinned"] [data-rail-tile]');
+  return {
+    contenuTop,
+    grandeBottom: grande?.getBoundingClientRect().bottom ?? null,
+    grandeTileWidth: grandeTile?.getBoundingClientRect().width ?? null,
+    pinnedTileWidth: pinnedTile?.getBoundingClientRect().width ?? null,
+  };
+});
 constate(
-  railWidthAfter !== null && railWidthAfter === railWidthBefore,
-  `la cote du rail a varié pendant le défilement (${railWidthBefore} → ${railWidthAfter}) — ` +
-    `une hauteur qui varie repousse la liste`,
+  afterScroll.pinnedTileWidth !== null && afterScroll.pinnedTileWidth < 45,
+  `la bande épinglée ne compacte pas à la cote COMPACTE (~37 px) après défilement : ${afterScroll.pinnedTileWidth}`,
 );
+constate(
+  afterScroll.grandeTileWidth !== null && afterScroll.grandeTileWidth >= 80,
+  `le GRAND rail a changé de cote après défilement — il ne devrait plus jamais compacter lui-même : ${afterScroll.grandeTileWidth}`,
+);
+constate(
+  afterScroll.grandeBottom !== null && afterScroll.contenuTop !== null && afterScroll.grandeBottom <= afterScroll.contenuTop + 1,
+  `le grand rail n'est pas sorti du scrollport (bas ${afterScroll.grandeBottom}, haut du scrollport ${afterScroll.contenuTop}) — ` +
+    'il devrait avoir défilé hors champ comme tout contenu ordinaire',
+);
+/**
+ * CE QUE LA BRANCHE #6080 MESURAIT ICI EST SUBSUMÉ, pas perdu (fusion
+ * 2026-09-12). Elle tenait « la cote du rail n'a pas varié pendant le
+ * défilement », par `railWidthAfter === railWidthBefore`. C'est exactement ce
+ * que dit `grandeTileWidth >= 80` ci-dessus, au même instant du même
+ * défilement : un grand rail qui aurait compacté n'y serait plus. La borne de
+ * dev est de plus STRICTEMENT plus forte — elle nomme la cote attendue au lieu
+ * de comparer deux mesures entre elles, donc elle tombe aussi si les DEUX
+ * bougent ensemble.
+ */
 
 /**
  * Le témoin 3 : la magnification opère. Sans lui, tout ce qui précède serait
@@ -493,6 +561,193 @@ constate(
 await layoutPage.close();
 await layoutContext.close();
 
+// --------------------------------------- l'en-tête ne bouge JAMAIS (#6103)
+/**
+ * L'EN-TÊTE ET LE SCROLLPORT NE CHANGENT JAMAIS DE GÉOMÉTRIE quand la bande
+ * épinglée se révèle (#6103, décision #6070) — elle est `position: absolute`
+ * DANS la fente du titre, jamais un flux qui pousserait quoi que ce soit
+ * (miroir `accessoryCollapsedHeight < expandedHeight` : « the header only
+ * ever shrinks », jamais ne grandit). Et LE TITRE CÈDE PUIS REPREND SA
+ * PLACE dans les DEUX sens — la bascule `pinned: true → false` retire la
+ * bande ET aucune rangée de la Lentille n'a bougé pendant l'aller-retour
+ * (G1 rejoué sur ce palier de RETOUR).
+ */
+const headerContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+const headerPage = await headerContext.newPage();
+await headerPage.goto(`${BASE}/`, { waitUntil: 'load' });
+await headerPage.waitForSelector('[data-row]');
+await headerPage.waitForTimeout(200);
+
+const headerBefore = await headerPage.evaluate(() => ({
+  headerHeight: document.querySelector('header')?.getBoundingClientRect().height ?? null,
+  contenuTop: document.getElementById('contenu')?.getBoundingClientRect().top ?? null,
+  h1Opacity: Number(getComputedStyle(document.querySelector('h1')).opacity),
+  h1AriaHidden: document.querySelector('h1')?.getAttribute('aria-hidden'),
+  pinnedPresent: document.querySelector('[data-rail="pinned"]') !== null,
+}));
+constate(headerBefore.headerHeight !== null, 'aucun <header> trouvé');
+constate(headerBefore.h1AriaHidden === null, `le titre est aria-hidden AVANT tout défilement (${headerBefore.h1AriaHidden})`);
+constate(headerBefore.h1Opacity === 1, `le titre n'est pas pleinement opaque au repos (${headerBefore.h1Opacity})`);
+constate(!headerBefore.pinnedPresent, 'la bande épinglée existe déjà au repos');
+
+const headerGeoDuring = [];
+for (const y of [40, 120, 240, 400, 600]) {
+  await headerPage.evaluate((v) => document.getElementById('contenu')?.scrollTo({ top: v }), y);
+  await headerPage.waitForTimeout(90);
+  headerGeoDuring.push(
+    await headerPage.evaluate(() => ({
+      headerHeight: document.querySelector('header')?.getBoundingClientRect().height ?? null,
+      contenuTop: document.getElementById('contenu')?.getBoundingClientRect().top ?? null,
+    })),
+  );
+}
+for (const { headerHeight, contenuTop } of headerGeoDuring) {
+  constate(
+    headerHeight === headerBefore.headerHeight,
+    `la hauteur de l'en-tête a changé pendant le défilement (${headerBefore.headerHeight} → ${headerHeight})`,
+  );
+  constate(
+    contenuTop === headerBefore.contenuTop,
+    `le haut du scrollport a bougé pendant le défilement (${headerBefore.contenuTop} → ${contenuTop})`,
+  );
+}
+
+// Laisse le fondu (HIDDEN_CHROME_EASE_OUT_MS = 250 ms) se terminer.
+await headerPage.waitForTimeout(400);
+const headerAfter = await headerPage.evaluate(() => ({
+  headerHeight: document.querySelector('header')?.getBoundingClientRect().height ?? null,
+  h1Opacity: Number(getComputedStyle(document.querySelector('h1')).opacity),
+  h1AriaHidden: document.querySelector('h1')?.getAttribute('aria-hidden'),
+  pinnedPresent: document.querySelector('[data-rail="pinned"]') !== null,
+}));
+constate(headerAfter.headerHeight === headerBefore.headerHeight, "la hauteur de l'en-tête a changé une fois la bande révélée");
+constate(headerAfter.h1Opacity === 0, `le titre ne s'est pas effacé derrière la bande (opacité ${headerAfter.h1Opacity})`);
+constate(headerAfter.h1AriaHidden === 'true', "le titre effacé n'est pas aria-hidden");
+constate(headerAfter.pinnedPresent, "la bande épinglée n'est pas apparue après défilement");
+
+/** LE RETOUR : la bascule fonctionne dans les DEUX sens, et aucune rangée
+ * n'a bougé pendant l'aller-retour complet (G1 rejoué sur ce palier). */
+const rowGeoBeforeRoundTrip = await geometrie(headerPage);
+await headerPage.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 0 }));
+await headerPage.waitForTimeout(400);
+const headerReturned = await headerPage.evaluate(() => ({
+  h1Opacity: Number(getComputedStyle(document.querySelector('h1')).opacity),
+  h1AriaHidden: document.querySelector('h1')?.getAttribute('aria-hidden'),
+  pinnedPresent: document.querySelector('[data-rail="pinned"]') !== null,
+}));
+constate(!headerReturned.pinnedPresent, 'la bande épinglée ne se retire pas quand le grand rail revient');
+constate(headerReturned.h1Opacity === 1, `le titre ne reprend pas sa place (opacité ${headerReturned.h1Opacity})`);
+constate(headerReturned.h1AriaHidden === null, 'le titre reste aria-hidden après le retour du grand rail');
+const rowGeoAfterRoundTrip = await geometrie(headerPage);
+const movedByRoundTrip = rowGeoAfterRoundTrip.filter(
+  (r, i) => rowGeoBeforeRoundTrip[i] === undefined || r.haut !== rowGeoBeforeRoundTrip[i].haut || r.height !== rowGeoBeforeRoundTrip[i].height,
+);
+constate(
+  movedByRoundTrip.length === 0,
+  `l'aller-retour de la bande épinglée a déplacé ${movedByRoundTrip.length} rangée(s) — ${JSON.stringify(movedByRoundTrip.slice(0, 3))}`,
+);
+
+await headerPage.close();
+await headerContext.close();
+
+// ------------------------- la bande épinglée ne double pas l'accès clavier (#6103, revue)
+/**
+ * LE GRAND RAIL NE DOUBLE PAS LA BANDE, NI AU CLAVIER NI DANS L'ARBRE
+ * D'ACCESSIBILITÉ (#6103, revue-correction). Le grand rail ne quitte jamais
+ * le DOM — il défile simplement hors du scrollport — et sans garde, ses
+ * liens restaient à la fois dans l'ordre de TABULATION et exposés sous le
+ * MÊME `aria-label` que la bande qui le remplace : un lecteur d'écran
+ * annonçait les conversations deux fois, et un `Tab` depuis la dernière
+ * tuile de la bande retombait dans le grand rail hors champ — que le
+ * navigateur ramène alors DANS la vue pour honorer le focus, faisant sauter
+ * le défilement (749 → 0 mesuré) et perdre la position de lecture pour rien
+ * de plus qu'un `Tab`.
+ *
+ * Le correctif (`inert={pinned}`, `components/conversation-rail.tsx`) doit
+ * tenir TROIS faits, mesurés ici plutôt qu'assumés :
+ *  · une SEULE région porte l'`aria-label` « Accès rapide aux conversations »
+ *    pendant que la bande est active — jamais deux ;
+ *  · un premier `Tab` depuis la dernière tuile de la bande rejoint
+ *    « Progression » SANS bouger le scrollport — elle vit dans l'en-tête,
+ *    jamais dans le flux qui défile ;
+ *  · un second `Tab` ne retombe PLUS dans le grand rail hors champ — il
+ *    poursuit dans l'ordre du DOM jusqu'au prochain contrôle RÉEL (les
+ *    filtres), pas jusqu'à un doublon des NEUF mêmes conversations.
+ *
+ * CE QUE CE TÉMOIN NE PROUVE PAS, ET POURQUOI CE N'EST PAS UN DÉFAUT : ce
+ * second `Tab` fait tout de même sauter le `scrollTop` à 0 — mesuré, la
+ * cible du DEUXIÈME `Tab` est le premier bouton de filtre (`aria-pressed`),
+ * pas une tuile du grand rail, et ce bouton vit lui aussi dans le flux
+ * défilant (décision #6070, filtres EN FLUX, comme sur iOS). Faire défiler
+ * la page jusqu'au prochain contrôle atteint par tabulation est le
+ * comportement d'accessibilité STANDARD — celui-là même qu'un lecteur
+ * d'écran iOS reproduit en balayant jusqu'à l'élément suivant de la liste —
+ * jamais celui qu'a corrigé ce lot : le lot corrige la RÉ-ANNONCE d'un
+ * contenu déjà lu, pas le fait que le clavier suive l'ordre du document
+ * plutôt que la position de défilement. Élargir la garde aux filtres les
+ * rendrait inatteignables au clavier tant que la bande est active — une
+ * régression, pas une correction. Suivi séparé, HORS PÉRIMÈTRE de #6103 : si
+ * ce saut doit un jour disparaître, il porte sur les DEUX (rail ET filtres),
+ * pas sur ce correctif de duplication.
+ */
+const kbdContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+const kbdPage = await kbdContext.newPage();
+await kbdPage.goto(`${BASE}/`, { waitUntil: 'load' });
+await kbdPage.waitForSelector('[data-row]');
+await kbdPage.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 600 }));
+await kbdPage.waitForTimeout(400);
+
+const kbdBefore = await kbdPage.evaluate(() => ({
+  pinnedPresent: document.querySelector('[data-rail="pinned"]') !== null,
+  grandeInert: document.querySelector('[data-rail="grande"]')?.hasAttribute('inert') ?? null,
+  regions: document.querySelectorAll('[aria-label="Accès rapide aux conversations"]').length,
+  scrollTop: document.getElementById('contenu')?.scrollTop ?? null,
+}));
+constate(kbdBefore.pinnedPresent, "la bande épinglée n'est pas apparue — impossible de mesurer le doublon clavier");
+constate(kbdBefore.grandeInert === true, `le grand rail n'est pas \`inert\` pendant que la bande est active (${kbdBefore.grandeInert})`);
+constate(
+  kbdBefore.regions === 1,
+  `${kbdBefore.regions} région(s) portent l'aria-label « Accès rapide aux conversations » en même temps — une seule le devrait`,
+);
+
+await kbdPage.evaluate(() => {
+  const liens = [...document.querySelectorAll('[data-rail="pinned"] a[data-conversation]')];
+  (liens[liens.length - 1])?.focus();
+});
+const scrollTopAvantTab = await kbdPage.evaluate(() => document.getElementById('contenu')?.scrollTop ?? null);
+
+await kbdPage.keyboard.press('Tab');
+const apresPremierTab = await kbdPage.evaluate(() => ({
+  ariaLabel: document.activeElement?.getAttribute('aria-label') ?? null,
+  scrollTop: document.getElementById('contenu')?.scrollTop ?? null,
+}));
+constate(
+  apresPremierTab.ariaLabel?.startsWith('Progression') === true,
+  `le premier \`Tab\` depuis la dernière tuile de la bande ne rejoint pas « Progression » (${apresPremierTab.ariaLabel})`,
+);
+constate(
+  apresPremierTab.scrollTop === scrollTopAvantTab,
+  `le premier \`Tab\` a déplacé le scrollport (${scrollTopAvantTab} → ${apresPremierTab.scrollTop})`,
+);
+
+await kbdPage.keyboard.press('Tab');
+const apresSecondTab = await kbdPage.evaluate(() => ({
+  dansGrandRail: document.activeElement?.closest('[data-rail="grande"]') !== null,
+  conversationId: document.activeElement?.getAttribute('data-conversation') ?? null,
+}));
+constate(
+  !apresSecondTab.dansGrandRail,
+  'le second `Tab` depuis « Progression » entre dans le grand rail hors champ — il devrait être `inert`',
+);
+constate(
+  apresSecondTab.conversationId === null,
+  `le second \`Tab\` atterrit sur une tuile de conversation (${apresSecondTab.conversationId}) — un doublon de la bande, ` +
+    'jamais un contrôle nouveau',
+);
+
+await kbdPage.close();
+await kbdContext.close();
+
 // ---------------------------------------------------- mouvement réduit
 const contexteReduit = await browser.newContext({
   viewport: { width: 390, height: 844 },
@@ -501,8 +756,25 @@ const contexteReduit = await browser.newContext({
 const pageReduite = await contexteReduit.newPage();
 await pageReduite.goto(`${BASE}/`, { waitUntil: 'load' });
 await pageReduite.waitForSelector('[data-row]');
-await pageReduite.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 400 }));
+await pageReduite.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 600 }));
 await pageReduite.waitForTimeout(300);
+
+/**
+ * LA BASCULE TITRE ↔ BANDE EST INSTANTANÉE SOUS MOUVEMENT RÉDUIT (#6103) —
+ * `motion-reduce:transition-none` (ListHeader) coupe le fondu de
+ * `HIDDEN_CHROME_EASE_OUT_MS` : l'opacité du titre doit déjà valoir 0 sans
+ * attendre la fin d'une transition qui n'existe plus, et la bande doit déjà
+ * être présente — on perd l'animation, jamais le résultat.
+ */
+const reducedHeader = await pageReduite.evaluate(() => ({
+  h1Opacity: Number(getComputedStyle(document.querySelector('h1')).opacity),
+  pinnedPresent: document.querySelector('[data-rail="pinned"]') !== null,
+}));
+constate(
+  reducedHeader.h1Opacity === 0,
+  `mouvement réduit : le titre ne s'efface pas immédiatement (opacité ${reducedHeader.h1Opacity})`,
+);
+constate(reducedHeader.pinnedPresent, "mouvement réduit : la bande épinglée n'est pas apparue");
 
 const reducedApp = await apparence(pageReduite);
 constate(

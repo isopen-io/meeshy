@@ -99,3 +99,15 @@ createRoot(root).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+/**
+ * LE TEMPS RÉEL S'AMORCE APRÈS LA PREMIÈRE PEINTURE (#5793) — `import()`,
+ * motif `dev-harness.ts` ci-dessus, mais SANS garde `DEV` : le fil et la
+ * liste reçoivent `message:new`/`typing:*` en PRODUCTION comme en
+ * développement. Placé APRÈS `createRoot(...).render(...)` : le rendu
+ * initial est déjà planifié quand `socket.io-client` (chargé par ce module,
+ * `lib/net/socket-io-factory.ts`) commence seulement à se télécharger —
+ * c'est ce qui le tient hors de `first_paint` (`budgets.json`,
+ * `scripts/measure-weight.mjs`).
+ */
+void import('@/lib/api/realtime');

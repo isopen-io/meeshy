@@ -103,6 +103,26 @@ struct StoryHeaderView: View {
     /// (`isFullscreenStorySession = true` ⇒ `chromeVisible = false`).
     @Binding var chromeVisible: Bool
 
+    /// **L'en-tête DEMANDE, il ne présente pas** (#6085).
+    ///
+    /// Il est reconstruit à chaque tick de la barre de progression : un `@State`
+    /// de cible y meurt entre le tap du menu et la passe de rendu suivante —
+    /// mesuré au simulateur, l'entrée s'affichait et rien ne s'ouvrait. La
+    /// présentation vit donc chez `StoryViewerContainer`, la racine STABLE du
+    /// cover, et cette fermeture est le seul lien.
+    ///
+    /// `nil` ⇒ aucune entrée (loi 4 : un contrôle existe s'il a un effet). C'est
+    /// aussi ce qui tient l'aperçu du composer hors du menu : il monte le
+    /// lecteur SANS conteneur, donc sans hôte de présentation.
+    @Environment(\.meeshyComposeSeedRequest) private var demanderComposer: ((ComposerSeedTarget) -> Void)?
+
+    /// La cible résolue pour la slide COURANTE. Cachée pour la MÊME raison que
+    /// `savableStickers` juste en dessous : l'en-tête est reconstruit à chaque
+    /// tick de la barre de progression, et le contenu d'un `Menu` est construit
+    /// avec lui — résoudre la règle d'offre en ligne la rejouerait des dizaines
+    /// de fois par seconde, en re-bridant les médias à chaque passe.
+    @State private var composableSlide: ComposerSeedTarget?
+
     @State private var avatarLongPressGlow = false
     /// Cache du label VoiceOver du bouton profil auteur — recalculé
     /// UNIQUEMENT au changement de slide (`.onChange(of: currentStory?.id)`),
@@ -363,6 +383,34 @@ struct StoryHeaderView: View {
                 Divider()
 
                 if let story = currentStory, let group = currentGroup {
+                    // **« Composer » — le même item, dans le menu de la PIÈCE**
+                    // (#6085, directive porteur 2026-09-11 : « il faut permettre
+                    // de pouvoir composer les pièces jointes d'une conversation,
+                    // d'un poste ou d'une story »).
+                    //
+                    // Le menu « … » EST le menu de la slide courante : c'est déjà
+                    // là que vivent « enregistrer le sticker » et les trois formes
+                    // de partage. Le libellé est celui de la conversation
+                    // (`message.compose.title`) et le glyphe le même — un geste
+                    // qui change de nom d'un écran à l'autre est un geste de plus
+                    // à apprendre.
+                    //
+                    // AVANT les actions propres au propriétaire : composer à
+                    // partir d'une slide n'est ni un partage ni une suppression,
+                    // et c'est offert à tout le monde — l'auteur compris, qui
+                    // reprend souvent sa propre image.
+                    if let cible = composableSlide, let demanderComposer {
+                        Button {
+                            HapticFeedback.light()
+                            pauseTimer()
+                            demanderComposer(cible)
+                        } label: {
+                            Label(String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main),
+                                  systemImage: "wand.and.stars")
+                        }
+                        Divider()
+                    }
+
                     if isOwnStory {
                         // External share via system share sheet (Messages,
                         // Mail, other apps). Only for public stories.
@@ -554,6 +602,7 @@ struct StoryHeaderView: View {
         }
         .adaptiveOnChange(of: currentStory?.id, initial: true) { _, _ in
             savableStickers = currentStory.map { StoryStickerLibrary.savable(in: $0) } ?? []
+            composableSlide = resolveComposableSlide()
         }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
@@ -594,5 +643,18 @@ struct StoryHeaderView: View {
             // `mintAndShareStory` — the author owns the analytics.
             ShareSheet(activityItems: [link.url])
         }
+    }
+
+    /// **La règle d'offre décide, pas le menu** (critère 2 de #6085). Une slide
+    /// à deux médias, une slide sans média ni texte : aucune cible, donc aucune
+    /// entrée. Le Prisme du lecteur descend sur le texte qui pré-remplira la
+    /// description — la graine d'un composer est du CONTENU, et le Prisme
+    /// s'applique à tout le contenu.
+    private func resolveComposableSlide() -> ComposerSeedTarget? {
+        guard demanderComposer != nil, let story = currentStory else { return nil }
+        return ComposerSeedTarget(
+            story: story,
+            preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        )
     }
 }

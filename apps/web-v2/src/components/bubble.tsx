@@ -3,7 +3,7 @@ import { badgesOf, editedOf, ephemeralBadgeOf, systemRowOf } from '@/lib/view/me
 import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, presenceOf } from '@/lib/view/conversation';
 import type { LocalDelivery } from '@/lib/view/message';
-import { served } from '@/lib/api/prism';
+import { prismFor, served } from '@/lib/api/prism';
 import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
@@ -184,10 +184,10 @@ export function Bubble({
   // une image dont seul l'`alt` est traduit ne la monte PAS (revue #5805).
   const translatedLanguages = translatedLanguagesOf(message);
   /** `displayLanguage` est une INSERTION au rang 0 (#5814) — UN résolveur
-   * (`resolvePrismTranslation`, D-14), jamais un second. Le MÊME prisme est
-   * remis à `Attachments` (qui le recompose à l'identique depuis les deux
-   * props) et à `servedRowLanguage` ci-dessous. */
-  const preferredLanguages = displayLanguage === undefined ? languages : [displayLanguage, ...languages];
+   * (`resolvePrismTranslation`, D-14), jamais un second, et depuis la revue
+   * #5805 UNE SEULE composition : `prismFor` (`api/prism.ts`) est le site
+   * unique de l'insertion, que ce ternaire recopiait pour la quatrième fois. */
+  const preferredLanguages = prismFor({ readerLanguages: languages, displayLanguage });
   const rendered = served({
     preferredLanguages,
     originalLanguage: message.originalLanguage,

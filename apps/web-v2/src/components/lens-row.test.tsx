@@ -313,3 +313,64 @@ describe('la rangée de la Lentille — un dernier message SANS TEXTE (revue #58
     expect(html).not.toContain('Photo');
   });
 });
+
+/**
+ * LA LIGNE 2 EN FRAPPE (#5793 revue-correction) — précédence
+ * `typing > brouillon > pont ✦ > aperçu`, `typing` en TÊTE
+ * (`targets/lentille.md:502-511`, `LentilleConversationRow.swift` §
+ * `Line2Kind.resolve`). Les témoins interrogent ce que la rangée REND, jamais
+ * la présence du champ.
+ */
+describe('la rangée de la Lentille — « X écrit » (#5793)', () => {
+  test('la frappe REMPLACE l’aperçu sur la ligne 2', () => {
+    const html = renderToStaticMarkup(<LensRow {...baseProps({ typist: 'Amina Diallo' })} />);
+    expect(html).toContain('Amina Diallo écrit');
+    expect(html).not.toContain('Bonjour');
+  });
+
+  test('sans frappeur, la ligne 2 reste l’aperçu — rien d’inventé', () => {
+    const html = renderToStaticMarkup(<LensRow {...baseProps()} />);
+    expect(html).toContain('Bonjour');
+    expect(html).not.toContain('écrit');
+  });
+
+  /** Un aperçu PROTÉGÉ ne doit pas reparaître par la porte de la frappe — et
+   * réciproquement, la frappe ne laisse rien fuir puisqu'elle ne dit rien du
+   * contenu (D-23, #5676). */
+  test('sur un dernier message à VUE UNIQUE, la frappe prime et le contenu ne revient pas', () => {
+    const viewOnce = conversation({
+      lastMessage: { id: 'm-vo', content: 'le code du coffre', createdAt: new Date('2026-01-01T10:00:00Z'), isViewOnce: true } as never,
+    });
+    const html = renderToStaticMarkup(<LensRow {...baseProps({ conversation: viewOnce, typist: 'Amina Diallo' })} />);
+    expect(html).toContain('Amina Diallo écrit');
+    expect(html).not.toContain('le code du coffre');
+  });
+
+  /** La frappe est une PREUVE D'ACTIVITÉ : le point de présence passe au vert
+   * quoi qu'ait servi le serveur (`LentilleConversationRow.swift:125-127`,
+   * `CLAUDE.md` § « User Presence »). `presence: 'offline'` ⇒ AUCUN point ;
+   * la frappe doit donc en faire apparaître un. */
+  test('la frappe FORCE la pastille de présence en ligne sur un direct hors ligne', () => {
+    const offline = conversation({
+      participants: [
+        { id: 'p1', userId: 'u-viewer' },
+        { id: 'p2', userId: 'u-amina', user: { id: 'u-amina', isOnline: false } },
+      ] as never,
+    });
+    const atRest = renderToStaticMarkup(<LensRow {...baseProps({ conversation: offline })} />);
+    const typing = renderToStaticMarkup(<LensRow {...baseProps({ conversation: offline, typist: 'Amina Diallo' })} />);
+    expect(atRest).not.toContain('data-presence');
+    expect(typing).toMatch(/data-presence="online"/);
+  });
+
+  test('sameRowProps distingue DEUX rangées qui ne diffèrent que par leur frappeur', () => {
+    // Les MÊMES références partout sauf `typist` (comme en production, où
+    // `CONVERSATIONS`, `READER_LANGUAGES` et `rowAction` sont stables) : sinon
+    // le témoin mesurerait l'identité du corpus ou du callback, pas `typist`.
+    const stable: Partial<LensRowProps> = { conversation: conversation({}), onRowAction: () => {} };
+    expect(sameRowProps(baseProps(stable), baseProps({ ...stable, typist: 'Amina Diallo' }))).toBe(false);
+    expect(
+      sameRowProps(baseProps({ ...stable, typist: 'Amina Diallo' }), baseProps({ ...stable, typist: 'Amina Diallo' })),
+    ).toBe(true);
+  });
+});

@@ -37,7 +37,7 @@ struct ConversationComposerState {
     var forwardAdditionalMessages: [Message] = []
     /// La cible de « Composer » — le média reçu que la porte va semer.
     /// Non-nil = la porte est présentée.
-    var composeMediaTarget: ComposableMessageTarget? = nil
+    var composeMediaTarget: ComposerSeedTarget? = nil
     /// La même cible, RETENUE le temps qu'une feuille se referme.
     ///
     /// Le second déclencheur de « Composer » vit dans la feuille de transfert,
@@ -46,7 +46,7 @@ struct ConversationComposerState {
     /// already presenting »). La promotion se fait donc dans l'`onDismiss` de
     /// la feuille — la primitive SwiftUI prévue pour ce cas exact, là où un
     /// délai n'est qu'un pari.
-    var pendingComposeTarget: ComposableMessageTarget? = nil
+    var pendingComposeTarget: ComposerSeedTarget? = nil
     var showConversationInfo = false
 
     // Popup consentement vocal à l'envoi d'audio (2026-07-08) : proposé UNE

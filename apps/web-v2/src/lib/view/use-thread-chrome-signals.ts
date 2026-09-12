@@ -32,6 +32,16 @@ export type ThreadChromeSignals = {
   readonly onComposerFocus: () => void;
   readonly onComposerBlur: (event: FocusEvent<HTMLElement>) => void;
   readonly dayPillLabel: string | null;
+  /**
+   * « LE LECTEUR REGARDE-T-IL LE BAS ? » — le MÊME verdict que celui qui
+   * gouverne le bouton « revenir en bas », exposé parce qu'un SECOND
+   * consommateur en a besoin : l'indicateur de frappe (#5793), une cellule qui
+   * apparaît APRÈS le dernier message et pousse donc le bas du défileur. Sans
+   * lui, l'écran recalculerait « suis-je en bas ? » avec sa propre marge —
+   * deux lois de proximité pour un seul écran, et la divergence ne se verrait
+   * que sur celle qu'on ne teste pas.
+   */
+  readonly nearBottom: boolean;
   readonly scrollButtonVisible: boolean;
   readonly scrollButtonUnreadCount: number;
   readonly scrollButtonSenderName: string | null;
@@ -165,6 +175,7 @@ export function useThreadChromeSignals(input: {
     onComposerFocus,
     onComposerBlur,
     dayPillLabel,
+    nearBottom,
     /**
      * CORRECTION revue #5774, défaut majeur 6 — le Résumé Vivant (`mode ===
      * 'summary'`) n'a AUCUNE liste qui défile (`chromeHiding`, même garde) :
