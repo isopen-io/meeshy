@@ -27,15 +27,34 @@ describe('shouldRetry — les deux moitiés', () => {
     }
   });
 
-  test('status 0 / 500 / TIMEOUT ⇒ true jusqu’à 2, false au 3e', () => {
+  test('status 0 / 500 / TIMEOUT ⇒ trois ESSAIS RÉELS au total, pas cinq', async () => {
+    // Compte les appels de `queryFn` via `QueryClient.fetchQuery`, jamais les
+    // verdicts bruts du prédicat : `failureCount` (query-core) démarre à 0 et
+    // n'est incrémenté qu'après le verdict, donc raisonner en verdicts
+    // 1-based masque un `<= 2` qui autorise cinq essais (#6210).
     for (const error of [
       new ApiError({ ok: false, status: 0, error: 'réseau' }),
       new ApiError({ ok: false, status: 500, error: 'panne' }),
       new ApiError({ ok: false, status: 0, error: 'délai', code: 'TIMEOUT' }),
     ]) {
-      expect(shouldRetry(1, error)).toBe(true);
-      expect(shouldRetry(2, error)).toBe(true);
-      expect(shouldRetry(3, error)).toBe(false);
+      const client = createAppQueryClient({ storage: fakeStorage(), buster: '0.0.0-test:u1' });
+      let calls = 0;
+      let threw = false;
+      try {
+        await client.fetchQuery({
+          queryKey: ['boom', error.message],
+          queryFn: () => {
+            calls += 1;
+            return Promise.reject(error);
+          },
+          retry: shouldRetry,
+          retryDelay: 0,
+        });
+      } catch {
+        threw = true;
+      }
+      expect(threw).toBe(true);
+      expect(calls).toBe(3);
     }
   });
 });
