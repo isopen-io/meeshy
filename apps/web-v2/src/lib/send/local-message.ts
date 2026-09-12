@@ -3,6 +3,7 @@ import type { AttachmentMessageType } from '@meeshy/shared/utils/attachment-mess
 import type { Message, Participant } from '@/lib/api/types';
 import type { SentMessageAck } from '@/lib/api/messages';
 import { attachmentPreviewOf, type PendingAttachment } from './attachments';
+import { protectionFieldsOf, type ComposeProtection } from './compose-protection';
 
 /**
  * LE MESSAGE LOCAL (#5813, étape 3) — la forme optimiste, avant confirmation.
@@ -53,8 +54,21 @@ export function localMessageOf(input: {
    * (`send/attachments.ts`) avant d'appeler ce constructeur.
    */
   readonly messageType?: 'text' | AttachmentMessageType;
+  /**
+   * LA PROTECTION CHOISIE PAR L'AUTEUR (#6175) — résolue en champs `Message`
+   * PAR `protectionFieldsOf` (`compose-protection.ts`), au MÊME instant
+   * `now` que le reste du message : la bulle optimiste porte ainsi EXACTEMENT
+   * ce qui partira dans le corps du POST (`bodyOf`, `perform-send.ts`, qui
+   * relit ces mêmes champs plutôt que de recomposer une seconde fois), et
+   * D-41 (« ce qu'on envoie flouté se rend flouté chez soi ») s'applique dès
+   * l'accusé optimiste, jamais seulement après confirmation serveur.
+   * `undefined` ⇒ aucune protection (comportement INCHANGÉ des appelants
+   * historiques : tout à `false`/`0`, comme avant ce lot).
+   */
+  readonly protection?: ComposeProtection;
   readonly now: Date;
 }): LocalMessage {
+  const protection = protectionFieldsOf(input.protection ?? {}, input.now.getTime());
   return {
     id: input.clientMessageId,
     clientMessageId: input.clientMessageId,
@@ -68,9 +82,11 @@ export function localMessageOf(input: {
     messageType: input.messageType ?? 'text',
     messageSource: 'user',
     isEdited: false,
-    isViewOnce: false,
+    isViewOnce: protection.isViewOnce,
     viewOnceCount: 0,
-    isBlurred: false,
+    isBlurred: protection.isBlurred,
+    ...(protection.effectFlags === 0 ? {} : { effectFlags: protection.effectFlags }),
+    ...(protection.expiresAt === undefined ? {} : { expiresAt: protection.expiresAt }),
     // Rien n'est encore parti : `deliveredCount` à 0 est ce que `deliveryOf`
     // (`lib/view/message.ts`) lit comme « en attente », sans champ inventé.
     deliveredCount: 0,

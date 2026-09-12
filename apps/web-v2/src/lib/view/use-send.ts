@@ -8,6 +8,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import type { PendingAttachment } from '@/lib/send/attachments';
+import { NO_PROTECTION, type ComposeProtection } from '@/lib/send/compose-protection';
 import { confirmedCountOf, entriesOf, outboxStore } from '@/lib/send/outbox-store';
 import { sendFailureReason } from '@/lib/send/failure-reason';
 
@@ -76,6 +77,10 @@ export function useSend(params: {
     attachments: readonly PendingAttachment[],
     replyTo: Message | null,
     language: string,
+    /** LA PROTECTION CHOISIE (#6175) — `NO_PROTECTION` par défaut : les
+     * appelants historiques (qui ne connaissent pas encore la rangée haute)
+     * continuent d'envoyer sans rien changer. */
+    protection?: ComposeProtection,
   ) => void;
   readonly retry: (messageId: string) => void;
 } {
@@ -109,7 +114,13 @@ export function useSend(params: {
   );
 
   const send = useCallback(
-    (text: string, attachments: readonly PendingAttachment[], replyTo: Message | null, language: string) => {
+    (
+      text: string,
+      attachments: readonly PendingAttachment[],
+      replyTo: Message | null,
+      language: string,
+      protection: ComposeProtection = NO_PROTECTION,
+    ) => {
       void sendAction({
         conversationId,
         draft: {
@@ -117,6 +128,14 @@ export function useSend(params: {
           originalLanguage: language,
           ...(replyTo === null ? {} : { replyToId: replyTo.id, replyTo }),
           ...(attachments.length === 0 ? {} : { attachments }),
+          /* Une protection VIDE ne pose pas la clé — sur la VALEUR, jamais
+             sur l'identité (revue-correction) : `composer.tsx` compose son
+             objet par `useMemo`, donc il n'est JAMAIS `NO_PROTECTION` et le
+             test d'identité laissait toujours passer `protection: {}`. Sans
+             conséquence observable (`protectionFieldsOf({})` rend les mêmes
+             défauts), mais un garde qui ne garde rien ment sur le brouillon
+             que `outbox-store` conserve. */
+          ...(Object.keys(protection).length === 0 ? {} : { protection }),
         },
         viewerId,
         ...(sender === undefined ? {} : { sender }),

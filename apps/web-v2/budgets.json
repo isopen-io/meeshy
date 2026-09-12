@@ -66,6 +66,14 @@
         "source": "Mesure de measure-weight.mjs le 2026-09-12 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,13 Ko gzip -9 -- LE CORPUS DE RECETTE du temps reel (`fixtures-realtime.ts` § `createFixturesSocketClient`/`SCHEDULE`, plus `fixtures-live.ts` inline puisque `fixtures-realtime.ts` en est le SEUL importeur), sorti du chunk `realtime` (ci-dessus) par un `import()` local a `lib/api/realtime.ts` § `syncConnection`. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins. N'entre dans AUCUN bundle `VITE_DATA_SOURCE=gateway` deploye (`__FIXTURES__` elague `createFixturesSocketClient`, `vite.config.ts` § `FIXTURE_MODULE`) : ce plafond ne borne que le POC et ses gates, jamais un lecteur reel. Corollaire du defaut qui a cree cette entree : toute chronologie de recette AJOUTEE grossit CE chunk, jamais `realtime` -- si elle grossit ailleurs, c'est qu'un import statique a recree l'arete que ce lot vient de couper."
       }
     },
+    "effects_sheet": {
+      "pattern": "^assets/effects-sheet-",
+      "kb": {
+        "value": 2,
+        "status": "CIBLE -- MESUREE PAR #6175, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-12 (`bun run build` puis `node scripts/measure-weight.mjs`) apres l'ajout de la feuille d'effets (deux sections, `EffectsSheet`), meme discipline que les chunks voisins (arrondi au Ko SUPERIEUR + 1 Ko de marge). `Sheet` (coquille modale partagee avec `language-sheet.tsx`) est deja dans le chunk du fil, pas ici -- seul le contenu propre de la feuille (les puces, les deux listes de bits) est compte."
+      }
+    },
     "stopword_language_detector": {
       "pattern": "^assets/stopword-language-detector-",
       "kb": {

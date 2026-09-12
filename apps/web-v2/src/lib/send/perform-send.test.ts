@@ -6,6 +6,8 @@ import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { messagesQueryKey } from '@/lib/api/messages';
 import type { Conversation, Message } from '@/lib/api/types';
 
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+
 import { pendingAttachmentOf } from './attachments';
 import { entriesOf, createOutboxStore } from './outbox-store';
 import { debounceEntryCountForTests, performSend, retrySend, type SendDeps } from './perform-send';
@@ -801,5 +803,199 @@ describe('performSend — pièces jointes (#5668)', () => {
     const uploadCallsAfterRetry = calls.filter((c) => c.url.includes('/attachments/upload')).length;
     expect(uploadCallsAfterRetry).toBe(1); // JAMAIS un second upload.
     expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(0); // la reprise a réussi.
+  });
+});
+
+/**
+ * LA PROTECTION (#6175) — `services/gateway/src/routes/conversations/messages-send.ts:41-105,240-245`.
+ * Chaque témoin lit le CORPS réellement POSTÉ (`calls[0].init.body`) et la
+ * bulle optimiste (l'entrée d'outbox, AVANT tout accusé — `online: false`
+ * isole ces témoins du réseau, comme le fait déjà « draft.replyTo » plus
+ * haut).
+ */
+describe('performSend — la protection (#6175)', () => {
+  const NOW = 1_757_600_000_000; // 2026-09-11T13:33:20.000Z
+
+  function bodyOfLastCall(calls: readonly { readonly init: RequestInit }[]): Record<string, unknown> {
+    return JSON.parse(String(calls[calls.length - 1]?.init.body)) as Record<string, unknown>;
+  }
+
+  test('éphémère 60 s ⇒ expiresAt = now + 60 s (ISO) dans le corps ET sur la bulle optimiste ; effectFlags porte EPHEMERAL ; isBlurred ABSENT', async () => {
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: fakeFetch({ status: 200 }).impl }),
+      queryClient: seededClient(),
+      outbox,
+      online: false,
+      now: () => NOW,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'ça brûle', originalLanguage: 'fr', protection: { ephemeralSeconds: 60 } },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const entry = entriesOf(outbox.getState(), 'c-a')[0]!;
+    const expected = new Date(NOW + 60_000);
+    expect(entry.message.expiresAt).toEqual(expected);
+    expect(entry.message.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.EPHEMERAL);
+    expect(entry.message.isBlurred).toBe(false);
+  });
+
+  test('éphémère 60 s, EN LIGNE ⇒ le corps POSTÉ porte expiresAt ISO et effectFlags, jamais isBlurred', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'x') });
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox: createOutboxStore(),
+      online: true,
+      now: () => NOW,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'ça brûle 2', originalLanguage: 'fr', protection: { ephemeralSeconds: 60 } },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const body = bodyOfLastCall(calls);
+    expect(body.expiresAt).toBe(new Date(NOW + 60_000).toISOString());
+    expect(body.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.EPHEMERAL);
+    expect(body.isBlurred).toBeUndefined();
+    expect(body.isViewOnce).toBeUndefined();
+  });
+
+  test('flou ⇒ isBlurred: true dans le corps, effectFlags porte BLURRED, la bulle optimiste est VOILÉE', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'x') });
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox: createOutboxStore(),
+      online: true,
+      now: () => NOW,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'secret', originalLanguage: 'fr', protection: { blurred: true } },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const body = bodyOfLastCall(calls);
+    expect(body.isBlurred).toBe(true);
+    expect(body.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.BLURRED);
+    expect(body.expiresAt).toBeUndefined();
+  });
+
+  test('vue unique (loi seule — aucun contrôle ne l’arme en conversation) ⇒ isViewOnce: true, bit VIEW_ONCE', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'x') });
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox: createOutboxStore(),
+      online: true,
+      now: () => NOW,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'une seule fois', originalLanguage: 'fr', protection: { viewOnce: true } },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const body = bodyOfLastCall(calls);
+    expect(body.isViewOnce).toBe(true);
+    expect(body.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.VIEW_ONCE);
+  });
+
+  test('effets décoratifs (SHAKE|GLOW) combinés au flou ⇒ effectFlags = SHAKE|GLOW|BLURRED', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'x') });
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox: createOutboxStore(),
+      online: true,
+      now: () => NOW,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: {
+        content: 'boum',
+        originalLanguage: 'fr',
+        protection: { effectFlags: MESSAGE_EFFECT_FLAGS.SHAKE | MESSAGE_EFFECT_FLAGS.GLOW, blurred: true },
+      },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const body = bodyOfLastCall(calls);
+    expect(body.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.SHAKE | MESSAGE_EFFECT_FLAGS.GLOW | MESSAGE_EFFECT_FLAGS.BLURRED);
+    expect(body.isBlurred).toBe(true);
+  });
+
+  test('NO_PROTECTION (aucune clé `protection`) ⇒ aucune des quatre clés dans le corps — rétro-compatible', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'x') });
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient: seededClient(),
+      outbox: createOutboxStore(),
+      online: true,
+      now: () => NOW,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'rien de spécial', originalLanguage: 'fr' },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const body = bodyOfLastCall(calls);
+    expect('isBlurred' in body).toBe(false);
+    expect('expiresAt' in body).toBe(false);
+    expect('effectFlags' in body).toBe(false);
+    expect('isViewOnce' in body).toBe(false);
+  });
+
+  test('retrySend rejoue le MÊME expiresAt — jamais recalculé depuis une horloge qui a avancé', async () => {
+    const sequence = sequencedFetch([{ status: 0 }, { status: 200, body: ackBody('m9', 'x') }]);
+    let clock = NOW;
+    const outbox = createOutboxStore();
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: sequence.impl }),
+      queryClient: seededClient(),
+      outbox,
+      online: true,
+      now: () => clock,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'reprise éphémère', originalLanguage: 'fr', protection: { ephemeralSeconds: 60 } },
+      viewerId: 'u-viewer',
+      deps,
+    });
+    const failedEntry = entriesOf(outbox.getState(), 'c-a')[0]!;
+    expect(failedEntry.delivery).toBe('failed');
+    const firstBody = bodyOfLastCall(sequence.calls);
+
+    clock += 30_000; // l'horloge a avancé de 30 s avant le rejeu.
+    await retrySend({ conversationId: 'c-a', clientMessageId: failedEntry.message.clientMessageId, deps });
+
+    const secondBody = bodyOfLastCall(sequence.calls);
+    expect(secondBody.expiresAt).toBe(firstBody.expiresAt); // le MÊME, jamais recalculé.
   });
 });

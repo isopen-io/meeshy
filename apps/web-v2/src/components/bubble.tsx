@@ -19,6 +19,7 @@ import {
   Badges,
   Check,
   EditedMark,
+  EffectsIndicator,
   FailedSendBand,
   Flags,
   PrismPastille,
@@ -387,8 +388,9 @@ export function Bubble({
         {/* LES BADGES DE TÊTE (#5936) — AU-DESSUS de la bulle, HORS du fond
             coloré, alignés du côté de la bulle (`BubbleStandardLayout
             .swift:522-541`). */}
-        <div className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+        <div className={`flex items-center gap-1.5 ${isMine ? 'justify-end' : 'justify-start'}`}>
           <Badges badges={badges} />
+          <EffectsIndicator effectFlags={message.effectFlags} />
         </div>
 
         {/* LE BADGE ÉPHÉMÈRE — AU-DESSUS de la bulle, HORS du fond coloré

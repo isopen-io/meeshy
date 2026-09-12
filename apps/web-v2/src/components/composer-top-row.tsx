@@ -7,6 +7,32 @@ import { EPHEMERAL_DURATIONS, characterCounterOf } from '@/lib/send/compose-prot
 import { SENTIMENT_EMOJI, type SentimentLevel } from '@/lib/send/sentiment';
 
 /**
+ * L'ÉTAT ARMÉ D'UNE BASCULE (revue-correction #6175, défaut majeur) — le
+ * LAVIS porte la couleur d'état, l'ENCRE reste `--color-ios-ink` dans les
+ * DEUX schémas, et un LISERÉ referme l'identité.
+ *
+ * C'est la doctrine déjà écrite dans `composer-language-pill.tsx:16-25` et
+ * gardée par `check-thread-chrome.mjs § 6` : une encre à la couleur d'état
+ * posée sur un lavis de cette MÊME couleur ne tient pas la barre AA. Mesuré
+ * au navigateur sur la première forme de cette rangée — « 1min » 4,47:1 en
+ * schéma CLAIR (encre `--color-error`) et « Flou » 2,90:1 en schéma SOMBRE
+ * (encre `--color-i600`, un indigo foncé sur un fond quasi noir) : chacune ne
+ * rougissait que dans UN des deux schémas, exactement ce que « les deux
+ * schémas se regardent » existe pour attraper. La capsule « effets » portait
+ * la même forme avec `--accent`, donc un contraste qui variait avec la
+ * couleur de CHAQUE conversation, sans aucun plancher.
+ *
+ * Le liseré n'est pas une compensation : c'est la moitié d'iOS que la
+ * première forme avait laissée tomber (`+Protections.swift` — « capsule
+ * `error` à 15 % ET trait 30 % »).
+ */
+const armedStyle = (color: string, fill = 15, ring = 30) => ({
+  backgroundColor: `color-mix(in srgb, ${color} ${fill}%, transparent)`,
+  boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${color} ${ring}%, transparent)`,
+  color: 'var(--color-ios-ink)',
+});
+
+/**
  * LE LIBELLÉ FRANÇAIS DE CHAQUE NIVEAU — PROSE, jamais l'identifiant anglais
  * de `SentimentLevel` (D-13 : le CODE est en anglais, la PROSE reste en
  * français). iOS annonce « Tonalité du message » comme LABEL et l'EMOJI comme
@@ -88,14 +114,20 @@ export function ComposerTopRow({
       {ephemeralPickerOpen ? (
         <div
           data-composer-ephemeral-picker
-          className="mx-2 mb-1 flex gap-2 overflow-x-auto rounded-[16px] px-3 py-2"
+          role="group"
+          aria-label="Durée avant disparition du message"
+          className="mx-2 mb-1 flex gap-2 overflow-x-auto rounded-[16px] px-3 py-1"
           style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 8%, var(--color-ios-surface))' }}
         >
+          {/* CIBLES ≥ 44 (dimension 5, revue-correction #6175) — `min-h-11`
+              sur chaque capsule : la première forme mesurait 32 px de haut au
+              navigateur, sous la barre, alors que la rangée voisine venait de
+              la tenir. */}
           <button
             type="button"
             onClick={() => onSelectEphemeral(undefined)}
             aria-pressed={ephemeralSeconds === undefined}
-            className="shrink-0 rounded-full px-3.5 py-1.5 text-title font-semibold"
+            className="min-h-11 shrink-0 rounded-full px-3.5 text-title font-semibold"
             style={
               ephemeralSeconds === undefined
                 ? { backgroundColor: 'var(--accent)', color: 'var(--accent-ink)' }
@@ -112,13 +144,14 @@ export function ComposerTopRow({
                 type="button"
                 onClick={() => onSelectEphemeral(d.seconds)}
                 aria-pressed={active}
-                className="flex shrink-0 items-center gap-1 rounded-full px-3.5 py-1.5 text-title font-semibold"
+                aria-label={d.displayLabel}
+                className="flex min-h-11 shrink-0 items-center gap-1 rounded-full px-3.5 text-title font-semibold"
                 style={
                   active
-                    ? { backgroundColor: 'var(--color-error)', color: 'white' }
+                    ? armedStyle('var(--color-error)', 32, 100)
                     : {
                         backgroundColor: 'color-mix(in srgb, var(--color-error) 10%, transparent)',
-                        color: 'var(--color-error)',
+                        color: 'var(--color-ios-ink)',
                       }
                 }
               >
@@ -131,17 +164,20 @@ export function ComposerTopRow({
       ) : null}
 
       <div data-composer-toolbar className="flex items-center justify-start gap-1 px-3 pt-1.5">
+        {/* CIBLES ≥ 44×44 (dimension 5, revue-correction #6175) — `min-w-11`
+            AUTANT que `min-h-11`, motif `composer-language-pill.tsx:69`. La
+            première forme ne posait que la HAUTEUR : mesurée 32×44 au
+            navigateur dans les DEUX schémas, sous la barre en LARGEUR
+            pendant que le témoin unitaire, qui ne lisait que la CLASSE
+            `min-h-11`, restait vert. */}
         <button
           type="button"
           onClick={onToggleEphemeral}
           aria-pressed={ephemeralSeconds !== undefined}
+          aria-expanded={ephemeralPickerOpen}
           data-composer-ephemeral
-          className="flex min-h-11 shrink-0 items-center gap-1 rounded-chip px-2"
-          style={
-            ephemeralSeconds !== undefined
-              ? { backgroundColor: 'color-mix(in srgb, var(--color-error) 15%, transparent)', color: 'var(--color-error)' }
-              : { color: 'var(--color-ios-ink-2)' }
-          }
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
+          style={ephemeralSeconds !== undefined ? armedStyle('var(--color-error)') : { color: 'var(--color-ios-ink-2)' }}
           aria-label={
             ephemeralSeconds === undefined
               ? 'Activer le mode éphémère'
@@ -161,12 +197,8 @@ export function ComposerTopRow({
           onClick={onToggleBlur}
           aria-pressed={blurred}
           data-composer-blur
-          className="flex min-h-11 shrink-0 items-center gap-1 rounded-chip px-2"
-          style={
-            blurred
-              ? { backgroundColor: 'color-mix(in srgb, var(--color-i600) 15%, transparent)', color: 'var(--color-i600)' }
-              : { color: 'var(--color-ios-ink-2)' }
-          }
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
+          style={blurred ? armedStyle('var(--color-i600)') : { color: 'var(--color-ios-ink-2)' }}
           aria-label={blurred ? 'Mode flou actif' : 'Activer le mode flou'}
         >
           <Glyph name="eyeSlash" size={16} />
@@ -176,13 +208,10 @@ export function ComposerTopRow({
         <button
           type="button"
           onClick={onOpenEffects}
+          aria-haspopup="dialog"
           data-composer-effects
-          className="flex min-h-11 shrink-0 items-center gap-1 rounded-chip px-2"
-          style={
-            effectCount > 0
-              ? { backgroundColor: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)' }
-              : { color: 'var(--color-ios-ink-2)' }
-          }
+          className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
+          style={effectCount > 0 ? armedStyle('var(--accent)') : { color: 'var(--color-ios-ink-2)' }}
           aria-label={effectCount > 0 ? `${effectCount} effet(s) actif(s)` : 'Ajouter des effets au message'}
         >
           <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={16} />

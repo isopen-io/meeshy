@@ -109,6 +109,17 @@ export type SendMessageBody = {
   readonly messageType?: 'image' | 'file' | 'audio' | 'video';
   readonly attachmentIds?: readonly string[];
   readonly replyToId?: string;
+  /**
+   * LA PROTECTION (#6175) — `SendMessageBodySchema:76-81`
+   * (`services/gateway/src/routes/conversations/messages-send.ts`). Chaque
+   * clé est OMISE à sa valeur par défaut (`protectionBodyOf`,
+   * `send/perform-send.ts`) — jamais `false`/`0` posé explicitement.
+   */
+  readonly isBlurred?: boolean;
+  /** Chaîne ISO — le serveur la revit en `Date` (`messages-send.ts:317`). */
+  readonly expiresAt?: string;
+  readonly effectFlags?: number;
+  readonly isViewOnce?: boolean;
 };
 
 /**

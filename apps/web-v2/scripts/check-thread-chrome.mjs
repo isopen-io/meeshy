@@ -626,6 +626,121 @@ for (const scheme of ['light', 'dark']) {
 
     await context.close();
   }
+
+  // ---------------------------------------------------------------------- 7
+  /**
+   * LES TROIS BASCULES DE LA RANGÉE HAUTE (#6175, revue-correction) — même
+   * mesure que § 6, étendue aux occupantes qui l'ont rejointe : éphémère,
+   * flou, effets.
+   *
+   * DEUX DÉFAUTS MESURÉS ICI, que le témoin unitaire ne pouvait pas voir :
+   *
+   * · LA CIBLE, EN LARGEUR. `min-h-11` sans `min-w-11` donne 32×44 — le test
+   *   unitaire lisait la CLASSE `min-h-11` et restait vert sur la dimension
+   *   voisine (leçon du dépôt : un témoin vert sur la dimension voisine).
+   *
+   * · LE CONTRASTE DE L'ÉTAT ARMÉ, DANS CHAQUE SCHÉMA. Une encre à la
+   *   couleur d'état sur un lavis de cette MÊME couleur mesurait 4,47:1 pour
+   *   « 1min » en CLAIR et 2,90:1 pour « Flou » en SOMBRE : chacune ne
+   *   rougissait que dans UN des deux schémas. La capsule « effets » en
+   *   portait une troisième forme, à l'accent — donc un contraste qui variait
+   *   avec la couleur de chaque conversation, sans plancher.
+   */
+  {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      colorScheme: scheme === 'light' ? 'light' : 'dark',
+    });
+    await context.addInitScript((s) => {
+      try {
+        localStorage.setItem('meeshy.scheme', s);
+      } catch {
+        /* navigation privée */
+      }
+    }, scheme);
+    const page = await context.newPage();
+    await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
+    await page.waitForSelector('[data-message]');
+    await page.waitForTimeout(300);
+
+    const TOGGLES = [
+      ['[data-composer-ephemeral]', 'éphémère'],
+      ['[data-composer-blur]', 'flou'],
+      ['[data-composer-effects]', 'effets'],
+    ];
+
+    const boxOf = (sel) =>
+      page.evaluate((s) => {
+        const el = document.querySelector(s);
+        if (el === null) return null;
+        const r = el.getBoundingClientRect();
+        return { width: Math.round(r.width * 10) / 10, height: Math.round(r.height * 10) / 10 };
+      }, sel);
+
+    for (const [sel, name] of TOGGLES) {
+      const box = await boxOf(sel);
+      if (expect(box !== null, `${scheme} · la bascule « ${name} » existe dans la rangée haute`)) {
+        expect(
+          box.width >= 44 && box.height >= 44,
+          `${scheme} · « ${name} » tient la cible 44×44 (${box.width}×${box.height})`,
+        );
+      }
+    }
+
+    /* L'ÉTAT ARMÉ, PAS SEULEMENT L'ÉTAT AU REPOS — c'est l'armé qui peint un
+       lavis sous son encre, donc lui seul peut tomber sous AA. On ARME par
+       le geste réel (la loi 4 : le contrôle a un effet), jamais en posant une
+       classe. */
+    await page.locator('[data-composer-ephemeral]').click();
+    await page.waitForSelector('[data-composer-ephemeral-picker]');
+    const picker = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-composer-ephemeral-picker] button')].map((b) => {
+        const r = b.getBoundingClientRect();
+        return { label: b.getAttribute('aria-label') ?? b.textContent, height: Math.round(r.height) };
+      }),
+    );
+    const tooShort = picker.filter((c) => c.height < 44);
+    expect(
+      picker.length > 0 && tooShort.length === 0,
+      `${scheme} · les ${picker.length} capsules de durée tiennent 44 px de haut (${tooShort.map((c) => `${c.label} ${c.height}`).join(', ') || 'toutes'})`,
+    );
+
+    await page.locator('[data-composer-ephemeral-picker] button', { hasText: '1min' }).first().click();
+    await page.locator('[data-composer-blur]').click();
+    await page.waitForTimeout(150);
+
+    for (const [sel, name] of [
+      ['[data-composer-ephemeral]', 'éphémère'],
+      ['[data-composer-blur]', 'flou'],
+    ]) {
+      const armed = await boxOf(sel);
+      expect(armed.width >= 44 && armed.height >= 44, `${scheme} · « ${name} » ARMÉE tient la cible (${armed.width}×${armed.height})`);
+      const ratio = await contrastOf(page, `${sel} span`);
+      expect(ratio !== null && ratio >= 4.5, `${scheme} · « ${name} » ARMÉE tient la barre AA (${ratio}:1)`);
+    }
+
+    /* LA FEUILLE D'EFFETS — ses puces sont des cibles au même titre. */
+    await page.locator('[data-composer-effects]').click();
+    await page.waitForSelector('dialog[open]');
+    const chips = await page.evaluate(() =>
+      [...document.querySelectorAll('dialog[open] button')].map((b) => {
+        const r = b.getBoundingClientRect();
+        return { label: b.getAttribute('aria-label') ?? b.textContent, height: Math.round(r.height) };
+      }),
+    );
+    const shortChips = chips.filter((c) => c.height < 44);
+    expect(
+      chips.length > 0 && shortChips.length === 0,
+      `${scheme} · les ${chips.length} puces de la feuille d'effets tiennent 44 px (${shortChips.map((c) => `${c.label} ${c.height}`).join(', ') || 'toutes'})`,
+    );
+
+    await page.locator('dialog[open] button', { hasText: 'Confettis' }).first().click();
+    await page.waitForTimeout(100);
+    const chipRatio = await contrastOf(page, 'dialog[open] button[aria-pressed="true"]');
+    expect(chipRatio !== null && chipRatio >= 4.5, `${scheme} · une puce d'effet ACTIVE tient la barre AA (${chipRatio}:1)`);
+
+    await context.close();
+  }
 }
 
 await browser.close();
