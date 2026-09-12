@@ -194,7 +194,7 @@ extension ConversationListView {
             Button {
                 HapticFeedback.light()
                 renameText = conversation.name
-                renameTarget = conversation
+                sheetTargets.rename = conversation
             } label: {
                 Label(
                     String(localized: "context.rename", defaultValue: "Renommer", bundle: .main),
@@ -599,7 +599,7 @@ extension ConversationListView {
                         onDetails: { sheetTargets.info = conversation },
                         onRename: {
                             renameText = conversation.name
-                            renameTarget = conversation
+                            sheetTargets.rename = conversation
                         },
                         onSetFavorite: { emoji in
                             Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: emoji) }

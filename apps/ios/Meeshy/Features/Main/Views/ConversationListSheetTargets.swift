@@ -56,4 +56,10 @@ struct ConversationListSheetTargets {
 
     /// Celle dont le menu contextuel est ouvert.
     @Indirect var contextMenu: Conversation? = nil
+
+    /// Celle qu'on renomme (menu contextuel, groupes et communautés).
+    /// Arrivée dans le sac au second passage : elle était restée en ligne pour
+    /// 992 octets alors qu'elle est une cible de feuille comme les sept autres
+    /// — la preuve qu'un regroupement se relit après coup, champ par champ.
+    @Indirect var rename: Conversation? = nil
 }
