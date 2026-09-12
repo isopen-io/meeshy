@@ -1,8 +1,11 @@
+import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { Conversation } from '@/lib/api/types';
 import type { ConversationFlags } from '@/lib/api/preferences';
+import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
+import { applyConversationUpdated } from '@/lib/api/realtime-apply';
 
 import { LensRow, sameRowProps, type LensRowProps } from './lens-row';
 
@@ -372,5 +375,61 @@ describe('la rangée de la Lentille — « X écrit » (#5793)', () => {
     expect(
       sameRowProps(baseProps({ ...stable, typist: 'Amina Diallo' }), baseProps({ ...stable, typist: 'Amina Diallo' })),
     ).toBe(true);
+  });
+});
+
+/**
+ * T6 (#6171) — la rangée RE-REND l'aperçu SERVI après `applyConversationUpdated`.
+ * `applyConversationUpdated` patch le cache DIRECTEMENT (motif `socket.test.ts`
+ * § `conversation:updated`) : on relit la conversation PATCHÉE et on la rend
+ * telle quelle — c'est le même geste que ferait l'écran (`useConversationsSnapshot`).
+ */
+describe('LensRow après applyConversationUpdated (#6171, T6) — l’aperçu SERVI, et la rangée SE re-rend', () => {
+  test('le `<span lang="fr">` porte le texte SERVI, le préfixe nomme l’auteur ADOPTÉ ; sameRowProps constate une IDENTITÉ neuve', () => {
+    const client = new QueryClient();
+    const before = conversation({
+      id: 'c-a',
+      // GROUPE, et c'est ce qui rend l'ADOPTION observable À L'ÉCRAN : le
+      // préfixe d'auteur de la ligne 2 ne se rend que là (`senderName = group
+      // ? …`, `lens-row.tsx`), et il vient de `lastMessage.sender.displayName`
+      // — donc de la LIGNE NEUTRE, jamais de la carte de traductions. Sans
+      // cette moitié, le témoin restait VERT après retrait de l'adoption
+      // (mesuré en revue-correction #6171) : la rangée lit
+      // `lastMessageTranslations`, qui se patche de toute façon.
+      type: 'group',
+      memberCount: 3,
+      lastMessage: { id: 'm-2', content: 'Oui, jeudi 14h.', createdAt: new Date('2026-01-01T10:00:00Z') } as never,
+    });
+    client.setQueryData(CONVERSATIONS_QUERY_KEY, [before]);
+
+    applyConversationUpdated(client, {
+      conversationId: 'c-a',
+      updatedBy: { id: 'u-kwame' },
+      updatedAt: '2026-09-12T10:07:00.000Z',
+      lastMessageId: 'm-1',
+      lastMessagePreview: 'Hola, ¿la revisión sigue el jueves?',
+      lastMessageOriginalLanguage: 'es',
+      lastMessageAt: '2026-09-12T10:00:00.000Z',
+      lastMessageTranslations: { fr: 'Bonjour, la revue reste bien jeudi ?' },
+      lastMessageSenderName: 'Kwame Mensah',
+      previewRecalculated: true,
+    });
+
+    const after = client
+      .getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)
+      ?.find((c) => c.id === 'c-a') as Conversation;
+
+    const beforeProps = baseProps({ conversation: before });
+    const afterProps = baseProps({ conversation: after });
+
+    const html = renderToStaticMarkup(<LensRow {...afterProps} />);
+    expect(html).toContain('lang="fr"');
+    expect(html).toContain('Bonjour, la revue reste bien jeudi ?');
+    // L'ADOPTION atteint le PIXEL : l'auteur rendu est celui du message NOUVEAU.
+    expect(html).toContain('Kwame Mensah');
+    expect(renderToStaticMarkup(<LensRow {...beforeProps} />)).not.toContain('Kwame Mensah');
+
+    // La rangée SE re-rend : `conversation` a changé d'IDENTITÉ (patch immuable).
+    expect(sameRowProps(beforeProps, afterProps)).toBe(false);
   });
 });

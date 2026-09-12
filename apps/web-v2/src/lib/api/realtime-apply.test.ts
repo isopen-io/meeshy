@@ -18,6 +18,7 @@ import {
   isConversationUpdated,
   isMessageTranslationEvent,
   isSocketMessage,
+  neutralLastMessageFromPreview,
 } from './realtime-apply';
 import type { Conversation, Message } from './types';
 
@@ -405,7 +406,13 @@ describe('applyConversationUpdated (#5793, revue-correction défaut 1) — la QU
     expect(Object.prototype.hasOwnProperty.call(patched ?? {}, 'lastMessageTranslations')).toBe(false);
   });
 
-  test('`lastMessageId` NE CORRESPOND PAS au `lastMessage` connu : le contenu n’est PAS fabriqué', () => {
+  /**
+   * `lastMessageId` NE CORRESPOND PAS au `lastMessage` connu — ADOPTION
+   * (#6171, G3, revue de #5793 : ce témoin CHANGE DE SENS — il affirmait
+   * « le contenu n'est pas fabriqué » ; il affirme désormais l'ADOPTION,
+   * miroir `LastMessageFacet.adoptLastMessage`).
+   */
+  test('`lastMessageId` NE CORRESPOND PAS au `lastMessage` connu : la ligne ADOPTE le nouveau (#6171, G3)', () => {
     const client = new QueryClient();
     client.setQueryData(CONVERSATIONS_QUERY_KEY, [
       conv({ id: 'c-a', lastMessage: localMessage({ id: 'm-1', content: 'ancien contenu' }) }),
@@ -420,9 +427,257 @@ describe('applyConversationUpdated (#5793, revue-correction défaut 1) — la QU
     });
 
     const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
-    // `lastMessage` reste celui déjà connu — un `message:new`/`GET …/messages` le complètera.
+    expect(patched?.lastMessage?.id).toBe('m-2');
+    expect(patched?.lastMessage?.content).toBe('un aperçu que la charge ne peut pas étayer');
+  });
+
+  /**
+   * T5 — le SCÉNARIO complet de la spécification #6171 § 4.2 : un message
+   * SUPPRIMÉ POUR TOUS cesse d'être décrit (auteur, `isViewOnce`), la ligne
+   * décrit désormais `m-1` (Kwame, espagnol) au RANG résolu du LECTEUR.
+   */
+  test('T5 — adoption COMPLÈTE : id, contenu, langue, auteur, `isViewOnce` qui ne survit PAS, `lastMessageAt`', () => {
+    const client = new QueryClient();
+    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+      conv({
+        id: 'c-a',
+        lastMessage: {
+          ...localMessage({ id: 'm-2', content: 'Oui, jeudi 14h.', originalLanguage: 'fr' }),
+          sender: { displayName: 'Vous' } as never,
+          isViewOnce: true,
+        },
+        lastMessageAt: new Date('2026-09-12T10:02:00.000Z'),
+      }),
+    ]);
+
+    applyConversationUpdated(client, {
+      conversationId: 'c-a',
+      updatedBy: { id: 'u-kwame' },
+      updatedAt: '2026-09-12T10:07:00.000Z',
+      lastMessageId: 'm-1',
+      lastMessagePreview: 'Hola, ¿la revisión sigue el jueves?',
+      lastMessageOriginalLanguage: 'es',
+      lastMessageAt: '2026-09-12T10:00:00.000Z',
+      lastMessageTranslations: { fr: 'Bonjour, la revue reste bien jeudi ?', en: 'Hello, is the review still on for Thursday?' },
+      lastMessageSenderName: 'Kwame Mensah',
+      senderId: 'p-kwame',
+      previewRecalculated: true,
+    });
+
+    const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
     expect(patched?.lastMessage?.id).toBe('m-1');
-    expect(patched?.lastMessage?.content).toBe('ancien contenu');
+    expect(patched?.lastMessage?.content).toBe('Hola, ¿la revisión sigue el jueves?');
+    expect(patched?.lastMessage?.originalLanguage).toBe('es');
+    expect((patched?.lastMessage?.sender as unknown as { displayName?: string } | undefined)?.displayName).toBe('Kwame Mensah');
+    // `isViewOnce` du message SUPPRIMÉ ne survit PAS sur la ligne neutre.
+    expect(patched?.lastMessage?.isViewOnce).toBe(false);
+    // D-26 : le cache garde la chaîne ISO TELLE QUELLE (`decodeConversation` la revit en `Date`).
+    expect(patched?.lastMessageAt as unknown as string).toBe('2026-09-12T10:00:00.000Z');
+    expect(patched?.lastMessageTranslations).toEqual({
+      fr: 'Bonjour, la revue reste bien jeudi ?',
+      en: 'Hello, is the review still on for Thursday?',
+    });
+
+    // LE RANG DU LECTEUR (leçon 261) — prisme ['fr','en'] ⇒ 'fr' (rang 1).
+    const servedFr = served({
+      preferredLanguages: ['fr', 'en'],
+      originalLanguage: patched?.lastMessageOriginalLanguage,
+      translations: patched?.lastMessageTranslations,
+      original: patched?.lastMessage?.content ?? '',
+    });
+    expect(servedFr.text).toBe('Bonjour, la revue reste bien jeudi ?');
+    expect(servedFr.language).toBe('fr');
+
+    // CONTRE-TÉMOIN DE RANG — prisme ['en','fr'] ⇒ 'en' (rang 1 de CE lecteur).
+    const servedEn = served({
+      preferredLanguages: ['en', 'fr'],
+      originalLanguage: patched?.lastMessageOriginalLanguage,
+      translations: patched?.lastMessageTranslations,
+      original: patched?.lastMessage?.content ?? '',
+    });
+    expect(servedEn.text).toBe('Hello, is the review still on for Thursday?');
+    expect(servedEn.language).toBe('en');
+  });
+
+  /**
+   * Témoin VOISIN — MÊME `lastMessageId` : AUCUNE adoption, le comportement
+   * EXISTANT (`:364-388`) reste vert (pas de régression du chemin nominal).
+   */
+  test('MÊME `lastMessageId` : pas d’adoption, seule la carte SERVEUR change', () => {
+    const client = new QueryClient();
+    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+      conv({ id: 'c-a', lastMessage: localMessage({ id: 'm-1', content: 'contenu original' }) }),
+    ]);
+
+    applyConversationUpdated(client, {
+      conversationId: 'c-a',
+      updatedBy: { id: 'u-1' },
+      updatedAt: '2026-09-12T10:07:00.000Z',
+      lastMessageId: 'm-1',
+      lastMessageTranslations: { fr: 'traduit' },
+    });
+
+    const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
+    expect(patched?.lastMessage?.id).toBe('m-1');
+    expect(patched?.lastMessage?.content).toBe('contenu original');
+    expect(patched?.lastMessageTranslations).toEqual({ fr: 'traduit' });
+  });
+});
+
+describe('neutralLastMessageFromPreview (#6171, G3) — chaque champ vient de la charge ou d’un défaut DÉCLARÉ', () => {
+  test('aucune pièce jointe ⇒ `messageType` "text", `isViewOnce`/`isBlurred` "?? false"', () => {
+    const message = neutralLastMessageFromPreview({
+      conversationId: 'c-a',
+      updatedBy: { id: 'u-1' },
+      updatedAt: '2026-09-12T10:00:00.000Z',
+      lastMessageId: 'm-1',
+    });
+    expect(message.messageType).toBe('text');
+    expect(message.isViewOnce).toBe(false);
+    expect(message.isBlurred).toBe(false);
+    expect(message.content).toBe('');
+    expect(message.originalLanguage).toBe('');
+    expect(message.sender).toBeUndefined();
+    expect(message.attachments).toBeUndefined();
+    // Repli sur `updatedAt` — le SEUL horodatage que le contrat garantit toujours.
+    expect(message.createdAt as unknown as string).toBe('2026-09-12T10:00:00.000Z');
+  });
+
+  test('une pièce jointe IMAGE ⇒ `messageType` "image", portée SANS fabrication', () => {
+    const message = neutralLastMessageFromPreview({
+      conversationId: 'c-a',
+      updatedBy: { id: 'u-1' },
+      updatedAt: '2026-09-12T10:00:00.000Z',
+      lastMessageId: 'm-1',
+      lastMessageAttachments: [
+        { id: 'a-1', mimeType: 'image/jpeg', thumbnailUrl: 'https://x/y.jpg', originalName: 'y.jpg', fileSize: 100, duration: null, width: 10, height: 10 },
+      ],
+    });
+    expect(message.messageType).toBe('image');
+    expect(message.attachments).toHaveLength(1);
+  });
+});
+
+/**
+ * LA GARDE MONOTONE DU RANG (revue-correction #6171) — le contrat l'EXIGE des
+ * clients (`previewRecalculated`, `packages/shared/.../conversation.ts`) et iOS
+ * la tient par son `>` strict (`ConversationListViewModel.swift:1100`, exception
+ * `:1214-1216`). Le web écrivait `lastMessageAt` sans condition : deux
+ * `message:new` arrivés dans le désordre faisaient REDESCENDRE une conversation
+ * vivante dans la liste, qui trie sur ce champ.
+ *
+ * Le témoin de RECUL est celui qui compte : à horodatage qui AVANCE, la garde
+ * juste et l'absence de garde rendent le même verdict (même forme que le témoin
+ * de rang du Prisme, leçon 261).
+ */
+describe('applyConversationUpdated — la garde monotone du RANG (revue-correction #6171)', () => {
+  const at = (iso: string) => iso;
+
+  test('un horodatage qui RECULE sans `previewRecalculated` (diffusion désordonnée) NE change PAS le rang', () => {
+    const client = new QueryClient();
+    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+      conv({
+        id: 'c-a',
+        lastMessage: localMessage({ id: 'm-2', content: 'le plus récent' }),
+        lastMessageAt: new Date('2026-09-12T10:05:00.000Z'),
+      }),
+    ]);
+
+    applyConversationUpdated(client, {
+      conversationId: 'c-a',
+      updatedBy: { id: 'u-1' },
+      updatedAt: at('2026-09-12T10:06:00.000Z'),
+      lastMessageId: 'm-1',
+      lastMessageAt: at('2026-09-12T10:00:00.000Z'),
+      lastMessagePreview: 'un message plus ancien',
+    });
+
+    const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
+    expect(new Date(patched?.lastMessageAt as unknown as string).toISOString()).toBe('2026-09-12T10:05:00.000Z');
+    // L'ADOPTION, elle, s'applique — miroir iOS, qui adopte dans la branche
+    // « pas de bump » et ne garde QUE le rang.
+    expect(patched?.lastMessage?.id).toBe('m-1');
+  });
+
+  test('adopter un AUTRE message JETTE la carte de l’ancien — jamais une traduction périmée sur un original neuf', () => {
+    const client = new QueryClient();
+    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+      conv({
+        id: 'c-a',
+        lastMessage: localMessage({ id: 'm-2', content: 'Oui, jeudi 14h.', originalLanguage: 'fr' }),
+        lastMessageTranslations: { en: 'Yes, Thursday 2pm.' },
+        lastMessageOriginalLanguage: 'fr',
+      }),
+    ]);
+
+    // Une charge qui NOMME un autre message SANS son groupe Prisme (émetteur non
+    // conformant, ou champ ajouté en amont et non relayé) : la ligne ne doit
+    // servir AUCUNE traduction plutôt que celle du message qu'elle a quitté.
+    applyConversationUpdated(client, {
+      conversationId: 'c-a',
+      updatedBy: { id: 'u-1' },
+      updatedAt: '2026-09-12T10:07:00.000Z',
+      lastMessageId: 'm-1',
+    });
+
+    const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
+    expect(Object.prototype.hasOwnProperty.call(patched ?? {}, 'lastMessageTranslations')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(patched ?? {}, 'lastMessageOriginalLanguage')).toBe(false);
+    expect(
+      served({
+        preferredLanguages: ['en', 'fr'],
+        originalLanguage: patched?.lastMessageOriginalLanguage,
+        translations: patched?.lastMessageTranslations,
+        original: patched?.lastMessage?.content ?? '',
+      }).text,
+    ).not.toBe('Yes, Thursday 2pm.');
+  });
+
+  test('`previewRecalculated: true` FAIT reculer le rang (suppression pour tous, masquage personnel)', () => {
+    const client = new QueryClient();
+    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+      conv({ id: 'c-a', lastMessage: localMessage({ id: 'm-2' }), lastMessageAt: new Date('2026-09-12T10:05:00.000Z') }),
+    ]);
+
+    applyConversationUpdated(client, {
+      conversationId: 'c-a',
+      updatedBy: { id: 'u-1' },
+      updatedAt: at('2026-09-12T10:06:00.000Z'),
+      lastMessageId: 'm-1',
+      lastMessageAt: at('2026-09-12T10:00:00.000Z'),
+      lastMessagePreview: 'le message précédent reprend la ligne',
+      previewRecalculated: true,
+    });
+
+    const patched = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY)?.find((c) => c.id === 'c-a');
+    expect(patched?.lastMessageAt as unknown as string).toBe('2026-09-12T10:00:00.000Z');
+  });
+
+  test('un horodatage qui AVANCE change le rang, et une ligne SANS rang connu l’accepte', () => {
+    const client = new QueryClient();
+    client.setQueryData(CONVERSATIONS_QUERY_KEY, [
+      conv({ id: 'c-a', lastMessage: localMessage({ id: 'm-1' }), lastMessageAt: new Date('2026-09-12T10:00:00.000Z') }),
+      conv({ id: 'c-b', lastMessage: localMessage({ id: 'm-9' }) }),
+    ]);
+
+    applyConversationUpdated(client, {
+      conversationId: 'c-a',
+      updatedBy: { id: 'u-1' },
+      updatedAt: at('2026-09-12T10:06:00.000Z'),
+      lastMessageId: 'm-1',
+      lastMessageAt: at('2026-09-12T10:06:00.000Z'),
+    });
+    applyConversationUpdated(client, {
+      conversationId: 'c-b',
+      updatedBy: { id: 'u-1' },
+      updatedAt: at('2026-09-12T10:06:00.000Z'),
+      lastMessageId: 'm-9',
+      lastMessageAt: at('2026-09-12T09:00:00.000Z'),
+    });
+
+    const rows = client.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY);
+    expect(rows?.find((c) => c.id === 'c-a')?.lastMessageAt as unknown as string).toBe('2026-09-12T10:06:00.000Z');
+    expect(rows?.find((c) => c.id === 'c-b')?.lastMessageAt as unknown as string).toBe('2026-09-12T09:00:00.000Z');
   });
 });
 
@@ -522,5 +777,52 @@ describe('applyMessageTranslation (#5793, revue-correction défaut 2) — le pip
       translations: [translationEntry({ targetLanguage: 'fr', translatedContent: 'Salut' })],
     });
     expect(client.getQueryCache().findAll()).toHaveLength(0);
+  });
+
+  /**
+   * T1 (#6171) — le RANG du lecteur (leçon 261) : témoin sur un rang AUTRE
+   * que le premier, prisme `['fr','en']` recevant `en` PUIS `fr`, et sa
+   * CONTRE-ÉPREUVE `['en','fr']` recevant `fr` PUIS `en`.
+   */
+  test('T1 — le RANG du lecteur : `en` sert au rang 2, `fr` reprend la main au rang 1', () => {
+    const client = new QueryClient();
+    const original = localMessage({ id: 'm-1', originalLanguage: 'es', content: 'Hola', translations: [] });
+    client.setQueryData<MessagesPage>(messagesQueryKey('c-a'), { messages: [original], hasOlder: false });
+
+    const readerServed = () =>
+      served({
+        preferredLanguages: ['fr', 'en'],
+        originalLanguage: 'es',
+        translations: (client.getQueryData<MessagesPage>(messagesQueryKey('c-a'))?.messages[0] as Message).translations,
+        original: 'Hola',
+      });
+
+    expect(readerServed()).toEqual({ text: 'Hola', language: 'es', translated: false });
+
+    applyMessageTranslation(client, { messageId: 'm-1', translations: [translationEntry({ targetLanguage: 'en', translatedContent: 'Hi' })] });
+    expect(readerServed()).toEqual({ text: 'Hi', language: 'en', translated: true });
+
+    applyMessageTranslation(client, { messageId: 'm-1', translations: [translationEntry({ targetLanguage: 'fr', translatedContent: 'Salut' })] });
+    expect(readerServed()).toEqual({ text: 'Salut', language: 'fr', translated: true });
+  });
+
+  test('T1, contre-épreuve — prisme [\'en\',\'fr\'] : `fr` sert au rang 2, `en` reprend la main au rang 1', () => {
+    const client = new QueryClient();
+    const original = localMessage({ id: 'm-1', originalLanguage: 'es', content: 'Hola', translations: [] });
+    client.setQueryData<MessagesPage>(messagesQueryKey('c-a'), { messages: [original], hasOlder: false });
+
+    const readerServed = () =>
+      served({
+        preferredLanguages: ['en', 'fr'],
+        originalLanguage: 'es',
+        translations: (client.getQueryData<MessagesPage>(messagesQueryKey('c-a'))?.messages[0] as Message).translations,
+        original: 'Hola',
+      });
+
+    applyMessageTranslation(client, { messageId: 'm-1', translations: [translationEntry({ targetLanguage: 'fr', translatedContent: 'Salut' })] });
+    expect(readerServed()).toEqual({ text: 'Salut', language: 'fr', translated: true });
+
+    applyMessageTranslation(client, { messageId: 'm-1', translations: [translationEntry({ targetLanguage: 'en', translatedContent: 'Hi' })] });
+    expect(readerServed()).toEqual({ text: 'Hi', language: 'en', translated: true });
   });
 });

@@ -424,6 +424,43 @@ describe('Bubble — displayLanguage, myReactions, selected (#5814, T12)', () =>
 });
 
 /**
+ * T4 (#6171) — après une traduction GREFFÉE (`message:translation`, via
+ * `applyMessageTranslation`), `lang` SUIT la langue SERVIE : le nœud porteur
+ * (`bubble.tsx`, inchangé) est déjà branché sur `served()` — ce témoin PROUVE
+ * qu'il suit, à trois rangs du Prisme `['fr','en']` sur un original ESPAGNOL.
+ */
+describe('Bubble — `lang` SUIT la langue servie après une traduction greffée (#6171, T4)', () => {
+  const spanish: Message = { ...BASE_MESSAGE, originalLanguage: 'es', content: 'Hola, ¿todo bien?', translations: [] };
+  const renderAt = (translations: Message['translations']) =>
+    renderToStaticMarkup(
+      <Bubble place={placeOf({ ...spanish, translations })} languages={['fr', 'en']} isGrouped viewerId="u-viewer" onJumpToMessage={() => {}} />,
+    );
+
+  test('aucune traduction ⇒ lang="es", l’ORIGINAL', () => {
+    const html = renderAt([]);
+    expect(html).toContain('lang="es"');
+    expect(html).toContain('Hola, ¿todo bien?');
+  });
+
+  test('traduction `en` greffée (rang 2) ⇒ lang="en"', () => {
+    const html = renderAt([
+      { id: 't-en', messageId: spanish.id, targetLanguage: 'en', translatedContent: 'Hi, all good?', translationModel: 'medium', createdAt: new Date() },
+    ]);
+    expect(html).toContain('lang="en"');
+    expect(html).toContain('Hi, all good?');
+  });
+
+  test('traduction `fr` greffée EN PLUS (rang 1) ⇒ lang="fr", reprend la main sur `en`', () => {
+    const html = renderAt([
+      { id: 't-en', messageId: spanish.id, targetLanguage: 'en', translatedContent: 'Hi, all good?', translationModel: 'medium', createdAt: new Date() },
+      { id: 't-fr', messageId: spanish.id, targetLanguage: 'fr', translatedContent: 'Salut, ça va ?', translationModel: 'medium', createdAt: new Date() },
+    ]);
+    expect(html).toContain('lang="fr"');
+    expect(html).toContain('Salut, ça va ?');
+  });
+});
+
+/**
  * RETIRER UNE RÉACTION EN TAPANT SA CAPSULE (#5865, suivi de #5814 T12) —
  * iOS le permet déjà (`BubbleReactionsOverlay.swift`), seul le rail du menu
  * du message (appui long) le permettait ici. `onReact` n'est câblé QUE sur

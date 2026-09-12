@@ -33,7 +33,6 @@ import { applyConsumption } from '@/lib/api/view-once';
 import type { Message } from '@/lib/api/types';
 import { served } from '@/lib/api/prism';
 import { sessionStore } from '@/lib/api/session';
-import { useTypists } from '@/lib/api/use-typists';
 import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf, withAccent } from '@/lib/accent';
 import { isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
@@ -46,7 +45,7 @@ import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { translationChoices } from '@/lib/view/message-actions';
 import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
 import { useOnline } from '@/lib/net/online';
-import { useTypingEmitter } from '@/lib/view/use-typing-emitter';
+import { useThreadTyping } from '@/lib/view/use-thread-typing';
 import { menuRows } from '@/lib/reading-mode/catalog';
 import {
   resolveThreadMode,
@@ -126,19 +125,6 @@ export default function ThreadScreen() {
     () => conversation?.participants.find((p) => p.userId === viewer.id),
     [conversation, viewer.id],
   );
-
-  /**
-   * QUI ÉCRIT — RÉEL, jamais deviné (#5793). `useTypists` lit le magasin de
-   * frappe alimenté par `api/socket.ts` (`typing:start`/`typing:stop`), et
-   * ne rend le premier frappeur du roster que si son échéance de sécurité
-   * n'est pas dépassée. Aucun typist connu ⇒ aucun indicateur : on n'invente
-   * pas de copie, la forme iOS est « <Auteur> écrit »
-   * (`ConversationListViewModel.swift:966`).
-   */
-  const typists = useTypists(conversationId, viewer.id ?? '');
-  const typist = typists[0];
-  const onTypingTextChange = useTypingEmitter(conversationId);
-  const typistId = typist?.userId;
 
   /**
    * LA FENÊTRE COUVRE-T-ELLE TOUT LE NON-LU ? — `threadData.hasOlder` mime
@@ -432,6 +418,23 @@ export default function ThreadScreen() {
   });
 
   /**
+   * QUI ÉCRIT — LE ROSTER ENTIER (#6171, § 5 étape 0/2 de la spécification) —
+   * extrait dans `lib/view/use-thread-typing.ts` : le magasin de frappe, le
+   * port d'émission ET l'ancrage à l'APPARITION (G8, jamais au changement de
+   * meneur) y vivent désormais, doc-comment complet là-bas. `thread-modes.tsx`
+   * reçoit `typing.typists` (le tableau ENTIER, jamais `typists[0]`, G1) et
+   * compose lui-même le libellé (`typingAnnouncement`) et le meneur
+   * (`typingLead`).
+   */
+  const typing = useThreadTyping({
+    conversationId,
+    viewerId: viewer.id ?? '',
+    scroller,
+    nearBottom: chrome.nearBottom,
+    noteProgrammaticScroll: scene.noteProgrammaticScroll,
+  });
+
+  /**
    * LE SAUT DE CITATION (#5566, défaut 10) — le bouton de citation promettait
    * une navigation par son nom accessible et ne faisait rien. `scrollToIndex`
    * amène le message cité dans la fenêtre virtualisée ; la mise en évidence
@@ -482,38 +485,6 @@ export default function ThreadScreen() {
     jumpToMessage(pendingJump);
     setPendingJump(null);
   }, [pendingJump, readingDecision.mode, jumpToMessage]);
-
-  /**
-   * L'INDICATEUR DE FRAPPE DOIT SE VOIR (revue-correction #5793) — la cellule
-   * s'ajoute APRÈS le dernier message, donc SOUS le bas du défileur. Mesuré au
-   * navigateur sur `/c/c-deploiement` : avant la frappe le lecteur est
-   * exactement en bas (`scrollHeight − clientHeight − scrollTop === 0`) ;
-   * l'apparition ajoute 42 px et le laisse à 42 px du bas — la cellule tombe
-   * à y 760..802 dans un scrollport qui s'arrête à 768, soit **34 de ses 42 px
-   * cachés**. Le cas NOMINAL d'une conversation vivante (on est en bas) était
-   * donc celui où l'indicateur ne se voyait pas. Tant que `typing` valait
-   * `true` en dur, il était monté AVANT l'ancrage d'ouverture et le défaut
-   * n'existait pas : le rendre réel l'a créé.
-   *
-   * `nearBottom` est le verdict du chrome (`use-thread-chrome-signals.ts`),
-   * pas une seconde marge, et il se lit AVANT la croissance (il est calculé
-   * sur `virtualizer.getTotalSize()`, que cette cellule hors `<ol>` ne change
-   * pas). Un lecteur qui a remonté son historique n'est JAMAIS ramené en bas —
-   * même règle que l'ancrage d'ouverture, qui s'abandonne à la première
-   * intention. `pinToBottom` est la loi PARTAGÉE, et `noteProgrammaticScroll`
-   * empêche ce défilement de RÉVÉLER le chrome comme le ferait un geste.
-   *
-   * Clé `typistId` (jamais l'objet) : le keepalive de 3 s remplace l'entrée du
-   * magasin à chaque `typing:start`, donc son identité — s'y accrocher
-   * rejouerait l'ancrage toutes les trois secondes.
-   */
-  useEffect(() => {
-    const element = scroller.current;
-    if (typistId === undefined || element === null || !chrome.nearBottom) return;
-    const cancel = pinToBottom(element, { frames: 1, onFirstFrame: noteProgrammaticScroll });
-    return cancel;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typistId]);
 
   /**
    * LE PRÉ-ADRESSAGE DU COMPOSEUR (#5695, écart 8 §1.4) — au tap d'un
@@ -793,7 +764,7 @@ export default function ThreadScreen() {
           longPress={messageMenu.longPress}
           onPickLanguage={messageMenu.onPickLanguage}
           onReact={messageMenu.onMenuReact}
-          typist={typist}
+          typists={typing.typists}
           accent={accent}
         />
         </main>
@@ -879,7 +850,7 @@ export default function ThreadScreen() {
               send(text, attachments, replyToMessage ?? null, language);
               setReplyTarget(null);
             }}
-            onTextChange={onTypingTextChange}
+            onTextChange={typing.onTextChange}
             {...(viewerParticipant ? { rights: viewerParticipant.permissions } : {})}
             {...(replyTo ? { replyTo, onCancelReply: () => setReplyTarget(null) } : {})}
           />

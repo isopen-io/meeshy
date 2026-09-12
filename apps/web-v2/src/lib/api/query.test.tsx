@@ -1,9 +1,14 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { conversationQueryKey } from './conversations';
 import { messagesQueryKey } from './messages';
+import { applyMessageTranslation } from './realtime-apply';
 import { useThreadData } from './query';
 import type { Conversation } from './types';
 
@@ -120,5 +125,129 @@ describe('useThreadData — `conversationId` (#5793, revue-correction défaut 3)
     );
 
     expect(html).toContain('data-conversation-id="salon-riviere"');
+  });
+});
+
+/**
+ * T3 (#6171, § 4.1) — LE MAILLON « cache → hook → écran » : une traduction
+ * greffée par `applyMessageTranslation` (`setQueryData`) notifie
+ * l'OBSERVATEUR TanStack de `useThreadData`, SANS qu'aucun FETCH
+ * supplémentaire ne parte. Motif `use-thread-chrome-signals.test.tsx` :
+ * `createRoot` + `act`, happy-dom réel — `renderToStaticMarkup` (le motif du
+ * reste de ce fichier) ne rejoue pas de second rendu après la résolution
+ * asynchrone des fixtures, donc ne peut pas observer cette mise à jour.
+ *
+ * Le compteur distingue un FETCH réel (`action.type === 'fetch'`, posé par
+ * `QueryObserver`/`refetch`) d'une simple écriture de cache
+ * (`setQueryData` ⇒ `action.type === 'success'`, manuel) : c'est la même
+ * distinction que T2 (`socket.test.ts`), portée au niveau de l'ÉCRAN plutôt
+ * que du port.
+ */
+const globalsT3 = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+describe('useThreadData — une traduction reçue re-rend le fil SANS refetch (#6171, T3)', () => {
+  beforeAll(() => {
+    ensureHappyDomRegistered();
+    globalsT3.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(async () => {
+    await act(async () => {});
+    delete globalsT3.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  let container: HTMLDivElement;
+  let root: Root;
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  test('m4 (c-deploiement, anglais, sans traduction) bascule au français — AUCUN fetch de plus', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let fetchStarts = 0;
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (
+        event.type === 'updated' &&
+        event.action.type === 'fetch' &&
+        JSON.stringify(event.query.queryKey) === JSON.stringify(messagesQueryKey('c-deploiement'))
+      ) {
+        fetchStarts += 1;
+      }
+    });
+
+    let captured!: ReturnType<typeof useThreadData>;
+    function Probe() {
+      captured = useThreadData('c-deploiement');
+      return <span data-status={captured.status} />;
+    }
+
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Probe />
+        </QueryClientProvider>,
+      );
+    });
+    // Laisse la résolution des fixtures ET la notification `notifyManager`
+    // (MACROTÂCHE, `setTimeout(…, 0)`, plusieurs sauts : chargement → succès
+    // de CHAQUE requête) se rejouer jusqu'au bout — un seul tour n'y suffit
+    // pas.
+    for (let i = 0; i < 10 && captured.status === 'pending'; i += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+
+    expect(captured.status).toBe('success');
+    const before = captured.messages.find((m) => m.id === 'm4');
+    expect(before?.translations ?? []).toHaveLength(0);
+    expect(fetchStarts).toBe(1); // le chargement initial, UN SEUL.
+
+    act(() => {
+      applyMessageTranslation(queryClient, {
+        messageId: 'm4',
+        translations: [
+          {
+            id: 't-m4-fr',
+            messageId: 'm4',
+            sourceLanguage: 'en',
+            targetLanguage: 'fr',
+            translatedContent: 'Bien. Mais le démarrage à froid dépasse toujours deux secondes en 3G.',
+            translationModel: 'medium',
+            cacheKey: 'm4_en_fr',
+            cached: false,
+          },
+        ],
+      });
+    });
+    // `notifyManager` de TanStack Query BATCHE la notification des
+    // observateurs via `setTimeout(…, 0)` (une MACROTÂCHE, pas une
+    // microtâche, `notifyManager.js` § `defaultScheduler`) — un `await` sans
+    // minuteur ne le laisse jamais se rejouer.
+    for (
+      let i = 0;
+      i < 10 && captured.messages.find((m) => m.id === 'm4')?.translations.length === 0;
+      i += 1
+    ) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+
+    const after = captured.messages.find((m) => m.id === 'm4');
+    expect(after?.translations.find((t) => t.targetLanguage === 'fr')?.translatedContent).toBe(
+      'Bien. Mais le démarrage à froid dépasse toujours deux secondes en 3G.',
+    );
+    expect(fetchStarts).toBe(1); // INCHANGÉ : la traduction n'a déclenché AUCUN refetch.
+
+    unsubscribe();
   });
 });

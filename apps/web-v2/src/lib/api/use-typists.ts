@@ -13,9 +13,11 @@ const EMPTY: readonly TypingEntry[] = [];
  * jamais à chaque rendu du fil — le virtualiseur en provoque plusieurs par
  * seconde au défilement (`thread.tsx`, doc-comment de `place()`).
  *
- * Rend UN SEUL frappeur ce lot (le premier de la liste, § 1.3/2 de la
- * spécification #5793 : « recevoir une LISTE de frappeurs, le roster est un
- * suivi ») — `thread-modes.tsx` continue de rendre au plus une ligne.
+ * Rend le ROSTER ENTIER (#6171, G1) — ce hook n'a JAMAIS tronqué : c'était
+ * `routes/thread.tsx` qui ne lisait que `typists[0]`. `useThreadTyping`
+ * (`lib/view/use-thread-typing.ts`) distribue désormais le tableau complet à
+ * `thread-modes.tsx`, qui compose le libellé (`typingAnnouncement`) et élit
+ * le meneur (`typingLead`, `lib/view/typing-roster.ts`).
  */
 export function useTypists(conversationId: string, viewerId: string): readonly TypingEntry[] {
   const raw = useStore(typingStore, (s) => s.byConversation[conversationId] ?? EMPTY);

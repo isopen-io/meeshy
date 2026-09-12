@@ -376,6 +376,135 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
     expect(typistsOf(typing.getState(), 'c-a', Date.now())).toEqual([]);
   });
 
+  /**
+   * DEUX FRAPPEURS EXPIRENT UN PAR UN (#6171, T8) — le magasin de frappe
+   * tient DÉJÀ plusieurs entrées par conversation (`typing-store.ts`) ; ce
+   * témoin prouve que la CONNEXION arme un minuteur de sécurité PAR
+   * frappeur, jamais un seul pour toute la conversation.
+   */
+  test('DEUX frappeurs expirent UN PAR UN — chaque minuteur ne retire que le sien (#6171, T8)', () => {
+    const scheduler = fakeScheduler();
+    const { deps, socket, typing } = buildDeps({
+      scheduleTimeout: scheduler.scheduleTimeout,
+      clearTimeoutFn: scheduler.clearTimeoutFn,
+    });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-kwame', username: 'kwame', displayName: 'Kwame Mensah', conversationId: 'c-a' });
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-fatou', username: 'fatou', displayName: 'Fatou Bâ', conversationId: 'c-a' });
+    expect(typistsOf(typing.getState(), 'c-a', Date.now()).map((t) => t.userId)).toEqual(['u-kwame', 'u-fatou']);
+
+    // Le minuteur de Kwame (le PREMIER programmé) se déclenche seul.
+    scheduler.scheduled[0]?.fn();
+    expect(typistsOf(typing.getState(), 'c-a', Date.now()).map((t) => t.userId)).toEqual(['u-fatou']);
+
+    scheduler.scheduled[1]?.fn();
+    expect(typistsOf(typing.getState(), 'c-a', Date.now())).toEqual([]);
+  });
+
+  test('un SECOND `typing:start` du MÊME frappeur réarme SON minuteur sans toucher celui d’un autre', () => {
+    const scheduler = fakeScheduler();
+    const { deps, socket, typing } = buildDeps({
+      scheduleTimeout: scheduler.scheduleTimeout,
+      clearTimeoutFn: scheduler.clearTimeoutFn,
+    });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-kwame', username: 'kwame', conversationId: 'c-a' });
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-fatou', username: 'fatou', conversationId: 'c-a' });
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-kwame', username: 'kwame', conversationId: 'c-a' });
+
+    expect(scheduler.scheduled[0]?.cleared).toBe(true); // le PREMIER minuteur de Kwame a été annulé.
+    expect(scheduler.scheduled[1]?.cleared).toBe(false); // celui de Fatou n'a jamais été touché.
+    /**
+     * L'ORDRE NE BOUGE PAS (revue-correction #6171, défaut 3) — Kwame est
+     * apparu EN PREMIER ; son keepalive réarme son échéance (assertions
+     * ci-dessus) mais ne le renvoie PAS en queue du roster, miroir
+     * `ConversationSocketHandler.swift:366-380`/`:392-395` (« Republie le
+     * roster dans l'ordre de première apparition »). Cette assertion
+     * attendait AUPARAVANT `['u-fatou', 'u-kwame']` — l'ancienne forme de
+     * `typing-store.ts` § `start` (`filter` puis ajout en QUEUE) déplaçait
+     * le frappeur qui réarme, et ce test consacrait le défaut au lieu de le
+     * révéler : falsifié par `typing-store.test.ts` § « un keepalive du
+     * MÊME frappeur ne lui fait perdre ni sa place de meneur ni l'ordre ».
+     */
+    expect(typistsOf(typing.getState(), 'c-a', Date.now()).map((t) => t.userId)).toEqual(['u-kwame', 'u-fatou']);
+  });
+
+  /**
+   * `message:new` RÉTRACTE la frappe de SON AUTEUR (#6171, G2/T9) — miroir
+   * `ConversationListViewModel.swift:992-1013`. Un frappeur qui n'a pas écrit
+   * ce message reste en place.
+   */
+  test('un `message:new` rétracte la frappe de SON AUTEUR, et de lui seul (#6171, G2/T9)', () => {
+    const scheduler = fakeScheduler();
+    const { deps, socket, typing } = buildDeps({
+      scheduleTimeout: scheduler.scheduleTimeout,
+      clearTimeoutFn: scheduler.clearTimeoutFn,
+    });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-kwame', username: 'kwame', conversationId: 'c-a' });
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-fatou', username: 'fatou', conversationId: 'c-a' });
+
+    socket.fire(SERVER_EVENTS.MESSAGE_NEW, socketMessage({ senderId: 'u-kwame' }));
+
+    expect(typistsOf(typing.getState(), 'c-a', Date.now()).map((t) => t.userId)).toEqual(['u-fatou']);
+    expect(scheduler.scheduled[0]?.cleared).toBe(true); // le minuteur de Kwame est désarmé.
+    expect(scheduler.scheduled[1]?.cleared).toBe(false); // celui de Fatou ne l'est pas.
+  });
+
+  test('la rétractation lit AUSSI `sender.userId` (deux espaces d’ids, doc `conversation.ts:210-226`)', () => {
+    const { deps, socket, typing } = buildDeps();
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-kwame', username: 'kwame', conversationId: 'c-a' });
+    socket.fire(SERVER_EVENTS.MESSAGE_NEW, socketMessage({ senderId: 'p-kwame', sender: { id: 'p-kwame', displayName: 'Kwame Mensah', userId: 'u-kwame' } }));
+
+    expect(typistsOf(typing.getState(), 'c-a', Date.now())).toEqual([]);
+  });
+
+  /**
+   * `message:translation` BASCULE LE CACHE SANS AUCUNE REQUÊTE (#6171, T2) —
+   * le compteur de fetch = 0 EST le critère de fin de l'issue.
+   */
+  test('`message:translation` bascule le cache SANS AUCUNE requête (compteur de fetch = 0) (#6171, T2)', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData<MessagesPage>(messagesQueryKey('c-a'), {
+      messages: [{ ...socketMessage({ id: 'm-1', originalLanguage: 'es', content: 'Hola' }), translations: [] } as unknown as Message],
+      hasOlder: false,
+    });
+    let fetchCount = 0;
+    void queryClient.getQueryCache().build(queryClient, {
+      queryKey: messagesQueryKey('c-a'),
+      queryFn: async () => {
+        fetchCount += 1;
+        throw new Error('aucune requête ne doit partir');
+      },
+    });
+
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    socket.fire(SERVER_EVENTS.MESSAGE_TRANSLATION, {
+      messageId: 'm-1',
+      translations: [
+        {
+          id: 't-1',
+          messageId: 'm-1',
+          sourceLanguage: 'es',
+          targetLanguage: 'fr',
+          translatedContent: 'Salut',
+          translationModel: 'basic',
+          cacheKey: 'k',
+          cached: false,
+        },
+      ],
+    });
+
+    const page = queryClient.getQueryData<MessagesPage>(messagesQueryKey('c-a'));
+    expect(page?.messages.find((m) => m.id === 'm-1')?.translations.find((t) => t.targetLanguage === 'fr')?.translatedContent).toBe('Salut');
+    expect(fetchCount).toBe(0);
+  });
+
   test('émettre la frappe passe par `typing:start`/`typing:stop`, avec `{ conversationId }`', () => {
     const { deps, socket } = buildDeps();
     const connection = createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);

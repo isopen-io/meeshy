@@ -150,9 +150,30 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     typingTimers.delete(key);
   };
 
+  /**
+   * `message:new` RÉTRACTE la frappe de SON AUTEUR (#6171, G2) — miroir
+   * `ConversationListViewModel.swift:992-1013` : « l'arrivée du message est
+   * la preuve la plus forte que la frappe est terminée … il ne retire que
+   * CET auteur et laisse les autres frappeurs en place ». La règle vit ICI
+   * (`api/socket.ts`), pas dans `realtime-apply.ts` : la seconde est PURE sur
+   * le cache et ne connaît pas le magasin de frappe (D-40) — ne pas lui
+   * donner une dépendance de plus.
+   *
+   * DEUX ESPACES D'IDS (doc `conversation.ts:210-226`) : `senderId` porte un
+   * `Participant.id`, `sender.userId` un `User.id` — le magasin de frappe est
+   * indexé par `userId` (`typing:start`, `TypingEvent.userId`), donc les DEUX
+   * candidats sont retirés, dédoublonnés. `stop` est IDEMPOTENT
+   * (`typing-store.ts:56-67`) : un candidat qui ne tapait pas ne coûte rien.
+   */
   const onMessageNew = (payload: unknown): void => {
     if (!isSocketMessage(payload)) return;
     applyMessageNew(deps.queryClient, deps.outbox, payload);
+
+    const candidates = new Set([payload.senderId, payload.sender?.userId].filter((id): id is string => id !== undefined));
+    for (const userId of candidates) {
+      disarmTypingSafetyTimeout(payload.conversationId, userId);
+      deps.typing.getState().stop(payload.conversationId, userId);
+    }
   };
 
   const onTypingStart = (payload: unknown): void => {
