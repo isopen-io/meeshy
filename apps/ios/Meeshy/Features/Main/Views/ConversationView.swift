@@ -22,7 +22,7 @@ struct ConversationActiveMember: Identifiable { // internal for cross-file exten
 }
 
 struct ConversationOverlayState {
-    var overlayMessage: Message? = nil
+    @Indirect var overlayMessage: Message? = nil
     /// Aperçu d'appui long en Focal : pixels de la cellule vivante + frame
     /// écran, capturés par le contrôleur au moment du geste. `nil` en mode
     /// bulles — l'overlay garde alors son `ThemedMessageBubble` historique.
@@ -44,14 +44,14 @@ struct ConversationOverlayState {
     /// Maximum de messages ET pièces jointes sélectionnables au total
     /// (retour porteur 2026-08-27, #4005).
     static let selectionCap = 100
-    var detailSheetMessage: Message? = nil
+    @Indirect var detailSheetMessage: Message? = nil
     /// Message whose call-detail sheet (transcript-aware, `CallSummaryDetailSheet`)
     /// is presented — separate from `detailSheetMessage`, which stays wired to
     /// `MessageMoreSheet` for regular messages.
-    var callDetailMessage: Message? = nil
+    @Indirect var callDetailMessage: Message? = nil
     var moreSheetInitialItem: MoreItem? = nil
     /// Message dont le picker d'emoji complet (réaction) est présenté.
-    var fullReactionPickerMessage: Message? = nil
+    @Indirect var fullReactionPickerMessage: Message? = nil
     var quickReactionMessageId: String? = nil
 
     /// Bubble cell frame (window coordinates) of the message whose
@@ -65,7 +65,7 @@ struct ConversationOverlayState {
     var deleteConfirmSelectionActive = false
     /// Message dont la feuille de partage système (`UIActivityViewController`)
     /// est présentée — action « Partager » du menu « Plus… ».
-    var shareMessage: Message? = nil
+    @Indirect var shareMessage: Message? = nil
     var showStoryViewer = false
     var storyViewerUserId: String? = nil
     var storyViewerGroupIndex: Int = 0

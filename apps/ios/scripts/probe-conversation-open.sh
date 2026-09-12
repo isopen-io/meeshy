@@ -61,9 +61,15 @@ CID="${ROW%%|*}"
 CNAME="${ROW#*|}"
 echo "Conversation : $CNAME  ($CID)"
 
-# La trace précédente est EFFACÉE avant le tir : sans ça, un fichier laissé par
-# un crash antérieur se lit comme le verdict du tir courant — le faux positif le
-# plus coûteux de cette boucle, parce qu'il a l'air d'une preuve.
+# LA DATE DE LA TRACE EST RELEVÉE AVANT LE TIR, et c'est un faux positif déjà
+# payé : le Release n'embarque pas `CrashStackDumper` (`#if DEBUG`), donc aucune
+# trace neuve n'est écrite — et la trace du tir PRÉCÉDENT se lisait comme le
+# verdict du tir courant, avec la même `si_addr` au bit près. Un fichier qu'on
+# ne peut pas effacer à distance se DATE ; le verdict, lui, ne vient jamais de
+# la trace mais de la console.
+AVANT=$(xcrun devicectl device info files --device "$DEVICE" \
+  --domain-type appDataContainer --domain-identifier "$BUNDLE" --username mobile \
+  --subdirectory Documents 2>/dev/null | grep segv_backtrace | awk '{print $(NF-1), $NF}')
 xcrun devicectl device process launch --device "$DEVICE" --terminate-existing "$BUNDLE" >/dev/null 2>&1 || true
 sleep 2
 xcrun devicectl device process launch --device "$DEVICE" --terminate-existing \
@@ -75,10 +81,15 @@ kill "$LAUNCH" 2>/dev/null || true
 echo
 if grep -q "terminated due to signal" "$WORK/console.log"; then
   echo "PLANTÉ : $(grep 'terminated due to signal' "$WORK/console.log" | head -1)"
-  pull "Documents/segv_backtrace.txt" "./segv_backtrace.txt"
-  if [ -s ./segv_backtrace.txt ]; then
-    echo "Trace : ./segv_backtrace.txt"
+  APRES=$(xcrun devicectl device info files --device "$DEVICE" \
+    --domain-type appDataContainer --domain-identifier "$BUNDLE" --username mobile \
+    --subdirectory Documents 2>/dev/null | grep segv_backtrace | awk '{print $(NF-1), $NF}')
+  if [ -n "$APRES" ] && [ "$APRES" != "$AVANT" ]; then
+    pull "Documents/segv_backtrace.txt" "./segv_backtrace.txt"
+    echo "Trace NEUVE : ./segv_backtrace.txt"
     head -1 ./segv_backtrace.txt
+  else
+    echo "(aucune trace neuve — build Release, ou dumper absent : le verdict vient de la console)"
   fi
   exit 1
 fi

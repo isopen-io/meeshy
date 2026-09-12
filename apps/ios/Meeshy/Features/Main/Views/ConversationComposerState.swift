@@ -28,7 +28,7 @@ struct ConversationComposerState {
 
     var showOptions = false
     var actionAlert: String? = nil
-    var forwardMessage: Message? = nil
+    @Indirect var forwardMessage: Message? = nil
     /// **Transfert groupé (#4005).** Vide pour les DEUX sites d'ouverture
     /// historiques (longpress simple, swipe) — `forwardMessage` seul porte
     /// alors tout. Non vide UNIQUEMENT depuis le mode sélection multiple :
@@ -37,7 +37,7 @@ struct ConversationComposerState {
     var forwardAdditionalMessages: [Message] = []
     /// La cible de « Composer » — le média reçu que la porte va semer.
     /// Non-nil = la porte est présentée.
-    var composeMediaTarget: ComposerSeedTarget? = nil
+    @Indirect var composeMediaTarget: ComposerSeedTarget? = nil
     /// La même cible, RETENUE le temps qu'une feuille se referme.
     ///
     /// Le second déclencheur de « Composer » vit dans la feuille de transfert,
@@ -46,7 +46,7 @@ struct ConversationComposerState {
     /// already presenting »). La promotion se fait donc dans l'`onDismiss` de
     /// la feuille — la primitive SwiftUI prévue pour ce cas exact, là où un
     /// délai n'est qu'un pari.
-    var pendingComposeTarget: ComposerSeedTarget? = nil
+    @Indirect var pendingComposeTarget: ComposerSeedTarget? = nil
     var showConversationInfo = false
 
     // Popup consentement vocal à l'envoi d'audio (2026-07-08) : proposé UNE
