@@ -65,7 +65,7 @@
     "idb-keyval": "^6.3.0",
     "libphonenumber-js": "^1.13.11",
     "lucide-react": "^1.33.0",
-    "markdown-it": "^15.0.1",
+    "markdown-it": "^14.1.1",
     "markdown-it-emoji": "^3.1.0",
     "mermaid": "^11.16.0",
     "next": "15.5.25",
@@ -94,7 +94,7 @@
     "tus-js-client": "^4.3.1",
     "use-debounce": "^10.1.1",
     "workbox-window": "^7.4.1",
-    "zod": "^4.4.3",
+    "zod": "^4.5.4",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

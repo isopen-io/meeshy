@@ -74,7 +74,7 @@
     "uuid": "^14.0.2",
     "winston": "^3.19.0",
     "zeromq": "^6.5.0",
-    "zod": "^4.4.3",
+    "zod": "^4.5.4",
     "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
