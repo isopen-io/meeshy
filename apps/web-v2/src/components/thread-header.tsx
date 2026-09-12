@@ -52,8 +52,22 @@ export function ThreadHeader({
   readonly onResetReadingModeToAuto: () => void;
 }) {
   return (
+    /*
+      LA BANDE FLOTTE, ELLE NE BORNE PLUS (#6213) — `absolute inset-x-0 top-0`
+      au lieu d'un `shrink-0` de colonne flex. Elle était HABILLÉE en bande
+      flottante (le flou et le fond à 80 % ci-dessous) mais POSÉE en frère de
+      flux : rien ne passait jamais dessous, le flou n'avait rien à flouter,
+      et son arête basse TRANCHAIT le contenu (capture porteur 2026-09-12).
+      Miroir `floatingHeaderSection`, zIndex 100 au-dessus d'une liste qui
+      court jusqu'au bord physique (`ConversationView.swift:1873, 1891`).
+
+      `pt-safe` : la bande est le dernier bord fixe du HAUT, c'est donc elle
+      qui porte l'encoche — la racine `h-dvh` ne le peut plus sans empêcher le
+      contenu de transiter sous elle (voir `routes/thread.tsx`), et le
+      défileur la porte de son côté en marge INTÉRIEURE (`--thread-pad-top`).
+    */
     <header
-      className="thread-header z-10 shrink-0 backdrop-blur-xl"
+      className="thread-header absolute inset-x-0 top-0 z-30 pt-safe backdrop-blur-xl"
       style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-surface) 80%, transparent)' }}
     >
       <div className="flex items-center gap-2 px-4 py-2">

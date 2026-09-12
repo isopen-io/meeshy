@@ -61,6 +61,7 @@ import { chromeStyleVars, sceneStyleVars } from '@/lib/reading-mode/metrics';
 import { backdropStyleVars } from '@/lib/view/thread-backdrop';
 import { BOTTOM_ANCHOR_FRAMES, pinToBottom } from '@/lib/view/pin-to-bottom';
 import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
+import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { ThreadModes } from './thread-modes';
 
 /**
@@ -405,6 +406,7 @@ export default function ThreadScreen() {
    * Style : ce fichier l'avait déjà payé une fois, `thread-header.tsx`
    * §revue #5814, `thread-modes.tsx` §#5878).
    */
+  const { bottomEdgeRef, vars: insetVars } = useThreadInsets();
   const chrome = useThreadChromeSignals({
     scroller,
     mode: readingDecision.mode,
@@ -642,11 +644,27 @@ export default function ThreadScreen() {
        difference entre une PAGE (le document entier defile, le composeur suit)
        et une APPLICATION (seule la zone des messages defile, l'en-tete et le
        composeur sont des bords fixes). Avec `min-h-dvh` le composeur recouvrait
-       les derniers messages — le defaut le plus visible du premier rendu. */
+       les derniers messages — le defaut le plus visible du premier rendu.
+
+       PLUS DE COLONNE FLEX, ET PLUS DE `pt-safe` ICI (#6213). Les trois pièces
+       étaient des FRÈRES DE FLUX — en-tête, défileur, composeur — donc le
+       défileur était BORNÉ par ses voisins et leurs arêtes TRANCHAIENT le
+       contenu (capture porteur du 2026-09-12). iOS pose l'inverse : la liste
+       court de bord PHYSIQUE à bord physique (`.ignoresSafeArea(.container,
+       edges: [.top, .bottom])`, `ConversationView.swift:1873`), le chrome
+       FLOTTE au-dessus, et les réserves sont des marges INTÉRIEURES du
+       défileur (`topInset`/`bottomInset`, :1552-1556) — c'est ce que
+       `lib/view/thread-insets.ts` calcule et que `useThreadInsets` pose ici.
+
+       L'encoche haute descend donc avec elles : elle est portée par le
+       défileur (`--thread-pad-top`) ET par la bande flottante (`pt-safe`,
+       `components/thread-header.tsx` — son dernier bord fixe en haut), jamais
+       par cette racine, qui doit rester exactement haute de `100dvh` pour que
+       le contenu puisse transiter sous la bande. */
     <div
       ref={chrome.host}
-      className="relative flex h-dvh flex-col overflow-hidden pt-safe"
-      style={{ ...withAccent(accent), ...chromeStyleVars(), ...backdropStyleVars() } as CSSProperties}
+      className="relative h-dvh overflow-hidden"
+      style={{ ...withAccent(accent), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
     >
       <div className="thread-backdrop" aria-hidden />
       <ThreadHeader
@@ -687,9 +705,8 @@ export default function ThreadScreen() {
         défileur, borné par le header au-dessus et le composeur en dessous
         (« la géométrie fait le travail », §1.5 de la spécification).
       */}
-      <div className="relative flex flex-1 flex-col overflow-hidden">
-        <DayPill label={chrome.dayPillLabel} headerExpanded={expanded} />
-        <main
+      <DayPill label={chrome.dayPillLabel} headerExpanded={expanded} />
+      <main
           id="contenu"
           ref={scroller}
         /* `tabIndex={-1}` — focalisable PROGRAMMATIQUEMENT (jamais dans
@@ -709,7 +726,20 @@ export default function ThreadScreen() {
           liste : même effet quand le contenu est court, et un débordement
           normal quand il est long.
         */
-        className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-3.5 pt-2 pb-2"
+        /*
+          `absolute inset-0` — LE DÉFILEUR EST L'ÉCRAN (#6213), et les deux
+          bandes de chrome flottent au-dessus de lui. Ses réserves sont des
+          marges INTÉRIEURES (`--thread-pad-top`/`--thread-pad-bottom`,
+          `lib/view/thread-insets.ts`), miroir exact des `contentInset` d'iOS :
+          le contenu TRANSITE sous la bande au lieu de s'arrêter à son arête,
+          et l'escamotage du chrome (#5774) découvre enfin du contenu au lieu
+          de libérer du vide.
+
+          `pt-2`/`pb-2` ont disparu avec la borne : la respiration basse est
+          désormais le `+16` d'iOS, porté par la loi (`LIST_BOTTOM_BREATH`),
+          et la haute est l'encoche.
+        */
+        className="scrollbar-none absolute inset-0 flex flex-col overflow-y-auto px-3.5"
         /*
           LES COTES DE LA SCÈNE DU FIL (#5648) — la SEULE porte par laquelle
           `reading-mode/metrics.ts::sceneStyleVars()` atteint le CSS,
@@ -719,7 +749,7 @@ export default function ThreadScreen() {
           reposer ici, une variable CSS traverse les nœuds intermédiaires
           sans qu'ils la déclarent.
         */
-        style={sceneStyleVars()}
+        style={{ ...sceneStyleVars(), paddingTop: 'var(--thread-pad-top)', paddingBottom: 'var(--thread-pad-bottom)' }}
       >
         {/*
           `flexShrink: 0` n'est PAS une précaution : `<main>` est un conteneur
@@ -767,15 +797,14 @@ export default function ThreadScreen() {
           typists={typing.typists}
           accent={accent}
         />
-        </main>
-        <ScrollToBottomButton
-          visible={chrome.scrollButtonVisible}
-          unreadCount={chrome.scrollButtonUnreadCount}
-          senderName={chrome.scrollButtonSenderName}
-          previewText={chrome.scrollButtonPreviewText}
-          onClick={chrome.onScrollToBottom}
-        />
-      </div>
+      </main>
+      <ScrollToBottomButton
+        visible={chrome.scrollButtonVisible}
+        unreadCount={chrome.scrollButtonUnreadCount}
+        senderName={chrome.scrollButtonSenderName}
+        previewText={chrome.scrollButtonPreviewText}
+        onClick={chrome.onScrollToBottom}
+      />
 
       {/*
         LA PILULE VISIBLE (revue #5814, défaut majeur 10) — le refus d'une
@@ -787,7 +816,15 @@ export default function ThreadScreen() {
         d'écran. Motif `dayLabel` (rondeur, flou) au-dessus du composeur.
       */}
       {announcer.text !== '' ? (
-        <div className="flex justify-center px-4 pb-1.5" aria-hidden>
+        /* FLOTTANTE, et ancrée au bord bas MESURÉ (#6213) — jamais dans le
+           flux : en frère de flux elle poussait tout l'écran d'une trentaine
+           de pixels à chaque annonce, et le fil sautait sous les yeux du
+           lecteur pour dire « Message copié ». */
+        <div
+          className="pointer-events-none absolute inset-x-0 z-20 flex justify-center px-4"
+          style={{ bottom: 'var(--thread-notice-bottom)' }}
+          aria-hidden
+        >
           <span
             className="rounded-chip px-3 py-1.5 text-mini font-semibold backdrop-blur-md"
             style={{
@@ -814,6 +851,20 @@ export default function ThreadScreen() {
         fil. Le Résumé porte déjà son geste de sortie, « Reprendre le fil »
         (`onResumeThread`) : composer d'abord.
       */}
+      {/*
+        LE BORD BAS, ET LA SEULE PIÈCE MESURÉE DE L'ÉCRAN (#6213) — cette
+        enveloppe existe TOUJOURS, même vide (Résumé Vivant) : c'est elle que
+        `useThreadInsets` observe, et un nœud qui se démonte emporterait son
+        `ResizeObserver` avec lui. Sa hauteur devient la réserve basse du
+        défileur, exactement comme `updateComposerHeight` alimente
+        `bottomInset` côté iOS (`ConversationView.swift:2013-2019`).
+
+        `absolute bottom-0` : le composeur FLOTTE au-dessus du fil (iOS
+        `zIndex(50)`), il ne le borne plus. C'est ce qui permet à la dernière
+        bulle de sortir de l'écran par le bord pendant le geste au lieu de
+        s'arrêter net sur la pilule de langue — le défaut de la capture.
+      */}
+      <div ref={bottomEdgeRef} className="absolute inset-x-0 bottom-0 z-20">
       {readingDecision.mode === 'summary' ? null : messageMenu.selection !== null ? (
         /* LE MODE SÉLECTION REMPLACE LE COMPOSEUR (#5814, question 5) —
            miroir `ConversationView.swift:1986` : jamais les deux à la fois. */
@@ -834,7 +885,7 @@ export default function ThreadScreen() {
           l'enveloppe (bascule micro → champ, ouverture du tiroir de pièces
           jointes) ne désengage rien.
         */
-        <div className="thread-composer-chrome shrink-0" onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
+        <div className="thread-composer-chrome" onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
           <Composer
             preferred={readerLanguages}
             onSend={({ text, attachments, language }) => {
@@ -856,6 +907,7 @@ export default function ThreadScreen() {
           />
         </div>
       )}
+      </div>
 
       {/* LE MENU DU MESSAGE (#5814) — portail conditionnel : monté SEULEMENT
           quand `useLongPress`/le clic droit/`ContextMenu` ont ciblé un

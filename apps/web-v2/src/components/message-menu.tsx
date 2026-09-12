@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 
 import { flag, languageName } from '@/lib/languages';
 import { placeMessageMenuCluster } from '@/lib/view/popover';
+import { safeAreaInsets } from '@/lib/view/safe-area';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import {
@@ -87,14 +88,6 @@ function accentOf(element: HTMLElement): string | undefined {
 /** `--safe-top`/`--safe-bottom` — posées par `thread-menu.css` depuis
  * `env(safe-area-inset-*)`, seule porte par laquelle une loi PURE
  * (`placeMessageMenuCluster`) reçoit une valeur qui dépend du DOM. */
-function safeAreaInsets(): { readonly top: number; readonly bottom: number } {
-  if (typeof window === 'undefined') return { top: 0, bottom: 0 };
-  const style = getComputedStyle(document.documentElement);
-  const top = Number.parseFloat(style.getPropertyValue('--safe-top')) || 0;
-  const bottom = Number.parseFloat(style.getPropertyValue('--safe-bottom')) || 0;
-  return { top, bottom };
-}
-
 export function MessageMenu({
   target,
   items,

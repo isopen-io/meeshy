@@ -276,12 +276,39 @@
  * (composeur, barre de recherche) ; le plancher de 8px est la respiration due
  * quand l'appareil n'a pas d'indicateur home.
  */
+/*
+ * L'ENCOCHE EST DECLAREE UNE FOIS, ICI (#6213) — `env()` n'apparait plus
+ * qu'a cet endroit du depot.
+ *
+ * Elle etait ecrite DEUX fois, sous deux formes : ces deux utilitaires
+ * lisaient `env()` en direct, pendant que `--safe-top`/`--safe-bottom`
+ * portaient la MEME mesure pour les lois pures (`lib/view/safe-area.ts`,
+ * `placeMessageMenuCluster`). Deux jumelles qui ne pouvaient pas diverger sur
+ * un appareil — elles lisaient la meme source — mais qui ne pouvaient pas non
+ * plus etre PILOTEES ensemble : aucun temoin de navigateur ne sait poser un
+ * `env()`, donc aucun ne pouvait mesurer une mise en page a encoche. Le fil
+ * (#6213) en avait besoin, `check-thread-scroll-edges.mjs` les surcharge
+ * desormais toutes les deux d'un seul geste.
+ *
+ * Les variables vivaient dans `thread-menu.css` — donc dans le CHUNK du fil :
+ * elles etaient absentes partout ailleurs. Sur `:root` de la feuille critique,
+ * elles s'appliquent au document entier, ce que leur commentaire d'origine
+ * affirmait deja.
+ */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 @utility pt-safe {
-  padding-top: env(safe-area-inset-top);
+  padding-top: var(--safe-top);
 }
 
 @utility pb-safe {
-  padding-bottom: max(env(safe-area-inset-bottom), 8px);
+  /* Le plancher de 8px est la respiration due quand l'appareil n'a pas
+     d'indicateur home ; il reste ICI, sur le BORD, jamais dans la variable —
+     `--safe-bottom` doit dire l'encoche REELLE aux lois qui la lisent. */
+  padding-bottom: max(var(--safe-bottom), 8px);
 }
 
 @utility offscreen {

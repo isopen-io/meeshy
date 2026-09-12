@@ -317,6 +317,7 @@ for (const scheme of ['light', 'dark']) {
         expected,
         top: rect.top,
         mainTop: main.top,
+        headerBottom: document.querySelector('header.thread-header').getBoundingClientRect().bottom,
         pillTopVar: getComputedStyle(host).getPropertyValue('--day-pill-top').trim(),
         pointerEvents: getComputedStyle(node).pointerEvents,
         catchesTheFinger: node.contains(centre),
@@ -334,20 +335,37 @@ for (const scheme of ['light', 'dark']) {
        * la variable qui la produit ne prouve que l'auto-cohérence : les deux
        * bougeraient ensemble. Le FAIT à tenir est GÉOMÉTRIQUE — « la pill
        * démarre SOUS le header » (`MessageDayStickyOverlay.swift:18-20`) :
-       * elle touche le bord bas de l'en-tête, à moins d'une marge. Poser
-       * `topOffset` entier dans une enveloppe qui commence DÉJÀ à ce bord la
-       * descendait 52 px plus bas — mesuré à `y = 120` en revue de #5774,
-       * contre `y = 76` sur la cible iOS.
+       * elle touche le bord bas de l'en-tête, à moins d'une marge.
+       *
+       * LE RÉFÉRENTIEL EST LE BORD BAS DE L'EN-TÊTE, PLUS `main.top` (#6213).
+       * Les deux ont coïncidé tant que le défileur COMMENÇAIT sous la bande —
+       * `main.top` était alors un raccourci commode pour ce bord, et le fait
+       * mesuré était le bon par accident de géométrie. Le défileur couvrant
+       * désormais l'écran entier (le chrome FLOTTE au-dessus), `main.top` vaut
+       * 0 et ce raccourci mesurait la distance au bord HAUT de l'écran : 60 px,
+       * refusés par un seuil qui parlait d'autre chose. La phrase de
+       * l'assertion, elle, n'a pas changé d'un mot — c'est le signe qu'elle
+       * visait juste et que seul son point de mesure était emprunté.
        */
-      const offset = Math.round(pill.top - pill.mainTop);
+      const offset = Math.round(pill.top - pill.headerBottom);
       expect(
         offset >= 0 && offset <= 16,
         `${scheme} · elle démarre SOUS l'en-tête, à moins d'une marge : ${offset} px sous son bord bas`,
       );
+      /*
+        LA COTE DÉRIVÉE SE MESURE DEPUIS LE HAUT DU CADRE (#6213), pas depuis
+        le bord bas de l'en-tête : `--day-pill-top` porte désormais
+        l'arithmétique iOS ENTIÈRE — encoche + `topOffset`(60) — là où elle
+        n'en portait que le troisième terme (`DAY_PILL_MARGIN`, retirée avec la
+        divergence qu'elle décrivait). C'est donc `pill.top` qu'on lui oppose,
+        pas l'écart au header ; les deux assertions restent DEUX choses
+        distinctes — l'une géométrique (« sous la bande »), l'autre de
+        dérivation (« la cote iOS, servie »).
+      */
       const derived = Number.parseFloat(pill.pillTopVar);
       expect(
-        Number.isFinite(derived) && Math.abs(offset - derived) <= 1,
-        `${scheme} · et cette marge est celle que la cote DÉRIVÉE sert (--day-pill-top = ${pill.pillTopVar})`,
+        Number.isFinite(derived) && Math.abs(pill.top - derived) <= 1,
+        `${scheme} · et la cote DÉRIVÉE la pose depuis le haut du cadre (--day-pill-top = ${pill.pillTopVar}, pilule à ${Math.round(pill.top)})`,
       );
       expect(
         pill.pointerEvents === 'none' && !pill.catchesTheFinger,

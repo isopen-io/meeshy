@@ -199,26 +199,23 @@ export const DAY_PILL_TOP = 60;
 export const DAY_PILL_FADE_MS = 180;
 
 /**
- * L'EN-TÊTE DE LA v3.1 EST EN FLUX (`routes/thread.tsx:57-61`) — celui d'iOS
- * FLOTTE au-dessus de la liste, et c'est toute la différence : `topOffset`
- * y est mesuré depuis le haut du CADRE, donc il DOIT franchir la hauteur du
- * header ; ici l'enveloppe du défileur COMMENCE déjà au bord bas du header,
- * cette hauteur est donc DÉJÀ DÉPENSÉE.
+ * L'ARITHMÉTIQUE iOS EST REDEVENUE ENTIÈRE (#6213) — et la constante qui
+ * décrivait sa divergence a disparu avec sa cause.
  *
- * Ce qui reste à poser dans l'enveloppe est le TROISIÈME terme de
- * l'arithmétique iOS — la marge, et elle seule. Poser `topOffset` entier y
- * descendait la pilule 52 px trop bas : mesuré à `y = 120` au navigateur
- * pendant la revue de #5774, contre `y = 76` sur la cible iOS
- * (`targets/thread.focal.scene.light.a11y.txt`).
+ * Ce fichier a porté, de #5774 à #6213, un `DAY_PILL_MARGIN = DAY_PILL_TOP −
+ * 8 − 44` justifié ainsi : « l'en-tête de la v2.0 est EN FLUX, celui d'iOS
+ * FLOTTE au-dessus de la liste, et c'est toute la différence — l'enveloppe du
+ * défileur COMMENCE déjà au bord bas du header, cette hauteur est donc DÉJÀ
+ * DÉPENSÉE. » Le raisonnement était juste ; sa PRÉMISSE ne l'est plus. Le
+ * défileur couvre maintenant l'écran entier et la bande flotte au-dessus de
+ * lui, exactement comme sur iOS, donc `topOffset` se pose ENTIER — depuis le
+ * haut du cadre, l'encoche comprise (`threadInsets().dayPillTop`,
+ * `lib/view/thread-insets.ts`).
  *
- * Les deux premiers termes sont DÉRIVÉS du même doc-comment, jamais
- * ré-inventés : `8` (le padding haut du header) et `44` (la rangée de
- * contrôles) — ce sont exactement `py-2` et `size-11` de
- * `components/thread-header.tsx`.
+ * Une soustraction qui n'existait que pour compenser un écart de pose est le
+ * genre de constante qu'il faut RETIRER quand l'écart tombe, jamais garder
+ * « au cas où » : elle redescendrait la pilule 52 px trop haut.
  */
-export const DAY_PILL_HEADER_PADDING = 8;
-export const DAY_PILL_HEADER_ROW = 44;
-export const DAY_PILL_MARGIN = DAY_PILL_TOP - DAY_PILL_HEADER_PADDING - DAY_PILL_HEADER_ROW;
 
 /**
  * LA SEULE PORTE par laquelle une cote de la scène atteint le CSS — posée
@@ -276,7 +273,10 @@ export function chromeStyleVars(): CSSProperties {
   return {
     '--chrome-edge-travel': `${HIDDEN_CHROME_EDGE_TRAVEL}px`,
     '--chrome-ease-out-ms': `${HIDDEN_CHROME_EASE_OUT_MS}ms`,
-    '--day-pill-top': `${DAY_PILL_MARGIN}px`,
+    /* `--day-pill-top` n'est PLUS posée ici (#6213) : elle dépend désormais de
+       l'ENCOCHE, que seule une lecture du document connaît — `useThreadInsets`
+       la pose sur le même hôte, à partir de `DAY_PILL_TOP` ci-dessus. Une cote
+       qui a besoin d'une mesure n'est plus une constante de dérivation. */
     '--day-pill-fade-ms': `${DAY_PILL_FADE_MS}ms`,
   } as CSSProperties;
 }
