@@ -46,3 +46,47 @@ export declare function deriveAndroidVersionName(gradleText: string, version: st
 export declare function auditIosMarketingVersion(pbxprojText: string, version: string): readonly string[];
 
 export declare function deriveIosMarketingVersion(pbxprojText: string, version: string): string;
+
+export declare function auditIosInfoPlistVersionForm(plistXml: string): readonly string[];
+
+export type ShellBuildNumberEnv = Readonly<{ readonly [key: string]: unknown; readonly MEESHY_SHELL_BUILD_NUMBER?: string }>;
+
+export declare function resolveShellBuildNumber(
+  options: Readonly<{ readonly env: ShellBuildNumberEnv; readonly commitCount: number; readonly shallow: boolean }>,
+): number;
+
+export declare function stripGradleComments(gradleText: string): string;
+
+export declare function auditAndroidVersionCodeForm(gradleText: string): readonly string[];
+
+export declare function auditCommittedBuildNumberFallback(
+  files: Readonly<{ readonly gradleText: string; readonly pbxprojText: string }>,
+): readonly string[];
+
+/**
+ * Type SOMME, pas un `udid?: string` : la destination est OBLIGATOIRE sur iOS
+ * et n'a aucun sens sur Android. Un optionnel laissait composer
+ * `-destination id=undefined` sans qu'aucun compilateur ne s'en mêle.
+ */
+export type NativeBuildTarget =
+  | Readonly<{ readonly target: 'android'; readonly buildNumber: number; readonly version: string }>
+  | Readonly<{
+      readonly target: 'ios';
+      readonly buildNumber: number;
+      readonly version: string;
+      readonly udid: string;
+    }>;
+
+export declare function nativeBuildArgs(options: NativeBuildTarget): readonly string[];
+
+export type ShellVersionExpectation = Readonly<{ readonly version: string; readonly buildNumber: number }>;
+
+export declare function auditBuiltApkVersion(
+  outputMetadataJson: string,
+  expectation: ShellVersionExpectation,
+): readonly string[];
+
+export declare function auditBuiltIosAppVersion(
+  infoPlistJson: string,
+  expectation: ShellVersionExpectation,
+): readonly string[];

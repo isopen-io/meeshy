@@ -39,7 +39,7 @@
  * POINT D'ENTRÉE.
  */
 import { spawnSync } from 'node:child_process';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -243,12 +243,29 @@ export function resolveShellVersion(packageJsonRaw) {
 const ANDROID_VERSION_NAME_RE = /versionName\s+"([^"]*)"/;
 
 /**
+ * Retire les COMMENTAIRES avant tout audit de forme de `build.gradle`. Sans
+ * cela, une garde se laisse satisfaire par une PHRASE : `versionCode 1` sous
+ * un commentaire qui parle de `meeshyBuildNumber` passait l'audit, parce que
+ * `exec` rend la PREMIÈRE occurrence et qu'un commentaire en est une. Une
+ * garde qu'un commentaire contente ne garde rien.
+ *
+ * Le `[^:]` épargne `https://…` (le `//` d'une URL n'ouvre pas un commentaire).
+ */
+export function stripGradleComments(gradleText) {
+  return gradleText
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .map((line) => line.replace(/(^|[^:])\/\/.*$/, '$1'))
+    .join('\n');
+}
+
+/**
  * Audite `android/app/build.gradle` — ferme #6196 côté Android : `versionName`
  * doit égaler la version de `package.json`, jamais une littérale recopiée à
  * la main (le gabarit Capacitor pose "1.0" une fois pour toutes à `cap add`).
  */
 export function auditAndroidVersionName(gradleText, version) {
-  const match = ANDROID_VERSION_NAME_RE.exec(gradleText);
+  const match = ANDROID_VERSION_NAME_RE.exec(stripGradleComments(gradleText));
   if (match === null) {
     return ['aucun "versionName" trouvé dans build.gradle — le fichier a-t-il changé de forme ?'];
   }
@@ -298,6 +315,268 @@ export function deriveIosMarketingVersion(pbxprojText, version) {
     throw new Error('aucun "MARKETING_VERSION" trouvé dans project.pbxproj — impossible de dériver la version.');
   }
   return pbxprojText.replace(IOS_MARKETING_VERSION_RE, `MARKETING_VERSION = ${version};`);
+}
+
+/**
+ * Audite la FORME d'`Info.plist` — miroir de `BundleVersionVariableGuardTests.swift`
+ * (#6186) : les deux clés de version doivent RÉSOUDRE une variable de build,
+ * jamais porter un nombre en dur. Une garde sur la valeur serait vraie le
+ * jour où on l'aligne à la main, puis fausse à la construction suivante ;
+ * seule la variable `$(…)` énonce l'invariant.
+ */
+const IOS_PLIST_VERSION_KEYS = Object.freeze([
+  { key: 'CFBundleShortVersionString', expected: '$(MARKETING_VERSION)' },
+  { key: 'CFBundleVersion', expected: '$(CURRENT_PROJECT_VERSION)' },
+]);
+
+export function auditIosInfoPlistVersionForm(plistXml) {
+  return IOS_PLIST_VERSION_KEYS.flatMap(({ key, expected }) => {
+    const re = new RegExp(`<key>${key}</key>\\s*<string>([^<]*)</string>`);
+    const match = re.exec(plistXml);
+    if (match === null) {
+      return [`Info.plist ne porte aucune clé "${key}" — attendu "${expected}".`];
+    }
+    if (match[1] !== expected) {
+      return [
+        `Info.plist porte "${key}" = "${match[1]}" — attendu "${expected}" : la version se RÉSOUT, elle ` +
+          'ne se recopie jamais en dur (miroir de BundleVersionVariableGuardTests.swift, #6186).',
+      ];
+    }
+    return [];
+  });
+}
+
+/**
+ * Résout le numéro de BUILD des coques (D-45) — distinct de la VERSION
+ * (`resolveShellVersion`, produit) : un fait de CONSTRUCTION, jamais commis.
+ * UNE source : `MEESHY_SHELL_BUILD_NUMBER` si posé, sinon le compte de
+ * commits de `HEAD`. Fail-closed sur un dépôt superficiel sans compteur
+ * explicite — un clone `fetch-depth: 1` ne doit jamais fabriquer un build
+ * "1" en silence — et sur le plafond `versionCode` d'Android (2 100 000 000).
+ */
+const ANDROID_VERSION_CODE_MAX = 2_100_000_000;
+
+export function resolveShellBuildNumber({ env, commitCount, shallow }) {
+  const override = env.MEESHY_SHELL_BUILD_NUMBER;
+  if (override !== undefined) {
+    if (!/^[1-9]\d*$/.test(override)) {
+      throw new Error(
+        `MEESHY_SHELL_BUILD_NUMBER="${override}" n'est pas un entier positif — un numéro de build est un ` +
+          'compteur, jamais zéro, jamais négatif, jamais décimal.',
+      );
+    }
+    const value = Number(override);
+    if (value > ANDROID_VERSION_CODE_MAX) {
+      throw new Error(
+        `MEESHY_SHELL_BUILD_NUMBER="${override}" dépasse le plafond ${ANDROID_VERSION_CODE_MAX} qu'Android ` +
+          'impose à versionCode.',
+      );
+    }
+    return value;
+  }
+
+  if (shallow) {
+    throw new Error(
+      'le dépôt est SUPERFICIEL (git rev-parse --is-shallow-repository) et aucun MEESHY_SHELL_BUILD_NUMBER ' +
+        "n'est posé — le compte de commits d'un clone superficiel n'est pas un numéro de build, c'est une " +
+        'absence déguisée en 1. Poser MEESHY_SHELL_BUILD_NUMBER (CI) ou `git fetch --unshallow` (poste local).',
+    );
+  }
+
+  if (!Number.isInteger(commitCount) || commitCount < 1) {
+    throw new Error(`commitCount="${commitCount}" doit être un entier ≥ 1 (git rev-list --count HEAD).`);
+  }
+  if (commitCount > ANDROID_VERSION_CODE_MAX) {
+    throw new Error(
+      `commitCount=${commitCount} dépasse le plafond ${ANDROID_VERSION_CODE_MAX} qu'Android impose à ` +
+        'versionCode — poser MEESHY_SHELL_BUILD_NUMBER.',
+    );
+  }
+  return commitCount;
+}
+
+/**
+ * Audite la FORME de `versionCode` dans `build.gradle`. DEUX exigences, et la
+ * seconde a été payée par une construction gradle en échec :
+ *
+ *   1. il doit LIRE `meeshyBuildNumber`, jamais porter une littérale — le `1`
+ *      du gabarit Capacitor signifie « construit hors du site unique », pas
+ *      « build numéro 1 » ;
+ *   2. il doit être une AFFECTATION (`versionCode = …`). Groovy parse
+ *      `versionCode (expr).toInteger()` comme `versionCode(expr).toInteger()` :
+ *      l'argument passé au setter est alors la CHAÎNE, et `.toInteger()`
+ *      s'applique au retour du setter — mesuré le 2026-09-12,
+ *      `IllegalArgumentException: Value is null` sur `BeanDynamicObject`.
+ *      Une garde qui n'exige que le nom de la propriété accepte donc la forme
+ *      qui casse la construction, et c'est exactement celle qu'on a écrite en
+ *      premier : l'exigence de forme doit couvrir la panne CONSTATÉE, sinon
+ *      elle ne garde que ce qu'on savait déjà.
+ */
+const ANDROID_VERSION_CODE_LINE_RE = /versionCode\b([^\n]*)/;
+
+export function auditAndroidVersionCodeForm(gradleText) {
+  const match = ANDROID_VERSION_CODE_LINE_RE.exec(stripGradleComments(gradleText));
+  if (match === null) {
+    return ['aucun "versionCode" trouvé dans build.gradle — le fichier a-t-il changé de forme ?'];
+  }
+  const rhs = match[1].trim();
+  const violations = [];
+  if (!rhs.startsWith('=')) {
+    violations.push(
+      `versionCode "${rhs}" n'est pas une AFFECTATION — Groovy parse « versionCode (expr).toInteger() » ` +
+        'comme « versionCode(expr).toInteger() » (le setter reçoit la chaîne, puis .toInteger() s\'applique ' +
+        "à son retour : « Value is null », mesuré). Écrire « versionCode = (…) » (D-45).",
+    );
+  }
+  if (!rhs.includes('meeshyBuildNumber')) {
+    violations.push(
+      `versionCode "${rhs}" est une littérale — il doit LIRE meeshyBuildNumber ` +
+        "(project.findProperty('meeshyBuildNumber')), posé par scripts/build-shells.mjs à la construction (D-45).",
+    );
+  }
+  return violations;
+}
+
+/**
+ * Ce que les deux fichiers SUIVIS annoncent quand la construction ne passe PAS
+ * par le site unique (Android Studio, Xcode, `./gradlew` à la main) : `1`, et
+ * `1` seulement (D-45). C'est la moitié de la doctrine qu'aucune garde ne
+ * tenait — le numéro de build ne se commet jamais, mais son REPLI, si, et un
+ * repli qui ressemble à un vrai numéro (`4711`) rend le build d'un poste
+ * indiscernable d'un build numéroté. `1` est une ABSENCE lisible.
+ */
+const IOS_CURRENT_PROJECT_VERSION_RE = /CURRENT_PROJECT_VERSION = ([^;]+);/g;
+const ANDROID_BUILD_NUMBER_FALLBACK_RE = /meeshyBuildNumber'\)\s*\?:\s*'([^']*)'/;
+
+export function auditCommittedBuildNumberFallback({ gradleText, pbxprojText }) {
+  const violations = [];
+
+  const gradleFallback = ANDROID_BUILD_NUMBER_FALLBACK_RE.exec(stripGradleComments(gradleText));
+  if (gradleFallback === null) {
+    violations.push(
+      "build.gradle ne porte aucun repli « ?: '1' » derrière meeshyBuildNumber — une construction hors du " +
+        'site unique doit annoncer 1, jamais échouer ni inventer un numéro (D-45).',
+    );
+  } else if (gradleFallback[1] !== '1') {
+    violations.push(
+      `build.gradle replie meeshyBuildNumber sur "${gradleFallback[1]}" — attendu "1" : le repli est la MARQUE ` +
+        "d'un build fait hors du site unique, et il ne doit pas ressembler à un numéro de build (D-45).",
+    );
+  }
+
+  const pbxMatches = [...pbxprojText.matchAll(IOS_CURRENT_PROJECT_VERSION_RE)];
+  if (pbxMatches.length === 0) {
+    violations.push('project.pbxproj ne porte aucun CURRENT_PROJECT_VERSION — le fichier a-t-il changé de forme ?');
+  }
+  for (const m of pbxMatches) {
+    if (m[1].trim() !== '1') {
+      violations.push(
+        `project.pbxproj porte "${m[0]}" — attendu 1 : le numéro de build VOYAGE en surcharge xcodebuild ` +
+          "(D-45), le fichier ne porte que la marque d'un build fait hors du site unique.",
+      );
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * Les arguments natifs qui font VOYAGER le numéro de build (D-45) jusqu'à
+ * gradle et xcodebuild — pure et exportée pour un témoin d'EFFET, jamais
+ * seulement de forme (le pilote appelle exactement cette fonction).
+ *
+ * Fail-closed sur la destination iOS : un `udid` absent composait
+ * `-destination id=undefined` en silence, et un `udid` de RÉFÉRENCE enverrait
+ * la coque sur le simulateur de l'app NATIVE (leçon 554). La loi vit déjà
+ * dans `resolveShellSimulatorUdid` ; elle est rejouée ICI parce que c'est ce
+ * site qui COMPOSE la ligne de commande — et parce qu'un témoin qui se
+ * contente de vérifier que la sortie ne CONTIENT pas l'UDID de référence, en
+ * n'ayant jamais passé cet UDID, ne peut pas tomber.
+ */
+export function nativeBuildArgs({ target, buildNumber, version, udid }) {
+  if (target === 'android') {
+    return ['assembleDebug', `-PmeeshyBuildNumber=${buildNumber}`];
+  }
+  if (typeof udid !== 'string' || udid.trim() === '') {
+    throw new Error(
+      "nativeBuildArgs({ target: 'ios' }) exige un udid — sans lui, xcodebuild recevait " +
+        '`-destination id=undefined` et échouait sur une destination introuvable.',
+    );
+  }
+  if (udid === REFERENCE_IOS_SIMULATOR_UDID) {
+    throw new Error(
+      `udid="${udid}" est le simulateur de RÉFÉRENCE (« Meeshy Ref-Native », l'app NATIVE iOS y vit, D-1) : ` +
+        `la coque ne s'y construit ni ne s'y installe JAMAIS (leçon 554). Utiliser "${SHELL_IOS_SIMULATOR_UDID}".`,
+    );
+  }
+  return [
+    '-project',
+    'ios/App/App.xcodeproj',
+    '-scheme',
+    'App',
+    '-destination',
+    `id=${udid}`,
+    `CURRENT_PROJECT_VERSION=${buildNumber}`,
+    `MARKETING_VERSION=${version}`,
+    'build',
+  ];
+}
+
+/**
+ * Audite l'APK CONSTRUIT (`output-metadata.json` d'AGP) contre ce que la
+ * construction a demandé — ferme M2 (aucun témoin ne portait sur l'artefact
+ * réel, seulement sur les fichiers projet AVANT construction).
+ */
+export function auditBuiltApkVersion(outputMetadataJson, { version, buildNumber }) {
+  let parsed;
+  try {
+    parsed = JSON.parse(outputMetadataJson);
+  } catch (err) {
+    return [`output-metadata.json illisible : ${err instanceof Error ? err.message : String(err)}`];
+  }
+  const element = Array.isArray(parsed?.elements) ? parsed.elements[0] : undefined;
+  if (element === undefined) {
+    return ['output-metadata.json ne porte aucun élément — la construction a-t-elle produit un APK ?'];
+  }
+
+  const violations = [];
+  if (element.versionName !== version) {
+    violations.push(
+      `l'APK construit porte versionName="${element.versionName}" — attendu "${version}" (package.json).`,
+    );
+  }
+  if (element.versionCode !== buildNumber) {
+    violations.push(
+      `l'APK construit porte versionCode=${element.versionCode} — attendu ${buildNumber} (le numéro de build demandé).`,
+    );
+  }
+  return violations;
+}
+
+/**
+ * Audite l'`App.app` CONSTRUITE (son `Info.plist`, converti en JSON par
+ * `plutil -convert json`) contre ce que la construction a demandé.
+ */
+export function auditBuiltIosAppVersion(infoPlistJson, { version, buildNumber }) {
+  let parsed;
+  try {
+    parsed = JSON.parse(infoPlistJson);
+  } catch (err) {
+    return [`Info.plist (JSON) illisible : ${err instanceof Error ? err.message : String(err)}`];
+  }
+
+  const violations = [];
+  if (parsed?.CFBundleShortVersionString !== version) {
+    violations.push(
+      `l'App.app construite porte CFBundleShortVersionString="${parsed?.CFBundleShortVersionString}" — attendu "${version}".`,
+    );
+  }
+  if (String(parsed?.CFBundleVersion ?? '') !== String(buildNumber)) {
+    violations.push(
+      `l'App.app construite porte CFBundleVersion="${parsed?.CFBundleVersion}" — attendu "${buildNumber}".`,
+    );
+  }
+  return violations;
 }
 
 // ---------------------------------------------------------------------------
@@ -410,11 +689,27 @@ async function main() {
     return;
   }
 
-  // 5. Construction native.
+  // 4.6. Numéro de BUILD (D-45) — un fait de CONSTRUCTION, distinct de la
+  //      VERSION ci-dessus (un fait de PRODUIT) : UNE source, jamais commise.
+  const shallow = spawnSync('git', ['rev-parse', '--is-shallow-repository'], { cwd: APP })
+    .stdout.toString()
+    .trim() === 'true';
+  const commitCount = Number(
+    spawnSync('git', ['rev-list', '--count', 'HEAD'], { cwd: APP }).stdout.toString().trim(),
+  );
+  const buildNumber = resolveShellBuildNumber({ env: process.env, commitCount, shallow });
+  console.log(
+    `  numéro de build : ${buildNumber} (${
+      process.env.MEESHY_SHELL_BUILD_NUMBER !== undefined ? 'MEESHY_SHELL_BUILD_NUMBER' : 'compte de commits de HEAD'
+    })`,
+  );
+
+  // 5. Construction native — le numéro de build VOYAGE en argument, jamais
+  //    commis dans un fichier suivi (D-45).
   if (target !== 'ios') {
     run(
       './gradlew',
-      ['assembleDebug'],
+      nativeBuildArgs({ target: 'android', buildNumber, version: shellVersion }),
       {
         cwd: join(APP, 'android'),
         env: {
@@ -425,6 +720,30 @@ async function main() {
       },
       'construction Android (assembleDebug)',
     );
+
+    const outputMetadataPath = join(
+      APP,
+      'android/app/build/outputs/apk/debug/output-metadata.json',
+    );
+    if (!existsSync(outputMetadataPath)) {
+      console.error(
+        `\n  gradle a rendu 0 mais n'a produit aucun ${outputMetadataPath.slice(APP.length + 1)} : ` +
+          "l'audit de l'artefact ne peut pas s'exécuter, et un audit qu'on ne peut pas exécuter n'est pas un " +
+          'audit vert.\n',
+      );
+      process.exit(1);
+    }
+    const apkViolations = auditBuiltApkVersion(readFileSync(outputMetadataPath, 'utf8'), {
+      version: shellVersion,
+      buildNumber,
+    });
+    if (apkViolations.length > 0) {
+      console.error("\n  l'APK construit ne porte pas la version demandée :\n");
+      for (const v of apkViolations) console.error(`    · ${v}`);
+      console.error('');
+      process.exit(1);
+    }
+    console.log(`  audit de l'APK construit : versionName ${shellVersion}, versionCode ${buildNumber} — ok`);
     console.log(`\n  APK : android/app/build/outputs/apk/debug/app-debug.apk`);
     console.log(
       '  installation AVD : adb install -r android/app/build/outputs/apk/debug/app-debug.apk && ' +
@@ -436,9 +755,43 @@ async function main() {
     const udid = resolveShellSimulatorUdid(process.env);
     run(
       'xcodebuild',
-      ['-project', 'ios/App/App.xcodeproj', '-scheme', 'App', '-destination', `id=${udid}`, 'build'],
+      nativeBuildArgs({ target: 'ios', buildNumber, version: shellVersion, udid }),
       { cwd: APP, env: process.env },
       'construction iOS (xcodebuild)',
+    );
+
+    const builtInfoPlistPath = join(
+      APP,
+      'ios/App/Build/Products/Debug-iphonesimulator/App.app/Info.plist',
+    );
+    if (!existsSync(builtInfoPlistPath)) {
+      console.error(
+        `\n  xcodebuild a rendu 0 mais n'a produit aucun ${builtInfoPlistPath.slice(APP.length + 1)} : ` +
+          "l'audit de l'artefact ne peut pas s'exécuter, et un audit qu'on ne peut pas exécuter n'est pas un " +
+          'audit vert.\n',
+      );
+      process.exit(1);
+    }
+    const plutil = spawnSync('plutil', ['-convert', 'json', '-o', '-', builtInfoPlistPath], {
+      encoding: 'utf8',
+    });
+    if (plutil.status !== 0) {
+      console.error(
+        `\n  plutil a échoué (code ${plutil.status}) sur l'Info.plist construit : ${
+          (plutil.stderr ?? '').toString().trim() || 'aucune sortie d’erreur'
+        }\n`,
+      );
+      process.exit(1);
+    }
+    const appViolations = auditBuiltIosAppVersion(plutil.stdout, { version: shellVersion, buildNumber });
+    if (appViolations.length > 0) {
+      console.error("\n  l'App.app construite ne porte pas la version demandée :\n");
+      for (const v of appViolations) console.error(`    · ${v}`);
+      console.error('');
+      process.exit(1);
+    }
+    console.log(
+      `  audit de l'App.app construite : CFBundleShortVersionString ${shellVersion}, CFBundleVersion ${buildNumber} — ok`,
     );
     console.log(`\n  App.app : ios/App/Build/Products/Debug-iphonesimulator/App.app`);
     console.log(

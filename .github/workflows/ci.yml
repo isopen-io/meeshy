@@ -607,6 +607,15 @@ jobs:
           cd apps/web-v2
           node scripts/check-thread-chrome.mjs
 
+      # #6213 — LE FIL DÉFILE D'UN BORD À L'AUTRE DE L'ÉCRAN. Miroir de
+      # check-thread-chrome.mjs : rien de ceci n'est visible d'un test
+      # unitaire, seule la mesure de rectangles réels le prouve.
+      - name: Gate arêtes de défilement du fil (#6213)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-thread-scroll-edges.mjs
+
       - name: Gate couple de focus des champs (l'anneau et son contre-anneau)
         if: ${{ !cancelled() }}
         run: |

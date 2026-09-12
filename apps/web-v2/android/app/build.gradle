@@ -7,7 +7,10 @@ android {
         applicationId "me.meeshy.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        // Numéro de build LU à la construction (D-45) : `-PmeeshyBuildNumber=<n>`,
+        // posé par scripts/build-shells.mjs. Sans lui, 1 — la marque d'un build
+        // fait HORS du site unique.
+        versionCode = (project.findProperty('meeshyBuildNumber') ?: '1').toString().toInteger()
         versionName "2.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
