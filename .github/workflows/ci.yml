@@ -286,6 +286,7 @@ jobs:
           # ci-dessus ; il n'ouvre aucun navigateur, donc il a sa place ici et
           # non dans le travail Playwright.
           node scripts/check-scheme-bootstrap.mjs
+          node scripts/check-interface-language-bootstrap.mjs
           node scripts/check-docker-context.mjs
           node scripts/check-git-tracking.mjs
 

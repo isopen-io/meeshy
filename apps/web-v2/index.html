@@ -29,6 +29,19 @@
       src/lib/scheme.ts — une seule définition, trois lecteurs (#5588).
     -->
     <script>/*@INLINE_SCHEME_BOOTSTRAP@*/</script>
+    <!--
+      MÊME PATRON, pour la langue d'INTERFACE (#6206) — distincte du Prisme de
+      CONTENU (résolution par message, cf. CLAUDE.md racine). Le `lang="fr"`
+      ci-dessus n'est que le repli STATIQUE avant que ce script ne s'exécute :
+      il pose `document.documentElement.lang` depuis un choix stocké, sinon
+      `navigator.languages`, avant la première peinture — comme le schéma,
+      inline pour qu'une requête de plus ne soit pas nécessaire.
+
+      Son texte est injecté par le greffon `meeshy-inline-interface-language-bootstrap`
+      (vite.config.ts) depuis `src/lib/inline-interface-language-bootstrap.js`,
+      la MÊME constante qu'importe `src/lib/interface-language.ts`.
+    -->
+    <script>/*@INLINE_INTERFACE_LANGUAGE_BOOTSTRAP@*/</script>
   </head>
   <body>
     <div id="root"></div>
