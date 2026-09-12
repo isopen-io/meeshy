@@ -45,6 +45,8 @@ function makeTopic(overrides = {}) {
     cooldownMinutes: 60,
     isActive: true,
     priority: 0,
+    createdAt: '2026-09-12T00:00:00Z',
+    updatedAt: '2026-09-12T00:00:00Z',
     ...overrides,
   };
 }
