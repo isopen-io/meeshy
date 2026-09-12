@@ -475,6 +475,21 @@ struct GalleryVideoPage: View, Equatable {
             if !isPlayerAttached {
                 playOrDownloadButton
             }
+
+            // **La quatrième porte** (#6163) : double tap à gauche ⇒ −10 s, à
+            // droite ⇒ +10 s. Armée seulement quand une piste est ATTACHÉE à
+            // cette page — sans piste il n'y a rien à parcourir, et la loi 4
+            // refuse un contrôle sans effet. Cette condition est aussi ce qui
+            // évite de retarder le tap d'un point de vue où le bouton central
+            // de lecture est encore là : les deux ne sont jamais montés
+            // ensemble, `!isPlayerAttached` gouvernant l'un et l'autre.
+            if isActive, isPlayerAttached {
+                MediaStageSeekZones(size: stage.frame) { point in
+                    MediaStageSeekAction.apply(at: point,
+                                               in: stage.frame,
+                                               manager: videoManager)
+                }
+            }
         }
         .frame(width: stage.frame.width, height: stage.frame.height)
         .clipShape(RoundedRectangle(cornerRadius: stage.cornerRadius, style: .continuous))
