@@ -24,24 +24,20 @@ import { Link } from '@/routes/route-table';
  * son propre rail (« vue PURE : aucun `@State` de défilement, aucun
  * observateur »), et elle garde ce composant testable sans simuler un scroll.
  *
- * OÙ NOTRE ÉCRAN DIFFÈRE D'iOS, ASSUMÉ POUR LE GESTE, JAMAIS POUR LA
- * STABILITÉ DE LA LISTE (révisé #6070) : là-bas le trail vit DANS la vue
- * défilante, sort du champ, et une bande épinglée (`PinnedStoryTrailBand`)
- * le remplace en miniature DANS L'EN-TÊTE replié. Ici le rail est `shrink-0`
- * au-dessus d'une liste qui défile dans son propre conteneur — il ne sort
- * jamais, et cette différence reste : le trail est atteignable en
- * permanence, là où iOS le perd et doit le réintroduire.
- *
- * Ce qui NE reste PAS assumé : la première version compactait « sur place »
- * en réduisant la hauteur réelle de la région du rail — exactement ce
- * qu'iOS n'accepte jamais, puisque `PinnedStoryTrailBand` occupe une bande
- * d'en-tête à hauteur FIXE. Réduire la région faisait varier la hauteur du
- * conteneur défilant lui-même à chaque bascule, provoquant un saut mesuré
- * par `check-lens.mjs` (9 rangées déplacées en MISE EN PAGE). Le montage
- * (`routes/conversations.tsx`) réserve donc la hauteur GRANDE en flux, par
- * une tuile fantôme TOUJOURS présente, et peint le rail RÉEL — celui qui
- * compacte — par-dessus, hors flux, dans la même boîte : sa hauteur peut
- * varier librement, elle ne pousse plus jamais rien.
+ * LA GÉOGRAPHIE iOS EST REPRISE POUR DE VRAI (#6103, décision #6070,
+ * `decisions.md` D-36 — annule et remplace la note ci-dessous, gardée en
+ * mémoire du premier arbitrage). Le grand rail (`ConversationRail`,
+ * `variant="grande"`) vit DANS la vue défilante et en SORT normalement, comme
+ * tout contenu du flux ; une bande compacte (`variant="pinned"`), la MÊME
+ * cellule, prend la place du TITRE dans l'en-tête (`ListHeader`) une fois le
+ * grand rail sorti (`useOutOfView`, `lib/view/use-out-of-view.ts`) — jamais
+ * les deux peints en même temps, exactement `PinnedStoryTrailBand`
+ * (`StoryTrayView.swift:656-671`). Le premier arbitrage (#5946) compactait le
+ * rail SUR PLACE, hors flux, superposé à une tuile fantôme toujours GRANDE :
+ * il tenait l'invariant « aucune rangée ne bouge » mais laissait une bande
+ * VIDE (~130 px) entre l'en-tête et les filtres une fois défilé, un défaut
+ * que la cible iOS n'a pas — voir `check-lens.mjs` § 7 pour l'arbitrage
+ * complet entre les deux formes.
  */
 
 /** La grande — celle de la tête de liste. Cote de l'avatar, en pixels. */
@@ -64,6 +60,34 @@ export const RAIL_TILE_COMPACT = 30;
  */
 const SEUIL_LIBELLE = 44;
 
+/**
+ * LA CIBLE TACTILE (charte, dimension 5 — « cibles ≥ 44 pt ») — #6103.
+ *
+ * À `RAIL_TILE_COMPACT` (30 px d'avatar, sans libellé), la boîte du lien
+ * mesure environ 32 px de haut : sous la cible. Le `<li data-rail-tile>`,
+ * lui, DOIT garder sa largeur exacte (`cellule`) — c'est elle que
+ * `check-lens.mjs` mesure pour prouver la compaction (#6070) — donc la
+ * cible s'obtient en ÉTENDANT la zone cliquable du lien AU-DELÀ de sa boîte
+ * visuelle, jamais en élargissant la case qui le contient. `minWidth`/
+ * `minHeight` pose le plancher ; une marge NÉGATIVE, toujours écrite avec
+ * son signe même quand elle vaut zéro (`-0px` à `RAIL_TILE_GRANDE`, où la
+ * cellule dépasse déjà 44 px), ramène le lien à sa place sans repousser ses
+ * voisins — la même technique que la charte applique déjà aux boutons ronds
+ * de 32 px du dépôt.
+ */
+const MIN_TOUCH_TARGET = 44;
+
+/**
+ * LES DEUX COTES QUI DÉRIVENT DE LA CELLULE, exportées parce qu'une SECONDE
+ * boîte doit les tenir à l'identique : la tuile FANTÔME qui réserve la
+ * hauteur du rail pendant la résolution (`RailPlaceholderTile`,
+ * `components/conversation-rail.tsx`). Elle n'a de valeur que si elle mesure
+ * exactement ce que la vraie mesurera — recopier `88` et `2.5` en ferait une
+ * jumelle qui dérive au premier changement de cote (revue #6103).
+ */
+export const railCellWidth = (size: number): number => Math.round(size * 1.222);
+export const railRingWidth = (size: number): number => Math.max(1, Math.round(size * 0.035 * 10) / 10);
+
 export type RailTileProps = {
   readonly conversationId: string;
   readonly title: string;
@@ -80,16 +104,27 @@ export type RailTileProps = {
  * v3 (règle 32) n'autorise à animer que `opacity` et `scale`, jamais la
  * géométrie — et la raison vaut ici plus qu'ailleurs : animer la `width` de six
  * tuiles PENDANT un défilement force un reflow par image, ce qui est la cause
- * classique de saccade. L'hystérésis du montage (48 px pour compacter, 24 pour
- * rouvrir) fait que la bascule survient UNE fois, franchement, hors du geste
- * continu — un basculement net vaut mieux qu'une interpolation qui rame.
+ * classique de saccade.
+ *
+ * Depuis #6103, aucune tuile ne CHANGE d'ailleurs de cote : le grand rail
+ * garde la sienne pour toujours et une bande DISTINCTE, montée ailleurs
+ * (`ListHeader`), rend la cote compacte. Ce qui bascule est donc un
+ * MONTAGE — franc, hors du geste continu — jamais une interpolation, et
+ * l'hystérésis qui l'empêche de clignoter vit chez celui qui l'observe
+ * (`PINNED_RAIL_REVEAL_RATIO` / `PINNED_RAIL_RELEASE_RATIO`,
+ * `lib/lens/pinned-rail.ts`), jamais ici.
  */
 export function RailTile({ conversationId, title, accent, unread, size }: RailTileProps) {
   const porteLibelle = size >= SEUIL_LIBELLE;
   /* Toutes les cotes DÉRIVENT de `size`. Une épaisseur figée borderait
      discrètement un avatar de 72 px et mangerait la moitié d'un de 30. */
-  const anneau = Math.max(1, Math.round(size * 0.035 * 10) / 10);
-  const cellule = Math.round(size * 1.222);
+  const anneau = railRingWidth(size);
+  const cellule = railCellWidth(size);
+  /* Négative dès que la cellule est plus étroite que la cible ; `0` sinon —
+     mais TOUJOURS émise avec son signe (voir le doc-comment de
+     `MIN_TOUCH_TARGET`) pour que les deux tailles rendent le même GABARIT de
+     valeur, condition du témoin « même balisage » ci-dessous. */
+  const hitPad = Math.max(0, (MIN_TOUCH_TARGET - cellule) / 2);
 
   return (
     <li
@@ -101,8 +136,18 @@ export function RailTile({ conversationId, title, accent, unread, size }: RailTi
         to="thread"
         params={{ conversation: conversationId }}
         aria-label={title}
+        data-conversation={conversationId}
         className="flex flex-col items-center gap-1.5 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-        style={{ outlineColor: 'var(--color-ios-brand)' }}
+        style={{
+          outlineColor: 'var(--color-ios-brand)',
+          minWidth: `${MIN_TOUCH_TARGET}px`,
+          minHeight: `${MIN_TOUCH_TARGET}px`,
+          marginLeft: `-${hitPad}px`,
+          marginRight: `-${hitPad}px`,
+          marginTop: `-${hitPad}px`,
+          marginBottom: `-${hitPad}px`,
+          justifyContent: 'center',
+        }}
       >
         <span
           data-anneau

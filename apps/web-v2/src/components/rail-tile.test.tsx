@@ -148,7 +148,18 @@ describe('RailTile — une tuile, deux tailles', () => {
         // pour prouver que le rail compacte réellement) — elle DIFFÈRE par
         // construction entre les deux tailles, et c'est la seule chose que
         // ce témoin neutralise sans y voir une divergence de STRUCTURE.
-        .replace(/data-rail-tile="\d+"/g, 'data-rail-tile="N"');
+        .replace(/data-rail-tile="\d+"/g, 'data-rail-tile="N"')
+        // LA MARGE DE CIBLE TACTILE (#6103, `MIN_TOUCH_TARGET`) est NÉGATIVE
+        // à `RAIL_TILE_COMPACT` et NULLE à `RAIL_TILE_GRANDE` — mais une
+        // marge nulle SIGNÉE (`-0px`) se sérialise SANS son signe une fois
+        // fondue dans le raccourci `margin` (le CSSOM canonicalise le zéro,
+        // signé ou non, à une seule écriture), quand une marge négative
+        // RÉELLE (`-3.5px`) le garde. Cette dissymétrie de signe n'est pas
+        // une divergence de STRUCTURE — c'est la même règle qui rend `0` à
+        // une taille où elle n'a rien à compenser et un nombre réel à
+        // l'autre — donc neutralisée ICI, jamais en évitant le signe dans
+        // le composant (qui le perdrait alors pour de vrai, dans le DOM).
+        .replace(/-N/g, 'N');
       demonter();
       return forme;
     });
@@ -158,5 +169,33 @@ describe('RailTile — une tuile, deux tailles', () => {
     expect(formes[0]!.replace(/<span[^>]*data-libelle[\s\S]*?<\/span>/, '')).toBe(
       formes[1]!.replace(/<span[^>]*data-libelle[\s\S]*?<\/span>/, ''),
     );
+  });
+
+  /**
+   * LA CIBLE TACTILE (#6103, charte dimension 5) — à `RAIL_TILE_COMPACT`, la
+   * boîte visuelle du lien (~32 px) est SOUS 44 px. La cible s'étend par une
+   * marge NÉGATIVE, jamais en élargissant `<li data-rail-tile>` : c'est LUI
+   * que `check-lens.mjs` mesure pour prouver que le rail compacte
+   * réellement (#6070) — le déformer romprait ce gate.
+   */
+  test('la cible reste ≥ 44 px SANS changer la boîte de mise en page', () => {
+    const compact = monter(RAIL_TILE_COMPACT);
+    const li = compact.querySelector('[data-rail-tile]') as HTMLElement;
+    const lien = compact.querySelector('a') as HTMLAnchorElement;
+    expect(li.style.width).toBe('37px');
+    expect(lien.style.minWidth).toBe('44px');
+    expect(lien.style.minHeight).toBe('44px');
+    // La marge compense exactement (44 − 37) / 2 = 3.5 px, avec son signe.
+    expect(lien.style.marginLeft).toBe('-3.5px');
+    expect(lien.style.marginRight).toBe('-3.5px');
+    demonter();
+
+    const grande = monter(RAIL_TILE_GRANDE);
+    const liGrande = grande.querySelector('[data-rail-tile]') as HTMLElement;
+    const lienGrande = grande.querySelector('a') as HTMLAnchorElement;
+    expect(liGrande.style.width).toBe('88px');
+    expect(lienGrande.style.minWidth).toBe('44px');
+    // La cellule (88) dépasse déjà la cible : aucune compensation à faire.
+    expect(['0px', '-0px']).toContain(lienGrande.style.marginLeft);
   });
 });

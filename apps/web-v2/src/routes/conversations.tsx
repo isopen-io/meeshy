@@ -1,29 +1,28 @@
 import { useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
-import { Avatar } from '@/components/avatar';
-import { RAIL_TILE_COMPACT, RAIL_TILE_GRANDE, RailTile } from '@/components/rail-tile';
+import { ConversationRail } from '@/components/conversation-rail';
+import { ListHeader } from '@/components/list-header';
 import { Glyph } from '@/components/glyph';
 import { LensRow } from '@/components/lens-row';
 import { LensSection } from '@/components/lens-sticker';
 import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { useScene } from '@/lib/lens/scene';
+import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { apiConfig } from '@/lib/api/config';
 import { rowAction, useConversations } from '@/lib/api/query';
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
-import { accentOf } from '@/lib/accent';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
 import { partagerInvitation, RETOUR_INVITATION } from '@/lib/view/invitation';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { resolveLensSections } from '@/lib/lens/sections';
 import { useOnline } from '@/lib/net/online';
+import { useOutOfView } from '@/lib/view/use-out-of-view';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useMinute } from '@/lib/view/use-minute';
-import { titleOf } from '@/lib/view/conversation';
-import { Link } from '@/routes/route-table';
 
 /**
  * L'ECRAN DE LISTE.
@@ -37,32 +36,16 @@ import { Link } from '@/routes/route-table';
  */
 
 /**
- * LA HAUTEUR RÉSERVÉE DU RAIL (#5650, F5/§5 étape 9, revue-correction) —
- * `check-gateway-build.mjs` comparait l'`offsetTop` de la première rangée
- * avant/après résolution et rougissait de 130 px : le rail (avatar 72 +
- * liséré + libellé) se PEIGNAIT VIDE tant que `list.data === undefined`
- * (`conversations` vaut `[]`), puis SAUTAIT à sa hauteur réelle une fois les
- * conversations arrivées.
- *
- * La hauteur se réserve par une TUILE FANTÔME — la MÊME boîte que la vraie,
- * rendue invisible — jamais par un nombre écrit à la main (même discipline
- * que `SkeletonSectionStub`, `components/lens-skeleton.tsx`, et D-4 : aucune
- * cote de géométrie ne s'écrit ici). Un `minHeight: 130` aurait deux torts
- * qu'une tuile n'a pas : il fige une cote qui dérive dès que l'avatar ou la
- * typographie du libellé bougent, et il creuse un TROU de 130 px au-dessus
- * de l'état vide d'un compte qui n'a encore AUCUNE conversation — le tout
- * premier écran d'un nouvel arrivant.
+ * LE RAIL ET SA BANDE ÉPINGLÉE VIVENT DÉSORMAIS DANS LEURS PROPRES MODULES
+ * (#6103, décision #6070) — `components/conversation-rail.tsx` (la cellule,
+ * la tuile fantôme de chargement, l'exclusion des archivées) et
+ * `components/list-header.tsx` (la bascule titre ↔ bande). Voir leurs
+ * doc-comments pour la géographie complète : le grand rail vit DANS la vue
+ * défilante (`<ul id="contenu">` ci-dessous), la bande compacte DANS
+ * l'en-tête — jamais superposés au même endroit, contrairement à l'ancienne
+ * forme qui compactait le rail SUR PLACE et laissait une réserve de hauteur
+ * vide une fois défilé.
  */
-function RailPlaceholderTile() {
-  return (
-    <li aria-hidden="true" className="flex w-[88px] shrink-0 flex-col items-center gap-1.5" style={{ visibility: 'hidden' }}>
-      <span className="grid place-items-center rounded-chip p-[2.5px]">
-        <Avatar initials="" color="var(--color-ios-card)" size={72} />
-      </span>
-      <span className="w-full truncate text-center text-check">&nbsp;</span>
-    </li>
-  );
-}
 
 /**
  * `rowAction` (#5650, F2/F4/§5 étape 9) — RÉFÉRENCE DE MODULE STABLE
@@ -179,30 +162,24 @@ export default function ConversationsScreen() {
   const frame = useRef<HTMLUListElement | null>(null);
 
   /**
-   * **LE TRAIL SE COMPACTE QUAND ON DÉFILE** (#5946, directive porteur) — la
-   * tuile passe de 72 à 30 px, comme l'app iOS passe de `.storyTray` (88 pt) à
-   * `.storyTrayCompact` (36 pt).
+   * **LA BANDE ÉPINGLÉE PREND LA PLACE DU TITRE QUAND LE GRAND RAIL EST
+   * SORTI DU SCROLLPORT** (#6103, décision #6070) — voir `ListHeader` et
+   * `ConversationRail` pour la géographie complète, et `pinned-rail.ts` pour
+   * les deux seuils. `useOutOfView` délègue la mesure à un
+   * `IntersectionObserver` : aucun `scrollTop` lu à la main ici, contrairement
+   * à `useScene` juste en dessous, qui a besoin d'une valeur CONTINUE (la
+   * perspective) là où cette bascule n'est qu'un booléen.
    *
-   * iOS obtient l'effet autrement : son trail vit DANS la vue défilante, sort
-   * du champ, et une bande épinglée le remplace en miniature. Notre disposition
-   * ne le permet pas — le rail est `shrink-0` au-dessus d'une liste qui défile
-   * dans son propre conteneur, donc il ne sort jamais. On compacte SUR PLACE,
-   * ce qui vaut mieux pour le geste : le trail reste atteignable en
-   * permanence, là où iOS le perd et doit le réintroduire.
-   *
-   * **L'observation vit ICI, dans le montage** — jamais dans la tuile, qui
-   * reste une vue PURE. C'est la règle qu'iOS écrit noir sur blanc pour son
-   * propre rail (« aucun `@State` de défilement, aucun observateur »).
-   *
-   * HYSTÉRÉSIS de 24 px : sans elle, un doigt posé pile sur le seuil ferait
-   * clignoter la bande à chaque micro-mouvement. On compacte à 48, on rouvre à
-   * 24 — jamais au même point.
+   * `observeGrandRail` est une réf de RAPPEL, jamais un `RefObject` : le grand
+   * rail QUITTE le DOM sur le chemin d'échec (cache vide + erreur) et y
+   * REVIENT à la reprise — voir le doc-comment de `useOutOfView` pour les deux
+   * défauts que le `RefObject` laissait passer.
    */
-  const [railCompact, setRailCompact] = useState(false);
-  const onListScroll = (): void => {
-    const y = frame.current?.scrollTop ?? 0;
-    setRailCompact((etait) => (etait ? y > 24 : y > 48));
-  };
+  const { pinned, observe: observeGrandRail } = useOutOfView({
+    root: frame,
+    revealRatio: PINNED_RAIL_REVEAL_RATIO,
+    releaseRatio: PINNED_RAIL_RELEASE_RATIO,
+  });
   const { focus, level } = useScene(frame);
   const online = useOnline();
 
@@ -226,12 +203,12 @@ export default function ConversationsScreen() {
   const { languages: readerLanguages } = useReaderLanguages();
   const conversations = list.data ?? EMPTY_CONVERSATIONS;
   const overrides = useStore(conversationStore, (s) => s.overrides);
-  /** Le corpus du RAIL — même précédence iOS que `applyFilter` (l'archivé
-   * sort), mémorisé parce qu'il se lit DEUX fois par rendu (la décision de
-   * peindre la région, puis les tuiles). */
-  const railConversations = useMemo(
-    () => conversations.filter((c) => !effectiveFlagsOf(c, overrides).isArchived),
-    [conversations, overrides],
+  /** Le corpus du RAIL — `ConversationRail` applique lui-même la même
+   * précédence iOS que `applyFilter` (l'archivé sort) : un seul site, pour
+   * les DEUX géographies (grande et épinglée). */
+  const railProps = useMemo(
+    () => ({ conversations, viewerId: viewer.id ?? '', overrides, loading }),
+    [conversations, viewer.id, overrides, loading],
   );
 
   /**
@@ -275,147 +252,7 @@ export default function ConversationsScreen() {
        100dvh (box-sizing: border-box) — jamais par `<body>`, qui l'AJOUTAIT
        et poussait la barre de recherche hors du cadre (#5604, app.css). */
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
-      <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
-        <h1
-          className="flex-1 text-large-title font-bold"
-          style={{
-            background: 'linear-gradient(90deg, var(--color-ios-brand), var(--color-ios-brand-deep))',
-            WebkitBackgroundClip: 'text',
-            backgroundClip: 'text',
-            color: 'transparent',
-          }}
-        >
-          Meeshy Chats
-        </h1>
-        {/*
-          L'ENTRÉE DU TABLEAU DE BORD « PROGRESSION » (#5547). Sur iOS elle vit
-          dans le profil et les réglages (#5698) ; la v3.1 n'a pas encore de
-          `/me` (inventaire de parité, V4.0.0) — l'en-tête de la liste est donc
-          sa porte jusque-là, à la place où l'utilisateur la chercherait sans
-          le savoir. Un `Link`, jamais un bouton qui navigue : `href`, nouvel
-          onglet, préchargement à l'intention (`router.tsx` § Link).
-        */}
-        <Link
-          to="progression"
-          aria-label="Progression — badges, niveau et série"
-          className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
-        >
-          <span
-            className="grid size-8 place-items-center rounded-chip"
-            style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 14%, transparent)' }}
-          >
-            <Glyph name="trophy" size={16} />
-          </span>
-        </Link>
-        {/*
-          #5559 revue-correction, défaut 2 : « Créer un lien de partage » et
-          « Nouvelle conversation » n'avaient AUCUN gestionnaire — aucune
-          route ne les sert aujourd'hui (`route-table.tsx` ne déclare que
-          `list`/`thread`). Deux boutons qui ne font RIEN au clic sur
-          l'écran PHARE, à côté d'un écran dont tout le reste agit, sont
-          pires qu'une absence : ils PROMETTENT un effet qu'ils ne tiennent
-          pas. Retirés jusqu'à leur porte réelle (issues compagnon à ouvrir :
-          lien de partage — la passerelle expose déjà la création, l'effet
-          minimal est une copie presse-papier avec retour visible ; nouvelle
-          conversation — un flux de composition à construire) plutôt que de
-          laisser deux contrôles mentir.
-        */}
-      </header>
-
-      {/*
-        LE RAIL D'ACCÈS RAPIDE : avatars 88 px, anneau de marque quand non lu.
-        #5559 revue-correction, défauts 3 et 9.
-
-        (3) CE N'ÉTAIT NI DES STORIES NI UN CONTRÔLE : quatre `<li>` nus,
-        aucun `<a>` ni `<button>`, un anneau qui promettait un contenu que
-        rien n'ouvrait. En l'absence d'une route « stories » (issue
-        compagnon à ouvrir), la seule destination RÉELLE de chaque avatar
-        aujourd'hui est SON FIL — chaque tuile est donc un `Link` vers
-        `thread`, exactement ce qu'elle ouvre déjà si on tape la ligne
-        correspondante plus bas.
-
-        (9) LE RAIL LIT DÉSORMAIS LA MÊME SOURCE QUE LA LISTE — `CONVERSATIONS`
-        filtrées du corpus ARCHIVÉ (`effectiveFlagsOf(...).isArchived`, même
-        précédence iOS `:598-601` que `applyFilter`) et `effectiveUnreadOf`
-        pour l'anneau. Avant ce correctif, le rail lisait le fil BRUT et
-        `unreadOf` seul : marquer « Lu » vidait le badge de la ligne sans
-        jamais éteindre l'anneau du rail, archiver sortait la conversation de
-        la liste sans jamais la retirer du rail — deux vérités pour un même
-        état, sur le MÊME écran.
-      */}
-      {/*
-        LE RAIL NE SE PEINT PAS QUAND IL N'A RIEN À MONTRER (revue-correction
-        #5650) — un compte sans conversation, ou dont tout est archivé, ne
-        garde ni région étiquetée vide pour le lecteur d'écran ni bande
-        blanche au-dessus de son état vide. Pendant le CHARGEMENT en
-        revanche, il se peint avec sa tuile fantôme : c'est ce qui tient
-        l'`offsetTop` du contenu identique avant et après la résolution.
-      */}
-      {/*
-        LA COMPACTION NE DÉPLACE JAMAIS LA LISTE (#6070) — voir le
-        doc-comment de `RailTile` pour l'arbitrage. Une tuile fantôme,
-        TOUJOURS à la cote GRANDE, réserve la hauteur EN FLUX (le `<ul>`
-        `invisible` ci-dessous) ; le rail RÉEL — celui qui compacte de
-        `RAIL_TILE_GRANDE` à `RAIL_TILE_COMPACT` au défilement — est peint
-        PAR-DESSUS, `absolute inset-0`, dans la même boîte que le fantôme
-        (`section` porte `position: relative`, son seul ancêtre positionné).
-        Sa propre hauteur peut donc varier librement : elle ne pousse plus
-        jamais `<ul id="contenu">` sous elle. `check-lens.mjs` mesure les
-        deux faces de cet invariant : le rail compacte bien (la tuile
-        `[data-rail-tile]` rétrécit), et pourtant AUCUNE rangée ne bouge.
-      */}
-      {loading || railConversations.length > 0 ? (
-      <section aria-label="Accès rapide aux conversations" className="relative shrink-0 pb-1">
-        <ul aria-hidden="true" className="invisible flex gap-3 px-4 py-2">
-          <RailPlaceholderTile />
-        </ul>
-        <div className="absolute inset-0 overflow-x-auto">
-          <ul className="flex gap-3 px-4 py-2">
-            {railConversations.length === 0 ? <RailPlaceholderTile /> : null}
-            {railConversations.map((c) => (
-              <RailTile
-                key={c.id}
-                conversationId={c.id}
-                title={titleOf(c, viewer.id ?? '')}
-                accent={accentOf(c)}
-                unread={effectiveUnreadOf(c, overrides)}
-                size={railCompact ? RAIL_TILE_COMPACT : RAIL_TILE_GRANDE}
-              />
-            ))}
-          </ul>
-        </div>
-      </section>
-      ) : null}
-
-      <nav aria-label="Filtres" className="shrink-0 overflow-x-auto">
-        <ul className="flex gap-2 px-4 py-1.5">
-          {LIST_FILTERS.map((f) => {
-            const active = f === filter;
-            return (
-              <li key={f}>
-                <button
-                  type="button"
-                  onClick={() => setFilter(f)}
-                  aria-pressed={active}
-                  className="rounded-chip px-3 py-1.5 text-title font-medium whitespace-nowrap transition-colors"
-                  style={
-                    active
-                      ? { backgroundColor: 'var(--color-ios-brand)', color: 'white' }
-                      : {
-                          backgroundColor: 'var(--color-ios-card)',
-                          color: 'var(--color-ios-ink-2)',
-                          border: '0.5px solid var(--color-edge)',
-                        }
-                  }
-                >
-                  {FILTER_LABELS[f]}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+      <ListHeader pinned={pinned} railProps={railProps} />
 
       {/*
         AUCUN `gap` : l'espacement des cartes est ce qui les faisait lire comme
@@ -440,10 +277,67 @@ export default function ConversationsScreen() {
       <ul
         ref={frame}
         id="contenu"
-        onScroll={onListScroll}
         className="flex flex-1 flex-col overflow-y-auto px-2"
         {...(loading ? { 'aria-busy': true, 'aria-label': 'Chargement des conversations' } : {})}
       >
+        {/*
+          LE RAIL ET LES FILTRES VIVENT DÉSORMAIS DANS LA VUE DÉFILANTE
+          (#6103, décision #6070) — miroir `ConversationListView.swift:
+          1659-1671` : « lentilleRailOrStoryTray » puis « composedFilterChips »
+          sont les DEUX PREMIERS enfants du contenu qui défile, AVANT les
+          sections. `-mx-2` neutralise le `px-2` de ce scrollport — même
+          technique que `LensSection` pour un plein-bord — puisque
+          `ConversationRail`/le `<nav>` posent leur propre `px-4`.
+
+          Le rail GRANDE ne compacte plus JAMAIS lui-même : seule la bande
+          `pinned` de `ListHeader`, ailleurs dans le DOM, prend cette forme.
+          `check-lens.mjs` mesure les deux faces : la bande compacte bien
+          quand le grand rail sort du champ, et pourtant AUCUNE rangée de la
+          Lentille ne bouge.
+
+          `inert={pinned}` (#6103, revue-correction) — LE MÊME booléen qui
+          fait apparaître la bande dans `ListHeader` retire le grand rail de
+          l'ordre de tabulation et de l'arbre d'accessibilité pendant qu'elle
+          le remplace : sans lui, ses neuf liens restaient DOUBLÉS avec ceux
+          de la bande (même corpus, même `aria-label`), et un `Tab` depuis la
+          dernière tuile de la bande y retombait — forçant le navigateur à
+          faire défiler ce rail hors champ DANS la vue, ce qui ramenait la
+          liste en tête et démontait la bande pour rien de plus qu'un
+          `Tab`. Voir le doc-comment de `ConversationRail` pour le détail.
+        */}
+        <li className="-mx-2 shrink-0">
+          <ConversationRail ref={observeGrandRail} variant="grande" inert={pinned} {...railProps} />
+        </li>
+        <li className="-mx-2 shrink-0">
+          <nav aria-label="Filtres" className="overflow-x-auto">
+            <ul className="flex gap-2 px-4 py-1.5">
+              {LIST_FILTERS.map((f) => {
+                const active = f === filter;
+                return (
+                  <li key={f}>
+                    <button
+                      type="button"
+                      onClick={() => setFilter(f)}
+                      aria-pressed={active}
+                      className="rounded-chip px-3 py-1.5 text-title font-medium whitespace-nowrap transition-colors"
+                      style={
+                        active
+                          ? { backgroundColor: 'var(--color-ios-brand)', color: 'white' }
+                          : {
+                              backgroundColor: 'var(--color-ios-card)',
+                              color: 'var(--color-ios-ink-2)',
+                              border: '0.5px solid var(--color-edge)',
+                            }
+                      }
+                    >
+                      {FILTER_LABELS[f]}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        </li>
         {/*
           LES TROIS ÉTATS DU RÉSEAU (#5650, F5/§5 étape 9), même doctrine que
           `ConversationListViewModel.performLoadConversations` : `list.data`
