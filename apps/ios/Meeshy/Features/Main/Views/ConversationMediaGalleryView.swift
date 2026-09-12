@@ -79,7 +79,10 @@ struct ConversationMediaGalleryView: View {
     /// pièce offre de réagir, celui-ci dit si l'utilisateur l'a demandé. Il se
     /// remet à `false` au changement de pièce (`handlePageChange`) : la rangée
     /// appartient au média qu'on regardait.
-    @State private var reactionBarOpen = false
+    /// `internal` — l'orchestration du plein cadre la referme en entrant
+    /// (`+Presentation.swift`), et `private` est une portée de FICHIER. Même
+    /// prix que celui payé par `currentPageID` ci-dessous.
+    @State var reactionBarOpen = false
     /// Maps attachment.id → sender info (name, avatar, color, date)
     var senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
 
@@ -128,15 +131,25 @@ struct ConversationMediaGalleryView: View {
     /// `+Geometry.swift`, et `private` est une portée de FICHIER. Même prix que
     /// celui payé par les pages au #4014, et pour la même raison.
     @State var currentPageID: String?
-    @State private var showControls = true
+    /// **L'état d'immersion, un seul** (#6142, spec § 3.2). Il a remplacé
+    /// `showControls` : un booléen ne pouvait pas porter la RAISON de l'entrée,
+    /// et sans elle l'appui long et le glissement rendaient le même écran. Il ne
+    /// s'écrit qu'en un endroit — `onEnterStage`, `+Presentation.swift` — et il
+    /// commande DEUX choses : le plateau, et les cotes que le solveur rend.
+    @State var stagePresentation: StagePresentation = .carded
     @StateObject private var saveCoordinator = MediaSaveCoordinator()
     // Plain reference (NOT @ObservedObject): only `activeURL`/`player` identity
     // drive this root's rendering (`videoTransportLayer`) — the manager also
     // publishes `currentTime` at 5-10Hz, which used to re-render the WHOLE
     // gallery root continuously. Scoped via onReceive($activeURL/$player).
-    private let videoManager = SharedAVPlayerManager.shared
+    let videoManager = SharedAVPlayerManager.shared
     @State private var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
     @State private var videoManagerPlayer: AVPlayer?
+    /// Lu par la seule pastille « en pause » : `pausedOnEntry` se souvient du
+    /// GESTE, et une pastille qui survivrait à la reprise affirmerait le
+    /// contraire de ce qu'on voit. `isPlaying` ne publie qu'aux TRANSITIONS,
+    /// contrairement au `currentTime` qui interdit d'observer le manager en bloc.
+    @State var videoManagerIsPlaying: Bool = SharedAVPlayerManager.shared.isPlaying
 
     init(
         allAttachments: [MessageAttachment],
@@ -265,6 +278,11 @@ struct ConversationMediaGalleryView: View {
 
             overlayLayer
 
+            // **Ce que l'appui long a promis** (#6142) : la pastille est la
+            // seule chose qui distingue ses deux portes à l'écran. Elle vit
+            // au-dessus du plateau, qui n'existe pas là où elle s'affiche.
+            pausedBadgeLayer
+
             // **La traînée d'émojis est la couche la PLUS HAUTE du visualiseur**
             // (précision porteur 2026-09-11 : « les réactions doivent apparaître
             // par-dessus tous les autres contrôleurs »).
@@ -289,15 +307,22 @@ struct ConversationMediaGalleryView: View {
         }
         .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
         .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
+        .onReceive(videoManager.$isPlaying) { videoManagerIsPlaying = $0 }
         .sheet(isPresented: $showFullEmojiPicker) { fullEmojiPickerSheet }
     }
 
-    /// L'animation de `showControls` est portée ICI et non sur la racine :
+    /// L'animation de l'état d'immersion est portée ICI et non sur la racine :
     /// posée sur le `ZStack` racine, elle installait une transaction animée sur
     /// TOUT l'arbre — pager compris — à chaque bascule des contrôles.
+    ///
+    /// **`allowsHitTesting` n'est pas une ceinture de plus : c'est la garde**
+    /// (#6142). La couche s'en va en FONDU, donc elle reste dans l'arbre — et
+    /// atteignable — pendant toute la transition : sans cette ligne, un tap posé
+    /// pendant ces deux dixièmes fermerait la galerie par un bouton que
+    /// l'utilisateur voit déjà disparaître.
     private var overlayLayer: some View {
         ZStack {
-            if showControls {
+            if stagePresentation.showsPlateau {
                 // Le plateau ENTIER — les deux couloirs et ce qui se pose sur le
                 // cadre, transport vidéo compris (#6141) : il commande le média,
                 // donc il vit sur le cadre, plus dans une couche flottante à lui.
@@ -305,7 +330,8 @@ struct ConversationMediaGalleryView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: showControls)
+        .allowsHitTesting(stagePresentation.showsPlateau)
+        .animation(.easeInOut(duration: 0.2), value: stagePresentation)
     }
 
     // MARK: - Pager
@@ -378,10 +404,11 @@ struct ConversationMediaGalleryView: View {
             GalleryImagePage(
                 attachment: attachment,
                 stage: stage(for: attachment),
+                presentation: stagePresentation,
                 isActive: distance == 0,
                 rendersFullPixels: GalleryRenderWindow.rendersFullPixels(distance: distance),
                 accessibilityLabel: imageAccessibilityLabel(attachment),
-                onToggleControls: { toggleControls() },
+                onEnterStage: { onEnterStage($0) },
                 onDismiss: { dismissGallery() }
             )
             .equatable()
@@ -390,10 +417,11 @@ struct ConversationMediaGalleryView: View {
             GalleryVideoPage(
                 attachment: attachment,
                 stage: stage(for: attachment),
+                presentation: stagePresentation,
                 accentColor: accentColor,
                 isActive: distance == 0,
                 isWindowed: GalleryRenderWindow.rendersFullPixels(distance: distance),
-                onToggleControls: { toggleControls() },
+                onEnterStage: { onEnterStage($0) },
                 onCacheActivation: { cacheAttachment(attachment) },
                 onDismiss: { dismiss() }
             )
@@ -402,22 +430,6 @@ struct ConversationMediaGalleryView: View {
         default:
             Color.black
         }
-    }
-
-    /// **Masquer le chrome emporte la traînée.**
-    ///
-    /// Elle recouvre désormais la rangée d'actions (précision porteur : « par-dessus
-    /// tous les autres contrôleurs »), donc le bouton « Réagir » n'est plus
-    /// atteignable pendant qu'elle est ouverte : le « second appui referme » de
-    /// l'amendement précédent passe par CE geste-ci, le tap sur le média, qui
-    /// reste le geste universel de ce visualiseur. Les deux autres sorties sont
-    /// inchangées — choisir un émoji, changer de pièce.
-    ///
-    /// Sans cette ligne, rouvrir le chrome ferait resurgir une traînée que
-    /// personne n'aurait redemandée.
-    private func toggleControls() {
-        showControls.toggle()
-        if !showControls, reactionBarOpen { reactionBarOpen = false }
     }
 
     private func dismissGallery() {

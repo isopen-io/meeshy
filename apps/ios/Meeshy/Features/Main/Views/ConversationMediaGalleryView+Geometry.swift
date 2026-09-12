@@ -67,6 +67,26 @@ enum MediaGalleryStage {
         )
     }
 
+    /// **Ce que le plateau prend EN HAUT — et ce qu'il rend en plein cadre**
+    /// (#6142).
+    ///
+    /// Les deux retraits tombent à zéro dès que l'état bascule, et c'est ce qui
+    /// fait du plein cadre autre chose qu'un fondu de chrome : tant que le pager
+    /// garde les bandes du plateau, le média reste exactement là où il était et
+    /// « plein cadre » ne nomme rien. Les fonctions sont statiques pour que la
+    /// reprise de place s'éprouve sans monter la vue.
+    static func topInset(presentation: StagePresentation,
+                         corridors: MediaStageFraming.Corridors) -> CGFloat {
+        presentation.showsPlateau ? corridors.safeTop + corridors.top : 0
+    }
+
+    /// Et EN BAS — le rail, la zone sûre, plus la gouttière qui décolle le cadre
+    /// de la pellicule.
+    static func bottomInset(presentation: StagePresentation,
+                            corridors: MediaStageFraming.Corridors) -> CGFloat {
+        presentation.showsPlateau ? corridors.rail + corridors.safeBottom + corridors.gutter : 0
+    }
+
     /// Les proportions du média, ou `nil` quand la pièce jointe ne les porte
     /// pas — ce qui est le cas nominal d'un média reçu avant que le serveur ne
     /// les ait calculées.
@@ -203,30 +223,29 @@ extension ConversationMediaGalleryView {
         )
     }
 
-    /// Ce que le plateau prend EN HAUT — la zone sûre puis le couloir des
-    /// contrôles. Le pager s'en sert pour se poser exactement dans la zone libre
-    /// que le solveur a mesurée ; sans ce partage, le cadre dessiné et le cadre
-    /// calculé diffèreraient d'une bande.
+    /// Le pager s'en sert pour se poser exactement dans la zone libre que le
+    /// solveur a mesurée ; sans ce partage, le cadre dessiné et le cadre calculé
+    /// diffèreraient d'une bande. En plein cadre, les deux valent zéro et le
+    /// pager reprend l'écran entier.
     var plateauTopInset: CGFloat {
-        stageCorridors.safeTop + stageCorridors.top
+        MediaGalleryStage.topInset(presentation: stagePresentation, corridors: stageCorridors)
     }
 
-    /// Et EN BAS — le rail, la zone sûre, plus la gouttière qui décolle le cadre
-    /// de la pellicule.
     var plateauBottomInset: CGFloat {
-        stageCorridors.rail + stageCorridors.safeBottom + stageCorridors.gutter
+        MediaGalleryStage.bottomInset(presentation: stagePresentation, corridors: stageCorridors)
     }
 
     /// Le cadre de CE média. Chaque page a le sien : une vidéo 16:9 et une scène
     /// 9:16 gardent les mêmes couloirs, seul le cadre change entre elles.
+    ///
+    /// **L'état d'immersion entre ici** (#6142) : `framing` le projette sur le
+    /// solveur, donc franchir une porte change des COTES. Un état qui n'aurait
+    /// commandé que du chrome aurait laissé la loi de cadrage sans interrupteur.
     func stage(for attachment: MessageAttachment) -> MediaStageFraming.Result {
         MediaGalleryStage.resolve(
             viewport: DeviceLayout.windowSize,
             mediaRatio: MediaGalleryStage.ratio(of: attachment),
-            // Les trois portes du plein cadre — tap, appui long, glissement —
-            // sont #6142. La géométrie sait déjà rendre `.full` ; c'est
-            // l'orchestration qui manque, et elle reste app-side.
-            presentation: .carded,
+            presentation: stagePresentation.framing,
             corridors: stageCorridors
         )
     }
@@ -236,7 +255,7 @@ extension ConversationMediaGalleryView {
         guard currentIndex < allAttachments.count else {
             return MediaGalleryStage.resolve(viewport: DeviceLayout.windowSize,
                                              mediaRatio: nil,
-                                             presentation: .carded,
+                                             presentation: stagePresentation.framing,
                                              corridors: stageCorridors)
         }
         return stage(for: allAttachments[currentIndex])
