@@ -85,7 +85,23 @@ final class LentilleTextSecondaryContrastAATests: XCTestCase {
             "régression du garde-fou : indigo700.opacity(0.6) sur #F8F7FF mesure \(WCAGContrast.fmt(old)):1 — " +
             "attendu < 4,5:1 (c'est le défaut #5625/#5559 d'origine, ~2,70:1)"
         )
-        XCTAssertEqual(old, 2.70, accuracy: 0.02)
+        // **#5599 — la valeur épinglée datait de l'ANCIENNE composition alpha.**
+        // Les deux couleurs n'ont pas bougé (`indigo700` = #4338CA,
+        // `backgroundSecondary(light)` = #F8F7FF, vérifié dans `MeeshyColors`) ;
+        // c'est `composite(_:over:)` qui a été corrigé depuis, et la source-over
+        // exacte sur ces deux couleurs donne 3,04:1 — recalculé à la main, pas
+        // relevé sur la machine :
+        //
+        //   composite = fg·0,6 + bg·0,4       = (0,547 · 0,519 · 0,875)
+        //   L_texte   = 0,2747 · L_fond       = 0,9368
+        //   ratio     = (0,9368 + 0,05) / (0,2747 + 0,05) = 3,04
+        //
+        // Ce que ce témoin DOCUMENTE est inchangé, et c'est l'assertion
+        // ci-dessus qui le porte : l'ancienne teinte passait sous AA. Le
+        // chiffre exact n'est qu'un repère — l'épingler à 0,02 près en fait un
+        // témoin de la FORMULE autant que du défaut, et c'est la formule qui a
+        // eu raison de lui.
+        XCTAssertEqual(old, 3.04, accuracy: 0.02)
     }
 
     // MARK: - RE-PREUVE : le commentaire de `MeeshyColors.textSecondary` cite bien la formule réelle
