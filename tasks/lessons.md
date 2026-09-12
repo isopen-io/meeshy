@@ -31193,3 +31193,65 @@ et pour la même raison : un identifiant qu'on n'alloue pas ne collisionne pas
 AUCUNE de ces sessions — elles committent toutes sous le même auteur. Ce qui
 distingue qui a fait quoi est la BRANCHE, jamais le nom.
 
+## Leçon 587 — Un job ROUGE avec ZÉRO test en échec dit qu'une suite ne s'est pas CHARGÉE — et le typecheck ne pouvait pas le voir
+
+2026-09-12, #6157. « Test gateway » rouge sur `dev`, avec ce verdict :
+
+```
+Test Suites: 1 failed, 1249 passed, 1250 total
+Tests:       24043 passed, 24043 total
+```
+
+**Aucun test en échec, et pourtant rouge.** La signature est celle-là, et elle se
+lit en une seconde une fois qu'on la connaît : une suite qui ne se CHARGE pas ne
+contribue aucun test au décompte. Ici un `import` vers une API disparue (la
+jumelle d'une résolution add/add), donc `TS2305` au chargement.
+
+> **Une suite qui ne se charge pas ne mesure RIEN, et c'est PIRE qu'un test
+> rouge.** Un test rouge nomme ce qui casse ; une suite muette laisse croire que
+> sa garde veille. Celle-ci était le témoin de confidentialité du FIL — un
+> dernier message à vue unique ne doit pas partir en clair dans le corps
+> SÉRIALISÉ. Le rouge était visible, la garde était morte.
+
+## La moitié qui coûte le plus : la vérification ne POUVAIT pas voir le défaut
+
+J'avais annoncé « `tsc --noEmit` du gateway : 0 erreur » comme preuve de la
+résolution. Mesuré après coup :
+
+```jsonc
+// services/gateway/tsconfig.json
+"include": ["src/**/*", "shared/**/*"],
+"exclude": ["node_modules", "dist", "…/encryption/**/*",
+            "src/**/__tests__/**/*", "src/**/*.test.ts", "src/**/*.spec.ts"]
+```
+
+**Le typecheck et l'exécution des tests couvrent des ensembles de fichiers
+DISJOINTS.** Une erreur de type dans un test est invisible à `tsc` (exclu) et
+FATALE à jest (qui typecheck chaque suite au chargement). « J'ai lancé le
+typecheck » ne vérifie donc JAMAIS un fichier de test — et c'est exactement là
+que vivent les consommateurs de l'API qu'on vient de supprimer.
+
+> **Avant de tirer une preuve d'un outil, lire son `include`/`exclude`.** Un
+> outil vert sur un ensemble qui ne contient pas le fichier douteux n'a rien
+> mesuré. C'est la 583 posée sur l'espace au lieu du temps : un témoin ne mesure
+> son sujet que si son sujet est dans son champ.
+
+Ce qui attrape ce défaut-là, après une suppression d'export, ne coûte qu'une
+commande — et elle doit balayer TOUTES les refs, pas le clone (leçon 561) :
+
+```bash
+grep -rn '<NomSupprimé>' --include='*.ts' packages services apps   # le clone
+git for-each-ref --format='%(refname)' refs/remotes/origin refs/heads \
+  | while read -r r; do git grep -l '<NomSupprimé>' "$r" 2>/dev/null; done
+```
+
+Mesuré ici : le clone rendait UN consommateur (celui de dev, réparé) ; les
+1 707 refs en rendaient un SECOND — `packages/shared/__tests__/utils/
+last-message-protection.test.ts` sur `claude/ios-reactions-coherence`, le test
+unitaire de la jumelle. Il rejouerait le défaut à la fusion de cette branche.
+
+Et la résolution elle-même suit la 586 : on n'AJOUTE PAS l'alias négatif
+(`lastMessageTextMayTravel` = `!isLastMessageProtected`). Deux noms pour une loi,
+c'est ce que cette résolution venait de payer — le consommateur adopte le
+vocabulaire du dépôt.
+
