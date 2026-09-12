@@ -68,6 +68,8 @@ function mount(pinned: boolean): HTMLDivElement {
       <ListHeader
         pinned={pinned}
         railProps={{ groups: GROUPS, loading: false }}
+        conversations={[]}
+        viewerId="u-viewer"
       />,
     );
   });
@@ -81,6 +83,8 @@ function rerender(el: HTMLDivElement, pinned: boolean): void {
       <ListHeader
         pinned={pinned}
         railProps={{ groups: GROUPS, loading: false }}
+        conversations={[]}
+        viewerId="u-viewer"
       />,
     );
   });
@@ -129,6 +133,23 @@ describe('ListHeader — la bande épinglée prend la place du titre', () => {
   });
 });
 
+describe('ListHeader — les deux boutons d’en-tête (#5652, réaccordés #6080)', () => {
+  test('« Créer un lien de partage » et « Nouvelle conversation » sont rendus, à côté de Progression', () => {
+    const el = mount(false);
+    expect(el.querySelector('button[aria-label="Créer un lien de partage"]')).not.toBeNull();
+    expect(el.querySelector('a[aria-label="Nouvelle conversation"]')).not.toBeNull();
+  });
+
+  test('« Créer un lien de partage » ouvre la feuille de choix', () => {
+    const el = mount(false);
+    const bouton = el.querySelector('button[aria-label="Créer un lien de partage"]') as HTMLButtonElement;
+    act(() => {
+      bouton.click();
+    });
+    expect(el.querySelector('dialog')).not.toBeNull();
+  });
+});
+
 describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () => {
   function mountWithGrandRail(pinned: boolean): HTMLDivElement {
     const c = document.createElement('div');
@@ -142,6 +163,8 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
           <ListHeader
             pinned={pinned}
             railProps={{ groups: GROUPS, loading: false }}
+            conversations={[]}
+            viewerId="u-viewer"
           />
           <StoryRail variant="grande" groups={GROUPS} loading={false} />
         </div>,
@@ -164,6 +187,8 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
           <ListHeader
             pinned={false}
             railProps={{ groups: GROUPS, loading: false }}
+            conversations={[]}
+            viewerId="u-viewer"
           />
           <StoryRail variant="grande" groups={GROUPS} loading={false} />
         </div>,
@@ -206,6 +231,8 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
           <ListHeader
             pinned={false}
             railProps={{ groups: GROUPS, loading: false }}
+            conversations={[]}
+            viewerId="u-viewer"
           />
           <StoryRail variant="grande" groups={GROUPS} loading={false} />
         </div>,
@@ -228,6 +255,8 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
           <ListHeader
             pinned={false}
             railProps={{ groups: GROUPS, loading: false }}
+            conversations={[]}
+            viewerId="u-viewer"
           />
           <StoryRail variant="grande" groups={GROUPS} loading={false} />
         </div>,

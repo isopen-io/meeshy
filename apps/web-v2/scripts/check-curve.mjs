@@ -411,6 +411,22 @@ for (const [swiftName, downstreamName, what] of REVEAL_MAPPINGS) {
 }
 
 /**
+ * PARTIE 5 bis — RETIRÉE (fusion #6080 ↔ #6103, 2026-09-12). Cette section
+ * gardait `RAIL_SIZE_COMPACT` (`components/stories-rail.tsx`, la branche
+ * `#5652` de cette fusion) en parité TEXTUELLE stricte avec
+ * `AvatarContext.storyTrayCompact` (36 pt, `MeeshyAvatar.swift`). La bande
+ * épinglée retenue par la fusion (`components/story-rail.tsx`, doc-comment
+ * « LA COTE — DEUX CONSTANTES iOS ») ne reprend PAS cette cote : elle sert la
+ * cote COMPACTE de `rail-tile.tsx` (`RAIL_TILE_COMPACT` = 30), partagée avec
+ * la tuile de conversation, un choix ASSUMÉ et non tranché par cette fusion
+ * (« l'écart qui reste… n'est pas tranché par cette fusion »). Un gate qui
+ * exigeait l'égalité stricte avec 36 pt rougirait donc sur un écart QUI EST
+ * la décision, pas un défaut — et son fichier source (`stories-rail.tsx`) a
+ * disparu avec la branche qu'il gardait. Si la cote 36 doit un jour redevenir
+ * la référence, elle se regarde à `rail-tile.tsx`, jamais ici.
+ */
+
+/**
  * PARTIE 6 — LA TYPOGRAPHIE DE LA RANGÉE DE LA LENTILLE (#5694, écart 1).
  * `LentilleMetrics.Name.size`/`.Line2.size` ne sont PAS des littéraux Swift
  * (`MeeshyFont.bodySize`/`.subheadSize`) — leur aval n'est donc pas une

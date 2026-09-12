@@ -1,4 +1,4 @@
-import type { StoryTrayAuthor, StoryTrayPost } from '@/lib/api/stories';
+import type { StatusMoodPost, StoryTrayAuthor, StoryTrayPost } from '@/lib/api/stories';
 
 /**
  * **LE GROUPEMENT PAR AUTEUR EST UN TRAVAIL DE VUE** (#6080).
@@ -28,6 +28,13 @@ export type StoryTrayGroup = {
   readonly hasUnseen: boolean;
   /** Vrai pour le groupe du lecteur lui-même — il ouvre la tête du rail. */
   readonly isMine: boolean;
+  /** L'humeur COURANTE de l'auteur (`Post.moodEmoji`, `?scope=statuses`) —
+   * `undefined` tant qu'aucune humeur active n'existe. Résolue à part
+   * (`withMoods`) : les stories et les statuts sont deux CORPUS distincts côté
+   * passerelle (`GET /social/posts?scope=stories` / `?scope=statuses`), fusionnés
+   * ici comme le fait `LentilleRailEntry.moodEmoji` côté iOS
+   * (`StoriesVivantsRail.swift`) — une pastille porte les deux signaux. */
+  readonly moodEmoji?: string | null;
 };
 
 function instantOf(value: string | Date | undefined): number {
@@ -75,6 +82,39 @@ export function groupStoriesByAuthor(
     if (a.isMine !== b.isMine) return a.isMine ? -1 : 1;
     if (a.hasUnseen !== b.hasUnseen) return a.hasUnseen ? -1 : 1;
     return b.latestAt - a.latestAt;
+  });
+}
+
+/**
+ * **FUSIONNE LE CORPUS DES HUMEURS DANS LES GROUPES DE STORIES** (#5652).
+ *
+ * Le rail « vivants » d'iOS peint UNE pastille par auteur, portant à la fois
+ * l'anneau de story ET le badge d'humeur (`LentilleRailEntry.moodEmoji`,
+ * `StoriesVivantsRail.swift`) — deux corpus, une seule vue. Ici, seuls les
+ * auteurs qui ont DÉJÀ une entrée (au moins une story) reçoivent leur humeur :
+ * un auteur qui n'a QU'un statut, sans story, n'a pas encore de pastille dans
+ * ce rail — écart assumé de ce premier jet, la fusion complète (créer une
+ * pastille pour un statut seul) est un travail de plus grande ampleur que ce
+ * lot ne couvre pas.
+ *
+ * `Post.moodEmoji` (schema.prisma) — la PLUS RÉCENTE humeur de chaque auteur,
+ * le corpus étant déjà trié `createdAt desc` par `PostFeedService.getStatuses`.
+ */
+export function withMoods(
+  groups: readonly StoryTrayGroup[],
+  moods: readonly StatusMoodPost[],
+): readonly StoryTrayGroup[] {
+  const moodByAuthor = new Map<string, string>();
+  for (const post of moods) {
+    const authorId = post.author?.id ?? post.authorId;
+    if (authorId === undefined || moodByAuthor.has(authorId)) continue;
+    if (post.moodEmoji === null || post.moodEmoji === undefined || post.moodEmoji === '') continue;
+    moodByAuthor.set(authorId, post.moodEmoji);
+  }
+  if (moodByAuthor.size === 0) return groups;
+  return groups.map((g) => {
+    const mood = moodByAuthor.get(g.authorId);
+    return mood === undefined ? g : { ...g, moodEmoji: mood };
   });
 }
 

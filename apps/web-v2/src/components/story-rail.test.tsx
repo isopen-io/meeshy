@@ -246,4 +246,29 @@ describe('StoryRail — ce que le corpus des stories apporte', () => {
     const lien = el.querySelector('a[data-story-author="u-amina"]') as HTMLElement;
     expect(lien.getAttribute('aria-label')).toBe('Amina Diallo, 2 stories, non vues');
   });
+
+  test('un anneau NON vu porte `data-accented` — le gate de la Lentille le mesure', () => {
+    const el = mount({ variant: 'grande', groups: [{ ...group('u-amina', 'Amina Diallo'), hasUnseen: true }] });
+    expect(el.querySelector('[data-anneau][data-accented="true"]')).not.toBeNull();
+  });
+
+  test('un anneau VU ne porte PAS `data-accented`', () => {
+    const el = mount({ variant: 'grande', groups: [{ ...group('u-amina', 'Amina Diallo'), hasUnseen: false }] });
+    expect(el.querySelector('[data-anneau]')?.hasAttribute('data-accented')).toBe(false);
+  });
+
+  test('une humeur active peint un badge `data-mood`, absent sans humeur', () => {
+    const avecHumeur = mount({
+      variant: 'grande',
+      groups: [{ ...group('u-amina', 'Amina Diallo'), moodEmoji: '🎉' }],
+    });
+    expect(avecHumeur.querySelector('[data-mood="🎉"]')?.textContent).toBe('🎉');
+
+    act(() => {
+      root!.unmount();
+    });
+    root = undefined;
+    const sansHumeur = mount({ variant: 'grande', groups: [group('u-amina', 'Amina Diallo')] });
+    expect(sansHumeur.querySelector('[data-mood]')).toBeNull();
+  });
 });
