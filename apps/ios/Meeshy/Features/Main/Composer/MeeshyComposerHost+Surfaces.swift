@@ -168,9 +168,49 @@ extension MeeshyComposerHost {
         //
         // `textEditingZones` garantit qu'elles sont exclusives : la hauteur
         // servie est toujours celle de la zone montée.
-        .storyComposerCanvasBottomReservation(
-            (editsSceneDescription || editsPostContent) ? sceneDescriptionEditorHeight : 0
-        )
+        .storyComposerCanvasBottomReservation(canvasBottomReservation)
+    }
+
+    /// **Ce que le bas de l'écran occupe, et que le canvas doit libérer.**
+    ///
+    /// Les deux textes ne le prennent plus de la même façon depuis #6126, et
+    /// c'est ce que ce calcul rend visible :
+    ///
+    /// - **le CORPS du post** s'écrit dans une zone montée en bas ; ce qu'elle
+    ///   occupe est sa hauteur MESURÉE (`sceneDescriptionEditorHeight`), posée
+    ///   par son propre `onHeightChange` ;
+    /// - **la LÉGENDE n'en prend AUCUNE**, et c'est une mesure, pas un choix.
+    ///
+    /// ## Ce qui a été mesuré, et pourquoi la branche a disparu (#6126)
+    ///
+    /// Le lot avait d'abord câblé ici `keyboardTransition?.height` — la légende
+    /// s'écrivant en place, ce qui menace de la couvrir est le CLAVIER et non
+    /// une zone dont on mesure la hauteur. Le raisonnement se tenait ; **il
+    /// était faux deux fois**, et seul le simulateur pouvait le dire :
+    ///
+    /// 1. **la légende n'a pas besoin d'être soulevée.** `StoryComposerView`
+    ///    déclare `.ignoresSafeArea(.keyboard)`, ce qui empêche le CANVAS d'être
+    ///    poussé — mais la colonne du meuble, elle, est bien comprimée par la
+    ///    zone sûre du clavier, et la couche de contrôles ancrée en bas remonte
+    ///    avec elle. Capture 2026-09-12 11:12 : clavier levé, champ au tiers
+    ///    haut de l'écran, coche et capsule de langue visibles.
+    /// 2. **la réserve n'avait de toute façon aucun effet sur ce chemin.**
+    ///    Forcée à une constante de 260 pt, l'écran est resté STRICTEMENT
+    ///    identique (captures 11:12 et 11:13, binaire réinstallé et horodaté
+    ///    entre les deux). `composerSurface` — qui porte
+    ///    `.storyComposerCanvasBottomReservation(…)` — n'est pas le montage de
+    ///    l'atelier Story.
+    ///
+    /// > Une réserve qu'on ne peut pas voir agir n'est pas une précaution, c'est
+    /// > un contrôle inerte (loi 4) — et elle aurait fait croire, à la relecture,
+    /// > que la légende est protégée par elle.
+    ///
+    /// Le CORPS du post garde la sienne, telle qu'elle était avant le lot. Si
+    /// elle est inerte elle aussi, c'est un défaut ANTÉRIEUR et distinct : il se
+    /// mesure et se corrige à part.
+    var canvasBottomReservation: CGFloat {
+        if editsPostContent { return sceneDescriptionEditorHeight }
+        return 0
     }
 
     /// **L'icône qui ouvre la description de la slide** (#4124).
@@ -195,7 +235,7 @@ extension MeeshyComposerHost {
     var atelierDescriptionButton: some View {
         Button {
             HapticFeedback.light()
-            editsSceneDescription = true
+            openSceneDescriptionEditing()
         } label: {
             // **La FORME est celle de la rangée, pas celle de l'en-tête**
             // (#4136). Elle portait une pastille de verre, juste parce qu'elle
@@ -671,76 +711,84 @@ extension MeeshyComposerHost {
     /// et ce n'est pas un rangement : monté en fermeture d'`.overlay` dans
     /// `body`, il plantait à l'ouverture — débordement de pile par profondeur de
     /// type SwiftUI. Le fichier du type porte la trace et la leçon.
-    /// **Le volet de description servi à la surface** (#4742).
+    /// **Le volet de description servi à la surface** (#4742, puis #6126).
     ///
-    /// Il LIT ; la saisie reste l'affaire de `sceneDescriptionEditor`, qui
-    /// monte au-dessus du clavier. Deux champs pour un même texte auraient
-    /// divergé au premier réglage — ici il n'y en a qu'un, et le volet ouvre
-    /// celui-là.
+    /// Il LIT **et** il ÉCRIT depuis #6126. Il ne s'efface plus pendant la
+    /// saisie, et cette ligne de garde partie est tout le lot : elle existait
+    /// parce qu'une SECONDE surface — la zone du bas — affichait le même texte,
+    /// et que les laisser toutes deux à l'écran l'aurait montré en double. Il
+    /// n'y a plus de seconde surface.
     ///
-    /// Pendant la SAISIE le volet s'efface : l'éditeur affiche déjà le texte,
-    /// et le laisser derrière montrerait la description en double.
+    /// L'argument qui justifiait la lecture seule — « deux champs pour un même
+    /// texte auraient divergé au premier réglage » — vaut encore, dans l'autre
+    /// sens : il n'y en a toujours qu'un, c'est celui-ci.
+    ///
+    /// **`editsSceneDescription` survit, avec un autre sens.** Il ne dit plus
+    /// « une zone est montée en bas » mais « l'auteur écrit la légende », et
+    /// c'est le volet qui le pose, depuis le calque. Un seul lecteur en
+    /// dépend désormais : `canvasBottomReservation`, qui rend au canvas la
+    /// hauteur du clavier.
     var sceneDescriptionPanel: AnyView? {
-        guard !editsSceneDescription else { return nil }
-        return AnyView(
+        AnyView(
             ComposerSceneDescriptionPanel(
-                text: sceneDescriptionBinding.wrappedValue,
+                text: sceneDescriptionBinding,
                 placeholder: String(localized: "composer.description.placeholder",
                                     defaultValue: "Ajouter une description",
                                     bundle: .main),
                 isCollapsed: $sceneDescriptionCollapsed,
-                onEdit: {
-                    // Ouvrir la saisie DÉPLIE : écrire dans un volet rangé
+                // **L'encre suit le FOND** (#6127). Même loi que le reste du
+                // chrome de l'atelier — `CanvasChromeScheme`, résolue une fois
+                // par le modèle et servie ici. Le volet n'en décide aucune.
+                chromeScheme: viewModel.canvasChromeScheme,
+                // La MÊME capsule que le document — jamais une seconde : deux
+                // sélecteurs pour une seule `documentLanguage` auraient deux
+                // mémoires à faire diverger (#5137).
+                languageAccessory: AnyView(documentLanguageCapsule),
+                onEditingChange: { enCours in
+                    // Écrire DÉPLIE : ouvrir le champ dans un volet rangé
                     // laisserait l'auteur taper sans voir ce qu'il écrit.
-                    sceneDescriptionCollapsed = false
-                    editsSceneDescription = true
-                }
+                    if enCours { sceneDescriptionCollapsed = false }
+                    editsSceneDescription = enCours
+                },
+                editingRequest: sceneDescriptionEditingRequest
             )
         )
     }
 
-    var sceneDescriptionEditor: some View {
-        ComposerSceneDescriptionEditor(
-            text: sceneDescriptionBinding,
-            placeholder: String(localized: "composer.scene.description.placeholder",
-                                defaultValue: "Ajoutez une description…", bundle: .main),
-            plateauTint: tint.color,
-            onDone: { editsSceneDescription = false },
-            onHeightChange: { sceneDescriptionEditorHeight = $0 },
-            // **La langue se déclare où le texte se valide** (#5137). La MÊME
-            // capsule que le document — jamais une seconde : deux sélecteurs
-            // pour une seule `documentLanguage` auraient deux mémoires à faire
-            // diverger, et c'est exactement ce que #4621 a déjà payé sur la
-            // clé de son titre.
-            languageAccessory: AnyView(documentLanguageCapsule)
-        )
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+    /// **Ouvrir la légende depuis une porte qui n'est pas elle** (#6126).
+    ///
+    /// Déplie d'abord — un champ ouvert dans un volet rangé ne serait pas
+    /// visible —, puis demande le focus par le jeton. Les deux gestes dans cet
+    /// ordre, à un seul endroit : les deux portes (bouton d'atelier, rail
+    /// `.description`) appellent ceci plutôt que d'en porter chacune une copie,
+    /// qui aurait divergé sur l'ordre au premier ajustement.
+    func openSceneDescriptionEditing() {
+        sceneDescriptionCollapsed = false
+        sceneDescriptionEditingRequest &+= 1
     }
 
-    /// **Les DEUX zones d'écriture du bas, et l'exclusion qui les sépare**
-    /// (#4890).
+    /// **Ce qui s'écrit EN BAS — le corps du post, et lui seul** (#4890, réduit
+    /// au #6126).
     ///
-    /// En Post, la description est la LÉGENDE du média courant et le contenu
-    /// est le corps de la publication : deux textes réels, deux zones. Elles
-    /// s'ancrent au MÊME bord bas — ouvertes ensemble, elles se recouvriraient
-    /// et l'auteur taperait dans celle qu'il ne regarde pas.
+    /// En Post, la description est la LÉGENDE du média courant et le contenu est
+    /// le corps de la publication : deux textes réels. Ils avaient deux zones,
+    /// ancrées au MÊME bord bas, et le `if / else if` d'ici rendait leur
+    /// superposition impossible par construction.
     ///
-    /// Le `if / else if` rend la superposition impossible par CONSTRUCTION, et
-    /// c'est une seconde ceinture : `handleRailDoor` ferme déjà l'une en
-    /// ouvrant l'autre. Les deux se répondent — l'état reste d'accord avec ce
-    /// qui est peint, et ce qui est peint ne dépend pas de l'ordre des
-    /// affectations.
+    /// **La légende a quitté le bas** (directive porteur 2026-09-12) : elle
+    /// s'écrit sur la scène, à l'endroit exact où elle se lit. Il ne reste donc
+    /// qu'une zone, et l'exclusion qu'arbitrait ce site n'a plus deux termes.
     ///
-    /// **Sortie du `body` au 2026-09-04, budget de fichier** : le meuble passait
-    /// à 1209 lignes contre un plafond DUR de 1200, et la directive du
-    /// 2026-08-28 dit d'extraire AVANT d'ajouter. La coupe suit une question
-    /// entière — « qu'est-ce qui s'écrit en bas, et lequel » — et rejoint les
-    /// deux zones qu'elle arbitre, déjà voisines dans ce fichier.
+    /// > Ce qui disparaît ici n'est pas une garde devenue inutile par
+    /// > négligence : c'est une garde dont le CONFLIT qu'elle prévenait a été
+    /// > supprimé. Les deux textes ne se disputent plus le même bord.
+    ///
+    /// `handleRailDoor` continue de fermer l'une en ouvrant l'autre — l'état
+    /// reste d'accord avec ce qui est peint, et c'est désormais la seule
+    /// ceinture nécessaire.
     @ViewBuilder
     var textEditingZones: some View {
-        if editsSceneDescription {
-            sceneDescriptionEditor
-        } else if editsPostContent {
+        if editsPostContent {
             postContentEditor
         }
     }
@@ -1030,4 +1078,90 @@ extension MeeshyComposerHost {
         ComposerSceneCapabilities.bands
     }
 
+    // MARK: - Ce que le `body` empile, et ce qu'il voile
+
+    // **Extraits de `MeeshyComposerHost.swift` le 2026-09-12** (#6126). Le lot
+    // de la légende en place a porté le type à 1 225 lignes — au-delà du
+    // plafond dur de 1 200 —, et la règle du dépôt est de DÉCOUPER, pas de
+    // relever le plafond. La coupe suit la responsabilité déjà écrite en tête
+    // de ce fichier : le type garde ce qu'il EST (ses entrées, ses états, son
+    // `body`) ; ce que le `body` MONTE vit ici.
+
+    /// La pile du meuble — plateau, surface, socle. Extraite du `body` le
+    /// 2026-09-04 pour que le viseur puisse l'ENVELOPPER : ce qui doit couvrir
+    /// le socle ne peut pas être un modificateur posé après lui.
+    @ViewBuilder
+    var composerStack: some View {
+        VStack(spacing: 0) {
+            // Le plateau coiffe les TROIS surfaces depuis le lot 4.7, sous la
+            // règle de placement. Il vivait dans `composerSurface`, ce qui le
+            // réservait de fait à la scène : le chip « Post » d'une
+            // republication de mood n'existait alors sur aucun écran. La
+            // disposition de la scène est inchangée — un `VStack` qui empile le
+            // plateau puis l'atelier —, et ce montage-ci est le SEUL.
+            // **La surface DOCUMENT porte le chip dans SA barre haute (#4047).**
+            // Il flottait ici, seul sur une rangée au-dessus de tout, pendant
+            // que la barre de la surface ne portait qu'un `✕`. Le header voulu
+            // est d'un seul tenant — `✕ · type · slides` — et une rangée
+            // au-dessus d'une barre est deux barres.
+            //
+            // **La condition n'est PAS écrite ici.** `ComposerFormatFanPlacement`
+            // porte les deux places (`paints` / `paintsInDocumentHeader`), et
+            // elles sont EXCLUSIVES par construction. Un `&& mountedSurface !=
+            // .document` ajouté sur cette ligne aurait été une seconde écriture
+            // de la règle, invisible aux tests — exactement ce que la garde de
+            // ce `body` interdit, et elle a rougi pour le dire.
+            if paintsFormatFan { plateauTools }
+            surfaceWithIntakePortals
+            // **La description a quitté le bas au #4124.** Elle y vivait en
+            // permanence — d'abord une barre à chevron, puis le calque de
+            // lecture — et prenait la place que la scène CENTRÉE réclame, pour
+            // un texte que l'auteur ne regarde pas la plupart du temps. Elle
+            // s'ouvre désormais par l'icône de la rangée haute, par-dessus tout
+            // (`sceneDescriptionLayer`), et n'occupe l'écran que quand on
+            // l'écrit.
+            // `assembles(.publish)` dit que l'ATELIER peint la flèche. Le socle
+            // peint donc les MÊMES trois zones seulement quand l'atelier les a
+            // cédées : deux barres de publication, dont une inerte, seraient
+            // une régression sèche sur la surface de création la plus utilisée.
+            //
+            // `!paintedSocleZones.isEmpty` s'y ajoute depuis le 2026-08-28 : le
+            // mood a cédé sa SEULE zone (`.publish`) à son propre en-tête
+            // (`ComposerMoodSurface.header`), et sans cette garde le socle se
+            // peindrait quand même — une `HStack` vide, juste un `Spacer` sous
+            // un padding, l'espace exact que la consolidation vise à rendre.
+            if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty {
+                socle
+            }
+        }
+    }
+
+    /// **Le voile de progression du bake** (#4996) — un type NOMMÉ hors du
+    /// `body`, comme `ComposerSceneDescriptionEditor` : monté en fermeture
+    /// d'`.overlay`, il ajoute un niveau à la profondeur de type SwiftUI de ce
+    /// corps, qui a déjà coûté un débordement de pile à cet écran.
+    @ViewBuilder
+    var composerExportProgress: some View {
+        if let fraction = sceneExport.progress {
+            ZStack {
+                Color.black.opacity(0.55).ignoresSafeArea()
+                VStack(spacing: 12) {
+                    ProgressView(value: fraction)
+                        .progressViewStyle(.linear)
+                        .tint(MeeshyColors.brandPrimary)
+                        .frame(width: 180)
+                    Text(ComposerExportCopy.inProgress)
+                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .foregroundStyle(.white)
+                }
+                .padding(24)
+                .adaptiveGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .transition(.opacity)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Text(ComposerExportCopy.inProgress))
+            .accessibilityValue(Text(LocalizedNumber.percent(Int((fraction * 100).rounded()))))
+            .accessibilityAddTraits(.updatesFrequently)
+        }
+    }
 }

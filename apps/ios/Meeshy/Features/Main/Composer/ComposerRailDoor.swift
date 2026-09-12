@@ -74,6 +74,23 @@ nonisolated enum ComposerRailLevel: Equatable {
 
 nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
 
+    /// **Les deux portes qui ÉCRIVENT, et elles seules** (#6132, directive
+    /// porteur 2026-09-12 : « le choix d'un outil fait disparaître le
+    /// clavier »).
+    ///
+    /// Toutes les autres posent, règlent ou qualifient — aucune ne prend de
+    /// texte, donc aucune n'a de raison de laisser le clavier debout. Celles-ci
+    /// en ont une : le clavier EST ce qu'elles ouvrent.
+    ///
+    /// Une RÈGLE nommée plutôt qu'un `if door != .description && door !=
+    /// .content` écrit au site d'appel : la onzième porte ajoutée un jour
+    /// hériterait du bon défaut sans que personne n'ait à y penser, et la
+    /// question « cette porte écrit-elle ? » se pose une fois, ici.
+    static let writingDoors: Set<ComposerRailDoor> = [.description, .content]
+
+    /// `true` quand ouvrir cette porte doit LAISSER le clavier levé.
+    var keepsKeyboard: Bool { Self.writingDoors.contains(self) }
+
     /// **Ne pose AUCUN objet** : elle donne le focus à la description de la
     /// `MeeshySlide`. En S/R cette description EST le contenu de la
     /// publication ; en P c'est la légende du média courant (#4045).

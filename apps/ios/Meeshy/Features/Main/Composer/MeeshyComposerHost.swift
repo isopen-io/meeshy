@@ -735,22 +735,49 @@ struct MeeshyComposerHost: View {
     /// ancrage bas, elles se recouvriraient.
     @State var editsPostContent = false
 
-    /// **Le repli du volet de description** (#4742, défaut RETOURNÉ au #5138).
+    /// **Le repli du volet de description** (#4742, défaut retourné au #5138,
+    /// puis RETOURNÉ À NOUVEAU au #6126).
     ///
     /// Une préférence d'ÉCRAN, pas une propriété de la slide : changer d'unité
     /// d'histoire ne doit pas rouvrir un volet que l'auteur vient de ranger.
     ///
-    /// **Replié par défaut** (directive porteur 2026-09-04 : « par défaut
-    /// l'espace de contenu du caption doit être replié »). Il naissait déplié,
-    /// et la raison écrite ici — « la description existe pour être relue » —
-    /// valait tant que le volet était le SEUL endroit où le texte se voyait
-    /// (#4742). Depuis #4993 il se peint PAR-DESSUS la scène : déplié d'entrée,
-    /// il couvre la bande basse du canvas à l'instant précis où l'auteur
-    /// compose — c'est-à-dire avant qu'il y ait la moindre légende à relire.
+    /// ## Le va-et-vient du défaut, et ce qui le tranche
     ///
-    /// Replié n'est pas caché : le chevron reste disponible en permanence
-    /// (#4993), et ouvrir la saisie déplie (`sceneDescriptionPanel.onEdit`).
-    @State var sceneDescriptionCollapsed = true
+    /// **2026-09-04 — replié** : « par défaut l'espace de contenu du caption
+    /// doit être replié ». La raison tenait : depuis #4993 le volet se peint
+    /// PAR-DESSUS la scène, donc déplié d'entrée il couvrait la bande basse du
+    /// canvas à l'instant précis où l'auteur compose — et il la couvrait pour
+    /// afficher un texte VIDE, puisqu'il n'y avait encore rien à relire.
+    ///
+    /// **2026-09-12 — déplié** : « La légende […] affichée par défaut quand la
+    /// scène s'affiche avec un placeholder invitant à s'exprimer ». La directive
+    /// postérieure l'emporte, et elle ne se contente pas d'être postérieure :
+    /// elle répond à l'objection du 09-04 en changeant ce que le volet MONTRE.
+    /// Replié, il ne coûtait rien mais n'invitait à rien — il fallait trouver le
+    /// chevron pour découvrir qu'une légende existe. Déplié sur une INVITE, la
+    /// bande basse qu'il occupe ne cache plus un vide : elle porte l'amorce, qui
+    /// est le seul contenu utile tant que rien n'est écrit.
+    ///
+    /// > Un état vide DESSINÉ vaut mieux qu'un état vide ABSENT : le premier
+    /// > dit ce qu'on peut faire, le second laisse chercher.
+    ///
+    /// Et depuis #6126 l'écriture se fait EN PLACE : déplier n'ouvre plus une
+    /// zone qui reprend la scène, donc le coût que le 09-04 voulait éviter a
+    /// changé de nature en même temps que le défaut.
+    ///
+    /// Déplié n'est pas figé : le chevron reste disponible en permanence
+    /// (#4993) — sauf pendant la frappe, où replier emporterait le champ.
+    @State var sceneDescriptionCollapsed = false
+
+    /// **Le jeton qui ouvre la légende depuis AILLEURS** (#6126).
+    ///
+    /// Deux portes mènent à la description sans passer par elle : le bouton de
+    /// l'atelier et la porte `.description` du rail. Elles posaient
+    /// `editsSceneDescription = true`, ce qui montait une zone en bas ; la
+    /// saisie étant désormais en place, ce drapeau ne commande plus l'ouverture
+    /// — il la CONSTATE. Sans ce jeton, les deux portes seraient devenues des
+    /// contrôles inertes, et rien ne l'aurait signalé.
+    @State var sceneDescriptionEditingRequest = 0
 
     /// La hauteur RENDUE de la zone de saisie (#4361) — déclarée à l'atelier en
     /// réserve basse pour que le canvas se rétracte AU-DESSUS d'elle au lieu
@@ -955,56 +982,6 @@ struct MeeshyComposerHost: View {
         )
     }
 
-
-    /// La pile du meuble — plateau, surface, socle. Extraite du `body` le
-    /// 2026-09-04 pour que le viseur puisse l'ENVELOPPER : ce qui doit couvrir
-    /// le socle ne peut pas être un modificateur posé après lui.
-    @ViewBuilder
-    var composerStack: some View {
-        VStack(spacing: 0) {
-            // Le plateau coiffe les TROIS surfaces depuis le lot 4.7, sous la
-            // règle de placement. Il vivait dans `composerSurface`, ce qui le
-            // réservait de fait à la scène : le chip « Post » d'une
-            // republication de mood n'existait alors sur aucun écran. La
-            // disposition de la scène est inchangée — un `VStack` qui empile le
-            // plateau puis l'atelier —, et ce montage-ci est le SEUL.
-            // **La surface DOCUMENT porte le chip dans SA barre haute (#4047).**
-            // Il flottait ici, seul sur une rangée au-dessus de tout, pendant
-            // que la barre de la surface ne portait qu'un `✕`. Le header voulu
-            // est d'un seul tenant — `✕ · type · slides` — et une rangée
-            // au-dessus d'une barre est deux barres.
-            //
-            // **La condition n'est PAS écrite ici.** `ComposerFormatFanPlacement`
-            // porte les deux places (`paints` / `paintsInDocumentHeader`), et
-            // elles sont EXCLUSIVES par construction. Un `&& mountedSurface !=
-            // .document` ajouté sur cette ligne aurait été une seconde écriture
-            // de la règle, invisible aux tests — exactement ce que la garde de
-            // ce `body` interdit, et elle a rougi pour le dire.
-            if paintsFormatFan { plateauTools }
-            surfaceWithIntakePortals
-            // **La description a quitté le bas au #4124.** Elle y vivait en
-            // permanence — d'abord une barre à chevron, puis le calque de
-            // lecture — et prenait la place que la scène CENTRÉE réclame, pour
-            // un texte que l'auteur ne regarde pas la plupart du temps. Elle
-            // s'ouvre désormais par l'icône de la rangée haute, par-dessus tout
-            // (`sceneDescriptionLayer`), et n'occupe l'écran que quand on
-            // l'écrit.
-            // `assembles(.publish)` dit que l'ATELIER peint la flèche. Le socle
-            // peint donc les MÊMES trois zones seulement quand l'atelier les a
-            // cédées : deux barres de publication, dont une inerte, seraient
-            // une régression sèche sur la surface de création la plus utilisée.
-            //
-            // `!paintedSocleZones.isEmpty` s'y ajoute depuis le 2026-08-28 : le
-            // mood a cédé sa SEULE zone (`.publish`) à son propre en-tête
-            // (`ComposerMoodSurface.header`), et sans cette garde le socle se
-            // peindrait quand même — une `HStack` vide, juste un `Spacer` sous
-            // un padding, l'espace exact que la consolidation vise à rendre.
-            if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty {
-                socle
-            }
-        }
-    }
-
     var body: some View {
         // **Le viseur ENVELOPPE le meuble entier, socle compris** (directive
         // porteur 2026-09-04). Une enveloppe, et non un `.overlay` posé plus
@@ -1108,81 +1085,5 @@ struct MeeshyComposerHost: View {
         //
         // La ligne est RETIRÉE, pas gardée par un `if` : une présentation au
         // montage tenue par une condition se rallume au premier cas ajouté.
-    }
-
-    /// **Le voile de progression du bake** (#4996) — un type NOMMÉ hors du
-    /// `body`, comme `ComposerSceneDescriptionEditor` : monté en fermeture
-    /// d'`.overlay`, il ajoute un niveau à la profondeur de type SwiftUI de ce
-    /// corps, qui a déjà coûté un débordement de pile à cet écran.
-    @ViewBuilder
-    var composerExportProgress: some View {
-        if let fraction = sceneExport.progress {
-            ZStack {
-                Color.black.opacity(0.55).ignoresSafeArea()
-                VStack(spacing: 12) {
-                    ProgressView(value: fraction)
-                        .progressViewStyle(.linear)
-                        .tint(MeeshyColors.brandPrimary)
-                        .frame(width: 180)
-                    Text(ComposerExportCopy.inProgress)
-                        .font(MeeshyFont.relative(13, weight: .medium))
-                        .foregroundStyle(.white)
-                }
-                .padding(24)
-                .adaptiveGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            }
-            .transition(.opacity)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(Text(ComposerExportCopy.inProgress))
-            .accessibilityValue(Text(LocalizedNumber.percent(Int((fraction * 100).rounded()))))
-            .accessibilityAddTraits(.updatesFrequently)
-        }
-    }
-
-    /// **Le SEUL site qui ouvre le viseur** — et il porte son mode.
-    ///
-    /// Le mode voyage par un état du meuble plutôt que par le portail :
-    /// `ComposerPortal` est la clé d'un `.sheet(item:)`, et lui donner une
-    /// valeur associée changerait son identité — deux ouvertures de la caméra
-    /// dans deux modes deviendraient deux feuilles distinctes aux yeux de
-    /// SwiftUI, qui n'en honore qu'une.
-    ///
-    /// Il est REPOSÉ à chaque ouverture, jamais seulement à la fermeture : une
-    /// mémoire de mode qui survit rendrait tout appui suivant sur la porte
-    /// média dépendant de la façon dont le composer a été ouvert — un
-    /// comportement que rien à l'écran n'annoncerait.
-    func presentCamera(mode: CameraCaptureMode) {
-        pendingCameraMode = mode
-        presentedPortal = .camera
-    }
-
-    /// La graine entre par la RÈGLE, jamais par quatre affectations écrites
-    /// ici : `ComposerMoodSeeding.adopt` est éprouvable sans monter une vue, et
-    /// c'est elle qui tient l'invariant « une graine ne remplace jamais ce que
-    /// l'auteur a posé ».
-    /// Le `guard` n'est pas une redite de la règle : `adopt(nil, …)` rend la
-    /// composition intacte, mais la RÉÉCRIRE déclencherait une passe de rendu
-    /// pour rien à chaque apparition d'un composer de création — celui qui ne
-    /// sème jamais rien.
-    ///
-    /// L'état COURANT est relu au moment de l'adoption, jamais capturé plus tôt.
-    /// C'est ce qui rend l'ordre indifférent avec le sélecteur d'audience de la
-    /// surface : qu'il ait déjà appliqué la mémoire du format (loi 10) ou non,
-    /// une graine muette sur l'audience rend ce qu'elle trouve.
-    func adoptMoodSeed(_ graine: ComposerMoodSeed?) {
-        guard let graine else { return }
-        let adoptee = ComposerMoodSeeding.adopt(
-            graine,
-            into: ComposerMoodComposition(
-                emoji: moodEmoji,
-                text: documentText,
-                visibility: composerVisibility,
-                visibilityUserIds: composerVisibilityUserIds
-            )
-        )
-        moodEmoji = adoptee.emoji
-        documentText = adoptee.text
-        composerVisibility = adoptee.visibility
-        composerVisibilityUserIds = adoptee.visibilityUserIds
     }
 }

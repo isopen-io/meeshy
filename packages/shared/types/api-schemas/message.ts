@@ -484,6 +484,24 @@ export const messageMinimalSchema = {
     senderId: { type: 'string', nullable: true, description: 'Sender ID' },
     messageType: { type: 'string', description: 'Message type' },
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+    // #6111 — sans ces quatre déclarations, fast-json-stringify les retire en
+    // SILENCE de l'aperçu de liste : la classification cliente
+    // (`LastMessageSummaryKind`) recevait toujours `false`/`null`, et un
+    // dernier message à vue unique, flouté ou éphémère périmé s'affichait en
+    // clair au démarrage à froid — le défaut se corrigeant tout seul à la
+    // première mise à jour temps réel (le socket transporte déjà ces mêmes
+    // drapeaux en clés plates), ce qui le rendait fugace et invisible.
+    //
+    // `nullable: true` sur les TROIS non-dates aussi (porté de #6112 à la
+    // fusion du 2026-09-12) : les colonnes Prisma sont optionnelles, donc la
+    // valeur servie peut être `null` — la déclarer non nullable fait coercer
+    // ce `null` en `false`/`0` au lieu de le transmettre, et le client ne peut
+    // plus distinguer « pas protégé » de « le serveur ne sait pas ». Les deux
+    // lots avaient posé la même déclaration ; celui-ci en avait la forme juste.
+    expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Self-destruct timestamp' },
+    isViewOnce: { type: 'boolean', nullable: true, description: 'View-once message (disappears after view)' },
+    isBlurred: { type: 'boolean', nullable: true, description: 'Content blurred until tap to reveal' },
+    effectFlags: { type: 'number', nullable: true, description: 'Bitfield for message effects (blurred / ephemeral / view-once)' },
     // Lot 3 (partage de position) — hissé depuis metadata.location. Un
     // message géolocalisé sans légende a un `content` vide ; ce champ est
     // ce qui permet au client de rendre malgré tout un aperçu pertinent.

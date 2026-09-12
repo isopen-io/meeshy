@@ -235,12 +235,23 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
 
         XCTAssertTrue(plat.contains("EmojiReactionPicker("),
                       "La rangée est la brique SDK partagée, pas une rangée réécrite.")
-        XCTAssertTrue(plat.contains("scale:2"),
-                      "Échelle 2 — le gabarit arrêté pour la story (#6083).")
+        XCTAssertTrue(plat.contains("scale:1.5"),
+                      "Échelle 1,5 — le gabarit arrêté pour la story (#6083), ramené de 2 à 1,5 "
+                          + "le 2026-09-11 au soir (« ×0,75, elles sont trop grosses »). Ce site n'a "
+                          + "pas d'échelle à lui : il rend celle de la story, et les deux bougent ensemble.")
+        XCTAssertFalse(plat.contains("scale:2,"),
+                       "L'échelle 2 a été explicitement RETIRÉE des deux barres.")
         XCTAssertTrue(plat.contains("chrome:.none"),
                       "Sans fond ni contour : le média EST le fond, comme la scène d'une story.")
         XCTAssertTrue(plat.contains("scrollable:true"),
-                      "À l'échelle 2 la rangée dépasse la largeur de l'écran : elle DÉFILE.")
+                      "La rangée DÉFILE. À l'échelle 1,5, six émojis (22 pt de police, ~26 pt de "
+                          + "large chacun), le « + » (32 pt) et six intervalles de 6 pt demandent "
+                          + "~330 pt une fois multipliés — plus que la largeur utile d'un iPhone de "
+                          + "390 (306 pt une fois les marges du plein écran retirées). Le seuil "
+                          + "dépend donc de la LARGEUR autant que de l'échelle : sur un Pro Max la "
+                          + "rangée tiendrait, et le ScrollView ne ferait simplement rien. C'est "
+                          + "pourquoi cette assertion se lit « elle défile QUAND il le faut », et "
+                          + "non « elle dépasse toujours ».")
         XCTAssertTrue(plat.contains("onExpandFullPicker:"),
                       "Le « + » de fin de rangée garde son rôle : ouvrir le sélecteur complet.")
     }

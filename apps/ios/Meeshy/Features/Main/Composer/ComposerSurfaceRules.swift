@@ -377,8 +377,26 @@ nonisolated enum ComposerChromeOwnership {
         /// L'œil du socle sous la SCÈNE n'existe que si l'atelier l'a armé
         /// (#4135) — loi 4 : un contrôle qu'aucun corps n'exécute est absent,
         /// jamais peint puis inerte. Défaut `false`, le sens sûr.
-        atelierOffersPreview: Bool = false
+        atelierOffersPreview: Bool = false,
+        /// **Écrire n'est pas publier** (#6132, directive porteur 2026-09-12 :
+        /// « lorsqu'on écrit une légende, on a pas besoin de voir le bouton
+        /// publier, aperçu ou audience »).
+        ///
+        /// Aucune des trois zones du socle ne sert le geste en cours pendant la
+        /// frappe : l'audience qualifie une publication qu'on ne déclenche pas,
+        /// l'œil montre une scène qu'on est en train de décrire, et la flèche
+        /// est le plus souvent désactivée. Elles prennent en revanche la place
+        /// dont le texte a besoin, et sur un écran comprimé par le clavier
+        /// elles se font chevaucher par le rail (#6131).
+        ///
+        /// La règle vit ICI plutôt que dans un `if` du `body` pour la raison que
+        /// ce fichier répète : une condition posée dans un corps est invisible
+        /// aux tests, et c'est ainsi qu'une règle produit se met à exister en
+        /// deux exemplaires. Défaut `false` — un appelant qui l'ignore obtient
+        /// le comportement d'avant, exactement.
+        writesText: Bool = false
     ) -> [ComposerTopBarControl] {
+        guard !writesText else { return [] }
         switch surface {
         case .scene:
             // **RETOURNÉ au #4135** : le socle y peignait RIEN, l'atelier

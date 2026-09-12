@@ -95,8 +95,19 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// n'était pas un ordre de couches : le socle est le FRÈRE de la surface
     /// dans la `VStack` du meuble, et un overlay ne couvre jamais son frère.
     /// Le viseur doit donc ENVELOPPER la pile, pas se poser dessus.
+    ///
+    /// **Les deux moitiés ne vivent plus dans le même fichier** (#6126,
+    /// 2026-09-12). Le meuble a franchi le plafond de 1 200 lignes et a été
+    /// découpé : le `body` — donc l'enveloppe — reste sur le type, et
+    /// `composerStack` est parti chez `+Surfaces`, avec ce que le meuble MONTE.
+    /// Ce témoin lit donc deux sources et cherche chaque moitié où elle est.
+    ///
+    /// > Un découpage de fichier éteint toute garde ancrée sur un FICHIER
+    /// > plutôt que sur ce qu'elle garde. Celle-ci a rougi — c'est le bon cas ;
+    /// > celles qui cherchent une ABSENCE, elles, seraient passées au vert.
     func test_leViseur_enveloppeLaPile_socleCompris() throws {
         let code = compact(try source("MeeshyComposerHost.swift"))
+        let surfaces = compact(try source("MeeshyComposerHost+Surfaces.swift"))
         // L'enveloppe se garde sur son NOM et sur ce qu'elle contient, pas
         // sur un appel littéral : d'autres enveloppes s'intercalent — le menu
         // du fond l'a fait le jour même (#5041) — et une garde qui épingle
@@ -107,10 +118,26 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
         XCTAssertTrue(code[enveloppe.upperBound...].hasPrefix("backgroundMenuPresented(composerStack)")
                       || code[enveloppe.upperBound...].hasPrefix("composerStack)"),
                       "posé APRÈS le socle, le viseur ne l'aurait jamais couvert")
-        guard let début = code.range(of: "varcomposerStack:someView{"),
-              let fin = code.range(of: "varbody:someView{", range: début.upperBound..<code.endIndex)
-        else { return XCTFail("la pile ou le body a changé de nom") }
-        XCTAssertTrue(String(code[début.upperBound..<fin.lowerBound]).contains("socle"),
+        guard let début = surfaces.range(of: "varcomposerStack:someView{") else {
+            return XCTFail("la pile a changé de nom ou de fichier")
+        }
+        // La borne de fin est l'accolade APPARIÉE, pas la déclaration
+        // suivante : `varbody:someView{` ne bornait que tant que les deux
+        // vivaient dans le même fichier ET dans cet ordre-là. Le texte est
+        // compacté, donc il n'y a plus de saut de ligne où s'accrocher — ce
+        // qui reste vrai est l'équilibre des accolades.
+        var profondeur = 1
+        var corps = ""
+        for caractère in surfaces[début.upperBound...] {
+            if caractère == "{" { profondeur += 1 }
+            if caractère == "}" {
+                profondeur -= 1
+                if profondeur == 0 { break }
+            }
+            corps.append(caractère)
+        }
+        XCTAssertGreaterThan(corps.count, 40, "le corps de la pile est vide — la garde ne garde rien")
+        XCTAssertTrue(corps.contains("socle"),
                       "le socle doit être DANS ce que le viseur enveloppe")
     }
 

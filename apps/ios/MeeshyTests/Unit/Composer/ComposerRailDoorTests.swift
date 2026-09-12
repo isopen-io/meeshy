@@ -1947,9 +1947,51 @@ final class ComposerContentDoorWiringGuardTests: XCTestCase {
     /// laisserait la moitié du défaut.
     func test_lesDeuxZonesDeTexte_neSouvrentJamaisEnsemble() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("editsPostContent=falseeditsSceneDescription=true"),
+        // Depuis #6126, ouvrir la description ne pose plus de drapeau : le
+        // drapeau CONSTATE la frappe, il ne la commande plus. La porte passe par
+        // le site unique `openSceneDescriptionEditing()`. Ce que ce témoin garde
+        // est inchangé — la fermeture de l'AUTRE zone reste explicite ici.
+        XCTAssertTrue(source.contains("editsPostContent=falseopenSceneDescriptionEditing()"),
                       "Ouvrir la description doit fermer le contenu.")
         XCTAssertTrue(source.contains("editsSceneDescription=falseeditsPostContent=true"),
                       "Ouvrir le contenu doit fermer la description.")
+    }
+
+    // MARK: - #6132 · Choisir un outil fait tomber le clavier
+
+    /// **Deux portes écrivent, toutes les autres non.**
+    ///
+    /// > « Le choix d'un outil fait disparaître le clavier ! » — porteur,
+    /// > 2026-09-12
+    ///
+    /// Le témoin balaye `allCases` plutôt que de citer une liste : c'est ce qui
+    /// fait qu'une onzième porte ajoutée demain DOIT être classée, au lieu
+    /// d'hériter silencieusement du mauvais défaut.
+    func test_seulesLesDeuxPortesDEcriture_gardentLeClavier() {
+        for porte in ComposerRailDoor.allCases {
+            let écrit = porte == .description || porte == .content
+            XCTAssertEqual(porte.keepsKeyboard, écrit,
+                           "\(porte.rawValue) : une porte garde le clavier si et seulement si elle prend du texte.")
+        }
+        XCTAssertEqual(ComposerRailDoor.writingDoors, [.description, .content])
+        XCTAssertGreaterThan(ComposerRailDoor.allCases.count, 3,
+                             "le balayage doit porter sur de VRAIES portes — sinon il ne prouve rien")
+    }
+
+    /// **Et le meuble doit poser le geste, pas seulement connaître la règle.**
+    ///
+    /// La règle vit sur la porte ; sans ce témoin, elle pourrait être juste et
+    /// n'être appelée nulle part — exactement la forme d'un contrôle inerte
+    /// (loi 4), à ceci près qu'ici c'est une RÈGLE inerte, qui se relit comme
+    /// une garantie.
+    func test_leMeuble_rendLeClavier_desQuUnePorteNEcritPas() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("if!door.keepsKeyboard{dismissTextEditing()}"),
+                      "Ouvrir une porte qui n'écrit pas doit rendre le clavier (#6132).")
+        XCTAssertTrue(source.contains("funcdismissTextEditing()"),
+                      "… et le geste doit exister — sinon la garde ci-dessus lirait un appel fantôme.")
+        XCTAssertTrue(source.contains("UIResponder.resignFirstResponder"),
+                      "Le renvoi passe par le premier RÉPONDANT : trois champs peuvent l'être, "
+                        + "et les fermer un par un demanderait de les connaître tous.")
     }
 }

@@ -279,7 +279,30 @@ extension MeeshyComposerHost {
     /// Une porte du rail délègue au chemin d'ingestion EXISTANT — le rail est
     /// une autre GÉOGRAPHIE, pas un second pipeline. Y écrire un chemin neuf
     /// ferait diverger la porte de la rangée qui fait déjà la même chose.
+    /// **Rendre le clavier, où qu'il soit accroché** (#6132).
+    ///
+    /// Le premier répondant peut être le champ de la légende, celui du corps du
+    /// post ou un éditeur inline du canvas — trois propriétaires, trois états
+    /// privés. Les fermer un par un depuis ici demanderait de les connaître
+    /// tous ; renvoyer le répondant courant le fait sans en nommer aucun, et
+    /// chacun se referme ensuite par sa propre règle (le calque de description
+    /// écoute déjà la perte de focus pour se ranger).
+    func dismissTextEditing() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
+    }
+
     func handleRailDoor(_ door: ComposerRailDoor) {
+        // **Choisir un outil fait tomber le clavier** (#6132, directive porteur
+        // 2026-09-12). Une porte qui ne prend pas de texte n'a aucune raison de
+        // laisser le clavier occuper la moitié de l'écran : ses réglages y
+        // passeraient dessous, et l'auteur devrait le renvoyer lui-même avant de
+        // voir ce qu'il vient d'ouvrir.
+        //
+        // Le prédicat vit sur la PORTE (`keepsKeyboard`), pas ici : c'est elle
+        // qui sait si elle écrit, et une onzième porte héritera du bon défaut
+        // sans que ce site ait à changer.
+        if !door.keepsKeyboard { dismissTextEditing() }
         switch door {
         case .media:
             // **L'intention se pose AVEC le sélecteur, jamais avant** (#6008).
@@ -324,7 +347,7 @@ extension MeeshyComposerHost {
             // avec ce qui est peint, sans quoi refermer la description
             // rouvrirait le contenu par surprise.
             editsPostContent = false
-            editsSceneDescription = true
+            openSceneDescriptionEditing()
         case .content:
             // **Le CORPS du post** (#4890) — jamais la légende, que
             // `.description` ouvre juste au-dessus. Deux portes voisines, deux
@@ -1065,5 +1088,60 @@ extension MeeshyComposerHost {
         }
         ingestIntoDocument(medias)
         HapticFeedback.light()
+    }
+
+    // MARK: - Ce qui entre par un GESTE du meuble
+
+    // **Extraits de `MeeshyComposerHost.swift` le 2026-09-12** (#6126), même
+    // découpe que `+Surfaces` : le viseur et la graine de mood font tous deux
+    // ENTRER de la matière dans la composition — c'est la responsabilité que
+    // ce fichier déclare en tête. Les laisser sur le type revenait à y ranger
+    // des gestes parce qu'ils y étaient nés, pas parce qu'ils y appartiennent.
+
+    /// **Le SEUL site qui ouvre le viseur** — et il porte son mode.
+    ///
+    /// Le mode voyage par un état du meuble plutôt que par le portail :
+    /// `ComposerPortal` est la clé d'un `.sheet(item:)`, et lui donner une
+    /// valeur associée changerait son identité — deux ouvertures de la caméra
+    /// dans deux modes deviendraient deux feuilles distinctes aux yeux de
+    /// SwiftUI, qui n'en honore qu'une.
+    ///
+    /// Il est REPOSÉ à chaque ouverture, jamais seulement à la fermeture : une
+    /// mémoire de mode qui survit rendrait tout appui suivant sur la porte
+    /// média dépendant de la façon dont le composer a été ouvert — un
+    /// comportement que rien à l'écran n'annoncerait.
+    func presentCamera(mode: CameraCaptureMode) {
+        pendingCameraMode = mode
+        presentedPortal = .camera
+    }
+
+    /// La graine entre par la RÈGLE, jamais par quatre affectations écrites
+    /// ici : `ComposerMoodSeeding.adopt` est éprouvable sans monter une vue, et
+    /// c'est elle qui tient l'invariant « une graine ne remplace jamais ce que
+    /// l'auteur a posé ».
+    /// Le `guard` n'est pas une redite de la règle : `adopt(nil, …)` rend la
+    /// composition intacte, mais la RÉÉCRIRE déclencherait une passe de rendu
+    /// pour rien à chaque apparition d'un composer de création — celui qui ne
+    /// sème jamais rien.
+    ///
+    /// L'état COURANT est relu au moment de l'adoption, jamais capturé plus tôt.
+    /// C'est ce qui rend l'ordre indifférent avec le sélecteur d'audience de la
+    /// surface : qu'il ait déjà appliqué la mémoire du format (loi 10) ou non,
+    /// une graine muette sur l'audience rend ce qu'elle trouve.
+    func adoptMoodSeed(_ graine: ComposerMoodSeed?) {
+        guard let graine else { return }
+        let adoptee = ComposerMoodSeeding.adopt(
+            graine,
+            into: ComposerMoodComposition(
+                emoji: moodEmoji,
+                text: documentText,
+                visibility: composerVisibility,
+                visibilityUserIds: composerVisibilityUserIds
+            )
+        )
+        moodEmoji = adoptee.emoji
+        documentText = adoptee.text
+        composerVisibility = adoptee.visibility
+        composerVisibilityUserIds = adoptee.visibilityUserIds
     }
 }

@@ -83,10 +83,18 @@ final class ComposerSceneCaptureGestureTests: XCTestCase {
         //
         // Le `try` est en TÊTE, une seule fois : `try a() + try b()` ne
         // compile pas.
-        let dossier = root.appendingPathComponent("Meeshy/Features/Main/Composer")
-        return try ["MeeshyComposerHost.swift", "MeeshyComposerHost+Viewfinder.swift"]
-            .map { try String(contentsOf: dossier.appendingPathComponent($0), encoding: .utf8) }
-            .joined(separator: "\n")
+        // **L'UNITÉ, jamais une liste de fichiers** (#6126, 2026-09-12). Cette
+        // fonction nommait deux fichiers ; le découpage du meuble a déplacé
+        // `presentCamera` vers `+Intake`, et la borne ci-dessus est tombée —
+        // la garde a dit « le fichier lu n'est pas le meuble », ce qui était
+        // exact et parfaitement inutile.
+        //
+        // Le doc-comment juste au-dessus avait nommé le risque sans le
+        // refermer : « un armement-au-montage réintroduit dans le fichier
+        // EXTRAIT n'aurait fait rougir personne ». Une liste de fichiers est
+        // un inventaire à tenir à jour ; `composerHostSource()` suit le
+        // meuble, extensions comprises, parce que c'est son métier.
+        return try AppSourceGuard.composerHostSource()
     }
 
     // MARK: - Le mode suit le FORMAT, pas la porte

@@ -30676,6 +30676,190 @@ Deux corollaires pratiques :
   (`--host`, `http://10.0.2.2:<port>`) — c'est le même moteur, le même écran,
   et aucun artefact mal étiqueté n'est produit.
 
+## Leçon 577 — Un témoin qui FABRIQUE sa donnée ne mesure qu'une moitié de la chaîne, et affirme l'autre
+
+2026-09-11, passerelle (audit de cohérence iOS ↔ passerelle).
+`conversation-wire-fields.test.ts` est un bon témoin : il sérialise une ligne de
+liste et regarde ce qui survit à `fast-json-stringify`, qui retire en silence
+toute propriété non déclarée. Il est né d'un vrai défaut de production, il est
+bien écrit, et il est **vert depuis des mois sur quatre champs que la base ne
+chargeait pas**.
+
+L'objet qu'il sérialise est un littéral, sous un commentaire qui dit « ce que le
+handler de liste pose réellement ». Le commentaire affirme ; le test, lui, ne
+mesure que ce qui se passe APRÈS que le handler a posé. `description`,
+`defaultWriteRole`, `slowModeSeconds` et `autoTranslateEnabled` étaient déclarés
+au schéma, présents dans le littéral — et absents du `select` Prisma. Servis
+`undefined` sur chaque ligne, pour toujours.
+
+Les deux pièges sont symétriques, et un seul des deux se voit :
+
+| | déclaré au schéma | chargé par la requête | ce qui part |
+|---|---|---|---|
+| piège 2026-08-24 | ✗ | ✓ | rien (strippé) |
+| piège 2026-09-11 | ✓ | ✗ | rien (jamais lu) |
+
+> **Une donnée fabriquée dans un test est une HYPOTHÈSE, pas une mesure.** Le
+> test prouve « si le handler pose ceci, alors le fil rend cela » — jamais que
+> le handler le pose. Devant un témoin qui construit son entrée, demander :
+> *quelle moitié de la chaîne reste non mesurée, et qui la mesure ?*
+
+Parade : un témoin qui lit les DEUX SOURCES DE VÉRITÉ et les confronte, plutôt
+qu'une donnée écrite à la main. Ici : les colonnes de `model Conversation` lues
+dans `schema.prisma` à l'exécution, ∩ les propriétés de `conversationMinimalSchema`,
+⊆ les clefs du `select` — avec une liste d'exceptions qui coûte une phrase
+chacune. La loi attrape le prochain champ ; un littéral n'attrape que celui
+qu'on a pensé à y écrire.
+
+Corollaire d'outillage : une sélection Prisma **inline dans un `findMany` est
+illisible pour tout témoin**. L'extraire en constante exportée n'est pas
+cosmétique — c'est ce qui rend la moitié amont mesurable.
+
+
+## Leçon 578 — La graphie du FIL n'est pas la graphie du MAGASIN, et ce qui se perd entre les deux est ce qui ne se regarde pas
+
+2026-09-11, passerelle (audit de cohérence iOS ↔ passerelle).
+`POST /posts` accepte une transcription faite sur l'appareil dans la graphie du
+client — `duration_ms`, `segments[].start`/`.end` en **secondes**, `speaker_id`.
+Les deux services la persistaient **verbatim** (`{ ...data.mobileTranscription,
+segments, source: 'mobile' }`) dans `PostMedia.transcription`, dont la graphie
+canonique est `durationMs`, `startMs`/`endMs` en **millisecondes**, `speakerId`.
+
+Le texte, lui, porte le même nom des deux côtés. Un audio transcrit sur
+l'appareil rendait donc sa transcription — et des segments **sans aucun
+horodatage** : pas de surlignage au fil de la lecture, pas de saut à un segment,
+durée lue à `0`. Le même enregistrement transcrit par Whisper s'affichait
+entièrement.
+
+> **Quand on vérifie qu'une transcription « marche », on lit le texte.** Ce qui
+> se perd dans une conversion de graphie est exactement ce que ce regard ne
+> couvre pas : le TEMPS, l'unité, l'identité du locuteur. La question à poser à
+> tout site qui persiste une charge reçue n'est pas « le champ principal est-il
+> là ? » mais **« ce document a-t-il une graphie à lui, et qui la lui donne ? »**
+
+Le dépôt savait. Le chemin TUS l'écrit noir sur blanc — « la forme validée est
+celle que le translator lit (`startMs`/`endMs`), pas celle de `POST /posts`
+[…] : c'est le lecteur final qui dicte la forme ». La règle était juste et
+publiée ; elle n'avait jamais été appliquée là où le lecteur final voulait la
+même chose. **Un doc-comment qui NOMME une divergence est un aveu : aller voir
+si l'autre moitié a été traitée.**
+
+Parade : un site UNIQUE de conversion, dont le témoin est que sa sortie passe le
+validateur du magasin (`parseAttachmentTranscription`) — et dont la
+contre-épreuve est que la charge du fil, elle, est refusée. Une garde qui
+compare des clefs se contente de décrire ; une garde qui fait valider sa sortie
+par le lecteur mesure.
+
+Et l'unité est le piège dans le piège : `start: 12.4` relu comme des
+millisecondes donne un segment de 12 ms au lieu de 12,4 s — un décalage qui a
+l'air d'un bug de LECTEUR, jamais d'un bug de format.
+
+
+## Leçon 579 — Un décodage strict sur un champ que PERSONNE ne lit coûte la PAGE entière
+
+2026-09-11, iOS + passerelle (audit de cohérence).
+`Message.translations` est une colonne JSON Mongo, relue par la passerelle avec
+un CAST — aucune validation. Le type décrit ce que les écrivains d'aujourd'hui
+posent, jamais ce que la base contient : écriture partielle, version antérieure,
+translator tombé entre deux champs.
+
+La chaîne complète, pour UNE ligne malformée :
+
+1. l'entrée sans `text` produit `translatedContent: undefined` ;
+2. le schéma wire ne le déclare pas `nullable` ⇒ `fast-json-stringify` OMET la
+   clé ;
+3. `APITextTranslation.translatedContent` est non optionnel ⇒ le message échoue ;
+4. `MessagesResponse.data` est un `[APIMessage]` décodé d'un bloc ⇒ **la page
+   entière échoue**.
+
+La conversation s'ouvre VIDE, et rien dans le journal ne nomme la ligne fautive.
+
+> **La rigueur d'un type se paie au NIVEAU où l'échec remonte, jamais au niveau
+> où il est écrit.** Un champ non optionnel dans un élément de tableau est une
+> décision sur le TABLEAU. Demander : *si cet élément est refusé, qu'est-ce qui
+> disparaît ?* — si la réponse est « plus que l'élément », le décodage doit être
+> tolérant par élément.
+
+`translationModel` n'était lu par AUCUNE surface (relevé sur tout le dépôt :
+seuls des tests), et le web le traitait déjà comme absent (`|| 'basic'`). Un
+champ que personne ne lit ne mérite pas de faire tomber quoi que ce soit.
+
+Parade, en DEUX moitiés qui ne se remplacent pas :
+- côté serveur, ne pas servir ce qu'on ne peut pas décrire honnêtement — une
+  entrée sans texte n'est pas une traduction (« le client peut se tromper ; la
+  charge, non ») ;
+- côté client, tolérance par ÉLÉMENT (`decodeLossyArrayIfPresent`, déjà dans le
+  SDK), pour la malformation que personne n'a prévue.
+
+Et surtout **ne pas rendre facultatif le champ de CONTENU** pour faire taire le
+symptôme : `translatedContent` reste obligatoire, parce qu'une traduction sans
+texte n'a rien à faire dans la liste. C'est le champ de MÉTADONNÉE qui devient
+facultatif — il dit alors ce qui est vrai plutôt que ce qu'on espérait.
+
+
+## Leçon 580 — Une erreur de DÉCODAGE tombe dans le `catch` de la panne RÉSEAU, et la file se rejoue pour toujours
+
+2026-09-11, iOS (audit de cohérence iOS ↔ passerelle).
+`SettingsActionQueue` rejoue une modification de profil faite hors-ligne. Le
+gestionnaire décodait la réponse en `APIResponse<MeeshyUser>` ; `PATCH /users/me`
+sert `data: { user, message }`. Le décodage échouait **à tous les coups**, sur
+`keyNotFound(id)`.
+
+Ce qui rend le défaut invisible n'est pas l'échec : c'est OÙ il atterrit.
+
+```swift
+} catch {                     // 5xx, connectivité… et keyNotFound
+    return false              // « garder en file, on rejouera »
+}
+```
+
+La doctrine de ce `catch` est juste pour une panne réseau. Appliquée à une
+erreur de FORME, elle produit : le serveur a écrit, le client croit avoir
+échoué, l'action reste en file, et chaque retour en ligne la rejoue. Le seul
+symptôme visible est un compteur « en attente de synchronisation » qui ne
+redescend jamais — jamais une erreur.
+
+> **Un `catch` fourre-tout classe par DÉFAUT, et son défaut encode une
+> hypothèse : « ce qui a échoué est le transport ».** Devant un rejeu, demander
+> *quelles autres erreurs finissent ici, et le verdict leur convient-il ?* Une
+> erreur de décodage est TERMINALE au sens de la file (rejouer n'y changera
+> rien) tout en étant indistinguable d'une erreur transitoire.
+
+Parade de forme, plus solide que d'énumérer un cas de plus : **un rejeu ne doit
+exiger aucune forme de réponse.** Le chemin persiste une adresse écrite par une
+version possiblement antérieure de l'app ; parier sur la forme de ce qu'elle
+rend est un pari sur une route qu'on ne connaît pas. `SimpleAPIResponse` —
+l'enveloppe, sans son `data` — ne peut pas tomber sur un changement de route.
+
+Le jumeau du site avait déjà la bonne forme (`OutboxDispatcher.updateProfile`,
+`APIResponse<[String: AnyCodable]>`) avec, en commentaire, exactement cette
+raison. **Deux sites qui font la même requête ne partagent pas pour autant ce
+qu'on a appris sur elle** — chercher le jumeau fait partie du correctif.
+
+
+## Leçon 581 — Un témoin qui lit le SOURCE rougit sur le commentaire qui l'explique
+
+2026-09-11, iOS. Le correctif de la leçon 580 s'accompagne d'un témoin
+d'inspection de source (le gestionnaire est une fermeture en ligne dans le bloc
+`.task` de `MeeshyApp` : aucun test ne peut l'invoquer). Il asserte que le corps
+ne contient plus `APIResponse<MeeshyUser>`.
+
+Il est tombé ROUGE sur le correctif juste — parce que le commentaire que je
+venais d'écrire pour EXPLIQUER le correctif nomme la forme fautive :
+
+```swift
+// Ce site exigeait `APIResponse<MeeshyUser>` ; PATCH /users/me sert …
+let _: SimpleAPIResponse = try await APIClient.shared.replayPersistedRequest(
+```
+
+> **Un témoin de source ne distingue pas le code de ce qui le documente.** Et
+> la documentation d'un correctif NOMME, par construction, ce qu'il retire —
+> les deux se contredisent donc mécaniquement. Le réflexe « je reformule le
+> commentaire » est le mauvais : il fait payer à l'explication le prix de
+> l'outil de mesure.
+
+Parade : retirer les lignes de commentaire AVANT de mesurer. Trois lignes de
+`filter`, et le commentaire peut dire la vérité entière.
 ## Leçon 573 — Une liste d'annotations CI est plafonnée, et le rapport dit son propre total juste à côté
 
 2026-09-11, iOS (#6078). Pour attribuer les rouges de `dev`, j'ai comparé la
@@ -30791,4 +30975,159 @@ Parade : `git merge-base --is-ancestor origin/dev origin/<branche>` répond en
 une commande à la seule question qui compte — *cette branche contient-elle dev
 tel qu'il est MAINTENANT ?* — et `gh api repos/.../pulls/N -q .mergeable_state`
 donne l'état non mis en cache quand on veut l'avis de GitHub plutôt que le sien.
+
+
+## Leçon 583 — Un témoin qui CAPTURE un pixel doit attendre la PEINTURE, jamais le chargement — et `complete` ne dit rien de la peinture
+
+2026-09-12, #6135. `check-media.mjs` garde un défaut de PEINTURE : le glyphe de
+repli ne doit pas se poser par-dessus une image décodée. Il capture la pièce
+jointe, échantillonne le cœur de sa boîte, et exige une seule couleur. Il était
+**vert en local et rouge en CI depuis sa naissance**, onze heures durant — et
+comme le job s'arrête au premier rouge, il faisait sauter les neuf gates
+suivants.
+
+Le message ne disait pas assez pour trancher :
+
+```
+le cœur de la boîte est la couleur servie (229,246,248) à 21,20 %, en 106 teintes
+```
+
+**Trois hypothèses ont été falsifiées à la main, à un run de quinze minutes par
+tour** : le composeur qui recouvrirait la pièce (la marge de 11 px concernait une
+AUTRE pièce, 1 169 px plus bas) ; `loading="lazy"` qui différerait le chargement
+(`complete=true` au repos, en local) ; la rastérisation logicielle du runner
+(trois lancements, dont `--use-angle=swiftshader` : les trois rendaient 100,00 %
+sur une teinte). Aucune ne tenait, et le gate restait vert en local sur les trois.
+
+CE QUI A TRANCHÉ : FAIRE DIRE AU TÉMOIN CE QU'IL A VU. Enrichi de l'état de
+l'`<img>` au moment de la capture et des CINQ premières couleurs, il a rendu en
+CI deux relevés que seule une explication réconcilie :
+
+```
+cinq premières : 229,246,248 21.2% | 228,245,247 16.0% | 228,245,248 15.3%
+                 | 230,246,248 11.8% | 229,245,248 10.4%
+image APRÈS la capture : complete=true naturalWidth=1 hidden=false couvre=true
+                 opacity=1 objectFit=cover visible
+fond de la figure : color(srgb 0.27451 0.741176 0.792157 / 0.12)
+```
+
+`229,246,248` est l'accent de la conversation à 12 % composité — **le fond de la
+figure**, pas l'image indigo `99,102,241`. Le cœur montrait donc la boîte VIDE,
+pendant que l'`<img>` relevée juste après se déclarait décodée, opaque et
+couvrant exactement cette boîte. **La capture avait précédé la peinture.**
+
+La pièce mesurée est le PREMIER message du fil (`top = -462` au repos) et son
+`<img>` porte `loading="lazy"` + `decoding="async"`. `locator.screenshot()` fait
+défiler l'élément dans le champ **puis** capture : la capture tombe dans la même
+séquence que le chargement que son propre défilement vient de déclencher. Sur
+macOS la peinture arrive avant ; sur le runner Linux, non.
+
+> **`complete` dit que les octets sont là, jamais qu'un pixel a été posé.** Un
+> témoin qui lit des PIXELS attend `scrollIntoViewIfNeeded()` → `decode()` →
+> DEUX `requestAnimationFrame` (le premier rend la main au compositeur, le second
+> garantit qu'une frame a été produite après le décodage). Et il ne se repose
+> jamais sur le défilement IMPLICITE de la capture : ce défilement est la cause
+> du chargement qu'on attend.
+
+SECONDE MOITIÉ, ET ELLE RENDAIT LE MESSAGE TROMPEUR : **une part de pixels ne se
+mesure pas à l'ÉGALITÉ STRICTE.** Les cinq couleurs ci-dessus sont la même à ±2 :
+un aplat composité est TRAMÉ, et compter des clés `"r,g,b"` exactes fragmentait un
+champ uniforme à l'œil en 106 clés — d'où « 21,20 % » pour un aplat. Le témoin
+annonçait un recouvrement là où il n'y avait qu'une trame. La part se calcule à
+une DISTANCE de la dominante (ici ±2).
+
+LA TOLÉRANCE SE JUSTIFIE PAR UNE MESURE, JAMAIS PAR UN SENTIMENT. Un témoin
+desserré qui ne tombe plus ne garde rien : la faute d'origine a été rejouée (le
+glyphe repeint APRÈS l'`<img>`, donc par-dessus), reconstruite, mesurée.
+
+|  | à ±2 | à l'exact | teintes | |
+|---|---|---|---|---|
+| forme fautive, clair | 92,16 % | 92,13 % | 54 | ROUGE |
+| forme fautive, sombre | 90,47 % | 90,36 % | 65 | ROUGE |
+| forme correcte | 100,00 % | 100,00 % | 1 | VERT |
+
+**La tolérance ne déplace le verdict que de 0,03 point sur la forme fautive** :
+elle est orthogonale au défaut gardé, et le glyphe fondu (`71,71,174` contre
+`99,102,241`) en est à une distance de 67 — trente-trois fois le seuil. C'est
+cette mesure-là, pas l'intuition, qui autorise à desserrer.
+
+Et deux de mes propres hypothèses, corrigées pour qu'elles ne traînent pas : le
+schéma SOMBRE n'était pas un faux vert (il rougit à 90,47 % sur la forme fautive,
+il mesure donc bien) ; le CADRAGE n'était pas en cause (capture CI 251×168,
+locale 247×165 — la CI est même légèrement plus grande).
+
+> **Un témoin qui rougit sans dire ce qu'il a vu coûte un run par hypothèse.**
+> Lui faire rendre son relevé dans le message d'ÉCHEC — jamais au repos — est
+> moins cher que la première hypothèse qu'on aurait explorée sans lui.
+
+Mécanique du comptage par égalité stricte identifiée par la session `andp-00`.
+Voir aussi la 576 (un défaut visuel peut n'exister que sur UN moteur).
+
+## Leçon 584 — Un DÉCOUPAGE éteint toute garde ancrée sur un FICHIER plutôt que sur l'unité — et l'asymétrie décide si on l'apprend
+
+2026-09-12, #6117 / #6125-6127. `MeeshyComposerHost.swift` passait le plafond dur
+de 1 200 lignes ; le découpage a déplacé `presentCamera` vers `+Intake` et
+`composerStack` vers `+Surfaces`. Trois gardes ont rougi — dont
+`ComposerSceneCaptureGestureTests`, qui lisait une **liste en dur de deux
+fichiers** et a annoncé « le fichier lu n'est pas le meuble » : exact, et
+parfaitement inutile.
+
+Son propre doc-comment avait nommé le risque sans le refermer : « un
+armement-au-montage réintroduit dans le fichier EXTRAIT n'aurait fait rougir
+personne ». Elles lisent désormais `AppSourceGuard.composerHostSource()`, qui
+suit le meuble ET ses extensions.
+
+> **L'ASYMÉTRIE EST LA LEÇON, pas le rougissement.** Une garde qui cherche une
+> PRÉSENCE rougit quand son ancre déménage — bruyant, mais on l'apprend le jour
+> même. Une garde qui cherche une ABSENCE passe au VERT : son motif n'est plus
+> dans le fichier qu'elle lit, donc elle ne trouve rien, donc elle est contente.
+> Après tout découpage, ce sont les gardes d'ABSENCE qu'il faut relire — ce sont
+> les seules dont le silence ne prouve rien.
+
+Corollaire de forme : une garde s'ancre sur l'UNITÉ (le type et ses extensions),
+jamais sur une liste de chemins. Un chemin est un fait d'aujourd'hui ; l'unité est
+ce que la règle voulait dire. Même famille que la 560 (un lot qui RENOMME rend
+anti-corrélé tout garde qui reconnaissait par le nom) : là c'est le NOM qui bouge
+sous la garde, ici la POSITION dans l'arborescence.
+
+Trouvée et corrigée par la session `v2-meeshy-c7`, qui a laissé l'allocation du
+numéro à la session qui tenait `tasks/lessons.md` — précisément à cause de la 561.
+
+
+## Leçon 585 — Un gate qui ÉCRIT un état qui survit au run se sabote avec un tour de retard
+
+2026-09-12, #6138. `ExplicitPluralLabelTests` (5 assertions) attendait le repli
+anglais du catalogue et recevait du français, **sans qu'une ligne ait changé**.
+
+La cause n'est pas dans le code : l'app écrit sa surcharge de langue dans SON
+domaine de préférences — `me.meeshy.app.plist` → `AppleLanguages = ["fr"]`,
+`meeshy.ui.language = "fr"` — et ce fichier SURVIT au run. Or la **phase 3 du
+gate**, dont la raison d'être est « laisser l'app connectée », la pose elle-même.
+Le gate est donc **vert au premier passage sur un appareil neuf, rouge à partir du
+second**. L'appareil, lui, est bien en `en-US` : ce n'est pas l'environnement
+qu'on croit interroger.
+
+> **La question à poser à un gate n'est pas seulement « que lit-il ? » mais
+> « qu'ÉCRIT-il, et où cela survit-il ? »** Un gate qui laisse un état derrière
+> lui ne mesure plus son sujet : il mesure la trace de son passage précédent.
+
+COROLLAIRE DE DIAGNOSTIC, et c'est lui qui fait gagner l'heure : **devant un rouge
+qu'aucun diff n'explique, chercher ce que le run PRÉCÉDENT a laissé derrière lui
+avant de chercher dans le code.** Un `git log` sur les fichiers concernés ne
+rendra jamais rien, par construction — l'état fautif n'est pas versionné.
+
+C'est le PENDANT, sur l'état PERSISTANT, de ce que la 583 dit du TEMPS : là un
+témoin lisait avant que la peinture n'arrive, ici il lit après qu'un run a écrit.
+Les deux mesurent autre chose que leur sujet, et aucune des deux ne se voit dans
+un diff. La formule vaut pour les deux : **un témoin ne mesure son sujet que si
+l'on sait ce qui le précède et ce qui l'entoure.**
+
+Distinction utile pour ne pas confondre avec la 560 : là, un lot déplaçait le NOM
+sous une garde ; ici, c'est le gate lui-même qui fabrique la condition de son
+propre échec. Le premier est un accident de refactor, le second un défaut de
+conception du dispositif.
+
+Trouvée par la session `v2-meeshy-c7`, qui a laissé l'allocation du numéro à la
+session tenant `tasks/lessons.md` — son propre fichier s'arrêtant à 574, y écrire
+une 580 aurait rejoué exactement la 561.
 

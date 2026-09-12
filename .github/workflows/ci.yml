@@ -542,7 +542,21 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      # CHAQUE GATE RAPPORTE SON VERDICT, PAS SEULEMENT LE PREMIER (#6137).
+      # GitHub arrête un travail à la première étape rouge : les dix gates
+      # ci-dessous étant indépendants (chacun lève son propre serveur statique
+      # et son propre Chromium), un rouge en cachait NEUF. Mesuré : `dev` est
+      # resté rouge onze heures sur le gate des états du fil pendant que la
+      # coque, capacitor, la virtualisation et le mode de lecture ne tournaient
+      # plus du tout — et le rouge du mode de lecture (#6130), visible la veille,
+      # avait DISPARU des rapports sans être corrigé, simplement plus mesuré.
+      #
+      # `!cancelled()` et non `always()` : une annulation ne doit pas faire
+      # tourner les gates restants. Les étapes de PRÉPARATION au-dessus gardent
+      # leur arrêt — un gate qui tourne sans `dist` rendrait un rouge de
+      # plomberie qui ne mesure rien, soit le défaut inverse.
       - name: Gate cache institutionnel
+        if: ${{ !cancelled() }}
         run: |
           cd apps/web-v2
           node scripts/check-institutional.mjs
@@ -551,11 +565,13 @@ jobs:
       # même navigateur sur le même `dist`, et un second travail paierait une
       # installation de Chromium pour rien.
       - name: Gate flux de la Lentille (mise en page invariable au défilement)
+        if: ${{ !cancelled() }}
         run: |
           cd apps/web-v2
           node scripts/check-lens.mjs
 
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
+        if: ${{ !cancelled() }}
         run: |
           cd apps/web-v2
           node scripts/check-thread-states.mjs
@@ -570,11 +586,13 @@ jobs:
       # propre sortie (`dist-capacitor`, `dist-gateway`) : ils ne touchent pas
       # au `dist` que les pas précédents ont mesuré.
       - name: Gate actions de rangée (un contrôle existe s'il a un EFFET)
+        if: ${{ !cancelled() }}
         run: |
           cd apps/web-v2
           node scripts/check-list-actions.mjs
 
       - name: Gate mode de lecture (l'EFFET, pas le rendu du contrôle)
+        if: ${{ !cancelled() }}
         run: |
           cd apps/web-v2
           node scripts/check-reading-mode.mjs
@@ -584,16 +602,19 @@ jobs:
       # `pointer-events`, positions et `scrollTop` RÉELS, dans les deux
       # schémas — rien de tout cela n'est visible d'un test unitaire.
       - name: Gate chrome du fil (escamotage, pilule de jour, retour en bas)
+        if: ${{ !cancelled() }}
         run: |
           cd apps/web-v2
           node scripts/check-thread-chrome.mjs
 
       - name: Gate couple de focus des champs (l'anneau et son contre-anneau)
+        if: ${{ !cancelled() }}
         run: |
           cd apps/web-v2
           node scripts/check-field-focus.mjs
 
       - name: Gate dist de la coque Capacitor (variante B)
+        if: ${{ !cancelled() }}
         run: |
           cd apps/web-v2
           node scripts/check-shell-dist.mjs
@@ -602,11 +623,13 @@ jobs:
       # par la CLI, jamais en ESM : `bun test` ne peut pas voir un `import.meta`
       # qui casse ce chargeur-là. Ce gate rejoue le VRAI chargeur (`bunx cap ls`).
       - name: Gate capacitor.config.ts (chargeur CJS réel de la CLI)
+        if: ${{ !cancelled() }}
         run: |
           cd apps/web-v2
           node scripts/check-capacitor-config.mjs
 
       - name: Gate build passerelle (VITE_DATA_SOURCE=gateway parle vraiment)
+        if: ${{ !cancelled() }}
         run: |
           cd apps/web-v2
           node scripts/check-gateway-build.mjs
@@ -616,6 +639,7 @@ jobs:
       # reconstruit normalement. Le placer avant les deux autres leur ferait
       # mesurer un `dist` qui n'est pas celui qu'on livre.
       - name: Gate virtualisation du fil (500 messages)
+        if: ${{ !cancelled() }}
         run: |
           cd apps/web-v2
           node scripts/check-thread-virtualization.mjs
