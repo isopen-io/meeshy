@@ -5,10 +5,10 @@ import { performSend, retrySend, type Draft } from '@/lib/send/perform-send';
 import { outboxStore } from '@/lib/send/outbox-store';
 import type { RowActionId } from '@/lib/view/row-actions';
 
-import { ApiError, httpTransport } from './client';
-import { apiConfig } from './config';
+import { ApiError } from './client';
 import { performRowAction } from './conversation-actions';
-import { conversationQuery, conversationsQuery, type ConversationsDeps } from './conversations';
+import { conversationQuery, conversationsQuery } from './conversations';
+import { apiDeps as deps } from './deps';
 import type { Conversation, Participant } from './types';
 import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
@@ -16,12 +16,11 @@ import { performReaction, type PerformReactionResult } from './reactions';
 import { storyTrayQueryOptions } from './stories';
 
 /**
- * L'ADAPTATEUR UNIQUE (#5650, F2/F3) — le SEUL endroit qui résout
- * `apiConfig.source` en dépendances de requête. `deps` est une constante de
- * MODULE : la source est figée à la CONSTRUCTION (`VITE_DATA_SOURCE`),
- * jamais relue à l'exécution — donc jamais recalculée à chaque rendu.
+ * `deps` — alias LOCAL de l'adaptateur unique `apiDeps` (`./deps`, #6151).
+ * Le renommage garde ce fichier inchangé partout où `deps` était déjà écrit ;
+ * `apiDeps` reste le SEUL endroit qui résout `apiConfig.source`
+ * (`scripts/check-api-source.mjs` le garde).
  */
-const deps: ConversationsDeps = { source: apiConfig.source, transport: httpTransport };
 
 export function useConversations() {
   return useQuery(conversationsQuery(deps));

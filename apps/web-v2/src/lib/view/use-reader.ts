@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useStore } from 'zustand/react';
 
 import { currentDeviceLocale } from '@/lib/api/client';
-import { apiConfig } from '@/lib/api/config';
+import { apiDeps } from '@/lib/api/deps';
 import { sessionStore } from '@/lib/api/session';
 import { READER_LOCALE, resolveReaderLanguages } from '@/lib/reader';
 
@@ -38,7 +38,7 @@ export function useReaderLanguages(): ReaderPrism {
   const languages = useMemo(
     () =>
       resolveReaderLanguages({
-        source: apiConfig.source,
+        source: apiDeps.source,
         session: { status, user: { systemLanguage, regionalLanguage, customDestinationLanguage } },
         deviceLocale: currentDeviceLocale(),
       }),
