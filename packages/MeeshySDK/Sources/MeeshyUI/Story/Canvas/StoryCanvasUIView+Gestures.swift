@@ -147,34 +147,56 @@ extension StoryCanvasUIView {
             return
         }
 
-        // Background double-tap → cycle videoFitMode (auto → fit → fill → auto).
+        // Background double-tap → bascule AJUSTER ⇄ REMPLIR.
         // Use `resolveManipulationTarget` to honour the active manipulation
         // layer (so a tap on the bg in `.background` layer triggers the cycle
         // even when no foreground item is hit). Foreground items still get
         // their dedicated double-tap handling below via `hitTestItem`.
+        //
+        // **Le cycle était à TROIS branches pour DEUX rendus** (#6125). Il
+        // passait par `nil`, que le renderer peint exactement comme `"fill"` :
+        // tant que le défaut d'un fond neuf était `nil`, les trois valeurs se
+        // suivaient sans qu'on voie la redite. Le #6125 fait entrer les fonds
+        // AJUSTÉS, et la redite devient visible — deux appuis d'affilée sans
+        // effet à l'écran.
+        //
+        // La règle vit désormais dans `StoryBackgroundFraming`, avec sa jumelle
+        // de test, et ce site cesse d'en porter une copie. C'était la SECONDE :
+        // `performDoubleTapForTesting` en gardait une identique, si bien que le
+        // faisceau de test éprouvait la copie plutôt que le geste.
         if let bgId = backgroundMediaObjectId,
            resolveManipulationTarget(at: location) == bgId,
            hitTestItem(at: location) == nil {
-            let current = slide.effects.backgroundTransform?.videoFitMode
-            let next: String?
-            switch current {
-            case nil:    next = "fit"
-            case "fit":  next = "fill"
-            case "fill": next = nil
-            default:     next = nil
-            }
-            var updated = slide
-            var bg = updated.effects.backgroundTransform ?? StoryBackgroundTransform()
-            bg.videoFitMode = next
-            updated.effects.backgroundTransform = bg.isIdentity ? nil : bg
-            slide = updated
-            onItemModified?(slide)
-            onBackgroundTransformChanged?(bg)
+            toggleBackgroundFitMode()
             return
         }
 
         guard let id = hitTestItem(at: location), let kind = itemKind(forId: id) else { return }
         onItemDoubleTapped?(id, kind)
+    }
+
+    /// **La bascule du cadrage de fond, site UNIQUE** (#6125).
+    ///
+    /// Le geste et son faisceau de test (`performDoubleTapForTesting`)
+    /// portaient chacun leur copie de cette mutation, et les deux copies
+    /// avaient déjà divergé : le faisceau ne notifiait pas `onItemModified`. Un
+    /// témoin vert y prouvait donc quelque chose que le doigt ne faisait pas.
+    ///
+    /// > Un faisceau de test qui RECOPIE le geste qu'il prétend jouer n'éprouve
+    /// > que sa propre copie. La seule forme qui tienne est celle-ci : le
+    /// > faisceau APPELLE ce que le geste appelle.
+    func toggleBackgroundFitMode() {
+        var updated = slide
+        var bg = updated.effects.backgroundTransform ?? StoryBackgroundTransform()
+        bg.videoFitMode = StoryBackgroundFraming.nextFitMode(current: bg.videoFitMode)
+        // `isIdentity` reste consulté : la transformation peut porter une
+        // échelle ou un décalage devenus neutres par ailleurs. Ce qu'elle ne
+        // peut plus faire, c'est jeter le cadrage — `nextFitMode` ne rend
+        // jamais `nil`, donc `videoFitMode` suffit à la rendre non neutre.
+        updated.effects.backgroundTransform = bg.isIdentity ? nil : bg
+        slide = updated
+        onItemModified?(slide)
+        onBackgroundTransformChanged?(bg)
     }
 
     /// **De quelle famille est l'objet touché** — site UNIQUE (#4671).

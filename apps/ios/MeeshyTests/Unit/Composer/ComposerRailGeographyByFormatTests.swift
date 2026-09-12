@@ -166,7 +166,16 @@ final class ComposerRailGeographyByFormatTests: XCTestCase {
     /// > qu'aucun geste n'ouvre.
     func test_laLegendeDuCanvas_resteAtteignable_horsDuRail() throws {
         let hote = try AppSourceGuard.stripComments(AppSourceGuard.composerHostSource())
-        XCTAssertTrue(hote.contains("editsSceneDescription = true"),
+        // **Le doc-comment ci-dessus avait raison avant l'heure.** « La question
+        // n'est pas “la porte est-elle dans le rail ?” mais “la légende est-elle
+        // ATTEIGNABLE ?” » — et l'assertion, elle, citait quand même une
+        // IMPLÉMENTATION : le drapeau posé en ligne. #6126 a retiré ce drapeau
+        // des portes (il constate la frappe, il ne l'ouvre plus) et la garde a
+        // rougi en annonçant une légende inatteignable qui ne l'était pas.
+        //
+        // > Une garde peut nommer la bonne question dans sa prose et la
+        // > trahir dans son assertion. C'est la prose qu'il faut suivre.
+        XCTAssertTrue(hote.contains("openSceneDescriptionEditing()"),
                       "aucun geste n'ouvre plus la légende du canvas — elle est devenue inatteignable")
         XCTAssertTrue(hote.contains("var atelierDescriptionButton: some View"),
                       "la pastille qui l'ouvre a disparu : la légende n'a plus de porte du tout")

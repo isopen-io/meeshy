@@ -201,9 +201,22 @@ extension MeeshyComposerHost {
             // jamais dans le corps du socle.
             documentHasScene: documentHasScene,
             // Sous la SCÈNE, l'œil n'existe que si l'atelier l'a armé (#4135).
-            atelierOffersPreview: publishTrigger.offersPreview
+            atelierOffersPreview: publishTrigger.offersPreview,
+            // **Écrire n'est pas publier** (#6132). Les deux zones d'écriture
+            // passent par le même terme : ce qui compte n'est pas LAQUELLE on
+            // remplit, c'est qu'on est en train de remplir quelque chose.
+            writesText: writesText
         )
     }
+
+    /// **Le geste en cours est-il d'ÉCRIRE ?** (#6132, directive porteur
+    /// 2026-09-12.)
+    ///
+    /// Nommé une fois, lu par tout ce qui doit s'effacer pendant la frappe. Les
+    /// deux drapeaux sont exclusifs par construction (`handleRailDoor` ferme
+    /// l'un en ouvrant l'autre) ; ce qui est demandé ici est leur UNION, pas
+    /// leur arbitrage.
+    var writesText: Bool { editsSceneDescription || editsPostContent }
 
     /// **OÙ le plateau — donc l'éventail — a le droit de se peindre.**
     ///
