@@ -90,7 +90,29 @@ public struct EmojiReactionPicker: View {
     public var quickEmojis: [String]
     public enum Style { case dark, light }
     public var style: Style
-    /// Scale factor applied to all sizes (default 1.0). Use < 1.0 for compact contexts.
+    /// Facteur d'échelle appliqué à TOUTES les tailles de la rangée.
+    ///
+    /// **Le défaut EST la taille de Meeshy** (1,5 — directive porteur du
+    /// 2026-09-12 : « agrandi les barres de reaction de x1.4 au moins, en
+    /// profiter pour aligner cette taille partout où on peut réagir — story,
+    /// message, image, commentaire, attachement »).
+    ///
+    /// Il valait 1,0, et sept hôtes le montaient sous TROIS échelles — 0,78 en
+    /// grille média, 1,0 pour quatre d'entre eux, 2 en plein écran et au rail
+    /// de story. Un rapport de 2,56 entre la plus petite et la plus grande,
+    /// pour le même geste sur le même objet, et aucune des trois valeurs n'était
+    /// justifiée ailleurs que par le site qui la portait.
+    ///
+    /// **La valeur 1,5 n'est pas choisie ici, elle est REPRISE** : le porteur
+    /// l'a arrêtée le matin même sur capture (« ×0,75, elles sont trop
+    /// grosses », #6112, qui a ramené la story et le plein écran de 2 à 1,5).
+    /// Entre deux valeurs qui satisfont « ×1,4 au moins », prendre celle qu'une
+    /// décision a déjà produite — une constante neuve, même conforme, oblige à
+    /// rejouer l'arbitrage qui l'a fixée.
+    ///
+    /// **Surcharger ce paramètre est désormais une EXCEPTION**, et une
+    /// exception s'écrit — donc se justifie. Il n'y en a aucune à justifier
+    /// aujourd'hui : garde `ReactionBarScaleParityTests`.
     public var scale: CGFloat
     /// When true, the emoji strip is wrapped in a horizontal ScrollView so callers can
     /// pass more emojis than fit on-screen and let the user swipe to access the rest.
@@ -120,7 +142,7 @@ public struct EmojiReactionPicker: View {
     public init(
         quickEmojis: [String] = ["❤️", "😂", "😮", "🔥", "😢", "👏"],
         style: Style = .dark,
-        scale: CGFloat = 1.0,
+        scale: CGFloat = 1.5,
         scrollable: Bool = false,
         chrome: EmojiReactionPickerChrome = .capsule,
         onReact: ((String) -> Void)? = nil,

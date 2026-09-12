@@ -265,6 +265,17 @@ final class MessageListViewController: UIViewController {
     /// mutation (plafond `ConversationOverlayState.selectionCap` compris),
     /// ce contrôleur ne fait que relayer l'id tapé.
     var onToggleSelection: ((String) -> Void)?
+    /// **Les trois opérations servies EN PREMIER par le menu système**
+    /// (#6117 — « les options qu'il faut en premier c'est editer, selectionner
+    /// et composer »), plus la porte du GRAND menu.
+    var onEditMessage: ((String) -> Void)?
+    var onSelectMessage: ((String) -> Void)?
+    var onComposeFromMessage: ((String) -> Void)?
+    /// « Plus… » ouvre `MessageMoreSheet` — la feuille COMPLÈTE — et non
+    /// l'overlay d'appui long. Les deux sont des menus distincts.
+    var onOpenMoreSheet: ((String) -> Void)?
+    /// Remis par `ConversationView`, jamais recalculé ici.
+    var canEditMessage: ((String) -> Bool)?
     /// Add reaction. Carries the message id and the tapped bubble cell's
     /// on-screen frame (window coords; `nil` when the cell is not realized)
     /// so the quick-reaction bar can anchor to the bubble.
@@ -1380,6 +1391,11 @@ final class MessageListViewController: UIViewController {
             let selectionModeActive = self.isSelectionModeActive
             let selectedIds = self.selectedMessageIds
             let toggleSelectionHandler = self.onToggleSelection
+            let editHandler = self.onEditMessage
+            let selectHandler = self.onSelectMessage
+            let composeHandler = self.onComposeFromMessage
+            let moreSheetHandler = self.onOpenMoreSheet
+            let canEdit = self.canEditMessage
             let openReactPickerHandler = self.onOpenReactPicker
             let showInfoHandler = self.onShowMessageInfo
             let showReadStatusHandler = self.onShowReadStatus
@@ -1415,10 +1431,22 @@ final class MessageListViewController: UIViewController {
             // - < iOS 26 : overlay custom (long-press du BubbleSwipeContainer
             //   → `onLongPress` → état d'overlay de ConversationView). Le menu
             //   natif UIMenu ne se style pas comme cet overlay.
-            var nativeMenu: (() -> AnyView)? = nil
-            if #available(iOS 26.0, *), let builder = self.nativeMessageMenu {
-                nativeMenu = { builder(message) }
-            }
+            // **Le `.contextMenu` natif ne prend plus la pression** (#6117).
+            //
+            // Il la prenait sous iOS 26, ce qui coupait le menu Meeshy sur les
+            // téléphones récents : le même appui long rendait deux menus
+            // différents selon la version. La directive porteur du 2026-09-12
+            // rend le menu Meeshy à l'appui long partout, et confie le menu
+            // SYSTÈME au DOUBLE TAP — où il se présente par code
+            // (`UIEditMenuInteraction`, `NativeMessageEditMenu.swift`), ce
+            // qu'un `.contextMenu` ne sait pas faire.
+            //
+            // `nativeMenu` reste déclaré à `nil` plutôt que supprimé : c'est
+            // lui qui commande, vingt lignes plus bas, le RETRAIT de
+            // l'`UIContextMenuInteraction` que le système pose sur la cellule.
+            // Le supprimer laisserait cette interaction en place et rouvrirait
+            // la pression système que ce lot vient de fermer.
+            let nativeMenu: (() -> AnyView)? = nil
 
             // Chemin overlay custom uniquement : retirer toute
             // UIContextMenuInteraction que le système aurait posée. Sur le
@@ -1767,12 +1795,34 @@ final class MessageListViewController: UIViewController {
                     onSwipeReply: { swipeReplyHandler?(messageId) },
                     onSwipeForward: { swipeForwardHandler?(messageId) },
                     onLongPress: { longPressHandler(messageId) },
-                    // iOS 26+ (menu natif présent) : couper le long-press
-                    // custom — le `.contextMenu` natif possède la pression.
-                    enableLongPress: nativeMenu == nil,
+                    // **L'appui long ouvre le menu MEESHY sur TOUTES les
+                    // versions** (#6117, directive porteur du 2026-09-12 :
+                    // « le menu meeshy se fait au longpress »).
+                    //
+                    // Il valait `nativeMenu == nil` — donc sous iOS 26 le
+                    // long-press custom était COUPÉ et le `.contextMenu` natif
+                    // possédait la pression. Le même geste rendait alors deux
+                    // menus différents selon le téléphone ; la directive rend
+                    // à chaque geste une identité stable de iOS 16 à iOS 26,
+                    // et confie le natif au double tap.
+                    enableLongPress: true,
                     isSelectionModeActive: selectionModeActive,
                     isSelected: selectedIds.contains(messageId),
-                    onToggleSelection: { toggleSelectionHandler?(messageId) }
+                    onToggleSelection: { toggleSelectionHandler?(messageId) },
+                    // Les opérations primaires du menu SYSTÈME, ouvert au
+                    // double tap. Elles sont composées ici parce que c'est le
+                    // seul étage qui tient à la fois le `messageId` et les
+                    // rappels déjà résolus par `ConversationView`.
+                    editMenuActions: MessageEditMenuAction.primaires(
+                        messageId: messageId,
+                        peutEditer: canEdit?(messageId) ?? false,
+                        editer: editHandler,
+                        selectionner: selectHandler,
+                        composer: composeHandler,
+                        repondre: swipeReplyHandler,
+                        transferer: swipeForwardHandler,
+                        plus: moreSheetHandler
+                    )
                 ) {
                     if let focalRow {
                         focalRow.equatable()

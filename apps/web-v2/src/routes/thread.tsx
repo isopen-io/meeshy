@@ -244,15 +244,15 @@ export default function ThreadScreen() {
   /**
    * L'ENVOI (#5813) — `send/perform-send.ts` porte la RÈGLE (débounce,
    * accusé, reprise, upsert idempotent) ; ce hook n'est qu'un abonnement à
-   * l'outbox (§ 4.10 de la spécification). `originalLanguage` = rang 1 du
-   * Prisme du lecteur (Q3 : jamais de détection on-device ce lot), figée à
-   * l'envoi et préservée au renvoi (`entry.message` repris tel quel).
+   * l'outbox (§ 4.10 de la spécification). La LANGUE d'origine n'est plus
+   * figée ici : `send()` la reçoit PAR MESSAGE, décidée par `Composer`
+   * (`useComposeLanguage`, #5828) — jamais le rang 1 du Prisme du LECTEUR
+   * (`readerLocale`), qui décrit qui LIT, pas qui ÉCRIT.
    */
   const { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry } = useSend({
     conversationId,
     viewerId: viewer.id ?? '',
     ...(viewerParticipant === undefined ? {} : { sender: viewerParticipant }),
-    originalLanguage: readerLocale,
     announce: announcer.announce,
   });
   /**
@@ -864,13 +864,18 @@ export default function ThreadScreen() {
         */
         <div className="thread-composer-chrome shrink-0" onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
           <Composer
-            onSend={({ text, attachments }) => {
+            preferred={readerLanguages}
+            onSend={({ text, attachments, language }) => {
               /* LE MESSAGE CITÉ ENTIER, PAS SON SEUL IDENTIFIANT
                  (revue-correction #5813, défaut majeur 6) — `replyToMessage`
                  est déjà résolu plus haut pour la bande du composeur ; le
                  réutiliser ici évite une seconde recherche ET porte la
-                 citation jusqu'à la bulle optimiste. */
-              send(text, attachments, replyToMessage ?? null);
+                 citation jusqu'à la bulle optimiste.
+                 `language` (#5828) — décidée PAR MESSAGE par le composeur
+                 (détection locale → choix → rang 1 du Prisme du LECTEUR),
+                 jamais `readerLocale` : c'est la langue de l'ÉCRIVAIN qui
+                 doit partir en `originalLanguage`, jamais celle du lecteur. */
+              send(text, attachments, replyToMessage ?? null, language);
               setReplyTarget(null);
             }}
             onTextChange={onTypingTextChange}
