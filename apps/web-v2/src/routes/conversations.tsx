@@ -13,6 +13,7 @@ import { apiConfig } from '@/lib/api/config';
 import { rowAction, useConversations } from '@/lib/api/query';
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
+import { useTypistNames } from '@/lib/api/use-typists';
 import { resolveViewer } from '@/lib/api/viewer';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
@@ -203,6 +204,14 @@ export default function ConversationsScreen() {
   const { languages: readerLanguages } = useReaderLanguages();
   const conversations = list.data ?? EMPTY_CONVERSATIONS;
   const overrides = useStore(conversationStore, (s) => s.overrides);
+  /**
+   * QUI ÉCRIT, PAR CONVERSATION (#5793) — l'écran s'abonne UNE fois et
+   * distribue : une rangée est rendue dans un `.map`, elle ne peut pas appeler
+   * de hook. Même forme que `overrides` juste au-dessus, et `sameRowProps`
+   * (`components/lens-row.tsx`) borne le coût — seule la rangée dont le nom
+   * change se re-rend.
+   */
+  const typists = useTypistNames(viewer.id ?? '');
   /** Le corpus du RAIL — `ConversationRail` applique lui-même la même
    * précédence iOS que `applyFilter` (l'archivé sort) : un seul site, pour
    * les DEUX géographies (grande et épinglée). */
@@ -375,6 +384,7 @@ export default function ConversationsScreen() {
                 flags={effectiveFlagsOf(c, overrides)}
                 unreadCount={effectiveUnreadOf(c, overrides)}
                 onRowAction={rowAction}
+                typist={typists[c.id]}
                 status={{
                   /**
                    * L'APLATISSEMENT AU REPOS (#5694, écart 2) —

@@ -159,18 +159,35 @@ async function main() {
 
   const browser = await launchChromium();
 
-  // --- 1. SANS session : redirection, AUCUNE requête de conversations ----
+  // --- 1. SANS session : redirection, AUCUNE requête de conversations,   --
+  //        AUCUNE poignée de main socket -----------------------------------
   {
     const context = await browser.newContext();
     const page = await context.newPage();
     const requests = [];
+    const socketRequests = [];
     page.on('request', (req) => {
       if (req.url().includes('/api/v1/conversations')) requests.push(req.url());
+      if (req.url().includes('/socket.io/')) socketRequests.push(req.url());
     });
+    // Le socket VISE `gate.meeshy.me` (base de PRODUCTION, aucune surcharge
+    // dans cette construction) — abandonné ici pour ne JAMAIS laisser partir
+    // un octet réel vers un serveur de production depuis ce gate (#5793).
+    await page.route('**/socket.io/**', (route) => route.abort());
     await page.goto(`${base}/`, { waitUntil: 'networkidle' });
     const path = await page.evaluate(() => window.location.pathname);
     check(path === '/login', `sans session, "/" redirige vers /login (obtenu : ${path})`);
     check(requests.length === 0, `sans session, aucune requête /api/v1/conversations (obtenu : ${requests.length})`);
+    /**
+     * `main.tsx` amorce `lib/api/realtime.ts` INCONDITIONNELLEMENT (`import()`
+     * après la première peinture) — c'est `sessionStore` qui décide si une
+     * connexion s'ouvre (`syncConnection`, #5793) : sans session, AUCUNE
+     * poignée de main ne doit partir, quel que soit le module chargé.
+     */
+    check(
+      socketRequests.length === 0,
+      `sans session, aucune poignée de main /socket.io/ (obtenu : ${socketRequests.length})`,
+    );
     await context.close();
   }
 
@@ -195,6 +212,13 @@ async function main() {
         }),
       });
     });
+
+    // Le socket est ABANDONNÉ (jamais un octet réel vers `gate.meeshy.me`
+    // depuis ce gate), mais la REQUÊTE elle-même doit PARTIR : c'est la
+    // preuve que `lib/api/realtime.ts` ouvre une connexion dès qu'une
+    // session existe (#5793).
+    const socketRequestPromise = page.waitForRequest((req) => req.url().includes('/socket.io/'), { timeout: 10000 });
+    await page.route('**/socket.io/**', (route) => route.abort());
 
     await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
 
@@ -231,6 +255,14 @@ async function main() {
     check(
       populatedFirstSectionOffset !== null,
       'corpus PEUPLÉ : aucune [data-section] trouvée pour mesurer le décalage du rail + des filtres',
+    );
+
+    const socketRequest = await socketRequestPromise.catch(() => null);
+    check(
+      socketRequest !== null,
+      'AVEC session, une poignée de main /socket.io/ PART (obtenu : ' +
+        (socketRequest === null ? 'aucune requête' : socketRequest.url()) +
+        ')',
     );
 
     // --- 3. /login avec une session ⇒ /  ---------------------------------

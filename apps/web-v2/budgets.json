@@ -36,6 +36,23 @@
         "status": "CIBLE -- MESUREE PAR #5668, NON ARBITREE",
         "source": "Mesure de measure-weight.mjs le 2026-09-09 (`bun run build` puis `node scripts/measure-weight.mjs`) : 2,52 Ko gzip -9 apres la revue-correction (panneau de pieces jointes, bande d'apercu, barre d'enregistrement, bande de refus micro -- `glyphs-composer.ts` compris), arrondi au Ko SUPERIEUR (3) + 1 Ko de marge, meme discipline que le chunk `summary` ci-dessus. `use-recorder.ts` (le moteur MediaRecorder/AudioContext) reste dans le chunk du fil (`thread-*.js`), pas dans celui-ci : lui seul est CHARGE A LA DEMANDE par un second `lazy()`, le hook restant une dependance STATIQUE de `composer.tsx` (spec #5668 S 7, \"le socle ne bouge pas ... tout ce lot vit dans le chunk du fil ou plus loin\")."
       }
+    },
+    "socketio": {
+      "pattern": "^assets/socketio-",
+      "kb": {
+        "value": 14,
+        "status": "CIBLE -- MESUREE PAR #5793, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-12 (`bun run build` puis `node scripts/measure-weight.mjs`) : 12,41 Ko gzip -9 (`socket.io-client`/`engine.io-client`/`socket.io-parser`/`engine.io-parser`/`@socket.io/component-emitter`, nommes par `vite.config.ts` S manualChunks), arrondi au Ko SUPERIEUR (13) + 1 Ko de marge, meme discipline que les chunks `summary`/`composer_tray` ci-dessus. Atteint UNIQUEMENT par `lib/net/socket-io-factory.ts`, lui-meme importe par `lib/api/realtime.ts` -- charge en `import()` APRES la premiere peinture (`main.tsx`), jamais dans le socle. Ce dernier point est GARDE sur l'entree `realtime` ci-dessous (`dynamic_only`), pas seulement affirme ici : la revue-correction #5793 a mesure que `routes/thread.tsx` importait STATIQUEMENT `realtime` (via `view/use-typing-emitter.ts`), donc que socket.io etait sur le chemin critique de toute ouverture de conversation pendant que cette phrase disait le contraire."
+      }
+    },
+    "realtime": {
+      "pattern": "^assets/realtime-",
+      "dynamic_only": true,
+      "kb": {
+        "value": 6,
+        "status": "CIBLE -- MESUREE PAR #5793, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-12 : 4,41 Ko gzip -9 (`lib/api/realtime.ts` + ses dependances propres -- la connexion, l'application au cache, le magasin de frappe -- hors `socket.io-client` lui-meme, compte a part dans le chunk `socketio` ci-dessus), arrondi au Ko SUPERIEUR (5) + 1 Ko de marge. C'est le module que `main.tsx` charge en `import()` juste apres la premiere peinture (S 7 de la specification #5793). `dynamic_only` exige qu'AUCUN autre fichier produit ne l'importe statiquement : c'est ce qui tient `socketio` (sa seule dependance vendor) hors du chemin critique des routes, et c'est la garde qui manquait quand `use-typing-emitter.ts` importait le possesseur de la connexion au lieu du port `api/typing-emit.ts`."
+      }
     }
   },
   "network_note": "Le profil est REPRIS TEL QUEL de apps/web-v2/budgets.json — deux chiffres mesures sur deux profils differents ne se comparent pas, et la comparaison v3 / v4 est precisement ce que ce POC doit rendre.",

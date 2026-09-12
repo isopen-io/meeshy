@@ -58,11 +58,21 @@ const QUICK_EMOJIS = QUICK_REACTIONS.slice(0, 2);
 
 export function Composer({
   onSend,
+  onTextChange,
   replyTo,
   onCancelReply,
   rights,
 }: {
   onSend: (payload: { text: string; attachments: readonly PendingAttachment[] }) => void;
+  /**
+   * LA SORTIE DE FRAPPE (#5793) — appelée à CHAQUE changement du champ
+   * (texte courant, ou `''` juste après un envoi) : `thread.tsx` la branche
+   * sur `useTypingEmitter`, qui décide seul du débounce et du keepalive
+   * (`typing:start`/`stop`, miroir `ConversationSocketHandler.swift:284-292`).
+   * Ce composant n'a AUCUNE règle de frappe — il se contente de RAPPORTER
+   * le texte, motif `onSend` : la RÈGLE vit chez l'appelant.
+   */
+  onTextChange?: (text: string) => void;
   /**
    * LA CITATION PRÉ-ADRESSÉE — `language` est la LANGUE DANS LAQUELLE
    * `excerpt` EST SERVI (`served().language`, jamais la langue d'origine du
@@ -148,6 +158,7 @@ export function Composer({
 
   const resetAfterSend = (opts?: { readonly keepFocus: boolean }) => {
     setText('');
+    onTextChange?.('');
     setPending([]);
     setPanelOpen(false);
     if (field.current) {
@@ -343,6 +354,7 @@ export function Composer({
               onInput={(e) => {
                 const el = e.currentTarget;
                 setText(el.value);
+                onTextChange?.(el.value);
                 // Croissance jusqu'a cinq lignes, comme iOS (`lineLimit(1...5)`).
                 el.style.height = 'auto';
                 el.style.height = `${Math.min(el.scrollHeight, 5 * 22)}px`;

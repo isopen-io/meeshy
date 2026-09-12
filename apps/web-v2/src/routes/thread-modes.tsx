@@ -7,7 +7,9 @@ import { Avatar } from '@/components/avatar';
 import { Bubble } from '@/components/bubble';
 import { FocalRow } from '@/components/focal-row';
 import { SummarySkeleton } from '@/components/summary/summary-skeleton';
-import type { Conversation, Message, Participant } from '@/lib/api/types';
+import { TypingDots } from '@/components/typing-dots';
+import type { Conversation, Message } from '@/lib/api/types';
+import type { TypingEntry } from '@/lib/api/typing-store';
 import type { Viewer } from '@/lib/api/viewer';
 import { dayLabel, type PlacedMessage } from '@/lib/grouping';
 import type { ConversationEpisode, FaceRampEntry } from '@/lib/summary/types';
@@ -81,7 +83,6 @@ export function ThreadModes({
   longPress,
   onPickLanguage,
   onReact,
-  typing,
   typist,
   accent,
 }: {
@@ -121,9 +122,9 @@ export function ThreadModes({
   /** Retire une réaction MIENNE en tapant sa capsule (#5865) — même geste
    * que `onPickLanguage`, une seule loi vers `useMessageMenu.onMenuReact`. */
   readonly onReact: (messageId: string, emoji: string) => void;
-  // L'indicateur de frappe, en queue du fil
-  readonly typing: boolean;
-  readonly typist: Participant | undefined;
+  /** L'indicateur de frappe, en queue du fil (#5793) — `undefined` ⇒ aucun
+   * frappeur connu ⇒ aucun indicateur (`useTypists`, `api/use-typists.ts`). */
+  readonly typist: TypingEntry | undefined;
   readonly accent: string;
 }) {
   const viewerId = viewer.id ?? '';
@@ -376,10 +377,20 @@ export function ThreadModes({
         })}
       </ol>
 
-      {typing && typist !== undefined ? (
+      {typist === undefined ? null : (
         /* L'indicateur de frappe est une VRAIE cellule du flux, en queue —
            pas un overlay : il pousse le fil comme le ferait un message, donc
-           l'arrivee du vrai message ne fait sauter aucune ligne. */
+           l'arrivee du vrai message ne fait sauter aucune ligne.
+
+           AUCUNE RÉGION LIVE ICI, et c'est une CONTRAINTE, pas un oubli
+           (revue-correction #5793) : le fil n'en a qu'UNE
+           (`use-live-announcer.ts` § « LA RÉGION LIVE UNIQUE DU FIL »), et
+           elle est rendue DEUX fois — hors écran pour le lecteur d'écran, et
+           en pilule VISIBLE au-dessus du composeur (`thread.tsx`). Y verser
+           « X écrit » afficherait donc une seconde annonce visuelle du MÊME
+           évènement que cette cellule (D-11). Un second `[aria-live]` posé
+           ici est l'autre voie, et elle demande de rendre le gate
+           `check-thread-states` non ambigu : suivi ouvert. */
         <div className="flex items-end gap-1.5 py-1">
           <Avatar initials={initialsOf(typist.displayName)} color={accent} size={18} />
           <span
@@ -389,22 +400,10 @@ export function ThreadModes({
             <span className="text-time" style={{ color: 'var(--color-ios-ink-2)' }}>
               {typist.displayName} écrit
             </span>
-            <span className="flex gap-[3px]" aria-hidden>
-              {[0, 1, 2].map((i) => (
-                <span
-                  key={i}
-                  className="size-[5px] rounded-full"
-                  style={{
-                    backgroundColor: 'var(--accent)',
-                    animation: 'typingDot 1s ease-in-out infinite',
-                    animationDelay: `${i * 0.18}s`,
-                  }}
-                />
-              ))}
-            </span>
+            <TypingDots color="var(--accent)" />
           </span>
         </div>
-      ) : null}
+      )}
     </>
   );
 }

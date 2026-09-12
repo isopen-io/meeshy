@@ -46,6 +46,7 @@
     "@tanstack/react-query": "5.102.8",
     "@tanstack/react-virtual": "3.14.10",
     "preact": "10.29.8",
+    "socket.io-client": "4.8.3",
     "zustand": "5.0.15"
   },
   "devDependencies": {

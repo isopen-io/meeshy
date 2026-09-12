@@ -112,6 +112,34 @@ const seconds = (bytes) => Math.round(((bytes * 8) / profile.download_bps) * 100
  * un échec au même titre qu'un dépassement.
  */
 const onDemandChunkEntries = Object.entries(budgets.on_demand_chunks ?? {}).filter(([key]) => key !== 'subject');
+
+/**
+ * QUI IMPORTE QUI, STATIQUEMENT (revue-correction #5793) — les arêtes
+ * `import … from "./autre-chunk.js"` des fichiers produits. Un chunk n'est « à
+ * la demande » que si la SEULE façon de l'atteindre est un `import()` : dès
+ * qu'un chunk de route l'importe statiquement, le navigateur doit le
+ * télécharger AVANT d'exécuter cette route, et le plafond ci-dessus mesure
+ * alors un coût qui n'est plus optionnel.
+ *
+ * Le défaut qui a motivé ce relevé : `view/use-typing-emitter.ts` importait
+ * `api/realtime.ts` (le possesseur de la connexion, donc `socket.io-client`),
+ * et `routes/thread.tsx` importe ce hook — ouvrir une conversation exigeait
+ * 17 Ko gzip de plus, pendant que `budgets.json` affirmait « jamais dans le
+ * socle ». Un libellé ne garde rien ; cette arête, oui.
+ */
+const staticImportEdges = new Map(
+  allAssets
+    .filter((a) => a.file.endsWith('.js'))
+    .map((a) => [
+      a.file,
+      [...readFileSync(join(dist, a.file), 'utf8').matchAll(/import[^;\n]*?from"\.\/([^"]+)"/g)].map(
+        (m) => `assets/${m[1]}`,
+      ),
+    ]),
+);
+const staticImportersOf = (file) =>
+  [...staticImportEdges.entries()].filter(([, targets]) => targets.includes(file)).map(([importer]) => importer);
+
 const onDemandChunks = {};
 const onDemandChunkFailures = [];
 for (const [name, spec] of onDemandChunkEntries) {
@@ -124,6 +152,18 @@ for (const [name, spec] of onDemandChunkEntries) {
     onDemandChunkFailures.push(`  AUCUN FICHIER : « ${name} » (motif ${spec.pattern}) — le lazy() est-il cassé ?`);
   } else if (typeof cap === 'number' && onDemandChunks[name].kb > cap) {
     onDemandChunkFailures.push(`  DEPASSEMENT : « ${name} » ${onDemandChunks[name].kb} Ko > plafond ${cap} Ko`);
+  }
+  /** `dynamic_only: true` — AUCUN autre fichier produit ne doit l'importer
+   * statiquement : la seule voie d'accès est un `import()`. */
+  if (spec.dynamic_only === true) {
+    const importers = matches.flatMap((m) => staticImportersOf(m.file));
+    onDemandChunks[name].static_importers = importers;
+    if (importers.length > 0) {
+      onDemandChunkFailures.push(
+        `  PLUS A LA DEMANDE : « ${name} » est importé STATIQUEMENT par ${importers.join(', ')}` +
+          ` — la seule voie autorisée est un import() (budgets.json › on_demand_chunks.${name}.dynamic_only)`,
+      );
+    }
   }
 }
 

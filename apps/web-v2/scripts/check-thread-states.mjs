@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { launchChromium } from './lib/browser.mjs';
 import { checkThreadMedia } from './lib/check-media.mjs';
 import { checkMessageStates } from './lib/check-message-states.mjs';
+import { checkTypingVisibility } from './lib/check-typing-visibility.mjs';
 
 const DIST = join(fileURLToPath(new URL('..', import.meta.url)), 'dist');
 const TYPES = {
@@ -1037,6 +1038,8 @@ await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin:
 await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'focal', scheme: 'dark' });
 await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'bulles', scheme: 'light' });
 await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'bulles', scheme: 'dark' });
+
+await checkTypingVisibility({ browser, BASE, expect });
 
 await browser.close();
 server.close();

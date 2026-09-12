@@ -335,6 +335,24 @@ export default defineConfig({
           proxy.on('proxyReq', (proxyReq) => proxyReq.removeHeader('origin'));
         },
       },
+      /**
+       * LE SOCKET, MÊME DISCIPLINE QUE `/api/v1` CI-DESSUS (#5793).
+       * `http://localhost:5173` n'est pas dans `CORS_ORIGINS` de la
+       * passerelle (`docker-compose.staging.yml:237-238`) ; le proxy rend la
+       * poignée de main SAME-ORIGIN côté navigateur — `ws: true` fait suivre
+       * l'UPGRADE HTTP en WebSocket, que `http-proxy` ne relaie PAS par
+       * défaut. Le retrait de l'en-tête `origin` est le MÊME motif que pour
+       * `/api/v1` : sans lui, `originIsAllowed()` (`cors-origins.ts:131-139`)
+       * verrait passer `localhost:5173` telle quelle et la refuserait.
+       */
+      '/socket.io': {
+        target: process.env.MEESHY_PROXY_TARGET ?? 'https://gate.staging.meeshy.me',
+        ws: true,
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => proxyReq.removeHeader('origin'));
+        },
+      },
     },
   },
   resolve: {
@@ -521,6 +539,25 @@ export default defineConfig({
             // de son moteur dans le socle, et la mesure l'a dit avant moi.
             if (id.includes('@tanstack/react-virtual') || id.includes('@tanstack/virtual-core')) {
               return 'virtual';
+            }
+            /**
+             * LE CLIENT SOCKET.IO (#5793) — ~13 Ko gzip, atteint UNIQUEMENT
+             * par `lib/net/socket-io-factory.ts`, lui-même importé par
+             * `lib/api/realtime.ts` (chargé en `import()` APRÈS la première
+             * peinture, `main.tsx`). Le NOMMER, même motif que le
+             * virtualiseur ci-dessus : sans ce nom, ces cinq paquets
+             * rejoindraient `core` dès qu'un SEUL import statique les
+             * atteindrait par erreur — et le gate de poids ne pourrait
+             * désigner AUCUN coupable.
+             */
+            if (
+              id.includes('socket.io-client') ||
+              id.includes('engine.io-client') ||
+              id.includes('socket.io-parser') ||
+              id.includes('engine.io-parser') ||
+              id.includes('@socket.io/component-emitter')
+            ) {
+              return 'socketio';
             }
             return 'core';
           }
