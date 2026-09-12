@@ -22,7 +22,6 @@ export function useSend(params: {
   readonly conversationId: string;
   readonly viewerId: string;
   readonly sender?: Participant;
-  readonly originalLanguage: string;
   /**
    * LA RÉGION LIVE PARTAGÉE (revue #5814, défaut majeur 9) — `useSend` ne
    * possède plus SA propre annonce : il la POSE sur `useLiveAnnouncer`, la
@@ -61,11 +60,24 @@ export function useSend(params: {
    *
    * `attachments` (#5668) — la sélection du composeur (`send/attachments.ts`) ;
    * liste vide pour un envoi texte pur, comportement INCHANGÉ.
+   *
+   * `language` (#5828) — LA LANGUE D'ORIGINE DE CE MESSAGE, décidée PAR
+   * MESSAGE par `useComposeLanguage` (détection locale → choix → rang 1 du
+   * Prisme du lecteur), jamais figée par écran : `thread.tsx` posait
+   * auparavant `originalLanguage: readerLocale` une fois pour tout l'écran
+   * (le rang 1 du LECTEUR, jamais celui de l'ÉCRIVAIN) — c'est le défaut que
+   * #5828 corrige. Argument OBLIGATOIRE : aucun défaut ici ne doit pouvoir
+   * remplacer un appelant qui l'aurait oublié.
    */
-  readonly send: (text: string, attachments: readonly PendingAttachment[], replyTo: Message | null) => void;
+  readonly send: (
+    text: string,
+    attachments: readonly PendingAttachment[],
+    replyTo: Message | null,
+    language: string,
+  ) => void;
   readonly retry: (messageId: string) => void;
 } {
-  const { conversationId, viewerId, sender, originalLanguage, announce } = params;
+  const { conversationId, viewerId, sender, announce } = params;
   const online = useOnline();
   const entries = useStore(outboxStore, (s) => entriesOf(s, conversationId));
 
@@ -95,12 +107,12 @@ export function useSend(params: {
   );
 
   const send = useCallback(
-    (text: string, attachments: readonly PendingAttachment[], replyTo: Message | null) => {
+    (text: string, attachments: readonly PendingAttachment[], replyTo: Message | null, language: string) => {
       void sendAction({
         conversationId,
         draft: {
           content: text,
-          originalLanguage,
+          originalLanguage: language,
           ...(replyTo === null ? {} : { replyToId: replyTo.id, replyTo }),
           ...(attachments.length === 0 ? {} : { attachments }),
         },
@@ -109,7 +121,7 @@ export function useSend(params: {
         online,
       });
     },
-    [conversationId, originalLanguage, viewerId, sender, online],
+    [conversationId, viewerId, sender, online],
   );
 
   const retry = useCallback(

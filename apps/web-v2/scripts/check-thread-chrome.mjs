@@ -476,6 +476,126 @@ for (const scheme of ['light', 'dark']) {
     await touch(page, 'end');
     await close(page);
   }
+
+  // ---------------------------------------------------------------------- 6
+  /**
+   * LA PASTILLE DE LANGUE DU COMPOSEUR (#5828, § 4.9 de la spécification).
+   * Sur `c-deploiement` (la conversation que `check-thread-states.mjs`
+   * ouvre déjà pour le même genre de mesure — « 0 contrôle sans
+   * gestionnaire ») : la pastille existe, tient la cible d'au moins 44×44,
+   * ne recouvre ni le champ ni le bouton « + », tient le contraste AA ; un
+   * choix dans la feuille la met à jour ET l'envoi suivant porte la langue
+   * choisie jusque dans la bulle SERVIE (`lang="en"`) — l'effet mesuré
+   * jusqu'au pixel, pas un booléen lu dans le code (leçon du dépôt).
+   */
+  {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      colorScheme: scheme === 'light' ? 'light' : 'dark',
+    });
+    await context.addInitScript((s) => {
+      try {
+        localStorage.setItem('meeshy.scheme', s);
+      } catch {
+        /* navigation privée : le repli HTML tient pour la page seule. */
+      }
+    }, scheme);
+    const page = await context.newPage();
+    await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
+    await page.waitForSelector('[data-message]');
+    await page.waitForTimeout(300);
+
+    const PILL = '[data-composer] button[aria-label^="Langue d’écriture"]';
+
+    const pillBox = await page.evaluate((sel) => {
+      const pill = document.querySelector(sel);
+      const textarea = document.querySelector('[data-composer] textarea');
+      const plus = document.querySelector('[data-composer] [aria-label="Ouvrir le menu des pièces jointes"]');
+      if (pill === null || textarea === null) return null;
+      const p = pill.getBoundingClientRect();
+      const t = textarea.getBoundingClientRect();
+      const plusBox = plus === null ? null : plus.getBoundingClientRect();
+      const overlapsPlus =
+        plusBox !== null &&
+        !(p.right <= plusBox.left || p.left >= plusBox.right || p.bottom <= plusBox.top || p.top >= plusBox.bottom);
+      /* LA CAPSULE PEINTE, PAS SEULEMENT LA CIBLE (revue-correction #5828) —
+         une capsule plus LARGE que son bouton déborde sans rien changer au
+         rectangle du `<button>` : c'est la peinture qui sortait de l'écran
+         (chevron coupé, mesuré sur les deux schémas avant correction), et
+         `opacity` comme le non-recouvrement du champ la donnaient pour
+         « entièrement visible ». On mesure donc la RÉUNION bouton+capsule
+         contre le cadre, et le défilement horizontal du document. */
+      const painted = [pill, ...pill.querySelectorAll('*')]
+        .map((n) => n.getBoundingClientRect())
+        .reduce((u, r) => ({ left: Math.min(u.left, r.left), right: Math.max(u.right, r.right) }), {
+          left: p.left,
+          right: p.right,
+        });
+      return {
+        width: p.width,
+        height: p.height,
+        bottom: p.bottom,
+        textareaTop: t.top,
+        opacity: getComputedStyle(pill).opacity,
+        overlapsPlus,
+        paintedLeft: painted.left,
+        paintedRight: painted.right,
+        viewportWidth: document.documentElement.clientWidth,
+        docScrollWidth: document.documentElement.scrollWidth,
+      };
+    }, PILL);
+
+    if (expect(pillBox !== null, `${scheme} · une pastille de langue existe dans le composeur`)) {
+      expect(
+        pillBox.width >= 44 && pillBox.height >= 44,
+        `${scheme} · sa cible fait au moins 44×44 (${pillBox.width}×${pillBox.height})`,
+      );
+      expect(Number.parseFloat(pillBox.opacity) === 1, `${scheme} · elle est entièrement visible (opacity ${pillBox.opacity})`);
+      expect(
+        pillBox.paintedLeft >= 0 && pillBox.paintedRight <= pillBox.viewportWidth,
+        `${scheme} · sa CAPSULE PEINTE tient dans le cadre (${Math.round(pillBox.paintedLeft)} → ${Math.round(pillBox.paintedRight)} pour ${pillBox.viewportWidth} px)`,
+      );
+      expect(
+        pillBox.docScrollWidth <= pillBox.viewportWidth,
+        `${scheme} · elle ne fait pas défiler la page horizontalement (${pillBox.docScrollWidth} ≤ ${pillBox.viewportWidth})`,
+      );
+      expect(
+        pillBox.bottom <= pillBox.textareaTop,
+        `${scheme} · elle ne recouvre pas le champ (son bas ${Math.round(pillBox.bottom)} ≤ le haut du champ ${Math.round(pillBox.textareaTop)})`,
+      );
+      expect(!pillBox.overlapsPlus, `${scheme} · elle ne chevauche pas le bouton « + »`);
+
+      const ratio = await contrastOf(page, `${PILL} span`);
+      expect(ratio !== null && ratio >= 4.5, `${scheme} · son contraste encre/fond tient la barre AA (${ratio}:1)`);
+    }
+
+    await page.locator(PILL).click();
+    await page.waitForSelector('dialog[open]');
+    const dialogTitle = await page.locator('dialog[open] h2').textContent();
+    expect(dialogTitle === 'Langue d’écriture', `${scheme} · la feuille est titrée « Langue d’écriture » (« ${dialogTitle} »)`);
+
+    await page.locator('dialog[open] button', { hasText: 'English' }).first().click();
+    await page.waitForTimeout(200);
+    expect((await page.locator('dialog[open]').count()) === 0, `${scheme} · le dialogue s'est refermé après le choix`);
+
+    const afterChoice = await page.locator('[data-composer-language]').getAttribute('aria-label');
+    expect(
+      afterChoice === 'Langue d’écriture : anglais',
+      `${scheme} · l'aria-label devient « Langue d’écriture : anglais » (« ${afterChoice} »)`,
+    );
+
+    await page.locator('[data-composer] textarea').fill('Do you confirm the mockup for tomorrow?');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(500);
+    const lastLang = await page.evaluate(() => {
+      const rows = document.querySelectorAll('[data-message]');
+      const last = rows[rows.length - 1];
+      return last?.querySelector('[lang]')?.getAttribute('lang') ?? null;
+    });
+    expect(lastLang === 'en', `${scheme} · la DERNIÈRE bulle du fil porte lang="en" (« ${lastLang} »)`);
+
+    await context.close();
+  }
 }
 
 await browser.close();

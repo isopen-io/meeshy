@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
+import { ComposerLanguagePill } from './composer-language-pill';
 import { Glyph } from './glyph';
 import type { ComposerNotice } from './composer-tray';
 import {
@@ -12,8 +13,16 @@ import {
   type PendingAttachment,
 } from '@/lib/send/attachments';
 import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
+import { useComposeLanguage } from '@/lib/view/use-compose-language';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
 import { recordingSupported, useRecorder } from '@/lib/view/use-recorder';
+
+/**
+ * LA FEUILLE DE LANGUE, CHARGÉE À LA DEMANDE (#5828) — même discipline que
+ * `ComposerTray` ci-dessous : elle ne pèse sur le chunk du fil que si un
+ * lecteur touche la pastille.
+ */
+const LanguageSheet = lazy(() => import('./language-sheet').then((m) => ({ default: m.LanguageSheet })));
 
 /**
  * LE COMPOSEUR.
@@ -56,14 +65,28 @@ const ComposerTray = lazy(() => import('./composer-tray'));
  */
 const QUICK_EMOJIS = QUICK_REACTIONS.slice(0, 2);
 
+/** IDENTITÉ STABLE pour l'appelant qui omet `preferred` (les témoins, surtout)
+ * — un `[]` littéral en valeur par défaut serait reconstruit à CHAQUE rendu
+ * et invaliderait le `useMemo` de `useComposeLanguage` en boucle (CLAUDE.md §
+ * Prisme, cycle 123 : « son IDENTITÉ change à chaque rendu chez tout hôte qui
+ * le construit en ligne »). */
+const NO_PREFERRED_LANGUAGES: readonly string[] = [];
+
 export function Composer({
+  preferred = NO_PREFERRED_LANGUAGES,
   onSend,
   onTextChange,
   replyTo,
   onCancelReply,
   rights,
 }: {
-  onSend: (payload: { text: string; attachments: readonly PendingAttachment[] }) => void;
+  /** LE PRISME DU LECTEUR (#5828) — repli de la langue d'écriture quand
+   * aucune détection ne tranche : `useComposeLanguage` lit `preferred[0]`,
+   * jamais `preferred` en bloc. Un tableau MÉMOÏSÉ côté hôte
+   * (`useReaderLanguages`, `thread.tsx`), jamais reconstruit en ligne
+   * (CLAUDE.md § Prisme, cycle 123). */
+  preferred?: readonly string[];
+  onSend: (payload: { text: string; attachments: readonly PendingAttachment[]; language: string }) => void;
   /**
    * LA SORTIE DE FRAPPE (#5793) — appelée à CHAQUE changement du champ
    * (texte courant, ou `''` juste après un envoi) : `thread.tsx` la branche
@@ -102,6 +125,15 @@ export function Composer({
   const sendTarget = text.trim().length > 0 || pending.length > 0;
   const hasReply = replyTo !== undefined;
   const isRecording = recorder.state.status === 'recording';
+
+  /**
+   * LA LANGUE D'ÉCRITURE (#5828) — décide ce qui PART, jamais le rang 1 du
+   * Prisme du LECTEUR. `compose.language` est LA valeur envoyée ; la pastille
+   * n'affiche jamais autre chose (loi 4 : elle ne ment pas).
+   */
+  const compose = useComposeLanguage({ preferred });
+  const [languageSheetOpen, setLanguageSheetOpen] = useState(false);
+  const languagePillRef = useRef<HTMLButtonElement>(null);
 
   /**
    * LOI 4 SUR LE MICRO DE LA RANGÉE (revue-correction #5668) — il n'était
@@ -159,6 +191,7 @@ export function Composer({
   const resetAfterSend = (opts?: { readonly keepFocus: boolean }) => {
     setText('');
     onTextChange?.('');
+    compose.setText(''); // Le vidage réinitialise la détection (miroir `TextAnalyzer` texte vidé).
     setPending([]);
     setPanelOpen(false);
     if (field.current) {
@@ -188,7 +221,12 @@ export function Composer({
     const own = value.trim();
     if (!own && attachments.length === 0) return;
     const keepFocus = document.activeElement === field.current;
-    onSend({ text: own, attachments });
+    // LA VALEUR AFFICHÉE EST CELLE QUI PART (#5828, Q2) — capturée AVANT
+    // `resetAfterSend`, qui vide le texte et donc changerait ce que
+    // `compose.language` rendrait si on le relisait après.
+    const language = compose.language;
+    onSend({ text: own, attachments, language });
+    compose.noteSent(); // Le choix cesse d'être ÉPINGLÉ, mais reste COLLANT (Q3).
     resetAfterSend({ keepFocus });
   };
 
@@ -286,6 +324,44 @@ export function Composer({
         </Suspense>
       ) : null}
 
+      {/* LA RANGÉE HAUTE (#5828) — miroir `topToolbar`
+          (`UniversalComposerBar+Toolbar.swift:25-81`) : posée AU-DESSUS du
+          champ, jamais DANS lui, et DÉMONTÉE pendant un enregistrement
+          (`+Layout.swift:200-206`, « aucun outil en main pendant le vocal »).
+          Pour l'instant, seule occupante — éphémère/flou/effets la
+          rejoindront (surfaces à venir, D-1 disposition).
+
+          ANCRÉE EN TÊTE DE RANGÉE, jamais à droite (revue-correction) — iOS
+          range ses outils dans le groupe MENANT (`◎ 👁 ✦ 😐 [🇫🇷 FR ⌄]`, la
+          pastille à x≈158 pt APRÈS quatre icônes, `topToolbar` finissant par
+          `Spacer()` + le compteur de caractères ; capture de référence
+          `ref-native-02-thread.png`). L'ancrer à droite plaçait la seule
+          occupante d'aujourd'hui à l'OPPOSÉ de sa place iOS et condamnait les
+          quatre contrôles à venir à s'y aligner faux. */}
+      {!isRecording ? (
+        <div data-composer-toolbar className="flex items-center justify-start gap-1 px-3 pt-1.5">
+          <ComposerLanguagePill code={compose.language} onOpen={() => setLanguageSheetOpen(true)} buttonRef={languagePillRef} />
+        </div>
+      ) : null}
+
+      {languageSheetOpen ? (
+        <Suspense fallback={null}>
+          <LanguageSheet
+            title="Langue d’écriture"
+            selected={compose.language}
+            onSelect={(code) => {
+              compose.choose(code);
+              setLanguageSheetOpen(false);
+              languagePillRef.current?.focus();
+            }}
+            onClose={() => {
+              setLanguageSheetOpen(false);
+              languagePillRef.current?.focus();
+            }}
+          />
+        </Suspense>
+      ) : null}
+
       {isRecording ? (
         <Suspense fallback={<div style={{ minHeight: 56 }} aria-hidden />}>
           <ComposerTray
@@ -355,6 +431,7 @@ export function Composer({
                 const el = e.currentTarget;
                 setText(el.value);
                 onTextChange?.(el.value);
+                compose.setText(el.value);
                 // Croissance jusqu'a cinq lignes, comme iOS (`lineLimit(1...5)`).
                 el.style.height = 'auto';
                 el.style.height = `${Math.min(el.scrollHeight, 5 * 22)}px`;

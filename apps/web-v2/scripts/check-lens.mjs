@@ -219,6 +219,14 @@ for (const { y, geo } of readings) {
  * n'a ni compacté ni disparu : il est simplement sorti du champ, comme tout
  * contenu ordinaire du flux.
  */
+// La bande épinglée se matérialise via un `IntersectionObserver` (sortie du
+// grand rail), jamais un délai fixe — attendre la CONDITION cible plutôt
+// qu'un nombre de ms rendait ce gate instable sous charge CI (revue-
+// correction : « la bande épinglée ne compacte pas… : null » alors que la
+// tuile finissait par apparaître un instant plus tard).
+await page
+  .waitForFunction(() => document.querySelector('[data-rail="pinned"] [data-rail-tile]') !== null, undefined, { timeout: 3_000 })
+  .catch(() => {});
 const afterScroll = await page.evaluate(() => {
   const contenuTop = document.getElementById('contenu')?.getBoundingClientRect().top ?? null;
   const grande = document.querySelector('[data-rail="grande"]');
@@ -583,8 +591,21 @@ for (const { headerHeight, contenuTop } of headerGeoDuring) {
   );
 }
 
-// Laisse le fondu (HIDDEN_CHROME_EASE_OUT_MS = 250 ms) se terminer.
-await headerPage.waitForTimeout(400);
+// Attend que le fondu (HIDDEN_CHROME_EASE_OUT_MS = 250 ms) soit VRAIMENT
+// terminé — un délai FIXE rendait ce gate instable sous charge CI (revue-
+// correction : opacité relevée à 0.198… ou 0.954… selon la lenteur de la
+// machine, jamais 0 ni 1) ; on attend la CONDITION cible, avec un plafond
+// large en filet de sécurité, jamais un raccourcissement de l'attente.
+await headerPage
+  .waitForFunction(
+    () => {
+      const h1 = document.querySelector('h1');
+      return h1 !== null && Number(getComputedStyle(h1).opacity) === 0 && document.querySelector('[data-rail="pinned"]') !== null;
+    },
+    undefined,
+    { timeout: 3_000 },
+  )
+  .catch(() => {});
 const headerAfter = await headerPage.evaluate(() => ({
   headerHeight: document.querySelector('header')?.getBoundingClientRect().height ?? null,
   h1Opacity: Number(getComputedStyle(document.querySelector('h1')).opacity),
@@ -600,7 +621,16 @@ constate(headerAfter.pinnedPresent, "la bande épinglée n'est pas apparue aprè
  * n'a bougé pendant l'aller-retour complet (G1 rejoué sur ce palier). */
 const rowGeoBeforeRoundTrip = await geometrie(headerPage);
 await headerPage.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 0 }));
-await headerPage.waitForTimeout(400);
+await headerPage
+  .waitForFunction(
+    () => {
+      const h1 = document.querySelector('h1');
+      return h1 !== null && Number(getComputedStyle(h1).opacity) === 1 && document.querySelector('[data-rail="pinned"]') === null;
+    },
+    undefined,
+    { timeout: 3_000 },
+  )
+  .catch(() => {});
 const headerReturned = await headerPage.evaluate(() => ({
   h1Opacity: Number(getComputedStyle(document.querySelector('h1')).opacity),
   h1AriaHidden: document.querySelector('h1')?.getAttribute('aria-hidden'),

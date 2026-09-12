@@ -8,6 +8,7 @@ import { DEFAULT_USER_PERMISSIONS } from '@meeshy/shared/types/participant';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { Composer } from './composer';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
+import { COMPOSE_DETECT_DEBOUNCE_MS } from '@/lib/view/use-compose-language';
 
 /**
  * LA CITATION PRÉ-ADRESSÉE DIT SA LANGUE (revue #5695) — `replyTo.excerpt`
@@ -634,5 +635,226 @@ describe('Composer — le tiroir des pièces jointes (#5668)', () => {
     });
     await flush();
     expect(container.querySelector('[aria-label="Ouvrir le menu des pièces jointes"]')).toBeNull();
+  });
+});
+
+/**
+ * LA LANGUE D'ÉCRITURE EST UN CONTRÔLE AVEC EFFET (#5828) — le critère de
+ * fin : un lecteur `['fr','en']` qui tape en anglais envoie son message
+ * étiqueté `en`, jamais `fr` (rang ≠ 1 du Prisme, leçon 261). Le détecteur
+ * est injecté au NIVEAU DU NAVIGATEUR (`globalThis.LanguageDetector`, motif
+ * `language-detector.test.ts`) — jamais un prop de test sur `Composer` : ce
+ * composant n'expose aucun point d'injection, comme `useRecorder` que
+ * `composer.tsx` ne bouchonne qu'en mockant `navigator.mediaDevices`.
+ */
+describe('Composer — la langue d’écriture est un contrôle avec effet (#5828)', () => {
+  type FakeLanguageDetectorApi = {
+    availability: () => Promise<'unavailable' | 'downloadable' | 'downloading' | 'available'>;
+    create: () => Promise<{ detect: (text: string) => Promise<readonly { detectedLanguage: string; confidence: number }[]> }>;
+  };
+  const globalsWithDetector = globalThis as typeof globalThis & { LanguageDetector?: FakeLanguageDetectorApi };
+
+  /** Un détecteur natif BOUCHONNÉ, prêt (`available`) : reconnaît l'anglais
+   * et l'allemand dans les phrases que ces témoins tapent, silencieux sinon. */
+  const installFakeBrowserDetector = () => {
+    globalsWithDetector.LanguageDetector = {
+      availability: async () => 'available',
+      create: async () => ({
+        detect: async (text: string) => {
+          if (/confirm|mockup/i.test(text)) return [{ detectedLanguage: 'en', confidence: 0.97 }];
+          if (/bestätigen|vorlage/i.test(text)) return [{ detectedLanguage: 'de', confidence: 0.97 }];
+          return [{ detectedLanguage: 'und', confidence: 0 }];
+        },
+      }),
+    };
+  };
+
+  test('rendu statique : la pastille annonce le rang 1 du Prisme, sur un rang ≠ fr', () => {
+    const html = renderToStaticMarkup(<Composer onSend={() => {}} preferred={['en', 'fr']} />);
+    expect(html).toMatch(/aria-label="Langue d’écriture : (anglais|English)"/);
+    expect(html).toContain('>EN<');
+  });
+
+  test('la pastille est un <button type="button"> avec aria-haspopup="dialog" (loi 4)', () => {
+    const html = renderToStaticMarkup(<Composer onSend={() => {}} preferred={['fr']} />);
+    const match = html.match(/<button[^>]*data-composer-language="fr"[^>]*>/);
+    expect(match).not.toBeNull();
+    expect(match?.[0]).toContain('type="button"');
+    expect(match?.[0]).toContain('aria-haspopup="dialog"');
+  });
+
+  describe('DOM réel', () => {
+    const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+    beforeAll(() => {
+      ensureHappyDomRegistered();
+      globals.IS_REACT_ACT_ENVIRONMENT = true;
+      installFakeBrowserDetector();
+    });
+
+    afterAll(async () => {
+      await act(async () => {});
+      delete globals.IS_REACT_ACT_ENVIRONMENT;
+      delete globalsWithDetector.LanguageDetector;
+      await releaseHappyDomIfRegistered();
+    });
+
+    let container: HTMLDivElement;
+    let root: Root;
+
+    afterEach(() => {
+      act(() => {
+        root.unmount();
+      });
+      container.remove();
+    });
+
+    const mount = (onSend: (payload: { text: string; attachments: readonly unknown[]; language: string }) => void) => {
+      container = document.createElement('div');
+      document.body.appendChild(container);
+      root = createRoot(container);
+      act(() => {
+        root.render(<Composer onSend={onSend} preferred={['fr', 'en']} />);
+      });
+      return container;
+    };
+
+    const type = (field: HTMLTextAreaElement, value: string) => {
+      act(() => {
+        field.value = value;
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    };
+
+    const passDebounce = () => act(async () => new Promise((r) => setTimeout(r, COMPOSE_DETECT_DEBOUNCE_MS + 60)));
+
+    test('taper en anglais, laisser le débounce s’écouler, envoyer ⇒ onSend porte language: "en"', async () => {
+      let sent: { text: string; attachments: readonly unknown[]; language: string } | null = null;
+      const el = mount((payload) => {
+        sent = payload;
+      });
+      const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
+      type(field, 'Do you confirm the mockup?');
+      await passDebounce();
+
+      // Le geste NOMINAL du dépôt : cliquer « Envoyer » (les autres témoins de
+      // ce fichier dispatchent `keydown`+`Enter` par un `KeyboardEvent` cru
+      // qui, combiné à happy-dom, fait lever une exception INTERNE au plugin
+      // de suivi de valeur de React-DOM — sans rapport avec le composeur).
+      act(() => {
+        el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();
+      });
+
+      expect(sent).not.toBeNull();
+      expect(sent!.text).toBe('Do you confirm the mockup?');
+      expect(sent!.attachments).toEqual([]);
+      expect(sent!.language).toBe('en');
+    });
+
+    /**
+     * LA LANGUE COURANTE SURVIT À L'ENVOI (revue-correction #5828) — le cas
+     * qui manquait, et le plus fréquent d'une conversation vivante : on écrit
+     * une phrase anglaise, puis on enchaîne sur « ok ». Sur iOS,
+     * `composerState.selectedLanguage` garde `en` (`textAnalyzer.reset()`
+     * n'efface que l'analyseur, `ComposerLanguageResolver` rend `nil` faute
+     * de verdict = « current already wins »). Sans ce rang, le second message
+     * repartait étiqueté `fr` — le défaut MÊME que #5828 corrige, rejoué un
+     * message plus tard.
+     */
+    test('après un envoi détecté en anglais, un « ok » de suite part ENCORE en "en" (langue courante)', async () => {
+      const sent: string[] = [];
+      const el = mount((payload) => {
+        sent.push(payload.language);
+      });
+      const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
+      const clickSend = () =>
+        act(() => {
+          el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();
+        });
+
+      type(field, 'Do you confirm the mockup?');
+      await passDebounce();
+      clickSend();
+      expect(sent).toEqual(['en']);
+
+      expect(el.querySelector('[aria-label="Langue d’écriture : anglais"]')).not.toBeNull();
+
+      type(field, 'ok');
+      await passDebounce();
+      clickSend();
+      expect(sent).toEqual(['en', 'en']);
+    });
+
+    test('clic pastille ⇒ feuille « Langue d’écriture » ; choisir Deutsch ⇒ la pastille change ET l’envoi suivant porte "de"', async () => {
+      let sent: { text: string; attachments: readonly unknown[]; language: string } | null = null;
+      const el = mount((payload) => {
+        sent = payload;
+      });
+      const pill = el.querySelector<HTMLButtonElement>('[data-composer-language]')!;
+
+      act(() => {
+        pill.click();
+      });
+      // Laisse le `lazy()` de la feuille se résoudre — un `import()` DYNAMIQUE
+      // (première résolution du chunk dans ce process de test) prend plus
+      // qu'une poignée de micro-tâches, mesuré à l'écriture de ce témoin.
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 200)));
+
+      const dialog = el.querySelector<HTMLDialogElement>('dialog[open]');
+      expect(dialog).not.toBeNull();
+      expect(dialog?.querySelector('h2')?.textContent).toBe('Langue d’écriture');
+
+      const germanRow = Array.from(dialog!.querySelectorAll('button')).find((b) => b.textContent?.includes('Deutsch'));
+      expect(germanRow).not.toBeUndefined();
+      act(() => {
+        germanRow!.click();
+      });
+
+      expect(el.querySelector('dialog[open]')).toBeNull();
+      expect(el.querySelector('[aria-label="Langue d’écriture : allemand"]')).not.toBeNull();
+
+      const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
+      type(field, 'Bonjour');
+      act(() => {
+        el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();
+      });
+
+      expect(sent!.language).toBe('de');
+    });
+
+    test('pendant un enregistrement, la rangée haute (pastille) n’est pas montée', async () => {
+      class FakeMediaRecorder {
+        ondataavailable: (() => void) | null = null;
+        start() {}
+        stop() {}
+      }
+      Object.defineProperty(globalThis, 'MediaRecorder', { value: FakeMediaRecorder, configurable: true });
+      Object.defineProperty(navigator, 'mediaDevices', {
+        value: { getUserMedia: () => Promise.resolve({ getTracks: () => [] } as unknown as MediaStream) },
+        configurable: true,
+      });
+      try {
+        const el = mount(() => {});
+        expect(el.querySelector('[data-composer-toolbar]')).not.toBeNull();
+        act(() => {
+          el.querySelector<HTMLButtonElement>('[aria-label="Enregistrer un message vocal"]')!.click();
+        });
+        // Laisse `requestStream()` (une promesse résolue) et son enchaînement
+        // asynchrone se dérouler jusqu'à l'état `recording`.
+        await act(async () => {
+          for (let i = 0; i < 5; i += 1) await Promise.resolve();
+        });
+        expect(el.querySelector('[data-composer-toolbar]')).toBeNull();
+      } finally {
+        Reflect.deleteProperty(globalThis, 'MediaRecorder');
+        Reflect.deleteProperty(navigator, 'mediaDevices');
+      }
+    });
+
+    test('le code affiché sur la pastille ne porte pas `lang` — ce n’est pas de la prose', () => {
+      const el = mount(() => {});
+      const pill = el.querySelector<HTMLButtonElement>('[data-composer-language]')!;
+      expect(pill.querySelector('[lang]')).toBeNull();
+    });
   });
 });
