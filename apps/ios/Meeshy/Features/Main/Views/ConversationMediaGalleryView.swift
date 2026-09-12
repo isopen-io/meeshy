@@ -198,16 +198,6 @@ struct ConversationMediaGalleryView: View {
             : ""
     }
 
-    /// Position lisible du média courant pour VoiceOver — la capsule « n / N »
-    /// serait sinon lue « n barre oblique N » (position portée par le seul texte).
-    private var galleryPositionAccessibilityLabel: String {
-        String(
-            format: String(localized: "gallery.position", defaultValue: "Média %1$d sur %2$d", bundle: .main),
-            currentIndex + 1,
-            allAttachments.count
-        )
-    }
-
     /// **Le texte de la légende, dans la langue courante** — source UNIQUE pour
     /// l'affichage ET pour VoiceOver (#4934).
     ///
@@ -533,20 +523,12 @@ struct ConversationMediaGalleryView: View {
                 }
                 .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
-                Spacer()
-
-                if allAttachments.count > 1 {
-                    Text("\(currentIndex + 1) / \(allAttachments.count)")
-                        .font(MeeshyFont.relative(13, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .adaptiveGlass(in: Capsule())
-                        .contentTransition(.numericText())
-                        .animation(.spring(response: 0.3), value: currentIndex)
-                        .accessibilityLabel(galleryPositionAccessibilityLabel)
-                }
-
+                // La capsule « n / N » a quitté ce couloir (#6144, directive
+                // porteur « enlever les N/M au centre ! ») : le rail du couloir
+                // bas MONTRE déjà la position — vignette active bordée de
+                // blanc — et il la dit mieux qu'un texte. Le libellé VoiceOver
+                // de position, lui, ne disparaît pas : il vit maintenant sur
+                // chaque vignette du rail (`FilmstripThumbnail`).
                 Spacer()
 
                 if currentIndex < allAttachments.count {
