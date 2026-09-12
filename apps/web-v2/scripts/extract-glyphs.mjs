@@ -349,3 +349,37 @@ emit({
   type: 'ThreadStatesGlyphName',
   role: "LE JEU D'ECRAN des etats du message (#5936) : transfere, modifie, lieu, citation de story, appel video, avis d'arrivee — charge avec le chunk du fil, jamais dans le socle.",
 });
+
+/**
+ * LE JEU D'ECRAN DES MENUS FLOTTANTS (#6104) — les quatre glyphes des deux
+ * boutons flottants et de leur echelle, miroir `RootMenuLadderEntry.swift` :
+ *
+ * | iOS | phosphor | pourquoi celui-la |
+ * |---|---|---|
+ * | `square.stack.fill` (le Flux) | `stack` | des plans empiles, la meme idee |
+ * | `sparkle.magnifyingglass` (Decouvrir) | `binoculars` | voir plus loin |
+ * | `person.3.fill` (Communautes) | `users-three` | TROIS personnes, comme iOS |
+ * | `gearshape.fill` (Reglages) | `gear` | — |
+ *
+ * `binoculars` plutot que `magnifying-glass` : phosphor ne publie pas la
+ * loupe a etincelles d'iOS, et la loupe NUE est deja le glyphe de la
+ * RECHERCHE dans cette application (barre de la liste). Deux sens pour un
+ * meme dessin, sur deux surfaces que l'utilisateur enchaine, est exactement
+ * la divergence que la dimension 6 nomme — les jumelles disent « chercher des
+ * GENS », ce que la loupe ne dit plus ici.
+ *
+ * `link-simple`, `bell`, `phone` et `user` — les quatre autres glyphes de
+ * l'echelle et du profil — restent au SOCLE, ou ils vivent deja : les
+ * dupliquer ici paierait leurs octets DEUX FOIS au meme demarrage, puisque le
+ * socle est toujours charge. C'est l'arbitrage que `composer-tray` a deja
+ * tranche dans ce fichier pour `image`/`file`/`microphone`/`x`.
+ */
+const FLOATING = ['stack', 'binoculars', 'users-three', 'gear'];
+
+emit({
+  ids: FLOATING,
+  output: join(HERE, '../src/components/glyphs-floating.ts'),
+  constant: 'FLOATING_GLYPHS',
+  type: 'FloatingGlyphName',
+  role: "LE JEU D'ECRAN des menus flottants (#6104) : charge avec le chunk des menus, jamais dans le socle.",
+});

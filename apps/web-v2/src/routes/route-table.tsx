@@ -50,6 +50,28 @@ export const ROUTES = {
   /* MOT DE PASSE OUBLIÉ, flux E-MAIL (#5816) — le flux TÉLÉPHONE et
      `/reset-password` sont hors tranche (issues compagnons). */
   forgotPassword: { pattern: '/forgot-password', screen: () => import('@/routes/forgot-password') },
+  /* LES HUIT DESTINATIONS DES MENUS FLOTTANTS (#6214) — le Flux pour le bouton
+     de gauche, les six barreaux de l'échelle de droite, et le profil qu'ouvre
+     l'avatar. Leurs libellés, teintes et glyphes vivent dans UNE table
+     (`lib/view/floating-menu.ts`, miroir `RootMenuLadderEntry.swift`) ; ces
+     lignes-ci n'en portent que l'adresse.
+
+     Elles arrivent AVANT leur contenu, et c'est délibéré : un barreau qui
+     viserait une adresse absente serait un contrôle qui ment (loi 4), défaut
+     déjà payé par le rail des stories. Chaque écran est aujourd'hui un écran
+     d'attente NOMMÉ, remplacé par son vrai contenu dans son issue à lui.
+
+     Le nommage suit iOS (`Router.swift` § routes de hub), jamais le legacy :
+     ces sept destinations n'existent pas dans `apps/web`. `/me` complète
+     l'espace ouvert par `/me/progression` (#5547). */
+  feed: { pattern: '/feed', screen: () => import('@/routes/feed') },
+  links: { pattern: '/links', screen: () => import('@/routes/links') },
+  notifications: { pattern: '/notifications', screen: () => import('@/routes/notifications') },
+  calls: { pattern: '/calls', screen: () => import('@/routes/calls') },
+  discover: { pattern: '/discover', screen: () => import('@/routes/discover') },
+  communities: { pattern: '/communities', screen: () => import('@/routes/communities') },
+  settings: { pattern: '/settings', screen: () => import('@/routes/settings') },
+  profile: { pattern: '/me', screen: () => import('@/routes/profile') },
 } as const;
 
 function NotFound() {
