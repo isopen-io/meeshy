@@ -95,6 +95,27 @@ export function patchConversation(
   );
 }
 
+/**
+ * `createDirectConversation` (#5652, bloc D) — `POST /api/v1/conversations`
+ * (`services/gateway/src/routes/conversations/core-lifecycle.ts:77-91`,
+ * `requiredAuth`), § 3.5 de la spécification. IDEMPOTENT côté serveur : un
+ * direct déjà existant entre les deux comptes est RENDU, jamais recréé — ce
+ * port n'a donc pas à distinguer les deux issues, les DEUX rendent la même
+ * `Conversation`.
+ */
+export function createDirectConversation(deps: ConversationsDeps, participantId: string): Promise<ApiResult<Conversation>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') {
+    const found = CONVERSATIONS.find((c) => c.type === 'direct' && c.participants.some((p) => p.userId === participantId));
+    if (found !== undefined) return Promise.resolve({ ok: true, data: found });
+    return Promise.resolve({ ok: false, status: 501, error: 'Création de direct indisponible en fixtures' });
+  }
+  return deps.transport.request<Conversation>({
+    method: 'POST',
+    path: '/api/v1/conversations',
+    body: { type: 'direct', participantIds: [participantId] },
+  });
+}
+
 export function conversationQuery(deps: ConversationsDeps, id: string, init?: { readonly queryClient?: QueryClient }) {
   const cached = init?.queryClient?.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY);
   const found = cached?.find((c) => c.id === id);

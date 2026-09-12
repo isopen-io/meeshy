@@ -139,7 +139,8 @@ function StoryTile({ group, size, showsLabel }: { readonly group: StoryTrayGroup
       >
         <span
           data-anneau
-          className="grid place-items-center rounded-chip"
+          data-accented={group.hasUnseen ? 'true' : undefined}
+          className="relative grid place-items-center rounded-chip"
           style={{
             padding: anneau,
             background: group.hasUnseen
@@ -148,6 +149,26 @@ function StoryTile({ group, size, showsLabel }: { readonly group: StoryTrayGroup
           }}
         >
           <Avatar initials={initialsOf(label)} color={'var(--color-ios-brand)'} size={avatar} />
+          {/* LE BADGE D'HUMEUR (#5652) — miroir `LentilleRailEntry.moodEmoji`
+              (`StoriesVivantsRail.swift`) : une pastille SECONDAIRE posée sur
+              l'anneau, jamais un second anneau — l'humeur et la story sont
+              deux signaux distincts sur la MÊME entrée. */}
+          {group.moodEmoji ? (
+            <span
+              data-mood={group.moodEmoji}
+              aria-hidden="true"
+              className="absolute right-0 bottom-0 grid place-items-center rounded-full leading-none"
+              style={{
+                width: Math.max(16, Math.round(size * 0.28)),
+                height: Math.max(16, Math.round(size * 0.28)),
+                fontSize: Math.max(10, Math.round(size * 0.16)),
+                background: 'var(--color-ios-surface)',
+                boxShadow: '0 0 0 1.5px var(--color-ios-surface)',
+              }}
+            >
+              {group.moodEmoji}
+            </span>
+          ) : null}
         </span>
         {showsLabel ? (
           <span

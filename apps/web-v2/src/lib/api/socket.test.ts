@@ -11,6 +11,7 @@ import { createOutboxStore, entriesOf } from '@/lib/send/outbox-store';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { messagesQueryKey, type MessagesPage } from './messages';
 import { createRealtimeConnection, type RealtimeDeps } from './socket';
+import { STORY_TRAY_QUERY_KEY } from './stories';
 import { createTypingStore, typistsOf } from './typing-store';
 import type { Message } from './types';
 
@@ -289,6 +290,29 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
     expect(patched?.translations.find((t) => t.targetLanguage === 'fr')?.translatedContent).toBe('Salut');
   });
 
+  /**
+   * `story:*` / `status:*` (#5652, bloc E) — LE RAIL SUIT LE FIL EN DIRECT.
+   * Motif `AUTHENTICATED` ci-dessus : une invalidation TanStack, jamais une
+   * reconstruction locale du corpus depuis la charge de l'événement.
+   */
+  const STORY_EVENTS: readonly [string, unknown][] = [
+    [SERVER_EVENTS.STORY_CREATED, { story: { id: 's-1' } }],
+    [SERVER_EVENTS.STORY_UPDATED, { story: { id: 's-1' } }],
+    [SERVER_EVENTS.STORY_DELETED, { storyId: 's-1', authorId: 'u-1' }],
+    [SERVER_EVENTS.STORY_VIEWED, { storyId: 's-1', viewerId: 'u-1', viewerUsername: 'x', viewCount: 1 }],
+  ];
+  for (const [event, payload] of STORY_EVENTS) {
+    test(`\`${event}\` invalide le rail des STORIES`, () => {
+      const { deps, socket, queryClient } = buildDeps();
+      queryClient.setQueryData(STORY_TRAY_QUERY_KEY, []);
+      createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+      socket.fire(event, payload);
+
+      expect(queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(true);
+    });
+  }
+
   test('`typing:start` alimente le magasin de frappe, JAMAIS pour soi-même', () => {
     const { deps, socket, typing } = buildDeps({ viewerId: () => 'u-viewer' });
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
@@ -475,6 +499,9 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
     });
     socket.fire(SERVER_EVENTS.MESSAGE_TRANSLATION, { messageId: 'm-1', translations: [] });
     expect(deps.queryClient.getQueryData(CONVERSATIONS_QUERY_KEY)).toBeUndefined();
+    deps.queryClient.setQueryData(STORY_TRAY_QUERY_KEY, []);
+    socket.fire(SERVER_EVENTS.STORY_CREATED, { story: { id: 's-1' } });
+    expect(deps.queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(false);
     // Le minuteur de sécurité en attente a été annulé par `destroy`.
     expect(scheduler.scheduled.every((s) => s.cleared)).toBe(true);
   });

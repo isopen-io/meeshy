@@ -30,6 +30,41 @@ describe('resolveViewer', () => {
     expect(viewer).toEqual({ id: null, handle: null, displayName: '', isAnonymous: true });
   });
 
+  /**
+   * MON PORTRAIT (revue #5652) — la pastille « moi » du rail de stories est la
+   * première surface à en avoir besoin ; le lire ici plutôt que dans l'écran
+   * évite qu'une deuxième, puis une troisième, relise `sessionStore` à sa
+   * façon. Une chaîne VIDE est une ABSENCE, jamais une URL (`<img src="">`
+   * recharge le document).
+   */
+  test('un avatar servi voyage sur le lecteur', () => {
+    const viewer = resolveViewer({
+      source: 'gateway',
+      session: {
+        status: 'authenticated',
+        user: { id: 'u1', username: 'amina', avatar: 'https://cdn.test/a.jpg' },
+        token: 't',
+        sessionToken: 's',
+        expiresAt: Date.now() + 1000,
+      },
+    });
+    expect(viewer.avatar).toBe('https://cdn.test/a.jpg');
+  });
+
+  test('un avatar VIDE est OMIS — jamais une clé posée à la chaîne vide', () => {
+    const viewer = resolveViewer({
+      source: 'gateway',
+      session: {
+        status: 'authenticated',
+        user: { id: 'u1', username: 'amina', avatar: '  ' },
+        token: 't',
+        sessionToken: 's',
+        expiresAt: Date.now() + 1000,
+      },
+    });
+    expect('avatar' in viewer).toBe(false);
+  });
+
   test('source gateway + session pending2fa ⇒ anonyme', () => {
     const viewer = resolveViewer({
       source: 'gateway',

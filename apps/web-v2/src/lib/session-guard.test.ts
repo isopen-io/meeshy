@@ -8,7 +8,9 @@ import { resolveRouteAccess, type RouteKey } from './session-guard';
  * session, les routes PUBLIQUES d'authentification en refusent une active.
  */
 
-const PRIVATE_ROUTES: readonly RouteKey[] = ['list', 'thread', 'progression'];
+/** `conversationsNew` (#5652, revue) — créer une conversation est un geste de
+ * MEMBRE ; la route est arrivée avec son écran sans être déclarée privée. */
+const PRIVATE_ROUTES: readonly RouteKey[] = ['list', 'thread', 'conversationsNew', 'progression'];
 const PUBLIC_AUTH_ROUTES: readonly RouteKey[] = ['login', 'signup'];
 
 describe('resolveRouteAccess — source fixtures : toujours allow (les deux moitiés du seuil)', () => {
