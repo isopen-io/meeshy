@@ -89,17 +89,43 @@ describe('NotificationService — événements de sync de lecture multi-appareil
     it("émet notification:read { notificationId } vers la room de l'utilisateur", async () => {
       prisma.notification.update.mockResolvedValue(makeRawNotification());
 
-      await service.markAsRead(NOTIF_ID);
+      await service.markAsRead(NOTIF_ID, USER_ID);
       await flushAsync();
 
       expect(mockIO.to).toHaveBeenCalledWith(`user:${USER_ID}`);
       expect(mockIO.emit).toHaveBeenCalledWith('notification:read', { notificationId: NOTIF_ID });
     });
 
+    /**
+     * LA PORTÉE EST DANS LA REQUÊTE, PAS DANS LA MÉMOIRE DE L'APPELANT (#6166).
+     *
+     * La propriété d'une notification était vérifiée par la route SEULE depuis
+     * `77b39f5cdd` (2026-01-28) — donc par la discipline de chaque appelant. Un
+     * appelant qui oublie ne faisait rougir personne : le service acceptait un
+     * id nu, et le témoin de la route (`unit/routes/notifications-routes.test.ts`,
+     * « returns 403 when notification belongs to different user ») ne voit pas
+     * passer un appel qui ne traverse pas la route.
+     *
+     * Ce témoin asserte la CLAUSE, pas le code HTTP : c'est la seule lecture qui
+     * distingue « la garde existe » de « la garde est rendue par un appelant
+     * discipliné ». `objectContaining` et non l'égalité — ce qui est défendu est
+     * la PRÉSENCE de `userId` dans la portée, pas la forme entière de la clause,
+     * qu'un lot voisin peut légitimement enrichir.
+     */
+    it('porte le propriétaire dans la clause where — la garde est dans la requête', async () => {
+      prisma.notification.update.mockResolvedValue(makeRawNotification());
+
+      await service.markAsRead(NOTIF_ID, USER_ID);
+
+      expect(prisma.notification.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ id: NOTIF_ID, userId: USER_ID }) }),
+      );
+    });
+
     it('émet aussi notification:counts avec le prédicat isRead (jamais readAt)', async () => {
       prisma.notification.update.mockResolvedValue(makeRawNotification());
 
-      await service.markAsRead(NOTIF_ID);
+      await service.markAsRead(NOTIF_ID, USER_ID);
       await flushAsync();
 
       expect(mockIO.emit).toHaveBeenCalledWith('notification:counts', expect.any(Object));
@@ -117,7 +143,7 @@ describe('NotificationService — événements de sync de lecture multi-appareil
       const offlineService = new NotificationService(prisma);
       prisma.notification.update.mockResolvedValue(makeRawNotification());
 
-      const result = await offlineService.markAsRead(NOTIF_ID);
+      const result = await offlineService.markAsRead(NOTIF_ID, USER_ID);
 
       expect(result).not.toBeNull();
     });
@@ -128,7 +154,7 @@ describe('NotificationService — événements de sync de lecture multi-appareil
       prisma.notification.findUnique.mockResolvedValue({ userId: USER_ID });
       prisma.notification.delete.mockResolvedValue({});
 
-      await service.deleteNotification(NOTIF_ID);
+      await service.deleteNotification(NOTIF_ID, USER_ID);
       await flushAsync();
 
       expect(mockIO.to).toHaveBeenCalledWith(`user:${USER_ID}`);
@@ -139,11 +165,38 @@ describe('NotificationService — événements de sync de lecture multi-appareil
       prisma.notification.findUnique.mockResolvedValue({ userId: USER_ID });
       prisma.notification.delete.mockRejectedValue(new Error('gone'));
 
-      const deleted = await service.deleteNotification(NOTIF_ID);
+      const deleted = await service.deleteNotification(NOTIF_ID, USER_ID);
       await flushAsync();
 
       expect(deleted).toBe(false);
       expect(mockIO.emit).not.toHaveBeenCalledWith('notification:deleted', expect.anything());
+    });
+
+    /** Même loi que `markAsRead` ci-dessus — la portée est dans la relecture (#6166). */
+    it('porte le propriétaire dans la relecture — la garde est dans la requête', async () => {
+      prisma.notification.findUnique.mockResolvedValue({ userId: USER_ID });
+      prisma.notification.delete.mockResolvedValue({});
+
+      await service.deleteNotification(NOTIF_ID, USER_ID);
+
+      expect(prisma.notification.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ id: NOTIF_ID, userId: USER_ID }) }),
+      );
+    });
+
+    /**
+     * ET LA RELECTURE VIDE ARRÊTE LE GESTE (#6166). Avant, `findUnique` sans
+     * résultat laissait passer la suppression « au cas où », et la méthode
+     * rendait `true`. Portée par `userId`, une relecture vide signifie désormais
+     * « pas à cet utilisateur » : la suppression ne part pas.
+     */
+    it('ne supprime RIEN quand la relecture portée ne rend rien', async () => {
+      prisma.notification.findUnique.mockResolvedValue(null);
+
+      const deleted = await service.deleteNotification(NOTIF_ID, USER_ID);
+
+      expect(deleted).toBe(false);
+      expect(prisma.notification.delete).not.toHaveBeenCalled();
     });
   });
 
