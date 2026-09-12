@@ -14,8 +14,11 @@ import { pageÀInstantFigé } from './instant.mjs';
  * Playwright franchit cette fenêtre sur un runner chargé et rend un fond
  * transparent alors que l'écran a parfaitement sauté : la PR #6079 en a fait les
  * frais sans toucher un seul fichier de `apps/web-v2`, pendant que `dev` restait
- * vert au même contenu. Même loi que `check-media.mjs:161` — ne jamais confondre
- * un DÉCALAGE avec une ABSENCE d'effet.
+ * vert au même contenu. Même loi que l'attente de PEINTURE de `check-media.mjs`
+ * (§ « ON ATTEND QUE LA PEINTURE ARRIVE ») — ne jamais confondre un DÉCALAGE
+ * avec une ABSENCE d'effet. Citée par son TITRE et non par son numéro de ligne :
+ * `check-media.mjs:161` ne désignait plus rien après le lot suivant (#6155), et
+ * une citation par numéro ne se vérifie jamais à la lecture.
  *
  * ON ENREGISTRE L'ÉTAT, ON NE LE GUETTE PLUS (revue du 2026-09-12, #6148). Lire
  * en PREMIER et borner SOUS 1600 ms réduisait la course sans la fermer : la borne
