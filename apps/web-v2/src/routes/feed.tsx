@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { useStore } from 'zustand/react';
 
 import { FeedPostCard } from '@/components/feed-post-card';
@@ -10,18 +10,15 @@ import { StoryRail, type StoryRailProps } from '@/components/story-rail';
 import { apiDeps } from '@/lib/api/deps';
 import { FEED_PAGE_SIZE } from '@/lib/api/feed';
 import type { FeedPost } from '@/lib/api/feed-pages';
-import { postGestureAction, recordShareAction, refreshFeedAction, useFeed } from '@/lib/api/query';
+import { refreshFeedAction, useFeed } from '@/lib/api/query';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
-import type { PostToggleKind } from '@/lib/feed/interactions';
-import { publicationShareUrl, RETOUR_PARTAGE_PUBLICATION } from '@/lib/feed/share-url';
-import { partagerLien } from '@/lib/view/invitation';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { useOnline } from '@/lib/net/online';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
-import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
+import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useMinute } from '@/lib/view/use-minute';
 import { useOutOfView } from '@/lib/view/use-out-of-view';
@@ -242,36 +239,8 @@ export default function FeedScreen() {
    * — « le fil réutilisera ce hook tel quel »). ARMÉ au seul état `idle`, et
    * seulement s'il y a déjà des cartes : une liste vide ne doit rien charger
    * en boucle (même garde que `conversations.tsx`). */
-  /* L'ISSUE D'UN GESTE s'annonce, comme une réaction du fil de messages
-     (`use-message-menu.ts`) : l'échec défait l'optimiste EN SILENCE pour
-     l'œil qui regarde ailleurs, et un geste hors ligne ressemble à un geste
-     confirmé — sans annonce, les deux seraient indiscernables. */
-  const { text: announcement, announce } = useLiveAnnouncer();
-  const onGesture = useCallback(
-    (postId: string, kind: PostToggleKind) => {
-      void postGestureAction(postId, kind).then((result) => {
-        if (!result.ok) announce(result.message);
-        else if (result.notice !== undefined) announce(result.notice);
-      });
-    },
-    [announce],
-  );
+  const { announcement, onGesture, onShare } = usePostGesture();
 
-  /* PARTAGER (#6278, D-48) — `partagerLien` part DANS le gestionnaire, sans
-     `await` préalable : la feuille du système n'ouvre que pendant l'activation
-     du geste. Le partage n'est COMPTÉ qu'une fois le lien réellement parti. */
-  const onShare = useCallback(
-    (postId: string) => {
-      void partagerLien({ title: 'Meeshy', text: 'Une publication sur Meeshy', url: publicationShareUrl(postId) }).then(
-        (result) => {
-          if (result === 'partage' || result === 'copie') void recordShareAction(postId);
-          const retour = RETOUR_PARTAGE_PUBLICATION[result];
-          if (retour !== null) announce(retour);
-        },
-      );
-    },
-    [announce],
-  );
 
   const { observe: observeTail } = useLoadMoreSentinel({
     root: frame,

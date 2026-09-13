@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import { applyPostToggle, applyServedCount, type PostToggleKind } from '@/lib/feed/interactions';
+import { applyPostToggle, applyServedCount, togglePost, withServedCount, type PostToggleKind } from '@/lib/feed/interactions';
 
 import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
@@ -8,6 +8,7 @@ import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
+import { postQueryKey } from './publication-detail';
 
 /**
  * LE PORT DES GESTES D'UNE PUBLICATION (#6278) — aimer et enregistrer, le
@@ -87,9 +88,19 @@ export async function performPostGesture(params: {
   const flightKey = `${kind}:${postId}`;
   if (inFlight.has(flightKey)) return { ok: true };
 
-  const on = !isOn(findPost(deps.queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY), postId), kind);
-  const setOn = (value: boolean) =>
-    deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) => applyPostToggle(data, { postId, kind, on: value }));
+  /* Le fil d'abord, le détail sinon : un lien DIRECT vers `/post/:id` n'a
+     jamais rempli le fil, et n'y lire que lui verrait « pas aimé » sur un post
+     déjà aimé. Les DEUX caches basculent ensemble — la même publication ne
+     peut pas porter deux cœurs selon l'écran qui la montre. */
+  const known =
+    findPost(deps.queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY), postId) ??
+    deps.queryClient.getQueryData<FeedPost>(postQueryKey(postId));
+  const on = !isOn(known, kind);
+  const setOn = (value: boolean) => {
+    const change = { postId, kind, on: value };
+    deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) => applyPostToggle(data, change));
+    deps.queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) => (post === undefined ? post : togglePost(post, change)));
+  };
 
   setOn(on);
   inFlight.add(flightKey);
@@ -100,7 +111,9 @@ export async function performPostGesture(params: {
     if (result.ok) {
       const count = kind === 'bookmark' ? servedBookmarkCount(result.data) : undefined;
       if (count !== undefined) {
-        deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) => applyServedCount(data, { postId, kind, count }));
+        const served = { postId, kind, count };
+        deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) => applyServedCount(data, served));
+        deps.queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) => (post === undefined ? post : withServedCount(post, served)));
       }
       return { ok: true };
     }
@@ -110,6 +123,7 @@ export async function performPostGesture(params: {
     setOn(!on);
     if (kind === 'like' && result.status === 409) {
       void deps.queryClient.invalidateQueries({ queryKey: FEED_QUERY_KEY });
+      void deps.queryClient.invalidateQueries({ queryKey: postQueryKey(postId) });
       return { ok: true };
     }
     return { ok: false, message: kind === 'like' ? LIKE_FAILED_MESSAGE : BOOKMARK_FAILED_MESSAGE };
