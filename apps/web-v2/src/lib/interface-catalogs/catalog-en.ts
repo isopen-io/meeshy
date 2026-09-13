@@ -176,6 +176,7 @@ const en = {
   'settings.logout.message': 'Are you sure you want to log out?',
   'settings.logout.inprogress': 'Logging out...',
   'settings.legacy': 'Classic version, new tab',
+  'settings.legacy.unavailable': 'Unavailable in this environment',
   'settings.loading': 'Loading settings',
   'settings.error.title': 'Unable to load your settings',
   'settings.retry': 'Try again',
