@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { resolveAttachmentSrc } from './media-url';
+import { attachmentSrcSet, resolveAttachmentSrc, sizesFor } from './media-url';
+import type { ImageVariant } from './types';
 
 /**
  * `resolveAttachmentSrc` — défaut 2 de la revue #5668 : `Attachment.fileUrl`
@@ -90,5 +91,36 @@ describe('resolveAttachmentSrc — la clé de stockage NUE (#5805)', () => {
     expect(resolveAttachmentSrc('/api/v1/attachments/file/2026%2F09%2Fphoto.png', 'https://gate.meeshy.me')).toBe(
       'https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fphoto.png',
     );
+  });
+});
+
+/**
+ * `attachmentSrcSet`/`sizesFor` (#6221, D4 §1.4.4) — la variante ÉLUE par la
+ * largeur d'affichage, sous sa forme NATIVE navigateur.
+ */
+describe('attachmentSrcSet — la forme native du srcset', () => {
+  const variant = (width: number, url: string): ImageVariant => ({
+    width,
+    height: Math.round((width * 2) / 3),
+    url,
+    size: 1000,
+    format: 'webp',
+  });
+
+  test('chaque variante passe par attachmentSrc — même route que fileUrl, jamais une seconde résolution', () => {
+    const variants = [variant(320, '2026/09/a-320.webp'), variant(640, '2026/09/a-640.webp')];
+    expect(attachmentSrcSet(variants)).toBe(
+      'https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fa-320.webp 320w, ' +
+        'https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fa-640.webp 640w',
+    );
+  });
+
+  test('undefined ou liste vide : undefined — jamais un srcset vide', () => {
+    expect(attachmentSrcSet(undefined)).toBeUndefined();
+    expect(attachmentSrcSet([])).toBeUndefined();
+  });
+
+  test('sizesFor(149) = "149px"', () => {
+    expect(sizesFor(149)).toBe('149px');
   });
 });

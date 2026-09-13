@@ -2,6 +2,21 @@ import { prismFor, resolveAudioTrack, servedTranscript, type Served, type Served
 import type { Attachment } from '@/lib/api/types';
 
 /**
+ * `MediaCarrier` (#6221, § 5 étape 5) — CE QUE LA VISIONNEUSE REMET AU BAS DU
+ * CADRE (`bottomMetadataOverlay`, `ConversationMediaGalleryView.swift:690-760`) :
+ * l'auteur, la date d'envoi, et une légende DÉJÀ SERVIE par le Prisme — la
+ * MÊME descente que le texte du message, jamais une seconde (cycle 128).
+ * `caption: null` ⇒ pas de légende ; `sender: null` (jamais un « ? ») ⇒ pas
+ * de bloc auteur (loi 4). Posé par `bubble.tsx`/`focal-row.tsx` depuis ce
+ * qu'ils ont déjà résolu — ce type ne RÉSOUT rien, il ne fait que VOYAGER.
+ */
+export type MediaCarrier = {
+  readonly caption: Served | null;
+  readonly sender: { readonly displayName: string } | null;
+  readonly sentAt: string;
+};
+
+/**
  * L'ÉLECTION D'UNE PIÈCE JOINTE (#5805) — la composition en DEUX temps que
  * `api/prism.ts` sépare volontairement : `servedTranscript` élit le TEXTE,
  * `resolveAudioTrack` REÇOIT sa langue pour élire la PISTE — jamais une

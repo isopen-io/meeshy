@@ -1,0 +1,439 @@
+import { useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import { createPortal } from 'react-dom';
+
+import type { Attachment } from '@/lib/api/types';
+import { attachmentSrc } from '@/lib/api/media-url';
+import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
+import { nextFocusIndex } from '@/lib/view/focus-trap';
+import { useLongPress } from '@/lib/view/long-press';
+import { electDescription, type MediaCarrier } from '@/lib/view/media';
+import {
+  CARDED_STAGE,
+  DISMISS_THRESHOLD,
+  DOUBLE_TAP_SCALE,
+  STAGE,
+  rendersFullPixels,
+  resolveStageDrag,
+  showsPausedBadge,
+  stageAfter,
+  type StagePresentation,
+} from '@/lib/view/media-stage';
+import { kindOf } from '@/lib/view/message';
+import { safeAreaInsets } from '@/lib/view/safe-area';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { useMediaPlayback } from '@/lib/view/use-media-playback';
+import { READER_LOCALE } from '@/lib/reader';
+
+import '@/styles/media-viewer.css';
+
+import { Glyph } from './glyph';
+import { MediaFilmstrip } from './media-filmstrip';
+
+/**
+ * `MediaViewer` (#6221, § 5 étape 5) — LA VISIONNEUSE PLEIN ÉCRAN, chunk À LA
+ * DEMANDE (`lazy(() => import('./media-viewer'))`, `attachment-blocks.tsx`) :
+ * scène noire, pellicule (`MediaFilmstrip`) SEULEMENT si `items.length > 1`,
+ * fenêtre de rendu ±1 (`prefetchRange`), loi d'immersion PURE (`media-
+ * stage.ts`, StagePresentation), retour matériel/navigateur SANS entrée
+ * fantôme (`useBackDismiss`), piège à focus (`nextFocusIndex`), `#root`
+ * `inert` le temps de l'ouverture.
+ *
+ * PELLICULE AU MESSAGE, PAS À LA CONVERSATION (D-48, Q2 de la spécification
+ * #6221) : `items` est le tableau `visual` DÉJÀ partitionné par
+ * `Attachments` — la projection conversation-entière est une ISSUE
+ * COMPAGNON (avec réagir/répondre/composer), jamais un raccourci par un
+ * magasin global depuis ce chunk.
+ *
+ * GESTES — ce qui est LIVRÉ : tap (bascule plateau ⇄ plein cadre), glissement
+ * vertical qui SUIT le doigt (ferme ≥ 150, entre en plein cadre ≤ −150 depuis
+ * `carded`), appui long 500 ms (plein cadre + pause), double-tap (zoom
+ * 1 ↔ 2,5 sur une page IMAGE), flèches/pellicule pour la pagination. CE QUI
+ * NE L'EST PAS (D-48, écart ASSUMÉ, faute de temps sur ce tour) : le
+ * pincement à deux doigts et le déplacement d'une image zoomée au doigt — la
+ * loi PURE qui les gouvernerait (`MAX_SCALE`, `media-stage.ts`) est déjà
+ * dérivée et testée, seule la mécanique `PointerEvent` à deux points manque.
+ * Un contournement matériel n'existe pas : le double-tap reste le chemin
+ * complet pour explorer une image en grand.
+ */
+export type MediaViewerProps = {
+  readonly items: readonly Attachment[];
+  readonly startIndex: number;
+  readonly onClose: () => void;
+  readonly languages: readonly string[];
+  readonly displayLanguage?: string;
+  readonly fallbackLanguage: string;
+  readonly carrier?: MediaCarrier;
+};
+
+/** Un seuil de balayage HORIZONTAL, indépendant du seuil vertical de fermeture — la pagination n'est pas un geste d'immersion. */
+const SWIPE_PAGE_THRESHOLD_PX = 60;
+
+function clampIndex(index: number, count: number): number {
+  return Math.max(0, Math.min(count - 1, index));
+}
+
+/** `bottomMetadataOverlay` (auteur, date, `w × h`, poids, légende) — ABSENT sans `carrier` (loi 4). */
+function CarrierFooter({ attachment, carrier }: { readonly attachment: Attachment; readonly carrier: MediaCarrier | undefined }) {
+  if (carrier === undefined) return null;
+  const lang = carrier.caption !== null && carrier.caption.language !== READER_LOCALE ? carrier.caption.language : undefined;
+  const kind = kindOf(attachment);
+  const sizeLabel = attachment.width !== undefined && attachment.height !== undefined ? `${attachment.width} × ${attachment.height}` : undefined;
+  const weightLabel = `${Math.max(1, Math.round(attachment.fileSize / 1024))} Ko`;
+
+  return (
+    <div data-viewer-footer className="media-viewer-chrome flex flex-col gap-1 px-4 pb-2 text-white">
+      {carrier.sender !== null ? (
+        <div className="flex items-center gap-2 text-mini">
+          <span className="font-medium">{carrier.sender.displayName}</span>
+          <time dateTime={carrier.sentAt} className="opacity-70">
+            {new Date(carrier.sentAt).toLocaleString(READER_LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          </time>
+        </div>
+      ) : null}
+      <div className="flex items-center gap-1.5 text-mini opacity-70">
+        <Glyph name={kind === 'video' ? 'fillPlay' : 'image'} size={12} />
+        {sizeLabel !== undefined ? <span>{sizeLabel}</span> : null}
+        <span>·</span>
+        <span>{weightLabel}</span>
+      </div>
+      {carrier.caption !== null && carrier.caption.text !== '' ? (
+        <p data-viewer-caption className="text-title" {...(lang !== undefined ? { lang } : {})}>
+          {carrier.caption.text}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function ViewerImagePage({
+  attachment,
+  languages,
+  displayLanguage,
+  fallbackLanguage,
+}: {
+  readonly attachment: Attachment;
+  readonly languages: readonly string[];
+  readonly displayLanguage?: string;
+  readonly fallbackLanguage: string;
+}) {
+  const described = electDescription({ attachment, readerLanguages: languages, displayLanguage, fallbackLanguage });
+  const lang = described.language !== READER_LOCALE ? described.language : undefined;
+  const [zoomed, setZoomed] = useState(false);
+  const placeholder = thumbHashPlaceholder(attachment.thumbHash);
+
+  return (
+    <div
+      className="relative flex size-full items-center justify-center overflow-hidden"
+      style={placeholder !== undefined ? { backgroundImage: `url("${placeholder}")`, backgroundSize: 'cover' } : undefined}
+      onDoubleClick={(event) => {
+        event.stopPropagation();
+        setZoomed((z) => !z);
+      }}
+    >
+      {attachment.fileUrl === '' ? (
+        <div className="flex flex-col items-center gap-2 text-white/70">
+          <Glyph name="image" size={48} className="opacity-30" />
+          <span className="text-mini">Média indisponible</span>
+        </div>
+      ) : (
+        <img
+          src={attachmentSrc(attachment.fileUrl)}
+          alt={described.text}
+          {...(lang !== undefined ? { lang } : {})}
+          className="max-h-full max-w-full object-contain transition-transform duration-200"
+          style={{ transform: zoomed ? `scale(${DOUBLE_TAP_SCALE})` : 'scale(1)' }}
+          draggable={false}
+        />
+      )}
+    </div>
+  );
+}
+
+function ViewerVideoPage({
+  attachment,
+  isActive,
+  presentation,
+  onToggleRef,
+}: {
+  readonly attachment: Attachment;
+  readonly isActive: boolean;
+  readonly presentation: StagePresentation;
+  readonly onToggleRef: (toggle: (() => void) | null) => void;
+}) {
+  const { status, toggle, bind } = useMediaPlayback({ attachmentId: attachment.id });
+  const statusRef = useRef(status);
+  statusRef.current = status;
+  const toggleRef = useRef(toggle);
+  toggleRef.current = toggle;
+
+  useEffect(() => {
+    if (isActive) {
+      onToggleRef(() => toggleRef.current());
+      if (statusRef.current !== 'playing') toggleRef.current();
+    } else {
+      if (statusRef.current === 'playing') toggleRef.current();
+      onToggleRef(null);
+    }
+    return () => onToggleRef(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
+
+  const posterUrl = attachment.thumbnailUrl !== undefined && attachment.thumbnailUrl !== '' ? attachmentSrc(attachment.thumbnailUrl) : undefined;
+  const paused = showsPausedBadge(presentation, true, status === 'playing');
+
+  return (
+    <div className="relative flex size-full items-center justify-center bg-black">
+      <video
+        key={attachment.fileUrl}
+        ref={bind}
+        playsInline
+        preload="auto"
+        {...(posterUrl !== undefined ? { poster: posterUrl } : {})}
+        src={attachmentSrc(attachment.fileUrl)}
+        className="max-h-full max-w-full object-contain"
+      />
+      {paused ? (
+        <span className="absolute rounded-full bg-black/55 px-3 py-1 text-mini font-medium text-white">En pause</span>
+      ) : null}
+    </div>
+  );
+}
+
+/** Une page HORS de la fenêtre de rendu — le fond ThumbHash seul, aucun octet de média chargé. */
+function ViewerBackdropPage({ attachment }: { readonly attachment: Attachment }) {
+  const placeholder = thumbHashPlaceholder(attachment.thumbHash);
+  return (
+    <div
+      className="size-full bg-black"
+      style={placeholder !== undefined ? { backgroundImage: `url("${placeholder}")`, backgroundSize: 'cover' } : undefined}
+    />
+  );
+}
+
+export default function MediaViewer({
+  items,
+  startIndex,
+  onClose,
+  languages,
+  displayLanguage,
+  fallbackLanguage,
+  carrier,
+}: MediaViewerProps) {
+  const [index, setIndex] = useState(() => clampIndex(startIndex, items.length));
+  const [presentation, setPresentation] = useState<StagePresentation>(CARDED_STAGE);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+  const activeVideoToggleRef = useRef<(() => void) | null>(null);
+  const dragRef = useRef<{ readonly startX: number; readonly startY: number; dx: number; dy: number } | null>(null);
+  const trackRef = useRef<HTMLDivElement | null>(null);
+
+  useBackDismiss(onClose);
+
+  const current = items[index];
+  const insets = safeAreaInsets();
+  const carriesDuration = current !== undefined && kindOf(current) === 'video';
+
+  // #root INERT le temps de l'ouverture — même dispositif que le clone du
+  // menu de message (`message-menu.tsx:380-391`), porté ICI au NIVEAU DE LA
+  // COUCHE plutôt qu'à un aperçu cloné.
+  useEffect(() => {
+    const root = document.getElementById('root');
+    const previousOverflow = document.body.style.overflow;
+    root?.setAttribute('inert', '');
+    document.body.style.overflow = 'hidden';
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
+    return () => {
+      root?.removeAttribute('inert');
+      document.body.style.overflow = previousOverflow;
+      previouslyFocusedRef.current?.focus();
+    };
+  }, []);
+
+  const goTo = (next: number): void => {
+    setIndex(clampIndex(next, items.length));
+    setPresentation(CARDED_STAGE);
+  };
+
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onClose();
+      return;
+    }
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      goTo(index + 1);
+      return;
+    }
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      goTo(index - 1);
+      return;
+    }
+    if (e.key === ' ') {
+      if (activeVideoToggleRef.current !== null) {
+        e.preventDefault();
+        activeVideoToggleRef.current();
+      }
+      return;
+    }
+    if (e.key === 'Tab') {
+      const dialog = dialogRef.current;
+      if (dialog === null) return;
+      const focusables = Array.from(dialog.querySelectorAll<HTMLElement>('button, [href], [tabindex]:not([tabindex="-1"])')).filter(
+        (el) => !el.hasAttribute('disabled'),
+      );
+      if (focusables.length === 0) return;
+      const activeElement = document.activeElement;
+      const currentPos = focusables.indexOf(activeElement as HTMLElement);
+      const next = nextFocusIndex(focusables.length, currentPos === -1 ? 0 : currentPos, e.shiftKey);
+      e.preventDefault();
+      focusables[next]?.focus();
+    }
+  };
+
+  // Tap sur la scène — bascule le plateau. `stopPropagation` sur les
+  // contrôles (fermer, pellicule, bouton play) empêche cette bascule de se
+  // déclencher par-dessus une action réelle.
+  const onStageClick = (): void => {
+    if (dragRef.current !== null && (Math.abs(dragRef.current.dx) > 4 || Math.abs(dragRef.current.dy) > 4)) return;
+    setPresentation((p) => stageAfter(p, 'tap'));
+  };
+
+  const longPress = useLongPress({
+    onOpen: () => setPresentation(() => stageAfter(CARDED_STAGE, 'longPress')),
+  });
+
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    dragRef.current = { startX: event.clientX, startY: event.clientY, dx: 0, dy: 0 };
+  };
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    const drag = dragRef.current;
+    if (drag === null) return;
+    drag.dx = event.clientX - drag.startX;
+    drag.dy = event.clientY - drag.startY;
+    if (trackRef.current !== null && Math.abs(drag.dy) > Math.abs(drag.dx)) {
+      trackRef.current.style.transform = `translateY(${Math.max(0, drag.dy)}px)`;
+    }
+  };
+  const onPointerUp = (): void => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (drag === null) return;
+    if (trackRef.current !== null) trackRef.current.style.transform = '';
+
+    if (Math.abs(drag.dx) > Math.abs(drag.dy)) {
+      if (drag.dx <= -SWIPE_PAGE_THRESHOLD_PX) goTo(index + 1);
+      else if (drag.dx >= SWIPE_PAGE_THRESHOLD_PX) goTo(index - 1);
+      return;
+    }
+    const verdict = resolveStageDrag({ dx: drag.dx, dy: drag.dy, presentation, threshold: DISMISS_THRESHOLD });
+    if (verdict === 'dismisses') onClose();
+    else if (verdict === 'entersFull') setPresentation({ kind: 'full', pausedOnEntry: false });
+  };
+
+  const isFull = presentation.kind === 'full';
+
+  if (current === undefined) return null;
+
+  return createPortal(
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Média ${index + 1} sur ${items.length}`}
+      data-media-viewer
+      data-viewer-index={index}
+      className="fixed inset-0 z-[1000] flex flex-col bg-black"
+      onKeyDown={onKeyDown}
+      tabIndex={-1}
+    >
+      {/* Couloir haut */}
+      <div
+        className="media-viewer-chrome flex items-center justify-between px-3"
+        style={{ height: STAGE.topCorridorHeight + insets.top, paddingTop: insets.top, opacity: isFull ? 0 : 1 }}
+      >
+        <button
+          ref={closeButtonRef}
+          type="button"
+          aria-label="Fermer"
+          onClick={onClose}
+          className="tap-target-34 grid size-10 place-items-center rounded-full bg-white/15 text-white"
+        >
+          <Glyph name="x" size={16} />
+        </button>
+      </div>
+
+      {/* Le cadre — pages */}
+      <div
+        ref={trackRef}
+        className="relative min-h-0 flex-1"
+        onClick={onStageClick}
+        onContextMenu={(e) => e.preventDefault()}
+        onPointerDown={(e: ReactPointerEvent<HTMLDivElement>) => {
+          onPointerDown(e);
+          longPress.onPointerDown(e);
+        }}
+        onPointerMove={(e: ReactPointerEvent<HTMLDivElement>) => {
+          onPointerMove(e);
+          longPress.onPointerMove(e);
+        }}
+        onPointerUp={() => {
+          onPointerUp();
+          longPress.onPointerUp();
+        }}
+        onPointerCancel={() => longPress.onPointerCancel()}
+      >
+        {items.map((attachment, i) => {
+          const distance = i - index;
+          if (Math.abs(distance) > 1 && i !== index) return null; // hors fenêtre ET hors page courante : pas monté du tout
+          const fullPixels = rendersFullPixels(distance);
+          return (
+            <div
+              key={attachment.id}
+              data-viewer-page
+              data-full-pixels={fullPixels}
+              className="media-viewer-page absolute inset-0"
+              style={{ transform: `translateX(${distance * 100}%)`, display: Math.abs(distance) > 1 ? 'none' : 'block' }}
+            >
+              {!fullPixels ? (
+                <ViewerBackdropPage attachment={attachment} />
+              ) : kindOf(attachment) === 'video' ? (
+                <ViewerVideoPage
+                  attachment={attachment}
+                  isActive={i === index}
+                  presentation={presentation}
+                  onToggleRef={(fn) => {
+                    if (i === index) activeVideoToggleRef.current = fn;
+                  }}
+                />
+              ) : (
+                <ViewerImagePage
+                  attachment={attachment}
+                  languages={languages}
+                  fallbackLanguage={fallbackLanguage}
+                  {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Couloir bas */}
+      <div className="media-viewer-chrome flex flex-col" style={{ opacity: isFull ? 0 : 1, paddingBottom: insets.bottom }}>
+        <CarrierFooter attachment={current} carrier={carrier} />
+        {carriesDuration ? (
+          <div className="px-4 pb-1" aria-hidden>
+            <span className="block h-[3px] w-full rounded-full bg-white/20" />
+          </div>
+        ) : null}
+        {items.length > 1 ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} /> : null}
+      </div>
+    </div>,
+    document.body,
+  );
+}

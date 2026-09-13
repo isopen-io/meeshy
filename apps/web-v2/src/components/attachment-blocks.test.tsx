@@ -221,13 +221,15 @@ describe('Attachments — le vocal, la piste suit le TEXTE servi (#5805, cycle 1
 });
 
 /**
- * LA VIDÉO (#6193) — `kindOf` sait rendre `'video'` depuis toujours ;
- * `Attachments` retombait sur `return null`, une perte SILENCIEUSE (le
- * message existe, l'auteur croit avoir envoyé quelque chose, le lecteur ne
- * voit AUCUNE trace). La lecture (poster, `<video>`, plein écran) reste
- * hors tranche — ce witness porte seulement le repli.
+ * LA VIDÉO — #6193 posait le repli LISIBLE (`kindOf` sait rendre `'video'`
+ * depuis toujours ; un `return null` était une perte SILENCIEUSE). #6221
+ * (« la grille 2/3/4+ ») le FAIT ÉVOLUER : une pièce vidéo avec une URL
+ * exploitable rend désormais un LECTEUR RÉEL (`VideoTile`, `video-tile.tsx`,
+ * témoins T8/T9 dédiés) ; le repli D-42 ne reste que pour une pièce SANS
+ * fichier (`fileUrl === ''`) — la forme que #6193 visait à l'origine (un
+ * upload dont l'URL n'est jamais arrivée).
  */
-describe('Attachments — la vidéo, un repli LISIBLE plutôt qu’un vide (#6193)', () => {
+describe('Attachments — la vidéo : lecteur réel avec URL, repli D-42 sans fichier (#6193 puis #6221)', () => {
   const video: Attachment = {
     ...attachmentDefaults,
     id: 'a-video-1',
@@ -241,41 +243,34 @@ describe('Attachments — la vidéo, un repli LISIBLE plutôt qu’un vide (#619
     uploadedBy: 'u-amina',
     createdAt: new Date().toISOString(),
   };
-  // Sans métadonnées connues (`duration` ABSENTE, jamais `undefined` explicite
-  // — `exactOptionalPropertyTypes` distingue les deux) : le repli doit encore
-  // porter le type, avec la taille en dernier recours.
   const { duration: _duration, ...videoWithoutDuration } = video;
-  const videoWithoutMetadata: Attachment = { ...videoWithoutDuration, originalName: '', fileSize: 0 };
+  const videoWithoutUrl: Attachment = { ...videoWithoutDuration, fileUrl: '', originalName: '', fileSize: 0 };
 
-  test('rend un repli non vide : jamais null', () => {
+  test('avec une URL : rend un lecteur réel (<video>, bouton "Lire la vidéo"), jamais le repli', () => {
     const html = renderOne(video, { languages: ['fr'] });
     expect(html).not.toBe('');
-    expect(html).toContain('data-video-fallback');
+    expect(html).toContain('<video');
+    expect(html).toContain('Lire la vidéo');
+    expect(html).not.toContain('data-video-fallback');
   });
 
-  test('porte le TYPE (glyphe vidéo) — même sans nom ni durée connus', () => {
-    const html = renderOne(videoWithoutMetadata, { languages: ['fr'] });
+  test('porte la DURÉE (m:ss) en badge quand `duration` est connue', () => {
+    const html = renderOne(video, { languages: ['fr'] });
+    expect(html).toContain('>0:12<');
+  });
+
+  test('SANS fichier (fileUrl vide) : repli D-42 lisible — glyphe, nom, taille en dernier recours', () => {
+    const html = renderOne(videoWithoutUrl, { languages: ['fr'] });
     expect(html).toContain('data-video-fallback');
     expect(html).toContain('>Vidéo<');
     expect(html).toContain('>0 Ko<');
-  });
-
-  test('porte le NOM d’origine quand il existe', () => {
-    const html = renderOne(video, { languages: ['fr'] });
-    expect(html).toContain('trajet-vers-la-gare.mp4');
-  });
-
-  test('porte la DURÉE (m:ss) quand `duration` est connue, plutôt que la taille', () => {
-    const html = renderOne(video, { languages: ['fr'] });
-    expect(html).toContain('>0:12<');
-    expect(html).not.toContain('4102 Ko');
+    expect(html).not.toContain('<video');
   });
 
   test('CONTRE-ÉPREUVE : `kindOf` déciderait `video`, un `return null` laisserait le fil vide (leçon 261)', () => {
     // Une régression qui réintroduirait `return null` pour `kind === 'video'`
-    // ferait retomber ce witness — le même que celui du gate `sansGlyphes`
-    // employé plus bas pour la protection : une absence affirmée seule ne
-    // suffit jamais, il faut la présence positive du repli en face.
+    // ferait retomber ce witness — une absence affirmée seule ne suffit
+    // jamais, il faut la présence positive d'un rendu en face.
     const html = renderOne(video, { languages: ['fr'] });
     expect(html.trim().length).toBeGreaterThan(0);
   });

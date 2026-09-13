@@ -1,0 +1,27 @@
+/**
+ * LA VISIONNEUSE PLEIN ÉCRAN (#6221) — la feuille voyage avec SON chunk
+ * (`media-viewer-*.js`/`.css`), jamais dans `app.css` : c'est un écran
+ * atteint par une MINORITÉ de sessions (un fil qui reçoit plusieurs médias),
+ * et son poids ne doit rien coûter à l'ouverture de l'application — même
+ * arbitrage que `floating-menus.css`.
+ */
+
+.media-viewer-track {
+  scroll-snap-type: x mandatory;
+}
+
+.media-viewer-page {
+  scroll-snap-align: center;
+}
+
+.media-viewer-chrome {
+  transition:
+    opacity 250ms ease,
+    transform 250ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .media-viewer-chrome {
+    transition-duration: 0ms;
+  }
+}
