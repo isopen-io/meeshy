@@ -23,6 +23,7 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'story',
   'feed',
   'notifications',
+  'profile',
 ];
 const PUBLIC_AUTH_ROUTES: readonly RouteKey[] = ['login', 'signup'];
 
