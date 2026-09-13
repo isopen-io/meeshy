@@ -355,10 +355,13 @@ describe('Le recensement des adresses en sursis', () => {
 const SUCCESSEURS: readonly { readonly cle: string; readonly issue: string }[] = [
   { cle: 'links/user.ts GET /links', issue: '#4170 — cible de /my-links et /links/stats' },
   { cle: 'me/index.ts GET /', issue: '#4178 — cible de /auth/me' },
-  {
-    cle: 'user-deletions.ts POST ${basePath}/conversations/:conversationId/restore-for-me',
-    issue: "#4332 — n'a AUCUN successeur à nommer : la corbeille n'existe qu'ici",
-  },
+  // L'entrée `user-deletions.ts POST ${basePath}/conversations/:conversationId/restore-for-me`
+  // (#4332) a QUITTÉ cette liste au lot #4317 : la route a désormais un
+  // successeur RÉEL (`apiPath('/conversations/:conversationId/restore-for-me')`,
+  // enregistré juste au-dessus dans le même fichier) et l'annonce
+  // (`depreciee(ALIAS_SUPPRESSION_RESTAURATION_CONVERSATION)`) — elle n'est
+  // donc plus « déclarée alias sans annonce possible » et sort du balayage
+  // `muets` par le fait, pas par exemption.
 ];
 
 /**

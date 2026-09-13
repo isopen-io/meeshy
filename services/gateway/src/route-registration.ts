@@ -188,12 +188,17 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
 
     // ═══════════════════════════════════════════════════════════════════
     // userDeletionsRoutes : `basePath`, jamais `prefix` — le plugin
-    // calcule ses propres chemins ABSOLUS (#4277 critère 3). Reste sous
-    // `/api` et non `/api/v1` : `DELETE …/conversations/:id/delete-for-me`
-    // collisionnerait avec `routes/conversations/delete-for-me.ts`, déjà
-    // monté là et plus complet (transfert de propriété, clôture,
-    // diffusion). Trancher laquelle survit est une décision produit, pas
-    // un rangement d'adresse.
+    // calcule ses propres chemins ABSOLUS (#4277 critère 3). `basePath: '/api'`
+    // ne gouverne plus que les SEPT alias LEGACY, tous en sursis depuis
+    // #4317 : `DELETE …/conversations/:id/delete-for-me` reste sous `/api`
+    // (jamais `/api/v1`) parce qu'il collisionnerait avec
+    // `routes/conversations/delete-for-me.ts`, déjà monté là et plus complet
+    // (transfert de propriété, clôture, diffusion) — c'est la SEULE des sept
+    // adresses dont le successeur vit dans un AUTRE module. Les six autres
+    // gestes (restore-for-me, clear-history, delete/restore-for-me message,
+    // retrait en lot, liste des conversations supprimées) enregistrent
+    // désormais EUX-MÊMES leur adresse canonique sous `apiPath()` en plus de
+    // leur alias — ce montage-ci ne pilote que la seconde.
     // ═══════════════════════════════════════════════════════════════════
     await server.register(userDeletionsRoutes, { basePath: '/api' });
 
