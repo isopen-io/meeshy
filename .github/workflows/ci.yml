@@ -648,6 +648,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-discover.mjs
 
+      # #6361 — Mes liens : le hub ne montre que la famille servie, la liste
+      # porte les agrégats de la passerelle, « copier » met l'adresse PUBLIQUE
+      # dans le presse-papiers, « Désactiver » se lit au geste, la création
+      # remplace l'écran par le lien créé ; chaque texte tient AA et aucun
+      # n'est volé par un disque (deux schémas, deux gabarits).
+      - name: Gate Mes liens (hub, liens de partage, détail, création)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-links.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |

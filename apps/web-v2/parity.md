@@ -335,7 +335,8 @@ dans une version ultérieure ·
 | `/search` | `legacy` | |
 | `/communities`, `/communities/:id` | **V4.0.0** | **servies par la v3.1 depuis #6364** — la liste de SES communautés et le détail d'une communauté (ses conversations mènent au fil) ; nomenclature du legacy reprise (D-5). `/communities/new` est une **adresse neuve** (la création, miroir `Route.communityCreate`). Membres, invitation, réglages, rejoindre/quitter et publications restent au legacy, chacun suivi par son issue (D-60) |
 | `/contacts` | `legacy` | |
-| `/links`, `/links/tracked/:token` | `legacy` | `/l/:token` de la V4.0.0 en est le pendant public |
+| `/links` | **V4.0.0** | **servie par la v3.1 depuis #6361** — le hub « Mes liens » et ses liens de PARTAGE : `/links/share` (liste et agrégats), `/links/share/:linkId` (détail, copier, partager, désactiver/activer) et `/links/share/new` (création) sont des **adresses neuves**, miroir `Route.shareLinks`. Les liens de suivi (#6408), l'affiliation (#6409) et les liens de communauté (#6410) restent au legacy (D-63) |
+| `/links/tracked/:token` | `legacy` | `/l/:token` de la V4.0.0 en est le pendant public ; la famille « liens de suivi » arrive avec #6408 |
 
 ### Liens et redirections
 

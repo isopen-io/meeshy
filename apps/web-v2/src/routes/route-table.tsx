@@ -94,6 +94,14 @@ export const ROUTES = {
   post: { pattern: '/post/$post', screen: publicationScreen },
   postDeepLink: { pattern: '/feeds/post/$post', screen: publicationScreen },
   links: { pattern: '/links', screen: () => import('@/routes/links') },
+  /* LES LIENS DE PARTAGE (#6361, D-63) — miroir `Route.shareLinks`, puis
+     `CreateShareLinkView` et `ShareLinkDetailView` (`Router.swift`,
+     `ShareLinksView.swift`). Adresses NEUVES : le legacy sert `/links` d'un
+     seul tenant. L'ORDRE compte : le routeur rend la PREMIÈRE adresse qui
+     correspond, et `new` serait sinon lu comme le linkId d'un lien. */
+  shareLinks: { pattern: '/links/share', screen: () => import('@/routes/share-links') },
+  shareLinkNew: { pattern: '/links/share/new', screen: () => import('@/routes/share-link-new') },
+  shareLink: { pattern: '/links/share/$link', screen: () => import('@/routes/share-link') },
   notifications: { pattern: '/notifications', screen: () => import('@/routes/notifications') },
   calls: { pattern: '/calls', screen: () => import('@/routes/calls') },
   discover: { pattern: '/discover', screen: () => import('@/routes/discover') },
