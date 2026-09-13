@@ -122,7 +122,13 @@ export function ThreadHeader({
             <h1 className="truncate text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
               {title}
             </h1>
-            <p className="flex items-center gap-1 text-mini" style={{ color: 'var(--color-ios-ink-2)' }}>
+            {/* `--color-ios-ink` et non `-ink-2` (#6308) : l'encre secondaire, semi-
+                transparente (`color-mix(in srgb, #4338ca 80%, transparent)` en clair),
+                posée sur cette bande DE VERRE au pire cas (flou désactivé, #6124/D-51)
+                mesure 3,58:1 — sous la barre AA. `--color-ios-ink` y tient (mesuré par
+                `scripts/lib/glass-contrast.test.ts`), la hiérarchie reste lisible par la
+                taille (`text-mini`) plutôt que par l'opacité. */}
+            <p className="flex items-center gap-1 text-mini" style={{ color: 'var(--color-ios-ink)' }}>
               <Glyph name="lock" size={9} style={{ color: 'var(--color-ok)' }} />
               {group ? `${conversation.memberCount} participants` : 'Chiffré de bout en bout'}
             </p>
