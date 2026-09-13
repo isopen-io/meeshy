@@ -201,42 +201,41 @@ check(
 );
 
 // ------------------------------------------------------- 2. cible tactile réelle
-/**
- * AMENDEMENT #6220 (revue de #5817, défaut 1) — `page.hover()` ne scrolle
- * une cible QUE si Playwright la juge insuffisamment visible ; son critère
- * porte sur la RANGÉE entière (`[data-row]`), pas sur le petit bouton dans
- * son coin. Au chargement, `c-nouvelle` (10ᵉ des 29) rend déjà, à
- * `scrollTop = 0`, presque entière à l'écran : `hover()` ne bougeait donc
- * rien, et son bouton d'actions retombait exactement dans la bande FIXE que
- * la barre de recherche flottante occupe au bas du scrollport
- * (`position: absolute; bottom: 0`, hors flux — `conversations.tsx`) — deux
- * coins sur quatre atterrissaient sur la barre, jamais sur le bouton.
- *
- * Ce n'est pas le défaut que #6220 a corrigé (qui portait sur la DERNIÈRE
- * rangée au bas MAXIMAL du défilement, couvert plus bas par un test dédié) :
- * une rangée MÉDIANE peut, à un défilement quelconque, traverser
- * MOMENTANÉMENT la bande de la barre — un utilisateur qui continue son
- * geste la voit filer plus haut, hors de la bande, exactement comme sous
- * n'importe quel bandeau flottant posé sur une liste défilante. Ce que ce
- * témoin doit mesurer est l'ATTEIGNABILITÉ du bouton une fois le geste
- * terminé sur cette rangée — donc dans une position DE REPOS qui la dégage
- * de la barre — jamais un instantané pris au milieu d'un défilement qu'on
- * n'a pas fini. `scrollIntoView({ block: 'center' })` positionne
- * délibérément chaque rangée au CENTRE du scrollport avant la mesure : loin
- * de la bande fixe de la barre, sauf pour la toute dernière rangée du
- * corpus, dont le repos naturel EST contre le bas — cas que le test dédié
- * « au bas MAXIMAL du défilement » couvre déjà spécifiquement.
- */
+//
+// LA RANGÉE EST D'ABORD AMENÉE AU CENTRE DU SCROLLPORT, ET C'EST UNE CONDITION
+// DE LA MESURE, PAS UNE COMMODITÉ (#6229 → #6237).
+//
+// Depuis que la barre de recherche FLOTTE (`absolute inset-x-0 bottom-0 z-10`,
+// #6220), les rangées passent SOUS elle pendant le défilement — c'est le
+// comportement voulu, celui d'iOS, et `#contenu` réserve sa hauteur pour que la
+// DERNIÈRE rangée reste atteignable dégagée. Mais le débord `::after` de la
+// cible tactile (34 + 2×5 = 44) dépasse la boîte du bouton de 5 px : pour toute
+// rangée qui se trouve à cet instant sous la barre, `elementFromPoint` rend la
+// barre sur les deux coins BAS. Mesuré : `bas-gauche → DIV…backdrop-blur-xl`,
+// `bas-droit → DIV.absolute inset-x-0 bottom-0 z-10`, bouton 753→787 dans une
+// fenêtre de 844 dont la barre occupe 779→844.
+//
+// Ce que ce constat mesurait alors était l'OCCLUSION par un flotteur assumé, pas
+// la géométrie du bouton — le seul sujet de cette section. Et il tombait sur une
+// rangée DIFFÉRENTE selon la machine (`c-nouvelle` en local, `c-salon-riviere`
+// en CI), signature d'un artefact de position. Centrer la rangée reproduit ce
+// que fait un doigt — on amène à soi ce qu'on veut toucher — et la garde
+// conserve ses dents : un bouton réellement trop petit rougit toujours, partout.
+//
+// La contre-garde est juste en dessous : on VÉRIFIE que la rangée mesurée est
+// bien dégagée de la barre, sinon un futur changement de disposition pourrait
+// remettre la mesure sous le flotteur sans que rien ne le dise.
 for (const row of rows) {
-  await page.evaluate((row) => {
-    document.querySelector(`[data-row="${row}"]`)?.scrollIntoView({ block: 'center' });
+  await page.evaluate((r) => {
+    document.querySelector(`[data-row="${r}"]`)?.scrollIntoView({ block: 'center' });
   }, row);
+  await page.waitForTimeout(80);
   await page.hover(`[data-row="${row}"]`);
   await page.waitForTimeout(60);
   const hit = await page.evaluate(
     ({ row, floor }) => {
       const btn = document.querySelector(`[data-row="${row}"] button[aria-label="Actions de conversation"]`);
-      if (btn === null) return { ok: false, why: 'bouton absent' };
+      if (btn === null) return { ok: false, why: 'bouton absent', degage: false };
       const r = btn.getBoundingClientRect();
       const cx = r.left + r.width / 2;
       const cy = r.top + r.height / 2;
@@ -251,9 +250,19 @@ for (const row of rows) {
         const el = document.elementFromPoint(x, y);
         return el !== btn && !btn.contains(el);
       });
-      return { ok: misses.length === 0, why: `${misses.length} coin(s) hors cible, boîte ${Math.round(r.width)}×${Math.round(r.height)}` };
+      const bar = document.querySelector('[data-search-bar]')?.getBoundingClientRect();
+      const degage = bar === undefined || cy + half < bar.top;
+      return {
+        ok: misses.length === 0,
+        why: `${misses.length} coin(s) hors cible, boîte ${Math.round(r.width)}×${Math.round(r.height)}`,
+        degage,
+      };
     },
     { row, floor: TAP_FLOOR },
+  );
+  check(
+    hit.degage,
+    `la rangée « ${row} » est mesurée DÉGAGÉE de la barre flottante — sinon on mesure le flotteur, pas le bouton`,
   );
   check(hit.ok, `la cible tactile du bouton d'actions de « ${row} » couvre ${TAP_FLOOR}×${TAP_FLOOR} (${hit.why})`);
 }
