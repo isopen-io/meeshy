@@ -61,14 +61,17 @@ describe('performPreferenceEdit', () => {
     expect(await pending).toEqual({ status: 'saved' });
   });
 
-  test('confirmé : le cache porte ce que le serveur a RETENU', async () => {
+  /* #6342 — la valeur RETENUE du geste l'emporte sur la valeur demandée ; la
+     voisine servie dans la même catégorie n'est pas adoptée (elle date du
+     traitement de CETTE requête, et peut être périmée). */
+  test('confirmé : le réglage du geste porte ce que le serveur a RETENU, jamais ses voisins servis', async () => {
     const { deps, read } = depsWith({
       online: true,
       seed: cached,
-      answer: Promise.resolve({ ok: true, data: { notification: { pushEnabled: false, soundEnabled: false } } }),
+      answer: Promise.resolve({ ok: true, data: { notification: { pushEnabled: true, soundEnabled: false } } }),
     });
     expect(await performPreferenceEdit({ patch: { pushEnabled: false }, deps })).toEqual({ status: 'saved' });
-    expect(read()).toEqual({ ...cached, pushEnabled: false, soundEnabled: false });
+    expect(read()).toEqual({ ...cached, pushEnabled: true });
   });
 
   test('refusé : le cache revient EXACTEMENT à l’instantané, et le refus se dit', async () => {
