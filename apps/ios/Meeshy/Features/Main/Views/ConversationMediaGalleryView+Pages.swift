@@ -130,7 +130,50 @@ struct GalleryImagePage: View, Equatable {
 
             if hasRenderableSource {
                 imageLayer
-                    .aspectRatio(contentMode: .fit)
+                    /*
+                     **LA TAILLE VIENT DU SOLVEUR, PAS D'UN `.aspectRatio`**
+                     (retour porteur 2026-09-13 : « ça zoom trop au point où on
+                     ne voit plus tout le contenu »).
+
+                     `MediaStageFraming.Result` rend DEUX tailles : `frame`, le
+                     cadre, et `media`, le média ajusté par un `aspectFit` dont
+                     le doc-comment promet « jamais de rognage, jamais
+                     d'étirement ». **`media` n'était lu par AUCUNE vue** —
+                     mesuré : zéro occurrence dans tout le dépôt. La loi
+                     calculait juste, et personne ne l'écoutait.
+
+                     Ce qui tenait lieu de contrainte était le
+                     `.aspectRatio(contentMode: .fit)` posé ici. Il ne portait
+                     pas sur l'image : `imageLayer` rend un
+                     `ProgressiveCachedImage`, dont le corps est un `ZStack` de
+                     quatre branches (plein format / vignette / thumbHash /
+                     `Color.clear`). Un `.aspectRatio` sans ratio explicite
+                     déduit celui de la vue qu'il enveloppe — et un `ZStack`
+                     dont une branche est un `Color.clear` n'a pas le ratio de
+                     l'image qu'il montre. Le média se posait donc au cadre, et
+                     en plein cadre — où le cadre EST l'écran — une image très
+                     haute débordait par le haut et par le bas.
+
+                     Reproduit au simulateur avec un témoin 600×2400 portant
+                     trois repères : en mode CADRÉ les trois se voyaient ; en
+                     PLEIN CADRE, « HAUT » et « BAS » disparaissaient et seul
+                     « MILIEU » subsistait.
+
+                     > Une loi qui calcule une valeur que personne ne lit ne
+                     > protège de rien — et elle est PIRE qu'absente, parce que
+                     > son existence et ses tests donnent l'illusion que la
+                     > question est réglée. `MediaGalleryStageGeometryTests`
+                     > éprouvait `aspectFit` et passait ; le pixel, lui, était
+                     > rogné.
+
+                     La taille est désormais posée en dur depuis `stage.media`.
+                     Le non-rognage devient une propriété de CONSTRUCTION : le
+                     cadre proposé a exactement le ratio de l'image, donc
+                     `.resizable()` le remplit sans déborder ni déformer. Le
+                     `.aspectRatio` est retiré — le garder ferait deux sources
+                     pour une même décision, dont une inopérante.
+                    */
+                    .frame(width: stage.media.width, height: stage.media.height)
                     .scaleEffect(scale)
                     .offset(offset)
                     .gesture(zoomGesture, including: isActive ? .all : .none)

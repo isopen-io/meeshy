@@ -192,6 +192,57 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
     /// **UN site construit l'entrée du solveur.** Deux sites, c'est deux
     /// plateaux : celui que la page dessine et celui que l'overlay habille
     /// finiraient par diverger d'une gouttière, et rien ne rougirait.
+    /// **CE QUE LE SOLVEUR CALCULE DOIT ÊTRE LU** (retour porteur 2026-09-13 :
+    /// « ça zoom trop au point où on ne voit plus tout le contenu »).
+    ///
+    /// `MediaStageFraming.Result` rend deux tailles. `frame` était consommé ;
+    /// `media` — le média ajusté par un `aspectFit` dont le doc-comment promet
+    /// « jamais de rognage, jamais d'étirement » — ne l'était par AUCUNE vue :
+    /// zéro occurrence dans tout le dépôt. Ce qui tenait lieu de contrainte
+    /// était un `.aspectRatio(contentMode: .fit)` posé sur `imageLayer`,
+    /// c'est-à-dire sur un `ProgressiveCachedImage` dont le corps est un
+    /// `ZStack` à quatre branches (dont un `Color.clear`) : sans ratio
+    /// explicite, `.aspectRatio` déduit celui de la vue qu'il enveloppe, et un
+    /// `ZStack` n'a pas celui de l'image qu'il montre. En plein cadre — où le
+    /// cadre EST l'écran — une image très haute débordait donc en haut et en bas.
+    ///
+    /// > Une loi qui calcule une valeur que personne ne lit ne protège de rien,
+    /// > et elle est PIRE qu'absente : son existence et ses tests donnent
+    /// > l'illusion que la question est réglée. Les témoins de cette suite
+    /// > éprouvaient `aspectFit` et passaient ; le pixel, lui, était rogné.
+    ///
+    /// Ce témoin ferme la boucle que les autres laissaient ouverte : ils
+    /// mesurent ce que la loi CALCULE, celui-ci mesure qu'on l'ÉCOUTE.
+    func test_theSolverMediaSize_isActuallyConsumedByTheView() throws {
+        let code = try unit()
+        XCTAssertTrue(
+            code.contains("stage.media.width") && code.contains("stage.media.height"),
+            """
+            La vue ne consomme pas `stage.media` : le média n'est plus contraint par le \
+            solveur, et rien ne garantit qu'il tient dans son cadre. C'est le rognage du \
+            plein cadre — la loi calcule juste et personne ne l'écoute.
+            """
+        )
+    }
+
+    /// Le `.aspectRatio` retiré ne doit pas revenir sur la page image : deux
+    /// sources pour une même décision, dont une inopérante sur un `ZStack`.
+    func test_theImagePage_doesNotReintroduceAnIntrinsicAspectRatio() throws {
+        let code = try unit()
+        guard let start = code.range(of: "if hasRenderableSource {") else {
+            return XCTFail("La page image a changé de forme — la garde ne mesure plus rien.")
+        }
+        let window = code[start.upperBound...].prefix(300)
+        XCTAssertFalse(
+            window.contains(".aspectRatio(contentMode: .fit)"),
+            """
+            `.aspectRatio(contentMode: .fit)` est de retour sur le média. Il ne mord pas \
+            sur un `ProgressiveCachedImage` (ZStack sans ratio intrinsèque) et double la \
+            décision que `stage.media` porte déjà.
+            """
+        )
+    }
+
     func test_theGallery_buildsTheSolverInputInExactlyOnePlace() throws {
         let code = try unit()
 
