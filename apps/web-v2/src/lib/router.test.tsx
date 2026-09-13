@@ -115,4 +115,33 @@ describe('createRouter().Link — compose l’onClick de l’appelant (#5816, T1
     click(anchor);
     expect(window.location.pathname).toBe('/target');
   });
+
+  /**
+   * NAVIGUER VERS L'ADRESSE OÙ L'ON EST DÉJÀ N'EMPILE RIEN (revue-correction
+   * #5893). Mesuré dans un navigateur réel avant le correctif : sur `/feed`,
+   * chaque tap du bouton flottant de gauche — qui pointe sur `feed` quelle
+   * que soit la route — ajoutait une entrée d'historique (`history.length`
+   * 3 → 4) sans rien changer à l'écran. Le bouton RETOUR matériel d'Android
+   * (directive coque 5b) ramenait alors sur `/feed`, pas sur la liste.
+   */
+  test('un lien vers la route COURANTE n’empile aucune entrée d’historique (loi 4 + retour matériel)', () => {
+    window.history.replaceState(null, '', '/target');
+    const pushState = spyOn(window.history, 'pushState');
+    const { Link } = createRouter(ROUTES, NotFound);
+    const el = mount(<Link to="target">Cible</Link>);
+    click(el.querySelector('a')!);
+    expect(pushState).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe('/target');
+    pushState.mockRestore();
+  });
+
+  test('… mais un lien vers une AUTRE route empile bien, lui', () => {
+    window.history.replaceState(null, '', '/');
+    const pushState = spyOn(window.history, 'pushState');
+    const { Link } = createRouter(ROUTES, NotFound);
+    const el = mount(<Link to="target">Cible</Link>);
+    click(el.querySelector('a')!);
+    expect(pushState).toHaveBeenCalled();
+    pushState.mockRestore();
+  });
 });

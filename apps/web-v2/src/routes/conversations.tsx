@@ -18,6 +18,7 @@ import { refreshListAction, rowAction, useConversations, useStatusMoods, useStor
 import type { StatusMoodPost } from '@/lib/api/stories';
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
+import { storyViewedStore } from '@/lib/api/story-viewed-store';
 import { useTypistNames } from '@/lib/api/use-typists';
 import { resolveViewer } from '@/lib/api/viewer';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
@@ -29,6 +30,7 @@ import { resolveLensSections } from '@/lib/lens/sections';
 import { useOnline } from '@/lib/net/online';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useOutOfView } from '@/lib/view/use-out-of-view';
+import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { useReaderLanguages } from '@/lib/view/use-reader';
@@ -92,11 +94,6 @@ import { useMinute } from '@/lib/view/use-minute';
 /** Référence STABLE — un `[]` littéral par rendu changerait l'identité de
  * `conversations` à chaque image et défairait les mémos qui en dépendent. */
 const EMPTY_CONVERSATIONS: readonly Conversation[] = [];
-
-/** Même règle, pour le regroupement des stories : un `new Set()` écrit en ligne
- * change d'identité à chaque rendu et ferait recalculer le mémo pour rien —
- * exactement le piège que `CLAUDE.md` § Prisme décrit sur `preferredLanguages`. */
-const EMPTY_VIEWED: ReadonlySet<string> = new Set<string>();
 
 /** Même règle : le repli du corpus d'humeurs, une seule fois. */
 const EMPTY_STATUS_MOODS: readonly StatusMoodPost[] = [];
@@ -254,6 +251,16 @@ export default function ConversationsScreen() {
   });
   const { focus, level } = useScene(frame);
   const online = useOnline();
+  /**
+   * LE RETOUR RAMÈNE À LA MÊME POSITION (#5893, § 0 de la spécification) —
+   * `frame` (`<ul id="contenu">`) est le scrollport que la Lentille défile ;
+   * le routeur démonte cet écran à chaque navigation (`Screen
+   * key={routeKey}`), donc `window.scrollY` seul (`lib/router.tsx`) ne
+   * rendait jamais rien ici. Ouvrir `/feed` par le bouton flottant puis
+   * revenir retrouve désormais la même rangée, exactement comme un lien
+   * direct `/c/:id` puis retour.
+   */
+  useScrollportMemory(frame);
 
   /**
    * LA SOURCE (#5650) — `useConversations()` sert les fixtures OU la
@@ -311,6 +318,10 @@ export default function ConversationsScreen() {
    * de six entrées vit dans le rail, avec sa porte « tout voir ».
    */
   const tray = useStoryTray();
+  /** L'AVANCE OPTIMISTE sur « vu par moi » (#5817) — un ensemble STABLE tant
+   * qu'aucune story n'est ouverte : `zustand` ne notifie que sur changement
+   * d'identité, donc le mémo des groupes ne se recalcule pas pour rien. */
+  const seenNow = useStore(storyViewedStore, (s) => s.ids);
   /**
    * LE CORPUS DES HUMEURS (#5652) — un DEUXIÈME corpus, fusionné sur les
    * groupes de stories par `withMoods` (`lib/view/story-tray.ts`). Une requête
@@ -324,15 +335,17 @@ export default function ConversationsScreen() {
       withMoods(
         groupStoriesByAuthor(tray.data ?? [], {
           viewerId: viewer.id ?? undefined,
-          // « Vu par moi » n'est pas servi par la passerelle (`viewCount` est un
-          // COMPTE, qui ne dit pas QUI) : issue compagnon, même forme que
-          // `reaction-store.ts`. D'ici là tout est non vu — un anneau allumé à
-          // tort se corrige d'un regard, un anneau éteint à tort cache une story.
-          viewedIds: EMPTY_VIEWED,
+          // « Vu par moi » EST servi par la passerelle (`isViewedByMe`,
+          // `PostFeedService.ts`, les deux projections) — le commentaire qui
+          // affirmait le contraire ici a été mesuré FAUX (#5817). `viewedIds`
+          // n'est plus qu'une AVANCE : la story que le lecteur vient d'ouvrir
+          // éteint son anneau tout de suite, sans attendre le retour réseau
+          // (`api/story-viewed-store.ts`, § Optimistic Updates).
+          viewedIds: seenNow,
         }),
         moods.data ?? EMPTY_STATUS_MOODS,
       ),
-    [tray.data, viewer.id, moods.data],
+    [tray.data, viewer.id, moods.data, seenNow],
   );
   /** `railTientLaPlace` borne la promesse à la PREMIÈRE tentative : un corpus
    * LENT garde sa place, un corpus qui répond NON la perd immédiatement

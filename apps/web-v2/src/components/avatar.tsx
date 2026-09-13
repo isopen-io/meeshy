@@ -30,6 +30,7 @@ export function Avatar({
   presence,
   name,
   opacity,
+  src,
 }: {
   initials: string;
   /** L'accent de la conversation — jamais une couleur codée en dur ici. */
@@ -45,7 +46,24 @@ export function Avatar({
    * dans les deux schémas (mesuré 3,74:1 / 2,80:1). Défaut `1`.
    */
   opacity?: number;
+  /**
+   * UN VRAI PORTRAIT (#5893) — `PostMedia.author.avatar`/`Viewer.avatar` :
+   * une URL, jamais posée pour un groupe (D-1 étend `MeeshyAvatar.swift`,
+   * qui peint la photo AU-DESSUS du dégradé d'initiales quand elle existe).
+   *
+   * SANS ÉTAT LOCAL, DÉLIBÉRÉMENT (revue-correction #5893) — `Avatar` est
+   * appelé comme une fonction PURE par au moins un témoin du dépôt
+   * (`living-summary.test.tsx#expand`, qui rejoue l'arbre React sans
+   * dispatcher de hooks pour retrouver un `onClick` réel sans bibliothèque
+   * de DOM) : un `useState` y lève « Invalid hook call ». Le repli sur les
+   * initiales se fait donc en manipulant le DOM DIRECTEMENT au `onError`
+   * (`e.currentTarget.style.display = 'none'`) plutôt qu'en re-rendant — le
+   * dégradé et les initiales restent TOUJOURS montés, juste RECOUVERTS par
+   * la photo tant qu'elle charge, et redécouverts si elle échoue.
+   */
+  src?: string;
 }) {
+  const showsImage = src !== undefined && src !== '';
   const dot = size * 0.26;
   // 0.8536 = (1 + cos(pi/4)) / 2 — le point a 45 deg sur le cercle, en fraction
   // du diametre. On retranche la moitie de la pastille pour la CENTRER dessus.
@@ -62,18 +80,32 @@ export function Avatar({
        (un élément de flex est déjà blockifié), et rend la géométrie DÉRIVÉE
        vraie dans tous les contextes. */
     <span className="avatar-root relative block shrink-0" style={{ width: size, height: size, opacity: opacity ?? 1 }}>
+      {/* LE DÉGRADÉ D'INITIALES — TOUJOURS MONTÉ (voir le doc-comment de
+          `src` ci-dessus) : c'est ce que la photo RECOUVRE tant qu'elle
+          charge, et ce que l'échec de la photo RÉVÈLE en s'effaçant. */}
       <span
         className="grid size-full place-items-center rounded-chip font-semibold text-ios-surface"
         style={{
           background: `linear-gradient(135deg, ${color}, color-mix(in oklch, ${color} 68%, white))`,
           fontSize: size * 0.38,
         }}
-        aria-hidden={name === undefined}
-        aria-label={name}
-        role={name === undefined ? undefined : 'img'}
+        aria-hidden={name === undefined || showsImage}
+        aria-label={showsImage ? undefined : name}
+        role={name === undefined || showsImage ? undefined : 'img'}
       >
         {initials}
       </span>
+      {showsImage ? (
+        <img
+          src={src}
+          alt={name ?? ''}
+          loading="lazy"
+          className="absolute inset-0 size-full rounded-chip object-cover"
+          onError={(event) => {
+            event.currentTarget.style.display = 'none';
+          }}
+        />
+      ) : null}
       {showsDot ? (
         /* `data-presence` — L'ANCRE de la pastille (revue #5935). Les gates
            navigateur la comptaient par le NOMBRE d'enfants de `.avatar-root`
