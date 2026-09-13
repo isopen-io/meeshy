@@ -48,6 +48,35 @@ final class HashtagResultsViewModel: ObservableObject {
         }
     }
 
+    /// **Le cœur des RÉSULTATS D'UN HASHTAG aimait dans le vide** (retour
+    /// porteur 2026-09-13) — jumeau exact du défaut des favoris :
+    /// `HashtagResultsView` montait `FeedPostCard(post: post)` et rien d'autre.
+    /// Garde : `FeedPostCardLikeWiringSourceGuardTests`.
+    ///
+    /// Même règle partagée (`PostLikeMutation`), même restauration par ID plutôt
+    /// que par index — `loadMore` peut avoir ajouté une page pendant
+    /// l'aller-retour réseau. Pas de cache à sauver ici : cet écran n'en a pas,
+    /// et l'écho serveur `post:liked` réaffirmera le total absolu.
+    func toggleLike(_ postId: String) async {
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        let snapshot = posts[index]
+        let outcome = PostLikeMutation.toggled(isLiked: snapshot.isLiked, likes: snapshot.likes)
+        posts[index].isLiked = outcome.isLiked
+        posts[index].likes = outcome.likes
+        do {
+            if outcome.isLiked {
+                try await service.like(postId: postId)
+            } else {
+                try await service.unlike(postId: postId)
+            }
+        } catch {
+            if let current = posts.firstIndex(where: { $0.id == postId }) {
+                posts[current] = snapshot
+            }
+            FeedbackToastManager.shared.showError(String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main))
+        }
+    }
+
     func loadMore() async {
         guard hasMore, !isLoading else { return }
         isLoading = true
