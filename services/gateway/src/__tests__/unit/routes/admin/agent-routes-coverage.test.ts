@@ -11,7 +11,6 @@ const mockAgentClient = {
 };
 
 jest.mock('../../../../services/AgentHttpClient', () => ({
-  ...(jest.requireActual('../../../../services/AgentHttpClient') as object),
   AgentUnavailableError: class AgentUnavailableError extends Error {
     constructor(message: string) {
       super(message);
