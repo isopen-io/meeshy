@@ -1,177 +1,72 @@
-import { Avatar } from '@/components/avatar';
-import { initialsOf } from '@/lib/view/conversation';
-import { Link } from '@/routes/route-table';
-
 /**
- * **UNE TUILE DE TRAIL, ET SA COTE PILOTE TOUT LE RESTE** (#5946).
+ * **LA COTE DU PLATEAU DES STORIES — ET CE QU'ELLE GOUVERNE** (#6133).
  *
- * L'app iOS rend le trail des stories sous DEUX formes — la grande en tête de
- * liste, et une compacte. Les deux passent par la MÊME cellule, et son
- * doc-comment dit exactement ce qu'il faut reproduire :
+ * **La cote iOS gouverne l'AVATAR, jamais la cellule.** `AvatarContext.size`
+ * (`packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyAvatar.swift:46-52`)
+ * est la taille du VISAGE : `.storyTray` = 88, `.storyTrayCompact` = 36.
+ * L'anneau de story se dessine AUTOUR de lui (`ringSize = size + 6`,
+ * `MeeshyAvatar.swift:165`), et la cellule se COMPOSE ensuite : l'anneau plus
+ * la respiration de son libellé au grand plateau (`StoryRingCell`,
+ * `.frame(width: 96)`, `StoryTrayView.swift:289`), l'anneau seul dans la bande
+ * épinglée (« 36pt avatar + 6pt story ring plus breathing »,
+ * `CollapsibleHeader.swift:80`).
  *
- * > « the grande trail and the pinned mini-trail render an identical cell, only
- * > differing by `context` size »
- * > « `context` drives the size (`.storyTray` 88pt vs `.storyTrayCompact` 36pt);
- * > all proportional metrics derive from it »
+ * **Pourquoi l'écrire ici, une fois.** La première écriture du web faisait
+ * valoir la cote iOS sur la CELLULE — `round(size × 1.222)`, avatar 72 →
+ * cellule 88. Ce n'était pas une lecture d'iOS mais un rapport inventé : il
+ * donnait 88 à la bonne case pour la mauvaise raison, et 37 au lieu de 42 à la
+ * bande. Deux sessions l'ont rederivé à chaque revue, jusqu'au conflit de
+ * #6100. Le grief de #6080 contre un grand avatar (« un huitième de l'écran pour
+ * trois entrées ») ne tient plus depuis #6103 : le plateau SORT du champ au
+ * défilement, et c'est la bande compacte qui prend la fente du titre.
  *
- * D'où ce composant unique. Écrire une seconde tuile « compacte » aurait donné
- * deux vérités pour une même cellule — et ce dépôt a mesuré ce que ça coûte :
- * les trois familles de résolveurs du Prisme ont divergé sur trois clients
- * faute d'un site UNIQUE.
- *
- * **Rien ici ne connaît le défilement.** Quand compacter est du ressort du
- * MONTAGE, jamais de la tuile — c'est la règle qu'iOS écrit noir sur blanc pour
- * son propre rail (« vue PURE : aucun `@State` de défilement, aucun
- * observateur »), et elle garde ce composant testable sans simuler un scroll.
- *
- * LA GÉOGRAPHIE iOS EST REPRISE POUR DE VRAI (#6103, décision #6070,
- * `decisions.md` D-36 — annule et remplace la note ci-dessous, gardée en
- * mémoire du premier arbitrage). Le grand rail (`ConversationRail`,
- * `variant="grande"`) vit DANS la vue défilante et en SORT normalement, comme
- * tout contenu du flux ; une bande compacte (`variant="pinned"`), la MÊME
- * cellule, prend la place du TITRE dans l'en-tête (`ListHeader`) une fois le
- * grand rail sorti (`useOutOfView`, `lib/view/use-out-of-view.ts`) — jamais
- * les deux peints en même temps, exactement `PinnedStoryTrailBand`
- * (`StoryTrayView.swift:656-671`). Le premier arbitrage (#5946) compactait le
- * rail SUR PLACE, hors flux, superposé à une tuile fantôme toujours GRANDE :
- * il tenait l'invariant « aucune rangée ne bouge » mais laissait une bande
- * VIDE (~130 px) entre l'en-tête et les filtres une fois défilé, un défaut
- * que la cible iOS n'a pas — voir `check-lens.mjs` § 7 pour l'arbitrage
- * complet entre les deux formes.
+ * **Ce fichier ne peint rien.** `StoryTile` (`story-rail.tsx`) peint la loi,
+ * dans les deux géographies, sur le Flux comme sur la liste — le MÊME
+ * composant avec la MÊME cote. La tuile de CONVERSATION qui vivait ici
+ * (`RailTile`) n'avait plus aucun appelant depuis la fusion #6080 ↔ #6103 : ses
+ * témoins mesuraient une cellule qu'aucun écran ne montrait, et elle est
+ * retirée avec eux.
  */
 
-/** La grande — celle de la tête de liste. Cote de l'avatar, en pixels. */
-export const RAIL_TILE_GRANDE = 72;
+/** `AvatarContext.storyTray` — l'avatar du grand plateau. */
+export const RAIL_TILE_GRANDE = 88;
+
+/** `AvatarContext.storyTrayCompact` — l'avatar de la bande épinglée. */
+export const RAIL_TILE_COMPACT = 36;
+
+/** `ringSize = size + 6` : l'anneau déborde l'avatar de 3 px de chaque côté. */
+const RING_OUTSET = 6;
+
+/** `StoryRingCell` — la largeur du libellé sous l'anneau du grand plateau. */
+const GRANDE_LABEL_FRAME = 96;
 
 /**
- * La compacte — celle qu'on voit en défilant. iOS descend de 88 à 36 pt, un
- * rapport de 0,41 ; appliqué à nos 72 px d'avatar, il donne 30.
+ * La fente du titre de l'en-tête (`min-h-11`, `components/rail-title-slot.tsx`)
+ * — la bande y est `absolute` et ne pousse rien : son anneau doit y tenir.
  */
-export const RAIL_TILE_COMPACT = 30;
+export const RAIL_TITLE_SLOT = 44;
+
+/** Charte, dimension 5 — cibles de 44 px au moins. */
+export const MIN_TOUCH_TARGET = 44;
+
+export const railRingBox = (size: number): number => size + RING_OUTSET;
+
+export const railCellWidth = (size: number, showsLabel: boolean): number =>
+  showsLabel ? Math.max(railRingBox(size), GRANDE_LABEL_FRAME) : railRingBox(size);
 
 /**
- * Sous ce seuil, la tuile ne porte plus son libellé : à 30 px un nom tronqué à
- * deux lettres ne dit rien que l'avatar ne dise déjà, et il vole la hauteur
- * qu'on cherche justement à rendre à la liste. Miroir de `showsUsername` /
- * `isCompact` côté iOS, dont le seuil est `context.size <= 44`.
- *
- * Le nom ne DISPARAÎT pas pour autant : il reste sur l'`aria-label` du lien,
- * donc un lecteur d'écran l'annonce à l'identique aux deux tailles.
+ * La marge NÉGATIVE qui porte la cible tactile à 44 sans élargir la case :
+ * la bande épinglée mesure 42, son lien s'étend d'un pixel de chaque côté.
  */
-const SEUIL_LIBELLE = 44;
+export const railHitPad = (cell: number): number => Math.max(0, (MIN_TOUCH_TARGET - cell) / 2);
 
 /**
- * LA CIBLE TACTILE (charte, dimension 5 — « cibles ≥ 44 pt ») — #6103.
- *
- * À `RAIL_TILE_COMPACT` (30 px d'avatar, sans libellé), la boîte du lien
- * mesure environ 32 px de haut : sous la cible. Le `<li data-rail-tile>`,
- * lui, DOIT garder sa largeur exacte (`cellule`) — c'est elle que
- * `check-lens.mjs` mesure pour prouver la compaction (#6070) — donc la
- * cible s'obtient en ÉTENDANT la zone cliquable du lien AU-DELÀ de sa boîte
- * visuelle, jamais en élargissant la case qui le contient. `minWidth`/
- * `minHeight` pose le plancher ; une marge NÉGATIVE, toujours écrite avec
- * son signe même quand elle vaut zéro (`-0px` à `RAIL_TILE_GRANDE`, où la
- * cellule dépasse déjà 44 px), ramène le lien à sa place sans repousser ses
- * voisins — la même technique que la charte applique déjà aux boutons ronds
- * de 32 px du dépôt.
+ * Le trait de l'anneau — `ringWidth` d'iOS (`MeeshyAvatar.swift:167-175`) :
+ * 0,7 au grand plateau, 1,5 à la bande, DOUBLÉ pour une story non vue
+ * (`lineWidth: context.ringWidth * 2`). Un trait sous le pixel ne se peint pas
+ * sur tous les écrans : le plancher est le filet de 1 px.
  */
-const MIN_TOUCH_TARGET = 44;
-
-/**
- * LES DEUX COTES QUI DÉRIVENT DE LA CELLULE, exportées parce qu'une SECONDE
- * boîte doit les tenir à l'identique : la tuile FANTÔME qui réserve la
- * hauteur du rail pendant la résolution (`RailPlaceholderTile`,
- * `components/conversation-rail.tsx`). Elle n'a de valeur que si elle mesure
- * exactement ce que la vraie mesurera — recopier `88` et `2.5` en ferait une
- * jumelle qui dérive au premier changement de cote (revue #6103).
- */
-export const railCellWidth = (size: number): number => Math.round(size * 1.222);
-export const railRingWidth = (size: number): number => Math.max(1, Math.round(size * 0.035 * 10) / 10);
-
-export type RailTileProps = {
-  readonly conversationId: string;
-  readonly title: string;
-  /** Couleur d'accent de la conversation — déterministe, jamais choisie ici. */
-  readonly accent: string;
-  /** Non-lus SERVIS (déjà passés par les surcharges optimistes de l'hôte). */
-  readonly unread: number;
-  /** LA cote : tout le reste en dérive. */
-  readonly size: number;
+export const railStroke = (size: number, unseen: boolean): number => {
+  const ringWidth = size === RAIL_TILE_GRANDE ? 0.7 : 1.5;
+  return Math.max(1, Math.round(ringWidth * (unseen ? 2 : 1) * 10) / 10);
 };
-
-/**
- * **AUCUNE TRANSITION sur le changement de cote, et c'est délibéré.** La charte
- * v3 (règle 32) n'autorise à animer que `opacity` et `scale`, jamais la
- * géométrie — et la raison vaut ici plus qu'ailleurs : animer la `width` de six
- * tuiles PENDANT un défilement force un reflow par image, ce qui est la cause
- * classique de saccade.
- *
- * Depuis #6103, aucune tuile ne CHANGE d'ailleurs de cote : le grand rail
- * garde la sienne pour toujours et une bande DISTINCTE, montée ailleurs
- * (`ListHeader`), rend la cote compacte. Ce qui bascule est donc un
- * MONTAGE — franc, hors du geste continu — jamais une interpolation, et
- * l'hystérésis qui l'empêche de clignoter vit chez celui qui l'observe
- * (`PINNED_RAIL_REVEAL_RATIO` / `PINNED_RAIL_RELEASE_RATIO`,
- * `lib/lens/pinned-rail.ts`), jamais ici.
- */
-export function RailTile({ conversationId, title, accent, unread, size }: RailTileProps) {
-  const porteLibelle = size >= SEUIL_LIBELLE;
-  /* Toutes les cotes DÉRIVENT de `size`. Une épaisseur figée borderait
-     discrètement un avatar de 72 px et mangerait la moitié d'un de 30. */
-  const anneau = railRingWidth(size);
-  const cellule = railCellWidth(size);
-  /* Négative dès que la cellule est plus étroite que la cible ; `0` sinon —
-     mais TOUJOURS émise avec son signe (voir le doc-comment de
-     `MIN_TOUCH_TARGET`) pour que les deux tailles rendent le même GABARIT de
-     valeur, condition du témoin « même balisage » ci-dessous. */
-  const hitPad = Math.max(0, (MIN_TOUCH_TARGET - cellule) / 2);
-
-  return (
-    <li
-      data-rail-tile={size}
-      className="flex shrink-0 flex-col items-center gap-1.5"
-      style={{ width: `${cellule}px` }}
-    >
-      <Link
-        to="thread"
-        params={{ conversation: conversationId }}
-        aria-label={title}
-        data-conversation={conversationId}
-        className="flex flex-col items-center gap-1.5 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-        style={{
-          outlineColor: 'var(--color-ios-brand)',
-          minWidth: `${MIN_TOUCH_TARGET}px`,
-          minHeight: `${MIN_TOUCH_TARGET}px`,
-          marginLeft: `-${hitPad}px`,
-          marginRight: `-${hitPad}px`,
-          marginTop: `-${hitPad}px`,
-          marginBottom: `-${hitPad}px`,
-          justifyContent: 'center',
-        }}
-      >
-        <span
-          data-anneau
-          className="grid place-items-center rounded-chip"
-          style={{
-            padding: `${anneau}px`,
-            background:
-              unread > 0
-                ? 'var(--color-ios-brand)'
-                : 'color-mix(in srgb, var(--color-ios-ink-3) 40%, transparent)',
-          }}
-        >
-          <Avatar initials={initialsOf(title)} color={accent} size={size} />
-        </span>
-        {porteLibelle ? (
-          <span
-            data-libelle
-            className="w-full truncate text-center text-check"
-            style={{ color: 'var(--color-ios-ink-2)' }}
-          >
-            {title}
-          </span>
-        ) : null}
-      </Link>
-    </li>
-  );
-}
