@@ -69,7 +69,7 @@ describe('followBrowserInterfaceLanguage — « Automatique » retire le choix e
 
   test('le catalogue de la langue résolue est chargé avant qu’elle ne soit posée', async () => {
     await followBrowserInterfaceLanguage(['pt-BR']);
-    expect(translate(currentInterfaceLanguage(), 'root.menu.settings')).toBe('Configurações');
+    expect(translate(currentInterfaceLanguage(), 'root.menu.settings')).toBe('Ajustes');
   });
 
   test('aucune langue du navigateur n’est cataloguée ⇒ le défaut du produit', async () => {

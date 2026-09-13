@@ -50,3 +50,23 @@ export const INLINE_INTERFACE_LANGUAGE_BOOTSTRAP =
   `}` +
   `document.documentElement.lang=r||'${DEFAULT_INTERFACE_LANGUAGE}';` +
   `}catch(e){}})();`;
+
+/**
+ * LA MÊME RÈGLE, EN FONCTION (#5563) — ce que « Automatique » résout quand les
+ * réglages retirent un choix explicite, sans recharger la page. Elle vit ICI,
+ * à côté du script, et `interface-language-choice.test.ts` exécute les deux sur
+ * les mêmes cas : le premier écart entre la chaîne et la fonction rougit.
+ *
+ * @param {string | null} stored le choix stocké, ou `null`
+ * @param {readonly string[]} languages `navigator.languages`, dans son ordre
+ * @returns {string} une langue de `SUPPORTED_INTERFACE_LANGUAGES`
+ */
+export function resolveInterfaceLanguageCode(stored, languages) {
+  /** @type {readonly string[]} */
+  const supported = SUPPORTED_INTERFACE_LANGUAGES;
+  if (stored && supported.includes(stored)) return stored;
+  const found = languages
+    .map((language) => (language || '').slice(0, 2).toLowerCase())
+    .find((code) => supported.includes(code));
+  return found ?? DEFAULT_INTERFACE_LANGUAGE;
+}

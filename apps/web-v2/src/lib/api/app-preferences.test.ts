@@ -138,7 +138,8 @@ describe('patchAppPreferences — l’écriture fusionne, et rend ce que le serv
   test('PATCH multi-catégories, corps rangé par catégorie', async () => {
     const { calls, transport } = transportAnswering({ ok: true, data: { privacy: wire().privacy } });
     const result = await patchAppPreferences({ source: 'gateway', transport }, { showTypingIndicator: true });
-    expect(calls[0]).toMatchObject({ method: 'PATCH', path: '/api/v1/me/preferences', body: { privacy: { showTypingIndicator: true } } });
+    expect([calls[0]?.method, calls[0]?.path]).toEqual(['PATCH', '/api/v1/me/preferences']);
+    expect(calls[0]?.body).toEqual({ privacy: { showTypingIndicator: true } });
     expect(result).toEqual({
       ok: true,
       data: { showOnlineStatus: false, showLastSeen: true, showReadReceipts: true, showTypingIndicator: false },

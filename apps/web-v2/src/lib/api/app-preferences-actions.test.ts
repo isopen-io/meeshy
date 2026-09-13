@@ -55,8 +55,7 @@ describe('performPreferenceEdit', () => {
     const answer = deferred();
     const { deps, read } = depsWith({ online: true, answer: answer.promise, seed: cached });
     const pending = performPreferenceEdit({ patch: { showOnlineStatus: false }, deps });
-    await Promise.resolve();
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(read()?.showOnlineStatus).toBe(false);
     answer.resolve({ ok: true, data: { privacy: { showOnlineStatus: false, showLastSeen: true, showReadReceipts: true, showTypingIndicator: true } } });
     expect(await pending).toEqual({ status: 'saved' });
