@@ -417,15 +417,16 @@ for (const [swiftName, downstreamName, what] of REVEAL_MAPPINGS) {
  * gardait `RAIL_SIZE_COMPACT` (`components/stories-rail.tsx`, la branche
  * `#5652` de cette fusion) en parité TEXTUELLE stricte avec
  * `AvatarContext.storyTrayCompact` (36 pt, `MeeshyAvatar.swift`). La bande
- * épinglée retenue par la fusion (`components/story-rail.tsx`, doc-comment
- * « LA COTE — DEUX CONSTANTES iOS ») ne reprend PAS cette cote : elle sert la
- * cote COMPACTE de `rail-tile.tsx` (`RAIL_TILE_COMPACT` = 30), partagée avec
- * la tuile de conversation, un choix ASSUMÉ et non tranché par cette fusion
- * (« l'écart qui reste… n'est pas tranché par cette fusion »). Un gate qui
- * exigeait l'égalité stricte avec 36 pt rougirait donc sur un écart QUI EST
- * la décision, pas un défaut — et son fichier source (`stories-rail.tsx`) a
- * disparu avec la branche qu'il gardait. Si la cote 36 doit un jour redevenir
- * la référence, elle se regarde à `rail-tile.tsx`, jamais ici.
+ * épinglée retenue par la fusion servait alors la cote COMPACTE de
+ * `rail-tile.tsx` (30), un écart non tranché — et son fichier source
+ * (`stories-rail.tsx`) a disparu avec la branche qu'il gardait.
+ *
+ * **#6133 A TRANCHÉ : 36 EST REDEVENUE LA RÉFÉRENCE**, et elle se regarde là où
+ * ce commentaire l'annonçait — `rail-tile.tsx` (`RAIL_TILE_COMPACT` = 36,
+ * `RAIL_TILE_GRANDE` = 88, la cote iOS gouvernant l'AVATAR). Sa garde n'est pas
+ * revenue ici en parité TEXTUELLE : elle mesure la cote PEINTE, en bornes
+ * absolues nommées, au navigateur (`check-lens.mjs` § 7,
+ * `check-floating-clearance.mjs`) et dans `rail-tile.test.tsx`.
  */
 
 /**

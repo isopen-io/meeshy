@@ -208,16 +208,34 @@ export function useSearch(): [URLSearchParams, (next: URLSearchParams, replace?:
 
 // --- La fabrique -----------------------------------------------------------
 
-export function createRouter<T extends RouteTable>(table: T, notFound: ComponentType) {
-  const entries = Object.entries(table).map(([key, route]) => ({
-    key,
-    pattern: route.pattern,
-    compile: compile(route.pattern),
-    // `lazy` est appele UNE fois par route : le module se memorise tout seul,
-    // donc precharger revient a declencher l'import, et le rendu le retrouve.
-    Screen: lazy(route.screen),
-    load: route.screen,
-  }));
+export type RouterOptions = {
+  /**
+   * Ce qu'un ecran ATTEND avant de se rendre (#6206) — le catalogue
+   * d'interface de la langue resolue. Il est cherche EN PARALLELE du chunk de
+   * l'ecran, jamais apres : en serie, chaque premier ecran paierait un
+   * aller-retour reseau de plus sur la 3G visee. Le squelette tient pendant
+   * les deux.
+   */
+  readonly screenPrerequisite?: () => Promise<unknown>;
+};
+
+export function createRouter<T extends RouteTable>(table: T, notFound: ComponentType, options: RouterOptions = {}) {
+  const { screenPrerequisite } = options;
+  const entries = Object.entries(table).map(([key, route]) => {
+    const load =
+      screenPrerequisite === undefined
+        ? route.screen
+        : () => Promise.all([route.screen(), screenPrerequisite()]).then(([screen]) => screen);
+    return {
+      key,
+      pattern: route.pattern,
+      compile: compile(route.pattern),
+      // `lazy` est appele UNE fois par route : le module se memorise tout seul,
+      // donc precharger revient a declencher l'import, et le rendu le retrouve.
+      Screen: lazy(load),
+      load,
+    };
+  });
 
   function href<C extends keyof T & string>(
     key: C,

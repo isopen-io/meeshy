@@ -41,7 +41,7 @@ pydantic==2.13.5
 # (exit 0) before merge — uv only ever reports the FIRST unsatisfiable pin.
 grpcio==1.83.1
 grpcio-tools==1.76.0
-grpcio-reflection==1.83.1
+grpcio-reflection==1.76.0
 protobuf==6.33.6
 pyzmq==27.2.0
 
@@ -233,7 +233,14 @@ httpcore==0.17.3
 # httpcore déclare `anyio>=3.0,<5.0` : il accepte 4.15.0 sans rien savoir de la
 # rupture — le plafond doit donc être posé ICI. Reproduit et infirmé en local :
 # httpcore 0.17.3 + anyio 4.15.0 => AttributeError ; + anyio 4.14.2 => import OK.
-# Ne PAS lever ce plafond tant que httpx/httpcore restent sur cette paire ; le
-# jour où Prisma permet httpx 0.28+, httpcore 1.x importe `anyio.abc` en propre
-# et la contrainte tombe d'elle-même.
-anyio==4.15.0
+#
+# 2026-09-13 : l'épingle était RESTÉE à 4.15.0 sous ce commentaire (bump
+# dependabot ce72396d35 du 2026-09-07), et « Build translator » était rouge sur
+# `dev` comme sur `main`. anyio 4.15.1 (2026-09-05) livre le correctif amont
+# (agronholm/anyio#1311 : accès direct aux sous-modules `anyio.*` sans import
+# préalable). Remesuré en local, venv neuf par version, `import httpx` avec
+# httpx 0.24.1 + httpcore 0.17.3 : 4.15.0 => AttributeError ; 4.15.1 => OK ;
+# 4.14.2 => OK. dependabot ignore désormais 4.15.0 exactement.
+# Le jour où Prisma permet httpx 0.28+, httpcore 1.x importe `anyio.abc` en
+# propre et cette paire cesse d'être fragile.
+anyio==4.15.1

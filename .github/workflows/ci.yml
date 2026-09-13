@@ -571,6 +571,16 @@ jobs:
           cd apps/web-v2
           node scripts/check-lens.mjs
 
+      # #6277 / #6133 — aucun disque flottant ne recouvre, au repos, un texte de
+      # carte du Flux, un libellé du plateau ni un contrôle du chrome
+      # (elementFromPoint, deux schémas, 390×844 et 320×568) ; l'en-tête du Flux
+      # s'escamote ; les cotes du plateau sont celles d'iOS (88 / 36).
+      - name: Gate couloir des disques flottants (Flux et liste)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-floating-clearance.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |
@@ -607,6 +617,25 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-thread-chrome.mjs
+
+      # #6101 — AU REPOS, LA PILULE DE JOUR NE RECOUVRE AUCUN TEXTE. Boîtes
+      # des nœuds texte sous la capsule et opacité calculée, deux schémas,
+      # deux gabarits, trois modes rendus — une géométrie, jamais un booléen.
+      - name: Gate pilule de jour au repos (#6101)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-day-pill-rest.mjs
+
+      # #6206 — UNE SECONDE LANGUE D'INTERFACE S'AFFICHE RÉELLEMENT : <html lang>
+      # résolu (stockage → navigateur → fr), écran d'attente et menus flottants
+      # dans la langue, UN SEUL catalogue téléchargé, aucune erreur de page,
+      # atteignabilité à 320×568 en allemand et en arabe.
+      - name: Gate langue d'interface (#6206)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-interface-language.mjs
 
       # #6213 — LE FIL DÉFILE D'UN BORD À L'AUTRE DE L'ÉCRAN. Miroir de
       # check-thread-chrome.mjs : rien de ceci n'est visible d'un test

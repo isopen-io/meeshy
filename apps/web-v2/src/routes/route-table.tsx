@@ -1,3 +1,5 @@
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { createRouter } from '@/lib/router';
 
 /**
@@ -7,6 +9,10 @@ import { createRouter } from '@/lib/router';
  * route est ce qui borne la premiere peinture, et ecrit ici chaque `import()`
  * est un arbitrage VISIBLE. Genere, il se subit.
  */
+/* LE DÉTAIL D'UNE PUBLICATION (#6278) — UN seul `import()` pour ses DEUX
+   adresses, pour qu'elles ne puissent jamais diverger d'écran. */
+const publicationScreen = () => import('@/routes/post');
+
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },
   thread: { pattern: '/c/$conversation', screen: () => import('@/routes/thread') },
@@ -79,6 +85,14 @@ export const ROUTES = {
      ces sept destinations n'existent pas dans `apps/web`. `/me` complète
      l'espace ouvert par `/me/progression` (#5547). */
   feed: { pattern: '/feed', screen: () => import('@/routes/feed') },
+  /* LE DÉTAIL D'UNE PUBLICATION (#6278, D-48, D-49) — `/post/$post` est
+     l'adresse que la passerelle range dans ses liens suivis
+     (`PostService.ts:1742`) et que le legacy sert (`apps/web/app/post/[postId]`,
+     D-5) ; `/feeds/post/$post` est celle des liens profonds d'iOS
+     (`DeepLinkRouter.swift:106`) et l'adresse que le partage émet
+     (`lib/feed/share-url.ts`). UN seul `import()` pour les deux portes. */
+  post: { pattern: '/post/$post', screen: publicationScreen },
+  postDeepLink: { pattern: '/feeds/post/$post', screen: publicationScreen },
   links: { pattern: '/links', screen: () => import('@/routes/links') },
   notifications: { pattern: '/notifications', screen: () => import('@/routes/notifications') },
   calls: { pattern: '/calls', screen: () => import('@/routes/calls') },
@@ -105,4 +119,8 @@ function NotFound() {
   );
 }
 
-export const { Router, Link, href, navigate } = createRouter(ROUTES, NotFound);
+/* LE CATALOGUE D'INTERFACE (#6206) — chaque écran l'attend, en parallèle de
+   son chunk : ce qui s'y rend lit ses libellés de façon synchrone. */
+export const { Router, Link, href, navigate } = createRouter(ROUTES, NotFound, {
+  screenPrerequisite: () => loadInterfaceCatalog(currentInterfaceLanguage()),
+});

@@ -67,6 +67,15 @@ const OVERRIDES = {
    * seul lirait mal à 13-18 px sur le fond dégradé du bouton.
    */
   pause: join(CORE, 'fill/pause-fill.svg'),
+  /**
+   * `heart-fill` / `bookmark-fill` (#6278) — le cœur et le signet d'une carte
+   * du fil se peignent PLEINS quand le lecteur a posé le geste
+   * (`heart.fill` / `bookmark.fill`, `FeedPostCard.swift:946-947,1059-1095`).
+   * Le contour seul ne dirait pas l'état : c'est lui que `aria-pressed`
+   * annonce, et le pixel doit dire la même chose.
+   */
+  'heart-fill': join(CORE, 'fill/heart-fill.svg'),
+  'bookmark-fill': join(CORE, 'fill/bookmark-fill.svg'),
 };
 
 /**
@@ -404,7 +413,7 @@ emit({
  * N'Y ENTRE PAS : il est deja au SOCLE (`caretLeft`, retour de l'en-tete), le
  * dupliquer paierait ses octets deux fois au meme demarrage.
  */
-const FEED = ['heart', 'chat-circle', 'arrows-clockwise', 'bookmark', 'share-network', 'waveform', 'caret-right'];
+const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right'];
 
 emit({
   ids: FEED,

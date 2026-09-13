@@ -7,9 +7,9 @@
   "first_paint": {
     "subject": "document + feuille + modules que le document reference lui-meme, gzip -9. Les chunks d'ecran charges a la demande n'y sont pas : c'est ce que le decoupage par route achete.",
     "kb": {
-      "value": 41,
-      "status": "CIBLE — PROPOSEE PAR LE POC, NON ARBITREE",
-      "source": "Aucune directive du porteur ne donne ce chiffre : il est propose par le POC et attend l'arbitrage. DESCENDU de 120 a 40 apres #5447 (le remplacement de TanStack Router), qui a fait passer la mesure de 50,85 a 24,53 Ko. Un plafond suit la mesure DANS LES DEUX SENS quand la baisse est STRUCTURELLE — ici une dependance retiree, pas un jeu de donnees allege. Les ~15 Ko d'ecart avec la mesure ne sont pas une autorisation de croissance : ils absorbent les ecrans a venir dont une part atterrit forcement dans le socle (composants partages, table de jetons). Un plafond laisse a 120 aurait laisse rentrer une seconde dependance de 25 Ko sans qu'aucun gate ne rougisse — c'est precisement ce que #5447 a du trouver a la main. RELEVE le 2026-09-13 (#5672, T-verify/T-reset) : la marge etait DEJA a 0,05 Ko avant ce lot (mesure sur l'arbre repris : 39,95 Ko), et deux routes NEUVES (/auth/verify-email, /reset-password) cout(ai)ent structurellement quelques dizaines d'octets chacune dans `index-*.js` -- la table `ROUTES` de `route-table.tsx` est LUE par le document lui-meme (D-3), donc CHAQUE entree ajoutee, meme minimale (nom de route + motif + une fermeture `import()`), grossit le socle par construction, jamais par une derive de code. Le CSS (feuille unique, 410 classes) n'a pas bouge : les deux ecrans neufs ont ete ecrits pour ne REUTILISER que des classes DEJA presentes ailleurs (`rounded-[14px]`, `tracking-wide`), aucune valeur arbitraire neuve. Mesure apres ce lot : 40,06 Ko -- 0,06 Ko au-dessus de l'ancien plafond de 40. Le plafond monte au Ko SUPERIEUR (41) + une marge quasi nulle, MEME discipline que `on_demand_chunks` ci-dessous (arrondi superieur + marge) plutot qu'un saut arbitraire ; la marge sous 40 etant deja consommee AVANT ce lot, ce resserrement continu (le meme que celui documente sur `on_demand_chunks.floating_menus` ci-dessous) precede structurellement toute feature qui ajoute une route, et n'est pas propre a celle-ci. Le prochain lot qui touche `route-table.tsx` doit REMESURER avant d'ecrire, pas supposer que la marge tient."
+      "value": 90,
+      "status": "ARBITRE PAR LE PORTEUR le 2026-09-13 (#6279, D-49)",
+      "source": "Directive du porteur, 2026-09-13 : « ce n'est pas grave on double le budget pour atteindre 90ko ». Mesure qui la fonde (`bun run build` puis `node scripts/measure-weight.mjs`) : dev a 39,96-39,98 Ko pour un plafond de 40 ; la route de detail d'une publication (#6278) portait la premiere peinture a 40,01 Ko (une route), 40,03 (avec l'alias /feeds/post), 40,05 (squelette extrait) — chaque route ajoute ~30 octets gzip au module d'entree (sa ligne de table, sa liste __vite__mapDeps, le nom de son chunk), si bien qu'a 40 AUCUNE route neuve ne passait. Le plafond reste un GATE : 90 laisse ~50 Ko de croissance, ce qui n'autorise pas une dependance lourde dans le socle sans qu'on la voie. HISTORIQUE — la valeur precedente, 40, etait une cible proposee par le POC et jamais arbitree : DESCENDUE de 120 a 40 apres #5447 (le remplacement de TanStack Router), qui a fait passer la mesure de 50,85 a 24,53 Ko. Un plafond suit la mesure DANS LES DEUX SENS quand la baisse est STRUCTURELLE — ici une dependance retiree, pas un jeu de donnees allege. Les ~15 Ko d'ecart avec la mesure ne sont pas une autorisation de croissance : ils absorbent les ecrans a venir dont une part atterrit forcement dans le socle (composants partages, table de jetons). Un plafond laisse a 120 aurait laisse rentrer une seconde dependance de 25 Ko sans qu'aucun gate ne rougisse — c'est precisement ce que #5447 a du trouver a la main."
     }
   },
   "institutional_page": {
@@ -31,6 +31,15 @@
         "value": 7,
         "status": "CIBLE -- MESUREE PAR #5695, NON ARBITREE",
         "source": "Mesure de measure-weight.mjs le 2026-09-08 (`bun run build` puis `node scripts/measure-weight.mjs`) : 5,93 Ko gzip -9, arrondi au Ko SUPERIEUR (6) + 1 Ko de marge, meme discipline que first_paint.kb ci-dessus."
+      }
+    },
+    "interface_catalogs": {
+      "pattern": "^assets/catalog-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 7,
+        "status": "CIBLE -- MESUREE PAR #6206, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-13 (`bun run build` puis `node scripts/measure-weight.mjs`) : les SEPT catalogues d'interface (`src/lib/interface-catalogs/catalog-*.ts`, 40 cles) pesent ensemble 5,48 Ko gzip -9, soit 0,7 a 0,9 Ko chacun (l'arabe le plus lourd, l'anglais le plus leger). Un lecteur n'en telecharge qu'UN (celui de sa langue d'interface, `i18n-catalog.ts` § LOADERS), mesure par `scripts/check-interface-language.mjs` ; la SOMME est bornee parce que c'est elle qui grossit a chaque cle ajoutee (sept fois la cle). Arrondi au Ko SUPERIEUR (6) + 1 Ko de marge, meme discipline que les chunks voisins. `dynamic_only` garde le chargement paresseux PAR LANGUE : un import statique d'un catalogue le ferait telecharger par tous les lecteurs, quelle que soit leur langue. Premiere peinture : 39,92 Ko avant ce lot, 40,42 apres (+0,50 -- le chargeur, ses sept `import()` et la resolution de langue, tires par `route-table.tsx` et `shell.tsx`), sous le plafond de 90 (D-49)."
       }
     },
     "composer_tray": {

@@ -41,7 +41,7 @@ import { MediaFilmstrip } from './media-filmstrip';
  * fantôme (`useBackDismiss`), piège à focus (`nextFocusIndex`), `#root`
  * `inert` le temps de l'ouverture.
  *
- * PELLICULE AU MESSAGE, PAS À LA CONVERSATION (D-48, Q2 de la spécification
+ * PELLICULE AU MESSAGE, PAS À LA CONVERSATION (D-54, Q2 de la spécification
  * #6221) : `items` est le tableau `visual` DÉJÀ partitionné par
  * `Attachments` — la projection conversation-entière est une ISSUE
  * COMPAGNON (avec réagir/répondre/composer), jamais un raccourci par un
@@ -51,7 +51,7 @@ import { MediaFilmstrip } from './media-filmstrip';
  * vertical qui SUIT le doigt (ferme ≥ 150, entre en plein cadre ≤ −150 depuis
  * `carded`), appui long 500 ms (plein cadre + pause), double-tap (zoom
  * 1 ↔ 2,5 sur une page IMAGE), flèches/pellicule pour la pagination. CE QUI
- * NE L'EST PAS (D-48, écart ASSUMÉ, faute de temps sur ce tour) : le
+ * NE L'EST PAS (D-54, écart ASSUMÉ, faute de temps sur ce tour) : le
  * pincement à deux doigts et le déplacement d'une image zoomée au doigt — la
  * loi PURE qui les gouvernerait (`MAX_SCALE`, `media-stage.ts`) est déjà
  * dérivée et testée, seule la mécanique `PointerEvent` à deux points manque.

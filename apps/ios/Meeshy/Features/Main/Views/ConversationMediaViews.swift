@@ -852,6 +852,50 @@ struct AudioMediaView: View, Equatable {
                 )
             }
         }
+        .task(id: attachment.id) {
+            /*
+             LE SEMIS DE LA LANGUE, PORTÉ PAR L'IDENTITÉ DE L'ATTACHMENT
+             (retour porteur 2026-09-13 : « le switch ne se produit pas
+             systématiquement ; parfois le premier fonctionne, tu vas sur un
+             autre message et ça ne fonctionne plus »).
+
+             `selectedAudioLangCode` n'était semé NULLE PART : son seul écrivain
+             est l'`adaptiveOnChange(of: activeAudioLanguageOverride)` ci-dessus,
+             dont l'`initial` vaut `false` — il ne tire pas à la première
+             apparition. Sa valeur de départ était donc le `nil` de la
+             déclaration, pendant que le player recevait, dans le MÊME appel,
+             `initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage`
+             — la descente JUSTE. Le pied montrait le drapeau de la V.O. quand la
+             piste suivait le Prisme.
+
+             Ce qui en fait la panne DÉCRITE : les cellules du fil sont des
+             `UIHostingConfiguration` mises à jour EN PLACE au recyclage (aucune
+             classe de cellule, aucun `prepareForReuse`). L'identité SwiftUI du
+             sous-arbre ne change pas, donc le `@State` SURVIT d'un message à
+             l'autre. Le message suivant héritait de la langue du précédent, et le
+             verrou d'entrée du player (`guard code != selectedAudioLanguage`)
+             AVALAIT la bascule : le tap partait au modèle, redescendait par
+             `activeAudioLanguageOverride`, et ne changeait rien. D'où « le premier
+             marche, le suivant non » — une dépendance à l'ORDRE DE VISITE, jamais
+             à la règle.
+
+             > Un `@State` semé seulement par un `onChange` n'a pas de valeur
+             > initiale : il a celle du DERNIER usage de la vue. Sur une liste
+             > recyclée, ce n'est pas un défaut, c'est un héritage.
+
+             Porté par `attachment.id`, le semis est rejoué à chaque recyclage —
+             l'événement même qui produisait l'héritage — et il DÉRIVE de la loi
+             partagée (`AudioTrackLanguageResolver`), jamais d'une constante.
+
+             Pas de `.id(content.messageId)` sur `standardLayout` (le miroir de ce
+             que fait `stickerLayout`) : cela corrigerait ce défaut et ses cousins
+             d'un coup, mais recréerait le sous-arbre de CHAQUE bulle à chaque
+             recyclage — l'inverse de la fluidité, et de ce que le gate Equatable
+             obtient. Les autres `@State` qui fuient ainsi (`revealedAttachmentIds`,
+             `showCarousel`, `carouselIndex`) sont un lot à part, avec leur mesure.
+            */
+            selectedAudioLangCode = resolvedPreferredTranscriptionLanguage
+        }
         .task(id: currentAudioUrl) {
             // Reset stale "cached" flag from a previous URL (e.g. previous
             // language) so resolveAvailability drives the truth for the new URL.

@@ -201,12 +201,24 @@ main[data-scene='idle'] .focus-stamp {
  * commentaire de tête) : « 60 = padding haut du header (8) + rangée de
  * contrôles (~44) + marge (8) — la pill démarre SOUS le header ». RESTE
  * pendant le geste (`MessageListViewController.swift:597-605`) : aucune
- * règle de ce fichier ne la masque au défilement — seul `DayPill` (React,
- * `label === null || headerExpanded`) décide de son montage.
+ * règle de ce fichier ne la masque au défilement.
+ *
+ * ET S'EFFACE AU REPOS (#6101, `decisions.md`) : posée sous la bande, elle
+ * recouvrait le nom d'auteur de la première rangée lisible d'un fil immobile.
+ * L'état de REPOS est l'absence d'attribut — le premier rendu est donc juste
+ * avant tout abonnement, sans éclair de pilule à l'ouverture ;
+ * `data-day-pill="revealed"` est posé hors React par `useDayPillReveal`
+ * (`lib/view/day-pill-reveal.ts`) pendant le défilement utilisateur et une
+ * fenêtre après. `DayPill` (React, `label === null || headerExpanded`) décide
+ * toujours de son MONTAGE ; ce fichier, de sa VISIBILITÉ.
  */
 .thread-day-pill {
   top: var(--day-pill-top);
+  opacity: 0;
   transition: opacity var(--day-pill-fade-ms, 180ms) ease-in-out;
+}
+[data-day-pill='revealed'] .thread-day-pill {
+  opacity: 1;
 }
 
 /* LE BOUTON « DÉFILER VERS LE BAS » — cible tactile ≥ 44 px

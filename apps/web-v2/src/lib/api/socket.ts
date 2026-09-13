@@ -11,8 +11,11 @@ import type { TypingActionData, TypingEvent } from '@meeshy/shared/types/socketi
 import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
+import { applyPostToggle, applyServedCount } from '@/lib/feed/interactions';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
+import { FEED_QUERY_KEY } from './feed';
+import type { FeedInfiniteData } from './feed-pages';
 import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
@@ -44,6 +47,32 @@ function isTypingEvent(payload: unknown): payload is TypingEvent {
   if (typeof payload !== 'object' || payload === null) return false;
   const p = payload as Record<string, unknown>;
   return typeof p.userId === 'string' && typeof p.conversationId === 'string' && typeof p.username === 'string';
+}
+
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+
+/** `PostLikedEventData` / `PostUnlikedEventData` (`@meeshy/shared/types/post`),
+ * réduits aux trois champs que le fil lit — validés, jamais crus sur parole. */
+type PostLikeEvent = { readonly postId: string; readonly userId: string; readonly likeCount: number };
+
+function isPostLikeEvent(payload: unknown): payload is PostLikeEvent {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  return typeof p.postId === 'string' && typeof p.userId === 'string' && isFiniteNumber(p.likeCount);
+}
+
+/** `PostBookmarkedEventData` — PERSONNEL (émis aux seuls sockets de l'auteur
+ * du geste), donc `bookmarked` décrit toujours le lecteur. */
+type PostBookmarkEvent = { readonly postId: string; readonly bookmarked: boolean; readonly bookmarkCount?: number };
+
+function isPostBookmarkEvent(payload: unknown): payload is PostBookmarkEvent {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  return (
+    typeof p.postId === 'string' &&
+    typeof p.bookmarked === 'boolean' &&
+    (p.bookmarkCount === undefined || isFiniteNumber(p.bookmarkCount))
+  );
 }
 
 export type RealtimeSessionInfo = {
@@ -229,6 +258,44 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     void deps.queryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY });
   };
 
+  /**
+   * `post:liked` / `post:unliked` / `post:bookmarked` (#6278, D-47) — LE FIL
+   * SUIT LES GESTES EN DIRECT, par les DEUX mêmes fonctions pures que
+   * l'optimiste (`lib/feed/interactions.ts`). Le compte diffusé est ABSOLU et
+   * remplace l'estimation ; « aimé par moi » ne bascule que pour un geste du
+   * LECTEUR (un autre de ses appareils) — le « j'aime » d'un autre ne remplit
+   * jamais son cœur. Miroir `FeedView.swift:1331-1357`.
+   */
+  const updateFeed = (update: (data: FeedInfiniteData | undefined) => FeedInfiniteData | undefined): void => {
+    deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, update);
+  };
+
+  const onPostLikeChanged =
+    (on: boolean) =>
+    (payload: unknown): void => {
+      if (!isPostLikeEvent(payload)) return;
+      const { postId, likeCount } = payload;
+      const byViewer = payload.userId === deps.viewerId();
+      updateFeed((data) =>
+        applyServedCount(byViewer ? applyPostToggle(data, { postId, kind: 'like', on }) : data, {
+          postId,
+          kind: 'like',
+          count: likeCount,
+        }),
+      );
+    };
+  const onPostLiked = onPostLikeChanged(true);
+  const onPostUnliked = onPostLikeChanged(false);
+
+  const onPostBookmarked = (payload: unknown): void => {
+    if (!isPostBookmarkEvent(payload)) return;
+    const { postId, bookmarked, bookmarkCount } = payload;
+    updateFeed((data) => {
+      const toggled = applyPostToggle(data, { postId, kind: 'bookmark', on: bookmarked });
+      return bookmarkCount === undefined ? toggled : applyServedCount(toggled, { postId, kind: 'bookmark', count: bookmarkCount });
+    });
+  };
+
   /** Le MÊME geste qu'un 401 HTTP (§ doc-comment de `RealtimeDeps`) — les
    * DEUX motifs ferment la session, aucun ne tente de rafraîchir (D-26). */
   const onTokenExpired = (_payload: AuthTokenExpiredEventData): void => deps.onClearSession();
@@ -275,6 +342,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryChanged);
+  socket.on<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
+  socket.on<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
+  socket.on<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
   socket.on<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
   socket.on<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
 
@@ -311,6 +381,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryChanged);
+      socket.off<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
+      socket.off<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
+      socket.off<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
       socket.off<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
       socket.off<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
       socket.disconnect();

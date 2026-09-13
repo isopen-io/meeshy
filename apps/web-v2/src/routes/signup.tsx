@@ -73,7 +73,7 @@ export default function SignupScreen() {
   // Une inscription réussie AUTHENTIFIE déjà (`auth.register` établit la
   // session, #4264) — sans ce drapeau, l'effet ci-dessous mènerait à `list`
   // avant que `handleSubmit` n'ait pu router vers la vérification d'e-mail
-  // (D-47, #5672, raccordement).
+  // (D-53, #5672, raccordement).
   const [justRegistered, setJustRegistered] = useState(false);
 
   // Même doctrine que login.tsx : `auth.register` parle TOUJOURS à la

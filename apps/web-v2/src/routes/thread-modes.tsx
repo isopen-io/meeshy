@@ -277,11 +277,10 @@ export function ThreadModes({
               {p.opensDay ? (
                 <div className="flex justify-center py-1.5">
                   <span
-                    className="rounded-chip px-3 py-1 text-time font-semibold backdrop-blur-md"
+                    className="glass glass-card rounded-chip px-3 py-1 text-time font-semibold"
                     style={{
                       color: 'var(--color-day-ink)',
                       border: '0.5px solid var(--color-day-hairline)',
-                      backgroundColor: 'color-mix(in srgb, var(--color-ios-card) 70%, transparent)',
                     }}
                   >
                     {dayLabel(p.message.createdAt, { locale: readerLocale })}

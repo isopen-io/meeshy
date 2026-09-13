@@ -11,6 +11,8 @@ import { createOutboxStore, entriesOf } from '@/lib/send/outbox-store';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { messagesQueryKey, type MessagesPage } from './messages';
 import { createRealtimeConnection, type RealtimeDeps } from './socket';
+import { FEED_QUERY_KEY } from './feed';
+import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { STORY_TRAY_QUERY_KEY } from './stories';
 import { createTypingStore, typistsOf } from './typing-store';
 import type { Message } from './types';
@@ -323,6 +325,81 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       expect(queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(true);
     });
   }
+
+  /**
+   * `post:liked` / `post:unliked` / `post:bookmarked` (#6278) — LE FIL SUIT
+   * LES GESTES EN DIRECT. Le compte diffusé est ABSOLU (`PostLikedEventData
+   * .likeCount`, `PostBookmarkedEventData.bookmarkCount`) : il REMPLACE ce que
+   * le cache estimait. L'état « aimé par moi » ne bascule que si l'auteur du
+   * geste est le lecteur (un autre appareil) — le « j'aime » d'un autre ne
+   * remplit jamais MON cœur.
+   */
+  const feedWith = (partial: Partial<FeedPost>): FeedInfiniteData => ({
+    pages: [
+      {
+        posts: [{ id: 'p-1', type: 'POST', createdAt: '2026-09-13T10:00:00.000Z', ...partial }],
+        pagination: { limit: 20, hasMore: false, nextCursor: null },
+      },
+    ],
+    pageParams: [undefined],
+  });
+  const feedPost = (queryClient: QueryClient) => queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY)?.pages[0]?.posts[0];
+
+  test('`post:liked` d’un AUTRE lecteur remplace le compte par le compte servi, sans remplir mon cœur', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(FEED_QUERY_KEY, feedWith({ isLikedByMe: false, likeCount: 3 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_LIKED, { postId: 'p-1', userId: 'u-other', emoji: '❤️', likeCount: 7, reactionSummary: {} });
+
+    expect(feedPost(queryClient)?.likeCount).toBe(7);
+    expect(feedPost(queryClient)?.isLikedByMe).toBe(false);
+  });
+
+  test('`post:liked` du lecteur LUI-MÊME (autre appareil) remplit le cœur ET pose le compte servi', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(FEED_QUERY_KEY, feedWith({ isLikedByMe: false, likeCount: 3 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_LIKED, { postId: 'p-1', userId: 'u-viewer', emoji: '❤️', likeCount: 4, reactionSummary: {} });
+
+    expect(feedPost(queryClient)?.isLikedByMe).toBe(true);
+    expect(feedPost(queryClient)?.likeCount).toBe(4);
+  });
+
+  test('`post:unliked` du lecteur vide le cœur et pose le compte servi', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(FEED_QUERY_KEY, feedWith({ isLikedByMe: true, likeCount: 4 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_UNLIKED, { postId: 'p-1', userId: 'u-viewer', emoji: '❤️', likeCount: 3, reactionSummary: {} });
+
+    expect(feedPost(queryClient)?.isLikedByMe).toBe(false);
+    expect(feedPost(queryClient)?.likeCount).toBe(3);
+  });
+
+  test('`post:bookmarked` (personnel) pose le signet ET le compte servi', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(FEED_QUERY_KEY, feedWith({ isBookmarkedByMe: false, bookmarkCount: 1 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_BOOKMARKED, { postId: 'p-1', bookmarked: true, bookmarkCount: 5 });
+
+    expect(feedPost(queryClient)?.isBookmarkedByMe).toBe(true);
+    expect(feedPost(queryClient)?.bookmarkCount).toBe(5);
+  });
+
+  test('une charge de geste MALFORMÉE est ignorée — le cache ne bouge pas', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const data = feedWith({ isLikedByMe: false, likeCount: 3 });
+    queryClient.setQueryData(FEED_QUERY_KEY, data);
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_LIKED, { postId: 'p-1', likeCount: 'beaucoup' });
+    socket.fire(SERVER_EVENTS.POST_BOOKMARKED, null);
+
+    expect(queryClient.getQueryData(FEED_QUERY_KEY)).toBe(data);
+  });
 
   test('`typing:start` alimente le magasin de frappe, JAMAIS pour soi-même', () => {
     const { deps, socket, typing } = buildDeps({ viewerId: () => 'u-viewer' });

@@ -49,13 +49,29 @@ export function portailDuNavigateur(): PortailPartage {
   return { ...partage, ...copie };
 }
 
-export async function partagerInvitation(
+export function partagerInvitation(
   lien: string,
   portail: PortailPartage = portailDuNavigateur(),
 ): Promise<ResultatInvitation> {
+  return partagerLien({ title: 'Meeshy', text: TEXTE_INVITATION, url: lien }, portail);
+}
+
+/**
+ * LE PARTAGE GÉNÉRIQUE (#6278) — l'invitation n'en est qu'un cas ; une
+ * publication du fil en est un autre. Mêmes quatre issues, même règle : une
+ * annulation (`AbortError`) est une décision, tout autre refus de la feuille
+ * (Safari hors activation : `NotAllowedError`) retombe sur le presse-papier.
+ * À appeler DANS le gestionnaire du geste, sans `await` préalable : la
+ * feuille du système n'ouvre que pendant l'activation.
+ */
+export async function partagerLien(
+  donnees: { readonly title: string; readonly text: string; readonly url: string },
+  portail: PortailPartage = portailDuNavigateur(),
+): Promise<ResultatInvitation> {
+  const lien = donnees.url;
   if (portail.share) {
     try {
-      await portail.share({ title: 'Meeshy', text: TEXTE_INVITATION, url: lien });
+      await portail.share({ title: donnees.title, text: donnees.text, url: donnees.url });
       return 'partage';
     } catch (erreur) {
       // Fermer la feuille de partage est une DÉCISION, pas une panne : on ne

@@ -3,7 +3,8 @@ import { TypingDots } from './typing-dots';
 import type { TypingEntry } from '@/lib/api/typing-store';
 import { AVATAR_SIZE, ROW_PADDING_HORIZONTAL } from '@/lib/reading-mode/metrics';
 import { initialsOf } from '@/lib/view/conversation';
-import { typingAnnouncement, typingLead } from '@/lib/view/typing-roster';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { interfaceTypingFormatter, typingAnnouncement, typingLead } from '@/lib/view/typing-roster';
 
 /**
  * LA CELLULE DE FRAPPE DU FIL (#6171, G1) — extraite de `routes/thread-
@@ -70,7 +71,10 @@ export function TypingRosterCell({
 }) {
   const lead = typingLead(typists);
   if (lead === undefined) return null;
-  const label = typingAnnouncement(typists.map((t) => t.displayName));
+  const label = typingAnnouncement(
+    typists.map((t) => t.displayName),
+    interfaceTypingFormatter(currentInterfaceLanguage()),
+  );
 
   if (flat) {
     return (

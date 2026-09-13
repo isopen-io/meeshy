@@ -145,3 +145,63 @@ describe('createRouter().Link — compose l’onClick de l’appelant (#5816, T1
     pushState.mockRestore();
   });
 });
+
+/**
+ * LE PRÉALABLE D'ÉCRAN (#6206) — un écran ne se rend qu'une fois son préalable
+ * tenu (le catalogue d'interface de la langue résolue). Il est cherché EN
+ * PARALLÈLE du chunk de l'écran, jamais après : attendre en série ajouterait
+ * un aller-retour réseau à chaque premier écran.
+ */
+describe('createRouter(…, { screenPrerequisite }) — l’écran attend son préalable', () => {
+  const deferred = () => {
+    const box: { resolve: () => void } = { resolve: () => undefined };
+    const promise = new Promise<void>((resolve) => {
+      box.resolve = resolve;
+    });
+    return { promise, resolve: () => box.resolve() };
+  };
+
+  const settle = async () => {
+    await act(async () => {
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    });
+  };
+
+  test('le squelette tient tant que le préalable n’est pas tenu, l’écran vient ensuite', async () => {
+    window.history.replaceState(null, '', '/');
+    const gate = deferred();
+    const requested: string[] = [];
+    const table = {
+      list: {
+        pattern: '/',
+        screen: () => {
+          requested.push('screen');
+          return Promise.resolve({ default: () => <p data-screen>Écran</p> });
+        },
+      },
+    } as const;
+    const { Router, navigate: go } = createRouter(table, NotFound, {
+      screenPrerequisite: () => {
+        requested.push('prerequisite');
+        return gate.promise;
+      },
+    });
+    /* L'adresse OBSERVÉE par le routeur est la sienne, pas `window.location` :
+       `replaceState` ne le notifie pas, et le témoin précédent l'a laissé ailleurs. */
+    act(() => go('/', true));
+
+    const el = mount(<Router wrap={(screen) => screen} skeleton={<p data-skeleton>Attente</p>} />);
+    await settle();
+
+    expect(sortedCopy(requested)).toEqual(['prerequisite', 'screen']);
+    expect(el.querySelector('[data-screen]')).toBeNull();
+    expect(el.querySelector('[data-skeleton]')).not.toBeNull();
+
+    gate.resolve();
+    await settle();
+
+    expect(el.querySelector('[data-screen]')).not.toBeNull();
+  });
+});
+
+const sortedCopy = (values: readonly string[]): readonly string[] => [...values].sort();

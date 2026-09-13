@@ -18,6 +18,7 @@
  * LIT. Ré-implémenter la même règle ici aurait recréé exactement la jumelle
  * divergente que #5588 a fermée pour le schéma clair/sombre.
  */
+import { loadInterfaceCatalog } from './i18n-catalog';
 import {
   DEFAULT_INTERFACE_LANGUAGE,
   INTERFACE_LANGUAGE_KEY,
@@ -41,6 +42,9 @@ function isSupported(code: string): code is InterfaceLanguage {
  * plutôt que d'exposer une clé de catalogue nue à l'utilisateur.
  */
 export function currentInterfaceLanguage(): InterfaceLanguage {
+  /* Hors navigateur (rendu serveur, témoin sans DOM) : le document du HTML
+     statique porte `lang="fr"`, c'est donc la langue que ce rendu sert. */
+  if (typeof document === 'undefined') return DEFAULT;
   const declared = document.documentElement.lang;
   return isSupported(declared) ? declared : DEFAULT;
 }
@@ -51,8 +55,14 @@ export function currentInterfaceLanguage(): InterfaceLanguage {
  * système) : un changement de langue d'interface est TOUJOURS un choix
  * explicite, il n'existe pas de « préférence système » à suivre pour cette
  * valeur au sens où `prefers-color-scheme` en est une pour le schéma.
+ *
+ * Le catalogue de la langue est CHARGÉ AVANT qu'elle ne soit posée (#6206) :
+ * un libellé rendu entre les deux lirait une langue sans aucun texte. Ce qui
+ * est déjà monté garde sa langue jusqu'à son prochain rendu — iOS applique de
+ * même le changement au relancement (`settings.interface_language.restart`).
  */
-export function setInterfaceLanguage(language: InterfaceLanguage): void {
+export async function setInterfaceLanguage(language: InterfaceLanguage): Promise<void> {
+  await loadInterfaceCatalog(language);
   document.documentElement.lang = language;
   try {
     localStorage.setItem(KEY, language);
