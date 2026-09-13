@@ -277,6 +277,47 @@ updates:
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
 
+  # bun.lock — resynchronisation SEULE, sans toucher aux manifestes (#6230).
+  # Les cinq entrées npm ci-dessus bougent `package.json` et `pnpm-lock.yaml` ;
+  # aucune ne connaît `bun.lock`, le lock que CI et développement local
+  # installent réellement (CLAUDE.md § Build System — bun est le défaut,
+  # parité CI). Une PR npm/pnpm fusionnée sans régénération de `bun.lock`
+  # laisse donc un retard qui n'est visible qu'au prochain `bun install`
+  # manuel (#6230 : @signalapp/libsignal-client, zod, @tus/server, sharp
+  # avaient chacun dérivé de la sorte).
+  # `versioning-strategy: lockfile-only` ne rouvre AUCUNE portée de
+  # `package.json` : cette entrée se contente de réaligner `bun.lock` sur ce
+  # que les manifestes acceptent déjà. Une entrée `package-ecosystem: bun`
+  # sans cette restriction dupliquerait les PR de montée de version des
+  # entrées npm ci-dessus sur les mêmes paquets — deux branches Dependabot
+  # éditant le même `package.json`, en conflit l'une avec l'autre.
+  # Le gate CI qui referme la boucle : `scripts/check-lockfile-alignment.mjs`
+  # (job `quality`, étape « Lockfile alignment guard ») fait déjà rougir
+  # toute PR — Dependabot ou humaine — dont `bun.lock` diverge des
+  # manifestes ; cette entrée réduit la fréquence à laquelle ça arrive, le
+  # gate reste la garantie. Passer `bun install` en `--frozen-lockfile` dans
+  # `ci.yml` a été considéré et écarté : le gate ci-dessus détecte déjà tout
+  # désalignement, avec un message qui nomme le paquet et le site en cause —
+  # `--frozen-lockfile` échouerait sur le même désalignement avec un message
+  # bun générique, sans rien garantir de plus.
+  - package-ecosystem: "bun"
+    directory: "/"
+    versioning-strategy: "lockfile-only"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "monorepo"
+    commit-message:
+      prefix: "chore(deps-bun-lock)"
+      include: "scope"
+    reviewers:
+      - "isopen-io/meeshy-maintainers"
+
   # ===========================================================================
   # GITHUB ACTIONS - Workflows CI/CD
   # ===========================================================================
