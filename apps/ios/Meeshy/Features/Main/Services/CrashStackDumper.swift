@@ -123,6 +123,30 @@ enum CrashStackDumper {
                      appelant. Même ordre que `backtrace`, donc les deux listes
                      se lisent en regard.
                     */
+                    /*
+                     BORNÉ À arm64, l'ABI que ce bloc DÉCRIT (#6213 ter).
+                     Le commentaire ci-dessus dit « Sur arm64 : [fp] = fp de
+                     l'appelant, [fp+8] = adresse de retour » — mais le code ne
+                     GARDAIT pas ce qu'il affirmait. `__ss.__fp` n'existe que sur
+                     `__darwin_arm64_thread_state64` ; le champ homologue de
+                     `__darwin_x86_thread_state64` s'appelle `__rbp`.
+                     Pourquoi la panne a survécu à un build device VERT : un build
+                     d'appareil ne compile QUE arm64, tandis que
+                     `-destination "generic/platform=iOS Simulator"` — ce que fait
+                     la CI « iOS Tests » — compile arm64 ET x86_64. La condition
+                     manquante n'était donc pas visible du côté où j'avais mesuré.
+                     > Une garde d'architecture absente ne se voit pas sur la
+                     > tranche qu'on a compilée : elle se voit sur celle qu'on n'a
+                     > pas compilée. Un vert d'appareil ne dit rien du simulateur.
+                     Pas de branche x86_64 : le palmarès de cadres sert le
+                     diagnostic sur APPAREIL RÉEL (le débordement de pile mesuré y
+                     vivait), et aucun simulateur Intel ne tourne sur cette machine.
+                     Écrire une seconde ABI que rien n'exercerait serait du code
+                     mort crédible — exactement ce que ce dépôt paie ailleurs.
+                     La trace `backtrace()` qui suit, elle, reste servie sur TOUTE
+                     architecture : seul le palmarès est arm64.
+                    */
+                    #if arch(arm64)
                     if let uc = ucontext?.assumingMemoryBound(to: ucontext_t.self),
                        let mc = uc.pointee.uc_mcontext {
                         CrashStackDumper.headerBuffer.withUnsafeMutableBufferPointer { hdr in
@@ -160,6 +184,7 @@ enum CrashStackDumper {
                             _ = write(fd, base, i)
                         }
                     }
+                    #endif
                     var addrs = [UnsafeMutableRawPointer?](repeating: nil, count: 192)
                     let n = backtrace(&addrs, 192)
                     backtrace_symbols_fd(&addrs, n, fd)
