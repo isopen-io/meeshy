@@ -67,6 +67,14 @@ const TYPES = {
 const isConversationsList = (url) => url.pathname === '/api/v1/conversations';
 
 /**
+ * Le plateau de stories (#6249) — `loadStoryTray`/`loadStoryFeed` appellent
+ * désormais le successeur `GET /social/posts?scope=stories`, jamais l'alias
+ * déprécié `/posts/feed/stories`. Même motif que `isStatusMoods` plus bas :
+ * un prédicat sur `pathname` + `scope`, jamais un glob sur l'ancienne adresse.
+ */
+const isStoriesFeed = (url) => url.pathname === '/api/v1/social/posts' && url.searchParams.get('scope') === 'stories';
+
+/**
  * 45 conversations synthétiques pour le bloc 2 (#6195) — `lastMessageAt`
  * strictement décroissant, comme `core-list.ts` les sert triées. Mime la
  * FORME de `pageOfConversations` (`fixtures-pagination.ts`) sans en
@@ -319,7 +327,7 @@ async function main() {
        les tentatives de react-query — le rail peignait son squelette tout ce
        temps, dans les deux blocs. Le bloc « corpus VIDE » mesurait donc un
        corpus à moitié vide, et il l'a dit. */
-    await page.route('**/api/v1/posts/feed/stories**', async (route) => {
+    await page.route(isStoriesFeed, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -430,7 +438,7 @@ async function main() {
       isConversationsList,
       conversationsRouteHandler({ requestCounts: block2bCounts, failWhile: (before) => before === 'c-gw-29' && block2bStillFailing }),
     );
-    await page.route('**/api/v1/posts/feed/stories**', async (route) => {
+    await page.route(isStoriesFeed, async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: [] }) });
     });
     await page.route('**/socket.io/**', (route) => route.abort());
@@ -488,7 +496,7 @@ async function main() {
     let skeletonSeenDuringRefresh = false;
 
     await page.route(isConversationsList, conversationsRouteHandler({ requestCounts: block2cCounts }));
-    await page.route('**/api/v1/posts/feed/stories**', async (route) => {
+    await page.route(isStoriesFeed, async (route) => {
       storiesRequests += 1;
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: [] }) });
     });
@@ -565,7 +573,7 @@ async function main() {
     }, 20);
     const refreshSettled = Promise.all([
       page.waitForResponse((res) => isConversationsList(new URL(res.url())) && new URL(res.url()).searchParams.get('before') === null, { timeout: 5000 }),
-      page.waitForResponse((res) => res.url().includes('/api/v1/posts/feed/stories'), { timeout: 5000 }),
+      page.waitForResponse((res) => isStoriesFeed(new URL(res.url())), { timeout: 5000 }),
       page.waitForResponse((res) => res.url().includes('/api/v1/social/posts?scope=statuses'), { timeout: 5000 }),
     ]);
     /**
@@ -629,7 +637,7 @@ async function main() {
     });
     /* VIDE des DEUX côtés — sans quoi « corpus vide » ne décrit que la moitié
        de l'écran (voir le bloc 2). */
-    await page.route('**/api/v1/posts/feed/stories**', async (route) => {
+    await page.route(isStoriesFeed, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -763,7 +771,7 @@ async function main() {
         body: JSON.stringify({ success: true, data: [], pagination: { limit: 30, offset: 0, total: 0, hasMore: false } }),
       });
     });
-    await anonPage.route('**/api/v1/posts/feed/stories**', async (route) => {
+    await anonPage.route(isStoriesFeed, async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: [] }) });
     });
     await anonPage.route('**/socket.io/**', (route) => route.abort());
@@ -786,7 +794,7 @@ async function main() {
         body: JSON.stringify({ success: true, data: [], pagination: { limit: 30, offset: 0, total: 0, hasMore: false } }),
       });
     });
-    await page.route('**/api/v1/posts/feed/stories**', async (route) => {
+    await page.route(isStoriesFeed, async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data: [] }) });
     });
     await page.route('**/socket.io/**', (route) => route.abort());
