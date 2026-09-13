@@ -63,6 +63,8 @@ const es = {
   'notifications.action.delete': 'Eliminar',
   'notifications.failure': 'La acción no se completó. Inténtalo de nuevo.',
 
+  'notFound.title': 'Esta dirección no existe.',
+
   'pending.back': 'Volver a las conversaciones',
   'pending.comingSoon': 'Esta pantalla llegará pronto.',
   'pending.feed.promise': 'Las publicaciones de las personas que sigues.',

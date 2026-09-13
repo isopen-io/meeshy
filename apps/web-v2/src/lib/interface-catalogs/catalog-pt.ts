@@ -67,6 +67,8 @@ const pt = {
   'notifications.action.delete': 'Excluir',
   'notifications.failure': 'A ação não foi concluída. Tente novamente.',
 
+  'notFound.title': 'Este endereço não existe.',
+
   'pending.back': 'Voltar às conversas',
   'pending.comingSoon': 'Esta tela chega em breve.',
   'pending.feed.promise': 'As publicações de quem você segue.',

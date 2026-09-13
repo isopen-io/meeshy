@@ -63,6 +63,8 @@ const en = {
   'notifications.action.delete': 'Delete',
   'notifications.failure': 'That didn’t go through. Try again.',
 
+  'notFound.title': "This address doesn't exist.",
+
   'pending.back': 'Back to conversations',
   'pending.comingSoon': 'This screen is coming soon.',
   'pending.feed.promise': 'Posts from the people you follow.',
