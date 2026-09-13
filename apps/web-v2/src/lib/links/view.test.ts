@@ -2,7 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import type { MyShareLink, ShareLinksData, ShareLinksSummary } from '@/lib/api/links';
 
-import { canReactivate, displayNameOf, findShareLink, joinUrlOf, webOriginOf, withLinkActive, withLinkFirst } from './view';
+import { canReactivate, displayNameOf, findShareLink, joinUrlOf, shareLinkDetailState, withLinkActive, withLinkFirst } from './view';
+import { webOriginOf } from './web-origin';
 
 /**
  * LES RÈGLES PURES DE « MES LIENS » (#6361) — ce qu'aucune capture ne dit :
@@ -103,13 +104,15 @@ describe('findShareLink — le détail se lit dans la liste de SES liens', () =>
 describe('withLinkActive — le geste optimiste de (dés)activation', () => {
   test('désactiver pose la cause « retiré » et baisse le compte des actifs', () => {
     const next = withLinkActive(data([link(), link({ id: 'l2', linkId: 'mshy_l2' })]), 'mshy_l2', false);
-    expect(findShareLink(next, 'mshy_l2')).toMatchObject({ isActive: false, inactiveReason: 'REVOKED' });
+    const toggled = findShareLink(next, 'mshy_l2');
+    expect([toggled?.isActive, toggled?.inactiveReason]).toEqual([false, 'REVOKED']);
     expect(next?.pages[0]?.summary?.activeLinks).toBe(1);
   });
 
   test('réactiver efface la cause et remonte le compte', () => {
     const next = withLinkActive(data([link({ isActive: false, inactiveReason: 'REVOKED' })]), 'mshy_l1', true);
-    expect(findShareLink(next, 'mshy_l1')).toMatchObject({ isActive: true, inactiveReason: null });
+    const toggled = findShareLink(next, 'mshy_l1');
+    expect([toggled?.isActive, toggled?.inactiveReason]).toEqual([true, null]);
     expect(next?.pages[0]?.summary?.activeLinks).toBe(1);
   });
 
@@ -123,6 +126,39 @@ describe('withLinkActive — le geste optimiste de (dés)activation', () => {
     const next = withLinkActive(data([link()], [link({ id: 'l2', linkId: 'mshy_l2' })]), 'mshy_l2', false);
     expect(next?.pages[0]?.summary?.activeLinks).toBe(1);
     expect(next?.pages[1]?.summary).toBeNull();
+  });
+});
+
+describe('shareLinkDetailState — le refus ne se dit qu’après la DERNIÈRE page', () => {
+  const flags = (overrides: Partial<Parameters<typeof shareLinkDetailState>[0]> = {}) => ({
+    found: false,
+    loaded: true,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    isError: false,
+    ...overrides,
+  });
+
+  test('un lien trouvé se lit, même pendant qu’une page suivante charge', () => {
+    expect(shareLinkDetailState(flags({ found: true, hasNextPage: true, isFetchingNextPage: true }))).toBe('ready');
+  });
+
+  test('rien de chargé : le squelette ; rien de chargé et une erreur : l’erreur', () => {
+    expect(shareLinkDetailState(flags({ loaded: false }))).toBe('loading');
+    expect(shareLinkDetailState(flags({ loaded: false, isError: true }))).toBe('error');
+  });
+
+  test('des pages restent : on les charge, on ne refuse PAS', () => {
+    expect(shareLinkDetailState(flags({ hasNextPage: true }))).toBe('searching');
+    expect(shareLinkDetailState(flags({ hasNextPage: true, isFetchingNextPage: true }))).toBe('loading');
+  });
+
+  test('la dernière page lue sans le lien : le refus', () => {
+    expect(shareLinkDetailState(flags())).toBe('refused');
+  });
+
+  test('une page suivante en échec : l’erreur, jamais un refus', () => {
+    expect(shareLinkDetailState(flags({ hasNextPage: true, isError: true }))).toBe('error');
   });
 });
 

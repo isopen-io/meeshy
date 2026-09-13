@@ -80,7 +80,7 @@ describe('loadMyShareLinks — GET /api/v1/links (les SIENS, `createdBy` côté 
       meta: { summary: { totalLinks: 4, activeLinks: 2, totalUses: 131 } },
     });
     const result = await loadMyShareLinks({ source: 'gateway', transport, offset: 0 });
-    expect(last()).toMatchObject({ method: 'GET', path: '/api/v1/links?offset=0&limit=50&include=summary' });
+    expect([last().method, last().path]).toEqual(['GET', '/api/v1/links?offset=0&limit=50&include=summary']);
     expect(result.ok && result.data.summary).toEqual({ totalLinks: 4, activeLinks: 2, totalUses: 131 });
     expect(result.ok && result.data.nextOffset).toBeNull();
   });

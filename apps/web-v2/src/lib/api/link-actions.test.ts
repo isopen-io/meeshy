@@ -121,7 +121,7 @@ describe('performCreateShareLink', () => {
     });
     expect(outcome.status).toBe('created');
     const head = cached(queryClient)?.pages[0]?.links[0];
-    expect(head).toMatchObject({ linkId: 'mshy_new', name: 'Pour la newsletter', conversationTitle: 'Annonces produit', currentUses: 0, isActive: true });
+    expect([head?.linkId, head?.name, head?.conversationTitle, head?.currentUses, head?.isActive]).toEqual(['mshy_new', 'Pour la newsletter', 'Annonces produit', 0, true]);
     expect(cached(queryClient)?.pages[0]?.summary?.totalLinks).toBe(2);
   });
 

@@ -654,3 +654,62 @@ emit({
   type: 'CallsGlyphName',
   role: "LE JEU D'ECRAN du journal d'appels (#6362) : directions, type video et etat vide, charge avec la route /calls, jamais dans le socle.",
 });
+
+/**
+ * LE JEU D'ECRAN DE « MES LIENS » (#6361) — miroir des symboles de
+ * `LinksHubView.swift`, `ShareLinksView.swift`, `ShareLinkDetailView.swift` et
+ * `CreateShareLinkView.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `link.badge.plus` (banniere, etat vide) | `link` |
+ * | `link` / `link.badge.minus` (lien actif / inactif) | `link-simple` (socle) / `link-break` |
+ * | `plus.circle.fill` (creer) | `plus-circle` |
+ * | `checkmark.circle.fill` (actifs) | `check-circle` |
+ * | `person.fill.badge.plus` (rejoints, utilisations) | `user-plus` |
+ * | `doc.on.doc` (copier) | `copy` |
+ * | `square.and.arrow.up` (partager) | `export` |
+ * | `pause.circle` / `play.circle` (desactiver / activer) | `pause-circle` / `play-circle` |
+ * | `infinity` (maximum) | `infinity` |
+ * | `bubble.left.and.bubble.right.fill` (section conversation) | `chats-circle` |
+ * | `tag.fill` (identite) | `tag` |
+ * | `person.badge.key.fill` (acces invites) | `key` (socle) |
+ * | `slider.horizontal.3` (permissions) | `sliders-horizontal` |
+ * | `gauge.with.dots.needle.bottom.50percent` (limites) | `gauge` |
+ * | `person.fill.checkmark` / `person.fill` / `envelope.fill` / `calendar` | `user-check` / `user` (socle) / `envelope-simple` / `calendar-blank` |
+ * | `bubble.left.fill` / `photo.fill` / `paperclip` / `clock.fill` | `chat-circle` / `image` (socle) / `paperclip` / `clock-counter-clockwise` |
+ * | `person.2.fill` / `clock.badge.xmark` (limites) | `users` (socle) / `hourglass` |
+ * | `chevron.forward` | `caret-right` |
+ */
+const LINKS = [
+  'link',
+  'link-break',
+  'plus-circle',
+  'check-circle',
+  'user-plus',
+  'copy',
+  'export',
+  'pause-circle',
+  'play-circle',
+  'infinity',
+  'chats-circle',
+  'tag',
+  'sliders-horizontal',
+  'gauge',
+  'user-check',
+  'envelope-simple',
+  'calendar-blank',
+  'chat-circle',
+  'paperclip',
+  'clock-counter-clockwise',
+  'hourglass',
+  'caret-right',
+];
+
+emit({
+  ids: LINKS,
+  output: join(HERE, '../src/components/glyphs-links.ts'),
+  constant: 'LINKS_GLYPHS',
+  type: 'LinksGlyphName',
+  role: "LE JEU D'ECRAN de Mes liens (#6361) : hub, liens de partage, detail et creation, charge avec les routes /links, jamais dans le socle.",
+});
