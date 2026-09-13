@@ -383,3 +383,33 @@ emit({
   type: 'FloatingGlyphName',
   role: "LE JEU D'ECRAN des menus flottants (#6104) : charge avec le chunk des menus, jamais dans le socle.",
 });
+
+/**
+ * LE JEU D'ECRAN DU FIL DES PUBLICATIONS (#5893, #6104) — les cinq
+ * statistiques STATIQUES de `FeedPostCard` (aimer, commenter, repartager,
+ * enregistrer, partager), miroir `FeedPostCard.swift:976-1131`. Ce lot les
+ * rend en COMPTEURS, jamais en boutons (lecture seule, D-6) : les glyphes
+ * restent les memes qu'iOS, seul l'effet du geste change (aucun).
+ *
+ * `arrows-clockwise` pour repartager (`arrow.2.squarepath` cote iOS) : le
+ * mouvement circulaire est la meme idee, phosphor ne publie pas l'exact
+ * pictogramme SF Symbols. `chat-circle` (bulle nue) plutot que
+ * `chat-circle-text` (deja dans PROGRESSION, une bulle a lignes) : la carte
+ * de post n'a besoin que de la bulle, jamais du texte a l'interieur.
+ *
+ * `waveform` (deja dans PROGRESSION, mais un AUTRE chunk -- dupliquer ici
+ * evite de faire dependre le fil de la route progression) sert le repli
+ * plein cadre d'un media AUDIO (post ou reel) avant toute lecture. `caret-right`
+ * sert les DEUX fleches du carrousel de FeedPostCardCarousel -- `caret-left`
+ * N'Y ENTRE PAS : il est deja au SOCLE (`caretLeft`, retour de l'en-tete), le
+ * dupliquer paierait ses octets deux fois au meme demarrage.
+ */
+const FEED = ['heart', 'chat-circle', 'arrows-clockwise', 'bookmark', 'share-network', 'waveform', 'caret-right'];
+
+emit({
+  ids: FEED,
+  output: join(HERE, '../src/components/glyphs-feed.ts'),
+  constant: 'FEED_GLYPHS',
+  type: 'FeedGlyphName',
+  role: "LE JEU D'ECRAN du fil des publications (#5893) : les cinq statistiques de la carte de post, charge avec la route /feed, jamais dans le socle.",
+});

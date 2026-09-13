@@ -696,33 +696,42 @@ check(
 );
 
 /**
- * LE CLIQUET DU §10 EST TOMBÉ (#5765) — LA PORTE EST ARRIVÉE (#6080) : chaque
- * pastille mène désormais à `/stories?author=…` (`routes/stories.tsx`). Ce
- * que ce témoin mesure maintenant n'est plus « zéro contrôle » mais l'EFFET
- * du tap — une pastille cliquable qui ne mène nulle part serait pire que
- * l'ancien état sans porte du tout.
+ * LE CLIQUET DU §10 EST TOMBÉ (#5765) — LA PORTE EST ARRIVÉE (#6080), PUIS
+ * ELLE A CHANGÉ DE DESTINATION (#5817) : une pastille menait à la liste
+ * filtrée `/stories?author=…` ; elle ouvre désormais LE LECTEUR PLEIN ÉCRAN,
+ * `/story/$post`, à la story d'entrée que son groupe porte
+ * (`group.entryStoryId`, `lib/view/story-tray.ts`). Ce que ce témoin mesure
+ * n'a pas changé — l'EFFET du tap, une pastille qui ne mène nulle part étant
+ * pire que l'absence de porte —, seulement ce qui doit apparaître au bout.
+ *
+ * L'identité se compare par IDENTIFIANT (`data-story-author`, porté par
+ * l'en-tête du lecteur), jamais par un libellé : « Votre story » et le nom
+ * d'un contact sont deux textes que la traduction et le repli de nom peuvent
+ * changer sans que la porte, elle, soit cassée.
  */
 const premierAuteur = await enTetePage.evaluate(
   () => document.querySelector('[data-rail="grande"] a[data-story-author]')?.getAttribute('data-story-author') ?? null,
 );
+const lienAttendu = await enTetePage.evaluate(
+  () => document.querySelector('[data-rail="grande"] a[data-story-author]')?.getAttribute('href') ?? null,
+);
 await enTetePage.click('[data-rail="grande"] a[data-story-author]');
-await enTetePage.waitForFunction(() => window.location.pathname === '/stories', undefined, { timeout: 3000 }).catch(() => {});
-/* La route `/stories` est chargée à la DEMANDE (`screen: () => import(...)`,
-   `route-table.tsx`) : le changement de `pathname` ci-dessus ne dit rien de
-   l'arrivée du chunk. Attendre le `<h1>` lui-même, pas seulement l'URL. */
-await enTetePage.waitForSelector('h1', { timeout: 3000 }).catch(() => {});
-const surStories = await enTetePage.evaluate(() => ({
+/* La route `/story/$post` est chargée à la DEMANDE (`screen: () => import(...)`,
+   `route-table.tsx`) : le changement de `pathname` ne dit rien de l'arrivée du
+   chunk. Attendre la SCÈNE elle-même, pas seulement l'URL. */
+await enTetePage.waitForSelector('[data-story-scene]', { timeout: 5000 }).catch(() => {});
+const surLecteur = await enTetePage.evaluate(() => ({
   pathname: window.location.pathname,
-  search: window.location.search,
-  titre: document.querySelector('h1')?.textContent ?? null,
+  scene: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
+  auteur: document.querySelector('[data-story-scene] [data-story-author]')?.getAttribute('data-story-author') ?? null,
 }));
 check(
-  surStories.pathname === '/stories' && premierAuteur !== null && surStories.search.includes(`author=${premierAuteur}`),
-  `un tap sur la première pastille du rail ouvre RÉELLEMENT la story de SON auteur (${JSON.stringify({ premierAuteur, ...surStories })})`,
+  lienAttendu !== null && surLecteur.pathname === lienAttendu && surLecteur.scene !== null,
+  `un tap sur la première pastille du rail OUVRE le lecteur à l'adresse qu'elle promet (${JSON.stringify({ lienAttendu, ...surLecteur })})`,
 );
 check(
-  surStories.titre !== null && surStories.titre !== 'Stories' && surStories.titre !== "Aucune story pour l'instant",
-  `l'écran ouvert nomme l'auteur tapé, pas un titre générique (titre : « ${surStories.titre} »)`,
+  premierAuteur !== null && surLecteur.auteur === premierAuteur,
+  `le lecteur ouvert est celui de l'auteur TAPÉ, pas d'un autre (attendu « ${premierAuteur} », obtenu « ${surLecteur.auteur} »)`,
 );
 await enTetePage.goto(`${BASE}/`, { waitUntil: 'load' });
 await enTetePage.waitForSelector('[data-row]');

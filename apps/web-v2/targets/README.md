@@ -51,6 +51,7 @@ construction `VITE_READING_MODES` (#5674, D-20).
 | `bulle.md` | l'analyse de la Bulle : loi du mode, anatomie, fil en bulles, états, gestes, tableau, écarts, ce que la charte du README affirmait |
 | `resume.md` | l'analyse de faisabilité du Résumé Vivant — verdict : **intégrable sous condition** (digest calculé localement, aucun endpoint ; il manque un corpus de fixtures qui rende le mode atteignable, et l'inversion du gate) |
 | `riviere.md` | l'analyse de faisabilité de la Rivière — verdict : **intégrable sous condition** (la loi des couloirs est déjà en TypeScript partagé avec 61 vecteurs, le compte de membres que lit iOS est déjà servi ; la condition est la virtualisation du tracé, D-15) |
+| `story.*.png`, `story.*.a11y.txt`, `story.md` | le lecteur de stories plein écran (#5817) : texte et image, clair/sombre — capturé le 2026-09-13 sur un contact FRAÎCHEMENT créé (`recette000102` ↔ `cwstory7826`, le compte connecté à Ref-Native ayant tourné depuis le semis initial, voir `story.md` § 0 et `seed.md`) ; `story.paused.*` reste NON tenu pour une raison d'outillage explicite (geste synthétique insuffisant), pas de produit |
 
 Chaque capture existe en `light` et en `dark`. Les captures sont réduites à
 l'échelle logique de l'appareil (388 × 844) ; les originaux 3× vivent hors

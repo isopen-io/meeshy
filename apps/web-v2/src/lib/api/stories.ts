@@ -52,13 +52,20 @@ export type StoryTrayAuthor = {
   readonly avatar?: string;
 };
 
-/** Une story du plateau — la forme EXACTE de `trayStorySelect`, rien de plus. */
+/** Une story du plateau — la forme EXACTE de `trayStorySelect`, rien de plus.
+ *
+ * `isViewedByMe` (#5817, correctif du défaut relevé § 2 de la spécification)
+ * — SERVI par la passerelle sur les DEUX projections (`PostFeedService.ts`,
+ * commentaire « isViewedByMe (anneau vu/non-vu) reste servi dans les deux »),
+ * jamais absent du plateau contrairement à ce qu'affirmait le doc-comment de
+ * `groupStoriesByAuthor` avant ce lot. */
 export type StoryTrayPost = {
   readonly id: string;
   readonly type: string;
   readonly createdAt: string | Date;
   readonly expiresAt?: string | Date;
   readonly viewCount?: number;
+  readonly isViewedByMe?: boolean;
   readonly author?: StoryTrayAuthor;
   readonly media?: readonly StoryTrayMedia[];
 };
@@ -129,4 +136,140 @@ export function statusMoodsQueryOptions(deps: StoriesDeps) {
     queryFn: ({ signal }: { signal: AbortSignal }) =>
       loadStatusMoods({ ...deps, signal }).then(unwrap),
   };
+}
+
+/**
+ * **LE CORPUS COMPLET DU LECTEUR** (#5817) — LE MÊME ENDPOINT que
+ * `loadStoryTray`, SANS `?projection=tray` : `chargerStories`
+ * (`services/gateway/src/routes/posts/feed.ts:419-484`) sert alors
+ * `storyPostInclude` (`postIncludes.ts:382-385`) — contenu, langue
+ * d'origine, traductions, effets de fond, media, auteur — tout ce que
+ * `lib/stories/playback.ts` a besoin de LIRE pour jouer une story, quand le
+ * plateau (`trayStorySelect`) ne sert que l'anneau et la miniature.
+ *
+ * `STORY_FEED_QUERY_KEY` est un troisième corpus SOUS le même préfixe
+ * (`STORIES_QUERY_PREFIX`) : `refreshListAction`/le socket (`api/socket.ts`)
+ * invalident le préfixe entier et couvrent donc ce corpus SANS ligne de plus
+ * (doc-comment `STORIES_QUERY_PREFIX` ci-dessus).
+ */
+export const STORY_FEED_QUERY_KEY = [...STORIES_QUERY_PREFIX, 'feed'] as const;
+
+/** Un fond d'effet de story — `StoryEffects.background`
+ * (`"RRGGBB"` ou `"gradient:RRGGBB:RRGGBB"`, `schema.prisma`). */
+export type StoryFeedEffects = { readonly background?: string | null };
+
+/** Une story du corpus COMPLET — la forme que `storyPostInclude` sert,
+ * réduite à ce que le lecteur (#5817, périmètre TEXTE + IMAGE) consomme. */
+export type StoryFeedPost = {
+  readonly id: string;
+  readonly type: string;
+  readonly createdAt: string | Date;
+  readonly expiresAt?: string | Date | null;
+  readonly viewCount?: number;
+  readonly isViewedByMe?: boolean;
+  readonly author?: StoryTrayAuthor;
+  readonly media?: readonly StoryTrayMedia[];
+  readonly content?: string | null;
+  readonly originalLanguage?: string | null;
+  /** La carte `langue → { text, … }` que `postScalarSelect.translations`
+   * sert (`schema.prisma:911`) — dépouillée par `lib/api/prism.ts`, JAMAIS
+   * relue ici telle quelle (D-14, cycle 122 du CLAUDE.md racine). */
+  readonly translations?: unknown;
+  readonly storyEffects?: StoryFeedEffects | null;
+};
+
+export async function loadStoryFeed(
+  params: StoriesDeps & { readonly signal?: AbortSignal },
+): Promise<ApiResult<readonly StoryFeedPost[]>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    const { STORY_FEED } = await import('./fixtures-stories');
+    return { ok: true, data: STORY_FEED };
+  }
+  return params.transport.request<readonly StoryFeedPost[]>({
+    method: 'GET',
+    path: '/api/v1/posts/feed/stories?limit=50',
+    ...(params.signal !== undefined ? { signal: params.signal } : {}),
+  });
+}
+
+export function storyFeedQueryOptions(deps: StoriesDeps) {
+  return {
+    queryKey: STORY_FEED_QUERY_KEY,
+    queryFn: ({ signal }: { signal: AbortSignal }) => loadStoryFeed({ ...deps, signal }).then(unwrap),
+  };
+}
+
+/**
+ * **LA TROISIÈME MARCHE DE LA CASCADE** (#5817, revue-correction, défaut 4)
+ * — miroir de `StoryViewerContainer.swift:297-352` : cache → groupe déjà là
+ * → `GET /posts/:id` UNITAIRE → `loadStories(forceNetwork:)` → 2,5 s →
+ * `timedOut`. `loadStoryFeed` ne sert que les 50 stories les plus récentes
+ * (`limit=50`, plafond serveur) ; une story partagée par LIEN mais plus
+ * ancienne que ces 50-là (ou publiée par un auteur dont aucune autre story
+ * ne figure dans la fenêtre) reste pourtant une adresse « partageable
+ * publiquement » (`parity.md:310`). Cette marche la retrouve À LA DEMANDE,
+ * sans jamais élargir la fenêtre du corpus principal.
+ *
+ * `GET /posts/:postId` (`services/gateway/src/routes/posts/core.ts:475-500`,
+ * requiredAuth) applique déjà l'ACL de `getPostById` — un lecteur qui n'a
+ * pas le droit de voir cette story reçoit le MÊME 404 `POST_NOT_FOUND`
+ * qu'une story qui n'existe pas (D-6 : aucun oracle d'existence). Le corps
+ * servi n'est PAS `trayStorySelect` (le plateau) : c'est le post complet,
+ * une projection plus large que `StoryFeedPost` mais qui la CONTIENT — le
+ * même contrat de champs (`content`, `translations`, `storyEffects`,
+ * `media`, `author`…) que `storyPostInclude` sert déjà à `loadStoryFeed`.
+ */
+/** `timedOut` (`StoryViewerContainer.swift:297-352`) — le délai de garde de
+ * la cascade DE REPLI, jamais celui d'un appel ordinaire (`DEFAULT_TIMEOUT_MS`,
+ * 15 s, `http.ts`) : la 3ᵉ marche n'a de raison d'exister que pour dire vite
+ * « introuvable », pas pour attendre une passerelle lente aussi longtemps
+ * qu'un chargement normal. */
+export const STORY_POST_FALLBACK_TIMEOUT_MS = 2500;
+
+export async function loadStoryPost(
+  params: StoriesDeps & { readonly postId: string; readonly signal?: AbortSignal },
+): Promise<ApiResult<StoryFeedPost>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    const { STORY_FEED } = await import('./fixtures-stories');
+    const found = STORY_FEED.find((story) => story.id === params.postId);
+    if (found === undefined) {
+      return { ok: false, status: 404, error: 'Post not found', code: 'POST_NOT_FOUND' };
+    }
+    return { ok: true, data: found };
+  }
+  return params.transport.request<StoryFeedPost>({
+    method: 'GET',
+    path: `/api/v1/posts/${encodeURIComponent(params.postId)}`,
+    timeoutMs: STORY_POST_FALLBACK_TIMEOUT_MS,
+    ...(params.signal !== undefined ? { signal: params.signal } : {}),
+  });
+}
+
+export function storyPostQueryOptions(deps: StoriesDeps & { readonly postId: string }) {
+  return {
+    queryKey: [...STORIES_QUERY_PREFIX, 'post', deps.postId] as const,
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      loadStoryPost({ ...deps, signal }).then(unwrap),
+  };
+}
+
+/**
+ * **MARQUER UNE STORY VUE** (#5817) — `POST /posts/:postId/view`
+ * (`services/gateway/src/routes/posts/interactions.ts:398-424`,
+ * requiredAuth, corps `{ duration?: number }`). `{ viewed: true }` quel que
+ * soit le verdict serveur (« ni oracle d'existence ni témoin d'audience ») :
+ * l'appelant n'attend de cette réponse qu'un accusé, jamais une donnée à
+ * afficher.
+ */
+export async function markStoryViewed(
+  params: StoriesDeps & { readonly postId: string; readonly durationMs?: number },
+): Promise<ApiResult<{ readonly viewed: boolean }>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    return { ok: true, data: { viewed: true } };
+  }
+  return params.transport.request<{ readonly viewed: boolean }>({
+    method: 'POST',
+    path: `/api/v1/posts/${encodeURIComponent(params.postId)}/view`,
+    body: params.durationMs === undefined ? {} : { duration: params.durationMs },
+  });
 }

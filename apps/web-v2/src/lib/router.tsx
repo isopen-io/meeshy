@@ -79,7 +79,45 @@ function subscriber(onSchemeChange: () => void): () => void {
   return () => subscribers.delete(onSchemeChange);
 }
 
+/**
+ * `isCurrentHref` — l'adresse VISÉE est-elle celle où l'on est DÉJÀ ?
+ *
+ * Comparaison de CHAÎNES, pas de `new URL()` : tous les appelants de
+ * `navigate` passent une adresse RELATIVE À LA RACINE (`href(...)`,
+ * `'/stories'`, `` `${location.pathname}?…` `` — relevé exhaustif au
+ * 2026-09-13), soit exactement la forme que ce concaténé produit. Une forme
+ * ABSOLUE ne s'apparierait pas et retomberait sur l'empilement d'hier :
+ * fail-open, jamais une navigation avalée par erreur — et 120 octets de
+ * moins avant le premier pixel qu'un `new URL()` gardé (le budget de la
+ * courbe se tient à 0,1 Ko près).
+ */
+function isCurrentHref(url: string): boolean {
+  if (typeof window === 'undefined') return false;
+  return url === `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+/**
+ * NAVIGUER VERS L'ADRESSE OÙ L'ON EST DÉJÀ N'EMPILE RIEN (revue-correction
+ * #5893, mesuré dans un navigateur réel).
+ *
+ * `pushState` accepte volontiers la MÊME adresse deux fois : chaque tap
+ * ajoutait une entrée. Le bouton flottant de GAUCHE pointe sur `feed` quelle
+ * que soit la route (`floating-menus.tsx`, table `FEED_DESTINATION`), donc
+ * sur `/feed` il ne changeait RIEN à l'écran — loi 4 — tout en faisant
+ * grossir l'historique : `history.length` 3 → 4 par tap, mesuré. Le bouton
+ * RETOUR matériel d'Android (directive coque 5b) ramenait alors sur `/feed`
+ * au lieu de la liste, autant de fois qu'on avait tapé.
+ *
+ * La garde vit ICI, au SITE UNIQUE de la navigation, et pas chez l'appelant :
+ * les trente écrans à venir porteront tous des liens vers des destinations qui
+ * peuvent être la leur (une échelle de menu, un onglet, un fil d'Ariane), et
+ * une garde par appelant est une garde qu'on oublie.
+ *
+ * Un `replace` EXPLICITE traverse : c'est ainsi qu'une redirection réécrit
+ * l'entrée courante (garde de session, canonicalisation d'URL).
+ */
 export function navigate(url: string, replace = false): void {
+  if (!replace && isCurrentHref(url)) return;
   if (replace) window.history.replaceState(null, '', url);
   else window.history.pushState(null, '', url);
   notify();
