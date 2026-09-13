@@ -157,7 +157,7 @@ final class ForwardPickerComposeEntryTests: XCTestCase {
             "Garde-fou : la source lue n'est pas celle de l'hôte."
         )
         XCTAssertEqual(
-            code.components(separatedBy: "ConversationMediaComposerDoor(").count - 1, 1,
+            code.components(separatedBy: "MediaComposerDoor(").count - 1, 1,
             "L'hôte monte la porte une fois, et une seule : deux montages, deux sorties à tenir d'accord."
         )
         XCTAssertTrue(

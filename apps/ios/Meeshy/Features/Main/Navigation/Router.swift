@@ -63,6 +63,18 @@ enum Route: Hashable {
     case communityInvite(String)
     case notifications
     case userStats
+    /// Le tableau de bord des streaks & badges (#5698) — niveau, série,
+    /// badges par axe, succès ; la cible des quatre notifications de
+    /// réengagement (`badge_earned`, `streak_milestone`, `level_up`,
+    /// `achievement_unlocked`).
+    case progression
+    /// UNE section du hub — Badges, Défis ou Succès (directive porteur
+    /// 2026-09-09). Elle était présentée en `.sheet` : une feuille INTERROMPT,
+    /// se ferme vers le bas, n'entre pas dans l'historique, et le glissement
+    /// depuis le bord gauche n'y fait rien. Poussée dans la pile, elle reçoit
+    /// les trois gratuitement — c'est le modèle que servent déjà l'Android et
+    /// le web.
+    case progressionSection(ProgressionSection)
     case links
     case affiliate
     case trackingLinks
@@ -99,6 +111,21 @@ extension Route {
         }
     }
 
+    /// Hauteur du `CollapsibleHeader` que l'écran de cette route monte, ou
+    /// `nil` s'il n'en monte aucun. Sert à la pastille de synchronisation
+    /// (`RootChromeLayer.syncPillTopPadding`) : ce qui décide de sa marge
+    /// haute hors conversation n'est pas « suis-je sur telle route ? » mais
+    /// « qu'est-ce que l'hôte pose en haut ? » — un booléen ne peut dire que
+    /// deux cas là où il y en a trois (#5944).
+    var collapsibleHeaderHeight: CGFloat? {
+        switch self {
+        case .settings, .profile, .postDetail, .links, .contacts, .peopleDiscovery:
+            return CollapsibleHeaderMetrics.expandedHeight
+        default:
+            return nil
+        }
+    }
+
     var displayTitle: String {
         switch self {
         case .conversation(let conv):
@@ -129,6 +156,18 @@ extension Route {
             return String(localized: "route.title.notifications", defaultValue: "Notifications", bundle: .main)
         case .userStats:
             return String(localized: "route.title.stats", defaultValue: "Statistiques", bundle: .main)
+        case .progression:
+            return String(localized: "route.title.progression", defaultValue: "Progression", bundle: .main)
+        case .progressionSection(let section):
+            // Le titre de la PAGE, pas celui du hub : c'est lui que la barre
+            // de navigation d'iPad affiche et que VoiceOver annonce à
+            // l'arrivée. Les trois libellés vivent déjà dans le catalogue de
+            // l'écran — les recopier ici en ferait des jumeaux qui divergent.
+            switch section {
+            case .badges: return ProgressionCopy.badgesTitle
+            case .defis: return AchievementCopy.sectionsHeader
+            case .succes: return ProgressionCopy.achievementsTitle
+            }
         case .links:
             return String(localized: "route.title.links", defaultValue: "Liens", bundle: .main)
         case .affiliate:
@@ -282,10 +321,48 @@ final class Router: ObservableObject {
     @Published var pendingOpenSearch: Bool = false
 
     /// Demande d'ouverture du COMPOSEUR de post du flux depuis ailleurs (accès
-    /// rapides de la liste de conversations, tableau de bord — 2026-08-21) :
-    /// `RootView` montre le flux, `ThemedFeedOverlay` ouvre son composeur et
-    /// consomme le drapeau. Même patron que `pendingOpenSearch`.
+    /// rapides de la liste de conversations, tableau de bord — 2026-08-21).
+    /// Même patron que `pendingOpenSearch`.
+    ///
+    /// **Le drapeau se LÈVE ici et se RAMASSE par `consumePendingFeedComposer()`,
+    /// jamais autrement** : les deux racines ne montent pas le même flux —
+    /// `RootView` (iPhone) monte `ThemedFeedOverlay`, `iPadRootView` monte
+    /// `FeedView` — et chacune possède son propre drapeau de composeur. Tant que
+    /// la seule lectrice était l'enveloppe iPhone, « Publier un post » levait sur
+    /// iPad un drapeau que personne ne lisait : le bouton se peignait, vibrait,
+    /// et n'ouvrait rien (2026-09-08).
     @Published var pendingOpenFeedComposer: Bool = false
+
+    /// Le palier à CÉLÉBRER avant d'ouvrir le tableau de bord (#5809), posé par
+    /// le tap d'une notification de succès, de série ou de niveau.
+    ///
+    /// `nil` est un état LÉGITIME : une charge qui ne dit pas quel palier a été
+    /// franchi n'en fait pas inventer un — le tap ouvre alors le tableau de
+    /// bord comme avant, sans célébration.
+    @Published var pendingEngagementReveal: EngagementReveal?
+
+    /// Ramasse le palier à célébrer, UNE fois.
+    ///
+    /// La remise à plat vit ICI, à son site unique : les deux racines montent
+    /// des hôtes différents, et une remise à zéro laissée à chacune finit par
+    /// diverger — une racine oublie, et son bouton cesse d'agir sans que rien
+    /// ne rougisse.
+    func consumePendingEngagementReveal() -> EngagementReveal? {
+        guard let palier = pendingEngagementReveal else { return nil }
+        pendingEngagementReveal = nil
+        return palier
+    }
+
+    /// Ramasse la demande de composeur de flux, UNE fois.
+    ///
+    /// La remise à plat vit ICI, à son site unique : laissée à chaque hôte, elle
+    /// se réécrit à chaque racine et une racine finit par oublier — c'est
+    /// exactement ainsi que l'iPad s'est retrouvé sans lecteur.
+    func consumePendingFeedComposer() -> Bool {
+        guard pendingOpenFeedComposer else { return false }
+        pendingOpenFeedComposer = false
+        return true
+    }
 
     /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant, posé par l'item « Focal
     /// (bêta) » du menu d'appui long de la liste (gardé par

@@ -38,7 +38,7 @@ final class iPadRootViewPerfRerenderTests: XCTestCase {
     /// Companion guard: the extensions that share `iPadRootView`'s stored
     /// properties must not reintroduce the observation either.
     func test_iPadRootViewExtensions_doNotObserveNetworkMonitor() throws {
-        for file in ["Views/iPadRootView+Sheets.swift", "Views/iPadRootView+Panels.swift",
+        for file in ["Views/RootLayers/iPadRootViewLayers.swift", "Views/iPadRootView+Panels.swift",
                      "Views/iPadRootView+Overlays.swift", "Views/iPadRootView+Navigation.swift"] {
             let source = try source(of: file)
             XCTAssertFalse(

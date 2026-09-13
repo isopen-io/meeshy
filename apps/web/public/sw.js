@@ -16,17 +16,16 @@
 const APP_BUILD_VERSION = '__RUNTIME_BUILD_VERSION__' !== '__RUNTIME' + '_BUILD_VERSION__'
   ? '__RUNTIME_BUILD_VERSION__'
   : `DEV_${Date.now()}`;
-const SW_VERSION = '1.4.0';
+const SW_VERSION = '1.5.0';
 
 /**
  * NAMESPACE DE CACHE — le Cache Storage est à l'échelle de l'ORIGINE, pas du
  * worker. Tout script enregistré sur `meeshy.me` y écrit et peut y supprimer,
- * y compris le worker de la zone v3 que le § 7 de la conception planifie
- * « servi à la RACINE de l'URL par nécessité de portée ». Ce préfixe est donc
- * la frontière de propriété : ce worker ne détruit QUE ce qu'il a écrit
- * (§ ACTIVATION). JUMEAU de `LEGACY_CACHE_NAMESPACE`
+ * y compris celui de l'application qui succédera au legacy sur cette origine.
+ * Ce préfixe est donc la frontière de propriété : ce worker ne détruit QUE ce
+ * qu'il a écrit (§ ACTIVATION). JUMEAU de `LEGACY_CACHE_NAMESPACE`
  * (`apps/web/utils/service-worker.ts`), qui purge les mêmes caches depuis la
- * page — gardé par `__tests__/public/sw.v3-zone.test.ts`.
+ * page — gardé par `__tests__/public/sw.juridiction.test.ts`.
  */
 const CACHE_NAMESPACE = 'meeshy-cache-';
 const CACHE_NAME = `${CACHE_NAMESPACE}${APP_BUILD_VERSION}`;
@@ -47,67 +46,17 @@ function log(...args) {
 }
 
 // ============================================================================
-// FRONTIÈRE DE ZONE — ce worker n'a AUCUNE juridiction sur la v3
+// PAGES LAISSÉES AU RÉSEAU
 // ============================================================================
-// JUMEAU CLIENT de la règle Traefik du routeur `frontend-v3`
-// (`docker-compose.prod.yml`, et son homologue de `/opt/meeshy/production/`).
-// Ce worker est enregistré sur `scope: '/'`, donc sur l'origine ENTIÈRE : sans
-// cette liste, il aiguille `meeshy.me` en second, derrière Traefik et sans
-// l'avoir déclaré. Ajouter ou retirer un `PathPrefix` étant un
-// `docker compose up -d` SANS rebuild, alors que `CACHE_NAME` est indexé sur
-// un horodatage posé au DÉMARRAGE du conteneur `frontend`
-// (`docker-entrypoint.sh:57-60`), son cache survit à l'opération dont il
-// fausse le résultat : le retour arrière du § 4.3 de la conception en devient
-// inerte côté client.
-//
-// ORDRE, dans UN sens seulement (§ 4.4 bis, § 10.4 étape 9) : un préfixe
-// ENTRE ici dans un commit ANTÉRIEUR — déployé, et activé chez les clients —
-// à celui qui l'ajoute au routeur `frontend-v3` ; il n'en SORT jamais. Cette
-// liste est monotone croissante, et c'est ce qui garde vrai le retour arrière
-// du § 4.3 : retirer un `PathPrefix` ne demande aucune contrepartie ici (ne
-// pas intercepter n'est jamais faux, seulement moins mis en cache), alors que
-// l'en retirer rouvrirait le défaut le temps d'une propagation de worker.
-// Gardé par `scripts/check-v3-pipeline.mjs` — invariant « le worker legacy
-// s'efface devant ce que la règle réclame », posé une fois PAR DÉPLOIEMENT
-// (production ET staging) et qui EXÉCUTE `belongsToV3Zone` plutôt que de la
-// recopier. `__tests__/public/sw.v3-zone.test.ts` garde l'autre moitié : que
-// chaque chemin réclamé échappe VRAIMENT au listener.
-//
-// `/l` est entré ici pour l'ÉTAPE 2 du § 4.9 (« le rôle premier, une seule
-// route »), dans le commit antérieur exigé ci-dessus.
-//
-// LES SIX SUIVANTS SONT UN RATTRAPAGE, ET IL FAUT LE DIRE. `/` a été réclamé
-// par le routeur de staging quand la vitrine v3 a basculé (2026-09-01) SANS
-// entrer dans cette liste : la vitrine était donc servie aux navigateurs neufs
-// et le shell du legacy, sorti du cache, aux revenants. Aucun témoin n'a
-// rougi — celui qui existait ne lisait que le compose de PRODUCTION et ne
-// reconnaissait que `PathPrefix(…)`, jamais `Path(…)`, qui est justement la
-// forme employée pour `/`. Les cinq pages institutionnelles entrent, elles,
-// dans l'ordre nominal : ici d'abord, au routeur ensuite (#4686). `/login` et
-// `/signup` suivent le même ordre : la v3 les sert désormais par un
-// `<form method="post">` sans JavaScript, et le shell du legacy sorti du cache
-// les recouvrirait sans cela chez tout visiteur revenant. `/chats` entre au
-// meme titre : la v3 y sert desormais la liste des conversations du lecteur, et
-// un shell mis en cache par le worker y montrerait celles de la session
-// PRECEDENTE — le pire des defauts que ce cache puisse produire.
-// `/chat` (au singulier) est la porte de l'INVITE — `/chat/:lien`, conception
-// § 12.3 — servie par la v3 avec un formulaire sans JavaScript ; il entre ici
-// AVANT le routeur (§ 4.4 bis), sinon le shell legacy de `/chat/[id]` sorti du
-// cache recouvrirait la modale de choix chez tout visiteur revenant.
-// HUIT PREFIXES AJOUTES LE 2026-09-03, et la raison merite d'etre dite : ces
-// ecrans etaient LIVRES, testes et mesures depuis des jours, et sur AUCUN
-// chemin de bascule. Le worker les interceptait donc chez tout visiteur
-// revenant, et le routeur ne pouvait pas les reclamer sans les servir aux
-// seuls navigateurs neufs. Six d'entre eux (`/contacts`, `/links`, `/search`,
-// `/notifications`, `/post`, `/stories`) etaient dans ce trou depuis leur
-// livraison ; deux (`/reels`, `/moods`) y entrent avec elle.
-//
-// C'est la PREMIERE marche du § 4.4 bis — declarer, DEPLOYER, puis reclamer au
-// routeur. L'invariant « le worker legacy connait TOUT ce que la zone sert »
-// (`scripts/lib/v3-routage.mjs`) la garde desormais : un ecran servi par
-// `apps/web-old-version3/app` et absent de cette liste fait rougir le gate.
-const V3_ZONE_PREFIXES = [
-  '/__v3',
+// Ce worker n'intercepte pas ces chemins : le navigateur les demande au
+// serveur. Ils sont sortis du cache au titre de la zone de l'ancienne refonte
+// v3, retirée depuis (#5994) ; les chemins que seule cette refonte servait
+// sont partis avec elle (#6001). Ceux-ci, le legacy les sert : ils restent au
+// réseau pour que le retrait ne change rien à ce qu'y voient les utilisateurs.
+// La branche App Shell sert le cache AVANT le réseau — y rouvrir l'accueil,
+// `/login` ou `/settings` rendrait le shell d'une session ou d'un déploiement
+// précédent. En rouvrir un est une décision de produit, pas un nettoyage.
+const NETWORK_ONLY_PREFIXES = [
   '/l',
   '/',
   '/about',
@@ -117,35 +66,19 @@ const V3_ZONE_PREFIXES = [
   '/privacy',
   '/login',
   '/signup',
-  '/chats',
   '/chat',
   '/contacts',
   '/links',
   '/search',
   '/notifications',
   '/post',
-  '/stories',
-  '/reels',
-  '/moods',
   '/settings',
   '/feed',
-  '/composer',
-  '/deconnexion',
-  // `/calls` entre le 2026-09-05 — l'historique des appels (#5108, consultation
-  // seule, aucune pile WebRTC embarquee) : meme marche que les huit ci-dessus,
-  // declaree ICI avant que le routeur ne la reclame (§ 4.4 bis).
-  '/calls',
-  // `/communities` entre le 2026-09-05 — les communautes du lecteur (matrice
-  // ordre 45, L7 : liste, ouverture sur ses conversations, creation). Il etait
-  // servi par `apps/web-old-version3/app` sans etre ici : exactement le trou que les huit
-  // prefixes du 2026-09-03 ont solde, et que l'invariant garde depuis. Meme
-  // marche que `/calls` juste au-dessus — declarer ICI, DEPLOYER, puis reclamer
-  // au routeur (§ 4.4 bis).
   '/communities',
 ];
 
-function belongsToV3Zone(pathname) {
-  return V3_ZONE_PREFIXES.some(
+function isLeftToNetwork(pathname) {
+  return NETWORK_ONLY_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
 }
@@ -176,10 +109,9 @@ self.addEventListener('activate', (event) => {
     (async () => {
       // Nettoyer les anciens caches DE CE WORKER — ceux du namespace, et eux
       // seuls. Un `filter((name) => name !== CACHE_NAME)` sans préfixe est une
-      // purge à l'échelle de l'ORIGINE : elle détruit le cache d'un worker qui
-      // n'est pas celui-ci (la zone v3, § 4.4 bis de la conception), et ce
-      // troisième canal de juridiction serait resté ouvert après la garde du
-      // listener `fetch`.
+      // purge à l'échelle de l'ORIGINE : elle détruirait le cache de tout autre
+      // worker de `meeshy.me`, à commencer par celui de l'application qui
+      // succédera au legacy.
       const cacheNames = await caches.keys();
       await Promise.all(
         cacheNames
@@ -205,12 +137,9 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // 0. FRONTIÈRE DE ZONE — avant TOUT autre test, méthode comprise. Ne rien
-  //    intercepter, c'est laisser le navigateur parler au routeur : la règle
-  //    Traefik redevient la seule autorité, dans les DEUX sens (ajout ET
-  //    retrait d'un `PathPrefix`). Ce n'est pas une règle d'aiguillage parmi
-  //    d'autres — c'est l'absence de juridiction, donc elle passe en premier.
-  if (belongsToV3Zone(url.pathname)) {
+  // 0. PAGES LAISSÉES AU RÉSEAU — avant tout autre test, méthode comprise :
+  //    le navigateur les demande au serveur, sans passer par le cache.
+  if (isLeftToNetwork(url.pathname)) {
     return;
   }
 

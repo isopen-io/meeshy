@@ -46,7 +46,104 @@ extension View {
         accentColor: String,
         preferredContentLanguages: [String] = []
     ) -> some View {
-        fullScreenCover(isPresented: isPresented) {
+        modifier(SocialMediaGalleryLayer(
+            post: post,
+            isPresented: isPresented,
+            startMediaId: startMediaId,
+            startSceneIndex: startSceneIndex,
+            accentColor: accentColor,
+            preferredContentLanguages: preferredContentLanguages
+        ))
+    }
+}
+
+/// **Le plein écran d'un post, ET la porte qu'il ouvre** (#6085).
+///
+/// Un `ViewModifier` nominal plutôt qu'une fermeture : « Composer » enchaîne
+/// DEUX présentations sur le même hôte — la galerie se referme, le meuble prend
+/// sa place — et une séquence a besoin d'un endroit où se lire d'un seul tenant.
+/// C'est exactement la raison, et la forme, de `ConversationMediaGalleryLayer`
+/// sur le chemin conversation.
+private struct SocialMediaGalleryLayer: ViewModifier {
+
+    let post: FeedPost?
+    @Binding var isPresented: Bool
+    let startMediaId: String?
+    let startSceneIndex: Int
+    let accentColor: String
+    let preferredContentLanguages: [String]
+
+    /// **Le publieur de « Composer »** — valeur d'environnement, jamais
+    /// `@EnvironmentObject` : les hôtes de ce modificateur sont montés dans des
+    /// FEUILLES qui ne portent pas les objets de la racine (`UserProfileSheet` →
+    /// `ProfileUserPostsList`, `FeedCommentsSheet`, `BookmarksView`). Lire un
+    /// objet absent fait trapper ; `nil` ne fait que retirer l'entrée (loi 4).
+    @Environment(\.meeshyStoryComposer) private var storyComposer: StoryViewModel?
+
+    /// **Armer, puis fermer** — jamais présenter tout de suite. Deux
+    /// `fullScreenCover` armés dans la même transaction n'en présentent AUCUN.
+    @State private var pendingCompose: ComposerSeedTarget?
+    @State private var composeTarget: ComposerSeedTarget?
+
+    /// **La règle d'offre décide, pas la galerie** (critère 2 de #6085). Un post
+    /// à deux photos, un média sans URL, un post vide : la cible ne se construit
+    /// pas, et sans cible il n'y a aucun bouton.
+    private var composable: ComposerSeedTarget? {
+        guard storyComposer != nil, let post else { return nil }
+        guard let cible = ComposerSeedTarget(post: post), cible.attachment != nil else { return nil }
+        // **Un bouton qui dit « avec CE média » doit en emporter un** (loi 4).
+        // La règle d'offre rend un plan SANS média quand le porteur en a
+        // plusieurs — le texte reste semable, et c'est juste pour un menu de
+        // message. Ici le libellé promet la pièce : sans elle, le contrôle
+        // mentirait au moment précis où l'utilisateur la regarde.
+        return cible
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .fullScreenCover(isPresented: $isPresented, onDismiss: promote) { galerie }
+            // **La porte vit sur un HÔTE À ELLE** — SwiftUI ne présente qu'UNE
+            // modale par vue, et celle du dessus occupe déjà la place de cet
+            // hôte. Un `Color.clear` en arrière-plan lui en donne une autre ;
+            // sans quoi la galerie se referme sur une cible armée que rien
+            // n'ouvre. Mesuré au simulateur sur le chemin story, qui présentait
+            // le même défaut pour la même raison.
+            .background {
+                Color.clear
+                    .fullScreenCover(item: $composeTarget) { target in
+                        if let storyComposer {
+                            MediaComposerDoor(
+                                target: target,
+                                storyViewModel: storyComposer,
+                                // Aucun aperçu : les trois modèles que
+                                // `StoryViewerView` réclame ne traversent pas
+                                // cette frontière depuis un hôte de fil.
+                                // DETTE NOMMÉE, comme `ShareComposeDoor`.
+                                preview: nil,
+                                onDismiss: { composeTarget = nil }
+                            )
+                        }
+                    }
+            }
+    }
+
+    /// La galerie est DÉMONTÉE : le meuble peut prendre sa place.
+    private func promote() {
+        guard let attendue = pendingCompose else { return }
+        pendingCompose = nil
+        composeTarget = attendue
+    }
+
+    /// **La valeur d'environnement est REMISE à l'intérieur du cover.**
+    ///
+    /// Un `fullScreenCover` n'hérite pas de l'environnement de son hôte dans ce
+    /// dépôt — six sites le documentent et le contournent à la main. La couche
+    /// la lit DEHORS (où la racine l'a posée) et la repose DEDANS : sans ce
+    /// relais, la branche SCÈNE — qui lit la valeur elle-même, n'ayant pas de
+    /// fermeture à recevoir — n'aurait jamais d'entrée « Composer ».
+    @ViewBuilder
+    private var galerie: some View {
+        Group {
             if let post {
                 // **Une SCÈNE se rejoue, elle ne se feuillette pas** (directive
                 // porteur 2026-09-05). Le site unique d'ouverture est le seul
@@ -103,11 +200,21 @@ extension View {
                     .id(startSceneIndex)
                 } else {
                     SocialMediaGalleryContent(
-                        post: post, startMediaId: startMediaId, accentColor: accentColor
+                        post: post, startMediaId: startMediaId, accentColor: accentColor,
+                        // **Le même item, dans le menu de la PIÈCE** (arbitrage
+                        // porteur 2026-09-11). C'est la rangée d'actions du plein
+                        // écran — celle qui porte déjà « Créer avec ce média » en
+                        // conversation — et non un bouton inventé pour le fil :
+                        // même libellé, même glyphe, même rang.
+                        onCompose: composable.map { cible in {
+                            pendingCompose = cible
+                            isPresented = false
+                        } }
                     )
                 }
             }
         }
+        .environment(\.meeshyStoryComposer, storyComposer)
     }
 }
 
@@ -141,6 +248,11 @@ struct SocialMediaGalleryContent: View {
         return Dictionary(uniqueKeysWithValues: attachments.map { ($0.id, info) })
     }
 
+    /// **« Composer » sur la pièce ouverte** (#6085). `nil` ⇒ aucun bouton — la
+    /// galerie ne connaît que des pièces jointes, et c'est la COUCHE qui a
+    /// résolu la règle d'offre sur le post porteur.
+    var onCompose: (() -> Void)?
+
     var body: some View {
         let items = attachments
         ConversationMediaGalleryView(
@@ -157,7 +269,8 @@ struct SocialMediaGalleryContent: View {
             captionMap: SocialMediaCaption.map(
                 for: post.media, carrierText: post.displayContent
             ),
-            senderInfoMap: senderInfoMap
+            senderInfoMap: senderInfoMap,
+            onComposeWithMedia: onCompose.map { action in { _ in action() } }
         )
     }
 }

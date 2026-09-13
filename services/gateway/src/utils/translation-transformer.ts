@@ -54,11 +54,27 @@ export function transformTranslationsToArray(
 
   return Object.entries(translationsJson)
     .filter(([lang]) => !matchesLanguage || matchesLanguage(lang))
+    // **UNE ENTRÉE SANS TEXTE N'EST PAS UNE TRADUCTION** (audit de cohérence
+    // iOS ↔ passerelle, 2026-09-11). `translationsJson` est un document Mongo
+    // lu SANS validation : le type ci-dessus décrit ce que les écrivains
+    // d'aujourd'hui posent, pas ce que la base contient — écritures partielles,
+    // versions antérieures, panne du translator à mi-chemin.
+    //
+    // Le coût de laisser passer une entrée creuse n'est PAS local : le schéma
+    // wire ne déclare pas ces champs `nullable`, donc fast-json-stringify les
+    // OMET, et `APITextTranslation.translatedContent` (non optionnel) fait
+    // alors échouer le décodage du message — puis, le tableau `data` étant
+    // décodé d'un bloc, **de la page entière de messages**. Une ligne
+    // malformée vidait une conversation.
+    .filter(([, data]) => typeof data?.text === 'string' && data.text.length > 0)
     .map(([lang, data]) => ({
       id: `${messageId}-${lang}`, // ID synthétique pour compatibilité
       messageId,
       targetLanguage: lang,
       translatedContent: data.text,
+      // Métadonnée, pas contenu : son absence ne justifie pas de retirer une
+      // traduction lisible. On ne SERT que ce qui est connu — inventer
+      // « basic » ferait dire au serveur une chose qu'il ignore.
       translationModel: data.translationModel,
       confidenceScore: data.confidenceScore,
       isEncrypted: data.isEncrypted || false,

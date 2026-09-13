@@ -2508,7 +2508,23 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // MARK: - Room Management
 
     public func joinConversation(_ conversationId: String) {
-        guard !joinedConversations.contains(conversationId) else { return }
+        // **Le mémo alimente le RE-JOIN de reconnexion ; il ne décide pas s'il
+        // faut poser la question** (#5947). Un `guard !joinedConversations
+        // .contains(...) else { return }` vivait ici : rouvrir une conversation
+        // dans la même session de socket n'interrogeait donc plus jamais le
+        // serveur — le cycle « quitter / revenir » signalé par le porteur.
+        //
+        // Or la question n'a d'intérêt que par sa RÉPONSE : `conversation:join`
+        // est le seul aller-retour qui rende `join-error` / `not_a_member`,
+        // c'est-à-dire le seul moyen d'apprendre qu'une appartenance a cessé.
+        // Le sauter au motif qu'on a déjà rejoint, c'est raisonner sur un état
+        // que seul le serveur connaît.
+        //
+        // Ce que ça coûte, mesuré : `socket.join` est idempotent côté
+        // passerelle, et le budget est de 30 jonctions/minute — une ouverture de
+        // conversation est un geste humain. La rafale de reconnexion, elle,
+        // n'emprunte pas ce chemin (le handler `.connect` émet directement).
+        //
         // Tracker la room AVANT toute emission : le handler `.connect`
         // (re-join loop) re-emet `conversation:join` pour toutes les rooms
         // de `joinedConversations` une fois le handshake termine.
@@ -3185,9 +3201,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 rtt = hint * 2 // hint is one-way; double for round-trip
             } else {
                 // No server-computed hint: approximate from current wall time vs serverTime.
-                let isoFormatter = ISO8601DateFormatter()
-                isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                if let serverDate = isoFormatter.date(from: serverTimeStr) {
+                if let serverDate = (try? Date(serverTimeStr, strategy: .iso8601.time(includingFractionalSeconds: true))) ?? (try? Date(serverTimeStr, strategy: .iso8601)) {
                     rtt = abs(Date().timeIntervalSince(serverDate)) * 1000 // ms
                 } else {
                     return

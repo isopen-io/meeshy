@@ -1,6 +1,22 @@
 import crypto from 'node:crypto';
-import type { ConversationState, PendingAction, PendingMessage, PendingReaction, MessageDirective, ReactionDirective } from '../graph/state';
-import type { LlmProvider, LlmTool } from '../llm/types';
+import type { ConversationState, MessageIllustration, PendingAction, PendingMessage, PendingReaction, MessageDirective, ReactionDirective } from '../graph/state';
+import type { LlmCitation, LlmProvider, LlmTool } from '../llm/types';
+
+/**
+ * L'article qui illustrera un message qui OUVRE un sujet : la première page
+ * http(s) citée par la recherche web (#6192). Une réponse dans un fil, ou un
+ * message écrit sans recherche, ne s'illustre pas — un groupe WhatsApp ne
+ * reçoit pas une photo à chaque réplique.
+ */
+export function pickIllustration(
+  directive: MessageDirective,
+  isNewTopic: boolean,
+  citations: readonly LlmCitation[] | undefined,
+): MessageIllustration | undefined {
+  if (!isNewTopic || !directive.needsWebSearch) return undefined;
+  const page = (citations ?? []).find((citation) => /^https?:\/\//i.test(citation.url));
+  return page ? { sourceUrl: page.url } : undefined;
+}
 
 function detectConversationLanguage(state: ConversationState): string {
   const recentMessages = state.messages.slice(-20);
@@ -14,6 +30,20 @@ function detectConversationLanguage(state: ConversationState): string {
   for (const [lang, count] of freq) { if (count > maxCount) { dominant = lang; maxCount = count; } }
   return dominant;
 }
+
+const TONE_GUIDES: Record<string, string> = {
+  familier: 'Ecris de maniere decontractee, avec des abreviations et du langage familier.',
+  enthousiaste: 'Ecris de maniere decontractee, avec des abreviations et du langage familier.',
+  critique: 'Sois direct, parfois piquant, avec un regard critique.',
+  sarcastique: 'Sois direct, parfois piquant, avec un regard critique.',
+  curieux: 'Pose des questions, montre de la curiosite, explore les idees.',
+  // Archétypes de kongossa (#6192)
+  complice: "Ecris comme quelqu'un qui partage un ragot ou un secret au groupe : complicite, un peu de suspense, « vous avez vu ça ? ».",
+  journalistique: "Rapporte les faits comme un chroniqueur populaire : le lieu, la date, ce qui s'est passe, et le site ou tu l'as lu — sans jargon.",
+  moqueur: 'Blague, punchline, ironie legere — jamais mechant, jamais sur un deuil.',
+  nostalgique: "Compare avec la vie « ici » (France, Canada, USA) et « chez nous au pays », avec un peu de nostalgie.",
+  posé: 'Calme et pose : un proverbe si ca colle, tempere les exces, prends du recul.',
+};
 
 function buildGeneratorPrompt(
   displayName: string,
@@ -43,13 +73,7 @@ function buildGeneratorPrompt(
   const emojisText = profile.commonEmojis.length > 0
     ? `\n- EMOJIS: ${profile.commonEmojis.join(' ')}` : '';
 
-  const toneGuide = profile.tone === 'familier' || profile.tone === 'enthousiaste'
-    ? 'Ecris de maniere decontractee, avec des abreviations et du langage familier.'
-    : profile.tone === 'critique' || profile.tone === 'sarcastique'
-      ? 'Sois direct, parfois piquant, avec un regard critique.'
-      : profile.tone === 'curieux'
-        ? 'Pose des questions, montre de la curiosite, explore les idees.'
-        : 'Garde un ton naturel et equilibre.';
+  const toneGuide = TONE_GUIDES[profile.tone] ?? 'Garde un ton naturel et equilibre.';
 
   const emojiGuide = profile.emojiUsage === 'abondant'
     ? 'Maximum 1-2 emojis, naturellement places.'
@@ -62,6 +86,7 @@ function buildGeneratorPrompt(
     ? `MODE ELABORE — Tu OUVRES un nouveau sujet ou c'est ta PREMIERE intervention sur ce theme.
 Le sujet DOIT etre en rapport DIRECT avec le titre et la description de la conversation.
 Tu peux developper (2-4 phrases). Donne ton avis, une experience, une observation concrete.
+Si tu t'appuies sur une actu lue sur le web, ecris comme quelqu'un qui vient de la lire sur son telephone et la partage au groupe (« j'ai vu ça sur ... ») — l'image de l'article sera jointe a ton message, ne la decris pas.
 Reste CONVERSATIONNEL. Pas de dissertation. Pas de structure formelle.`
     : `MODE CHAT — Tu REAGIS dans un fil existant. C'est du CHAT, pas un article.
 Ta reponse DOIT etre en RELATION DIRECTE avec ce qui vient d'etre dit. Ne change pas de sujet.
@@ -249,6 +274,8 @@ async function generateMessage(
     const content = response.content.trim();
     if (!content || content === 'SKIP') return null;
 
+    const illustration = pickIllustration(directive, isNewTopic, response.citations);
+
     return {
       type: 'message',
       asUserId: directive.asUserId,
@@ -261,6 +288,7 @@ async function generateMessage(
       topicCategory: directive.topicCategory,
       topicHash: crypto.createHash('md5').update(content).digest('hex').slice(0, 8),
       messageSource: 'agent',
+      ...(illustration ? { illustration } : {}),
     };
   } catch (error) {
     console.error(`[Generator] Error generating message for user ${directive.asUserId}:`, error);

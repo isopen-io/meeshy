@@ -502,7 +502,18 @@ struct ProfileView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(statsAccessibilityLabel)
             .accessibilityHint(String(localized: "profile.stats.a11y.hint", defaultValue: "Ouvre les statistiques détaillées", bundle: .main))
+
+            progressionEntry
         }
+    }
+
+    /// L'entrée du tableau de bord des streaks & badges (#5698) — sous les
+    /// statistiques, là où l'utilisateur cherche « où j'en suis ». La vue vit
+    /// dans son propre fichier : `ProfileView` est déjà au-delà du seuil de
+    /// découpage (1 000 lignes, directive 2026-09-02) — on n'y ajoute que la
+    /// ligne qui la monte.
+    private var progressionEntry: some View {
+        ProfileProgressionEntry { router.push(.progression) }
     }
 
     // Recompose le bouton de stats en UN seul élément VoiceOver cohérent : sans

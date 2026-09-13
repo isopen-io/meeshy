@@ -109,13 +109,20 @@ final class ComposerAtelierHeaderTests: XCTestCase {
         XCTAssertTrue(compacte.contains("socle"), "L'unité lue n'est pas celle du meuble — la garde ne mesurerait RIEN.")
         XCTAssertFalse(compacte.contains("mountedSurface==.scene{sceneDescriptionSection}"),
                        "La description est revenue occuper le bas en permanence.")
-        // **RETOURNÉ au #4361.** Elle s'ouvrait en COUCHE par-dessus tout ; elle
-        // s'ancre désormais en BAS et fait REMONTER la scène. La directive qui
-        // l'avait mise en couche (#4124) visait juste — la description ne doit
-        // pas occuper le bas en permanence — mais recouvrir était le mauvais
-        // geste : écrire une description, c'est regarder la scène qu'on décrit.
-        XCTAssertTrue(compacte.contains("ifeditsSceneDescription{sceneDescriptionEditor}"),
-                      "Elle doit s'ouvrir en ZONE BASSE, la scène remontant au-dessus.")
+        // **RETOURNÉ une seconde fois, au #6126.** Trois places en quatre lots :
+        // bande permanente (#3925) → couche par-dessus tout (#4124) → zone
+        // ancrée en bas (#4361) → **en place, dans le volet lui-même**
+        // (2026-09-12). Chaque retour visait juste et chacun s'arrêtait un cran
+        // trop tôt : ce que l'auteur veut n'est ni recouvrir la scène, ni faire
+        // remonter la scène, c'est écrire la légende LÀ OÙ IL LA LIT.
+        //
+        // > La zone basse de la légende a donc disparu. Ce témoin garde
+        // > désormais son ABSENCE — et, pour ne pas être vert par omission, la
+        // > PRÉSENCE de ce qui la remplace.
+        XCTAssertFalse(compacte.contains("varsceneDescriptionEditor:someView"),
+                       "La zone basse de la LÉGENDE doit avoir disparu (#6126).")
+        XCTAssertTrue(compacte.contains("varpostContentEditor:someView"),
+                      "Le CORPS du post garde la sienne — c'est le contraste que la directive décrit.")
     }
 
     /// **RETOURNÉ au #4361 — il n'y a plus de flou du tout, et c'est le point.**
@@ -152,10 +159,17 @@ final class ComposerAtelierHeaderTests: XCTestCase {
         // > ci-dessous survivent à un troisième état, et tombent sur ce qui
         // > compte : une constante à la place de la mesure, ou une réserve qui
         // > ne retombe pas à zéro.
+        // **Ce que la réserve garde a rétréci au #6126.** Le ternaire
+        // `? sceneDescriptionEditorHeight : 0` servait les deux zones ; la
+        // légende n'en a plus, et la réserve qu'on lui avait câblée (la hauteur
+        // du clavier) ne déplaçait rien au simulateur. Ce qui reste est la
+        // réserve du CORPS du post, et c'est elle que ce témoin protège : une
+        // CONSTANTE à sa place ferait remonter la scène du mauvais nombre de
+        // points dès la deuxième ligne.
         XCTAssertTrue(
-            compacte.contains("?sceneDescriptionEditorHeight:0"),
-            "… et la réserve est la hauteur MESURÉE, remise à zéro à la fermeture : une constante "
-                + "ferait remonter la scène du mauvais nombre de points dès la deuxième ligne."
+            compacte.contains("ifeditsPostContent{returnsceneDescriptionEditorHeight}"),
+            "… et la réserve du CORPS du post est la hauteur MESURÉE de sa zone, jamais une "
+                + "constante — c'est ce que la directive du 2026-09-05 demande."
         )
         XCTAssertTrue(
             compacte.contains("editsSceneDescription"),

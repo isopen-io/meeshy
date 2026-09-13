@@ -2,6 +2,7 @@ import { randomInt } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { TrackingLink, TrackingLinkClick } from '@meeshy/shared/types/tracking-link';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { EngagementService } from './engagement/EngagementService';
 import {
   clickStatsPipeline,
   foldClickStatsFacet,
@@ -165,6 +166,19 @@ export class TrackingLinkService {
         uniqueClicks: 0
       }
     });
+
+    // Axe `social.tracked_link` (#5766) : créer un lien, c'est ouvrir une porte
+    // vers soi. Tir-et-oublie — un compteur d'engagement ne fait jamais échouer
+    // l'acte qu'il mesure.
+    // `createdBy` est OPTIONNEL : un lien peut naître sans auteur identifié, et
+    // il ne crédite alors personne — plutôt que de créditer « quelqu'un » par
+    // défaut, ce qui fabriquerait de l'engagement à partir de rien.
+    const auteurDuLien = params.createdBy;
+    if (auteurDuLien) {
+      new EngagementService(this.prisma)
+        .recordActivity(auteurDuLien, 'social.tracked_link')
+        .catch((err) => enhancedLogger.warn('[TrackingLinkService] engagement social.tracked_link failed', { err }));
+    }
 
     return trackingLink as TrackingLink;
   }

@@ -5,7 +5,7 @@ function makeTopic(overrides: Partial<TopicCatalogEntry> = {}): TopicCatalogEntr
   return {
     id: 't1', slug: 's1', label: 'L1', description: null,
     keywordPatterns: [], instructionTemplate: '', searchHintTemplate: '',
-    examples: [], cooldownMinutes: 60, isActive: true,
+    examples: [], cooldownMinutes: 60, isActive: true, priority: 0,
     ...overrides,
   };
 }

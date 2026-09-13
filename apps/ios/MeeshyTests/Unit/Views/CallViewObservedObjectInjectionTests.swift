@@ -57,7 +57,9 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
     // in RootView.swift) by the `rootView_*` tests above; the iPad guard verifies
     // iPadRootView routes through that shared layer and never mounts CallView itself.
     func test_iPadRootView_routesCallPresentationThroughSharedLayer() throws {
-        let source = try source(of: "Views/iPadRootView+Sheets.swift")
+        // Depuis #5837 la présentation d'appel de l'iPad est posée par
+        // `iPadCoversAndChromeLayer` (RootLayers/iPadRootViewLayers.swift).
+        let source = try source(of: "Views/RootLayers/iPadRootViewLayers.swift")
         XCTAssertTrue(
             // 2026-08-13 — `CallPresentationLayer` gained the hoisted mini-audio-player
             // closures (`miniPlayerOnTapBody`/`miniPlayerCurrentConversationId`), so the
@@ -71,7 +73,7 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
         )
         XCTAssertFalse(
             source.contains("CallView(callManager:"),
-            "iPadRootView+Sheets must NOT mount CallView directly — that gives it its own " +
+            "iPadRootViewLayers must NOT mount CallView directly — that gives it its own " +
             "callManager observation and reintroduces the 0x8BADF00D background watchdog (P0 #1)."
         )
     }

@@ -8,6 +8,7 @@ import { createQueryClient } from '@/lib/react-query/query-client';
 import { indexedDbPersister } from '@/lib/react-query/persister';
 import { shouldDehydrateQuery } from '@/lib/react-query/persist-options';
 import { initSettingsSync, destroySettingsSync } from '@/lib/settings-sync';
+import { registerAccountScopedCachePurge } from '@/utils/session-cache-purge';
 
 const ReactQueryDevtools =
   process.env.NODE_ENV === 'production'
@@ -29,6 +30,10 @@ export function QueryProvider({ children }: QueryProviderProps) {
 
   useEffect(() => {
     initSettingsSync(queryClient);
+    // Purge à la déconnexion (#3743) : le seul détenteur du QueryClient est
+    // ce composant, donc le seul site qui peut vider son cache EN MÉMOIRE en
+    // plus du cache persistant et des autres magasins de compte.
+    registerAccountScopedCachePurge(queryClient);
     return () => destroySettingsSync();
   }, [queryClient]);
 

@@ -45,6 +45,8 @@ export type AgentResponse = {
   replyToId?: string;
   mentionedUsernames?: string[];
   messageSource: 'agent';
+  /** Article source d'un sujet lancé : la passerelle joint son image Open Graph (#6192). */
+  illustration?: { sourceUrl: string };
   metadata: {
     agentType: 'impersonator' | 'animator' | 'orchestrator';
     roleConfidence: number;

@@ -85,6 +85,7 @@ jest.mock('../../../services/MentionService', () => ({
 }));
 
 jest.mock('../../../utils/withMutationLog', () => ({
+  ...(jest.requireActual('../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn(({ op }: { op: () => Promise<unknown> }) => op()),
 }));
 

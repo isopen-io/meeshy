@@ -54,7 +54,7 @@ DECIDE:
    - Si message: asUserId, topic (sujet a aborder), replyToMessageId (OBLIGATOIRE sauf conversation morte), mentionUsernames (liste @username)
    - Si reaction: asUserId, targetMessageId, emoji
    - delayCategory: "immediate" (reponse directe), "short" (10-60min), "medium" (1-6h, contribution spontanee), "long" (6-24h, sujet de fond)
-   - topicCategory: categorie courte du sujet (ex: "sport", "politique", "meteo", "humour", "tech", "culture")
+   - topicCategory: categorie courte du sujet (ex: "sport", "politique", "meteo", "humour", "tech", "culture", "faits divers", "people", "kongossa")
 4. Les interventions doivent etre NATURELLES et VARIEES
 5. Ne fais PAS intervenir le meme utilisateur plus de 2 fois
 6. Les reactions doivent utiliser des emojis courants et pertinents au message cible
@@ -206,8 +206,36 @@ function countMatches(regexes: RegExp[], haystack: string): number {
   return total;
 }
 
+export type RankedTopic = { topic: TopicCatalogEntry; score: number };
+
+// Une ligne servie par le cache Redis d'avant le déploiement n'a pas de
+// `priority` : elle vaut 0, jamais NaN.
+function topicPriority(topic: TopicCatalogEntry): number {
+  const raw: unknown = topic.priority;
+  return typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
+}
+
 /**
- * Sélectionne le topic à provoquer : top-3 par score regex puis random parmi
+ * Classe les sujets éligibles : score = occurrences regex dans le haystack
+ * + `priority` admin (#6192). Les ex æquo sont MÉLANGÉS avant le tri stable,
+ * sinon une conversation sans signal (tous à 0) rendait toujours les trois
+ * premiers de la liste — les sujets tech, seedés en tête.
+ */
+export function rankProvocationTopics(
+  eligible: TopicCatalogEntry[],
+  compiledPatterns: Map<string, RegExp[]>,
+  haystack: string,
+): RankedTopic[] {
+  return shuffleArray(eligible)
+    .map((topic) => ({
+      topic,
+      score: countMatches(compiledPatterns.get(topic.id) ?? [], haystack) + topicPriority(topic),
+    }))
+    .sort((a, b) => b.score - a.score);
+}
+
+/**
+ * Sélectionne le topic à provoquer : top-3 du classement puis random parmi
  * ce top pour éviter le déterminisme. Retourne null si liste vide.
  */
 export function selectProvocationTopic(
@@ -216,12 +244,8 @@ export function selectProvocationTopic(
   haystack: string,
 ): TopicCatalogEntry | null {
   if (eligible.length === 0) return null;
-  const scored = eligible.map((t) => ({
-    topic: t,
-    score: countMatches(compiledPatterns.get(t.id) ?? [], haystack),
-  }));
-  const sorted = scored.sort((a, b) => b.score - a.score);
-  const pool = sorted.slice(0, Math.min(3, sorted.length));
+  const ranked = rankProvocationTopics(eligible, compiledPatterns, haystack);
+  const pool = ranked.slice(0, Math.min(3, ranked.length));
   const pick = pool[Math.floor(Math.random() * pool.length)];
   return pick.topic;
 }

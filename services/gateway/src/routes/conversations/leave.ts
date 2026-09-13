@@ -12,6 +12,7 @@ import { announceConversationClosed } from '../../socketio/announceConversationC
 import { endConversationMembership } from '../../socketio/endConversationMembership'
 import { resoudreSuccessionDuCreateur } from '../../services/conversations/creatorSuccession'
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure'
+import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 
 export function registerLeaveRoutes(
   fastify: FastifyInstance,
@@ -291,6 +292,14 @@ export function registerLeaveRoutes(
 
         await endConversationMembership({ io, manager, conversationId: id, userId })
       }
+
+      // Succès « cercles » (#5759) — le départ EST un geste, et il laisse une
+      // trace (`leftAt`), contrairement au départ de communauté qui supprime
+      // sa ligne.
+      void new CerclesAchievements(fastify.prisma).recordEvent({
+        kind: 'conversation.leave',
+        userId,
+      }).catch(() => undefined);
 
       return sendSuccess(reply, { conversationId: id, leftAt: now.toISOString() })
     }

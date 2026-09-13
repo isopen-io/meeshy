@@ -35,8 +35,33 @@ extension ConversationView {
         // sous le doigt de l'utilisateur : tout ce que la fabrique grave (avatar,
         // faits du média, texte élu par le Prisme, protection) est déjà connu.
         composerState.pendingReplyReference = viewModel.optimisticReplyReference(quoting: msg)
-        isTyping = true
+        requestReplyFocus(openingConversation: false)
         HapticFeedback.medium()
+    }
+
+    /// Pose la citation d'une réponse reçue par `ReplyContext` — story, mood,
+    /// statut — et lève le clavier comme un geste de réponse (#6003).
+    /// `openingConversation` : la conversation vient d'être poussée pour
+    /// répondre, et non déjà à l'écran.
+    func applyReplyContext(_ context: ReplyContext, openingConversation: Bool) {
+        composerState.pendingReplyReference = context.toReplyReference
+        requestReplyFocus(openingConversation: openingConversation)
+    }
+
+    /// Demande le focus du composer par un FRONT bas → haut (#6003).
+    ///
+    /// `isTyping` ne convient pas : c'est un `@FocusState` lié à aucun champ,
+    /// qui ne fait que recevoir le focus de la barre. La barre expose
+    /// `focusTrigger`, consommé par un `onChange` puis remis à `false` — d'où
+    /// le front : une porte restée levée (composer non monté) ne changerait
+    /// plus de valeur, et une affectation faite pendant la passe qui monte le
+    /// composer n'est pas vue.
+    func requestReplyFocus(openingConversation: Bool) {
+        composerState.focusRequested = false
+        let delay = ConversationComposerState.replyFocusDelay(openingConversation: openingConversation)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            composerState.focusRequested = true
+        }
     }
 
     // `scrollToAndHighlight(_:proxy:)` a vécu ici sans qu'aucun commit du dépôt

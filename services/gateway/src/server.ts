@@ -64,6 +64,7 @@ import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
 import { TusCleanupService } from './services/TusCleanupService';
 import { ExpiredMessagesCleanupService } from './services/ExpiredMessagesCleanupService';
 import { ExpiredStoriesCleanupService } from './services/ExpiredStoriesCleanupService';
+import { ExpiredShareLinksCleanupService } from './services/ExpiredShareLinksCleanupService';
 import { OrphanMediaCleanupService } from './services/storage/OrphanMediaCleanupService';
 import { MediaService } from './services/MediaService';
 import { ZmqAgentClient } from './services/zmq-agent/ZmqAgentClient';
@@ -132,6 +133,7 @@ class MeeshyServer {
   private tusCleanup: TusCleanupService;
   private expiredStoriesCleanup: ExpiredStoriesCleanupService;
   private expiredMessagesCleanup: ExpiredMessagesCleanupService;
+  private expiredShareLinksCleanup: ExpiredShareLinksCleanupService;
   private orphanMediaCleanup: OrphanMediaCleanupService;
   private deliveryQueue: RedisDeliveryQueue;
   private agentClient: ZmqAgentClient | null = null;
@@ -275,6 +277,16 @@ class MeeshyServer {
     // a cet instant (il est cree par `socketIOHandler.initialize()`), et une
     // capture ici retiendrait `null` pour toujours.
     this.expiredMessagesCleanup = new ExpiredMessagesCleanupService(this.prisma, {
+      resolveManager: () => this.socketIOHandler.getManager(),
+    });
+
+    // Cron de révocation des liens de partage échus (#4195, suite de #4194).
+    // `expiresAt` n'est le geste de personne : sans ce balayage, un invité
+    // entré avant l'échéance gardait sa socket dans la room de conversation
+    // indéfiniment après elle. `resolveIO`/`resolveManager` sont PARESSEUX
+    // pour la même raison que ci-dessus.
+    this.expiredShareLinksCleanup = new ExpiredShareLinksCleanupService(this.prisma, {
+      resolveIO: () => this.socketIOHandler.getManager()?.getIO(),
       resolveManager: () => this.socketIOHandler.getManager(),
     });
     // SOTA audit Pilier 4 — outbox-based ghost media file cleanup. Reaps
@@ -1074,6 +1086,11 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       this.expiredMessagesCleanup.start();
       logger.info('✓ Expired messages cleanup service started');
 
+      // Start expired-share-links sweep (hourly): revokes guests of a share
+      // link once its expiresAt has lapsed, and marks the link inactive.
+      this.expiredShareLinksCleanup.start();
+      logger.info('✓ Expired share links cleanup service started');
+
       // Start orphan-media cleanup worker (5-min sweep, deletes files
       // referenced in OrphanMediaCleanup whose cleanupAfter has passed).
       this.orphanMediaCleanup.start();
@@ -1143,6 +1160,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       if (this.expiredMessagesCleanup) {
         this.expiredMessagesCleanup.stop();
         logger.info('✓ Expired messages cleanup service stopped');
+      }
+
+      // Stop expired-share-links sweep
+      if (this.expiredShareLinksCleanup) {
+        this.expiredShareLinksCleanup.stop();
+        logger.info('✓ Expired share links cleanup service stopped');
       }
 
       // Stop orphan-media cleanup worker

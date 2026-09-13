@@ -196,20 +196,32 @@ final class ComposerSceneActivationTests: XCTestCase {
     // Ce que ce témoin gardait — « la description existe et vit au bon endroit »
     // — n'est pas affaibli : il asserte désormais qu'elle vit dans une COUCHE,
     // ce qui est une position tout aussi vérifiable et une place mieux choisie.
-    func test_laDescription_vitDansUneCouche_etNonSousLeCanvas() throws {
+    func test_laDescription_vitDansLeVolet_etNonSousLeCanvas() throws {
         let raw = try AppSourceGuard.composerHostSource()
-        XCTAssertTrue(raw.contains("var sceneDescriptionEditor"),
-                      "sceneDescriptionEditor introuvable ou source vide")
+        XCTAssertTrue(raw.contains("var sceneDescriptionPanel"),
+                      "sceneDescriptionPanel introuvable ou source vide")
         let src = compact(raw)
         XCTAssertFalse(
             src.contains("ifmountedSurface==.scene{sceneDescriptionSection}"),
             "La description est revenue occuper le bas en permanence — la place que la scène centrée réclame."
         )
-        // RETOURNÉ au #4361 : la zone s'ancre en BAS et la scène remonte
-        // au-dessus, au lieu d'être recouverte par une couche.
-        XCTAssertTrue(
+        // **RETOURNÉ une seconde fois au #6126.** #4361 avait remplacé la couche
+        // par une ZONE BASSE, et c'était mieux : écrire une description, c'est
+        // regarder la scène qu'on décrit. Le lot #6126 va au bout du même
+        // raisonnement — la légende ne s'écrit ni au-dessus de la scène ni
+        // en-dessous, mais DANS le volet où on la lit.
+        //
+        // Ce que ce témoin gardait — « la description existe et vit au bon
+        // endroit » — n'est pas affaibli : la place est toujours vérifiable, et
+        // elle est mieux choisie.
+        XCTAssertFalse(
             src.contains("ifeditsSceneDescription{sceneDescriptionEditor}"),
-            "Elle s'ouvre par l'icône de la rangée d'outils, en zone basse."
+            "La zone basse de la légende a disparu au #6126 — elle s'édite en place."
+        )
+        XCTAssertTrue(
+            src.contains("chromeScheme:viewModel.canvasChromeScheme"),
+            "Le volet est bien MONTÉ et branché sur le fond (#6127) — sans quoi l'assertion "
+                + "négative ci-dessus serait verte par omission."
         )
     }
 
@@ -297,11 +309,22 @@ final class ComposerSceneActivationTests: XCTestCase {
     // de lecture, et la clé n'avait plus aucun lecteur. Une clé gardée ici sans
     // lecteur aurait fait croire à sept traductions vivantes pour un contrôle
     // qui n'existe plus. Les trois clés du calque prennent sa place.
+    //
+    // **`composer.scene.description.placeholder` en sort à son tour au #6126**,
+    // pour exactement la même raison : sa lectrice était la zone basse
+    // (`sceneDescriptionEditor`), que la légende éditée en place a supprimée. La
+    // clé a été retirée du catalogue avec elle — la garde des clés mortes l'avait
+    // vue. L'invite servie aujourd'hui est celle du VOLET,
+    // `composer.description.placeholder`, et c'est elle qui doit être traduite.
+    //
+    // > Cette liste est un INVENTAIRE de ce qui s'affiche, pas une archive de ce
+    // > qui s'est affiché. Une clé y survit à son lecteur sans que rien ne le
+    // > dise — sauf ce témoin, qui rougit le jour où le catalogue la perd.
     func test_lesLibellesDescription_sontTraduits_7Locales() throws {
         let catalog = try source("Meeshy/Localizable.xcstrings")
         let json = try JSONSerialization.jsonObject(with: Data(catalog.utf8)) as? [String: Any]
         let strings = json?["strings"] as? [String: Any]
-        for key in ["composer.scene.description.placeholder",
+        for key in ["composer.description.placeholder",
                     "composer.description.amorce",
                     "composer.description.a11y.edit",
                     "composer.description.a11y.done"] {

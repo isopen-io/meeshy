@@ -1543,7 +1543,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         .mockResolvedValueOnce(0)
         .mockResolvedValueOnce(5);
 
-      await service.markAsRead('notif-1');
+      await service.markAsRead('notif-1', 'u-1');
       await flushMicrotasks();
 
       expect(mockIO.to).toHaveBeenCalledWith(`user:${userId}`);
@@ -1570,7 +1570,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         .mockResolvedValueOnce(2)
         .mockResolvedValueOnce(8);
 
-      await service.deleteNotification('notif-1');
+      await service.deleteNotification('notif-1', 'u-1');
       await flushMicrotasks();
 
       expect(mockIO.to).toHaveBeenCalledWith(`user:${AUTHOR_ID}`);
@@ -1596,7 +1596,7 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         delivery: { emailSent: false, pushSent: false },
       });
 
-      await expect(serviceNoIO.markAsRead('notif-1')).resolves.not.toThrow();
+      await expect(serviceNoIO.markAsRead('notif-1', 'u-1')).resolves.not.toThrow();
     });
   });
 });

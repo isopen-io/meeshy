@@ -144,11 +144,13 @@ public struct ConversationScrollControlsView: View {
 
     /// Couleur de contenu lisible sur la teinte glass. L'accent est déterministe
     /// par conversation et peut tomber sur une couleur claire (jaune/cyan/vert) —
-    /// un contenu blanc y serait illisible (WCAG < 3:1). On choisit blanc ou sombre
-    /// selon la luminance WCAG de l'accent (seuil 0.6, convention repo). Offline :
-    /// la teinte neutral500 est sombre, le blanc reste lisible.
+    /// un contenu blanc y serait illisible (WCAG < 3:1). `Color.readableInk`
+    /// choisit noir/blanc au point d'égalité de contraste WCAG (#5950 — l'ancien
+    /// seuil arrondi `0.6` élisait l'encre blanche sur toute la plage 0,179 → 0,6,
+    /// ex. `#46BDCA` : 1,98:1 en schéma clair, sous la barre AA). Offline : la
+    /// teinte neutral500 est sombre, le blanc reste lisible.
     private var contentColor: Color {
-        isOffline ? .white : (Color(hex: accentColor).luminance > 0.6 ? .black : .white)
+        isOffline ? .white : Color(hex: accentColor).readableInk
     }
 
     /// Repos = cercle parfait ; contenu riche/hors-ligne/recherche = capsule
@@ -331,7 +333,7 @@ public struct ConversationScrollControlsView: View {
             // Left: rich attachment preview (audio play / image|video thumbnail
             // / type glyph) of the last unread message.
             if Self.shouldShowAttachmentPreview(unreadCount: unreadCount, hasAttachmentPreview: hasAttachmentPreview) {
-                unreadAttachmentPreview
+                unreadAttachmentColumn
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -344,11 +346,31 @@ public struct ConversationScrollControlsView: View {
                     // Y loger les visages faisait disparaître la miniature pendant
                     // toute la durée d'une frappe, alors que les deux
                     // informations sont vraies en même temps.
+                    //
+                    // **Les visages et les points, PAS le nom** (directive
+                    // porteur 2026-09-10). Le nom y était redondant à deux
+                    // titres : la pile porte déjà la photo — ou les initiales —
+                    // de celui qui écrit, et le libellé d'accessibilité du
+                    // bouton entier annonce déjà « <nom>, Défiler vers le bas ».
+                    // Il volait en prime la largeur de la capsule à l'aperçu du
+                    // dernier message, qui vit sur la même ligne.
+                    //
+                    // `typingLabel(for:)` reste : c'est VoiceOver qui le
+                    // consomme. Une même chaîne ne sert pas l'œil et le lecteur
+                    // d'écran quand les deux n'ont pas besoin de la même chose.
+                    // **Les points SUIVENT le visage, sans cadre** (#5987).
+                    //
+                    // Ils étaient posés PAR-DESSUS la pile, dans une pastille
+                    // sombre — un cadre dans un cadre, qui masquait la photo
+                    // même qu'il annonce. Cette pastille n'était pas
+                    // décorative : elle gardait des points BLANCS lisibles sur
+                    // une photo quelconque. Les sortir retire cette raison, et
+                    // les points prennent donc `contentColor` — l'encre que la
+                    // capsule élit déjà pour tout son contenu (#5950). Blancs,
+                    // ils disparaîtraient sur un accent clair.
                     HStack(spacing: 6) {
                         typingAvatarStack
-                        Text(typingLabel)
-                            .font(.system(size: 11, weight: .semibold))
-                            .lineLimit(1)
+                        typingDotsView
                     }
                 }
 
@@ -365,7 +387,15 @@ public struct ConversationScrollControlsView: View {
                 }
             }
 
-            Spacer(minLength: 0)
+            // **Le ressort ne pousse que s'il y a quelque chose à pousser**
+            // (#5963). Il étalait la capsule à sa largeur maximale même quand
+            // elle ne portait plus que les visages et les points : une pastille
+            // large et vide, avec le chevron seul à trois cents points de son
+            // contenu. Sans lui, la rangée ÉPOUSE ce qu'elle montre — une
+            // annonce de frappe est compacte, un aperçu de message reste large.
+            if unreadCount > 0 {
+                Spacer(minLength: 0)
+            }
 
             // Right: chevron / offline glyph.
             if isOffline {
@@ -379,7 +409,13 @@ public struct ConversationScrollControlsView: View {
         .foregroundColor(contentColor)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .frame(maxWidth: 260)
+        // **Une BORNE, pas une largeur** (#5963). `maxWidth` s'ÉTEND à ce que
+        // le parent offre : posée sans condition, elle donnait 260 pt à une
+        // rangée qui ne porte que des visages et des points, et la capsule
+        // s'affichait large et creuse. Elle ne borne donc que ce qui peut
+        // vraiment déborder — l'aperçu du dernier message ; sans aperçu, la
+        // rangée épouse son contenu.
+        .frame(maxWidth: unreadCount > 0 ? 260 : nil)
     }
 
     /// Single-line preview of the last received message: its text when present,
@@ -398,7 +434,7 @@ public struct ConversationScrollControlsView: View {
                     Image(systemName: symbol)
                         .font(.system(size: 10, weight: .semibold))
                 }
-                Text(attachmentSummary(label: label))
+                Text(label)
                     .font(.system(size: 12, weight: .regular))
                     .lineLimit(1)
                     .opacity(0.95)
@@ -406,10 +442,23 @@ public struct ConversationScrollControlsView: View {
         }
     }
 
-    /// Joins the attachment type label with its formatted detail when present.
-    private func attachmentSummary(label: String) -> String {
-        guard let detail = unreadAttachmentDetail, !detail.isEmpty else { return label }
-        return "\(label) · \(detail)"
+    /// **La miniature ET son détail, l'un sous l'autre** (#5987).
+    ///
+    /// Le détail suivait le libellé sur la ligne de texte — « Photo · 1280×720
+    /// · 2,3 Mo » — et lui volait sa largeur, alors que cette ligne la partage
+    /// déjà avec l'aperçu du dernier message. Sous la miniature, il occupe une
+    /// place que rien d'autre ne réclame, et il décrit ce qu'il touche.
+    @ViewBuilder
+    private var unreadAttachmentColumn: some View {
+        VStack(spacing: 2) {
+            unreadAttachmentPreview
+            if let detail = unreadAttachmentDetail, !detail.isEmpty {
+                Text(detail)
+                    .font(.system(size: 9, weight: .regular))
+                    .lineLimit(1)
+                    .opacity(0.85)
+            }
+        }
     }
 
     @ViewBuilder
@@ -503,15 +552,6 @@ public struct ConversationScrollControlsView: View {
         .offset(x: offsetX)
     }
 
-    /// Les points animés, posés sur une pastille sombre qui les garde lisibles
-    /// quelle que soit la photo dessous.
-    private var typingDotsBadge: some View {
-        typingDotsView
-            .padding(.horizontal, 5)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(Color.black.opacity(0.55)))
-    }
-
     /// Les visages de ceux qui écrivent, avec les trois points animés
     /// PAR-DESSUS.
     ///
@@ -525,7 +565,6 @@ public struct ConversationScrollControlsView: View {
             }
         }
         .frame(width: typingStackWidth, height: Self.typingFaceSize, alignment: .leading)
-        .overlay(typingDotsBadge)
         .accessibilityHidden(true)
     }
 
@@ -533,7 +572,7 @@ public struct ConversationScrollControlsView: View {
         HStack(spacing: 3) {
             ForEach(0..<3, id: \.self) { i in
                 Circle()
-                    .fill(Color.white)
+                    .fill(contentColor)
                     .frame(width: 5, height: 5)
                     .offset(y: typingDotPhase == i ? -3 : 0)
                     .animation(

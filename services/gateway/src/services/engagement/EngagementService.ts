@@ -18,10 +18,23 @@ import {
   ENGAGEMENT_AXIS_WEIGHTS,
   CONTENT_ENGAGEMENT_AXES,
   CONVERSATION_ENGAGEMENT_AXES,
+  badgeMilestoneKey,
+  engagementAxisFamily,
+  levelMilestoneKey,
+  streakMilestoneKey,
+  type EngagementAxisFamily,
   type EngagementAxisKey,
   type EngagementAchievementKey,
 } from '@meeshy/shared/types/engagement';
+import {
+  computeEngagementElan,
+  creditedPoints,
+  ELAN_HIGH_BADGE_THRESHOLD,
+  ELAN_WINDOW_DAYS,
+  type EngagementElan,
+} from '@meeshy/shared/utils/engagement-elan';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
+import { engagementAchievementTitle, engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 import { NotificationService } from '../notifications/NotificationService';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
@@ -31,9 +44,67 @@ const log = enhancedLogger.child({ module: 'EngagementService' });
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Durée de validité du cache d'entrées d'élan (#5749).
+ *
+ * L'élan demande deux lectures — les familles actives sur la fenêtre glissante,
+ * et l'assise permanente. `recordActivity` s'exécute sur CHAQUE message : les
+ * payer à chaque geste ajouterait deux allers-retours à la voie chaude, ce que
+ * la dimension 2 interdit (« une lenteur est un BUG »).
+ *
+ * Une minute de péremption est sans conséquence : la fenêtre glissante est de
+ * sept JOURS et l'assise ne bouge qu'au franchissement d'un palier. Le pire cas
+ * est un compte qui vient de débloquer son dixième succès et crédite au facteur
+ * précédent pendant moins d'une minute — l'élan est un bonus, jamais une
+ * propriété de correction.
+ */
+const ELAN_CACHE_TTL_MS = 60 * 1000;
+
+/** Au-delà, le cache est purgé de ses entrées périmées — borne la mémoire d'un processus long. */
+const ELAN_CACHE_MAX_ENTRIES = 10_000;
+
+type ElanInputs = {
+  readonly recentFamilies: readonly EngagementAxisFamily[];
+  readonly achievementCount: number;
+  readonly highBadgeCount: number;
+  readonly expiresAt: number;
+};
+
 /** Jour civil UTC (minuit) — la comparaison de série ne dépend jamais de l'heure de l'appel. */
 function startOfUtcDay(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+/**
+ * Jour civil de `date` dans `timezone` (repli UTC si absent ou invalide, #5734) —
+ * rendu comme un marqueur `Date.UTC(y, m, d)`, jamais comme le début RÉEL du jour
+ * dans ce fuseau. La série ne compare que des ÉTIQUETTES de jour civil, jamais des
+ * instants : deux jours civils consécutifs valent toujours exactement `ONE_DAY_MS`
+ * sous ce marqueur, y compris à cheval sur une transition d'heure d'été — ce que
+ * l'instant réel de minuit local ne garantit pas.
+ */
+function civilDayInTimezone(date: Date, timezone: string | null | undefined): Date {
+  if (!timezone) return startOfUtcDay(date);
+
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const year = Number(parts.find((p) => p.type === 'year')?.value);
+    const month = Number(parts.find((p) => p.type === 'month')?.value);
+    const day = Number(parts.find((p) => p.type === 'day')?.value);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+      return startOfUtcDay(date);
+    }
+    return new Date(Date.UTC(year, month - 1, day));
+  } catch {
+    // `timezone` porte une valeur qu'`Intl` refuse (IANA invalide, corrompue) —
+    // repli UTC, jamais une levée qui casserait `recordActivity`.
+    return startOfUtcDay(date);
+  }
 }
 
 /** Prisma signale une violation d'index unique par le code `P2002`. */
@@ -41,8 +112,110 @@ function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
 }
 
+/**
+ * L'indice de route que les QUATRE notifications de réengagement transportent
+ * (`metadata.route`, projeté en `data.route` sur le fil push) : l'écran
+ * « Progression », qui RESTITUE le palier annoncé. Un client qui sait naviguer
+ * par nom de route (iOS `pushNavigateToRoute`, la v3.1 web) le suit tel quel ;
+ * un client qui route par TYPE de notification n'a rien à lire ici.
+ */
+export const ENGAGEMENT_ROUTE = 'progression';
+
+/** Le rang d'un seuil de score dans l'échelle des niveaux — « niveau 3 » pour le palier 150. */
+export function levelIndexOf(threshold: number): number {
+  const index = LEVEL_THRESHOLDS.indexOf(threshold as (typeof LEVEL_THRESHOLDS)[number]);
+  return index === -1 ? 0 : index + 1;
+}
+
 export class EngagementService {
+  /** Cache par compte des ENTRÉES de l'élan — voir `ELAN_CACHE_TTL_MS`. */
+  private readonly elanCache = new Map<string, ElanInputs>();
+
   constructor(private readonly prisma: PrismaClient) {}
+
+  /**
+   * Les entrées de l'élan pour `userId` : les familles actives sur la fenêtre
+   * glissante, et l'assise permanente. Deux lectures indexées, mises en cache
+   * une minute (`ELAN_CACHE_TTL_MS`).
+   *
+   * `EngagementCounter.updatedAt` suffit à dire qu'une famille est active :
+   * la SEULE écriture sur ce modèle est l'incrément d'activité, donc la date
+   * de modification EST la date du dernier geste sur cet axe. Aucun stockage
+   * neuf n'est nécessaire.
+   */
+  private async loadElanInputs(userId: string): Promise<ElanInputs> {
+    const maintenant = Date.now();
+    const enCache = this.elanCache.get(userId);
+    if (enCache && enCache.expiresAt > maintenant) return enCache;
+
+    const depuis = new Date(maintenant - ELAN_WINDOW_DAYS * ONE_DAY_MS);
+    const [compteursRecents, paliers] = await Promise.all([
+      this.prisma.engagementCounter.findMany({
+        where: { userId, updatedAt: { gte: depuis } },
+        select: { axisKey: true },
+      }),
+      this.prisma.engagementMilestone.findMany({
+        where: { userId, milestoneType: { in: ['achievement', 'badge'] } },
+        select: { milestoneType: true, milestoneKey: true },
+      }),
+    ]);
+
+    const familles = new Set<EngagementAxisFamily>();
+    for (const ligne of compteursRecents) {
+      // Un axe présent en base mais absent du catalogue (rétrogradation de
+      // version) est ignoré plutôt que de faire lever `engagementAxisFamily`.
+      try {
+        familles.add(engagementAxisFamily(ligne.axisKey as EngagementAxisKey));
+      } catch {
+        continue;
+      }
+    }
+
+    let achievementCount = 0;
+    let highBadgeCount = 0;
+    for (const palier of paliers) {
+      if (palier.milestoneType === 'achievement') {
+        achievementCount += 1;
+        continue;
+      }
+      // Clé de badge : `<axisKey>:<seuil>` — le seuil est le dernier segment.
+      const seuil = Number.parseInt(palier.milestoneKey.split(':').at(-1) ?? '', 10);
+      if (Number.isFinite(seuil) && seuil >= ELAN_HIGH_BADGE_THRESHOLD) highBadgeCount += 1;
+    }
+
+    const entree: ElanInputs = {
+      recentFamilies: [...familles],
+      achievementCount,
+      highBadgeCount,
+      expiresAt: maintenant + ELAN_CACHE_TTL_MS,
+    };
+
+    if (this.elanCache.size >= ELAN_CACHE_MAX_ENTRIES) {
+      for (const [cle, valeur] of this.elanCache) {
+        if (valeur.expiresAt <= maintenant) this.elanCache.delete(cle);
+      }
+    }
+    this.elanCache.set(userId, entree);
+    return entree;
+  }
+
+  /**
+   * L'élan qui s'applique à CE geste sur CET axe.
+   *
+   * La famille de l'axe courant est ajoutée aux familles récentes : un
+   * utilisateur qui n'écrivait que du contenu et poste son premier commentaire
+   * EST, à cet instant, actif dans deux familles. La lui refuser jusqu'au
+   * geste suivant ferait mentir la règle « plusieurs sprints en même temps »
+   * au moment précis où elle devient vraie.
+   */
+  private async elanFor(userId: string, axisKey: EngagementAxisKey): Promise<EngagementElan> {
+    const inputs = await this.loadElanInputs(userId);
+    return computeEngagementElan({
+      activeFamilies: [...inputs.recentFamilies, engagementAxisFamily(axisKey)],
+      achievementCount: inputs.achievementCount,
+      highBadgeCount: inputs.highBadgeCount,
+    });
+  }
 
   /**
    * Incrémente le compteur de `axisKey` pour `userId` et notifie chaque
@@ -51,10 +224,18 @@ export class EngagementService {
    * neuf qu'un palier dans `]N, N+1]`.
    */
   async recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void> {
+    // UN SEUL élan pour ce geste, résolu avant toute écriture et partagé par le
+    // compteur et le score : deux résolutions indépendantes pourraient tomber
+    // de part et d'autre de la péremption du cache et créditer deux montants
+    // différents pour un même geste, ce qui romprait l'invariant
+    // `engagementScore == Σ(points)` de façon indétectable.
+    const elan = await this.elanFor(userId, axisKey);
+    const points = creditedPoints(ENGAGEMENT_AXIS_WEIGHTS[axisKey], elan);
+
     const counter = await this.prisma.engagementCounter.upsert({
       where: { userId_axisKey: { userId, axisKey } },
-      create: { userId, axisKey, count: 1 },
-      update: { count: { increment: 1 } },
+      create: { userId, axisKey, count: 1, points },
+      update: { count: { increment: 1 }, points: { increment: points } },
       select: { count: true },
     });
 
@@ -70,7 +251,7 @@ export class EngagementService {
 
     await this.tryAwardAchievements(userId, axisKey, previousCount);
     await this.updateStreak(userId);
-    await this.updateEngagementScore(userId, axisKey);
+    await this.updateEngagementScore(userId, points);
   }
 
   /**
@@ -119,7 +300,7 @@ export class EngagementService {
         data: {
           userId,
           milestoneType: 'badge',
-          milestoneKey: `${axisKey}:${threshold}`,
+          milestoneKey: badgeMilestoneKey(axisKey, threshold),
         },
       });
     } catch (err) {
@@ -131,13 +312,22 @@ export class EngagementService {
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
       const lang = recipientLanguage(user, 'fr');
       const notificationService = getSharedNotificationService() ?? new NotificationService(this.prisma);
+      // Le MOT, jamais la clé : « Badge débloqué : conversation.private ·
+      // palier 10 » a été servi en production (2026-09-08) parce que la clé
+      // stable tenait lieu de titre. Le libellé se résout à la langue du
+      // LECTEUR (`engagementAxisLabel`, même catalogue que la v3.1 web et le
+      // miroir iOS) ; `route` dit au client où le tap MÈNE — l'écran
+      // « Progression » (#5547 web, #5698 iOS), jamais un autre.
       await notificationService.createNotification({
         userId,
         type: 'badge_earned',
         priority: 'normal',
-        content: notificationString(lang, 'engagement.badgeEarned', { title: axisKey, count: threshold }),
+        content: notificationString(lang, 'engagement.badgeEarned', {
+          title: engagementAxisLabel(lang, axisKey),
+          count: threshold,
+        }),
         context: {},
-        metadata: { action: 'view_details', axisKey, threshold },
+        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, axisKey, threshold },
       });
     } catch (err) {
       log.warn('badge_earned notification failed after milestone was recorded', {
@@ -227,10 +417,10 @@ export class EngagementService {
         type: 'achievement_unlocked',
         priority: 'normal',
         content: notificationString(lang, 'engagement.achievementUnlocked', {
-          title: achievementKey.replace('achievement.', ''),
+          title: engagementAchievementTitle(lang, achievementKey),
         }),
         context: {},
-        metadata: { action: 'view_details', achievementKey },
+        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, achievementKey },
       });
     } catch (err) {
       log.warn('achievement_unlocked notification failed after milestone was recorded', {
@@ -244,7 +434,8 @@ export class EngagementService {
   /**
    * Une activité qualifiante — n'importe quel appel à `recordActivity`, sur
    * n'importe quel axe (§ 5) — fait avancer la série de jours actifs.
-   * Comparaison par JOUR CIVIL UTC : plusieurs activités le même jour ne
+   * Comparaison par JOUR CIVIL DANS LE FUSEAU DE L'UTILISATEUR (`User.timezone`,
+   * repli UTC si absent — #5734) : plusieurs activités le même jour civil ne
    * l'incrémentent qu'une fois ; un jour sauté la remet à 1.
    *
    * Lecture puis écriture, pas une transaction : la fenêtre de course (deux
@@ -263,11 +454,16 @@ export class EngagementService {
   private async updateStreak(userId: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { currentStreakDays: true, longestStreakDays: true, lastStreakDate: true },
+      select: { currentStreakDays: true, longestStreakDays: true, lastStreakDate: true, timezone: true },
     });
     if (!user) return;
 
-    const today = startOfUtcDay(new Date());
+    const today = civilDayInTimezone(new Date(), user.timezone);
+    // `lastStreakDate` already stores a CIVIL-DAY MARKER (`Date.UTC(y, m, d)`,
+    // written below) — re-running it through `civilDayInTimezone` would
+    // reinterpret that midnight-UTC instant AS IF it were a fresh moment in the
+    // user's timezone, shifting it a day off for any non-UTC offset. Only
+    // `startOfUtcDay` (idempotent on an already-normalized marker) belongs here.
     const lastDay = user.lastStreakDate ? startOfUtcDay(user.lastStreakDate) : null;
 
     if (lastDay && lastDay.getTime() === today.getTime()) {
@@ -303,7 +499,7 @@ export class EngagementService {
         data: {
           userId,
           milestoneType: 'streak',
-          milestoneKey: `streak:${threshold}`,
+          milestoneKey: streakMilestoneKey(threshold),
         },
       });
     } catch (err) {
@@ -321,7 +517,7 @@ export class EngagementService {
         priority: 'normal',
         content: notificationString(lang, 'engagement.streakMilestone', { count: threshold }),
         context: {},
-        metadata: { action: 'view_details', threshold },
+        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, threshold },
       });
     } catch (err) {
       log.warn('streak_milestone notification failed after milestone was recorded', {
@@ -333,24 +529,59 @@ export class EngagementService {
   }
 
   /**
-   * Ajoute le poids de `axisKey` (`ENGAGEMENT_AXIS_WEIGHTS`) au score agrégé
-   * `User.engagementScore` et notifie chaque palier `LEVEL_THRESHOLDS`
-   * franchi par CET incrément précis — même mécanique que le compteur d'axe
-   * (§ 5, § 7). `$inc` atomique : un `User` créé avant cette migration a le
-   * champ ABSENT (pas à zéro), et Mongo traite `$inc` sur un champ absent
-   * comme un départ à zéro, ce qui est déjà le comportement voulu — aucun
-   * repli `?? 0` n'est nécessaire ici, à la différence d'`updateStreak`.
+   * Ajoute `points` au score agrégé `User.engagementScore` et notifie chaque
+   * palier `LEVEL_THRESHOLDS` franchi par CET incrément précis — même
+   * mécanique que le compteur d'axe (§ 5, § 7).
+   *
+   * `points` est le poids de l'axe DÉJÀ multiplié par l'élan (#5749), calculé
+   * une fois par `recordActivity` et partagé avec le compteur : c'est ce qui
+   * tient l'invariant `engagementScore == Σ(EngagementCounter.points)`. La
+   * méthode ne recalcule donc RIEN — lui passer un axe l'obligerait à
+   * re-résoudre l'élan, avec le risque de tomber de l'autre côté de la
+   * péremption du cache et de créditer deux montants pour un même geste.
+   *
+   * ## Pourquoi une commande brute et non `increment` (#5742)
+   *
+   * La version précédente écrivait par `{ increment: weight }`, en s'appuyant
+   * sur ce doc-comment : « un `User` créé avant cette migration a le champ
+   * ABSENT (pas à zéro), et Mongo traite `$inc` sur un champ absent comme un
+   * départ à zéro ». L'affirmation est JUSTE pour un champ absent, et le champ
+   * n'était pas absent — il était `null`. Vérifié contre Mongo 8 :
+   *
+   *     champ ABSENT + $inc  ->  { s: 3 }
+   *     champ NULL   + $inc  ->  ERREUR « Cannot apply $inc to a value of
+   *                              non-numeric type »
+   *
+   * Mesuré en production le 2026-09-08 : `engagementScore` valait `null` sur
+   * les 9 comptes ayant une activité, la somme pondérée de leurs compteurs
+   * allant de 8 à 140. Chaque crédit échouait, en silence — cet appel est le
+   * DERNIER de `recordActivity`, donc compteurs, badges, succès et série
+   * étaient déjà commités quand il rejetait. Aucune ligne d'erreur, trois mois
+   * de score mort, et un écran « Progression » annonçant « Niveau 0 · 0 point »
+   * à un compte qui avait produit 140 points.
+   *
+   * Le pipeline d'agrégation `$ifNull` traite `null` ET l'absence comme zéro,
+   * en UNE écriture atomique — strictement mieux qu'une normalisation suivie
+   * d'un `$inc`, qui en demanderait deux. `findAndModify` rend en prime la
+   * valeur NEUVE, nécessaire pour savoir quels paliers cet incrément franchit.
+   *
+   * Prisma ne sait pas exprimer une mise à jour par pipeline : d'où
+   * `$runCommandRaw`, idiome déjà employé dans le dépôt (`routes/posts/nearby.ts`).
    */
-  private async updateEngagementScore(userId: string, axisKey: EngagementAxisKey): Promise<void> {
-    const weight = ENGAGEMENT_AXIS_WEIGHTS[axisKey];
-    const user = await this.prisma.user.update({
-      where: { id: userId },
-      data: { engagementScore: { increment: weight } },
-      select: { engagementScore: true },
-    });
+  private async updateEngagementScore(userId: string, points: number): Promise<void> {
+    const result = (await this.prisma.$runCommandRaw({
+      findAndModify: 'User',
+      query: { _id: { $oid: userId } },
+      update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, points] } } }],
+      new: true,
+      fields: { engagementScore: 1 },
+    } as never)) as unknown as { value?: { engagementScore?: number } | null };
 
-    const newScore = user.engagementScore;
-    const previousScore = newScore - weight;
+    const newScore = result?.value?.engagementScore;
+    // Compte introuvable (supprimé entre l'activité et ce crédit) : rien à
+    // notifier, et surtout pas un palier calculé sur `undefined`.
+    if (typeof newScore !== 'number') return;
+    const previousScore = newScore - points;
     const crossedThresholds = LEVEL_THRESHOLDS.filter(
       (threshold) => threshold > previousScore && threshold <= newScore,
     );
@@ -370,7 +601,7 @@ export class EngagementService {
         data: {
           userId,
           milestoneType: 'level',
-          milestoneKey: `level:${threshold}`,
+          milestoneKey: levelMilestoneKey(threshold),
         },
       });
     } catch (err) {
@@ -386,9 +617,13 @@ export class EngagementService {
         userId,
         type: 'level_up',
         priority: 'normal',
-        content: notificationString(lang, 'engagement.levelUp', { count: threshold }),
+        // Le NIVEAU, jamais le seuil de score : « Niveau 150 atteint » (le
+        // palier de points) se lisait comme un cent-cinquantième niveau. Le
+        // niveau est le RANG du palier dans l'échelle (§ 7) — le même que
+        // l'écran « Progression » affiche (`EngagementLevelProgress.level`).
+        content: notificationString(lang, 'engagement.levelUp', { count: levelIndexOf(threshold) }),
         context: {},
-        metadata: { action: 'view_details', threshold },
+        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, threshold, level: levelIndexOf(threshold) },
       });
     } catch (err) {
       log.warn('level_up notification failed after milestone was recorded', {

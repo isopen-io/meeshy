@@ -8,8 +8,11 @@ extension ConversationView {
 
     // MARK: - Scroll to Bottom Button
 
-    var hasTypingIndicator: Bool {
-        !typingObserver.typingParticipants.isEmpty
+    /// Le roster est PASSÉ, jamais lu depuis un observateur capturé à l'`init`
+    /// (#5961) : celui-ci pointait le store d'un ViewModel jeté par
+    /// `@StateObject`, donc toujours vide. Voir `ConversationTypingRosterHost`.
+    func hasTypingIndicator(_ typing: [TypingParticipant]) -> Bool {
+        !typing.isEmpty
     }
 
     /// Unread message attachment (for rich preview in button)
@@ -18,8 +21,8 @@ extension ConversationView {
     }
 
     /// True when there are unread messages to show in the button
-    var hasUnreadContent: Bool {
-        scrollState.unreadBadgeCount > 0 || hasTypingIndicator
+    func hasUnreadContent(_ typing: [TypingParticipant]) -> Bool {
+        scrollState.unreadBadgeCount > 0 || hasTypingIndicator(typing)
     }
 
     var isOffline: Bool {
@@ -27,10 +30,10 @@ extension ConversationView {
         return false // Defaults to false if not connected to a reachability manager here
     }
 
-    var scrollToBottomButton: some View {
+    func scrollToBottomButton(typing: [TypingParticipant]) -> some View {
         ConversationScrollControlsView(
             unreadCount: scrollState.unreadBadgeCount,
-            typingParticipants: typingObserver.typingParticipants,
+            typingParticipants: typing,
             lastUnreadMessageContent: viewModel.lastUnreadMessage?.content,
             // Nom devant l'aperçu — utile en groupe (qui a écrit ?), muet en
             // DM (l'unique interlocuteur n'a pas besoin d'être nommé) (#3921).
@@ -69,7 +72,7 @@ extension ConversationView {
                 }
             }
         )
-        .accessibilityLabel(scrollToBottomAccessibilityLabel)
+        .accessibilityLabel(scrollToBottomAccessibilityLabel(typing))
         .onReceive(scrollButtonAudioStatePublisher) { context, playing in
             updateScrollButtonAudioIsPlaying(context: context, playing: playing)
         }
@@ -85,7 +88,7 @@ extension ConversationView {
         if scrollButtonAudioIsPlaying != newValue { scrollButtonAudioIsPlaying = newValue }
     }
 
-    private var scrollToBottomAccessibilityLabel: String {
+    private func scrollToBottomAccessibilityLabel(_ typing: [TypingParticipant]) -> String {
         let action = String(localized: "conversation.scroll-to-bottom.a11y",
                             defaultValue: "Défiler vers le bas", bundle: .main)
         if scrollState.unreadBadgeCount > 0 {
@@ -97,8 +100,8 @@ extension ConversationView {
             let unread = UnreadCountLabel.messages(scrollState.unreadBadgeCount)
             return "\(unread), \(action)"
         }
-        if hasTypingIndicator {
-            return "\(typingLabel), \(action)"
+        if hasTypingIndicator(typing) {
+            return "\(typingLabel(typing)), \(action)"
         }
         return action
     }
@@ -188,8 +191,8 @@ extension ConversationView {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    var typingLabel: String {
-        let names = typingObserver.typingParticipants.displayNames
+    func typingLabel(_ typing: [TypingParticipant]) -> String {
+        let names = typing.displayNames
         switch names.count {
         case 1: return String(format: String(localized: "typing.named", bundle: .main), names[0])
         case 2: return String(format: String(localized: "typing.double", bundle: .main), names[0], names[1])

@@ -42,7 +42,8 @@ final class FocalBetaPreviewNavigationSourceGuardTests: XCTestCase {
     // MARK: - 1. Les deux sites RÉELS lisent le canal éphémère
 
     func test_rootView_conversationDestination_readsAndClearsThePendingForcedMode() throws {
-        let code = try source("Features/Main/Views/RootView.swift")
+        // Le `switch` de routes vit dans `RootRouteDestination` depuis #5837.
+        let code = try source("Features/Main/Views/RootLayers/RootRouteDestination.swift")
         XCTAssertTrue(
             code.contains("forcedReadingMode: router.pendingForcedReadingMode"),
             "RootView doit lire `router.pendingForcedReadingMode` au site de construction de ConversationView — sinon l'item « Focal (bêta) » n'atteint jamais l'écran."
@@ -76,8 +77,10 @@ final class FocalBetaPreviewNavigationSourceGuardTests: XCTestCase {
     func test_exactlyTwoNavigationSites_wireThePendingForcedMode() throws {
         let roots = [
             "Features/Main/Views/RootView.swift",
+            "Features/Main/Views/RootLayers/RootRouteDestination.swift",
+            "Features/Main/Views/RootLayers/RootViewLayers.swift",
             "Features/Main/Views/iPadRootView.swift",
-            "Features/Main/Views/iPadRootView+Sheets.swift",
+            "Features/Main/Views/RootLayers/iPadRootViewLayers.swift",
             "Features/Main/Views/GuestConversationContainer.swift",
             "Features/Main/Services/ConversationFirstRenderWarmup.swift",
         ]
@@ -95,9 +98,10 @@ final class FocalBetaPreviewNavigationSourceGuardTests: XCTestCase {
     // MARK: - 2. Les quatre autres sites de montage restent INTACTS (nil ⇒ bit-à-bit identique, au niveau du CODE)
 
     func test_rootView_notificationPreviewSheet_neverMentionsForcedReadingMode() throws {
-        let code = try source("Features/Main/Views/RootView.swift")
+        // L'aperçu est monté par `RootEnvironmentLayer` (#5837).
+        let code = try source("Features/Main/Views/RootLayers/RootViewLayers.swift")
         guard let range = code.range(of: "ConversationView(conversation: conv, previewMode: true, onOpenFullConversation:") else {
-            XCTFail("Le site d'aperçu de notification (sheet) est introuvable dans RootView.swift — a-t-il changé de forme ?")
+            XCTFail("Le site d'aperçu de notification (sheet) est introuvable dans RootLayers/RootViewLayers.swift — a-t-il changé de forme ?")
             return
         }
         let end = code.index(range.upperBound, offsetBy: 300, limitedBy: code.endIndex) ?? code.endIndex
@@ -108,10 +112,10 @@ final class FocalBetaPreviewNavigationSourceGuardTests: XCTestCase {
     }
 
     func test_iPadRootViewSheets_notificationPreview_neverMentionsForcedReadingMode() throws {
-        let code = try source("Features/Main/Views/iPadRootView+Sheets.swift")
+        let code = try source("Features/Main/Views/RootLayers/iPadRootViewLayers.swift")
         XCTAssertFalse(
             code.contains("forcedReadingMode"),
-            "iPadRootView+Sheets.swift (aperçu de notification) ne doit JAMAIS mentionner forcedReadingMode — site de montage non concerné par I-075."
+            "RootLayers/iPadRootViewLayers.swift (aperçu de notification) ne doit JAMAIS mentionner forcedReadingMode — site de montage non concerné par I-075."
         )
     }
 

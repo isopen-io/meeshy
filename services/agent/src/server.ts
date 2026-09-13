@@ -4,6 +4,7 @@ import Redis from 'ioredis';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { env } from './env';
 import { createLlmProvider } from './llm/llm-factory';
+import { describeLlmStartup } from './llm/llm-startup-log';
 import { LlmRouter } from './llm/llm-router';
 import type { LlmProvider } from './llm/types';
 import { buildAgentGraph, type TracerRef } from './graph/graph';
@@ -87,13 +88,21 @@ async function buildLlmFromConfig(): Promise<LlmProvider> {
     ?? globalConfig?.fallbackModel
     ?? (fallbackProviderName === 'openai' ? env.OPENAI_MODEL : env.ANTHROPIC_MODEL);
 
-  if (fallbackKey && fallbackProviderName !== primaryProvider) {
+  const fallbackArmed = Boolean(fallbackKey && fallbackProviderName !== primaryProvider);
+  const startupLog = describeLlmStartup({
+    primaryProvider,
+    primaryModel,
+    fallbackProviderName,
+    fallbackModel,
+    fallbackArmed,
+  });
+  server.log[startupLog.level](startupLog.message);
+
+  if (fallbackKey && fallbackArmed) {
     const { withFallback } = await import('./llm/llm-fallback');
     const fallback = createLlmProvider({ provider: fallbackProviderName, apiKey: fallbackKey, model: fallbackModel });
-    server.log.info(`[LLM] Primary: ${primaryProvider}/${primaryModel} | Fallback: ${fallbackProviderName}/${fallbackModel}`);
     return withFallback(primary, fallback);
   }
-  server.log.info(`[LLM] Provider: ${primaryProvider}/${primaryModel} (no fallback configured)`);
   return primary;
 }
 

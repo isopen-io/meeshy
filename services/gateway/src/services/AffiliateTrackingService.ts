@@ -1,4 +1,5 @@
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { EngagementService } from './engagement/EngagementService.js';
 
 const logger = enhancedLogger.child({ module: 'AffiliateTrackingService' });
 
@@ -152,6 +153,19 @@ export class AffiliateTrackingService {
           completedAt: new Date()
         }
       });
+
+      // Axe `social.invite_joined` (#5766) — le crédit va à celui qui a INVITÉ,
+      // jamais à celui qui arrive : l'axe mesure « quelqu'un est venu par moi ».
+      // Il est posé ICI, après la création de la relation, et non à la VISITE :
+      // un lien cliqué ne prouve rien, une inscription si.
+      //
+      // L'amitié qui se noue juste en dessous crédite en plus `social.friendship`
+      // aux deux parties, par son propre chemin — deux gestes distincts, deux
+      // axes, et c'est voulu : inviter quelqu'un qui vient VAUT plus que se
+      // lier à quelqu'un qu'on connaît déjà.
+      new EngagementService(prisma)
+        .recordActivity(affiliateToken.createdBy, 'social.invite_joined')
+        .catch((err: unknown) => logger.warn('engagement social.invite_joined failed', { err } as never));
 
       // Créer automatiquement une demande d'amitié entre les utilisateurs (ou
       // accepter une demande préexistante dans un autre statut) — FriendRequest

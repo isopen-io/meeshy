@@ -1,5 +1,421 @@
 # @meeshy/shared
 
+## 1.19.3
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - le `requireActual` étalé prend son cast — la suite d'error-format se CHARGE à nouveau (#6293)
+  - un like rejoué ne double plus la notification de l'auteur (#6293)
+  - le rail et le lecteur de stories appellent leurs successeurs, jamais les routes dépréciées (#6284)
+  - le fil des publications se lit sur le web, texte et image, légende dans la langue du lecteur, et la liste y mène au doigt
+  - spell out full test paths in CLAUDE.md to satisfy the path-existence guard
+  - stop routing Mongo/Redis admin UIs and raw DB ports on staging (#6254, #6255)
+  - stop routing Mongo/Redis admin UIs through Traefik in prod (#3640) (#6253)
+  - démuseler TS2307 — 19 imports cassés dans des tests, jamais résolus (#6252)
+  - les stories se regardent en plein écran, une après l'autre, avec progression, tap avant/arrière, appui qui suspend et légende dans la langue du lecteur
+  - pin the emoji length bound to UTF-16 units, independent of zod's version (#6248)
+  - le gate des actions de rangée mesurait le FLOTTEUR, pas le bouton (#6237)
+  - épingler zod à 4.4.3 — 4.5 compte des CODE POINTS et desserre 242 bornes en silence
+  - dev rouge — zod scindé entre deux workspaces, et un garde aveuglé par son propre littéral
+  - le composeur restaure la langue de son brouillon et porte les six occupantes de la rangée haute d'iOS
+  - check-lens fige son horloge, la rangée c-live cesse de bouger après minuit
+  - VoiceOver n'annonce plus « waveform and mic » avant « PROFIL VOCAL »
+  - deux deinit isolées double-libéraient — dont celle que je venais d'introduire (Refs #6226)
+  - le vumètre ne fait plus battre toute la conversation, et six portillons Equatable sont enfin posés (Refs #6226)
+  - la barre de recherche flotte et réserve sa place — plus de frontière de défilement infranchissable (Closes #6220)
+  - le plafond du chunk des menus flottants dit la mesure RÉELLE
+  - une vignette en boucle ne veille plus l'écran, et la Lentille tombe à 1,3 Ko (Refs #6221)
+  - les seize connexions de LECTURE reçoivent enfin le réglage SQLite (Refs #6221)
+  - la Lentille maigrit de 10 Ko à 3 — sept cibles de feuille sur le tas (Refs #6221)
+  - ouvrir une conversation ne déborde plus la pile — la vue maigrit de 15 Ko à 5 (Closes #6221)
+  - un menu flottant se déplace, s'accroche au bord et retrouve sa place
+  - deux menus flottants ouvrent le Flux et les sept autres écrans
+  - le numéro de build des coques suit une source unique et l'artefact construit est audité (Closes #6211)
+  - les huit destinations des menus flottants ont une adresse
+  - le fil défile d'un bord à l'autre de l'écran — le chrome flotte, il ne coupe plus (Closes #6213)
+  - shouldRetry does three attempts total, not five
+  - la Lentille charge la suite de la liste au défilement et se rafraîchit au tirer, comme sur iOS
+  - fixe la locale du scénario de langue du composeur en fr-FR
+  - postInclude cesse de servir storyViews à tout lecteur d'un post (#6208)
+  - un socle i18n d'interface, langue résolue au démarrage (#6206)
+  - keep PostFeedService.test.ts at its inherited line budget
+  - repoint the two remaining include-shape post assertions to select
+  - postInclude cesse de servir storyViews à tout lecteur d'un post
+  - épingle la résolution DNS au connect pour l'illustration d'agent (#6201)
+  - la lecture d'un média se fait dans un cadre, et le plateau porte tout le reste
+  - réunir les gestes du plateau sur la vue qui les dispute, et faire converger les deux solveurs de cadrage
+  - le fil temps réel reçoit conversation:updated, message:translation et le roster multi-frappeurs
+  - le double tap latéral d'une vidéo recule ou avance de dix secondes
+  - la garde SSRF de l'illustration valide TOUTES les adresses du nom, jamais la première (#6201)
+  - les deux coques dérivent leur version de package.json, jamais 1.0 en littéral
+  - la progression d'une vidéo descend dans le couloir du plateau (#6162)
+  - une pièce jointe VIDÉO rend un repli lisible au lieu d'un vide (#6197)
+  - une pièce jointe VIDÉO rend un repli lisible au lieu d'un vide
+  - poser réagir · répondre · composer en colonne à droite du cadre (#6161)
+  - la frappe se lit dans la pastille, qui enfle et se rétracte
+  - l'app installée porte le numéro de build du projet
+  - la pastille « en pause » fait monter son glyphe avec son texte (#6142)
+  - le menu ⋯ remplace le bouton d'enregistrement du couloir haut
+  - retirer la capsule n/N du couloir haut de la galerie média
+  - ouvrir le plein cadre au tap, à l'appui long et au glissement (#6142)
+  - habiller le hors-champ d'un média de son ThumbHash, dans les deux états (#6143)
+  - poser le média de conversation dans un cadre arrondi, et rendre ses contrôles au plateau (#6141)
+  - réserve la marque aux œuvres composées, jamais aux médias transmis (#6146)
+  - le solveur du plateau de lecture rend le cadre ET le média (#6141)
+  - StatusHandler's typing-denial test double gains socket.leave()
+  - typing:start signals a lost conversation membership instead of failing silently
+  - un message épinglé, transféré, modifié, système ou emoji seul se reconnaît dans le fil
+  - le témoin de check-utilities cesse d'affirmer le bug que #5960 a corrigé (#5966)
+  - table légère votes/réponses pour stickers interactifs (O10)
+  - les chips de l'Élan servent la fenêtre, pas le cumul (#5897)
+  - factor the five account-deletion sweep steps to stay under the file-size budget
+  - un compte supprimé n'est plus interrogeable en clair (#5691)
+  - retirer une réaction en tapant sa propre capsule (#5865)
+  - extraire le montage des modes du fil dans thread-modes.tsx
+  - six gardes de web-v3 cessent d'être verts parce qu'ils ne tournaient nulle part
+  - un refus d'inscription pour quota dit la vraie attente
+  - un avis d'arrivée avance l'horloge de sa conversation
+  - un pseudo déjà pris n'épuise plus le quota d'inscription
+  - le garde de dérive compare au contexte de build, pas à la tête
+  - golden partagé du Prisme pour ses quatre familles de résolveurs
+  - le CLAUDE.md cesse de citer le script que ce lot supprime
+  - @MainActor sur AchievementCopySingularAgreementTests
+  - la v3.1 prend l'image du legacy, et l'app annulée quitte le dépôt
+  - AchievementCopy accorde le singulier du palier 1 (#5859)
+  - le cliquet des couleurs ignore les commentaires (#5883)
+  - le cliquet des couleurs compte des USAGES, plus des mentions (#5883)
+  - la CI cesse de construire l'app annulée, et le chantier web reprend son nom (#5880)
+  - les 48 clés du lot engagement quittent le français forcé — run test (#5852)
+  - align EngagementService.test.ts on the content axis weight of 9
+  - prerender-institutional lit le dist réellement construit (#5821)
+  - un démarrage sans repli LLM avertit (WARN), plus n'informe (#5826)
+  - sections.test.ts partage l'instant de l'ancre du fil au lieu d'un second new Date()
+  - SPM cache key on Package.resolved instead of project.yml (#3609)
+  - le fil « Équipe déploiement » reste ancré à AUJOURD'HUI à Paris
+  - une session expirée cesse d'être ressuscitée ou de rouvrir un socket (#5712)
+  - route la purge du défi 2FA par son site unique (#4542)
+  - un compte supprimé n'garde plus son identité en clair (#5691)
+  - anonymize messages of a deleted account automatically (#5689)
+  - un ban à durée s'expire tout seul (#5527)
+  - align account-deletion grace period to the promised 30 days, purge sessions/voice profile/share links automatically (#3632)
+  - un conteneur en retard sur ses routes se signale avant l'utilisateur (#5644)
+  - route GET /me/export pagination through the SSOT validatePagination
+  - l'export RGPD couvre posts, stories, commentaires, réactions, médias, profil vocal et sessions (#3633)
+  - résout le conflit de merge dev↔PR sur messagePostSaveEffects
+  - ne pas mocker les schémas de réponse partagés dans le nouveau test (#3627)
+  - poser un sticker alimente l'axe d'engagement « tool.sticker »
+  - un commentaire texte alimente l'axe d'engagement « comment.text »
+  - un auteur peut désactiver les commentaires de son post (#3959)
+  - conversation:updated porte enfin son groupe MÉDIA (#3737)
+  - la réinitialisation de mot de passe par un admin révoque les sessions actives (#5569)
+  - EXACT geo-discoverability est réservée à un opt-in explicite et à un adulte vérifié (#3637)
+  - vérification MIME universelle, retrait EXIF, SVG en téléchargement forcé sur la route legacy (#3627)
+  - export média watermarké côté serveur (#3600)
+  - répare le budget de taille et deux dernières fixtures 12-car. (#3629)
+  - l'invitation par e-mail persiste sa relation et mène à une page qui existe (#3691)
+  - aligne les fixtures de mot de passe sur PASSWORD_MIN_LENGTH=12 (#3629)
+  - régénère UsersEndpoint.swift et relève le cliquet de dette Swift (#3690)
+  - mot de passe 12 caractères partout, lookups email/phone limités (#3629)
+  - répare les deux cliquets touchés par la nouvelle route (#3690)
+  - un code de parrainage intrinsèque au compte (#3690)
+  - extrait le témoin du jeton hérité pour rester sous le budget de taille (#4531)
+  - retire rotateRefreshToken mort, garde un JWT hérité de 6 mois refusé (#3621)
+  - compacte() retire les commentaires CSS avant de replier l'espace
+  - resserre le cliquet de dette de lint web après le retrait du hook mort (#3646)
+  - le menu du message le plus ancien s'ouvre vers le bas, sans JS
+  - remesure les ratchets écrasés par la fusion de dev (#5385)
+  - rattrape le ratchet participate/liste après #5386
+  - un message du fil se transfère vers une autre conversation (#5386)
+  - désambiguïse le doublon « Leçon 162 » de tasks/lessons.md
+  - amorce le transfert de message (#5386) — menu, mutations, envoi
+  - l'expiration d'un retrait s'annonce, l'annuler se nomme (#5387)
+  - composer.js réenregistré, feed.js ne paie plus le texte du composer
+  - sépare la durée de vie d'une story de la copie de création (#5479)
+  - remesure le budget de composer.js (drift pré-existant)
+  - sdk-tests nomme ce qui casse avant de mourir (#5466)
+  - un fond file:// ne gagne plus sur le postMediaId (drift pré-existant, #5457)
+  - le témoin de déclenchement suit le refactor #5407
+  - désactive le cache distant Turborepo, jamais joignable sans TURBO_TOKEN (#4861)
+  - StickerPaletteTests suit le déplacement du déclencheur de lieu (drift pré-existant, #5461)
+  - StickerPaletteTests suit le déplacement du déclencheur de lieu (#5407, #5461)
+  - persist detectedLanguage on Post so on-demand translation reuses it (#5422)
+  - un fond file:// ne gagne plus sur le postMediaId d'une story
+  - le témoin de rédaction d'en-tête appelle redactHeader lui aussi
+  - fix second missed TestEndpoint.root reference in APIServiceTests
+  - ShareLinkService migre vers DELETE /guest-sessions/me (#5425)
+  - rédige l'en-tête Authorization et couvre /auth/login/2fa (#4843)
+  - remove three dead polling-translation routes (#5423)
+  - remesure le budget de navigateur.js après le correctif #5440
+  - la navigation douce attrape les trois promesses de la View Transition (#5440)
+  - attrape ready et finished d'une transition abandonnée (#5440)
+  - attache rate-limit@file au routeur Traefik du gateway (#3622)
+  - PATCH /admin/share-links/:id rouvre un lien fermé (#5429)
+  - scope le locator a.avatar-lien à la ligne de Marta sur /chats
+  - remesure le budget du fil après la fusion de deux correctifs concurrents
+  - remesure le budget du fil, ratchet rouge sur dev — porté de #5426
+  - route direct .log.warn( calls through logWarn() (#5415)
+  - un message s'épingle dans le fil v3, avec son bandeau (#5385)
+  - resync jetons-de-vues.json/issues-a-ouvrir.md with dev
+  - un refus de schéma à l'inscription parle français, jamais Ajv
+  - resync budgets-mesures.json/budgets.json with dev after merge
+  - guard the dead-entry debt of the generated Swift/TS endpoint catalogs (#5372)
+  - la liste et le tableau de bord enregistrent le travailleur de zone (#5321)
+  - cover 'expired' in queuedMessageArrival's exhaustive table
+  - retire le jumeau mort PostApi.getStories, documente activeCall()
+  - unify French wording between app and SDK localization catalogs
+  - classe `expired` dans la garde d'exhaustivité des files d'attente
+  - remove IEncryptionAdapter, exercised by no implementer or caller
+  - give a self-destructing message its own message:expired event
+  - retire le bloc de rendu dupliqué qui bloquait la collecte Playwright
+  - remove SignalProtocolAdapter, unreachable from every production path
+  - réparer les 5 suites que la mesure ciblée du lot précédent avait manquées
+  - mesurer et rallumer noUnusedParameters — deux gardes de sécurité manquantes trouvées au passage
+  - apply reader's personal history hiding to forward-source previews
+  - un repost de story v3 remappe enfin ses propres postMediaId
+  - une CSP réelle en Report-Only, plus de domaine inexistant (#5728)
+  - exempt Next.js special files from the API-literal guard
+  - generate sitemap.xml and robots.txt (#3672)
+  - retire un `as any` du témoin #3737 — dette ESLint régressait de 1
+  - un seul hook lit les messages d'une conversation (#3646)
+  - apps/web sert le certificat mkcert partagé sur https://meeshy.local:3100
+  - armer la fenêtre glissante de session sur les deux refresh du web
+  - un seul jeu de défauts de workers, scaling réel, gRPC mort retiré (#3664)
+  - stop caching and serving translation failures as text
+  - accorder le singulier du palier 1 des succès de volume
+  - posts delegate Prism translation stripping to a shared adapter
+  - exclude admin-only exploitation routes from client API catalogs (#5424)
+  - régénère api/endpoints.ts pour PATCH /admin/share-links/:id
+
+## 1.19.2
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - l'import relatif de la loi de protection porte son extension .js (#6189)
+  - une pièce jointe DÉCLARÉE protégée ne rend plus son média — et sa loi descend dans shared (#6189)
+  - un seul site résout apiConfig.source en dépendances (#6151)
+  - le rail des stories porte l'humeur de son auteur, et chaque pastille ouvre sa story
+  - le témoin clavier de la Lentille compte les TROIS arrêts de l'en-tête, pas un
+  - le projet Xcode reprend les trois fichiers de #6156 — xcodegen regénéré
+  - le cliquet de dette de taille reprend son mou (#6050)
+  - dans l'éditeur d'objet, le clavier et le panneau d'options s'excluent (#6156)
+  - la purge de déconnexion vide le DERNIER QueryClient, pas celui capturé au premier montage
+  - retire l'invalidation du rail des statuts, superseded par la fusion story-rail
+  - le témoin de peinture exige l'IDENTITÉ de l'image servie, pas l'uniformité de son cœur
+  - purge Cache Storage, React Query cache and E2EE keys at logout (#3743)
+  - le rail de la Lentille porte les stories d'iOS, et les deux boutons d'en-tête ont leur effet
+  - le rail défile quand il ne tient pas, et choisir un outil rend le clavier (#6131, #6132)
+  - la mise en évidence d'un saut s'ENREGISTRE avant le geste, elle ne se guette plus (#6148)
+  - écrire n'est pas publier — le socle s'efface pendant la frappe (#6132)
+  - la légende en place solde ses dettes — gardes déplacées, réserve inerte retirée, hôte découpé (#6126)
+  - le témoin des médias attend la PEINTURE de l'image, pas son chargement (#6135)
+  - le gate du mode de lecture cesse de rougir entre minuit et dix heures (#6130)
+  - le composeur dit dans quelle langue on écrit et l'envoie comme langue d'origine
+  - l'enveloppe du grand plateau cède avec son rail, et le gate cesse d'interroger deux noms morts (#6080)
+  - éditer, sélectionner et composer passent en tête du menu système (#6117)
+  - le double tap ouvre le menu système, l'appui long le menu Meeshy (#6117)
+  - le fil et la liste reçoivent le temps réel de la passerelle (socket.io, message:new, typing)
+  - MEESHY_SHELL_START_PATH sert les deux coques, ou se refuse
+  - la compaction du trail des stories ne déplace plus les rangées de la Lentille
+  - une image s'affiche et un vocal se joue dans le fil, dans la langue du lecteur
+  - le rail des stories cesse de promettre un contenu qui ne vient pas
+  - la pastille de coupure cessait d'aller chercher son code SUR LE RÉSEAU
+  - le modèle d'une traduction est facultatif jusqu'au bout de la chaîne
+  - le bouton « Réagir » du plein écran parle les sept langues (#6114)
+  - une traduction malformée ne vide plus la conversation entière
+  - le rejeu hors-ligne d'un réglage cesse d'échouer à chaque tentative
+  - « Composer » s'ouvre depuis le média d'un post et la slide d'une story (#6085)
+  - les réactions de story et de plein écran reviennent à une taille tenable (×0,75)
+  - la pastille de synchronisation ne pèse plus avant le premier pixel
+  - le chevron du retour et son compte de non-lus vivent sur la MÊME ligne
+  - la réaction du plein écran s'ouvre par un bouton et se pose par-dessus tout
+  - les vues de conversation s'alignent sur iOS, et le rail montre de vraies stories
+  - une image ouverte en plein écran se réagit sur la pièce elle-même
+  - ouvrir une conversation cesse de casser le fil quand un message n'a aucune réaction (#6086)
+  - la barre de réactions d'une story grandit, perd son fond et garde son glissé
+  - l'habillage de la barre de réaction devient une option de l'hôte
+  - les huit rouges hérités de la suite iOS — sept témoins gardaient la lettre, un seul défaut de code — run test
+  - le catalogue perd ses 68 clés en double, et un témoin texte l'interdit
+  - la table de jetons a de nouveau un gate WCAG/parité/cascade
+  - un lien de partage qui EXPIRE retire enfin l'accès à ses invités
+  - mes doc-comments de #6166 faisaient remonter le cumul de dette de taille
+  - le seul TS2305 qui empêchait la suite de sécurité des notifications de se charger
+  - la propriété d'une notification passe de la DISCIPLINE de l'appelant à la signature
+  - la suite de protection du fil se CHARGE de nouveau — et ma preuve ne pouvait pas voir le défaut
+  - un dernier message protégé ne s'affiche plus en clair au démarrage à froid
+  - une transcription faite sur l'appareil garde ses horodatages
+  - la liste des conversations charge enfin les quatre réglages qu'elle promet
+  - le cliquet des bouchons de schéma de réponse redevient vert (#6092)
+  - un dernier message protégé ne part plus en clair dans la liste
+  - le filtre du rattrapage se fait vérifier par Prisma, pas par un as const
+  - un rattrapage rouvre la vidéo et la voix des entrées par lien déjà écrites
+  - l'entrée par lien laisse la vidéo et la voix suivre les drapeaux de l'hôte
+  - le rattrapage passe la requête à TypeScript, sans assertion
+  - la migration legacy n'ouvre plus un membre fermé, et un rattrapage rouvre l'existant
+  - les trois portes de création écrivent la table des droits d'un membre nommé
+  - StatusHandler's typing-denial test double gains socket.leave()
+
+## 1.19.1
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - le témoin du faux token affirme la RÈGLE, il n'épingle plus le défaut
+  - le garde des utilitaires cesse d'accuser la prose qui l'explique
+  - un commentaire JSDoc cesse d'injecter une fausse classe « \* » (#5958)
+  - le fil escamote son chrome pendant le geste, garde une pilule de jour collante et offre « revenir en bas » avec le compte de non-lus
+  - les huit dernières tailles figées suivent Dynamic Type, cadre compris
+  - dix tailles de police figées redeviennent relatives — la dette recule
+  - six témoins du composeur rattrapent la règle posée par #5409
+  - douze témoins cessent d'affirmer du français à un hôte anglais
+  - un drapeau de construction VIDE est une absence, pas une valeur
+  - l'image déployée sert les VRAIES conversations, plus les fixtures
+  - les chips de l'Élan servent la fenêtre, pas le cumul (#5897) (#5928)
+  - une CSP réelle en Report-Only, plus de domaine inexistant (#5728) (#5926)
+  - la file d'envoi ne survit plus à une session finie sans transition (#5917)
+  - six gardes de web-v3 cessent d'être verts parce qu'ils ne tournaient nulle part (#5921)
+  - un pseudo déjà pris n'épuise plus le quota d'inscription (#5915)
+  - retirer une réaction en tapant sa propre capsule (#5865) (#5924)
+  - extraire le montage des modes du fil dans thread-modes.tsx (#5922)
+  - pin arch=arm64 on id-based iOS simulator destinations (#5909)
+  - les défis survivent à l'absence de leur mesure, et l'entrée Meesh porte la marque
+  - le composeur du fil tient ce qu'il promet — pièce jointe, vocal, envoi vers la passerelle
+  - le garde de dérive compare au contexte de build, pas à la tête (#5908)
+  - deux suites arrivées par dev entrent enfin dans le projet Xcode
+  - AchievementCopy accorde le singulier du palier 1 (#5859) (#5886)
+  - golden partagé du Prisme pour ses quatre familles de résolveurs (#5904)
+  - les 48 clés du lot engagement quittent le français forcé — run test (#5852) (#5858)
+  - un succès ne se célèbre plus deux fois, et « Voir ma progression » y mène vraiment
+  - le numéro de build d'un binaire Xcode Cloud vient enfin de Xcode Cloud
+  - la série se nomme, et l'app rappelle six fois par jour de la tenir
+  - les sections de la progression sont des pages, et un badge se montre enfin
+  - « rejoindre une conversation » exclut le créateur et le DM (#5940)
+  - table légère votes/réponses pour stickers interactifs (O10) (#5933)
+  - un compte supprimé n'est plus interrogeable en clair (#5691) (#5925)
+  - un avis d'arrivée avance l'horloge de sa conversation (#5918)
+  - accorder le singulier du palier 1 des succès de volume (#5846)
+
+## 1.19.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le focus d'un champ épaissit sa bordure, pas seulement sa teinte (#5894)
+  - le socle web-v3 dit comment se connecter à la référence iOS, et par quelle voie
+  - le témoin de l'annonceur ne laisse plus courir un minuteur après sa dernière assertion (#5888)
+  - FocalRow réserve une hauteur sous le texte de la rangée élue sans ligne basse
+  - la bordure d'un champ survit à son focus, et un garde le tient
+  - on entre dans Meeshy comme sur iOS — accueil à deux portes, lien magique, mot de passe oublié
+  - le cliquet des couleurs ignore les commentaires (#5883)
+  - la flamme devient son propre hero de la progression (#5838)
+  - la coque Android atteint le staging et liste les conversations du compte de recette
+  - un en-tête de scène sonore sans accent servi n'est plus peint en noir (#5874)
+  - les deux témoins de surcharge vide n'utilisent plus test.each (#5872)
+  - VITE_API_BASE traverse enfin le workflow et le Dockerfile (#5872)
+  - une construction de production ne rend plus une base d'API relative (#5872)
+  - un message a ses actions — appui long, clic droit et touche Menu ouvrent le rail de réactions et Sélectionner · Traduire · Copier · Composer · Plus…
+  - le contrôle de dérive compare chaque hôte à SA branche, pas tous à main
+  - le hero « Dernier succès » était VIDE pour tout le monde, toujours (#5840)
+  - les deux racines descendent sous le budget de profondeur — 66→21 et 69→24 niveaux (#5837)
+  - pt-BR manquait sur les 22 clés de Progression de cette branche
+  - l'entrée Meesh remplace le trophée, et son détail s'ouvre en verre (#5839)
+  - les bornes du registre de frappe atteignent le natif (#5839)
+  - les sept chaînes neuves entrent au catalogue, en huit langues
+  - la file de célébration est nonisolated, et la seconde porte a sa garde (#5847)
+  - l'écran natif parcourt la séquence — quatre heros simples et trois portes
+  - un succès s'affiche AU GESTE ; la borne des paliers se calcule (#5847)
+  - le miroir Swift de la composition, et la garde qui les compare (#5838)
+  - la frappe de démonstration a sa date — le sous-menu se contredisait
+  - « Progression » devient un HUB — trois heros, trois portes
+  - l'indice de relance dit « l'opération », pas « la publication » (#5830)
+  - un palier verrouillé se peint neutre et ne rayonne pas (#5831)
+  - un message écrit dans le fil part vers la passerelle, se confirme, et se relance quand il a échoué
+  - l'absence s'OMET, elle ne se pose pas à undefined
+  - la relance réveille le flusher et le catalogue reçoit ses 15 clés (#5830, #5831)
+  - le héros du tableau de bord et l'ouverture en grand (#5831)
+  - la démonstration MONTRE le lot neuf — hero, élan et défis
+  - un démarrage sans repli LLM avertit (WARN), plus n'informe (#5827)
+  - un lien profond vers un fil s'ouvre dans les deux coques au lieu d'une page blanche
+  - une conversation sans historique dit « Nouvelle conversation »
+  - la famille SOCIALE atteint la vue — quatre glyphes, un libellé (#5766)
+  - text-footnote était une classe MORTE — elle ne peignait rien
+  - l'engagement mesure le LIEN SOCIAL, et le barème est réordonné (#5766)
+  - le chemin SOCKET porte le palier lui aussi — une règle, deux portes
+  - vitest, promesses gardées, surfaces déclarées, canari relevé (#5743, #5759)
+  - la référence iOS de web-v3 a son simulateur, que la coque Capacitor ne remplace jamais
+  - le témoin d'ordre lit sa source par node:fs, pas par le global Bun
+  - le mock conforme au protocole, et l'entrée de catalogue documentée (#5743)
+  - UN bloc d'accès rapides, toujours en fin de liste — le doublon de l'état vide disparaît
+  - la queue d'accès rapides suit iOS — rendue dès UNE conversation, et sur le compte BRUT
+  - une classe qui ne peint rien, et un ViewModel incomplet (#5743, #5759)
+  - sections.test.ts partage l'instant de l'ancre du fil au lieu d'un second new Date() (#5798)
+  - sitemap.xml et robots.txt publiés (#3672) (#5796)
+  - SPM cache key on Package.resolved instead of project.yml (#3609) (#5795)
+  - la liste et le fil lisent la passerelle de staging quand la construction le déclare
+  - garder l'extension .js dans les specifieurs (convention ESM du dépôt)
+  - la garde Node redevient importable sous ESM (#5757)
+  - les SEPT sections livrables — 22 familles, ~120 succès, 176 chaînes (#5759)
+  - les deux derniers sites de conversation, et la frappe iOS compile (#5759)
+  - l'écran de démarrage a enfin une sortie, et la queue de liste cesse d'être un vide
+  - « Publier un post » ouvre enfin le composeur sur iPad
+  - les rangées iOS, le miroir Swift gardé, et le générateur d'endpoints réparé (#5759, #5757)
+  - les succès générés en rangées horizontales, une par section (#5759)
+  - deux travaux d'une même surface ne partagent plus leur numéro d'issue dans le workflow web-v3
+  - le producteur, la carte d'atteignabilité, et une famille retirée faute de signal (#5759)
+  - l'élan se VOIT — servi par la route, montré par les deux clients (#5749)
+  - les conversations se dépensent en POINTS, jamais en ACTIONS (option C, #5743)
+  - la loi de la Rivière est câblée et prouvée sur le web — 61 vecteurs partagés verts, l'éligibilité lit memberCount comme iOS, le menu dit « N aujourd'hui »
+  - la monnaie rare — registre, frappe manuelle, et le héros qui la montre (#5743)
+  - l'ÉLAN — le poids multiplié au MOMENT du crédit (#5749)
+  - le garde de lockfile n'exige plus l'alignement du champ version des workspaces
+  - le score s'incrémente enfin — `$ifNull` en une écriture atomique
+  - le Résumé Vivant s'ouvre de lui-même dès 26 non-lus — épisodes, digest et rampe « Ils t'attendent » calculés localement
+  - serve non-CSP security headers on every route (#3628) (#5730)
+  - la Lentille se lit comme sur iOS — sections et stickers collants, liste aplatie au repos, hiérarchie 15/13/12
+  - use ESM import for security headers, not require()
+  - serve non-CSP security headers on every route (#3628)
+  - la sonde de fumée distingue une route absente d'une entité absente
+  - align EngagementService test on the content axis weight of 9 (#5853)
+  - un succès gravé par un GESTE s'annonce ; le balayage reste muet (#5847)
+  - les bornes du registre de frappe sont servies (#5839)
+  - la purge de compte désactive ses adhésions aux communautés (#5801)
+  - le retrait d'un membre par un admin de communauté laisse une trace
+  - quitter une communauté laisse une trace, la ré-adhésion réactive la ligne (#5760)
+  - l'engagementScore ne meurt plus sur un $inc contre null (#5742)
+  - la série d'engagement se compte dans le fuseau de l'utilisateur
+  - keep admin-routes-group2.test.ts within its frozen line-count debt
+  - keep report_resolved off the frozen shared-package size budget, fix admin-routes-group2 regression
+  - notify reporter when their report reaches a terminal status (#3718)
+  - les 18 langues fantômes NLLB-200 sont mappées, plus de repli silencieux (#3659)
+  - le hero montre le DERNIER succès, et les dates de frappe voyagent
+  - l'ordre des blocs de Progression est DÉCLARÉ, une fois (#5838)
+  - la frappe débite INTÉGRALEMENT — la famille sociale manquait à l'ordre
+  - la section « cercles » — neuf familles, neuf gabarits, huit langues (#5759)
+  - la GRAMMAIRE des succès — des milliers d'entrées, pas des milliers de traductions (#5758)
+  - drop duplicate 'engagement.badgeEarned' key entry
+
+## 1.18.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - SUPPORTED_LANGUAGES vient de packages/shared, plus d'un littéral (#3658)
+  - un message flouté, à vue unique, éphémère ou supprimé n'est plus servi en clair sur le fil
+  - les vues Progression prennent leurs teintes en Color, sans un Color(hex:) de plus
+  - la carte de niveau nomme le rang suivant, jamais le seuil de points
+  - une notification de palier dit le MOT, le NIVEAU, et mène à l'écran Progression
+  - l'écran Progression — badges, niveau, série et succès depuis GET /me/engagement
+  - l'écran /me/progression — badges, niveau, série et succès
+  - les clés de palier viennent du catalogue partagé
+  - posts delegate Prism translation stripping to a shared adapter (#5723)
+  - la loi de progression des badges, écrite une fois pour le web et iOS
+
 ## 1.17.0
 
 ### Minor Changes

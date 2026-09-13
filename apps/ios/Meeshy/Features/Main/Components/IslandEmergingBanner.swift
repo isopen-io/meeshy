@@ -69,8 +69,6 @@ extension EnvironmentValues {
 /// statique à sa position finale, fondu simple à l'insertion/retrait (le
 /// mouvement d'émergence peut déclencher une gêne vestibulaire).
 struct IslandEmergingBanner<Content: View>: View {
-    /// Couleur finale de la capsule (la naissance est toujours noire).
-    let tint: Color
     /// Taille naturelle de `content` une fois posé, calculée par l'appelant
     /// (métriques de police + padding connus). C'est d'elle que dérivent le
     /// ratio d'échelle et l'offset de naissance : une taille fausse déplace la
@@ -102,12 +100,12 @@ struct IslandEmergingBanner<Content: View>: View {
             // en régime permanent, et point d'arrivée/départ des animations.
             content()
                 .transition(Self.emergenceTransition(
-                    tint: tint, settledSize: settledSize, topInset: topInset
+                    settledSize: settledSize, topInset: topInset
                 ))
         } else {
             content()
                 .modifier(IslandEmergenceStyle(
-                    progress: 1, tint: tint, settledSize: settledSize, topInset: topInset
+                    progress: 1, settledSize: settledSize, topInset: topInset
                 ))
                 .transition(.opacity)
         }
@@ -118,13 +116,13 @@ struct IslandEmergingBanner<Content: View>: View {
     /// → atterrissage doux ; le retrait est légèrement plus court, la capsule
     /// se dissout dans l'île sans traîner.
     fileprivate static func emergenceTransition(
-        tint: Color, settledSize: CGSize, topInset: CGFloat
+        settledSize: CGSize, topInset: CGFloat
     ) -> AnyTransition {
         let born = IslandEmergenceStyle(
-            progress: 0, tint: tint, settledSize: settledSize, topInset: topInset
+            progress: 0, settledSize: settledSize, topInset: topInset
         )
         let settled = IslandEmergenceStyle(
-            progress: 1, tint: tint, settledSize: settledSize, topInset: topInset
+            progress: 1, settledSize: settledSize, topInset: topInset
         )
         return .asymmetric(
             insertion: AnyTransition.modifier(active: born, identity: settled)
@@ -187,7 +185,6 @@ enum IslandEmergenceGeometry {
 /// façon déterministe (échelle de rendu, jamais de frame de layout).
 private struct IslandEmergenceStyle: ViewModifier, Animatable {
     var progress: CGFloat
-    let tint: Color
     let settledSize: CGSize
     let topInset: CGFloat
 
@@ -211,15 +208,24 @@ private struct IslandEmergenceStyle: ViewModifier, Animatable {
         let birthScale = IslandEmergenceGeometry.birthScale(settledSize: settledSize)
 
         content
-            // Le contenu se colore d'après sa position dans le morph : blanc
-            // tant qu'il est dans l'île, couleurs de base une fois posé.
+            // Le contenu se colore d'après sa position dans le morph.
             .environment(\.islandEmergenceProgress, p)
-            // Voile noir DERRIÈRE le contenu (et devant la teinte) : dans
-            // l'île la capsule est noire et le texte reste lisible dessus —
-            // c'était un overlay AU-DESSUS du contenu jusqu'ici, qui masquait
-            // l'information au lieu de lui servir de fond.
-            .background(Capsule().fill(Color.black.opacity(Double(1 - p))))
-            .background(Capsule().fill(tint))
+            // **UNE seule capsule, et c'est celle de l'île** (#5974).
+            //
+            // Deux fonds s'empilaient ici : un noir qui NAISSAIT opaque puis
+            // s'effaçait (`opacity(1 - p)`), et la teinte de marque en dessous,
+            // permanente. Le morph était donc une SUBSTITUTION — et pendant
+            // toute sa durée l'œil voit deux composants superposés, le sombre
+            // devant et l'indigo qui dépasse derrière. Directive porteur
+            // (capture à l'appui) : « le noir doit venir seul et plus besoin de
+            // celui derrière ; celui qu'il faut préserver c'est celui qui vient
+            // de la Dynamic Island ».
+            //
+            // Ce qui disparaît n'est pas une couleur mais un CHANGEMENT
+            // D'IDENTITÉ : la capsule sort de l'île et reste l'île. C'est aussi
+            // la seule lecture honnête du geste — une annonce qui vient de
+            // là-haut n'a pas de raison de devenir autre chose en descendant.
+            .background(Capsule().fill(Color.black))
             .clipShape(Capsule())
             .shadow(color: Color.black.opacity(0.15 * Double(p)), radius: 6, y: 2)
             .scaleEffect(

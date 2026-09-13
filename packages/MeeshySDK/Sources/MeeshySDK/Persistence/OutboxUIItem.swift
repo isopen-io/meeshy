@@ -14,6 +14,17 @@ public struct OutboxUIItem: Sendable, Equatable, Identifiable {
     public let source: Source
     public let status: OutboxStatus
     public let createdAt: Date
+    /// Horloge de la LIGNE, pas de l'objet : l'instant de sa dernière écriture
+    /// — donc, pour une ligne terminale (`.failed` / `.exhausted`), l'instant
+    /// où elle a RENONCÉ.
+    ///
+    /// La pastille de synchronisation borne l'affichage d'une entrée terminale
+    /// à une courte fenêtre (#4660). Mesurer cette fenêtre sur `createdAt`
+    /// ferait naître PÉRIMÉ tout envoi mis en file il y a longtemps et qui
+    /// échoue maintenant — l'utilisateur ne saurait jamais que son message
+    /// vient d'échouer. Les deux dates répondent à deux questions et vivent
+    /// donc toutes les deux ici.
+    public let updatedAt: Date
 
     public init(
         id: String,
@@ -23,7 +34,8 @@ public struct OutboxUIItem: Sendable, Equatable, Identifiable {
         attachmentCount: Int,
         source: Source,
         status: OutboxStatus,
-        createdAt: Date
+        createdAt: Date,
+        updatedAt: Date? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -33,6 +45,7 @@ public struct OutboxUIItem: Sendable, Equatable, Identifiable {
         self.source = source
         self.status = status
         self.createdAt = createdAt
+        self.updatedAt = updatedAt ?? createdAt
     }
 
     public enum Kind: Sendable, Equatable {
@@ -102,7 +115,34 @@ extension OutboxUIItem {
     /// failures are non-fatal: the returned item falls back to sensible
     /// defaults (no preview, generic icon) so a single corrupted payload does
     /// not hide the entire queue from the pill UI.
+    ///
+    /// L'horloge de la ligne est estampillée ICI, en UN site, et non dans les
+    /// dix mappeurs : ceux-ci composent l'APPARENCE d'une entrée (icône,
+    /// aperçu, ancre), une question à laquelle `updatedAt` ne participe pas.
+    /// Un champ qui QUALIFIE une entrée sans entrer dans sa composition ne se
+    /// trouve pas en cherchant « qui compose cette entrée ? » — c'est ainsi
+    /// qu'on l'oublie dans le onzième mappeur. Le faire voyager par
+    /// construction rend l'oubli impossible.
     public static func from(record: OutboxRecord) -> OutboxUIItem {
+        composed(record: record).stamped(updatedAt: record.updatedAt)
+    }
+
+    /// Copie immuable portant l'horloge de la ligne.
+    private func stamped(updatedAt: Date) -> OutboxUIItem {
+        OutboxUIItem(
+            id: id,
+            kind: kind,
+            titlePreview: titlePreview,
+            iconKind: iconKind,
+            attachmentCount: attachmentCount,
+            source: source,
+            status: status,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+
+    private static func composed(record: OutboxRecord) -> OutboxUIItem {
         switch record.kind {
         case .sendMessage:
             return mapSendMessage(record: record)

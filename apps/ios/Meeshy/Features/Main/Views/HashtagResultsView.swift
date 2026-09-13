@@ -19,7 +19,10 @@ struct HashtagResultsView: View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 ForEach(viewModel.posts) { post in
-                    FeedPostCard(post: post)
+                    FeedPostCard(
+                        post: post,
+                        onLike: { id in Task { await viewModel.toggleLike(id) } }
+                    )
                         .equatable()
                         .onAppear {
                             if post.id == viewModel.posts.last?.id {

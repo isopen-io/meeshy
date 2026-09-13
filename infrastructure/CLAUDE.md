@@ -61,6 +61,8 @@ Always backup docker-compose.yml before editing on production.
 - Routes defined via Docker labels on services
 - Middlewares: secure-headers, cors, basic auth (dashboard)
 - Healthcheck takes ~30s (start_period + first check) before routing traffic
+- **Mongo/Redis admin UIs (`nosqlclient`, `p3x-redis-ui`) are NEVER routed by Traefik, in prod (#3640) or staging (#6254).** They bind to `127.0.0.1` on the host — prod: `MONGO_UI_PORT`/`REDIS_UI_PORT` (default 8081/8082); staging: `MONGO_UI_PORT_STAGING`/`REDIS_UI_PORT_STAGING` (default 8091/8092 — offset from prod's since both composes run on the same host, `root@meeshy.me`). Reach them with `ssh -L 8081:127.0.0.1:8081 -L 8082:127.0.0.1:8082 root@meeshy.me` (prod) or `ssh -L 8091:127.0.0.1:8091 -L 8092:127.0.0.1:8092 root@meeshy.me` (staging), then `http://localhost:<port>` locally. Guards: `services/gateway/src/__tests__/unit/config/admin-ui-ssh-tunnel-only.test.ts` (prod), `services/gateway/src/__tests__/unit/config/staging-admin-surfaces-ssh-tunnel-only.test.ts` (staging).
+- **The staging compose's raw debug ports (`database-staging` 27018, `redis-staging` 6380) are bound to `127.0.0.1` only, never on all interfaces (#6255)** — reach them through the same SSH tunnel as the admin UIs above, never by publishing them unqualified. Guard: `services/gateway/src/__tests__/unit/config/staging-admin-surfaces-ssh-tunnel-only.test.ts`.
 
 ## MongoDB Setup
 - Version 8.0 with replica set (`rs0`)

@@ -26,26 +26,18 @@ extension StoryCanvasUIView: UIPointerInteractionDelegate {
     }
 
     #if DEBUG
-    /// Test seam mirroring `handleDoubleTap` cycle (auto → fit → fill → auto)
-    /// for the background. Commits to the model + fires the callback.
-    /// The double-tap is bg-specific (toggle fit mode override) and not part
-    /// of the unified BG/FG gesture flow, so it keeps its dedicated test seam.
+    /// Faisceau de test du double-tap de FOND — la bascule AJUSTER ⇄ REMPLIR.
+    /// Le double-tap est spécifique au fond (il ne fait pas partie du flot de
+    /// geste unifié BG/FG), d'où ce faisceau dédié.
+    ///
+    /// **Il APPELLE la bascule, il ne la recopie plus** (#6125). Il en portait
+    /// une copie, et les deux avaient divergé : celle-ci ne notifiait pas
+    /// `onItemModified`. Un témoin vert y prouvait donc quelque chose que le
+    /// doigt ne faisait pas — le défaut le plus coûteux d'un faisceau, puisque
+    /// sa seule raison d'être est de tenir lieu du geste.
     internal func performDoubleTapForTesting(targetId: String) {
         guard targetId == backgroundMediaObjectId else { return }
-        let current = slide.effects.backgroundTransform?.videoFitMode
-        let next: String?
-        switch current {
-        case nil:    next = "fit"
-        case "fit":  next = "fill"
-        case "fill": next = nil
-        default:     next = nil
-        }
-        var updated = slide
-        var bg = updated.effects.backgroundTransform ?? StoryBackgroundTransform()
-        bg.videoFitMode = next
-        updated.effects.backgroundTransform = bg.isIdentity ? nil : bg
-        slide = updated
-        onBackgroundTransformChanged?(bg)
+        toggleBackgroundFitMode()
     }
     #endif
 }

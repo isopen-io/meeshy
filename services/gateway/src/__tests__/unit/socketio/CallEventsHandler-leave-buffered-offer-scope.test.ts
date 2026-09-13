@@ -31,6 +31,7 @@ const mockClearRingingTimeout = jest.fn<any>();
 const mockCreateCallSummaryMessage = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     leaveCall: mockLeaveCall,
     getCallSession: mockGetCallSession,

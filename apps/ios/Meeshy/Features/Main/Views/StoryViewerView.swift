@@ -340,6 +340,10 @@ struct StoryViewerView: View {
     /// `resetGestureTracking()`, et réarmé à chaque touch-down de l'enfant : il ne
     /// peut donc pas neutraliser le geste SUIVANT.
     @State var readerFeatureConsumedByTouch: Bool = false // internal for cross-file extension access
+    /// **La barre de réactions a revendiqué le glissé en cours** — posé par elle
+    /// selon `StoryReactionStripGesture`, lu par `unifiedDragGesture`, purgé par
+    /// `resetGestureTracking()` et à la fermeture de la barre.
+    @State var reactionStripOwnsDrag: Bool = false // internal for cross-file extension access
     /// Bord SUPÉRIEUR (coordonnées `.global`) de la surface scrollable ouverte,
     /// remonté par `StoryReaderScrollableSurfaceTopKey`. `nil` = aucune surface
     /// ouverte, ou surface dont le cadre n'est pas mesurable ici (cf.
@@ -745,6 +749,12 @@ struct StoryViewerView: View {
         // ferait passer un geste pour « né dans la surface ».
         .adaptiveOnChange(of: hasScrollableReaderSurface) { _, isOpen in
             if !isOpen { scrollableSurfaceTopY = nil }
+        }
+        // Filet du drapeau de revendication : la barre refermée, plus personne
+        // ne peut le retirer. Le `UIScrollView` de la rangée peut priver la
+        // barre de son `onEnded` — un drapeau collé gèlerait la navigation.
+        .adaptiveOnChange(of: showEmojiStrip) { _, isOpen in
+            if !isOpen { reactionStripOwnsDrag = false }
         }
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
             // **La légende se replie à CHAQUE changement de story.** Laissée
@@ -1522,6 +1532,7 @@ struct StoryViewerView: View {
             isCanvasPlaybackPaused: shouldPauseTimer,
             gestureResetToken: gestureResetToken,
             readerFeatureConsumedByTouch: $readerFeatureConsumedByTouch,
+            reactionStripOwnsDrag: $reactionStripOwnsDrag,
             keyboard: keyboard,
             triggerStoryReaction: { emoji, frame in
                 triggerStoryReaction(emoji, from: frame)

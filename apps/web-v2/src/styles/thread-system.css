@@ -1,0 +1,39 @@
+/*
+ * LA CAPSULE DE LA RANGÉE SYSTÈME, EN BULLE (#5936) — copie littérale de
+ * `BubbleSystemViews.swift:120-130` (`white`/`black` LITTÉRAUX, même
+ * doctrine que `thread-protection.css` question 10 de D-23 : ces deux
+ * teintes sont CITÉES, jamais un jeton généré pour une seule capsule). La
+ * rangée PLATE (Focal/Script) ne monte AUCUNE capsule — texte nu, centré,
+ * directement en style inline (`system-notice.tsx`).
+ */
+.system-notice {
+  padding-inline: var(--ios-space-md, 12px);
+  padding-block: 7px;
+  border-radius: 999px;
+  background-color: color-mix(in srgb, white 6%, transparent);
+  border: 0.5px solid color-mix(in srgb, white 8%, transparent);
+}
+:root.light .system-notice {
+  background-color: color-mix(in srgb, black 4%, transparent);
+  border-color: color-mix(in srgb, black 5%, transparent);
+}
+
+/*
+ * LE FOND DE SECOURS DE LA CARTE DE STORY CITÉE (revue-correction #5936,
+ * défaut majeur 7) — copie littérale de `BubbleStoryCitationCard
+ * .sceneFallback` (`Color(hex: reply.authorColor).opacity(isDark ? 0.32 :
+ * 0.24)`) : une teinte PÂLE de l'auteur SUR LA SURFACE (`--ios-surface`),
+ * JAMAIS sur `black` — le défaut précédent (`color-mix(…, black)`) rendait
+ * la MÊME valeur dans les QUATRE runs du gate (aucune variation de schéma),
+ * un pavé quasi noir en plein schéma clair. Même doctrine que
+ * `.system-notice` ci-dessus : deux teintes CITÉES, pas un jeton
+ * `packages/design-tokens` (une seule feuille Swift les porte, hors de la
+ * palette centrale — #5445 ne dérive que `MeeshyColors.swift` /
+ * `DesignTokens.swift`).
+ */
+.story-scene-fallback {
+  --story-scene-fallback-opacity: 32%;
+}
+:root.light .story-scene-fallback {
+  --story-scene-fallback-opacity: 24%;
+}

@@ -68,6 +68,8 @@ public final class MeeshyVideoCanvasLayer: CALayer {
         let item = AVPlayerItem(url: url)
         item.preferredForwardBufferDuration = bufferDuration
         let queue = AVQueuePlayer(playerItem: item)
+        // Couche de canvas en boucle : décor, jamais un contenu regardé (#6221).
+        queue.preventsDisplaySleepDuringVideoPlayback = false
         queue.isMuted = muted
         queue.automaticallyWaitsToMinimizeStalling = false
         if loops {

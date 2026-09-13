@@ -130,8 +130,7 @@ struct ThemedFeedOverlay: View {
     @State private var showFullComposer = false
 
     private func consumePendingComposerRequest() {
-        guard router.pendingOpenFeedComposer else { return }
-        router.pendingOpenFeedComposer = false
+        guard router.consumePendingFeedComposer() else { return }
         showFullComposer = true
     }
     @State private var quoteOriginalPost: FeedPost?

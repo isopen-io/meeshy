@@ -22,6 +22,7 @@ import { MediaService } from './MediaService';
 import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
 import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupService';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { EngagementService } from './engagement/EngagementService';
 import { ZMQSingleton } from './ZmqSingleton';
 import { authorSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
@@ -44,6 +45,8 @@ import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
 import { quantizeCoordinate, resolveDiscoverabilityPrecision, type DiscoverabilityPrecision } from './location/geoDiscoverability';
 import { isAdult } from '@meeshy/shared/utils/age';
 import { translationTargetId } from './zmq-translation/utils/zmq-helpers';
+import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
+import { parseAttachmentTranscription } from '@meeshy/shared/utils/attachment-validators';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -350,7 +353,7 @@ export class PostService {
         ...(geoPoint ? { geoPoint: geoPoint as unknown as Prisma.InputJsonValue, geoPrecision } : {}),
         ...(repostOfId !== undefined ? { repostOfId, originalRepostOfId } : {}),
       },
-      include: postInclude,
+      select: postInclude,
     });
 
     // Link pre-uploaded media if any
@@ -389,11 +392,20 @@ export class PostService {
 
       // If a mobileTranscription is provided, persist it in the audio PostMedia
       if (data.mobileTranscription && audioMedia) {
-        const transcriptionPayload: Prisma.InputJsonValue = {
-          ...data.mobileTranscription,
-          segments: data.mobileTranscription.segments ?? [],
-          source: 'mobile',
-        };
+        // La graphie du FIL n'est pas celle du MAGASIN — un seul site convertit
+        // (`attachmentTranscriptionFromMobile`), et sa sortie est validée par le
+        // même schéma que le chemin serveur.
+        const transcriptionPayload = attachmentTranscriptionFromMobile(
+          data.mobileTranscription,
+        ) as Prisma.InputJsonValue;
+        const verdict = parseAttachmentTranscription(transcriptionPayload);
+        if (verdict.ok === false) {
+          // Fail-soft, comme `PostAudioService.handleTranscriptionReady` : une
+          // transcription facultative ne doit jamais empêcher la publication.
+          log.warn('Mobile transcription failed validation — persisting anyway', {
+            postId: post.id, postMediaId: audioMedia.id, issues: verdict.issues,
+          });
+        }
         await this.prisma.postMedia.update({
           where: { id: audioMedia.id },
           data: { transcription: transcriptionPayload },
@@ -511,7 +523,7 @@ export class PostService {
     // Refetch pour inclure transcription et translations après toutes les opérations media
     const refreshed = await this.prisma.post.findUnique({
       where: { id: post.id },
-      include: postInclude,
+      select: postInclude,
     });
     return refreshed ?? post;
   }
@@ -1295,7 +1307,7 @@ export class PostService {
       return tx.post.update({
         where: { id: postId },
         data: updateData,
-        include: postInclude,
+        select: postInclude,
       });
     });
 
@@ -1444,7 +1456,7 @@ export class PostService {
 
     return this.prisma.post.findFirst({
       where: { id: postId },
-      include: postInclude,
+      select: postInclude,
     });
   }
 
@@ -1501,7 +1513,7 @@ export class PostService {
 
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: postInclude,
+      select: postInclude,
     });
     if (!post) return null;
 
@@ -1527,7 +1539,7 @@ export class PostService {
 
     return this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: postInclude,
+      select: postInclude,
     });
   }
 
@@ -1562,7 +1574,7 @@ export class PostService {
   async unlikePost(postId: string, userId: string, emoji?: string) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: postInclude,
+      select: postInclude,
     });
     if (!post) return null;
 
@@ -1621,7 +1633,7 @@ export class PostService {
 
     const refreshed = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: postInclude,
+      select: postInclude,
     });
 
     // Le post a été relu après le retrait ; s'il a disparu entre-temps, la
@@ -1755,6 +1767,15 @@ export class PostService {
         });
         return { link, shareCount: updated.shareCount };
       });
+      // Axe `social.share` (#5766) — crédité UNIQUEMENT sur `reused: false`,
+      // c'est-à-dire à la PREMIÈRE mise en partage de ce contenu par cette
+      // personne. Les deux autres sorties de cette méthode rendent
+      // `reused: true` : elles réutilisent un lien déjà émis, et les créditer
+      // ferait gagner des points en pressant « Partager » en boucle. Un axe
+      // d'engagement qui se farme ne mesure plus rien.
+      new EngagementService(this.prisma)
+        .recordActivity(userId, 'social.share')
+        .catch((err: unknown) => log.warn('engagement social.share failed', { err }));
       return { shared: true, shareCount: created.shareCount, token: created.link.token, shortUrl: `${baseUrl}${created.link.shortUrl}`, reused: false };
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
@@ -2127,7 +2148,7 @@ export class PostService {
     return this.prisma.post.update({
       where: { id: postId },
       data: { shareCount: { increment: 1 } },
-      include: postInclude,
+      select: postInclude,
     });
   }
 
@@ -2141,7 +2162,7 @@ export class PostService {
     return this.prisma.post.update({
       where: { id: postId },
       data: { isPinned: true },
-      include: postInclude,
+      select: postInclude,
     });
   }
 
@@ -2155,7 +2176,7 @@ export class PostService {
     return this.prisma.post.update({
       where: { id: postId },
       data: { isPinned: false },
-      include: postInclude,
+      select: postInclude,
     });
   }
 
@@ -2520,7 +2541,7 @@ export class PostService {
             ...(snapshotStoryEffects !== undefined ? { storyEffects: snapshotStoryEffects } : {}),
             ...(snapshotMedia !== undefined ? { media: { create: snapshotMedia } } : {}),
           },
-          include: postInclude,
+          select: postInclude,
         });
 
         // The media just duplicated above got fresh `PostMedia` ids — but
@@ -2611,7 +2632,7 @@ export class PostService {
         isQuote,
         ...(expiresAt !== undefined ? { expiresAt } : {}),
       },
-      include: postInclude,
+      select: postInclude,
     });
 
     await this.prisma.post.update({

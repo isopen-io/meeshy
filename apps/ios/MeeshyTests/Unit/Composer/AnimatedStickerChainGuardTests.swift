@@ -69,7 +69,11 @@ final class AnimatedStickerChainGuardTests: XCTestCase {
     /// figerait par l'autre, pour le même geste utilisateur.
     func test_lesDeuxSitesDePose_emportentLesOctets() throws {
         let sdkPose = try sdkSource("MeeshyUI/Story/StoryComposerView+Media.swift")
-        let hostPose = try appSource("Meeshy/Features/Main/Composer/MeeshyComposerHost+Intake.swift")
+        // #6069 — la pose du sticker suit son SÉLECTEUR : `stickerPickerSheet`
+        // a quitté `+Intake` (1 265 lignes) pour `+Pickers`. Le chemin est mis à
+        // jour dans le MÊME commit que l'extraction, sinon cette garde lirait un
+        // fichier où les octets ne sont plus et rougirait pour un déménagement.
+        let hostPose = try appSource("Meeshy/Features/Main/Composer/MeeshyComposerHost+Pickers.swift")
 
         XCTAssertTrue(sdkPose.contains("animatedData: item.animatedData"),
                       "poser depuis le composer SDK doit emporter les octets du sticker.")

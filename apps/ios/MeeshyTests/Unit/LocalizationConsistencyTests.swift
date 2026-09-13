@@ -182,6 +182,12 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Models/ConversationFilterLabel.swift",  // 9
         "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift",  // 9
+        // #6145 — le menu ⋯ a emporté quatre clés hors du fichier épinglé (les
+        // deux verbes, la note de marque, le libellé VoiceOver du glyphe). Un
+        // cliquet ancré sur un CHEMIN cesse de voir ce qu'une découpe déplace,
+        // et il cesse de le voir EN SILENCE : sa destination s'inscrit donc
+        // dans le même commit (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Menu.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift",  // 9
         "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 8
         "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8
@@ -233,7 +239,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+Selection.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",  // 5
         "apps/ios/Meeshy/Features/Contacts/PeopleDiscoveryView.swift",  // 4
-        "apps/ios/Meeshy/Features/Main/Composer/ConversationMediaComposerDoor.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Composer/MediaComposerDoor.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Composer/UpgradeGateView.swift",  // 4
         "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift",  // 4
@@ -323,7 +329,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ParticipantsView.swift",  // 38
         "apps/ios/Meeshy/Features/Main/Components/ConversationDashboardView.swift",  // 37
         "apps/ios/Meeshy/Features/Main/Components/ConversationPreferencesTab.swift",  // 31
-        "apps/ios/Meeshy/Features/Main/Views/FeedView+Attachments.swift",  // 31
+        // #6040 — la feuille est sortie de `FeedView+Attachments.swift` : les
+        // deux moitiés portent des littéraux, les deux restent dans la liste.
+        "apps/ios/Meeshy/Features/Main/Views/FeedView+Attachments.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/FeedComposerSheet.swift",  // 26
         "apps/ios/Meeshy/Features/Main/Components/MessageMoreSheet.swift",  // 29
         "apps/ios/Meeshy/Features/Main/Views/PrivacySettingsView.swift",  // 29
         "apps/ios/Meeshy/Features/Main/Views/VoiceProfileWizardView.swift",  // 29

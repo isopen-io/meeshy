@@ -127,13 +127,20 @@ final class LentilleSceneActivityTests: XCTestCase {
         // 2026-09-01). La queue de liste passe le compte RÉEL — c'est lui qui
         // décide des trois grands boutons jusqu'à dix conversations ; l'état
         // vide passe zéro, écrit plutôt que sous-entendu.
-        XCTAssertTrue(code.contains("quickActions(isEmptyState: false, conversationCount: conversationViewModel.conversations.count, minHeight: listTailMinHeight)"),
-                      "La queue de liste = les accès rapides, hauts d'une demi-région visible, et le "
-                          + "compte RÉEL — sans lui, le seuil de démarrage ne pourrait jamais tomber.")
-        XCTAssertTrue(code.contains("if LentilleFeatureFlag.isLentilleListEnabled { quickActions(isEmptyState: true, conversationCount: 0) }"),
-                      "L'état vide = les mêmes accès rapides.")
+        // **UN seul montage depuis le 2026-09-09.** `listTail` vit HORS du
+        // `if groupedConversations.isEmpty` : il se rend dans toutes les
+        // branches, celle de l'état vide comprise. La brancher AUSSI dans
+        // l'état vide affichait le bloc DEUX fois à un compte neuf. Le titre
+        // suit désormais le VIDE, pas le site d'appel — c'est ce qui permet au
+        // montage unique de servir les deux situations.
+        XCTAssertTrue(code.contains("quickActions(isEmptyState: conversationViewModel.conversations.isEmpty, conversationCount: conversationViewModel.conversations.count, minHeight: listTailMinHeight)"),
+                      "La queue de liste = les accès rapides, hauts d'une demi-région visible, le "
+                          + "compte RÉEL — sans lui le seuil de démarrage ne peut jamais tomber — et "
+                          + "un titre qui suit le corpus.")
+        XCTAssertFalse(code.contains("quickActions(isEmptyState: true, conversationCount: 0)"),
+                       "L'état vide ne monte plus son propre bloc : la queue le porte déjà.")
         XCTAssertEqual(code.components(separatedBy: "ConversationListQuickActions(").count - 1, 1,
-                       "Une seule fabrique, deux montages : zéro divergence entre queue et état vide.")
+                       "Une seule fabrique, UN seul montage : ni divergence, ni doublon.")
         for door in ["case .findMembers: router.push(.peopleDiscovery(.discover))", "case .myContacts: router.push(.contacts(.contacts))",
                      "case .myAffiliates: router.push(.affiliate)",
                      "case .newMessage: onNewConversation?()", "case .story: storyViewModel.showStoryComposer = true",

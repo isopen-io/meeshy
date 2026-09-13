@@ -100,12 +100,18 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
     /// Taper une vignette amène SA slide sur la scène. Sans le relais, la bande
     /// resterait un inventaire et le carrousel ne serait pas navigable depuis
     /// l'écran document (loi 4 : un contrôle existe s'il a un effet).
+    ///
+    /// **#5599 — le rail s'adresse par INDEX de slide, plus par URL de média.**
+    /// Le relais `onSelectMedia:` n'existe plus : le rail rend un `Int`, et le
+    /// meuble le passe tel quel. Ce que ce témoin garde est INCHANGÉ — taper
+    /// une vignette change l'écran —, seul le vocabulaire de l'adresse a
+    /// changé. Garder `onSelectMedia:` reviendrait à exiger le retour d'une
+    /// indirection que le modèle des slides a rendue inutile.
     func test_thumbnailTap_selectsTheSlideOfThatMedia() throws {
         let compacted = compact(try hostSource())
-        XCTAssertTrue(compacted.contains("onSelectMedia:{mediain"),
-            "Le meuble doit relayer le tap d'une vignette…")
-        XCTAssertTrue(compacted.contains("viewModel.selectSlide(at:index)"),
-            "…jusqu'à `selectSlide`, sans quoi taper une vignette ne changerait rien à l'écran.")
+        XCTAssertTrue(compacted.contains("onSelect:{viewModel.selectSlide(at:$0)}"),
+            "Taper une vignette doit amener SA slide sur la scène — sans ce relais, le rail "
+                + "est un inventaire et le carrousel n'est pas navigable (loi 4).")
     }
 
     // MARK: - Le rôle d'un média posé (#4724)
@@ -248,15 +254,18 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
     /// rail, ne le confirme : un contrôle dont l'effet est ailleurs ET
     /// invisible ici. La résolution appartient au MEUBLE — lui seul tient la
     /// carte `média → slide` et la slide courante.
+    ///
+    /// **#5599 — la slide courante se dit par son INDEX.** Le meuble n'a plus à
+    /// résoudre `média → slide` pour répondre « laquelle cercler » : les slides
+    /// SONT le modèle, et `viewModel.currentSlideIndex` est la réponse. La
+    /// vieille résolution par carte inverse a disparu avec le besoin qui la
+    /// justifiait — elle traduisait une adresse (l'URL) dans une autre (la
+    /// position), ce que plus personne ne demande.
     func test_theRailKnowsWhichSlideIsOnScreen() throws {
         let compacted = compact(try hostSource())
-        XCTAssertTrue(compacted.contains("selectedMediaURL:selectedSlideMediaURL"),
-            "Le meuble doit dire à la surface QUELLE vignette cercler.")
-        XCTAssertTrue(
-            compacted.contains("slideIdByMediaURL.first(where:{$0.value==current})?.key"),
-            "La résolution passe par l'INDEX, jamais par l'ordre des tableaux — l'ordre ment dès qu'un "
-                + "média est retiré au milieu."
-        )
+        XCTAssertTrue(compacted.contains("currentIndex:viewModel.currentSlideIndex"),
+            "Le meuble doit dire au rail QUELLE vignette cercler — sans anneau, taper une "
+                + "vignette change la scène sans que rien, dans le rail, ne le confirme.")
     }
 
     /// **Le rail vit dans la BARRE HAUTE, et en UN seul exemplaire.** Deux
@@ -289,10 +298,22 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
         let barre = try source("ComposerTopBar.swift")
         XCTAssertTrue(barre.contains("struct ComposerTopBar"),
             "La source de la barre haute est introuvable — la garde ne mesurerait RIEN.")
+        // **On compte l'IDENTIFIANT, jamais la sous-chaîne — et cette garde a payé
+        // la différence.** Le jour où le rail est passé en SLOT injecté
+        // (`slideRailSlot: AnyView?`, 2eefee7aae), `components(separatedBy:)` en a
+        // compté CINQ au lieu de deux et la garde a rougi, alors que le rail allait
+        // très bien : `slideRail` y était toujours déclaré une fois et monté une
+        // fois, et les trois occurrences de trop appartenaient à un identifiant
+        // VOISIN dont il n'est que le préfixe.
+        //
+        // C'est la forme la plus discrète d'un piège déjà payé ici : un lot qui
+        // RENOMME n'éteint pas les gardes qui reconnaissent par le nom, il les
+        // INVERSE. Celui-ci n'a même rien renommé — un nom voisin a suffi.
         XCTAssertEqual(
-            barre.components(separatedBy: "slideRail").count - 1, 2,
+            AppSourceGuard.occurrences(ofIdentifier: "slideRail", in: barre), 2,
             "`slideRail` doit apparaître EXACTEMENT deux fois : sa déclaration et son unique montage, "
-                + "dans le `body` de la barre haute. Un troisième site est un second rail."
+                + "dans le `body` de la barre haute. Un troisième site est un second rail. "
+                + "(`slideRailSlot` est le contenu INJECTÉ par l'hôte — une autre chose, qui ne compte pas ici.)"
         )
 
         guard let corps = barre.range(of: "var body: some View"),
@@ -312,7 +333,15 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
             let code = try source(surface)
             XCTAssertTrue(code.contains("ComposerTopBar("),
                 "\(surface) doit CONSOMMER la barre — sinon cette garde ne dit rien de cette surface.")
-            XCTAssertFalse(code.contains("slideRail"),
+            // Là encore l'IDENTIFIANT, pas la sous-chaîne — et ici la nuance PORTE
+            // l'architecture : les deux surfaces déclarent bien `slideRailSlot`,
+            // un slot OPAQUE qu'elles relaient sans rien savoir du rail (une
+            // mini-preview demande les effets vivants et les bitmaps chargés,
+            // donc le ViewModel, que ces surfaces ne connaissent pas). Relayer un
+            // slot n'est pas déclarer un rail ; c'est même ce qui garantit qu'il
+            // n'en existe qu'un.
+            XCTAssertEqual(
+                AppSourceGuard.occurrences(ofIdentifier: "slideRail", in: code), 0,
                 "\(surface) redéclare un rail de slides : c'est le second inventaire que #4047 interdit.")
         }
     }

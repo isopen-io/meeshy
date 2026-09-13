@@ -795,7 +795,7 @@ struct ComposerToolPanelHost: View {
                     .fill(Color(hex: textHex))
                 Text("Aa")
                     .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: textHex).luminance > 0.6 ? .black : .white)
+                    .foregroundColor(Color(hex: textHex).readableInk)
             }
             .frame(width: 32, height: 32)
             .overlay(

@@ -248,7 +248,7 @@ export function resolveLastMessagePreview(params: {
  *
  * IL VIT ICI, ET PLUS DANS `apps/web`. Il y a été écrit d'abord, avec la
  * mention « SSOT UNIQUE de cet adaptateur CÔTÉ WEB » — une portée qui était
- * juste tant qu'une seule application lisait des messages. `apps/web-v3` en est
+ * juste tant qu'une seule application lisait des messages. `apps/web-v2` en est
  * la seconde : l'y recopier aurait fabriqué la jumelle que le § Prisme du
  * `CLAUDE.md` racine passe son temps à démonter, et une jumelle d'ADAPTATEUR est
  * la plus sournoise — elle ne dit pas la règle, elle décide seulement quelles
@@ -275,6 +275,43 @@ export function buildTranslationRecord(translations: unknown): Record<string, st
     const key = entry?.language || entry?.targetLanguage;
     const text = entry?.content ?? entry?.translatedContent;
     if (typeof key === 'string' && key.trim() !== '' && typeof text === 'string' && text.trim() !== '') {
+      record[key] = text;
+    }
+  }
+  return record;
+}
+
+/**
+ * Dépouille la carte des traductions d'un POST ou d'un COMMENTAIRE
+ * (`{ [langue]: { text, translationModel, confidenceScore, createdAt, updatedAt } }`,
+ * `schema.prisma` `Post.translations` / `PostComment.translations`) en
+ * `Record<langue → texte>` — la forme qu'attend {@link resolvePrismTranslation}.
+ *
+ * Dialecte DISTINCT de {@link buildTranslationRecord} : celui-ci dépouille un
+ * TABLEAU (`Message.translations`, tel que servi sur le fil par
+ * `transformTranslationsToArray`), celui-ci une CARTE clé→objet — c'est la
+ * forme que la passerelle sert TELLE QUELLE pour un post ou un commentaire,
+ * sans transformation en tableau. Passer l'un à la fonction de l'autre rend
+ * une carte vide plutôt qu'une erreur, ce qui masquerait le défaut derrière un
+ * repli sur l'original — d'où deux fonctions nommées plutôt qu'une signature
+ * qui devine.
+ *
+ * `apps/web/hooks/use-post-translation.ts` en était la jumelle : un
+ * dépouillement local, réécrit à la main, que le § Prisme du `CLAUDE.md`
+ * racine interdit — une jumelle d'ADAPTATEUR ne fait pas servir une MAUVAISE
+ * langue, elle fait servir l'ORIGINAL, ce qui ressemble à une traduction
+ * absente.
+ *
+ * La clé rendue est la langue VERBATIM : la comparaison qui suit la normalise
+ * (`normalizeLanguageForDedup`), donc la canonicaliser ici serait la faire deux
+ * fois — et masquerait laquelle des deux fait foi.
+ */
+export function buildPostTranslationRecord(translations: unknown): Record<string, string> {
+  const record: Record<string, string> = {};
+  if (!translations || typeof translations !== 'object' || Array.isArray(translations)) return record;
+  for (const [key, entry] of Object.entries(translations as Record<string, { text?: unknown }>)) {
+    const text = entry?.text;
+    if (typeof text === 'string' && text.trim() !== '') {
       record[key] = text;
     }
   }

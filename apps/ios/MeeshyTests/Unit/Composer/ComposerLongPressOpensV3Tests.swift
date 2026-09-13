@@ -8,7 +8,7 @@ import XCTest
 /// par le composer v3 ».
 ///
 /// Le chemin est : longpress → `MessageOverlayMenu` → « Composer » →
-/// `ConversationMediaComposerDoor` → `MeeshyComposerHost`, ouverture
+/// `MediaComposerDoor` → `MeeshyComposerHost`, ouverture
 /// `.mediaSeeded`. La seule règle qui décide de la surface montée est
 /// `ComposerSurfaceRouting.surface`, et c'est elle que ce fichier interroge —
 /// jamais une capture d'écran, qui ne dirait pas POURQUOI.

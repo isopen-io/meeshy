@@ -1,4 +1,4 @@
-import { resolveParticipant, resolveParticipantFromMessage } from '../participant-resolver';
+import { resolveParticipant, resolveParticipantFromMessage, resolveMembershipDenialReason } from '../participant-resolver';
 import type { SocketUser, ConnectedUserResult } from '../socket-helpers';
 
 jest.mock('../socket-helpers', () => ({
@@ -299,5 +299,94 @@ describe('resolveParticipantFromMessage', () => {
       isAnonymous: false,
       displayName: 'Bob B',
     });
+  });
+});
+
+describe('resolveMembershipDenialReason', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+
+  it('returns not_a_member for a registered user with no Participant row at all', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst.mockResolvedValueOnce(null);
+
+    const reason = await resolveMembershipDenialReason({
+      prisma,
+      conversationId: 'conv-1',
+      isAnonymous: false,
+      userId: 'user-123',
+    });
+
+    expect(reason).toBe('not_a_member');
+    // Unlike resolveParticipant's query, this lookup must NOT filter isActive —
+    // a banned/left row (isActive: false) has to be found to be distinguished
+    // from no row at all.
+    expect(prisma.participant.findFirst).toHaveBeenCalledWith({
+      where: { userId: 'user-123', conversationId: 'conv-1' },
+      select: { bannedAt: true, leftAt: true, isActive: true },
+    });
+  });
+
+  it('returns banned for a registered user whose row carries bannedAt', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst.mockResolvedValueOnce({
+      bannedAt: new Date('2026-01-01'), leftAt: new Date('2026-01-01'), isActive: false,
+    });
+
+    const reason = await resolveMembershipDenialReason({
+      prisma,
+      conversationId: 'conv-1',
+      isAnonymous: false,
+      userId: 'user-123',
+    });
+
+    expect(reason).toBe('banned');
+  });
+
+  it('returns no_longer_member for a registered user who left (leftAt set, no ban)', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst.mockResolvedValueOnce({
+      bannedAt: null, leftAt: new Date('2026-01-01'), isActive: false,
+    });
+
+    const reason = await resolveMembershipDenialReason({
+      prisma,
+      conversationId: 'conv-1',
+      isAnonymous: false,
+      userId: 'user-123',
+    });
+
+    expect(reason).toBe('no_longer_member');
+  });
+
+  it('returns not_a_member for an anonymous socket with no Participant row bound to this conversation', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst.mockResolvedValueOnce(null);
+
+    const reason = await resolveMembershipDenialReason({
+      prisma,
+      conversationId: 'conv-OTHER',
+      isAnonymous: true,
+      anonymousParticipantId: 'part-123',
+    });
+
+    expect(reason).toBe('not_a_member');
+    expect(prisma.participant.findFirst).toHaveBeenCalledWith({
+      where: { id: 'part-123', conversationId: 'conv-OTHER' },
+      select: { id: true },
+    });
+  });
+
+  it('returns no_longer_member for an anonymous socket whose row exists but is inactive', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst.mockResolvedValueOnce({ id: 'part-123' });
+
+    const reason = await resolveMembershipDenialReason({
+      prisma,
+      conversationId: 'conv-1',
+      isAnonymous: true,
+      anonymousParticipantId: 'part-123',
+    });
+
+    expect(reason).toBe('no_longer_member');
   });
 });

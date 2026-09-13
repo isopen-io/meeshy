@@ -344,7 +344,7 @@ final class AppInitWireupTests: XCTestCase {
         // SCÈNE, et l'audience y traverse les mêmes deux maillons. Elle entre
         // ici plutôt que dans une garde à elle : le jour où un troisième site
         // ouvre l'atelier, c'est cette liste qu'on relira.
-        ("Meeshy/Features/Main/Composer/ConversationMediaComposerDoor.swift", "MeeshyComposerHost("),
+        ("Meeshy/Features/Main/Composer/MediaComposerDoor.swift", "MeeshyComposerHost("),
         // #4102 — `composerSurface`, qui MONTE l'atelier, a suivi le découpage du
         // meuble vers `+Surfaces`. L'adresse suit le montage, jamais le nom
         // du type : laissée sur le fichier principal, la garde aurait rougi
@@ -377,8 +377,9 @@ final class AppInitWireupTests: XCTestCase {
     /// (« Attempt to present … which is already presenting »). C'est la course
     /// que les `Task.sleep(350 ms)` masquaient.
     func test_theStoryComposerCoverIsMountedOnlyAtTheRoots() throws {
-        let mounts = ["Meeshy/Features/Main/Views/RootView.swift",
-                      "Meeshy/Features/Main/Views/iPadRootView+Sheets.swift"]
+        // Les covers vivent dans les couches nominales des racines (#5837).
+        let mounts = ["Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
+                      "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift"]
         for path in mounts {
             XCTAssertEqual(
                 occurrences(of: ".storyComposerCover(", in: try appSource(path)), 1,

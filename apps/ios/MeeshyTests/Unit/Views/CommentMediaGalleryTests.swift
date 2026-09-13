@@ -324,18 +324,46 @@ final class CommentMediaGalleryWiringGuardTests: XCTestCase {
         XCTAssertTrue(text.contains("captionMap: snapshot.captions"))
     }
 
+    /// **#5599 — la composition a été CENTRALISÉE, et ce témoin gardait la
+    /// lettre.** Il exigeait `captionMap:` dans chaque hôte ; depuis que le
+    /// plein écran social se monte par le modificateur unique
+    /// `.socialMediaGallery(...)` (`SocialMediaGalleryPresentation.swift`),
+    /// c'est LUI qui compose la carte des légendes — et le doc-comment du site
+    /// d'appel le dit : « aucune légende ne change au passage ».
+    ///
+    /// La règle à garder n'est donc plus « chaque hôte passe une carte » mais
+    /// **« chaque hôte monte le site UNIQUE, et le site unique passe la carte »**
+    /// — ce qui est plus fort : l'ancienne version se serait laissé satisfaire
+    /// par un hôte qui remonte sa propre galerie avec sa propre carte, c'est-à-dire
+    /// par la divergence même que la centralisation a fermée.
     func test_everySocialFullscreen_passesACaptionMap() throws {
         for path in [
             "Meeshy/Features/Main/Views/FeedPostCard.swift",
             "Meeshy/Features/Main/Views/PostDetailView.swift",
-            "Meeshy/Features/Main/Views/CommentMediaView.swift",
         ] {
             let text = try source(path)
             XCTAssertTrue(
-                text.contains("captionMap:"),
-                "\(path) : une galerie montée sans `captionMap` ne peut afficher AUCUNE légende."
+                text.contains(".socialMediaGallery("),
+                "\(path) : le plein écran social se monte par le site UNIQUE — un hôte qui "
+                + "remonte sa propre galerie rouvre la divergence des légendes."
             )
         }
+
+        // Le commentaire garde sa propre présentation (sa galerie n'est pas
+        // celle d'un post) : il passe donc la carte lui-même, et c'est ce qu'on
+        // vérifie chez lui.
+        XCTAssertTrue(
+            try source("Meeshy/Features/Main/Views/CommentMediaView.swift").contains("captionMap:"),
+            "CommentMediaView : une galerie montée sans `captionMap` ne peut afficher AUCUNE légende."
+        )
+
+        // Et le site unique porte bien la carte — sans quoi les deux hôtes
+        // ci-dessus seraient conformes en montant un site qui ne sert rien.
+        XCTAssertTrue(
+            try source("Meeshy/Features/Main/Views/SocialMediaGalleryPresentation.swift")
+                .contains("captionMap:"),
+            "Le site unique du plein écran social doit composer la carte des légendes."
+        )
     }
 
     /// La légende voyageait déjà sur le fil (`APIPostMedia.caption`) et dans le

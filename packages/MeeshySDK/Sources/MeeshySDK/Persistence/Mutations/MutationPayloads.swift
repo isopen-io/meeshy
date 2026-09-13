@@ -321,6 +321,28 @@ public struct RepostPostPayload: Codable, Sendable, Equatable {
 
 // MARK: - Posts & comments
 
+/// **Un média DÉJÀ monté par une tentative précédente**, rangé sous son index
+/// d'origine dans `CreatePostPayload.localMediaPaths` (#5830).
+///
+/// Les deux valeurs voyagent ENSEMBLE parce que les deux servent : l'`id`
+/// devient un `PostMedia` dans le corps de `POST /posts`, et l'`url` est ce que
+/// le canvas d'un réel affiche — adopter l'id sans l'url laisse le lecteur
+/// devant un `file://` que l'assainisseur annule (#5280).
+public struct UploadedPostMedia: Codable, Sendable, Equatable {
+    /// Position du fichier dans `localMediaPaths` au moment de la composition.
+    public let sourceIndex: Int
+    /// L'identifiant `PostMedia`/`MessageAttachment` rendu par TUS.
+    public let id: String
+    /// La clé de stockage servie (`2026/09/<uid>/<nom>`), jamais une adresse.
+    public let url: String
+
+    public init(sourceIndex: Int, id: String, url: String) {
+        self.sourceIndex = sourceIndex
+        self.id = id
+        self.url = url
+    }
+}
+
 public struct CreatePostPayload: Codable, Sendable, Equatable {
     public let clientMutationId: String
     public let content: String
@@ -517,6 +539,27 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         return mimes[index]
     }
 
+    /// **Ce qu'une tentative PRÉCÉDENTE a déjà monté** (#5830).
+    ///
+    /// Sans ce champ, `OutboxDispatcher.dispatchCreatePost` reparcourait
+    /// `localMediaPaths` DEPUIS L'INDEX 0 à chaque rejeu : un fichier téléversé
+    /// avec succès à la tentative *n* était **jeté** dès que la tentative
+    /// échouait sur un fichier suivant. Seul l'offset TUS d'un fichier survivait
+    /// — jamais le fait qu'un fichier soit FINI. Une publication à trois médias
+    /// et 56 Mo dont aucune tentative ne peut tout finir d'un trait ne se
+    /// publiait donc JAMAIS, quel que soit le nombre de tentatives (réel bloqué
+    /// mesuré sur l'appareil du porteur le 2026-09-08 : `attempts = 5`,
+    /// `2.mov` figé à 20 Mo sur 42,6 Mo, les trois fichiers encore sur disque).
+    ///
+    /// La clé est l'INDEX D'ORIGINE, jamais la longueur d'un tableau : c'est la
+    /// seule jointure entre ce que l'auteur a composé et ce que le serveur a
+    /// créé, et un fichier sauté rompt tout alignement positionnel (même
+    /// raison que `uploadedSourceIndexes` côté dispatcher, #4756).
+    ///
+    /// `nil` — le cas de toute ligne écrite avant ce champ, et de toute
+    /// première tentative — vaut « rien d'acquis ».
+    public let uploadedMedia: [UploadedPostMedia]?
+
     public init(
         clientMutationId: String,
         content: String,
@@ -539,7 +582,8 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         mediaCaptions: [String?]? = nil,
         mediaAlts: [String?]? = nil,
         mediaObjectIds: [String?]? = nil,
-        allowSoundExtraction: Bool? = nil
+        allowSoundExtraction: Bool? = nil,
+        uploadedMedia: [UploadedPostMedia]? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
@@ -563,6 +607,7 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.mediaAlts = mediaAlts
         self.mediaObjectIds = mediaObjectIds
         self.allowSoundExtraction = allowSoundExtraction
+        self.uploadedMedia = uploadedMedia
     }
 }
 

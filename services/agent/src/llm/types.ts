@@ -18,11 +18,18 @@ export type LlmChatParams = {
   tools?: LlmTool[];
 };
 
+export type LlmCitation = {
+  url: string;
+  title?: string;
+};
+
 export type LlmChatResponse = {
   content: string;
   usage: { inputTokens: number; outputTokens: number };
   model: string;
   latencyMs: number;
+  /** Pages web citées par la réponse (recherche web), dédupliquées, dans l'ordre. Absent hors recherche web. */
+  citations?: readonly LlmCitation[];
 };
 
 export type LlmProvider = {

@@ -523,6 +523,7 @@ struct RiverStreamHost: View {
                    bubble.isSystem,
                    let content = contentByMessageId[bubble.messageId] {
                     RiverBubbleView(content: content, contentWidth: columns.totalWidth)
+                        .equatable()
                         .padding(.vertical, RiverMetrics.Bubble.baseGap)
                 } else {
                     HStack(alignment: .top, spacing: 0) {
@@ -556,6 +557,7 @@ struct RiverStreamHost: View {
                 onOpenInThread: onOpenInThread,
                 onReply: onReply
             )
+                .equatable()
                 .padding(.horizontal, RiverMetrics.Lane.gutter)
                 .onTapGesture {
                     navigation.moveTo(RiverLaneResolver.RiverCursor(laneIndex: laneIndex, rank: rank))

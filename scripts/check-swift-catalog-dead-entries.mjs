@@ -184,7 +184,31 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // exposition dans les catalogues générés. L'écran de ré-acceptation
 // iOS/Android/Web qui l'appellera est un travail client à part, ouvert
 // séparément (#5716).
-const BASELINE_DEAD_ENTRIES = 251;
+//
+// 250 → 251 (#3954) : `PostsEndpoint.byPostIdObjectsByObjectIdResponses`
+// (nouvelles routes `POST`/`DELETE`/`GET
+// /posts/:postId/objects/:objectId/responses`, table légère votes/réponses
+// des stickers interactifs, O10) — morte à la naissance PAR CONSTRUCTION,
+// même cas que `MeEndpoint.terms` (#3635) ci-dessus : le kind `interactive`
+// du canvas reste RÉSERVÉ au contrat (`RESERVED_KINDS`, #3953, non traité
+// ici), donc aucun client ne peut encore poser un sticker interactif ni
+// appeler ces routes. #3954 livre le contrat serveur et son exposition dans
+// les catalogues générés ; l'appelant iOS (posé/lu depuis la scène) est le
+// périmètre de #3953, une issue distincte.
+//
+// 251 → 257 (#4317) : `ConversationsEndpoint.byConversationIdClearHistory`,
+// `.byConversationIdRestoreForMe`, `MessagesEndpoint.bulkDeleteForMe`,
+// `.byMessageIdDeleteForMe`, `.byMessageIdRestoreForMe` et
+// `UserEndpoint.deletedConversations` — six gestes utilisateur qui vivaient
+// sous `/api` sans jamais avoir été versionnés migrent enfin sous `/api/v1`
+// (route CANONIQUE, en plus de leur alias legacy déprécié). Mortes à la
+// naissance PAR CONSTRUCTION, même cas que `usersByUserIdBan` (#5528)
+// ci-dessus : les trois clients continuent d'appeler l'adresse legacy
+// (`ApiLegacyConversationsEndpoint`/`ApiLegacyMessagesEndpoint` côté iOS) —
+// aucun n'a besoin de migrer dans l'immédiat, le retrait de l'alias restant
+// gouverné par le compteur d'accès nul (#4275). Faire pointer iOS vers la
+// nouvelle adresse est un travail client à part, pas ouvert par ce lot.
+const BASELINE_DEAD_ENTRIES = 257;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

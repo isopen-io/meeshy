@@ -28,7 +28,7 @@ struct ConversationComposerState {
 
     var showOptions = false
     var actionAlert: String? = nil
-    var forwardMessage: Message? = nil
+    @Indirect var forwardMessage: Message? = nil
     /// **Transfert groupé (#4005).** Vide pour les DEUX sites d'ouverture
     /// historiques (longpress simple, swipe) — `forwardMessage` seul porte
     /// alors tout. Non vide UNIQUEMENT depuis le mode sélection multiple :
@@ -37,7 +37,7 @@ struct ConversationComposerState {
     var forwardAdditionalMessages: [Message] = []
     /// La cible de « Composer » — le média reçu que la porte va semer.
     /// Non-nil = la porte est présentée.
-    var composeMediaTarget: ComposableMessageTarget? = nil
+    @Indirect var composeMediaTarget: ComposerSeedTarget? = nil
     /// La même cible, RETENUE le temps qu'une feuille se referme.
     ///
     /// Le second déclencheur de « Composer » vit dans la feuille de transfert,
@@ -46,7 +46,7 @@ struct ConversationComposerState {
     /// already presenting »). La promotion se fait donc dans l'`onDismiss` de
     /// la feuille — la primitive SwiftUI prévue pour ce cas exact, là où un
     /// délai n'est qu'un pari.
-    var pendingComposeTarget: ComposableMessageTarget? = nil
+    @Indirect var pendingComposeTarget: ComposerSeedTarget? = nil
     var showConversationInfo = false
 
     // Popup consentement vocal à l'envoi d'audio (2026-07-08) : proposé UNE
@@ -96,6 +96,10 @@ struct ConversationComposerState {
 
     // Reply & Edit
     var pendingReplyReference: ReplyReference? = nil
+    /// **La porte de focus du composer** (#6003), liée à
+    /// `UniversalComposerBar.focusTrigger`. Levée par `requestReplyFocus`,
+    /// remise à `false` par la barre dès qu'elle a pris le focus.
+    var focusRequested = false
     var editingMessageId: String? = nil
     var editingOriginalContent: String? = nil
     /// **Le brouillon en cours au moment d'entrer en édition (#4003).** Sans
@@ -119,6 +123,14 @@ struct ConversationComposerState {
 }
 
 extension ConversationComposerState {
+    /// Délai avant de lever le clavier pour une réponse (#6003). Nul pour un
+    /// geste sur la conversation déjà à l'écran ; à l'ouverture d'une
+    /// conversation poussée pour répondre, il laisse la transition de
+    /// navigation se terminer — un focus posé pendant la poussée est perdu.
+    static func replyFocusDelay(openingConversation: Bool) -> TimeInterval {
+        openingConversation ? 0.45 : 0
+    }
+
     /// Replaces the audio attachment `attachmentId` in place with the freshly
     /// edited recording. Editing a media attachment must never spawn a second
     /// tray chip — this mirrors the image editor's replace-by-id contract

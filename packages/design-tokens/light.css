@@ -14,8 +14,9 @@
    dire « au-dessus » : le prendre dans la rampe retournée le peignait #edeef6,
    donc PLUS SOMBRE que `--color-surface` (#ffffff) et indiscernable de
    `--color-bg-sunken` (1,00:1). Les quatre plans sont désormais une échelle
-   strictement croissante en luminance, gardée par le contrôle d'ORDRE de
-   scripts/check-jetons.mjs — une parité de CLÉS ne dit rien d'une palette. */
+   strictement croissante en luminance — mesurée par le contrôle d'ORDRE de
+   l'ancienne refonte v3, parti avec elle (#5994, #6000) ; une parité de CLÉS
+   ne dit rien d'une palette. */
 :root.light {
   color-scheme: light;
 

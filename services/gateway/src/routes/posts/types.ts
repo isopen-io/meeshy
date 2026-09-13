@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
+import { utf16Bounded } from '@meeshy/shared/utils/validation-primitives';
 
 // ============================================
 // CURSOR PAGINATION HELPERS
@@ -135,7 +136,7 @@ const StoryTextObjectSchema = z.object({
 
 const StoryStickerObjectSchema = z.object({
   id: z.string().max(STORY_ID_MAX).optional(),
-  emoji: z.string().max(EMOJI_MAX_LENGTH).optional(),
+  emoji: utf16Bounded(z.string(), { max: EMOJI_MAX_LENGTH }).optional(),
   x: z.number().min(-10).max(10).optional(),
   y: z.number().min(-10).max(10).optional(),
   scale: z.number().min(0).max(20).optional(),
@@ -538,7 +539,7 @@ export const ReelFeedQuerySchema = FeedQuerySchema.extend({
 });
 
 export const LikeSchema = z.object({
-  emoji: z.string().max(EMOJI_MAX_LENGTH).default('❤️'),
+  emoji: utf16Bounded(z.string(), { max: EMOJI_MAX_LENGTH }).default('❤️'),
 });
 
 /**
@@ -566,8 +567,26 @@ export const LikeSchema = z.object({
  * geste à l'aveugle que cette route existe pour supprimer.
  */
 export const UnlikeSchema = z.object({
-  emoji: z.string().trim().min(1).max(EMOJI_MAX_LENGTH).optional(),
+  emoji: utf16Bounded(z.string().trim(), { min: 1, max: EMOJI_MAX_LENGTH }).optional(),
 });
+
+/**
+ * Réponse à un sticker interactif (#3954) — sondage/quiz pose `choice`, un
+ * curseur emoji `numericValue`, une question/« à vous » `text`. Les trois
+ * sont indépendamment optionnels ; au moins un est requis (`.refine`), le
+ * kind `interactive` restant RÉSERVÉ au contrat (#3953) — ce schéma ne valide
+ * pas la forme d'une réponse contre le sous-type de son sticker.
+ */
+export const PostInteractiveResponseSchema = z
+  .object({
+    choice: z.string().trim().min(1).max(200).optional(),
+    numericValue: z.number().finite().optional(),
+    text: z.string().trim().min(1).max(2000).optional(),
+  })
+  .refine(
+    (data) => data.choice !== undefined || data.numericValue !== undefined || data.text !== undefined,
+    { message: 'At least one of choice, numericValue or text is required' },
+  );
 
 // ============================================
 // RESPONSE TYPES
@@ -598,6 +617,11 @@ export interface PostParams {
 
 export interface CommentParams extends PostParams {
   commentId: string;
+}
+
+export interface PostObjectParams extends PostParams {
+  /** `MeeshySceneObject.id` du sticker à l'intérieur du canvas — chaîne libre, pas un ObjectId. */
+  objectId: string;
 }
 
 export interface UserParams {

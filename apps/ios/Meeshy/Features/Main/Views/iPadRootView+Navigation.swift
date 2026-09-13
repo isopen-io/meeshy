@@ -230,6 +230,7 @@ extension iPadRootView {
         } else {
             switch routeName {
             case "userStats": rightPanelRoute = .userStats
+            case "progression": rightPanelRoute = .progression
             case "affiliate": rightPanelRoute = .affiliate
             default: break
             }
@@ -327,8 +328,13 @@ extension iPadRootView {
                 navigateToConversationById(conversationId)
             }
 
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
-            rightPanelRoute = .userStats
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
+            // Le palier se CÉLÈBRE d'abord (#5809) — même geste, même effet que
+            // sur iPhone. La racine iPad n'a pas de `NotificationNavContext` :
+            // elle dérive le palier de la notification qu'elle tient déjà.
+            router.pendingEngagementReveal = EngagementReveal.from(
+                type: notification.notificationType, metadata: notification.metadata)
+            rightPanelRoute = .progression
 
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate
@@ -384,8 +390,11 @@ extension iPadRootView {
                 )
             }
 
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
-            rightPanelRoute = .userStats
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
+            // Célébration (#5809) — le chemin SOCKET porte sa métadonnée.
+            router.pendingEngagementReveal = EngagementReveal.from(
+                type: event.notificationType, metadata: event.metadata)
+            rightPanelRoute = .progression
 
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate
@@ -511,8 +520,13 @@ extension iPadRootView {
                 )
             }
 
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
-            rightPanelRoute = .userStats
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
+            // Célébration (#5809) : la charge APNs ne porte pas de
+            // `NotificationMetadata` typée. On n'invente donc AUCUN palier —
+            // le tap ouvre le tableau de bord, comme avant. Parité exacte avec
+            // `NotificationNavContext.init(from: NotificationPayload)`, qui
+            // pose `reveal = nil` pour la même raison.
+            rightPanelRoute = .progression
 
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate

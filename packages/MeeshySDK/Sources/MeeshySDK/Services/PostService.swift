@@ -187,7 +187,7 @@ public protocol PostServiceProviding: Sendable {
     func pinPost(postId: String) async throws
     func unpinPost(postId: String) async throws
     func viewPost(postId: String, duration: Int?) async throws
-    func getPostViews(postId: String, limit: Int, offset: Int) async throws -> PostViewersResponse
+    func getPostViews(postId: String, limit: Int, offset: Int) async throws -> OffsetPaginatedAPIResponse<[APIPostViewer]>
     func getUserPosts(userId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
     func getCommentReplies(postId: String, commentId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
     func getCommunityPosts(communityId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
@@ -899,15 +899,24 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         }
     }
 
-    public func getPostViews(postId: String, limit: Int = 50, offset: Int = 0) async throws -> PostViewersResponse {
-        let response: APIResponse<PostViewersResponse> = try await api.request(
+    /// **La liste « vu par » d'une story ou d'un post — réservée à l'auteur.**
+    ///
+    /// La route sert l'enveloppe paginée ordinaire du dépôt : les spectateurs
+    /// dans `data`, la pagination en SŒUR (`sendSuccess(reply, result.items,
+    /// { pagination })`, `routes/posts/interactions.ts`). Le SDK en attendait
+    /// un objet `{ items, pagination }` sous `data` — une forme qu'aucune route
+    /// ne sert : chaque appel aurait échoué au décodage. Aucun appelant de
+    /// production ne l'avait vu, faute d'appelant.
+    public func getPostViews(
+        postId: String, limit: Int = 50, offset: Int = 0
+    ) async throws -> OffsetPaginatedAPIResponse<[APIPostViewer]> {
+        try await api.request(
             PostsEndpoint.byPostIdViews(postId: postId),
             queryItems: [
                 URLQueryItem(name: "limit", value: "\(limit)"),
                 URLQueryItem(name: "offset", value: "\(offset)")
             ]
         )
-        return response.data
     }
 
     // MARK: - Feed Variants

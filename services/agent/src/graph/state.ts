@@ -62,6 +62,14 @@ export type TriggerContext = {
   triggeredByUserId?: string;
 };
 
+/**
+ * L'article qui a inspiré un message qui OUVRE un sujet (#6192). La passerelle
+ * en résout l'image Open Graph et la joint au message ; seule l'URL voyage.
+ */
+export type MessageIllustration = {
+  sourceUrl: string;
+};
+
 export type PendingMessage = {
   type: 'message';
   asUserId: string;
@@ -74,6 +82,7 @@ export type PendingMessage = {
   topicCategory: string;
   topicHash: string;
   messageSource: 'agent';
+  illustration?: MessageIllustration;
 };
 
 export type PendingReaction = {

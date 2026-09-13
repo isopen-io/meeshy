@@ -23,6 +23,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { isBlockedBetween } from '../../utils/blocking';
 import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { reconcileCommunityMembership } from '../../services/conversations/communityMembershipSync';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import {
@@ -40,6 +41,8 @@ import { emitToConversationParticipants } from '../../socketio/emitToConversatio
 import { announceConversationClosed } from '../../socketio/announceConversationClosed';
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
+import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
 
@@ -263,15 +266,12 @@ export function registerCreateConversationRoute(
         select: { id: true, displayName: true, username: true, avatar: true }
       });
       const userMap = new Map(allUsers.map(u => [u.id, u]));
-      const defaultPermissions = {
-        canSendMessages: true,
-        canSendFiles: true,
-        canSendImages: true,
-        canSendVideos: false,
-        canSendAudios: false,
-        canSendLocations: false,
-        canSendLinks: false
-      };
+      // #6080 — la table vient du site UNIQUE (`services/participantRights.ts`),
+      // pour le créateur comme pour chaque membre initial. Le littéral écrit ici
+      // fermait `canSendVideos`/`canSendAudios`, ce que la garde de pièce jointe
+      // (#5151) lit comme un REFUS : dans tout groupe créé depuis l'app, une
+      // vidéo, un vocal et un document étaient rejetés.
+      const defaultPermissions = { ...FOUNDING_MEMBER_PERMISSIONS };
 
       const creatorUser = userMap.get(userId);
       // Broadcast = announcement channel with admin-only write
@@ -329,32 +329,23 @@ export function registerCreateConversationRoute(
         }
       });
 
+      // Succès « cercles » (#5759) — APRÈS l'ACK métier. Créer un cercle, c'est
+      // aussi le rejoindre : les deux familles (`create.count`, `join.*`) sont
+      // évaluées par les deux événements, chacun ne mesurant que la sienne.
+      void new CerclesAchievements(prisma).recordEvent({ kind: 'conversation.create', userId }).catch(() => undefined);
+      void new CerclesAchievements(prisma).recordEvent({
+        kind: 'conversation.join',
+        userId,
+        conversationId: conversation.id,
+      }).catch(() => undefined);
+
       // Si la conversation est créée dans une communauté, ajouter automatiquement
-      // tous les participants à la communauté s'ils n'y sont pas déjà
+      // tous les participants à la communauté s'ils n'y sont pas déjà —
+      // réactivant au passage une ligne laissée par un départ (#5760), voir
+      // `reconcileCommunityMembership`.
       if (communityId) {
         const allUserIds = [userId, ...uniqueParticipantIds];
-
-        // Récupérer les membres actuels de la communauté
-        const existingMembers = await prisma.communityMember.findMany({
-          where: {
-            communityId,
-            userId: { in: allUserIds }
-          },
-          select: { userId: true }
-        });
-
-        const existingUserIds = existingMembers.map(member => member.userId);
-        const newUserIds = allUserIds.filter(id => !existingUserIds.includes(id));
-
-        // Ajouter les nouveaux membres à la communauté
-        if (newUserIds.length > 0) {
-          await prisma.communityMember.createMany({
-            data: newUserIds.map(userId => ({
-              communityId,
-              userId
-            }))
-          });
-        }
+        await reconcileCommunityMembership(prisma, communityId, allUserIds);
       }
 
       // Pour les DMs, pas de titre — le frontend résout le nom de l'interlocuteur

@@ -38,8 +38,7 @@ extension ConversationSyncEngine {
             } catch {
                 lastError = error
                 if attempt < 2 {
-                    let backoff = UInt64(1_000_000_000 * (1 << attempt))
-                    try? await Task.sleep(nanoseconds: backoff)
+                    try? await Task.sleep(for: .seconds(1 << attempt))
                 }
             }
         }
@@ -507,7 +506,7 @@ extension ConversationSyncEngine {
         await SearchIndex.shared.indexConversations(servies.filter(\.isActive))
         _conversationsDidChange.send()
         if let checkpoint,
-           let date = Self.formatterDuCheckpoint.date(from: checkpoint) ?? ISO8601DateFormatter().date(from: checkpoint) {
+           let date = (try? Date(checkpoint, strategy: .iso8601.time(includingFractionalSeconds: true))) ?? (try? Date(checkpoint, strategy: .iso8601)) {
             lastSyncTimestamp = max(lastSyncTimestamp, date)
         } else if let plusRecente = servies.map(\.updatedAt).max() {
             lastSyncTimestamp = SyncWatermark.fromFullSync(receivedUpdatedAt: [plusRecente], fallback: lastSyncTimestamp)
@@ -558,7 +557,7 @@ extension ConversationSyncEngine {
 
         do {
             let since = lastSyncTimestamp
-            let sinceStr = ISO8601DateFormatter().string(from: since)
+            let sinceStr = since.formatted(.iso8601.time(includingFractionalSeconds: true))
             let queryItems = [
                 URLQueryItem(name: "limit", value: String(Self.deltaPageLimit)),
                 URLQueryItem(name: "offset", value: "0"),
@@ -708,7 +707,7 @@ extension ConversationSyncEngine {
         guard let creance = creanceDeSync() else { return .repli(.creanceAbsente) }
 
         let demande = SyncDeltaRequest(
-            since: ISO8601DateFormatter().string(from: lastSyncTimestamp),
+            since: lastSyncTimestamp.formatted(.iso8601.time(includingFractionalSeconds: true)),
             collections: ["conversations"],
             seq: await SyncSeqTracker.shared.lastSeq.flatMap { Int(exactly: $0) }
         )
@@ -762,7 +761,7 @@ extension ConversationSyncEngine {
             // escaladent vers `fullSync` par le chemin existant de l'appelant.
             let incomplet = delta.hasMore || delta.hasGap
             if !incomplet, let checkpoint = delta.checkpoint,
-               let date = Self.formatterDuCheckpoint.date(from: checkpoint) ?? ISO8601DateFormatter().date(from: checkpoint) {
+               let date = (try? Date(checkpoint, strategy: .iso8601.time(includingFractionalSeconds: true))) ?? (try? Date(checkpoint, strategy: .iso8601)) {
                 lastSyncTimestamp = max(lastSyncTimestamp, date)
             }
             return .traite(DeltaOutcome(succeeded: true, mayHaveMore: incomplet))

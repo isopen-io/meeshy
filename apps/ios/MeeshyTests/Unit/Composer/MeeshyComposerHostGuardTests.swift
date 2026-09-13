@@ -1360,7 +1360,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// **La GRAINE DU MÉDIA non plus** — troisième fois que la même discipline
     /// se pose dans ce fichier, sur un troisième échec silencieux.
     ///
-    /// Un défaut la ferait disparaître de `ConversationMediaComposerDoor` sans
+    /// Un défaut la ferait disparaître de `MediaComposerDoor` sans
     /// casser la moindre compilation : la porte du média reçu ouvrirait alors un
     /// atelier VIDE, sous une entrée de menu qui vient de promettre une photo
     /// déjà posée. Le produit resterait plausible — l'auteur croirait avoir mal
@@ -1421,7 +1421,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// porte de création de story (`StoryTrayActions`), la porte du mood
     /// (`MoodComposerDoor`), la porte du document (`DocumentComposerDoor`) —
     /// ces deux dernières vivant dans le fichier de leur surface — et la porte
-    /// du média reçu (`ConversationMediaComposerDoor`).
+    /// du média reçu (`MediaComposerDoor`).
     ///
     /// **Ce quatrième nom a une histoire qu'il faut garder.** Le plan du lot 5
     /// dirigeait le montage vers `ConversationView`, une feuille de
@@ -1484,7 +1484,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // > envoi ». Les deux se lisent dans un diff, et c'est pour ça que la
             // > liste est écrite en toutes lettres plutôt que comptée.
             ["StoryTrayActions.swift", "ComposerMoodSurface.swift", "DocumentComposerDoor.swift",
-             "ConversationMediaComposerDoor.swift", "ShareComposeDoor.swift",
+             "MediaComposerDoor.swift", "ShareComposeDoor.swift",
              "StoryEditComposer.swift", "StoryRepublishComposer.swift"],
             "Les sites qui montent le MEUBLE lui-même sont écrits en toutes lettres, et ce sont des PORTES : "
                 + "un montage de plus, posé directement dans une feuille de présentation, recopierait l'envoi "

@@ -74,21 +74,31 @@ final class ComposerMediaStripTests: XCTestCase {
                 .contains("private var mediaStrip"),
             "L'ancien ruban est revenu dans le document : c'est le second inventaire que #4047 interdit."
         )
-        let src = compact(raw)
-        // `let`, et pas `var` : la barre RECEIT l'inventaire et ne peut pas
-        // l'amender — une forme plus forte que celle que gardait la version
-        // d'avant, où la surface document le déclarait en `var`.
+        // **#5599 — la BANDE a été remplacée par le RAIL, et ce témoin gardait
+        // la bande.** Ce qui se peint n'est plus un média par vignette mais une
+        // SLIDE par vignette : un média posé sur la scène sans ouvrir de page
+        // n'est aucune vignette, et c'est exactement la distinction que le
+        // commentaire ci-dessus annonçait sans encore la mesurer.
+        //
+        // Les trois capacités restent EXIGÉES, sur leur porteur actuel
+        // (`ComposerSlideRail`) : recevoir sans amender, peindre une vignette
+        // par élément, pouvoir en retirer une. Le doc-comment du rail dit
+        // lui-même que la troisième avait été perdue au passage d'un lot et
+        // rétablie sur constat porteur (2026-09-06) — raison de plus pour
+        // qu'un témoin la tienne.
+        let rail = compact(try source("Meeshy/Features/Main/Composer/ComposerSlideRail.swift"))
         XCTAssertTrue(
-            src.contains("letlocalMedia:[ComposerDocumentMedia]"),
-            "La barre doit RECEVOIR `localMedia` — elle reste sans état, le meuble le possède."
+            rail.contains("letslides:[StorySlide]"),
+            "Le rail doit RECEVOIR ses slides — il reste sans état, le meuble le possède."
         )
         XCTAssertTrue(
-            src.contains("ForEach(localMedia,id:\\.url)") && src.contains("ComposerMediaThumbnail("),
-            "Le ruban doit peindre UNE vignette par média (`ComposerMediaThumbnail`) — la preuve visible."
+            rail.contains("ForEach(Array(slides.enumerated()),id:\\.element.id)"),
+            "Le rail doit peindre UNE vignette par slide — la preuve visible."
         )
         XCTAssertTrue(
-            src.contains("onRemoveMedia?("),
-            "Chaque vignette doit pouvoir se RETIRER via `onRemoveMedia` — retirer re-juge le format."
+            rail.contains("letonDelete:(Int)->Void") && rail.contains("Button{onDelete(index)}"),
+            "Chaque vignette doit pouvoir se RETIRER — la croix que le constat porteur du "
+                + "2026-09-06 a fait rétablir après qu'un lot l'eut perdue."
         )
     }
 
@@ -101,18 +111,24 @@ final class ComposerMediaStripTests: XCTestCase {
         // ont fondé une page (`headerTileMedia`). Garder l'ancienne chaîne ici
         // aurait rougi sur un câblage devenu JUSTE, et — pire — aurait poussé à
         // « réparer » en re-branchant la liste entière, rouvrant le défaut.
+        // **#5599 — même bascule que ci-dessus, côté CÂBLAGE.** Le meuble ne
+        // passe plus une liste de médias : il passe les SLIDES, et la règle qui
+        // les dérive a changé de signature avec elles
+        // (`ComposerHeaderTiles.tiles(for:)`). Ce que ce témoin doit tenir est
+        // inchangé et se lit toujours en trois temps : la liste vient de la
+        // RÈGLE, taper sélectionne, la croix retire.
         XCTAssertTrue(
-            src.contains("localMedia:headerTileMedia"),
-            "Le meuble doit passer `localMedia: headerTileMedia` aux deux barres — sans quoi rien "
-                + "n'est peint (ou tout l'est, ce qui est le défaut du #4724)."
+            src.contains("ComposerHeaderTiles.tiles(for:viewModel.slides)"),
+            "La liste des vignettes doit venir de la RÈGLE, jamais d'un filtre réécrit en ligne "
+                + "dans un `body` — c'est ce qui garde les deux surfaces d'accord."
         )
         XCTAssertTrue(
-            src.contains("ComposerHeaderTiles.tiles(documentLocalMedia,founding:slideIdByMediaURL)"),
-            "…et cette liste doit venir de la RÈGLE, jamais d'un filtre réécrit en ligne dans un `body`."
+            src.contains("onSelect:{viewModel.selectSlide(at:$0)}"),
+            "Taper une vignette doit SÉLECTIONNER sa slide — sans quoi le rail est décoratif."
         )
         XCTAssertTrue(
-            src.contains("documentLocalMedia.removeAll"),
-            "Le retrait d'une vignette doit ôter l'élément de `documentLocalMedia` — ce qui RE-JUGE le format."
+            src.contains("onDelete:{viewModel.removeSlide(at:$0)}"),
+            "La croix d'une vignette doit RETIRER sa slide du modèle — ce qui re-juge le format."
         )
     }
 

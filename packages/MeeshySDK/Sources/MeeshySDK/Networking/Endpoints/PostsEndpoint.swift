@@ -26,6 +26,7 @@ public enum PostsEndpoint: MeeshyEndpoint, Sendable {
     case byPostIdInteractions(postId: String)
     case byPostIdLike(postId: String)
     case byPostIdMediaByMediaIdExport(postId: String, mediaId: String)
+    case byPostIdObjectsByObjectIdResponses(postId: String, objectId: String)
     case byPostIdPin(postId: String)
     case byPostIdRepost(postId: String)
     case byPostIdRepublish(postId: String)
@@ -66,6 +67,7 @@ public enum PostsEndpoint: MeeshyEndpoint, Sendable {
         case .byPostIdInteractions(let postId): return "/api/v1/posts/\(postId)/interactions"
         case .byPostIdLike(let postId): return "/api/v1/posts/\(postId)/like"
         case .byPostIdMediaByMediaIdExport(let postId, let mediaId): return "/api/v1/posts/\(postId)/media/\(mediaId)/export"
+        case .byPostIdObjectsByObjectIdResponses(let postId, let objectId): return "/api/v1/posts/\(postId)/objects/\(objectId)/responses"
         case .byPostIdPin(let postId): return "/api/v1/posts/\(postId)/pin"
         case .byPostIdRepost(let postId): return "/api/v1/posts/\(postId)/repost"
         case .byPostIdRepublish(let postId): return "/api/v1/posts/\(postId)/republish"

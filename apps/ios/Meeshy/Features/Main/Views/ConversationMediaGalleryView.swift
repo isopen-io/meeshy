@@ -65,6 +65,28 @@ struct ConversationMediaGalleryView: View {
     /// même lot peuvent porter des légendes de provenances différentes, et une
     /// langue choisie sur l'une ne dit rien de l'autre.
     @State private var captionLanguage: [String: String] = [:]
+    /// Le sélecteur complet d'émojis, ouvert par le « + » de la rangée. Un `Bool`
+    /// et non la pièce elle-même : la rangée ne s'affiche QUE pour la page
+    /// courante, donc la cible se relit au moment du choix — deux états
+    /// parallèles auraient permis à l'un de viser une page que l'autre a quittée.
+    ///
+    /// `internal` — la traînée d'émojis et sa feuille vivent dans
+    /// `+Actions.swift` depuis le #6161, et `private` est une portée de FICHIER.
+    /// Même prix que celui payé par `currentPageID` plus bas.
+    @State var showFullEmojiPicker = false
+    /// **La rangée d'émojis est OUVERTE** (révision porteur 2026-09-11 : « les
+    /// réactions […] doivent s'activer comme pour répondre ou composer, il faut
+    /// mettre un bouton réagir (emoji +) qui affiche la traille des emojis »).
+    ///
+    /// Au repos le visualiseur est NU — rien ne se pose sur l'image. Cet état
+    /// répond à une question qui n'est PAS celle de la loi : la loi dit si la
+    /// pièce offre de réagir, celui-ci dit si l'utilisateur l'a demandé. Il se
+    /// remet à `false` au changement de pièce (`handlePageChange`) : la rangée
+    /// appartient au média qu'on regardait.
+    /// `internal` — l'orchestration du plein cadre la referme en entrant
+    /// (`+Presentation.swift`), et `private` est une portée de FICHIER. Même
+    /// prix que celui payé par `currentPageID` ci-dessous.
+    @State var reactionBarOpen = false
     /// Maps attachment.id → sender info (name, avatar, color, date)
     var senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
 
@@ -87,22 +109,59 @@ struct ConversationMediaGalleryView: View {
     /// pas le porteur. `nil` ⇒ aucun bouton.
     var onReplyToMedia: ((MessageAttachment) -> Void)?
 
+    /// **Réagir à la PIÈCE, depuis le plein écran** (#6084).
+    ///
+    /// La pièce voyage AVEC l'émoji : la galerie sait quelle page est ouverte,
+    /// l'hôte non. Un rappel qui ne porterait que l'émoji laisserait l'hôte
+    /// deviner la cible — et il devinerait le message, ce qui ferait mentir la
+    /// rangée sur ce qu'elle vise.
+    ///
+    /// `nil` ⇒ **ni bouton ni rangée** (loi 4, appliquée par
+    /// `AttachmentReactionOffer.offersReaction`). C'est le cas des hôtes
+    /// SOCIAUX — post, story, réel, commentaire : le serveur n'expose aucune
+    /// réaction par MÉDIA pour eux (`AttachmentReaction` est indexée sur un
+    /// `messageId` de conversation, et `PostMedia` ne porte aucune relation de
+    /// réaction). Ils n'affichent donc pas une barre inerte : ils n'en
+    /// affichent pas.
+    var onReactToMedia: ((MessageAttachment, String) -> Void)?
+
     /// `id → position`, construite une fois à la présentation. Remplace les
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
     /// ET à chaque fermeture (`stopActiveVideoAudio`).
     private let indexByID: [String: Int]
 
     @Environment(\.dismiss) private var dismiss
-    @State private var currentPageID: String?
-    @State private var showControls = true
-    @StateObject private var saveCoordinator = MediaSaveCoordinator()
+    /// `internal` — le couloir bas du plateau le PILOTE depuis
+    /// `+Geometry.swift`, et `private` est une portée de FICHIER. Même prix que
+    /// celui payé par les pages au #4014, et pour la même raison.
+    @State var currentPageID: String?
+    /// **L'état d'immersion, un seul** (#6142, spec § 3.2). Il a remplacé
+    /// `showControls` : un booléen ne pouvait pas porter la RAISON de l'entrée,
+    /// et sans elle l'appui long et le glissement rendaient le même écran. Il ne
+    /// s'écrit qu'en un endroit — `onEnterStage`, `+Presentation.swift` — et il
+    /// commande DEUX choses : le plateau, et les cotes que le solveur rend.
+    @State var stagePresentation: StagePresentation = .carded
+    /// `internal` — le menu ⋯ le PILOTE depuis `+Menu.swift`, et `private` est
+    /// une portée de FICHIER. Même prix que celui payé par `currentPageID`
+    /// au-dessus, et pour la même raison.
+    @StateObject var saveCoordinator = MediaSaveCoordinator()
     // Plain reference (NOT @ObservedObject): only `activeURL`/`player` identity
-    // drive this root's rendering (`videoTransportLayer`) — the manager also
-    // publishes `currentTime` at 5-10Hz, which used to re-render the WHOLE
-    // gallery root continuously. Scoped via onReceive($activeURL/$player).
-    private let videoManager = SharedAVPlayerManager.shared
-    @State private var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
-    @State private var videoManagerPlayer: AVPlayer?
+    // drive this root's rendering (the band and the centred play/pause,
+    // `+Transport.swift`) — the manager also publishes `currentTime` at 5-10Hz,
+    // which used to re-render the WHOLE gallery root continuously. Scoped via
+    // onReceive($activeURL/$player); the band is the only view that observes
+    // the manager, so the ticking stays inside it.
+    let videoManager = SharedAVPlayerManager.shared
+    /// `internal` — la bande du couloir et la couche centrale les LISENT depuis
+    /// `+Transport.swift`, et `private` est une portée de FICHIER. Même prix que
+    /// celui payé par `currentPageID`, et pour la même raison.
+    @State var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
+    @State var videoManagerPlayer: AVPlayer?
+    /// Lu par la seule pastille « en pause » : `pausedOnEntry` se souvient du
+    /// GESTE, et une pastille qui survivrait à la reprise affirmerait le
+    /// contraire de ce qu'on voit. `isPlaying` ne publie qu'aux TRANSITIONS,
+    /// contrairement au `currentTime` qui interdit d'observer le manager en bloc.
+    @State var videoManagerIsPlaying: Bool = SharedAVPlayerManager.shared.isPlaying
 
     init(
         allAttachments: [MessageAttachment],
@@ -112,7 +171,8 @@ struct ConversationMediaGalleryView: View {
         captionMap: [String: String] = [:],
         senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:],
         onComposeWithMedia: ((MessageAttachment) -> Void)? = nil,
-        onReplyToMedia: ((MessageAttachment) -> Void)? = nil
+        onReplyToMedia: ((MessageAttachment) -> Void)? = nil,
+        onReactToMedia: ((MessageAttachment, String) -> Void)? = nil
     ) {
         self.allAttachments = allAttachments
         self.startAttachmentId = startAttachmentId
@@ -122,6 +182,7 @@ struct ConversationMediaGalleryView: View {
         self.senderInfoMap = senderInfoMap
         self.onComposeWithMedia = onComposeWithMedia
         self.onReplyToMedia = onReplyToMedia
+        self.onReactToMedia = onReactToMedia
         let positions = Dictionary(
             allAttachments.enumerated().map { ($0.element.id, $0.offset) },
             uniquingKeysWith: { first, _ in first }
@@ -137,26 +198,9 @@ struct ConversationMediaGalleryView: View {
     /// Position courante, DÉRIVÉE de `currentPageID` — plus de `@State`
     /// miroir à tenir synchronisé (et donc plus d'écriture d'état, donc plus
     /// d'invalidation racine, à chaque page traversée).
-    private var currentIndex: Int {
+    var currentIndex: Int {
         guard let currentPageID, let index = indexByID[currentPageID] else { return 0 }
         return index
-    }
-
-    /// Annonce VoiceOver de l'état du bouton d'enregistrement. Vide au repos.
-    private var saveStateAccessibilityValue: String {
-        saveCoordinator.isProcessing
-            ? String(localized: "common.saving", defaultValue: "Enregistrement…", bundle: .main)
-            : ""
-    }
-
-    /// Position lisible du média courant pour VoiceOver — la capsule « n / N »
-    /// serait sinon lue « n barre oblique N » (position portée par le seul texte).
-    private var galleryPositionAccessibilityLabel: String {
-        String(
-            format: String(localized: "gallery.position", defaultValue: "Média %1$d sur %2$d", bundle: .main),
-            currentIndex + 1,
-            allAttachments.count
-        )
     }
 
     /// **Le texte de la légende, dans la langue courante** — source UNIQUE pour
@@ -228,6 +272,23 @@ struct ConversationMediaGalleryView: View {
             galleryPager
 
             overlayLayer
+
+            // **Ce que l'appui long a promis** (#6142) : la pastille est la
+            // seule chose qui distingue ses deux portes à l'écran. Elle vit
+            // au-dessus du plateau, qui n'existe pas là où elle s'affiche.
+            pausedBadgeLayer
+
+            // **La traînée d'émojis est la couche la PLUS HAUTE du visualiseur**
+            // (précision porteur 2026-09-11 : « les réactions doivent apparaître
+            // par-dessus tous les autres contrôleurs »).
+            //
+            // DERNIER enfant du `ZStack` racine, et non un `.zIndex()` posé plus
+            // bas : `zIndex` n'ordonne qu'entre FRÈRES d'un même conteneur. La
+            // traînée vivait dans la pile de `controlsOverlay`, où elle
+            // PARTAGEAIT la hauteur avec le bloc bas — aucun `zIndex` ne l'aurait
+            // sortie de cette pile, et rien n'aurait empêché le bloc bas de la
+            // comprimer. Le rang se gagne par la COUCHE.
+            reactionLayer
         }
         .statusBar(hidden: true)
         .onAppear {
@@ -241,30 +302,38 @@ struct ConversationMediaGalleryView: View {
         }
         .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
         .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
+        .onReceive(videoManager.$isPlaying) { videoManagerIsPlaying = $0 }
+        .sheet(isPresented: $showFullEmojiPicker) { fullEmojiPickerSheet }
     }
 
-    /// L'animation de `showControls` est portée ICI et non sur la racine :
+    /// L'animation de l'état d'immersion est portée ICI et non sur la racine :
     /// posée sur le `ZStack` racine, elle installait une transaction animée sur
     /// TOUT l'arbre — pager compris — à chaque bascule des contrôles.
+    ///
+    /// **`allowsHitTesting` n'est pas une ceinture de plus : c'est la garde**
+    /// (#6142). La couche s'en va en FONDU, donc elle reste dans l'arbre — et
+    /// atteignable — pendant toute la transition : sans cette ligne, un tap posé
+    /// pendant ces deux dixièmes fermerait la galerie par un bouton que
+    /// l'utilisateur voit déjà disparaître.
     private var overlayLayer: some View {
         ZStack {
-            if showControls {
+            if stagePresentation.showsPlateau {
+                // Le plateau ENTIER — les deux couloirs et ce qui se pose sur le
+                // cadre, transport vidéo compris (#6141) : il commande le média,
+                // donc il vit sur le cadre, plus dans une couche flottante à lui.
                 controlsOverlay
-                    .transition(.opacity)
-                // Contrôles de transport vidéo (play/pause/scrub/skip/speed/mute/pip)
-                // pour la vidéo en cours de lecture. Avant : la galerie rendait une
-                // couche AVPlayerLayer brute SANS aucun contrôle ("AUCUN CONTROLEUR").
-                // Composant SDK partagé `VideoTransportControls` piloté par le même
-                // `SharedAVPlayerManager`. Posé au-dessus des métadonnées (z-order).
-                videoTransportLayer
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: showControls)
+        .allowsHitTesting(stagePresentation.showsPlateau)
+        .animation(.easeInOut(duration: 0.2), value: stagePresentation)
     }
 
     // MARK: - Pager
 
+    /// **Le pager occupe la ZONE LIBRE, jamais l'écran entier** (#6141). Ses
+    /// deux retraits sont ceux que le solveur a réservés — lui et le plateau
+    /// lisent la MÊME table (`stageCorridors`, `+Geometry.swift`).
     private var galleryPager: some View {
         AdaptiveHorizontalPager(
             items: allAttachments,
@@ -273,6 +342,8 @@ struct ConversationMediaGalleryView: View {
         ) { index, attachment in
             galleryPage(attachment, index: index)
         }
+        .padding(.top, plateauTopInset)
+        .padding(.bottom, plateauBottomInset)
         .ignoresSafeArea()
         .adaptiveOnChange(of: currentPageID) { oldID, newID in
             handlePageChange(from: oldID, to: newID)
@@ -288,6 +359,14 @@ struct ConversationMediaGalleryView: View {
         // d'atteindre. C'est l'inverse du volet de description du composer, qui
         // est une préférence d'écran parce qu'il commente TOUTE la publication.
         if oldID != newID, captionExpanded { captionExpanded = false }
+
+        // **La rangée d'émojis appartient à la pièce qu'on REGARDAIT** (#6084,
+        // révision porteur). La laisser ouverte la ferait surgir sur un média que
+        // personne n'a demandé à commenter, et un émoji tapé par réflexe
+        // atterrirait sur la mauvaise pièce — le pire des deux, parce qu'il
+        // aurait l'air d'avoir marché. Même contrat que le repli de légende juste
+        // au-dessus, et pour la même raison.
+        if oldID != newID, reactionBarOpen { reactionBarOpen = false }
 
         if let oldID, oldID != newID, let oldIndex = indexByID[oldID] {
             let oldAtt = allAttachments[oldIndex]
@@ -319,10 +398,12 @@ struct ConversationMediaGalleryView: View {
         case .image:
             GalleryImagePage(
                 attachment: attachment,
+                stage: stage(for: attachment),
+                presentation: stagePresentation,
                 isActive: distance == 0,
                 rendersFullPixels: GalleryRenderWindow.rendersFullPixels(distance: distance),
                 accessibilityLabel: imageAccessibilityLabel(attachment),
-                onToggleControls: { toggleControls() },
+                onEnterStage: { onEnterStage($0) },
                 onDismiss: { dismissGallery() }
             )
             .equatable()
@@ -330,10 +411,12 @@ struct ConversationMediaGalleryView: View {
         case .video:
             GalleryVideoPage(
                 attachment: attachment,
+                stage: stage(for: attachment),
+                presentation: stagePresentation,
                 accentColor: accentColor,
                 isActive: distance == 0,
                 isWindowed: GalleryRenderWindow.rendersFullPixels(distance: distance),
-                onToggleControls: { toggleControls() },
+                onEnterStage: { onEnterStage($0) },
                 onCacheActivation: { cacheAttachment(attachment) },
                 onDismiss: { dismiss() }
             )
@@ -342,10 +425,6 @@ struct ConversationMediaGalleryView: View {
         default:
             Color.black
         }
-    }
-
-    private func toggleControls() {
-        showControls.toggle()
     }
 
     private func dismissGallery() {
@@ -415,6 +494,7 @@ struct ConversationMediaGalleryView: View {
         MediaCaptionOverlay(caption: text,
                             isExpanded: captionExpanded,
                             horizontalInset: 16,
+                            maxExpandedHeight: cadreCaptionMaxHeight,
                             // **« JUSTE afficher le texte déplié avec effet
                             // ombre »** — donc pas de voile en plus. Le
                             // dégradé noir du composant sert les hôtes qui
@@ -445,66 +525,56 @@ struct ConversationMediaGalleryView: View {
                         .foregroundColor(.white)
                         .frame(width: 40, height: 40)
                         .adaptiveGlass(in: Circle(), interactive: true)
-                        .padding()
                 }
                 .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
+                // La capsule « n / N » a quitté ce couloir (#6144, directive
+                // porteur « enlever les N/M au centre ! ») : le rail du couloir
+                // bas MONTRE déjà la position — vignette active bordée de
+                // blanc — et il la dit mieux qu'un texte. Le libellé VoiceOver
+                // de position, lui, ne disparaît pas : il vit maintenant sur
+                // chaque vignette du rail (`FilmstripThumbnail`).
                 Spacer()
 
-                if allAttachments.count > 1 {
-                    Text("\(currentIndex + 1) / \(allAttachments.count)")
-                        .font(MeeshyFont.relative(13, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .adaptiveGlass(in: Capsule())
-                        .contentTransition(.numericText())
-                        .animation(.spring(response: 0.3), value: currentIndex)
-                        .accessibilityLabel(galleryPositionAccessibilityLabel)
-                }
-
-                Spacer()
-
-                if currentIndex < allAttachments.count {
-                    Button { requestSaveCurrent() } label: {
-                        Group {
-                            if saveCoordinator.isProcessing {
-                                ProgressView().tint(.white)
-                            } else {
-                                Image(systemName: "arrow.down.to.line")
-                            }
-                        }
-                        // Chrome : glyphe d'état figé dans un cadre tap fixe
-                        // 40×40 (doctrine 82i) — ne pas scaler.
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
-                        .frame(width: 40, height: 40)
-                        .adaptiveGlass(in: Circle(), interactive: true)
-                        .padding(.trailing, 12)
-                        .padding(.top, 8)
-                    }
-                    .disabled(saveCoordinator.isProcessing)
-                    .accessibilityLabel(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main))
-                    .accessibilityValue(saveStateAccessibilityValue)
-                    // Composant UNIFIÉ « Enregistrer » : même sheet de
-                    // destinations pour image et vidéo (Photos / Fichiers /
-                    // Partager), issue via toast + haptics.
-                    .mediaSaveFlow(saveCoordinator)
-                } else {
-                    Color.clear.frame(width: 52, height: 40).padding(.trailing, 12)
-                }
+                // La flèche d'enregistrement direct a cédé la place au menu ⋯
+                // (#6145, directive porteur) : l'enregistrement y est devenu une
+                // ENTRÉE, à côté du partage hors de l'application. Le menu et
+                // ses deux transports vivent dans `+Menu.swift`.
+                overflowMenu
             }
+            .padding(.horizontal, MediaGalleryStage.gutter + 2)
+            .frame(height: MediaGalleryStage.topCorridorHeight)
 
-            Spacer(minLength: 0)
+            // LE CADRE, puis LES DEUX BANDES DU COULOIR BAS. Ce qui se pose sur
+            // le cadre part avec lui ; ce qui PARCOURT reste au plateau
+            // (`+Geometry.swift`, `+Transport.swift`) — la progression du média
+            // d'abord, le rail de la série ensuite. L'ordre est la directive
+            // porteur mot pour mot : « la progression […] en bas juste
+            // au-dessus du rail de défilement ».
+            cadreRegion
+                .padding(.bottom, MediaGalleryStage.gutter)
 
-            bottomOverlay
+            transportCorridor
+
+            railCorridor
         }
+        .padding(.top, stageCorridors.safeTop)
+        .padding(.bottom, stageCorridors.safeBottom)
+        .ignoresSafeArea()
     }
 
-    /// Bas de l'écran : auteur du média, légende, puis — sur TOUTE la rangée,
-    /// par-dessous — la pellicule de toute la conversation.
+    /// Bas du CADRE : auteur du média, sa date, sa ligne format / dimensions /
+    /// poids, puis la légende. **Plus ses actions** (#6161) : réagir · répondre ·
+    /// composer sont montées au-dessus de ce bloc, en colonne verticale à droite
+    /// (`cadreActionColumn`). Ce qui reste ici est exactement ce que le porteur a
+    /// demandé de garder sous le voile.
+    ///
+    /// **La pellicule n'est plus là** (#6141) : elle a rejoint le couloir bas du
+    /// plateau (`railCorridor`, `+Geometry.swift`), où plus aucune légende
+    /// dépliée ne peut la comprimer. Le voile, lui, a monté d'un cran
+    /// (`cadreOverlay`) : un dégradé par étage ferait deux lisières.
     @ViewBuilder
-    private var bottomOverlay: some View {
+    var bottomOverlay: some View {
         if currentIndex < allAttachments.count {
             let att = allAttachments[currentIndex]
             VStack(alignment: .leading, spacing: 0) {
@@ -541,56 +611,111 @@ struct ConversationMediaGalleryView: View {
                     captionLanguageRow(att.id)
                     captionOverlay(caption)
                 }
-                if allAttachments.count > 1 {
-                    ConversationMediaFilmstrip(
-                        attachments: allAttachments,
-                        currentPageID: $currentPageID,
-                        accentColor: accentColor
-                    )
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom)
-            )
         }
     }
 
     // MARK: - Video Transport Controls (for the currently playing video)
+    //
+    // **Le transport a quitté ce fichier au #6162.** Il s'était posé sur le
+    // cadre au #6141 — le bon endroit tant que la progression, la durée et le
+    // play/pause étaient UNE vue. Ils ne le sont plus : la progression est
+    // descendue au couloir du plateau (`transportCorridor`) et le play/pause
+    // est resté au centre du média (`cadreCenterPlayPause`), les deux dans
+    // `+Transport.swift`. Ce commentaire reste pour que la prochaine recherche
+    // de « videoTransportLayer » atterrisse quelque part.
 
-    /// Marge basse du transport vidéo : il doit rester au-dessus du bloc bas,
-    /// dont la hauteur change selon que la pellicule est montée ou non.
-    private var videoTransportBottomInset: CGFloat {
-        allAttachments.count > 1 ? 132 + ConversationMediaFilmstrip.reservedHeight : 132
-    }
-
-    @ViewBuilder
-    private var videoTransportLayer: some View {
-        if currentIndex < allAttachments.count {
-            let att = allAttachments[currentIndex]
-            if att.type == .video,
-               videoManagerActiveURL == att.fileUrl,
-               videoManagerPlayer != nil {
-                VideoTransportControls(
-                    manager: videoManager,
-                    accentColor: accentColor,
-                    controls: [.playPause, .scrubber, .duration, .speed, .mute, .pip]
-                )
-                // Ancré entre la top bar (close/save) et les métadonnées bas.
-                .padding(.top, 64)
-                .padding(.bottom, videoTransportBottomInset)
+    /// **Les actions quittent le bas du cadre pour une COLONNE VERTICALE à
+    /// droite** (#6161, directive porteur 2026-09-12 : « il faut placer les
+    /// contrôleurs du bas sur le côté en vertical sur la zone sombre du
+    /// plateau »).
+    ///
+    /// Elles étaient en ligne, à droite de l'auteur, sous le voile (#4014) ;
+    /// elles prennent le gabarit de la barre latérale du lecteur de story
+    /// (`StoryViewerView+Sidebar.swift`).
+    ///
+    /// ## Elle se POSE sur le cadre — elle ne lui prend pas de largeur
+    ///
+    /// La lecture opposée avait été retenue une heure plus tôt : un vrai couloir
+    /// latéral, réservé AVANT le cadre comme les couloirs haut et bas. Elle
+    /// coûtait **356 × 633 → 322 × 572** sur une scène 9:16, soit un cinquième
+    /// de la surface. Second arbitrage porteur du même jour — *« on va essayer
+    /// de garder l'aspect des story mais ce ne sont pas des story »* — et c'est
+    /// celui-ci qui vit : `MediaStageFraming` ne gagne AUCUN champ ici.
+    ///
+    /// **#4561 / #4633 ne l'interdisent pas**, et il faut le dire ici parce
+    /// qu'un lot futur les citera pour « corriger » ce choix : ces deux issues
+    /// gouvernent le COMPOSER, où un contrôle posé sur la scène entre en
+    /// concurrence avec le geste d'ÉDITION. En lecture il n'y a aucune édition à
+    /// protéger, et le lecteur de story a toujours posé sa colonne sur son
+    /// canvas.
+    ///
+    /// Le retrait bas n'existe pas : `bottomMetadataOverlay` porte déjà ses
+    /// 12 pt de `padding(.top)`, qui valent la gouttière. Une colonne vide ne
+    /// prend donc RIEN — ni largeur, ni hauteur (loi 4).
+    var cadreActionColumn: some View {
+        VStack(spacing: MediaStageActionColumn.spacing) {
+            if currentIndex < allAttachments.count {
+                mediaActions(allAttachments[currentIndex])
             }
         }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.trailing, MediaGalleryStage.gutter)
     }
 
-    /// **La barre d'actions du média, à DROITE des informations de l'auteur**
-    /// (#4014) — la place que les deux issues du plein écran lui donnent.
-    ///
-    /// Verticale par destination : chaque action y entre par sa propre closure
-    /// optionnelle, si bien qu'un hôte n'en câble que ce qu'il sait servir.
-    /// Aucune action câblée ⇒ la barre ne rend RIEN, pas même son espace.
+    /// Les trois actions, chacune derrière sa propre closure optionnelle : un
+    /// hôte n'en câble que ce qu'il sait servir, et ce qu'il ne câble pas
+    /// n'existe pas (loi 4).
     @ViewBuilder
-    private func mediaActionBar(_ att: MessageAttachment) -> some View {
+    private func mediaActions(_ att: MessageAttachment) -> some View {
+        // **« Réagir » est une ACTION, pas un ornement** (#6084, révision porteur
+        // 2026-09-11 : « les réactions sur les attachements en plein écran
+        // doivent s'activer comme pour répondre ou composer, il faut mettre un
+        // bouton réagir (emoji +) qui affiche la traille des emojis »).
+        //
+        // Il rejoint donc CETTE rangée — même rang, même gabarit 40 pt, même
+        // verre que Répondre et Composer — au lieu de poser sa rangée d'émojis
+        // sur l'image en permanence.
+        //
+        // **La garde remonte d'un cran** : c'est l'EXISTENCE du bouton que la loi
+        // décide, pas seulement celle de la rangée. Plus simple et plus sûr — une
+        // pièce protégée n'a alors même pas d'entrée vers le geste, et il n'y a
+        // plus qu'un endroit où la protection pourrait être oubliée.
+        if AttachmentReactionOffer.offersReaction(surface: .fullscreen,
+                                                  attachment: att,
+                                                  hasHandler: onReactToMedia != nil) {
+            Button {
+                HapticFeedback.light()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    reactionBarOpen.toggle()
+                }
+            } label: {
+                // Chrome : glyphe figé dans un cercle glass 40 pt (doctrine 82i)
+                // — ne pas scaler, glass APRÈS le sizing. Le « + » est un BADGE
+                // sur l'émoji, écho du « + » que la rangée porte en fin de course :
+                // le même signe pour la même promesse, « il y en a plus ».
+                Image(systemName: "face.smiling")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(reactionBarOpen ? MeeshyColors.indigo400 : .white)
+                    .overlay(alignment: .topTrailing) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 9, weight: .black))
+                            .foregroundColor(reactionBarOpen ? MeeshyColors.indigo400 : .white)
+                            .offset(x: 6, y: -5)
+                    }
+                    .frame(width: MediaStageActionColumn.glass,
+                           height: MediaStageActionColumn.glass)
+                    .adaptiveGlass(in: Circle(), interactive: true)
+                    .mediaStageActionTarget()
+            }
+            .accessibilityLabel(String(localized: "media.react.title",
+                                       defaultValue: "Réagir", bundle: .main))
+            .accessibilityHint(String(localized: "media.react.hint",
+                                      defaultValue: "Affiche la rangée d'émojis pour réagir à ce média.",
+                                      bundle: .main))
+            .accessibilityAddTraits(reactionBarOpen ? [.isSelected] : [])
+        }
         if let onReplyToMedia, !ComposableAttachment.isProtected(att) {
             // **Un média PROTÉGÉ ne se cite pas** (#4013) : la bannière de
             // citation porte la vignette du média, ce qui ferait sortir de la
@@ -605,8 +730,10 @@ struct ConversationMediaGalleryView: View {
                 Image(systemName: "arrowshape.turn.up.left.fill")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
-                    .frame(width: 40, height: 40)
+                    .frame(width: MediaStageActionColumn.glass,
+                           height: MediaStageActionColumn.glass)
                     .adaptiveGlass(in: Circle(), interactive: true)
+                    .mediaStageActionTarget()
             }
             .accessibilityLabel(String(localized: "media.reply.title",
                                        defaultValue: "Répondre", bundle: .main))
@@ -624,8 +751,10 @@ struct ConversationMediaGalleryView: View {
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.white)
-                    .frame(width: 40, height: 40)
+                    .frame(width: MediaStageActionColumn.glass,
+                           height: MediaStageActionColumn.glass)
                     .adaptiveGlass(in: Circle(), interactive: true)
+                    .mediaStageActionTarget()
             }
             .accessibilityLabel(String(localized: "media.compose.title",
                                        defaultValue: "Créer avec ce média", bundle: .main))
@@ -656,8 +785,12 @@ struct ConversationMediaGalleryView: View {
                             .font(MeeshyFont.relative(12, weight: .medium))
                             .foregroundColor(.white.opacity(0.6))
                     }
+                    // **Les actions ont quitté cette rangée** (#6161) : elles
+                    // sont une colonne verticale posée à droite du cadre
+                    // (`cadreActionColumn`). Ce qui reste ici est ce que le
+                    // porteur a explicitement gardé sous le voile — l'auteur, sa
+                    // date, la légende, la ligne format / dimensions / poids.
                     Spacer()
-                    mediaActionBar(att)
                 }
                 .accessibilityElement(children: .contain)
             }
@@ -725,19 +858,5 @@ struct ConversationMediaGalleryView: View {
         guard let range = GalleryRenderWindow.prefetchRange(around: index, count: allAttachments.count)
         else { return }
         range.forEach { cacheAttachment(allAttachments[$0]) }
-    }
-
-    private func requestSaveCurrent() {
-        guard currentIndex < allAttachments.count else { return }
-        let att = allAttachments[currentIndex]
-        let urlStr = att.fileUrl.isEmpty ? (att.thumbnailUrl ?? "") : att.fileUrl
-        guard !urlStr.isEmpty else { return }
-        HapticFeedback.light()
-        saveCoordinator.requestSave(MediaSaveRequest(
-            kind: att.type == .video ? .video : .image,
-            remoteURLString: urlStr,
-            suggestedFileName: att.originalName.isEmpty ? nil : att.originalName,
-            attachmentId: att.id.isEmpty ? nil : att.id
-        ))
     }
 }

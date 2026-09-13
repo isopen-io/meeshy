@@ -66,6 +66,11 @@ struct StoryViewerContainer: View {
     /// `nil` tant que non vérifié pour ce `postId` précis.
     @State private var freshnessCheckedPostId: String?
 
+    /// **La cible que « Composer » ouvrira** (#6085). Elle vit ICI, la racine
+    /// STABLE du cover, et non dans l'en-tête qui porte l'entrée de menu — voir
+    /// la remarque au site de présentation, plus bas.
+    @State private var composeSeedTarget: ComposerSeedTarget?
+
     private var uid: String { userId ?? "" }
 
     /// Pur, testable sans hôte SwiftUI (parité `StoryViewerScope.resolve`) —
@@ -120,6 +125,21 @@ struct StoryViewerContainer: View {
                     targetParentCommentId: targetParentCommentId
                 )
                 .transition(.identity)
+                // **La porte « Composer » est PRÉSENTÉE ICI** (#6085), et pas
+                // dans l'en-tête qui porte son entrée de menu.
+                //
+                // Deux raisons, et la seconde décide :
+                //  1. le lecteur est présenté en `fullScreenCover`, que
+                //     l'environnement de l'hôte ne traverse pas — c'est déjà
+                //     pourquoi chaque site remet à la main les trois modèles que
+                //     `StoryViewerView` déclare ;
+                //  2. **l'en-tête est reconstruit à chaque tick de la barre de
+                //     progression** : un `@State` de cible y meurt entre le tap
+                //     du menu et la passe suivante. Mesuré au simulateur —
+                //     l'entrée s'affichait, le tap posait la cible, et rien ne
+                //     s'ouvrait. Ce conteneur, lui, est la racine STABLE du
+                //     cover : il tient l'état, l'en-tête ne fait que DEMANDER.
+                .environment(\.meeshyComposeSeedRequest, { composeSeedTarget = $0 })
             } else if timedOut {
                 notFoundOverlay
             } else {
@@ -164,6 +184,20 @@ struct StoryViewerContainer: View {
         // `fullScreenCover` et peut lever un retour, la question est **qui
         // l'AFFICHE, depuis là-dessous ?**
         .feedbackToastOverlay()
+        // **La porte COMMUNE** (#6085) : la même que le message reçu et que les
+        // deux pleins écrans du fil. Trois surfaces, un montage — l'envoi, la
+        // reprise hors-ligne et la sortie n'ont qu'une écriture.
+        //
+        // Aucun aperçu : il monterait un SECOND lecteur de stories par-dessus
+        // celui-ci. DETTE NOMMÉE, la même que `ShareComposeDoor`.
+        .fullScreenCover(item: $composeSeedTarget) { cible in
+            MediaComposerDoor(
+                target: cible,
+                storyViewModel: viewModel,
+                preview: nil,
+                onDismiss: { composeSeedTarget = nil }
+            )
+        }
     }
 
     // MARK: - Loading / Fallback UI

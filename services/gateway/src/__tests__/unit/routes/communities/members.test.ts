@@ -419,15 +419,40 @@ describe('DELETE /communities/:id/members/:memberId — not admin', () => {
 });
 
 describe('DELETE /communities/:id/members/:memberId — success (admin removes member)', () => {
-  it('returns 200', async () => {
+  it('returns 200, sets isActive:false + leftAt instead of deleting the row (#5800)', async () => {
     const prisma = makePrisma();
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue(communityWithUserAsAdmin());
+    prisma.communityMember.findFirst = jest.fn<any>().mockResolvedValue({
+      id: 'mem-removed', communityId: COMMUNITY_ID, userId: OTHER_USER_ID, isActive: true,
+    });
     const { app } = await buildApp({ prisma });
     const res = await app.inject({
       method: 'DELETE',
       url: `/communities/${COMMUNITY_ID}/members/${OTHER_USER_ID}`,
     });
     expect(res.statusCode).toBe(200);
+    expect(prisma.communityMember.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.communityMember.update).toHaveBeenCalledWith({
+      where: { id: 'mem-removed' },
+      data: { isActive: false, leftAt: expect.any(Date) },
+    });
+    await app.close();
+  });
+});
+
+describe('DELETE /communities/:id/members/:memberId — target is not an active member', () => {
+  it('returns 404 without touching the row', async () => {
+    const prisma = makePrisma();
+    prisma.community.findFirst = jest.fn<any>().mockResolvedValue(communityWithUserAsAdmin());
+    prisma.communityMember.findFirst = jest.fn<any>().mockResolvedValue(null);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/communities/${COMMUNITY_ID}/members/${OTHER_USER_ID}`,
+    });
+    expect(res.statusCode).toBe(404);
+    expect(prisma.communityMember.update).not.toHaveBeenCalled();
+    expect(prisma.communityMember.deleteMany).not.toHaveBeenCalled();
     await app.close();
   });
 });

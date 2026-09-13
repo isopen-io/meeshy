@@ -2392,4 +2392,106 @@ final class ConversationSocketHandlerTests: XCTestCase {
             "Duplicate message after high-volume burst must still be suppressed by dedup"
         )
     }
+
+    // MARK: - Le refus de jonction, et la fenêtre où personne n'écoute (#5947)
+
+    private func refusDeJonction(reason: String) throws -> ConversationJoinErrorEvent {
+        let json = Data("""
+        {"conversationId":"\(conversationId)","reason":"\(reason)","message":"Vous n'êtes pas membre de cette conversation"}
+        """.utf8)
+        return try JSONDecoder().decode(ConversationJoinErrorEvent.self, from: json)
+    }
+
+    /// **On posait la question avant d'avoir branché l'oreille** (#5947).
+    ///
+    /// `activate()` émet `conversation:join` ; `armSocketSubscriptions()` — qui
+    /// abonne au puits `conversationJoinError` — n'était appelé qu'ensuite, par
+    /// `loadMessages()`. Entre les deux : une lecture GRDB, le drain NSE, les
+    /// réconciliations — bien plus que les ~90 ms d'aller-retour mesurés.
+    ///
+    /// `PassthroughSubject` ne rejoue RIEN : la réponse du serveur tombait dans
+    /// le vide, et le mémo de `joinConversation` interdisait de reposer la
+    /// question. Une conversation dont le serveur avait retiré l'utilisateur
+    /// restait donc ouverte, lisible et INSCRIPTIBLE — mesuré le 2026-09-10, y
+    /// compris après relance complète de l'app, les trois portes REST rendant
+    /// 403 pendant ce temps.
+    ///
+    /// Le témoin reproduit l'ordre RÉEL : le serveur répond DEPUIS l'émission,
+    /// et l'armement tardif arrive après. Un témoin qui enverrait la réponse
+    /// après l'armement mesurerait un ordre que la production n'a pas.
+    func test_leRefusArriveAvantLArmementTardif_estQuandMemeEntendu() async throws {
+        // **Sans passer par `makeSUT`, qui ARME avant de rendre le SUT.** Un
+        // handler pré-armé ne peut pas vivre la course : le puits existe déjà
+        // quand la réponse arrive, et le témoin passe des deux côtés du diff —
+        // il mesurerait le saut de file `.receive(on: .main)`, pas le défaut.
+        let socket = MockMessageSocket()
+        let sut = ConversationSocketHandler(
+            conversationId: conversationId,
+            currentUserId: currentUserId,
+            messageSocket: socket,
+            isApplicationActive: { true }
+        )
+        let delegate = MockConversationSocketDelegate()
+        sut.delegate = delegate
+        let refus = try refusDeJonction(reason: "not_a_member")
+        socket.onJoinConversation = { _ in socket.conversationJoinError.send(refus) }
+
+        sut.activate()
+        sut.armSocketSubscriptions()   // l'ordre de production : APRÈS
+        // Les puits sont `.receive(on: .main)` : laisser passer un tour.
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(
+            delegate.accessRevokedReasons.count, 1,
+            "Le serveur a répondu « tu n'es pas membre » et personne n'écoutait : le fil reste ouvert et inscriptible."
+        )
+    }
+
+    /// La garde ne doit pas devenir un déclencheur : un refus TRANSITOIRE
+    /// (limite de débit franchie par une tempête de reconnexion) ne ferme rien.
+    /// C'est la règle du cycle 99, et armer plus tôt ne doit pas la défaire.
+    func test_unRefusTransitoireNeFermeToujoursRien() async throws {
+        let socket = MockMessageSocket()
+        let sut = ConversationSocketHandler(
+            conversationId: conversationId,
+            currentUserId: currentUserId,
+            messageSocket: socket,
+            isApplicationActive: { true }
+        )
+        let delegate = MockConversationSocketDelegate()
+        sut.delegate = delegate
+        let refus = try refusDeJonction(reason: "rate_limited")
+        socket.onJoinConversation = { _ in socket.conversationJoinError.send(refus) }
+
+        sut.activate()
+        sut.armSocketSubscriptions()
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertTrue(delegate.accessRevokedReasons.isEmpty)
+    }
+
+    /// **Le mémo de jonction décidait s'il fallait POSER la question**, alors
+    /// qu'il n'existe que pour alimenter le re-join de reconnexion. Rouvrir une
+    /// conversation dans la même session de socket n'interrogeait donc plus
+    /// jamais le serveur — le cycle « quitter / revenir » signalé par le
+    /// porteur.
+    ///
+    /// **Garde de SOURCE, et c'est assumé** : la décision vit dans
+    /// `MessageSocketManager`, dont l'émission exige une socket réellement
+    /// connectée. Ce qui est vérifiable ici, c'est que le raccourci n'est plus
+    /// écrit — pas qu'il ne s'exécute pas.
+    func test_leMemoNInterditPlusDeReposerLaQuestion() throws {
+        let source = try AppSourceGuard.unit(
+            "../../packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift"
+        )
+        let commandes = source
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        XCTAssertFalse(
+            commandes.contains("guard !joinedConversations.contains(conversationId) else { return }"),
+            "Ce raccourci fait sauter l'aller-retour dont la RÉPONSE est le seul moyen d'apprendre qu'on n'est plus membre."
+        )
+    }
 }
+

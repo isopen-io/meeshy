@@ -324,8 +324,20 @@ fileprivate struct BubbleGridCell: View {
     /// Réaction par-image active seulement en grille multi-images (`!solo`), sur
     /// image non protégée, avec callback câblé. L'image solo garde la réaction
     /// message-level ; les protégées gardent le long-press de révélation.
+    ///
+    /// **La conjonction a quitté ce `body` pour `AttachmentReactionOffer`**
+    /// (#6084) : le plein écran pose désormais la MÊME question sur la MÊME
+    /// pièce, et une condition enfouie dans une vue n'est interrogeable par
+    /// aucun témoin — c'est ce qui a laissé le plein écran sans barre sans que
+    /// rien ne rougisse. Le verdict de la grille est inchangé à une chose près,
+    /// qui est un resserrement : la loi lit `ComposableAttachment.isProtected`,
+    /// donc une pièce CHIFFRÉE n'offre plus de réaction par-image — le prédicat
+    /// local ci-dessus, qui gouverne encore le RENDU (révélation d'une vidéo
+    /// protégée), ne connaît que la vue unique et le flou.
     private var canReactPerImage: Bool {
-        !solo && !attachmentIsProtected && onReactToAttachment != nil
+        AttachmentReactionOffer.offersReaction(surface: .bubbleGrid(isSolo: solo),
+                                               attachment: attachment,
+                                               hasHandler: onReactToAttachment != nil)
     }
 
     private var isRevealed: Bool {
@@ -425,8 +437,14 @@ fileprivate struct BubbleGridCell: View {
                 Color.black.opacity(0.4)
                     .contentShape(Rectangle())
                     .onTapGesture { withAnimation { showReactionPicker = false } }
+                // **Aucune échelle écrite ici** (#6117) : la taille de la
+                // rangée est celle du composant, une seule pour toutes les
+                // surfaces où l'on réagit. Elle valait 0,78 — la plus petite
+                // des trois échelles du dépôt, quand le plein écran montait la
+                // même rangée à 2. `scrollable` reste : à 1,5 la rangée dépasse
+                // la largeur d'une tuile, donc elle DÉFILE plutôt que d'être
+                // rognée par le `.clipped()` de la grille.
                 EmojiReactionPicker(
-                    scale: 0.78,
                     scrollable: true,
                     onReact: { emoji in
                         onReactToAttachment?(attachment.id, emoji)
@@ -435,7 +453,11 @@ fileprivate struct BubbleGridCell: View {
                     onDismiss: { withAnimation { showReactionPicker = false } }
                 )
                 .padding(MeeshySpacing.sm)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+                // `adaptiveGlass` et non `.ultraThinMaterial` en dur : sous
+                // iOS 26 ce site rendait une matière PLATE là où le reste du
+                // chrome rend du verre système (#4997 — le site unique
+                // retombe de lui-même sur `.ultraThinMaterial` avant iOS 26).
+                .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                 .padding(.horizontal, MeeshySpacing.xs + 2)
             }
             .transition(.opacity)

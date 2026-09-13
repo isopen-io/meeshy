@@ -39,6 +39,7 @@ export function AgentTopicEditModal({ topic, onClose, onSaved }: Props) {
           examples: topic.examples,
           cooldownMinutes: topic.cooldownMinutes,
           isActive: topic.isActive,
+          priority: topic.priority ?? 0,
         }
       : {
           slug: '',
@@ -50,6 +51,7 @@ export function AgentTopicEditModal({ topic, onClose, onSaved }: Props) {
           examples: [],
           cooldownMinutes: 60,
           isActive: true,
+          priority: 0,
         }
   );
   const [error, setError] = useState<string | null>(null);
@@ -205,7 +207,25 @@ export function AgentTopicEditModal({ topic, onClose, onSaved }: Props) {
             />
           </label>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label htmlFor="agent-topic-priority" className="text-sm font-medium">
+                {t('agent.topicEditModal.fieldPriority')}
+              </label>
+              <input
+                id="agent-topic-priority"
+                type="number"
+                value={form.priority}
+                onChange={(e) => setForm({ ...form, priority: Math.max(0, Math.min(10, Number(e.target.value) || 0)) })}
+                min={0}
+                max={10}
+                aria-describedby="agent-topic-priority-hint"
+                className="mt-1 w-full border border-slate-300 dark:border-slate-700 dark:bg-slate-900 rounded-md p-2 text-sm"
+              />
+              <p id="agent-topic-priority-hint" className="mt-1 text-xs text-slate-500">
+                {t('agent.topicEditModal.priorityHint')}
+              </p>
+            </div>
             <label className="block">
               <span className="text-sm font-medium">{t('agent.topicEditModal.fieldCooldown')}</span>
               <input

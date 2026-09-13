@@ -35,11 +35,16 @@ export type SmokeReport = {
   unreachable: SmokeResult[];
 };
 
-/** Remplace chaque segment `:param` par un identifiant Mongo ObjectId plausible. */
+/**
+ * Remplace chaque segment variable par un identifiant Mongo ObjectId plausible
+ * — `:param` ET le JOKER `*`, qui échappait à la substitution : la sonde
+ * interrogeait `/api/v1/attachments/file/*` avec un astérisque LITTÉRAL, une
+ * URL dont aucun verdict ne pouvait rien dire (#5857).
+ */
 export function resolveRoutePath(path: string, placeholder: string = PLACEHOLDER_PATH_PARAM): string {
   return path
     .split('/')
-    .map((segment) => (segment.startsWith(':') ? placeholder : segment))
+    .map((segment) => (segment.startsWith(':') || segment === '*' ? placeholder : segment))
     .join('/');
 }
 
@@ -57,9 +62,41 @@ export function selectSmokeRoutes(routes: readonly ManifestRoute[]): ManifestRou
   return routes.filter(isSmokeTestable);
 }
 
-/** 404 = la route n'existe pas sur le binaire servi. Tout le reste prouve qu'elle y est. */
-export function classifySmokeStatus(status: number): 'present' | 'absent' {
-  return status === 404 ? 'absent' : 'present';
+/**
+ * Le corps que `sendError()` produit — le producteur UNIQUE des réponses du
+ * gateway (§ « API Response Format » du CLAUDE.md racine). Le reconnaître
+ * PROUVE que notre handler a tourné, donc que la route existe.
+ */
+function isGatewayErrorBody(body: unknown): boolean {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    !Array.isArray(body) &&
+    (body as { success?: unknown }).success === false
+  );
+}
+
+/**
+ * **Un 404 ne dit pas à lui seul qu'une route est absente (#5857).**
+ *
+ * La sonde interroge chaque `:param` avec un ObjectId qui n'existe pas : une
+ * route PUBLIQUE de lecture-par-identifiant répond donc légitimement 404.
+ * Mesuré sur staging le 2026-09-09 — douze routes vivantes déclarées absentes,
+ * à chaque déploiement, ce qui avait fini par vider ce gate de tout signal.
+ * Les routes GARDÉES y échappaient par accident : elles rendent 401/403 AVANT
+ * de chercher quoi que ce soit.
+ *
+ * La règle est POSITIVE et fail-closed : un 404 n'est « présent » que s'il
+ * porte la signature de notre propre producteur d'erreurs. Tout autre 404 —
+ * la forme du `notFoundHandler` de Fastify, un corps vide, du HTML de proxy —
+ * n'a rien prouvé et reste « absent ». Conclure l'inverse (absent SI la forme
+ * Fastify) pencherait du mauvais côté : le jour où cette forme change, une
+ * route réellement disparue passerait pour présente — exactement la panne que
+ * #5644 existe pour attraper.
+ */
+export function classifySmokeStatus(status: number, body?: unknown): 'present' | 'absent' {
+  if (status !== 404) return 'present';
+  return isGatewayErrorBody(body) ? 'present' : 'absent';
 }
 
 export function summarizeSmokeResults(results: readonly SmokeResult[]): SmokeReport {
@@ -70,7 +107,12 @@ export function summarizeSmokeResults(results: readonly SmokeResult[]): SmokeRep
   };
 }
 
-export type SmokeFetchResponse = { status: number };
+/**
+ * Le CORPS voyage avec le statut : sans lui, `classifySmokeStatus` ne peut pas
+ * distinguer les deux 404 — la sonde était structurellement incapable de
+ * rendre un verdict juste, quel que soit son classificateur (#5857).
+ */
+export type SmokeFetchResponse = { status: number; body?: unknown };
 export type SmokeFetch = (
   url: string,
   init: { method: string; headers: Record<string, string> }
@@ -110,7 +152,7 @@ export async function runRouteSmokeTest(options: RunRouteSmokeTestOptions): Prom
           path: route.path,
           module: route.module,
           status: response.status,
-          verdict: classifySmokeStatus(response.status)
+          verdict: classifySmokeStatus(response.status, response.body)
         };
       } catch {
         results[index] = {

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import {
   isValidEmoji,
   sanitizeEmoji,
@@ -228,6 +229,32 @@ describe('EMOJI_MAX_LENGTH (length bound SSOT)', () => {
 
   it('leaves headroom beyond the longest measured RGI grapheme', () => {
     expect(EMOJI_MAX_LENGTH).toBeGreaterThanOrEqual(15);
+  });
+
+  // CE QUE ZOD COMPTE, MESURÉ — pas seulement ce que ce fichier SUPPOSE (#6235).
+  //
+  // Les trois témoins ci-dessus comparent `String.length` à EMOJI_MAX_LENGTH en
+  // JS pur. Ils restent donc VERTS même si `z.string().max()` cesse de compter
+  // des unités UTF-16 — et zod 4.5 a fait exactement cela : il compte des CODE
+  // POINTS. La borne emoji est alors passée EN SILENCE de 32 unités (~64 octets)
+  // à 32 code points (~128 octets), un fail-OPEN partagé par les ~242 `.max()`
+  // du dépôt, que seule une fixture en caractères ASTRAUX pouvait révéler.
+  //
+  // Le commentaire de ce `describe` énonçait déjà le contrat ; ce témoin est ce
+  // qui le TIENT. Un contrat écrit dans un commentaire et vérifié par personne
+  // se perd à la première montée de dépendance, sans qu'aucun gate ne bouge.
+  it('la borne `.max()` de zod compte des unités UTF-16, jamais des code points', () => {
+    const bound = z.string().max(EMOJI_MAX_LENGTH);
+    // 32 emojis astraux = 64 unités UTF-16 pour 32 code points : au-dessus de la
+    // borne en unités, PILE dessus en code points. C'est la seule forme d'entrée
+    // qui distingue les deux comptages.
+    const astral = '😀'.repeat(EMOJI_MAX_LENGTH);
+    expect(astral.length).toBe(EMOJI_MAX_LENGTH * 2);
+    expect([...astral].length).toBe(EMOJI_MAX_LENGTH);
+    expect(bound.safeParse(astral).success).toBe(false);
+    // Contre-épreuve : la MÊME longueur en unités, hors plan astral, passe — le
+    // témoin mesure bien le comptage, pas une borne devenue trop stricte.
+    expect(bound.safeParse('a'.repeat(EMOJI_MAX_LENGTH)).success).toBe(true);
   });
 
   // The REST reaction body is validated by Fastify/AJV against this shared

@@ -81,7 +81,11 @@ extension MeeshyComposerHost {
                     presentMediaIntake(source)
                 }
             }
-            Button(ComposerMediaSourcePolicy.cancel, role: .cancel) { }
+            // **Annuler DÉSARME** (#6008). Ce corps était vide : l'intention
+            // posée par la porte du rail survivait à la feuille qu'elle venait
+            // d'ouvrir, et le média suivant — quelle que soit sa porte — se
+            // posait sur la scène courante au lieu d'ouvrir sa page.
+            Button(ComposerMediaSourcePolicy.cancel, role: .cancel) { abandonRailPosing() }
         }
         // **L'historique se remplit AU-DESSUS de l'aiguillage** (#4402), pas
         // sur la surface qui l'affiche. Un instantané pris seulement pendant

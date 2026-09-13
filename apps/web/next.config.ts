@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { nonCspSecurityHeaders, reportOnlyCspHeader } from './next.config.security.js';
 // Plugin next-intl désactivé pour éviter les redirections d'URL
 // L'internationalisation est gérée côté client via le LanguageContext
 // import createNextIntlPlugin from 'next-intl/plugin';
@@ -140,9 +141,16 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // Headers pour PWA et Service Workers
+  // Headers pour PWA et Service Workers, et en-têtes de sécurité globaux (#3628)
   async headers() {
     return [
+      {
+        // CSP servie en Report-Only ici — voir le commentaire de
+        // reportOnlyCspHeader dans next.config.security.js (#5728 : bascule
+        // en mode bloquant réservée à une vérification staging bout en bout).
+        source: '/:path*',
+        headers: [...nonCspSecurityHeaders, ...reportOnlyCspHeader],
+      },
       {
         source: '/sw.js',
         headers: [

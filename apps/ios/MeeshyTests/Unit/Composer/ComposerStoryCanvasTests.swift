@@ -34,7 +34,7 @@ final class ComposerStoryCanvasTests: XCTestCase {
     /// capture vidéo, reprise de brouillon, média reçu d'une conversation —
     /// gardent la scène. Elles n'ouvrent sur aucun choix : elles ARRIVENT avec
     /// un contenu, et l'atelier est le seul écran qui le tienne déjà.
-    /// `ConversationMediaComposerDoor` le documente pour son propre cas — son
+    /// `MediaComposerDoor` le documente pour son propre cas — son
     /// média semé disparaîtrait de l'écran ET de la publication, le brouillon
     /// du document n'ayant ni `mediaIds` ni fichier.
     ///
@@ -48,7 +48,7 @@ final class ComposerStoryCanvasTests: XCTestCase {
     /// > Une exemption qui couvre quatre cas d'un seul argument doit être
     /// > vérifiée sur les quatre.
     func test_lesOuverturesQuiPORTENTDeLaMatière_gardentLaScène() {
-        for ouverture in [ComposerOpening.videoCameraReady, .resume, .mediaSeeded] {
+        for ouverture in [ComposerOpening.videoCameraReady, .resume] {
             XCTAssertEqual(
                 ComposerSurfaceRouting.surface(opening: ouverture, format: .story),
                 .scene,

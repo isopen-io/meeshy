@@ -14,6 +14,7 @@ const agentResponseSchema = z.object({
   replyToId: z.string().optional(),
   mentionedUsernames: z.array(z.string()).optional(),
   messageSource: z.literal('agent'),
+  illustration: z.object({ sourceUrl: z.string().url() }).optional(),
   metadata: z.object({
     agentType: z.enum(['impersonator', 'animator', 'orchestrator']),
     roleConfidence: z.number().min(0).max(1),

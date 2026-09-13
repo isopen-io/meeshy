@@ -565,10 +565,15 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastViewPostId = postId
     }
 
-    func getPostViews(postId: String, limit: Int, offset: Int) async throws -> PostViewersResponse {
+    func getPostViews(
+        postId: String, limit: Int, offset: Int
+    ) async throws -> OffsetPaginatedAPIResponse<[APIPostViewer]> {
         getPostViewsCallCount += 1
+        // La forme que la ROUTE sert : la liste dans `data`, la pagination en
+        // sœur (`routes/posts/interactions.ts`). Le double décodait l'ancienne
+        // forme, que rien n'a jamais servie.
         return JSONStub.decode("""
-        {"items":[],"pagination":{"total":0,"offset":0,"limit":\(limit),"hasMore":false}}
+        {"success":true,"data":[],"pagination":{"total":0,"offset":\(offset),"limit":\(limit),"hasMore":false}}
         """)
     }
 

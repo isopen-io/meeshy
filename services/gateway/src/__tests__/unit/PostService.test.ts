@@ -136,12 +136,14 @@ describe('PostService', () => {
       prisma.postMedia.findFirst.mockResolvedValue({ id: 'media-audio', fileUrl: '/uploads/audio.m4a' });
       prisma.postMedia.update.mockResolvedValue({});
 
+      // La graphie du FIL — `duration_ms`, `start`/`end` en SECONDES — telle que
+      // `MobileTranscriptionSchema` l'accepte.
       const mobileTranscription = {
         text: 'Hello world',
         language: 'en',
         confidence: 0.95,
         duration_ms: 3000,
-        segments: [],
+        segments: [{ text: 'Hello world', start: 0.25, end: 2.9, speaker_id: 'S1' }],
       };
 
       await service.createPost(
@@ -156,16 +158,24 @@ describe('PostService', () => {
         }),
       );
 
+      // ...et la graphie du MAGASIN — `durationMs`, `startMs`/`endMs` en
+      // MILLISECONDES, `speakerId` — telle que `attachmentTranscriptionSchema`
+      // l'exige (audit de cohérence iOS ↔ passerelle, 2026-09-11). Persistée
+      // verbatim, la charge du fil arrivait chez un lecteur qui ne sait lire ni
+      // `start`/`end` ni `duration_ms` : le texte s'affichait, les segments
+      // n'avaient plus d'horodatage. Site unique de conversion :
+      // `services/posts/mobile-transcription.ts`.
       expect(prisma.postMedia.update).toHaveBeenCalledWith({
         where: { id: 'media-audio' },
         data: {
           transcription: {
+            type: 'audio',
             text: 'Hello world',
             language: 'en',
             confidence: 0.95,
-            duration_ms: 3000,
-            segments: [],
             source: 'mobile',
+            durationMs: 3000,
+            segments: [{ text: 'Hello world', startMs: 250, endMs: 2900, speakerId: 'S1' }],
           },
         },
       });

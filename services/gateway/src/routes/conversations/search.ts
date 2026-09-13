@@ -24,6 +24,7 @@ import {
   buildLastMessagePreviewTranslations,
   truncateMessagePreview
 } from './utils/last-message-preview';
+import { isLastMessageProtected } from '@meeshy/shared/utils/last-message-protection';
 
 const logger = enhancedLogger.child({ module: 'ConversationSearchRoutes' });
 
@@ -310,7 +311,21 @@ export function registerSearchRoutes(
         // le `include` Prisma ci-dessus (aucun `select` restrictif sur
         // `messages`), mais était jusqu'ici jeté par cette reconstruction
         // manuelle — la donnée était payée puis perdue. Hisser explicitement.
-        const place = sharedPlaceFromMetadata((msg as { metadata?: unknown } | undefined)?.metadata);
+        // #6111 — jumeau exact du masquage de `GET /conversations` : un
+        // dernier message à vue unique, flouté ou éphémère périmé ne
+        // transporte plus rien de son contenu (lieu, pièces jointes, leur
+        // compte compris). Identité, horloge, type et drapeaux continuent de
+        // partir — ce sont eux qui qualifient le placeholder client.
+        const isMsgProtected = msg
+          ? isLastMessageProtected({
+              isBlurred: (msg as { isBlurred?: boolean | null }).isBlurred,
+              isViewOnce: (msg as { isViewOnce?: boolean | null }).isViewOnce,
+              expiresAt: (msg as { expiresAt?: Date | null }).expiresAt
+            })
+          : false;
+        const place = isMsgProtected
+          ? null
+          : sharedPlaceFromMetadata((msg as { metadata?: unknown } | undefined)?.metadata);
         const lastMessage = msg ? {
           id: msg.id,
           // Même borne que `GET /conversations` : la carte d'aperçu traduite
@@ -318,10 +333,14 @@ export function registerSearchRoutes(
           // et servir l'original en entier ferait dépendre le poids de la ligne
           // de la langue du lecteur. Le contenu complet passe toujours par
           // `GET /conversations/:id/messages`.
-          content: truncateMessagePreview(msg.content),
+          content: isMsgProtected ? '' : truncateMessagePreview(msg.content),
           senderId: msg.senderId,
           messageType: msg.messageType,
           createdAt: msg.createdAt,
+          isBlurred: (msg as { isBlurred?: boolean | null }).isBlurred ?? false,
+          isViewOnce: (msg as { isViewOnce?: boolean | null }).isViewOnce ?? false,
+          expiresAt: (msg as { expiresAt?: Date | null }).expiresAt ?? null,
+          effectFlags: (msg as { effectFlags?: number | null }).effectFlags ?? 0,
           sender: sender ? {
             id: sender.id,
             userId: sender.userId,
@@ -335,8 +354,8 @@ export function registerSearchRoutes(
               ? (sender.user?.isOnline ?? false)
               : false,
           } : null,
-          attachments: msg.attachments || [],
-          _count: (msg as any)._count,
+          attachments: isMsgProtected ? [] : (msg.attachments || []),
+          _count: isMsgProtected ? { attachments: 0 } : (msg as any)._count,
           ...(place ? { location: place } : {}),
         } : null;
 
@@ -393,8 +412,8 @@ export function registerSearchRoutes(
           // (`MeeshyConversation.resolvedLastMessagePreview`,
           // `formatLastMessage` côté web) et que la carte compacte
           // `{ langue: aperçu }` n'a pas la forme de `Message.translations`.
-          lastMessageOriginalLanguage: msg?.originalLanguage ?? null,
-          lastMessageTranslations: buildLastMessagePreviewTranslations({
+          lastMessageOriginalLanguage: isMsgProtected ? null : (msg?.originalLanguage ?? null),
+          lastMessageTranslations: isMsgProtected ? null : buildLastMessagePreviewTranslations({
             translations: (msg as { translations?: unknown } | undefined)?.translations,
             originalLanguage: msg?.originalLanguage,
             viewerLanguages

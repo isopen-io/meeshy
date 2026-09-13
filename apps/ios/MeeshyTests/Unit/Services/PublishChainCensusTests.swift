@@ -244,7 +244,22 @@ final class PublishChainCensusTests: XCTestCase {
         // (`ComposerDocumentDraft.mediaAlts` → `PublishIntent.document` →
         // `enqueuePostMedia` → `CreatePostPayload.mediaAlts`), et c'est
         // exactement la question que ce compte pose.
-        XCTAssertEqual(champs(voieDurable()).count, 17,
+        //
+        // **18 depuis le 2026-09-10 : `allowSoundExtraction`** (relevé #6011).
+        // Même réponse, vérifiée maillon par maillon avant d'abaisser la
+        // référence — `ComposerDocumentRules:592` (le draft le déclare) →
+        // `ComposerDocumentDurablePublisher:83` (draft → intent) →
+        // `MutationPayloads:529` (le payload durable le porte) →
+        // `OfflineQueue+PostMediaProgress:101` (la file le transporte). Il ne
+        // naît pas ici.
+        //
+        // **Le symptôme qui a trahi le lot précédent** : `voieDurable()`
+        // construisait DÉJÀ ses dix-huit arguments — il fallait bien que le
+        // fichier compile — pendant que l'attendu restait à dix-sept. Ajuster
+        // le constructeur d'un cliquet sans répondre à sa question, c'est le
+        // faire taire sans l'écouter ; il ne reste alors qu'un rouge que
+        // personne ne sait plus lire.
+        XCTAssertEqual(champs(voieDurable()).count, 18,
                        "`CreatePostBody` (voie DURABLE) a changé de taille — ce champ neuf "
                        + "vient-il des quatre maillons amont, ou naît-il ici ?")
     }

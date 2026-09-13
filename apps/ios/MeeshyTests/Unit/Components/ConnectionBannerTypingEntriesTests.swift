@@ -92,6 +92,33 @@ final class ConnectionBannerTypingEntriesTests: XCTestCase {
         )
     }
 
+    /// **L'annonce de frappe ne doit pas se poser SUR le chrome de la
+    /// conversation** (#5941, constaté à l'écran par le porteur).
+    ///
+    /// `liftedTopPadding(base: 72)` rend `0` — et c'est juste, la borne retient
+    /// au lieu de passer sous la barre d'état (témoin ci-dessus). Mais posée à
+    /// `y = 0`, la bannière descend de sa hauteur et recouvre le chrome de la
+    /// conversation, mesuré à `y = 70…114` : le bandeau « @pseudo » masquait le
+    /// bouton « Mode de lecture ».
+    ///
+    /// La fonction n'est donc pas en cause : **la base l'est**. 72 pt ne peut
+    /// pas à la fois absorber une remontée de 88 et laisser le chrome libre.
+    /// Ce témoin épingle la valeur employée en conversation, qui doit poser la
+    /// bannière SOUS le chrome — sans quoi le chevauchement revient sans que
+    /// rien ne rougisse.
+    func test_lAnnonceDeFrappeSePosseSousLeChromeDeConversation() {
+        let haut = ConnectionBanner.conversationTopPadding
+
+        XCTAssertGreaterThanOrEqual(
+            haut, ConnectionBanner.conversationChromeBottom,
+            "posée plus haut, la bannière recouvre les boutons Appeler / Rechercher / Mode de lecture"
+        )
+
+        // Et elle ne part pas à la dérive : une marge qui doublerait la
+        // hauteur du chrome ferait flotter l'annonce au milieu du fil.
+        XCTAssertLessThan(haut, ConnectionBanner.conversationChromeBottom * 2)
+    }
+
     func test_liftedTopPadding_neverPushesAboveTheTopOfItsHost() {
         XCTAssertEqual(ConnectionBanner.liftedTopPadding(base: 0), 0,
                        "un hôte sans marge (iPad) ne doit pas voir la pastille passer sous la barre d'état")

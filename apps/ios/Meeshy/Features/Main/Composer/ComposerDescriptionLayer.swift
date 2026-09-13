@@ -122,6 +122,40 @@ struct ComposerDescriptionLayer: View {
     /// n'a rien à déclarer pour garder ce qu'il avait.
     var validationLabel: String = ComposerDescriptionCopy.done
 
+    /// **Quand la frappe commence et quand elle finit** (#6126).
+    ///
+    /// Monté EN PLACE sur la scène, le calque est le seul à savoir qu'un tap
+    /// vient d'ouvrir le champ — `isEditing` est son état privé. Son hôte, lui,
+    /// doit le savoir pour deux raisons qui n'ont rien à voir l'une avec
+    /// l'autre : réserver au canvas la hauteur du clavier, et cesser de
+    /// proposer un repli qui emporterait le champ en cours de frappe.
+    ///
+    /// `onValidate` ne pouvait pas tenir ce rôle : il ne dit que la FIN, et il
+    /// la dit aussi quand la zone se range pour une autre raison. Une
+    /// affordance qui dépend de l'ouverture a besoin de l'ouverture.
+    var onEditingChange: ((Bool) -> Void)?
+
+    /// **Le jeton d'ouverture EXTERNE** (#6126).
+    ///
+    /// Le calque s'ouvre au TAP, et c'est le geste nominal. Mais deux portes
+    /// mènent aussi à la légende sans passer par elle : le bouton de l'atelier
+    /// (`atelierDescriptionButton`) et la porte `.description` du rail. Tant que
+    /// la saisie était une zone montée en bas, elles l'ouvraient en posant un
+    /// drapeau ; la saisie étant désormais EN PLACE, ce drapeau ne commande plus
+    /// rien — et les deux portes seraient devenues des contrôles inertes.
+    ///
+    /// > La loi 4 ne se vérifie pas seulement sur le contrôle qu'un lot
+    /// > déplace : elle se vérifie sur tout ce qui MENAIT à ce que le lot a
+    /// > déplacé. Une porte ne rougit pas quand la pièce derrière change de
+    /// > place — elle s'ouvre sur rien.
+    ///
+    /// Un COMPTEUR plutôt qu'un booléen : deux ouvertures successives sans
+    /// fermeture explicite entre elles doivent toutes deux agir, et un `Bool`
+    /// remis à `false` par le calque ferait écrire l'état de l'enfant par le
+    /// parent. Valeur initiale ignorée — `adaptiveOnChange` ne se déclenche
+    /// qu'au CHANGEMENT, donc le montage n'ouvre rien.
+    var editingRequest: Int = 0
+
     @State private var isEditing = false
     @FocusState private var isFocused: Bool
 
@@ -146,6 +180,14 @@ struct ComposerDescriptionLayer: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .onAppear { if opensEditingOnAppear { isEditing = true } }
+        // **Un seul site annonce l'ouverture et la fermeture.** Le poser sur
+        // `isEditing` plutôt que dans chacun des deux gestes garantit que
+        // l'hôte entend TOUTES les transitions — y compris celles qu'un chemin
+        // futur introduirait sans penser à prévenir.
+        .adaptiveOnChange(of: isEditing) { _, enCours in onEditingChange?(enCours) }
+        // Les portes qui mènent à la légende sans passer par elle — voir
+        // `editingRequest`.
+        .adaptiveOnChange(of: editingRequest) { _, _ in isEditing = true }
         // **Quand le clavier part, la zone part** (directive porteur
         // 2026-08-30). Une seule loi pour les trois chemins — la coche, le
         // glissement contrôlé, et toute dismission système — au lieu d'une
@@ -188,20 +230,39 @@ struct ComposerDescriptionLayer: View {
     /// Vide ⇒ une amorce, **jamais un cadre vide**. Un cadre annonce une zone de
     /// saisie ; l'amorce annonce un geste, et c'est le geste qui manque à
     /// l'auteur devant une description qu'il n'a pas encore écrite.
+    /// **L'encre suit le FOND, jamais une constante** (#6127, directive porteur
+    /// 2026-09-12 : « Lorsque le fond de la scène est claire la description doit
+    /// avoir son écriture fonction et vice versa »).
+    ///
+    /// Ces quatre couleurs étaient figées à `isDark: true`. C'était juste tant
+    /// que le calque ne servait que des surfaces sombres — la zone basse épingle
+    /// `.dark`, et le plateau du meuble est navy. Posé SUR la scène, il sert
+    /// désormais un fond que l'AUTEUR choisit : un pastel clair, une capture
+    /// d'écran blanche. L'encre claire y disparaît.
+    ///
+    /// Le calque ne calcule rien et ne reçoit aucun paramètre de plus : il LIT
+    /// le `colorScheme` que son hôte épingle. C'est ce qui garde une seule
+    /// source — `CanvasChromeScheme`, résolue une fois par le volet — et fait
+    /// suivre d'un coup `glassControlForeground()` et `adaptiveGlass`, qui
+    /// lisent déjà le même environnement.
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var isDark: Bool { colorScheme == .dark }
+
     @ViewBuilder
     private var readerText: some View {
         if text.isEmpty {
             Text(ComposerDescriptionCopy.amorce)
                 .font(MeeshyFont.relative(15))
-                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
         } else {
             MessageTextRenderer.render(
                 text,
                 fontSize: 15,
-                color: MeeshyColors.textPrimary(isDark: true),
-                mentionColor: MeeshyColors.mentionColor(isDark: true),
-                hashtagColor: MeeshyColors.hashtagColor(isDark: true),
-                accentColor: MeeshyColors.textPrimary(isDark: true),
+                color: MeeshyColors.textPrimary(isDark: isDark),
+                mentionColor: MeeshyColors.mentionColor(isDark: isDark),
+                hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
+                accentColor: MeeshyColors.textPrimary(isDark: isDark),
                 usesRelativeFont: true
             )
             .lineLimit(collapsedLineLimit)

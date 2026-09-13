@@ -68,8 +68,9 @@ struct FeedView: View {
     @State var composerText = ""
     /// Les personnes que ce post nomme SANS que son texte le dise. Aucune n'est
     /// INLINE : celles-là, le serveur les relit du contenu lui-même. `var` non
-    /// privée — `publishPostWithAttachments()` vit dans l'extension
-    /// `FeedView+Attachments`.
+    /// privée — `feedDeclaredReferences` vit dans l'extension
+    /// `FeedView+Attachments`, et c'est elle qui les remet aux deux chemins de
+    /// publication restants (`publishAudioPost`, `publishBorrowedSoundPost`).
     @State var composerReferences: [ComposerReference] = []
     @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
@@ -175,15 +176,19 @@ struct FeedView: View {
     @State var isUploading = false
     @State var uploadProgress: UploadQueueProgress?
     @State var isLoadingMedia = false
-    @StateObject var audioRecorder = AudioRecorderManager()
+    // (#6226) `audioRecorder` retiré : déclaré ici, il n'était LU nulle part
+    // dans `FeedView*` — un abonnement à vingt hertz et une instance
+    // d'enregistreur vivante pour personne.
     @State private var pendingAttachmentType: String?
     @State var showEmojiPicker = false
     @State private var quoteTargetPost: FeedPost?
 
     var composerHasContent: Bool {
         // pendingPlace inclus : sinon le bouton Publier reste desactive pour une
-        // position seule et publishPostWithAttachments() (dont le garde autorise
-        // deja ce cas) ne devient jamais atteignable (Task 13, 2026-07-29).
+        // position seule et le chemin de publication ne devient jamais
+        // atteignable (Task 13, 2026-07-29). La règle est portée aujourd'hui par
+        // `ComposerDocumentSendRules` (`emptyDraft` accepte un lieu seul) ;
+        // `publishPostWithAttachments`, qui l'appliquait ici, est retirée (#6016).
         !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty || pendingPlace != nil
     }
 
@@ -651,16 +656,11 @@ struct FeedView: View {
         // L'origine est la MÊME que celle du fil iPhone (`.feedComposer`) —
         // même intention, même profil, même socle. Une origine « iPad » aurait
         // fabriqué une seconde vérité à tenir d'accord avec la première.
-        .fullScreenCover(isPresented: $showComposer) {
-            DocumentComposerDoor(
-                intent: ComposerIntent(origin: .feedComposer),
-                viewModel: viewModel,
-                storyViewModel: storyViewModel,
-                router: router,
-                conversationListViewModel: conversationListViewModel,
-                statusViewModel: statusViewModel
-            )
-        }
+        .feedPostComposer(
+            isPresented: $showComposer, router: router, viewModel: viewModel,
+            storyViewModel: storyViewModel, statusViewModel: statusViewModel,
+            conversationListViewModel: conversationListViewModel
+        )
     }
 
     /// Actions du header, dans l'ordre de lecture : les Réels, puis « À

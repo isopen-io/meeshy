@@ -235,8 +235,17 @@ async function joinAsGuest(
     canSendMessages: shareLink.allowAnonymousMessages,
     canSendFiles: shareLink.allowAnonymousFiles,
     canSendImages: shareLink.allowAnonymousImages,
-    canSendVideos: false,
-    canSendAudios: false,
+    // Une vidéo EST un fichier (`classifyAnonymousAttachment`,
+    // `services/attachments/ContentSignature.ts`) : elle suit le MÊME
+    // drapeau que `canSendFiles`, jamais un `false` inventé par ce site.
+    // La voix suit le droit d'ÉCRIRE, pas celui d'envoyer des fichiers — même
+    // fonction, même décision produit, `isAudio` y retourne `{ allowed: true }`
+    // sans jamais consulter `allowAnonymousFiles`/`allowAnonymousImages` (#6091).
+    canSendVideos: shareLink.allowAnonymousFiles,
+    canSendAudios: shareLink.allowAnonymousMessages,
+    // Refus ASSUMÉS, alignés sur `NEW_MEMBER_PERMISSIONS` : le lien ne porte
+    // aucun drapeau position/lien, et un visiteur n'a pas de raison d'émettre
+    // l'un ou l'autre avant un geste explicite de l'hôte.
     canSendLocations: false,
     canSendLinks: false,
     canViewHistory: shareLink.allowViewHistory,
@@ -347,8 +356,13 @@ async function joinAsRegistered(
       canSendMessages: true,
       canSendFiles: true,
       canSendImages: true,
-      canSendVideos: false,
-      canSendAudios: false,
+      // Un utilisateur NOMMÉ entrant par lien est un membre à part entière —
+      // cohérent avec `NEW_MEMBER_PERMISSIONS`
+      // (`services/participantRights.ts:119`) et avec `canSendFiles`/
+      // `canSendImages` ci-dessus : l'hôte n'a jamais dit non (#6091).
+      canSendVideos: true,
+      canSendAudios: true,
+      // Refus ASSUMÉS, alignés sur `NEW_MEMBER_PERMISSIONS`.
       canSendLocations: false,
       canSendLinks: false,
       canViewHistory: shareLink.allowViewHistory,

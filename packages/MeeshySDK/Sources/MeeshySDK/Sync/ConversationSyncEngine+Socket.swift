@@ -162,7 +162,7 @@ extension ConversationSyncEngine {
                     await self.cache.conversations.update(for: "list") { conversations in
                         var updated = conversations
                         if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
-                            updated[idx].closedAt = ISO8601DateFormatter().date(from: event.closedAt)
+                            updated[idx].closedAt = (try? Date(event.closedAt, strategy: .iso8601.time(includingFractionalSeconds: true))) ?? (try? Date(event.closedAt, strategy: .iso8601))
                             updated[idx].closedBy = event.closedBy
                         }
                         return updated

@@ -386,7 +386,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           return sendForbidden(reply, 'Access denied');
         }
 
-        const updated = await notificationService.markAsRead(id);
+        const updated = await notificationService.markAsRead(id, userId);
 
         return sendSuccess(reply, updated);
       } catch (error) {
@@ -715,7 +715,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           return sendForbidden(reply, 'Access denied');
         }
 
-        const deleted = await notificationService.deleteNotification(id);
+        const deleted = await notificationService.deleteNotification(id, userId);
 
         if (!deleted) {
           return sendInternalError(reply, 'Failed to delete notification');

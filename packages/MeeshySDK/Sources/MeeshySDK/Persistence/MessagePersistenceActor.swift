@@ -2076,7 +2076,11 @@ public actor MessagePersistenceActor {
                             messageServerId: api.id,
                             targetLanguage: t.targetLanguage,
                             translatedContent: t.translatedContent,
-                            translationModel: t.translationModel,
+                            // La colonne locale est `notNull` et AUCUNE surface
+                            // ne la lit : la chaîne vide y dit « le serveur n'a
+                            // pas déclaré de modèle », sans imposer une
+                            // reconstruction de table pour une métadonnée morte.
+                            translationModel: t.translationModel ?? "",
                             confidenceScore: t.confidenceScore,
                             sourceLanguage: t.sourceLanguage,
                             receivedAt: now

@@ -76,7 +76,10 @@ final class DependencyContainer {
         do {
             try MessageDatabaseMigrations.runAll(on: pool)
             try FeedDatabaseMigrations.runAll(on: pool)
-            DatabaseMaintenance.applyTuning(on: pool)
+            // `applyTuning` a disparu d'ici (#6221) : ses PRAGMA sont désormais
+            // posés par connexion dans `dbConfig()`. C'était la SEULE écriture
+            // inconditionnelle du démarrage, et elle pouvait attendre jusqu'à
+            // cinq secondes la fin d'une écriture de la NSE sur le même fichier.
         } catch {
             containerLogger.fault("Database migrations failed after recovery: \(error.localizedDescription, privacy: .public)")
             diagnostics.firstAttemptError = (diagnostics.firstAttemptError ?? "") + " | migrations: \(error.localizedDescription)"
@@ -223,10 +226,43 @@ final class DependencyContainer {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.sessionWasInvalidated = true }
             .store(in: &cancellables)
-        AuthManager.shared.$isAuthenticated
-            .removeDuplicates()
-            .dropFirst()
-            .filter { !$0 }
+        // #5913 — PAS de `.dropFirst()`. Il écartait la valeur INITIALE, donc la
+        // purge n'avait lieu que sur une transition `true → false` observée EN
+        // VOL. Or les fins de session les plus courantes n'en émettent aucune :
+        // l'app tuée pendant la session, le jeton expiré constaté au démarrage,
+        // la session invalidée côté serveur entre deux lancements. Dans ces trois
+        // cas l'app démarre déjà déconnectée — première valeur `false`, jetée —
+        // et la file du compte sortant survivait jusqu'au compte suivant (mesuré :
+        // 7 lignes de 12 h, dont 2 `blockUser` et 1 `unblockUser`).
+        //
+        // Le `filter { !$0 }` suffit à garder un démarrage CONNECTÉ hors de la
+        // purge ; sur un démarrage déconnecté avec une file vide, le coût est une
+        // lecture `pendingOutboxCount()` et rien d'autre. Le toast, lui, reste
+        // gouverné par `sessionWasInvalidated` — faux au démarrage à froid, donc
+        // aucun message ne s'affiche pour une purge de résidus.
+        // #5968 — le booléen SEUL confond « pas encore regardé » et « regardé,
+        // personne ». `isAuthenticated` naît `false`, `checkExistingSession()`
+        // est async, et ce conteneur s'abonne à la CONSTRUCTION de l'`App` : un
+        // `@Published` rejoue sa valeur courante au nouvel abonné, donc `false`
+        // traversait `filter { !$0 }` et la purge partait à CHAQUE démarrage à
+        // froid — 25 messages et 7 lignes d'outbox effacés sur une session
+        // parfaitement valide, mesuré au simulateur de recette.
+        //
+        // Le commentaire de #5913 concluait « un `filter { !$0 }` suffit à
+        // garder le démarrage CONNECTÉ hors de la purge ». C'est cette phrase
+        // que la mesure réfute : au moment où le filtre s'applique, personne
+        // n'a encore regardé s'il y a une session.
+        //
+        // `hasResolvedStoredSession` apporte le troisième état. Le cas de #5913
+        // — app tuée, jeton expiré, session invalidée entre deux lancements —
+        // reste couvert : il se présente comme « résolu, personne », et purge.
+        Publishers.CombineLatest(
+            AuthManager.shared.$hasResolvedStoredSession,
+            AuthManager.shared.$isAuthenticated
+        )
+        .map { SessionPurgeDecision.shouldPurgeLocalMessages(sessionResolved: $0, isAuthenticated: $1) }
+        .removeDuplicates()
+        .filter { $0 }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 let invalidated = self?.sessionWasInvalidated ?? false
@@ -235,6 +271,16 @@ final class DependencyContainer {
                     do {
                         let pendingCount = try await persistence.pendingOutboxCount()
                         try await persistence.clearAllMessagesForLogout()
+                        // #5913 — la purge SQL ci-dessus vide la TABLE ; l'acteur
+                        // `OfflineQueue` garde, lui, ses `items` et ses
+                        // `outcomeTombstones` EN MÉMOIRE. Sans cette ligne, le
+                        // bandeau continue d'afficher les lignes du compte sortant
+                        // et `retryAll()` — qui n'a aucun filtre de statut et se
+                        // déclenche au retour du réseau — peut encore les rejouer,
+                        // sous le jeton du compte SUIVANT. `clearAll()` fait les
+                        // trois (mémoire, tombstones, base) ; elle n'avait jusqu'ici
+                        // aucun appelant dans le dépôt.
+                        await OfflineQueue.shared.clearAll()
                         if DependencyContainer.shouldSurfaceOutboxLossToast(
                             sessionWasInvalidated: invalidated, pendingCount: pendingCount
                         ) {
@@ -529,6 +575,12 @@ final class DependencyContainer {
             try db.execute(sql: "PRAGMA synchronous = NORMAL")
             try db.execute(sql: "PRAGMA journal_size_limit = 16777216")
             try db.execute(sql: "PRAGMA wal_autocheckpoint = 1000")
+            // #6221 — `cache_size`, `mmap_size` et `temp_store` vivent sur la
+            // CONNEXION, pas dans le fichier. `applyTuning(on:)` les posait via
+            // `pool.write`, donc sur le seul rédacteur : les seize lecteurs
+            // travaillaient sans mmap ni cache de pages. Ici, ils atteignent
+            // chaque connexion — et sans transaction d'écriture au démarrage.
+            try DatabaseMaintenance.prepareTuning(db)
         }
         return config
     }

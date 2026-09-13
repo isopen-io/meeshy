@@ -5,10 +5,10 @@
 //
 // L'invariant porte sur le `bun.lock` de la RACINE et sur TOUS les manifestes
 // que la racine déclare comme workspaces. Sa surface est donc le dépôt, pas une
-// app. Sa première écriture vivait dans `apps/web-old-version3/__tests__/` : elle sortait
-// de son propre workspace (`join(__dirname,'..','..','..')`), ne tournait dans
-// AUCUNE CI (`grep web-v3 .github/workflows/ci.yml` = rien), et serait morte en
-// silence au premier renommage de `apps/web-v3`. Un garde d'infrastructure
+// app. Sa première écriture vivait dans les tests de l'ancienne refonte v3
+// (retirée du dépôt depuis, #5994) : elle sortait de son propre workspace
+// (`join(__dirname,'..','..','..')`), ne tournait dans AUCUNE CI, et serait
+// morte en silence au premier renommage de son application. Un garde d'infrastructure
 // hébergé par l'app la plus jeune du dépôt. Précédent retenu :
 // `scripts/check-type-debt.sh`, gate de racine appelé par le job `quality`.
 //
@@ -28,12 +28,31 @@
 // La première écriture itérait les workspaces que `bun.lock` connaît DÉJÀ, puis
 // lisait leur manifeste. Un manifeste que le lock n'a jamais vu n'était donc
 // contrôlé par personne — le sens « manifeste → lock », c'est-à-dire le sens
-// que le critère de fin nomme. Ce n'était pas théorique : `apps/web-v3` était
+// que le critère de fin nomme. Ce n'était pas théorique : `apps/web-v2` était
 // exactement dans cet état, et le garde certifiait « aligné ».
 //
 // Les deux sens ensemble ont un effet de bord voulu : un `bun.lock` commité
 // SANS l'arbre de fichiers qu'il décrit (ou l'inverse) rougit. Le lock et le
 // disque ne peuvent plus diverger sur un clone propre sans que la CI le dise.
+//
+// POURQUOI LE CHAMP `version` D'UN WORKSPACE N'EST PLUS COMPARÉ [issue #5740]
+//
+// Il l'a été, et c'est ce qui a rendu le Quality gate rouge sur `main` à
+// chaque commit `chore(release): version packages [skip ci]` (changesets bump
+// les manifestes, jamais `bun.lock`). Mesuré avant de trancher : ni
+// `bun install --ignore-scripts` ni `bun install --force --lockfile-only` ne
+// réécrivent ce champ pour un paquet de workspace LOCAL — bun ne le traite
+// simplement pas comme une donnée qu'un `install` rafraîchit. L'option
+// « faire committer bun.lock par le processus de release » n'a donc pas de
+// commande qui la rende vraie.
+// Et la comparaison ne protégeait rien : `version` d'un workspace n'est
+// référencé par AUCUNE autre entrée du lock (les dépendances internes
+// résolvent en `workspace:*`, jamais par numéro), donc rien ne peut résoudre
+// différemment selon sa valeur. Ce que la comparaison gardait, c'était du
+// bruit de CI répété à chaque release, pas un invariant de résolution.
+// `name`, lui, reste comparé : il compose `resolutionKeyFor` plus bas et une
+// divergence dirait un workspace mal apparié — un fait de résolution, pas
+// seulement de métadonnée.
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -240,9 +259,13 @@ const pairedWorkspaces = (world) => {
     .map(({ directory, document }) => ({ directory, document, locked: locked[directory] }));
 };
 
+// `version` en est exclu : voir « POURQUOI LE CHAMP version D'UN WORKSPACE
+// N'EST PLUS COMPARÉ » en tête de fichier (#5740). `name`, lui, est comparé —
+// il compose `resolutionKeyFor` plus bas, une divergence est un fait de
+// résolution.
 const lockRepeatsTheIdentityOfEachManifest = (world) =>
   pairedWorkspaces(world).flatMap(({ directory, document, locked }) =>
-    ['name', 'version'].flatMap((field) =>
+    ['name'].flatMap((field) =>
       document[field] === locked[field] ||
       document[field] === undefined ||
       locked[field] === undefined
@@ -402,6 +425,41 @@ const mutate = (world, apply) => {
   return copy;
 };
 
+/**
+ * LA VERSION QUE TOUS LES MANIFESTES ACCEPTERAIENT, DÉRIVÉE — jamais écrite en
+ * dur.
+ *
+ * La sonde « un retard déclaré qui a cessé de retarder » doit poser un override
+ * qu'AUCUN manifeste ne contredit, pour vérifier que le garde réclame alors le
+ * retrait du paquet de `OVERRIDES_LAGGING_BEHIND_THEIR_MANIFESTS`. Cette
+ * version était un littéral, `8.5.26` — exactement ce qu'`apps/web` déclarait
+ * le jour où la sonde a été écrite. Le jour où ce manifeste est passé à
+ * `^8.5.28`, `8.5.26` a cessé de le satisfaire : la sonde est devenue AVEUGLE,
+ * et le garde a perdu, en silence, le seul témoin qui surveillait sa propre
+ * liste de retards déclarés.
+ *
+ * Un littéral qui encode une portée du moment rend l'écart permanent et
+ * invisible (leçon 594). On dérive donc la version des manifestes, comme le
+ * garde dérive déjà tout le reste : le plancher le plus haut parmi les portées
+ * déclarées satisfait toutes les portées de la même ligne majeure.
+ */
+const versionEveryManifestWouldAccept = (world, name) => {
+  const floors = world.manifests
+    .flatMap(({ document }) =>
+      DEPENDENCY_FIELDS.flatMap((field) => {
+        const range = rangesAt(document, field)[name];
+        return range === undefined || !isInstallableRange(range) ? [] : [range];
+      }),
+    )
+    .map((range) => parseVersion(/^[\^~]/.test(range) ? range.slice(1) : range))
+    .filter((version) => version !== null);
+  const highest = floors.reduce(
+    (winner, version) => (winner === null || isAtLeast(version, winner) ? version : winner),
+    null,
+  );
+  return (highest ?? [0, 0, 0]).join('.');
+};
+
 const MUTATIONS = [
   [
     "un manifeste de workspace que le lock n'a jamais vu",
@@ -426,13 +484,6 @@ const MUTATIONS = [
       world.lock.workspaces['apps/zz-fantome'] = { name: '@meeshy/zz-fantome', version: '0.0.0' };
     },
     'bun.lock déclare un workspace absent du graphe sur disque',
-  ],
-  [
-    'une version de manifeste que le lock ne suit pas',
-    (world) => {
-      world.lock.workspaces['apps/web'].version = '0.0.0-sonde';
-    },
-    'version : manifeste=',
   ],
   [
     'une portée de manifeste que le lock ne suit pas',
@@ -488,9 +539,27 @@ const MUTATIONS = [
     'un retard déclaré qui a cessé de retarder',
     (world) => {
       const root = world.manifests.find(({ directory }) => directory === '');
-      root.document.overrides = { ...root.document.overrides, postcss: '8.5.26' };
+      root.document.overrides = {
+        ...root.document.overrides,
+        postcss: versionEveryManifestWouldAccept(world, 'postcss'),
+      };
     },
     'overrides postcss ne contredit plus aucun manifeste',
+  ],
+];
+
+// Le pendant positif de MUTATIONS : une divergence que ce garde doit TOLÉRER.
+// Sans ce témoin, rien n'empêche une réécriture future de
+// `lockRepeatsTheIdentityOfEachManifest` de réintroduire `version` en
+// silence — #5740 redeviendrait rouge à chaque `chore(release)` sans qu'aucun
+// self-test ne le voie venir.
+const TOLERATED_MUTATIONS = [
+  [
+    'une version de manifeste que le lock ne suit pas (#5740 — aucune conséquence de résolution)',
+    (world) => {
+      world.manifests.find(({ directory }) => directory === 'apps/web').document.version =
+        '999.0.0-sonde';
+    },
   ],
 ];
 
@@ -502,11 +571,19 @@ const selfTest = (world) => {
   blind.forEach(([title, , expected]) =>
     console.error(`AVEUGLE : « ${title} » n'a produit aucun échec contenant « ${expected} »`),
   );
-  if (blind.length > 0) {
-    console.error(`\n${blind.length}/${MUTATIONS.length} mutations passent sous le garde.`);
+
+  const overzealous = TOLERATED_MUTATIONS.filter(([, apply]) => inspect(mutate(world, apply)).length > 0);
+  overzealous.forEach(([title]) =>
+    console.error(`TROP STRICT : « ${title} » aurait dû rester silencieuse`),
+  );
+
+  const failing = blind.length + overzealous.length;
+  const total = MUTATIONS.length + TOLERATED_MUTATIONS.length;
+  if (failing > 0) {
+    console.error(`\n${failing}/${total} sondes échouent.`);
     return 1;
   }
-  console.log(`self-test : ${MUTATIONS.length}/${MUTATIONS.length} mutations détectées.`);
+  console.log(`self-test : ${total}/${total} sondes correctes (${MUTATIONS.length} détectées, ${TOLERATED_MUTATIONS.length} tolérées).`);
   return 0;
 };
 

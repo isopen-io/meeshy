@@ -605,8 +605,10 @@ class TestLanguagesEndpoint:
 
     def test_languages_reflects_configured_supported_languages(self, test_client):
         """#5709 \u2014 /languages ne sert plus 8 langues cod\u00e9es en dur : elle
-        reflete Settings.supported_languages_list (40 codes par d\u00e9faut),
-        jamais une copie fig\u00e9e qui diverge d\u00e8s qu'on ajoute une langue \u00e0
+        reflete Settings.supported_languages_list, qui n'est plus non plus
+        les 40 codes historiquement fig\u00e9s ici (#3658 \u2014 d\u00e9sormais
+        l'intersection entre packages/shared et LANGUAGE_MAPPINGS), jamais
+        une copie fig\u00e9e qui diverge d\u00e8s qu'on ajoute une langue \u00e0
         SUPPORTED_LANGUAGES sans toucher cet endpoint."""
         logger.info("Test 23.25: /languages reflete la configuration reelle")
 

@@ -24,6 +24,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case deleteAccountDeleteNow
     case engagement
     case export
+    case meeshMint
     case permissions
     case preferences
     case preferencesApplication
@@ -54,6 +55,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .deleteAccountDeleteNow: return "/api/v1/me/delete-account/delete-now"
         case .engagement: return "/api/v1/me/engagement"
         case .export: return "/api/v1/me/export"
+        case .meeshMint: return "/api/v1/me/meesh/mint"
         case .permissions: return "/api/v1/me/permissions"
         case .preferences: return "/api/v1/me/preferences"
         case .preferencesApplication: return "/api/v1/me/preferences/application"

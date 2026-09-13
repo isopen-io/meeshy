@@ -171,9 +171,17 @@ final class ComposerSoundFileIntakeTests: XCTestCase {
                       "posé en premier plan, il demande d'abord OÙ ce premier plan atterrit")
         XCTAssertTrue(code.contains("case.sceneChip:viewModel.attachPastedAudio(url:destination,role:.foreground)"),
                       "sur une scène, il devient une puce POSÉE dessus")
-        XCTAssertTrue(code.contains("case.contentCard:documentLocalMedia.append("),
-                      "sans scène, il devient une carte de contenu — sinon l'objet de scène "
-                      + "n'est rendu par rien et part quand même à la publication")
+        // **#6073 — JUMEAU de `ComposerSoundSourceWiringGuardTests`, et trouvé
+        // par le MOTIF, pas par son nom.** L'écriture dans la liste du document
+        // passe par l'entonnoir depuis le #6047 ; ce témoin cherchait encore
+        // `documentLocalMedia.append(` en direct. Corriger le seul témoin que
+        // la CI nomme laisse debout tous ceux qui gardent le même motif sous un
+        // autre nom — c'est la leçon 569 appliquée à un REMPLACEMENT plutôt
+        // qu'à un retrait.
+        XCTAssertTrue(code.contains("case.contentCard:ecrireDansLaListeDuDocument("),
+                      "sans scène, il devient une carte de contenu — écrite par l'entonnoir, "
+                      + "sinon l'objet de scène n'est rendu par rien et part quand même à la "
+                      + "publication")
     }
 
     /// **Le témoin qui vient d'être retourné, et pourquoi** (#4722).

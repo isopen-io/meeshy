@@ -231,6 +231,20 @@ public struct StoryMentionPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
 
+    /// **L'état d'avant l'ouverture, retenu pour pouvoir le RENDRE** (#6134).
+    ///
+    /// Cette feuille applique chaque choix au composer à l'instant du tap — ce
+    /// qui était la raison, jusqu'ici, de n'offrir que « Terminé ». La directive
+    /// demande « Annuler », donc il ne s'agit pas d'ajouter une étiquette mais
+    /// de tenir ce qu'elle promet : sans cet instantané, le bouton fermerait la
+    /// feuille en laissant les mentions posées, et l'utilisateur croirait avoir
+    /// refusé.
+    ///
+    /// Posé une seule fois (`?? references` au premier affichage) : un `onAppear`
+    /// qui réécrit rejouerait l'instantané à chaque retour de plan et ferait
+    /// oublier le point de départ réel.
+    @State private var instantane: [ComposerReference]?
+
     public init(references: [ComposerReference],
                 modes: [PostReferenceDisplay] = PostReferenceDisplay.declarable,
                 onChange: @escaping ([ComposerReference]) -> Void) {
@@ -243,9 +257,21 @@ public struct StoryMentionPickerSheet: View {
         // En-tête explicite plutôt qu'une `NavigationStack` : la sheet est
         // présentée depuis le composer, un `fullScreenCover` sans barre d'état,
         // qui met les insets de safe area à zéro — la même raison qui a fait
-        // écrire l'en-tête à la main dans `AudienceUserPickerView`.
+        // écrire l'en-tête à la main dans `AudienceUserPickerView`. Depuis
+        // #6134 cet en-tête est PARTAGÉ avec la feuille Hashtag, qui vit de
+        // l'autre côté de la frontière SDK.
         VStack(spacing: 0) {
-            header
+            MeeshySheetHeader(
+                title: String(localized: "reference.sheet.title",
+                              defaultValue: "Mentionner", bundle: .module),
+                onCancel: {
+                    // RENDRE, puis fermer. L'ordre compte : fermer d'abord
+                    // démonterait la vue avant que l'hôte ait reçu l'état.
+                    if let instantane { onChange(instantane) }
+                    dismiss()
+                },
+                onDone: { dismiss() }
+            )
             searchField
             if !references.isEmpty { alreadyReferenced }
             if query.isEmpty {
@@ -271,22 +297,7 @@ public struct StoryMentionPickerSheet: View {
             }
         }
         .modifier(AudiencePickerPresentationStyle())
-    }
-
-    private var header: some View {
-        ZStack {
-            Text(String(localized: "reference.sheet.title", defaultValue: "Mentionner", bundle: .module))
-                .font(MeeshyFont.relative(16, weight: .semibold))
-            HStack {
-                Spacer()
-                // « Terminé » et non « Annuler » : chaque choix est déjà
-                // appliqué au composer, il n'y a plus rien à annuler ici.
-                Button(String(localized: "common.done", defaultValue: "Terminé", bundle: .module)) { dismiss() }
-            }
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.lg)
-        .padding(.bottom, MeeshySpacing.sm)
+        .onAppear { instantane = instantane ?? references }
     }
 
     private var searchField: some View {

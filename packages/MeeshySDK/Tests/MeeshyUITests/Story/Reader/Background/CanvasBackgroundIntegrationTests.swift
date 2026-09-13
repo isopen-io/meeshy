@@ -44,6 +44,25 @@ final class CanvasBackgroundIntegrationTests: XCTestCase {
         XCTAssertTrue(firstPlayer === secondPlayer, "AVPlayer must be reused, not recreated")
     }
 
+    /// **Le double-tap bascule entre DEUX rendus, plus trois valeurs** (#6125).
+    ///
+    /// Ce témoin assertait `nil → "fit" → "fill" → nil`, et il avait raison
+    /// tant que `nil` était le cadrage d'arrivée d'un fond neuf : la boucle se
+    /// refermait sur l'état de départ. Depuis que l'ingestion pose `"fit"`
+    /// (directive porteur 2026-09-12), `nil` n'est plus un point de départ mais
+    /// un **alias** — le renderer le peint exactement comme `"fill"`
+    /// (`StoryBackgroundLayer.resolveVideoGravity` : « mode libre : TOUJOURS
+    /// `.resizeAspectFill` »).
+    ///
+    /// > Revenir à `nil` depuis `"fill"` aurait enchaîné **deux appuis au rendu
+    /// > identique**. Le troisième tap ci-dessous vérifie précisément ça : il
+    /// > doit RAMENER à `"fit"`, pas à l'alias.
+    ///
+    /// Le témoin garde son entrée sur `nil` — c'est ce que porte toute
+    /// composition antérieure au lot, et le cycle doit continuer de la servir.
+    /// La règle elle-même est éprouvée à part et sans canvas
+    /// (`StoryBackgroundFramingTests`) ; ce test-ci vérifie que le GESTE
+    /// l'appelle, et qu'il commit dans le modèle.
     func test_doubleTap_onBg_cyclesVideoFitMode() throws {
         let bgMedia = StoryMediaObject(
             id: "bg-1",
@@ -62,11 +81,13 @@ final class CanvasBackgroundIntegrationTests: XCTestCase {
 
         XCTAssertNil(canvas.slide.effects.backgroundTransform?.videoFitMode)
         canvas.performDoubleTapForTesting(targetId: "bg-1")
-        XCTAssertEqual(canvas.slide.effects.backgroundTransform?.videoFitMode, "fit")
+        XCTAssertEqual(canvas.slide.effects.backgroundTransform?.videoFitMode, "fit",
+                       "Depuis l'alias `nil` (qui REMPLIT), l'appui doit ajuster.")
         canvas.performDoubleTapForTesting(targetId: "bg-1")
         XCTAssertEqual(canvas.slide.effects.backgroundTransform?.videoFitMode, "fill")
         canvas.performDoubleTapForTesting(targetId: "bg-1")
-        XCTAssertNil(canvas.slide.effects.backgroundTransform?.videoFitMode)
+        XCTAssertEqual(canvas.slide.effects.backgroundTransform?.videoFitMode, "fit",
+                       "Le cycle a DEUX états : revenir à `nil` rendrait deux appuis identiques à l'écran (#6125).")
     }
 
     func test_bgScale_mutation_routesContentLayerTransform() throws {

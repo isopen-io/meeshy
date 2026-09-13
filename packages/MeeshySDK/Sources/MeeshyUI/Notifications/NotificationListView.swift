@@ -119,7 +119,7 @@ enum NotificationCategory: String, CaseIterable {
             return [
                 .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
                 .system, .maintenance, .updateAvailable,
-                .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned,
+                .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned,
                 .legacyAffiliateSignup
             ]
         }

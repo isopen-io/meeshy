@@ -22,6 +22,54 @@
 Les quatre partagent la même mécanique de bas niveau (§ 3, § 4) et ne
 diffèrent que par la fonction qui décide « ce seuil est-il franchi ? ».
 
+### Ce qui se CÉLÈBRE et ce qui se NOTIFIE (directive porteur 2026-09-09, #5847)
+
+Les quatre types partagent la mécanique, **pas la surface**.
+
+> *« On a facilement la vue d'achievement qui s'affiche lorsqu'on a réalisé une
+> opération qui déclenche un succès, le reste ce sont des notifications rien de
+> plus ! »*
+
+| type | au moment du geste | au tap de la notification |
+|---|---|---|
+| `ACHIEVEMENT_UNLOCKED` | **la vue de révélation s'ouvre, sans rien toucher** | la vue de révélation, puis le tableau de bord |
+| `BADGE_EARNED` | notification | tableau de bord |
+| `STREAK_MILESTONE` | notification | la vue de révélation, puis le tableau de bord |
+| `LEVEL_UP` | notification | la vue de révélation, puis le tableau de bord |
+
+La raison tient en une phrase : **un succès nomme un fait rare et non
+répétable — il mérite qu'on interrompe ; un badge, une série, un niveau
+tombent au fil de l'usage.** Les célébrer tous ferait de la célébration un
+bruit, et le premier bruit qu'on apprend à ignorer est celui qui devait faire
+plaisir. Le TAP, lui, reste servi pour les trois formes : quelqu'un qui touche
+la notification d'une série a demandé à la voir.
+
+Loi unique, côté client : `EngagementReveal.celebratesUnprompted`
+(`packages/MeeshySDK/.../Models/EngagementReveal.swift`), lue par
+`EngagementRevealHost`, l'hôte MONTÉ SUR LES DEUX RACINES — un hôte écrit deux
+fois diverge, et la divergence ne rougit nulle part.
+
+### Ce qui ANNONCE, et ce qui se tait
+
+L'attribution d'un succès a un site unique côté serveur —
+`graveEtAnnonce` (`services/gateway/src/services/achievements/AchievementAnnounce.ts`),
+partagé par `CerclesAchievements` et `GlobalAchievements` — et **l'annonce
+dépend de l'ORIGINE de l'attribution, jamais du palier** :
+
+- `origin: 'geste'` ⇒ le palier s'annonce ;
+- `origin: 'balayage'` ⇒ il se tait. Le balayage (`GlobalAchievements.sweep`,
+  joué à l'ouverture de `GET /me/engagement`) est un RATTRAPAGE : il découvre
+  ce qui était déjà vrai. Notifier ferait tomber des dizaines de bannières d'un
+  coup à la première ouverture de l'écran, pour des gestes vieux de plusieurs
+  jours ;
+- un geste qui franchit plusieurs paliers d'UNE famille n'annonce que **le plus
+  haut** — « 1 000 messages envoyés » subsume « 1 message envoyé ». Le cas se
+  produit au premier geste d'un compte qui a déjà de l'historique ;
+- un geste qui franchit **deux FAMILLES** annonce les deux : ce sont deux faits
+  distincts, et en taire un garderait un acquis pour soi. La rafale se gouverne
+  à l'AFFICHAGE (le client célèbre l'un après l'autre, `EngagementRevealQueue`),
+  jamais en perdant un fait.
+
 ## 2. Les axes (socle dicté par le porteur, § « etc. » assumé — extensible)
 
 | famille | axe | ce qui incrémente le compteur |
@@ -206,6 +254,41 @@ Conditions ponctuelles, non répétables, sur un ou plusieurs axes :
 | `achievement.three_conversation_kinds` | au moins 1 sur les 3 axes de conversation |
 
 Même mécanique anti-rejeu (`milestoneType: "achievement"`).
+
+### La GRAMMAIRE des succès (#5758, #5759) — ce que ce socle est devenu
+
+Les cinq conditions ci-dessus restent servies, mais elles ne sont plus le
+catalogue : elles en sont l'amorce. Le porteur en a demandé des **milliers**
+(« une conversation de plus de 10, 100, 1 000, 10 000 membres ; même chose pour
+une communauté, pour un appel lancé, pour un message, un vocal, une image… »),
+ce qu'une énumération ne peut pas porter — des milliers d'entrées × sept
+langues, fausses dès la première divergence de traduction.
+
+La clé est donc **composée**, et le libellé aussi :
+
+```
+achievement.<section>.<sujet>.<geste>.<échelle>:<palier>
+achievement.cercles.conversation.join.size:1000
+achievement.parole.message.send.count:10000
+```
+
+Le nombre de chaînes à traduire suit le nombre de **familles** (sujet, geste,
+échelle) — 22 aujourd'hui —, pas le nombre de succès (114). Sources de vérité :
+`packages/shared/types/achievement-catalog.ts` (la grammaire),
+`achievement-families.ts` (les familles), `utils/achievement-labels.ts` (les
+gabarits), `utils/achievement-view.ts` (l'ordre, l'atteignabilité, la fenêtre).
+Miroir iOS : `packages/MeeshySDK/.../Models/AchievementCatalog.swift`, dont
+`parse(key:)` est l'INVERSE exact de `key(tier:)` — c'est lui qui permet à une
+clé composée reçue sur le fil de se célébrer.
+
+**Deux namespaces de clés cohabitent donc**, et c'est délibéré : les cinq clés
+plates (`achievement.first_content`…) sont gravées par `EngagementService`, les
+composées par les deux producteurs de la section « achievements ». Un client
+lit d'abord l'énumération legacy, puis la grammaire — leurs formes ne se
+confondent pas (une clé plate n'a ni `:` ni cinq segments).
+
+**Un succès ne crédite AUCUN point** (#5758) : il nomme un fait, il n'alimente
+pas la monnaie — sinon la course aux succès deviendrait une pompe à Meeshes.
 
 ## 9. Écran de consultation
 

@@ -125,6 +125,7 @@ import { meCategoriesRoutes } from './me/categories';
 import { meConsentsRoutes } from './me/consents';
 import { meTermsRoutes } from './me/terms';
 import { meEngagementRoutes } from './me/engagement';
+import { meMeeshRoutes } from './me/meesh';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
 import { directoryPeopleRoutes } from './directory/people';
@@ -287,6 +288,7 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // engagementScore}. Montage AUTONOME, même patron que `me-consents` juste
   // au-dessus.
   { name: 'me-engagement', prefix: `${API_PREFIX}/me`, module: meEngagementRoutes },
+  { name: 'me-meesh', prefix: `${API_PREFIX}/me`, module: meMeeshRoutes },
   { name: 'account-deletion', prefix: `${API_PREFIX}/account/deletion`, module: accountDeletionRoutes },
   { name: 'directory-availability', prefix: `${API_PREFIX}/directory`, module: directoryAvailabilityRoutes },
   { name: 'directory-people', prefix: `${API_PREFIX}/directory`, module: directoryPeopleRoutes },

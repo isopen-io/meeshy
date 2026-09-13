@@ -35,6 +35,42 @@ nonisolated enum ComposerMediaDoor: Equatable, Sendable {
     case sceneRail
 }
 
+/// **Ce qu'une écriture dans la liste média du document fait de l'INTENTION du
+/// rail** (#6008).
+///
+/// `ComposerMediaDoor` ci-dessus dit par quelle porte un média est ENTRÉ ;
+/// celle-ci dit ce que l'écriture fait du drapeau qui porte cette porte. Les
+/// deux moitiés d'une même question, et c'est la seconde qui manquait : le
+/// drapeau était ARMÉ par la porte du rail et consommé par la seule ingestion.
+/// Trois autres sites écrivaient dans la liste sans jamais y toucher, et le
+/// bouton d'annulation de la feuille de choix avait un corps VIDE — une
+/// intention abandonnée survivait donc à son geste et se posait sur le média
+/// SUIVANT, quelle que soit sa porte.
+///
+/// > **Une règle qui vit dans un fichier ne gouverne pas les portes qui
+/// > n'ouvrent pas ce fichier.** Les deux portes son n'ont rien fait de mal :
+/// > elles ont été écrites sans jamais croiser la ligne qui posait
+/// > l'invariant. C'est pourquoi la discipline est remplacée ici par une
+/// > question que le compilateur POSE — le `switch` de
+/// > `ecrireDansLaListeDuDocument` est exhaustif et n'a pas de `default`.
+nonisolated enum ComposerRailPosing: Equatable, Sendable {
+    /// La liste vient du sélecteur QUE le rail a ouvert : elle prend
+    /// l'intention et la fait retomber.
+    case consomme
+    /// L'écriture vient d'ailleurs — une porte son, la démotion d'un objet de
+    /// scène en carte de contenu. Une intention encore armée à cet instant est
+    /// PÉRIMÉE par construction : la porte du rail présente son sélecteur dans
+    /// la même instruction qu'elle arme, donc rien ne peut s'intercaler tant
+    /// qu'il est à l'écran.
+    case abandonne
+    /// Le rôle du média est posé EXPLICITEMENT avant l'écriture (la graine).
+    /// `syncPostMediaIntoSlides` ne consulte `railPosedMediaURLs` que pour les
+    /// médias sans rôle : l'intention ne concerne celui-ci ni dans un sens ni
+    /// dans l'autre, et la jeter priverait le média d'après d'une intention
+    /// encore valide.
+    case roleDejaPose
+}
+
 /// **Où se range un média visuel posé — la loi du #4724.**
 ///
 /// Elle a une jumelle qui l'a précédée d'un an de commits : `ComposerAudioPlacement`,

@@ -28,7 +28,7 @@ import {
   isConversationWriteRefused,
   describeConversationWriteRefusal
 } from './conversationWriteAdmission';
-import { resolveParticipantRights, attachmentSendRightForMimeType } from '../participantRights';
+import { resolveParticipantRights, attachmentSendRightForMimeType, NEW_MEMBER_PERMISSIONS } from '../participantRights';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -709,14 +709,21 @@ export class MessagingService {
           avatar: user.avatar,
           role: roleMap[memberDoc.role] || 'member',
           language: recipientLanguage(user, 'fr'),
+          // #6080 — le repli d'un droit ABSENT du document hérité est la table
+          // du site unique, jamais `false`. Ces `permissions` alimentent
+          // `senderRights` dans la MÊME requête : les deux `?? false` sur vidéo
+          // et audio ne projetaient pas une valeur, ils GOUVERNAIENT le refus de
+          // #5151 — et la collection `ConversationMember` est antérieure à ces
+          // deux droits, donc le cas nominal est l'absence. Ce que le document
+          // hérité DIT reste souverain : `??` distingue « non dit » de `false`.
           permissions: {
-            canSendMessages: memberDoc.canSendMessage ?? true,
-            canSendFiles: memberDoc.canSendFiles ?? true,
-            canSendImages: memberDoc.canSendImages ?? true,
-            canSendVideos: memberDoc.canSendVideos ?? false,
-            canSendAudios: memberDoc.canSendAudios ?? false,
-            canSendLocations: memberDoc.canSendLocations ?? false,
-            canSendLinks: memberDoc.canSendLinks ?? false
+            canSendMessages: memberDoc.canSendMessage ?? NEW_MEMBER_PERMISSIONS.canSendMessages,
+            canSendFiles: memberDoc.canSendFiles ?? NEW_MEMBER_PERMISSIONS.canSendFiles,
+            canSendImages: memberDoc.canSendImages ?? NEW_MEMBER_PERMISSIONS.canSendImages,
+            canSendVideos: memberDoc.canSendVideos ?? NEW_MEMBER_PERMISSIONS.canSendVideos,
+            canSendAudios: memberDoc.canSendAudios ?? NEW_MEMBER_PERMISSIONS.canSendAudios,
+            canSendLocations: memberDoc.canSendLocations ?? NEW_MEMBER_PERMISSIONS.canSendLocations,
+            canSendLinks: memberDoc.canSendLinks ?? NEW_MEMBER_PERMISSIONS.canSendLinks
           },
           isActive: true,
           joinedAt: memberDoc.joinedAt ? new Date(memberDoc.joinedAt) : new Date(),

@@ -478,8 +478,36 @@ final class ComposerLeadingRailSourceGuardTests: XCTestCase {
         //
         // Ce que le témoin doit dire n'a pas changé : le ressort PRÉCÈDE tout ce
         // qui se peint. Sa condition s'intercale, elle ne le déplace pas.
-        XCTAssertTrue(source.contains("ifaxis==.vertical,pushesToThumb{Spacer(minLength:0)}switchmode{"),
+        // **Le `switch` a été EXTRAIT le 2026-09-12** (`d76b5468d7`, #6131 : le
+        // rail défile quand il ne tient pas). Il vit désormais dans
+        // `railEntries`, et le ressort ne le précède plus TEXTUELLEMENT — il
+        // précède l'appel. L'ancrage, lui, n'a pas bougé d'un point.
+        //
+        // > C'est la TROISIÈME fois que ce témoin épingle une forme en croyant
+        // > tenir l'ancrage : son propre doc-comment raconte déjà #4072 et
+        // > #4582. Un témoin qui exige une concaténation littérale mesure la
+        // > façon d'écrire, pas la propriété — et il rougit sur chaque
+        // > extraction légitime, en annonçant que les portes ont cessé d'être
+        // > poussées vers le bas alors qu'elles le sont toujours.
+        //
+        // Ce qu'il doit dire tient en deux faits, et ils survivent à
+        // l'extraction : le ressort est CONDITIONNEL et POSÉ, et il précède ce
+        // qui se peint — quel que soit le nom sous lequel cela se peint.
+        guard let ressort = source.range(of: "ifaxis==.vertical,pushesToThumb{Spacer(minLength:0)}") else {
+            return XCTFail("""
+                Le ressort conditionnel a disparu du rail : sans lui, un `VStack` centré \
+                remet les entrées hautes hors de portée du pouce dès que la scène rétrécit.
+                """)
+        }
+        guard let entrees = source.range(of: "railEntries", range: ressort.upperBound..<source.endIndex) else {
+            return XCTFail("""
+                Le ressort ne précède plus les entrées : c'est lui, et non un alignement, \
+                qui les ancre en bas.
+                """)
+        }
+        XCTAssertTrue(ressort.upperBound <= entrees.lowerBound,
                       "Le ressort doit PRÉCÉDER les entrées : c'est lui qui les ancre en bas.")
+        // Et les entrées peignent bien les deux modes — extraites ou non.
         XCTAssertTrue(source.contains("case.doors(letdoors):ForEach(doors"))
         // **Le mode OUTIL peint ses contrôleurs, sans que la forme soit figée.**
         //
@@ -833,13 +861,34 @@ final class ComposerMediaSourceWiringGuardTests: XCTestCase {
     /// **La garde du défaut d'origine.** La porte média n'appelle plus l'outil
     /// PHOTO en direct : c'était le raccourci qui faisait disparaître deux
     /// sources sur trois dès qu'une scène existait.
+    ///
+    /// **#6073 — la règle a changé de FORME au #6047, et ce témoin gardait la
+    /// lettre.** Il exigeait `railPosesNextMedia = true; presentMediaSources()`,
+    /// c'est-à-dire l'intention armée AVANT la présentation. #6008 a lié
+    /// l'intention au RETOUR de la présentation, pour une raison que son
+    /// doc-comment porte : `presentMediaSources` peut ne RIEN présenter (la
+    /// règle des sources peut en offrir zéro), et une intention armée devant
+    /// une feuille qui n'apparaît pas n'a plus aucune sortie — ni consommation,
+    /// ni annulation à laquelle se raccrocher.
+    ///
+    /// La forme neuve est donc PLUS forte que celle que ce témoin gardait. Ce
+    /// qu'il doit garder n'est pas l'ordre des deux instructions mais les deux
+    /// propriétés qui comptent : l'intention est LIÉE à la présentation (par
+    /// l'affectation du retour), et la porte ne court-circuite pas vers l'outil
+    /// PHOTO. Écrire l'assertion sur la LETTRE d'une implémentation, c'est
+    /// s'engager à rougir à chaque amélioration de cette implémentation.
     func test_laPorteMedia_neVaPlusDroitALaPhototheque() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("case.media:railPosesNextMedia=true;presentMediaSources()"),
-                      "La porte MARQUE l'origine avant d'ouvrir le choix — c'est ce qui garde "
-                        + "sa pose sur la scène courante (directive porteur 2026-08-30).")
+        XCTAssertTrue(source.contains("case.media:railPosesNextMedia=presentMediaSources()"),
+                      "La porte LIE l'intention de pose au RETOUR de la présentation : une "
+                        + "feuille qui ne s'ouvre pas ne laisse aucune intention armée derrière "
+                        + "elle (#6008), et une intention posée garde la pose sur la scène "
+                        + "courante (directive porteur 2026-08-30).")
         XCTAssertFalse(source.contains("case.media:handleDocumentTool(.photo)"),
                        "Ce raccourci retire la caméra et l'import de fichier sans qu'aucune règle les refuse.")
+        XCTAssertFalse(source.contains("railPosesNextMedia=true;presentMediaSources()"),
+                       "L'intention ne s'arme plus AVANT la présentation : cette forme laissait "
+                         + "un drapeau posé devant une feuille qui peut n'offrir aucune source.")
     }
 
     /// Le choix a son lecteur AU-DESSUS de l'aiguillage, comme tout portail du
@@ -1040,8 +1089,19 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
         // publication.
         XCTAssertTrue(source.contains("case.sceneChip:viewModel.attachPastedAudio(url:destination,role:.foreground)"),
                       "…et placé en CONTENU sur une SCÈNE, devenir une puce posée dessus")
-        XCTAssertTrue(source.contains("case.contentCard:documentLocalMedia.append("),
-                      "…ou, sans scène, une pièce jointe du document")
+        // **#6073 — l'écriture dans la liste du document passe par l'ENTONNOIR
+        // depuis le #6047.** Ce témoin cherchait `documentLocalMedia.append(`
+        // en direct ; ce site n'existe plus, et c'est le but du lot : aucun
+        // appelant n'écrit dans la liste sans DÉCLARER ce que le rail fait de
+        // ce média (`.consomme` / `.abandonne` / `.roleDejaPose`). Garder la
+        // lettre ici reviendrait à exiger le retour du contournement que
+        // l'entonnoir a fermé.
+        XCTAssertTrue(source.contains("case.contentCard:ecrireDansLaListeDuDocument("),
+                      "…ou, sans scène, une pièce jointe du document — écrite par l'entonnoir, "
+                        + "seul site autorisé à toucher la liste (#6047)")
+        XCTAssertTrue(source.contains("rail:.abandonne"),
+                      "…et le placement en CARTE DE CONTENU abandonne la pose sur la scène : "
+                        + "le média part dans le document, pas sur le canvas.")
     }
 
     /// La sélection affichée est ce que la règle ferait SANS choix — jamais un
@@ -1915,9 +1975,51 @@ final class ComposerContentDoorWiringGuardTests: XCTestCase {
     /// laisserait la moitié du défaut.
     func test_lesDeuxZonesDeTexte_neSouvrentJamaisEnsemble() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("editsPostContent=falseeditsSceneDescription=true"),
+        // Depuis #6126, ouvrir la description ne pose plus de drapeau : le
+        // drapeau CONSTATE la frappe, il ne la commande plus. La porte passe par
+        // le site unique `openSceneDescriptionEditing()`. Ce que ce témoin garde
+        // est inchangé — la fermeture de l'AUTRE zone reste explicite ici.
+        XCTAssertTrue(source.contains("editsPostContent=falseopenSceneDescriptionEditing()"),
                       "Ouvrir la description doit fermer le contenu.")
         XCTAssertTrue(source.contains("editsSceneDescription=falseeditsPostContent=true"),
                       "Ouvrir le contenu doit fermer la description.")
+    }
+
+    // MARK: - #6132 · Choisir un outil fait tomber le clavier
+
+    /// **Deux portes écrivent, toutes les autres non.**
+    ///
+    /// > « Le choix d'un outil fait disparaître le clavier ! » — porteur,
+    /// > 2026-09-12
+    ///
+    /// Le témoin balaye `allCases` plutôt que de citer une liste : c'est ce qui
+    /// fait qu'une onzième porte ajoutée demain DOIT être classée, au lieu
+    /// d'hériter silencieusement du mauvais défaut.
+    func test_seulesLesDeuxPortesDEcriture_gardentLeClavier() {
+        for porte in ComposerRailDoor.allCases {
+            let écrit = porte == .description || porte == .content
+            XCTAssertEqual(porte.keepsKeyboard, écrit,
+                           "\(porte.rawValue) : une porte garde le clavier si et seulement si elle prend du texte.")
+        }
+        XCTAssertEqual(ComposerRailDoor.writingDoors, [.description, .content])
+        XCTAssertGreaterThan(ComposerRailDoor.allCases.count, 3,
+                             "le balayage doit porter sur de VRAIES portes — sinon il ne prouve rien")
+    }
+
+    /// **Et le meuble doit poser le geste, pas seulement connaître la règle.**
+    ///
+    /// La règle vit sur la porte ; sans ce témoin, elle pourrait être juste et
+    /// n'être appelée nulle part — exactement la forme d'un contrôle inerte
+    /// (loi 4), à ceci près qu'ici c'est une RÈGLE inerte, qui se relit comme
+    /// une garantie.
+    func test_leMeuble_rendLeClavier_desQuUnePorteNEcritPas() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("if!door.keepsKeyboard{dismissTextEditing()}"),
+                      "Ouvrir une porte qui n'écrit pas doit rendre le clavier (#6132).")
+        XCTAssertTrue(source.contains("funcdismissTextEditing()"),
+                      "… et le geste doit exister — sinon la garde ci-dessus lirait un appel fantôme.")
+        XCTAssertTrue(source.contains("UIResponder.resignFirstResponder"),
+                      "Le renvoi passe par le premier RÉPONDANT : trois champs peuvent l'être, "
+                        + "et les fermer un par un demanderait de les connaître tous.")
     }
 }

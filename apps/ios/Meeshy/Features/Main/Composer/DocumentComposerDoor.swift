@@ -89,7 +89,7 @@ struct DocumentComposerDoor: View {
     /// **Réinjectés à travers la frontière du cover d'APERÇU.**
     /// `StoryViewerView` les lit en `@EnvironmentObject`, et un cover ne
     /// recopie pas l'environnement de son hôte — même raison, mot pour mot, que
-    /// porte déjà `ConversationMediaComposerDoor`, qui monte le MÊME lecteur.
+    /// porte déjà `MediaComposerDoor`, qui monte le MÊME lecteur.
     /// Sans eux, l'œil ouvrirait un écran qui plante à la première lecture
     /// d'environnement, pas un aperçu.
     let storyViewModel: StoryViewModel
@@ -137,7 +137,7 @@ struct DocumentComposerDoor: View {
             // le `false` aurait donné un composer qui compose une story et une
             // flèche qui refuse — la loi 4, sur le geste qui termine le travail.
             //
-            // Le corps est le MÊME que celui de `ConversationMediaComposerDoor`,
+            // Le corps est le MÊME que celui de `MediaComposerDoor`,
             // et volontairement : c'est le publieur de CRÉATION de story du
             // dépôt (`publishStoryInBackground`), et deux assemblages de ses
             // quatorze arguments auraient divergé au premier champ ajouté.
@@ -203,7 +203,7 @@ struct DocumentComposerDoor: View {
 
     /// L'aperçu est rendu par le LECTEUR (`StoryViewerView`), pas par un
     /// composant maison — loi 6, et le MÊME montage que
-    /// `ConversationMediaComposerDoor.apercu`. Un troisième chemin d'aperçu
+    /// `MediaComposerDoor.apercu`. Un troisième chemin d'aperçu
     /// mentirait tôt ou tard sur ce qui sera publié.
     private func apercu(_ assets: StoryPreviewAssets) -> some View {
         let items = assets.slides.map { $0.toPreviewStoryItem() }

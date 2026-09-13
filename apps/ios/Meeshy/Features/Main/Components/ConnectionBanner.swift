@@ -61,20 +61,21 @@ struct ConnectionBanner: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// **L'annonce de frappe, portée par `IslandEmergingBanner`** (#4066).
-    ///
-    /// La pastille ne grossit plus : c'est une capsule qui naît dans la
-    /// Dynamic Island et se pose dessous qui dit « quelqu'un vient de se mettre
-    /// à écrire ». L'orchestration vit ICI plutôt que dans `SyncPill` parce que
-    /// c'est cette vue qui possède la source de frappe (`typingSource`, #4049)
-    /// et qui sait donc reconnaître une entrée NEUVE.
-    @State private var announcement: SyncPillEntry?
-    /// Les identifiants déjà vus — une frappe qui CONTINUE garde le même
-    /// `typing.<conv>` et ne se ré-annonce donc pas.
-    @State private var seenTypingIDs: Set<String> = []
-    /// Retrait de l'annonce (one-shot, annulable). Borné, jamais
-    /// `repeatForever` — cf. audit chauffe #3940.
-    @State private var announcementWorkItem: DispatchWorkItem?
+    // **L'annonce de frappe est retournée à la pastille** (#6188, directive
+    // porteur 2026-09-12). Elle avait été confiée le 2026-08-28 (#4066) à une
+    // capsule naissant dans la Dynamic Island, orchestrée ici : trois états et
+    // une vue vivaient à cet endroit.
+    //
+    // Il n'en reste RIEN, et c'est le point : les entrées de frappe entrent
+    // déjà dans `entries` (voir `typingEntries`, plus bas), donc la pastille
+    // les reçoit, les fait tourner, les rend tappables par leur `source` — et
+    // décide elle-même de son accent, qu'elle est la seule à pouvoir mesurer.
+    // Dupliquer ici la détection de nouveauté (`seenTypingIDs`) revenait à
+    // tenir deux fois le même fait ; `SyncPill.seenEntryIDs` le tient une.
+    //
+    // `IslandEmergingBanner` reste dans le dépôt : `CallView` s'en sert pour la
+    // qualité d'appel dégradée. C'est l'USAGE qui disparaît, pas le composant.
+
     /// `true` quand `StoryViewerView` est présenté en `fullScreenCover` —
     /// cache la pill pour qu'elle ne rende plus par-dessus le header story
     /// (bug 2026-05-27). Injecté explicitement pour la même raison que
@@ -218,7 +219,13 @@ struct ConnectionBanner: View {
                 dotStyle: isTerminalFailure ? .error : .brand,
                 source: item.source,
                 // A permanently-failed row is not in flight — no activity dots.
-                showsActivityDots: !isTerminalFailure
+                showsActivityDots: !isTerminalFailure,
+                // **Une ligne terminale se RELANCE d'un doigt** (#5830).
+                // `item.id` EST l'identifiant de la ligne outbox : la pastille
+                // le portait déjà sans jamais s'en servir, et le tap tombait
+                // dans `case .unknown: break` chez les deux racines — une
+                // publication échouée était un mur.
+                retryOutboxId: StuckPublicationRetry.retryableOutboxId(for: item)
             ))
         }
 
@@ -273,6 +280,32 @@ struct ConnectionBanner: View {
         max(0, base - SyncPillMetrics.topLift)
     }
 
+    /// **Le bas du chrome flottant d'une conversation**, mesuré au simulateur
+    /// (`idb ui describe-all`, 2026-09-10) : les boutons Retour / Appeler /
+    /// Rechercher / Mode de lecture / avatar occupent `y = 70…114`.
+    ///
+    /// Une constante plutôt qu'un couplage à l'état privé de `ConversationView`
+    /// — c'est le compromis que le site d'appel assumait déjà. Ce qui change,
+    /// c'est qu'elle est NOMMÉE et épinglée par un témoin : la valeur d'avant
+    /// (72) était écrite en littéral, et rien ne disait à quoi elle se
+    /// comparait.
+    static let conversationChromeBottom: CGFloat = 114
+
+    /// **La marge haute de la pastille DANS une conversation** (#5941).
+    ///
+    /// Le site d'appel passait `liftedTopPadding(base: 72)`. Or `topLift` vaut
+    /// 88 : la soustraction est négative, la borne la ramène à `0`, et la
+    /// bannière se posait donc à `y = 0` — sur le chrome, qu'elle recouvrait.
+    /// Le bandeau « @pseudo » masquait le bouton « Mode de lecture », constaté
+    /// à l'écran.
+    ///
+    /// **La remontée sous la Dynamic Island et le respect du chrome sont
+    /// incompatibles ici** : le chrome commence à 70 pt, l'île est au-dessus.
+    /// Il faut choisir, et c'est le chrome qui gagne — un contrôle recouvert
+    /// est un contrôle qu'on ne peut plus lire, alors qu'une annonce posée
+    /// 8 pt plus bas reste parfaitement visible.
+    static let conversationTopPadding: CGFloat = conversationChromeBottom + MeeshySpacing.sm
+
     var body: some View {
         // Skip rendering when StoryViewerView est présenté plein écran —
         // le fullScreenCover du root ne supprime pas les safeAreaInset /
@@ -282,17 +315,9 @@ struct ConnectionBanner: View {
                                          inAppNoticePresenting: inAppNotices.currentToast != nil) {
             EmptyView()
         } else {
-            ZStack(alignment: .top) {
-                SyncPill(entries: entries, onTap: onItemTap)
-                    .opacity(announcement == nil ? 1 : 0)
-
-                if let announcement {
-                    typingAnnouncementBanner(announcement)
-                }
-            }
-                .adaptiveOnChange(of: typingSource.typingUsers) { _, _ in
-                    handleTypingChange()
-                }
+            SyncPill(entries: entries,
+                     onTap: onItemTap,
+                     onRetry: { StuckPublicationRetry.retry(outboxId: $0) })
                 .adaptiveOnChange(of: statusVM.status) { oldValue, newValue in
                     handleStatusTransition(from: oldValue, to: newValue)
                 }
@@ -301,72 +326,6 @@ struct ConnectionBanner: View {
                     handleInitialStatus(statusVM.status)
                 }
         }
-    }
-
-    /// La capsule qui émerge de l'île — le composant `IslandEmergingBanner`,
-    /// écrit et testé de longue date mais monté NULLE PART jusqu'ici.
-    ///
-    /// `settledSize` est calculée, jamais estimée : le composant en dérive
-    /// l'échelle et l'offset de NAISSANCE, et son propre doc-comment nomme le
-    /// mode d'échec — « une taille fausse déplace la naissance hors de l'île ».
-    /// La mesure passe donc par `UIFont`, déterministe, plutôt que par un
-    /// `GeometryReader` dont la valeur n'arriverait qu'APRÈS le premier rendu,
-    /// soit trop tard pour la naissance.
-    @ViewBuilder
-    private func typingAnnouncementBanner(_ entry: SyncPillEntry) -> some View {
-        let font = UIFont.preferredFont(forTextStyle: .footnote)
-        let width = (entry.label as NSString)
-            .size(withAttributes: [.font: font]).width
-        let size = TypingAnnouncementLaw.settledSize(
-            labelWidth: width,
-            lineHeight: font.lineHeight,
-            maxWidth: DeviceLayout.windowSize.width - 32
-        )
-
-        IslandEmergingBanner(
-            tint: MeeshyColors.brandPrimary,
-            settledSize: size,
-            reduceMotion: reduceMotion
-        ) {
-            Text(entry.label)
-                .font(.footnote.weight(.semibold))
-                .foregroundColor(.white)
-                .lineLimit(1)
-                .padding(.horizontal, TypingAnnouncementLaw.horizontalPadding)
-                .padding(.vertical, TypingAnnouncementLaw.verticalPadding)
-        }
-        .allowsHitTesting(false)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(entry.label)
-    }
-
-    /// Une entrée de frappe NEUVE fait émerger la capsule ; une frappe qui
-    /// continue ne la rejoue pas (même identifiant `typing.<conv>`).
-    private func handleTypingChange() {
-        let typing = Self.typingEntries(
-            typingUsers: typingSource.typingUsers,
-            excluding: activeConversationId?()
-        )
-        let ids = Set(typing.map(\.id))
-        let fresh = typing.filter { !seenTypingIDs.contains($0.id) }
-        seenTypingIDs = ids
-
-        guard let toAnnounce = TypingAnnouncementLaw.announcement(among: fresh) else { return }
-
-        announcementWorkItem?.cancel()
-        withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
-            announcement = toAnnounce
-        }
-        let retract = DispatchWorkItem {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                announcement = nil
-            }
-        }
-        announcementWorkItem = retract
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + TypingAnnouncementLaw.visibleDuration,
-            execute: retract
-        )
     }
 
     /// `true` only when the connection becomes genuinely usable again

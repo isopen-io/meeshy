@@ -18,6 +18,11 @@ public actor CacheCoordinator {
     public let comments: GRDBCacheStore<String, FeedComment>
     public let stories: GRDBCacheStore<String, StoryGroup>
     public let stats: GRDBCacheStore<String, UserStats>
+    /// L'instantané de `GET /me/engagement` (#5698) — badges, série, niveau
+    /// de l'utilisateur courant, UNE entrée par compte (`id = "current"`).
+    /// Même politique que `stats` : l'écran « Progression » s'ouvre sur le
+    /// dernier instantané connu et revalide en silence.
+    public let engagementProgress: GRDBCacheStore<String, APIEngagementProgress>
     public let notifications: GRDBCacheStore<String, APINotification>
     public let affiliateTokens: GRDBCacheStore<String, AffiliateToken>
     public let shareLinks: GRDBCacheStore<String, MyShareLink>
@@ -312,6 +317,7 @@ public actor CacheCoordinator {
         // → un refetch réseau unique au premier lancement, puis tout est chiffré.
         self.stories = GRDBCacheStore(policy: .stories, db: db, namespace: "stories", encrypted: true)
         self.stats = GRDBCacheStore(policy: .userStats, db: db, namespace: "stats")
+        self.engagementProgress = GRDBCacheStore(policy: .userStats, db: db, namespace: "engagement")
         self.notifications = GRDBCacheStore(policy: .notifications, db: db, namespace: "notif", encrypted: true)
         self.affiliateTokens = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "affil")
         self.shareLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "slinks")
@@ -415,6 +421,7 @@ public actor CacheCoordinator {
         await comments.invalidateAll()
         await stories.invalidateAll()
         await stats.invalidateAll()
+        await engagementProgress.invalidateAll()
         await notifications.invalidateAll()
         await affiliateTokens.invalidateAll()
         await shareLinks.invalidateAll()
@@ -859,6 +866,7 @@ public actor CacheCoordinator {
         // `invalidateAll()` continue de tout vider comme avant.
         await comments.invalidateAll()
         await stats.invalidateAll()
+        await engagementProgress.invalidateAll()
         await notifications.invalidateAll()
         await affiliateTokens.invalidateAll()
         await shareLinks.invalidateAll()

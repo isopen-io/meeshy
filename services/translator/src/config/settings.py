@@ -8,6 +8,8 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
+from config.generated_languages import SUPPORTED_LANGUAGE_CODES as _PRODUCT_LANGUAGE_CODES
+
 logger = logging.getLogger(__name__)
 
 class Settings:
@@ -114,7 +116,14 @@ class Settings:
         
         # Configuration des langues
         self.default_language = os.getenv("DEFAULT_LANGUAGE", "fr")
-        self.supported_languages = os.getenv("SUPPORTED_LANGUAGES", "af,ar,bg,bn,cs,da,de,el,en,es,fa,fi,fr,he,hi,hr,hu,hy,id,ig,it,ja,ko,ln,lt,ms,nl,no,pl,pt,ro,ru,sv,sw,th,tr,uk,ur,vi,zh")
+        # #3658 — le défaut n'est plus un littéral codé en dur : c'est
+        # l'intersection entre les codes reconnus par le PRODUIT
+        # (packages/shared/utils/language-codes.ts, projetée dans
+        # generated_languages.py) et ceux que le modèle NLLB sait
+        # effectivement traduire (LANGUAGE_MAPPINGS, plus bas dans ce module).
+        # Voir _default_supported_languages_csv() pour la raison de
+        # l'intersection plutôt que la feuille brute.
+        self.supported_languages = os.getenv("SUPPORTED_LANGUAGES", _default_supported_languages_csv())
         self.auto_detect_language = os.getenv("AUTO_DETECT_LANGUAGE", "true").lower() == "true"
         
         # Configuration des modèles de traduction NLLB uniquement
@@ -257,6 +266,33 @@ LANGUAGE_MAPPINGS = {
     'sv': 'swe_Latn',      # Swedish
     'tr': 'tur_Latn',      # Turkish
     'uk': 'ukr_Cyrl',      # Ukrainian
+    # === Langues fantômes mappées (#3659) — 18 des 25 langues offertes sans
+    # code NLLB avaient un vrai code dans le catalogue NLLB-200/FLORES-200 ;
+    # leur absence ici faisait retomber toute demande sur `fra_Latn` en
+    # silence (TranslatorEngine.lang_codes.get(code, 'fra_Latn')). Les 7
+    # restantes (bas, byv, dua, ewo, fan, ksf, nnh — langues camerounaises
+    # hors NLLB-200) ne sont délibérément PAS ajoutées ici : décision du
+    # porteur, elles restent offertes au produit mais ne sont jamais
+    # traduites — TranslatorEngine lève désormais une erreur explicite
+    # plutôt que d'inventer une traduction.
+    'ak': 'aka_Latn',      # Akan (Ghana)
+    'az': 'azj_Latn',      # Azerbaijani (Nord)
+    'bm': 'bam_Latn',      # Bambara (Mali)
+    'ca': 'cat_Latn',      # Catalan
+    'et': 'est_Latn',      # Estonian
+    'ka': 'kat_Geor',      # Georgian
+    'kk': 'kaz_Cyrl',      # Kazakh
+    'km': 'khm_Khmr',      # Khmer (Cambodge)
+    'lo': 'lao_Laoo',      # Lao
+    'lv': 'lvs_Latn',      # Latvian (Standard)
+    'my': 'mya_Mymr',      # Burmese
+    'ne': 'npi_Deva',      # Nepali
+    'sk': 'slk_Latn',      # Slovak
+    'sl': 'slv_Latn',      # Slovenian
+    'sr': 'srp_Cyrl',      # Serbian
+    'ta': 'tam_Taml',      # Tamil
+    'tl': 'tgl_Latn',      # Tagalog (Filipino)
+    'uz': 'uzn_Latn',      # Uzbek (Nord)
 
     # === Langues Asiatiques ===
     'ar': 'arb_Arab',      # Arabic
@@ -304,6 +340,24 @@ LANGUAGE_MAPPINGS = {
     'st': 'sot_Latn',      # Southern Sotho (Lesotho)
     'nso': 'nso_Latn',     # Northern Sotho/Sepedi (Afrique du Sud)
 }
+
+def _default_supported_languages_csv() -> str:
+    """Défaut de SUPPORTED_LANGUAGES (#3658) : l'INTERSECTION entre ce que le
+    produit reconnaît (_PRODUCT_LANGUAGE_CODES, généré depuis
+    packages/shared/utils/language-codes.ts) et ce que LANGUAGE_MAPPINGS sait
+    convertir vers un code NLLB.
+
+    Jamais _PRODUCT_LANGUAGE_CODES seul : `TranslatorEngine.lang_codes` (voir
+    services/translation_ml/translator_engine.py) retombe sur
+    `.get(code, 'eng_Latn')` pour tout code sans entrée dans LANGUAGE_MAPPINGS
+    — annoncer un tel code dans /languages ferait revivre exactement le bug
+    que ce fichier documente déjà avoir eu (repli silencieux vers l'anglais
+    ou le français). L'ordre de _PRODUCT_LANGUAGE_CODES est préservé pour que
+    la sortie reste stable et lisible (l'ordre du produit, pas celui d'un
+    dict Python).
+    """
+    return ",".join(code for code in _PRODUCT_LANGUAGE_CODES if code in LANGUAGE_MAPPINGS)
+
 
 def get_model_language_code(iso_code: str) -> str:
     """Convertit un code ISO vers un code modèle"""

@@ -336,6 +336,43 @@ nonisolated enum ComposerObjectEditorRail {
     /// déplie toujours : choisir un outil dit qu'on veut le régler, et laisser
     /// son panneau rangé rendrait le rail muet — c'est ce qui distingue une
     /// bascule d'un interrupteur global.
+    /// **Ce panneau porte-t-il son PROPRE champ de saisie ?** (#6156)
+    ///
+    /// Un seul le fait : ⌾ DÉCRIRE d'un média (`MediaAltTextField`). C'est la
+    /// seule section dont le clavier sert un champ INTÉRIEUR au panneau ; pour
+    /// toutes les autres, le clavier sert le texte du canvas, et les deux se
+    /// disputent alors le bas de l'écran.
+    ///
+    /// > La distinction porte sur ce que le panneau POSSÈDE, jamais sur l'état
+    /// > du clavier. Écrite « si le clavier est levé, range le panneau », la
+    /// > règle retirerait sous le doigt le champ qu'on vient de toucher — le
+    /// > défaut exact que #5083 a payé sur cet écran, un champ à y=884 sur un
+    /// > écran de 874 points.
+    static func ownsTextField(_ section: ComposerObjectEditorSection) -> Bool {
+        if case .media(let outil) = section { return outil == .altText }
+        return false
+    }
+
+    /// **Le clavier vient de monter : faut-il ranger le panneau ?** (#6156)
+    ///
+    /// > « C'est soit le clavier soit les choix de police. » — directive porteur
+    /// > 2026-09-12, capture à l'appui : les deux occupaient le bas ensemble et
+    /// > le texte édité tenait dans 200 × 330 pt sur un écran de 874.
+    static func collapsesWhenKeyboardRises(_ section: ComposerObjectEditorSection) -> Bool {
+        !ownsTextField(section)
+    }
+
+    /// **Taper cet outil doit-il rendre le clavier ?** (#6156)
+    ///
+    /// > « Si on veut changer le style ça enlève le focus. »
+    ///
+    /// Jumelle exacte de la précédente, et c'est voulu : une exclusion qui ne
+    /// vaudrait que dans un sens laisserait l'état interdit se former par
+    /// l'autre porte.
+    static func dismissesKeyboard(afterTapping section: ComposerObjectEditorSection) -> Bool {
+        !ownsTextField(section)
+    }
+
     static func collapsed(afterTapping tapped: ComposerObjectEditorSection,
                           selected: ComposerObjectEditorSection,
                           wasCollapsed: Bool) -> Bool {

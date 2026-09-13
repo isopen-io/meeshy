@@ -126,15 +126,49 @@ struct ComposerLeadingRail: View {
         }
     }
 
-    var body: some View {
-        if !isEmpty {
-            railStack {
-                // Le ressort POUSSE les entrées vers le bas : c'est lui, et non
-                // un alignement, qui tient la décision 2 — un `VStack` centré
-                // remettrait les entrées hautes hors de portée du pouce dès que
-                // la scène rétrécit. À l'horizontale il n'a pas lieu d'être.
-                if axis == .vertical, pushesToThumb { Spacer(minLength: 0) }
-                switch mode {
+    /// **Le rail vertical DÉFILE quand il ne tient pas** (#6131, directive
+    /// porteur 2026-09-12 : « il faut juste rendre le rail des outils scrollable
+    /// pendant la frappe pour faire tout défiler et choisir »).
+    ///
+    /// C'est la transposition EXACTE de ce que la rangée horizontale fait déjà
+    /// quelques lignes plus bas, et pour la même raison arithmétique : neuf
+    /// portes font `9 × 44 + 8 × 10 = 476 pt`, et **une pile trop haute n'est
+    /// pas clippée par SwiftUI — elle DESSINE par-dessus les deux bords.**
+    /// Mesuré au simulateur le 2026-09-12 : clavier levé, la colonne tombe à
+    /// ~408 pt, la pastille `@` se peignait sur « Public » et le `#` passait
+    /// sous le clavier.
+    ///
+    /// `ViewThatFits` plutôt qu'un drapeau « on écrit » : le débordement est
+    /// une question de PLACE, pas d'état. Un rail serré par un petit écran, par
+    /// une Dynamic Type large ou par une dixième porte déborde exactement
+    /// pareil, et aucun de ces cas n'aurait pensé à lever le drapeau. Quand ça
+    /// tient, la première variante gagne et la capsule garde sa taille — le
+    /// comportement d'avant, au pixel.
+    @ViewBuilder
+    private var verticalDoors: some View {
+        ViewThatFits(in: .vertical) {
+            railStack { railEntries }
+            ScrollView(.vertical, showsIndicators: false) { railStack { railEntries } }
+        }
+    }
+
+    /// **Le rail FLOTTANT est celui qui déborde** — et c'est lui, pas tous les
+    /// rails verticaux, que #6131 rend défilant.
+    ///
+    /// Le rail à ressort (`pushesToThumb`) pousse ses entrées vers le bas avec
+    /// un `Spacer` flexible : il « tient » toujours, par construction, donc
+    /// `ViewThatFits` y choisirait éternellement la première variante. Le
+    /// rendre défilant demanderait de retirer ce ressort — c'est-à-dire de
+    /// défaire la décision 2, qui garde les entrées à portée du pouce. Ce lot
+    /// ne touche pas à ça : il corrige le débordement MESURÉ, sur le rail qui
+    /// l'a montré.
+    private var scrollsWhenTooTall: Bool {
+        axis == .vertical && !pushesToThumb
+    }
+
+    @ViewBuilder
+    private var railEntries: some View {
+        switch mode {
                 case .doors(let doors):
                     ForEach(doors, id: \.rawValue) { door in
                         doorButton(door)
@@ -185,7 +219,25 @@ struct ComposerLeadingRail: View {
                             toolButton(control)
                         }
                     }
-                    exitButton
+            exitButton
+        }
+    }
+
+    var body: some View {
+        if !isEmpty {
+            Group {
+                if scrollsWhenTooTall {
+                    verticalDoors
+                } else {
+                    railStack {
+                        // Le ressort POUSSE les entrées vers le bas : c'est lui,
+                        // et non un alignement, qui tient la décision 2 — un
+                        // `VStack` centré remettrait les entrées hautes hors de
+                        // portée du pouce dès que la scène rétrécit. À
+                        // l'horizontale il n'a pas lieu d'être.
+                        if axis == .vertical, pushesToThumb { Spacer(minLength: 0) }
+                        railEntries
+                    }
                 }
             }
             .frame(width: axis == .vertical ? ComposerRailGeometry.railWidth : nil,

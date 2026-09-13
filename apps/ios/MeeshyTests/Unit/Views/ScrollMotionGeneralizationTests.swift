@@ -26,21 +26,38 @@ final class ScrollMotionGeneralizationTests: XCTestCase {
         )
     }
 
+    /// **La loi se lit sur l'UNITÉ, pas sur un fichier.**
+    ///
+    /// Les deux moitiés — publier le mouvement, y abonner les boutons — n'ont
+    /// aucune raison de vivre dans le même fichier, et depuis le 2026-09-13
+    /// elles n'y vivent plus pour la conversation : la grappe a été extraite
+    /// dans `ConversationExpandedHeaderBand.swift` (type nominal
+    /// `ConversationHeaderActionsCluster`) pour cesser de peser sur la LARGEUR
+    /// de la valeur `ConversationView`, cause du débordement de pile à
+    /// l'ouverture (#6213 bis). La loi, elle, n'a pas bougé d'un pouce.
+    ///
+    /// > Un témoin qui lit UN fichier mesure un découpage autant qu'une règle.
+    /// > Quand le code déménage, il n'a pas la décence de se taire : il affirme
+    /// > que la loi a disparu.
     private func assertWiresBothHalves(
         _ fileName: String,
         sourceExpression: String,
+        companions: [String] = [],
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
-        let source = try viewSource(fileName)
+        let source = try ([fileName] + companions)
+            .map { try viewSource($0) }
+            .joined(separator: "\n")
+        let unitName = ([fileName] + companions).joined(separator: " + ")
         XCTAssertTrue(
             source.contains(sourceExpression),
-            "\(fileName) doit PUBLIER le mouvement de sa liste (\(sourceExpression))",
+            "\(unitName) doit PUBLIER le mouvement de sa liste (\(sourceExpression))",
             file: file, line: line
         )
         XCTAssertTrue(
             source.contains(".hiddenWhileScrolling()"),
-            "\(fileName) doit abonner ses boutons d'action à la loi commune",
+            "\(unitName) doit abonner ses boutons d'action à la loi commune",
             file: file, line: line
         )
     }
@@ -48,9 +65,20 @@ final class ScrollMotionGeneralizationTests: XCTestCase {
     /// Conversation : le vrai signal UIKit (drag / décélération) remonte des
     /// délégués `UIScrollView`, pas d'un offset à débouncer.
     func test_conversationHeader_wiresBothHalvesOfTheLaw() throws {
+        // La valeur publiée s'appelle `hidesHeaderActions` DANS le type extrait,
+        // et `ConversationView` la lui remet sous son nom d'origine
+        // (`hidesHeaderActions: hidesHeaderActionsForScroll`). C'est la CHAÎNE
+        // qui est gardée — l'hôte calcule, le type publie — et non l'orthographe
+        // d'un seul maillon, qui changerait au prochain déplacement.
         try assertWiresBothHalves(
             "ConversationView.swift",
-            sourceExpression: ".scrollMotionActive(hidesHeaderActionsForScroll)"
+            sourceExpression: "hidesHeaderActions: hidesHeaderActionsForScroll",
+            companions: ["ConversationExpandedHeaderBand.swift"]
+        )
+        let band = try viewSource("ConversationExpandedHeaderBand.swift")
+        XCTAssertTrue(
+            band.contains(".scrollMotionActive(hidesHeaderActions)"),
+            "Le type nominal du header doit publier le mouvement à la loi commune."
         )
     }
 

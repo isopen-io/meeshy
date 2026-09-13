@@ -16,7 +16,8 @@ final class AudioBubbleRouterTests: XCTestCase {
         coordinator: ConversationAudioCoordinator,
         fileUrl: String? = nil,
         createdAt: Date = Date(),
-        transcription: MessageTranscription? = nil
+        transcription: MessageTranscription? = nil,
+        autoRevealTranscription: Bool = true
     ) -> AudioBubbleRouter {
         let attachment = MeeshyMessageAttachment(
             id: attachmentId,
@@ -36,6 +37,7 @@ final class AudioBubbleRouterTests: XCTestCase {
             attachment: attachment,
             accentColorHex: "FF6B6B",
             transcription: transcription,
+            autoRevealTranscription: autoRevealTranscription,
             onPlayRequest: {},
             coordinatorForTesting: coordinator
         )
@@ -177,5 +179,27 @@ final class AudioBubbleRouterTests: XCTestCase {
             transcription: nil
         )
         XCTAssertFalse(router.reserveTranscriptionHeight)
+    }
+
+    // MARK: - #4956 — autoRevealTranscription forwarding
+
+    /// The router forwards `autoRevealTranscription` verbatim to
+    /// `AudioPlayerView` (via `AudioBubbleContent`) — it is an OPAQUE
+    /// parameter, resolved by the caller (`isMe || audio.autoTranscribeIncoming`).
+    /// These tests only prove the primitive reaches the router unchanged;
+    /// the CTA rendering itself lives in `AudioTranscriptionRevealTests`
+    /// (MeeshySDK), alongside the pure rule.
+    func test_autoRevealTranscription_defaultsToTrue() {
+        let engine = MockAudioPlaybackEngine()
+        let coord = ConversationAudioCoordinator(engine: engine)
+        let router = makeRouter(attachmentId: "a1", coordinator: coord)
+        XCTAssertTrue(router.autoRevealTranscription)
+    }
+
+    func test_autoRevealTranscription_forwardsExplicitFalse() {
+        let engine = MockAudioPlaybackEngine()
+        let coord = ConversationAudioCoordinator(engine: engine)
+        let router = makeRouter(attachmentId: "a1", coordinator: coord, autoRevealTranscription: false)
+        XCTAssertFalse(router.autoRevealTranscription)
     }
 }

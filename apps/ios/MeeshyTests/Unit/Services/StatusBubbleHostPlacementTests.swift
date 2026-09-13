@@ -38,14 +38,23 @@ final class StatusBubbleHostPlacementTests: XCTestCase {
     }
 
     func test_windowRoots_hostTheBubble() throws {
+        // Depuis #5837 l'hôte est `RootStatusBubbleLayer`, la première couche
+        // nominale posée sur le `ZStack` de CHAQUE racine ; c'est elle qui
+        // appelle `.withStatusBubble()`.
         for root in ["RootView.swift", "iPadRootView.swift"] {
             let source = try strippedSource(of: root)
             XCTAssertTrue(
-                source.contains(".withStatusBubble()"),
+                source.contains(".modifier(RootStatusBubbleLayer("),
                 "\(root) est l'hôte UNIQUE de la bulle pour sa fenêtre — sans lui, " +
                 "plus aucune surface non modale n'affiche le mood."
             )
         }
+        let layer = try strippedSource(of: "RootLayers/RootSharedLayers.swift")
+        XCTAssertTrue(
+            layer.contains(".withStatusBubble()"),
+            "RootStatusBubbleLayer doit poser .withStatusBubble() — sinon les deux racines " +
+            "montent une couche qui n'héberge rien."
+        )
     }
 
     func test_siblingProneSurfaces_doNotHostTheBubble() throws {

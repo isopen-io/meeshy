@@ -115,7 +115,8 @@ nonisolated enum MediaKindLabel {
     /// (`ConversationView+Composer.labelForAttachment`,
     /// `FeedView+Attachments.feedLabelForAttachment`), la seconde surmontée
     /// d'un commentaire qui la déclarait déjà « la même SSOT » que la première.
-    /// Un commentaire ne fait pas d'une copie une source unique.
+    /// Un commentaire ne fait pas d'une copie une source unique. La seconde
+    /// n'existe plus : elle est partie avec le composer inline du fil (#6016).
     static func attachmentLabel(for attachment: MessageAttachment,
                                 bundle: Bundle = .main,
                                 locale: Locale = .current) -> String {

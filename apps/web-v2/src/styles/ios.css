@@ -1,0 +1,99 @@
+/* LE PONT vers la palette iOS.
+ *
+ * Ce fichier ne porte AUCUNE valeur. Les valeurs vivent dans
+ * `@meeshy/design-tokens/ios.css`, GÉNÉRÉ depuis MeeshyColors.swift et
+ * DesignTokens.swift par `packages/design-tokens/scripts/generate-from-ios.mjs`.
+ * Ce qui reste ici est un NOMMAGE : donner aux jetons iOS des noms
+ * d'utilitaires Tailwind. C'est le travail de l'application, pas de la table.
+ *
+ * Avant #5445, ce fichier recopiait la palette à la main — une seconde table,
+ * que la charte interdit (§ 12.5 règle 1), et dont le défaut n'est pas
+ * l'effort de recopie mais la DÉRIVE SILENCIEUSE : chaque table restant
+ * cohérente avec elle-même, une couleur corrigée d'un côté ne fait rougir
+ * aucun témoin de l'autre. Le gate `bun run check` de design-tokens l'interdit
+ * désormais : il régénère et refuse toute différence.
+ *
+ * CE QUI RESTE OUVERT (#5445) : `tokens.css` (la table de la v3) et cette
+ * palette-ci assignent les mêmes couleurs à des RÔLES différents — la v3 fait
+ * de indigo400 sa primaire, iOS de indigo500 ; les neutres de la v3 sont
+ * violacés, ceux d'iOS des gris vrais. Unifier ces rôles changerait le rendu
+ * d'une application en service : c'est une décision du porteur, pas un
+ * refactor.
+ */
+@import '@meeshy/design-tokens/ios.css';
+
+@theme inline {
+  --color-ios-brand: var(--ios-indigo-500);
+  --color-ios-brand-deep: var(--ios-indigo-700);
+  --color-read: var(--ios-read-receipt);
+  --color-i50: var(--ios-indigo-50);
+  --color-i200: var(--ios-indigo-200);
+  --color-i300: var(--ios-indigo-300);
+  --color-i400: var(--ios-indigo-400);
+  --color-i600: var(--ios-indigo-600);
+
+  --color-ios-surface: var(--ios-surface);
+  --color-ios-card: var(--ios-surface-card);
+  --color-ios-ink: var(--ios-ink);
+  --color-ios-ink-2: var(--ios-ink-2);
+  --color-ios-ink-3: var(--ios-ink-3);
+
+  --color-bubble-mine: var(--ios-bubble-mine);
+  --color-meta-mine: var(--ios-bubble-meta-mine);
+  --color-meta: var(--ios-bubble-meta);
+  --color-quote-mine: var(--ios-quote-bg-mine);
+  --color-quote: var(--ios-quote-bg);
+  --color-edge: var(--ios-edge);
+  --color-day-ink: var(--ios-day-ink);
+  --color-day-hairline: var(--ios-day-hairline);
+  /* Le nom de SOI en tête de rangée (revue #5935, défaut majeur 2) —
+     `FocalIdentityHeader.swift:90-92`, `--ios-indigo-500` servi tel quel y
+     mesure sous AA (4,47:1 / 4,45:1). Voir `focal-row.tsx`. */
+  --color-self-name-ink: var(--ios-self-name-ink);
+
+  /* Les géométries : celles que Swift DÉCLARE, et celles qu'il porte en
+     littéral — le générateur distingue les deux et cite le site de chacune. */
+  --radius-bubble: var(--ios-radius-bubble);
+  --radius-field-ios: var(--ios-radius-field);
+  --radius-quote: var(--ios-radius-quote);
+  --radius-row-ios: var(--ios-radius-md);
+  /**
+   * `rounded-media` (#5805) — la grille de visuels d'un message : rayon 16
+   * (`--ios-radius-lg`, BSL:817 `MeeshyRadius.lg`, `FocalMetrics.Media.radius`,
+   * `Focal/Core/FocalMetrics.swift:225-227`), JAMAIS 18 (`--ios-radius-bubble`) :
+   * la grille est un FRÈRE de la bulle de texte (`VStack(spacing: 4)`,
+   * BSL:794), donc jamais teintée par son fond. Un jeton dérivé, pas une
+   * constante TS sans consommateur (Q4, § 9 de la spécification #5805).
+   */
+  --radius-media: var(--ios-radius-lg);
+  --size-avatar-row: var(--ios-avatar-row);
+  --size-avatar-bubble: var(--ios-avatar-bubble);
+  --size-avatar-header: var(--ios-avatar-header);
+  --size-avatar-typing: var(--ios-avatar-typing);
+  --size-header-circle: var(--ios-header-circle);
+
+  --text-check: var(--ios-font-caption);
+  --text-mini: var(--ios-font-footnote);
+  --text-time: var(--ios-text-time);
+  --text-title: var(--ios-font-subhead);
+  --text-bubble: var(--ios-font-body);
+  --text-input: var(--ios-text-input);
+  --text-large-title: var(--ios-text-large-title);
+}
+
+/**
+ * LE RÉSUMÉ VIVANT (#5695) — SIX alias, DÉLIBÉRÉMENT hors du `@theme inline`
+ * ci-dessus : ce bloc est importé PARTOUT (feuille globale), donc tout
+ * jeton qui y entre grossit la PREMIÈRE PEINTURE, mesurée par
+ * `measure-weight.mjs`. Ces six-là ne sont consommés qu'en `style={{
+ * fontSize: 'var(--text-summary-title)' }}` par les composants du Résumé
+ * (`src/components/summary/**`), jamais comme classe Tailwind
+ * (`check-utilities.mjs` ne les cherche donc pas) : ils vivent dans
+ * `styles/summary.css`, chargée UNIQUEMENT par le chunk qui les consomme
+ * (`summary-skeleton.tsx`, statique dans le CHUNK DU FIL — lui-même lazy,
+ * jamais dans `index-*.js`). Mesuré : les y laisser coûtait +0,20 Ko à la
+ * première peinture pour une fonctionnalité qui ne s'ouvre qu'à la demande.
+ * Les VALEURS SOURCE (`--ios-text-summary-*`, `--ios-summary-*`) restent
+ * générées par `packages/design-tokens/scripts/generate-from-ios.mjs`
+ * (D-4) — seule leur NOMINATION locale change de domicile.
+ */

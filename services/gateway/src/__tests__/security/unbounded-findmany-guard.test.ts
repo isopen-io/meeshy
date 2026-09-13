@@ -238,10 +238,12 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // dette neuve.
   'conversations/participant-ban-core.ts': 2,
   // #4284 a découpé conversations/core.ts en fichiers frères ; les huit
-  // sites vivent désormais dans core-detail.ts (3), core-lifecycle.ts (2)
-  // et core-list.ts (3). Le compte total est inchangé.
+  // sites vivent désormais dans core-detail.ts (3), core-lifecycle.ts (2
+  // à l'origine, 1 depuis #5760 — la reconciliation d'appartenance de
+  // communauté est passée dans `services/conversations/communityMembershipSync.ts`,
+  // hors du périmètre balayé ici) et core-list.ts (3).
   'conversations/core-detail.ts': 3,
-  'conversations/core-lifecycle.ts': 2,
+  'conversations/core-lifecycle.ts': 1,
   'conversations/core-list.ts': 3,
   'conversations/leave.ts': 1,
   // 5 -> 3 : #4177 a retire du travail MORT, pas ajoute une borne. Trois lectures

@@ -318,7 +318,7 @@ export class PostAudioService {
   private async broadcastPostUpdate(postId: string): Promise<void> {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: postInclude,
+      select: postInclude,
     });
 
     if (!post) {

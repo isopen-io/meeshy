@@ -16,7 +16,7 @@ import os
 /// la remet au meuble.
 ///
 /// **Aucune seconde fabrique de graine.** La matérialisation est celle de
-/// `ConversationMediaSeeding` — mêmes trois branches, même plafond de 1080 px,
+/// `ComposerMediaSeeding` — mêmes trois branches, même plafond de 1080 px,
 /// mêmes raisons : une vidéo reste un FICHIER (la décoder perdrait le son et le
 /// mouvement), une image se décode hors du main actor parce que la POSE, elle,
 /// doit rester synchrone (`restoreCanvas` est un instantané qui ne relit jamais
@@ -188,7 +188,7 @@ final class ShareComposeHandoffConsumer: ObservableObject {
                   let bitmap = await StoryMediaLoader.shared.loadImage(data: donnees, maxDimension: 1080)
             else { return nil }
             // Le bitmap pour le CANVAS, le fichier pour la PUBLICATION (#5409) —
-            // même raison que sa jumelle `ConversationMediaSeeding.seed`. Cette
+            // même raison que sa jumelle `ComposerMediaSeeding.seed`. Cette
             // porte-ci monte DÉJÀ la surface document : sans l'origine, partager
             // une image depuis une autre app puis publier en POST perdait
             // l'image, en production.

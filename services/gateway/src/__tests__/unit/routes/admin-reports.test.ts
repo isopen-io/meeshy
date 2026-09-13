@@ -45,6 +45,21 @@ jest.mock('../../../services/admin/report.service', () => ({
   }),
 }));
 
+// #3718 — la logique de notification elle-même (langues, contenu, garde
+// anonyme) est couverte par son propre témoin
+// (`services/reports/__tests__/reportResolvedNotification.test.ts`) ; ici on
+// ne garde que le CÂBLAGE — la route appelle-t-elle la bonne fonction, avec
+// la bonne charge, au bon moment ? `jest.requireActual` pour ne pas perdre
+// `isNewlyResolvedReportTransition`, dont la route dépend réellement.
+const mockNotifyReportResolved = jest.fn<any>().mockResolvedValue(undefined);
+jest.mock('../../../services/reports/reportResolvedNotification', () => {
+  const actual = jest.requireActual('../../../services/reports/reportResolvedNotification') as any;
+  return {
+    ...actual,
+    notifyReportResolved: (...a: any[]) => mockNotifyReportResolved(...a),
+  };
+});
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { reportRoutes } from '../../../routes/admin/reports';
@@ -275,9 +290,29 @@ describe('PATCH /:id — invalid body → 400', () => {
   });
 });
 
+describe('PATCH /:id — 404 quand le signalement est introuvable', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockGetReportById.mockResolvedValue(null);
+    app = await buildApp();
+  });
+  afterAll(async () => {
+    mockGetReportById.mockResolvedValue({ id: 'rpt-1', status: 'pending' });
+    await app.close();
+  });
+
+  it('returns 404 and does NOT call updateReport', async () => {
+    mockUpdateReport.mockClear();
+    const res = await app.inject({ method: 'PATCH', url: '/rpt-missing', payload: { status: 'resolved' } });
+    expect(res.statusCode).toBe(404);
+    expect(mockUpdateReport).not.toHaveBeenCalled();
+  });
+});
+
 describe('PATCH /:id — success → 200', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
+    mockGetReportById.mockResolvedValue({ id: 'rpt-1', status: 'pending' });
     mockUpdateReport.mockResolvedValue({ id: 'rpt-1', status: 'resolved' });
     app = await buildApp();
   });
@@ -291,6 +326,65 @@ describe('PATCH /:id — success → 200', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+  });
+});
+
+// #3718 — art. 16 DSA : le déclarant reçoit une réponse motivée quand son
+// signalement bascule dans un statut terminal.
+describe('PATCH /:id — #3718 notifie le déclarant sur une transition TERMINALE réelle', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => { app = await buildApp(); });
+  afterAll(async () => { await app.close(); });
+
+  it('appelle notifyReportResolved quand le statut passe de pending à resolved', async () => {
+    mockNotifyReportResolved.mockClear();
+    mockGetReportById.mockResolvedValue({ id: 'rpt-1', status: 'pending' });
+    mockUpdateReport.mockResolvedValue({
+      id: 'rpt-1',
+      status: 'resolved',
+      reporterId: 'reporter-1',
+      reportedType: 'message',
+      reportType: 'spam',
+      actionTaken: 'content_removed',
+    });
+
+    const res = await app.inject({ method: 'PATCH', url: '/rpt-1', payload: { status: 'resolved' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockNotifyReportResolved).toHaveBeenCalledTimes(1);
+    const [, reportArg] = mockNotifyReportResolved.mock.calls[0];
+    expect(reportArg).toMatchObject({
+      id: 'rpt-1',
+      reporterId: 'reporter-1',
+      status: 'resolved',
+      actionTaken: 'content_removed',
+    });
+  });
+
+  it("n'appelle PAS notifyReportResolved quand le statut ne change pas (édition de moderatorNotes)", async () => {
+    mockNotifyReportResolved.mockClear();
+    mockGetReportById.mockResolvedValue({ id: 'rpt-1', status: 'resolved' });
+    mockUpdateReport.mockResolvedValue({ id: 'rpt-1', status: 'resolved', reporterId: 'reporter-1' });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/rpt-1',
+      payload: { moderatorNotes: 'note actualisée' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockNotifyReportResolved).not.toHaveBeenCalled();
+  });
+
+  it("n'appelle PAS notifyReportResolved quand le nouveau statut n'est pas terminal", async () => {
+    mockNotifyReportResolved.mockClear();
+    mockGetReportById.mockResolvedValue({ id: 'rpt-1', status: 'pending' });
+    mockUpdateReport.mockResolvedValue({ id: 'rpt-1', status: 'under_review', reporterId: 'reporter-1' });
+
+    const res = await app.inject({ method: 'PATCH', url: '/rpt-1', payload: { status: 'under_review' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockNotifyReportResolved).not.toHaveBeenCalled();
   });
 });
 

@@ -527,14 +527,19 @@ describe('POST /register — valid phone transfer token', () => {
  * même quota qu'une création de compte, et trois corrections fermaient la porte
  * cinq minutes à quelqu'un qui n'avait rien créé.
  *
- * La règle — et les deux moitiés comptent autant :
+ * La règle (#5912) :
  *
  * - un **400** rend la tentative : la saisie est à corriger, rien n'a été
  *   touché, rien n'a été appris sur autrui ;
- * - un **409** la GARDE : il apprend qu'un pseudo ou une adresse EXISTE, et un
- *   oracle remboursable est un oracle gratuit, donc énumérable à volonté.
+ * - un **409 USERNAME_TAKEN** la rend AUSSI depuis #5912 : la collision de
+ *   pseudo est l'issue la plus courante d'une inscription humaine, et
+ *   l'oracle qu'elle ouvre est déjà borné ailleurs, par le limiteur DÉDIÉ de
+ *   `GET /directory/availability` (20/min par IP) ;
+ * - un **409 EMAIL_TAKEN** la GARDE, lui seul : c'est la SEULE porte qui
+ *   apprend qu'un e-mail existe (#4158 a fermé les autres), donc un oracle
+ *   remboursable ici resterait un oracle gratuit.
  */
-describe('POST /register — un 400 rend la tentative, un 409 la garde', () => {
+describe('POST /register — un 400 et un 409 USERNAME_TAKEN rendent la tentative, un 409 EMAIL_TAKEN la garde', () => {
   const refus = (code: string, status: number, field: string) =>
     Object.assign(new Error(`refus ${code}`), { code, status, field });
 
@@ -565,9 +570,17 @@ describe('POST /register — un 400 rend la tentative, un 409 la garde', () => {
     expect(total).toBe(2);
   });
 
-  it('un 409 USERNAME_TAKEN ne rembourse RIEN — l’oracle se paie', async () => {
+  it('un 409 USERNAME_TAKEN rembourse — l’oracle de pseudo est borné ailleurs (#5912)', async () => {
     const total = await inscrireEtCompter(
       jest.fn<any>().mockRejectedValue(refus('USERNAME_TAKEN', 409, 'username')),
+    );
+
+    expect(total).toBe(2);
+  });
+
+  it('un 409 EMAIL_TAKEN ne rembourse RIEN — seule porte qui apprend qu’un e-mail existe (#4158)', async () => {
+    const total = await inscrireEtCompter(
+      jest.fn<any>().mockRejectedValue(refus('EMAIL_TAKEN', 409, 'email')),
     );
 
     expect(total).toBe(0);

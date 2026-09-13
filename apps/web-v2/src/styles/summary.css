@@ -1,0 +1,30 @@
+/**
+ * LE RÉSUMÉ VIVANT (#5695) — jetons et règles SCOPÉS à cette fonctionnalité,
+ * délibérément HORS de `ios.css`/`app.css` (feuille globale, chargée par
+ * CHAQUE route). Ce fichier n'est importé QUE par `summary-skeleton.tsx`,
+ * statique dans le CHUNK DU FIL — lui-même lazy — donc jamais dans la
+ * première peinture. Voir le doc-comment de `ios.css` pour la mesure qui a
+ * motivé ce domicile.
+ */
+:root {
+  --text-summary-title: var(--ios-text-summary-title);
+  --text-summary-counts: var(--ios-text-summary-counts);
+  --text-summary-partial: var(--ios-text-summary-partial);
+  --radius-summary-skeleton: var(--ios-radius-sm);
+  --color-summary-surface-tint: var(--ios-summary-surface-tint);
+  --color-summary-skeleton-fill: var(--ios-summary-skeleton-fill);
+}
+
+/**
+ * LE CHEVRON « AVANCER » (épisodes) — écart 4 (§1.4 de la spécification) :
+ * pas de `chevron.forward` en SVG. Le glyphe `caretLeft` existant
+ * (`glyphs.ts`) se retourne par `scaleX(-1)` en LTR pour pointer vers
+ * l'avant, et reste tel quel sous `:dir(rtl)` — une direction de LECTURE,
+ * jamais un nom de côté physique (« right »/« left ») dans un identifiant.
+ */
+.glyph-forward {
+  transform: scaleX(-1);
+}
+.glyph-forward:dir(rtl) {
+  transform: none;
+}

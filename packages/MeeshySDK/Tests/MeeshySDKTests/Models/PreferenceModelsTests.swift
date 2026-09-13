@@ -157,7 +157,7 @@ final class PreferenceModelsTests: XCTestCase {
 
         XCTAssertTrue(defaults.transcriptionEnabled)
         XCTAssertEqual(defaults.transcriptionSource, .auto)
-        XCTAssertFalse(defaults.autoTranscribeIncoming)
+        XCTAssertTrue(defaults.autoTranscribeIncoming)
         XCTAssertTrue(defaults.audioTranslationEnabled)
         XCTAssertEqual(defaults.translatedAudioFormat, .mp3)
         XCTAssertTrue(defaults.ttsEnabled)

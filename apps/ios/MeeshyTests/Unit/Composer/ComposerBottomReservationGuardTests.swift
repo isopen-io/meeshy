@@ -35,30 +35,76 @@ final class ComposerBottomReservationGuardTests: XCTestCase {
 
     // MARK: - 1. La réserve vaut pour les deux zones
 
+    /// **Le calcul a quitté le site d'appel au #6126** — et la garde le suit.
+    ///
+    /// La réserve s'écrivait en ternaire DANS `.storyComposerCanvasBottomReservation(…)`.
+    /// Elle est désormais une propriété nommée, `canvasBottomReservation`, parce
+    /// que les deux zones ne prennent plus le bas de la même façon : le CORPS du
+    /// post monte une zone dont on mesure la hauteur, la LÉGENDE s'écrit en place
+    /// et ce qui la menace est le CLAVIER.
+    ///
+    /// > Lire le site d'APPEL aurait laissé cette garde verte sur le seul nom de
+    /// > la propriété — une garde qui ne mesure plus rien, et qui a l'air de
+    /// > mesurer. Elle lit donc le CORPS, et vérifie d'abord qu'il n'est pas vide.
     func test_laReserve_couvreLesDeuxZonesDEcriture() throws {
         let text = try source()
-        let appel = block(from: ".storyComposerCanvasBottomReservation(", to: ")", in: text)
-        XCTAssertFalse(appel.isEmpty, "La réserve basse est introuvable — la garde ne mesurerait rien.")
-
         XCTAssertTrue(
-            appel.contains("editsSceneDescription") && appel.contains("editsPostContent"),
-            "La réserve doit s'appliquer aux DEUX modes d'écriture. Ne tester que la " +
-            "description laisse la zone de CONTENU passer par-dessus la scène, sans que " +
-            "rien ne le signale : la hauteur est bien mesurée, elle n'est simplement pas servie."
+            text.contains(".storyComposerCanvasBottomReservation(canvasBottomReservation)"),
+            "La réserve basse doit être DÉCLARÉE au canvas — sans elle la saisie recouvre la scène."
+        )
+        let corps = block(from: "var canvasBottomReservation: CGFloat {", to: "\n    }", in: text)
+        XCTAssertFalse(corps.isEmpty, "`canvasBottomReservation` introuvable — la garde ne mesurerait rien.")
+
+        // **Le titre de ce témoin a changé de sens au #6126, et c'est mesuré.**
+        // La directive du 2026-09-05 demandait que la réserve vaille pour les
+        // DEUX zones — elle avait raison : les deux s'ancraient en bas. La
+        // légende n'a plus de zone, donc plus rien à réserver ; et la réserve
+        // qu'on lui avait câblée (la hauteur du clavier) s'est révélée SANS
+        // EFFET au simulateur, forcée à 260 pt. Voir le doc-comment de
+        // `canvasBottomReservation`.
+        XCTAssertTrue(
+            corps.contains("editsPostContent"),
+            "La zone du CORPS du post doit toujours réserver sa hauteur : sans elle, " +
+            "elle passe par-dessus la scène — le défaut que la directive 2026-09-05 corrige."
+        )
+        XCTAssertFalse(
+            corps.contains("editsSceneDescription"),
+            "La LÉGENDE ne réserve plus rien (#6126) : elle s'écrit en place et remonte avec " +
+            "le clavier. Re-câbler une branche pour elle rajouterait une réserve MESURÉE inerte."
         )
     }
 
-    /// La hauteur servie est celle de la zone MONTÉE — les deux ne peuvent pas
-    /// s'ouvrir ensemble. Sans cette exclusivité, la réserve unifiée servirait
-    /// la hauteur d'une zone fermée.
-    func test_lesDeuxZones_sontExclusives() throws {
+    /// **Il n'y a plus qu'UNE zone en bas, et l'exclusivité a changé de porteur.**
+    ///
+    /// L'ancien témoin lisait `if editsSceneDescription / else if editsPostContent`
+    /// dans `textEditingZones` : c'était le `else` qui garantissait que la réserve
+    /// unifiée ne serve jamais la hauteur d'une zone fermée. Depuis #6126 la
+    /// LÉGENDE n'a plus de zone — elle s'édite en place —, donc ce `else` n'a plus
+    /// de second terme et l'exclusivité se joue ailleurs : chaque branche de
+    /// `canvasBottomReservation` RETOURNE, et les deux portes se ferment l'une
+    /// l'autre (`ComposerContentDoorWiringGuardTests`).
+    ///
+    /// > Réécrire ce témoin sur `textEditingZones` l'aurait rendu vert par
+    /// > omission : un `if` seul y satisfait n'importe quelle exigence de
+    /// > non-recouvrement. Ce qu'il faut garder est que la zone RESTANTE est bien
+    /// > celle du CORPS, et qu'aucune ne revienne pour la légende.
+    func test_laZoneRestante_estCelleDuCorps_etElleEstSeule() throws {
         let text = try source()
         let zones = block(from: "var textEditingZones: some View {", to: "\n    }", in: text)
         XCTAssertFalse(zones.isEmpty, "`textEditingZones` introuvable")
         XCTAssertTrue(
-            zones.contains("if editsSceneDescription") && zones.contains("else if editsPostContent"),
-            "Les deux zones partagent une seule hauteur mesurée : elles DOIVENT être " +
-            "exclusives, sinon la réserve sert la hauteur de la zone qui n'est pas montée."
+            zones.contains("if editsPostContent"),
+            "Le CORPS du post garde sa zone du bas — c'est le contraste que la directive décrit."
+        )
+        XCTAssertFalse(
+            zones.contains("sceneDescriptionEditor"),
+            "La zone basse de la LÉGENDE ne doit pas revenir : elle s'écrit là où elle se lit (#6126)."
+        )
+        let corps = block(from: "var canvasBottomReservation: CGFloat {", to: "\n    }", in: text)
+        XCTAssertEqual(
+            corps.components(separatedBy: "return").count - 1, 2,
+            "La réserve a DEUX sorties depuis le #6126 — le corps du post, et le repos. " +
+            "Une troisième signalerait le retour d'une branche pour la légende."
         )
     }
 
@@ -92,9 +138,13 @@ final class ComposerBottomReservationGuardTests: XCTestCase {
     /// mesure remontée par la zone cesserait de décrire ce qu'on voit.
     func test_laDifference_nePasseParAucunSupplementEnPoints() throws {
         let text = try source()
-        let appel = block(from: ".storyComposerCanvasBottomReservation(", to: ")", in: text)
+        // Re-pointé au #6126 sur le CORPS de la propriété : lu au site d'appel,
+        // ce témoin ne verrait plus qu'un identifiant, où aucun `+` ne peut
+        // apparaître — vert pour toujours, et pour la mauvaise raison.
+        let corps = block(from: "var canvasBottomReservation: CGFloat {", to: "\n    }", in: text)
+        XCTAssertFalse(corps.isEmpty, "`canvasBottomReservation` introuvable")
         XCTAssertFalse(
-            appel.contains("+"),
+            corps.contains("+"),
             "La réserve doit servir la hauteur MESURÉE, sans addition : la différence entre " +
             "les deux modes vient de ce que la zone occupe réellement (son nombre de lignes), " +
             "jamais d'un supplément posé ici."

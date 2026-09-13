@@ -320,6 +320,30 @@ extension UniversalComposerBar {
         // Custom send (edit mode, recording, or parent-managed send)
         if let onCustomSend {
             onCustomSend()
+            // **Le champ ressuscitait son texte juste après l'envoi** (#5961).
+            //
+            // `text` est un `@State` LOCAL, poussé vers `textBinding` par un
+            // `.adaptiveOnChange(of: text)` — donc APRÈS ce tour de run loop.
+            // `onCustomSend()` vient de rendre la main : l'hôte a vidé SA
+            // source (`composerText.text = ""`), et la synchro différée y
+            // re-pousserait l'ancien `text`. Le texte réapparaît, l'auteur tape
+            // la suite, et l'envoi suivant emporte tout — un message par
+            // accumulation, mesuré le 2026-09-10.
+            //
+            // Le dépôt connaissait ce piège : le doc-comment de
+            // `sendQuickEmoji` le décrit mot pour mot et le referme, pour
+            // l'emoji SEUL. Le geste d'envoi ordinaire, son voisin, ne l'avait
+            // jamais reçu.
+            //
+            // **On ALIGNE, on ne vide pas.** Vider inconditionnellement
+            // perdrait la saisie quand l'hôte REFUSE l'envoi — une édition
+            // qu'il garde pour correction. La barre ne suit qu'une décision
+            // déjà prise : si l'hôte a vidé sa source, elle s'aligne.
+            if ComposerSendAlignment.shouldClearLocalText(hostText: textBinding?.wrappedValue,
+                                                          localText: text) {
+                text = ""
+                textAnalyzer.reset()
+            }
             HapticFeedback.light()
             return
         }

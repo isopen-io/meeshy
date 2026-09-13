@@ -1,12 +1,29 @@
 /**
  * Témoin de #4277 (critère 3) — `userDeletionsRoutes` ne porte plus de
- * chemin ABSOLU codé en dur : l'adresse suit `opts.basePath` (fournie au
- * `server.register(userDeletionsRoutes, { basePath })`), avec un repli sur
- * `/api` — la valeur EFFECTIVE d'aujourd'hui (`prefix: ''` + chemin en dur
- * `/api/…`) — quand l'appelant n'en fournit aucune. `basePath`, jamais
- * `prefix` : les routes internes sont des URLs ABSOLUES, et le mécanisme de
- * préfixage NATIF de Fastify (déclenché par la clé réservée `prefix`) les
- * additionnerait — voir le commentaire de `UserDeletionsRoutesOptions`.
+ * chemin ABSOLU codé en dur pour ses adresses LEGACY : elles suivent
+ * `opts.basePath` (fourni au `server.register(userDeletionsRoutes, { basePath })`),
+ * avec un repli sur `/api` quand l'appelant n'en fournit aucune. `basePath`,
+ * jamais `prefix` : les routes internes sont des URLs ABSOLUES, et le
+ * mécanisme de préfixage NATIF de Fastify (déclenché par la clé réservée
+ * `prefix`) les additionnerait — voir le commentaire de
+ * `UserDeletionsRoutesOptions`.
+ *
+ * #4317 a changé ce que « suivre le préfixe » veut dire pour SIX des sept
+ * routes : `restore-for-me` (conversation), `clear-history`,
+ * `delete-for-me`/`restore-for-me` (message), le retrait en lot et la liste
+ * des conversations supprimées ont chacun gagné une adresse CANONIQUE fixée à
+ * `apiPath()` (`/api/v1` par défaut), REGISTRÉE EN PLUS de leur alias legacy
+ * — jamais à sa place, et jamais pilotée par `opts.basePath`. Seul
+ * `delete-for-me` (conversation) reste un alias pur : son successeur vit dans
+ * un AUTRE module (`routes/conversations/delete-for-me.ts`), déjà monté sous
+ * `/api/v1` avant ce lot.
+ *
+ * Passer `basePath: '/api/v1'` ferait donc désormais lever
+ * `FST_ERR_DUPLICATED_ROUTE` pour les six routes migrées : leur adresse
+ * canonique occupe déjà ce chemin. Les témoins ci-dessous emploient un
+ * préfixe legacy DISTINCT (`/api/legacy-test`) pour rester valides sans
+ * dépendre de la valeur par défaut de `apiPath()` — la preuve du couplage
+ * legacy/canonique vit dans `user-deletions-v1-migration.test.ts`.
  *
  * @jest-environment node
  */
@@ -17,6 +34,7 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
 }));
 jest.mock('../../../services/conversationPreferencesSync', () => ({
+  ...(jest.requireActual('../../../services/conversationPreferencesSync') as object),
   writeConversationPreferences: jest.fn<any>().mockResolvedValue(undefined),
 }));
 jest.mock('../../../services/messaging/retractHiddenMessageNotifications', () => ({
@@ -66,20 +84,25 @@ function buildPrisma() {
   };
 }
 
-describe('userDeletionsRoutes — adresse pilotée par le préfixe d\'enregistrement (#4277)', () => {
-  it('suit un préfixe /api/v1 explicite — plus une seule adresse en dur dans le fichier', async () => {
+describe('userDeletionsRoutes — adresse pilotée par le préfixe d\'enregistrement (#4277, #4317)', () => {
+  it('l\'alias LEGACY suit un préfixe explicite — plus une seule adresse en dur pour lui', async () => {
     const app = Fastify({ logger: false });
     app.decorate('prisma', buildPrisma() as any);
-    await app.register(userDeletionsRoutes, { basePath: '/api/v1' });
+    await app.register(userDeletionsRoutes, { basePath: '/api/legacy-test' });
     await app.ready();
 
-    const res = await app.inject({ method: 'GET', url: '/api/v1/user/deleted-conversations' });
+    const res = await app.inject({ method: 'GET', url: '/api/legacy-test/user/deleted-conversations' });
     expect(res.statusCode).toBe(200);
 
     // L'ancienne adresse bare-/api ne doit PLUS répondre sous ce montage :
-    // la preuve que la chaîne est bien PILOTÉE, pas dupliquée en dur à côté.
+    // la preuve que l'alias est bien PILOTÉ, pas dupliqué en dur à côté.
     const missOld = await app.inject({ method: 'GET', url: '/api/user/deleted-conversations' });
     expect(missOld.statusCode).toBe(404);
+
+    // L'adresse CANONIQUE (#4317), elle, reste servie quel que soit le
+    // préfixe legacy demandé — elle ne dérive JAMAIS de `opts.basePath`.
+    const canonique = await app.inject({ method: 'GET', url: '/api/v1/user/deleted-conversations' });
+    expect(canonique.statusCode).toBe(200);
 
     await app.close();
   });
@@ -99,20 +122,20 @@ describe('userDeletionsRoutes — adresse pilotée par le préfixe d\'enregistre
     await app.close();
   });
 
-  it('les sept routes suivent TOUTES le même préfixe — une seule convention (critère 3)', async () => {
+  it('les sept alias LEGACY suivent TOUS le même préfixe — une seule convention (critère 3)', async () => {
     const app = Fastify({ logger: false });
     app.decorate('prisma', buildPrisma() as any);
-    await app.register(userDeletionsRoutes, { basePath: '/api/v1' });
+    await app.register(userDeletionsRoutes, { basePath: '/api/legacy-test' });
     await app.ready();
 
     const routes = [
-      { method: 'DELETE', url: '/api/v1/conversations/c1/delete-for-me' },
-      { method: 'POST', url: '/api/v1/conversations/c1/restore-for-me' },
-      { method: 'POST', url: '/api/v1/conversations/c1/clear-history' },
-      { method: 'DELETE', url: '/api/v1/messages/m1/delete-for-me' },
-      { method: 'POST', url: '/api/v1/messages/m1/restore-for-me' },
-      { method: 'DELETE', url: '/api/v1/messages/bulk/delete-for-me' },
-      { method: 'GET', url: '/api/v1/user/deleted-conversations' },
+      { method: 'DELETE', url: '/api/legacy-test/conversations/c1/delete-for-me' },
+      { method: 'POST', url: '/api/legacy-test/conversations/c1/restore-for-me' },
+      { method: 'POST', url: '/api/legacy-test/conversations/c1/clear-history' },
+      { method: 'DELETE', url: '/api/legacy-test/messages/m1/delete-for-me' },
+      { method: 'POST', url: '/api/legacy-test/messages/m1/restore-for-me' },
+      { method: 'DELETE', url: '/api/legacy-test/messages/bulk/delete-for-me' },
+      { method: 'GET', url: '/api/legacy-test/user/deleted-conversations' },
     ] as const;
 
     for (const route of routes) {

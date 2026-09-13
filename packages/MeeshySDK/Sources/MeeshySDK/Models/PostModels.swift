@@ -337,17 +337,14 @@ public struct APIPostViewer: Decodable, Sendable {
     public let user: APIAuthor?
 }
 
-public struct PostViewersResponse: Decodable, Sendable {
-    public let items: [APIPostViewer]
-    public let pagination: PostViewersPagination
-}
-
-public struct PostViewersPagination: Decodable, Sendable {
-    public let total: Int
-    public let offset: Int
-    public let limit: Int
-    public let hasMore: Bool
-}
+// `PostViewersResponse` / `PostViewersPagination` ont été RETIRÉS (audit de
+// cohérence iOS ↔ passerelle, 2026-09-11). Ils décrivaient
+// `{ data: { items, pagination } }` ; `GET /posts/:postId/views` sert
+// `{ data: [...], pagination: {...} }` — la liste À LA RACINE et la pagination
+// en SŒUR de `data`, comme toute route paginée du dépôt. La réponse était donc
+// 100 % indécodable, et aucun appelant de production ne l'avait constaté parce
+// qu'il n'y en avait aucun. Le type juste existait déjà :
+// `OffsetPaginatedAPIResponse<[APIPostViewer]>`.
 
 // MARK: - Conversion helpers
 

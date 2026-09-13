@@ -89,6 +89,22 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Published State
 
     @Published public var isAuthenticated = false
+
+    /// **La session a-t-elle été REGARDÉE ?** (#5968)
+    ///
+    /// `isAuthenticated` naît `false` et `checkExistingSession()` est async :
+    /// entre le lancement et sa conclusion, `false` ne veut pas dire « pas de
+    /// session », il veut dire « personne n'a encore regardé ». Un `@Published`
+    /// rejouant sa valeur courante à tout nouvel abonné, un consommateur qui
+    /// s'abonne tôt reçoit ce `false`-là et le prend pour un verdict.
+    ///
+    /// Ce que ça a coûté : `DependencyContainer` s'abonne à la CONSTRUCTION de
+    /// l'`App` et purgeait la base locale — 25 messages et 7 lignes d'outbox
+    /// mesurés — à chaque démarrage à froid, session parfaitement valide.
+    ///
+    /// Passe à `true` UNE fois, à la fin de `checkExistingSession()`, quelle
+    /// que soit l'issue : c'est un fait sur la LECTURE, pas sur son résultat.
+    @Published public private(set) var hasResolvedStoredSession = false
     /// D'OÙ vient la session courante. `nil` tant qu'aucune n'a été appliquée.
     ///
     /// Sans elle, l'app n'a que `isAuthenticated`, qui vaut `true` de la même
@@ -689,6 +705,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Check Existing Session
 
     public func checkExistingSession() async {
+        // `defer` et non une affectation par sortie : cette fonction a plusieurs
+        // retours anticipés (aucun utilisateur actif, trousseau vide), et un
+        // état neuf doit être porté par TOUTES les portes du type. Le `defer`
+        // les couvre par construction — on ne peut pas en oublier une.
+        defer { hasResolvedStoredSession = true }
         loadSavedAccounts()
         migrateFromLegacyKeysIfNeeded()
 

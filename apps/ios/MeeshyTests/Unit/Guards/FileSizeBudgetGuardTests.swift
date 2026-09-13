@@ -58,7 +58,10 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "ConversationView.swift",
         "FeedCommentsSheet.swift",
         "FeedPostCard.swift",
-        "FeedView+Attachments.swift",
+        // #6040 — `FeedView+Attachments.swift` a QUITTÉ la dette : 207 lignes,
+        // contre 1 391 avant le découpage. La feuille qui en est sortie
+        // (`FeedComposerSheet.swift`, 1 166) n'y ENTRE pas : elle est sous le
+        // plafond. Le nom sort ENTIER, plafond compris — voir ci-dessous.
         "FeedView.swift",
         "FeedViewModel.swift",
         "MeeshyApp.swift",
@@ -269,7 +272,62 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// dans le `body`, a suivi. Net : le fichier est plus COURT qu'avant le lot.
     ///
     /// REMESURÉ sur les 29 noms restants, jamais soustrait de tête.
-    private static let legacyLineCeiling = 60_862
+    // #6016 — 60 862 → 60 235 (−627). Le composer inline du fil quitte
+    // `FeedView+Attachments.swift` : dix-huit fonctions et une `var` de 44
+    // lignes que rien ne montait. Le fichier RESTE en dette (1 391 > 1 200),
+    // donc son nom reste dans la liste ; seul le plafond baisse, et il baisse
+    // d'exactement ce que le lot a retiré.
+    //
+    // **Il baisse de 627, pas de 1 253.** Le cumul MESURÉ ce jour est 59 609,
+    // soit 626 lignes de mou DÉJÀ présentes avant ce lot — quelqu'un a allégé
+    // sans faire descendre le cran. Les reprendre ici serait juste au sens du
+    // cliquet et faux au sens de la coordination : une PR en vol peut avoir
+    // légitimement écrit dans ce mou, et la lui retirer après coup ferait
+    // rougir `dev` pour un ajout que rien n'interdisait au moment où il a été
+    // écrit. Ce mou est donc une issue à lui seul (#6046), pas une prise de
+    // guerre de ce lot.
+    // #6040 — 60 235 → 58 844 (−1 391). `FeedView+Attachments.swift` sort de
+    // `legacyOverBudget` : il tombe de 1 391 à 207 lignes, la feuille partant
+    // dans son propre fichier (1 166, sous le plafond, donc hors dette).
+    //
+    // **Le plafond baisse de tout ce que le fichier PESAIT, pas de sa seule
+    // part au-dessus de 1 200** — la règle que ce cliquet applique depuis
+    // #4102 : « un nom qui sort de la liste en sort ENTIER, sinon le cliquet
+    // garderait du mou au nom d'un fichier qu'il ne mesure plus. »
+    //
+    // Cumul mesuré après le découpage : 58 218. Les 626 de marge qui restent
+    // sont le mou PRÉEXISTANT de #6050, que ce lot ne reprend pas plus que
+    // #6016 ne l'avait fait — pour la même raison de coordination.
+    //
+    // #6050 — 58 844 → 58 302 (−542). Remesuré sur les 28 noms restants (aucun
+    // n'a quitté `legacyOverBudget` : tous dépassent toujours le budget, règle
+    // 2 vérifiée). Le mou signalé par #6050 (626 lignes au moment de l'issue)
+    // a évolué entre-temps sous l'effet de découpes voisines livrées ailleurs
+    // dans le dépôt ; 542 lignes de marge étaient réellement mesurables ce
+    // jour, et ce commit les reprend intégralement — le cran suit le cumul
+    // RÉEL, jamais un chiffre lu dans un commentaire.
+    //
+    // La règle 3 reste À SENS UNIQUE (`XCTAssertLessThanOrEqual`), par décision
+    // explicite et non par oubli. #6050 proposait de la rendre symétrique,
+    // comme le cliquet des couleurs (`check-accent-color-hardcoding.mjs`, qui
+    // rougit aussi sur une amélioration non enregistrée) : cela aurait fermé
+    // la fenêtre qui a laissé ce mou s'accumuler. Mais un sens unique est
+    // actuellement exploité ailleurs, à dessein :
+    // `docs/superpowers/plans/2026-09-10-appui-long-rendu-du-mode.md` (D4)
+    // baisse volontiers `ConversationView.swift`, `MessageListViewController.swift`
+    // et `MessageOverlayMenu.swift` sur PLUSIEURS commits avant de remesurer le
+    // plafond une seule fois, à sa dernière tâche — et sa propre doc-comment le
+    // dit : « la garde est à sens unique : une baisse ne la fait pas rougir. »
+    // La branche qui porte ce plan (`claude/appui-long-rendu-du-mode`) est
+    // encore vivante au 2026-09-12 ; la rendre symétrique aujourd'hui ferait
+    // rougir chacun de ses commits intermédiaires pour un mou que ce lot
+    // compte lui-même reprendre à sa Tâche 24. Le vrai défaut de #6050 n'était
+    // pas l'absence de symétrie — c'était un cran non remesuré depuis deux
+    // lots — et c'est ce que ce commit corrige, sans toucher au sens de la
+    // règle. Le prix de cette asymétrie reste entier : une baisse non suivie
+    // d'un abaissement du plafond DANS LE MÊME COMMIT redevient du mou
+    // silencieux jusqu'au prochain remesurage.
+    private static let legacyLineCeiling = 58_302
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
@@ -314,6 +372,12 @@ final class FileSizeBudgetGuardTests: XCTestCase {
 
     // MARK: - Règle 3 — et elle ne grossit pas de l'intérieur
 
+    /// À SENS UNIQUE par décision explicite (#6050) : une baisse du cumul ne
+    /// fait pas rougir ce test, elle ne fait qu'ouvrir du mou. C'est ce mou
+    /// qu'un lot doit reprendre lui-même, DANS LE MÊME COMMIT que la baisse
+    /// qui l'a créé — voir le doc-comment de `legacyLineCeiling` pour la raison
+    /// (un cliquet symétrique casserait le séquencement d'un lot en cours qui
+    /// compte sur cette asymétrie).
     func test_leCumulDeLaDetteHeriteeNeMonteJamais() throws {
         let total = try sources()
             .filter { Self.legacyOverBudget.contains($0.lastPathComponent) }

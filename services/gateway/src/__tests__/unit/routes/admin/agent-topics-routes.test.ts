@@ -114,6 +114,32 @@ describe('Agent Topics Routes — admin dashboard push', () => {
     expect(adminEventsPublished()).toEqual([{ kind: 'topics' }]);
   });
 
+  it('POST /topics accepte une priorité admin (0-10) et la persiste (#6192)', async () => {
+    mockPrisma.agentTopicCatalog.create.mockResolvedValueOnce({ ...storedTopic, priority: 3 });
+
+    const res = await app.inject({ method: 'POST', url: '/topics', payload: { ...validTopicBody, priority: 3 } });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockPrisma.agentTopicCatalog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ priority: 3 }) }),
+    );
+  });
+
+  it('POST /topics refuse une priorité hors de 0-10', async () => {
+    const tooHigh = await app.inject({ method: 'POST', url: '/topics', payload: { ...validTopicBody, priority: 11 } });
+    const negative = await app.inject({ method: 'POST', url: '/topics', payload: { ...validTopicBody, priority: -1 } });
+    expect(tooHigh.statusCode).toBe(400);
+    expect(negative.statusCode).toBe(400);
+    expect(mockPrisma.agentTopicCatalog.create).not.toHaveBeenCalled();
+  });
+
+  it('PATCH /topics/:id ne touche pas à la priorité quand le corps ne la porte pas', async () => {
+    mockPrisma.agentTopicCatalog.update.mockResolvedValueOnce(storedTopic);
+    await app.inject({ method: 'PATCH', url: `/topics/${storedTopic.id}`, payload: { label: 'Kongossa' } });
+    const data = mockPrisma.agentTopicCatalog.update.mock.calls[0][0].data;
+    expect(data).not.toHaveProperty('priority');
+  });
+
   it('PATCH /topics/:id publishes {kind:"topics"} on agent:admin-event', async () => {
     mockPrisma.agentTopicCatalog.update.mockResolvedValueOnce(storedTopic);
 

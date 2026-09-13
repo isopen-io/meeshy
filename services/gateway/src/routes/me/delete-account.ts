@@ -281,7 +281,7 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
         //     401 → refresh → teardown, donc sans liste d'exceptions par client.
         //
         // Le CODE reste `INVALID_PASSWORD` : mesuré, aucun client des quatre
-        // surfaces (`apps/web`, `apps/web-v3`, `packages/MeeshySDK` + `apps/ios`,
+        // surfaces (`apps/web`, `apps/web-v2`, `packages/MeeshySDK` + `apps/ios`,
         // `apps/android`) ne le lit — changer le statut ne peut donc casser aucun
         // branchement existant — et il reste le discriminant nommable pour celui
         // qui voudra distinguer ce 400 d'un 400 de validation.

@@ -87,13 +87,11 @@ const KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE = new Set([
   // `apps/web/components/common/bubble-message/MessageNameDate.tsx`,
   // `apps/web/components/v2/MessageBubble.tsx`.
   'u.byUsername',
-  // `PATCH`/`DELETE /api/v1/guest-sessions/me` — appelée par
-  // `apps/web-old-version3/lib/api/invite.ts:84` via un chemin construit à la main
-  // (`CHEMIN_BATTEMENT`). `apps/web-v3` est HORS du périmètre `SEARCH_ROOTS`
-  // de ce script (`apps/web`, `packages/shared`) : élargir le périmètre à
-  // toute l'arborescence `web-v3` déplacerait le compte de dette de façon non
-  // mesurée pour cette issue (cf. « toute baisse doit être MESURÉE, jamais
-  // supposée ») — l'exception documentée est le correctif proportionné.
+  // `PATCH`/`DELETE /api/v1/guest-sessions/me` — appelée en production par le
+  // SDK iOS (`ShareLinkService` → `GuestSessionsEndpoint.me`), hors du périmètre
+  // `SEARCH_ROOTS` de ce script (`apps/web`, `packages/shared`). Son appelant web
+  // construisait le chemin à la main dans l'ancienne refonte v3, retirée du dépôt
+  // depuis (#5994) : la route reste appelée, l'exception reste juste.
   'guestSessions.me',
 ]);
 
@@ -214,7 +212,7 @@ export const parseCatalogBlock = (blockLines) => {
 // consultation « Progression ») — morte à la naissance PAR CONSTRUCTION,
 // même forme que `users.meReferralCode` (#3690) ci-dessus : cette issue
 // livre la route gateway (lecture des compteurs/paliers/streak, #5530) et
-// son exposition dans les catalogues générés ; l'appelant web-v3 (l'écran
+// son exposition dans les catalogues générés ; l'appelant web-v2 (l'écran
 // « Progression ») est un travail d'écran séparé, pas encore ouvert — voir
 // le corps de la PR qui livre cette route pour le détail du périmètre
 // différé.
@@ -225,7 +223,47 @@ export const parseCatalogBlock = (blockLines) => {
 // route gateway et son exposition dans les catalogues générés ; l'écran de
 // ré-acceptation (iOS/Android/web) qui l'appellera est un travail client à
 // part, ouvert séparément (#5716).
-const BASELINE_DEAD_ENTRIES = 268;
+//
+// 268 → 269 (#5743) : `me.meeshMint` (`POST /me/meesh/mint`, la frappe d'une
+// Meesh). La raison DIFFÈRE des deux précédentes, et c'est pourquoi elle est
+// écrite plutôt que rangée sous « même forme que » : cette route A un appelant
+// client — `mintMeesh` dans `apps/web-v2/src/lib/api/engagement.ts` — mais il
+// ne passe PAS par ce catalogue. La v3.1 n'importe `@meeshy/shared/api/endpoints`
+// nulle part : ses 444 adresses se paieraient avant le premier pixel (D-14), et
+// chaque kilo-octet y est mesuré par un gate. Elle adresse donc ses routes par
+// un chemin littéral, ce qui rend MORTE au sens de ce cliquet toute entrée
+// `me.*` qu'elle consomme — `me.engagement` l'est déjà pour exactement ce
+// motif, et le sera tant que la v3.1 ne pourra pas importer un sous-ensemble
+// du catalogue.
+//
+// Ce qu'il faudrait pour la ressusciter, et qui n'est pas de ce lot : un
+// catalogue SCINDABLE, dont un client puisse tirer trois adresses sans en
+// embarquer 444.
+//
+// 269 → 270 (#3954) : `posts.byPostIdObjectsByObjectIdResponses`
+// (`POST`/`DELETE`/`GET /posts/:postId/objects/:objectId/responses`, table
+// légère votes/réponses des stickers interactifs, O10) — morte à la
+// naissance PAR CONSTRUCTION, même forme que `users.meReferralCode` (#3690)
+// et `me.engagement` (#5547) ci-dessus : le kind `interactive` du canvas
+// reste RÉSERVÉ au contrat (`RESERVED_KINDS`, #3953, non traité ici) — aucun
+// client ne peut encore poser un tel sticker, donc aucun n'appelle ces
+// routes. #3954 livre le contrat serveur et son exposition dans les
+// catalogues générés ; les appelants (iOS/web/Android) sont le périmètre de
+// #3953, une issue distincte.
+//
+// 270 → 276 (#4317) : `conversations.byConversationIdClearHistory`,
+// `.byConversationIdRestoreForMe`, `messages.bulkDeleteForMe`,
+// `.byMessageIdDeleteForMe`, `.byMessageIdRestoreForMe` et
+// `user.deletedConversations` — six gestes utilisateur qui vivaient sous
+// `/api` sans jamais avoir été versionnés migrent enfin sous `/api/v1`
+// (adresse CANONIQUE, en plus de leur alias legacy déprécié). Mortes à la
+// naissance PAR CONSTRUCTION, même forme que `usersByUserIdBan` (#5528,
+// miroir Swift) ci-dessus : les trois clients continuent d'appeler l'adresse
+// legacy — aucun n'a besoin de migrer dans l'immédiat, le retrait de l'alias
+// restant gouverné par le compteur d'accès nul (#4275). Faire pointer un
+// client vers la nouvelle adresse est un travail à part, pas ouvert par ce
+// lot.
+const BASELINE_DEAD_ENTRIES = 276;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

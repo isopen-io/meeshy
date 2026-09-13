@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MeeshySDK
 import MeeshyUI
 
@@ -53,6 +54,27 @@ struct SocialSceneFullscreenView: View {
     /// quelle scène et l'afficher en plein écran ». Sans elle, les quatre
     /// tuiles d'une mosaïque menaient toutes à la première.
     let startSceneIndex: Int
+
+    /// **Le publieur de « Composer »** (#6085) — valeur d'environnement, jamais
+    /// `@EnvironmentObject` : cette vue vit DANS un `fullScreenCover`, que les
+    /// objets de la racine ne traversent pas. `SocialMediaGalleryLayer` repose
+    /// la valeur à l'intérieur du cover ; `nil` ⇒ aucune entrée (loi 4).
+    @Environment(\.meeshyStoryComposer) private var storyComposer: StoryViewModel?
+
+    /// La cible que « Composer » ouvrira. Un cover de plus, présenté PAR cette
+    /// vue : deux présentations empilées sont licites quand la seconde naît de
+    /// la première — ce n'est que sur UNE MÊME vue que SwiftUI n'en montre
+    /// aucune.
+    @State private var composeTarget: ComposerSeedTarget?
+
+    /// **La règle d'offre décide, pas la scène** (critère 2 de #6085). Un post à
+    /// deux photos, un post sans média : aucune cible, donc aucun bouton. Et le
+    /// libellé promet la PIÈCE — sans pièce, le contrôle mentirait.
+    private var composable: ComposerSeedTarget? {
+        guard storyComposer != nil else { return nil }
+        guard let cible = ComposerSeedTarget(post: post), cible.attachment != nil else { return nil }
+        return cible
+    }
 
     init(post: FeedPost,
          document: CanvasV3,
@@ -169,6 +191,22 @@ struct SocialSceneFullscreenView: View {
             DispatchQueue.main.async { pageCourante = vise }
         }
         .onDisappear { isPlaying = false }
+        // **La porte COMMUNE** (#6085) : la même que le message reçu, le média
+        // feuilleté et la slide de story. Un post COMPOSÉ se rejoue ici et non
+        // dans la galerie — sans cette branche, « Composer » n'atteignait, sur
+        // le fil, que les posts SANS scène, c'est-à-dire la minorité.
+        .fullScreenCover(item: $composeTarget) { cible in
+            if let storyComposer {
+                MediaComposerDoor(
+                    target: cible,
+                    storyViewModel: storyComposer,
+                    // Aucun aperçu : il monterait un lecteur DANS un lecteur.
+                    // DETTE NOMMÉE, la même que `ShareComposeDoor`.
+                    preview: nil,
+                    onDismiss: { composeTarget = nil }
+                )
+            }
+        }
     }
 
     /// **Ce document BOUGE-t-il ?** — la porte du contrôle de lecture, et la
@@ -264,7 +302,14 @@ struct SocialSceneFullscreenView: View {
             carrier: carrier
         )
         .preferredContentLanguages(preferredContentLanguages)
-        .aspectRatio(9.0 / 16.0, contentMode: .fit)
+        // **LE RATIO RÉEL DE LA SCÈNE, jamais le portrait d'office** (retour
+        // porteur 2026-09-13). Un littéral `9.0 / 16.0` cadrait toute scène en
+        // portrait : une scène paysage y débordait, ses bords hors de l'écran.
+        // `.fit` sur le mauvais ratio ne protège de rien. La loi est celle que
+        // `StoryViewerView.readerCanvasRatio` applique déjà — désormais à un
+        // site unique, `SceneFullscreenFraming`.
+        .aspectRatio(SceneFullscreenFraming.ratio(of: document, sceneIndex: index),
+                     contentMode: .fit)
         .ignoresSafeArea(edges: .bottom)
     }
 
@@ -276,9 +321,9 @@ struct SocialSceneFullscreenView: View {
             HStack {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(MeeshyFont.relative(16, weight: .bold))
                         .foregroundColor(.white)
-                        .frame(width: 40, height: 40)
+                        .frame(width: UIFontMetrics.default.scaledValue(for: 40), height: UIFontMetrics.default.scaledValue(for: 40))
                         .adaptiveGlass(in: Circle(), interactive: true)
                         .padding()
                 }
@@ -287,6 +332,11 @@ struct SocialSceneFullscreenView: View {
                 Spacer()
                 if document.scenes.count > 1 { compteurDeScene }
                 if bouge { boutonDeLecture }
+                // **Le même item, dans le menu de la PIÈCE** (#6085) : même
+                // glyphe et même libellé que le bouton de la galerie, posé au
+                // même rang de chrome. Un geste qui change de dessin d'un plein
+                // écran à l'autre est un geste de plus à apprendre.
+                if let cible = composable { boutonComposer(cible) }
             }
 
             Spacer(minLength: 0)
@@ -309,7 +359,7 @@ struct SocialSceneFullscreenView: View {
                         }
                     ) { texte, taille in
                         Text(texte)
-                            .font(.system(size: taille))
+                            .font(MeeshyFont.relative(taille))
                             .foregroundColor(.white)
                     }
                 }
@@ -321,6 +371,28 @@ struct SocialSceneFullscreenView: View {
                                startPoint: .top, endPoint: .bottom)
             )
         }
+    }
+
+    /// **« Composer » sur la pièce qu'on regarde** (#6085).
+    private func boutonComposer(_ cible: ComposerSeedTarget) -> some View {
+        Button {
+            HapticFeedback.light()
+            isPlaying = false
+            composeTarget = cible
+        } label: {
+            Image(systemName: "wand.and.stars")
+                .font(MeeshyFont.relative(16, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: UIFontMetrics.default.scaledValue(for: 40),
+                       height: UIFontMetrics.default.scaledValue(for: 40))
+                .adaptiveGlass(in: Circle(), interactive: true)
+                .padding()
+        }
+        .accessibilityLabel(String(localized: "media.compose.title",
+                                   defaultValue: "Créer avec ce média", bundle: .main))
+        .accessibilityHint(String(localized: "media.compose.hint",
+                                  defaultValue: "Ouvre le composer avec ce média posé.",
+                                  bundle: .main))
     }
 
     /// **Un seul bouton, et il arrête TOUT ou poursuit TOUT** (directive
@@ -342,9 +414,9 @@ struct SocialSceneFullscreenView: View {
             isPlaying.toggle()
         } label: {
             Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 16, weight: .bold))
+                .font(MeeshyFont.relative(16, weight: .bold))
                 .foregroundColor(.white)
-                .frame(width: 40, height: 40)
+                .frame(width: UIFontMetrics.default.scaledValue(for: 40), height: UIFontMetrics.default.scaledValue(for: 40))
                 .adaptiveGlass(in: Circle(), interactive: true)
                 .padding()
         }
@@ -361,7 +433,7 @@ struct SocialSceneFullscreenView: View {
     /// scène le dit déjà, et le lire deux fois ferait bégayer le lecteur.
     private var compteurDeScene: some View {
         Text("\(sceneIndex + 1) / \(document.scenes.count)")
-            .font(.system(size: 12, weight: .bold, design: .monospaced))
+            .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
             .foregroundColor(.white)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -381,10 +453,10 @@ struct SocialSceneFullscreenView: View {
             )
             VStack(alignment: .leading, spacing: 2) {
                 Text(post.author)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(.white)
                 Text(post.timestamp.formatted(date: .abbreviated, time: .shortened))
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(.white.opacity(0.7))
             }
             Spacer(minLength: 0)

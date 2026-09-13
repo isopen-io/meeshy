@@ -63,24 +63,41 @@ final class FeedComposerSheetRetirementInventoryTests: XCTestCase {
     /// commit — soit elle a été PERDUE, et c'est une régression, pas une mise à
     /// jour d'inventaire.
     func test_leSetDesCapacitesNonMigrees_estOpposableAuRetrait() throws {
-        let feuille = try source("Meeshy/Features/Main/Views/FeedView+Attachments.swift")
+        // **Deux fichiers depuis #6040**, et l'inventaire dit LEQUEL porte quoi.
+        //
+        // La feuille vivait dans `FeedView+Attachments.swift`, qui annonce une
+        // EXTENSION de `FeedView` et contenait surtout autre chose : 1 136
+        // lignes de feuille contre 199 d'extension, au-dessus du plafond dur.
+        // Le découpage les sépare — et il ne répartit PAS les cinq ancres de
+        // façon homogène : quatre partent avec la feuille, `feedDeclaredReferences`
+        // reste dans l'extension, parce que ce sont les deux publications audio
+        // survivantes qui la lisent.
+        //
+        // > Un inventaire qui dirait seulement « ces cinq ancres existent
+        // > quelque part » se laisserait satisfaire par un déménagement qui
+        // > casse la capacité. Nommer le FICHIER de chacune est ce qui rend le
+        // > déplacement visible.
+        let feuille = try source("Meeshy/Features/Main/Views/FeedComposerSheet.swift")
+        let lExtension = try source("Meeshy/Features/Main/Views/FeedView+Attachments.swift")
         // guard-foul : la feuille est la RÉFÉRENCE — si on la lit vide, l'inventaire
         // mesure une parité avec un fantôme.
-        XCTAssertTrue(feuille.contains("struct FeedComposerSheet"), "FeedView+Attachments introuvable ou vide")
+        XCTAssertTrue(feuille.contains("struct FeedComposerSheet"), "FeedComposerSheet introuvable ou vide")
+        XCTAssertTrue(lExtension.contains("extension FeedView"), "FeedView+Attachments introuvable ou vide")
 
-        let capacites: [(nom: String, ancre: String)] = [
-            ("progression",       "uploadProgress"),
-            ("références",         "feedDeclaredReferences"),
-            ("dépôt",              "TusUploadManager("),
-            ("éditeur d'image",    "MeeshyImageEditorView("),
-            ("son emprunté",       "publishBorrowedSoundPost")
+        let capacites: [(nom: String, ancre: String, chez: String, source: String)] = [
+            ("progression",       "uploadProgress",         "FeedComposerSheet",     feuille),
+            ("références",         "feedDeclaredReferences", "FeedView+Attachments", lExtension),
+            ("dépôt",              "TusUploadManager(",      "FeedComposerSheet",     feuille),
+            ("éditeur d'image",    "MeeshyImageEditorView(", "FeedComposerSheet",     feuille),
+            ("son emprunté",       "publishBorrowedSoundPost", "FeedComposerSheet",   feuille)
         ]
         for capacite in capacites {
             XCTAssertTrue(
-                feuille.contains(capacite.ancre),
-                "« \(capacite.nom) » : la feuille ne porte plus `\(capacite.ancre)`. Si le meuble l'a "
-                    + "reprise, la retirer de cet inventaire ICI, dans le même commit ; sinon c'est une "
-                    + "régression que retirerait aussi la feuille."
+                capacite.source.contains(capacite.ancre),
+                "« \(capacite.nom) » : `\(capacite.chez)` ne porte plus `\(capacite.ancre)`. Si le meuble "
+                    + "l'a reprise, la retirer de cet inventaire ICI, dans le même commit ; si elle a "
+                    + "seulement CHANGÉ DE FICHIER, corriger la colonne `chez` — mais si elle a disparu, "
+                    + "c'est une régression que retirerait aussi la feuille."
             )
         }
         XCTAssertEqual(

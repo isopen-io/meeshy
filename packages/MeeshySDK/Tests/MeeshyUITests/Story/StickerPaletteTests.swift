@@ -175,14 +175,12 @@ final class StickerPaletteTests: XCTestCase {
     /// qui n'a pas bougé : le `.task` de la feuille ne doit toujours pas
     /// nommer le fournisseur.
     ///
-    /// **Le déclencheur a de nouveau changé au #5407** : la garde
-    /// d'idempotence (`nearbyPlaces.nearby()` + `places.isEmpty`) a quitté le
-    /// corps du déclencheur pour un site UNIQUE, `chercheLesLieuxSiBesoin()`
-    /// (`StickerPickerView+Templates.swift`), partagé par les deux moments où
-    /// les lieux peuvent devenir chargeables (arrivée sur la section, arrivée
-    /// tardive du fournisseur). Ce témoin suit le déplacement : il vérifie
-    /// SÉPARÉMENT que le déclencheur de section APPELLE le site unique, et
-    /// que le site unique porte toujours la garde.
+    /// **Le déclencheur a de nouveau bougé au #5407** : `.onAppear` et
+    /// l'arrivée tardive du fournisseur délèguent désormais à un site UNIQUE,
+    /// `chercheLesLieuxSiBesoin()` (`StickerPickerView+Templates.swift`), au
+    /// lieu d'inliner l'appel à chaque déclencheur. Ce témoin suit le
+    /// déplacement — il vérifie le CÂBLAGE des deux déclencheurs ici, et
+    /// l'IDEMPOTENCE de la fonction partagée dans son fichier.
     func test_thePlaceProvider_isCalledOnTabEntry_notOnSheetOpen() throws {
         let code = Self.strippingComments(
             try String(contentsOf: Self.pickerSourceURL, encoding: .utf8))
@@ -196,34 +194,47 @@ final class StickerPaletteTests: XCTestCase {
         let sections = Self.strippingComments(
             try String(contentsOf: Self.verticalSourceURL, encoding: .utf8))
 
-        // Le cas `.place` du switch qui construit chaque section porte le
-        // déclencheur — la `LazyVStack` ne le construit qu'en arrivant dessus,
-        // ce qui EST le motif visible que le doc-comment exige.
-        let placeCase = try XCTUnwrap(Self.blockBody(after: "case .place:", in: sections),
-                                       "Le déclencheur de la section Lieu est introuvable — personne ne chargerait les lieux.")
-        XCTAssertTrue(placeCase.contains("chercheLesLieuxSiBesoin()"),
-                      "Personne n'appelle le chargement des lieux à l'arrivée sur la section.")
-        XCTAssertFalse(placeCase.contains("nearbyPlaces"),
-                       "Le déclencheur devrait déléguer au site unique (#5407), pas relire le "
-                        + "fournisseur directement — la garde d'idempotence vivrait à deux endroits.")
+        let sectionContent = try XCTUnwrap(
+            Self.blockBody(after: "private func stickerSectionContent(_ onglet: StickerPaletteTab) -> some View {", in: sections),
+            "Le switch de nature est introuvable.")
+        let placeCase = try XCTUnwrap(sectionContent.range(of: "case .place:"),
+                                      "Le cas .place est introuvable dans le switch de nature.")
+        let placeCaseEnd = sectionContent[placeCase.upperBound...]
+            .range(of: "case .library:")?.lowerBound ?? sectionContent.endIndex
+        let beforePlace = sectionContent[sectionContent.startIndex..<placeCase.lowerBound]
+        let placeBody = sectionContent[placeCase.upperBound..<placeCaseEnd]
+        let afterPlace = sectionContent[placeCaseEnd...]
 
-        // La garde d'idempotence elle-même vit au site UNIQUE #5407, partagé
-        // par les deux déclencheurs (arrivée de section, arrivée du
-        // fournisseur) — jamais recopiée à chaque appelant.
+        XCTAssertTrue(
+            placeBody.contains("placeTab") && placeBody.contains(".onAppear { chercheLesLieuxSiBesoin() }"),
+            "Le déclencheur de la section Lieu est introuvable — personne ne chargerait les lieux.")
+        XCTAssertTrue(placeBody.contains("if servable { chercheLesLieuxSiBesoin() }"),
+                      "Le fournisseur arrivant après la section n'y relance plus la recherche.")
+
+        // **Et le déclencheur ne remonte pas d'un cran.** L'appeler dans un cas
+        // voisin, ou dans le switch lui-même hors du cas `.place`, ramènerait
+        // exactement le défaut que ce témoin existe pour interdire : la
+        // position demandée avant que l'auteur ait montré le moindre intérêt
+        // pour un lieu.
+        XCTAssertFalse(
+            beforePlace.contains("chercheLesLieuxSiBesoin") || afterPlace.contains("chercheLesLieuxSiBesoin"),
+            "Le chargement est remonté hors du cas .place : il se déclencherait "
+             + "dès l'affichage d'une autre nature.")
+
         let templates = Self.strippingComments(
             try String(contentsOf: Self.templatesSourceURL, encoding: .utf8))
         let chercheLesLieux = try XCTUnwrap(
             Self.blockBody(after: "func chercheLesLieuxSiBesoin() {", in: templates),
-            "Le site unique de chargement des lieux (#5407) est introuvable.")
+            "Le site unique de chargement des lieux est introuvable.")
         XCTAssertTrue(chercheLesLieux.contains("nearbyPlaces.nearby()"),
                       "Personne ne charge les lieux : la section resterait vide à jamais.")
         XCTAssertTrue(chercheLesLieux.contains("places.isEmpty"),
                       "Sans garde d'idempotence, revenir sur la section relance une recherche.")
 
-        // **Et le déclencheur ne remonte pas d'un cran.** Le poser sur la liste
-        // entière, ou sur l'interrupteur de nature, ramènerait exactement le
-        // défaut que ce témoin existe pour interdire : la position demandée
-        // avant que l'auteur ait montré le moindre intérêt pour un lieu.
+        // Repris de la version de `dev` à la fusion du 2026-09-13 : le
+        // déclencheur ne doit pas non plus remonter au CONTENEUR d'onglets.
+        // Les deux gardes sont complémentaires — celle-ci surveille une
+        // fonction que la délimitation du cas `.place` ne balaie pas.
         XCTAssertFalse(Self.blockBody(after: "var tabbedContent: some View {", in: sections)?
                         .contains("nearbyPlaces") ?? false,
                        "Le chargement est remonté au conteneur : il se déclencherait "

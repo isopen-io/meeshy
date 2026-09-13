@@ -21,7 +21,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 556,
+  "routeCount": 566,
   "routes": [
     {
       "method": "DELETE",
@@ -642,6 +642,34 @@
     },
     {
       "method": "DELETE",
+      "path": "/api/v1/messages/:messageId/delete-for-me",
+      "module": "userDeletionsRoutes",
+      "mountPrefix": "",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/messages/bulk/delete-for-me",
+      "module": "userDeletionsRoutes",
+      "mountPrefix": "",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
       "path": "/api/v1/notifications/:id",
       "module": "notificationRoutes",
       "mountPrefix": "/api/v1",
@@ -741,6 +769,20 @@
     {
       "method": "DELETE",
       "path": "/api/v1/posts/:postId/like",
+      "module": "anonyme~10",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/posts/:postId/objects/:objectId/responses",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -3437,6 +3479,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/posts/:postId/objects/:objectId/responses",
+      "module": "anonyme~10",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/posts/:postId/views",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
@@ -4040,6 +4096,20 @@
       "path": "/api/v1/user-preferences/conversations/:conversationId",
       "module": "conversationPreferencesRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/user/deleted-conversations",
+      "module": "userDeletionsRoutes",
+      "mountPrefix": "",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -6272,6 +6342,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/conversations/:conversationId/clear-history",
+      "module": "userDeletionsRoutes",
+      "mountPrefix": "",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/conversations/:conversationId/encryption",
       "module": "encryptionRoutes",
       "mountPrefix": "/api/v1",
@@ -6331,6 +6415,20 @@
       "path": "/api/v1/conversations/:conversationId/receipts",
       "module": "conversationReceiptsRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/:conversationId/restore-for-me",
+      "module": "userDeletionsRoutes",
+      "mountPrefix": "",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -6598,6 +6696,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/me/meesh/mint",
+      "module": "meMeeshRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/me/preferences/categories",
       "module": "anonyme~9",
       "mountPrefix": "/api/v1/me/preferences/categories",
@@ -6615,6 +6727,20 @@
       "path": "/api/v1/me/preferences/categories/reorder",
       "module": "anonyme~9",
       "mountPrefix": "/api/v1/me/preferences/categories",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/messages/:messageId/restore-for-me",
+      "module": "userDeletionsRoutes",
+      "mountPrefix": "",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -6809,6 +6935,20 @@
     {
       "method": "POST",
       "path": "/api/v1/posts/:postId/like",
+      "module": "anonyme~10",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/posts/:postId/objects/:objectId/responses",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",

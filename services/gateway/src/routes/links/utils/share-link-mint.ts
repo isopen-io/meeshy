@@ -10,6 +10,8 @@ import { sendNotFound, sendForbidden, sendError } from '../../../utils/response'
 import type { NotificationService } from '../../../services/notifications/NotificationService';
 import type { MeeshySocketIOHandler } from '../../../socketio/MeeshySocketIOHandler';
 import { generateUniqueShareLinkId, ensureUniqueShareLinkIdentifier, generateConversationIdentifier } from './link-helpers';
+import { FOUNDING_MEMBER_PERMISSIONS } from '../../../services/participantRights';
+import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import type { CreateLinkInput } from '../types';
 
 /**
@@ -87,15 +89,13 @@ type NewParticipantSeed = {
   readonly type: 'user';
   readonly displayName: string;
   readonly role: 'creator' | 'member';
-  readonly permissions: {
-    readonly canSendMessages: boolean;
-    readonly canSendFiles: boolean;
-    readonly canSendImages: boolean;
-    readonly canSendVideos: boolean;
-    readonly canSendAudios: boolean;
-    readonly canSendLocations: boolean;
-    readonly canSendLinks: boolean;
-  };
+  /**
+   * La forme PARTAGÉE, pas une recopie locale (#6080) : le littéral déclaré ici
+   * énumérait sept droits et omettait `canViewHistory`, si bien qu'écrire la
+   * table du site unique ne compilait pas. Un type qui ne sait pas dire ce que
+   * la loi écrit force le site d'appel à réécrire la loi.
+   */
+  readonly permissions: ParticipantPermissions;
 };
 
 export type MintedShareLink = {
@@ -216,10 +216,13 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
     // Aucune garde de rang : l'acteur EST le créateur de ce qu'il vient de
     // fabriquer, exactement comme `POST /conversations` ne demande de rang à
     // personne pour la conversation qu'on crée soi-même.
-    const defaultPerms = {
-      canSendMessages: true, canSendFiles: true, canSendImages: true,
-      canSendVideos: false, canSendAudios: false, canSendLocations: false, canSendLinks: false
-    };
+    // #6080 — le créateur et les membres initiaux sont des membres NOMMÉS :
+    // leur table vient du site unique (`services/participantRights.ts`). Le
+    // littéral écrit ici fermait `canSendVideos`/`canSendAudios`, ce que la
+    // garde de pièce jointe (#5151) lit comme un REFUS. Ce qui reste borné par
+    // le LIEN, et doit le rester, ce sont les visiteurs qui le SUIVRONT
+    // (`routes/conversations/link-admission.ts`).
+    const defaultPerms = { ...FOUNDING_MEMBER_PERMISSIONS };
 
     const creatorInfo = await prisma.user.findUnique({
       where: { id: userId },
@@ -289,10 +292,10 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
             userId, type: 'user',
             displayName: legacyCreatorInfo?.displayName || legacyCreatorInfo?.username || 'User',
             role: 'creator',
-            permissions: {
-              canSendMessages: true, canSendFiles: true, canSendImages: true,
-              canSendVideos: false, canSendAudios: false, canSendLocations: false, canSendLinks: false
-            }
+            // #6080 — même table que la branche `newConversation` ci-dessus :
+            // deux littéraux pour le même geste auraient redivergé au premier
+            // droit ajouté.
+            permissions: { ...FOUNDING_MEMBER_PERMISSIONS }
           }]
         }
       }

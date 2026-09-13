@@ -178,6 +178,22 @@ class TranslationInferenceError(RuntimeError):
     original."""
 
 
+class UnsupportedLanguageError(TranslationInferenceError):
+    """Code de langue (source ou cible) sans entrée dans `LANGUAGE_MAPPINGS`
+    — donc sans code NLLB-200 connu (#3659). Sous-classe de
+    `TranslationInferenceError` à dessein : elle doit traverser exactement
+    les mêmes garde-fous (jamais mise en cache, jamais assemblée comme une
+    traduction réelle) et le même repli sur le texte original.
+
+    Avant #3659, `self.lang_codes.get(code, 'eng_Latn'/'fra_Latn')` retombait
+    silencieusement sur l'anglais ou le français pour toute langue absente du
+    mapping — une demande de tamoul rendait du français sans que rien ne le
+    signale. C'est précisément le repli silencieux que la règle 1 du Prisme
+    Linguistique interdit (`CLAUDE.md` racine) : à défaut de traduction, le
+    contraire de « fabriquer une traduction fausse » est de ne PAS traduire,
+    et de laisser l'appelant servir l'original."""
+
+
 class TranslatorEngine:
     """
     Moteur de traduction utilisant les modèles NLLB
@@ -210,6 +226,23 @@ class TranslatorEngine:
         self.lang_codes = dict(LANGUAGE_MAPPINGS)
 
         logger.info("⚙️ TranslatorEngine initialisé")
+
+    def _resolve_nllb_code(self, iso_code: str, role: str) -> str:
+        """Résout un code ISO 639-1 vers son code NLLB-200 via `lang_codes`.
+
+        Lève `UnsupportedLanguageError` si `iso_code` n'a pas d'entrée — plus
+        jamais de repli silencieux vers `eng_Latn`/`fra_Latn` (#3659). `role`
+        ('source' ou 'cible') sert uniquement au message d'erreur.
+        """
+        nllb_code = self.lang_codes.get(iso_code)
+        if nllb_code is None:
+            raise UnsupportedLanguageError(
+                f"Langue {role} '{iso_code}' sans code NLLB-200 dans "
+                f"LANGUAGE_MAPPINGS — aucune traduction ne peut être produite "
+                f"pour ce code (voir #3659 : jamais de repli vers eng_Latn/"
+                f"fra_Latn)."
+            )
+        return nllb_code
 
     def detect_language(self, text: str, fallback: Optional[str] = None) -> str:
         """Détecte la langue source. langdetect seuillé ; jamais de défaut 'en'
@@ -409,9 +442,9 @@ class TranslatorEngine:
         def translate_sync():
             """Traduction synchrone dans un thread"""
             try:
-                # Codes NLLB
-                nllb_source = self.lang_codes.get(source_lang, 'eng_Latn')
-                nllb_target = self.lang_codes.get(target_lang, 'fra_Latn')
+                # Codes NLLB — jamais de repli silencieux (#3659)
+                nllb_source = self._resolve_nllb_code(source_lang, 'source')
+                nllb_target = self._resolve_nllb_code(target_lang, 'cible')
 
                 # Obtenir pipeline du cache LRU (ou créer si nécessaire)
                 reusable_pipeline, is_available = self._get_or_create_pipeline(
@@ -504,9 +537,9 @@ class TranslatorEngine:
             try:
                 logger.info(f"[BATCH-SYNC] 🚀 FAST translate_batch_sync: {len(texts)} textes, {source_lang}→{target_lang}")
 
-                # Codes NLLB
-                nllb_source = self.lang_codes.get(source_lang, 'eng_Latn')
-                nllb_target = self.lang_codes.get(target_lang, 'fra_Latn')
+                # Codes NLLB — jamais de repli silencieux (#3659)
+                nllb_source = self._resolve_nllb_code(source_lang, 'source')
+                nllb_target = self._resolve_nllb_code(target_lang, 'cible')
 
                 # Obtenir pipeline du cache LRU (ou créer si nécessaire)
                 reusable_pipeline, is_available = self._get_or_create_pipeline(

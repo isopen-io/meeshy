@@ -4,7 +4,7 @@
  *
  * Pourquoi ce script existe : la v4 web doit reprendre l'interface iOS
  * (directive porteur 2026-09-06, #5444). Elle a d'abord recopié la palette iOS
- * à la main dans `apps/web-v3/src/styles/ios.css` — c'est-à-dire une SECONDE
+ * à la main dans `apps/web-v2/src/styles/ios.css` — c'est-à-dire une SECONDE
  * TABLE, ce que la charte interdit (§ 12.5 règle 1), et le défaut exact que
  * #5445 demande de solder : une couleur corrigée d'un côté dérive de l'autre
  * en SILENCE, chaque table restant cohérente avec elle-même.
@@ -195,6 +195,29 @@ const HORS_TABLE_IOS = [
   ['--ios-header-circle', '28px', 'ConversationView+Header.swift — cercle visuel des actions (cible 44)'],
   ['--ios-bubble-mine', 'var(--ios-indigo-500)', 'BubbleBackground.swift — brandPrimary, le MÊME dans toutes les conversations'],
   ['--ios-bubble-meta-mine', 'color-mix(in srgb, white 70%, transparent)', 'BubbleFooter.swift:283 — metaColor quand isMe'],
+  ['--ios-text-summary-title', '20px', 'Focal/Summary/LivingSummaryView.swift:64 — relative(20, .heavy), « Résumé Vivant »'],
+  ['--ios-text-summary-counts', '14px', 'Focal/Summary/LivingSummaryView.swift:68 — relative(14, .semibold), « N messages · P personnes »'],
+  ['--ios-text-summary-partial', '12px', 'Focal/Summary/LivingSummaryView.swift:73 — relative(12, .medium), « Sur les N derniers messages »'],
+  /**
+   * LES TUILES DU TIROIR DU COMPOSEUR (#5668) — trois littéraux Swift, pas de
+   * l'indigo de marque : `UniversalComposerBar+Attachments.swift:250-278`
+   * pose `color: "9B59B6"` (photo) / `"45B7D1"` (fichier) / `"E74C3C"`
+   * (vocal) sur `CarouselTile`, hors de toute table `MeeshyColors` — mêmes
+   * dans les deux schémas (aucune branche claire/sombre dans Swift).
+   */
+  ['--ios-tile-photo', '#9B59B6', 'UniversalComposerBar+Attachments.swift:250 — CarouselTile(id: "photo").color'],
+  ['--ios-tile-file', '#45B7D1', 'UniversalComposerBar+Attachments.swift:262 — CarouselTile(id: "file").color'],
+  ['--ios-tile-voice', '#E74C3C', 'UniversalComposerBar+Attachments.swift:274 — CarouselTile(id: "voice").color'],
+  /**
+   * L'ENCRE DE LA BARRE D'ENREGISTREMENT EN SCHÉMA SOMBRE (#5668,
+   * revue-correction) — `UniversalComposerBar+Recording.swift:148` pose
+   * `waveformColor = isDark ? "FFFFFF" : accentColor`, et les quatre autres
+   * couleurs de cette barre suivent la même bascule (`:144-152`, `:220-225`).
+   * Seule la moitié SOMBRE est une valeur : la moitié CLAIRE est l'accent de
+   * la conversation, que seule l'application connaît — `app.css` compose les
+   * deux (`--recording-ink`).
+   */
+  ['--ios-recording-ink-dark', '#FFFFFF', 'UniversalComposerBar+Recording.swift:148 — waveformColor = isDark ? "FFFFFF" : accentColor'],
 ];
 
 /**
@@ -233,6 +256,34 @@ const HORS_TABLE_PAR_SCHEMA = [
   ],
   ['--ios-day-ink', 'var(--ios-indigo-200)', 'var(--ios-indigo-700)', 'MessageDaySeparator.swift'],
   ['--ios-day-hairline', 'var(--ios-indigo-900)', 'var(--ios-indigo-200)', 'MessageDaySeparator.swift — strokeBorder'],
+  /**
+   * LE NOM DE SOI EN TÊTE DE RANGÉE (revue #5935, défaut majeur 2) —
+   * `FocalIdentityHeader.swift:90-92` peint `nameColor = isMe ?
+   * MeeshyColors.indigo500 : textPrimary` sur la ligne d'identité (13 px,
+   * poids 800). `--ios-indigo-500` servi TEL QUEL y mesure 4,47:1 (clair) et
+   * 4,45:1 (sombre) — SOUS la barre AA de 4,5:1, et 13 px n'ouvre pas
+   * l'exemption « grand texte » (18,5 px). Méthode D-18/#5625 : le cran
+   * suivant qui PASSE, pas un plancher inventé — indigo700/indigo200,
+   * exactement la paire déjà dérivée pour `--ios-day-ink` (7,90:1 / 13,34:1),
+   * mais nommée pour SA fonction : un séparateur de jour et un nom de soi ne
+   * sont pas la même chose, même si leur cran de contraste coïncide
+   * aujourd'hui. iOS lui-même reste sous AA sur ce point précis — c'est un
+   * défaut de la CIBLE (famille #5681-#5683, issue compagnon), pas une
+   * dérivation web qui invente une couleur.
+   */
+  ['--ios-self-name-ink', 'var(--ios-indigo-200)', 'var(--ios-indigo-700)', 'FocalIdentityHeader.swift:90-92 — nameColor quand isMe (indigo500 mesuré sous AA, #5935)'],
+  [
+    '--ios-summary-surface-tint',
+    'color-mix(in srgb, white 6%, transparent)',
+    'color-mix(in srgb, black 4%, transparent)',
+    'FocalMetrics.swift:385-386 — SurfaceTint, fond des cartes d’épisode du Résumé Vivant',
+  ],
+  [
+    '--ios-summary-skeleton-fill',
+    'color-mix(in srgb, white 8%, transparent)',
+    'color-mix(in srgb, black 6%, transparent)',
+    'Focal/Summary/LivingSummaryView.swift:151-164 — remplissage des trois barres du squelette',
+  ],
 ];
 
 // ------------------------------------------------------------------ SORTIE
@@ -278,7 +329,7 @@ const output = `/* GÉNÉRÉ — ne pas éditer à la main.
  * assignent les mêmes couleurs à des RÔLES DIFFÉRENTS (design-tokens fait de
  * indigo400 sa primaire, iOS de indigo500 ; les neutres de la v3 sont violacés,
  * ceux d'iOS sont des gris vrais). Unifier ces rôles changerait le rendu de
- * web-v3, ce qu'aucune décision n'a demandé — c'est le reste de #5445.
+ * web-v2, ce qu'aucune décision n'a demandé — c'est le reste de #5445.
  */
 
 :root,

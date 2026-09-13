@@ -962,10 +962,10 @@ extension MeeshyComposerHost {
             return
         }
         // Le palier RETENU pour la PROCHAINE publication est écrit ICI, au
-        // moment où il SERT — même geste que
-        // `FeedView+Attachments.publishPostWithAttachments`
-        // (`FeedNearbyDiscoverability.remember(nearbyDiscoverability)`) : la
-        // spec parle du dernier choix « utilisé », pas du dernier survolé.
+        // moment où il SERT — le geste que faisait `publishPostWithAttachments`
+        // (`FeedNearbyDiscoverability.remember(nearbyDiscoverability)`) avant
+        // son retrait en #6016, et que ce site a repris : la spec parle du
+        // dernier choix « utilisé », pas du dernier survolé.
         if documentOffersNearbyDiscoverability {
             FeedNearbyDiscoverability.remember(documentDiscoverability)
         }

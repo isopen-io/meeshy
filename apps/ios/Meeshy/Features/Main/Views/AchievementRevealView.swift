@@ -1,0 +1,329 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+/// **Le palier obtenu se REGARDE avant de se ranger dans une grille.**
+///
+/// Toucher une notification de succès ouvrait directement le tableau de bord
+/// (#5809) : il fallait retrouver soi-même, parmi les badges, celui qu'on
+/// venait de débloquer. La récompense arrivait sous forme de devoir.
+///
+/// Cette vue s'intercale entre le tap et le tableau de bord — elle ne le
+/// remplace pas : elle le COUVRE, et le referme sur lui. L'utilisateur n'a donc
+/// jamais un geste de plus à faire pour arriver là où il allait.
+///
+/// **Réduire les animations est respecté, et pas seulement ralenti.** Sous ce
+/// réglage, le badge est POSÉ à son état final — aucune échelle, aucun halo qui
+/// pulse, aucun rayon qui tourne. Une animation « plus lente » reste une
+/// animation : la demande est de ne pas en jouer.
+struct AchievementRevealView: View {
+
+    /// **POURQUOI cette vue est à l'écran** — ce n'est pas la même nouvelle,
+    /// et une vue qui l'ignore ment sur l'une des deux (#5831).
+    ///
+    /// Célébrer, c'est annoncer un fait qui vient de tomber : haptique de
+    /// succès, « Succès débloqué », et une sortie qui MÈNE au tableau de bord.
+    /// Consulter, c'est y revenir depuis ce même tableau de bord : on n'y
+    /// refête rien, on n'y « va » nulle part — on referme. Et un succès qu'on
+    /// n'a PAS encore obtenu s'y regarde aussi : c'est là qu'on lit ce qu'il
+    /// faut faire pour l'avoir.
+    enum Occasion: Equatable {
+        case celebration
+        case consultation(unlocked: Bool, reachedAt: String?)
+
+        var estCelebration: Bool { self == .celebration }
+
+        var estObtenu: Bool {
+            switch self {
+            case .celebration: return true
+            case .consultation(let unlocked, _): return unlocked
+            }
+        }
+    }
+
+    let reveal: EngagementReveal
+    var occasion: Occasion = .celebration
+    /// Ferme la célébration — et ne fait QUE ça.
+    let onContinue: () -> Void
+    /// **Mène au tableau de bord.** Séparée de `onContinue` depuis #5903 : le
+    /// bouton « Voir ma progression » les confondait, et ne faisait donc que
+    /// refermer. Ça marchait par UNE porte — l'hôte de notification pousse
+    /// `.progression` AVANT d'ouvrir la vue, si bien que la refermer y arrive —
+    /// et par elle seule. Depuis toute autre, le bouton promettait une
+    /// navigation et rendait l'écran qu'on regardait déjà.
+    ///
+    /// `nil` ⇒ la vue n'offre pas cette sortie : c'est le cas de la
+    /// consultation, où l'on VIENT du tableau de bord et où y « aller » n'aurait
+    /// aucun sens.
+    var onVoirProgression: (() -> Void)?
+
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var isDark: Bool { colorScheme == .dark }
+
+    @State private var apparu = false
+    @State private var halo = false
+
+    // MARK: - Ce que le palier DIT
+
+    private var titre: String {
+        switch reveal {
+        case .achievement(let clé): return ProgressionCopy.title(for: clé)
+        case .composedAchievement(let famille, let palier):
+            // Le MOT, jamais la clé. `label` ne rend `nil` que pour une famille
+            // sans gabarit — le titre de section reste alors juste, là où
+            // « achievement.cercles.conversation.join.size:1000 » ne dirait rien.
+            return AchievementCopy.label(famille, tier: palier)
+                ?? AchievementCopy.sectionTitle(famille.section)
+        // Le MOT de l'axe et son seuil — « 100 messages texte ». Un axe que ce
+        // client ne connaît pas encore (ajouté au serveur avant la mise à jour)
+        // rend son seuil seul plutôt qu'une clé technique : « palier 100 » dit
+        // moins, mais ne ment pas et ne fait rien échouer.
+        case .badge(let axe, let seuil):
+            guard let clé = EngagementAxisKey(rawValue: axe) else {
+                return String(localized: "reveal.badge.tier",
+                              defaultValue: "Palier \(seuil)", bundle: .main)
+            }
+            return "\(seuil) \(ProgressionCopy.title(for: clé).lowercased())"
+        case .streak(let jours): return ProgressionCopy.streak(jours)
+        case .level(let rang): return ProgressionCopy.levelTitle(rang)
+        }
+    }
+
+    private var explication: String {
+        switch reveal {
+        case .achievement(let clé):
+            return ProgressionCopy.condition(for: clé)
+        case .composedAchievement(let famille, _):
+            // Le titre PORTE déjà la condition (« 1 000 messages envoyés ») :
+            // la répéter ici ne dirait rien de neuf. Ce qui manque au lecteur,
+            // c'est OÙ ce palier se range — la section, qu'il retrouvera en
+            // rangée sur le tableau de bord.
+            return String(localized: "reveal.composed.subtitle",
+                          defaultValue: "Un palier de plus dans « \(AchievementCopy.sectionTitle(famille.section)) ».",
+                          bundle: .main)
+        case .badge:
+            return String(localized: "reveal.badgeAxis.subtitle",
+                          defaultValue: "Un palier de plus sur cet axe. Le suivant se débloque en continuant.",
+                          bundle: .main)
+        case .streak(let jours):
+            return String(localized: "reveal.streak.subtitle",
+                          defaultValue: "\(jours) jours d'affilée. La série continue tant que vous écrivez.",
+                          bundle: .main)
+        case .level:
+            return String(localized: "reveal.level.subtitle",
+                          defaultValue: "Votre activité vous a fait franchir un rang.",
+                          bundle: .main)
+        }
+    }
+
+    private var bandeau: String {
+        if case .consultation(let unlocked, let reachedAt) = occasion {
+            guard unlocked else {
+                return String(localized: "reveal.badge.locked", defaultValue: "Succès à débloquer", bundle: .main)
+            }
+            return ProgressionCopy.obtained(reachedAt)
+                ?? String(localized: "reveal.badge.unlocked", defaultValue: "Succès obtenu", bundle: .main)
+        }
+        switch reveal {
+        case .achievement, .composedAchievement:
+            return String(localized: "reveal.badge.achievement", defaultValue: "Succès débloqué", bundle: .main)
+        case .badge: return String(localized: "reveal.badge.badge", defaultValue: "Badge gagné", bundle: .main)
+        case .streak: return String(localized: "reveal.badge.streak", defaultValue: "Série tenue", bundle: .main)
+        case .level: return String(localized: "reveal.badge.level", defaultValue: "Nouveau niveau", bundle: .main)
+        }
+    }
+
+    private var teinte: Color {
+        // Un palier verrouillé se peint en GRIS, pas dans la couleur de la
+        // récompense : la couleur EST le signal « c'est à vous ». La servir à
+        // ce qui n'est pas obtenu la vide de son sens sur tout l'écran.
+        //
+        // `neutral500` et non `textMuted` : mesuré au simulateur, ce dernier
+        // rend `indigo300` à 70 % — sur un disque de 128 pt, un lavande PLEIN
+        // qui se lit comme une SECONDE récompense plutôt que comme une absence.
+        // Le gris neutre est déjà le vocabulaire du verrouillé dans cette app
+        // (`AchievementBadgeView`, teinte « 808080 »).
+        guard occasion.estObtenu else { return MeeshyColors.neutral500 }
+        switch reveal {
+        case .achievement, .composedAchievement: return MeeshyColors.purple500
+        // La teinte de la grille des badges (#5698) : la célébration et la
+        // grille doivent se reconnaître, sinon on ne retrouve pas ce qu'on
+        // vient de gagner.
+        case .badge: return MeeshyColors.brandPrimary
+        case .streak: return MeeshyColors.warning
+        case .level: return MeeshyColors.indigo500
+        }
+    }
+
+    private var symbole: String {
+        occasion.estObtenu ? reveal.symbolName : "lock.fill"
+    }
+
+    /// Ce que la sortie FAIT — elle ferme, et son mot le dit.
+    ///
+    /// Il disait « Voir ma progression » en célébration, pour une action qui ne
+    /// faisait que refermer. Ce mot appartient désormais au bouton qui mène
+    /// VRAIMENT (ci-dessous) ; celui-ci reprend le sien.
+    private var libelleSortie: String {
+        occasion.estCelebration
+            ? String(localized: "reveal.ok", defaultValue: "OK", bundle: .main)
+            : String(localized: "reveal.close", defaultValue: "Fermer", bundle: .main)
+    }
+
+    private var libelleProgression: String {
+        String(localized: "reveal.continue", defaultValue: "Voir ma progression", bundle: .main)
+    }
+
+    var body: some View {
+        ZStack {
+            MeeshyColors.backgroundPrimary(isDark: isDark).ignoresSafeArea()
+            lueurDeFond.ignoresSafeArea()
+
+            VStack(spacing: MeeshySpacing.xl) {
+                Spacer()
+                médaille
+                texte
+                Spacer()
+                sortie
+            }
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.bottom, MeeshySpacing.xxl)
+        }
+        .onAppear(perform: entrer)
+        // UN seul élément pour le lecteur d'écran : « Succès débloqué, <titre>,
+        // <explication> » se lit d'un trait. Trois éléments séparés feraient
+        // balayer trois fois ce qui est une seule nouvelle.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(bandeau). \(titre). \(explication)")
+    }
+
+    // MARK: - Pièces
+
+    private var lueurDeFond: some View {
+        RadialGradient(
+            colors: [teinte.opacity(isDark ? 0.28 : 0.18), .clear],
+            center: .center, startRadius: 0, endRadius: 320
+        )
+        .scaleEffect(halo ? 1.0 : 0.7)
+        .opacity(apparu ? 1 : 0)
+    }
+
+    private var médaille: some View {
+        ZStack {
+            // Les rayons ne tournent QUE si l'animation est permise — sinon ils
+            // ne sont pas peints du tout : un décor immobile n'explique rien et
+            // encombre la lecture.
+            //
+            // Et ils ne se peignent QUE pour un palier OBTENU : un rayonnement
+            // dit « ta-daa ». Le servir à ce qui n'est pas encore acquis
+            // félicite pour rien — même erreur que la couleur, une couche
+            // au-dessus.
+            if !reduceMotion && occasion.estObtenu {
+                ForEach(0..<12, id: \.self) { i in
+                    Capsule()
+                        .fill(teinte.opacity(0.35))
+                        .frame(width: 3, height: 18)
+                        .offset(y: -78)
+                        .rotationEffect(.degrees(Double(i) / 12 * 360))
+                        .scaleEffect(halo ? 1.15 : 0.6)
+                        .opacity(apparu ? 1 : 0)
+                }
+            }
+
+            Circle()
+                .fill(LinearGradient(colors: [teinte, teinte.opacity(0.55)],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 128, height: 128)
+                .shadow(color: teinte.opacity(0.45), radius: 24, y: 10)
+
+            Image(systemName: symbole)
+                .font(MeeshyFont.relative(56, weight: .semibold))
+                .foregroundColor(.white)
+        }
+        .scaleEffect(apparu ? 1 : 0.4)
+        .opacity(apparu ? 1 : 0)
+    }
+
+    private var texte: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            Text(bandeau.uppercased())
+                .font(MeeshyFont.relative(12, weight: .bold))
+                .tracking(1.2)
+                .foregroundColor(teinte)
+
+            Text(titre)
+                .font(MeeshyFont.relative(26, weight: .bold))
+                .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
+                .multilineTextAlignment(.center)
+
+            Text(explication)
+                .font(MeeshyFont.relative(15))
+                .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .opacity(apparu ? 1 : 0)
+        .offset(y: apparu ? 0 : MeeshySpacing.lg)
+    }
+
+    private var sortie: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            // L'action OFFERTE en premier, remplie : c'est elle qu'on propose.
+            if let onVoirProgression {
+                Button {
+                    HapticFeedback.light()
+                    onVoirProgression()
+                } label: {
+                    Text(libelleProgression)
+                        .font(MeeshyFont.relative(16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(Capsule().fill(teinte))
+                }
+                .buttonStyle(.plain)
+            }
+
+            // La fermeture. Pleine quand elle est SEULE (consultation), en
+            // retrait quand elle accompagne l'action offerte : deux capsules
+            // pleines côte à côte ne diraient pas laquelle est proposée.
+            Button {
+                HapticFeedback.light()
+                onContinue()
+            } label: {
+                Text(libelleSortie)
+                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .foregroundColor(onVoirProgression == nil ? .white : teinte)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(
+                        Capsule().fill(onVoirProgression == nil ? teinte : Color.clear)
+                    )
+                    .overlay(
+                        Capsule().stroke(
+                            onVoirProgression == nil ? Color.clear : teinte.opacity(0.5),
+                            lineWidth: 1
+                        )
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+        .opacity(apparu ? 1 : 0)
+    }
+
+    // MARK: - L'entrée
+
+    private func entrer() {
+        // L'haptique de SUCCÈS annonce un fait nouveau. La rejouer à chaque
+        // consultation ferait fêter, plusieurs fois par jour, quelque chose qui
+        // n'arrive plus — et userait le signal qui compte.
+        if occasion.estCelebration { HapticFeedback.success() } else { HapticFeedback.light() }
+        guard !reduceMotion else {
+            // POSÉ, pas animé — et le halo reste à son échelle de repos.
+            apparu = true
+            halo = true
+            return
+        }
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.62)) { apparu = true }
+        withAnimation(.easeOut(duration: 0.9).delay(0.1)) { halo = true }
+    }
+}

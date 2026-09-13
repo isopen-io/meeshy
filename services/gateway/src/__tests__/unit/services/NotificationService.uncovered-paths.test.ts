@@ -377,7 +377,7 @@ describe('NotificationService — Uncovered Paths', () => {
       prisma.notification.findUnique.mockResolvedValue({ userId: 'user-1' });
       prisma.notification.delete.mockRejectedValue(new Error('Delete failed'));
 
-      const result = await service.deleteNotification('notif-id');
+      const result = await service.deleteNotification('notif-id', 'user-id');
       expect(result).toBe(false);
     });
   });
@@ -767,7 +767,7 @@ describe('NotificationService — Uncovered Paths', () => {
   describe('markAsRead — error path', () => {
     it('should return null when update throws', async () => {
       prisma.notification.update.mockRejectedValue(new Error('Update failed'));
-      const result = await service.markAsRead('notif-id');
+      const result = await service.markAsRead('notif-id', 'user-id');
       expect(result).toBeNull();
     });
   });

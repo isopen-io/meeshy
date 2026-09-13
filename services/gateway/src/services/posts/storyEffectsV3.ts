@@ -665,7 +665,7 @@ export function convertStoryEffectsForWire(effects: unknown): unknown {
  * `canvasCaps` vient de l'en-tête `X-Canvas-Caps` — `undefined` (en-tête
  * absent) vaut « client qui n'a rien dit » (legacy présumé) ; `0` vaut
  * « client qui déclare ne rendre AUCUN canvas », une affirmation distincte de
- * l'absence (#5195 — un client comme web-v3, qui ne lit jamais `storyEffects`
+ * l'absence (#5195 — un client comme web-v2, qui ne lit jamais `storyEffects`
  * par conception, se distingue ainsi d'un client simplement pas-encore-connu).
  * `readerLanguage` est la langue DÉJÀ résolue par le middleware d'auth
  * (`authContext.userLanguage` — le Prisme s'applique jusqu'à l'invite de mise

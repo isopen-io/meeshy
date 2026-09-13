@@ -46,6 +46,12 @@ final class SheetToolbarSemanticsTests: XCTestCase {
         // et les feuilles qui ont déménagé.
         "Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift",
         "Meeshy/Features/Main/Composer/MeeshyComposerHost+Intake.swift",
+        // #6069 — les six SÉLECTEURS (lieu, langue, emoji, sticker, référence)
+        // quittent `+Intake` pour leur propre fichier. La liste étant ADDITIVE,
+        // la destination s'y inscrit dans le MÊME commit : sans cette ligne, les
+        // feuilles sortiraient de la mesure sans qu'aucun témoin ne rougisse —
+        // le mode de panne que le doc-comment ci-dessus annonce.
+        "Meeshy/Features/Main/Composer/MeeshyComposerHost+Pickers.swift",
         "Meeshy/Features/Main/Composer/MeeshyComposerHost+Socle.swift",
         "Meeshy/Features/Main/Composer/ComposerMoodSurface.swift",
     ]

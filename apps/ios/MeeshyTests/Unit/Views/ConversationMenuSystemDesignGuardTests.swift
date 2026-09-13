@@ -7,9 +7,29 @@ import XCTest
 /// 1. **Tout callback destructif passe par une confirmation système** : la
 ///    suppression d'une conversation (menu natif, menu custom ET swipe
 ///    « hide ») ne doit JAMAIS appeler `deleteConversation` directement —
-///    elle arme `deleteTargetConversation`, consommé par l'unique
+///    elle arme `sheetTargets.deleteTarget`, consommé par l'unique
 ///    `confirmationDialog` de `ConversationListView` (rendu natif de l'OS
 ///    courant, Liquid Glass sur iOS 26).
+///
+/// **La cible s'appelait `deleteTargetConversation` jusqu'au 2026-09-13.** Le
+/// lot #6221 (« la Lentille maigrit de 10 Ko à 3 ») a déplacé sept cibles de
+/// feuille sur le tas, dans `ConversationListSheetTargets`, pour réduire la
+/// LARGEUR de la valeur `ConversationListView` — un débordement de pile au
+/// montage. Le comportement n'a pas bougé d'un pouce : trois sites arment la
+/// cible (menu natif, menu custom, swipe « hide »), le dialog la consomme, et
+/// l'unique appel à `deleteConversation` vit dans son bouton destructif.
+///
+/// > Un RENOMMAGE n'éteint pas les gardes qui reconnaissent par le nom : il les
+/// > INVERSE. Ces trois témoins ont viré au rouge en annonçant « suppression
+/// > sans confirmation » alors que la confirmation était intacte — un rouge qui
+/// > DÉCRIT l'inverse de la réalité coûte plus cher qu'un silence, parce qu'on
+/// > le range dans la dette et qu'on cesse de le lire. Ils ont d'ailleurs été
+/// > attribués à tort à #5599 (dette héritée) avant d'être datés par
+/// > `git log -S`.
+///
+/// Les assertions ancrent donc sur `sheetTargets.deleteTarget` ET tolèrent
+/// l'ancien nom : ce qui compte est qu'un chemin destructif ARME une cible de
+/// confirmation, jamais lequel des deux noms elle porte.
 /// 2. **Le menu custom rend le design système de la version d'iOS courante**
 ///    via les wrappers `Compatibility/` du SDK : conteneur `adaptiveGlass`
 ///    (vrai `glassEffect` iOS 26, fallback material avant), rows avec
@@ -31,6 +51,18 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// Un chemin destructif est conforme s'il ARME une cible de confirmation,
+    /// quel que soit le nom que cette cible porte. Les deux orthographes sont
+    /// acceptées pour que la garde survive au prochain déplacement — c'est
+    /// l'INVARIANT qui est gardé, pas l'identifiant.
+    private func armsAConfirmationTarget(_ block: String) -> Bool {
+        block.contains("sheetTargets.deleteTarget = conversation")
+            || block.contains("deleteTargetConversation = conversation")
+    }
+
+    private static let confirmationTargetNames =
+        "`sheetTargets.deleteTarget` (ou son ancien nom `deleteTargetConversation`)"
+
     // MARK: - Destructive confirmation
 
     /// Le SEUL call site de `deleteConversation(conversationId:` dans la liste
@@ -43,7 +75,7 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             callSites, 1,
             "ConversationListView doit contenir exactement UN appel à " +
             "deleteConversation — celui du confirmationDialog. Tout nouveau " +
-            "chemin de suppression doit armer `deleteTargetConversation` à la place."
+            "chemin de suppression doit armer \(Self.confirmationTargetNames) à la place."
         )
 
         guard let dialogRange = listSource.range(of: "conversation.delete.confirm.title") else {
@@ -70,7 +102,7 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         XCTAssertFalse(
             overlaysSource.contains("conversationViewModel.deleteConversation("),
             "ConversationListView+Overlays ne doit contenir AUCUN appel direct à " +
-            "deleteConversation — le menu custom route par deleteTargetConversation " +
+            "deleteConversation — le menu custom route par la cible de confirmation " +
             "vers le confirmationDialog système."
         )
 
@@ -81,8 +113,8 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         let end = overlaysSource.index(onDeleteRange.lowerBound, offsetBy: 400, limitedBy: overlaysSource.endIndex) ?? overlaysSource.endIndex
         let block = String(overlaysSource[onDeleteRange.lowerBound ..< end])
         XCTAssertTrue(
-            block.contains("deleteTargetConversation = conversation"),
-            "onDelete doit armer deleteTargetConversation (confirmation système) au lieu de supprimer."
+            armsAConfirmationTarget(block),
+            "onDelete doit armer \(Self.confirmationTargetNames) — confirmation système — au lieu de supprimer."
         )
     }
 
@@ -97,8 +129,8 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         let end = listSource.index(hideRange.lowerBound, offsetBy: 300, limitedBy: listSource.endIndex) ?? listSource.endIndex
         let block = String(listSource[hideRange.lowerBound ..< end])
         XCTAssertTrue(
-            block.contains("deleteTargetConversation = conversation"),
-            "Le swipe « hide » doit armer deleteTargetConversation — jamais de suppression directe."
+            armsAConfirmationTarget(block),
+            "Le swipe « hide » doit armer \(Self.confirmationTargetNames) — jamais de suppression directe."
         )
     }
 
@@ -235,8 +267,8 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             "Le builder natif doit offrir Renommer (parité menu custom)."
         )
         XCTAssertTrue(
-            builderBlock.contains("deleteTargetConversation = conversation"),
-            "Le Delete du builder natif doit armer deleteTargetConversation " +
+            armsAConfirmationTarget(builderBlock),
+            "Le Delete du builder natif doit armer \(Self.confirmationTargetNames) " +
             "(confirmation système) — jamais de suppression directe."
         )
     }
@@ -341,40 +373,59 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Menu message NATIF (iOS 26 Liquid Glass) + fallback overlay
+    // MARK: - Menu message : la PRESSION est au menu Meeshy, le DOUBLE TAP au système
     //
-    // Pivot 2026-07-14 : sur iOS 26 la bulle attache un `.contextMenu` NATIF
-    // (Liquid Glass, comme les lignes de conversation) avec aperçu de la bulle
-    // d'origine ; < iOS 26 garde l'overlay custom (`MessageOverlayMenu`). Deux
-    // chemins par version d'OS, exactement comme `ConversationRowItem`.
+    // **Le pivot du 2026-07-14 est SUPPLANTÉ par la directive porteur du
+    // 2026-09-12 (#6117).**
+    //
+    // Il disait : « sur iOS 26 la bulle attache un `.contextMenu` NATIF avec
+    // aperçu ; < iOS 26 garde l'overlay custom — deux chemins par version
+    // d'OS ». Il tenait, et il a produit exactement ce que deux chemins par
+    // version produisent : **le même appui long rendait deux menus différents
+    // selon le téléphone**, le menu Meeshy disparaissant sur les récents.
+    //
+    // La directive du 2026-09-12 rend à chaque geste une identité stable de
+    // iOS 16 à iOS 26 — appui long = menu MEESHY partout, double tap = menu
+    // SYSTÈME, présenté PAR CODE (`UIEditMenuInteraction`), ce qu'un
+    // `.contextMenu` ne sait pas faire.
+    //
+    // Cette loi-là est gardée par `ThreadRowGestureParityTests`, et ce fichier
+    // ne la redouble pas : deux gardes qui affirment la même règle divergent au
+    // premier changement, et c'est déjà arrivé ici — le témoin retiré ci-dessous
+    // exigeait `enableLongPress: nativeMenu == nil` pendant que
+    // `ThreadRowGestureParityTests` l'INTERDISAIT. Deux gardes opposées sur une
+    // même chaîne : l'une des deux était forcément rouge.
 
-    /// iOS 26+ : `.contextMenu` natif + aperçu, long-press custom coupé ;
-    /// < iOS 26 : overlay custom conservé (ConditionalBubbleLongPress).
-    func test_messageRow_prefersNativeMenu_oniOS26_withCustomFallback() throws {
-        let listSource = try source("Meeshy/Features/Main/Views/MessageListView.swift")
-        XCTAssertTrue(
-            listSource.contains("if #available(iOS 26.0, *), let menu"),
-            "Le .contextMenu natif des bulles doit être gaté #available(iOS 26.0, *)."
-        )
-        XCTAssertTrue(
-            listSource.contains(".contextMenu { menu() } preview: { preview() }"),
-            "Le chemin iOS 26 doit attacher le .contextMenu NATIF AVEC preview " +
-            "(la vraie bulle d'origine)."
-        )
-        XCTAssertTrue(
-            listSource.contains("ConditionalBubbleLongPress"),
-            "Le long-press custom de la bulle doit être conditionnel (coupé quand " +
-            "le menu natif est actif, gardé < iOS 26)."
-        )
-
+    /// **La machinerie du menu natif reste en place, alimentée à `nil` — et ce
+    /// `nil` n'est pas un reste.**
+    ///
+    /// C'est lui qui commande le RETRAIT de l'`UIContextMenuInteraction` que le
+    /// système pose sur la cellule. Supprimer la déclaration au motif qu'elle ne
+    /// sert plus laisserait cette interaction en place et **rouvrirait la
+    /// pression système que #6117 vient de fermer** — le menu Meeshy
+    /// redisparaîtrait sous iOS 26, sans qu'aucune ligne de geste n'ait bougé.
+    ///
+    /// C'est donc l'invariant que ce fichier garde, et le seul : il n'est dit
+    /// nulle part ailleurs.
+    func test_messageRow_nativeMenuStaysDeclaredNil_soTheSystemPressIsRemoved() throws {
         let vcSource = try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
+
         XCTAssertTrue(
-            vcSource.contains(".nativeMessageContextMenu(menu: nativeMenu)"),
-            "La cellule doit attacher le menu natif via .nativeMessageContextMenu(menu:)."
+            vcSource.contains("let nativeMenu: (() -> AnyView)? = nil"),
+            "`nativeMenu` doit rester DÉCLARÉ à nil : c'est ce qui commande le " +
+            "retrait de l'UIContextMenuInteraction posée par le système."
         )
         XCTAssertTrue(
-            vcSource.contains("enableLongPress: nativeMenu == nil"),
-            "La cellule doit couper le long-press custom quand le menu natif est actif."
+            vcSource.contains("if nativeMenu == nil"),
+            "Le retrait de l'interaction système doit rester CONDITIONNÉ à " +
+            "`nativeMenu == nil` — sans quoi il ne se produirait plus si le " +
+            "chemin natif revenait."
+        )
+        XCTAssertTrue(
+            vcSource.contains("$0 is UIContextMenuInteraction"),
+            "La cellule doit retirer l'UIContextMenuInteraction du système : " +
+            "laissée en place, elle reprendrait la pression longue à iOS 26 et " +
+            "le menu Meeshy disparaîtrait de nouveau sur les téléphones récents."
         )
     }
 

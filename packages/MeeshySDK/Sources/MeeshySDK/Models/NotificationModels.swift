@@ -160,9 +160,13 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     case maintenance = "maintenance"
     case updateAvailable = "update_available"
 
-    // Engagement
+    // Engagement — les QUATRE types que la passerelle émet
+    // (`packages/shared/types/notification.ts`). `level_up` manquait : un
+    // niveau atteint décodait en `.system`, s'affichait comme une alerte
+    // système et n'ouvrait pas l'écran « Progression » (#5698).
     case achievementUnlocked = "achievement_unlocked"
     case streakMilestone = "streak_milestone"
+    case levelUp = "level_up"
     case badgeEarned = "badge_earned"
 
     // Legacy uppercase (backward compat)
@@ -204,7 +208,10 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .friendNewStory: return "camera.fill"
         case .friendNewPost: return "square.text.square.fill"
         case .friendNewMood: return "face.smiling.fill"
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned: return "trophy.fill"
+        case .achievementUnlocked, .legacyAchievementUnlocked: return "trophy.fill"
+        case .badgeEarned: return "medal.fill"
+        case .streakMilestone: return "flame.fill"
+        case .levelUp: return "star.fill"
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted: return "globe"
         case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled: return "exclamationmark.triangle.fill"
         case .system, .maintenance, .updateAvailable: return "bell.fill"
@@ -236,8 +243,13 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
             return "9B59B6"
         case .friendRequest, .contactRequest, .legacyFriendRequest, .friendAccepted, .contactAccepted, .legacyFriendAccepted, .legacyStatusUpdate:
             return "4ECDC4"
-        case .communityInvite, .communityJoined, .communityLeft, .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft, .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
+        case .communityInvite, .communityJoined, .communityLeft, .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft:
             return "F8B500"
+        // La famille « engagement » porte l'ambre des badges de l'écran
+        // « Progression » (`MeeshyColors.warningHex`), distinct de la famille
+        // « communauté » ci-dessus — un badge ne ressemble plus à une invitation.
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
+            return "FBBF24"
         case .missedCall, .callDeclined, .incomingCall, .incomingCallAlert, .callEnded, .legacyCallMissed, .legacyCallIncoming:
             return "E91E63"
         case .legacyAffiliateSignup:
@@ -425,6 +437,24 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
     public let city: String?
     public let location: String?
 
+    // MARK: - Paliers d'engagement (#5809)
+    //
+    // La passerelle les pose depuis toujours (`EngagementService` :
+    // `{ action, route, achievementKey }` pour un succès, `{ …, threshold }`
+    // pour une série, `{ …, threshold, level }` pour un niveau) — et ce
+    // décodeur les JETAIT en silence. Une vue de célébration ne pouvait donc
+    // pas savoir QUOI célébrer : le palier voyageait, personne ne le lisait.
+    /// La clé stable du succès débloqué (`achievement.first_voice`…).
+    public let achievementKey: String?
+    /// L'AXE du badge gagné (`content.message.text`…). Un badge ne porte pas
+    /// `achievementKey` : sa paire est `axisKey` + `threshold`, et sans elle
+    /// une notification de badge ne désigne aucun palier.
+    public let axisKey: String?
+    /// Le palier atteint — seuil du badge, jours de série, ou score du niveau.
+    public let threshold: Int?
+    /// Le RANG du niveau, déjà calculé par la passerelle (`levelIndexOf`).
+    public let level: Int?
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         messagePreview = try container.decodeIfPresent(String.self, forKey: .messagePreview)
@@ -455,6 +485,15 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
         countryName = try container.decodeIfPresent(String.self, forKey: .countryName)
         city = try container.decodeIfPresent(String.self, forKey: .city)
         location = try container.decodeIfPresent(String.self, forKey: .location)
+        achievementKey = try container.decodeIfPresent(String.self, forKey: .achievementKey)
+        // L'AXE d'un badge. `tryAwardBadge` pose `axisKey` là où
+        // `tryAwardAchievement` pose `achievementKey` : la passe qui a fait
+        // entrer les trois autres champs a laissé celui-ci dehors, et une
+        // notification de badge n'avait donc RIEN à célébrer (#5809, moitié
+        // badge).
+        axisKey = try container.decodeIfPresent(String.self, forKey: .axisKey)
+        threshold = try container.decodeIfPresent(Int.self, forKey: .threshold)
+        level = try container.decodeIfPresent(Int.self, forKey: .level)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -463,6 +502,7 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
         case contentType, postPreview, parentCommentPreview, excerpt, mediaType, postThumbnailUrl, attachments
         case deviceName, deviceVendor, deviceOS, deviceOSVersion, deviceType
         case ipAddress, country, countryName, city, location
+        case achievementKey, axisKey, threshold, level
     }
 }
 
@@ -637,8 +677,17 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
             return "Traduction disponible"
         case .voiceCloneReady:
             return "Clone vocal pret"
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
-            return "Nouveau badge debloque !"
+        // Un titre PAR palier — le corps (serveur, langue du lecteur) dit
+        // lequel ; le titre dit de quelle ÉCHELLE il s'agit. « Nouveau badge »
+        // pour une série de sept jours ou un niveau atteint disait faux.
+        case .badgeEarned:
+            return "Badge débloqué"
+        case .streakMilestone:
+            return "Série de jours actifs"
+        case .levelUp:
+            return "Niveau atteint"
+        case .achievementUnlocked, .legacyAchievementUnlocked:
+            return "Succès débloqué"
         case .securityAlert, .legacySystemAlert:
             return "Alerte de securite"
         case .loginNewDevice:

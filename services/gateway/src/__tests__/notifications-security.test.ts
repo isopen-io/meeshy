@@ -12,7 +12,11 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { NotificationService, CreateNotificationData } from '../services/notifications/NotificationService';
+import { NotificationService } from '../services/notifications/NotificationService';
+// `CreateNotificationData` vit dans `notifications/types.ts` et n'a jamais été
+// réexporté par `NotificationService.ts` — le seul TS2305 qui empêchait cette
+// suite de se charger (#6160).
+import type { CreateNotificationData } from '../services/notifications/types';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
 // Mock Prisma

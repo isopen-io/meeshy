@@ -342,6 +342,9 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         for path in ["Meeshy/Features/Main/Views/ConversationView+Composer.swift",
                      "Meeshy/Features/Main/Views/FeedView.swift",
                      "Meeshy/Features/Main/Views/FeedView+Attachments.swift",
+                     // La feuille est sortie de `FeedView+Attachments` en #6040 ;
+                     // le site du feed sheet vit là désormais.
+                     "Meeshy/Features/Main/Views/FeedComposerSheet.swift",
                      "Meeshy/Features/Main/Views/FeedCommentsSheet.swift"] {
             let src = try source(path)
             XCTAssertFalse(src.contains("LocationPickerView(accentColor: accentColor) { coordinate, _ in"),
@@ -357,18 +360,48 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// par `createPost(content:)` seul quand il n'y avait pas de fichier : une
     /// position seule, sans texte ni piece jointe, n'envoyait rien. Corriger un
     /// seul des deux chemins laisse la moitie du bug.
-    func test_bothPublishPathsCarryTheLocation() throws {
-        let src = try source("Meeshy/Features/Main/Views/FeedView+Attachments.swift")
+    ///
+    /// **Il n'en reste qu'UN (#6016).** `publishPostWithAttachments` — le
+    /// composer INLINE du fil — a été retiré : plus rien ne l'appelait depuis la
+    /// bascule vers `DocumentComposerDoor`. Sa moitié de ce témoin n'est pas
+    /// PERDUE, elle a changé d'adresse avec la règle : c'est
+    /// `ComposerDocumentSendRules.emptyDraft` qui accepte désormais un lieu
+    /// seul, et `ComposerDocumentToolChainTests.test_unLieuSeul_sansTexteNiMedia_peutPartir`
+    /// qui le mesure. Retirer une assertion parce que son sujet disparaît n'est
+    /// légitime QUE si l'on peut nommer où elle se rejoue — sinon c'est de la
+    /// couverture perdue déguisée en nettoyage.
+    ///
+    /// `publishPost()` est la FEUILLE (`FeedComposerSheet`), qui reste montée :
+    /// son retrait est explicitement INTERDIT par
+    /// `FeedComposerSheetRetirementInventoryTests` tant que cinq capacités n'ont
+    /// pas rejoint le meuble.
+    func test_theSheetPublishPathCarriesTheLocation() throws {
+        // `FeedComposerSheet.swift` depuis #6040 : la feuille a quitté le
+        // fichier qui annonçait une extension de `FeedView`.
+        let src = try source("Meeshy/Features/Main/Views/FeedComposerSheet.swift")
         let publish = try body(from: "private func publishPost()", to: "// MARK:", in: src)
         XCTAssertTrue(publish.contains("location: pendingPlace"),
                       "publishPost perd la position dans sa branche sans fichier.")
 
-        let withAttachments = try body(from: "func publishPostWithAttachments", to: "private func publishPost()", in: src)
-        XCTAssertTrue(withAttachments.contains("location: pendingPlace"),
-                      "publishPostWithAttachments a le meme defaut : corriger un seul chemin laisse la moitie du bug.")
-
         XCTAssertTrue(publish.contains("pendingPlace != nil"),
                       "Une position seule, sans texte ni piece jointe, doit pouvoir partir.")
+    }
+
+    /// Le pendant du retrait : `publishPostWithAttachments` ne doit pas
+    /// REVENIR. Un chemin de publication inline ressuscité sur le fil rouvrirait
+    /// la divergence que #6016 vient de fermer — deux implémentations de
+    /// « publier un post », dont une seule reçoit les corrections.
+    func test_theInlineFeedPublishPath_staysRetired() throws {
+        // Les DEUX moitiés du fichier d'origine : le chemin inline ne doit
+        // renaître ni dans l'extension, ni dans la feuille qui en est sortie.
+        let src = try [ "Meeshy/Features/Main/Views/FeedView+Attachments.swift",
+                        "Meeshy/Features/Main/Views/FeedComposerSheet.swift" ]
+            .map { try source($0) }
+            .joined(separator: "\n")
+        XCTAssertFalse(AppSourceGuard.stripComments(src).contains("func publishPostWithAttachments"),
+                       "Le chemin inline du fil est retire (#6016) : la publication d'un post passe par "
+                           + "`ComposerDocumentSurface.publishDocument`. Le faire revenir ici redonne deux "
+                           + "implementations a une seule regle.")
     }
 
     // MARK: - Partage de position (Task 14, 2026-07-29)
