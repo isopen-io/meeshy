@@ -228,10 +228,12 @@ export const registerRequestSchema = {
     // importe déjà `usernamePatternSource` depuis la façade `api-schemas.js`,
     // qui ré-exporte CE fichier. Importer la constante ici la referait
     // boucler. La garde `password-min-length-parity.test.ts` tient le
-    // littéral honnête.
+    // littéral honnête — et c'est elle qui a trouvé ces trois-ci quand la
+    // constante est passée de 12 à 6 (directive porteur 2026-09-13, après
+    // mesure : 18 refus d'inscription pour 2 comptes créés en 24 h).
     password: {
       type: 'string',
-      minLength: 12,
+      minLength: 6,
       description: 'Password (minimum PASSWORD_MIN_LENGTH characters)'
     },
     firstName: firstNameProperty,
@@ -395,7 +397,7 @@ export const changePasswordRequestSchema = {
     },
     newPassword: {
       type: 'string',
-      minLength: 12,
+      minLength: 6,
       description: 'New password (minimum PASSWORD_MIN_LENGTH characters)'
     }
   }
@@ -415,7 +417,7 @@ export const resetPasswordRequestSchema = {
     },
     newPassword: {
       type: 'string',
-      minLength: 12,
+      minLength: 6,
       description: 'New password (minimum PASSWORD_MIN_LENGTH characters)'
     }
   }
