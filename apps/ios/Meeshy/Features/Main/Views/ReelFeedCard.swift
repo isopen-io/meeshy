@@ -551,6 +551,7 @@ struct ReelFeedCard: View, Equatable {
         }
         mediaSaveCoordinator.requestSave(MediaSaveRequest(
             kind: attachmentKind,
+            origin: .composed,
             remoteURLString: url,
             suggestedFileName: media.fileName
         ))

@@ -2303,3 +2303,121 @@ la décision et le mode d'emploi manquaient. Le critère de fin #4 de l'issue
 eux-mêmes ; il ne s'applique pas à (c), qui ne change rien au calendrier de
 déploiement. Suivi : la mesure de #4631 (dérive du compose de staging sur le
 dépôt) reste un défaut distinct, non fermé par cette décision.
+
+## 2026-09-12 : SSRF de l'illustration d'agent — le trou 1 se ferme par épinglage au connect, `undici` devient une dépendance directe (#6201)
+
+**Statut** : Accepté
+
+**Contexte** : le trou 2 de #6201 (une seule adresse validée sur N) a été fermé
+sur `dev` (`fba914e6a7`). Restait le trou 1 : `publicHttpUrl` valide un nom via
+`lookup(host)` AVANT la requête, et le transport par défaut (`fetch` global —
+donc `undici`, déjà présent transitivement, mais non résoluble en dépendance
+directe du gateway) résout le même nom une SECONDE fois, indépendamment, au
+moment d'ouvrir la connexion TCP. Un DNS contrôlé par l'attaquant, à TTL court,
+peut rendre une adresse publique à la première résolution et une adresse
+interne à la seconde — TOCTOU classique, sans course à gagner puisque c'est le
+serveur DNS de l'attaquant qui choisit quand changer de réponse.
+
+Trois voies avaient été mesurées par l'issue :
+
+| voie | ferme le trou | coût |
+|---|---|---|
+| **`Agent` undici avec `connect: { lookup }`** | oui, proprement — la résolution qui valide EST celle qui connecte | déclarer `undici` en dépendance directe, toucher `bun.lock` |
+| réécrire l'URL avec l'IP + en-tête `Host` | oui | casse le SNI TLS sans `servername`, à reconstruire à chaque saut de redirection |
+| passer à `node:https` | oui | réécrit tout le transport (streaming, bornes de taille, timeouts) — coût disproportionné pour une seule garde |
+
+**Décision** : la première voie. `node:undici` n'existe pas comme module
+intégré sous Node 22 (`ERR_UNKNOWN_BUILTIN_MODULE`, vérifié) : `undici` est donc
+ajouté aux `dependencies` de `services/gateway/package.json` (il était déjà
+présent transitivement via `fastify`/`jsdom`/`srvx`, à une version identique —
+aucune résolution nouvelle, seulement une déclaration directe et une entrée de
+lockfile). Un `Agent({ connect: { lookup } })` est construit avec un
+`connect.lookup` qui applique EXACTEMENT la règle de `publicHttpUrl` (« toutes
+les adresses publiques », résolution vide refusée) ; cet Agent sert de
+`dispatcher` au `fetch` par défaut. La validation et la connexion partagent
+ainsi la MÊME résolution fraîche, prise au dernier moment possible — il n'y a
+plus de fenêtre entre les deux à faire dériver.
+
+Portée volontairement étroite : seul le `fetchImpl` PAR DÉFAUT passe par l'Agent
+épinglé. Un `fetchImpl` injecté (les 42 témoins existants) contourne l'Agent
+entièrement, comme avant — aucune régression sur la suite unitaire, qui
+continue de tester la logique de garde sans réseau réel. Un unique Agent est
+mémoïsé pour le `lookup` par défaut (une résolution pinnée par requête suffit,
+pas une instance par appel) ; un `lookup` de test en obtient un dédié.
+
+**Preuve** : `services/gateway/src/services/zmq-agent/agent-illustration.ts`
+(`createConnectLookup`, `pinnedAgentFor`, `pinnedFetch`) ; le témoin qui exerce
+le NIVEAU que le trou 1 exigeait (§ « épinglage au connect » du fichier de
+test) — il n'injecte PAS `fetchImpl`, seulement un `lookup` qui compte ses
+appels et change de réponse entre le premier (pré-validation) et le second
+(résolution réelle au connect). Contre-épreuve mesurée : en repointant le
+`fetchImpl` par défaut sur le `fetch` global NU (la forme d'avant ce lot), ce
+même témoin ROUGIT — `lookup` n'est appelé qu'une fois, la résolution réelle
+passant par le DNS système hors de portée du témoin. `npx tsc --noEmit` : 0
+erreur. `bun run test` sur le fichier : 43/43 verts.
+
+**Alternatives rejetées** : réécriture d'URL (SNI cassé) et migration vers
+`node:https` (coût disproportionné pour une seule garde, documentées dans
+l'issue). Aucune des deux n'a été implémentée.
+
+**Conséquences** : `services/gateway/package.json` déclare `undici@^8.10.0` ;
+`bun.lock` porte l'entrée. `pnpm-lock.yaml` n'a délibérément pas été
+re-régénéré dans ce lot — le CI pnpm tourne en `--no-frozen-lockfile` (le
+résout à la volée) et une régénération locale a fait dériver des entrées sans
+rapport (bump de `socket.io-parser`/`ws`, ajout non lié dans `apps/web-v2`) ;
+les inclure aurait élargi ce lot au-delà de sa portée. Une session qui
+régénère `pnpm-lock.yaml` pour une autre raison peut porter cette entrée dans
+la foulée.
+
+## `postInclude` devient un `Prisma.PostSelect` — `storyViews` ne voyage plus vers tout lecteur d'un post (2026-09-12, #4791)
+
+**Le fait** : `GET /posts/:id/views` (la liste des spectateurs d'une story)
+est réservée à l'auteur — `403` pour tout autre lecteur
+(`routes/posts/interactions.ts`). Mais `postInclude`
+(`services/gateway/src/services/posts/postIncludes.ts`), le point d'hydratation
+UNIQUE utilisé par `PostService`, `PostFeedService`, `PostAudioService` et les
+routes de recherche/proximité/hashtag, était un `Prisma.PostInclude` — et
+Prisma renvoie TOUS les scalaires d'un modèle sous `include`, quelles que
+soient les relations nommées. `Post.storyViews` (la même donnée, embarquée)
+partait donc vers chaque lecteur AUTORISÉ à voir le post — fil, recherche,
+à proximité, reposts, commentaires attachés — sans qu'aucune route ne l'ait
+demandé ni qu'un test ne le voie : le schéma de réponse de ces routes ne
+déclare `storyViews` nulle part, donc rien ne l'aurait arrêté à la
+sérialisation non plus.
+
+**La décision** : convertir `postInclude` (et `storyPostInclude`, qui en
+dérive par spread) en `Prisma.PostSelect` — un `select` explicite listant
+CHAQUE scalaire du modèle Post SAUF `storyViews` (`postScalarSelect`), plus
+les cinq relations déjà présentes. `select` est le seul des deux qui puisse
+exprimer « tout sauf CE champ » ; `include` ne le peut pas par construction.
+Les 22 sites d'appel (`PostService` ×15, `PostFeedService` ×6 dont un
+imbriqué sous `postBookmark.include.post`, `PostAudioService`, les routes
+`nearby`/`hashtag`) passent désormais `select: postInclude` (ou
+`storyPostInclude`/`feedPostInclude`), jamais `include:` — le compilateur
+(`Prisma.validator<Prisma.PostSelect>()`) refuse toute autre forme, ce qui a
+servi de garde de migration : `tsc --noEmit` (0 erreur) après conversion
+confirme qu'aucun site n'a été oublié.
+
+**Alternative rejetée** : retirer purement la colonne `storyViews` du schéma.
+Rejetée parce que `PostService.republishStory`/`updatePost` la remettent
+encore explicitement à `[]` à la republication d'une story (reset
+d'engagement) — une écriture vivante, donc pas du code mort à retirer sans
+readresser d'abord ces deux sites séparément (hors de la portée de cette
+issue, qui vise la fuite de LECTURE, pas la propriété d'écriture).
+
+**Preuve** : `services/gateway/src/services/posts/__tests__/postIncludes.test.ts`
+— trois témoins dédiés (`postScalarSelect`, `postInclude`, `storyPostInclude`
+n'ont jamais `storyViews`), ROUGE prouvé en réintroduisant temporairement
+`storyViews: true` dans `postScalarSelect` (3 échecs), puis restauré. Suite
+complète : `npx tsc --noEmit` gateway 0 erreur ; 118 suites / 2203 tests
+`posts`/`PostService`/`PostFeedService`/`PostAudioService` verts (aucune
+régression sur les 22 sites convertis).
+
+**Hors de portée depuis cet environnement** (aucun accès infra/production) :
+le critère de fin n°1 de #4791 — compter les documents Post portant encore un
+`storyViews` legacy non vide (`db.posts.countDocuments({ storyViews: { $ne: [] } })`
+sur staging/production) — n'a pas pu être mesuré. La migration
+`scripts/migrations/mongodb/018_clear_legacy_post_storyViews.js` est committée
+(dry-run par défaut, compte les documents concernés, `APPLIQUER=true` pour
+vider `storyViews` sur les lignes héritées) mais n'a pas été jouée. L'issue
+reste ouverte pour ce point, à fermer par une session avec accès à la base.

@@ -759,6 +759,39 @@ for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
     failures.push(`boîte emoji du sticker : Swift ${emojiBoxSwift}, dérivée ${emojiBoxDerived}`);
 }
 
+/**
+ * PARTIE 10 — LE SEUIL DU TIRER-POUR-RAFRAÎCHIR (#6195). Le brief de la
+ * spécification nomme cette section « PARTIE 6 », déjà prise par la
+ * typographie de la Lentille (ci-dessus, même renumérotation qu'à la
+ * PARTIE 9) : numérotée ici dans l'ordre réel du fichier.
+ *
+ * SOURCE SWIFT DISTINCTE de `FocalMetrics.swift` : `pullThreshold` est une
+ * PROPRIÉTÉ CALCULÉE (`{ 90 }`, pas `= 90`) de
+ * `MeeshyRefreshableScroll.swift` — sa propre regex, motif PARTIE 9 pour
+ * `EmojiDetector.swift`.
+ */
+{
+  const refreshableScrollSwift = readFileSync(
+    `${ROOT}packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyRefreshableScroll.swift`,
+    'utf8',
+  );
+  const pullToRefreshDerived = readFileSync(`${ROOT}apps/web-v2/src/lib/view/pull-to-refresh.ts`, 'utf8');
+
+  const pullThresholdSwift = (() => {
+    const m = /pullThreshold:\s*CGFloat\s*\{\s*(-?[0-9.]+)\s*\}/.exec(refreshableScrollSwift);
+    return m === null ? null : Number(m[1]);
+  })();
+  const pullThresholdDerived = count(pullToRefreshDerived, 'PULL_THRESHOLD');
+
+  if (pullThresholdSwift === null) {
+    failures.push('seuil du tirer-pour-rafraîchir : « pullThreshold: CGFloat { … } » introuvable dans MeeshyRefreshableScroll.swift');
+  } else if (pullThresholdDerived === null) {
+    failures.push('seuil du tirer-pour-rafraîchir : « PULL_THRESHOLD » introuvable dans lib/view/pull-to-refresh.ts');
+  } else if (pullThresholdSwift !== pullThresholdDerived) {
+    failures.push(`seuil du tirer-pour-rafraîchir : Swift ${pullThresholdSwift}, dérivé ${pullThresholdDerived}`);
+  }
+}
+
 if (failures.length > 0) {
   console.error('\n  La loi de la Lentille a DÉRIVÉ de packages/shared/utils/focus-curve.ts :\n');
   for (const e of failures) console.error(`    · ${e}`);
@@ -786,5 +819,6 @@ console.log(
     `\n  Le menu du message est conforme à MessageOverlayMenu.swift/MessageActionsMenu.swift` +
     ` (${MENU_MAPPINGS.length} cotes + le chrome de la liste + les 6/20 emojis du rail).` +
     `\n  Les états du message sont conformes à EmojiDetector.swift/BubbleSticker.swift` +
-    ` (3 tailles d'emoji seul + 2 cotes de sticker en bulle).`,
+    ` (3 tailles d'emoji seul + 2 cotes de sticker en bulle).` +
+    `\n  Le seuil du tirer-pour-rafraîchir est conforme à MeeshyRefreshableScroll.swift (1 cote).`,
 );

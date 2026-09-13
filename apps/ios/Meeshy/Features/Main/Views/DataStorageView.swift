@@ -142,6 +142,9 @@ struct DataStorageView: View {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(Color(hex: color))
+                // Décorative — jumelle de `SettingsView.settingsSection` : sans
+                // ce masque, VoiceOver annonce le nom du symbole avant le titre.
+                .accessibilityHidden(true)
             Text(title.uppercased())
                 .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))

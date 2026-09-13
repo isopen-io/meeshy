@@ -48,4 +48,38 @@ describe('createFixturesSocketClient (#5793) — le bouchon de fixtures', () => 
     client.connect();
     expect(count).toBe(0);
   });
+
+  /**
+   * LA CHRONOLOGIE `c-live` (#6171, G6) — `disconnect()` annule AUSSI les
+   * minuteurs À UN COUP (`atMs`), pas seulement l'intervalle répété
+   * d'Amina : sans cette extension, un `disconnect()` survenu entre deux
+   * événements laissait le suivant partir dans le vide.
+   */
+  test('`disconnect()` coupe AUSSI la chronologie `c-live` (minuteurs à un coup)', async () => {
+    const client = createFixturesSocketClient({ base: '', auth: { token: 't', sessionToken: 's' } });
+    let translations = 0;
+    client.on(SERVER_EVENTS.MESSAGE_TRANSLATION, () => (translations += 1));
+    client.connect();
+    client.disconnect();
+
+    await new Promise((r) => setTimeout(r, 2100));
+    expect(translations).toBe(0);
+  });
+
+  test('la chronologie `c-live` greffe la traduction anglaise à 2 s puis française à 3,5 s', async () => {
+    const client = createFixturesSocketClient({ base: '', auth: { token: 't', sessionToken: 's' } });
+    const received: unknown[] = [];
+    client.on(SERVER_EVENTS.MESSAGE_TRANSLATION, (payload) => received.push(payload));
+    client.connect();
+
+    await new Promise((r) => setTimeout(r, 2200));
+    expect(received).toHaveLength(1);
+    expect((received[0] as { translations: readonly { targetLanguage: string }[] }).translations[0]?.targetLanguage).toBe('en');
+
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(received).toHaveLength(2);
+    expect((received[1] as { translations: readonly { targetLanguage: string }[] }).translations[0]?.targetLanguage).toBe('fr');
+
+    client.disconnect();
+  });
 });

@@ -493,9 +493,12 @@ docker compose -f infrastructure/docker/compose/docker-compose.prod.yml up -d
 | Gateway API | gate.meeshy.me | 443 |
 | Translator | ml.meeshy.me | 443 |
 | Static Files | static.meeshy.me | 443 |
-| MongoDB UI | mongo.meeshy.me | 443 |
-| Redis UI | redis.meeshy.me | 443 |
 | Traefik | traefik.meeshy.me | 443 |
+
+MongoDB UI and Redis UI are **not** routed by Traefik (#3640) — they bind to
+`127.0.0.1` on the server only. Reach them via SSH tunnel:
+`ssh -L 8081:127.0.0.1:8081 -L 8082:127.0.0.1:8082 root@meeshy.me`, then open
+`http://localhost:8081` (Mongo) / `http://localhost:8082` (Redis) locally.
 
 ---
 

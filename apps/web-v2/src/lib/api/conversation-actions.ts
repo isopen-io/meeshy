@@ -5,7 +5,7 @@ import type { ConversationStoreState, OverrideKey } from '@/lib/conversation-sto
 import { effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import type { RowActionId } from '@/lib/view/row-actions';
 
-import { CONVERSATIONS_QUERY_KEY, patchConversation, type ConversationsDeps } from './conversations';
+import { findCachedConversation, patchConversation, type ConversationsDeps } from './conversations';
 import { outcomeOf } from './outcome';
 import { pushConversationFlags, pushRead, pushUnread } from './preferences';
 import type { Conversation } from './types';
@@ -113,8 +113,7 @@ export async function performRowAction(params: {
   readonly deps: ConversationActionDeps;
 }): Promise<void> {
   const { conversationId, action, deps } = params;
-  const list = deps.queryClient.getQueryData<readonly Conversation[]>(CONVERSATIONS_QUERY_KEY);
-  const conversation = list?.find((c) => c.id === conversationId);
+  const conversation = findCachedConversation(deps.queryClient, conversationId);
   if (conversation === undefined) return;
 
   const store = deps.store.getState();

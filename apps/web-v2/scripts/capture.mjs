@@ -38,6 +38,20 @@ const SCREENS = [
       SAISIE (aucun `?token=`) ; l'attente et son compte à rebours sont tenus
       par les témoins de `magic-link.test.tsx`, qu'une capture figée ne saurait
       montrer sans mentir sur le temps. */
+  /** LE LECTEUR PLEIN ÉCRAN DE STORIES (#5817) — les DEUX formes du périmètre :
+      la story TEXTE (fond d'effet + texte résolu par le Prisme, rang ≠ 1 :
+      l'original est anglais, le lecteur voit le français) et la story IMAGE
+      (média plein cadre + légende dessous). Le lecteur force son canevas noir,
+      comme iOS (`preferredColorScheme(.dark)`) : les deux schémas doivent rendre
+      la MÊME image — c'est la jumelle claire qui prouve qu'aucun jeton de
+      surface ne fuit dans le lecteur. */
+  /** LE FIL DES PUBLICATIONS (#5893) — deux cartes de tête sur le corpus de
+      fixtures : un POST (en-tête + texte + média) puis les suivantes. Il entre
+      dans la série STANDING pour qu'aucun changement de la carte ne passe
+      désormais sans image, dans les DEUX schémas. */
+  { name: 'feed', path: '/feed' },
+  { name: 'story-text', path: '/story/st-amie-1' },
+  { name: 'story-image', path: '/story/st-amie-2' },
   { name: 'welcome', path: '/welcome' },
   { name: 'magic-link', path: '/auth/magic-link' },
   { name: 'magic-link-validate', path: '/auth/magic-link/validate' },

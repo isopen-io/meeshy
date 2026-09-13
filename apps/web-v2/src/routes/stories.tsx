@@ -5,6 +5,7 @@ import { Avatar } from '@/components/avatar';
 import { apiDeps } from '@/lib/api/deps';
 import { useStoryTray } from '@/lib/api/query';
 import { sessionStore } from '@/lib/api/session';
+import { storyViewedStore } from '@/lib/api/story-viewed-store';
 import { resolveViewer } from '@/lib/api/viewer';
 import { initialsOf } from '@/lib/view/conversation';
 import { groupStoriesByAuthor, storyAuthorLabel } from '@/lib/view/story-tray';
@@ -13,11 +14,20 @@ import { Link } from '@/routes/route-table';
 
 /**
  * **TOUTES LES STORIES** (#6080) — la destination du second bouton flottant du
- * rail, et de chaque tuile.
+ * rail (« Voir toutes les stories »).
  *
- * `?author=` filtre sur un auteur. La MÊME adresse sert « tout voir » et
- * « voir celles d'Inès » parce que c'est le même écran avec un filtre : deux
- * écrans auraient été deux vérités sur « comment on présente une story ».
+ * `?author=` filtre l'AFFICHAGE sur un auteur — un repli de navigation
+ * conservé pour un lien direct, mais qui n'a plus de PORTE dans l'interface
+ * depuis #5817 : chaque tuile du rail ouvre désormais directement le lecteur
+ * (`/story/$post`), jamais cette liste filtrée. La MÊME adresse sert « tout
+ * voir » et « voir celles d'Inès » parce que c'est le même écran avec un
+ * filtre : deux écrans auraient été deux vérités sur « comment on présente
+ * une story ».
+ *
+ * **CHAQUE LIGNE OUVRE LE LECTEUR** (#5817), jamais elle-même : le tap sur
+ * une ligne nomme une PERSONNE, donc suit son id d'entrée
+ * (`group.entryStoryId`, même loi que le rail, `lib/view/story-tray.ts`)
+ * plutôt que de reboucler sur `?author=`.
  *
  * Il lit le MÊME cache que le rail (`useStoryTray`, même clé de requête) :
  * arriver ici depuis la liste ne déclenche aucune requête et n'affiche aucun
@@ -29,10 +39,14 @@ export default function StoriesScreen() {
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const tray = useStoryTray();
+  /** L'avance OPTIMISTE sur « vu par moi » — le MÊME magasin que le rail
+   * (`api/story-viewed-store.ts`) : revenir du lecteur éteint l'anneau ici
+   * aussi, sans attendre que la passerelle reserve `isViewedByMe`. */
+  const seenNow = useStore(storyViewedStore, (s) => s.ids);
 
   const groups = useMemo(
-    () => groupStoriesByAuthor(tray.data ?? [], { viewerId: viewer.id ?? undefined, viewedIds: new Set<string>() }),
-    [tray.data, viewer.id],
+    () => groupStoriesByAuthor(tray.data ?? [], { viewerId: viewer.id ?? undefined, viewedIds: seenNow }),
+    [tray.data, viewer.id, seenNow],
   );
   const montres = useMemo(
     () => (filtreAuteur === undefined ? groups : groups.filter((g) => g.authorId === filtreAuteur)),
@@ -89,8 +103,8 @@ export default function StoriesScreen() {
               return (
                 <li key={g.authorId}>
                   <Link
-                    to="stories"
-                    search={{ author: g.authorId }}
+                    to="story"
+                    params={{ post: g.entryStoryId }}
                     className="flex w-full items-center gap-3 rounded-card px-3 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2"
                     style={{ backgroundColor: 'var(--color-ios-card)', outlineColor: 'var(--color-ios-brand)' }}
                   >

@@ -238,26 +238,43 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
         )
     }
 
-    /// La pellicule est montée SOUS les détails de l'auteur, et seulement quand
-    /// il y a plus d'un média à parcourir.
-    func test_filmstrip_isMountedBelowTheAuthorRow_whenThereIsMoreThanOneMedium() throws {
+    /// **La pellicule a quitté le bloc du média pour le couloir bas du
+    /// plateau** (#6141, spec `2026-09-12-lecture-media-plateau-design.md` § 2.2).
+    ///
+    /// Ce témoin affirmait l'inverse jusqu'au 2026-09-12 — « montée SOUS les
+    /// détails de l'auteur, dans `bottomOverlay` » — et il avait raison tant que
+    /// la galerie était bord à bord : le bloc bas ÉTAIT le seul endroit où poser
+    /// quelque chose. La loi du plateau le supplante, et pour une raison de
+    /// comportement, pas de goût : dans cette colonne, une légende dépliée
+    /// pouvait comprimer la pellicule — le seul contrôle du bas qui sert à
+    /// NAVIGUER. Au plateau, sa hauteur est réservée AVANT que le cadre ne
+    /// prenne le reste, donc plus rien ne peut la lui reprendre.
+    ///
+    /// Ce que la garde tient reste la même chose, mesurée à sa nouvelle place :
+    /// la pellicule existe, elle est en bas, et un média seul n'en a pas.
+    func test_filmstrip_livesInThePlateauCorridor_neverOnTheCadre() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
-        guard let body = declarationBody(startingAt: "private var bottomOverlay", in: code) else {
-            XCTFail("bottomOverlay introuvable"); return
+        guard let couloir = declarationBody(startingAt: "var railCorridor", in: code),
+              let blocBas = declarationBody(startingAt: "var bottomOverlay", in: code) else {
+            XCTFail("`railCorridor` ou `bottomOverlay` introuvable"); return
         }
 
-        guard let author = body.range(of: "bottomMetadataOverlay(att)"),
-              let strip = body.range(of: "ConversationMediaFilmstrip(")
-        else {
-            XCTFail("la pellicule doit être montée dans le bloc bas, sous la rangée auteur"); return
-        }
         XCTAssertTrue(
-            author.upperBound < strip.lowerBound,
-            "la pellicule doit venir APRÈS les détails de l'auteur, pas au-dessus."
+            couloir.contains("ConversationMediaFilmstrip("),
+            "le couloir bas du plateau EST la pellicule."
         )
         XCTAssertTrue(
-            body.contains("if allAttachments.count > 1 {"),
+            couloir.contains("if allAttachments.count > 1 {"),
             "un média seul n'a pas de pellicule à parcourir."
+        )
+        XCTAssertFalse(
+            blocBas.contains("ConversationMediaFilmstrip("),
+            "la pellicule ne se pose plus sur le cadre : elle y partageait la colonne "
+                + "avec la légende, qui pouvait la comprimer en se dépliant."
+        )
+        XCTAssertTrue(
+            blocBas.contains("bottomMetadataOverlay(att)"),
+            "l'auteur, lui, reste sur le cadre — il appartient au média."
         )
     }
 

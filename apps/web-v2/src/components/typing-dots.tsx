@@ -11,8 +11,12 @@
  * rougisse, la forme exacte des jumelles que `CLAUDE.md` § « UNE source de
  * vérité » interdit.
  *
- * `aria-hidden` : le TEXTE voisin (« X écrit ») porte déjà le sens ; trois
- * points n'ajoutent rien à un lecteur d'écran et se prononceraient
+ * `aria-hidden` : dans la cellule de frappe du fil, le CONTENEUR porte déjà
+ * le sens via `role="img"` + `aria-label` (`typing-roster-cell.tsx`, revue-
+ * correction, défaut majeur 1 — le nom calculé de la cellule, pas un texte
+ * voisin qui n'existe plus en tenue plate) ; dans la ligne 2 de la Lentille,
+ * c'est le texte visible qui le porte. Dans les deux cas, ces points
+ * n'ajoutent rien à un lecteur d'écran et se prononceraient
  * « point point point ».
  *
  * L'animation est `typingDot` (`styles/app.css`, l'UNIQUE `@keyframes` du POC)

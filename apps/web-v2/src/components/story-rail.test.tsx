@@ -46,13 +46,22 @@ afterEach(() => {
   container = undefined;
 });
 
+/**
+ * `stories` porte désormais UNE story par défaut (#5817) — un
+ * `StoryTrayGroup` réel n'est JAMAIS construit vide (`groupStoriesByAuthor`
+ * ne pousse un groupe qu'à partir d'au moins une story), et la tuile a
+ * maintenant besoin d'un id de story RÉEL pour composer son lien
+ * (`group.entryStoryId`, posé par `groupStoriesByAuthor`,
+ * `lib/view/story-tray.ts`).
+ */
 const group = (authorId: string, displayName: string): StoryTrayGroup => ({
   authorId,
   author: { id: authorId, displayName } as StoryTrayGroup['author'],
-  stories: [],
+  stories: [{ id: `st-${authorId}`, isViewedByMe: false } as StoryTrayGroup['stories'][number]],
   latestAt: 0,
   hasUnseen: true,
   isMine: false,
+  entryStoryId: `st-${authorId}`,
 });
 
 function mount(props: {
@@ -219,10 +228,16 @@ describe('StoryRail — `inert` retire le grand rail du clavier et de l’access
  * pas d'équivalent chez dev, donc aucun témoin à porter : ils sont neufs ici.
  */
 describe('StoryRail — ce que le corpus des stories apporte', () => {
-  test('chaque tuile mène à la story de SON auteur, jamais au fil', () => {
+  /**
+   * #5817 — la tuile ouvre désormais LE LECTEUR PLEIN ÉCRAN (`/story/$post`),
+   * jamais le fil ET jamais non plus l'ancienne destination `/stories?author=`
+   * (#6080) : elle pose l'id d'ENTRÉE qu'elle a calculé (`entryStoryId()`),
+   * pas l'id de l'auteur.
+   */
+  test('chaque tuile mène À LA STORY de son auteur (/story/$post), jamais au fil ni à /stories', () => {
     const el = mount({ variant: 'grande', groups: [group('u-amina', 'Amina Diallo')] });
     const lien = el.querySelector('a[data-story-author="u-amina"]') as HTMLAnchorElement;
-    expect(lien.getAttribute('href')).toContain('u-amina');
+    expect(lien.getAttribute('href')).toBe('/story/st-u-amina');
   });
 
   test('les deux portes flottantes n’existent QUE sur le grand plateau', () => {

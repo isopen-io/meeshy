@@ -812,6 +812,7 @@ struct FeedPostCard: View {
         }
         mediaSaveCoordinator.requestSave(MediaSaveRequest(
             kind: attachmentKind,
+            origin: .composed,
             remoteURLString: url,
             suggestedFileName: media.fileName
         ))

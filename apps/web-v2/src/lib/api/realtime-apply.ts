@@ -4,6 +4,7 @@ import type { StoreApi } from 'zustand/vanilla';
 import type {
   ConversationUnreadUpdatedEventData,
   ConversationUpdatedEventData,
+  LastMessagePreviewAttachment,
 } from '@meeshy/shared/types/socketio-events/conversation';
 import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
 import type { TranslationEvent } from '@meeshy/shared/types/socketio-events/translation';
@@ -218,6 +219,116 @@ export function isConversationUpdated(payload: unknown): payload is Conversation
 }
 
 /**
+ * `messageTypeOf` — le SEUL champ de la ligne neutre que le contrat ne
+ * transporte pas directement (question 9.4 de la spécification #6171) :
+ * dérivé du `mimeType` de la PREMIÈRE pièce jointe (`image/*` ⇒ `'image'`,
+ * `audio/*` ⇒ `'audio'`, `video/*` ⇒ `'video'`, sinon `'file'` ; aucune pièce
+ * ⇒ `'text'`). La Lentille ne LIT PAS ce champ sur son aperçu — elle lit
+ * `lastMessageAttachments` pour choisir son glyphe (`lens-row.tsx` §
+ * `MEDIA_PREVIEW`) — donc cette valeur ne gouverne aucun rendu aujourd'hui ;
+ * elle est posée pour que la forme du `Message` reste COMPLÈTE, documentée
+ * comme telle.
+ */
+function messageTypeOf(attachments: readonly LastMessagePreviewAttachment[]): Message['messageType'] {
+  const first = attachments[0];
+  if (first === undefined) return 'text';
+  if (first.mimeType.startsWith('image/')) return 'image';
+  if (first.mimeType.startsWith('audio/')) return 'audio';
+  if (first.mimeType.startsWith('video/')) return 'video';
+  return 'file';
+}
+
+/**
+ * `neutralLastMessageFromPreview` — LA LIGNE NEUTRE (#6171, G3) que
+ * `applyConversationUpdated` compose quand `lastMessageId` nomme un AUTRE
+ * message que celui que la ligne connaît déjà : miroir `LastMessageFacet
+ * .adoptLastMessage` (iOS, `:170-184`). Exportée pour le témoin (T5).
+ *
+ * CE N'EST PAS « inventer ce que la source ne porte pas » (leçon « un
+ * instantané qui RECOPIE invente ce que la source ne porte pas ») : chaque
+ * champ vient soit de la charge, soit d'un défaut que le CONTRAT lui-même
+ * déclare — « clé absente = un FAIT » (doc-comment de
+ * `ConversationUpdatedEventData` : pas de pièce jointe déclarée ⇒ pas de
+ * pièce jointe, pas flouté déclaré ⇒ pas flouté).
+ *
+ * `sender` — SEUL le `displayName` (motif `rawMessageFromSocket`, § doc-
+ * comment ci-dessus : le cast est justifié par les deux seuls lecteurs de
+ * `message.sender` sur une rangée de liste, `displayName` et `avatar` — ici
+ * seul le premier est transporté). Absent si `lastMessageSenderName` ne l'est
+ * pas (tri-état, jamais un nom fabriqué).
+ *
+ * `createdAt`/`timestamp` — `lastMessageAt`, chaîne ISO gardée TELLE QUELLE
+ * (D-26) ; repli sur `updatedAt` (le SEUL horodatage que le contrat garantit
+ * toujours) si `lastMessageAt` est absent ou `null` dans cette branche.
+ */
+export function neutralLastMessageFromPreview(data: ConversationUpdatedEventData): Message {
+  const attachments = data.lastMessageAttachments ?? [];
+  const at = data.lastMessageAt ?? data.updatedAt;
+  return {
+    id: data.lastMessageId as string,
+    conversationId: data.conversationId,
+    senderId: data.senderId ?? '',
+    content: data.lastMessagePreview ?? '',
+    originalLanguage: data.lastMessageOriginalLanguage ?? '',
+    messageType: messageTypeOf(attachments),
+    messageSource: 'user',
+    isEdited: false,
+    isViewOnce: data.lastMessageIsViewOnce ?? false,
+    viewOnceCount: 0,
+    isBlurred: data.lastMessageIsBlurred ?? false,
+    deliveredCount: 0,
+    readCount: 0,
+    reactionCount: 0,
+    isEncrypted: false,
+    createdAt: at as unknown as Date,
+    timestamp: at as unknown as Date,
+    translations: [],
+    ...(data.lastMessageExpiresAt === undefined || data.lastMessageExpiresAt === null
+      ? {}
+      : { expiresAt: data.lastMessageExpiresAt as unknown as Date }),
+    ...(data.lastMessageSenderName === undefined || data.lastMessageSenderName === null
+      ? {}
+      : { sender: { displayName: data.lastMessageSenderName } as unknown as Participant }),
+    ...(attachments.length === 0 ? {} : { attachments: attachments as unknown as Message['attachments'] }),
+  } as unknown as Message;
+}
+
+/**
+ * `acceptsLastMessageAt` — LA GARDE MONOTONE DU RANG (revue-correction #6171),
+ * exigée par le contrat lui-même : « Les clients tiennent une garde monotone sur
+ * le groupe d'aperçu — un `lastMessageAt` plus ancien y désigne un message
+ * périmé … Posé par `emitConversationPreviewUpdate` et par LUI SEUL. Les
+ * émetteurs message-driven (`MessageHandler`, `MeeshySocketIOManager`)
+ * l'omettent délibérément : **ce sont eux que la garde monotone protège** »
+ * (doc-comment de `previewRecalculated`, `packages/shared/types/socketio-events/
+ * conversation.ts`). Miroir EXACT d'iOS : le `>` strict du bump
+ * (`ConversationListViewModel.swift:1100`) et son unique exception
+ * (`:1214-1216`, « Réservé au drapeau : sans lui, un horodatage qui recule
+ * décrit un message périmé (diffusion arrivée dans le désordre) et doit rester
+ * ignoré »).
+ *
+ * `lastMessageAt` est le RANG de la ligne (la liste trie dessus) : l'écrire sans
+ * garde faisait redescendre une conversation vivante dès que deux `message:new`
+ * arrivaient dans le désordre. Le défaut PRÉEXISTAIT à l'adoption (G3), qui l'a
+ * rendu visible : la ligne adopte désormais aussi le CONTENU du message nommé.
+ *
+ * `known` arrive en DEUX formes — chaîne ISO du cache brut (D-26) ou `Date`
+ * décodée : `new Date()` accepte les deux, et un horodatage connu ILLISIBLE
+ * laisse passer (fail-open sur le rang, jamais une ligne figée pour toujours).
+ */
+export function acceptsLastMessageAt(params: {
+  readonly known: Conversation['lastMessageAt'];
+  readonly incoming: string;
+  readonly previewRecalculated?: boolean | undefined;
+}): boolean {
+  if (params.previewRecalculated === true) return true;
+  if (params.known === undefined) return true;
+  const knownMs = new Date(params.known as unknown as string).getTime();
+  if (Number.isNaN(knownMs)) return true;
+  return new Date(params.incoming).getTime() > knownMs;
+}
+
+/**
  * `applyConversationUpdated` — le puits de `conversation:updated` (défaut
  * MAJEUR 1 de la revue #5793) : la QUATRIÈME famille du Prisme (résolue
  * SERVEUR, § CLAUDE.md « Prisme Linguistique ») — l'aperçu de ligne DÉJÀ
@@ -242,12 +353,16 @@ export function isConversationUpdated(payload: unknown): payload is Conversation
  *    son tour (absent = ne pas toucher, `null` = retirer la clé — jamais
  *    `undefined`, `exactOptionalPropertyTypes`, motif `applyMessageNew`).
  *
- * `lastMessage.content` n'est fusionné que si la ligne connaît DÉJÀ ce
- * message (même `id`) : la charge ne porte pas le corps complet (expéditeur,
- * type, pièces jointes…) et en fabriquer un inventerait des champs qu'elle ne
- * transporte pas (leçon « un instantané qui RECOPIE invente ce que la source
- * ne porte pas ») — un `message:new` déjà reçu ou le prochain
- * `GET …/messages` porte le reste.
+ * **UN AUTRE `lastMessageId` ADOPTE une ligne NEUVE** (#6171, G3, revue de
+ * #5793) — miroir `LastMessageFacet.adoptLastMessage` (iOS, `:170-184` :
+ * « Nommer un AUTRE message, c'est cesser de décrire le précédent … sans ce
+ * geste, une suppression pour tous du dernier message laissait la ligne
+ * rendre l'aperçu du remplaçant sous la vignette, l'auteur et le “Vue
+ * unique” du message supprimé »). `neutralLastMessageFromPreview` compose
+ * cette ligne AVANT la fusion champ par champ ci-dessous — ce n'est PAS
+ * « inventer ce que la source ne porte pas » : chaque champ vient de la
+ * charge, ou d'un défaut que le CONTRAT lui-même déclare (« clé absente = un
+ * FAIT », doc-comment de `ConversationUpdatedEventData`).
  */
 export function applyConversationUpdated(queryClient: QueryClient, data: ConversationUpdatedEventData): void {
   if (!('lastMessageId' in data)) return;
@@ -260,16 +375,46 @@ export function applyConversationUpdated(queryClient: QueryClient, data: Convers
 
     let next: Conversation = c;
 
+    if (next.lastMessage?.id !== data.lastMessageId) {
+      /* ADOPTER, C'EST CESSER DE DÉCRIRE LE PRÉCÉDENT — *Y COMPRIS SA CARTE*
+         (revue-correction #6171). `adoptLastMessage` (iOS,
+         `LastMessageFacet.swift:170-182`) remet à neutre les TREIZE champs de la
+         facette, `lastMessageTranslations`/`lastMessageOriginalLanguage`
+         comprises, et laisse les blocs tri-état ci-dessous les reposer depuis la
+         charge. Sans ce retrait, un évènement qui nomme un AUTRE message sans
+         porter le groupe Prisme laissait la ligne servir la traduction de
+         l'ANCIEN message par-dessus l'original du NOUVEAU — exactement ce que le
+         contrat décrit (« poser l'un sans les autres laisse la ligne rendre
+         l'ANCIEN texte traduit », doc-comment de `lastMessageTranslations`).
+         Les trois émetteurs réels posent toujours les trois clés (à `null` quand
+         il n'y a pas de carte, `resolveLastMessagePreviewPrism:135-147`), donc
+         ceci ne les change pas : c'est la dépendance à l'ORDRE des blocs qui
+         disparaît, et elle est ce que trente écrans recopieraient. */
+      const { lastMessageTranslations: _card, lastMessageOriginalLanguage: _cardLang, ...adopted } = next;
+      next = { ...adopted, lastMessage: neutralLastMessageFromPreview(data) };
+    }
+
     if (data.lastMessageAt !== undefined) {
       if (data.lastMessageAt === null) {
         const { lastMessageAt: _at, ...rest } = next;
         next = rest;
-      } else {
+      } else if (
+        acceptsLastMessageAt({
+          known: c.lastMessageAt,
+          incoming: data.lastMessageAt,
+          previewRecalculated: data.previewRecalculated,
+        })
+      ) {
         // Chaîne ISO conservée TELLE QUELLE (D-26, « cache = forme du fil ») —
         // `decodeConversation` (le `select`) la revit en `Date`, motif exact de
         // `applyMessageNew` ci-dessus. Cast vers `Date` (jamais
         // `Conversation['lastMessageAt']`, qui inclut `undefined` — une valeur
         // ainsi typée resterait REFUSÉE par `exactOptionalPropertyTypes`).
+        //
+        // `c` et non `next` : le rang se compare à celui que la ligne portait
+        // AVANT cet évènement — l'adoption ci-dessus ne touche pas
+        // `lastMessageAt`, mais s'appuyer sur `next` ferait dépendre la garde
+        // de l'ordre des blocs plutôt que de la donnée.
         next = { ...next, lastMessageAt: data.lastMessageAt as unknown as Date };
       }
     }

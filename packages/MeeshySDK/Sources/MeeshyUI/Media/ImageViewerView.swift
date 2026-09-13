@@ -360,7 +360,7 @@ public struct ImageFullscreen: View {
         saveState = .saving
         HapticFeedback.light()
         Task {
-            let saved = await saveStamped(url)
+            let saved = await saveAsReceived(url)
             if saved, let attId = attachmentId {
                 let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
                 AttachmentStatusReporter.report(attachmentId: attId, body: body)
@@ -377,7 +377,7 @@ public struct ImageFullscreen: View {
         }
     }
 
-    /// Enregistre l'image MARQUÉE dans la photothèque.
+    /// Enregistre l'image TELLE QU'ELLE A ÉTÉ REÇUE, sans marque.
     ///
     /// Les octets viennent du cache partagé : ils sont presque toujours déjà
     /// résidents (la bulle vient de les afficher), donc pas d'aller-retour
@@ -385,22 +385,24 @@ public struct ImageFullscreen: View {
     /// sur l'autorisation add-only (l'app porte `NSPhotoLibraryAddUsageDescription`),
     /// donc un refus se résout en `false` plutôt qu'en crash.
     ///
-    /// La marque suit la MÊME règle que le flux unifié de l'app
-    /// (`MediaSaveBranding`) : filigrane fixe sur les images, jamais sur un
-    /// format animé, et un marquage impossible n'empêche jamais
-    /// l'enregistrement — on écrit alors les octets d'origine.
+    /// **Aucun filigrane ici, et ce n'est pas un oubli.** Ce chemin direct n'est
+    /// emprunté que lorsque l'hôte ne fournit PAS `onSaveRequested` — c'est-à-dire
+    /// depuis les deux surfaces de CONVERSATION (la bulle, l'aperçu plein écran
+    /// d'un média de fil). Or la directive porteur du 2026-09-12, qui supplante
+    /// celle du 2026-08-12 (« un média qui quitte Meeshy porte sa marque »),
+    /// réserve la marque aux œuvres COMPOSÉES — story enregistrée ou exportée,
+    /// scène de post, scène de réel — et l'interdit sur les originaux d'une
+    /// conversation. Marquer ici, c'était appliquer l'ancienne règle sous la
+    /// nouvelle, à l'endroit exact qu'elle vise.
+    ///
+    /// La règle elle-même reste app-side (`MediaSaveBranding`, `MediaOrigin`) :
+    /// cette vue ne décide rien, elle sert des octets déjà qualifiés par le seul
+    /// chemin qui puisse l'atteindre.
     @MainActor
-    private func saveStamped(_ url: URL) async -> Bool {
+    private func saveAsReceived(_ url: URL) async -> Bool {
         guard let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString) else {
             return false
         }
-        guard MeeshyImageWatermark.supports(pathExtension: url.pathExtension),
-              let image = UIImage(data: data),
-              let stamped = MeeshyImageWatermark.stamped(
-                image, username: AuthManager.shared.currentUser?.username)
-        else {
-            return await PhotoLibraryManager.shared.saveImage(data)
-        }
-        return await PhotoLibraryManager.shared.saveImage(stamped)
+        return await PhotoLibraryManager.shared.saveImage(data)
     }
 }

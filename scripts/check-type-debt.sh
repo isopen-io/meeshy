@@ -229,7 +229,29 @@ NC='\033[0m'
 # ait ete abaissee — il refuse qu'une marge regagnee redevienne depensable. Mais
 # une amelioration s'enregistre a sa valeur MESUREE, jamais a zero : ecrire zero
 # n'enregistre pas un progres, il affirme une fin.
-readonly WEB_BASELINE=1144
+#
+# 1144 → 1128 le 2026-09-12, et l'effet est ENTIÈREMENT attribué.
+#
+# Le lot #6192 (l'animateur et ses sujets administrables) a fait descendre la
+# dette de seize erreurs, et son propre commit le DIT : `1b2e6057db` —
+# « la fabrique de sujet du modal porte createdAt/updatedAt — la dette de types
+# descend de 1144 à 1128 ». Il a fait le progrès, l'a mesuré, et n'a pas resserré
+# le cliquet : c'est exactement la moitié que ce garde existe pour attraper, et
+# il l'a attrapée (run 34701896625, job « Quality (bun) »).
+#
+# CORROBORATION, parce que la leçon de l'épisode `WEB_BASELINE=0` ci-dessus
+# l'exige — un compte ne se corrobore jamais par lui-même. Trois sources
+# concordent, dont DEUX mesures indépendantes :
+#
+#   • la CI rend « AMÉLIORATION NON ENREGISTRÉE : 1128 erreurs, baseline 1144 » ;
+#   • ce script, relancé ici sur l'arbre à jour, rend le même 1128 (exit 1) ;
+#   • le commit qui a produit l'amélioration annonce la même arrivée, 1128.
+#
+# Les deux premières sont des mesures ; la troisième est une déclaration. Elle ne
+# compte que parce que les deux autres la confirment — dans l'autre sens, une
+# valeur annoncée par un commit et jamais remesurée est précisément ce qui a
+# produit le `WEB_BASELINE=0` de l'épisode précédent.
+readonly WEB_BASELINE=1128
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #

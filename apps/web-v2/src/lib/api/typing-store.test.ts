@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { createTypingStore, typistNamesOf, typistsOf, TYPING_SAFETY_TIMEOUT_MS } from './typing-store';
+import { typingAnnouncement, typingLead } from '@/lib/view/typing-roster';
 
 describe('typing-store (#5793) — le réducteur pur de la frappe reçue', () => {
   test('start ajoute un frappeur avec une échéance de sécurité de 15 s', () => {
@@ -45,6 +46,30 @@ describe('typing-store (#5793) — le réducteur pur de la frappe reçue', () =>
     const before = store.getState();
     store.getState().stop('c-1', 'u-amina');
     expect(store.getState()).toBe(before);
+  });
+
+  /**
+   * FALSIFICATION (revue-correction #6171, défaut 3) — miroir
+   * `ConversationSocketHandler.swift:366-380`/`:392-395` : l'ordre du
+   * roster est celui de la PREMIÈRE apparition, jamais celui du dernier
+   * `typing:start`. Avant le correctif, un keepalive de Kwame (arrivé en
+   * premier) le reléguait en queue — le MENEUR (`typingLead`) et le
+   * libellé à deux noms (`typingAnnouncement`) s'inversaient toutes les
+   * ~3 s. Reproduit mot pour mot la preuve navigateur de la revue
+   * (`check-realtime-events.mjs`, T+7,8 s puis T+9,3 s après keepalive).
+   */
+  test('un keepalive du MÊME frappeur ne lui fait perdre ni sa place de meneur ni l’ordre du roster', () => {
+    const store = createTypingStore();
+    store.getState().start('c-1', { userId: 'u-kwame', displayName: 'Kwame Mensah' }, 6_000);
+    store.getState().start('c-1', { userId: 'u-fatou', displayName: 'Fatou Bâ' }, 7_500);
+    const avant = typistsOf(store.getState(), 'c-1', 7_800);
+    expect(typingLead(avant)?.displayName).toBe('Kwame Mensah');
+    expect(typingAnnouncement(avant.map((t) => t.displayName))).toBe('Kwame Mensah et Fatou Bâ écrivent');
+
+    store.getState().start('c-1', { userId: 'u-kwame', displayName: 'Kwame Mensah' }, 9_000); // keepalive
+    const apres = typistsOf(store.getState(), 'c-1', 9_300);
+    expect(typingLead(apres)?.displayName).toBe('Kwame Mensah');
+    expect(typingAnnouncement(apres.map((t) => t.displayName))).toBe('Kwame Mensah et Fatou Bâ écrivent');
   });
 });
 

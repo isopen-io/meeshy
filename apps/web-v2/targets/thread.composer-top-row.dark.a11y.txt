@@ -1,0 +1,32 @@
+Application | Meeshy | frame={'y': 0, 'x': 0, 'width': 402, 'height': 874}
+Button | Retour | frame={'y': 72, 'x': 16, 'width': 40, 'height': 40}
+PopUpButton | Appeler | frame={'y': 70, 'x': 151, 'width': 44, 'height': 44}
+Button | Rechercher dans la conversation | frame={'y': 70, 'x': 195, 'width': 44, 'height': 44}
+Button | Mode de lecture : Focal | frame={'y': 70, 'x': 239, 'width': 87, 'height': 44}
+Image | Demo | frame={'y': 70, 'x': 334, 'width': 44, 'height': 44}
+StaticText | J
+Jvhh, 12:22, distribué | frame={'y': 11, 'x': 69, 'width': 305, 'height': 42.33333206176758}
+StaticText | je vois, 12:22, distribué | frame={'y': 59.33333206176758, 'x': 69, 'width': 305, 'height': 22.666667938232422}
+StaticText | je vois
+Mince, 12:22, distribué | frame={'y': 88, 'x': 69, 'width': 305, 'height': 42.33332824707031}
+StaticText | je vois
+Mince
+Ok, 12:22, distribué | frame={'y': 136.3333282470703, 'x': 69, 'width': 305, 'height': 67.00001525878906}
+StaticText | je vois
+Mince
+Ok
+G, 12:29, distribué | frame={'y': 209.3333282470703, 'x': 69, 'width': 305, 'height': 91.33332824707031}
+StaticText | AAA, 12:31, distribué | frame={'y': 306.6666564941406, 'x': 69, 'width': 305, 'height': 22.66668701171875}
+GenericElement | 12:32, distribué | frame={'y': 335.3333435058594, 'x': 69, 'width': 305, 'height': 73}
+StaticText | ok, 12:36, distribué | frame={'y': 414.3333435058594, 'x': 69, 'width': 305, 'height': 22.666656494140625}
+Button | Demo, rien tout pars, 12:37 | frame={'y': 457, 'x': 28, 'width': 346, 'height': 83}
+Button | 15:31, distribué | frame={'y': 551, 'x': 28, 'width': 346, 'height': 104}
+Button | Activer le mode éphémère | frame={'y': 726, 'x': 8, 'width': 30.33333333333333, 'height': 22.33333333333337}
+Button | Activer le mode flou | frame={'y': 725.6666666666666, 'x': 44.33333333333333, 'width': 35, 'height': 23}
+Button | Ajouter des effets au message | frame={'y': 726, 'x': 85.33333333333333, 'width': 31, 'height': 22.33333333333337}
+GenericElement | Tonalité du message | frame={'y': 727.3333333333334, 'x': 125.83333333333334, 'width': 23, 'height': 19.33333333333337}
+PopUpButton | Langue du message | frame={'y': 726, 'x': 158.33333333333331, 'width': 66, 'height': 22.33333333333337}
+Button | Ouvrir le menu des pièces jointes | frame={'y': 786, 'x': 12, 'width': 44, 'height': 44}
+Button | Enregistrer un message vocal | frame={'y': 779, 'x': 72, 'width': 36, 'height': 36}
+TextField | Champ de message | frame={'y': 776, 'x': 110, 'width': 208, 'height': 42}
+Button | Envoyer le message | frame={'y': 786, 'x': 346, 'width': 44, 'height': 44}

@@ -6,14 +6,16 @@
  * `--safe-top`/`--safe-bottom` — la SEULE porte par laquelle une loi PURE
  * (`placeMessageMenuCluster`, `lib/view/popover.ts`) reçoit l'encoche de
  * l'appareil : lues par `getComputedStyle(document.documentElement)`
- * (`components/message-menu.tsx::safeAreaInsets`), jamais un second calcul
- * d'`env()` en JavaScript. Postées sur `:root` — peu importe quelle feuille
- * les déclare, elles s'appliquent au document entier.
+ * (`lib/view/safe-area.ts::safeAreaInsets`), jamais un second calcul d'`env()`
+ * en JavaScript.
+ *
+ * **Elles ne sont PLUS déclarées ici** (#6213). Cette feuille ne vit que dans
+ * le CHUNK du fil : les variables manquaient donc partout ailleurs, alors même
+ * que leur commentaire d'origine affirmait « elles s'appliquent au document
+ * entier ». Elles sont posées sur `:root` par `app.css`, la feuille critique,
+ * et ce sont désormais `pt-safe`/`pb-safe` qui en DÉRIVENT — `env()` n'est plus
+ * écrit qu'à un seul endroit du dépôt.
  */
-:root {
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-}
 
 /* LE CLUSTER — enveloppe plein écran (rail + aperçu + liste), positionnée
    par `placeMessageMenuCluster` (`lib/view/popover.ts`) en style INLINE ;

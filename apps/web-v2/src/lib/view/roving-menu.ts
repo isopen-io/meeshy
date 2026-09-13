@@ -96,7 +96,20 @@ export type RovingMenu = {
   readonly setActiveIndex: (index: number) => void;
   readonly buttonRef: RefObject<HTMLButtonElement | null>;
   readonly menuRef: RefObject<HTMLDivElement | null>;
-  readonly itemRefs: RefObject<(HTMLButtonElement | null)[]>;
+  /**
+   * `HTMLElement` et non `HTMLButtonElement` (#6104) : ce hook ne fait
+   * qu'appeler `.focus()` sur ces éléments — la contrainte était plus étroite
+   * que ce qu'il exige, et elle interdisait la seule forme correcte d'une
+   * ligne qui NAVIGUE. L'échelle des menus flottants ouvre huit adresses ;
+   * ses lignes sont des `<a>`, parce qu'« un lien qui navigue DOIT rester un
+   * lien » (`chrome-action.tsx:36`) — un `<button>` qui appellerait
+   * `navigate()` perdrait l'ouverture dans un onglet, le survol qui montre
+   * l'adresse, et le menu contextuel du navigateur.
+   *
+   * Les trois appelants historiques passent des `<button>`, assignables à
+   * `HTMLElement` : rien ne change pour eux.
+   */
+  readonly itemRefs: RefObject<(HTMLElement | null)[]>;
   /**
    * DÉPLACE LE FOCUS À PARTIR D'UNE TOUCHE, sans événement (#5814 revue).
    * Rend `true` quand la touche a été CONSOMMÉE — à l'appelant d'appeler
@@ -121,7 +134,7 @@ export function useRovingMenu(options: RovingMenuOptions): RovingMenu {
   const [activeIndex, setActiveIndex] = useState(0);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const itemRefs = useRef<(HTMLElement | null)[]>([]);
 
   const closeAndFocusButton = () => {
     setOpen(false);

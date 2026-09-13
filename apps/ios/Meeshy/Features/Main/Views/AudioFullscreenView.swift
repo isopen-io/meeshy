@@ -717,6 +717,7 @@ private struct AudioFullscreenPage: View {
         HapticFeedback.light()
         saveCoordinator.requestSave(MediaSaveRequest(
             kind: .audio,
+            origin: .transmitted,
             remoteURLString: currentAudioUrl,
             suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
             attachmentId: attachment.id.isEmpty ? nil : attachment.id

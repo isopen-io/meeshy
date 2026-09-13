@@ -35,6 +35,7 @@ import {
   Badges,
   Check,
   EditedMark,
+  EffectsIndicator,
   FailedSendBand,
   Flags,
   PrismPastille,
@@ -583,8 +584,13 @@ export const FocalRow = memo(function FocalRow({
         ) : null}
 
         {/* LES BADGES DE TÊTE — épinglé, transféré (#5936) — AU-DESSUS de
-            l'identité, `FocalRow.swift:233`. */}
-        <Badges badges={badges} />
+            l'identité, `FocalRow.swift:233`. LES EFFETS DÉCORATIFS (#6175,
+            revue-correction défaut majeur 1) rejoignent la même rangée —
+            voir le doc-comment de `EffectsIndicator`, `message-blocks.tsx`. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badges badges={badges} />
+          <EffectsIndicator effectFlags={message.effectFlags} />
+        </div>
 
         {/* LE BADGE ÉPHÉMÈRE — AU-DESSUS de l'identité (F11,
             `FocalEphemeralBadge.swift:22-37`, `FocalRow.swift:365-376`),

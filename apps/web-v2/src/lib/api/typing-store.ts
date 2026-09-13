@@ -29,8 +29,11 @@ export type TypingEntry = {
 
 export type TypingState = {
   readonly byConversation: Readonly<Record<string, readonly TypingEntry[]>>;
-  /** `typing:start` — REMPLACE l'entrée du même frappeur (repousse son
-   * échéance), ne la double jamais. */
+  /** `typing:start` — REMPLACE l'entrée du même frappeur EN PLACE (repousse
+   * son échéance sans déplacer sa position), ne la double jamais. Miroir
+   * `ConversationSocketHandler.swift:366-380` (`typingUserOrder`) : l'ORDRE
+   * est celui de la PREMIÈRE apparition, jamais celui du dernier keepalive
+   * (revue-correction #6171, défaut 3). */
   start(conversationId: string, entry: { readonly userId: string; readonly displayName: string }, now: number): void;
   /** `typing:stop` — retire SEULEMENT ce frappeur ; la ligne survit tant
    * qu'il en reste un autre. */
@@ -45,11 +48,24 @@ export function createTypingStore(): TypingStoreApi {
     start: (conversationId, entry, now) =>
       set((state) => {
         const current = state.byConversation[conversationId] ?? [];
-        const withoutSelf = current.filter((e) => e.userId !== entry.userId);
+        const next = { ...entry, expiresAt: now + TYPING_SAFETY_TIMEOUT_MS };
+        /**
+         * EN PLACE, jamais retiré-puis-ajouté (revue-correction #6171,
+         * défaut 3) — un `typing:start` de KEEPALIVE (le même frappeur
+         * réarme son échéance toutes les ~3 s tant qu'il écrit) ne doit ni
+         * déplacer son rang dans le roster ni changer le MENEUR
+         * (`typingLead`/`typing-roster.ts`, le premier apparu). L'ancienne
+         * forme (`filter` puis `[...reste, next]`) reléguait le frappeur en
+         * queue à chaque keepalive : le meneur et l'ordre à deux noms
+         * s'inversaient toutes les ~3 s (falsifié par
+         * `roster-order.falsification.test.ts`, repris ci-dessous).
+         */
+        const alreadyAt = current.findIndex((e) => e.userId === entry.userId);
+        const entries = alreadyAt === -1 ? [...current, next] : current.map((e, i) => (i === alreadyAt ? next : e));
         return {
           byConversation: {
             ...state.byConversation,
-            [conversationId]: [...withoutSelf, { ...entry, expiresAt: now + TYPING_SAFETY_TIMEOUT_MS }],
+            [conversationId]: entries,
           },
         };
       }),

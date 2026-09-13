@@ -353,7 +353,7 @@ export class PostService {
         ...(geoPoint ? { geoPoint: geoPoint as unknown as Prisma.InputJsonValue, geoPrecision } : {}),
         ...(repostOfId !== undefined ? { repostOfId, originalRepostOfId } : {}),
       },
-      include: postInclude,
+      select: postInclude,
     });
 
     // Link pre-uploaded media if any
@@ -523,7 +523,7 @@ export class PostService {
     // Refetch pour inclure transcription et translations après toutes les opérations media
     const refreshed = await this.prisma.post.findUnique({
       where: { id: post.id },
-      include: postInclude,
+      select: postInclude,
     });
     return refreshed ?? post;
   }
@@ -1307,7 +1307,7 @@ export class PostService {
       return tx.post.update({
         where: { id: postId },
         data: updateData,
-        include: postInclude,
+        select: postInclude,
       });
     });
 
@@ -1456,7 +1456,7 @@ export class PostService {
 
     return this.prisma.post.findFirst({
       where: { id: postId },
-      include: postInclude,
+      select: postInclude,
     });
   }
 
@@ -1513,7 +1513,7 @@ export class PostService {
 
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: postInclude,
+      select: postInclude,
     });
     if (!post) return null;
 
@@ -1539,7 +1539,7 @@ export class PostService {
 
     return this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: postInclude,
+      select: postInclude,
     });
   }
 
@@ -1574,7 +1574,7 @@ export class PostService {
   async unlikePost(postId: string, userId: string, emoji?: string) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: postInclude,
+      select: postInclude,
     });
     if (!post) return null;
 
@@ -1633,7 +1633,7 @@ export class PostService {
 
     const refreshed = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: postInclude,
+      select: postInclude,
     });
 
     // Le post a été relu après le retrait ; s'il a disparu entre-temps, la
@@ -2148,7 +2148,7 @@ export class PostService {
     return this.prisma.post.update({
       where: { id: postId },
       data: { shareCount: { increment: 1 } },
-      include: postInclude,
+      select: postInclude,
     });
   }
 
@@ -2162,7 +2162,7 @@ export class PostService {
     return this.prisma.post.update({
       where: { id: postId },
       data: { isPinned: true },
-      include: postInclude,
+      select: postInclude,
     });
   }
 
@@ -2176,7 +2176,7 @@ export class PostService {
     return this.prisma.post.update({
       where: { id: postId },
       data: { isPinned: false },
-      include: postInclude,
+      select: postInclude,
     });
   }
 
@@ -2541,7 +2541,7 @@ export class PostService {
             ...(snapshotStoryEffects !== undefined ? { storyEffects: snapshotStoryEffects } : {}),
             ...(snapshotMedia !== undefined ? { media: { create: snapshotMedia } } : {}),
           },
-          include: postInclude,
+          select: postInclude,
         });
 
         // The media just duplicated above got fresh `PostMedia` ids — but
@@ -2632,7 +2632,7 @@ export class PostService {
         isQuote,
         ...(expiresAt !== undefined ? { expiresAt } : {}),
       },
-      include: postInclude,
+      select: postInclude,
     });
 
     await this.prisma.post.update({

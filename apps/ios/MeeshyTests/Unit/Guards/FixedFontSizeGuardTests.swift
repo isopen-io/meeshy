@@ -205,6 +205,13 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // > qui a cessé de les couvrir. Toute extraction hors d'un fichier de
         // > `bearingFiles` doit inscrire sa destination dans le MÊME commit.
         "Features/Main/Views/ConversationMediaGalleryView.swift",
+        // #6145 — RELOCALISATION pure, même forme qu'au #4084 : le glyphe figé
+        // du couloir haut (18 pt dans un cercle glass de 40) quitte le fichier
+        // racine avec le contrôle qu'il décore — la flèche d'enregistrement
+        // devenue menu ⋯. La POPULATION ne bouge pas : ni `totalCeiling` ni
+        // `textCeiling`, seul le NOM change. Le racine en porte encore d'autres
+        // (la croix, le transport vidéo) : il reste dans la liste.
+        "Features/Main/Views/ConversationMediaGalleryView+Menu.swift",
         "Features/Main/Views/ConversationMediaGalleryView+Pages.swift",
         "Features/Main/Views/ConversationView+ComposerAttachments.swift",
         "Features/Main/Views/ConversationView+ComposerBanners.swift",

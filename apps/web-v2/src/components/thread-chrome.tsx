@@ -70,8 +70,16 @@ export function ScrollToBottomButton({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="thread-scroll-to-bottom absolute end-4 bottom-2 z-10 grid min-h-11 min-w-11 place-items-center rounded-chip backdrop-blur-md"
+      /* `bottom` VARIABLE, jamais `bottom-2` (#6213) — le défileur couvrant
+         désormais l'écran entier, ce bouton est un frère du composeur et non
+         plus un enfant d'une enveloppe qui s'arrêtait au-dessus de lui : posé
+         à 8 px du bord physique, il se retrouvait DERRIÈRE la barre de
+         composition. `--thread-scroll-button-bottom` l'ancre au bord bas
+         MESURÉ, miroir `.padding(.bottom, composerScrollButtonAnchor +
+         MeeshySpacing.sm)` (`ConversationView.swift:1957`). */
+      className="thread-scroll-to-bottom absolute end-4 z-20 grid min-h-11 min-w-11 place-items-center rounded-chip backdrop-blur-md"
       style={{
+        bottom: 'var(--thread-scroll-button-bottom)',
         backgroundColor: 'color-mix(in srgb, var(--accent) 85%, transparent)',
         /* L'ENCRE LISIBLE, jamais `#fff` en dur — miroir de l'INTENTION de
            `ConversationScrollControlsView.swift:150-152` (« noir ou blanc selon

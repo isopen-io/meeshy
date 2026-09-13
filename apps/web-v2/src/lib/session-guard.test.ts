@@ -9,8 +9,20 @@ import { resolveRouteAccess, type RouteKey } from './session-guard';
  */
 
 /** `conversationsNew` (#5652, revue) — créer une conversation est un geste de
- * MEMBRE ; la route est arrivée avec son écran sans être déclarée privée. */
-const PRIVATE_ROUTES: readonly RouteKey[] = ['list', 'thread', 'conversationsNew', 'progression'];
+ * MEMBRE ; la route est arrivée avec son écran sans être déclarée privée.
+ * `stories`/`storyCompose`/`story` (#5817) rejoignent le même correctif : leurs
+ * ports sont tous `requiredAuth`. `feed` (#5893) de même — `scope=home` exige
+ * une session malgré `optionalAuth` à la porte. */
+const PRIVATE_ROUTES: readonly RouteKey[] = [
+  'list',
+  'thread',
+  'conversationsNew',
+  'progression',
+  'stories',
+  'storyCompose',
+  'story',
+  'feed',
+];
 const PUBLIC_AUTH_ROUTES: readonly RouteKey[] = ['login', 'signup'];
 
 describe('resolveRouteAccess — source fixtures : toujours allow (les deux moitiés du seuil)', () => {
@@ -29,6 +41,15 @@ describe('resolveRouteAccess — source gateway, visiteur anonyme sur une route 
   // #5547 — le tableau de bord lit `GET /me/engagement`, qui ne sert que
   // l'utilisateur AUTHENTIFIÉ : un visiteur sans compte n'y a rien à voir.
   test('progression', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'progression' })).toBe('redirect-login'));
+  // #5817 — GET /posts/feed/stories et POST /posts/:postId/view sont
+  // requiredAuth : un visiteur sans compte n'y a rien à voir.
+  test('stories', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'stories' })).toBe('redirect-login'));
+  test('storyCompose', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'storyCompose' })).toBe('redirect-login'));
+  test('story', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'story' })).toBe('redirect-login'));
+  // #5893 — GET /social/posts?scope=home exige une session malgré
+  // optionalAuth à la porte : un visiteur sans compte y recevait jusqu'ici
+  // l'écran d'attente (route publique par défaut).
+  test('feed', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'feed' })).toBe('redirect-login'));
 });
 
 describe('resolveRouteAccess — source gateway, session ACTIVE sur login/signup ⇒ redirect-home', () => {

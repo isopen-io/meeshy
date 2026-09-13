@@ -41,6 +41,21 @@ const FULL_FRAME = /\b(?:min-)?h-dvh\b/;
  */
 const EXEMPT = new Map<string, string>([
   [
+    'thread.tsx',
+    "le FIL, et c'est une exception MESURÉE (#6213) : sa racine `h-dvh` ne " +
+      "porte AUCUN inset parce que son défileur couvre l'écran entier et que " +
+      "le contenu doit pouvoir transiter SOUS la bande — un `pt-safe` sur la " +
+      "racine l'en empêcherait, et c'est précisément le couperet que le lot " +
+      'referme. Les deux bords portent l’encoche là où iOS la porte : le ' +
+      'défileur en marge INTÉRIEURE (`--thread-pad-top`, ' +
+      '`lib/view/thread-insets.ts`, miroir de `topInset: DeviceLayout.safeAreaTop`) ' +
+      'et la bande flottante en `pt-safe` (`components/thread-header.tsx`). ' +
+      "Le débordement que ce témoin interdit est impossible ici : la racine est " +
+      "`h-dvh overflow-hidden` et TOUS ses enfants sont hors flux. " +
+      "Sans cette entrée, le témoin passait au vert sur la seule PROSE des " +
+      "commentaires qui citent `pt-safe` — un vert vide, pire qu'un rouge.",
+  ],
+  [
     'components/shell.tsx',
     "la COQUILLE, justement : c'est elle qui ne doit porter AUCUN inset — " +
       "l'écran plein-cadre le porte lui-même. La garder hors exception ferait " +

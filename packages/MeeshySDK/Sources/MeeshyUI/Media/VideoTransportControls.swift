@@ -21,20 +21,35 @@ public struct VideoTransportControls: View {
     @ObservedObject private var manager: SharedAVPlayerManager
     private let accentColor: String
     private let controls: MeeshyVideoPlayer.ControlSet
+    private let placement: TransportLayout.Placement
+    private let centerOpacity: Double
 
     @State private var isSeeking = false
     @State private var seekValue: Double = 0
 
     private let speeds: [PlaybackSpeed] = [.x1_0, .x1_25, .x1_5, .x1_75, .x2_0]
 
+    /// `placement` par DÉFAUT `.stacked` : les quatre surfaces qui montaient
+    /// cette vue avant #6162 n'ont pas changé d'une ligne, et c'est ce qui rend
+    /// la séparation sûre — le plateau de lecture est le seul hôte qui la
+    /// demande, et il la demande à voix haute.
+    ///
+    /// `centerOpacity` sert la seconde moitié de la directive porteur du
+    /// 2026-09-12 — *« le bouton pause/play plus transparent au centre »*. Il
+    /// s'applique à la couche CENTRALE seule : la bande du couloir n'a rien à
+    /// laisser voir derrière elle.
     public init(
         manager: SharedAVPlayerManager,
         accentColor: String,
-        controls: MeeshyVideoPlayer.ControlSet
+        controls: MeeshyVideoPlayer.ControlSet,
+        placement: TransportLayout.Placement = .stacked,
+        centerOpacity: Double = 1
     ) {
         self.manager = manager
         self.accentColor = accentColor
         self.controls = controls
+        self.placement = placement
+        self.centerOpacity = centerOpacity
     }
 
     private var accent: Color { Color(hex: accentColor) }
@@ -45,21 +60,39 @@ public struct VideoTransportControls: View {
     }
 
     private var hasBottomBar: Bool {
-        controls.contains(.scrubber) || controls.contains(.duration)
-            || !TransportLayout.barItems(for: controls).isEmpty
-            || TransportLayout.showsMenuButton(for: controls)
+        TransportLayout.showsBar(placement: placement, controls: controls)
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
-            centerControls
-            Spacer()
-            if hasBottomBar {
-                bottomBar.padding(.horizontal, 16)
+        Group {
+            switch placement {
+            case .stacked:
+                VStack(spacing: 0) {
+                    Spacer()
+                    centerLayer
+                    Spacer()
+                    if hasBottomBar {
+                        bottomBar.padding(.horizontal, 16)
+                    }
+                }
+            case .center:
+                centerLayer
+            case .corridor:
+                if hasBottomBar { bottomBar }
             }
         }
         .buttonStyle(BouncyTransportButtonStyle())
+    }
+
+    /// Le `switch` ci-dessus dit QUEL conteneur ; `showsCenter` dit si la couche
+    /// centrale existe. Deux questions, et c'est la seconde qu'une quatrième
+    /// place poserait à nouveau — l'écrire dans le `switch` obligerait à la
+    /// reposer là-bas, donc à la répondre deux fois.
+    @ViewBuilder
+    private var centerLayer: some View {
+        if TransportLayout.showsCenter(placement: placement) {
+            centerControls.opacity(centerOpacity)
+        }
     }
 
     // MARK: - Centre (⏪10 · ▶︎/⏸ · ⏩10) — Liquid Glass
@@ -67,11 +100,15 @@ public struct VideoTransportControls: View {
     private var centerControls: some View {
         AdaptiveGlassContainer(spacing: 32) {
             HStack(spacing: 32) {
-                if controls.contains(.scrubber) { skipButton(systemName: "gobackward.10", seconds: -10) }
+                if showsSkip { skipButton(systemName: "gobackward.10", seconds: -10) }
                 if controls.contains(.playPause) { playPauseButton }
-                if controls.contains(.scrubber) { skipButton(systemName: "goforward.10", seconds: 10) }
+                if showsSkip { skipButton(systemName: "goforward.10", seconds: 10) }
             }
         }
+    }
+
+    private var showsSkip: Bool {
+        TransportLayout.showsSkip(placement: placement, controls: controls)
     }
 
     private func skipButton(systemName: String, seconds: Double) -> some View {
@@ -114,11 +151,11 @@ public struct VideoTransportControls: View {
 
     private var bottomBar: some View {
         HStack(spacing: 10) {
-            if controls.contains(.duration) {
+            if TransportLayout.showsElapsedTime(placement: placement, controls: controls) {
                 timeLabel(isSeeking ? seekValue * manager.duration : manager.currentTime)
             }
             if controls.contains(.scrubber) { seekBar }
-            if controls.contains(.duration) {
+            if TransportLayout.showsTotalDuration(placement: placement, controls: controls) {
                 timeLabel(manager.duration)
             }
             ForEach(TransportLayout.barItems(for: controls), id: \.self) { item in
@@ -130,10 +167,15 @@ public struct VideoTransportControls: View {
             if TransportLayout.showsMenuButton(for: controls) { moreMenu }
         }
         .padding(.horizontal, 14)
-        .frame(height: 48)
-        .adaptiveGlass(in: Capsule())
+        .frame(height: TransportLayout.barHeight)
+        .modifier(TransportBarSurface(glass: TransportLayout.wrapsBarInGlass(placement: placement)))
     }
 
+    /// **Une taille figée qui se justifie par son CADRE** (doctrine 82i) : la
+    /// barre est haute de 48 pt exactement, et un horodatage qui grandirait avec
+    /// le Dynamic Type en sortirait par le haut. Le `design: .monospaced` n'est
+    /// pas décoratif non plus — sans lui, les chiffres changent de largeur en
+    /// défilant et la ligne tressaute à chaque seconde.
     private func timeLabel(_ seconds: Double) -> some View {
         Text(formatMediaDuration(seconds))
             .font(.system(size: 12, weight: .semibold, design: .monospaced))
@@ -240,6 +282,26 @@ public struct VideoTransportControls: View {
         }
         .frame(height: 32)
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// **Le fond de la barre dépend de ce qu'elle a DERRIÈRE elle.**
+///
+/// Posée sur le média (`.stacked`), elle porte la capsule de verre : c'est le
+/// seul matériau qui tienne au-dessus d'une image dont on ne connaît ni la
+/// couleur ni la luminosité. Descendue au couloir (`.corridor`, #6162), elle a
+/// le noir du plateau derrière elle — une capsule y dessinerait un objet
+/// flottant sur rien, et volerait à la ligne de progression la pleine largeur
+/// que l'issue lui demande.
+private struct TransportBarSurface: ViewModifier {
+    let glass: Bool
+
+    func body(content: Content) -> some View {
+        if glass {
+            content.adaptiveGlass(in: Capsule())
+        } else {
+            content
+        }
     }
 }
 

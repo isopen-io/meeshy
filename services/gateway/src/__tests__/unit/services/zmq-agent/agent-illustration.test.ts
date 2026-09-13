@@ -49,9 +49,9 @@ function fakeFetch(routes: Record<string, FakeResponse | (() => FakeResponse)>):
 }
 
 const publicLookup: LookupLike = async (hostname) => {
-  if (hostname === 'intranet.local' || hostname === 'evil.example') return { address: '10.0.0.5', family: 4 };
-  if (hostname === 'localhost') return { address: '127.0.0.1', family: 4 };
-  return { address: '93.184.216.34', family: 4 };
+  if (hostname === 'intranet.local' || hostname === 'evil.example') return [{ address: '10.0.0.5', family: 4 }];
+  if (hostname === 'localhost') return [{ address: '127.0.0.1', family: 4 }];
+  return [{ address: '93.184.216.34', family: 4 }];
 };
 
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64, 1)]);
@@ -215,5 +215,154 @@ describe('resolveAgentIllustration', () => {
     });
     const result = await resolveAgentIllustration({ sourceUrl: ARTICLE, fetchImpl, lookup: publicLookup });
     expect(result?.filename).toBe('une-du-jour.png');
+  });
+});
+
+/**
+ * LE DÉFAUT QUE LES DIX-SEPT CAS CI-DESSUS NE POUVAIENT PAS ATTRAPER (#6201).
+ *
+ * Ils injectent `fetchImpl` ET `lookup`, et les remplacent par une fiction
+ * COHÉRENTE. Or les deux trous SSRF vivent précisément dans le DÉSACCORD entre
+ * ces deux dépendances : la validation résout une fois, le transport résout une
+ * seconde. Deux faux qui s'accordent ne peuvent pas exprimer un désaccord.
+ *
+ * > La couture qui rend une garde testable est ce qui rend la suite aveugle à
+ * > son trou.
+ *
+ * Ces témoins sont donc écrits sur la COUTURE elle-même — un `lookup` qui rend
+ * plusieurs adresses, et un qui change d'avis entre deux appels — et non sur ce
+ * qu'elle protège. C'est la seule forme qui distingue « la garde existe » de
+ * « la garde couvre toutes les réponses du résolveur ».
+ */
+describe('agent-illustration — la garde lit TOUTES les adresses du nom (#6201)', () => {
+  const PUBLIC_IP = { address: '93.184.216.34', family: 4 } as const;
+  const PRIVATE_IP = { address: '10.0.0.5', family: 4 } as const;
+  const METADATA_IP = { address: '169.254.169.254', family: 4 } as const;
+
+  /**
+   * DEUX ENREGISTREMENTS A, un public et un privé. Aucune course à gagner : il
+   * suffit de les publier. L'ordre est celui du DNS, donc l'attaquant le
+   * choisit — les deux ordres sont testés, sans quoi le témoin passerait par
+   * chance sur l'ordre favorable.
+   */
+  for (const [nom, adresses] of [
+    ['public PUIS privée', [PUBLIC_IP, PRIVATE_IP]],
+    ['privée PUIS publique', [PRIVATE_IP, PUBLIC_IP]],
+    ['publique PUIS métadonnées cloud', [PUBLIC_IP, METADATA_IP]],
+  ] as const) {
+    it(`refuse un nom qui résout ${nom} — une seule adresse non publique suffit`, async () => {
+      const fetchImpl = fakeFetch({});
+      const lookup: LookupLike = async () => adresses;
+
+      const result = await resolveAgentIllustration({ sourceUrl: ARTICLE, fetchImpl, lookup });
+
+      expect(result).toBeNull();
+      // Et la requête ne part MÊME PAS : une garde qui refuse après avoir
+      // laissé partir la connexion n'a rien gardé.
+      expect(fetchImpl.calls).toEqual([]);
+    });
+  }
+
+  /**
+   * LA CONTRE-ÉPREUVE, sans quoi les trois cas ci-dessus passeraient sur un
+   * résolveur qui refuserait TOUT : plusieurs adresses, toutes publiques ⇒ la
+   * requête part.
+   */
+  it('CONTRÔLE : plusieurs adresses TOUTES publiques ⇒ la requête part', async () => {
+    const fetchImpl = fakeFetch({
+      [ARTICLE]: { status: 200, headers: { 'content-type': 'text/html' }, body: articleHtml() },
+      [IMAGE]: { status: 200, headers: { 'content-type': 'image/jpeg' }, body: JPEG },
+    });
+    const lookup: LookupLike = async () => [PUBLIC_IP, { address: '93.184.216.35', family: 4 }];
+
+    const result = await resolveAgentIllustration({ sourceUrl: ARTICLE, fetchImpl, lookup });
+
+    expect(result).not.toBeNull();
+    expect(fetchImpl.calls).toEqual([ARTICLE, IMAGE]);
+  });
+
+  /**
+   * UNE RÉSOLUTION VIDE EST REFUSÉE. `[].every(...)` rend `true` : sans le
+   * refus explicite du vide, un nom qui ne résout rien passerait la garde. Ce
+   * témoin garde la ligne qui l'empêche — c'est un vert à vide qu'aucun autre
+   * cas ne verrait.
+   */
+  it('refuse un nom dont la résolution est VIDE — `[].every` rend true', async () => {
+    const fetchImpl = fakeFetch({});
+    const lookup: LookupLike = async () => [];
+
+    expect(await resolveAgentIllustration({ sourceUrl: ARTICLE, fetchImpl, lookup })).toBeNull();
+    expect(fetchImpl.calls).toEqual([]);
+  });
+
+  /**
+   * LE TROU 1 (TOCTOU / rebinding) N'ÉTAIT PAS TESTABLE ICI — historique.
+   *
+   * J'ai d'abord écrit un témoin censé constater la dette : un `lookup` rendant
+   * une adresse publique au 1er appel et celle des métadonnées au 2e, et
+   * `expect(result).not.toBeNull()`. Il a ROUGI — `result` était `null` — et sa
+   * cause démonte l'idée même du témoin : les deux appels à `lookup` que la
+   * garde fait ne sont pas « validation puis transport », ce sont les
+   * validations de DEUX URL (l'article, puis l'image extraite de son HTML). Le
+   * second refus venait de la garde qui fonctionne, pas du défaut.
+   *
+   * Le désaccord validation/transport est INOBSERVABLE tant que `fetchImpl` est
+   * injecté, parce qu'un faux transport ne résout AUCUN nom : il n'y a pas de
+   * seconde résolution à contredire. Aucun arrangement des faux ne contourne
+   * cela — c'est la couture elle-même qui le rend invisible.
+   *
+   * > Un défaut qui vit dans le DÉSACCORD de deux dépendances injectées ne peut
+   * > pas être vu par une suite qui les injecte toutes les deux. Ce n'est pas un
+   * > témoin qui manque, c'est un NIVEAU de test : il faut un transport réel
+   * > (résolveur local pointant deux A, ou serveur de test) pour l'exercer.
+   *
+   * Le trou est fermé plus bas dans ce fichier (§ « épinglage au connect ») en
+   * laissant le `fetchImpl` par DÉFAUT (undici, épinglé) agir, et en n'injectant
+   * QUE `lookup` — exactement le niveau que ce commentaire réclamait.
+   */
+});
+
+/**
+ * TROU 1 FERMÉ (#6201) — ÉPINGLAGE AU CONNECT.
+ *
+ * Le bloc ci-dessus a démontré qu'aucun arrangement de `fetchImpl` + `lookup`
+ * injectés ne peut voir le désaccord validation/transport : un faux transport
+ * ne résout aucun nom, donc il n'y a pas de seconde résolution à contredire.
+ *
+ * Le correctif retire la seconde résolution INDÉPENDANTE : `pinnedFetch`
+ * construit un `Agent` undici dont `connect.lookup` EST le `lookup` fourni,
+ * appliquant la même règle « toutes les adresses publiques » que
+ * `publicHttpUrl`. La validation et la connexion partagent alors la même
+ * résolution fraîche — il n'y a plus de fenêtre entre les deux à faire
+ * dériver.
+ *
+ * Ce témoin n'injecte donc PAS `fetchImpl` : il laisse le transport par défaut
+ * (undici, épinglé) agir, et n'injecte que `lookup` — le niveau que le
+ * commentaire ci-dessus réclamait. `lookup` compte ses appels : le premier
+ * sert la pré-validation (`publicHttpUrl`), le second sert la résolution
+ * RÉELLE au moment du connect — c'est là qu'un DNS qui change d'avis entre les
+ * deux instants doit être rattrapé, sans qu'aucune connexion n'ait jamais pu
+ * s'établir vers l'adresse privée.
+ */
+describe('agent-illustration — épinglage au connect (#6201, trou 1)', () => {
+  it('refuse la connexion si le nom change d’avis entre la pré-validation et le connect', async () => {
+    let calls = 0;
+    const flappingLookup: LookupLike = async () => {
+      calls += 1;
+      // 1er appel (pré-validation du sourceUrl, par `publicHttpUrl`) : public.
+      // Tout appel suivant (la résolution RÉELLE au connect, via l'Agent
+      // épinglé) : privé — un DNS à TTL court qui change de réponse entre les
+      // deux instants, exactement le scénario que #6201 décrit.
+      return calls === 1 ? [{ address: '93.184.216.34', family: 4 }] : [{ address: '10.0.0.5', family: 4 }];
+    };
+
+    const result = await resolveAgentIllustration({ sourceUrl: ARTICLE, lookup: flappingLookup });
+
+    expect(result).toBeNull();
+    // La pré-validation a vu "public" (elle a été appelée), mais la connexion
+    // réelle ne s'est jamais établie : le second appel — celui du connect via
+    // l'Agent épinglé — a vu l'adresse privée et a refusé AVANT tout octet
+    // échangé sur le réseau.
+    expect(calls).toBeGreaterThanOrEqual(2);
   });
 });

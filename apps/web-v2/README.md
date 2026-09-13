@@ -132,6 +132,29 @@ SYNCHRONISÉE ne porte `server.appStartPath` — fuite mesurée le 2026-09-09 su
 `android/app/src/main/assets/capacitor.config.json`, reste d'une recette de
 lien profond antérieure).
 
+**Version et numéro de build (D-45, #6196, #6211).** Les deux coques ne
+portent jamais de valeur littérale. `versionName`/`MARKETING_VERSION`
+DÉRIVENT de `package.json` à chaque `build:shells` (dans `android/app/build.gradle`
+et `ios/App/App.xcodeproj/project.pbxproj`, réécrits) ; `versionCode`/
+`CURRENT_PROJECT_VERSION` sont un fait de CONSTRUCTION dont seul le REPLI est
+commis (`1` des deux côtés — la marque lisible d'un build fait hors du site
+unique, gardée par `auditCommittedBuildNumberFallback`) : la VALEUR est lue
+depuis `MEESHY_SHELL_BUILD_NUMBER` s'il est posé, sinon `git rev-list --count
+HEAD`, et transmise en argument (`-PmeeshyBuildNumber=<n>` à gradle,
+`CURRENT_PROJECT_VERSION=<n>` à `xcodebuild`). Le pilote audite l'artefact
+CONSTRUIT (`output-metadata.json`, `Info.plist` de l'`App.app`) contre ce
+qu'il a demandé. Détail et raisons : `decisions.md` § D-45.
+
+**Avant toute capture Android : `adb shell pm clear me.meeshy.app`.**
+`adb install -r` remplace le paquet sans vider ses données, et la WebView
+ressert alors son cache : mesuré le 2026-09-12, l'APK installé portait
+`versionCode=20220` et ne contenait AUCUN marqueur de fixture (vérifié en
+dézippant ses `assets/`), pendant que l'écran affichait encore « Amina
+Diallo » et « Salon Rivière » — la liste d'un build précédent. Une capture
+prise ainsi montre un AUTRE build que celui qu'on vient de construire : c'est
+la comparaison de soi à soi (leçon 554) par un autre chemin que le simulateur.
+Après `pm clear`, les deux coques rendent le même écran de connexion.
+
 **Pourquoi la passerelle laisse entrer ces deux origines.** Une WebView
 Capacitor envoie un en-tête `Origin`, contrairement à une app native — les
 deux origines VIRTUELLES ci-dessus sont déclarées dans `CORS_ORIGINS` /

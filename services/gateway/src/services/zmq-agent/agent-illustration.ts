@@ -1,5 +1,7 @@
 import { lookup as dnsLookup } from 'node:dns/promises';
+import type { LookupOptions as DnsLookupOptions } from 'node:dns';
 import { isIP } from 'node:net';
+import { Agent, fetch as undiciFetch } from 'undici';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'AgentIllustration' });
@@ -25,7 +27,22 @@ export type FetchLike = (
   text(): Promise<string>;
 }>;
 
-export type LookupLike = (hostname: string) => Promise<{ address: string; family?: number }>;
+/**
+ * TOUTES les adresses d'un nom, jamais la première (#6201).
+ *
+ * L'ancienne forme rendait `{ address, family }` — une SEULE adresse — et
+ * `dnsLookup(hostname)` sans `{ all: true }` ne rend effectivement que la
+ * première. Un nom portant deux enregistrements A, un public et un privé,
+ * passait donc la validation sur le public pendant que la connexion pouvait
+ * prendre l'autre : pas de course à gagner, pas de TTL à régler, il suffisait
+ * de publier deux A.
+ *
+ * Le défaut vivait dans le TYPE : une signature qui ne peut pas exprimer
+ * plusieurs adresses rend la garde correcte inécrivable. C'est l'inverse de
+ * #6166, où la garde devait entrer dans la signature ; ici la signature
+ * l'interdisait.
+ */
+export type LookupLike = (hostname: string) => Promise<readonly { address: string; family?: number }[]>;
 
 export type ResolvedIllustration = {
   buffer: Buffer;
@@ -143,8 +160,12 @@ async function publicHttpUrl(raw: string, base: string | undefined, lookup: Look
   // décider de ce qu'on peut lire directement dans l'URL.
   if (isIP(host)) return isPublicAddress(host) ? url : null;
   try {
-    const { address } = await lookup(host);
-    return isPublicAddress(address) ? url : null;
+    const addresses = await lookup(host);
+    // Une résolution VIDE est refusée EXPLICITEMENT : `[].every(...)` rend
+    // `true`, donc sans cette ligne un nom qui ne résout rien passerait la
+    // garde — un vert à vide, exactement le contraire d'un fail-closed.
+    if (addresses.length === 0) return null;
+    return addresses.every((entry) => isPublicAddress(entry.address)) ? url : null;
   } catch {
     return null;
   }
@@ -217,10 +238,78 @@ async function downloadImage(
   return { buffer, mimeType, filename: filenameFor(fetched.url, mimeType), sourceUrl, imageUrl: fetched.url.toString() };
 }
 
+function defaultLookup(hostname: string): Promise<readonly { address: string; family?: number }[]> {
+  return dnsLookup(hostname, { all: true });
+}
+
+/**
+ * ÉPINGLAGE au connect (#6201, trou 1 — TOCTOU / DNS rebinding).
+ *
+ * `publicHttpUrl` valide un nom AVANT la requête ; le transport par défaut
+ * (`fetch` global, donc `undici`) résout le nom une SECONDE fois, indépendamment,
+ * au moment d'ouvrir la connexion TCP. Entre les deux, un DNS contrôlé par
+ * l'attaquant peut changer de réponse (TTL court) : validé public, connecté en
+ * privé. Aucune revalidation après coup ne ferme cette fenêtre — il faut que la
+ * résolution qui SERT à valider soit la MÊME que celle qui sert à connecter.
+ *
+ * `Agent({ connect: { lookup } })` d'undici fait exactement ça : il remplace le
+ * résolveur que `net.connect`/`tls.connect` utilisent pour établir la connexion
+ * elle-même. En lui passant ce wrapper — qui applique la même règle « toutes les
+ * adresses publiques » que `publicHttpUrl` — la validation et la connexion
+ * partagent la même résolution fraîche, prise au dernier moment possible : il
+ * n'y a plus de fenêtre entre les deux à faire dériver.
+ */
+function createConnectLookup(lookup: LookupLike): (
+  hostname: string,
+  options: DnsLookupOptions,
+  callback: (err: NodeJS.ErrnoException | null, address: string | { address: string; family: number }[], family?: number) => void,
+) => void {
+  return (hostname, options, callback) => {
+    const wantsAll = options?.all === true;
+    lookup(hostname).then(
+      (addresses) => {
+        if (addresses.length === 0 || !addresses.every((entry) => isPublicAddress(entry.address))) {
+          callback(Object.assign(new Error(`ENOTFOUND ${hostname}`), { code: 'ENOTFOUND', hostname }), wantsAll ? [] : '');
+          return;
+        }
+        if (wantsAll) {
+          callback(
+            null,
+            addresses.map((entry) => ({ address: entry.address, family: entry.family ?? (isIP(entry.address) === 6 ? 6 : 4) })),
+          );
+          return;
+        }
+        const [first] = addresses;
+        callback(null, first.address, first.family ?? (isIP(first.address) === 6 ? 6 : 4));
+      },
+      (error: unknown) => callback(error instanceof Error ? error : new Error(String(error)), wantsAll ? [] : ''),
+    );
+  };
+}
+
+// Un seul Agent pour le lookup par défaut : une résolution pinnée par requête
+// suffit, pas une par appel — seul un `lookup` de test (voie non mise en cache)
+// justifie d'en fabriquer un autre.
+let defaultPinnedAgent: Agent | undefined;
+
+function pinnedAgentFor(lookup: LookupLike): Agent {
+  if (lookup === defaultLookup) {
+    defaultPinnedAgent ??= new Agent({ connect: { lookup: createConnectLookup(defaultLookup) } });
+    return defaultPinnedAgent;
+  }
+  return new Agent({ connect: { lookup: createConnectLookup(lookup) } });
+}
+
+function pinnedFetch(lookup: LookupLike): FetchLike {
+  const dispatcher = pinnedAgentFor(lookup);
+  return (url, init) => undiciFetch(url, { ...init, dispatcher }) as unknown as ReturnType<FetchLike>;
+}
+
 export async function resolveAgentIllustration(options: ResolveIllustrationOptions): Promise<ResolvedIllustration | null> {
+  const lookup = options.lookup ?? defaultLookup;
   const deps = {
-    fetchImpl: options.fetchImpl ?? (fetch as unknown as FetchLike),
-    lookup: options.lookup ?? ((hostname: string) => dnsLookup(hostname)),
+    fetchImpl: options.fetchImpl ?? pinnedFetch(lookup),
+    lookup,
     timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     maxRedirects: options.maxRedirects ?? DEFAULT_MAX_REDIRECTS,
     maxImageBytes: options.maxImageBytes ?? DEFAULT_MAX_IMAGE_BYTES,

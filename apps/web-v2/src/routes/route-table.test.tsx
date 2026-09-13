@@ -77,3 +77,22 @@ describe('ROUTES — les quatre adresses de #5816', () => {
     expect(typeof ROUTES.forgotPassword.screen).toBe('function');
   });
 });
+
+/**
+ * LE LECTEUR PLEIN ÉCRAN (#5817) — `/story/$post` nomme un POST, jamais une
+ * personne (D-5, nomenclature legacy `/story/:postId`) ; l'id d'entrée est
+ * calculé par l'APPELANT (rail, liste) — voir `entryStoryId`,
+ * `lib/view/story-tray.ts`.
+ */
+describe('ROUTES — le lecteur de stories (#5817)', () => {
+  test('story s’apparie à /story/<id> et en extrait le paramètre `post`', () => {
+    const compiled = compile(ROUTES.story.pattern);
+    expect(match(compiled, '/story/abc123')).toEqual({ post: 'abc123' });
+    expect(match(compiled, '/story/')).toBe(null);
+    expect(match(compiled, '/stories')).toBe(null);
+  });
+
+  test('story est un import() paresseux', () => {
+    expect(typeof ROUTES.story.screen).toBe('function');
+  });
+});

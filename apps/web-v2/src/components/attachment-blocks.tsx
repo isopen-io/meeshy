@@ -12,6 +12,7 @@ import { MEDIA_GRID_MAX_WIDTH, TRANSCRIPT_TEXT_OPACITY } from '@/lib/reading-mod
 
 import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
+import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
 
 /**
  * LES WIDGETS DE MÉDIA DU FIL (#5805) — SITE UNIQUE, partagé par `bubble.tsx`
@@ -27,9 +28,16 @@ import { MEDIA_GLYPHS } from './glyphs-media';
  * la fois (`useAudioPlayback` → `audioCoordinator`).
  *
  * HORS TRANCHE (issues compagnons, § 9 de la spécification #5805) : la
- * grille 2/3/4+ et son badge `+N`, la vidéo, la visionneuse plein écran, le
- * karaoké segment par segment et la vitesse, le carrousel multi-pistes — le
- * site est prêt à les recevoir, aucun ne les réclame ici.
+ * grille 2/3/4+ et son badge `+N`, la LECTURE vidéo (poster, `<video>`,
+ * plein écran), la visionneuse plein écran, le karaoké segment par segment
+ * et la vitesse, le carrousel multi-pistes — le site est prêt à les
+ * recevoir, aucun ne les réclame ici.
+ *
+ * `kind === 'video'` REND depuis #6193 : `return null` n'est pas une mise
+ * hors tranche, c'est une perte SILENCIEUSE — le message existe, son auteur
+ * croit avoir envoyé quelque chose, et le lecteur ne voyait aucune trace.
+ * `VideoFallback` sert un repli LISIBLE (glyphe, nom, durée si connue) ;
+ * la lecture elle-même reste hors tranche, décidée à sa propre issue.
  */
 
 function ImageTile({
@@ -262,6 +270,36 @@ function VoiceAttachment({
   );
 }
 
+/** `duration` en MILLISECONDES (même convention que `VoiceAttachment`) → `m:ss`. */
+const durationLabelOf = (durationMs: number | undefined): string | undefined => {
+  if (durationMs === undefined) return undefined;
+  const seconds = Math.round(durationMs / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+};
+
+/**
+ * LE REPLI D'UNE PIÈCE VIDÉO (#6193) — la LECTURE (poster, `<video>`, plein
+ * écran) reste hors tranche (§9 de #5805) ; ce widget dit seulement qu'une
+ * vidéo EST là, avec ce que le dépôt en connaît déjà : son TYPE (le glyphe
+ * + le libellé), sa DURÉE si l'attachement la porte, son NOM si l'auteur en
+ * a un. `return null` perdait les trois en silence.
+ */
+function VideoFallback({ attachment }: { readonly attachment: Attachment }) {
+  const duration = durationLabelOf(attachment.duration);
+
+  return (
+    <div className="flex items-center gap-2 py-1" data-attachment={attachment.id} data-video-fallback>
+      <GlyphSvg glyph={THREAD_STATES_GLYPHS.videoCamera} size={24} />
+      <span className="min-w-0 flex-1 truncate text-title">
+        {attachment.originalName !== '' ? attachment.originalName : 'Vidéo'}
+      </span>
+      <span className="shrink-0 text-time opacity-70 tabular-nums">
+        {duration ?? `${Math.round(attachment.fileSize / 1024)} Ko`}
+      </span>
+    </div>
+  );
+}
+
 /**
  * LE SUBSTITUT D'UNE PIÈCE MASQUÉE (#6189) — ce qu'on rend À LA PLACE du média.
  *
@@ -377,7 +415,7 @@ export function Attachments({
             </div>
           );
         }
-        return null;
+        return <VideoFallback key={i} attachment={attachment} />;
       })}
     </>
   );

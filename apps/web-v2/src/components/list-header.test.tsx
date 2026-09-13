@@ -53,6 +53,7 @@ const group = (authorId: string, displayName: string): StoryTrayGroup => ({
   latestAt: 0,
   hasUnseen: true,
   isMine: false,
+  entryStoryId: `st-${authorId}`,
 });
 
 const GROUPS: readonly StoryTrayGroup[] = [group('c-1', 'Amina Diallo')];

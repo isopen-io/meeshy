@@ -122,7 +122,7 @@ export async function chargerPostsParHashtag(
           { visibility: 'COMMUNITY', authorId: { in: communityCoMemberIds } },
         ],
       },
-      include: postInclude,
+      select: postInclude,
     });
     const postsById = new Map(posts.map((post) => [post.id, post]));
 

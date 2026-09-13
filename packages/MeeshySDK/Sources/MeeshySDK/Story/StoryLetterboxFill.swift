@@ -116,6 +116,22 @@ public enum StoryLetterboxFill {
         return .none
     }
 
+    /// **La même table, pour un média qui n'a PAS de scène** (#6143).
+    ///
+    /// La règle ci-dessus a été écrite pour le canvas d'une story : elle
+    /// descend une composition (un fond, des collages, un composite de slide)
+    /// et connaît le bitmap que l'atelier vient de stamper. Une pièce jointe de
+    /// conversation n'a rien de tout cela — elle porte UN hachage, le sien, et
+    /// la galerie qui l'encadre n'a aucun bitmap déjà posé sur un layer.
+    ///
+    /// D'où cette porte d'entrée, et d'où sa forme : une PROJECTION du cas
+    /// simple sur la table existante, jamais une seconde table. Réécrire ici
+    /// « un hachage vide n'est pas une source » ferait exister la règle en deux
+    /// exemplaires, et rien ne rougirait le jour où l'un des deux changerait.
+    public nonisolated static func source(thumbHash: String?) -> Source {
+        source(hasStampedBitmap: false, hashes: [thumbHash].compactMap { $0 })
+    }
+
     /// Ce que la bande LAISSE VOIR du fond peint dessous. Assez opaque pour que
     /// la bande appartienne visiblement au média, assez transparente pour que le
     /// noir cinéma continue de porter le texte que l'auteur y pose.

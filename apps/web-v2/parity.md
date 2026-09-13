@@ -11,7 +11,7 @@
 |---|---|---|
 | `apps/web` (legacy) | **80** | **la PRODUCTION, seule — 100 % du trafic utilisateur** |
 | `apps/web-old-version3` | 48 | n'a jamais servi un écran ; **annulée** le 2026-09-07, quitte le dépôt avec #5882 |
-| `apps/web-v2` (la v3.1) | **20** — 15 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
+| `apps/web-v2` (la v3.1) | **29** — 24 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
 
 **L'ancienne refonte n'a jamais servi un seul écran à un utilisateur réel.**
 
@@ -25,6 +25,15 @@
 > réaligner dessus. Comme la correction du 2026-09-09 le disait déjà : c'est
 > le script qui fait foi, jamais ce tableau, et l'écart n'est gardé par aucun
 > gate sur son propre delta.
+
+> **Correction du 2026-09-13 (revue-correction #5817).** Le tableau était
+> resté à « 20 » alors que la table de routes avait gagné neuf adresses
+> depuis. Mesure du jour, `node scripts/route-inventory.mjs` : **29** routes
+> v3.1 (24 écrans + 5 documents pré-rendus) / **91** adresses distinctes en
+> union avec le legacy. Ce lot en apporte UNE (`/story/$post`) ; les huit
+> autres étaient déjà là et personne n'avait reprojeté le script — c'est
+> exactement le mode de dérive que l'absence de gate sur ce delta rend
+> silencieux, et il vient de se reproduire pour la troisième fois.
 
 > **Correction du 2026-09-08 (#5669).** Ce tableau a porté « `apps/web-v2` — 0 —
 > nulle part encore » pendant tout le cadrage de #5492, et c'était FAUX : la
@@ -307,7 +316,8 @@ dans une version ultérieure ·
 |---|---|---|
 | `/feed`, `/feeds`, `/feed/posts`, `/feed/reels` | `legacy` | **quatre** adresses de fil : fusionner à la reprise, pas porter à l'identique |
 | `/post/:postId`, `/feeds/post/:postId` | `legacy` | deux adresses pour un post |
-| `/story/:postId`, `/reel/:postId`, `/mood/:postId` | `legacy` | **liens partageables publiquement** — à porter avant tout décommissionnement |
+| `/story/:postId` | **`v3.1`** | **PORTÉ** le 2026-09-13 (#5817) — `/story/$post`, le lecteur plein écran ; l'adresse LEGACY est reprise telle quelle (D-5), un lien déjà partagé continue de mener au bon endroit |
+| `/reel/:postId`, `/mood/:postId` | `legacy` | **liens partageables publiquement** — à porter avant tout décommissionnement |
 | `/hashtag/:tag` | `legacy` | |
 | `/search` | `legacy` | |
 | `/communities`, `/communities/:id` | `legacy` | |

@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { launchChromium } from './lib/browser.mjs';
 import { checkThreadMedia } from './lib/check-media.mjs';
 import { checkMessageStates } from './lib/check-message-states.mjs';
+import { checkRealtimeEvents } from './lib/check-realtime-events.mjs';
 import { checkTypingVisibility } from './lib/check-typing-visibility.mjs';
 
 const DIST = join(fileURLToPath(new URL('..', import.meta.url)), 'dist');
@@ -1047,6 +1048,14 @@ await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin:
 await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'bulles', scheme: 'dark' });
 
 await checkTypingVisibility({ browser, BASE, expect });
+
+/**
+ * 11 — LE FIL TEMPS RÉEL (#6171) — `conversation:updated`, `message:translation`
+ * et le roster multi-frappeurs, DEUX runs (clair/sombre), `lib/check-
+ * realtime-events.mjs`.
+ */
+await checkRealtimeEvents({ browser, BASE, expect, setScheme, AA_THRESHOLD, scheme: 'light' });
+await checkRealtimeEvents({ browser, BASE, expect, setScheme, AA_THRESHOLD, scheme: 'dark' });
 
 await browser.close();
 server.close();

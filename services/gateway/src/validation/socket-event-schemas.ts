@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
 import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
+import { utf16Bounded } from '@meeshy/shared/utils/validation-primitives';
 import type {
   MessageSendData,
   MessageSendWithAttachmentsData,
@@ -214,7 +215,7 @@ export type SocketTypingData = z.infer<typeof SocketTypingSchema>;
 
 export const SocketReactionAddSchema = z.object({
   messageId: mongoId,
-  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
   conversationId: z.string().optional(),
 });
 
@@ -222,7 +223,7 @@ export type SocketReactionAddData = z.infer<typeof SocketReactionAddSchema>;
 
 export const SocketReactionRemoveSchema = z.object({
   messageId: mongoId,
-  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
   conversationId: z.string().optional(),
 });
 
@@ -231,7 +232,7 @@ export type SocketReactionRemoveData = z.infer<typeof SocketReactionRemoveSchema
 export const SocketCommentReactionAddSchema = z.object({
   commentId: mongoId,
   postId: mongoId,
-  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
 });
 
 export type SocketCommentReactionAddData = z.infer<typeof SocketCommentReactionAddSchema>;
@@ -239,7 +240,7 @@ export type SocketCommentReactionAddData = z.infer<typeof SocketCommentReactionA
 export const SocketCommentReactionRemoveSchema = z.object({
   commentId: mongoId,
   postId: mongoId,
-  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
 });
 
 export type SocketCommentReactionRemoveData = z.infer<typeof SocketCommentReactionRemoveSchema>;
@@ -260,14 +261,14 @@ export type SocketPostRoomActionData = z.infer<typeof SocketPostRoomActionSchema
 
 export const SocketPostReactionAddSchema = z.object({
   postId: mongoId,
-  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
 });
 
 export type SocketPostReactionAddData = z.infer<typeof SocketPostReactionAddSchema>;
 
 export const SocketPostReactionRemoveSchema = z.object({
   postId: mongoId,
-  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
 });
 
 export type SocketPostReactionRemoveData = z.infer<typeof SocketPostReactionRemoveSchema>;
@@ -281,7 +282,7 @@ export type SocketPostReactionRequestSyncData = z.infer<typeof SocketPostReactio
 export const SocketAttachmentReactionAddSchema = z.object({
   attachmentId: mongoId,
   messageId: mongoId,
-  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
 });
 
 export type SocketAttachmentReactionAddData = z.infer<typeof SocketAttachmentReactionAddSchema>;
@@ -289,7 +290,7 @@ export type SocketAttachmentReactionAddData = z.infer<typeof SocketAttachmentRea
 export const SocketAttachmentReactionRemoveSchema = z.object({
   attachmentId: mongoId,
   messageId: mongoId,
-  emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
+  emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
 });
 
 export type SocketAttachmentReactionRemoveData = z.infer<typeof SocketAttachmentReactionRemoveSchema>;

@@ -75,15 +75,19 @@ services:
       retries: 3
       start_period: 40s
 
-  # NoSQLClient - Interface MongoDB sur mongo.${DOMAIN}
+  # NoSQLClient - Interface MongoDB, accès SSH tunnel/VPN uniquement (#3640).
+  # Jamais routée par Traefik : un opérateur atteint le port loopback via
+  # `ssh -L ${MONGO_UI_PORT:-8081}:127.0.0.1:${MONGO_UI_PORT:-8081} root@meeshy.me`.
   nosqlclient:
     image: mongoclient/mongoclient:latest
     container_name: meeshy-nosqlclient
     restart: unless-stopped
     environment:
       MONGOCLIENT_DEFAULT_CONNECTION_URL: "mongodb://${MONGODB_USER:-meeshy}:${MONGODB_PASSWORD:?MONGODB_PASSWORD absente sur l hote. Vide, nosqlclient se connectait a la base avec le mot de passe public MeeshyPassword123}@database:27017/${MONGODB_DATABASE:-meeshy}?authSource=admin"
-      ROOT_URL: "https://mongo.${DOMAIN:-localhost}"
+      ROOT_URL: "http://localhost:${MONGO_UI_PORT:-8081}"
       PORT: 3000
+    ports:
+      - "127.0.0.1:${MONGO_UI_PORT:-8081}:3000"
     depends_on:
       database:
         condition: service_healthy
@@ -95,15 +99,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.nosqlclient.rule=Host(`mongo.${DOMAIN:-localhost}`)"
-      - "traefik.http.routers.nosqlclient.entrypoints=websecure"
-      - "traefik.http.routers.nosqlclient.tls.certresolver=letsencrypt"
-      - "traefik.http.services.nosqlclient.loadbalancer.server.port=3000"
-      - "traefik.http.routers.nosqlclient.middlewares=mongo-auth"
-      # Authentification pour MongoDB interface
-      - "traefik.http.middlewares.mongo-auth.basicauth.users=${MONGO_USERS:-''}"
 
   # Redis Cache
   redis:
@@ -121,7 +116,9 @@ services:
       timeout: 10s
       retries: 3
 
-  # P3X Redis UI - Interface Redis sur redis.${DOMAIN}
+  # P3X Redis UI - Interface Redis, accès SSH tunnel/VPN uniquement (#3640).
+  # Jamais routée par Traefik : un opérateur atteint le port loopback via
+  # `ssh -L ${REDIS_UI_PORT:-8082}:127.0.0.1:${REDIS_UI_PORT:-8082} root@meeshy.me`.
   p3x-redis-ui:
     image: patrikx3/p3x-redis-ui:latest
     container_name: meeshy-p3x-redis-ui
@@ -130,6 +127,8 @@ services:
       - P3X_REDIS_UI_SETTINGS={"hostname":"redis","port":6379,"password":"","database":0}
       - P3X_REDIS_UI_HTTP_PORT=7843
       - P3XRS_SETTINGS_PATH=/settings
+    ports:
+      - "127.0.0.1:${REDIS_UI_PORT:-8082}:7843"
     volumes:
       - redis-ui-data:/settings
     depends_on:
@@ -143,15 +142,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.p3x-redis.rule=Host(`redis.${DOMAIN:-localhost}`)"
-      - "traefik.http.routers.p3x-redis.entrypoints=websecure"
-      - "traefik.http.routers.p3x-redis.tls.certresolver=letsencrypt"
-      - "traefik.http.services.p3x-redis.loadbalancer.server.port=7843"
-      - "traefik.http.routers.p3x-redis.middlewares=redis-auth"
-      # Authentification pour Redis interface
-      - "traefik.http.middlewares.redis-auth.basicauth.users=${REDIS_USERS:-''}"
 
   # Translator Service sur ml.${DOMAIN}
   translator:

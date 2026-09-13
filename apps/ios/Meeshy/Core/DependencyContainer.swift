@@ -76,7 +76,10 @@ final class DependencyContainer {
         do {
             try MessageDatabaseMigrations.runAll(on: pool)
             try FeedDatabaseMigrations.runAll(on: pool)
-            DatabaseMaintenance.applyTuning(on: pool)
+            // `applyTuning` a disparu d'ici (#6221) : ses PRAGMA sont désormais
+            // posés par connexion dans `dbConfig()`. C'était la SEULE écriture
+            // inconditionnelle du démarrage, et elle pouvait attendre jusqu'à
+            // cinq secondes la fin d'une écriture de la NSE sur le même fichier.
         } catch {
             containerLogger.fault("Database migrations failed after recovery: \(error.localizedDescription, privacy: .public)")
             diagnostics.firstAttemptError = (diagnostics.firstAttemptError ?? "") + " | migrations: \(error.localizedDescription)"
@@ -572,6 +575,12 @@ final class DependencyContainer {
             try db.execute(sql: "PRAGMA synchronous = NORMAL")
             try db.execute(sql: "PRAGMA journal_size_limit = 16777216")
             try db.execute(sql: "PRAGMA wal_autocheckpoint = 1000")
+            // #6221 — `cache_size`, `mmap_size` et `temp_store` vivent sur la
+            // CONNEXION, pas dans le fichier. `applyTuning(on:)` les posait via
+            // `pool.write`, donc sur le seul rédacteur : les seize lecteurs
+            // travaillaient sans mmap ni cache de pages. Ici, ils atteignent
+            // chaque connexion — et sans transaction d'écriture au démarrage.
+            try DatabaseMaintenance.prepareTuning(db)
         }
         return config
     }

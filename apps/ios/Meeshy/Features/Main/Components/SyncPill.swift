@@ -240,6 +240,20 @@ struct SyncPill: View {
     /// entrée. Borné, jamais `repeatForever` (cf. audit chauffe #3940).
     @State private var hideWorkItem: DispatchWorkItem?
 
+    /// **La pastille est-elle en train d'enfler ?** (#6188)
+    ///
+    /// Un état à DEUX valeurs, et le retour au repos est programmé dans le même
+    /// geste que la montée : le défaut des révisions #4018 → #4050 n'était pas
+    /// l'amplitude, c'était une pastille qui restait grosse quand la fenêtre
+    /// d'accent se réarmait. `TypingAnnouncementLaw.scale(emphasizing:)` tient
+    /// l'amplitude, et `emphasisTotalDuration` le retour — les deux sortent de
+    /// la même loi pour qu'ils ne puissent pas diverger.
+    @State private var isEmphasizing = false
+    /// Retour au repos différé (one-shot, annulable). Annulable parce qu'une
+    /// SECONDE conversation qui se met à écrire pendant l'accent doit relancer
+    /// la fenêtre entière, pas la laisser expirer sur l'ancien minuteur.
+    @State private var emphasisWorkItem: DispatchWorkItem?
+
     /// Délai sans NOUVELLE entrée après lequel la pastille s'efface — évite
     /// l'affichage permanent au repos (#4017). Réarmé à chaque arrivée.
     private static let idleHideDelay: TimeInterval = 6.0
@@ -320,14 +334,45 @@ struct SyncPill: View {
             return
         }
 
-        // La pastille garde sa taille en toute circonstance (#4066, directive
-        // porteur 2026-08-28) : une capsule de STATUT n'est pas le porteur
-        // d'une annonce. Ce qui doit se voir « en gros » quand quelqu'un écrit
-        // paraît désormais par `IslandEmergingBanner`, monté par
-        // `ConnectionBanner`. Ne reste ici que ce que la pastille sait faire :
-        // se montrer sur une entrée neuve, s'effacer après un silence.
+        // La pastille porte de nouveau l'annonce de frappe, et elle enfle pour
+        // le dire (#6188, directive porteur 2026-09-12). Elle avait cédé ce
+        // rôle à `IslandEmergingBanner` le 2026-08-28 (#4066) ; l'île se tait
+        // désormais pour la frappe — elle sert encore la qualité d'appel
+        // dégradée, montée par `CallView`.
         if !newIDs.isEmpty { isVisible = true }
+        emphasizeIfTypingStarted(among: entries.filter { newIDs.contains($0.id) })
         scheduleAutoHide()
+    }
+
+    /// **L'accent du début de frappe** (#6188) : la pastille enfle, tient, puis
+    /// revient à sa taille.
+    ///
+    /// Ne se joue que sur une entrée de frappe NEUVE — une frappe qui continue
+    /// garde son identifiant `typing.<conv>` et ne repasse donc pas ici. C'est
+    /// `TypingAnnouncementLaw` qui tranche laquelle, pour que « seule une
+    /// frappe s'annonce » reste jouable sans écran.
+    private func emphasizeIfTypingStarted(among newEntries: [SyncPillEntry]) {
+        guard !reduceMotion else { return }
+        guard TypingAnnouncementLaw.announcement(among: newEntries) != nil else { return }
+
+        emphasisWorkItem?.cancel()
+        withAnimation(.spring(response: TypingAnnouncementLaw.emphasisRiseDuration,
+                              dampingFraction: 0.6)) {
+            isEmphasizing = true
+        }
+
+        let settle = DispatchWorkItem {
+            withAnimation(.spring(response: TypingAnnouncementLaw.emphasisFallDuration,
+                                  dampingFraction: 0.8)) {
+                isEmphasizing = false
+            }
+        }
+        emphasisWorkItem = settle
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + TypingAnnouncementLaw.emphasisRiseDuration
+                + TypingAnnouncementLaw.emphasisHoldDuration,
+            execute: settle
+        )
     }
 
     /// Programme l'effacement au repos (#4017). Un état persistant l'annule et
@@ -367,18 +412,21 @@ struct SyncPill: View {
                 .fill(capsuleBackground)
                 .shadow(color: Color.black.opacity(isDark ? 0.35 : 0.12), radius: 6, x: 0, y: 2)
         )
-        // **La pastille GARDE SA TAILLE.** Ce commentaire annonçait un accent
-        // ×1.5 (#4018) qui n'existe plus : il a survécu à son propre code,
-        // supprimé par `960f7d1df0` sur décision du porteur du 2026-08-28 —
-        // « l'effet sur la SyncPill qui la grossit est inutile, il existe un
-        // composant qui rend les informations en gros et c'est ce composant
-        // qu'il faut utiliser lorsqu'un utilisateur commence la frappe ».
-        // L'annonce de frappe appartient depuis à `IslandEmergingBanner` ;
-        // une capsule de STATUT n'est pas le porteur d'une annonce.
+        // **La pastille enfle au début d'une frappe, puis redescend** (#6188,
+        // directive porteur 2026-09-12).
         //
-        // Il est réécrit plutôt que retiré : l'accent a été repris TROIS fois
-        // en dix jours (#4018, #4026, #4050) avant d'être abandonné, et un
-        // fichier muet sur ce point invite une quatrième reprise.
+        // Cinquième révision du même geste : accent ×1.5 (#4018), lié à la
+        // durée du signal (#4026), fenêtre réarmable (#4050), retiré au profit
+        // d'`IslandEmergingBanner` (#4066, `960f7d1df0`, 2026-08-28), rendu ici
+        // ce jour. Le commentaire est TENU À JOUR plutôt que retiré : c'est lui
+        // qui a permis, à chaque reprise, de savoir que l'argument adverse
+        // (« une capsule de STATUT n'est pas le porteur d'une annonce ») avait
+        // déjà été tenu — et tranché dans l'autre sens par le porteur.
+        //
+        // L'amplitude et le retour sortent tous deux de `TypingAnnouncementLaw`
+        // pour qu'ils ne puissent pas diverger : le défaut des reprises
+        // précédentes n'était pas la taille, c'était le retour au repos.
+        .scaleEffect(TypingAnnouncementLaw.scale(emphasizing: isEmphasizing))
         .contentShape(Capsule())
         .onTapGesture(perform: handleTap)
         .onLongPressGesture(minimumDuration: 0.5) {

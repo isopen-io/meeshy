@@ -122,3 +122,43 @@ export const customDestinationLanguageCode = z
   .min(2)
   .max(6)
   .transform((code) => normalizeLanguageCode(code) ?? code.toLowerCase());
+
+/**
+ * Borne de longueur en unités **UTF-16** (`String.length`), posée sans
+ * dépendre de ce que l'installation de zod fait de `.min()`/`.max()`/`.length()`.
+ *
+ * zod ≤4.4 comptait des unités UTF-16 ; zod ≥4.5 est passé à compter des
+ * CODE POINTS Unicode — un fail-open silencieux, à la montée de version, sur
+ * toute borne censée plafonner un COÛT (octets/unités) plutôt qu'un nombre de
+ * caractères perçus : `z.string().max(32)` laisse alors passer 32 emojis
+ * astraux (64 unités UTF-16, ~128 octets) au lieu de 32 (#6235). `.refine()`
+ * ne souffre pas de cette ambiguïté : il lit `value.length`, qui est
+ * `String.length` par définition du langage, quelle que soit la version de
+ * zod installée.
+ *
+ * Réservé aux bornes de STOCKAGE / anti-abus (« au plus N unités UTF-16 »).
+ * Une borne d'AFFICHAGE (« au plus N caractères comme un humain les compte »)
+ * doit rester sur `.min()`/`.max()` natifs, dont la sémantique évoluée de zod
+ * 4.5 s'en rapproche davantage.
+ *
+ * @see EMOJI_MAX_LENGTH (`types/reaction.ts`) — première borne portée ici
+ */
+export function utf16Bounded<S extends z.ZodString>(
+  schema: S,
+  bounds: { min?: number; max?: number },
+): S {
+  return schema.superRefine((value, ctx) => {
+    if (bounds.min !== undefined && value.length < bounds.min) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `String must contain at least ${bounds.min} character(s)`,
+      });
+    }
+    if (bounds.max !== undefined && value.length > bounds.max) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `String must contain at most ${bounds.max} character(s)`,
+      });
+    }
+  });
+}

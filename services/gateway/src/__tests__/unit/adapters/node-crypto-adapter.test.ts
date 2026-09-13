@@ -6,7 +6,7 @@
  */
 
 import { NodeCryptoAdapter } from '../../../adapters/node-crypto-adapter';
-import type { CryptoAdapter } from '../../../../shared/encryption/crypto-adapter';
+import type { CryptoAdapter } from '@meeshy/shared/encryption/crypto-adapter';
 
 describe('NodeCryptoAdapter', () => {
   let adapter: CryptoAdapter;

@@ -15,6 +15,7 @@ import {
   customDestinationLanguageCode,
   passwordTooShort,
   supportedLanguageCode,
+  utf16Bounded,
 } from './validation-primitives.js';
 
 /**
@@ -1187,7 +1188,7 @@ export const ReactionSchemas = {
 
   // Ajouter une réaction
   add: z.object({
-    emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
+    emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),
   }),
 };
 

@@ -65,6 +65,30 @@ final class ConversationViewBodyTypeDepthTests: XCTestCase {
         try assertNestingWithinBudget(of: ConversationView.Body.self, label: "ConversationView.body")
     }
 
+    /// **Les couches de l'en-tête de conversation** (#6194, suivi de #5855).
+    ///
+    /// La garde ci-dessus mesure `ConversationView.Body` — or `body` rend
+    /// `bodyWithSheets`, qui EST un `AnyView` : elle imprime « 0 niveau » et
+    /// certifie le type que l'effacement a aplati, jamais le coût qui vit
+    /// derrière. C'est SOUS elle, verte, que l'app a débordé la pile à chaque
+    /// ouverture de conversation le 2026-09-12, en Debug comme en Release.
+    ///
+    /// Ces trois couches sont ce que l'effacement cachait. Elles ne sont
+    /// mesurables QUE depuis qu'elles sont nominales : une propriété calculée
+    /// n'offre aucun type à interroger — le remède et la garde sont ici le même
+    /// geste, ce qui est la vraie raison de préférer la struct à l'`AnyView`.
+    func test_conversationHeaderLayers_nestingStaysWithinStackBudget() throws {
+        try assertNestingWithinBudget(
+            of: ConversationExpandedHeaderBand.Body.self,
+            label: "ConversationExpandedHeaderBand.body")
+        try assertNestingWithinBudget(
+            of: ConversationHeaderMidContent.Body.self,
+            label: "ConversationHeaderMidContent.body")
+        try assertNestingWithinBudget(
+            of: ConversationHeaderActionsCluster.Body.self,
+            label: "ConversationHeaderActionsCluster.body")
+    }
+
     func test_bubbleStandardLayoutBody_nestingStaysWithinStackBudget() throws {
         try assertNestingWithinBudget(of: BubbleStandardLayout.Body.self, label: "BubbleStandardLayout.body")
     }

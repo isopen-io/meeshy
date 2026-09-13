@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { conversationStore } from '@/lib/conversation-store';
 import { performSend, retrySend, type Draft } from '@/lib/send/perform-send';
@@ -7,16 +7,33 @@ import type { RowActionId } from '@/lib/view/row-actions';
 
 import { ApiError } from './client';
 import { performRowAction } from './conversation-actions';
-import { conversationQuery, conversationsQuery } from './conversations';
+import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import { apiDeps } from './deps';
+import { feedQuery, refreshFeed } from './feed';
 import type { Conversation, Participant } from './types';
 import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
 import { performReaction, type PerformReactionResult } from './reactions';
-import { statusMoodsQueryOptions, storyTrayQueryOptions } from './stories';
+import {
+  STORIES_QUERY_PREFIX,
+  STORY_TRAY_QUERY_KEY,
+  markStoryViewed,
+  statusMoodsQueryOptions,
+  storyFeedQueryOptions,
+  storyPostQueryOptions,
+  storyTrayQueryOptions,
+} from './stories';
+import { storyViewedStore } from './story-viewed-store';
 
+/**
+ * `useConversations` (#6195) — `useInfiniteQuery` : la Lentille défile
+ * au-delà de la première page serveur (§0 de la spécification). `.data` est
+ * APLATI par `select` (`flattenConversationPages`) ; `.hasNextPage` /
+ * `.isFetchingNextPage` / `.isFetchNextPageError` alimentent
+ * `paginationStateOf` (`lib/lens/pagination.ts`) côté écran.
+ */
 export function useConversations() {
-  return useQuery(conversationsQuery(apiDeps));
+  return useInfiniteQuery(conversationsQuery(apiDeps));
 }
 
 /**
@@ -30,7 +47,25 @@ export function useConversations() {
  * une conversation marquée lue ailleurs gardait son compte pour toujours.
  */
 export function useConversationsSnapshot(): readonly Conversation[] | undefined {
-  return useQuery({ ...conversationsQuery(apiDeps), enabled: false }).data;
+  return useInfiniteQuery({ ...conversationsQuery(apiDeps), enabled: false }).data;
+}
+
+/**
+ * `refreshListAction` (#6195) — RÉFÉRENCE DE MODULE STABLE (motif
+ * `rowAction` ci-dessous) : le tirer-pour-rafraîchir de la Lentille. Les
+ * conversations (page 1 seule, `refreshConversations`) ET les stories/humeurs
+ * (`STORIES_QUERY_PREFIX`, une invalidation qui couvre les DEUX clés) partent
+ * EN PARALLÈLE — miroir des quatre travaux `async let` d'iOS (`:1638-1642`),
+ * réduits à ce que la v3.1 sert réellement (Q9/Q10, § 1.8 de la
+ * spécification). Un échec des conversations PROPAGE (c'est
+ * `usePullToRefresh` qui le traduit en `completing failed`) ; l'invalidation
+ * des stories ne rejette jamais (`invalidateQueries` ne lève pas).
+ */
+export function refreshListAction(): Promise<void> {
+  return Promise.all([
+    refreshConversations(appQueryClient, apiDeps),
+    appQueryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX }),
+  ]).then(() => undefined);
 }
 
 /**
@@ -54,6 +89,80 @@ export function useStoryTray() {
  */
 export function useStatusMoods() {
   return useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000 });
+}
+
+/**
+ * **LE CORPUS COMPLET DU LECTEUR DE STORIES** (#5817) — même adaptateur,
+ * même `apiDeps` que `useStoryTray`. `staleTime: 0` (contrairement au
+ * plateau) : le lecteur doit voir une vue tout juste marquée par une AUTRE
+ * fenêtre/onglet dès sa prochaine ouverture — cache-first (le rendu part du
+ * cache existant sans jamais poser de spinner dessus), mais sans figer une
+ * minute de fraîcheur sur un corpus qui change à chaque `markStoryViewed`.
+ */
+export function useStoryFeed() {
+  return useQuery({ ...storyFeedQueryOptions(apiDeps), staleTime: 0 });
+}
+
+/**
+ * **LA TROISIÈME MARCHE, CÔTÉ ÉCRAN** (#5817, revue-correction, défaut 4) —
+ * `enabled` uniquement quand le corpus principal EST arrivé et n'y contient
+ * pas la story ciblée (`stories.ts#loadStoryPost`, doc-comment). `retry:
+ * false` : un 404 est un VERDICT (D-6, aucun oracle d'existence), jamais une
+ * panne réseau à réessayer.
+ */
+export function useStoryPost(postId: string, options: { readonly enabled: boolean }) {
+  return useQuery({ ...storyPostQueryOptions({ ...apiDeps, postId }), enabled: options.enabled, retry: false, staleTime: 0 });
+}
+
+/**
+ * `markStoryViewedAction` (#5817) — RÉFÉRENCE DE MODULE STABLE (motif
+ * `rowAction`), en TROIS temps dont l'ordre est la moitié du travail :
+ *
+ * 1. **L'AVANCE OPTIMISTE, tout de suite** (`storyViewedStore`) — l'anneau de
+ *    la tuile s'éteint à l'instant où la story s'affiche, pas au retour du
+ *    réseau (§ Optimistic Updates). C'est le SEUL retour visible du geste
+ *    « j'ai regardé » : sans lui, l'anneau s'éteint « tout seul », plus tard.
+ * 2. l'appel réel (`POST /posts/:postId/view`), dont l'échec est AVALÉ — un
+ *    accusé de lecture perdu n'a jamais mérité de toast, iOS le journalise
+ *    sans le montrer (`StoryViewModel+Viewing.swift:120-166`).
+ * 3. l'invalidation du **PLATEAU SEUL** (`STORY_TRAY_QUERY_KEY`), jamais du
+ *    préfixe entier.
+ *
+ * **Pourquoi pas le préfixe** (revue-correction) : `STORIES_QUERY_PREFIX`
+ * couvre AUSSI `STORY_FEED_QUERY_KEY`, le corpus que le lecteur est en train
+ * de LIRE — et il a un observateur actif, à `staleTime: 0`. L'invalider
+ * relançait donc une requête de 50 posts À CHAQUE story affichée, et surtout
+ * reclassait les groupes sous le lecteur (le rang dépend de `hasUnseen`, que
+ * la lecture fait basculer) : arrivé au bout d'un auteur, `nextPosition` ne
+ * trouvait plus de groupe suivant et FERMAIT le lecteur au lieu de passer à
+ * l'auteur d'après. Le plateau, lui, n'a aucun observateur pendant la lecture
+ * — l'invalidation le marque périmé et il repart frais au retour.
+ */
+export function markStoryViewedAction(postId: string): Promise<void> {
+  storyViewedStore.getState().markViewed(postId);
+  return markStoryViewed({ ...apiDeps, postId })
+    .catch(() => undefined)
+    .then(() => appQueryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY }))
+    .then(() => undefined);
+}
+
+/**
+ * `useFeed` (#5893) — `useInfiniteQuery` : le fil des publications défile
+ * au-delà de la première page serveur, même motif que `useConversations`.
+ * `.data` est APLATI par `select` (`flattenFeedPages`).
+ */
+export function useFeed() {
+  return useInfiniteQuery(feedQuery(apiDeps));
+}
+
+/**
+ * `refreshFeedAction` (#5893) — RÉFÉRENCE DE MODULE STABLE (motif
+ * `refreshListAction`) : le tirer-pour-rafraîchir du fil. Page 1 seule,
+ * curseur remis à zéro — jamais l'invalidation du préfixe `STORIES_QUERY_PREFIX`,
+ * un corpus DISTINCT que le fil ne montre pas.
+ */
+export function refreshFeedAction(): Promise<void> {
+  return refreshFeed(appQueryClient, apiDeps);
 }
 
 export function useConversation(id: string) {

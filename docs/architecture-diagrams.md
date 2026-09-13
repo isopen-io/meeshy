@@ -279,12 +279,12 @@ graph TB
 
         subgraph "Database Container"
             MongoDB[MongoDB 8.0<br/>Port 27017<br/>Replica Set: rs0]
-            MongoUI[NoSQLClient<br/>Port 3001<br/>mongo.meeshy.me]
+            MongoUI[NoSQLClient<br/>Port 3000<br/>127.0.0.1:8081 SSH tunnel only]
         end
 
         subgraph "Cache Container"
             RedisDB[Redis 8 Alpine<br/>Port 6379]
-            RedisUI[P3X Redis UI<br/>Port 7843<br/>redis.meeshy.me]
+            RedisUI[P3X Redis UI<br/>Port 7843<br/>127.0.0.1:8082 SSH tunnel only]
         end
     end
 

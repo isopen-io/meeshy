@@ -1,19 +1,24 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { ListHeader } from '@/components/list-header';
 import { StoryRail } from '@/components/story-rail';
 import { Glyph } from '@/components/glyph';
-import { LensRow } from '@/components/lens-row';
+import { LensRow, ROW_HEIGHT } from '@/components/lens-row';
+import { LensPaginationFooter } from '@/components/lens-pagination-footer';
 import { LensSection } from '@/components/lens-sticker';
 import { LensSkeletonRows } from '@/components/lens-skeleton';
+import { PullIndicator } from '@/components/pull-indicator';
 import { useScene } from '@/lib/lens/scene';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
+import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { apiDeps } from '@/lib/api/deps';
-import { rowAction, useConversations, useStatusMoods, useStoryTray } from '@/lib/api/query';
+import { PAGE_SIZE } from '@/lib/api/conversations';
+import { refreshListAction, rowAction, useConversations, useStatusMoods, useStoryTray } from '@/lib/api/query';
 import type { StatusMoodPost } from '@/lib/api/stories';
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
+import { storyViewedStore } from '@/lib/api/story-viewed-store';
 import { useTypistNames } from '@/lib/api/use-typists';
 import { resolveViewer } from '@/lib/api/viewer';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
@@ -23,7 +28,11 @@ import { groupStoriesByAuthor, railTientLaPlace, withMoods } from '@/lib/view/st
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { resolveLensSections } from '@/lib/lens/sections';
 import { useOnline } from '@/lib/net/online';
+import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useOutOfView } from '@/lib/view/use-out-of-view';
+import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
+import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
+import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useMinute } from '@/lib/view/use-minute';
 
@@ -85,11 +94,6 @@ import { useMinute } from '@/lib/view/use-minute';
 /** Référence STABLE — un `[]` littéral par rendu changerait l'identité de
  * `conversations` à chaque image et défairait les mémos qui en dépendent. */
 const EMPTY_CONVERSATIONS: readonly Conversation[] = [];
-
-/** Même règle, pour le regroupement des stories : un `new Set()` écrit en ligne
- * change d'identité à chaque rendu et ferait recalculer le mémo pour rien —
- * exactement le piège que `CLAUDE.md` § Prisme décrit sur `preferredLanguages`. */
-const EMPTY_VIEWED: ReadonlySet<string> = new Set<string>();
 
 /** Même règle : le repli du corpus d'humeurs, une seule fois. */
 const EMPTY_STATUS_MOODS: readonly StatusMoodPost[] = [];
@@ -181,6 +185,37 @@ export default function ConversationsScreen() {
   const frame = useRef<HTMLUListElement | null>(null);
 
   /**
+   * LA RÉSERVE DE LA BARRE DE RECHERCHE (#6220) — MESURÉE, jamais supposée,
+   * miroir de `useThreadInsets`/`bottomEdgeRef` (`lib/view/use-thread-insets.ts`)
+   * qui réserve la même façon la place du composeur sous le fil.
+   *
+   * La barre flotte SUR le scrollport (`absolute inset-x-0 bottom-0`) plutôt
+   * que de lui disputer sa hauteur en flux : posée en flux, elle réduisait la
+   * boîte de `#contenu` d'autant, et la DERNIÈRE rangée qui tombait pile sur
+   * cette frontière avait son centre — et celui de son bouton « Actions de
+   * conversation » — VOLÉ par cette même barre (`elementFromPoint`), sans
+   * qu'aucun défilement ne puisse jamais l'en sortir : la frontière de
+   * défilement ÉTAIT la barre elle-même. `#contenu` réserve donc sa hauteur en
+   * `padding-block-end`, exactement la doctrine du rail de stories pour ses
+   * boutons flottants (`story-rail.tsx`, `RAIL_ACTIONS_WIDTH`) : le contenu ne
+   * s'arrête jamais SOUS un flotteur, il lui laisse sa place.
+   */
+  const [searchBarHeight, setSearchBarHeight] = useState(0);
+  const observedSearchBar = useRef<ResizeObserver | null>(null);
+  const searchBarRef = useCallback((node: HTMLDivElement | null) => {
+    observedSearchBar.current?.disconnect();
+    observedSearchBar.current = null;
+    if (node === null) {
+      setSearchBarHeight(0);
+      return;
+    }
+    const observer = new ResizeObserver(() => setSearchBarHeight(node.offsetHeight));
+    observer.observe(node);
+    observedSearchBar.current = observer;
+    setSearchBarHeight(node.offsetHeight);
+  }, []);
+
+  /**
    * **LA BANDE ÉPINGLÉE PREND LA PLACE DU TITRE QUAND LE GRAND RAIL EST
    * SORTI DU SCROLLPORT** (#6103, décision #6070) — voir `ListHeader` et
    * `StoryRail` pour la géographie complète, et `pinned-rail.ts` pour les deux
@@ -216,6 +251,16 @@ export default function ConversationsScreen() {
   });
   const { focus, level } = useScene(frame);
   const online = useOnline();
+  /**
+   * LE RETOUR RAMÈNE À LA MÊME POSITION (#5893, § 0 de la spécification) —
+   * `frame` (`<ul id="contenu">`) est le scrollport que la Lentille défile ;
+   * le routeur démonte cet écran à chaque navigation (`Screen
+   * key={routeKey}`), donc `window.scrollY` seul (`lib/router.tsx`) ne
+   * rendait jamais rien ici. Ouvrir `/feed` par le bouton flottant puis
+   * revenir retrouve désormais la même rangée, exactement comme un lien
+   * direct `/c/:id` puis retour.
+   */
+  useScrollportMemory(frame);
 
   /**
    * LA SOURCE (#5650) — `useConversations()` sert les fixtures OU la
@@ -232,6 +277,18 @@ export default function ConversationsScreen() {
    * conversations » au-dessus d'un `role="alert"` masquerait l'alerte pour
    * un lecteur d'écran, qui n'annonce pas le contenu d'une région occupée. */
   const loading = list.data === undefined && !list.isError;
+  /**
+   * LA PAGINATION (#6195) — `paginationStateOf` DÉRIVE les quatre cas des
+   * drapeaux de `useInfiniteQuery`, jamais tenus à part. La SENTINELLE qui
+   * s'en sert est déclarée plus bas, après `visible` (voir son doc-comment).
+   */
+  const paginationState = paginationStateOf(list);
+  /**
+   * TIRER-POUR-RAFRAÎCHIR (#6195) — le MÊME scrollport que la sentinelle et
+   * `useScene` : `refreshListAction` (conversations page 1 + stories/humeurs
+   * en parallèle, `lib/api/query.ts`).
+   */
+  const pull = usePullToRefresh({ root: frame, onRefresh: refreshListAction, threshold: PULL_THRESHOLD });
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const { languages: readerLanguages } = useReaderLanguages();
@@ -261,6 +318,10 @@ export default function ConversationsScreen() {
    * de six entrées vit dans le rail, avec sa porte « tout voir ».
    */
   const tray = useStoryTray();
+  /** L'AVANCE OPTIMISTE sur « vu par moi » (#5817) — un ensemble STABLE tant
+   * qu'aucune story n'est ouverte : `zustand` ne notifie que sur changement
+   * d'identité, donc le mémo des groupes ne se recalcule pas pour rien. */
+  const seenNow = useStore(storyViewedStore, (s) => s.ids);
   /**
    * LE CORPUS DES HUMEURS (#5652) — un DEUXIÈME corpus, fusionné sur les
    * groupes de stories par `withMoods` (`lib/view/story-tray.ts`). Une requête
@@ -274,15 +335,17 @@ export default function ConversationsScreen() {
       withMoods(
         groupStoriesByAuthor(tray.data ?? [], {
           viewerId: viewer.id ?? undefined,
-          // « Vu par moi » n'est pas servi par la passerelle (`viewCount` est un
-          // COMPTE, qui ne dit pas QUI) : issue compagnon, même forme que
-          // `reaction-store.ts`. D'ici là tout est non vu — un anneau allumé à
-          // tort se corrige d'un regard, un anneau éteint à tort cache une story.
-          viewedIds: EMPTY_VIEWED,
+          // « Vu par moi » EST servi par la passerelle (`isViewedByMe`,
+          // `PostFeedService.ts`, les deux projections) — le commentaire qui
+          // affirmait le contraire ici a été mesuré FAUX (#5817). `viewedIds`
+          // n'est plus qu'une AVANCE : la story que le lecteur vient d'ouvrir
+          // éteint son anneau tout de suite, sans attendre le retour réseau
+          // (`api/story-viewed-store.ts`, § Optimistic Updates).
+          viewedIds: seenNow,
         }),
         moods.data ?? EMPTY_STATUS_MOODS,
       ),
-    [tray.data, viewer.id, moods.data],
+    [tray.data, viewer.id, moods.data, seenNow],
   );
   /** `railTientLaPlace` borne la promesse à la PREMIÈRE tentative : un corpus
    * LENT garde sa place, un corpus qui répond NON la perd immédiatement
@@ -328,12 +391,35 @@ export default function ConversationsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, filter, search, viewer.id, overrides, timeZone, minute]);
 
+  /**
+   * LA SENTINELLE DE DÉFILEMENT INFINI (#6195) — déclarée APRÈS `visible`
+   * parce qu'elle en DÉPEND : iOS déclenche `loadMore()` depuis l'`onAppear`
+   * d'une RANGÉE (`triggerLoadMoreIfNeeded`,
+   * `ConversationListView.swift:1045-1060`), donc une liste qui n'affiche
+   * AUCUNE rangée ne charge rien. Sans `visible.length > 0`
+   * (revue-correction #6195), un filtre qui ne rend aucune rangée posait la
+   * sentinelle en HAUT du champ, immédiatement intersectée : chaque page
+   * arrivée la remontait, et l'écran vidait le corpus ENTIER du compte en
+   * autant de requêtes séquentielles — un orage de requêtes qu'iOS ne produit
+   * jamais, pour un écran qui restera vide de toute façon.
+   *
+   * ARMÉE au seul état `idle` (`hasNextPage` sans page en vol ni erreur) : une
+   * page en cours ou en erreur ne doit pas en redéclencher une seconde.
+   */
+  const { observe: observeTail } = useLoadMoreSentinel({
+    root: frame,
+    rootMargin: loadMoreRootMargin(ROW_HEIGHT),
+    enabled: paginationState === 'idle' && visible.length > 0,
+    onReach: () => void list.fetchNextPage(),
+  });
+
   return (
     /* `pt-safe` : l'encoche HAUTE est portee par le CADRE de l'ecran, dans ses
        100dvh (box-sizing: border-box) — jamais par `<body>`, qui l'AJOUTAIT
        et poussait la barre de recherche hors du cadre (#5604, app.css). */
-    <div className="flex h-dvh flex-col overflow-hidden pt-safe">
+    <div className="relative flex h-dvh flex-col overflow-hidden pt-safe">
       <ListHeader pinned={pinned} railProps={railProps} conversations={conversations} viewerId={viewer.id ?? ''} />
+      <PullIndicator phase={pull.phase} offsetPx={pull.offsetPx} reducedMotion={pull.reducedMotion} />
 
       {/*
         AUCUN `gap` : l'espacement des cartes est ce qui les faisait lire comme
@@ -366,8 +452,16 @@ export default function ConversationsScreen() {
            grise doublait le bord droit de la liste : un trait que personne
            n'avait dessiné et que rien n'explique à l'utilisateur. iOS n'en
            montre aucun — c'est le repère de section COLLANT qui dit où l'on est,
-           pas un rail. */
-        className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-2"
+           pas un rail. `overscroll-contain` (#6195) empêche le REBOND natif de
+           voler le geste de tirer sur mobile (WKWebView / WebView Android). */
+        className="scrollbar-none overscroll-contain flex flex-1 flex-col overflow-y-auto px-2"
+        /* `pullTransform` (`lib/view/pull-to-refresh.ts`) : `transform`, JAMAIS
+           `padding`/`margin` (#6195) — `offsetTop` de chaque rangée reste
+           INVARIANT pendant le tirer (l'invariant que `check-lens.mjs` § 9
+           mesure) et `useScene`/`useOutOfView` ne voient aucun changement de
+           géométrie. La loi porte les DEUX régimes — doigt posé sans
+           transition, retour animé — voir son doc-comment. */
+        style={{ paddingBottom: searchBarHeight, ...pullTransform(pull.phase, pull.offsetPx) }}
         {...(loading ? { 'aria-busy': true, 'aria-label': 'Chargement des conversations' } : {})}
       >
         {/*
@@ -490,6 +584,33 @@ export default function ConversationsScreen() {
             ))}
           </LensSection>
         ))}
+        {/*
+          LE PIED DE PAGINATION (#6195) — APRÈS les sections, AVANT les états
+          vides (miroir iOS `ConversationListView.swift:1851` →
+          `ConversationPaginationFooter()` puis `:1859` `listTail`). Rendu
+          uniquement sur la branche « contenu réel » — jamais sous
+          `ListError`/le squelette, et jamais sur une liste FILTRÉE vide
+          (revue-correction #6195, défaut 5) : `visible.length > 0` est la
+          MÊME condition que celle qui garde déjà la sentinelle juste
+          au-dessus (`enabled: paginationState === 'idle' && visible.length >
+          0`), pour que les deux ne puissent plus diverger. Miroir du
+          doc-comment iOS sur `ConversationPaginationFooter()`
+          (`ConversationListView.swift:1829-1851`) : « Rendered ONLY inside
+          this `else` (non-empty list): an empty list already surfaces its OWN
+          error/empty state […] Pagination is only meaningful when there is
+          content to page through. » Sans cette garde, une recherche
+          infructueuse affichait « Toutes les conversations sont chargées »
+          au-dessus d'« Aucune conversation ne correspond à… » — le pendant
+          du double « Réessayer » qu'iOS documente explicitement éviter.
+        */}
+        {visible.length > 0 ? (
+          <LensPaginationFooter
+            state={paginationState}
+            showsAllLoadedHint={showsAllLoadedHint(conversations.length, PAGE_SIZE)}
+            onRetry={() => void list.fetchNextPage()}
+            sentinelRef={observeTail}
+          />
+        ) : null}
         {/*
           DEUX états VIDES DISTINCTS (#5559 T15) : `empty-corpus` (aucune
           conversation du tout — l'écran de DÉMARRAGE) contre `empty-filter`
@@ -616,8 +737,16 @@ export default function ConversationsScreen() {
         )}
       </ul>
 
-      {/* La barre de recherche EN BAS — a portee du pouce (cf. doc-comment). */}
-      <div className="shrink-0 px-4 pt-2 pb-safe">
+      {/*
+        La barre de recherche EN BAS — a portee du pouce (cf. doc-comment).
+        FLOTTANTE (#6220) : `absolute inset-x-0 bottom-0` la sort du flux
+        plutôt que de lui laisser réduire la boîte de `#contenu` — c'est cette
+        réduction qui volait, pile à sa frontière, le centre de la dernière
+        rangée visible et de son bouton d'actions. `#contenu` réserve sa
+        hauteur MESURÉE en `padding-block-end` (voir `searchBarRef` ci-dessus)
+        : le contenu s'arrête toujours AU-DESSUS d'elle, jamais dessous.
+      */}
+      <div ref={searchBarRef} data-search-bar className="absolute inset-x-0 bottom-0 z-10 px-4 pt-2 pb-safe">
         <div
           className="flex items-center gap-3 px-4 py-3 backdrop-blur-xl"
           style={{

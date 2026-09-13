@@ -181,4 +181,37 @@ final class StoryLetterboxFillTests: XCTestCase {
     func test_uneSceneSansAucunMedia_neRendAucuneSource() {
         XCTAssertTrue(StoryLetterboxFill.candidateHashes(effects: StoryEffects()).isEmpty)
     }
+
+    // MARK: - Le média SEUL — une pièce jointe n'a pas de scène (#6143)
+
+    /// **La galerie de conversation encadre un média, pas une composition.**
+    ///
+    /// `candidateHashes(effects:)` descend une scène : un fond, des collages,
+    /// un composite de slide. Une pièce jointe n'a rien de tout cela — elle
+    /// porte UN hachage, le sien. D'où cette porte d'entrée, qui projette le
+    /// cas sur la table de règles existante au lieu d'en ouvrir une seconde.
+    func test_unePieceJointe_estHabilleeParSonPropreHachage() {
+        XCTAssertEqual(StoryLetterboxFill.source(thumbHash: "abc"), .thumbHash("abc"))
+    }
+
+    /// **Le noir est la réponse JUSTE, pas un repli honteux** (spec § 2.1) : un
+    /// média sans hachage n'a aucune matière à étirer, et inventer une couleur
+    /// moyenne serait peindre ce que personne n'a mesuré.
+    func test_sansHachage_leHorsChampResteNoir() {
+        XCTAssertEqual(StoryLetterboxFill.source(thumbHash: nil), .none)
+        XCTAssertEqual(StoryLetterboxFill.source(thumbHash: ""), .none)
+    }
+
+    /// **La surcharge doit RESTER une projection.** Si elle réécrivait sa
+    /// propre condition de vacuité, « une source vide n'est pas une source »
+    /// existerait en deux exemplaires — et le jour où l'un changerait, rien ne
+    /// rougirait. Le témoin compare donc les deux chemins sur la même entrée.
+    func test_laSurcharge_projetteLaTableExistante_neLaRecopiePas() {
+        for hachage in ["abc", "", "  "] {
+            XCTAssertEqual(
+                StoryLetterboxFill.source(thumbHash: hachage),
+                StoryLetterboxFill.source(hasStampedBitmap: false, hashes: [hachage]),
+                "le chemin du média seul doit rendre ce que rend la table, sur « \(hachage) »")
+        }
+    }
 }

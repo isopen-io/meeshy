@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 
+import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
+import { useRoute } from '@/lib/router';
 
 /**
  * LA COQUILLE — deliberement mince.
@@ -45,8 +47,31 @@ import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 const chargerPastille = () => import('./sync-pill').then((m) => ({ default: m.SyncPill }));
 const SyncPill = lazy(chargerPastille);
 
+/**
+ * ...ET LES DEUX MENUS FLOTTANTS (#6104), seconde exception à la minceur, sur
+ * la MÊME fondation que la première : iOS n'a pas de barre commune, mais il a
+ * bien une couche de chrome flottant au-dessus de tous les écrans
+ * (`RootChromeLayer`), et ses deux boutons y vivent
+ * (`RootView.draggableFloatingButtons`, `.zIndex(100)`).
+ *
+ * **Ils sont chargés à la demande pour la raison déjà mesurée sur la
+ * pastille** — la première peinture est à 37,19 Ko pour un plafond de 40 — et
+ * **préchargés pour une raison DIFFÉRENTE de la sienne**. La pastille est
+ * préchargée parce que le moment où elle sert est celui où le réseau est
+ * tombé ; les menus le sont parce qu'ils sont le SEUL chemin vers sept écrans
+ * de l'application : les attendre au premier appui ferait clignoter la
+ * navigation entière au démarrage.
+ *
+ * **`showsFloatingMenus` seul reste en statique**, exactement comme
+ * `useSyncPillArmed` : il ne connaît ni glyphe, ni libellé, ni géométrie — il
+ * répond OUI ou NON sur une clé de route, et c'est son OUI qui rend le reste.
+ */
+const chargerMenus = () => import('./floating-menus').then((m) => ({ default: m.FloatingMenus }));
+const FloatingMenus = lazy(chargerMenus);
+
 export default function Shell({ children }: { children: ReactNode }) {
   const pastilleArmee = useSyncPillArmed();
+  const menusArmes = showsFloatingMenus(useRoute().key);
 
   /* APRÈS le premier pixel, pendant qu'on est encore en ligne. L'effet ne
      s'exécute pas au rendu serveur, donc le préchauffage institutionnel n'en
@@ -54,6 +79,7 @@ export default function Shell({ children }: { children: ReactNode }) {
      le module déjà résolu au lieu de rouvrir une requête. */
   useEffect(() => {
     void chargerPastille();
+    void chargerMenus();
   }, []);
 
   return (
@@ -73,6 +99,14 @@ export default function Shell({ children }: { children: ReactNode }) {
         </Suspense>
       ) : null}
       {children}
+      {/* APRÈS `children` : à z-index égal, c'est l'ordre du document qui
+          tranche, et un menu recouvert par l'écran qu'il commande serait le
+          défaut le plus bête du lot. */}
+      {menusArmes ? (
+        <Suspense fallback={null}>
+          <FloatingMenus />
+        </Suspense>
+      ) : null}
     </div>
   );
 }
