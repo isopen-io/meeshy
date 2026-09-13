@@ -85,6 +85,18 @@ describe('ROUTES — les quatre adresses de #5816', () => {
  * `lib/view/story-tray.ts`.
  */
 describe('ROUTES — le lecteur de stories (#5817)', () => {
+  /** LE DÉTAIL D'UNE PUBLICATION (#6278) — `/post/$post` est l'adresse que
+   * la passerelle range dans ses liens suivis (`PostService.ts:1742`) et que
+   * le legacy sert déjà (`apps/web/app/post/[postId]`) ; `/feeds/post/$post`
+   * est celle des liens profonds d'iOS (`DeepLinkRouter.swift:106`) et du
+   * repli de partage. Deux portes, UN écran. */
+  test('post s’apparie à /post/<id>, et /feeds/post/<id> ouvre le MÊME écran', () => {
+    expect(match(compile(ROUTES.post.pattern), '/post/abc123')).toEqual({ post: 'abc123' });
+    expect(match(compile(ROUTES.postDeepLink.pattern), '/feeds/post/abc123')).toEqual({ post: 'abc123' });
+    expect(match(compile(ROUTES.post.pattern), '/post/')).toBe(null);
+    expect(ROUTES.postDeepLink.screen).toBe(ROUTES.post.screen);
+  });
+
   test('story s’apparie à /story/<id> et en extrait le paramètre `post`', () => {
     const compiled = compile(ROUTES.story.pattern);
     expect(match(compiled, '/story/abc123')).toEqual({ post: 'abc123' });

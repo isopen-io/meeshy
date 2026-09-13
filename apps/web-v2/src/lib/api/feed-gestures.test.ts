@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
+import { postQueryKey } from './publication-detail';
 import {
   BOOKMARK_FAILED_MESSAGE,
   GESTURE_PENDING_MESSAGE,
@@ -206,5 +207,43 @@ describe('performPostGesture — source `fixtures`', () => {
     });
     expect(result).toEqual({ ok: true });
     expect(cachedPost(queryClient)?.isLikedByMe).toBe(true);
+  });
+});
+
+describe('performPostGesture — le DÉTAIL d’une publication partage le geste (#6278)', () => {
+  const detailOf = (queryClient: QueryClient) => queryClient.getQueryData<FeedPost>(postQueryKey('p1'));
+
+  /** Un lien direct vers `/post/:id` n'a JAMAIS rempli le cache du fil :
+   * lire l'état depuis le seul fil y verrait « pas aimé » et enverrait un
+   * second `POST` sur un post déjà aimé. */
+  test('un lien DIRECT (fil vide) lit l’état depuis le cache du détail : un post déjà aimé est RETIRÉ', async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(postQueryKey('p1'), post({ isLikedByMe: true, likeCount: 3 }));
+    const { requests, transport } = scripted(async () => ({ ok: true, data: { liked: false } }));
+
+    await performPostGesture({ postId: 'p1', kind: 'like', deps: gatewayDeps(queryClient, transport) });
+
+    expect(requests[0]?.method).toBe('DELETE');
+    expect(detailOf(queryClient)?.isLikedByMe).toBe(false);
+    expect(detailOf(queryClient)?.likeCount).toBe(2);
+  });
+
+  test('le fil ET le détail basculent ensemble — et se défont ensemble sur refus', async () => {
+    const queryClient = seeded([post({ isBookmarkedByMe: false, bookmarkCount: 2 })]);
+    queryClient.setQueryData(postQueryKey('p1'), post({ isBookmarkedByMe: false, bookmarkCount: 2 }));
+
+    const accepted = scripted(async () => ({ ok: true, data: { bookmarked: true, bookmarkCount: 6 } }));
+    await performPostGesture({ postId: 'p1', kind: 'bookmark', deps: gatewayDeps(queryClient, accepted.transport) });
+    expect(cachedPost(queryClient)?.isBookmarkedByMe).toBe(true);
+    expect(cachedPost(queryClient)?.bookmarkCount).toBe(6);
+    expect(detailOf(queryClient)?.isBookmarkedByMe).toBe(true);
+    expect(detailOf(queryClient)?.bookmarkCount).toBe(6);
+
+    const refused = scripted(async () => ({ ok: false, status: 404, error: 'Post not found' }));
+    await performPostGesture({ postId: 'p1', kind: 'bookmark', deps: gatewayDeps(queryClient, refused.transport) });
+    expect(refused.requests[0]?.method).toBe('DELETE');
+    expect(detailOf(queryClient)?.isBookmarkedByMe).toBe(true);
+    expect(detailOf(queryClient)?.bookmarkCount).toBe(6);
+    expect(cachedPost(queryClient)?.bookmarkCount).toBe(6);
   });
 });
