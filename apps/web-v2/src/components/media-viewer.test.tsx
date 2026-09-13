@@ -141,6 +141,56 @@ describe('MediaViewer — ouverture au bon index, la pellicule le marque (critè
     const body = mount({ items, startIndex: 0, onClose: () => {} });
     expect(body.querySelector('[data-filmstrip]') === null).toBe(true);
   });
+
+  /**
+   * #6345 — défiler la pellicule À LA MAIN choisissait sa propre tête de
+   * lecture (l'effet `scrollLeft = filmstripScrollOffset`) mais n'avait AUCUN
+   * effet retour sur le média affiché : `onScroll` n'existait pas. Miroir
+   * `ConversationMediaFilmstrip` iOS 17+ (`modernStrip`,
+   * `scrollPosition(id:anchor:)`).
+   */
+  test('défiler la pellicule à la main (scrollLeft=179) amène l’index 3 sous la tête de lecture, et la scène le montre', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const body = mount({ items, startIndex: 0, onClose: () => {} });
+    const track = body.querySelector('[data-filmstrip]') as HTMLElement;
+
+    act(() => {
+      track.scrollLeft = 179; // filmstripIndexAtPlayhead(179, 4) === 3 (media-stage.test.ts)
+      track.dispatchEvent(new Event('scroll', { bubbles: false }));
+    });
+
+    expect(body.querySelector('[data-media-viewer]')!.getAttribute('data-viewer-index')).toBe('3');
+    const filmstripItems = Array.from(body.querySelectorAll('[data-filmstrip-item]'));
+    expect(filmstripItems[3]!.getAttribute('aria-current')).toBe('true');
+  });
+
+  test('un défilement qui reste sous le média COURANT ne bouge rien (pas de sélection à vide)', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const body = mount({ items, startIndex: 2, onClose: () => {} });
+    const track = body.querySelector('[data-filmstrip]') as HTMLElement;
+
+    act(() => {
+      track.scrollLeft = 118; // filmstripIndexAtPlayhead(118, 4) === 2, identique à startIndex
+      track.dispatchEvent(new Event('scroll', { bubbles: false }));
+    });
+
+    expect(body.querySelector('[data-media-viewer]')!.getAttribute('data-viewer-index')).toBe('2');
+  });
+
+  /**
+   * #6345 — `FILMSTRIP_RESERVED_HEIGHT` (80, border-box) était calculée et
+   * testée dans `media-stage.ts` mais n'avait aucun consommateur : le plateau
+   * ne réservait que 70px (padding asymétrique). Miroir
+   * `.frame(height: FilmstripMetrics.reservedHeight)` côté iOS.
+   */
+  test('la bande réserve 80px en border-box (FILMSTRIP_RESERVED_HEIGHT, miroir iOS)', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const body = mount({ items, startIndex: 0, onClose: () => {} });
+    const track = body.querySelector('[data-filmstrip]') as HTMLElement;
+
+    expect(track.style.height).toBe('80px');
+    expect(track.classList.contains('box-border')).toBe(true);
+  });
 });
 
 describe('MediaViewer — fermeture (critère « Escape/retour ferme »)', () => {

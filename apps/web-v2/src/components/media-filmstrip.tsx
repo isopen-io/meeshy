@@ -6,7 +6,14 @@ import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 import { kindOf } from '@/lib/view/message';
-import { FILMSTRIP, filmstripLeadingInset, filmstripScrollOffset } from '@/lib/view/media-stage';
+import {
+  FILMSTRIP,
+  FILMSTRIP_RESERVED_HEIGHT,
+  filmstripIndexAtPlayhead,
+  filmstripLeadingInset,
+  filmstripMaxScrollOffset,
+  filmstripScrollOffset,
+} from '@/lib/view/media-stage';
 
 import { Glyph } from './glyph';
 
@@ -21,6 +28,19 @@ import { Glyph } from './glyph';
  *
  * La TÊTE DE LECTURE est le bord DROIT (`scroll-padding-inline-start` posé à
  * `filmstripLeadingInset(largeur)`, defilement vers `filmstripScrollOffset`).
+ *
+ * DEUX SENS DE SYNCHRONISATION (#6345, miroir `ConversationMediaFilmstrip`
+ * iOS 17+, `modernStrip`) : la sélection (clic, flèche) fait défiler la bande
+ * vers `filmstripScrollOffset(currentIndex)` (effet ci-dessous) — ET le
+ * défilement À LA MAIN de la bande choisit le média affiché (`onScroll`),
+ * borné par `filmstripMaxScrollOffset` (le rembours élastique de certains
+ * trackpads peut rendre un `scrollLeft` hors bornes). Round-trip stable :
+ * `filmstripIndexAtPlayhead(filmstripScrollOffset(i), n) === i`, donc l'effet
+ * ne redéclenche jamais `onSelect` en boucle.
+ *
+ * `FILMSTRIP_RESERVED_HEIGHT` (= 80, `border-box`) — la hauteur TOTALE que la
+ * bande réserve, miroir de `.frame(height: reservedHeight)` côté iOS : le
+ * plateau (`flex-1`) s'en trouve raccourci d'autant, jamais recouvert.
  */
 export function MediaFilmstrip({
   items,
@@ -36,9 +56,26 @@ export function MediaFilmstrip({
   useEffect(() => {
     const el = trackRef.current;
     if (el === null) return;
-    el.style.scrollPaddingInlineStart = `${filmstripLeadingInset(el.clientWidth)}px`;
+    // `paddingInlineStart` (contenu RÉEL, pas seulement `scroll-padding-*`,
+    // sans effet tant qu'aucun `scroll-snap-type` n'est posé sur CET élément)
+    // — sans lui, `scrollWidth` d'une pellicule courte (≤ 6 vignettes) reste
+    // plus étroit que le viewport et le navigateur borne TOUT `scrollLeft` à
+    // 0 : ni le mount-effect ci-dessous ni un doigt réel ne peuvent amener un
+    // média autre que le premier sous la tête de lecture. Miroir
+    // `contentMargins(.leading, leadingInset, for: .scrollContent)` (iOS 17+).
+    const inset = `${filmstripLeadingInset(el.clientWidth)}px`;
+    el.style.paddingInlineStart = inset;
+    el.style.scrollPaddingInlineStart = inset;
     el.scrollLeft = filmstripScrollOffset(currentIndex);
   }, [currentIndex]);
+
+  const onScroll = (): void => {
+    const el = trackRef.current;
+    if (el === null) return;
+    const bounded = Math.min(filmstripMaxScrollOffset(items.length, el.clientWidth), Math.max(0, el.scrollLeft));
+    const next = filmstripIndexAtPlayhead(bounded, items.length);
+    if (next !== currentIndex) onSelect(next);
+  };
 
   if (items.length <= 1) return null;
 
@@ -48,11 +85,13 @@ export function MediaFilmstrip({
       role="group"
       aria-label="Pellicule"
       ref={trackRef}
-      className="flex overflow-x-auto"
+      onScroll={onScroll}
+      className="flex overflow-x-auto box-border"
       style={{
+        height: FILMSTRIP_RESERVED_HEIGHT,
         gap: FILMSTRIP.spacing,
         paddingBlockStart: FILMSTRIP.verticalPadding,
-        paddingBlockEnd: FILMSTRIP.bottomPadding,
+        paddingBlockEnd: FILMSTRIP.verticalPadding + FILMSTRIP.bottomPadding,
         paddingInlineEnd: FILMSTRIP.trailingInset,
       }}
     >
