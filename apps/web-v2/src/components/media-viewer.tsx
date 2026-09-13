@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
@@ -24,6 +24,7 @@ import {
 import { kindOf } from '@/lib/view/message';
 import { safeAreaInsets } from '@/lib/view/safe-area';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { lateralSeek } from '@/lib/view/media-transport';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -173,6 +174,13 @@ function ViewerImagePage({
  * et descend au couloir ; le play/pause COMMANDE et reste là où l'œil est.
  * Seule la page ACTIVE monte l'un et l'autre — une page voisine préchargée
  * n'a rien à parcourir ni à commander.
+ *
+ * DOUBLE TAP LATÉRAL (#6369, miroir `MediaStageSeek` du SDK) — un double tap
+ * sur le tiers gauche de la scène recule de 10 s, sur le tiers droit avance
+ * de 10 s. `lateralSeek` rend `null` au CENTRE (le tap simple y garde son
+ * effet immédiat, comme sur une page voisine) et sur un média SANS DURÉE
+ * (aucune collision possible avec le double tap de ZOOM d'`ViewerImagePage`,
+ * qui n'a pas de durée) : rien d'autre à coordonner entre les deux gestes.
  */
 function ViewerVideoPage({
   attachment,
@@ -211,8 +219,20 @@ function ViewerVideoPage({
   const posterUrl = attachment.thumbnailUrl !== undefined && attachment.thumbnailUrl !== '' ? attachmentSrc(attachment.thumbnailUrl) : undefined;
   const paused = showsPausedBadge(presentation, true, status === 'playing');
 
+  // `stopPropagation` seulement quand la zone latérale RÉCLAME le geste : au
+  // centre, `lateralSeek` rend `null` et l'événement continue de remonter
+  // jusqu'à `onStageClick`, exactement comme s'il n'y avait ici aucun
+  // gestionnaire — le tap simple garde son effet immédiat.
+  const onLateralDoubleClick = (event: ReactMouseEvent<HTMLDivElement>): void => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const jump = lateralSeek({ x: event.clientX - rect.left, width: rect.width, position: playback.position, duration: playback.duration });
+    if (jump === null) return;
+    event.stopPropagation();
+    playback.seek(jump.to);
+  };
+
   return (
-    <div className="relative flex size-full items-center justify-center bg-black">
+    <div className="relative flex size-full items-center justify-center bg-black" onDoubleClick={isActive ? onLateralDoubleClick : undefined}>
       <video
         key={attachment.fileUrl}
         ref={bind}
