@@ -80,6 +80,20 @@ export function loadInterfaceCatalog(language: InterfaceLanguage): Promise<Inter
   return request;
 }
 
+/**
+ * LECTURE EN MODE SUSPENSE (#6341) — jette la promesse en cours si le
+ * catalogue n'est pas encore chargé ; la limite Suspense la plus proche la
+ * rattrape et réessaie une fois résolue, comme elle le fait déjà pour un
+ * `import()` de `lazy()`. Pour `NotFound` (`routes/route-table.tsx`), seul
+ * écran qui peut se rendre sans passer par `screenPrerequisite` — une adresse
+ * inconnue n'a, par définition, aucune route dont le chargement attendrait le
+ * catalogue.
+ */
+export function suspendForInterfaceCatalog(language: InterfaceLanguage): void {
+  if (loaded.has(language)) return;
+  throw loadInterfaceCatalog(language);
+}
+
 const PLACEHOLDER = /\{(\w+)\}/g;
 
 /** Les noms de paramètres d'un texte de catalogue, dans leur ordre d'apparition. */

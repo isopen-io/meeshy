@@ -1,7 +1,11 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { Suspense } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { compile, match } from '@/lib/router';
-import { ROUTES } from './route-table';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { NotFound, ROUTES } from './route-table';
 
 /**
  * LES ADRESSES D'AUTHENTIFICATION (#5555, T8) — `/login` et `/signup`
@@ -106,5 +110,72 @@ describe('ROUTES — le lecteur de stories (#5817)', () => {
 
   test('story est un import() paresseux', () => {
     expect(typeof ROUTES.story.screen).toBe('function');
+  });
+});
+
+/**
+ * L'ÉCRAN D'ADRESSE INCONNUE (#6341) — ses deux textes viennent du catalogue
+ * d'interface, plus « Cette href n’existe pas. » en dur. Le témoin s'écrit en
+ * ANGLAIS et en ARABE : en français, le texte en dur d'hier et le catalogue
+ * rendraient la même chose pour le titre (mais pas pour le mot « href », qui
+ * ne survivrait à aucune des deux).
+ */
+describe('NotFound — ce qu’il dit vient du catalogue (#6341)', () => {
+  beforeAll(async () => {
+    ensureHappyDomRegistered();
+    await Promise.all([loadInterfaceCatalog('en'), loadInterfaceCatalog('ar'), loadInterfaceCatalog('fr')]);
+  });
+
+  afterAll(async () => {
+    await releaseHappyDomIfRegistered();
+  });
+
+  afterEach(() => {
+    document.documentElement.lang = 'fr';
+  });
+
+  const render = () => renderToStaticMarkup(<NotFound />);
+
+  test('fr : le titre ne porte plus le mot « href »', () => {
+    const html = render();
+    expect(html).toContain('Cette adresse n&#x27;existe pas.');
+    expect(html).toContain('Revenir aux conversations');
+    expect(html).not.toContain('Cette href');
+  });
+
+  test('en : titre et retour en anglais', () => {
+    document.documentElement.lang = 'en';
+    const html = render();
+    expect(html).toContain('This address doesn&#x27;t exist.');
+    expect(html).toContain('Back to conversations');
+    expect(html).not.toContain('adresse');
+  });
+
+  test('ar : titre et retour en arabe', () => {
+    document.documentElement.lang = 'ar';
+    const html = render();
+    expect(html).toContain('هذا العنوان غير موجود.');
+    expect(html).toContain('العودة إلى المحادثات');
+  });
+
+  /**
+   * SUSPENSE SANS ROUTE (#6341) — une adresse inconnue n'a, par définition,
+   * traversé aucun `screenPrerequisite` : `NotFound` doit donc pouvoir se
+   * rendre sous une limite Suspense (celle que `router.tsx` pose déjà autour
+   * de chaque écran) SANS jamais laisser fuir l'erreur « catalogue lu avant
+   * d'être chargé » — que le catalogue de la langue courante soit déjà en
+   * cache ou non. Le comportement de `suspendForInterfaceCatalog` lui-même
+   * (jette la promesse en cours puis ne jette plus) est prouvé sans dépendre
+   * de l'ordre d'exécution des fichiers de témoins dans `i18n-catalog.test.ts`.
+   */
+  test('sous Suspense, une adresse inconnue ne laisse jamais fuir l’erreur de catalogue non chargé', () => {
+    document.documentElement.lang = 'de';
+    expect(() =>
+      renderToStaticMarkup(
+        <Suspense fallback={<p>…</p>}>
+          <NotFound />
+        </Suspense>,
+      ),
+    ).not.toThrow();
   });
 });

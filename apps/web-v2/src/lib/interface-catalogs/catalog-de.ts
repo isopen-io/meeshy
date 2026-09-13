@@ -63,6 +63,8 @@ const de = {
   'notifications.action.delete': 'Löschen',
   'notifications.failure': 'Das hat nicht geklappt. Versuche es erneut.',
 
+  'notFound.title': 'Diese Adresse gibt es nicht.',
+
   'pending.back': 'Zurück zu den Unterhaltungen',
   'pending.comingSoon': 'Dieser Bildschirm kommt bald.',
   'pending.feed.promise': 'Die Beiträge der Menschen, denen du folgst.',

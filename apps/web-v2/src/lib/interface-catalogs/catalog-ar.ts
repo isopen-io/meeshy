@@ -63,6 +63,8 @@ const ar = {
   'notifications.action.delete': 'حذف',
   'notifications.failure': 'لم يكتمل الإجراء. أعد المحاولة.',
 
+  'notFound.title': 'هذا العنوان غير موجود.',
+
   'pending.back': 'العودة إلى المحادثات',
   'pending.comingSoon': 'هذه الشاشة قادمة قريبًا.',
   'pending.feed.promise': 'منشورات الأشخاص الذين تتابعهم.',

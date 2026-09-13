@@ -2,7 +2,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { catalogPlaceholders, loadInterfaceCatalog, translate, type InterfaceCatalog } from './i18n-catalog';
+import {
+  catalogPlaceholders,
+  loadInterfaceCatalog,
+  suspendForInterfaceCatalog,
+  translate,
+  type InterfaceCatalog,
+} from './i18n-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from './inline-interface-language-bootstrap.js';
 import { currentInterfaceLanguage, type InterfaceLanguage } from './interface-language';
 
@@ -113,5 +119,35 @@ describe('la chaîne résolution → catalogue sert réellement une seconde lang
     document.documentElement.lang = 'fr';
     await loadInterfaceCatalog(currentInterfaceLanguage());
     expect(translate(currentInterfaceLanguage(), 'root.menu.settings')).toBe('Réglages');
+  });
+});
+
+/**
+ * `suspendForInterfaceCatalog` — LECTURE EN MODE SUSPENSE (#6341), pour
+ * `NotFound` (`routes/route-table.tsx`), seul écran qui peut se rendre sans
+ * passer par `screenPrerequisite`. Le second témoin ne suppose PAS que sa
+ * langue est encore hors cache — `bun test` partage le module entre fichiers
+ * (`loadAll()` ci-dessus charge déjà les sept langues dans ce même fichier) —
+ * il porte sur la PROMESSE jetée si elle l'est, et sur l'absence de jet une
+ * fois le catalogue résolu, quel que soit l'état de départ.
+ */
+describe('suspendForInterfaceCatalog — #6341', () => {
+  test('un catalogue déjà chargé ne jette rien', async () => {
+    await loadInterfaceCatalog('fr');
+    expect(() => suspendForInterfaceCatalog('fr')).not.toThrow();
+  });
+
+  test('jette la promesse en cours tant que non chargé, puis ne jette plus une fois résolu', async () => {
+    let thrown: unknown;
+    try {
+      suspendForInterfaceCatalog('pt');
+    } catch (error) {
+      thrown = error;
+    }
+    if (thrown !== undefined) {
+      expect(thrown).toBeInstanceOf(Promise);
+      await thrown;
+    }
+    expect(() => suspendForInterfaceCatalog('pt')).not.toThrow();
   });
 });

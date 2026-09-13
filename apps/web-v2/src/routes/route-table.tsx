@@ -1,4 +1,4 @@
-import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadInterfaceCatalog, suspendForInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { createRouter } from '@/lib/router';
 
@@ -102,17 +102,29 @@ export const ROUTES = {
   profile: { pattern: '/me', screen: () => import('@/routes/profile') },
 } as const;
 
-function NotFound() {
+/**
+ * L'ÉCRAN D'ADRESSE INCONNUE (#6341) — ses deux textes viennent du catalogue
+ * d'interface, comme le reste de l'application. Contrairement à un écran
+ * routé, aucune route n'a fait passer une adresse inconnue par
+ * `screenPrerequisite` : `suspendForInterfaceCatalog` rejoue la même attente
+ * pour ce seul cas, sous la même limite Suspense (`router.tsx`). Le libellé
+ * de retour REND `pending.back`, déjà porté par le catalogue — un second
+ * texte identique aurait divergé au premier lot qui n'aurait modifié que l'un
+ * des deux.
+ */
+export function NotFound() {
+  const langue = currentInterfaceLanguage();
+  suspendForInterfaceCatalog(langue);
   return (
     <div className="grid min-h-dvh place-items-center p-6 pt-safe text-center">
       <div className="grid gap-3">
-        <p className="text-screen font-bold">Cette href n’existe pas.</p>
+        <p className="text-screen font-bold">{translate(langue, 'notFound.title')}</p>
         <a
           href="/"
           className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
           style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
         >
-          Revenir aux conversations
+          {translate(langue, 'pending.back')}
         </a>
       </div>
     </div>
