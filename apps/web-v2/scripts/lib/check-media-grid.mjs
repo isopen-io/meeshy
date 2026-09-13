@@ -328,13 +328,38 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   if (skin === 'bulles') {
     await backPage.getByRole('button', { name: /Mode de lecture/ }).click();
     await backPage.getByRole('menuitemradio', { name: /Bulles/ }).click();
-    await backPage.waitForTimeout(300);
+    await backPage.waitForFunction(() => typeof window.history.state?.backDismiss !== 'string');
     await waitForRowSettled(backPage, QUAD_ID);
   }
   await backPage.locator(`[data-message="${QUAD_ID}"]`).evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await waitForRowSettled(backPage, QUAD_ID);
+  /**
+   * #6319 — l'entrée que le retour consomme est relevée À L'INSERTION de la
+   * visionneuse (l'observateur de mutations s'exécute juste après le commit),
+   * jamais après une attente : c'est l'historique que trouverait un retour
+   * tapé dans la première image. Une entrée posée par un effet passif
+   * (après peinture) laissait ce retour quitter le fil — `URL blank`.
+   */
+  await backPage.evaluate(() => {
+    window.__entryBeforeViewer = window.history.state?.backDismiss ?? null;
+    window.__entryAtViewerInsert = undefined;
+    const observer = new MutationObserver(() => {
+      if (document.querySelector('[data-media-viewer]') === null) return;
+      observer.disconnect();
+      window.__entryAtViewerInsert = window.history.state?.backDismiss ?? null;
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
   await backPage.locator(`[data-message="${QUAD_ID}"] [data-media-tile]`).nth(1).click();
   await backPage.waitForSelector('[data-media-viewer]');
+  const entries = await backPage.evaluate(() => ({
+    before: window.__entryBeforeViewer,
+    atInsert: window.__entryAtViewerInsert,
+  }));
+  expect(
+    typeof entries.atInsert === 'string' && entries.atInsert !== entries.before,
+    `[${skin}/${scheme}] la visionneuse est insérée AVEC son entrée d'historique — un retour dès la première image lui appartient (avant ${entries.before}, à l'insertion ${entries.atInsert})`,
+  );
   await backPage.goBack();
   await backPage.waitForSelector('[data-media-viewer]', { state: 'detached' });
   const urlAfterGoBack = new URL(backPage.url()).pathname;
