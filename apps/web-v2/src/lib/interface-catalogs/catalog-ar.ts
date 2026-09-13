@@ -182,6 +182,17 @@ const ar = {
   'settings.save.error': 'لم يُحفظ الإعداد.',
   'settings.theme.sync_error': 'طُبّق المظهر على هذا الجهاز دون مزامنة.',
   'common.cancel': 'إلغاء',
+
+  'media.video.play': 'تشغيل الفيديو',
+  'media.video.pause': 'إيقاف مؤقت',
+  'media.video.position': 'موضع التشغيل',
+  'media.video.position.value': '{elapsed} من {total}',
+  'media.video.mute': 'كتم الصوت',
+  'media.video.unmute': 'إلغاء كتم الصوت',
+  'media.video.more_options': 'مزيد من الخيارات',
+  'media.video.speed': 'السرعة',
+  'media.video.pip.enter': 'صورة داخل صورة',
+  'media.video.pip.exit': 'الخروج من صورة داخل صورة',
 } satisfies InterfaceCatalog;
 
 export default ar;

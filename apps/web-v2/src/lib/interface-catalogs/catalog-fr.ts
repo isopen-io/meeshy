@@ -192,6 +192,17 @@ const fr = {
   'settings.save.error': "Le réglage n'a pas été enregistré.",
   'settings.theme.sync_error': 'Thème appliqué sur cet appareil, sans synchronisation.',
   'common.cancel': 'Annuler',
+
+  'media.video.play': 'Lire la vidéo',
+  'media.video.pause': 'Pause',
+  'media.video.position': 'Position de lecture',
+  'media.video.position.value': '{elapsed} sur {total}',
+  'media.video.mute': 'Couper le son',
+  'media.video.unmute': 'Réactiver le son',
+  'media.video.more_options': "Plus d'options",
+  'media.video.speed': 'Vitesse',
+  'media.video.pip.enter': "Image dans l'image",
+  'media.video.pip.exit': "Quitter l'image dans l'image",
 } as const;
 
 export default fr;
