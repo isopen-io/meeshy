@@ -136,6 +136,32 @@ const searchFor = async (page, query, userId) => {
 
 const relationshipOf = (page, userId) => attrOf(page, `[data-person="${userId}"]`, 'data-relationship');
 
+const DISCOVER_RUNG = '[role="menuitem"][href="/discover"]';
+
+/** Ouvre l'échelle, lit le barreau « Découvrir » une fois la cascade jouée (#6321), puis la referme. */
+const discoverRung = async (page) => {
+  await page.click('[data-floating-menu]');
+  await page.waitForSelector(DISCOVER_RUNG);
+  /* La cascade des barreaux : 320 ms plus 40 ms par rang. */
+  await page.waitForTimeout(700);
+  const state = await page.evaluate((selector) => {
+    const rung = document.querySelector(selector);
+    const badge = rung?.querySelector('[data-badge-pose="rung"]') ?? null;
+    const r = rung?.getBoundingClientRect();
+    const hit = r === undefined ? null : document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return {
+      count: badge?.getAttribute('data-unread') ?? null,
+      text: badge?.textContent ?? null,
+      label: rung?.getAttribute('aria-label') ?? null,
+      reachable: hit !== null && rung !== null && (hit === rung || rung.contains(hit)),
+    };
+  }, DISCOVER_RUNG);
+  const ink = state.count === null ? null : await contrastOf(page, `${DISCOVER_RUNG} [data-badge-pose="rung"]`);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => document.querySelector('[role="menu"]') === null);
+  return { ...state, ink };
+};
+
 const within = (page, predicate, arg, ms) =>
   page.waitForFunction(predicate, arg, { timeout: ms, polling: 16 }).then(() => true, () => false);
 
@@ -168,6 +194,15 @@ try {
       check((await attrOf(page, '[data-discover-tab="discover"]', 'aria-selected')) === 'true', `${label} : « Découvrir » est l'onglet du premier rendu`);
       check((await presenceDots(page)) === 0, `${label} : aucun point de présence au premier rendu`);
       await capture(page, `decouvrir-${slug}`);
+
+      // ------------------------------------------------ 1 bis. le barreau « Découvrir » porte les demandes reçues (#6321)
+      const rungAtStart = await discoverRung(page);
+      check(
+        rungAtStart.count === '3' && rungAtStart.text === '3' && rungAtStart.label === 'Découvrir, 3 demandes reçues',
+        `${label} : le barreau « Découvrir » porte « 3 » et l'annonce (${JSON.stringify(rungAtStart)})`,
+      );
+      check(rungAtStart.reachable, `${label} : la pastille ne vole pas le centre du barreau`);
+      check(rungAtStart.ink !== null && rungAtStart.ink >= WCAG_AA, `${label} : le chiffre du barreau « Découvrir » tient AA (${rungAtStart.ink})`);
 
       // ------------------------------------------------ 2. atteignabilité au repos
       expectReach(
@@ -261,6 +296,11 @@ try {
         INSTANT_MS,
       );
       check(acceptedTap, `${label} : accepter retire la ligne ET fait baisser le compte à 1 au geste (< ${INSTANT_MS} ms)`);
+      const rungAfter = await discoverRung(page);
+      check(
+        rungAfter.count === '1' && rungAfter.label === 'Découvrir, 1 demande reçue',
+        `${label} : le barreau « Découvrir » a suivi les deux gestes — « 1 » (${JSON.stringify(rungAfter)})`,
+      );
       await page.waitForSelector('[data-discover-announce]:not(:empty)', { timeout: 2000 }).catch(() => null);
       check(((await textOf(page, '[data-discover-announce]')) ?? '').length > 0, `${label} : le geste s'annonce (« ${await textOf(page, '[data-discover-announce]')} »)`);
 

@@ -330,6 +330,9 @@ const de = {
   'discover.announce.sendFailed': 'Anfrage konnte nicht gesendet werden',
   'discover.announce.unblockFailed': 'Entsperren fehlgeschlagen',
   'discover.announce.offline': 'Offline: Es wurde nichts gesendet.',
+
+  'a11y.floating.rung.discover.requests.one': 'Entdecken, {count} Anfrage erhalten',
+  'a11y.floating.rung.discover.requests.other': 'Entdecken, {count} Anfragen erhalten',
 } satisfies InterfaceCatalog;
 
 export default de;

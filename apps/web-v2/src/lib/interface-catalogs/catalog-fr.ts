@@ -339,6 +339,9 @@ const fr = {
   'discover.announce.sendFailed': 'Impossible d’envoyer la demande',
   'discover.announce.unblockFailed': 'Impossible de débloquer',
   'discover.announce.offline': 'Hors ligne : rien n’a été envoyé.',
+
+  'a11y.floating.rung.discover.requests.one': 'Découvrir, {count} demande reçue',
+  'a11y.floating.rung.discover.requests.other': 'Découvrir, {count} demandes reçues',
 } as const;
 
 export default fr;

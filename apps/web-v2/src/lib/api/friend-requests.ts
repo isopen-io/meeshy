@@ -57,7 +57,7 @@ export type PendingRequests = { readonly count: number; readonly more: boolean }
 
 export type FriendRequestsDeps = { readonly source: DataSource; readonly transport: HttpTransport };
 
-export const FRIENDS_QUERY_PREFIX = ['friends'] as const;
+export { FRIENDS_QUERY_PREFIX } from './friends-keys';
 export const friendRequestsQueryKey = (bucket: FriendRequestBucket) => ['friends', 'requests', bucket] as const;
 
 const optionalText = z.optional(z.nullable(z.string()));

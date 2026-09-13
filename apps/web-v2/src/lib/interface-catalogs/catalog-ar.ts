@@ -329,6 +329,9 @@ const ar = {
   'discover.announce.sendFailed': 'تعذّر إرسال الطلب',
   'discover.announce.unblockFailed': 'تعذّر إلغاء الحظر',
   'discover.announce.offline': 'غير متصل: لم يُرسَل شيء.',
+
+  'a11y.floating.rung.discover.requests.one': 'اكتشاف، {count} طلب وارد',
+  'a11y.floating.rung.discover.requests.other': 'اكتشاف، {count} طلبات واردة',
 } satisfies InterfaceCatalog;
 
 export default ar;

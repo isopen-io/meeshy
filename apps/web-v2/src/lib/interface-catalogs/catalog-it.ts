@@ -330,6 +330,9 @@ const it = {
   'discover.announce.sendFailed': 'Impossibile inviare la richiesta',
   'discover.announce.unblockFailed': 'Impossibile sbloccare',
   'discover.announce.offline': 'Offline: non è stato inviato nulla.',
+
+  'a11y.floating.rung.discover.requests.one': 'Scopri, {count} richiesta ricevuta',
+  'a11y.floating.rung.discover.requests.other': 'Scopri, {count} richieste ricevute',
 } satisfies InterfaceCatalog;
 
 export default it;

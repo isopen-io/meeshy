@@ -334,6 +334,9 @@ const pt = {
   'discover.announce.sendFailed': 'Não foi possível enviar o pedido',
   'discover.announce.unblockFailed': 'Não foi possível desbloquear',
   'discover.announce.offline': 'Sem conexão: nada foi enviado.',
+
+  'a11y.floating.rung.discover.requests.one': 'Descobrir, {count} pedido recebido',
+  'a11y.floating.rung.discover.requests.other': 'Descobrir, {count} pedidos recebidos',
 } satisfies InterfaceCatalog;
 
 export default pt;

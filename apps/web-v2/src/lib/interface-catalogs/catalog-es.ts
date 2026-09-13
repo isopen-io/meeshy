@@ -330,6 +330,9 @@ const es = {
   'discover.announce.sendFailed': 'No se pudo enviar la solicitud',
   'discover.announce.unblockFailed': 'No se pudo desbloquear',
   'discover.announce.offline': 'Sin conexión: no se envió nada.',
+
+  'a11y.floating.rung.discover.requests.one': 'Descubrir, {count} solicitud recibida',
+  'a11y.floating.rung.discover.requests.other': 'Descubrir, {count} solicitudes recibidas',
 } satisfies InterfaceCatalog;
 
 export default es;
