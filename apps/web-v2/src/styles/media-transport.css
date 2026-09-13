@@ -119,6 +119,26 @@
   font-weight: 600;
 }
 
+/**
+ * LE PLAY/PAUSE AU CENTRE DU MÉDIA — `cadreCenterPlayPause` : 64 de diamètre,
+ * rendu plus transparent (55 %) pour ne pas cacher ce qu'on regarde
+ * (directive porteur 2026-09-12).
+ */
+.media-viewer-center-toggle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 4rem;
+  height: 4rem;
+  margin: -2rem 0 0 -2rem;
+  border-radius: 9999px;
+  color: #fff;
+  background-color: rgb(0 0 0 / 45%);
+  opacity: 0.55;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .media-transport-fill,
   .media-transport-thumb {

@@ -25,12 +25,16 @@ import { kindOf } from '@/lib/view/message';
 import { safeAreaInsets } from '@/lib/view/safe-area';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { READER_LOCALE } from '@/lib/reader';
 
 import '@/styles/media-viewer.css';
 
-import { Glyph } from './glyph';
+import { Glyph, GlyphSvg } from './glyph';
+import { MEDIA_GLYPHS } from './glyphs-media';
 import { MediaFilmstrip } from './media-filmstrip';
+import { MediaTransport } from './media-transport';
 
 /**
  * `MediaViewer` (#6221, § 5 étape 5) — LA VISIONNEUSE PLEIN ÉCRAN, chunk À LA
@@ -152,18 +156,32 @@ function ViewerImagePage({
   );
 }
 
+/**
+ * LA PAGE VIDÉO (#6221, #6359) — le média, le play/pause AU CENTRE, et la
+ * barre de lecture rendue DANS LE COULOIR BAS (`corridorSlot`) par un portail.
+ * Miroir `cadreCenterPlayPause` + `transportCorridor`
+ * (`ConversationMediaGalleryView+Transport.swift`) : la progression RAPPORTE
+ * et descend au couloir ; le play/pause COMMANDE et reste là où l'œil est.
+ * Seule la page ACTIVE monte l'un et l'autre — une page voisine préchargée
+ * n'a rien à parcourir ni à commander.
+ */
 function ViewerVideoPage({
   attachment,
   isActive,
   presentation,
   onToggleRef,
+  corridorSlot,
+  language,
 }: {
   readonly attachment: Attachment;
   readonly isActive: boolean;
   readonly presentation: StagePresentation;
   readonly onToggleRef: (toggle: (() => void) | null) => void;
+  readonly corridorSlot: HTMLElement | null;
+  readonly language: InterfaceLanguage;
 }) {
-  const { status, toggle, bind } = useMediaPlayback({ attachmentId: attachment.id });
+  const playback = useMediaPlayback({ attachmentId: attachment.id, tracksTime: true });
+  const { status, toggle, bind } = playback;
   const statusRef = useRef(status);
   statusRef.current = status;
   const toggleRef = useRef(toggle);
@@ -198,6 +216,42 @@ function ViewerVideoPage({
       {paused ? (
         <span className="media-viewer-paused-badge absolute rounded-full px-3 py-1 text-mini font-medium text-white">En pause</span>
       ) : null}
+      {isActive ? (
+        <button
+          type="button"
+          aria-label={translate(language, status === 'playing' ? 'media.video.pause' : 'media.video.play')}
+          className="media-viewer-center-toggle"
+          onClick={(event) => {
+            event.stopPropagation();
+            toggle();
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          {status === 'playing' ? <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={28} /> : <Glyph name="fillPlay" size={28} />}
+        </button>
+      ) : null}
+      {isActive && corridorSlot !== null
+        ? createPortal(
+            /* Le portail rend la barre DANS LE COULOIR, mais ses événements
+               React remontent l'arbre des COMPOSANTS jusqu'à la scène : un clic
+               y basculerait le plateau en plein cadre (le chrome disparaîtrait
+               sous le doigt qui règle le son), un appui y armerait l'appui long,
+               et Espace y déclencherait le raccourci lecture/pause au lieu
+               d'activer le bouton. La barre ne parle qu'à la vidéo. */
+            <div
+              onClick={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerMove={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (event.key === ' ' || event.key === 'Enter') event.stopPropagation();
+              }}
+            >
+              <MediaTransport playback={playback} durationMs={attachment.duration} language={language} />
+            </div>,
+            corridorSlot,
+          )
+        : null}
     </div>
   );
 }
@@ -263,9 +317,11 @@ export default function MediaViewer({
 
   useBackDismiss(onClose);
 
+  const [transportSlot, setTransportSlot] = useState<HTMLElement | null>(null);
+  const language = currentInterfaceLanguage();
+
   const current = items[index];
   const insets = safeAreaInsets();
-  const carriesDuration = current !== undefined && kindOf(current) === 'video' && !maskedAttachment(current);
 
   // #root INERT le temps de l'ouverture — même dispositif que le clone du
   // menu de message (`message-menu.tsx:380-391`), porté ICI au NIVEAU DE LA
@@ -444,6 +500,8 @@ export default function MediaViewer({
                   onToggleRef={(fn) => {
                     if (i === index) activeVideoToggleRef.current = fn;
                   }}
+                  corridorSlot={transportSlot}
+                  language={language}
                 />
               ) : (
                 <ViewerImagePage
@@ -461,11 +519,9 @@ export default function MediaViewer({
       {/* Couloir bas */}
       <div className="media-viewer-chrome flex flex-col" style={{ opacity: isFull ? 0 : 1, paddingBottom: insets.bottom }}>
         <CarrierFooter attachment={current} carrier={carrier} />
-        {carriesDuration ? (
-          <div className="px-4 pb-1" aria-hidden>
-            <span className="media-viewer-progress-track block h-[3px] rounded-full" />
-          </div>
-        ) : null}
+        {/* La place de la barre de lecture (#6359) : la page vidéo ACTIVE y rend `MediaTransport` par un portail ; vide sur une image. */}
+        <div ref={setTransportSlot} data-viewer-transport-slot />
+
         {items.length > 1 ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} /> : null}
       </div>
     </div>,

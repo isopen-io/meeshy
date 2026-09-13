@@ -242,6 +242,26 @@ describe('MediaTransport — le menu vitesse et image dans l’image', () => {
     expect(requests).toBe(1);
   });
 
+  test('Échap referme le menu — pas la visionneuse — et rend le focus au bouton « ⋯ »', async () => {
+    let parentKeys = 0;
+    const { body, video } = mount({ durationMs: 60_000, onParentKey: () => (parentKeys += 1) });
+    await loadMetadata(video, 60);
+    const more = button(body, "Plus d'options")!;
+
+    await act(async () => {
+      more.click();
+    });
+    const firstItem = body.querySelector<HTMLElement>('[role="menuitemradio"]')!;
+
+    await act(async () => {
+      firstItem.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+
+    expect(body.querySelector('[role="menu"]')).toBeNull();
+    expect(parentKeys).toBe(0);
+    expect(document.activeElement).toBe(button(body, "Plus d'options"));
+  });
+
   test('sans image dans l’image, le menu ne propose que la vitesse', async () => {
     const { body, video } = mount({ durationMs: 60_000 });
     await loadMetadata(video, 60);

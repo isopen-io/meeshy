@@ -46,6 +46,7 @@ export function MediaTransport({ playback, durationMs, language }: MediaTranspor
   const [scrubFraction, setScrubFraction] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const draggingRef = useRef(false);
+  const moreButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const { duration, position, muted, rate, pictureInPicture } = playback;
 
@@ -148,6 +149,7 @@ export function MediaTransport({ playback, durationMs, language }: MediaTranspor
 
       <div className="media-transport-more">
         <button
+          ref={moreButtonRef}
           type="button"
           aria-label={translate(language, 'media.video.more_options')}
           aria-haspopup="menu"
@@ -158,7 +160,20 @@ export function MediaTransport({ playback, durationMs, language }: MediaTranspor
           <GlyphSvg glyph={MEDIA_TRANSPORT_GLYPHS.dotsThree} size={18} />
         </button>
         {menuOpen ? (
-          <div role="menu" aria-label={translate(language, 'media.video.more_options')} className="media-transport-menu">
+          <div
+            role="menu"
+            aria-label={translate(language, 'media.video.more_options')}
+            className="media-transport-menu"
+            onKeyDown={(event) => {
+              // Échap referme CE menu : la visionneuse, qui ferme sur Échap,
+              // ne doit pas le recevoir en même temps.
+              if (event.key !== 'Escape') return;
+              event.preventDefault();
+              event.stopPropagation();
+              setMenuOpen(false);
+              moreButtonRef.current?.focus();
+            }}
+          >
             <div role="group" aria-label={translate(language, 'media.video.speed')}>
               {PLAYBACK_SPEEDS.map((speed) => (
                 <button

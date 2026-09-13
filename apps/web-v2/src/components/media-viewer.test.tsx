@@ -269,6 +269,133 @@ describe('MediaViewer — le piège à focus (`focus-trap.ts`)', () => {
   });
 });
 
+/**
+ * LA BARRE DE LECTURE DANS LA VISIONNEUSE (#6359) — miroir
+ * `transportCorridor` et `cadreCenterPlayPause`
+ * (`ConversationMediaGalleryView+Transport.swift`) : la barre vit dans le
+ * COULOIR BAS, le play/pause au centre du média. `media-12` = [image, image,
+ * vidéo de 7 000 ms].
+ */
+describe('MediaViewer — la barre de lecture d’une vidéo (#6359)', () => {
+  const tripleVideoIndex = (): { readonly items: readonly Attachment[]; readonly videoIndex: number } => {
+    const items = attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID);
+    return { items, videoIndex: items.findIndex((a) => a.mimeType.startsWith('video/')) };
+  };
+
+  const corridor = (body: HTMLElement): HTMLElement => body.querySelector<HTMLElement>('[data-viewer-transport-slot]')!;
+
+  async function loadActiveVideo(body: HTMLElement, seconds: number): Promise<HTMLVideoElement> {
+    const video = currentPage(body).querySelector('video')!;
+    await act(async () => {
+      Object.defineProperty(video, 'duration', { value: seconds, configurable: true });
+      Object.defineProperty(video, 'currentTime', { value: 0, configurable: true, writable: true });
+      video.dispatchEvent(new Event('loadedmetadata'));
+    });
+    return video;
+  }
+
+  test('avant ses métadonnées, le couloir bas montre la durée de la PIÈCE, sans piste', () => {
+    const { items, videoIndex } = tripleVideoIndex();
+    const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+
+    expect(corridor(body).querySelector('[role="slider"]')).toBeNull();
+    expect(corridor(body).textContent).toContain('0:07');
+  });
+
+  test('une fois la durée connue, la piste vit dans le couloir bas, jamais sur le média', async () => {
+    const { items, videoIndex } = tripleVideoIndex();
+    const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+    await loadActiveVideo(body, 7);
+
+    expect(corridor(body).querySelector('[role="slider"]')).not.toBeNull();
+    expect(currentPage(body).querySelector('[role="slider"]')).toBeNull();
+  });
+
+  test('les flèches du curseur parcourent la vidéo et ne changent pas de page', async () => {
+    const { items, videoIndex } = tripleVideoIndex();
+    const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+    const video = await loadActiveVideo(body, 60);
+
+    await act(async () => {
+      corridor(body).querySelector('[role="slider"]')!.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowLeft' }));
+    });
+    await act(async () => {
+      corridor(body).querySelector('[role="slider"]')!.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+    });
+
+    expect(body.querySelector('[data-media-viewer]')!.getAttribute('data-viewer-index')).toBe(String(videoIndex));
+    expect(video.currentTime).toBe(10);
+  });
+
+  test('le play/pause au centre met en pause puis relance, sans basculer le plateau', async () => {
+    const { items, videoIndex } = tripleVideoIndex();
+    const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+    const topCorridor = body.querySelector<HTMLElement>('[data-media-viewer] > div')!;
+
+    const pause = currentPage(body).querySelector<HTMLButtonElement>('button[aria-label="Pause"]');
+    expect(pause).not.toBeNull();
+
+    await act(async () => {
+      pause!.click();
+    });
+    const play = currentPage(body).querySelector<HTMLButtonElement>('button[aria-label="Lire la vidéo"]');
+    expect(play).not.toBeNull();
+    expect(topCorridor.style.opacity).toBe('1');
+
+    await act(async () => {
+      play!.click();
+    });
+    expect(currentPage(body).querySelector('button[aria-label="Pause"]')).not.toBeNull();
+  });
+
+  test('toucher le muet ou « ⋯ » agit sur la vidéo sans basculer le plateau en plein cadre', async () => {
+    const { items, videoIndex } = tripleVideoIndex();
+    const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+    const video = await loadActiveVideo(body, 60);
+    const topCorridor = body.querySelector<HTMLElement>('[data-media-viewer] > div')!;
+    const buttonIn = (label: string): HTMLButtonElement =>
+      Array.from(corridor(body).querySelectorAll<HTMLButtonElement>('button')).find((b) => b.getAttribute('aria-label') === label)!;
+
+    // L'opacité se lit APRÈS CHAQUE geste : deux bascules du plateau
+    // s'annulent, et une lecture unique en fin de test resterait verte
+    // précisément quand chaque clic remonte jusqu'à la scène.
+    await act(async () => {
+      buttonIn('Couper le son').click();
+    });
+    expect(video.muted).toBe(true);
+    expect(topCorridor.style.opacity).toBe('1');
+
+    await act(async () => {
+      buttonIn("Plus d'options").click();
+    });
+    expect(corridor(body).querySelector('[role="menu"]')).not.toBeNull();
+    expect(topCorridor.style.opacity).toBe('1');
+  });
+
+  test('Espace sur un bouton de la barre l’active, sans remonter au raccourci lecture/pause de la visionneuse', async () => {
+    const { items, videoIndex } = tripleVideoIndex();
+    const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+    await loadActiveVideo(body, 60);
+    const mute = Array.from(corridor(body).querySelectorAll<HTMLButtonElement>('button')).find((b) => b.getAttribute('aria-label') === 'Couper le son')!;
+    expect(currentPage(body).querySelector('button[aria-label="Pause"]')).not.toBeNull();
+
+    await act(async () => {
+      mute.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: ' ' }));
+    });
+
+    expect(currentPage(body).querySelector('button[aria-label="Pause"]')).not.toBeNull();
+  });
+
+  test('CONTRE-ÉPREUVE : une page IMAGE n’a ni barre, ni play/pause, ni ligne de progression décorative', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const body = mount({ items, startIndex: 0, onClose: () => {} });
+
+    expect(body.querySelector('[data-media-transport]')).toBeNull();
+    expect(body.querySelector('.media-viewer-progress-track')).toBeNull();
+    expect(currentPage(body).querySelector('button')).toBeNull();
+  });
+});
+
 describe('MediaViewer — la vidéo rend un <video> réel avec poster, jamais null', () => {
   test('media-12 : la page active sur l’index vidéo porte un <video poster>', () => {
     const items = attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID); // [image, image, vidéo]
