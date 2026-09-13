@@ -186,6 +186,8 @@ const ar = {
   'media.video.play': 'تشغيل الفيديو',
   'media.video.pause': 'إيقاف مؤقت',
   'media.video.position': 'موضع التشغيل',
+  'media.audio.position': 'موضع التشغيل',
+  'media.audio.speed': 'سرعة التشغيل',
   'media.video.position.value': '{elapsed} من {total}',
   'media.video.mute': 'كتم الصوت',
   'media.video.unmute': 'إلغاء كتم الصوت',

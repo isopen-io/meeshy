@@ -187,6 +187,8 @@ const it = {
   'media.video.play': 'Riproduci video',
   'media.video.pause': 'Metti in pausa',
   'media.video.position': 'Posizione di riproduzione',
+  'media.audio.position': 'Posizione di riproduzione',
+  'media.audio.speed': 'Velocità di riproduzione',
   'media.video.position.value': '{elapsed} di {total}',
   'media.video.mute': 'Disattiva audio',
   'media.video.unmute': 'Riattiva audio',

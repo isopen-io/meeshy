@@ -8,6 +8,10 @@ import { electAudio, type MediaCarrier } from '@/lib/view/media';
 import { partitionAttachments, type MediaGridFrame } from '@/lib/view/media-grid-layout';
 import { waveformOf } from '@/lib/view/message';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
+import { PLAYBACK_SPEEDS, seekFraction, speedLabel } from '@/lib/view/media-transport';
+import { activeSegmentIndex, segmentSeekTarget } from '@/lib/view/transcript-karaoke';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { READER_LOCALE } from '@/lib/reader';
 import { TRANSCRIPT_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 
@@ -67,7 +71,40 @@ function VoiceAttachment({
     displayLanguage,
     fallbackLanguage,
   });
-  const { status, progress, toggle, bind } = useMediaPlayback({ attachmentId: attachment.id });
+  // `tracksTime` est OPT-IN : sans lui `position`/`duration` restent à 0 et une
+  // tuile du fil ne paie rien. Le vocal en a besoin — le karaoké et le parcours
+  // au doigt lisent tous deux la position.
+  const { status, progress, toggle, bind, position, duration, seek, rate, setRate } =
+    useMediaPlayback({ attachmentId: attachment.id, tracksTime: true });
+  const uiLanguage = currentInterfaceLanguage();
+
+  /*
+   LE KARAOKÉ NE S'ALLUME QUE SUR LA LANGUE D'ORIGINE (#6306).
+
+   `Attachment.transcription.segments` horodate le texte ORIGINAL. Quand le
+   Prisme sert une TRADUCTION, les bornes ne décrivent plus le texte affiché :
+   surligner « segment 2 » y désignerait des mots qui ne correspondent à rien.
+   Un karaoké faux est pire qu'aucun karaoké — il affirme suivre la voix.
+
+   La garde compare donc la langue SERVIE à celle de la transcription. Le jour
+   où la passerelle horodatera aussi les traductions, c'est cette comparaison
+   qui s'ouvrira, pas le rendu.
+  */
+  /*
+   `AttachmentTranscription` est une UNION — audio, vidéo, document, image — et
+   seules les deux premières horodatent. Le typecheck l'a dit avant le rendu :
+   `Property 'segments' does not exist on type 'DocumentTranscription'`. On
+   n'élargit donc pas le type de la charge ; on interroge la forme, une fois,
+   à l'endroit qui en a besoin.
+  */
+  const transcription = attachment.transcription;
+  const timed =
+    transcription !== undefined && 'segments' in transcription ? transcription.segments : undefined;
+  const segments =
+    timed !== undefined && timed.length > 0 && transcript.language === transcription?.language
+      ? timed
+      : undefined;
+  const activeSegment = segments === undefined ? null : activeSegmentIndex(segments, position);
 
   const waves = waveformOf(attachment);
   // `duration` voyage en MILLISECONDES sur la charge du dépôt.
@@ -141,7 +178,39 @@ function VoiceAttachment({
             <Glyph name="fillPlay" size={13} className="text-white" />
           )}
         </button>
-        <span className="flex h-6 flex-1 items-center gap-px" aria-hidden>
+        {/* L'ONDE SE PARCOURT AU DOIGT (#6306) — elle était `aria-hidden` et
+            inerte : on voyait la progression sans pouvoir s'y déplacer.
+            `onPointerMove` déplace RÉELLEMENT l'écoute pendant le geste
+            (`AVAudioPlayer.currentTime` a son équivalent gratuit ici : poser
+            `currentTime` sur un `<audio>` ne coûte aucun décodage), ce que la
+            directive « gestes progressifs et annulables » exige — un `onEnded`
+            seul y est nommément interdit.
+            `role="slider"` plutôt qu'`aria-hidden` : ce qui a un effet doit être
+            atteignable au clavier et annoncé. */}
+        <span
+          role="slider"
+          tabIndex={0}
+          aria-label={translate(uiLanguage, 'media.audio.position')}
+          aria-valuemin={0}
+          aria-valuemax={Math.max(1, Math.round(duration))}
+          aria-valuenow={Math.round(position)}
+          className="flex h-6 flex-1 cursor-pointer items-center gap-px"
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId);
+            const r = e.currentTarget.getBoundingClientRect();
+            seek(seekFraction({ clientX: e.clientX, left: r.left, width: r.width }) * duration);
+          }}
+          onPointerMove={(e) => {
+            if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+            const r = e.currentTarget.getBoundingClientRect();
+            seek(seekFraction({ clientX: e.clientX, left: r.left, width: r.width }) * duration);
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            e.preventDefault();
+            seek(Math.max(0, Math.min(duration, position + (e.key === 'ArrowRight' ? 5 : -5))));
+          }}
+        >
           {waves.map((h, i) => (
             <span
               key={i}
@@ -157,6 +226,19 @@ function VoiceAttachment({
         <span className="shrink-0 text-time tabular-nums">
           {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
         </span>
+        {/* LA VITESSE (#6306) — un cycle, pas un menu : c'est le geste d'iOS
+            (`cycleSpeed`), et un vocal se réécoute plus vite bien plus souvent
+            qu'on ne choisit une vitesse précise. La loi des paliers est celle du
+            transport vidéo, partagée — deux échelles de vitesse dans la même app
+            seraient une jumelle divergente. */}
+        <button
+          type="button"
+          onClick={() => setRate(PLAYBACK_SPEEDS[(PLAYBACK_SPEEDS.indexOf(rate as 1) + 1) % PLAYBACK_SPEEDS.length] ?? 1)}
+          className="tap-target-22 shrink-0 rounded-chip px-1 text-time tabular-nums"
+          aria-label={translate(uiLanguage, 'media.audio.speed')}
+        >
+          {speedLabel(rate, uiLanguage)}
+        </button>
       </div>
 
       {transcript.text !== '' ? (
@@ -169,7 +251,25 @@ function VoiceAttachment({
           style={{ opacity: TRANSCRIPT_TEXT_OPACITY }}
           {...(lang !== undefined ? { lang } : {})}
         >
-          {transcript.text}
+          {segments === undefined
+            ? transcript.text
+            : segments.map((segment, i) => (
+                <span
+                  key={`${segment.startMs}-${i}`}
+                  onClick={() => {
+                    const target = segmentSeekTarget(segments, i);
+                    if (target !== null) seek(target);
+                  }}
+                  className="cursor-pointer"
+                  /* Le segment prononcé reprend sa pleine opacité ; les autres
+                     gardent celle du bloc. On ne CHANGE pas la couleur — un
+                     surlignage teinté rendrait la transcription illisible en
+                     schéma clair, où l'opacité fait déjà tout le contraste. */
+                  style={i === activeSegment ? { opacity: 1, fontWeight: 500 } : undefined}
+                >
+                  {segment.text}{' '}
+                </span>
+              ))}
         </p>
       ) : null}
 

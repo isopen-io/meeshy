@@ -187,6 +187,8 @@ const es = {
   'media.video.play': 'Reproducir vídeo',
   'media.video.pause': 'Pausa',
   'media.video.position': 'Posición de reproducción',
+  'media.audio.position': 'Posición de reproducción',
+  'media.audio.speed': 'Velocidad de reproducción',
   'media.video.position.value': '{elapsed} de {total}',
   'media.video.mute': 'Silenciar',
   'media.video.unmute': 'Activar sonido',

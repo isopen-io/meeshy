@@ -196,6 +196,8 @@ const fr = {
   'media.video.play': 'Lire la vidéo',
   'media.video.pause': 'Pause',
   'media.video.position': 'Position de lecture',
+  'media.audio.position': 'Position de lecture',
+  'media.audio.speed': 'Vitesse de lecture',
   'media.video.position.value': '{elapsed} sur {total}',
   'media.video.mute': 'Couper le son',
   'media.video.unmute': 'Réactiver le son',

@@ -61,7 +61,13 @@ export function activeSegmentIndex(
   // Le dernier segment dont le départ est déjà passé. Couvre d'un seul geste le
   // cas nominal, le trou (on garde le précédent) et la queue (on garde le
   // dernier) — trois branches deviennent une propriété.
-  let candidat = ordonnés[0];
+  // `noUncheckedIndexedAccess` : un accès indexé rend `T | undefined`, même sur
+  // un tableau qu'on vient de tester non vide. On part donc du premier élément
+  // OBTENU, jamais d'un index supposé sûr.
+  const [premier] = ordonnés;
+  if (premier === undefined) return null;
+
+  let candidat = premier;
   for (const segment of ordonnés) {
     if (segment.startMs > ms) break;
     candidat = segment;
