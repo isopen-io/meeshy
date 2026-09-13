@@ -47,7 +47,7 @@ const profileOf = (overrides: Partial<MyProfile> = {}): MyProfile => ({
 describe('l’en-tête', () => {
   test('lecture : un retour NOMMÉ, le titre, et « Modifier »', () => {
     const html = renderToStaticMarkup(
-      <ProfileHeaderBar language="fr" editing={false} saving={false} online onEdit={noop} onCancel={noop} onSave={noop} />,
+      <ProfileHeaderBar language="fr" editing={false} saving={false} online ready onEdit={noop} onCancel={noop} onSave={noop} />,
     );
     expect(html).toContain('aria-label="Revenir aux conversations"');
     expect(html).toContain('Profil');
@@ -57,7 +57,7 @@ describe('l’en-tête', () => {
 
   test('hors ligne, « Modifier » est désactivé', () => {
     const html = renderToStaticMarkup(
-      <ProfileHeaderBar language="fr" editing={false} saving={false} online={false} onEdit={noop} onCancel={noop} onSave={noop} />,
+      <ProfileHeaderBar language="fr" editing={false} saving={false} online={false} ready onEdit={noop} onCancel={noop} onSave={noop} />,
     );
     expect(html).toMatch(/<button[^>]*disabled[^>]*>[^<]*Modifier/);
   });
@@ -73,7 +73,7 @@ describe('l’en-tête', () => {
 
   test('édition : « Annuler » et « Enregistrer »', () => {
     const html = renderToStaticMarkup(
-      <ProfileHeaderBar language="fr" editing saving={false} online onEdit={noop} onCancel={noop} onSave={noop} />,
+      <ProfileHeaderBar language="fr" editing saving={false} online ready onEdit={noop} onCancel={noop} onSave={noop} />,
     );
     expect(html).toContain('Annuler');
     expect(html).toContain('Enregistrer');

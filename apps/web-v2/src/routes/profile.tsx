@@ -210,6 +210,7 @@ export default function ProfileScreen() {
         editing={editing}
         saving={saving}
         online={online}
+        ready={profile !== undefined}
         onEdit={() => profile === undefined || setDraft(draftOf(profile))}
         onCancel={() => setDraft(null)}
         onSave={() => void save()}
