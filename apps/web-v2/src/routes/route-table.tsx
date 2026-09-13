@@ -98,6 +98,13 @@ export const ROUTES = {
   calls: { pattern: '/calls', screen: () => import('@/routes/calls') },
   discover: { pattern: '/discover', screen: () => import('@/routes/discover') },
   communities: { pattern: '/communities', screen: () => import('@/routes/communities') },
+  /* CRÉER, PUIS UNE COMMUNAUTÉ (#6364, D-60) — miroir `Route.communityCreate` et
+     `Route.communityDetail` (`Router.swift`). `/communities/:id` est l'adresse
+     que le legacy sert (`apps/web/app/(connected)/communities/[id]`, D-5).
+     L'ORDRE compte : le routeur rend la PREMIÈRE adresse qui correspond, et
+     `new` serait sinon lu comme l'identifiant d'une communauté. */
+  communityNew: { pattern: '/communities/new', screen: () => import('@/routes/community-new') },
+  community: { pattern: '/communities/$community', screen: () => import('@/routes/community') },
   settings: { pattern: '/settings', screen: () => import('@/routes/settings') },
   profile: { pattern: '/me', screen: () => import('@/routes/profile') },
 } as const;

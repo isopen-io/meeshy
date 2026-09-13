@@ -310,6 +310,8 @@ dans une version ultérieure ·
 | `/c/:conversation` | **V4.0.0** | **adresse neuve** — le fil du membre |
 | `/chat/:share_link` | **V4.0.0** | **adresse neuve** — rejoindre par lien public |
 | `/call/:callId` | `legacy` | appel en cours |
+| `/calls` | **V4.0.0** | **adresse neuve, servie par la v3.1 depuis #6362** — le journal d'appels (miroir de l'onglet `.calls` de `ContactsHubView`) : manqués, reçus, émis, filtre « Manqués », une ligne ouvre le fil. Écran seul et non onglet d'un hub (D-61). Lancer ou rappeler un appel reste hors du web, suivi par son issue |
+| `/discover` | **V4.0.0** | **adresse neuve, servie par la v3.1 depuis #6363** — la découverte de personnes (miroir de `PeopleDiscoveryView`) : onglets Découvrir (inviter par e-mail, rechercher, un geste par relation), Demandes (reçues, envoyées ; accepter, refuser, annuler) et Bloqués (débloquer). `?onglet=` et `?demandes=` portent l'onglet et le filtre. SMS et carnet d'adresses, suggestions, profil d'autrui et « À proximité » suivis par leurs issues (D-62) |
 
 ### Profil et réglages
 
@@ -331,7 +333,7 @@ dans une version ultérieure ·
 | `/reel/:postId`, `/mood/:postId` | `legacy` | **liens partageables publiquement** — à porter avant tout décommissionnement |
 | `/hashtag/:tag` | `legacy` | |
 | `/search` | `legacy` | |
-| `/communities`, `/communities/:id` | `legacy` | |
+| `/communities`, `/communities/:id` | **V4.0.0** | **servies par la v3.1 depuis #6364** — la liste de SES communautés et le détail d'une communauté (ses conversations mènent au fil) ; nomenclature du legacy reprise (D-5). `/communities/new` est une **adresse neuve** (la création, miroir `Route.communityCreate`). Membres, invitation, réglages, rejoindre/quitter et publications restent au legacy, chacun suivi par son issue (D-60) |
 | `/contacts` | `legacy` | |
 | `/links`, `/links/tracked/:token` | `legacy` | `/l/:token` de la V4.0.0 en est le pendant public |
 

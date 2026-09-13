@@ -4,11 +4,12 @@ import '@/styles/floating-menus.css';
 
 import { Avatar } from './avatar';
 import { MenuGlyph } from './menu-glyph';
-import { UnreadCornerBadge, UnreadRungBadge } from './unread-badge';
+import { UnreadCornerBadge, UnreadRungBadge, unreadBadgeText } from './unread-badge';
 import { sessionStore } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useNotificationCounts } from '@/lib/view/use-notification-counts';
+import { usePendingFriendRequestCount } from '@/lib/view/use-pending-friend-requests';
 import { initialsOf } from '@/lib/view/conversation';
 import { FEED_DESTINATION, MENU_LADDER, PROFILE_DESTINATION, type FloatingDestination } from '@/lib/view/floating-menu';
 import {
@@ -76,22 +77,45 @@ function closedMenuLabel(language: InterfaceLanguage, unread: number): string {
   return translate(language, key, { count: String(unread) });
 }
 
+type RungBadge = NonNullable<FloatingDestination['badge']>;
+type RungCounts = Readonly<Record<RungBadge, number>>;
+
 /** Le compteur que CE barreau porte — `menuBadgeCount` d'iOS (`RootView.swift:1740`). */
-function rungCount(destination: FloatingDestination, unread: number): number {
-  return destination.badge === 'unreadNotifications' ? unread : 0;
+function rungCount(destination: FloatingDestination, counts: RungCounts): number {
+  return destination.badge === undefined ? 0 : counts[destination.badge];
 }
 
+/**
+ * Le nom qui dit un compte, par compteur. Les notifications disent le nombre
+ * SERVI par la passerelle ; les demandes reçues sont comptées sur une page de
+ * cent, donc « 99+ » au-delà, comme la pastille (#6321).
+ */
+const RUNG_LABELS = {
+  unreadNotifications: {
+    one: 'a11y.floating.rung.notifications.unread.one',
+    other: 'a11y.floating.rung.notifications.unread.other',
+    text: (count: number) => String(count),
+  },
+  pendingFriendRequests: {
+    one: 'a11y.floating.rung.discover.requests.one',
+    other: 'a11y.floating.rung.discover.requests.other',
+    text: unreadBadgeText,
+  },
+} as const;
+
 /** Le nom d'un barreau — il dit son compte quand il en porte un, une fois. */
-function rungLabel(language: InterfaceLanguage, destination: FloatingDestination, unread: number): string {
-  const count = rungCount(destination, unread);
-  if (count <= 0) return translate(language, destination.labelKey);
-  const key = count === 1 ? 'a11y.floating.rung.notifications.unread.one' : 'a11y.floating.rung.notifications.unread.other';
-  return translate(language, key, { count: String(count) });
+function rungLabel(language: InterfaceLanguage, destination: FloatingDestination, counts: RungCounts): string {
+  const count = rungCount(destination, counts);
+  if (count <= 0 || destination.badge === undefined) return translate(language, destination.labelKey);
+  const labels = RUNG_LABELS[destination.badge];
+  return translate(language, count === 1 ? labels.one : labels.other, { count: labels.text(count) });
 }
 
 export function FloatingMenus() {
   const session = useStore(sessionStore, (s) => s.session);
   const unread = useNotificationCounts().data?.unread ?? 0;
+  const pendingFriendRequests = usePendingFriendRequestCount();
+  const counts: RungCounts = { unreadNotifications: unread, pendingFriendRequests };
   const flux = useFloatingDrag('feed', FEED_DEFAULT);
   const menu = useFloatingDrag('menu', MENU_DEFAULT);
   const expandsDown = ladderExpandsDown(menu.position.y);
@@ -234,7 +258,7 @@ export function FloatingMenus() {
                   itemRefs.current[index] = el;
                 }}
                 onClick={() => setOpen(false)}
-                aria-label={rungLabel(langue, destination, unread)}
+                aria-label={rungLabel(langue, destination, counts)}
                 className="floating-rung pointer-events-auto absolute grid place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={
                   {
@@ -250,7 +274,7 @@ export function FloatingMenus() {
                 }
               >
                 <MenuGlyph glyph={destination.glyph} size={18} />
-                <UnreadRungBadge count={rungCount(destination, unread)} tint={destination.tint} size={LADDER_RUNG} />
+                <UnreadRungBadge count={rungCount(destination, counts)} tint={destination.tint} size={LADDER_RUNG} />
               </Link>
             ))}
           </div>
