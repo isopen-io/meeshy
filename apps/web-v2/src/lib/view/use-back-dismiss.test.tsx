@@ -93,6 +93,31 @@ describe('useBackDismiss — le retour matériel ferme la COUCHE, pas l’écran
     }
   });
 
+  /**
+   * LE BARREAU QUI NAVIGUE — mesuré sur l'échelle flottante (#6288) : le lien
+   * pousse sa destination PUIS ferme la couche. Rendre « son » entrée à ce
+   * moment-là reculerait d'UNE entrée — celle de la destination — et
+   * défaisait la navigation : `/notifications` poussée, `/` rendue.
+   */
+  test('une navigation survenue pendant que la couche est ouverte n’est PAS défaite à sa fermeture', () => {
+    let backCalls = 0;
+    const originalBack = window.history.back.bind(window.history);
+    window.history.back = () => {
+      backCalls += 1;
+    };
+    try {
+      mount(true, () => {});
+      window.history.pushState(null, '', '/destination');
+      act(() => {
+        root.render(<Harness open={false} onClose={() => {}} />);
+      });
+      expect(backCalls).toBe(0);
+    } finally {
+      window.history.back = originalBack;
+      window.history.replaceState(null, '', '/');
+    }
+  });
+
   test('fermée PAR LE RETOUR (popstate) ⇒ ne rend PAS une seconde entrée (l’entrée est déjà consommée)', () => {
     let backCalls = 0;
     const originalBack = window.history.back.bind(window.history);

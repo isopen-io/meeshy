@@ -42,6 +42,8 @@ export type RouteKey =
   | 'storyCompose'
   | 'story'
   | 'feed'
+  | 'notifications'
+  | 'profile'
   | 'login'
   | 'signup'
   | 'welcome'
@@ -71,6 +73,14 @@ export type RouteAccessDecision = 'allow' | 'redirect-login' | 'redirect-home' |
  * bien que `optionalAuth` garde la porte : un visiteur sans compte y recevait
  * jusqu'ici l'écran d'attente (route publique par défaut), puis — le jour où
  * ce lot lui donne du contenu — un 401 en silence.
+ *
+ * `notifications` (#6288) — la même classe, fermée AVANT le contenu cette
+ * fois : les routes `/notifications*` de la passerelle portent toutes
+ * `onRequest: [fastify.authenticate]`.
+ *
+ * `profile` (#6289) — `/me` est SON profil : `PATCH /users/me*` et
+ * `GET /users/me/stats` portent `fastify.authenticate`. Un visiteur sans compte
+ * n'a pas de soi à voir ni à modifier.
  */
 const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'list',
@@ -81,6 +91,8 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'storyCompose',
   'story',
   'feed',
+  'notifications',
+  'profile',
 ]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 

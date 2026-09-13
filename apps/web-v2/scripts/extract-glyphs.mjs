@@ -422,3 +422,79 @@ emit({
   type: 'FeedGlyphName',
   role: "LE JEU D'ECRAN du fil des publications (#5893) : les cinq statistiques de la carte de post, charge avec la route /feed, jamais dans le socle.",
 });
+
+/**
+ * LE JEU D'ECRAN DE LA CLOCHE (#6288) — les glyphes du rail de categories,
+ * miroir `NotificationCategory.icon` (`NotificationListView.swift:37-51`) :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `circle.fill` (non lues) | `circle` |
+ * | `bubble.left.fill` (messages) | `chat-circle` |
+ * | `heart.fill` (reactions) | `heart` |
+ * | `at` (mentions) | `at` |
+ * | `hand.thumbsup.fill` (social) | `thumbs-up` |
+ * | `person.badge.plus` (contacts) | `user-plus` |
+ * | `person.3.fill` (groupes) | `users-three` |
+ * | `globe` (traductions) | `globe` |
+ * | `gear` (systeme) | `gear` |
+ *
+ * plus `trash` pour « Supprimer » dans le menu d'une ligne. `bell` (toutes),
+ * `phone` (appels) et `check` (marquer lue) restent au SOCLE, ou ils vivent
+ * deja. `heart`, `chat-circle`, `users-three`, `gear`, `globe` et `user-plus`
+ * existent aussi dans d'autres jeux d'ecran : ceux-la ne se chargent jamais
+ * avec la cloche, aucun octet n'est donc paye deux fois au meme demarrage.
+ */
+const NOTIFICATIONS = ['circle', 'chat-circle', 'heart', 'at', 'thumbs-up', 'user-plus', 'users-three', 'globe', 'gear', 'trash'];
+
+emit({
+  ids: NOTIFICATIONS,
+  output: join(HERE, '../src/components/glyphs-notifications.ts'),
+  constant: 'NOTIFICATIONS_GLYPHS',
+  type: 'NotificationsGlyphName',
+  role: "LE JEU D'ECRAN de la cloche (#6288) : le rail des categories et le menu d'une ligne, charge avec la route /notifications, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DU PROFIL (#6289) — miroir des symboles de `ProfileView.swift`
+ * et du bandeau de statistiques de `UserProfileSheet+DetailsTab.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `pencil.circle.fill` (avatar) | `pencil-simple` |
+ * | `photo.fill` (banniere) | `camera` |
+ * | `person.text.rectangle.fill` (identite) | `identification-card` |
+ * | `text.quote` (bio) | `quotes` |
+ * | `at` (pseudo) | `at` |
+ * | `envelope.fill` (contact) | `envelope-simple` |
+ * | `globe` (langues) | `globe` |
+ * | `chart.bar.fill` (statistiques) | `chart-bar` |
+ * | `paperplane.fill` (messages) | `chat-circle` |
+ * | `calendar` (membre depuis, jours) | `calendar-blank` |
+ * | `person.badge.plus.fill` (demandes) | `user-plus` |
+ * | `chevron.forward` | `caret-right` |
+ *
+ * `user`, `phone`, `translate`, `trophy`, `users` et `x` restent au SOCLE.
+ */
+const PROFILE = [
+  'pencil-simple',
+  'camera',
+  'identification-card',
+  'quotes',
+  'at',
+  'envelope-simple',
+  'globe',
+  'chart-bar',
+  'chat-circle',
+  'calendar-blank',
+  'user-plus',
+  'caret-right',
+];
+
+emit({
+  ids: PROFILE,
+  output: join(HERE, '../src/components/glyphs-profile.ts'),
+  constant: 'PROFILE_GLYPHS',
+  type: 'ProfileGlyphName',
+  role: "LE JEU D'ECRAN du profil (#6289) : sections, contacts, langues, statistiques et entrees, charge avec la route /me, jamais dans le socle.",
+});

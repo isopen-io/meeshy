@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { createTypingStore, typistNamesOf, typistsOf, TYPING_SAFETY_TIMEOUT_MS } from './typing-store';
-import { typingAnnouncement, typingLead } from '@/lib/view/typing-roster';
+import { interfaceTypingFormatter, typingAnnouncement, typingLead } from '@/lib/view/typing-roster';
 
 describe('typing-store (#5793) — le réducteur pur de la frappe reçue', () => {
   test('start ajoute un frappeur avec une échéance de sécurité de 15 s', () => {
@@ -64,12 +64,12 @@ describe('typing-store (#5793) — le réducteur pur de la frappe reçue', () =>
     store.getState().start('c-1', { userId: 'u-fatou', displayName: 'Fatou Bâ' }, 7_500);
     const avant = typistsOf(store.getState(), 'c-1', 7_800);
     expect(typingLead(avant)?.displayName).toBe('Kwame Mensah');
-    expect(typingAnnouncement(avant.map((t) => t.displayName))).toBe('Kwame Mensah et Fatou Bâ écrivent');
+    expect(typingAnnouncement(avant.map((t) => t.displayName), interfaceTypingFormatter('fr'))).toBe('Kwame Mensah et Fatou Bâ écrivent');
 
     store.getState().start('c-1', { userId: 'u-kwame', displayName: 'Kwame Mensah' }, 9_000); // keepalive
     const apres = typistsOf(store.getState(), 'c-1', 9_300);
     expect(typingLead(apres)?.displayName).toBe('Kwame Mensah');
-    expect(typingAnnouncement(apres.map((t) => t.displayName))).toBe('Kwame Mensah et Fatou Bâ écrivent');
+    expect(typingAnnouncement(apres.map((t) => t.displayName), interfaceTypingFormatter('fr'))).toBe('Kwame Mensah et Fatou Bâ écrivent');
   });
 });
 

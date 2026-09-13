@@ -18,10 +18,11 @@
 
 export const INTERFACE_LANGUAGE_KEY = 'meeshy.interface-language';
 
-/** Sept langues visées (CLAUDE.md racine, dimension 9) ; `fr` et `en` seules
- * cataloguées aujourd'hui (#6206) — une langue non catalguée résout vers
- * `DEFAULT_INTERFACE_LANGUAGE` plutôt que d'afficher une clé nue. */
-export const SUPPORTED_INTERFACE_LANGUAGES = /** @type {const} */ (['fr', 'en']);
+/** Les sept langues du produit (CLAUDE.md racine, dimension 9), celles du
+ * catalogue iOS — toutes cataloguées (`src/lib/interface-catalogs/`, #6206).
+ * Une langue hors de cette liste résout vers `DEFAULT_INTERFACE_LANGUAGE`. Le
+ * code est la LANGUE, jamais la région : `pt-BR` se sert en `pt`. */
+export const SUPPORTED_INTERFACE_LANGUAGES = /** @type {const} */ (['fr', 'en', 'es', 'pt', 'de', 'it', 'ar']);
 
 export const DEFAULT_INTERFACE_LANGUAGE = /** @type {const} */ ('fr');
 

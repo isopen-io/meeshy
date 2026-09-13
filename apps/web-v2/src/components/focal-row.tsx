@@ -6,6 +6,7 @@ import { badgesOf, editedOf, ephemeralBadgeOf, systemRowOf } from '@/lib/view/me
 import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, presenceOf } from '@/lib/view/conversation';
 import { prismFor, served } from '@/lib/api/prism';
+import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
 import type { FlatRowMode } from '@/lib/reading-mode/decision';
@@ -458,6 +459,8 @@ export const FocalRow = memo(function FocalRow({
           attachments={message.attachments}
           languages={languages}
           fallbackLanguage={message.originalLanguage}
+          carrier={mediaCarrierOf({ message, caption: rendered })}
+          mediaFrame="tiles"
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}

@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { INTERFACE_LANGUAGE_KEY } from './inline-interface-language-bootstrap.js';
+import { translate } from './i18n-catalog';
 import { currentInterfaceLanguage, setInterfaceLanguage } from './interface-language';
 
 /**
@@ -36,8 +37,15 @@ describe('currentInterfaceLanguage — lit document.documentElement.lang, jamais
     expect(currentInterfaceLanguage()).toBe('en');
   });
 
+  test('rend chacune des sept langues cataloguées', () => {
+    for (const language of ['fr', 'en', 'es', 'pt', 'de', 'it', 'ar']) {
+      document.documentElement.lang = language;
+      expect(currentInterfaceLanguage()).toBe(language);
+    }
+  });
+
   test('retombe sur le défaut « fr » si la valeur posée est une langue non cataloguée', () => {
-    document.documentElement.lang = 'de';
+    document.documentElement.lang = 'sw';
     expect(currentInterfaceLanguage()).toBe('fr');
   });
 
@@ -48,13 +56,22 @@ describe('currentInterfaceLanguage — lit document.documentElement.lang, jamais
 });
 
 describe('setInterfaceLanguage — pose ET persiste, contrairement au suivi système du schéma', () => {
-  test('pose document.documentElement.lang immédiatement', () => {
-    setInterfaceLanguage('en');
+  test('pose document.documentElement.lang', async () => {
+    await setInterfaceLanguage('en');
     expect(document.documentElement.lang).toBe('en');
   });
 
-  test('persiste le choix pour le prochain démarrage', () => {
-    setInterfaceLanguage('en');
+  test('persiste le choix pour le prochain démarrage', async () => {
+    await setInterfaceLanguage('en');
     expect(localStorage.getItem(INTERFACE_LANGUAGE_KEY)).toBe('en');
+  });
+
+  /**
+   * La langue n'est posée qu'une fois son catalogue CHARGÉ : un libellé rendu
+   * entre les deux lirait une langue dont aucun texte n'est disponible.
+   */
+  test('charge le catalogue de la langue AVANT de la poser', async () => {
+    await setInterfaceLanguage('it');
+    expect(translate(currentInterfaceLanguage(), 'root.menu.settings')).toBe('Impostazioni');
   });
 });

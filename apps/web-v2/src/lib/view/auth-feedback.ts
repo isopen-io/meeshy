@@ -221,3 +221,64 @@ export function placeMagicLinkValidationFailure(failure: ApiFailure): MagicLinkV
   if (failure.status === 400) return { message: MAGIC_LINK_INVALID_MESSAGE };
   return { message: `${AUTH_GENERIC_FAILURE_MESSAGE} (${failure.code ?? failure.status})` };
 }
+
+// --- Vérification d'e-mail (T-verify, miroir EmailVerificationView.swift) --
+
+type VerifyEmailData = { readonly message: string; readonly alreadyVerified?: boolean; readonly verifiedAt?: string };
+
+export type VerifyEmailOutcome =
+  | { readonly kind: 'verified' }
+  | { readonly kind: 'invalid-code' }
+  | { readonly kind: 'offline' }
+  | { readonly kind: 'failed'; readonly message: string };
+
+/**
+ * Un code faux ET un code expiré rendent le MÊME 400 côté serveur
+ * (`AuthService.verifyEmail`, aucun champ ne les distingue) — un seul texte,
+ * même doctrine que `placeMagicLinkValidationFailure`. La branche
+ * `alreadyVerified` (magic-link.ts:349-354) est un SUCCÈS, jamais un refus :
+ * l'écran affiche le même overlay de confirmation.
+ */
+export function resolveVerifyEmailOutcome(result: ApiResult<VerifyEmailData>): VerifyEmailOutcome {
+  if (result.ok) return { kind: 'verified' };
+  if (result.status === 0) return { kind: 'offline' };
+  if (result.status === 400) return { kind: 'invalid-code' };
+  return { kind: 'failed', message: `${AUTH_GENERIC_FAILURE_MESSAGE} (${result.code ?? result.status})` };
+}
+
+// --- Réinitialisation du mot de passe (T-reset) -------------------------
+
+type VerifyResetTokenData = { readonly valid: boolean; readonly requires2FA?: boolean; readonly expiresAt?: string };
+type ResetPasswordData = { readonly message: string };
+
+export type ResetTokenState = 'checking' | 'valid' | 'invalid' | 'offline';
+
+/**
+ * `GET /reset-password/verify-token` rend `valid:false` en 200 (jeton périmé
+ * ou consommé) — CE N'EST PAS un échec HTTP, donc `result.ok` seul ne suffit
+ * pas à décider : la valeur PORTÉE tranche, jamais son enveloppe.
+ */
+export function resolveResetTokenState(result: ApiResult<VerifyResetTokenData>): ResetTokenState {
+  if (!result.ok) return result.status === 0 ? 'offline' : 'invalid';
+  return result.data.valid ? 'valid' : 'invalid';
+}
+
+export type ResetPasswordOutcome =
+  | { readonly kind: 'reset' }
+  | { readonly kind: 'invalid-token' }
+  | { readonly kind: 'offline' }
+  | { readonly kind: 'failed'; readonly message: string };
+
+/**
+ * Un 400 sur `POST /reset-password` couvre en pratique le jeton
+ * invalide/expiré (mot de passe trop court ou dépareillé étant déjà bloqués
+ * côté client par `isPasswordValid` + l'égalité des deux champs) — l'écran
+ * en tire la même sortie que `verifyResetToken` invalide : retour vers
+ * `/forgot-password`.
+ */
+export function resolveResetPasswordOutcome(result: ApiResult<ResetPasswordData>): ResetPasswordOutcome {
+  if (result.ok) return { kind: 'reset' };
+  if (result.status === 0) return { kind: 'offline' };
+  if (result.status === 400) return { kind: 'invalid-token' };
+  return { kind: 'failed', message: `${AUTH_GENERIC_FAILURE_MESSAGE} (${result.code ?? result.status})` };
+}

@@ -5,7 +5,10 @@
  * sur la conversation dédiée `c-live` (§5 étape 6 de la spécification).
  *
  * Contexte Playwright : `locale: 'en-US'` — la locale est POSÉE, jamais
- * héritée du runner. Sous fixtures le prisme est
+ * héritée du runner. Elle résout AUSSI la langue d'INTERFACE (`en`, script
+ * d'amorçage de `index.html`) : le libellé de frappe, qui vient du catalogue
+ * d'interface (#6206), se lit donc en ANGLAIS pendant que le CONTENU suit le
+ * prisme ci-dessous — deux résolveurs, deux langues, sur le même écran. Sous fixtures le prisme est
  * `resolveUserLanguagesOrdered({ systemLanguage: 'fr' }, { deviceLocale })`
  * (`lib/reader.ts:44-52`), donc `['fr','en']` en `en-US` : c'est ce qui rend
  * le RANG 2 (`en`) OBSERVABLE avant que `fr` ne reprenne la main au rang 1.
@@ -115,14 +118,14 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
   // ===== 3. LE ROSTER, DANS LE FIL =====
   await page.clock.runFor(1500); // T+6,3 s
   expect(
-    /^Kwame Mensah écrit$/.test((await typingCellText(page)) ?? ''),
-    `${label} T+6,3 s : la cellule dit « Kwame Mensah écrit » (obtenu ${await typingCellText(page)})`,
+    /^Kwame Mensah is typing$/.test((await typingCellText(page)) ?? ''),
+    `${label} T+6,3 s : la cellule dit « Kwame Mensah is typing » (obtenu ${await typingCellText(page)})`,
   );
 
   await page.clock.runFor(1500); // T+7,8 s
   expect(
-    (await typingCellText(page)) === 'Kwame Mensah et Fatou Bâ écrivent',
-    `${label} T+7,8 s : « Kwame Mensah et Fatou Bâ écrivent » (obtenu ${await typingCellText(page)})`,
+    (await typingCellText(page)) === 'Kwame Mensah and Fatou Bâ are typing',
+    `${label} T+7,8 s : « Kwame Mensah and Fatou Bâ are typing » (obtenu ${await typingCellText(page)})`,
   );
   expect(
     (await typingCellAvatarInitials(page)) === 'KM',
@@ -139,7 +142,7 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
    */
   await page.clock.runFor(1500); // T+9,3 s — keepalive de Kwame à 9 000 ms.
   expect(
-    (await typingCellText(page)) === 'Kwame Mensah et Fatou Bâ écrivent',
+    (await typingCellText(page)) === 'Kwame Mensah and Fatou Bâ are typing',
     `${label} T+9,3 s : le keepalive de Kwame ne change PAS l'ordre du roster (obtenu ${await typingCellText(page)})`,
   );
   expect(
@@ -191,7 +194,7 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
 
   await page.clock.runFor(4000); // T+13,3 s — Fatou s'arrête à 13 000 ms.
   expect(
-    (await typingCellText(page)) === 'Kwame Mensah écrit',
+    (await typingCellText(page)) === 'Kwame Mensah is typing',
     `${label} T+13,3 s : Fatou s'est arrêtée, Kwame reste seul (obtenu ${await typingCellText(page)})`,
   );
 

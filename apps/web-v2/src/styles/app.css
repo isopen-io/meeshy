@@ -17,8 +17,19 @@
  * un mesusage se voit en revue au lieu de se cacher derriere `rounded-lg`.
  */
 @import 'tailwindcss';
+/* LA FEUILLE DE PREMIÈRE PEINTURE NAÎT DU CODE LIVRÉ, jamais de sa PROSE
+   (#6124). La détection automatique de Tailwind lit aussi les gates de
+   `scripts/` et les documents Markdown : un nom de classe CITÉ dans un
+   commentaire, une assertion ou une décision (`backdrop-blur-xl`,
+   `backdrop-filter`) y fabriquait un utilitaire que rien n'emploie, avec ses
+   `@property` — mesuré à ~0,1 Ko gzip de la feuille servie avant le premier
+   pixel. Même arbitrage que `institutional.css` (`source(none)`), borné ici
+   aux deux sources qui ne sont jamais du code d'écran. */
+@source not '../../scripts';
+@source not '../../**/*.md';
 @import '@meeshy/design-tokens/tokens.css';
 @import './ios.css';
+@import './glass.css';
 
 /* Le schema SOMBRE est le defaut de la table (`:root, :root.dark`) ; le clair
    s'obtient par la classe `.light`. La variante ci-dessous sert les rares cas

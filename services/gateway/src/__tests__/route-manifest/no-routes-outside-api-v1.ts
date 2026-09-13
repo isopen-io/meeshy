@@ -105,53 +105,53 @@ export const ALLOWED_OUTSIDE_API_V1: readonly AllowedOutsideApiV1[] = [
     family: 'deprecated-alias',
     reason: 'Alias non versionné de POST /api/v1/socketio/disconnect-user (#4376) — en sursis, retrait gouverné par le compteur d\'accès (#4275).',
   },
-  // ── Les sept routes de userDeletionsRoutes — DETTE CONNUE, pas une décision ──
+  // ── Les sept alias LEGACY de userDeletionsRoutes — #4317, SOLDÉ ──
   // `DELETE .../conversations/:conversationId/delete-for-me` PARTAGE son
   // adresse finale sous /api/v1 avec un DOUBLON déjà vivant
   // (routes/conversations/delete-for-me.ts, monté dans conversationRoutes) :
-  // la faire migrer ferait lever Fastify au démarrage
-  // (FST_ERR_DUPLICATED_ROUTE) tant qu'une décision produit n'a pas tranché
-  // laquelle des deux implémentations reste. Les six autres routes du même
-  // fichier n'ont AUCUN doublon et pourraient migrer seules — groupées ici
-  // pour que le fichier garde une SEULE convention d'adressage (critère 3)
-  // plutôt que d'en réintroduire une deuxième. Suivi : nouvelle issue à
-  // ouvrir, « quelle implémentation de delete-for-me de conversation
-  // reste ? » (voir routes/user-deletions.ts, doc-comment de
-  // `UserDeletionsRoutesOptions`).
+  // #4317 a tranché que celui-ci survit — le faire migrer lèverait
+  // FST_ERR_DUPLICATED_ROUTE au démarrage. Il reste donc le SEUL des sept
+  // sans adresse canonique DANS ce module ; son successeur vit ailleurs.
+  // Les six autres n'avaient ni doublon ni successeur — #4317 leur en a
+  // donné un, sous `apiPath()`, enregistré EN PLUS de l'alias ci-dessous
+  // (jamais à sa place). Les sept portent désormais les trois en-têtes
+  // `Deprecation`/`Sunset`/`Link` (#4274) : famille `deprecated-alias`, plus
+  // `known-gap` pour ce module — voir routes/user-deletions.ts,
+  // § « Ce qui RESTAIT — soldé ».
   {
     path: '/api/conversations/:conversationId/delete-for-me',
-    family: 'known-gap',
-    reason: 'Collision avec routes/conversations/delete-for-me.ts sous /api/v1 — décision produit requise.',
+    family: 'deprecated-alias',
+    reason: 'Alias non versionné de DELETE /api/v1/conversations/:id/delete-for-me (routes/conversations/delete-for-me.ts, #4317) — en sursis, retrait gouverné par le compteur d\'accès (#4275).',
   },
   {
     path: '/api/conversations/:conversationId/restore-for-me',
-    family: 'known-gap',
-    reason: 'Groupée avec delete-for-me pour garder une seule convention d\'adressage dans le fichier.',
+    family: 'deprecated-alias',
+    reason: 'Alias non versionné de POST /api/v1/conversations/:id/restore-for-me (#4317) — en sursis, retrait gouverné par le compteur d\'accès (#4275).',
   },
   {
     path: '/api/conversations/:conversationId/clear-history',
-    family: 'known-gap',
-    reason: 'Groupée avec delete-for-me pour garder une seule convention d\'adressage dans le fichier.',
+    family: 'deprecated-alias',
+    reason: 'Alias non versionné de POST /api/v1/conversations/:id/clear-history (#4317) — en sursis, retrait gouverné par le compteur d\'accès (#4275).',
   },
   {
     path: '/api/messages/:messageId/delete-for-me',
-    family: 'known-gap',
-    reason: 'Groupée avec delete-for-me pour garder une seule convention d\'adressage dans le fichier.',
+    family: 'deprecated-alias',
+    reason: 'Alias non versionné de DELETE /api/v1/messages/:id/delete-for-me (#4317) — en sursis, retrait gouverné par le compteur d\'accès (#4275).',
   },
   {
     path: '/api/messages/:messageId/restore-for-me',
-    family: 'known-gap',
-    reason: 'Groupée avec delete-for-me pour garder une seule convention d\'adressage dans le fichier.',
+    family: 'deprecated-alias',
+    reason: 'Alias non versionné de POST /api/v1/messages/:id/restore-for-me (#4317) — en sursis, retrait gouverné par le compteur d\'accès (#4275).',
   },
   {
     path: '/api/messages/bulk/delete-for-me',
-    family: 'known-gap',
-    reason: 'Groupée avec delete-for-me pour garder une seule convention d\'adressage dans le fichier.',
+    family: 'deprecated-alias',
+    reason: 'Alias non versionné de DELETE /api/v1/messages/bulk/delete-for-me (#4317) — en sursis, retrait gouverné par le compteur d\'accès (#4275).',
   },
   {
     path: '/api/user/deleted-conversations',
-    family: 'known-gap',
-    reason: 'Groupée avec delete-for-me pour garder une seule convention d\'adressage dans le fichier.',
+    family: 'deprecated-alias',
+    reason: 'Alias non versionné de GET /api/v1/user/deleted-conversations (#4317) — en sursis, retrait gouverné par le compteur d\'accès (#4275).',
   },
 ];
 

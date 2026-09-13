@@ -1,5 +1,7 @@
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 import { useRoute } from '@/lib/router';
@@ -66,7 +68,13 @@ const SyncPill = lazy(chargerPastille);
  * `useSyncPillArmed` : il ne connaît ni glyphe, ni libellé, ni géométrie — il
  * répond OUI ou NON sur une clé de route, et c'est son OUI qui rend le reste.
  */
-const chargerMenus = () => import('./floating-menus').then((m) => ({ default: m.FloatingMenus }));
+const chargerMenus = () =>
+  /* Les menus se disent dans la langue d'interface (#6206) : leur catalogue
+     est attendu avec leur chunk, en parallèle — `import()` comme le catalogue
+     sont idempotents, le préchargement ci-dessous ne paie rien deux fois. */
+  Promise.all([import('./floating-menus'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.FloatingMenus,
+  }));
 const FloatingMenus = lazy(chargerMenus);
 
 export default function Shell({ children }: { children: ReactNode }) {

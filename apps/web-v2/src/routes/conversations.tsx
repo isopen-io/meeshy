@@ -711,10 +711,9 @@ export default function ConversationsScreen() {
       */}
       <div ref={searchBarRef} data-search-bar className="absolute inset-x-0 bottom-0 z-10 px-4 pt-2 pb-safe">
         <div
-          className="flex items-center gap-3 px-4 py-3 backdrop-blur-xl"
+          className="glass-prominent glass-card flex items-center gap-3 px-4 py-3"
           style={{
             borderRadius: 22,
-            backgroundColor: 'color-mix(in srgb, var(--color-ios-card) 85%, transparent)',
             border: '1px solid var(--color-edge)',
           }}
         >

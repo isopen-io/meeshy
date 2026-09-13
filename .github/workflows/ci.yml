@@ -581,6 +581,28 @@ jobs:
           cd apps/web-v2
           node scripts/check-floating-clearance.mjs
 
+      # #6288 — la cloche : la pastille du bouton flottant porte le compte servi
+      # et disparaît à zéro ; une catégorie filtre ; ouvrir une ligne la marque
+      # lue et mène à sa cible ; « Tout lire » a un effet ; aucun texte ni
+      # contrôle n'est volé par un disque (elementFromPoint, deux schémas,
+      # 390×844 et 320×568).
+      - name: Gate cloche des notifications (pastille, catégories, marquage, cible)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-notifications.mjs
+
+      # #6289 — le profil : il se lit (contact masqué, trois rangs du Prisme,
+      # statistiques), se modifie en optimiste, garde le couple de focus de ses
+      # champs, change une langue par la feuille et la retire, recompresse une
+      # photo avant de l'envoyer, désactive l'écriture hors ligne ; aucun
+      # contrôle ni texte n'est volé par un disque (deux schémas, deux gabarits).
+      - name: Gate profil (lecture, édition optimiste, langues, recompression, hors-ligne)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-profile.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |
@@ -617,6 +639,25 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-thread-chrome.mjs
+
+      # #6101 — AU REPOS, LA PILULE DE JOUR NE RECOUVRE AUCUN TEXTE. Boîtes
+      # des nœuds texte sous la capsule et opacité calculée, deux schémas,
+      # deux gabarits, trois modes rendus — une géométrie, jamais un booléen.
+      - name: Gate pilule de jour au repos (#6101)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-day-pill-rest.mjs
+
+      # #6206 — UNE SECONDE LANGUE D'INTERFACE S'AFFICHE RÉELLEMENT : <html lang>
+      # résolu (stockage → navigateur → fr), écran d'attente et menus flottants
+      # dans la langue, UN SEUL catalogue téléchargé, aucune erreur de page,
+      # atteignabilité à 320×568 en allemand et en arabe.
+      - name: Gate langue d'interface (#6206)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-interface-language.mjs
 
       # #6213 — LE FIL DÉFILE D'UN BORD À L'AUTRE DE L'ÉCRAN. Miroir de
       # check-thread-chrome.mjs : rien de ceci n'est visible d'un test

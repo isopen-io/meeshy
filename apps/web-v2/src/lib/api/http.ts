@@ -100,7 +100,7 @@ export type ApiSuccess<T> = {
 export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
 
 export type HttpRequest = {
-  readonly method: 'GET' | 'PUT' | 'POST' | 'DELETE';
+  readonly method: 'GET' | 'PUT' | 'POST' | 'PATCH' | 'DELETE';
   readonly path: string;
   readonly body?: unknown;
   /** Transmis tel quel à `fetch` — l'appelant (TanStack Query, un effet de

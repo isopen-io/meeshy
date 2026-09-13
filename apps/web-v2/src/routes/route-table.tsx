@@ -1,3 +1,5 @@
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { createRouter } from '@/lib/router';
 
 /**
@@ -58,9 +60,16 @@ export const ROUTES = {
      validation, adresse SÉPARÉE. */
   magicLink: { pattern: '/auth/magic-link', screen: () => import('@/routes/magic-link') },
   magicLinkValidate: { pattern: '/auth/magic-link/validate', screen: () => import('@/routes/magic-link-validate') },
-  /* MOT DE PASSE OUBLIÉ, flux E-MAIL (#5816) — le flux TÉLÉPHONE et
-     `/reset-password` sont hors tranche (issues compagnons). */
+  /* MOT DE PASSE OUBLIÉ, flux E-MAIL (#5816) — le flux TÉLÉPHONE reste hors
+     tranche (issue compagnon). */
   forgotPassword: { pattern: '/forgot-password', screen: () => import('@/routes/forgot-password') },
+  /* ON FINIT D'ENTRER DANS MEESHY (T-verify/T-reset, #5672) — nomenclature
+     legacy reprise (D-5) : `apps/web/app/auth/verify-email`,
+     `apps/web/app/reset-password`. L'e-mail et le jeton voyagent en QUERY
+     STRING (`?email=`, `?token=`) — un lien reçu par courriel reste valide
+     après un rafraîchissement, jamais une navigation en mémoire seule. */
+  verifyEmail: { pattern: '/auth/verify-email', screen: () => import('@/routes/verify-email') },
+  resetPassword: { pattern: '/reset-password', screen: () => import('@/routes/reset-password') },
   /* LES HUIT DESTINATIONS DES MENUS FLOTTANTS (#6214) — le Flux pour le bouton
      de gauche, les six barreaux de l'échelle de droite, et le profil qu'ouvre
      l'avatar. Leurs libellés, teintes et glyphes vivent dans UNE table
@@ -110,4 +119,8 @@ function NotFound() {
   );
 }
 
-export const { Router, Link, href, navigate } = createRouter(ROUTES, NotFound);
+/* LE CATALOGUE D'INTERFACE (#6206) — chaque écran l'attend, en parallèle de
+   son chunk : ce qui s'y rend lit ses libellés de façon synchrone. */
+export const { Router, Link, href, navigate } = createRouter(ROUTES, NotFound, {
+  screenPrerequisite: () => loadInterfaceCatalog(currentInterfaceLanguage()),
+});
