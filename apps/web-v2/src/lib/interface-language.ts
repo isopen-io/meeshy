@@ -23,6 +23,7 @@ import {
   DEFAULT_INTERFACE_LANGUAGE,
   INTERFACE_LANGUAGE_KEY,
   SUPPORTED_INTERFACE_LANGUAGES,
+  resolveInterfaceLanguageCode,
 } from './inline-interface-language-bootstrap.js';
 
 export type InterfaceLanguage = (typeof SUPPORTED_INTERFACE_LANGUAGES)[number];
@@ -57,9 +58,10 @@ export function currentInterfaceLanguage(): InterfaceLanguage {
  * valeur au sens où `prefers-color-scheme` en est une pour le schéma.
  *
  * Le catalogue de la langue est CHARGÉ AVANT qu'elle ne soit posée (#6206) :
- * un libellé rendu entre les deux lirait une langue sans aucun texte. Ce qui
- * est déjà monté garde sa langue jusqu'à son prochain rendu — iOS applique de
- * même le changement au relancement (`settings.interface_language.restart`).
+ * un libellé rendu entre les deux lirait une langue sans aucun texte. Les
+ * abonnés sont prévenus ENSUITE (#5563) : la racine de l'application se
+ * redessine alors dans la nouvelle langue, sans rechargement — là où iOS
+ * attend le relancement (`settings.interface_language.restart`).
  */
 export async function setInterfaceLanguage(language: InterfaceLanguage): Promise<void> {
   await loadInterfaceCatalog(language);
@@ -69,4 +71,59 @@ export async function setInterfaceLanguage(language: InterfaceLanguage): Promise
   } catch {
     /* Stockage refusé : la langue tient pour la session, sans se souvenir. */
   }
+  notify();
+}
+
+const listeners = new Set<() => void>();
+
+function notify(): void {
+  listeners.forEach((listener) => listener());
+}
+
+/**
+ * S'abonne aux changements de langue d'interface (#5563) — la forme que
+ * `useSyncExternalStore` attend. Rend la fonction de désabonnement.
+ */
+export function subscribeInterfaceLanguage(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/**
+ * Le choix EXPLICITE de l'utilisateur, ou `null` quand l'interface est en
+ * « Automatique » — miroir `UILanguageOverride.explicitChoice` (iOS). Une
+ * langue stockée non cataloguée n'est pas un choix.
+ */
+export function interfaceLanguageChoice(): InterfaceLanguage | null {
+  try {
+    const stored = localStorage.getItem(KEY);
+    return stored !== null && isSupported(stored) ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+const browserLanguages = (): readonly string[] =>
+  typeof navigator === 'undefined' ? [] : navigator.languages ?? [navigator.language];
+
+/**
+ * « AUTOMATIQUE » (#5563) — retire le choix et suit le navigateur, par la
+ * règle du script d'amorçage (`resolveInterfaceLanguageCode`), jamais une
+ * seconde écriture de cette règle. Le choix n'est retiré qu'une fois le
+ * catalogue de la langue résolue CHARGÉ : un échec de chargement laisse
+ * l'interface telle qu'elle était, choix compris.
+ */
+export async function followBrowserInterfaceLanguage(languages: readonly string[] = browserLanguages()): Promise<void> {
+  const resolved = resolveInterfaceLanguageCode(null, languages);
+  const language: InterfaceLanguage = isSupported(resolved) ? resolved : DEFAULT;
+  await loadInterfaceCatalog(language);
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    /* Stockage refusé : rien n'était retenu. */
+  }
+  document.documentElement.lang = language;
+  notify();
 }

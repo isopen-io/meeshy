@@ -8,6 +8,14 @@ import { Field } from '@/components/field';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import type { GlyphName } from '@/components/glyphs';
 import { PROFILE_GLYPHS, type ProfileGlyphName } from '@/components/glyphs-profile';
+import {
+  GroupedSection,
+  RowIcon,
+  SECTION_BRAND_INK,
+  SECTION_CARD_STYLE,
+  SECTION_INK,
+  SECTION_INK_2,
+} from '@/components/grouped-section';
 import type { MaskedContact, MyProfile, MyStats, PendingRequests, ProfileImageKind } from '@/lib/api/profile';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -39,13 +47,10 @@ import { Link } from '@/routes/route-table';
 
 export const PROFILE_HEADER_HEIGHT = 64;
 
-const INK = 'var(--color-ios-ink)';
-const INK_2 = 'var(--color-ios-ink-2)';
-const BRAND_INK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--ios-indigo-600)]';
-const CARD_STYLE = {
-  backgroundColor: 'var(--color-ios-card)',
-  border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 22%, transparent)',
-} as const;
+const INK = SECTION_INK;
+const INK_2 = SECTION_INK_2;
+const BRAND_INK = SECTION_BRAND_INK;
+const CARD_STYLE = SECTION_CARD_STYLE;
 const FIELD_TINT = 'var(--color-ios-brand)';
 
 type IconSpec = { readonly set: 'socle'; readonly name: GlyphName } | { readonly set: 'ecran'; readonly name: ProfileGlyphName };
@@ -56,18 +61,9 @@ function Icon({ spec, size }: { readonly spec: IconSpec; readonly size: number }
 
 function FieldIcon({ spec }: { readonly spec: IconSpec }) {
   return (
-    <span
-      aria-hidden="true"
-      className="grid shrink-0 place-items-center rounded-[8px]"
-      style={{
-        width: 28,
-        height: 28,
-        color: 'var(--color-ios-brand)',
-        backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)',
-      }}
-    >
+    <RowIcon>
       <Icon spec={spec} size={15} />
-    </span>
+    </RowIcon>
   );
 }
 
@@ -85,19 +81,9 @@ function Section({
   readonly children: ReactNode;
 }) {
   return (
-    <section aria-labelledby={id} className="grid gap-2">
-      <h2 id={id} className={`flex items-center gap-1.5 ps-1 text-check font-bold tracking-wide ${BRAND_INK}`}>
-        <GlyphSvg glyph={PROFILE_GLYPHS[glyph]} size={12} />
-        {title}
-      </h2>
-      {card ? (
-        <div className="grid overflow-hidden rounded-card" style={CARD_STYLE}>
-          {children}
-        </div>
-      ) : (
-        children
-      )}
-    </section>
+    <GroupedSection id={id} title={title} icon={<GlyphSvg glyph={PROFILE_GLYPHS[glyph]} size={12} />} card={card}>
+      {children}
+    </GroupedSection>
   );
 }
 

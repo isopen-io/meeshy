@@ -498,3 +498,71 @@ emit({
   type: 'ProfileGlyphName',
   role: "LE JEU D'ECRAN du profil (#6289) : sections, contacts, langues, statistiques et entrees, charge avec la route /me, jamais dans le socle.",
 });
+
+/**
+ * LE JEU D'ECRAN DES REGLAGES (#5563) — miroir des symboles de `SettingsView.swift`
+ * et de `PrivacySettingsView.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `person.circle.fill` (compte) | `user-circle` |
+ * | `shield.fill` (securite) | `shield-check` |
+ * | `person.crop.circle.badge.minus` (supprimer) | `user-minus` |
+ * | `eye.fill` (visibilite) | `eye` |
+ * | `circle.fill` (statut en ligne) | `circle` |
+ * | `keyboard` (indicateur de frappe) | `keyboard` |
+ * | `paintbrush.fill` (apparence) | `paint-brush` |
+ * | `circle.lefthalf.filled` / `sun.max` / `moon` (theme) | `circle-half` / `sun` / `moon` |
+ * | `globe` (langue de l'interface) | `globe` |
+ * | `bell.badge.fill` (notifications) | `bell-ringing` |
+ * | `speaker.wave.2.fill` (sons) | `speaker-high` |
+ * | `slider.horizontal.3` (plus d'options) | `sliders-horizontal` |
+ * | `externaldrive.fill` (donnees) | `hard-drives` |
+ * | `bubble.left` (messages) | `chat-text` |
+ * | `square.and.arrow.up.fill` (export) | `export` |
+ * | `wrench.and.screwdriver.fill` (outils) | `wrench` |
+ * | `info.circle.fill` (a propos) | `info` |
+ * | `doc.text.fill` (conditions) | `file-text` |
+ * | `hand.raised.fill` (politique) | `hand-palm` |
+ * | `sparkles` (version) | `sparkle` |
+ * | `rectangle.portrait.and.arrow.forward` (deconnexion) | `sign-out` |
+ * | lien vers le legacy (propre au web) | `arrow-square-out` |
+ * | `chevron.forward` | `caret-right` |
+ *
+ * `lock`, `clock`, `checks`, `translate`, `bell`, `image` et `trophy` restent au SOCLE.
+ */
+const SETTINGS = [
+  'user-circle',
+  'shield-check',
+  'user-minus',
+  'eye',
+  'circle',
+  'keyboard',
+  'paint-brush',
+  'circle-half',
+  'sun',
+  'moon',
+  'globe',
+  'bell-ringing',
+  'speaker-high',
+  'sliders-horizontal',
+  'hard-drives',
+  'chat-text',
+  'export',
+  'wrench',
+  'info',
+  'file-text',
+  'hand-palm',
+  'sparkle',
+  'sign-out',
+  'arrow-square-out',
+  'caret-right',
+];
+
+emit({
+  ids: SETTINGS,
+  output: join(HERE, '../src/components/glyphs-settings.ts'),
+  constant: 'SETTINGS_GLYPHS',
+  type: 'SettingsGlyphName',
+  role: "LE JEU D'ECRAN des reglages (#5563) : sections, bascules, theme, liens vers le legacy, charge avec la route /settings, jamais dans le socle.",
+});

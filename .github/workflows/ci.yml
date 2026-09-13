@@ -603,6 +603,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-profile.mjs
 
+      # #5563 — les réglages : le thème bascule à chaud et persiste, la langue
+      # d'interface se pose sans rechargement, les bascules que la passerelle
+      # obéit sont optimistes et désactivées hors ligne, chaque entrée non portée
+      # mène au legacy, la déconnexion efface la session ; aucun contrôle ni
+      # texte n'est volé par un disque (deux schémas, deux gabarits).
+      - name: Gate réglages (thème, langue d'interface, bascules, legacy, déconnexion)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-settings.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |
