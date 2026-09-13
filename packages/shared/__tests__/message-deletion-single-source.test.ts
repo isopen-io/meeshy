@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -43,7 +43,7 @@ import { join } from 'path';
  * un résidu — la trancher demande un arbitrage produit, pas un témoin.
  */
 describe('Message dit sa suppression une seule fois', () => {
-  const schema = readFileSync(join(import.meta.dir, '..', 'prisma', 'schema.prisma'), 'utf8');
+  const schema = readFileSync(join(import.meta.dirname, '..', 'prisma', 'schema.prisma'), 'utf8');
 
   /** Le bloc `model Message { … }`, borné par ses accolades. */
   const modelMessage = (): string => {
