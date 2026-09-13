@@ -1,5 +1,5 @@
 import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { Field } from '@/components/field';
@@ -12,6 +12,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
+import { useSettled } from '@/lib/view/use-settled';
 import {
   COMMUNITIES_SEARCH_HEIGHT,
   COMMUNITIES_TOP_RESERVE,
@@ -47,18 +48,6 @@ import {
 const SEARCH_DEBOUNCE_MS = 350;
 const EMPTY_SEARCH = '';
 
-function useSettled(value: string, delayMs: number): string {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    if (value.trim() === EMPTY_SEARCH) {
-      setSettled(EMPTY_SEARCH);
-      return undefined;
-    }
-    const handle = setTimeout(() => setSettled(value), delayMs);
-    return () => clearTimeout(handle);
-  }, [value, delayMs]);
-  return settled;
-}
 
 export default function CommunitiesScreen() {
   const language = currentInterfaceLanguage();

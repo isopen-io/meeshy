@@ -637,6 +637,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-calls.mjs
 
+      # #6363 / #6321 — découvrir des personnes : trois onglets (Découvrir,
+      # Demandes, Bloqués), chaque relation par son geste, accepter/refuser
+      # retirent la ligne et font baisser le compte de l'onglet ET du barreau au
+      # geste, aucun point de présence peint ; chaque texte tient AA et aucun
+      # n'est volé par un disque (deux schémas, deux gabarits).
+      - name: Gate découverte de personnes (relations, demandes, bloqués, compte)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-discover.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |
