@@ -585,3 +585,31 @@ emit({
   type: 'SettingsGlyphName',
   role: "LE JEU D'ECRAN des reglages (#5563) : sections, bascules, theme, liens vers le legacy, charge avec la route /settings, jamais dans le socle.",
 });
+
+/**
+ * LE JEU D'ECRAN DES COMMUNAUTES (#6364) — miroir des symboles de
+ * `CommunityListView.swift`, `CommunityDetailView.swift` et
+ * `CommunityCreateView.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `bubble.left.fill` (conversations d'une carte) | `chat-circle` |
+ * | `bubble.left.and.bubble.right.fill` (canaux du detail) | `chats-circle` |
+ * | `globe` (publique) | `globe` |
+ * | `plus.circle.fill` (creer) | `plus-circle` |
+ * | `person.3.fill` (etat vide) | `users-three` |
+ * | `xmark.circle.fill` (effacer la recherche) | `x-circle` |
+ * | `lock.shield.fill` / `eye.fill` (confidentialite a la creation) | `shield-check` / `eye` |
+ * | `chevron.forward` | `caret-right` |
+ *
+ * `lock`, `users`, `magnifyingGlass`, `caretLeft` et `warningCircle` restent au SOCLE.
+ */
+const COMMUNITIES = ['chat-circle', 'chats-circle', 'globe', 'plus-circle', 'users-three', 'x-circle', 'shield-check', 'eye', 'caret-right'];
+
+emit({
+  ids: COMMUNITIES,
+  output: join(HERE, '../src/components/glyphs-communities.ts'),
+  constant: 'COMMUNITIES_GLYPHS',
+  type: 'CommunitiesGlyphName',
+  role: "LE JEU D'ECRAN des communautes (#6364) : cartes, detail, recherche et creation, charge avec les routes /communities, jamais dans le socle.",
+});

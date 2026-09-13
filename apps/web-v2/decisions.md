@@ -2327,3 +2327,28 @@ Le poids : `first_paint` était mesuré à 40,5 Ko (plafond 41, D-53) avant ce t
 - Le double tap latéral ±10 s d'iOS (`MediaStageSeek`, #6163) : #6369. Au clavier, le saut de 10 s existe déjà sur le curseur.
 - La première peinture passe de 41,65 à 42,12 Ko. `i18n-catalog` et `preload-helper` sortent du chunk d'entrée : cause mesurée pour le premier, à bissecter pour le second. Suivi en #6368.
 - La colonne d'actions (Enregistrer, Réagir, Répondre) : #6303. Le vocal plein écran : #6306.
+
+## D-60 · Ses communautés se lisent comme iOS : la liste, le détail et la création sont servis ; membres, invitation, réglages, rejoindre/quitter et publications attendent chacun leur issue — 2026-09-13 (#6364)
+
+**Le constat.** `/communities` était un écran d'attente (#6214). iOS ouvre `CommunityListView` depuis le cinquième barreau, puis pousse `communityDetail`, `communityCreate`, `communitySettings`, `communityMembers` et `communityInvite` (`Router.swift`, `RootRouteDestination.swift`).
+
+**Le périmètre V4.0.0 tranché.** Sont servis les trois gestes du chemin nominal, que la passerelle sert entièrement (`services/gateway/src/routes/communities/core.ts`) : voir les siennes (`/communities`), en ouvrir une (`/communities/:id`, l'adresse du legacy reprise, D-5, par id OU identifiant), en créer une (`/communities/new`, adresse neuve, déclarée AVANT le détail dans `route-table.tsx` : le routeur rend la première adresse qui correspond, et `new` serait lu comme un identifiant). Ne sont PAS servis, et aucun de leurs contrôles n'est dessiné (loi 4) : les membres (#6375), l'invitation et l'ajout de membres à la création (#6376), les réglages du créateur (#6377), rejoindre et quitter (#6378), l'onglet des publications du détail (#6379). Le cœur « réagir à la communauté » du détail iOS n'a aucun effet et n'est pas repris. Recette connectée sur staging et dans les coques : #6381.
+
+**Le port est une projection** (`lib/api/communities.ts`). La route de liste charge `members[].user.isOnline` et le créateur ; celle des conversations charge la ligne entière des participants. Le cache de requêtes est persisté : seuls les champs peints y entrent, et la présence d'autrui n'y entre jamais. Le brouillon de création est validé par `zod/mini` avec les bornes de `createCommunityRequestSchema` avant qu'un octet ne parte ; un refus se nomme sous son champ, un 409 sous l'identifiant.
+
+**Cache d'abord, à trois niveaux.** La liste se peint depuis le cache persisté ; le squelette ne vient que sur un cache vide. Une recherche se peint AUSSITÔT depuis la liste en cache filtrée comme la passerelle filtre (`cachedSearchPlaceholder`), puis la réponse complète la première page — iOS vide la grille le temps de la requête. Le détail se peint depuis la carte déjà reçue (`findCachedCommunity`, par id ou identifiant) et se revalide en fond.
+
+**Divergence assumée avec la doctrine optimiste : la création attend la passerelle.** L'identité d'une communauté (son `id`, son identifiant `mshy_…` qu'un conflit peut refuser) est attribuée par le serveur : une carte posée avant la réponse mènerait à un détail inexistant et disparaîtrait sur un 409. Le retour instantané est le bouton, qui passe « Création… » au geste ; la réponse écrit ENSEMBLE le détail et la tête de la liste (`community-actions.ts`), et l'écran de création est REMPLACÉ par le détail — le retour ramène à la liste, comme `router.pop()` puis `push(detail)` d'iOS. Hors ligne, rien ne part (#6325).
+
+**Divergences assumées avec iOS.**
+- **Le texte blanc des cartes tient AA** : le repli de bannière est la teinte ASSOMBRIE et un voile descend sous le texte. iOS pose la teinte à 80 % puis 40 % d'opacité, et un nom blanc sur une communauté jaune y descend sous 2:1. Le gate mesure le pixel le plus clair réellement peint sous chaque texte.
+- **Une recherche sans réponse nomme ce qu'elle cherchait** ; iOS réaffiche l'état vide générique (« Aucune communauté », « Créer »), qui dit faux quand l'utilisateur en a.
+- **Le sélecteur d'emoji de la création n'est pas repris** : sur iOS, l'emoji choisi n'est ni envoyé ni conservé (#6380).
+- **Aucun segment à un seul onglet** : « Conversations » est une section tant que les publications ne sont pas servies (#6379).
+- 403 et 404 rendent le même refus (D-6).
+
+**Le couloir.** En-tête (64) et recherche (56) finissent au-dessus des disques ; la première carte commence sous eux au repos (`COMMUNITIES_TOP_RESERVE`, 58). Le détail et la création sont des routes profondes (`isDeepRoute`) : ni l'un ni l'autre ne porte les disques, et `floating-gate.ts` n'a pas bougé.
+
+**Mesuré** (`bun run build` puis `node scripts/measure-weight.mjs`, deux builds sur le même arbre, la base reprenant `route-table.tsx` et `routes/communities.tsx` d'`origin/dev` — les autres fichiers du lot n'entrent pas dans le socle) : première peinture 42,20 → 42,32 Ko (plafond 90), et 42,35 Ko une fois le lot rebasé sur `origin/dev` 7bf367f591. Chunks, sur l'arbre rebasé : `communities` 8,57 Ko (plafond 10), `community_detail` 1,15 (3), `community_create` 1,81 (3). Catalogues 24,54 Ko pour les sept (46 clés ×7, plafond porté de 20 à 26). Gate `scripts/check-communities.mjs` : 164 invariants, deux schémas × deux gabarits ; ses textes de carte sont mesurés sous les LIGNES de texte réellement posées (une boîte d'élément englobait l'anneau blanc de l'avatar et rendait 1,27:1 à tort).
+
+**Ce que ce lot ne fait pas, et où c'est suivi.** Membres (#6375). Invitation (#6376). Réglages (#6377). Rejoindre et quitter (#6378). Publications du détail (#6379). Emoji de la création iOS (#6380). Recette connectée (#6381). File d'écriture hors ligne (#6325). Deux formes de pluriel seulement (#6316).

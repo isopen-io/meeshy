@@ -614,6 +614,18 @@ jobs:
           cd apps/web-v2
           node scripts/check-settings.mjs
 
+      # #6364 — ses communautés : la grille remplace l'écran d'attente, la
+      # recherche se peint depuis le cache, une carte ouvre son détail et une
+      # conversation son fil, la création refuse un identifiant pris sous son
+      # champ puis devient le détail ; les textes blancs des cartes tiennent AA
+      # au pire pixel ; aucun contrôle ni texte n'est volé par un disque (deux
+      # schémas, deux gabarits).
+      - name: Gate communautés (liste, recherche, détail, création, hors-ligne)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-communities.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |

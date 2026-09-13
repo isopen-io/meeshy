@@ -331,7 +331,7 @@ dans une version ultérieure ·
 | `/reel/:postId`, `/mood/:postId` | `legacy` | **liens partageables publiquement** — à porter avant tout décommissionnement |
 | `/hashtag/:tag` | `legacy` | |
 | `/search` | `legacy` | |
-| `/communities`, `/communities/:id` | `legacy` | |
+| `/communities`, `/communities/:id` | **V4.0.0** | **servies par la v3.1 depuis #6364** — la liste de SES communautés et le détail d'une communauté (ses conversations mènent au fil) ; nomenclature du legacy reprise (D-5). `/communities/new` est une **adresse neuve** (la création, miroir `Route.communityCreate`). Membres, invitation, réglages, rejoindre/quitter et publications restent au legacy, chacun suivi par son issue (D-60) |
 | `/contacts` | `legacy` | |
 | `/links`, `/links/tracked/:token` | `legacy` | `/l/:token` de la V4.0.0 en est le pendant public |
 
