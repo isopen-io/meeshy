@@ -91,7 +91,13 @@ describe('useBackDismiss — le retour matériel ferme la COUCHE, pas l’écran
         root.render(<Harness open onClose={() => {}} />);
       });
       await act(async () => {});
-      expect(stateWhenInserted).toEqual({ backDismiss: expect.stringMatching(/^back-dismiss-\d+$/) });
+      const marker =
+        typeof stateWhenInserted === 'object' && stateWhenInserted !== null && 'backDismiss' in stateWhenInserted
+          ? stateWhenInserted.backDismiss
+          : null;
+      expect(typeof marker === 'string' && /^back-dismiss-\d+$/.test(marker) ? 'posée' : `absente (${String(marker)})`).toBe(
+        'posée',
+      );
     } finally {
       globals.IS_REACT_ACT_ENVIRONMENT = true;
     }
