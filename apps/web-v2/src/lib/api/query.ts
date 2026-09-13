@@ -12,6 +12,7 @@ import { apiDeps } from './deps';
 import { FEED_QUERY_KEY, feedQuery, refreshFeed } from './feed';
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
 import type { FeedInfiniteData } from './feed-pages';
+import { recordPostShare } from './feed-share';
 import { postQueryOptions } from './publication-detail';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import type { Conversation, Participant } from './types';
@@ -177,6 +178,12 @@ export function refreshFeedAction(): Promise<void> {
  */
 export function postGestureAction(postId: string, kind: PostToggleKind): Promise<PostGestureResult> {
   return performPostGesture({ postId, kind, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+/** `recordShareAction` (#6278) — RÉFÉRENCE DE MODULE STABLE : compter un
+ * partage DÉJÀ parti, sur l'instance partagée du cache du fil. */
+export function recordShareAction(postId: string): Promise<boolean> {
+  return recordPostShare({ postId, deps: { ...apiDeps, queryClient: appQueryClient } });
 }
 
 /**

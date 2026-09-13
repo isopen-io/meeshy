@@ -10,8 +10,16 @@
  */
 
 .floating-menus {
-  /** La marge latérale — `minEdgePadding` d'iOS (`FloatingButtons.swift:109`). */
-  --float-side: 20px;
+  /**
+   * `--float-side` et `--float-top` sont POSÉES EN LIGNE par le composant
+   * depuis `lib/view/floating-corridor.ts` (#6277) : le chrome du Flux réserve
+   * le couloir au pixel près, et deux écritures de la même cote — l'une ici,
+   * l'autre en TypeScript — étaient la jumelle que `feed.tsx` avouait
+   * (« Dupliqué plutôt qu'importé »). Le texte qui suit garde la MESURE qui a
+   * fixé 126 ; depuis #6133 (plateau à l'avatar de 88), ce que le couloir vole
+   * ou non se mesure par `scripts/check-floating-clearance.mjs`, sur la liste
+   * ET sur le Flux, et non plus par ce tableau.
+   */
 
   /**
    * LE COULOIR HAUT — 126, et le nombre est MESURÉ avant d'être justifié.
@@ -50,7 +58,6 @@
    * portent leur menu au bord droit. C'est pour cela que le déplacement
    * (#6215) n'est pas un agrément : c'est la réponse d'iOS au même problème.
    */
-  --float-top: calc(env(safe-area-inset-top, 0px) + 126px);
 
   /**
    * LE COULOIR BAS — `bottomSafeZoneWithSearch` d'iOS (110). La liste porte

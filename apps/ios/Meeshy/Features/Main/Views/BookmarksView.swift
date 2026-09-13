@@ -73,6 +73,9 @@ struct BookmarksView: View {
                     ForEach(visiblePosts) { post in
                         FeedPostCard(
                             post: post,
+                            onLike: { postId in
+                                Task { await viewModel.toggleLike(postId) }
+                            },
                             onBookmark: { postId in
                                 Task { await viewModel.removeBookmark(postId) }
                             },

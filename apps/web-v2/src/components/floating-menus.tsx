@@ -10,6 +10,8 @@ import { FEED_DESTINATION, MENU_LADDER, PROFILE_DESTINATION } from '@/lib/view/f
 import {
   FEED_DEFAULT,
   FLOATING_BUTTON,
+  FLOATING_SIDE,
+  FLOATING_TOP,
   LADDER_RUNG,
   MENU_DEFAULT,
   floatingLeft,
@@ -98,7 +100,18 @@ export function FloatingMenus() {
   };
 
   return (
-    <div className="floating-menus pointer-events-none fixed inset-0 z-30">
+    <div
+      className="floating-menus pointer-events-none fixed inset-0 z-30"
+      /* LES COULOIRS SONT POSÉS DEPUIS LA LOI (`lib/view/floating-corridor.ts`),
+         que le chrome du Flux lit aussi — la feuille ne garde que le couloir
+         bas, qu'aucun écran ne partage. */
+      style={
+        {
+          '--float-side': `${FLOATING_SIDE}px`,
+          '--float-top': `calc(env(safe-area-inset-top, 0px) + ${FLOATING_TOP}px)`,
+        } as React.CSSProperties
+      }
+    >
       {open ? <LadderDismissLayer onClose={closeAndFocusButton} /> : null}
 
       {/* LES DEUX TÉMOINS DE POSITION — voir `use-floating-drag.ts`. Ils

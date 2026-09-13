@@ -15,8 +15,8 @@ import { Link } from '@/routes/route-table';
 import { FeedSkeleton } from './feed';
 
 /**
- * LE DÉTAIL D'UNE PUBLICATION (#6278, D-48) — `/post/$post` (l'alias
- * `/feeds/post/$post` attend #6279), miroir réduit de `PostDetailView.swift` : la carte du
+ * LE DÉTAIL D'UNE PUBLICATION (#6278, D-48, D-49) — `/post/$post` et
+ * `/feeds/post/$post`, miroir réduit de `PostDetailView.swift` : la carte du
  * fil, en entier, avec ses gestes. Même modèle (`resolveFeedCardModel` — le
  * Prisme, l'accent, la géométrie ne se recalculent jamais ici, D-14), même
  * hôte des gestes (`usePostGesture`), même cache que le fil pour l'état du
@@ -101,7 +101,7 @@ export default function PostDetailScreen() {
   const online = useOnline();
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
-  const { announcement, onGesture } = usePostGesture();
+  const { announcement, onGesture, onShare } = usePostGesture();
 
   const model = useMemo(
     () => (post.data === undefined ? undefined : resolveFeedCardModel(post.data, { preferredLanguages: readerLanguages, now: new Date() })),
@@ -118,7 +118,7 @@ export default function PostDetailScreen() {
       </p>
       <main id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-3 pb-safe">
         {model !== undefined ? (
-          <FeedPostCard model={model} onGesture={onGesture} />
+          <FeedPostCard model={model} onGesture={onGesture} onShare={onShare} />
         ) : isRefusal(post.error) ? (
           <PostDetailRefused />
         ) : post.isError ? (

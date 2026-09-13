@@ -14,17 +14,15 @@ import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { apiDeps } from '@/lib/api/deps';
 import { PAGE_SIZE } from '@/lib/api/conversations';
-import { refreshListAction, rowAction, useConversations, useStatusMoods, useStoryTray } from '@/lib/api/query';
-import type { StatusMoodPost } from '@/lib/api/stories';
+import { refreshListAction, rowAction, useConversations } from '@/lib/api/query';
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
-import { storyViewedStore } from '@/lib/api/story-viewed-store';
 import { useTypistNames } from '@/lib/api/use-typists';
 import { resolveViewer } from '@/lib/api/viewer';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
 import { partagerInvitation, RETOUR_INVITATION } from '@/lib/view/invitation';
-import { groupStoriesByAuthor, railTientLaPlace, withMoods } from '@/lib/view/story-tray';
+import { useStoryRailProps } from '@/lib/view/use-story-rail';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { resolveLensSections } from '@/lib/lens/sections';
 import { useOnline } from '@/lib/net/online';
@@ -94,9 +92,6 @@ import { useMinute } from '@/lib/view/use-minute';
 /** Référence STABLE — un `[]` littéral par rendu changerait l'identité de
  * `conversations` à chaque image et défairait les mémos qui en dépendent. */
 const EMPTY_CONVERSATIONS: readonly Conversation[] = [];
-
-/** Même règle : le repli du corpus d'humeurs, une seule fois. */
-const EMPTY_STATUS_MOODS: readonly StatusMoodPost[] = [];
 
 /**
  * `content-center` ET NON `place-items-center` SEUL (#5650, revue-correction)
@@ -317,43 +312,7 @@ export default function ConversationsScreen() {
    * donc plus lieu d'être — une story n'est pas une conversation — et le plafond
    * de six entrées vit dans le rail, avec sa porte « tout voir ».
    */
-  const tray = useStoryTray();
-  /** L'AVANCE OPTIMISTE sur « vu par moi » (#5817) — un ensemble STABLE tant
-   * qu'aucune story n'est ouverte : `zustand` ne notifie que sur changement
-   * d'identité, donc le mémo des groupes ne se recalcule pas pour rien. */
-  const seenNow = useStore(storyViewedStore, (s) => s.ids);
-  /**
-   * LE CORPUS DES HUMEURS (#5652) — un DEUXIÈME corpus, fusionné sur les
-   * groupes de stories par `withMoods` (`lib/view/story-tray.ts`). Une requête
-   * qui échoue ou n'a pas encore répondu laisse simplement les groupes SANS
-   * humeur (`moods.data ?? []`) — jamais un état de chargement à part : le
-   * badge d'humeur est un COMPLÉMENT de la pastille, pas sa condition.
-   */
-  const moods = useStatusMoods();
-  const storyGroups = useMemo(
-    () =>
-      withMoods(
-        groupStoriesByAuthor(tray.data ?? [], {
-          viewerId: viewer.id ?? undefined,
-          // « Vu par moi » EST servi par la passerelle (`isViewedByMe`,
-          // `PostFeedService.ts`, les deux projections) — le commentaire qui
-          // affirmait le contraire ici a été mesuré FAUX (#5817). `viewedIds`
-          // n'est plus qu'une AVANCE : la story que le lecteur vient d'ouvrir
-          // éteint son anneau tout de suite, sans attendre le retour réseau
-          // (`api/story-viewed-store.ts`, § Optimistic Updates).
-          viewedIds: seenNow,
-        }),
-        moods.data ?? EMPTY_STATUS_MOODS,
-      ),
-    [tray.data, viewer.id, moods.data, seenNow],
-  );
-  /** `railTientLaPlace` borne la promesse à la PREMIÈRE tentative : un corpus
-   * LENT garde sa place, un corpus qui répond NON la perd immédiatement
-   * (`lib/view/story-tray.ts`, témoins `story-tray-place.test.ts`). */
-  const railProps = useMemo(
-    () => ({ groups: storyGroups, loading: railTientLaPlace(tray) }),
-    [storyGroups, tray],
-  );
+  const railProps = useStoryRailProps(viewer.id ?? undefined);
 
   /**
    * LES SECTIONS (#5694, écart 6) — `resolveLensSections` re-partitionne le
@@ -489,7 +448,11 @@ export default function ConversationsScreen() {
           liste en tête et démontait la bande pour rien de plus qu'un
           `Tab`. Voir le doc-comment de `StoryRail` pour le détail.
         */}
-        <li className="-mx-2 shrink-0">
+        {/* `pt-2` — l'air d'iOS au-dessus du plateau (`ConversationListView`,
+            `VStack.padding(.top, 8)`) : sans lui, le libellé de la première
+            tuile passait sous le bas du disque du Flux (#6277, mesuré par
+            `check-floating-clearance.mjs`). */}
+        <li className="-mx-2 shrink-0 pt-2">
           <StoryRail ref={observeGrandRail} variant="grande" inert={pinned} {...railProps} />
         </li>
         <li className="-mx-2 shrink-0">

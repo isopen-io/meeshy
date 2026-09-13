@@ -49,10 +49,12 @@ export function applyPostToggle(data: FeedInfiniteData | undefined, change: Post
  * rend sur `POST|DELETE /posts/:id/bookmark` et le diffuse sur `post:liked` /
  * `post:unliked` / `post:bookmarked` : un compte servi fait foi, un ±1 local
  * n'est qu'une avance. */
-export type ServedCount = { readonly postId: string; readonly kind: PostToggleKind; readonly count: number };
+const SERVED_COUNT_FIELD = { like: 'likeCount', bookmark: 'bookmarkCount', share: 'shareCount' } as const;
+
+export type ServedCount = { readonly postId: string; readonly kind: PostToggleKind | 'share'; readonly count: number };
 
 export function withServedCount(post: FeedPost, served: ServedCount): FeedPost {
-  const field = served.kind === 'like' ? 'likeCount' : 'bookmarkCount';
+  const field = SERVED_COUNT_FIELD[served.kind];
   return post.id !== served.postId || post[field] === served.count ? post : { ...post, [field]: served.count };
 }
 
