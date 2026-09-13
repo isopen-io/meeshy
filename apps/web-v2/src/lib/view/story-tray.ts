@@ -28,6 +28,11 @@ export type StoryTrayGroup = {
   readonly hasUnseen: boolean;
   /** Vrai pour le groupe du lecteur lui-même — il ouvre la tête du rail. */
   readonly isMine: boolean;
+  /** **PAR OÙ CE GROUPE S'OUVRE** (#5817) — l'adresse que la tuile pose dans
+   * `/story/$post`. Portée par le GROUPE, jamais recalculée au site d'appel :
+   * c'est ici, et seulement ici, qu'on sait quelles stories sont vues (le
+   * verdict de la passerelle ET l'avance optimiste de la session). */
+  readonly entryStoryId: string;
   /** L'humeur COURANTE de l'auteur (`Post.moodEmoji`, `?scope=statuses`) —
    * `undefined` tant qu'aucune humeur active n'existe. Résolue à part
    * (`withMoods`) : les stories et les statuts sont deux CORPUS distincts côté
@@ -45,11 +50,17 @@ function instantOf(value: string | Date | undefined): number {
 }
 
 /**
- * `viewedIds` — les stories que CE lecteur a ouvertes. La passerelle ne sert
- * pas « vue par moi » sur le plateau (`trayStorySelect` porte `viewCount`, un
- * COMPTE, qui ne dit pas QUI) : c'est donc au client de le tenir, exactement
- * comme `reaction-store.ts` tient « mes réactions » pour la même raison.
- * Un compte de 2 ne dit pas qui.
+ * `viewedIds` — l'avance OPTIMISTE de la session (`api/story-viewed-store.ts`,
+ * alimentée par `markStoryViewedAction` au moment même où la story s'affiche),
+ * pour la fenêtre pendant laquelle la passerelle n'a pas encore reservi son
+ * verdict.
+ *
+ * **La passerelle SERT bien « vue par moi » sur le plateau** — `isViewedByMe`
+ * (`StoryTrayPost`, `lib/api/stories.ts`), posé par `PostFeedService.ts` sur
+ * les DEUX projections (tray et complète). Le commentaire qui affirmait le
+ * contraire ici était FAUX (défaut relevé § 2 de la spécification #5817,
+ * corrigé dans ce lot). Les deux sources s'UNISSENT, elles ne se classent
+ * pas : vue ⇔ la passerelle le dit OU ce lecteur vient de la voir.
  */
 export function groupStoriesByAuthor(
   stories: readonly StoryTrayPost[],
@@ -64,16 +75,36 @@ export function groupStoriesByAuthor(
     else deja.push(story);
   }
 
+  /* LE VERDICT « VUE PAR MOI » SE PROJETTE UNE FOIS, ICI (#5817,
+     revue-correction), et c'est une UNION MONOTONE, jamais une priorité :
+     `isViewedByMe === true` (la passerelle) OU `viewedIds` (ce que ce lecteur
+     vient de faire). Un `false` servi par la passerelle est un INSTANTANÉ, pris
+     avant le `POST /posts/:id/view` que le lecteur vient d'émettre — le laisser
+     gagner rallumait l'anneau d'une story qu'on venait de regarder, mesuré au
+     pilotage navigateur (l'anneau d'Inès restait accentué après ses DEUX
+     stories, le corpus de fixtures portant `isViewedByMe: false`). Rien ne
+     peut rendre un « vu » local faux : on l'a vraiment vue.
+
+     Le projeter SUR la story plutôt que de le recalculer à chaque lecture ferme
+     la porte à une SECONDE loi : `hasUnseen`, `entryStoryId` et tout
+     consommateur en aval lisent désormais le MÊME champ, et un site qui
+     oublierait `viewedIds` ne peut plus diverger en silence. */
+  const withSeenVerdict = (s: StoryTrayPost): StoryTrayPost => {
+    const seen = s.isViewedByMe === true || options.viewedIds.has(s.id);
+    return s.isViewedByMe === seen ? s : { ...s, isViewedByMe: seen };
+  };
+
   const groupes: StoryTrayGroup[] = [];
   for (const [authorId, lot] of parAuteur) {
-    const triees = [...lot].sort((a, b) => instantOf(b.createdAt) - instantOf(a.createdAt));
+    const triees = lot.map(withSeenVerdict).sort((a, b) => instantOf(b.createdAt) - instantOf(a.createdAt));
     groupes.push({
       authorId,
       author: triees[0]?.author,
       stories: triees,
       latestAt: instantOf(triees[0]?.createdAt),
-      hasUnseen: triees.some((s) => !options.viewedIds.has(s.id)),
+      hasUnseen: triees.some((s) => s.isViewedByMe !== true),
       isMine: options.viewerId !== undefined && authorId === options.viewerId,
+      entryStoryId: entryStoryIdOf(triees),
     });
   }
 
@@ -152,4 +183,34 @@ export function railTientLaPlace(requete: {
   readonly failureCount: number;
 }): boolean {
   return requete.data === undefined && !requete.isError && requete.failureCount === 0;
+}
+
+/**
+ * **PAR OÙ UN GROUPE S'OUVRE** (#5817) — le rail et la liste des stories
+ * nomment une PERSONNE (`openingGroup`, `StoryViewerRequestOrigin.swift:18-49`) ;
+ * c'est donc ICI, jamais dans le lecteur, que se décide QUELLE story de
+ * cette personne ouvrir. Une seule adresse (`/story/$post`) sert alors les
+ * deux intentions — targetingStory pour un lien direct, openingGroup pour un
+ * tap de tuile qui a déjà résolu son entrée.
+ *
+ * **MÊME ORDRE que `entryIndexFor`** (`lib/stories/playback.ts`) — première
+ * NON VUE en ordre de LECTURE (la plus ANCIENNE d'abord), sinon la plus
+ * ancienne tout court. `stories` arrive ici trié DESC (l'ordre du PLATEAU,
+ * pour l'anneau et la miniature) : le premier point de correction de ce lot
+ * avait pris ce tri pour l'ordre de lecture et posait donc la story la plus
+ * RÉCENTE en entrée — l'inverse exact d'`entryIndexFor`, qui lit le corpus
+ * complet ASC.
+ *
+ * **CE QU'ELLE NE FAIT PAS, DÉLIBÉRÉMENT** : sauter les stories EXPIRÉES.
+ * `entryIndexFor` le fait parce qu'il tient l'horloge du lecteur ; le plateau
+ * ne la tient pas, et l'y injecter n'apporterait rien — l'adresse posée ici
+ * est une ENTRÉE, et `resolvePlayablePosition` (le seul site qui connaît
+ * `now`) avance jusqu'à la première story lisible depuis elle. Deux lois qui
+ * se DISENT identiques et ne le sont pas coûtent plus cher qu'une frontière
+ * dite à voix haute.
+ */
+export function entryStoryIdOf(stories: readonly StoryTrayPost[]): string {
+  const oldestFirst = [...stories].sort((a, b) => instantOf(a.createdAt) - instantOf(b.createdAt));
+  const unseen = oldestFirst.find((s) => s.isViewedByMe !== true);
+  return (unseen ?? oldestFirst[0])?.id ?? '';
 }

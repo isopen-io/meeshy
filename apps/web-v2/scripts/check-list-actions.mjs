@@ -201,7 +201,36 @@ check(
 );
 
 // ------------------------------------------------------- 2. cible tactile réelle
+/**
+ * AMENDEMENT #6220 (revue de #5817, défaut 1) — `page.hover()` ne scrolle
+ * une cible QUE si Playwright la juge insuffisamment visible ; son critère
+ * porte sur la RANGÉE entière (`[data-row]`), pas sur le petit bouton dans
+ * son coin. Au chargement, `c-nouvelle` (10ᵉ des 29) rend déjà, à
+ * `scrollTop = 0`, presque entière à l'écran : `hover()` ne bougeait donc
+ * rien, et son bouton d'actions retombait exactement dans la bande FIXE que
+ * la barre de recherche flottante occupe au bas du scrollport
+ * (`position: absolute; bottom: 0`, hors flux — `conversations.tsx`) — deux
+ * coins sur quatre atterrissaient sur la barre, jamais sur le bouton.
+ *
+ * Ce n'est pas le défaut que #6220 a corrigé (qui portait sur la DERNIÈRE
+ * rangée au bas MAXIMAL du défilement, couvert plus bas par un test dédié) :
+ * une rangée MÉDIANE peut, à un défilement quelconque, traverser
+ * MOMENTANÉMENT la bande de la barre — un utilisateur qui continue son
+ * geste la voit filer plus haut, hors de la bande, exactement comme sous
+ * n'importe quel bandeau flottant posé sur une liste défilante. Ce que ce
+ * témoin doit mesurer est l'ATTEIGNABILITÉ du bouton une fois le geste
+ * terminé sur cette rangée — donc dans une position DE REPOS qui la dégage
+ * de la barre — jamais un instantané pris au milieu d'un défilement qu'on
+ * n'a pas fini. `scrollIntoView({ block: 'center' })` positionne
+ * délibérément chaque rangée au CENTRE du scrollport avant la mesure : loin
+ * de la bande fixe de la barre, sauf pour la toute dernière rangée du
+ * corpus, dont le repos naturel EST contre le bas — cas que le test dédié
+ * « au bas MAXIMAL du défilement » couvre déjà spécifiquement.
+ */
 for (const row of rows) {
+  await page.evaluate((row) => {
+    document.querySelector(`[data-row="${row}"]`)?.scrollIntoView({ block: 'center' });
+  }, row);
   await page.hover(`[data-row="${row}"]`);
   await page.waitForTimeout(60);
   const hit = await page.evaluate(
@@ -658,33 +687,42 @@ check(
 );
 
 /**
- * LE CLIQUET DU §10 EST TOMBÉ (#5765) — LA PORTE EST ARRIVÉE (#6080) : chaque
- * pastille mène désormais à `/stories?author=…` (`routes/stories.tsx`). Ce
- * que ce témoin mesure maintenant n'est plus « zéro contrôle » mais l'EFFET
- * du tap — une pastille cliquable qui ne mène nulle part serait pire que
- * l'ancien état sans porte du tout.
+ * LE CLIQUET DU §10 EST TOMBÉ (#5765) — LA PORTE EST ARRIVÉE (#6080), PUIS
+ * ELLE A CHANGÉ DE DESTINATION (#5817) : une pastille menait à la liste
+ * filtrée `/stories?author=…` ; elle ouvre désormais LE LECTEUR PLEIN ÉCRAN,
+ * `/story/$post`, à la story d'entrée que son groupe porte
+ * (`group.entryStoryId`, `lib/view/story-tray.ts`). Ce que ce témoin mesure
+ * n'a pas changé — l'EFFET du tap, une pastille qui ne mène nulle part étant
+ * pire que l'absence de porte —, seulement ce qui doit apparaître au bout.
+ *
+ * L'identité se compare par IDENTIFIANT (`data-story-author`, porté par
+ * l'en-tête du lecteur), jamais par un libellé : « Votre story » et le nom
+ * d'un contact sont deux textes que la traduction et le repli de nom peuvent
+ * changer sans que la porte, elle, soit cassée.
  */
 const premierAuteur = await enTetePage.evaluate(
   () => document.querySelector('[data-rail="grande"] a[data-story-author]')?.getAttribute('data-story-author') ?? null,
 );
+const lienAttendu = await enTetePage.evaluate(
+  () => document.querySelector('[data-rail="grande"] a[data-story-author]')?.getAttribute('href') ?? null,
+);
 await enTetePage.click('[data-rail="grande"] a[data-story-author]');
-await enTetePage.waitForFunction(() => window.location.pathname === '/stories', undefined, { timeout: 3000 }).catch(() => {});
-/* La route `/stories` est chargée à la DEMANDE (`screen: () => import(...)`,
-   `route-table.tsx`) : le changement de `pathname` ci-dessus ne dit rien de
-   l'arrivée du chunk. Attendre le `<h1>` lui-même, pas seulement l'URL. */
-await enTetePage.waitForSelector('h1', { timeout: 3000 }).catch(() => {});
-const surStories = await enTetePage.evaluate(() => ({
+/* La route `/story/$post` est chargée à la DEMANDE (`screen: () => import(...)`,
+   `route-table.tsx`) : le changement de `pathname` ne dit rien de l'arrivée du
+   chunk. Attendre la SCÈNE elle-même, pas seulement l'URL. */
+await enTetePage.waitForSelector('[data-story-scene]', { timeout: 5000 }).catch(() => {});
+const surLecteur = await enTetePage.evaluate(() => ({
   pathname: window.location.pathname,
-  search: window.location.search,
-  titre: document.querySelector('h1')?.textContent ?? null,
+  scene: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
+  auteur: document.querySelector('[data-story-scene] [data-story-author]')?.getAttribute('data-story-author') ?? null,
 }));
 check(
-  surStories.pathname === '/stories' && premierAuteur !== null && surStories.search.includes(`author=${premierAuteur}`),
-  `un tap sur la première pastille du rail ouvre RÉELLEMENT la story de SON auteur (${JSON.stringify({ premierAuteur, ...surStories })})`,
+  lienAttendu !== null && surLecteur.pathname === lienAttendu && surLecteur.scene !== null,
+  `un tap sur la première pastille du rail OUVRE le lecteur à l'adresse qu'elle promet (${JSON.stringify({ lienAttendu, ...surLecteur })})`,
 );
 check(
-  surStories.titre !== null && surStories.titre !== 'Stories' && surStories.titre !== "Aucune story pour l'instant",
-  `l'écran ouvert nomme l'auteur tapé, pas un titre générique (titre : « ${surStories.titre} »)`,
+  premierAuteur !== null && surLecteur.auteur === premierAuteur,
+  `le lecteur ouvert est celui de l'auteur TAPÉ, pas d'un autre (attendu « ${premierAuteur} », obtenu « ${surLecteur.auteur} »)`,
 );
 await enTetePage.goto(`${BASE}/`, { waitUntil: 'load' });
 await enTetePage.waitForSelector('[data-row]');

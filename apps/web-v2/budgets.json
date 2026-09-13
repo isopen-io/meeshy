@@ -82,6 +82,14 @@
         "source": "Mesure de measure-weight.mjs le 2026-09-12 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,95 Ko gzip -9 (l'heuristique ecriture + mots-outils de secours, `src/lib/send/stopword-language-detector.ts` — 1,16 Ko a la premiere forme, 1,95 apres l'enrichissement des six tables en revue-correction, qui a fait passer es/it/pt de 0/15 phrases servies a 8/15 sans aucun verdict faux), arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks `summary`/`composer_tray`/`socketio`/`realtime` ci-dessus. Charge en `import()` UNIQUEMENT par `src/lib/send/language-detector.ts` (`defaultLanguageDetector()`), quand l'API navigateur `LanguageDetector` est absente ou pas encore `available` -- jamais au chargement du fil (`thread-*.js` ne l'importe pas statiquement, mesure : `first_paint` inchange a 37,19 Ko avant/apres ce lot)."
       }
     },
+    "story_reader": {
+      "pattern": "^assets/story-(?!compose-|tray-)[A-Za-z0-9_-]+\\.js$",
+      "kb": {
+        "value": 5,
+        "status": "CIBLE -- MESUREE PAR #5817, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-13 (`bun run build` puis `node scripts/measure-weight.mjs`) : 4,11 Ko gzip -9 a la premiere forme, REMESURE 4,63 en revue-correction (le voile du chrome, le gel de l'ordre de lecture, l'etat << media indisponible >>, la pause a l'onglet cache et la progression ecrite au DOM plutot qu'en etat) -- le lecteur plein ecran (`routes/story.tsx` + `lib/stories/{playback,gesture,caption}.ts`), arrondi au Ko SUPERIEUR + 1 Ko de marge, meme discipline que les chunks voisins. Le motif exclut EXPLICITEMENT `story-compose-` et `story-tray-` (deux chunks DISTINCTS, deja mesures ailleurs ou non gardes) : les trois fichiers partagent le prefixe `assets/story` a la lettre, et un motif naif (`^assets/story-`) les aurait tous comptes dans la meme somme, rendant ce plafond illisible des le premier changement d'aucun des trois."
+      }
+    },
     "floating_menus": {
       "pattern": "^assets/floating-menus-",
       "kb": {

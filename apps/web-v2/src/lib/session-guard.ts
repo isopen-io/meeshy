@@ -38,6 +38,9 @@ export type RouteKey =
   | 'thread'
   | 'conversationsNew'
   | 'progression'
+  | 'stories'
+  | 'storyCompose'
+  | 'story'
   | 'login'
   | 'signup'
   | 'welcome'
@@ -55,8 +58,22 @@ export type RouteAccessDecision = 'allow' | 'redirect-login' | 'redirect-home' |
  * route privée non déclarée est la forme la plus discrète du défaut : rien ne
  * rougit, l'écran s'ouvre, et c'est l'API qui dit non — trois écrans plus
  * tard, on aura oublié pourquoi.
+ *
+ * `stories`/`storyCompose`/`story` (#5817, correctif d'un défaut de la MÊME
+ * classe, relevé § 2 de la spécification) — leurs ports (`GET /posts/feed/
+ * stories`, `POST /posts/:postId/view`) sont tous `requiredAuth` ; un
+ * visiteur sans compte y recevait un écran qui s'ouvre puis un 401 en
+ * silence, jamais une invitation à se connecter.
  */
-const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['list', 'thread', 'conversationsNew', 'progression']);
+const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
+  'list',
+  'thread',
+  'conversationsNew',
+  'progression',
+  'stories',
+  'storyCompose',
+  'story',
+]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 
 /**

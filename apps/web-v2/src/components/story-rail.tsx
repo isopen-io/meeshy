@@ -18,6 +18,15 @@ import { Link } from '@/routes/route-table';
  * avatar aujourd'hui est SON FIL ». Un anneau qui promet un contenu que rien
  * n'ouvre est un contrôle qui ment — loi 4, un contrôle existe s'il a un effet.
  *
+ * **LA TUILE OUVRE DÉSORMAIS LE LECTEUR PLEIN ÉCRAN** (#5817) — `/story/$post`,
+ * jamais `/stories?author=`. Le rail nomme une PERSONNE (intention
+ * `openingGroup`, `StoryViewerRequestOrigin.swift`) : c'est donc LUI qui
+ * calcule quelle story de cette personne ouvrir — `group.entryStoryId`,
+ * posé par `groupStoriesByAuthor` (`lib/view/story-tray.ts`) : la première
+ * NON VUE en ordre de lecture, sinon la plus ancienne du groupe. Le lecteur recalculera SA propre entrée (`entryIndexFor`,
+ * `lib/stories/playback.ts`) depuis le corpus complet ; l'id posé ici n'est
+ * qu'une ADRESSE, jamais un ordre de lecture.
+ *
  * ## CE FICHIER EST UNE FUSION, ET IL FAUT DIRE LAQUELLE (2026-09-12)
  *
  * Deux lots ont corrigé ce rail la même nuit, sans se voir, et chacun n'a
@@ -115,8 +124,8 @@ function StoryTile({ group, size, showsLabel }: { readonly group: StoryTrayGroup
       style={{ width: cellule }}
     >
       <Link
-        to="stories"
-        search={{ author: group.authorId }}
+        to="story"
+        params={{ post: group.entryStoryId }}
         /* L'IDENTITÉ DE LA TUILE EST PORTÉE PAR L'ÉLÉMENT FOCALISABLE (porté de
            #6103, où elle s'appelait `data-conversation`) : `ListHeader` retient
            celle que la bande épinglée avait sous le focus, puis rend le focus à
