@@ -71,12 +71,34 @@
  *     chance ; l'autre moitié du temps il passe par ABSENCE (leçon 560, « un
  *     lot qui RENOMME rend anti-corrélé tout garde qui reconnaissait par le
  *     nom » — et sa sonde dont la cible a disparu, qui sort VERTE).
+ *
+ * 9.  L'HORLOGE DE CHAQUE PAGE EST FIGÉE SUR `INSTANT` (#6228). La §9
+ *     pagination (#6195) a fait rougir ce gate sur `dev` — la rangée
+ *     `c-live` bougeait de 32 px « après immobilité », dans les deux
+ *     schémas. Mesuré : PAS un défaut de défilement. `LIVE_SCHEDULE`
+ *     (`fixtures-realtime.ts`) ADOPTE `live-1` comme dernier message de
+ *     `c-live` 4 500 ms après `connect()`, avec `lastMessageAt:
+ *     LIVE_1.createdAt` — un horaire ancré sur `minutesAgo(40)`, donc sur
+ *     l'HEURE RÉELLE du runner. Dans les quarante premières minutes après
+ *     minuit LOCAL, ce ré-étiquetage fait franchir à `c-live` la frontière
+ *     « Aujourd'hui »/« Hier » PENDANT le test — un séparateur de jour
+ *     s'insère ou disparaît au-dessus de sa rangée, qui n'est pas un
+ *     `[data-row]` et ne compte donc dans aucune des deux mesures de
+ *     hauteur, seulement dans le décalage qu'il produit. C'est exactement
+ *     la classe que #6130 (`lib/instant.mjs`) a fermée pour les autres
+ *     gates de ce répertoire — restée ouverte ici parce que la §9 est
+ *     arrivée après #6130 sans reprendre son remède. `setFixedTime` (jamais
+ *     `clock.install`, qui gèle aussi `setTimeout`/`performance.now()`
+ *     et désarmerait l'aplatissement au repos que ce même gate mesure) posé
+ *     AVANT chaque `goto` — les fixtures lisent `minutesAgo(...)` à
+ *     l'import du module, donc dans la page, donc après la navigation.
  */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
+import { INSTANT } from './lib/instant.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const TYPES = {
@@ -134,6 +156,7 @@ const apparence = (page) =>
 // ---------------------------------------------------------------- mouvement normal
 const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const page = await context.newPage();
+await page.clock.setFixedTime(INSTANT);
 await page.goto(`${BASE}/`, { waitUntil: 'load' });
 await page.waitForSelector('[data-row]');
 await page.waitForTimeout(300);
@@ -351,6 +374,7 @@ await context.close();
  */
 const stickyContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const stickyPage = await stickyContext.newPage();
+await stickyPage.clock.setFixedTime(INSTANT);
 await stickyPage.goto(`${BASE}/`, { waitUntil: 'load' });
 await stickyPage.waitForSelector('[data-sticker]');
 await stickyPage.waitForTimeout(200);
@@ -547,6 +571,7 @@ await stickyContext.close();
  */
 const layoutContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const layoutPage = await layoutContext.newPage();
+await layoutPage.clock.setFixedTime(INSTANT);
 await layoutPage.goto(`${BASE}/`, { waitUntil: 'load' });
 await layoutPage.waitForSelector('[data-row]');
 await layoutPage.waitForTimeout(200);
@@ -623,6 +648,7 @@ await layoutContext.close();
  */
 const headerContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const headerPage = await headerContext.newPage();
+await headerPage.clock.setFixedTime(INSTANT);
 await headerPage.goto(`${BASE}/`, { waitUntil: 'load' });
 await headerPage.waitForSelector('[data-row]');
 await headerPage.waitForTimeout(200);
@@ -779,6 +805,7 @@ await headerContext.close();
  */
 const kbdContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const kbdPage = await kbdContext.newPage();
+await kbdPage.clock.setFixedTime(INSTANT);
 await kbdPage.goto(`${BASE}/`, { waitUntil: 'load' });
 await kbdPage.waitForSelector('[data-row]');
 await kbdPage.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 600 }));
@@ -856,6 +883,7 @@ const contexteReduit = await browser.newContext({
   reducedMotion: 'reduce',
 });
 const pageReduite = await contexteReduit.newPage();
+await pageReduite.clock.setFixedTime(INSTANT);
 await pageReduite.goto(`${BASE}/`, { waitUntil: 'load' });
 await pageReduite.waitForSelector('[data-row]');
 await pageReduite.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 600 }));
@@ -908,6 +936,7 @@ const pagination = [];
 for (const colorScheme of ['light', 'dark']) {
   const pgContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme });
   const pgPage = await pgContext.newPage();
+  await pgPage.clock.setFixedTime(INSTANT);
   await pgPage.goto(`${BASE}/`, { waitUntil: 'load' });
   await pgPage.waitForSelector('[data-row]');
   await pgPage.waitForTimeout(300);
