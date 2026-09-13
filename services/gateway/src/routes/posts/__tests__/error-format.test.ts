@@ -102,7 +102,7 @@ jest.mock('../../../services/CacheStore', () => ({
 // attendait 404 et lisait 500, sans qu'aucun message ne parle d'idempotence.
 // Même remède que `interactions.harness.ts`, qui le documente déjà.
 jest.mock('../../../utils/withMutationLog', () => ({
-  ...jest.requireActual('../../../utils/withMutationLog'),
+  ...(jest.requireActual('../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn().mockImplementation(({ op }: any) => op()),
 }));
 
