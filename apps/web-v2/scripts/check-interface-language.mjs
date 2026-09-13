@@ -77,7 +77,9 @@ const GERMAN = {
   promise: 'Die in deinen Unterhaltungen geteilten Links werden hier gesammelt.',
   soon: 'Dieser Bildschirm kommt bald.',
   back: 'Zurück zu den Unterhaltungen',
-  menu: 'Menü',
+  /* Le bouton DIT le compte de la cloche (#6288) : les fixtures en servent
+     trois non lues, et son nom le porte dans la langue d'interface. */
+  menu: 'Menü, 3 ungelesene Mitteilungen',
   ladder: 'Meeshy-Navigation',
   rungs: ['Meine Links', 'Mitteilungen', 'Anrufe', 'Entdecken', 'Communitys', 'Einstellungen'],
 };
@@ -88,7 +90,7 @@ const ARABIC = {
   promise: 'ستُجمع هنا الروابط التي تمت مشاركتها في محادثاتك.',
   soon: 'هذه الشاشة قادمة قريبًا.',
   back: 'العودة إلى المحادثات',
-  menu: 'القائمة',
+  menu: 'القائمة، 3 إشعارات غير مقروءة',
   ladder: 'التنقل في Meeshy',
   rungs: ['روابطي', 'الإشعارات', 'المكالمات', 'اكتشاف', 'المجتمعات', 'الإعدادات'],
 };
@@ -99,7 +101,7 @@ const FRENCH = {
   promise: 'Les liens partagés dans vos conversations se rassembleront ici.',
   soon: 'Cet écran arrive bientôt.',
   back: 'Revenir aux conversations',
-  menu: 'Menu',
+  menu: 'Menu, 3 notifications non lues',
   ladder: 'Navigation Meeshy',
   rungs: ['Mes liens', 'Notifications', 'Appels', 'Découvrir', 'Communautés', 'Réglages'],
 };

@@ -146,7 +146,7 @@ describe('supprimer', () => {
     expect(ids(queryClient, 'all')).toEqual(['n1', 'n3']);
     expect(ids(queryClient, 'unread')).toEqual(['n1']);
     expect(unread(queryClient)).toBe(1);
-    expect(requests[0]).toMatchObject({ method: 'DELETE', path: '/api/v1/notifications/n2' });
+    expect(`${requests[0]?.method} ${requests[0]?.path}`).toBe('DELETE /api/v1/notifications/n2');
 
     release({ ok: false, status: 403, error: 'Access denied' });
     expect(await pending).toBe(false);

@@ -20,7 +20,23 @@ import { useEffect, useRef } from 'react';
  * au lieu de quitter l'écran. Fermée autrement (Échap, un clic hors-menu,
  * une action choisie), elle REND son entrée (`history.back()`) pour qu'un
  * retour ULTÉRIEUR ne soit pas avalé à la place.
+ *
+ * **ELLE NE REND QUE SA PROPRE ENTRÉE** (#6313). Une couche fermée PARCE
+ * QU'UNE ACTION A NAVIGUÉ — un barreau de l'échelle flottante pousse sa
+ * destination puis referme l'échelle — n'est plus l'entrée courante :
+ * reculer d'une entrée défaisait la navigation elle-même (mesuré : `/notifications`
+ * poussée, `/` rendue, sur `dev` comme sur la branche de #6288). L'entrée
+ * posée porte donc une MARQUE, et le retour n'a lieu que si l'historique est
+ * encore dessus. Le prix, assumé : après une telle navigation, l'entrée de la
+ * couche reste sous la destination, et un retour y ramène l'écran d'origine —
+ * exactement ce qu'on quittait.
  */
+let nextMarker = 0;
+
+function carriesMarker(state: unknown, marker: string): boolean {
+  return typeof state === 'object' && state !== null && (state as { readonly backDismiss?: unknown }).backDismiss === marker;
+}
+
 export function useBackDismiss(onClose: () => void): void {
   const onCloseRef = useRef(onClose);
   useEffect(() => {
@@ -28,7 +44,9 @@ export function useBackDismiss(onClose: () => void): void {
   });
 
   useEffect(() => {
-    window.history.pushState(null, '');
+    nextMarker += 1;
+    const marker = `back-dismiss-${nextMarker}`;
+    window.history.pushState({ backDismiss: marker }, '');
     let consumedByHistory = false;
     const onPopState = () => {
       consumedByHistory = true;
@@ -38,7 +56,7 @@ export function useBackDismiss(onClose: () => void): void {
 
     return () => {
       window.removeEventListener('popstate', onPopState);
-      if (!consumedByHistory) window.history.back();
+      if (!consumedByHistory && carriesMarker(window.history.state, marker)) window.history.back();
     };
   }, []);
 }

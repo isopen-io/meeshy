@@ -422,3 +422,35 @@ emit({
   type: 'FeedGlyphName',
   role: "LE JEU D'ECRAN du fil des publications (#5893) : les cinq statistiques de la carte de post, charge avec la route /feed, jamais dans le socle.",
 });
+
+/**
+ * LE JEU D'ECRAN DE LA CLOCHE (#6288) — les glyphes du rail de categories,
+ * miroir `NotificationCategory.icon` (`NotificationListView.swift:37-51`) :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `circle.fill` (non lues) | `circle` |
+ * | `bubble.left.fill` (messages) | `chat-circle` |
+ * | `heart.fill` (reactions) | `heart` |
+ * | `at` (mentions) | `at` |
+ * | `hand.thumbsup.fill` (social) | `thumbs-up` |
+ * | `person.badge.plus` (contacts) | `user-plus` |
+ * | `person.3.fill` (groupes) | `users-three` |
+ * | `globe` (traductions) | `globe` |
+ * | `gear` (systeme) | `gear` |
+ *
+ * plus `trash` pour « Supprimer » dans le menu d'une ligne. `bell` (toutes),
+ * `phone` (appels) et `check` (marquer lue) restent au SOCLE, ou ils vivent
+ * deja. `heart`, `chat-circle`, `users-three`, `gear`, `globe` et `user-plus`
+ * existent aussi dans d'autres jeux d'ecran : ceux-la ne se chargent jamais
+ * avec la cloche, aucun octet n'est donc paye deux fois au meme demarrage.
+ */
+const NOTIFICATIONS = ['circle', 'chat-circle', 'heart', 'at', 'thumbs-up', 'user-plus', 'users-three', 'globe', 'gear', 'trash'];
+
+emit({
+  ids: NOTIFICATIONS,
+  output: join(HERE, '../src/components/glyphs-notifications.ts'),
+  constant: 'NOTIFICATIONS_GLYPHS',
+  type: 'NotificationsGlyphName',
+  role: "LE JEU D'ECRAN de la cloche (#6288) : le rail des categories et le menu d'une ligne, charge avec la route /notifications, jamais dans le socle.",
+});

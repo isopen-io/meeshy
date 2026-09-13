@@ -3,6 +3,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { NOTIFICATIONS_QUERY_KEY } from '@/lib/api/notifications';
+import { appQueryClient } from '@/lib/api/query-client';
 import { FloatingMenus } from './floating-menus';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { MENU_LADDER } from '@/lib/view/floating-menu';
@@ -30,11 +32,15 @@ afterAll(async () => {
 let container: HTMLDivElement;
 let root: Root;
 
+/* Le compte de notifications (#6288) vit dans le client PARTAGÉ : résolu
+   pendant un témoin, il changerait le NOM du bouton dans le suivant. Ces
+   témoins-ci parlent du menu, pas du compte (`floating-menus-unread.test.tsx`). */
 afterEach(() => {
   act(() => {
     root.unmount();
   });
   container.remove();
+  appQueryClient.removeQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
 });
 
 function monter(): HTMLDivElement {

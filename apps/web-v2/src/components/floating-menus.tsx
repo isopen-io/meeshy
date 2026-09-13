@@ -4,9 +4,11 @@ import '@/styles/floating-menus.css';
 
 import { Avatar } from './avatar';
 import { MenuGlyph } from './menu-glyph';
+import { UnreadCornerBadge } from './unread-badge';
 import { sessionStore } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { useNotificationCounts } from '@/lib/view/use-notification-counts';
 import { initialsOf } from '@/lib/view/conversation';
 import { FEED_DESTINATION, MENU_LADDER, PROFILE_DESTINATION } from '@/lib/view/floating-menu';
 import {
@@ -53,14 +55,13 @@ import { Link, href, navigate } from '@/routes/route-table';
  * travers un menu fermé. La cascade est donc jouée par une `@keyframes` à la
  * naissance plutôt que par une transition.
  *
- * **Aucune pastille de non-lus dans ce lot, et c'est délibéré.** iOS en pose
- * une au coin du bouton droit, alimentée par `notificationManager.unreadCount`.
- * Mesuré sur `dev` : cette application n'a AUCUNE source de notifications —
- * ni endpoint, ni magasin, ni corpus de recette. Peindre un nombre inventé
- * serait pire que l'absence, et écrire l'atome `UnreadCornerBadge` sans son
- * premier appelant réel est exactement ce que son propre doc-comment interdit
- * (`unread-badge.tsx:41-47`) — ce dépôt l'a déjà payé une fois sur CETTE
- * pastille. Elle reviendra avec le compteur, dans le même commit que lui.
+ * **La pastille de non-lus est arrivée AVEC son compteur** (#6219, #6288),
+ * comme ce paragraphe l'avait exigé quand #6104 l'avait refusée faute de
+ * source : iOS la pose au coin du bouton droit, alimentée par
+ * `notificationManager.unreadCount` ; ici `UnreadCornerBadge` lit
+ * `useNotificationCounts` — `GET /notifications/counts`, tenu par les gestes
+ * optimistes de la cloche et par `notification:counts`. La pastille est
+ * décorative : c'est le BOUTON qui annonce le compte, dans son nom.
  */
 
 /** Le dégradé du disque — les deux couples de teintes d'iOS, à l'hexadécimal près. */
@@ -68,8 +69,16 @@ const FEED_GRADIENT = 'linear-gradient(135deg, #F87171, #A5B4FC)';
 const MENU_GRADIENT = 'linear-gradient(135deg, #4F46E5, #A5B4FC)';
 const MENU_GRADIENT_OPEN = 'linear-gradient(135deg, #F87171, #A5B4FC)';
 
+/** Le nom du bouton FERMÉ — il dit le compte quand il y en a un, une fois. */
+function closedMenuLabel(language: InterfaceLanguage, unread: number): string {
+  if (unread <= 0) return translate(language, 'a11y.floating.menu');
+  const key = unread === 1 ? 'a11y.floating.menu.unread.one' : 'a11y.floating.menu.unread.other';
+  return translate(language, key, { count: String(unread) });
+}
+
 export function FloatingMenus() {
   const session = useStore(sessionStore, (s) => s.session);
+  const unread = useNotificationCounts().data?.unread ?? 0;
   const flux = useFloatingDrag('feed', FEED_DEFAULT);
   const menu = useFloatingDrag('menu', MENU_DEFAULT);
   const expandsDown = ladderExpandsDown(menu.position.y);
@@ -247,7 +256,7 @@ export function FloatingMenus() {
           onClick={onMenuButton}
           aria-haspopup="menu"
           aria-expanded={open}
-          aria-label={translate(langue, open ? PROFILE_DESTINATION.labelKey : 'a11y.floating.menu')}
+          aria-label={open ? translate(langue, PROFILE_DESTINATION.labelKey) : closedMenuLabel(langue, unread)}
           className="floating-disc glass-prominent glass-card pointer-events-auto absolute inset-0 grid touch-none place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{
             backgroundImage: open ? MENU_GRADIENT_OPEN : MENU_GRADIENT,
@@ -260,6 +269,7 @@ export function FloatingMenus() {
             <Avatar initials={initialsOf(nom)} color="var(--color-ios-brand)" size={38} />
           )}
         </button>
+        <UnreadCornerBadge count={unread} />
       </div>
     </div>
   );

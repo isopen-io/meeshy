@@ -22,6 +22,7 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'storyCompose',
   'story',
   'feed',
+  'notifications',
 ];
 const PUBLIC_AUTH_ROUTES: readonly RouteKey[] = ['login', 'signup'];
 
@@ -50,6 +51,11 @@ describe('resolveRouteAccess — source gateway, visiteur anonyme sur une route 
   // optionalAuth à la porte : un visiteur sans compte y recevait jusqu'ici
   // l'écran d'attente (route publique par défaut).
   test('feed', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'feed' })).toBe('redirect-login'));
+  // #6288 — les six routes `/notifications*` de la passerelle portent toutes
+  // `onRequest: [fastify.authenticate]` : la cloche d'un visiteur sans compte
+  // n'existe pas, et un écran qui s'ouvre sur un 401 muet n'invite personne.
+  test('notifications', () =>
+    expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'notifications' })).toBe('redirect-login'));
 });
 
 describe('resolveRouteAccess — source gateway, session ACTIVE sur login/signup ⇒ redirect-home', () => {

@@ -12,7 +12,14 @@ import { UNREAD_BADGE_CORNER, UnreadCornerBadge } from './unread-badge';
  */
 describe('la pastille de coin', () => {
   test('les cotes d’iOS', () => {
-    expect(UNREAD_BADGE_CORNER).toMatchObject({ minimumSize: 18, horizontalPadding: 6, offsetX: 16, offsetY: -16, shadowOpacity: 0.5 });
+    const { minimumSize, horizontalPadding, offsetX, offsetY, shadowOpacity } = UNREAD_BADGE_CORNER;
+    expect({ minimumSize, horizontalPadding, offsetX, offsetY, shadowOpacity }).toEqual({
+      minimumSize: 18,
+      horizontalPadding: 6,
+      offsetX: 16,
+      offsetY: -16,
+      shadowOpacity: 0.5,
+    });
   });
 
   test('le portillon vit dans l’atome : rien à zéro ni en négatif', () => {

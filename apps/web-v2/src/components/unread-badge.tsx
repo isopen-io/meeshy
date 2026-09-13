@@ -42,9 +42,13 @@
  * Un atome sans consommateur ne protège rien et finit par diverger de ce qu'il
  * prétend garder : ce dépôt l'a déjà payé une fois, sur CET atome précisément
  * (« l'atome existait, testé, sans un seul consommateur » —
- * `LentilleConversationRow.swift`). La pose de coin reviendra avec son premier
- * appelant réel, dans le même commit que lui ; ses cotes sont écrites
- * ci-dessus pour qu'il n'ait pas à les rechercher.
+ * `LentilleConversationRow.swift`).
+ *
+ * **La pose de coin est REVENUE avec son premier appelant réel** (#6219,
+ * #6288) : le bouton flottant de droite, qui porte le compte de notifications
+ * non lues servi par `GET /notifications/counts` et tenu par
+ * `notification:counts` — dans le même commit que ce compte, comme ce
+ * paragraphe l'exigeait.
  */
 
 /** Cotes de la pose de FLUX — `UnreadCountBadge.swift`, trait pour trait. */
@@ -101,6 +105,57 @@ export function UnreadBadge({
         backgroundColor: 'var(--color-error)',
         boxShadow: `0 0 ${UNREAD_BADGE_FLOW.shadowRadius}px color-mix(in srgb, var(--color-error) ${UNREAD_BADGE_FLOW.shadowOpacity * 100}%, transparent)`,
         ...(opacity === undefined ? {} : { opacity }),
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+/**
+ * Cotes de la pose de COIN — `NotificationBadge` (`FloatingButtons.swift:700-745`),
+ * trait pour trait : plus petite que la pose de flux parce qu'elle EMPIÈTE sur
+ * ce qu'elle annote.
+ */
+export const UNREAD_BADGE_CORNER = {
+  height: 18,
+  /** Plancher égal à la hauteur : à un chiffre, un CERCLE. */
+  minimumSize: 18,
+  horizontalPadding: 6,
+  /** Décalage depuis le CENTRE du bouton porteur — `.offset(x: 16, y: -16)`. */
+  offsetX: 16,
+  offsetY: -16,
+  fontSize: 10,
+  shadowRadius: 3,
+  shadowOpacity: 0.5,
+} as const;
+
+/**
+ * La pastille de COIN — posée par son hôte dans une boîte `position: relative`
+ * (le bouton flottant). DÉCORATIVE (`aria-hidden`) : c'est le bouton qui
+ * annonce le compte dans son nom, une seule fois.
+ */
+export function UnreadCornerBadge({ count }: { readonly count: number }) {
+  const text = unreadBadgeText(count);
+  if (text === '') return null;
+  const { height, minimumSize, horizontalPadding, offsetX, offsetY, fontSize, shadowRadius, shadowOpacity } = UNREAD_BADGE_CORNER;
+
+  return (
+    <span
+      data-unread={count}
+      aria-hidden="true"
+      className="pointer-events-none absolute grid place-items-center rounded-chip font-semibold text-white tabular-nums"
+      style={{
+        top: '50%',
+        left: '50%',
+        transform: `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px))`,
+        minWidth: minimumSize,
+        height,
+        paddingInline: horizontalPadding,
+        fontSize,
+        lineHeight: 1,
+        backgroundColor: 'var(--color-error)',
+        boxShadow: `0 0 ${shadowRadius}px color-mix(in srgb, var(--color-error) ${shadowOpacity * 100}%, transparent)`,
       }}
     >
       {text}

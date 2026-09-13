@@ -581,6 +581,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-floating-clearance.mjs
 
+      # #6288 — la cloche : la pastille du bouton flottant porte le compte servi
+      # et disparaît à zéro ; une catégorie filtre ; ouvrir une ligne la marque
+      # lue et mène à sa cible ; « Tout lire » a un effet ; aucun texte ni
+      # contrôle n'est volé par un disque (elementFromPoint, deux schémas,
+      # 390×844 et 320×568).
+      - name: Gate cloche des notifications (pastille, catégories, marquage, cible)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-notifications.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |

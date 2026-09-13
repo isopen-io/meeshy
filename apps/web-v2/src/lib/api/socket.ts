@@ -12,10 +12,20 @@ import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
 import { applyPostToggle, applyServedCount } from '@/lib/feed/interactions';
+import { decodeNotification } from '@/lib/notifications/record';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData } from './feed-pages';
+import { NOTIFICATIONS_QUERY_KEY } from './notifications';
+import {
+  applyNotificationCounts,
+  applyNotificationDeleted,
+  applyNotificationDeletedBulk,
+  applyNotificationNew,
+  applyNotificationRead,
+  applyNotificationReadBulk,
+} from './notifications-realtime';
 import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
@@ -296,6 +306,34 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     });
   };
 
+  /**
+   * `notification:*` (#6288) — LA CLOCHE SUIT LA PASSERELLE SANS RELIRE : les
+   * règles vivent dans `notifications-realtime.ts`, ces lignes les branchent.
+   *
+   * Le DÉDOUBLONNAGE de `notification:new` vit ICI, sur la connexion : une
+   * notification dont aucune liste n'est en cache (cloche jamais ouverte) ne
+   * peut pas être reconnue par le cache, et le compte l'avancerait à chaque
+   * rediffusion. La mémoire est BORNÉE — une session longue ne doit rien
+   * retenir d'autre que les derniers identifiants vus.
+   */
+  const seenNotifications = new Set<string>();
+  const SEEN_NOTIFICATIONS_CAP = 200;
+  const onNotificationNew = (payload: unknown): void => {
+    const notification = decodeNotification(payload);
+    if (notification === null || seenNotifications.has(notification.id)) return;
+    seenNotifications.add(notification.id);
+    if (seenNotifications.size > SEEN_NOTIFICATIONS_CAP) {
+      const oldest = seenNotifications.values().next().value;
+      if (oldest !== undefined) seenNotifications.delete(oldest);
+    }
+    applyNotificationNew(deps.queryClient, notification);
+  };
+  const onNotificationRead = (payload: unknown): void => applyNotificationRead(deps.queryClient, payload);
+  const onNotificationReadBulk = (payload: unknown): void => applyNotificationReadBulk(deps.queryClient, payload);
+  const onNotificationDeleted = (payload: unknown): void => applyNotificationDeleted(deps.queryClient, payload);
+  const onNotificationDeletedBulk = (payload: unknown): void => applyNotificationDeletedBulk(deps.queryClient, payload);
+  const onNotificationCounts = (payload: unknown): void => applyNotificationCounts(deps.queryClient, payload);
+
   /** Le MÊME geste qu'un 401 HTTP (§ doc-comment de `RealtimeDeps`) — les
    * DEUX motifs ferment la session, aucun ne tente de rafraîchir (D-26). */
   const onTokenExpired = (_payload: AuthTokenExpiredEventData): void => deps.onClearSession();
@@ -329,6 +367,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
        `['conversations', id, 'messages']` (la page du fil). Seules les requêtes
        ACTIVES sont re-jouées — un fil fermé se contente d'être marqué périmé. */
     void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+    /* LA CLOCHE AUSSI (#6288) : une notification émise pendant la coupure n'a
+       jamais atteint ce socket, et `notification:counts` ne se rejoue pas. */
+    void deps.queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
   };
 
   socket.on<unknown>(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
@@ -345,6 +386,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
   socket.on<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
   socket.on<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, onNotificationReadBulk);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, onNotificationDeleted);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, onNotificationDeletedBulk);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_COUNTS, onNotificationCounts);
   socket.on<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
   socket.on<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
 
@@ -384,6 +431,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
       socket.off<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
       socket.off<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, onNotificationReadBulk);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, onNotificationDeleted);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, onNotificationDeletedBulk);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_COUNTS, onNotificationCounts);
       socket.off<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
       socket.off<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
       socket.disconnect();
