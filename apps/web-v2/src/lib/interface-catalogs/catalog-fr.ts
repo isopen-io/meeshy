@@ -72,6 +72,8 @@ const fr = {
   'notifications.action.delete': 'Supprimer',
   'notifications.failure': 'L’action n’a pas abouti. Réessayez.',
 
+  'notFound.title': "Cette adresse n'existe pas.",
+
   'pending.back': 'Revenir aux conversations',
   'pending.comingSoon': 'Cet écran arrive bientôt.',
   'pending.feed.promise': 'Les publications de celles et ceux que vous suivez.',
