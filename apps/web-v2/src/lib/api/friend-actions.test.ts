@@ -145,6 +145,27 @@ describe('envoyer une demande', () => {
   });
 });
 
+describe('annuler une demande encore provisoire (#6418)', () => {
+  test('aucun identifiant fabriqué ne part : l’annulation attend l’enregistrement, puis annule la VRAIE demande', async () => {
+    const h = harness({ status: 201, body: { success: true, data: request('f-real', grace, false) } });
+    h.queryClient.setQueryData(friendRequestsQueryKey('sent'), pages());
+    const sending = performSendRequest({ person: grace, deps: h.deps });
+    const placeholder = h.queryClient.getQueryData<FriendRequestsData>(friendRequestsQueryKey('sent'))?.pages[0]?.requests[0];
+    if (placeholder === undefined) throw new Error('la ligne provisoire devait être posée au geste');
+    expect(placeholder.id).toBe('optimiste:u-grace');
+
+    const cancelling = performRespondToRequest({ request: placeholder, action: 'cancel', deps: h.deps });
+    h.release();
+    expect(await sending).toBe('done');
+    expect(await cancelling).toBe('done');
+    expect(h.calls).toEqual([
+      { method: 'POST', url: 'https://gate.test/api/v1/directory/friend-requests' },
+      { method: 'PATCH', url: 'https://gate.test/api/v1/directory/friend-requests/f-real' },
+    ]);
+    expect(h.ids('sent')).toEqual([]);
+  });
+});
+
 describe('débloquer', () => {
   test('la personne quitte la liste au geste, et y revient si la passerelle refuse', async () => {
     const h = harness(refused);

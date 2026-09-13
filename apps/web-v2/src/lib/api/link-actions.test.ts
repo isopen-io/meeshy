@@ -96,6 +96,37 @@ describe('performSetShareLinkActive', () => {
     expect([first, second]).toEqual(['done', 'done']);
     expect(calls).toHaveLength(1);
   });
+
+  test('une bascule CONTRAIRE à celle en vol ne part pas, et ne se dit pas faite (#6418)', async () => {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const calls: string[] = [];
+    const queryClient = new QueryClient();
+    const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      calls.push(`${init?.method ?? 'GET'} ${String(input)}`);
+      await held;
+      return new Response(JSON.stringify({ success: true, data: { isActive: false } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    const deps: LinkActionDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: 'https://gate.test', fetchImpl: fetchImpl as typeof fetch, timeoutMs: 0 }),
+      queryClient,
+      isOnline: () => true,
+    };
+    queryClient.setQueryData(SHARE_LINKS_QUERY_KEY, seeded([link()]));
+
+    const disabling = performSetShareLinkActive({ link: link(), isActive: false, deps });
+    const activating = performSetShareLinkActive({ link: link({ isActive: false, inactiveReason: 'REVOKED' }), isActive: true, deps });
+    release();
+    const [first, second] = await Promise.all([disabling, activating]);
+
+    expect(first).toBe('done');
+    expect(second).not.toBe('done');
+    expect(calls).toEqual(['PATCH https://gate.test/api/v1/links/mshy_l1']);
+    expect(cached(queryClient)?.pages[0]?.links[0]?.isActive).toBe(false);
+  });
 });
 
 const created = {
