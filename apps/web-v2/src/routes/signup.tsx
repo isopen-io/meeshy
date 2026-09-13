@@ -70,12 +70,17 @@ export default function SignupScreen() {
   const [isSubmitting, setSubmitting] = useState(false);
   const [isShowingCountrySheet, setShowingCountrySheet] = useState(false);
   const [isShowingLanguageSheet, setShowingLanguageSheet] = useState(false);
+  // Une inscription réussie AUTHENTIFIE déjà (`auth.register` établit la
+  // session, #4264) — sans ce drapeau, l'effet ci-dessous mènerait à `list`
+  // avant que `handleSubmit` n'ait pu router vers la vérification d'e-mail
+  // (D-47, #5672, raccordement).
+  const [justRegistered, setJustRegistered] = useState(false);
 
   // Même doctrine que login.tsx : `auth.register` parle TOUJOURS à la
   // passerelle réelle, indépendamment de `apiConfig.source`.
   useEffect(() => {
-    if (session.status === 'authenticated') navigate(href('list'), true);
-  }, [session.status]);
+    if (session.status === 'authenticated' && !justRegistered) navigate(href('list'), true);
+  }, [session.status, justRegistered]);
 
   function patch(fields: Partial<SignupFormState>) {
     setForm((current) => ({ ...current, ...fields }));
@@ -99,8 +104,12 @@ export default function SignupScreen() {
       return;
     }
     // Compte créé : le magasin de session est déjà `authenticated`
-    // (`auth.ts#register`) — l'effet ci-dessus mène vers `/`, IMMÉDIATEMENT,
-    // sans pause d'aucune sorte (doctrine SignupView.swift:413-429).
+    // (`auth.ts#register`) — mais l'e-mail reste à vérifier (T-verify,
+    // #5672) avant d'entrer dans la Lentille. `justRegistered` retient
+    // l'effet ci-dessus le temps de ce routage, IMMÉDIATEMENT, sans pause
+    // d'aucune sorte (doctrine SignupView.swift:413-429).
+    setJustRegistered(true);
+    navigate(href('verifyEmail', undefined, { email: form.email }), true);
   }
 
   const emailError = feedback.fieldErrors.email;
