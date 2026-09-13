@@ -59,7 +59,7 @@ describe('la recompression', () => {
   test('la bannière a sa propre borne', async () => {
     const { codec, encodings } = codecOf({ width: 4032, height: 3024 });
     await recompressImage(photo(5_000_000), 'banner', codec);
-    expect(encodings[0]).toMatchObject({ width: IMAGE_TARGETS.banner.maxWidth, height: 1125 });
+    expect(encodings.map(({ width, height }) => ({ width, height }))).toEqual([{ width: IMAGE_TARGETS.banner.maxWidth, height: 1125 }]);
   });
 
   test('un navigateur qui ne sait pas écrire le WebP retombe sur le JPEG', async () => {
@@ -82,6 +82,10 @@ describe('la recompression', () => {
       },
       encode: async () => null,
     };
-    await expect(recompressImage(photo(1000, 'image/heic'), 'avatar', codec)).rejects.toThrow();
+    const refused = await recompressImage(photo(1000, 'image/heic'), 'avatar', codec).then(
+      () => false,
+      () => true,
+    );
+    expect(refused).toBe(true);
   });
 });

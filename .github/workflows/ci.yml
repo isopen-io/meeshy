@@ -592,6 +592,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-notifications.mjs
 
+      # #6289 — le profil : il se lit (contact masqué, trois rangs du Prisme,
+      # statistiques), se modifie en optimiste, garde le couple de focus de ses
+      # champs, change une langue par la feuille et la retire, recompresse une
+      # photo avant de l'envoyer, désactive l'écriture hors ligne ; aucun
+      # contrôle ni texte n'est volé par un disque (deux schémas, deux gabarits).
+      - name: Gate profil (lecture, édition optimiste, langues, recompression, hors-ligne)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-profile.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |

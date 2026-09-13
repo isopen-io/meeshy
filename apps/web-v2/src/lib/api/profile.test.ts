@@ -204,12 +204,13 @@ describe('la frontière d’écriture — validée avant tout octet', () => {
     const { calls, deps } = gatewayReplying([]);
     const result = await patchMyProfile(deps, { bio: 'x'.repeat(501) });
     expect(calls).toHaveLength(0);
-    expect(result).toMatchObject({ ok: false, status: 0, field: 'bio' });
+    expect(result.ok ? null : { status: result.status, field: result.field }).toEqual({ status: 0, field: 'bio' });
   });
 
   test('un refus de la passerelle remonte tel quel', async () => {
     const { deps } = gatewayReplying([{ status: 400, body: { success: false, error: 'Invalid data', code: 'BAD_REQUEST' } }]);
-    expect(await patchMyProfile(deps, { displayName: 'Ada' })).toMatchObject({ ok: false, status: 400, error: 'Invalid data' });
+    const result = await patchMyProfile(deps, { displayName: 'Ada' });
+    expect(result.ok ? null : { status: result.status, error: result.error }).toEqual({ status: 400, error: 'Invalid data' });
   });
 
   test('l’avatar et la bannière ont chacun leur route, et une data: URI est refusée localement', async () => {

@@ -454,3 +454,47 @@ emit({
   type: 'NotificationsGlyphName',
   role: "LE JEU D'ECRAN de la cloche (#6288) : le rail des categories et le menu d'une ligne, charge avec la route /notifications, jamais dans le socle.",
 });
+
+/**
+ * LE JEU D'ECRAN DU PROFIL (#6289) — miroir des symboles de `ProfileView.swift`
+ * et du bandeau de statistiques de `UserProfileSheet+DetailsTab.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `pencil.circle.fill` (avatar) | `pencil-simple` |
+ * | `photo.fill` (banniere) | `camera` |
+ * | `person.text.rectangle.fill` (identite) | `identification-card` |
+ * | `text.quote` (bio) | `quotes` |
+ * | `at` (pseudo) | `at` |
+ * | `envelope.fill` (contact) | `envelope-simple` |
+ * | `globe` (langues) | `globe` |
+ * | `chart.bar.fill` (statistiques) | `chart-bar` |
+ * | `paperplane.fill` (messages) | `chat-circle` |
+ * | `calendar` (membre depuis, jours) | `calendar-blank` |
+ * | `person.badge.plus.fill` (demandes) | `user-plus` |
+ * | `chevron.forward` | `caret-right` |
+ *
+ * `user`, `phone`, `translate`, `trophy`, `users` et `x` restent au SOCLE.
+ */
+const PROFILE = [
+  'pencil-simple',
+  'camera',
+  'identification-card',
+  'quotes',
+  'at',
+  'envelope-simple',
+  'globe',
+  'chart-bar',
+  'chat-circle',
+  'calendar-blank',
+  'user-plus',
+  'caret-right',
+];
+
+emit({
+  ids: PROFILE,
+  output: join(HERE, '../src/components/glyphs-profile.ts'),
+  constant: 'PROFILE_GLYPHS',
+  type: 'ProfileGlyphName',
+  role: "LE JEU D'ECRAN du profil (#6289) : sections, contacts, langues, statistiques et entrees, charge avec la route /me, jamais dans le socle.",
+});

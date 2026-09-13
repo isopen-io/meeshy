@@ -585,6 +585,14 @@ export default defineConfig({
             ) {
               return 'socketio';
             }
+            /**
+             * ZOD (#6289) — la frontière du profil (`lib/api/profile.ts`,
+             * `zod/mini`) est son SEUL importeur. Sans ce nom, la règle par
+             * défaut le rangeait dans `core` : mesuré, la première peinture
+             * passait de ~40,8 à 45,43 Ko pour un validateur qu'aucun écran
+             * du socle ne lit.
+             */
+            if (id.includes('/node_modules/zod/') || id.includes('/zod@')) return 'zod';
             return 'core';
           }
           /**

@@ -37,9 +37,9 @@
       "pattern": "^assets/catalog-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 10,
-        "status": "CIBLE -- MESUREE PAR #6206, REMESUREE PAR #6288, NON ARBITREE",
-        "source": "REMESURE le 2026-09-13 par #6288 : 8,56 Ko gzip -9 pour les sept catalogues (1,09 Ko l'anglais a 1,38 Ko l'arabe) apres l'ajout des 33 cles de la cloche (onze categories, etats, gestes, compte annonce par le bouton flottant) -- chaque cle est payee SEPT fois dans la somme, jamais plus d'une fois par un lecteur. Plafond porte a 10 (8,56 arrondi au Ko SUPERIEUR + 1 Ko de marge, meme discipline). HISTORIQUE -- Mesure de measure-weight.mjs le 2026-09-13 (`bun run build` puis `node scripts/measure-weight.mjs`) : les SEPT catalogues d'interface (`src/lib/interface-catalogs/catalog-*.ts`, 40 cles) pesent ensemble 5,48 Ko gzip -9, soit 0,7 a 0,9 Ko chacun (l'arabe le plus lourd, l'anglais le plus leger). Un lecteur n'en telecharge qu'UN (celui de sa langue d'interface, `i18n-catalog.ts` § LOADERS), mesure par `scripts/check-interface-language.mjs` ; la SOMME est bornee parce que c'est elle qui grossit a chaque cle ajoutee (sept fois la cle). Arrondi au Ko SUPERIEUR (6) + 1 Ko de marge, meme discipline que les chunks voisins. `dynamic_only` garde le chargement paresseux PAR LANGUE : un import statique d'un catalogue le ferait telecharger par tous les lecteurs, quelle que soit leur langue. Premiere peinture : 39,92 Ko avant ce lot, 40,42 apres (+0,50 -- le chargeur, ses sept `import()` et la resolution de langue, tires par `route-table.tsx` et `shell.tsx`), sous le plafond de 90 (D-49)."
+        "value": 15,
+        "status": "CIBLE -- MESUREE PAR #6206, REMESUREE PAR #6288 PUIS #6289, NON ARBITREE",
+        "source": "REMESURE le 2026-09-13 par #6289 : 13,91 Ko gzip -9 pour les sept catalogues apres l'ajout des 59 cles du profil (sections, champs, trois rangs du Prisme, statistiques, etats, gestes d'image) -- chaque cle payee SEPT fois dans la somme, jamais plus d'une fois par un lecteur, qui ne telecharge que le catalogue de sa langue. Plafond porte a 15 (13,91 arrondi au Ko SUPERIEUR + 1 Ko de marge, meme discipline). HISTORIQUE -- REMESURE le 2026-09-13 par #6288 : 8,56 Ko gzip -9 pour les sept catalogues (1,09 Ko l'anglais a 1,38 Ko l'arabe) apres l'ajout des 33 cles de la cloche (onze categories, etats, gestes, compte annonce par le bouton flottant) -- chaque cle est payee SEPT fois dans la somme, jamais plus d'une fois par un lecteur. Plafond porte a 10 (8,56 arrondi au Ko SUPERIEUR + 1 Ko de marge, meme discipline). HISTORIQUE -- Mesure de measure-weight.mjs le 2026-09-13 (`bun run build` puis `node scripts/measure-weight.mjs`) : les SEPT catalogues d'interface (`src/lib/interface-catalogs/catalog-*.ts`, 40 cles) pesent ensemble 5,48 Ko gzip -9, soit 0,7 a 0,9 Ko chacun (l'arabe le plus lourd, l'anglais le plus leger). Un lecteur n'en telecharge qu'UN (celui de sa langue d'interface, `i18n-catalog.ts` § LOADERS), mesure par `scripts/check-interface-language.mjs` ; la SOMME est bornee parce que c'est elle qui grossit a chaque cle ajoutee (sept fois la cle). Arrondi au Ko SUPERIEUR (6) + 1 Ko de marge, meme discipline que les chunks voisins. `dynamic_only` garde le chargement paresseux PAR LANGUE : un import statique d'un catalogue le ferait telecharger par tous les lecteurs, quelle que soit leur langue. Premiere peinture : 39,92 Ko avant ce lot, 40,42 apres (+0,50 -- le chargeur, ses sept `import()` et la resolution de langue, tires par `route-table.tsx` et `shell.tsx`), sous le plafond de 90 (D-49)."
       }
     },
     "composer_tray": {
@@ -113,6 +113,22 @@
         "value": 12,
         "status": "CIBLE -- MESUREE PAR #6288, NON ARBITREE",
         "source": "Mesure de measure-weight.mjs le 2026-09-13 (`bun run build` puis `node scripts/measure-weight.mjs`, arbre rebase sur `origin/dev` 6e34289a5b) : 10,21 Ko gzip -9 pour les DEUX fichiers `notifications-<hash>` -- l'ECRAN de la cloche (7,36 Ko : `routes/notifications.tsx`, `components/notification-row*.tsx` et le jeu de glyphes `glyphs-notifications.ts`) et son PORT (2,84 Ko : `lib/api/notifications.ts`, `lib/notifications/{categories,record}.ts`), que Vite nomme tous deux d'apres leur module. Le motif exige un hachage de HUIT caracteres : il exclut `notifications-cache-` (0,59 Ko, partage avec le chunk `realtime` qui applique les evenements `notification:*`) et le port est compte ici plutot qu'a part parce qu'il n'a pas d'autre raison d'etre que cet ecran, sa pastille et le temps reel. Arrondi au Ko SUPERIEUR (11) + 1 Ko de marge, meme discipline que les chunks voisins. Hors chunk : `use-notification-counts-` (0,24 Ko, le seul module de la cloche que les menus flottants emportent) et `fixtures-notifications-` (1,55 Ko, corpus de recette elague des builds `VITE_DATA_SOURCE=gateway`). Premiere peinture : 40,76 Ko sur `origin/dev` (6e34289a5b), 40,77 avec ce lot -- deux builds mesures, jamais deduits (la ligne de la route existait deja, #6214)."
+      }
+    },
+    "profile": {
+      "pattern": "^assets/profile-[A-Za-z0-9_-]{8}\\.js$",
+      "kb": {
+        "value": 12,
+        "status": "CIBLE -- MESUREE PAR #6289, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-13 (`bun run build` puis `node scripts/measure-weight.mjs`) : 10,71 Ko gzip -9 pour `assets/profile-<hash>.js` -- l'ECRAN du profil (`routes/profile.tsx`, `routes/profile-sections.tsx`), son PORT et ses gestes (`lib/api/profile.ts`, `lib/api/profile-actions.ts`), la recompression d'image (`lib/profile/image-recompress.ts`), le brouillon (`lib/view/profile-draft.ts`) et le jeu de glyphes `glyphs-profile.ts`. Arrondi au Ko SUPERIEUR (11) + 1 Ko de marge, meme discipline que les chunks voisins. Le motif exige un hachage de HUIT caracteres : il exclut `fixtures-profile-` (0,64 Ko, corpus de recette elague des builds `VITE_DATA_SOURCE=gateway`). Hors chunk, partages avec d'autres ecrans : `language-sheet-`, `languages-`, `field-`, `avatar-`, `attachments-`, et `zod-` (borne a part ci-dessous)."
+      }
+    },
+    "zod": {
+      "pattern": "^assets/zod-",
+      "kb": {
+        "value": 6,
+        "status": "CIBLE -- MESUREE PAR #6289, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-13 : 4,59 Ko gzip -9 -- `zod/mini`, la validation de frontiere du profil (`lib/api/profile.ts`), NOMME dans `vite.config.ts § manualChunks`. SANS ce nom la regle par defaut (« node_modules => core ») le rangeait dans le SOCLE : mesure, la premiere peinture passait de 41,12 a 45,43 Ko pour un validateur qu'aucun ecran du socle ne lit. Ce plafond ne suffit pas a garder la porte (le socle n'a pas de motif par dependance) : c'est `first_paint.kb` qui la garde, et ce nom qui DESIGNE le coupable le jour ou un import statique le ferait revenir. Arrondi au Ko SUPERIEUR (5) + 1 Ko de marge."
       }
     },
     "floating_menus": {
