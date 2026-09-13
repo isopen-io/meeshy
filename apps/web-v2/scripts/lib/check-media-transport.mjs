@@ -74,6 +74,14 @@ export async function checkViewerVideoTransport({ browser, BASE, expect, setSche
   );
 
   // ===== T2 — la vidéo avance PENDANT le glissement, pas au relâcher =====
+  // La lecture est d'abord ASSURÉE : parcourir ne doit jamais l'arrêter, et le
+  // témoin ne peut le dire que si elle jouait avant le geste.
+  await page.evaluate(async () => {
+    const video = document.querySelector('[data-media-viewer] [data-viewer-page] video');
+    video.muted = true;
+    if (video.paused) await video.play().catch(() => {});
+  });
+  const playingBefore = await page.evaluate(() => !document.querySelector('[data-media-viewer] [data-viewer-page] video').paused);
   const box = await slider.boundingBox();
   const middleY = box.y + box.height / 2;
   await page.mouse.move(box.x + box.width * 0.2, middleY);
@@ -87,6 +95,23 @@ export async function checkViewerVideoTransport({ browser, BASE, expect, setSche
   );
   await page.mouse.up();
   expect((await topCorridorOpacity(page)) === '1', `${label} parcourir la piste ne bascule pas le plateau en plein cadre`);
+  const playingAfter = await page.evaluate(() => !document.querySelector('[data-media-viewer] [data-viewer-page] video').paused);
+  expect(
+    playingBefore && playingAfter,
+    `${label} une vidéo qui jouait joue encore après le parcours — la piste ne met jamais en pause (avant ${playingBefore}, après ${playingAfter})`,
+  );
+  // Le muet posé pour garantir la lecture est retiré : T3 part d'une vidéo sonore.
+  // `volumechange` arrive dans une tâche à part : on attend que la barre l'ait
+  // RELU (son bouton redevient « Couper le son ») — ce qui prouve au passage
+  // qu'un changement de son fait hors de la barre y est bien reflété.
+  await page.evaluate(() => {
+    document.querySelector('[data-media-viewer] [data-viewer-page] video').muted = false;
+  });
+  await page.waitForFunction(
+    () => Array.from(document.querySelectorAll('[data-viewer-transport-slot] button')).some((b) => b.getAttribute('aria-label') === 'Couper le son'),
+    null,
+    { timeout: 3000 },
+  );
 
   // ===== T3 — le muet agit sur la vidéo sans cacher le chrome =====
   const barLabels = await page.evaluate(() => ({
