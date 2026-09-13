@@ -19,7 +19,12 @@ services:
     environment:
       MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-meeshy}
     ports:
-      - "27018:27017"  # Exposition externe pour debug/migration
+      # Debug/migration — lié à 127.0.0.1 uniquement, tunnel SSH/VPN pour
+      # atteindre le port depuis l'extérieur (#6255). Publier ce port sans
+      # préfixe de loopback exposait MongoDB lui-même (sans authentification,
+      # `--noauth` ci-dessus) sur l'internet public si le pare-feu de l'hôte
+      # n'était pas explicitement restrictif.
+      - "127.0.0.1:27018:27017"
     volumes:
       - database_staging_data:/data/db
       - database_staging_config:/data/configdb
@@ -58,37 +63,35 @@ services:
     restart: "no"
 
   # ===========================================================================
-  # NOSQLCLIENT STAGING - MongoDB Web UI
+  # NOSQLCLIENT STAGING - MongoDB Web UI, accès SSH tunnel/VPN uniquement (#6254)
   # ===========================================================================
+  # Même traitement qu'en production (#3640) : jamais routée par Traefik — un
+  # opérateur atteint le port loopback via
+  # `ssh -L ${MONGO_UI_PORT_STAGING:-8091}:127.0.0.1:${MONGO_UI_PORT_STAGING:-8091} root@meeshy.me`.
+  # Défauts décalés de ceux de la production (8081/8082, docker-compose.prod.yml) :
+  # les deux composes tournent sur le MÊME hôte (`root@meeshy.me`), et des
+  # défauts identiques feraient échouer la publication du second port au démarrage.
   nosqlclient-staging:
     image: mongoclient/mongoclient:latest
     container_name: meeshy-nosqlclient-staging
     restart: unless-stopped
     environment:
       MONGOCLIENT_DEFAULT_CONNECTION_URL: "mongodb://database-staging:27017/${MONGODB_DATABASE:-meeshy}?replicaSet=rs0&directConnection=true"
-      ROOT_URL: "https://mongo.staging.${DOMAIN:-meeshy.me}"
+      ROOT_URL: "http://localhost:${MONGO_UI_PORT_STAGING:-8091}"
       PORT: 3000
+    ports:
+      - "127.0.0.1:${MONGO_UI_PORT_STAGING:-8091}:3000"
     depends_on:
       mongo-init-staging:
         condition: service_completed_successfully
     networks:
       - meeshy-staging-network
-      - meeshy-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=meeshy_meeshy-network"
-      - "traefik.http.routers.nosqlclient-staging.rule=Host(`mongo.staging.${DOMAIN:-meeshy.me}`)"
-      - "traefik.http.routers.nosqlclient-staging.entrypoints=websecure"
-      - "traefik.http.routers.nosqlclient-staging.tls.certresolver=letsencrypt"
-      - "traefik.http.services.nosqlclient-staging.loadbalancer.server.port=3000"
-      - "traefik.http.routers.nosqlclient-staging.middlewares=nosqlclient-staging-auth"
-      - "traefik.http.middlewares.nosqlclient-staging-auth.basicauth.users=${MONGO_USERS:-}"
 
   # ===========================================================================
   # REDIS STAGING
@@ -99,7 +102,11 @@ services:
     restart: unless-stopped
     command: redis-server --appendonly yes
     ports:
-      - "6380:6379"  # Port alternatif pour debug
+      # Debug — lié à 127.0.0.1 uniquement, tunnel SSH/VPN pour atteindre le
+      # port depuis l'extérieur (#6255). Publier ce port sans préfixe de
+      # loopback exposait Redis lui-même sur l'internet public si le
+      # pare-feu de l'hôte n'était pas explicitement restrictif.
+      - "127.0.0.1:6380:6379"
     volumes:
       - redis_staging_data:/data
     networks:
@@ -111,8 +118,13 @@ services:
       retries: 3
 
   # ===========================================================================
-  # P3X REDIS UI STAGING
+  # P3X REDIS UI STAGING - accès SSH tunnel/VPN uniquement (#6254)
   # ===========================================================================
+  # Même traitement qu'en production (#3640) : jamais routée par Traefik — un
+  # opérateur atteint le port loopback via
+  # `ssh -L ${REDIS_UI_PORT_STAGING:-8092}:127.0.0.1:${REDIS_UI_PORT_STAGING:-8092} root@meeshy.me`.
+  # Défaut décalé de celui de la production (8082, docker-compose.prod.yml) :
+  # les deux composes tournent sur le MÊME hôte (`root@meeshy.me`).
   p3x-redis-ui-staging:
     image: patrikx3/p3x-redis-ui:latest
     container_name: meeshy-p3x-redis-ui-staging
@@ -121,6 +133,8 @@ services:
       - P3X_REDIS_UI_SETTINGS={"hostname":"redis-staging","port":6379,"password":"","database":0}
       - P3X_REDIS_UI_HTTP_PORT=7843
       - P3XRS_SETTINGS_PATH=/settings
+    ports:
+      - "127.0.0.1:${REDIS_UI_PORT_STAGING:-8092}:7843"
     volumes:
       - redis_staging_ui_data:/settings
     depends_on:
@@ -128,22 +142,12 @@ services:
         condition: service_healthy
     networks:
       - meeshy-staging-network
-      - meeshy-network
     healthcheck:
       test: ["CMD-SHELL", "netstat -an | grep :7843 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=meeshy_meeshy-network"
-      - "traefik.http.routers.p3x-redis-staging.rule=Host(`redis.staging.${DOMAIN:-meeshy.me}`)"
-      - "traefik.http.routers.p3x-redis-staging.entrypoints=websecure"
-      - "traefik.http.routers.p3x-redis-staging.tls.certresolver=letsencrypt"
-      - "traefik.http.services.p3x-redis-staging.loadbalancer.server.port=7843"
-      - "traefik.http.routers.p3x-redis-staging.middlewares=p3x-redis-staging-auth"
-      - "traefik.http.middlewares.p3x-redis-staging-auth.basicauth.users=${REDIS_USERS:-}"
 
   # ===========================================================================
   # TRANSLATOR STAGING - ML Service
