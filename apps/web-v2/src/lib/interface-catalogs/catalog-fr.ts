@@ -185,6 +185,7 @@ const fr = {
   'settings.logout.message': 'Voulez-vous vraiment vous déconnecter ?',
   'settings.logout.inprogress': 'Déconnexion en cours...',
   'settings.legacy': 'Version classique, nouvel onglet',
+  'settings.legacy.unavailable': 'Indisponible sur cet environnement',
   'settings.loading': 'Chargement des réglages',
   'settings.error.title': 'Impossible de charger vos réglages',
   'settings.retry': 'Réessayer',

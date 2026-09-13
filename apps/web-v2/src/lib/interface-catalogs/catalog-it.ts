@@ -176,6 +176,7 @@ const it = {
   'settings.logout.message': 'Vuoi davvero uscire?',
   'settings.logout.inprogress': 'Disconnessione in corso...',
   'settings.legacy': 'Versione classica, nuova scheda',
+  'settings.legacy.unavailable': 'Non disponibile in questo ambiente',
   'settings.loading': 'Caricamento delle impostazioni',
   'settings.error.title': 'Impossibile caricare le impostazioni',
   'settings.retry': 'Riprova',

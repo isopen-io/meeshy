@@ -175,6 +175,7 @@ const ar = {
   'settings.logout.message': 'هل تريد فعلاً تسجيل الخروج؟',
   'settings.logout.inprogress': 'جارٍ تسجيل الخروج...',
   'settings.legacy': 'النسخة الكلاسيكية، علامة تبويب جديدة',
+  'settings.legacy.unavailable': 'غير متاح في هذه البيئة',
   'settings.loading': 'جارٍ تحميل الإعدادات',
   'settings.error.title': 'تعذّر تحميل إعداداتك',
   'settings.retry': 'إعادة المحاولة',

@@ -176,6 +176,7 @@ const de = {
   'settings.logout.message': 'Möchtest du dich wirklich abmelden?',
   'settings.logout.inprogress': 'Abmeldung läuft...',
   'settings.legacy': 'Klassische Version, neuer Tab',
+  'settings.legacy.unavailable': 'In dieser Umgebung nicht verfügbar',
   'settings.loading': 'Einstellungen werden geladen',
   'settings.error.title': 'Deine Einstellungen konnten nicht geladen werden',
   'settings.retry': 'Erneut versuchen',

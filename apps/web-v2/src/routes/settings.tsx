@@ -5,6 +5,7 @@ import { useStore } from 'zustand/react';
 import { performPreferenceEdit, type PreferenceActionDeps } from '@/lib/api/app-preferences-actions';
 import { appPreferencesQueryOptions, type PreferencesPatch, type ThemeMode } from '@/lib/api/app-preferences';
 import { logout } from '@/lib/api/auth';
+import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
@@ -19,6 +20,7 @@ import {
 import { useOnline } from '@/lib/net/online';
 import { currentThemePreference, setThemePreference, type ThemePreference } from '@/lib/scheme';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { legacyReachable } from '@/lib/view/legacy-link';
 import { href, navigate } from '@/routes/route-table';
 import {
   AboutSection,
@@ -137,6 +139,10 @@ export default function SettingsScreen() {
   const sessionUser = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   const enabled = apiDeps.source === 'fixtures' || sessionUser !== null;
   const query = useQuery({ ...appPreferencesQueryOptions(apiDeps), enabled }, appQueryClient);
+  /* Le legacy ne sert QUE la production (#6354, D-63) : hors production, les
+     rangées non portées deviennent inertes plutôt que de mener quiconque, sur
+     staging ou dans une coque, vers la production réelle. */
+  const legacyOk = legacyReachable(apiConfig.base);
 
   const [theme, setTheme] = useState<ThemePreference>(currentThemePreference);
   const [interfaceChoice, setInterfaceChoice] = useState<InterfaceLanguage | null>(interfaceLanguageChoice);
@@ -194,8 +200,8 @@ export default function SettingsScreen() {
             language={language}
             user={sessionUser === null ? null : { username: sessionUser.username, displayName: sessionUser.displayName ?? null, avatar: sessionUser.avatar ?? null }}
           />
-          <AccountSection language={language} />
-          <PrivacySection language={language} view={view} disabled={!online} onToggle={toggle} onRetry={() => void query.refetch()} />
+          <AccountSection language={language} legacyReachable={legacyOk} />
+          <PrivacySection language={language} view={view} disabled={!online} onToggle={toggle} onRetry={() => void query.refetch()} legacyReachable={legacyOk} />
           <AppearanceSection
             language={language}
             theme={theme}
@@ -204,8 +210,15 @@ export default function SettingsScreen() {
             onInterfaceLanguage={chooseInterfaceLanguage}
             primaryLanguage={sessionUser?.systemLanguage ?? null}
           />
-          <NotificationsSection language={language} view={view} disabled={!online} onToggle={toggle} onRetry={() => void query.refetch()} />
-          <DataSection language={language} />
+          <NotificationsSection
+            language={language}
+            view={view}
+            disabled={!online}
+            onToggle={toggle}
+            onRetry={() => void query.refetch()}
+            legacyReachable={legacyOk}
+          />
+          <DataSection language={language} legacyReachable={legacyOk} />
           <ToolsSection language={language} />
           <AboutSection language={language} version={__APP_VERSION__} />
           <LogoutButton language={language} busy={loggingOut} onPress={() => setConfirming(true)} />

@@ -180,6 +180,7 @@ const pt = {
   'settings.logout.message': 'Tem certeza de que deseja sair?',
   'settings.logout.inprogress': 'Saindo...',
   'settings.legacy': 'Versão clássica, nova aba',
+  'settings.legacy.unavailable': 'Indisponível neste ambiente',
   'settings.loading': 'Carregando os ajustes',
   'settings.error.title': 'Não foi possível carregar seus ajustes',
   'settings.retry': 'Tentar de novo',
