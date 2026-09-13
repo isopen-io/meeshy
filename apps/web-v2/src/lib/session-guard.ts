@@ -44,6 +44,7 @@ export type RouteKey =
   | 'feed'
   | 'notifications'
   | 'profile'
+  | 'settings'
   | 'login'
   | 'signup'
   | 'welcome'
