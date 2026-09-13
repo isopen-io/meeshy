@@ -15,8 +15,8 @@ import { Link } from '@/routes/route-table';
 import { FeedSkeleton } from './feed';
 
 /**
- * LE DÉTAIL D'UNE PUBLICATION (#6278, D-48) — `/post/$post` et
- * `/feeds/post/$post`, miroir réduit de `PostDetailView.swift` : la carte du
+ * LE DÉTAIL D'UNE PUBLICATION (#6278, D-48) — `/post/$post` (l'alias
+ * `/feeds/post/$post` attend #6279), miroir réduit de `PostDetailView.swift` : la carte du
  * fil, en entier, avec ses gestes. Même modèle (`resolveFeedCardModel` — le
  * Prisme, l'accent, la géométrie ne se recalculent jamais ici, D-14), même
  * hôte des gestes (`usePostGesture`), même cache que le fil pour l'état du
