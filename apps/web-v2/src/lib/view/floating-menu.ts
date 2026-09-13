@@ -55,12 +55,13 @@ export type FloatingDestination = {
   readonly glyph: MenuGlyph;
   /**
    * Le compteur VIVANT que le barreau porte en pastille — miroir de
-   * `RootMenuLadderEntry.badge`. La table reste pure : c'est l'échelle qui
-   * résout la valeur au rendu. iOS en déclare un second (`pendingFriendRequests`,
-   * sur « Découvrir ») ; il n'est pas écrit ici tant que le web n'a aucune
-   * source de demandes d'amitié — un nombre sans source serait inventé.
+   * `RootMenuLadderEntry.badge` (`RootMenuLadderEntry.swift:78-84`), et comme
+   * lui DEUX : `unreadNotifications` sur « Notifications » (#6219), et
+   * `pendingFriendRequests` sur « Découvrir » (#6321), arrivé avec sa source —
+   * le panier des demandes reçues de `friend-requests.ts` (#6363). La table
+   * reste pure : c'est l'échelle qui résout la valeur au rendu.
    */
-  readonly badge?: 'unreadNotifications';
+  readonly badge?: 'unreadNotifications' | 'pendingFriendRequests';
 };
 
 /**
@@ -107,6 +108,7 @@ export const DISCOVER_DESTINATION: FloatingDestination = {
   promiseKey: 'pending.discover.promise',
   tint: '#8B5CF6',
   glyph: { set: 'flottant', name: 'binoculars' },
+  badge: 'pendingFriendRequests',
 };
 
 export const COMMUNITIES_DESTINATION: FloatingDestination = {

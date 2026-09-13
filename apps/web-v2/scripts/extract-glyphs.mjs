@@ -628,6 +628,23 @@ emit({
  *
  * `phone`, `caretLeft` et `warningCircle` restent au SOCLE.
  */
+/**
+ * LA DÉCOUVERTE DE PERSONNES (#6363) — `PeopleDiscoveryView` et ses trois
+ * onglets : `person.badge.plus` (Demandes, Ajouter), `hand.raised.fill`
+ * (Bloqués), `envelope.fill` (inviter par e-mail), `paperplane` (état vide des
+ * envoyées), `person.2.slash` (état vide des reçues, rendu `user-check` barré
+ * par le sens plutôt que par un trait). Chargé avec la route /discover.
+ */
+const DISCOVER = ['user-plus', 'hand-palm', 'envelope-simple', 'paper-plane-tilt', 'user-check'];
+
+emit({
+  ids: DISCOVER,
+  output: join(HERE, '../src/components/glyphs-discover.ts'),
+  constant: 'DISCOVER_GLYPHS',
+  type: 'DiscoverGlyphName',
+  role: "LE JEU D'ECRAN de la decouverte de personnes (#6363) : onglets, ajout, blocage, invitation et etats vides, charge avec la route /discover, jamais dans le socle.",
+});
+
 const CALLS = ['arrow-up-right', 'arrow-down-left', 'phone-x', 'video-camera', 'phone-outgoing'];
 
 emit({
