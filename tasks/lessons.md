@@ -31953,7 +31953,7 @@ Deux écrans neufs (`verify-email-flow.tsx`, `reset-password-flow.tsx`, apps/web
 4. **Le correctif est un remplacement d'un mot, jamais une réécriture** : `onChange` → `onInput` sur CHAQUE champ contrôlé qu'un témoin interactif pose par `input.value = X; dispatchEvent(new Event('input'))`. Un champ qui n'est vérifié QUE par `renderToStaticMarkup` (état initial, aucune interaction) peut rester en `onChange` sans que rien ne le prouve encore — mais le jour où il gagne un témoin interactif, il tombera dans le même panneau.
 
 Détail : `apps/web-v2/decisions.md` § D-47.
-## Leçon 600 — Un `jest.mock` de module qui ne rend qu'UNE PARTIE de ses exports laisse les autres à `undefined` : un piège LATENT qui se déclenche quand une route adopte l'export voisin
+## Leçon 603 — Un `jest.mock` de module qui ne rend qu'UNE PARTIE de ses exports laisse les autres à `undefined` : un piège LATENT qui se déclenche quand une route adopte l'export voisin
 
 En portant `withMutationOutcome` à la route `POST /posts/:postId/like` (#6293), un
 témoin sans rapport a rougi : `routes/posts/__tests__/error-format.test.ts`
