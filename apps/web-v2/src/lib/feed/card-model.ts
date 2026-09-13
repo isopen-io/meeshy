@@ -53,8 +53,14 @@ export type FeedCardStats = {
   readonly shareCount: number;
 };
 
+/** CE QUE LE LECTEUR A DÉJÀ FAIT de ce post (#6278) — `isLikedByMe` (le nom SERVI — `PostFeedService.ts:1197` ; le wire n'a jamais porté `isLiked`) /
+ * `isBookmarkedByMe` servis par la passerelle ; non servi ⇒ `false`, le
+ * contrôle se peint vide plutôt que d'affirmer un geste jamais posé. */
+export type FeedCardViewer = { readonly liked: boolean; readonly bookmarked: boolean };
+
 export type FeedCardModel = {
   readonly id: string;
+  readonly viewer: FeedCardViewer;
   readonly isReel: boolean;
   readonly author: FeedCardAuthor;
   readonly relativeTime: string;
@@ -146,6 +152,7 @@ export function resolveFeedCardModel(
 
   return {
     id: post.id,
+    viewer: { liked: post.isLikedByMe === true, bookmarked: post.isBookmarkedByMe === true },
     isReel,
     author: {
       name: authorName,
