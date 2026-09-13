@@ -25,6 +25,7 @@
 import { jest, describe, it, expect, afterEach } from '@jest/globals';
 
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn(),
 }));
 

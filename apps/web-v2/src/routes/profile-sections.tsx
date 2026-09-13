@@ -114,6 +114,7 @@ export function ProfileHeaderBar({
   editing,
   saving,
   online,
+  ready,
   onEdit,
   onCancel,
   onSave,
@@ -122,6 +123,8 @@ export function ProfileHeaderBar({
   readonly editing: boolean;
   readonly saving: boolean;
   readonly online: boolean;
+  /** Le profil SERVI est en cache (#6343) — sans lui aucun brouillon ne peut naître. */
+  readonly ready: boolean;
   readonly onEdit: () => void;
   readonly onCancel: () => void;
   readonly onSave: () => void;
@@ -161,7 +164,14 @@ export function ProfileHeaderBar({
           {translate(language, saving ? 'profile.saving' : 'profile.save')}
         </button>
       ) : (
-        <button type="button" data-profile-edit onClick={onEdit} disabled={!online} className={actionClass} style={actionStyle(online)}>
+        <button
+          type="button"
+          data-profile-edit
+          onClick={onEdit}
+          disabled={!online || !ready}
+          className={actionClass}
+          style={actionStyle(online && ready)}
+        >
           {translate(language, 'profile.edit')}
         </button>
       )}

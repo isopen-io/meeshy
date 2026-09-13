@@ -39,6 +39,17 @@ function restoredKeys(snapshot: AppPreferences, patch: PreferencesPatch): Prefer
   return Object.fromEntries(Object.keys(patch).map((key) => [key, snapshot[key as keyof AppPreferences]]));
 }
 
+/**
+ * **La confirmation n'écrit, elle aussi, QUE les réglages du geste** (#6342) —
+ * à la valeur que la passerelle a RETENUE. Elle sert la catégorie COMPLÈTE telle
+ * qu'elle était quand elle a traité CETTE requête : adopter les voisins
+ * laisserait une réponse PÉRIMÉE, revenue après celle d'une bascule voisine,
+ * réécrire cette dernière à son ancienne valeur.
+ */
+function retainedKeys(served: PreferencesPatch, patch: PreferencesPatch): PreferencesPatch {
+  return Object.fromEntries(Object.entries(served).filter(([key]) => key in patch));
+}
+
 export async function performPreferenceEdit(params: {
   readonly patch: PreferencesPatch;
   readonly deps: PreferenceActionDeps;
@@ -60,6 +71,6 @@ export async function performPreferenceEdit(params: {
     return { status: 'refused', error: result.error };
   }
 
-  if (current !== undefined) deps.queryClient.setQueryData<AppPreferences>(KEY, { ...current, ...result.data });
+  if (current !== undefined) deps.queryClient.setQueryData<AppPreferences>(KEY, { ...current, ...retainedKeys(result.data, patch) });
   return { status: 'saved' };
 }

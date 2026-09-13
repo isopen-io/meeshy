@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
 /**
  * LE RETOUR MATÉRIEL CONSOMME LA COUCHE MODALE, PAS L'ÉCRAN (#5555, puis
@@ -30,6 +30,14 @@ import { useEffect, useRef } from 'react';
  * encore dessus. Le prix, assumé : après une telle navigation, l'entrée de la
  * couche reste sous la destination, et un retour y ramène l'écran d'origine —
  * exactement ce qu'on quittait.
+ *
+ * **L'ENTRÉE EST POSÉE DANS LE COMMIT QUI INSÈRE LA COUCHE** (#6319). Un effet
+ * passif la posait APRÈS la peinture (Preact : un `requestAnimationFrame`
+ * puis un `setTimeout`) : dans l'intervalle, la couche était VISIBLE et un
+ * retour ne trouvait aucune entrée à consommer — il quittait le fil (mesuré
+ * en CI : `URL blank`, trois têtes de dev sur neuf). L'effet de mise en page
+ * s'exécute avant que le navigateur ne rende la main : aucune image ne montre
+ * la couche sans que le retour lui appartienne.
  */
 let nextMarker = 0;
 
@@ -43,7 +51,7 @@ export function useBackDismiss(onClose: () => void): void {
     onCloseRef.current = onClose;
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     nextMarker += 1;
     const marker = `back-dismiss-${nextMarker}`;
     window.history.pushState({ backDismiss: marker }, '');
