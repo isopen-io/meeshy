@@ -12,7 +12,16 @@ export type LensPaginationFooterProps = {
   /** La sentinelle 1 px de l'état `idle` — réf de RAPPEL de
    * `useLoadMoreSentinel`. */
   readonly sentinelRef: Ref<HTMLLIElement>;
+  /**
+   * LE LIBELLÉ DE L'ÉTAT `exhausted` (#5893) — PARAMÉTRÉ plutôt que dupliqué :
+   * le fil des publications réutilise ce même pied (mêmes quatre cas, même
+   * encre) pour un corpus de PUBLICATIONS, pas de conversations. Défaut
+   * INCHANGÉ pour tout appelant antérieur à ce lot.
+   */
+  readonly exhaustedLabel?: string;
 };
+
+const DEFAULT_EXHAUSTED_LABEL = 'Toutes les conversations sont chargées';
 
 /**
  * L'ENCRE INDIGO DU PIED, LISIBLE DANS LES DEUX SCHÉMAS (revue-correction
@@ -39,7 +48,13 @@ const FOOTER_INK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--i
  * Réessayer, cible ≥ 44 px), `idle` (sentinelle invisible 1 px).
  * `data-pagination-footer="<state>"` est la prise des gates.
  */
-export function LensPaginationFooter({ state, showsAllLoadedHint, onRetry, sentinelRef }: LensPaginationFooterProps) {
+export function LensPaginationFooter({
+  state,
+  showsAllLoadedHint,
+  onRetry,
+  sentinelRef,
+  exhaustedLabel = DEFAULT_EXHAUSTED_LABEL,
+}: LensPaginationFooterProps) {
   if (state === 'loading-more') {
     return (
       /**
@@ -64,7 +79,7 @@ export function LensPaginationFooter({ state, showsAllLoadedHint, onRetry, senti
     if (!showsAllLoadedHint) return null;
     return (
       <li data-pagination-footer="exhausted" className="py-4 text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        Toutes les conversations sont chargées
+        {exhaustedLabel}
       </li>
     );
   }

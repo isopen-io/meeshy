@@ -90,6 +90,14 @@
         "source": "Mesure de measure-weight.mjs le 2026-09-13 (`bun run build` puis `node scripts/measure-weight.mjs`) : 4,11 Ko gzip -9 a la premiere forme, REMESURE 4,63 en revue-correction (le voile du chrome, le gel de l'ordre de lecture, l'etat << media indisponible >>, la pause a l'onglet cache et la progression ecrite au DOM plutot qu'en etat) -- le lecteur plein ecran (`routes/story.tsx` + `lib/stories/{playback,gesture,caption}.ts`), arrondi au Ko SUPERIEUR + 1 Ko de marge, meme discipline que les chunks voisins. Le motif exclut EXPLICITEMENT `story-compose-` et `story-tray-` (deux chunks DISTINCTS, deja mesures ailleurs ou non gardes) : les trois fichiers partagent le prefixe `assets/story` a la lettre, et un motif naif (`^assets/story-`) les aurait tous comptes dans la meme somme, rendant ce plafond illisible des le premier changement d'aucun des trois."
       }
     },
+    "feed": {
+      "pattern": "^assets/feed-[A-Za-z0-9_-]+\\.js$",
+      "kb": {
+        "value": 7,
+        "status": "CIBLE -- MESUREE PAR #5893, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-13 (`bun run build` puis `node scripts/measure-weight.mjs`) : 5,4 Ko gzip a la premiere forme, REMESURE 5,5 en revue-correction (la puce << Reel >>, le texte d'accessibilite servi, les gardes de nullite du fil) -9 (`routes/feed.tsx` + `components/feed-post-card.tsx` + `lib/feed/{card-model,text,layout}.ts` + `lib/media/thumbhash.ts` + `components/glyphs-feed.ts` -- tout ce que la route /feed importe qu'aucune autre route ne partage), arrondi au Ko SUPERIEUR (6) + 1 Ko de marge, meme discipline que les chunks voisins (`story_reader`, `floating_menus`). Le corpus de fixtures (`fixtures-feed.ts`, 2,02 Ko gzip) est un chunk SEPARE, non track ici -- meme arbitrage que `fixtures-stories.ts`, elague des builds `VITE_DATA_SOURCE=gateway`."
+      }
+    },
     "floating_menus": {
       "pattern": "^assets/floating-menus-",
       "kb": {

@@ -64,8 +64,20 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
   await page.clock.install({ time: INSTANT });
 
   let messageFetches = 0;
+  /**
+   * LE CHEMIN D'API, JAMAIS L'URL ENTIÈRE (revue-correction #5893) — ce
+   * témoin veut compter les RE-LECTURES de `GET /…/messages`. Le prédicat
+   * `req.url().includes('/messages')` comptait aussi les FICHIERS servis par
+   * le dist : dès que `api/messages.ts` est devenu un chunk partagé
+   * (l'arrivée de la route `/feed` dans `api/query.ts` a suffi), Rollup a
+   * émis `assets/messages-<hash>.js`, que le navigateur charge à l'ouverture
+   * du fil — et ce gate rougissait en annonçant une requête d'API que
+   * personne n'avait faite. Un témoin qui nomme un défaut ABSENT coûte plus
+   * cher qu'un témoin manquant : on cherche dans le mauvais fichier.
+   */
   page.on('request', (req) => {
-    if (req.url().includes('/messages')) messageFetches += 1;
+    const { pathname } = new URL(req.url());
+    if (pathname.startsWith('/api/') && pathname.includes('/messages')) messageFetches += 1;
   });
 
   const label = `[${scheme}]`;

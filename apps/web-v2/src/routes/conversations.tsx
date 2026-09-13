@@ -30,6 +30,7 @@ import { resolveLensSections } from '@/lib/lens/sections';
 import { useOnline } from '@/lib/net/online';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useOutOfView } from '@/lib/view/use-out-of-view';
+import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { useReaderLanguages } from '@/lib/view/use-reader';
@@ -250,6 +251,16 @@ export default function ConversationsScreen() {
   });
   const { focus, level } = useScene(frame);
   const online = useOnline();
+  /**
+   * LE RETOUR RAMÈNE À LA MÊME POSITION (#5893, § 0 de la spécification) —
+   * `frame` (`<ul id="contenu">`) est le scrollport que la Lentille défile ;
+   * le routeur démonte cet écran à chaque navigation (`Screen
+   * key={routeKey}`), donc `window.scrollY` seul (`lib/router.tsx`) ne
+   * rendait jamais rien ici. Ouvrir `/feed` par le bouton flottant puis
+   * revenir retrouve désormais la même rangée, exactement comme un lien
+   * direct `/c/:id` puis retour.
+   */
+  useScrollportMemory(frame);
 
   /**
    * LA SOURCE (#5650) — `useConversations()` sert les fixtures OU la

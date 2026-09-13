@@ -45,6 +45,11 @@ const SCREENS = [
       comme iOS (`preferredColorScheme(.dark)`) : les deux schémas doivent rendre
       la MÊME image — c'est la jumelle claire qui prouve qu'aucun jeton de
       surface ne fuit dans le lecteur. */
+  /** LE FIL DES PUBLICATIONS (#5893) — deux cartes de tête sur le corpus de
+      fixtures : un POST (en-tête + texte + média) puis les suivantes. Il entre
+      dans la série STANDING pour qu'aucun changement de la carte ne passe
+      désormais sans image, dans les DEUX schémas. */
+  { name: 'feed', path: '/feed' },
   { name: 'story-text', path: '/story/st-amie-1' },
   { name: 'story-image', path: '/story/st-amie-2' },
   { name: 'welcome', path: '/welcome' },

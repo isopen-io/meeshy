@@ -9,6 +9,7 @@ import { ApiError } from './client';
 import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import { apiDeps } from './deps';
+import { feedQuery, refreshFeed } from './feed';
 import type { Conversation, Participant } from './types';
 import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
@@ -143,6 +144,25 @@ export function markStoryViewedAction(postId: string): Promise<void> {
     .catch(() => undefined)
     .then(() => appQueryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY }))
     .then(() => undefined);
+}
+
+/**
+ * `useFeed` (#5893) — `useInfiniteQuery` : le fil des publications défile
+ * au-delà de la première page serveur, même motif que `useConversations`.
+ * `.data` est APLATI par `select` (`flattenFeedPages`).
+ */
+export function useFeed() {
+  return useInfiniteQuery(feedQuery(apiDeps));
+}
+
+/**
+ * `refreshFeedAction` (#5893) — RÉFÉRENCE DE MODULE STABLE (motif
+ * `refreshListAction`) : le tirer-pour-rafraîchir du fil. Page 1 seule,
+ * curseur remis à zéro — jamais l'invalidation du préfixe `STORIES_QUERY_PREFIX`,
+ * un corpus DISTINCT que le fil ne montre pas.
+ */
+export function refreshFeedAction(): Promise<void> {
+  return refreshFeed(appQueryClient, apiDeps);
 }
 
 export function useConversation(id: string) {

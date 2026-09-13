@@ -48,6 +48,20 @@ describe('LensPaginationFooter', () => {
     expect(html).toBe('');
   });
 
+  /** `exhaustedLabel` (#5893) — le fil des publications réutilise ce même
+   * pied pour un corpus de POSTS, pas de conversations. */
+  test('exhaustedLabel PARAMÉTRÉ ⇒ remplace le texte par défaut, sans le dupliquer', () => {
+    const html = render({
+      state: 'exhausted',
+      showsAllLoadedHint: true,
+      onRetry: () => {},
+      sentinelRef: null,
+      exhaustedLabel: 'Toutes les publications sont chargées',
+    });
+    expect(html).toContain('Toutes les publications sont chargées');
+    expect(html).not.toContain('Toutes les conversations sont chargées');
+  });
+
   test('error ⇒ le texte + le bouton Réessayer (cible ≥ 44 px)', () => {
     const html = render({ state: 'error', showsAllLoadedHint: false, onRetry: () => {}, sentinelRef: null });
     expect(html).toContain('Impossible de charger plus');
