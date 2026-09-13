@@ -158,6 +158,34 @@ describe('une rangée', () => {
     expect(html).toContain('alt=""');
   });
 
+  /**
+   * LA VIGNETTE ET L'AVATAR SONT DES RÉFÉRENCES DE MÉDIA, pas des adresses
+   * (#6388). `postThumbnailUrl` est `PostMedia.thumbnailUrl`
+   * (`NotificationService.ts:3580`) et l'avatar est `User.avatar` : la
+   * passerelle sert la CLÉ de stockage depuis #4324, et quelques lignes gardent
+   * l'adresse héritée d'avant la migration 013. Posées telles quelles, la
+   * première se résout contre le CHEMIN du document (`/notifications/2026/09/…`,
+   * où le SPA rend son `index.html`) et la seconde contre la RACINE de la
+   * passerelle — `net::ERR_FAILED`, puis `workbox … no-response`, ce que la
+   * console de `staging.meeshy.me/notifications` montrait le 2026-09-13.
+   */
+  test('la vignette d’une publication passe par la route de flux — clé nue comme adresse héritée', () => {
+    const cle = row(record({ type: 'post_comment', context: { postId: 'p1' }, metadata: { postThumbnailUrl: '2026/09/6aa607/thumb_p1.jpg' } }));
+    expect(cle).toContain('src="https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2F6aa607%2Fthumb_p1.jpg"');
+
+    const heritee = row(
+      record({ type: 'post_comment', context: { postId: 'p1' }, metadata: { postThumbnailUrl: 'https://gate.meeshy.me/2026/09/6aa607/thumb_p1.jpg' } }),
+    );
+    expect(heritee).toContain('src="https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2F6aa607%2Fthumb_p1.jpg"');
+  });
+
+  test('l’avatar de l’acteur passe par la même route — jamais l’adresse servie telle quelle', () => {
+    const html = row(
+      record({ actor: { id: 'u-kwame', username: 'kwame', displayName: 'Kwame Mensah', avatar: 'https://gate.meeshy.me/2026/09/6aa607/harbor_41.png' } }),
+    );
+    expect(html).toContain('src="https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2F6aa607%2Fharbor_41.png"');
+  });
+
   test('lue : aucune annonce « Non lue », et le menu de la rangée reste nommé', () => {
     const html = row(record({ state: { isRead: true, createdAt: '2026-09-13T08:00:00.000Z' } }));
     expect(html).toContain('data-read="true"');
