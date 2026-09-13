@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import type { FeedInfiniteData, FeedPost } from '@/lib/api/feed-pages';
 
 import { resolveFeedCardModel } from './card-model';
-import { applyPostToggle } from './interactions';
+import { applyPostToggle, applyServedCount } from './interactions';
 
 const NOW = new Date('2026-09-13T12:00:00.000Z');
 
@@ -104,5 +104,19 @@ describe('applyPostToggle — le geste optimiste, IMMUABLE, sur le cache paginé
     expect(applyPostToggle(undefined, { postId: 'p1', kind: 'like', on: true })).toBeUndefined();
     const data = pagesOf([post({ id: 'autre' })]);
     expect(applyPostToggle(data, { postId: 'p1', kind: 'like', on: true })).toBe(data);
+  });
+});
+
+describe('applyServedCount — un compte SERVI remplace l’estimation, partage compris (#6278)', () => {
+  test('le compte de partages servi entre au cache, sans toucher aux autres', () => {
+    const next = applyServedCount(pagesOf([post({ shareCount: 2, likeCount: 5 })]), { postId: 'p1', kind: 'share', count: 7 });
+    const found = next?.pages[0]?.posts[0];
+    expect(found?.shareCount).toBe(7);
+    expect(found?.likeCount).toBe(5);
+  });
+
+  test('un compte déjà juste ne change pas la référence du cache', () => {
+    const data = pagesOf([post({ shareCount: 7 })]);
+    expect(applyServedCount(data, { postId: 'p1', kind: 'share', count: 7 })).toBe(data);
   });
 });

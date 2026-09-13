@@ -11,6 +11,7 @@ import { conversationQuery, conversationsQuery, refreshConversations } from './c
 import { apiDeps } from './deps';
 import { feedQuery, refreshFeed } from './feed';
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
+import { recordPostShare } from './feed-share';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import type { Conversation, Participant } from './types';
 import { messagesQuery } from './messages';
@@ -175,6 +176,12 @@ export function refreshFeedAction(): Promise<void> {
  */
 export function postGestureAction(postId: string, kind: PostToggleKind): Promise<PostGestureResult> {
   return performPostGesture({ postId, kind, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+/** `recordShareAction` (#6278) — RÉFÉRENCE DE MODULE STABLE : compter un
+ * partage DÉJÀ parti, sur l'instance partagée du cache du fil. */
+export function recordShareAction(postId: string): Promise<boolean> {
+  return recordPostShare({ postId, deps: { ...apiDeps, queryClient: appQueryClient } });
 }
 
 export function useConversation(id: string) {
