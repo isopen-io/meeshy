@@ -62,6 +62,15 @@ describe('l’en-tête', () => {
     expect(html).toMatch(/<button[^>]*disabled[^>]*>[^<]*Modifier/);
   });
 
+  /* #6343 — sans profil servi (démarrage à froid, lecture en erreur), aucun
+     brouillon ne peut naître : « Modifier » actif serait un bouton sans effet. */
+  test('profil pas encore servi, « Modifier » est désactivé — en ligne', () => {
+    const html = renderToStaticMarkup(
+      <ProfileHeaderBar language="fr" editing={false} saving={false} online ready={false} onEdit={noop} onCancel={noop} onSave={noop} />,
+    );
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>[^<]*Modifier/);
+  });
+
   test('édition : « Annuler » et « Enregistrer »', () => {
     const html = renderToStaticMarkup(
       <ProfileHeaderBar language="fr" editing saving={false} online onEdit={noop} onCancel={noop} onSave={noop} />,

@@ -97,4 +97,31 @@ describe('performPreferenceEdit', () => {
     expect(calls).toHaveLength(1);
     expect(read()).toBeUndefined();
   });
+
+  /* #6342 — la passerelle sert la catégorie COMPLÈTE, telle qu'elle était quand
+     elle a traité CETTE requête. Deux bascules d'une même catégorie dont les
+     réponses reviennent dans l'ordre inverse : la réponse périmée ne réécrit
+     jamais la voisine. */
+  test('deux bascules de la même catégorie, réponses inversées : chacune garde la valeur choisie', async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(APP_PREFERENCES_QUERY_KEY, cached);
+    const answers = [deferred(), deferred()];
+    const sent: number[] = [];
+    const transport = {
+      request: () => answers[sent.push(1) - 1]?.promise ?? Promise.resolve({ ok: false, status: 0, error: 'inattendu' }),
+    } as unknown as HttpTransport;
+    const deps: PreferenceActionDeps = { source: 'gateway', transport, queryClient, isOnline: () => true };
+
+    const push = performPreferenceEdit({ patch: { pushEnabled: false }, deps });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const sound = performPreferenceEdit({ patch: { soundEnabled: false }, deps });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    answers[1]?.resolve({ ok: true, data: { notification: { pushEnabled: false, soundEnabled: false } } });
+    expect(await sound).toEqual({ status: 'saved' });
+    answers[0]?.resolve({ ok: true, data: { notification: { pushEnabled: false, soundEnabled: true } } });
+    expect(await push).toEqual({ status: 'saved' });
+
+    expect(queryClient.getQueryData<AppPreferences>(APP_PREFERENCES_QUERY_KEY)).toEqual({ ...cached, pushEnabled: false, soundEnabled: false });
+  });
 });
