@@ -20,10 +20,15 @@ jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
 jest.mock('../../../../utils/rate-limiter.js', () => ({
   createCustomRateLimiter: () => ({ middleware: () => async () => undefined }),
 }));
-jest.mock('../../../../utils/withMutationLog', () => {
-  class MutationResultGone extends Error {}
-  return { withMutationLog: jest.fn(async (args: any) => args.op()), MutationResultGone };
-});
+jest.mock('../../../../utils/withMutationLog', () => ({
+  // Le module réel est ÉTALÉ d'abord : `MutationResultGone` est une CLASSE
+  // dont les routes font `instanceof`, et `withMutationOutcome` est le
+  // chemin réel du repost. Une usine qui ne rendait que `withMutationLog`
+  // les laissait à `undefined` — `instanceof undefined` lève un TypeError
+  // qui se déguise en 500 sur des chemins d'erreur sans rapport.
+  ...(jest.requireActual('../../../../utils/withMutationLog') as object),
+  withMutationLog: jest.fn(async (args: any) => args.op()),
+}));
 
 /**
  * La LOI de visibilité de la présence est doublée — pas réécrite.

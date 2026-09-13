@@ -31,6 +31,18 @@
  * `posts/storyEffectsV3.negotiation.test.ts`. Les 41 autres fichiers que
  * l'issue nommait étaient déjà conformes.
  *
+ * **Et la première version de CE garde en manquait deux de plus** — revue de
+ * #6295 : `directory/friend-requests.test.ts` et
+ * `directory/friend-request-conversation-rights.test.ts` mockent
+ * `withMutationLog` avec un CORPS DE FONCTION (`() => { class X {} return
+ * {...}; }`), pas l'objet littéral direct (`() => ({...})`) que le premier
+ * `scanUnspreadMocks` reconnaissait seul. Les deux redéclarent une
+ * `MutationResultGone` LOCALE — ce qui masque le défaut `instanceof`, la classe
+ * du mock EST alors la bonne — mais laissent `withMutationOutcome` absent :
+ * même piège, sous un habillage qui semble plus complet. `scanUnspreadMocks`
+ * reconnaît désormais les deux formes (elles se terminent l'une et l'autre par
+ * une accolade de PORTÉE que `matchBrace` apparie identiquement).
+ *
  * **Un chiffre mesuré par une fenêtre de lignes est une affirmation, comme un
  * compte ou un tri (`services/gateway/CLAUDE.md`, cycle 93/86 bis) : il se
  * recompte avant d'être corrigé, il ne s'hérite pas de l'issue qui l'a posé.**
@@ -86,12 +98,21 @@ export type UnspreadMockSite = {
  * (§ tête de fichier : c'est exactement ce que la mesure de l'issue ratait).
  */
 export function scanUnspreadMocks(source: string, file: string): ReadonlyArray<UnspreadMockSite> {
-  const re = /jest\.mock\(\s*['"][^'"]*utils\/withMutationLog['"]\s*,\s*\(\)\s*=>\s*\(\{/g;
+  // `\(?\{` couvre les DEUX formes de fabrique que le dépôt porte : l'objet
+  // littéral direct (`() => ({ ... })`, la majorité des sites) et le corps de
+  // fonction (`() => { class X {} return { ... }; }`, la forme que
+  // `friend-requests.test.ts` et `friend-request-conversation-rights.test.ts`
+  // portaient — trouvée en revue de #6295, absente de la mesure initiale de
+  // l'issue). Les deux se terminent par un `{` de PORTÉE, et `matchBrace`
+  // apparie cette accolade quelle que soit la forme : chercher `requireActual`
+  // dans tout ce corps couvre un spread direct comme un spread suivi d'un
+  // `return`.
+  const re = /jest\.mock\(\s*['"][^'"]*utils\/withMutationLog['"]\s*,\s*\(\)\s*=>\s*\(?\{/g;
   const sites: UnspreadMockSite[] = [];
   let m: RegExpExecArray | null;
 
   while ((m = re.exec(source)) !== null) {
-    const openBrace = source.indexOf('{', m.index + m[0].length - 1);
+    const openBrace = m.index + m[0].length - 1;
     const close = matchBrace(source, openBrace);
     const body = source.slice(openBrace + 1, close);
     if (!body.includes('requireActual')) {
@@ -187,6 +208,31 @@ describe('Ce que le balayage sait discriminer', () => {
 
     expect(scanUnspreadMocks(source, 'x.test.ts')).toHaveLength(1);
   });
+
+  it('signale la forme CORPS DE FONCTION (pas objet littéral direct), sans requireActual — la forme qui a échappé à la première version de ce garde (revue de #6295)', () => {
+    // `friend-requests.test.ts` et `friend-request-conversation-rights.test.ts`
+    // portaient cette forme exacte : une CLASSE `MutationResultGone` LOCALE
+    // masque le défaut `instanceof` (elle EST la classe que le mock exporte),
+    // mais `withMutationOutcome` reste absent — le même piège, sous un habillage
+    // qui semble plus complet.
+    const source = `
+      jest.mock('../../../../utils/withMutationLog', () => {
+        class MutationResultGone extends Error {}
+        return { withMutationLog: jest.fn(async (args) => args.op()), MutationResultGone };
+      });`;
+
+    expect(scanUnspreadMocks(source, 'x.test.ts')).toEqual([{ file: 'x.test.ts' }]);
+  });
+
+  it('ne signale rien pour un corps de fonction qui étale requireActual avant son return', () => {
+    const source = `
+      jest.mock('../../../../utils/withMutationLog', () => {
+        const actual = jest.requireActual('../../../../utils/withMutationLog');
+        return { ...actual, withMutationLog: jest.fn(async (args) => args.op()) };
+      });`;
+
+    expect(scanUnspreadMocks(source, 'x.test.ts')).toEqual([]);
+  });
 });
 
 describe('Mutation — un double étroit réintroduit sur un fichier RÉEL fait tomber le balayage', () => {
@@ -213,9 +259,9 @@ describe('Le balayage LIT bien le répertoire — sans quoi il passerait au vert
     // Une garde négative meurt en silence quand son terrain disparaît (même
     // leçon que `unbounded-findmany-guard.test.ts` / `bare-include-guard.test.ts`) :
     // un répertoire renommé rendrait `[]` des deux côtés et ce témoin serait
-    // vert en ne mesurant plus rien. 46 sites conformes mesurés au moment
-    // d'écrire ce garde (§ tête de fichier) — tout retrait de double de test
-    // fait descendre ce compte, jamais une simple relecture.
+    // vert en ne mesurant plus rien. 48 sites conformes mesurés (46 + les 2
+    // trouvés en revue de #6295, § tête de fichier) — tout retrait de double
+    // de test fait descendre ce compte, jamais une simple relecture.
     let conformes = 0;
     for (const full of walk(SRC_DIR)) {
       const source = readFileSync(full, 'utf8');
@@ -223,6 +269,6 @@ describe('Le balayage LIT bien le répertoire — sans quoi il passerait au vert
         conformes += 1;
       }
     }
-    expect(conformes).toBeGreaterThanOrEqual(46);
+    expect(conformes).toBeGreaterThanOrEqual(48);
   });
 });
