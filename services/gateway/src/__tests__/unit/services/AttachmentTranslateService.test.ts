@@ -21,6 +21,7 @@ const mockAudioTranslateService: any = {
 };
 
 jest.mock('../../../services/AudioTranslateService', () => ({
+  ...(jest.requireActual('../../../services/AudioTranslateService') as object),
   AudioTranslateService: jest.fn().mockImplementation(() => mockAudioTranslateService)
 }));
 

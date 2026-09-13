@@ -21,6 +21,7 @@ const mockScheduleRingingTimeout = jest.fn<any>();
 const mockCreateCallSummaryMessage4 = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     initiateCall: mockInitiateCall,
     generateIceServers: mockGenerateIceServers4,

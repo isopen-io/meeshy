@@ -48,6 +48,7 @@ jest.mock('../../../routes/conversations/leave', () => ({
 }));
 
 jest.mock('../../../routes/conversations/delete-for-me', () => ({
+  ...(jest.requireActual('../../../routes/conversations/delete-for-me') as object),
   registerDeleteForMeRoutes: (...args: any[]) => mockRegisterDeleteForMe(...args),
 }));
 

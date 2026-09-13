@@ -34,6 +34,7 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
 }));
 jest.mock('../../../services/conversationPreferencesSync', () => ({
+  ...(jest.requireActual('../../../services/conversationPreferencesSync') as object),
   writeConversationPreferences: jest.fn<any>().mockResolvedValue(undefined),
 }));
 jest.mock('../../../services/messaging/retractHiddenMessageNotifications', () => ({
