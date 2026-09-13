@@ -2303,3 +2303,27 @@ Le poids : `first_paint` était mesuré à 40,5 Ko (plafond 41, D-53) avant ce t
 **Décision proposée — Accepter (option 1 de l'issue).** Un disque déplacé continue de survoler le contenu qui défile, sur les deux plateformes, sans exception. Écartée : *escamoter pendant le défilement* — elle désaligne le web d'iOS au lieu de les aligner, et retire au disque déplacé la moitié de sa raison d'être (rester à portée du pouce PENDANT qu'on lit). Écartée aussi : *estomper au-dessus d'un texte* — elle demanderait une détection de superposition en continu pendant le scroll, un coût de fluidité (dimension 4) pour un défaut qu'iOS porte identiquement et qu'aucun retour utilisateur ne signale.
 
 **Critère de fin.** Aucun code ne change : le témoin `check-floating-clearance.mjs` couvre déjà exactement cette exclusion (`exigeRepos`, appelé uniquement au repos, jamais après un `defile()` sur un disque déplacé) et documente la même raison depuis #6277. Cette entrée formalise la décision proposée ; #6300 se ferme dessus quand le porteur la confirme.
+
+## D-59 · La visionneuse lit une vidéo comme iOS : la piste au couloir bas, le play/pause au centre, et la barre est un chunk qu'une visionneuse de photos ne télécharge jamais — 2026-09-13 (#6359)
+
+**Le constat.** Sur « Meeshy Poc-Web-V31 », le porteur a relevé qu'il n'y avait « pas d'action » dans la visionneuse. Mesure faite : elle ne rendait qu'un bouton, « Fermer ». Une vidéo s'y jouait sans barre, et le couloir bas portait une ligne de progression `aria-hidden`, sans effet. C'était un contrôle qui ment (loi 4).
+
+**La cible est iOS, et elle se lit dans deux fichiers.** `ConversationMediaGalleryView+Transport.swift` pose la barre du SDK `VideoTransportControls(controls: [.scrubber, .mute, .speed, .pip], placement: .corridor)` au couloir bas. Le play/pause (`cadreCenterPlayPause`) reste au centre du média, plus transparent. La progression RAPPORTE et descend au couloir ; le play/pause COMMANDE et reste là où l'œil est. Tant que la vidéo n'a pas de durée, seule la durée de la pièce jointe s'affiche : une piste qu'on ne peut pas parcourir serait sans effet, et un « 0:00 » faux se croit.
+
+**Trois couches, une responsabilité chacune.**
+- `lib/view/media-transport.ts` est la LOI PURE : temps `m:ss`, paliers de vitesse (1× à 2×, localisés), fraction sous le doigt, saut clavier de 10 s (`MediaStageSeek.step`).
+- `lib/view/use-media-playback.ts` est la MÉCANIQUE : position, durée, `seek`, muet, vitesse, image dans l'image. Tout est additif pour les tuiles du fil et les vocaux. `tracksTime` est OPT-IN : seule la visionneuse suit la position à la seconde, et une tuile du fil ne se re-rend pas chaque seconde pour un chiffre qu'elle ne montre pas.
+- `components/media-transport.tsx` est la SURFACE.
+
+**La vidéo suit le doigt.** Chaque `pointermove` d'un geste en cours déplace réellement la lecture, et le relâcher conclut. C'est la forme que `VideoTransportControls.seekBar` a prise sur le retour porteur du 2026-09-13, et que la directive « gestes progressifs et annulables » exige. Mesuré au navigateur : doigt encore posé à 80 %, la lecture est à 5,601 s pour 5,60 attendus.
+
+**Un portail doit arrêter ses événements.** La page vidéo rend la barre dans le couloir bas par `createPortal`. Mais un événement React remonte l'arbre des COMPOSANTS, pas celui du DOM : toucher le muet atteignait le clic de scène et basculait le plateau en plein cadre (le chrome disparaissait sous le doigt), et Espace sur un bouton de la barre déclenchait le raccourci lecture/pause. Une garde autour du portail arrête clic, pointeur, Espace et Entrée. Le premier témoin écrit pour ce défaut ne pouvait pas échouer : deux clics, deux bascules qui s'annulent, une seule lecture à la fin. Il lit désormais l'opacité après chaque geste.
+
+**La barre est un chunk à la demande.** Montée en statique, elle portait le chunk `media_viewer` de 4,10 à 6,47 Ko, au-delà de sa cible de 6. Sortie en `lazy()`, `media_viewer` mesure 4,50 Ko et `media_transport` 2,72 Ko (plafond 4, `dynamic_only`) : une visionneuse de photos, le cas majoritaire, ne la télécharge pas. Écarté : relever le plafond de `media_viewer`. Le poids aurait été payé par chaque ouverture de photo pour un contrôle qu'elle n'affiche jamais.
+
+**Écarts assumés avec iOS.** Ni AirPlay ni boucle : le web n'a pas l'un, et iOS ne pose pas l'autre dans ce couloir. L'image dans l'image n'est offerte que si le navigateur l'offre (`document.pictureInPictureEnabled`).
+
+**Ce que ce lot ne fait pas, et où c'est suivi.**
+- Le double tap latéral ±10 s d'iOS (`MediaStageSeek`, #6163) : #6369. Au clavier, le saut de 10 s existe déjà sur le curseur.
+- La première peinture passe de 41,65 à 42,12 Ko. `i18n-catalog` et `preload-helper` sortent du chunk d'entrée : cause mesurée pour le premier, à bissecter pour le second. Suivi en #6368.
+- La colonne d'actions (Enregistrer, Réagir, Répondre) : #6303. Le vocal plein écran : #6306.
