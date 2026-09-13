@@ -37,6 +37,7 @@ const mockGetCallSession = jest.fn<any>();
 const mockUpdateCallStatus = jest.fn<any>().mockResolvedValue(undefined);
 
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     joinCall: mockJoinCall,
     generateIceServers: mockGenerateIceServers,

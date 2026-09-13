@@ -39,6 +39,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 // `UNSUPPORTED_TYPE` avant de toucher au moindre service de traduction) :
 // le double reste minimal, il ne prouve que le nombre de lectures.
 jest.mock('../../../services/AudioTranslateService', () => ({
+  ...(jest.requireActual('../../../services/AudioTranslateService') as object),
   AudioTranslateService: jest.fn().mockImplementation(() => ({
     translateSync: jest.fn(),
     translateAsync: jest.fn(),

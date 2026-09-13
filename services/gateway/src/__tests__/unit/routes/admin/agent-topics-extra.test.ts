@@ -14,6 +14,7 @@ jest.mock('../../../../services/CacheStore', () => {
 
 // AgentHttpClient: broadcastTopicsInvalidation creates a new instance each call
 jest.mock('../../../../services/AgentHttpClient', () => ({
+  ...(jest.requireActual('../../../../services/AgentHttpClient') as object),
   AgentHttpClient: jest.fn().mockImplementation(() => ({
     invalidateCache: jest.fn<any>().mockResolvedValue({}),
   })),
