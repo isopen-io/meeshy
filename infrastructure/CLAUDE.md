@@ -61,6 +61,7 @@ Always backup docker-compose.yml before editing on production.
 - Routes defined via Docker labels on services
 - Middlewares: secure-headers, cors, basic auth (dashboard)
 - Healthcheck takes ~30s (start_period + first check) before routing traffic
+- **Mongo/Redis admin UIs (`nosqlclient`, `p3x-redis-ui`) are NEVER routed by Traefik in prod (#3640).** They bind to `127.0.0.1` on the host (`MONGO_UI_PORT`/`REDIS_UI_PORT`, default 8081/8082) — reach them with `ssh -L 8081:127.0.0.1:8081 -L 8082:127.0.0.1:8082 root@meeshy.me`, then `http://localhost:8081` / `:8082` locally. Guard: `services/gateway/src/__tests__/unit/config/admin-ui-ssh-tunnel-only.test.ts`.
 
 ## MongoDB Setup
 - Version 8.0 with replica set (`rs0`)
