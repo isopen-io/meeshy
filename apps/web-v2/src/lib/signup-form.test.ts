@@ -36,9 +36,19 @@ function baseForm(overrides: Partial<SignupFormState> = {}): SignupFormState {
 }
 
 describe('PASSWORD_MIN — LUE depuis le schéma serveur, jamais un littéral local', () => {
+  /**
+   * AUCUN LITTÉRAL ICI, ET C'EST LE SUJET DU TÉMOIN. Il en portait un
+   * (`expect(PASSWORD_MIN).toBe(12)`) : le plancher est revenu à 6 côté serveur
+   * (directive porteur 2026-09-13, `4248b1e5`) et ce témoin a rougi sur `dev`
+   * et sur `main` — la constante recopiée que le fichier existe pour interdire,
+   * écrite dans le témoin qui l'interdit. Ce qui se prouve est la DÉRIVATION
+   * (le modèle lit le schéma partagé) et la FORME de la valeur ; le NOMBRE
+   * appartient au serveur, et lui seul le change.
+   */
   test('vaut exactement registerRequestSchema.properties.password.minLength', () => {
     expect(PASSWORD_MIN).toBe(registerRequestSchema.properties.password.minLength);
-    expect(PASSWORD_MIN).toBe(12);
+    expect(Number.isInteger(PASSWORD_MIN)).toBe(true);
+    expect(PASSWORD_MIN).toBeGreaterThan(0);
   });
 });
 
@@ -63,7 +73,11 @@ describe('validation locale — password (borne LUE, pas un littéral)', () => {
 
 describe('canSubmit — les TROIS champs requis, jamais le téléphone', () => {
   test('nom + e-mail + mot de passe valides ⇒ actif', () => expect(canSubmit(baseForm())).toBe(true));
-  test('mot de passe trop court ⇒ inactif', () => expect(canSubmit(baseForm({ password: 'trop-court' }))).toBe(false));
+  // DÉRIVÉ du plancher, jamais une chaîne écrite « assez courte » : 'trop-court'
+  // fait dix caractères — court sous un plancher à 12, VALIDE sous un plancher
+  // à 6, donc un témoin qui changeait de verdict sans que personne n'y touche.
+  test('mot de passe trop court ⇒ inactif', () =>
+    expect(canSubmit(baseForm({ password: 'a'.repeat(PASSWORD_MIN - 1) }))).toBe(false));
   test('téléphone vide ⇒ n’empêche rien', () => expect(canSubmit(baseForm({ phoneDigits: '' }))).toBe(true));
 });
 
