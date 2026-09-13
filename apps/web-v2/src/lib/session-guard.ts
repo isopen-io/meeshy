@@ -81,6 +81,11 @@ export type RouteAccessDecision = 'allow' | 'redirect-login' | 'redirect-home' |
  * `profile` (#6289) — `/me` est SON profil : `PATCH /users/me*` et
  * `GET /users/me/stats` portent `fastify.authenticate`. Un visiteur sans compte
  * n'a pas de soi à voir ni à modifier.
+ *
+ * `settings` (#6340) — `GET`/`PATCH /me/preferences` portent
+ * `fastify.authenticate`. Laissée publique par #5563, la route ouvrait sans
+ * session un écran dont la requête restait désactivée : squelettes À VIE, et
+ * une déconnexion offerte à qui n'est pas connecté.
  */
 const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'list',
@@ -93,6 +98,7 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'feed',
   'notifications',
   'profile',
+  'settings',
 ]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 
