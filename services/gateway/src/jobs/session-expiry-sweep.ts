@@ -12,6 +12,12 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
  * actives et le diagnostic de #5703 s'y sont trompés, et la garde de #5712 sur
  * la présence lit précisément cette colonne.
  *
+ * Aucun script de migration n'accompagne ce balayage, et il n'en faut pas :
+ * l'`updateMany` étant filtré sur l'état à corriger, son PREMIER passage solde
+ * le passif hérité exactement comme les suivants font l'entretien courant.
+ * (Repris d'une seconde implémentation de #5712, `claude/eager-planck-ngrirs`,
+ * à la fusion du 2026-09-13.)
+ *
  * `invalidatedReason: 'expired'` distingue cette invalidation AUTOMATIQUE de
  * celles qu'un humain provoque (`user_revoked`, `user_revoked_all`) : sans ce
  * motif, un balayage de fond serait indiscernable d'une révocation volontaire
