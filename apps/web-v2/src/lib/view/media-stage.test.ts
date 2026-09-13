@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   CARDED_STAGE,
+  FILMSTRIP_RESERVED_HEIGHT,
   filmstripIndexAtPlayhead,
   filmstripLeadingInset,
   filmstripMaxScrollOffset,
@@ -106,6 +107,24 @@ describe('la pellicule — FilmstripMetrics', () => {
 
   test('filmstripMaxScrollOffset(6, 390) est un multiple du pas 60', () => {
     expect(filmstripMaxScrollOffset(6, 390) % 60).toBe(0);
+  });
+
+  /**
+   * #6345 — round-trip sélection → défilement → sélection. C'est LUI qui
+   * garantit que l'effet de `MediaFilmstrip` (`scrollLeft =
+   * filmstripScrollOffset(currentIndex)`) ne redéclenche jamais son propre
+   * `onScroll` en boucle : le défilement programmatique retombe exactement
+   * sur l'index qui l'a produit.
+   */
+  test('round-trip : filmstripIndexAtPlayhead(filmstripScrollOffset(i), n) === i', () => {
+    const count = 6;
+    for (let i = 0; i < count; i += 1) {
+      expect(filmstripIndexAtPlayhead(filmstripScrollOffset(i), count)).toBe(i);
+    }
+  });
+
+  test('FILMSTRIP_RESERVED_HEIGHT = itemSide + 2×verticalPadding + bottomPadding = 54+20+6 = 80', () => {
+    expect(FILMSTRIP_RESERVED_HEIGHT).toBe(80);
   });
 
   test('rendersFullPixels(1) = true, rendersFullPixels(2) = false', () => {

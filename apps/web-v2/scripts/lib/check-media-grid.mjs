@@ -269,6 +269,56 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
     `[${skin}/${scheme}] la 2ᵉ vignette porte aria-current="true"`,
   );
 
+  /**
+   * #6345 — LA GÉOMÉTRIE RÉELLE, AU NAVIGATEUR. `FILMSTRIP_RESERVED_HEIGHT`
+   * (80, border-box) était calculée et testée en pur mais consommée par
+   * PERSONNE : le couloir ne réservait que 70px (padding asymétrique). Deux
+   * mesures, dans le MÊME navigateur que celui qui composite les pixels —
+   * jamais un style calculé lu hors contexte (`getBoundingClientRect`, comme
+   * `check-floating-clearance.mjs`) :
+   * 1. la bande rend EXACTEMENT 80px (± 1 pour l'arrondi sous-pixel) ;
+   * 2. la page MÉDIA active ne descend jamais SOUS le haut de la bande — la
+   *    scène et la pellicule ne se recouvrent jamais.
+   */
+  const filmstripRect = await dialog.locator('[data-filmstrip]').evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { top: r.top, height: r.height };
+  });
+  expect(
+    Math.abs(filmstripRect.height - 80) < 1,
+    `[${skin}/${scheme}] la pellicule réserve 80px (FILMSTRIP_RESERVED_HEIGHT), obtenu ${filmstripRect.height}`,
+  );
+  const activePageBottom = await dialog.locator('[data-viewer-page][data-full-pixels="true"]').first().evaluate((el) => {
+    const inner = el.querySelector('img, video');
+    return (inner ?? el).getBoundingClientRect().bottom;
+  });
+  expect(
+    activePageBottom <= filmstripRect.top + 1,
+    `[${skin}/${scheme}] le média actif reste AU-DESSUS de la pellicule (bas média ${activePageBottom}, haut pellicule ${filmstripRect.top})`,
+  );
+
+  /**
+   * #6345 — DÉFILER LA PELLICULE À LA MAIN CHOISIT LE MÉDIA AFFICHÉ. Avant ce
+   * lot, seul le CLIC sur une vignette sélectionnait (témoin G3 ci-dessus) ;
+   * le défilement libre de la bande n'avait aucun effet retour sur la scène
+   * (`filmstripIndexAtPlayhead` calculée, jamais lue). Miroir
+   * `ConversationMediaFilmstrip` iOS 17+ (`scrollPosition(id:anchor:)`).
+   */
+  await dialog.locator('[data-filmstrip]').evaluate((el) => {
+    el.scrollLeft = 179; // filmstripIndexAtPlayhead(179, 4) === 3 (media-stage.test.ts)
+    el.dispatchEvent(new Event('scroll', { bubbles: false }));
+  });
+  await page.waitForFunction(() => document.querySelector('[data-media-viewer]')?.getAttribute('data-viewer-index') === '3');
+  expect(
+    (await filmstripItems.nth(3).getAttribute('aria-current')) === 'true',
+    `[${skin}/${scheme}] défiler la pellicule à la main jusqu'à l'index 3 pose aria-current sur la 4ᵉ vignette`,
+  );
+  // Restauré à l'index 1 (clic, chemin déjà éprouvé par G3) — le reste du témoin G3 suppose cet état,
+  // focus REMIS sur « Fermer » : le clic de restauration l'a déplacé sur la vignette.
+  await filmstripItems.nth(1).click();
+  await page.waitForFunction(() => document.querySelector('[data-media-viewer]')?.getAttribute('data-viewer-index') === '1');
+  await dialog.getByRole('button', { name: 'Fermer' }).focus();
+
   // Shift+Tab depuis « Fermer » (le premier focalisable) revient au DERNIER
   // (motif QUE le composant lui-même applique — `nextFocusIndex`, prouvé ici
   // dans un vrai navigateur, jamais seulement en unitaire).
