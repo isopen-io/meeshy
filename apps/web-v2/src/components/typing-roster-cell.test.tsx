@@ -1,11 +1,45 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { TypingEntry } from '@/lib/api/typing-store';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
 import { TypingRosterCell } from './typing-roster-cell';
 
 const entry = (userId: string, displayName: string): TypingEntry => ({ userId, displayName, expiresAt: 0 });
+
+/**
+ * LA CELLULE DE FRAPPE DANS LA LANGUE D'INTERFACE (#6206) — le libellé exposé
+ * au lecteur d'écran vient du catalogue de la langue résolue.
+ */
+describe('TypingRosterCell — le libellé suit la langue d’interface', () => {
+  beforeAll(async () => {
+    ensureHappyDomRegistered();
+    await loadInterfaceCatalog('en');
+  });
+
+  afterAll(async () => {
+    document.documentElement.lang = 'fr';
+    await releaseHappyDomIfRegistered();
+  });
+
+  test('en : un et deux frappeurs se disent en anglais, dans les deux tenues', () => {
+    document.documentElement.lang = 'en';
+    const one = renderToStaticMarkup(
+      <TypingRosterCell typists={[entry('u-kwame', 'Kwame Mensah')]} accent="#5B4CFF" flat />,
+    );
+    const two = renderToStaticMarkup(
+      <TypingRosterCell
+        typists={[entry('u-kwame', 'Kwame Mensah'), entry('u-fatou', 'Fatou Bâ')]}
+        accent="#5B4CFF"
+        flat={false}
+      />,
+    );
+    expect(one).toContain('aria-label="Kwame Mensah is typing"');
+    expect(two).toContain('>Kwame Mensah and Fatou Bâ are typing<');
+  });
+});
 
 describe('TypingRosterCell (#6171, T10) — le roster ENTIER, jamais un seul frappeur', () => {
   test('aucun frappeur -> aucune cellule', () => {

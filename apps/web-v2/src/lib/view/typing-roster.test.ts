@@ -1,45 +1,57 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 
-import { typingAnnouncement, typingLead } from './typing-roster';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+
+import { interfaceTypingFormatter, typingAnnouncement, typingLead } from './typing-roster';
+
+const french = () => interfaceTypingFormatter('fr');
+
+beforeAll(async () => {
+  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en'), loadInterfaceCatalog('de')]);
+});
 
 describe('typingAnnouncement (#6171) — miroir TypingIndicatorBubble.label', () => {
   test('aucun frappeur -> chaîne vide', () => {
-    expect(typingAnnouncement([])).toBe('');
+    expect(typingAnnouncement([], french())).toBe('');
   });
 
   test('un frappeur -> "<nom> écrit"', () => {
-    expect(typingAnnouncement(['Kwame Mensah'])).toBe('Kwame Mensah écrit');
+    expect(typingAnnouncement(['Kwame Mensah'], french())).toBe('Kwame Mensah écrit');
   });
 
   test('deux frappeurs -> "<A> et <B> écrivent"', () => {
-    expect(typingAnnouncement(['Kwame Mensah', 'Fatou Bâ'])).toBe('Kwame Mensah et Fatou Bâ écrivent');
+    expect(typingAnnouncement(['Kwame Mensah', 'Fatou Bâ'], french())).toBe('Kwame Mensah et Fatou Bâ écrivent');
   });
 
   test('trois frappeurs et plus -> "Plusieurs personnes écrivent", jamais une énumération', () => {
-    expect(typingAnnouncement(['Kwame Mensah', 'Fatou Bâ', 'Amina Diallo'])).toBe('Plusieurs personnes écrivent');
+    expect(typingAnnouncement(['Kwame Mensah', 'Fatou Bâ', 'Amina Diallo'], french())).toBe(
+      'Plusieurs personnes écrivent',
+    );
   });
 
   test('l’ORDRE d’entrée est conservé, jamais trié par nom', () => {
-    expect(typingAnnouncement(['Fatou Bâ', 'Kwame Mensah'])).toBe('Fatou Bâ et Kwame Mensah écrivent');
+    expect(typingAnnouncement(['Fatou Bâ', 'Kwame Mensah'], french())).toBe('Fatou Bâ et Kwame Mensah écrivent');
   });
+});
 
-  /**
-   * LE FORMATEUR EST INJECTABLE (revue-correction #6171, défaut 2) — sans
-   * `formatter`, le défaut FRANÇAIS reste EXACTEMENT celui d'avant (les
-   * témoins ci-dessus, inchangés, le prouvent) ; ce témoin prouve que la loi
-   * elle-même ne recompose plus le français EN DUR dans son corps — un futur
-   * socle i18n de web-v2 branche ICI sans toucher les trois appelants.
-   */
-  test('un formateur injecté remplace les trois formes SANS toucher la loi de comptage', () => {
-    const english = {
-      one: (name: string) => `${name} is typing`,
-      two: (a: string, b: string) => `${a} and ${b} are typing`,
-      several: 'Several people are typing',
-    };
+/**
+ * LE PREMIER CLIENT DU CATALOGUE (#6206) — le témoin s'écrit sur une langue
+ * AUTRE que le français, et sur les formes à UN et DEUX noms : en français,
+ * le défaut codé en dur et le catalogue rendent le même texte, donc le témoin
+ * ne pourrait pas tomber.
+ */
+describe('interfaceTypingFormatter — les trois formes viennent du catalogue de la langue', () => {
+  test('en', () => {
+    const english = interfaceTypingFormatter('en');
     expect(typingAnnouncement(['Kwame Mensah'], english)).toBe('Kwame Mensah is typing');
     expect(typingAnnouncement(['Kwame Mensah', 'Fatou Bâ'], english)).toBe('Kwame Mensah and Fatou Bâ are typing');
     expect(typingAnnouncement(['A', 'B', 'C'], english)).toBe('Several people are typing');
-    expect(typingAnnouncement([], english)).toBe('');
+  });
+
+  test('de', () => {
+    const german = interfaceTypingFormatter('de');
+    expect(typingAnnouncement(['Kwame Mensah'], german)).toBe('Kwame Mensah schreibt');
+    expect(typingAnnouncement(['Kwame Mensah', 'Fatou Bâ'], german)).toBe('Kwame Mensah und Fatou Bâ schreiben');
   });
 });
 
