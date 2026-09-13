@@ -79,7 +79,7 @@ export function MediaFilmstrip({
             aria-label={isMasked ? `Média protégé ${index + 1} sur ${items.length}` : `Média ${index + 1} sur ${items.length}`}
             {...(isCurrent ? { 'aria-current': 'true' as const } : {})}
             onClick={() => onSelect(index)}
-            className="relative flex shrink-0 items-center justify-center overflow-hidden rounded-md bg-black"
+            className="media-filmstrip-item relative flex shrink-0 items-center justify-center overflow-hidden bg-black"
             style={{
               width: FILMSTRIP.itemSide,
               height: FILMSTRIP.itemSide,
@@ -89,7 +89,7 @@ export function MediaFilmstrip({
             }}
           >
             {isMasked ? (
-              <Glyph name="eyeSlash" size={14} className="text-white/60" />
+              <Glyph name="eyeSlash" size={14} className="media-filmstrip-masked-glyph" />
             ) : (
               <>
                 {thumb !== undefined ? <img src={thumb} alt="" aria-hidden className="size-full object-cover" /> : null}

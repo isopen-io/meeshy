@@ -13,6 +13,7 @@ import {
   OVERFLOW_LABEL_SIZE,
   OVERFLOW_VEIL_OPACITY,
   mediaGridSlots,
+  type MediaGridFrame,
 } from '@/lib/view/media-grid-layout';
 import { MEDIA_GRID_MAX_WIDTH } from '@/lib/reading-mode/metrics';
 import { READER_LOCALE } from '@/lib/reader';
@@ -118,20 +119,33 @@ export function ImageTile({
  * `items.length === 1` : AUCUNE boîte de grille — délègue directement à
  * `ImageTile`/`VideoTile` en mode SOLO, exactement le rendu d'avant ce lot.
  * `items.length >= 2` : la boîte `[data-media-grid]`, cotes DÉRIVÉES
- * (`mediaGridSlots`), fond noir (`BubbleStandardLayout.swift:816`).
+ * (`mediaGridSlots`), FORME déclarée par l'hôte (`frame`, `MediaGridFrame`) :
+ * boîte noire unique en bulle, cases arrondies séparées en rangée plate.
  *
  * `memo` sur des PRIMITIVES (`languages`, jamais l'objet — leçon cycle 123) :
  * l'identité de `items` (les pièces) et des trois chaînes suffit à décider
  * un re-rendu, l'état « visionneuse ouverte » restant chez `Attachments`.
  */
+const FRAME_CLASS: Readonly<Record<MediaGridFrame, string>> = {
+  box: 'relative overflow-hidden rounded-media bg-black',
+  tiles: 'relative',
+};
+
+const CELL_CLASS: Readonly<Record<MediaGridFrame, string>> = {
+  box: 'relative size-full overflow-hidden',
+  tiles: 'relative size-full overflow-hidden rounded-media bg-black',
+};
+
 export const MediaGrid = memo(function MediaGrid({
   items,
+  frame,
   languages,
   displayLanguage,
   fallbackLanguage,
   onOpen,
 }: {
   readonly items: readonly Attachment[];
+  readonly frame: MediaGridFrame;
   readonly languages: readonly string[];
   readonly displayLanguage?: string;
   readonly fallbackLanguage: string;
@@ -165,14 +179,14 @@ export const MediaGrid = memo(function MediaGrid({
     if (maskedAttachment(attachment)) return <MaskedAttachment key={attachment.id} attachment={attachment} fill />;
     if (kindOf(attachment) === 'video') {
       return (
-        <div key={attachment.id} className="relative size-full overflow-hidden">
+        <div key={attachment.id} className={CELL_CLASS[frame]}>
           <VideoTile attachment={attachment} solo={false} onExpand={() => onOpen(index)} />
           {overflowCount > 0 ? <OverflowVeil count={overflowCount} total={items.length} index={index} onOpen={onOpen} /> : null}
         </div>
       );
     }
     return (
-      <div key={attachment.id} className="relative size-full overflow-hidden">
+      <div key={attachment.id} className={CELL_CLASS[frame]}>
         <GridCellImage
           attachment={attachment}
           languages={languages}
@@ -189,7 +203,8 @@ export const MediaGrid = memo(function MediaGrid({
   return (
     <div
       data-media-grid
-      className="relative overflow-hidden rounded-media bg-black"
+      data-media-frame={frame}
+      className={FRAME_CLASS[frame]}
       style={{ width: MEDIA_GRID_MAX_WIDTH, height: boxHeight }}
     >
       {items.length === 2 ? (

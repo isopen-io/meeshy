@@ -7,6 +7,9 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { FocalRow } from './focal-row';
+import { messagesOf } from '@/lib/api/fixtures';
+import { MEDIA_CONVERSATION_ID } from '@/lib/api/fixtures-media';
+import { MEDIA_GRID_QUAD_WITNESS_ID } from '@/lib/api/fixtures-media-grid';
 import type { Message } from '@/lib/api/types';
 import type { PlacedMessage } from '@/lib/grouping';
 
@@ -920,5 +923,21 @@ describe('FocalRow — l’indicateur d’effets décoratifs (#6175, défaut maj
     expect(html).toContain('data-badge="effects"');
     expect(html).toContain('aria-hidden');
     expect(html).toContain('title="Arc-en-ciel"');
+  });
+});
+
+/**
+ * LA RANGÉE PLATE DÉCLARE SA FORME DE GRILLE (revue #6169) — iOS arrondit
+ * CHAQUE case et ne peint rien entre elles (`FocalAttachmentBlock.swift:203-213`),
+ * là où la bulle pose une boîte noire unique. La peinture se prouve au pixel
+ * (`scripts/lib/check-media-grid.mjs`, G5) ; ici, que l'hôte DÉCLARE la forme.
+ */
+describe('FocalRow — la grille de médias en cases arrondies (revue #6169)', () => {
+  test('media-13 (4 images) ⇒ [data-media-grid][data-media-frame="tiles"]', () => {
+    const quad = messagesOf(MEDIA_CONVERSATION_ID).find((m) => m.id === MEDIA_GRID_QUAD_WITNESS_ID);
+    if (quad === undefined) throw new Error('témoin introuvable : media-13');
+    const html = render(quad);
+    expect(html).toContain('data-media-frame="tiles"');
+    expect(html).not.toContain('data-media-frame="box"');
   });
 });

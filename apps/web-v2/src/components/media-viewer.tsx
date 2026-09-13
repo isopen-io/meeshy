@@ -134,8 +134,8 @@ function ViewerImagePage({
       }}
     >
       {attachment.fileUrl === '' ? (
-        <div className="flex flex-col items-center gap-2 text-white/70">
-          <Glyph name="image" size={48} className="opacity-30" />
+        <div className="media-viewer-muted-text flex flex-col items-center gap-2">
+          <Glyph name="image" size={48} className="media-viewer-fallback-glyph" />
           <span className="text-mini">Média indisponible</span>
         </div>
       ) : (
@@ -143,7 +143,7 @@ function ViewerImagePage({
           src={attachmentSrc(attachment.fileUrl)}
           alt={described.text}
           {...(lang !== undefined ? { lang } : {})}
-          className="max-h-full max-w-full object-contain transition-transform duration-200"
+          className="media-viewer-media transition-transform"
           style={{ transform: zoomed ? `scale(${DOUBLE_TAP_SCALE})` : 'scale(1)' }}
           draggable={false}
         />
@@ -193,10 +193,10 @@ function ViewerVideoPage({
         preload="auto"
         {...(posterUrl !== undefined ? { poster: posterUrl } : {})}
         src={attachmentSrc(attachment.fileUrl)}
-        className="max-h-full max-w-full object-contain"
+        className="media-viewer-media"
       />
       {paused ? (
-        <span className="absolute rounded-full bg-black/55 px-3 py-1 text-mini font-medium text-white">En pause</span>
+        <span className="media-viewer-paused-badge absolute rounded-full px-3 py-1 text-mini font-medium text-white">En pause</span>
       ) : null}
     </div>
   );
@@ -234,7 +234,7 @@ function ViewerMaskedPage({ attachment }: { readonly attachment: Attachment }) {
       data-protected-attachment="hidden"
       role="img"
       aria-label={libelle}
-      className="flex size-full flex-col items-center justify-center gap-2 bg-black text-white/70"
+      className="media-viewer-muted-text flex size-full flex-col items-center justify-center gap-2 bg-black"
     >
       <Glyph name={kind === 'video' ? 'fillPlay' : 'image'} size={40} className="opacity-40" />
       <Glyph name="eyeSlash" size={18} className="opacity-40" />
@@ -379,7 +379,7 @@ export default function MediaViewer({
       aria-label={`Média ${index + 1} sur ${items.length}`}
       data-media-viewer
       data-viewer-index={index}
-      className="fixed inset-0 z-[1000] flex flex-col bg-black"
+      className="media-viewer-layer fixed inset-0 flex flex-col bg-black"
       onKeyDown={onKeyDown}
       tabIndex={-1}
     >
@@ -393,7 +393,7 @@ export default function MediaViewer({
           type="button"
           aria-label="Fermer"
           onClick={onClose}
-          className="tap-target-34 grid size-10 place-items-center rounded-full bg-white/15 text-white"
+          className="media-viewer-close tap-target-34 grid place-items-center rounded-full text-white"
         >
           <Glyph name="x" size={16} />
         </button>
@@ -402,7 +402,7 @@ export default function MediaViewer({
       {/* Le cadre — pages */}
       <div
         ref={trackRef}
-        className="relative min-h-0 flex-1"
+        className="media-viewer-track-frame relative flex-1"
         onClick={onStageClick}
         onContextMenu={(e) => e.preventDefault()}
         onPointerDown={(e: ReactPointerEvent<HTMLDivElement>) => {
@@ -463,7 +463,7 @@ export default function MediaViewer({
         <CarrierFooter attachment={current} carrier={carrier} />
         {carriesDuration ? (
           <div className="px-4 pb-1" aria-hidden>
-            <span className="block h-[3px] w-full rounded-full bg-white/20" />
+            <span className="media-viewer-progress-track block h-[3px] rounded-full" />
           </div>
         ) : null}
         {items.length > 1 ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} /> : null}

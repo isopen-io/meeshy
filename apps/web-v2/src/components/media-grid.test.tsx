@@ -59,7 +59,7 @@ function mount(items: readonly Attachment[], onOpen: (index: number) => void): H
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root.render(<MediaGrid items={items} languages={['fr']} fallbackLanguage="fr" onOpen={onOpen} />);
+    root.render(<MediaGrid items={items} frame="box" languages={['fr']} fallbackLanguage="fr" onOpen={onOpen} />);
   });
   return container;
 }
@@ -153,7 +153,7 @@ describe('MediaGrid — la vidéo en grille rend un <video> réel, jamais null (
 describe('MediaGrid — témoin de RANG, PAS le rang 1 (leçon 261) : media-13, prisme [\'de\',\'fr\']', () => {
   test('les QUATRE cases servent l’allemand, aucune ne retombe sur l’anglais d’origine', () => {
     const html = renderToStaticMarkup(
-      <MediaGrid items={attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID)} languages={['de', 'fr']} fallbackLanguage="en" onOpen={() => {}} />,
+      <MediaGrid items={attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID)} frame="box" languages={['de', 'fr']} fallbackLanguage="en" onOpen={() => {}} />,
     );
     for (let n = 1; n <= 4; n += 1) {
       expect(html).toContain(`Aufnahme ${n} vom Yachthafen`);
@@ -172,5 +172,41 @@ describe('MediaGrid — `sizes` porté par chaque case, dérivé de `mediaGridSl
     imgs.forEach((img, i) => {
       expect(img.getAttribute('sizes')).toBe(sizesFor(slots[i]!.width));
     });
+  });
+});
+
+/**
+ * U4 (#6169) — LA BOÎTE PORTE SES COTES DÉRIVÉES, AU STYLE (ce que G1 mesure
+ * au pixel dans un vrai navigateur, ici au `style` posé par `mediaGridSlots`
+ * — un témoin unitaire qui rougirait AVANT tout gate DOM si l'arithmétique
+ * dérivait).
+ */
+describe('MediaGrid — la boîte porte ses cotes dérivées (U4, #6169)', () => {
+  test('media-11 (2 pièces) : 300 × 180', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_PAIR_WITNESS_ID), () => {});
+    const grid = el.querySelector('[data-media-grid]') as HTMLElement;
+    expect(grid.style.width).toBe('300px');
+    expect(grid.style.height).toBe('180px');
+  });
+
+  test('media-12 (3 pièces) : 300 × 240', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID), () => {});
+    const grid = el.querySelector('[data-media-grid]') as HTMLElement;
+    expect(grid.style.width).toBe('300px');
+    expect(grid.style.height).toBe('240px');
+  });
+
+  test('media-13 (4 pièces) : 300 × 240', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), () => {});
+    const grid = el.querySelector('[data-media-grid]') as HTMLElement;
+    expect(grid.style.width).toBe('300px');
+    expect(grid.style.height).toBe('240px');
+  });
+
+  test('media-14 (6 pièces, 4 rendues) : 300 × 240', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID), () => {});
+    const grid = el.querySelector('[data-media-grid]') as HTMLElement;
+    expect(grid.style.width).toBe('300px');
+    expect(grid.style.height).toBe('240px');
   });
 });

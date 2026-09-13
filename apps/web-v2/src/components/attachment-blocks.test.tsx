@@ -42,6 +42,7 @@ const renderOne = (attachment: Attachment, params: { readonly languages: readonl
       attachments={[attachment]}
       languages={params.languages}
       fallbackLanguage="fr"
+      mediaFrame="box"
       {...(params.displayLanguage !== undefined ? { displayLanguage: params.displayLanguage } : {})}
     />,
   );
@@ -311,7 +312,7 @@ describe('Attachments — l’image en ÉCHEC de décodage (#5805)', () => {
     document.body.appendChild(container);
     root = createRoot(container);
     act(() => {
-      root.render(<Attachments attachments={[broken]} languages={['fr']} fallbackLanguage="fr" />);
+      root.render(<Attachments attachments={[broken]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" />);
     });
 
     const figure = container.querySelector('figure')!;
@@ -423,7 +424,7 @@ describe('Attachments — la pièce DÉCLARÉE protégée (#6189)', () => {
     const claire = image();
     const masquee = { ...claire, id: 'a-masquee', isViewOnce: true } as Attachment;
     const html = renderToStaticMarkup(
-      <Attachments attachments={[masquee, claire]} languages={['fr']} fallbackLanguage="fr" />,
+      <Attachments attachments={[masquee, claire]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" />,
     );
 
     expect(html).toContain('data-protected-attachment="hidden"');

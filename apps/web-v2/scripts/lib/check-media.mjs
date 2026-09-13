@@ -37,6 +37,33 @@ const MEDIA_BROKEN_VOICE_ATTACHMENT_ID = 'media-6-a1';
 const PLAY_LABEL = "Lire l'audio";
 const PAUSE_LABEL = 'Mettre en pause';
 
+/**
+ * `waitForRowSettled` (#6169, renommage anglais D-13 de `attendreRangeeStable`
+ * — UN SEUL site, l'ancien nom disparaît) — attend que la rangée `id` cesse de
+ * bouger avant de la mesurer. EXPORTÉE pour que `check-media-grid.mjs`
+ * (G1-G4) la réutilise plutôt que d'en recopier une jumelle : la même course
+ * (le virtualiseur corrige `scrollTop` pendant qu'il mesure les rangées
+ * voisines, doc-comment ci-dessous) menace n'importe quelle rangée du même
+ * fil, pas seulement `media-1`.
+ *
+ * On attend donc que `top` cesse de changer entre DEUX lectures consécutives,
+ * jusqu'à un budget d'essais — jamais un délai fixe (leçon 590) : un délai
+ * qui suffit un jour peut ne plus suffire le suivant, la fenêtre de
+ * réajustement dépendant du nombre de rangées voisines à mesurer.
+ */
+export async function waitForRowSettled(page, id) {
+  let previousTop = null;
+  for (let attempt = 1; attempt <= 40; attempt += 1) {
+    const top = await page.evaluate(
+      (mid) => document.querySelector(`[data-message="${mid}"]`)?.getBoundingClientRect().top ?? null,
+      id,
+    );
+    if (top !== null && previousTop !== null && Math.abs(top - previousTop) < 0.5) return;
+    previousTop = top;
+    await page.waitForTimeout(100);
+  }
+}
+
 export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin, scheme }) {
   const mediaContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await setScheme(mediaContext, scheme);
@@ -91,21 +118,10 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
    * consécutives, jusqu'à un budget d'essais — jamais un délai fixe
    * (leçon 590) : un délai qui suffit un jour peut ne plus suffire le
    * suivant, la fenêtre de réajustement dépendant du nombre de rangées
-   * voisines à mesurer.
+   * voisines à mesurer. EXTRAITE en `waitForRowSettled` (ci-dessus,
+   * export) pour que `check-media-grid.mjs` la réutilise (#6169).
    */
-  const attendreRangeeStable = async (id) => {
-    let previousTop = null;
-    for (let essai = 1; essai <= 40; essai += 1) {
-      const top = await mediaPage.evaluate(
-        (mid) => document.querySelector(`[data-message="${mid}"]`)?.getBoundingClientRect().top ?? null,
-        id,
-      );
-      if (top !== null && previousTop !== null && Math.abs(top - previousTop) < 0.5) return;
-      previousTop = top;
-      await mediaPage.waitForTimeout(100);
-    }
-  };
-  await attendreRangeeStable(MEDIA_IMAGE_ATTACHMENT_ID.split('-a')[0]);
+  await waitForRowSettled(mediaPage, MEDIA_IMAGE_ATTACHMENT_ID.split('-a')[0]);
 
   if (skin === 'bulles') {
     await mediaPage.getByRole('button', { name: /Mode de lecture/ }).click();
@@ -113,7 +129,7 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
     await mediaPage.waitForTimeout(300);
     // Changer de peau reconstruit CHAQUE rangée (une hauteur différente par
     // peau) — la même course peut donc rejouer ici.
-    await attendreRangeeStable(MEDIA_IMAGE_ATTACHMENT_ID.split('-a')[0]);
+    await waitForRowSettled(mediaPage, MEDIA_IMAGE_ATTACHMENT_ID.split('-a')[0]);
   }
 
   const attachmentOf = (id) => mediaPage.locator(`[data-attachment="${id}"]`);
@@ -204,8 +220,21 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
    * octets sont là, jamais qu'un pixel a été posé. On attend `decode()` puis
    * DEUX `requestAnimationFrame` — le premier rend la main au compositeur, le
    * second garantit qu'une frame a été produite APRÈS le décodage.
+   *
+   * DEPUIS #6213 LE COMPOSEUR FLOTTE (leçon 599 : « faire flotter ce qui
+   * était en flux change ce qui passe SOUS lui ») — `scrollIntoViewIfNeeded()`
+   * amène l'élément au bord BAS du champ, désormais OCCULTÉ par
+   * `.thread-composer-chrome` (posé `position: absolute; inset-x-0 bottom-0`
+   * par-dessus le flux). `elementsFromPoint` au centre de la figure y trouve
+   * le chrome AVANT l'`<img>`, et le cœur peint tombe à 84,71 % / 56,60 %
+   * (66/56 teintes) au lieu de 100 % — pas un défaut de peinture réel, un
+   * défaut de POSITION du témoin. On CENTRE la rangée (`block: 'center'`,
+   * hors de la zone du chrome bas) puis on attend qu'elle cesse de bouger
+   * (`waitForRowSettled`, la même course que celle documentée plus haut) —
+   * jamais en baissant le seuil de 100 %.
    */
-  await attachmentOf(MEDIA_IMAGE_ATTACHMENT_ID).scrollIntoViewIfNeeded();
+  await attachmentOf(MEDIA_IMAGE_ATTACHMENT_ID).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await waitForRowSettled(mediaPage, MEDIA_IMAGE_ATTACHMENT_ID.split('-a')[0]);
   await mediaPage.locator(`img[data-attachment-image="${MEDIA_IMAGE_ATTACHMENT_ID}"]`).evaluate(async (el) => {
     if (typeof el.decode === 'function') await el.decode().catch(() => {});
     await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));

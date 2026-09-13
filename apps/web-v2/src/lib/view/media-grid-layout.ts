@@ -37,6 +37,19 @@ export const MEDIA_FOOTER_OVERLAY_OPACITY = 0.55;
 /** `+Media.swift:742` — la capsule du badge de durée d'une vignette vidéo. */
 export const DURATION_BADGE_OPACITY = 0.6;
 
+/**
+ * LA FORME DE LA GRILLE — une DONNÉE que l'hôte déclare, jamais une branche
+ * sur la peau recopiée dans le composant (revue #6169). Les deux sources
+ * Swift partagent l'arithmétique mais PAS la forme :
+ * - `box` : UNE boîte noire arrondie, les écarts peints en noir — la bulle
+ *   (`BubbleStandardLayout.swift:814-817`, `.background(Color.black)` puis
+ *   `.clipShape` sur la grille entière) ;
+ * - `tiles` : CHAQUE case arrondie, rien peint entre elles, l'écart laisse
+ *   voir le fond du fil — la rangée plate (`FocalAttachmentBlock.swift:203-213`,
+ *   `clipShape` sur la cellule, aucun fond de conteneur).
+ */
+export type MediaGridFrame = 'box' | 'tiles';
+
 /** Une case de la grille : SA largeur, la hauteur de la BOÎTE qui la contient, et son débordement (0 sauf la dernière visible). */
 export type MediaSlot = {
   readonly width: number;

@@ -12,6 +12,8 @@ import {
 } from '@/lib/api/fixtures-media-grid';
 import type { Attachment } from '@/lib/api/types';
 
+import type { MediaCarrier } from '@/lib/view/media';
+
 import MediaViewer from './media-viewer';
 
 /**
@@ -82,6 +84,7 @@ function mount(params: {
   readonly items: readonly Attachment[];
   readonly startIndex: number;
   readonly onClose: () => void;
+  readonly carrier?: MediaCarrier;
 }): HTMLElement {
   container = document.createElement('div');
   container.id = 'root';
@@ -95,6 +98,7 @@ function mount(params: {
         onClose={params.onClose}
         languages={['fr']}
         fallbackLanguage="fr"
+        {...(params.carrier !== undefined ? { carrier: params.carrier } : {})}
       />,
     );
   });
@@ -273,5 +277,44 @@ describe('MediaViewer — la pièce MASQUÉE reste masquée dans la visionneuse 
     expect(activePage.querySelector('img') !== null).toBe(true);
     const filmstripItems = Array.from(body.querySelectorAll('[data-filmstrip-item]'));
     expect(filmstripItems[1]!.querySelector('img') !== null).toBe(true);
+  });
+});
+
+/**
+ * U2 (#6169) — LE PIED PORTE L'AUTEUR, LA DATE, LES COTES ET LA LÉGENDE — le
+ * SEUL consommateur de `MediaCarrier` (`CarrierFooter`, `media-viewer.tsx`).
+ * `carrier` ABSENT ⇒ AUCUN pied (loi 4 : un carrier vide ne doit rien
+ * afficher qui ressemble à un auteur inventé).
+ */
+describe('MediaViewer — le pied porte le carrier, absent sans lui (#6169)', () => {
+  const carrier: MediaCarrier = {
+    sender: { displayName: 'Kwame Mensah' },
+    sentAt: '2026-09-13T10:13:00.000Z',
+    caption: { text: 'Aufnahme vom Yachthafen', language: 'de', translated: true },
+  };
+
+  test('avec carrier : auteur, <time datetime>, 640 × 427, 1 Ko, légende avec lang="de"', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const body = mount({ items, startIndex: 0, onClose: () => {}, carrier });
+
+    const footer = body.querySelector('[data-viewer-footer]');
+    expect(footer).not.toBeNull();
+    expect(footer!.textContent).toContain('Kwame Mensah');
+    const time = footer!.querySelector('time[datetime]');
+    expect(time).not.toBeNull();
+    expect(time!.getAttribute('datetime')).toBe('2026-09-13T10:13:00.000Z');
+    expect(footer!.textContent).toContain('640 × 427');
+    expect(footer!.textContent).toContain('1 Ko');
+
+    const caption = body.querySelector('[data-viewer-caption]');
+    expect(caption).not.toBeNull();
+    expect(caption!.getAttribute('lang')).toBe('de');
+    expect(caption!.textContent).toBe('Aufnahme vom Yachthafen');
+  });
+
+  test('SANS carrier : aucun [data-viewer-footer] (loi 4, jamais un auteur inventé)', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const body = mount({ items, startIndex: 0, onClose: () => {} });
+    expect(body.querySelector('[data-viewer-footer]')).toBeNull();
   });
 });

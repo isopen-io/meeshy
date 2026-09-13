@@ -5,7 +5,7 @@ import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { electAudio, type MediaCarrier } from '@/lib/view/media';
-import { partitionAttachments } from '@/lib/view/media-grid-layout';
+import { partitionAttachments, type MediaGridFrame } from '@/lib/view/media-grid-layout';
 import { waveformOf } from '@/lib/view/message';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
 import { READER_LOCALE } from '@/lib/reader';
@@ -203,6 +203,7 @@ export function Attachments({
   displayLanguage,
   fallbackLanguage,
   carrier,
+  mediaFrame,
 }: {
   readonly attachments: readonly Attachment[];
   /** Le prisme du lecteur — descendu pour l'`alt`/la transcription ET la piste audio. */
@@ -213,6 +214,8 @@ export function Attachments({
   readonly fallbackLanguage: string;
   /** Remis à la visionneuse plein écran (auteur, date, légende servie) — absent ⇒ aucun bloc auteur (loi 4). */
   readonly carrier?: MediaCarrier;
+  /** La forme de la grille, DÉCLARÉE par l'hôte (revue #6169) : `box` en bulle, `tiles` en rangée plate. Obligatoire — un défaut muet ferait porter à l'une des peaux la forme de l'autre. */
+  readonly mediaFrame: MediaGridFrame;
 }) {
   const { visual, audio, nonMedia } = partitionAttachments(attachments);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -222,6 +225,7 @@ export function Attachments({
       {visual.length > 0 ? (
         <MediaGrid
           items={visual}
+          frame={mediaFrame}
           languages={languages}
           fallbackLanguage={fallbackLanguage}
           onOpen={setOpenIndex}

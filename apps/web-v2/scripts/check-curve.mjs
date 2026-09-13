@@ -26,6 +26,8 @@
  */
 import { readFileSync } from 'node:fs';
 
+import { mediaGridCurveFailures } from './lib/curve-media-grid.mjs';
+
 const ROOT = new URL('../../..', import.meta.url).pathname;
 const UPSTREAM = `${ROOT}packages/shared/utils/focus-curve.ts`;
 /**
@@ -792,6 +794,8 @@ for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
   }
 }
 
+failures.push(...mediaGridCurveFailures({ root: ROOT, count }));
+
 if (failures.length > 0) {
   console.error('\n  La loi de la Lentille a DÉRIVÉ de packages/shared/utils/focus-curve.ts :\n');
   for (const e of failures) console.error(`    · ${e}`);
@@ -820,5 +824,7 @@ console.log(
     ` (${MENU_MAPPINGS.length} cotes + le chrome de la liste + les 6/20 emojis du rail).` +
     `\n  Les états du message sont conformes à EmojiDetector.swift/BubbleSticker.swift` +
     ` (3 tailles d'emoji seul + 2 cotes de sticker en bulle).` +
-    `\n  Le seuil du tirer-pour-rafraîchir est conforme à MeeshyRefreshableScroll.swift (1 cote).`,
+    `\n  Le seuil du tirer-pour-rafraîchir est conforme à MeeshyRefreshableScroll.swift (1 cote).` +
+    `\n  La grille de médias du Fil est conforme à FocalAttachmentBlock.swift/BubbleStandardLayout+Media.swift/` +
+    `ConversationMediaFilmstrip.swift/+Geometry.swift/+Pages.swift (21 cotes).`,
 );
