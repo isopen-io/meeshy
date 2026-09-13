@@ -1,39 +1,59 @@
-import { useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
+import { useStore } from 'zustand/react';
 
 import { FeedPostCard } from '@/components/feed-post-card';
 import { Glyph } from '@/components/glyph';
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
 import { PullIndicator } from '@/components/pull-indicator';
+import { RailTitleSlot } from '@/components/rail-title-slot';
+import { StoryRail, type StoryRailProps } from '@/components/story-rail';
+import { apiDeps } from '@/lib/api/deps';
 import { FEED_PAGE_SIZE } from '@/lib/api/feed';
 import type { FeedPost } from '@/lib/api/feed-pages';
-import { refreshFeedAction, useFeed } from '@/lib/api/query';
+import { postGestureAction, refreshFeedAction, useFeed } from '@/lib/api/query';
+import { sessionStore } from '@/lib/api/session';
+import { resolveViewer } from '@/lib/api/viewer';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
+import type { PostToggleKind } from '@/lib/feed/interactions';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
+import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { useOnline } from '@/lib/net/online';
+import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
+import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useMinute } from '@/lib/view/use-minute';
+import { useOutOfView } from '@/lib/view/use-out-of-view';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
+import { useStoryRailProps } from '@/lib/view/use-story-rail';
 import { Link } from '@/routes/route-table';
 
 /**
- * LE FIL DES PUBLICATIONS (#5893, #6104) — destination du bouton flottant de
- * GAUCHE, miroir réduit de `FeedView.swift` (D-1) : auteur + heure relative
- * sur la même ligne, corps via le Prisme (`resolveFeedCardModel`,
- * `lib/feed/card-model.ts` — JAMAIS de descente réécrite ici, D-14), média
- * avec placeholder ThumbHash puis chargement paresseux, pagination par
- * curseur. LECTEUR SEUL ce lot (D-6) : ni écriture, ni réaction, ni
- * commentaire — les cinq statistiques de chaque carte sont des compteurs
- * STATIQUES (`FeedPostCard`).
+ * LE FIL DES PUBLICATIONS (#5893, #6104, #6277) — destination du bouton
+ * flottant de GAUCHE, miroir réduit de `FeedView.swift` (D-1) : le plateau des
+ * stories en tête du contenu défilant, un en-tête qui s'escamote, puis les
+ * cartes — auteur + heure relative sur la même ligne, corps via le Prisme
+ * (`resolveFeedCardModel`, `lib/feed/card-model.ts` — JAMAIS de descente
+ * réécrite ici, D-14), média avec placeholder ThumbHash puis chargement
+ * paresseux, pagination par curseur. LECTEUR SEUL (D-6) : ni écriture, ni
+ * réaction, ni commentaire — les cinq statistiques de chaque carte sont des
+ * compteurs STATIQUES (`FeedPostCard`).
  *
- * CE QUI N'EST PAS REPRIS CE LOT, ASSUMÉ (§ 1.5 de la spécification) : le
- * rail de stories, le placeholder de composeur, les deux boutons ronds
- * (Réels / à proximité), le menu « Plus d'options », le panneau de traduction
- * secondaire et la bannière temps réel « N nouveaux posts » — chacun un
- * contrôle qui ouvrirait une route ou un geste absent (loi 4), ou un
- * compagnon de temps réel hors périmètre lecture seule.
+ * LE PLATEAU ET L'EN-TÊTE ESCAMOTABLE SONT CEUX DE LA LISTE (#6277) — iOS
+ * monte le même `StoryTrayView` et la même `PinnedStoryTrailBand` sur les deux
+ * écrans (`FeedView.swift:1124-1126`, `:610-634`). Ici aussi : `StoryRail`,
+ * `RailTitleSlot` et `useStoryRailProps`, les MÊMES composants avec la MÊME
+ * cote (#6133) — jamais une seconde tuile ni une seconde bascule.
+ *
+ * CE QUI N'EST PAS REPRIS, ASSUMÉ (§ 1.5 de la spécification) : le placeholder
+ * de composeur, les deux boutons ronds de l'en-tête (Réels / à proximité), le
+ * menu « Plus d'options », le panneau de traduction secondaire et la bannière
+ * temps réel « N nouveaux posts » — chacun un contrôle qui ouvrirait une route
+ * ou un geste absent (loi 4), ou un compagnon de temps réel hors périmètre
+ * lecture seule. Le bouton retour, lui, reste : iOS ferme le fil par le disque
+ * qui l'a ouvert, le web a une adresse et doit pouvoir la quitter.
  */
 const EMPTY_POSTS: readonly FeedPost[] = [];
 
@@ -42,9 +62,37 @@ const EMPTY_POSTS: readonly FeedPost[] = [];
  * défilement infini (`loadMoreRootMargin`) suit cette échelle. */
 const FEED_ROW_HEIGHT_ESTIMATE = 420;
 
-export function FeedHeader() {
+/**
+ * **LA HAUTEUR DE L'EN-TÊTE, DÉCLARÉE** — `CollapsibleHeaderMetrics.
+ * expandedHeight` (64). La réserve du couloir ci-dessous se calcule depuis
+ * elle : mesurée, elle aurait dépendu de la hauteur de ligne d'un titre, et la
+ * première écriture de ce fichier l'avait relevée à 65 au navigateur.
+ */
+export const FEED_HEADER_HEIGHT = 64;
+
+/**
+ * **LA RÉSERVE DU COULOIR DES DISQUES FLOTTANTS** (#6277) — la loi d'iOS, jamais
+ * une cote magique.
+ *
+ * iOS pose les disques sous `FloatingButtonSafeZone.top` et ouvre son fil par
+ * un plateau de hauteur FIXE (`StoryTrayView.frame(height: 120)`, présent même
+ * sans story puisqu'il porte « Moi ») : la première carte commence toujours
+ * sous le couloir. Le rail du web ne peint RIEN sans corpus (`StoryRail`) —
+ * la loi se porte donc par un PLANCHER sur le chrome qui le contient : le bas du
+ * couloir (`FLOATING_CORRIDOR_BOTTOM`, `lib/view/floating-corridor.ts`) moins
+ * la hauteur de l'en-tête. L'encoche s'annule dans la soustraction : elle
+ * décale à la fois le couloir (`env(safe-area-inset-top)`) et l'écran (`pt-safe`).
+ *
+ * Avec des stories, le plateau (anneau de 94 + libellé) dépasse le plancher et
+ * c'est lui qui occupe le couloir — le disque du Flux survole alors sa première
+ * tuile, exactement comme la cible `targets/feed.*.png`, qui y garde une cible
+ * de 44 px atteignable (`check-floating-clearance.mjs`).
+ */
+export const FEED_TOP_RESERVE = FLOATING_CORRIDOR_BOTTOM - FEED_HEADER_HEIGHT;
+
+export function FeedHeader({ pinned, railProps }: { readonly pinned: boolean; readonly railProps: StoryRailProps }) {
   return (
-    <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
+    <header className="flex shrink-0 items-center gap-2 px-3" style={{ height: FEED_HEADER_HEIGHT }}>
       <Link
         to="list"
         aria-label="Retour aux conversations"
@@ -53,10 +101,36 @@ export function FeedHeader() {
       >
         <Glyph name="caretLeft" size={20} />
       </Link>
-      <h1 className="text-screen font-bold" style={{ color: 'var(--color-ios-brand)' }}>
-        Meeshy Feed
-      </h1>
+      <RailTitleSlot title="Meeshy Feed" pinned={pinned} railProps={railProps} />
     </header>
+  );
+}
+
+/**
+ * LE CHROME HAUT DU CONTENU DÉFILANT — le grand plateau, qui SORT du champ au
+ * défilement comme tout contenu (#6103), posé sur la réserve du couloir.
+ * `-mx-3` neutralise le `px-3` du scrollport : le plateau court de bord à bord,
+ * comme sur la liste. `observe` est la réf de rappel de `useOutOfView` ; `inert`
+ * retire le plateau des deux arbres pendant que la bande de l'en-tête le
+ * remplace (voir `StoryRail`).
+ */
+export function FeedTopChrome({
+  railProps,
+  inert,
+  observe,
+}: {
+  readonly railProps: StoryRailProps;
+  readonly inert: boolean;
+  readonly observe?: (node: Element | null) => void;
+}) {
+  return (
+    /* `pt-3` — l'air d'iOS au-dessus du plateau (`FeedView`, `LazyVStack
+       .padding(.top, 12)`) : sans lui, le libellé de la première tuile passait
+       sous le bas du disque du Flux (mesuré à la capture). `border-box` : le
+       plancher COMPTE cet air, la loi du couloir reste exacte. */
+    <li className="-mx-3 shrink-0 pt-3" style={{ minHeight: FEED_TOP_RESERVE }}>
+      <StoryRail ref={observe} variant="grande" inert={inert} {...railProps} />
+    </li>
   );
 }
 
@@ -99,51 +173,6 @@ export function FeedEmpty() {
   );
 }
 
-/**
- * **LE BAS DU CORRIDOR DES DISQUES FLOTTANTS** — `--float-top`
- * (`styles/floating-menus.css:53`, 126) plus la hauteur du disque
- * (`FLOATING_BUTTON`, `lib/view/floating-pose.ts:16`, 52). L'inset de
- * sécurité du haut s'ANNULE dans la comparaison qui suit : il décale à la
- * fois ce corridor et l'en-tête du fil (via `pt-safe` sur le conteneur), donc
- * la marge à réserver ENTRE eux n'en dépend pas.
- *
- * Dupliqué plutôt qu'importé : `floating-pose.ts` ne vit aujourd'hui QUE dans
- * le chunk à la demande des menus (`floating_menus`, `budgets.json`) ;
- * l'importer depuis `feed.tsx` ferait naître une arête partagée entre deux
- * chunks déjà mesurés séparément, pour deux constantes qui ne bougent pas.
- * Même arbitrage que `FLOATING_SIDE`/`--float-side` (`floating-pose.ts:88-98`).
- */
-const FLOATING_DISC_CORRIDOR_BOTTOM = 178;
-
-/**
- * **LA HAUTEUR DE `<FeedHeader>`**, mesurée à 390×844 (revue-correction de
- * #5893/#6104, Playwright + `getBoundingClientRect`) : `pt-3` (12) + `pb-2`
- * (8) + la ligne bouton-retour/titre, où l'icône `size-11` (44) domine.
- */
-const FEED_HEADER_HEIGHT = 65;
-
-/**
- * **LA BANDE QUI MANQUAIT** — le rail de stories et le placeholder de
- * composeur occupent exactement ce corridor sur iOS (`FeedView.swift:
- * 1124-1130`) et ne sont PAS repris ce lot (doc-comment ci-dessus) : sans
- * eux, les deux disques flottants (`lib/view/floating-gate.ts`) recouvraient
- * le texte et la rangée d'actions de la PREMIÈRE carte. Mesuré avant ce
- * correctif : disques à 126-178, première carte dès 65, son texte à 137, sa
- * rangée d'actions à 178 — 113 px de la carte sous le corridor.
- *
- * Cette bande est DÉCORATIVE (`aria-hidden`, aucun geste, ce n'est donc pas
- * un contrôle inerte au sens de la loi 4) et vit DANS le scrollport, comme
- * l'aurait fait le rail : elle défile normalement dès le premier geste, elle
- * ne fige rien au-dessus du contenu.
- */
-const FEED_TOP_CLEARANCE = Math.max(0, FLOATING_DISC_CORRIDOR_BOTTOM - FEED_HEADER_HEIGHT);
-
-/** Composant à part pour que la revue et le témoin en isolent la valeur —
- * même découpage que `FeedHeader`/`FeedEmpty` ci-dessus. */
-export function FeedTopClearance() {
-  return <li aria-hidden="true" style={{ height: FEED_TOP_CLEARANCE, flexShrink: 0 }} />;
-}
-
 const SKELETON_CARDS = [0, 1, 2] as const;
 
 /** Le squelette au démarrage à froid SEUL (cache vide, requête en vol) —
@@ -182,6 +211,17 @@ export default function FeedScreen() {
    * discipline que la Lentille (`useMinute`, `conversations.tsx`). */
   const minute = useMinute();
 
+  const session = useStore(sessionStore, (s) => s.session);
+  const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
+  const railProps = useStoryRailProps(viewer.id ?? undefined);
+  /** La bande de l'en-tête prend la place du titre quand le grand plateau est
+   * SORTI du scrollport — mêmes seuils que la liste (`lib/lens/pinned-rail.ts`). */
+  const { pinned, observe: observeGrandRail } = useOutOfView({
+    root: frame,
+    revealRatio: PINNED_RAIL_REVEAL_RATIO,
+    releaseRatio: PINNED_RAIL_RELEASE_RATIO,
+  });
+
   const loading = feed.data === undefined && !feed.isError;
   const paginationState = paginationStateOf(feed);
   const pull = usePullToRefresh({ root: frame, onRefresh: refreshFeedAction, threshold: PULL_THRESHOLD });
@@ -200,6 +240,21 @@ export default function FeedScreen() {
    * — « le fil réutilisera ce hook tel quel »). ARMÉ au seul état `idle`, et
    * seulement s'il y a déjà des cartes : une liste vide ne doit rien charger
    * en boucle (même garde que `conversations.tsx`). */
+  /* L'ISSUE D'UN GESTE s'annonce, comme une réaction du fil de messages
+     (`use-message-menu.ts`) : l'échec défait l'optimiste EN SILENCE pour
+     l'œil qui regarde ailleurs, et un geste hors ligne ressemble à un geste
+     confirmé — sans annonce, les deux seraient indiscernables. */
+  const { text: announcement, announce } = useLiveAnnouncer();
+  const onGesture = useCallback(
+    (postId: string, kind: PostToggleKind) => {
+      void postGestureAction(postId, kind).then((result) => {
+        if (!result.ok) announce(result.message);
+        else if (result.notice !== undefined) announce(result.notice);
+      });
+    },
+    [announce],
+  );
+
   const { observe: observeTail } = useLoadMoreSentinel({
     root: frame,
     rootMargin: loadMoreRootMargin(FEED_ROW_HEIGHT_ESTIMATE),
@@ -209,7 +264,10 @@ export default function FeedScreen() {
 
   return (
     <div className="relative flex h-dvh flex-col overflow-hidden pt-safe">
-      <FeedHeader />
+      <FeedHeader pinned={pinned} railProps={railProps} />
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
       <PullIndicator phase={pull.phase} offsetPx={pull.offsetPx} reducedMotion={pull.reducedMotion} />
       <ul
         ref={frame}
@@ -218,7 +276,7 @@ export default function FeedScreen() {
         style={pullTransform(pull.phase, pull.offsetPx)}
         {...(loading ? { 'aria-busy': true, 'aria-label': 'Chargement du fil' } : {})}
       >
-        <FeedTopClearance />
+        <FeedTopChrome railProps={railProps} inert={pinned} observe={observeGrandRail} />
         {feed.data === undefined && feed.isError ? (
           <FeedError online={online} onRetry={() => void feed.refetch()} />
         ) : loading ? (
@@ -231,7 +289,7 @@ export default function FeedScreen() {
           <>
             {models.map((model) => (
               <li key={model.id}>
-                <FeedPostCard model={model} />
+                <FeedPostCard model={model} onGesture={onGesture} />
               </li>
             ))}
             <LensPaginationFooter

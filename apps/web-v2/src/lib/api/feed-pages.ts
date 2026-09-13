@@ -6,7 +6,7 @@ import type { InfiniteData } from '@tanstack/react-query';
  * `services/gateway/src/services/posts/postIncludes.ts:367-374`), réduite à
  * ce que `FeedPostCard` (v3.1) LIT — voir § 3.1 de la spécification pour la
  * liste complète des champs retenus et de ceux laissés de côté (menu,
- * transcription, réactions du lecteur autres que `isLiked`…).
+ * transcription, réactions du lecteur autres que `isLikedByMe`…).
  *
  * FONCTION DE MODULE, jamais une projection locale : les champs viennent
  * directement de la forme du wire, aucun renommage (`sender` → `author` etc.)
@@ -80,7 +80,7 @@ export type FeedPost = {
   readonly repostCount?: number | null;
   readonly bookmarkCount?: number | null;
   readonly shareCount?: number | null;
-  readonly isLiked?: boolean | null;
+  readonly isLikedByMe?: boolean | null;
   readonly isBookmarkedByMe?: boolean | null;
   readonly isRepostedByMe?: boolean | null;
 };

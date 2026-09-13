@@ -195,6 +195,12 @@ updates:
         versions: [">=1.77.0"]
       - dependency-name: "grpcio-tools"
         versions: [">=1.77.0"]
+      # anyio 4.15.0 rend `anyio.abc` inatteignable sans import explicite, et
+      # httpcore 0.17.3 (épinglé pour Prisma) l'annote à la création de classe :
+      # l'image translator ne se construit plus. 4.15.1 corrige (anyio#1311) —
+      # seule la version fautive est ignorée (détail : requirements.txt).
+      - dependency-name: "anyio"
+        versions: ["4.15.0"]
       # pyannote-audio>=4.0 → pyannote-core>=6.0.1 → numpy>=2.0 + torch>=2.8.0,
       # incompatibles avec numpy<1.24.0 et torch==2.6.0 (Dockerfile). Le bump
       # Dependabot #1674 (3.4.0→4.0.7) a cassé le build Docker translator
