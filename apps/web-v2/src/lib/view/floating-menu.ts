@@ -1,5 +1,6 @@
 import type { GlyphName } from '@/components/glyphs';
 import type { FloatingGlyphName } from '@/components/glyphs-floating';
+import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { ROUTES } from '@/routes/route-table';
 
 /**
@@ -41,9 +42,14 @@ export type FloatingDestination = {
   readonly key: string;
   /** La clé de `ROUTES`. Elle peut diverger de `key` : iOS ouvre les appels sur l'onglet d'un hub partagé. */
   readonly route: keyof typeof ROUTES;
-  readonly label: string;
+  /**
+   * Le NOM, par sa clé de catalogue d'interface (#6206) — jamais un texte : la
+   * table est une donnée pure, chaque consommateur le traduit au rendu. Le
+   * type n'admet que la famille `root.menu.*`, celle d'iOS.
+   */
+  readonly labelKey: Extract<InterfaceCatalogKey, `root.menu.${string}`>;
   /** Ce que l'écran d'attente promet. Une phrase qui manque fait passer « pas encore » pour « cassé ». */
-  readonly promise: string;
+  readonly promiseKey: Extract<InterfaceCatalogKey, `pending.${string}.promise`>;
   /** La teinte du barreau, reprise d'iOS à l'hexadécimal près. */
   readonly tint: string;
   readonly glyph: MenuGlyph;
@@ -61,8 +67,8 @@ export type FloatingDestination = {
 export const LINKS_DESTINATION: FloatingDestination = {
   key: 'links',
   route: 'links',
-  label: 'Mes liens',
-  promise: 'Les liens partagés dans vos conversations se rassembleront ici.',
+  labelKey: 'root.menu.links',
+  promiseKey: 'pending.links.promise',
   tint: '#F8B500',
   glyph: { set: 'socle', name: 'linkSimple' },
 };
@@ -70,8 +76,8 @@ export const LINKS_DESTINATION: FloatingDestination = {
 export const NOTIFICATIONS_DESTINATION: FloatingDestination = {
   key: 'notifications',
   route: 'notifications',
-  label: 'Notifications',
-  promise: 'Ce qui vous attend — mentions, réponses, invitations — se lira ici.',
+  labelKey: 'root.menu.notifications',
+  promiseKey: 'pending.notifications.promise',
   tint: '#FF6B6B',
   glyph: { set: 'socle', name: 'bell' },
 };
@@ -79,8 +85,8 @@ export const NOTIFICATIONS_DESTINATION: FloatingDestination = {
 export const CALLS_DESTINATION: FloatingDestination = {
   key: 'calls',
   route: 'calls',
-  label: 'Appels',
-  promise: 'Le journal de vos appels, et de quoi en passer un.',
+  labelKey: 'root.menu.calls',
+  promiseKey: 'pending.calls.promise',
   tint: '#6366F1',
   glyph: { set: 'socle', name: 'phone' },
 };
@@ -88,8 +94,8 @@ export const CALLS_DESTINATION: FloatingDestination = {
 export const DISCOVER_DESTINATION: FloatingDestination = {
   key: 'discover',
   route: 'discover',
-  label: 'Découvrir',
-  promise: 'Des personnes à rencontrer, choisies par ce que vous avez en commun.',
+  labelKey: 'root.menu.discover',
+  promiseKey: 'pending.discover.promise',
   tint: '#8B5CF6',
   glyph: { set: 'flottant', name: 'binoculars' },
 };
@@ -97,8 +103,8 @@ export const DISCOVER_DESTINATION: FloatingDestination = {
 export const COMMUNITIES_DESTINATION: FloatingDestination = {
   key: 'communities',
   route: 'communities',
-  label: 'Communautés',
-  promise: 'Les communautés dont vous faites partie, et celles qui vous ressemblent.',
+  labelKey: 'root.menu.communities',
+  promiseKey: 'pending.communities.promise',
   tint: '#2ECC71',
   glyph: { set: 'flottant', name: 'usersThree' },
 };
@@ -106,8 +112,8 @@ export const COMMUNITIES_DESTINATION: FloatingDestination = {
 export const SETTINGS_DESTINATION: FloatingDestination = {
   key: 'settings',
   route: 'settings',
-  label: 'Réglages',
-  promise: 'Vos langues, votre confidentialité, vos notifications.',
+  labelKey: 'root.menu.settings',
+  promiseKey: 'pending.settings.promise',
   tint: '#64748B',
   glyph: { set: 'flottant', name: 'gear' },
 };
@@ -126,8 +132,8 @@ export const MENU_LADDER: readonly FloatingDestination[] = [
 export const FEED_DESTINATION: FloatingDestination = {
   key: 'feed',
   route: 'feed',
-  label: 'Flux',
-  promise: 'Les publications de celles et ceux que vous suivez.',
+  labelKey: 'root.menu.feed',
+  promiseKey: 'pending.feed.promise',
   tint: '#F87171',
   glyph: { set: 'flottant', name: 'stack' },
 };
@@ -136,8 +142,8 @@ export const FEED_DESTINATION: FloatingDestination = {
 export const PROFILE_DESTINATION: FloatingDestination = {
   key: 'profile',
   route: 'profile',
-  label: 'Profil',
-  promise: 'Votre identité Meeshy — nom, photo, langues, et ce que les autres en voient.',
+  labelKey: 'root.menu.profile',
+  promiseKey: 'pending.profile.promise',
   tint: '#4F46E5',
   glyph: { set: 'socle', name: 'user' },
 };

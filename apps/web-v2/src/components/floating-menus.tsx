@@ -5,6 +5,8 @@ import '@/styles/floating-menus.css';
 import { Avatar } from './avatar';
 import { MenuGlyph } from './menu-glyph';
 import { sessionStore } from '@/lib/api/session';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
 import { FEED_DESTINATION, MENU_LADDER, PROFILE_DESTINATION } from '@/lib/view/floating-menu';
 import {
@@ -75,6 +77,10 @@ export function FloatingMenus() {
   const roving = useRovingMenu({ itemCount: MENU_LADDER.length });
   const { open, setOpen, closeAndFocusButton, activeIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown } = roving;
 
+  /* La langue d'INTERFACE, lue au rendu : son catalogue est chargé avec le
+     chunk de ce composant (`shell.tsx`, #6206). */
+  const langue = currentInterfaceLanguage();
+
   const nom =
     session.status === 'authenticated'
       ? (session.user.displayName ?? session.user.username)
@@ -136,7 +142,7 @@ export function FloatingMenus() {
         to="feed"
         data-floating-feed
         data-dragging={flux.dragging ? 'true' : undefined}
-        aria-label={FEED_DESTINATION.label}
+        aria-label={translate(langue, FEED_DESTINATION.labelKey)}
         onPointerDown={flux.onPointerDown}
         onPointerMove={flux.onPointerMove}
         onPointerUp={flux.onPointerUp}
@@ -192,7 +198,7 @@ export function FloatingMenus() {
           <div
             ref={menuRef}
             role="menu"
-            aria-label="Navigation Meeshy"
+            aria-label={translate(langue, 'a11y.floating.menu.ladder')}
             onKeyDown={onMenuKeyDown}
             className="pointer-events-none absolute inset-0"
           >
@@ -206,7 +212,7 @@ export function FloatingMenus() {
                   itemRefs.current[index] = el;
                 }}
                 onClick={() => setOpen(false)}
-                aria-label={destination.label}
+                aria-label={translate(langue, destination.labelKey)}
                 className="floating-rung pointer-events-auto absolute grid place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={
                   {
@@ -241,7 +247,7 @@ export function FloatingMenus() {
           onClick={onMenuButton}
           aria-haspopup="menu"
           aria-expanded={open}
-          aria-label={open ? PROFILE_DESTINATION.label : 'Menu'}
+          aria-label={translate(langue, open ? PROFILE_DESTINATION.labelKey : 'a11y.floating.menu')}
           className="floating-disc glass-prominent glass-card pointer-events-auto absolute inset-0 grid touch-none place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{
             backgroundImage: open ? MENU_GRADIENT_OPEN : MENU_GRADIENT,

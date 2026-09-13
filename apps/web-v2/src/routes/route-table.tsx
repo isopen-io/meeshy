@@ -1,3 +1,5 @@
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { createRouter } from '@/lib/router';
 
 /**
@@ -110,4 +112,8 @@ function NotFound() {
   );
 }
 
-export const { Router, Link, href, navigate } = createRouter(ROUTES, NotFound);
+/* LE CATALOGUE D'INTERFACE (#6206) — chaque écran l'attend, en parallèle de
+   son chunk : ce qui s'y rend lit ses libellés de façon synchrone. */
+export const { Router, Link, href, navigate } = createRouter(ROUTES, NotFound, {
+  screenPrerequisite: () => loadInterfaceCatalog(currentInterfaceLanguage()),
+});

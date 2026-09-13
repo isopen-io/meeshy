@@ -180,12 +180,15 @@ describe('createRouter(…, { screenPrerequisite }) — l’écran attend son pr
         },
       },
     } as const;
-    const { Router } = createRouter(table, NotFound, {
+    const { Router, navigate: go } = createRouter(table, NotFound, {
       screenPrerequisite: () => {
         requested.push('prerequisite');
         return gate.promise;
       },
     });
+    /* L'adresse OBSERVÉE par le routeur est la sienne, pas `window.location` :
+       `replaceState` ne le notifie pas, et le témoin précédent l'a laissé ailleurs. */
+    act(() => go('/', true));
 
     const el = mount(<Router wrap={(screen) => screen} skeleton={<p data-skeleton>Attente</p>} />);
     await settle();

@@ -33,6 +33,15 @@
         "source": "Mesure de measure-weight.mjs le 2026-09-08 (`bun run build` puis `node scripts/measure-weight.mjs`) : 5,93 Ko gzip -9, arrondi au Ko SUPERIEUR (6) + 1 Ko de marge, meme discipline que first_paint.kb ci-dessus."
       }
     },
+    "interface_catalogs": {
+      "pattern": "^assets/catalog-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 7,
+        "status": "CIBLE -- MESUREE PAR #6206, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-09-13 (`bun run build` puis `node scripts/measure-weight.mjs`) : les SEPT catalogues d'interface (`src/lib/interface-catalogs/catalog-*.ts`, 40 cles) pesent ensemble 5,48 Ko gzip -9, soit 0,7 a 0,9 Ko chacun (l'arabe le plus lourd, l'anglais le plus leger). Un lecteur n'en telecharge qu'UN (celui de sa langue d'interface, `i18n-catalog.ts` § LOADERS), mesure par `scripts/check-interface-language.mjs` ; la SOMME est bornee parce que c'est elle qui grossit a chaque cle ajoutee (sept fois la cle). Arrondi au Ko SUPERIEUR (6) + 1 Ko de marge, meme discipline que les chunks voisins. `dynamic_only` garde le chargement paresseux PAR LANGUE : un import statique d'un catalogue le ferait telecharger par tous les lecteurs, quelle que soit leur langue. Premiere peinture : 39,92 Ko avant ce lot, 40,42 apres (+0,50 -- le chargeur, ses sept `import()` et la resolution de langue, tires par `route-table.tsx` et `shell.tsx`), sous le plafond de 90 (D-49)."
+      }
+    },
     "composer_tray": {
       "pattern": "^assets/composer-tray-",
       "kb": {

@@ -2146,3 +2146,28 @@ n'affirme rien qu'il ne tienne pas.
 **La garde nomme une PROPRIÉTÉ, pas une API** (le piège du cycle 107). Un flou d'arrière-plan (`backdrop-blur-*`, `backdrop-filter`, `backdropFilter`) n'a qu'un usage — du verre ou un voile ; un ton de surface iOS rendu translucide EST le repli du verre ; un élément qui porte une classe de verre et réécrit son fond, ou une densité `--glass-*` posée localement, contourne le site en l'employant. Les trois tombent hors du site, la prose des commentaires ne compte pas, et une entrée d'inventaire devenue fausse — compte trop haut, fichier disparu — tombe aussi (`scripts/glass-site.test.ts`, dans `bun test`).
 
 **La feuille de première peinture ne naît plus de la PROSE** (`app.css`, `@source not` sur `scripts/` et les `*.md`). Mesuré en livrant ce lot : les classes citées dans les gates et les décisions (`backdrop-blur-xl`, `backdrop-filter`) faisaient générer à Tailwind des utilitaires que rien n'emploie, avec leurs `@property`. Première peinture : 39,96 Ko sur `dev`, 40,06 avec le verre avant ce réglage, 39,86 après — le plafond est désormais de 90 Ko (D-49), mais un octet servi avant le premier pixel pour un commentaire n'a pas de raison d'exister.
+
+## D-52 · L'interface a UN catalogue, sept langues, un chunk par langue — et aucun repli — 2026-09-13 (#6206)
+
+**Le constat.** web-v2 n'avait qu'un embryon de catalogue (`fr`/`en`, trois annonces). Tout le reste de l'interface était en français en dur, y compris le roster de frappe. Ce dernier était déjà rendu injectable par un formateur, mais aucun catalogue ne savait l'alimenter : `translate()` ne rendait que des chaînes plates, et une forme « un nom » ou « deux noms » ne pouvait pas s'y exprimer.
+
+**Les sept langues sont celles du catalogue iOS** : `fr, en, es, pt, de, it, ar`. Le code est la LANGUE, jamais la région (le script d'amorçage réduit `pt-BR` à `pt`, et le portugais servi est celui qu'iOS catalogue sous `pt-BR`). Les noms de clés reprennent ceux d'iOS partout où iOS en a un (`root.menu.*`, `a11y.floating.menu`, `typing.*`) ; les clés propres au web le disent par leur préfixe (`pending.*`).
+
+**La forme.**
+- **Le français est la source des clés** (`src/lib/interface-catalogs/catalog-fr.ts`, `as const`) ; `InterfaceCatalogKey` en dérive, et chaque autre langue se déclare `satisfies InterfaceCatalog`. Une clé absente ou en trop ne compile pas. Le témoin `i18n-catalog.test.ts` la mesure aussi à l'exécution (mêmes clés, jamais vide, jamais égal à sa clé, mêmes paramètres). Il est prouvé rouge : une clé retirée de `de` et un paramètre retiré de `ar` le font tomber, avec la langue et la clé nommées.
+- **Les paramètres se nomment** (`{name}`) et se placent là où la langue les veut. Leur liste est TYPÉE depuis la valeur française : `translate(l, 'typing.double', { first, second })` compile, et un nom oublié ne compile pas. C'est la troisième voie posée sur l'issue (les entrées qui savent leurs paramètres), sans que le catalogue contienne de fonctions : il reste une donnée.
+- **Aucun repli, ni vers le français, ni vers la clé.** Un catalogue lu avant d'être chargé LÈVE : c'est une rupture du contrat de démarrage, pas un état à maquiller. Un `defaultValue` aurait servi du français aux six autres langues en silence.
+- **`typingAnnouncement` n'a plus de formateur par défaut.** Un défaut français aurait servi le français à tout appelant oublieux, et aucun témoin écrit en français n'aurait pu le voir.
+
+**Un chunk par langue, attendu EN PARALLÈLE.** Chaque catalogue est un `import()` (`i18n-catalog.ts` § `LOADERS`) ; `budgets.json › on_demand_chunks.interface_catalogs` le garde `dynamic_only`. Le routeur attend le catalogue de la langue résolue AVEC le chunk de l'écran (`createRouter(…, { screenPrerequisite })`, `route-table.tsx`), jamais après : en série, chaque premier écran paierait un aller-retour de plus sur la 3G visée. La coquille fait de même pour les menus flottants (`shell.tsx`). Tout ce qui se rend ensuite lit le catalogue de façon synchrone.
+
+Mesuré : le gate navigateur ne voit qu'UN catalogue téléchargé par cas. Chacun pèse de 0,7 à 0,9 Ko gzip ; les sept ensemble, 5,48 Ko (`measure-weight.mjs`). La première peinture passe de **39,92 à 40,42 Ko (+0,50)** : le chargeur, ses sept `import()` et la résolution de langue. C'est sous le plafond de 90 (D-49).
+
+**Sous `bun test`, le catalogue de la langue du document est préchargé** (`bunfig.toml › [test] preload`). Ce préchargement rejoue le contrat du démarrage pour `fr`. Ce n'est pas un repli : un témoin qui pose une autre langue charge son catalogue lui-même, et une clé absente reste rouge.
+
+**Ce que ce lot ne fait pas, et où c'est suivi.**
+- La mise en page reste de gauche à droite en arabe : `lang` est posé, `dir` ne l'est pas (#6311).
+- 478 chaînes d'interface restent en dur dans 94 fichiers (#6310), dont le squelette et la page introuvable, qui se rendent avant tout catalogue.
+- Un changement de langue (`setInterfaceLanguage`, sans appelant à ce jour) charge le catalogue AVANT de poser la langue. Ce qui est déjà monté garde la sienne jusqu'à son prochain rendu, comme iOS, qui applique le changement au relancement (`settings.interface_language.restart`). L'écran des réglages tranchera s'il recharge.
+
+**Effet de bord mesuré sur un gate.** `check-realtime-events.mjs` ouvre son navigateur en `en-US` pour rendre observable le rang 2 du Prisme. Cette locale résout AUSSI la langue d'interface : le libellé de frappe s'y lit désormais en anglais (« Kwame Mensah and Fatou Bâ are typing »), pendant que le contenu suit le Prisme. Deux résolveurs, deux langues, sur le même écran : c'est exactement la distinction que #6206 devait tenir.

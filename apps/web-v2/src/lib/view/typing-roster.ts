@@ -1,17 +1,13 @@
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+
 /**
  * LE FORMATEUR DU LIBELLÉ — trois formes, JAMAIS une chaîne recomposée par
- * concaténation libre (revue-correction #6171, défaut 2) : `web-v2` ne porte
- * ENCORE aucun catalogue de traduction d'INTERFACE (`index.html` pose
- * `lang="fr"` en dur, aucun `src/locales`) — une dette PRÉEXISTANTE, à
- * l'échelle de l'application, que ce lot ne comble pas. Ce qu'il fait : ne
- * pas l'AGGRAVER en écrivant une quatrième chaîne française en dur qu'un
- * futur socle i18n devrait retrouver et démonter. `typingAnnouncement`
- * reste une fonction PURE prenant des noms ; le FRANÇAIS n'est plus câblé
- * dans son corps mais dans ce SEUL littéral, injectable par un futur
- * résolveur de langue d'INTERFACE — distincte du Prisme de CONTENU, qui est
- * celle du LECTEUR (`lib/api/prism.ts`). Miroir des clés de catalogue iOS
- * (`typing.named`/`typing.double`/`typing.several`,
- * `apps/ios/Meeshy/Localizable.xcstrings`).
+ * concaténation libre (revue-correction #6171, défaut 2). Elles viennent du
+ * catalogue d'INTERFACE (#6206), sous les clés d'iOS
+ * `typing.named`/`typing.double`/`typing.several`
+ * (`apps/ios/Meeshy/Localizable.xcstrings`) : la langue d'INTERFACE, distincte
+ * du Prisme de CONTENU, qui est celle du LECTEUR (`lib/api/prism.ts`).
  */
 export type TypingAnnouncementFormatter = {
   readonly one: (name: string) => string;
@@ -19,11 +15,14 @@ export type TypingAnnouncementFormatter = {
   readonly several: string;
 };
 
-const FRENCH_TYPING_ANNOUNCEMENT: TypingAnnouncementFormatter = {
-  one: (name) => `${name} écrit`,
-  two: (first, second) => `${first} et ${second} écrivent`,
-  several: 'Plusieurs personnes écrivent',
-};
+/** Les trois formes dans une langue d'interface — son catalogue doit être chargé. */
+export function interfaceTypingFormatter(language: InterfaceLanguage): TypingAnnouncementFormatter {
+  return {
+    one: (name) => translate(language, 'typing.named', { name }),
+    two: (first, second) => translate(language, 'typing.double', { first, second }),
+    several: translate(language, 'typing.several'),
+  };
+}
 
 /**
  * LA LOI DE LIBELLÉ DU ROSTER DE FRAPPE (#6171) — fonction PURE, sans
@@ -37,11 +36,10 @@ const FRENCH_TYPING_ANNOUNCEMENT: TypingAnnouncementFormatter = {
  * PREMIÈRE APPARITION, `typing-store.ts`) qui décide, cette loi ne fait que
  * le mettre en mots.
  *
- * `formatter` — défaut FRANÇAIS (`FRENCH_TYPING_ANNOUNCEMENT`), injectable
- * SANS toucher les appelants : c'est le point d'entrée qu'un socle i18n de
- * web-v2 (#6206, dette § doc-comment ci-dessus) branchera pour résoudre la
- * langue d'INTERFACE plutôt que d'ajouter une CINQUIÈME chaîne française en
- * dur.
+ * `formatter` — OBLIGATOIRE, sans défaut : un défaut français aurait servi
+ * le français à tout appelant qui oublie la langue d'interface, et un témoin
+ * écrit en français n'aurait pas pu le voir (#6206). Les appelants passent
+ * `interfaceTypingFormatter(currentInterfaceLanguage())`.
  *
  * Vit dans `lib/view/` parce qu'elle est PARTAGÉE par trois surfaces : la
  * cellule de frappe du fil (`routes/thread-modes.tsx`), le bouton « revenir
@@ -51,7 +49,7 @@ const FRENCH_TYPING_ANNOUNCEMENT: TypingAnnouncementFormatter = {
  */
 export function typingAnnouncement(
   names: readonly string[],
-  formatter: TypingAnnouncementFormatter = FRENCH_TYPING_ANNOUNCEMENT,
+  formatter: TypingAnnouncementFormatter,
 ): string {
   if (names.length === 0) return '';
   /* `?? ''` INATTEIGNABLE — `noUncheckedIndexedAccess` ignore le garde
