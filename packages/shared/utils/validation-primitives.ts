@@ -61,15 +61,29 @@ export const USERNAME_PATTERN = new RegExp(usernamePatternSource);
  * l'arbitre, et lui imposer une longueur enfermerait tout compte créé sous une
  * borne plus basse.
  *
- * Portée à 12 par #3629 : 6 caractères laissait passer des mots de passe
- * triviaux (`zxcvbn` seul, au reset, en jugeait déjà la moitié trop faibles).
- * Douze est le plancher NIST SP 800-63B pour un secret mémorisé sans
- * complexité imposée — la longueur, pas la composition, est ce qui coûte le
- * plus cher à un attaquant.
+ * **Ramenée à 6 sur directive porteur du 2026-09-13**, après mesure en
+ * production : sur les ~24 h de rétention des journaux de la passerelle,
+ * `POST /api/v1/auth/register` a rendu **18 refus pour cette seule borne**,
+ * contre **2 comptes effectivement créés** sur la même journée. Neuf tentatives
+ * d'inscription sur dix échouaient donc sur la longueur du mot de passe.
+ *
+ * Ce que cette valeur ANNULE, et il faut le dire pour que la prochaine session
+ * ne la « corrige » pas : #3629 l'avait portée de 6 à 12 pour une raison qui
+ * reste vraie — 6 caractères laissent passer des mots de passe triviaux
+ * (`zxcvbn`, au reset, en jugeait déjà la moitié trop faibles), et 12 est le
+ * plancher NIST SP 800-63B pour un secret mémorisé sans complexité imposée. Le
+ * porteur a arbitré en connaissance de cet écart : l'inscription qui n'aboutit
+ * pas coûte, aujourd'hui, plus que le mot de passe faible qu'elle laisse
+ * passer.
+ *
+ * Ce qui NE change pas, et qui limite la portée du recul : `zxcvbn` continue de
+ * juger la FORCE au-delà de la longueur (`utils/password-strength.ts`), et la
+ * réinitialisation garde sa propre exigence. Six est un plancher de SAISIE, pas
+ * un satisfecit de sécurité.
  *
  * Garde : `__tests__/password-min-length-parity.test.ts`.
  */
-export const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MIN_LENGTH = 6;
 
 export const passwordTooShort = `Mot de passe trop court (min ${PASSWORD_MIN_LENGTH} caractères)`;
 

@@ -183,6 +183,17 @@ const de = {
   'settings.save.error': 'Die Einstellung wurde nicht gespeichert.',
   'settings.theme.sync_error': 'Design auf diesem Gerät übernommen, nicht synchronisiert.',
   'common.cancel': 'Abbrechen',
+
+  'media.video.play': 'Video abspielen',
+  'media.video.pause': 'Pausieren',
+  'media.video.position': 'Wiedergabeposition',
+  'media.video.position.value': '{elapsed} von {total}',
+  'media.video.mute': 'Stummschalten',
+  'media.video.unmute': 'Ton einschalten',
+  'media.video.more_options': 'Weitere Optionen',
+  'media.video.speed': 'Geschwindigkeit',
+  'media.video.pip.enter': 'Bild-in-Bild',
+  'media.video.pip.exit': 'Bild-in-Bild beenden',
 } satisfies InterfaceCatalog;
 
 export default de;
