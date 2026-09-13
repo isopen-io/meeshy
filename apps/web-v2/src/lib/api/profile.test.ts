@@ -6,7 +6,6 @@ import {
   decodeMyStats,
   loadMyProfile,
   loadMyStats,
-  loadPendingRequests,
   maskEmail,
   maskPhone,
   patchMyImage,
@@ -16,7 +15,7 @@ import {
 
 /**
  * LE PORT DU PROFIL (#6289) — `GET /api/v1/me`, `GET /api/v1/users/me/stats`,
- * `GET /api/v1/directory/friend-requests`, `PATCH /api/v1/users/me` et ses deux
+ * `PATCH /api/v1/users/me` et ses deux
  * jumelles d'image. Témoins écrits contre le transport RÉEL (`createHttpTransport`)
  * nourri d'un `fetch` bouchonné : la méthode, le chemin et le corps que la
  * passerelle reçoit sont mesurés, jamais supposés.
@@ -164,15 +163,6 @@ describe('les lectures parlent aux vraies routes', () => {
     const result = await loadMyStats(deps);
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(['GET https://gate.test/api/v1/users/me/stats']);
     expect(result.ok && result.data.totalMessages).toBe(7);
-  });
-
-  test('les demandes REÇUES EN ATTENTE, comptées sur une page — « plus » quand la passerelle en a davantage', async () => {
-    const { calls, deps } = gatewayReplying([
-      { status: 200, body: { success: true, data: [{ id: 'r1' }, { id: 'r2' }], pagination: { hasMore: true, nextCursor: 'c' } } },
-    ]);
-    const result = await loadPendingRequests(deps);
-    expect(calls[0]?.url).toBe('https://gate.test/api/v1/directory/friend-requests?direction=received&status=pending&limit=100');
-    expect(result.ok && result.data).toEqual({ count: 2, more: true });
   });
 
   test('la source fixtures sert le lecteur de recette par le MÊME chemin', async () => {

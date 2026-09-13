@@ -14,6 +14,8 @@ import { createRealtimeConnection, type RealtimeDeps } from './socket';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { STORY_TRAY_QUERY_KEY } from './stories';
+import { BLOCKED_USERS_QUERY_KEY } from './blocks';
+import { friendRequestsQueryKey } from './friend-requests';
 import { createTypingStore, typistsOf } from './typing-store';
 import type { Message } from './types';
 
@@ -325,6 +327,43 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       expect(queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(true);
     });
   }
+
+  /**
+   * `friend-request:*` (#6321) — LES DEMANDES D'AMITIÉ SUIVENT LA PASSERELLE.
+   * Les charges ne portent que des identifiants : une invalidation de la
+   * famille `['friends']` recompte la pastille du barreau « Découvrir » et
+   * rafraîchit les paniers de la découverte, bloqués compris.
+   */
+  const FRIEND_EVENTS: readonly [string, unknown][] = [
+    [SERVER_EVENTS.FRIEND_REQUEST_NEW, { friendRequestId: 'f-1', senderId: 'u-1', receiverId: 'u-me' }],
+    [SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, { friendRequestId: 'f-1', cancelledBy: 'u-1' }],
+    [SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, { friendRequestId: 'f-1', accepterId: 'u-1' }],
+    [SERVER_EVENTS.FRIEND_REQUEST_REJECTED, { friendRequestId: 'f-1', rejecterId: 'u-1' }],
+  ];
+  for (const [event, payload] of FRIEND_EVENTS) {
+    test(`\`${event}\` invalide les demandes d’amitié et les bloqués`, () => {
+      const { deps, socket, queryClient } = buildDeps();
+      queryClient.setQueryData(friendRequestsQueryKey('received'), { pages: [], pageParams: [] });
+      queryClient.setQueryData(BLOCKED_USERS_QUERY_KEY, { pages: [], pageParams: [] });
+      createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+      socket.fire(event, payload);
+
+      expect(queryClient.getQueryState(friendRequestsQueryKey('received'))?.isInvalidated).toBe(true);
+      expect(queryClient.getQueryState(BLOCKED_USERS_QUERY_KEY)?.isInvalidated).toBe(true);
+    });
+  }
+
+  test('une RE-authentification invalide aussi les demandes d’amitié — une demande reçue pendant la coupure se recompte', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(friendRequestsQueryKey('received'), { pages: [], pageParams: [] });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+    expect(queryClient.getQueryState(friendRequestsQueryKey('received'))?.isInvalidated).toBe(false);
+
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+    expect(queryClient.getQueryState(friendRequestsQueryKey('received'))?.isInvalidated).toBe(true);
+  });
 
   /**
    * `post:liked` / `post:unliked` / `post:bookmarked` (#6278) — LE FIL SUIT
@@ -719,6 +758,9 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
     deps.queryClient.setQueryData(STORY_TRAY_QUERY_KEY, []);
     socket.fire(SERVER_EVENTS.STORY_CREATED, { story: { id: 's-1' } });
     expect(deps.queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(false);
+    deps.queryClient.setQueryData(friendRequestsQueryKey('received'), { pages: [], pageParams: [] });
+    socket.fire(SERVER_EVENTS.FRIEND_REQUEST_NEW, { friendRequestId: 'f-1', senderId: 'u-1', receiverId: 'u-me' });
+    expect(deps.queryClient.getQueryState(friendRequestsQueryKey('received'))?.isInvalidated).toBe(false);
     // Le minuteur de sécurité en attente a été annulé par `destroy`.
     expect(scheduler.scheduled.every((s) => s.cleared)).toBe(true);
   });

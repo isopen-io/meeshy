@@ -16,8 +16,9 @@ import {
   SECTION_INK,
   SECTION_INK_2,
 } from '@/components/grouped-section';
+import type { PendingRequests } from '@/lib/api/friend-requests';
 import { attachmentSrc } from '@/lib/api/media-url';
-import type { MaskedContact, MyProfile, MyStats, PendingRequests, ProfileImageKind } from '@/lib/api/profile';
+import type { MaskedContact, MyProfile, MyStats, ProfileImageKind } from '@/lib/api/profile';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { ProfileDraft } from '@/lib/view/profile-draft';
