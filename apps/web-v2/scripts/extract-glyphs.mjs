@@ -613,3 +613,27 @@ emit({
   type: 'CommunitiesGlyphName',
   role: "LE JEU D'ECRAN des communautes (#6364) : cartes, detail, recherche et creation, charge avec les routes /communities, jamais dans le socle.",
 });
+
+/**
+ * LE JEU D'ECRAN DU JOURNAL D'APPELS (#6362) — miroir des symboles de
+ * `CallsTab.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `arrow.up.right` (appel emis) | `arrow-up-right` |
+ * | `arrow.down.left` (appel recu) | `arrow-down-left` |
+ * | `arrow.down.left` en rouge (appel manque) | `phone-x` — divergence assumee (D-61) : la direction ne se dit jamais par la couleur seule |
+ * | `video.fill` (appel video) | `video-camera` |
+ * | `phone.arrow.up.right` (etat vide) | `phone-outgoing` |
+ *
+ * `phone`, `caretLeft` et `warningCircle` restent au SOCLE.
+ */
+const CALLS = ['arrow-up-right', 'arrow-down-left', 'phone-x', 'video-camera', 'phone-outgoing'];
+
+emit({
+  ids: CALLS,
+  output: join(HERE, '../src/components/glyphs-calls.ts'),
+  constant: 'CALLS_GLYPHS',
+  type: 'CallsGlyphName',
+  role: "LE JEU D'ECRAN du journal d'appels (#6362) : directions, type video et etat vide, charge avec la route /calls, jamais dans le socle.",
+});

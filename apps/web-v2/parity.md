@@ -310,6 +310,7 @@ dans une version ultérieure ·
 | `/c/:conversation` | **V4.0.0** | **adresse neuve** — le fil du membre |
 | `/chat/:share_link` | **V4.0.0** | **adresse neuve** — rejoindre par lien public |
 | `/call/:callId` | `legacy` | appel en cours |
+| `/calls` | **V4.0.0** | **adresse neuve, servie par la v3.1 depuis #6362** — le journal d'appels (miroir de l'onglet `.calls` de `ContactsHubView`) : manqués, reçus, émis, filtre « Manqués », une ligne ouvre le fil. Écran seul et non onglet d'un hub (D-61). Lancer ou rappeler un appel reste hors du web, suivi par son issue |
 
 ### Profil et réglages
 
