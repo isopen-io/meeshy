@@ -117,8 +117,16 @@ const releve = (page, chrome) =>
         return hit !== null && (hit === el || el.contains(hit));
       };
 
+      /* Les tuiles qui défilent SOUS les portes du plateau sont voilées par
+         construction (`RailActions`) : seule la zone libre compte. */
+      const portesTextes = [...document.querySelectorAll('[aria-label="Créer une story"]')].map((a) => a.getBoundingClientRect().left);
+      const libreTextes = portesTextes.length > 0 ? Math.min(...portesTextes) - 16 : innerWidth;
+      /* Les textes mesurés : ceux des cartes du Flux ET les libellés du grand
+         plateau — un disque qui mange « Votre story » mange un texte. */
+      const conteneurs = '[data-feed-card], [data-rail="grande"] [data-rail-tile]';
       const textes = [];
-      for (const carte of document.querySelectorAll('[data-feed-card]')) {
+      for (const carte of document.querySelectorAll(conteneurs)) {
+        const dansPlateau = carte.closest('[data-rail="grande"]') !== null;
         for (const el of carte.querySelectorAll('*')) {
           if (el.closest('[aria-hidden="true"]') !== null) continue;
           const porteTexte = [...el.childNodes].some((n) => n.nodeType === 3 && (n.textContent ?? '').trim() !== '');
@@ -132,11 +140,11 @@ const releve = (page, chrome) =>
             [r.right - i, r.top + i],
             [r.left + i, r.bottom - i],
             [r.right - i, r.bottom - i],
-          ].filter(([x, y]) => dansPort(x, y));
+          ].filter(([x, y]) => dansPort(x, y) && (!dansPlateau || x < libreTextes));
           if (points.length === 0) continue;
           const voles = points
             .map(([x, y]) => ({ x, y, hit: document.elementFromPoint(x, y) }))
-            .filter(({ hit }) => hit === null || hit.closest('[data-feed-card]') !== carte)
+            .filter(({ hit }) => hit === null || !carte.contains(hit))
             .map(({ x, y, hit }) => ({ x: Math.round(x), y: Math.round(y), par: coupable(hit) }));
           textes.push({ texte: nom(el), points: points.length, voles });
         }
@@ -240,7 +248,7 @@ for (const scheme of ['light', 'dark']) {
     await page.waitForTimeout(300);
 
     const tagFlux = `Flux ${gabarit}`;
-    const flux = await releve(page, 'header a, header button, section:has([data-rail="grande"]) a[aria-label]');
+    const flux = await releve(page, 'header a, header button, section:has([data-rail="grande"]) a[aria-label]:not([data-story-author])');
     constate(
       (await page.evaluate(() => document.querySelector('#contenu [data-rail="grande"]') !== null)),
       `${tagFlux} : le grand plateau de stories n'ouvre pas le fil (cible targets/feed.*.png)`,
@@ -302,7 +310,7 @@ for (const scheme of ['light', 'dark']) {
     await page.waitForTimeout(300);
 
     const tagListe = `Liste ${gabarit}`;
-    const liste = await releve(page, 'header a, header button, section:has([data-rail="grande"]) a[aria-label], nav[aria-label="Filtres"] button');
+    const liste = await releve(page, 'header a, header button, section:has([data-rail="grande"]) a[aria-label]:not([data-story-author]), nav[aria-label="Filtres"] button');
     exigeRepos(tagListe, liste);
     const grandeListe = await cotes(page, 'grande');
     constate(

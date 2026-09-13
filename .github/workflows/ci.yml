@@ -571,6 +571,16 @@ jobs:
           cd apps/web-v2
           node scripts/check-lens.mjs
 
+      # #6277 / #6133 — aucun disque flottant ne recouvre, au repos, un texte de
+      # carte du Flux, un libellé du plateau ni un contrôle du chrome
+      # (elementFromPoint, deux schémas, 390×844 et 320×568) ; l'en-tête du Flux
+      # s'escamote ; les cotes du plateau sont celles d'iOS (88 / 36).
+      - name: Gate couloir des disques flottants (Flux et liste)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-floating-clearance.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |
