@@ -31992,6 +31992,36 @@ parlait d'idempotence.
    sujet coûte deux fois : il ne mesure rien, et il déplace ce que les autres
    mesurent.**
 
+**Complément du même jour, et c'est une faute que j'ai commise en corrigeant la
+première.** Le remède — étaler le module réel — s'écrit avec un CAST :
+
+```js
+...(jest.requireActual('<module>') as object),   // et non `...jest.requireActual(...)`
+```
+
+`jest.requireActual` rend `unknown`, et TypeScript refuse d'étaler `unknown`
+(**TS2698**). Écrite sans cast, ma correction a rendu la suite **incapable de se
+CHARGER** — signature à reconnaître, déjà connue de ce dépôt : `Tests: 24138
+passed, 24138 total` avec `Test Suites: 1 failed`. **Zéro test en échec et une
+suite en échec = une suite qui n'a pas compilé**, donc une garde muette, pas une
+assertion fausse.
+
+Et la convention existait : balayé, le gateway porte ~145 étalements de
+`requireActual` et **tous** portent un cast (`as object`, `as Record<string,
+unknown>`) ou la forme générique `requireActual<Record<string, unknown>>(...)`.
+`interactions.harness.ts` l'évite autrement — il prend le module en PARAMÈTRE
+typé `object`, et son doc-comment dit pourquoi. J'ai cité ce doc-comment dans mon
+message de commit sans copier sa forme.
+
+> **Citer une convention n'est pas l'appliquer.** Quand un fichier voisin explique
+> pourquoi il fait quelque chose d'une certaine façon, la relecture utile n'est
+> pas « il a raison » mais « ma ligne a-t-elle la même forme que la sienne ? ».
+
+Et le même jour : mon balayage local était passé au VERT sur cette forme avant que
+`jest` ne monte de 30.4.2 à 30.5.1 dans une intégration de dépendances. Un
+typage qui se resserre transforme une ligne légale en erreur de compilation, sans
+que la ligne ait bougé — corollaire direct de la leçon 598.
+
 Et la leçon de fond sur ces deux témoins : ils affirmaient le chemin de rejeu en
 le SIMULANT. Leur intention est reprise dans
 `__tests__/unit/routes/posts/likeIdempotency.test.ts`, qui ne mocke PAS le helper
