@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 
+import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
+
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
@@ -56,8 +58,15 @@ export function MediaFilmstrip({
     >
       {items.map((attachment, index) => {
         const isCurrent = index === currentIndex;
-        const thumb =
-          attachment.thumbnailUrl !== undefined && attachment.thumbnailUrl !== ''
+        // `maskedAttachment` (#6189, cycle 125) — LA VIGNETTE EST UN CONTENU :
+        // sans cette garde, la pellicule rendait `attachment.thumbnailUrl` (ou
+        // son ThumbHash, dérivé de l'image) pour CHAQUE pièce, masquée ou
+        // non — la seule case que `MediaGrid` retient déjà, révélée un cran
+        // plus loin par le couloir bas de la visionneuse.
+        const isMasked = maskedAttachment(attachment);
+        const thumb = isMasked
+          ? undefined
+          : attachment.thumbnailUrl !== undefined && attachment.thumbnailUrl !== ''
             ? attachmentSrc(attachment.thumbnailUrl)
             : thumbHashPlaceholder(attachment.thumbHash);
 
@@ -66,10 +75,11 @@ export function MediaFilmstrip({
             key={attachment.id}
             type="button"
             data-filmstrip-item
-            aria-label={`Média ${index + 1} sur ${items.length}`}
+            {...(isMasked ? { 'data-protected-attachment': 'hidden' as const } : {})}
+            aria-label={isMasked ? `Média protégé ${index + 1} sur ${items.length}` : `Média ${index + 1} sur ${items.length}`}
             {...(isCurrent ? { 'aria-current': 'true' as const } : {})}
             onClick={() => onSelect(index)}
-            className="relative shrink-0 overflow-hidden rounded-md bg-black"
+            className="relative flex shrink-0 items-center justify-center overflow-hidden rounded-md bg-black"
             style={{
               width: FILMSTRIP.itemSide,
               height: FILMSTRIP.itemSide,
@@ -78,10 +88,16 @@ export function MediaFilmstrip({
               border: isCurrent ? '2px solid var(--accent)' : '1px solid rgba(255,255,255,0.18)',
             }}
           >
-            {thumb !== undefined ? <img src={thumb} alt="" aria-hidden className="size-full object-cover" /> : null}
-            {kindOf(attachment) === 'video' ? (
-              <Glyph name="fillPlay" size={16} className="absolute inset-0 m-auto text-white" />
-            ) : null}
+            {isMasked ? (
+              <Glyph name="eyeSlash" size={14} className="text-white/60" />
+            ) : (
+              <>
+                {thumb !== undefined ? <img src={thumb} alt="" aria-hidden className="size-full object-cover" /> : null}
+                {kindOf(attachment) === 'video' ? (
+                  <Glyph name="fillPlay" size={16} className="absolute inset-0 m-auto text-white" />
+                ) : null}
+              </>
+            )}
           </button>
         );
       })}

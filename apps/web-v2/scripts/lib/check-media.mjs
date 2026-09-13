@@ -44,10 +44,76 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
   await mediaPage.goto(`${BASE}/c/c-medias`, { waitUntil: 'load' });
   await mediaPage.waitForSelector('[data-message]');
 
+  /**
+   * `media-1`..`media-6` SONT DÉSORMAIS À ONZE RANGÉES DU BAS, PAS SIX (#6221
+   * a inséré CINQ messages hauts — `media-15` puis les quatre de
+   * `MEDIA_GRID_MESSAGES`, `fixtures-media-grid.ts` — entre `media-5` et
+   * `media-7`, le fil s'ouvrant EN BAS, `pin-to-bottom.ts`). Avant ce lot, ces
+   * six témoins tenaient dans la fenêtre initiale du virtualiseur sans
+   * remonter ; les cinq nouvelles rangées (dont deux boîtes de 240 px) les en
+   * ont fait sortir — mesuré : (a) rougissait par EXPIRATION sur
+   * `[data-attachment="media-1-a1"] img`, jamais monté.
+   *
+   * Même dispositif que la section (n) plus bas : remonter en BOUCLE jusqu'à
+   * ce que la CONDITION soit vraie, jamais un budget de temps fixe (leçon
+   * 590) — un seul `scrollTop = 0` peut être défait sous les pieds du gate
+   * par les mesures de rangées voisines qui arrivent (`check-thread-
+   * virtualization.mjs:29`).
+   */
+  const scroller = mediaPage.locator('main#contenu');
+  const ESSAIS_REMONTEE_INITIALE = 40;
+  for (let essai = 1; essai <= ESSAIS_REMONTEE_INITIALE; essai += 1) {
+    const monte = await mediaPage.evaluate(
+      (id) => document.querySelector(`[data-message="${id}"]`) !== null,
+      MEDIA_IMAGE_ATTACHMENT_ID.split('-a')[0],
+    );
+    if (monte) break;
+    await scroller.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    await mediaPage.waitForTimeout(150);
+  }
+
+  /**
+   * ATTENDRE LA STABILITÉ, PAS SEULEMENT LE MONTAGE (#6221, suite du
+   * défaut ci-dessus). `media-1` peut être ATTACHÉ tout en continuant de
+   * BOUGER : le virtualiseur mesure les rangées MÉDIA voisines (des
+   * ESTIMATIONS jusqu'à leur premier rendu) et corrige `scrollTop` à
+   * mesure — mesuré par sonde (`probe.mjs`) : un `getBoundingClientRect()`
+   * pris juste après le montage donnait `top=645`, et une capture prise au
+   * MÊME instant montrait le couloir bas (composeur, rail de réactions) —
+   * une frame en plein réajustement, pas la tuile. La suite du test
+   * (`scrollIntoViewIfNeeded` + un `waitForTimeout` fixe) souffrait de la
+   * MÊME course, à plus petite échelle (84,7 % puis 56,6 % de cœur peint au
+   * lieu de 100 %, jamais un défaut de peinture réel).
+   *
+   * On attend donc que `top` cesse de changer entre DEUX lectures
+   * consécutives, jusqu'à un budget d'essais — jamais un délai fixe
+   * (leçon 590) : un délai qui suffit un jour peut ne plus suffire le
+   * suivant, la fenêtre de réajustement dépendant du nombre de rangées
+   * voisines à mesurer.
+   */
+  const attendreRangeeStable = async (id) => {
+    let previousTop = null;
+    for (let essai = 1; essai <= 40; essai += 1) {
+      const top = await mediaPage.evaluate(
+        (mid) => document.querySelector(`[data-message="${mid}"]`)?.getBoundingClientRect().top ?? null,
+        id,
+      );
+      if (top !== null && previousTop !== null && Math.abs(top - previousTop) < 0.5) return;
+      previousTop = top;
+      await mediaPage.waitForTimeout(100);
+    }
+  };
+  await attendreRangeeStable(MEDIA_IMAGE_ATTACHMENT_ID.split('-a')[0]);
+
   if (skin === 'bulles') {
     await mediaPage.getByRole('button', { name: /Mode de lecture/ }).click();
     await mediaPage.getByRole('menuitemradio', { name: /Bulles/ }).click();
     await mediaPage.waitForTimeout(300);
+    // Changer de peau reconstruit CHAQUE rangée (une hauteur différente par
+    // peau) — la même course peut donc rejouer ici.
+    await attendreRangeeStable(MEDIA_IMAGE_ATTACHMENT_ID.split('-a')[0]);
   }
 
   const attachmentOf = (id) => mediaPage.locator(`[data-attachment="${id}"]`);
@@ -638,7 +704,7 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
   //     virtualiseur CORRIGE `scrollTop` quand les mesures des rangées voisines
   //     arrivent (`check-thread-virtualization.mjs:29`), donc un seul
   //     `scrollTop = 0` peut être défait sous les pieds du gate.
-  const scroller = mediaPage.locator('main#contenu');
+  //     `scroller` est déjà déclaré plus haut (remontée initiale, #6221).
   const idsAttendus = [...protegesAttendus.map(([id]) => id), 'media-10', 'media-1'];
   const montees = () =>
     mediaPage.evaluate(

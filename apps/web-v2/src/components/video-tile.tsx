@@ -69,6 +69,14 @@ export function VideoTile({
     <div
       data-attachment={attachment.id}
       data-video-status={status}
+      /* `data-media-tile` (#6169) — MANQUANT jusqu'ici : une grille comptant
+         3 pièces dont une vidéo ne rendait que 2 `[data-media-tile]`,
+         `ImageTile`/`GridCellImage` étant les SEULS à le poser. La tuile
+         reste un `<div onClick>` (pas un `<button>`) — le clic pilote la
+         lecture inline (`onExpand`), un rôle distinct d'« ouvrir la
+         visionneuse » que `ImageTile`/`GridCellImage` remplissent en bouton
+         — mais elle occupe une CASE de la grille au même titre qu'elles. */
+      data-media-tile
       className="relative size-full overflow-hidden bg-black"
       onClick={onExpand}
       role="presentation"

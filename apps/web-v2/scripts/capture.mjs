@@ -301,6 +301,37 @@ for (const scheme of ['dark', 'light']) {
     await page.close();
   }
 
+  /**
+   * thread-media-grid / thread-media-grid-bubbles (#6169, #6221) — LA GRILLE
+   * 2/3/4+, les DEUX peaux. `media-13` (`MEDIA_GRID_QUAD_WITNESS_ID`,
+   * `fixtures-media-grid.ts`) porte QUATRE images sans débordement (aucun
+   * badge `+N`) : la vue la plus proche de la cible iOS
+   * (`FocalMediaGridLayout`/`BubbleStandardLayout+Media.swift`) à comparer
+   * face à face avec la capture Ref-Native du même message.
+   */
+  for (const [name, skin] of [
+    ['thread-media-grid', 'focal'],
+    ['thread-media-grid-bubbles', 'bulles'],
+  ]) {
+    const page = await context.newPage();
+    await page.clock.setFixedTime(INSTANT);
+    await page.goto(`${BASE}/c/c-medias`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(300);
+    if (skin === 'bulles') {
+      await page.getByRole('button', { name: /Mode de lecture/ }).click();
+      await page.waitForTimeout(150);
+      await page.getByRole('menuitemradio', { name: /Bulles/ }).click();
+      await page.waitForTimeout(300);
+    }
+    await page.evaluate(() =>
+      document.querySelector('[data-message="media-13"]')?.scrollIntoView({ block: 'center' }),
+    );
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${OUTPUT}${name}.${scheme}.png` });
+    console.log(`  ${name} · ${scheme}`);
+    await page.close();
+  }
+
   await context.close();
 }
 

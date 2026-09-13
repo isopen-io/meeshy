@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 
+import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
+
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
@@ -211,6 +213,36 @@ function ViewerBackdropPage({ attachment }: { readonly attachment: Attachment })
   );
 }
 
+/**
+ * `ViewerMaskedPage` (#6189, cycle 125) — LE DÉFAUT trouvé par
+ * `media-viewer.test.tsx` : `items` (le tableau `visual` ENTIER, D-41) porte
+ * une pièce MASQUÉE à SA position, et `MediaGrid` ne pose aucun bouton
+ * dessus (aucun tap direct) — mais une flèche ou la pellicule, depuis une
+ * page VOISINE déjà ouverte, l'atteignait quand même. `ViewerImagePage`/
+ * `ViewerVideoPage` ne consultaient `maskedAttachment` nulle part : la page
+ * active rendait le VRAI `<img>`/`<video>`, URL en clair.
+ *
+ * Même vocabulaire que `MaskedAttachment` (`masked-attachment.tsx`), à
+ * l'échelle PLEIN CADRE : ni fichier, ni URL, ni vignette (cycle 125, « une
+ * protection de contenu se mesure sur tout ce que la charge TRANSPORTE »).
+ */
+function ViewerMaskedPage({ attachment }: { readonly attachment: Attachment }) {
+  const kind = kindOf(attachment);
+  const libelle = kind === 'video' ? 'Vidéo protégée' : kind === 'audio' ? 'Vocal protégé' : 'Photo protégée';
+  return (
+    <div
+      data-protected-attachment="hidden"
+      role="img"
+      aria-label={libelle}
+      className="flex size-full flex-col items-center justify-center gap-2 bg-black text-white/70"
+    >
+      <Glyph name={kind === 'video' ? 'fillPlay' : 'image'} size={40} className="opacity-40" />
+      <Glyph name="eyeSlash" size={18} className="opacity-40" />
+      <span className="text-mini">{libelle}</span>
+    </div>
+  );
+}
+
 export default function MediaViewer({
   items,
   startIndex,
@@ -233,7 +265,7 @@ export default function MediaViewer({
 
   const current = items[index];
   const insets = safeAreaInsets();
-  const carriesDuration = current !== undefined && kindOf(current) === 'video';
+  const carriesDuration = current !== undefined && kindOf(current) === 'video' && !maskedAttachment(current);
 
   // #root INERT le temps de l'ouverture — même dispositif que le clone du
   // menu de message (`message-menu.tsx:380-391`), porté ICI au NIVEAU DE LA
@@ -391,6 +423,7 @@ export default function MediaViewer({
           const distance = i - index;
           if (Math.abs(distance) > 1 && i !== index) return null; // hors fenêtre ET hors page courante : pas monté du tout
           const fullPixels = rendersFullPixels(distance);
+          const isMasked = maskedAttachment(attachment);
           return (
             <div
               key={attachment.id}
@@ -401,6 +434,8 @@ export default function MediaViewer({
             >
               {!fullPixels ? (
                 <ViewerBackdropPage attachment={attachment} />
+              ) : isMasked ? (
+                <ViewerMaskedPage attachment={attachment} />
               ) : kindOf(attachment) === 'video' ? (
                 <ViewerVideoPage
                   attachment={attachment}
