@@ -13,6 +13,7 @@ import { useLinkSharing } from '@/lib/links/use-link-sharing';
 import { displayNameOf, findShareLink, joinUrlOf, shareLinkDetailState } from '@/lib/links/view';
 import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
+import { useTapGate } from '@/lib/view/tap-gate';
 import {
   LinksAnnouncement,
   LinksHeader,
@@ -43,7 +44,7 @@ import {
  */
 
 type ToggleKey = 'links.announce.offline' | 'links.announce.toggleFailed';
-const TOGGLE_FAILURE: Readonly<Record<Exclude<ShareLinkActionOutcome, 'done'>, ToggleKey>> = {
+const TOGGLE_FAILURE: Readonly<Record<Exclude<ShareLinkActionOutcome, 'done' | 'busy'>, ToggleKey>> = {
   offline: 'links.announce.offline',
   failed: 'links.announce.toggleFailed',
 };
@@ -71,14 +72,17 @@ export default function ShareLinkScreen() {
   }, [state, fetchNextPage]);
 
   const deps: LinkActionDeps = useMemo(() => ({ ...apiDeps, queryClient: appQueryClient, isOnline: () => navigator.onLine }), []);
+  const admitTap = useTapGate();
   const toggle = useCallback(
     (current: MyShareLink) => {
+      if (!admitTap()) return;
       const next = !current.isActive;
-      void performSetShareLinkActive({ link: current, isActive: next, deps }).then((outcome) =>
-        announce(translate(language, outcome === 'done' ? (next ? 'links.announce.activated' : 'links.announce.disabled') : TOGGLE_FAILURE[outcome])),
-      );
+      void performSetShareLinkActive({ link: current, isActive: next, deps }).then((outcome) => {
+        if (outcome === 'busy') return;
+        announce(translate(language, outcome === 'done' ? (next ? 'links.announce.activated' : 'links.announce.disabled') : TOGGLE_FAILURE[outcome]));
+      });
     },
-    [announce, deps, language],
+    [admitTap, announce, deps, language],
   );
 
   return (

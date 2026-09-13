@@ -84,6 +84,37 @@ const withRequestFirst = (data: FriendRequestsData | undefined, request: FriendR
 const update = (queryClient: QueryClient, bucket: FriendRequestBucket, next: (data: FriendRequestsData | undefined) => FriendRequestsData | undefined) =>
   queryClient.setQueryData<FriendRequestsData>(friendRequestsQueryKey(bucket), next);
 
+const OPTIMISTIC_PREFIX = 'optimiste:';
+
+const isProvisional = (request: FriendRequestRecord): boolean => request.id.startsWith(OPTIMISTIC_PREFIX);
+
+/**
+ * **UNE DEMANDE PROVISOIRE NE S'ANNULE PAS PAR SON IDENTIFIANT** (#6418) — il
+ * est fabriqué ici (`optimiste:<userId>`), la passerelle ne le connaît pas. On
+ * attend l'enregistrement en vol, puis on annule la VRAIE demande. Si l'envoi a
+ * échoué, elle n'existe pas : il n'y a rien à annuler. Une ligne provisoire
+ * sans envoi en vol (un cache restauré au milieu d'un envoi) ne part pas : la
+ * famille se relit, et la vérité de la passerelle la remplace.
+ */
+async function respondOnceRecorded(params: {
+  readonly request: FriendRequestRecord;
+  readonly action: FriendRequestAction;
+  readonly deps: FriendActionDeps;
+}): Promise<FriendActionOutcome> {
+  const { request, deps } = params;
+  const sending = inFlight.get(`send:${request.receiverId}`);
+  if (sending === undefined) {
+    void deps.queryClient.invalidateQueries({ queryKey: FRIENDS_QUERY_PREFIX });
+    return 'failed';
+  }
+  if ((await sending) !== 'done') return 'done';
+  const recorded = deps.queryClient
+    .getQueryData<FriendRequestsData>(friendRequestsQueryKey('sent'))
+    ?.pages.flatMap((page) => page.requests)
+    .find((row) => row.receiverId === request.receiverId && !isProvisional(row));
+  return recorded === undefined ? 'done' : performRespondToRequest({ ...params, request: recorded });
+}
+
 export function performRespondToRequest({
   request,
   action,
@@ -93,6 +124,7 @@ export function performRespondToRequest({
   readonly action: FriendRequestAction;
   readonly deps: FriendActionDeps;
 }): Promise<FriendActionOutcome> {
+  if (isProvisional(request)) return respondOnceRecorded({ request, action, deps });
   return once(`request:${request.id}`, async () => {
     if (!deps.isOnline()) return 'offline';
     const from: FriendRequestBucket = action === 'cancel' ? 'sent' : 'received';

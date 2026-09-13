@@ -165,6 +165,25 @@ const discoverRung = async (page) => {
 const within = (page, predicate, arg, ms) =>
   page.waitForFunction(predicate, arg, { timeout: ms, polling: 16 }).then(() => true, () => false);
 
+/**
+ * UN DOUBLE TAP RÉEL (#6417) — deux clics au MÊME point, à 120 ms. Un geste
+ * optimiste REMPLACE ce qu'il touche : le second clic tombe sur la ligne qui
+ * remonte ou le bouton qui a pris la place. `page.dblclick` n'attrape rien, il
+ * enchaîne ses deux clics avant le rendu. La porte (`tap-gate.ts`) retient
+ * 350 ms ; `TAP_SETTLE_MS` laisse passer la fenêtre avant le geste VOULU suivant.
+ */
+const TAP_SETTLE_MS = 400;
+const doubleTap = async (page, selector) => {
+  const point = await page.$eval(selector, (el) => {
+    el.scrollIntoView({ block: 'center' });
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  await page.mouse.click(point.x, point.y);
+  await page.waitForTimeout(120);
+  await page.mouse.click(point.x, point.y);
+};
+
 const browser = await launchChromium();
 try {
   for (const scheme of ['light', 'dark']) {
@@ -230,9 +249,11 @@ try {
       check((await attrOf(page, '[data-person="u-lea"] [data-connection="none"]', 'aria-label')) === 'Ajouter Léa Martin', `${label} : « Ajouter » nomme la personne`);
       check((await presenceDots(page)) === 0, `${label} : la recherche ne peint aucun point de présence`);
       const addInk = await contrastOf(page, '[data-person="u-lea"] [data-connection="none"] span');
-      await page.click('[data-person="u-lea"] [data-connection="none"]');
+      await doubleTap(page, '[data-person="u-lea"] [data-connection="none"]');
       const addedInstantly = await within(page, () => document.querySelector('[data-person="u-lea"]')?.getAttribute('data-relationship') === 'pendingSent', null, INSTANT_MS);
       check(addedInstantly, `${label} : « Ajouter » passe « En attente » au geste (< ${INSTANT_MS} ms)`);
+      await page.waitForTimeout(TAP_SETTLE_MS);
+      check((await relationshipOf(page, 'u-lea')) === 'pendingSent', `${label} : le second tap d'un double tap n'annule pas la demande qu'il vient d'envoyer (#6417)`);
       await searchFor(page, 'bruno', 'u-bruno');
       const friendInk = await contrastOf(page, '[data-person="u-bruno"] [data-connection="friend"]');
       await searchFor(page, 'yann', 'u-yann');
@@ -280,7 +301,7 @@ try {
       };
       await capture(page, `decouvrir-demandes-${slug}`);
 
-      await page.click('[data-request="fx-fr-kwame"] [data-request-reject]');
+      await doubleTap(page, '[data-request="fx-fr-kwame"] [data-request-reject]');
       const rejected = await within(
         page,
         () => document.querySelector('[data-request="fx-fr-kwame"]') === null && document.querySelector('[data-discover-tab-count]')?.getAttribute('data-discover-tab-count') === '2',
@@ -288,6 +309,12 @@ try {
         INSTANT_MS,
       );
       check(rejected, `${label} : refuser retire la ligne ET fait baisser le compte à 2 au geste (< ${INSTANT_MS} ms)`);
+      await page.waitForTimeout(TAP_SETTLE_MS);
+      const afterDoubleTap = await ids(page, '[data-request-list="received"] [data-request]', 'data-request');
+      check(
+        JSON.stringify(afterDoubleTap) === JSON.stringify(['fx-fr-amina', 'fx-fr-fatou']),
+        `${label} : le second tap d'un double tap ne refuse pas la demande qui remonte sous le doigt (${JSON.stringify(afterDoubleTap)})`,
+      );
       await page.click('[data-request="fx-fr-amina"] [data-request-accept]');
       const acceptedTap = await within(
         page,
@@ -357,6 +384,45 @@ try {
       check((await presenceDots(page)) === 0, `${label} : aucun point de présence, dans aucun état`);
       check(errors.length === 0, `${label} : aucune erreur de page — ${JSON.stringify(errors)}`);
       await context.close();
+
+      // ------------------------------------------------ 11. hors ligne à cache FROID (#6419)
+      /* La coupure telle que l'application la VOIT (`navigator.onLine`,
+         événement `offline`), comme une coque qui garde ses fichiers : le
+         chunk se charge, la requête des bloqués est MISE EN PAUSE. */
+      const cold = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, locale: 'fr-FR' });
+      const coldPage = await cold.newPage();
+      coldPage.setDefaultTimeout(10_000);
+      const coldErrors = [];
+      coldPage.on('pageerror', (error) => coldErrors.push(error.message));
+      await coldPage.goto(`${BASE}/`, { waitUntil: 'load' });
+      await coldPage.waitForSelector('[data-floating-menu]');
+      const setNetwork = (online) =>
+        coldPage.evaluate((value) => {
+          Object.defineProperty(Navigator.prototype, 'onLine', { configurable: true, get: () => value });
+          window.dispatchEvent(new Event(value ? 'online' : 'offline'));
+        }, online);
+      await setNetwork(false);
+      await coldPage.click('[data-floating-menu]');
+      await coldPage.click(DISCOVER_RUNG);
+      await coldPage.waitForSelector('[data-discover-tab="blocked"]');
+      await coldPage.click('[data-discover-tab="blocked"]');
+      const saysOffline = await coldPage.waitForSelector('[data-discover-blocked] [data-discover-offline]', { timeout: 3000 }).then(() => true, () => false);
+      const coldState = await coldPage.evaluate(() => ({
+        squelette: document.querySelector('[data-discover-skeleton]') !== null,
+        occupe: document.getElementById('contenu')?.getAttribute('aria-busy') ?? null,
+      }));
+      check(saysOffline && !coldState.squelette && coldState.occupe === null, `${label} : à cache froid hors ligne, « Bloqués » dit la coupure — ni squelette, ni aria-busy (${JSON.stringify(coldState)})`);
+      const coldCopy = (await coldPage.textContent('[data-discover-blocked] [data-discover-offline]').catch(() => null)) ?? '';
+      check(
+        coldCopy.includes('La liste se chargera dès le retour du réseau.') && !coldCopy.includes('dernier chargement'),
+        `${label} : à cache froid, l'annonce ne promet aucune liste déjà chargée (« ${coldCopy} »)`,
+      );
+      await capture(coldPage, `decouvrir-hors-ligne-froid-${slug}`);
+      await setNetwork(true);
+      const resumed = await coldPage.waitForSelector('[data-blocked="u-yann"]', { timeout: 5000 }).then(() => true, () => false);
+      check(resumed, `${label} : au retour du réseau, les bloqués se chargent seuls`);
+      check(coldErrors.length === 0, `${label} : aucune erreur de page à cache froid — ${JSON.stringify(coldErrors)}`);
+      await cold.close();
     }
   }
 } finally {

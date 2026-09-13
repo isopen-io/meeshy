@@ -116,8 +116,15 @@ describe('les états', () => {
   });
 
   test('hors ligne sur un cache non vide, le journal reste et le dit', () => {
-    const html = renderToStaticMarkup(<CallsOfflineNotice language="fr" />);
+    const html = renderToStaticMarkup(<CallsOfflineNotice language="fr" cold={false} />);
     expect(html).toContain('role="status"');
     expect(html).toContain('Vous voyez le journal du dernier chargement.');
+  });
+
+  test('hors ligne à cache FROID, l’annonce ne promet aucun journal déjà chargé (#6419)', () => {
+    const html = renderToStaticMarkup(<CallsOfflineNotice language="fr" cold />);
+    expect(html).toContain('role="status"');
+    expect(html).toContain('Le journal se chargera dès le retour du réseau.');
+    expect(html).not.toContain('dernier chargement');
   });
 });

@@ -20,6 +20,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { useOnline } from '@/lib/net/online';
 import { useSearch } from '@/lib/router';
+import { coldStateOf } from '@/lib/view/cold-state';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useMinute } from '@/lib/view/use-minute';
@@ -82,7 +83,8 @@ export default function CallsScreen() {
   );
 
   const records = history.data?.pages.flatMap((page) => page.records) ?? null;
-  const loading = history.data === undefined && !history.isError;
+  const cold = coldStateOf(history);
+  const loading = cold === 'loading';
   const paginationState = paginationStateOf(history);
 
   const onSelect = useCallback(
@@ -103,8 +105,10 @@ export default function CallsScreen() {
 
   const body =
     records === null ? (
-      history.isError ? (
+      cold === 'error' ? (
         <CallsError language={language} online={online} onRetry={() => void history.refetch()} />
+      ) : cold === 'offline' ? (
+        <CallsOfflineNotice language={language} cold />
       ) : (
         <li>
           <CallsSkeleton />
@@ -114,7 +118,7 @@ export default function CallsScreen() {
       <CallsEmpty language={language} filter={filter} />
     ) : (
       <>
-        {online ? null : <CallsOfflineNotice language={language} />}
+        {online ? null : <CallsOfflineNotice language={language} cold={false} />}
         {records.map((record) => (
           <CallRow key={record.callId} language={language} record={record} now={now} />
         ))}
