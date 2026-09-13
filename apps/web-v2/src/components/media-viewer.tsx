@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -34,7 +34,16 @@ import '@/styles/media-viewer.css';
 import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { MediaFilmstrip } from './media-filmstrip';
-import { MediaTransport } from './media-transport';
+
+/**
+ * LA BARRE DE LECTURE EST UN CHUNK À PART (#6359) — elle ne sert qu'une
+ * visionneuse ouverte sur une VIDÉO. Une visionneuse de photos, le cas
+ * majoritaire, ne paie ni ses octets ni sa feuille (`budgets.json ›
+ * on_demand_chunks.media_transport`). Le chunk se charge quand la page vidéo
+ * active monte son portail ; en attendant, le couloir reste vide, comme il
+ * l'est de toute façon tant que la vidéo n'a pas chargé ses métadonnées.
+ */
+const MediaTransport = lazy(() => import('./media-transport').then((module) => ({ default: module.MediaTransport })));
 
 /**
  * `MediaViewer` (#6221, § 5 étape 5) — LA VISIONNEUSE PLEIN ÉCRAN, chunk À LA
@@ -247,7 +256,9 @@ function ViewerVideoPage({
                 if (event.key === ' ' || event.key === 'Enter') event.stopPropagation();
               }}
             >
-              <MediaTransport playback={playback} durationMs={attachment.duration} language={language} />
+              <Suspense fallback={null}>
+                <MediaTransport playback={playback} durationMs={attachment.duration} language={language} />
+              </Suspense>
             </div>,
             corridorSlot,
           )

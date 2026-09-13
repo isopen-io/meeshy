@@ -284,6 +284,20 @@ describe('MediaViewer — la barre de lecture d’une vidéo (#6359)', () => {
 
   const corridor = (body: HTMLElement): HTMLElement => body.querySelector<HTMLElement>('[data-viewer-transport-slot]')!;
 
+  /**
+   * La barre est un chunk À LA DEMANDE (`lazy`) : on attend que son module
+   * soit résolu et que `Suspense` ait rendu, exactement comme la page le fait
+   * en production — jamais un `setTimeout` au jugé.
+   */
+  async function mountVideo(): Promise<{ readonly body: HTMLElement; readonly videoIndex: number }> {
+    const { items, videoIndex } = tripleVideoIndex();
+    const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+    await act(async () => {
+      await import('./media-transport');
+    });
+    return { body, videoIndex };
+  }
+
   async function loadActiveVideo(body: HTMLElement, seconds: number): Promise<HTMLVideoElement> {
     const video = currentPage(body).querySelector('video')!;
     await act(async () => {
@@ -294,17 +308,15 @@ describe('MediaViewer — la barre de lecture d’une vidéo (#6359)', () => {
     return video;
   }
 
-  test('avant ses métadonnées, le couloir bas montre la durée de la PIÈCE, sans piste', () => {
-    const { items, videoIndex } = tripleVideoIndex();
-    const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+  test('avant ses métadonnées, le couloir bas montre la durée de la PIÈCE, sans piste', async () => {
+    const { body } = await mountVideo();
 
     expect(corridor(body).querySelector('[role="slider"]')).toBeNull();
     expect(corridor(body).textContent).toContain('0:07');
   });
 
   test('une fois la durée connue, la piste vit dans le couloir bas, jamais sur le média', async () => {
-    const { items, videoIndex } = tripleVideoIndex();
-    const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+    const { body } = await mountVideo();
     await loadActiveVideo(body, 7);
 
     expect(corridor(body).querySelector('[role="slider"]')).not.toBeNull();
@@ -312,8 +324,7 @@ describe('MediaViewer — la barre de lecture d’une vidéo (#6359)', () => {
   });
 
   test('les flèches du curseur parcourent la vidéo et ne changent pas de page', async () => {
-    const { items, videoIndex } = tripleVideoIndex();
-    const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+    const { body, videoIndex } = await mountVideo();
     const video = await loadActiveVideo(body, 60);
 
     await act(async () => {
@@ -328,8 +339,7 @@ describe('MediaViewer — la barre de lecture d’une vidéo (#6359)', () => {
   });
 
   test('le play/pause au centre met en pause puis relance, sans basculer le plateau', async () => {
-    const { items, videoIndex } = tripleVideoIndex();
-    const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+    const { body } = await mountVideo();
     const topCorridor = body.querySelector<HTMLElement>('[data-media-viewer] > div')!;
 
     const pause = currentPage(body).querySelector<HTMLButtonElement>('button[aria-label="Pause"]');
@@ -349,8 +359,7 @@ describe('MediaViewer — la barre de lecture d’une vidéo (#6359)', () => {
   });
 
   test('toucher le muet ou « ⋯ » agit sur la vidéo sans basculer le plateau en plein cadre', async () => {
-    const { items, videoIndex } = tripleVideoIndex();
-    const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+    const { body } = await mountVideo();
     const video = await loadActiveVideo(body, 60);
     const topCorridor = body.querySelector<HTMLElement>('[data-media-viewer] > div')!;
     const buttonIn = (label: string): HTMLButtonElement =>
@@ -373,8 +382,7 @@ describe('MediaViewer — la barre de lecture d’une vidéo (#6359)', () => {
   });
 
   test('Espace sur un bouton de la barre l’active, sans remonter au raccourci lecture/pause de la visionneuse', async () => {
-    const { items, videoIndex } = tripleVideoIndex();
-    const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+    const { body } = await mountVideo();
     await loadActiveVideo(body, 60);
     const mute = Array.from(corridor(body).querySelectorAll<HTMLButtonElement>('button')).find((b) => b.getAttribute('aria-label') === 'Couper le son')!;
     expect(currentPage(body).querySelector('button[aria-label="Pause"]')).not.toBeNull();
