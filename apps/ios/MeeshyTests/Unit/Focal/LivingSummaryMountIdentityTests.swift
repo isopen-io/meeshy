@@ -50,6 +50,11 @@ final class LivingSummaryMountIdentityTests: XCTestCase {
     /// La branche `.summary` seule — bornée par le pont UIKit qui la suit dans
     /// le même `ZStack`, pour qu'aucune assertion ne se satisfasse d'une
     /// occurrence appartenant à un autre mode de lecture.
+    ///
+    /// **Le pont s'appelle `messageListLayer` depuis #6213** (`9546b56da9`,
+    /// 2026-09-12) : `MessageListView(` a quitté le `ZStack` pour une propriété
+    /// déclarée PLUS HAUT dans le fichier, et la garde ne trouvait plus de borne
+    /// après la branche. Le code gardé, lui, n'avait pas bougé (#5599).
     private func summaryBranch() throws -> String {
         let code = try conversationViewCode()
         let start = try XCTUnwrap(
@@ -58,7 +63,7 @@ final class LivingSummaryMountIdentityTests: XCTestCase {
             "garde doit être re-pointée avant tout le reste."
         )
         let end = try XCTUnwrap(
-            code.range(of: "MessageListView(", options: [], range: start.upperBound ..< code.endIndex),
+            code.range(of: "messageListLayer", options: [], range: start.upperBound ..< code.endIndex),
             "Le pont UIKit qui borne la branche `.summary` est introuvable — la garde ne sait plus " +
             "où s'arrête le mode Résumé."
         )

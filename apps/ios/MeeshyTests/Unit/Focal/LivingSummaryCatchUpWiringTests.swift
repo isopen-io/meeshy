@@ -37,7 +37,9 @@ final class LivingSummaryCatchUpWiringTests: XCTestCase {
     }
 
     /// Même délimitation que `LivingSummaryMountIdentityTests.summaryBranch()` :
-    /// la branche `.summary` seule, bornée par le pont UIKit qui la suit.
+    /// la branche `.summary` seule, bornée par le pont UIKit qui la suit —
+    /// `messageListLayer` depuis #6213 (`9546b56da9`), qui a sorti
+    /// `MessageListView(` du `ZStack` (#5599).
     private func summaryBranch() throws -> String {
         let code = try conversationViewCode()
         let start = try XCTUnwrap(
@@ -45,7 +47,7 @@ final class LivingSummaryCatchUpWiringTests: XCTestCase {
             "La branche de montage `mode == .summary` a disparu de `ConversationView`."
         )
         let end = try XCTUnwrap(
-            code.range(of: "MessageListView(", options: [], range: start.upperBound ..< code.endIndex),
+            code.range(of: "messageListLayer", options: [], range: start.upperBound ..< code.endIndex),
             "Le pont UIKit qui borne la branche `.summary` est introuvable."
         )
         return String(code[start.upperBound ..< end.lowerBound])
