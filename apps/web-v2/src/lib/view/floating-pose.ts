@@ -12,8 +12,15 @@
  * borne exacte où une comparaison bascule.
  */
 
-/** Le disque fermé — 52, comme iOS (`FloatingButtons.swift:108`). */
-export const FLOATING_BUTTON = 52;
+import { FLOATING_BUTTON } from './floating-corridor';
+
+/**
+ * Le disque fermé (52), la marge latérale (20) et le haut du couloir (126)
+ * vivent dans `floating-corridor.ts` depuis #6277 : le chrome des écrans qui
+ * portent les disques les partage au pixel près, et une copie ici en aurait
+ * refait la jumelle que ce module existe pour retirer.
+ */
+export { FLOATING_BUTTON, FLOATING_SIDE, FLOATING_TOP } from './floating-corridor';
 
 /** Un barreau de l'échelle — 46 (`RootView.swift:1699`). */
 export const LADDER_RUNG = 46;
@@ -85,19 +92,6 @@ export function ladderRungOffset(index: number, expandsDown: boolean): number {
   return expandsDown ? distance : -distance;
 }
 
-/**
- * **CE QUE LE BOUTON DE GAUCHE OCCUPE, du bord à son extrémité** — la marge
- * latérale plus le disque.
- *
- * Exporté pour que le rail des stories RÉSERVE cette largeur plutôt que de
- * laisser sa première tuile s'arrêter dessous (`story-rail.tsx`). La valeur de
- * `--float-side` est écrite en CSS ; ce nombre-ci la double, et c'est le seul
- * endroit du lot où une cote existe à deux endroits — un `var()` ne se lit pas
- * depuis JavaScript sans mesurer le DOM, ce qui coûterait une image à chaque
- * rendu du rail pour une valeur qui ne change jamais.
- */
-export const FLOATING_SIDE = 20;
-export const FLOATING_RESERVE = FLOATING_SIDE + FLOATING_BUTTON;
 
 /**
  * **CE QUE LE BOUTON PEUT ATTEINDRE** — les trois couloirs, lus depuis le CSS
