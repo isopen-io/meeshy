@@ -49,7 +49,7 @@ describe('FeedPostCard — aimer et enregistrer remettent l’intention à l’h
     render(post, onGesture);
   };
 
-  const gesture = (kind: PostToggleKind) =>
+  const gesture = (kind: PostToggleKind | 'share') =>
     container.querySelector(`button[data-feed-gesture="${kind}"]`) as HTMLButtonElement | null;
 
   const post = (partial: Partial<FeedPost>): FeedPost => ({
@@ -101,5 +101,31 @@ describe('FeedPostCard — aimer et enregistrer remettent l’intention à l’h
       ['p1', 'like'],
       ['p1', 'bookmark'],
     ]);
+  });
+
+  /** « Partager » n'est PAS une bascule : il n'a ni état « pressé » ni cœur
+   * plein — c'est un geste ponctuel, donc un bouton simple, et il n'existe
+   * que si un hôte sait partager (loi 4). */
+  test('« Partager » devient un bouton dès qu’un hôte sait partager — sans `aria-pressed`', () => {
+    const shared: string[] = [];
+    mount(post({ shareCount: 4 }), () => undefined);
+    expect(gesture('share')).toBeNull();
+
+    act(() => {
+      root.render(
+        <FeedPostCard
+          model={resolveFeedCardModel(post({ shareCount: 4 }), { preferredLanguages: ['fr'], now: NOW })}
+          onGesture={() => undefined}
+          onShare={(postId) => shared.push(postId)}
+        />,
+      );
+    });
+
+    const share = gesture('share');
+    expect(share).not.toBeNull();
+    expect(share?.hasAttribute('aria-pressed')).toBe(false);
+    expect(share?.textContent).toContain('4');
+    act(() => share?.click());
+    expect(shared).toEqual(['p1']);
   });
 });

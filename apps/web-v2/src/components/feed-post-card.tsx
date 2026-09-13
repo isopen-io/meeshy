@@ -25,6 +25,8 @@ import { FEED_TEXT_TRUNCATION_LIMIT, truncateWords } from '@/lib/feed/text';
 
 type GestureHandler = (postId: string, kind: PostToggleKind) => void;
 
+type ShareHandler = (postId: string) => void;
+
 const GESTURE_OF_STAT: Partial<Record<keyof FeedCardStats, PostToggleKind>> = {
   likeCount: 'like',
   bookmarkCount: 'bookmark',
@@ -62,17 +64,36 @@ function FeedActionsRow({
   viewer,
   tone,
   onGesture,
+  onShare,
 }: {
   readonly postId: string;
   readonly stats: FeedCardStats;
   readonly viewer: FeedCardViewer;
   readonly tone: 'onLight' | 'onDark';
   readonly onGesture?: GestureHandler;
+  readonly onShare?: ShareHandler;
 }) {
   const ink = tone === 'onDark' ? 'rgba(255,255,255,0.92)' : 'var(--color-ios-ink-2)';
   return (
     <div className="flex items-center justify-between" data-feed-actions>
       {STAT_ITEMS.map((item) => {
+        /* « Partager » est un geste PONCTUEL, pas une bascule : un bouton
+           simple, sans `aria-pressed` — et seulement si l'hôte sait partager. */
+        if (item.key === 'shareCount' && onShare !== undefined) {
+          return (
+            <button
+              key={item.key}
+              type="button"
+              data-feed-gesture="share"
+              onClick={() => onShare(postId)}
+              className="flex items-center gap-1.5 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ color: ink, minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
+            >
+              <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={item.label} />
+              <span className="text-check font-medium">{stats[item.key]}</span>
+            </button>
+          );
+        }
         const kind = GESTURE_OF_STAT[item.key];
         if (kind === undefined || onGesture === undefined) {
           return (
@@ -302,7 +323,16 @@ function FeedPostText({ text }: { readonly text: FeedCardText }) {
 /** Le RÉEL — plein cadre, identité et actions SUR le média, scrim bas (miroir
  * `ReelFeedCard.swift`). Rendu en AFFICHE IMMOBILE : la lecture reste hors
  * tranche (D-42), le média est son propre repli (poster/placeholder). */
-function FeedReelCard({ model, onGesture }: { readonly model: FeedCardModel; readonly onGesture?: GestureHandler }) {
+type CardHosts = { readonly onGesture?: GestureHandler; readonly onShare?: ShareHandler };
+
+/** Les hôtes optionnels passent tels quels — `exactOptionalPropertyTypes`
+ * refuse de poser une clé optionnelle à `undefined`. */
+const hostsOf = ({ onGesture, onShare }: CardHosts): CardHosts => ({
+  ...(onGesture !== undefined ? { onGesture } : {}),
+  ...(onShare !== undefined ? { onShare } : {}),
+});
+
+function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & CardHosts) {
   const poster = model.media[0];
   const ratio = poster?.ratio ?? 1.25;
 
@@ -347,20 +377,14 @@ function FeedReelCard({ model, onGesture }: { readonly model: FeedCardModel; rea
             {model.text.full}
           </p>
         ) : null}
-        <FeedActionsRow
-          postId={model.id}
-          stats={model.stats}
-          viewer={model.viewer}
-          tone="onDark"
-          {...(onGesture !== undefined ? { onGesture } : {})}
-        />
+        <FeedActionsRow postId={model.id} stats={model.stats} viewer={model.viewer} tone="onDark" {...hostsOf(hosts)} />
       </div>
     </div>
   );
 }
 
-export function FeedPostCard({ model, onGesture }: { readonly model: FeedCardModel; readonly onGesture?: GestureHandler }) {
-  if (model.isReel) return <FeedReelCard model={model} {...(onGesture !== undefined ? { onGesture } : {})} />;
+export function FeedPostCard({ model, ...hosts }: { readonly model: FeedCardModel } & CardHosts) {
+  if (model.isReel) return <FeedReelCard model={model} {...hostsOf(hosts)} />;
 
   return (
     <article
@@ -376,13 +400,7 @@ export function FeedPostCard({ model, onGesture }: { readonly model: FeedCardMod
         </div>
       ) : null}
       <div className="px-3">
-        <FeedActionsRow
-          postId={model.id}
-          stats={model.stats}
-          viewer={model.viewer}
-          tone="onLight"
-          {...(onGesture !== undefined ? { onGesture } : {})}
-        />
+        <FeedActionsRow postId={model.id} stats={model.stats} viewer={model.viewer} tone="onLight" {...hostsOf(hosts)} />
       </div>
     </article>
   );
