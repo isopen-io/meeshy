@@ -4,6 +4,7 @@ import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, presenceOf } from '@/lib/view/conversation';
 import type { LocalDelivery } from '@/lib/view/message';
 import { prismFor, served } from '@/lib/api/prism';
+import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
@@ -290,6 +291,8 @@ export function Bubble({
           attachments={message.attachments}
           languages={languages}
           fallbackLanguage={message.originalLanguage}
+          carrier={mediaCarrierOf({ message, caption: rendered })}
+          mediaFrame="box"
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}

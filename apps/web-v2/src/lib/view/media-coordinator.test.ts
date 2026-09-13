@@ -1,15 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createAudioCoordinator } from './audio-coordinator';
+import { createMediaCoordinator } from './media-coordinator';
 
 /**
- * `createAudioCoordinator()` — SANS DOM : le module ne touche à rien
+ * `createMediaCoordinator()` — SANS DOM : le module ne touche à rien
  * d'autre que ses propres closures, miroir de
- * `ConversationAudioCoordinator.play()` (§ Étape 3 de la spécification).
+ * `ConversationAudioCoordinator.play()` (§ Étape 0 de la spécification
+ * « grille de médias », renommage de `audio-coordinator.test.ts`).
  */
-describe('createAudioCoordinator', () => {
+describe('createMediaCoordinator', () => {
   test('claim(a) puis claim(b) : le pause de a est appelé UNE fois, b devient actif', () => {
-    const coordinator = createAudioCoordinator();
+    const coordinator = createMediaCoordinator();
     let pauseACalls = 0;
     let pauseBCalls = 0;
 
@@ -28,7 +29,7 @@ describe('createAudioCoordinator', () => {
   });
 
   test('release(b) libère l’actif ; release(a), déjà remplacé, ne rappelle rien', () => {
-    const coordinator = createAudioCoordinator();
+    const coordinator = createMediaCoordinator();
     let pauseACalls = 0;
     coordinator.claim('a', () => {
       pauseACalls += 1;
@@ -47,7 +48,7 @@ describe('createAudioCoordinator', () => {
   });
 
   test('claim(a) deux fois : idempotent, pauseA jamais appelé', () => {
-    const coordinator = createAudioCoordinator();
+    const coordinator = createMediaCoordinator();
     let pauseACalls = 0;
     const pauseA = () => {
       pauseACalls += 1;
@@ -59,7 +60,7 @@ describe('createAudioCoordinator', () => {
   });
 
   test('subscribe : notifié seulement sur un CHANGEMENT de active(), jamais sur un claim redondant', () => {
-    const coordinator = createAudioCoordinator();
+    const coordinator = createMediaCoordinator();
     let notifications = 0;
     const unsubscribe = coordinator.subscribe(() => {
       notifications += 1;
@@ -81,5 +82,20 @@ describe('createAudioCoordinator', () => {
     unsubscribe();
     coordinator.claim('c', () => {});
     expect(notifications).toBe(3);
+  });
+
+  /** UN SEUL COORDINATEUR POUR LES DEUX ÉLÉMENTS (#6221) — le coordinateur ne
+   * distingue pas `<audio>` de `<video>` : ce sont deux id de STRING, jamais
+   * un type d'élément. Ce témoin le prouve à même le module PUR, sans DOM ;
+   * `use-media-playback.test.tsx` le prouve avec de VRAIS éléments. */
+  test('un vocal et une vidéo partagent la MÊME exclusivité, par id seul', () => {
+    const coordinator = createMediaCoordinator();
+    let voicePaused = 0;
+    coordinator.claim('voice-1', () => {
+      voicePaused += 1;
+    });
+    coordinator.claim('video-1', () => {});
+    expect(voicePaused).toBe(1);
+    expect(coordinator.active()).toBe('video-1');
   });
 });

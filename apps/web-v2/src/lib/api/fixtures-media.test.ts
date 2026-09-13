@@ -19,6 +19,14 @@ import {
   MEDIA_VOICE_EN_WITNESS_ID,
   wavDataUri,
 } from './fixtures-media';
+import {
+  MEDIA_GRID_OVERFLOW_WITNESS_ID,
+  MEDIA_GRID_PAIR_WITNESS_ID,
+  MEDIA_GRID_QUAD_WITNESS_ID,
+  MEDIA_GRID_TRIPLE_WITNESS_ID,
+  MEDIA_SOLO_VIDEO_WITNESS_ID,
+  MEDIA_VIDEO_DATA_URI,
+} from './fixtures-media-grid';
 import { decodeMessages } from './decode';
 import { electDescription } from '../view/media';
 import { messagesOf } from './fixtures';
@@ -116,9 +124,9 @@ test('wavDataUri : deux tons différents rendent deux URIs différentes', () => 
   expect(wavDataUri({ seconds: 1, tone: 440 })).not.toBe(wavDataUri({ seconds: 1, tone: 523 }));
 });
 
-test('les dix messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique', () => {
+test('les QUINZE messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique (#6221, +5)', () => {
   const messages = messagesOf(MEDIA_CONVERSATION_ID);
-  expect(messages).toHaveLength(10);
+  expect(messages).toHaveLength(15);
   const times = messages.map((m) => new Date(m.createdAt).getTime());
   expect(times).toEqual([...times].sort((a, b) => a - b));
   expect(messages.some((m) => m.id === MEDIA_BROKEN_IMAGE_WITNESS_ID)).toBe(true);
@@ -127,6 +135,64 @@ test('les dix messages du corpus médias sont servis par messagesOf, dans l’or
   expect(messages.some((m) => m.id === MEDIA_BLURRED_WITNESS_ID)).toBe(true);
   expect(messages.some((m) => m.id === MEDIA_VIEW_ONCE_WITNESS_ID)).toBe(true);
   expect(messages.some((m) => m.id === MEDIA_MASKED_PIECE_WITNESS_ID)).toBe(true);
+  expect(messages.some((m) => m.id === MEDIA_SOLO_VIDEO_WITNESS_ID)).toBe(true);
+  expect(messages.some((m) => m.id === MEDIA_GRID_PAIR_WITNESS_ID)).toBe(true);
+  expect(messages.some((m) => m.id === MEDIA_GRID_TRIPLE_WITNESS_ID)).toBe(true);
+  expect(messages.some((m) => m.id === MEDIA_GRID_QUAD_WITNESS_ID)).toBe(true);
+  expect(messages.some((m) => m.id === MEDIA_GRID_OVERFLOW_WITNESS_ID)).toBe(true);
+});
+
+/**
+ * T18 (#6221) — `MEDIA_CONVERSATION.lastMessage` reste `media-7` malgré les
+ * cinq messages neufs, et chacun d'eux respecte le contrat de la passerelle
+ * (`thumbHash`, `thumbnailUrl` non vide, `imageVariants`) ou celui du média
+ * vidéo (mimeType/duration/dimensions RÉELLES, mesurées par `ffprobe`).
+ */
+test('lastMessage reste media-7 malgré les cinq messages neufs (#6221)', () => {
+  expect(MEDIA_CONVERSATION.lastMessage?.id).toBe(MEDIA_NULL_METADATA_WITNESS_ID);
+});
+
+test('les cinq messages neufs sont datés ENTRE media-5 (09:20) et media-7 (09:30)', () => {
+  const messages = messagesOf(MEDIA_CONVERSATION_ID);
+  const lower = dayAt(0, 9, 20);
+  const upper = dayAt(0, 9, 30);
+  for (const id of [
+    MEDIA_SOLO_VIDEO_WITNESS_ID,
+    MEDIA_GRID_PAIR_WITNESS_ID,
+    MEDIA_GRID_TRIPLE_WITNESS_ID,
+    MEDIA_GRID_QUAD_WITNESS_ID,
+    MEDIA_GRID_OVERFLOW_WITNESS_ID,
+  ]) {
+    const found = messages.find((m) => m.id === id)!;
+    const t = new Date(found.createdAt).getTime();
+    expect(t).toBeGreaterThan(new Date(lower).getTime());
+    expect(t).toBeLessThan(new Date(upper).getTime());
+  }
+});
+
+test('chaque pièce du corpus grille porte thumbHash, thumbnailUrl non vide, imageVariants', () => {
+  const messages = messagesOf(MEDIA_CONVERSATION_ID);
+  for (const id of [MEDIA_GRID_PAIR_WITNESS_ID, MEDIA_GRID_TRIPLE_WITNESS_ID, MEDIA_GRID_QUAD_WITNESS_ID, MEDIA_GRID_OVERFLOW_WITNESS_ID]) {
+    const found = messages.find((m) => m.id === id)!;
+    for (const attachment of found.attachments ?? []) {
+      expect(attachment.thumbHash).toBe('pPMBAAA=');
+      if (attachment.mimeType.startsWith('image/')) {
+        expect(attachment.thumbnailUrl).not.toBe('');
+        expect(attachment.imageVariants?.length ?? 0).toBeGreaterThanOrEqual(1);
+      }
+    }
+  }
+});
+
+test('la vidéo porte mimeType video/webm, duration 7000, largeur/hauteur 160×90 (mesurées par ffprobe)', () => {
+  const messages = messagesOf(MEDIA_CONVERSATION_ID);
+  const solo = messages.find((m) => m.id === MEDIA_SOLO_VIDEO_WITNESS_ID)!;
+  const video = solo.attachments?.[0]!;
+  expect(video.mimeType).toBe('video/webm');
+  expect(video.duration).toBe(7_000);
+  expect(video.width).toBe(160);
+  expect(video.height).toBe(90);
+  expect(video.fileUrl).toBe(MEDIA_VIDEO_DATA_URI);
 });
 
 /**
