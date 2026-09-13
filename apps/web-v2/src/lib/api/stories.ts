@@ -7,11 +7,15 @@ import type { ApiResult, HttpTransport } from './http';
  * (`conversations.ts:33-41`) : `source` résolue ICI, jamais dans le hook ni
  * dans l'écran, et les fixtures passent par le MÊME chemin.
  *
- * `GET /api/v1/posts/feed/stories?projection=tray`
- * (`services/gateway/src/routes/posts/feed.ts:422-448`, authentification
- * REQUISE — 401 `UNAUTHORIZED` sans session). La projection `tray` est une
- * whitelist stricte côté serveur (`:437`) : toute autre valeur est ignorée et
- * sert la charge complète, d'où l'envoi de la chaîne exacte.
+ * `GET /api/v1/social/posts?scope=stories&projection=tray` (#6249 — successeur
+ * de l'alias déprécié `GET /posts/feed/stories?projection=tray`,
+ * `services/gateway/src/routes/posts/feed.ts:801-813`, authentification
+ * REQUISE — 401 `UNAUTHORIZED` sans session). La lecture — `chargerStories`,
+ * donc `trayStorySelect` — est INCHANGÉE : l'alias et la route cible
+ * délèguent à la MÊME fonction (`feed.ts:450-457` vs `:801-813`), seule
+ * l'adresse a bougé. La projection `tray` reste une whitelist stricte côté
+ * serveur : toute autre valeur est ignorée et sert la charge complète, d'où
+ * l'envoi de la chaîne exacte.
  *
  * Ce que le serveur renvoie est un POST par story (`trayStorySelect`,
  * `postIncludes.ts:275-296`), pas un auteur : `{ id, type, createdAt,
@@ -19,9 +23,9 @@ import type { ApiResult, HttpTransport } from './http';
  * est un travail de VUE** — un rail montre un cercle par auteur, jamais un par
  * story —, et il vit dans `lib/view/story-tray.ts` avec sa règle de tri.
  *
- * `limit` est plafonné à 50 côté serveur (`validatePagination`, `:448`) : le
- * demander plus haut ne sert à rien, et le demander plus bas priverait le rail
- * d'auteurs sans que rien ne le dise.
+ * `limit` est plafonné à 50 côté serveur (`LimiteSchema`) : le demander plus
+ * haut ne sert à rien, et le demander plus bas priverait le rail d'auteurs
+ * sans que rien ne le dise.
  */
 /**
  * `STORIES_QUERY_PREFIX` (#6195) — le préfixe COMMUN aux deux corpus de ce
@@ -84,7 +88,7 @@ export async function loadStoryTray(
   }
   return params.transport.request<readonly StoryTrayPost[]>({
     method: 'GET',
-    path: '/api/v1/posts/feed/stories?projection=tray&limit=50',
+    path: '/api/v1/social/posts?scope=stories&projection=tray&limit=50',
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
 }
@@ -140,8 +144,9 @@ export function statusMoodsQueryOptions(deps: StoriesDeps) {
 
 /**
  * **LE CORPUS COMPLET DU LECTEUR** (#5817) — LE MÊME ENDPOINT que
- * `loadStoryTray`, SANS `?projection=tray` : `chargerStories`
- * (`services/gateway/src/routes/posts/feed.ts:419-484`) sert alors
+ * `loadStoryTray` (#6249, `GET /api/v1/social/posts?scope=stories`), SANS
+ * `?projection=tray` : `chargerStories`
+ * (`services/gateway/src/routes/posts/feed.ts:801-813`) sert alors
  * `storyPostInclude` (`postIncludes.ts:382-385`) — contenu, langue
  * d'origine, traductions, effets de fond, media, auteur — tout ce que
  * `lib/stories/playback.ts` a besoin de LIRE pour jouer une story, quand le
@@ -187,7 +192,7 @@ export async function loadStoryFeed(
   }
   return params.transport.request<readonly StoryFeedPost[]>({
     method: 'GET',
-    path: '/api/v1/posts/feed/stories?limit=50',
+    path: '/api/v1/social/posts?scope=stories&limit=50',
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
 }
@@ -254,12 +259,17 @@ export function storyPostQueryOptions(deps: StoriesDeps & { readonly postId: str
 }
 
 /**
- * **MARQUER UNE STORY VUE** (#5817) — `POST /posts/:postId/view`
- * (`services/gateway/src/routes/posts/interactions.ts:398-424`,
- * requiredAuth, corps `{ duration?: number }`). `{ viewed: true }` quel que
- * soit le verdict serveur (« ni oracle d'existence ni témoin d'audience ») :
- * l'appelant n'attend de cette réponse qu'un accusé, jamais une donnée à
- * afficher.
+ * **MARQUER UNE STORY VUE** (#5817, migré #6249) — `POST /api/v1/social/events`
+ * (`services/gateway/src/routes/social/events.ts:670-696`, successeur de
+ * l'alias déprécié `POST /posts/:postId/view`), corps
+ * `{ events: [{ type: 'view', postId, durationMs? }] }` (`SocialEventSchema`,
+ * `events.ts:163-171` — `durationMs`, pas `duration` : le nom dit son unité).
+ *
+ * Le serveur y répond `{ recorded, rejected }`, jamais `{ viewed }` — cette
+ * fonction retombe donc sur `{ viewed: true }` en cas de succès, quel que soit
+ * le verdict serveur (« ni oracle d'existence ni témoin d'audience », même
+ * comportement que l'alias historique) : l'appelant n'attend de cette réponse
+ * qu'un accusé, jamais une donnée à afficher.
  */
 export async function markStoryViewed(
   params: StoriesDeps & { readonly postId: string; readonly durationMs?: number },
@@ -267,9 +277,11 @@ export async function markStoryViewed(
   if (__FIXTURES__ && params.source === 'fixtures') {
     return { ok: true, data: { viewed: true } };
   }
-  return params.transport.request<{ readonly viewed: boolean }>({
+  const result = await params.transport.request<{ readonly recorded: number; readonly rejected: number }>({
     method: 'POST',
-    path: `/api/v1/posts/${encodeURIComponent(params.postId)}/view`,
-    body: params.durationMs === undefined ? {} : { duration: params.durationMs },
+    path: '/api/v1/social/events',
+    body: { events: [{ type: 'view', postId: params.postId, ...(params.durationMs === undefined ? {} : { durationMs: params.durationMs }) }] },
   });
+  if (!result.ok) return result;
+  return { ok: true, data: { viewed: true } };
 }
