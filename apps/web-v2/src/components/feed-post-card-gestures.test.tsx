@@ -49,7 +49,7 @@ describe('FeedPostCard — aimer et enregistrer remettent l’intention à l’h
     render(post, onGesture);
   };
 
-  const gesture = (kind: PostToggleKind) =>
+  const gesture = (kind: PostToggleKind | 'share') =>
     container.querySelector(`button[data-feed-gesture="${kind}"]`) as HTMLButtonElement | null;
 
   const post = (partial: Partial<FeedPost>): FeedPost => ({

@@ -6,9 +6,11 @@ import { LensPaginationFooter } from '@/components/lens-pagination-footer';
 import { PullIndicator } from '@/components/pull-indicator';
 import { FEED_PAGE_SIZE } from '@/lib/api/feed';
 import type { FeedPost } from '@/lib/api/feed-pages';
-import { postGestureAction, refreshFeedAction, useFeed } from '@/lib/api/query';
+import { postGestureAction, recordShareAction, refreshFeedAction, useFeed } from '@/lib/api/query';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import type { PostToggleKind } from '@/lib/feed/interactions';
+import { publicationShareUrl, RETOUR_PARTAGE_PUBLICATION } from '@/lib/feed/share-url';
+import { partagerLien } from '@/lib/view/invitation';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { useOnline } from '@/lib/net/online';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -217,6 +219,22 @@ export default function FeedScreen() {
     [announce],
   );
 
+  /* PARTAGER (#6278, D-48) — `partagerLien` part DANS le gestionnaire, sans
+     `await` préalable : la feuille du système n'ouvre que pendant l'activation
+     du geste. Le partage n'est COMPTÉ qu'une fois le lien réellement parti. */
+  const onShare = useCallback(
+    (postId: string) => {
+      void partagerLien({ title: 'Meeshy', text: 'Une publication sur Meeshy', url: publicationShareUrl(postId) }).then(
+        (result) => {
+          if (result === 'partage' || result === 'copie') void recordShareAction(postId);
+          const retour = RETOUR_PARTAGE_PUBLICATION[result];
+          if (retour !== null) announce(retour);
+        },
+      );
+    },
+    [announce],
+  );
+
   const { observe: observeTail } = useLoadMoreSentinel({
     root: frame,
     rootMargin: loadMoreRootMargin(FEED_ROW_HEIGHT_ESTIMATE),
@@ -251,7 +269,7 @@ export default function FeedScreen() {
           <>
             {models.map((model) => (
               <li key={model.id}>
-                <FeedPostCard model={model} onGesture={onGesture} />
+                <FeedPostCard model={model} onGesture={onGesture} onShare={onShare} />
               </li>
             ))}
             <LensPaginationFooter
