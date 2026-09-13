@@ -236,4 +236,4 @@ httpcore==0.17.3
 # Ne PAS lever ce plafond tant que httpx/httpcore restent sur cette paire ; le
 # jour où Prisma permet httpx 0.28+, httpcore 1.x importe `anyio.abc` en propre
 # et la contrainte tombe d'elle-même.
-anyio==4.15.0
+anyio==4.15.1
