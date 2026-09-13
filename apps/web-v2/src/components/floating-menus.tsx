@@ -4,13 +4,13 @@ import '@/styles/floating-menus.css';
 
 import { Avatar } from './avatar';
 import { MenuGlyph } from './menu-glyph';
-import { UnreadCornerBadge } from './unread-badge';
+import { UnreadCornerBadge, UnreadRungBadge } from './unread-badge';
 import { sessionStore } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useNotificationCounts } from '@/lib/view/use-notification-counts';
 import { initialsOf } from '@/lib/view/conversation';
-import { FEED_DESTINATION, MENU_LADDER, PROFILE_DESTINATION } from '@/lib/view/floating-menu';
+import { FEED_DESTINATION, MENU_LADDER, PROFILE_DESTINATION, type FloatingDestination } from '@/lib/view/floating-menu';
 import {
   FEED_DEFAULT,
   FLOATING_BUTTON,
@@ -74,6 +74,19 @@ function closedMenuLabel(language: InterfaceLanguage, unread: number): string {
   if (unread <= 0) return translate(language, 'a11y.floating.menu');
   const key = unread === 1 ? 'a11y.floating.menu.unread.one' : 'a11y.floating.menu.unread.other';
   return translate(language, key, { count: String(unread) });
+}
+
+/** Le compteur que CE barreau porte — `menuBadgeCount` d'iOS (`RootView.swift:1740`). */
+function rungCount(destination: FloatingDestination, unread: number): number {
+  return destination.badge === 'unreadNotifications' ? unread : 0;
+}
+
+/** Le nom d'un barreau — il dit son compte quand il en porte un, une fois. */
+function rungLabel(language: InterfaceLanguage, destination: FloatingDestination, unread: number): string {
+  const count = rungCount(destination, unread);
+  if (count <= 0) return translate(language, destination.labelKey);
+  const key = count === 1 ? 'a11y.floating.rung.notifications.unread.one' : 'a11y.floating.rung.notifications.unread.other';
+  return translate(language, key, { count: String(count) });
 }
 
 export function FloatingMenus() {
@@ -221,7 +234,7 @@ export function FloatingMenus() {
                   itemRefs.current[index] = el;
                 }}
                 onClick={() => setOpen(false)}
-                aria-label={translate(langue, destination.labelKey)}
+                aria-label={rungLabel(langue, destination, unread)}
                 className="floating-rung pointer-events-auto absolute grid place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={
                   {
@@ -237,6 +250,7 @@ export function FloatingMenus() {
                 }
               >
                 <MenuGlyph glyph={destination.glyph} size={18} />
+                <UnreadRungBadge count={rungCount(destination, unread)} tint={destination.tint} size={LADDER_RUNG} />
               </Link>
             ))}
           </div>
@@ -269,7 +283,10 @@ export function FloatingMenus() {
             <Avatar initials={initialsOf(nom)} color="var(--color-ios-brand)" size={38} />
           )}
         </button>
-        <UnreadCornerBadge count={unread} />
+        {/* MENU OUVERT, LE COMPTE CHANGE DE PORTEUR — `RootView.swift:1666`
+            retire la pastille du disque, le barreau « Notifications » la
+            reprend. Les deux ensemble peindraient deux fois le même nombre. */}
+        {open ? null : <UnreadCornerBadge count={unread} />}
       </div>
     </div>
   );

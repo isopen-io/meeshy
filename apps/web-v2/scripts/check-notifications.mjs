@@ -13,6 +13,10 @@
  *
  *  1. sur la liste, la pastille du bouton flottant porte le compte SERVI
  *     (« 3 »), posée au coin d'iOS (+16, −16), et le bouton l'annonce ;
+ *     menu OUVERT, elle quitte le disque et le barreau « Notifications » la
+ *     porte, blanche à l'encre de sa teinte (AA), au coin (±15,18), et l'annonce
+ *     dans son nom (#6219) ; elle SUIT le disque qu'on déplace — à chaque image
+ *     de la course, à l'accroche au bord et après rechargement — sans saut ;
  *  2. le barreau « Notifications » de l'échelle ouvre la cloche : douze
  *     rangées, trois non lues, « 3 non lues » dans l'en-tête ;
  *  3. AU REPOS, chaque texte de rangée et chaque contrôle du chrome retombe sur
@@ -87,7 +91,56 @@ const rowsOf = (page) =>
   page.$$eval('[data-notification]', (els) =>
     els.map((el) => ({ id: el.dataset.notification, type: el.dataset.notificationType, read: el.dataset.read })),
   );
-const badgeOf = (page) => page.$eval('.floating-menus [data-unread]', (el) => el.getAttribute('data-unread')).catch(() => null);
+const badgeOf = (page) => page.$eval('[data-badge-pose="corner"]', (el) => el.getAttribute('data-unread')).catch(() => null);
+/** `ThemedActionButton` — `.offset(x: size × 0,33, y: −size × 0,33)`, barreau de 46. */
+const RUNG_CORNER = 46 * 0.33;
+const NOTIFICATIONS_RUNG = '[role="menuitem"][href="/notifications"]';
+
+/** Ouvre l'échelle, lit le barreau « Notifications » une fois la cascade jouée, puis la referme. */
+const rungState = async (page) => {
+  await page.click('[data-floating-menu]');
+  await page.waitForSelector(NOTIFICATIONS_RUNG);
+  /* La cascade des barreaux : 320 ms plus 40 ms par rang. */
+  await page.waitForTimeout(700);
+  const state = await page.evaluate((selector) => {
+    const rung = document.querySelector(selector);
+    const badge = rung?.querySelector('[data-badge-pose="rung"]') ?? null;
+    const r = rung?.getBoundingClientRect();
+    const b = badge?.getBoundingClientRect();
+    const hit = r === undefined ? null : document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return {
+      discBadge: document.querySelector('[data-badge-pose="corner"]') !== null,
+      count: badge?.getAttribute('data-unread') ?? null,
+      text: badge?.textContent ?? null,
+      badges: document.querySelectorAll('[role="menuitem"] [data-unread]').length,
+      label: rung?.getAttribute('aria-label') ?? null,
+      dx: r && b ? b.left + b.width / 2 - (r.left + r.width / 2) : null,
+      dy: r && b ? b.top + b.height / 2 - (r.top + r.height / 2) : null,
+      h: b?.height ?? null,
+      reachable: hit !== null && rung !== null && (hit === rung || rung.contains(hit)),
+    };
+  }, NOTIFICATIONS_RUNG);
+  const ink = state.count === null ? null : await contrastOf(page, `${NOTIFICATIONS_RUNG} [data-badge-pose="rung"]`);
+  return { ...state, ink };
+};
+const closeLadder = async (page) => {
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => document.querySelector('[role="menu"]') === null);
+};
+
+/** Le disque du menu et sa pastille, lus APRÈS une image : le rendu suit le pointeur, il ne le précède pas. */
+const discAndBadge = (page) =>
+  page.evaluate(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    const disc = document.querySelector('[data-floating-menu]')?.getBoundingClientRect();
+    const badge = document.querySelector('[data-badge-pose="corner"]')?.getBoundingClientRect();
+    if (disc === undefined || badge === undefined) return null;
+    const x = disc.left + disc.width / 2;
+    const y = disc.top + disc.height / 2;
+    return { x, y, w: disc.width, dx: badge.left + badge.width / 2 - x, dy: badge.top + badge.height / 2 - y };
+  });
+/** La pastille est au coin du disque, à l'échelle du disque (1,15 pendant le geste). */
+const atCorner = (m) => m !== null && Math.abs(m.dx - CORNER.x * (m.w / 52)) <= 1 && Math.abs(m.dy - CORNER.y * (m.w / 52)) <= 1;
 const countText = (page) => page.$eval('[data-unread-count]', (el) => el.textContent?.trim() ?? '').catch(() => null);
 const capture = async (page, name) => {
   if (CAPTURE_DIR !== null) await page.screenshot({ path: join(CAPTURE_DIR, `${name}.png`) });
@@ -161,9 +214,71 @@ try {
       );
       await capture(page, `liste-pastille-${scheme}-${width}x${height}`);
 
+      // ------------------------------------------------ 1b. menu ouvert, le compte change de porteur
+      const opened = await rungState(page);
+      await capture(page, `echelle-pastille-${scheme}-${width}x${height}`);
+      check(!opened.discBadge, `${label} : menu ouvert, la pastille QUITTE le disque (RootView.swift:1666)`);
+      check(
+        opened.count === '3' && opened.text === '3' && opened.badges === 1,
+        `${label} : le barreau « Notifications » porte « 3 », et lui seul (${JSON.stringify({ count: opened.count, badges: opened.badges })})`,
+      );
+      check(opened.label === 'Notifications, 3 non lues', `${label} : le barreau annonce son compte (« ${opened.label} »)`);
+      check(
+        opened.dx !== null && Math.abs(opened.dx - RUNG_CORNER) <= 1 && Math.abs(opened.dy + RUNG_CORNER) <= 1 && opened.h === 16,
+        `${label} : la pastille du barreau est au coin d'iOS (±15,18), 16 de haut (${JSON.stringify({ dx: opened.dx, dy: opened.dy, h: opened.h })})`,
+      );
+      check(opened.reachable, `${label} : la pastille ne vole pas le centre du barreau`);
+      check(opened.ink !== null && opened.ink >= WCAG_AA, `${label} : le chiffre du barreau tient AA (${opened.ink})`);
+      await closeLadder(page);
+      check((await badgeOf(page)) === '3', `${label} : refermée, la pastille revient sur le disque`);
+
+      // ------------------------------------------------ 1c. la pastille suit le disque : glisser, accrocher, recharger
+      const start = await discAndBadge(page);
+      const target = { x: width * 0.3, y: height * 0.5 };
+      await page.mouse.move(start.x, start.y);
+      await page.mouse.down();
+      const course = [];
+      for (let step = 1; step <= 12; step += 1) {
+        const pointer = { x: start.x + ((target.x - start.x) * step) / 12, y: start.y + ((target.y - start.y) * step) / 12 };
+        await page.mouse.move(pointer.x, pointer.y);
+        course.push({ pointer, m: await discAndBadge(page) });
+      }
+      const dragged = course.filter(({ m }) => m !== null && m.w > 53);
+      check(dragged.length >= 10, `${label} : le disque est tenu pendant la course (${dragged.length} images à l'échelle 1,15)`);
+      const lagging = dragged.filter(({ pointer, m }) => Math.abs(m.x - pointer.x) > 1 || Math.abs(m.y - pointer.y) > 1);
+      check(lagging.length === 0, `${label} : le disque suit le pointeur sans retard — ${JSON.stringify(lagging.slice(0, 2))}`);
+      const astray = course.filter(({ m }) => !atCorner(m));
+      check(astray.length === 0, `${label} : à chaque image de la course, la pastille reste au coin du disque — ${JSON.stringify(astray.slice(0, 2))}`);
+      await page.mouse.up();
+      const released = await discAndBadge(page);
+      await page.waitForTimeout(300);
+      const settled = await discAndBadge(page);
+      check((await page.getAttribute('[data-floating-menu]', 'data-floating-menu')) === 'closed', `${label} : un déplacement n'ouvre pas l'échelle`);
+      check(
+        released !== null && Math.abs(released.w - 52) <= 0.5 && atCorner(released) && released.x < width / 2 && Math.abs(released.y - target.y) <= 1,
+        `${label} : relâché, le disque s'accroche au bord gauche à la hauteur du doigt, pastille au coin (${JSON.stringify(released)})`,
+      );
+      check(
+        settled !== null && Math.abs(settled.x - released.x) <= 0.5 && Math.abs(settled.y - released.y) <= 0.5 && atCorner(settled),
+        `${label} : rien ne bouge plus après l'accroche — ni le disque ni sa pastille (${JSON.stringify(settled)})`,
+      );
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForSelector('[data-badge-pose="corner"]').catch(() => null);
+      const reloaded = await discAndBadge(page);
+      check(
+        reloaded !== null && Math.abs(reloaded.x - settled.x) <= 1 && Math.abs(reloaded.y - settled.y) <= 1 && atCorner(reloaded) && (await badgeOf(page)) === '3',
+        `${label} : rechargé, le disque revient à sa place et la pastille « 3 » à son coin (${JSON.stringify(reloaded)})`,
+      );
+      await capture(page, `deplacement-pastille-${scheme}-${width}x${height}`);
+      /* La suite mesure l'atteignabilité AU REPOS : le disque retrouve sa pose par défaut. */
+      await page.evaluate(() => localStorage.removeItem('menuButtonPosition'));
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForSelector('[data-badge-pose="corner"]');
+
       // ------------------------------------------------ 2. le barreau ouvre la cloche
       await page.click('[data-floating-menu]');
-      await page.click('[role="menuitem"][aria-label="Notifications"]');
+      /* Par son ADRESSE, jamais par son nom : le nom du barreau porte le compte (#6219). */
+      await page.click('[role="menuitem"][href="/notifications"]');
       /* Une navigation d'application (`pushState`) ne déclenche aucun `load` :
          c'est l'adresse elle-même qu'on attend, jamais un chargement. */
       await page.waitForFunction(() => location.pathname === '/notifications');
@@ -263,6 +378,13 @@ try {
         (await page.getAttribute('[data-notification="fx-notif-reaction"]', 'data-read')) === 'true' && (await countText(page)) === '1 non lue',
         `${label} : « Marquer comme lue » a un effet (« ${await countText(page)} »)`,
       );
+      const afterRead = await rungState(page);
+      check(
+        afterRead.count === '1' && afterRead.label === 'Notifications, 1 non lue',
+        `${label} : le barreau a baissé avec la ligne lue (${JSON.stringify({ count: afterRead.count, label: afterRead.label })})`,
+      );
+      await closeLadder(page);
+      check(new URL(page.url()).pathname === '/notifications', `${label} : refermer l'échelle ne défait pas la navigation (${page.url()})`);
 
       await page.hover('[data-notification="fx-notif-login"]');
       await page.click('[data-notification="fx-notif-login"] button[aria-label="Actions de la notification"]');
@@ -278,6 +400,12 @@ try {
       check((await page.$('[data-mark-all-read]')) === null, `${label} : « Tout lire » s'efface avec ce qu'il avait à lire`);
       check((await rowsOf(page)).every((r) => r.read === 'true'), `${label} : toutes les rangées sont lues`);
       check((await page.getAttribute('[data-floating-menu]', 'aria-label')) === 'Menu', `${label} : le bouton redevient « Menu »`);
+      const allRead = await rungState(page);
+      check(
+        allRead.badges === 0 && allRead.label === 'Notifications',
+        `${label} : à zéro, aucun barreau ne porte de pastille et « Notifications » ne dit plus de compte (${JSON.stringify({ badges: allRead.badges, label: allRead.label })})`,
+      );
+      await closeLadder(page);
 
       // ------------------------------------------------ 9. aucune erreur
       check(errors.length === 0, `${label} : aucune erreur de page — ${JSON.stringify(errors)}`);

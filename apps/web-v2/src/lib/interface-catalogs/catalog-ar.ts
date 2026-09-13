@@ -28,6 +28,8 @@ const ar = {
   'a11y.floating.menu.ladder': 'التنقل في Meeshy',
   'a11y.floating.menu.unread.one': 'القائمة، {count} إشعار غير مقروء',
   'a11y.floating.menu.unread.other': 'القائمة، {count} إشعارات غير مقروءة',
+  'a11y.floating.rung.notifications.unread.one': 'الإشعارات، {count} غير مقروء',
+  'a11y.floating.rung.notifications.unread.other': 'الإشعارات، {count} غير مقروءة',
 
   'notifications.category.all': 'الكل',
   'notifications.category.unread': 'غير المقروءة',

@@ -53,6 +53,14 @@ export type FloatingDestination = {
   /** La teinte du barreau, reprise d'iOS à l'hexadécimal près. */
   readonly tint: string;
   readonly glyph: MenuGlyph;
+  /**
+   * Le compteur VIVANT que le barreau porte en pastille — miroir de
+   * `RootMenuLadderEntry.badge`. La table reste pure : c'est l'échelle qui
+   * résout la valeur au rendu. iOS en déclare un second (`pendingFriendRequests`,
+   * sur « Découvrir ») ; il n'est pas écrit ici tant que le web n'a aucune
+   * source de demandes d'amitié — un nombre sans source serait inventé.
+   */
+  readonly badge?: 'unreadNotifications';
 };
 
 /**
@@ -80,6 +88,7 @@ export const NOTIFICATIONS_DESTINATION: FloatingDestination = {
   promiseKey: 'pending.notifications.promise',
   tint: '#FF6B6B',
   glyph: { set: 'socle', name: 'bell' },
+  badge: 'unreadNotifications',
 };
 
 export const CALLS_DESTINATION: FloatingDestination = {

@@ -37,6 +37,8 @@ const fr = {
   'a11y.floating.menu.ladder': 'Navigation Meeshy',
   'a11y.floating.menu.unread.one': 'Menu, {count} notification non lue',
   'a11y.floating.menu.unread.other': 'Menu, {count} notifications non lues',
+  'a11y.floating.rung.notifications.unread.one': 'Notifications, {count} non lue',
+  'a11y.floating.rung.notifications.unread.other': 'Notifications, {count} non lues',
 
   'notifications.category.all': 'Toutes',
   'notifications.category.unread': 'Non lues',

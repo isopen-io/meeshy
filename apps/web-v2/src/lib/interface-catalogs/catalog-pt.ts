@@ -32,6 +32,8 @@ const pt = {
   'a11y.floating.menu.ladder': 'Navegação do Meeshy',
   'a11y.floating.menu.unread.one': 'Menu, {count} notificação não lida',
   'a11y.floating.menu.unread.other': 'Menu, {count} notificações não lidas',
+  'a11y.floating.rung.notifications.unread.one': 'Notificações, {count} não lida',
+  'a11y.floating.rung.notifications.unread.other': 'Notificações, {count} não lidas',
 
   'notifications.category.all': 'Todas',
   'notifications.category.unread': 'Não lidas',

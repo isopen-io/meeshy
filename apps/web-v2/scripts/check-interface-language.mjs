@@ -81,7 +81,7 @@ const GERMAN = {
      trois non lues, et son nom le porte dans la langue d'interface. */
   menu: 'Menü, 3 ungelesene Mitteilungen',
   ladder: 'Meeshy-Navigation',
-  rungs: ['Meine Links', 'Mitteilungen', 'Anrufe', 'Entdecken', 'Communitys', 'Einstellungen'],
+  rungs: ['Meine Links', 'Mitteilungen, 3 ungelesen', 'Anrufe', 'Entdecken', 'Communitys', 'Einstellungen'],
 };
 
 const ARABIC = {
@@ -92,7 +92,7 @@ const ARABIC = {
   back: 'العودة إلى المحادثات',
   menu: 'القائمة، 3 إشعارات غير مقروءة',
   ladder: 'التنقل في Meeshy',
-  rungs: ['روابطي', 'الإشعارات', 'المكالمات', 'اكتشاف', 'المجتمعات', 'الإعدادات'],
+  rungs: ['روابطي', 'الإشعارات، 3 غير مقروءة', 'المكالمات', 'اكتشاف', 'المجتمعات', 'الإعدادات'],
 };
 
 const FRENCH = {
@@ -103,7 +103,7 @@ const FRENCH = {
   back: 'Revenir aux conversations',
   menu: 'Menu, 3 notifications non lues',
   ladder: 'Navigation Meeshy',
-  rungs: ['Mes liens', 'Notifications', 'Appels', 'Découvrir', 'Communautés', 'Réglages'],
+  rungs: ['Mes liens', 'Notifications, 3 non lues', 'Appels', 'Découvrir', 'Communautés', 'Réglages'],
 };
 
 const CASES = [

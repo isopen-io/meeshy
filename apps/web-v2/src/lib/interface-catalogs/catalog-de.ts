@@ -28,6 +28,8 @@ const de = {
   'a11y.floating.menu.ladder': 'Meeshy-Navigation',
   'a11y.floating.menu.unread.one': 'Menü, {count} ungelesene Mitteilung',
   'a11y.floating.menu.unread.other': 'Menü, {count} ungelesene Mitteilungen',
+  'a11y.floating.rung.notifications.unread.one': 'Mitteilungen, {count} ungelesen',
+  'a11y.floating.rung.notifications.unread.other': 'Mitteilungen, {count} ungelesen',
 
   'notifications.category.all': 'Alle',
   'notifications.category.unread': 'Ungelesen',
