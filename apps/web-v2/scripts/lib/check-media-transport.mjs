@@ -1,0 +1,118 @@
+/**
+ * T1-T5 — LA BARRE DE LECTURE DE LA VISIONNEUSE (#6359), AU NAVIGATEUR. Les
+ * témoins unitaires (`media-transport.test.tsx`, `media-viewer.test.tsx`)
+ * posent la durée et la position à la main ; ici, c'est Chromium qui décode
+ * la vraie vidéo de `media-12` (WebM 7 s, `fixtures-media-grid.ts`) et qui dit
+ * où en est la lecture.
+ *
+ * Fichier À PART de `check-media-grid.mjs` : la grille et la barre sont deux
+ * lots, et deux sessions y écrivent (#6303 porte la colonne d'actions de la
+ * même visionneuse). `expect` et `setScheme` sont REMIS par l'hôte, jamais
+ * redéfinis. `waitForRowSettled` vient de `check-media.mjs`.
+ */
+import { waitForRowSettled } from './check-media.mjs';
+
+const TRIPLE_VIDEO_ID = 'media-12';
+
+async function scrollUntilMounted(page, scroller, id) {
+  for (let attempt = 1; attempt <= 40; attempt += 1) {
+    const mounted = await page.evaluate((mid) => document.querySelector(`[data-message="${mid}"]`) !== null, id);
+    if (mounted) return;
+    await scroller.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    await page.waitForTimeout(150);
+  }
+}
+
+const viewerVideoState = (page) =>
+  page.evaluate(() => {
+    const video = document.querySelector('[data-media-viewer] [data-viewer-page] video');
+    if (video === null) return null;
+    return { currentTime: video.currentTime, duration: video.duration, muted: video.muted, playbackRate: video.playbackRate };
+  });
+
+const topCorridorOpacity = (page) =>
+  page.evaluate(() => getComputedStyle(document.querySelector('[data-media-viewer] > div')).opacity);
+
+export async function checkViewerVideoTransport({ browser, BASE, expect, setScheme, scheme }) {
+  const label = `[transport/${scheme}]`;
+  // La barre parle la LANGUE D'INTERFACE (catalogue `media.video.*`), résolue
+  // depuis la langue du navigateur : sans locale posée, Chromium dit `en-US`
+  // et ses libellés seraient anglais. Les témoins ci-dessous visent le
+  // français, donc la locale est FIXÉE, jamais laissée à la machine.
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR' });
+  await setScheme(context, scheme);
+  const page = await context.newPage();
+  await page.goto(`${BASE}/c/c-medias`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-message]');
+
+  const scroller = page.locator('main#contenu');
+  await scrollUntilMounted(page, scroller, TRIPLE_VIDEO_ID);
+  await waitForRowSettled(page, TRIPLE_VIDEO_ID);
+  const row = page.locator(`[data-message="${TRIPLE_VIDEO_ID}"]`);
+  await row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await waitForRowSettled(page, TRIPLE_VIDEO_ID);
+
+  // La tuile vidéo ouvre la visionneuse sur un tap HORS de son bouton central
+  // (`VideoTile.onExpand`) ; le centre, lui, lit la vidéo sur place. Playwright
+  // clique au CENTRE d'un élément par défaut : on vise donc un coin.
+  await row.locator('[data-media-tile]').filter({ has: page.locator('video') }).first().click({ position: { x: 10, y: 10 } });
+  await page.waitForSelector('[data-media-viewer]');
+
+  // ===== T1 — une fois la vidéo décodée, la piste vit dans le couloir bas, jamais sur le média =====
+  const slider = page.locator('[data-viewer-transport-slot] [role="slider"]');
+  await slider.waitFor({ state: 'visible', timeout: 8000 });
+  expect(
+    (await page.locator('[data-media-viewer] [data-viewer-page] [role="slider"]').count()) === 0,
+    `${label} la piste n'est jamais posée sur le média`,
+  );
+  const initial = await viewerVideoState(page);
+  expect(
+    initial !== null && Number.isFinite(initial.duration) && initial.duration > 6,
+    `${label} la vidéo de media-12 a décodé sa durée (${JSON.stringify(initial)})`,
+  );
+
+  // ===== T2 — la vidéo avance PENDANT le glissement, pas au relâcher =====
+  const box = await slider.boundingBox();
+  const middleY = box.y + box.height / 2;
+  await page.mouse.move(box.x + box.width * 0.2, middleY);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.8, middleY, { steps: 6 });
+  const duringDrag = await viewerVideoState(page);
+  const expectedDuring = initial.duration * 0.8;
+  expect(
+    duringDrag !== null && Math.abs(duringDrag.currentTime - expectedDuring) < 0.8,
+    `${label} doigt encore posé à 80 % : la lecture y est déjà (${duringDrag?.currentTime} s, attendu ≈ ${expectedDuring.toFixed(2)} s)`,
+  );
+  await page.mouse.up();
+  expect((await topCorridorOpacity(page)) === '1', `${label} parcourir la piste ne bascule pas le plateau en plein cadre`);
+
+  // ===== T3 — le muet agit sur la vidéo sans cacher le chrome =====
+  const barLabels = await page.evaluate(() => ({
+    lang: document.documentElement.lang,
+    buttons: Array.from(document.querySelectorAll('[data-viewer-transport-slot] button')).map((b) => b.getAttribute('aria-label')),
+  }));
+  expect(
+    barLabels.buttons.includes('Couper le son') && barLabels.buttons.includes("Plus d'options"),
+    `${label} la barre porte « Couper le son » et « Plus d'options » en français (${JSON.stringify(barLabels)})`,
+  );
+  await page.locator('[data-viewer-transport-slot]').getByRole('button', { name: 'Couper le son' }).click();
+  expect((await viewerVideoState(page))?.muted === true, `${label} « Couper le son » coupe réellement la vidéo`);
+  expect((await topCorridorOpacity(page)) === '1', `${label} toucher le muet laisse le chrome visible`);
+
+  // ===== T4 — la vitesse se choisit dans le menu « ⋯ » =====
+  await page.locator('[data-viewer-transport-slot]').getByRole('button', { name: "Plus d'options" }).click();
+  await page.getByRole('menuitemradio', { name: '1,5×' }).click();
+  expect((await viewerVideoState(page))?.playbackRate === 1.5, `${label} choisir 1,5× règle la vitesse de la vidéo`);
+  expect((await page.locator('[data-viewer-transport-slot] [role="menu"]').count()) === 0, `${label} le menu se referme après le choix`);
+
+  // ===== T5 — Échap dans le menu referme le menu, jamais la visionneuse =====
+  await page.locator('[data-viewer-transport-slot]').getByRole('button', { name: "Plus d'options" }).click();
+  await page.getByRole('menuitemradio', { name: '1×' }).focus();
+  await page.keyboard.press('Escape');
+  expect((await page.locator('[data-viewer-transport-slot] [role="menu"]').count()) === 0, `${label} Échap referme le menu`);
+  expect((await page.locator('[data-media-viewer]').count()) === 1, `${label} Échap dans le menu laisse la visionneuse ouverte`);
+
+  await context.close();
+}

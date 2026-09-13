@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { launchChromium } from './lib/browser.mjs';
 import { checkThreadMedia } from './lib/check-media.mjs';
 import { checkThreadMediaGrid } from './lib/check-media-grid.mjs';
+import { checkViewerVideoTransport } from './lib/check-media-transport.mjs';
 import { checkMessageStates } from './lib/check-message-states.mjs';
 import { checkRealtimeEvents } from './lib/check-realtime-events.mjs';
 import { checkTypingVisibility } from './lib/check-typing-visibility.mjs';
@@ -1046,6 +1047,15 @@ await checkThreadMedia({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: '
  */
 await checkThreadMediaGrid({ browser, BASE, expect, setScheme, skin: 'focal', scheme: 'light' });
 await checkThreadMediaGrid({ browser, BASE, expect, setScheme, skin: 'bulles', scheme: 'dark' });
+
+/**
+ * 8ter — LA BARRE DE LECTURE DE LA VISIONNEUSE (#6359) — `lib/check-media-
+ * transport.mjs` : la vraie vidéo de media-12 décodée par Chromium, la piste
+ * au couloir bas, la lecture qui suit la souris PENDANT le glissement, le muet
+ * et la vitesse qui agissent sans cacher le chrome, Échap qui ferme le menu et
+ * jamais la visionneuse. Un seul schéma : la barre n'a pas de variante claire.
+ */
+await checkViewerVideoTransport({ browser, BASE, expect, setScheme, scheme: 'dark' });
 
 /**
  * 9 — LES ÉTATS DU MESSAGE (#5936) — `lib/check-message-states.mjs`, QUATRE
