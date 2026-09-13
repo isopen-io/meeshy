@@ -10,6 +10,8 @@ import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import { apiDeps } from './deps';
 import { feedQuery, refreshFeed } from './feed';
+import { performPostGesture, type PostGestureResult } from './feed-gestures';
+import type { PostToggleKind } from '@/lib/feed/interactions';
 import type { Conversation, Participant } from './types';
 import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
@@ -163,6 +165,16 @@ export function useFeed() {
  */
 export function refreshFeedAction(): Promise<void> {
   return refreshFeed(appQueryClient, apiDeps);
+}
+
+/**
+ * `postGestureAction` (#6278) — RÉFÉRENCE DE MODULE STABLE, motif
+ * `reactAction` : aimer et enregistrer une publication du fil, liés à
+ * l'instance PARTAGÉE `appQueryClient` — le cache que `useFeed` observe est
+ * celui que le geste bascule.
+ */
+export function postGestureAction(postId: string, kind: PostToggleKind): Promise<PostGestureResult> {
+  return performPostGesture({ postId, kind, deps: { ...apiDeps, queryClient: appQueryClient } });
 }
 
 export function useConversation(id: string) {
