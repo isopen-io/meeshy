@@ -39,13 +39,62 @@ extension ConversationMediaGalleryView {
     ///   l'arbre, pager compris.
     func onEnterStage(_ door: StageEntry) {
         let next = stagePresentation.after(door)
-        guard next != stagePresentation else { return }
+
+        /*
+         **LE TRANSPORT S'APPLIQUE AVANT LE COURT-CIRCUIT DE CADRAGE.**
+
+         `guard next != stagePresentation` protège l'ANIMATION : rejouer une
+         transition vers l'état courant ferait clignoter le plateau pour rien.
+         Mais il avalait aussi la commande de LECTURE, et c'est ce qui rendait
+         l'appui long muet une fois en plein cadre : `after(.longPress)` y rend
+         `.full(pausedOnEntry: true)`, c'est-à-dire l'état courant — donc retour
+         immédiat, sans avoir rien pausé ni repris. Le lecteur ne pouvait
+         reprendre que par le bouton central (retour porteur 2026-09-13 :
+         « appui long permet de faire pause et D'ENLEVER LA PAUSE sans quitter
+         le plein écran »).
+
+         > Un court-circuit posé pour une raison en sert souvent une seconde à
+         > son insu. Ici, « ne pas rejouer l'animation » avait fini par vouloir
+         > dire « ne rien faire du tout ».
+
+         La commande de lecture est donc lue et appliquée d'abord ; le retour
+         anticipé ne gouverne plus que le cadrage. Le retour haptique suit le
+         GESTE, pas la transition : un appui long qui bascule la lecture sans
+         changer de cadre doit se sentir.
+        */
+        applyTransport(StagePresentation.transportIntent(for: door, from: stagePresentation))
+
+        guard next != stagePresentation else {
+            if door == .longPress { HapticFeedback.light() }
+            return
+        }
 
         if next.isFull, reactionBarOpen { reactionBarOpen = false }
-        if next.pausedOnEntry { pauseActiveVideo() }
         HapticFeedback.light()
 
         withAnimation(.easeInOut(duration: 0.25)) { stagePresentation = next }
+    }
+
+    /// Applique au player partagé ce que la porte commande — et rien d'autre.
+    ///
+    /// `pauseActiveVideo()` porte déjà la garde qui compte : ne toucher au
+    /// player que si la piste active est bien celle de cette page. La bascule
+    /// la reprend telle quelle, sans quoi reprendre depuis la galerie
+    /// relancerait la lecture d'une AUTRE surface (le feed, une bulle, une
+    /// image-dans-l'image).
+    func applyTransport(_ intent: StageTransportIntent) {
+        switch intent {
+        case .none:
+            return
+        case .pause:
+            pauseActiveVideo()
+        case .togglePlayback:
+            guard currentIndex < allAttachments.count else { return }
+            let attachment = allAttachments[currentIndex]
+            guard attachment.type == .video,
+                  videoManager.activeURL == attachment.fileUrl else { return }
+            videoManager.togglePlayPause()
+        }
     }
 
     /// **L'appui long met en pause ce qui JOUE, jamais ce qui est à l'écran.**

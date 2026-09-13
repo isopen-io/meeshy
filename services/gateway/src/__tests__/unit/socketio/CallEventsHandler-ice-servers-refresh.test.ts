@@ -27,6 +27,7 @@ const mockGetIceServerTtl = jest.fn<any>().mockReturnValue(480);
 const mockGetCallSession = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     generateIceServers: mockGenerateIceServers,
     getIceServerTtl: mockGetIceServerTtl,

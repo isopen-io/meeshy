@@ -18,10 +18,11 @@
 
 export const INTERFACE_LANGUAGE_KEY = 'meeshy.interface-language';
 
-/** Sept langues visées (CLAUDE.md racine, dimension 9) ; `fr` et `en` seules
- * cataloguées aujourd'hui (#6206) — une langue non catalguée résout vers
- * `DEFAULT_INTERFACE_LANGUAGE` plutôt que d'afficher une clé nue. */
-export const SUPPORTED_INTERFACE_LANGUAGES = /** @type {const} */ (['fr', 'en']);
+/** Les sept langues du produit (CLAUDE.md racine, dimension 9), celles du
+ * catalogue iOS — toutes cataloguées (`src/lib/interface-catalogs/`, #6206).
+ * Une langue hors de cette liste résout vers `DEFAULT_INTERFACE_LANGUAGE`. Le
+ * code est la LANGUE, jamais la région : `pt-BR` se sert en `pt`. */
+export const SUPPORTED_INTERFACE_LANGUAGES = /** @type {const} */ (['fr', 'en', 'es', 'pt', 'de', 'it', 'ar']);
 
 export const DEFAULT_INTERFACE_LANGUAGE = /** @type {const} */ ('fr');
 
@@ -49,3 +50,23 @@ export const INLINE_INTERFACE_LANGUAGE_BOOTSTRAP =
   `}` +
   `document.documentElement.lang=r||'${DEFAULT_INTERFACE_LANGUAGE}';` +
   `}catch(e){}})();`;
+
+/**
+ * LA MÊME RÈGLE, EN FONCTION (#5563) — ce que « Automatique » résout quand les
+ * réglages retirent un choix explicite, sans recharger la page. Elle vit ICI,
+ * à côté du script, et `interface-language-choice.test.ts` exécute les deux sur
+ * les mêmes cas : le premier écart entre la chaîne et la fonction rougit.
+ *
+ * @param {string | null} stored le choix stocké, ou `null`
+ * @param {readonly string[]} languages `navigator.languages`, dans son ordre
+ * @returns {string} une langue de `SUPPORTED_INTERFACE_LANGUAGES`
+ */
+export function resolveInterfaceLanguageCode(stored, languages) {
+  /** @type {readonly string[]} */
+  const supported = SUPPORTED_INTERFACE_LANGUAGES;
+  if (stored && supported.includes(stored)) return stored;
+  const found = languages
+    .map((language) => (language || '').slice(0, 2).toLowerCase())
+    .find((code) => supported.includes(code));
+  return found ?? DEFAULT_INTERFACE_LANGUAGE;
+}

@@ -18,7 +18,7 @@
     },
     "apps/web": {
       "name": "@meeshy/web",
-      "version": "1.45.0",
+      "version": "1.47.0",
       "dependencies": {
         "@ffmpeg/ffmpeg": "^0.12.15",
         "@ffmpeg/util": "^0.12.2",
@@ -128,13 +128,14 @@
     },
     "apps/web-v2": {
       "name": "@meeshy/web-v2",
-      "version": "2.0.0",
+      "version": "2.0.2",
       "dependencies": {
         "@meeshy/shared": "workspace:*",
         "@tanstack/react-query": "5.102.8",
         "@tanstack/react-virtual": "3.14.10",
         "preact": "10.29.8",
         "socket.io-client": "4.8.3",
+        "zod": "4.4.3",
         "zustand": "5.0.15",
       },
       "devDependencies": {
@@ -164,7 +165,7 @@
     },
     "packages/shared": {
       "name": "@meeshy/shared",
-      "version": "1.19.1",
+      "version": "1.19.3",
       "dependencies": {
         "@prisma/client": "^6.15.0",
         "zod": "^4.4.3",
@@ -182,7 +183,7 @@
     },
     "services/agent": {
       "name": "@meeshy/agent",
-      "version": "1.0.39",
+      "version": "1.0.41",
       "dependencies": {
         "@langchain/core": "^1.2.9",
         "@langchain/langgraph": "^1.4.12",
@@ -213,7 +214,7 @@
     },
     "services/gateway": {
       "name": "@meeshy/gateway",
-      "version": "1.45.0",
+      "version": "1.47.0",
       "dependencies": {
         "@fastify/cors": "^11.3.0",
         "@fastify/helmet": "^13.0.2",
@@ -296,7 +297,7 @@
     },
     "services/translator": {
       "name": "@meeshy/translator",
-      "version": "1.44.0",
+      "version": "1.46.0",
     },
   },
   "overrides": {

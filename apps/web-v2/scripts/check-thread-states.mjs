@@ -30,6 +30,7 @@ import { fileURLToPath } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
 import { checkThreadMedia } from './lib/check-media.mjs';
+import { checkThreadMediaGrid } from './lib/check-media-grid.mjs';
 import { checkMessageStates } from './lib/check-message-states.mjs';
 import { checkRealtimeEvents } from './lib/check-realtime-events.mjs';
 import { checkTypingVisibility } from './lib/check-typing-visibility.mjs';
@@ -1036,6 +1037,15 @@ await runProtectionSuite('bulles');
  */
 await checkThreadMedia({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'focal', scheme: 'light' });
 await checkThreadMedia({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'bulles', scheme: 'dark' });
+
+/**
+ * 8bis — LA GRILLE DE MÉDIAS ET SA VISIONNEUSE (#6169) — `lib/check-media-
+ * grid.mjs` : tuiles comptées, badge `+N`, décodage sans saut de mise en
+ * page, tap ⇒ visionneuse au bon index avec focus piégé et retour matériel
+ * qui ferme la couche sans quitter le fil.
+ */
+await checkThreadMediaGrid({ browser, BASE, expect, setScheme, skin: 'focal', scheme: 'light' });
+await checkThreadMediaGrid({ browser, BASE, expect, setScheme, skin: 'bulles', scheme: 'dark' });
 
 /**
  * 9 — LES ÉTATS DU MESSAGE (#5936) — `lib/check-message-states.mjs`, QUATRE

@@ -29,6 +29,14 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
         try strippedSource("Meeshy/Features/Main/Views/ConversationView.swift")
     }
 
+    /// Le type nominal qui ORDONNE réellement la grappe, extrait le 2026-09-13
+    /// dans `ConversationExpandedHeaderBand.swift` — la grappe pesait sur la
+    /// LARGEUR de la valeur `ConversationView` (débordement de pile à
+    /// l'ouverture, #6213 bis).
+    private func headerActionsClusterSource() throws -> String {
+        try strippedSource("Meeshy/Features/Main/Views/ConversationExpandedHeaderBand.swift")
+    }
+
     // MARK: - Insertion APRÈS expandedHeaderSearchButton, JAMAIS avant headerCallButtons
 
     func test_readingModeAffordanceCluster_isInsertedInsideTheHStack_afterTheSearchButton() throws {
@@ -42,20 +50,49 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
         }
         let end = code.index(range.lowerBound, offsetBy: 300, limitedBy: code.endIndex) ?? code.endIndex
         let body = code[range.lowerBound..<end]
-        guard let callRange = body.range(of: "headerCallButtons.layoutPriority(1)"),
-              let searchRange = body.range(of: "expandedHeaderSearchButton"),
-              let affordanceRange = body.range(of: "readingModeAffordanceCluster")
+        // L'HÔTE remet les trois fentes ; il ne les ORDONNE plus lui-même.
+        guard body.range(of: "headerCallButtons") != nil,
+              body.range(of: "expandedHeaderSearchButton") != nil,
+              body.range(of: "readingModeAffordanceCluster") != nil
         else {
             XCTFail("Un des trois éléments de la grappe (appel, recherche, mode) est introuvable dans les 300 premiers caractères de headerButtonsCluster.")
             return
         }
+
+        /*
+         L'ORDRE SE MESURE LÀ OÙ IL SE JOUE — dans le `HStack` du type nominal,
+         jamais dans la liste d'arguments de l'hôte.
+
+         Depuis le 2026-09-13, `headerButtonsCluster` remet trois fermetures à
+         `ConversationHeaderActionsCluster` ; **l'ordre des ARGUMENTS d'un
+         initialiseur ne détermine aucun ordre de rendu.** Une garde qui
+         resterait sur l'hôte passerait au vert en lisant une liste nommée dont
+         l'ordre est décoratif : elle mesurerait une convention d'écriture au
+         lieu du contrat §WS-7. C'est le sens inverse du piège habituel — non
+         plus un rouge sur du code juste, mais un VERT sur ce qui aurait cessé
+         d'être vérifié.
+        */
+        let cluster = try headerActionsClusterSource()
+        guard let clusterRange = cluster.range(of: "struct ConversationHeaderActionsCluster: View {") else {
+            XCTFail("ConversationHeaderActionsCluster introuvable — c'est lui qui ordonne la grappe.")
+            return
+        }
+        let clusterEnd = cluster.index(clusterRange.lowerBound, offsetBy: 500, limitedBy: cluster.endIndex) ?? cluster.endIndex
+        let clusterBody = cluster[clusterRange.lowerBound..<clusterEnd]
+        guard let callRange = clusterBody.range(of: "callButtons().layoutPriority(1)"),
+              let searchRange = clusterBody.range(of: "searchButton()"),
+              let affordanceRange = clusterBody.range(of: "readingModeCluster()")
+        else {
+            XCTFail("Le HStack du type nominal ne contient pas les trois fentes dans leur forme attendue.")
+            return
+        }
         XCTAssertTrue(
             callRange.upperBound < searchRange.lowerBound,
-            "`headerCallButtons.layoutPriority(1)` doit rester le PREMIER élément — interdiction absolue de l'arbitrage de faire passer quoi que ce soit avant lui."
+            "`callButtons().layoutPriority(1)` doit rester le PREMIER élément — interdiction absolue de l'arbitrage de faire passer quoi que ce soit avant lui."
         )
         XCTAssertTrue(
             searchRange.upperBound < affordanceRange.lowerBound,
-            "`readingModeAffordanceCluster` doit être inséré APRÈS `expandedHeaderSearchButton` (contrat §WS-7 travail 3, arbitrage F-086bis)."
+            "`readingModeCluster()` doit être rendu APRÈS `searchButton()` (contrat §WS-7 travail 3, arbitrage F-086bis)."
         )
     }
 

@@ -3,7 +3,15 @@ import { forwardRef } from 'react';
 import { Avatar } from '@/components/avatar';
 import { ChromeActionDisc, CHROME_ACTION_HIT, CHROME_ACTION_HIT_CLASS } from '@/components/chrome-action';
 import { Glyph } from '@/components/glyph';
-import { RAIL_TILE_COMPACT, RAIL_TILE_GRANDE, railCellWidth, railRingWidth } from '@/components/rail-tile';
+import {
+  MIN_TOUCH_TARGET,
+  RAIL_TILE_COMPACT,
+  RAIL_TILE_GRANDE,
+  railCellWidth,
+  railHitPad,
+  railRingBox,
+  railStroke,
+} from '@/components/rail-tile';
 import { initialsOf } from '@/lib/view/conversation';
 import { storyAuthorLabel, type StoryTrayGroup } from '@/lib/view/story-tray';
 import { Link } from '@/routes/route-table';
@@ -75,12 +83,12 @@ import { Link } from '@/routes/route-table';
  * même question — l'une par la cote, l'autre par la géographie — et c'est la
  * géographie qui gagne, parce que c'est celle de la cible.
  *
- * Les cotes servies ici sont donc celles de `rail-tile.tsx` (`RAIL_TILE_GRANDE`
- * = 72 → cellule 88, `RAIL_TILE_COMPACT` = 30 → cellule 37), un seul domicile
- * partagé avec la tuile de conversation. **L'écart qui reste** — l'avatar iOS
- * du grand plateau est à 88 quand le web est à 72 — n'est pas tranché par cette
- * fusion : le monter change la cote d'un composant partagé et se mesure à la
- * capture, pas dans une résolution de conflit.
+ * **L'ÉCART EST TRANCHÉ PAR #6133** : la cote iOS gouverne l'AVATAR, jamais la
+ * cellule. `RAIL_TILE_GRANDE` = 88 (anneau 94 posé autour, cellule 96) et
+ * `RAIL_TILE_COMPACT` = 36 (anneau et cellule 42, dans la fente de 44 de
+ * l'en-tête) — la loi et son pourquoi vivent dans `rail-tile.tsx`, les bornes
+ * absolues dans `check-lens.mjs` et `check-floating-clearance.mjs`. Ce rail est
+ * le MÊME composant avec la MÊME cote sur la liste et sur le Flux (#6277).
  *
  * **AUCUN INDICATEUR DE DÉFILEMENT** — `ScrollView(.horizontal, showsIndicators:
  * false)`, la cible iOS à la lettre. Le plateau défile, barre masquée :
@@ -91,6 +99,9 @@ export type StoryRailVariant = 'grande' | 'pinned';
 const RAIL = {
   gap: 8,
   padding: 16,
+  /** L'air au-dessus et au-dessous des anneaux du grand plateau — et le calage
+   * haut de ses deux portes (`RailActions`). */
+  paddingBlock: 8,
   /** `LentilleRailPolicy.visibleEntries` — au-delà, la porte « tout voir ». */
   maxEntries: 6,
 } as const;
@@ -105,9 +116,10 @@ const RAIL = {
 function StoryTile({ group, size, showsLabel }: { readonly group: StoryTrayGroup; readonly size: number; readonly showsLabel: boolean }) {
   const label = storyAuthorLabel(group);
   const combien = group.stories.length;
-  const anneau = railRingWidth(size);
-  const cellule = railCellWidth(size);
-  const avatar = size - anneau * 2;
+  const anneau = railRingBox(size);
+  const cellule = railCellWidth(size, showsLabel);
+  const hitPad = railHitPad(cellule);
+  const trait = railStroke(size, group.hasUnseen);
 
   return (
     /* `data-story-tile` porte la COTE de l'avatar, pour que le gate des stories
@@ -144,20 +156,38 @@ function StoryTile({ group, size, showsLabel }: { readonly group: StoryTrayGroup
            Roy » et « Inès Baraka » se chevauchant en « Camille RoyInès
            Baraka ». iOS contraint le sien à la même cote. */
         className="flex flex-col items-center gap-1 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-        style={{ width: cellule, outlineColor: 'var(--color-ios-brand)' }}
+        /* LA CIBLE TACTILE (charte, dimension 5) — la bande épinglée mesure
+           42 : le lien s'étend à 44 par une marge NÉGATIVE (`railHitPad`),
+           jamais en élargissant la case que les gates mesurent. */
+        style={{
+          width: cellule,
+          minWidth: MIN_TOUCH_TARGET,
+          minHeight: MIN_TOUCH_TARGET,
+          marginLeft: -hitPad,
+          marginRight: -hitPad,
+          marginTop: -hitPad,
+          marginBottom: -hitPad,
+          justifyContent: 'center',
+          outlineColor: 'var(--color-ios-brand)',
+        }}
       >
         <span
           data-anneau
           data-accented={group.hasUnseen ? 'true' : undefined}
-          className="relative grid place-items-center rounded-chip"
+          /* L'ANNEAU SE POSE AUTOUR DE L'AVATAR (`ringSize = size + 6`,
+             `MeeshyAvatar.swift:165`) : un trait de `railStroke` au bord d'une
+             boîte de 6 px plus large, et l'air entre les deux — jamais un
+             disque plein qui mangerait l'avatar. */
+          className="relative grid shrink-0 place-items-center rounded-chip"
           style={{
-            padding: anneau,
-            background: group.hasUnseen
-              ? 'var(--color-ios-brand)'
-              : 'color-mix(in srgb, var(--color-ios-ink-3) 40%, transparent)',
+            width: anneau,
+            height: anneau,
+            boxShadow: `inset 0 0 0 ${trait}px ${
+              group.hasUnseen ? 'var(--color-ios-brand)' : 'color-mix(in srgb, var(--color-ios-ink-3) 40%, transparent)'
+            }`,
           }}
         >
-          <Avatar initials={initialsOf(label)} color={'var(--color-ios-brand)'} size={avatar} />
+          <Avatar initials={initialsOf(label)} color={'var(--color-ios-brand)'} size={size} />
           {/* LE BADGE D'HUMEUR (#5652) — miroir `LentilleRailEntry.moodEmoji`
               (`StoriesVivantsRail.swift`) : une pastille SECONDAIRE posée sur
               l'anneau, jamais un second anneau — l'humeur et la story sont
@@ -208,6 +238,15 @@ function StoryTile({ group, size, showsLabel }: { readonly group: StoryTrayGroup
  * au lieu de la percuter. `pointer-events-none` sur le conteneur et le voile,
  * `auto` sur chaque bouton : le rail reste défilable de bout en bout.
  *
+ * **Elles se calent en HAUT du plateau, jamais en son milieu** (#6133, #6277).
+ * Centrées sur un anneau de 94, elles descendaient à 129 px de l'écran — sous
+ * le disque du menu, dont le couloir commence à 126 (`FLOATING_TOP`,
+ * `lib/view/floating-corridor.ts`) : exactement le défaut que
+ * `FloatingButtonSafeZone` corrige chez iOS (« recouvrait « Créer une story »
+ * sur 60 % de sa surface »). Calées sur l'air du plateau, elles finissent à
+ * 116 sous un en-tête de 64. `check-floating-clearance.mjs` le mesure au
+ * centre de chacune.
+ *
  * Les deux portes sont RÉELLES (`routes/stories.tsx`, `routes/story-compose.tsx`)
  * et la seconde est aussi la sortie du plafond de six entrées.
  */
@@ -215,7 +254,7 @@ export const RAIL_ACTIONS_WIDTH = CHROME_ACTION_HIT * 2;
 
 function RailActions() {
   return (
-    <div className="pointer-events-none absolute inset-y-0 end-0 flex items-center">
+    <div className="pointer-events-none absolute inset-y-0 end-0 flex">
       <span
         aria-hidden="true"
         className="h-full"
@@ -225,8 +264,8 @@ function RailActions() {
         }}
       />
       <span
-        className="flex h-full items-center"
-        style={{ width: RAIL_ACTIONS_WIDTH, backgroundColor: 'var(--color-ios-surface)' }}
+        className="flex h-full items-start"
+        style={{ width: RAIL_ACTIONS_WIDTH, paddingTop: RAIL.paddingBlock, backgroundColor: 'var(--color-ios-surface)' }}
       >
         <Link
           to="storyCompose"
@@ -339,7 +378,7 @@ export const StoryRail = forwardRef<
         ...(grande
           ? {
               paddingInline: RAIL.padding,
-              paddingBlock: 8,
+              paddingBlock: RAIL.paddingBlock,
               paddingInlineEnd: RAIL_ACTIONS_WIDTH + RAIL.padding,
             }
           : {}),
@@ -352,8 +391,8 @@ export const StoryRail = forwardRef<
               aria-hidden="true"
               className="shrink-0 rounded-chip"
               style={{
-                width: railCellWidth(size),
-                height: size,
+                width: railCellWidth(size, grande),
+                height: railRingBox(size),
                 background: 'color-mix(in srgb, var(--color-ios-ink-3) 18%, transparent)',
               }}
             />

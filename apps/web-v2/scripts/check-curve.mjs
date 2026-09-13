@@ -26,6 +26,8 @@
  */
 import { readFileSync } from 'node:fs';
 
+import { mediaGridCurveFailures } from './lib/curve-media-grid.mjs';
+
 const ROOT = new URL('../../..', import.meta.url).pathname;
 const UPSTREAM = `${ROOT}packages/shared/utils/focus-curve.ts`;
 /**
@@ -415,15 +417,16 @@ for (const [swiftName, downstreamName, what] of REVEAL_MAPPINGS) {
  * gardait `RAIL_SIZE_COMPACT` (`components/stories-rail.tsx`, la branche
  * `#5652` de cette fusion) en parité TEXTUELLE stricte avec
  * `AvatarContext.storyTrayCompact` (36 pt, `MeeshyAvatar.swift`). La bande
- * épinglée retenue par la fusion (`components/story-rail.tsx`, doc-comment
- * « LA COTE — DEUX CONSTANTES iOS ») ne reprend PAS cette cote : elle sert la
- * cote COMPACTE de `rail-tile.tsx` (`RAIL_TILE_COMPACT` = 30), partagée avec
- * la tuile de conversation, un choix ASSUMÉ et non tranché par cette fusion
- * (« l'écart qui reste… n'est pas tranché par cette fusion »). Un gate qui
- * exigeait l'égalité stricte avec 36 pt rougirait donc sur un écart QUI EST
- * la décision, pas un défaut — et son fichier source (`stories-rail.tsx`) a
- * disparu avec la branche qu'il gardait. Si la cote 36 doit un jour redevenir
- * la référence, elle se regarde à `rail-tile.tsx`, jamais ici.
+ * épinglée retenue par la fusion servait alors la cote COMPACTE de
+ * `rail-tile.tsx` (30), un écart non tranché — et son fichier source
+ * (`stories-rail.tsx`) a disparu avec la branche qu'il gardait.
+ *
+ * **#6133 A TRANCHÉ : 36 EST REDEVENUE LA RÉFÉRENCE**, et elle se regarde là où
+ * ce commentaire l'annonçait — `rail-tile.tsx` (`RAIL_TILE_COMPACT` = 36,
+ * `RAIL_TILE_GRANDE` = 88, la cote iOS gouvernant l'AVATAR). Sa garde n'est pas
+ * revenue ici en parité TEXTUELLE : elle mesure la cote PEINTE, en bornes
+ * absolues nommées, au navigateur (`check-lens.mjs` § 7,
+ * `check-floating-clearance.mjs`) et dans `rail-tile.test.tsx`.
  */
 
 /**
@@ -792,6 +795,8 @@ for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
   }
 }
 
+failures.push(...mediaGridCurveFailures({ root: ROOT, count }));
+
 if (failures.length > 0) {
   console.error('\n  La loi de la Lentille a DÉRIVÉ de packages/shared/utils/focus-curve.ts :\n');
   for (const e of failures) console.error(`    · ${e}`);
@@ -820,5 +825,7 @@ console.log(
     ` (${MENU_MAPPINGS.length} cotes + le chrome de la liste + les 6/20 emojis du rail).` +
     `\n  Les états du message sont conformes à EmojiDetector.swift/BubbleSticker.swift` +
     ` (3 tailles d'emoji seul + 2 cotes de sticker en bulle).` +
-    `\n  Le seuil du tirer-pour-rafraîchir est conforme à MeeshyRefreshableScroll.swift (1 cote).`,
+    `\n  Le seuil du tirer-pour-rafraîchir est conforme à MeeshyRefreshableScroll.swift (1 cote).` +
+    `\n  La grille de médias du Fil est conforme à FocalAttachmentBlock.swift/BubbleStandardLayout+Media.swift/` +
+    `ConversationMediaFilmstrip.swift/+Geometry.swift/+Pages.swift (21 cotes).`,
 );

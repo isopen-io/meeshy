@@ -7,7 +7,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 
-import { electAudio, electAudioTrack, electDescription, type MediaAttachment } from './media';
+import { electAudio, electAudioTrack, electDescription, mediaCarrierOf, type MediaAttachment } from './media';
 
 const englishVoiceWithFrenchTrack: MediaAttachment = {
   transcription: { type: 'audio', transcribedText: 'Hello team', language: 'en', confidence: 0.9, source: 'whisper' },
@@ -271,5 +271,52 @@ describe('electDescription / servedTranscript — la forme RÉELLE du wire (`typ
       language: 'en',
       translated: false,
     });
+  });
+});
+
+/**
+ * `mediaCarrierOf` (#6169, § 5 étape f) — CE QUE LA VISIONNEUSE REMET AU PIED
+ * (`CarrierFooter`, `media-viewer.tsx`) : l'auteur, la date d'envoi, une
+ * légende DÉJÀ SERVIE par l'hôte (`bubble.tsx`/`focal-row.tsx`, la MÊME
+ * `Served` que le corps du message — jamais une seconde descente, cycle 128).
+ * `mediaCarrierOf` ne RÉSOUT rien : il VOYAGE ce qu'on lui donne.
+ */
+describe('mediaCarrierOf — VOYAGE ce que l’hôte a déjà résolu, ne résout rien (#6169)', () => {
+  test('sender = { displayName } depuis message.sender, sentAt = message.createdAt (ISO)', () => {
+    const createdAt = new Date('2026-09-13T10:13:00.000Z');
+    const carrier = mediaCarrierOf({
+      message: { sender: { displayName: 'Kwame Mensah' }, createdAt },
+      caption: { text: '', language: 'fr', translated: false },
+    });
+    expect(carrier.sender).toEqual({ displayName: 'Kwame Mensah' });
+    expect(carrier.sentAt).toBe('2026-09-13T10:13:00.000Z');
+  });
+
+  test('sender ABSENT (jamais un "?") ⇒ null', () => {
+    const carrier = mediaCarrierOf({
+      message: { createdAt: new Date('2026-09-13T10:13:00.000Z') },
+      caption: { text: '', language: 'fr', translated: false },
+    });
+    expect(carrier.sender).toBeNull();
+  });
+
+  test('sender.displayName VIDE (jamais un "?") ⇒ null', () => {
+    const carrier = mediaCarrierOf({
+      message: { sender: { displayName: '' }, createdAt: new Date('2026-09-13T10:13:00.000Z') },
+      caption: { text: '', language: 'fr', translated: false },
+    });
+    expect(carrier.sender).toBeNull();
+  });
+
+  test('témoin de RANG : la légende VOYAGE telle que servie par l’hôte, sans y toucher — rang 2 d’un prisme [\'fr\',\'de\'] sur un message EN sans traduction fr', () => {
+    // La descente elle-même vit chez l'hôte (`servedTranscript`/`served`,
+    // déjà couvert par les témoins de rang de ce fichier) — ici on prouve
+    // seulement que `mediaCarrierOf` ne la REFAIT PAS : la `Served` passée
+    // en `de` ressort en `de`, jamais retombée sur le rang 1.
+    const carrier = mediaCarrierOf({
+      message: { sender: { displayName: 'Amina' }, createdAt: new Date('2026-09-13T10:13:00.000Z') },
+      caption: { text: 'Aufnahme vom Yachthafen', language: 'de', translated: true },
+    });
+    expect(carrier.caption).toEqual({ text: 'Aufnahme vom Yachthafen', language: 'de', translated: true });
   });
 });

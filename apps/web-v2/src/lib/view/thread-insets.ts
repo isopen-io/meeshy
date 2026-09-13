@@ -13,7 +13,7 @@ import { DAY_PILL_TOP } from '@/lib/reading-mode/metrics';
  *
  * Deux symptômes de la même pose :
  *
- * 1. L'en-tête était HABILLÉ en bande flottante (`backdrop-blur-xl`, fond à
+ * 1. L'en-tête était HABILLÉ en bande flottante (verre régulier, fond à
  *    80 % — `components/thread-header.tsx`) mais POSÉ en frère de flux : un
  *    flou qui n'avait rien à flouter.
  * 2. L'escamotage du chrome (#5774) ne découvrait RIEN. `EdgeHiddenChrome`

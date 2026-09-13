@@ -761,3 +761,112 @@ describe('Bubble — l’indicateur d’effets décoratifs (#6175, défaut majeu
     expect(html).toContain('>2<');
   });
 });
+
+/**
+ * L'HÔTE REMET LE CARRIER À LA VISIONNEUSE (#6169, U3) — `bubble.tsx:289-294`
+ * appelle `mediaCarrierOf({ message, caption: rendered })` et le passe à
+ * `Attachments`. `MediaCarrier` n'a pas de prop de rendu directe sur la
+ * grille (loi 4 : un carrier absent ne change RIEN visuellement AVANT
+ * l'ouverture) — la preuve passe donc par l'OUVERTURE de la visionneuse
+ * (chunk `lazy()`, `Suspense`), seul consommateur de `carrier`
+ * (`CarrierFooter`, `media-viewer.tsx`).
+ */
+describe('Bubble — remet le carrier (auteur, date) à la visionneuse ouverte (#6169)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+  afterAll(async () => {
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  let container: HTMLDivElement;
+  let root: Root;
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  const withFourImages: Message = {
+    ...BASE_MESSAGE,
+    id: 'm-carrier-grid',
+    messageType: 'image',
+    sender: { ...BASE_MESSAGE.sender!, displayName: 'Kwame Mensah' },
+    attachments: [1, 2, 3, 4].map((n) => ({
+      ...attachmentDefaults,
+      id: `att-carrier-${n}`,
+      messageId: 'm-carrier-grid',
+      fileName: `photo-${n}.png`,
+      originalName: `photo-${n}.png`,
+      mimeType: 'image/png',
+      fileSize: 96,
+      width: 640,
+      height: 427,
+      fileUrl: `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mNITvsIAALqAbsneUV/AAAAAElFTkSuQmCC`,
+      uploadedBy: 'u-amina',
+      createdAt: '2026-09-08T09:00:00.000Z',
+    })),
+  };
+
+  test('la 1ʳᵉ tuile ouvre la visionneuse, dont le pied porte le NOM de l’expéditeur', async () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <Bubble place={placeOf(withFourImages)} languages={['fr', 'en']} isGrouped viewerId="u-viewer" onJumpToMessage={() => {}} />,
+      );
+    });
+
+    const tile = container.querySelector('[data-media-tile]') as HTMLButtonElement;
+    expect(tile).not.toBeNull();
+    act(() => {
+      tile.click();
+    });
+    // Le chunk `lazy()` résout en une microtask ; `Suspense` remonte au tour
+    // suivant — un SEUL `act(async)` vide laisse React rejouer les deux.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // `MediaViewer` rend par `createPortal(…, document.body)` (§ media-
+    // viewer.tsx) — HORS de `container`, il faut donc interroger le
+    // DOCUMENT, pas la racine montée.
+    const footer = document.querySelector('[data-viewer-footer]');
+    expect(footer).not.toBeNull();
+    expect(footer?.textContent).toContain('Kwame Mensah');
+  });
+});
+
+/** LA BULLE DÉCLARE SA FORME DE GRILLE (revue #6169) — une boîte noire unique (`BubbleStandardLayout.swift:814-817`). */
+describe('Bubble — la grille de médias en boîte unique (revue #6169)', () => {
+  test('4 images ⇒ [data-media-grid][data-media-frame="box"]', () => {
+    const fourImages: Message = {
+      ...BASE_MESSAGE,
+      id: 'm-frame-grid',
+      messageType: 'image',
+      attachments: [1, 2, 3, 4].map((n) => ({
+        ...attachmentDefaults,
+        id: `att-frame-${n}`,
+        messageId: 'm-frame-grid',
+        fileName: `photo-${n}.png`,
+        originalName: `photo-${n}.png`,
+        mimeType: 'image/png',
+        fileSize: 96,
+        width: 640,
+        height: 427,
+        fileUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        uploadedBy: 'u-amina',
+        createdAt: '2026-09-08T09:00:00.000Z',
+      })),
+    };
+    const html = renderToStaticMarkup(
+      <Bubble place={placeOf(fourImages)} languages={['fr']} isGrouped viewerId="u-viewer" onJumpToMessage={() => {}} />,
+    );
+    expect(html).toContain('data-media-frame="box"');
+    expect(html).not.toContain('data-media-frame="tiles"');
+  });
+});

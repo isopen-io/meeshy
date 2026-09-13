@@ -179,14 +179,29 @@ final class ConversationTopChromeFadeTests: XCTestCase {
             "parent SwiftUI — c'est le signal qui efface les boutons d'action."
         )
 
+        // **La chaîne traverse DEUX fichiers depuis le 2026-09-13.** La grappe
+        // du header est devenue un type nominal, `ConversationHeaderActionsCluster`,
+        // extrait dans `ConversationExpandedHeaderBand.swift` pour cesser de
+        // peser sur la LARGEUR de la valeur `ConversationView` (débordement de
+        // pile à l'ouverture, #6213 bis). L'hôte calcule et remet la valeur, le
+        // type la publie, la grappe s'y abonne — ce sont ces trois maillons qui
+        // sont gardés, pas leur cohabitation dans un seul fichier.
         let viewSource = try conversationViewSource()
+        let band = try String(
+            contentsOf: viewsDirectory().appendingPathComponent("ConversationExpandedHeaderBand.swift"),
+            encoding: .utf8
+        )
         XCTAssertTrue(
-            viewSource.contains(".scrollMotionActive(hidesHeaderActionsForScroll)"),
-            "Le header doit PUBLIER le mouvement via la loi commune " +
+            viewSource.contains("hidesHeaderActions: hidesHeaderActionsForScroll"),
+            "Le header doit REMETTRE son état de défilement au type qui le publie."
+        )
+        XCTAssertTrue(
+            band.contains(".scrollMotionActive(hidesHeaderActions)"),
+            "Le type du header doit PUBLIER le mouvement via la loi commune " +
             "`ScrollMotion` plutôt que de câbler son propre fondu."
         )
         XCTAssertTrue(
-            viewSource.contains(".hiddenWhileScrolling()"),
+            band.contains(".hiddenWhileScrolling()"),
             "La grappe de boutons d'action (appel + recherche) doit s'y abonner."
         )
     }

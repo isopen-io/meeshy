@@ -1,3 +1,5 @@
+import { loadInterfaceCatalog, suspendForInterfaceCatalog, translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { createRouter } from '@/lib/router';
 
 /**
@@ -7,6 +9,10 @@ import { createRouter } from '@/lib/router';
  * route est ce qui borne la premiere peinture, et ecrit ici chaque `import()`
  * est un arbitrage VISIBLE. Genere, il se subit.
  */
+/* LE DÉTAIL D'UNE PUBLICATION (#6278) — UN seul `import()` pour ses DEUX
+   adresses, pour qu'elles ne puissent jamais diverger d'écran. */
+const publicationScreen = () => import('@/routes/post');
+
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },
   thread: { pattern: '/c/$conversation', screen: () => import('@/routes/thread') },
@@ -54,9 +60,16 @@ export const ROUTES = {
      validation, adresse SÉPARÉE. */
   magicLink: { pattern: '/auth/magic-link', screen: () => import('@/routes/magic-link') },
   magicLinkValidate: { pattern: '/auth/magic-link/validate', screen: () => import('@/routes/magic-link-validate') },
-  /* MOT DE PASSE OUBLIÉ, flux E-MAIL (#5816) — le flux TÉLÉPHONE et
-     `/reset-password` sont hors tranche (issues compagnons). */
+  /* MOT DE PASSE OUBLIÉ, flux E-MAIL (#5816) — le flux TÉLÉPHONE reste hors
+     tranche (issue compagnon). */
   forgotPassword: { pattern: '/forgot-password', screen: () => import('@/routes/forgot-password') },
+  /* ON FINIT D'ENTRER DANS MEESHY (T-verify/T-reset, #5672) — nomenclature
+     legacy reprise (D-5) : `apps/web/app/auth/verify-email`,
+     `apps/web/app/reset-password`. L'e-mail et le jeton voyagent en QUERY
+     STRING (`?email=`, `?token=`) — un lien reçu par courriel reste valide
+     après un rafraîchissement, jamais une navigation en mémoire seule. */
+  verifyEmail: { pattern: '/auth/verify-email', screen: () => import('@/routes/verify-email') },
+  resetPassword: { pattern: '/reset-password', screen: () => import('@/routes/reset-password') },
   /* LES HUIT DESTINATIONS DES MENUS FLOTTANTS (#6214) — le Flux pour le bouton
      de gauche, les six barreaux de l'échelle de droite, et le profil qu'ouvre
      l'avatar. Leurs libellés, teintes et glyphes vivent dans UNE table
@@ -72,6 +85,14 @@ export const ROUTES = {
      ces sept destinations n'existent pas dans `apps/web`. `/me` complète
      l'espace ouvert par `/me/progression` (#5547). */
   feed: { pattern: '/feed', screen: () => import('@/routes/feed') },
+  /* LE DÉTAIL D'UNE PUBLICATION (#6278, D-48, D-49) — `/post/$post` est
+     l'adresse que la passerelle range dans ses liens suivis
+     (`PostService.ts:1742`) et que le legacy sert (`apps/web/app/post/[postId]`,
+     D-5) ; `/feeds/post/$post` est celle des liens profonds d'iOS
+     (`DeepLinkRouter.swift:106`) et l'adresse que le partage émet
+     (`lib/feed/share-url.ts`). UN seul `import()` pour les deux portes. */
+  post: { pattern: '/post/$post', screen: publicationScreen },
+  postDeepLink: { pattern: '/feeds/post/$post', screen: publicationScreen },
   links: { pattern: '/links', screen: () => import('@/routes/links') },
   notifications: { pattern: '/notifications', screen: () => import('@/routes/notifications') },
   calls: { pattern: '/calls', screen: () => import('@/routes/calls') },
@@ -81,21 +102,37 @@ export const ROUTES = {
   profile: { pattern: '/me', screen: () => import('@/routes/profile') },
 } as const;
 
-function NotFound() {
+/**
+ * L'ÉCRAN D'ADRESSE INCONNUE (#6341) — ses deux textes viennent du catalogue
+ * d'interface, comme le reste de l'application. Contrairement à un écran
+ * routé, aucune route n'a fait passer une adresse inconnue par
+ * `screenPrerequisite` : `suspendForInterfaceCatalog` rejoue la même attente
+ * pour ce seul cas, sous la même limite Suspense (`router.tsx`). Le libellé
+ * de retour REND `pending.back`, déjà porté par le catalogue — un second
+ * texte identique aurait divergé au premier lot qui n'aurait modifié que l'un
+ * des deux.
+ */
+export function NotFound() {
+  const langue = currentInterfaceLanguage();
+  suspendForInterfaceCatalog(langue);
   return (
     <div className="grid min-h-dvh place-items-center p-6 pt-safe text-center">
       <div className="grid gap-3">
-        <p className="text-screen font-bold">Cette href n’existe pas.</p>
+        <p className="text-screen font-bold">{translate(langue, 'notFound.title')}</p>
         <a
           href="/"
           className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
           style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
         >
-          Revenir aux conversations
+          {translate(langue, 'pending.back')}
         </a>
       </div>
     </div>
   );
 }
 
-export const { Router, Link, href, navigate } = createRouter(ROUTES, NotFound);
+/* LE CATALOGUE D'INTERFACE (#6206) — chaque écran l'attend, en parallèle de
+   son chunk : ce qui s'y rend lit ses libellés de façon synchrone. */
+export const { Router, Link, href, navigate } = createRouter(ROUTES, NotFound, {
+  screenPrerequisite: () => loadInterfaceCatalog(currentInterfaceLanguage()),
+});

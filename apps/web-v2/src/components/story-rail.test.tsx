@@ -287,3 +287,52 @@ describe('StoryRail — ce que le corpus des stories apporte', () => {
     expect(sansHumeur.querySelector('[data-mood]')).toBeNull();
   });
 });
+
+/**
+ * **LA TUILE PEINT LA COTE D'iOS** (#6133) — l'avatar porte `.storyTray` /
+ * `.storyTrayCompact`, l'anneau se pose AUTOUR (`ringSize = size + 6`), la
+ * cellule compose l'anneau et son libellé. La loi est dans `rail-tile.tsx` ;
+ * ces témoins mesurent qu'elle est PEINTE, pas seulement déclarée.
+ */
+describe('StoryTile — la cote d’iOS, peinte (#6133)', () => {
+  test('grand plateau : avatar 88, anneau 94 posé autour, cellule 96', () => {
+    const el = mount({ variant: 'grande', groups: [group('u-amina', 'Amina Diallo')] });
+    const li = el.querySelector('[data-rail-tile]') as HTMLElement;
+    const anneau = el.querySelector('[data-anneau]') as HTMLElement;
+    const avatar = anneau.querySelector('.avatar-root') as HTMLElement;
+    expect(li.style.width).toBe('96px');
+    expect(anneau.style.width).toBe('94px');
+    expect(anneau.style.height).toBe('94px');
+    expect(avatar.style.width).toBe('88px');
+  });
+
+  test('bande épinglée : avatar 36, anneau et cellule 42, cible de 44 sans élargir la case', () => {
+    const el = mount({ variant: 'pinned', groups: [group('u-amina', 'Amina Diallo')] });
+    const li = el.querySelector('[data-rail-tile]') as HTMLElement;
+    const anneau = el.querySelector('[data-anneau]') as HTMLElement;
+    const avatar = anneau.querySelector('.avatar-root') as HTMLElement;
+    const lien = el.querySelector('a[data-story-author]') as HTMLElement;
+    expect(li.style.width).toBe('42px');
+    expect(anneau.style.width).toBe('42px');
+    expect(avatar.style.width).toBe('36px');
+    expect(lien.style.minHeight).toBe('44px');
+    expect(lien.style.minWidth).toBe('44px');
+    expect(lien.style.marginLeft).toBe('-1px');
+  });
+
+  test('le trait de l’anneau suit `ringWidth` : doublé et à la marque pour une story non vue', () => {
+    const nonVue = mount({ variant: 'grande', groups: [{ ...group('u-amina', 'Amina Diallo'), hasUnseen: true }] });
+    const trait = (nonVue.querySelector('[data-anneau]') as HTMLElement).style.boxShadow;
+    expect(trait).toContain('1.4px');
+    expect(trait).toContain('brand');
+    act(() => {
+      root!.unmount();
+    });
+    root = undefined;
+
+    const vue = mount({ variant: 'grande', groups: [{ ...group('u-amina', 'Amina Diallo'), hasUnseen: false }] });
+    const traitVu = (vue.querySelector('[data-anneau]') as HTMLElement).style.boxShadow;
+    expect(traitVu).toContain('1px');
+    expect(traitVu).not.toContain('brand');
+  });
+});

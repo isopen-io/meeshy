@@ -32068,3 +32068,44 @@ installe non figé ») était JUSTE sur son axe. Ce qui a cassé vivait sur un a
 axe : la scission des manifestes entre workspaces. **Un raisonnement correct sur
 la dimension qu'on regarde ne dit rien des dimensions qu'on ne regarde pas** —
 d'où l'intérêt d'un garde, qui les regarde toutes sans avoir à y penser.
+
+## Leçon 602 — Une vérification enchaînée à l'action qu'elle garde, dans la même commande, n'est pas une garde : c'est un journal (2026-09-13)
+
+**Cas.** Libérer de l'espace en retirant les worktrees « finis ». Pour
+`v2_meeshy-claude` — propre, tête dans `dev`, aucun commit hors `dev` — la
+commande était `lsof -a -d cwd | grep v2_meeshy-claude; git worktree remove
+v2_meeshy-claude`. Le `lsof` a AFFICHÉ trois processus vivants (`zsh`, `gh`,
+`sort`) : une autre session Claude, suspendue depuis 49 minutes dans un
+`gh api graphql --paginate`, avait son répertoire courant là. Le worktree a
+été retiré dans la même seconde, parce que `;` n'attend le verdict de personne.
+Rien n'était perdu dans git ; le répertoire a été recréé aussitôt au même
+chemin, sur la même branche.
+
+1. **« Propre et absorbé » ne dit rien de l'OCCUPATION.** Les trois critères
+   qui prouvent qu'on ne perd aucun travail (`status --porcelain` vide, zéro
+   commit hors `dev`, branche poussée) ne disent pas si une session vivante a
+   son répertoire courant dedans. C'est un quatrième critère, d'une autre
+   nature : un fait de PROCESSUS, pas de dépôt.
+2. **La forme opérante** : la vérification est un appel, sa lecture est un
+   temps, l'action destructive est un AUTRE appel. Si l'on tient à une seule
+   commande, la garde CONDITIONNE l'action
+   (`[ -z "$(lsof -a -d cwd | grep …)" ] && git worktree remove …`), elle ne la
+   précède jamais par `;`.
+3. **Le trailer de session ne désigne pas l'occupant d'un worktree** : la tête
+   de `v2_meeshy-claude` portait le trailer d'un pair (c'était la tête de
+   `dev`), et ce pair a répondu que ce worktree n'était pas le sien. Un commit
+   dit qui l'a ÉCRIT ; seul `lsof` dit qui est LÀ.
+
+## Leçon 603 — `onChange` React ne voit pas un `input.value = X` suivi d'un `dispatchEvent(new Event('input'))` sous `happy-dom` ; `onInput` le voit toujours
+
+Deux écrans neufs (`verify-email-flow.tsx`, `reset-password-flow.tsx`, apps/web-v2 #5672) posaient `onChange={(e) => setX(e.currentTarget.value)}` sur leurs champs contrôlés. Les témoins interactifs (`createRoot` + `act`, patron `auth.test.ts`/`magic-link.test.tsx`) échouaient TOUS de la même façon : le bouton restait désactivé après avoir « rempli » le champ, `stub.calls` restait vide, et pourtant `input.value` valait bien la chaîne posée.
+
+1. **Le symptôme pointait vers `onlyDigits()` (le filtre du champ), et le vrai défaut était ailleurs.** Un test isolé, minimal (`useState` + `<input onChange>` seul, sans aucune logique métier) reproduisait le même échec : `onChange` ne se déclenchait JAMAIS, alors qu'un test IDENTIQUE avec `onInput` à la place se déclenchait à chaque fois. Ce n'est donc pas une fonction pure qui a un défaut — c'est le COUPLE « poser `.value` puis redispatcher un `input` natif » qui échappe au mécanisme de suivi de valeur que React installe pour distinguer un changement RÉEL d'un changement PROGRAMMATIQUE, sous l'implémentation `happy-dom` du DOM.
+
+2. **Le motif existait déjà dans le dépôt, et personne ne l'avait généralisé.** `magic-link-flow.tsx#magic-link-email` posait `onInput`, pas `onChange` — c'est le SEUL champ testé interactivement avant ce lot, et son auteur avait déjà buté sur le même mur sans laisser de trace explicite. Tous les autres champs du dossier (`login.tsx`, `signup.tsx`, `forgot-password.tsx`) posent `onChange` et n'ont AUCUN témoin interactif — seulement `renderToStaticMarkup` sur l'état initial, qui ne peut pas voir le défaut. **Un motif qui ne vit que dans un seul fichier, sans commentaire qui dise pourquoi, ne se retrouve qu'en revivant la même panne.**
+
+3. **La question à poser avant d'écrire un test interactif sur un champ contrôlé neuf** : « ce champ a-t-il un frère déjà testé de cette façon dans le dépôt ? Comment pose-t-il son gestionnaire ? » — pas « `onChange` est-il le nom React standard ? » (il l'est, et c'est justement ce qui rend le piège invisible à la relecture : le code compile, se lit juste, et ne rougit qu'à l'exécution du test).
+
+4. **Le correctif est un remplacement d'un mot, jamais une réécriture** : `onChange` → `onInput` sur CHAQUE champ contrôlé qu'un témoin interactif pose par `input.value = X; dispatchEvent(new Event('input'))`. Un champ qui n'est vérifié QUE par `renderToStaticMarkup` (état initial, aucune interaction) peut rester en `onChange` sans que rien ne le prouve encore — mais le jour où il gagne un témoin interactif, il tombera dans le même panneau.
+
+Détail : `apps/web-v2/decisions.md` § D-47.

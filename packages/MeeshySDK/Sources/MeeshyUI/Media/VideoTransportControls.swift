@@ -269,12 +269,38 @@ public struct VideoTransportControls: View {
             .highPriorityGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
+                        /*
+                         **L'IMAGE SUIT LE DOIGT** (retour porteur 2026-09-13 :
+                         « visuellement on voit le recul sur les frames »).
+
+                         Ce bloc ne posait QUE `seekValue` — la position
+                         AFFICHÉE de la pastille — et le déplacement réel
+                         n'avait lieu qu'en `onEnded`. Le curseur bougeait donc
+                         seul, au-dessus d'une image figée, et relâcher plus
+                         loin ne montrait la destination qu'APRÈS coup : on ne
+                         voyait jamais ce qu'on parcourait, seulement où l'on
+                         était tombé. C'est aussi, mot pour mot, ce que la
+                         directive « les gestes de glissement sont PROGRESSIFS
+                         et ANNULABLES » (2026-08-30, `apps/ios/CLAUDE.md`)
+                         interdit : « `DragGesture().onEnded` comme unique
+                         porteur d'une décision ».
+
+                         `precise: false` pendant le geste — AVFoundation
+                         s'arrête à l'image-clé la plus proche, sans rien
+                         reconstruire, et `SharedAVPlayerManager` coalesce les
+                         cibles pour n'en servir que ce que le décodeur suit.
+                         La frame exacte est posée par `onEnded`, une fois.
+                        */
                         isSeeking = true
-                        seekValue = max(0, min(1, value.location.x / geo.size.width))
+                        let fraction = max(0, min(1, value.location.x / geo.size.width))
+                        seekValue = fraction
+                        manager.seek(to: fraction * manager.duration, precise: false)
                     }
                     .onEnded { value in
+                        // `onEnded` ne DÉCIDE plus : il CONCLUT un déplacement
+                        // déjà à l'écran, en le posant sur la frame exacte.
                         let fraction = max(0, min(1, value.location.x / geo.size.width))
-                        manager.seek(to: fraction * manager.duration)
+                        manager.seek(to: fraction * manager.duration, precise: true)
                         isSeeking = false
                         seekValue = 0
                     }

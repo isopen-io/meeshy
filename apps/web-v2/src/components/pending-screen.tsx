@@ -1,6 +1,8 @@
 import { Glyph } from './glyph';
 import { MenuGlyph } from './menu-glyph';
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from './chrome-action';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { FloatingDestination } from '@/lib/view/floating-menu';
 import { Link } from '@/routes/route-table';
 
@@ -29,16 +31,21 @@ import { Link } from '@/routes/route-table';
  * Le glyphe est DÉCORATIF (`aria-hidden` par défaut dans `Glyph`) : le titre le
  * nomme déjà, et l'annoncer une seconde fois ferait lire deux fois la même
  * chose au lecteur d'écran.
+ *
+ * **Ses quatre textes viennent du catalogue d'interface** (#6206) — titre,
+ * promesse, « bientôt » et retour. La route l'a chargé avant de rendre l'écran
+ * (`screenPrerequisite`, `route-table.tsx`).
  */
 export function PendingScreen({ destination }: { readonly destination: FloatingDestination }) {
-  const { glyph, label, promise, tint } = destination;
+  const { glyph, labelKey, promiseKey, tint } = destination;
+  const langue = currentInterfaceLanguage();
 
   return (
     <main className="flex h-dvh flex-col overflow-hidden pt-safe">
       <header className="flex shrink-0 items-center gap-1 px-2 pt-3 pb-2">
         <Link
           to="list"
-          aria-label="Revenir aux conversations"
+          aria-label={translate(langue, 'pending.back')}
           className={`${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`}
           style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
         >
@@ -47,7 +54,7 @@ export function PendingScreen({ destination }: { readonly destination: FloatingD
           </ChromeActionDisc>
         </Link>
         <h1 className="text-body font-semibold" style={{ color: 'var(--color-ios-ink-1)' }}>
-          {label}
+          {translate(langue, labelKey)}
         </h1>
       </header>
 
@@ -65,10 +72,10 @@ export function PendingScreen({ destination }: { readonly destination: FloatingD
           <MenuGlyph glyph={glyph} size={30} />
         </span>
         <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink-1)' }}>
-          {promise}
+          {translate(langue, promiseKey)}
         </p>
         <p className="text-check" style={{ color: 'var(--color-ios-ink-2)' }}>
-          Cet écran arrive bientôt.
+          {translate(langue, 'pending.comingSoon')}
         </p>
       </div>
     </main>

@@ -241,9 +241,18 @@ const grandRailWidthBefore = await page.evaluate(
   () => document.querySelector('[data-rail="grande"] [data-rail-tile]')?.getBoundingClientRect().width ?? null,
 );
 constate(grandRailWidthBefore !== null, 'aucune tuile trouvée dans [data-rail="grande"] avant défilement');
+/**
+ * LA COTE RETENUE, NOMMÉE (#6133) — la cote iOS gouverne l'AVATAR
+ * (`MeeshyAvatar.storyTray` = 88), l'anneau se pose autour (`ringSize = size +
+ * 6`) et la cellule du grand plateau respire à la largeur de son libellé
+ * (`StoryRingCell`, `.frame(width: 96)`). La borne est ABSOLUE : `>= 80`
+ * laissait passer l'ancienne cellule de 88 autant que la juste de 96.
+ */
+const IOS_GRANDE_CELL = 96;
+const IOS_COMPACT_RING = 36 + 6;
 constate(
-  grandRailWidthBefore !== null && grandRailWidthBefore >= 80,
-  `le grand rail ne part pas de la cote GRANDE (~88 px) : ${grandRailWidthBefore}`,
+  grandRailWidthBefore === IOS_GRANDE_CELL,
+  `le grand rail ne part pas de la cellule d'iOS (${IOS_GRANDE_CELL} px — avatar .storyTray 88, anneau 94) : ${grandRailWidthBefore}`,
 );
 constate(
   await page.evaluate(() => document.querySelector('[data-rail="pinned"]') === null),
@@ -294,11 +303,11 @@ const afterScroll = await page.evaluate(() => {
   };
 });
 constate(
-  afterScroll.pinnedTileWidth !== null && afterScroll.pinnedTileWidth < 45,
-  `la bande épinglée ne compacte pas à la cote COMPACTE (~37 px) après défilement : ${afterScroll.pinnedTileWidth}`,
+  afterScroll.pinnedTileWidth === IOS_COMPACT_RING,
+  `la bande épinglée ne compacte pas à la cellule d'iOS (${IOS_COMPACT_RING} px — avatar .storyTrayCompact 36, anneau 42) après défilement : ${afterScroll.pinnedTileWidth}`,
 );
 constate(
-  afterScroll.grandeTileWidth !== null && afterScroll.grandeTileWidth >= 80,
+  afterScroll.grandeTileWidth === IOS_GRANDE_CELL,
   `le GRAND rail a changé de cote après défilement — il ne devrait plus jamais compacter lui-même : ${afterScroll.grandeTileWidth}`,
 );
 constate(

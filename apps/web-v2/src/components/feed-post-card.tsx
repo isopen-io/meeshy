@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { Avatar } from './avatar';
 import { Glyph, GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
-import type { FeedCardMedia, FeedCardModel, FeedCardStats, FeedCardText } from '@/lib/feed/card-model';
+import type { FeedCardMedia, FeedCardModel, FeedCardStats, FeedCardText, FeedCardViewer } from '@/lib/feed/card-model';
+import type { PostToggleKind } from '@/lib/feed/interactions';
 import { FEED_TEXT_TRUNCATION_LIMIT, truncateWords } from '@/lib/feed/text';
 
 /**
@@ -14,12 +15,27 @@ import { FEED_TEXT_TRUNCATION_LIMIT, truncateWords } from '@/lib/feed/text';
  * SEUL aiguillage — `resolveFeedCardModel` (`lib/feed/card-model.ts`) a déjà
  * tranché tout le reste (Prisme, accent, géométrie).
  *
- * LECTURE SEULE (D-6, ce lot) : les cinq statistiques sont des `<span>`
- * STATIQUES, jamais des boutons — aimer/commenter/repartager/enregistrer/
- * partager sont des compagnons. Le SEUL geste vivant est la pagination d'un
- * carrousel, qui EXPLORE un contenu déjà reçu plutôt que d'écrire quoi que
- * ce soit.
+ * LES GESTES QUI ÉCRIVENT (#6278) : « Aimer » et « Enregistrer » sont des
+ * boutons à bascule DÈS QU'UN HÔTE porte `onGesture` — la carte ne tient
+ * aucun état de geste, elle peint `model.viewer` (le cache du fil) et remet
+ * l'intention. Sans hôte, ou pour commenter/repartager/partager qui n'ont
+ * pas encore d'effet, la statistique reste un `<span>` : un bouton sans effet
+ * mentirait (loi 4).
  */
+
+type GestureHandler = (postId: string, kind: PostToggleKind) => void;
+
+type ShareHandler = (postId: string) => void;
+
+const GESTURE_OF_STAT: Partial<Record<keyof FeedCardStats, PostToggleKind>> = {
+  likeCount: 'like',
+  bookmarkCount: 'bookmark',
+};
+
+const FILLED_GLYPH: Partial<Record<keyof typeof FEED_GLYPHS, keyof typeof FEED_GLYPHS>> = {
+  heart: 'heartFill',
+  bookmark: 'bookmarkFill',
+};
 
 const STAT_ITEMS: readonly { readonly key: keyof FeedCardStats; readonly glyph: keyof typeof FEED_GLYPHS; readonly label: string }[] = [
   { key: 'likeCount', glyph: 'heart', label: 'Aimer' },
@@ -42,16 +58,73 @@ const STAT_ITEMS: readonly { readonly key: keyof FeedCardStats; readonly glyph: 
  * (`title` ⇒ `role="img" aria-label`), et le compte redevient du TEXTE lu —
  * « Aimer 14 », comme iOS l'énonce (`feed.post.a11y.like`).
  */
-function FeedActionsRow({ stats, tone }: { readonly stats: FeedCardStats; readonly tone: 'onLight' | 'onDark' }) {
+function FeedActionsRow({
+  postId,
+  stats,
+  viewer,
+  tone,
+  onGesture,
+  onShare,
+}: {
+  readonly postId: string;
+  readonly stats: FeedCardStats;
+  readonly viewer: FeedCardViewer;
+  readonly tone: 'onLight' | 'onDark';
+  readonly onGesture?: GestureHandler;
+  readonly onShare?: ShareHandler;
+}) {
   const ink = tone === 'onDark' ? 'rgba(255,255,255,0.92)' : 'var(--color-ios-ink-2)';
   return (
     <div className="flex items-center justify-between" data-feed-actions>
-      {STAT_ITEMS.map((item) => (
-        <span key={item.key} className="flex items-center gap-1.5" style={{ color: ink, minHeight: 44 }}>
-          <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={item.label} />
-          <span className="text-check font-medium">{stats[item.key]}</span>
-        </span>
-      ))}
+      {STAT_ITEMS.map((item) => {
+        /* « Partager » est un geste PONCTUEL, pas une bascule : un bouton
+           simple, sans `aria-pressed` — et seulement si l'hôte sait partager. */
+        if (item.key === 'shareCount' && onShare !== undefined) {
+          return (
+            <button
+              key={item.key}
+              type="button"
+              data-feed-gesture="share"
+              onClick={() => onShare(postId)}
+              className="flex items-center gap-1.5 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ color: ink, minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
+            >
+              <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={item.label} />
+              <span className="text-check font-medium">{stats[item.key]}</span>
+            </button>
+          );
+        }
+        const kind = GESTURE_OF_STAT[item.key];
+        if (kind === undefined || onGesture === undefined) {
+          return (
+            <span key={item.key} className="flex items-center gap-1.5" style={{ color: ink, minHeight: 44 }}>
+              <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={item.label} />
+              <span className="text-check font-medium">{stats[item.key]}</span>
+            </span>
+          );
+        }
+        const pressed = kind === 'like' ? viewer.liked : viewer.bookmarked;
+        /* Le cœur aimé se peint dans la couleur d'erreur, le signet dans la
+           marque (sur un réel, en blanc) — miroir `FeedPostCard.swift:946`,
+           rouge seulement quand LE LECTEUR a aimé. */
+        const pressedInk = kind === 'like' ? 'var(--color-error)' : tone === 'onDark' ? 'white' : 'var(--color-ios-brand)';
+        return (
+          <button
+            key={item.key}
+            type="button"
+            data-feed-gesture={kind}
+            aria-pressed={pressed}
+            onClick={() => onGesture(postId, kind)}
+            className="flex items-center gap-1.5 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{ color: pressed ? pressedInk : ink, minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
+          >
+            <span className="grid place-items-center" {...(pressed ? { 'data-feed-glyph-filled': '' } : {})}>
+              <GlyphSvg glyph={FEED_GLYPHS[pressed ? (FILLED_GLYPH[item.glyph] ?? item.glyph) : item.glyph]} size={19} title={item.label} />
+            </span>
+            <span className="text-check font-medium">{stats[item.key]}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -250,7 +323,16 @@ function FeedPostText({ text }: { readonly text: FeedCardText }) {
 /** Le RÉEL — plein cadre, identité et actions SUR le média, scrim bas (miroir
  * `ReelFeedCard.swift`). Rendu en AFFICHE IMMOBILE : la lecture reste hors
  * tranche (D-42), le média est son propre repli (poster/placeholder). */
-function FeedReelCard({ model }: { readonly model: FeedCardModel }) {
+type CardHosts = { readonly onGesture?: GestureHandler; readonly onShare?: ShareHandler };
+
+/** Les hôtes optionnels passent tels quels — `exactOptionalPropertyTypes`
+ * refuse de poser une clé optionnelle à `undefined`. */
+const hostsOf = ({ onGesture, onShare }: CardHosts): CardHosts => ({
+  ...(onGesture !== undefined ? { onGesture } : {}),
+  ...(onShare !== undefined ? { onShare } : {}),
+});
+
+function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & CardHosts) {
   const poster = model.media[0];
   const ratio = poster?.ratio ?? 1.25;
 
@@ -295,14 +377,14 @@ function FeedReelCard({ model }: { readonly model: FeedCardModel }) {
             {model.text.full}
           </p>
         ) : null}
-        <FeedActionsRow stats={model.stats} tone="onDark" />
+        <FeedActionsRow postId={model.id} stats={model.stats} viewer={model.viewer} tone="onDark" {...hostsOf(hosts)} />
       </div>
     </div>
   );
 }
 
-export function FeedPostCard({ model }: { readonly model: FeedCardModel }) {
-  if (model.isReel) return <FeedReelCard model={model} />;
+export function FeedPostCard({ model, ...hosts }: { readonly model: FeedCardModel } & CardHosts) {
+  if (model.isReel) return <FeedReelCard model={model} {...hostsOf(hosts)} />;
 
   return (
     <article
@@ -318,7 +400,7 @@ export function FeedPostCard({ model }: { readonly model: FeedCardModel }) {
         </div>
       ) : null}
       <div className="px-3">
-        <FeedActionsRow stats={model.stats} tone="onLight" />
+        <FeedActionsRow postId={model.id} stats={model.stats} viewer={model.viewer} tone="onLight" {...hostsOf(hosts)} />
       </div>
     </article>
   );

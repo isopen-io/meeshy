@@ -67,6 +67,15 @@ const OVERRIDES = {
    * seul lirait mal à 13-18 px sur le fond dégradé du bouton.
    */
   pause: join(CORE, 'fill/pause-fill.svg'),
+  /**
+   * `heart-fill` / `bookmark-fill` (#6278) — le cœur et le signet d'une carte
+   * du fil se peignent PLEINS quand le lecteur a posé le geste
+   * (`heart.fill` / `bookmark.fill`, `FeedPostCard.swift:946-947,1059-1095`).
+   * Le contour seul ne dirait pas l'état : c'est lui que `aria-pressed`
+   * annonce, et le pixel doit dire la même chose.
+   */
+  'heart-fill': join(CORE, 'fill/heart-fill.svg'),
+  'bookmark-fill': join(CORE, 'fill/bookmark-fill.svg'),
 };
 
 /**
@@ -404,7 +413,7 @@ emit({
  * N'Y ENTRE PAS : il est deja au SOCLE (`caretLeft`, retour de l'en-tete), le
  * dupliquer paierait ses octets deux fois au meme demarrage.
  */
-const FEED = ['heart', 'chat-circle', 'arrows-clockwise', 'bookmark', 'share-network', 'waveform', 'caret-right'];
+const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right'];
 
 emit({
   ids: FEED,
@@ -412,4 +421,148 @@ emit({
   constant: 'FEED_GLYPHS',
   type: 'FeedGlyphName',
   role: "LE JEU D'ECRAN du fil des publications (#5893) : les cinq statistiques de la carte de post, charge avec la route /feed, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DE LA CLOCHE (#6288) — les glyphes du rail de categories,
+ * miroir `NotificationCategory.icon` (`NotificationListView.swift:37-51`) :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `circle.fill` (non lues) | `circle` |
+ * | `bubble.left.fill` (messages) | `chat-circle` |
+ * | `heart.fill` (reactions) | `heart` |
+ * | `at` (mentions) | `at` |
+ * | `hand.thumbsup.fill` (social) | `thumbs-up` |
+ * | `person.badge.plus` (contacts) | `user-plus` |
+ * | `person.3.fill` (groupes) | `users-three` |
+ * | `globe` (traductions) | `globe` |
+ * | `gear` (systeme) | `gear` |
+ *
+ * plus `trash` pour « Supprimer » dans le menu d'une ligne. `bell` (toutes),
+ * `phone` (appels) et `check` (marquer lue) restent au SOCLE, ou ils vivent
+ * deja. `heart`, `chat-circle`, `users-three`, `gear`, `globe` et `user-plus`
+ * existent aussi dans d'autres jeux d'ecran : ceux-la ne se chargent jamais
+ * avec la cloche, aucun octet n'est donc paye deux fois au meme demarrage.
+ */
+const NOTIFICATIONS = ['circle', 'chat-circle', 'heart', 'at', 'thumbs-up', 'user-plus', 'users-three', 'globe', 'gear', 'trash'];
+
+emit({
+  ids: NOTIFICATIONS,
+  output: join(HERE, '../src/components/glyphs-notifications.ts'),
+  constant: 'NOTIFICATIONS_GLYPHS',
+  type: 'NotificationsGlyphName',
+  role: "LE JEU D'ECRAN de la cloche (#6288) : le rail des categories et le menu d'une ligne, charge avec la route /notifications, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DU PROFIL (#6289) — miroir des symboles de `ProfileView.swift`
+ * et du bandeau de statistiques de `UserProfileSheet+DetailsTab.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `pencil.circle.fill` (avatar) | `pencil-simple` |
+ * | `photo.fill` (banniere) | `camera` |
+ * | `person.text.rectangle.fill` (identite) | `identification-card` |
+ * | `text.quote` (bio) | `quotes` |
+ * | `at` (pseudo) | `at` |
+ * | `envelope.fill` (contact) | `envelope-simple` |
+ * | `globe` (langues) | `globe` |
+ * | `chart.bar.fill` (statistiques) | `chart-bar` |
+ * | `paperplane.fill` (messages) | `chat-circle` |
+ * | `calendar` (membre depuis, jours) | `calendar-blank` |
+ * | `person.badge.plus.fill` (demandes) | `user-plus` |
+ * | `chevron.forward` | `caret-right` |
+ *
+ * `user`, `phone`, `translate`, `trophy`, `users` et `x` restent au SOCLE.
+ */
+const PROFILE = [
+  'pencil-simple',
+  'camera',
+  'identification-card',
+  'quotes',
+  'at',
+  'envelope-simple',
+  'globe',
+  'chart-bar',
+  'chat-circle',
+  'calendar-blank',
+  'user-plus',
+  'caret-right',
+];
+
+emit({
+  ids: PROFILE,
+  output: join(HERE, '../src/components/glyphs-profile.ts'),
+  constant: 'PROFILE_GLYPHS',
+  type: 'ProfileGlyphName',
+  role: "LE JEU D'ECRAN du profil (#6289) : sections, contacts, langues, statistiques et entrees, charge avec la route /me, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DES REGLAGES (#5563) — miroir des symboles de `SettingsView.swift`
+ * et de `PrivacySettingsView.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `person.circle.fill` (compte) | `user-circle` |
+ * | `shield.fill` (securite) | `shield-check` |
+ * | `person.crop.circle.badge.minus` (supprimer) | `user-minus` |
+ * | `eye.fill` (visibilite) | `eye` |
+ * | `circle.fill` (statut en ligne) | `circle` |
+ * | `keyboard` (indicateur de frappe) | `keyboard` |
+ * | `paintbrush.fill` (apparence) | `paint-brush` |
+ * | `circle.lefthalf.filled` / `sun.max` / `moon` (theme) | `circle-half` / `sun` / `moon` |
+ * | `globe` (langue de l'interface) | `globe` |
+ * | `bell.badge.fill` (notifications) | `bell-ringing` |
+ * | `speaker.wave.2.fill` (sons) | `speaker-high` |
+ * | `slider.horizontal.3` (plus d'options) | `sliders-horizontal` |
+ * | `externaldrive.fill` (donnees) | `hard-drives` |
+ * | `bubble.left` (messages) | `chat-text` |
+ * | `square.and.arrow.up.fill` (export) | `export` |
+ * | `wrench.and.screwdriver.fill` (outils) | `wrench` |
+ * | `info.circle.fill` (a propos) | `info` |
+ * | `doc.text.fill` (conditions) | `file-text` |
+ * | `hand.raised.fill` (politique) | `hand-palm` |
+ * | `sparkles` (version) | `sparkle` |
+ * | `rectangle.portrait.and.arrow.forward` (deconnexion) | `sign-out` |
+ * | lien vers le legacy (propre au web) | `arrow-square-out` |
+ * | `chevron.forward` | `caret-right` |
+ *
+ * `lock`, `clock`, `checks`, `translate`, `bell`, `image` et `trophy` restent au SOCLE.
+ */
+const SETTINGS = [
+  'user-circle',
+  'shield-check',
+  'user-minus',
+  'eye',
+  'circle',
+  'keyboard',
+  'paint-brush',
+  'circle-half',
+  'sun',
+  'moon',
+  'globe',
+  'bell-ringing',
+  'speaker-high',
+  'sliders-horizontal',
+  'hard-drives',
+  'chat-text',
+  'export',
+  'wrench',
+  'info',
+  'file-text',
+  'hand-palm',
+  'sparkle',
+  'sign-out',
+  'arrow-square-out',
+  'caret-right',
+];
+
+emit({
+  ids: SETTINGS,
+  output: join(HERE, '../src/components/glyphs-settings.ts'),
+  constant: 'SETTINGS_GLYPHS',
+  type: 'SettingsGlyphName',
+  role: "LE JEU D'ECRAN des reglages (#5563) : sections, bascules, theme, liens vers le legacy, charge avec la route /settings, jamais dans le socle.",
 });

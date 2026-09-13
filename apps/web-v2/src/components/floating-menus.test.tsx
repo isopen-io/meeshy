@@ -3,7 +3,10 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { NOTIFICATIONS_QUERY_KEY } from '@/lib/api/notifications';
+import { appQueryClient } from '@/lib/api/query-client';
 import { FloatingMenus } from './floating-menus';
+import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { MENU_LADDER } from '@/lib/view/floating-menu';
 
 /**
@@ -29,11 +32,15 @@ afterAll(async () => {
 let container: HTMLDivElement;
 let root: Root;
 
+/* Le compte de notifications (#6288) vit dans le client PARTAGÉ : résolu
+   pendant un témoin, il changerait le NOM du bouton dans le suivant. Ces
+   témoins-ci parlent du menu, pas du compte (`floating-menus-unread.test.tsx`). */
 afterEach(() => {
   act(() => {
     root.unmount();
   });
   container.remove();
+  appQueryClient.removeQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
 });
 
 function monter(): HTMLDivElement {
@@ -48,6 +55,40 @@ function monter(): HTMLDivElement {
 
 const boutonMenu = () => container.querySelector('[data-floating-menu]') as HTMLButtonElement;
 const barreaux = () => [...container.querySelectorAll('[role="menuitem"]')] as HTMLAnchorElement[];
+
+/**
+ * LES MENUS DANS LA LANGUE D'INTERFACE (#6206) — écrit en ALLEMAND : en
+ * français, les libellés d'hier et ceux du catalogue se confondent, et le
+ * témoin ne pourrait pas tomber.
+ */
+describe('dans une autre langue d’interface', () => {
+  test('de : les deux boutons, le menu et les six barreaux se disent en allemand', async () => {
+    await loadInterfaceCatalog('de');
+    document.documentElement.lang = 'de';
+    try {
+      monter();
+      expect(container.querySelector('[data-floating-feed]')?.getAttribute('aria-label')).toBe('Feed');
+      expect(boutonMenu().getAttribute('aria-label')).toBe('Menü');
+
+      act(() => {
+        boutonMenu().click();
+      });
+
+      expect(container.querySelector('[role="menu"]')?.getAttribute('aria-label')).toBe('Meeshy-Navigation');
+      expect(barreaux().map((a) => a.getAttribute('aria-label'))).toEqual([
+        'Meine Links',
+        'Mitteilungen',
+        'Anrufe',
+        'Entdecken',
+        'Communitys',
+        'Einstellungen',
+      ]);
+      expect(boutonMenu().getAttribute('aria-label')).toBe('Profil');
+    } finally {
+      document.documentElement.lang = 'fr';
+    }
+  });
+});
 
 describe('au repos', () => {
   /**
@@ -96,7 +137,7 @@ describe('l’échelle ouverte', () => {
 
     const rendus = barreaux();
     expect(rendus).toHaveLength(MENU_LADDER.length);
-    expect(rendus.map((a) => a.getAttribute('aria-label'))).toEqual(MENU_LADDER.map((d) => d.label));
+    expect(rendus.map((a) => a.getAttribute('aria-label'))).toEqual(MENU_LADDER.map((d) => translate('fr', d.labelKey)));
     for (const lien of rendus) {
       expect(lien.tagName).toBe('A');
       expect(lien.getAttribute('href')).toMatch(/^\/[a-z]+$/);

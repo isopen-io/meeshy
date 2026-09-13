@@ -301,6 +301,45 @@ for (const scheme of ['dark', 'light']) {
     await page.close();
   }
 
+  /**
+   * thread-media-grid / thread-media-grid-bubbles (#6169, #6221) — LA GRILLE
+   * 2/3/4+, les DEUX peaux. `media-13` (`MEDIA_GRID_QUAD_WITNESS_ID`,
+   * `fixtures-media-grid.ts`) porte QUATRE images sans débordement (aucun
+   * badge `+N`) : la vue la plus proche de la cible iOS
+   * (`FocalMediaGridLayout`/`BubbleStandardLayout+Media.swift`) à comparer
+   * face à face avec la capture Ref-Native du même message.
+   *
+   * LE MODE SE CHOISIT TOUJOURS EXPLICITEMENT, MÊME « focal » (défaut trouvé
+   * en revue #6169) : ce bloc partage le `context` (donc le `localStorage`,
+   * donc la préférence de mode) avec le bloc `thread-media`/`thread-media-
+   * bubbles` juste au-dessus, qui LAISSE le mode à « bulles » sans le
+   * remettre à « focal » avant de rendre la main. Une NOUVELLE `page()` ne
+   * réinitialise PAS cette préférence — mesuré : la capture « focal » de ce
+   * bloc rendait la puce « Bulles » et les rangées en surface teintée. On
+   * choisit donc la ligne du menu CORRESPONDANT AU SKIN dans les deux cas,
+   * jamais seulement pour « bulles ».
+   */
+  for (const [name, skin, menuLabel] of [
+    ['thread-media-grid', 'focal', 'Focal'],
+    ['thread-media-grid-bubbles', 'bulles', 'Bulles'],
+  ]) {
+    const page = await context.newPage();
+    await page.clock.setFixedTime(INSTANT);
+    await page.goto(`${BASE}/c/c-medias`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: /Mode de lecture/ }).click();
+    await page.waitForTimeout(150);
+    await page.getByRole('menuitemradio', { name: new RegExp(menuLabel) }).click();
+    await page.waitForTimeout(300);
+    await page.evaluate(() =>
+      document.querySelector('[data-message="media-13"]')?.scrollIntoView({ block: 'center' }),
+    );
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${OUTPUT}${name}.${scheme}.png` });
+    console.log(`  ${name} · ${scheme} (${skin})`);
+    await page.close();
+  }
+
   await context.close();
 }
 

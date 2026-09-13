@@ -1,4 +1,5 @@
 import { apiConfig } from './config';
+import type { ImageVariant } from './types';
 
 /**
  * L'URL D'UNE PIÈCE JOINTE, RÉSOLUE CONTRE LA BONNE ORIGINE (défaut 2, revue
@@ -62,4 +63,24 @@ export function resolveAttachmentSrc(fileUrl: string, base: string): string {
  * ailleurs. */
 export function attachmentSrc(fileUrl: string): string {
   return resolveAttachmentSrc(fileUrl, apiConfig.base);
+}
+
+/**
+ * `attachmentSrcSet` (#6221, D4 §1.4.4) — LA VARIANTE D'IMAGE ÉLUE PAR LA
+ * LARGEUR D'AFFICHAGE, sous sa forme NATIVE navigateur : `imageVariants` est
+ * SERVIE (`attachmentIncludes.ts:79`) et TYPÉE (`attachment.ts:194`) depuis
+ * avant ce lot — il ne manquait que le pont vers `srcset`, où
+ * `attachmentSrc` (ci-dessus) reste le SITE UNIQUE de résolution d'URL :
+ * chaque variante traverse la MÊME règle que `fileUrl`, jamais une
+ * concaténation seconde. `undefined` sans variante — l'appelant retombe
+ * alors sur `src` seul (`fileUrl`), jamais sur un `srcset` vide.
+ */
+export function attachmentSrcSet(variants: readonly ImageVariant[] | undefined): string | undefined {
+  if (variants === undefined || variants.length === 0) return undefined;
+  return variants.map((variant) => `${attachmentSrc(variant.url)} ${variant.width}w`).join(', ');
+}
+
+/** `sizes` d'une tuile de largeur d'affichage fixe — la case ne redimensionne jamais selon le viewport. */
+export function sizesFor(widthPx: number): string {
+  return `${widthPx}px`;
 }

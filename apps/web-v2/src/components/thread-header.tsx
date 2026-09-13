@@ -55,7 +55,7 @@ export function ThreadHeader({
     /*
       LA BANDE FLOTTE, ELLE NE BORNE PLUS (#6213) — `absolute inset-x-0 top-0`
       au lieu d'un `shrink-0` de colonne flex. Elle était HABILLÉE en bande
-      flottante (le flou et le fond à 80 % ci-dessous) mais POSÉE en frère de
+      flottante (le verre régulier, `styles/glass.css`) mais POSÉE en frère de
       flux : rien ne passait jamais dessous, le flou n'avait rien à flouter,
       et son arête basse TRANCHAIT le contenu (capture porteur 2026-09-12).
       Miroir `floatingHeaderSection`, zIndex 100 au-dessus d'une liste qui
@@ -67,8 +67,7 @@ export function ThreadHeader({
       défileur la porte de son côté en marge INTÉRIEURE (`--thread-pad-top`).
     */
     <header
-      className="thread-header absolute inset-x-0 top-0 z-30 pt-safe backdrop-blur-xl"
-      style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-surface) 80%, transparent)' }}
+      className="thread-header glass absolute inset-x-0 top-0 z-30 pt-safe"
     >
       <div className="flex items-center gap-2 px-4 py-2">
         {/*

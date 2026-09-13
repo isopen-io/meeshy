@@ -51,12 +51,29 @@ describe('FeedPostCard — le POST', () => {
     expect(html).not.toContain('Buenos días');
   });
 
-  test('les cinq statistiques sont des `<span>` STATIQUES, jamais des `<button>` (D-6, lecture seule)', () => {
+  test('SANS hôte qui écrit (`onGesture` absent), les cinq statistiques restent des `<span>` — aucun bouton sans effet (loi 4)', () => {
     const html = renderToStaticMarkup(
       <FeedPostCard model={modelOf(basePost({ content: 'x', originalLanguage: 'fr', likeCount: 14, commentCount: 2 }))} />,
     );
     expect(html).toContain('data-feed-actions');
     expect(html).not.toContain('<button');
+  });
+
+  /** #6278 — aimer et enregistrer ont un effet dès qu'un hôte les porte ;
+   * commenter, repartager et partager n'en ont pas ENCORE, ils restent donc
+   * des statistiques et ne se déguisent pas en contrôles. */
+  test('AVEC un hôte, « Aimer » et « Enregistrer » deviennent des boutons à bascule ; les trois autres restent des statistiques', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard
+        model={modelOf(basePost({ content: 'x', originalLanguage: 'fr', likeCount: 14, isLikedByMe: true, isBookmarkedByMe: false }))}
+        onGesture={() => undefined}
+      />,
+    );
+    expect(html.match(/<button/g)).toHaveLength(2);
+    expect(html).toContain('data-feed-gesture="like" aria-pressed="true"');
+    expect(html).toContain('data-feed-gesture="bookmark" aria-pressed="false"');
+    expect(html).toContain('aria-label="Commenter"');
+    expect(html).toContain('>14<');
   });
 
   /**

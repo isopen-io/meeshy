@@ -729,7 +729,7 @@ extension MeeshyComposerHost {
     /// dépend désormais : `canvasBottomReservation`, qui rend au canvas la
     /// hauteur du clavier.
     var sceneDescriptionPanel: AnyView? {
-        AnyView(
+        return AnyView(
             ComposerSceneDescriptionPanel(
                 text: sceneDescriptionBinding,
                 placeholder: String(localized: "composer.description.placeholder",

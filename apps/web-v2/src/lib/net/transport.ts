@@ -23,11 +23,16 @@
  * `services/gateway/src/routes/reactions.ts:279-283`) — SANS corps, comme le
  * `body` optionnel ci-dessous le permet déjà.
  *
+ * `PATCH` rejoint le quatuor avec le profil (#6289) : `PATCH /api/v1/users/me`,
+ * `/users/me/avatar` et `/users/me/banner`
+ * (`services/gateway/src/routes/users/profile-updates.ts:42,286,392`) n'ont
+ * aucun autre verbe.
+ *
  * `body` est OPTIONNEL : `POST …/mark-unread` n'a pas de corps
  * (`services/gateway/src/routes/conversations/messages-read-status.ts:159-196`).
  */
 export type Transport = (request: {
-  readonly method: 'GET' | 'PUT' | 'POST' | 'DELETE';
+  readonly method: 'GET' | 'PUT' | 'POST' | 'PATCH' | 'DELETE';
   readonly path: string;
   readonly body?: unknown;
 }) => Promise<unknown>;

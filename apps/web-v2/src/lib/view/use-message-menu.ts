@@ -19,7 +19,7 @@ import {
 } from './message-actions';
 import { useLongPress, type LongPressAnchor } from './long-press';
 import { isMineOf } from './message';
-import { copyTextOf, orderedIds, selectionReducer, type SelectionState } from './selection';
+import { SELECTION_CAP, copyTextOf, orderedIds, selectionReducer, type SelectionState } from './selection';
 
 /**
  * LE HOOK DU MENU DU MESSAGE (#5814) — porte l'ÉTAT et les EFFETS (menu
@@ -173,7 +173,7 @@ export function useMessageMenu(params: {
       if (id === 'copy') {
         const text = copyableTextOf(messageId);
         if (text === undefined) {
-          announce('Message protégé');
+          announce(translate(currentInterfaceLanguage(), 'announce.messageProtected'));
           return;
         }
         if (typeof navigator === 'object' && navigator.clipboard) void navigator.clipboard.writeText(text);
@@ -207,7 +207,10 @@ export function useMessageMenu(params: {
       setSelection((current) => {
         if (current === null) return current;
         const next = selectionReducer(current, { type: 'toggle', id: messageId });
-        if (next?.reason === 'cap') announce('Maximum 100 messages');
+        if (next?.reason === 'cap') {
+          const lang = currentInterfaceLanguage();
+          announce(translate(lang, 'announce.selectionCap', { count: new Intl.NumberFormat(lang).format(SELECTION_CAP) }));
+        }
         return next;
       });
     },
@@ -222,7 +225,7 @@ export function useMessageMenu(params: {
       const ids = orderedIds(placed, new Set(selection.ids));
       const text = copyTextOf(ids, copyableTextOf);
       if (text === '') {
-        announce('Rien à copier');
+        announce(translate(currentInterfaceLanguage(), 'announce.nothingToCopy'));
         return;
       }
       if (typeof navigator === 'object' && navigator.clipboard) void navigator.clipboard.writeText(text);
@@ -253,13 +256,15 @@ export function useMessageMenu(params: {
     if (message === undefined) return undefined;
     const ctx = messageMenuContextOf(message, { now: Date.now() });
     const servedLanguage = servedOf(menuTarget.messageId)?.language ?? '';
-    const author = message.sender?.displayName ?? 'Vous';
+    const lang = currentInterfaceLanguage();
+    const author = message.sender?.displayName ?? translate(lang, 'message.author.self');
     const text = copyableTextOf(menuTarget.messageId);
-    const excerpt = text === undefined ? 'contenu protégé' : text.length > 80 ? `${text.slice(0, 80)}…` : text;
+    const excerpt =
+      text === undefined ? translate(lang, 'message.excerpt.protected') : text.length > 80 ? `${text.slice(0, 80)}…` : text;
     return {
       items: messageMenuItems(ctx),
       choices: translationChoices({ message, preferredLanguages: readerLanguages, servedLanguage }),
-      subjectLabel: `Actions du message de ${author} : ${excerpt}`,
+      subjectLabel: translate(lang, 'a11y.message.menu.subject', { author, excerpt }),
     };
   })();
 

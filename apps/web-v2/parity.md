@@ -11,7 +11,7 @@
 |---|---|---|
 | `apps/web` (legacy) | **80** | **la PRODUCTION, seule — 100 % du trafic utilisateur** |
 | `apps/web-old-version3` | 48 | n'a jamais servi un écran ; **annulée** le 2026-09-07, quitte le dépôt avec #5882 |
-| `apps/web-v2` (la v3.1) | **29** — 24 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
+| `apps/web-v2` (la v3.1) | **31** — 26 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
 
 **L'ancienne refonte n'a jamais servi un seul écran à un utilisateur réel.**
 
@@ -34,6 +34,17 @@
 > autres étaient déjà là et personne n'avait reprojeté le script — c'est
 > exactement le mode de dérive que l'absence de gate sur ce delta rend
 > silencieux, et il vient de se reproduire pour la troisième fois.
+
+> **Correction du 2026-09-13, second lot (#5672).** `/auth/verify-email` et
+> `/reset-password` passent de `legacy` à `V4.0.0` : le code de vérification
+> après inscription et la réinitialisation depuis le lien reçu sont
+> désormais servis par la v3.1 (`src/routes/verify-email.tsx`,
+> `src/routes/reset-password.tsx`, ports `verifyEmail`/`resendVerification`/
+> `verifyResetToken`/`resetPassword` de `src/lib/api/auth.ts`). Mesure du
+> jour, `node scripts/route-inventory.mjs` : **31** routes v3.1 (26 écrans +
+> 5 documents pré-rendus) / **91** adresses distinctes en union avec le
+> legacy — l'union ne bouge pas, ces deux adresses existaient déjà côté
+> legacy et changent seulement de verdict.
 
 > **Correction du 2026-09-08 (#5669).** Ce tableau a porté « `apps/web-v2` — 0 —
 > nulle part encore » pendant tout le cadrage de #5492, et c'était FAUX : la
@@ -276,10 +287,10 @@ dans une version ultérieure ·
 | `/signup/affiliate/:token` | **V4.0.0** | une porte parmi d'autres vers la clé d'affiliation |
 | `/auth/magic-link` | **V4.0.0** | |
 | `/auth/magic-link/validate` | **V4.0.0** | |
-| `/forgot-password` | **V4.0.0** | porté par #5816 : le MÊME écran répond à 200 et à 404 — l'existence d'une adresse ne se lit pas dans la réponse. Le flux TÉLÉPHONE et `/reset-password` restent `legacy` |
+| `/forgot-password` | **V4.0.0** | porté par #5816 : le MÊME écran répond à 200 et à 404 — l'existence d'une adresse ne se lit pas dans la réponse. Le flux TÉLÉPHONE reste `legacy` |
 | `/forgot-password/check-email` | `legacy` | état d'attente du précédent |
-| `/reset-password` | `legacy` | consommation du lien de réinitialisation |
-| `/auth/verify-email` | `legacy` | vérification d'adresse |
+| `/reset-password` | **V4.0.0** | porté par #5672 : le jeton (`?token=`) se vérifie via `GET /reset-password/verify-token` AVANT de montrer le formulaire — un jeton périmé ne laisse jamais saisir un mot de passe pour échouer à l'envoi |
+| `/auth/verify-email` | **V4.0.0** | porté par #5672 : anatomie de `EmailVerificationView.swift` — code à 6 chiffres (`?email=`), jamais le jeton de lien (validation par LIEN hors tranche, `/auth/magic-link/validate`) |
 | `/auth/verify-phone` | `legacy` | vérification de téléphone |
 | `/auth/verify-2fa` | `legacy` | second facteur |
 | `/settings/verify-email-change` | `legacy` | confirmation d'un changement d'adresse |

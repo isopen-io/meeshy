@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
+import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import { ROUTES } from '@/routes/route-table';
 import {
   FEED_DESTINATION,
@@ -91,10 +93,25 @@ describe('chaque destination se dit', () => {
    * le disque coloré ne dit rien de ce qu'il ouvre. Et la promesse est ce qui
    * distingue un écran d'attente d'une panne (#6214).
    */
-  test('porte un libellé et une promesse non vides', () => {
-    for (const destination of allFloatingDestinations()) {
-      expect(destination.label.trim().length).toBeGreaterThan(0);
-      expect(destination.promise.trim().length).toBeGreaterThan(0);
+  test('porte un libellé et une promesse dans chacune des sept langues', async () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      await loadInterfaceCatalog(language);
+      for (const destination of allFloatingDestinations()) {
+        expect(translate(language, destination.labelKey).trim().length).toBeGreaterThan(0);
+        expect(translate(language, destination.promiseKey).trim().length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  /**
+   * Deux destinations qui se NOMMENT pareil seraient indiscernables au lecteur
+   * d'écran — dans chaque langue, pas seulement en français.
+   */
+  test('porte un libellé qui n’appartient qu’à elle, dans chaque langue', async () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      await loadInterfaceCatalog(language);
+      const labels = allFloatingDestinations().map((d) => translate(language, d.labelKey));
+      expect({ language, distinct: new Set(labels).size }).toEqual({ language, distinct: labels.length });
     }
   });
 

@@ -42,9 +42,13 @@
  * Un atome sans consommateur ne protège rien et finit par diverger de ce qu'il
  * prétend garder : ce dépôt l'a déjà payé une fois, sur CET atome précisément
  * (« l'atome existait, testé, sans un seul consommateur » —
- * `LentilleConversationRow.swift`). La pose de coin reviendra avec son premier
- * appelant réel, dans le même commit que lui ; ses cotes sont écrites
- * ci-dessus pour qu'il n'ait pas à les rechercher.
+ * `LentilleConversationRow.swift`).
+ *
+ * **La pose de coin est REVENUE avec son premier appelant réel** (#6219,
+ * #6288) : le bouton flottant de droite, qui porte le compte de notifications
+ * non lues servi par `GET /notifications/counts` et tenu par
+ * `notification:counts` — dans le même commit que ce compte, comme ce
+ * paragraphe l'exigeait.
  */
 
 /** Cotes de la pose de FLUX — `UnreadCountBadge.swift`, trait pour trait. */
@@ -101,6 +105,124 @@ export function UnreadBadge({
         backgroundColor: 'var(--color-error)',
         boxShadow: `0 0 ${UNREAD_BADGE_FLOW.shadowRadius}px color-mix(in srgb, var(--color-error) ${UNREAD_BADGE_FLOW.shadowOpacity * 100}%, transparent)`,
         ...(opacity === undefined ? {} : { opacity }),
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+/**
+ * Cotes de la pose de COIN — `NotificationBadge` (`FloatingButtons.swift:700-745`),
+ * trait pour trait : plus petite que la pose de flux parce qu'elle EMPIÈTE sur
+ * ce qu'elle annote.
+ */
+export const UNREAD_BADGE_CORNER = {
+  height: 18,
+  /** Plancher égal à la hauteur : à un chiffre, un CERCLE. */
+  minimumSize: 18,
+  horizontalPadding: 6,
+  /** Décalage depuis le CENTRE du bouton porteur — `.offset(x: 16, y: -16)`. */
+  offsetX: 16,
+  offsetY: -16,
+  fontSize: 10,
+  shadowRadius: 3,
+  shadowOpacity: 0.5,
+} as const;
+
+/**
+ * La pastille de COIN — posée par son hôte dans une boîte `position: relative`
+ * (le bouton flottant). DÉCORATIVE (`aria-hidden`) : c'est le bouton qui
+ * annonce le compte dans son nom, une seule fois.
+ */
+export function UnreadCornerBadge({ count }: { readonly count: number }) {
+  const text = unreadBadgeText(count);
+  if (text === '') return null;
+  const { height, minimumSize, horizontalPadding, offsetX, offsetY, fontSize, shadowRadius, shadowOpacity } = UNREAD_BADGE_CORNER;
+
+  return (
+    <span
+      data-unread={count}
+      data-badge-pose="corner"
+      aria-hidden="true"
+      className="pointer-events-none absolute grid place-items-center rounded-chip font-semibold text-white tabular-nums"
+      style={{
+        top: '50%',
+        left: '50%',
+        transform: `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px))`,
+        minWidth: minimumSize,
+        height,
+        paddingInline: horizontalPadding,
+        fontSize,
+        lineHeight: 1,
+        backgroundColor: 'var(--color-error)',
+        boxShadow: `0 0 ${shadowRadius}px color-mix(in srgb, var(--color-error) ${shadowOpacity * 100}%, transparent)`,
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+/**
+ * Cotes de la pose de BARREAU — la pastille de `ThemedActionButton(badge:)`
+ * (`apps/ios/Meeshy/Features/Main/Views/RootViewComponents.swift:66-78`), trait
+ * pour trait : plancher 16, rembourrage 5, corps 9, décalée de `size × 0,33`.
+ */
+export const UNREAD_BADGE_RUNG = {
+  minimumSize: 16,
+  horizontalPadding: 5,
+  fontSize: 9,
+  offsetRatio: 0.33,
+} as const;
+
+/**
+ * **La pastille d'un BARREAU de l'échelle** (#6219) — la troisième pose d'iOS.
+ *
+ * **Blanche, pas rouge**, et c'est la seule pose qui déroge au rouge
+ * sémantique : elle se pose sur un disque déjà TEINTÉ — le barreau
+ * « Notifications » est #FF6B6B — où le rouge d'erreur disparaîtrait dans son
+ * support. iOS peint donc une capsule blanche à l'encre de la teinte.
+ *
+ * **L'encre est la teinte ASSOMBRIE** (le second arrêt du dégradé du barreau,
+ * 70 % de la teinte sur du noir), là où iOS prend la teinte pleine : #FF6B6B
+ * sur blanc mesure 2,8:1, sous le seuil AA pour un corps 9 ; assombrie, 5,2:1.
+ *
+ * Aucune respiration : l'échelle du web n'est montée qu'ouverte et ne porte
+ * pas le halo des barreaux d'iOS, dont la pulsation de la pastille est le
+ * prolongement. DÉCORATIVE : le barreau annonce le compte dans son nom.
+ */
+export function UnreadRungBadge({
+  count,
+  tint,
+  size,
+}: {
+  readonly count: number;
+  readonly tint: string;
+  readonly size: number;
+}) {
+  const text = unreadBadgeText(count);
+  if (text === '') return null;
+  const { minimumSize, horizontalPadding, fontSize, offsetRatio } = UNREAD_BADGE_RUNG;
+  const offset = Math.round(size * offsetRatio * 100) / 100;
+
+  return (
+    <span
+      data-unread={count}
+      data-badge-pose="rung"
+      aria-hidden="true"
+      className="pointer-events-none absolute grid place-items-center rounded-chip font-semibold tabular-nums"
+      style={{
+        top: '50%',
+        left: '50%',
+        transform: `translate(calc(-50% + ${offset}px), calc(-50% - ${offset}px))`,
+        minWidth: minimumSize,
+        height: minimumSize,
+        paddingInline: horizontalPadding,
+        fontSize,
+        lineHeight: 1,
+        backgroundColor: '#fff',
+        color: `color-mix(in srgb, ${tint} 70%, #000)`,
       }}
     >
       {text}

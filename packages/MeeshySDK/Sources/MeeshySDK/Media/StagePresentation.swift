@@ -88,6 +88,46 @@ public enum StagePresentation: Equatable, Sendable {
             return isFull ? self : .full(pausedOnEntry: false)
         }
     }
+
+    /// **Ce qu'une porte commande à la LECTURE — une information distincte de
+    /// ce qu'elle commande au CADRAGE** (retour porteur 2026-09-13 : « appui
+    /// long permet de faire pause ET D'ENLEVER LA PAUSE sans quitter le plein
+    /// écran »).
+    ///
+    /// `after(_:)` ne pouvait pas la porter. En plein cadre, l'appui long y rend
+    /// `.full(pausedOnEntry: true)` — soit LUI-MÊME dès le second appui — et
+    /// l'hôte, qui court-circuite sur `guard next != stagePresentation`, n'avait
+    /// alors plus rien à appliquer : le geste devenait un no-op et la seule
+    /// reprise possible passait par le bouton central.
+    ///
+    /// > Une porte qui rend le même ÉTAT ne dit pas qu'il ne s'est rien passé.
+    ///
+    /// `pausedOnEntry` mémorise le GESTE d'entrée, jamais l'état du transport —
+    /// `MediaStagePause` le dit déjà en posant sa troisième question
+    /// (`isPlaying`). Il manquait la conséquence : la commande de lecture voyage
+    /// à part, et l'hôte l'applique AVANT son court-circuit de cadrage.
+    public static func transportIntent(for door: StageEntry,
+                                       from current: StagePresentation) -> StageTransportIntent {
+        guard door == .longPress else { return .none }
+        // Entrer par l'appui long met en pause ; y insister, une fois dedans,
+        // bascule. Le geste fait ainsi « la même chose des deux côtés de la
+        // porte » — arrêter ce qui joue — tout en restant réversible sans sortir.
+        return current.isFull ? .togglePlayback : .pause
+    }
+}
+
+/// Ce qu'une porte du plateau commande au TRANSPORT, séparé de ce qu'elle
+/// commande au cadrage. Trois cas, pas deux : « ne rien faire » n'est pas
+/// « mettre en pause », et « basculer » n'est ni l'un ni l'autre.
+public enum StageTransportIntent: Equatable, Sendable {
+    /// La porte ne dit rien de la lecture — le tap qui rend la carte laisse la
+    /// vidéo continuer, et c'est voulu : refermer pour lire la légende ne doit
+    /// pas coûter sa place au lecteur.
+    case none
+    /// Entrée en plein cadre par l'appui long : on arrête ce qui joue.
+    case pause
+    /// Appui long alors qu'on y est déjà : pause ⇄ reprise, sans sortir.
+    case togglePlayback
 }
 
 /// **Quand la pastille « en pause » se montre.**

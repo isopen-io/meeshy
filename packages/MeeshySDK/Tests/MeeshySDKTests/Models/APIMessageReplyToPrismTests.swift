@@ -91,12 +91,27 @@ struct APIMessageReplyToPrismTests {
         #expect(reply.isProtected == false)
     }
 
+    /// Tolérant par ÉLÉMENT, pas par tableau (f7dfb23cf1) : une entrée
+    /// malformée est écartée, la clé PRÉSENTE reste un tableau — vide si rien
+    /// n'est lisible. Ce témoin attendait `nil`, la forme de l'ancien décodage
+    /// qui jetait le tableau entier ; aucun consommateur ne distingue `nil` de
+    /// `[]` (`toReplyReference` lit `translations ?? []`), et l'invariant qui
+    /// compte est le texte servi.
     @Test("une entrée de traduction malformée ne fait pas tomber la citation")
     func malformedTranslationEntryIsIsolated() throws {
         let reply = try Self.decodeReplyTo(Self.quoted(translations: ["{\"targetLanguage\":\"fr\"}"]))
         #expect(reply.id == "q1")
-        #expect(reply.translations == nil)
+        #expect(reply.translations?.isEmpty == true)
         #expect(reply.toReplyReference(currentUserId: "u-me", preferredLanguages: ["fr"]).previewText == "Hello")
+    }
+
+    @Test("une entrée malformée à côté d'une bonne : la bonne reste, et c'est elle qui est servie")
+    func wellFormedTranslationSurvivesAMalformedSibling() throws {
+        let reply = try Self.decodeReplyTo(Self.quoted(
+            translations: ["{\"targetLanguage\":\"de\"}", Self.translation("fr", "Bonjour")]
+        ))
+        #expect(reply.translations?.count == 1)
+        #expect(reply.toReplyReference(currentUserId: "u-me", preferredLanguages: ["fr"]).previewText == "Bonjour")
     }
 
     // MARK: - Prisme

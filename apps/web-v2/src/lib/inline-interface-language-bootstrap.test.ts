@@ -50,15 +50,19 @@ test('un choix stocké et cataloguée l’emporte sur navigator.languages', () =
 });
 
 test('un choix stocké non catalogué est ignoré au profit de navigator.languages', () => {
-  expect(run({ stored: 'de', navigatorLanguages: ['en-US', 'en'] })).toBe('en');
+  expect(run({ stored: 'sw', navigatorLanguages: ['en-US', 'en'] })).toBe('en');
 });
 
 test('rien de stocké : la première langue de navigator.languages qui est cataloguée gagne', () => {
-  expect(run({ stored: null, navigatorLanguages: ['de-DE', 'en-GB', 'fr-FR'] })).toBe('en');
+  expect(run({ stored: null, navigatorLanguages: ['ja-JP', 'de-DE', 'fr-FR'] })).toBe('de');
+});
+
+test('une variante régionale se résout sur sa langue : pt-BR sert le portugais', () => {
+  expect(run({ stored: null, navigatorLanguages: ['pt-BR'] })).toBe('pt');
 });
 
 test('rien de stocké, aucune langue de navigator.languages cataloguée : repli sur le défaut', () => {
-  expect(run({ stored: null, navigatorLanguages: ['de-DE', 'es-ES'] })).toBe(DEFAULT_INTERFACE_LANGUAGE);
+  expect(run({ stored: null, navigatorLanguages: ['ja-JP', 'sw-TZ'] })).toBe(DEFAULT_INTERFACE_LANGUAGE);
 });
 
 test('un stockage refusé (mode privé) ne lève pas — même patron que le schéma : le `catch` unique enveloppe tout le bloc, donc il laisse la valeur statique du HTML plutôt que de retomber sur navigator.languages', () => {
