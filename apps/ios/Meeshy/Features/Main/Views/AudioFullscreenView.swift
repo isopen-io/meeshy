@@ -878,13 +878,13 @@ private struct AudioFullscreenPage: View {
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
+                    // L'écoute SUIT le doigt (`currentTime` : coût nul) — #6300.
                     .onChanged { value in
                         isSeeking = true
                         seekValue = max(0, min(1, value.location.x / geo.size.width))
+                        player.seek(to: seekValue)
                     }
-                    .onEnded { value in
-                        let fraction = max(0, min(1, value.location.x / geo.size.width))
-                        player.seek(to: fraction)
+                    .onEnded { _ in
                         isSeeking = false
                         seekValue = 0
                     }

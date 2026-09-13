@@ -67,6 +67,64 @@ final class StagePresentationTests: XCTestCase {
                        "l'appui long PAUSE : il fait la même chose des deux côtés de la porte")
     }
 
+    // MARK: - L'appui long BASCULE la lecture en plein cadre (porteur 2026-09-13)
+
+    /*
+     « Appui long permet de faire pause ET D'ENLEVER LA PAUSE sans quitter le
+     plein écran. »
+
+     La présentation seule ne peut pas porter cette demande : en plein cadre,
+     `after(.longPress)` rend `.full(pausedOnEntry: true)` — c'est-à-dire
+     LUI-MÊME dès le second appui. L'hôte, qui court-circuite sur
+     `guard next != stagePresentation`, n'avait alors plus rien à appliquer :
+     le geste était un no-op, et la seule façon de reprendre était le bouton
+     central.
+
+     > Une porte qui rend le même ÉTAT ne dit pas qu'il ne s'est rien passé.
+     > `pausedOnEntry` mémorise le GESTE d'entrée, jamais l'état du transport —
+     > c'est déjà ce que dit `MediaStagePause`, qui pose sa troisième question
+     > (`isPlaying`) pour cette raison exacte. Il manquait la conséquence : ce
+     > que la porte commande à la LECTURE est une information distincte de ce
+     > qu'elle commande au CADRAGE, et elle doit voyager à part.
+    */
+
+    func test_longPress_fromCarded_pausesOnEntry() {
+        XCTAssertEqual(
+            StagePresentation.transportIntent(for: .longPress, from: .carded),
+            .pause,
+            "entrer en plein cadre par l'appui long met en pause — inchangé"
+        )
+    }
+
+    func test_longPress_whileFull_togglesPlayback_ratherThanPausingAgain() {
+        for current in [StagePresentation.full(pausedOnEntry: true),
+                        .full(pausedOnEntry: false)] {
+            XCTAssertEqual(
+                StagePresentation.transportIntent(for: .longPress, from: current),
+                .togglePlayback,
+                "en plein cadre, l'appui long BASCULE — c'est ce qui permet d'enlever la pause sans sortir"
+            )
+        }
+    }
+
+    /// Les deux autres portes ne commandent RIEN au transport. Le tap qui sort
+    /// du plein cadre ne doit pas arrêter la lecture : on revient à la carte,
+    /// la vidéo continue — et le lecteur qui referme pour lire la légende ne
+    /// perd pas sa place.
+    func test_theOtherDoors_commandNothingToPlayback() {
+        for door in [StageEntry.tap, .swipeUp] {
+            for current in [StagePresentation.carded,
+                            .full(pausedOnEntry: true),
+                            .full(pausedOnEntry: false)] {
+                XCTAssertEqual(
+                    StagePresentation.transportIntent(for: door, from: current),
+                    .none,
+                    "\(door) depuis \(current) ne doit rien commander à la lecture"
+                )
+            }
+        }
+    }
+
     // MARK: - Ce que l'état commande au cadrage
 
     /// **L'état d'immersion PILOTE la géométrie** — c'est tout l'objet du lot.

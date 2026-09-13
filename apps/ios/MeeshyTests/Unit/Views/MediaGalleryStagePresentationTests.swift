@@ -151,6 +151,65 @@ final class MediaGalleryStagePresentationTests: XCTestCase {
         XCTAssertTrue(code.contains("@State var stagePresentation: StagePresentation = .carded"))
     }
 
+    /// **La commande de LECTURE s'applique AVANT le court-circuit de cadrage**
+    /// (retour porteur 2026-09-13 : « appui long permet de faire pause et
+    /// D'ENLEVER LA PAUSE sans quitter le plein écran »).
+    ///
+    /// `guard next != stagePresentation` protège l'ANIMATION — rejouer une
+    /// transition vers l'état courant ferait clignoter le plateau. Mais il
+    /// avalait aussi le transport : en plein cadre, `after(.longPress)` rend
+    /// `.full(pausedOnEntry: true)`, soit l'état COURANT, donc retour immédiat
+    /// sans avoir rien pausé ni repris. L'appui long y était un no-op, et la
+    /// seule reprise possible passait par le bouton central.
+    ///
+    /// > Un court-circuit posé pour une raison en sert souvent une seconde à
+    /// > son insu. Ici, « ne pas rejouer l'animation » avait fini par vouloir
+    /// > dire « ne rien faire du tout ».
+    ///
+    /// Le témoin mesure l'ORDRE, parce que c'est l'ordre qui était faux : les
+    /// deux lignes existeraient toutes les deux dans la version fautive.
+    func test_theTransportCommand_isAppliedBeforeTheFramingShortCircuit() throws {
+        let code = try source(Self.gallery)
+        guard let body = declarationBody(startingAt: "func onEnterStage(_ door: StageEntry) {", in: code) else {
+            return XCTFail("`onEnterStage` introuvable — la garde ne mesurerait rien.")
+        }
+        guard let transport = body.range(of: "applyTransport(") else {
+            return XCTFail("""
+                `onEnterStage` ne commande RIEN à la lecture : l'appui long ne peut ni \
+                mettre en pause ni reprendre.
+                """)
+        }
+        guard let shortCircuit = body.range(of: "guard next != stagePresentation") else {
+            return XCTFail("Le court-circuit de cadrage a disparu — vérifier que l'animation ne se rejoue pas.")
+        }
+        XCTAssertTrue(
+            transport.lowerBound < shortCircuit.lowerBound,
+            """
+            `applyTransport` doit être appelé AVANT `guard next != stagePresentation`. \
+            Après, le retour anticipé l'avale dès que la porte rend l'état courant — \
+            c'est exactement le no-op de l'appui long en plein cadre.
+            """
+        )
+    }
+
+    /// La bascule ne doit toucher QUE la piste de cette page. Le player est
+    /// partagé par tout le processus : reprendre sans vérifier relancerait la
+    /// lecture d'une autre surface — le feed, une bulle, une image-dans-l'image.
+    func test_theToggle_onlyTouchesTheTrackOfThisPage() throws {
+        let code = try source(Self.gallery)
+        guard let body = declarationBody(startingAt: "func applyTransport(_ intent: StageTransportIntent) {", in: code) else {
+            return XCTFail("`applyTransport` introuvable.")
+        }
+        XCTAssertTrue(
+            body.contains("videoManager.activeURL == attachment.fileUrl"),
+            "La bascule doit vérifier que la piste active est bien celle de cette page."
+        )
+        XCTAssertTrue(
+            body.contains("videoManager.togglePlayPause()"),
+            "La bascule doit basculer la lecture — c'est ce qui permet d'enlever la pause sans sortir."
+        )
+    }
+
     /// **Les trois portes sont CÂBLÉES, pas seulement définies.** Une loi de
     /// transition qu'aucun geste n'appelle est un moteur sans arbre : verte de
     /// partout, inerte au doigt.
