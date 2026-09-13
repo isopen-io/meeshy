@@ -44,18 +44,29 @@ function Harness({
   attachmentId,
   coordinator,
   tag = 'audio',
+  tracksTime = false,
 }: {
   readonly onReady: (playback: MediaPlayback) => void;
   readonly attachmentId: string;
   readonly coordinator: MediaCoordinator;
   readonly tag?: 'audio' | 'video';
+  readonly tracksTime?: boolean;
 }) {
-  const playback = useMediaPlayback({ attachmentId, coordinator });
+  const playback = useMediaPlayback({ attachmentId, coordinator, tracksTime });
   onReady(playback);
+  const data = {
+    'data-status': playback.status,
+    'data-progress': playback.progress,
+    'data-position': playback.position,
+    'data-duration': playback.duration,
+    'data-muted': String(playback.muted),
+    'data-rate': playback.rate,
+    'data-pip': playback.pictureInPicture,
+  };
   if (tag === 'video') {
-    return <video ref={playback.bind} data-status={playback.status} data-progress={playback.progress} />;
+    return <video ref={playback.bind} {...data} />;
   }
-  return <audio ref={playback.bind} data-status={playback.status} data-progress={playback.progress} />;
+  return <audio ref={playback.bind} {...data} />;
 }
 
 function mount(params: {
@@ -63,6 +74,7 @@ function mount(params: {
   readonly attachmentId: string;
   readonly coordinator: MediaCoordinator;
   readonly tag?: 'audio' | 'video';
+  readonly tracksTime?: boolean;
 }): HTMLDivElement {
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -249,6 +261,197 @@ describe('useMediaPlayback — échec de lecture (#5805)', () => {
     expect(calls.loadCalls).toBe(1);
     expect(calls.playCalls).toBe(1);
     expect(statusOf(el)).toBe('playing');
+  });
+});
+
+/**
+ * LA MÉCANIQUE DE LA BARRE DE LECTURE (#6359) — position, durée, saut, muet,
+ * vitesse, image dans l'image. `tracksTime` est OPT-IN : seule la visionneuse
+ * affiche un temps à la seconde ; une tuile du fil qui le suivrait se
+ * re-rendrait chaque seconde pour rien (« Zero Unnecessary Re-render »).
+ */
+const attr = (el: HTMLDivElement, name: string): string | null => mediaOf(el).getAttribute(name);
+
+function setMediaTime(media: HTMLMediaElement, values: { readonly currentTime?: number; readonly duration?: number }): void {
+  if (values.duration !== undefined) Object.defineProperty(media, 'duration', { value: values.duration, configurable: true });
+  if (values.currentTime !== undefined) Object.defineProperty(media, 'currentTime', { value: values.currentTime, configurable: true, writable: true });
+}
+
+describe('useMediaPlayback — temps suivi à la seconde, sur demande (#6359)', () => {
+  test('loadedmetadata ⇒ la durée de l’élément, en secondes', async () => {
+    const coordinator = createMediaCoordinator();
+    const el = mount({ onReady: () => {}, attachmentId: 'v', coordinator, tag: 'video', tracksTime: true });
+    const media = mediaOf(el);
+
+    await act(async () => {
+      setMediaTime(media, { duration: 65 });
+      media.dispatchEvent(new Event('loadedmetadata'));
+    });
+
+    expect(attr(el, 'data-duration')).toBe('65');
+  });
+
+  test('timeupdate ⇒ la position à la seconde ; deux instants de la même seconde ne re-rendent pas', async () => {
+    const coordinator = createMediaCoordinator();
+    let renders = 0;
+    const el = mount({ onReady: () => (renders += 1), attachmentId: 'v', coordinator, tag: 'video', tracksTime: true });
+    const media = mediaOf(el);
+    setMediaTime(media, { duration: 65 });
+
+    await act(async () => {
+      setMediaTime(media, { currentTime: 12.4 });
+      media.dispatchEvent(new Event('timeupdate'));
+    });
+    expect(attr(el, 'data-position')).toBe('12');
+    const rendersAt12 = renders;
+
+    await act(async () => {
+      setMediaTime(media, { currentTime: 12.6 });
+      media.dispatchEvent(new Event('timeupdate'));
+    });
+    expect(attr(el, 'data-position')).toBe('12');
+    expect(renders).toBe(rendersAt12);
+  });
+
+  test('sans tracksTime, la position ne suit pas — la tuile du fil ne paie rien', async () => {
+    const coordinator = createMediaCoordinator();
+    const el = mount({ onReady: () => {}, attachmentId: 'v', coordinator, tag: 'video' });
+    const media = mediaOf(el);
+
+    await act(async () => {
+      setMediaTime(media, { duration: 65, currentTime: 30 });
+      media.dispatchEvent(new Event('loadedmetadata'));
+      media.dispatchEvent(new Event('timeupdate'));
+    });
+
+    expect(attr(el, 'data-position')).toBe('0');
+    expect(attr(el, 'data-duration')).toBe('0');
+  });
+});
+
+describe('useMediaPlayback — saut, muet, vitesse (#6359)', () => {
+  test('seek(30) déplace RÉELLEMENT la lecture et la position suit sans attendre le navigateur', async () => {
+    const coordinator = createMediaCoordinator();
+    let playback!: MediaPlayback;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'v', coordinator, tag: 'video', tracksTime: true });
+    const media = mediaOf(el);
+    setMediaTime(media, { duration: 65, currentTime: 0 });
+
+    await act(async () => {
+      playback.seek(30);
+    });
+
+    expect(media.currentTime).toBe(30);
+    expect(attr(el, 'data-position')).toBe('30');
+  });
+
+  test('seek est borné à la durée : ni avant 0, ni après la fin', async () => {
+    const coordinator = createMediaCoordinator();
+    let playback!: MediaPlayback;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'v', coordinator, tag: 'video', tracksTime: true });
+    const media = mediaOf(el);
+    setMediaTime(media, { duration: 65, currentTime: 10 });
+
+    await act(async () => {
+      playback.seek(90);
+    });
+    expect(media.currentTime).toBe(65);
+
+    await act(async () => {
+      playback.seek(-5);
+    });
+    expect(media.currentTime).toBe(0);
+  });
+
+  test('setMuted(true) coupe l’élément ; un changement externe (volumechange) est relu', async () => {
+    const coordinator = createMediaCoordinator();
+    let playback!: MediaPlayback;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'v', coordinator, tag: 'video', tracksTime: true });
+    const media = mediaOf(el);
+
+    await act(async () => {
+      playback.setMuted(true);
+    });
+    expect(media.muted).toBe(true);
+    expect(attr(el, 'data-muted')).toBe('true');
+
+    await act(async () => {
+      media.muted = false;
+      media.dispatchEvent(new Event('volumechange'));
+    });
+    expect(attr(el, 'data-muted')).toBe('false');
+  });
+
+  test('setRate(1.5) règle la vitesse de l’élément', async () => {
+    const coordinator = createMediaCoordinator();
+    let playback!: MediaPlayback;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'v', coordinator, tag: 'video', tracksTime: true });
+    const media = mediaOf(el);
+
+    await act(async () => {
+      playback.setRate(1.5);
+    });
+
+    expect(media.playbackRate).toBe(1.5);
+    expect(attr(el, 'data-rate')).toBe('1.5');
+  });
+});
+
+describe('useMediaPlayback — image dans l’image (#6359)', () => {
+  const pipDocument = () => document as Document & { pictureInPictureEnabled?: boolean; exitPictureInPicture?: () => Promise<void> };
+
+  test('un <audio> n’a pas d’image dans l’image', () => {
+    Object.defineProperty(pipDocument(), 'pictureInPictureEnabled', { value: true, configurable: true });
+    const coordinator = createMediaCoordinator();
+    const el = mount({ onReady: () => {}, attachmentId: 'a', coordinator, tag: 'audio', tracksTime: true });
+    expect(attr(el, 'data-pip')).toBe('unsupported');
+  });
+
+  test('sur une <video>, entrer puis sortir passe par le navigateur, et l’état suit ses événements', async () => {
+    Object.defineProperty(pipDocument(), 'pictureInPictureEnabled', { value: true, configurable: true });
+    let exitCalls = 0;
+    pipDocument().exitPictureInPicture = () => {
+      exitCalls += 1;
+      return Promise.resolve();
+    };
+    const coordinator = createMediaCoordinator();
+    let playback!: MediaPlayback;
+    let requestCalls = 0;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'v', coordinator, tag: 'video', tracksTime: true });
+    const video = mediaOf(el) as HTMLVideoElement;
+    video.requestPictureInPicture = () => {
+      requestCalls += 1;
+      return Promise.resolve({} as PictureInPictureWindow);
+    };
+
+    await act(async () => {
+      video.dispatchEvent(new Event('loadedmetadata'));
+    });
+    expect(attr(el, 'data-pip')).toBe('inactive');
+
+    await act(async () => {
+      playback.togglePictureInPicture();
+      video.dispatchEvent(new Event('enterpictureinpicture'));
+    });
+    expect(requestCalls).toBe(1);
+    expect(attr(el, 'data-pip')).toBe('active');
+
+    await act(async () => {
+      playback.togglePictureInPicture();
+      video.dispatchEvent(new Event('leavepictureinpicture'));
+    });
+    expect(exitCalls).toBe(1);
+    expect(attr(el, 'data-pip')).toBe('inactive');
+  });
+
+  test('un navigateur sans image dans l’image (pictureInPictureEnabled faux) ne l’offre pas', async () => {
+    Object.defineProperty(pipDocument(), 'pictureInPictureEnabled', { value: false, configurable: true });
+    const coordinator = createMediaCoordinator();
+    const el = mount({ onReady: () => {}, attachmentId: 'v', coordinator, tag: 'video', tracksTime: true });
+    await act(async () => {
+      mediaOf(el).dispatchEvent(new Event('loadedmetadata'));
+    });
+    expect(attr(el, 'data-pip')).toBe('unsupported');
   });
 });
 
