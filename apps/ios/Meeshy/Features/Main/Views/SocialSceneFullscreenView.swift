@@ -302,7 +302,14 @@ struct SocialSceneFullscreenView: View {
             carrier: carrier
         )
         .preferredContentLanguages(preferredContentLanguages)
-        .aspectRatio(9.0 / 16.0, contentMode: .fit)
+        // **LE RATIO RÉEL DE LA SCÈNE, jamais le portrait d'office** (retour
+        // porteur 2026-09-13). Un littéral `9.0 / 16.0` cadrait toute scène en
+        // portrait : une scène paysage y débordait, ses bords hors de l'écran.
+        // `.fit` sur le mauvais ratio ne protège de rien. La loi est celle que
+        // `StoryViewerView.readerCanvasRatio` applique déjà — désormais à un
+        // site unique, `SceneFullscreenFraming`.
+        .aspectRatio(SceneFullscreenFraming.ratio(of: document, sceneIndex: index),
+                     contentMode: .fit)
         .ignoresSafeArea(edges: .bottom)
     }
 
