@@ -183,6 +183,17 @@ const en = {
   'settings.save.error': 'The setting was not saved.',
   'settings.theme.sync_error': 'Theme applied on this device, not synced.',
   'common.cancel': 'Cancel',
+
+  'media.video.play': 'Play video',
+  'media.video.pause': 'Pause',
+  'media.video.position': 'Playback position',
+  'media.video.position.value': '{elapsed} of {total}',
+  'media.video.mute': 'Mute',
+  'media.video.unmute': 'Unmute',
+  'media.video.more_options': 'More options',
+  'media.video.speed': 'Speed',
+  'media.video.pip.enter': 'Picture in Picture',
+  'media.video.pip.exit': 'Exit Picture in Picture',
 } satisfies InterfaceCatalog;
 
 export default en;

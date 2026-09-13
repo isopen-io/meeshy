@@ -183,6 +183,17 @@ const it = {
   'settings.save.error': "L'impostazione non è stata salvata.",
   'settings.theme.sync_error': 'Tema applicato su questo dispositivo, non sincronizzato.',
   'common.cancel': 'Annulla',
+
+  'media.video.play': 'Riproduci video',
+  'media.video.pause': 'Metti in pausa',
+  'media.video.position': 'Posizione di riproduzione',
+  'media.video.position.value': '{elapsed} di {total}',
+  'media.video.mute': 'Disattiva audio',
+  'media.video.unmute': 'Riattiva audio',
+  'media.video.more_options': 'Altre opzioni',
+  'media.video.speed': 'Velocità',
+  'media.video.pip.enter': 'Picture-in-Picture',
+  'media.video.pip.exit': 'Esci da Picture-in-Picture',
 } satisfies InterfaceCatalog;
 
 export default it;

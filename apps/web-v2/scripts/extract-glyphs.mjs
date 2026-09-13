@@ -335,6 +335,25 @@ emit({
 });
 
 /**
+ * LE JEU D'ECRAN DE LA BARRE DE LECTURE DE LA VISIONNEUSE (#6359) — miroir
+ * des symboles de `VideoTransportControls.swift` : `speaker.wave.2.fill` /
+ * `speaker.slash.fill` (muet), `pip.enter` (image dans l'image) et
+ * `ellipsis` (le menu vitesse / image dans l'image). `pause` et `fill-play`
+ * restent la ou ils sont (`MEDIA_GLYPHS`, socle) : le chunk de la visionneuse
+ * les recoit deja, les dupliquer ici paierait leurs octets deux fois. Charge
+ * avec le chunk `media-viewer`, jamais dans le socle ni dans le chunk du fil.
+ */
+const MEDIA_TRANSPORT = ['speaker-high', 'speaker-slash', 'picture-in-picture', 'dots-three'];
+
+emit({
+  ids: MEDIA_TRANSPORT,
+  output: join(HERE, '../src/components/glyphs-media-transport.ts'),
+  constant: 'MEDIA_TRANSPORT_GLYPHS',
+  type: 'MediaTransportGlyphName',
+  role: "LE JEU D'ECRAN de la barre de lecture de la visionneuse (#6359) : charge avec le chunk media-viewer, jamais dans le socle.",
+});
+
+/**
  * LE JEU D'ECRAN DES ETATS DU MESSAGE (#5936) — miroir
  * `BubbleMetaBadges.swift` (transfere : `arrowshape.turn.up.right.fill`,
  * modifie : `pencil`), `LocationMessageView` (lieu : `mappin.and.ellipse`),
