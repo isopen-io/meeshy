@@ -188,6 +188,13 @@ updates:
       # plafonnent protobuf <7.0.0 ; un bump 7.x casse l'install du translator
       - dependency-name: "protobuf"
         versions: [">=7.0.0"]
+      # …et le plafond vaut dans les DEUX sens : grpcio-reflection 1.83.1 exige
+      # protobuf>=7.35.1 (#5508 fusionné le 2026-09-13 a cassé Build translator).
+      # La famille ne bouge qu'ensemble, jamais par un bump isolé.
+      - dependency-name: "grpcio-reflection"
+        versions: [">=1.77.0"]
+      - dependency-name: "grpcio-tools"
+        versions: [">=1.77.0"]
       # pyannote-audio>=4.0 → pyannote-core>=6.0.1 → numpy>=2.0 + torch>=2.8.0,
       # incompatibles avec numpy<1.24.0 et torch==2.6.0 (Dockerfile). Le bump
       # Dependabot #1674 (3.4.0→4.0.7) a cassé le build Docker translator
