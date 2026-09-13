@@ -283,13 +283,28 @@ try {
         'information, valeur': '[data-share-link-info="identifier"] dd',
       });
 
-      await page.click('[data-share-link-action="disable"]');
+      /* UN DOUBLE TAP (#6417) : « Désactiver » devient « Activer » au premier
+         tap, À LA MÊME PLACE ; le second tap, 120 ms plus tard, ne doit pas le
+         réactiver. La porte (`tap-gate.ts`) retient 350 ms. */
+      const disable = await page.$eval('[data-share-link-action="disable"]', (el) => {
+        el.scrollIntoView({ block: 'center' });
+        const r = el.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      });
+      await page.mouse.click(disable.x, disable.y);
+      await page.waitForTimeout(120);
+      await page.mouse.click(disable.x, disable.y);
       const optimistic = await page
         .waitForFunction(() => document.querySelector('[data-share-link-status]')?.textContent === 'Inactif' && document.querySelector('[data-share-link-action="activate"]') !== null, null, {
           timeout: 500,
         })
         .then(() => true, () => false);
       check(optimistic, `${label} : désactiver se lit AU GESTE — « Inactif » et « Activer » en moins de 500 ms`);
+      await page.waitForTimeout(400);
+      check(
+        (await textOf(page, '[data-share-link-status]')) === 'Inactif' && (await page.$('[data-share-link-action="activate"]')) !== null,
+        `${label} : le second tap d'un double tap ne réactive pas le lien`,
+      );
       check(await announced(page, 'Lien désactivé'), `${label} : la désactivation s'annonce`);
       check((await textOf(page, '[data-share-link-reason]')) === 'Vous avez désactivé ce lien.', `${label} : la cause se lit sous l'état`);
       await capture(page, `detail-desactive-${slug}`);

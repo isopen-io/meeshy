@@ -21,7 +21,10 @@ import {
  * **(Dés)activer est optimiste, avec retour arrière.** La ligne, le détail et le
  * compte des actifs lisent le MÊME cache : ils changent au tap, et reviennent à
  * l'instantané si la passerelle refuse (puis la famille se revalide). Un second
- * tap sur le même lien pendant le vol rend la MÊME promesse.
+ * appel VERS LA MÊME CIBLE pendant le vol rend la MÊME promesse ; une bascule
+ * CONTRAIRE à celle en vol ne part pas et rend `busy` — l'écran ne l'annonce
+ * pas : rendre la promesse en vol faisait dire « Lien activé » sur un lien
+ * qu'on venait de désactiver (#6418).
  *
  * **Créer attend la passerelle, et c'est délibéré** (même arbitrage que D-60).
  * Le `linkId` est attribué par le serveur : une ligne posée avant la réponse
@@ -38,16 +41,18 @@ export type LinkActionDeps = LinksDeps & {
   readonly isOnline: () => boolean;
 };
 
-export type ShareLinkActionOutcome = 'done' | 'offline' | 'failed';
+export type ShareLinkActionOutcome = 'done' | 'offline' | 'failed' | 'busy';
 
-const inFlight = new Map<string, Promise<ShareLinkActionOutcome>>();
+type Flight = { readonly isActive: boolean; readonly outcome: Promise<ShareLinkActionOutcome> };
 
-function once(key: string, run: () => Promise<ShareLinkActionOutcome>): Promise<ShareLinkActionOutcome> {
-  const pending = inFlight.get(key);
-  if (pending !== undefined) return pending;
-  const started = run().finally(() => inFlight.delete(key));
-  inFlight.set(key, started);
-  return started;
+const inFlight = new Map<string, Flight>();
+
+function once(linkId: string, isActive: boolean, run: () => Promise<ShareLinkActionOutcome>): Promise<ShareLinkActionOutcome> {
+  const pending = inFlight.get(linkId);
+  if (pending !== undefined) return pending.isActive === isActive ? pending.outcome : Promise.resolve('busy');
+  const outcome = run().finally(() => inFlight.delete(linkId));
+  inFlight.set(linkId, { isActive, outcome });
+  return outcome;
 }
 
 export function performSetShareLinkActive({
@@ -59,7 +64,7 @@ export function performSetShareLinkActive({
   readonly isActive: boolean;
   readonly deps: LinkActionDeps;
 }): Promise<ShareLinkActionOutcome> {
-  return once(link.linkId, async () => {
+  return once(link.linkId, isActive, async () => {
     if (!deps.isOnline()) return 'offline';
     const snapshot = deps.queryClient.getQueryData<ShareLinksData>(SHARE_LINKS_QUERY_KEY);
     deps.queryClient.setQueryData<ShareLinksData>(SHARE_LINKS_QUERY_KEY, (data) => withLinkActive(data, link.linkId, isActive));

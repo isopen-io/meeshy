@@ -9,6 +9,7 @@ import {
   BlockedPersonRow,
   ConnectionAction,
   DiscoverHeader,
+  DiscoverOfflineNotice,
   DiscoverTabBar,
   InviteCard,
   PersonResultRow,
@@ -167,5 +168,18 @@ describe('inviter par e-mail', () => {
 
   test('« Envoyer » reste inerte tant qu’aucune adresse n’est saisie', () => {
     expect(card('idle')).toMatch(/disabled=""[^>]*data-discover-invite-send|data-discover-invite-send[^>]*disabled=""/);
+  });
+});
+
+describe('hors ligne (#6419)', () => {
+  test('sur un cache non vide, la liste reste et le dit', () => {
+    expect(renderToStaticMarkup(<DiscoverOfflineNotice language="fr" cold={false} />)).toContain('Vous voyez la liste du dernier chargement.');
+  });
+
+  test('à cache FROID, l’annonce ne promet aucune liste déjà chargée', () => {
+    const html = renderToStaticMarkup(<DiscoverOfflineNotice language="fr" cold />);
+    expect(html).toContain('role="status"');
+    expect(html).toContain('La liste se chargera dès le retour du réseau.');
+    expect(html).not.toContain('dernier chargement');
   });
 });

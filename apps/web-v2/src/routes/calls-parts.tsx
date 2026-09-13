@@ -262,9 +262,14 @@ export function CallsError({
   );
 }
 
-export function CallsOfflineNotice({ language }: { readonly language: InterfaceLanguage }) {
+/**
+ * Hors ligne. Sur un cache non vide, le journal reste et l'annonce le dit ; à
+ * cache FROID (#6419), rien n'a jamais été chargé : l'annonce dit ce qui se
+ * passera au retour du réseau, jamais « le journal du dernier chargement ».
+ */
+export function CallsOfflineNotice({ language, cold }: { readonly language: InterfaceLanguage; readonly cold: boolean }) {
   return (
-    <li role="status" data-calls-offline className="flex items-start gap-3 px-5 py-3" style={{ borderBottom: EDGE }}>
+    <li role="status" data-calls-offline={cold ? 'cold' : 'cached'} className="flex items-start gap-3 px-5 py-3" style={{ borderBottom: EDGE }}>
       <span aria-hidden="true" className="pt-0.5" style={{ color: 'var(--color-warning)' }}>
         <Glyph name="warningCircle" size={18} />
       </span>
@@ -273,7 +278,7 @@ export function CallsOfflineNotice({ language }: { readonly language: InterfaceL
           {translate(language, 'calls.offline.title')}
         </span>
         <span className="text-caption" style={{ color: INK_2 }}>
-          {translate(language, 'calls.offline.body')}
+          {translate(language, cold ? 'calls.offline.cold.body' : 'calls.offline.body')}
         </span>
       </span>
     </li>
