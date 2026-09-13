@@ -9,8 +9,10 @@ import { ApiError } from './client';
 import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import { apiDeps } from './deps';
-import { feedQuery, refreshFeed } from './feed';
+import { FEED_QUERY_KEY, feedQuery, refreshFeed } from './feed';
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
+import type { FeedInfiniteData } from './feed-pages';
+import { postQueryOptions } from './publication-detail';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import type { Conversation, Participant } from './types';
 import { messagesQuery } from './messages';
@@ -175,6 +177,28 @@ export function refreshFeedAction(): Promise<void> {
  */
 export function postGestureAction(postId: string, kind: PostToggleKind): Promise<PostGestureResult> {
   return performPostGesture({ postId, kind, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+/**
+ * `usePost` (#6278) — le détail d'une publication, CACHE D'ABORD : ouvert
+ * depuis le fil, il se peint AVEC la carte déjà reçue (`initialData`, datée
+ * du fil pour que `staleTime: 0` la revalide en fond) — jamais un squelette
+ * sur une publication que l'écran précédent affichait. Ouvert par un lien
+ * direct, le cache est vide et le squelette est juste. `retry: false` : un
+ * 404 est un VERDICT (D-6), pas une panne à réessayer.
+ */
+export function usePost(postId: string) {
+  return useQuery({
+    ...postQueryOptions({ ...apiDeps, postId }),
+    initialData: () =>
+      appQueryClient
+        .getQueryData<FeedInfiniteData>(FEED_QUERY_KEY)
+        ?.pages.flatMap((page) => page.posts)
+        .find((post) => post.id === postId),
+    initialDataUpdatedAt: () => appQueryClient.getQueryState(FEED_QUERY_KEY)?.dataUpdatedAt,
+    staleTime: 0,
+    retry: false,
+  });
 }
 
 export function useConversation(id: string) {

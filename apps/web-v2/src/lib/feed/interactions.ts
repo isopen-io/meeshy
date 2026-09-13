@@ -22,7 +22,7 @@ const shifted = (count: number | null | undefined, on: boolean): number => {
   return Math.max(0, current + (on ? 1 : -1));
 };
 
-function toggled(post: FeedPost, change: PostToggle): FeedPost {
+export function togglePost(post: FeedPost, change: PostToggle): FeedPost {
   if (post.id !== change.postId) return post;
   if (change.kind === 'like') {
     if ((post.isLikedByMe === true) === change.on) return post;
@@ -42,19 +42,20 @@ function mapPosts(data: FeedInfiniteData | undefined, update: (post: FeedPost) =
 }
 
 export function applyPostToggle(data: FeedInfiniteData | undefined, change: PostToggle): FeedInfiniteData | undefined {
-  return mapPosts(data, (post) => toggled(post, change));
+  return mapPosts(data, (post) => togglePost(post, change));
 }
 
 /** LE COMPTE ABSOLU SERVI remplace l'estimation optimiste — la passerelle le
  * rend sur `POST|DELETE /posts/:id/bookmark` et le diffuse sur `post:liked` /
  * `post:unliked` / `post:bookmarked` : un compte servi fait foi, un ±1 local
  * n'est qu'une avance. */
-export function applyServedCount(
-  data: FeedInfiniteData | undefined,
-  served: { readonly postId: string; readonly kind: PostToggleKind; readonly count: number },
-): FeedInfiniteData | undefined {
+export type ServedCount = { readonly postId: string; readonly kind: PostToggleKind; readonly count: number };
+
+export function withServedCount(post: FeedPost, served: ServedCount): FeedPost {
   const field = served.kind === 'like' ? 'likeCount' : 'bookmarkCount';
-  return mapPosts(data, (post) =>
-    post.id !== served.postId || post[field] === served.count ? post : { ...post, [field]: served.count },
-  );
+  return post.id !== served.postId || post[field] === served.count ? post : { ...post, [field]: served.count };
+}
+
+export function applyServedCount(data: FeedInfiniteData | undefined, served: ServedCount): FeedInfiniteData | undefined {
+  return mapPosts(data, (post) => withServedCount(post, served));
 }

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 
 import { FeedPostCard } from '@/components/feed-post-card';
 import { Glyph } from '@/components/glyph';
@@ -6,12 +6,11 @@ import { LensPaginationFooter } from '@/components/lens-pagination-footer';
 import { PullIndicator } from '@/components/pull-indicator';
 import { FEED_PAGE_SIZE } from '@/lib/api/feed';
 import type { FeedPost } from '@/lib/api/feed-pages';
-import { postGestureAction, refreshFeedAction, useFeed } from '@/lib/api/query';
+import { refreshFeedAction, useFeed } from '@/lib/api/query';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
-import type { PostToggleKind } from '@/lib/feed/interactions';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { useOnline } from '@/lib/net/online';
-import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
+import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useMinute } from '@/lib/view/use-minute';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
@@ -202,20 +201,7 @@ export default function FeedScreen() {
    * — « le fil réutilisera ce hook tel quel »). ARMÉ au seul état `idle`, et
    * seulement s'il y a déjà des cartes : une liste vide ne doit rien charger
    * en boucle (même garde que `conversations.tsx`). */
-  /* L'ISSUE D'UN GESTE s'annonce, comme une réaction du fil de messages
-     (`use-message-menu.ts`) : l'échec défait l'optimiste EN SILENCE pour
-     l'œil qui regarde ailleurs, et un geste hors ligne ressemble à un geste
-     confirmé — sans annonce, les deux seraient indiscernables. */
-  const { text: announcement, announce } = useLiveAnnouncer();
-  const onGesture = useCallback(
-    (postId: string, kind: PostToggleKind) => {
-      void postGestureAction(postId, kind).then((result) => {
-        if (!result.ok) announce(result.message);
-        else if (result.notice !== undefined) announce(result.notice);
-      });
-    },
-    [announce],
-  );
+  const { announcement, onGesture } = usePostGesture();
 
   const { observe: observeTail } = useLoadMoreSentinel({
     root: frame,
