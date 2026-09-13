@@ -2112,3 +2112,37 @@ n'affirme rien qu'il ne tienne pas.
 **Ce que le plafond relevé n'autorise pas** : 90 Ko laissent environ 50 Ko de croissance au premier pixel. Ce n'est pas une licence pour faire entrer une dépendance lourde dans le socle — le gate rougit toujours, simplement plus tard, et une remontée structurelle dans `core-*.js` ou `index-*.js` se lit toujours dans le détail par fichier de `measure-weight.mjs`. Les leviers d'allègement chiffrés sur #6279 (#5784 pour la feuille, 9,5 Ko ; le découpage de `core`, 19,7 Ko ; une table des routes hors du module d'entrée) restent ouverts, sans urgence.
 
 **Conséquence immédiate** : la route de détail de #6278 (D-48) n'est plus bloquée, et son alias `/feeds/post/$post` — le lien profond d'iOS et l'adresse que le partage émet — revient avec elle.
+
+## D-50 · La pilule de jour s'efface au REPOS : elle sert pendant le défilement, et rien ne recouvre un fil immobile — 2026-09-13 (#6101)
+
+**Le fait mesuré.** Fil au repos, 390 × 844 : la pilule collante, posée sous la bande à `--day-pill-top`, occupait y = 60..92 et recouvrait le nom d'auteur de la première rangée lisible (« Amina Diallo » au milieu de `c-rattrapage`, le texte du dernier message à l'ouverture en Bulles). 40 échecs sur 2 schémas × 2 gabarits × 4 modes demandés, relevés par `scripts/check-day-pill-rest.mjs` AVANT correction. Aucune rangée ne chevauche sa voisine : c'est l'overlay qui recouvre le flux.
+
+**Les trois réponses de l'issue, et pourquoi la première.**
+1. *Elle reste posée par-dessus, comme iOS* — écartée : le défaut est visible de l'utilisateur (dimension 8) et prive un nom de sa lisibilité (dimension 5). « iOS fait pareil » dit que la cible porte le même défaut, pas qu'il est souhaitable.
+2. *Le flux lui réserve sa hauteur* — écartée : elle rouvre la bande permanente que #6213 venait de retirer sur retour porteur (« le défilement visible du haut au bas de l'écran ») ; déplacer le couperet n'est pas le retirer.
+3. **Elle s'efface au repos et se révèle pendant le défilement — retenue.** C'est pendant le défilement qu'elle sert, et c'est ce que dit la directive iOS du 2026-08-24 (« il doit rester lorsque tous les autres composants disparaissent durant le scroll ») : rester PENDANT le geste, jamais « rester au repos ». Au repos, chaque rangée porte déjà son heure et chaque jour son séparateur en flux. C'est aussi la règle que #6277 a posée pour les disques flottants du Flux — **aucun flottant ne recouvre un texte au repos** — : une même règle pour tout le chrome flottant de la v2.0.
+
+**La fenêtre n'est pas inventée** : c'est celle de la pilule jour·heure d'iOS (`ScrollTimePillState.swift`, `lingerMs = 900`), c'est-à-dire la loi PARTAGÉE du révélé (`SCROLL_ACTIVITY_LINGER_MS`, `scene/activity.ts`). Doigt posé qui tire : révélée tant qu'il tient ; levée : effacée 900 ms après le DERNIER défilement (la décélération la prolonge) ; un défilement du CODE — ancrage à l'ouverture, « revenir en bas », saut vers une citation — ne la révèle jamais.
+
+**La forme.** `lib/view/day-pill-reveal.ts` (loi pure `dayPillRevealed`, souscripteur au défileur, projection hors React sur `data-day-pill="revealed"`), consommée par `useThreadChromeSignals` — `routes/thread.tsx` n'a pas bougé. L'état de REPOS est l'ABSENCE d'attribut (`thread-scene.css`) : le premier rendu est juste avant tout abonnement, sans éclair de pilule à l'ouverture, et une panne du souscripteur tombe du côté du repos.
+
+**L'écart avec iOS est un écart d'ÉTAT, ouvert côté iOS** plutôt que reproduit ici : la même pilule y reste visible au repos et y recouvre la même rangée.
+
+**La Rivière n'est pas mesurée** : le fil de la v2.0 ne la rend pas (`THREAD_RENDERABLE_MODES`). Le témoin pose sa clé, relève le mode servi, et la mesurera le jour où elle entre au catalogue de rendu.
+
+## D-51 · Le verre a UN site, deux densités et un flou — et un outil l'interdit ailleurs — 2026-09-13 (#6124)
+
+**Le constat.** `glass-surface.tsx` se déclarait « site unique » en prose ; neuf surfaces réécrivaient flou et opacité à la main — 70 / 78 / 80 / 85 / 88 / 92 %, flous de 12 et 24 px — dont tout le chrome du fil, et les deux seuls consommateurs du composant le contournaient pour leur propre en-tête. Une règle en prose ne tient que là où quelqu'un s'en souvient.
+
+**Le site est `src/styles/glass.css`** (importée par `app.css`) : `glass` et `glass-prominent`, un ton par rôle (`glass-card`, `glass-accent`, surface d'écran par défaut). `GlassSurface` et `GlassBack` en sont des consommateurs comme les autres.
+
+**Les densités sont ARBITRÉES sur une mesure, pas moyennées.** Le fond de repli porte le contraste quand `backdrop-filter` ne s'applique pas ; son pire cas est le fond composé sur du noir OU du blanc pur passant dessous. Relevé au navigateur, flou désactivé, schéma clair / sombre : pilule de jour (day-ink sur card) **3,54** / 4,68 à 70 %, **4,40** / 6,29 à 78 %, 4,64 / 6,78 à 80 %, 6,21 / 10,24 à 92 % ; en-tête ≥ 9,9 dès 80 %. **La pilule de jour, à 70 %, tombait sous AA en clair dès que le flou manquait** — la divergence de matière cachait un défaut de contraste.
+- **80 %, `glass`** — le plus bas palier qui tient AA pour toutes les encres du fil dans les deux schémas : bandes d'en-tête (fil, états du fil, progression), repères de jour (pilule ET séparateur en flux, jumeaux d'iOS `MessageDaySeparator` en `.ultraThinMaterial`), contrôle teinté « revenir en bas » (iOS : `adaptiveGlass(tint:)`, le régulier teinté), `GlassBack`, `GlassSurface` non proéminent (78 → 80).
+- **92 %, `glass-prominent`** — ce qui se pose SUR un contenu qu'on lit : `GlassSurface` proéminent, l'annonce au-dessus du composeur, la barre de recherche flottante de la liste (85 → 92), les disques flottants (88 → 92, sous leur dégradé).
+- **Un flou, 24 px** — celui du site unique ; les puces passent de 12 à 24.
+
+**Ce qui n'est PAS du verre, dit sur place.** La pastille de synchronisation portait un flou sous des fonds PLEINS (erreur, avertissement, carte) : retiré, pas migré. L'inventaire nommé de `scripts/lib/glass-site.mjs` admet trois écarts, chacun avec sa raison : le VOILE du menu de message (un scrim, pas une surface), le fond du bouton d'actions de rangée (dans la gouttière réservée, jamais sur un contenu), la tuile du média masqué (en flux dans la bulle).
+
+**La garde nomme une PROPRIÉTÉ, pas une API** (le piège du cycle 107). Un flou d'arrière-plan (`backdrop-blur-*`, `backdrop-filter`, `backdropFilter`) n'a qu'un usage — du verre ou un voile ; un ton de surface iOS rendu translucide EST le repli du verre ; un élément qui porte une classe de verre et réécrit son fond, ou une densité `--glass-*` posée localement, contourne le site en l'employant. Les trois tombent hors du site, la prose des commentaires ne compte pas, et une entrée d'inventaire devenue fausse — compte trop haut, fichier disparu — tombe aussi (`scripts/glass-site.test.ts`, dans `bun test`).
+
+**La feuille de première peinture ne naît plus de la PROSE** (`app.css`, `@source not` sur `scripts/` et les `*.md`). Mesuré en livrant ce lot : les classes citées dans les gates et les décisions (`backdrop-blur-xl`, `backdrop-filter`) faisaient générer à Tailwind des utilitaires que rien n'emploie, avec leurs `@property`. Première peinture : 39,96 Ko sur `dev`, 40,06 avec le verre avant ce réglage, 39,86 après — le plafond est désormais de 90 Ko (D-49), mais un octet servi avant le premier pixel pour un commentaire n'a pas de raison d'exister.

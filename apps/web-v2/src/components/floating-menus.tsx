@@ -155,7 +155,7 @@ export function FloatingMenus() {
         onClick={(event) => {
           if (flux.consumeClick()) event.preventDefault();
         }}
-        className="floating-disc pointer-events-auto absolute grid touch-none place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="floating-disc glass-prominent glass-card pointer-events-auto absolute grid touch-none place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{
           left: floatingLeft(flux.position),
           top: floatingTop(flux.position),
@@ -242,7 +242,7 @@ export function FloatingMenus() {
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={open ? PROFILE_DESTINATION.label : 'Menu'}
-          className="floating-disc pointer-events-auto absolute inset-0 grid touch-none place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="floating-disc glass-prominent glass-card pointer-events-auto absolute inset-0 grid touch-none place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{
             backgroundImage: open ? MENU_GRADIENT_OPEN : MENU_GRADIENT,
             outlineColor: 'var(--color-ios-brand)',

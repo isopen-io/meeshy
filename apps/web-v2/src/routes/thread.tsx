@@ -875,9 +875,8 @@ export default function ThreadScreen() {
           aria-hidden
         >
           <span
-            className="rounded-chip px-3 py-1.5 text-mini font-semibold backdrop-blur-md"
+            className="glass-prominent glass-card rounded-chip px-3 py-1.5 text-mini font-semibold"
             style={{
-              backgroundColor: 'color-mix(in srgb, var(--color-ios-card) 92%, transparent)',
               color: 'var(--color-ios-ink)',
               border: '0.5px solid var(--color-edge)',
             }}

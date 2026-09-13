@@ -1,0 +1,71 @@
+/**
+ * LE VERRE — site UNIQUE de la matière translucide de web-v2 (#6124).
+ *
+ * Pendant web de `adaptiveGlass` / `adaptiveGlassProminent`
+ * (`MeeshyUI/Compatibility/AdaptiveGlass.swift`). Avant ce fichier, neuf
+ * surfaces réécrivaient la matière à la main : cinq opacités (70 / 78 / 80 /
+ * 85 / 92 %, plus 88 pour les disques) et deux rayons de flou (12 et 24 px)
+ * pour une seule matière. `scripts/lib/glass-site.mjs` interdit désormais
+ * tout flou d'arrière-plan et tout ton iOS translucide hors d'ici, sauf
+ * inventaire nommé.
+ *
+ * LA MATIÈRE A DEUX DENSITÉS, UN FLOU, ET UN TON PAR RÔLE — arbitrées sur une
+ * MESURE, pas moyennées. Le fond de repli est ce qui porte le contraste quand
+ * `backdrop-filter` ne s'applique pas (moteur sans support, transparence
+ * réduite) ; le pire cas est donc le fond composé sur du NOIR ou du BLANC pur
+ * passant dessous. Relevé au navigateur (2026-09-13), encre de la surface la
+ * plus exigeante, schéma clair / sombre :
+ *
+ * | densité | pilule de jour (day-ink / card) | en-tête (ink / surface) |
+ * |---|---|---|
+ * | 70 % | **3,54** / 4,68 | 7,58 / 6,89 |
+ * | 78 % | **4,40** / 6,29 | 9,45 / 9,38 |
+ * | 80 % | 4,64 / 6,78 | 9,95 / 10,12 |
+ * | 92 % | 6,21 / 10,24 | 13,36 / 15,11 |
+ *
+ * La pilule de jour, à 70 %, tombait sous AA en clair dès que le flou
+ * manquait : l'écart n'était pas seulement d'aspect.
+ *
+ * - `glass` — 80 %, la densité RÉGULIÈRE : bandes d'en-tête, repères (pilule
+ *   et séparateur de jour), contrôle teinté « revenir en bas », feuille non
+ *   proéminente. Le plus bas palier qui tient AA pour toutes les encres du
+ *   fil, dans les deux schémas.
+ * - `glass-prominent` — 92 %, ce qui se pose SUR du contenu qu'on lit : menus,
+ *   annonce au-dessus du composeur, barre de recherche flottante, disques.
+ * - UN flou, 24 px — celui que le site unique portait déjà.
+ * - Le TON n'est pas la matière : `glass-card` (puces et barres,
+ *   `--color-ios-card`) et `glass-accent` (contrôle teinté, la couleur de la
+ *   conversation) ; la surface d'écran (`--color-ios-surface`) est le défaut.
+ *   Un ton se pose sur la surface de verre ELLE-MÊME, jamais sur un ancêtre :
+ *   la variable s'hérite.
+ *
+ * UN SEUL `color-mix`, la densité portée par une variable : le build double
+ * chaque `color-mix` d'un repli opaque et d'un bloc `@supports` — deux écritures
+ * doublaient ce coût dans la feuille de PREMIÈRE PEINTURE (`budgets.json`).
+ * Le repli qu'il pose (le ton plein) est aussi le plus lisible des replis.
+ *
+ * `backdrop-filter` UNE SEULE FOIS, non préfixé : la minification fusionnait
+ * la paire préfixée en ne gardant que `-webkit-` (mesuré, `thread-menu.css`).
+ * Le préfixe est le travail du build.
+ */
+.glass,
+.glass-prominent {
+  background-color: color-mix(in srgb, var(--glass-tone, var(--color-ios-surface)) var(--glass-density), transparent);
+  backdrop-filter: blur(24px);
+}
+
+.glass {
+  --glass-density: 80%;
+}
+
+.glass-prominent {
+  --glass-density: 92%;
+}
+
+.glass-card {
+  --glass-tone: var(--color-ios-card);
+}
+
+.glass-accent {
+  --glass-tone: var(--accent);
+}

@@ -55,6 +55,21 @@ describe('glassViolations — la règle, falsifiée sur des sources fabriquées'
     ]);
   });
 
+  test('la classe de verre choisie par une EXPRESSION est reconnue aussi', () => {
+    const tsx =
+      "<div className={`${prominent ? 'glass-prominent' : 'glass'} rounded-card`} style={{ backgroundColor: 'red' }} />";
+    expect(glassViolations([source('src/components/g.tsx', tsx)])).toEqual([
+      { path: 'src/components/g.tsx', kind: 'glass-override', found: 1, allowed: 0 },
+    ]);
+  });
+
+  test('une densité `--glass-*` posée localement contourne le site et TOMBE', () => {
+    const tsx = "<nav className=\"glass\" style={{ '--glass-density': '60%' } as CSSProperties} />";
+    expect(glassViolations([source('src/components/n.tsx', tsx)])).toEqual([
+      { path: 'src/components/n.tsx', kind: 'glass-override', found: 1, allowed: 0 },
+    ]);
+  });
+
   test('un fond qui n’est pas celui de l’élément de verre ne compte pas', () => {
     const tsx =
       "<header className=\"glass\"><span style={{ backgroundColor: 'var(--accent)' }}>•</span></header>";
@@ -95,6 +110,11 @@ describe('le dépôt — tout le verre de web-v2 passe par son site (#6124)', ()
 
   test('aucune surface ne réécrit le verre hors du site ni de l’inventaire nommé', () => {
     expect(glassViolations(sources)).toEqual([]);
+  });
+
+  test('chaque entrée de l’inventaire désigne un fichier qui existe', () => {
+    const paths = new Set(sources.map((s) => s.path));
+    expect(Object.keys(GLASS_INVENTORY).filter((path) => !paths.has(path))).toEqual([]);
   });
 
   test('chaque entrée de l’inventaire porte sa raison', () => {

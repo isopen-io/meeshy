@@ -40,6 +40,11 @@ import { nextSyncPillExpiry, resolveSyncPill, syncPillLabel } from '@/lib/view/s
  * d'un échec se fait dans le fil, sur la bulle, là où l'on voit ce qu'on
  * renvoie (iOS y attache un `onTap`, porte que la v3.1 n'a pas encore ; issue
  * compagnon plutôt qu'un contrôle qui ne mène nulle part, loi 4).
+ *
+ * **Ce n'est pas du verre** (#6124) : ses trois fonds sont PLEINS (erreur,
+ * avertissement, carte) — le flou d'arrière-plan qu'elle portait ne floutait
+ * rien de visible. Il est retiré plutôt que migré : la pastille dit un état,
+ * sa couleur doit rester franche sur n'importe quel contenu.
  */
 
 const TEINTE = {
@@ -87,7 +92,7 @@ export function SyncPill() {
     >
       <span
         data-sync-pill={state.kind}
-        className="flex items-center gap-1.5 rounded-chip px-3 py-1.5 text-check font-semibold shadow-lg backdrop-blur-md"
+        className="flex items-center gap-1.5 rounded-chip px-3 py-1.5 text-check font-semibold shadow-lg"
         style={{ backgroundColor: teinte.fond, color: teinte.encre }}
       >
         <Glyph name={teinte.glyphe} size={11} />

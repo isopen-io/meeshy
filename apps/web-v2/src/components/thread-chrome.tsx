@@ -7,6 +7,10 @@ import { lastMessageLine, scrollToBottomLabel, unreadHeadline } from '@/lib/view
  * (`--day-pill-top`, `reading-mode/metrics.ts::chromeStyleVars`), RESTE
  * pendant le geste (`MessageListViewController.swift:597-605`, « le
  * sticker de date RESTE »), masquée seulement quand l'en-tête est DÉPLIÉ.
+ * S'EFFACE AU REPOS (#6101) : posée sous la bande, elle recouvrait le nom
+ * d'auteur de la première rangée lisible d'un fil immobile — sa visibilité
+ * suit le défilement utilisateur (`lib/view/day-pill-reveal.ts`,
+ * `thread-scene.css`), son montage reste décidé ici.
  * `role="heading"` porté par le NŒUD visible — même dispositif que
  * `.accessibilityAddTraits(.isHeader)` côté iOS : c'est un repère de
  * navigation, jamais un texte décoratif à masquer du lecteur d'écran.
@@ -25,11 +29,10 @@ export function DayPill({ label, headerExpanded }: { readonly label: string | nu
       <span
         role="heading"
         aria-level={2}
-        className="rounded-chip px-3 py-1.5 text-time font-semibold backdrop-blur-md"
+        className="glass glass-card rounded-chip px-3 py-1.5 text-time font-semibold"
         style={{
           color: 'var(--color-day-ink)',
           border: '0.5px solid var(--color-day-hairline)',
-          backgroundColor: 'color-mix(in srgb, var(--color-ios-card) 70%, transparent)',
         }}
       >
         {label}
@@ -77,10 +80,9 @@ export function ScrollToBottomButton({
          composition. `--thread-scroll-button-bottom` l'ancre au bord bas
          MESURÉ, miroir `.padding(.bottom, composerScrollButtonAnchor +
          MeeshySpacing.sm)` (`ConversationView.swift:1957`). */
-      className="thread-scroll-to-bottom absolute end-4 z-20 grid min-h-11 min-w-11 place-items-center rounded-chip backdrop-blur-md"
+      className="thread-scroll-to-bottom glass glass-accent absolute end-4 z-20 grid min-h-11 min-w-11 place-items-center rounded-chip"
       style={{
         bottom: 'var(--thread-scroll-button-bottom)',
-        backgroundColor: 'color-mix(in srgb, var(--accent) 85%, transparent)',
         /* L'ENCRE LISIBLE, jamais `#fff` en dur — miroir de l'INTENTION de
            `ConversationScrollControlsView.swift:150-152` (« noir ou blanc selon
            la luminance de l'accent »), servie par `--accent-ink`
