@@ -12,9 +12,9 @@ import { mediaCoordinator, type MediaCoordinator } from './media-coordinator';
  *
  * `HTMLMediaElement` — la classe COMMUNE à `<audio>` et `<video>`, jamais
  * `HTMLAudioElement` (#6221) : ce hook ne sait rien du TYPE de média qu'il
- * pilote, seulement qu'il expose `play`/`pause`/`load` et les événements
- * `play`/`pause`/`ended`/`error`/`timeupdate` — les CINQ que les deux
- * éléments partagent.
+ * pilote, seulement qu'il expose `play`/`pause`/`load` et les événements que
+ * les deux éléments partagent. L'image dans l'image est la seule capacité
+ * propre à `<video>`, et elle se déclare `unsupported` partout ailleurs.
  *
  * `idle` (rien ne joue, ou vient de se terminer) → `playing` → `paused` (tap
  * pendant la lecture, OU un AUTRE média vient de réclamer l'exclusivité via
@@ -24,11 +24,26 @@ import { mediaCoordinator, type MediaCoordinator } from './media-coordinator';
  */
 export type MediaPlaybackStatus = 'idle' | 'playing' | 'paused' | 'error';
 
+/** L'image dans l'image : absente (`<audio>`, navigateur qui ne l'offre pas), offerte, ou en cours. */
+export type PictureInPictureState = 'unsupported' | 'inactive' | 'active';
+
 export type MediaPlayback = {
   readonly status: MediaPlaybackStatus;
   /** [0..1] — la fraction déjà écoutée/regardée de la lecture EN COURS. */
   readonly progress: number;
+  /** La position, en secondes ENTIÈRES — suivie seulement avec `tracksTime`, `0` sinon. */
+  readonly position: number;
+  /** La durée de l'élément, en secondes — suivie seulement avec `tracksTime`, `0` tant qu'elle est inconnue. */
+  readonly duration: number;
+  readonly muted: boolean;
+  readonly rate: number;
+  readonly pictureInPicture: PictureInPictureState;
   readonly toggle: () => void;
+  /** Déplace RÉELLEMENT la lecture, bornée à `[0, durée]`. */
+  readonly seek: (seconds: number) => void;
+  readonly setMuted: (muted: boolean) => void;
+  readonly setRate: (rate: number) => void;
+  readonly togglePictureInPicture: () => void;
   /** Le `ref` de l'élément (`<audio>` ou `<video>`) que ce hook pilote. */
   readonly bind: (element: HTMLMediaElement | null) => void;
 };
@@ -42,35 +57,74 @@ export type MediaPlayback = {
  */
 const PROGRESS_UPDATE_STEP = 1 / 50;
 
+type PictureInPictureDocument = Document & {
+  readonly pictureInPictureEnabled?: boolean;
+  readonly pictureInPictureElement?: Element | null;
+  readonly exitPictureInPicture?: () => Promise<void>;
+};
+
+type PictureInPictureVideo = HTMLVideoElement & {
+  readonly requestPictureInPicture?: () => Promise<unknown>;
+  readonly disablePictureInPicture?: boolean;
+};
+
+function pictureInPictureSupport(element: HTMLMediaElement): PictureInPictureState {
+  if (!(element instanceof HTMLVideoElement)) return 'unsupported';
+  const video = element as PictureInPictureVideo;
+  const doc = document as PictureInPictureDocument;
+  if (doc.pictureInPictureEnabled !== true || typeof video.requestPictureInPicture !== 'function' || video.disablePictureInPicture === true) {
+    return 'unsupported';
+  }
+  return doc.pictureInPictureElement === element ? 'active' : 'inactive';
+}
+
+const knownDuration = (element: HTMLMediaElement): number =>
+  Number.isFinite(element.duration) && element.duration > 0 ? element.duration : 0;
+
+type Listeners = Readonly<Record<string, () => void>>;
+
 export function useMediaPlayback(params: {
   readonly attachmentId: string;
   readonly coordinator?: MediaCoordinator;
+  /**
+   * Suivre la position à la seconde et la durée (#6359). OPT-IN : seule la
+   * barre de lecture de la visionneuse les affiche ; une tuile du fil qui les
+   * suivrait se re-rendrait chaque seconde pour un chiffre qu'elle ne montre pas.
+   */
+  readonly tracksTime?: boolean;
 }): MediaPlayback {
-  const { attachmentId } = params;
+  const { attachmentId, tracksTime = false } = params;
   const coordinator = params.coordinator ?? mediaCoordinator;
 
   const [status, setStatus] = useState<MediaPlaybackStatus>('idle');
   const [progress, setProgress] = useState(0);
+  const [position, setPosition] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [muted, setMutedState] = useState(false);
+  const [rate, setRateState] = useState(1);
+  const [pictureInPicture, setPictureInPicture] = useState<PictureInPictureState>('unsupported');
   const elementRef = useRef<HTMLMediaElement | null>(null);
   const lastEmittedProgressRef = useRef(0);
-  const listenersRef = useRef<{
-    readonly play: () => void;
-    readonly pause: () => void;
-    readonly ended: () => void;
-    readonly error: () => void;
-    readonly timeupdate: () => void;
-  } | null>(null);
+  const lastEmittedPositionRef = useRef(0);
+  const listenersRef = useRef<Listeners | null>(null);
 
   const detach = useCallback((element: HTMLMediaElement): void => {
     const listeners = listenersRef.current;
     if (listeners === null) return;
-    element.removeEventListener('play', listeners.play);
-    element.removeEventListener('pause', listeners.pause);
-    element.removeEventListener('ended', listeners.ended);
-    element.removeEventListener('error', listeners.error);
-    element.removeEventListener('timeupdate', listeners.timeupdate);
+    for (const [type, listener] of Object.entries(listeners)) element.removeEventListener(type, listener);
     listenersRef.current = null;
   }, []);
+
+  const emitPosition = useCallback(
+    (seconds: number): void => {
+      if (!tracksTime) return;
+      const whole = Math.floor(seconds);
+      if (whole === lastEmittedPositionRef.current) return;
+      lastEmittedPositionRef.current = whole;
+      setPosition(whole);
+    },
+    [tracksTime],
+  );
 
   const bind = useCallback(
     (element: HTMLMediaElement | null) => {
@@ -95,7 +149,11 @@ export function useMediaPlayback(params: {
         coordinator.release(attachmentId);
         if (previous !== null) previous.pause();
         lastEmittedProgressRef.current = 0;
+        lastEmittedPositionRef.current = 0;
         setProgress(0);
+        setPosition(0);
+        setDuration(0);
+        setPictureInPicture('unsupported');
         setStatus('idle');
         return;
       }
@@ -125,21 +183,43 @@ export function useMediaPlayback(params: {
       };
       const onTimeUpdate = (): void => {
         const el = elementRef.current;
-        if (el === null || !Number.isFinite(el.duration) || el.duration <= 0) return;
-        const raw = el.currentTime / el.duration;
+        if (el === null) return;
+        emitPosition(el.currentTime);
+        const total = knownDuration(el);
+        if (total === 0) return;
+        const raw = el.currentTime / total;
         if (Math.abs(raw - lastEmittedProgressRef.current) < PROGRESS_UPDATE_STEP) return;
         lastEmittedProgressRef.current = raw;
         setProgress(raw);
       };
+      const onMetadata = (): void => {
+        if (tracksTime) setDuration(knownDuration(element));
+        setPictureInPicture(pictureInPictureSupport(element));
+      };
+      const onVolumeChange = (): void => setMutedState(element.muted);
+      const onRateChange = (): void => setRateState(element.playbackRate);
+      const onEnterPictureInPicture = (): void => setPictureInPicture('active');
+      const onLeavePictureInPicture = (): void => setPictureInPicture(pictureInPictureSupport(element) === 'unsupported' ? 'unsupported' : 'inactive');
 
-      listenersRef.current = { play: onPlay, pause: onPause, ended: onEnded, error: onError, timeupdate: onTimeUpdate };
-      element.addEventListener('play', onPlay);
-      element.addEventListener('pause', onPause);
-      element.addEventListener('ended', onEnded);
-      element.addEventListener('error', onError);
-      element.addEventListener('timeupdate', onTimeUpdate);
+      const listeners: Listeners = {
+        play: onPlay,
+        pause: onPause,
+        ended: onEnded,
+        error: onError,
+        timeupdate: onTimeUpdate,
+        loadedmetadata: onMetadata,
+        durationchange: onMetadata,
+        volumechange: onVolumeChange,
+        ratechange: onRateChange,
+        enterpictureinpicture: onEnterPictureInPicture,
+        leavepictureinpicture: onLeavePictureInPicture,
+      };
+      listenersRef.current = listeners;
+      for (const [type, listener] of Object.entries(listeners)) element.addEventListener(type, listener);
+      setMutedState(element.muted);
+      setPictureInPicture(pictureInPictureSupport(element));
     },
-    [attachmentId, coordinator, detach],
+    [attachmentId, coordinator, detach, emitPosition, tracksTime],
   );
 
   const toggle = useCallback((): void => {
@@ -163,5 +243,59 @@ export function useMediaPlayback(params: {
     });
   }, [attachmentId, coordinator, status]);
 
-  return { status, progress, toggle, bind };
+  const seek = useCallback(
+    (seconds: number): void => {
+      const element = elementRef.current;
+      if (element === null || !Number.isFinite(seconds)) return;
+      const total = knownDuration(element);
+      const target = total > 0 ? Math.min(total, Math.max(0, seconds)) : Math.max(0, seconds);
+      element.currentTime = target;
+      emitPosition(target);
+      if (total > 0) {
+        lastEmittedProgressRef.current = target / total;
+        setProgress(target / total);
+      }
+    },
+    [emitPosition],
+  );
+
+  const setMuted = useCallback((next: boolean): void => {
+    const element = elementRef.current;
+    if (element === null) return;
+    element.muted = next;
+    setMutedState(next);
+  }, []);
+
+  const setRate = useCallback((next: number): void => {
+    const element = elementRef.current;
+    if (element === null) return;
+    element.playbackRate = next;
+    setRateState(next);
+  }, []);
+
+  const togglePictureInPicture = useCallback((): void => {
+    const element = elementRef.current;
+    if (element === null || pictureInPicture === 'unsupported') return;
+    if (pictureInPicture === 'active') {
+      void (document as PictureInPictureDocument).exitPictureInPicture?.().catch(() => {});
+      return;
+    }
+    void (element as PictureInPictureVideo).requestPictureInPicture?.().catch(() => {});
+  }, [pictureInPicture]);
+
+  return {
+    status,
+    progress,
+    position,
+    duration,
+    muted,
+    rate,
+    pictureInPicture,
+    toggle,
+    seek,
+    setMuted,
+    setRate,
+    togglePictureInPicture,
+    bind,
+  };
 }

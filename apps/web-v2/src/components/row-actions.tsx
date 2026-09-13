@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { placePopover, placePopoverVertical } from '@/lib/view/popover';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { rowMenuItems, type RowActionId } from '@/lib/view/row-actions';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import type { ConversationFlags } from '@/lib/api/preferences';
 
 import { Glyph } from './glyph';
@@ -72,6 +73,21 @@ const MENU_PADDING = 8;
  * sinon le clic (même défaut que le débord de `tap-target-22` corrigé en #5566).
  */
 const BUTTON_SIZE = 34;
+
+/**
+ * LE RETOUR MATÉRIEL FERME LE MENU, PAS LA LISTE (#6357) — même loi que
+ * l'échelle flottante (`LadderDismissLayer`, `floating-menus.tsx`) et que
+ * `MessageMenu`. Mesuré sur l'émulateur Android contre staging : menu ouvert
+ * sur `/`, un appui RETOUR fermait le menu ET quittait la liste.
+ *
+ * Un composant à part, monté DANS le portail : `useBackDismiss` pose son
+ * entrée d'historique AU MONTAGE. Appelé dans `RowActions`, il en poserait une
+ * par RANGÉE de la liste, menu fermé, et le retour serait avalé en permanence.
+ */
+function RowMenuBackDismiss({ onClose }: { readonly onClose: () => void }) {
+  useBackDismiss(onClose);
+  return null;
+}
 
 export function RowActions({
   flags,
@@ -236,6 +252,7 @@ export function RowActions({
                 border: '1px solid var(--color-edge)',
               }}
             >
+              <RowMenuBackDismiss onClose={() => setOpen(false)} />
               {items.map((item, index) => (
                 <button
                   key={item.id}

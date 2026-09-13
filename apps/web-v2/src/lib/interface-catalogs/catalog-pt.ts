@@ -187,6 +187,17 @@ const pt = {
   'settings.save.error': 'O ajuste não foi salvo.',
   'settings.theme.sync_error': 'Tema aplicado neste dispositivo, sem sincronização.',
   'common.cancel': 'Cancelar',
+
+  'media.video.play': 'Reproduzir vídeo',
+  'media.video.pause': 'Pausar',
+  'media.video.position': 'Posição de reprodução',
+  'media.video.position.value': '{elapsed} de {total}',
+  'media.video.mute': 'Silenciar',
+  'media.video.unmute': 'Ativar som',
+  'media.video.more_options': 'Mais opções',
+  'media.video.speed': 'Velocidade',
+  'media.video.pip.enter': 'Picture-in-Picture',
+  'media.video.pip.exit': 'Sair do Picture-in-Picture',
 } satisfies InterfaceCatalog;
 
 export default pt;
