@@ -7,6 +7,7 @@ import {
   STORY_TRAY_QUERY_KEY,
   loadStoryFeed,
   loadStoryPost,
+  loadStoryTray,
   markStoryViewed,
 } from './stories';
 import { createHttpTransport } from './http';
@@ -47,18 +48,34 @@ describe('STORIES_QUERY_PREFIX', () => {
 });
 
 /**
- * `loadStoryFeed` (#5817) — LE MÊME endpoint que `loadStoryTray`
- * (`GET /posts/feed/stories`), SANS `?projection=tray` : le corpus COMPLET
- * (`storyPostInclude`) dont le lecteur a besoin pour JOUER une story —
- * contenu, traductions, effets — pas seulement l'anneau et la miniature.
+ * `loadStoryTray` (#6080, migré #6249) — `GET /social/posts?scope=stories`,
+ * successeur de l'alias déprécié `GET /posts/feed/stories`.
+ */
+describe('loadStoryTray', () => {
+  test('appelle GET /social/posts?scope=stories&projection=tray&limit=50', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: [] } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    await loadStoryTray({ source: 'gateway', transport });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe('/api/v1/social/posts?scope=stories&projection=tray&limit=50');
+    expect(calls[0]?.init.method).toBe('GET');
+  });
+});
+
+/**
+ * `loadStoryFeed` (#5817, migré #6249) — LE MÊME endpoint que
+ * `loadStoryTray` (`GET /social/posts?scope=stories`), SANS
+ * `?projection=tray` : le corpus COMPLET (`storyPostInclude`) dont le
+ * lecteur a besoin pour JOUER une story — contenu, traductions, effets —
+ * pas seulement l'anneau et la miniature.
  */
 describe('loadStoryFeed', () => {
-  test('appelle GET /posts/feed/stories?limit=50, SANS projection', async () => {
+  test('appelle GET /social/posts?scope=stories&limit=50, SANS projection', async () => {
     const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: [] } });
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
     await loadStoryFeed({ source: 'gateway', transport });
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe('/api/v1/posts/feed/stories?limit=50');
+    expect(calls[0]?.url).toBe('/api/v1/social/posts?scope=stories&limit=50');
     expect(calls[0]?.init.method).toBe('GET');
   });
 
@@ -118,23 +135,41 @@ describe('loadStoryPost', () => {
 });
 
 /**
- * `markStoryViewed` (#5817) — `POST /posts/:postId/view`
- * (`services/gateway/src/routes/posts/interactions.ts:398-424`,
- * requiredAuth) : `{ viewed: true }` quel que soit le verdict, jamais un
- * oracle d'existence.
+ * `markStoryViewed` (#5817, migré #6249) — `POST /social/events`
+ * (`services/gateway/src/routes/social/events.ts:670-696`, successeur de
+ * l'alias déprécié `POST /posts/:postId/view`) : `{ viewed: true }` quel que
+ * soit le verdict, jamais un oracle d'existence.
  */
 describe('markStoryViewed', () => {
-  test('appelle POST /posts/:postId/view', async () => {
-    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: { viewed: true } } });
+  test('appelle POST /social/events avec un événement view', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: { recorded: 1, rejected: 0 } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await markStoryViewed({ source: 'gateway', transport, postId: 'p1', durationMs: 4200 });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe('/api/v1/social/events');
+    expect(calls[0]?.init.method).toBe('POST');
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({
+      events: [{ type: 'view', postId: 'p1', durationMs: 4200 }],
+    });
+    expect(result).toEqual({ ok: true, data: { viewed: true } });
+  });
+
+  test('sans durationMs, omet le champ plutôt que d’envoyer undefined', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: { recorded: 1, rejected: 0 } } });
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
     await markStoryViewed({ source: 'gateway', transport, postId: 'p1' });
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe('/api/v1/posts/p1/view');
-    expect(calls[0]?.init.method).toBe('POST');
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ events: [{ type: 'view', postId: 'p1' }] });
+  });
+
+  test('rend true même si le serveur rejette l’événement (aucun oracle d’existence)', async () => {
+    const { impl } = fakeFetch({ status: 200, body: { success: true, data: { recorded: 0, rejected: 1 } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await markStoryViewed({ source: 'gateway', transport, postId: 'introuvable' });
+    expect(result).toEqual({ ok: true, data: { viewed: true } });
   });
 
   test('en fixtures, réussit sans appeler le transport', async () => {
-    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: { viewed: true } } });
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: { recorded: 1, rejected: 0 } } });
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
     const result = await markStoryViewed({ source: 'fixtures', transport, postId: 'st-mienne' });
     expect(calls).toHaveLength(0);
