@@ -12,7 +12,6 @@ import {
   AchievementsSection,
   AxisRow,
   GeneratedAchievements,
-  MeeshHero,
   ProgressionError,
   ProgressionSkeleton,
 } from './progression-parts';
@@ -259,7 +258,7 @@ const rendreAvecMeesh = (meesh: {
     />,
   );
 
-describe('MeeshHero', () => {
+describe('MeeshDetail — le héros des Meeshes (#5743)', () => {
   /**
    * L'absence se CONSTRUIT, elle ne s'hérite pas de la fixture.
    *
@@ -340,13 +339,6 @@ describe('la pièce d’argent des Meeshes', () => {
     expect(rendu).toContain(TEINTE_ARGENT);
     expect(rendu).not.toContain(TRACE_MEDAILLE);
   });
-
-  test('le héros des Meeshes montre la même pièce', () => {
-    const rendu = renderToStaticMarkup(<MeeshHero meesh={meeshDeLaFixture} onMint={() => {}} isMinting={false} />);
-    expect(rendu).toContain(TRACE_PIECE);
-    expect(rendu).toContain(TEINTE_ARGENT);
-    expect(rendu).not.toContain(TRACE_MEDAILLE);
-  });
 });
 
 /**
@@ -365,7 +357,7 @@ const rendreAvecElan = (elan: {
     <ElansHero progress={resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, elan })} />,
   );
 
-describe('ElanBanner', () => {
+describe('ElansHero — le bandeau d’élan (#5749)', () => {
   test('n’affiche RIEN au neutre — un badge « ×1 » n’apprend rien', () => {
     const rendu = rendreAvecElan({
       factor: 1,
