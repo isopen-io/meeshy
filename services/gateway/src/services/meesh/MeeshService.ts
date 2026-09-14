@@ -25,6 +25,8 @@ import {
   BADGE_THRESHOLDS,
   badgeMilestoneKey,
   ENGAGEMENT_AXES,
+  LEVEL_THRESHOLDS,
+  levelMilestoneKey,
   type EngagementAxisKey,
 } from '@meeshy/shared/types/engagement';
 import {
@@ -33,8 +35,23 @@ import {
   type MeeshMintPlan,
 } from '@meeshy/shared/utils/meesh';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { withRetry } from '../MessageMediaConsumptionService';
 
 const log = enhancedLogger.child({ module: 'MeeshService' });
+
+/**
+ * Les clés des paliers qu'une valeur ne couvre PLUS — ce qu'une frappe éteint,
+ * et rien d'autre (#6465).
+ *
+ * Un palier encore couvert garde sa ligne, donc sa DATE. L'effacer puis le
+ * regraver lui donnait un `reachedAt` neuf : un badge vieux de plusieurs mois
+ * devenait le « dernier succès » du jour, sans que rien n'ait été gagné.
+ */
+const clesNonCouvertes = (
+  seuils: readonly number[],
+  valeur: number,
+  cle: (seuil: number) => string,
+): string[] => seuils.filter((seuil) => seuil > valeur).map(cle);
 
 export type MeeshTotals = { readonly balance: number; readonly mintedLifetime: number };
 
@@ -95,8 +112,19 @@ export class MeeshService {
    * Le plan est recalculé DANS la transaction : celui qu'a vu l'écran a pu
    * vieillir entre l'affichage et le tap, et frapper sur un plan périmé
    * débiterait des axes qui ont bougé.
+   *
+   * **Un conflit d'écriture se rejoue (#6467).** D'autres écrivains touchent le
+   * document `User` pendant la transaction (activité, locale, pays) : MongoDB
+   * l'annule en bloc (P2034). Mesuré sur staging le 2026-09-14, deux gestes
+   * sur trois perdus ainsi. La reprise est sûre : rien de la tentative
+   * rejetée n'a été écrit, et `(userId, requestId)` reste unique au registre.
+   * Elle repart de la LECTURE, parce que les axes ont pu bouger entre-temps.
    */
   async mint(userId: string, requestId: string): Promise<MeeshMintOutcome> {
+    return withRetry(() => this.mintOnce(userId, requestId));
+  }
+
+  private async mintOnce(userId: string, requestId: string): Promise<MeeshMintOutcome> {
     const dejaFrappe = await this.prisma.meeshLedger.findUnique({
       where: { userId_requestId: { userId, requestId } },
       select: { id: true },
@@ -111,13 +139,17 @@ export class MeeshService {
     try {
       const totaux = await this.prisma.$transaction(async (tx) => {
         for (const ligne of plan.debits) {
-          await tx.engagementCounter.update({
+          // Le compteur RESTANT se lit dans la réponse de l'écriture : une
+          // relecture par axe allongeait la transaction, donc la fenêtre où un
+          // autre écrivain la fait annuler.
+          const restant = await tx.engagementCounter.update({
             where: { userId_axisKey: { userId, axisKey: ligne.axisKey } },
             data: { points: { decrement: ligne.points }, count: { decrement: ligne.count } },
+            select: { count: true },
           });
           // Un axe dont la frappe ne reprend AUCUNE action (les conversations,
           // `MEESH_POINTS_ONLY_AXES`) garde ses badges intacts : son compteur
-          // n'a pas bougé, il n'y a rien à éteindre ni à regraver.
+          // n'a pas bougé, il n'y a rien à éteindre.
           if (ligne.count === 0) continue;
 
           // Un palier de badge que le compteur ne couvre plus s'ÉTEINT : la
@@ -125,22 +157,13 @@ export class MeeshService {
           // reachedAt !== null`), c'est elle qu'il faut retirer pour que le
           // badge redescende comme le porteur l'a demandé. La contrainte unique
           // se libère du même coup : le badge se re-gagne et se re-notifie.
-          const restant = await tx.engagementCounter.findUnique({
-            where: { userId_axisKey: { userId, axisKey: ligne.axisKey } },
-            select: { count: true },
-          });
-          await tx.engagementMilestone.deleteMany({
-            where: {
-              userId,
-              milestoneType: 'badge',
-              milestoneKey: { startsWith: `${ligne.axisKey}:` },
-            },
-          });
-          // Puis on regrave ceux que le compteur restant couvre encore.
-          for (const seuil of BADGE_THRESHOLDS) {
-            if ((restant?.count ?? 0) < seuil) continue;
-            await tx.engagementMilestone.create({
-              data: { userId, milestoneType: 'badge', milestoneKey: badgeMilestoneKey(ligne.axisKey, seuil) },
+          // Ceux que le compteur couvre encore ne sont PAS touchés (#6465).
+          const eteints = clesNonCouvertes(BADGE_THRESHOLDS, restant.count ?? 0, (seuil) =>
+            badgeMilestoneKey(ligne.axisKey, seuil),
+          );
+          if (eteints.length > 0) {
+            await tx.engagementMilestone.deleteMany({
+              where: { userId, milestoneType: 'badge', milestoneKey: { in: eteints } },
             });
           }
         }
@@ -160,15 +183,26 @@ export class MeeshService {
         });
 
         const apres = await meeshTotalsFromLedger(tx, userId);
-        await tx.user.update({
+        const compte = await tx.user.update({
           where: { id: userId },
           data: {
             engagementScore: { decrement: MEESH_MINT_COST },
             meeshBalance: apres.balance,
             meeshMintedLifetime: apres.mintedLifetime,
           },
-          select: { id: true },
+          select: { engagementScore: true },
         });
+
+        // LE NIVEAU redescend avec le score (#6465). Un palier `level:T` gravé
+        // au-dessus du score restant faisait compter au NIVEAU ce que la BARRE
+        // ne voyait plus : « Niveau 3 · 1 point · encore 9 points avant le
+        // niveau 4 », sur staging, à la première frappe réelle.
+        const niveauxEteints = clesNonCouvertes(LEVEL_THRESHOLDS, compte.engagementScore ?? 0, levelMilestoneKey);
+        if (niveauxEteints.length > 0) {
+          await tx.engagementMilestone.deleteMany({
+            where: { userId, milestoneType: 'level', milestoneKey: { in: niveauxEteints } },
+          });
+        }
 
         return apres;
       });
