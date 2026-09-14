@@ -1,5 +1,52 @@
 # @meeshy/web
 
+## 1.51.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le cliquet des couleurs en dur ne compte plus l'appel mais le codage en dur (#6511)
+  - le geste tactile n'ARRIVAIT pas sur le runner — cascade déclarée, voie de repli ÉPROUVÉE avant d'être poussée
+  - le cliquet des couleurs rougissait sur l'APPLICATION de la règle qu'il défend — référence 943 → 946 (#6481, #6511)
+  - le gate Réels ne s'en remet plus à l'ÉLAN — douze invariants accusaient l'application pour une faute du harnais
+  - l'indice de l'appui long du disque du Flux n'est plus lu comme un texte orphelin (#6499)
+  - le bouton retour des Réels ne quitte jamais Meeshy, et vient en premier au clavier (#6498)
+  - les paliers anciens ne tombaient pas par le plafond, mais par 26 DOUBLONS — l'index unique n'existait pas (#6472)
+  - le détail Meesh dit sa frappe et son échec, et l'entrée prend la forme d'iOS (#6470)
+  - « votre point de conversation » au singulier — l'accord passe par la RÈGLE, jamais par un `if` français (#6478)
+  - le disque du Flux bascule Flux ↔ conversations, et son appui long ouvre les Réels (#6456)
+  - l'inscription se refait — téléphone d'abord, identité dérivée montrée ET envoyée (#6479)
+  - l'état vide de Messages favoris cesse d'afficher des guillemets échappés (#6481)
+  - chaque page ouverte depuis Réglages porte le retour en verre, un en-tête clair et des (+) en verre (#6481)
+  - la leçon 604 arrivée en double devient 609, et iOS reçoit le miroir Swift de la dérivation d'identité (#6479)
+  - remplissage des points historiques, option B — script à blanc par défaut (#6434) (#6455)
+  - retire next-pwa, jamais importé, qui épinglait un sous-arbre next/react/playwright (#6420)
+  - la migration 013 reconnaît enfin l'adresse héritée sans route de flux (#6390)
+  - les Réels se regardent — un pager plein écran servi par la passerelle, ouvert depuis le Flux (#6457)
+  - la dérivation d'identité MONTE au partagé — un écran ne peut promettre que ce qu'il calcule avec le serveur (#6479)
+  - l'entrée Meesh devient une seule pièce de verre, et Progression prend l'en-tête qui se réduit avec le retour en verre (#6466, #6480)
+  - un numéro IMPLAUSIBLE est refusé — la validité d'un numéro n'est pas sa vraisemblance (#6479)
+  - les trois notes passent derrière un (i) — l'écran d'inscription cesse d'être un mur de texte (#6441)
+  - le détail Meesh dit la frappe en cours et son échec, l'élan lit sa fenêtre, l'entrée devient un groupe de verre (#6467, #5927, #6466)
+  - un double tap latéral avance/recule la vidéo de 10 s, comme iOS (#6369) (#6374)
+  - le remplissage éteint aussi les niveaux gravés au-dessus du score (#6434, #6465)
+  - le menu flottant droit mène à l'administration, pour qui en a la permission servie (#6458)
+  - la frappe n'éteint que les paliers non couverts, et rejoue un conflit d'écriture (#6465, #6467)
+  - le champ téléphone dit ce que le numéro OUVRE — le seul levier honnête pour qu'il soit donné (#6441)
+  - le nom affiché devient facultatif — l'adresse seule ouvre enfin le compte que l'écran promettait (#6441)
+  - remplissage des points historiques, option B — loi pure, passage gardé, simulation par défaut (#6434)
+  - Découvrir reconnaît un contact ou un bloqué au-delà de la première page de cent (#6421)
+  - CI — sync-pill est un crochet de sélection, pas une classe stylée
+  - la pastille hors ligne descend sous la seconde bande de quatre écrans
+  - hors production, les réglages non portés deviennent inertes plutôt que de mener au legacy de PRODUCTION (#6354)
+  - un avatar et une vignette passent par la route de flux, jamais par la racine de la passerelle
+  - un marqueur (beta) et un marqueur de saut CI dans le même commit ne se supprime plus en silence
+  - un post s'ouvre à nouveau — getPostById lit par select, plus par include (#6503)
+  - un compte sans blockedUserIds redevient chercheable (#6452) (#6471)
+  - monter requireEmailVerification sur publier/inviter/créer un lien (#6437) (#6450)
+  - budget global de 10 s sur l'illustration d'agent (#6198)
+
 ## 1.50.0
 
 ### Minor Changes
