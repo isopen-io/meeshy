@@ -4,6 +4,7 @@ import {
   transformTranslationsToArray,
   type MessageTranslationJSON,
 } from '../../utils/translation-transformer';
+import type { AttachmentReplyTo } from './attachmentReplySnapshot';
 
 /**
  * Ce qu'une CITATION a le droit de transporter — site UNIQUE des trois
@@ -94,7 +95,11 @@ const maskedQuotedAttachment = (att: Record<string, unknown>): Record<string, un
  */
 export function servedQuotedMessage(
   quoted: QuotedMessageRow | null | undefined,
-  options?: { readonly includeTranslations?: boolean; readonly languages?: readonly string[] }
+  options?: {
+    readonly includeTranslations?: boolean;
+    readonly languages?: readonly string[];
+    readonly attachmentReplyTo?: AttachmentReplyTo | null;
+  }
 ): Record<string, unknown> {
   if (!quoted) return {};
   const isProtected = quotedMessageIsProtected(quoted);
