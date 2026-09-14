@@ -118,6 +118,11 @@ struct SocialSceneFullscreenView: View {
     /// **Repliée par défaut** — le brief le demande explicitement pour l'espace
     /// de contenu de la légende, et c'est la même règle que partout ailleurs.
     @State private var captionExpanded = false
+    /// La langue choisie dans la rangée de traduction de la légende (#6504) ;
+    /// `nil` : la langue que le Prisme a résolue.
+    @State private var langueDeLegende: String?
+    /// Une traduction a été demandée et n'est pas encore arrivée.
+    @State private var traductionDemandee = false
 
     /// **Le porteur de la scène.** Le document dit ce qu'il faut peindre ; il ne
     /// dit pas où vivent les pixels. Sans lui, le résolveur du player n'a aucun
@@ -139,9 +144,63 @@ struct SocialSceneFullscreenView: View {
     /// « dans le feed si possible et en plein écran obligatoirement »), d'où le
     /// repli sur le texte du porteur : rien d'autre ne le rend ici, et sans lui
     /// le format qu'on ouvre POUR mieux lire est celui qui montre le moins.
+    private var legende: (text: String, origin: SceneCaption.Origin)? {
+        SceneCaption.resolveWithOrigin(sceneIndex: sceneIndex, in: document, post: post,
+                                       carrierFallback: true)
+    }
+
+    /// La légende AFFICHÉE : celle de la langue choisie dans la rangée de
+    /// traduction quand elle vient du texte du post (#6504), sinon la légende
+    /// résolue telle quelle. Une langue sans texte connu retombe sur la résolue
+    /// — jamais une légende vide.
     private var caption: String? {
-        SceneCaption.resolve(sceneIndex: sceneIndex, in: document, post: post,
-                             carrierFallback: true)
+        guard let legende else { return nil }
+        guard legende.origin == .carrierText, let langue = langueDeLegende else { return legende.text }
+        if langue.lowercased() == post.originalLanguage?.lowercased() { return post.content }
+        return post.translations?.first { $0.key.lowercased() == langue.lowercased() }?.value.text ?? legende.text
+    }
+
+    /// **L'offre de traduction de la légende** (#6504) — seulement pour le
+    /// texte du post : la légende propre d'un média n'a aucune traduction
+    /// (#6280), et un sélecteur ou un « traduire » y serait sans effet.
+    private var offreDeTraduction: CaptionTranslationOffer {
+        guard legende?.origin == .carrierText else { return .none }
+        return CaptionTranslationOffer.resolve(
+            originalLanguage: post.originalLanguage,
+            translationLanguages: post.availableLanguages,
+            preferredLanguages: preferredContentLanguages,
+            activeLanguage: langueDeLegende ?? post.resolvedLanguageCode(preferredLanguages: preferredContentLanguages)
+        )
+    }
+
+    /// La rangée posée entre la légende et « voir moins ». `nil` : rien à offrir.
+    private var rangeeDeTraduction: AnyView? {
+        let offre = offreDeTraduction
+        guard offre != .none else { return nil }
+        return AnyView(MediaCaptionTranslationRow(
+            offer: offre,
+            isRequesting: traductionDemandee,
+            onSelectLanguage: { code in
+                withAnimation(.easeInOut(duration: 0.2)) { langueDeLegende = code }
+            },
+            onTranslateNow: { cible in demanderTraduction(vers: cible) }
+        ))
+    }
+
+    /// « Demander la traduction » part tout de suite ; la traduction revient par
+    /// la socket (`post:translation-updated`), que l'hôte applique au post qu'il
+    /// nous passe. En cas d'échec, l'indicateur retombe pour qu'on puisse
+    /// réessayer.
+    private func demanderTraduction(vers cible: String) {
+        traductionDemandee = true
+        let postId = post.id
+        Task {
+            do {
+                try await PostService.shared.requestTranslation(postId: postId, targetLanguage: cible)
+            } catch {
+                traductionDemandee = false
+            }
+        }
     }
 
     var body: some View {
@@ -151,6 +210,10 @@ struct SocialSceneFullscreenView: View {
             if document.scenes.count > 1 { defilement } else { scenePlayer(0) }
 
             chrome
+        }
+        // Une traduction arrivée éteint l'indicateur de demande (#6504).
+        .adaptiveOnChange(of: post.translations?.count ?? 0) { _, _ in
+            traductionDemandee = false
         }
         // **La lecture ne s'arme que s'il y a quelque chose à jouer.** Un
         // canvas fixe n'a ni vidéo, ni son, ni animation : lever `isPlaying`
@@ -352,6 +415,8 @@ struct SocialSceneFullscreenView: View {
                         // le voile du composant masquerait la scène qu'on est
                         // venu regarder ; l'ombre du texte suffit à le détacher.
                         dimsBackgroundWhenExpanded: false,
+                        // La traduction ENTRE la légende et son invite (#6504).
+                        accessory: rangeeDeTraduction,
                         onToggle: {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 captionExpanded.toggle()
