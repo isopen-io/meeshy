@@ -39,6 +39,8 @@ const ar = {
   'reels.media.error': 'تعذّر التشغيل — إعادة المحاولة',
   'reels.image': 'صورة {index} من {count}',
 
+  'stories.mine': 'قصتك',
+
   'feed.post.action.like': 'إعجاب',
   'feed.post.action.comment': 'تعليق',
   'feed.post.action.repost': 'إعادة النشر',

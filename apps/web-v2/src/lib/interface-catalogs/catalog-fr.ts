@@ -51,6 +51,11 @@ const fr = {
   'reels.media.error': 'Lecture impossible — Réessayer',
   'reels.image': 'Image {index} sur {count}',
 
+  /* LE LIBELLÉ DU GROUPE DU LECTEUR (#6550) — partagé par le rail
+     (`components/story-rail.tsx`) et la liste « Toutes les stories »
+     (`routes/stories.tsx`), via `storyAuthorLabel()`. */
+  'stories.mine': 'Votre story',
+
   /* LA CARTE DU FIL ET SES GESTES (#6488) — `FeedPostCard`, l'en-tête et les
      quatre états du Flux (`routes/feed.tsx`), et les échecs d'un geste
      (`lib/api/feed-gestures.ts`, `lib/feed/share-url.ts`) : tous écrits en

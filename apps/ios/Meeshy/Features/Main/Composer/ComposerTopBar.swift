@@ -2,12 +2,12 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// **La barre haute du composer — `✕ · [type ▾] · rail · ⋯`** (planche § P4).
+/// **La barre haute du composer — `✕ · rail · ⋯`** (planche § P4).
 ///
 /// ## Pourquoi elle sort de la surface document (#4070)
 ///
 /// Elle n'a jamais appartenu au DOCUMENT : elle agit sur la
-/// `MeeshyPublication` — la fermer, choisir son profil, lire ses
+/// `MeeshyPublication` — la fermer, lire ses
 /// `MeeshySlide`, ouvrir ce que le document sait faire. Toute surface du
 /// meuble en a besoin, et la scène incrustée devenant sa propre surface, la
 /// garder privée à l'une des deux aurait obligé l'autre à la recopier.
@@ -30,13 +30,10 @@ struct ComposerTopBar: View {
     ///
     /// Le rail montre désormais une mini-preview par SCÈNE, ce qui demande le
     /// ViewModel (effets vivants, bitmaps chargés). Cette barre ne le connaît
-    /// pas et n'a pas à le connaître : slot OPAQUE, comme `formatFan` et
-    /// `overflowMenu` juste en dessous. `nil` ⇒ pas de rail.
+    /// pas et n'a pas à le connaître : slot OPAQUE, comme `overflowMenu`
+    /// juste en dessous. `nil` ⇒ pas de rail.
     let slideRailSlot: AnyView?
 
-    /// L'éventail des profils, monté par l'hôte. `nil` ⇒ un seul format offert,
-    /// donc aucun sélecteur (loi 4).
-    let formatFan: AnyView?
     /// Ce que le document sait faire. `nil` ⇒ aucune entrée n'a d'objet.
     let overflowMenu: AnyView?
 
@@ -65,7 +62,6 @@ struct ComposerTopBar: View {
                     .adaptiveGlass(in: Circle())
             }
             .accessibilityLabel(Text(ComposerDocumentCopy.close))
-            if let formatFan { formatFan.fixedSize() }
             slideRail
             Spacer(minLength: 0)
             if let overflowMenu { overflowMenu.fixedSize() }

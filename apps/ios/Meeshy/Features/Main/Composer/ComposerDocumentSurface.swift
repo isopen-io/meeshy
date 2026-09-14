@@ -156,18 +156,6 @@ struct ComposerDocumentSurface: View {
     /// carte — et c'est le cas de l'écrasante majorité des publications.
     var foregroundSounds: [ComposerForegroundSound] = []
 
-    /// **Le chip de TYPE DE PUBLICATION, dans la BARRE HAUTE (#4047).**
-    ///
-    /// Un slot opaque : la surface ne sait pas ce qu'est un format, ni quels
-    /// formats sont offerts — c'est la règle de placement du meuble
-    /// (`ComposerFormatFanPlacement`) qui décide, et l'éventail lui-même
-    /// (`ComposerFormatFan`) qui les peint. La surface ne fait que lui donner sa
-    /// PLACE, entre la fermeture et les slides.
-    ///
-    /// `nil` ⇒ rien peint. Le meuble le passe seulement là où il peignait déjà
-    /// sa rangée `plateauTools` ; ailleurs, la barre garde sa forme courte.
-    var formatFan: AnyView? = nil
-
     /// **Le menu `⋯` de la barre haute (#4047).**
     ///
     /// Slot OPAQUE, comme `formatFan` : la surface lui donne sa PLACE — au bout
@@ -388,7 +376,6 @@ struct ComposerDocumentSurface: View {
     private var exitAffordance: some View {
         ComposerTopBar(
             slideRailSlot: slideRailSlot,
-            formatFan: formatFan,
             overflowMenu: overflowMenu,
             onClose: onClose,
         )
