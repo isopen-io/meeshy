@@ -25,6 +25,32 @@ const fr = {
   'typing.double': '{first} et {second} écrivent',
   'typing.several': 'Plusieurs personnes écrivent',
 
+  /* LES RÉELS (#6457) — le bouton de l'en-tête du Flux et le lecteur plein
+     écran ; `feed.header.reels`, `reels.back`, `reels.empty` et
+     `reels.action.*` reprennent les clés d'iOS. */
+  'feed.header.reels': 'Lancer les Réels',
+  'reels.title': 'Réels',
+  'reels.back': 'Retour',
+  'reels.open': 'Regarder le réel de {author}',
+  'reels.item': 'Réel de {author}, {index} sur {count}',
+  'reels.loading': 'Chargement des réels',
+  'reels.empty': 'Aucun réel pour le moment',
+  'reels.empty.hint': 'Les réels de vos contacts apparaîtront ici.',
+  'reels.error': 'Impossible de charger les réels',
+  'reels.error.hint': 'Réessayez dans un instant.',
+  'reels.retry': 'Réessayer',
+  'reels.offline': 'Hors ligne',
+  'reels.offline.cold': 'Les réels se chargeront dès le retour du réseau.',
+  'reels.action.like': 'J’aime',
+  'reels.action.bookmark': 'Enregistrer',
+  'reels.action.share': 'Partager',
+  'reels.sound.on': 'Activer le son',
+  'reels.sound.off': 'Couper le son',
+  'reels.play': 'Lire le réel',
+  'reels.pause': 'Mettre le réel en pause',
+  'reels.media.error': 'Lecture impossible — Réessayer',
+  'reels.image': 'Image {index} sur {count}',
+
   'root.menu.feed': 'Flux',
   'root.menu.links': 'Mes liens',
   'root.menu.notifications': 'Notifications',
