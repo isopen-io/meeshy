@@ -1,5 +1,37 @@
 # @meeshy/web
 
+## 1.49.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - l'écran d'attente des destinations flottantes, qu'aucune route ne monte plus, quitte le dépôt (#6416)
+  - un double tap n'agit qu'une fois, un geste en vol ne ment pas, une requête en pause se dit hors ligne (#6417, #6418, #6419)
+  - Mes liens se lisent et se gèrent sur le web, comme LinksHubView d'iOS (#6361)
+  - le barreau « Découvrir » porte son compte dans les gates de langue et de menu (#6406)
+  - le texte d'un sticker voyage avec son image — legende et alt
+  - les témoins d'inscription suivent le minimum de mot de passe du schéma, sans littéral (#6393)
+  - le barreau « Découvrir » porte le compte des demandes reçues, comme iOS (#6321)
+  - on découvre des personnes sur le web, comme PeopleDiscoveryView d'iOS (#6363)
+  - le journal d'appels se lit sur le web, comme l'onglet Appels d'iOS (#6362)
+  - ses communautés se lisent, s'ouvrent et se créent comme sur iOS (#6364)
+  - la barre de lecture est un chunk à la demande — une visionneuse de photos ne la paie plus (#6359)
+  - la visionneuse monte la barre de lecture au couloir bas et le play/pause au centre (#6359)
+  - la mécanique et la barre de lecture vidéo — position, durée, parcours au doigt, muet, vitesse, image dans l'image (#6359)
+  - le retour matériel ferme le menu d'une rangée sans quitter la liste (#6357)
+  - la landing n'affirme plus « 200 languages » ni la confidentialité absolue de la traduction serveur (#6350)
+  - le contraste du verre a un gate, pas seulement une prose (#6308) (#6347)
+  - le contraste du verre a un gate, pas seulement une prose (#6308)
+  - la pellicule de la visionneuse défile dans les deux sens et réserve sa hauteur (#6346)
+  - message-deletion-single-source.test.ts tourne sous Vitest, pas bun:test (#6414)
+  - la longueur minimale d'un mot de passe revient à 6 (directive porteur 2026-09-13)
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.19.5
+
 ## 1.48.0
 
 ### Minor Changes
