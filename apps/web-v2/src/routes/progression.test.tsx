@@ -589,3 +589,72 @@ describe('GeneratedAchievements', () => {
     expect(rendu).not.toContain('/ 0');
   });
 });
+
+describe('MeeshDetail — l’activité et l’échec se DISENT (#6470)', () => {
+  // `canMint` est DÉRIVÉ (`debitablePoints >= mintCost`, `engagement-progress.ts`),
+  // jamais servi par le fil : le poser à `true` dans la fixture ne le rend pas
+  // vrai. C'est `debitablePoints` qui décide.
+  const meeshFrappable = resolveEngagementProgress({
+    ...ENGAGEMENT_PROGRESS_FIXTURE,
+    meesh: { balance: 2, mintedLifetime: 2, debitablePoints: 2400, floorPoints: 0, missingPoints: 0, mintCost: 1200 },
+  }).meesh!;
+
+  function rendre(props: { isMinting: boolean; mintError?: string }) {
+    return renderToStaticMarkup(
+      <MeeshDetail meesh={meeshFrappable} onMint={() => {}} isMinting={props.isMinting} mintError={props.mintError} />,
+    );
+  }
+
+  /**
+   * Un LIBELLÉ seul ne distingue pas « en cours » de « figé ». Le jumeau iOS
+   * pose un `ProgressView` à gauche du texte ; le web pose son rouet.
+   */
+  test('en vol, un indicateur d’activité accompagne le libellé', () => {
+    const rendu = rendre({ isMinting: true });
+    expect(rendu).toContain('data-meesh-mint-spinner');
+    expect(rendu).toContain('Frappe en cours');
+    expect(rendu).toContain('aria-busy="true"');
+  });
+
+  test('au repos, aucun indicateur — il décrirait un état qui n’est pas', () =>
+    expect(rendre({ isMinting: false })).not.toContain('data-meesh-mint-spinner'));
+
+  /**
+   * L'échec se lit SOUS l'action qu'on peut retenter, jamais en haut de l'écran
+   * où le détail le cacherait. `role="alert"` pour qu'un lecteur d'écran
+   * l'entende sans avoir à le chercher.
+   */
+  test('un échec se dit sous l’action, et s’annonce', () => {
+    const rendu = rendre({ isMinting: false, mintError: 'La frappe n’a pas abouti.' });
+    expect(rendu).toContain('data-meesh-mint-error');
+    expect(rendu).toContain('role="alert"');
+    expect(rendu).toContain('La frappe n’a pas abouti.');
+  });
+
+  /** Pendant une nouvelle frappe, l'échec PRÉCÉDENT décrit un état révolu. */
+  test('un échec ne survit pas au geste suivant', () =>
+    expect(rendre({ isMinting: true, mintError: 'La frappe n’a pas abouti.' })).not.toContain('data-meesh-mint-error'));
+
+  test('sans échec, rien ne se dit', () =>
+    expect(rendre({ isMinting: false })).not.toContain('data-meesh-mint-error'));
+});
+
+describe('MeeshEntry — la forme suit iOS (#6466, repris #6470)', () => {
+  /**
+   * `rounded-chip` donnait une gélule là où iOS pose
+   * `RoundedRectangle(cornerRadius: 12)`. Et UNE seule surface, pas deux
+   * bulles : la directive du 2026-09-14 demandait d'abord un groupe séparé, le
+   * porteur l'a vu au simulateur et a tranché l'inverse.
+   */
+  test('l’entrée est un rectangle arrondi, pas une capsule', () => {
+    const rendu = renderToStaticMarkup(<MeeshEntry meesh={meeshDeLaFixture} onMint={() => {}} isMinting={false} />);
+    expect(rendu).toContain('border-radius:12px');
+    expect(rendu).not.toContain('rounded-chip');
+  });
+
+  test('un seul contrôle, un seul libellé accessible', () => {
+    const rendu = renderToStaticMarkup(<MeeshEntry meesh={meeshDeLaFixture} onMint={() => {}} isMinting={false} />);
+    expect(rendu.match(/<button/g)).toHaveLength(1);
+    expect(rendu.match(/aria-label="/g)).toHaveLength(1);
+  });
+});
