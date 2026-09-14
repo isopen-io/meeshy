@@ -273,28 +273,36 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
-    // 2026-08-12 — barre immersive façon WhatsApp : le fond de la bannière
-    // remonte sous la status bar jusqu'au bord haut du viewport. Sans cette
-    // extension, la zone status bar laisse voir le contenu scrollé derrière
-    // (bulles de messages au-dessus de la barre — capture user 2026-08-12).
-    func test_banner_backgroundBleedsIntoTopSafeArea_immersive() throws {
-        let source = try pillSource()
-        XCTAssertTrue(
-            source.contains(".ignoresSafeArea(.container, edges: .top)"),
-            "The banner background must extend under the status bar to the top of the " +
-            "viewport (WhatsApp-style immersive bar) — otherwise scrolled content stays " +
-            "visible in the status-bar strip above the banner."
+    // 2026-08-12 — barre immersive façon WhatsApp : la zone status bar ne doit
+    // pas laisser voir le contenu scrollé derrière (bulles de messages au-dessus
+    // de la barre — capture user 2026-08-12).
+    //
+    // 2026-09-14 (#6579) — L'EXIGENCE TIENT, SON PROPRIÉTAIRE A CHANGÉ. La
+    // bannière posait elle-même `.ignoresSafeArea(.container, edges: .top)` sur
+    // son décor ; le mini-lecteur audio ne posait rien, donc une écoute sans
+    // appel laissait la bande au fond thématique. Une peinture portée par chaque
+    // barre est présente chez l'une et absente chez l'autre : elle appartient
+    // désormais à `TopChromeBand`, monté UNE fois sur le conteneur qui les
+    // empile. Le détail de la bande est gardé par `TopChromeBandGuardTests`.
+    func test_banner_noLongerOwnsTheStatusBarBleed_theTopChromeBandDoes() throws {
+        XCTAssertFalse(
+            try pillSource().contains("ignoresSafeArea"),
+            "La bannière ne peint plus que sa propre hauteur — sinon la bande " +
+            "a deux propriétaires, donc deux comportements."
         )
-        guard let backgroundRange = source.range(of: ".background("),
-              let offsetRange = source.range(of: ".offset(x: pillDragOffset)") else {
-            XCTFail("expected pillContent to keep its .background + .offset chain")
-            return
-        }
-        let backgroundBlock = String(source[backgroundRange.lowerBound..<offsetRange.lowerBound])
+        let band = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Meeshy/Features/Main/Components/TopChromeTint.swift"),
+            encoding: .utf8
+        )
         XCTAssertTrue(
-            backgroundBlock.contains(".ignoresSafeArea(.container, edges: .top)"),
-            "ignoresSafeArea must apply to the banner BACKGROUND only (decor bleed), " +
-            "never to the banner content — the controls must stay inside the safe area."
+            AppSourceGuard.stripComments(band).contains(".ignoresSafeArea(.container, edges: .top)"),
+            "…et c'est `TopChromeBand` qui remonte sous la status bar jusqu'au " +
+            "bord haut du viewport, pour l'appel COMME pour l'écoute audio."
         )
     }
 
@@ -332,11 +340,9 @@ final class FloatingCallPillViewTests: XCTestCase {
             "stops so the WCAG tests and the shipped gradient can never drift " +
             "apart."
         )
-        XCTAssertTrue(
-            backgroundBlock.contains(".ignoresSafeArea(.container, edges: .top)"),
-            "The indigo decor must keep bleeding under the status bar / " +
-            "Dynamic Island — the call details sit right below the island."
-        )
+        // Le débord sous la status bar / Dynamic Island a changé de
+        // propriétaire le 2026-09-14 (#6579) : il appartient à `TopChromeBand`.
+        // Voir `test_banner_noLongerOwnsTheStatusBarBleed_theTopChromeBandDoes`.
     }
 
     // 2026-08-12 — retrait des chevrons gauche/droite (retour user : inutiles ;
@@ -595,13 +601,16 @@ final class FloatingCallPillViewTests: XCTestCase {
 @MainActor
 final class CallPresentationLayerMountTests: XCTestCase {
 
-    private func rootViewSource() throws -> String {
+    /// EXTRAIT de `RootView.swift` le 2026-09-14 (#6579) : celui-ci dépassait le
+    /// plafond dur de 1200 lignes, donc y ajouter le montage de la bande du haut
+    /// était interdit.
+    private func layerSource() throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // Views/
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Views/RootView.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Views/RootLayers/CallPresentationLayer.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -610,13 +619,13 @@ final class CallPresentationLayerMountTests: XCTestCase {
     /// et matcheraient sinon les assertions négatives (même piège que la
     /// garde RTL, cf. RightToLeftLayoutGuardTests.strippingComments).
     private func callPresentationLayerBody() throws -> String {
-        let source = AppSourceGuard.stripComments(try rootViewSource())
-        guard let start = source.range(of: "struct CallPresentationLayer: ViewModifier {"),
-              let end = source.range(of: "\nstruct ", range: start.upperBound..<source.endIndex) else {
-            XCTFail("CallPresentationLayer not found in RootView.swift")
+        let source = AppSourceGuard.stripComments(try layerSource())
+        guard let start = source.range(of: "struct CallPresentationLayer: ViewModifier {") else {
+            XCTFail("CallPresentationLayer not found in CallPresentationLayer.swift")
             return ""
         }
-        return String(source[start.lowerBound..<end.lowerBound])
+        let end = source.range(of: "\nstruct ", range: start.upperBound..<source.endIndex)
+        return String(source[start.lowerBound..<(end?.lowerBound ?? source.endIndex)])
     }
 
     func test_pill_isMountedAsFrameCompressingVStack_notSafeAreaInset() throws {

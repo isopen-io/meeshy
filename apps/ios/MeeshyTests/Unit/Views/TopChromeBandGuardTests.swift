@@ -113,6 +113,11 @@ final class TopChromeBandGuardTests: XCTestCase {
             "La bande peint et RIEN d'autre : aucun geste, aucune forme de " +
             "contact — sinon elle intercepte les appuis du chrome qu'elle habille."
         )
+        XCTAssertTrue(
+            tint.contains(".background(alignment: .top)"),
+            "En `.background(alignment: .top)` : la bande se glisse derrière le " +
+            "sommet du VStack et remonte jusqu'au bord, sans rien recouvrir."
+        )
         XCTAssertFalse(
             tint.contains(".overlay"),
             "La bande se pose en `.background`, jamais en `.overlay` : posée " +
@@ -120,20 +125,75 @@ final class TopChromeBandGuardTests: XCTestCase {
         )
     }
 
-    /// La bande est montée sur le conteneur UNIQUE des deux barres, donc par
-    /// les DEUX racines (iPhone et iPad) sans duplication.
-    func test_laBandeEstMonteeSurLeConteneurDesDeuxBarres() throws {
-        let layer = try code(layerPath)
+    /// La bande est montée sur le conteneur UNIQUE des deux barres — et ce
+    /// conteneur est monté par les DEUX racines. Un correctif posé dans une
+    /// seule racine aurait manqué l'iPad en silence.
+    func test_laBandeEstMonteeSurLeConteneurQueLesDeuxRacinesPartagent() throws {
         XCTAssertTrue(
-            layer.contains("TopChromeBand("),
+            try code(layerPath).contains("TopChromeBand("),
             "`CallPresentationLayer` — le `VStack` qui empile pilule et " +
-            "mini-lecteur, monté par RootViewLayers ET iPadRootViewLayers — " +
-            "est le seul point de montage possible d'une bande partagée."
+            "mini-lecteur — est le seul point de montage possible d'une bande " +
+            "partagée par les deux barres."
+        )
+        for racine in ["Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
+                       "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift"] {
+            XCTAssertTrue(
+                try code(racine).contains("CallPresentationLayer("),
+                "\(racine) doit monter `CallPresentationLayer` — c'est ce qui " +
+                "porte la bande jusqu'à cette racine."
+            )
+        }
+    }
+
+    /// La bande ne se peint que si la BARRE est là. `callState.isActive` ne le
+    /// dit pas : la pilule se masque aussi en plein écran et pendant le PiP
+    /// système — une bande calée dessus serait un ruban indigo posé sur rien.
+    func test_laBandeSuitLaVisibiliteDeLaPilule_pasLEtatDeLAppel() {
+        XCTAssertTrue(FloatingCallPillView.isShowingPill(
+            displayMode: .pip, callState: .connected, isSystemPiPActive: false))
+        XCTAssertFalse(FloatingCallPillView.isShowingPill(
+            displayMode: .fullScreen, callState: .connected, isSystemPiPActive: false))
+        XCTAssertFalse(FloatingCallPillView.isShowingPill(
+            displayMode: .pip, callState: .connected, isSystemPiPActive: true))
+        XCTAssertFalse(FloatingCallPillView.isShowingPill(
+            displayMode: .pip, callState: .idle, isSystemPiPActive: false))
+    }
+
+    /// …et la bande d'écoute suit ce que la BARRE AFFICHE, pas ce que le
+    /// coordinateur joue : le mini-lecteur se masque dans la conversation qui
+    /// joue. Sans cette remontée, un ruban indigo surplomberait cette
+    /// conversation, sans barre en dessous.
+    func test_leMiniLecteurRemonteCeQuIlAFFICHE_pasCeQueLeCoordinateurJoue() throws {
+        let bar = try code(miniBarPath)
+        XCTAssertTrue(
+            bar.contains("adaptiveOnChange(of: displayedContext)"),
+            "La remontée doit observer `displayedContext` (masquage + fenêtre " +
+            "de grâce comprises), jamais `coordinator.activeContext`."
         )
         XCTAssertTrue(
-            layer.contains(".background(alignment: .top)"),
-            "En `.background(alignment: .top)` : la bande se glisse derrière le " +
-            "sommet du VStack et remonte jusqu'au bord, sans rien recouvrir."
+            try code(layerPath).contains("onDisplayedContextChange:"),
+            "…et l'hôte doit la brancher plutôt que d'observer lui-même un " +
+            "coordinateur qui publie `progress` à ~20 Hz."
+        )
+    }
+
+    /// Aucune couture entre la bande et la barre : les 6 pt de respiration du
+    /// mini-lecteur étaient posés APRÈS son `.background`, donc NON teintés —
+    /// une ligne claire de 6 pt exactement là où la bande rejoint la barre.
+    func test_lesSixPointsDeRespirationSontPeintsParLeBandeau() throws {
+        let bar = try code(miniBarPath)
+        let padding = try XCTUnwrap(
+            bar.range(of: ".padding(.top, 6)"),
+            "Le mini-lecteur garde sa respiration de 6 pt."
+        )
+        let background = try XCTUnwrap(
+            bar.range(of: ".background(MiniAudioPlayerBarStyle.background)"),
+            "…et son aplat de marque."
+        )
+        XCTAssertTrue(
+            padding.lowerBound < background.lowerBound,
+            "La respiration doit être ABSORBÉE par l'aplat : posée après lui, " +
+            "elle laisse 6 pt non teintés entre la bande du haut et la barre."
         )
     }
 
@@ -174,15 +234,38 @@ final class TopChromeBandGuardTests: XCTestCase {
         XCTAssertNil(TopChromeTint.resolve(callIsActive: false, audio: nil))
     }
 
-    /// L'appel PRIME sur l'écoute — l'ordre que le `VStack` tient déjà
-    /// visuellement (la pilule au-dessus du mini-lecteur).
-    func test_resolve_lAppelPrimeSurLEcoute() {
+    /// Une bande, et une seule, par barre active.
+    func test_resolve_neRendUneBandeQueQuandUneBarreEstActive() {
         XCTAssertEqual(TopChromeTint.resolve(callIsActive: true, audio: nil), .call)
         XCTAssertEqual(TopChromeTint.resolve(callIsActive: false, audio: audioContext()), .audio)
+        XCTAssertNotNil(
+            TopChromeTint.resolve(callIsActive: true, audio: audioContext()),
+            "Un appel PENDANT une lecture audio garde une bande : la pilule " +
+            "occupe le haut du VStack, donc la bande la prolonge."
+        )
+    }
+
+    /// La précédence de l'appel sur l'écoute n'est PAS observable dans la teinte
+    /// résolue : les deux barres portent les mêmes arrêts. Ce témoin l'ACTE — si
+    /// une teinte distincte apparaît un jour, il tombe et oblige à écrire le vrai
+    /// témoin de rang (sans quoi un `resolve` inversé resterait vert).
+    ///
+    /// Ce qui est observable AUJOURD'HUI, et qui est donc le vrai témoin de
+    /// l'ordre, c'est la pile : la pilule est posée AVANT le mini-lecteur dans
+    /// le `VStack`, donc c'est elle qui touche le haut.
+    func test_lesDeuxBarresPartagentLaMemeTeinte_doncLOrdreSeLitDansLaPile() throws {
         XCTAssertEqual(
-            TopChromeTint.resolve(callIsActive: true, audio: audioContext()), .call,
-            "Un appel actif PENDANT une lecture audio garde la teinte d'appel : " +
-            "la pilule occupe le haut du VStack, donc la bande la prolonge."
+            TopChromeTint.call, TopChromeTint.audio,
+            "Tant que les deux teintes sont identiques, aucune assertion sur la " +
+            "VALEUR rendue ne peut prouver la précédence."
+        )
+        let layer = try code(layerPath)
+        let pill = try XCTUnwrap(layer.range(of: "FloatingCallPillView(callManager:"))
+        let mini = try XCTUnwrap(layer.range(of: "MiniAudioPlayerBar("))
+        XCTAssertTrue(
+            pill.lowerBound < mini.lowerBound,
+            "L'appel prime sur l'écoute : la pilule est le premier élément du " +
+            "VStack, donc la barre que la bande prolonge quand les deux jouent."
         )
     }
 
@@ -203,12 +286,16 @@ final class TopChromeBandGuardTests: XCTestCase {
 
     /// La couleur de la BANDE est l'arrêt HAUT : c'est lui qui touche la barre
     /// système, et c'est lui qui a été calibré contre le blanc (6.3:1).
-    func test_laCouleurDeBandeEstLArretHaut_etLEncreVientDeLaLuminance() {
+    func test_laCouleurDeBandeEstLArretHaut_etLEncreTientLeContrasteWCAG() {
         XCTAssertEqual(TopChromeTint.call.bandColor, TopChromeTint.call.top)
-        XCTAssertEqual(
-            TopChromeTint.call.foreground, TopChromeTint.call.bandColor.readableInk,
-            "L'encre se RÉSOUT par la luminance (`readableInk`, le point unique " +
-            "du dépôt), jamais posée à la main."
+        XCTAssertGreaterThanOrEqual(
+            CallBannerContrast.contrastRatio(
+                TopChromeTint.call.foreground, TopChromeTint.call.bandColor
+            ), 4.5,
+            "L'encre de la bande doit tenir 4.5:1 (WCAG 1.4.3) contre l'aplat " +
+            "qu'elle surmonte. Elle se RÉSOUT par la luminance (`readableInk`), " +
+            "jamais posée à la main — une encre posée à l'œil passe ce seuil " +
+            "par chance, pas par construction."
         )
         XCTAssertEqual(
             TopChromeTint.audio.foreground, MiniAudioPlayerBarStyle.primaryForeground,

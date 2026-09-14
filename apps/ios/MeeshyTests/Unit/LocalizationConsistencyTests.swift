@@ -379,6 +379,11 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStoryCitationCard.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Views/RootView.swift",  // 18
+        // #6579 — `CallPresentationLayer` a QUITTÉ l'écran ci-dessus pour son
+        // propre fichier (RootView.swift dépassait le plafond dur de 1200
+        // lignes). Le cliquet suit le CODE, pas le chemin : sans cette ligne,
+        // `call.unknown` sortirait du cliquet en silence (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/RootLayers/CallPresentationLayer.swift",  // 1
         "apps/ios/Meeshy/Features/Auth/Views/EmailVerificationView.swift",  // 17
         "apps/ios/Meeshy/Features/Main/Components/RecentMediaStrip.swift",  // 17
         "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel.swift",  // 17
