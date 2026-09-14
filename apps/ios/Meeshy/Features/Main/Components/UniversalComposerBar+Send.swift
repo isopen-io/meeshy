@@ -81,7 +81,8 @@ extension UniversalComposerBar {
             isSending: externalIsSending,
             keyboardIsUp: isFocused,
             offersQuickEmoji: showEmoji,
-            offersTextSticker: textStickerTemplate != nil
+            offersTextSticker: textStickerTemplate != nil,
+            exceedsWordLimit: ComposerActionSlot.exceedsTextStickerLimit(text)
         )
     }
 
