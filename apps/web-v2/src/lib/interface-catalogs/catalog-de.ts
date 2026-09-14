@@ -39,6 +39,14 @@ const de = {
   'reels.media.error': 'Wiedergabe nicht möglich — Erneut versuchen',
   'reels.image': 'Bild {index} von {count}',
 
+  'stories.title': 'Storys',
+  'stories.loading': 'Storys werden geladen…',
+  'stories.error': 'Storys konnten nicht geladen werden.',
+  'stories.empty.title': 'Noch keine Storys',
+  'stories.empty.subtitle': 'Storys deiner Kontakte werden hier vierundzwanzig Stunden lang angezeigt.',
+  'stories.create': 'Story erstellen',
+  'stories.count.one': '{count} Story',
+  'stories.count.other': '{count} Storys',
   'stories.mine': 'Deine Story',
 
   'feed.post.action.like': 'Gefällt mir',
