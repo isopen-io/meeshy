@@ -3631,6 +3631,19 @@ model PostMedia {
   caption      String?
   alt          String?  // Accessibilité
 
+  /// Langue SOURCE de `caption` (ISO 639-1, détectée à l'écriture). DISTINCTE
+  /// de `language` ci-dessous, qui décrit la langue du MÉDIA (variantes
+  /// TTS/sous-titres) — pas celle de sa légende. `null` tant que `caption` est
+  /// vide ou n'a pas encore été traduite (#6280).
+  captionLanguage String?
+  /// Traductions de `caption`, MÊME forme que `Post.translations`
+  /// (`{ "fr": { text, translationModel, confidenceScore?, createdAt, updatedAt? } }`).
+  /// DISTINCTE de `translations` ci-dessous, déjà prise par les pistes
+  /// audio/transcriptions traduites — n'y range JAMAIS une légende, et
+  /// inversement. Voir `packages/shared/types/media-caption-translation.ts`
+  /// et `packages/shared/decisions.md` § 2026-09-14 (#6280).
+  captionTranslations Json?
+
   // Transcription audio (même structure que Attachment.transcription)
   /// Structure: {
   ///   text: string,

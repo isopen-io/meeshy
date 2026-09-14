@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// **Ce qu'on offre entre une légende et son invite** (#6504).
 ///
@@ -53,5 +54,68 @@ nonisolated enum CaptionTranslationOffer: Equatable {
                             language: String?) -> String {
         guard let cle = language?.lowercased(), cle != originalLanguage?.lowercased() else { return content }
         return translations.first { $0.key.lowercased() == cle }?.value ?? content
+    }
+}
+
+/// **Ce qu'on traduit sous une légende : le contenu AFFICHÉ, jamais un voisin** (#6280).
+///
+/// Directive porteur 2026-09-14 : le contenu du post, la légende d'un média et
+/// son texte alternatif sont TROIS contenus. Le plein écran d'une scène affiche
+/// soit la légende PROPRE du média de la scène, soit le texte du post en repli
+/// (`SceneCaption.Origin`) ; la rangée et la feuille traduisent celui-là, avec
+/// ses seules traductions et par sa seule route — jamais l'un pour l'autre,
+/// même à chaînes égales.
+nonisolated struct CaptionTranslationSource: Equatable {
+    enum Target: Equatable {
+        /// `POST /posts/:postId/translate` — le contenu du post.
+        case post(id: String)
+        /// `POST /posts/media/:mediaId/caption/translate` — la légende du média.
+        case mediaCaption(mediaId: String)
+
+        var identifiant: String {
+            switch self {
+            case .post(let id): return id
+            case .mediaCaption(let mediaId): return mediaId
+            }
+        }
+    }
+
+    let text: String
+    let originalLanguage: String?
+    let translations: [String: String]
+    let target: Target
+
+    static func of(origin: SceneCaption.Origin, post: FeedPost, mediaId: String?) -> CaptionTranslationSource? {
+        switch origin {
+        case .carrierText:
+            return CaptionTranslationSource(
+                text: post.content,
+                originalLanguage: post.originalLanguage,
+                translations: (post.translations ?? [:]).mapValues(\.text),
+                target: .post(id: post.id)
+            )
+        case .mediaCaption:
+            guard let mediaId,
+                  let media = post.media.first(where: { $0.id == mediaId }),
+                  let caption = media.caption,
+                  !caption.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+            return CaptionTranslationSource(
+                text: caption,
+                originalLanguage: media.captionLanguage,
+                translations: media.captionTranslations ?? [:],
+                target: .mediaCaption(mediaId: mediaId)
+            )
+        }
+    }
+
+    /// La langue dont ce contenu s'affiche par défaut : la descente du Prisme
+    /// (`PrismTranslationResolver`, la langue d'origine concourant à son rang),
+    /// sinon l'original. UNE résolution pour le texte et le drapeau actif.
+    func displayedLanguage(preferredLanguages: [String]) -> String? {
+        PrismTranslationResolver.resolve(
+            originalLanguage: originalLanguage,
+            translations: translations,
+            preferredLanguages: preferredLanguages
+        )?.language ?? originalLanguage
     }
 }

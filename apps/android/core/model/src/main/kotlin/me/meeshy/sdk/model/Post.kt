@@ -2,6 +2,7 @@ package me.meeshy.sdk.model
 
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.lang.resolveLastMessagePreview
 
 /** A post author — port of APIAuthor (PostModels.swift). */
 @Serializable
@@ -29,8 +30,56 @@ data class ApiPostMedia(
     val order: Int? = null,
     val caption: String? = null,
     val alt: String? = null,
+    /**
+     * Langue SOURCE de [caption] (`PostMedia.captionLanguage`, #6280) — DISTINCTE
+     * de [translations] ci-dessous, qui traduit les PISTES audio/transcriptions,
+     * jamais le texte de la légende. `null` tant que le pipeline de traduction de
+     * légende n'a pas encore détecté de langue source.
+     */
+    val captionLanguage: String? = null,
+    /**
+     * Traductions de [caption] (`PostMedia.captionTranslations`, #6280) — même
+     * forme que `ApiPost.translations`, DISTINCTE de [translations] ci-dessous
+     * (déjà prise par les pistes audio traduites). Voir
+     * `packages/shared/types/media-caption-translation.ts` (SSOT du contrat).
+     */
+    val captionTranslations: Map<String, ApiMediaCaptionTranslationEntry>? = null,
     val transcription: ApiAttachmentTranscription? = null,
     val translations: Map<String, ApiAttachmentTranslation>? = null,
+)
+
+/**
+ * La descente du Prisme sur LA LÉGENDE de ce média (#6280) — projette
+ * [me.meeshy.sdk.lang.resolveLastMessagePreview] (règle #3 du Prisme : la langue
+ * d'origine concourt à SON rang, jamais comme court-circuit). `null` quand
+ * [ApiPostMedia.caption] est absent ; sinon [ApiPostMedia.caption] TEL QUEL si
+ * aucune traduction ne cible une langue préférée (règle #1 : jamais un premier
+ * élément arbitraire de la carte). Mirror de [FeedMedia.resolvedCaption] côté
+ * modèle REST plutôt qu'aplati.
+ */
+fun ApiPostMedia.resolvedCaption(preferredLanguages: List<String>): String? =
+    resolveLastMessagePreview(
+        preview = caption,
+        translations = captionTranslations
+            ?.mapNotNull { (lang, entry) -> entry.text.takeIf { it.isNotBlank() }?.let { lang to it } }
+            ?.toMap(),
+        originalLanguage = captionLanguage,
+        preferredLanguages = preferredLanguages,
+    )
+
+/**
+ * Une entrée de [ApiPostMedia.captionTranslations] (#6280) — même forme que
+ * [ApiPostTranslationEntry], déclarée séparément parce qu'elle qualifie une
+ * LÉGENDE de média, jamais `Post.content`. Port de iOS
+ * `APIMediaCaptionTranslationEntry` (PostModels.swift).
+ */
+@Serializable
+data class ApiMediaCaptionTranslationEntry(
+    val text: String = "",
+    val translationModel: String? = null,
+    val confidenceScore: Double? = null,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
 )
 
 /** A post/comment translation entry — port of APIPostTranslationEntry (PostModels.swift). */
