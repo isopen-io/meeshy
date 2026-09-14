@@ -66,15 +66,6 @@ const ar = {
   'notFound.title': 'هذا العنوان غير موجود.',
 
   'pending.back': 'العودة إلى المحادثات',
-  'pending.comingSoon': 'هذه الشاشة قادمة قريبًا.',
-  'pending.feed.promise': 'منشورات الأشخاص الذين تتابعهم.',
-  'pending.links.promise': 'ستُجمع هنا الروابط التي تمت مشاركتها في محادثاتك.',
-  'pending.notifications.promise': 'ما ينتظرك — الإشارات والردود والدعوات — ستقرؤه هنا.',
-  'pending.calls.promise': 'سجل مكالماتك، وطريقة لإجراء مكالمة.',
-  'pending.discover.promise': 'أشخاص للتعرف عليهم، يتم اختيارهم بحسب ما يجمعكم.',
-  'pending.communities.promise': 'المجتمعات التي تنتمي إليها، وتلك التي تشبهك.',
-  'pending.settings.promise': 'لغاتك وخصوصيتك وإشعاراتك.',
-  'pending.profile.promise': 'هويتك على Meeshy — الاسم والصورة واللغات وما يراه الآخرون منها.',
 
   'profile.title': 'الملف الشخصي',
   'profile.edit': 'تعديل',
