@@ -73,7 +73,10 @@
 // peignaient chacune leur pastille en `Color(hex:)`. Le cliquet à DEUX SENS a
 // exigé l'enregistrement, et c'est sa moitié la moins évidente qui a raison :
 // une amélioration non consignée se laisse reperdre en silence au lot suivant.
-const BASELINE_HARDCODED_COLOR_COUNT = 943;
+// 2026-09-14 (#6481) — 943 → 930. Le lot des pages de Réglages avait porté le
+// compte à 946 : les deux vues du profil vocal répétaient `Color(hex: accentColor)`
+// à chaque site. La teinte y est désormais convertie une fois (`accent`).
+const BASELINE_HARDCODED_COLOR_COUNT = 930;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
