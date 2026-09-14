@@ -302,7 +302,18 @@ export function PasswordSettings() {
               SoundFeedback.playClick();
               handleSave();
             }}
-            disabled={isLoading || !formData.currentPassword || !formData.newPassword || !formData.confirmPassword}
+            // Le mot de passe ACTUEL n'entre dans la condition que si le
+            // compte en a un (#6424) : sans cette garde, le bouton restait
+            // gris pour un compte né d'une inscription par e-mail seul —
+            // c'est-à-dire pour la personne que ce formulaire vient
+            // précisément servir. Un champ masqué qui désactive quand même le
+            // bouton est la forme la plus silencieuse du contrôle inerte.
+            disabled={
+              isLoading ||
+              (hasPassword !== false && !formData.currentPassword) ||
+              !formData.newPassword ||
+              !formData.confirmPassword
+            }
             className="w-full sm:w-auto focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
             {isLoading ? t('security.password.updating') : t('security.password.update')}
