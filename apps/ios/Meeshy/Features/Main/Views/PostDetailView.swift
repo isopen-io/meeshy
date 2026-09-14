@@ -1714,10 +1714,8 @@ EngagementGlyph(
     /// déjà l'une des plus grosses expressions du fichier ; tout ce qu'on peut
     /// en sortir doit en sortir.
     static func captionServings(for post: FeedPost) -> [String: SocialMediaCaptionServing] {
-        SocialMediaCaption.serving(
-            for: post.media, carrier: .from(post: post),
-            preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
-        )
+        SocialMediaCaption.serving(for: post.media, carrier: .from(post: post),
+                                   preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
     }
 
     struct DetailMediaAuthor {

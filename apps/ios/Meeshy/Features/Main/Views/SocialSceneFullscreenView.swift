@@ -125,6 +125,14 @@ struct SocialSceneFullscreenView: View {
     @State private var languesDemandees: Set<String> = []
     /// La feuille de traduction des messages, ouverte par l'icône de la rangée.
     @State private var feuilleDeTraductionOuverte = false
+    /// Les traductions de CE post arrivées pendant l'ouverture (#6560) : tant
+    /// que le plein écran couvre la carte hôte, le post qu'elle relaie ne change pas.
+    @State private var arrivees: [CaptionTranslationArrival] = []
+
+    /// Le post de l'hôte, augmenté des traductions arrivées depuis l'ouverture.
+    private var postAffiche: FeedPost {
+        CaptionTranslationArrival.applying(arrivees, to: post)
+    }
 
     /// **Le porteur de la scène.** Le document dit ce qu'il faut peindre ; il ne
     /// dit pas où vivent les pixels. Sans lui, le résolveur du player n'a aucun
@@ -159,7 +167,7 @@ struct SocialSceneFullscreenView: View {
         guard let legende else { return nil }
         return CaptionTranslationSource.of(
             origin: legende.origin,
-            post: post,
+            post: postAffiche,
             mediaId: SceneCaption.mediaIdentity(sceneIndex: sceneIndex, in: document, post: post)
         )
     }
@@ -280,9 +288,9 @@ struct SocialSceneFullscreenView: View {
 
     /// La demande part tout de suite, par la route du contenu affiché ; la
     /// traduction revient par la socket (`post:translation-updated` ou
-    /// `media:caption-translation-updated`), que l'hôte applique au post qu'il
-    /// nous passe. En cas d'échec, la langue quitte l'attente pour qu'on puisse
-    /// réessayer.
+    /// `media:caption-translation-updated`), que la vue plie elle-même sur le
+    /// post affiché (#6560). En cas d'échec, la langue quitte l'attente pour
+    /// qu'on puisse réessayer.
     private func demanderTraduction(vers cible: String) {
         guard let source = sourceDeTraduction else { return }
         let langue = cible.lowercased()
@@ -315,6 +323,14 @@ struct SocialSceneFullscreenView: View {
         // Une traduction arrivée sort sa langue de l'attente (#6504, #6280).
         .adaptiveOnChange(of: sourceDeTraduction?.translations.count ?? 0) { _, _ in
             languesDemandees.subtract((sourceDeTraduction?.translations ?? [:]).keys.map { $0.lowercased() })
+        }
+        .onReceive(SocialSocketManager.shared.mediaCaptionTranslationUpdated.receive(on: DispatchQueue.main)) { recue in
+            guard recue.postId == post.id else { return }
+            arrivees.append(.mediaCaption(recue))
+        }
+        .onReceive(SocialSocketManager.shared.postTranslationUpdated.receive(on: DispatchQueue.main)) { recue in
+            guard recue.postId == post.id else { return }
+            arrivees.append(.post(recue))
         }
         .sheet(isPresented: $feuilleDeTraductionOuverte) { feuilleDeTraduction }
         // **La lecture ne s'arme que s'il y a quelque chose à jouer.** Un
