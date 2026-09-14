@@ -7,7 +7,7 @@ import { GeoIPService, getRequestContext } from '../services/GeoIPService';
 import { initSessionService, markSessionTrusted } from '../services/SessionService';
 import { rememberPendingDeviceTrust } from './auth/pending-device-trust';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
-import { sendSuccess, sendBadRequest, sendInternalError } from '../utils/response.js';
+import { sendSuccess, sendBadRequest, sendError, sendInternalError } from '../utils/response.js';
 import { userSchema, sessionSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 const logger = enhancedLogger.child({ module: 'MagicLinkRoutes' });
 
@@ -82,6 +82,11 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         400: {
           description: 'Invalid request',
           ...errorResponseSchema
+        },
+        429: {
+          description:
+            'Rate limited. Distinct from the 200 above: the refusal concerns the CALLER, not the existence of the address — the limiter is checked BEFORE the account lookup, so saying it enumerates nothing.',
+          ...errorResponseSchema
         }
       },
       security: []
@@ -108,6 +113,28 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         deviceFingerprint: (request.body as any)?.deviceFingerprint,
         rememberDevice // Stored server-side for security
       });
+
+      /**
+       * UN REFUS DU LIMITEUR SE DIT (#6450).
+       *
+       * La route rendait `sendSuccess` quoi que le service ait répondu. Sur un
+       * refus de débit, elle servait donc `{"success":true,"message":"Too many
+       * requests…"}` en HTTP 200 : un client qui branche sur `success` annonce
+       * « regardez votre boîte mail » alors qu'aucun courriel n'est parti.
+       *
+       * Pour un compte SANS mot de passe (#6424), ce lien est la SEULE porte —
+       * l'annoncer ouverte quand elle ne l'est pas laisse la personne dehors
+       * sans qu'elle sache pourquoi.
+       *
+       * Cela ne rouvre AUCUNE énumération, et le service le dit déjà dans son
+       * propre commentaire : le débit est vérifié AVANT la recherche du
+       * compte, donc le refus parle de l'APPELANT, jamais de l'existence de
+       * l'adresse. C'est la raison pour laquelle il peut se dire, là où
+       * « aucun compte » ne le peut pas.
+       */
+      if (result.success === false) {
+        return sendError(reply, 429, result.message, { code: result.error ?? 'RATE_LIMITED' });
+      }
 
       return sendSuccess(reply, { expiresInSeconds: (result as any).expiresInSeconds }, { message: result.message });
 
