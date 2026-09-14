@@ -3,7 +3,8 @@ import { useStore } from 'zustand/react';
 
 import { CountrySheet } from '@/components/country-sheet';
 import { Field } from '@/components/field';
-import { Glyph } from '@/components/glyph';
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { AUTH_GLYPHS } from '@/components/glyphs-auth';
 import { LanguageSheet } from '@/components/language-sheet';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
@@ -16,8 +17,6 @@ import {
   canSubmit,
   composeRegisterBody,
   emptySignupForm,
-  hasDisplayName,
-  hasPassword,
   type SignupFormState,
 } from '@/lib/signup-form';
 import { placeSignupFailure, type SignupFeedback, type SignupField } from '@/lib/view/auth-feedback';
@@ -78,6 +77,9 @@ export default function SignupScreen() {
   const [isSubmitting, setSubmitting] = useState(false);
   const [isShowingCountrySheet, setShowingCountrySheet] = useState(false);
   const [isShowingLanguageSheet, setShowingLanguageSheet] = useState(false);
+  // Le téléphone ne passe pas par `Field` (il porte le sélecteur de pays) : son
+  // (i) est tenu ici, avec la même loi — replié par défaut, jamais retiré du DOM.
+  const [isPhoneHintOpen, setPhoneHintOpen] = useState(false);
   // Une inscription réussie AUTHENTIFIE déjà (`auth.register` établit la
   // session, #4264) — sans ce drapeau, l'effet ci-dessous mènerait à `list`
   // avant que `handleSubmit` n'ait pu router vers la vérification d'e-mail
@@ -166,6 +168,11 @@ export default function SignupScreen() {
             tint={INDIGO_TINT}
             focused={focused === 'displayName'}
             error={feedback.fieldErrors.displayName}
+            hint={{
+              text: 'Laissé vide, nous le tirons de votre adresse. Vous pourrez le changer à tout moment.',
+              glyph: AUTH_GLYPHS.info,
+              label: 'À quoi sert le nom affiché',
+            }}
           >
             {({ id, describedBy }) => (
               <input
@@ -184,12 +191,6 @@ export default function SignupScreen() {
               />
             )}
           </Field>
-
-          {!hasDisplayName(form.displayName) ? (
-            <p data-signup-display-name-note className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              Laissé vide, nous le tirons de votre adresse. Vous pourrez le changer à tout moment.
-            </p>
-          ) : null}
 
           <div className="grid gap-1">
             <Field id="signup-email" label="Adresse e-mail" tint={INDIGO_TINT} focused={focused === 'email'} error={emailError}>
@@ -256,26 +257,42 @@ export default function SignupScreen() {
                   className="w-full bg-transparent py-3 text-input outline-none"
                   style={{ color: 'var(--color-ios-ink)' }}
                   aria-label="Téléphone"
+                  aria-describedby="signup-phone-hint"
                 />
+                <button
+                  type="button"
+                  onClick={() => setPhoneHintOpen((open) => !open)}
+                  aria-expanded={isPhoneHintOpen}
+                  aria-controls="signup-phone-hint"
+                  aria-label="À quoi sert le numéro"
+                  className="grid shrink-0 place-items-center rounded-full"
+                  style={{ minWidth: 44, minHeight: 44, marginRight: -10, color: 'var(--color-ios-ink-3)' }}
+                >
+                  <GlyphSvg glyph={AUTH_GLYPHS.info} size={18} />
+                </button>
               </div>
             </div>
             {feedback.fieldErrors.phoneNumber !== undefined ? (
               <p role="alert" className="text-caption" style={{ color: 'var(--ios-error)' }}>
                 {feedback.fieldErrors.phoneNumber}
               </p>
-            ) : (
-              /* CE QU'IL OUVRE, jamais « facultatif » (#6441). Les deux usages
-                 sont MESURÉS, pas promis : le numéro est un identifiant de
-                 connexion (`AuthService.ts:158`, la disjonction
-                 username/email/phoneNumber) et il rend trouvable par un
-                 contact qui l'a au carnet (`contacts-match.ts`,
-                 `matchedBy: 'phone'`). Dire l'usage est le seul levier
-                 honnête pour qu'il soit donné — le NOMMER facultatif ferait
-                 l'inverse. */
-              <p data-signup-phone-benefit className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-                Il vous permettra de vous connecter, et à vos proches de vous retrouver.
-              </p>
-            )}
+            ) : null}
+            {/* CE QU'IL OUVRE — derrière le (i) depuis le retour porteur « la
+                page est trop surchargée ». Les deux usages sont MESURÉS, pas
+                promis : identifiant de connexion (`AuthService.ts:158`) et
+                découverte par un contact qui l'a au carnet
+                (`contacts-match.ts`, `matchedBy: 'phone'`).
+                `sr-only` plutôt que démonté : REPLIÉ ne veut pas dire ABSENT —
+                `aria-describedby` de l'input le porte toujours, donc un lecteur
+                d'écran l'entend sans avoir à trouver le bouton. */}
+            <p
+              id="signup-phone-hint"
+              data-signup-phone-benefit
+              className={`text-caption ${isPhoneHintOpen ? '' : 'sr-only'}`}
+              style={{ color: 'var(--color-ios-ink-2)' }}
+            >
+              Il vous permettra de vous connecter, et à vos proches de vous retrouver.
+            </p>
           </div>
 
           {/* LE MOT DE PASSE EST FACULTATIF (#6424). Le libellé le DIT, et la
@@ -294,6 +311,11 @@ export default function SignupScreen() {
             tint={INDIGO_TINT}
             focused={focused === 'password'}
             error={feedback.fieldErrors.password}
+            hint={{
+              text: 'Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un plus tard.',
+              glyph: AUTH_GLYPHS.info,
+              label: 'Que se passe-t-il sans mot de passe',
+            }}
           >
             {({ id, describedBy }) => (
               <input
@@ -312,13 +334,6 @@ export default function SignupScreen() {
               />
             )}
           </Field>
-
-          {!hasPassword(form.password) ? (
-            <p data-signup-magic-link-note className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un
-              plus tard.
-            </p>
-          ) : null}
 
           {/* LA PASTILLE LIT LE MÊME CATALOGUE QUE LA FEUILLE (correction de
               revue, défaut 2) : `getLanguageInfo` (`@meeshy/shared`), les 83

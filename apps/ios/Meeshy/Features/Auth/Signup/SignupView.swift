@@ -33,6 +33,9 @@ struct SignupView: View {
     @FocusState private var focusedField: SignupField?
     @State private var isShowingLanguageSheet = false
     @State private var isShowingCountryPicker = false
+    /// Le champ dont le (i) est DÉPLIÉ — un seul à la fois (#6441) : deux
+    /// détails ouverts reproduiraient la surcharge qu'on vient de retirer.
+    @State private var expandedHint: SignupField?
     @State private var isShowingTerms = false
     @State private var isShowingPrivacy = false
 
@@ -116,34 +119,31 @@ struct SignupView: View {
                 localized: "auth.signup.name.label",
                 defaultValue: "Nom affiché (facultatif)",
                 bundle: .main
+            ),
+            hint: FieldHint(
+                text: String(
+                    localized: "auth.signup.name.derivedNote",
+                    defaultValue: "Laissé vide, nous le tirons de votre adresse. Vous pourrez le changer à tout moment.",
+                    bundle: .main
+                ),
+                buttonLabel: String(
+                    localized: "auth.signup.name.hintLabel",
+                    defaultValue: "À quoi sert le nom affiché",
+                    bundle: .main
+                )
             )
         ) {
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                TextField(
-                    String(localized: "auth.signup.name.placeholder", defaultValue: "Comment vous appeler ?", bundle: .main),
-                    text: $viewModel.form.displayName
-                )
-                .textContentType(.name)
-                .textInputAutocapitalization(.words)
-                .autocorrectionDisabled()
-                .submitLabel(.next)
-                .focused($focusedField, equals: .displayName)
-                .onSubmit { focusedField = .email }
-                .foregroundColor(theme.textPrimary)
-
-                if !viewModel.form.hasDisplayName {
-                    Text(
-                        String(
-                            localized: "auth.signup.name.derivedNote",
-                            defaultValue: "Laissé vide, nous le tirons de votre adresse. Vous pourrez le changer à tout moment.",
-                            bundle: .main
-                        )
-                    )
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                    .foregroundColor(theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            TextField(
+                String(localized: "auth.signup.name.placeholder", defaultValue: "Comment vous appeler ?", bundle: .main),
+                text: $viewModel.form.displayName
+            )
+            .textContentType(.name)
+            .textInputAutocapitalization(.words)
+            .autocorrectionDisabled()
+            .submitLabel(.next)
+            .focused($focusedField, equals: .displayName)
+            .onSubmit { focusedField = .email }
+            .foregroundColor(theme.textPrimary)
         }
     }
 
@@ -194,6 +194,28 @@ struct SignupView: View {
     // le chemin nominal, et le NOMMER facultatif fait croire qu'il y a une
     // décision à prendre. Vide ⇒ absent de la charge (`SignupForm`).
 
+    /// CE QUE LE NUMÉRO OUVRE — et rien d'autre (#6441). Les deux usages sont
+    /// MESURÉS, pas promis : identifiant de connexion (`AuthService.ts:158`,
+    /// la disjonction username/email/phoneNumber) et découverte par un contact
+    /// qui l'a au carnet (`contacts-match.ts`, `matchedBy: "phone"`). Dire
+    /// l'USAGE est le seul levier honnête pour qu'il soit donné ; le présenter
+    /// comme un choix à prendre ferait l'inverse, et c'est ce que le témoin
+    /// voisin interdit depuis #5555.
+    private var phoneHint: FieldHint {
+        FieldHint(
+            text: String(
+                localized: "auth.signup.phone.benefit",
+                defaultValue: "Il vous permettra de vous connecter, et à vos proches de vous retrouver.",
+                bundle: .main
+            ),
+            buttonLabel: String(
+                localized: "auth.signup.phone.hintLabel",
+                defaultValue: "À quoi sert le numéro",
+                bundle: .main
+            )
+        )
+    }
+
     private var phoneField: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(String(localized: "auth.signup.phone.label", defaultValue: "Téléphone", bundle: .main))
@@ -224,6 +246,7 @@ struct SignupView: View {
                 .accessibilityLabel(CountryPicker.accessibilityLabel(for: viewModel.form.country))
                 .accessibilityHint(String(localized: "auth.signup.phone.country.hint", defaultValue: "Changer de pays", bundle: .main))
 
+                HStack(spacing: 0) {
                 TextField(
                     String(localized: "auth.signup.phone.placeholder", defaultValue: "Numéro de téléphone", bundle: .main),
                     text: $viewModel.form.phoneDigits
@@ -232,34 +255,18 @@ struct SignupView: View {
                 .keyboardType(.phonePad)
                 .focused($focusedField, equals: .phoneNumber)
                 .foregroundColor(theme.textPrimary)
+                .accessibilityLabel(String(localized: "auth.signup.phone.label", defaultValue: "Téléphone", bundle: .main))
+                .accessibilityHint(phoneHint.text)
+
+                hintButton(for: .phoneNumber, hint: phoneHint)
+                }
                 .padding(.horizontal, MeeshySpacing.lg)
                 .frame(minHeight: 48)
                 .background(inputSurface(isFocused: focusedField == .phoneNumber))
-                .accessibilityLabel(String(localized: "auth.signup.phone.label", defaultValue: "Téléphone", bundle: .main))
             }
 
             errorRow(for: .phoneNumber)
-
-            // CE QU'IL OUVRE — et rien d'autre (#6441). Les deux usages
-            // sont MESURÉS, pas promis : le numéro est un identifiant de
-            // connexion (`AuthService.ts:158`, la disjonction
-            // username/email/phoneNumber) et il rend trouvable par un contact
-            // qui l'a au carnet (`contacts-match.ts`, `matchedBy: "phone"`).
-            // Dire l'USAGE est le seul levier honnête pour qu'il soit donné —
-            // le présenter comme un choix à prendre ferait l'inverse, et c'est
-            // ce que le témoin voisin interdit depuis #5555.
-            if viewModel.error(for: .phoneNumber) == nil {
-                Text(
-                    String(
-                        localized: "auth.signup.phone.benefit",
-                        defaultValue: "Il vous permettra de vous connecter, et à vos proches de vous retrouver.",
-                        bundle: .main
-                    )
-                )
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                .foregroundColor(theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
+            hintRow(for: .phoneNumber, hint: phoneHint)
         }
         .sheet(isPresented: $isShowingCountryPicker) {
             SignupCountrySheet(selection: $viewModel.form.country)
@@ -289,32 +296,29 @@ struct SignupView: View {
                 localized: "auth.signup.password.label",
                 defaultValue: "Mot de passe (facultatif)",
                 bundle: .main
+            ),
+            hint: FieldHint(
+                text: String(
+                    localized: "auth.signup.password.magicLinkNote",
+                    defaultValue: "Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un plus tard.",
+                    bundle: .main
+                ),
+                buttonLabel: String(
+                    localized: "auth.signup.password.hintLabel",
+                    defaultValue: "Que se passe-t-il sans mot de passe",
+                    bundle: .main
+                )
             )
         ) {
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                SecureField(
-                    String(localized: "auth.signup.password.placeholder", defaultValue: "6 caractères minimum", bundle: .main),
-                    text: $viewModel.form.password
-                )
-                .textContentType(.newPassword)
-                .submitLabel(.go)
-                .focused($focusedField, equals: .password)
-                .onSubmit { attemptSubmit() }
-                .foregroundColor(theme.textPrimary)
-
-                if !viewModel.form.hasPassword {
-                    Text(
-                        String(
-                            localized: "auth.signup.password.magicLinkNote",
-                            defaultValue: "Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un plus tard.",
-                            bundle: .main
-                        )
-                    )
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                    .foregroundColor(theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            SecureField(
+                String(localized: "auth.signup.password.placeholder", defaultValue: "6 caractères minimum", bundle: .main),
+                text: $viewModel.form.password
+            )
+            .textContentType(.newPassword)
+            .submitLabel(.go)
+            .focused($focusedField, equals: .password)
+            .onSubmit { attemptSubmit() }
+            .foregroundColor(theme.textPrimary)
         }
     }
 
@@ -504,6 +508,7 @@ struct SignupView: View {
     private func fieldBlock<Content: View>(
         field: SignupField,
         label: String,
+        hint: FieldHint? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
@@ -511,13 +516,66 @@ struct SignupView: View {
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
-            content()
-                .padding(.horizontal, MeeshySpacing.lg)
-                .frame(minHeight: 48)
-                .background(inputSurface(isFocused: focusedField == field))
-                .accessibilityLabel(label)
+            HStack(spacing: 0) {
+                content()
+                    .accessibilityLabel(label)
+                    .accessibilityHint(hint?.text ?? "")
+                if let hint {
+                    hintButton(for: field, hint: hint)
+                }
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .frame(minHeight: 48)
+            .background(inputSurface(isFocused: focusedField == field))
 
             errorRow(for: field)
+            hintRow(for: field, hint: hint)
+        }
+    }
+
+    /// LE DÉTAIL DERRIÈRE UN (i) (#6441, retour porteur « la page est trop
+    /// surchargée »).
+    ///
+    /// Trois notes posées sous trois champs remplissaient l'écran d'un texte
+    /// que personne ne relit après la première fois. Le bouton vit DANS le
+    /// cadre du champ : la rangée fait déjà 48 pt, donc `meeshyTapTarget()`
+    /// y tient ses 44 pt sans ajouter UNE seule unité de hauteur.
+    ///
+    /// Et REPLIÉ ne veut pas dire ABSENT : `accessibilityHint` porte le même
+    /// texte sur le champ lui-même, donc VoiceOver l'énonce sans avoir à
+    /// trouver le bouton. La note précédente était lue parce qu'elle était
+    /// visible ; celle-ci l'est parce qu'elle est attachée.
+    struct FieldHint {
+        let text: String
+        /// Ce que VoiceOver annonce pour le bouton — « en savoir plus » seul ne
+        /// dit pas SUR QUOI, et trois boutons identiques sur un écran ne se
+        /// distinguent alors plus.
+        let buttonLabel: String
+    }
+
+    private func hintButton(for field: SignupField, hint: FieldHint) -> some View {
+        Button {
+            HapticFeedback.light()
+            expandedHint = expandedHint == field ? nil : field
+        } label: {
+            Image(systemName: "info.circle")
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
+                .foregroundColor(theme.textMuted)
+        }
+        .buttonStyle(.plain)
+        .meeshyTapTarget()
+        .accessibilityLabel(hint.buttonLabel)
+        .accessibilityValue(hint.text)
+    }
+
+    @ViewBuilder
+    private func hintRow(for field: SignupField, hint: FieldHint?) -> some View {
+        if let hint, expandedHint == field {
+            Text(hint.text)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
+                .foregroundColor(theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityHidden(true)
         }
     }
 

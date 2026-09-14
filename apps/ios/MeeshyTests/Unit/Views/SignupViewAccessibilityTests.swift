@@ -102,14 +102,19 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Le COMPTE, pas la seule présence : c'est ce qui rend « j'ai supprimé
     /// l'haptique au lieu de la faire converger » rouge.
     ///
-    /// `SignupView` en porte sept — fermer, « Se connecter » sous l'e-mail,
+    /// `SignupView` en porte huit — fermer, « Se connecter » sous l'e-mail,
     /// ouvrir le sélecteur de pays, ouvrir la feuille de langue, le pied
-    /// « Déjà un compte ? », puis le succès et l'échec de l'envoi. Les deux
-    /// derniers sont d'INTENSITÉS distinctes : un compte créé et un refus ne se
-    /// sentent pas pareil, et c'est la seule information tactile de l'écran.
-    func test_signupView_keepsItsSevenHaptics() throws {
+    /// « Déjà un compte ? », **déplier un (i)** (#6441), puis le succès et
+    /// l'échec de l'envoi. Les deux derniers sont d'INTENSITÉS distinctes : un
+    /// compte créé et un refus ne se sentent pas pareil, et c'est la seule
+    /// information tactile de l'écran.
+    ///
+    /// Le (i) en a une parce que ses deux voisins d'usage en ont une : ouvrir
+    /// le sélecteur de pays et ouvrir la feuille de langue. Un contrôle qui
+    /// RÉVÈLE quelque chose se sent, sur cet écran, depuis #5555.
+    func test_signupView_keepsItsEightHaptics() throws {
         let body = try code(Self.signupView)
-        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 7)
+        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 8)
         XCTAssertTrue(body.contains("HapticFeedback.success()"),
                       "la création du compte se SENT — c'est le seul retour immédiat avant la bascule")
         XCTAssertTrue(body.contains("HapticFeedback.error()"),
@@ -258,9 +263,38 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// sans que rien ne rougisse — un champ muet n'échoue jamais.
     func test_phoneField_statesWhatTheNumberUnlocks() throws {
         let body = try code(Self.signupView)
+        XCTAssertTrue(body.contains("auth.signup.phone.benefit"),
+                      "l'écran DOIT dire ce que le numéro ouvre")
         let phone = try fieldBody("phoneField", in: body)
-        XCTAssertTrue(phone.contains("auth.signup.phone.benefit"),
-                      "le champ téléphone DOIT dire ce que le numéro ouvre")
+        XCTAssertTrue(phone.contains("phoneHint"),
+                      "et le champ téléphone DOIT le porter — un texte défini mais jamais monté n'informe personne")
+    }
+
+    // MARK: - Un détail REPLIÉ n'est pas un détail PERDU
+
+    /// #6441, retour porteur « la page est trop surchargée ! mettez les (i)
+    /// avec les détails ».
+    ///
+    /// Replier trois notes libère l'écran et fait courir UN risque précis :
+    /// que le détail devienne inatteignable à qui ne voit pas le bouton. Ce
+    /// témoin tient les trois pièces qui l'empêchent — sans elles, le
+    /// dépliement serait la SEULE façon d'accéder au texte, et l'écran aurait
+    /// troqué de la surcharge contre de l'inaccessibilité.
+    ///
+    /// La cible tactile compte double ici : le (i) vit DANS le cadre du champ,
+    /// une rangée de 48 pt — `meeshyTapTarget()` y tient ses 44 pt sans ajouter
+    /// la moindre hauteur, ce qui est exactement la raison de l'avoir mis là.
+    func test_fieldHints_areReachableWithoutUnfolding() throws {
+        let body = try code(Self.signupView)
+
+        XCTAssertTrue(body.contains("accessibilityHint(hint?.text ?? \"\")"),
+                      "le CHAMP porte le détail : VoiceOver l'énonce sans que le bouton soit trouvé")
+        XCTAssertTrue(body.contains("accessibilityValue(hint.text)"),
+                      "et le BOUTON le porte aussi — « en savoir plus » seul n'apprend rien")
+        XCTAssertTrue(body.contains("meeshyTapTarget()"),
+                      "le (i) est un glyphe : sans cadre déclaré, sa cible EST son dessin")
+        XCTAssertTrue(body.contains("accessibilityLabel(hint.buttonLabel)"),
+                      "trois (i) sur un écran ne se distinguent que par ce qu'ils ANNONCENT")
     }
 
     // MARK: - Le mot de passe, LUI, est annoncé facultatif — et sa conséquence dite
@@ -280,8 +314,8 @@ final class SignupViewAccessibilityTests: XCTestCase {
                       "le mot de passe DOIT se dire facultatif — il l'est")
         XCTAssertTrue(password.contains("magicLinkNote"),
                       "et la conséquence de son absence DOIT être dite : la porte devient le lien magique")
-        XCTAssertTrue(password.contains("!viewModel.form.hasPassword"),
-                      "la note ne se montre que tant que le champ est VIDE — sinon elle décrit un état révolu")
+        XCTAssertTrue(password.contains("FieldHint("),
+                      "la conséquence passe par le (i) (#6441) — c'est ce qui la garde REJOIGNABLE une fois repliée")
     }
 
     // MARK: - Le nom affiché aussi : facultatif, et sa conséquence dite
@@ -305,8 +339,8 @@ final class SignupViewAccessibilityTests: XCTestCase {
                       "le nom affiché DOIT se dire facultatif — la passerelle ne l'exige pas")
         XCTAssertTrue(name.contains("derivedNote"),
                       "et la conséquence DOIT être dite : il se DÉRIVE de l'adresse")
-        XCTAssertTrue(name.contains("!viewModel.form.hasDisplayName"),
-                      "la note ne se montre que tant que le champ est VIDE — sinon elle décrit un état révolu")
+        XCTAssertTrue(name.contains("FieldHint("),
+                      "la conséquence passe par le (i) (#6441) — c'est ce qui la garde REJOIGNABLE une fois repliée")
     }
 
     /// Les `defaultValue:` du fichier — la copie que l'utilisateur lit.
