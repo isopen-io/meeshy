@@ -41,6 +41,11 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
  * route, pour une raison que le défaut vient d'illustrer : deux routes
  * écrivent ces colonnes (`createPost`, `updatePost`), et la troisième qu'on
  * ajoutera repartirait sans garde. Ici, il n'y a rien à oublier.
+ *
+ * Rend les entrées effectivement ÉCRITES (id + texte ASSAINI, `null` si le
+ * texte n'était que du balisage) — c'est ce que `applyMediaCaption` relit pour
+ * déclencher `MediaCaptionTranslationService.triggerMediaCaptionTranslation`
+ * (#6280) sans réécrire le filtre `requestedMediaIds` une seconde fois.
  */
 export async function applyMediaText(
   column: 'alt' | 'caption',
@@ -48,19 +53,21 @@ export async function applyMediaText(
   requestedMediaIds: string[] | undefined,
   texts: Record<string, string> | undefined,
   client: Pick<PrismaClient, 'postMedia'>,
-): Promise<void> {
-  if (!texts || !requestedMediaIds?.length) return;
+): Promise<Array<{ id: string; text: string | null }>> {
+  if (!texts || !requestedMediaIds?.length) return [];
   const requested = new Set(requestedMediaIds);
   const entries = Object.entries(texts).filter(([id]) => requested.has(id));
-  if (entries.length === 0) return;
-  await Promise.all(entries.map(([id, text]) => {
+  if (entries.length === 0) return [];
+  const written = entries.map(([id, text]) => {
     const propre = SecuritySanitizer.sanitizeText(text);
-    return client.postMedia.updateMany({
-      where: { id, postId },
-      // Un texte qui n'est QUE du balisage devient vide, donc `null` — la
-      // même phrase qu'une chaîne blanche : « il n'y a pas de légende ».
-      // Écrire `''` la rendrait présente et vide.
-      data: { [column]: propre.trim().length > 0 ? propre : null },
-    });
-  }));
+    // Un texte qui n'est QUE du balisage devient vide, donc `null` — la même
+    // phrase qu'une chaîne blanche : « il n'y a pas de légende ». Écrire `''`
+    // la rendrait présente et vide.
+    return { id, text: propre.trim().length > 0 ? propre : null };
+  });
+  await Promise.all(written.map(({ id, text }) => client.postMedia.updateMany({
+    where: { id, postId },
+    data: { [column]: text },
+  })));
+  return written;
 }

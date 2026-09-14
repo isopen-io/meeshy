@@ -51,6 +51,8 @@ const pt = {
   'stories.create': 'Criar um story',
   'stories.count.one': '{count} story',
   'stories.count.other': '{count} stories',
+  'stories.mine': 'Seu story',
+
   'feed.post.action.like': 'Curtir',
   'feed.post.action.comment': 'Comentar',
   'feed.post.action.repost': 'Republicar',

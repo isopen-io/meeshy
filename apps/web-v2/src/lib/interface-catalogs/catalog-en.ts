@@ -47,6 +47,8 @@ const en = {
   'stories.create': 'Create a story',
   'stories.count.one': '{count} story',
   'stories.count.other': '{count} stories',
+  'stories.mine': 'Your story',
+
   'feed.post.action.like': 'Like',
   'feed.post.action.comment': 'Comment',
   'feed.post.action.repost': 'Repost',

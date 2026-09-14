@@ -264,10 +264,12 @@ struct SocialMediaGalleryContent: View {
             // servis, comme la carte du fil le faisait déjà. L'ORDRE suit celui
             // de la déclaration — l'init membre à membre l'impose.
             captionServings: SocialMediaCaption.serving(
-                for: post.media, carrier: .from(post: post)
+                for: post.media, carrier: .from(post: post),
+                preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
             ),
             captionMap: SocialMediaCaption.map(
-                for: post.media, carrierText: post.displayContent
+                for: post.media, carrierText: post.displayContent,
+                preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
             ),
             senderInfoMap: senderInfoMap,
             onComposeWithMedia: onCompose.map { action in { _ in action() } }

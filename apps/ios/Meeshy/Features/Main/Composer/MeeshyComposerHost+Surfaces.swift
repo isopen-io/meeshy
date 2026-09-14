@@ -105,21 +105,6 @@ extension MeeshyComposerHost {
         // PLUS HAUT que l'injecteur ne le voit pas. La palette de stickers
         // avait perdu ses sections « Lieu » et « Mes stickers » sans qu'aucune
         // ligne ne soit fausse.
-        // **Les deux accessoires de la rangée haute de l'atelier** (#4124). Le
-        // SDK expose deux emplacements ; ce qu'on y met reste app-side — le chip
-        // lit l'éventail et la mémoire de format, l'icône ouvre un éditeur dont
-        // le TEXTE appartient au meuble.
-        //
-        // Le chip est gaté par la MÊME règle que partout ailleurs
-        // (`ComposerFormatFanPlacement`) : c'est elle qui garantit qu'il n'y a
-        // jamais deux sélecteurs à l'écran, par l'exhaustivité de son `switch`
-        // et non par un compte d'occurrences.
-        .storyComposerHeaderLeadingAccessory {
-            if mountsFormatFan
-                && ComposerFormatFanPlacement.place(for: mountedSurface) == .atelierHeader {
-                formatChip
-            }
-        }
         // **L'icône de description DESCEND dans la rangée d'outils** (#4136,
         // directive porteur 2026-08-28). Elle vivait dans la rangée haute
         // depuis #4124, où elle avait été posée pour une raison de PLACE : à
@@ -319,9 +304,6 @@ extension MeeshyComposerHost {
         ComposerSceneSurface(
             slideRailSlot: slideRailSlot,
             format: selectedFormat,
-            formatFan: mountsFormatFan
-                && ComposerFormatFanPlacement.place(for: mountedSurface) == .documentHeader
-                ? AnyView(formatChip) : nil,
             overflowMenu: documentOverflowEntries.isEmpty
                 ? nil : AnyView(overflowMenu),
             onClose: onDismiss,
@@ -968,89 +950,12 @@ extension MeeshyComposerHost {
             onClose: onDismiss,
             // La flèche PUBLIER a quitté le socle pour l'en-tête de la surface
             // au 2026-08-28 (`ComposerChromeOwnership.headerPaintsPublish`).
-            // `AnyView`, comme `formatFan:`/`overflowMenu:` de `ComposerTopBar` :
+            // `AnyView`, comme `overflowMenu:` de `ComposerTopBar` :
             // c'est le MEUBLE qui construit le bouton — la surface le reçoit
             // déjà fait, elle ne publie jamais elle-même.
             headerPublishButton: AnyView(moodHeaderPublishButton)
         )
     }
-
-    /// Le plateau ne porte plus qu'UNE chose : l'éventail, le seul endroit du
-    /// meuble où l'auteur choisit ce qu'il PUBLIE.
-    ///
-    /// **Il est monté par le `body`, une seule fois, sous `paintsFormatFan`**
-    /// (lot 4.7). Il l'était par `composerSurface`, ce qui le réservait de fait
-    /// à la scène : le chip « Post » d'une republication de mood n'existait
-    /// alors sur aucun écran. Le descendre en bloc aurait livré le défaut
-    /// symétrique sous `.feedComposer` — d'où la règle, et non un second
-    /// montage.
-    ///
-    /// **Trois pictogrammes en sont partis le 2026-08-24** — caméra,
-    /// diapositives, timeline. Ils n'étaient pas des `Button` : le tap ne
-    /// faisait rien, et depuis que la porte de création monte le meuble ils
-    /// étaient inertes EN PRODUCTION, sur la surface de création la plus
-    /// utilisée. Loi 4 : une affordance non offerte est absente.
-    ///
-    /// Ils ne sont pas branchables d'ici. `addSlide()`, `isTimelineVisible` et
-    /// l'écriture de `currentEffects` (`public internal(set)`) sont `internal`
-    /// à `MeeshyUI` : le meuble peut LIRE la composition, pas la modifier.
-    /// Fabriquer un chemin de secours app-side aurait doublé des commandes que
-    /// l'atelier offre déjà et qui, elles, agissent — la bande de diapositives,
-    /// le menu ⋯ → Timeline, le fournisseur de capture que ce host injecte.
-    ///
-    /// Condition de retour, à remplir côté SDK : un écrivain public de la
-    /// composition atteignable par le meuble. Sans lui, un bouton ici ouvrirait
-    /// une caméra dont la photo n'aurait nulle part où aller.
-    var plateauTools: some View {
-        HStack(spacing: 12) {
-            Spacer()
-            formatChip
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-    }
-
-    /// **Le SITE UNIQUE du sélecteur de format.**
-    ///
-    /// Deux places le montent — la rangée du plateau (scène, mood) et la barre
-    /// haute du document (#4047) — et elles sont EXCLUSIVES par la règle de
-    /// placement, jamais par une condition écrite dans un `body`. Une seule
-    /// CONSTRUCTION les sert toutes les deux : en écrire une par place aurait
-    /// donné deux sélecteurs à faire diverger, et le compte d'occurrences que
-    /// les gardes tiennent est là pour l'interdire.
-    /// **Le premier plan est ADAPTATIF depuis #4124.** Il était
-    /// `textSecondary(isDark: true)` — juste tant que le chip ne vivait que sur
-    /// le plateau, sombre par construction. Descendu dans la rangée de
-    /// l'atelier, il hérite de `canvasChromeScheme`, qui suit le FOND du canvas :
-    /// sur une scène pastel, un premier plan clair s'efface.
-    var formatChip: some View {
-        ComposerFormatFan(
-            offeredFormats: profile.offeredFormats,
-            // **Les QUATRE formats restent au menu** (#4030) : ceux que la
-            // composition ne permet pas encore s'y montrent éteints avec leur
-            // raison, au lieu de disparaître. Mesuré au simulateur le
-            // 2026-08-30 : depuis l'entrée Post, l'éventail n'offrait que Post
-            // et Story — la bascule vers Réel et Mood semblait ne pas exister.
-            candidateFormats: ComposerFormat.allComposable,
-            // **La cause du refus, pas seulement le refus** (#4858). Les MÊMES
-            // deux faits que `moodGate` juge — un média ingéré, une scène — de
-            // sorte que la phrase servie ne peut pas contredire le verdict qui
-            // l'a produite. Les lire ici plutôt que de les recalculer dans
-            // l'éventail est ce qui garde les deux d'accord.
-            carriesMoreThanText: !documentLocalMedia.isEmpty || documentHasScene,
-            selection: formatSelection,
-            // **La disposition se choisit avec le TYPE de publication**
-            // (directive porteur 2026-09-06). Elle n'apparaît que là où elle a
-            // un effet — `ComposerMosaicChoice.isServed`, la MÊME règle que la
-            // publication consulte.
-            slideCount: viewModel.slides.count,
-            mosaicLayout: mosaicLayout,
-            onSelectMosaic: { mosaicLayout = $0 }
-        )
-        .font(.footnote.weight(.semibold))
-        .glassControlForeground()
-    }
-
 
     /// L'unique lecture du juge de l'historique. Le socle posait la même
     /// question à deux endroits ; le rail la pose une fois.
@@ -1093,25 +998,6 @@ extension MeeshyComposerHost {
     @ViewBuilder
     var composerStack: some View {
         VStack(spacing: 0) {
-            // Le plateau coiffe les TROIS surfaces depuis le lot 4.7, sous la
-            // règle de placement. Il vivait dans `composerSurface`, ce qui le
-            // réservait de fait à la scène : le chip « Post » d'une
-            // republication de mood n'existait alors sur aucun écran. La
-            // disposition de la scène est inchangée — un `VStack` qui empile le
-            // plateau puis l'atelier —, et ce montage-ci est le SEUL.
-            // **La surface DOCUMENT porte le chip dans SA barre haute (#4047).**
-            // Il flottait ici, seul sur une rangée au-dessus de tout, pendant
-            // que la barre de la surface ne portait qu'un `✕`. Le header voulu
-            // est d'un seul tenant — `✕ · type · slides` — et une rangée
-            // au-dessus d'une barre est deux barres.
-            //
-            // **La condition n'est PAS écrite ici.** `ComposerFormatFanPlacement`
-            // porte les deux places (`paints` / `paintsInDocumentHeader`), et
-            // elles sont EXCLUSIVES par construction. Un `&& mountedSurface !=
-            // .document` ajouté sur cette ligne aurait été une seconde écriture
-            // de la règle, invisible aux tests — exactement ce que la garde de
-            // ce `body` interdit, et elle a rougi pour le dire.
-            if paintsFormatFan { plateauTools }
             surfaceWithIntakePortals
             // **La description a quitté le bas au #4124.** Elle y vivait en
             // permanence — d'abord une barre à chevron, puis le calque de

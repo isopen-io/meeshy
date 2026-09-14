@@ -15,6 +15,8 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.ApiPostTranslationEntry
+import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.ApiMediaCaptionTranslationEntry
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreatePostRequest
 import me.meeshy.sdk.net.api.PostApi
@@ -774,6 +776,66 @@ class PostRepositoryTest {
         )
 
         val stored = repo.applyTranslationUpdate("p1", "es", pushedEntry())
+
+        assertThat(stored).isFalse()
+    }
+
+    // --- Realtime media caption translation push (applyMediaCaptionTranslationUpdate,
+    //     #6280): the gateway translated a PostMedia.caption server-side and broadcast
+    //     the finished entry. Media-caption sibling of applyTranslationUpdate above. ---
+
+    private fun pushedCaptionEntry(text: String = "Hola") = ApiMediaCaptionTranslationEntry(
+        text = text,
+        translationModel = "nllb",
+        confidenceScore = 0.97,
+    )
+
+    @Test
+    fun applyMediaCaptionTranslationUpdate_foldsThePushedEntryIntoTheTargetedMedia() = runTest {
+        val repo = seed(
+            ApiPost(id = "p1", content = "post text", media = listOf(ApiPostMedia(id = "m1", caption = "Bonjour"))),
+        )
+
+        val stored = repo.applyMediaCaptionTranslationUpdate("p1", "m1", commentId = null, "es", pushedCaptionEntry())
+
+        assertThat(stored).isTrue()
+        repo.feedStream().test {
+            val entry = awaitItem().cachedPost("p1").media!!.first { it.id == "m1" }.captionTranslations!!["es"]!!
+            assertThat(entry.text).isEqualTo("Hola")
+            assertThat(entry.translationModel).isEqualTo("nllb")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun applyMediaCaptionTranslationUpdate_isInertForAnUnknownPost() = runTest {
+        val repo = seed(
+            ApiPost(id = "p1", content = "post text", media = listOf(ApiPostMedia(id = "m1", caption = "Bonjour"))),
+        )
+
+        val stored = repo.applyMediaCaptionTranslationUpdate("missing", "m1", null, "es", pushedCaptionEntry())
+
+        assertThat(stored).isFalse()
+    }
+
+    @Test
+    fun applyMediaCaptionTranslationUpdate_isInertForAnUnknownMedia() = runTest {
+        val repo = seed(
+            ApiPost(id = "p1", content = "post text", media = listOf(ApiPostMedia(id = "m1", caption = "Bonjour"))),
+        )
+
+        val stored = repo.applyMediaCaptionTranslationUpdate("p1", "unknown", null, "es", pushedCaptionEntry())
+
+        assertThat(stored).isFalse()
+    }
+
+    @Test
+    fun applyMediaCaptionTranslationUpdate_isInertWhenCommentIdIsSet() = runTest {
+        val repo = seed(
+            ApiPost(id = "p1", content = "post text", media = listOf(ApiPostMedia(id = "m1", caption = "Bonjour"))),
+        )
+
+        val stored = repo.applyMediaCaptionTranslationUpdate("p1", "m1", "c1", "es", pushedCaptionEntry())
 
         assertThat(stored).isFalse()
     }

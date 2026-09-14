@@ -53,6 +53,9 @@
  * pas `PrismaClient` : le double de test reste trivial (même esprit que
  * `ForwardSourceReader` dans `AttachmentService.ts`).
  */
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from './withOrphanedSenderRepair';
+
 export interface SourceAttachment {
   readonly id: string;
   readonly fileName: string;
@@ -124,11 +127,23 @@ export async function copyAttachmentsFromMessage(
   prisma: CopyAttachmentsPrisma,
   params: CopyAttachmentsParams
 ): Promise<{ copied: number }> {
+  // Le contrôle de propriété EXIGE `sender` : un expéditeur disparu fait donc
+  // rejeter cette lecture (#6516), et la portée n'est connue qu'APRÈS —
+  // `discoverConversationIdsByMessageIds` la découvre sans jamais
+  // resélectionner `sender`. `prisma` n'est ici que la vue structurale
+  // `CopyAttachmentsPrisma` (testabilité) ; le SEUL appelant de production
+  // (`MessageProcessor`) lui passe le vrai client, dont la réparation a
+  // réellement besoin — d'où le cast, local à ce module.
+  const realPrisma = prisma as unknown as PrismaClient;
   const [source, requester] = await Promise.all([
-    prisma.message.findUnique({
-      where: { id: params.sourceMessageId },
-      select: { sender: { select: { id: true, userId: true } } },
-    }),
+    withOrphanedSenderRepair(
+      { prisma: realPrisma, conversationIds: discoverConversationIdsByMessageIds(realPrisma, [params.sourceMessageId]) },
+      () =>
+        prisma.message.findUnique({
+          where: { id: params.sourceMessageId },
+          select: { sender: { select: { id: true, userId: true } } },
+        })
+    ),
     prisma.participant.findUnique({
       where: { id: params.requesterParticipantId },
       select: { id: true, userId: true },

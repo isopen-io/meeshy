@@ -100,7 +100,7 @@ const storiesCountLabel = (language: InterfaceLanguage, count: number): string =
   translate(language, count === 1 ? 'stories.count.one' : 'stories.count.other', { count: String(count) });
 
 export function StoryRow({ language, group }: { readonly language: InterfaceLanguage; readonly group: StoryTrayGroup }) {
-  const label = storyAuthorLabel(group);
+  const label = storyAuthorLabel(group, language);
   return (
     <Link
       to="story"
@@ -154,7 +154,7 @@ export default function StoriesScreen() {
 
   const chargement = tray.data === undefined && !tray.isError;
   const defaultTitle = translate(language, 'stories.title');
-  const title = filtreAuteur === undefined ? defaultTitle : storyAuthorLabel(montres[0] ?? groups[0] ?? ({} as never)) || defaultTitle;
+  const title = filtreAuteur === undefined ? defaultTitle : storyAuthorLabel(montres[0] ?? groups[0] ?? ({} as never), language) || defaultTitle;
 
   return (
     <main className="flex h-dvh flex-col overflow-hidden pt-safe">

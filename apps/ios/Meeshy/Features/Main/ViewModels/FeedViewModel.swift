@@ -67,7 +67,7 @@ class FeedViewModel: ObservableObject {
     private var nextCursor: String?
     private let api: APIClientProviding
     private let offlineQueue: OfflineQueueing
-    private let feedCache: any FeedCacheStoring
+    let feedCache: any FeedCacheStoring
     private let limit = 20
     private var cancellables = Set<AnyCancellable>()
     /// Subscriptions owned by `subscribeToSocketEvents()` only — kept
@@ -1687,6 +1687,12 @@ class FeedViewModel: ObservableObject {
                 self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
+
+        // --- media:caption-translation-updated (#6280) — FeedViewModel+MediaCaptionTranslation.swift ---
+        socialSocket.mediaCaptionTranslationUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.receiveMediaCaptionTranslation($0) }
+            .store(in: &socketCancellables)
     }
 
     /// Règle unique de pose d'une traduction de post — appliquée à l'exemplaire
@@ -1865,7 +1871,7 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    private func debouncedCacheSave() {
+    func debouncedCacheSave() {
         cacheSaveTask?.cancel()
         let snapshot = posts
         cacheSaveTask = Task {

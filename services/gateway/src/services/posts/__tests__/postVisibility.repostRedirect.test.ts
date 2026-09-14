@@ -21,8 +21,12 @@ import { resolveInteractionTarget, resolveConsumptionTarget } from '../postVisib
 
 const AUTHOR_ID = 'author-1';
 const ROOT_ID = 'root-post-1';
-const REPOST_ID = 'repost-post-1';
+/** ObjectId Mongo valide (24 hex) — c'est l'id TOP-LEVEL passé à `resolveInteractionTarget`/
+ *  `resolveConsumptionTarget`, désormais gardé par `isValidObjectId` (#6557). */
+const REPOST_ID = '507f1f77bcf86cd799439012';
 const VIEWER_ID = 'viewer-1';
+/** Idem — `plain-post-1` ci-dessous. */
+const PLAIN_POST_ID = '507f1f77bcf86cd799439001';
 
 type FakePost = {
   id: string;
@@ -66,13 +70,22 @@ describe('resolveInteractionTarget', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('returns the post itself when it is not a repost', async () => {
-    const post = makePost({ id: 'plain-post-1', repostOfId: null });
-    const prisma = makePrisma({ 'plain-post-1': post });
+    const post = makePost({ id: PLAIN_POST_ID, repostOfId: null });
+    const prisma = makePrisma({ [PLAIN_POST_ID]: post });
 
-    const target = await resolveInteractionTarget(prisma as any, 'plain-post-1', VIEWER_ID);
+    const target = await resolveInteractionTarget(prisma as any, PLAIN_POST_ID, VIEWER_ID);
 
-    expect(target?.id).toBe('plain-post-1');
+    expect(target?.id).toBe(PLAIN_POST_ID);
     expect(prisma.post.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('#6557 — returns null for a malformed postId (optimistic mutation token), without querying Prisma', async () => {
+    const prisma = makePrisma({});
+
+    const target = await resolveInteractionTarget(prisma as any, 'cmid_95c0d8b2-b9a7-466a-b352-e019bb10316a', VIEWER_ID);
+
+    expect(target).toBeNull();
+    expect(prisma.post.findFirst).not.toHaveBeenCalled();
   });
 
   it('returns the quote repost itself — quotes keep their own social life', async () => {
@@ -260,5 +273,14 @@ describe('resolveConsumptionTarget', () => {
     const target = await resolveConsumptionTarget(prisma as any, REPOST_ID, VIEWER_ID);
 
     expect(target?.id).toBe(REPOST_ID);
+  });
+
+  it('#6557 — returns null for a malformed postId, without querying Prisma (GET /posts/:postId/comments)', async () => {
+    const prisma = makePrisma({});
+
+    const target = await resolveConsumptionTarget(prisma as any, 'tmp_local-story-draft', VIEWER_ID);
+
+    expect(target).toBeNull();
+    expect(prisma.post.findFirst).not.toHaveBeenCalled();
   });
 });

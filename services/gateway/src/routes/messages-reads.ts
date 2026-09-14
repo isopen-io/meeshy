@@ -33,6 +33,7 @@ import {
   sendInternalError,
 } from '../utils/response.js';
 import { logger, type MessageParams, type MessagesRouteDeps } from './messages-shared';
+import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
 
 /**
  * L'expéditeur tel que `GET /messages/:messageId` le CHARGE — un `Participant`,
@@ -190,7 +191,10 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       const userId = authRequest.authContext.userId;
 
       // Récupérer le message avec ses détails (sans statusEntries - évite N+1)
-      const message = await prisma.message.findFirst({
+      const message = await withOrphanedSenderRepair(
+        { prisma, conversationIds: discoverConversationIdsByMessageIds(prisma, [messageId]) },
+        () =>
+      prisma.message.findFirst({
         where: {
           id: messageId,
           deletedAt: null
@@ -265,7 +269,8 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
           },
           attachments: { select: attachmentFullSelect }
         }
-      });
+      })
+      );
 
       if (!message) {
         return sendNotFound(reply, 'Message non trouvé');

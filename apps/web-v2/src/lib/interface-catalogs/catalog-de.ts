@@ -47,6 +47,8 @@ const de = {
   'stories.create': 'Story erstellen',
   'stories.count.one': '{count} Story',
   'stories.count.other': '{count} Storys',
+  'stories.mine': 'Deine Story',
+
   'feed.post.action.like': 'Gefällt mir',
   'feed.post.action.comment': 'Kommentieren',
   'feed.post.action.repost': 'Erneut teilen',

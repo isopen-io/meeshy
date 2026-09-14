@@ -156,6 +156,38 @@ describe('MagicLinkFlow — (c) envoi', () => {
   });
 });
 
+/**
+ * LES INDÉSIRABLES, NOMMÉS PENDANT L'ATTENTE (#6404, directive porteur
+ * 2026-09-13 : « préciser dans l'interface de regarder les spams si aucun
+ * e-mail ne parvient dans la minute »).
+ *
+ * La passerelle rend 200 même pour une adresse inconnue
+ * (`MagicLinkService.ts:133-137`, anti-énumération) : l'écran ne peut donc ni
+ * promettre l'envoi ni le démentir. Ce qu'il peut, c'est nommer la première
+ * cause d'un e-mail « jamais reçu » — et le dire à l'étape où l'on attend, pas
+ * derrière un (i) qu'on n'ouvrira pas.
+ */
+describe('MagicLinkFlow — la note sur les indésirables', () => {
+  test('absente à la saisie, présente à l’attente, et elle NOMME la minute', async () => {
+    const { clock, now } = fakeClock();
+    const stub = requestStub([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
+    const el = mount({ request: stub.request, clock, now });
+    expect(el.querySelector('[data-magic-link-spam-hint]')).toBeNull();
+
+    fill(el, 'ada@meeshy.example');
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+
+    const note = el.querySelector('[data-magic-link-spam-hint]');
+    expect(note).not.toBeNull();
+    const dit = (note?.textContent ?? '').toLowerCase();
+    expect(dit).toContain('minute');
+    expect(dit).toContain('indésirables');
+  });
+});
+
 describe('MagicLinkFlow — (d) attente + compte à rebours', () => {
   test('« Lien envoyé ! », timer 10:00 → 0:00, expiration, renvoi relance à 10:00', async () => {
     const { clock, now, advanceSeconds, hasActiveTimer } = fakeClock();

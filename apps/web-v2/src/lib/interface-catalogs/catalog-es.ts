@@ -47,6 +47,8 @@ const es = {
   'stories.create': 'Crear una historia',
   'stories.count.one': '{count} historia',
   'stories.count.other': '{count} historias',
+  'stories.mine': 'Tu historia',
+
   'feed.post.action.like': 'Me gusta',
   'feed.post.action.comment': 'Comentar',
   'feed.post.action.repost': 'Republicar',

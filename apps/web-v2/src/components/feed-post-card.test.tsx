@@ -112,6 +112,36 @@ describe('FeedPostCard — le POST', () => {
     expect(html).not.toContain('alt="Le marché"');
   });
 
+  /** La légende porte l'attribut `lang` DE LA LANGUE SERVIE (#6280) — un
+   * lecteur d'écran qui prononce une traduction française avec une voix
+   * anglaise est le défaut du cycle 122 (CLAUDE.md § Prisme), rendu
+   * audible sur une légende de média. */
+  test('la légende traduite porte `lang` dans la langue SERVIE, pas la langue source', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard
+        model={modelOf(
+          basePost({
+            media: [
+              {
+                id: 'm1',
+                mimeType: 'image/jpeg',
+                fileUrl: 'a.jpg',
+                caption: 'The morning market',
+                captionLanguage: 'en',
+                captionTranslations: {
+                  fr: { text: 'Le marché du matin', translationModel: 'nllb-200', createdAt: '2026-09-14T00:00:00.000Z' },
+                },
+              },
+            ],
+          }),
+          ['fr'],
+        )}
+      />,
+    );
+    expect(html).toContain('lang="fr"');
+    expect(html).toContain('Le marché du matin');
+  });
+
   test('une image SANS texte d’accessibilité servi est décorative (`alt=""`), jamais nommée par son URL', () => {
     const html = renderToStaticMarkup(
       <FeedPostCard model={modelOf(basePost({ media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }] }))} />,

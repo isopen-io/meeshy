@@ -48,6 +48,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
+import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 // Editing allows empty content (unlike sending): the message may carry
 // attachments whose caption is being cleared. The attachment-aware emptiness
@@ -172,22 +173,24 @@ export function registerEditMessagePutRoute(
       }
 
       // Vérifier que le message existe
-      const existingMessage = await prisma.message.findFirst({
-        where: {
-          id: messageId,
-          conversationId: conversationId,
-          deletedAt: null
-        },
-        include: {
-          sender: {
-            select: { id: true, userId: true }
+      const existingMessage = await withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () =>
+        prisma.message.findFirst({
+          where: {
+            id: messageId,
+            conversationId: conversationId,
+            deletedAt: null
           },
-          // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
-          // colonnes sur une lecture déjà là : aucun aller-retour de plus.
-          conversation: { select: { isActive: true, closedAt: true } },
-          attachments: { select: { id: true } }
-        }
-      });
+          include: {
+            sender: {
+              select: { id: true, userId: true }
+            },
+            // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
+            // colonnes sur une lecture déjà là : aucun aller-retour de plus.
+            conversation: { select: { isActive: true, closedAt: true } },
+            attachments: { select: { id: true } }
+          }
+        })
+      );
 
       if (!existingMessage) {
         return sendNotFound(reply, 'Message not found');
@@ -576,27 +579,31 @@ export function registerEditMessagePatchRoute(
       // `message:edited` partait vers des clients qui l'avaient déjà retirée, et
       // l'API répondait succès. Les trois autres entrées gardaient déjà leur
       // lecture ; celle-ci était la dernière sans garde.
-      const message = await prisma.message.findFirst({
-        where: { id: messageId, deletedAt: null },
-        include: {
-          sender: {
-            select: { userId: true }
-          },
-          conversation: {
+      const message = await withOrphanedSenderRepair(
+        { prisma, conversationIds: discoverConversationIdsByMessageIds(prisma, [messageId]) },
+        () =>
+          prisma.message.findFirst({
+            where: { id: messageId, deletedAt: null },
             include: {
-              participants: {
-                where: {
-                  userId: userId,
-                  isActive: true
+              sender: {
+                select: { userId: true }
+              },
+              conversation: {
+                include: {
+                  participants: {
+                    where: {
+                      userId: userId,
+                      isActive: true
+                    }
+                  }
                 }
-              }
+              },
+              // Sans elles, la garde de vacuité ne peut pas trancher : c'est la
+              // pièce jointe qui autorise un texte vide (retrait de légende).
+              attachments: { select: { id: true } }
             }
-          },
-          // Sans elles, la garde de vacuité ne peut pas trancher : c'est la
-          // pièce jointe qui autorise un texte vide (retrait de légende).
-          attachments: { select: { id: true } }
-        }
-      });
+          })
+      );
 
       if (!message) {
         return sendNotFound(reply, 'Message introuvable');

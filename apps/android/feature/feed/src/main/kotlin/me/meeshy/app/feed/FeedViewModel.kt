@@ -251,6 +251,23 @@ class FeedViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            // Prisme, push side (#6280): the gateway translated a PostMedia.caption
+            // server-side and broadcast the finished entry. Fold it into the feed
+            // cache so the open card re-renders the media's caption in the reader's
+            // preferred language the instant it lands — the media-caption sibling of
+            // post:translation-updated above (parity with iOS
+            // FeedViewModel.applyMediaCaptionTranslation).
+            socialSocket.mediaCaptionTranslationUpdated.collect { payload ->
+                postRepository.applyMediaCaptionTranslationUpdate(
+                    postId = payload.postId,
+                    mediaId = payload.mediaId,
+                    commentId = payload.commentId,
+                    language = payload.language,
+                    entry = payload.translation,
+                )
+            }
+        }
+        viewModelScope.launch {
             // post:updated — the author edited the post (caption, media, mood, ...) and the
             // gateway broadcast the whole new post. Fold it onto the cached card so the edit
             // shows in place, preserving the viewer's own like/bookmark/view/reaction state

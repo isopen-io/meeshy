@@ -96,7 +96,7 @@ function Chevron() {
 }
 
 /**
- * **`reachable` (#6354, D-62) — hors production, aucun lien vers le legacy.**
+ * **`reachable` (#6354, D-67) — hors production, aucun lien vers le legacy.**
  * Le legacy (`https://meeshy.me`) ne sert QUE la production ; un lecteur de
  * staging qui suivrait « Supprimer le compte » atterrirait sur la suppression
  * de la production, potentiellement sous un autre compte. Sans hôte legacy à

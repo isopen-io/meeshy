@@ -30,6 +30,7 @@ import { normalizeLanguageForDedup, makeLanguageFilter } from '@meeshy/shared/ut
 import { servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
 import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
+import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 /// Un message cité PROTÉGÉ (vue unique, flouté, chiffré) ne fait voyager que
 /// son placeholder — ni texte, ni traduction, ni vignette, ni ThumbHash, ni
@@ -799,25 +800,33 @@ export async function enrichForwardedMessagesForList(
             .map((m: any) => m.sender?.userId ?? null)
         );
 
-        const forwardedMessages = await prisma.message.findMany({
-          where: { id: { in: uniqueForwardedIds } },
-          select: {
-            id: true,
-            content: true,
-            senderId: true,
-            conversationId: true,
-            messageType: true,
-            createdAt: true,
-            // Lot 2 : le message d'ORIGINE transféré est un objet imbriqué —
-            // sans `metadata`, un message géolocalisé transféré n'affiche
-            // jamais sa position dans l'aperçu de transfert.
-            metadata: true,
-            sender: {
-              select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
-            },
-            attachments: { select: attachmentForwardPreviewSelect, take: 1 }
-          }
-        });
+        // Les sources d'une même page peuvent vivre dans PLUSIEURS
+        // conversations différentes (#6516) : la portée de la réparation ne
+        // peut donc pas être connue avant la lecture — elle se DÉCOUVRE, sur
+        // les mêmes ids, sans jamais sélectionner `sender`.
+        const forwardedMessages = await withOrphanedSenderRepair(
+          { prisma, conversationIds: discoverConversationIdsByMessageIds(prisma, uniqueForwardedIds) },
+          () =>
+            prisma.message.findMany({
+              where: { id: { in: uniqueForwardedIds } },
+              select: {
+                id: true,
+                content: true,
+                senderId: true,
+                conversationId: true,
+                messageType: true,
+                createdAt: true,
+                // Lot 2 : le message d'ORIGINE transféré est un objet imbriqué —
+                // sans `metadata`, un message géolocalisé transféré n'affiche
+                // jamais sa position dans l'aperçu de transfert.
+                metadata: true,
+                sender: {
+                  select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
+                },
+                attachments: { select: attachmentForwardPreviewSelect, take: 1 }
+              }
+            })
+        );
 
         // Masquage personnel du LECTEUR sur le message SOURCE (#3616) — voir
         // le doc-comment de la fonction. Une lecture groupée par conversation

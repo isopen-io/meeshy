@@ -47,6 +47,8 @@ const ar = {
   'stories.create': 'إنشاء قصة',
   'stories.count.one': '{count} قصة',
   'stories.count.other': '{count} قصص',
+  'stories.mine': 'قصتك',
+
   'feed.post.action.like': 'إعجاب',
   'feed.post.action.comment': 'تعليق',
   'feed.post.action.repost': 'إعادة النشر',

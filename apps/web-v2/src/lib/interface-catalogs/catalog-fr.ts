@@ -60,6 +60,11 @@ const fr = {
   'stories.create': 'Créer une story',
   'stories.count.one': '{count} story',
   'stories.count.other': '{count} stories',
+  /* LE LIBELLÉ DU GROUPE DU LECTEUR (#6550) — partagé par le rail
+     (`components/story-rail.tsx`) et la liste « Toutes les stories »
+     (`routes/stories.tsx`), via `storyAuthorLabel()`. */
+  'stories.mine': 'Votre story',
+
   /* LA CARTE DU FIL ET SES GESTES (#6488) — `FeedPostCard`, l'en-tête et les
      quatre états du Flux (`routes/feed.tsx`), et les échecs d'un geste
      (`lib/api/feed-gestures.ts`, `lib/feed/share-url.ts`) : tous écrits en

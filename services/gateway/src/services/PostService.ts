@@ -9,6 +9,7 @@ import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { applyMediaOrder } from './posts/mediaOrder';
 import { applyMediaText } from './posts/mediaText';
+import { triggerMediaCaptionTranslations, writeMediaCaption, type WrittenMediaCaption } from './posts/mediaCaptionWrites';
 import { engagementAggregateIncrements } from './posts/engagementIncrements';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
@@ -997,7 +998,8 @@ export class PostService {
    * Elle porte, en profil Post, la légende de CE média — distincte du `content`
    * du post, qui reste celui de la publication (modèle § 3). Les deux textes ont
    * des sujets différents : le premier décrit une image, le second dit ce que
-   * l'auteur publie.
+   * l'auteur publie. Chaque légende écrite part en traduction (#6280,
+   * `posts/mediaCaptionWrites.ts`).
    */
   private async applyMediaCaption(
     postId: string,
@@ -1005,7 +1007,7 @@ export class PostService {
     mediaCaption: Record<string, string> | undefined,
     client: Pick<PrismaClient, 'postMedia'> = this.prisma,
   ): Promise<void> {
-    await applyMediaText('caption', postId, requestedMediaIds, mediaCaption, client);
+    triggerMediaCaptionTranslations(await writeMediaCaption(postId, requestedMediaIds, mediaCaption, client));
   }
 
   /**
@@ -1283,6 +1285,9 @@ export class PostService {
       }
     }
 
+    // Écrite dans la transaction, traduite après son commit (`mediaCaptionWrites.ts`).
+    let writtenMediaCaptions: WrittenMediaCaption[] = [];
+
     const updated = await this.prisma.$transaction(async (tx) => {
       if (mediaIdsToRemove.length > 0) {
         await tx.postMedia.deleteMany({ where: { id: { in: mediaIdsToRemove }, postId } });
@@ -1300,7 +1305,7 @@ export class PostService {
           enhancedLogger.warn(`[PostService] updatePost: ${shortfall}`, { postId, authorId: userId });
         }
         await this.applyMediaAlt(postId, mediaIdsToAttach, mediaAlt, tx);
-        await this.applyMediaCaption(postId, mediaIdsToAttach, mediaCaption, tx);
+        writtenMediaCaptions = await writeMediaCaption(postId, mediaIdsToAttach, mediaCaption, tx);
         await applyMediaOrder(tx, postId, mediaIdsToAttach);
       }
       if (storyContentEdit) {
@@ -1314,6 +1319,8 @@ export class PostService {
         select: postInclude,
       });
     });
+
+    triggerMediaCaptionTranslations(writtenMediaCaptions);
 
     // Les octets des médias que l'édition vient de retirer. APRÈS le commit,
     // et c'est l'inverse de l'ordre du balayage : ici la transaction peut
@@ -2415,6 +2422,9 @@ export class PostService {
       duration?: number;
       caption?: string;
       alt?: string;
+      // Traductions de légende copiées : le texte source ne change pas (#6280).
+      captionLanguage?: string;
+      captionTranslations?: Prisma.InputJsonValue;
       language?: string;
       transcription?: Prisma.InputJsonValue;
       uploaderId?: string;
@@ -2462,6 +2472,8 @@ export class PostService {
           duration?: number | null;
           caption?: string | null;
           alt?: string | null;
+          captionLanguage?: string | null;
+          captionTranslations?: Prisma.JsonValue | null;
           language?: string | null;
           transcription?: Prisma.JsonValue | null;
         }>;
@@ -2492,6 +2504,8 @@ export class PostService {
             duration: m.duration ?? undefined,
             caption: m.caption ?? undefined,
             alt: m.alt ?? undefined,
+            captionLanguage: m.captionLanguage ?? undefined,
+            captionTranslations: (m.captionTranslations ?? undefined) as Prisma.InputJsonValue | undefined,
             language: m.language ?? undefined,
             transcription: (m.transcription ?? undefined) as Prisma.InputJsonValue | undefined,
             // Le reposteur possède la copie : c'est LUI qui vient d'en écrire

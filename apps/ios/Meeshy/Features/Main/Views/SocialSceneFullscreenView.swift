@@ -125,6 +125,14 @@ struct SocialSceneFullscreenView: View {
     @State private var languesDemandees: Set<String> = []
     /// La feuille de traduction des messages, ouverte par l'icône de la rangée.
     @State private var feuilleDeTraductionOuverte = false
+    /// Les traductions de CE post arrivées pendant l'ouverture (#6560) : tant
+    /// que le plein écran couvre la carte hôte, le post qu'elle relaie ne change pas.
+    @State private var arrivees: [CaptionTranslationArrival] = []
+
+    /// Le post de l'hôte, augmenté des traductions arrivées depuis l'ouverture.
+    private var postAffiche: FeedPost {
+        CaptionTranslationArrival.applying(arrivees, to: post)
+    }
 
     /// **Le porteur de la scène.** Le document dit ce qu'il faut peindre ; il ne
     /// dit pas où vivent les pixels. Sans lui, le résolveur du player n'a aucun
@@ -151,35 +159,46 @@ struct SocialSceneFullscreenView: View {
                                        carrierFallback: true)
     }
 
-    /// La langue dont le texte du post est affiché : le choix du lecteur dans la
+    /// **Le contenu que la rangée et la feuille traduisent** : celui qui est
+    /// AFFICHÉ, identifié par sa source — la légende propre du média de la
+    /// scène, ou le texte du post en repli (#6280). Jamais l'un pour l'autre :
+    /// ce sont deux contenus, même à chaînes égales.
+    private var sourceDeTraduction: CaptionTranslationSource? {
+        guard let legende else { return nil }
+        return CaptionTranslationSource.of(
+            origin: legende.origin,
+            post: postAffiche,
+            mediaId: SceneCaption.mediaIdentity(sceneIndex: sceneIndex, in: document, post: post)
+        )
+    }
+
+    /// La langue dont le contenu est affiché : le choix du lecteur dans la
     /// rangée ou la feuille, sinon la descente du Prisme. UNE résolution pour le
     /// texte ET le drapeau actif — deux résolutions divergeaient (#6531).
     private var langueAffichee: String? {
-        langueDeLegende ?? post.resolvedLanguageCode(preferredLanguages: preferredContentLanguages)
+        langueDeLegende ?? sourceDeTraduction?.displayedLanguage(preferredLanguages: preferredContentLanguages)
     }
 
-    /// La légende AFFICHÉE : pour le texte du post (#6504), le texte de la langue
-    /// affichée ; pour la légende propre d'un média, telle quelle — c'est un
-    /// autre contenu, sans traductions (#6280).
+    /// La légende AFFICHÉE, dans la langue affichée : texte du post ou légende
+    /// du média, chacun avec ses seules traductions.
     private var caption: String? {
         guard let legende else { return nil }
-        guard legende.origin == .carrierText else { return legende.text }
+        guard let source = sourceDeTraduction else { return legende.text }
         return CaptionTranslationOffer.carrierText(
-            content: post.content,
-            originalLanguage: post.originalLanguage,
-            translations: (post.translations ?? [:]).mapValues(\.text),
+            content: source.text,
+            originalLanguage: source.originalLanguage,
+            translations: source.translations,
             language: langueAffichee
         )
     }
 
-    /// **L'offre de traduction de la légende** (#6504) — seulement pour le
-    /// texte du post : la légende propre d'un média n'a aucune traduction
-    /// (#6280), et un sélecteur ou une feuille y seraient sans effet.
+    /// **L'offre de traduction de la légende** (#6504, #6280) — sur le contenu
+    /// affiché, texte du post ou légende du média.
     private var offreDeTraduction: CaptionTranslationOffer {
-        guard legende?.origin == .carrierText else { return .none }
+        guard let source = sourceDeTraduction else { return .none }
         return CaptionTranslationOffer.resolve(
-            originalLanguage: post.originalLanguage,
-            translationLanguages: post.availableLanguages,
+            originalLanguage: source.originalLanguage,
+            translationLanguages: Array(source.translations.keys),
             activeLanguage: langueAffichee
         )
     }
@@ -198,38 +217,40 @@ struct SocialSceneFullscreenView: View {
         ))
     }
 
-    /// Les traductions du post, dans la forme que la feuille des messages lit.
-    private var traductionsDuPost: [MessageTranslation] {
-        (post.translations ?? [:])
-            .map { langue, traduction in
+    /// Les traductions du contenu affiché, dans la forme que la feuille des
+    /// messages lit.
+    private var traductionsAffichees: [MessageTranslation] {
+        guard let source = sourceDeTraduction else { return [] }
+        return source.translations
+            .map { langue, texte in
                 MessageTranslation(
-                    id: "\(post.id)-\(langue)",
-                    messageId: post.id,
-                    sourceLanguage: post.originalLanguage ?? "",
+                    id: "\(source.target.identifiant)-\(langue)",
+                    messageId: source.target.identifiant,
+                    sourceLanguage: source.originalLanguage ?? "",
                     targetLanguage: langue,
-                    translatedContent: traduction.text,
-                    translationModel: traduction.translationModel ?? "nllb-200",
-                    confidenceScore: traduction.confidenceScore
+                    translatedContent: texte,
+                    translationModel: "nllb-200",
+                    confidenceScore: nil
                 )
             }
             .sorted { $0.targetLanguage < $1.targetLanguage }
     }
 
     /// **LA feuille de traduction des messages et des audios**, réutilisée pour
-    /// le texte du post (directive porteur 2026-09-14 : l'icône « ouvre la
+    /// le contenu affiché (directive porteur 2026-09-14 : l'icône « ouvre la
     /// feuille habituelle de traduction … pour demander une traduction de ce
     /// contenu dans la langue souhaitée »). Une langue déjà traduite affiche la
-    /// légende dans cette langue ; une autre demande la traduction DU POST —
-    /// jamais la traduction locale d'un message qui n'existe pas.
+    /// légende dans cette langue ; une autre demande la traduction de CE contenu
+    /// par sa route — jamais la traduction locale d'un message qui n'existe pas.
     private var feuilleDeTraduction: some View {
-        let origine = post.originalLanguage ?? ""
+        let origine = sourceDeTraduction?.originalLanguage ?? ""
         return NavigationStack {
             ScrollView(showsIndicators: false) {
                 MessageLanguageDetailView(
                     message: Message(
-                        id: post.id,
+                        id: sourceDeTraduction?.target.identifiant ?? post.id,
                         conversationId: "",
-                        content: post.content,
+                        content: sourceDeTraduction?.text ?? post.content,
                         originalLanguage: origine,
                         createdAt: post.timestamp,
                         senderName: post.author,
@@ -239,7 +260,7 @@ struct SocialSceneFullscreenView: View {
                     ),
                     contactColor: post.authorColor,
                     conversationId: "",
-                    textTranslations: traductionsDuPost,
+                    textTranslations: traductionsAffichees,
                     onSelectTranslation: { traduction in
                         withAnimation(.easeInOut(duration: 0.2)) {
                             langueDeLegende = traduction?.targetLanguage ?? origine
@@ -265,17 +286,23 @@ struct SocialSceneFullscreenView: View {
         .presentationDragIndicator(.visible)
     }
 
-    /// La demande part tout de suite ; la traduction revient par la socket
-    /// (`post:translation-updated`), que l'hôte applique au post qu'il nous
-    /// passe. En cas d'échec, la langue quitte l'attente pour qu'on puisse
-    /// réessayer.
+    /// La demande part tout de suite, par la route du contenu affiché ; la
+    /// traduction revient par la socket (`post:translation-updated` ou
+    /// `media:caption-translation-updated`), que la vue plie elle-même sur le
+    /// post affiché (#6560). En cas d'échec, la langue quitte l'attente pour
+    /// qu'on puisse réessayer.
     private func demanderTraduction(vers cible: String) {
+        guard let source = sourceDeTraduction else { return }
         let langue = cible.lowercased()
         languesDemandees.insert(langue)
-        let postId = post.id
         Task {
             do {
-                try await PostService.shared.requestTranslation(postId: postId, targetLanguage: langue)
+                switch source.target {
+                case .post(let id):
+                    try await PostService.shared.requestTranslation(postId: id, targetLanguage: langue)
+                case .mediaCaption(let mediaId):
+                    try await PostService.shared.requestMediaCaptionTranslation(mediaId: mediaId, targetLanguage: langue)
+                }
             } catch {
                 languesDemandees.remove(langue)
                 FeedbackToastManager.shared.showError(
@@ -293,9 +320,17 @@ struct SocialSceneFullscreenView: View {
 
             chrome
         }
-        // Une traduction arrivée sort sa langue de l'attente (#6504).
-        .adaptiveOnChange(of: post.translations?.count ?? 0) { _, _ in
-            languesDemandees.subtract((post.translations ?? [:]).keys.map { $0.lowercased() })
+        // Une traduction arrivée sort sa langue de l'attente (#6504, #6280).
+        .adaptiveOnChange(of: sourceDeTraduction?.translations.count ?? 0) { _, _ in
+            languesDemandees.subtract((sourceDeTraduction?.translations ?? [:]).keys.map { $0.lowercased() })
+        }
+        .onReceive(SocialSocketManager.shared.mediaCaptionTranslationUpdated.receive(on: DispatchQueue.main)) { recue in
+            guard recue.postId == post.id else { return }
+            arrivees.append(.mediaCaption(recue))
+        }
+        .onReceive(SocialSocketManager.shared.postTranslationUpdated.receive(on: DispatchQueue.main)) { recue in
+            guard recue.postId == post.id else { return }
+            arrivees.append(.post(recue))
         }
         .sheet(isPresented: $feuilleDeTraductionOuverte) { feuilleDeTraduction }
         // **La lecture ne s'arme que s'il y a quelque chose à jouer.** Un
@@ -406,6 +441,8 @@ struct SocialSceneFullscreenView: View {
         .adaptiveOnChange(of: pageCourante) { _, nouvelle in
             guard let index = pages.first(where: { $0.id == nouvelle })?.index else { return }
             sceneIndex = index
+            // Une autre scène porte un autre contenu : la langue choisie ne le suit pas.
+            langueDeLegende = nil
         }
     }
 
