@@ -70,8 +70,15 @@ export const AuthSchemas = {
       .max(16, 'Username trop long (max 16)')
       .regex(USERNAME_PATTERN, 'Username invalide (lettres, chiffres, - et _ uniquement)')
       .optional(),
+    /**
+     * OPTIONNEL depuis #6424 — un compte peut naître sans mot de passe, sa
+     * seule porte étant alors le lien magique. La borne ne s'applique donc
+     * qu'à une valeur FOURNIE : `.optional()` après `.min()`, jamais un
+     * `.min(0)` qui accepterait la chaîne vide comme un secret.
+     */
     password: z.string()
-      .min(PASSWORD_MIN_LENGTH, passwordTooShort),
+      .min(PASSWORD_MIN_LENGTH, passwordTooShort)
+      .optional(),
     firstName: z.string().min(1).max(50)
       .regex(PERSON_NAME_PATTERN, 'Le prénom doit contenir au moins une lettre')
       .optional(),
@@ -84,19 +91,14 @@ export const AuthSchemas = {
     systemLanguage: supportedLanguageCode.optional(),
     regionalLanguage: supportedLanguageCode.optional(),
     phoneTransferToken: z.string().optional(), // Token proving SMS verification for phone transfer
-  }).superRefine((data, ctx) => {
-    if (data.displayName) return;
-    if (data.firstName && data.lastName) return;
-
-    // Le refus DÉSIGNE `displayName` : c'est le champ que le formulaire court
-    // affiche, et un 400 dont les `violations` ne nomment aucun champ n'aide ni
-    // le client ni les journaux.
-    ctx.addIssue({
-      code: 'custom',
-      path: ['displayName'],
-      message: 'Nom affiché requis (ou prénom ET nom)',
-    });
   }),
+  // La disjonction d'identité (`displayName`, ou `firstName` + `lastName`) a
+  // été RETIRÉE par #6424, en même temps que l'`anyOf` de sa jumelle Ajv : le
+  // serveur nomme le compte depuis l'adresse, qui est requise. Un `superRefine`
+  // laissé ici aurait refusé une inscription pour l'absence d'une donnée que le
+  // handler juste en dessous fabrique — et la parité des deux couches, que
+  // `register-single-screen-contract.test.ts` mesure, serait tombée du mauvais
+  // côté : la plus stricte refuse ce que l'autre accepte, sans l'expliquer.
 
   // Refresh token
   refreshToken: z.object({
