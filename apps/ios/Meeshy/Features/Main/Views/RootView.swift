@@ -354,35 +354,46 @@ struct RootView: View {
                     isSearchBarVisible: !isScrollingDown,
                     reduceMotion: reduceMotionEnabled,
                     content: { safeArea in
-                        ReelsPlayerView(
-                            seedPosts: launch.seedPosts,
-                            startId: launch.startId,
-                            commentTargetId: launch.commentId,
-                            commentParentTargetId: launch.parentCommentId,
-                            revealCompleted: reelsRevealCompleted,
-                            safeArea: safeArea,
-                            onClose: { closeReels() },
-                            onOpenProfile: { userId, username in
-                                router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
-                            },
-                            onOpenStory: { userId in
-                                storyViewerCoordinator.present(StoryViewerRequest(
-                                    id: userId,
-                                    startAtFirstUnviewed: true,
-                                    singleGroup: true
-                                ))
-                            },
-                            onOpenDetail: { postId in
-                                // Ferme le lecteur immersif avant de pousser le détail —
-                                // sinon la page se pousse SOUS l'overlay (zIndex 60) et
-                                // reste invisible tant que l'utilisateur ne ferme pas.
-                                closeReels()
-                                router.push(.postDetail(postId))
-                            },
-                            authorHasStory: { userId in
-                                storyViewModel.storyRingState(forUserId: userId) != .none
-                            }
-                        )
+                        if let failure = launch.failure, let postId = launch.startId {
+                            ReelOpenFailureView(
+                                failure: failure,
+                                onRetry: {
+                                    await revealReelFromNotification(postId: postId, commentId: launch.commentId,
+                                                                     parentCommentId: launch.parentCommentId)
+                                },
+                                onClose: { closeReels() }
+                            )
+                        } else {
+                            ReelsPlayerView(
+                                seedPosts: launch.seedPosts,
+                                startId: launch.startId,
+                                commentTargetId: launch.commentId,
+                                commentParentTargetId: launch.parentCommentId,
+                                revealCompleted: reelsRevealCompleted,
+                                safeArea: safeArea,
+                                onClose: { closeReels() },
+                                onOpenProfile: { userId, username in
+                                    router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
+                                },
+                                onOpenStory: { userId in
+                                    storyViewerCoordinator.present(StoryViewerRequest(
+                                        id: userId,
+                                        startAtFirstUnviewed: true,
+                                        singleGroup: true
+                                    ))
+                                },
+                                onOpenDetail: { postId in
+                                    // Ferme le lecteur immersif avant de pousser le détail —
+                                    // sinon la page se pousse SOUS l'overlay (zIndex 60) et
+                                    // reste invisible tant que l'utilisateur ne ferme pas.
+                                    closeReels()
+                                    router.push(.postDetail(postId))
+                                },
+                                authorHasStory: { userId in
+                                    storyViewModel.storyRingState(forUserId: userId) != .none
+                                }
+                            )
+                        }
                     }
                 )
                 .id(launch.id)
@@ -1325,7 +1336,7 @@ struct RootView: View {
 
         case .securityAlert, .loginNewDevice, .legacySystemAlert,
              .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
-             .system, .maintenance, .updateAvailable, .voiceCloneReady:
+             .system, .maintenance, .updateAvailable, .voiceCloneReady, .reportResolved:
             // Pas d'entité cible : ouvrir la liste des notifications plutôt
             // qu'un tap muet — l'utilisateur retrouve au moins la notification
             // (et son détail) qu'il vient de toucher.
@@ -1337,53 +1348,26 @@ struct RootView: View {
     /// notification. The reels feed (`getReels(seedReelId:)`) deliberately
     /// EXCLUDES the seed reel, so the target reel must be injected as the pager's
     /// seed — otherwise the pager opens on the first affinity reel (the original
-    /// "wrong post" bug). Cache-first for an instant open (the Notification
-    /// Service Extension prefetches the tapped post into the feed cache via
-    /// `NSEPendingPostConsumer`), then network as a fallback so the tap is never a
-    /// dead end.
+    /// "wrong post" bug). Cache first, ONE request, and the reader's own failure
+    /// state when it fails: the decision is `ReelNotificationOpener` (#6508).
     private func openReelFromNotification(postId: String, commentId: String? = nil, parentCommentId: String? = nil) {
         Task { @MainActor in
-            await NSEPendingPostConsumer.shared.consumeAll()
-
-            if let cached = await cachedReelSeed(for: postId), cached.isReel {
-                reelsPresenter.present(posts: [cached], startId: postId, commentId: commentId, parentCommentId: parentCommentId)
-                return
-            }
-
-            let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            if let apiPost = try? await PostService.shared.getPost(postId: postId),
-               case let post = apiPost.toFeedPost(preferredLanguages: preferred),
-               post.isReel {
-                reelsPresenter.present(
-                    posts: [post],
-                    startId: postId,
-                    commentId: commentId,
-                    parentCommentId: parentCommentId
-                )
-            } else {
-                // Post introuvable OU classé non-reel (le seed du pager filtre sur
-                // `isReel` : présenter un non-reel ouvrait le feed d'affinité sur
-                // un réel SANS RAPPORT). Jamais de cul-de-sac : la surface post
-                // universelle rend tout type, en CONSERVANT la cible commentaire.
-                router.push(.postDetail(
-                    postId, nil,
-                    showComments: commentId != nil,
-                    commentId: commentId,
-                    parentCommentId: parentCommentId
-                ))
-            }
+            await revealReelFromNotification(postId: postId, commentId: commentId, parentCommentId: parentCommentId)
         }
     }
 
-    /// The reel already cached for `postId` (NSE-prefetched or previously loaded),
-    /// or `nil` on a cold cache. Mirrors `PostDetailViewModel.loadPost`'s
-    /// cache-first read so a tapped reel notification renders instantly.
-    private func cachedReelSeed(for postId: String) async -> FeedPost? {
-        switch await CacheCoordinator.shared.feed.load(for: postId) {
-        case .fresh(let cached, _), .stale(let cached, _):
-            return cached.first
-        case .expired, .empty:
-            return nil
+    private func revealReelFromNotification(postId: String, commentId: String?, parentCommentId: String?) async {
+        switch await ReelNotificationOpener.live.destination(for: postId) {
+        case .reel(let post):
+            reelsPresenter.present(posts: [post], startId: postId, commentId: commentId, parentCommentId: parentCommentId)
+        case .postDetail(let post):
+            // Trouvé mais NON réel (le pager filtre sur `isReel`) : la surface
+            // post universelle le rend, semée du post déjà chargé, en
+            // CONSERVANT la cible commentaire.
+            router.push(.postDetail(postId, post, showComments: commentId != nil,
+                                    commentId: commentId, parentCommentId: parentCommentId))
+        case .failure(let failure):
+            reelsPresenter.presentFailure(failure, postId: postId, commentId: commentId, parentCommentId: parentCommentId)
         }
     }
 

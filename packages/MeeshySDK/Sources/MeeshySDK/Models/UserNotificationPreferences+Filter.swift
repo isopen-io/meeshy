@@ -172,6 +172,8 @@ public extension UserNotificationPreferences {
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned,
              .legacyStatusUpdate, .legacyAffiliateSignup:
             return true
+        case .reportResolved:
+            return true  // art. 16 DSA : le déclarant apprend TOUJOURS l'issue de son signalement
         }
     }
 

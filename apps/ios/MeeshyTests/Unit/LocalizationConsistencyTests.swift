@@ -279,6 +279,12 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/StoryLanguageQuickBar.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/iPadRootView.swift",  // 2
         "apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationOfflineContent.swift",  // 2
+        // #6508 — les mots d'un échec d'ouverture ont QUITTÉ l'écran ci-dessus
+        // (et le détail d'un post) pour la table que partagent le détail, la
+        // cible story et le lecteur de réels. Le cliquet suit le CODE, pas le
+        // chemin : la destination s'inscrit dans le même commit (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/ContentFetchFailure+Copy.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/ReelOpenFailureView.swift",  // 2
         "apps/ios/Meeshy/Core/DependencyContainer.swift",  // 1
         "apps/ios/Meeshy/Features/Auth/ViewModels/EmailVerificationViewModel.swift",  // 1
         "apps/ios/Meeshy/Features/Contacts/CallStarter.swift",  // 1
