@@ -42,6 +42,7 @@ import {
   DEFAULT_ALLOWED_ORIGINS,
   everyOriginIsAllowed,
   fastifyCorsOrigin,
+  isCorsRejection,
   originIsAllowed,
   resolveAllowedOrigins,
   socketIoCorsOrigin,
@@ -367,5 +368,201 @@ describe('les coques Capacitor de la v3.1 sont des origines NOMMÉES du staging 
     expect(DEFAULT_ALLOWED_ORIGINS).not.toContain(COQUE_ANDROID);
     expect(originIsAllowed(COQUE_IOS, { NODE_ENV: 'production' })).toBe(false);
     expect(originIsAllowed(COQUE_ANDROID, { NODE_ENV: 'production' })).toBe(false);
+  });
+});
+
+/**
+ * Un refus CORS n'est pas une panne serveur (#6591).
+ *
+ * Mesuré en production le 2026-09-14 : une origine absente de `CORS_ORIGINS`
+ * recevait un prévol (`OPTIONS`) en **500**, journalisé en `[ERROR] Uncaught
+ * error in request handler … Not allowed by CORS` — 64 lignes en 25 minutes,
+ * toutes depuis des outils locaux visant l'hôte de production, zéro
+ * utilisateur réel touché. La cause : `fastifyCorsOrigin` passait une `Error`
+ * nue au rappel de `@fastify/cors`, que la porte relaie telle quelle au
+ * gestionnaire d'erreurs global (`next(error)` → `setErrorHandler`), qui
+ * n'avait aucun moyen de la distinguer d'une panne réelle.
+ *
+ * `isCorsRejection` est le marqueur qui permet cette distinction ; ce bloc
+ * prouve qu'il fonctionne à la fois en ISOLATION (le prédicat pur) et à
+ * travers la VRAIE porte HTTP (`@fastify/cors` réel, comme `porteHttp`
+ * ci-dessus) — sans reconstruire le gestionnaire d'erreurs de `server.ts` :
+ * `server.ts` lui-même est confronté par balayage de source, plus bas, pour
+ * prouver que sa branche CORS précède bien la ligne qui journalise en ERROR.
+ */
+describe('un refus CORS rend un statut propre, jamais 500 ni une ligne ERROR (#6591)', () => {
+  const REFUSEE = 'https://evil.example';
+
+  it('isCorsRejection reconnaît UNIQUEMENT les erreurs produites par le refus', () => {
+    const regle = fastifyCorsOrigin({ env: envAvecListe('production', V3) });
+    if (regle === true) throw new Error('la porte ne devrait pas être ouverte');
+
+    let capturee: Error | null = null;
+    regle(REFUSEE, (err) => {
+      capturee = err;
+    });
+
+    expect(capturee).not.toBeNull();
+    expect(isCorsRejection(capturee)).toBe(true);
+    expect(isCorsRejection(new Error(CORS_REJECTION_MESSAGE))).toBe(false);
+    expect(isCorsRejection(new Error('panne Mongo'))).toBe(false);
+    expect(isCorsRejection(null)).toBe(false);
+    expect(isCorsRejection(undefined)).toBe(false);
+  });
+
+  it('la MÊME reconnaissance vaut côté Socket.IO — la porte partage le marqueur', () => {
+    const regle = socketIoCorsOrigin({ env: envAvecListe('production', V3) });
+    if (regle === true) throw new Error('la porte ne devrait pas être ouverte');
+
+    let capturee: Error | null = null;
+    regle(REFUSEE, (err) => {
+      capturee = err;
+    });
+
+    expect(isCorsRejection(capturee)).toBe(true);
+  });
+
+  it('porte HTTP réelle — un prévol refusé rend un statut NON-5xx, sans access-control-allow-origin', async () => {
+    const env = envAvecListe('production', V3);
+    const app = Fastify({ logger: false });
+    // L'ORDRE compte (#6591) : `@fastify/cors` enregistre lui-même une route
+    // `OPTIONS *` PENDANT son enregistrement, et cette route capture le
+    // gestionnaire d'erreurs alors actif — un `setErrorHandler` posé APRÈS
+    // `register(cors, …)` n'est JAMAIS vu par le prévol qu'elle sert. C'est
+    // exactement pourquoi le refus CORS ressortait en 500 par le repli
+    // générique de Fastify en production alors que toutes les AUTRES routes
+    // (enregistrées après le gestionnaire) répondaient déjà correctement.
+    app.setErrorHandler(async (error, _request, reply) => {
+      // La même distinction que `server.ts` : un refus CORS répond proprement,
+      // jamais par le repli générique qui produirait un 500.
+      if (isCorsRejection(error)) {
+        return reply.code(403).send({ success: false, error: 'CORS Rejected', code: 'CORS_REJECTED' });
+      }
+      return reply.code(500).send({ success: false, error: 'Internal Server Error' });
+    });
+    await app.register(cors, { origin: fastifyCorsOrigin({ env }), credentials: true, methods: CORS_METHODS });
+    app.get('/health', async () => ({ success: true }));
+
+    try {
+      const res = await app.inject({
+        method: 'OPTIONS',
+        url: '/health',
+        headers: { origin: REFUSEE, 'access-control-request-method': 'GET' },
+      });
+
+      expect(res.headers['access-control-allow-origin']).toBeUndefined();
+      expect(res.statusCode).toBeLessThan(500);
+      expect(res.statusCode).not.toBe(500);
+      expect(JSON.parse(res.body)).toMatchObject({ success: false, code: 'CORS_REJECTED' });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('porte HTTP réelle — une origine AUTORISÉE n\'est pas affectée par le gestionnaire CORS', async () => {
+    const env = envAvecListe('production', V3);
+    const app = Fastify({ logger: false });
+    app.setErrorHandler(async (error, _request, reply) => {
+      if (isCorsRejection(error)) return reply.code(403).send({ success: false, error: 'CORS Rejected' });
+      return reply.code(500).send({ success: false, error: 'Internal Server Error' });
+    });
+    await app.register(cors, { origin: fastifyCorsOrigin({ env }), credentials: true, methods: CORS_METHODS });
+    app.get('/health', async () => ({ success: true }));
+
+    try {
+      const res = await app.inject({
+        method: 'OPTIONS',
+        url: '/health',
+        headers: { origin: V3, 'access-control-request-method': 'GET' },
+      });
+
+      expect(res.headers['access-control-allow-origin']).toBe(V3);
+      expect(res.statusCode).toBeLessThan(300);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('DOCUMENTE le piège d\'ordre : `setErrorHandler` posé APRÈS `register(cors, …)` reste invisible au prévol', async () => {
+    // Ce témoin prouve la CAUSE du 500, pas le correctif : il enregistre le
+    // gestionnaire dans l'ORDRE FAUTIF (celui que `server.ts` portait avant
+    // #6591) pour que personne ne réordonne les deux enregistrements de
+    // production sans comprendre pourquoi ça rouvrirait le bug.
+    const env = envAvecListe('production', V3);
+    const app = Fastify({ logger: false });
+    await app.register(cors, { origin: fastifyCorsOrigin({ env }), credentials: true, methods: CORS_METHODS });
+    app.setErrorHandler(async (error, _request, reply) => {
+      if (isCorsRejection(error)) return reply.code(403).send({ success: false, error: 'CORS Rejected' });
+      return reply.code(500).send({ success: false, error: 'Internal Server Error' });
+    });
+    app.get('/health', async () => ({ success: true }));
+
+    try {
+      const res = await app.inject({
+        method: 'OPTIONS',
+        url: '/health',
+        headers: { origin: REFUSEE, 'access-control-request-method': 'GET' },
+      });
+
+      // Le repli de FASTIFY LUI-MÊME (pas le nôtre) — la preuve que notre
+      // gestionnaire n'a jamais été consulté pour cette route.
+      expect(res.statusCode).toBe(500);
+      expect(JSON.parse(res.body)).not.toMatchObject({ code: 'CORS_REJECTED' });
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+/**
+ * `server.ts` REND ce que le bloc ci-dessus prouve en isolation — balayé
+ * depuis le FICHIER réel, pas recopié (cf. la leçon « un témoin qui ne peut
+ * pas tomber n'est pas un témoin » de `services/gateway/CLAUDE.md`).
+ */
+describe('server.ts branche isCorsRejection AVANT la ligne qui journalise en ERROR (#6591)', () => {
+  const SOURCE = fs.readFileSync(path.join(SRC, 'server.ts'), 'utf8');
+
+  it('importe isCorsRejection depuis la règle partagée', () => {
+    expect(SOURCE).toContain("from './config/cors-origins'");
+    expect(SOURCE).toMatch(/isCorsRejection/);
+  });
+
+  it('le setErrorHandler teste isCorsRejection AVANT logger.error(\'Uncaught error', () => {
+    const debutHandler = SOURCE.indexOf('setErrorHandler(async (error, request, reply)');
+    const testCors = SOURCE.indexOf('isCorsRejection(error)', debutHandler);
+    const ligneErreur = SOURCE.indexOf("logger.error('Uncaught error in request handler'", debutHandler);
+
+    expect(debutHandler).toBeGreaterThan(-1);
+    expect(testCors).toBeGreaterThan(-1);
+    expect(ligneErreur).toBeGreaterThan(-1);
+    expect(testCors).toBeLessThan(ligneErreur);
+  });
+
+  it('la branche CORS répond sans passer par le repli 500 générique', () => {
+    const debutHandler = SOURCE.indexOf('setErrorHandler(async (error, request, reply)');
+    const testCors = SOURCE.indexOf('isCorsRejection(error)', debutHandler);
+    const finBranche = SOURCE.indexOf('}', SOURCE.indexOf('{', testCors));
+    const brancheCors = SOURCE.slice(testCors, finBranche);
+
+    expect(brancheCors).toMatch(/reply\.code\(403\)/);
+    expect(brancheCors).not.toMatch(/code\(500\)/);
+  });
+
+  /**
+   * Le piège d'ordre, confronté au FICHIER réel — pas seulement documenté par
+   * le témoin d'isolation ci-dessus. `@fastify/cors` enregistre sa propre
+   * route `OPTIONS *` PENDANT `register(cors, …)`, et cette route capture le
+   * gestionnaire d'erreurs alors actif : posé APRÈS, `setErrorHandler` n'est
+   * JAMAIS vu par un prévol refusé, quelle que soit sa branche interne — c'est
+   * la cause RÉELLE du 500 mesuré en production, indépendante de la branche
+   * `isCorsRejection` posée plus haut dans ce fichier.
+   */
+  it('`setErrorHandler` est posé AVANT `register(cors, …)` — sans quoi le prévol ne le voit jamais', () => {
+    const poseGestionnaire = SOURCE.indexOf('this.server.setErrorHandler(');
+    const enregistreCors = SOURCE.indexOf('this.server.register(cors,');
+
+    expect(poseGestionnaire).toBeGreaterThan(-1);
+    expect(enregistreCors).toBeGreaterThan(-1);
+    expect(poseGestionnaire).toBeLessThan(enregistreCors);
   });
 });
