@@ -755,7 +755,11 @@ export class PostService {
   /// route). Previously, every fetch silently inflated viewCount.
   async getPostById(postId: string, viewerUserId?: string) {
     const visibilityFilter = await this.buildVisibilityFilter(viewerUserId);
-    const detailInclude = {
+    // Un `select`, jamais un `include` : `postInclude` est un `PostSelect`
+    // (scalaires compris) depuis #4791, et le passer sous `include` fait
+    // rejeter la lecture par Prisma — chaque ouverture de post rendait 500
+    // (#6503). `satisfies` rend la forme vérifiable par `tsc` au site même.
+    const detailSelect = {
       ...postInclude,
       // Le détail charge TOUTES les références, silencieuses comprises : c'est
       // `projectReferencesForViewer` qui décide de ce que CE lecteur en voit.
@@ -765,10 +769,10 @@ export class PostService {
       // `postMentions` est le nom de la RELATION (le schéma nomme
       // `Post.postMentions`) ; la clé exposée au client, elle, est `mentions`.
       postMentions: { select: { display: true, mentionedUser: { select: authorSelect } } },
-    };
+    } satisfies Prisma.PostSelect;
     const visible = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED, ...visibilityFilter },
-      include: detailInclude,
+      select: detailSelect,
     });
 
     // Un référencé HORS audience ne passe pas le filtre ci-dessus — c'est
@@ -779,7 +783,7 @@ export class PostService {
     const post = visible ?? (viewerUserId
       ? await this.prisma.post.findFirst({
           where: { id: postId, deletedAt: NOT_DELETED },
-          include: detailInclude,
+          select: detailSelect,
         })
       : null);
     if (!post) return null;
