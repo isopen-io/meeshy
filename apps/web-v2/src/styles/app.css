@@ -503,15 +503,12 @@
  * « le chrome gagne — un contrôle recouvert est un contrôle qu'on ne peut plus
  * lire, alors qu'une annonce posée 8 pt plus bas reste parfaitement visible ».
  *
- * La cote est MESURÉE, jamais estimée : relevé au navigateur à 390 × 844 le
- * 2026-09-11, le bas de l'en-tête de LISTE est à 64 px et celui du FIL à 60 px
- * (hors encoche, que chaque écran porte lui-même en `pt-safe`). On prend le
- * plus haut des deux, plus les 8 px d'air d'iOS — sur-dégager est le sens
- * SÛR de l'erreur, sous-dégager recouvre un bouton.
+ * La cote n'est plus ICI : elle DÉPEND de l'écran depuis #6401/#6387 (quatre
+ * écrans portent une seconde bande sous leur en-tête, que 72 px recouvrait en
+ * plein milieu) — `syncPillTop()` (`lib/view/sync-pill-offset.ts`) la calcule
+ * et `sync-pill.tsx` la pose en style EN LIGNE, qui l'emporte sur toute règle
+ * de cette feuille. Une seconde valeur ici referait diverger les deux.
  */
-.sync-pill {
-  top: calc(env(safe-area-inset-top, 0px) + 72px);
-}
 
 @utility scrollbar-none {
   scrollbar-width: none;
