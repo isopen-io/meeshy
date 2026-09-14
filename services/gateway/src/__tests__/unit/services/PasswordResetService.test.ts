@@ -665,8 +665,11 @@ describe('PasswordResetService', () => {
         expect(result.error).toContain(`minimum ${PASSWORD_MIN_LENGTH} characters`);
       });
 
-      it('should reject password without lowercase letter', async () => {
+      it('accepts a password without a lowercase letter, and moves on to validate the token (#6436)', async () => {
+        // NIST SP 800-63B (#6436) : plus de règle de composition — seul le
+        // score zxcvbn (mocké au maximum ici) gouverne la robustesse.
         mockZxcvbn.mockReturnValue({ score: 4, feedback: {} });
+        mockPrisma.passwordResetToken.findUnique.mockResolvedValue(null);
 
         const result = await service.completePasswordReset({
           ...validResetCompletion,
@@ -674,12 +677,14 @@ describe('PasswordResetService', () => {
           confirmPassword: 'ALLUPPERCASE123!'
         });
 
+        // Password validation passes; the reset then fails on the (invalid) token.
         expect(result.success).toBe(false);
-        expect(result.error).toContain('one lowercase letter');
+        expect(result.error).toBe('Invalid or expired reset token');
       });
 
-      it('should reject password without uppercase letter', async () => {
+      it('accepts a password without an uppercase letter, and moves on to validate the token (#6436)', async () => {
         mockZxcvbn.mockReturnValue({ score: 4, feedback: {} });
+        mockPrisma.passwordResetToken.findUnique.mockResolvedValue(null);
 
         const result = await service.completePasswordReset({
           ...validResetCompletion,
@@ -688,11 +693,12 @@ describe('PasswordResetService', () => {
         });
 
         expect(result.success).toBe(false);
-        expect(result.error).toContain('one uppercase letter');
+        expect(result.error).toBe('Invalid or expired reset token');
       });
 
-      it('should reject password without digit', async () => {
+      it('accepts a password without a digit, and moves on to validate the token (#6436)', async () => {
         mockZxcvbn.mockReturnValue({ score: 4, feedback: {} });
+        mockPrisma.passwordResetToken.findUnique.mockResolvedValue(null);
 
         const result = await service.completePasswordReset({
           ...validResetCompletion,
@@ -701,7 +707,7 @@ describe('PasswordResetService', () => {
         });
 
         expect(result.success).toBe(false);
-        expect(result.error).toContain('one digit');
+        expect(result.error).toBe('Invalid or expired reset token');
       });
 
       it('should accept password without special character (special chars are optional)', async () => {
@@ -1260,8 +1266,10 @@ describe('PasswordResetService', () => {
     });
 
     it('should include zxcvbn warning in errors', () => {
+      // 'Password123!' is 12 chars, whose length-proportional tier (#6436)
+      // requires score >= 2 — score 1 stays below it regardless of tiering.
       mockZxcvbn.mockReturnValue({
-        score: 2,
+        score: 1,
         feedback: { warning: 'This is a commonly used password' }
       });
 
@@ -1729,8 +1737,11 @@ describe('PasswordResetService - Security Tests', () => {
 
   it('should reject low-score password with no zxcvbn warning message', async () => {
     // Covers the FALSE branch of `if (result.feedback.warning)` at line 652:
-    // score < MIN_PASSWORD_SCORE but feedback.warning is empty → only score error pushed
-    mockZxcvbn.mockReturnValue({ score: 2, feedback: { warning: '' } });
+    // score below the length-proportional minimum (#6436) but feedback.warning
+    // is empty → only score error pushed. 'Moderate1Passxx' is 15 chars, whose
+    // tier requires score >= 2 (see minPasswordScoreForLength) — score 1 stays
+    // below it regardless of the tiering.
+    mockZxcvbn.mockReturnValue({ score: 1, feedback: { warning: '' } });
 
     const result = await service.completePasswordReset({
       ...validResetCompletion,
