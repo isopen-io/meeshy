@@ -167,12 +167,35 @@ const selfTest = () => {
   return 0;
 };
 
+// Les conflits DÉJÀ remédiés, chacun avec sa preuve. Un vrai conflit reste
+// dans la fenêtre de balayage pendant cent commits de `main` : sans cet
+// acquittement, le témoin rougirait des semaines sur un fait réglé, et un
+// témoin qui rougit en permanence apprend à tout le monde à l'ignorer — il ne
+// verrait plus le prochain (#6573). Un SHA n'entre ici qu'avec la remédiation
+// qui a fait partir ce que le push avait supprimé.
+export const REMEDIED = new Map([
+  [
+    '1353fc2197ccead04d251e56427cd053e4d17f03',
+    '(beta) 1.0.9 : build démarré par 22a0888d2a, run 34773896429 en succès (#6351)',
+  ],
+]);
+
+export const unremediedConflicts = (commits) =>
+  commits.filter(({ sha, message }) => hasConflict(message) && !REMEDIED.has(sha));
+
+// En PREMIER PARENT : GitHub ne lit que le message de la TÊTE d'un push. Un
+// commit arrivé sur `main` par une fusion n'a jamais été cette tête et n'a
+// supprimé aucun workflow — sans `--first-parent`, la plage parcourt toutes
+// les branches fusionnées et signale, entre autres, le correctif #6360 dont
+// le corps CITE les deux marqueurs pour décrire le piège (#6573).
+export const rangeLogArgs = (range) => ['log', '--first-parent', `--format=%H\x1f%B\x1e`, range];
+
 const commitsIn = (range) => {
   const SEP = '\x1f';
   const END = '\x1e';
   const output = execFileSync(
     'git',
-    ['log', `--format=%H${SEP}%B${END}`, range],
+    rangeLogArgs(range),
     { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
   );
   return output
@@ -186,9 +209,12 @@ const commitsIn = (range) => {
 };
 
 const checkRange = (range) => {
-  const conflicts = commitsIn(range).filter(({ message }) => hasConflict(message));
+  const commits = commitsIn(range);
+  const conflicts = unremediedConflicts(commits);
+  const acknowledged = commits.filter(({ sha, message }) => hasConflict(message) && REMEDIED.has(sha));
+  acknowledged.forEach(({ sha }) => console.log(`acquitté ${sha} — ${REMEDIED.get(sha)}`));
   if (conflicts.length === 0) {
-    console.log(`aucun conflit (beta) × saut CI sur ${range}.`);
+    console.log(`aucun conflit (beta) × saut CI non remédié sur ${range}.`);
     return 0;
   }
   conflicts.forEach(({ sha, message }) => {
