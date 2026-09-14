@@ -94,6 +94,19 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// publié.
     let imageCache: (any ImageCacheReader)?
 
+    /// **Position (secondes) à laquelle la slide s'OUVRE** — `0` par défaut,
+    /// donc toute surface existante est inchangée.
+    ///
+    /// C'est la moitié manquante de `onPlaybackTime` (#6580) : la carte du fil
+    /// publiait sa position et aucun hôte ne la rendait à la surface suivante,
+    /// si bien qu'ouvrir le détail d'un post en lecture recommençait tout à
+    /// zéro — la vidéo comme le fond sonore. L'hôte du détail passe ici la
+    /// dernière position publiée par la carte.
+    ///
+    /// Une seule horloge : `StoryCanvasUIView.currentTime`, que
+    /// `seedPlayhead(_:)` sème au montage.
+    let startAt: Double
+
     // MARK: - Primary init
 
     public init(story: StoryItem,
@@ -109,6 +122,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 locksMute: Bool = false,
                 isPaused: Bool = false,
                 isOutgoing: Bool = false,
+                startAt: Double = 0,
                 onCompletion: (@Sendable () -> Void)? = nil,
                 onContentReady: (() -> Void)? = nil,
                 onContentProgress: ((Double) -> Void)? = nil,
@@ -127,6 +141,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.locksMute = locksMute
         self.isPaused = isPaused
         self.isOutgoing = isOutgoing
+        self.startAt = startAt
         self.onCompletion = onCompletion
         self.onContentReady = onContentReady
         self.onContentProgress = onContentProgress
@@ -210,6 +225,11 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // entendait la story PENDANT l'interlude (bug user 2026-07-25). Naître
         // en pause supprime la course au lieu de tenter de la gagner.
         view.setPaused(true)
+        // La position SÈME avant `setReaderContext`, le premier site qui
+        // démarre quoi que ce soit (audio compris) : semée après, la vidéo
+        // aurait déjà été calée sur zéro et l'audio déjà planifié depuis le
+        // début de sa fenêtre — c'est le retour à zéro que #6580 corrige.
+        view.seedPlayhead(startAt)
         view.setReaderContext(StoryReaderContext(
             preferredLanguages: preferredLanguages,
             mute: mute,

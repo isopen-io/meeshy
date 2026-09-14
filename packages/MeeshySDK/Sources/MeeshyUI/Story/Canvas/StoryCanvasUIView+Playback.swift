@@ -116,6 +116,33 @@ extension StoryCanvasUIView {
         }
     }
 
+    /// **Ouvre la slide à `seconds` plutôt qu'à zéro (#6580).**
+    ///
+    /// Le porteur : « lorsqu'on a un son de fond, ouverture en détail on joue le
+    /// son directement aligné, correctement ». La carte publiait déjà sa
+    /// position (`onPlaybackTime`) et personne ne la lisait — une loi qui
+    /// calcule une valeur que personne ne consomme. Ce point d'entrée la rend
+    /// consommable, sans fabriquer une horloge de plus : il SÈME
+    /// `currentTime`, la seule position que la vidéo suit déjà
+    /// (`alignToTimelineThenPlay` lit `slidePlayheadSeconds`, poussé depuis
+    /// elle), et que `captureSlideTimelineAnchor()` remet au mixer.
+    ///
+    /// À appeler AVANT toute lecture — `makeUIView` le fait avant
+    /// `setReaderContext`, qui est le premier site qui démarre quoi que ce
+    /// soit. Semé plus tard, il ferait sauter l'image et redémarrerait l'audio.
+    ///
+    /// N'ÉMET PAS `onPlaybackTime` : le site d'appel est l'évaluation du body
+    /// SwiftUI de l'hôte, et lui rendre un état pendant sa propre mise à jour
+    /// est exactement ce que SwiftUI interdit. Le premier tick du displayLink
+    /// l'émettra.
+    public func seedPlayhead(_ seconds: Double) {
+        guard seconds.isFinite, seconds > 0 else { return }
+        let clamped = min(seconds, effectiveSlideTotalDuration)
+        guard clamped > 0 else { return }
+        currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
+        pushSlidePlayheadToLayers()
+    }
+
     func forEachAVPlayer(_ block: (AVPlayer) -> Void) {
         for sub in itemsContainer.sublayers ?? [] {
             if let media = sub as? StoryMediaLayer, let player = media.avPlayer {
