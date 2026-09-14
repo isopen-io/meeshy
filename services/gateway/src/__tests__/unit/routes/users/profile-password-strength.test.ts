@@ -12,6 +12,7 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 jest.mock('../../../../utils/logger', () => ({
   logError: jest.fn(),
+  logWarn: jest.fn(),
 }));
 
 jest.mock('../../../../utils/logger-enhanced.js', () => ({
@@ -39,6 +40,19 @@ jest.mock('../../../../utils/password-hash', () => ({
 
 jest.mock('@meeshy/shared/utils/validation', () => ({
   updatePasswordSchema: { parse: jest.fn((b: any) => b) },
+}));
+
+// #6435 — la route relève et coupe les AUTRES sessions après tout changement,
+// premier mot de passe compris (#6447). Ce harnais ne teste que la force et le
+// premier mot de passe : il neutralise la révocation, qu'exerce
+// profile-password-session-revocation.test.ts.
+jest.mock('../../../../services/SessionService', () => ({
+  getUserSessions: jest.fn<any>().mockResolvedValue([]),
+  invalidateAllSessions: jest.fn<any>().mockResolvedValue(0),
+}));
+
+jest.mock('../../../../socketio/disconnectSession', () => ({
+  disconnectSession: jest.fn<any>().mockResolvedValue(undefined),
 }));
 
 import { updateUserPassword } from '../../../../routes/users/profile';
