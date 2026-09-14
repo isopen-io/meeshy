@@ -39,6 +39,15 @@ const ar = {
   'reels.media.error': 'تعذّر التشغيل — إعادة المحاولة',
   'reels.image': 'صورة {index} من {count}',
 
+  'stories.title': 'القصص',
+  'stories.loading': 'جاري تحميل القصص…',
+  'stories.error': 'تعذّر تحميل القصص.',
+  'stories.empty.title': 'لا توجد قصص حتى الآن',
+  'stories.empty.subtitle': 'ستظهر هنا قصص جهات اتصالك لمدة أربع وعشرين ساعة.',
+  'stories.create': 'إنشاء قصة',
+  'stories.count.one': '{count} قصة',
+  'stories.count.other': '{count} قصص',
+
   'root.menu.feed': 'التدفق',
   'root.menu.links': 'روابطي',
   'root.menu.notifications': 'الإشعارات',

@@ -39,6 +39,15 @@ const en = {
   'reels.media.error': 'Can’t play — Try again',
   'reels.image': 'Image {index} of {count}',
 
+  'stories.title': 'Stories',
+  'stories.loading': 'Loading stories…',
+  'stories.error': 'Stories could not be loaded.',
+  'stories.empty.title': 'No stories yet',
+  'stories.empty.subtitle': 'Stories from your contacts will appear here for twenty-four hours.',
+  'stories.create': 'Create a story',
+  'stories.count.one': '{count} story',
+  'stories.count.other': '{count} stories',
+
   'root.menu.feed': 'Feed',
   'root.menu.links': 'My links',
   'root.menu.notifications': 'Notifications',

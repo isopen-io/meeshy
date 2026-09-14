@@ -39,6 +39,15 @@ const it = {
   'reels.media.error': 'Riproduzione impossibile — Riprova',
   'reels.image': 'Immagine {index} di {count}',
 
+  'stories.title': 'Storie',
+  'stories.loading': 'Caricamento delle storie…',
+  'stories.error': 'Non è stato possibile caricare le storie.',
+  'stories.empty.title': 'Nessuna storia per ora',
+  'stories.empty.subtitle': 'Le storie dei tuoi contatti appariranno qui per ventiquattro ore.',
+  'stories.create': 'Crea una storia',
+  'stories.count.one': '{count} storia',
+  'stories.count.other': '{count} storie',
+
   'root.menu.feed': 'Feed',
   'root.menu.links': 'I miei link',
   'root.menu.notifications': 'Notifiche',
