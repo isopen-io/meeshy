@@ -171,18 +171,14 @@ struct MeeshyComposerHost: View {
     /// c'est aussi ce qui rend le repli sur valeur inconnue explicite.
     @AppStorage("composer.plateau.tint") var storedTint: String = PlateauTint.defaultTint.rawValue
 
-    /// Le format COURANT — un champ, pas une identité (loi 9). Il s'ouvre sur
-    /// `initialFormat` de la porte et l'éventail (`ComposerFormatFan`) l'écrit.
+    /// Le format d'OUVERTURE — la surface se route dessus (#6502). Il s'ouvre
+    /// sur `initialFormat` de la porte, ou sur le format qu'un geste a nommé
+    /// (#5055), et plus rien ne le réécrit : l'éventail qui l'écrivait est
+    /// parti. Le format PUBLIÉ se choisit au geste, sur la flèche
+    /// (`ComposerPublishMenuRule`), et voyage en paramètre jusqu'au brouillon.
     ///
-    /// Sa garde négative nommait DEUX conditions de levée, et les deux sont
-    /// tombées : V1 a fait varier l'offre avec la composition, V2 a fait
-    /// changer la SURFACE montée avec le format, V3-3 a fait suivre l'ENVOI.
-    /// L'ordre importait — monter l'éventail avant que l'envoi ne suive aurait
-    /// offert un choix que la publication ignore, le pire des deux mondes
-    /// puisqu'il aurait eu l'air de marcher.
-    ///
-    /// Ce champ est ce que l'auteur a TAPÉ ; ce qui gouverne est
-    /// `selectedFormat`, qui le ramène dans l'offre quand celle-ci se referme.
+    /// Ce qui gouverne est `selectedFormat`, qui le ramène dans l'offre quand
+    /// celle-ci se referme.
     @State var currentFormat: ComposerFormat
 
     /// Le texte des surfaces SANS canvas — le document ET le mood. Il vit dans
@@ -204,12 +200,6 @@ struct MeeshyComposerHost: View {
     /// L'emoji du mood — la seule matière SANS laquelle un mood ne part pas
     /// (`ComposerMoodPolicy.canPublish`). Il vit ici pour la même raison que
     /// `documentText` : le publieur est le socle, pas la surface.
-    /// **La disposition que l'auteur demande pour ses scènes.** `nil` ⇒ il n'a
-    /// rien imposé, et `CanvasV3.resolvedLayout` tranche — le composer ne grave
-    /// pas le repli, sinon chaque publication figerait une valeur que personne
-    /// ne relirait le jour où ce repli change.
-    @State var mosaicLayout: MosaicLayoutMode?
-
     @State var moodEmoji: String?
 
     /// L'audience du meuble et sa liste nominative — **UNE seule pour ses deux

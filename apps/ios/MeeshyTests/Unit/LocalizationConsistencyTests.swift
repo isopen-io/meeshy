@@ -229,7 +229,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/CallSignalGlyph.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Components/LanguageFlagChip.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift",  // 5
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerFormatFan.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerFormatAvailability.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeSegmenter.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSectionIdentity.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Services/CrashDiagnosticsManager.swift",  // 5
