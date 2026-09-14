@@ -27,6 +27,13 @@ public struct SignupForm: Equatable {
 
     /// Le nom que l'utilisateur se donne. Seul champ d'identité de la charge —
     /// la passerelle en dérive pseudo, prénom et nom (#5218).
+    /// Le pseudo TAPÉ, vide tant que l'utilisateur n'a rien changé (#6479).
+    ///
+    /// Distinct d'`effectiveUsername`, qui rend celui qui PARTIRA — dérivé de
+    /// l'adresse à défaut de saisie. L'écran montre le second et écrit dans le
+    /// premier : sans cette séparation, taper une lettre dans l'adresse
+    /// écraserait un pseudo choisi à la main.
+    public var username: String
     public var displayName: String
     public var email: String
     /// Les chiffres SEULS, sans indicatif : l'indicatif vient de `country`.
@@ -132,6 +139,31 @@ public struct SignupForm: Equatable {
     public var hasPassword: Bool { Self.hasPassword(password) }
     public var hasDisplayName: Bool { Self.hasDisplayName(displayName) }
 
+    /// LE PSEUDO QUI PARTIRA — tapé s'il l'a été, dérivé de l'adresse sinon.
+    ///
+    /// Directive porteur 2026-09-14 : « dès qu'un champ username est rempli la
+    /// passerelle n'a plus rien à créer ; elle crée quand aucune valeur n'est
+    /// disponible. Ici on a des données et la passerelle doit utiliser ces
+    /// données. » C'est exactement ce que fait `resoudreUsername`
+    /// (`registration.service.ts`) : un pseudo fourni traverse
+    /// `normalizeUsername` et rien n'est généré.
+    ///
+    /// Rend `""` quand la dérivation retombe sur le RECOURS (`user`) : là on
+    /// n'a justement AUCUNE donnée, et envoyer `user` garantirait une collision
+    /// pour tout le monde. C'est la règle du porteur lue jusqu'au bout.
+    public var effectiveUsername: String {
+        let tape = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tape.isEmpty { return tape }
+        let derive = RegistrationIdentity.pseudoRacine(displayName: displayName, email: email)
+        return derive == RegistrationIdentity.pseudoDeSecours ? "" : derive
+    }
+
+    /// Le nom affiché qui partira — tapé s'il l'a été, dérivé de l'adresse sinon.
+    public var effectiveDisplayName: String {
+        let tape = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return tape.isEmpty ? RegistrationIdentity.displayNameDepuisEmail(email) : tape
+    }
+
     /// Un numéro FOURNI doit être plausible (#6479) ; un champ VIDE reste
     /// valide — il n'est pas requis. Troisième champ à porter cette forme,
     /// après le mot de passe et le nom affiché.
@@ -183,11 +215,12 @@ public struct SignupForm: Equatable {
     public func registerRequest() -> RegisterRequest {
         let phone = hasPhone ? normalizedPhoneDigits : nil
         return RegisterRequest(
-            // `nil`, jamais `""` (#6441) : même loi que `password` ci-dessous.
-            // La passerelle DÉRIVE le nom affiché de l'adresse quand la clé est
-            // absente ; une chaîne vide serait une valeur, refusée par
-            // `minLength: 1`.
-            displayName: hasDisplayName ? displayName.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
+            // CE QUE L'ÉCRAN MONTRE EST CE QU'IL ENVOIE (#6479) — dérivé ou
+            // tapé, peu importe : dès qu'une valeur existe, la passerelle n'a
+            // plus à en inventer une. Les deux clés restent `nil` quand il n'y
+            // a réellement rien, et `nil` — jamais `""`, que `minLength: 1`
+            // refuserait.
+            displayName: effectiveDisplayName.isEmpty ? nil : effectiveDisplayName,
             email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
             // `nil`, jamais `""` (#6424) : la passerelle lit l'ABSENCE de la
             // clé pour créer un compte sans mot de passe. Une chaîne vide
@@ -198,7 +231,8 @@ public struct SignupForm: Equatable {
             phoneNumber: phone,
             phoneCountryCode: phone == nil ? nil : country.id,
             systemLanguage: systemLanguage,
-            regionalLanguage: regionalLanguage
+            regionalLanguage: regionalLanguage,
+            username: effectiveUsername.isEmpty ? nil : effectiveUsername
         )
     }
 
@@ -266,6 +300,7 @@ public struct SignupForm: Equatable {
     /// langue régionale. Rien à configurer avant de commencer à taper.
     public init(locale: Locale = .current) {
         let system = Self.defaultSystemLanguage(for: locale)
+        self.username = ""
         self.displayName = ""
         self.email = ""
         self.phoneDigits = ""
@@ -278,6 +313,7 @@ public struct SignupForm: Equatable {
     /// Initialiseur complet — les suites l'emploient pour poser un état sans
     /// rejouer la saisie champ par champ.
     public init(
+        username: String = "",
         displayName: String,
         email: String,
         phoneDigits: String = "",
@@ -286,6 +322,7 @@ public struct SignupForm: Equatable {
         systemLanguage: String,
         regionalLanguage: String
     ) {
+        self.username = username
         self.displayName = displayName
         self.email = email
         self.phoneDigits = phoneDigits

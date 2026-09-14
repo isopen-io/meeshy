@@ -53,9 +53,16 @@ struct SecurityView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                scrollContent
+            // Retour en verre de l'en-tête partagé (#6481) ; la page possède
+            // le défilement, l'écran ne fournit que ses sections.
+            CollapsibleHeaderPage(
+                title: String(localized: "settings.security.title", defaultValue: "Sécurité", bundle: .main),
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: MeeshyColors.indigo500,
+                backgroundColor: theme.backgroundPrimary
+            ) {
+                sectionsContent
             }
         }
         .onDisappear {
@@ -148,53 +155,20 @@ struct SecurityView: View {
         .onAppear { Task { await twoFactorViewModel.checkStatus() } }
     }
 
-    // MARK: - Header
+    // MARK: - Sections Content
 
-    private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.backward")
-                        .font(.subheadline.weight(.semibold))
-                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(.callout.weight(.medium))
-                }
-                .foregroundColor(MeeshyColors.indigo500)
-            }
-
-            Spacer()
-
-            Text(String(localized: "settings.security.title", defaultValue: "Sécurité", bundle: .main))
-                .font(.headline)
-                .foregroundColor(theme.textPrimary)
-
-            Spacer()
-
-            Color.clear.frame(width: 60, height: 24)
+    private var sectionsContent: some View {
+        VStack(spacing: 24) {
+            passwordSection
+            twoFactorSection
+            emailSection
+            phoneSection
+            conversationLockSection
+            activeSessionsSection
+            Spacer().frame(height: 40)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - Scroll Content
-
-    private var scrollContent: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 24) {
-                passwordSection
-                twoFactorSection
-                emailSection
-                phoneSection
-                conversationLockSection
-                activeSessionsSection
-                Spacer().frame(height: 40)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-        }
+        .padding(.top, 16)
     }
 
     // MARK: - Password Section
@@ -679,9 +653,10 @@ struct SecurityView: View {
                             .foregroundColor(.white)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
-                            .background(
-                                Capsule().fill(MeeshyColors.error)
-                            )
+                            // Le (+) « Configurer » passe en verre PROÉMINENT (#6481) :
+                            // le verre simple rendrait le texte blanc illisible avant
+                            // iOS 26, où la variante proéminente garde l'aplat rouge.
+                            .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.error)
                         }
                     } else {
                         Button {

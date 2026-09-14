@@ -36,63 +36,31 @@ struct AboutView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                scrollContent
-            }
+            CollapsibleHeaderPage(
+                title: String(localized: "about.title", defaultValue: "À propos", bundle: .main),
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: Color(hex: accentColor),
+                backgroundColor: theme.backgroundPrimary,
+                content: { pageContent }
+            )
         }
     }
 
-    // MARK: - Header
+    // MARK: - Content
 
-    private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                HStack(spacing: MeeshySpacing.xs) {
-                    Image(systemName: "chevron.backward")
-                        .font(MeeshyFont.relative(14, weight: .semibold))
-                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(MeeshyFont.relative(15, weight: .medium))
-                }
-                .foregroundColor(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-
-            Spacer()
-
-            Text(String(localized: "about.title", defaultValue: "À propos", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            Color.clear.frame(width: 60, height: 24)
-                .accessibilityHidden(true)
+    private var pageContent: some View {
+        VStack(spacing: MeeshySpacing.xl) {
+            appHeaderSection
+            informationsSection
+            descriptionSection
+            fonctionnalitesSection
+            liensSection
+            copyrightSection
+            Spacer().frame(height: MeeshySpacing.xxxl + MeeshySpacing.sm)
         }
         .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, MeeshySpacing.md)
-    }
-
-    // MARK: - Scroll Content
-
-    private var scrollContent: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: MeeshySpacing.xl) {
-                appHeaderSection
-                informationsSection
-                descriptionSection
-                fonctionnalitesSection
-                liensSection
-                copyrightSection
-                Spacer().frame(height: MeeshySpacing.xxxl + MeeshySpacing.sm)
-            }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.top, MeeshySpacing.lg)
-        }
+        .padding(.top, MeeshySpacing.lg)
     }
 
     // MARK: - App Header

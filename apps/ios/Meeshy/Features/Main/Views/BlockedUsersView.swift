@@ -51,34 +51,20 @@ struct BlockedUsersView: View {
 
     // MARK: - Header
 
+    /// En-tête partagé, FIXE (`scrollOffset: 0`). La liste porte `.refreshable`
+    /// et des actions de balayage, et les états chargement / vide ne défilent
+    /// pas : posé en surimpression d'une `List`, l'en-tête couvrirait le
+    /// tirer-pour-rafraîchir. Il reste donc au-dessus du contenu, déplié.
     private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                HStack(spacing: MeeshySpacing.xs) {
-                    Image(systemName: "chevron.backward")
-                        .font(MeeshyFont.relative(14, weight: .semibold))
-                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(MeeshyFont.relative(15, weight: .medium))
-                }
-                .foregroundColor(Color(hex: accentColor))
-            }
-
-            Spacer()
-
-            Text(String(localized: "blocked.users.title", defaultValue: "Utilisateurs bloqués", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            Color.clear.frame(width: 60, height: 24)
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, MeeshySpacing.md)
+        CollapsibleHeader(
+            title: String(localized: "blocked.users.title", defaultValue: "Utilisateurs bloqués", bundle: .main),
+            scrollOffset: 0,
+            onBack: { dismiss() },
+            titleColor: theme.textPrimary,
+            backArrowColor: Color(hex: accentColor),
+            backgroundColor: theme.backgroundPrimary,
+            trailing: { EmptyView() }
+        )
     }
 
     // MARK: - Content

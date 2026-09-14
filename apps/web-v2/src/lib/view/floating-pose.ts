@@ -172,6 +172,13 @@ export type FloatingBounds = {
  * parcourue qui tranche, exactement comme `LONG_PRESS_MAX_DISTANCE_PX` le fait
  * déjà dans `long-press.ts`, et la valeur est la même pour que deux gestes de
  * la même application n'aient pas deux tolérances au tremblement.
+ *
+ * **L'égalité est GARDÉE par un témoin** (#6456, `floating-drag.test.ts`) : le
+ * disque du Flux porte les deux gestes à la fois, et régler l'une sans l'autre
+ * ouvrirait une bande de distances où l'appui long est annulé sans que le
+ * glisser ait commencé — un disque qui ne fait RIEN. Le témoin plutôt qu'un
+ * import : cette loi pure est lue par le chrome du Flux, et `long-press.ts`
+ * tire React et ses gestionnaires.
  */
 export const FLOATING_DRAG_THRESHOLD = 6;
 

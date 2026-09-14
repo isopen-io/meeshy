@@ -188,11 +188,27 @@ final class SignupFormTests: XCTestCase {
         XCTAssertTrue(makeForm(displayName: "123").hasDisplayName)
     }
 
-    func test_registerRequest_withoutDisplayName_omitsTheKeyEntirely() throws {
-        let payload = try encodedPayload(makeForm(displayName: ""))
-        XCTAssertNil(payload["displayName"],
-                     "la passerelle DÉRIVE le nom de l'adresse ; `\"\"` serait une valeur refusée par `minLength: 1`")
+    /// LA LOI A CHANGÉ, et le témoin avec elle (#6479).
+    ///
+    /// #6441 omettait la clé pour que la PASSERELLE dérive. Directive porteur
+    /// 2026-09-14 : « ici on a des données et la passerelle doit utiliser ces
+    /// données ». L'écran MONTRE le nom affiché dérivé — une donnée, sous les
+    /// yeux de l'utilisateur, qu'il a acceptée en continuant. Elle part.
+    func test_registerRequest_withoutTypedDisplayName_sendsTheDerivedOne() throws {
+        let payload = try encodedPayload(makeForm(displayName: "", email: "jean.dupont@example.com"))
+        XCTAssertEqual(payload["displayName"] as? String, "Jean Dupont")
+        XCTAssertEqual(payload["username"] as? String, "jean-dupont")
         XCTAssertNotNil(payload["email"], "l'adresse, elle, voyage toujours")
+    }
+
+    /// Ce qui SURVIT de #6441 : la clé reste ABSENTE quand il n'y a réellement
+    /// rien. Une adresse dont rien n'est slugifiable retombe sur le recours
+    /// `user` — l'envoyer garantirait une collision pour tout le monde, et là
+    /// on n'a justement AUCUNE donnée.
+    func test_registerRequest_withAnUnslugifiableAddress_omitsBothKeys() throws {
+        let payload = try encodedPayload(makeForm(displayName: "", email: "a@b.co"))
+        XCTAssertNil(payload["username"])
+        XCTAssertNil(payload["displayName"])
     }
 
     func test_registerRequest_withTypedDisplayName_carriesItTrimmed() throws {
@@ -244,14 +260,19 @@ final class SignupFormTests: XCTestCase {
 
     // MARK: - La charge exacte
 
-    /// Le cœur du lot : trois clés que le client N'ENVOIE PLUS.
+    /// `username` A CHANGÉ DE CAMP (#6479), les deux noms d'état civil NON.
+    ///
+    /// #5218 retirait les trois pour ne pas faire inventer un pseudo unique à
+    /// l'utilisateur. Le pseudo n'est plus INVENTÉ : il est MONTRÉ, dérivé de
+    /// l'adresse, et modifiable — donc il part. `firstName`/`lastName` restent
+    /// dérivés côté serveur : rien ne les saisit.
     ///
     /// Assertion sur l'ABSENCE et non sur `nil` — c'est le JSON que la
     /// passerelle lit, et un `Optional` nil encodé par erreur en `null` serait
     /// une clé PRÉSENTE à valeur nulle, que `AuthSchemas.register` refuserait.
-    func test_registerRequest_neverCarriesUsernameFirstNameOrLastName() throws {
+    func test_registerRequest_carriesUsername_butNeverFirstOrLastName() throws {
         let payload = try encodedPayload(makeForm())
-        XCTAssertNil(payload["username"])
+        XCTAssertEqual(payload["username"] as? String, "awa-ndiaye")
         XCTAssertNil(payload["firstName"])
         XCTAssertNil(payload["lastName"])
     }

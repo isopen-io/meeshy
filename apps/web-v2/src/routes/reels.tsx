@@ -13,6 +13,7 @@ import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
 import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, shouldLoadMoreReels } from '@/lib/reels/thread';
 import { useSearch } from '@/lib/router';
 import { useMinute } from '@/lib/view/use-minute';
@@ -38,8 +39,9 @@ import { href, navigate } from '@/routes/route-table';
  *   est instantané sous `prefers-reduced-motion`. Échap referme.
  * - **La sortie est l'historique** : `/reels` est une adresse, le retour du
  *   navigateur comme le retour matériel d'Android (qui recule l'historique de la
- *   WebView) la quittent. Le bouton recule s'il y a d'où reculer, et remplace
- *   l'adresse par le Flux sinon (un lien profond ouvert seul).
+ *   WebView) la quittent. Le bouton recule seulement vers une entrée de Meeshy
+ *   et remplace l'adresse par le Flux sinon (`lib/reels/exit.ts`, #6498) :
+ *   `history.length` compte aussi les pages des autres sites.
  * - **Les disques flottants n'y sont pas** (`floating-gate.ts`, liste fermée) :
  *   iOS présente les Réels par-dessus toute la navigation.
  * - **Hors ligne avec des réels, la coquille le dit** : la pastille de
@@ -201,7 +203,7 @@ export default function ReelsScreen() {
   );
 
   const close = useCallback(() => {
-    if (window.history.length > 1) window.history.back();
+    if (reelsExitOf(currentHistory()) === 'back') window.history.back();
     else navigate(href('feed'), true);
   }, []);
 
@@ -270,9 +272,30 @@ export default function ReelsScreen() {
   );
 
   return (
-    <div data-reels className="relative h-dvh overflow-hidden bg-black text-white">
+    <ReelsFrame language={language} onBack={close} announcement={announcement}>
       {body}
-      <ReelsBackButton language={language} onBack={close} />
+    </ReelsFrame>
+  );
+}
+
+export function ReelsFrame({
+  language,
+  onBack,
+  announcement,
+  children,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly onBack: () => void;
+  readonly announcement: string;
+  readonly children: React.ReactNode;
+}) {
+  return (
+    <div data-reels className="relative h-dvh overflow-hidden bg-black text-white">
+      {/* « Retour » EN TÊTE du document (#6498) : sa place à l'écran est
+          absolue, mais le clavier et le lecteur d'écran suivent l'ordre du
+          document — après le fil, il fallait traverser chaque réel monté. */}
+      <ReelsBackButton language={language} onBack={onBack} />
+      {children}
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>

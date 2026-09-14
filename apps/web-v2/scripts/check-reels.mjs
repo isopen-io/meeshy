@@ -24,8 +24,10 @@
  *     claire ; chaque contrôle fait 44 et reste atteignable ;
  *  8. hors ligne, les réels restent et l'écran le dit ;
  *  9. le retour du navigateur quitte les Réels et ne laisse AUCUN lecteur ;
- *     le bouton retour aussi ;
- * 10. un lien profond `?seed=` démarre sur son réel, une seule fois ;
+ *     le bouton retour aussi, en reculant (#6498) ;
+ * 10. un lien profond `?seed=` démarre sur son réel, une seule fois ; la
+ *     première tabulation atteint « Retour » ; ouvert après une page tierce,
+ *     son bouton retour mène au Flux, jamais hors de Meeshy (#6498) ;
  * 11. à cache froid hors ligne, la coupure est dite — ni squelette, ni silence ;
  * 12. sous `prefers-reduced-motion`, le clavier déplace sans animation ;
  * 13. aucune erreur de page, aucun défilement horizontal.
@@ -359,7 +361,10 @@ try {
       await page.waitForSelector('[data-reel-index="0"]');
       await page.click('[data-reels-back]');
       await page.waitForURL('**/feed');
-      check(true, `${label} : le bouton retour ramène au Flux`);
+      /* Ouvert DEPUIS le Flux, le bouton RECULE (#6498) : l'entrée des Réels
+         reste devant soi. Un remplacement par le Flux arriverait à la même
+         adresse, mais empilerait un second Flux derrière le premier. */
+      check(await page.evaluate(() => window.navigation?.canGoForward === true), `${label} : le bouton retour ramène au Flux en RECULANT, sans empiler`);
 
       check(errors.length === 0, `${label} : aucune erreur de page — ${JSON.stringify(errors)}`);
       await context.close();
@@ -379,7 +384,28 @@ try {
         `${label} : la légende est servie dans la langue du lecteur (Prisme)`,
       );
       await capture(deepPage, `reels-lien-profond-${slug}`);
+      /* « Retour » est le PREMIER contrôle du lecteur (#6498) : après le fil,
+         il fallait traverser la scène et le rail de chaque réel monté. Seul le
+         lien d'évitement de la coquille (« Aller au contenu ») le précède. */
+      await deepPage.keyboard.press('Tab');
+      if (await deepPage.evaluate(() => document.activeElement?.classList.contains('skip-link') === true)) await deepPage.keyboard.press('Tab');
+      const firstControl = await deepPage.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.tagName);
+      check(
+        await deepPage.evaluate(() => document.activeElement?.hasAttribute('data-reels-back') === true),
+        `${label} : « Retour » est le premier contrôle du lecteur au clavier, avant tout réel (${firstControl})`,
+      );
       check(deepErrors.length === 0, `${label} : aucune erreur de page au lien profond — ${JSON.stringify(deepErrors)}`);
+
+      /* Un lien profond ouvert APRÈS une page tierce (#6498) : `history.length`
+         vaut 3, mais rien de Meeshy ne précède — le bouton mène au Flux. */
+      const foreign = await deep.newPage();
+      await foreign.goto('data:text/html,<p>ailleurs</p>');
+      await foreign.goto(`${BASE}/reels?seed=${DEEP_SEED}`, { waitUntil: 'load' });
+      await foreign.waitForSelector('[data-reel-index="0"]');
+      await foreign.click('[data-reels-back]');
+      const stayed = await foreign.waitForURL(`${BASE}/feed`, { timeout: 5000 }).then(() => true, () => false);
+      check(stayed, `${label} : un lien profond ouvert après une page tierce revient au Flux, jamais hors de Meeshy (${foreign.url()})`);
+      await foreign.close();
       await deep.close();
 
       // ------------------------------------------------ 11. cache froid hors ligne
