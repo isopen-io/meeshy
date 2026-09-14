@@ -60,6 +60,7 @@ import type { AfterResponse } from '../../utils/after-response';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { registrationLanguages } from './registration-languages';
 import { derivedNames, displayNameDepuisEmail, generateUsername } from './registration-identity';
+import { passwordSettingsUrl, profileEditUrl } from '../email/account-identity-block';
 import { RegistrationRefusal } from './registration-refusal';
 
 const logger = enhancedLogger.child({ module: 'RegistrationService' });
@@ -136,6 +137,20 @@ export type RegistrationDeps = {
       verificationCode: string;
       expiryHours: number;
       language: string;
+      /**
+       * L'identité DÉRIVÉE et ses liens (#6424) — déclarée ici parce que ce
+       * type EST le contrat que ce service exige de son fournisseur d'e-mail.
+       * L'omettre du type laisserait le champ voyager sans qu'aucun double de
+       * test ne soit obligé de le voir, et un témoin qui ne le voit pas ne
+       * peut pas mesurer qu'il part.
+       */
+      identity?: {
+        username: string;
+        displayName: string;
+        profileUrl: string;
+        passwordUrl: string;
+        hasPassword: boolean;
+      };
     }): Promise<{ success: boolean; error?: string; provider?: string; messageId?: string }>;
   };
   readonly frontendUrl: string;
@@ -481,6 +496,23 @@ export async function registerAccount(
       // Le rang SERVI, pas `data.systemLanguage` : le premier e-mail d'un
       // compte partait en français à qui n'avait renseigné que son rang 2.
       language: languages.systemLanguage,
+      /**
+       * #6424 — le pseudo et le nom affiché ont été DÉRIVÉS de l'adresse : la
+       * personne ne les a jamais vus, et n'a jamais eu l'occasion de dire
+       * qu'ils ne lui conviennent pas. Cet e-mail est le premier — et
+       * longtemps le seul — endroit où elle les découvre, avec les deux liens
+       * qui les changent.
+       *
+       * `hasPassword` se lit sur ce qui a été ÉCRIT, pas sur ce que la charge
+       * demandait : c'est la même valeur que la porte de connexion lira.
+       */
+      identity: {
+        username: normalizedUsername,
+        displayName: nomAfficheFinal,
+        profileUrl: profileEditUrl(deps.frontendUrl),
+        passwordUrl: passwordSettingsUrl(deps.frontendUrl),
+        hasPassword: hashedPassword !== null,
+      },
     });
 
     if (!resultat.success) {

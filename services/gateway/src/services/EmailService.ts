@@ -24,6 +24,11 @@ import {
   type EmailTranslations,
   type SupportedLanguage,
 } from './email/translations';
+import {
+  accountIdentityBlockHtml,
+  accountIdentityBlockText,
+  type IdentiteDuCompte,
+} from './email/account-identity-block';
 
 // Logger dédié pour EmailService
 const logger = enhancedLogger.child({ module: 'EmailService' });
@@ -77,6 +82,15 @@ export interface EmailVerificationData {
   verificationCode?: string;
   expiryHours: number;
   language?: string;
+  /**
+   * L'identité DÉRIVÉE et ses liens d'édition (#6424).
+   *
+   * OPTIONNELLE parce que tous les appelants ne l'ont pas — le renvoi de
+   * vérification depuis un chemin qui ne charge pas le profil, par exemple.
+   * Absente, le bloc n'est simplement pas composé : jamais un bloc à moitié
+   * rempli, qui présenterait un pseudo vide comme si c'était le sien.
+   */
+  identity?: IdentiteDuCompte;
 }
 
 export interface PasswordChangedEmailData {
@@ -134,6 +148,17 @@ export interface MagicLinkEmailData {
   magicLink: string;
   location: string;
   language?: string;
+  /**
+   * L'identité et ses liens (#6424) — servie ici pour une raison propre au
+   * lien magique : tant qu'aucun mot de passe n'est posé, cet e-mail est la
+   * SEULE porte du compte. C'est donc le seul endroit où rappeler qu'on peut
+   * cesser d'en dépendre.
+   *
+   * Quand `identity.hasPassword` est vrai, le bloc se réduit à l'identité et
+   * à son lien d'édition : le paragraphe « définir un mot de passe » ne
+   * s'affiche pas.
+   */
+  identity?: IdentiteDuCompte;
 }
 
 export interface EmailChangeVerificationData {
@@ -454,8 +479,15 @@ export class EmailService {
       ? `\n\n${data.language === 'fr' ? 'Ou entrez ce code dans l\'application' : 'Or enter this code in the app'}: ${data.verificationCode}`
       : '';
 
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🎉 ${t.verification.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.verification.intro}</p><div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.verification.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p>${codeBlockHtml}<div class="info"><strong>ℹ️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.verification.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
-    const text = `${t.verification.title}\n\n${t.common.greeting} ${data.name},\n\n${t.verification.intro}\n\n${data.verificationLink}${codeBlockText}\n\n${expiry}\n\n${t.verification.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
+    // #6424 — l'identité DÉRIVÉE se découvre ici, ou nulle part : une
+    // inscription par e-mail seul n'a montré ni pseudo ni nom affiché à qui
+    // s'inscrit. Le bloc se place APRÈS le bouton de validation et AVANT les
+    // mentions d'expiration : le geste demandé reste le premier lu.
+    const identityHtml = data.identity ? accountIdentityBlockHtml(data.identity, data.language) : '';
+    const identityText = data.identity ? `\n\n${accountIdentityBlockText(data.identity, data.language)}` : '';
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🎉 ${t.verification.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.verification.intro}</p><div style="text-align:center"><a href="${data.verificationLink}" class="button">✓ ${t.verification.buttonText}</a></div><p class="link-text" style="word-break:break-all;font-size:14px">${data.verificationLink}</p>${codeBlockHtml}${identityHtml}<div class="info"><strong>ℹ️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.verification.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
+    const text = `${t.verification.title}\n\n${t.common.greeting} ${data.name},\n\n${t.verification.intro}\n\n${data.verificationLink}${codeBlockText}${identityText}\n\n${expiry}\n\n${t.verification.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
 
     return this.sendEmail({ to: data.to, subject: t.verification.subject, html, text, trackingType: 'verification', trackingLang: data.language });
   }
@@ -662,6 +694,8 @@ export class EmailService {
         </p>
       </div>
 
+      ${data.identity ? accountIdentityBlockHtml(data.identity, lang) : ''}
+
       <!-- Fallback Link -->
       <p style="font-size:12px;word-break:break-all;margin-top:20px">
         ${content.fallbackText}<br>
@@ -690,7 +724,8 @@ export class EmailService {
   </div>
 </body>
 </html>`;
-    const text = `${content.title}\n\n${content.greeting} ${data.name},\n\n${content.intro}\n\n${data.magicLink}\n\n${content.expiryTitle}: ${content.expiryText}\n\n${content.requestFrom} ${data.location}\n${content.requestAt} ${dateFormatted}\n\n${content.notYou}\n\n${content.footer}\n\n${this.getFooterContentText(lang)}`;
+    const identityText = data.identity ? `\n\n${accountIdentityBlockText(data.identity, lang)}` : '';
+    const text = `${content.title}\n\n${content.greeting} ${data.name},\n\n${content.intro}\n\n${data.magicLink}${identityText}\n\n${content.expiryTitle}: ${content.expiryText}\n\n${content.requestFrom} ${data.location}\n${content.requestAt} ${dateFormatted}\n\n${content.notYou}\n\n${content.footer}\n\n${this.getFooterContentText(lang)}`;
 
     return this.sendEmail({ to: data.to, subject: content.subject, html, text, trackingType: 'magic_link', trackingLang: lang });
   }

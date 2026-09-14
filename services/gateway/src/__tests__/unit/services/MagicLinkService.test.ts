@@ -382,7 +382,74 @@ describe('MagicLinkService', () => {
           name: mockUser.firstName,
           magicLink: expect.stringContaining('token='),
           location: 'New York, United States',
-          language: mockUser.systemLanguage
+          language: mockUser.systemLanguage,
+          identity: {
+            username: mockUser.username,
+            displayName: mockUser.displayName,
+            profileUrl: 'https://meeshy.me/settings#profile',
+            passwordUrl: 'https://meeshy.me/settings#security',
+            hasPassword: false,
+          },
+        });
+      });
+
+      /**
+       * L'IDENTITÉ QUI VOYAGE AVEC LE LIEN (#6424).
+       *
+       * Tant qu'aucun mot de passe n'est posé, cet e-mail est la SEULE porte du
+       * compte : c'est le seul endroit où rappeler qu'on peut cesser d'en
+       * dépendre. Le témoin le plus important du groupe est le dernier — le
+       * HASH ne doit pas atteindre le gabarit. Une régression qui l'y laisserait
+       * ne lèverait rien et n'échouerait nulle part.
+       */
+      describe("l'identité jointe au lien magique", () => {
+        const identiteEnvoyee = () =>
+          (mockEmailService.sendMagicLinkEmail as jest.Mock).mock.calls[0]?.[0]?.identity;
+
+        it('dit hasPassword=false quand la colonne est absente', async () => {
+          await service.requestMagicLink(validMagicLinkRequest);
+          expect(identiteEnvoyee()?.hasPassword).toBe(false);
+        });
+
+        it('dit hasPassword=true quand un hash existe', async () => {
+          (mockPrisma.user.findFirst as jest.Mock).mockResolvedValue({
+            ...mockUser,
+            password: 'hash-bcrypt',
+          });
+
+          await service.requestMagicLink(validMagicLinkRequest);
+          expect(identiteEnvoyee()?.hasPassword).toBe(true);
+        });
+
+        it('retombe sur le PSEUDO quand le nom affiché est absent — jamais une chaîne vide', async () => {
+          (mockPrisma.user.findFirst as jest.Mock).mockResolvedValue({
+            ...mockUser,
+            displayName: null,
+          });
+
+          await service.requestMagicLink(validMagicLinkRequest);
+          expect(identiteEnvoyee()?.displayName).toBe(mockUser.username);
+        });
+
+        it('le HASH ne voyage JAMAIS jusqu’au gabarit', async () => {
+          (mockPrisma.user.findFirst as jest.Mock).mockResolvedValue({
+            ...mockUser,
+            password: 'hash-bcrypt',
+          });
+
+          await service.requestMagicLink(validMagicLinkRequest);
+          const charge = (mockEmailService.sendMagicLinkEmail as jest.Mock).mock.calls[0]?.[0];
+
+          expect(JSON.stringify(charge)).not.toContain('hash-bcrypt');
+        });
+
+        it('la colonne password EST demandée — sans elle, hasPassword mentirait pour tout le monde', async () => {
+          await service.requestMagicLink(validMagicLinkRequest);
+          const appel = (mockPrisma.user.findFirst as jest.Mock).mock.calls[0]?.[0];
+
+          expect(appel?.select?.password).toBe(true);
+          expect(appel?.select?.username).toBe(true);
+          expect(appel?.select?.displayName).toBe(true);
         });
       });
 
