@@ -22,17 +22,18 @@ describe('la perspective de liste', () => {
   });
 
   test('un rang à la distance de saturation porte tout le fondu', () => {
-    const p = perspective(520);
+    const p = perspective(400);
     expect(p.alpha).toBeCloseTo(0.55, 10);
-    expect(p.scale).toBeCloseTo(0.96, 10);
+    expect(p.scale).toBeCloseTo(0.9, 10);
   });
 
   test('au-delà de la saturation, rien ne bouge plus', () => {
-    expect(perspective(2000)).toEqual(perspective(520));
+    expect(perspective(2000)).toEqual(perspective(400));
   });
 
   test('le fondu est linéaire entre la bande et la saturation', () => {
-    expect(perspective(260).alpha).toBeCloseTo(1 - 0.45 * 0.5, 10);
+    expect(perspective(200).alpha).toBeCloseTo(1 - 0.45 * 0.5, 10);
+    expect(perspective(200).scale).toBeCloseTo(1 - 0.1 * 0.5, 10);
   });
 
   /**

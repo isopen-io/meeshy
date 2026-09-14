@@ -35,24 +35,27 @@ describe('focusCurve — thread variant (Focal, fil)', () => {
 })
 
 describe('focusCurve — list variant (Lentille)', () => {
-  it('at d=520 renders alpha=0.55 and scale=0.96 — literal contract criterion', () => {
-    const { alpha, scale } = focusCurve(520, 'list')
+  // Loupe accentuée (directive porteur 2026-09-15, #6586) : portée 520 → 400,
+  // échelle 0.04 → 0.10 — une voisine à une rangée (92 pt) passe de 99,3 % à
+  // 97,7 %, le fond de liste de 96 % à 90 %.
+  it('at d=400 renders alpha=0.55 and scale=0.90 — the accentuated loupe floor', () => {
+    const { alpha, scale } = focusCurve(400, 'list')
     expect(alpha).toBeCloseTo(0.55, 4)
-    expect(scale).toBeCloseTo(0.96, 4)
+    expect(scale).toBeCloseTo(0.9, 4)
   })
 
   it('at d=0 (pile dans la bande) renders alpha=1, scale=1', () => {
     expect(focusCurve(0, 'list')).toEqual({ alpha: 1, scale: 1 })
   })
 
-  it('at d=260 (mid-ramp), alpha and scale sit exactly halfway to their d=520 floor', () => {
-    const { alpha, scale } = focusCurve(260, 'list')
+  it('at d=200 (mid-ramp), alpha and scale sit exactly halfway to their d=400 floor', () => {
+    const { alpha, scale } = focusCurve(200, 'list')
     expect(alpha).toBeCloseTo(1 - 0.45 * 0.5, 4)
-    expect(scale).toBeCloseTo(1 - 0.04 * 0.5, 4)
+    expect(scale).toBeCloseTo(1 - 0.1 * 0.5, 4)
   })
 
-  it('f saturates at d=520 — a farther row (d=700) renders the identical floor', () => {
-    expect(focusCurve(700, 'list')).toEqual(focusCurve(520, 'list'))
+  it('f saturates at d=400 — a farther row (d=700) renders the identical floor', () => {
+    expect(focusCurve(700, 'list')).toEqual(focusCurve(400, 'list'))
   })
 
   it('the row height (64) never enters the law — focusCurve is a pure function of (distance, variant) only', () => {

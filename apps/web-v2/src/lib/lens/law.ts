@@ -27,10 +27,10 @@
  * qu'on l'y accorde.
  */
 
-/** `f = min(1, d/520)`, `alpha = 1 − 0,45f`, `echelle = 1 − 0,04f`. */
-export const LIST_MAX_DISTANCE = 520;
+/** `f = min(1, d/400)`, `alpha = 1 − 0,45f`, `echelle = 1 − 0,10f` (loupe accentuée, #6586). */
+export const LIST_MAX_DISTANCE = 400;
 export const LIST_FADE = 0.45;
-export const LIST_SCALE = 0.04;
+export const LIST_SCALE = 0.1;
 
 /** Sous la bande : fondu court sur `d/160`, plafonné à `−0,35`. */
 export const BELOW_BAND_DISTANCE = 160;

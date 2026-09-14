@@ -16,8 +16,8 @@
  *     400 (au-delà de la borne, `f` clampé à 1 — même résultat que 380),
  *     et une distance négative (`-50`, clampée à `f = 0`, donc
  *     `alpha = scale = 1`, PAS de terme « sous la bande » pour ce variant).
- *   - `list` : d = 0, 260 (mi-course), 520 (borne `f = 1`), 600 (au-delà,
- *     clampé — même résultat que 520).
+ *   - `list` : d = 0, 200 (mi-course), 400 (borne `f = 1`), 600 (au-delà,
+ *     clampé — même résultat que 400) — portée accentuée le 2026-09-15 (#6586).
  *   - `list` sous la bande de focus (`distance < 0`, terme additif
  *     `belowBandFade`) : -16 (fondu court, `-16/160 = -0.1`), -56 (pile sur
  *     le plafond `-0.35`, `-56/160 = -0.35`), -100 (au-delà du plafond,

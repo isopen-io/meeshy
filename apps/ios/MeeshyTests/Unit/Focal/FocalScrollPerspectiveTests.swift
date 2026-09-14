@@ -270,4 +270,44 @@ final class FocalScrollPerspectiveTests: XCTestCase {
         XCTAssertEqual(p.y, -40, accuracy: 0.001, "vers le bas visuel = −y dans le repère renversé")
         XCTAssertEqual(p.x, 0, accuracy: 0.001)
     }
+
+    // MARK: - Loupe du message élu (directive porteur 2026-09-15, #6586)
+
+    /// L'élu grandit ; ses voisins restent à plat — la planche est fixe
+    /// (directive 2026-08-24 : « aucune animation entre les messages »).
+    func test_loupeScale_magnifiesOnlyTheFocusedMessage() {
+        let size = CGSize(width: 390, height: 60)
+        XCTAssertGreaterThan(FocalMetrics.Focus.loupeGain, 0)
+        XCTAssertEqual(FocalScrollPerspective.loupeScale(isFocused: true, reduceMotion: false, size: size), 1 + FocalMetrics.Focus.loupeGain, accuracy: 0.0001)
+        XCTAssertEqual(FocalScrollPerspective.loupeScale(isFocused: false, reduceMotion: false, size: size), 1)
+        XCTAssertEqual(FocalScrollPerspective.loupeScale(isFocused: true, reduceMotion: true, size: size), 1)
+    }
+
+    /// Un long message ne déborde jamais de la marge de sa carte : la loupe
+    /// se réduit pour lui plutôt que de mordre ses voisins.
+    func test_loupeScale_aTallMessageNeverOverflowsItsCardMargin() {
+        let size = CGSize(width: 390, height: 900)
+        let scale = FocalScrollPerspective.loupeScale(isFocused: true, reduceMotion: false, size: size)
+        XCTAssertGreaterThan(scale, 1)
+        XCTAssertLessThanOrEqual((scale - 1) * size.height / 2, FocalMetrics.FocusCard.marginVertical + 0.0001)
+    }
+
+    @MainActor
+    func test_magnify_posesTheLoupeOnTheFocusedLayer_andFlattensTheOthers() {
+        let layer = CALayer()
+        layer.bounds = CGRect(x: 0, y: 0, width: 390, height: 60)
+        FocalScrollPerspective.magnify(layer, isFocused: true, animated: false)
+        XCTAssertEqual(layer.transform.m11, FocalScrollPerspective.loupeScale(isFocused: true, reduceMotion: false, size: layer.bounds.size), accuracy: 0.0001)
+        XCTAssertEqual(layer.transform.m22, layer.transform.m11, accuracy: 0.0001, "une loupe, pas un étirement")
+        FocalScrollPerspective.magnify(layer, isFocused: false, animated: false)
+        XCTAssertTrue(CATransform3DIsIdentity(layer.transform))
+    }
+
+    func test_host_posesTheLoupeOnTheElectedCell_afterTheElection() throws {
+        let host = try normalizedSource("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        guard let election = host.range(of: "let electionChanged = focalFocusedLocalId != focused"),
+              let loupe = host.range(of: "FocalScrollPerspective.magnify(cell.contentView.layer, isFocused:")
+        else { return XCTFail("la passe doit élire PUIS poser la loupe sur la cellule élue") }
+        XCTAssertLessThan(election.lowerBound, loupe.lowerBound, "la loupe suit l'élection de la même frame")
+    }
 }

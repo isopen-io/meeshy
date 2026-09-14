@@ -3416,11 +3416,11 @@ extension MessageListViewController {
         // reste écrite et testée — elle n'est simplement plus APPLIQUÉE ; la
         // planche est fixe.
         //
-        // Ce qui distingue le message élu n'est donc plus sa taille mais sa
-        // CARTE et ses chips, posées par la reconfiguration au tick d'élection.
-        for cell in cells { FocalScrollPerspective.reset(cell.contentView.layer) }
+        // Ce qui distingue l'élu : sa CARTE, ses chips et sa LOUPE (#6586,
+        // 2026-09-15) — lui seul grandit, ses voisins restent à plat.
         let focused = FocalScrollPerspective.focusedId(cells: geometries, focusY: focusY, currentId: focalFocusedLocalId)
         let electionChanged = focalFocusedLocalId != focused
+        for cell in cells { FocalScrollPerspective.magnify(cell.contentView.layer, isFocused: focused != nil && focalGeometry(of: cell)?.id == focused, animated: electionChanged) }
         focalFocusedLocalId = focused
         // Les détails du message en focus apparaissent AVEC la carte, pas au
         // posé (directive 2026-08-22) : la reconfiguration ne change aucune
