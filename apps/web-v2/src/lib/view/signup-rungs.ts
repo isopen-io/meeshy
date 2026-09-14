@@ -1,42 +1,45 @@
 /**
- * LES BARREAUX DE L'INSCRIPTION — ce qui est VISIBLE, et quand (#6405).
+ * LES BARREAUX DE L'INSCRIPTION — ce qui est VISIBLE, et quand (#6405, #6582).
  *
- * Directive porteur 2026-09-14 : « assure-toi d'avoir un composant moderne et
- * agréable à voir, les champs apparaissent uniquement au fur et à mesure ».
+ * Directive porteur 2026-09-14, qui REDÉCOUPE celle de la veille : « il faut
+ * mettre dès le départ le numéro et l'email à montrer, et lorsqu'on a fini de
+ * mettre l'email, faire apparaître les détails de son identité DIRECTEMENT.
+ * […] Pas d'étape 1 sur N à afficher : tout se fait intuitivement dans la page
+ * de création de compte. »
  *
- * ## Pourquoi une loi PURE plutôt que six `useState` dans l'écran
+ * ## Ce que la reprise retire, et pourquoi
  *
- * « Au fur et à mesure » est une règle d'ORDRE et de MONOTONIE, pas un effet
- * visuel : un champ paru ne disparaît JAMAIS. Sans cette seconde moitié, une
- * adresse qu'on revient corriger ferait s'effondrer la moitié du formulaire
- * sous les doigts — le contraire de ce que la directive demande. Écrite ici,
- * la règle se prouve sans DOM et se lit d'un coup d'œil ; répartie dans
- * l'écran, elle serait six conditions qu'il faudrait relire ensemble pour
- * savoir ce qui paraît.
+ * #6405 avait TROIS barreaux, le numéro se méritant derrière l'adresse, et une
+ * jauge « Étape N sur 3 » pour rembourser l'impression de formulaire sans fin.
+ * Les deux tombent ensemble, et c'est cohérent : ce qu'on ne compte plus, on
+ * n'a plus à l'annoncer. Un formulaire de DEUX temps dont le premier montre
+ * tout ce qu'on a à donner de soi ne donne pas l'impression de se dérouler ;
+ * il se lit d'un regard.
  *
- * ## Les trois barreaux, et ce qu'ils portent
+ * Le numéro remonte donc au premier barreau, avec l'adresse — il n'a jamais
+ * été obligatoire (`SignupView.swift:169-171` ne l'annonce même pas comme
+ * facultatif), et le cacher en faisait une étape à franchir plutôt qu'un champ
+ * à laisser vide. Le bouton « Je continue sans numéro » disparaît avec lui :
+ * il n'y a plus rien à passer.
+ *
+ * ## Les deux barreaux
  *
  * | barreau | ce qu'il rend | ce qui l'ouvre |
  * |---|---|---|
- * | `email` | l'adresse | rien — il est là dès l'ouverture |
- * | `phone` | le numéro et ce à quoi il sert | une adresse VALIDE |
- * | `identity` | l'identité dérivée, le mot de passe facultatif, la langue, le bouton | le numéro RÉPONDU |
+ * | `contact` | l'adresse et le numéro | rien — ils sont là dès l'ouverture |
+ * | `identity` | l'identité dérivée, le mot de passe, le parrainage, la langue, le bouton | une adresse VALIDE |
  *
- * **« Répondu » n'est pas « rempli ».** Le numéro est facultatif
- * (`SignupView.swift:169-171` ne l'annonce même pas comme tel) : exiger des
- * chiffres pour continuer en ferait une obligation déguisée, et bloquerait
- * l'inscription simplifiée que la directive vise. Y répondre, c'est taper des
- * chiffres, quitter le champ, ou dire explicitement qu'on n'en donne pas.
- * L'écran décide lequel des trois s'est produit ; cette loi n'en connaît que
- * le verdict.
+ * ## Ce qui SURVIT de #6405 : la monotonie
  *
- * **Aucun barreau ne saute son prédécesseur** : répondre au numéro avant
- * d'avoir une adresse valide n'ouvre rien — sans quoi un remplissage
- * automatique du navigateur ouvrirait tout le formulaire d'un coup, ce que la
- * directive interdit exactement.
+ * « Au fur et à mesure » reste une règle de MONOTONIE, pas un effet visuel :
+ * un champ paru ne disparaît JAMAIS. Sans cette seconde moitié, une adresse
+ * qu'on revient corriger ferait s'effondrer la moitié du formulaire sous les
+ * doigts — le contraire de ce que la directive demande. Écrite ici, la règle
+ * se prouve sans DOM ; répartie dans l'écran, elle serait des conditions qu'il
+ * faudrait relire ensemble pour savoir ce qui paraît.
  */
 
-export const SIGNUP_RUNGS = ['email', 'phone', 'identity'] as const;
+export const SIGNUP_RUNGS = ['contact', 'identity'] as const;
 
 export type SignupRung = (typeof SIGNUP_RUNGS)[number];
 
@@ -46,18 +49,16 @@ export type SignupRung = (typeof SIGNUP_RUNGS)[number];
  * est de se souvenir qu'il s'est ouvert.
  */
 export type SignupReveal = {
-  readonly emailSettled: boolean;
-  readonly phoneSettled: boolean;
+  readonly identitySettled: boolean;
 };
 
-export const INITIAL_SIGNUP_REVEAL: SignupReveal = { emailSettled: false, phoneSettled: false };
+export const INITIAL_SIGNUP_REVEAL: SignupReveal = { identitySettled: false };
 
-/** Ce que l'écran OBSERVE, à l'instant du rendu. */
+/** Ce que l'écran OBSERVE, à l'instant du rendu. Une seule observation depuis
+ * #6582 : le numéro ne conditionne plus rien. */
 export type SignupAnswers = {
   /** L'adresse passe `isEmailValid` — la MÊME loi que le bouton d'envoi. */
   readonly emailValid: boolean;
-  /** Des chiffres, un départ du champ, ou un « je continue sans numéro ». */
-  readonly phoneAnswered: boolean;
 };
 
 /**
@@ -70,17 +71,15 @@ export type SignupAnswers = {
  * chaque rendu »).
  */
 export function nextSignupReveal(previous: SignupReveal, answers: SignupAnswers): SignupReveal {
-  const emailSettled = previous.emailSettled || answers.emailValid;
-  const phoneSettled = previous.phoneSettled || (emailSettled && answers.phoneAnswered);
-  if (emailSettled === previous.emailSettled && phoneSettled === previous.phoneSettled) return previous;
-  return { emailSettled, phoneSettled };
+  const identitySettled = previous.identitySettled || answers.emailValid;
+  if (identitySettled === previous.identitySettled) return previous;
+  return { identitySettled };
 }
 
-/** Les barreaux VISIBLES, dans l'ordre — `email` toujours, les suivants selon ce qui est paru. */
+/** Les barreaux VISIBLES, dans l'ordre — `contact` toujours, `identity` une
+ * fois l'adresse valide. */
 export function visibleSignupRungs(reveal: SignupReveal): readonly SignupRung[] {
-  if (!reveal.emailSettled) return ['email'];
-  if (!reveal.phoneSettled) return ['email', 'phone'];
-  return SIGNUP_RUNGS;
+  return reveal.identitySettled ? SIGNUP_RUNGS : ['contact'];
 }
 
 /** Un barreau est-il visible ? — la lecture qu'un gabarit fait, sans recomposer la liste. */

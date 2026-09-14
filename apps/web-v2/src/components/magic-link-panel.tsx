@@ -11,6 +11,7 @@ import {
   type MagicLinkDeadline,
   type MagicLinkRequestOutcome,
 } from '@/lib/view/magic-link';
+import { SPAM_HINT } from '@/lib/view/auth-copy';
 import { useCountdown } from '@/lib/view/use-countdown';
 
 import { AuthSubmitButton } from './auth-chrome';
@@ -52,18 +53,6 @@ const MAGIC_LINK_SUBMIT_GRADIENT = 'linear-gradient(90deg, var(--ios-indigo-600)
 
 const OUTCOME_FIELD_ERROR = 'Adresse e-mail invalide';
 
-/**
- * CE QUE LA PASSERELLE NE DIT PAS, ET QUE L'ÉCRAN DOIT DIRE (#6404).
- *
- * `POST /auth/magic-link/request` rend 200 même pour une adresse inconnue
- * (`MagicLinkService.ts:133-137`, anti-énumération) : l'écran ne peut donc ni
- * promettre que l'e-mail part, ni démentir. Ce qu'il PEUT faire, c'est nommer
- * la première cause d'un e-mail « jamais reçu » — le dossier indésirables — et
- * dire au bout de combien de temps s'inquiéter. La directive porteur le
- * demande mot pour mot : « préciser dans l'interface de regarder les spams si
- * aucun e-mail ne parvient dans la minute ».
- */
-const SPAM_HINT = 'Rien reçu après une minute ? Regardez vos indésirables (spam) — le message peut y être tombé.';
 
 function bannerFor(outcome: MagicLinkRequestOutcome | null): string | null {
   if (outcome === null) return null;
@@ -85,9 +74,29 @@ export type MagicLinkPanelProps = {
    * panneau partage `/login` avec d'autres contrôles (voler le focus y
    * déplacerait le défilement sans que personne ne l'ait demandé). */
   readonly autoFocus?: boolean;
+  /**
+   * LE TITRE DE SECTION — vrai sur l'écran plein, FAUX sur `/login` (#6583).
+   *
+   * Directive porteur 2026-09-14 : « à la connexion la page doit être sans
+   * titre sauf la baguette magique ». Sur `/login`, la baguette, la phrase, le
+   * champ et le bouton se lisent d'un regard ; « Entrez votre adresse email »
+   * y répétait ce que le champ dit déjà. Sur `/auth/magic-link` — l'adresse
+   * que les e-mails visent, ouverte sans contexte — il reste : c'est le seul
+   * endroit où il annonce quelque chose.
+   *
+   * La phrase, elle, ne bouge PAS : elle dit ce que le bouton va PROVOQUER,
+   * ce qu'aucun autre élément ne dit.
+   */
+  readonly heading?: boolean;
 };
 
-export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, autoFocus = false }: MagicLinkPanelProps) {
+export function MagicLinkPanel({
+  deps = defaultMagicLinkDeps,
+  footer,
+  onCancel,
+  autoFocus = false,
+  heading = true,
+}: MagicLinkPanelProps) {
   const online = useOnline();
   const [step, setStep] = useState<'input' | 'waiting'>('input');
   const [email, setEmail] = useState('');
@@ -161,7 +170,9 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
           </>
         )}
 
-        {/* LES INDÉSIRABLES — voir `SPAM_HINT`. Toujours présent pendant
+        {/* LES INDÉSIRABLES — `SPAM_HINT` (`lib/view/auth-copy.ts`), PARTAGÉE
+            avec `/forgot-password` depuis #6583 : même attente, même phrase.
+            Toujours présent pendant
             l'attente, jamais derrière un (i) : c'est le seul endroit où
             l'utilisateur attend quelque chose qui peut ne jamais paraître. */}
         <p data-magic-link-spam-hint className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
@@ -205,11 +216,13 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
         <GlyphSvg glyph={AUTH_GLYPHS.magicWand} size={56} />
       </span>
 
-      <h2 className="text-center text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-        Entrez votre adresse email
-      </h2>
+      {heading ? (
+        <h2 className="text-center text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+          Entrez votre adresse email
+        </h2>
+      ) : null}
       <p className="text-center text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
-        Nous vous enverrons un lien de connexion sécurisé
+        Nous vous enverrons un lien de connexion sécurisé par mail
       </p>
 
       <Field id="magic-link-email" glyph={AUTH_GLYPHS.envelope} tint="var(--ios-indigo-400)" focused={focused} error={fieldError}>
@@ -244,7 +257,7 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
       <AuthSubmitButton
         disabled={!isEmailValid(email) || !online}
         isSubmitting={submitting}
-        label="Envoyer le lien magique"
+        label="Recevoir le lien"
         busyLabel="Envoi…"
         background={MAGIC_LINK_SUBMIT_GRADIENT}
       />

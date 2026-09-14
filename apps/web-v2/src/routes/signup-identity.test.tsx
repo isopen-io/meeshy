@@ -17,20 +17,21 @@ import SignupScreen from './signup';
 const html = renderToStaticMarkup(<SignupScreen />);
 
 /**
- * LES BARREAUX (#6405, directive porteur 2026-09-14 : « les champs
- * apparaissent uniquement au fur et à mesure »).
+ * LES DEUX BARREAUX (#6405, REDÉCOUPÉ par #6582 — directive porteur
+ * 2026-09-14 : « il faut mettre dès le départ le numéro et l'e-mail à
+ * montrer »).
  *
- * L'ordre a changé avec eux : l'ADRESSE ouvre le formulaire, parce que tout en
- * découle — l'identité dérivée (#6479) n'a rien à montrer avant elle, et le
- * lien de validation part vers elle. Le téléphone la suit, le reste suit le
- * téléphone.
+ * L'ordre reste celui de #6479 : l'ADRESSE ouvre le formulaire, parce que tout
+ * en découle — l'identité dérivée n'a rien à montrer avant elle, et le lien de
+ * validation part vers elle. Ce qui change, c'est que le NUMÉRO ne se mérite
+ * plus : il paraît avec l'adresse, sur le même barreau de CONTACT.
  *
  * `renderToStaticMarkup` mesure l'état INITIAL : c'est exactement ce qu'il faut
  * pour prouver ce qui ne paraît PAS encore. L'ordre COMPLET, lui, se mesure sur
- * un formulaire qu'on remplit — `signup-rungs.test.ts` prouve la loi, ce témoin
- * prouve qu'elle atteint des pixels.
+ * un formulaire qu'on remplit — `signup-rungs.test.ts` prouve la loi,
+ * `signup-rungs.test.tsx` prouve qu'elle atteint des pixels.
  */
-describe('à l’ouverture, un seul champ', () => {
+describe('à l’ouverture, le CONTACT et lui seul', () => {
   const positions = {
     email: html.indexOf('signup-email'),
     telephone: html.indexOf('signup-phone-hint'),
@@ -38,10 +39,12 @@ describe('à l’ouverture, un seul champ', () => {
     motDePasse: html.indexOf('signup-password'),
   };
 
-  test('l’adresse est là', () => expect(positions.email).toBeGreaterThan(-1));
+  test('l’adresse est là, et le numéro AVEC elle', () => {
+    expect(positions.email).toBeGreaterThan(-1);
+    expect(positions.telephone).toBeGreaterThan(positions.email);
+  });
 
-  test('ni le téléphone, ni l’identité, ni le mot de passe ne sont rendus — pas même repliés', () => {
-    expect(positions.telephone).toBe(-1);
+  test('ni l’identité, ni le mot de passe ne sont rendus — pas même repliés', () => {
     expect(positions.identite).toBe(-1);
     expect(positions.motDePasse).toBe(-1);
   });
