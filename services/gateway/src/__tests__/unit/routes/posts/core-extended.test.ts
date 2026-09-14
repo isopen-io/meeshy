@@ -127,7 +127,7 @@ function makeAuth(authenticated: boolean) {
     if (authenticated) {
       (req as any).authContext = {
         isAuthenticated: true,
-        registeredUser: { id: USER_ID, role: 'USER' },
+        registeredUser: { emailVerifiedAt: new Date(), id: USER_ID, role: 'USER' },
       };
     } else {
       (req as any).authContext = null;

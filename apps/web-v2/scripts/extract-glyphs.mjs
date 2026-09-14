@@ -76,6 +76,13 @@ const OVERRIDES = {
    */
   'heart-fill': join(CORE, 'fill/heart-fill.svg'),
   'bookmark-fill': join(CORE, 'fill/bookmark-fill.svg'),
+  /**
+   * `coin-fill` (#6427) — la PIÈCE des Meeshes, PLEINE : à 18-20 px, à côté
+   * d'un solde en gras, le contour de `coin` se perd, et c'est la silhouette
+   * métallique qui doit dire « monnaie ». Même tracé que l'actif iOS
+   * `MeeshCoin`, pour que les deux plateformes montrent la même pièce.
+   */
+  'coin-fill': join(CORE, 'fill/coin-fill.svg'),
 };
 
 /**
@@ -161,6 +168,8 @@ const PROGRESSION = [
   'fire',
   'star',
   'medal',
+  // La pièce des Meeshes (#6427) : la médaille reste aux BADGES.
+  'coin-fill',
   'chat-text',
   'article',
   'camera',
@@ -628,6 +637,23 @@ emit({
  *
  * `phone`, `caretLeft` et `warningCircle` restent au SOCLE.
  */
+/**
+ * LA DÉCOUVERTE DE PERSONNES (#6363) — `PeopleDiscoveryView` et ses trois
+ * onglets : `person.badge.plus` (Demandes, Ajouter), `hand.raised.fill`
+ * (Bloqués), `envelope.fill` (inviter par e-mail), `paperplane` (état vide des
+ * envoyées), `person.2.slash` (état vide des reçues, rendu `user-check` barré
+ * par le sens plutôt que par un trait). Chargé avec la route /discover.
+ */
+const DISCOVER = ['user-plus', 'hand-palm', 'envelope-simple', 'paper-plane-tilt', 'user-check'];
+
+emit({
+  ids: DISCOVER,
+  output: join(HERE, '../src/components/glyphs-discover.ts'),
+  constant: 'DISCOVER_GLYPHS',
+  type: 'DiscoverGlyphName',
+  role: "LE JEU D'ECRAN de la decouverte de personnes (#6363) : onglets, ajout, blocage, invitation et etats vides, charge avec la route /discover, jamais dans le socle.",
+});
+
 const CALLS = ['arrow-up-right', 'arrow-down-left', 'phone-x', 'video-camera', 'phone-outgoing'];
 
 emit({
@@ -636,4 +662,63 @@ emit({
   constant: 'CALLS_GLYPHS',
   type: 'CallsGlyphName',
   role: "LE JEU D'ECRAN du journal d'appels (#6362) : directions, type video et etat vide, charge avec la route /calls, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DE « MES LIENS » (#6361) — miroir des symboles de
+ * `LinksHubView.swift`, `ShareLinksView.swift`, `ShareLinkDetailView.swift` et
+ * `CreateShareLinkView.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `link.badge.plus` (banniere, etat vide) | `link` |
+ * | `link` / `link.badge.minus` (lien actif / inactif) | `link-simple` (socle) / `link-break` |
+ * | `plus.circle.fill` (creer) | `plus-circle` |
+ * | `checkmark.circle.fill` (actifs) | `check-circle` |
+ * | `person.fill.badge.plus` (rejoints, utilisations) | `user-plus` |
+ * | `doc.on.doc` (copier) | `copy` |
+ * | `square.and.arrow.up` (partager) | `export` |
+ * | `pause.circle` / `play.circle` (desactiver / activer) | `pause-circle` / `play-circle` |
+ * | `infinity` (maximum) | `infinity` |
+ * | `bubble.left.and.bubble.right.fill` (section conversation) | `chats-circle` |
+ * | `tag.fill` (identite) | `tag` |
+ * | `person.badge.key.fill` (acces invites) | `key` (socle) |
+ * | `slider.horizontal.3` (permissions) | `sliders-horizontal` |
+ * | `gauge.with.dots.needle.bottom.50percent` (limites) | `gauge` |
+ * | `person.fill.checkmark` / `person.fill` / `envelope.fill` / `calendar` | `user-check` / `user` (socle) / `envelope-simple` / `calendar-blank` |
+ * | `bubble.left.fill` / `photo.fill` / `paperclip` / `clock.fill` | `chat-circle` / `image` (socle) / `paperclip` / `clock-counter-clockwise` |
+ * | `person.2.fill` / `clock.badge.xmark` (limites) | `users` (socle) / `hourglass` |
+ * | `chevron.forward` | `caret-right` |
+ */
+const LINKS = [
+  'link',
+  'link-break',
+  'plus-circle',
+  'check-circle',
+  'user-plus',
+  'copy',
+  'export',
+  'pause-circle',
+  'play-circle',
+  'infinity',
+  'chats-circle',
+  'tag',
+  'sliders-horizontal',
+  'gauge',
+  'user-check',
+  'envelope-simple',
+  'calendar-blank',
+  'chat-circle',
+  'paperclip',
+  'clock-counter-clockwise',
+  'hourglass',
+  'caret-right',
+];
+
+emit({
+  ids: LINKS,
+  output: join(HERE, '../src/components/glyphs-links.ts'),
+  constant: 'LINKS_GLYPHS',
+  type: 'LinksGlyphName',
+  role: "LE JEU D'ECRAN de Mes liens (#6361) : hub, liens de partage, detail et creation, charge avec les routes /links, jamais dans le socle.",
 });

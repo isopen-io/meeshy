@@ -32109,3 +32109,110 @@ Deux écrans neufs (`verify-email-flow.tsx`, `reset-password-flow.tsx`, apps/web
 4. **Le correctif est un remplacement d'un mot, jamais une réécriture** : `onChange` → `onInput` sur CHAQUE champ contrôlé qu'un témoin interactif pose par `input.value = X; dispatchEvent(new Event('input'))`. Un champ qui n'est vérifié QUE par `renderToStaticMarkup` (état initial, aucune interaction) peut rester en `onChange` sans que rien ne le prouve encore — mais le jour où il gagne un témoin interactif, il tombera dans le même panneau.
 
 Détail : `apps/web-v2/decisions.md` § D-47.
+
+## Leçon 604 — Avant d'écrire une « loi pure » dans `shared`, chercher la CAPACITÉ, jamais le NOM : la jumelle qu'on s'apprête à créer existe souvent déjà, en mieux (2026-09-14)
+
+**Cas.** #6424 demandait de dériver un pseudo et un nom affiché de la partie
+locale d'une adresse. J'ai écrit `packages/shared/utils/username-from-email.ts`
+— trois fonctions pures, seize témoins verts, un commit poussé. Puis, en
+branchant la passerelle, `services/gateway/src/services/auth/registration-identity.ts`
+(#5216) : `pseudoRacine` tirait DÉJÀ le pseudo de la partie locale de l'adresse,
+et `generateUsername` réglait en plus l'unicité — sept candidats en UNE requête,
+repli aléatoire, bornes du schéma respectées. La jumelle que je venais d'écrire
+était la moins bonne des deux : elle ne connaissait pas la base.
+
+1. **La recherche qui aurait suffi n'était pas sur le nom.** `git grep
+   username-from-email` ne rend rien ; `git grep -n "split('@')"` rend le site
+   existant en une seconde. Un module se cherche par ce qu'il FAIT — la
+   primitive qu'il emploie forcément — pas par le nom qu'on lui aurait donné.
+2. **« Une loi pure appartient à `shared` » est un raisonnement, pas une
+   mesure.** Il est juste dans l'absolu et faux ici : l'unicité d'un pseudo
+   n'est pas décidable sans la base, donc la loi complète ne PEUT pas vivre
+   dans `shared`. L'architecture qu'on déduit du principe doit céder devant
+   celle qu'on mesure dans le dépôt.
+3. **Ce qui reste après le retrait est le vrai lot.** Sur trois fonctions
+   écrites, une seule manquait — le NOM AFFICHÉ. Les deux autres étaient des
+   redites. Le lot utile s'est révélé plus petit que le lot imaginé, et deux
+   défauts du site existant (le `+` du sous-adressage, le point d'une adresse)
+   n'auraient jamais été vus depuis la jumelle.
+4. **Le retrait se commit, il ne se force-push pas.** La branche garde le
+   commit qui crée la jumelle et celui qui la retire : l'historique porte la
+   mesure, et le prochain qui aura l'idée la retrouvera.
+
+## Leçon 605 — Une borne abaissée sur directive peut rester INATTEIGNABLE parce qu'une règle VOISINE la retire, et le gate reste vert (2026-09-14)
+
+**Cas.** Directive du 13 septembre, après mesure de 18 refus d'inscription pour
+2 comptes créés en 24 h : « il faut diminuer à 6 caractères au lieu de 12 ».
+`PASSWORD_MIN_LENGTH` est passée de 12 à 6, ses trois littéraux Ajv alignés, la
+garde de parité verte. Mais `validatePasswordStrength` — appelée par les CINQ
+portes qui acceptent un mot de passe — exige en plus une majuscule, un chiffre
+et un score `zxcvbn` ≥ 3/4. Aucun mot de passe de six caractères CHOISI PAR UN
+HUMAIN n'atteint 3/4. La borne abaissée n'a atteint personne, et le refus
+mesuré en production a continué.
+
+1. **Une borne ne gouverne que ce qu'elle est SEULE à gouverner.** La question
+   à poser en abaissant un seuil n'est pas « la valeur est-elle bien changée
+   partout ? » (ce que la garde de parité mesure très bien) mais **« qui
+   d'autre refuse la même chose, pour une autre raison ? »**. Le voisin ne
+   partage ni le nom, ni le fichier, ni le témoin.
+2. **Le motif est celui de la « loi qui calcule une valeur que personne ne
+   lit », dans sa forme la plus coûteuse** : ici la valeur est LUE, la garde
+   est verte, la directive est appliquée — et le symptôme survit. Ce qui la
+   rend invisible est précisément que tout est correct.
+3. **Le témoin qui l'attrape n'est pas un témoin de valeur.** Ce n'est pas
+   « `PASSWORD_MIN_LENGTH === 6` » mais « il EXISTE un mot de passe de
+   `PASSWORD_MIN_LENGTH` caractères que la porte accepte ». Une borne déclarée
+   sans témoin d'atteignabilité est une promesse que rien ne tient.
+
+## Leçon 606 — Un compte SANS secret ne doit pas payer le verrou qui protège les comptes AVEC secret (2026-09-14)
+
+**Cas.** #6424 rend `User.password` nullable. `verifyPassword(saisie, null)`
+rend `false` — juste, documenté, et **indistinguable d'un mot de passe faux**.
+Or la branche d'échec de `AuthService.authenticate` COMPTE la tentative et
+ferme le compte au seuil (#4138). Cinq essais auraient donc verrouillé quinze
+minutes un compte dont le mot de passe n'existe pas, c'est-à-dire un compte que
+personne ne peut deviner : le verrou n'aurait protégé personne et n'aurait puni
+que son détenteur.
+
+1. **Un `false` correct peut être au mauvais ENDROIT.** La fonction de
+   comparaison a raison de rendre `false` ; c'est l'appelant qui doit
+   distinguer « le secret ne correspond pas » de « il n'y a pas de secret ».
+   Le refus se lève AVANT la comparaison, ne compte rien, et nomme la porte à
+   prendre (`PASSWORD_NOT_SET`, 401).
+2. **Le témoin central n'est pas le message, c'est l'ABSENCE D'ÉCRITURE.**
+   `expect(update).not.toHaveBeenCalled()` après sept tentatives : un témoin
+   qui vérifierait seulement le code d'erreur resterait vert alors que le
+   compteur monte.
+3. **La généralisation.** Toute colonne qu'on rend nullable transforme une
+   comparaison en trois cas là où le code en compte deux. Chercher, en aval de
+   la comparaison, ce qui PUNIT l'échec — compteur, verrou, journal de
+   sécurité, limiteur — et se demander si la troisième valeur mérite la même
+   punition.
+
+## Leçon 607 — Un composant peut avoir sa suite de tests et n'être monté NULLE PART : un fichier de test n'est pas un consommateur (2026-09-14)
+
+**Cas.** En cherchant où l'e-mail de #6424 devait renvoyer pour « définir un
+mot de passe », mesure de `apps/web` : `PasswordSettings` (256 lignes) et
+`__tests__/components/settings/password-settings.test.tsx` existent tous deux,
+et le composant a **zéro consommateur** hors sa propre définition. L'onglet
+« Security » des réglages monte `EncryptionSettings`. Conséquence : **aucune
+personne ne pouvait changer son mot de passe depuis l'application web**, seulement
+le réinitialiser par e-mail depuis `/forgot-password`.
+
+1. **Le comptage doit EXCLURE les tests.** `git grep -l PasswordSettings` rend
+   deux fichiers et rassure ; en retirant `__tests__`, il n'en reste qu'un — sa
+   définition. C'est cette seconde commande qui mesure quelque chose.
+2. **Le motif est celui de la « vue sans consommateur ne rougit nulle part »,
+   avec une aggravation** : la suite de tests VERTE fait croire que la
+   fonctionnalité est éprouvée. Elle l'est — sur un composant que personne
+   n'affiche.
+3. **La question qui l'attrape** se pose au moment où l'on veut renvoyer
+   quelqu'un vers un écran : « ce lien atterrit-il sur une page qui parle de
+   ça ? ». C'est la loi 4 (un contrôle existe s'il a un effet) appliquée à une
+   DESTINATION plutôt qu'à un bouton.
+4. **Corollaire mesuré le même jour** : la barre latérale de `/admin` pointait
+   « Journaux d'audit » vers `/admin/audit`, quand la page vit dans
+   `app/admin/audit-logs/`. Un 404 depuis toujours, trouvé en RECOPIANT la
+   table vers une autre application. Porter une liste de destinations est une
+   occasion de les VÉRIFIER — recopiée sans mesure, elle importe ses 404 dans
+   l'application neuve.

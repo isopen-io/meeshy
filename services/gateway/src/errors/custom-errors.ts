@@ -132,6 +132,37 @@ export class UserLockedError extends BaseAppError {
   }
 }
 
+/**
+ * Le compte existe, mais il n'a PAS de mot de passe (#6424).
+ *
+ * Un compte né d'une inscription par e-mail seul n'en a aucun : `null` dans la
+ * colonne. Sans cette classe, `verifyPassword(saisie, null)` rendait `false` —
+ * juste, mais indistinguable d'un mot de passe FAUX. Deux conséquences, et la
+ * seconde est un vrai défaut :
+ *
+ * 1. la personne lisait « Identifiants invalides » sans jamais apprendre que sa
+ *    porte est le lien magique — un cul-de-sac dont rien ne sort ;
+ * 2. surtout, chaque tentative COMPTAIT : cinq essais verrouillaient pour
+ *    quinze minutes un compte dont le mot de passe n'existe pas, donc un compte
+ *    que personne ne peut deviner. Le verrou punissait la seule victime possible.
+ *
+ * ## Ce que ce refus APPREND, et pourquoi c'est assumé
+ *
+ * Il dit « cette adresse a un compte, sans mot de passe ». L'existence d'un
+ * compte est déjà apprenable par `POST /register` (`EMAIL_TAKEN`, oracle
+ * documenté et payant, #4158) ; ce qui s'y ajoute est qu'il n'y a AUCUN secret
+ * à deviner — une information qui décourage l'attaque plutôt que de l'armer.
+ * Le limiteur de `POST /login` la borne comme il borne tout le reste.
+ *
+ * 401, et non 403 : c'est un refus d'AUTHENTIFICATION dont le remède est de se
+ * présenter autrement, pas une permission manquante.
+ */
+export class PasswordNotSetError extends BaseAppError {
+  constructor(message = "Ce compte n'a pas encore de mot de passe — connectez-vous par lien magique") {
+    super(message, 401, 'PASSWORD_NOT_SET');
+  }
+}
+
 export class UserInactiveError extends BaseAppError {
   constructor(message = 'Compte inactif ou désactivé') {
     super(message, 403, 'USER_INACTIVE');

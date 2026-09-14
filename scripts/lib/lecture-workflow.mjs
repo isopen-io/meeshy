@@ -122,15 +122,45 @@ export const stepsOf = (job) => {
     const ifAt = field('if');
     const usesAt = field('uses');
     const dirAt = field('working-directory');
+    const idAt = field('id');
+    const withAt = field('with');
     return {
       line: step.line,
       name: nameAt === -1 ? '(étape sans nom)' : scalarAfter(texts2[nameAt]),
+      id: idAt === -1 ? null : scalarAfter(texts2[idAt]),
       uses: usesAt === -1 ? null : scalarAfter(texts2[usesAt]),
       condition: ifAt === -1 ? null : blockScalar(step.lines, ifAt),
       run: runAt === -1 ? null : blockScalar(step.lines, runAt),
       workingDirectory: dirAt === -1 ? null : scalarAfter(texts2[dirAt]),
+      with: withAt === -1 ? {} : withOf(step.lines, withAt),
     };
   });
+};
+
+/** Les entrées `with:` d'une étape, clé → valeur (bloc `|` compris). */
+const withOf = (lines, start) => {
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((entry) => entry.text.trim() !== '' && indentOf(entry.text) <= 8);
+  const body = end === -1 ? rest : rest.slice(0, end);
+  return Object.fromEntries(
+    body.flatMap((entry, offset) => {
+      const key = /^ {10}([A-Za-z0-9_-]+):/.exec(entry.text);
+      return key === null ? [] : [[key[1], blockScalar(lines, start + 1 + offset)]];
+    }),
+  );
+};
+
+/** Le bloc `env:` de tête d'un workflow (colonne 0), clé → valeur. */
+export const envOf = (workflow) => {
+  const lines = workflow.split('\n');
+  const start = lines.findIndex((line) => /^env:\s*$/.test(line));
+  if (start === -1) return {};
+  return Object.fromEntries(
+    blockAfter(lines, start).flatMap((entry) => {
+      const pair = /^ {2}([A-Za-z0-9_]+):\s*(.*)$/.exec(entry.text);
+      return pair === null ? [] : [[pair[1], unquote(pair[2].trim())]];
+    }),
+  );
 };
 
 /**

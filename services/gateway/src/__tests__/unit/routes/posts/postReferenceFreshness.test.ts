@@ -154,7 +154,7 @@ async function buildApp(): Promise<{ app: FastifyInstance; socialEvents: ReturnT
   const requiredAuth = async (req: FastifyRequest) => {
     (req as any).authContext = {
       isAuthenticated: true,
-      registeredUser: { id: USER_ID, role: 'USER', username: 'author' },
+      registeredUser: { emailVerifiedAt: new Date(), id: USER_ID, role: 'USER', username: 'author' },
     };
   };
 

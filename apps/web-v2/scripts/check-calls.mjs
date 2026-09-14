@@ -258,6 +258,44 @@ try {
 
       check(errors.length === 0, `${label} : aucune erreur de page — ${JSON.stringify(errors)}`);
       await context.close();
+
+      // ------------------------------------------------ 8. hors ligne à cache FROID (#6419)
+      /* Une coque qui perd le réseau garde ses fichiers : on émule la coupure
+         telle que l'application la VOIT (`navigator.onLine` et l'événement
+         `offline`), sans bloquer le chargement du chunk de l'écran. TanStack met
+         alors la requête EN PAUSE — ni données, ni erreur. */
+      const cold = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, locale: 'fr-FR' });
+      const coldPage = await cold.newPage();
+      coldPage.setDefaultTimeout(10_000);
+      const coldErrors = [];
+      coldPage.on('pageerror', (error) => coldErrors.push(error.message));
+      await coldPage.goto(`${BASE}/`, { waitUntil: 'load' });
+      await coldPage.waitForSelector('[data-floating-menu]');
+      const setNetwork = (online) =>
+        coldPage.evaluate((value) => {
+          Object.defineProperty(Navigator.prototype, 'onLine', { configurable: true, get: () => value });
+          window.dispatchEvent(new Event(value ? 'online' : 'offline'));
+        }, online);
+      await setNetwork(false);
+      await coldPage.click('[data-floating-menu]');
+      await coldPage.click('[role="menuitem"][href="/calls"]');
+      const saysOffline = await coldPage.waitForSelector('[data-calls-offline]', { timeout: 3000 }).then(() => true, () => false);
+      const coldState = await coldPage.evaluate(() => ({
+        squelette: document.querySelector('[data-calls-skeleton]') !== null,
+        occupe: document.getElementById('contenu')?.getAttribute('aria-busy') ?? null,
+      }));
+      check(saysOffline && !coldState.squelette && coldState.occupe === null, `${label} : à cache froid hors ligne, le journal dit la coupure — ni squelette, ni aria-busy (${JSON.stringify(coldState)})`);
+      const coldCopy = (await coldPage.textContent('[data-calls-offline]').catch(() => null)) ?? '';
+      check(
+        (await coldPage.getAttribute('[data-calls-offline]', 'data-calls-offline').catch(() => null)) === 'cold' && coldCopy.includes('Le journal se chargera dès le retour du réseau.') && !coldCopy.includes('dernier chargement'),
+        `${label} : à cache froid, l'annonce ne promet aucun journal déjà chargé (« ${coldCopy} »)`,
+      );
+      await capture(coldPage, `appels-hors-ligne-froid-${slug}`);
+      await setNetwork(true);
+      const resumed = await coldPage.waitForSelector('[data-call]', { timeout: 5000 }).then(() => true, () => false);
+      check(resumed && (await coldPage.$('[data-calls-offline]')) === null, `${label} : au retour du réseau, le journal se charge seul`);
+      check(coldErrors.length === 0, `${label} : aucune erreur de page à cache froid — ${JSON.stringify(coldErrors)}`);
+      await cold.close();
     }
   }
 } finally {

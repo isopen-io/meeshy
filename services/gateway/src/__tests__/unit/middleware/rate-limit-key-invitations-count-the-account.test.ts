@@ -86,7 +86,10 @@ function ligneUtilisateur(id: string) {
     customDestinationLanguage: null,
     isOnline: true,
     lastActiveAt: new Date(),
-    emailVerifiedAt: null,
+    // #6437 — cette ligne exerce le PLAFOND de débit, pas la garde d'e-mail
+    // confirmé montée depuis sur la même route : un e-mail vérifié ici évite
+    // de confondre les deux refus (429 vs 403 EMAIL_NOT_VERIFIED).
+    emailVerifiedAt: new Date(),
     deviceLocale: null,
     profileCompletionRate: null,
     createdAt: new Date(),

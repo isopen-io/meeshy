@@ -40,7 +40,7 @@ jest.mock('../../../services/EmailService', () => ({
 }));
 
 import { AuthService } from '../../../services/AuthService';
-import { UserLockedError } from '../../../errors/custom-errors';
+import { PasswordNotSetError, UserLockedError } from '../../../errors/custom-errors';
 import { MAX_FAILED_LOGIN_ATTEMPTS } from '../../../services/LoginAttemptService';
 
 const USER_ID = '507f1f77bcf86cd799439011';
@@ -199,5 +199,77 @@ describe('AuthService.authenticate — l’échec est compté', () => {
 
     expect(etat().failedLoginAttempts).toBe(0);
     expect(etat().lockedUntil).toBeNull();
+  });
+});
+
+
+/**
+ * UN COMPTE SANS MOT DE PASSE N'EST PAS UN COMPTE AU MOT DE PASSE FAUX (#6424).
+ *
+ * Ces témoins vivent ICI, avec le verrou, parce que c'est le verrou qu'ils
+ * mesurent : `verifyPassword(saisie, null)` rend `false`, donc le MÊME verdict
+ * qu'une saisie erronée — et la branche d'échec, celle que ce fichier garde
+ * depuis #4138, COMPTE la tentative et ferme le compte au seuil.
+ *
+ * Cinq essais auraient donc verrouillé quinze minutes un compte dont le mot de
+ * passe n'existe pas, c'est-à-dire un compte que personne ne peut deviner. Le
+ * verrou n'aurait protégé personne et n'aurait puni que son détenteur.
+ *
+ * Le témoin CENTRAL est le second : ce n'est pas le message du refus qui
+ * compte, c'est que RIEN ne soit écrit.
+ */
+describe('AuthService.authenticate — un compte SANS mot de passe (#6424)', () => {
+  it('refuse par un code qui DIT la porte à prendre, pas par « identifiants invalides »', async () => {
+    const { prisma } = makePrisma({ password: null });
+    const svc = makeService(prisma);
+
+    await expect(svc.authenticate({ username: 'cible', password: 'peu importe' })).rejects.toBeInstanceOf(
+      PasswordNotSetError,
+    );
+  });
+
+  it("ne COMPTE rien — le verrou ne doit pas fermer un compte qu'on ne peut pas deviner", async () => {
+    const { prisma, etat, update } = makePrisma({ password: null });
+    const svc = makeService(prisma);
+
+    for (let i = 0; i < MAX_FAILED_LOGIN_ATTEMPTS + 2; i++) {
+      await expect(svc.authenticate({ username: 'cible', password: 'essai' })).rejects.toBeInstanceOf(
+        PasswordNotSetError,
+      );
+    }
+
+    expect(etat().failedLoginAttempts).toBe(0);
+    expect(etat().lockedUntil).toBeNull();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('ne CONFRONTE même pas la saisie — il n’y a rien à confronter', async () => {
+    const { prisma } = makePrisma({ password: null });
+    const svc = makeService(prisma);
+
+    await expect(svc.authenticate({ username: 'cible', password: 'x' })).rejects.toBeInstanceOf(
+      PasswordNotSetError,
+    );
+
+    expect(mockCompare).not.toHaveBeenCalled();
+  });
+
+  it('le refus porte le code PASSWORD_NOT_SET et un 401 — pas un 500', async () => {
+    const { prisma } = makePrisma({ password: null });
+    const svc = makeService(prisma);
+
+    const erreur = await svc.authenticate({ username: 'cible', password: 'x' }).catch((e) => e);
+
+    expect((erreur as { code?: string }).code).toBe('PASSWORD_NOT_SET');
+    expect((erreur as { statusCode?: number }).statusCode).toBe(401);
+  });
+
+  it('un compte QUI A un mot de passe garde exactement l’ancien comportement', async () => {
+    const { prisma, etat } = makePrisma();
+    mockCompare.mockResolvedValue(false);
+    const svc = makeService(prisma);
+
+    await expect(svc.authenticate({ username: 'cible', password: 'faux' })).resolves.toBeNull();
+    expect(etat().failedLoginAttempts).toBe(1);
   });
 });

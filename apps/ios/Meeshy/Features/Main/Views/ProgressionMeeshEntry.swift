@@ -29,16 +29,14 @@ struct ProgressionMeeshEntry: View {
             HapticFeedback.light()
             ouvert.toggle()
         } label: {
-            // `(N logo)` — le NOMBRE puis la MARQUE, dans une capsule allongée
-            // (directive porteur 2026-09-09). Deux changements, une raison
-            // commune : ce jeton nomme une monnaie de Meeshy, pas une
-            // décoration.
+            // `(N pièce)` — le NOMBRE puis la MONNAIE, dans une capsule allongée
+            // (directive porteur 2026-09-09).
             //
-            // Le glyphe était `medal.fill`, un symbole SYSTÈME : il disait
-            // « récompense » en général, quand il fallait dire « Meesh ». Le
-            // logo de la marque vivait pourtant dans les assets sans qu'AUCUN
-            // code Swift ne le monte — un actif orphelin, présent et jamais
-            // servi.
+            // Le glyphe a changé deux fois, et pour la même raison. `medal.fill`
+            // disait « récompense » en général ; le logo Meeshy (2026-09-09)
+            // disait « marque ». Une Meesh est une MONNAIE : la pièce d'argent
+            // (directive porteur 2026-09-14, #6427) est le premier glyphe qui
+            // dit ce qu'est la chose.
             //
             // Et la capsule était serrée à 10 pt : le nombre y touchait ses
             // bords, ce qui la faisait lire comme un badge de compteur plutôt
@@ -47,17 +45,7 @@ struct ProgressionMeeshEntry: View {
                 Text("\(meesh.balance)")
                     .font(MeeshyFont.relative(17, weight: .bold, design: .rounded))
                     .monospacedDigit()
-                // **Le logo garde SES couleurs.** `renderingMode(.template)`
-                // le rendait en carré plein orange : le PNG porte un canal
-                // alpha, mais il est OPAQUE partout — le fond fait partie du
-                // dessin. Teinté, un logo à fond plein devient un rectangle
-                // uni, et l'identité qu'on voulait montrer disparaît
-                // exactement là où on la mettait.
-                Image("MeeshyLogo")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 20, height: 20)
-                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                MeeshCoinGlyph(size: 20)
             }
             .foregroundColor(tint)
             .padding(.horizontal, 14)
@@ -94,6 +82,31 @@ struct ProgressionMeeshEntry: View {
     }
 }
 
+/// LA PIÈCE D'ARGENT des Meeshes (#6427).
+///
+/// Même tracé que le web (`coin-fill` de Phosphor, `PROGRESSION_GLYPHS.coinFill`) :
+/// même geste, même icône sur les deux plateformes. L'actif est un VECTEUR en
+/// GABARIT. Le logo qu'il remplace était un PNG opaque, qu'on ne pouvait pas
+/// teinter sans le changer en carré plein ; la pièce, elle, prend l'argent de
+/// `MeeshyColors.meeshSilver`, et sa couleur propre l'emporte sur l'ambre que
+/// la capsule donne à son contenu.
+///
+/// Décoratif : le solde est dit par le libellé de l'entrée qui la porte.
+struct MeeshCoinGlyph: View {
+    static let assetName = "MeeshCoin"
+    let size: CGFloat
+
+    var body: some View {
+        Image(Self.assetName)
+            .renderingMode(.template)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: size, height: size)
+            .foregroundColor(MeeshyColors.meeshSilver)
+            .accessibilityHidden(true)
+    }
+}
+
 /// LE CONTENU du sous-menu, séparé de son bouton.
 ///
 /// Deux raisons, et la seconde compte plus : l'état d'OUVERTURE est une affaire
@@ -110,16 +123,12 @@ struct ProgressionMeeshDetail: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            // L'EN-TÊTE du menu — le logo et le mot. Le panneau s'ouvrait sur un
+            // L'EN-TÊTE du menu — la pièce et le mot. Le panneau s'ouvrait sur un
             // solde nu : hors du bouton qui l'a ouvert, plus rien ne disait de
             // quelle monnaie on parlait, et « 3 Meesh » devait porter seul à la
             // fois le nom et le chiffre.
             HStack(spacing: 6) {
-                Image("MeeshyLogo")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 16, height: 16)
-                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                MeeshCoinGlyph(size: 16)
                 Text(ProgressionCopy.meeshEntryTitle)
                     .font(.caption2.weight(.semibold))
                     .textCase(.uppercase)

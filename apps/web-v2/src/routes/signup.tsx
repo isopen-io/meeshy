@@ -11,7 +11,14 @@ import { auth, isPhoneConflict } from '@/lib/api/auth';
 import { countryName, type Country } from '@/lib/countries';
 import { sessionStore } from '@/lib/api/session';
 import { useOnline } from '@/lib/net/online';
-import { canSubmit, composeRegisterBody, emptySignupForm, type SignupFormState } from '@/lib/signup-form';
+import {
+  PASSWORD_MIN,
+  canSubmit,
+  composeRegisterBody,
+  emptySignupForm,
+  hasPassword,
+  type SignupFormState,
+} from '@/lib/signup-form';
 import { placeSignupFailure, type SignupFeedback, type SignupField } from '@/lib/view/auth-feedback';
 import { Link, href, navigate } from '@/routes/route-table';
 
@@ -248,9 +255,19 @@ export default function SignupScreen() {
             ) : null}
           </div>
 
+          {/* LE MOT DE PASSE EST FACULTATIF (#6424). Le libellé le DIT, et la
+              note en dessous dit ce qui se passe sans lui — sans quoi laisser
+              le champ vide serait un geste qu'on ne pose que par accident.
+              La note disparaît dès qu'un mot de passe est tapé : elle décrit
+              alors un état qui n'est plus celui du formulaire.
+
+              Le gabarit lit `PASSWORD_MIN`, jamais un littéral : celui qui
+              vivait ici annonçait « 12 caractères minimum » alors que la borne
+              était passée à 6 — exactement le défaut que le doc-comment de
+              `PASSWORD_MIN` dit vouloir empêcher. */}
           <Field
             id="signup-password"
-            label="Mot de passe"
+            label="Mot de passe (facultatif)"
             tint={INDIGO_TINT}
             focused={focused === 'password'}
             error={feedback.fieldErrors.password}
@@ -264,7 +281,7 @@ export default function SignupScreen() {
                 onChange={(e) => patch({ password: e.currentTarget.value })}
                 onFocus={() => setFocused('password')}
                 onBlur={() => setFocused(null)}
-                placeholder="12 caractères minimum"
+                placeholder={`${PASSWORD_MIN} caractères minimum`}
                 className="w-full bg-transparent py-3 text-input outline-none"
                 aria-describedby={describedBy}
                 aria-invalid={describedBy !== undefined}
@@ -272,6 +289,13 @@ export default function SignupScreen() {
               />
             )}
           </Field>
+
+          {!hasPassword(form.password) ? (
+            <p data-signup-magic-link-note className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+              Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un
+              plus tard.
+            </p>
+          ) : null}
 
           {/* LA PASTILLE LIT LE MÊME CATALOGUE QUE LA FEUILLE (correction de
               revue, défaut 2) : `getLanguageInfo` (`@meeshy/shared`), les 83

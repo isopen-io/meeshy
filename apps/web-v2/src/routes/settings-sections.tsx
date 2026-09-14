@@ -551,7 +551,20 @@ export function DataSection({ language, legacyReachable }: { readonly language: 
   );
 }
 
-export function ToolsSection({ language }: { readonly language: InterfaceLanguage }) {
+/**
+ * `showAdmin` — l'ENTRÉE de l'espace d'administration (#6432).
+ *
+ * Elle n'apparaît que pour qui y a droit, et le droit vient du SERVEUR
+ * (`GET /me/permissions`, résolu par l'écran hôte) : `SessionUser` ne projette
+ * pas `role`, donc rien ici ne peut le déduire.
+ *
+ * **Cacher la rangée n'est PAS la garde.** L'écran `/admin` refait la lecture
+ * pour lui-même — on y entre aussi par un lien profond, et une porte gardée
+ * seulement par l'absence de son bouton n'est pas gardée. Cette rangée ne fait
+ * que la DÉCOUVERTE ; c'est la raison pour laquelle son absence, en cas
+ * d'erreur réseau, ne coûte qu'un chemin d'accès et jamais une fuite.
+ */
+export function ToolsSection({ language, showAdmin = false }: { readonly language: InterfaceLanguage; readonly showAdmin?: boolean }) {
   return (
     <GroupedSection id="settings-tools" title={upper(language, 'settings.section.tools')} icon={SECTION_ICON({ set: 'ecran', name: 'wrench' })}>
       <Link to="progression" data-settings-progression className={ROW_CLASS} style={ROW_STYLE}>
@@ -561,6 +574,15 @@ export function ToolsSection({ language }: { readonly language: InterfaceLanguag
         <RowText label={translate(language, 'settings.tools.progression')} />
         <Chevron />
       </Link>
+      {showAdmin ? (
+        <Link to="admin" data-settings-admin className={ROW_CLASS} style={ROW_STYLE}>
+          <RowIcon tint="var(--color-ios-brand)">
+            <Glyph name="key" size={15} />
+          </RowIcon>
+          <RowText label={translate(language, 'admin.title')} />
+          <Chevron />
+        </Link>
+      ) : null}
     </GroupedSection>
   );
 }

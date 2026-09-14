@@ -308,6 +308,8 @@ const SEMANTIQUES = [
   ['neutral400', '--ios-neutral-400'],
   ['neutral500', '--ios-neutral-500'],
   ['neutral600', '--ios-neutral-600'],
+  // L'argent de la pièce Meesh (#6427) — le web ne le recopie pas.
+  ['meeshSilver', '--ios-meesh-silver'],
 ];
 const semantiques = SEMANTIQUES.map(([swift, css]) => {
   if (!constantes.has(swift)) echoue(`constante attendue absente : ${swift}`);
