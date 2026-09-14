@@ -1,25 +1,34 @@
 import SwiftUI
 import MeeshyUI
 
-/// **Les deux écrans du « rien à montrer », côte à côte.**
+/// **Les écrans du « rien à montrer », côte à côte.**
 ///
 /// Ils vivent ensemble parce que c'est leur DIFFÉRENCE qui porte la règle :
 /// même silhouette, mais une disparition n'appelle pas la même action qu'un
-/// échec réseau. Les séparer laisserait l'un dériver sans que l'autre rougisse
-/// — et c'est exactement ce qui s'était produit, l'écran d'indisponibilité
-/// servant les deux causes pendant que le ViewModel les distinguait déjà.
+/// échec — et un échec serveur ne se raconte pas comme un échec réseau (#6508).
 ///
 /// Le choix entre eux n'est pas ici : il est dans `PostDetailAbsenceReason`,
-/// pur et testé. Ces vues ne décident de rien, elles rendent.
+/// pur et testé. Les mots, l'icône et l'offre de réessai viennent de
+/// `ContentFetchFailure+Copy`, partagé avec la cible story et le lecteur de
+/// réels. Ces vues ne décident de rien, elles rendent.
 ///
 /// Extrait de `PostDetailView.swift` — le budget de fichier interdit d'ajouter
 /// à un fichier déjà hors budget, donc on extrait AVANT d'ajouter (#4903).
 extension PostDetailView {
 
+    /// L'état rendu quand il n'y a ni post ni chargement en cours.
+    @ViewBuilder
+    var absenceState: some View {
+        switch PostDetailAbsenceReason.resolve(hasPost: false, isLoading: false, failure: viewModel.loadFailure) {
+        case .networkFailed:
+            loadFailedState(.network)
+        case .serverFailed:
+            loadFailedState(.server)
+        case .present, .stillLoading, .unavailable:
+            unavailableState
+        }
+    }
 
-    /// Contenu introuvable : expiré, retiré, ou jamais accessible à cette
-    /// personne. On ne distingue pas — le serveur répond la même chose dans les
-    /// trois cas, et prétendre le contraire serait inventer.
     /// **Un échec de chargement n'est pas une disparition.**
     ///
     /// Même silhouette que `unavailableState` — l'utilisateur reconnaît l'écran
@@ -27,27 +36,20 @@ extension PostDetailView {
     /// chose qui puisse aider est de refaire la requête. Le bouton « Retour »
     /// reste en second, jamais en premier : partir est le repli, pas le geste
     /// attendu.
-    var loadFailedState: some View {
+    func loadFailedState(_ cause: ContentFetchFailure) -> some View {
         VStack(spacing: 12) {
-            Image(systemName: "wifi.exclamationmark")
+            Image(systemName: cause.symbolName)
                 // `MeeshyFont.relative` et non `.system(size:)` : une icône
                 // d'état vide n'a pas de cadre fixe, donc rien ne justifie
-                // qu'elle ignore Dynamic Type. La taille figée venait de
-                // l'ancien site, où elle bénéficiait d'une amnistie de dette —
-                // **l'extraction la lui a fait perdre**, et c'est juste : le
-                // code arrive dans un fichier NEUF, où la règle s'applique
-                // pleine. Extraire fait franchir au code deux frontières
-                // invisibles : les gardes qui nomment un fichier, et l'amnistie.
+                // qu'elle ignore Dynamic Type.
                 .font(MeeshyFont.relative(40))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
-            Text(String(localized: "feed.post.detail.loadFailed.title",
-                        defaultValue: "Impossible de charger ce contenu", bundle: .main))
+            Text(cause.title)
                 .font(MeeshyFont.relative(17, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
-            Text(String(localized: "feed.post.detail.loadFailed.body",
-                        defaultValue: "Vérifiez votre connexion, puis réessayez.", bundle: .main))
+            Text(cause.message)
                 .font(MeeshyFont.relative(14))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -75,21 +77,20 @@ extension PostDetailView {
         .accessibilityElement(children: .contain)
     }
 
-
-
+    /// Contenu introuvable ou interdit : expiré, retiré, ou jamais accessible à
+    /// cette personne. On ne distingue pas — l'utilisateur n'a rien de
+    /// différent à faire, et prétendre savoir lequel serait inventer.
     var unavailableState: some View {
         VStack(spacing: 12) {
-            Image(systemName: "clock.badge.xmark")
+            Image(systemName: ContentFetchFailure.notFound.symbolName)
                 .font(MeeshyFont.relative(40))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
-            Text(String(localized: "feed.post.detail.unavailable.title",
-                        defaultValue: "Ce contenu n'est plus disponible", bundle: .main))
+            Text(ContentFetchFailure.notFound.title)
                 .font(MeeshyFont.relative(17, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
-            Text(String(localized: "feed.post.detail.unavailable.body",
-                        defaultValue: "Il a peut-être expiré ou été retiré par son auteur.", bundle: .main))
+            Text(ContentFetchFailure.notFound.message)
                 .font(MeeshyFont.relative(14))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)

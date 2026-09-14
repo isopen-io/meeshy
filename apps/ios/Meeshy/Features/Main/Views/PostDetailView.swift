@@ -845,13 +845,7 @@ struct PostDetailView: View {
                 // suppression qui n'a pas eu lieu et n'offre que « Retour »,
                 // retirant la seule action utile : réessayer (#4903).
                 Spacer()
-                if PostDetailAbsenceReason.resolve(hasPost: false,
-                                                   isLoading: false,
-                                                   error: viewModel.error) == .loadFailed {
-                    loadFailedState
-                } else {
-                    unavailableState
-                }
+                absenceState
                 Spacer()
             }
 
