@@ -130,7 +130,6 @@ import {
   updateUserProfile,
   updateUserAvatar,
   updateUserBanner,
-  updateUserPassword,
   updateUsername,
   getUserByUsername,
   getUserById,
@@ -238,7 +237,7 @@ async function buildApp(opts: {
   const {
     authenticated = true,
     prisma = makePrisma(),
-    routes = [updateUserProfile, updateUserAvatar, updateUserBanner, updateUserPassword, updateUsername, getUserByUsername, getUserById, getUserByEmail, getUserByIdDedicated, getUserByPhone],
+    routes = [updateUserProfile, updateUserAvatar, updateUserBanner, updateUsername, getUserByUsername, getUserById, getUserByEmail, getUserByIdDedicated, getUserByPhone],
     withNotificationService = false,
     withSocketIOHandler = false,
   } = opts;
@@ -723,96 +722,14 @@ describe('PATCH /users/me/banner — service error', () => {
   });
 });
 
-// ─── PATCH /users/me/password ─────────────────────────────────────────────────
-
-describe('PATCH /users/me/password — unauthenticated', () => {
-  it('returns 401 when no auth context', async () => {
-    const app = await buildApp({ authenticated: false, routes: [updateUserPassword] });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'oldpassword', newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
-    });
-    expect(res.statusCode).toBe(401);
-    await app.close();
-  });
-});
-
-describe('PATCH /users/me/password — user not found', () => {
-  it('returns 404 when user does not exist', async () => {
-    const prisma = makePrisma({
-      user: {
-        findUnique: jest.fn<any>().mockResolvedValue(null),
-        update: jest.fn<any>().mockResolvedValue(mockUser),
-      },
-    });
-    const app = await buildApp({ routes: [updateUserPassword], prisma });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'oldpassword', newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
-    });
-    expect(res.statusCode).toBe(404);
-    await app.close();
-  });
-});
-
-describe('PATCH /users/me/password — wrong current password', () => {
-  it('returns 400 when current password is incorrect', async () => {
-    mockBcryptCompare.mockResolvedValueOnce(false);
-    const app = await buildApp({ routes: [updateUserPassword] });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'wrongpassword', newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
-    });
-    expect(res.statusCode).toBe(400);
-    await app.close();
-  });
-});
-
-describe('PATCH /users/me/password — success', () => {
-  it('returns 200 when password is updated', async () => {
-    mockBcryptCompare.mockResolvedValueOnce(true);
-    const app = await buildApp({ routes: [updateUserPassword] });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'correctpassword', newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-    await app.close();
-  });
-});
-
-describe('PATCH /users/me/password — success with notification', () => {
-  it('returns 200 and fires notification', async () => {
-    mockBcryptCompare.mockResolvedValueOnce(true);
-    const app = await buildApp({ routes: [updateUserPassword], withNotificationService: true });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'correctpassword', newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-});
-
-describe('PATCH /users/me/password — service error', () => {
-  it('returns 500 when update throws', async () => {
-    mockBcryptCompare.mockResolvedValueOnce(true);
-    const prisma = makePrisma({
-      user: {
-        findUnique: jest.fn<any>().mockResolvedValue({ id: USER_ID, password: '$2b$12$hashed' }),
-        update: jest.fn<any>().mockRejectedValue(new Error('DB error')),
-      },
-    });
-    const app = await buildApp({ routes: [updateUserPassword], prisma });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me/password',
-      payload: { currentPassword: 'correctpassword', newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
-    });
-    expect(res.statusCode).toBe(500);
-    await app.close();
-  });
-});
+// `PATCH /users/me/password` a son propre fichier —
+// `profile-password-change.test.ts` (comportement général),
+// `profile-password-strength.test.ts` (force du mot de passe) et
+// `profile-password-session-revocation.test.ts` (révocation des autres
+// sessions, #6435). Ce fichier était déjà hors budget de taille (#4426) ;
+// les y laisser aurait exigé d'y AJOUTER les mocks de session que #6435
+// requiert, ce que la règle interdit tant qu'un fichier hors budget n'a pas
+// été découpé.
 
 // ─── PATCH /users/me/username ─────────────────────────────────────────────────
 

@@ -90,6 +90,19 @@ jest.mock('@meeshy/shared/utils/validation', () => ({
   updateUsernameSchema: { parse: jest.fn((b: any) => b) },
 }));
 
+// #6435 — updateUserPassword relève et coupe désormais les AUTRES sessions.
+// Ce fichier ne teste pas ce comportement (voir
+// profile-password-session-revocation.test.ts) : une liste vide n'a personne
+// à couper.
+jest.mock('../../../../services/SessionService', () => ({
+  getUserSessions: jest.fn<any>().mockResolvedValue([]),
+  invalidateAllSessions: jest.fn<any>().mockResolvedValue(0),
+}));
+
+jest.mock('../../../../socketio/disconnectSession', () => ({
+  disconnectSession: jest.fn<any>().mockResolvedValue(undefined),
+}));
+
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
   userSchema: {},
   userMinimalSchema: {},
