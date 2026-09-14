@@ -64,7 +64,11 @@ async function main(): Promise<void> {
 
     const tries = [...rapport.accounts].sort((a, b) => b.plan.scoreBefore - a.plan.scoreBefore);
     tries.forEach(({ role, status, plan }, rang) => {
-      const touche = plan.counterWrites.length > 0 || plan.score !== null || plan.levelsToEngrave.length > 0;
+      const touche =
+        plan.counterWrites.length > 0 ||
+        plan.score !== null ||
+        plan.levelsToEngrave.length > 0 ||
+        plan.levelsToErase.length > 0;
       if (!touche) return;
       console.log(
         [
@@ -76,6 +80,7 @@ async function main(): Promise<void> {
           `réparti ${signe(plan.distributedPoints)}`,
           plan.undistributed > 0 ? `NON RÉPARTI ${plan.undistributed}` : '',
           plan.levelsToEngrave.length > 0 ? `paliers ${plan.levelsToEngrave.join(',')}` : '',
+          plan.levelsToErase.length > 0 ? `niveaux éteints ${plan.levelsToErase.join(',')}` : '',
           `frappe ${oui(plan.canMintBefore)}→${oui(plan.canMintAfter)}`,
           `[${status}]`,
         ]
@@ -88,7 +93,7 @@ async function main(): Promise<void> {
     console.log(
       `\n${t.accounts} comptes · ${t.accountsWithWrites} à écrire · ${t.counterWrites} lignes` +
         ` · rempli +${t.filledPoints} · réparti +${t.distributedPoints} · ${t.scoresAligned} scores alignés` +
-        ` · ${t.levelsToEngrave} paliers · ${t.undistributedAccounts} restes non répartis` +
+        ` · ${t.levelsToEngrave} paliers · ${t.levelsToErase} niveaux éteints · ${t.undistributedAccounts} restes non répartis` +
         ` · frappe possible ${t.canMintBefore}→${t.canMintAfter}` +
         (APPLY ? ` · ${t.moved} comptes abandonnés (valeur bougée — relancer)` : '\nRelancer avec --apply pour écrire.'),
     );

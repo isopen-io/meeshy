@@ -37,6 +37,13 @@
  *    sans les avoir gravés — même doctrine que #5742 : une bannière « Niveau 4
  *    atteint » des semaines après le fait ne veut rien dire.
  *
+ * 4. **Éteindre** les paliers de niveau gravés AU-DESSUS du score final (#6465).
+ *    Une frappe antérieure au correctif débitait le score sans retirer ces
+ *    lignes ; le niveau les comptait pendant que la barre lisait le score
+ *    (« Niveau 3 · 1 point · encore 9 points avant le niveau 4 », staging,
+ *    2026-09-14). Le score ne descend que par une frappe : un palier au-dessus
+ *    de lui ne peut venir que de là.
+ *
  * La loi est IDEMPOTENTE : rejouée sur l'état qu'elle a produit, elle n'écrit
  * plus rien. Un passage interrompu se termine donc en le relançant.
  */
@@ -60,6 +67,7 @@ export type PointsBackfillTotals = {
   readonly distributedPoints: number;
   readonly scoresAligned: number;
   readonly levelsToEngrave: number;
+  readonly levelsToErase: number;
   readonly undistributedAccounts: number;
   readonly canMintBefore: number;
   readonly canMintAfter: number;
@@ -128,8 +136,17 @@ async function appliquerCompte(prisma: PrismaClient, userId: string, plan: Point
       if (!estP2002(err)) throw err;
     }
   }
+  if (plan.levelsToErase.length > 0) {
+    await prisma.engagementMilestone.deleteMany({
+      where: { userId, milestoneType: 'level', milestoneKey: { in: plan.levelsToErase.map(levelMilestoneKey) } },
+    });
+  }
   return true;
 }
+
+/** Vrai si le plan écrit quoi que ce soit — la même question pour le statut et pour les totaux. */
+const aDesEcritures = (plan: PointsBackfillPlan): boolean =>
+  plan.counterWrites.length > 0 || plan.score !== null || plan.levelsToEngrave.length > 0 || plan.levelsToErase.length > 0;
 
 /** Les axes qu'une frappe a débités, lus dans `MeeshLedger.meta.debits` — un `Json`, donc lu défensivement. */
 const axesDebites = (meta: unknown): string[] => {
@@ -175,10 +192,9 @@ export async function backfillEngagementPoints(
       },
       rules,
     );
-    const aEcrire = plan.counterWrites.length > 0 || plan.score !== null || plan.levelsToEngrave.length > 0;
     const status: PointsBackfillStatus = !options.apply
       ? 'simulated'
-      : !aEcrire
+      : !aDesEcritures(plan)
         ? 'unchanged'
         : (await appliquerCompte(prisma, compte.id, plan))
           ? 'applied'
@@ -194,14 +210,13 @@ export async function backfillEngagementPoints(
     accounts,
     totals: {
       accounts: accounts.length,
-      accountsWithWrites: compter(
-        ({ plan }) => plan.counterWrites.length > 0 || plan.score !== null || plan.levelsToEngrave.length > 0,
-      ),
+      accountsWithWrites: compter(({ plan }) => aDesEcritures(plan)),
       counterWrites: additionner(({ plan }) => plan.counterWrites.length),
       filledPoints: additionner(({ plan }) => plan.filledPoints),
       distributedPoints: additionner(({ plan }) => plan.distributedPoints),
       scoresAligned: compter(({ plan }) => plan.score !== null),
       levelsToEngrave: additionner(({ plan }) => plan.levelsToEngrave.length),
+      levelsToErase: additionner(({ plan }) => plan.levelsToErase.length),
       undistributedAccounts: compter(({ plan }) => plan.undistributed > 0),
       canMintBefore: compter(({ plan }) => plan.canMintBefore),
       canMintAfter: compter(({ plan }) => plan.canMintAfter),
@@ -243,6 +258,8 @@ export type PointsBackfillPlan = {
   readonly counterWrites: readonly PointsBackfillCounterWrite[];
   readonly score: { readonly from: number; readonly to: number } | null;
   readonly levelsToEngrave: readonly number[];
+  /** Les paliers de niveau gravés au-dessus du score final — à éteindre (#6465). */
+  readonly levelsToErase: readonly number[];
   readonly scoreBefore: number;
   readonly scoreAfter: number;
   readonly pointsBefore: number;
@@ -314,6 +331,7 @@ export function planEngagementPointsBackfill(
       .map((l) => ({ counterId: l.id, axisKey: l.axisKey, from: l.lu, to: l.points, filled: l.filled })),
     score: ecart < 0 ? { from: account.score, to: scoreAfter } : null,
     levelsToEngrave: rules.levelThresholds.filter((seuil) => seuil <= scoreAfter && !graves.has(levelMilestoneKey(seuil))),
+    levelsToErase: rules.levelThresholds.filter((seuil) => seuil > scoreAfter && graves.has(levelMilestoneKey(seuil))),
     scoreBefore: account.score,
     scoreAfter,
     pointsBefore,

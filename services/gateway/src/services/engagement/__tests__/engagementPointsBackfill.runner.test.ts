@@ -33,12 +33,17 @@ function fausseBase(params: {
 }) {
   const commandes: Commande[] = [];
   const paliersCrees: { userId: string; milestoneKey: string }[] = [];
+  const paliersEteints: unknown[] = [];
   const prisma = {
     engagementCounter: { findMany: async () => params.compteurs },
     user: { findMany: async () => params.comptes },
     meeshLedger: { findMany: async () => params.frappes ?? [] },
     engagementMilestone: {
       findMany: async () => params.paliers ?? [],
+      deleteMany: async (args: { where: unknown }) => {
+        paliersEteints.push(args.where);
+        return { count: 1 };
+      },
       create: async (args: { data: { userId: string; milestoneKey: string } }) => {
         if ((params.paliersDejaGraves ?? []).includes(args.data.milestoneKey)) {
           throw Object.assign(new Error('unique'), { code: 'P2002' });
@@ -52,7 +57,7 @@ function fausseBase(params: {
       return { ok: 1, n: params.trouve ? params.trouve(commande) : 1, nModified: 1 };
     },
   };
-  return { prisma: prisma as unknown as PrismaClient, commandes, paliersCrees };
+  return { prisma: prisma as unknown as PrismaClient, commandes, paliersCrees, paliersEteints };
 }
 
 /** Un compte comme celui mesuré sur staging : des actions, aucun point, un score crédité. */
@@ -149,6 +154,36 @@ describe('backfillEngagementPoints — application', () => {
 
     expect(paliersCrees).toEqual([{ userId: UN, milestoneKey: 'level:150' }]);
     expect(rapport.accounts[0]!.status).toBe('applied');
+  });
+
+  it('éteint les niveaux gravés au-dessus du score, en UNE commande bornée au compte et aux seules clés visées (#6465)', async () => {
+    const { prisma, paliersEteints } = fausseBase({
+      compteurs: [{ id: 'a', userId: UN, axisKey: 'content.text_message', count: 3, points: 1 }],
+      comptes: [{ id: UN, engagementScore: 1, role: 'USER' }],
+      frappes: [{ userId: UN, meta: { debits: [{ axisKey: 'content.text_message', points: 727, count: 78 }] } }],
+      paliers: [
+        { userId: UN, milestoneKey: 'level:10' },
+        { userId: UN, milestoneKey: 'level:150' },
+      ],
+    });
+
+    const rapport = await backfillEngagementPoints(prisma, REGLES, { apply: true });
+
+    expect(paliersEteints).toEqual([{ userId: UN, milestoneType: 'level', milestoneKey: { in: ['level:10', 'level:150'] } }]);
+    expect(rapport.accounts[0]!.status).toBe('applied');
+    expect(rapport.totals).toMatchObject({ accountsWithWrites: 1, levelsToErase: 2 });
+  });
+
+  it('en simulation, aucun niveau n’est éteint', async () => {
+    const { prisma, paliersEteints } = fausseBase({
+      compteurs: [{ id: 'a', userId: UN, axisKey: 'content.text_message', count: 3, points: 1 }],
+      comptes: [{ id: UN, engagementScore: 1, role: 'USER' }],
+      paliers: [{ userId: UN, milestoneKey: 'level:10' }],
+    });
+
+    await backfillEngagementPoints(prisma, REGLES, { apply: false });
+
+    expect(paliersEteints).toEqual([]);
   });
 
   it('les totaux comptent les comptes qui peuvent frapper avant et après', async () => {

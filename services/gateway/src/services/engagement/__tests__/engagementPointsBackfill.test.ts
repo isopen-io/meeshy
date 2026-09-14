@@ -50,7 +50,10 @@ const appliquer = (avant: PointsBackfillAccount, plan: PointsBackfillPlan): Poin
     const ecrit = plan.counterWrites.find((w) => w.counterId === c.id);
     return ecrit ? { ...c, points: ecrit.to } : c;
   }),
-  engravedLevelKeys: [...avant.engravedLevelKeys, ...plan.levelsToEngrave.map(levelMilestoneKey)],
+  engravedLevelKeys: [
+    ...avant.engravedLevelKeys.filter((cle) => !plan.levelsToErase.map(levelMilestoneKey).includes(cle)),
+    ...plan.levelsToEngrave.map(levelMilestoneKey),
+  ],
 });
 
 const ecritSur = (plan: PointsBackfillPlan, axe: string) => plan.counterWrites.find((w) => w.axisKey === axe);
@@ -172,6 +175,39 @@ describe('planEngagementPointsBackfill — l’invariant score == Σ points', ()
     expect(plan.counterWrites).toEqual([]);
     expect(plan.score).toBeNull();
     expect(plan.levelsToEngrave).toEqual([]);
+  });
+
+  /**
+   * Le compte de staging APRÈS sa première frappe réelle (2026-09-14) : score 1,
+   * Σ points 1, et trois paliers de niveau gravés au-dessus. L'écran disait
+   * « Niveau 3 · 1 point · encore 9 points avant le niveau 4 » (#6465).
+   */
+  it('après une frappe, les niveaux gravés au-dessus du score s’éteignent, et seulement eux', () => {
+    const texte = axeDe('content', 1);
+    const avant = compte({
+      score: 1,
+      counters: [ligne(texte, 3, 1)],
+      mintedAxes: [texte],
+      engravedLevelKeys: ['level:10', 'level:50', 'level:150'],
+    });
+
+    const plan = planEngagementPointsBackfill(avant, REGLES);
+
+    expect(plan.levelsToErase).toEqual([10, 50, 150]);
+    expect(plan.levelsToEngrave).toEqual([]);
+    expect(plan.counterWrites).toEqual([]);
+    expect(plan.score).toBeNull();
+    expect(planEngagementPointsBackfill(appliquer(avant, plan), REGLES).levelsToErase).toEqual([]);
+  });
+
+  it('un niveau que le score couvre reste gravé', () => {
+    const texte = axeDe('content', 1);
+    const plan = planEngagementPointsBackfill(
+      compte({ score: 60, counters: [ligne(texte, 20, 60)], engravedLevelKeys: ['level:10', 'level:50'] }),
+      REGLES,
+    );
+
+    expect(plan.levelsToErase).toEqual([]);
   });
 
   it('est IDEMPOTENTE : rejouée sur l’état qu’elle a produit, elle n’écrit plus rien', () => {
