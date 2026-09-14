@@ -671,6 +671,18 @@ jobs:
           cd apps/web-v2
           node scripts/check-links.mjs
 
+      # #6457 — les Réels : le bouton de l'en-tête du Flux, un réel touché ouvre
+      # le lecteur SUR lui depuis le cache (sans squelette, sans disque), un seul
+      # réel joue, un balayage tactile accroche le suivant puis le précédent, le
+      # clavier aussi, « J'aime » se voit au retour dans le Flux, le texte blanc
+      # tient AA au pixel, le retour ne laisse aucun lecteur ; hors ligne chaud
+      # et froid, lien profond, mouvement réduit (deux schémas, deux gabarits).
+      - name: Gate Réels (lecteur plein écran, balayage, lecture unique, retour)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-reels.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |

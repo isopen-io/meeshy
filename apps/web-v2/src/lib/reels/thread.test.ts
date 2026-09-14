@@ -10,6 +10,7 @@ import {
   neighborIndex,
   pageModeOf,
   playbackIntentOf,
+  reelDisplayOf,
   shouldLoadMoreReels,
 } from './thread';
 
@@ -127,6 +128,24 @@ describe('neighborIndex — les flèches du clavier valent le balayage', () => {
     expect(neighborIndex({ index: 2, direction: 'next', count: 3 })).toBe(2);
     expect(neighborIndex({ index: 1, direction: 'previous', count: 3 })).toBe(0);
     expect(neighborIndex({ index: 0, direction: 'previous', count: 3 })).toBe(0);
+  });
+});
+
+describe('reelDisplayOf — la scène montre ce qui se lit, la vidéo d’abord', () => {
+  const m = (id: string, kind: string) => ({ id, kind });
+
+  test('la vidéo gagne sur les images, même rangée après elles', () => {
+    expect(reelDisplayOf([m('i1', 'image'), m('v1', 'video')])).toEqual({ kind: 'video', media: m('v1', 'video') });
+  });
+
+  test('l’audio passe avant les images', () => {
+    expect(reelDisplayOf([m('i1', 'image'), m('a1', 'audio')])).toEqual({ kind: 'audio', media: m('a1', 'audio') });
+  });
+
+  test('les images se parcourent toutes, dans leur ordre ; un fichier illisible ne se montre pas', () => {
+    expect(reelDisplayOf([m('i1', 'image'), m('f1', 'other'), m('i2', 'image')])).toEqual({ kind: 'images', images: [m('i1', 'image'), m('i2', 'image')] });
+    expect(reelDisplayOf([m('f1', 'other')])).toEqual({ kind: 'none' });
+    expect(reelDisplayOf([])).toEqual({ kind: 'none' });
   });
 });
 

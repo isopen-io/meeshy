@@ -440,8 +440,14 @@ emit({
  * sert les DEUX fleches du carrousel de FeedPostCardCarousel -- `caret-left`
  * N'Y ENTRE PAS : il est deja au SOCLE (`caretLeft`, retour de l'en-tete), le
  * dupliquer paierait ses octets deux fois au meme demarrage.
+ *
+ * `monitor-play` (#6457) : le bouton « Lancer les Reels » de l'en-tete du fil,
+ * miroir de `play.rectangle.on.rectangle.fill` (`FeedView.swift`) -- un cadre
+ * d'ecran qui porte le triangle de lecture, la meme idee que le symbole iOS.
+ * Le lecteur des Reels relit ce MEME jeu (coeur, signet, partage, onde) plutot
+ * que d'en recopier les traces dans un jeu a lui.
  */
-const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right'];
+const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play'];
 
 emit({
   ids: FEED,
