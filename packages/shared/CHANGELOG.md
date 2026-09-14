@@ -1,5 +1,29 @@
 # @meeshy/shared
 
+## 1.20.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la borne de mot de passe DÉCLARÉE redevient atteignable (#6436) (#6446)
+  - rester sous le budget de taille de PasswordResetService.test.ts
+  - changer son mot de passe révoque les autres sessions (#6435)
+  - la borne de mot de passe DÉCLARÉE redevient atteignable (#6436)
+  - l'accolade orpheline qui cassait MagicLinkService, et la garde nommée pour un champ qui mesurait tout l'écran (#6424)
+  - Release publie pour les plateformes de Docker — plus d'étage arm64 émulé (#6442)
+  - les clients offrent l'inscription par adresse seule — le mot de passe devient un choix (#6424, #6441)
+  - l'entrée Meesh montre une pièce d'argent, plus le logo Meeshy (#6427)
+  - `hasPassword` rejoint la forme SERVIE par /me, et le témoin du lien magique quitte un fichier hors budget (#6424)
+  - les onglets de Découvrir se parcourent aux flèches du clavier (#6430)
+  - la Meesh se montre en pièce d'argent sur le web — jeton meeshSilver dérivé de MeeshyColors (#6427)
+  - l'espace d'administration est SERVI par la v2, fail-closed (#6432)
+  - une Meesh frappée apparaît au solde — les totaux se lisent au registre (#6428)
+  - le premier e-mail d'un compte lui DIT son identité, et la porte qu'il a (#6424)
+  - un compte peut naître d'une adresse seule, et vivre sans mot de passe (#6424)
+  - le bouton « Mettre à jour » restait GRIS pour un compte sans mot de passe (#6424)
+  - un e-mail suffit à nommer un compte — pseudo et nom affichés dérivés de sa partie locale (#6424)
+
 ## 1.19.5
 
 ### Patch Changes
