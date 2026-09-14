@@ -200,14 +200,37 @@ final class SignupViewAccessibilityTests: XCTestCase {
 
     // MARK: - Le téléphone n'est pas annoncé facultatif
 
+    /// Le bloc source d'un champ — de sa déclaration au champ suivant.
+    ///
+    /// Le témoin ci-dessous lisait le FICHIER ENTIER. Il portait le nom du
+    /// téléphone, sa documentation parlait du téléphone, et il assérait une
+    /// propriété de tout l'écran : la première fois qu'un AUTRE champ a eu une
+    /// bonne raison de se dire facultatif (#6424, le mot de passe), il a rougi
+    /// pour un champ dont il ne parle pas. Une garde nommée pour une chose et
+    /// mesurée sur une autre finit toujours par accuser la mauvaise.
+    private func fieldBody(_ name: String, in code: String) throws -> String {
+        let start = try XCTUnwrap(code.range(of: "private var \(name): some View {"),
+                                  "champ `\(name)` introuvable dans SignupView")
+        let rest = code[start.upperBound...]
+        let end = rest.range(of: "\n    private var ") ?? rest.range(of: "\n    // MARK:")
+        return String(end == nil ? rest : rest[..<end!.lowerBound])
+    }
+
     /// Il n'est ni requis, ni présenté comme un choix : le NOMMER facultatif
     /// fait croire qu'il y a une décision à prendre. Vide, il est simplement
     /// absent de la charge.
+    ///
+    /// **La règle ne vaut PAS pour le mot de passe** (#6424), et la différence
+    /// est de nature : un numéro absent ne change rien à ce qui suit, un mot de
+    /// passe absent décide de la SEULE porte du compte. Il y a donc une
+    /// décision à prendre, et la taire laisserait la personne l'ignorer — le
+    /// témoin jumeau ci-dessous exige qu'elle soit dite.
     func test_phoneField_isNeverAnnouncedAsOptional() throws {
         let body = try code(Self.signupView)
-        XCTAssertFalse(body.lowercased().contains("facultat"),
+        let phone = try fieldBody("phoneField", in: body)
+        XCTAssertFalse(phone.lowercased().contains("facultat"),
                        "aucun « facultatif » sur le champ téléphone")
-        XCTAssertFalse(body.lowercased().contains("optionnel"),
+        XCTAssertFalse(phone.lowercased().contains("optionnel"),
                        "ni sa variante — le champ vide se suffit")
 
         // L'astérisque se cherche dans ce que l'utilisateur LIT, pas dans le
@@ -220,6 +243,27 @@ final class SignupViewAccessibilityTests: XCTestCase {
             "un astérisque dans la copie marquerait implicitement les AUTRES champs comme "
             + "requis, alors qu'aucun ne l'annonce : \(starred)"
         )
+    }
+
+    // MARK: - Le mot de passe, LUI, est annoncé facultatif — et sa conséquence dite
+
+    /// Un compte peut naître sans mot de passe (#6424) : sa seule porte est
+    /// alors le lien magique. Laisser le champ vide est donc un CHOIX, et un
+    /// choix qu'on ne pose que par accident tant qu'on ignore ce qu'il fait.
+    ///
+    /// Deux exigences, et la seconde compte plus que la première : le libellé
+    /// dit « facultatif », et la note dit ce qui se passe SANS lui. Un champ
+    /// marqué facultatif sans sa conséquence est une case qu'on saute.
+    func test_passwordField_announcesItsOptionalityAndItsConsequence() throws {
+        let body = try code(Self.signupView)
+        let password = try fieldBody("passwordField", in: body)
+
+        XCTAssertTrue(password.lowercased().contains("facultatif"),
+                      "le mot de passe DOIT se dire facultatif — il l'est")
+        XCTAssertTrue(password.contains("magicLinkNote"),
+                      "et la conséquence de son absence DOIT être dite : la porte devient le lien magique")
+        XCTAssertTrue(password.contains("!viewModel.form.hasPassword"),
+                      "la note ne se montre que tant que le champ est VIDE — sinon elle décrit un état révolu")
     }
 
     /// Les `defaultValue:` du fichier — la copie que l'utilisateur lit.

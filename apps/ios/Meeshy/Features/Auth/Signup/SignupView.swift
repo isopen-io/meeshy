@@ -241,7 +241,7 @@ struct SignupView: View {
         fieldBlock(
             field: .password,
             label: String(
-                localized: "auth.signup.password.label.optional",
+                localized: "auth.signup.password.label",
                 defaultValue: "Mot de passe (facultatif)",
                 bundle: .main
             )

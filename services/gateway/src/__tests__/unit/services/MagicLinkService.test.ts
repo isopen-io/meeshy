@@ -384,8 +384,6 @@ describe('MagicLinkService', () => {
         expect(mockEmailService.sendMagicLinkEmail).toHaveBeenCalledTimes(1);
       });
 
-      });
-
       it('should log security event for magic link request', async () => {
         await service.requestMagicLink(validMagicLinkRequest);
 
