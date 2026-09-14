@@ -763,6 +763,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-gateway-build.mjs
 
+      # #6458 — le barreau « Administration » du menu flottant, sur un dist
+      # gateway (l'administration n'a pas de fixtures) : sept barreaux dans
+      # l'écran aux deux poses (deux schémas, 390×844 et 320×568), parcours
+      # clavier et navigation vers /admin sur UNE lecture de la matrice ; six
+      # barreaux sans le droit, sur 403 et en vol ; aucune lecture sans session.
+      - name: Gate barreau Administration du menu flottant (#6458)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-admin-rung.mjs
+
       # #6151 — un seul site résout `apiConfig.source` en dépendances d'appel
       # (`src/lib/api/deps.ts`). Un huitième site qui reconstruirait
       # `{ source: apiConfig.source, … }` divergerait en silence sans ce gate.

@@ -44,10 +44,13 @@ export type FloatingDestination = {
   /**
    * Le NOM, par sa clé de catalogue d'interface (#6206) — jamais un texte : la
    * table est une donnée pure, chaque consommateur le traduit au rendu. Le
-   * type n'admet que la famille `root.menu.*`, celle d'iOS.
+   * type n'admet que la famille `root.menu.*`, celle d'iOS — et `admin.title`,
+   * le nom que l'écran d'administration et la rangée des Réglages portent déjà
+   * (#6458) : une clé `root.menu.admin` aurait été une seconde écriture du
+   * même mot, libre de diverger dans l'une des sept langues.
    */
-  readonly labelKey: Extract<InterfaceCatalogKey, `root.menu.${string}`>;
-  /** La teinte du barreau, reprise d'iOS à l'hexadécimal près. */
+  readonly labelKey: Extract<InterfaceCatalogKey, `root.menu.${string}` | 'admin.title'>;
+  /** La teinte du barreau, reprise d'iOS à l'hexadécimal près — ou un jeton de sa palette dérivée. */
   readonly tint: string;
   readonly glyph: MenuGlyph;
   /**
@@ -127,6 +130,39 @@ export const MENU_LADDER: readonly FloatingDestination[] = [
   SETTINGS_DESTINATION,
 ];
 
+/**
+ * **L'ESPACE D'ADMINISTRATION** (#6458) — une EXTENSION WEB assumée : iOS n'a
+ * pas d'administration, et `RootMenuLadderEntry.swift` n'a donc pas ce `case`.
+ *
+ * - **Le nom** est `admin.title`, celui de l'écran et de la rangée des
+ *   Réglages ; **le glyphe** est `key`, celui de la même rangée — « même mot,
+ *   même icône » (dimension 6), et zéro octet de plus : `key` vit au socle.
+ * - **La teinte** est un jeton de la palette dérivée d'iOS, l'indigo profond de
+ *   la marque : la famille de la rangée des Réglages (`--color-ios-brand`),
+ *   assez sombre pour ne pas se confondre avec « Appels » (indigo 500) au coin
+ *   de l'œil.
+ * - **La place** est la DERNIÈRE, et c'est une décision écrite dans
+ *   `decisions.md` : les six barreaux d'iOS gardent leur rang, donc leur place
+ *   sous le doigt, et la destination la plus rare est la plus lointaine.
+ */
+export const ADMIN_DESTINATION: FloatingDestination = {
+  key: 'admin',
+  route: 'admin',
+  labelKey: 'admin.title',
+  tint: 'var(--ios-indigo-800)',
+  glyph: { set: 'socle', name: 'key' },
+};
+
+/**
+ * **L'échelle que CE lecteur voit.** Sans le droit, `MENU_LADDER` lui-même —
+ * la même référence, les six d'iOS ; avec le droit servi, les six puis
+ * l'administration. Le barreau n'est jamais monté puis masqué : un lien caché
+ * resterait dans le parcours de tabulation.
+ */
+export function menuLadderFor({ canAccessAdmin }: { readonly canAccessAdmin: boolean }): readonly FloatingDestination[] {
+  return canAccessAdmin ? [...MENU_LADDER, ADMIN_DESTINATION] : MENU_LADDER;
+}
+
 /** Le bouton de GAUCHE, en entier. */
 export const FEED_DESTINATION: FloatingDestination = {
   key: 'feed',
@@ -146,11 +182,11 @@ export const PROFILE_DESTINATION: FloatingDestination = {
 };
 
 /**
- * Les HUIT. C'est cette fonction que le témoin de la loi 4 interroge — et elle
+ * Les NEUF. C'est cette fonction que le témoin de la loi 4 interroge — et elle
  * existe précisément parce qu'une énumération centrée sur l'échelle oublie les
- * deux destinations qui n'en font pas partie, qui sont aussi les deux plus
- * fréquentées.
+ * destinations qui n'en font pas partie : les deux plus fréquentées, et celle
+ * qui n'y paraît que pour qui administre.
  */
 export function allFloatingDestinations(): readonly FloatingDestination[] {
-  return [FEED_DESTINATION, ...MENU_LADDER, PROFILE_DESTINATION];
+  return [FEED_DESTINATION, ...MENU_LADDER, ADMIN_DESTINATION, PROFILE_DESTINATION];
 }

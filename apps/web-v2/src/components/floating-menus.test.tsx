@@ -245,7 +245,7 @@ describe('le barreau « Administration » (#6458)', () => {
   function ouvrirEnTantQue(matrice: boolean | null): void {
     act(() => {
       sessionStore.getState().establish({
-        user: { id: 'u-admin', username: 'admin', displayName: 'Admin', avatar: null },
+        user: { id: 'u-admin', username: 'admin', displayName: 'Admin' },
         token: 'jeton-de-test',
         sessionToken: 'session-de-test',
         expiresIn: 3600,
@@ -315,17 +315,16 @@ describe('le barreau « Administration » (#6458)', () => {
     expect(document.activeElement).toBe(barreauAdmin());
   });
 
+  /* La navigation elle-même se mesure au navigateur (`check-admin-rung.mjs`) :
+     le document de témoin est `about:blank`, où `pushState` ne change pas
+     d'adresse. Ici se prouve la fermeture, que le clic doit produire. */
   test('le choisir referme l’échelle', () => {
     ouvrirEnTantQue(true);
-    const avant = window.location.pathname;
-    try {
-      act(() => {
-        barreauAdmin()?.click();
-      });
-      expect(barreaux()).toHaveLength(0);
-      expect(window.location.pathname).toBe('/admin');
-    } finally {
-      window.history.replaceState(null, '', avant);
-    }
+    act(() => {
+      barreauAdmin()?.click();
+    });
+
+    expect(barreaux()).toHaveLength(0);
+    expect(boutonMenu().getAttribute('aria-expanded')).toBe('false');
   });
 });

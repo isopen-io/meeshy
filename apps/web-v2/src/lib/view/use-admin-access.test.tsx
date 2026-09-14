@@ -75,7 +75,7 @@ const memoire = () => {
 const sessionOuverte = (): SessionStoreApi => {
   const session = createSessionStore({ storage: memoire() });
   session.getState().establish({
-    user: { id: 'u-admin', username: 'admin', displayName: 'Admin', avatar: null },
+    user: { id: 'u-admin', username: 'admin', displayName: 'Admin' },
     token: 'jeton-de-test',
     sessionToken: 'session-de-test',
     expiresIn: 3600,
