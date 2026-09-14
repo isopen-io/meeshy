@@ -50,7 +50,13 @@ function isTwoFactorResponse(data: LoginResponseData): data is LoginTwoFactorDat
  * (#5218). Composée par `composeRegisterBody()` (`signup-form.ts`).
  */
 export type RegisterBody = {
-  readonly displayName: string;
+  /**
+   * ABSENT ⇒ la passerelle le DÉRIVE de la partie locale de l'adresse (#6441,
+   * `displayNameDepuisEmail`). La clé est OMISE, jamais posée à `''` : même
+   * raison que `password` ci-dessous — `displayNameProperty` porte
+   * `minLength: 1`, une chaîne vide serait refusée.
+   */
+  readonly displayName?: string;
   readonly email: string;
   /**
    * ABSENT ⇒ le compte naît sans mot de passe (#6424), et sa seule porte est

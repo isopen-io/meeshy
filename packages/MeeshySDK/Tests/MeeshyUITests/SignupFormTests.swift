@@ -81,9 +81,14 @@ final class SignupFormTests: XCTestCase {
         XCTAssertFalse(SignupForm.isDisplayNameValid("Alice@meeshy"))
     }
 
-    func test_isDisplayNameValid_emptyOrTooLong_isInvalid() {
-        XCTAssertFalse(SignupForm.isDisplayNameValid(""))
-        XCTAssertFalse(SignupForm.isDisplayNameValid("   "))
+    /// **Le champ VIDE est valide** (#6441), pour la même raison que le mot de
+    /// passe : la passerelle DÉRIVE le nom affiché de la partie locale de
+    /// l'adresse quand la clé est absente. Le refuser ici rendrait le client
+    /// plus STRICT que le serveur — le défaut que le doc-comment de
+    /// `displayNameMaxLength` dit vouloir empêcher.
+    func test_isDisplayNameValid_emptyIsValid_tooLongIsNot() {
+        XCTAssertTrue(SignupForm.isDisplayNameValid(""))
+        XCTAssertTrue(SignupForm.isDisplayNameValid("   "))
         XCTAssertFalse(
             SignupForm.isDisplayNameValid(String(repeating: "a", count: SignupForm.displayNameMaxLength + 1))
         )
@@ -137,10 +142,50 @@ final class SignupFormTests: XCTestCase {
         XCTAssertTrue(makeForm(phoneDigits: "").canSubmit)
     }
 
-    func test_canSubmit_withAnyRequiredFieldInvalid_isFalse() {
-        XCTAssertFalse(makeForm(displayName: "").canSubmit)
+    /// L'ADRESSE est le seul champ requis (#6441) — une saisie FOURNIE doit
+    /// tenir sa borne, mais son absence n'empêche rien.
+    func test_canSubmit_withAnyProvidedFieldInvalid_isFalse() {
         XCTAssertFalse(makeForm(email: "pas-une-adresse").canSubmit)
         XCTAssertFalse(makeForm(password: "court").canSubmit)
+        XCTAssertFalse(makeForm(displayName: "123").canSubmit)
+    }
+
+    // MARK: - Le nom affiché est FACULTATIF (#6441, ce que #6424 avait laissé)
+    //
+    // Directive porteur 2026-09-14 : « on met un e-mail, tu crées un compte
+    // avec le pseudo pris de la première partie de l'e-mail, le display name
+    // pareil ». Le formulaire doit donc laisser partir une charge qui n'en
+    // porte AUCUN — et `canSubmit` cessait seul de le permettre.
+
+    /// LE témoin de ce lot. Il ne peut pas verdir pour un motif étranger : les
+    /// deux autres champs facultatifs y sont VIDES eux aussi, donc seul le
+    /// relâchement du nom affiché peut l'activer.
+    func test_canSubmit_withEmailAlone_isTrue() {
+        XCTAssertTrue(makeForm(displayName: "", phoneDigits: "", password: "").canSubmit)
+    }
+
+    func test_canSubmit_withoutEmail_isFalse() {
+        XCTAssertFalse(makeForm(displayName: "", email: "", password: "").canSubmit)
+    }
+
+    func test_hasDisplayName_distinguishesTypedFromValid() {
+        XCTAssertFalse(makeForm(displayName: "").hasDisplayName)
+        XCTAssertFalse(makeForm(displayName: "   ").hasDisplayName)
+        // Refusé par le pattern, mais bel et bien TAPÉ : les deux questions
+        // sont distinctes, et c'est `hasDisplayName` qui décide si la clé part.
+        XCTAssertTrue(makeForm(displayName: "123").hasDisplayName)
+    }
+
+    func test_registerRequest_withoutDisplayName_omitsTheKeyEntirely() throws {
+        let payload = try encodedPayload(makeForm(displayName: ""))
+        XCTAssertNil(payload["displayName"],
+                     "la passerelle DÉRIVE le nom de l'adresse ; `\"\"` serait une valeur refusée par `minLength: 1`")
+        XCTAssertNotNil(payload["email"], "l'adresse, elle, voyage toujours")
+    }
+
+    func test_registerRequest_withTypedDisplayName_carriesItTrimmed() throws {
+        let payload = try encodedPayload(makeForm(displayName: "  Awa N’Diaye  "))
+        XCTAssertEqual(payload["displayName"] as? String, "Awa N’Diaye")
     }
 
     // MARK: - Le mot de passe est FACULTATIF (#6424)

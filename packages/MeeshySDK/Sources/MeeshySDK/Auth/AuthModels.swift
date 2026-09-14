@@ -66,6 +66,17 @@ public struct RegisterRequest: Encodable, Sendable {
     /// Le nom que l'utilisateur se donne. Unique champ d'identité de
     /// l'inscription : la passerelle en dérive `username`, `firstName` et
     /// `lastName`.
+    ///
+    /// `nil` ⇒ **absent de la charge**, et la passerelle DÉRIVE alors le nom
+    /// affiché de la partie locale de l'adresse (#6441,
+    /// `displayNameDepuisEmail`) — l'adresse seule suffit à ouvrir un compte.
+    ///
+    /// `nil`, jamais `""`, pour la même raison que `password` ci-dessous :
+    /// `displayNameProperty` porte `minLength: 1`, donc une chaîne vide serait
+    /// une VALEUR refusée, et l'inscription échouerait là où elle devait passer.
+    /// Le type était optionnel bien avant que ce sens le soit — c'est
+    /// exactement ce silence qui a laissé `canSubmit` exiger un nom pendant un
+    /// cycle entier après l'ouverture de #6424.
     public let displayName: String?
     public let email: String
     /// `nil` ⇒ **absent de la charge**, et le compte naît SANS mot de passe

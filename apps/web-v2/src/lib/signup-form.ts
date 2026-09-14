@@ -43,10 +43,31 @@ export const PASSWORD_MIN = registerRequestSchema.properties.password.minLength;
  * serveur et le Zod de `AuthSchemas.register` compilent tous deux. */
 const PERSON_NAME_PATTERN = new RegExp(personNamePatternSource, 'u');
 
+/**
+ * Un nom affiché FOURNI doit tenir le pattern et la borne ; un champ VIDE est
+ * valide, parce qu'il est LÉGITIME (#6441, suite de #6424) — la passerelle le
+ * DÉRIVE alors de la partie locale de l'adresse (`displayNameDepuisEmail`,
+ * `services/gateway/src/services/auth/registration-identity.ts`).
+ *
+ * C'est MOT POUR MOT l'arbitrage rendu pour le mot de passe trente lignes plus
+ * bas, et le doc-comment de `DISPLAY_NAME_MAX` nomme déjà le défaut qu'il
+ * écarte : garder l'ancienne règle rendrait le client plus STRICT que le
+ * serveur — un refus local pour une charge que la passerelle ACCEPTE, et rien
+ * ne rougit nulle part. La moitié « mot de passe » de #6424 a été livrée sans
+ * celle-ci : l'écran annonçait « adresse seule » et exigeait toujours un nom.
+ */
 export function isDisplayNameValid(value: string): boolean {
   const trimmed = value.trim();
-  if (trimmed.length === 0 || trimmed.length > DISPLAY_NAME_MAX) return false;
+  if (trimmed.length === 0) return true;
+  if (trimmed.length > DISPLAY_NAME_MAX) return false;
   return PERSON_NAME_PATTERN.test(trimmed);
+}
+
+/** `true` quand un nom affiché a réellement été TAPÉ. Distinct de
+ * `isDisplayNameValid`, qui répond « cette saisie est-elle acceptable » :
+ * c'est celle-ci qui décide si la clé part dans la charge. */
+export function hasDisplayName(value: string): boolean {
+  return value.trim().length > 0;
 }
 
 /** Rapprochement du `z.email`/`format: 'email'` serveur : « a@b » (pas de TLD)
@@ -76,10 +97,11 @@ export function hasPassword(value: string): boolean {
   return value.length > 0;
 }
 
-/** Le bouton s'active dès que le nom et l'adresse sont valides — et que le mot
- * de passe, s'il a été tapé, atteint sa borne (#6424). Ni le téléphone ni le
- * mot de passe n'y figurent comme EXIGENCES : la passerelle n'en requiert
- * aucun (§ SignupForm.swift). */
+/** Le bouton s'active dès que l'ADRESSE est valide — et que le nom affiché et
+ * le mot de passe, s'ils ont été tapés, tiennent leurs bornes (#6441).
+ * L'adresse est le SEUL champ requis, comme `required: ['email']` du schéma
+ * partagé : ni le nom, ni le téléphone, ni le mot de passe ne sont exigés par
+ * la passerelle (§ SignupForm.swift, le miroir qui porte la même loi). */
 export function canSubmit(form: SignupFormState): boolean {
   return isDisplayNameValid(form.displayName) && isEmailValid(form.email) && isPasswordValid(form.password);
 }
@@ -99,7 +121,10 @@ export function composeRegisterBody(form: SignupFormState): RegisterBody {
   const digits = normalizedPhoneDigits(form.phoneDigits);
   const hasPhone = digits.length > 0;
   return {
-    displayName: form.displayName.trim(),
+    // OMISE quand le champ est vide, jamais `''` : `displayNameProperty` porte
+    // `minLength: 1` — une chaîne vide serait une VALEUR, refusée par la borne,
+    // et l'inscription échouerait dans le cas même qu'elle ouvre (#6441).
+    ...(hasDisplayName(form.displayName) ? { displayName: form.displayName.trim() } : {}),
     email: form.email.trim().toLowerCase(),
     // `undefined` par OMISSION, jamais `''` (#6424) — même raison que le couple
     // téléphone une ligne plus bas : une clé présente à valeur vide décrit

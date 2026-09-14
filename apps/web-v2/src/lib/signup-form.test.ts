@@ -7,6 +7,7 @@ import {
   composeRegisterBody,
   defaultLanguages,
   isDisplayNameValid,
+  hasDisplayName,
   isEmailValid,
   isPasswordValid,
   hasPassword,
@@ -43,7 +44,12 @@ describe('PASSWORD_MIN — LUE depuis le schéma serveur, jamais un littéral lo
 });
 
 describe('validation locale — displayName', () => {
-  test('vide ⇒ invalide', () => expect(isDisplayNameValid('')).toBe(false));
+  // #6441 — un champ VIDE est LÉGITIME : la passerelle DÉRIVE le nom affiché
+  // de la partie locale de l'adresse. Même arbitrage que le mot de passe ; le
+  // refuser ici rendrait le client plus strict que le serveur, et rien ne
+  // rougirait nulle part.
+  test('vide ⇒ valide (la passerelle le dérive de l’adresse)', () => expect(isDisplayNameValid('')).toBe(true));
+  test('vide après trim ⇒ valide aussi', () => expect(isDisplayNameValid('   ')).toBe(true));
   test('101 caractères ⇒ invalide', () => expect(isDisplayNameValid('a'.repeat(101))).toBe(false));
   test('sans lettre ("123 456") ⇒ invalide', () => expect(isDisplayNameValid('123 456')).toBe(false));
   test('avec accents et apostrophes ("Aïcha O’Neil") ⇒ valide', () =>
@@ -71,13 +77,64 @@ describe('hasPassword — TAPÉ, ce qui n’est pas la même question que VALIDE
     expect(hasPassword('a')).toBe(true));
 });
 
-describe('canSubmit — les TROIS champs requis, jamais le téléphone', () => {
+describe('hasDisplayName — TAPÉ, ce qui n’est pas la même question que VALIDE (#6441)', () => {
+  test('champ vide ⇒ false', () => expect(hasDisplayName('')).toBe(false));
+  test('espaces seuls ⇒ false — rien n’a été nommé', () => expect(hasDisplayName('   ')).toBe(false));
+  test('saisie refusée par le pattern ⇒ true — elle est tapée', () => expect(hasDisplayName('123')).toBe(true));
+});
+
+describe('canSubmit — l’ADRESSE seule suffit (#6441)', () => {
   test('nom + e-mail + mot de passe valides ⇒ actif', () => expect(canSubmit(baseForm())).toBe(true));
+  /**
+   * LE témoin de ce lot. Il tombait sur `false` avant #6441 : l'écran
+   * promettait l'inscription par adresse seule et gardait le bouton éteint.
+   * Il ne peut pas verdir par un motif étranger — les deux autres champs y
+   * sont VIDES, donc seul le relâchement du nom affiché peut l'activer.
+   */
+  test('nom affiché vide, mot de passe vide, téléphone vide ⇒ ACTIF', () =>
+    expect(canSubmit(baseForm({ displayName: '', password: '', phoneDigits: '' }))).toBe(true));
+  test('adresse vide ⇒ inactif — elle est le seul champ requis', () =>
+    expect(canSubmit(baseForm({ displayName: '', email: '', password: '' }))).toBe(false));
+  test('nom affiché TAPÉ mais sans lettre ⇒ inactif — une saisie fournie tient sa borne', () =>
+    expect(canSubmit(baseForm({ displayName: '123 456' }))).toBe(false));
   test('mot de passe trop court ⇒ inactif', () =>
     expect(canSubmit(baseForm({ password: 'a'.repeat(PASSWORD_MIN - 1) }))).toBe(false));
   test('téléphone vide ⇒ n’empêche rien', () => expect(canSubmit(baseForm({ phoneDigits: '' }))).toBe(true));
   test('mot de passe vide ⇒ n’empêche rien non plus (#6424)', () =>
     expect(canSubmit(baseForm({ password: '' }))).toBe(true));
+});
+
+describe('composeRegisterBody — sans nom affiché (#6441)', () => {
+  /**
+   * Même loi que `password` : la clé est OMISE, pas posée à `''`.
+   * `displayNameProperty` porte `minLength: 1` — une chaîne vide serait une
+   * VALEUR, refusée par le serveur, et l'inscription échouerait précisément
+   * dans le cas qu'elle vient d'ouvrir.
+   */
+  test('la clé displayName est ABSENTE de la charge', () => {
+    const body = composeRegisterBody(baseForm({ displayName: '' }));
+    expect('displayName' in body).toBe(false);
+  });
+
+  test('espaces seuls ⇒ ABSENTE aussi', () => {
+    const body = composeRegisterBody(baseForm({ displayName: '   ' }));
+    expect('displayName' in body).toBe(false);
+  });
+
+  test('la borne du serveur refuserait la chaîne vide — ce que l’omission évite', () => {
+    expect(registerRequestSchema.properties.displayName.minLength).toBe(1);
+  });
+
+  test('le reste de la charge est intact', () => {
+    const body = composeRegisterBody(baseForm({ displayName: '' }));
+    expect(body.email).toBe(baseForm().email.toLowerCase());
+    expect(body.password).toBe(baseForm().password);
+  });
+
+  test('un nom TAPÉ voyage, débarrassé de ses espaces de bord', () => {
+    const body = composeRegisterBody(baseForm({ displayName: '  Ada Lovelace  ' }));
+    expect(body.displayName).toBe('Ada Lovelace');
+  });
 });
 
 describe('composeRegisterBody — sans mot de passe (#6424)', () => {

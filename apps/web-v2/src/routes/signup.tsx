@@ -16,6 +16,7 @@ import {
   canSubmit,
   composeRegisterBody,
   emptySignupForm,
+  hasDisplayName,
   hasPassword,
   type SignupFormState,
 } from '@/lib/signup-form';
@@ -155,9 +156,13 @@ export default function SignupScreen() {
         </div>
 
         <div className="grid gap-5 pb-8">
+          {/* FACULTATIF, et ANNONCÉ tel quel (#6441). La moitié « mot de passe »
+              de #6424 a été livrée sans celle-ci : le champ restait le PREMIER
+              de l'écran, sans mention, et `canSubmit` l'exigeait — l'écran
+              promettait l'inscription par adresse seule et la refusait. */}
           <Field
             id="signup-display-name"
-            label="Nom affiché"
+            label="Nom affiché (facultatif)"
             tint={INDIGO_TINT}
             focused={focused === 'displayName'}
             error={feedback.fieldErrors.displayName}
@@ -179,6 +184,12 @@ export default function SignupScreen() {
               />
             )}
           </Field>
+
+          {!hasDisplayName(form.displayName) ? (
+            <p data-signup-display-name-note className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+              Laissé vide, nous le tirons de votre adresse. Vous pourrez le changer à tout moment.
+            </p>
+          ) : null}
 
           <div className="grid gap-1">
             <Field id="signup-email" label="Adresse e-mail" tint={INDIGO_TINT} focused={focused === 'email'} error={emailError}>

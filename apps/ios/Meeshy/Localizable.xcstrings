@@ -37436,49 +37436,96 @@
         }
       }
     },
+    "auth.signup.name.derivedNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إذا تركته فارغًا، فسنشتقّه من عنوانك. يمكنك تغييره في أي وقت."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lässt du es leer, leiten wir ihn aus deiner Adresse ab. Du kannst ihn jederzeit ändern."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Left empty, we derive it from your address. You can change it at any time."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si lo dejas vacío, lo derivamos de tu dirección. Podrás cambiarlo cuando quieras."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laissé vide, nous le tirons de votre adresse. Vous pourrez le changer à tout moment."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se lo lasci vuoto, lo ricaviamo dal tuo indirizzo. Potrai cambiarlo quando vuoi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se deixar vazio, nós o derivamos do seu endereço. Você poderá alterá-lo quando quiser."
+          }
+        }
+      }
+    },
     "auth.signup.name.label": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الاسم المعروض"
+            "value": "الاسم المعروض (اختياري)"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anzeigename"
+            "value": "Anzeigename (optional)"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Display name"
+            "value": "Display name (optional)"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nombre visible"
+            "value": "Nombre visible (opcional)"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nom affiché"
+            "value": "Nom affiché (facultatif)"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nome visualizzato"
+            "value": "Nome visualizzato (facoltativo)"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nome de exibição"
+            "value": "Nome de exibição (opcional)"
           }
         }
       }

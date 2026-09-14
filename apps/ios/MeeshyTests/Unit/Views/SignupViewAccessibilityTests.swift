@@ -266,6 +266,31 @@ final class SignupViewAccessibilityTests: XCTestCase {
                       "la note ne se montre que tant que le champ est VIDE — sinon elle décrit un état révolu")
     }
 
+    // MARK: - Le nom affiché aussi : facultatif, et sa conséquence dite
+
+    /// TROISIÈME cas de la même règle, et il a manqué un cycle (#6441).
+    ///
+    /// #6424 a ouvert l'inscription par adresse seule et n'a relâché que le mot
+    /// de passe : le nom affiché restait EXIGÉ par `canSubmit`, sans mention,
+    /// en tête d'écran. L'écran promettait une chose et en refusait une autre —
+    /// un défaut qu'aucune garde ne voyait, parce que la garde du mot de passe
+    /// ne parle que du mot de passe.
+    ///
+    /// Comme lui, il est un CHOIX : vide, la passerelle dérive le nom de
+    /// l'adresse. Donc les deux mêmes exigences, et la seconde compte plus —
+    /// « facultatif » sans sa conséquence est une case qu'on saute.
+    func test_displayNameField_announcesItsOptionalityAndItsConsequence() throws {
+        let body = try code(Self.signupView)
+        let name = try fieldBody("displayNameField", in: body)
+
+        XCTAssertTrue(name.lowercased().contains("facultatif"),
+                      "le nom affiché DOIT se dire facultatif — la passerelle ne l'exige pas")
+        XCTAssertTrue(name.contains("derivedNote"),
+                      "et la conséquence DOIT être dite : il se DÉRIVE de l'adresse")
+        XCTAssertTrue(name.contains("!viewModel.form.hasDisplayName"),
+                      "la note ne se montre que tant que le champ est VIDE — sinon elle décrit un état révolu")
+    }
+
     /// Les `defaultValue:` du fichier — la copie que l'utilisateur lit.
     private static func copyLiterals(in code: String) -> [String] {
         var literals: [String] = []

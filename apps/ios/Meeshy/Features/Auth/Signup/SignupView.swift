@@ -104,22 +104,46 @@ struct SignupView: View {
 
     // MARK: - Nom affiché
 
+    /// FACULTATIF, et ANNONCÉ tel quel (#6441) — avec sa CONSÉQUENCE, comme le
+    /// champ de mot de passe : dire « facultatif » sans dire ce qui arrive
+    /// quand on le laisse vide ne renseigne personne. La clé du libellé est
+    /// RÉUTILISÉE, jamais doublée d'une `.label.optional` — une clé orpheline
+    /// rend son identifiant dans les langues qui ne l'ont pas.
     private var displayNameField: some View {
         fieldBlock(
             field: .displayName,
-            label: String(localized: "auth.signup.name.label", defaultValue: "Nom affiché", bundle: .main)
-        ) {
-            TextField(
-                String(localized: "auth.signup.name.placeholder", defaultValue: "Comment vous appeler ?", bundle: .main),
-                text: $viewModel.form.displayName
+            label: String(
+                localized: "auth.signup.name.label",
+                defaultValue: "Nom affiché (facultatif)",
+                bundle: .main
             )
-            .textContentType(.name)
-            .textInputAutocapitalization(.words)
-            .autocorrectionDisabled()
-            .submitLabel(.next)
-            .focused($focusedField, equals: .displayName)
-            .onSubmit { focusedField = .email }
-            .foregroundColor(theme.textPrimary)
+        ) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                TextField(
+                    String(localized: "auth.signup.name.placeholder", defaultValue: "Comment vous appeler ?", bundle: .main),
+                    text: $viewModel.form.displayName
+                )
+                .textContentType(.name)
+                .textInputAutocapitalization(.words)
+                .autocorrectionDisabled()
+                .submitLabel(.next)
+                .focused($focusedField, equals: .displayName)
+                .onSubmit { focusedField = .email }
+                .foregroundColor(theme.textPrimary)
+
+                if !viewModel.form.hasDisplayName {
+                    Text(
+                        String(
+                            localized: "auth.signup.name.derivedNote",
+                            defaultValue: "Laissé vide, nous le tirons de votre adresse. Vous pourrez le changer à tout moment.",
+                            bundle: .main
+                        )
+                    )
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
+                    .foregroundColor(theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
     }
 
