@@ -53,6 +53,9 @@ struct ProgressionView: View {
     /// comprises.
     @State private var reveal: ProgressionRevealRequest?
 
+    /// Le décalage du défilement, que seul l'en-tête lit (#6480).
+    @State private var scrollRelay = ScrollOffsetRelay()
+
     init(viewModel: ProgressionViewModel? = nil) {
         _viewModel = StateObject(wrappedValue: viewModel ?? ProgressionViewModel())
     }
@@ -61,9 +64,14 @@ struct ProgressionView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
+            content
+
+            // L'EN-TÊTE QUI SE RÉDUIT (#6480) — le composant partagé, posé
+            // PAR-DESSUS le défilement, comme Réglages : grand titre au repos,
+            // barre compacte en défilant, retour en verre.
             VStack(spacing: 0) {
                 header
-                content
+                Spacer()
             }
         }
         .task { await viewModel.load() }
@@ -82,55 +90,52 @@ struct ProgressionView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                back()
-            } label: {
-                Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(16, weight: .semibold))
-                    .foregroundColor(accentColor)
-            }
-            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
-
-            Spacer()
-
-            Text(String(localized: "progression.title", defaultValue: "Progression", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            /*
-             * L'ENTRÉE MEESH remplace le trophée (#5839).
-             *
-             * Le trophée était `accessibilityHidden(true)`, ne réagissait à
-             * rien et n'annonçait rien : un ornement posé à l'endroit où l'œil
-             * cherche un contrôle. À sa place, le solde et sa porte.
-             *
-             * `nil` quand la passerelle ne sert pas le bloc — l'écran n'affiche
-             * alors RIEN : un solde de zéro montré à quelqu'un qui en a deux
-             * serait pire qu'une absence.
-             */
-            if let meesh = viewModel.progress?.meesh {
-                ProgressionMeeshEntry(
-                    meesh: meesh,
-                    isMinting: viewModel.isMinting,
-                    onMint: { Task { await viewModel.mint() } }
-                )
-            } else {
-                Color.clear.frame(width: 24, height: 24)
-            }
+        // Seul ce reader se re-rend au fil du défilement : la racine écrit
+        // `scrollRelay.offset` sans s'y abonner (même dispositif que Réglages).
+        ScrollOffsetReader(relay: scrollRelay) { offset in
+            CollapsibleHeader(
+                title: String(localized: "progression.title", defaultValue: "Progression", bundle: .main),
+                scrollOffset: offset,
+                onBack: { back() },
+                titleColor: theme.textPrimary,
+                backArrowColor: accentColor,
+                backgroundColor: theme.backgroundPrimary,
+                trailing: {
+                /*
+                 * L'ENTRÉE MEESH remplace le trophée (#5839), et devient
+                 * l'ACTION de l'en-tête partagé (#6480).
+                 *
+                 * `nil` quand la passerelle ne sert pas le bloc — l'écran
+                 * n'affiche alors RIEN : un solde de zéro montré à quelqu'un qui
+                 * en a deux serait pire qu'une absence.
+                 */
+                if let meesh = viewModel.progress?.meesh {
+                    ProgressionMeeshEntry(
+                        meesh: meesh,
+                        isMinting: viewModel.isMinting,
+                        mintError: viewModel.mintError,
+                        onMint: { Task { await viewModel.mint() } }
+                    )
+                }
+                }
+            )
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 
     // MARK: - Content
 
     private var content: some View {
         ScrollView(showsIndicators: false) {
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: ScrollOffsetPreferenceKey.self,
+                    value: geo.frame(in: .named("scroll")).minY
+                )
+            }
+            .frame(height: 0)
+
+            Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
+
             VStack(spacing: MeeshySpacing.xl) {
                 if viewModel.isOffline {
                     ProgressionNotice(kind: .offline(hasSnapshot: viewModel.progress != nil))
@@ -174,6 +179,26 @@ struct ProgressionView: View {
                             )
                         case .level:
                             ProgressionLevelHero(progress: progress, isDark: isDark)
+                        case .meesh:
+                            // LE SOLDE, SOUS LE NIVEAU (#6497). Le même bloc que
+                            // la feuille de l'entrée d'en-tête — pas une jumelle :
+                            // deux rendus du solde auraient divergé au premier
+                            // changement. L'action passe par le MÊME `viewModel.mint()`,
+                            // donc la même clé d'idempotence : deux portes, une
+                            // seule frappe.
+                            if let meesh = progress.meesh {
+                                ProgressionMeeshDetail(
+                                    meesh: meesh,
+                                    isMinting: viewModel.isMinting,
+                                    mintError: viewModel.mintError,
+                                    onMint: { Task { await viewModel.mint() } }
+                                )
+                                .padding(MeeshySpacing.lg)
+                                .background(
+                                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
+                                        .fill(ThemeManager.shared.backgroundSecondary)
+                                )
+                            }
                         case .elans:
                             ProgressionElansHero(progress: progress, isDark: isDark)
                         case .flamme:
@@ -195,5 +220,8 @@ struct ProgressionView: View {
             .padding(.top, 8)
         }
         .refreshable { await viewModel.load(forceNetwork: true) }
+        .coordinateSpace(name: "scroll")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
+        .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+
     }
 }

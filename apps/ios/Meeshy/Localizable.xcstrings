@@ -36966,6 +36966,53 @@
         }
       }
     },
+    "auth.signup.email.verificationNotice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سنرسل رابطًا إلى هذا العنوان: عليك فتحه لتفعيل حسابك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wir senden einen Link an diese Adresse — du musst ihn öffnen, um dein Konto zu bestätigen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "We will send a link to this address: you must open it to verify your account."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviaremos un enlace a esta dirección: deberás abrirlo para validar tu cuenta."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invieremo un link a questo indirizzo: dovrai aprirlo per convalidare il tuo account."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviaremos um link para este endereço: você precisará abri-lo para validar sua conta."
+          }
+        }
+      }
+    },
     "auth.signup.error.generic": {
       "extractionState": "manual",
       "localizations": {
@@ -37197,6 +37244,288 @@
           "stringUnit": {
             "state": "translated",
             "value": "Já tem uma conta?"
+          }
+        }
+      }
+    },
+    "auth.signup.identity.close": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fermer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiudi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fechar"
+          }
+        }
+      }
+    },
+    "auth.signup.identity.displayName": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الاسم المعروض"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anzeigename"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display name"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre visible"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nom affiché"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nome visualizzato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nome de exibição"
+          }
+        }
+      }
+    },
+    "auth.signup.identity.edit": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعديل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ändern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifier"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifica"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar"
+          }
+        }
+      }
+    },
+    "auth.signup.identity.editLabel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعديل الاسم المستعار والاسم المعروض"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Benutzernamen und Anzeigenamen ändern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit username and display name"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar usuario y nombre visible"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifier le pseudo et le nom affiché"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifica nome utente e nome visualizzato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar usuário e nome de exibição"
+          }
+        }
+      }
+    },
+    "auth.signup.identity.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هويتك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Identität"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your identity"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu identidad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre identité"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La tua identità"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua identidade"
+          }
+        }
+      }
+    },
+    "auth.signup.identity.username": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اسم المستخدم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Benutzername"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Username"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usuario"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pseudo"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nome utente"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usuário"
           }
         }
       }
@@ -37436,96 +37765,49 @@
         }
       }
     },
-    "auth.signup.name.label": {
+    "auth.signup.password.hintLabel": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الاسم المعروض"
+            "value": "ماذا يحدث بدون كلمة مرور"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anzeigename"
+            "value": "Was ohne Passwort passiert"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Display name"
+            "value": "What happens without a password"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nombre visible"
+            "value": "Qué pasa sin contraseña"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nom affiché"
+            "value": "Que se passe-t-il sans mot de passe"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nome visualizzato"
+            "value": "Cosa succede senza password"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nome de exibição"
-          }
-        }
-      }
-    },
-    "auth.signup.name.placeholder": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "بماذا ننادِيك؟"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wie sollen wir dich nennen?"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "What should we call you?"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Cómo te llamamos?"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Comment vous appeler ?"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Come possiamo chiamarti?"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Como podemos te chamar?"
+            "value": "O que acontece sem senha"
           }
         }
       }
@@ -37536,43 +37818,90 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كلمة المرور"
+            "value": "كلمة المرور (اختياري)"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Passwort"
+            "value": "Passwort (optional)"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Password"
+            "value": "Password (optional)"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contraseña"
+            "value": "Contraseña (opcional)"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mot de passe"
+            "value": "Mot de passe (facultatif)"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Password"
+            "value": "Password (facoltativa)"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Senha"
+            "value": "Senha (opcional)"
+          }
+        }
+      }
+    },
+    "auth.signup.password.magicLinkNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بدون كلمة مرور، ستسجّل الدخول عبر رابط يُرسل إلى عنوانك. يمكنك تعيين واحدة لاحقًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ohne Passwort meldest du dich über einen Link an, der an deine Adresse geht. Du kannst später eines festlegen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Without a password, you will sign in with a link sent to your address. You can set one later."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin contraseña, iniciarás sesión con un enlace enviado a tu dirección. Podrás definir una más tarde."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un plus tard."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Senza password, accederai con un link inviato al tuo indirizzo. Potrai impostarne una in seguito."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem senha, você entrará com um link enviado para o seu endereço. Você poderá definir uma depois."
           }
         }
       }
@@ -37620,6 +37949,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mínimo de 6 caracteres"
+          }
+        }
+      }
+    },
+    "auth.signup.phone.benefit": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سيتيح لك تسجيل الدخول، ويسمح لمن تعرفهم بالعثور عليك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Damit meldest du dich an, und deine Kontakte können dich finden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It lets you sign in, and lets people you know find you."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te permitirá iniciar sesión, y que tus contactos te encuentren."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il vous permettra de vous connecter, et à vos proches de vous retrouver."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ti permetterà di accedere e ai tuoi contatti di trovarti."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ele permite que você entre e que seus contatos te encontrem."
           }
         }
       }
@@ -37761,6 +38137,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "País"
+          }
+        }
+      }
+    },
+    "auth.signup.phone.hintLabel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ما فائدة الرقم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wozu die Nummer dient"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What the number is for"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para qué sirve el número"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À quoi sert le numéro"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A cosa serve il numero"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para que serve o número"
           }
         }
       }
@@ -38899,43 +39322,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المفضلة"
+            "value": "المنشورات المحفوظة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Favoriten"
+            "value": "Gespeicherte Beiträge"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Favorites"
+            "value": "Saved posts"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Favoritos"
+            "value": "Publicaciones guardadas"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Favoris"
+            "value": "Publications enregistrées"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Preferiti"
+            "value": "Post salvati"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Favoritos"
+            "value": "Publicações salvas"
           }
         }
       }
@@ -110159,43 +110582,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الخصوصية"
+            "value": "سياسة الخصوصية"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Datenschutz"
+            "value": "Datenschutzerklärung"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Privacy"
+            "value": "Privacy Policy"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Privacidad"
+            "value": "Política de privacidad"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Confidentialité"
+            "value": "Politique de confidentialité"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Privacy"
+            "value": "Informativa sulla privacy"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Privacidade"
+            "value": "Política de privacidade"
           }
         }
       }
@@ -110488,43 +110911,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الشروط"
+            "value": "شروط الاستخدام"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bedingungen"
+            "value": "Nutzungsbedingungen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Terms"
+            "value": "Terms of Service"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Términos"
+            "value": "Términos de servicio"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conditions"
+            "value": "Conditions d'utilisation"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Termini"
+            "value": "Termini di servizio"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Termos"
+            "value": "Termos de uso"
           }
         }
       }
@@ -139470,53 +139893,6 @@
         }
       }
     },
-    "sessions_back": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "رجوع"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zurück"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Back"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Atrás"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retour"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Indietro"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Voltar"
-          }
-        }
-      }
-    },
     "sessions_current_badge": {
       "extractionState": "manual",
       "localizations": {
@@ -155263,7 +155639,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Press and hold a message and choose \\\"Add to favourites\\\" to find it here."
+            "value": "Press and hold a message and choose “Add to favourites” to find it here."
           }
         },
         "es": {
@@ -155275,7 +155651,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Appuyez longuement sur un message et choisissez \\\"Ajouter aux favoris\\\" pour le retrouver ici."
+            "value": "Appuyez longuement sur un message et choisissez « Ajouter aux favoris » pour le retrouver ici."
           }
         },
         "it": {
@@ -184254,46 +184630,154 @@
     "progression.meesh.floor": {
       "extractionState": "manual",
       "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "سيتم استخدام %lld نقاط محادثتك أخيرًا، دون إطفاء أي وسام."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ihre %lld Unterhaltungspunkte werden zuletzt verwendet, ohne ein Abzeichen abzuschalten."
+        "fr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Votre point de conversation sera repris en dernier, sans éteindre aucun badge."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Vos %lld points de conversation seront repris en dernier, sans éteindre aucun badge."
+                }
+              }
+            }
           }
         },
         "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your %lld conversation points will be used last, without turning off any badge."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Your conversation point will be used last, without turning off any badge."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Your %lld conversation points will be used last, without turning off any badge."
+                }
+              }
+            }
           }
         },
         "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tus %lld puntos de conversación se usarán al final, sin apagar ninguna insignia."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Tu punto de conversación se usará al final, sin apagar ninguna insignia."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Tus %lld puntos de conversación se usarán al final, sin apagar ninguna insignia."
+                }
+              }
+            }
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vos %lld points de conversation seront repris en dernier, sans éteindre aucun badge."
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ihr Unterhaltungspunkt wird zuletzt verwendet, ohne ein Abzeichen abzuschalten."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ihre %lld Unterhaltungspunkte werden zuletzt verwendet, ohne ein Abzeichen abzuschalten."
+                }
+              }
+            }
           }
         },
         "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I tuoi %lld punti di conversazione saranno usati per ultimi, senza spegnere alcun badge."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Il tuo punto di conversazione sarà usato per ultimo, senza spegnere alcun badge."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "I tuoi %lld punti di conversazione saranno usati per ultimi, senza spegnere alcun badge."
+                }
+              }
+            }
           }
         },
         "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seus %lld pontos de conversa serão usados por último, sem apagar nenhum selo."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Seu ponto de conversa será usado por último, sem apagar nenhum selo."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Seus %lld pontos de conversa serão usados por último, sem apagar nenhum selo."
+                }
+              }
+            }
+          }
+        },
+        "ar": {
+          "variations": {
+            "plural": {
+              "zero": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "سيتم استخدام %lld نقطة محادثتك أخيرًا، دون إطفاء أي وسام."
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "ستُستخدم نقطة محادثتك أخيرًا، دون إطفاء أي وسام."
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "ستُستخدم نقطتا محادثتك أخيرًا، دون إطفاء أي وسام."
+                }
+              },
+              "few": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "سيتم استخدام %lld نقاط محادثتك أخيرًا، دون إطفاء أي وسام."
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "سيتم استخدام %lld نقطة محادثتك أخيرًا، دون إطفاء أي وسام."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "سيتم استخدام %lld نقطة محادثتك أخيرًا، دون إطفاء أي وسام."
+                }
+              }
+            }
           }
         }
       }
@@ -184489,46 +184973,154 @@
     "progression.meesh.missing": {
       "extractionState": "manual",
       "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا يزال أمامك %lld نقطة قابلة للتحويل قبل الحصول على Meesh."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Noch %lld umwandelbare Punkte bis zu einer Meesh."
+        "fr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Encore %lld point convertible avant une Meesh."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Encore %lld points convertibles avant une Meesh."
+                }
+              }
+            }
           }
         },
         "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld more convertible points before a Meesh."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld more convertible point before a Meesh."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld more convertible points before a Meesh."
+                }
+              }
+            }
           }
         },
         "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aún %lld puntos convertibles antes de una Meesh."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Aún %lld punto convertible antes de una Meesh."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Aún %lld puntos convertibles antes de una Meesh."
+                }
+              }
+            }
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Encore %lld points convertibles avant une Meesh."
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Noch %lld umwandelbarer Punkt bis zu einer Meesh."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Noch %lld umwandelbare Punkte bis zu einer Meesh."
+                }
+              }
+            }
           }
         },
         "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ancora %lld punti convertibili prima di una Meesh."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ancora %lld punto convertibile prima di una Meesh."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ancora %lld punti convertibili prima di una Meesh."
+                }
+              }
+            }
           }
         },
         "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ainda %lld pontos conversíveis antes de uma Meesh."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ainda %lld ponto conversível antes de uma Meesh."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ainda %lld pontos conversíveis antes de uma Meesh."
+                }
+              }
+            }
+          }
+        },
+        "ar": {
+          "variations": {
+            "plural": {
+              "zero": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال أمامك %lld نقطة قابلة للتحويل قبل الحصول على Meesh."
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال أمامك نقطة واحدة قابلة للتحويل قبل الحصول على Meesh."
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال أمامك نقطتان قابلتان للتحويل قبل الحصول على Meesh."
+                }
+              },
+              "few": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال أمامك %lld نقاط قابلة للتحويل قبل الحصول على Meesh."
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال أمامك %lld نقطة قابلة للتحويل قبل الحصول على Meesh."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال أمامك %lld نقطة قابلة للتحويل قبل الحصول على Meesh."
+                }
+              }
+            }
           }
         }
       }

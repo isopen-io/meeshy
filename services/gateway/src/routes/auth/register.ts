@@ -270,9 +270,17 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       // du compte. Même discipline que le reste de cette route : une même
       // budget de tentative que n'importe quelle autre entrée invalide, pas de
       // remboursement.
-      const strength = validatePasswordStrength(validatedData.password);
-      if (!strength.isValid) {
-        return sendBadRequest(reply, `Password requirements: ${strength.errors.join(', ')}`);
+      // #6424 — un mot de passe ABSENT n'est pas un mot de passe faible. Le
+      // compte naît sans, sa seule porte est le lien magique, et la robustesse
+      // se juge au moment où il en pose un (`PATCH /users/me/password`, qui
+      // appelle la MÊME fonction). Passer `undefined` ici rendrait quatre
+      // erreurs — dont « minimum 6 characters » sur une saisie qui n'existe
+      // pas — et refuserait l'inscription que ce lot vient d'ouvrir.
+      if (validatedData.password !== undefined) {
+        const strength = validatePasswordStrength(validatedData.password);
+        if (!strength.isValid) {
+          return sendBadRequest(reply, `Password requirements: ${strength.errors.join(', ')}`);
+        }
       }
 
       // Le rang 4 du Prisme entre ICI, avec la requête — c'est la seule couche

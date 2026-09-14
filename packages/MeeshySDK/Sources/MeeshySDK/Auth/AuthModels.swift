@@ -54,21 +54,48 @@ public struct LoginResponseData: Decodable, Sendable {
 
 /// La charge de `POST /auth/register`.
 ///
-/// **#5218 — `username`, `firstName` et `lastName` ne partent plus.** La
-/// passerelle les DÉRIVE de `displayName` ; les envoyer depuis le client
-/// obligeait l'utilisateur à composer un pseudo unique et à découper son nom en
-/// deux, soit trois écrans de wizard pour trois valeurs que le serveur sait
-/// fabriquer. Ils restent déclarés — optionnels — parce que la reprise après un
-/// transfert de numéro réémet une inscription dont le serveur a déjà écho ; un
-/// champ `nil` est ABSENT du JSON (l'`Encodable` synthétisé encode un
-/// `Optional` avec `encodeIfPresent`), donc ne rien passer ne pose rien.
+/// **#5218 — `firstName` et `lastName` ne partent plus.** La passerelle les
+/// DÉRIVE de `displayName` ; les envoyer depuis le client obligeait
+/// l'utilisateur à découper son nom en deux, soit des écrans de wizard pour des
+/// valeurs que le serveur sait fabriquer.
+///
+/// **#6479 — `username`, LUI, repart.** Non pas comme au wizard d'avant, où il
+/// fallait l'inventer, mais parce que l'écran le MONTRE : il affiche le pseudo
+/// dérivé de l'adresse et laisse le modifier. Dès lors la valeur existe, et la
+/// directive porteur est sans ambiguïté — « ici on a des données et la
+/// passerelle doit utiliser ces données ». `resoudreUsername` l'emploie tel
+/// quel et ne génère plus rien.
+///
+/// Un champ `nil` est ABSENT du JSON (l'`Encodable` synthétisé encode un
+/// `Optional` avec `encodeIfPresent`), donc ne rien passer ne pose rien — et
+/// c'est ce qui reste vrai quand l'adresse ne donne rien de slugifiable.
 public struct RegisterRequest: Encodable, Sendable {
     /// Le nom que l'utilisateur se donne. Unique champ d'identité de
     /// l'inscription : la passerelle en dérive `username`, `firstName` et
     /// `lastName`.
+    ///
+    /// `nil` ⇒ **absent de la charge**, et la passerelle DÉRIVE alors le nom
+    /// affiché de la partie locale de l'adresse (#6441,
+    /// `displayNameDepuisEmail`) — l'adresse seule suffit à ouvrir un compte.
+    ///
+    /// `nil`, jamais `""`, pour la même raison que `password` ci-dessous :
+    /// `displayNameProperty` porte `minLength: 1`, donc une chaîne vide serait
+    /// une VALEUR refusée, et l'inscription échouerait là où elle devait passer.
+    /// Le type était optionnel bien avant que ce sens le soit — c'est
+    /// exactement ce silence qui a laissé `canSubmit` exiger un nom pendant un
+    /// cycle entier après l'ouverture de #6424.
     public let displayName: String?
     public let email: String
-    public let password: String
+    /// `nil` ⇒ **absent de la charge**, et le compte naît SANS mot de passe
+    /// (#6424) : sa seule porte est le lien magique, jusqu'à ce qu'il en pose
+    /// un depuis son profil.
+    ///
+    /// `nil`, jamais `""`. La passerelle lit l'ABSENCE de la clé ; une chaîne
+    /// vide serait une valeur — refusée par la borne de longueur — et
+    /// l'inscription échouerait là où elle devait passer. `Encodable` omet une
+    /// propriété optionnelle `nil` par défaut, ce qui rend l'absence gratuite
+    /// ici et payante nulle part.
+    public let password: String?
     /// Les chiffres tels que tapés (forme nationale admise, `0612345678`) ;
     /// la passerelle les normalise en E.164 avec `phoneCountryCode`. `nil` ⇒
     /// absent de la charge — le téléphone n'est jamais obligatoire.
@@ -77,6 +104,17 @@ public struct RegisterRequest: Encodable, Sendable {
     public let phoneCountryCode: String?
     public let systemLanguage: String
     public let regionalLanguage: String?
+    /// Le pseudo que l'écran MONTRE et donc ENVOIE (#6479).
+    ///
+    /// Déclaré depuis #5218 pour la reprise après transfert de numéro, il
+    /// restait toujours `nil`. Il PART désormais : l'écran affiche le pseudo
+    /// dérivé de l'adresse et laisse le modifier, donc la valeur existe.
+    /// `resoudreUsername` l'emploie tel quel et ne génère plus rien.
+    ///
+    /// `nil` ⇒ absent de la charge, et la passerelle en cherche un LIBRE — le
+    /// seul cas restant est une adresse dont rien n'est slugifiable. Fourni,
+    /// une collision devient un refus `USERNAME_TAKEN` servi avec trois pseudos
+    /// libres : on ne renomme pas quelqu'un après lui avoir montré son pseudo.
     public let username: String?
     public let firstName: String?
     public let lastName: String?
@@ -84,7 +122,7 @@ public struct RegisterRequest: Encodable, Sendable {
     public init(
         displayName: String? = nil,
         email: String,
-        password: String,
+        password: String? = nil,
         phoneNumber: String? = nil,
         phoneCountryCode: String? = nil,
         systemLanguage: String = "fr",

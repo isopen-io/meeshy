@@ -13,6 +13,7 @@
 
 
 import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
+import { meeshMissing } from '@/lib/view/meesh-copy';
 import { GLYPHS } from '@/components/glyphs';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { ProgressBar } from '@/components/progress-bar';
@@ -70,6 +71,8 @@ export const BRAND = 'var(--color-ios-brand)';
 export const STREAK_TINT = 'var(--ios-warning)';
 /** L'ambre des Meeshes — la même famille que les badges, distincte de la marque. */
 export const MEESH_TINT = 'var(--ios-warning)';
+/** L'argent de la PIÈCE Meesh (#6427) — dérivé de `MeeshyColors.meeshSilver`, jamais recopié. */
+export const MEESH_COIN_TINT = 'var(--ios-meesh-silver)';
 export const UNLOCKED_TINT = 'var(--ios-success)';
 export const INK = 'var(--color-ios-ink)';
 export const INK_2 = 'var(--color-ios-ink-2)';
@@ -388,7 +391,18 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
   );
 }
 
-export function MeeshHero({ meesh, onMint, isMinting }: { meesh: EngagementMeeshProgress; onMint: () => void; isMinting: boolean }) {
+export function MeeshHero({
+  meesh,
+  onMint,
+  isMinting,
+  mintError,
+}: {
+  meesh: EngagementMeeshProgress;
+  onMint: () => void;
+  isMinting: boolean;
+  /** L'ÉCHEC de la frappe (#6470) — même loi que `MeeshDetail`. */
+  mintError?: string | undefined;
+}) {
   const soldeLabel = meesh.balance === 0 ? 'Aucune Meesh' : meesh.balance === 1 ? '1 Meesh' : `${meesh.balance} Meeshes`;
   return (
     <section aria-labelledby="progression-meesh" className="flex flex-col gap-3 rounded-card px-4 py-4"
@@ -398,8 +412,8 @@ export function MeeshHero({ meesh, onMint, isMinting }: { meesh: EngagementMeesh
       }}
     >
       <div className="flex items-center gap-2">
-        <span style={{ color: MEESH_TINT }} aria-hidden="true">
-          <GlyphSvg glyph={PROGRESSION_GLYPHS.medal} size={18} />
+        <span style={{ color: MEESH_COIN_TINT }} aria-hidden="true">
+          <GlyphSvg glyph={PROGRESSION_GLYPHS.coinFill} size={18} />
         </span>
         <h2 id="progression-meesh" className="text-large-title font-bold" style={{ color: INK }}>
           {soldeLabel}
@@ -422,22 +436,39 @@ export function MeeshHero({ meesh, onMint, isMinting }: { meesh: EngagementMeesh
         // Le bouton RESTE pendant la frappe, avec son état dit : le faire
         // disparaître au moment du tap donnerait l'impression que l'action a
         // échoué, alors qu'elle est en cours.
-        <button
-          type="button"
-          onClick={onMint}
-          disabled={isMinting}
-          aria-busy={isMinting}
-          className="min-h-11 rounded-chip px-4 text-body font-semibold disabled:opacity-60"
-          style={{ backgroundColor: MEESH_TINT, color: 'var(--color-ios-surface)' }}
-        >
-          {isMinting ? 'Frappe en cours…' : `Convertir ${meesh.mintCost} points en une Meesh`}
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={onMint}
+            disabled={isMinting}
+            aria-busy={isMinting}
+            data-meesh-mint
+            className="flex min-h-11 items-center justify-center gap-2 rounded-chip px-4 text-body font-semibold disabled:opacity-80"
+            style={{ backgroundColor: MEESH_TINT, color: 'var(--color-ios-surface)' }}
+          >
+            {/* MÊME loi que `MeeshDetail` (#6470) : l'activité se VOIT, pas
+                seulement se lit. Deux surfaces qui portent la même action
+                doivent porter le même état, sinon l'une des deux ment. */}
+            {isMinting ? (
+              <span
+                aria-hidden="true"
+                data-meesh-mint-spinner
+                className="inline-block size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
+              />
+            ) : null}
+            {isMinting ? 'Frappe en cours…' : `Convertir ${meesh.mintCost} points en une Meesh`}
+          </button>
+          {mintError !== undefined && !isMinting ? (
+            <p role="alert" data-meesh-mint-error className="text-caption" style={{ color: 'var(--ios-error)' }}>
+              {mintError}
+            </p>
+          ) : null}
+        </>
       ) : (
         <p className="text-check" style={{ color: INK_2 }}>
-          Encore {meesh.missingPoints} points convertibles avant une Meesh.
-          {meesh.floorPoints > 0
-            ? ` Vos ${meesh.floorPoints} points de conversation seront repris en dernier, sans éteindre aucun badge.`
-            : ''}
+          {/* SITE UNIQUE (#6478) — la phrase vivait en double, donc fausse deux
+              fois : « Vos 1 points de conversation ». */}
+          {meeshMissing(meesh.missingPoints, meesh.floorPoints)}
         </p>
       )}
     </section>

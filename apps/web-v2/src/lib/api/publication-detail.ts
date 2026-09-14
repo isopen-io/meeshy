@@ -25,8 +25,11 @@ export async function loadPost(
   params: PublicationDeps & { readonly postId: string; readonly signal?: AbortSignal },
 ): Promise<ApiResult<FeedPost>> {
   if (__FIXTURES__ && params.source === 'fixtures') {
-    const { FEED_POSTS } = await import('./fixtures-feed');
-    const found = FEED_POSTS.find((post) => post.id === params.postId);
+    /* Le corpus des Réels (#6457) est lisible par identifiant, comme la
+       passerelle lit toute publication : un lien `/reels?seed=<id>` démarre
+       sur son réel même quand le Flux ne l'a jamais servi. */
+    const [{ FEED_POSTS }, { REEL_POSTS }] = await Promise.all([import('./fixtures-feed'), import('./fixtures-reels')]);
+    const found = [...FEED_POSTS, ...REEL_POSTS].find((post) => post.id === params.postId);
     return found === undefined
       ? { ok: false, status: 404, error: 'Post not found', code: 'POST_NOT_FOUND' }
       : { ok: true, data: found };

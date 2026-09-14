@@ -6,18 +6,18 @@
  * Un témoin unitaire prouve que `translate()` rend de l'allemand ; il ne
  * prouve ni que le script d'amorçage résout la langue du navigateur, ni que la
  * route attend le catalogue avant de rendre, ni que le chunk servi est bien
- * celui de CETTE langue. Ce gate ouvre `/links` (un écran d'attente, sous les
- * menus flottants) et mesure, pour chaque cas :
+ * celui de CETTE langue. Ce gate ouvre `/links` (le hub « Mes liens », sous les
+ * menus flottants — un écran d'attente jusqu'à #6361) et mesure, pour chaque cas :
  *
  *  1. `<html lang>` est la langue résolue (stockage → navigateur → `fr`) ;
- *  2. le titre, la promesse, l'annonce « bientôt » et le retour de l'écran sont
+ *  2. le titre, la bannière et son sous-titre, et le retour de l'écran sont
  *     dans cette langue ;
  *  3. le bouton du menu, l'échelle et ses six barreaux s'annoncent dans cette
  *     langue ;
  *  4. UN SEUL catalogue a été téléchargé, celui de la langue résolue — le
  *     chargement paresseux par langue est une mesure, pas une promesse ;
  *  5. aucune erreur de page (un catalogue lu avant d'être chargé LÈVE) ;
- *  6. à 320 × 568, le titre et la promesse les plus longs (allemand) restent
+ *  6. à 320 × 568, le titre et le sous-titre les plus longs (allemand) restent
  *     atteignables à leur centre (`document.elementFromPoint`) et ne débordent
  *     pas l'écran.
  *
@@ -74,36 +74,38 @@ const expect = (ok, what) => {
 const GERMAN = {
   lang: 'de',
   title: 'Meine Links',
-  promise: 'Die in deinen Unterhaltungen geteilten Links werden hier gesammelt.',
-  soon: 'Dieser Bildschirm kommt bald.',
+  subtitle: 'Lade ein, wen du willst, in deine Unterhaltungen',
+  banner: 'Deine Links verwalten',
   back: 'Zurück zu den Unterhaltungen',
   /* Le bouton DIT le compte de la cloche (#6288) : les fixtures en servent
      trois non lues, et son nom le porte dans la langue d'interface. */
   menu: 'Menü, 3 ungelesene Mitteilungen',
   ladder: 'Meeshy-Navigation',
-  rungs: ['Meine Links', 'Mitteilungen, 3 ungelesen', 'Anrufe', 'Entdecken', 'Communitys', 'Einstellungen'],
+  /* Le barreau « Découvrir » DIT le compte des demandes reçues (#6321) : les
+     fixtures en servent trois. */
+  rungs: ['Meine Links', 'Mitteilungen, 3 ungelesen', 'Anrufe', 'Entdecken, 3 Anfragen erhalten', 'Communitys', 'Einstellungen'],
 };
 
 const ARABIC = {
   lang: 'ar',
   title: 'روابطي',
-  promise: 'ستُجمع هنا الروابط التي تمت مشاركتها في محادثاتك.',
-  soon: 'هذه الشاشة قادمة قريبًا.',
+  subtitle: 'ادعُ من تشاء إلى محادثاتك',
+  banner: 'إدارة روابطك',
   back: 'العودة إلى المحادثات',
   menu: 'القائمة، 3 إشعارات غير مقروءة',
   ladder: 'التنقل في Meeshy',
-  rungs: ['روابطي', 'الإشعارات، 3 غير مقروءة', 'المكالمات', 'اكتشاف', 'المجتمعات', 'الإعدادات'],
+  rungs: ['روابطي', 'الإشعارات، 3 غير مقروءة', 'المكالمات', 'اكتشاف، 3 طلبات واردة', 'المجتمعات', 'الإعدادات'],
 };
 
 const FRENCH = {
   lang: 'fr',
   title: 'Mes liens',
-  promise: 'Les liens partagés dans vos conversations se rassembleront ici.',
-  soon: 'Cet écran arrive bientôt.',
+  subtitle: 'Invitez qui vous voulez dans vos conversations',
+  banner: 'Gérez vos liens',
   back: 'Revenir aux conversations',
   menu: 'Menu, 3 notifications non lues',
   ladder: 'Navigation Meeshy',
-  rungs: ['Mes liens', 'Notifications, 3 non lues', 'Appels', 'Découvrir', 'Communautés', 'Réglages'],
+  rungs: ['Mes liens', 'Notifications, 3 non lues', 'Appels', 'Découvrir, 3 demandes reçues', 'Communautés', 'Réglages'],
 };
 
 const CASES = [
@@ -138,15 +140,15 @@ async function measure({ name, locale, stored, want }, viewport, scheme) {
   });
 
   await page.goto(`${BASE}/links`, { waitUntil: 'load' });
-  await page.locator('main h1').waitFor({ state: 'visible', timeout: 10_000 });
+  await page.locator('header h1').waitFor({ state: 'visible', timeout: 10_000 });
   await page.locator('[data-floating-menu]').waitFor({ state: 'visible', timeout: 10_000 });
 
   expect((await page.evaluate(() => document.documentElement.lang)) === want.lang, `${tag} : <html lang="${want.lang}">`);
-  expect((await page.locator('main h1').innerText()).trim() === want.title, `${tag} : titre « ${want.title} »`);
-  expect((await page.getByText(want.promise, { exact: true }).count()) === 1, `${tag} : promesse dans la langue`);
-  expect((await page.getByText(want.soon, { exact: true }).count()) === 1, `${tag} : annonce « bientôt » dans la langue`);
+  expect((await page.locator('header h1').innerText()).trim() === want.title, `${tag} : titre « ${want.title} »`);
+  expect((await page.getByText(want.banner, { exact: true }).count()) === 1, `${tag} : bannière du hub dans la langue`);
+  expect((await page.getByText(want.subtitle, { exact: true }).count()) === 1, `${tag} : sous-titre de la bannière dans la langue`);
   expect(
-    (await page.locator('main header a').first().getAttribute('aria-label')) === want.back,
+    (await page.locator('header a').first().getAttribute('aria-label')) === want.back,
     `${tag} : le retour s'annonce « ${want.back} »`,
   );
   expect(
@@ -155,8 +157,8 @@ async function measure({ name, locale, stored, want }, viewport, scheme) {
   );
 
   const reach = await page.evaluate(() => {
-    const promise = [...document.querySelectorAll('#contenu p')][0];
-    return [document.querySelector('main h1'), promise].map((el) => {
+    const subtitle = document.querySelector('[data-links-banner] .text-caption');
+    return [document.querySelector('header h1'), subtitle].map((el) => {
       if (!el) return { found: false };
       const r = el.getBoundingClientRect();
       const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
@@ -167,7 +169,7 @@ async function measure({ name, locale, stored, want }, viewport, scheme) {
       };
     });
   });
-  for (const [index, label] of ['titre', 'promesse'].entries()) {
+  for (const [index, label] of ['titre', 'sous-titre de la bannière'].entries()) {
     const r = reach[index];
     expect(r.found && r.reachable, `${tag} : ${label} atteignable à son centre`);
     expect(r.found && r.inside, `${tag} : ${label} ne déborde pas l'écran`);

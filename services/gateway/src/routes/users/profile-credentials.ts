@@ -5,7 +5,7 @@
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { logError } from '../../utils/logger';
+import { logError, logWarn } from '../../utils/logger';
 import { hashPassword, verifyPassword } from '../../utils/password-hash';
 import { validatePasswordStrength } from '../../utils/password-strength';
 import {
@@ -21,6 +21,8 @@ import {
 import type { AuthenticatedRequest } from './types';
 import { authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
+import { getUserSessions, invalidateAllSessions } from '../../services/SessionService';
+import { disconnectSession } from '../../socketio/disconnectSession';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest } from '../../utils/response';
 import { searchTokensFor } from '../../utils/search-tokens';
@@ -34,14 +36,20 @@ export async function updateUserPassword(fastify: FastifyInstance) {
   fastify.patch('/users/me/password', {
     onRequest: [fastify.authenticate],
     schema: {
-      description: 'Change the authenticated user password. Requires current password for verification. New password must meet security requirements.',
+      description: 'Change the authenticated user password. Requires current password for verification. New password must meet security requirements. Every OTHER session is revoked and disconnected (#6435) — pass `x-session-token` to keep the calling device signed in.',
       tags: ['users'],
       summary: 'Change user password',
+      headers: {
+        type: 'object',
+        properties: {
+          'x-session-token': { type: 'string', description: 'Current session token, so this device is excluded from the post-change revocation' }
+        }
+      },
       body: {
         type: 'object',
-        required: ['currentPassword', 'newPassword'],
+        required: ['newPassword'],
         properties: {
-          currentPassword: { type: 'string', minLength: 1, description: 'Current password for verification — no length bound: a bound would lock out accounts created under a lower one' },
+          currentPassword: { type: 'string', minLength: 1, description: 'Current password for verification — REQUIRED unless the account has none yet (email-only signup, #6424), in which case the authenticated session is the proof. No length bound: a bound would lock out accounts created under a lower one' },
           newPassword: { type: 'string', minLength: PASSWORD_MIN_LENGTH, description: 'New password (min PASSWORD_MIN_LENGTH characters)' }
         }
       },
@@ -84,10 +92,33 @@ export async function updateUserPassword(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      const isPasswordValid = await verifyPassword(body.currentPassword, user.password);
+      /**
+       * POSER LE PREMIER MOT DE PASSE (#6424).
+       *
+       * Un compte né d'une inscription par e-mail seul n'a pas de mot de
+       * passe. Lui en réclamer un « actuel » pour en poser un premier rend la
+       * porte inatteignable : la preuve exigée est précisément la chose que
+       * l'appel vient créer.
+       *
+       * Ce qui la remplace n'est pas RIEN — c'est la SESSION. Un compte sans
+       * mot de passe n'a qu'une porte, le lien magique, et la franchir prouve
+       * le contrôle de la boîte mail. Le `onRequest: [fastify.authenticate]`
+       * de cette route est donc déjà une preuve de possession, du même ordre
+       * que celle qu'un lien de réinitialisation apporte à `/reset-password`.
+       *
+       * L'exception est BORNÉE par l'état de la ligne, jamais par ce que la
+       * requête déclare : `user.password === null` est lu en base. Un appel
+       * qui omettrait `currentPassword` sur un compte qui en a un se voit
+       * refusé exactement comme avant.
+       */
+      const premierMotDePasse = user.password === null || user.password === undefined;
 
-      if (!isPasswordValid) {
-        return sendBadRequest(reply, 'Current password is incorrect');
+      if (!premierMotDePasse) {
+        const isPasswordValid = await verifyPassword(body.currentPassword ?? '', user.password);
+
+        if (!isPasswordValid) {
+          return sendBadRequest(reply, 'Current password is incorrect');
+        }
       }
 
       // #3629 — cette porte ne validait que la LONGUEUR (`updatePasswordSchema`,
@@ -106,6 +137,35 @@ export async function updateUserPassword(fastify: FastifyInstance) {
         where: { id: userId },
         data: { password: hashedPassword }
       });
+
+      // #6435 — changer son mot de passe ne révoquait AUCUNE autre session :
+      // reprendre un compte (lien magique → on pose un mot de passe) ne
+      // chassait pas l'intrus qui y était déjà connecté. Même patron que
+      // `DELETE /sessions` (routes/auth/magic-link.ts) : les sessions à
+      // couper se relèvent AVANT la révocation (une ligne révoquée quitte la
+      // liste "active"), la session courante — identifiée par
+      // `x-session-token`, comme sur les autres routes de gestion de
+      // sessions — survit, et chaque AUTRE session voit son socket coupé
+      // individuellement (jamais `disconnectRevokedSessions`, qui couperait
+      // aussi l'appareil courant).
+      const currentSessionToken = request.headers['x-session-token'] as string | undefined;
+      const sessionsBeforeRevocation = await getUserSessions(userId, currentSessionToken);
+      const sessionsToDisconnect = sessionsBeforeRevocation
+        .filter((session) => !session.isCurrentSession)
+        .map((session) => session.id);
+
+      await invalidateAllSessions(userId, currentSessionToken, 'password_changed');
+
+      const io = fastify.socketIOHandler?.getManager?.()?.getIO();
+      for (const sessionId of sessionsToDisconnect) {
+        await disconnectSession({
+          io,
+          userId,
+          sessionId,
+          message: 'This device was signed out because the password changed.',
+          onError: (error) => logWarn(fastify.log, '[PASSWORD_CHANGE] socket cut failed', error),
+        });
+      }
 
       // Notification sécurité
       const notificationService = fastify.notificationService;

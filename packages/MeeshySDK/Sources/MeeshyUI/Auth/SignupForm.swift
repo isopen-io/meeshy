@@ -27,6 +27,13 @@ public struct SignupForm: Equatable {
 
     /// Le nom que l'utilisateur se donne. Seul champ d'identité de la charge —
     /// la passerelle en dérive pseudo, prénom et nom (#5218).
+    /// Le pseudo TAPÉ, vide tant que l'utilisateur n'a rien changé (#6479).
+    ///
+    /// Distinct d'`effectiveUsername`, qui rend celui qui PARTIRA — dérivé de
+    /// l'adresse à défaut de saisie. L'écran montre le second et écrit dans le
+    /// premier : sans cette séparation, taper une lettre dans l'adresse
+    /// écraserait un pseudo choisi à la main.
+    public var username: String
     public var displayName: String
     public var email: String
     /// Les chiffres SEULS, sans indicatif : l'indicatif vient de `country`.
@@ -71,9 +78,19 @@ public struct SignupForm: Equatable {
     /// combinantes incluses — `CharacterSet.letters` couvre L* et M*), espaces,
     /// apostrophes droite ET typographiques (le clavier iOS insère `’`), points
     /// et tirets ; au moins une lettre ; `displayNameMaxLength` caractères au plus.
+    ///
+    /// Un nom FOURNI tient le pattern et la borne ; un champ VIDE est valide,
+    /// parce qu'il est LÉGITIME (#6441, suite de #6424) — la passerelle le
+    /// DÉRIVE alors de la partie locale de l'adresse (`displayNameDepuisEmail`,
+    /// `services/gateway/src/services/auth/registration-identity.ts`). C'est le
+    /// même arbitrage que `isPasswordValid` ci-dessous, et le doc-comment de
+    /// `displayNameMaxLength` nomme déjà le défaut qu'il écarte : un refus
+    /// local pour une charge que la passerelle ACCEPTE, et rien ne rougit
+    /// nulle part.
     public static func isDisplayNameValid(_ value: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed.count <= displayNameMaxLength else { return false }
+        if trimmed.isEmpty { return true }
+        guard trimmed.count <= displayNameMaxLength else { return false }
         guard trimmed.unicodeScalars.contains(where: { CharacterSet.letters.contains($0) }) else { return false }
         let allowed = CharacterSet.letters
             .union(.whitespaces)
@@ -88,21 +105,84 @@ public struct SignupForm: Equatable {
         return trimmed.range(of: #"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$"#, options: .regularExpression) != nil
     }
 
+    /// Un mot de passe FOURNI doit atteindre la borne ; un champ VIDE est
+    /// valide, parce qu'il est LÉGITIME (#6424).
+    ///
+    /// Le compte naît alors sans mot de passe, et sa porte est le lien magique.
+    /// Garder l'ancienne règle ici rendrait le client plus strict que le
+    /// serveur — le défaut que le doc-comment de `displayNameMaxLength` nomme
+    /// juste au-dessus : un refus local pour une charge que la passerelle
+    /// accepte, et rien ne rougit nulle part.
     public static func isPasswordValid(_ value: String) -> Bool {
-        value.count >= passwordMinLength
+        value.isEmpty || value.count >= passwordMinLength
+    }
+
+    /// `true` quand l'utilisateur a réellement TAPÉ un mot de passe.
+    ///
+    /// Distinct de `isPasswordValid`, qui répond « cette saisie est-elle
+    /// acceptable ». Celle-ci répond « y a-t-il une saisie », et c'est elle qui
+    /// décide si la clé part dans la charge.
+    public static func hasPassword(_ value: String) -> Bool { !value.isEmpty }
+
+    /// `true` quand l'utilisateur a réellement TAPÉ un nom affiché.
+    ///
+    /// Jumelle de `hasPassword` : `isDisplayNameValid` répond « cette saisie
+    /// est-elle acceptable », celle-ci « y a-t-il une saisie » — et c'est elle
+    /// qui décide si la clé part dans la charge.
+    public static func hasDisplayName(_ value: String) -> Bool {
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     public var isDisplayNameValid: Bool { Self.isDisplayNameValid(displayName) }
     public var isEmailValid: Bool { Self.isEmailValid(email) }
     public var isPasswordValid: Bool { Self.isPasswordValid(password) }
+    public var hasPassword: Bool { Self.hasPassword(password) }
+    public var hasDisplayName: Bool { Self.hasDisplayName(displayName) }
 
-    /// Le bouton s'active dès que les TROIS champs requis sont valides.
+    /// LE PSEUDO QUI PARTIRA — tapé s'il l'a été, dérivé de l'adresse sinon.
     ///
-    /// Le téléphone n'y figure pas : il n'est pas requis, et l'annoncer comme
-    /// « facultatif » serait déjà une friction. Rien ici ne dépend du réseau —
-    /// aucun appel de disponibilité ne précède l'envoi.
+    /// Directive porteur 2026-09-14 : « dès qu'un champ username est rempli la
+    /// passerelle n'a plus rien à créer ; elle crée quand aucune valeur n'est
+    /// disponible. Ici on a des données et la passerelle doit utiliser ces
+    /// données. » C'est exactement ce que fait `resoudreUsername`
+    /// (`registration.service.ts`) : un pseudo fourni traverse
+    /// `normalizeUsername` et rien n'est généré.
+    ///
+    /// Rend `""` quand la dérivation retombe sur le RECOURS (`user`) : là on
+    /// n'a justement AUCUNE donnée, et envoyer `user` garantirait une collision
+    /// pour tout le monde. C'est la règle du porteur lue jusqu'au bout.
+    public var effectiveUsername: String {
+        let tape = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !tape.isEmpty { return tape }
+        let derive = RegistrationIdentity.pseudoRacine(displayName: displayName, email: email)
+        return derive == RegistrationIdentity.pseudoDeSecours ? "" : derive
+    }
+
+    /// Le nom affiché qui partira — tapé s'il l'a été, dérivé de l'adresse sinon.
+    public var effectiveDisplayName: String {
+        let tape = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return tape.isEmpty ? RegistrationIdentity.displayNameDepuisEmail(email) : tape
+    }
+
+    /// Un numéro FOURNI doit être plausible (#6479) ; un champ VIDE reste
+    /// valide — il n'est pas requis. Troisième champ à porter cette forme,
+    /// après le mot de passe et le nom affiché.
+    public var isPhoneValid: Bool { PhonePlausibility.isPlausible(phoneDigits) }
+
+    /// Le MOTIF du refus, pour que l'écran dise quoi corriger — « numéro
+    /// invalide » n'apprend rien à qui a tapé le sien de travers.
+    public var phoneRefusal: PhonePlausibility.Refusal? { PhonePlausibility.refusal(phoneDigits) }
+
+    /// Le bouton s'active dès que l'ADRESSE est valide — et que le nom affiché,
+    /// le mot de passe et le NUMÉRO, s'ils ont été tapés, tiennent leurs bornes
+    /// (#6441, #6479).
+    ///
+    /// L'adresse est le SEUL champ requis, exactement comme le
+    /// `required: ['email']` du schéma partagé : ni le nom, ni le téléphone, ni
+    /// le mot de passe ne sont exigés par la passerelle. Rien ici ne dépend du
+    /// réseau — aucun appel de disponibilité ne précède l'envoi.
     public var canSubmit: Bool {
-        isDisplayNameValid && isEmailValid && isPasswordValid
+        isDisplayNameValid && isEmailValid && isPasswordValid && isPhoneValid
     }
 
     // MARK: - Téléphone
@@ -135,13 +215,24 @@ public struct SignupForm: Equatable {
     public func registerRequest() -> RegisterRequest {
         let phone = hasPhone ? normalizedPhoneDigits : nil
         return RegisterRequest(
-            displayName: displayName.trimmingCharacters(in: .whitespacesAndNewlines),
+            // CE QUE L'ÉCRAN MONTRE EST CE QU'IL ENVOIE (#6479) — dérivé ou
+            // tapé, peu importe : dès qu'une valeur existe, la passerelle n'a
+            // plus à en inventer une. Les deux clés restent `nil` quand il n'y
+            // a réellement rien, et `nil` — jamais `""`, que `minLength: 1`
+            // refuserait.
+            displayName: effectiveDisplayName.isEmpty ? nil : effectiveDisplayName,
             email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-            password: password,
+            // `nil`, jamais `""` (#6424) : la passerelle lit l'ABSENCE de la
+            // clé pour créer un compte sans mot de passe. Une chaîne vide
+            // serait une VALEUR, refusée par la borne de longueur — le
+            // formulaire échouerait précisément dans le cas qu'il vient
+            // d'ouvrir.
+            password: hasPassword ? password : nil,
             phoneNumber: phone,
             phoneCountryCode: phone == nil ? nil : country.id,
             systemLanguage: systemLanguage,
-            regionalLanguage: regionalLanguage
+            regionalLanguage: regionalLanguage,
+            username: effectiveUsername.isEmpty ? nil : effectiveUsername
         )
     }
 
@@ -209,6 +300,7 @@ public struct SignupForm: Equatable {
     /// langue régionale. Rien à configurer avant de commencer à taper.
     public init(locale: Locale = .current) {
         let system = Self.defaultSystemLanguage(for: locale)
+        self.username = ""
         self.displayName = ""
         self.email = ""
         self.phoneDigits = ""
@@ -221,6 +313,7 @@ public struct SignupForm: Equatable {
     /// Initialiseur complet — les suites l'emploient pour poser un état sans
     /// rejouer la saisie champ par champ.
     public init(
+        username: String = "",
         displayName: String,
         email: String,
         phoneDigits: String = "",
@@ -229,6 +322,7 @@ public struct SignupForm: Equatable {
         systemLanguage: String,
         regionalLanguage: String
     ) {
+        self.username = username
         self.displayName = displayName
         self.email = email
         self.phoneDigits = phoneDigits

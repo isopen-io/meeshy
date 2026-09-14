@@ -79,7 +79,8 @@ const FloatingMenus = lazy(chargerMenus);
 
 export default function Shell({ children }: { children: ReactNode }) {
   const pastilleArmee = useSyncPillArmed();
-  const menusArmes = showsFloatingMenus(useRoute().key);
+  const routeKey = useRoute().key;
+  const menusArmes = showsFloatingMenus(routeKey);
 
   /* APRÈS le premier pixel, pendant qu'on est encore en ligne. L'effet ne
      s'exécute pas au rendu serveur, donc le préchauffage institutionnel n'en
@@ -112,7 +113,7 @@ export default function Shell({ children }: { children: ReactNode }) {
           défaut le plus bête du lot. */}
       {menusArmes ? (
         <Suspense fallback={null}>
-          <FloatingMenus />
+          <FloatingMenus routeKey={routeKey} />
         </Suspense>
       ) : null}
     </div>

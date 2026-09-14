@@ -2,8 +2,10 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { CountrySheet } from '@/components/country-sheet';
+import { DerivedIdentity } from '@/components/derived-identity';
 import { Field } from '@/components/field';
-import { Glyph } from '@/components/glyph';
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { AUTH_GLYPHS } from '@/components/glyphs-auth';
 import { LanguageSheet } from '@/components/language-sheet';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
@@ -11,7 +13,15 @@ import { auth, isPhoneConflict } from '@/lib/api/auth';
 import { countryName, type Country } from '@/lib/countries';
 import { sessionStore } from '@/lib/api/session';
 import { useOnline } from '@/lib/net/online';
-import { canSubmit, composeRegisterBody, emptySignupForm, type SignupFormState } from '@/lib/signup-form';
+import {
+  PASSWORD_MIN,
+  canSubmit,
+  effectiveDisplayName,
+  effectiveUsername,
+  composeRegisterBody,
+  emptySignupForm,
+  type SignupFormState,
+} from '@/lib/signup-form';
 import { placeSignupFailure, type SignupFeedback, type SignupField } from '@/lib/view/auth-feedback';
 import { Link, href, navigate } from '@/routes/route-table';
 
@@ -52,7 +62,12 @@ const INDIGO_TINT = 'var(--ios-indigo-500)';
  * copieront.
  */
 const INDIGO_LINK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--ios-indigo-600)]';
-const EMPTY_FEEDBACK: SignupFeedback = { fieldErrors: {}, bannerError: null, showSignIn: false };
+const EMPTY_FEEDBACK: SignupFeedback = {
+  fieldErrors: {},
+  bannerError: null,
+  showSignIn: false,
+  usernameSuggestions: [],
+};
 
 type FocusedField = SignupField | null;
 
@@ -70,6 +85,9 @@ export default function SignupScreen() {
   const [isSubmitting, setSubmitting] = useState(false);
   const [isShowingCountrySheet, setShowingCountrySheet] = useState(false);
   const [isShowingLanguageSheet, setShowingLanguageSheet] = useState(false);
+  // Le téléphone ne passe pas par `Field` (il porte le sélecteur de pays) : son
+  // (i) est tenu ici, avec la même loi — replié par défaut, jamais retiré du DOM.
+  const [isPhoneHintOpen, setPhoneHintOpen] = useState(false);
   // Une inscription réussie AUTHENTIFIE déjà (`auth.register` établit la
   // session, #4264) — sans ce drapeau, l'effet ci-dessous mènerait à `list`
   // avant que `handleSubmit` n'ait pu router vers la vérification d'e-mail
@@ -148,64 +166,6 @@ export default function SignupScreen() {
         </div>
 
         <div className="grid gap-5 pb-8">
-          <Field
-            id="signup-display-name"
-            label="Nom affiché"
-            tint={INDIGO_TINT}
-            focused={focused === 'displayName'}
-            error={feedback.fieldErrors.displayName}
-          >
-            {({ id, describedBy }) => (
-              <input
-                id={id}
-                type="text"
-                autoComplete="name"
-                value={form.displayName}
-                onChange={(e) => patch({ displayName: e.currentTarget.value })}
-                onFocus={() => setFocused('displayName')}
-                onBlur={() => setFocused(null)}
-                placeholder="Comment vous appeler ?"
-                className="w-full bg-transparent py-3 text-input outline-none"
-                style={{ color: 'var(--color-ios-ink)' }}
-                aria-describedby={describedBy}
-                aria-invalid={describedBy !== undefined}
-              />
-            )}
-          </Field>
-
-          <div className="grid gap-1">
-            <Field id="signup-email" label="Adresse e-mail" tint={INDIGO_TINT} focused={focused === 'email'} error={emailError}>
-              {({ id, describedBy }) => (
-                <input
-                  id={id}
-                  type="email"
-                  autoComplete="email"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  value={form.email}
-                  onChange={(e) => patch({ email: e.currentTarget.value })}
-                  onFocus={() => setFocused('email')}
-                  onBlur={() => setFocused(null)}
-                  placeholder="vous@exemple.com"
-                  className="w-full bg-transparent py-3 text-input outline-none"
-                  style={{ color: 'var(--color-ios-ink)' }}
-                  aria-describedby={describedBy}
-                  aria-invalid={describedBy !== undefined}
-                />
-              )}
-            </Field>
-            {feedback.showSignIn ? (
-              <Link
-                to="login"
-                replace
-                className={`inline-flex items-center justify-self-start text-caption font-semibold ${INDIGO_LINK}`}
-                style={{ minHeight: 44 }}
-              >
-                Se connecter
-              </Link>
-            ) : null}
-          </div>
-
           {/* Téléphone — jamais annoncé « facultatif » (SignupView.swift:169-171) :
               le laisser vide est le chemin nominal. */}
           <div className="grid gap-1">
@@ -238,7 +198,19 @@ export default function SignupScreen() {
                   className="w-full bg-transparent py-3 text-input outline-none"
                   style={{ color: 'var(--color-ios-ink)' }}
                   aria-label="Téléphone"
+                  aria-describedby="signup-phone-hint"
                 />
+                <button
+                  type="button"
+                  onClick={() => setPhoneHintOpen((open) => !open)}
+                  aria-expanded={isPhoneHintOpen}
+                  aria-controls="signup-phone-hint"
+                  aria-label="À quoi sert le numéro"
+                  className="grid shrink-0 place-items-center rounded-full"
+                  style={{ minWidth: 44, minHeight: 44, marginRight: -10, color: 'var(--color-ios-ink-3)' }}
+                >
+                  <GlyphSvg glyph={AUTH_GLYPHS.info} size={18} />
+                </button>
               </div>
             </div>
             {feedback.fieldErrors.phoneNumber !== undefined ? (
@@ -246,14 +218,103 @@ export default function SignupScreen() {
                 {feedback.fieldErrors.phoneNumber}
               </p>
             ) : null}
+            {/* CE QU'IL OUVRE — derrière le (i) depuis le retour porteur « la
+                page est trop surchargée ». Les deux usages sont MESURÉS, pas
+                promis : identifiant de connexion (`AuthService.ts:158`) et
+                découverte par un contact qui l'a au carnet
+                (`contacts-match.ts`, `matchedBy: 'phone'`).
+                `sr-only` plutôt que démonté : REPLIÉ ne veut pas dire ABSENT —
+                `aria-describedby` de l'input le porte toujours, donc un lecteur
+                d'écran l'entend sans avoir à trouver le bouton. */}
+            <p
+              id="signup-phone-hint"
+              data-signup-phone-benefit
+              className={`text-caption ${isPhoneHintOpen ? '' : 'sr-only'}`}
+              style={{ color: 'var(--color-ios-ink-2)' }}
+            >
+              Il vous permettra de vous connecter, et à vos proches de vous retrouver.
+            </p>
           </div>
 
+          <div className="grid gap-1">
+            <Field id="signup-email" label="Adresse e-mail" tint={INDIGO_TINT} focused={focused === 'email'} error={emailError}>
+              {({ id, describedBy }) => (
+                <input
+                  id={id}
+                  type="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  value={form.email}
+                  onChange={(e) => patch({ email: e.currentTarget.value })}
+                  onFocus={() => setFocused('email')}
+                  onBlur={() => setFocused(null)}
+                  placeholder="vous@exemple.com"
+                  className="w-full bg-transparent py-3 text-input outline-none"
+                  style={{ color: 'var(--color-ios-ink)' }}
+                  aria-describedby={describedBy}
+                  aria-invalid={describedBy !== undefined}
+                />
+              )}
+            </Field>
+            {/* L'AVERTISSEMENT DE VALIDATION (#6479, directive porteur).
+                Il n'est pas derrière un (i) : ce n'est pas un détail qu'on
+                consulte, c'est une CONDITION du compte. Le savoir avant
+                d'envoyer évite de taper une adresse jetable puis de découvrir
+                qu'on ne peut pas entrer. */}
+            <p data-signup-email-verification className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+              Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte.
+            </p>
+            {feedback.showSignIn ? (
+              <Link
+                to="login"
+                replace
+                className={`inline-flex items-center justify-self-start text-caption font-semibold ${INDIGO_LINK}`}
+                style={{ minHeight: 44 }}
+              >
+                Se connecter
+              </Link>
+            ) : null}
+          </div>
+
+          {/* CE QUE L'INSCRIPTION VA CRÉER — montré, modifiable, et ENVOYÉ
+              (#6479). Placé APRÈS l'adresse parce qu'il en DÉCOULE : tant
+              qu'elle n'est pas tapée, il n'y a rien à montrer. */}
+          <DerivedIdentity
+            username={effectiveUsername(form)}
+            displayName={effectiveDisplayName(form)}
+            onUsernameChange={(username) => patch({ username })}
+            onDisplayNameChange={(displayName) => patch({ displayName })}
+            tint={INDIGO_TINT}
+            focusedField={focused === 'username' || focused === 'displayName' ? focused : null}
+            onFocus={(field) => setFocused(field)}
+            onBlur={() => setFocused(null)}
+            usernameError={feedback.fieldErrors.username}
+            displayNameError={feedback.fieldErrors.displayName}
+            suggestions={feedback.usernameSuggestions}
+          />
+
+          {/* LE MOT DE PASSE EST FACULTATIF (#6424). Le libellé le DIT, et la
+              note en dessous dit ce qui se passe sans lui — sans quoi laisser
+              le champ vide serait un geste qu'on ne pose que par accident.
+              La note disparaît dès qu'un mot de passe est tapé : elle décrit
+              alors un état qui n'est plus celui du formulaire.
+
+              Le gabarit lit `PASSWORD_MIN`, jamais un littéral : celui qui
+              vivait ici annonçait « 12 caractères minimum » alors que la borne
+              était passée à 6 — exactement le défaut que le doc-comment de
+              `PASSWORD_MIN` dit vouloir empêcher. */}
           <Field
             id="signup-password"
-            label="Mot de passe"
+            label="Mot de passe (facultatif)"
             tint={INDIGO_TINT}
             focused={focused === 'password'}
             error={feedback.fieldErrors.password}
+            hint={{
+              text: 'Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un plus tard.',
+              glyph: AUTH_GLYPHS.info,
+              label: 'Que se passe-t-il sans mot de passe',
+            }}
           >
             {({ id, describedBy }) => (
               <input
@@ -264,7 +325,7 @@ export default function SignupScreen() {
                 onChange={(e) => patch({ password: e.currentTarget.value })}
                 onFocus={() => setFocused('password')}
                 onBlur={() => setFocused(null)}
-                placeholder="12 caractères minimum"
+                placeholder={`${PASSWORD_MIN} caractères minimum`}
                 className="w-full bg-transparent py-3 text-input outline-none"
                 aria-describedby={describedBy}
                 aria-invalid={describedBy !== undefined}

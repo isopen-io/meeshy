@@ -1,5 +1,5 @@
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
-import { memo, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { memo, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 
 import { Avatar } from '@/components/avatar';
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
@@ -14,6 +14,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
+import { findFocusableIndex } from '@/lib/view/roving-menu';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { Link } from '@/routes/route-table';
 
@@ -100,6 +101,38 @@ export function discoverTabLabel(language: InterfaceLanguage, tab: DiscoverTab, 
   return translate(language, key, { count: unreadBadgeText(received) });
 }
 
+/**
+ * Flèches gauche/droite, Début et Fin — le motif WAI-ARIA « Tabs » qu'annonce
+ * `role="tablist"` (#6422). Un seul onglet est dans l'ordre de tabulation
+ * (tabindex itinérant, comme `useRovingMenu`) ; les autres restent
+ * atteignables aux flèches. `findFocusableIndex` est la MÊME arithmétique que
+ * le menu ancré (`roving-menu.ts`) — aucune ligne désactivée ici, donc
+ * `isDisabledAt` reste la constante `false`. En arabe, gauche et droite
+ * s'inversent : la flèche qui AVANCE dans le sens de lecture reste la même.
+ */
+function tabBarKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, index: number, rtl: boolean, moveTo: (index: number) => void): void {
+  const count = DISCOVER_TABS.length;
+  const forwardKey = rtl ? 'ArrowLeft' : 'ArrowRight';
+  const backwardKey = rtl ? 'ArrowRight' : 'ArrowLeft';
+  switch (event.key) {
+    case forwardKey:
+      moveTo(findFocusableIndex(count, index, 1, () => false));
+      break;
+    case backwardKey:
+      moveTo(findFocusableIndex(count, index, -1, () => false));
+      break;
+    case 'Home':
+      moveTo(findFocusableIndex(count, -1, 1, () => false));
+      break;
+    case 'End':
+      moveTo(findFocusableIndex(count, count, -1, () => false));
+      break;
+    default:
+      return;
+  }
+  event.preventDefault();
+}
+
 /** La barre d'onglets soulignés de `PeopleDiscoveryView.subTabBar` — le compte des reçues sur « Demandes ». */
 export function DiscoverTabBar({
   language,
@@ -112,6 +145,14 @@ export function DiscoverTabBar({
   readonly received: number;
   readonly onSelect: (tab: DiscoverTab) => void;
 }) {
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const rtl = language === 'ar';
+  const moveTo = (index: number) => {
+    const tab = DISCOVER_TABS[index];
+    if (tab === undefined) return;
+    itemRefs.current[index]?.focus();
+    onSelect(tab);
+  };
   return (
     <div
       role="tablist"
@@ -119,7 +160,7 @@ export function DiscoverTabBar({
       className="flex shrink-0 px-2"
       style={{ height: DISCOVER_TABS_HEIGHT, borderBottom: EDGE }}
     >
-      {DISCOVER_TABS.map((tab) => {
+      {DISCOVER_TABS.map((tab, index) => {
         const active = tab === selected;
         const count = tab === 'requests' ? received : 0;
         return (
@@ -128,11 +169,16 @@ export function DiscoverTabBar({
             type="button"
             role="tab"
             id={`discover-tab-${tab}`}
+            ref={(el) => {
+              itemRefs.current[index] = el;
+            }}
+            tabIndex={active ? 0 : -1}
             aria-selected={active}
             aria-controls="contenu"
             aria-label={discoverTabLabel(language, tab, count)}
             data-discover-tab={tab}
             onClick={() => onSelect(tab)}
+            onKeyDown={(event) => tabBarKeyDown(event, index, rtl, moveTo)}
             className="relative flex min-w-0 flex-1 items-center justify-center focus-visible:outline-2 focus-visible:-outline-offset-2"
             style={{ minHeight: 44, outlineColor: BRAND }}
           >
@@ -703,9 +749,14 @@ export function DiscoverError({ language, online, onRetry }: { readonly language
   );
 }
 
-export function DiscoverOfflineNotice({ language }: { readonly language: InterfaceLanguage }) {
+/**
+ * Hors ligne. Sur un cache non vide, la liste reste et l'annonce le dit ; à
+ * cache FROID (#6419), rien n'a jamais été chargé : l'annonce dit ce qui se
+ * passera au retour du réseau, jamais « la liste du dernier chargement ».
+ */
+export function DiscoverOfflineNotice({ language, cold }: { readonly language: InterfaceLanguage; readonly cold: boolean }) {
   return (
-    <div role="status" data-discover-offline className="flex items-start gap-3 px-5 py-3" style={{ borderBottom: EDGE }}>
+    <div role="status" data-discover-offline={cold ? 'cold' : 'cached'} className="flex items-start gap-3 px-5 py-3" style={{ borderBottom: EDGE }}>
       <span aria-hidden="true" className="pt-0.5" style={{ color: TONE_INK.warning }}>
         <Glyph name="warningCircle" size={18} />
       </span>
@@ -714,7 +765,7 @@ export function DiscoverOfflineNotice({ language }: { readonly language: Interfa
           {translate(language, 'discover.offline.title')}
         </span>
         <span className="text-caption" style={{ color: INK_2 }}>
-          {translate(language, 'discover.offline.body')}
+          {translate(language, cold ? 'discover.offline.cold.body' : 'discover.offline.body')}
         </span>
       </span>
     </div>

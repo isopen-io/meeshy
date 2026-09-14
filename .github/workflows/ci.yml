@@ -296,12 +296,17 @@ jobs:
       # #3679 — jumeau des deux cliquets ci-dessus, appliqué à l'usage
       # explicite de `any` plutôt qu'aux erreurs de compilation ou de lint.
       # `services/gateway/src` et `packages/shared` n'ont pas de config
-      # ESLint (rien à demander à `@typescript-eslint/no-explicit-any`), donc
-      # ce script mesure par motif plutôt que par AST — cf. son en-tête pour
-      # ce que ça couvre et ce que ça ne couvre pas. `packages/shared` est
-      # tenu à zéro (CLAUDE.md l'exige déjà pour ce paquet) ; `gateway` porte
-      # une baseline qui ne peut que descendre.
-      - name: any debt ratchet (gateway + shared)
+      # ESLint (rien à demander à `@typescript-eslint/no-explicit-any`), et
+      # `apps/web` en a une mais règle cette directive en `warn` — jamais
+      # comptée par le cliquet ESLint jumeau (`check-lint-debt.sh`), qui ne
+      # garde que les erreurs. Ce script mesure donc par motif plutôt que par
+      # AST sur les trois paquets, pour une seule définition de « ce qui
+      # compte comme `any` » — cf. son en-tête pour le détail et pour
+      # pourquoi il tourne APRÈS le build web ci-dessus (`.next/` exclu).
+      # `packages/shared` est tenu à zéro (CLAUDE.md l'exige déjà pour ce
+      # paquet) ; `gateway` et `web` portent chacun une baseline qui ne peut
+      # que descendre.
+      - name: any debt ratchet (gateway + shared + web)
         run: bash scripts/check-any-debt.sh --self-test && bash scripts/check-any-debt.sh
 
       # #5372, suite de #4889 — une entrée de catalogue d'endpoints CLIENT
@@ -421,6 +426,18 @@ jobs:
       # ne doit pas éteindre le garde en silence.
       - name: CI summary coverage guard
         run: node scripts/check-ci-summary-coverage.mjs --self-test && node scripts/check-ci-summary-coverage.mjs
+
+      # Même placement, même raison : la surface est le DÉPÔT — les workflows qui
+      # publient `isopen/meeshy-<image>:latest` sur `main`. Il ferme #6442 :
+      # `docker.yml` construisait `linux/amd64`, `release.yml`
+      # `linux/amd64,linux/arm64` sous émulation QEMU. L'architecture de `latest`
+      # dépendait donc du workflow arrivé le dernier, et l'étage arm64 émulé de la
+      # passerelle rougissait `main` sans défaut de code
+      # (`qemu: uncaught target signal 4`). Le garde exige un même `env.PLATFORMS`
+      # chez tout publieur de `latest`, reconnu par ce qu'il FAIT, et une étape de
+      # construction qui le lit.
+      - name: Image platforms guard
+        run: node scripts/check-release-platforms.mjs --self-test && node scripts/check-release-platforms.mjs
 
       # Même raison de placement que les trois gardes ci-dessus : l'invariant
       # porte sur les quatre `docker-compose*.yml` de `infrastructure/docker/compose/`
@@ -592,6 +609,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-floating-clearance.mjs
 
+      # #6456 — le disque du Flux bascule Flux ↔ conversations sans saut (nom,
+      # adresse et marque suivent la destination), son appui long (souris,
+      # doigt, Maj+F10) ouvre les Réels sans navigation ni clic au relâché, un
+      # glisser tenu n'ouvre rien et suit le pointeur sans retard, la place
+      # survit au rechargement, un réel de carte ramène au même défilement.
+      - name: Gate disque du Flux (bascule, appui long, glisser)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-feed-disc.mjs
+
       # #6288 — la cloche : la pastille du bouton flottant porte le compte servi
       # et disparaît à zéro ; une catégorie filtre ; ouvrir une ligne la marque
       # lue et mène à sa cible ; « Tout lire » a un effet ; aucun texte ni
@@ -658,6 +686,29 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-discover.mjs
+
+      # #6361 — Mes liens : le hub ne montre que la famille servie, la liste
+      # porte les agrégats de la passerelle, « copier » met l'adresse PUBLIQUE
+      # dans le presse-papiers, « Désactiver » se lit au geste, la création
+      # remplace l'écran par le lien créé ; chaque texte tient AA et aucun
+      # n'est volé par un disque (deux schémas, deux gabarits).
+      - name: Gate Mes liens (hub, liens de partage, détail, création)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-links.mjs
+
+      # #6457 — les Réels : le bouton de l'en-tête du Flux, un réel touché ouvre
+      # le lecteur SUR lui depuis le cache (sans squelette, sans disque), un seul
+      # réel joue, un balayage tactile accroche le suivant puis le précédent, le
+      # clavier aussi, « J'aime » se voit au retour dans le Flux, le texte blanc
+      # tient AA au pixel, le retour ne laisse aucun lecteur ; hors ligne chaud
+      # et froid, lien profond, mouvement réduit (deux schémas, deux gabarits).
+      - name: Gate Réels (lecteur plein écran, balayage, lecture unique, retour)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-reels.mjs
 
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
@@ -750,6 +801,17 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-gateway-build.mjs
+
+      # #6458 — le barreau « Administration » du menu flottant, sur un dist
+      # gateway (l'administration n'a pas de fixtures) : sept barreaux dans
+      # l'écran aux deux poses (deux schémas, 390×844 et 320×568), parcours
+      # clavier et navigation vers /admin sur UNE lecture de la matrice ; six
+      # barreaux sans le droit, sur 403 et en vol ; aucune lecture sans session.
+      - name: Gate barreau Administration du menu flottant (#6458)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-admin-rung.mjs
 
       # #6151 — un seul site résout `apiConfig.source` en dépendances d'appel
       # (`src/lib/api/deps.ts`). Un huitième site qui reconstruirait

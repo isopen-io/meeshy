@@ -62,6 +62,16 @@ export function pressReducer(state: PressState, event: PressEvent): PressState {
 export type LongPressAnchor = { readonly element: HTMLElement; readonly rect: DOMRect };
 
 /**
+ * LES DEUX DÉCLENCHEURS CLAVIER DE L'APPUI LONG — la touche `ContextMenu` et
+ * `Maj+F10`. Écrits UNE fois : le menu d'un message et le disque du Flux
+ * (#6456) répondent au même geste, et deux écritures du même prédicat finissent
+ * par ne plus reconnaître la même touche.
+ */
+export function isContextMenuKey(event: { readonly key: string; readonly shiftKey: boolean }): boolean {
+  return event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey);
+}
+
+/**
  * LE HOOK — vit UNE FOIS dans l'hôte (`thread.tsx`), jamais une instance par
  * rangée virtualisée (§ 5 étape 5 de la spécification) : chaque gestionnaire
  * lit `event.currentTarget`, jamais une référence figée à un élément — la
@@ -134,8 +144,7 @@ export function useLongPress(options: {
   }, [open]);
 
   const onKeyDown = useCallback((event: ReactKeyboardEvent<HTMLElement>) => {
-    const isMenuKey = event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey);
-    if (!isMenuKey) return;
+    if (!isContextMenuKey(event)) return;
     event.preventDefault();
     open(event.currentTarget);
   }, [open]);

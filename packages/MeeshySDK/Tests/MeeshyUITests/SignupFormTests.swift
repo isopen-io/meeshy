@@ -81,9 +81,14 @@ final class SignupFormTests: XCTestCase {
         XCTAssertFalse(SignupForm.isDisplayNameValid("Alice@meeshy"))
     }
 
-    func test_isDisplayNameValid_emptyOrTooLong_isInvalid() {
-        XCTAssertFalse(SignupForm.isDisplayNameValid(""))
-        XCTAssertFalse(SignupForm.isDisplayNameValid("   "))
+    /// **Le champ VIDE est valide** (#6441), pour la même raison que le mot de
+    /// passe : la passerelle DÉRIVE le nom affiché de la partie locale de
+    /// l'adresse quand la clé est absente. Le refuser ici rendrait le client
+    /// plus STRICT que le serveur — le défaut que le doc-comment de
+    /// `displayNameMaxLength` dit vouloir empêcher.
+    func test_isDisplayNameValid_emptyIsValid_tooLongIsNot() {
+        XCTAssertTrue(SignupForm.isDisplayNameValid(""))
+        XCTAssertTrue(SignupForm.isDisplayNameValid("   "))
         XCTAssertFalse(
             SignupForm.isDisplayNameValid(String(repeating: "a", count: SignupForm.displayNameMaxLength + 1))
         )
@@ -137,22 +142,137 @@ final class SignupFormTests: XCTestCase {
         XCTAssertTrue(makeForm(phoneDigits: "").canSubmit)
     }
 
-    func test_canSubmit_withAnyRequiredFieldInvalid_isFalse() {
-        XCTAssertFalse(makeForm(displayName: "").canSubmit)
+    /// L'ADRESSE est le seul champ requis (#6441) — une saisie FOURNIE doit
+    /// tenir sa borne, mais son absence n'empêche rien.
+    func test_canSubmit_withAnyProvidedFieldInvalid_isFalse() {
         XCTAssertFalse(makeForm(email: "pas-une-adresse").canSubmit)
         XCTAssertFalse(makeForm(password: "court").canSubmit)
+        XCTAssertFalse(makeForm(displayName: "123").canSubmit)
+    }
+
+    // MARK: - Le nom affiché est FACULTATIF (#6441, ce que #6424 avait laissé)
+    //
+    // Directive porteur 2026-09-14 : « on met un e-mail, tu crées un compte
+    // avec le pseudo pris de la première partie de l'e-mail, le display name
+    // pareil ». Le formulaire doit donc laisser partir une charge qui n'en
+    // porte AUCUN — et `canSubmit` cessait seul de le permettre.
+
+    /// LE témoin de ce lot. Il ne peut pas verdir pour un motif étranger : les
+    /// deux autres champs facultatifs y sont VIDES eux aussi, donc seul le
+    /// relâchement du nom affiché peut l'activer.
+    func test_canSubmit_withEmailAlone_isTrue() {
+        XCTAssertTrue(makeForm(displayName: "", phoneDigits: "", password: "").canSubmit)
+    }
+
+    /// Le BRANCHEMENT de la loi partagée (#6479) — `PhonePlausibilityTests`
+    /// mesure la règle, ce bloc mesure qu'elle gouverne bien le bouton.
+    func test_canSubmit_withAnImplausiblePhone_isFalse() {
+        XCTAssertFalse(makeForm(phoneDigits: "1111100000").canSubmit)
+        XCTAssertFalse(makeForm(phoneDigits: "42424242").canSubmit)
+        XCTAssertEqual(makeForm(phoneDigits: "1111100000").phoneRefusal, .identicalRun)
+    }
+
+    func test_canSubmit_withARealPhone_isTrue() {
+        XCTAssertTrue(makeForm(phoneDigits: "0612345678").canSubmit)
+    }
+
+    func test_canSubmit_withoutEmail_isFalse() {
+        XCTAssertFalse(makeForm(displayName: "", email: "", password: "").canSubmit)
+    }
+
+    func test_hasDisplayName_distinguishesTypedFromValid() {
+        XCTAssertFalse(makeForm(displayName: "").hasDisplayName)
+        XCTAssertFalse(makeForm(displayName: "   ").hasDisplayName)
+        // Refusé par le pattern, mais bel et bien TAPÉ : les deux questions
+        // sont distinctes, et c'est `hasDisplayName` qui décide si la clé part.
+        XCTAssertTrue(makeForm(displayName: "123").hasDisplayName)
+    }
+
+    /// LA LOI A CHANGÉ, et le témoin avec elle (#6479).
+    ///
+    /// #6441 omettait la clé pour que la PASSERELLE dérive. Directive porteur
+    /// 2026-09-14 : « ici on a des données et la passerelle doit utiliser ces
+    /// données ». L'écran MONTRE le nom affiché dérivé — une donnée, sous les
+    /// yeux de l'utilisateur, qu'il a acceptée en continuant. Elle part.
+    func test_registerRequest_withoutTypedDisplayName_sendsTheDerivedOne() throws {
+        let payload = try encodedPayload(makeForm(displayName: "", email: "jean.dupont@example.com"))
+        XCTAssertEqual(payload["displayName"] as? String, "Jean Dupont")
+        XCTAssertEqual(payload["username"] as? String, "jean-dupont")
+        XCTAssertNotNil(payload["email"], "l'adresse, elle, voyage toujours")
+    }
+
+    /// Ce qui SURVIT de #6441 : la clé reste ABSENTE quand il n'y a réellement
+    /// rien. Une adresse dont rien n'est slugifiable retombe sur le recours
+    /// `user` — l'envoyer garantirait une collision pour tout le monde, et là
+    /// on n'a justement AUCUNE donnée.
+    func test_registerRequest_withAnUnslugifiableAddress_omitsBothKeys() throws {
+        let payload = try encodedPayload(makeForm(displayName: "", email: "a@b.co"))
+        XCTAssertNil(payload["username"])
+        XCTAssertNil(payload["displayName"])
+    }
+
+    func test_registerRequest_withTypedDisplayName_carriesItTrimmed() throws {
+        let payload = try encodedPayload(makeForm(displayName: "  Awa N’Diaye  "))
+        XCTAssertEqual(payload["displayName"] as? String, "Awa N’Diaye")
+    }
+
+    // MARK: - Le mot de passe est FACULTATIF (#6424)
+    //
+    // Directive porteur 2026-09-14 : « tant qu'on n'a pas le mot de passe
+    // défini, le seul moyen de se connecter c'est par lien magique ». Le
+    // formulaire doit donc laisser partir une charge qui n'en porte AUCUN.
+    //
+    // Le témoin qui compte le plus est celui de la charge : `nil`, jamais `""`.
+    // Une chaîne vide serait une VALEUR, refusée par la borne de longueur du
+    // serveur — le formulaire échouerait précisément dans le cas qu'il vient
+    // d'ouvrir, et le refus parlerait d'un mot de passe trop court à quelqu'un
+    // qui n'en a pas voulu.
+
+    func test_canSubmit_withoutPassword_isTrue() {
+        XCTAssertTrue(makeForm(password: "").canSubmit)
+    }
+
+    func test_isPasswordValid_emptyIsValid_shortIsNot() {
+        XCTAssertTrue(SignupForm.isPasswordValid(""))
+        XCTAssertFalse(SignupForm.isPasswordValid("court"))
+        XCTAssertTrue(SignupForm.isPasswordValid("motdepasse"))
+    }
+
+    func test_hasPassword_distinguishesTypedFromValid() {
+        XCTAssertFalse(makeForm(password: "").hasPassword)
+        // Trop court pour être accepté, mais bel et bien TAPÉ : les deux
+        // questions sont distinctes, et c'est `hasPassword` qui décide si la
+        // clé part.
+        XCTAssertTrue(makeForm(password: "court").hasPassword)
+    }
+
+    func test_registerRequest_withoutPassword_omitsTheKeyEntirely() throws {
+        let payload = try encodedPayload(makeForm(password: ""))
+        XCTAssertNil(payload["password"],
+                     "la passerelle lit l'ABSENCE de la clé ; une chaîne vide serait une valeur refusée")
+    }
+
+    func test_registerRequest_withoutPassword_stillCarriesIdentityAndEmail() throws {
+        let payload = try encodedPayload(makeForm(password: ""))
+        XCTAssertEqual(payload["displayName"] as? String, "Awa N’Diaye")
+        XCTAssertEqual(payload["email"] as? String, "awa@example.com")
     }
 
     // MARK: - La charge exacte
 
-    /// Le cœur du lot : trois clés que le client N'ENVOIE PLUS.
+    /// `username` A CHANGÉ DE CAMP (#6479), les deux noms d'état civil NON.
+    ///
+    /// #5218 retirait les trois pour ne pas faire inventer un pseudo unique à
+    /// l'utilisateur. Le pseudo n'est plus INVENTÉ : il est MONTRÉ, dérivé de
+    /// l'adresse, et modifiable — donc il part. `firstName`/`lastName` restent
+    /// dérivés côté serveur : rien ne les saisit.
     ///
     /// Assertion sur l'ABSENCE et non sur `nil` — c'est le JSON que la
     /// passerelle lit, et un `Optional` nil encodé par erreur en `null` serait
     /// une clé PRÉSENTE à valeur nulle, que `AuthSchemas.register` refuserait.
-    func test_registerRequest_neverCarriesUsernameFirstNameOrLastName() throws {
+    func test_registerRequest_carriesUsername_butNeverFirstOrLastName() throws {
         let payload = try encodedPayload(makeForm())
-        XCTAssertNil(payload["username"])
+        XCTAssertEqual(payload["username"] as? String, "awa-ndiaye")
         XCTAssertNil(payload["firstName"])
         XCTAssertNil(payload["lastName"])
     }

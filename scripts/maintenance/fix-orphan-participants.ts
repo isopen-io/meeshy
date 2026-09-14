@@ -10,8 +10,18 @@
  * (`MeeshySocketIOManager._emitUnreadCountsSnapshot`), désormais tolérant,
  * qui publie les ids orphelins en warn structuré pour alimenter ce script.
  *
- * Dry-run PAR DÉFAUT : liste les orphelins sans rien toucher.
- * `--apply` les supprime.
+ * `Message.sender` est, lui, une relation REQUISE vers `Participant` (#6501) :
+ * effacer un participant qui a écrit sans retirer ses messages les rend
+ * orphelins à leur tour. Leur conversation ayant disparu, aucune lecture
+ * directe ne les atteint — mais un message TRANSFÉRÉ ailleurs qui cite l'un
+ * d'eux charge son expéditeur (`enrichForwardedMessagesForList`), et fait
+ * alors rejeter toute la page chez le destinataire. Ce script retire donc les
+ * messages d'un participant orphelin AVANT de le supprimer — `prisma` émule
+ * les `onDelete: Cascade` de leurs enfants (`MessageStatusEntry`, `Reaction`,
+ * `MessageAttachment`, …).
+ *
+ * Dry-run PAR DÉFAUT : liste les orphelins (et compte leurs messages) sans
+ * rien toucher. `--apply` les supprime.
  *
  * Usage (depuis services/gateway, ou le conteneur gateway) :
  *   npx tsx ../../scripts/maintenance/fix-orphan-participants.ts [--apply]
@@ -82,13 +92,29 @@ async function fixOrphanParticipants(): Promise<void> {
     );
   }
 
+  const orphanIds = orphans.map(o => o.id);
+
   if (!apply) {
-    console.log(`\nFound ${orphans.length} orphan participants — re-run with --apply to delete`);
+    const orphanedMessages = await prisma.message.count({ where: { senderId: { in: orphanIds } } });
+    console.log(
+      `\nFound ${orphans.length} orphan participants ` +
+        `(${orphanedMessages} of their messages would also be deleted) — re-run with --apply to delete`
+    );
     return;
   }
 
+  // Retirer d'abord les messages de ces participants : un orphelin qui a
+  // écrit ne doit jamais survivre à son auteur (#6518). `prisma` émule les
+  // `onDelete: Cascade` déclarés au schéma pour leurs enfants.
+  const { count: deletedMessages } = await prisma.message.deleteMany({
+    where: { senderId: { in: orphanIds } },
+  });
+  if (deletedMessages > 0) {
+    console.log(`Deleted ${deletedMessages} messages of orphan participants (and their cascaded children)`);
+  }
+
   const { count } = await prisma.participant.deleteMany({
-    where: { id: { in: orphans.map(o => o.id) } },
+    where: { id: { in: orphanIds } },
   });
   console.log(`\nDeleted ${count} orphan participants`);
 }

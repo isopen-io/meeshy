@@ -365,8 +365,24 @@ export const updateBannerSchema = z.object({
 /**
  * Schéma de validation pour le changement de mot de passe
  */
+/**
+ * `currentPassword` est OPTIONNEL — et ne l'est que pour un compte qui n'en a
+ * pas (#6424).
+ *
+ * Un compte né d'une inscription par e-mail seul n'a pas de mot de passe :
+ * exiger l'ancien pour poser le premier ferait de la preuve une CONDITION
+ * d'existence de ce qu'elle doit prouver, et le compte n'aurait jamais aucun
+ * moyen d'en obtenir un.
+ *
+ * L'optionalité vit ici, dans la FORME ; l'exigence vit dans la ROUTE, qui
+ * seule connaît l'état du compte (`PATCH /users/me/password` :
+ * `user.password === null` ⇒ la session, obtenue par lien magique, EST la
+ * preuve ; sinon l'ancien mot de passe est exigé et vérifié). Poser la règle
+ * dans le schéma la rendrait aveugle à cet état, donc fausse dans un sens ou
+ * dans l'autre.
+ */
 export const updatePasswordSchema = z.object({
-  currentPassword: z.string().min(1, 'Mot de passe actuel requis'),
+  currentPassword: z.string().min(1, 'Mot de passe actuel requis').optional(),
   newPassword: z.string().min(PASSWORD_MIN_LENGTH, passwordTooShort),
   confirmPassword: z.string().min(1, 'Confirmation du mot de passe requise')
 }).refine((data) => data.newPassword === data.confirmPassword, {

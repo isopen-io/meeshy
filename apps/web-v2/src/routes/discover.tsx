@@ -36,7 +36,10 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { useOnline } from '@/lib/net/online';
 import { useSearch } from '@/lib/router';
+import { coldStateOf } from '@/lib/view/cold-state';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
+import { useTapGate } from '@/lib/view/tap-gate';
+import { useExhaustPages } from '@/lib/view/use-exhaust-pages';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useMinute } from '@/lib/view/use-minute';
@@ -96,7 +99,7 @@ const SEARCH_DEBOUNCE_MS = 350;
 const MIN_QUERY_LENGTH = 2;
 const ANNOUNCE_MS = 4000;
 
-type ListQuery = Pick<UseInfiniteQueryResult, 'data' | 'isError' | 'refetch' | 'fetchNextPage'>;
+type ListQuery = Pick<UseInfiniteQueryResult, 'data' | 'isError' | 'isPaused' | 'refetch' | 'fetchNextPage'>;
 
 type AnnounceKey = Extract<InterfaceCatalogKey, `discover.announce.${string}`>;
 
@@ -118,6 +121,12 @@ export default function DiscoverScreen() {
   const sent = useInfiniteQuery({ ...friendRequestsQueryOptions(apiDeps, 'sent'), enabled }, appQueryClient);
   const accepted = useInfiniteQuery({ ...friendRequestsQueryOptions(apiDeps, 'accepted'), enabled }, appQueryClient);
   const blocked = useInfiniteQuery({ ...blockedUsersQueryOptions(apiDeps), enabled }, appQueryClient);
+  /* L'INDEX de relation (#6421) doit lire TOUS les contacts et TOUS les
+     bloqués, pas seulement leur première page — `accepted` n'a aucune liste
+     visible pour le faire défiler, et `blocked` ne défile que sous son
+     propre onglet. */
+  useExhaustPages(accepted, enabled);
+  useExhaustPages(blocked, enabled);
 
   const receivedRows = useMemo(() => flattenFriendRequests(received.data), [received.data]);
   const sentRows = useMemo(() => flattenFriendRequests(sent.data), [sent.data]);
@@ -140,28 +149,41 @@ export default function DiscoverScreen() {
     [announce, language],
   );
 
+  /* Un geste REMPLACE ce qu'il touche : le second tap d'un double tap
+     n'atteint ni la ligne qui remonte, ni le bouton qui a pris la place (#6417). */
+  const admitTap = useTapGate();
   const onAccept = useCallback(
-    (request: FriendRequestRecord) =>
-      void performRespondToRequest({ request, action: 'accept', deps }).then((o) => report(o, 'discover.announce.accepted', 'discover.announce.acceptFailed')),
-    [deps, report],
+    (request: FriendRequestRecord) => {
+      if (!admitTap()) return;
+      void performRespondToRequest({ request, action: 'accept', deps }).then((o) => report(o, 'discover.announce.accepted', 'discover.announce.acceptFailed'));
+    },
+    [admitTap, deps, report],
   );
   const onReject = useCallback(
-    (request: FriendRequestRecord) =>
-      void performRespondToRequest({ request, action: 'reject', deps }).then((o) => report(o, 'discover.announce.rejected', 'discover.announce.rejectFailed')),
-    [deps, report],
+    (request: FriendRequestRecord) => {
+      if (!admitTap()) return;
+      void performRespondToRequest({ request, action: 'reject', deps }).then((o) => report(o, 'discover.announce.rejected', 'discover.announce.rejectFailed'));
+    },
+    [admitTap, deps, report],
   );
   const onCancel = useCallback(
-    (request: FriendRequestRecord) =>
-      void performRespondToRequest({ request, action: 'cancel', deps }).then((o) => report(o, 'discover.announce.cancelled', 'discover.announce.cancelFailed')),
-    [deps, report],
+    (request: FriendRequestRecord) => {
+      if (!admitTap()) return;
+      void performRespondToRequest({ request, action: 'cancel', deps }).then((o) => report(o, 'discover.announce.cancelled', 'discover.announce.cancelFailed'));
+    },
+    [admitTap, deps, report],
   );
   const onAdd = useCallback(
-    (person: PersonSummary) =>
-      void performSendRequest({ person, deps }).then((o) => report(o, 'discover.announce.sent', 'discover.announce.sendFailed')),
-    [deps, report],
+    (person: PersonSummary) => {
+      if (!admitTap()) return;
+      void performSendRequest({ person, deps }).then((o) => report(o, 'discover.announce.sent', 'discover.announce.sendFailed'));
+    },
+    [admitTap, deps, report],
   );
   const handlers: ConnectionHandlers = useMemo(() => ({ onAdd, onCancel, onAccept, onReject }), [onAdd, onCancel, onAccept, onReject]);
 
+  /* Débloquer passe par une confirmation modale : un double tap n'y retire
+     personne, il ne peut qu'ouvrir une confirmation — la porte n'y est pas. */
   const [unblockTarget, setUnblockTarget] = useState<PersonSummary | null>(null);
   const closeConfirm = useCallback(() => setUnblockTarget(null), []);
   const confirmUnblock = useCallback(() => {
@@ -237,8 +259,10 @@ export default function DiscoverScreen() {
 
   const listBody = (list: ListQuery, count: number, empty: ReactNode, rows: ReactNode) =>
     list.data === undefined ? (
-      list.isError ? (
+      coldStateOf(list) === 'error' ? (
         <DiscoverError language={language} online={online} onRetry={() => void list.refetch()} />
+      ) : coldStateOf(list) === 'offline' ? (
+        <DiscoverOfflineNotice language={language} cold />
       ) : (
         <DiscoverSkeleton />
       )
@@ -246,7 +270,7 @@ export default function DiscoverScreen() {
       empty
     ) : (
       <>
-        {online ? null : <DiscoverOfflineNotice language={language} />}
+        {online ? null : <DiscoverOfflineNotice language={language} cold={false} />}
         {rows}
       </>
     );
@@ -338,7 +362,7 @@ export default function DiscoverScreen() {
     ),
   };
 
-  const loading = activeList !== null && activeList.data === undefined && !activeList.isError;
+  const loading = activeList !== null && coldStateOf(activeList) === 'loading';
 
   return (
     <main className="relative flex h-dvh flex-col overflow-hidden pt-safe">

@@ -25,49 +25,69 @@ struct StarredMessagesView: View {
 
             if store.snapshots.isEmpty {
                 emptyState
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 10) {
-                        ForEach(store.snapshots) { snapshot in
-                            StarredRow(snapshot: snapshot, isDark: theme.mode.isDark)
-                                .onTapGesture {
-                                    navigate(to: snapshot)
-                                }
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        store.remove(messageId: snapshot.id)
-                                    } label: {
-                                        Label(String(localized: "starred.messages.remove", defaultValue: "Retirer des favoris", bundle: .main), systemImage: "star.slash")
-                                    }
-                                }
-                                .accessibilityElement(children: .combine)
-                                .accessibilityAddTraits(.isButton)
-                                .accessibilityHint(String(localized: "starred.messages.row.hint", defaultValue: "Ouvre la conversation", bundle: .main))
-                                .accessibilityAction { navigate(to: snapshot) }
+            }
+
+            // L'en-tête partagé remplace la barre système, masquée par la route
+            // (#6481) : titre, retour en verre et menu dans le même en-tête. La
+            // page passe PAR-DESSUS l'état vide, qui reste centré par ce ZStack.
+            CollapsibleHeaderPage(
+                title: String(localized: "starred.messages.title", defaultValue: "Messages favoris", bundle: .main),
+                onBack: { back() },
+                titleColor: theme.textPrimary,
+                backArrowColor: MeeshyColors.brandPrimary,
+                backgroundColor: theme.backgroundPrimary,
+                trailing: { moreOptionsMenu },
+                content: { rows }
+            )
+        }
+    }
+
+    private var rows: some View {
+        LazyVStack(spacing: 10) {
+            ForEach(store.snapshots) { snapshot in
+                StarredRow(snapshot: snapshot, isDark: theme.mode.isDark)
+                    .onTapGesture {
+                        navigate(to: snapshot)
+                    }
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            store.remove(messageId: snapshot.id)
+                        } label: {
+                            Label(String(localized: "starred.messages.remove", defaultValue: "Retirer des favoris", bundle: .main), systemImage: "star.slash")
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint(String(localized: "starred.messages.row.hint", defaultValue: "Ouvre la conversation", bundle: .main))
+                    .accessibilityAction { navigate(to: snapshot) }
             }
         }
-        .navigationTitle(String(localized: "starred.messages.title", defaultValue: "Messages favoris", bundle: .main))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if !store.snapshots.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button(role: .destructive) {
-                            store.clearAll()
-                        } label: {
-                            Label(String(localized: "starred.messages.remove_all", defaultValue: "Tout retirer", bundle: .main), systemImage: "star.slash.fill")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                    .accessibilityLabel(String(localized: "starred.messages.more_options", defaultValue: "Plus d'options", bundle: .main))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    /// Le menu « Tout retirer », en disque de verre du diamètre du retour. Le
+    /// disque EST le cercle : le glyphe passe d'`ellipsis.circle` à `ellipsis`,
+    /// qui ne s'y dessinerait pas deux fois. Absent sur une liste vide.
+    @ViewBuilder
+    private var moreOptionsMenu: some View {
+        if !store.snapshots.isEmpty {
+            Menu {
+                Button(role: .destructive) {
+                    store.clearAll()
+                } label: {
+                    Label(String(localized: "starred.messages.remove_all", defaultValue: "Tout retirer", bundle: .main), systemImage: "star.slash.fill")
                 }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(MeeshyFont.relative(17, weight: .semibold))
+                    .foregroundColor(MeeshyColors.brandPrimary)
+                    .frame(width: CollapsibleHeaderMetrics.roundChromeDiameter, height: CollapsibleHeaderMetrics.roundChromeDiameter)
+                    .adaptiveGlass(in: Circle(), interactive: true)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Circle())
             }
+            .accessibilityLabel(String(localized: "starred.messages.more_options", defaultValue: "Plus d'options", bundle: .main))
         }
     }
 
@@ -78,7 +98,7 @@ struct StarredMessagesView: View {
         AdaptiveContentUnavailableView(
             String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main),
             systemImage: "star.circle",
-            description: Text(String(localized: "starred.messages.empty.subtitle", defaultValue: "Appuyez longuement sur un message et choisissez \"Ajouter aux favoris\" pour le retrouver ici.", bundle: .main))
+            description: Text(String(localized: "starred.messages.empty.subtitle", defaultValue: "Appuyez longuement sur un message et choisissez « Ajouter aux favoris » pour le retrouver ici.", bundle: .main))
         )
     }
 
