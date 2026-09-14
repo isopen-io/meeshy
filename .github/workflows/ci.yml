@@ -604,6 +604,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-floating-clearance.mjs
 
+      # #6456 — le disque du Flux bascule Flux ↔ conversations sans saut (nom,
+      # adresse et marque suivent la destination), son appui long (souris,
+      # doigt, Maj+F10) ouvre les Réels sans navigation ni clic au relâché, un
+      # glisser tenu n'ouvre rien et suit le pointeur sans retard, la place
+      # survit au rechargement, un réel de carte ramène au même défilement.
+      - name: Gate disque du Flux (bascule, appui long, glisser)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-feed-disc.mjs
+
       # #6288 — la cloche : la pastille du bouton flottant porte le compte servi
       # et disparaît à zéro ; une catégorie filtre ; ouvrir une ligne la marque
       # lue et mène à sa cible ; « Tout lire » a un effet ; aucun texte ni

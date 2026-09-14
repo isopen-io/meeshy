@@ -47,6 +47,8 @@ const de = {
   'root.menu.communities': 'Communitys',
   'root.menu.settings': 'Einstellungen',
   'root.menu.profile': 'Profil',
+  'root.menu.conversations': 'Unterhaltungen',
+  'a11y.floating.feed.hint': 'Lange drücken, um Reels zu starten',
   'a11y.floating.menu': 'Menü',
   'a11y.floating.menu.ladder': 'Meeshy-Navigation',
   'a11y.floating.menu.unread.one': 'Menü, {count} ungelesene Mitteilung',

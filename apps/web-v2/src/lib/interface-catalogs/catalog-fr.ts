@@ -59,6 +59,8 @@ const fr = {
   'root.menu.communities': 'Communautés',
   'root.menu.settings': 'Réglages',
   'root.menu.profile': 'Profil',
+  'root.menu.conversations': 'Conversations',
+  'a11y.floating.feed.hint': 'Appui long pour lancer les Réels',
   'a11y.floating.menu': 'Menu',
   'a11y.floating.menu.ladder': 'Navigation Meeshy',
   'a11y.floating.menu.unread.one': 'Menu, {count} notification non lue',

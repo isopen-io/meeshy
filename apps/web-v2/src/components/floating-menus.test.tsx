@@ -161,6 +161,9 @@ describe('le disque du Flux (#6456)', () => {
   });
 
   afterEach(() => {
+    /* Un appui long resté sans relâché (le menu contextuel) garde son avaleur
+       armé : un appui neuf le désarme, comme chez l'utilisateur. */
+    window.dispatchEvent(new PointerEvent('pointerdown', { button: 0, pointerId: 99 }));
     window.history.pushState = originel;
     try {
       localStorage.removeItem('feedButtonPosition');
@@ -240,6 +243,43 @@ describe('le disque du Flux (#6456)', () => {
     pointeur('pointerup', 100, 200);
     cliquer();
     expect(empilees).toEqual(['/reels']);
+  });
+
+  /**
+   * **LE CLIC DU RELÂCHÉ RETOMBE SUR L'ÉCRAN SUIVANT** — le disque est démonté
+   * par la navigation, et le clic que le navigateur synthétise au relâché
+   * atteint ce qui est dessous (la scène des Réels, dont le tap met en pause).
+   * Il est avalé ; le clic d'un NOUVEL appui, lui, passe.
+   */
+  test('le clic du relâché est avalé où qu’il retombe, et le geste suivant n’est pas mangé', async () => {
+    monter('list');
+    pointeur('pointerdown', 100, 200);
+    await attendre(560);
+
+    const dessous = document.createElement('button');
+    document.body.appendChild(dessous);
+    try {
+      act(() => {
+        dessous.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, button: 0, pointerId: 7 }));
+      });
+      const fantome = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+      act(() => {
+        dessous.dispatchEvent(fantome);
+      });
+      expect(fantome.defaultPrevented).toBe(true);
+
+      act(() => {
+        dessous.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, pointerId: 8 }));
+        dessous.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, button: 0, pointerId: 8 }));
+      });
+      const voulu = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+      act(() => {
+        dessous.dispatchEvent(voulu);
+      });
+      expect(voulu.defaultPrevented).toBe(false);
+    } finally {
+      dessous.remove();
+    }
   });
 
   test('sur le Flux aussi, l’appui long ouvre les Réels et pas la liste', async () => {

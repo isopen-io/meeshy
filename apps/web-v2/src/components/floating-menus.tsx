@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import '@/styles/floating-menus.css';
@@ -12,7 +12,8 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 import { useNotificationCounts } from '@/lib/view/use-notification-counts';
 import { usePendingFriendRequestCount } from '@/lib/view/use-pending-friend-requests';
 import { initialsOf } from '@/lib/view/conversation';
-import { FEED_DESTINATION, PROFILE_DESTINATION, menuLadderFor, type FloatingDestination } from '@/lib/view/floating-menu';
+import { PROFILE_DESTINATION, feedDiscDestination, menuLadderFor, type FloatingDestination } from '@/lib/view/floating-menu';
+import { isContextMenuKey } from '@/lib/view/long-press';
 import {
   FEED_DEFAULT,
   FLOATING_BUTTON,
@@ -41,8 +42,9 @@ import { Link, href, navigate } from '@/routes/route-table';
  * `RootView.draggableFloatingButtons` (`apps/ios/.../RootView.swift:1550`).
  *
  * **Les deux boutons ne sont PAS symétriques, et c'est le fait qui gouverne ce
- * fichier.** Celui de gauche ne déplie rien : il OUVRE le Flux, et c'est donc
- * un lien. Celui de droite porte le visage de la personne et déplie une
+ * fichier.** Celui de gauche ne déplie rien : il NAVIGUE, et c'est donc un
+ * lien — vers le Flux, ou vers les conversations depuis le Flux, et vers les
+ * Réels à l'appui long (#6456). Celui de droite porte le visage de la personne et déplie une
  * échelle de six barreaux — sept pour qui administre (#6458). Les traiter comme deux instances d'un même objet
  * aurait demandé une abstraction qui n'aurait servi qu'à les rendre pareils —
  * ils ne le sont pas.
@@ -143,12 +145,18 @@ function measureLadderRooms(button: HTMLElement | null): LadderRooms | null {
   });
 }
 
-export function FloatingMenus() {
+/** Les Réels sans graine — `ReelsPresenter.presentFresh()`, le geste de l'appui long. */
+const ouvrirReels = () => navigate(href('reels'));
+
+export function FloatingMenus({ routeKey }: { readonly routeKey: string }) {
   const session = useStore(sessionStore, (s) => s.session);
   const unread = useNotificationCounts().data?.unread ?? 0;
   const pendingFriendRequests = usePendingFriendRequestCount();
   const counts: RungCounts = { unreadNotifications: unread, pendingFriendRequests };
-  const flux = useFloatingDrag('feed', FEED_DEFAULT);
+  /* LA BASCULE (#6456) : où le tap mène, lu sur la route que la coquille sert. */
+  const disque = feedDiscDestination(routeKey);
+  const indiceDisque = useId();
+  const flux = useFloatingDrag('feed', FEED_DEFAULT, { onLongPress: ouvrirReels });
   const menu = useFloatingDrag('menu', MENU_DEFAULT);
   const expandsDown = ladderExpandsDown(menu.position.y);
 
@@ -228,16 +236,36 @@ export function FloatingMenus() {
         style={{ left: floatingLeft({ x: 1, y: 1 }), top: floatingTop({ x: 1, y: 1 }), width: 0, height: 0 }}
       />
 
-      {/* LE BOUTON DE GAUCHE — un LIEN, parce qu'il navigue et rien d'autre. */}
+      {/* L'INDICE DU GESTE INVISIBLE — `leftA11yHint` d'iOS : un appui long que
+          rien ne signale à l'écran doit au moins être ANNONCÉ. Hors du lien,
+          pour ne pas entrer dans son nom. */}
+      <span id={indiceDisque} className="sr-only">
+        {translate(langue, 'a11y.floating.feed.hint')}
+      </span>
+
+      {/* LE BOUTON DE GAUCHE — un LIEN, parce qu'il navigue et rien d'autre.
+          Son adresse, son nom et son glyphe sont ceux de la destination du tap
+          (#6456) : Flux, ou Conversations quand on est sur le Flux. */}
       <Link
-        to="feed"
+        to={disque.route}
         data-floating-feed
+        data-disc-face={disque.key}
         data-dragging={flux.dragging ? 'true' : undefined}
-        aria-label={translate(langue, FEED_DESTINATION.labelKey)}
+        aria-label={translate(langue, disque.labelKey)}
+        aria-describedby={indiceDisque}
+        aria-keyshortcuts="Shift+F10"
         onPointerDown={flux.onPointerDown}
         onPointerMove={flux.onPointerMove}
         onPointerUp={flux.onPointerUp}
         onPointerCancel={flux.onPointerCancel}
+        onContextMenu={flux.onContextMenu}
+        /* L'APPUI LONG AU CLAVIER — les deux touches du menu d'un message
+           (`long-press.ts`) : même geste, même effet. */
+        onKeyDown={(event) => {
+          if (!isContextMenuKey(event)) return;
+          event.preventDefault();
+          ouvrirReels();
+        }}
         /* **UN LIEN EST NATIVEMENT DÉPLAÇABLE**, et c'est ce qui cassait le
            geste : le glisser-déposer du navigateur démarrait au premier
            mouvement, emportait la suite des événements de pointeur, et le
@@ -268,7 +296,7 @@ export function FloatingMenus() {
             : { transform: `translate(${flux.offset.x}px, ${flux.offset.y}px) scale(1.15)` }),
         }}
       >
-        <MenuGlyph glyph={FEED_DESTINATION.glyph} size={22} />
+        <MenuGlyph glyph={disque.glyph} size={22} />
       </Link>
 
       {/* LE BOUTON DE DROITE ET SON ÉCHELLE — un seul bloc positionné, pour que

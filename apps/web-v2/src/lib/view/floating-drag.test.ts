@@ -7,6 +7,7 @@ import {
   type FloatingBounds,
 } from './floating-pose';
 import { parseFloatingPosition, serializeFloatingPosition } from './floating-position';
+import { LONG_PRESS_MAX_DISTANCE_PX } from './long-press';
 
 /**
  * LE DÉPLACEMENT DES MENUS FLOTTANTS (#6215) — la loi, sans DOM.
@@ -14,6 +15,20 @@ import { parseFloatingPosition, serializeFloatingPosition } from './floating-pos
  * Miroir de `FreeFloatingButtonsContainer.normalizedPosition`
  * (`FloatingButtons.swift:277-306`).
  */
+
+/**
+ * **UN SEUL SEUIL POUR DEUX GESTES** (#6456) — le disque du Flux glisse ET
+ * s'appuie longuement. Si le glisser partait plus loin que l'annulation de
+ * l'appui long, un pouce qui tremble de 7 à 9 px n'obtiendrait ni l'un ni
+ * l'autre ; plus près, un glisser commencerait sous un appui long encore armé.
+ */
+describe('le seuil du glisser', () => {
+  test('est celui qui annule l’appui long', () => {
+    expect(FLOATING_DRAG_THRESHOLD).toBe(LONG_PRESS_MAX_DISTANCE_PX);
+    expect(isFloatingDrag(LONG_PRESS_MAX_DISTANCE_PX)).toBe(false);
+    expect(isFloatingDrag(LONG_PRESS_MAX_DISTANCE_PX + 1)).toBe(true);
+  });
+});
 
 /** Un écran de 390 × 844 avec les trois couloirs de `floating-menus.css`. */
 const ECRAN: FloatingBounds = { width: 390, height: 844, side: 20, top: 126, bottom: 110 };
