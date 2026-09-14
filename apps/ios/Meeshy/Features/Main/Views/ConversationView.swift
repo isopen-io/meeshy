@@ -1390,7 +1390,6 @@ struct ConversationView: View {
                 // 0 en preview, ni voile : hébergée dans une `.sheet` à détentes, déjà
                 // sous la status bar, la vue décalerait le flux dans le vide.
                 topInset: previewMode ? 0 : DeviceLayout.safeAreaTop,
-                chromeVisibility: previewMode ? .hidden : ThreadChromeFade.Visibility(header: !hidesEntireHeaderForScroll, composer: !hidesComposerChromeForScroll),
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,

@@ -186,4 +186,55 @@ final class SceneCaptionTests: XCTestCase {
             "mon voyage",
             "une légende vide laisse la place au repli plutôt que de peindre un bandeau blanc")
     }
+    // MARK: - D'où vient la légende (#6504)
+
+    /// **La traduction ne s'offre que là où elle existe.** Le texte du post
+    /// porte des traductions et se traduit à la demande ; la légende PROPRE d'un
+    /// média n'a aucune carte de traductions (#6280). Le plein écran doit donc
+    /// savoir laquelle des deux il affiche — la chaîne seule ne le dit pas.
+    func test_origine_laLegendePropreDuMedia() {
+        let publication = post(media: [media("m1", caption: "la plage")], content: "mon voyage")
+        let document = CanvasV3(scenes: [scene("s1", porte: "m1")])
+
+        let resolue = SceneCaption.resolveWithOrigin(sceneIndex: 0, in: document, post: publication,
+                                                     carrierFallback: true)
+
+        XCTAssertEqual(resolue?.text, "la plage")
+        XCTAssertEqual(resolue?.origin, .mediaCaption)
+    }
+
+    func test_origine_leTexteDuPost_enPleinEcran_surUneSceneSansMedia() {
+        let publication = post(media: [], content: "mon voyage")
+        let document = CanvasV3(scenes: [scene("s1")])
+
+        let resolue = SceneCaption.resolveWithOrigin(sceneIndex: 0, in: document, post: publication,
+                                                     carrierFallback: true)
+
+        XCTAssertEqual(resolue?.text, "mon voyage")
+        XCTAssertEqual(resolue?.origin, .carrierText)
+    }
+
+    /// Un post à UN visuel sans légende propre reçoit le texte du post en repli
+    /// (`SocialMediaCaption.map`) : c'est bien le texte du post, et il se traduit.
+    func test_origine_leTexteDuPost_quandLUniqueVisuelNAPasDeLegende() {
+        let publication = post(media: [media("m1", caption: nil)], content: "mon voyage")
+        let document = CanvasV3(scenes: [scene("s1", porte: "m1")])
+
+        let resolue = SceneCaption.resolveWithOrigin(sceneIndex: 0, in: document, post: publication,
+                                                     carrierFallback: true)
+
+        XCTAssertEqual(resolue?.text, "mon voyage")
+        XCTAssertEqual(resolue?.origin, .carrierText)
+    }
+
+    /// La forme historique reste la projection de la nouvelle : même texte.
+    func test_resolve_estLaProjectionDeResolveWithOrigin() {
+        let publication = post(media: [media("m1", caption: "la plage")], content: "mon voyage")
+        let document = CanvasV3(scenes: [scene("s1", porte: "m1")])
+
+        XCTAssertEqual(
+            SceneCaption.resolve(sceneIndex: 0, in: document, post: publication, carrierFallback: true),
+            SceneCaption.resolveWithOrigin(sceneIndex: 0, in: document, post: publication, carrierFallback: true)?.text
+        )
+    }
 }

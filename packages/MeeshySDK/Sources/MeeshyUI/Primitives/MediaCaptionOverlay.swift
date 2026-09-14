@@ -190,6 +190,17 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
     ///
     /// Défaut `true` : les hôtes qui ne disent rien gardent ce qu'ils avaient.
     private let dimsBackgroundWhenExpanded: Bool
+    /// **L'emplacement ENTRE la légende et son invite** (directive porteur
+    /// 2026-09-14, #6504) : « mettre entre les deux l'icône de traduction, la
+    /// sélection de la langue d'affichage s'il existe des traductions déjà, ou
+    /// l'icône pour traduire immédiatement ».
+    ///
+    /// L'atome ne sait rien des langues : l'hôte décide de ce qu'il y pose, et
+    /// s'il y pose quelque chose. Effacé en `AnyView` — un emplacement unique et
+    /// stable, pas une cellule de liste, comme l'accessoire de
+    /// `CollapsibleHeader` — pour ne pas ajouter un paramètre générique à tous
+    /// les appelants. `nil` : rien n'est rendu, les hôtes existants inchangés.
+    private let accessory: AnyView?
 
     /// **Ce que les surfaces partagent est la RÈGLE, pas le moteur de texte.**
     ///
@@ -213,6 +224,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
                 expandedTrailingInset: CGFloat = 0,
                 scrollToTopToken: Int = 0,
                 dimsBackgroundWhenExpanded: Bool = true,
+                accessory: AnyView? = nil,
                 onToggle: @escaping () -> Void,
                 @ViewBuilder render: @escaping (String, CGFloat) -> TextBody) {
         self.caption = caption
@@ -224,6 +236,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
         self.expandedTrailingInset = expandedTrailingInset
         self.scrollToTopToken = scrollToTopToken
         self.dimsBackgroundWhenExpanded = dimsBackgroundWhenExpanded
+        self.accessory = accessory
         self.onToggle = onToggle
         self.render = render
     }
@@ -294,6 +307,10 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .legibleOverCanvas()
 
+            if let accessory {
+                accessory
+            }
+
             if collapsed.isTruncated {
                 affordance(Self.seeMoreLabel, hint: Self.seeMoreHint)
             }
@@ -325,6 +342,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
     /// > un contrôle : c'est une récompense de fin de lecture. Et il ne suffit
     /// > pas qu'il soit RENDU — il doit être rendu là où on le cherche au
     /// > moment où on en a besoin.
+    @ViewBuilder
     private var expandedCaption: some View {
         // **Il MONTE depuis sa place, il ne se replace pas.** L'ancienne forme
         // enveloppait le contenu d'un `GeometryReader` + `minHeight:
@@ -332,10 +350,27 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
         // son ancre glissait au bas de l'écran. Le texte semblait descendre au
         // moment même où on demandait à en voir plus.
         //
-        // Ici la `ScrollView` se dimensionne à son CONTENU, plafonnée à
-        // `maxExpandedHeight`. Courte, elle occupe peu et reste là où la
-        // repliée était ; longue, elle grandit vers le haut jusqu'au plafond,
-        // puis défile. L'hôte n'a plus à déplacer quoi que ce soit.
+        // **Et une `ScrollView` ne se dimensionne PAS à son contenu** (#6504).
+        // Ce commentaire l'affirmait ; mesuré le 2026-09-14, une légende d'une
+        // ligne dépliée occupait 444 pt — la fenêtre prenait tout le plafond, et
+        // « voir moins » tombait sous 420 pt de vide (capture du porteur). Le
+        // corpus est donc rendu NU tant qu'il tient sous le plafond, et dans une
+        // fenêtre défilante seulement au-delà : `ViewThatFits` choisit, sur la
+        // hauteur que le plafond propose. Court, le bloc épouse son texte ;
+        // long, il grandit vers le haut jusqu'au plafond, puis défile.
+        //
+        // Le plafond n'est PAS un `.frame(maxHeight:)` : un cadre extensible
+        // prend la hauteur proposée jusqu'à son maximum QUEL QUE SOIT son
+        // contenu — texte nu compris. Mesuré : 444 pt avec `ViewThatFits` sous un
+        // tel cadre, exactement comme sans. `PlafondDeHauteur` propose le
+        // plafond, puis rend la hauteur réellement prise.
+        let corpus = render(caption, 15)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .legibleOverCanvas()
+            .padding(.leading, horizontalInset)
+            .padding(.trailing, horizontalInset + expandedTrailingInset)
+            .frame(maxWidth: .infinity, alignment: .leading)
         VStack(alignment: .leading, spacing: 8) {
             ScrollViewReader { proxy in
                 // **Aucune barre de défilement** (directive porteur 2026-09-03).
@@ -354,24 +389,27 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
                 // signal qu'il y a une suite —, et l'invite « voir moins » est
                 // posée SOUS la fenêtre, hors du défilement, donc toujours
                 // visible et jamais confondue avec la fin du corpus.
-                ScrollView(.vertical, showsIndicators: false) {
-                    render(caption, 15)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .legibleOverCanvas()
-                        .padding(.leading, horizontalInset)
-                        .padding(.trailing, horizontalInset + expandedTrailingInset)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        // L'ancre du retour en tête. Posée sur le CONTENU, pas
-                        // sur la fenêtre : c'est lui qu'on repositionne.
-                        .id(Self.topAnchor)
+                PlafondDeHauteur(plafond: maxExpandedHeight) {
+                    ViewThatFits(in: .vertical) {
+                        corpus
+                        ScrollView(.vertical, showsIndicators: false) {
+                            corpus
+                                // L'ancre du retour en tête. Posée sur le CONTENU, pas
+                                // sur la fenêtre : c'est lui qu'on repositionne.
+                                .id(Self.topAnchor)
+                        }
+                    }
                 }
-                .frame(maxHeight: maxExpandedHeight)
                 .adaptiveOnChange(of: scrollToTopToken) { _, _ in
                     withAnimation(.easeOut(duration: 0.28)) {
                         proxy.scrollTo(Self.topAnchor, anchor: .top)
                     }
                 }
+            }
+
+            if let accessory {
+                accessory
+                    .padding(.leading, horizontalInset)
             }
 
             affordance(Self.seeLessLabel, hint: Self.seeLessHint)
@@ -466,6 +504,30 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
     }
 }
 
+// MARK: - Un plafond qui ne s'étend pas
+
+/// **Borner une hauteur sans la remplir** (#6504).
+///
+/// `.frame(maxHeight:)` est un cadre EXTENSIBLE : proposé plus haut que son
+/// maximum, il prend ce maximum, même autour d'une ligne de texte. C'est ce qui
+/// posait « voir moins » sous 420 pt de vide. Cette mise en page propose au
+/// contenu la hauteur du plafond, puis ne rend que celle qu'il a prise.
+private struct PlafondDeHauteur: Layout {
+    let plafond: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let contenu = subviews.first else { return .zero }
+        let offerte = min(proposal.height ?? plafond, plafond)
+        let prise = contenu.sizeThatFits(ProposedViewSize(width: proposal.width, height: offerte))
+        return CGSize(width: proposal.width ?? prise.width, height: min(prise.height, plafond))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, anchor: .topLeading,
+                              proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
+    }
+}
+
 // MARK: - Lisibilité sur un fond quelconque
 
 private extension View {
@@ -512,6 +574,7 @@ public extension MediaCaptionOverlay where TextBody == MediaCaptionPlainText {
          expandedTrailingInset: CGFloat = 0,
          scrollToTopToken: Int = 0,
          dimsBackgroundWhenExpanded: Bool = true,
+         accessory: AnyView? = nil,
          onToggle: @escaping () -> Void) {
         self.init(caption: caption,
                   isExpanded: isExpanded,
@@ -522,6 +585,7 @@ public extension MediaCaptionOverlay where TextBody == MediaCaptionPlainText {
                   expandedTrailingInset: expandedTrailingInset,
                   scrollToTopToken: scrollToTopToken,
                   dimsBackgroundWhenExpanded: dimsBackgroundWhenExpanded,
+                  accessory: accessory,
                   onToggle: onToggle,
                   render: { texte, taille in MediaCaptionPlainText(texte, size: taille) })
     }
