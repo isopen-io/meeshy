@@ -39,6 +39,8 @@ const en = {
   'reels.media.error': 'Can’t play — Try again',
   'reels.image': 'Image {index} of {count}',
 
+  'stories.mine': 'Your story',
+
   'feed.post.action.like': 'Like',
   'feed.post.action.comment': 'Comment',
   'feed.post.action.repost': 'Repost',

@@ -7,6 +7,7 @@ import { useStoryTray } from '@/lib/api/query';
 import { sessionStore } from '@/lib/api/session';
 import { storyViewedStore } from '@/lib/api/story-viewed-store';
 import { resolveViewer } from '@/lib/api/viewer';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
 import { groupStoriesByAuthor, storyAuthorLabel } from '@/lib/view/story-tray';
 import { useSearch } from '@/lib/router';
@@ -34,6 +35,7 @@ import { Link } from '@/routes/route-table';
  * squelette — cache-first, § Instant App Principles.
  */
 export default function StoriesScreen() {
+  const language = currentInterfaceLanguage();
   const [search] = useSearch();
   const filtreAuteur = search.get('author') ?? undefined;
   const session = useStore(sessionStore, (s) => s.session);
@@ -67,7 +69,7 @@ export default function StoriesScreen() {
           <span aria-hidden="true" className="text-lg leading-none">‹</span>
         </Link>
         <h1 className="text-body font-semibold" style={{ color: 'var(--color-ios-ink-1)' }}>
-          {filtreAuteur === undefined ? 'Stories' : storyAuthorLabel(montres[0] ?? groups[0] ?? ({} as never)) || 'Stories'}
+          {filtreAuteur === undefined ? 'Stories' : storyAuthorLabel(montres[0] ?? groups[0] ?? ({} as never), language) || 'Stories'}
         </h1>
       </header>
 
@@ -99,7 +101,7 @@ export default function StoriesScreen() {
         ) : (
           <ul className="flex flex-col gap-2 py-2">
             {montres.map((g) => {
-              const label = storyAuthorLabel(g);
+              const label = storyAuthorLabel(g, language);
               return (
                 <li key={g.authorId}>
                   <Link

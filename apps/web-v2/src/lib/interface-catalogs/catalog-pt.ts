@@ -43,6 +43,8 @@ const pt = {
   'reels.media.error': 'Não foi possível reproduzir — Tentar novamente',
   'reels.image': 'Imagem {index} de {count}',
 
+  'stories.mine': 'Seu story',
+
   'feed.post.action.like': 'Curtir',
   'feed.post.action.comment': 'Comentar',
   'feed.post.action.repost': 'Republicar',

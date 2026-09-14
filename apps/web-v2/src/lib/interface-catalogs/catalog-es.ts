@@ -39,6 +39,8 @@ const es = {
   'reels.media.error': 'No se puede reproducir — Reintentar',
   'reels.image': 'Imagen {index} de {count}',
 
+  'stories.mine': 'Tu historia',
+
   'feed.post.action.like': 'Me gusta',
   'feed.post.action.comment': 'Comentar',
   'feed.post.action.repost': 'Republicar',
