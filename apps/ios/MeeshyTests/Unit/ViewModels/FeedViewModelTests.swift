@@ -575,7 +575,7 @@ final class FeedViewModelTests: XCTestCase {
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
         await sut.loadFeed(forceRefresh: true)
 
-        await sut.sendComment(postId: "p1", content: "Nice post!")
+        await sut.sendComment(postId: "p1", content: "Nice post!", originalLanguage: "en")
 
         XCTAssertEqual(sut.posts[0].commentCount, 4)
         XCTAssertEqual(sut.posts[0].comments.first?.content, "Nice post!", "optimistic comment inserted")
@@ -593,7 +593,7 @@ final class FeedViewModelTests: XCTestCase {
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1")]))
         await sut.loadFeed(forceRefresh: true)
 
-        await sut.sendComment(postId: "p1", content: "reply", parentId: "c1")
+        await sut.sendComment(postId: "p1", content: "reply", originalLanguage: "en", parentId: "c1")
 
         let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
         XCTAssertEqual(payload?.parentCommentId, "c1")
@@ -606,7 +606,7 @@ final class FeedViewModelTests: XCTestCase {
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
         await sut.loadFeed(forceRefresh: true)
 
-        await sut.sendComment(postId: "p1", content: "failing comment")
+        await sut.sendComment(postId: "p1", content: "failing comment", originalLanguage: "en")
 
         XCTAssertEqual(sut.posts[0].commentCount, 3, "comment count must roll back on enqueue failure")
         XCTAssertTrue(sut.posts[0].comments.isEmpty, "optimistic comment must be removed on rollback")
@@ -668,7 +668,7 @@ final class FeedViewModelTests: XCTestCase {
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
         await sut.loadFeed(forceRefresh: true)
 
-        await sut.sendComment(postId: "p1", content: "doomed comment")
+        await sut.sendComment(postId: "p1", content: "doomed comment", originalLanguage: "en")
         XCTAssertEqual(sut.posts[0].commentCount, 4, "optimistic comment inserted")
         XCTAssertEqual(sut.posts[0].comments.first?.content, "doomed comment")
 
@@ -1757,7 +1757,7 @@ final class FeedViewModelTests: XCTestCase {
         await sut.loadFeed(forceRefresh: true)
         sut.subscribeToSocketEvents()
 
-        await sut.sendComment(postId: "p1", content: "Hello")
+        await sut.sendComment(postId: "p1", content: "Hello", originalLanguage: "en")
         guard let cmid = (queue.enqueueCalls.first?.payload as? CreateCommentPayload)?.clientMutationId else {
             return XCTFail("no createComment enqueue")
         }

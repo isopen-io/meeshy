@@ -977,7 +977,7 @@ extension StoryViewerView {
                 // LIMITE ASSUMÉE, identique au feed : `CreateCommentPayload` ne
                 // porte pas `attachmentIds` (lacune du schéma SDK). Un média
                 // joint à un commentaire envoyé hors-ligne est perdu au rejeu ;
-                // le TEXTE et ses effets visuels, eux, survivent.
+                // le TEXTE, sa LANGUE déclarée (#6587) et ses effets survivent.
                 do {
                     // MÊME cmid que la tentative REST : un POST abouti dont la
                     // réponse s'est perdue est dédoublonné au rejeu (MutationLog).
@@ -985,12 +985,10 @@ extension StoryViewerView {
                     try await OfflineQueue.shared.enqueue(
                         .createComment,
                         payload: CreateCommentPayload(
-                            clientMutationId: cmid,
-                            postId: story.id,
-                            parentCommentId: parentId,
-                            content: text,
-                            location: location,
-                            effectFlags: effectFlags
+                            clientMutationId: cmid, postId: story.id,
+                            parentCommentId: parentId, content: text,
+                            originalLanguage: language,
+                            location: location, effectFlags: effectFlags
                         ),
                         conversationId: story.id
                     )

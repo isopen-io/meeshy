@@ -262,11 +262,13 @@ final class OutboxKindCodableTests: XCTestCase {
             clientMutationId: "cmid_cm",
             postId: "p1",
             parentCommentId: nil,
-            content: "first!"
+            content: "first!",
+            originalLanguage: "en"
         )
         let d = try roundTrip(p)
         XCTAssertEqual(d.content, "first!")
         XCTAssertNil(d.parentCommentId)
+        XCTAssertEqual(d.originalLanguage, "en")
     }
 
     func test_deleteComment_roundTrips() throws {

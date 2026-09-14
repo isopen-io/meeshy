@@ -2017,10 +2017,11 @@ struct CommentsSheetView: View {
                 // already use) instead of unconditionally losing the comment.
                 // The optimistic `tempId` row is reconciled by the already-wired
                 // `comment:added` socket handler once the outbox replay lands.
-                // NOTE: `CreateCommentPayload` carries `effectFlags` but not
+                // NOTE: `CreateCommentPayload` carries `effectFlags`, the
+                // authored language (#6587) and the shared place, but not
                 // `attachmentIds` (SDK schema gap) — attached media on a comment
-                // sent while offline is dropped on replay; the comment text and
-                // its visual effects survive.
+                // sent while offline is dropped on replay; the comment text, its
+                // declared language and its visual effects survive.
                 do {
                     // MÊME cmid que la tentative REST : si le POST a abouti côté
                     // serveur mais que sa réponse s'est perdue, le rejeu outbox
@@ -2028,12 +2029,10 @@ struct CommentsSheetView: View {
                     // second commentaire.
                     let cmid = tempId
                     let payload = CreateCommentPayload(
-                        clientMutationId: cmid,
-                        postId: post.id,
-                        parentCommentId: parentId,
-                        content: trimmed,
-                        location: place,
-                        effectFlags: effectFlags
+                        clientMutationId: cmid, postId: post.id,
+                        parentCommentId: parentId, content: trimmed,
+                        originalLanguage: lang,
+                        location: place, effectFlags: effectFlags
                     )
                     try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: post.id)
                     onCommentSent?(post.id)

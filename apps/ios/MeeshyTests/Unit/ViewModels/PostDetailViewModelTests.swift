@@ -396,7 +396,7 @@ final class PostDetailViewModelTests: XCTestCase {
         mock.getPostResult = .success(apiPost)
         await sut.loadPost("p1")
 
-        await sut.sendComment("New comment")
+        await sut.sendComment("New comment", originalLanguage: "en")
 
         // sendComment inserts an optimistic comment carrying a `cmid` id and
         // enqueues a createComment outbox op; the authoritative server id
@@ -415,7 +415,7 @@ final class PostDetailViewModelTests: XCTestCase {
         mock.getPostResult = .success(apiPost)
         await sut.loadPost("p1")
 
-        await sut.sendComment("Failing comment")
+        await sut.sendComment("Failing comment", originalLanguage: "en")
 
         XCTAssertTrue(sut.comments.isEmpty)
     }
@@ -559,7 +559,7 @@ final class PostDetailViewModelTests: XCTestCase {
         mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
         await sut.loadPost("p1")
 
-        await sut.sendComment("doomed comment")
+        await sut.sendComment("doomed comment", originalLanguage: "en")
         XCTAssertEqual(sut.comments.count, 1, "optimistic comment inserted")
         XCTAssertEqual(sut.comments[0].content, "doomed comment")
 
@@ -685,7 +685,7 @@ final class PostDetailViewModelTests: XCTestCase {
         sut.comments = [root]
         sut.replyingTo = root
 
-        await sut.sendReply("Coucou", effectFlags: 4)
+        await sut.sendReply("Coucou", originalLanguage: "en", effectFlags: 4)
 
         XCTAssertEqual(queue.enqueueCalls.first?.kind, .createComment,
                        "une réponse texte transite par l'outbox durable, pas par un appel direct")
@@ -706,7 +706,7 @@ final class PostDetailViewModelTests: XCTestCase {
         // Répondre à une réponse de niveau 2 …
         sut.replyingTo = reply
 
-        await sut.sendReply("@bob ok")
+        await sut.sendReply("@bob ok", originalLanguage: "en")
 
         // … reste plat au niveau 2 : rattaché au MÊME parent racine (c1), pas à r1.
         let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
@@ -727,7 +727,7 @@ final class PostDetailViewModelTests: XCTestCase {
         sut.comments = [root]
         sut.replyingTo = root
 
-        await sut.sendReply("Coucou")
+        await sut.sendReply("Coucou", originalLanguage: "en")
 
         XCTAssertEqual(sut.repliesMap["c1"]?.first?.id.hasPrefix("cmid") ?? false, true,
                        "la réponse optimiste est keyée par cmid, pas par un id serveur")
@@ -747,7 +747,7 @@ final class PostDetailViewModelTests: XCTestCase {
         sut.comments = [root]
         sut.replyingTo = root
 
-        await sut.sendReply("Coucou")
+        await sut.sendReply("Coucou", originalLanguage: "en")
 
         XCTAssertEqual(sut.repliesMap["c1"]?.isEmpty ?? true, true,
                        "l'enfilement refusé doit retirer la réponse optimiste")
@@ -770,7 +770,7 @@ final class PostDetailViewModelTests: XCTestCase {
         await sut.loadPost("p1")
         sut.subscribeToSocket("p1")
 
-        await sut.sendComment("Hello")
+        await sut.sendComment("Hello", originalLanguage: "en")
         guard let cmid = (queue.enqueueCalls.first?.payload as? CreateCommentPayload)?.clientMutationId else {
             return XCTFail("no createComment enqueue")
         }
@@ -802,7 +802,7 @@ final class PostDetailViewModelTests: XCTestCase {
         sut.comments = [root]
         sut.replyingTo = root
 
-        await sut.sendReply("Coucou")
+        await sut.sendReply("Coucou", originalLanguage: "en")
         guard let cmid = (queue.enqueueCalls.first?.payload as? CreateCommentPayload)?.clientMutationId else {
             return XCTFail("no createComment enqueue")
         }

@@ -550,8 +550,14 @@ struct OutboxDispatcher: OutboxDispatching {
             /// `metadata.location`.
             let location: SharedPlace?
             let effectFlags: Int?
+            /// Langue d'ÉCRITURE déclarée par l'auteur (#6587) — `CreateCommentSchema`
+            /// l'accepte côté gateway, et `PostTranslationService.translateComment`
+            /// ne retombe sur son heuristique de mots QUE si la clé est absente.
+            /// Encodée en `encodeIfPresent` : une ligne gravée avant le champ
+            /// rejoue sans la clé, donc sous le repli, exactement comme avant.
+            let originalLanguage: String?
 
-            enum CodingKeys: String, CodingKey { case content, parentId, location, effectFlags }
+            enum CodingKeys: String, CodingKey { case content, parentId, location, effectFlags, originalLanguage }
 
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
@@ -559,13 +565,15 @@ struct OutboxDispatcher: OutboxDispatching {
                 if let parentId { try container.encode(parentId, forKey: .parentId) }
                 try container.encodeIfPresent(location, forKey: .location)
                 try container.encodeIfPresent(effectFlags, forKey: .effectFlags)
+                try container.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
             }
         }
         let body = CreateCommentBody(
             content: payload.content,
             parentId: payload.parentCommentId,
             location: payload.location,
-            effectFlags: payload.effectFlags
+            effectFlags: payload.effectFlags,
+            originalLanguage: payload.originalLanguage
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             PostsEndpoint.byPostIdComments(postId: payload.postId),
