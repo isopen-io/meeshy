@@ -88,7 +88,11 @@
 // le fait rougir sur l'application de la règle qu'il défend. Suivi en issue
 // dédiée ; le corriger déplacerait la référence de 946 à ~163 et demande un
 // relevé, pas une retouche de nombre.
-const BASELINE_HARDCODED_COLOR_COUNT = 946;
+//
+// 2026-09-14 (#6482) — 946 → 945. La section Bêta de Réglages part avec son
+// interrupteur et sa liste d'étiquettes : un appel `Color(hex:)` de moins dans
+// `SettingsView`. Rien n'est reclassé, seul le compte suit.
+const BASELINE_HARDCODED_COLOR_COUNT = 945;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
