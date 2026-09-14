@@ -155263,7 +155263,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Press and hold a message and choose \\\"Add to favourites\\\" to find it here."
+            "value": "Press and hold a message and choose “Add to favourites” to find it here."
           }
         },
         "es": {
@@ -155275,7 +155275,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Appuyez longuement sur un message et choisissez \\\"Ajouter aux favoris\\\" pour le retrouver ici."
+            "value": "Appuyez longuement sur un message et choisissez « Ajouter aux favoris » pour le retrouver ici."
           }
         },
         "it": {
