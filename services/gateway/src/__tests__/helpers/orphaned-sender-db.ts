@@ -235,6 +235,24 @@ export function makeOrphanedSenderDb(seed: OrphanDbSeed = {}) {
           .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
         return newest ? { createdAt: newest.createdAt } : null;
       }),
+      /**
+       * La forme UNIQUE qu'un résolveur de portée (#6516) est autorisé à
+       * poser : des ids seuls, jamais `sender`. Toute autre forme jette —
+       * c'est ce qui prouve qu'un résolveur ne redemande pas ce qui a fait
+       * échouer la lecture qu'il répare.
+       */
+      findMany: jest.fn(async (args: any) => {
+        const where = args?.where ?? {};
+        const ids = where?.id?.in;
+        const select = args?.select ?? {};
+        const selectsOnlyConversationId = Object.keys(select).length === 1 && select.conversationId === true;
+        if (!Array.isArray(ids) || Object.keys(where).length !== 1 || !selectsOnlyConversationId) {
+          throw unsupported('findMany', args);
+        }
+        return state.messages.filter((message) => ids.includes(message.id)).map((message) => ({
+          conversationId: message.conversationId,
+        }));
+      }),
     },
     participant: {
       create: jest.fn(async (args: { data: OrphanDbDocument }) => {

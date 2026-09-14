@@ -19,6 +19,7 @@ import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutatio
 import type { ConversationParams } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 // Logger dédié pour messages-advanced
 const logger = enhancedLogger.child({ module: 'messages-advanced' });
@@ -93,21 +94,23 @@ export function registerDeleteMessageRoute(
       }
 
       // Vérifier que le message existe
-      const existingMessage = await prisma.message.findFirst({
-        where: {
-          id: messageId,
-          conversationId: conversationId,
-          deletedAt: null
-        },
-        include: {
-          sender: {
-            select: { id: true, userId: true }
+      const existingMessage = await withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () =>
+        prisma.message.findFirst({
+          where: {
+            id: messageId,
+            conversationId: conversationId,
+            deletedAt: null
           },
-          attachments: {
-            select: { id: true, mimeType: true }
+          include: {
+            sender: {
+              select: { id: true, userId: true }
+            },
+            attachments: {
+              select: { id: true, mimeType: true }
+            }
           }
-        }
-      });
+        })
+      );
 
       if (!existingMessage) {
         return sendNotFound(reply, 'Message not found');
