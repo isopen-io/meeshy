@@ -138,56 +138,46 @@ const waitPlaying = (page, index) =>
     )
     .then(() => true, () => false);
 
+const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+const pagerTop = (page) => page.evaluate(() => document.querySelector('[data-reels-pager]')?.scrollTop ?? -1);
+
 /**
- * Un balayage TACTILE réel, LANCÉ comme un pouce le lance (`preventFling:
- * false`) : le compositeur, l'inertie et l'accroche du navigateur. Le trajet ne
- * couvre qu'un tiers de page — c'est l'élan qui doit porter au réel suivant, et
- * `scroll-snap-stop: always` qui doit l'y ARRÊTER (mesuré : sans élan, un tiers
- * de page revient en place ; avec élan, exactement une page).
- */
-/**
- * UN BALAYAGE TACTILE — sans FLING (correction 2026-09-14).
+ * UN BALAYAGE TACTILE — un DOIGT posé, traîné, levé (#6492).
  *
- * `preventFling: false` confiait la course au compositeur : le doigt lance, la
- * physique finit. En local la page atterrissait à 568 ; **en CI le défileur ne
- * bougeait pas d'un pixel** (`top: 0`), et douze invariants tombaient en
- * accusant l'application.
+ * `Input.synthesizeScrollGesture` passe par la cible de geste SYNTHÉTIQUE de la
+ * plateforme. Sur macOS elle livre le geste ; sur le runner Linux (Aura, sans
+ * GPU) **le défileur n'a jamais bougé** (`0 → 0`, run 34832315725), avec ou
+ * sans fling : seize invariants tombaient en accusant l'application.
  *
- * Un fling a besoin du fil compositeur, que le runner sans GPU ne sert pas de
- * la même façon. Or l'invariant mesuré n'est pas la physique du geste : c'est
- * « un arrêt par réel ». `preventFling: true` parcourt la distance demandée de
- * façon déterministe, et laisse `scroll-snap` faire son travail — ce qui est
- * exactement ce que le témoin juge.
+ * `Input.dispatchTouchEvent`, sous l'émulation tactile que pose `hasTouch`,
+ * passe par l'émulateur de toucher du navigateur, qui reconnaît lui-même le
+ * défilement, identique sur toutes les plateformes. C'est le chemin que le gate
+ * du disque du Flux emploie déjà, vert sur ce même runner.
  *
- * ## La distance, elle, n'était pas anodine — et c'est la vraie cause
+ * Le doigt parcourt 60 % de la page, PLUS que le point de bascule de
+ * `scroll-snap` (la moitié), puis s'immobilise avant de se lever : aucun élan
+ * ne porte le geste, et c'est l'accroche seule que l'invariant « un arrêt par
+ * réel » éprouve.
  *
- * 35 % de la hauteur est SOUS le point de bascule de `scroll-snap`, qui est la
- * moitié. Sans fling, le défileur parcourait 299 px sur 844 puis **revenait en
- * arrière** : « accroche le réel suivant (0) », mesuré en local une fois le
- * fling retiré. Avec fling, l'élan franchissait la moitié — le témoin passait
- * pour une raison qui ne lui appartenait pas, et tombait dès que le compositeur
- * ne servait plus l'élan.
- *
- * 60 % dépasse le point de bascule de façon DÉTERMINISTE. Le geste devient
- * décisif au lieu d'être emporté, ce qui est précisément ce que l'invariant
- * « un arrêt par réel » veut éprouver.
- *
- * Rend le déplacement RÉELLEMENT obtenu, pour que l'appelant puisse distinguer
- * « l'application n'accroche pas » de « le geste n'est jamais parti ».
+ * Rend le déplacement obtenu DOIGT POSÉ, avant toute accroche, pour que
+ * l'appelant distingue « l'application n'accroche pas » de « le geste n'est
+ * jamais parti ».
  */
 const swipe = async (cdp, page, { width, height }, direction) => {
-  const avant = await page.evaluate(() => document.querySelector('[data-reels-pager]')?.scrollTop ?? -1);
-  const distance = Math.round(height * 0.6);
-  await cdp.send('Input.synthesizeScrollGesture', {
-    x: Math.round(width / 3),
-    y: Math.round(height / 2),
-    xDistance: 0,
-    yDistance: direction === 'next' ? -distance : distance,
-    speed: 3000,
-    gestureSourceType: 'touch',
-    preventFling: true,
-  });
-  const apres = await page.evaluate(() => document.querySelector('[data-reels-pager]')?.scrollTop ?? -1);
+  const avant = await pagerTop(page);
+  const x = Math.round(width / 3);
+  const from = Math.round(height * (direction === 'next' ? 0.8 : 0.2));
+  const distance = Math.round(height * 0.6) * (direction === 'next' ? -1 : 1);
+  const steps = 12;
+  const touch = (type, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: y === null ? [] : [{ x, y }] });
+  await touch('touchStart', from);
+  for (let step = 1; step <= steps; step += 1) {
+    await touch('touchMove', Math.round(from + (distance * step) / steps));
+    await pause(16);
+  }
+  await pause(150);
+  const apres = await pagerTop(page);
+  await touch('touchEnd', null);
   return { avant, apres, bouge: avant !== apres };
 };
 
@@ -322,7 +312,7 @@ try {
       await settle(page, 1);
       // Le geste a-t-il seulement PARTI ? Sans cette distinction, un harnais
       // muet accuse l'application : c'est ce qui s'est produit en CI le
-      // 2026-09-14, où `preventFling: false` ne déplaçait rien du tout.
+      // 2026-09-14, où `synthesizeScrollGesture` ne déplaçait rien du tout.
       check(gesteSuivant.bouge, `${label} : le balayage tactile déplace le défileur (${gesteSuivant.avant} → ${gesteSuivant.apres})`);
       check((await activeIndex(page)) === 1, `${label} : balayer vers le haut accroche le réel SUIVANT (${await activeIndex(page)})`);
       const landed = await page.evaluate(() => {

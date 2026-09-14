@@ -32374,3 +32374,24 @@ appartenait pas**, et tombait dès que le compositeur ne servait plus cet élan.
 
 Voisine de [[reference_a_red_on_both_sides_of_the_diff_also_measures_the_machine]]
 et du piège inverse : ici, VERT d'un seul côté mesurait la machine.
+
+### Correction — la distance n'était pas la cause en CI non plus (#6492)
+
+Le correctif ci-dessus, vert en local, **est resté rouge en CI** (run
+34832315725) : `le balayage tactile déplace le défileur (0 → 0)` sur les quatre
+peaux. Le témoin ajouté a donc tenu sa promesse. Il a dit que le GESTE n'était
+jamais parti, et ce n'était ni l'élan, ni la distance.
+
+`Input.synthesizeScrollGesture` passe par la cible de geste synthétique de la
+PLATEFORME : sur macOS elle livre le geste, sur le runner Linux (Aura, sans GPU)
+elle ne déplace rien. `Input.dispatchTouchEvent` sous `hasTouch` passe par
+l'émulateur de toucher du navigateur, qui reconnaît le défilement lui-même, et
+se comporte de la même façon sur les deux plateformes. `check-feed-disc` l'employait déjà, vert sur
+ce runner.
+
+- **Un vert LOCAL ne prouve pas un correctif de harnais qui ne rougit qu'en
+  CI.** Deux fautes plausibles (élan, distance) expliquaient le rouge local ;
+  aucune n'expliquait le rouge distant. La preuve est un run du runner qui
+  rougissait, avant la poussée sur `dev`.
+- **Avant d'inventer un geste, copier celui qu'un gate VERT du même job
+  emploie déjà.** Le chemin qui marchait était dans le fichier voisin.
