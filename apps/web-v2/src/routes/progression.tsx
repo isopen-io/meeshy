@@ -25,6 +25,7 @@ import {
   CARD,
   INK,
   INK_2,
+  MEESH_COIN_TINT,
   MEESH_TINT,
   STREAK_TINT,
   UNLOCKED_TINT,
@@ -368,7 +369,7 @@ export function SectionLink({ section, progress }: { section: ProgressionSection
  * directive du porteur est une NÉGATION, et une négation se prouve par un
  * témoin qui cherche l'absence.
  */
-function MeeshEntry({
+export function MeeshEntry({
   meesh,
   onMint,
   isMinting,
@@ -394,7 +395,7 @@ function MeeshEntry({
         }}
       >
         <span className="text-body font-bold">{meesh.balance}</span>
-        <GlyphSvg glyph={PROGRESSION_GLYPHS.medal} size={20} />
+        <GlyphSvg glyph={PROGRESSION_GLYPHS.coinFill} size={20} style={{ color: MEESH_COIN_TINT }} />
       </button>
 
       {ouvert ? (

@@ -269,4 +269,38 @@ final class ProgressionMeeshEntryTests: XCTestCase {
             "La conversion n'est pas proposée alors que les points la permettent."
         )
     }
+
+    // MARK: - La pièce d'argent (#6427)
+
+    /// **Une Meesh est une MONNAIE** : son glyphe dit « pièce », pas « marque ».
+    /// L'actif doit exister ET se teinter — un dessin rendu dans ses couleurs
+    /// d'origine ignorerait l'argent que la vue lui donne, exactement le défaut
+    /// du logo à fond plein que le commentaire de l'entrée raconte.
+    func test_theCoinGlyph_isATintableAssetOfTheApp() {
+        let image = UIImage(named: MeeshCoinGlyph.assetName, in: .main, compatibleWith: nil)
+        XCTAssertNotNil(image, "L'actif « \(MeeshCoinGlyph.assetName) » est absent du catalogue de l'app.")
+        XCTAssertEqual(image?.renderingMode, .alwaysTemplate, "La pièce ne se teinte pas : l'argent de la vue serait ignoré.")
+    }
+
+    /// **Pourquoi une garde de SOURCE ici, et pas l'arbre rendu.** Le glyphe est
+    /// DÉCORATIF (`accessibilityHidden`) : le solde est dit par le libellé de
+    /// l'entrée, et une image cachée n'apparaît dans aucun des deux arbres que
+    /// `RenderedScreen` descend. Le rendu ne pouvant pas la voir, c'est le
+    /// fichier qui témoigne — les deux sites, le bouton ET l'en-tête du détail.
+    func test_theEntryAndItsDetail_mountTheCoin_notTheMeeshyLogo() throws {
+        let source = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()   // Views
+                .deletingLastPathComponent()   // Unit
+                .deletingLastPathComponent()   // MeeshyTests
+                .deletingLastPathComponent()   // ios
+                .appendingPathComponent("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(source.contains("Image(\"MeeshyLogo\")"), "L'entrée Meesh monte encore le logo Meeshy.")
+        XCTAssertEqual(
+            source.components(separatedBy: "MeeshCoinGlyph(").count - 1, 2,
+            "La pièce doit être montée au bouton ET à l'en-tête du détail."
+        )
+    }
 }
