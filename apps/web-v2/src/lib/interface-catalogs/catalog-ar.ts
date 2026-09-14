@@ -434,6 +434,43 @@ const ar = {
   'links.create.error.offline': 'غير متصل: لم يُنشأ الرابط.',
   'links.create.error.refused': 'لا يمكنك إنشاء رابط لهذه المحادثة.',
   'links.create.error.default': 'تعذّر إنشاء الرابط. أعد المحاولة.',
+
+  /* L'ESPACE D'ADMINISTRATION (#6432) — les onze sections reprennent les
+     libellés de la barre latérale du legacy (`AdminLayout.tsx`), pour qu'un
+     administrateur retrouve ses repères d'une application à l'autre. */
+  'admin.title': 'الإدارة',
+  'admin.role': 'دورك: {role}',
+  'admin.denied.title': 'منطقة محجوزة',
+  'admin.denied.message': 'تتطلب هذه المنطقة صلاحية إدارية.',
+  'admin.counters.title': 'لمحة سريعة',
+  'admin.counters.unavailable': 'العدادات غير متاحة حاليًا.',
+  'admin.counters.users': 'الحسابات',
+  'admin.counters.activeUsers': 'الحسابات النشطة',
+  'admin.counters.messages': 'الرسائل',
+  'admin.counters.communities': 'المجتمعات',
+  'admin.counters.reports': 'البلاغات',
+  'admin.counters.newUsers': 'جديد (٢٤ ساعة)',
+  'admin.sections.title': 'الأقسام',
+  'admin.sections.legacy': 'الواجهة السابقة',
+  'admin.nav.dashboard': 'لوحة المعلومات',
+  'admin.nav.users': 'الحسابات',
+  'admin.nav.moderation': 'الإشراف',
+  'admin.nav.audit': 'سجلات التدقيق',
+  'admin.nav.analytics': 'الإحصاءات',
+  'admin.nav.trackingLinks': 'روابط التتبع',
+  'admin.nav.ranking': 'الترتيب',
+  'admin.nav.broadcasts': 'البثوث',
+  'admin.nav.settings': 'الإعدادات',
+  'admin.nav.agent': 'الوكيل',
+  'admin.nav.monitoring': 'المراقبة',
+  'admin.users.search': 'ابحث عن حساب',
+  'admin.users.count': '{count} حساب',
+  'admin.users.empty': 'لا يوجد حساب مطابق.',
+  'admin.users.unavailable': 'القائمة غير متاحة حاليًا.',
+  'admin.users.inactive': 'معطّل',
+  'admin.users.previous': 'السابق',
+  'admin.users.next': 'التالي',
+
 } satisfies InterfaceCatalog;
 
 export default ar;
