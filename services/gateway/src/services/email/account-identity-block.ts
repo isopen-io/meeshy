@@ -202,9 +202,18 @@ export function accountIdentityBlockText(identite: IdentiteDuCompte, language?: 
  * recopié dans deux services survit à la disparition de sa page dans l'un des
  * deux. Le jour où l'onglet change de nom, il change ici.
  *
- * Les ancres visent les onglets de `/settings` (`getInitialTab` lit
+ * Les ancres visent les onglets de `/settings` du LEGACY (`getInitialTab` lit
  * `window.location.hash`) : `#profile` porte le pseudo et le nom affiché,
- * `#security` porte le mot de passe.
+ * `#security` porte le mot de passe — ce dernier depuis #6424, qui y a monté
+ * `PasswordSettings`, jusque-là écrit et monté nulle part.
+ *
+ * **À la bascule vers `apps/web-v2`, ces deux ancres doivent exister là-bas.**
+ * Mesuré le 2026-09-14 : le `/settings` de la v2 n'a ni onglets par fragment
+ * ni section de mot de passe. Un lien d'e-mail qui atterrit sur une page qui
+ * ne parle pas de ce qu'il promet est un contrôle qui ment — et il ment dans
+ * le seul message que reçoit quelqu'un qui vient d'ouvrir un compte. La
+ * dépendance est notée ICI, au site qui compose les liens, parce que c'est le
+ * seul endroit où on la relira au moment de les changer.
  */
 export function profileEditUrl(baseUrl: string): string {
   return `${baseUrl.replace(/\/+$/, '')}/settings#profile`;
