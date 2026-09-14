@@ -465,9 +465,9 @@ final class ModeMenuModelTests: XCTestCase {
 
         let normalized = normalizedCode(raw)
         XCTAssertTrue(
-            normalized.contains("if LentilleFeatureFlag.isLentilleListEnabled { LentilleReadingModeSubmenu("),
-            "Le sous-menu doit être monté DERRIÈRE le drapeau Lentille — drapeau OFF, le " +
-            "menu contextuel doit rester bit-à-bit identique à aujourd'hui."
+            normalized.contains("if LentilleFeatureFlag.isLentilleListEnabled, LentilleFeatureFlag.isReadingModesEnabled { LentilleReadingModeSubmenu("),
+            "Le sous-menu doit être monté DERRIÈRE le drapeau Lentille ET les modes de lecture " +
+            "(#6482) — modes coupés, un mode choisi ici serait ignoré à l'ouverture."
         )
     }
 }

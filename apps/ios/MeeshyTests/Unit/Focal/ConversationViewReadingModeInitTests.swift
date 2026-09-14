@@ -7,33 +7,12 @@ import MeeshySDK
 /// `UserDefaults.standard` : `readingModeConversationType(for:)` (mapping
 /// pur, nouveau).
 ///
-/// **RE-PREUVE (I-075, second amendement 2026-08-16)** : la note historique
-/// « `LentilleFeatureFlag.readingModes` vaut `OFF` tant que rien ne l'a
-/// activé » N'EST PLUS VRAIE. Le drapeau cascade désormais vers
-/// `BetaFeaturesPreference` (défaut ON) quand sa propre clé n'a jamais été
-/// posée — sur le vrai domaine (`UserDefaults.standard` + le vrai
-/// `ProcessInfo`), aucun des deux n'a jamais été écrit par ce process de
-/// test, donc `MeeshyFeatureFlags.isReadingModesEnabled` (non injectable) y
-/// vaut RÉELLEMENT `true` maintenant — voir `LentilleFlagGateTests`
-/// (matrice complète) et `FeatureFlagGateTests
-/// .test_isReadingModesEnabled_injectable_defaultsToTrue_viaBetaCascade`
-/// pour la preuve injectable équivalente. Sans conséquence pour CE fichier :
-/// aucun test ci-dessous ne construit `ConversationView` (raison détaillée
-/// plus bas), donc rien ici ne dépendait de la valeur réelle du drapeau.
-///
-/// **I-075 RETIRÉ le 2026-08-18 (décision produit) — la note historique
-/// redevient vraie.** Le paragraphe ci-dessus décrit l'état du code entre le
-/// 2026-08-16 et le 2026-08-18, conservé pour l'historique. L'étage bêta
-/// n'étant plus consulté que si la préférence est EXPLICITEMENT exprimée, et
-/// ce process de test n'ayant jamais rien écrit au vrai domaine,
-/// `MeeshyFeatureFlags.isReadingModesEnabled` y vaut de nouveau `false` —
-/// preuve injectable équivalente : `FeatureFlagGateTests
-/// .test_isReadingModesEnabled_injectable_defaultsToFalse_afterBetaCascadeWithdrawal`
-/// (le témoin cité ci-dessus, retourné et renommé par ce lot). TOUJOURS sans
-/// conséquence pour CE fichier, et pour la même raison qu'en 2026-08-16 :
-/// aucun test ci-dessous ne construit `ConversationView`, donc aucun ne
-/// dépend de la valeur réelle du drapeau — c'est bien pourquoi ce fichier
-/// n'a QUE sa docstring à amender.
+/// **Valeur réelle du drapeau** : sur le vrai domaine (`UserDefaults.standard`),
+/// `MeeshyFeatureFlags.isReadingModesEnabled` vaut `true` depuis la sortie de
+/// bêta (2026-09-14, #6482) — preuve injectable : `FeatureFlagGateTests
+/// .test_isReadingModesEnabled_injectable_nothingWritten_returnsTrue`. Sans
+/// conséquence pour CE fichier : aucun test ci-dessous ne construit
+/// `ConversationView`, donc aucun ne dépend de la valeur réelle du drapeau.
 ///
 /// **Ce que cette suite NE reprouve PAS** : la décision « 4 branches + choix
 /// collant qui PRIME + drapeau OFF » est la loi GELÉE
