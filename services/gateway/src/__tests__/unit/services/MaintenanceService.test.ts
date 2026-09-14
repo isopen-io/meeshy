@@ -58,6 +58,17 @@ jest.mock('../../../services/SessionService', () => ({
   cleanupExpiredSessions: jest.fn<any>().mockResolvedValue(0),
 }));
 
+// Même raison, même patron — le témoin exhaustif de #6501 vit dans
+// `__tests__/unit/services/messaging/repairOrphanedMessageSenders.test.ts`.
+jest.mock('../../../services/messaging/repairOrphanedMessageSenders', () => ({
+  repairOrphanedMessageSenders: jest.fn<any>().mockResolvedValue({
+    deletedNotices: 0,
+    tombstoned: 0,
+    reassignedMessages: 0,
+    failures: 0,
+  }),
+}));
+
 // `anonymizeUserIdentity` (#5691) tourne en VRAI ici, comme sa jumelle
 // `purgeAccountIsolatedData` (#3632) — seul son collaborateur bcrypt est
 // mocké, pour la vitesse et le déterminisme.
@@ -71,6 +82,7 @@ import { anonymizeMessagesOfDeletedAccount } from '../../../services/messaging/a
 import { purgeMediaOfDeletedAccount } from '../../../services/purgeDeletedAccountMedia';
 import { deactivateCommunityMembershipsOfDeletedAccount } from '../../../services/deactivateDeletedAccountCommunityMemberships';
 import { cleanupExpiredSessions } from '../../../services/SessionService';
+import { repairOrphanedMessageSenders } from '../../../services/messaging/repairOrphanedMessageSenders';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -494,6 +506,41 @@ describe('cleanupExpiredData', () => {
     const sut = new MaintenanceService(prisma as any, attachmentService as any);
 
     await expect(sut.cleanupExpiredData()).resolves.toBeUndefined();
+  });
+
+  // #6501 — `Message.sender` est une relation REQUISE. Purger un anonyme qui a
+  // écrit rendait chacun de ses messages orphelin, et UN orphelin suffit à faire
+  // rejeter par Prisma toute lecture de la conversation.
+  it('spares anonymous participants who wrote — their messages would lose their sender (#6501)', async () => {
+    const prisma = makePrisma();
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await sut.cleanupExpiredData();
+
+    expect(prisma.participant.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ type: 'anonymous', sentMessages: { none: {} } }),
+      })
+    );
+  });
+
+  it('repairs orphaned message senders across EVERY conversation (#6501)', async () => {
+    const prisma = makePrisma();
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await sut.cleanupExpiredData();
+
+    expect(repairOrphanedMessageSenders).toHaveBeenCalledTimes(1);
+    expect(repairOrphanedMessageSenders).toHaveBeenCalledWith(prisma);
+  });
+
+  it('keeps sweeping when the orphan repair fails — best-effort, like its neighbors (#6501)', async () => {
+    (repairOrphanedMessageSenders as jest.Mock<any>).mockRejectedValueOnce(new Error('aggregate refused'));
+    const prisma = makePrisma();
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await expect(sut.cleanupExpiredData()).resolves.toBeUndefined();
+    expect(cleanupExpiredSessions).toHaveBeenCalledTimes(1);
   });
 });
 
