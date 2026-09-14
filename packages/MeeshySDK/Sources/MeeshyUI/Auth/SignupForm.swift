@@ -88,18 +88,35 @@ public struct SignupForm: Equatable {
         return trimmed.range(of: #"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$"#, options: .regularExpression) != nil
     }
 
+    /// Un mot de passe FOURNI doit atteindre la borne ; un champ VIDE est
+    /// valide, parce qu'il est LÉGITIME (#6424).
+    ///
+    /// Le compte naît alors sans mot de passe, et sa porte est le lien magique.
+    /// Garder l'ancienne règle ici rendrait le client plus strict que le
+    /// serveur — le défaut que le doc-comment de `displayNameMaxLength` nomme
+    /// juste au-dessus : un refus local pour une charge que la passerelle
+    /// accepte, et rien ne rougit nulle part.
     public static func isPasswordValid(_ value: String) -> Bool {
-        value.count >= passwordMinLength
+        value.isEmpty || value.count >= passwordMinLength
     }
+
+    /// `true` quand l'utilisateur a réellement TAPÉ un mot de passe.
+    ///
+    /// Distinct de `isPasswordValid`, qui répond « cette saisie est-elle
+    /// acceptable ». Celle-ci répond « y a-t-il une saisie », et c'est elle qui
+    /// décide si la clé part dans la charge.
+    public static func hasPassword(_ value: String) -> Bool { !value.isEmpty }
 
     public var isDisplayNameValid: Bool { Self.isDisplayNameValid(displayName) }
     public var isEmailValid: Bool { Self.isEmailValid(email) }
     public var isPasswordValid: Bool { Self.isPasswordValid(password) }
+    public var hasPassword: Bool { Self.hasPassword(password) }
 
-    /// Le bouton s'active dès que les TROIS champs requis sont valides.
+    /// Le bouton s'active dès que le nom et l'adresse sont valides — et que le
+    /// mot de passe, s'il a été tapé, atteint sa borne (#6424).
     ///
-    /// Le téléphone n'y figure pas : il n'est pas requis, et l'annoncer comme
-    /// « facultatif » serait déjà une friction. Rien ici ne dépend du réseau —
+    /// Ni le téléphone ni le mot de passe n'y figurent comme EXIGENCES : aucun
+    /// des deux n'est requis par la passerelle. Rien ici ne dépend du réseau —
     /// aucun appel de disponibilité ne précède l'envoi.
     public var canSubmit: Bool {
         isDisplayNameValid && isEmailValid && isPasswordValid
@@ -137,7 +154,12 @@ public struct SignupForm: Equatable {
         return RegisterRequest(
             displayName: displayName.trimmingCharacters(in: .whitespacesAndNewlines),
             email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-            password: password,
+            // `nil`, jamais `""` (#6424) : la passerelle lit l'ABSENCE de la
+            // clé pour créer un compte sans mot de passe. Une chaîne vide
+            // serait une VALEUR, refusée par la borne de longueur — le
+            // formulaire échouerait précisément dans le cas qu'il vient
+            // d'ouvrir.
+            password: hasPassword ? password : nil,
             phoneNumber: phone,
             phoneCountryCode: phone == nil ? nil : country.id,
             systemLanguage: systemLanguage,

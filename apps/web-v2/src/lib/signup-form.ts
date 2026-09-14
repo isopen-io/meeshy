@@ -56,12 +56,30 @@ export function isEmailValid(value: string): boolean {
   return /^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/.test(trimmed);
 }
 
+/**
+ * Un mot de passe FOURNI doit atteindre la borne ; un champ VIDE est valide,
+ * parce qu'il est LÉGITIME (#6424) — le compte naît alors sans mot de passe et
+ * sa porte est le lien magique.
+ *
+ * Garder l'ancienne règle rendrait le client plus STRICT que le serveur : un
+ * refus local pour une charge que la passerelle accepte, et rien ne rougit
+ * nulle part (§ `DISPLAY_NAME_MAX`, même piège).
+ */
 export function isPasswordValid(value: string): boolean {
-  return value.length >= PASSWORD_MIN;
+  return value.length === 0 || value.length >= PASSWORD_MIN;
 }
 
-/** Le bouton s'active dès que les TROIS champs requis sont valides — le
- * téléphone n'y figure jamais : il n'est pas requis (§ SignupForm.swift:99-106). */
+/** `true` quand un mot de passe a réellement été TAPÉ. Distinct de
+ * `isPasswordValid`, qui répond « cette saisie est-elle acceptable » : c'est
+ * celle-ci qui décide si la clé part dans la charge. */
+export function hasPassword(value: string): boolean {
+  return value.length > 0;
+}
+
+/** Le bouton s'active dès que le nom et l'adresse sont valides — et que le mot
+ * de passe, s'il a été tapé, atteint sa borne (#6424). Ni le téléphone ni le
+ * mot de passe n'y figurent comme EXIGENCES : la passerelle n'en requiert
+ * aucun (§ SignupForm.swift). */
 export function canSubmit(form: SignupFormState): boolean {
   return isDisplayNameValid(form.displayName) && isEmailValid(form.email) && isPasswordValid(form.password);
 }
@@ -83,7 +101,10 @@ export function composeRegisterBody(form: SignupFormState): RegisterBody {
   return {
     displayName: form.displayName.trim(),
     email: form.email.trim().toLowerCase(),
-    password: form.password,
+    // `undefined` par OMISSION, jamais `''` (#6424) — même raison que le couple
+    // téléphone une ligne plus bas : une clé présente à valeur vide décrit
+    // quelque chose qui n'a pas été demandé.
+    ...(hasPassword(form.password) ? { password: form.password } : {}),
     ...(hasPhone ? { phoneNumber: digits, phoneCountryCode: form.country.id } : {}),
     systemLanguage: form.systemLanguage,
     regionalLanguage: form.regionalLanguage,
