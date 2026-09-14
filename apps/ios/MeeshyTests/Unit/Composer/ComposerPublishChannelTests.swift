@@ -122,7 +122,10 @@ final class ComposerPublishChannelTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost+Socle.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
-        XCTAssertTrue(code.contains("ComposerPublishChannel.channel(for: selectedFormat)"))
+        XCTAssertTrue(code.contains("ComposerPublishMenuRule.route(surface: mountedSurface, choice: choice)"),
+                      "Le canal suit le CHOIX du geste (#6502), par la règle éprouvée.")
+        XCTAssertTrue(code.contains("ComposerPublishChannel.channel(for: format)"),
+                      "…et le gate de matière juge le canal du format publié.")
         XCTAssertTrue(code.contains("case .unsupported: refuseUnsupportedFormat()"),
                        "Un format sans canal se REFUSE en le disant, jamais en silence.")
     }
