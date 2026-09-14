@@ -296,12 +296,17 @@ jobs:
       # #3679 — jumeau des deux cliquets ci-dessus, appliqué à l'usage
       # explicite de `any` plutôt qu'aux erreurs de compilation ou de lint.
       # `services/gateway/src` et `packages/shared` n'ont pas de config
-      # ESLint (rien à demander à `@typescript-eslint/no-explicit-any`), donc
-      # ce script mesure par motif plutôt que par AST — cf. son en-tête pour
-      # ce que ça couvre et ce que ça ne couvre pas. `packages/shared` est
-      # tenu à zéro (CLAUDE.md l'exige déjà pour ce paquet) ; `gateway` porte
-      # une baseline qui ne peut que descendre.
-      - name: any debt ratchet (gateway + shared)
+      # ESLint (rien à demander à `@typescript-eslint/no-explicit-any`), et
+      # `apps/web` en a une mais règle cette directive en `warn` — jamais
+      # comptée par le cliquet ESLint jumeau (`check-lint-debt.sh`), qui ne
+      # garde que les erreurs. Ce script mesure donc par motif plutôt que par
+      # AST sur les trois paquets, pour une seule définition de « ce qui
+      # compte comme `any` » — cf. son en-tête pour le détail et pour
+      # pourquoi il tourne APRÈS le build web ci-dessus (`.next/` exclu).
+      # `packages/shared` est tenu à zéro (CLAUDE.md l'exige déjà pour ce
+      # paquet) ; `gateway` et `web` portent chacun une baseline qui ne peut
+      # que descendre.
+      - name: any debt ratchet (gateway + shared + web)
         run: bash scripts/check-any-debt.sh --self-test && bash scripts/check-any-debt.sh
 
       # #5372, suite de #4889 — une entrée de catalogue d'endpoints CLIENT
