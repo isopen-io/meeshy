@@ -50,7 +50,7 @@ enum TimelineAudioWindow {
             // Aucun rognage déclaré ET aucun décalage : rien à fenêtrer.
             guard elapsedInClip > 0 else { return nil }
         }
-        let originSeconds = (bounds?.start ?? 0)
+        let originSeconds = (bounds?.start ?? 0) + max(0, elapsedInClip)
         let endSeconds = bounds?.end ?? Double(fileLength) / sampleRate
         let startingFrame = AVAudioFramePosition(originSeconds * sampleRate)
         guard startingFrame >= 0, startingFrame < fileLength else { return nil }

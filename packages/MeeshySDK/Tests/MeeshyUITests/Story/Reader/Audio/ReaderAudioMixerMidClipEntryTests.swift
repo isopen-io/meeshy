@@ -112,6 +112,36 @@ final class ReaderAudioMixerMidClipEntryTests: XCTestCase {
         XCTAssertEqual(negative?.frameCount, zero?.frameCount)
     }
 
+    // MARK: - L'horloge du chip ne compte pas la pause comme du temps joué
+
+    func test_originAfterResume_shiftsTheOriginByThePausedSpan() {
+        // `slideElapsedSeconds` se mesure contre une origine MURALE. Sans
+        // glissement, une pause de 500 ticks faisait avancer de 500 ticks le
+        // temps que le chip audio affiche — alors que rien n'a joué.
+        let shifted = ReaderAudioMixer.originAfterResume(origin: 1_000,
+                                                         pausedAt: 4_000,
+                                                         resumedAt: 4_500)
+        XCTAssertEqual(shifted, 1_500, "L'origine glisse exactement de la durée de la pause")
+    }
+
+    func test_originAfterResume_nonMonotonicClock_leavesTheOriginUntouched() {
+        // Jalon périmé / horloge non monotone : un écoulé trop grand est un
+        // défaut d'affichage, un écoulé NÉGATIF est un crash de soustraction
+        // non signée. On rend l'origine inchangée.
+        XCTAssertEqual(ReaderAudioMixer.originAfterResume(origin: 1_000,
+                                                          pausedAt: 4_000,
+                                                          resumedAt: 3_000), 1_000)
+        XCTAssertEqual(ReaderAudioMixer.originAfterResume(origin: 1_000,
+                                                          pausedAt: 4_000,
+                                                          resumedAt: 4_000), 1_000)
+    }
+
+    func test_originAfterResume_overflow_leavesTheOriginUntouched() {
+        XCTAssertEqual(ReaderAudioMixer.originAfterResume(origin: .max - 10,
+                                                          pausedAt: 0,
+                                                          resumedAt: 1_000), .max - 10)
+    }
+
     // MARK: - La MÊME loi sert les deux moteurs
 
     func test_sharedLaw_isTheOneTheReaderProjects() {

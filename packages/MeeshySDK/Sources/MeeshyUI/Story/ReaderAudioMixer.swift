@@ -68,6 +68,12 @@ public final class ReaderAudioMixer {
     /// Wall-clock origin for the current playback pass — set on `play()` and
     /// used to derive the sample-accurate host-time targets for each clip.
     private var playbackStartHostTime: UInt64?
+    /// Instant `mach_absolute_time()` du dernier `pause()`, tant qu'aucune
+    /// reprise ne l'a soldé. `slideElapsedSeconds` se mesure contre
+    /// `playbackStartHostTime`, une horloge MURALE : sans ce jalon, une pause
+    /// de N secondes faisait avancer le chip audio de N secondes pendant que
+    /// rien ne jouait, et la reprise servait un écoulé faux de N (#6580).
+    private var pausedAtHostTime: UInt64?
     private var didShutdown: Bool = false
     /// Stored background audio entry (at most one per slide).
     private var backgroundEntry: BackgroundEntry?
@@ -183,14 +189,24 @@ public final class ReaderAudioMixer {
     /// Returns `true` when it scheduled a fresh pass, `false` when it merely
     /// resumed an existing one — the caller uses this to apply the default
     /// fade envelope exactly once per scheduled pass.
+    ///
+    /// `slideElapsed` est la position (secondes) de la SLIDE au moment de
+    /// l'appel — `0` à l'ouverture nominale, `t > 0` quand le détail s'ouvre
+    /// sur la position que la carte publiait déjà (#6580). Chaque clip en
+    /// déduit son propre écoulé et entre EN COURS de piste plutôt que de
+    /// rejouer son fichier depuis zéro.
     @discardableResult
-    public func play(originHost: UInt64, slideKey: String) throws -> Bool {
+    public func play(originHost: UInt64, slideKey: String, slideElapsed: Double = 0) throws -> Bool {
         logger.info("ReaderAudioMixer.play slideKey=\(slideKey, privacy: .public) entries=\(self.entries.count) bg=\(self.backgroundEntry == nil ? "nil" : "set") resume=\(self.startedSlideKey == slideKey)")
         if startedSlideKey == slideKey {
+            // HORS de toute correction #6580 : une reprise à clé identique reste
+            // un `resume`, jamais une replanification — replanifier ici
+            // ressusciterait l'ÉCHO que cette garde ferme (RC4.6).
             try resumeWithoutRescheduling()
             return false
         }
         playbackStartHostTime = originHost
+        pausedAtHostTime = nil
         guard !entries.isEmpty || backgroundEntry != nil else {
             logger.error("ReaderAudioMixer.play nothing scheduled (entries empty + no bg) — silent slide slideKey=\(slideKey, privacy: .public)")
             startedSlideKey = slideKey
@@ -201,13 +217,13 @@ public final class ReaderAudioMixer {
             try engine.start()
         }
         for entry in entries.values {
-            scheduleEntry(entry, originHost: originHost)
+            scheduleEntry(entry, originHost: originHost, slideElapsed: slideElapsed)
             entry.node.play()
             // Schedule volume fades on the main runloop. node.volume is read
             // by the audio thread per render slice, so the reads are safe.
             scheduleFades(for: entry, originHost: originHost)
         }
-        startBackground(originHost: originHost)
+        startBackground(originHost: originHost, slideElapsed: slideElapsed)
         startedSlideKey = slideKey
         isPlaying = true
         return true
@@ -217,6 +233,10 @@ public final class ReaderAudioMixer {
     /// `.play` bounce) — restarts the engine and any paused nodes WITHOUT
     /// touching the buffer schedule, so no clip is heard twice.
     private func resumeWithoutRescheduling() throws {
+        // L'origine GLISSE de la durée pendant laquelle rien n'a joué, sinon
+        // `slideElapsedSeconds` — et le chip audio qui le publie — compterait
+        // la pause comme du temps de lecture.
+        advancePlaybackOriginPastPause()
         guard !entries.isEmpty || backgroundEntry != nil else {
             isPlaying = true
             return
@@ -233,10 +253,40 @@ public final class ReaderAudioMixer {
         isPlaying = true
     }
 
+    /// Décale `playbackStartHostTime` de la durée de la pause en cours, et
+    /// solde le jalon. Sans effet si aucune pause n'est en attente.
+    private func advancePlaybackOriginPastPause() {
+        guard let pausedAt = pausedAtHostTime else { return }
+        pausedAtHostTime = nil
+        guard let origin = playbackStartHostTime else { return }
+        playbackStartHostTime = ReaderAudioMixer.originAfterResume(
+            origin: origin, pausedAt: pausedAt, resumedAt: mach_absolute_time())
+    }
+
+    /// Nouvelle origine d'un transport repris après une pause : l'ancienne
+    /// origine glissée de `resumedAt - pausedAt`. Pure et statique — la seule
+    /// forme de cette règle qui s'éprouve sans horloge réelle.
+    ///
+    /// Une reprise ANTÉRIEURE à la pause (horloge non monotone, jalon périmé)
+    /// rend l'origine inchangée plutôt qu'une valeur reculée : un écoulé trop
+    /// grand est un défaut d'affichage, un écoulé NÉGATIF est un crash de
+    /// soustraction non signée.
+    static func originAfterResume(origin: UInt64, pausedAt: UInt64, resumedAt: UInt64) -> UInt64 {
+        guard resumedAt > pausedAt else { return origin }
+        let pausedTicks = resumedAt - pausedAt
+        let (shifted, overflow) = origin.addingReportingOverflow(pausedTicks)
+        return overflow ? origin : shifted
+    }
+
     public func pause() {
         for entry in entries.values { entry.node.pause() }
         backgroundEntry?.player.pause()
         if engine.isRunning { engine.pause() }
+        // Jalon posé AVANT la remise à `false` : `slideElapsedSeconds` se gèle
+        // sur la valeur de cet instant, et la reprise repart d'ici.
+        if pausedAtHostTime == nil, playbackStartHostTime != nil {
+            pausedAtHostTime = mach_absolute_time()
+        }
         isPlaying = false
     }
 
@@ -245,6 +295,7 @@ public final class ReaderAudioMixer {
         backgroundEntry?.player.stop()
         if engine.isRunning { engine.stop() }
         playbackStartHostTime = nil
+        pausedAtHostTime = nil
         startedSlideKey = nil
         isPlaying = false
     }
@@ -376,6 +427,7 @@ public final class ReaderAudioMixer {
             engine.stop()
         }
         playbackStartHostTime = nil
+        pausedAtHostTime = nil
         startedSlideKey = nil
         backgroundStartOffset = 0
         isPlaying = false
@@ -396,7 +448,12 @@ public final class ReaderAudioMixer {
 
     // MARK: - Scheduling
 
-    private func scheduleEntry(_ entry: Entry, originHost: UInt64) {
+    /// `slideElapsed` est le playhead de la SLIDE (secondes) au moment où la
+    /// passe est planifiée — zéro à l'ouverture nominale, `t > 0` quand le
+    /// détail s'ouvre sur la position d'une carte déjà en lecture (#6580).
+    /// L'écoulé DANS le clip s'en déduit : `max(0, slideElapsed - startTime)`.
+    private func scheduleEntry(_ entry: Entry, originHost: UInt64, slideElapsed: Double) {
+        let elapsedInClip = max(0, slideElapsed - Double(entry.startTime))
         let delaySeconds = Double(entry.startTime)
         let hostDelta = ReaderAudioMixer.hostTime(forDelaySeconds: delaySeconds)
         let scheduleAt = AVAudioTime(hostTime: originHost + hostDelta)
@@ -415,6 +472,7 @@ public final class ReaderAudioMixer {
         } : nil
 
         ReaderAudioMixer.scheduleAudio(node: entry.node, file: entry.file, trimBounds: entry.trimBounds,
+                                       elapsedInClip: elapsedInClip,
                                        at: scheduleAt, completionHandler: completion)
     }
 
@@ -430,7 +488,13 @@ public final class ReaderAudioMixer {
         // jouerait sa portion coupée en boucle une fois passée la première
         // itération — le loop-back audio rejouerait le fichier ENTIER après
         // avoir lu correctement la fenêtre une première fois.
+        //
+        // `elapsedInClip: 0` est ÉCRIT, pas omis : une itération de boucle
+        // repart au DÉBUT de sa fenêtre. L'écoulé de la slide n'a de sens que
+        // pour l'entrée initiale (#6580) — le rejouer ici ferait reboucler
+        // chaque passe un cran plus loin dans le fichier, jusqu'au silence.
         ReaderAudioMixer.scheduleAudio(node: entry.node, file: entry.file, trimBounds: entry.trimBounds,
+                                       elapsedInClip: 0,
                                        at: nil, completionHandler: nil)
     }
 
@@ -462,24 +526,41 @@ public final class ReaderAudioMixer {
     /// Site UNIQUE d'appel à `scheduleFile`/`scheduleSegment` — foreground ET
     /// fond passent tous deux par ici (cf. `scheduleEntry`, `rescheduleLoopedEntry`,
     /// `scheduleBackgroundFile`), pour qu'une seule règle décide quand la
-    /// fenêtre s'applique. `trimBounds == nil` (pas de rognage déclaré) prend
-    /// le chemin d'aujourd'hui sans même consulter `segment(...)`.
+    /// fenêtre s'applique. `trimBounds == nil` ET `elapsedInClip == 0` (pas de
+    /// rognage déclaré, pas d'entrée en cours de piste) prend le chemin
+    /// d'aujourd'hui sans même consulter `segment(...)`.
+    ///
+    /// `elapsedInClip > 0` change DEUX choses à la fois, et les deux sont
+    /// nécessaires (#6580) :
+    /// 1. la position — l'origine glisse de `elapsedInClip` dans la source ;
+    /// 2. **l'heure** — on planifie en `at: nil` (immédiat) au lieu de l'heure
+    ///    future calculée pour un départ à zéro, qui est déjà PASSÉE. C'est
+    ///    littéralement la branche `AudioMixer.swift:141-152` du composer.
+    ///
+    /// Et si la fenêtre ne rend rien alors que l'ouverture est en cours de
+    /// piste, on ne planifie RIEN : le repli `scheduleFile` rejouerait le
+    /// fichier depuis zéro sous une vidéo déjà à `t`, un défaut PIRE que le
+    /// silence parce qu'il a l'air d'une lecture désynchronisée.
     private static func scheduleAudio(node: AVAudioPlayerNode,
                                       file: AVAudioFile,
                                       trimBounds: MediaTrimBounds?,
+                                      elapsedInClip: Double,
                                       at scheduleAt: AVAudioTime?,
                                       completionHandler: (@Sendable () -> Void)?) {
+        let entersMidClip = elapsedInClip.isFinite && elapsedInClip > 0
+        let at: AVAudioTime? = entersMidClip ? nil : scheduleAt
         guard let segment = ReaderAudioMixer.segment(forBounds: trimBounds,
-                                                     elapsedInClip: 0,
+                                                     elapsedInClip: elapsedInClip,
                                                      sampleRate: file.processingFormat.sampleRate,
                                                      fileLength: file.length) else {
-            node.scheduleFile(file, at: scheduleAt, completionHandler: completionHandler)
+            guard !entersMidClip else { return }
+            node.scheduleFile(file, at: at, completionHandler: completionHandler)
             return
         }
         node.scheduleSegment(file,
                              startingFrame: segment.startingFrame,
                              frameCount: segment.frameCount,
-                             at: scheduleAt,
+                             at: at,
                              completionHandler: completionHandler)
     }
 
@@ -727,13 +808,14 @@ extension ReaderAudioMixer {
     /// its node. The background was previously configured-but-muted: this is
     /// the call that actually makes the slide's background music audible.
     /// Invoked from `play(originHost:slideKey:)` after the foreground loop.
-    public func startBackground(originHost: UInt64) {
+    public func startBackground(originHost: UInt64, slideElapsed: Double = 0) {
         guard let bg = backgroundEntry else { return }
+        let elapsedInClip = max(0, slideElapsed - bg.startOffset)
         let scheduleAt = AVAudioTime(
             hostTime: originHost
                 + ReaderAudioMixer.hostTime(forDelaySeconds: bg.startOffset)
         )
-        scheduleBackgroundFile(at: scheduleAt)
+        scheduleBackgroundFile(at: scheduleAt, elapsedInClip: elapsedInClip)
         // Start silent when a fade-in (explicit or default) will ramp the
         // volume up; otherwise play straight at the target volume.
         bg.player.volume = isMuted ? 0 : (bg.fadeIn > 0 ? 0 : bg.targetVolume)
@@ -743,7 +825,7 @@ extension ReaderAudioMixer {
 
     /// Schedules the background file and, when `looping`, recursively re-arms
     /// the buffer on completion so the loop has no audible gap.
-    private func scheduleBackgroundFile(at scheduleAt: AVAudioTime?) {
+    private func scheduleBackgroundFile(at scheduleAt: AVAudioTime?, elapsedInClip: Double) {
         guard let bg = backgroundEntry else { return }
         let completion: (@Sendable () -> Void)? = bg.looping ? { @Sendable [weak self] in
             // `_ =` : voir `scheduleFile(originHost:)` — discarde le handle du
@@ -752,13 +834,17 @@ extension ReaderAudioMixer {
                 guard let self,
                       let live = self.backgroundEntry,
                       live.player.isPlaying else { return }
-                self.scheduleBackgroundFile(at: nil)
+                // `elapsedInClip: 0` ÉCRIT, pas omis : le rebouclage du fond
+                // repart au DÉBUT de sa fenêtre — jumeau de la note de
+                // `rescheduleLoopedEntry`.
+                self.scheduleBackgroundFile(at: nil, elapsedInClip: 0)
             }
         } : nil
         // Même site partagé que le foreground (`scheduleAudio`) : le rebouclage
         // du fond respecte la même fenêtre — sinon la musique de fond rognée
         // rejouerait le fichier ENTIER à partir de la deuxième itération.
         ReaderAudioMixer.scheduleAudio(node: bg.player, file: bg.file, trimBounds: bg.trimBounds,
+                                       elapsedInClip: elapsedInClip,
                                        at: scheduleAt, completionHandler: completion)
     }
 

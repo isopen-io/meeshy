@@ -30,11 +30,24 @@ extension StoryCanvasUIView {
     /// already advanced (`currentTime > 0`, composer preview scrub) the origin
     /// is back-dated so audio and the canvas playhead share one zero (RC4.4).
     func captureSlideTimelineOrigin() -> UInt64 {
+        captureSlideTimelineAnchor().originHost
+    }
+
+    /// L'origine ET l'écoulé, rendus d'UNE lecture de `currentTime`.
+    ///
+    /// Les deux disaient la même chose et se lisaient séparément : l'origine
+    /// back-datée disait au moteur *où est le zéro de la slide*, sans jamais
+    /// lui dire *de combien on est déjà entré*. Le mixer ne pouvait donc que
+    /// planifier chaque clip à une heure DÉJÀ PASSÉE — ce qu'`AVAudioPlayerNode`
+    /// rend en jouant le fichier depuis sa frame 0, sous une vidéo déjà à `t`
+    /// (#6580). Les rendre ensemble est la seule forme où ils ne peuvent pas
+    /// diverger.
+    func captureSlideTimelineAnchor() -> (originHost: UInt64, slideElapsed: Double) {
         let now = mach_absolute_time()
         let elapsed = currentTime.seconds
-        guard elapsed > 0, elapsed.isFinite else { return now }
+        guard elapsed > 0, elapsed.isFinite else { return (now, 0) }
         let back = ReaderAudioMixer.hostTime(forDelaySeconds: elapsed)
-        return back < now ? now - back : now
+        return (back < now ? now - back : now, elapsed)
     }
 
     /// Single funnel for the three `.play` audio entry points (`slide.didSet`,
@@ -84,12 +97,13 @@ extension StoryCanvasUIView {
             return
         }
         requestPlaybackSessionIfNeeded()
-        let origin = captureSlideTimelineOrigin()
+        let anchor = captureSlideTimelineAnchor()
         // Stop any other reader engine before starting this one (RC4.6).
         PlaybackCoordinator.shared.willStartPlaying(external: audioMixer)
         do {
-            _ = try audioMixer.play(originHost: origin,
-                                    slideKey: currentSlideKey)
+            _ = try audioMixer.play(originHost: anchor.originHost,
+                                    slideKey: currentSlideKey,
+                                    slideElapsed: anchor.slideElapsed)
             // Default fade envelope retiré 2026-05-27 — user feedback
             // « il y a encore des fade out et in dans le jeu des audio ».
             // Le mixer respecte uniquement les fadeIn/fadeOut explicites
@@ -338,9 +352,11 @@ extension StoryCanvasUIView {
         guard !MediaSessionCoordinator.shared.isCallActive else { return }
         guard !isAudioMuted else { return }
         PlaybackCoordinator.shared.willStartPlaying(external: audioMixer)
-        let origin = captureSlideTimelineOrigin()
+        let anchor = captureSlideTimelineAnchor()
         do {
-            _ = try audioMixer.play(originHost: origin, slideKey: currentSlideKey)
+            _ = try audioMixer.play(originHost: anchor.originHost,
+                                    slideKey: currentSlideKey,
+                                    slideElapsed: anchor.slideElapsed)
         } catch {
             os.Logger(subsystem: "me.meeshy.app", category: "media")
                 .error("edit ReaderAudioMixer.play failed: \(error.localizedDescription, privacy: .public)")
