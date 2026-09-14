@@ -19,7 +19,7 @@ final class ComposerActionSlotTests: XCTestCase {
     func test_duTexteSeul_montreLeCadreAMots() {
         XCTAssertEqual(
             ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: false,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true),
+                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
             .textSticker)
     }
 
@@ -29,7 +29,7 @@ final class ComposerActionSlotTests: XCTestCase {
     func test_sansHoteCable_leBoutonDEnvoiReste() {
         XCTAssertEqual(
             ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: false,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: false),
+                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: false, exceedsWordLimit: false),
             .send)
     }
 
@@ -41,7 +41,7 @@ final class ComposerActionSlotTests: XCTestCase {
         XCTAssertEqual(
             ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: false,
                                        isSending: false, keyboardIsUp: false,
-                                       offersQuickEmoji: true, offersTextSticker: true),
+                                       offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
             .send)
     }
 
@@ -53,7 +53,7 @@ final class ComposerActionSlotTests: XCTestCase {
     func test_unePieceJointe_reprendLeBoutonDEnvoi() {
         XCTAssertEqual(
             ComposerActionSlot.resolve(hasText: true, hasOtherContent: true, isEditMode: false,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true),
+                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
             .send)
     }
 
@@ -61,7 +61,7 @@ final class ComposerActionSlotTests: XCTestCase {
     func test_unePieceJointeSansTexte_montreLeBoutonDEnvoi() {
         XCTAssertEqual(
             ComposerActionSlot.resolve(hasText: false, hasOtherContent: true, isEditMode: false,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true),
+                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
             .send)
     }
 
@@ -70,7 +70,7 @@ final class ComposerActionSlotTests: XCTestCase {
     func test_uneEditionEnCours_montreLaCoche() {
         XCTAssertEqual(
             ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: true,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true),
+                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
             .send)
     }
 
@@ -79,7 +79,7 @@ final class ComposerActionSlotTests: XCTestCase {
     func test_unEnvoiEnVol_neProposePasLeCadre() {
         XCTAssertEqual(
             ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: false,
-                                       isSending: true, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true),
+                                       isSending: true, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
             .send)
     }
 
@@ -90,7 +90,7 @@ final class ComposerActionSlotTests: XCTestCase {
     func test_rienASaisir_montreLesEmojisRapides() {
         XCTAssertEqual(
             ComposerActionSlot.resolve(hasText: false, hasOtherContent: false, isEditMode: false,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true),
+                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
             .quickEmoji)
     }
 
@@ -100,7 +100,7 @@ final class ComposerActionSlotTests: XCTestCase {
     func test_rienASaisirSansEmoji_retombeSurLeBouton() {
         XCTAssertEqual(
             ComposerActionSlot.resolve(hasText: false, hasOtherContent: false, isEditMode: false,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: false, offersTextSticker: true),
+                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: false, offersTextSticker: true, exceedsWordLimit: false),
             .send)
     }
 
@@ -109,7 +109,46 @@ final class ComposerActionSlotTests: XCTestCase {
     func test_uneEditionVidee_montreLaCoche() {
         XCTAssertEqual(
             ComposerActionSlot.resolve(hasText: false, hasOtherContent: false, isEditMode: true,
-                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true),
+                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true, offersTextSticker: true, exceedsWordLimit: false),
             .send)
     }
+    // MARK: - La borne des sept mots (#6537)
+
+    /// Le comptage est une loi PURE : les espaces multiples et les retours à la
+    /// ligne ne fabriquent pas de mots. `split(whereSeparator:)` écarte les
+    /// séparations vides — c'est ce qui rend « a   b\n\nc » égal à trois.
+    func test_leComptageIgnoreLesSeparationsVides() {
+        XCTAssertEqual(ComposerActionSlot.wordCount(""), 0)
+        XCTAssertEqual(ComposerActionSlot.wordCount("   "), 0)
+        XCTAssertEqual(ComposerActionSlot.wordCount("a   b\n\nc"), 3)
+    }
+
+    /// LES DEUX BORNES, et elles seules : un témoin posé à 3 et à 20 passerait
+    /// quelle que soit la valeur du seuil entre les deux.
+    func test_laBorneEstSept() {
+        XCTAssertEqual(ComposerActionSlot.textStickerWordLimit, 7)
+        XCTAssertFalse(ComposerActionSlot.exceedsTextStickerLimit("un deux trois quatre cinq six sept"))
+        XCTAssertTrue(ComposerActionSlot.exceedsTextStickerLimit("un deux trois quatre cinq six sept huit"))
+    }
+
+    /// À SEPT MOTS la pastille reste — la borne est « au-delà », pas « à partir de ».
+    func test_aSeptMots_leCadreAMotsReste() {
+        XCTAssertEqual(
+            ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: false,
+                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true,
+                                       offersTextSticker: true, exceedsWordLimit: false),
+            .textSticker)
+    }
+
+    /// **LE témoin du lot.** Au-delà, le bouton ordinaire gagne — et il gagne
+    /// sur un clavier OUVERT, l'état où la pastille l'emportait jusqu'ici.
+    /// C'est la seule condition qui regarde le CONTENU et non le chrome.
+    func test_auDelaDeSeptMots_leBoutonOrdinaireGagne() {
+        XCTAssertEqual(
+            ComposerActionSlot.resolve(hasText: true, hasOtherContent: false, isEditMode: false,
+                                       isSending: false, keyboardIsUp: true, offersQuickEmoji: true,
+                                       offersTextSticker: true, exceedsWordLimit: true),
+            .send)
+    }
+
 }
