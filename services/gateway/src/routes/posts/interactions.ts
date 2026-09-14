@@ -927,17 +927,24 @@ export function registerInteractionRoutes(
         }, authContext.registeredUser.id).catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: broadcast post reposted failed', { err }));
       }
 
-      // Notify original post author
+      // Notifier l'auteur de l'original est un EFFET SECONDAIRE, comme le
+      // broadcast juste au-dessus : il part HORS du chemin de la réponse. La
+      // relecture de l'original était awaitée dans ce `try` ; quand elle jetait
+      // (#6503, `getPostById` refusé par Prisma), le `catch` rendait 500 pour
+      // un repost DÉJÀ créé, et l'app annonçait un échec au-dessus d'une
+      // écriture actée (#6524).
       const notifService = fastify.notificationService;
       if (notifService && repost.repostOfId && isFreshRepost) {
-        // Même garde que la route de traduction : sans le viewer, le lookup
-        // applique le filtre anonyme et ne retrouve pas une story réservée aux
-        // contacts — l'auteur d'une story repartagée n'était alors jamais
-        // notifié.
-        const original = await postService.getPostById(postId, authContext.registeredUser.id);
-        if (original?.authorId) {
-          notifService.createPostRepostNotification({
-            actorId: authContext.registeredUser.id,
+        const actorId = authContext.registeredUser.id;
+        void (async () => {
+          // Même garde que la route de traduction : sans le viewer, le lookup
+          // applique le filtre anonyme et ne retrouve pas une story réservée aux
+          // contacts — l'auteur d'une story repartagée n'était alors jamais
+          // notifié.
+          const original = await postService.getPostById(postId, actorId);
+          if (!original?.authorId) return;
+          await notifService.createPostRepostNotification({
+            actorId,
             originalPostId: postId,
             postAuthorId: original.authorId,
             repostId: repost.id,
@@ -945,8 +952,8 @@ export function registerInteractionRoutes(
             postPreview: (original as { content?: string | null }).content?.slice(0, 80) ?? undefined,
             postCreatedAt: (original as { createdAt?: Date | string | null }).createdAt ?? undefined,
             postExpiresAt: (original as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
-          }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: notify post repost failed', { err }));
-        }
+          });
+        })().catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: notify post repost failed', { err }));
       }
 
       return sendSuccess(reply, payload, { statusCode: 201 });
