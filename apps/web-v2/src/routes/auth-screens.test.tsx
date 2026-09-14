@@ -5,7 +5,7 @@ import { CountrySheet } from '@/components/country-sheet';
 import { Field } from '@/components/field';
 import { LanguageSheet } from '@/components/language-sheet';
 
-import LoginScreen from './login';
+import { LoginDoors } from './login';
 import SignupScreen from './signup';
 import WelcomeScreen from './welcome';
 
@@ -24,7 +24,10 @@ import WelcomeScreen from './welcome';
  */
 
 describe('LoginScreen — la marque et la version', () => {
-  const html = renderToStaticMarkup(<LoginScreen />);
+  // La porte du MOT DE PASSE (#6404) : c'est elle qui porte les deux champs
+  // que ce bloc mesure. La porte par défaut (lien magique) a ses propres
+  // témoins dans `login-doors.test.tsx`.
+  const html = renderToStaticMarkup(<LoginDoors method="motdepasse" />);
 
   test('rend le GLYPHE des trois traits, jamais l’icône d’application', () => {
     expect(html.match(/<line/g)).toHaveLength(3);
@@ -41,7 +44,10 @@ describe('LoginScreen — la marque et la version', () => {
   });
 
   test('les deux champs requis sont nommés, et le bouton part DÉSACTIVÉ (aucun champ rempli)', () => {
-    expect(html).toContain('Identifiant, e-mail ou téléphone');
+    // Le LIBELLÉ nomme désormais les trois formes que la passerelle accepte
+    // (`AuthService.ts:155-158`) — le gabarit ne les disait qu'à qui regardait
+    // le champ vide (#6404).
+    expect(html).toContain('E-mail, téléphone ou pseudo');
     expect(html).toContain('Mot de passe');
     expect(html).toContain('disabled');
   });
@@ -52,20 +58,22 @@ describe('LoginScreen — la marque et la version', () => {
 });
 
 /**
- * LES DEUX PORTES (#5816, T8) — `LoginView.swift:478-503` : « Connexion sans
- * mot de passe » AVANT « Mot de passe oublié ? » dans le HTML (l'ordre de
- * son doc-comment l.479-480), toutes deux des ANCRES.
+ * LES DEUX PORTES (#5816, T8 — réordonnées par #6404) — `LoginView.swift:478-503`
+ * empilait « Connexion sans mot de passe » AVANT « Mot de passe oublié ? ».
+ * La directive porteur 2026-09-13 monte la première d'un cran de plus : elle
+ * n'est plus un lien sous le formulaire, elle EST la porte par défaut. Sur la
+ * porte du mot de passe, le retour vers elle garde sa place — au-dessus de
+ * « Mot de passe oublié ? », comme iOS.
  */
 describe('LoginScreen — les deux portes', () => {
-  const html = renderToStaticMarkup(<LoginScreen />);
+  const html = renderToStaticMarkup(<LoginDoors method="motdepasse" />);
 
-  test('« Connexion sans mot de passe » (/auth/magic-link) précède « Mot de passe oublié ? » (/forgot-password)', () => {
-    const magicLinkIndex = html.indexOf('href="/auth/magic-link"');
+  test('le retour vers le lien (/login) précède « Mot de passe oublié ? » (/forgot-password)', () => {
+    const lienIndex = html.indexOf('Recevoir un lien de connexion par e-mail');
     const forgotPasswordIndex = html.indexOf('href="/forgot-password"');
-    expect(magicLinkIndex).toBeGreaterThan(-1);
+    expect(lienIndex).toBeGreaterThan(-1);
     expect(forgotPasswordIndex).toBeGreaterThan(-1);
-    expect(magicLinkIndex).toBeLessThan(forgotPasswordIndex);
-    expect(html).toContain('Connexion sans mot de passe');
+    expect(lienIndex).toBeLessThan(forgotPasswordIndex);
     expect(html).toContain('Mot de passe oublié ?');
   });
 
@@ -107,25 +115,17 @@ describe('WelcomeScreen', () => {
 describe('SignupScreen — les navigations sont des ancres, la langue vient du catalogue PARTAGÉ', () => {
   const html = renderToStaticMarkup(<SignupScreen />);
 
-  test('les TROIS chemins de retour vers la connexion sont des `<a href="/login">`', () => {
-    // Le « X » (qui appelait `window.history.back()` — sans destination sur un
-    // lien profond), « Déjà un compte ? Se connecter », et le « Se connecter »
-    // qui apparaît sous l'e-mail déjà pris (absent de l'état initial : deux
-    // ancres ici, la troisième est prouvée en recette).
+  /**
+   * L'ÉTAT INITIAL NE MONTRE PLUS QUE LE PREMIER BARREAU (#6405) — mais les
+   * deux SORTIES restent : le « X » et « Déjà un compte ? ». Elles ne sont pas
+   * des champs, et quelqu'un qui s'est trompé d'écran ne doit pas remplir une
+   * adresse pour faire paraître le lien qui l'emmène ailleurs. La pastille de
+   * langue et les deux pages légales, elles, vivent au troisième barreau —
+   * `signup-rungs.test.tsx` les mesure une fois dépliés.
+   */
+  test('les deux sorties vers la connexion sont des ANCRES, dès la première seconde', () => {
     expect(html.match(/href="\/login"/g)).toHaveLength(2);
     expect(html).not.toContain('history.back');
-  });
-
-  test('la pastille de langue rend le nom NATIF, avec son `lang` — jamais le code en capitales', () => {
-    // La locale de `bun test` n'est pas garantie : on mesure la FORME (un nœud
-    // porteur de `lang`), pas une langue particulière — c'est elle qui manquait.
-    expect(html).toContain('Vous lirez Meeshy en');
-    expect(html).toMatch(/<span lang="[a-z]{2,3}">/);
-  });
-
-  test('les deux pages légales sont des ancres PLEIN DOCUMENT', () => {
-    expect(html).toContain('href="/terms"');
-    expect(html).toContain('href="/privacy"');
   });
 });
 
