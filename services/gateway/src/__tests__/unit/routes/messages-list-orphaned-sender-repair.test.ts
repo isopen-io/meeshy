@@ -30,12 +30,6 @@ jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));
 
-jest.mock('../../../routes/conversations/utils/access-control', () => ({
-  ...(jest.requireActual('../../../routes/conversations/utils/access-control') as Record<string, unknown>),
-  verdictAccesConversation: async () => ({ genre: 'ok' }),
-  canAccessConversation: async () => true,
-}));
-
 jest.mock('../../../services/MentionService', () => ({ resolveMentionedUsers: jest.fn<any>().mockResolvedValue([]) }));
 jest.mock('../../../services/message-translation/MessageTranslationService', () => ({
   MessageTranslationService: jest.fn().mockImplementation(() => ({})),
@@ -232,6 +226,7 @@ function monter(scenario: Scenario): { app: FastifyInstance; db: OrphanedSenderD
       })),
     },
     attachmentStatusEntry: { findMany: jest.fn(async () => []) },
+    conversationReadCursor: { updateMany: jest.fn(async () => ({ count: 0 })), findMany: jest.fn(async () => []) },
   };
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
