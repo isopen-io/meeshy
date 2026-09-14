@@ -53,6 +53,14 @@ extension UniversalComposerBar {
     /// Deux cibles de 44 et la gouttière de 8 qui les sépare.
     static let quickEmojiSlotWidth: CGFloat = 96
 
+    /// **La cadence de la rotation des cadres à mots**, en secondes (#6537).
+    ///
+    /// Assez lente pour qu'on ait le temps de reconnaître un cadre et de le
+    /// taper — assez vive pour qu'on comprenne, en regardant la barre, que la
+    /// fonction en propose plusieurs. En deçà de deux secondes, le tap devient
+    /// une loterie : on vise ce qu'on voit, et on envoie le suivant.
+    static let stickerRotationPeriod: TimeInterval = 3
+
     /// **Le cadre à mots servi à la pastille** — `nil` quand l'hôte ne câble
     /// pas l'envoi de sticker ou quand le catalogue ne rend rien. C'est ce
     /// `nil` qui fait retomber `ComposerActionSlot` sur le bouton d'envoi :
@@ -63,11 +71,18 @@ extension UniversalComposerBar {
         // frappe, et un `@ObservedObject` sur un singleton global depuis une
         // feuille rouvrirait exactement les re-rendus que le § « Zero
         // Unnecessary Re-render » ferme.
-        return ComposerTextStickerChoice.resolve(
+        let tour = ComposerTextStickerChoice.rotation(
             recents: StickerUsageStore.shared.recents,
             favorites: StickerUsageStore.shared.favorites,
             catalog: StickerTemplateCatalog.templates(family: .text)
         )
+        guard !tour.isEmpty else { return nil }
+        // LE CADRE AFFICHÉ EST CELUI QU'UN TAP ENVOIE (#6537). Une seule
+        // propriété calculée sert les deux : la vue la rend, et la fermeture
+        // d'envoi capture sa valeur au même instant. Deux sources — l'une pour
+        // le dessin, l'autre pour le geste — auraient fini par diverger d'un
+        // tour, et l'auteur aurait envoyé le cadre qu'il venait de voir partir.
+        return tour[stickerRotationStep % tour.count]
     }
 
     /// Ce que l'emplacement de 44 points MONTRE — la règle est dans
@@ -81,7 +96,8 @@ extension UniversalComposerBar {
             isSending: externalIsSending,
             keyboardIsUp: isFocused,
             offersQuickEmoji: showEmoji,
-            offersTextSticker: textStickerTemplate != nil
+            offersTextSticker: textStickerTemplate != nil,
+            exceedsWordLimit: ComposerActionSlot.exceedsTextStickerLimit(text)
         )
     }
 
