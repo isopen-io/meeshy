@@ -206,6 +206,8 @@ const pt = {
   'media.video.play': 'Reproduzir vídeo',
   'media.video.pause': 'Pausar',
   'media.video.position': 'Posição de reprodução',
+  'media.audio.position': 'Posição de reprodução',
+  'media.audio.speed': 'Velocidade de reprodução',
   'media.video.position.value': '{elapsed} de {total}',
   'media.video.mute': 'Silenciar',
   'media.video.unmute': 'Ativar som',

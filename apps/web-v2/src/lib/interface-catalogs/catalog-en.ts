@@ -202,6 +202,8 @@ const en = {
   'media.video.play': 'Play video',
   'media.video.pause': 'Pause',
   'media.video.position': 'Playback position',
+  'media.audio.position': 'Playback position',
+  'media.audio.speed': 'Playback speed',
   'media.video.position.value': '{elapsed} of {total}',
   'media.video.mute': 'Mute',
   'media.video.unmute': 'Unmute',

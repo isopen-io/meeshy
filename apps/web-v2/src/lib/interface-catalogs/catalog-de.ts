@@ -202,6 +202,8 @@ const de = {
   'media.video.play': 'Video abspielen',
   'media.video.pause': 'Pausieren',
   'media.video.position': 'Wiedergabeposition',
+  'media.audio.position': 'Wiedergabeposition',
+  'media.audio.speed': 'Wiedergabegeschwindigkeit',
   'media.video.position.value': '{elapsed} von {total}',
   'media.video.mute': 'Stummschalten',
   'media.video.unmute': 'Ton einschalten',
