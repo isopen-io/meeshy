@@ -175,10 +175,11 @@ const waitPlaying = (page, index) =>
  * Rend le déplacement RÉELLEMENT obtenu, pour que l'appelant puisse distinguer
  * « l'application n'accroche pas » de « le geste n'est jamais parti ».
  */
-const swipe = async (cdp, page, { width, height }, direction) => {
-  const avant = await page.evaluate(() => document.querySelector('[data-reels-pager]')?.scrollTop ?? -1);
-  const distance = Math.round(height * 0.6);
-  await cdp.send('Input.synthesizeScrollGesture', {
+const pagerTop = (page) => page.evaluate(() => document.querySelector('[data-reels-pager]')?.scrollTop ?? -1);
+
+/** Le geste de haut niveau : un doigt, une course, la physique du navigateur. */
+const gestureSynthetise = async (cdp, { width, height }, distance, direction) =>
+  cdp.send('Input.synthesizeScrollGesture', {
     x: Math.round(width / 3),
     y: Math.round(height / 2),
     xDistance: 0,
@@ -187,8 +188,68 @@ const swipe = async (cdp, page, { width, height }, direction) => {
     gestureSourceType: 'touch',
     preventFling: true,
   });
-  const apres = await page.evaluate(() => document.querySelector('[data-reels-pager]')?.scrollTop ?? -1);
-  return { avant, apres, bouge: avant !== apres };
+
+/**
+ * LE MÊME GESTE, ÉVÉNEMENT PAR ÉVÉNEMENT — `Input.dispatchTouchEvent`.
+ *
+ * `synthesizeScrollGesture` passe par le pipeline de gestes du navigateur, que
+ * certains hôtes headless ne servent pas. Les événements bruts, eux, entrent
+ * par la voie ordinaire : ce que reçoit la page est indiscernable d'un vrai
+ * doigt, et c'est exactement ce que l'invariant veut éprouver.
+ */
+const gestureBrut = async (cdp, { width, height }, distance, direction) => {
+  const x = Math.round(width / 3);
+  const depart = direction === 'next' ? Math.round(height * 0.75) : Math.round(height * 0.2);
+  const signe = direction === 'next' ? -1 : 1;
+  const pas = 12;
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: depart }] });
+  for (let i = 1; i <= pas; i += 1) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x, y: Math.round(depart + (signe * distance * i) / pas) }],
+    });
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+};
+
+/**
+ * UN BALAYAGE TACTILE, en CASCADE QUI SE DÉCLARE (2026-09-14).
+ *
+ * ## Ce que la CI a appris, en deux exécutions
+ *
+ * `preventFling: false` confiait la course au compositeur : en local la page
+ * atterrissait, **en CI le défileur ne bougeait pas d'un pixel**, et douze
+ * invariants tombaient en accusant l'application. Le témoin de déplacement
+ * ajouté ici a rendu le verdict sans ambiguïté — `déplace le défileur (0 → 0)`
+ * sur les quatre peaux : le geste n'arrivait pas.
+ *
+ * Retirer le fling a aussi révélé une seconde faute, indépendante : 35 % de la
+ * hauteur est SOUS le point de bascule de `scroll-snap`, donc le défileur
+ * revenait. L'élan franchissait cette moitié — le témoin passait pour une
+ * raison qui ne lui appartenait pas. La course est désormais de 60 %.
+ *
+ * ## La cascade, et pourquoi elle ne ment pas
+ *
+ * Deux voies, de la plus fidèle à la plus basique, et la SORTIE dit laquelle a
+ * porté. Un repli silencieux aurait rendu le gate vert sur un hôte incapable de
+ * livrer un geste — le pire des verts, celui qui tient par un motif étranger à
+ * ce qu'il affirme.
+ */
+const swipe = async (cdp, page, { width, height }, direction) => {
+  const avant = await pagerTop(page);
+  const distance = Math.round(height * 0.6);
+
+  await gestureSynthetise(cdp, { width, height }, distance, direction);
+  let apres = await pagerTop(page);
+  let voie = 'geste';
+
+  if (apres === avant) {
+    await gestureBrut(cdp, { width, height }, distance, direction);
+    apres = await pagerTop(page);
+    voie = 'événements tactiles';
+  }
+
+  return { avant, apres, voie, bouge: avant !== apres };
 };
 
 /** Au centre, chaque contrôle retombe sur lui-même, et fait 44. */
@@ -323,7 +384,7 @@ try {
       // Le geste a-t-il seulement PARTI ? Sans cette distinction, un harnais
       // muet accuse l'application : c'est ce qui s'est produit en CI le
       // 2026-09-14, où `preventFling: false` ne déplaçait rien du tout.
-      check(gesteSuivant.bouge, `${label} : le balayage tactile déplace le défileur (${gesteSuivant.avant} → ${gesteSuivant.apres})`);
+      check(gesteSuivant.bouge, `${label} : le balayage tactile déplace le défileur (${gesteSuivant.avant} → ${gesteSuivant.apres}, par ${gesteSuivant.voie})`);
       check((await activeIndex(page)) === 1, `${label} : balayer vers le haut accroche le réel SUIVANT (${await activeIndex(page)})`);
       const landed = await page.evaluate(() => {
         const el = document.querySelector('[data-reels-pager]');
