@@ -2,7 +2,9 @@ package me.meeshy.sdk.story
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiAuthor
+import me.meeshy.sdk.model.ApiMediaCaptionTranslationEntry
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiRepostOf
 import org.junit.Test
 import java.time.Instant
@@ -112,6 +114,38 @@ class StoryGroupingTest {
         assertThat(item.repostOfId).isEqualTo("src-story")
         assertThat(item.repostAuthorUsername).isEqualTo("alice")
         assertThat(item.repostAuthorName).isEqualTo("Alice W.")
+    }
+
+    @Test
+    fun `toStoryItem carries a media's caption and its captionTranslations, flattened (#6280)`() {
+        val post = storyPost("p1", "u1", createdAt = isoAgo(1)).copy(
+            media = listOf(
+                ApiPostMedia(
+                    id = "m1",
+                    mimeType = "image/jpeg",
+                    caption = "Bonjour",
+                    captionLanguage = "fr",
+                    captionTranslations = mapOf(
+                        "en" to ApiMediaCaptionTranslationEntry(text = "Hello"),
+                        "es" to ApiMediaCaptionTranslationEntry(text = "   "), // blank, must be dropped
+                    ),
+                ),
+            ),
+        )
+        val media = post.toStoryItem().media.single()
+        assertThat(media.caption).isEqualTo("Bonjour")
+        assertThat(media.captionLanguage).isEqualTo("fr")
+        assertThat(media.captionTranslations).isEqualTo(mapOf("en" to "Hello"))
+    }
+
+    @Test
+    fun `toStoryItem projects null captionTranslations when the media has none`() {
+        val post = storyPost("p1", "u1", createdAt = isoAgo(1)).copy(
+            media = listOf(ApiPostMedia(id = "m1", mimeType = "image/jpeg", caption = "Bonjour")),
+        )
+        val media = post.toStoryItem().media.single()
+        assertThat(media.caption).isEqualTo("Bonjour")
+        assertThat(media.captionTranslations).isNull()
     }
 
     @Test
