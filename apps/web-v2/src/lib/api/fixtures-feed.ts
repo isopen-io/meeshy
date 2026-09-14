@@ -1,5 +1,6 @@
 import type { FeedAuthor, FeedPage, FeedPost } from './feed-pages';
 import { minutesAgo } from './fixtures-base';
+import { REEL_CLIP_BARS } from './fixtures-reel-clips';
 
 /**
  * LE CORPUS DU FIL EN FIXTURES (#5893) — servi par le MÊME chemin que la
@@ -28,7 +29,7 @@ const FILLER_AUTHORS: readonly FeedAuthor[] = [LEA, YANN, SOFIA, OMAR, MEI];
  * un cadrage carré (1:1, le défaut d'une carte de post) ou large (16:9, un
  * `REEL` portrait inversé pour la vignette).
  */
-function feedPhotoStandIn(topHex: string, bottomHex: string, ratio: 'square' | 'landscape' | 'portrait'): string {
+export function feedPhotoStandIn(topHex: string, bottomHex: string, ratio: 'square' | 'landscape' | 'portrait'): string {
   const [w, h] = ratio === 'landscape' ? [160, 90] : ratio === 'portrait' ? [90, 160] : [120, 120];
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">` +
@@ -208,8 +209,11 @@ export const REEL_PORTRAIT: FeedPost = {
   media: [
     {
       id: 'media-reel-1',
-      mimeType: 'video/mp4',
-      fileUrl: feedPhotoStandIn('#1e1b4b', '#4338ca', 'portrait'),
+      /* UN CLIP DÉCODABLE (#6457) : toucher ce réel ouvre le lecteur des Réels,
+         qui le JOUE — une image SVG servie pour une vidéo y aurait peint
+         « Lecture impossible » sur le premier réel de toute recette. */
+      mimeType: 'video/webm',
+      fileUrl: REEL_CLIP_BARS,
       thumbnailUrl: feedPhotoStandIn('#1e1b4b', '#4338ca', 'portrait'),
       thumbHash: THUMB_HASH_BLUE,
       width: 1080,

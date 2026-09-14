@@ -68,23 +68,28 @@ struct VoiceProfileWizardView: View {
 
     // MARK: - Header
 
+    /// En-tête partagé, FIXE (`scrollOffset: 0`), la progression juste dessous
+    /// (#6481). Il nomme la PAGE, pas l'étape : chaque étape affiche déjà son
+    /// propre titre dans son contenu, le répéter ici l'écrirait deux fois. Le
+    /// retour en verre ferme le parcours, comme la croix qu'il remplace ; la
+    /// navigation entre étapes reste portée par les boutons de chaque étape.
     private var header: some View {
-        HStack {
+        VStack(spacing: 0) {
+            CollapsibleHeader(
+                title: String(localized: "voice.profile.wizard.title", defaultValue: "Profil vocal", bundle: .main),
+                scrollOffset: 0,
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: Color(hex: accentColor),
+                backgroundColor: theme.backgroundPrimary,
+                trailing: { EmptyView() }
+            )
+
             stepIndicator
-            Spacer()
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 28)) // chrome control (cadre de tap fixe) — figé comme les xmark/transport (82i)
-                    .foregroundStyle(theme.textMuted)
-            }
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+                .padding(.bottom, 8)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
     }
 
     private var stepIndicator: some View {

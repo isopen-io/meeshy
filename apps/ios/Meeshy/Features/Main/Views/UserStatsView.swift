@@ -25,76 +25,52 @@ struct UserStatsView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                scrollContent
+            // Retour en verre de l'en-tête partagé (#6481). `back()` reste le
+            // geste : l'écran s'ouvre aussi depuis le Profil, une route et le
+            // panneau droit iPad.
+            CollapsibleHeaderPage(
+                title: String(localized: "user.stats.title", defaultValue: "Statistiques", bundle: .main),
+                onBack: { back() },
+                titleColor: theme.textPrimary,
+                backArrowColor: Color(hex: accentColor),
+                backgroundColor: theme.backgroundPrimary
+            ) {
+                statsContent
             }
         }
         .task { await viewModel.load() }
     }
 
-    // MARK: - Header
-
-    private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                back()
-            } label: {
-                Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(16, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
-
-            Spacer()
-
-            Text(String(localized: "user.stats.title", defaultValue: "Statistiques", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            Color.clear.frame(width: 24, height: 24)
-                .accessibilityHidden(true)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
     // MARK: - Content
 
-    private var scrollContent: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
-                if let errorMessage = viewModel.errorMessage {
-                    HStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.circle.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(MeeshyColors.error)
-                            .accessibilityHidden(true)
-                        Text(errorMessage)
-                            .font(MeeshyFont.relative(13, weight: .medium))
-                            .foregroundColor(MeeshyColors.error)
-                        Spacer()
-                    }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(MeeshyColors.error.opacity(0.1))
-                    )
+    private var statsContent: some View {
+        VStack(spacing: 20) {
+            if let errorMessage = viewModel.errorMessage {
+                HStack(spacing: 12) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(MeeshyColors.error)
+                        .accessibilityHidden(true)
+                    Text(errorMessage)
+                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .foregroundColor(MeeshyColors.error)
+                    Spacer()
                 }
-                statsCards
-                if !viewModel.timeline.isEmpty {
-                    timelineChart
-                }
-                achievementsSection
-                Spacer().frame(height: 40)
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(MeeshyColors.error.opacity(0.1))
+                )
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            statsCards
+            if !viewModel.timeline.isEmpty {
+                timelineChart
+            }
+            achievementsSection
+            Spacer().frame(height: 40)
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
     }
 
     // MARK: - Stats Cards

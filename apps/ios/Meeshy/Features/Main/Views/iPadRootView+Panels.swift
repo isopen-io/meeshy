@@ -30,7 +30,7 @@ struct iPadRightPanel: View {
                 onNotificationTap: onNotificationTap
             )
             // Filet de sécurité pour les écrans qui délèguent leur chrome à la
-            // barre système (Messages favoris, membres d'une communauté…) :
+            // barre système (membres d'une communauté…) :
             // racine du panneau, ils n'ont ni bouton retour propre ni geste de
             // retour, donc aucune sortie. Les écrans à en-tête maison posent
             // `.navigationBarHidden(true)` et ne voient jamais ce bouton.
@@ -181,11 +181,13 @@ struct iPadPanelDestination: View {
         case .hashtagResults(let tag):
             HashtagResultsView(tag: tag)
         case .bookmarks:
-            // Idem iPhone : la barre système porte le titre, et sur iPad le
-            // bouton retour du panneau droit y vit aussi.
+            // Idem iPhone : l'en-tête partagé porte le titre et le retour, qui
+            // ferme le panneau par `PanelBackAction` (#6481).
             BookmarksView()
+                .navigationBarHidden(true)
         case .starredMessages:
             StarredMessagesView()
+                .navigationBarHidden(true)
         case .friendRequests:
             FriendRequestListView()
                                 .navigationBarHidden(true)

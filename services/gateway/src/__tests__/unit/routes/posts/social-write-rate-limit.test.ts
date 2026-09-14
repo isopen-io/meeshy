@@ -157,7 +157,7 @@ function makePreValidationAuth() {
       userLanguage: 'fr',
       hasFullAccess: true,
       canSendMessages: true,
-      registeredUser: { id: userId, role: 'USER', username: `user-${userId}` },
+      registeredUser: { emailVerifiedAt: new Date(), id: userId, role: 'USER', username: `user-${userId}` },
     };
   };
 }

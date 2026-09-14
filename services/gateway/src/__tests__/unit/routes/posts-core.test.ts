@@ -132,7 +132,7 @@ const MOCK_POST = {
 
 // ─── buildApp ─────────────────────────────────────────────────────────────────
 
-async function buildApp({ authenticated = true } = {}): Promise<FastifyInstance> {
+async function buildApp({ authenticated = true, emailVerified = true } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   const requiredAuth = async (req: any, reply: any) => {
@@ -144,7 +144,7 @@ async function buildApp({ authenticated = true } = {}): Promise<FastifyInstance>
       type: 'user',
       isAnonymous: false,
       userId: USER_ID,
-      registeredUser: { id: USER_ID, role: 'USER' },
+      registeredUser: { emailVerifiedAt: emailVerified ? new Date() : null, id: USER_ID, role: 'USER' },
     };
   };
 
@@ -179,6 +179,23 @@ describe('POST /posts — not authenticated', () => {
       payload: { content: 'Hello' },
     });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+// #6437 — publier (post ou story) sort du compte vers d'autres personnes.
+describe('POST /posts — email not verified', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => { app = await buildApp({ emailVerified: false }); });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 403 EMAIL_NOT_VERIFIED when the author has not confirmed their e-mail', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/posts',
+      payload: { content: 'Hello' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
   });
 });
 

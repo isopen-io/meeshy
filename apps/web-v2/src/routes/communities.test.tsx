@@ -113,6 +113,21 @@ describe('le détail', () => {
     expect(html).toContain('Privée');
   });
 
+  /**
+   * BANNIÈRE ET AVATAR SONT DES RÉFÉRENCES DE MÉDIA (#6388) — `Community.banner`
+   * et `Community.avatar` portent la clé de stockage (#4324) ou l'adresse
+   * héritée d'avant la migration 013 ; ni l'une ni l'autre ne charge posée telle
+   * quelle en `src`. Même défaut que la vignette des notifications, sur l'écran
+   * voisin : la règle vit dans `attachmentSrc`, jamais chez l'appelant.
+   */
+  test('la bannière et l’avatar passent par la route de flux de la passerelle', () => {
+    const html = renderToStaticMarkup(
+      <CommunityHero language="fr" community={community({ banner: '2026/09/6aa607/banner.jpg', avatar: 'https://gate.meeshy.me/2026/09/6aa607/harbor_41.png' })} />,
+    );
+    expect(html).toContain('src="https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2F6aa607%2Fbanner.jpg"');
+    expect(html).toContain('src="https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2F6aa607%2Fharbor_41.png"');
+  });
+
   test('les compteurs sont des nombres ENTIERS, dans la langue', () => {
     const html = plain(renderToStaticMarkup(<CommunityStats language="fr" community={community()} />));
     expect(html).toContain('1 284');

@@ -57,7 +57,7 @@ function monter(): void {
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root.render(<FloatingMenus />);
+    root.render(<FloatingMenus routeKey="list" />);
   });
 }
 

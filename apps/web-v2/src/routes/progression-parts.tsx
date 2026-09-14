@@ -13,6 +13,7 @@
 
 
 import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
+import { meeshMissing } from '@/lib/view/meesh-copy';
 import { GLYPHS } from '@/components/glyphs';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { ProgressBar } from '@/components/progress-bar';
@@ -436,10 +437,9 @@ export function MeeshHero({ meesh, onMint, isMinting }: { meesh: EngagementMeesh
         </button>
       ) : (
         <p className="text-check" style={{ color: INK_2 }}>
-          Encore {meesh.missingPoints} points convertibles avant une Meesh.
-          {meesh.floorPoints > 0
-            ? ` Vos ${meesh.floorPoints} points de conversation seront repris en dernier, sans éteindre aucun badge.`
-            : ''}
+          {/* SITE UNIQUE (#6478) — la phrase vivait en double, donc fausse deux
+              fois : « Vos 1 points de conversation ». */}
+          {meeshMissing(meesh.missingPoints, meesh.floorPoints)}
         </p>
       )}
     </section>

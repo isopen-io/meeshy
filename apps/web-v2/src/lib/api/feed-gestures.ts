@@ -9,6 +9,7 @@ import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
 import { postQueryKey } from './publication-detail';
+import { REELS_QUERY_ROOT } from './reels';
 
 /**
  * LE PORT DES GESTES D'UNE PUBLICATION (#6278) — aimer et enregistrer, le
@@ -92,13 +93,21 @@ export async function performPostGesture(params: {
      jamais rempli le fil, et n'y lire que lui verrait « pas aimé » sur un post
      déjà aimé. Les DEUX caches basculent ensemble — la même publication ne
      peut pas porter deux cœurs selon l'écran qui la montre. */
+  /* LES FILS DE RÉELS (#6457) suivent le même geste : un réel servi par le fil
+     d'affinité n'est pas forcément dans le Flux, et le lecteur des Réels peint
+     depuis ses propres pages — toutes les graines, une seule racine. */
   const known =
     findPost(deps.queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY), postId) ??
+    deps.queryClient
+      .getQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT })
+      .map(([, data]) => findPost(data, postId))
+      .find((post) => post !== undefined) ??
     deps.queryClient.getQueryData<FeedPost>(postQueryKey(postId));
   const on = !isOn(known, kind);
   const setOn = (value: boolean) => {
     const change = { postId, kind, on: value };
     deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) => applyPostToggle(data, change));
+    deps.queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, (data) => applyPostToggle(data, change));
     deps.queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) => (post === undefined ? post : togglePost(post, change)));
   };
 
@@ -113,6 +122,7 @@ export async function performPostGesture(params: {
       if (count !== undefined) {
         const served = { postId, kind, count };
         deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) => applyServedCount(data, served));
+        deps.queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, (data) => applyServedCount(data, served));
         deps.queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) => (post === undefined ? post : withServedCount(post, served)));
       }
       return { ok: true };

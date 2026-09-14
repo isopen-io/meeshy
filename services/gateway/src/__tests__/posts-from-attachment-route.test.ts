@@ -171,16 +171,16 @@ const DUPLICATED = {
 
 // ─── Harness ──────────────────────────────────────────────────────────────────
 
-function makePreValidationAuth() {
+function makePreValidationAuth(emailVerified: boolean = true) {
   return async (req: FastifyRequest) => {
     (req as any).authContext = {
       isAuthenticated: true,
-      registeredUser: { id: USER_ID, role: 'USER' },
+      registeredUser: { emailVerifiedAt: emailVerified ? new Date() : null, id: USER_ID, role: 'USER' },
     };
   };
 }
 
-async function buildApp(prismaOverrides: Record<string, unknown> = {}): Promise<{
+async function buildApp(prismaOverrides: Record<string, unknown> = {}, opts: { emailVerified?: boolean } = {}): Promise<{
   app: FastifyInstance;
   social: Record<string, any>;
 }> {
@@ -204,7 +204,7 @@ async function buildApp(prismaOverrides: Record<string, unknown> = {}): Promise<
   };
   app.decorate('socialEvents', social as any);
 
-  registerCoreRoutes(app, prisma, makePreValidationAuth());
+  registerCoreRoutes(app, prisma, makePreValidationAuth(opts.emailVerified ?? true));
   await app.ready();
   return { app, social };
 }
@@ -218,6 +218,22 @@ beforeEach(() => {
   mockExtractMentions.mockReset().mockReturnValue([]);
   mockResolveUsernames.mockReset().mockResolvedValue(new Map());
   mockCreatePostMentions.mockReset().mockResolvedValue(undefined);
+});
+
+// #6437 — même porte de publication que POST /posts.
+describe('POST /posts/from-attachment — email not verified', () => {
+  it('returns 403 EMAIL_NOT_VERIFIED when the author has not confirmed their e-mail', async () => {
+    const { app } = await buildApp({}, { emailVerified: false });
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts/from-attachment',
+      payload: { attachmentId: ATTACHMENT_ID },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+    await app.close();
+  });
 });
 
 describe('POST /posts/from-attachment — iOS-01 : refus d\'un média protégé', () => {

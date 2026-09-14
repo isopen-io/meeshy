@@ -78,12 +78,22 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         public let hasStanding: Bool
         /// La fenêtre glissante en jours, SERVIE — aucun client ne la code en dur.
         public let windowDays: Int
+        /// La LISTE derrière le cardinal (#5897, #5927), lue sur la même fenêtre.
+        /// Optionnelle : une passerelle antérieure ne la sert pas.
+        public let activeFamilies: [String]?
 
-        public init(factor: Double, activeFamilyCount: Int, hasStanding: Bool, windowDays: Int) {
+        public init(
+            factor: Double,
+            activeFamilyCount: Int,
+            hasStanding: Bool,
+            windowDays: Int,
+            activeFamilies: [String]? = nil
+        ) {
             self.factor = factor
             self.activeFamilyCount = activeFamilyCount
             self.hasStanding = hasStanding
             self.windowDays = windowDays
+            self.activeFamilies = activeFamilies
         }
     }
 

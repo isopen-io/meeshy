@@ -2,10 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import {
-  ADMIN_PERMISSIONS_QUERY_KEY,
   ADMIN_USERS_PAGE_SIZE,
+  adminIdentityQueryOptions,
   adminUsersQueryKey,
-  loadAdminIdentity,
   loadAdminUsers,
   type AdminUserRow,
 } from '@/lib/api/admin';
@@ -75,16 +74,7 @@ export default function AdminUsersScreen() {
   const [recherche, setRecherche] = useState('');
   const [offset, setOffset] = useState(0);
 
-  const identite = useQuery({
-    queryKey: ADMIN_PERMISSIONS_QUERY_KEY,
-    queryFn: async ({ signal }) => {
-      const resultat = await loadAdminIdentity({ ...apiDeps, signal });
-      if (!resultat.ok) throw new Error(resultat.error);
-      return resultat.data;
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
+  const identite = useQuery(adminIdentityQueryOptions(apiDeps));
 
   const autorise = visibleAdminSections(identite.data?.permissions ?? null).some((s) => s.id === 'users');
 

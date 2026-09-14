@@ -1,11 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import {
-  ADMIN_DASHBOARD_QUERY_KEY,
-  ADMIN_PERMISSIONS_QUERY_KEY,
-  loadAdminDashboard,
-  loadAdminIdentity,
-} from '@/lib/api/admin';
+import { ADMIN_DASHBOARD_QUERY_KEY, adminIdentityQueryOptions, loadAdminDashboard } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
 import { adminSectionTarget, visibleAdminSections } from '@/lib/admin/sections';
 import { translate } from '@/lib/i18n-catalog';
@@ -49,19 +44,10 @@ const nombre = (valeur: number, langue: string): string => new Intl.NumberFormat
 export default function AdminScreen() {
   const language = currentInterfaceLanguage();
 
-  const identite = useQuery({
-    queryKey: ADMIN_PERMISSIONS_QUERY_KEY,
-    queryFn: async ({ signal }) => {
-      const resultat = await loadAdminIdentity({ ...apiDeps, signal });
-      if (!resultat.ok) throw new Error(resultat.error);
-      return resultat.data;
-    },
-    // Une matrice de permissions ne change pas pendant qu'on regarde un
-    // tableau de bord : la relire à chaque montage ferait un aller-retour par
-    // ouverture pour une valeur qui bouge une fois par an.
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
+  // La lecture PARTAGÉE avec la rangée des Réglages et le barreau du menu
+  // flottant (#6458) : même clé, même fraîcheur, un refus lu comme l'absence
+  // du droit.
+  const identite = useQuery(adminIdentityQueryOptions(apiDeps));
 
   const permissions = identite.data?.permissions ?? null;
   const sections = visibleAdminSections(permissions);

@@ -101,9 +101,9 @@ function isCurrentHref(url: string): boolean {
  * #5893, mesuré dans un navigateur réel).
  *
  * `pushState` accepte volontiers la MÊME adresse deux fois : chaque tap
- * ajoutait une entrée. Le bouton flottant de GAUCHE pointe sur `feed` quelle
- * que soit la route (`floating-menus.tsx`, table `FEED_DESTINATION`), donc
- * sur `/feed` il ne changeait RIEN à l'écran — loi 4 — tout en faisant
+ * ajoutait une entrée. Le bouton flottant de GAUCHE pointait alors sur `feed`
+ * quelle que soit la route (il bascule depuis #6456, `feedDiscDestination`),
+ * donc sur `/feed` il ne changeait RIEN à l'écran — loi 4 — tout en faisant
  * grossir l'historique : `history.length` 3 → 4 par tap, mesuré. Le bouton
  * RETOUR matériel d'Android (directive coque 5b) ramenait alors sur `/feed`
  * au lieu de la liste, autant de fois qu'on avait tapé.
