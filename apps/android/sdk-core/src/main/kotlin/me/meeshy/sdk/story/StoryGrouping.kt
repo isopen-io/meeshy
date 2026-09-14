@@ -33,6 +33,14 @@ private fun ApiPostMedia.toFeedMedia(): FeedMedia {
         mimeType?.startsWith("audio/") == true -> FeedMediaType.AUDIO
         else -> FeedMediaType.IMAGE
     }
+    // Aplatit `captionTranslations` (carte → objet riche) en `langue → texte` —
+    // la forme qu'attend `resolveLastMessagePreview` (#6280). Une traduction VIDE
+    // n'en est pas une (règle #3 du Prisme) : elle est sautée ici, jamais portée
+    // jusqu'au résolveur — mirror de `APIPostMedia.toFeedMedia` (PostModels.swift).
+    val flatCaptionTranslations = captionTranslations
+        ?.mapNotNull { (lang, entry) -> entry.text.takeIf { it.isNotBlank() }?.let { lang to it } }
+        ?.toMap()
+        ?.takeIf { it.isNotEmpty() }
     return FeedMedia(
         id = id,
         type = type,
@@ -43,6 +51,9 @@ private fun ApiPostMedia.toFeedMedia(): FeedMedia {
         width = width,
         height = height,
         duration = duration?.let { it / 1000 },
+        caption = caption,
+        captionLanguage = captionLanguage,
+        captionTranslations = flatCaptionTranslations,
     )
 }
 

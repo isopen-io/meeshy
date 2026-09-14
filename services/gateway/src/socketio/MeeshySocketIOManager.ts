@@ -70,6 +70,7 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { PostAudioService } from '../services/posts/PostAudioService';
 import { PostTranslationService } from '../services/posts/PostTranslationService';
+import { MediaCaptionTranslationService } from '../services/posts/MediaCaptionTranslationService';
 import { StoryTextObjectTranslationService } from '../services/posts/StoryTextObjectTranslationService';
 import type {
   ServerToClientEvents,
@@ -1658,6 +1659,9 @@ export class MeeshySocketIOManager {
       const zmqClient = this.translationService.getZmqClient();
       if (zmqClient) {
         PostTranslationService.init(this.prisma, zmqClient, this.socialEventsHandler);
+        // Traduction de la LÉGENDE d'un média (#6280) — même pipeline, même
+        // discipline d'init, namespace ZMQ distinct (`media-caption:`).
+        MediaCaptionTranslationService.init(this.prisma, zmqClient, this.socialEventsHandler);
       }
 
       // Initialiser le service de notifications avec Socket.IO

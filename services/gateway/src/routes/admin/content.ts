@@ -30,6 +30,7 @@ import {
   messageContentIsProtected,
   type MessageProtectionContext
 } from './media-protection';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 /**
  * Plafond de SCAN de `GET /admin/translations` (#4165).
@@ -317,7 +318,25 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         wherePage = { ...sansContenu, id: { in: servables } };
       }
 
-      const [messages, totalCount] = await Promise.all([
+      // Cette liste n'est bornée à AUCUNE conversation (`wherePage` filtre par
+      // date/statut/recherche, jamais par `conversationId`) : la portée de la
+      // réparation se DÉCOUVRE en rejouant le même `where`/`orderBy`/pagination
+      // avec un `select` sûr — jamais `sender` — plutôt que d'être connue
+      // d'avance (#6516).
+      const discoverContentPageConversationIds = async (): Promise<readonly string[]> => {
+        const rows = await fastify.prisma.message.findMany({
+          where: wherePage,
+          select: { conversationId: true },
+          orderBy: { createdAt: 'desc' },
+          skip: offsetNum,
+          take: limitNum
+        });
+        return [...new Set(rows.map((row) => row.conversationId))];
+      };
+      const [messages, totalCount] = await withOrphanedSenderRepair(
+        { prisma: fastify.prisma, conversationIds: discoverContentPageConversationIds },
+        () =>
+      Promise.all([
         fastify.prisma.message.findMany({
           where: wherePage,
           select: {
@@ -378,7 +397,8 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           take: limitNum
         }),
         fastify.prisma.message.count({ where: wherePage })
-      ]);
+      ])
+      );
 
       // #4333 bonus — un média à vue unique / flouté / éphémère-expiré ne
       // sort plus entier par cette liste platefome-entière : même prédicat,
@@ -652,43 +672,56 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       }
 
       // Récupérer messages avec translations (JSON)
-      const messages = await fastify.prisma.message.findMany({
-        where: {
-          ...where,
-          translations: {
-            not: null
+      const translationsWhere = { ...where, translations: { not: null } };
+      // Même motif que `GET /admin/messages` juste au-dessus : aucune
+      // conversation connue d'avance, la portée se DÉCOUVRE (#6516).
+      const messages = await withOrphanedSenderRepair(
+        {
+          prisma: fastify.prisma,
+          conversationIds: async () => {
+            const rows = await fastify.prisma.message.findMany({
+              where: translationsWhere,
+              select: { conversationId: true },
+              orderBy: { createdAt: 'desc' },
+              take: TRANSLATIONS_MESSAGE_SCAN_CAP
+            });
+            return [...new Set(rows.map((row) => row.conversationId))];
           }
         },
-        select: {
-          id: true,
-          content: true,
-          originalLanguage: true,
-          translations: true,
-          createdAt: true,
-          // Le select ASSOCIÉ à `messageContentIsProtected` (#4388). Sans lui,
-          // le prédicat répondrait « non protégé » sur TOUT message : un champ
-          // de protection présent au modèle et absent de la requête est un
-          // piège armé — la garde ne PEUT pas s'appliquer, même écrite.
-          ...messageContentProtectionSelect,
-          sender: {
+        () =>
+          fastify.prisma.message.findMany({
+            where: translationsWhere,
             select: {
               id: true,
-              userId: true,
-              displayName: true,
-              user: { select: { username: true } }
-            }
-          },
-          conversation: {
-            select: {
-              id: true,
-              identifier: true,
-              title: true
-            }
-          }
-        },
-        orderBy: { createdAt: 'desc' },
-        take: TRANSLATIONS_MESSAGE_SCAN_CAP
-      });
+              content: true,
+              originalLanguage: true,
+              translations: true,
+              createdAt: true,
+              // Le select ASSOCIÉ à `messageContentIsProtected` (#4388). Sans lui,
+              // le prédicat répondrait « non protégé » sur TOUT message : un champ
+              // de protection présent au modèle et absent de la requête est un
+              // piège armé — la garde ne PEUT pas s'appliquer, même écrite.
+              ...messageContentProtectionSelect,
+              sender: {
+                select: {
+                  id: true,
+                  userId: true,
+                  displayName: true,
+                  user: { select: { username: true } }
+                }
+              },
+              conversation: {
+                select: {
+                  id: true,
+                  identifier: true,
+                  title: true
+                }
+              }
+            },
+            orderBy: { createdAt: 'desc' },
+            take: TRANSLATIONS_MESSAGE_SCAN_CAP
+          })
+      );
 
       // Le scan a-t-il été tronqué ? Si oui, `total` ne compte que la fenêtre
       // lue et `hasMore` doit le dire — il ne peut alors qu'être trop prudent,

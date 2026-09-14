@@ -30,6 +30,7 @@ import {
   MEESH_TINT,
   STREAK_TINT,
   UNLOCKED_TINT,
+  MeeshHero,
   ProgressionError,
   ProgressionSkeleton,
 } from '@/routes/progression-parts';
@@ -552,18 +553,49 @@ export function MeeshDetail({
 /**
  * Le CORPS du hub — il parcourt la séquence partagée, il ne la compose pas.
  *
- * La frappe a quitté ce composant : elle vit dans l'entrée Meesh de l'en-tête
- * (#5839), où le solde se lit sans défiler. Le corps n'a donc plus besoin ni
- * de `onMint` ni de `isMinting` — les garder « au cas où » aurait laissé deux
- * chemins vers la même action, dont un mort.
+ * ## La frappe REVIENT dans le corps (directive porteur 2026-09-14, #6497)
+ *
+ * #5839 l'en avait sortie, avec une raison qui tenait : « les garder au cas où
+ * aurait laissé deux chemins vers la même action, dont un MORT ». Le mot qui
+ * compte est le dernier. Le solde vit désormais SOUS le niveau, en hero, et ce
+ * chemin-là est bien vivant — c'est même celui qu'on voit sans toucher la
+ * pièce de l'en-tête.
+ *
+ * Deux portes, UNE seule frappe : le même `mint.mutate()`, donc la même clé
+ * d'idempotence (`requestIdRef`), qui n'est renouvelée qu'après un succès. Ce
+ * que #5839 interdisait — un second chemin mort — n'est pas ce qui se passe
+ * ici ; ce qu'il protégeait — une seule action — reste vrai.
  */
-export function ProgressionBody({ progress }: { progress: EngagementProgress }) {
+export function ProgressionBody({
+  progress,
+  onMint,
+  isMinting,
+  mintError,
+}: {
+  progress: EngagementProgress;
+  onMint: () => void;
+  isMinting: boolean;
+  mintError?: string | undefined;
+}) {
   return (
     <div className="flex flex-col gap-4 px-4 py-3">
       {progressionLayout(progress).map((bloc) => {
         if (bloc.kind === 'last-achievement') return <LastAchievementHero key="dernier" progress={progress} />;
         if (bloc.kind === 'level') {
           return <LevelHero key="niveau" progress={progress} mintCost={progress.meesh?.mintCost ?? null} />;
+        }
+        if (bloc.kind === 'meesh') {
+          // La loi partagée ne pose ce bloc QUE si la passerelle sert le solde ;
+          // le garde ici est la ceinture du typage, pas une seconde règle.
+          return progress.meesh === undefined || progress.meesh === null ? null : (
+            <MeeshHero
+              key="meesh"
+              meesh={progress.meesh}
+              onMint={onMint}
+              isMinting={isMinting}
+              mintError={mintError}
+            />
+          );
         }
         if (bloc.kind === 'elans') return <ElansHero key="elans" progress={progress} />;
         if (bloc.kind === 'flamme') return <FlammeHero key="flamme" progress={progress} />;
@@ -635,7 +667,12 @@ export default function ProgressionScreen() {
 
       <main id="contenu" className="flex-1 overflow-y-auto pb-safe">
         {query.data !== undefined ? (
-          <ProgressionBody progress={query.data} />
+          <ProgressionBody
+            progress={query.data}
+            onMint={() => mint.mutate()}
+            isMinting={mint.isPending}
+            mintError={mint.isError ? MINT_FAILED_MESSAGE : undefined}
+          />
         ) : query.isError ? (
           <ProgressionError message={query.error.message} online={online} onRetry={() => void query.refetch()} />
         ) : (

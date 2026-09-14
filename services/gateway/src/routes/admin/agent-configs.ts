@@ -15,6 +15,7 @@ import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendBadRequest, sendNotFound, sendInternalError, sendPaginatedSuccess } from '../../utils/response';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { AgentUnavailableError } from '../../services/AgentHttpClient';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   requireAgentAdmin,
@@ -828,7 +829,7 @@ export function registerAgentConfigsRoutes(fastify: FastifyInstance, deps: Agent
 
       const where = { conversationId, messageSource: 'agent' as const };
 
-      const [messages, total] = await Promise.all([
+      const [messages, total] = await withOrphanedSenderRepair({ prisma: fastify.prisma, conversationIds: [conversationId] }, () => Promise.all([
         fastify.prisma.message.findMany({
           where,
           select: {
@@ -845,7 +846,7 @@ export function registerAgentConfigsRoutes(fastify: FastifyInstance, deps: Agent
           take: limitNum,
         }),
         fastify.prisma.message.count({ where }),
-      ]);
+      ]));
 
       return sendPaginatedSuccess(reply, messages, { total, page: Math.max(1, Number(page)), limit: limitNum, hasMore: skip + limitNum < total } as any);
     } catch (error) {

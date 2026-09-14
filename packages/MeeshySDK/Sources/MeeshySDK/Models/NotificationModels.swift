@@ -159,6 +159,9 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     case system = "system"
     case maintenance = "maintenance"
     case updateAvailable = "update_available"
+    /// L'issue d'un signalement, notifiée au déclarant (art. 16 DSA, #3718).
+    /// Absent du catalogue, il décodait en `.system` (#6508).
+    case reportResolved = "report_resolved"
 
     // Engagement — les QUATRE types que la passerelle émet
     // (`packages/shared/types/notification.ts`). `level_up` manquait : un
@@ -215,6 +218,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted: return "globe"
         case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled: return "exclamationmark.triangle.fill"
         case .system, .maintenance, .updateAvailable: return "bell.fill"
+        case .reportResolved: return "checkmark.shield.fill"
         case .legacyAffiliateSignup: return "link.badge.plus"
         case .legacyStatusUpdate: return "circle.fill"
         case .voiceCloneReady: return "waveform"
@@ -258,7 +262,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
             return "EF4444"
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted, .voiceCloneReady:
             return "08D9D6"
-        case .system, .maintenance, .updateAvailable:
+        case .system, .maintenance, .updateAvailable, .reportResolved:
             return "6366F1"
         case .friendNewStory, .friendNewPost, .friendNewMood:
             return "6366F1"
@@ -711,6 +715,8 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
             return "Message epingle"
         case .messageForwarded:
             return "Message transfere"
+        case .reportResolved:
+            return "Signalement traité"
         case .system, .maintenance, .updateAvailable:
             return content ?? "Notification systeme"
         }
@@ -744,6 +750,8 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
             return Self.firstNonEmpty(metadata?.excerpt, mediaSummary)
         case .loginNewDevice:
             return loginDeviceBody
+        case .reportResolved:
+            return content
         default:
             return nil
         }

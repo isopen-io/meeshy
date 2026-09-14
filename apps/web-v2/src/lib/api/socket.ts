@@ -11,7 +11,7 @@ import type { TypingActionData, TypingEvent } from '@meeshy/shared/types/socketi
 import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
-import { applyPostToggle, applyServedCount } from '@/lib/feed/interactions';
+import { applyMediaCaptionTranslation, applyPostToggle, applyServedCount, type MediaCaptionTranslationUpdate } from '@/lib/feed/interactions';
 import { decodeNotification } from '@/lib/notifications/record';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
@@ -83,6 +83,28 @@ function isPostBookmarkEvent(payload: unknown): payload is PostBookmarkEvent {
     typeof p.postId === 'string' &&
     typeof p.bookmarked === 'boolean' &&
     (p.bookmarkCount === undefined || isFiniteNumber(p.bookmarkCount))
+  );
+}
+
+/** `MediaCaptionTranslationUpdatedEventData` (`@meeshy/shared/types/post`,
+ * #6280), réduite aux champs que `applyMediaCaptionTranslation` consomme —
+ * `postId`/`commentId` ne servent qu'au ROUTAGE serveur (ZMQ, audience) :
+ * la fusion côté cache retrouve le média par `mediaId`, quel que soit le
+ * document (post ou commentaire) qui le porte. `commentId` n'est donc PAS
+ * relu ici : un média de commentaire n'a jamais d'entrée dans `FEED_QUERY_KEY`,
+ * `applyMediaCaptionTranslation` ne trouve rien à fusionner et ne modifie
+ * rien, sans lever. */
+function isMediaCaptionTranslationEvent(payload: unknown): payload is MediaCaptionTranslationUpdate {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  if (typeof p.mediaId !== 'string' || typeof p.language !== 'string') return false;
+  if (typeof p.translation !== 'object' || p.translation === null) return false;
+  const t = p.translation as Record<string, unknown>;
+  return (
+    typeof t.text === 'string' &&
+    typeof t.translationModel === 'string' &&
+    typeof t.createdAt === 'string' &&
+    (t.confidenceScore === undefined || isFiniteNumber(t.confidenceScore))
   );
 }
 
@@ -308,6 +330,21 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   /**
+   * `media:caption-translation-updated` (#6280) — LA LÉGENDE D'UN MÉDIA DU
+   * FIL SUIT LE PIPELINE ZMQ EN DIRECT, même motif que `post:liked` ci-dessus :
+   * une fonction pure (`applyMediaCaptionTranslation`, `lib/feed/interactions.ts`)
+   * appliquée à `FEED_QUERY_KEY`. `updateFeed` retrouve le média par id, quelle
+   * que soit la page qui le porte (`flattenFeedPages` garde la PREMIÈRE
+   * occurrence d'un post servi deux fois — la fusion doit donc viser TOUTES
+   * les pages, pas seulement la première, ce que `applyMediaCaptionTranslation`
+   * fait déjà via `mapPosts`).
+   */
+  const onMediaCaptionTranslationUpdated = (payload: unknown): void => {
+    if (!isMediaCaptionTranslationEvent(payload)) return;
+    updateFeed((data) => applyMediaCaptionTranslation(data, payload));
+  };
+
+  /**
    * `notification:*` (#6288) — LA CLOCHE SUIT LA PASSERELLE SANS RELIRE : les
    * règles vivent dans `notifications-realtime.ts`, ces lignes les branchent.
    *
@@ -404,6 +441,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
   socket.on<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
   socket.on<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
+  socket.on<unknown>(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, onMediaCaptionTranslationUpdated);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, onNotificationReadBulk);
@@ -453,6 +491,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
       socket.off<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
       socket.off<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
+      socket.off<unknown>(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, onMediaCaptionTranslationUpdated);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, onNotificationReadBulk);

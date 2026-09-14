@@ -145,8 +145,9 @@ final class ComposerDestinationSelectorTests: XCTestCase {
     func test_laPublicationDuDocument_estToujoursUnPostSimple() throws {
         let src = compact(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(
-            src.contains("forcePlainPost:selectedFormat==.post"),
-            "Le forçage doit porter sa CONDITION : un littéral `true` publierait une story en post simple (#4700)."
+            src.contains("forcePlainPost:choice.format==.post"),
+            "Le forçage doit porter sa CONDITION, lue sur le format que le GESTE publie (#6502) : un "
+                + "littéral `true` publierait une story en post simple (#4700)."
         )
         XCTAssertFalse(
             src.contains("forcePlainPost:true"),

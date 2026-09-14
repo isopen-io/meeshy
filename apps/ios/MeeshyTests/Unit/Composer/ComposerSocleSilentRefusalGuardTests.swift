@@ -56,7 +56,7 @@ final class ComposerSocleSilentRefusalGuardTests: XCTestCase {
     /// (`canPublishDocument` vrai) et rien n'est parti.
     func test_unBrouillonNul_neRendPasLaMainEnSilence() throws {
         let source = try socle()
-        guard let corps = corps(de: "func publishDocument()", dans: source) else {
+        guard let corps = corps(de: "func publishDocument(", dans: source) else {
             return XCTFail("`publishDocument` introuvable — la garde ne mesurerait rien.")
         }
         let compact = corps.components(separatedBy: .whitespacesAndNewlines).joined()
@@ -84,13 +84,13 @@ final class ComposerSocleSilentRefusalGuardTests: XCTestCase {
     /// c'est tout l'objet.
     func test_lEtatNormal_neLeveAucunToast() throws {
         let source = try socle()
-        guard let corps = corps(de: "func publishDocument()", dans: source) else {
+        guard let corps = corps(de: "func publishDocument(", dans: source) else {
             return XCTFail("`publishDocument` introuvable.")
         }
         let compact = corps.components(separatedBy: .whitespacesAndNewlines).joined()
 
         XCTAssertTrue(
-            compact.contains("guardcanPublishDocumentelse{return}"),
+            compact.contains("guardcanPublishDocument(as:choice.format)else{return}"),
             "« Rien à publier » se voit sur la flèche : le dire en plus serait du bruit.")
     }
 

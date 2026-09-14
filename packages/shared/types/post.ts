@@ -514,6 +514,27 @@ export interface CommentMediaUpdatedEventData {
   readonly comment: PostComment;
 }
 
+/**
+ * Émis (`media:caption-translation-updated`) quand le pipeline ZMQ a traduit
+ * la LÉGENDE (`PostMedia.caption`) d'un média — post OU commentaire (#6280).
+ * DISTINCT de `PostTranslationUpdatedEventData` (traduit `Post.content`, pas
+ * la légende d'un média du carrousel) et de `CommentMediaUpdatedEventData`
+ * (recharge le commentaire ENTIER pour une transcription audio prête).
+ * `commentId` est absent quand le média appartient directement à un post.
+ */
+export interface MediaCaptionTranslationUpdatedEventData {
+  readonly mediaId: string;
+  readonly postId: string;
+  readonly commentId?: string;
+  readonly language: string;
+  readonly translation: {
+    readonly text: string;
+    readonly translationModel: string;
+    readonly confidenceScore?: number;
+    readonly createdAt: string;
+  };
+}
+
 export interface CommentReactionAggregation {
   readonly emoji: string;
   readonly count: number;

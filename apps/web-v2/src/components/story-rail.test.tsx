@@ -3,6 +3,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 import { StoryRail } from './story-rail';
 import { RAIL_TILE_COMPACT, RAIL_TILE_GRANDE } from './rail-tile';
 import type { StoryTrayGroup } from '@/lib/view/story-tray';
@@ -20,9 +22,10 @@ import type { StoryTrayGroup } from '@/lib/view/story-tray';
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-beforeAll(() => {
+beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
+  await loadInterfaceCatalog('en');
 });
 
 afterAll(async () => {
@@ -69,6 +72,7 @@ function mount(props: {
   readonly groups: readonly StoryTrayGroup[];
   readonly loading?: boolean;
   readonly inert?: boolean;
+  readonly language?: InterfaceLanguage;
 }): HTMLDivElement {
   const c = document.createElement('div');
   document.body.appendChild(c);
@@ -81,6 +85,7 @@ function mount(props: {
         variant={props.variant}
         groups={props.groups}
         loading={props.loading ?? false}
+        language={props.language ?? 'fr'}
         {...(props.inert === undefined ? {} : { inert: props.inert })}
       />,
     );
@@ -95,6 +100,19 @@ describe('StoryRail — la grande en flux, la compacte épinglée', () => {
     expect(ul).not.toBeNull();
     expect(ul?.querySelector(`[data-rail-tile="${RAIL_TILE_GRANDE}"]`)).not.toBeNull();
     expect(el.textContent).toContain('Amina Diallo');
+  });
+
+  /**
+   * **LE LIBELLÉ DU GROUPE DU LECTEUR SUIT LA LANGUE D'INTERFACE** (#6550) —
+   * `storyAuthorLabel()` est partagée par ce rail et `routes/stories.tsx` ; ce
+   * témoin couvre le site d'appel du rail, rendu en `en`, comme le demande le
+   * critère de fin de #6550.
+   */
+  test('la tuile du lecteur suit la langue d\'interface — jamais « Votre story » figé (#6550)', () => {
+    const mienne: StoryTrayGroup = { ...group('u-moi', 'peu importe'), isMine: true };
+    const el = mount({ variant: 'grande', groups: [mienne], language: 'en' });
+    expect(el.textContent).toContain('Your story');
+    expect(el.textContent).not.toContain('Votre story');
   });
 
   /**

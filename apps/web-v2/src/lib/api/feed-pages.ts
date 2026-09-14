@@ -54,6 +54,25 @@ export type FeedMedia = {
    * milliseconde donne une pastille « 0:28 » sur un clip de 28 ms. */
   readonly duration?: number | null;
   readonly caption?: string | null;
+  /**
+   * LA LANGUE SOURCE DE LA LÉGENDE (#6280, `PostMedia.captionLanguage`,
+   * `schema.prisma:3638`) — DISTINCTE de `Post.originalLanguage` : une
+   * légende de média n'est pas le corps du post (CLAUDE.md § Prisme, trois
+   * contenus jamais confondus même à chaînes égales, directive porteur
+   * #6280). `null`/absente ⇒ la langue de la légende n'a pas encore été
+   * détectée par le pipeline.
+   */
+  readonly captionLanguage?: string | null;
+  /**
+   * `{ [langue]: { text, translationModel, confidenceScore?, createdAt,
+   * updatedAt? } }` (#6280, `PostMedia.captionTranslations`,
+   * `schema.prisma:3645`) — MÊME forme que `Post.translations`, dépouillée
+   * par `buildPostTranslationRecord` (`@meeshy/shared`), jamais par
+   * `buildTranslationRecord` (dialecte TABLEAU de `Message.translations`).
+   * DISTINCTE de `PostMedia.translations` (déjà prise par les pistes
+   * audio/transcriptions traduites — jamais une légende dedans).
+   */
+  readonly captionTranslations?: unknown;
   readonly alt?: string | null;
   readonly order?: number | null;
 };

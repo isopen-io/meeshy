@@ -80,6 +80,10 @@ const prismaCommentFindUnique = jest.fn<() => Promise<unknown>>();
  */
 const PUBLIC_ACL = { authorId: 'user-bob', visibility: 'PUBLIC', visibilityUserIds: [] };
 
+/** ObjectId Mongo valide (24 hex) — l'id d'URL, désormais gardé par `isValidObjectId`
+ *  avant d'atteindre Prisma (`resolveInteractionTarget`, #6557). */
+const POST_ID = '507f191e810c19729de860ea';
+
 const prisma = {
   post: {
     findUnique: prismaPostFindUnique,
@@ -87,7 +91,7 @@ const prisma = {
   },
   postComment: {
     findUnique: prismaCommentFindUnique,
-    findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue({ postId: 'post-1', post: PUBLIC_ACL }),
+    findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue({ postId: POST_ID, post: PUBLIC_ACL }),
   },
 } as unknown as PrismaClient;
 
@@ -158,7 +162,7 @@ describe('comment notifications — user_mentioned wins over comment_reply/post_
 
     const resp = await app.inject({
       method: 'POST',
-      url: '/posts/post-1/comments',
+      url: `/posts/${POST_ID}/comments`,
       body: { content: '@bob bravo', parentId: 'parent-1' },
     });
 
@@ -176,7 +180,7 @@ describe('comment notifications — user_mentioned wins over comment_reply/post_
 
     const resp = await app.inject({
       method: 'POST',
-      url: '/posts/post-1/comments',
+      url: `/posts/${POST_ID}/comments`,
       body: { content: '@carol bravo', parentId: 'parent-1' },
     });
 
@@ -193,7 +197,7 @@ describe('comment notifications — user_mentioned wins over comment_reply/post_
 
     const resp = await app.inject({
       method: 'POST',
-      url: '/posts/post-1/comments',
+      url: `/posts/${POST_ID}/comments`,
       body: { content: 'bravo', parentId: 'parent-1' },
     });
 
@@ -210,7 +214,7 @@ describe('comment notifications — user_mentioned wins over comment_reply/post_
 
     const resp = await app.inject({
       method: 'POST',
-      url: '/posts/post-1/comments',
+      url: `/posts/${POST_ID}/comments`,
       body: { content: '@bob bravo' },
     });
 
@@ -234,7 +238,7 @@ describe('comment notifications — user_mentioned wins over comment_reply/post_
 
     const resp = await app.inject({
       method: 'POST',
-      url: '/posts/post-1/comments',
+      url: `/posts/${POST_ID}/comments`,
       body: { content: '@carol bravo' },
     });
 
@@ -258,7 +262,7 @@ describe('comment notifications — user_mentioned wins over comment_reply/post_
 
     const resp = await app.inject({
       method: 'POST',
-      url: '/posts/post-1/comments',
+      url: `/posts/${POST_ID}/comments`,
       body: { content: '@carol bravo' },
     });
 

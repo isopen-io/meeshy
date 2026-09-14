@@ -49,6 +49,23 @@ nonisolated enum SceneCaption {
                         in document: CanvasV3,
                         post: FeedPost,
                         carrierFallback: Bool) -> String? {
+        resolveWithOrigin(sceneIndex: sceneIndex, in: document, post: post, carrierFallback: carrierFallback)?.text
+    }
+
+    /// **D'où vient la légende** (#6504). Le texte du POST porte des
+    /// traductions et se traduit à la demande ; la légende PROPRE d'un média n'a
+    /// aucune carte de traductions (#6280). La chaîne seule ne dit pas laquelle
+    /// des deux on affiche — et le plein écran n'offre la traduction qu'à la
+    /// première.
+    enum Origin: Equatable {
+        case mediaCaption
+        case carrierText
+    }
+
+    static func resolveWithOrigin(sceneIndex: Int,
+                                  in document: CanvasV3,
+                                  post: FeedPost,
+                                  carrierFallback: Bool) -> (text: String, origin: Origin)? {
         guard document.scenes.indices.contains(sceneIndex) else { return nil }
         // Le texte du porteur ne descend PAS jusqu'à la carte des médias quand
         // l'appelant l'interdit : `SocialMediaCaption.map` l'y injecte de
@@ -57,9 +74,14 @@ nonisolated enum SceneCaption {
         let porteur = carrierFallback ? post.displayContent : nil
         if let identite = mediaIdentity(sceneIndex: sceneIndex, in: document, post: post),
            let propre = SocialMediaCaption.map(for: post.media, carrierText: porteur)[identite] {
-            return propre
+            // `map` remplit le seul visuel d'un post avec le texte du porteur :
+            // c'est la légende PROPRE du média qui décide de l'origine.
+            let ownCaption = post.media.first { $0.id == identite }?.caption?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return (propre, ownCaption.isEmpty ? .carrierText : .mediaCaption)
         }
-        return SocialMediaCaption.resolve(own: nil, carrierText: porteur)
+        guard let texte = SocialMediaCaption.resolve(own: nil, carrierText: porteur) else { return nil }
+        return (texte, .carrierText)
     }
 
     /// Le média que la scène MONTRE — demandé à la scène, puis, pour un document

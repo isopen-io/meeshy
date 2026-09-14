@@ -130,7 +130,14 @@ if lu "le décompte de jetons est lisible" "$JETONS"; then
 fi
 
 dire "6. Nettoyage — le compte de preuve et la sonde de contrat"
-JS="d=db.getSiblingDB('meeshy'); n=0; d.User.find({email:{\$in:['$ADRESSE','sonde-contrat@example.invalid']}},{_id:1}).forEach(function(u){ n+=d.MagicLinkToken.deleteMany({userId:u._id}).deletedCount; n+=d.Participant.deleteMany({userId:u._id}).deletedCount; n+=d.UserSession.deleteMany({userId:u._id}).deletedCount; n+=d.User.deleteOne({_id:u._id}).deletedCount; }); print(JSON.stringify({supprimes:n, restants: d.User.countDocuments({email:{\$in:['$ADRESSE','sonde-contrat@example.invalid']}})}));"
+# Les MESSAGES des participants retirés partent AVANT eux (#6501). L'inscription
+# pose un avis d'arrivée dans la conversation globale, signé du Participant que
+# ce nettoyage retire ; `Message.sender` est une relation REQUISE, et UN avis
+# orphelin suffisait à rendre « Meeshy Global » illisible pour tout le monde.
+# mongosh n'émule pas les `onDelete: Cascade` de Prisma : les enfants du message
+# partent avec lui, nommés un par un (garde :
+# services/gateway/src/__tests__/security/proof-scripts-orphan-sender-guard.test.ts).
+JS="d=db.getSiblingDB('meeshy'); n=0; d.User.find({email:{\$in:['$ADRESSE','sonde-contrat@example.invalid']}},{_id:1}).forEach(function(u){ var ps=d.Participant.find({userId:u._id},{_id:1}).toArray().map(function(p){ return p._id; }); var ms=d.Message.find({senderId:{\$in:ps}},{_id:1}).toArray().map(function(m){ return m._id; }); ['MessageAttachment','MessageStatusEntry','AttachmentStatusEntry','AttachmentReaction','Reaction','Mention','UserMessageDeletion'].forEach(function(c){ n+=d.getCollection(c).deleteMany({messageId:{\$in:ms}}).deletedCount; }); d.Notification.updateMany({messageId:{\$in:ms}},{\$set:{messageId:null}}); n+=d.Message.deleteMany({_id:{\$in:ms}}).deletedCount; n+=d.MagicLinkToken.deleteMany({userId:u._id}).deletedCount; n+=d.Participant.deleteMany({userId:u._id}).deletedCount; n+=d.UserSession.deleteMany({userId:u._id}).deletedCount; n+=d.User.deleteOne({_id:u._id}).deletedCount; }); print(JSON.stringify({supprimes:n, restants: d.User.countDocuments({email:{\$in:['$ADRESSE','sonde-contrat@example.invalid']}})}));"
 NET=$(mongo "$JS"); printf '  %s\n' "$NET"
 if lu "le nettoyage est lisible" "$NET"; then
   printf '%s' "$NET" | grep -q '"restants":0' && verdict "aucun compte de test ne subsiste" ok || verdict "un compte de test subsiste" ko

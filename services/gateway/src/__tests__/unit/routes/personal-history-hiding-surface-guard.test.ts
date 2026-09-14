@@ -184,7 +184,11 @@ const SURFACES: Record<string, Classification> = {
   // Ce compte monte donc parce qu'un trou s'est fermé. L'incrémenter en le
   // disant est ce que ce cliquet demande ; le laisser rouge aurait appris à
   // ses lecteurs à le regeler sans lire.
-  'admin/content.ts': { kind: 'exempt', reads: 4, why: 'Surface admin/modération.' },
+  // 4 → 6 (#6516) : les deux lectures de plus sont les résolveurs de portée
+  // de `withOrphanedSenderRepair` (un expéditeur disparu faisait rejeter
+  // TOUTE la page admin en 500) — `select: { conversationId: true }`
+  // uniquement, rejoué APRÈS l'échec, jamais de contenu à masquer.
+  'admin/content.ts': { kind: 'exempt', reads: 6, why: 'Surface admin/modération.' },
   // Onze, INCHANGÉ après #4391 : la lecture de fenêtre de `GET /stats` n'a pas
   // disparu, elle a changé de FORME (`findMany` → `aggregateRaw`). C'est ce
   // que le balayage élargi rend visible.
@@ -366,6 +370,32 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "privacy.json), sans lecteur. Masquer une ligne à la destruction la " +
       'ferait survivre indéfiniment à la préférence d\'affichage d\'un seul ' +
       'utilisateur — même raisonnement, même exemption.',
+  },
+
+  // #6501 — même famille encore : une passe d'INTÉGRITÉ, sans lecteur, qui
+  // cherche les messages dont l'expéditeur a disparu pour les réparer.
+  'messaging/repairOrphanedMessageSenders.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Réparation d'intégrité, jamais une surface servie : elle cherche, dans " +
+      "une conversation entière, les messages dont le Participant expéditeur a " +
+      "disparu — un seul fait rejeter la lecture de TOUS les membres. Masquer " +
+      "une ligne pour un lecteur la laisserait casser la conversation des autres.",
+  },
+
+  // #6516 — le résolveur de PORTÉE partagé par tous les lecteurs qui
+  // branchent `withOrphanedSenderRepair` sans connaître leur conversation
+  // d'avance. Sa seule lecture ne sert jamais de contenu : `select: {
+  // conversationId: true }`, rien de plus — la même raison que
+  // `repairOrphanedMessageSenders.ts` juste au-dessus, un cran plus haut.
+  'messaging/withOrphanedSenderRepair.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Résolveur de portée : lit uniquement `conversationId` pour les messages " +
+      "dont l'id est déjà connu, jamais leur contenu ni leur expéditeur. Rien à " +
+      'masquer pour un lecteur qui ne reçoit aucun texte.',
   },
 };
 

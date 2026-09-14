@@ -48,6 +48,7 @@ import {
   sendError,
 } from '../utils/response.js';
 import { logger, type MessageParams, type MessagesRouteDeps } from './messages-shared';
+import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
 
 interface UpdateMessageBody {
   content?: string;
@@ -142,19 +143,23 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       // n'atteignait jamais la décision, et aucun modérateur ne pouvait être
       // admis ici alors que l'UI web le lui propose. Une politique qui se cache
       // dans un `where` est une politique qu'on ne peut plus unifier.
-      const message = await prisma.message.findFirst({
-        where: {
-          id: messageId,
-          deletedAt: null
-        },
-        include: {
-          sender: { select: { userId: true } },
-          // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
-          // colonnes sur une lecture déjà là : aucun aller-retour de plus.
-          conversation: { select: { isActive: true, closedAt: true } },
-          attachments: { select: attachmentMediaSelect }
-        }
-      });
+      const message = await withOrphanedSenderRepair(
+        { prisma, conversationIds: discoverConversationIdsByMessageIds(prisma, [messageId]) },
+        () =>
+          prisma.message.findFirst({
+            where: {
+              id: messageId,
+              deletedAt: null
+            },
+            include: {
+              sender: { select: { userId: true } },
+              // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
+              // colonnes sur une lecture déjà là : aucun aller-retour de plus.
+              conversation: { select: { isActive: true, closedAt: true } },
+              attachments: { select: attachmentMediaSelect }
+            }
+          })
+      );
 
       if (!message) {
         return sendNotFound(reply, 'Message not found or you are not authorized to modify it');
@@ -437,37 +442,41 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       const userId = authRequest.authContext.userId;
 
       // Vérifier que le message existe
-      const message = await prisma.message.findFirst({
-        where: {
-          id: messageId,
-          deletedAt: null
-        },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              userId: true,
-              displayName: true,
-              user: { select: { username: true } }
+      const message = await withOrphanedSenderRepair(
+        { prisma, conversationIds: discoverConversationIdsByMessageIds(prisma, [messageId]) },
+        () =>
+          prisma.message.findFirst({
+            where: {
+              id: messageId,
+              deletedAt: null
+            },
+            include: {
+              sender: {
+                select: {
+                  id: true,
+                  userId: true,
+                  displayName: true,
+                  user: { select: { username: true } }
+                }
+              },
+              // Ni l'appartenance ni la conversation ne sont jointes ici :
+              // `admitMessageDelete` lit la première lui-même (avec le filtre
+              // `isActive: true` que cette jointure n'avait jamais, et seulement
+              // quand l'acteur n'est PAS l'auteur), et `applyMessageRemovalEffects`
+              // relit `lastMessageAt` au plus près de son écriture conditionnelle.
+              // Le chemin nominal coûte donc deux lectures de moins qu'avant.
+              // `mimeType` est capturé ICI, avec l'admission : les attachements
+              // sont supprimés quelques lignes plus bas, et le décompte des
+              // compteurs de conversation ne pourrait plus les relire.
+              attachments: {
+                select: {
+                  id: true,
+                  mimeType: true
+                }
+              }
             }
-          },
-          // Ni l'appartenance ni la conversation ne sont jointes ici :
-          // `admitMessageDelete` lit la première lui-même (avec le filtre
-          // `isActive: true` que cette jointure n'avait jamais, et seulement
-          // quand l'acteur n'est PAS l'auteur), et `applyMessageRemovalEffects`
-          // relit `lastMessageAt` au plus près de son écriture conditionnelle.
-          // Le chemin nominal coûte donc deux lectures de moins qu'avant.
-          // `mimeType` est capturé ICI, avec l'admission : les attachements
-          // sont supprimés quelques lignes plus bas, et le décompte des
-          // compteurs de conversation ne pourrait plus les relire.
-          attachments: {
-            select: {
-              id: true,
-              mimeType: true
-            }
-          }
-        }
-      });
+          })
+      );
 
       if (!message) {
         return sendNotFound(reply, 'Message non trouvé');

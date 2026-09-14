@@ -25,6 +25,11 @@ struct MessageLanguageDetailView: View {
     var translationRequestFailedPublisher: AnyPublisher<ConversationViewModel.TranslationRequestFailure, Never>? = nil
     var onRequestTextTranslation: ((_ targetLanguage: String, _ sourceLanguage: String) -> Void)? = nil
     var onRequestAudioTranslation: ((_ targetLanguage: String, _ attachmentId: String) -> Void)? = nil
+    /// `false` quand le contenu n'est pas un message : la feuille sert aussi le
+    /// texte d'un post (#6504), dont les traductions arrivent par
+    /// `textTranslations` — lire `/messages/<id du post>/translations` ne
+    /// rendrait qu'un 404.
+    var fetchesMessageTranslations: Bool = true
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -468,6 +473,8 @@ struct MessageLanguageDetailView: View {
                 translations[t.targetLanguage] = t.translatedContent
             }
         }
+
+        guard fetchesMessageTranslations else { return }
 
         // `GET /messages/:id/translations` returns `data` as an OBJECT that
         // nests the list under `translations` (next to the original-message
