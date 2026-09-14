@@ -120,6 +120,25 @@ final class SceneFullscreenCaptionTranslationGuardTests: XCTestCase {
                        "La langue affichée se résout encore sur le post, quel que soit le contenu affiché.")
     }
 
+    /// **Une traduction arrivée PENDANT que le plein écran est ouvert s'y affiche**
+    /// (#6560). Recette staging 2026-09-14 : l'espagnol demandé depuis la feuille
+    /// est gravé en 0,6 s, le store du fil le reçoit — et la roue tourne encore
+    /// 30 s plus tard ; fermer puis rouvrir montre « Español ». Tant qu'il couvre
+    /// le fil, la carte hôte ne relaie pas le post neuf : le plein écran écoute
+    /// lui-même les traductions de SON post, légende de média et texte du post.
+    func test_uneTraductionArriveePendantLOuverture_sAfficheSansFermer() throws {
+        let code = try pleinEcran
+        XCTAssertTrue(code.contains(".onReceive(SocialSocketManager.shared.mediaCaptionTranslationUpdated"),
+                      "Le plein écran n'écoute pas les traductions de légende : il attend un post que son hôte ne relaie pas.")
+        XCTAssertTrue(code.contains(".onReceive(SocialSocketManager.shared.postTranslationUpdated"),
+                      "Le plein écran n'écoute pas les traductions du texte du post, que la même feuille demande.")
+        XCTAssertTrue(code.contains("CaptionTranslationArrival.applying("),
+                      "Les traductions reçues ne sont pas pliées sur le post affiché.")
+        let source = try XCTUnwrap(code.range(of: "CaptionTranslationSource.of("), "La source de traduction a disparu.")
+        XCTAssertTrue(String(code[source.lowerBound...].prefix(200)).contains("post: postAffiche"),
+                      "La rangée et la feuille lisent le post de l'hôte, sans les traductions arrivées.")
+    }
+
     /// La rangée n'appelle plus de traduction directe : l'icône, et la pastille
     /// qui porte le même glyphe, ouvrent la feuille (même icône ⇒ même effet).
     func test_laRangee_ouvreLaFeuille_parLIconeEtParLaPastille() throws {

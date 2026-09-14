@@ -119,3 +119,45 @@ nonisolated struct CaptionTranslationSource: Equatable {
         )?.language ?? originalLanguage
     }
 }
+
+/// **Une traduction ARRIVÉE pendant que le plein écran est ouvert** (#6560).
+///
+/// Recette staging 2026-09-14 : l'espagnol demandé depuis la feuille est gravé
+/// en 0,6 s et le store du fil le reçoit — mais le plein écran couvre la carte
+/// qui le présente, et tant qu'il est ouvert le post qu'elle lui relaie ne
+/// change pas : la roue tournait encore 30 s plus tard, « Español » n'apparaissait
+/// qu'en rouvrant. Le plein écran plie donc lui-même, sur le post qu'il affiche,
+/// ce que la socket livre pour CE post — par les règles de pose du store.
+nonisolated enum CaptionTranslationArrival: Sendable {
+    /// `post:translation-updated` — le texte du post.
+    case post(SocketPostTranslationUpdatedData)
+    /// `media:caption-translation-updated` — la légende d'un média.
+    case mediaCaption(SocketMediaCaptionTranslationUpdatedData)
+
+    var postId: String {
+        switch self {
+        case .post(let recue): return recue.postId
+        case .mediaCaption(let recue): return recue.postId
+        }
+    }
+
+    static func applying(_ arrivals: [CaptionTranslationArrival], to post: FeedPost) -> FeedPost {
+        arrivals.filter { $0.postId == post.id }.reduce(into: post) { affiche, arrivee in
+            switch arrivee {
+            case .post(let recue):
+                var traductions = affiche.translations ?? [:]
+                traductions[recue.language] = PostTranslation(
+                    text: recue.translation.text,
+                    translationModel: recue.translation.translationModel,
+                    confidenceScore: recue.translation.confidenceScore
+                )
+                affiche.translations = traductions
+            case .mediaCaption(let recue):
+                _ = FeedViewModel.applyMediaCaptionTranslation(
+                    recue.translation.text, mediaId: recue.mediaId, commentId: recue.commentId,
+                    language: recue.language, to: &affiche
+                )
+            }
+        }
+    }
+}
