@@ -71,6 +71,20 @@ describe('les quatre états du fil sont DESSINÉS, jamais un écran blanc', () =
     expect(html).toContain('size-11');
     expect(html).toContain('href="/"');
   });
+
+  /** `FeedView.swift` : la première action de l'en-tête, `play.rectangle.on.
+   * rectangle.fill`, « Lancer les Réels » ⇒ `ReelsPresenter.presentFresh()`
+   * (#6457). UN seul bouton, en haut à droite : après le titre. */
+  test('l’en-tête ouvre les Réels SANS graine, par un bouton nommé à droite du titre, cible 44', () => {
+    const html = renderToStaticMarkup(<FeedHeader pinned={false} railProps={RAIL_PLEIN} />);
+    expect(html).toContain('href="/reels"');
+    expect(html).toContain('aria-label="Lancer les Réels"');
+    expect(html.indexOf('href="/reels"')).toBeGreaterThan(html.indexOf('Meeshy Feed'));
+    expect(html.match(/href="\/reels/g)?.length).toBe(1);
+    const anchor = html.match(/<a [^>]*href="\/reels"[^>]*>/)?.[0] ?? '';
+    expect(anchor).toContain('size-11');
+    expect(anchor).toContain('draggable="false"');
+  });
 });
 
 /**

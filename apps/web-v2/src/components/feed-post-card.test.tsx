@@ -186,6 +186,34 @@ describe('FeedPostCard — le RÉEL, affiche immobile plein cadre', () => {
     expect(html).toContain('aria-label="Réel de Yann Petit"');
   });
 
+  /** « en touchant un réel on ouvre le feed de réel » (porteur, 2026-09-14) —
+   * `ReelsPresenter.present(posts:startId:)` : le lecteur démarre SUR le réel
+   * touché. Un lien (et non un `onClick`) : adresse, retour, nouvel onglet. */
+  test('toucher le réel ouvre le lecteur des Réels SUR CE RÉEL, par un lien nommé', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard model={modelOf(basePost({ id: 'reel-42', type: 'REEL', author: { id: 'u1', displayName: 'Yann Petit' } }))} />,
+    );
+    expect(html).toContain('href="/reels?seed=reel-42"');
+    expect(html).toContain('aria-label="Regarder le réel de Yann Petit"');
+    expect(html).toMatch(/<a[^>]*draggable="false"/);
+  });
+
+  test('les gestes du réel restent au-dessus du lien : aimer ne l’ouvre pas', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard model={modelOf(basePost({ id: 'reel-42', type: 'REEL' }))} onGesture={() => undefined} />,
+    );
+    const link = html.indexOf('href="/reels?seed=reel-42"');
+    const like = html.indexOf('data-feed-gesture="like"');
+    expect(link).toBeGreaterThan(-1);
+    expect(like).toBeGreaterThan(link);
+    expect(html).toMatch(/pointer-events-auto[^>]*>\s*<div[^>]*data-feed-actions/);
+  });
+
+  test('un POST ne mène jamais aux Réels', () => {
+    const html = renderToStaticMarkup(<FeedPostCard model={modelOf(basePost({ content: 'x', originalLanguage: 'fr' }))} />);
+    expect(html).not.toContain('/reels');
+  });
+
   /**
    * DÉFAUT BLOQUANT relevé À LA CAPTURE (#5893) — un poster `data:image/svg+xml`
    * référençant son propre dégradé par `fill="url(#g)"` porte un `)` NON

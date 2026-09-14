@@ -4,10 +4,12 @@ import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import { ROUTES } from '@/routes/route-table';
 import {
+  ADMIN_DESTINATION,
   FEED_DESTINATION,
   MENU_LADDER,
   PROFILE_DESTINATION,
   allFloatingDestinations,
+  menuLadderFor,
 } from './floating-menu';
 
 /**
@@ -58,6 +60,49 @@ describe('les six barreaux de l’échelle', () => {
   });
 });
 
+/**
+ * **LE BARREAU D'ADMINISTRATION** (#6458) — une extension WEB assumée : iOS n'a
+ * pas d'espace d'administration. Deux faits se gardent ici, et un témoin écrit
+ * sur un seul d'entre eux resterait vert sur la mauvaise implémentation.
+ */
+describe('le barreau « Administration »', () => {
+  /**
+   * Sans le droit, l'échelle est celle d'iOS À L'IDENTIQUE — pas « six
+   * barreaux », mais les six d'iOS dans l'ordre d'iOS. Une échelle qui
+   * insérerait le barreau puis le masquerait en CSS le laisserait dans le
+   * parcours de tabulation.
+   */
+  test('n’existe pas sans le droit : l’échelle est celle d’iOS', () => {
+    expect(menuLadderFor({ canAccessAdmin: false }).map((e) => e.key)).toEqual(MENU_LADDER.map((e) => e.key));
+  });
+
+  /**
+   * AVEC le droit, il vient EN DERNIER : les six barreaux d'iOS gardent leur
+   * rang, donc leur place sous le doigt — un administrateur qui passe de l'app
+   * native au web retrouve « Réglages » là où il l'a laissé.
+   */
+  test('vient en dernier avec le droit, les six d’iOS gardant leur rang', () => {
+    expect(menuLadderFor({ canAccessAdmin: true }).map((e) => e.key)).toEqual([...MENU_LADDER.map((e) => e.key), 'admin']);
+  });
+
+  /**
+   * Même mot que la rangée des Réglages et que le titre de l'écran (`admin.title`),
+   * même glyphe que la rangée (`key`) : la dimension 6 — « même mot, même
+   * icône » — se tient par la CLÉ, pas par une chaîne recopiée.
+   */
+  test('mène à /admin, se nomme comme l’écran et porte le glyphe de la rangée des Réglages', () => {
+    expect(ADMIN_DESTINATION.route).toBe('admin');
+    expect(ADMIN_DESTINATION.labelKey).toBe('admin.title');
+    expect(ADMIN_DESTINATION.glyph).toEqual({ set: 'socle', name: 'key' });
+  });
+
+  /** Sa teinte est un JETON de la palette dérivée d'iOS, jamais un hexadécimal inventé. */
+  test('porte une teinte de jeton, distincte des six', () => {
+    expect(ADMIN_DESTINATION.tint).toMatch(/^var\(--ios-[a-z0-9-]+\)$/);
+    expect(MENU_LADDER.map((e) => e.tint)).not.toContain(ADMIN_DESTINATION.tint);
+  });
+});
+
 describe('aucune destination flottante ne ment', () => {
   /**
    * **LE TÉMOIN QUI JUSTIFIE #6214.** La loi 4 de la planche — « un contrôle
@@ -76,14 +121,17 @@ describe('aucune destination flottante ne ment', () => {
   });
 
   /**
-   * Les huit, pas seulement les six — le Flux et le profil sont des
+   * Les neuf, pas seulement les six — le Flux et le profil sont des
    * destinations à part entière, et ce sont précisément celles qu'une
-   * énumération centrée sur l'échelle oublie.
+   * énumération centrée sur l'échelle oublie. L'administration aussi (#6458) :
+   * absente de `MENU_LADDER`, elle échapperait sinon aux deux témoins qui
+   * suivent — la route déclarée et le libellé unique dans sept langues.
    */
-  test('les huit destinations sont comptées', () => {
-    expect(allFloatingDestinations()).toHaveLength(8);
+  test('les neuf destinations sont comptées', () => {
+    expect(allFloatingDestinations()).toHaveLength(9);
     expect(allFloatingDestinations()).toContain(FEED_DESTINATION);
     expect(allFloatingDestinations()).toContain(PROFILE_DESTINATION);
+    expect(allFloatingDestinations()).toContain(ADMIN_DESTINATION);
   });
 });
 

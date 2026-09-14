@@ -6,6 +6,9 @@ import { FEED_GLYPHS } from './glyphs-feed';
 import type { FeedCardMedia, FeedCardModel, FeedCardStats, FeedCardText, FeedCardViewer } from '@/lib/feed/card-model';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { FEED_TEXT_TRUNCATION_LIMIT, truncateWords } from '@/lib/feed/text';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { Link } from '@/routes/route-table';
 
 /**
  * `FeedPostCard` (#5893) — la carte de publication du fil, DEUX FORMES,
@@ -349,7 +352,24 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
       ) : (
         <div className="absolute inset-0" style={{ backgroundColor: 'var(--color-ios-card)' }} />
       )}
-      <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent 55%)' }} aria-hidden="true" />
+      {/* TOUCHER LE RÉEL L'OUVRE (#6457) — miroir `ReelFeedCard.onTapMedia` ⇒
+          `ReelsPresenter.present(posts:startId:)`. Le lien couvre la carte
+          SOUS tout le reste : le voile, la puce et l'identité le laissent
+          passer (`pointer-events-none`), seule la rangée des gestes le
+          recouvre. `draggable={false}` : le glisser natif d'une ancre volerait
+          le défilement du fil. */}
+      <Link
+        to="reels"
+        search={{ seed: model.id }}
+        aria-label={translate(currentInterfaceLanguage(), 'reels.open', { author: model.author.name })}
+        draggable={false}
+        data-feed-reel-open
+        className="absolute inset-0 focus-visible:outline-2 focus-visible:-outline-offset-4"
+        style={{ borderRadius: 18, outlineColor: 'white' }}
+      >
+        {null}
+      </Link>
+      <div className="pointer-events-none absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent 55%)' }} aria-hidden="true" />
       {/* LA PUCE « RÉEL » (§ 1.5 de la spécification, manquante à la première
           forme) — la carte est rendue en AFFICHE IMMOBILE, et un réel dont la
           pièce de tête est une IMAGE (la moitié du corpus de recette de
@@ -358,12 +378,12 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
           tranche (D-42). */}
       <span
         data-feed-reel-chip
-        className="absolute top-3 left-3 rounded-chip px-2 py-0.5 text-check font-semibold text-white"
+        className="pointer-events-none absolute top-3 left-3 rounded-chip px-2 py-0.5 text-check font-semibold text-white"
         style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
       >
         Réel
       </span>
-      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 p-3">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 p-3">
         <div className="flex items-center gap-2">
           <Avatar initials={model.author.initials} color={model.author.accentColor} size={34} {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})} />
           <span className="text-body font-semibold text-white">{model.author.name}</span>
@@ -377,7 +397,9 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
             {model.text.full}
           </p>
         ) : null}
-        <FeedActionsRow postId={model.id} stats={model.stats} viewer={model.viewer} tone="onDark" {...hostsOf(hosts)} />
+        <div className="pointer-events-auto">
+          <FeedActionsRow postId={model.id} stats={model.stats} viewer={model.viewer} tone="onDark" {...hostsOf(hosts)} />
+        </div>
       </div>
     </div>
   );

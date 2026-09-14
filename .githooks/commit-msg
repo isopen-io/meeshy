@@ -1,0 +1,12 @@
+#!/bin/sh
+# Hook de commit du garde #6351 — refuse un message qui porte à la fois un
+# marqueur (beta) et un marqueur de saut CI ([skip ci], [no ci]…), avant que
+# GitHub ne le voie et ne supprime tous les workflows du push qui le porte.
+# Voir l'en-tête de scripts/check-beta-skip-conflict.mjs pour le piège complet.
+#
+# Installation (une fois par clone) : git config core.hooksPath .githooks
+# `package.json` → "prepare" le fait automatiquement pour un `install` qui
+# n'ignore pas les scripts.
+set -eu
+repo_root=$(git rev-parse --show-toplevel)
+exec node "$repo_root/scripts/check-beta-skip-conflict.mjs" --message-file "$1"

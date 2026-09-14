@@ -37436,49 +37436,143 @@
         }
       }
     },
+    "auth.signup.name.derivedNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إذا تركته فارغًا، فسنشتقّه من عنوانك. يمكنك تغييره في أي وقت."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lässt du es leer, leiten wir ihn aus deiner Adresse ab. Du kannst ihn jederzeit ändern."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Left empty, we derive it from your address. You can change it at any time."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si lo dejas vacío, lo derivamos de tu dirección. Podrás cambiarlo cuando quieras."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laissé vide, nous le tirons de votre adresse. Vous pourrez le changer à tout moment."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se lo lasci vuoto, lo ricaviamo dal tuo indirizzo. Potrai cambiarlo quando vuoi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se deixar vazio, nós o derivamos do seu endereço. Você poderá alterá-lo quando quiser."
+          }
+        }
+      }
+    },
+    "auth.signup.name.hintLabel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ما فائدة الاسم المعروض"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wozu der Anzeigename dient"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What the display name is for"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para qué sirve el nombre visible"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À quoi sert le nom affiché"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A cosa serve il nome visualizzato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para que serve o nome de exibição"
+          }
+        }
+      }
+    },
     "auth.signup.name.label": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الاسم المعروض"
+            "value": "الاسم المعروض (اختياري)"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anzeigename"
+            "value": "Anzeigename (optional)"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Display name"
+            "value": "Display name (optional)"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nombre visible"
+            "value": "Nombre visible (opcional)"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nom affiché"
+            "value": "Nom affiché (facultatif)"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nome visualizzato"
+            "value": "Nome visualizzato (facoltativo)"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nome de exibição"
+            "value": "Nome de exibição (opcional)"
           }
         }
       }
@@ -37526,6 +37620,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Como podemos te chamar?"
+          }
+        }
+      }
+    },
+    "auth.signup.password.hintLabel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا يحدث بدون كلمة مرور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was ohne Passwort passiert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What happens without a password"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qué pasa sin contraseña"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que se passe-t-il sans mot de passe"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa succede senza password"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que acontece sem senha"
           }
         }
       }
@@ -37671,6 +37812,53 @@
         }
       }
     },
+    "auth.signup.phone.benefit": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سيتيح لك تسجيل الدخول، ويسمح لمن تعرفهم بالعثور عليك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Damit meldest du dich an, und deine Kontakte können dich finden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It lets you sign in, and lets people you know find you."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te permitirá iniciar sesión, y que tus contactos te encuentren."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il vous permettra de vous connecter, et à vos proches de vous retrouver."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ti permetterà di accedere e ai tuoi contatti di trovarti."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ele permite que você entre e que seus contatos te encontrem."
+          }
+        }
+      }
+    },
     "auth.signup.phone.country.hint": {
       "extractionState": "manual",
       "localizations": {
@@ -37808,6 +37996,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "País"
+          }
+        }
+      }
+    },
+    "auth.signup.phone.hintLabel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ما فائدة الرقم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wozu die Nummer dient"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What the number is for"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para qué sirve el número"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À quoi sert le numéro"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A cosa serve il numero"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para que serve o número"
           }
         }
       }

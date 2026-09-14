@@ -122,6 +122,30 @@ export async function loadAdminIdentity(
   };
 }
 
+/**
+ * **LA LECTURE DES PERMISSIONS, écrite UNE fois** (#6458) — l'écran `/admin`,
+ * la liste des comptes, la rangée des Réglages et le barreau du menu flottant
+ * la partagent. Quatre `queryFn` recopiés sous la même clé auraient pu
+ * diverger sur la façon de lire un refus ; ici un refus LÈVE, et chaque site
+ * le lit comme l'absence du droit.
+ *
+ * Une matrice de permissions ne bouge pas pendant qu'on regarde un écran :
+ * cinq minutes de fraîcheur, et aucun nouvel essai — un 403 relancé trois fois
+ * remplirait les journaux d'audit de refus.
+ */
+export function adminIdentityQueryOptions(deps: AdminDeps) {
+  return {
+    queryKey: ADMIN_PERMISSIONS_QUERY_KEY,
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }): Promise<AdminIdentity> => {
+      const resultat = await loadAdminIdentity({ ...deps, ...(signal === undefined ? {} : { signal }) });
+      if (!resultat.ok) throw new Error(resultat.error);
+      return resultat.data;
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  };
+}
+
 export function decodeAdminDashboard(raw: unknown): AdminDashboard {
   const charge = asRecord(raw) ?? {};
   const stats = asRecord(charge.statistics) ?? {};

@@ -1,5 +1,6 @@
 import { memo, type CSSProperties, type ReactNode } from 'react';
 
+import { attachmentSrc } from '@/lib/api/media-url';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { notificationAccent } from '@/lib/notifications/categories';
@@ -111,7 +112,12 @@ function NotificationRowView({ notification, language, now, onOpen, onMarkRead, 
         </span>
         {metadata.postThumbnailUrl === undefined ? null : (
           <img
-            src={metadata.postThumbnailUrl}
+            /* `PostMedia.thumbnailUrl` est une RÉFÉRENCE de média, pas une
+               adresse (#6388) : la clé nue se résoudrait contre le CHEMIN du
+               document (`/notifications/2026/09/…`, où le SPA rend son
+               `index.html`) et l'adresse héritée contre la RACINE de la
+               passerelle. `attachmentSrc` est le site unique de la règle. */
+            src={attachmentSrc(metadata.postThumbnailUrl)}
             alt=""
             width={44}
             height={44}

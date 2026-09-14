@@ -5,6 +5,7 @@ import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
 import { postQueryKey } from './publication-detail';
+import { reelsQueryKey } from './reels';
 import {
   BOOKMARK_FAILED_MESSAGE,
   GESTURE_PENDING_MESSAGE,
@@ -245,5 +246,59 @@ describe('performPostGesture — le DÉTAIL d’une publication partage le geste
     expect(detailOf(queryClient)?.isBookmarkedByMe).toBe(true);
     expect(detailOf(queryClient)?.bookmarkCount).toBe(6);
     expect(cachedPost(queryClient)?.bookmarkCount).toBe(6);
+  });
+});
+
+describe('performPostGesture — le lecteur des RÉELS partage le geste (#6457)', () => {
+  const reelsPage = (posts: readonly FeedPost[]): FeedInfiniteData => ({
+    pages: [{ posts, pagination: { limit: 20, hasMore: false, nextCursor: null } }],
+    pageParams: [undefined],
+  });
+  const reelIn = (queryClient: QueryClient, seed?: string) =>
+    queryClient.getQueryData<FeedInfiniteData>(reelsQueryKey(seed))?.pages[0]?.posts.find((p) => p.id === 'r1');
+  const reel = (partial: Partial<FeedPost>): FeedPost => post({ id: 'r1', type: 'REEL', ...partial });
+
+  /** Un réel servi par le fil d'affinité n'est pas forcément dans le Flux :
+   * n'y lire que le Flux enverrait « aimer » sur un réel déjà aimé. */
+  test('un réel connu du SEUL fil des réels lit son état là : déjà aimé ⇒ `DELETE`, et le fil des réels bascule', async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(reelsQueryKey('seed-1'), reelsPage([reel({ isLikedByMe: true, likeCount: 9 })]));
+    const { requests, transport } = scripted(async () => ({ ok: true, data: { liked: false } }));
+
+    await performPostGesture({ postId: 'r1', kind: 'like', deps: gatewayDeps(queryClient, transport) });
+
+    expect(requests[0]?.method).toBe('DELETE');
+    expect(reelIn(queryClient, 'seed-1')?.isLikedByMe).toBe(false);
+    expect(reelIn(queryClient, 'seed-1')?.likeCount).toBe(8);
+  });
+
+  test('le Flux et TOUS les fils de réels basculent ensemble — et se défont ensemble sur refus', async () => {
+    const queryClient = seeded([reel({ isBookmarkedByMe: false, bookmarkCount: 1 })]);
+    queryClient.setQueryData(reelsQueryKey(), reelsPage([reel({ isBookmarkedByMe: false, bookmarkCount: 1 })]));
+    queryClient.setQueryData(reelsQueryKey('seed-2'), reelsPage([reel({ isBookmarkedByMe: false, bookmarkCount: 1 })]));
+
+    let release: (r: ApiResult<unknown>) => void = () => undefined;
+    const { transport } = scripted(() => new Promise((resolve) => (release = resolve)));
+    const pending = performPostGesture({ postId: 'r1', kind: 'bookmark', deps: gatewayDeps(queryClient, transport) });
+
+    expect(cachedPost(queryClient, 'r1')?.isBookmarkedByMe).toBe(true);
+    expect(reelIn(queryClient)?.isBookmarkedByMe).toBe(true);
+    expect(reelIn(queryClient, 'seed-2')?.bookmarkCount).toBe(2);
+
+    release({ ok: false, status: 404, error: 'Post not found' });
+    await pending;
+    expect(cachedPost(queryClient, 'r1')?.isBookmarkedByMe).toBe(false);
+    expect(reelIn(queryClient)?.isBookmarkedByMe).toBe(false);
+    expect(reelIn(queryClient, 'seed-2')?.bookmarkCount).toBe(1);
+  });
+
+  test('le compte servi fait foi dans les fils de réels aussi', async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(reelsQueryKey(), reelsPage([reel({ isBookmarkedByMe: false, bookmarkCount: 1 })]));
+    const { transport } = scripted(async () => ({ ok: true, data: { bookmarked: true, bookmarkCount: 12 } }));
+
+    await performPostGesture({ postId: 'r1', kind: 'bookmark', deps: gatewayDeps(queryClient, transport) });
+
+    expect(reelIn(queryClient)?.bookmarkCount).toBe(12);
   });
 });
