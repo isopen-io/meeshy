@@ -20,14 +20,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
-
-jest.mock('../../../../utils/logger-enhanced', () => ({
-  enhancedLogger: {
-    child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
-  },
-}));
-
+import { describe, it, expect } from '@jest/globals';
 import { JOIN_NOTICE_KIND } from '@meeshy/shared/utils/join-notice';
 import {
   repairOrphanedMessageSenders,
