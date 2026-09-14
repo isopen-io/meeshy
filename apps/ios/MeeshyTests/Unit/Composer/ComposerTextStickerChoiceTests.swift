@@ -80,4 +80,39 @@ final class ComposerTextStickerChoiceTests: XCTestCase {
     func test_unCatalogueVide_neRendRien() {
         XCTAssertNil(ComposerTextStickerChoice.resolve(recents: [], favorites: [], catalog: []))
     }
+    // MARK: - La ROTATION (#6537)
+
+    /// **La pastille commence par ce que l'auteur emploie.** La rotation ajoute
+    /// ce qu'il ne connaît pas encore ; elle ne change pas ce qu'il reconnaît.
+    func test_leTourCommenceParLeCadreEmploye() {
+        let tour = ComposerTextStickerChoice.rotation(
+            recents: [StickerUsageEntry(kind: .template, value: StickerTemplateCatalog.ID.textNeon)],
+            favorites: [],
+            catalog: catalogue)
+        XCTAssertEqual(tour.first?.id, StickerTemplateCatalog.ID.textNeon)
+    }
+
+    /// **LE témoin du lot.** Un cadre ne revient pas au milieu du tour : sur un
+    /// catalogue court, le doublon ferait « bégayer » la pastille, et l'auteur
+    /// croirait la rotation cassée.
+    func test_leTourNePorteAucunDoublon() {
+        let tour = ComposerTextStickerChoice.rotation(
+            recents: [StickerUsageEntry(kind: .template, value: StickerTemplateCatalog.ID.textNeon)],
+            favorites: [],
+            catalog: catalogue)
+        XCTAssertEqual(Set(tour.map(\.id)).count, tour.count)
+    }
+
+    /// Le tour porte TOUT le catalogue — sinon la rotation montrerait moins que
+    /// la feuille qu'un appui long ouvre, et l'auteur croirait avoir vu l'offre.
+    func test_leTourPorteToutLeCatalogue() {
+        let tour = ComposerTextStickerChoice.rotation(recents: [], favorites: [], catalog: catalogue)
+        XCTAssertEqual(Set(tour.map(\.id)), Set(catalogue.map(\.id)))
+    }
+
+    /// Catalogue vide ⇒ tour vide ⇒ pastille ABSENTE, jamais figée (loi 4).
+    func test_unCatalogueVide_neDonneAucunTour() {
+        XCTAssertTrue(ComposerTextStickerChoice.rotation(recents: [], favorites: [], catalog: []).isEmpty)
+    }
+
 }

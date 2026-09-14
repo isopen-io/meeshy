@@ -588,7 +588,7 @@ final class MessageListViewController: UIViewController {
     private func applyTopInsetToViews() {
         guard collectionView != nil else { return }
         // Rangée plate : le repos réserve la rangée de l'en-tête (#6013).
-        let restTop = topInset + ThreadChromeFade.headClearance(usesFlatRow: readingMode.usesFlatRow)
+        let restTop = topInset + ThreadHeadClearance.value(usesFlatRow: readingMode.usesFlatRow)
         if collectionView.contentInset.bottom != restTop {
             collectionView.contentInset.bottom = restTop
             collectionView.verticalScrollIndicatorInsets.bottom = restTop
@@ -1072,7 +1072,17 @@ final class MessageListViewController: UIViewController {
         // the oldest (visual top). We handle status-bar taps manually if needed.
         collectionView.scrollsToTop = false
         collectionView.delegate = self
-        view.addSubview(ThreadChromeFadeContainer(hosting: collectionView))
+        // LE FIL N'EST PLUS VOILÉ (#6537). `ThreadChromeFadeContainer` posait
+        // un masque plein écran pour estomper le fil sous l'en-tête et le
+        // composeur (#6013). Le chrome est fait de PASTILLES FLOTTANTES : la
+        // bande cachait donc aussi tout ce qui se trouve À CÔTÉ d'elles, et un
+        // texte masqué ne se lit ni ne se touche.
+        //
+        // Directive porteur 2026-09-14 : « supprimer ces voiles, non pas
+        // simplement les rendre invisible, mais permettre qu'on manipule les
+        // éléments entre — de l'entête à la frontière de l'universal composer
+        // bar ».
+        view.addSubview(collectionView)
     }
 
     // MARK: - Groupe de rangées (Script/Focal, #3919)
