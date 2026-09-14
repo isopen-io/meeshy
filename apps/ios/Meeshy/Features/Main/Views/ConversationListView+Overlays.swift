@@ -170,8 +170,10 @@ extension ConversationListView {
         // card I-071, ce sous-menu — l'aperçu-menu `LentillePeekView` a été
         // supprimé le 2026-08-21 : l'aperçu montre les derniers messages).
         // Drapeau OFF ⇒ rien de plus ici : bit-à-bit identique au menu
-        // d'aujourd'hui, comme partout ailleurs dans la Lentille.
-        if LentilleFeatureFlag.isLentilleListEnabled {
+        // d'aujourd'hui, comme partout ailleurs dans la Lentille. Modes de
+        // lecture coupés (#6482) ⇒ pas de sous-menu non plus : un mode choisi
+        // ici serait ignoré à l'ouverture, qui rend Script.
+        if LentilleFeatureFlag.isLentilleListEnabled, LentilleFeatureFlag.isReadingModesEnabled {
             LentilleReadingModeSubmenu(
                 conversation: conversation,
                 isAnonymous: ConversationListReaderAnonymity.isAnonymous(currentUser: AuthManager.shared.currentUser)
@@ -309,18 +311,9 @@ extension ConversationListView {
                 )
             }
 
-            // Focal (bêta) — I-075, amendement produit 2026-08-16. Publication
-            // bêta publique (plus un outil de dev) : force le mode Focal pour
-            // CETTE ouverture SEULE, sans écrire NI la préférence de mode NI
-            // aucun drapeau (jamais `select()`, jamais `LentilleFeatureFlag
-            // .setForDebug`, jamais `BetaFeaturesPreference.setEnabled`).
-            // Gardé par `BetaFeaturesPreference.isEnabled` (préférence
-            // utilisateur « Activer les bêta » — réglages, SettingsView)
-            // — indépendant de `reading_modes` : allumer ce
-            // dernier globalement re-déciderait la vue de TOUTES LES AUTRES
-            // conversations (mode AUTO), ce que ce chantier interdit.
             // RETRAIT FOCAL iOS (2026-08-18) : l'item « Focal (bêta) »
-            // (I-075) est retiré avec le mode — Script est le mode nominal.
+            // (I-075), qui forçait Focal pour une seule ouverture, est retiré
+            // avec le mode — Script est le mode nominal.
 
             // Bloquer / Débloquer (DM uniquement)
             if conversation.type == .direct, let userId = conversation.participantUserId {
