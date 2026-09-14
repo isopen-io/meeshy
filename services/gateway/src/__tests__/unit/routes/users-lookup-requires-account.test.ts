@@ -163,7 +163,11 @@ describe('… et les filtres que la jumelle authentifiée applique déjà', () =
     const where = findFirst.mock.calls[0][0].where as Record<string, any>;
     // Le blocage vaut dans les DEUX sens : sans cela, un utilisateur bloqué
     // retrouvait le profil de qui l'a bloqué, s'il connaissait son adresse.
-    expect(where.NOT).toMatchObject({ blockedUserIds: { has: VIEWER } });
+    // Depuis #6452, la clause de blocage vit sous un `OR` avec `isSet: false`
+    // (un compte SANS `blockedUserIds` ne doit pas être écarté) — voir
+    // `ContactDirectoryService.contactLookupScope.test.ts` pour la preuve par
+    // évaluation contre un vrai document.
+    expect(JSON.stringify(where.AND)).toContain(VIEWER);
     expect(where.id).toMatchObject({ notIn: expect.any(Array) });
 
     await app.close();

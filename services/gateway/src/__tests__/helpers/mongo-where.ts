@@ -70,6 +70,22 @@ function matchesFieldFilter(row: MongoDocument, key: string, filter: MongoDocume
     if (operator === 'in') {
       return has(row, key) && (operand as unknown[]).some((candidate) => sameValue(row[key], candidate));
     }
+    if (operator === 'notIn') {
+      return !has(row, key) || !(operand as unknown[]).some((candidate) => sameValue(row[key], candidate));
+    }
+    if (operator === 'has') {
+      // Même piège que `equals`/`not` sur un scalaire (voir l'en-tête du
+      // fichier), version TABLEAU (#6452) : sur le connecteur MongoDB, Prisma
+      // enveloppe `{ has }` d'un test d'existence implicite, si bien que sa
+      // NÉGATION écarte aussi les documents où le champ est ABSENT — mesuré en
+      // staging, 206 comptes actifs sur 246 exclus de `GET /directory/people`.
+      // On modélise la bizarrerie en faisant RÉUSSIR `has` quand le champ
+      // manque : nié par un `NOT` englobant, ça rend bien `false` (exclu),
+      // exactement le comportement de production qu'un correctif doit défaire
+      // par un `OR` explicite sur `isSet: false`, jamais par un `NOT` nu.
+      if (!has(row, key)) return true;
+      return Array.isArray(row[key]) && (row[key] as unknown[]).some((value) => sameValue(value, operand));
+    }
     throw new Error(`double Mongo: opérateur non supporté « ${key}.${operator} »`);
   });
 }
@@ -86,6 +102,16 @@ function sameValue(left: unknown, right: unknown): boolean {
 export function findFirstIn<T extends MongoDocument>(rows: readonly T[]) {
   return (args: { where?: MongoDocument }): Promise<T | null> =>
     Promise.resolve(rows.find((row) => matchesMongoWhere(row, args?.where)) ?? null);
+}
+
+/**
+ * `findMany` sur une collection en mémoire, avec la sémantique ci-dessus.
+ * Ignore `select`/`orderBy`/`cursor`/`take` — seul le `where` est évalué ;
+ * un test qui a besoin de pagination compose sa propre troncature par-dessus.
+ */
+export function findManyIn<T extends MongoDocument>(rows: readonly T[]) {
+  return (args: { where?: MongoDocument }): Promise<T[]> =>
+    Promise.resolve(rows.filter((row) => matchesMongoWhere(row, args?.where)));
 }
 
 /**

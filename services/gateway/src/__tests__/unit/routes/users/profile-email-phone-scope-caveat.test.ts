@@ -162,8 +162,12 @@ describe("`where` — servirProfilPublic n'applique JAMAIS la portée de contact
     const where = prisma.user.findFirst.mock.calls[0][0].where as Record<string, unknown>;
     expect(where.email).toBe('cible@example.com');
     expect(where.isActive).toBe(true);
-    expect(where.NOT).toMatchObject({ blockedUserIds: { has: VIEWER } });
+    // Le blocage vit sous un `OR` avec `isSet: false` (#6452) : un compte SANS
+    // `blockedUserIds` ne doit pas être écarté par le `NOT` — voir
+    // `ContactDirectoryService.contactLookupScope.test.ts` pour la preuve par
+    // évaluation contre un vrai document.
     expect(JSON.stringify(where.AND)).toContain('isSet');
+    expect(JSON.stringify(where.AND)).toContain(VIEWER);
 
     await app.close();
   });
@@ -177,7 +181,7 @@ describe("`where` — servirProfilPublic n'applique JAMAIS la portée de contact
     const where = prisma.user.findFirst.mock.calls[0][0].where as Record<string, unknown>;
     expect(where.phoneNumber).toBeDefined();
     expect(where.isActive).toBe(true);
-    expect(where.NOT).toMatchObject({ blockedUserIds: { has: VIEWER } });
+    expect(JSON.stringify(where.AND)).toContain(VIEWER);
 
     await app.close();
   });

@@ -157,9 +157,19 @@ export function contactLookupScope(options: {
     // `AND` et non `OR` à la racine : l'appelant pose lui-même un `OR` pour sa
     // liste d'identifiants (`ContactDirectoryService.match`), et deux `OR`
     // frères s'écraseraient en silence.
-    AND: [{ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] }],
+    AND: [
+      { OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] },
+      // Même piège, version TABLEAU (#6452) : sur le connecteur MongoDB,
+      // Prisma enveloppe `{ has }` d'un test d'existence implicite, si bien
+      // qu'un `NOT: { blockedUserIds: { has } }` posé NU écarte aussi les
+      // documents où le champ n'existe pas du tout — pas seulement ceux qui
+      // bloquent effectivement le lecteur. Mesuré en staging : 206 comptes
+      // actifs sur 246 étaient ainsi exclus de `GET /directory/people`, dont
+      // le compte système `meeshy`. Un compte sans blocage déclaré n'a
+      // PERSONNE dans sa liste — son absence doit inclure, jamais exclure.
+      { OR: [{ blockedUserIds: { isSet: false } }, { NOT: { blockedUserIds: { has: options.viewerId } } }] },
+    ],
     id: { notIn: [...options.blockedByViewer] },
-    NOT: { blockedUserIds: { has: options.viewerId } },
   };
 }
 
