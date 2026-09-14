@@ -133,7 +133,7 @@ jobs:
 
       # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -525,7 +525,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -873,7 +873,7 @@ jobs:
 
       # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -988,7 +988,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1128,7 +1128,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1280,7 +1280,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1443,7 +1443,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1600,7 +1600,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1672,7 +1672,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload results
-        uses: github/codeql-action/upload-sarif@v4.37.9
+        uses: github/codeql-action/upload-sarif@v4.38.0
         if: always()
         continue-on-error: true
         with:
@@ -1697,7 +1697,7 @@ jobs:
 
       # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -1776,7 +1776,7 @@ jobs:
 
       # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'

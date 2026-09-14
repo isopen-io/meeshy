@@ -117,7 +117,7 @@ describe('le compte — ce que la v2.0 ne porte pas reste atteignable', () => {
     expect(host.textContent).toContain('Supprimer le compte');
   });
 
-  /* #6354 (D-62) : hors production, aucune rangée ne mène à la production
+  /* #6354 (D-67) : hors production, aucune rangée ne mène à la production
      réelle — un testeur de staging ne doit jamais atterrir sur SA suppression
      de compte, sous un compte qui n'est pas le sien. */
   test('hors production : ni lien ni href vers le legacy — une rangée inerte qui le dit', () => {

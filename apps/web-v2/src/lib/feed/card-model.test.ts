@@ -181,6 +181,56 @@ describe('resolveFeedCardModel — le SITE UNIQUE qui compose type, Prisme, acce
     expect(model.media[0]?.caption).toBe('Le marché');
   });
 
+  /** LA LÉGENDE DESCEND SON PROPRE PRISME (#6280) — `captionLanguage` /
+   * `captionTranslations`, DISTINCTS de `originalLanguage` / `translations`
+   * du post (§ Prisme, trois contenus jamais confondus). TÉMOIN DE RANG ≠ 1
+   * (leçon 261), comme pour le corps du post ci-dessus. */
+  test('la légende d’un média descend le Prisme jusqu’au rang 2, avec la langue servie', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        media: [
+          {
+            id: 'm1',
+            mimeType: 'image/jpeg',
+            fileUrl: 'a.jpg',
+            caption: 'The morning market',
+            captionLanguage: 'en',
+            captionTranslations: {
+              fr: { text: 'Le marché du matin', translationModel: 'nllb-200', createdAt: '2026-09-14T00:00:00.000Z' },
+            },
+          },
+        ],
+      }),
+      { preferredLanguages: ['de', 'fr'], now: NOW },
+    );
+    expect(model.media[0]?.caption).toBe('Le marché du matin');
+    expect(model.media[0]?.captionLanguage).toBe('fr');
+    expect(model.media[0]?.captionTranslated).toBe(true);
+  });
+
+  test('sans traduction vers une langue du lecteur, la légende ORIGINALE est servie à sa langue', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        media: [
+          { id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'The morning market', captionLanguage: 'en' },
+        ],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media[0]?.caption).toBe('The morning market');
+    expect(model.media[0]?.captionLanguage).toBe('en');
+    expect(model.media[0]?.captionTranslated).toBe(false);
+  });
+
+  test('un média sans légende ne porte aucune clé `captionLanguage`', () => {
+    const model = resolveFeedCardModel(
+      basePost({ media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }] }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect('caption' in (model.media[0] ?? {})).toBe(false);
+    expect('captionLanguage' in (model.media[0] ?? {})).toBe(false);
+  });
+
   test('une durée servie voyage en MILLISECONDES, sous un nom qui le dit (PostMedia.duration // ms)', () => {
     const model = resolveFeedCardModel(
       basePost({ media: [{ id: 'm1', mimeType: 'video/mp4', fileUrl: 'v.mp4', duration: 28_000 }] }),

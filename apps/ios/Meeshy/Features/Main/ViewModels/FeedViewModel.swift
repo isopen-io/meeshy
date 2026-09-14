@@ -1687,6 +1687,68 @@ class FeedViewModel: ObservableObject {
                 self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
+
+        // --- media:caption-translation-updated (#6280) ---
+        // DISTINCT de `postTranslationUpdated` (traduit `Post.content`) : ceci
+        // traduit `PostMedia.caption`, sur un média du post OU d'un de ses
+        // commentaires (`data.commentId` tranche). Toujours FUSIONNÉ dans la
+        // carte des traductions du média — la résolution par le Prisme se fait
+        // à l'AFFICHAGE (`FeedMedia.resolvedCaption`), jamais ici : contrairement
+        // à `translatedContent`, il n'y a pas de champ « déjà affiché » à
+        // protéger d'une réécriture.
+        socialSocket.mediaCaptionTranslationUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] (data: SocketMediaCaptionTranslationUpdatedData) in
+                guard let self, let postIndex = self.posts.firstIndex(where: { $0.id == data.postId })
+                else { return }
+                let mediaId = data.mediaId
+                let commentId = data.commentId
+                let language = data.language
+                let text = data.translation.text
+                var post = self.posts[postIndex]
+                let changed = Self.applyMediaCaptionTranslation(
+                    text, mediaId: mediaId, commentId: commentId, language: language, to: &post
+                )
+                guard changed else { return }
+                self.posts[postIndex] = post
+                let postId = data.postId
+                Task.detached(priority: .utility) { [feedCache = self.feedCache] in
+                    await feedCache.patchEverywhere(itemId: postId) {
+                        _ = Self.applyMediaCaptionTranslation(
+                            text, mediaId: mediaId, commentId: commentId, language: language, to: &$0
+                        )
+                    }
+                }
+                self.debouncedCacheSave()
+            }
+            .store(in: &socketCancellables)
+    }
+
+    /// Règle unique de pose d'une traduction de LÉGENDE de média (#6280) — le
+    /// média peut appartenir directement au post ou à l'un de ses commentaires
+    /// (`commentId` tranche). Retourne `false` quand le média visé n'existe pas
+    /// dans cet exemplaire — le sink s'en sert pour ne pas réécrire le cache
+    /// pour rien, même patron que `applyCommentTranslation`.
+    nonisolated static func applyMediaCaptionTranslation(
+        _ text: String,
+        mediaId: String,
+        commentId: String?,
+        language: String,
+        to post: inout FeedPost
+    ) -> Bool {
+        if let commentId, let commentIndex = post.comments.firstIndex(where: { $0.id == commentId }) {
+            guard let mediaIndex = post.comments[commentIndex].media.firstIndex(where: { $0.id == mediaId })
+            else { return false }
+            var translations = post.comments[commentIndex].media[mediaIndex].captionTranslations ?? [:]
+            translations[language] = text
+            post.comments[commentIndex].media[mediaIndex].captionTranslations = translations
+            return true
+        }
+        guard let mediaIndex = post.media.firstIndex(where: { $0.id == mediaId }) else { return false }
+        var translations = post.media[mediaIndex].captionTranslations ?? [:]
+        translations[language] = text
+        post.media[mediaIndex].captionTranslations = translations
+        return true
     }
 
     /// Règle unique de pose d'une traduction de post — appliquée à l'exemplaire

@@ -50,13 +50,28 @@ final class SceneFullscreenCaptionTranslationGuardTests: XCTestCase {
                       "Le plein écran ne monte pas la rangée de traduction.")
     }
 
-    /// La rangée ne s'offre que pour le TEXTE du post : la légende propre d'un
-    /// média n'a pas de traductions (#6280).
-    func test_laRangee_neSOffreQuePourLeTexteDuPost() throws {
+    /// La rangée traduit le contenu AFFICHÉ, identifié par sa source : le texte
+    /// du post par la route du post, la légende d'un média par la route de la
+    /// légende (#6280) — jamais l'un par l'autre, même à chaînes égales.
+    func test_laRangee_traduitLeContenuAffiche_texteDuPostOuLegendeDuMedia() throws {
         XCTAssertTrue(try source("Meeshy/Features/Main/Views/SceneCaption.swift").contains("enum Origin"),
-                      "`SceneCaption` ne dit pas d'où vient la légende : impossible de ne traduire que le texte du post.")
-        XCTAssertTrue(try pleinEcran.contains(".carrierText"),
-                      "Le plein écran n'offre pas la rangée sur la seule origine « texte du post ».")
+                      "`SceneCaption` ne dit pas d'où vient la légende : impossible de savoir quel contenu traduire.")
+        let code = try pleinEcran
+        XCTAssertTrue(code.contains("CaptionTranslationSource.of("),
+                      "Le plein écran ne dérive pas ce qu'il traduit de la source affichée.")
+        XCTAssertTrue(code.contains("requestMediaCaptionTranslation(mediaId:"),
+                      "La légende d'un média ne se demande pas par sa propre route.")
+        XCTAssertTrue(code.contains("requestTranslation(postId:"),
+                      "Le texte du post ne se demande plus par la route du post.")
+    }
+
+    /// Une langue choisie pour la légende d'une scène ne suit pas le lecteur sur
+    /// la scène suivante : c'est un autre contenu.
+    func test_changerDeScene_oublieLaLangueChoisie() throws {
+        let code = try pleinEcran
+        let debut = try XCTUnwrap(code.range(of: ".adaptiveOnChange(of: pageCourante)"), "Le changement de page n'est plus observé.")
+        XCTAssertTrue(String(code[debut.lowerBound...].prefix(400)).contains("langueDeLegende = nil"),
+                      "La langue choisie pour une légende survit au changement de scène.")
     }
 
     /// L'icône de traduction ouvre LA feuille des messages et des audios
@@ -99,8 +114,10 @@ final class SceneFullscreenCaptionTranslationGuardTests: XCTestCase {
                       "Le texte du post affiché ne se lit pas depuis la langue active.")
         XCTAssertTrue(code.contains("activeLanguage: langueAffichee"),
                       "Le drapeau actif ne vient pas de la langue dont le texte est affiché.")
-        XCTAssertEqual(code.components(separatedBy: "post.resolvedLanguageCode(").count - 1, 1,
+        XCTAssertEqual(code.components(separatedBy: "displayedLanguage(preferredLanguages:").count - 1, 1,
                        "Plusieurs résolutions de langue subsistent : le drapeau et le texte peuvent diverger.")
+        XCTAssertFalse(code.contains("post.resolvedLanguageCode("),
+                       "La langue affichée se résout encore sur le post, quel que soit le contenu affiché.")
     }
 
     /// La rangée n'appelle plus de traduction directe : l'icône, et la pastille

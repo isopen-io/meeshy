@@ -263,7 +263,16 @@ export const parseCatalogBlock = (blockLines) => {
 // restant gouverné par le compteur d'accès nul (#4275). Faire pointer un
 // client vers la nouvelle adresse est un travail à part, pas ouvert par ce
 // lot.
-const BASELINE_DEAD_ENTRIES = 276;
+//
+// 276 → 277 (#6280) : `posts.mediaByMediaIdCaptionTranslate`
+// (`POST /posts/media/:mediaId/caption/translate`, traduction à la demande de
+// la LÉGENDE d'un média — un contenu distinct du texte du post). Morte à la
+// naissance DANS CE COMPTAGE, par construction : son appelant est le SDK iOS
+// (`PostService.requestMediaCaptionTranslation`, catalogue Swift, où elle
+// n'est pas morte), et ce script ne balaie que `apps/web` (legacy gelé) et
+// `packages/shared` — pas `apps/web-v2`. Même forme que
+// `posts.byPostIdTranslate`, déjà sans appelant ici pour la même raison.
+const BASELINE_DEAD_ENTRIES = 277;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

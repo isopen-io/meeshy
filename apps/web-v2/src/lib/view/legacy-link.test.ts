@@ -31,7 +31,7 @@ describe('legacyHref — l’adresse exacte que le legacy sait ouvrir', () => {
   });
 });
 
-describe('legacyReachable — le legacy ne sert QUE la production (#6354, D-62)', () => {
+describe('legacyReachable — le legacy ne sert QUE la production (#6354, D-67)', () => {
   test('la passerelle de production : atteignable', () => {
     expect(legacyReachable('https://gate.meeshy.me')).toBe(true);
   });

@@ -1,10 +1,15 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { sendSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendError, sendInternalError } from '../../utils/response';
 import { claimableMediaWhere } from '../../services/posts/mediaOwnership';
 import { reclaimMediaRowBytes, type PostMediaByteRemover } from '../../services/posts/reclaimPostMediaBytes';
 import { MediaService } from '../../services/MediaService';
+import { mayConsumePost } from './postConsumptionGate';
+import { createSocialTranslateRateLimitConfig } from './socialRateLimit';
+import { TranslatePostSchema } from './types';
+import { MediaCaptionTranslationService } from '../../services/posts/MediaCaptionTranslationService';
+import { enhancedLogger } from '../../utils/logger-enhanced';
 
 export interface PostMediaParams {
   mediaId: string;
@@ -72,6 +77,74 @@ export function registerPostMediaRoutes(
         return sendSuccess(reply, { message: 'Media deleted' });
       } catch (error) {
         return sendInternalError(reply, 'Failed to delete media');
+      }
+    },
+  );
+
+  // POST /posts/media/:mediaId/caption/translate — traduction à la demande de
+  // la LÉGENDE d'un média (#6280). Miroir EXACT de
+  // `POST /posts/:postId/translate` (core.ts) : même `TranslatePostSchema`,
+  // même seau de rate-limit `createSocialTranslateRateLimitConfig` (le
+  // pipeline de traduction protégé est le même bus ZMQ, qu'on traduise un
+  // post, un commentaire ou la légende d'un média).
+  //
+  // La garde d'audience passe par `mayConsumePost` (`postConsumptionGate.ts`)
+  // — un `select` propre, jamais la forme select-sous-include qui a cassé
+  // `getPostById` sous `include` (#6503/#6506). Un média de COMMENTAIRE n'a
+  // pas de `postId` direct : le post porteur (donc l'audience) se résout via
+  // `PostComment.postId`, comme `MediaCaptionTranslationService` le fait déjà
+  // pour la diffusion.
+  fastify.post(
+    '/posts/media/:mediaId/caption/translate',
+    { preValidation: [requiredAuth], config: { rateLimit: createSocialTranslateRateLimitConfig() } },
+    async (request: FastifyRequest<{ Params: PostMediaParams }>, reply: FastifyReply) => {
+      try {
+        const authContext = (request as UnifiedAuthRequest).authContext;
+        if (!authContext?.isAuthenticated || !authContext.registeredUser) {
+          return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+        }
+
+        const parsed = TranslatePostSchema.safeParse(request.body);
+        if (!parsed.success) {
+          return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
+        }
+
+        const { mediaId } = request.params;
+        const userId = authContext.registeredUser.id;
+
+        const media = await prisma.postMedia.findFirst({
+          where: { id: mediaId },
+          select: { id: true, postId: true, commentId: true },
+        });
+        if (!media) {
+          return sendNotFound(reply, 'Media not found', { code: 'MEDIA_NOT_FOUND' });
+        }
+
+        const postId = media.postId
+          ?? (media.commentId
+            ? (await prisma.postComment.findUnique({ where: { id: media.commentId }, select: { postId: true } }))?.postId
+            : undefined);
+
+        if (!postId || !(await mayConsumePost(prisma, postId, userId))) {
+          // Indiscernable d'un média inconnu — même discipline que
+          // `getPostById` (pas de fuite d'existence par le code d'erreur).
+          return sendNotFound(reply, 'Media not found', { code: 'MEDIA_NOT_FOUND' });
+        }
+
+        try {
+          MediaCaptionTranslationService.shared.translateOnDemand(mediaId, parsed.data.targetLanguage, {
+            force: parsed.data.force,
+          }).catch((err: unknown) => {
+            enhancedLogger.warn('[POST media/:mediaId/caption/translate]: on-demand translate failed', { err });
+          });
+        } catch {
+          return sendError(reply, 503, 'Translation service not available', { code: 'SERVICE_UNAVAILABLE' });
+        }
+
+        return sendSuccess(reply, { requested: true, targetLanguage: parsed.data.targetLanguage });
+      } catch (error) {
+        enhancedLogger.error('[POST /posts/media/:mediaId/caption/translate] Error', error as Error);
+        return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
       }
     },
   );

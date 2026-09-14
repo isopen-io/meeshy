@@ -57,7 +57,10 @@ extension FeedPostCard {
                 // s'il n'y a qu'un visuel — donc jamais ici, où il y en a
                 // plusieurs. Le carrousel consulte la règle, il ne la réécrit
                 // pas.
-                captions: SocialMediaCaption.map(for: mediaList, carrierText: post.displayContent),
+                captions: SocialMediaCaption.map(
+                    for: mediaList, carrierText: post.displayContent,
+                    preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
+                ),
                 accentColor: accentColor,
                 onOpen: { openFullscreen($0) }
             )
@@ -147,7 +150,9 @@ extension FeedPostCard {
     /// 2026-09-05, avec un `lineLimit(3)` qui rendait une longueur différente
     /// selon la largeur et le corps de texte.
     func singleMediaCaption(_ media: FeedMedia) -> some View {
-        FeedCaptionOverlay(caption: media.caption)
+        FeedCaptionOverlay(caption: media.resolvedCaption(
+            preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
+        ))
     }
 
     @ViewBuilder

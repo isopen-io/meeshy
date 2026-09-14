@@ -6,6 +6,8 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
+import me.meeshy.sdk.model.resolvedCaption
+import me.meeshy.sdk.lang.LanguageResolver.preferredContentLanguages
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.PostLanguageStrip
 
@@ -18,6 +20,13 @@ data class FeedPostImage(
     val width: Int?,
     val height: Int?,
     val thumbHash: String?,
+    /**
+     * The media's caption, Prisme-resolved to the viewer's preferred language
+     * (#6280) — `null` when the media carries no caption at all. Distinct from
+     * [FeedPostPresentation.content] (`Post.content`) and from any alt text:
+     * three separate contents, never confused even at equal strings.
+     */
+    val caption: String? = null,
 )
 
 /**
@@ -79,6 +88,7 @@ object FeedPostBuilder {
         activeLanguageCode: String? = null,
         currentUserId: String? = null,
     ): FeedPostPresentation {
+        val preferredLanguages = preferredContentLanguages(preferences)
         val images = post.media
             .orEmpty()
             .filter { it.isImage && it.fileUrl != null }
@@ -91,6 +101,7 @@ object FeedPostBuilder {
                     width = media.width,
                     height = media.height,
                     thumbHash = media.thumbHash,
+                    caption = media.resolvedCaption(preferredLanguages),
                 )
             }
         val originalCode = post.originalLanguage.normalizedCode()

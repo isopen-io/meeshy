@@ -3,6 +3,7 @@ package me.meeshy.app.feed
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiAuthor
+import me.meeshy.sdk.model.ApiMediaCaptionTranslationEntry
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
@@ -86,6 +87,54 @@ class FeedPostBuilderTest {
         val result = FeedPostBuilder.build(p, Prefs(), mediaBaseUrl = null)
 
         assertThat(result.images.single().thumbHash).isEqualTo("1QcSHQRnh493V4dIh4eXd3h4kJUI")
+    }
+
+    @Test
+    fun build_resolvesTheMediaCaptionThroughThePrisme() {
+        // #6280 — DISTINCT of the post's own content: same-string test data is
+        // deliberate, the two must never be confused (see /CLAUDE.md, media
+        // caption translation lot).
+        val media = ApiPostMedia(
+            id = "m1",
+            fileUrl = "https://cdn.example/m1.jpg",
+            mimeType = "image/jpeg",
+            caption = "Bonjour",
+            captionLanguage = "fr",
+            captionTranslations = mapOf(
+                "en" to ApiMediaCaptionTranslationEntry(text = "Hello"),
+            ),
+        )
+        val p = post(media = listOf(media))
+
+        val result = FeedPostBuilder.build(p, Prefs(systemLanguage = "en"), mediaBaseUrl = null)
+
+        assertThat(result.images.single().caption).isEqualTo("Hello")
+    }
+
+    @Test
+    fun build_projectsTheRawCaptionWhenNoPreferredTranslationMatches() {
+        val media = ApiPostMedia(
+            id = "m1",
+            fileUrl = "https://cdn.example/m1.jpg",
+            mimeType = "image/jpeg",
+            caption = "Bonjour",
+            captionLanguage = "fr",
+        )
+        val p = post(media = listOf(media))
+
+        val result = FeedPostBuilder.build(p, Prefs(systemLanguage = "en"), mediaBaseUrl = null)
+
+        assertThat(result.images.single().caption).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun build_projectsNullCaptionWhenTheMediaHasNone() {
+        val media = ApiPostMedia(id = "m1", fileUrl = "https://cdn.example/m1.jpg", mimeType = "image/jpeg")
+        val p = post(media = listOf(media))
+
+        val result = FeedPostBuilder.build(p, Prefs(), mediaBaseUrl = null)
+
+        assertThat(result.images.single().caption).isNull()
     }
 
     @Test

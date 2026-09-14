@@ -227,6 +227,11 @@ function FeedMediaCarousel({ media }: { readonly media: readonly FeedCardMedia[]
         <p
           className="absolute inset-x-0 bottom-0 px-3 py-2 text-check text-white"
           style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }}
+          /* La langue SERVIE (#6280, `resolveMediaCaption`), jamais la
+             langue d'interface : un lecteur d'écran qui prononce une
+             traduction française avec une voix anglaise est le défaut du
+             cycle 122 (CLAUDE.md § Prisme), rendu audible sur une légende. */
+          {...(current.captionLanguage !== undefined ? { lang: current.captionLanguage } : {})}
         >
           {current.caption}
         </p>
