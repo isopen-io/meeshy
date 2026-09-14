@@ -9,6 +9,7 @@ import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { applyMediaOrder } from './posts/mediaOrder';
 import { applyMediaText } from './posts/mediaText';
+import { MediaCaptionTranslationService } from './posts/MediaCaptionTranslationService';
 import { engagementAggregateIncrements } from './posts/engagementIncrements';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
@@ -998,6 +999,16 @@ export class PostService {
    * du post, qui reste celui de la publication (modèle § 3). Les deux textes ont
    * des sujets différents : le premier décrit une image, le second dit ce que
    * l'auteur publie.
+   *
+   * Déclenche `MediaCaptionTranslationService.triggerMediaCaptionTranslation`
+   * (#6280) pour chaque entrée ÉCRITE — jamais pour la carte brute de la
+   * requête, qui peut nommer des médias étrangers qu'`applyMediaText` a
+   * ignorés. Fire-and-forget, comme le reste du pipeline de traduction
+   * (`triggerStoryTextTranslation`) : la publication ne doit pas attendre le
+   * round-trip NLLB. Le `try/catch` est le même filet que
+   * `routes/posts/publication.ts` pour `PostTranslationService` — le service
+   * n'est pas encore initialisé dans un harnais de test qui n'a pas démarré
+   * `MeeshySocketIOManager`.
    */
   private async applyMediaCaption(
     postId: string,
@@ -1005,7 +1016,16 @@ export class PostService {
     mediaCaption: Record<string, string> | undefined,
     client: Pick<PrismaClient, 'postMedia'> = this.prisma,
   ): Promise<void> {
-    await applyMediaText('caption', postId, requestedMediaIds, mediaCaption, client);
+    const written = await applyMediaText('caption', postId, requestedMediaIds, mediaCaption, client);
+    for (const { id, text } of written) {
+      try {
+        MediaCaptionTranslationService.shared.triggerMediaCaptionTranslation(id, text).catch((err: unknown) => {
+          log.warn('MediaCaptionTranslation: trigger failed', { mediaId: id, err });
+        });
+      } catch {
+        // MediaCaptionTranslationService not initialized — skip silently
+      }
+    }
   }
 
   /**
@@ -2415,6 +2435,12 @@ export class PostService {
       duration?: number;
       caption?: string;
       alt?: string;
+      // Traduction de LÉGENDE (#6280) — copiée verbatim comme `caption`
+      // elle-même : le texte source ne change pas au repost, ses traductions
+      // restent donc valides. Un nouveau round-trip NLLB serait un travail
+      // redondant pour un résultat identique.
+      captionLanguage?: string;
+      captionTranslations?: Prisma.InputJsonValue;
       language?: string;
       transcription?: Prisma.InputJsonValue;
       uploaderId?: string;
@@ -2462,6 +2488,8 @@ export class PostService {
           duration?: number | null;
           caption?: string | null;
           alt?: string | null;
+          captionLanguage?: string | null;
+          captionTranslations?: Prisma.JsonValue | null;
           language?: string | null;
           transcription?: Prisma.JsonValue | null;
         }>;
@@ -2492,6 +2520,8 @@ export class PostService {
             duration: m.duration ?? undefined,
             caption: m.caption ?? undefined,
             alt: m.alt ?? undefined,
+            captionLanguage: m.captionLanguage ?? undefined,
+            captionTranslations: (m.captionTranslations ?? undefined) as Prisma.InputJsonValue | undefined,
             language: m.language ?? undefined,
             transcription: (m.transcription ?? undefined) as Prisma.InputJsonValue | undefined,
             // Le reposteur possède la copie : c'est LUI qui vient d'en écrire
