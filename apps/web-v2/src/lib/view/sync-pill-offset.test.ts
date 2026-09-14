@@ -10,19 +10,17 @@ import { SYNC_PILL_TOP_BAND, SYNC_PILL_TOP_DEFAULT, syncPillTop } from './sync-p
  * fuite d'une route oubliée que ce fichier a pour rôle d'empêcher.
  */
 describe('syncPillTop', () => {
-  test.each(['discover', 'calls', 'communities', 'notifications'])(
-    '%s porte la seconde bande : la pastille descend sous elle',
-    (routeKey) => {
+  for (const routeKey of ['discover', 'calls', 'communities', 'notifications']) {
+    test(`${routeKey} porte la seconde bande : la pastille descend sous elle`, () => {
       expect(syncPillTop(routeKey)).toBe(SYNC_PILL_TOP_BAND);
-    },
-  );
+    });
+  }
 
-  test.each(['list', 'feed', 'links', 'settings', 'profile', ''])(
-    '%s n’a qu’un en-tête : la pastille garde le défaut',
-    (routeKey) => {
+  for (const routeKey of ['list', 'feed', 'links', 'settings', 'profile', '']) {
+    test(`${routeKey || '(racine)'} n’a qu’un en-tête : la pastille garde le défaut`, () => {
       expect(syncPillTop(routeKey)).toBe(SYNC_PILL_TOP_DEFAULT);
-    },
-  );
+    });
+  }
 
   test('les deux cotes restent distinctes — sinon la bande ne change plus rien', () => {
     expect(SYNC_PILL_TOP_BAND).toBeGreaterThan(SYNC_PILL_TOP_DEFAULT);
