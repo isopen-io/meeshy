@@ -7,6 +7,7 @@ import { GLYPHS } from '@/components/glyphs';
 import { GlassSurface, GlassBack } from '@/components/glass-surface';
 import { ProgressBar } from '@/components/progress-bar';
 import { httpTransport, unwrap } from '@/lib/api/client';
+import { meeshMissing } from '@/lib/view/meesh-copy';
 import { apiDeps } from '@/lib/api/deps';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, mintMeesh } from '@/lib/api/engagement';
 import { useOnline } from '@/lib/net/online';
@@ -476,14 +477,12 @@ export function MeeshDetail({
               </button>
             ) : (
               <p className="text-caption" style={{ color: INK_2 }}>
-                Encore {meesh.missingPoints} points convertibles avant une Meesh.
                 {/* Le PLANCHER inaliénable se dit ici, pas ailleurs : sans lui,
                     l'utilisateur compte ses points de conversation dans ce qui
                     manque et ne comprend pas pourquoi le compte ne tombe pas
-                    juste. */}
-                {meesh.floorPoints > 0
-                  ? ` Vos ${meesh.floorPoints} points de conversation seront repris en dernier, sans éteindre aucun badge.`
-                  : ''}
+                    juste. La phrase vient du SITE UNIQUE depuis #6478 — elle
+                    vivait en double, donc fausse deux fois. */}
+                {meeshMissing(meesh.missingPoints, meesh.floorPoints)}
               </p>
             )}
     </div>

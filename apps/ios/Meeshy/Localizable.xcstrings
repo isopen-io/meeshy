@@ -184865,46 +184865,154 @@
     "progression.meesh.floor": {
       "extractionState": "manual",
       "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "سيتم استخدام %lld نقاط محادثتك أخيرًا، دون إطفاء أي وسام."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ihre %lld Unterhaltungspunkte werden zuletzt verwendet, ohne ein Abzeichen abzuschalten."
+        "fr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Votre point de conversation sera repris en dernier, sans éteindre aucun badge."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Vos %lld points de conversation seront repris en dernier, sans éteindre aucun badge."
+                }
+              }
+            }
           }
         },
         "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your %lld conversation points will be used last, without turning off any badge."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Your conversation point will be used last, without turning off any badge."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Your %lld conversation points will be used last, without turning off any badge."
+                }
+              }
+            }
           }
         },
         "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tus %lld puntos de conversación se usarán al final, sin apagar ninguna insignia."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Tu punto de conversación se usará al final, sin apagar ninguna insignia."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Tus %lld puntos de conversación se usarán al final, sin apagar ninguna insignia."
+                }
+              }
+            }
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vos %lld points de conversation seront repris en dernier, sans éteindre aucun badge."
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ihr Unterhaltungspunkt wird zuletzt verwendet, ohne ein Abzeichen abzuschalten."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ihre %lld Unterhaltungspunkte werden zuletzt verwendet, ohne ein Abzeichen abzuschalten."
+                }
+              }
+            }
           }
         },
         "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I tuoi %lld punti di conversazione saranno usati per ultimi, senza spegnere alcun badge."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Il tuo punto di conversazione sarà usato per ultimo, senza spegnere alcun badge."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "I tuoi %lld punti di conversazione saranno usati per ultimi, senza spegnere alcun badge."
+                }
+              }
+            }
           }
         },
         "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seus %lld pontos de conversa serão usados por último, sem apagar nenhum selo."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Seu ponto de conversa será usado por último, sem apagar nenhum selo."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Seus %lld pontos de conversa serão usados por último, sem apagar nenhum selo."
+                }
+              }
+            }
+          }
+        },
+        "ar": {
+          "variations": {
+            "plural": {
+              "zero": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "سيتم استخدام %lld نقطة محادثتك أخيرًا، دون إطفاء أي وسام."
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "ستُستخدم نقطة محادثتك أخيرًا، دون إطفاء أي وسام."
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "ستُستخدم نقطتا محادثتك أخيرًا، دون إطفاء أي وسام."
+                }
+              },
+              "few": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "سيتم استخدام %lld نقاط محادثتك أخيرًا، دون إطفاء أي وسام."
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "سيتم استخدام %lld نقطة محادثتك أخيرًا، دون إطفاء أي وسام."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "سيتم استخدام %lld نقطة محادثتك أخيرًا، دون إطفاء أي وسام."
+                }
+              }
+            }
           }
         }
       }
@@ -185100,46 +185208,154 @@
     "progression.meesh.missing": {
       "extractionState": "manual",
       "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا يزال أمامك %lld نقطة قابلة للتحويل قبل الحصول على Meesh."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Noch %lld umwandelbare Punkte bis zu einer Meesh."
+        "fr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Encore %lld point convertible avant une Meesh."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Encore %lld points convertibles avant une Meesh."
+                }
+              }
+            }
           }
         },
         "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld more convertible points before a Meesh."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld more convertible point before a Meesh."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld more convertible points before a Meesh."
+                }
+              }
+            }
           }
         },
         "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aún %lld puntos convertibles antes de una Meesh."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Aún %lld punto convertible antes de una Meesh."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Aún %lld puntos convertibles antes de una Meesh."
+                }
+              }
+            }
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Encore %lld points convertibles avant une Meesh."
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Noch %lld umwandelbarer Punkt bis zu einer Meesh."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Noch %lld umwandelbare Punkte bis zu einer Meesh."
+                }
+              }
+            }
           }
         },
         "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ancora %lld punti convertibili prima di una Meesh."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ancora %lld punto convertibile prima di una Meesh."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ancora %lld punti convertibili prima di una Meesh."
+                }
+              }
+            }
           }
         },
         "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ainda %lld pontos conversíveis antes de uma Meesh."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ainda %lld ponto conversível antes de uma Meesh."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ainda %lld pontos conversíveis antes de uma Meesh."
+                }
+              }
+            }
+          }
+        },
+        "ar": {
+          "variations": {
+            "plural": {
+              "zero": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال أمامك %lld نقطة قابلة للتحويل قبل الحصول على Meesh."
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال أمامك نقطة واحدة قابلة للتحويل قبل الحصول على Meesh."
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال أمامك نقطتان قابلتان للتحويل قبل الحصول على Meesh."
+                }
+              },
+              "few": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال أمامك %lld نقاط قابلة للتحويل قبل الحصول على Meesh."
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال أمامك %lld نقطة قابلة للتحويل قبل الحصول على Meesh."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا يزال أمامك %lld نقطة قابلة للتحويل قبل الحصول على Meesh."
+                }
+              }
+            }
           }
         }
       }
