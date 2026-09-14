@@ -1,5 +1,6 @@
 import { personNamePatternSource, registerRequestSchema } from '@meeshy/shared/types/api-schemas/auth';
 import { isSupportedLanguage } from '@meeshy/shared/utils/languages';
+import { phoneImplausibility, type PhoneImplausibility } from '@meeshy/shared/utils/phone-plausibility';
 
 import type { RegisterBody } from './api/auth';
 import { countryOf, type Country } from './countries';
@@ -97,13 +98,38 @@ export function hasPassword(value: string): boolean {
   return value.length > 0;
 }
 
-/** Le bouton s'active dès que l'ADRESSE est valide — et que le nom affiché et
- * le mot de passe, s'ils ont été tapés, tiennent leurs bornes (#6441).
+/** Le bouton s'active dès que l'ADRESSE est valide — et que le nom affiché, le
+ * mot de passe et le NUMÉRO, s'ils ont été tapés, tiennent leurs bornes
+ * (#6441, #6479).
  * L'adresse est le SEUL champ requis, comme `required: ['email']` du schéma
  * partagé : ni le nom, ni le téléphone, ni le mot de passe ne sont exigés par
  * la passerelle (§ SignupForm.swift, le miroir qui porte la même loi). */
 export function canSubmit(form: SignupFormState): boolean {
-  return isDisplayNameValid(form.displayName) && isEmailValid(form.email) && isPasswordValid(form.password);
+  return (
+    isDisplayNameValid(form.displayName) &&
+    isEmailValid(form.email) &&
+    isPasswordValid(form.password) &&
+    isPhoneValid(form.phoneDigits)
+  );
+}
+
+/**
+ * Un numéro FOURNI doit être plausible (#6479) ; un champ VIDE reste valide —
+ * le numéro n'est pas requis (#6424). Troisième champ à porter cette forme,
+ * après le mot de passe et le nom affiché.
+ *
+ * La loi vit dans `@meeshy/shared/utils/phone-plausibility`, jamais ici : la
+ * passerelle devra la partager pour que le refus soit le MÊME des deux côtés,
+ * et une jumelle locale rendrait cette convergence impossible.
+ */
+export function isPhoneValid(phoneDigits: string): boolean {
+  return phoneImplausibility(phoneDigits) === null;
+}
+
+/** Le MOTIF du refus, pour que l'écran dise quoi corriger — « numéro
+ * invalide » n'apprend rien à qui a tapé le sien de travers. */
+export function phoneRefusal(phoneDigits: string): PhoneImplausibility | null {
+  return phoneImplausibility(phoneDigits);
 }
 
 /** Les chiffres saisis, débarrassés de tout ce qui n'en est pas. */

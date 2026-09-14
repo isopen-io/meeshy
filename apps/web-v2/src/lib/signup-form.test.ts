@@ -8,6 +8,8 @@ import {
   defaultLanguages,
   isDisplayNameValid,
   hasDisplayName,
+  isPhoneValid,
+  phoneRefusal,
   isEmailValid,
   isPasswordValid,
   hasPassword,
@@ -102,6 +104,26 @@ describe('canSubmit — l’ADRESSE seule suffit (#6441)', () => {
   test('téléphone vide ⇒ n’empêche rien', () => expect(canSubmit(baseForm({ phoneDigits: '' }))).toBe(true));
   test('mot de passe vide ⇒ n’empêche rien non plus (#6424)', () =>
     expect(canSubmit(baseForm({ password: '' }))).toBe(true));
+});
+
+describe('le numéro FOURNI doit être plausible (#6479)', () => {
+  // Les trois exemples de la directive porteur, rejoués ICI parce que c'est
+  // `canSubmit` qui décide si l'utilisateur peut envoyer — la loi partagée a
+  // ses propres témoins, ce bloc mesure son BRANCHEMENT.
+  test('« 1111100000 » ⇒ bouton éteint', () =>
+    expect(canSubmit(baseForm({ phoneDigits: '1111100000' }))).toBe(false));
+  test('« 42424242 » ⇒ bouton éteint', () =>
+    expect(canSubmit(baseForm({ phoneDigits: '42424242' }))).toBe(false));
+  test('un vrai numéro ⇒ bouton actif', () =>
+    expect(canSubmit(baseForm({ phoneDigits: '0612345678' }))).toBe(true));
+  test('champ VIDE ⇒ bouton actif — le numéro n’est pas requis', () =>
+    expect(canSubmit(baseForm({ phoneDigits: '' }))).toBe(true));
+  test('le motif du refus est NOMMÉ, pas un booléen nu', () =>
+    expect(phoneRefusal('1111100000')).toBe('identical-run'));
+  test('isPhoneValid suit la loi partagée', () => {
+    expect(isPhoneValid('')).toBe(true);
+    expect(isPhoneValid('06123456')).toBe(false);
+  });
 });
 
 describe('composeRegisterBody — sans nom affiché (#6441)', () => {

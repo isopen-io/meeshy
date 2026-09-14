@@ -164,6 +164,18 @@ final class SignupFormTests: XCTestCase {
         XCTAssertTrue(makeForm(displayName: "", phoneDigits: "", password: "").canSubmit)
     }
 
+    /// Le BRANCHEMENT de la loi partagée (#6479) — `PhonePlausibilityTests`
+    /// mesure la règle, ce bloc mesure qu'elle gouverne bien le bouton.
+    func test_canSubmit_withAnImplausiblePhone_isFalse() {
+        XCTAssertFalse(makeForm(phoneDigits: "1111100000").canSubmit)
+        XCTAssertFalse(makeForm(phoneDigits: "42424242").canSubmit)
+        XCTAssertEqual(makeForm(phoneDigits: "1111100000").phoneRefusal, .identicalRun)
+    }
+
+    func test_canSubmit_withARealPhone_isTrue() {
+        XCTAssertTrue(makeForm(phoneDigits: "0612345678").canSubmit)
+    }
+
     func test_canSubmit_withoutEmail_isFalse() {
         XCTAssertFalse(makeForm(displayName: "", email: "", password: "").canSubmit)
     }

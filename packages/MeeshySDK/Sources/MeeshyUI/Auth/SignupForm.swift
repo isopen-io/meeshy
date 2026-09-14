@@ -132,15 +132,25 @@ public struct SignupForm: Equatable {
     public var hasPassword: Bool { Self.hasPassword(password) }
     public var hasDisplayName: Bool { Self.hasDisplayName(displayName) }
 
-    /// Le bouton s'active dès que l'ADRESSE est valide — et que le nom affiché
-    /// et le mot de passe, s'ils ont été tapés, tiennent leurs bornes (#6441).
+    /// Un numéro FOURNI doit être plausible (#6479) ; un champ VIDE reste
+    /// valide — il n'est pas requis. Troisième champ à porter cette forme,
+    /// après le mot de passe et le nom affiché.
+    public var isPhoneValid: Bool { PhonePlausibility.isPlausible(phoneDigits) }
+
+    /// Le MOTIF du refus, pour que l'écran dise quoi corriger — « numéro
+    /// invalide » n'apprend rien à qui a tapé le sien de travers.
+    public var phoneRefusal: PhonePlausibility.Refusal? { PhonePlausibility.refusal(phoneDigits) }
+
+    /// Le bouton s'active dès que l'ADRESSE est valide — et que le nom affiché,
+    /// le mot de passe et le NUMÉRO, s'ils ont été tapés, tiennent leurs bornes
+    /// (#6441, #6479).
     ///
     /// L'adresse est le SEUL champ requis, exactement comme le
     /// `required: ['email']` du schéma partagé : ni le nom, ni le téléphone, ni
     /// le mot de passe ne sont exigés par la passerelle. Rien ici ne dépend du
     /// réseau — aucun appel de disponibilité ne précède l'envoi.
     public var canSubmit: Bool {
-        isDisplayNameValid && isEmailValid && isPasswordValid
+        isDisplayNameValid && isEmailValid && isPasswordValid && isPhoneValid
     }
 
     // MARK: - Téléphone
