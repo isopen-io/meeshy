@@ -184,6 +184,10 @@ public protocol PostServiceProviding: Sendable {
     func createCanvasPost(type: PostType, content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?, mediaCaption: [String: String]?) async throws -> APIPost
     func createWithType(_ type: PostType, content: String, visibility: String, moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost
     func requestTranslation(postId: String, targetLanguage: String) async throws
+    /// `POST /posts/media/:mediaId/caption/translate` — traduction à la demande de
+    /// la LÉGENDE d'un média (#6280) : un contenu distinct du texte du post, qui
+    /// revient par `media:caption-translation-updated`.
+    func requestMediaCaptionTranslation(mediaId: String, targetLanguage: String) async throws
     func pinPost(postId: String) async throws
     func unpinPost(postId: String) async throws
     func viewPost(postId: String, duration: Int?) async throws
@@ -751,6 +755,15 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         )
     }
 
+    public func requestMediaCaptionTranslation(mediaId: String, targetLanguage: String) async throws {
+        let bodyData = try JSONSerialization.data(withJSONObject: ["targetLanguage": targetLanguage])
+        let _: APIResponse<MediaCaptionTranslationRequestAck> = try await api.request(
+            PostsEndpoint.mediaByMediaIdCaptionTranslate(mediaId: mediaId),
+            method: "POST",
+            body: bodyData
+        )
+    }
+
     public func pinPost(postId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.request(PostsEndpoint.byPostIdPin(postId: postId), method: "POST")
     }
@@ -965,4 +978,12 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
             body: BatchBody(sessions: sessions)
         )
     }
+}
+
+/// Accusé de `POST /posts/media/:mediaId/caption/translate` (#6280) :
+/// `{ requested: true, targetLanguage }` — un booléen voisin d'une chaîne, que
+/// `[String: String]` ne décode pas.
+struct MediaCaptionTranslationRequestAck: Decodable, Sendable {
+    let requested: Bool?
+    let targetLanguage: String?
 }
