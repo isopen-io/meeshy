@@ -227,6 +227,21 @@ final class SceneCaptionTests: XCTestCase {
         XCTAssertEqual(resolue?.origin, .carrierText)
     }
 
+    /// Recette porteur 2026-09-14 : une scène publiée avec la MÊME phrase en
+    /// texte du post et en description du média. La chaîne affichée est alors
+    /// exactement celle que `post.translations` traduit : c'est le texte du
+    /// post, et la traduction doit s'offrir.
+    func test_origine_leTexteDuPost_quandLaLegendePropreLeRepeteMotPourMot() {
+        let phrase = "Ce matin j'ai choisi la paix."
+        let publication = post(media: [media("m1", caption: " \(phrase)\n")], content: phrase)
+        let document = CanvasV3(scenes: [scene("s1", porte: "m1")])
+
+        let resolue = SceneCaption.resolveWithOrigin(sceneIndex: 0, in: document, post: publication,
+                                                     carrierFallback: true)
+
+        XCTAssertEqual(resolue?.origin, .carrierText)
+    }
+
     /// La forme historique reste la projection de la nouvelle : même texte.
     func test_resolve_estLaProjectionDeResolveWithOrigin() {
         let publication = post(media: [media("m1", caption: "la plage")], content: "mon voyage")
