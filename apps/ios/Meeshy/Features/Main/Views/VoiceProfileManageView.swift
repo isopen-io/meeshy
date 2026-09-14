@@ -52,27 +52,19 @@ struct VoiceProfileManageView: View {
 
     // MARK: - Header
 
+    /// En-tête partagé, FIXE (`scrollOffset: 0`) : les états chargement et vide
+    /// ne défilent pas, et seul le contenu du profil porte un défilement (#6481).
+    /// Le retour en verre ferme la feuille — la sortie qu'était la croix.
     private var header: some View {
-        HStack {
-            Text(String(localized: "voice.profile.title", defaultValue: "Profil vocal", bundle: .main))
-                .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
-            Spacer()
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                // Chrome de fermeture : glyphe dans une affordance de tap d'en-tête —
-                // gardé figé, doctrine 82i/87i. Libellé VoiceOver ajouté (146i).
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundStyle(theme.textMuted)
-            }
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        CollapsibleHeader(
+            title: String(localized: "voice.profile.title", defaultValue: "Profil vocal", bundle: .main),
+            scrollOffset: 0,
+            onBack: { dismiss() },
+            titleColor: theme.textPrimary,
+            backArrowColor: Color(hex: accentColor),
+            backgroundColor: theme.backgroundPrimary,
+            trailing: { EmptyView() }
+        )
     }
 
     // MARK: - Loading
@@ -287,6 +279,8 @@ struct VoiceProfileManageView: View {
                     .foregroundColor(theme.textSecondary)
             }
             Spacer()
+            // Le (+) reste dans sa carte, à côté de l'indication qu'il sert, et
+            // porte le verre adaptatif des actions d'en-tête (#6481).
             Button {
                 HapticFeedback.light()
                 showAddSamples = true
@@ -297,6 +291,9 @@ struct VoiceProfileManageView: View {
                     Text(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
                         .font(MeeshyFont.relative(13, weight: .semibold))
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .adaptiveGlass(in: Capsule(), tint: Color(hex: accentColor).opacity(0.14), interactive: true)
                 .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))

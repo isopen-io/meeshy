@@ -24,10 +24,17 @@ struct AffiliateView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                scrollContent
-            }
+            // Retour en verre de l'en-tête partagé (#6481). `back()` reste le
+            // geste : il ferme aussi le panneau droit iPad.
+            CollapsibleHeaderPage(
+                title: String(localized: "affiliate.title", defaultValue: "Parrainage", bundle: .main),
+                onBack: { back() },
+                titleColor: theme.textPrimary,
+                backArrowColor: Color(hex: accentColor),
+                backgroundColor: theme.backgroundPrimary,
+                trailing: { createLinkButton },
+                content: { affiliateContent }
+            )
         }
         .sheet(isPresented: $showCreateSheet) {
             AffiliateCreateView { token in
@@ -39,55 +46,36 @@ struct AffiliateView: View {
         .task { await viewModel.load() }
     }
 
-    // MARK: - Header
+    // MARK: - Header Action
 
-    private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                back()
-            } label: {
-                Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(16, weight: .semibold))
-                    .foregroundColor(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
-
-            Spacer()
-
-            Text(String(localized: "affiliate.title", defaultValue: "Parrainage", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            Button {
-                HapticFeedback.light()
-                showCreateSheet = true
-            } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(MeeshyFont.relative(22))
-                    .foregroundColor(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "affiliate.action.create", defaultValue: "Créer un lien de parrainage", bundle: .main))
+    /// Le (+) devient un disque de verre, du diamètre du retour qui lui fait
+    /// face (directive porteur 2026-09-14, #6481) — le glyphe plein cerclé
+    /// ne ressemblait à aucun autre chrome de la barre.
+    private var createLinkButton: some View {
+        Button {
+            HapticFeedback.light()
+            showCreateSheet = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(Color(hex: accentColor))
+                .frame(width: 40, height: 40)
+                .adaptiveGlass(in: Circle(), interactive: true)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "affiliate.action.create", defaultValue: "Créer un lien de parrainage", bundle: .main))
     }
 
     // MARK: - Content
 
-    private var scrollContent: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
-                statsOverview
-                tokensSection
-                Spacer().frame(height: 40)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+    private var affiliateContent: some View {
+        VStack(spacing: 20) {
+            statsOverview
+            tokensSection
+            Spacer().frame(height: 40)
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
     }
 
     // MARK: - Stats Overview

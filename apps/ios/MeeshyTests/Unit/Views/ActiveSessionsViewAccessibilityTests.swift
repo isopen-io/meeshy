@@ -45,8 +45,11 @@ final class ActiveSessionsViewAccessibilityTests: XCTestCase {
 
     func test_screenTitle_carriesHeaderTrait() throws {
         let source = try activeSessionsViewSource()
+        // Since #6481 the title is rendered by the shared `CollapsibleHeader`, which
+        // carries the header trait itself (guarded in MeeshyUI by
+        // `CollapsibleHeaderTitleAccessibilityTests`): mounting it is the proof.
         XCTAssertTrue(
-            source.contains(".accessibilityAddTraits(.isHeader)"),
+            source.contains(".accessibilityAddTraits(.isHeader)") || source.contains("CollapsibleHeader("),
             "The screen title ('Sessions actives') must carry the header trait so VoiceOver " +
             "users can jump to it via the Headings rotor."
         )

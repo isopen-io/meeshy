@@ -57,9 +57,16 @@ struct DataExportView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                scrollContent
+            // Retour en verre de l'en-tête partagé (#6481). `back()` reste le
+            // geste : il ferme aussi le panneau droit iPad.
+            CollapsibleHeaderPage(
+                title: String(localized: "settings.data.export.title", defaultValue: "Export de données", bundle: .main),
+                onBack: { back() },
+                titleColor: theme.textPrimary,
+                backArrowColor: Color(hex: accentColor),
+                backgroundColor: theme.backgroundPrimary
+            ) {
+                exportContent
             }
         }
         .sheet(isPresented: $showShareSheet) {
@@ -69,57 +76,21 @@ struct DataExportView: View {
         }
     }
 
-    // MARK: - Header
-
-    private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                back()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.backward")
-                        .font(MeeshyFont.relative(14, weight: .semibold))
-                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(MeeshyFont.relative(15, weight: .medium))
-                }
-                .foregroundColor(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-
-            Spacer()
-
-            Text(String(localized: "settings.data.export.title", defaultValue: "Export de données", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            Color.clear.frame(width: 60, height: 24)
-                .accessibilityHidden(true)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
     // MARK: - Content
 
-    private var scrollContent: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
-                infoCard
-                formatSection
-                optionsSection
-                if let error = exportError {
-                    errorBanner(message: error)
-                }
-                exportButton
-                Spacer().frame(height: 40)
+    private var exportContent: some View {
+        VStack(spacing: 20) {
+            infoCard
+            formatSection
+            optionsSection
+            if let error = exportError {
+                errorBanner(message: error)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            exportButton
+            Spacer().frame(height: 40)
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
     }
 
     private var infoCard: some View {

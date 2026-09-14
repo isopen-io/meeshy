@@ -18,10 +18,14 @@ struct PrivacySettingsView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                scrollContent
-            }
+            CollapsibleHeaderPage(
+                title: String(localized: "settings.privacy.title", defaultValue: "Confidentialité", bundle: .main),
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: Color(hex: accentColor),
+                backgroundColor: theme.backgroundPrimary,
+                content: { pageContent }
+            )
         }
         .settingsInfoOverlay($presentedInfo)
         .adaptiveOnChange(of: prefs.privacy.allowAnalytics) { _, _ in
@@ -29,54 +33,20 @@ struct PrivacySettingsView: View {
         }
     }
 
-    // MARK: - Header
+    // MARK: - Content
 
-    private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.backward")
-                        .font(MeeshyFont.relative(14, weight: .semibold))
-                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(MeeshyFont.relative(15, weight: .medium))
-                }
-                .foregroundColor(Color(hex: accentColor))
-            }
+    private var pageContent: some View {
+        VStack(spacing: MeeshySpacing.xxl + MeeshySpacing.xs) {
+            visibilitySection
+            contactsSection
+            locationSection
+            mediaSection
+            encryptionSection
 
-            Spacer()
-
-            Text(String(localized: "settings.privacy.title", defaultValue: "Confidentialité", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            Color.clear.frame(width: 60, height: 24)
+            Spacer().frame(height: MeeshySpacing.xxxl + MeeshySpacing.sm)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - Scroll Content
-
-    private var scrollContent: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: MeeshySpacing.xxl + MeeshySpacing.xs) {
-                visibilitySection
-                contactsSection
-                locationSection
-                mediaSection
-                encryptionSection
-
-                Spacer().frame(height: MeeshySpacing.xxxl + MeeshySpacing.sm)
-            }
-            .padding(.horizontal, MeeshySpacing.xl)
-            .padding(.top, MeeshySpacing.lg)
-        }
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.top, MeeshySpacing.lg)
     }
 
     // MARK: - Sections
