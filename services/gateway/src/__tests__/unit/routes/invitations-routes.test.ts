@@ -54,18 +54,27 @@ type AppOptions = {
   prismaOverrides?: PrismaOverrides;
   withEmailService?: boolean;
   emailServiceRejects?: boolean;
+  emailVerified?: boolean;
 };
 
 async function buildApp({
   prismaOverrides = {},
   withEmailService = true,
   emailServiceRejects = false,
+  emailVerified = true,
 }: AppOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
 
   app.decorate('prisma', makePrisma(prismaOverrides) as unknown);
   app.decorate('authenticate', async (req: Parameters<typeof app.authenticate>[0]) => {
     (req as unknown as Record<string, unknown>).user = { userId: USER_ID };
+    // #6437 — la même chose que `createUnifiedAuthMiddleware` pose en
+    // production, seule forme que lit `requireEmailVerification` (montée
+    // juste après `fastify.authenticate` sur cette route).
+    (req as unknown as Record<string, unknown>).authContext = {
+      isAuthenticated: true,
+      registeredUser: { id: USER_ID, emailVerifiedAt: emailVerified ? new Date() : null },
+    };
   });
 
   const sendInvitationEmail = emailServiceRejects
@@ -110,12 +119,33 @@ describe('POST /invitations/email', () => {
     expect(body.data.invitationUrl).toMatch(/^http:\/\/localhost:3100\/signup\/affiliate\/aff_[A-Za-z0-9]+$/);
   });
 
+  // #6437 — inviter sort du compte vers quelqu'un qui n'est pas encore sur
+  // Meeshy : un e-mail non confirmé ne peut plus l'emprunter.
+  it('returns 403 EMAIL_NOT_VERIFIED when the sender has not confirmed their e-mail', async () => {
+    const appUnverified = await buildApp({ emailVerified: false });
+
+    const res = await appUnverified.inject({
+      method: 'POST',
+      url: '/invitations/email',
+      headers: AUTH_HEADER,
+      payload: { email: 'friend@example.com' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
+    await appUnverified.close();
+  });
+
   it('persists a dedicated single-use affiliate token and the invitation relation (#3691)', async () => {
     const prisma = makePrisma();
     const appTracked = Fastify({ logger: false });
     appTracked.decorate('prisma', prisma as unknown);
     appTracked.decorate('authenticate', async (req: Parameters<typeof app.authenticate>[0]) => {
       (req as unknown as Record<string, unknown>).user = { userId: USER_ID };
+      (req as unknown as Record<string, unknown>).authContext = {
+        isAuthenticated: true,
+        registeredUser: { id: USER_ID, emailVerifiedAt: new Date() },
+      };
     });
     await appTracked.register(invitationRoutes);
     await appTracked.ready();
@@ -150,6 +180,10 @@ describe('POST /invitations/email', () => {
     appNoEmail.decorate('prisma', makePrisma() as unknown);
     appNoEmail.decorate('authenticate', async (req: Parameters<typeof app.authenticate>[0]) => {
       (req as unknown as Record<string, unknown>).user = { userId: USER_ID };
+      (req as unknown as Record<string, unknown>).authContext = {
+        isAuthenticated: true,
+        registeredUser: { id: USER_ID, emailVerifiedAt: new Date() },
+      };
     });
     (appNoEmail as unknown as Record<string, { warn: typeof warnSpy }>).log = {
       ...(appNoEmail.log as unknown as Record<string, unknown>),
@@ -294,6 +328,10 @@ describe('POST /invitations/email', () => {
     appBad.decorate('prisma', badPrisma as unknown);
     appBad.decorate('authenticate', async (req: Parameters<typeof app.authenticate>[0]) => {
       (req as unknown as Record<string, unknown>).user = { userId: USER_ID };
+      (req as unknown as Record<string, unknown>).authContext = {
+        isAuthenticated: true,
+        registeredUser: { id: USER_ID, emailVerifiedAt: new Date() },
+      };
     });
     await appBad.register(invitationRoutes);
     await appBad.ready();
