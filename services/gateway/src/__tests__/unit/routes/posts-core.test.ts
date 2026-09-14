@@ -144,7 +144,7 @@ async function buildApp({ authenticated = true } = {}): Promise<FastifyInstance>
       type: 'user',
       isAnonymous: false,
       userId: USER_ID,
-      registeredUser: { id: USER_ID, role: 'USER' },
+      registeredUser: { emailVerifiedAt: new Date(), id: USER_ID, role: 'USER' },
     };
   };
 

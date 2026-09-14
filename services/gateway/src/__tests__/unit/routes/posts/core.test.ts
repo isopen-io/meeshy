@@ -114,12 +114,12 @@ const POST_ID = '507f1f77bcf86cd799439022';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function makePreValidationAuth(authenticated: boolean) {
+function makePreValidationAuth(authenticated: boolean, emailVerified: boolean = true) {
   return async (req: FastifyRequest) => {
     if (authenticated) {
       (req as any).authContext = {
         isAuthenticated: true,
-        registeredUser: { id: USER_ID, role: 'USER' },
+        registeredUser: { emailVerifiedAt: emailVerified ? new Date() : null, id: USER_ID, role: 'USER' },
       };
     } else {
       (req as any).authContext = null;
@@ -130,12 +130,13 @@ function makePreValidationAuth(authenticated: boolean) {
 async function buildApp(opts: {
   authenticated?: boolean;
   withSocialEvents?: boolean;
+  emailVerified?: boolean;
 } = {}): Promise<FastifyInstance> {
-  const { authenticated = true, withSocialEvents = false } = opts;
+  const { authenticated = true, withSocialEvents = false, emailVerified = true } = opts;
 
   const app = Fastify({ logger: false });
   const prisma = {} as any;
-  const requiredAuth = makePreValidationAuth(authenticated);
+  const requiredAuth = makePreValidationAuth(authenticated, emailVerified);
 
   app.decorate('notificationService', {
     createPostMentionNotificationsBatch: (...args: any[]) => mockCreatePostMentionNotificationsBatch(...args),
@@ -174,6 +175,17 @@ describe('POST /posts — unauthenticated', () => {
     const app = await buildApp({ authenticated: false });
     const res = await app.inject({ method: 'POST', url: '/posts', payload: { content: 'Hello' } });
     expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
+// #6437 — publier (post ou story) sort du compte vers d'autres personnes.
+describe('POST /posts — email not verified', () => {
+  it('returns 403 EMAIL_NOT_VERIFIED when the author has not confirmed their e-mail', async () => {
+    const app = await buildApp({ emailVerified: false });
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { content: 'Hello' } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
     await app.close();
   });
 });
