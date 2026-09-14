@@ -2,6 +2,7 @@
  * Utilitaires de normalisation des données utilisateur
  */
 
+import { capitalizeName } from '@meeshy/shared/utils/registration-identity';
 import { parsePhoneNumber, isValidPhoneNumber, CountryCode } from 'libphonenumber-js';
 import { usernamePatternSource } from '@meeshy/shared/types';
 import { enhancedLogger } from './logger-enhanced.js';
@@ -188,12 +189,7 @@ export function normalizeUsername(username: string): string {
  * `"O'Brien"` reste `"O'Brien"`. Les segments multi-espaces et les préfixes
  * non-alphabétiques (`"3john"`) sont préservés à l'identique.
  */
-export function capitalizeName(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/(^|[\s'.-])(\p{L})/gu, (_match, separator, letter) => separator + letter.toUpperCase());
-}
+export { capitalizeName };
 
 /**
  * Jeu des caracteres qui BRISENT une ligne a l'affichage — SOURCE UNIQUE.
