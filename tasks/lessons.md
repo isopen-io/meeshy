@@ -32216,3 +32216,42 @@ le réinitialiser par e-mail depuis `/forgot-password`.
    table vers une autre application. Porter une liste de destinations est une
    occasion de les VÉRIFIER — recopiée sans mesure, elle importe ses 404 dans
    l'application neuve.
+
+## Leçon 608 — Un script de PREUVE qui lit mal rend des verts VIDES, et ce sont les plus rassurants (2026-09-14)
+
+**Cas.** Pour prouver le flux #6424 sur staging, un script en six étapes lisait
+la base par `ssh root@… "docker exec … mongosh --eval '<js>'"`. Le `<js>`
+contenait des guillemets simples ; les couches shell les ont mangés ; `mongosh`
+a rendu une chaîne VIDE. Le script assérait alors :
+
+```bash
+printf '%s' "$LIGNE" | grep -q '"password"' && verdict "…" ko || verdict "la colonne password est ABSENTE" ok
+```
+
+`grep -q` sur du vide est faux, donc la branche `ok` s'exécutait : **« la
+colonne password est ABSENTE » passait au vert sans qu'aucune ligne n'ait été
+lue.** Même chose pour « le compteur n'a jamais été écrit ». Deux preuves
+inexistantes, et ce sont précisément les deux qui rassuraient le plus.
+
+Ce que la base disait vraiment, une fois le passage par base64 mis en place :
+`{"password":null,"failedLoginAttempts":{"low":0,…}}` — les faits étaient bons.
+**Le produit était juste ; l'instrument mentait.**
+
+1. **Une assertion d'ABSENCE doit d'abord prouver la PRÉSENCE de la lecture.**
+   La forme opérante est en deux temps : une garde `lu()` qui échoue si la
+   réponse est vide, PUIS l'assertion. Sans elle, « absent » et « pas
+   interrogé » rendent le même verdict — et c'est le vert.
+2. **Assérer sur la VALEUR, jamais sur l'absence d'une sous-chaîne.**
+   `grep -q '"password":null'` (ce que la base DIT) plutôt que
+   `! grep -q '"password"'` (ce qu'elle ne dit pas) : la première ne peut pas
+   passer sur du vide.
+3. **Un `<js>` qui traverse ssh + docker + sh se transporte en base64.** Trois
+   couches de shell, trois occasions de perdre un guillemet ; l'encodage retire
+   la question au lieu de la compter.
+4. **La leçon générale, et c'est elle qui pique** : ce dépôt passe ses journées
+   à traquer « la garde qui ne garde rien » chez les autres. Un outil de
+   VÉRIFICATION est du code comme un autre — il mérite la question qu'on pose à
+   toute garde : *que rend-il quand ce qu'il mesure n'existe pas ?* Ici,
+   « vert ». Le premier réflexe devant un script de preuve tout vert est de le
+   faire échouer exprès (interroger un compte inexistant) et de vérifier qu'il
+   rougit.
