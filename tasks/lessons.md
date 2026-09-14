@@ -32282,7 +32282,7 @@ seau : le deuxième était étranglé par le premier, et l'échec ressemblait à
 défaut du produit. Avant d'accuser le serveur d'un 429, lire la CLÉ du
 limiteur — ce qu'elle agrège dit si deux exécutions du test sont, pour lui, la
 même personne.
-## Leçon 604 — Un résolveur « site unique » ne l'est que pour les appelants qui l'APPELLENT : la question n'est pas « la règle existe-t-elle ? » mais « quelles surfaces la contournent ? » (2026-09-13)
+## Leçon 609 — Un résolveur « site unique » ne l'est que pour les appelants qui l'APPELLENT : la question n'est pas « la règle existe-t-elle ? » mais « quelles surfaces la contournent ? » (2026-09-13)
 
 **Cas.** Retour porteur : sur `staging.meeshy.me/notifications`,
 `GET https://gate.meeshy.me/2026/09/<id>/harbor_<uuid>.png net::ERR_FAILED`,
