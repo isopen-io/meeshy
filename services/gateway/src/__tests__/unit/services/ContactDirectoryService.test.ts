@@ -21,6 +21,7 @@ jest.mock('../../../services/PresenceVisibilityService', () => ({
 
 import { ContactDirectoryService } from '../../../services/ContactDirectoryService';
 import { normalizeContacts } from '../../../utils/contact-identifiers';
+import { matchesMongoWhere } from '../../helpers/mongo-where';
 
 const OWNER_ID = '507f1f77bcf86cd799439011';
 const AWA_ID = '507f1f77bcf86cd799439022';
@@ -138,7 +139,35 @@ describe('ContactDirectoryService.match', () => {
 
     const where = prisma.user.findMany.mock.calls[0][0].where;
     expect(where.id.notIn).toEqual(expect.arrayContaining([OWNER_ID, BOB_ID]));
-    expect(where.NOT).toEqual({ blockedUserIds: { has: OWNER_ID } });
+    // Le blocage vit dans `AND`, sous la même forme « absent vs null » que
+    // `deletedAt` juste au-dessus — un `NOT` nu au premier niveau écarterait
+    // aussi les comptes qui n'ont jamais écrit `blockedUserIds` (#6529, même
+    // défaut que #6452 pour `contactLookupScope`).
+    expect(where.NOT).toBeUndefined();
+    expect(where.AND).toContainEqual({
+      OR: [{ blockedUserIds: { isSet: false } }, { NOT: { blockedUserIds: { has: OWNER_ID } } }],
+    });
+  });
+
+  /**
+   * Preuve par ÉVALUATION contre un vrai document (#6529), pas seulement par
+   * inspection de la forme du `where` — c'est exactement ce qui a laissé
+   * passer le même défaut sur `contactLookupScope()` jusqu'à #6452 : la forme
+   * `NOT: { blockedUserIds: { has } }` a l'air juste, elle EST juste pour un
+   * champ posé, et ne l'est plus pour un champ ABSENT (ce que Prisma traduit
+   * sur le connecteur MongoDB — voir `__tests__/helpers/mongo-where.ts`).
+   */
+  it('rend un contact dont le compte Meeshy ne porte AUCUNE clé `blockedUserIds`', async () => {
+    const prisma = makePrisma({ users: [] });
+    const service = new ContactDirectoryService(prisma);
+    const contacts = normalizeContacts([{ emails: ['awa@test.com'] }]);
+
+    await service.match({ contacts, excludeUserId: OWNER_ID });
+
+    const where = prisma.user.findMany.mock.calls[0][0].where;
+    const compteSansBlocageDeclare = { id: AWA_ID, isActive: true, email: 'awa@test.com' };
+
+    expect(matchesMongoWhere(compteSansBlocageDeclare, where)).toBe(true);
   });
 
   it('does not hit the database when no contact carries an identifier', async () => {
