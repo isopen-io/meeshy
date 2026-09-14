@@ -315,13 +315,15 @@ final class ProgressionMeeshEntryTests: XCTestCase {
                       "La conversion n'est plus offerte après un échec : « \(dit) »")
     }
 
-    // MARK: - Le groupe de verre (#6466)
+    // MARK: - Une seule pièce de verre (#6466)
 
     /// **Garde de SOURCE, et pourquoi.** Le verre ne laisse aucune trace dans
     /// l'arbre d'accessibilité : l'entrée reste UN élément, un libellé (ce que
     /// `test_theEntryAnnouncesTheBalance` garde). La preuve visuelle est la
-    /// capture au simulateur ; ce témoin empêche seulement le retour à la capsule.
-    func test_theEntry_isAGlassGroup_notACapsule() throws {
+    /// capture au simulateur ; ce témoin empêche le retour à la capsule ET à
+    /// deux bulles séparées — le porteur les a vues le 2026-09-14 et a tranché :
+    /// « les deux éléments associés en un seul, pas de séparation visuelle ».
+    func test_theEntry_isOneGlassPiece_withoutSeparation() throws {
         let source = try String(
             contentsOf: URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent()   // Views
@@ -331,9 +333,35 @@ final class ProgressionMeeshEntryTests: XCTestCase {
                 .appendingPathComponent("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift"),
             encoding: .utf8
         )
-        let entree = source.components(separatedBy: "struct MeeshCoinGlyph").first ?? ""
-        XCTAssertTrue(entree.contains("AdaptiveGlassContainer("), "L'entrée n'est pas un groupe de verre.")
-        XCTAssertFalse(entree.contains("Capsule()"), "L'entrée est encore une capsule.")
+        let apresEntree = source.components(separatedBy: "struct ProgressionMeeshEntry").dropFirst().first ?? ""
+        let etiquette = apresEntree.components(separatedBy: ".popover(").first ?? ""
+        XCTAssertEqual(etiquette.components(separatedBy: ".adaptiveGlass(").count - 1, 1,
+                       "L'entrée doit porter UNE seule pièce de verre, pour le nombre et la pièce ensemble.")
+        XCTAssertFalse(etiquette.contains("AdaptiveGlassContainer("), "L'entrée est encore un groupe de bulles séparées.")
+        XCTAssertFalse(etiquette.contains("Capsule()"), "L'entrée est encore une capsule.")
+    }
+
+    // MARK: - L'en-tête qui se réduit (#6480)
+
+    /// Directive porteur 2026-09-14 : Progression « adopte le header qui se
+    /// réduit au défilement », avec le retour en verre. L'en-tête était fait
+    /// main : chevron nu, titre fixe. Le composant partagé porte les deux —
+    /// l'écran n'a qu'à le MONTER, et c'est ce que ce témoin garde.
+    func test_progression_mountsTheCollapsibleHeader_notAHandmadeBar() throws {
+        let source = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()   // Views
+                .deletingLastPathComponent()   // Unit
+                .deletingLastPathComponent()   // MeeshyTests
+                .deletingLastPathComponent()   // ios
+                .appendingPathComponent("Meeshy/Features/Main/Views/ProgressionView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(source.contains("CollapsibleHeader("), "Progression ne monte pas l'en-tête partagé.")
+        XCTAssertTrue(source.contains("ScrollOffsetReader(relay: scrollRelay)"),
+                      "L'en-tête de Progression ne lit pas le défilement : il ne se réduira pas.")
+        XCTAssertFalse(source.contains("Image(systemName: \"chevron.backward\")"),
+                       "Progression garde un chevron fait main à côté de l'en-tête partagé.")
     }
 
     // MARK: - La pièce d'argent (#6427)

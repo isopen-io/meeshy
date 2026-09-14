@@ -25,47 +25,37 @@ struct ProgressionMeeshEntry: View {
     @State private var ouvert = false
     private let tint = MeeshyColors.warning
 
-    /// Une bulle du groupe : plus RECTANGLE qu'une capsule (directive porteur 2026-09-14, #6466).
-    private static let bulle = RoundedRectangle(cornerRadius: 12, style: .continuous)
-    /// Le côté d'une bulle — 40 pt, et le groupe garde une cible de 44 pt.
-    private static let cote: CGFloat = 40
-    /// L'ÉCART entre les deux bulles : assez pour qu'elles se lisent séparées.
-    private static let ecart: CGFloat = 5
+    /// La forme de la pièce : plus RECTANGLE qu'une capsule (directive porteur 2026-09-14, #6466).
+    private static let forme = RoundedRectangle(cornerRadius: 12, style: .continuous)
 
     var body: some View {
         Button {
             HapticFeedback.light()
             ouvert.toggle()
         } label: {
-            // `N` puis la PIÈCE — deux bulles de verre, UN contrôle (#6466).
+            // `N` puis la PIÈCE — UNE seule pièce de verre (#6466).
             //
-            // Directive porteur 2026-09-14 : « plus rectangle, et le nombre de
-            // meesh comme s'il était dans sa bulle, bien que les deux dans le
-            // même composant — en Liquid Glass il existe un composant de bouton
-            // dans le même espace, mais visuellement avec une certaine
-            // distance ». C'est le motif des boutons GROUPÉS d'iOS 26 : deux
-            // formes de verre dans un même conteneur, séparées par un écart.
-            // Le conteneur reçoit un espacement NUL, inférieur à l'écart : deux
-            // formes plus proches que cet espacement fusionneraient en une seule.
+            // Le porteur a d'abord demandé « le nombre comme dans sa bulle, les
+            // deux dans le même composant » ; il a vu deux bulles séparées au
+            // simulateur et a tranché (2026-09-14) : « les deux éléments
+            // associés en un seul, pas de séparation visuelle ». Le verre porte
+            // donc les deux ensemble, sans conteneur ni écart, à la hauteur des
+            // chromes ronds de l'en-tête dont l'entrée est l'action (#6480).
             //
             // Le glyphe a changé deux fois, et pour la même raison. `medal.fill`
             // disait « récompense » en général ; le logo Meeshy (2026-09-09)
             // disait « marque ». Une Meesh est une MONNAIE : la pièce d'argent
             // (#6427) est le premier glyphe qui dit ce qu'est la chose.
-            AdaptiveGlassContainer(spacing: 0) {
-                HStack(spacing: Self.ecart) {
-                    Text("\(meesh.balance)")
-                        .font(MeeshyFont.relative(17, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundColor(tint)
-                        .padding(.horizontal, 12)
-                        .frame(minWidth: Self.cote, minHeight: Self.cote)
-                        .adaptiveGlass(in: Self.bulle, tint: tint.opacity(0.14))
-                    MeeshCoinGlyph(size: 20)
-                        .frame(width: Self.cote, height: Self.cote)
-                        .adaptiveGlass(in: Self.bulle, tint: MeeshyColors.meeshSilver.opacity(0.14))
-                }
+            HStack(spacing: 6) {
+                Text("\(meesh.balance)")
+                    .font(MeeshyFont.relative(17, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(tint)
+                MeeshCoinGlyph(size: 20)
             }
+            .padding(.horizontal, 12)
+            .frame(minHeight: CollapsibleHeaderMetrics.roundChromeDiameter)
+            .adaptiveGlass(in: Self.forme, tint: tint.opacity(0.14), interactive: true)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
