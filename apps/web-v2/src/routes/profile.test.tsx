@@ -106,6 +106,27 @@ describe('la bannière et l’avatar', () => {
     expect(html).toContain('src="https://static.test/a.webp"');
   });
 
+  /**
+   * BANNIÈRE ET PHOTO SONT DES RÉFÉRENCES DE MÉDIA (#6388) — `MyProfile.banner`
+   * et `.avatar` portent la clé de stockage (#4324) ou l'adresse héritée
+   * d'avant la migration 013. Le témoin voisin sert deux adresses EXTERNES, qui
+   * traversent inchangées ; celui-ci prouve les deux formes de la passerelle.
+   */
+  test('une clé de stockage et une adresse héritée passent par la route de flux', () => {
+    const html = renderToStaticMarkup(
+      <ProfileHero
+        language="fr"
+        profile={profileOf({ banner: '2026/09/6aa607/banner.jpg', avatar: 'https://gate.meeshy.me/2026/09/6aa607/harbor_41.png' })}
+        editing={false}
+        pending={{}}
+        onPick={noop}
+        onCancelUpload={noop}
+      />,
+    );
+    expect(html).toContain('src="https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2F6aa607%2Fbanner.jpg"');
+    expect(html).toContain('src="https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2F6aa607%2Fharbor_41.png"');
+  });
+
   test('en édition, deux contrôles NOMMÉS changent la photo et la bannière', () => {
     const html = renderToStaticMarkup(
       <ProfileHero language="fr" profile={profileOf()} editing pending={{}} onPick={noop} onCancelUpload={noop} />,

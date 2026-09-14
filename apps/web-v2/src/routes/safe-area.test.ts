@@ -56,6 +56,17 @@ const EXEMPT = new Map<string, string>([
       "commentaires qui citent `pt-safe` — un vert vide, pire qu'un rouge.",
   ],
   [
+    'reels.tsx',
+    "les RÉELS (#6457), plein écran IMMERSIF comme `ReelsPlayerView` qui " +
+      "ignore les zones sûres (`.ignoresSafeArea()`) : le média court sous " +
+      "l'encoche, et chaque CHROME porte son propre inset — le retour, les " +
+      "points des images et l'annonce hors ligne en `env(safe-area-inset-top)`, " +
+      "l'auteur, la légende et le rail en `env(safe-area-inset-bottom)` " +
+      '(`components/reel-page.tsx`). Le débordement que ce témoin interdit est ' +
+      'impossible ici : la racine est `h-dvh overflow-hidden` et le pager ' +
+      '`h-full`, défileur de ses propres pages.',
+  ],
+  [
     'components/shell.tsx',
     "la COQUILLE, justement : c'est elle qui ne doit porter AUCUN inset — " +
       "l'écran plein-cadre le porte lui-même. La garder hors exception ferait " +

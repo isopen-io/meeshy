@@ -344,6 +344,17 @@ jobs:
       - name: Lockfile alignment guard
         run: node scripts/check-lockfile-alignment.mjs --self-test && node scripts/check-lockfile-alignment.mjs
 
+      # #6351 — filet de sécurité pour la CI ordinaire : un commit qui porte à
+      # la fois un marqueur (beta) et un marqueur de saut CI fait supprimer
+      # TOUS les workflows du push par GitHub, ios-beta-trigger.yml compris.
+      # Cette étape ne verra donc jamais ce cas précis (un push affecté par le
+      # piège ne fait justement tourner aucune CI) ; elle attrape le même
+      # défaut sur un commit de PR normal, avant qu'il n'atteigne `main`. Le
+      # témoin qui couvre le cas que GitHub supprime est périodique, sur
+      # schedule — .github/workflows/beta-marker-audit.yml.
+      - name: Beta/skip commit-message conflict guard
+        run: node scripts/check-beta-skip-conflict.mjs --self-test && node scripts/check-beta-skip-conflict.mjs
+
       # Même raison de placement que le garde ci-dessus : l'invariant porte sur
       # le `Makefile` de la RACINE, donc il est appelé ici et non depuis les
       # tests d'une app. Sa première écriture vivait dans les tests de l'ancienne
@@ -670,6 +681,18 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-links.mjs
+
+      # #6457 — les Réels : le bouton de l'en-tête du Flux, un réel touché ouvre
+      # le lecteur SUR lui depuis le cache (sans squelette, sans disque), un seul
+      # réel joue, un balayage tactile accroche le suivant puis le précédent, le
+      # clavier aussi, « J'aime » se voit au retour dans le Flux, le texte blanc
+      # tient AA au pixel, le retour ne laisse aucun lecteur ; hors ligne chaud
+      # et froid, lien profond, mouvement réduit (deux schémas, deux gabarits).
+      - name: Gate Réels (lecteur plein écran, balayage, lecture unique, retour)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-reels.mjs
 
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}

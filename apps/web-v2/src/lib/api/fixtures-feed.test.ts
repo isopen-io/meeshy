@@ -48,7 +48,8 @@ describe('FEED_POSTS — le corpus exerce chaque famille du § 3.4', () => {
   test('REEL_PORTRAIT est un REEL vidéo en portrait, dimensionné', () => {
     expect(REEL_PORTRAIT.type).toBe('REEL');
     const media = REEL_PORTRAIT.media?.[0];
-    expect(media?.mimeType).toBe('video/mp4');
+    expect(media?.mimeType?.startsWith('video/')).toBe(true);
+    expect(media?.fileUrl.startsWith('data:video/webm;base64,')).toBe(true);
     expect(media?.height).toBeGreaterThan(media?.width ?? 0);
   });
 
