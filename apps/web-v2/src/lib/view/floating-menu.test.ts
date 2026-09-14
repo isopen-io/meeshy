@@ -5,12 +5,15 @@ import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-b
 import { ROUTES } from '@/routes/route-table';
 import {
   ADMIN_DESTINATION,
+  CONVERSATIONS_DESTINATION,
   FEED_DESTINATION,
   MENU_LADDER,
   PROFILE_DESTINATION,
   allFloatingDestinations,
+  feedDiscDestination,
   menuLadderFor,
 } from './floating-menu';
+import { showsFloatingMenus } from './floating-gate';
 
 /**
  * LA TABLE DES DESTINATIONS FLOTTANTES (#6214, #6104) — miroir de
@@ -103,6 +106,39 @@ describe('le barreau « Administration »', () => {
   });
 });
 
+/**
+ * **LE DISQUE DU FLUX BASCULE** (#6456) — `onLeftTap: showFeed.toggle()`
+ * (`RootView.swift:1557-1565`). Le même disque montre le Flux ou ramène aux
+ * conversations ; son nom et son glyphe disent où le tap MÈNE, jamais où l'on
+ * est — un disque « Flux » posé sur le Flux annoncerait un geste sans effet.
+ */
+describe('la destination du disque de gauche', () => {
+  test('sur le Flux, il ramène aux conversations', () => {
+    expect(feedDiscDestination('feed')).toBe(CONVERSATIONS_DESTINATION);
+    expect(CONVERSATIONS_DESTINATION.route).toBe('list');
+  });
+
+  /**
+   * Toutes les AUTRES routes qui portent les disques, pas seulement la liste :
+   * un témoin écrit sur `list` seul resterait vert sur une loi « liste ⇒ Flux,
+   * sinon conversations », qui ferait du disque un retour sur les Réglages.
+   */
+  test('partout ailleurs où les disques paraissent, il ouvre le Flux', () => {
+    const autres = ['list', 'links', 'notifications', 'calls', 'discover', 'communities', 'settings', 'profile'];
+    for (const route of autres) {
+      expect({ route, porte: showsFloatingMenus(route) }).toEqual({ route, porte: true });
+      expect({ route, destination: feedDiscDestination(route).key }).toEqual({ route, destination: 'feed' });
+    }
+  });
+
+  /** « Même mot, même icône » (dimension 6) : le glyphe du retour est la marque, celle qu'iOS peint Flux ouvert. */
+  test('les deux faces portent deux noms et deux glyphes distincts', () => {
+    expect(CONVERSATIONS_DESTINATION.labelKey).not.toBe(FEED_DESTINATION.labelKey);
+    expect(CONVERSATIONS_DESTINATION.glyph).toEqual({ set: 'marque' });
+    expect(FEED_DESTINATION.glyph).toEqual({ set: 'flottant', name: 'stack' });
+  });
+});
+
 describe('aucune destination flottante ne ment', () => {
   /**
    * **LE TÉMOIN QUI JUSTIFIE #6214.** La loi 4 de la planche — « un contrôle
@@ -127,9 +163,10 @@ describe('aucune destination flottante ne ment', () => {
    * absente de `MENU_LADDER`, elle échapperait sinon aux deux témoins qui
    * suivent — la route déclarée et le libellé unique dans sept langues.
    */
-  test('les neuf destinations sont comptées', () => {
-    expect(allFloatingDestinations()).toHaveLength(9);
+  test('les dix destinations sont comptées', () => {
+    expect(allFloatingDestinations()).toHaveLength(10);
     expect(allFloatingDestinations()).toContain(FEED_DESTINATION);
+    expect(allFloatingDestinations()).toContain(CONVERSATIONS_DESTINATION);
     expect(allFloatingDestinations()).toContain(PROFILE_DESTINATION);
     expect(allFloatingDestinations()).toContain(ADMIN_DESTINATION);
   });
