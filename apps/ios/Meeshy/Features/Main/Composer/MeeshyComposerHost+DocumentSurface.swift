@@ -228,7 +228,7 @@ extension MeeshyComposerHost {
             loadedImages: viewModel.loadedImages,
             imagesVersion: viewModel.loadedImagesVersion,
             onSelect: { viewModel.selectSlide(at: $0) },
-            onDelete: { viewModel.removeSlide(at: $0) }))
+            onDelete: { retractScene(at: $0) }))
     }
 
     var documentContentMedia: [ComposerContentMedia] {

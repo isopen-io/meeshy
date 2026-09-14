@@ -126,9 +126,15 @@ final class ComposerMediaStripTests: XCTestCase {
             src.contains("onSelect:{viewModel.selectSlide(at:$0)}"),
             "Taper une vignette doit SÉLECTIONNER sa slide — sans quoi le rail est décoratif."
         )
+        // **#6577 — la croix passe par le RETRAIT du meuble, pas par le SDK.**
+        // `removeSlide` ne nettoie que ce que la vue peint ; le fichier restait
+        // dans `documentLocalMedia` et repartait à la publication. Ce que ce
+        // témoin tient est inchangé — la croix a un EFFET sur le modèle — mais
+        // son site a bougé d'un cran, et il fallait qu'il bouge.
         XCTAssertTrue(
-            src.contains("onDelete:{viewModel.removeSlide(at:$0)}"),
-            "La croix d'une vignette doit RETIRER sa slide du modèle — ce qui re-juge le format."
+            src.contains("onDelete:{retractScene(at:$0)}"),
+            "La croix d'une vignette doit RETIRER sa scène ET son fichier — par le point "
+                + "d'entrée du meuble, seul lieu qui voie les deux porteurs (#6577)."
         )
     }
 
@@ -161,40 +167,5 @@ final class ComposerMediaStripTests: XCTestCase {
         for loc in ["ar", "de", "en", "es", "fr", "it", "pt-BR"] {
             XCTAssertNotNil(locs[loc], "Clé du ruban : locale « \(loc) » manquante (cliquet i18n)")
         }
-    }
-
-    // MARK: - #4052 — un chip qu'aucune slide ne sélectionne garde sa croix
-
-    /// **Le correctif de pixel du #4047 était TOTAL tant que tout média était
-    /// une slide.** Le #4052 a rompu l'équivalence : un audio devient la
-    /// bande-son de la scène, pas une page du carrousel — il n'a donc aucune
-    /// slide à sélectionner, son chip ne porte jamais l'anneau, et son ✕ ne
-    /// s'affichait PLUS JAMAIS. Le vocal devenait irretirable.
-    func test_unChipSansSlide_gardeSaCroix_sinonSonMediaSeraitIrretirable() {
-        XCTAssertTrue(
-            ComposerMediaChipAffordance.showsRemove(isSelected: false, isSelectable: false),
-            "Un chip qu'aucune slide ne peut sélectionner n'a QUE sa croix : la lui retirer laisse un "
-                + "média posé pour toujours."
-        )
-    }
-
-    /// L'ordre « deux gestes pour supprimer » reste tenu partout où un PREMIER
-    /// geste existe — c'est-à-dire sur les chips qui mènent à une slide.
-    func test_unChipSelectionnable_neMontreSaCroix_queSelectionne() {
-        XCTAssertFalse(
-            ComposerMediaChipAffordance.showsRemove(isSelected: false, isSelectable: true),
-            "Viser une vignette pour NAVIGUER ne doit pas la supprimer — le défaut mesuré au #4047."
-        )
-        XCTAssertTrue(
-            ComposerMediaChipAffordance.showsRemove(isSelected: true, isSelectable: true)
-        )
-    }
-
-    /// Le cas dégénéré, écrit pour qu'il ne surprenne personne : un chip
-    /// sélectionné garde sa croix même si la carte le dit non sélectionnable.
-    func test_unChipSelectionne_gardeSaCroix_quoiQuenDiseLaCarte() {
-        XCTAssertTrue(
-            ComposerMediaChipAffordance.showsRemove(isSelected: true, isSelectable: false)
-        )
     }
 }

@@ -220,7 +220,11 @@ enum AppSourceGuard {
         // budget : il l'est quand les gardes qui le nommaient pointent l'unité
         // (leçon 347).
         "Meeshy/Features/Main/Composer/DocumentComposerDoor.swift",
-        "Meeshy/Features/Main/Composer/ComposerMediaThumbnail.swift",
+        // `ComposerMediaThumbnail.swift` vivait ici : il est SUPPRIMÉ au #6577,
+        // faute d'appelant de production depuis que le rail de scènes a remplacé
+        // la bande de médias (#5599). Une adresse qui survit à son fichier ne
+        // rougit pas — `unitURLs` lit ce qui existe — mais elle fait croire que
+        // la garde couvre quelque chose.
         // **Les cinq types de l'ENVOI, extraits le 2026-09-06** quand
         // `ComposerDocumentRules` a franchi le plafond DUR de 1200 lignes —
         // chemin, aiguillage, refus, plan et issue. Même raison que les quatre

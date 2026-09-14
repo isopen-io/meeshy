@@ -200,7 +200,8 @@ final class ComposerMediaRetractionTests: XCTestCase {
     // MARK: - Les DEUX gestes y passent
 
     func test_leRailTrailing_passeParLePointUnique() throws {
-        guard let corps = body(after: "func handleTrailingRailAction(", in: try hostSource())
+        let source = try hostSource()
+        guard let corps = body(after: "func handleTrailingRailAction(", in: source)
             .map(compact) else {
             return XCTFail("`handleTrailingRailAction(` introuvable — la garde ne mesurerait rien")
         }
@@ -213,20 +214,41 @@ final class ComposerMediaRetractionTests: XCTestCase {
             + "le fichier reste dans la charge.")
     }
 
+    /// **Le TROISIÈME geste, absent du cadrage de ce lot.** L'appui long sur un
+    /// fond ouvre un menu dont « Supprimer » retombait, lui aussi, sur le seul
+    /// `viewModel.deleteElement(id:)` (#5041). Il n'a jamais figuré dans
+    /// l'inventaire des portes de suppression parce qu'il est arrivé après
+    /// elles — le mode d'oubli que le dépôt nomme déjà : « une règle qui naît
+    /// hors de l'unité de son hôte naît hors de toutes les gardes ».
+    func test_leMenuDuFond_passeParLePointUnique() throws {
+        let source = try hostSource()
+        guard let corps = body(after: "func applyBackgroundMenu(", in: source).map(compact) else {
+            return XCTFail("`applyBackgroundMenu(` introuvable — la garde ne mesurerait rien")
+        }
+        guard let suppression = corps.range(of: "case.delete:") else {
+            return XCTFail("La branche `.delete` du menu de fond est introuvable")
+        }
+        let branche = String(corps[suppression.upperBound...].prefix(200))
+        XCTAssertTrue(branche.contains("retractMedia("),
+            "Supprimer un FOND depuis son menu retire l'objet du modèle et laisse son fichier "
+            + "dans la charge : le même défaut que le rail trailing, par une porte de plus.")
+    }
+
     /// La corbeille du rail de scènes ne connaît qu'un INDEX. `retractScene(at:)`
     /// est l'adaptateur qui le traduit en identités — la scène et les objets
     /// qu'elle porte — puis appelle le point d'entrée unique. Un adaptateur,
     /// jamais un second retrait : c'est ce que le second témoin ci-dessous
     /// vérifie.
     func test_laCorbeilleDuRailDeScenes_passeParLePointUnique() throws {
-        let source = compact(try hostSource())
-        XCTAssertFalse(source.contains("onDelete:{viewModel.removeSlide(at:$0)}"),
+        let source = try hostSource()
+        let compacte = compact(source)
+        XCTAssertFalse(compacte.contains("onDelete:{viewModel.removeSlide(at:$0)}"),
             "La corbeille du rail de scènes appelle `removeSlide` en DIRECT : elle retire la "
             + "page de l'écran et laisse son fichier dans `documentLocalMedia`.")
-        XCTAssertTrue(source.contains("onDelete:{retractScene(at:$0)}"),
+        XCTAssertTrue(compacte.contains("onDelete:{retractScene(at:$0)}"),
             "La corbeille du rail de scènes doit passer par l'adaptateur du meuble — "
             + "le seul lieu qui voie les DEUX porteurs.")
-        guard let corps = body(after: "func retractScene(", in: try hostSource()).map(compact) else {
+        guard let corps = body(after: "func retractScene(", in: source).map(compact) else {
             return XCTFail("Aucun `retractScene(` : la corbeille ne peut atteindre le point d'entrée unique")
         }
         XCTAssertTrue(corps.contains("retractMedia(objectIds:"),
@@ -250,9 +272,14 @@ final class ComposerMediaRetractionTests: XCTestCase {
         let fichiers = (try? FileManager.default.contentsOfDirectory(at: dossier,
                                                                     includingPropertiesForKeys: nil)) ?? []
         XCTAssertGreaterThan(fichiers.count, 50, "dossier du composer introuvable — garde muette")
+        // Le corpus est DÉPOUILLÉ de ses commentaires : la pierre tombale qui dit
+        // pourquoi ces deux types sont partis les NOMME, et c'est sa raison d'être.
+        // Une garde qui compte dans les commentaires interdirait d'expliquer un
+        // retrait à l'endroit où l'explication sert.
         let corpus = fichiers
             .filter { $0.pathExtension == "swift" }
             .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
+            .map(AppSourceGuard.stripComments)
             .joined(separator: "\n")
         for demonte in ["ComposerMediaThumbnail", "ComposerMediaChipAffordance"] {
             XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: demonte, in: corpus), 0,
@@ -260,5 +287,151 @@ final class ComposerMediaRetractionTests: XCTestCase {
                 + "témoins VERTS sur un contrôle que plus rien ne monte — c'est ce qui a "
                 + "masqué #6577 pendant tout un lot.")
         }
+    }
+
+    // MARK: - LA CHARGE, de bout en bout — le symptôme du porteur, rejoué
+
+    private func media(_ nom: String) -> ComposerDocumentMedia {
+        ComposerDocumentMedia(url: URL(fileURLWithPath: "/tmp/composer-\(nom).jpg"),
+                              mimeType: "image/jpeg", durationMs: nil)
+    }
+
+    /// Le brouillon que la flèche remet, composé des MÊMES porteurs que le
+    /// meuble lui passe (`MeeshyComposerHost+Draft.documentDraft`) — dont
+    /// `altsBySourceURL`, la projection que le meuble sert sous le nom
+    /// `altsParURLSource`. La réécrire ici en aurait fait une jumelle.
+    private func brouillon(_ porteurs: ComposerMediaPorters) -> ComposerDocumentDraft {
+        ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: true, text: "", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil,
+            localMedia: porteurs.localMedia, location: nil,
+            discoverabilityPrecision: nil, originalLanguage: nil,
+            mobileTranscription: nil, references: [], storyEffects: nil,
+            mediaCaptions: porteurs.captions,
+            mediaAlts: porteurs.altsBySourceURL,
+            mediaObjectIds: porteurs.objectIdBySource,
+            allowSoundExtraction: nil)
+    }
+
+    private func porteursAvec(_ fichier: ComposerDocumentMedia,
+                              objet: String,
+                              scene: String) -> ComposerMediaPorters {
+        ComposerMediaPorters(
+            localMedia: [fichier],
+            roleByURL: [fichier.url: .background],
+            slideIdByMediaURL: [fichier.url: scene],
+            objectIdBySource: [fichier.url: objet],
+            captions: [fichier.url: "la légende de \(objet)"],
+            altsByObjectId: [objet: "l'alternative de \(objet)"],
+            transcriptions: [:],
+            railPosedURLs: [fichier.url])
+    }
+
+    /// **« Je supprime un média et rechoisit un autre : au moment de publier,
+    /// c'est l'ancien qui a été supprimé qui est publié »** (porteur, 2026-09-14).
+    ///
+    /// Le geste, rejoué sur la CHARGE — pas sur l'écran, qui disait vrai.
+    func test_choisirA_retirerA_choisirB_laChargeNeParlePlusDeA() {
+        let a = media("A")
+        let b = media("B")
+
+        let retrait = ComposerMediaRetraction.retracting(
+            porteursAvec(a, objet: "objet-A", scene: "scene-1"),
+            objectIds: ["objet-A"], slideId: nil)
+
+        var apresB = retrait.porteurs
+        apresB.localMedia.append(b)
+        apresB.roleByURL[b.url] = .background
+        apresB.slideIdByMediaURL[b.url] = "scene-2"
+        apresB.objectIdBySource[b.url] = "objet-B"
+        apresB.captions[b.url] = "la légende de objet-B"
+        apresB.altsByObjectId["objet-B"] = "l'alternative de objet-B"
+
+        let charge = brouillon(apresB)
+
+        XCTAssertEqual(charge.localMedia.map(\.url), [b.url],
+            "Le brouillon téléverse encore A : c'est LUI que le gateway grave à `order: 0`, "
+            + "donc en COUVERTURE de la publication (#6577).")
+        XCTAssertNil(charge.mediaCaptions[a.url], "La légende de A voyage encore")
+        XCTAssertNil(charge.mediaAlts[a.url], "L'alternative de A voyage encore")
+        XCTAssertNil(charge.mediaObjectIds[a.url], "Le pont d'objet de A voyage encore")
+
+        // Le voisin n'est pas emporté : un retrait qui nettoie TROP est l'autre
+        // moitié du même défaut.
+        XCTAssertEqual(charge.mediaCaptions[b.url], "la légende de objet-B")
+        XCTAssertEqual(charge.mediaAlts[b.url], "l'alternative de objet-B")
+
+        // Un cran plus bas : ce que TUS monte, et qui devient les `mediaIds`.
+        let intention = PublishIntent.document(
+            localMedia: charge.localMedia, declaredType: nil,
+            forcePlainPost: charge.forcePlainPost, content: charge.text,
+            visibility: charge.visibility.rawValue,
+            visibilityUserIds: charge.visibilityUserIds,
+            originalLanguage: charge.originalLanguage, mentions: charge.mentions,
+            location: charge.location,
+            discoverabilityPrecision: charge.discoverabilityPrecision,
+            transcription: charge.mobileTranscription, storyEffects: charge.storyEffects,
+            mediaCaptions: charge.mediaCaptions, mediaAlts: charge.mediaAlts,
+            mediaObjectIds: charge.mediaObjectIds,
+            allowSoundExtraction: charge.allowSoundExtraction)
+        XCTAssertEqual(intention.localMediaURLs, [b.url],
+            "L'intention publiée monte encore le fichier retiré — le fantôme part au TUS.")
+
+        XCTAssertEqual(retrait.retiredURLs, [a.url],
+            "Le registre de pré-montée doit oublier EXACTEMENT A, sinon son `PostMedia` "
+            + "reste orphelin côté serveur.")
+        XCTAssertEqual(retrait.retiredObjectIds, ["objet-A"])
+    }
+
+    /// **Le même fichier doit pouvoir REVENIR.** `mediaRoleByURL` et
+    /// `railPosedMediaURLs` sont aussi des gardes d'idempotence : survivant à
+    /// leur média, elles font sauter en silence la re-pose du même fichier —
+    /// « je le supprime, je le rechoisis, il n'apparaît plus ».
+    func test_leMemeFichier_peutRevenir_apresSonRetrait() {
+        let a = media("A")
+        let retrait = ComposerMediaRetraction.retracting(
+            porteursAvec(a, objet: "objet-A", scene: "scene-1"),
+            objectIds: ["objet-A"], slideId: nil)
+
+        XCTAssertNil(retrait.porteurs.roleByURL[a.url],
+            "Le rôle survit à son média : la re-pose du même fichier sera SAUTÉE.")
+        XCTAssertFalse(retrait.porteurs.railPosedURLs.contains(a.url),
+            "La marque du rail survit à son média : la porte du prochain fichier sera fausse.")
+        XCTAssertNil(retrait.porteurs.slideIdByMediaURL[a.url])
+    }
+
+    /// **Jeter une SCÈNE nomme une scène, pas un fichier.** L'URL se déduit de
+    /// l'index des fondations, et l'objet né de ce fichier part avec elle — même
+    /// si l'appelant ne l'avait pas nommé.
+    func test_jeterUneScene_emporteSonFond_etLObjetQuiEnEstNe() {
+        let a = media("A")
+        let retrait = ComposerMediaRetraction.retracting(
+            porteursAvec(a, objet: "objet-A", scene: "scene-1"),
+            objectIds: [], slideId: "scene-1")
+
+        XCTAssertTrue(retrait.porteurs.localMedia.isEmpty,
+            "La scène part de l'écran et son fichier reste dans la charge — le défaut #6577.")
+        XCTAssertEqual(retrait.retiredURLs, [a.url])
+        XCTAssertEqual(retrait.retiredObjectIds, ["objet-A"],
+            "L'objet né du fond n'est nommé par personne : c'est la règle qui doit le déduire.")
+        XCTAssertTrue(retrait.porteurs.altsByObjectId.isEmpty,
+            "L'alternative de cet objet s'accrocherait au PROCHAIN fichier posé sous le même "
+            + "identifiant.")
+    }
+
+    /// Un objet sans fichier — un texte, une pastille — ne retire rien des
+    /// porteurs et descend tel quel au SDK. C'est le cas nominal du rail
+    /// trailing, qui supprime surtout des objets qui ne sont aucun média.
+    func test_unObjetSansFichier_neRetireRienDesPorteurs() {
+        let a = media("A")
+        let porteurs = porteursAvec(a, objet: "objet-A", scene: "scene-1")
+        let retrait = ComposerMediaRetraction.retracting(
+            porteurs, objectIds: ["un-texte"], slideId: nil)
+
+        XCTAssertEqual(retrait.porteurs, porteurs,
+            "Supprimer un objet de texte ne doit toucher AUCUN porteur de média.")
+        XCTAssertTrue(retrait.retiredURLs.isEmpty)
+        XCTAssertEqual(retrait.retiredObjectIds, ["un-texte"],
+            "L'objet doit quand même descendre au SDK — sinon le geste n'a plus d'effet.")
     }
 }
