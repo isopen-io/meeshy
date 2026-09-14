@@ -3,9 +3,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { ADMIN_PERMISSIONS_QUERY_KEY, type AdminIdentity } from '@/lib/api/admin';
 import { NOTIFICATIONS_QUERY_KEY } from '@/lib/api/notifications';
 import { FRIENDS_QUERY_PREFIX } from '@/lib/api/friend-requests';
 import { appQueryClient } from '@/lib/api/query-client';
+import { sessionStore } from '@/lib/api/session';
 import { FloatingMenus } from './floating-menus';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { MENU_LADDER } from '@/lib/view/floating-menu';
@@ -212,5 +214,118 @@ describe('l’échelle ouverte', () => {
     });
 
     expect(barreaux()).toHaveLength(0);
+  });
+});
+
+/**
+ * **LE BARREAU « ADMINISTRATION »** (#6458) — le septième, pour qui en a la
+ * permission SERVIE. La garde elle-même est prouvée état par état dans
+ * `use-admin-access.test.tsx` ; ce qui se prouve ici est son BRANCHEMENT : la
+ * même entrée de cache que l'écran `/admin` décide du barreau, qui naît à la
+ * fin de l'échelle, s'annonce, se parcourt au clavier et referme l'échelle.
+ */
+describe('le barreau « Administration » (#6458)', () => {
+  const identite = (canAccessAdmin: boolean): AdminIdentity => ({
+    role: canAccessAdmin ? 'ADMIN' : 'USER',
+    permissions: {
+      canAccessAdmin,
+      canManageUsers: false,
+      canManageGroups: false,
+      canManageConversations: false,
+      canViewAnalytics: false,
+      canModerateContent: false,
+      canViewAuditLogs: false,
+      canManageNotifications: false,
+      canManageTranslations: false,
+    },
+  });
+
+  /* La session d'abord : le client partagé VIDE son cache à chaque changement
+     d'identité (`query-client.ts`), la matrice se pose donc après elle. */
+  function ouvrirEnTantQue(matrice: boolean | null): void {
+    act(() => {
+      sessionStore.getState().establish({
+        user: { id: 'u-admin', username: 'admin', displayName: 'Admin', avatar: null },
+        token: 'jeton-de-test',
+        sessionToken: 'session-de-test',
+        expiresIn: 3600,
+      });
+    });
+    if (matrice !== null) appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, identite(matrice));
+    monter();
+    act(() => {
+      boutonMenu().click();
+    });
+  }
+
+  const barreauAdmin = () => container.querySelector('[role="menuitem"][href="/admin"]') as HTMLAnchorElement | null;
+
+  afterEach(() => {
+    act(() => {
+      sessionStore.getState().clearSession();
+    });
+    appQueryClient.removeQueries({ queryKey: ADMIN_PERMISSIONS_QUERY_KEY });
+  });
+
+  test('matrice servie avec le droit : sept barreaux, le dernier mène à /admin et se nomme « Administration »', () => {
+    ouvrirEnTantQue(true);
+
+    const rendus = barreaux();
+    expect(rendus).toHaveLength(MENU_LADDER.length + 1);
+    expect(rendus.at(-1)?.getAttribute('href')).toBe('/admin');
+    expect(rendus.at(-1)?.getAttribute('aria-label')).toBe('Administration');
+    expect(rendus.at(-1)?.querySelector('svg')).not.toBeNull();
+  });
+
+  test('matrice servie sans le droit : les six d’iOS, aucun chemin vers /admin', () => {
+    ouvrirEnTantQue(false);
+
+    expect(barreaux()).toHaveLength(MENU_LADDER.length);
+    expect(barreauAdmin()).toBeNull();
+  });
+
+  test('matrice inconnue : les six d’iOS', () => {
+    ouvrirEnTantQue(null);
+
+    expect(barreaux()).toHaveLength(MENU_LADDER.length);
+    expect(barreauAdmin()).toBeNull();
+  });
+
+  /**
+   * Le septième barreau est dans le PARCOURS du menu, pas seulement dans le
+   * DOM : `Fin` y pose le focus, `Bas` en repart vers le premier. Un
+   * `itemCount` resté à six le laisserait hors d'atteinte du clavier.
+   */
+  test('le clavier l’atteint : Fin y pose le focus, Bas revient au premier, Haut y retourne', () => {
+    ouvrirEnTantQue(true);
+    const menu = container.querySelector('[role="menu"]') as HTMLElement;
+    const touche = (key: string) =>
+      act(() => {
+        menu.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+      });
+
+    touche('End');
+    expect(document.activeElement).toBe(barreauAdmin());
+    expect(barreauAdmin()?.getAttribute('tabindex')).toBe('0');
+
+    touche('ArrowDown');
+    expect(document.activeElement).toBe(barreaux()[0] ?? null);
+
+    touche('ArrowUp');
+    expect(document.activeElement).toBe(barreauAdmin());
+  });
+
+  test('le choisir referme l’échelle', () => {
+    ouvrirEnTantQue(true);
+    const avant = window.location.pathname;
+    try {
+      act(() => {
+        barreauAdmin()?.click();
+      });
+      expect(barreaux()).toHaveLength(0);
+      expect(window.location.pathname).toBe('/admin');
+    } finally {
+      window.history.replaceState(null, '', avant);
+    }
   });
 });
