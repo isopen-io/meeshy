@@ -115,25 +115,17 @@ describe('WelcomeScreen', () => {
 describe('SignupScreen — les navigations sont des ancres, la langue vient du catalogue PARTAGÉ', () => {
   const html = renderToStaticMarkup(<SignupScreen />);
 
-  test('les TROIS chemins de retour vers la connexion sont des `<a href="/login">`', () => {
-    // Le « X » (qui appelait `window.history.back()` — sans destination sur un
-    // lien profond), « Déjà un compte ? Se connecter », et le « Se connecter »
-    // qui apparaît sous l'e-mail déjà pris (absent de l'état initial : deux
-    // ancres ici, la troisième est prouvée en recette).
+  /**
+   * L'ÉTAT INITIAL NE MONTRE PLUS QUE LE PREMIER BARREAU (#6405) — mais les
+   * deux SORTIES restent : le « X » et « Déjà un compte ? ». Elles ne sont pas
+   * des champs, et quelqu'un qui s'est trompé d'écran ne doit pas remplir une
+   * adresse pour faire paraître le lien qui l'emmène ailleurs. La pastille de
+   * langue et les deux pages légales, elles, vivent au troisième barreau —
+   * `signup-rungs.test.tsx` les mesure une fois dépliés.
+   */
+  test('les deux sorties vers la connexion sont des ANCRES, dès la première seconde', () => {
     expect(html.match(/href="\/login"/g)).toHaveLength(2);
     expect(html).not.toContain('history.back');
-  });
-
-  test('la pastille de langue rend le nom NATIF, avec son `lang` — jamais le code en capitales', () => {
-    // La locale de `bun test` n'est pas garantie : on mesure la FORME (un nœud
-    // porteur de `lang`), pas une langue particulière — c'est elle qui manquait.
-    expect(html).toContain('Vous lirez Meeshy en');
-    expect(html).toMatch(/<span lang="[a-z]{2,3}">/);
-  });
-
-  test('les deux pages légales sont des ancres PLEIN DOCUMENT', () => {
-    expect(html).toContain('href="/terms"');
-    expect(html).toContain('href="/privacy"');
   });
 });
 

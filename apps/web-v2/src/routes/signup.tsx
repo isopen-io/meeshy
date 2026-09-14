@@ -7,6 +7,7 @@ import { Field } from '@/components/field';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { AUTH_GLYPHS } from '@/components/glyphs-auth';
 import { LanguageSheet } from '@/components/language-sheet';
+import { RungReveal } from '@/components/rung-reveal';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
 import { auth, isPhoneConflict } from '@/lib/api/auth';
@@ -20,8 +21,17 @@ import {
   effectiveUsername,
   composeRegisterBody,
   emptySignupForm,
+  isEmailValid,
   type SignupFormState,
 } from '@/lib/signup-form';
+import {
+  INITIAL_SIGNUP_REVEAL,
+  SIGNUP_RUNGS,
+  nextSignupReveal,
+  showsSignupRung,
+  visibleSignupRungs,
+  type SignupReveal,
+} from '@/lib/view/signup-rungs';
 import { placeSignupFailure, type SignupFeedback, type SignupField } from '@/lib/view/auth-feedback';
 import { Link, href, navigate } from '@/routes/route-table';
 
@@ -94,6 +104,29 @@ export default function SignupScreen() {
   // (D-53, #5672, raccordement).
   const [justRegistered, setJustRegistered] = useState(false);
 
+  /**
+   * CE QUI EST PARU (#6405) — la loi est dans `signup-rungs.ts` ; ici, sa
+   * mémoire et ses trois observations.
+   *
+   * `phoneAnswered` n'est PAS « le numéro est rempli » : le numéro est
+   * facultatif, et exiger des chiffres pour ouvrir la suite en ferait une
+   * obligation déguisée. Y répondre, c'est taper, quitter le champ, ou le dire
+   * — les trois gestes posent ce drapeau, qui ne se lève qu'une fois.
+   *
+   * L'avancée se DÉRIVE pendant le rendu plutôt que dans un effet : l'effet
+   * aurait peint une image de plus avec l'ancien état, et le barreau aurait
+   * paru un battement APRÈS la frappe qui l'ouvre. `nextSignupReveal` rend
+   * l'objet précédent à l'identique quand rien ne change, ce qui referme la
+   * boucle.
+   */
+  const [reveal, setReveal] = useState<SignupReveal>(INITIAL_SIGNUP_REVEAL);
+  const [isPhoneAnswered, setPhoneAnswered] = useState(false);
+  const nextReveal = nextSignupReveal(reveal, {
+    emailValid: isEmailValid(form.email),
+    phoneAnswered: isPhoneAnswered || form.phoneDigits.trim() !== '',
+  });
+  if (nextReveal !== reveal) setReveal(nextReveal);
+
   // Même doctrine que login.tsx : `auth.register` parle TOUJOURS à la
   // passerelle réelle, indépendamment de `apiConfig.source`.
   useEffect(() => {
@@ -163,11 +196,82 @@ export default function SignupScreen() {
           <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
             Vous lirez tout le monde dans votre langue.
           </p>
+
+          {/* OÙ L'ON EN EST (#6405). Trois segments, un par barreau : un
+              formulaire qui se déplie SANS dire combien il reste laisse croire
+              qu'il est sans fin — c'est le prix qu'on paie pour ne pas tout
+              montrer d'un coup, et une jauge de 3 pixels le rembourse.
+              `aria-hidden` : le compte est DIT juste à côté, en toutes lettres,
+              plutôt que d'être déduit de trois traits colorés. */}
+          <div className="mt-1 flex items-center gap-2">
+            <div aria-hidden="true" className="flex flex-1 gap-1">
+              {SIGNUP_RUNGS.map((rung) => (
+                <span
+                  key={rung}
+                  data-signup-step={showsSignupRung(reveal, rung) ? 'atteint' : 'a-venir'}
+                  className="h-1 flex-1 rounded-full transition-colors"
+                  style={{
+                    backgroundColor: showsSignupRung(reveal, rung)
+                      ? 'var(--ios-indigo-500)'
+                      : 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)',
+                  }}
+                />
+              ))}
+            </div>
+            <span className="text-caption tabular-nums" style={{ color: 'var(--color-ios-ink-3)' }}>
+              Étape {visibleSignupRungs(reveal).length} sur {SIGNUP_RUNGS.length}
+            </span>
+          </div>
         </div>
 
         <div className="grid gap-5 pb-8">
-          {/* Téléphone — jamais annoncé « facultatif » (SignupView.swift:169-171) :
-              le laisser vide est le chemin nominal. */}
+          <div className="grid gap-1">
+            <Field id="signup-email" label="Adresse e-mail" tint={INDIGO_TINT} focused={focused === 'email'} error={emailError}>
+              {({ id, describedBy }) => (
+                <input
+                  id={id}
+                  type="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  value={form.email}
+                  onInput={(e) => patch({ email: e.currentTarget.value })}
+                  onFocus={() => setFocused('email')}
+                  onBlur={() => setFocused(null)}
+                  placeholder="vous@exemple.com"
+                  className="w-full bg-transparent py-3 text-input outline-none"
+                  style={{ color: 'var(--color-ios-ink)' }}
+                  aria-describedby={describedBy}
+                  aria-invalid={describedBy !== undefined}
+                />
+              )}
+            </Field>
+            {/* L'AVERTISSEMENT DE VALIDATION (#6479, directive porteur).
+                Il n'est pas derrière un (i) : ce n'est pas un détail qu'on
+                consulte, c'est une CONDITION du compte. Le savoir avant
+                d'envoyer évite de taper une adresse jetable puis de découvrir
+                qu'on ne peut pas entrer. */}
+            <p data-signup-email-verification className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+              Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte.
+            </p>
+            {feedback.showSignIn ? (
+              <Link
+                to="login"
+                replace
+                className={`inline-flex items-center justify-self-start text-caption font-semibold ${INDIGO_LINK}`}
+                style={{ minHeight: 44 }}
+              >
+                Se connecter
+              </Link>
+            ) : null}
+          </div>
+
+          {/* LE NUMÉRO — DEUXIÈME BARREAU (#6405) : il ne paraît qu'une fois
+              l'adresse valide. Jamais annoncé « facultatif »
+              (`SignupView.swift:169-171`) : le laisser vide est le chemin
+              nominal, et « Je continue sans numéro » le dit mieux qu'une
+              étiquette, parce que c'est un GESTE, pas une mention. */}
+          <RungReveal shown={showsSignupRung(reveal, 'phone')}>
           <div className="grid gap-1">
             <label className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
               Téléphone
@@ -191,9 +295,12 @@ export default function SignupScreen() {
                   type="tel"
                   autoComplete="tel-national"
                   value={form.phoneDigits}
-                  onChange={(e) => patch({ phoneDigits: e.currentTarget.value })}
+                  onInput={(e) => patch({ phoneDigits: e.currentTarget.value })}
                   onFocus={() => setFocused('phoneNumber')}
-                  onBlur={() => setFocused(null)}
+                  onBlur={() => {
+                    setFocused(null);
+                    setPhoneAnswered(true);
+                  }}
                   placeholder="Numéro de téléphone"
                   className="w-full bg-transparent py-3 text-input outline-none"
                   style={{ color: 'var(--color-ios-ink)' }}
@@ -236,47 +343,23 @@ export default function SignupScreen() {
             </p>
           </div>
 
-          <div className="grid gap-1">
-            <Field id="signup-email" label="Adresse e-mail" tint={INDIGO_TINT} focused={focused === 'email'} error={emailError}>
-              {({ id, describedBy }) => (
-                <input
-                  id={id}
-                  type="email"
-                  autoComplete="email"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  value={form.email}
-                  onChange={(e) => patch({ email: e.currentTarget.value })}
-                  onFocus={() => setFocused('email')}
-                  onBlur={() => setFocused(null)}
-                  placeholder="vous@exemple.com"
-                  className="w-full bg-transparent py-3 text-input outline-none"
-                  style={{ color: 'var(--color-ios-ink)' }}
-                  aria-describedby={describedBy}
-                  aria-invalid={describedBy !== undefined}
-                />
-              )}
-            </Field>
-            {/* L'AVERTISSEMENT DE VALIDATION (#6479, directive porteur).
-                Il n'est pas derrière un (i) : ce n'est pas un détail qu'on
-                consulte, c'est une CONDITION du compte. Le savoir avant
-                d'envoyer évite de taper une adresse jetable puis de découvrir
-                qu'on ne peut pas entrer. */}
-            <p data-signup-email-verification className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte.
-            </p>
-            {feedback.showSignIn ? (
-              <Link
-                to="login"
-                replace
+            {showsSignupRung(reveal, 'identity') ? null : (
+              <button
+                type="button"
+                data-signup-skip-phone
+                onClick={() => setPhoneAnswered(true)}
                 className={`inline-flex items-center justify-self-start text-caption font-semibold ${INDIGO_LINK}`}
                 style={{ minHeight: 44 }}
               >
-                Se connecter
-              </Link>
-            ) : null}
-          </div>
+                Je continue sans numéro
+              </button>
+            )}
+          </RungReveal>
 
+          {/* LE RESTE — TROISIÈME BARREAU (#6405) : identité dérivée, mot de
+              passe facultatif, langue, bouton et mentions. Il ne paraît
+              qu'une fois le numéro RÉPONDU — tapé, quitté, ou passé. */}
+          <RungReveal shown={showsSignupRung(reveal, 'identity')}>
           {/* CE QUE L'INSCRIPTION VA CRÉER — montré, modifiable, et ENVOYÉ
               (#6479). Placé APRÈS l'adresse parce qu'il en DÉCOULE : tant
               qu'elle n'est pas tapée, il n'y a rien à montrer. */}
@@ -322,7 +405,7 @@ export default function SignupScreen() {
                 type="password"
                 autoComplete="new-password"
                 value={form.password}
-                onChange={(e) => patch({ password: e.currentTarget.value })}
+                onInput={(e) => patch({ password: e.currentTarget.value })}
                 onFocus={() => setFocused('password')}
                 onBlur={() => setFocused(null)}
                 placeholder={`${PASSWORD_MIN} caractères minimum`}
@@ -410,6 +493,12 @@ export default function SignupScreen() {
             </div>
           </div>
 
+          </RungReveal>
+
+          {/* HORS DES BARREAUX, DÉLIBÉRÉMENT (#6405) : ce n'est pas un champ,
+              c'est une SORTIE. Quelqu'un qui a déjà un compte doit pouvoir le
+              dire à la première seconde, sans avoir à remplir une adresse pour
+              faire paraître le lien qui l'emmène ailleurs. */}
           <Link
             to="login"
             replace
