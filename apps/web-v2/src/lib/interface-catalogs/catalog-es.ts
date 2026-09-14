@@ -190,6 +190,7 @@ const es = {
   'settings.logout.message': '¿Seguro que quieres cerrar sesión?',
   'settings.logout.inprogress': 'Cerrando sesión...',
   'settings.legacy': 'Versión clásica, pestaña nueva',
+  'settings.legacy.unavailable': 'No disponible en este entorno',
   'settings.loading': 'Cargando los ajustes',
   'settings.error.title': 'No se pudieron cargar tus ajustes',
   'settings.retry': 'Reintentar',
