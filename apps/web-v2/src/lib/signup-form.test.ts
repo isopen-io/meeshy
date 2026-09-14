@@ -28,6 +28,7 @@ const FR = countryOf('FR')!;
 
 function baseForm(overrides: Partial<SignupFormState> = {}): SignupFormState {
   return {
+    username: '',
     displayName: 'Ada Lovelace',
     email: 'ada@example.com',
     phoneDigits: '',
@@ -126,20 +127,41 @@ describe('le numéro FOURNI doit être plausible (#6479)', () => {
   });
 });
 
-describe('composeRegisterBody — sans nom affiché (#6441)', () => {
+describe('composeRegisterBody — sans nom affiché TAPÉ (#6441, révisé #6479)', () => {
   /**
-   * Même loi que `password` : la clé est OMISE, pas posée à `''`.
-   * `displayNameProperty` porte `minLength: 1` — une chaîne vide serait une
-   * VALEUR, refusée par le serveur, et l'inscription échouerait précisément
-   * dans le cas qu'elle vient d'ouvrir.
+   * LA LOI A CHANGÉ, et le témoin avec elle.
+   *
+   * #6441 omettait la clé pour que la PASSERELLE dérive. #6479 renverse la
+   * charge de la preuve sur directive porteur : « ici on a des données et la
+   * passerelle doit utiliser ces données ». L'écran MONTRE le nom affiché
+   * dérivé — c'est une donnée, sous les yeux de l'utilisateur, qui l'a
+   * acceptée en continuant. Elle part.
+   *
+   * Ce qui SURVIT de #6441 : la clé reste OMISE quand il n'y a réellement
+   * rien à envoyer. `displayNameProperty` porte `minLength: 1` — une chaîne
+   * vide serait une VALEUR refusée, et l'inscription échouerait dans le cas
+   * même qu'elle ouvre.
    */
-  test('la clé displayName est ABSENTE de la charge', () => {
-    const body = composeRegisterBody(baseForm({ displayName: '' }));
-    expect('displayName' in body).toBe(false);
+  test('le nom affiché DÉRIVÉ part — la passerelle n’a plus à l’inventer', () => {
+    const body = composeRegisterBody(baseForm({ displayName: '', email: 'jean.dupont@example.com' }));
+    expect(body.displayName).toBe('Jean Dupont');
+    expect(body.username).toBe('jean-dupont');
   });
 
-  test('espaces seuls ⇒ ABSENTE aussi', () => {
-    const body = composeRegisterBody(baseForm({ displayName: '   ' }));
+  test('espaces seuls ⇒ la dérivation gagne, comme un champ vide', () => {
+    const body = composeRegisterBody(baseForm({ displayName: '   ', email: 'jean.dupont@example.com' }));
+    expect(body.displayName).toBe('Jean Dupont');
+  });
+
+  /**
+   * Le SEUL cas où la passerelle doit encore chercher : une adresse dont rien
+   * n'est slugifiable. `pseudoRacine` y retombe sur le recours `user` —
+   * l'envoyer garantirait une collision pour tout le monde. On n'a alors
+   * AUCUNE donnée, et c'est la règle du porteur lue jusqu'au bout.
+   */
+  test('une adresse non slugifiable ⇒ les DEUX clés restent absentes', () => {
+    const body = composeRegisterBody(baseForm({ displayName: '', email: 'a@b.co' }));
+    expect('username' in body).toBe(false);
     expect('displayName' in body).toBe(false);
   });
 
@@ -186,10 +208,18 @@ describe('composeRegisterBody — sans mot de passe (#6424)', () => {
 });
 
 describe('composeRegisterBody — la charge EXACTE de POST /auth/register (register.ts:133)', () => {
-  test('trim + minuscules l’e-mail, jamais username/firstName/lastName', () => {
+  /**
+   * `username` A CHANGÉ DE CAMP (#6479), `firstName`/`lastName` NON.
+   *
+   * Directive porteur : « dès qu'un champ username est rempli la passerelle n'a
+   * plus rien à créer ». L'écran montre le pseudo, donc il l'envoie — et
+   * `resoudreUsername` l'emploie tel quel. Les deux noms d'état civil, eux,
+   * restent DÉRIVÉS du nom affiché côté serveur : rien ne les saisit.
+   */
+  test('trim + minuscules l’e-mail ; username PART, firstName/lastName jamais', () => {
     const body = composeRegisterBody(baseForm({ email: '  Ada@Example.COM  ' }));
     expect(body.email).toBe('ada@example.com');
-    expect('username' in body).toBe(false);
+    expect(body.username).toBe('ada-lovelace');
     expect('firstName' in body).toBe(false);
     expect('lastName' in body).toBe(false);
   });

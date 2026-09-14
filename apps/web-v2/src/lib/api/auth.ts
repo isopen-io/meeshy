@@ -56,6 +56,14 @@ export type RegisterBody = {
    * raison que `password` ci-dessous — `displayNameProperty` porte
    * `minLength: 1`, une chaîne vide serait refusée.
    */
+  /**
+   * Le pseudo que l'écran MONTRE et donc ENVOIE (#6479). `resoudreUsername`
+   * (`registration.service.ts`) l'emploie tel quel — la passerelle ne génère
+   * que si la clé est ABSENTE. Une collision devient alors un refus
+   * `USERNAME_TAKEN` servi avec trois pseudos libres, jamais un renommage
+   * silencieux.
+   */
+  readonly username?: string;
   readonly displayName?: string;
   readonly email: string;
   /**

@@ -31,10 +31,41 @@ describe('placeSignupFailure — le champ vise directement une saisie', () => {
     expect(result.bannerError).toBeNull();
   });
 
-  test('field:"username" (nom SERVEUR) ⇒ sous NOM AFFICHÉ (table iOS)', () => {
+  /**
+   * LA TABLE A CHANGÉ (#6479). `username` se repliait sur le nom affiché parce
+   * qu'aucune saisie ne le portait. L'écran montre et ENVOIE désormais le
+   * pseudo : un refus qui le vise doit se poser SOUS lui, sinon le message
+   * accuse un champ que l'utilisateur n'a pas touché.
+   */
+  test('field:"username" ⇒ sous le PSEUDO, qui a maintenant sa saisie', () => {
     const result = placeSignupFailure(failure({ status: 400, code: 'VALIDATION_ERROR', field: 'username' }));
-    expect(result.fieldErrors.displayName).toBeDefined();
+    expect(result.fieldErrors.username).toBeDefined();
+    expect(result.fieldErrors.displayName).toBeUndefined();
     expect(result.fieldErrors.email).toBeUndefined();
+  });
+
+  /**
+   * La contrepartie d'ENVOYER le pseudo : une collision est un REFUS, plus un
+   * renommage silencieux. Les trois valeurs libres que la passerelle sert avec
+   * lui sont ce qui empêche ce refus d'être un mur — et elles doivent traverser
+   * jusqu'à l'écran.
+   */
+  test('USERNAME_TAKEN porte les trois pseudos libres jusqu’à l’écran', () => {
+    const result = placeSignupFailure(
+      failure({
+        status: 409,
+        code: 'USERNAME_TAKEN',
+        field: 'username',
+        suggestions: ['ada-l', 'ada-lovelace2', 'ada1815'],
+      }),
+    );
+    expect(result.fieldErrors.username).toBeDefined();
+    expect(result.usernameSuggestions).toEqual(['ada-l', 'ada-lovelace2', 'ada1815']);
+  });
+
+  test('tout autre refus ne propose AUCUN pseudo', () => {
+    const result = placeSignupFailure(failure({ status: 400, code: 'VALIDATION_ERROR', field: 'email' }));
+    expect(result.usernameSuggestions).toEqual([]);
   });
 
   test('field:"phoneCountryCode" ⇒ sous téléphone (même saisie que phoneNumber)', () => {

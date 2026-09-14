@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { CountrySheet } from '@/components/country-sheet';
+import { DerivedIdentity } from '@/components/derived-identity';
 import { Field } from '@/components/field';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { AUTH_GLYPHS } from '@/components/glyphs-auth';
@@ -15,6 +16,8 @@ import { useOnline } from '@/lib/net/online';
 import {
   PASSWORD_MIN,
   canSubmit,
+  effectiveDisplayName,
+  effectiveUsername,
   composeRegisterBody,
   emptySignupForm,
   type SignupFormState,
@@ -59,7 +62,12 @@ const INDIGO_TINT = 'var(--ios-indigo-500)';
  * copieront.
  */
 const INDIGO_LINK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--ios-indigo-600)]';
-const EMPTY_FEEDBACK: SignupFeedback = { fieldErrors: {}, bannerError: null, showSignIn: false };
+const EMPTY_FEEDBACK: SignupFeedback = {
+  fieldErrors: {},
+  bannerError: null,
+  showSignIn: false,
+  usernameSuggestions: [],
+};
 
 type FocusedField = SignupField | null;
 
@@ -158,73 +166,6 @@ export default function SignupScreen() {
         </div>
 
         <div className="grid gap-5 pb-8">
-          {/* FACULTATIF, et ANNONCÉ tel quel (#6441). La moitié « mot de passe »
-              de #6424 a été livrée sans celle-ci : le champ restait le PREMIER
-              de l'écran, sans mention, et `canSubmit` l'exigeait — l'écran
-              promettait l'inscription par adresse seule et la refusait. */}
-          <Field
-            id="signup-display-name"
-            label="Nom affiché (facultatif)"
-            tint={INDIGO_TINT}
-            focused={focused === 'displayName'}
-            error={feedback.fieldErrors.displayName}
-            hint={{
-              text: 'Laissé vide, nous le tirons de votre adresse. Vous pourrez le changer à tout moment.',
-              glyph: AUTH_GLYPHS.info,
-              label: 'À quoi sert le nom affiché',
-            }}
-          >
-            {({ id, describedBy }) => (
-              <input
-                id={id}
-                type="text"
-                autoComplete="name"
-                value={form.displayName}
-                onChange={(e) => patch({ displayName: e.currentTarget.value })}
-                onFocus={() => setFocused('displayName')}
-                onBlur={() => setFocused(null)}
-                placeholder="Comment vous appeler ?"
-                className="w-full bg-transparent py-3 text-input outline-none"
-                style={{ color: 'var(--color-ios-ink)' }}
-                aria-describedby={describedBy}
-                aria-invalid={describedBy !== undefined}
-              />
-            )}
-          </Field>
-
-          <div className="grid gap-1">
-            <Field id="signup-email" label="Adresse e-mail" tint={INDIGO_TINT} focused={focused === 'email'} error={emailError}>
-              {({ id, describedBy }) => (
-                <input
-                  id={id}
-                  type="email"
-                  autoComplete="email"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  value={form.email}
-                  onChange={(e) => patch({ email: e.currentTarget.value })}
-                  onFocus={() => setFocused('email')}
-                  onBlur={() => setFocused(null)}
-                  placeholder="vous@exemple.com"
-                  className="w-full bg-transparent py-3 text-input outline-none"
-                  style={{ color: 'var(--color-ios-ink)' }}
-                  aria-describedby={describedBy}
-                  aria-invalid={describedBy !== undefined}
-                />
-              )}
-            </Field>
-            {feedback.showSignIn ? (
-              <Link
-                to="login"
-                replace
-                className={`inline-flex items-center justify-self-start text-caption font-semibold ${INDIGO_LINK}`}
-                style={{ minHeight: 44 }}
-              >
-                Se connecter
-              </Link>
-            ) : null}
-          </div>
-
           {/* Téléphone — jamais annoncé « facultatif » (SignupView.swift:169-171) :
               le laisser vide est le chemin nominal. */}
           <div className="grid gap-1">
@@ -294,6 +235,64 @@ export default function SignupScreen() {
               Il vous permettra de vous connecter, et à vos proches de vous retrouver.
             </p>
           </div>
+
+          <div className="grid gap-1">
+            <Field id="signup-email" label="Adresse e-mail" tint={INDIGO_TINT} focused={focused === 'email'} error={emailError}>
+              {({ id, describedBy }) => (
+                <input
+                  id={id}
+                  type="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  value={form.email}
+                  onChange={(e) => patch({ email: e.currentTarget.value })}
+                  onFocus={() => setFocused('email')}
+                  onBlur={() => setFocused(null)}
+                  placeholder="vous@exemple.com"
+                  className="w-full bg-transparent py-3 text-input outline-none"
+                  style={{ color: 'var(--color-ios-ink)' }}
+                  aria-describedby={describedBy}
+                  aria-invalid={describedBy !== undefined}
+                />
+              )}
+            </Field>
+            {/* L'AVERTISSEMENT DE VALIDATION (#6479, directive porteur).
+                Il n'est pas derrière un (i) : ce n'est pas un détail qu'on
+                consulte, c'est une CONDITION du compte. Le savoir avant
+                d'envoyer évite de taper une adresse jetable puis de découvrir
+                qu'on ne peut pas entrer. */}
+            <p data-signup-email-verification className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+              Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte.
+            </p>
+            {feedback.showSignIn ? (
+              <Link
+                to="login"
+                replace
+                className={`inline-flex items-center justify-self-start text-caption font-semibold ${INDIGO_LINK}`}
+                style={{ minHeight: 44 }}
+              >
+                Se connecter
+              </Link>
+            ) : null}
+          </div>
+
+          {/* CE QUE L'INSCRIPTION VA CRÉER — montré, modifiable, et ENVOYÉ
+              (#6479). Placé APRÈS l'adresse parce qu'il en DÉCOULE : tant
+              qu'elle n'est pas tapée, il n'y a rien à montrer. */}
+          <DerivedIdentity
+            username={effectiveUsername(form)}
+            displayName={effectiveDisplayName(form)}
+            onUsernameChange={(username) => patch({ username })}
+            onDisplayNameChange={(displayName) => patch({ displayName })}
+            tint={INDIGO_TINT}
+            focusedField={focused === 'username' || focused === 'displayName' ? focused : null}
+            onFocus={(field) => setFocused(field)}
+            onBlur={() => setFocused(null)}
+            usernameError={feedback.fieldErrors.username}
+            displayNameError={feedback.fieldErrors.displayName}
+            suggestions={feedback.usernameSuggestions}
+          />
 
           {/* LE MOT DE PASSE EST FACULTATIF (#6424). Le libellé le DIT, et la
               note en dessous dit ce qui se passe sans lui — sans quoi laisser
