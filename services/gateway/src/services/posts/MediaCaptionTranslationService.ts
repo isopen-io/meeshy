@@ -211,13 +211,39 @@ export class MediaCaptionTranslationService {
     };
 
     try {
-      await (this.prisma as unknown as { $runCommandRaw: (cmd: Prisma.InputJsonObject) => Promise<unknown> }).$runCommandRaw({
+      // Mise à jour en PIPELINE (#6558). L'invalidation pose `captionTranslations`
+      // à null ; un `$set` pointé (`captionTranslations.<langue>`) sur un null
+      // est refusé par MongoDB, qui le rend dans `writeErrors` d'une réponse
+      // `ok: 1` SANS lever — le service journalisait « persisted » et diffusait
+      // une traduction jamais écrite. La fusion part d'une carte vide quand le
+      // champ est null ou absent ; la valeur voyage en `$literal`, sans quoi un
+      // texte traduit commençant par `$` serait lu comme un chemin de champ.
+      const result = await (this.prisma as unknown as {
+        $runCommandRaw: (cmd: Prisma.InputJsonObject) => Promise<{ n?: number; writeErrors?: unknown[] }>;
+      }).$runCommandRaw({
         update: 'PostMedia',
         updates: [{
           q: { _id: { $oid: mediaId } },
-          u: { $set: { [`captionTranslations.${targetLanguage}`]: translationData } },
+          u: [{
+            $set: {
+              captionTranslations: {
+                $mergeObjects: [
+                  { $ifNull: ['$captionTranslations', {}] },
+                  { [targetLanguage]: { $literal: translationData } },
+                ],
+              },
+            },
+          }],
         }],
       });
+
+      const writeErrors = result?.writeErrors ?? [];
+      if (writeErrors.length > 0 || (result?.n ?? 0) === 0) {
+        log.error('MediaCaptionTranslation: persist refused', new Error('captionTranslations not written'), {
+          mediaId, targetLanguage, matched: result?.n ?? 0, writeErrors,
+        });
+        return;
+      }
 
       log.info('MediaCaptionTranslation: persisted', { mediaId, targetLanguage });
 
