@@ -151,15 +151,25 @@ struct SocialSceneFullscreenView: View {
                                        carrierFallback: true)
     }
 
-    /// La légende AFFICHÉE : celle de la langue choisie dans la rangée de
-    /// traduction quand elle vient du texte du post (#6504), sinon la légende
-    /// résolue telle quelle. Une langue sans texte connu retombe sur la résolue
-    /// — jamais une légende vide.
+    /// La langue dont le texte du post est affiché : le choix du lecteur dans la
+    /// rangée ou la feuille, sinon la descente du Prisme. UNE résolution pour le
+    /// texte ET le drapeau actif — deux résolutions divergeaient (#6531).
+    private var langueAffichee: String? {
+        langueDeLegende ?? post.resolvedLanguageCode(preferredLanguages: preferredContentLanguages)
+    }
+
+    /// La légende AFFICHÉE : pour le texte du post (#6504), le texte de la langue
+    /// affichée ; pour la légende propre d'un média, telle quelle — c'est un
+    /// autre contenu, sans traductions (#6280).
     private var caption: String? {
         guard let legende else { return nil }
-        guard legende.origin == .carrierText, let langue = langueDeLegende else { return legende.text }
-        if langue.lowercased() == post.originalLanguage?.lowercased() { return post.content }
-        return post.translations?.first { $0.key.lowercased() == langue.lowercased() }?.value.text ?? legende.text
+        guard legende.origin == .carrierText else { return legende.text }
+        return CaptionTranslationOffer.carrierText(
+            content: post.content,
+            originalLanguage: post.originalLanguage,
+            translations: (post.translations ?? [:]).mapValues(\.text),
+            language: langueAffichee
+        )
     }
 
     /// **L'offre de traduction de la légende** (#6504) — seulement pour le
@@ -170,7 +180,7 @@ struct SocialSceneFullscreenView: View {
         return CaptionTranslationOffer.resolve(
             originalLanguage: post.originalLanguage,
             translationLanguages: post.availableLanguages,
-            activeLanguage: langueDeLegende ?? post.resolvedLanguageCode(preferredLanguages: preferredContentLanguages)
+            activeLanguage: langueAffichee
         )
     }
 

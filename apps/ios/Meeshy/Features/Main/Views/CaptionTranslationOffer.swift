@@ -39,4 +39,19 @@ nonisolated enum CaptionTranslationOffer: Equatable {
         }
         return origine == nil ? .none : .translate
     }
+
+    /// **Le texte du post dans la langue affichée**, lu DEPUIS la langue active.
+    ///
+    /// Recette 2026-09-14 : le plein écran marquait « Français » actif sur un
+    /// texte portugais — le texte venait de `translatedContent`, figé par un
+    /// autre chemin, le drapeau de la descente du Prisme (#6531). Le texte et le
+    /// drapeau se lisent désormais depuis UNE langue. Une langue sans texte connu
+    /// rend le contenu, jamais une légende vide.
+    static func carrierText(content: String,
+                            originalLanguage: String?,
+                            translations: [String: String],
+                            language: String?) -> String {
+        guard let cle = language?.lowercased(), cle != originalLanguage?.lowercased() else { return content }
+        return translations.first { $0.key.lowercased() == cle }?.value ?? content
+    }
 }

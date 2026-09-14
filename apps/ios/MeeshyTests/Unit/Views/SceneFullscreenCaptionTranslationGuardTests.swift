@@ -91,6 +91,18 @@ final class SceneFullscreenCaptionTranslationGuardTests: XCTestCase {
                       "La feuille n'a aucun moyen de sauter la lecture des traductions d'un message.")
     }
 
+    /// Le texte du post affiché et le drapeau marqué actif viennent de la MÊME
+    /// langue (recette 2026-09-14 : « Français » actif sur un texte portugais).
+    func test_leTexteAffiche_etLeDrapeauActif_viennentDeLaMemeLangue() throws {
+        let code = try pleinEcran
+        XCTAssertTrue(code.contains("CaptionTranslationOffer.carrierText("),
+                      "Le texte du post affiché ne se lit pas depuis la langue active.")
+        XCTAssertTrue(code.contains("activeLanguage: langueAffichee"),
+                      "Le drapeau actif ne vient pas de la langue dont le texte est affiché.")
+        XCTAssertEqual(code.components(separatedBy: "post.resolvedLanguageCode(").count - 1, 1,
+                       "Plusieurs résolutions de langue subsistent : le drapeau et le texte peuvent diverger.")
+    }
+
     /// La rangée n'appelle plus de traduction directe : l'icône, et la pastille
     /// qui porte le même glyphe, ouvrent la feuille (même icône ⇒ même effet).
     func test_laRangee_ouvreLaFeuille_parLIconeEtParLaPastille() throws {
