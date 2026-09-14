@@ -1,5 +1,55 @@
 # @meeshy/gateway
 
+## 1.52.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le fil et sa carte parlent la langue d'interface, pas le français en dur (#6546)
+  - la montée de React quitte le lot — @types/react 19.3 ajoutait deux erreurs au cliquet de dette
+  - budget interface_catalogs remesuré après les 28 clés du Flux (#6488)
+  - l'inscription se déplie barreau par barreau, et ce qui est calculé se voit et se modifie
+  - le plein écran de scène traduit le contenu qu'il affiche — légende du média ou texte du post (#6280)
+  - le fil et sa carte parlent la langue d'interface, pas le français en dur (#6488)
+  - /login s'ouvre sur le lien magique, et l'identifiant + mot de passe devient une option nommée
+  - quatre clés de catalogue orphelines depuis la refonte de l'inscription (#6479)
+  - le catalogue ne garde plus les quatre clés du nom d'inscription que plus rien n'emploie (#6541)
+  - le fil décode et sert la légende de média traduite (#6280)
+  - fix-orphan-participants.ts ne laisse plus de messages sans expéditeur (#6518) (#6540)
+  - le fil applique et affiche la légende de média traduite (#6280)
+  - le store social câble le socket media:caption-translation-updated (#6280)
+  - ApiPostMedia/FeedMedia décodent et résolvent la légende traduite (#6280)
+  - le fil se lit et se touche de l'en-tête au composeur — les deux voiles disparaissent, la pastille à mots tourne (#6537)
+  - les surfaces de légende de média servent la traduction résolue par le Prisme (#6280)
+  - le store du fil applique la traduction de légende reçue par socket (#6280)
+  - événement socket media:caption-translation-updated (#6280)
+  - APIPostMedia/FeedMedia décodent et résolvent la légende traduite (#6280)
+  - au-delà de sept mots, le bouton d'envoi ordinaire — et la touche Retour passe à la ligne (#6537)
+  - le solde des Meeshes passe SOUS le niveau — et MeeshHero cesse d'être un mort-vivant (#6497)
+  - le texte du post affiché en plein écran et le drapeau actif viennent d'une seule langue (#6504)
+  - une légende de média qui répète le texte du post s'offre à la traduction (#6504)
+  - l'icône de traduction de la légende ouvre la feuille de traduction des messages (#6504)
+  - la légende dépliée se pose juste au-dessus de « voir moins », et la traduction s'offre entre les deux (#6504)
+  - le témoin du plancher de mot de passe le DÉRIVE — le rouge de dev et main est soldé
+  - un double tap latéral avance/recule la vidéo de 10 s, comme iOS (#6369)
+  - la légende de média sort de PostService, et le gestionnaire socket en mocke le service (#6280)
+  - l'édition d'un post ne déclenche plus la traduction de légende DANS sa transaction (#6280)
+  - route POST /posts/media/:mediaId/caption/translate (#6280)
+  - jest.requireActual fonctionne sous bun test (#6519)
+  - PostService déclenche la traduction de légende à la création/édition/repost (#6280)
+  - MediaCaptionTranslationService — traduction de la légende d'un média (#6280)
+  - ContactDirectoryService.match() ne perd plus un contact sans blockedUserIds (#6529) (#6530)
+  - un post s'ouvre à nouveau — getPostById lit par select, plus par include (#6503)
+  - aucun effaceur ne laisse plus de message sans expéditeur (#6501)
+  - un expéditeur disparu est réparé, et la lecture de la conversation rejouée une fois (#6501)
+  - PostMedia.captionLanguage/captionTranslations + événement média:légende-traduction
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.21.0
+
 ## 1.51.0
 
 ### Minor Changes
