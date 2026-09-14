@@ -290,16 +290,20 @@ describe('zmq-helpers', () => {
       expect(translationTargetId('post', OBJECT_ID)).toBe(`post:${OBJECT_ID}`);
       expect(translationTargetId('comment', 'c1')).toBe('comment:c1');
       expect(translationTargetId('story', 's1')).toBe('story:s1');
+      // #6280 — la légende d'un média (PostMedia.caption) partage le même bus
+      // que les autres familles sociales, sous son propre préfixe.
+      expect(translationTargetId('media-caption', 'm1')).toBe('media-caption:m1');
     });
 
     it('exposes the namespaces the social pipelines claim', () => {
-      expect([...TRANSLATION_TARGET_NAMESPACES]).toEqual(['post', 'comment', 'story']);
+      expect([...TRANSLATION_TARGET_NAMESPACES]).toEqual(['post', 'comment', 'story', 'media-caption']);
     });
 
     it('extracts the namespace of a social target, null for a bare message id', () => {
       expect(translationTargetNamespace(`post:${OBJECT_ID}`)).toBe('post');
       expect(translationTargetNamespace('comment:abc')).toBe('comment');
       expect(translationTargetNamespace('story:abc')).toBe('story');
+      expect(translationTargetNamespace(`media-caption:${OBJECT_ID}`)).toBe('media-caption');
       expect(translationTargetNamespace(OBJECT_ID)).toBeNull();
     });
 
@@ -313,6 +317,7 @@ describe('zmq-helpers', () => {
       expect(isMessageTranslationTarget(translationTargetId('post', OBJECT_ID))).toBe(false);
       expect(isMessageTranslationTarget(`comment:${OBJECT_ID}`)).toBe(false);
       expect(isMessageTranslationTarget(`story:${OBJECT_ID}`)).toBe(false);
+      expect(isMessageTranslationTarget(`media-caption:${OBJECT_ID}`)).toBe(false);
       expect(isMessageTranslationTarget(`text-object:${OBJECT_ID}`)).toBe(false);
     });
   });
