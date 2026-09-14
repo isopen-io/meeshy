@@ -434,29 +434,29 @@ public final class ReaderAudioMixer {
                                        at: nil, completionHandler: nil)
     }
 
-    /// Convertit une fenêtre de rognage en position/longueur de FRAMES pour
-    /// `AVAudioPlayerNode.scheduleSegment` — même conversion que
-    /// `AudioMixer.scheduleNodeFromTimelineTime` (secondes × `sampleRate`,
-    /// comparé à `file.length`). `nil` en entrée (aucune fenêtre déclarée) ou
-    /// en sortie (fenêtre aberrante : bornes inversées, hors fichier, fichier
-    /// vide) signale à l'appelant de retomber sur `scheduleFile` — une donnée
-    /// vieillie ou incohérente ne doit JAMAIS produire un silence.
+    /// Convertit une fenêtre de rognage ET l'écoulé DANS le clip en
+    /// position/longueur de FRAMES pour `AVAudioPlayerNode.scheduleSegment`.
+    ///
+    /// Projection du site partagé `TimelineAudioWindow.segment` — la MÊME loi
+    /// que celle qu'applique `AudioMixer.scheduleNodeFromTimelineTime` côté
+    /// composition. Elle n'est pas recopiée ici : les deux moteurs avaient déjà
+    /// divergé sur `hostTime(forDelaySeconds:)`, et c'est cette divergence-là
+    /// qui laissait le LECTEUR incapable d'entrer en cours de piste (#6580).
+    ///
+    /// `nil` en sortie et `elapsedInClip == 0` ⇒ l'appelant retombe sur
+    /// `scheduleFile` (source entière, comportement d'aujourd'hui) ; `nil` avec
+    /// `elapsedInClip > 0` ⇒ l'ouverture est au-delà de la fin du clip et il ne
+    /// faut RIEN planifier — cf. `scheduleAudio`.
     ///
     /// Pure et statique : éprouvable sans `AVAudioEngine` ni fichier réel.
     static func segment(forBounds bounds: MediaTrimBounds?,
+                        elapsedInClip: Double,
                         sampleRate: Double,
                         fileLength: AVAudioFramePosition) -> (startingFrame: AVAudioFramePosition, frameCount: AVAudioFrameCount)? {
-        guard let bounds,
-              sampleRate.isFinite, sampleRate > 0,
-              fileLength > 0,
-              bounds.start.isFinite, bounds.end.isFinite,
-              bounds.start >= 0, bounds.end > bounds.start
-        else { return nil }
-        let startingFrame = AVAudioFramePosition(bounds.start * sampleRate)
-        guard startingFrame >= 0, startingFrame < fileLength else { return nil }
-        let endFrame = min(fileLength, AVAudioFramePosition(bounds.end * sampleRate))
-        guard endFrame > startingFrame else { return nil }
-        return (startingFrame, AVAudioFrameCount(endFrame - startingFrame))
+        TimelineAudioWindow.segment(bounds: bounds,
+                                    elapsedInClip: elapsedInClip,
+                                    sampleRate: sampleRate,
+                                    fileLength: fileLength)
     }
 
     /// Site UNIQUE d'appel à `scheduleFile`/`scheduleSegment` — foreground ET
@@ -470,6 +470,7 @@ public final class ReaderAudioMixer {
                                       at scheduleAt: AVAudioTime?,
                                       completionHandler: (@Sendable () -> Void)?) {
         guard let segment = ReaderAudioMixer.segment(forBounds: trimBounds,
+                                                     elapsedInClip: 0,
                                                      sampleRate: file.processingFormat.sampleRate,
                                                      fileLength: file.length) else {
             node.scheduleFile(file, at: scheduleAt, completionHandler: completionHandler)
