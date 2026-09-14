@@ -73,9 +73,27 @@
 // peignaient chacune leur pastille en `Color(hex:)`. Le cliquet à DEUX SENS a
 // exigé l'enregistrement, et c'est sa moitié la moins évidente qui a raison :
 // une amélioration non consignée se laisse reperdre en silence au lot suivant.
-// 2026-09-14 (#6481) — 943 → 930. Le lot des pages de Réglages avait porté le
-// compte à 946 : les deux vues du profil vocal répétaient `Color(hex: accentColor)`
-// à chaque site. La teinte y est désormais convertie une fois (`accent`).
+// 2026-09-14 (#6481, lot « Réglages en verre ») — 943 → 946. Trois usages
+// neufs, tous de la forme `Color(hex: accentColor)` dans
+// `VoiceProfileManageView` (5 → 7) et `VoiceProfileWizardView` (9 → 10) : la
+// flèche de retour en verre prend la teinte de la conversation. L'argument est
+// une VARIABLE — c'est la couleur d'accent, convertie depuis la chaîne hex que
+// `conversation.accentColor` sert. C'est exactement ce que CLAUDE.md § Accent
+// Color EXIGE ; ces appels sont l'application de la règle, pas son contournement.
+//
+// ⚠️ CE QUE CE CLIQUET MESURE N'EST PAS CE QU'IL ANNONCE (relevé le 2026-09-14).
+// Sur les 946 occurrences, **163 seulement passent un LITTÉRAL** (`Color(hex: "#…")`) ;
+// les 836 autres passent une variable, et la plupart sont des couleurs d'accent
+// comme celles-ci. Le garde compte donc l'APPEL, pas le codage en dur — ce qui
+// le fait rougir sur l'application de la règle qu'il défend. Suivi en issue
+// dédiée ; le corriger déplacerait la référence de 946 à ~163 et demande un
+// relevé, pas une retouche de nombre.
+//
+// 2026-09-14 (#6481, suite) — 946 → 930. Les deux vues du profil vocal
+// convertissent désormais leur teinte UNE fois (`accent`) au lieu de répéter
+// `Color(hex: accentColor)` à chaque site (7 et 11 sites). L'appel reste
+// l'application de la règle d'accent, simplement non répété ; la mise en garde
+// ci-dessus sur ce que le cliquet mesure vaut toujours.
 const BASELINE_HARDCODED_COLOR_COUNT = 930;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
