@@ -163,7 +163,13 @@ describe('… et les filtres que la jumelle authentifiée applique déjà', () =
     const where = findFirst.mock.calls[0][0].where as Record<string, any>;
     // Le blocage vaut dans les DEUX sens : sans cela, un utilisateur bloqué
     // retrouvait le profil de qui l'a bloqué, s'il connaissait son adresse.
-    expect(where.NOT).toMatchObject({ blockedUserIds: { has: VIEWER } });
+    // Il vit dans `AND`, sous la même forme « absent vs null » que
+    // `deletedAt` — un `NOT` nu au premier niveau écarterait aussi les
+    // comptes qui n'ont jamais écrit `blockedUserIds` (#6452).
+    expect(where.NOT).toBeUndefined();
+    expect(where.AND).toContainEqual({
+      OR: [{ blockedUserIds: { isSet: false } }, { NOT: { blockedUserIds: { has: VIEWER } } }],
+    });
     expect(where.id).toMatchObject({ notIn: expect.any(Array) });
 
     await app.close();

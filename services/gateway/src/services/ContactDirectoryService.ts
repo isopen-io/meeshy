@@ -157,9 +157,20 @@ export function contactLookupScope(options: {
     // `AND` et non `OR` à la racine : l'appelant pose lui-même un `OR` pour sa
     // liste d'identifiants (`ContactDirectoryService.match`), et deux `OR`
     // frères s'écraseraient en silence.
-    AND: [{ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] }],
+    AND: [
+      { OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] },
+      // Même piège « absent vs null », sur le champ VOISIN : `NOT: {
+      // blockedUserIds: { has } }` seul écarte aussi les documents où
+      // `blockedUserIds` est ABSENT — sur le connecteur MongoDB, Prisma
+      // enveloppe le filtre de tableau d'un test d'existence, et `NOT`
+      // inverse cette absence en refus. Mesuré en production (#6452) : 206
+      // comptes actifs sur 246 n'ont jamais écrit ce champ (jamais bloqué
+      // personne) et disparaissaient de toute recherche. Un `OR` isSet
+      // couvre les deux cas : champ absent (rien à exclure) OU champ
+      // présent et ne contenant pas le viewer.
+      { OR: [{ blockedUserIds: { isSet: false } }, { NOT: { blockedUserIds: { has: options.viewerId } } }] },
+    ],
     id: { notIn: [...options.blockedByViewer] },
-    NOT: { blockedUserIds: { has: options.viewerId } },
   };
 }
 
