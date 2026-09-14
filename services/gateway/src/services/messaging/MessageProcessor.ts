@@ -307,6 +307,12 @@ export class MessageProcessor {
     location?: unknown;
     /** Sticker (#4823) — champ dédié, même doctrine. Validé par `parseMessageSticker`. */
     sticker?: unknown;
+    /**
+     * Pièce NOMMÉE citée (#6164) — champ dédié, même doctrine. Déjà ADMISE par
+     * `admitAttachmentReply` au transport (l'appartenance au message cité se
+     * lit en base) ; `parseAttachmentReplyTo` en garde ici la FORME.
+     */
+    attachmentReplyTo?: unknown;
   }): Promise<Message> {
     const corr: Record<string, any> = {
       clientMessageId: data.clientMessageId,

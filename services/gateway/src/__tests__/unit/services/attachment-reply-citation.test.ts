@@ -24,10 +24,12 @@ import {
   parseAttachmentReplyTo,
   attachmentReplyToFromMetadata,
   attachmentReplyKindFor,
+  admitAttachmentReply,
   ATTACHMENT_REPLY_FROZEN_FIELDS,
   ATTACHMENT_REPLY_REVOCABLE_FIELDS,
 } from '../../../services/messaging/attachmentReplySnapshot';
 import { servedQuotedMessage } from '../../../services/messaging/servedQuotedMessage';
+import { clientDeclaredMetadata } from '../../../services/messaging/clientDeclaredMetadata';
 
 const piece = (rang: number, extra: Record<string, unknown> = {}) => ({
   id: `507f1f77bcf86cd79943900${rang}`,
@@ -211,7 +213,7 @@ describe('#6164 — la pièce NOMMÉE d’une citation', () => {
     const blocSelect = () => {
       const debut = source.indexOf('messageSelect.replyTo');
       expect(debut).toBeGreaterThan(-1);
-      return source.slice(debut, debut + 4000);
+      return source.slice(debut, debut + 6000);
     };
 
     it('ordonne les pièces de la citation — sans orderBy, « la première » est ARBITRAIRE d’un appel à l’autre', () => {
@@ -224,8 +226,112 @@ describe('#6164 — la pièce NOMMÉE d’une citation', () => {
       expect(blocSelect()).toMatch(/take:\s*4/);
     });
 
-    it('rattrape la pièce citée hors du take, en UNE requête par page', () => {
-      expect(source).toMatch(/backfillCitedAttachments/);
+    it('lit l’instantané sur le message QUI CITE, jamais sur le message CITÉ', () => {
+      expect(source).toMatch(/attachmentReplyTo:\s*attachmentReplyToFromMetadata\(message\.metadata\)/);
+      expect(source).not.toMatch(/attachmentReplyToFromMetadata\(message\.replyTo/);
+    });
+
+    it('rattrape la pièce citée hors du take, en UNE requête par page — et la route l’APPELLE', () => {
+      const backfill = readFileSync(
+        join(__dirname, '../../../services/messaging/citedAttachmentBackfill.ts'),
+        'utf-8'
+      );
+      // Une SEULE requête pour toute la page, jamais une par message.
+      expect(backfill.match(/prisma\.messageAttachment\.findMany/g)).toHaveLength(1);
+      // FAIL-CLOSED : la pièce rattrapée doit appartenir au message CITÉ.
+      expect(backfill).toMatch(/piece\.messageId !== m\.replyTo\?\.id/);
+      // Le masquage passe par le site UNIQUE, jamais une seconde boucle locale.
+      expect(backfill).toMatch(/servedQuotedAttachments\(/);
+
+      const route = readFileSync(
+        join(__dirname, '../../../routes/conversations/messages-list.ts'),
+        'utf-8'
+      );
+      expect(route).toMatch(/await backfillCitedAttachments\(/);
+    });
+  });
+
+  /**
+   * L'ENVOI. Citer la pièce d'un message qu'on ne cite pas, c'est citer la
+   * pièce d'une conversation qu'on ne lit peut-être pas : ce n'est pas une
+   * faute de frappe qu'on tolère en retombant sur le représentatif, c'est une
+   * FUITE — l'identifiant sert d'ancre à un saut, et le service qui le relit
+   * chargerait la ligne. La garde est donc FERMÉE : au moindre doute, refus.
+   */
+  describe('la garde d’envoi est FERMÉE — un attachmentId étranger au message cité est REFUSÉ', () => {
+    const MESSAGE_CITE = '507f1f77bcf86cd799439000';
+    const AUTRE_MESSAGE = '507f1f77bcf86cd799439999';
+
+    const fauxPrisma = (row: Record<string, unknown> | null) => ({
+      messageAttachment: {
+        findUnique: async () => row,
+      },
+    });
+
+    it('refuse une pièce qui appartient à un AUTRE message — la fuite que la citation ouvrirait', async () => {
+      const verdict = await admitAttachmentReply(
+        fauxPrisma({ id: TROISIEME, messageId: AUTRE_MESSAGE, mimeType: 'image/jpeg' }) as never,
+        { replyToId: MESSAGE_CITE, attachmentReplyTo: { attachmentId: TROISIEME } }
+      );
+      expect(verdict.ok).toBe(false);
+    });
+
+    it('refuse une pièce INTROUVABLE', async () => {
+      const verdict = await admitAttachmentReply(
+        fauxPrisma(null) as never,
+        { replyToId: MESSAGE_CITE, attachmentReplyTo: { attachmentId: TROISIEME } }
+      );
+      expect(verdict.ok).toBe(false);
+    });
+
+    it('refuse une pièce nommée SANS message cité — on ne cite pas une pièce hors de son porteur', async () => {
+      const verdict = await admitAttachmentReply(
+        fauxPrisma({ id: TROISIEME, messageId: MESSAGE_CITE, mimeType: 'image/jpeg' }) as never,
+        { replyToId: undefined, attachmentReplyTo: { attachmentId: TROISIEME } }
+      );
+      expect(verdict.ok).toBe(false);
+    });
+
+    it('refuse une forme malformée', async () => {
+      const verdict = await admitAttachmentReply(
+        fauxPrisma(null) as never,
+        { replyToId: MESSAGE_CITE, attachmentReplyTo: { attachmentId: '   ' } }
+      );
+      expect(verdict.ok).toBe(false);
+    });
+
+    it('accepte la pièce du message cité — et DÉRIVE la nature du MIME relu, jamais de ce que le client déclare', async () => {
+      const verdict = await admitAttachmentReply(
+        fauxPrisma({ id: TROISIEME, messageId: MESSAGE_CITE, mimeType: 'audio/mp4' }) as never,
+        { replyToId: MESSAGE_CITE, attachmentReplyTo: { attachmentId: TROISIEME, kind: 'file' } }
+      );
+      expect(verdict).toEqual({ ok: true, snapshot: { attachmentId: TROISIEME, kind: 'audio' } });
+    });
+
+    it('laisse passer un envoi qui ne nomme aucune pièce — sans requête', async () => {
+      const verdict = await admitAttachmentReply(
+        { messageAttachment: { findUnique: async () => { throw new Error('aucune requête attendue'); } } } as never,
+        { replyToId: MESSAGE_CITE, attachmentReplyTo: undefined }
+      );
+      expect(verdict).toEqual({ ok: true, snapshot: null });
+    });
+
+    it('la route REST d’envoi appelle la garde — un transport qui porte le champ sans elle serait muet', () => {
+      const route = readFileSync(
+        join(__dirname, '../../../routes/conversations/messages-send.ts'),
+        'utf-8'
+      );
+      expect(route).toMatch(/\bimport\s*\{[^}]*\badmitAttachmentReply\b[^}]*\}\s*from\s*['"][^'"]*attachmentReplySnapshot['"]/);
+      expect(route).toMatch(/\bawait\s+admitAttachmentReply\(/);
+      expect(route).toMatch(/attachmentReplyTo:\s*z\./);
+    });
+
+    it('le site UNIQUE de composition range l’instantané sous metadata — jamais une clé posée à la main', () => {
+      const compose = clientDeclaredMetadata({
+        attachmentReplyTo: { attachmentId: TROISIEME, kind: 'image' },
+      });
+      expect(compose.attachmentReplyTo).toEqual({ attachmentId: TROISIEME, kind: 'image' });
+      expect(clientDeclaredMetadata({}).attachmentReplyTo).toBeUndefined();
     });
   });
 });

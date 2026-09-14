@@ -110,3 +110,79 @@ export function attachmentReplyToFromMetadata(metadata: unknown): AttachmentRepl
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
   return parseAttachmentReplyTo((metadata as Record<string, unknown>)['attachmentReplyTo']);
 }
+
+/**
+ * PLAT, pas une union discriminée : le `tsconfig` du gateway pose
+ * `strictNullChecks: false`, sous lequel un `if (!verdict.ok)` ne restreint PAS
+ * une union sur un littéral booléen — le site d'appel ne verrait jamais
+ * `reason`. Une forme qui ne compile pas sous le réglage RÉEL du projet n'est
+ * pas plus sûre, elle est seulement absente.
+ *
+ * `ok: false` ⇒ `reason` porte le motif du refus. `ok: true` ⇒ `snapshot` porte
+ * l'instantané ADMIS, ou `null` quand l'envoi ne nomme aucune pièce.
+ */
+export type AttachmentReplyAdmission = {
+  readonly ok: boolean;
+  readonly snapshot?: AttachmentReplyTo | null;
+  readonly reason?: string;
+};
+
+/** Le strict nécessaire de Prisma : la ligne de la pièce, et son porteur. */
+type AttachmentOwnerReader = {
+  readonly messageAttachment: {
+    findUnique: (args: {
+      where: { id: string };
+      select: { id: true; messageId: true; mimeType: true };
+    }) => Promise<{ id: string; messageId: string; mimeType: string | null } | null>;
+  };
+};
+
+/**
+ * LA GARDE D'ENVOI, FERMÉE — site UNIQUE de la règle, wiré par transport.
+ *
+ * Citer la pièce d'un message qu'on ne cite pas, c'est citer la pièce d'une
+ * conversation qu'on ne lit peut-être pas. Ce n'est PAS une faute de frappe
+ * qu'on tolérerait en retombant sur le représentatif : l'identifiant gravé sert
+ * d'ancre à un saut, et chaque service qui le relit ira chercher la ligne. Au
+ * moindre doute — pièce introuvable, porteur différent, message cité absent,
+ * forme illisible — on REFUSE l'envoi.
+ *
+ * La NATURE est DÉRIVÉE du MIME relu, jamais de ce que le client déclare :
+ * `kind` est le seul fait descriptif qui survit à une protection posée plus
+ * tard, donc c'est le seul que le client ne doit pas pouvoir forger. Un client
+ * qui annonce `file` sur une piste audio verrait sinon sa citation dire
+ * « un fichier » pour toujours.
+ *
+ * Un envoi qui ne nomme aucune pièce ne coûte AUCUNE requête.
+ */
+export async function admitAttachmentReply(
+  prisma: AttachmentOwnerReader,
+  params: { readonly replyToId?: string | null; readonly attachmentReplyTo?: unknown }
+): Promise<AttachmentReplyAdmission> {
+  const declared = params.attachmentReplyTo;
+  if (declared === undefined || declared === null) return { ok: true, snapshot: null };
+
+  if (typeof declared !== 'object' || Array.isArray(declared)) {
+    return { ok: false, reason: 'attachmentReplyTo doit être un objet { attachmentId }' };
+  }
+  const raw = (declared as Record<string, unknown>)['attachmentId'];
+  const attachmentId = typeof raw === 'string' ? raw.trim() : '';
+  if (attachmentId.length === 0) {
+    return { ok: false, reason: 'attachmentReplyTo.attachmentId est requis' };
+  }
+
+  const replyToId = params.replyToId?.trim() ?? '';
+  if (replyToId.length === 0) {
+    return { ok: false, reason: 'Citer une pièce jointe exige de citer le message qui la porte' };
+  }
+
+  const piece = await prisma.messageAttachment.findUnique({
+    where: { id: attachmentId },
+    select: { id: true, messageId: true, mimeType: true },
+  });
+  if (!piece || piece.messageId !== replyToId) {
+    return { ok: false, reason: 'La pièce jointe citée n’appartient pas au message cité' };
+  }
+
+  return { ok: true, snapshot: { attachmentId: piece.id, kind: attachmentReplyKindFor(piece.mimeType) } };
+}
