@@ -142,12 +142,18 @@ final class FeedPostCardCarouselGuardTests: XCTestCase {
 
     // MARK: - 3. Une légende par slide, résolue UNE fois
 
+    /// Le témoin lit l'appel COMPACTÉ : #6280 a ajouté `preferredLanguages:`
+    /// en coupant l'appel sur trois lignes, et la garde rougissait sur une mise
+    /// en page alors que la carte passait toujours par le résolveur (#6564).
+    /// Ce qu'elle protège ne change pas : les médias du lot et le texte du
+    /// porteur entrent dans `SocialMediaCaption.map`, et nulle part ailleurs.
     func test_theCaptionFollowsTheSlide_throughTheSharedResolver() throws {
         let preview = try source("Meeshy/Features/Main/Views/FeedPostCard+Media.swift")
+            .components(separatedBy: .whitespacesAndNewlines).joined()
         let carousel = try source("Meeshy/Features/Main/Views/FeedPostCardCarousel.swift")
 
         XCTAssertTrue(
-            preview.contains("SocialMediaCaption.map(for: mediaList, carrierText: post.displayContent)"),
+            preview.contains("SocialMediaCaption.map(for:mediaList,carrierText:post.displayContent"),
             "La carte doit résoudre les légendes par le MÊME résolveur que la galerie " +
             "plein écran (vue `3e`) — jamais une seconde règle de priorité."
         )
