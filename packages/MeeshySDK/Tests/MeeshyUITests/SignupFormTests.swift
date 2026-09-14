@@ -143,6 +143,48 @@ final class SignupFormTests: XCTestCase {
         XCTAssertFalse(makeForm(password: "court").canSubmit)
     }
 
+    // MARK: - Le mot de passe est FACULTATIF (#6424)
+    //
+    // Directive porteur 2026-09-14 : « tant qu'on n'a pas le mot de passe
+    // défini, le seul moyen de se connecter c'est par lien magique ». Le
+    // formulaire doit donc laisser partir une charge qui n'en porte AUCUN.
+    //
+    // Le témoin qui compte le plus est celui de la charge : `nil`, jamais `""`.
+    // Une chaîne vide serait une VALEUR, refusée par la borne de longueur du
+    // serveur — le formulaire échouerait précisément dans le cas qu'il vient
+    // d'ouvrir, et le refus parlerait d'un mot de passe trop court à quelqu'un
+    // qui n'en a pas voulu.
+
+    func test_canSubmit_withoutPassword_isTrue() {
+        XCTAssertTrue(makeForm(password: "").canSubmit)
+    }
+
+    func test_isPasswordValid_emptyIsValid_shortIsNot() {
+        XCTAssertTrue(SignupForm.isPasswordValid(""))
+        XCTAssertFalse(SignupForm.isPasswordValid("court"))
+        XCTAssertTrue(SignupForm.isPasswordValid("motdepasse"))
+    }
+
+    func test_hasPassword_distinguishesTypedFromValid() {
+        XCTAssertFalse(makeForm(password: "").hasPassword)
+        // Trop court pour être accepté, mais bel et bien TAPÉ : les deux
+        // questions sont distinctes, et c'est `hasPassword` qui décide si la
+        // clé part.
+        XCTAssertTrue(makeForm(password: "court").hasPassword)
+    }
+
+    func test_registerRequest_withoutPassword_omitsTheKeyEntirely() throws {
+        let payload = try encodedPayload(makeForm(password: ""))
+        XCTAssertNil(payload["password"],
+                     "la passerelle lit l'ABSENCE de la clé ; une chaîne vide serait une valeur refusée")
+    }
+
+    func test_registerRequest_withoutPassword_stillCarriesIdentityAndEmail() throws {
+        let payload = try encodedPayload(makeForm(password: ""))
+        XCTAssertEqual(payload["displayName"] as? String, "Awa N’Diaye")
+        XCTAssertEqual(payload["email"] as? String, "awa@example.com")
+    }
+
     // MARK: - La charge exacte
 
     /// Le cœur du lot : trois clés que le client N'ENVOIE PLUS.

@@ -95,6 +95,13 @@ export type ApiSuccess<T> = {
    * jumelle divergente que ce transport existe pour éviter.
    */
   readonly cursorPagination?: CursorPaginationMeta;
+  /**
+   * #6361 — les MÉTA-DONNÉES qu'une route pose à côté de `data`
+   * (`GET /links?include=summary` : `meta.summary`, les agrégats réels de ses
+   * liens). Transmises telles quelles et NON typées : c'est au port qui les
+   * lit de les valider (`decodeShareLinksSummary`, `zod/mini`).
+   */
+  readonly meta?: Readonly<Record<string, unknown>>;
 };
 
 export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
@@ -324,6 +331,9 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
         ...(envelope.pagination !== undefined ? { pagination: envelope.pagination as PaginationMeta } : {}),
         ...(envelope.cursorPagination !== undefined
           ? { cursorPagination: envelope.cursorPagination as CursorPaginationMeta }
+          : {}),
+        ...(envelope.meta !== null && typeof envelope.meta === 'object' && !Array.isArray(envelope.meta)
+          ? { meta: envelope.meta as Readonly<Record<string, unknown>> }
           : {}),
       };
     }

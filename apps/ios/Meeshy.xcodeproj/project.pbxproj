@@ -1375,6 +1375,7 @@
 		BD51AD1364CAD8E5D5A1B4C6 /* ComposerSceneBandTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93660893C9B981C410AB13C4 /* ComposerSceneBandTests.swift */; };
 		BD88DF0E9F79F45019414780 /* FaceRampRankingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBF8956D385392295407F707 /* FaceRampRankingTests.swift */; };
 		BDBE718277EC042E5C34B9E0 /* MessageReactionsDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D02BF48A4ABB5565E6E4AD2A /* MessageReactionsDetailView.swift */; };
+		BDBF56312AC8A2B3A2CC3C89 /* StickerAltText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 313A7DD7608F909F08DA11E3 /* StickerAltText.swift */; };
 		BDE0C161B26D8DAC65AC0F1D /* FeedButtonAnchorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C37D8CF0C43294478A00011 /* FeedButtonAnchorTests.swift */; };
 		BDFC18895F34220664A2527A /* StoryGroupIntroPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DE436BFF2450806F2C12452 /* StoryGroupIntroPolicyTests.swift */; };
 		BDFF13CD48F14B24C9072697 /* ComposerObjectEditorRailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE757F171D41F216C2F75D3D /* ComposerObjectEditorRailTests.swift */; };
@@ -1756,6 +1757,7 @@
 		EEDEA7C3B2555791AC1A0607 /* UniversalComposerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D53E574D2ABCD6B49A0E243 /* UniversalComposerBar.swift */; };
 		EF167CF15A737E8F41B377F2 /* RightToLeftLayoutGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BCC36EA7B1BDE1803E3B185 /* RightToLeftLayoutGuardTests.swift */; };
 		EF233DCCB207EA01984845D0 /* MediaSaveCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74DE2B01BA2B32CFDC2079AD /* MediaSaveCoordinatorTests.swift */; };
+		EF4F09265F9CE7537D40E879 /* StickerAltTextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77903DEFC5382215093C40FB /* StickerAltTextTests.swift */; };
 		EFC24685D76C880C7EDEA9BC /* ConversationAnalysisProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7789E976C9781FA848AA7BF2 /* ConversationAnalysisProviding.swift */; };
 		EFC7C96CB9B65BD07B696590 /* NowPlayingArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 091ED0E5F185AAC732D3BD38 /* NowPlayingArtwork.swift */; };
 		EFD7E2EE44D13341A4A814A8 /* FocalMetaColumn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 745E52FC05484AEC856B1332 /* FocalMetaColumn.swift */; };
@@ -2295,6 +2297,7 @@
 		306276D89CA204981399861F /* MessageEditsDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageEditsDetailView.swift; sourceTree = "<group>"; };
 		30BD0F8F4D9194A8CE0C6E34 /* StoryViewerLanguageOverrideTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerLanguageOverrideTests.swift; sourceTree = "<group>"; };
 		310E39A1E7DD4C4FE63D4EB3 /* FileSizeBudgetGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSizeBudgetGuardTests.swift; sourceTree = "<group>"; };
+		313A7DD7608F909F08DA11E3 /* StickerAltText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerAltText.swift; sourceTree = "<group>"; };
 		31417CF82678240975477FB6 /* AttachmentSendServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentSendServiceTests.swift; sourceTree = "<group>"; };
 		31834DA2A1FFFED8438D86DF /* CommentDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentDraftStore.swift; sourceTree = "<group>"; };
 		31A97C094A92B0B373F3AA28 /* ReelVideoConsumedLanguageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelVideoConsumedLanguageTests.swift; sourceTree = "<group>"; };
@@ -2835,6 +2838,7 @@
 		775F426642CE8CEA8A515A49 /* StoryPublishService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryPublishService.swift; sourceTree = "<group>"; };
 		7787410D9270FD22A5DDC330 /* MyStoriesSourceCorpusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyStoriesSourceCorpusTests.swift; sourceTree = "<group>"; };
 		7789E976C9781FA848AA7BF2 /* ConversationAnalysisProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAnalysisProviding.swift; sourceTree = "<group>"; };
+		77903DEFC5382215093C40FB /* StickerAltTextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerAltTextTests.swift; sourceTree = "<group>"; };
 		77D5C3ABDB3A0E8B2489B213 /* BackgroundColorPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundColorPalette.swift; sourceTree = "<group>"; };
 		77DF8E6311CBC7C72493DEBB /* TermsOfServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermsOfServiceView.swift; sourceTree = "<group>"; };
 		782703E1FA808D60F1523300 /* DiscoverViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverViewModel.swift; sourceTree = "<group>"; };
@@ -4396,6 +4400,7 @@
 				840A53DFF7BA37312E5CCA38 /* ConversationLoadingPhaseTests.swift */,
 				B5F5FC43167C96FB29AF8CD8 /* SocialAudioSurfaceWiringGuardTests.swift */,
 				CEB19495A2C64AC013A9129C /* SocialAudioTrackTests.swift */,
+				77903DEFC5382215093C40FB /* StickerAltTextTests.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -5919,6 +5924,7 @@
 				9E879A41FE1DB28B730CAC31 /* SilentPushDurability.swift */,
 				6E65DF73A206A9474663F628 /* StarredMessagesStore.swift */,
 				810FD95C737DDEE3A43C43A3 /* StatusBubbleController.swift */,
+				313A7DD7608F909F08DA11E3 /* StickerAltText.swift */,
 				64B0B8AF379864F058F20DB7 /* StickerSendPipeline.swift */,
 				CD0CBDD05F71644C8AF2BCC9 /* StoryExportPreflight.swift */,
 				98E974B54CC33C354DF829D8 /* StoryInteractionService.swift */,
@@ -7394,6 +7400,7 @@
 				2AA6D803D02BA4C3CC85E2F5 /* StatusBubbleController.swift in Sources */,
 				4B73EFE53D2A699081580D4C /* StatusBubbleOverlay.swift in Sources */,
 				80DA971C0FCBD2E811647853 /* StatusViewModel.swift in Sources */,
+				BDBF56312AC8A2B3A2CC3C89 /* StickerAltText.swift in Sources */,
 				FE153ABD46011EC965D6958C /* StickerLibraryArtwork.swift in Sources */,
 				22E8A0C28416FCA912A313A5 /* StickerLibraryPaste.swift in Sources */,
 				FAA839BDB0E5C8AA9034F9C2 /* StickerLibraryStore.swift in Sources */,
@@ -8395,6 +8402,7 @@
 				9803011FE06986FD545CCB98 /* StatusComposerSheetPresentationTests.swift in Sources */,
 				AF0A55C4DC1BAAB7736CBDAD /* StatusRealtimePersistenceTests.swift in Sources */,
 				8A0B64A5DD84CD3AAA2DEC9F /* StatusViewModelTests.swift in Sources */,
+				EF4F09265F9CE7537D40E879 /* StickerAltTextTests.swift in Sources */,
 				143F3E57403828EA7A62121F /* StickerLibraryArtworkTests.swift in Sources */,
 				79B8D00B9E022D652AC755A2 /* StickerLibraryPasteTests.swift in Sources */,
 				29C95628F142A3F8D7CD602A /* StickerLibraryStoreTests.swift in Sources */,

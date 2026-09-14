@@ -4,6 +4,7 @@ import { logError, logWarn } from '../utils/logger';
 import { sendSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError } from '../utils/response.js';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 import { createInvitationRateLimitConfig } from '../middleware/rate-limit';
+import { requireEmailVerification } from '../middleware/auth';
 import { generateUniqueAffiliateToken } from './affiliate';
 
 const sendEmailInvitationSchema = z.object({
@@ -20,7 +21,8 @@ const EMAIL_INVITATION_TOKEN_NAME = 'Invitation par e-mail';
 
 export async function invitationRoutes(fastify: FastifyInstance) {
   fastify.post('/invitations/email', {
-    onRequest: [fastify.authenticate],
+    // #6437 — inviter sort du compte vers quelqu'un qui n'est pas encore sur Meeshy.
+    onRequest: [fastify.authenticate, requireEmailVerification],
     config: { rateLimit: createInvitationRateLimitConfig() },
     schema: {
       description: 'Send an email invitation to join Meeshy',

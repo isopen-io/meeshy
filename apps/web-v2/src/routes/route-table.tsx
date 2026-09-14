@@ -94,12 +94,43 @@ export const ROUTES = {
   post: { pattern: '/post/$post', screen: publicationScreen },
   postDeepLink: { pattern: '/feeds/post/$post', screen: publicationScreen },
   links: { pattern: '/links', screen: () => import('@/routes/links') },
+  /* LES LIENS DE PARTAGE (#6361, D-63) — miroir `Route.shareLinks`, puis
+     `CreateShareLinkView` et `ShareLinkDetailView` (`Router.swift`,
+     `ShareLinksView.swift`). Adresses NEUVES : le legacy sert `/links` d'un
+     seul tenant. L'ORDRE compte : le routeur rend la PREMIÈRE adresse qui
+     correspond, et `new` serait sinon lu comme le linkId d'un lien. */
+  shareLinks: { pattern: '/links/share', screen: () => import('@/routes/share-links') },
+  shareLinkNew: { pattern: '/links/share/new', screen: () => import('@/routes/share-link-new') },
+  shareLink: { pattern: '/links/share/$link', screen: () => import('@/routes/share-link') },
   notifications: { pattern: '/notifications', screen: () => import('@/routes/notifications') },
   calls: { pattern: '/calls', screen: () => import('@/routes/calls') },
   discover: { pattern: '/discover', screen: () => import('@/routes/discover') },
   communities: { pattern: '/communities', screen: () => import('@/routes/communities') },
+  /* CRÉER, PUIS UNE COMMUNAUTÉ (#6364, D-60) — miroir `Route.communityCreate` et
+     `Route.communityDetail` (`Router.swift`). `/communities/:id` est l'adresse
+     que le legacy sert (`apps/web/app/(connected)/communities/[id]`, D-5).
+     L'ORDRE compte : le routeur rend la PREMIÈRE adresse qui correspond, et
+     `new` serait sinon lu comme l'identifiant d'une communauté. */
+  communityNew: { pattern: '/communities/new', screen: () => import('@/routes/community-new') },
+  community: { pattern: '/communities/$community', screen: () => import('@/routes/community') },
   settings: { pattern: '/settings', screen: () => import('@/routes/settings') },
   profile: { pattern: '/me', screen: () => import('@/routes/profile') },
+  /* L'ESPACE D'ADMINISTRATION (#6432) — nomenclature LEGACY reprise (D-5) :
+     `apps/web/app/admin` et `apps/web/app/admin/users` servent déjà ces deux
+     adresses, et un administrateur qui bascule d'une application à l'autre
+     doit retrouver ses signets.
+
+     L'ORDRE compte : le routeur rend la PREMIÈRE adresse qui correspond. Ici
+     les deux motifs sont littéraux et disjoints, mais toute section future en
+     `/admin/$quelquechose` devra se poser AVANT un éventuel motif paramétré,
+     comme `communityNew` avant `community`.
+
+     La garde n'est PAS dans cette table : `resolveRouteAccess` n'exige qu'une
+     session, et le DROIT se lit au serveur (`GET /me/permissions`) dans
+     l'écran lui-même. Une garde de route qui déciderait ici devrait connaître
+     le rôle, que `SessionUser` ne projette pas. */
+  admin: { pattern: '/admin', screen: () => import('@/routes/admin') },
+  adminUsers: { pattern: '/admin/users', screen: () => import('@/routes/admin-users') },
 } as const;
 
 /**

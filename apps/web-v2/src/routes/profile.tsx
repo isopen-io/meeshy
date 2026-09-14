@@ -1,13 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { LanguageSheet } from '@/components/language-sheet';
 import { apiDeps } from '@/lib/api/deps';
+import { friendRequestsQueryOptions, pendingRequestsOf } from '@/lib/api/friend-requests';
 import {
   myProfileQueryOptions,
   myStatsQueryOptions,
-  pendingRequestsQueryOptions,
   type MyProfile,
   type ProfileImageKind,
   type ProfilePatch,
@@ -133,7 +133,7 @@ export default function ProfileScreen() {
 
   const profileQuery = useQuery({ ...myProfileQueryOptions(apiDeps), enabled }, appQueryClient);
   const statsQuery = useQuery({ ...myStatsQueryOptions(apiDeps), enabled }, appQueryClient);
-  const requestsQuery = useQuery({ ...pendingRequestsQueryOptions(apiDeps), enabled }, appQueryClient);
+  const receivedRequests = useInfiniteQuery({ ...friendRequestsQueryOptions(apiDeps, 'received'), enabled }, appQueryClient);
   const profile = profileQuery.data;
 
   const [draft, setDraft] = useState<ProfileDraft | null>(null);
@@ -255,7 +255,7 @@ export default function ProfileScreen() {
           )}
           <StatsSection language={language} stats={statsQuery.data ?? null} />
           <ProgressionEntry language={language} />
-          <RequestsSection language={language} pending={requestsQuery.data ?? null} />
+          <RequestsSection language={language} pending={pendingRequestsOf(receivedRequests.data)} />
           {profile === undefined ? null : <MemberSinceSection language={language} createdAt={profile.createdAt} />}
         </div>
       </main>

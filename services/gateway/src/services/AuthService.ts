@@ -26,7 +26,7 @@ import {
   clearFailedLoginAttempts,
   lockIsVisibleTo
 } from './LoginAttemptService';
-import { UserLockedError } from '../errors/custom-errors';
+import { PasswordNotSetError, UserLockedError } from '../errors/custom-errors';
 import type { GlobalMembershipSocketManager } from './conversations/ensureGlobalConversationMembership';
 import { servedUserPermissions } from './admin/served-permissions';
 import {
@@ -174,6 +174,25 @@ export class AuthService {
       }
 
 
+      /**
+       * UN COMPTE SANS MOT DE PASSE N'EST PAS UN COMPTE AU MOT DE PASSE FAUX
+       * (#6424).
+       *
+       * Ce refus se lit AVANT `verifyPassword` — qui rendrait `false` sur un
+       * hash `null`, donc le même verdict qu'une saisie erronée. La différence
+       * n'est pas cosmétique : la branche d'échec ci-dessous COMPTE la
+       * tentative et verrouille au seuil. Un compte dont le mot de passe
+       * n'existe pas serait ainsi fermé quinze minutes par cinq essais, alors
+       * qu'aucun essai ne peut réussir — le verrou ne protégerait personne et
+       * ne punirait que son détenteur.
+       *
+       * Rien n'est compté ici, et le refus DIT la porte à prendre.
+       */
+      if (!user.password) {
+        logger.info(`[AUTH_SERVICE] compte sans mot de passe — lien magique requis: ${user.username}`);
+        throw new PasswordNotSetError();
+      }
+
       // Vérifier le mot de passe
       const passwordValid = await verifyPassword(credentials.password, user.password);
       if (!passwordValid) {
@@ -291,6 +310,11 @@ export class AuthService {
       // rendrait indiscernable d'un mot de passe faux, et la personne
       // légitime n'apprendrait jamais pourquoi on la refuse (#4138).
       if (error instanceof UserLockedError) {
+        throw error;
+      }
+      // Un compte SANS mot de passe non plus (#6424) : même raison, autre
+      // décision — la porte existe, elle est ailleurs.
+      if (error instanceof PasswordNotSetError) {
         throw error;
       }
       logger.error('[AUTH_SERVICE] ❌ Erreur dans authenticate', error);

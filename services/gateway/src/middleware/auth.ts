@@ -922,9 +922,9 @@ export const requireAnalyst = requireRole(['BIGBOSS', 'ADMIN', 'ANALYST']);
  * `EMAIL_NOT_VERIFIED`. Le premier cas rendait ici `403 PERMISSION_DENIED`,
  * c'est-à-dire le code d'un refus de DROIT pour une absence d'IDENTITÉ.
  *
- * Zéro appelant de production, mesuré : la garde n'est montée par aucune route
- * du gateway. Elle est corrigée quand même — la laisser diverger ferait de la
- * prochaine route qui la monte une régression prête à l'emploi.
+ * Montée depuis #6437 sur `EMAIL_VERIFICATION_GATED_ROUTES` ci-dessous — la
+ * décision retenue (documentée sur l'issue) est la réponse intermédiaire que
+ * l'issue proposait : ce qui SORT du compte vers d'autres personnes.
  */
 export async function requireEmailVerification(request: FastifyRequest, reply: FastifyReply) {
   const authContext = (request as UnifiedAuthRequest).authContext;
@@ -939,4 +939,20 @@ export async function requireEmailVerification(request: FastifyRequest, reply: F
     return;
   }
 }
+
+/**
+ * Routes qui exigent un e-mail CONFIRMÉ (#6437) — une constante, pas une
+ * prose, comme l'exige le critère de fin de l'issue. Décision : ce qui SORT
+ * du compte vers d'autres personnes — publier (posts ET stories, même route),
+ * inviter par e-mail, créer un lien de partage. Tout le reste (lecture,
+ * messagerie privée, réglages, rejoindre une conversation existante) reste
+ * accessible à un compte non confirmé — la décision complète est sur #6437.
+ */
+export const EMAIL_VERIFICATION_GATED_ROUTES = [
+  'POST /posts',
+  'POST /posts/from-attachment',
+  'POST /invitations/email',
+  'POST /links',
+  'POST /conversations/:id/new-link',
+] as const;
 

@@ -13,11 +13,11 @@ import type { ApiResult, HttpTransport } from './http';
  * - `GET /api/v1/me` — la SEULE lecture de soi (`services/gateway/src/routes/me/
  *   get-me.ts`, #4178), `{ user }` servi par `formatUserResponse`.
  * - `GET /api/v1/users/me/stats` — `computeUserStats` (`routes/user-stats.ts:257`).
- * - `GET /api/v1/directory/friend-requests?direction=received&status=pending`
- *   — les demandes reçues EN ATTENTE, comptées sur une page de 100
- *   (`LIMITE_MAX_DEMANDES`, `directory/friend-requests-core.ts:22`) : la
- *   passerelle ne sert aucun compte, et une pastille « 100+ » dit la vérité là
- *   où un nombre exact demanderait de tout paginer.
+ * - Les demandes reçues EN ATTENTE ne sont PLUS lues ici (#6363) : le profil
+ *   compte le panier `received` de `friend-requests.ts` (`pendingRequestsOf`),
+ *   le MÊME que l'onglet « Demandes » de la découverte et la pastille du
+ *   barreau (#6321). Deux lectures parallèles auraient dit deux nombres, et
+ *   une acceptation n'aurait fait baisser que l'un des deux.
  * - `PATCH /api/v1/users/me`, `/users/me/avatar`, `/users/me/banner`
  *   (`routes/users/profile-updates.ts:42,286,392`).
  *
@@ -37,9 +37,6 @@ import type { ApiResult, HttpTransport } from './http';
 
 export const MY_PROFILE_QUERY_KEY = ['me', 'profile'] as const;
 export const MY_STATS_QUERY_KEY = ['me', 'stats'] as const;
-export const PENDING_REQUESTS_QUERY_KEY = ['me', 'friend-requests', 'pending'] as const;
-
-export const PENDING_REQUESTS_PAGE = 100;
 
 export type ProfileDeps = { readonly source: DataSource; readonly transport: HttpTransport };
 
@@ -73,7 +70,6 @@ export type MyStats = {
   readonly friendRequestsReceived: number;
 };
 
-export type PendingRequests = { readonly count: number; readonly more: boolean };
 
 const MASK = '•';
 
@@ -242,32 +238,6 @@ export async function loadMyStats(params: ProfileDeps & { readonly signal?: Abor
   return stats === null ? { ok: false, status: 0, error: 'Statistiques illisibles' } : { ok: true, data: stats };
 }
 
-const WirePagination = z.object({ hasMore: z.optional(z.boolean()) });
-
-export async function loadPendingRequests(
-  params: ProfileDeps & { readonly signal?: AbortSignal },
-): Promise<ApiResult<PendingRequests>> {
-  if (__FIXTURES__ && params.source === 'fixtures') {
-    const { fixturePendingRequests } = await import('./fixtures-profile');
-    return { ok: true, data: fixturePendingRequests() };
-  }
-  const query = new URLSearchParams({ direction: 'received', status: 'pending', limit: String(PENDING_REQUESTS_PAGE) });
-  const result = await params.transport.request<unknown>({
-    method: 'GET',
-    path: `/api/v1/directory/friend-requests?${query.toString()}`,
-    ...withSignal(params.signal),
-  });
-  if (!result.ok) return result;
-  const pagination = WirePagination.safeParse(result.pagination);
-  return {
-    ok: true,
-    data: {
-      count: Array.isArray(result.data) ? result.data.length : 0,
-      more: pagination.success && pagination.data.hasMore === true,
-    },
-  };
-}
-
 export async function patchMyProfile(deps: ProfileDeps, patch: ProfilePatch): Promise<ApiResult<MyProfile>> {
   const validated = validateProfilePatch(patch);
   if (!validated.ok) {
@@ -304,13 +274,5 @@ export function myStatsQueryOptions(deps: ProfileDeps) {
   return {
     queryKey: MY_STATS_QUERY_KEY,
     queryFn: async ({ signal }: { readonly signal?: AbortSignal }) => unwrap(await loadMyStats({ ...deps, ...withSignal(signal) })),
-  };
-}
-
-export function pendingRequestsQueryOptions(deps: ProfileDeps) {
-  return {
-    queryKey: PENDING_REQUESTS_QUERY_KEY,
-    queryFn: async ({ signal }: { readonly signal?: AbortSignal }) =>
-      unwrap(await loadPendingRequests({ ...deps, ...withSignal(signal) })),
   };
 }

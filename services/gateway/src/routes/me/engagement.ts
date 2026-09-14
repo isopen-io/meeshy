@@ -34,16 +34,17 @@ import { engagementAxisFamily, isEngagementAxisKey, maxEngagementMilestonesPerUs
 import { ACHIEVEMENT_FAMILIES } from '@meeshy/shared/types/achievement-families';
 import { AchievementReachService } from '../../services/achievements/AchievementReachService';
 import { GlobalAchievements } from '../../services/achievements/GlobalAchievements';
+import { meeshTotalsFromLedger } from '../../services/meesh/MeeshService';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { logError } from '../../utils/logger';
 
+// Le solde et les frappes n'y sont PAS : ils se lisent au registre (#6428),
+// une colonne absente en ressortant zéro après une frappe bien réelle.
 const USER_ENGAGEMENT_SELECT = {
   currentStreakDays: true,
   longestStreakDays: true,
   engagementScore: true,
-  meeshBalance: true,
-  meeshMintedLifetime: true,
 } as const;
 
 type UserEngagementColumns = {
@@ -194,7 +195,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
         // fermer un écran de consultation.
         await new GlobalAchievements(fastify.prisma).sweep(userId).catch(() => undefined);
 
-        const [user, counters, milestones, frappes] = await Promise.all([
+        const [user, counters, milestones, frappes, totauxMeesh] = await Promise.all([
           fastify.prisma.user.findUnique({ where: { id: userId }, select: USER_ENGAGEMENT_SELECT }),
           // `take` borné, jamais retiré (#4165 critère 4) — même si le
           // maximum THÉORIQUE tient déjà sous la borne : au plus
@@ -237,6 +238,9 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
             _min: { createdAt: true },
             _max: { createdAt: true },
           }),
+          // LE SOLDE ET LES FRAPPES, lus au registre (#6428) — la même loi que
+          // la frappe écrit, jamais la colonne qu'un incrément a pu laisser nulle.
+          meeshTotalsFromLedger(fastify.prisma, userId),
         ]);
 
         if (!user) {
@@ -301,8 +305,8 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
             windowDays: ELAN_WINDOW_DAYS,
           },
           meesh: {
-            balance: (streakUser as { meeshBalance?: number }).meeshBalance ?? 0,
-            mintedLifetime: (streakUser as { meeshMintedLifetime?: number }).meeshMintedLifetime ?? 0,
+            balance: totauxMeesh.balance,
+            mintedLifetime: totauxMeesh.mintedLifetime,
             debitablePoints: plan.debitablePoints,
             floorPoints: plan.floorPoints,
             missingPoints: plan.missingPoints,

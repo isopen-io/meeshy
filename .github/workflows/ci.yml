@@ -411,6 +411,18 @@ jobs:
       - name: CI summary coverage guard
         run: node scripts/check-ci-summary-coverage.mjs --self-test && node scripts/check-ci-summary-coverage.mjs
 
+      # Même placement, même raison : la surface est le DÉPÔT — les workflows qui
+      # publient `isopen/meeshy-<image>:latest` sur `main`. Il ferme #6442 :
+      # `docker.yml` construisait `linux/amd64`, `release.yml`
+      # `linux/amd64,linux/arm64` sous émulation QEMU. L'architecture de `latest`
+      # dépendait donc du workflow arrivé le dernier, et l'étage arm64 émulé de la
+      # passerelle rougissait `main` sans défaut de code
+      # (`qemu: uncaught target signal 4`). Le garde exige un même `env.PLATFORMS`
+      # chez tout publieur de `latest`, reconnu par ce qu'il FAIT, et une étape de
+      # construction qui le lit.
+      - name: Image platforms guard
+        run: node scripts/check-release-platforms.mjs --self-test && node scripts/check-release-platforms.mjs
+
       # Même raison de placement que les trois gardes ci-dessus : l'invariant
       # porte sur les quatre `docker-compose*.yml` de `infrastructure/docker/compose/`
       # et sur les deux modèles d'environnement — la surface est le DÉPÔT.
@@ -613,6 +625,51 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-settings.mjs
+
+      # #6364 — ses communautés : la grille remplace l'écran d'attente, la
+      # recherche se peint depuis le cache, une carte ouvre son détail et une
+      # conversation son fil, la création refuse un identifiant pris sous son
+      # champ puis devient le détail ; les textes blancs des cartes tiennent AA
+      # au pire pixel ; aucun contrôle ni texte n'est volé par un disque (deux
+      # schémas, deux gabarits).
+      - name: Gate communautés (liste, recherche, détail, création, hors-ligne)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-communities.mjs
+
+      # #6362 — le journal d'appels : il remplace l'écran d'attente, les trois
+      # directions se distinguent par un glyphe et un libellé (jamais la couleur
+      # seule), aucune ligne ne porte « Rappeler », « Manqués » se peint depuis
+      # le cache, une ligne ouvre son fil ; chaque texte tient AA et aucun n'est
+      # volé par un disque (deux schémas, deux gabarits).
+      - name: Gate journal d'appels (directions, filtre, fil, hors-ligne)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-calls.mjs
+
+      # #6363 / #6321 — découvrir des personnes : trois onglets (Découvrir,
+      # Demandes, Bloqués), chaque relation par son geste, accepter/refuser
+      # retirent la ligne et font baisser le compte de l'onglet ET du barreau au
+      # geste, aucun point de présence peint ; chaque texte tient AA et aucun
+      # n'est volé par un disque (deux schémas, deux gabarits).
+      - name: Gate découverte de personnes (relations, demandes, bloqués, compte)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-discover.mjs
+
+      # #6361 — Mes liens : le hub ne montre que la famille servie, la liste
+      # porte les agrégats de la passerelle, « copier » met l'adresse PUBLIQUE
+      # dans le presse-papiers, « Désactiver » se lit au geste, la création
+      # remplace l'écran par le lien créé ; chaque texte tient AA et aucun
+      # n'est volé par un disque (deux schémas, deux gabarits).
+      - name: Gate Mes liens (hub, liens de partage, détail, création)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-links.mjs
 
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}

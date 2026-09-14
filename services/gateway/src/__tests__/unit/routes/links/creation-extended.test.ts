@@ -26,6 +26,7 @@ jest.mock('../../../../utils/sanitize', () => ({
 }));
 
 jest.mock('../../../../middleware/auth', () => ({
+  ...(jest.requireActual('../../../../middleware/auth') as object),
   createUnifiedAuthMiddleware: jest.fn(() => async (req: FastifyRequest) => {
     (req as any).authContext = (req as any)._testAuthContext;
   }),
@@ -58,7 +59,7 @@ const CONV_ID = '507f1f77bcf86cd799439022';
 const MEMBER_ID = '507f1f77bcf86cd799439033';
 const LINK_ID = 'link-001';
 
-const mockUser = { id: USER_ID, role: 'USER', username: 'alice', displayName: 'Alice' };
+const mockUser = { id: USER_ID, role: 'USER', username: 'alice', displayName: 'Alice', emailVerifiedAt: new Date() };
 
 const mockShareLink = {
   id: LINK_ID,

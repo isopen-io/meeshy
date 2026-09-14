@@ -7,8 +7,15 @@ import { axesByFamily, resolveEngagementProgress } from '@meeshy/shared/utils/en
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { ACHIEVEMENT_COPY, AXIS_LABELS, FAMILY_LABELS } from '@/lib/view/progression';
 
-import { ElansHero, MeeshDetail, ProgressionBody } from './progression';
-import { AchievementsSection, AxisRow, GeneratedAchievements, ProgressionError, ProgressionSkeleton } from './progression-parts';
+import { ElansHero, MeeshDetail, MeeshEntry, ProgressionBody } from './progression';
+import {
+  AchievementsSection,
+  AxisRow,
+  GeneratedAchievements,
+  MeeshHero,
+  ProgressionError,
+  ProgressionSkeleton,
+} from './progression-parts';
 
 /**
  * L'ÉCRAN « PROGRESSION », RENDU (#5547) — ce que les témoins purs ne prouvent
@@ -310,6 +317,35 @@ describe('MeeshHero', () => {
     });
     expect(rendu).toContain('>1 Meesh<');
     expect(rendu).toContain('1 frappée depuis toujours');
+  });
+});
+
+/**
+ * LA PIÈCE D'ARGENT (#6427) — une Meesh est une MONNAIE : son glyphe dit
+ * « pièce », pas « récompense ». La médaille reste aux badges.
+ *
+ * Le témoin cherche le TRACÉ, pas un nom de glyphe : un nom se renomme sans que
+ * le dessin change, et c'est le dessin que l'œil voit. `coin-fill` (Phosphor)
+ * s'ouvre sur `M207.58,63.84`, `medal` sur `M216,96A88,88`.
+ */
+const TRACE_PIECE = 'M207.58,63.84';
+const TRACE_MEDAILLE = 'M216,96A88,88';
+const TEINTE_ARGENT = 'var(--ios-meesh-silver)';
+const meeshDeLaFixture = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE).meesh!;
+
+describe('la pièce d’argent des Meeshes', () => {
+  test('l’entrée de l’en-tête montre la pièce, en argent, et plus la médaille', () => {
+    const rendu = renderToStaticMarkup(<MeeshEntry meesh={meeshDeLaFixture} onMint={() => {}} isMinting={false} />);
+    expect(rendu).toContain(TRACE_PIECE);
+    expect(rendu).toContain(TEINTE_ARGENT);
+    expect(rendu).not.toContain(TRACE_MEDAILLE);
+  });
+
+  test('le héros des Meeshes montre la même pièce', () => {
+    const rendu = renderToStaticMarkup(<MeeshHero meesh={meeshDeLaFixture} onMint={() => {}} isMinting={false} />);
+    expect(rendu).toContain(TRACE_PIECE);
+    expect(rendu).toContain(TEINTE_ARGENT);
+    expect(rendu).not.toContain(TRACE_MEDAILLE);
   });
 });
 

@@ -31,6 +31,25 @@ describe('searchUsers — GET /api/v1/directory/people (§ 3.4)', () => {
    * elle-même, et son schéma ne sert pas `avatar`. Voir le doc-comment du
    * port.
    */
+  /**
+   * LA PRÉSENCE D'UN INCONNU NE PASSE PAS (#6363) — même si une charge la
+   * portait (une passerelle qui servirait `?expand=presence` par défaut, un
+   * alias qui la déclare), le résultat décodé n'a ni `isOnline` ni
+   * `lastActiveAt` : rien en aval ne peut peindre un point qu'on ne lui a pas
+   * servi sous la loi de visibilité.
+   */
+  test('en gateway, un résultat est PROJETÉ : ni présence, ni ligne sans identifiant', async () => {
+    const transport = fakeTransport({
+      ok: true,
+      data: [
+        { id: 'u-ada', username: 'ada', displayName: 'Ada Lovelace', avatar: null, isOnline: true, lastActiveAt: '2026-09-13T11:59:00.000Z' },
+        { username: 'sans-id' },
+      ],
+    });
+    const result = await searchUsers({ source: 'gateway', transport }, 'ada');
+    expect(result.ok && result.data).toEqual([{ id: 'u-ada', username: 'ada', displayName: 'Ada Lovelace', avatar: null }]);
+  });
+
   test('en gateway, appelle GET /api/v1/directory/people?q=…&limit=20', async () => {
     const transport = fakeTransport({ ok: true, data: [] });
     await searchUsers({ source: 'gateway', transport }, 'ami na');
