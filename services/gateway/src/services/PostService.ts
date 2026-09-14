@@ -1016,7 +1016,33 @@ export class PostService {
     mediaCaption: Record<string, string> | undefined,
     client: Pick<PrismaClient, 'postMedia'> = this.prisma,
   ): Promise<void> {
-    const written = await applyMediaText('caption', postId, requestedMediaIds, mediaCaption, client);
+    const written = await this.writeMediaCaption(postId, requestedMediaIds, mediaCaption, client);
+    this.triggerMediaCaptionTranslations(written);
+  }
+
+  /**
+   * Écrit `PostMedia.caption` SANS déclencher la traduction — pour un
+   * appelant qui doit repousser `triggerMediaCaptionTranslation` APRÈS le
+   * commit de SA propre transaction (`updatePost`). `triggerMediaCaptionTranslation`
+   * écrit `captionLanguage`/`captionTranslations` via `this.prisma`, HORS de
+   * tout `tx` : l'appeler pendant qu'un `$transaction` tient encore ouvert le
+   * même document `PostMedia` (ex. le `tx.postMedia.updateMany` qui vient de
+   * rattacher ce média) concurrence son verrou Mongo — un risque de conflit
+   * d'écriture que `triggerStoryTextTranslation` évite déjà en n'étant JAMAIS
+   * appelé depuis l'intérieur d'un `$transaction` de ce fichier.
+   */
+  private async writeMediaCaption(
+    postId: string,
+    requestedMediaIds: string[] | undefined,
+    mediaCaption: Record<string, string> | undefined,
+    client: Pick<PrismaClient, 'postMedia'>,
+  ): Promise<Array<{ id: string; text: string | null }>> {
+    return applyMediaText('caption', postId, requestedMediaIds, mediaCaption, client);
+  }
+
+  /** Rejoue `MediaCaptionTranslationService.triggerMediaCaptionTranslation`
+   * pour chaque entrée ÉCRITE par `writeMediaCaption`/`applyMediaCaption`. */
+  private triggerMediaCaptionTranslations(written: Array<{ id: string; text: string | null }>): void {
     for (const { id, text } of written) {
       try {
         MediaCaptionTranslationService.shared.triggerMediaCaptionTranslation(id, text).catch((err: unknown) => {
@@ -1303,6 +1329,11 @@ export class PostService {
       }
     }
 
+    // Capturée DANS la transaction (`writeMediaCaption`, sans déclenchement),
+    // rejouée APRÈS son commit — voir le doc-comment de `writeMediaCaption`
+    // pour la raison (conflit d'écriture Mongo évité).
+    let writtenMediaCaptions: Array<{ id: string; text: string | null }> = [];
+
     const updated = await this.prisma.$transaction(async (tx) => {
       if (mediaIdsToRemove.length > 0) {
         await tx.postMedia.deleteMany({ where: { id: { in: mediaIdsToRemove }, postId } });
@@ -1320,7 +1351,7 @@ export class PostService {
           enhancedLogger.warn(`[PostService] updatePost: ${shortfall}`, { postId, authorId: userId });
         }
         await this.applyMediaAlt(postId, mediaIdsToAttach, mediaAlt, tx);
-        await this.applyMediaCaption(postId, mediaIdsToAttach, mediaCaption, tx);
+        writtenMediaCaptions = await this.writeMediaCaption(postId, mediaIdsToAttach, mediaCaption, tx);
         await applyMediaOrder(tx, postId, mediaIdsToAttach);
       }
       if (storyContentEdit) {
@@ -1334,6 +1365,9 @@ export class PostService {
         select: postInclude,
       });
     });
+
+    // APRÈS le commit — jamais pendant, voir `writeMediaCaption`.
+    this.triggerMediaCaptionTranslations(writtenMediaCaptions);
 
     // Les octets des médias que l'édition vient de retirer. APRÈS le commit,
     // et c'est l'inverse de l'ordre du balayage : ici la transaction peut
