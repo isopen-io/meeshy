@@ -1478,43 +1478,8 @@ public struct StoryEffects: Codable, Sendable {
         return objects
     }
 
-    /// Retourne l'audio background résolu.
-    /// - Premier `audioPlayerObjects` avec `isBackground == true` → cet objet.
-    /// - Sinon, si aucun audioPlayerObject n'a de flag explicite (tous `nil`) ET
-    ///   que la story utilise les champs legacy `backgroundAudioId/Volume/Start/End`,
-    ///   synthétise un `StoryAudioPlayerObject` virtuel.
-    /// - Un `isBackground: false` explicite sur un audioPlayerObject signale que
-    ///   l'utilisateur a manipulé les flags — on ne retombe plus sur la synthèse legacy.
-    public var resolvedBackgroundAudio: StoryAudioPlayerObject? {
-        if let existing = audioPlayerObjects?.first(where: { $0.isBackground == true }) {
-            return existing
-        }
-        let audiosUntouched = (audioPlayerObjects ?? []).allSatisfy { $0.isBackground == nil }
-        guard audiosUntouched, let bgId = backgroundAudioId else { return nil }
-        let start = backgroundAudioStart.map { Float($0) }
-        let end = backgroundAudioEnd.map { Float($0) }
-        let duration: Float? = {
-            guard let start, let end, end > start else { return nil }
-            return end - start
-        }()
-        return StoryAudioPlayerObject(
-            id: "legacy-bg-audio",
-            postMediaId: bgId,
-            placement: "background",
-            volume: backgroundAudioVolume ?? 0.5,
-            waveformSamples: [],
-            isBackground: true,
-            backgroundAudioVariants: backgroundAudioVariants,
-            startTime: start,
-            duration: duration,
-            loop: true
-        )
-    }
-
-    /// Retourne uniquement les audios foreground (draggable pills avec UI).
-    public var resolvedForegroundAudioPlayers: [StoryAudioPlayerObject] {
-        (audioPlayerObjects ?? []).filter { $0.isBackground != true }
-    }
+    // La résolution AUDIO de `StoryEffects` vit dans
+    // `StoryEffects+AudioResolution.swift` — ce fichier est hors budget.
 }
 
 // MARK: - Post Type
