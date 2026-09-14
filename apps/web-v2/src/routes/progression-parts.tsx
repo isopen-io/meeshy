@@ -70,6 +70,8 @@ export const BRAND = 'var(--color-ios-brand)';
 export const STREAK_TINT = 'var(--ios-warning)';
 /** L'ambre des Meeshes — la même famille que les badges, distincte de la marque. */
 export const MEESH_TINT = 'var(--ios-warning)';
+/** L'argent de la PIÈCE Meesh (#6427) — dérivé de `MeeshyColors.meeshSilver`, jamais recopié. */
+export const MEESH_COIN_TINT = 'var(--ios-meesh-silver)';
 export const UNLOCKED_TINT = 'var(--ios-success)';
 export const INK = 'var(--color-ios-ink)';
 export const INK_2 = 'var(--color-ios-ink-2)';
@@ -398,8 +400,8 @@ export function MeeshHero({ meesh, onMint, isMinting }: { meesh: EngagementMeesh
       }}
     >
       <div className="flex items-center gap-2">
-        <span style={{ color: MEESH_TINT }} aria-hidden="true">
-          <GlyphSvg glyph={PROGRESSION_GLYPHS.medal} size={18} />
+        <span style={{ color: MEESH_COIN_TINT }} aria-hidden="true">
+          <GlyphSvg glyph={PROGRESSION_GLYPHS.coinFill} size={18} />
         </span>
         <h2 id="progression-meesh" className="text-large-title font-bold" style={{ color: INK }}>
           {soldeLabel}

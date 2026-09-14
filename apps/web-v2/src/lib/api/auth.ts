@@ -52,7 +52,13 @@ function isTwoFactorResponse(data: LoginResponseData): data is LoginTwoFactorDat
 export type RegisterBody = {
   readonly displayName: string;
   readonly email: string;
-  readonly password: string;
+  /**
+   * ABSENT ⇒ le compte naît sans mot de passe (#6424), et sa seule porte est
+   * le lien magique. La clé est OMISE, jamais posée à `''` : la passerelle lit
+   * l'absence ; une chaîne vide serait une valeur, refusée par la borne de
+   * longueur — l'inscription échouerait dans le cas même qu'elle ouvre.
+   */
+  readonly password?: string;
   readonly phoneNumber?: string;
   readonly phoneCountryCode?: string;
   readonly systemLanguage?: string;

@@ -411,6 +411,18 @@ jobs:
       - name: CI summary coverage guard
         run: node scripts/check-ci-summary-coverage.mjs --self-test && node scripts/check-ci-summary-coverage.mjs
 
+      # Même placement, même raison : la surface est le DÉPÔT — les workflows qui
+      # publient `isopen/meeshy-<image>:latest` sur `main`. Il ferme #6442 :
+      # `docker.yml` construisait `linux/amd64`, `release.yml`
+      # `linux/amd64,linux/arm64` sous émulation QEMU. L'architecture de `latest`
+      # dépendait donc du workflow arrivé le dernier, et l'étage arm64 émulé de la
+      # passerelle rougissait `main` sans défaut de code
+      # (`qemu: uncaught target signal 4`). Le garde exige un même `env.PLATFORMS`
+      # chez tout publieur de `latest`, reconnu par ce qu'il FAIT, et une étape de
+      # construction qui le lit.
+      - name: Image platforms guard
+        run: node scripts/check-release-platforms.mjs --self-test && node scripts/check-release-platforms.mjs
+
       # Même raison de placement que les trois gardes ci-dessus : l'invariant
       # porte sur les quatre `docker-compose*.yml` de `infrastructure/docker/compose/`
       # et sur les deux modèles d'environnement — la surface est le DÉPÔT.

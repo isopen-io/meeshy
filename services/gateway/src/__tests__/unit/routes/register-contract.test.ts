@@ -94,20 +94,32 @@ describe("contrat d'entrée de POST /register — couche Ajv RÉELLE", () => {
       expect((await poster({ ...HERITE })).statusCode).toBe(200);
     });
 
-    it('refuse une charge SANS aucune identité', async () => {
-      const res = await poster({ email: 'lena@example.com', password: 'Xk9$mQ2vLp8#nR4wZ' });
-
-      expect(res.statusCode).toBe(400);
+    /**
+     * Ces trois témoins gardaient les REFUS de la disjonction. #6424 la retire :
+     * le serveur nomme le compte depuis l'adresse, et exiger de la charge une
+     * donnée que le handler fabrique refusait l'inscription que ce lot ouvre.
+     *
+     * Ce qui compte ici est qu'Ajv le fasse RÉELLEMENT — la couche montée dans
+     * Fastify, pas la structure du schéma que la garde jumelle de
+     * `packages/shared` inspecte. C'est ce partage qui a permis de mesurer que
+     * les deux couches sont tombées ensemble.
+     */
+    it("accepte une charge qui ne porte QUE l'adresse", async () => {
+      expect((await poster({ email: 'lena@example.com' })).statusCode).toBe(200);
     });
 
-    it('refuse un firstName SEUL — la moitié du couple ne vaut pas identité', async () => {
+    it('accepte un firstName SEUL — le serveur complète le reste', async () => {
       const res = await poster({ email: 'lena@example.com', password: 'Xk9$mQ2vLp8#nR4wZ', firstName: 'Lena' });
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(200);
     });
 
-    it("refuse une charge sans mot de passe, même avec l'identité", async () => {
-      expect((await poster({ displayName: 'Lena Vogel', email: 'lena@example.com' })).statusCode).toBe(400);
+    it("accepte une charge sans mot de passe — le lien magique est alors la porte", async () => {
+      expect((await poster({ displayName: 'Lena Vogel', email: 'lena@example.com' })).statusCode).toBe(200);
+    });
+
+    it("refuse toujours une charge SANS adresse — c'est la seule source qui nomme le compte", async () => {
+      expect((await poster({ displayName: 'Lena Vogel', password: 'Xk9$mQ2vLp8#nR4wZ' })).statusCode).toBe(400);
     });
   });
 
