@@ -59,9 +59,45 @@ final class SceneFullscreenCaptionTranslationGuardTests: XCTestCase {
                       "Le plein écran n'offre pas la rangée sur la seule origine « texte du post ».")
     }
 
-    /// « Traduire maintenant » demande réellement la traduction.
-    func test_traduireMaintenant_demandeLaTraduction() throws {
-        XCTAssertTrue(try pleinEcran.contains("requestTranslation(postId:"),
-                      "« Traduire maintenant » n'appelle aucun service : ce serait un contrôle inerte.")
+    /// L'icône de traduction ouvre LA feuille des messages et des audios
+    /// (directive porteur 2026-09-14) — pas une demande directe vers une langue
+    /// choisie à la place du lecteur.
+    func test_lIconeDeTraduction_ouvreLaFeuilleDeTraductionDesMessages() throws {
+        let code = try pleinEcran
+        XCTAssertTrue(code.contains(".sheet("), "Le plein écran ne présente aucune feuille.")
+        XCTAssertTrue(code.contains("MessageLanguageDetailView("),
+                      "La feuille présentée n'est pas celle des messages et des audios.")
+        XCTAssertTrue(code.contains("textTranslations:"),
+                      "La feuille ne reçoit pas les traductions du post : elle proposerait de traduire ce qui l'est déjà.")
+    }
+
+    /// Une langue choisie dans la feuille demande la traduction DU POST, pas
+    /// celle d'un message qui n'existe pas.
+    func test_uneLangueChoisieDansLaFeuille_demandeLaTraductionDuPost() throws {
+        let code = try pleinEcran
+        XCTAssertTrue(code.contains("onRequestTextTranslation:"),
+                      "La feuille retomberait sur la traduction locale d'un message.")
+        XCTAssertTrue(code.contains("requestTranslation(postId:"),
+                      "Aucune demande de traduction du post : le choix d'une langue serait sans effet.")
+    }
+
+    /// La feuille lit les traductions d'un MESSAGE par son identifiant ; un post
+    /// n'en est pas un — la lecture partirait vers une route qui rend 404.
+    func test_laFeuille_neLitPasLesTraductionsDUnMessagePourUnPost() throws {
+        XCTAssertTrue(try pleinEcran.contains("fetchesMessageTranslations: false"),
+                      "Le plein écran laisse la feuille lire `/messages/<id du post>/translations`.")
+        let feuille = try source("Meeshy/Features/Main/Components/MessageDetail/MessageLanguageDetailView.swift")
+        XCTAssertTrue(feuille.contains("guard fetchesMessageTranslations"),
+                      "La feuille n'a aucun moyen de sauter la lecture des traductions d'un message.")
+    }
+
+    /// La rangée n'appelle plus de traduction directe : l'icône, et la pastille
+    /// qui porte le même glyphe, ouvrent la feuille (même icône ⇒ même effet).
+    func test_laRangee_ouvreLaFeuille_parLIconeEtParLaPastille() throws {
+        let rangee = try source("Meeshy/Features/Main/Views/MediaCaptionTranslationRow.swift")
+        XCTAssertTrue(rangee.contains("onOpenTranslations"), "La rangée n'ouvre pas la feuille.")
+        XCTAssertFalse(rangee.contains("onTranslateNow"), "La rangée traduit encore directement.")
+        XCTAssertTrue(rangee.contains("TranslationsBadge(metrics: .overlay, action:"),
+                      "La pastille de traduction reste décorative à côté d'une icône identique qui agit.")
     }
 }

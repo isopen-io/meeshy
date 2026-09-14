@@ -5,66 +5,54 @@ import XCTest
 ///
 /// Directive porteur 2026-09-14 : « mettre entre les deux l'icône de traduction,
 /// la sélection de la langue d'affichage s'il existe des traductions déjà, ou
-/// l'icône pour traduire immédiatement ».
+/// l'icône pour traduire immédiatement » — puis, le même jour : cette icône
+/// « ouvre la feuille habituelle de traduction, celle des messages, des audios,
+/// pour demander une traduction de ce contenu dans la langue souhaitée ».
 ///
-/// La règle est PURE : la vue n'a qu'à rendre ce qu'elle décide. Et elle refuse
-/// d'offrir un contrôle qui ne ferait rien — un sélecteur à une seule langue, un
-/// « traduire » vers la langue dans laquelle la légende est déjà écrite (loi 4).
+/// La règle est PURE : la vue n'a qu'à rendre ce qu'elle décide. La feuille
+/// propose TOUTES les langues : l'icône n'est donc jamais un contrôle inerte
+/// dès que la langue d'origine est connue.
 final class CaptionTranslationOfferTests: XCTestCase {
 
     func test_desTraductionsExistent_onOffreLeSelecteur_origineEnTete() {
         let offre = CaptionTranslationOffer.resolve(
             originalLanguage: "fr",
             translationLanguages: ["es", "en"],
-            preferredLanguages: ["en"],
             activeLanguage: "en"
         )
 
         XCTAssertEqual(offre, .languages(codes: ["fr", "en", "es"], active: "en"))
     }
 
-    func test_aucuneTraduction_onOffreDeTraduireVersLaPremiereLanguePrefereeAutreQueLOrigine() {
+    func test_aucuneTraduction_onOffreLIconeQuiOuvreLaFeuille() {
         let offre = CaptionTranslationOffer.resolve(
             originalLanguage: "en",
             translationLanguages: [],
-            preferredLanguages: ["en", "fr"],
             activeLanguage: nil
         )
 
-        XCTAssertEqual(offre, .translateNow(target: "fr"))
-    }
-
-    /// La légende est déjà dans la seule langue du lecteur : « traduire » ne
-    /// changerait rien. Aucune offre plutôt qu'un bouton inerte.
-    func test_laLegendeEstDejaDansLaLangueDuLecteur_onNOffreRien() {
-        let offre = CaptionTranslationOffer.resolve(
-            originalLanguage: "fr",
-            translationLanguages: [],
-            preferredLanguages: ["FR"],
-            activeLanguage: nil
-        )
-
-        XCTAssertEqual(offre, .none)
-    }
-
-    func test_sansLanguePreferee_etSansTraduction_onNOffreRien() {
-        let offre = CaptionTranslationOffer.resolve(
-            originalLanguage: "fr",
-            translationLanguages: [],
-            preferredLanguages: [],
-            activeLanguage: nil
-        )
-
-        XCTAssertEqual(offre, .none)
+        XCTAssertEqual(offre, .translate)
     }
 
     /// Une traduction vers la langue d'origine elle-même ne fait pas un choix :
-    /// le sélecteur ne s'offre qu'à partir de DEUX langues distinctes.
-    func test_uneSeuleLangueDistincte_onNOffrePasDeSelecteur() {
+    /// le sélecteur ne s'offre qu'à partir de DEUX langues distinctes — la
+    /// feuille, elle, reste offerte.
+    func test_uneSeuleLangueDistincte_onOffreLaFeuille_pasLeSelecteur() {
         let offre = CaptionTranslationOffer.resolve(
             originalLanguage: "fr",
             translationLanguages: ["FR"],
-            preferredLanguages: ["fr"],
+            activeLanguage: nil
+        )
+
+        XCTAssertEqual(offre, .translate)
+    }
+
+    /// Sans langue d'origine, la feuille n'a ni « Original » à nommer ni langue
+    /// source à transmettre : rien n'est offert.
+    func test_sansLangueDOrigine_niTraduction_onNOffreRien() {
+        let offre = CaptionTranslationOffer.resolve(
+            originalLanguage: nil,
+            translationLanguages: [],
             activeLanguage: nil
         )
 
@@ -75,7 +63,6 @@ final class CaptionTranslationOfferTests: XCTestCase {
         let offre = CaptionTranslationOffer.resolve(
             originalLanguage: "fr",
             translationLanguages: ["EN", "en", "es"],
-            preferredLanguages: ["fr"],
             activeLanguage: nil
         )
 

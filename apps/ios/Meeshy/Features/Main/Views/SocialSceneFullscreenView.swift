@@ -121,8 +121,10 @@ struct SocialSceneFullscreenView: View {
     /// La langue choisie dans la rangée de traduction de la légende (#6504) ;
     /// `nil` : la langue que le Prisme a résolue.
     @State private var langueDeLegende: String?
-    /// Une traduction a été demandée et n'est pas encore arrivée.
-    @State private var traductionDemandee = false
+    /// Les langues demandées depuis la feuille, pas encore arrivées.
+    @State private var languesDemandees: Set<String> = []
+    /// La feuille de traduction des messages, ouverte par l'icône de la rangée.
+    @State private var feuilleDeTraductionOuverte = false
 
     /// **Le porteur de la scène.** Le document dit ce qu'il faut peindre ; il ne
     /// dit pas où vivent les pixels. Sans lui, le résolveur du player n'a aucun
@@ -162,13 +164,12 @@ struct SocialSceneFullscreenView: View {
 
     /// **L'offre de traduction de la légende** (#6504) — seulement pour le
     /// texte du post : la légende propre d'un média n'a aucune traduction
-    /// (#6280), et un sélecteur ou un « traduire » y serait sans effet.
+    /// (#6280), et un sélecteur ou une feuille y seraient sans effet.
     private var offreDeTraduction: CaptionTranslationOffer {
         guard legende?.origin == .carrierText else { return .none }
         return CaptionTranslationOffer.resolve(
             originalLanguage: post.originalLanguage,
             translationLanguages: post.availableLanguages,
-            preferredLanguages: preferredContentLanguages,
             activeLanguage: langueDeLegende ?? post.resolvedLanguageCode(preferredLanguages: preferredContentLanguages)
         )
     }
@@ -179,26 +180,97 @@ struct SocialSceneFullscreenView: View {
         guard offre != .none else { return nil }
         return AnyView(MediaCaptionTranslationRow(
             offer: offre,
-            isRequesting: traductionDemandee,
+            isRequesting: !languesDemandees.isEmpty,
             onSelectLanguage: { code in
                 withAnimation(.easeInOut(duration: 0.2)) { langueDeLegende = code }
             },
-            onTranslateNow: { cible in demanderTraduction(vers: cible) }
+            onOpenTranslations: { feuilleDeTraductionOuverte = true }
         ))
     }
 
-    /// « Demander la traduction » part tout de suite ; la traduction revient par
-    /// la socket (`post:translation-updated`), que l'hôte applique au post qu'il
-    /// nous passe. En cas d'échec, l'indicateur retombe pour qu'on puisse
+    /// Les traductions du post, dans la forme que la feuille des messages lit.
+    private var traductionsDuPost: [MessageTranslation] {
+        (post.translations ?? [:])
+            .map { langue, traduction in
+                MessageTranslation(
+                    id: "\(post.id)-\(langue)",
+                    messageId: post.id,
+                    sourceLanguage: post.originalLanguage ?? "",
+                    targetLanguage: langue,
+                    translatedContent: traduction.text,
+                    translationModel: traduction.translationModel ?? "nllb-200",
+                    confidenceScore: traduction.confidenceScore
+                )
+            }
+            .sorted { $0.targetLanguage < $1.targetLanguage }
+    }
+
+    /// **LA feuille de traduction des messages et des audios**, réutilisée pour
+    /// le texte du post (directive porteur 2026-09-14 : l'icône « ouvre la
+    /// feuille habituelle de traduction … pour demander une traduction de ce
+    /// contenu dans la langue souhaitée »). Une langue déjà traduite affiche la
+    /// légende dans cette langue ; une autre demande la traduction DU POST —
+    /// jamais la traduction locale d'un message qui n'existe pas.
+    private var feuilleDeTraduction: some View {
+        let origine = post.originalLanguage ?? ""
+        return NavigationStack {
+            ScrollView(showsIndicators: false) {
+                MessageLanguageDetailView(
+                    message: Message(
+                        id: post.id,
+                        conversationId: "",
+                        content: post.content,
+                        originalLanguage: origine,
+                        createdAt: post.timestamp,
+                        senderName: post.author,
+                        senderColor: post.authorColor,
+                        senderAvatarURL: post.authorAvatarURL,
+                        senderUserId: post.authorId
+                    ),
+                    contactColor: post.authorColor,
+                    conversationId: "",
+                    textTranslations: traductionsDuPost,
+                    onSelectTranslation: { traduction in
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            langueDeLegende = traduction?.targetLanguage ?? origine
+                        }
+                    },
+                    translatingTextLanguages: languesDemandees,
+                    onRequestTextTranslation: { cible, _ in demanderTraduction(vers: cible) },
+                    fetchesMessageTranslations: false
+                )
+                .padding(16)
+            }
+            .navigationTitle(String(localized: "feed.post.translation.title", defaultValue: "Langues", bundle: .main))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) {
+                        feuilleDeTraductionOuverte = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    /// La demande part tout de suite ; la traduction revient par la socket
+    /// (`post:translation-updated`), que l'hôte applique au post qu'il nous
+    /// passe. En cas d'échec, la langue quitte l'attente pour qu'on puisse
     /// réessayer.
     private func demanderTraduction(vers cible: String) {
-        traductionDemandee = true
+        let langue = cible.lowercased()
+        languesDemandees.insert(langue)
         let postId = post.id
         Task {
             do {
-                try await PostService.shared.requestTranslation(postId: postId, targetLanguage: cible)
+                try await PostService.shared.requestTranslation(postId: postId, targetLanguage: langue)
             } catch {
-                traductionDemandee = false
+                languesDemandees.remove(langue)
+                FeedbackToastManager.shared.showError(
+                    String(localized: "feed.post.translation.error", defaultValue: "Erreur de traduction", bundle: .main)
+                )
             }
         }
     }
@@ -211,10 +283,11 @@ struct SocialSceneFullscreenView: View {
 
             chrome
         }
-        // Une traduction arrivée éteint l'indicateur de demande (#6504).
+        // Une traduction arrivée sort sa langue de l'attente (#6504).
         .adaptiveOnChange(of: post.translations?.count ?? 0) { _, _ in
-            traductionDemandee = false
+            languesDemandees.subtract((post.translations ?? [:]).keys.map { $0.lowercased() })
         }
+        .sheet(isPresented: $feuilleDeTraductionOuverte) { feuilleDeTraduction }
         // **La lecture ne s'arme que s'il y a quelque chose à jouer.** Un
         // canvas fixe n'a ni vidéo, ni son, ni animation : lever `isPlaying`
         // y ferait tourner un displayLink pour rien, et allumerait un bouton
