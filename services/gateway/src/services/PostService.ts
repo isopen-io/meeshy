@@ -9,7 +9,7 @@ import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { applyMediaOrder } from './posts/mediaOrder';
 import { applyMediaText } from './posts/mediaText';
-import { MediaCaptionTranslationService } from './posts/MediaCaptionTranslationService';
+import { triggerMediaCaptionTranslations, writeMediaCaption, type WrittenMediaCaption } from './posts/mediaCaptionWrites';
 import { engagementAggregateIncrements } from './posts/engagementIncrements';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
@@ -998,17 +998,8 @@ export class PostService {
    * Elle porte, en profil Post, la légende de CE média — distincte du `content`
    * du post, qui reste celui de la publication (modèle § 3). Les deux textes ont
    * des sujets différents : le premier décrit une image, le second dit ce que
-   * l'auteur publie.
-   *
-   * Déclenche `MediaCaptionTranslationService.triggerMediaCaptionTranslation`
-   * (#6280) pour chaque entrée ÉCRITE — jamais pour la carte brute de la
-   * requête, qui peut nommer des médias étrangers qu'`applyMediaText` a
-   * ignorés. Fire-and-forget, comme le reste du pipeline de traduction
-   * (`triggerStoryTextTranslation`) : la publication ne doit pas attendre le
-   * round-trip NLLB. Le `try/catch` est le même filet que
-   * `routes/posts/publication.ts` pour `PostTranslationService` — le service
-   * n'est pas encore initialisé dans un harnais de test qui n'a pas démarré
-   * `MeeshySocketIOManager`.
+   * l'auteur publie. Chaque légende écrite part en traduction (#6280,
+   * `posts/mediaCaptionWrites.ts`).
    */
   private async applyMediaCaption(
     postId: string,
@@ -1016,42 +1007,7 @@ export class PostService {
     mediaCaption: Record<string, string> | undefined,
     client: Pick<PrismaClient, 'postMedia'> = this.prisma,
   ): Promise<void> {
-    const written = await this.writeMediaCaption(postId, requestedMediaIds, mediaCaption, client);
-    this.triggerMediaCaptionTranslations(written);
-  }
-
-  /**
-   * Écrit `PostMedia.caption` SANS déclencher la traduction — pour un
-   * appelant qui doit repousser `triggerMediaCaptionTranslation` APRÈS le
-   * commit de SA propre transaction (`updatePost`). `triggerMediaCaptionTranslation`
-   * écrit `captionLanguage`/`captionTranslations` via `this.prisma`, HORS de
-   * tout `tx` : l'appeler pendant qu'un `$transaction` tient encore ouvert le
-   * même document `PostMedia` (ex. le `tx.postMedia.updateMany` qui vient de
-   * rattacher ce média) concurrence son verrou Mongo — un risque de conflit
-   * d'écriture que `triggerStoryTextTranslation` évite déjà en n'étant JAMAIS
-   * appelé depuis l'intérieur d'un `$transaction` de ce fichier.
-   */
-  private async writeMediaCaption(
-    postId: string,
-    requestedMediaIds: string[] | undefined,
-    mediaCaption: Record<string, string> | undefined,
-    client: Pick<PrismaClient, 'postMedia'>,
-  ): Promise<Array<{ id: string; text: string | null }>> {
-    return applyMediaText('caption', postId, requestedMediaIds, mediaCaption, client);
-  }
-
-  /** Rejoue `MediaCaptionTranslationService.triggerMediaCaptionTranslation`
-   * pour chaque entrée ÉCRITE par `writeMediaCaption`/`applyMediaCaption`. */
-  private triggerMediaCaptionTranslations(written: Array<{ id: string; text: string | null }>): void {
-    for (const { id, text } of written) {
-      try {
-        MediaCaptionTranslationService.shared.triggerMediaCaptionTranslation(id, text).catch((err: unknown) => {
-          log.warn('MediaCaptionTranslation: trigger failed', { mediaId: id, err });
-        });
-      } catch {
-        // MediaCaptionTranslationService not initialized — skip silently
-      }
-    }
+    triggerMediaCaptionTranslations(await writeMediaCaption(postId, requestedMediaIds, mediaCaption, client));
   }
 
   /**
@@ -1329,10 +1285,8 @@ export class PostService {
       }
     }
 
-    // Capturée DANS la transaction (`writeMediaCaption`, sans déclenchement),
-    // rejouée APRÈS son commit — voir le doc-comment de `writeMediaCaption`
-    // pour la raison (conflit d'écriture Mongo évité).
-    let writtenMediaCaptions: Array<{ id: string; text: string | null }> = [];
+    // Écrite dans la transaction, traduite après son commit (`mediaCaptionWrites.ts`).
+    let writtenMediaCaptions: WrittenMediaCaption[] = [];
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (mediaIdsToRemove.length > 0) {
@@ -1351,7 +1305,7 @@ export class PostService {
           enhancedLogger.warn(`[PostService] updatePost: ${shortfall}`, { postId, authorId: userId });
         }
         await this.applyMediaAlt(postId, mediaIdsToAttach, mediaAlt, tx);
-        writtenMediaCaptions = await this.writeMediaCaption(postId, mediaIdsToAttach, mediaCaption, tx);
+        writtenMediaCaptions = await writeMediaCaption(postId, mediaIdsToAttach, mediaCaption, tx);
         await applyMediaOrder(tx, postId, mediaIdsToAttach);
       }
       if (storyContentEdit) {
@@ -1366,8 +1320,7 @@ export class PostService {
       });
     });
 
-    // APRÈS le commit — jamais pendant, voir `writeMediaCaption`.
-    this.triggerMediaCaptionTranslations(writtenMediaCaptions);
+    triggerMediaCaptionTranslations(writtenMediaCaptions);
 
     // Les octets des médias que l'édition vient de retirer. APRÈS le commit,
     // et c'est l'inverse de l'ordre du balayage : ici la transaction peut
@@ -2469,10 +2422,7 @@ export class PostService {
       duration?: number;
       caption?: string;
       alt?: string;
-      // Traduction de LÉGENDE (#6280) — copiée verbatim comme `caption`
-      // elle-même : le texte source ne change pas au repost, ses traductions
-      // restent donc valides. Un nouveau round-trip NLLB serait un travail
-      // redondant pour un résultat identique.
+      // Traductions de légende copiées : le texte source ne change pas (#6280).
       captionLanguage?: string;
       captionTranslations?: Prisma.InputJsonValue;
       language?: string;
