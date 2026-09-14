@@ -33,6 +33,32 @@ export function reservedGlobalMemberRole(username: string): MemberRoleType {
   return 'member';
 }
 
+/**
+ * Un compte SEMÉ naît vérifié — sinon il ne peut RIEN publier (#6581).
+ *
+ * Les trois comptes de bootstrap portent des adresses qui ne reçoivent aucun
+ * courrier (`meeshy@meeshy.me`, `admin@meeshy.me`, `atabeth@meeshy.me`) : le
+ * lien de vérification n'arrive nulle part, donc personne ne peut le cliquer.
+ * Depuis #6437, `requireEmailVerification` garde `POST /posts` — la porte de
+ * TOUTE publication, post comme story. Sans `emailVerifiedAt`, le compte de
+ * démonstration que ce service vient de créer prend `403 EMAIL_NOT_VERIFIED`
+ * dès sa première publication : il lit, il écrit en conversation, et il ne
+ * peut ni publier ni alimenter la bibliothèque de sons — laquelle ne naît QUE
+ * d'une publication publique (`SoundCaptureService`, effet de bord de
+ * `createPost`). Le seed produisait donc une base dont la chaîne de
+ * publication est muette pour tous ses comptes.
+ *
+ * JAMAIS un écrasement. Une date déjà posée est une vérification RÉELLE — en
+ * production, le 2026-09-15, `atabeth` porte `2026-02-15T13:01:17.760Z` — et
+ * la réécrire à chaque boot mentirait sur la date sans rien débloquer.
+ */
+export function seedEmailVerification(
+  existing: { emailVerifiedAt?: Date | null } | null | undefined,
+  now: Date = new Date(),
+): { emailVerifiedAt: Date } | Record<string, never> {
+  return existing?.emailVerifiedAt ? {} : { emailVerifiedAt: now };
+}
+
 
 export class InitService {
   private prisma: PrismaClient;
@@ -189,10 +215,11 @@ export class InitService {
 
       const user = result.user;
 
-      // Mettre à jour le rôle vers BIGBOSS (fixe)
+      // Mettre à jour le rôle vers BIGBOSS (fixe) — et poser la vérification
+      // d'e-mail du seed (#6581, cf. `seedEmailVerification`).
       await this.prisma.user.update({
         where: { id: user.id },
-        data: { role: UserRoleEnum.BIGBOSS }
+        data: { role: UserRoleEnum.BIGBOSS, ...seedEmailVerification(null) }
       });
 
       // Ajouter l'utilisateur comme CREATOR de la conversation meeshy —
@@ -244,7 +271,10 @@ export class InitService {
             role: UserRoleEnum.ADMIN,
             systemLanguage,
             regionalLanguage,
-            customDestinationLanguage
+            customDestinationLanguage,
+            // Rattrape un compte semé AVANT #6581 : la clé n'est écrite que si
+            // aucune vérification réelle n'existe déjà.
+            ...seedEmailVerification(existingUser)
           }
         });
 
@@ -268,10 +298,11 @@ export class InitService {
           throw new Error('Échec de la création de l\'utilisateur Admin');
         }
 
-        // Mettre à jour le rôle vers ADMIN (fixe)
+        // Mettre à jour le rôle vers ADMIN (fixe) — et poser la vérification
+        // d'e-mail du seed (#6581).
         await this.prisma.user.update({
           where: { id: result.user.id },
-          data: { role: UserRoleEnum.ADMIN }
+          data: { role: UserRoleEnum.ADMIN, ...seedEmailVerification(null) }
         });
       }
 
@@ -464,10 +495,11 @@ export class InitService {
 
       const user = result.user;
 
-      // Mettre à jour le rôle vers la valeur configurée
+      // Mettre à jour le rôle vers la valeur configurée — et poser la
+      // vérification d'e-mail du seed (#6581).
       await this.prisma.user.update({
         where: { id: user.id },
-        data: { role: role as any }
+        data: { role: role as any, ...seedEmailVerification(null) }
       });
 
       // Ajouter l'utilisateur à la conversation globale meeshy —
