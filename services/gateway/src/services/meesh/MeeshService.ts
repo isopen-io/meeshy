@@ -36,10 +36,39 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const log = enhancedLogger.child({ module: 'MeeshService' });
 
+export type MeeshTotals = { readonly balance: number; readonly mintedLifetime: number };
+
 export type MeeshMintOutcome =
-  | { readonly status: 'minted'; readonly balance: number; readonly mintedLifetime: number; readonly plan: MeeshMintPlan }
-  | { readonly status: 'already-minted'; readonly balance: number; readonly mintedLifetime: number }
+  | ({ readonly status: 'minted'; readonly plan: MeeshMintPlan } & MeeshTotals)
+  | ({ readonly status: 'already-minted' } & MeeshTotals)
   | { readonly status: 'insufficient'; readonly plan: MeeshMintPlan };
+
+/**
+ * LE SOLDE SE LIT AU REGISTRE (#6428) — `User.meeshBalance == Σ(delta)`, et
+ * cette fonction est le seul endroit qui calcule les deux totaux.
+ *
+ * Les colonnes `meeshBalance` / `meeshMintedLifetime` étaient écrites par
+ * `{ increment: 1 }`. Sur MongoDB, Prisma n'envoie pas `$inc` : il traduit
+ * l'incrément en pipeline `$set: { champ: { $add: ['$champ', 1] } }` (journal
+ * de requêtes, base jetable, 2026-09-14). Or `$add` rend `null` dès qu'un
+ * opérande MANQUE, et le `@default(0)` du schéma ne vaut qu'à la création :
+ * 277 comptes de production sur 282 n'ont pas la colonne. Leur première frappe
+ * débitait 1221 points, gravait sa ligne, et laissait `null`, que Prisma relit
+ * `0`. L'écran annonçait « Aucune Meesh » après une frappe bien réelle.
+ *
+ * Les deux lectures sont SÉQUENTIELLES : dans une transaction interactive,
+ * elles partagent la session.
+ */
+export async function meeshTotalsFromLedger(
+  db: Pick<PrismaClient, 'meeshLedger'>,
+  userId: string,
+): Promise<MeeshTotals> {
+  const somme = await db.meeshLedger.aggregate({ where: { userId }, _sum: { delta: true } });
+  // `reason: 'mint'` : le registre porte aussi les dons et les octrois, qui
+  // changent le solde sans être des frappes.
+  const frappes = await db.meeshLedger.count({ where: { userId, reason: 'mint' } });
+  return { balance: somme._sum.delta ?? 0, mintedLifetime: frappes };
+}
 
 export class MeeshService {
   constructor(private readonly prisma: PrismaClient) {}
@@ -73,22 +102,14 @@ export class MeeshService {
       select: { id: true },
     });
     if (dejaFrappe) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { meeshBalance: true, meeshMintedLifetime: true },
-      });
-      return {
-        status: 'already-minted',
-        balance: user?.meeshBalance ?? 0,
-        mintedLifetime: user?.meeshMintedLifetime ?? 0,
-      };
+      return { status: 'already-minted', ...(await meeshTotalsFromLedger(this.prisma, userId)) };
     }
 
     const plan = computeMeeshMintPlan(await this.axisStates(userId));
     if (!plan.canMint) return { status: 'insufficient', plan };
 
     try {
-      const resultat = await this.prisma.$transaction(async (tx) => {
+      const totaux = await this.prisma.$transaction(async (tx) => {
         for (const ligne of plan.debits) {
           await tx.engagementCounter.update({
             where: { userId_axisKey: { userId, axisKey: ligne.axisKey } },
@@ -124,16 +145,8 @@ export class MeeshService {
           }
         }
 
-        const user = await tx.user.update({
-          where: { id: userId },
-          data: {
-            engagementScore: { decrement: MEESH_MINT_COST },
-            meeshBalance: { increment: 1 },
-            meeshMintedLifetime: { increment: 1 },
-          },
-          select: { meeshBalance: true, meeshMintedLifetime: true },
-        });
-
+        // La ligne AVANT les colonnes : ce sont les totaux du registre, frappe
+        // comprise, qui s'écrivent — jamais un incrément de la colonne.
         await tx.meeshLedger.create({
           data: {
             userId,
@@ -146,35 +159,33 @@ export class MeeshService {
           },
         });
 
-        return user;
+        const apres = await meeshTotalsFromLedger(tx, userId);
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            engagementScore: { decrement: MEESH_MINT_COST },
+            meeshBalance: apres.balance,
+            meeshMintedLifetime: apres.mintedLifetime,
+          },
+          select: { id: true },
+        });
+
+        return apres;
       });
 
       log.info('Meesh frappée', {
         userId,
         cost: MEESH_MINT_COST,
         axes: plan.debits.map((d) => d.axisKey),
-        balance: resultat.meeshBalance,
+        balance: totaux.balance,
       });
-      return {
-        status: 'minted',
-        balance: resultat.meeshBalance,
-        mintedLifetime: resultat.meeshMintedLifetime,
-        plan,
-      };
+      return { status: 'minted', ...totaux, plan };
     } catch (err) {
       // P2002 sur `(userId, requestId)` : deux frappes concurrentes portant le
       // même identifiant — l'index unique a fait son office, la première a
       // gagné. On rend son résultat plutôt qu'une erreur.
       if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
-        const user = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: { meeshBalance: true, meeshMintedLifetime: true },
-        });
-        return {
-          status: 'already-minted',
-          balance: user?.meeshBalance ?? 0,
-          mintedLifetime: user?.meeshMintedLifetime ?? 0,
-        };
+        return { status: 'already-minted', ...(await meeshTotalsFromLedger(this.prisma, userId)) };
       }
       throw err;
     }
