@@ -145,8 +145,39 @@ const waitPlaying = (page, index) =>
  * `scroll-snap-stop: always` qui doit l'y ARRÊTER (mesuré : sans élan, un tiers
  * de page revient en place ; avec élan, exactement une page).
  */
-const swipe = async (cdp, { width, height }, direction) => {
-  const distance = Math.round(height * 0.35);
+/**
+ * UN BALAYAGE TACTILE — sans FLING (correction 2026-09-14).
+ *
+ * `preventFling: false` confiait la course au compositeur : le doigt lance, la
+ * physique finit. En local la page atterrissait à 568 ; **en CI le défileur ne
+ * bougeait pas d'un pixel** (`top: 0`), et douze invariants tombaient en
+ * accusant l'application.
+ *
+ * Un fling a besoin du fil compositeur, que le runner sans GPU ne sert pas de
+ * la même façon. Or l'invariant mesuré n'est pas la physique du geste : c'est
+ * « un arrêt par réel ». `preventFling: true` parcourt la distance demandée de
+ * façon déterministe, et laisse `scroll-snap` faire son travail — ce qui est
+ * exactement ce que le témoin juge.
+ *
+ * ## La distance, elle, n'était pas anodine — et c'est la vraie cause
+ *
+ * 35 % de la hauteur est SOUS le point de bascule de `scroll-snap`, qui est la
+ * moitié. Sans fling, le défileur parcourait 299 px sur 844 puis **revenait en
+ * arrière** : « accroche le réel suivant (0) », mesuré en local une fois le
+ * fling retiré. Avec fling, l'élan franchissait la moitié — le témoin passait
+ * pour une raison qui ne lui appartenait pas, et tombait dès que le compositeur
+ * ne servait plus l'élan.
+ *
+ * 60 % dépasse le point de bascule de façon DÉTERMINISTE. Le geste devient
+ * décisif au lieu d'être emporté, ce qui est précisément ce que l'invariant
+ * « un arrêt par réel » veut éprouver.
+ *
+ * Rend le déplacement RÉELLEMENT obtenu, pour que l'appelant puisse distinguer
+ * « l'application n'accroche pas » de « le geste n'est jamais parti ».
+ */
+const swipe = async (cdp, page, { width, height }, direction) => {
+  const avant = await page.evaluate(() => document.querySelector('[data-reels-pager]')?.scrollTop ?? -1);
+  const distance = Math.round(height * 0.6);
   await cdp.send('Input.synthesizeScrollGesture', {
     x: Math.round(width / 3),
     y: Math.round(height / 2),
@@ -154,8 +185,10 @@ const swipe = async (cdp, { width, height }, direction) => {
     yDistance: direction === 'next' ? -distance : distance,
     speed: 3000,
     gestureSourceType: 'touch',
-    preventFling: false,
+    preventFling: true,
   });
+  const apres = await page.evaluate(() => document.querySelector('[data-reels-pager]')?.scrollTop ?? -1);
+  return { avant, apres, bouge: avant !== apres };
 };
 
 /** Au centre, chaque contrôle retombe sur lui-même, et fait 44. */
@@ -285,8 +318,12 @@ try {
         window.__longTasks = [];
         new PerformanceObserver((list) => window.__longTasks.push(...list.getEntries().map((e) => Math.round(e.duration)))).observe({ type: 'longtask' });
       });
-      await swipe(cdp, { width, height }, 'next');
+      const gesteSuivant = await swipe(cdp, page, { width, height }, 'next');
       await settle(page, 1);
+      // Le geste a-t-il seulement PARTI ? Sans cette distinction, un harnais
+      // muet accuse l'application : c'est ce qui s'est produit en CI le
+      // 2026-09-14, où `preventFling: false` ne déplaçait rien du tout.
+      check(gesteSuivant.bouge, `${label} : le balayage tactile déplace le défileur (${gesteSuivant.avant} → ${gesteSuivant.apres})`);
       check((await activeIndex(page)) === 1, `${label} : balayer vers le haut accroche le réel SUIVANT (${await activeIndex(page)})`);
       const landed = await page.evaluate(() => {
         const el = document.querySelector('[data-reels-pager]');
@@ -301,7 +338,7 @@ try {
         }, null, { timeout: 3000 })
         .then(() => true, () => false);
       check(afterSwipe, `${label} : le réel quitté ne joue plus, jamais deux à la fois`);
-      await swipe(cdp, { width, height }, 'previous');
+      await swipe(cdp, page, { width, height }, 'previous');
       await settle(page, 0);
       check((await activeIndex(page)) === 0, `${label} : balayer vers le bas revient au PRÉCÉDENT`);
       check(await waitPlaying(page, 0), `${label} : et il rejoue`);
