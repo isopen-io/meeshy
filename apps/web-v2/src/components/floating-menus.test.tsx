@@ -207,6 +207,28 @@ describe('le disque du Flux (#6456)', () => {
   });
 
   /**
+   * **L'INDICE DÉCRIT LE DISQUE, IL NE SE LIT PAS À PART** (#6499) — un texte
+   * `sr-only` reste un nœud de l'arbre d'accessibilité : au balayage, VoiceOver
+   * et TalkBack le lisaient AUSSI seul, détaché de tout contrôle (mesuré dans
+   * l'arbre de Chromium). `hidden` le retire du parcours ; `aria-describedby`,
+   * qui le référence directement, continue d'en lire le texte.
+   */
+  test('l’indice de l’appui long est la description du disque, jamais un texte lu seul', () => {
+    for (const route of ['list', 'feed']) {
+      monter(route);
+      const id = disque().getAttribute('aria-describedby');
+      const cible = id === null ? null : document.getElementById(id);
+      expect(cible?.textContent).toBe(translate('fr', 'a11y.floating.feed.hint'));
+      expect(cible?.hidden).toBe(true);
+      act(() => {
+        root.unmount();
+      });
+      container.remove();
+    }
+    monter('list');
+  });
+
+  /**
    * Sur le Flux, le NOM et le GLYPHE changent avec l'action — un disque qui
    * dirait « Flux » en ramenant aux conversations annoncerait une chose et en
    * ferait une autre.

@@ -270,9 +270,27 @@ export default function ReelsScreen() {
   );
 
   return (
-    <div data-reels className="relative h-dvh overflow-hidden bg-black text-white">
+    <ReelsFrame language={language} onBack={close} announcement={announcement}>
       {body}
-      <ReelsBackButton language={language} onBack={close} />
+    </ReelsFrame>
+  );
+}
+
+export function ReelsFrame({
+  language,
+  onBack,
+  announcement,
+  children,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly onBack: () => void;
+  readonly announcement: string;
+  readonly children: React.ReactNode;
+}) {
+  return (
+    <div data-reels className="relative h-dvh overflow-hidden bg-black text-white">
+      {children}
+      <ReelsBackButton language={language} onBack={onBack} />
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>

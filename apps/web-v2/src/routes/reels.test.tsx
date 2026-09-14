@@ -8,7 +8,7 @@ import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { ROUTES } from '@/routes/route-table';
 
-import { ReelsBackButton, ReelsEmpty, ReelsFailure, ReelsSkeleton } from './reels';
+import { ReelsBackButton, ReelsEmpty, ReelsFailure, ReelsFrame, ReelsSkeleton } from './reels';
 
 /**
  * LE LECTEUR DES RÉELS, RENDU (#6457) — `renderToStaticMarkup`, même méthode que
@@ -155,5 +155,24 @@ describe('les états du lecteur sont DESSINÉS, jamais un écran noir muet', () 
     const html = renderToStaticMarkup(<ReelsBackButton language="fr" onBack={() => undefined} />);
     expect(html).toContain('aria-label="Retour"');
     expect(html).toContain('size-11');
+  });
+});
+
+/**
+ * « RETOUR » EST LE PREMIER CONTRÔLE DU LECTEUR (#6498) — rendu APRÈS le fil,
+ * il fallait traverser la scène et le rail de chaque réel monté pour
+ * l'atteindre au clavier ou au lecteur d'écran (28 tabulations pour six réels,
+ * mesuré). Sa place à l'écran est absolue : l'ordre du document ne la change pas.
+ */
+describe('le cadre du lecteur', () => {
+  test('« Retour » précède le fil dans l’ordre du document', () => {
+    const html = renderToStaticMarkup(
+      <ReelsFrame language="fr" onBack={() => undefined} announcement="">
+        <div data-reels-pager="" />
+      </ReelsFrame>,
+    );
+    const retour = html.indexOf('data-reels-back');
+    expect(retour).toBeGreaterThan(-1);
+    expect(retour).toBeLessThan(html.indexOf('data-reels-pager'));
   });
 });
