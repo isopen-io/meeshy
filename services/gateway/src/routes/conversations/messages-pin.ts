@@ -38,6 +38,7 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 /**
  * Enregistre les routes d'épinglage : pin, unpin, liste des messages épinglés.
@@ -385,7 +386,7 @@ export function registerMessagePinRoutes(
         reader: historyReaderFromAuthContext(authRequest.authContext)
       });
 
-      const pinnedMessages = await prisma.message.findMany({
+      const pinnedMessages = await withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () => prisma.message.findMany({
         where: applyPersonalHistoryHiding(
           applyHistoryFloor({ conversationId, pinnedAt: { not: null }, deletedAt: null }, pinnedFloor),
           pinnedHiding
@@ -462,7 +463,7 @@ export function registerMessagePinRoutes(
           attachments: { select: attachmentForwardPreviewSelect },
           _count: { select: { reactions: true, replies: true } }
         }
-      });
+      }));
 
       // #4177 — le total DOIT appliquer le même plancher que la page
       // (`pinnedFloor`, quelques lignes plus haut) : il ne l'appliquait pas,
