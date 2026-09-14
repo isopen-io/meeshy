@@ -376,9 +376,9 @@ dynamiquement `Lentille/Perspective/*` (cité par `Mode/LentilleFocusCard.swift:
 
 La courbe est le miroir gelé `FocalFocusCurve.focusCurve(distance:variant: .list)`
 (`Focal/Core/FocalFocusCurve.swift:133-152`) :
-`f = min(1, d/520)`, `alpha = clamp(1 − 0,45·f + fonduSousBande)`, `scale = 1 − 0,04·f`, avec
+`f = min(1, d/400)`, `alpha = clamp(1 − 0,45·f + fonduSousBande)`, `scale = 1 − 0,10·f` (loupe accentuée le 2026-09-15, #6586), avec
 `fonduSousBande = −0,35 · clamp(−d/160)` pour `d < 0` (`:68-70`, `:78-81`). Constantes :
-`listMaxDistance 520`, `listAlphaDecay 0,45`, `listScaleDecay 0,04`,
+`listMaxDistance 400`, `listAlphaDecay 0,45`, `listScaleDecay 0,10`,
 `listBelowBandDistance 160`, `listBelowBandAlphaCap 0,35`.
 
 **Une règle de consommation propre à la liste** (`:129-135`) : la courbe est appliquée à la distance
@@ -623,7 +623,7 @@ UNIQUE, optimiste.
 | Drapeau `lentille_list`, défaut OFF, programme bêta (`LentilleFeatureFlag.swift:173-192`) | aucun drapeau — la Lentille est la seule peau (`decisions.md:111-129`) | divergent (assumé, D-9 — voir §10) |
 | Hauteur de layout 84, hauteur visuelle 100, double `frame` (`LentilleMetrics.swift:35`, `:211` ; `LentilleConversationRow.swift:166-167`) | `ROW_HEIGHT = 84`, `VISUAL_HEIGHT = 100`, `OVERHANG = 8`, `top: -8` (`lens-row.tsx:45-49`, `:171-174`) | **conforme** |
 | `transform-origin: 16% 50%` (`LentilleMetrics.swift:48-50`) | `transformOrigin: '16% 50%'` (`lens-row.tsx:181`) | **conforme** |
-| Courbe `.list` 520 / 0,45 / 0,04 + sous-bande 160 / 0,35 (`FocalFocusCurve.swift:39-51`, `:133-152`) | `law.ts:31-37`, `:58-67` — gardée octet par octet par `scripts/check-curve.mjs` | **conforme** |
+| Courbe `.list` 400 / 0,45 / 0,10 + sous-bande 160 / 0,35 (`FocalFocusCurve.swift:39-51`, `:133-152`) | `law.ts:31-37`, `:58-67` — gardée octet par octet par `scripts/check-curve.mjs` | **conforme** |
 | Élection à hystérésis 45, départage par `id` (`FocalFocusCurve.swift:93` ; `LentilleFocusElectionHost.swift:94-107`) | `electFocus` (`law.ts:80-106`), `hysteresis: BAND_HALF_HEIGHT` (`scene.ts:97`) | **conforme** |
 | Bande = **centre** de la région visible, rampe depuis le bord haut (`LentillePerspective.swift:44-50`) ; `focusBandOffset` inutilisé | `frameBottom: box.bottom - BAND_OFFSET` (**−140**) puis `bandCenter` (`scene.ts:74-78`, `law.ts:114-127`) | **divergent** : la bande web est 70 px plus haut |
 | Respiration 8 / 36 / 40, translation seule (`LentilleMetrics.swift:185-189` ; `LentilleFocusBreathing.swift:24-29`) | `BREATHING/RAMP_START/RAMP_LENGTH` 8/36/40 (`law.ts:144-146`, `:166-178`) — gardés par `check-curve.mjs` | **conforme** (loi) |

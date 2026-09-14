@@ -41,7 +41,8 @@ nonisolated enum FocalFocusCurve {
         /// transposées de la maquette vol. 3 (`0612c8ca`) sont retirées : le
         /// vol. 4 fait foi — amendé dans la loi partagée PUIS dans ce miroir.
         case thread
-        /// Liste (Lentille) : `f = min(1, d/520)`, `alpha = 1 − 0.45f`, `scale = 1 − 0.04f`.
+        /// Liste (Lentille) : `f = min(1, d/400)`, `alpha = 1 − 0.45f`, `scale = 1 − 0.10f`
+        /// — loupe accentuée le 2026-09-15 (#6586), amendée dans la loi partagée PUIS ici.
         case list
     }
 
@@ -65,9 +66,9 @@ nonisolated enum FocalFocusCurve {
     static let threadHorizontalPivot: CGFloat = 0.16
 
     /// Miroir de `FOCUS_CURVE_CONSTANTS.list`.
-    static let listMaxDistance: CGFloat = 520
+    static let listMaxDistance: CGFloat = 400
     static let listAlphaDecay: CGFloat = 0.45
-    static let listScaleDecay: CGFloat = 0.04
+    static let listScaleDecay: CGFloat = 0.10
 
     /// Miroir de `FOCUS_CURVE_CONSTANTS.belowBand` — fondu court sous la
     /// bande de focus (liste uniquement, §4.1). Rampe PROPORTIONNELLE
@@ -125,7 +126,7 @@ nonisolated enum FocalFocusCurve {
     ///     `1`). Le fondu sous la bande est un terme ADDITIF distinct :
     ///     `belowBandFade = −0.35 · clampUnit(−d/160)`, borné à `[0.65, 1]`
     ///     une fois recombiné — un fondu volontairement COURT (rayon
-    ///     `160px` contre `520px` au-dessus de la bande).
+    ///     `160px` contre `400px` au-dessus de la bande).
     ///   - Le variant `.thread` n'a pas d'amendement « sous la bande » : par
     ///     symétrie et pour rester une loi pure et totale, `distance ≤ 0` y
     ///     rend `alpha = 1` et `scale = 1` (le rang pile au focus, ou
