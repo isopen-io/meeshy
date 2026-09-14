@@ -27,8 +27,8 @@ const groupe = (authorId: string, displayName: string): StoryTrayGroup => ({
   entryStoryId: `st-${authorId}`,
 });
 
-const RAIL_VIDE = { groups: [], loading: false } as const;
-const RAIL_PLEIN = { groups: [groupe('u-amina', 'Amina Diallo')], loading: false } as const;
+const RAIL_VIDE = { groups: [], loading: false, language: 'fr' } as const;
+const RAIL_PLEIN = { groups: [groupe('u-amina', 'Amina Diallo')], loading: false, language: 'fr' } as const;
 
 describe('les quatre états du fil sont DESSINÉS, jamais un écran blanc', () => {
   test('erreur EN LIGNE : le motif, la conduite à tenir, et « Réessayer » à 44 px', () => {

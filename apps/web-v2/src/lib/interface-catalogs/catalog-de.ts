@@ -39,6 +39,8 @@ const de = {
   'reels.media.error': 'Wiedergabe nicht möglich — Erneut versuchen',
   'reels.image': 'Bild {index} von {count}',
 
+  'stories.mine': 'Deine Story',
+
   'feed.post.action.like': 'Gefällt mir',
   'feed.post.action.comment': 'Kommentieren',
   'feed.post.action.repost': 'Erneut teilen',

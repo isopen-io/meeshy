@@ -39,6 +39,8 @@ const it = {
   'reels.media.error': 'Riproduzione impossibile — Riprova',
   'reels.image': 'Immagine {index} di {count}',
 
+  'stories.mine': 'La tua storia',
+
   'feed.post.action.like': 'Mi piace',
   'feed.post.action.comment': 'Commenta',
   'feed.post.action.repost': 'Ripubblica',
