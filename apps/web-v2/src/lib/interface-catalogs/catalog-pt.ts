@@ -70,15 +70,6 @@ const pt = {
   'notFound.title': 'Este endereço não existe.',
 
   'pending.back': 'Voltar às conversas',
-  'pending.comingSoon': 'Esta tela chega em breve.',
-  'pending.feed.promise': 'As publicações de quem você segue.',
-  'pending.links.promise': 'Os links compartilhados nas suas conversas vão se reunir aqui.',
-  'pending.notifications.promise': 'O que espera por você — menções, respostas, convites — vai aparecer aqui.',
-  'pending.calls.promise': 'O histórico das suas chamadas, e um jeito de fazer uma.',
-  'pending.discover.promise': 'Pessoas para conhecer, escolhidas pelo que vocês têm em comum.',
-  'pending.communities.promise': 'As comunidades das quais você faz parte, e as que se parecem com você.',
-  'pending.settings.promise': 'Seus idiomas, sua privacidade, suas notificações.',
-  'pending.profile.promise': 'Sua identidade no Meeshy — nome, foto, idiomas e o que os outros veem dela.',
 
   'profile.title': 'Perfil',
   'profile.edit': 'Editar',
@@ -439,6 +430,43 @@ const pt = {
   'links.create.error.offline': 'Sem conexão: o link não foi criado.',
   'links.create.error.refused': 'Você não pode criar um link para esta conversa.',
   'links.create.error.default': 'Não foi possível criar o link. Tente novamente.',
+
+  /* L'ESPACE D'ADMINISTRATION (#6432) — les onze sections reprennent les
+     libellés de la barre latérale du legacy (`AdminLayout.tsx`), pour qu'un
+     administrateur retrouve ses repères d'une application à l'autre. */
+  'admin.title': 'Administração',
+  'admin.role': 'O seu papel: {role}',
+  'admin.denied.title': 'Área reservada',
+  'admin.denied.message': 'Esta área exige uma permissão de administração.',
+  'admin.counters.title': 'Num relance',
+  'admin.counters.unavailable': 'Contadores indisponíveis de momento.',
+  'admin.counters.users': 'Contas',
+  'admin.counters.activeUsers': 'Contas ativas',
+  'admin.counters.messages': 'Mensagens',
+  'admin.counters.communities': 'Comunidades',
+  'admin.counters.reports': 'Denúncias',
+  'admin.counters.newUsers': 'Novas (24 h)',
+  'admin.sections.title': 'Secções',
+  'admin.sections.legacy': 'interface anterior',
+  'admin.nav.dashboard': 'Painel',
+  'admin.nav.users': 'Contas',
+  'admin.nav.moderation': 'Moderação',
+  'admin.nav.audit': 'Registos de auditoria',
+  'admin.nav.analytics': 'Estatísticas',
+  'admin.nav.trackingLinks': 'Ligações de seguimento',
+  'admin.nav.ranking': 'Classificação',
+  'admin.nav.broadcasts': 'Difusões',
+  'admin.nav.settings': 'Definições',
+  'admin.nav.agent': 'Agente',
+  'admin.nav.monitoring': 'Supervisão',
+  'admin.users.search': 'Procurar uma conta',
+  'admin.users.count': '{count} conta(s)',
+  'admin.users.empty': 'Nenhuma conta corresponde.',
+  'admin.users.unavailable': 'Lista indisponível de momento.',
+  'admin.users.inactive': 'desativada',
+  'admin.users.previous': 'Anteriores',
+  'admin.users.next': 'Seguintes',
+
 } satisfies InterfaceCatalog;
 
 export default pt;

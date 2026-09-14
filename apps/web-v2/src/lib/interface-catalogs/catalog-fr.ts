@@ -75,15 +75,6 @@ const fr = {
   'notFound.title': "Cette adresse n'existe pas.",
 
   'pending.back': 'Revenir aux conversations',
-  'pending.comingSoon': 'Cet écran arrive bientôt.',
-  'pending.feed.promise': 'Les publications de celles et ceux que vous suivez.',
-  'pending.links.promise': 'Les liens partagés dans vos conversations se rassembleront ici.',
-  'pending.notifications.promise': 'Ce qui vous attend — mentions, réponses, invitations — se lira ici.',
-  'pending.calls.promise': 'Le journal de vos appels, et de quoi en passer un.',
-  'pending.discover.promise': 'Des personnes à rencontrer, choisies par ce que vous avez en commun.',
-  'pending.communities.promise': 'Les communautés dont vous faites partie, et celles qui vous ressemblent.',
-  'pending.settings.promise': 'Vos langues, votre confidentialité, vos notifications.',
-  'pending.profile.promise': 'Votre identité Meeshy — nom, photo, langues, et ce que les autres en voient.',
 
   'profile.title': 'Profil',
   'profile.edit': 'Modifier',
@@ -444,6 +435,43 @@ const fr = {
   'links.create.error.offline': 'Hors ligne : le lien n’a pas été créé.',
   'links.create.error.refused': 'Vous ne pouvez pas créer de lien pour cette conversation.',
   'links.create.error.default': 'Le lien n’a pas pu être créé. Réessayez.',
+
+  /* L'ESPACE D'ADMINISTRATION (#6432) — les onze sections reprennent les
+     libellés de la barre latérale du legacy (`AdminLayout.tsx`), pour qu'un
+     administrateur retrouve ses repères d'une application à l'autre. */
+  'admin.title': 'Administration',
+  'admin.role': 'Votre rôle : {role}',
+  'admin.denied.title': 'Espace réservé',
+  'admin.denied.message': 'Cet espace demande un droit d\'administration.',
+  'admin.counters.title': 'En un coup d\'œil',
+  'admin.counters.unavailable': 'Compteurs indisponibles pour le moment.',
+  'admin.counters.users': 'Comptes',
+  'admin.counters.activeUsers': 'Comptes actifs',
+  'admin.counters.messages': 'Messages',
+  'admin.counters.communities': 'Communautés',
+  'admin.counters.reports': 'Signalements',
+  'admin.counters.newUsers': 'Nouveaux (24 h)',
+  'admin.sections.title': 'Sections',
+  'admin.sections.legacy': 'ancienne interface',
+  'admin.nav.dashboard': 'Tableau de bord',
+  'admin.nav.users': 'Comptes',
+  'admin.nav.moderation': 'Modération',
+  'admin.nav.audit': 'Journaux d\'audit',
+  'admin.nav.analytics': 'Statistiques',
+  'admin.nav.trackingLinks': 'Liens de suivi',
+  'admin.nav.ranking': 'Classement',
+  'admin.nav.broadcasts': 'Diffusions',
+  'admin.nav.settings': 'Réglages',
+  'admin.nav.agent': 'Agent',
+  'admin.nav.monitoring': 'Supervision',
+  'admin.users.search': 'Rechercher un compte',
+  'admin.users.count': '{count} compte(s)',
+  'admin.users.empty': 'Aucun compte ne correspond.',
+  'admin.users.unavailable': 'Liste indisponible pour le moment.',
+  'admin.users.inactive': 'désactivé',
+  'admin.users.previous': 'Précédents',
+  'admin.users.next': 'Suivants',
+
 } as const;
 
 export default fr;

@@ -59,7 +59,8 @@ import { candidatsDePseudo } from '../../utils/username-candidates';
 import type { AfterResponse } from '../../utils/after-response';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { registrationLanguages } from './registration-languages';
-import { derivedNames, generateUsername } from './registration-identity';
+import { derivedNames, displayNameDepuisEmail, generateUsername } from './registration-identity';
+import { passwordSettingsUrl, profileEditUrl } from '../email/account-identity-block';
 import { RegistrationRefusal } from './registration-refusal';
 
 const logger = enhancedLogger.child({ module: 'RegistrationService' });
@@ -82,7 +83,12 @@ const heuresDeValidite = (): number =>
  */
 export type RegisterData = {
   readonly username?: string;
-  readonly password: string;
+  /**
+   * ABSENT sur une inscription par e-mail seul (#6424) — le compte naît alors
+   * sans mot de passe, et `User.password` reste `null`. Sa seule porte est le
+   * lien magique jusqu'à ce que son détenteur en pose un.
+   */
+  readonly password?: string;
   readonly displayName?: string;
   readonly firstName?: string;
   readonly lastName?: string;
@@ -131,6 +137,20 @@ export type RegistrationDeps = {
       verificationCode: string;
       expiryHours: number;
       language: string;
+      /**
+       * L'identité DÉRIVÉE et ses liens (#6424) — déclarée ici parce que ce
+       * type EST le contrat que ce service exige de son fournisseur d'e-mail.
+       * L'omettre du type laisserait le champ voyager sans qu'aucun double de
+       * test ne soit obligé de le voir, et un témoin qui ne le voit pas ne
+       * peut pas mesurer qu'il part.
+       */
+      identity?: {
+        username: string;
+        displayName: string;
+        profileUrl: string;
+        passwordUrl: string;
+        hasPassword: boolean;
+      };
     }): Promise<{ success: boolean; error?: string; provider?: string; messageId?: string }>;
   };
   readonly frontendUrl: string;
@@ -154,10 +174,30 @@ export type RegistrationDeps = {
   readonly afterResponse?: AfterResponse;
 };
 
+/**
+ * Le nom affiché tel que l'inscription le DONNE — ou tel que l'adresse le dit
+ * (#6424).
+ *
+ * Trois sources, dans cet ordre : la saisie, puis l'adresse, et c'est tout —
+ * le couple `firstName`/`lastName` est traité par `displayNamePersiste`, qui
+ * en dispose déjà. Directive porteur 2026-09-14 : « le display name pareil »,
+ * c'est-à-dire tiré de la même première partie de l'adresse que le pseudo.
+ *
+ * Rend `''` quand rien ne se tire — un cas RÉEL (`李雷@example.com`), pas une
+ * hypothèse : `slugDAdresse` est ASCII strict. L'appelant retombe alors sur le
+ * pseudo généré, la seule chaîne qui existe à coup sûr.
+ */
+function nomAfficheDeLInscription(data: RegisterData): string {
+  const saisi = data.displayName?.trim();
+  if (saisi && saisi !== '') return saisi;
+
+  return displayNameDepuisEmail(data.email);
+}
+
 /** Le nom affiché tel qu'il sera PERSISTÉ : la saisie normalisée, casse conservée. */
 function displayNamePersiste(data: RegisterData, firstName: string, lastName: string): string {
-  const saisi = data.displayName?.trim();
-  const source = saisi && saisi !== '' ? saisi : `${firstName} ${lastName}`;
+  const nomComplet = `${firstName} ${lastName}`.trim();
+  const source = nomComplet !== '' ? nomComplet : nomAfficheDeLInscription(data);
   return SecuritySanitizer.sanitizeText(normalizeDisplayName(source));
 }
 
@@ -177,7 +217,7 @@ function nomsDeLInscription(data: RegisterData): { firstName: string; lastName: 
     };
   }
 
-  const derives = derivedNames(data.displayName ?? '');
+  const derives = derivedNames(nomAfficheDeLInscription(data));
   return {
     firstName: SecuritySanitizer.sanitizeText(derives.firstName),
     lastName: SecuritySanitizer.sanitizeText(derives.lastName),
@@ -279,7 +319,26 @@ export async function registerAccount(
   const normalizedEmail = normalizeEmail(data.email);
   const { firstName, lastName } = nomsDeLInscription(data);
   const normalizedDisplayName = displayNamePersiste(data, firstName, lastName);
-  const normalizedUsername = await pseudoDeLInscription(deps.prisma, data, normalizedDisplayName);
+  const usernameGenere = await pseudoDeLInscription(deps.prisma, data, normalizedDisplayName);
+
+  /**
+   * LE DERNIER RECOURS DU NOM AFFICHÉ : le pseudo (#6424).
+   *
+   * `normalizedDisplayName` peut être VIDE — une adresse sans aucun caractère
+   * ASCII (`李雷@example.com`) n'en tire rien, et l'inscription par e-mail seul
+   * n'a plus de champ pour le demander. Persister le vide donnerait une ligne
+   * de conversation sans nom, un avatar sans initiale et un e-mail de
+   * validation qui souhaite la bienvenue à personne.
+   *
+   * Le pseudo, lui, existe TOUJOURS — `generateUsername` ne rend jamais vide,
+   * `user1234` au pire. Il est donc le seul repli qui ne peut pas manquer, et
+   * il est celui que l'e-mail de validation invite justement à changer.
+   *
+   * Le repli se lit APRÈS la génération, jamais avant : le pseudo n'existe pas
+   * plus tôt, et c'est ce qui a imposé de scinder cette ligne en deux.
+   */
+  const nomAfficheFinal = normalizedDisplayName !== '' ? normalizedDisplayName : usernameGenere;
+  const normalizedUsername = usernameGenere;
 
   const existant = await deps.prisma.user.findFirst({
     where: {
@@ -330,7 +389,18 @@ export async function registerAccount(
     }
   }
 
-  const hashedPassword = await hashPassword(data.password);
+  /**
+   * `null` — jamais un hash — quand l'inscription ne donne pas de mot de passe
+   * (#6424).
+   *
+   * La tentation serait de hacher une chaîne aléatoire pour garder la colonne
+   * pleine. Ce serait fabriquer un secret que personne ne connaît, et surtout
+   * rendre l'état INDISTINGUABLE d'un vrai mot de passe : la porte de connexion
+   * ne pourrait plus dire « ce compte n'en a pas, prends le lien magique », et
+   * l'e-mail de lien magique ne saurait plus s'il doit proposer d'en poser un.
+   * L'absence doit se LIRE.
+   */
+  const hashedPassword = data.password ? await hashPassword(data.password) : null;
   const { raw: verificationToken, hash: verificationTokenHash } = deps.verificationToken();
   const verificationCode = deps.verificationCode();
   const expiryHours = heuresDeValidite();
@@ -348,7 +418,7 @@ export async function registerAccount(
       // introuvable jusqu'à sa prochaine modification de profil (#4159).
       searchTokens: searchTokensFor({
         username: normalizedUsername,
-        displayName: normalizedDisplayName,
+        displayName: nomAfficheFinal,
         firstName,
         lastName,
       }),
@@ -362,12 +432,12 @@ export async function registerAccount(
       regionalLanguage: languages.regionalLanguage,
       customDestinationLanguage: languages.customDestinationLanguage,
       deviceLocale: languages.deviceLocale,
-      displayName: normalizedDisplayName,
+      displayName: nomAfficheFinal,
       // Calculé, jamais laissé au `@default(0)` de la colonne (#3688) — sinon
       // tout compte reste à 0 % jusqu'à sa première mise à jour de profil.
       // Avatar et bio sont toujours absents à la création.
       profileCompletionRate: calculateProfileCompletionRate({
-        displayName: normalizedDisplayName,
+        displayName: nomAfficheFinal,
         avatar: null,
         bio: null,
         phoneNumber: telephone.phoneNumber,
@@ -419,13 +489,30 @@ export async function registerAccount(
 
     const resultat = await deps.emailService.sendEmailVerification({
       to: normalizedEmail,
-      name: normalizedDisplayName,
+      name: nomAfficheFinal,
       verificationLink,
       verificationCode,
       expiryHours,
       // Le rang SERVI, pas `data.systemLanguage` : le premier e-mail d'un
       // compte partait en français à qui n'avait renseigné que son rang 2.
       language: languages.systemLanguage,
+      /**
+       * #6424 — le pseudo et le nom affiché ont été DÉRIVÉS de l'adresse : la
+       * personne ne les a jamais vus, et n'a jamais eu l'occasion de dire
+       * qu'ils ne lui conviennent pas. Cet e-mail est le premier — et
+       * longtemps le seul — endroit où elle les découvre, avec les deux liens
+       * qui les changent.
+       *
+       * `hasPassword` se lit sur ce qui a été ÉCRIT, pas sur ce que la charge
+       * demandait : c'est la même valeur que la porte de connexion lira.
+       */
+      identity: {
+        username: normalizedUsername,
+        displayName: nomAfficheFinal,
+        profileUrl: profileEditUrl(deps.frontendUrl),
+        passwordUrl: passwordSettingsUrl(deps.frontendUrl),
+        hasPassword: hashedPassword !== null,
+      },
     });
 
     if (!resultat.success) {

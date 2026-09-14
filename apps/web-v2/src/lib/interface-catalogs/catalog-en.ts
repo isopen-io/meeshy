@@ -66,15 +66,6 @@ const en = {
   'notFound.title': "This address doesn't exist.",
 
   'pending.back': 'Back to conversations',
-  'pending.comingSoon': 'This screen is coming soon.',
-  'pending.feed.promise': 'Posts from the people you follow.',
-  'pending.links.promise': 'Links shared in your conversations will gather here.',
-  'pending.notifications.promise': 'What is waiting for you — mentions, replies, invitations — will show up here.',
-  'pending.calls.promise': 'Your call history, and a way to place a call.',
-  'pending.discover.promise': 'People to meet, chosen by what you have in common.',
-  'pending.communities.promise': 'The communities you belong to, and the ones that feel like you.',
-  'pending.settings.promise': 'Your languages, your privacy, your notifications.',
-  'pending.profile.promise': 'Your Meeshy identity — name, photo, languages, and what others see of it.',
 
   'profile.title': 'Profile',
   'profile.edit': 'Edit',
@@ -435,6 +426,43 @@ const en = {
   'links.create.error.offline': 'Offline: the link was not created.',
   'links.create.error.refused': 'You cannot create a link for this conversation.',
   'links.create.error.default': 'The link could not be created. Try again.',
+
+  /* L'ESPACE D'ADMINISTRATION (#6432) — les onze sections reprennent les
+     libellés de la barre latérale du legacy (`AdminLayout.tsx`), pour qu'un
+     administrateur retrouve ses repères d'une application à l'autre. */
+  'admin.title': 'Administration',
+  'admin.role': 'Your role: {role}',
+  'admin.denied.title': 'Restricted area',
+  'admin.denied.message': 'This area requires an administration right.',
+  'admin.counters.title': 'At a glance',
+  'admin.counters.unavailable': 'Counters unavailable right now.',
+  'admin.counters.users': 'Accounts',
+  'admin.counters.activeUsers': 'Active accounts',
+  'admin.counters.messages': 'Messages',
+  'admin.counters.communities': 'Communities',
+  'admin.counters.reports': 'Reports',
+  'admin.counters.newUsers': 'New (24 h)',
+  'admin.sections.title': 'Sections',
+  'admin.sections.legacy': 'legacy interface',
+  'admin.nav.dashboard': 'Dashboard',
+  'admin.nav.users': 'Accounts',
+  'admin.nav.moderation': 'Moderation',
+  'admin.nav.audit': 'Audit logs',
+  'admin.nav.analytics': 'Analytics',
+  'admin.nav.trackingLinks': 'Tracking links',
+  'admin.nav.ranking': 'Ranking',
+  'admin.nav.broadcasts': 'Broadcasts',
+  'admin.nav.settings': 'Settings',
+  'admin.nav.agent': 'Agent',
+  'admin.nav.monitoring': 'Monitoring',
+  'admin.users.search': 'Search an account',
+  'admin.users.count': '{count} account(s)',
+  'admin.users.empty': 'No account matches.',
+  'admin.users.unavailable': 'List unavailable right now.',
+  'admin.users.inactive': 'disabled',
+  'admin.users.previous': 'Previous',
+  'admin.users.next': 'Next',
+
 } satisfies InterfaceCatalog;
 
 export default en;

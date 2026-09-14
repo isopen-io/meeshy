@@ -73,10 +73,54 @@ jest.mock('sonner', () => ({
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
+/**
+ * LE COMPOSANT FAIT DEUX APPELS, PAS UN (#6424).
+ *
+ * Au montage il demande `GET /me?expand=security` pour savoir si le compte a
+ * DÉJÀ un mot de passe — sans quoi il exigerait un « mot de passe actuel » d'un
+ * compte né d'une inscription par e-mail seul, c'est-à-dire d'un compte qui
+ * vient précisément ici pour en poser un premier.
+ *
+ * Les doubles sont donc routés par URL, jamais par ORDRE D'APPEL. Un
+ * `mockResolvedValueOnce` répond au PREMIER appel, quel qu'il soit : la sonde
+ * de montage aurait consommé la réponse destinée au `PATCH`, et le
+ * changement de mot de passe aurait échoué sur un `undefined` — trois témoins
+ * rouges pour une raison qui n'a rien à voir avec ce qu'ils mesurent.
+ */
+const SONDE_SECURITE = /\/api\/v1\/me(\?|$)/;
+
+/** La réponse de la sonde. `hasPassword: true` par défaut : c'est l'état du
+ * compte ORDINAIRE, celui que la plupart de ces témoins décrivent. */
+function stubSecurityProbe(hasPassword = true) {
+  return {
+    ok: true,
+    json: () => Promise.resolve({ data: { user: { security: { hasPassword } } } }),
+  };
+}
+
+/**
+ * Route les appels : la sonde reçoit toujours sa réponse, le `PATCH` reçoit
+ * `reponsePatch`. Une fonction plutôt qu'une valeur, pour que les témoins qui
+ * REJETTENT ou qui diffèrent puissent l'exprimer.
+ */
+function routeFetch(reponsePatch: () => unknown) {
+  mockFetch.mockImplementation((url: string) => {
+    if (SONDE_SECURITE.test(String(url))) return Promise.resolve(stubSecurityProbe());
+    return reponsePatch();
+  });
+}
+
 describe('PasswordSettings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockFetch.mockReset();
+    // Défaut : la sonde répond, et rien d'autre n'est appelé par les témoins de
+    // rendu. Les témoins de soumission remplacent l'implémentation.
+    mockFetch.mockImplementation((url: string) =>
+      SONDE_SECURITE.test(String(url))
+        ? Promise.resolve(stubSecurityProbe())
+        : Promise.reject(new Error(`appel non stubé : ${String(url)}`)),
+    );
   });
 
   describe('Rendu initial', () => {
@@ -280,10 +324,7 @@ describe('PasswordSettings', () => {
     };
 
     it('envoie la requete API avec les bonnes donnees', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ message: 'Success' }),
-      });
+      routeFetch(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ message: 'Success' }) }));
 
       render(<PasswordSettings />);
       fillValidForm();
@@ -311,10 +352,9 @@ describe('PasswordSettings', () => {
 
     it('affiche un message de succes et reinitialise le formulaire', async () => {
       const { toast } = require('sonner');
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ message: 'Mot de passe mis a jour' }),
-      });
+      routeFetch(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ message: 'Mot de passe mis a jour' }) }),
+      );
 
       render(<PasswordSettings />);
       fillValidForm();
@@ -332,9 +372,7 @@ describe('PasswordSettings', () => {
     });
 
     it('affiche "Mise a jour..." pendant le chargement', async () => {
-      mockFetch.mockImplementation(
-        () => new Promise((resolve) => setTimeout(() => resolve({ ok: true, json: () => ({}) }), 100))
-      );
+      routeFetch(() => new Promise((resolve) => setTimeout(() => resolve({ ok: true, json: () => ({}) }), 100)));
 
       render(<PasswordSettings />);
       fillValidForm();
@@ -345,9 +383,7 @@ describe('PasswordSettings', () => {
     });
 
     it('desactive le bouton pendant le chargement', async () => {
-      mockFetch.mockImplementation(
-        () => new Promise((resolve) => setTimeout(() => resolve({ ok: true, json: () => ({}) }), 100))
-      );
+      routeFetch(() => new Promise((resolve) => setTimeout(() => resolve({ ok: true, json: () => ({}) }), 100)));
 
       render(<PasswordSettings />);
       fillValidForm();
@@ -359,10 +395,9 @@ describe('PasswordSettings', () => {
 
     it('affiche une erreur si la requete echoue', async () => {
       const { toast } = require('sonner');
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: 'Mot de passe incorrect' }),
-      });
+      routeFetch(() =>
+        Promise.resolve({ ok: false, json: () => Promise.resolve({ error: 'Mot de passe incorrect' }) }),
+      );
 
       render(<PasswordSettings />);
       fillValidForm();
@@ -377,7 +412,7 @@ describe('PasswordSettings', () => {
     it('gere les erreurs reseau', async () => {
       const { toast } = require('sonner');
       const consoleError = jest.spyOn(console, 'error').mockImplementation();
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+      routeFetch(() => Promise.reject(new Error('Network error')));
 
       render(<PasswordSettings />);
       fillValidForm();
@@ -389,6 +424,80 @@ describe('PasswordSettings', () => {
       });
 
       consoleError.mockRestore();
+    });
+  });
+
+  /**
+   * LE PREMIER MOT DE PASSE (#6424).
+   *
+   * Un compte né d'une inscription par e-mail seul n'en a pas : lui réclamer un
+   * mot de passe « actuel » pour en poser un premier rend la porte
+   * inatteignable — la preuve exigée est exactement la chose que l'appel vient
+   * créer.
+   *
+   * Le témoin qui compte le plus est celui de la CHARGE : la clé
+   * `currentPassword` doit être ABSENTE, pas posée à `''`. Une chaîne vide
+   * traverserait le schéma (`minLength: 1` la refuse) et rendrait 400 à
+   * quelqu'un qui n'a rien à saisir.
+   */
+  describe('Compte SANS mot de passe (#6424)', () => {
+    const sansMotDePasse = (reponsePatch: () => unknown) => {
+      mockFetch.mockImplementation((url: string) => {
+        if (SONDE_SECURITE.test(String(url))) return Promise.resolve(stubSecurityProbe(false));
+        return reponsePatch();
+      });
+    };
+
+    const remplirNouveau = () => {
+      fireEvent.change(screen.getByLabelText('Nouveau mot de passe'), {
+        target: { value: 'newPassword456' },
+      });
+      fireEvent.change(screen.getByLabelText('Confirmer le mot de passe'), {
+        target: { value: 'newPassword456' },
+      });
+    };
+
+    it('masque le champ « mot de passe actuel » — il n’y en a pas à saisir', async () => {
+      sansMotDePasse(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+
+      render(<PasswordSettings />);
+
+      await waitFor(() => {
+        expect(screen.queryByLabelText('Mot de passe actuel')).not.toBeInTheDocument();
+      });
+    });
+
+    it('envoie la charge SANS la clé currentPassword', async () => {
+      sansMotDePasse(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ message: 'ok' }) }),
+      );
+
+      render(<PasswordSettings />);
+      await waitFor(() => {
+        expect(screen.queryByLabelText('Mot de passe actuel')).not.toBeInTheDocument();
+      });
+      remplirNouveau();
+      fireEvent.click(screen.getByText('Mettre a jour'));
+
+      await waitFor(() => {
+        const appelPatch = mockFetch.mock.calls.find(
+          ([url]: [string]) => !SONDE_SECURITE.test(String(url)),
+        );
+        expect(appelPatch).toBeDefined();
+        const corps = JSON.parse(appelPatch![1].body as string);
+        expect('currentPassword' in corps).toBe(false);
+        expect(corps.newPassword).toBe('newPassword456');
+      });
+    });
+
+    it('garde le champ « actuel » quand le compte EN A un', async () => {
+      routeFetch(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+
+      render(<PasswordSettings />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Mot de passe actuel')).toBeInTheDocument();
+      });
     });
   });
 

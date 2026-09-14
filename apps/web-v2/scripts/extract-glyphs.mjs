@@ -76,6 +76,13 @@ const OVERRIDES = {
    */
   'heart-fill': join(CORE, 'fill/heart-fill.svg'),
   'bookmark-fill': join(CORE, 'fill/bookmark-fill.svg'),
+  /**
+   * `coin-fill` (#6427) — la PIÈCE des Meeshes, PLEINE : à 18-20 px, à côté
+   * d'un solde en gras, le contour de `coin` se perd, et c'est la silhouette
+   * métallique qui doit dire « monnaie ». Même tracé que l'actif iOS
+   * `MeeshCoin`, pour que les deux plateformes montrent la même pièce.
+   */
+  'coin-fill': join(CORE, 'fill/coin-fill.svg'),
 };
 
 /**
@@ -161,6 +168,8 @@ const PROGRESSION = [
   'fire',
   'star',
   'medal',
+  // La pièce des Meeshes (#6427) : la médaille reste aux BADGES.
+  'coin-fill',
   'chat-text',
   'article',
   'camera',

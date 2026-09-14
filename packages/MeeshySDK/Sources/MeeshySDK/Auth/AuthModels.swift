@@ -68,7 +68,16 @@ public struct RegisterRequest: Encodable, Sendable {
     /// `lastName`.
     public let displayName: String?
     public let email: String
-    public let password: String
+    /// `nil` ⇒ **absent de la charge**, et le compte naît SANS mot de passe
+    /// (#6424) : sa seule porte est le lien magique, jusqu'à ce qu'il en pose
+    /// un depuis son profil.
+    ///
+    /// `nil`, jamais `""`. La passerelle lit l'ABSENCE de la clé ; une chaîne
+    /// vide serait une valeur — refusée par la borne de longueur — et
+    /// l'inscription échouerait là où elle devait passer. `Encodable` omet une
+    /// propriété optionnelle `nil` par défaut, ce qui rend l'absence gratuite
+    /// ici et payante nulle part.
+    public let password: String?
     /// Les chiffres tels que tapés (forme nationale admise, `0612345678`) ;
     /// la passerelle les normalise en E.164 avec `phoneCountryCode`. `nil` ⇒
     /// absent de la charge — le téléphone n'est jamais obligatoire.
@@ -84,7 +93,7 @@ public struct RegisterRequest: Encodable, Sendable {
     public init(
         displayName: String? = nil,
         email: String,
-        password: String,
+        password: String? = nil,
         phoneNumber: String? = nil,
         phoneCountryCode: String? = nil,
         systemLanguage: String = "fr",
