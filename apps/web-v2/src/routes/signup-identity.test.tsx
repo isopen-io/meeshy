@@ -16,33 +16,38 @@ import SignupScreen from './signup';
 
 const html = renderToStaticMarkup(<SignupScreen />);
 
-describe('l’ordre des champs suit la directive : téléphone, puis adresse', () => {
-  /**
-   * L'ordre se mesure par la POSITION des marqueurs dans le HTML, jamais par
-   * leur simple présence : « les trois champs existent » resterait vrai après
-   * n'importe quelle permutation, et c'est la permutation qui est demandée.
-   */
+/**
+ * LES BARREAUX (#6405, directive porteur 2026-09-14 : « les champs
+ * apparaissent uniquement au fur et à mesure »).
+ *
+ * L'ordre a changé avec eux : l'ADRESSE ouvre le formulaire, parce que tout en
+ * découle — l'identité dérivée (#6479) n'a rien à montrer avant elle, et le
+ * lien de validation part vers elle. Le téléphone la suit, le reste suit le
+ * téléphone.
+ *
+ * `renderToStaticMarkup` mesure l'état INITIAL : c'est exactement ce qu'il faut
+ * pour prouver ce qui ne paraît PAS encore. L'ordre COMPLET, lui, se mesure sur
+ * un formulaire qu'on remplit — `signup-rungs.test.ts` prouve la loi, ce témoin
+ * prouve qu'elle atteint des pixels.
+ */
+describe('à l’ouverture, un seul champ', () => {
   const positions = {
-    telephone: html.indexOf('signup-phone-hint'),
     email: html.indexOf('signup-email'),
+    telephone: html.indexOf('signup-phone-hint'),
     identite: html.indexOf('data-derived-identity'),
     motDePasse: html.indexOf('signup-password'),
   };
 
-  test('les quatre blocs sont rendus', () => {
-    for (const [nom, index] of Object.entries(positions)) {
-      expect(nom.length > 0 && index).toBeGreaterThan(-1);
-    }
+  test('l’adresse est là', () => expect(positions.email).toBeGreaterThan(-1));
+
+  test('ni le téléphone, ni l’identité, ni le mot de passe ne sont rendus — pas même repliés', () => {
+    expect(positions.telephone).toBe(-1);
+    expect(positions.identite).toBe(-1);
+    expect(positions.motDePasse).toBe(-1);
   });
 
-  test('le téléphone vient AVANT l’adresse', () =>
-    expect(positions.telephone).toBeLessThan(positions.email));
-
-  test('l’identité vient APRÈS l’adresse — elle en découle', () =>
-    expect(positions.email).toBeLessThan(positions.identite));
-
-  test('le mot de passe ferme la marche', () =>
-    expect(positions.identite).toBeLessThan(positions.motDePasse));
+  test('le bouton « Créer mon compte » ne paraît pas non plus : il n’y a rien à créer', () =>
+    expect(html).not.toContain('Créer mon compte'));
 });
 
 describe('l’avertissement de validation d’adresse', () => {

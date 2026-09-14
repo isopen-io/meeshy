@@ -344,52 +344,33 @@ extension MeeshyComposerHost {
     /// son nom accessible à l'instant précis où il était occupé. L'état en vol
     /// est porté par `accessibilityValue`, et l'auteur le voit à la teinte qui
     /// retombe.
-    /// **Ce que la flèche du socle PRESSE, selon la surface** (#4135).
+    /// **Ce que la flèche du socle PRESSE, selon le CHOIX du geste** (#4135,
+    /// #6502).
     ///
-    /// Sous la scène, elle ne fabrique aucun brouillon : elle presse la
-    /// télécommande, en lui apportant le format ET l'audience choisis AU MOMENT
-    /// DU GESTE. C'est l'atelier qui publie — un second chemin d'envoi côté
-    /// meuble est ce que la doctrine, C2 et le lot 7 interdisent tous les trois.
+    /// La surface est celle d'OUVERTURE ; le format et l'agencement arrivent du
+    /// geste — une entrée du menu de la flèche, ou le format d'ouverture quand la
+    /// composition n'appelle aucun choix. Le canal est une RÈGLE éprouvée
+    /// (`ComposerPublishMenuRule.route`), plus un `switch` écrit ici.
     ///
-    /// L'audience voyage avec ses personnes nommées, jamais seule : un mode sans
-    /// sa liste publierait vers un ensemble que personne n'a choisi.
-    func performSoclePublish() {
-        switch mountedSurface {
-        case .scene:
+    /// Sous l'atelier, la flèche presse la télécommande en lui apportant le
+    /// format ET l'audience choisis AU MOMENT DU GESTE : c'est l'atelier qui
+    /// publie. L'audience voyage avec ses personnes nommées, jamais seule.
+    ///
+    /// Une STORY part par le canal de la SCÈNE, jamais par le brouillon
+    /// (directive porteur 2026-09-01) : `ComposerDocumentDraft` ne porte pas de
+    /// slides. Un RÉEL part par le document (#4869) : le canal de la scène publie
+    /// un post PAR SLIDE, et un réel de deux photos y faisait deux posts.
+    func performSoclePublish(_ choice: ComposerPublishChoice) {
+        switch ComposerPublishMenuRule.route(surface: mountedSurface, choice: choice) {
+        case .atelier:
             publishTrigger.requestPublish(
-                as: selectedFormat.postType,
+                as: choice.format.postType,
                 visibility: composerVisibility.rawValue,
                 visibilityUserIds: composerVisibilityUserIds
             )
-        case .document, .mood:
-            // **Une story part par le canal de la SCÈNE, pas par le brouillon**
-            // (directive porteur 2026-09-01). Elle est routée sur `.document`
-            // depuis que le nouveau composer ne charge plus l'atelier — mais
-            // `ComposerDocumentDraft` porte du texte, des pièces jointes et un
-            // lieu, jamais des slides. L'y faire passer publierait une story
-            // VIDE de tout ce que l'auteur a composé.
-            //
-            // > Router une surface et router sa PUBLICATION sont deux gestes.
-            // > Le premier se voit à l'écran ; le second ne se voit qu'à
-            // > l'arrivée, sur un contenu qu'on ne peut plus rattraper.
-            //
-            // **Le routage est une RÈGLE depuis #4869**, plus une liste de
-            // formats. La condition ne nommait que la story, et le réel —
-            // routé sur `.document` par le MÊME lot (#4751) — tombait sur le
-            // refus de `DocumentComposerDoor` : un réel composé depuis le Feed
-            // ne partait jamais, flèche peinte et sans effet.
-            //
-            // Le réel n'a PAS reçu le canal de la scène pour autant, et c'est
-            // la mesure qui l'a décidé : ce canal publie un post PAR SLIDE, si
-            // bien qu'un réel de deux photos y produisait deux posts au lieu
-            // d'un. La phrase ci-dessus avertissait de ce piège exact — « le
-            // second ne se voit qu'à l'arrivée, sur un contenu qu'on ne peut
-            // plus rattraper ». Il s'est refermé au simulateur, pas au gate.
-            switch ComposerPublishChannel.channel(for: selectedFormat) {
-            case .scene:       publishStoryScene()
-            case .document:    publishDocument()
-            case .unsupported: refuseUnsupportedFormat()
-            }
+        case .storyScene:  publishStoryScene(as: choice.format)
+        case .document:    publishDocument(choice)
+        case .unsupported: refuseUnsupportedFormat()
         }
     }
 
@@ -426,8 +407,8 @@ extension MeeshyComposerHost {
     /// greffe : ce qui change ici est la BASE qu'on lui donne — `.empty`, parce
     /// que le meuble n'a pas de magasin d'atelier à relayer sur ce chemin, et
     /// c'est toujours honnête.
-    func publishStoryScene() {
-        guard canPublishDocument else { return }
+    func publishStoryScene(as format: ComposerFormat) {
+        guard canPublishDocument(as: format) else { return }
         isPublishingDocument = true
         let accepted = onPublishAllInBackground(
             viewModel.slides,
@@ -442,7 +423,7 @@ extension MeeshyComposerHost {
             viewModel.draftId,
             composerReferences,
             accessibilityCarryingComposerCaptions(.empty, slides: viewModel.slides),
-            selectedFormat.postType
+            format.postType
         )
         isPublishingDocument = false
         if accepted { onDismiss() }
@@ -531,7 +512,7 @@ extension MeeshyComposerHost {
                 // dans l'autre sens.
                 .accessibilityLabel(Text("composer.socle.publish", bundle: .main))
                 .accessibilityValue(isPublishingDocument ? ComposerSocleCopy.publishInProgress : "")
-                .accessibilityHint(publishBlockedHint)
+                .accessibilityHint(publishArrowHint)
         }
     }
 
@@ -590,15 +571,66 @@ extension MeeshyComposerHost {
         }
     }
 
+    /// **La flèche du socle — un menu quand la composition appelle un choix**
+    /// (#6502). Plus d'une image ou au moins une vidéo : le menu propose le
+    /// format et, pour un post à plusieurs scènes, l'agencement. Sinon la flèche
+    /// publie directement au format d'ouverture. Les deux passent par le MÊME
+    /// habillage, qui porte le gate.
     var publishButton: some View {
         publishCapsule(
-            Button {
-                performSoclePublish()
-            } label: {
-                publishCapsuleLabel
+            Group {
+                if let entries = publishMenuEntries {
+                    ComposerPublishMenu(entries: entries, onPublish: { performSoclePublish($0) }) {
+                        publishCapsuleLabel
+                    }
+                } else {
+                    Button {
+                        performSoclePublish(ComposerPublishChoice(format: selectedFormat, layout: nil))
+                    } label: {
+                        publishCapsuleLabel
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .buttonStyle(.plain)
         )
+    }
+
+    /// **Les entrées du menu, ou `nil`** — la LECTURE de
+    /// `ComposerPublishMenuRule.menu`, jamais une condition écrite dans le corps.
+    ///
+    /// Les candidats sont l'offre de la porte AVEC le réel ouvert : un réel que
+    /// la composition ne qualifie pas encore reste au menu, grisé avec sa raison.
+    /// Les médias se comptent sur TOUTES les slides — `reelGate`, lui, ne lit que
+    /// la slide courante.
+    var publishMenuEntries: [ComposerPublishMenuRule.Entry]? {
+        let fonds = Set(viewModel.slideImages.keys)
+        return ComposerPublishMenuRule.menu(
+            mediaKinds: ComposerPublishMenuRule.mediaKinds(
+                slides: viewModel.slides,
+                slideImageIds: fonds,
+                documentMedia: documentLocalMedia,
+                bridgedSources: Set(documentMediaObjectIdBySource.keys)),
+            candidates: ComposerProfile.profile(
+                for: intent.origin,
+                compositionQualifiesAsReel: true,
+                compositionQualifiesAsMood: moodGate
+            ).offeredFormats,
+            offered: profile.offeredFormats,
+            carriesMoreThanText: !documentLocalMedia.isEmpty || documentHasScene,
+            slideCount: viewModel.slides.count,
+            layoutsTravel: ComposerPublishMenuRule.documentCarriesEveryMedia(
+                slides: viewModel.slides,
+                slideImageIds: fonds,
+                bridgedObjectIds: Set(documentMediaObjectIdBySource.values))
+        )
+    }
+
+    /// **Ce que VoiceOver entend sur la flèche** — l'indice de blocage quand elle
+    /// refuse, l'annonce du choix quand elle ouvre le menu (#6502). Un seul site :
+    /// deux `accessibilityHint` empilés laisseraient le système trancher.
+    var publishArrowHint: String {
+        guard publishBlockedHint.isEmpty, publishMenuEntries != nil else { return publishBlockedHint }
+        return ComposerPublishMenuCopy.hint
     }
 
     /// **La flèche PUBLIER de l'en-tête du mood** — même geste, même gate, même
@@ -623,7 +655,7 @@ extension MeeshyComposerHost {
     var moodHeaderPublishButton: some View {
         publishCapsule(
             Button {
-                publishDocument()
+                publishDocument(ComposerPublishChoice(format: selectedFormat, layout: nil))
             } label: {
                 publishCapsuleLabel
             }
@@ -637,6 +669,13 @@ extension MeeshyComposerHost {
     /// || isPublishing)` sur le bouton), et deux écritures d'une règle sont deux
     /// occasions de la corriger à moitié.
     var canPublishDocument: Bool {
+        canPublishDocument(as: selectedFormat)
+    }
+
+    /// Le même gate, pour le format que le GESTE publie (#6502) : le menu peut
+    /// publier en post une composition ouverte en story, et une story compte un
+    /// fond choisi comme matière là où un post exige un objet.
+    func canPublishDocument(as format: ComposerFormat) -> Bool {
         ComposerDocumentPublishGate.canPublish(
             surface: mountedSurface,
             emoji: moodEmoji,
@@ -692,9 +731,9 @@ extension MeeshyComposerHost {
             // mentir la flèche chez l'un des deux : armée sur un post que le
             // plan refuse, ou éteinte sur une story qu'il accepte.
             hasMedia: !documentLocalMedia.isEmpty
-                || (ComposerPublishChannel.channel(for: selectedFormat) != .unsupported
+                || (ComposerPublishChannel.channel(for: format) != .unsupported
                     && ComposerStoryCanvas.hasPublishableCanvas(
-                        format: selectedFormat,
+                        format: format,
                         slides: viewModel.slides,
                         // L'image de fond ne vit pas dans `effects` : sans elle
                         // une story-photo n'armerait pas la flèche (#4741).
@@ -731,179 +770,6 @@ extension MeeshyComposerHost {
                                                     format: selectedFormat) ?? ""
     }
 
-    /// Ce que la flèche remet au site de montage.
-    ///
-    /// `nil` sous la scène — le socle n'y est pas peint, et fabriquer un
-    /// brouillon pour une surface qui publie par l'atelier aurait été le second
-    /// chemin d'envoi que la doctrine, C2 et le lot 7 interdisent tous les trois.
-    /// **`identifiant d'objet → alternative` devient `URL source →
-    /// alternative`** (2026-09-05).
-    ///
-    /// Le pont est `documentMediaObjectIdBySource`, alimenté par le retour
-    /// d'`applyContentMedia` — le seul site qui ait jamais connu les deux
-    /// bouts. Une source dont l'objet n'a pas d'alternative n'entre pas dans
-    /// la carte : un `nil` et une chaîne vide se disent pareil à l'arrivée, et
-    /// une chaîne vide poserait une alternative BLANCHE — un lecteur d'écran
-    /// annoncerait alors « image » suivi de rien, ce qui est pire que rien.
-    var altsParURLSource: ComposerMediaCaptions {
-        documentMediaObjectIdBySource.reduce(into: ComposerMediaCaptions()) { carte, entree in
-            let (source, objectId) = entree
-            guard let texte = documentMediaAlts[objectId],
-                  !texte.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            else { return }
-            carte[source] = texte
-        }
-    }
-
-    var documentDraft: ComposerDocumentDraft? {
-        switch mountedSurface {
-        case .scene:
-            return nil
-        case .mood:
-            // `repostOfId` vient de la PORTE, pas de la graine : c'est la porte
-            // qui sait quelle publication elle repartage
-            // (`.repost(ofPostId:sourceFormat:)`), et le poser aussi dans la
-            // graine aurait fait deux sources pour un même fait. `audioUrl`,
-            // lui, vient de la graine — c'est une matière de la SOURCE, pas son
-            // identité.
-            return ComposerDocumentDraft.mood(
-                emoji: moodEmoji,
-                text: documentText,
-                visibility: composerVisibility,
-                visibilityUserIds: composerVisibilityUserIds,
-                references: composerReferences,
-                repostOfId: intent.origin.repostedPostId,
-                audioUrl: moodSeed?.audioUrl
-            )
-        case .document:
-            // L'audience est celle du SOCLE, jamais la graine de la porte.
-            // `initialVisibility` la fournissait tant qu'`audienceChip` était un
-            // témoin ; le lire encore ferait publier sous un réglage que
-            // l'auteur vient de changer, en silence. Il ne reste qu'un lecteur :
-            // l'atelier, à qui le SDK l'imposerait par défaut sans lui.
-            //
-            // `repostOfId` vient de la PORTE, exactement comme sous le mood —
-            // et c'est ce qui fait de la bascule Mood → Post un ANCRAGE plutôt
-            // qu'un post ordinaire. Le lire ailleurs (la graine, un drapeau du
-            // site de montage) en ferait une seconde source pour « quelle
-            // publication republie-t-on », alors que la porte le sait.
-            //
-            // `originalLanguage` vient du SOCLE (`documentLanguage`, T2.2) et
-            // non plus d'un littéral `nil` : c'est la capsule qui l'écrit, la
-            // porte qui la poste telle quelle.
-            //
-            // `forcePlainPost` valait TOUJOURS `true` ici (B3, #3926), et le
-            // commentaire disait pourquoi : « ce publieur n'est atteint que
-            // lorsque `mountedSurface == .document`, c'est-à-dire
-            // `selectedFormat == .post` ». **Le routage du 2026-09-01 a rendu
-            // cette phrase fausse** — la STORY descend désormais sur le
-            // document, et le littéral aurait forcé en POST simple une
-            // composition que l'auteur venait de déclarer story.
-            //
-            // > Un littéral justifié par un invariant de ROUTAGE est une bombe à
-            // > retardement : le jour où la route change, rien ne rougit — le
-            // > commentaire cesse simplement d'être vrai.
-            //
-            // Il porte donc désormais sa condition, qui dit exactement ce que le
-            // commentaire affirmait. Ce qu'il garde de son sens d'origine : les
-            // médias qualifiants d'un POST forment un carrousel, jamais un réel
-            // promu en silence.
-            //
-            // `location` vient du SOCLE (`documentLocation`, T2.5, écrit par
-            // `LocationPickerView`) — jamais d'un littéral `nil` : un littéral
-            // jetterait le lieu que l'auteur vient de choisir.
-            //
-            // `discoverabilityPrecision` est le SECOND opt-in, gardé par
-            // `documentOffersNearbyDiscoverability` — la MÊME garde que celle
-            // qui peint le contrôle (`FeedNearbyDiscoverability.offers(`),
-            // jamais recopiée : un contrôle absent de l'écran ne doit jamais
-            // pouvoir peser sur ce qui part. Hors de cette garde, ou tant que
-            // l'auteur n'a rien activé, `precisionToSend` vaut déjà `nil`
-            // (`NearbyDiscoverabilityChoice`, off par défaut).
-            //
-            // `mobileTranscription` vient du SOCLE (`documentTranscription`,
-            // T2.6, écrit par `AudioPostComposerView` au retour du sixième
-            // outil) — jamais d'un littéral `nil` : un littéral ferait perdre
-            // la transcription faite SUR L'APPAREIL, et le serveur
-            // re-transcrirait ce travail en silence.
-            return ComposerDocumentDraft.document(
-                format: selectedFormat,
-                forcePlainPost: selectedFormat == .post,
-                text: documentText,
-                visibility: composerVisibility,
-                visibilityUserIds: composerVisibilityUserIds,
-                repostOfId: intent.origin.repostedPostId,
-                localMedia: documentLocalMedia,
-                location: documentLocation,
-                discoverabilityPrecision: documentOffersNearbyDiscoverability
-                    ? documentDiscoverability.precisionToSend
-                    : nil,
-                originalLanguage: documentLanguage,
-                mobileTranscription: documentTranscription,
-                // Les personnes nommées par la feuille de l'outil `@`. Sans ce
-                // passage, la feuille aurait laissé choisir des gens et un mode
-                // puis le brouillon serait parti avec `mentions: nil` : un geste
-                // complet pour une conséquence nulle.
-                references: composerReferences,
-                // **LE CANVAS de la slide courante** (#4756). Il est ici et
-                // nulle part ailleurs : c'est le seul site qui compose le
-                // brouillon d'un post, et le seul qui voie à la fois le format
-                // choisi et l'atelier.
-                //
-                // `sceneIsPresent` — le MÊME prédicat que celui qui monte la
-                // vue, jamais `documentHasScene` en direct : les deux
-                // répondaient à la même question et divergeaient sur une story
-                // vide (cf. `sceneIsPresent`). Sans scène à l'écran, aucun blob
-                // ne part — un canvas vide encodé ferait croire à une scène
-                // composée puis effacée.
-                // **TOUTES les slides partent** (directive porteur 2026-09-06).
-                // La règle vit dans `ComposerStoryCanvas`, où elle s'éprouve ;
-                // ce site ne fait que la consulter, comme il consulte déjà
-                // `sceneIsPresent`.
-                storyEffects: ComposerStoryCanvas.publishedSlide(
-                    format: selectedFormat,
-                    sceneIsPresent: sceneIsPresent,
-                    slides: viewModel.slides,
-                    // **La disposition demandée voyage avec les scènes.** Sans
-                    // cette ligne le contrôle serait un décor : l'auteur
-                    // choisirait « en vague » et la publication partirait dans
-                    // le repli.
-                    layout: mosaicLayout),
-                // **Les légendes du composer, enfin remises** (#4756). Cette
-                // carte avait un écrivain et aucun lecteur sur cette voie : ce
-                // qui manquait n'était pas la saisie, c'était ce passage-ci.
-                mediaCaptions: documentMediaCaptions,
-                // **La traduction de clé se fait ICI, et nulle part ailleurs.**
-                //
-                // L'éditeur d'objet écrit par identifiant d'OBJET — c'est ce
-                // qu'il édite, et c'est la seule clé qui survive au
-                // remplacement d'un fichier sur la même scène. Le chemin
-                // durable, lui, réaligne par URL SOURCE, comme les légendes.
-                //
-                // Ce site est le seul qui tienne les DEUX : la carte des alts
-                // et le pont `URL source → identifiant d'objet` qu'a rendu
-                // `applyContentMedia`. Traduire plus tôt aurait accroché
-                // l'alternative à un fichier plutôt qu'à l'objet ; plus tard,
-                // le pont n'existe plus.
-                mediaAlts: altsParURLSource,
-                // Le pont que `applyContentMedia` a rendu, remis TEL QUEL : la
-                // traduction en positions se fait un étage plus bas, là où
-                // l'ORDRE des fichiers existe.
-                mediaObjectIds: documentMediaObjectIdBySource,
-                // **`nil`, honnêtement** (#3996). La surface `.document` (sans
-                // scène) ne monte aucun `SoundExtractionToggle` — il ne vit
-                // que dans l'atelier (`ComposerToolPanelHost` →
-                // `ComposerBottomBand`), monté seulement sous `.scene`. Poser
-                // autre chose que `nil` ici affirmerait une décision que
-                // l'auteur n'a jamais pu exprimer sur cette surface. Le champ
-                // voyage désormais de bout en bout (#3996) ; le jour où cette
-                // surface gagne son propre contrôle, c'est cette ligne qui le
-                // relaiera.
-                allowSoundExtraction: nil
-            )
-        }
-    }
-
     /// Le meuble TRANSMET : il ne connaît ni service, ni file, ni endpoint.
     ///
     /// Il referme le composer sur une ACCEPTATION et le laisse ouvert sur un
@@ -933,7 +799,7 @@ extension MeeshyComposerHost {
     /// la phrase, l'audience et les mentions. **Dette CONSIGNÉE, condition de
     /// levée nommée** : que `setStatus` rende un résultat, comme `createPost` le
     /// fait déjà par `publishSuccess` / `publishError`.
-    func publishDocument() {
+    func publishDocument(_ choice: ComposerPublishChoice) {
         // **Un refus qui SE DIT** (#5285, 2026-09-05).
         //
         // Ce `guard` rendait la main SANS un mot. Mesuré par la session
@@ -955,8 +821,8 @@ extension MeeshyComposerHost {
         // faux est un état NORMAL (rien à publier — pas de texte, pas de
         // média), que la flèche grisée dit déjà. Un brouillon NUL, lui, est une
         // anomalie : la flèche était armée et rien n'est parti.
-        guard canPublishDocument else { return }
-        guard let draft = documentDraft else {
+        guard canPublishDocument(as: choice.format) else { return }
+        guard let draft = documentDraft(for: choice) else {
             HapticFeedback.error()
             FeedbackToastManager.shared.showError(ComposerDocumentCopy.publishError)
             return

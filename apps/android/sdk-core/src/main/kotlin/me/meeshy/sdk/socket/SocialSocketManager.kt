@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.SocketPostTranslationUpdatedData
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentUpdatedData
 import me.meeshy.sdk.model.SocketCommentTranslationUpdatedData
+import me.meeshy.sdk.model.SocketMediaCaptionTranslationUpdatedData
 import me.meeshy.sdk.model.SocketCommentLikedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
 import me.meeshy.sdk.model.SocketCommentReactionUpdateData
@@ -60,6 +61,7 @@ class SocialSocketManager @Inject constructor(
     private val _commentReactionAdded = buf<SocketCommentReactionUpdateData>()
     private val _commentReactionRemoved = buf<SocketCommentReactionUpdateData>()
     private val _commentTranslationUpdated = buf<SocketCommentTranslationUpdatedData>()
+    private val _mediaCaptionTranslationUpdated = buf<SocketMediaCaptionTranslationUpdatedData>()
     private val _storyCreated = buf<SocketStoryCreatedData>()
     private val _storyUpdated = buf<SocketStoryUpdatedData>()
     private val _storyViewed = buf<SocketStoryViewedData>()
@@ -132,6 +134,16 @@ class SocialSocketManager @Inject constructor(
      */
     val commentTranslationUpdated: SharedFlow<SocketCommentTranslationUpdatedData> =
         _commentTranslationUpdated.asSharedFlow()
+
+    /**
+     * `media:caption-translation-updated` — the gateway translated a `PostMedia.caption`
+     * server-side and pushed the finished entry (#6280). DISTINCT of [postTranslationUpdated]
+     * (translates `Post.content`): the open feed card folds this into the targeted media's
+     * caption-translations map so it re-renders in the reader's preferred language the
+     * instant it lands — the media-caption sibling of [postTranslationUpdated].
+     */
+    val mediaCaptionTranslationUpdated: SharedFlow<SocketMediaCaptionTranslationUpdatedData> =
+        _mediaCaptionTranslationUpdated.asSharedFlow()
     val storyCreated: SharedFlow<SocketStoryCreatedData> = _storyCreated.asSharedFlow()
 
     /**
@@ -176,6 +188,7 @@ class SocialSocketManager @Inject constructor(
         listen("comment:reaction-added", _commentReactionAdded)
         listen("comment:reaction-removed", _commentReactionRemoved)
         listen("comment:translation-updated", _commentTranslationUpdated)
+        listen("media:caption-translation-updated", _mediaCaptionTranslationUpdated)
         listen("story:created", _storyCreated)
         listen("story:updated", _storyUpdated)
         listen("story:viewed", _storyViewed)

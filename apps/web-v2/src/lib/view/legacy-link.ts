@@ -16,7 +16,7 @@
  * `hashchange`) ; la suppression de compte a sa page à elle
  * (`apps/web/app/account/deletion`), obligation réglementaire.
  *
- * **Le legacy ne sert QUE la production — jamais staging (#6354, D-62).**
+ * **Le legacy ne sert QUE la production — jamais staging (#6354, D-67).**
  * `LEGACY_ORIGIN` est une constante ABSOLUE, posée une fois pour toutes ; un
  * build dont la passerelle (`apiConfig.base`) n'est pas celle de production
  * pointerait donc, sans garde, vers la production RÉELLE — mesuré sur

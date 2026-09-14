@@ -3,54 +3,8 @@ import AVKit
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - Reels Presenter
-
-/// App-wide presenter for the immersive reel experience. A shared observable so
-/// both entry points — a long-press on the feed button (RootView) and a tap on a
-/// reel card (FeedView) — drive the same top-level overlay without threading an
-/// `@EnvironmentObject` through every host.
-@MainActor
-final class ReelsPresenter: ObservableObject {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-    static let shared = ReelsPresenter()
-
-    struct Launch: Identifiable, Equatable {
-        let id = UUID()
-        var seedPosts: [FeedPost]
-        var startId: String?
-        /// Comment targeted by a notification — when set, the reel auto-opens its
-        /// comments sheet and scrolls to / highlights this comment.
-        var commentId: String?
-        /// Parent comment when `commentId` is a reply — the sheet expands the
-        /// parent thread before scrolling to the reply.
-        var parentCommentId: String?
-        static func == (lhs: Launch, rhs: Launch) -> Bool { lhs.id == rhs.id }
-    }
-
-    @Published var launch: Launch?
-
-    private init() {}
-
-    /// Opens the reels seeded from posts already on screen, starting on `startId`.
-    /// `commentId` (optional) opens the comments sheet on the seed reel and scrolls
-    /// to that comment — used by tapped reel comment notifications.
-    func present(posts: [FeedPost], startId: String?, commentId: String? = nil, parentCommentId: String? = nil) {
-        launch = Launch(seedPosts: posts, startId: startId, commentId: commentId, parentCommentId: parentCommentId)
-    }
-
-    /// Opens the reels with no seed (long-press launch); the view fetches a page.
-    func presentFresh() {
-        launch = Launch(seedPosts: [], startId: nil)
-    }
-
-    func dismiss() {
-        launch = nil
-    }
-}
+// `ReelsPresenter` lives in `ReelsPresenter.swift` (extracted: this file is
+// over the size budget).
 
 // MARK: - Reels Player
 

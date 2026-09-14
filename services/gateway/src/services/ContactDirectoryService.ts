@@ -209,17 +209,17 @@ export class ContactDirectoryService {
 
     const candidates = await this.prisma.user.findMany({
       where: {
+        // Même loi que les deux sœurs publiques (#6529, même défaut que
+        // #6452) : `isActive`, le filtre anti-suppression et le filtre
+        // anti-blocage « absent vs null/vide » — `blockedUserIds` est un
+        // champ TABLEAU dont `isSet` n'est pas exposé au typage Prisma
+        // généré (`StringNullableListFilter` ne le déclare pas, alors que le
+        // connecteur MongoDB le sert), d'où le passage par cette fonction
+        // plutôt qu'un littéral typé directement contre `UserWhereInput`.
+        // `id` est réécrit juste après : cette route exclut aussi le
+        // demandeur LUI-MÊME, que `contactLookupScope` n'a pas à connaître.
+        ...contactLookupScope({ viewerId: excludeUserId, blockedByViewer: [] }),
         id: { notIn: [excludeUserId, ...blockedUserIds] },
-        isActive: true,
-        // Même piège que dans `contactLookupScope` ci-dessus : `deletedAt: null`
-        // seul n'atteint aucune ligne dont le champ est ABSENT — c'est-à-dire
-        // toutes celles créées avant l'ajout de la colonne. Cette route étant
-        // sans appelant (le chemin iOS qui l'utilisait est mort), personne ne
-        // l'a vu.
-        AND: [{ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] }],
-        // Un compte qui a bloqué le demandeur ne doit pas ressortir de son
-        // carnet d'adresses — le blocage vaut dans les deux sens.
-        NOT: { blockedUserIds: { has: excludeUserId } },
         OR: [
           ...(phones.length > 0 ? [{ phoneNumber: { in: phones } }] : []),
           ...(emails.length > 0 ? [{ email: { in: emails } }] : []),

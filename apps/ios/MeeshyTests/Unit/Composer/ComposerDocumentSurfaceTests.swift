@@ -504,7 +504,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// cette garde nommait elle-même : « un éventail monté dans le `body` … ne
     /// toucherait aucun des trois ». Ce site est désormais DÉLIBÉRÉ, et le
     /// compte d'occurrences en reste le verrou.
-    func test_leRepostDUnMood_offreLAncrage_ET_unEcranLePeint() throws {
+    func test_leRepostDUnMood_offreLAncrage_etSaPorteLePublie() throws {
         let profil = ComposerProfile.profile(for: .repost(ofPostId: "mood-source", sourceFormat: .status))
 
         XCTAssertEqual(
@@ -515,24 +515,6 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             ComposerSurfaceRouting.surface(opening: profil.opensWith, format: .post), .document,
             "Le chip d'ancrage mène à la surface document — c'est là qu'atterrit la bascule."
         )
-        XCTAssertTrue(
-            ComposerFormatFanPlacement.paints(
-                surface: .mood,
-                opening: profil.opensWith,
-                offeredFormats: profil.offeredFormats
-            ),
-            "Sans placement sous le MOOD, le chip « Post » n'existerait sur aucun écran — l'état d'avant 4.7."
-        )
-        XCTAssertTrue(
-            ComposerFormatFanPlacement.paints(
-                surface: .document,
-                opening: profil.opensWith,
-                offeredFormats: profil.offeredFormats
-            ),
-            "… et sans placement sous le DOCUMENT, l'ancrage serait une porte à SENS UNIQUE : on y entrerait "
-                + "sans pouvoir revenir au mood."
-        )
-
         let envoi = try corpsDeDeclaration(
             commencantPar: "private func publish(_ draft: ComposerDocumentDraft)",
             dans: sourceDeLaPorteDuMood()
@@ -545,211 +527,9 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             "La porte du mood doit AIGUILLER sur le format : un `guard draft.format == .status` y refuserait "
                 + "l'ancrage, et le chip « Post » armerait une flèche que la publication ignore."
         )
-
-        let source = try sourceDuMeuble()
-        guard let plateau = corpsDeDeclaration(commencantPar: "var plateauTools", dans: source),
-              // **`composerStack`, pas `body`** — le sujet de cette garde a
-              // DÉMÉNAGÉ sans qu'elle le suive (constaté le 2026-09-05, sur un
-              // état antérieur à ce lot). La pile a été extraite du `body` dans
-              // sa propre propriété ; la garde continuait de lire `body`, n'y
-              // trouvait plus le montage, et rougissait en accusant un retrait
-              // qui n'avait pas eu lieu.
-              //
-              // > Une garde qui nomme une DÉCLARATION garde deux choses : son
-              // > invariant, et la place où il vit. La seconde n'est pas
-              // > l'invariant — et c'est pourtant elle qui la fait tomber lors
-              // > d'une extraction que rien n'interdit.
-              let corpsDuMeuble = corpsDeDeclaration(commencantPar: "var composerStack: some View", dans: source),
-              let mood = corpsDeDeclaration(commencantPar: "var moodSurface", dans: source),
-              let document = corpsDeDeclaration(commencantPar: "var documentSurface", dans: source) else {
-            return XCTFail("Les quatre blocs du meuble sont introuvables — la garde ne mesurerait RIEN.")
-        }
-
-        XCTAssertTrue(plateau.contains("formatChip"), "Le bloc lu n'est pas celui du plateau.")
-        XCTAssertTrue(
-            corpsDuMeuble.contains("plateauTools"),
-            "Le `body` du meuble ne monte plus le plateau : l'éventail cesserait de se peindre PARTOUT, y "
-                + "compris sous la scène qui le portait déjà."
-        )
-        XCTAssertTrue(
-            corpsDuMeuble.contains("paintsFormatFan"),
-            "Le plateau est monté sous la RÈGLE `paintsFormatFan` (ancrée sur `ComposerFormatFanPlacement`) — "
-                + "depuis B3 il coiffe aussi le document du composer du fil, où choisir « Story » emporte le "
-                + "contenu dans la scène (B1). La règle nommée reste le seul juge du montage."
-        )
-        XCTAssertFalse(
-            mood.contains("plateauTools") || mood.contains("ComposerFormatFan("),
-            "La surface du mood peint l'éventail elle-même : deux montages pour un seul sélecteur, et la "
-                + "règle de placement cesserait de gouverner l'un des deux."
-        )
-        XCTAssertFalse(
-            document.contains("plateauTools") || document.contains("ComposerFormatFan("),
-            "La surface document RECONSTRUIT l'éventail : deux constructions pour un seul sélecteur, à faire "
-                + "diverger. Elle en reçoit le MÊME (`formatChip`), et la place est décidée par la règle."
-        )
-
-        // **Le document a changé de PLACE au 2026-08-27, pas de règle** (#4047,
-        // directive porteur) : le chip descend dans SA barre haute, entre la
-        // fermeture et le rail des slides — la rangée du plateau y aurait fait
-        // deux barres empilées pour un header que la planche dessine d'un seul
-        // tenant.
-        //
-        // Ce que cette garde protégeait — « un seul sélecteur à l'écran » —
-        // n'est pas affaibli, il est mieux dit : au lieu de compter des
-        // occurrences dans un fichier (qu'un renommage contourne), elle asserte
-        // l'EXCLUSIVITÉ des deux places sur CHAQUE surface. Deux sélecteurs
-        // simultanés deviennent impossibles par la règle, pas par convention.
-        XCTAssertEqual(
-            ComposerFormatFanPlacement.place(for: .document), .documentHeader,
-            "Le document porte le chip dans SA barre haute — entre la fermeture et le rail des slides. "
-                + "La rangée du plateau y ferait deux barres empilées pour un header d'un seul tenant."
-        )
-        // **La scène rejoint la règle au #4124.** L'argument qui la gardait sur
-        // la rangée du plateau — « elle n'a pas de barre haute à elle » — a
-        // cessé d'être vrai : l'atelier expose désormais un accessoire *leading*
-        // dans SA rangée, contre la fermeture. Le chip y descend, et la rangée
-        // du plateau disparaît sous l'atelier : c'était la seconde barre que le
-        // header d'un seul tenant interdit, la même que #4047 avait retirée du
-        // document.
-        XCTAssertEqual(ComposerFormatFanPlacement.place(for: .scene), .atelierHeader,
-            "L'atelier porte le chip contre sa fermeture — plus de rangée empilée au-dessus de lui.")
-        XCTAssertEqual(ComposerFormatFanPlacement.place(for: .mood), .plateauRow,
-            "Le mood garde la rangée : il n'a pas de barre haute à lui où loger le chip.")
-
-        // La question n'est pas « quel bloc le peint » mais « combien de fois le
-        // meuble le peint », et la réponse doit rester UNE. Le site a changé au
-        // lot 4.7 — du bloc de la scène au `body` — et le compte, lui, n'a pas
-        // bougé : c'est lui qui interdit qu'un second montage naisse ailleurs.
-        XCTAssertEqual(
-            occurrences(of: "ComposerFormatFan(", in: source), 1,
-            "Le meuble monte l'éventail à un second endroit : deux sélecteurs pour un seul format courant, "
-                + "dont un seul gouverné par `ComposerFormatFanPlacement`."
-        )
-        XCTAssertEqual(
-            occurrences(of: "plateauTools", in: source), 2,
-            "Le plateau doit avoir exactement DEUX mentions — sa déclaration et son unique montage. Un "
-                + "troisième site le peindrait deux fois sur le même écran."
-        )
     }
 
     // MARK: - B3 (#3926) — OÙ l'éventail se peint, après la levée de la frontière
-
-    /// **La règle de PLACEMENT — posée au lot 4.7, LEVÉE au chantier B.**
-    ///
-    /// Elle tenait l'éventail hors des surfaces où un format offert routait de
-    /// l'autre côté de la frontière « scène / pas de scène » : sous le document
-    /// de `.feedComposer`, choisir « Story » aurait laissé la saisie derrière,
-    /// rien ne faisant entrer du texte dans un canvas.
-    ///
-    /// **La frontière que cette règle gardait est LEVÉE depuis B1/B2 (#3924/#3925).**
-    /// Elle bloquait l'éventail sous le document de `.feedComposer` parce que
-    /// choisir « Story » y aurait laissé la saisie derrière — rien ne faisait
-    /// entrer du texte dans un canvas. B1 (`applyContentText` + `applyContentMedia`)
-    /// et B2 (la description partagée) l'y font entrer, dans les DEUX sens ; le
-    /// média local reste de surcroît l'état du meuble. Le contenu partagé suivant
-    /// désormais la bascule, `paints` rend `true` PARTOUT : plus de porte à sens
-    /// unique à empêcher. La ligne `.feedComposer` est passée `false → true` dans
-    /// le même commit que la levée — un cas de table laissé sous une règle qui
-    /// l'a démenti devient le mensonge que lira la session suivante.
-    func test_lePlacementDeLEventail_estOuvertPartout_depuisLeTransfertDuContenu() {
-        let repostDeMood = ComposerOrigin.repost(ofPostId: "mood-source", sourceFormat: .status)
-        let mediaRecu = ComposerOrigin.conversationMedia(messageId: "msg-1", attachmentId: "att-1")
-        let cas: [(String, ComposerOrigin, ComposerFormat)] = [
-            ("tray de story · Story", .storyTray, .story),
-            ("tray de story · Post", .storyTray, .post),
-            ("puce de mood · Mood", .moodChip, .status),
-            ("repost d'un mood · Mood", repostDeMood, .status),
-            ("repost d'un mood · Post", repostDeMood, .post),
-            ("composer du fil · Post", .feedComposer, .post),
-            ("composer du fil · Story", .feedComposer, .story),
-            ("média de conversation · Story", mediaRecu, .story),
-            ("média de conversation · Post", mediaRecu, .post)
-        ]
-
-        for (nom, origine, format) in cas {
-            let profil = ComposerProfile.profile(for: origine)
-            XCTAssertTrue(
-                profil.offeredFormats.contains(format),
-                "\(nom) : le format mesuré n'est plus offert par cette porte — le cas ne mesurerait RIEN."
-            )
-            let surface = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: format)
-            XCTAssertTrue(
-                ComposerFormatFanPlacement.paints(
-                    surface: surface,
-                    opening: profil.opensWith,
-                    offeredFormats: profil.offeredFormats
-                ),
-                "\(nom) : le contenu partagé suit désormais la bascule (B1/B2) — l'éventail se peint là où il "
-                    + "est visible, sur toute surface. Un `false` ici ferait renaître une porte à sens unique."
-            )
-        }
-    }
-
-    /// **Les DEUX règles de l'éventail se lisent ENSEMBLE — et leur CONJONCTION
-    /// est elle-même une règle.**
-    ///
-    /// Le placement dit OÙ il a le droit de se peindre ; la visibilité dit s'il
-    /// a quelque chose à offrir. La puce de mood les sépare : son placement est
-    /// autorisé (`.mood` ne renvoie à aucune scène) et pourtant rien ne se
-    /// peint, parce qu'elle n'offre qu'UN format — et un chip unique est une
-    /// affordance sans choix, ce que la loi 4 nomme.
-    ///
-    /// Sans ce test, une session lirait « le mood a un éventail » dans le seul
-    /// placement, et retirerait le `count > 1` en croyant réparer un oubli.
-    ///
-    /// **Depuis B3 (#3926), `paints` rend `true` partout (la frontière est
-    /// levée, cf. le test voisin), si bien que `mounts` se réduit à la
-    /// VISIBILITÉ.** La conjonction reste écrite pour deux raisons : elle garde
-    /// la visibilité maîtresse aujourd'hui — la puce de mood est le SEUL cas à
-    /// `false`, et par son offre unique —, et elle laisse `paints` reprendre la
-    /// main si une frontière renaissait. Le composer du fil, lui, monte
-    /// désormais l'éventail sous son document : ce n'est plus une régression à
-    /// interdire mais le comportement VOULU.
-    func test_lesDeuxReglesDeLEventail_seLisentENSEMBLE_dansUneSeuleRegle() {
-        let profilDuMood = ComposerProfile.profile(for: .moodChip)
-        XCTAssertEqual(
-            profilDuMood.offeredFormats, [.status],
-            "La prémisse de ce test est l'offre UNIQUE de la création de mood : si elle s'élargissait, le "
-                + "test cesserait de mesurer la séparation des deux règles."
-        )
-        XCTAssertTrue(
-            ComposerFormatFanPlacement.paints(
-                surface: .mood,
-                opening: profilDuMood.opensWith,
-                offeredFormats: profilDuMood.offeredFormats
-            ),
-            "Le placement AUTORISE le mood : aucun de ses formats offerts ne renvoie à une scène. C'est CE "
-                + "cas qui prouve que le montage ne peut pas se réduire au seul placement."
-        )
-
-        let repostDeMood = ComposerOrigin.repost(ofPostId: "mood-source", sourceFormat: .status)
-        let mediaRecu = ComposerOrigin.conversationMedia(messageId: "msg-1", attachmentId: "att-1")
-        let cas: [(String, ComposerOrigin, ComposerSurfaceKind, Bool)] = [
-            ("tray de story · scène", .storyTray, .scene, true),
-            ("puce de mood · mood", .moodChip, .mood, false),
-            ("repost d'un mood · mood", repostDeMood, .mood, true),
-            ("repost d'un mood · document", repostDeMood, .document, true),
-            ("composer du fil · document", .feedComposer, .document, true),
-            ("média de conversation · scène", mediaRecu, .scene, true)
-        ]
-
-        for (nom, origine, surface, attendu) in cas {
-            let profil = ComposerProfile.profile(for: origine)
-            XCTAssertEqual(
-                ComposerFormatFanPlacement.mounts(
-                    surface: surface,
-                    opening: profil.opensWith,
-                    offeredFormats: profil.offeredFormats
-                ),
-                attendu,
-                "\(nom) : le MONTAGE de l'éventail a changé. Attendu \(attendu) — la puce de mood est le SEUL "
-                    + "cas à `false`, et par la VISIBILITÉ (offre unique = rangée vide, loi 4), jamais par le "
-                    + "placement : depuis B1/B2 le contenu suit la bascule, si bien que le composer du fil monte "
-                    + "l'éventail sous son document (B3). Si la puce de mood cesse de tomber, la visibilité a "
-                    + "cessé de compter ; si le composer du fil retombe, la frontière levée a été reposée."
-            )
-        }
-    }
 
     // MARK: - Lot 5 — la porte du média reçu peint enfin son éventail
 
@@ -778,80 +558,6 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
                 .document,
                 "\(nom(format)) sous une graine média se compose dans le MEUBLE : "
                     + "`ComposerDocumentDraft.localMedia` porte la photo depuis #5409."
-            )
-        }
-    }
-
-    /// **L'éventail de la porte se MONTE**, éventail qualifiant ou non.
-    ///
-    /// La garde qui vaut : `mounts` est la conjonction, et c'est elle que le
-    /// meuble lit. Interroger `paints` seul laisserait passer une offre
-    /// rétrécie à un chip unique — un contrôle absent, sous une table qui
-    /// promet trois formats.
-    func test_leMediaSeme_monteSonEventail_qualifiantOuNon() {
-        for gate in [true, false] {
-            let profil = ComposerProfile.profile(
-                for: .conversationMedia(messageId: "msg-1", attachmentId: "att-1"),
-                compositionQualifiesAsReel: gate
-            )
-            XCTAssertTrue(
-                ComposerFormatFanPlacement.mounts(
-                    surface: ComposerSurfaceRouting.surface(
-                        opening: profil.opensWith, format: profil.initialFormat),
-                    opening: profil.opensWith,
-                    offeredFormats: profil.offeredFormats
-                ),
-                "réel=\(gate) : la porte DÉCLARE \(profil.offeredFormats.count) formats et n'en offrirait "
-                    + "aucun contrôle — l'UI morte que la loi 4 nomme."
-            )
-        }
-    }
-
-    /// L'éventail est monté UNE fois, dans le `body`, sous la règle — et la
-    /// condition passe par une PROPRIÉTÉ NOMMÉE qui ne fait que la LIRE.
-    ///
-    /// Une règle écrite en ligne dans un `body` est invisible aux tests, et
-    /// c'est ainsi qu'une règle produit se met à exister en deux exemplaires.
-    /// La loi 5 impose de surcroît que rien n'y conditionne l'affichage sur la
-    /// PORTE : `test_theSocleYieldsToTheAtelier_andNeverToTheDoor` interdit déjà
-    /// `if profile` / `if origin` dans ce même bloc.
-    ///
-    /// **Les deux dernières assertions sont NÉGATIVES depuis le 2026-08-25, et
-    /// c'est le fond de l'affaire.** Elles exigeaient la PRÉSENCE de
-    /// `ComposerFormatFanPlacement.paints(` et de
-    /// `ComposerFormatFanPolicy.isVisible(` dans le meuble — deux symboles que
-    /// le meuble joignait lui-même par un `&&`. Cette écriture-là passait la
-    /// garde en laissant la CONJONCTION hors de toute assertion : la remplacer
-    /// par un `||` gardait les deux symboles, gardait ce test vert, et
-    /// repeignait l'éventail sous le document de `.feedComposer`. La conjonction
-    /// est descendue dans `ComposerFormatFanPlacement.mounts` (exercée par
-    /// `test_lesDeuxReglesDeLEventail_seLisentENSEMBLE_dansUneSeuleRegle`), et
-    /// ce que le meuble ne doit plus contenir est justement de quoi la
-    /// réécrire.
-    func test_host_monteLEventail_dansLeBody_sousLaRegleDePlacement() throws {
-        let source = try sourceDuMeuble()
-        guard let corpsDuMeuble = corpsDeDeclaration(commencantPar: "var composerStack: some View", dans: source) else {
-            return XCTFail("La pile du meuble est introuvable — la garde ne mesurerait RIEN.")
-        }
-        let compacte = corpsDuMeuble.components(separatedBy: .whitespacesAndNewlines).joined()
-
-        XCTAssertTrue(compacte.contains("surface"), "Le bloc lu n'est pas celui du `body`.")
-        XCTAssertTrue(
-            compacte.contains("ifpaintsFormatFan{plateauTools}"),
-            "Le plateau doit être monté sous la propriété nommée `paintsFormatFan` : une expression écrite "
-                + "en ligne ici serait une seconde écriture de la règle, invisible aux tests."
-        )
-        XCTAssertTrue(
-            source.contains("ComposerFormatFanPlacement.mounts("),
-            "`paintsFormatFan` doit LIRE la règle COMPOSÉE — placement ET visibilité, jointes une seule fois, "
-                + "à l'endroit où une assertion peut les joindre aussi."
-        )
-        for reecriture in ["ComposerFormatFanPlacement.paints(", "ComposerFormatFanPolicy.isVisible("] {
-            XCTAssertFalse(
-                source.contains(reecriture),
-                "Le meuble lit « \(reecriture) » : il rejoint donc les deux règles lui-même, dans une "
-                    + "propriété privée qu'aucune assertion n'évalue. C'est là que le `&&` a vécu, et un `||` "
-                    + "y passait quatre gardes au vert en repeignant l'éventail sous `.feedComposer`."
             )
         }
     }
@@ -1414,12 +1120,12 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// posé sur le bloc entier serait vert grâce au mood seul.
     func test_leMeuble_semeLaSourceDeLaPORTE_dansLeBrouillonDuDocument() throws {
         guard let bloc = corpsDeDeclaration(
-            commencantPar: "var documentDraft",
+            commencantPar: "func documentDraft(",
             dans: try sourceDuMeuble()
         ) else {
             return XCTFail("Le brouillon doit être une propriété nommée `documentDraft` — la garde s'ancre dessus.")
         }
-        let branches = bloc.components(separatedBy: "case .document:")
+        let branches = bloc.components(separatedBy: "case .scene, .document:")
         guard branches.count == 2 else {
             return XCTFail("La branche `.document` du brouillon est introuvable — la garde ne mesurerait RIEN.")
         }

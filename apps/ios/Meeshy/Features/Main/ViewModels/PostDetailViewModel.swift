@@ -16,7 +16,7 @@ class PostDetailViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isLoadingComments = false
     @Published var hasMoreComments: Bool?  // nil = pas encore chargé ≠ « il y en a plus » (#4868)
-    @Published var error: String?
+    @Published var loadFailure: ContentFetchFailure?
     @Published var replyingTo: FeedComment? = nil
 
     @Published var repliesMap: [String: [FeedComment]] = [:]
@@ -160,9 +160,9 @@ class PostDetailViewModel: ObservableObject {
                 }
             }
         } catch {
-            // 404 ⇒ absence, pas échec : `post == nil` le dit déjà, et
-            // signaler un échec inviterait à réessayer pour rien (#4903).
-            self.error = PostDetailAbsenceReason.isNotFound(error) ? nil : error.localizedDescription
+            // La CAUSE, pas une phrase : l'écran en tire connexion, serveur ou
+            // indisponibilité (`PostDetailAbsenceReason`, #4903, #6508).
+            self.loadFailure = ContentFetchFailure.classify(error)
         }
     }
 

@@ -6,7 +6,7 @@ import { FEED_GLYPHS } from './glyphs-feed';
 import type { FeedCardMedia, FeedCardModel, FeedCardStats, FeedCardText, FeedCardViewer } from '@/lib/feed/card-model';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { FEED_TEXT_TRUNCATION_LIMIT, truncateWords } from '@/lib/feed/text';
-import { translate } from '@/lib/i18n-catalog';
+import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { Link } from '@/routes/route-table';
 
@@ -40,13 +40,18 @@ const FILLED_GLYPH: Partial<Record<keyof typeof FEED_GLYPHS, keyof typeof FEED_G
   bookmark: 'bookmarkFill',
 };
 
-const STAT_ITEMS: readonly { readonly key: keyof FeedCardStats; readonly glyph: keyof typeof FEED_GLYPHS; readonly label: string }[] = [
-  { key: 'likeCount', glyph: 'heart', label: 'Aimer' },
-  { key: 'commentCount', glyph: 'chatCircle', label: 'Commenter' },
-  { key: 'repostCount', glyph: 'arrowsClockwise', label: 'Repartager' },
-  { key: 'bookmarkCount', glyph: 'bookmark', label: 'Enregistrer' },
-  { key: 'shareCount', glyph: 'shareNetwork', label: 'Partager' },
-];
+/* `as const satisfies` plutôt qu'une annotation `InterfaceCatalogKey` large
+   (revue-correction #6488) : une clé de catalogue TYPÉE LARGE force
+   `translate()` à exiger des paramètres pour CHAQUE clé possible du
+   catalogue, y compris celles qui en portent — `as const` garde le type
+   LITTÉRAL de chacune des cinq clés ci-dessous, aucune desquelles n'en prend. */
+const STAT_ITEMS = [
+  { key: 'likeCount', glyph: 'heart', labelKey: 'feed.post.action.like' },
+  { key: 'commentCount', glyph: 'chatCircle', labelKey: 'feed.post.action.comment' },
+  { key: 'repostCount', glyph: 'arrowsClockwise', labelKey: 'feed.post.action.repost' },
+  { key: 'bookmarkCount', glyph: 'bookmark', labelKey: 'feed.post.action.bookmark' },
+  { key: 'shareCount', glyph: 'shareNetwork', labelKey: 'feed.post.action.share' },
+] as const satisfies readonly { readonly key: keyof FeedCardStats; readonly glyph: keyof typeof FEED_GLYPHS; readonly labelKey: InterfaceCatalogKey }[];
 
 /**
  * La rangée des cinq statistiques — `tone` bascule l'encre entre la carte
@@ -77,9 +82,11 @@ function FeedActionsRow({
   readonly onShare?: ShareHandler;
 }) {
   const ink = tone === 'onDark' ? 'rgba(255,255,255,0.92)' : 'var(--color-ios-ink-2)';
+  const language = currentInterfaceLanguage();
   return (
     <div className="flex items-center justify-between" data-feed-actions>
       {STAT_ITEMS.map((item) => {
+        const label = translate(language, item.labelKey);
         /* « Partager » est un geste PONCTUEL, pas une bascule : un bouton
            simple, sans `aria-pressed` — et seulement si l'hôte sait partager. */
         if (item.key === 'shareCount' && onShare !== undefined) {
@@ -92,7 +99,7 @@ function FeedActionsRow({
               className="flex items-center gap-1.5 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
               style={{ color: ink, minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
             >
-              <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={item.label} />
+              <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={label} />
               <span className="text-check font-medium">{stats[item.key]}</span>
             </button>
           );
@@ -101,7 +108,7 @@ function FeedActionsRow({
         if (kind === undefined || onGesture === undefined) {
           return (
             <span key={item.key} className="flex items-center gap-1.5" style={{ color: ink, minHeight: 44 }}>
-              <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={item.label} />
+              <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={label} />
               <span className="text-check font-medium">{stats[item.key]}</span>
             </span>
           );
@@ -122,7 +129,7 @@ function FeedActionsRow({
             style={{ color: pressed ? pressedInk : ink, minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
           >
             <span className="grid place-items-center" {...(pressed ? { 'data-feed-glyph-filled': '' } : {})}>
-              <GlyphSvg glyph={FEED_GLYPHS[pressed ? (FILLED_GLYPH[item.glyph] ?? item.glyph) : item.glyph]} size={19} title={item.label} />
+              <GlyphSvg glyph={FEED_GLYPHS[pressed ? (FILLED_GLYPH[item.glyph] ?? item.glyph) : item.glyph]} size={19} title={label} />
             </span>
             <span className="text-check font-medium">{stats[item.key]}</span>
           </button>
@@ -142,6 +149,7 @@ function FeedMediaSurface({ media }: { readonly media: FeedCardMedia }) {
   const [loaded, setLoaded] = useState(false);
 
   if (media.kind === 'video' || media.kind === 'audio') {
+    const language = currentInterfaceLanguage();
     const poster = media.thumbnailSrc ?? media.placeholder;
     return (
       <div
@@ -165,9 +173,14 @@ function FeedMediaSurface({ media }: { readonly media: FeedCardMedia }) {
         }}
       >
         {media.kind === 'video' ? (
-          <Glyph name="fillPlay" size={44} style={{ color: 'rgba(255,255,255,0.85)' }} title="Vidéo" />
+          <Glyph name="fillPlay" size={44} style={{ color: 'rgba(255,255,255,0.85)' }} title={translate(language, 'feed.post.media.video')} />
         ) : (
-          <GlyphSvg glyph={FEED_GLYPHS.waveform} size={72} style={{ color: 'rgba(255,255,255,0.55)' }} title="Audio" />
+          <GlyphSvg
+            glyph={FEED_GLYPHS.waveform}
+            size={72}
+            style={{ color: 'rgba(255,255,255,0.55)' }}
+            title={translate(language, 'feed.post.media.audio')}
+          />
         )}
       </div>
     );
@@ -204,6 +217,7 @@ function FeedMediaCarousel({ media }: { readonly media: readonly FeedCardMedia[]
   const [page, setPage] = useState(0);
   const clamped = Math.min(page, media.length - 1);
   const current = media[clamped];
+  const language = currentInterfaceLanguage();
   if (current === undefined) return null;
 
   return (
@@ -213,6 +227,11 @@ function FeedMediaCarousel({ media }: { readonly media: readonly FeedCardMedia[]
         <p
           className="absolute inset-x-0 bottom-0 px-3 py-2 text-check text-white"
           style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }}
+          /* La langue SERVIE (#6280, `resolveMediaCaption`), jamais la
+             langue d'interface : un lecteur d'écran qui prononce une
+             traduction française avec une voix anglaise est le défaut du
+             cycle 122 (CLAUDE.md § Prisme), rendu audible sur une légende. */
+          {...(current.captionLanguage !== undefined ? { lang: current.captionLanguage } : {})}
         >
           {current.caption}
         </p>
@@ -229,7 +248,7 @@ function FeedMediaCarousel({ media }: { readonly media: readonly FeedCardMedia[]
           {clamped > 0 ? (
             <button
               type="button"
-              aria-label="Média précédent"
+              aria-label={translate(language, 'feed.post.media.previous')}
               onClick={() => setPage(clamped - 1)}
               className="absolute inset-y-0 left-0 grid place-items-center"
               style={{ width: 44 }}
@@ -240,7 +259,7 @@ function FeedMediaCarousel({ media }: { readonly media: readonly FeedCardMedia[]
           {clamped < media.length - 1 ? (
             <button
               type="button"
-              aria-label="Média suivant"
+              aria-label={translate(language, 'feed.post.media.next')}
               onClick={() => setPage(clamped + 1)}
               className="absolute inset-y-0 right-0 grid place-items-center"
               style={{ width: 44 }}
@@ -294,6 +313,7 @@ function FeedPostText({ text }: { readonly text: FeedCardText }) {
   const [expanded, setExpanded] = useState(false);
   const truncated = truncateWords(text.full, FEED_TEXT_TRUNCATION_LIMIT);
   const shown = !truncated.truncated || expanded ? text.full : truncated.text;
+  const language = currentInterfaceLanguage();
 
   return (
     <div className="px-3">
@@ -316,7 +336,7 @@ function FeedPostText({ text }: { readonly text: FeedCardText }) {
           className="pb-1.5 text-left text-check font-semibold"
           style={{ color: 'var(--color-ios-brand)', minHeight: 44 }}
         >
-          {expanded ? 'voir moins' : 'voir plus'}
+          {translate(language, expanded ? 'feed.post.see_less' : 'feed.post.see_more')}
         </button>
       ) : null}
     </div>
@@ -338,11 +358,12 @@ const hostsOf = ({ onGesture, onShare }: CardHosts): CardHosts => ({
 function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & CardHosts) {
   const poster = model.media[0];
   const ratio = poster?.ratio ?? 1.25;
+  const language = currentInterfaceLanguage();
 
   return (
     <div
       role="group"
-      aria-label={`Réel de ${model.author.name}`}
+      aria-label={translate(language, 'feed.post.reel.of', { author: model.author.name })}
       className="relative overflow-hidden"
       style={{ borderRadius: 18, aspectRatio: `1 / ${ratio}` }}
       data-feed-card="reel"
@@ -361,7 +382,7 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
       <Link
         to="reels"
         search={{ seed: model.id }}
-        aria-label={translate(currentInterfaceLanguage(), 'reels.open', { author: model.author.name })}
+        aria-label={translate(language, 'reels.open', { author: model.author.name })}
         draggable={false}
         data-feed-reel-open
         className="absolute inset-0 focus-visible:outline-2 focus-visible:-outline-offset-4"
@@ -381,7 +402,7 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
         className="pointer-events-none absolute top-3 left-3 rounded-chip px-2 py-0.5 text-check font-semibold text-white"
         style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
       >
-        Réel
+        {translate(language, 'feed.post.reel.chip')}
       </span>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 p-3">
         <div className="flex items-center gap-2">

@@ -12,14 +12,17 @@ final class FeedTranslationPatchTests: XCTestCase {
     private func makePost(
         id: String = "p1",
         comments: [FeedComment] = [],
+        media: [FeedMedia] = [],
         translations: [String: PostTranslation]? = nil,
         translatedContent: String? = nil
     ) -> FeedPost {
-        FeedPost(
+        var post = FeedPost(
             id: id, author: "alice", authorId: "a1", content: "Bonjour",
             comments: comments, originalLanguage: "fr",
             translations: translations, translatedContent: translatedContent
         )
+        post.media = media
+        return post
     }
 
     private func makeComment(id: String, translatedContent: String? = nil) -> FeedComment {
@@ -121,6 +124,58 @@ final class FeedTranslationPatchTests: XCTestCase {
 
         XCTAssertFalse(changed)
         XCTAssertEqual(post.comments.first?.translatedContent, "Déjà")
+    }
+
+    // MARK: - Média (légende, #6280)
+
+    func test_applyMediaCaptionTranslation_onPostMedia_storesTranslation() {
+        var post = makePost(media: [FeedMedia(id: "m1", type: .image, caption: "Sunset")])
+
+        let changed = FeedViewModel.applyMediaCaptionTranslation(
+            "Coucher de soleil", mediaId: "m1", commentId: nil, language: "fr", to: &post
+        )
+
+        XCTAssertTrue(changed)
+        XCTAssertEqual(post.media.first?.captionTranslations?["fr"], "Coucher de soleil")
+    }
+
+    func test_applyMediaCaptionTranslation_onCommentMedia_storesTranslation() {
+        let comment = FeedComment(
+            id: "c1", author: "bob", authorId: "b1", content: "Salut",
+            media: [FeedMedia(id: "m1", type: .image, caption: "Sunset")]
+        )
+        var post = makePost(comments: [comment])
+
+        let changed = FeedViewModel.applyMediaCaptionTranslation(
+            "Coucher de soleil", mediaId: "m1", commentId: "c1", language: "fr", to: &post
+        )
+
+        XCTAssertTrue(changed)
+        XCTAssertEqual(post.comments.first?.media.first?.captionTranslations?["fr"], "Coucher de soleil")
+        XCTAssertTrue(post.media.isEmpty, "le média d'un commentaire ne doit jamais atterrir sur le post porteur")
+    }
+
+    func test_applyMediaCaptionTranslation_unknownMedia_isANoOp() {
+        var post = makePost(media: [FeedMedia(id: "m1", type: .image, caption: "Sunset")])
+
+        let changed = FeedViewModel.applyMediaCaptionTranslation(
+            "Coucher de soleil", mediaId: "ghost", commentId: nil, language: "fr", to: &post
+        )
+
+        XCTAssertFalse(changed)
+        XCTAssertNil(post.media.first?.captionTranslations)
+    }
+
+    func test_applyMediaCaptionTranslation_isIdempotentAndMergesLanguages() {
+        var post = makePost(media: [FeedMedia(id: "m1", type: .image, caption: "Sunset")])
+
+        _ = FeedViewModel.applyMediaCaptionTranslation("Coucher de soleil", mediaId: "m1", commentId: nil, language: "fr", to: &post)
+        _ = FeedViewModel.applyMediaCaptionTranslation("Atardecer", mediaId: "m1", commentId: nil, language: "es", to: &post)
+        _ = FeedViewModel.applyMediaCaptionTranslation("Coucher de soleil", mediaId: "m1", commentId: nil, language: "fr", to: &post)
+
+        XCTAssertEqual(post.media.first?.captionTranslations?["fr"], "Coucher de soleil")
+        XCTAssertEqual(post.media.first?.captionTranslations?["es"], "Atardecer")
+        XCTAssertEqual(post.media.first?.captionTranslations?.count, 2)
     }
 
     // MARK: - Multi-clés

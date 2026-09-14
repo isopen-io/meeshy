@@ -5,6 +5,7 @@ import type { StoryRailProps } from '@/components/story-rail';
 import { useStatusMoods, useStoryTray } from '@/lib/api/query';
 import type { StatusMoodPost } from '@/lib/api/stories';
 import { storyViewedStore } from '@/lib/api/story-viewed-store';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { groupStoriesByAuthor, railTientLaPlace, withMoods } from '@/lib/view/story-tray';
 
 const EMPTY_STATUS_MOODS: readonly StatusMoodPost[] = [];
@@ -47,5 +48,7 @@ export function useStoryRailProps(viewerId: string | undefined): StoryRailProps 
     [tray.data, viewerId, moods.data, seenNow],
   );
 
-  return useMemo(() => ({ groups, loading: railTientLaPlace(tray) }), [groups, tray]);
+  const language = currentInterfaceLanguage();
+
+  return useMemo(() => ({ groups, loading: railTientLaPlace(tray), language }), [groups, tray, language]);
 }

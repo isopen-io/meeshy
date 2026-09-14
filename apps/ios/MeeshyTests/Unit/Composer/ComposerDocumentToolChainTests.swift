@@ -271,7 +271,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     /// `location: documentLocation`) fait rougir ce test — le lieu choisi
     /// serait JETÉ avant même d'atteindre `PublishIntent.document(location:)`.
     func test_leBrouillonDuDocument_porteLeLieuChoisi_pasUnLitteralNil() throws {
-        guard let corps = declarationBody(startingAt: "var documentDraft", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "func documentDraft(", in: try hostCode()) else {
             return XCTFail("`documentDraft` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
         }
         let compacte = compact(corps)
@@ -348,7 +348,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     /// valeur en dur. Sans elle, le test ci-dessus pourrait être juste et
     /// correct sans que la production ne l'appelle jamais.
     func test_leBrouillonDuDocument_porteLeSecondOptInDepuisLeChoix_jamaisUnLitteral() throws {
-        guard let corps = declarationBody(startingAt: "var documentDraft", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "func documentDraft(", in: try hostCode()) else {
             return XCTFail("`documentDraft` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
         }
         let compacte = compact(corps)
@@ -664,7 +664,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     /// ce test — la transcription faite sur l'appareil serait JETÉE avant
     /// même d'atteindre `PublishIntent.document(transcription:)`.
     func test_leBrouillonDuDocument_porteLaTranscriptionEcrite_pasUnLitteralNil() throws {
-        guard let corps = declarationBody(startingAt: "var documentDraft", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "func documentDraft(", in: try hostCode()) else {
             return XCTFail("`documentDraft` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
         }
         let compacte = compact(corps)

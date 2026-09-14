@@ -691,6 +691,32 @@ describe('SocialEventsHandler', () => {
     });
   });
 
+  describe('broadcastMediaCaptionTranslationUpdated (#6280)', () => {
+    const translation = { text: 'Hello world', translationModel: 'nllb', confidenceScore: 0.9, createdAt: '2026-09-14T00:00:00.000Z' };
+
+    it('emits media:caption-translation-updated to feed rooms and post room for a POST-attached media', async () => {
+      const { handler, io } = buildHandler();
+      const data = { mediaId: 'media-1', postId: POST_ID, language: 'en', translation } as any;
+
+      await handler.broadcastMediaCaptionTranslationUpdated(data, AUTHOR_ID, 'PUBLIC', []);
+
+      const rooms = emittedRooms(io);
+      expect(rooms.some((r: string) => r.includes('post:'))).toBe(true);
+      expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
+    });
+
+    it('uses the comment broadcast rooms when the media belongs to a comment', async () => {
+      const { handler, io } = buildHandler();
+      const data = { mediaId: 'media-1', postId: POST_ID, commentId: COMMENT_ID, language: 'en', translation } as any;
+
+      await handler.broadcastMediaCaptionTranslationUpdated(data, AUTHOR_ID, 'PUBLIC', []);
+
+      const rooms = emittedRooms(io);
+      expect(rooms.some((r: string) => r.includes('post:'))).toBe(true);
+      expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
+    });
+  });
+
   describe('broadcastPostReposted', () => {
     it('emits post:reposted to visibility-filtered feed rooms', async () => {
       const { handler, io } = buildHandler();

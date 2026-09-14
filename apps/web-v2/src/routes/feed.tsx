@@ -93,11 +93,12 @@ export const FEED_HEADER_HEIGHT = 64;
 export const FEED_TOP_RESERVE = FLOATING_CORRIDOR_BOTTOM - FEED_HEADER_HEIGHT;
 
 export function FeedHeader({ pinned, railProps }: { readonly pinned: boolean; readonly railProps: StoryRailProps }) {
+  const language = currentInterfaceLanguage();
   return (
     <header className="flex shrink-0 items-center gap-2 px-3" style={{ height: FEED_HEADER_HEIGHT }}>
       <Link
         to="list"
-        aria-label="Retour aux conversations"
+        aria-label={translate(language, 'pending.back')}
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
@@ -110,7 +111,7 @@ export function FeedHeader({ pinned, railProps }: { readonly pinned: boolean; re
           SOUS l'en-tête (`FLOATING_TOP`) : il ne couvre pas ce bouton. */}
       <Link
         to="reels"
-        aria-label={translate(currentInterfaceLanguage(), 'feed.header.reels')}
+        aria-label={translate(language, 'feed.header.reels')}
         draggable={false}
         data-feed-reels
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -152,16 +153,17 @@ export function FeedTopChrome({
 
 /** `status === 'error'`, à CACHE VIDE — miroir `ListError` (`conversations.tsx`). */
 export function FeedError({ online, onRetry }: { readonly online: boolean; readonly onRetry: () => void }) {
+  const language = currentInterfaceLanguage();
   return (
     <li role="alert" className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center">
       <span style={{ color: 'var(--color-error)' }}>
         <Glyph name="warningCircle" size={28} />
       </span>
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        {online ? 'Impossible de charger le fil' : 'Hors ligne'}
+        {translate(language, online ? 'feed.error.title' : 'feed.offline.title')}
       </p>
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {online ? 'Réessayez dans un instant.' : 'Le fil s’affichera à la reconnexion.'}
+        {translate(language, online ? 'feed.error.body' : 'feed.offline.body')}
       </p>
       <button
         type="button"
@@ -169,21 +171,22 @@ export function FeedError({ online, onRetry }: { readonly online: boolean; reado
         className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
-        Réessayer
+        {translate(language, 'feed.retry')}
       </button>
     </li>
   );
 }
 
 export function FeedEmpty() {
+  const language = currentInterfaceLanguage();
   return (
     <li className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center">
       <Glyph name="image" size={40} style={{ color: 'var(--color-ios-ink-3)' }} />
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        Aucune publication
+        {translate(language, 'feed.empty.title')}
       </p>
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        Les publications de vos contacts apparaîtront ici.
+        {translate(language, 'feed.empty.subtitle')}
       </p>
     </li>
   );
@@ -266,6 +269,8 @@ export default function FeedScreen() {
     onReach: () => void feed.fetchNextPage(),
   });
 
+  const language = currentInterfaceLanguage();
+
   return (
     <div className="relative flex h-dvh flex-col overflow-hidden pt-safe">
       <FeedHeader pinned={pinned} railProps={railProps} />
@@ -278,7 +283,7 @@ export default function FeedScreen() {
         id="contenu"
         className="scrollbar-none overscroll-contain flex flex-1 flex-col gap-3 overflow-y-auto px-3 pb-safe"
         style={pullTransform(pull.phase, pull.offsetPx)}
-        {...(loading ? { 'aria-busy': true, 'aria-label': 'Chargement du fil' } : {})}
+        {...(loading ? { 'aria-busy': true, 'aria-label': translate(language, 'feed.loading') } : {})}
       >
         <FeedTopChrome railProps={railProps} inert={pinned} observe={observeGrandRail} />
         {feed.data === undefined && feed.isError ? (
@@ -299,7 +304,7 @@ export default function FeedScreen() {
             <LensPaginationFooter
               state={paginationState}
               showsAllLoadedHint={showsAllLoadedHint(posts.length, FEED_PAGE_SIZE)}
-              exhaustedLabel="Toutes les publications sont chargées"
+              exhaustedLabel={translate(language, 'feed.allLoaded')}
               onRetry={() => void feed.fetchNextPage()}
               sentinelRef={observeTail}
             />
