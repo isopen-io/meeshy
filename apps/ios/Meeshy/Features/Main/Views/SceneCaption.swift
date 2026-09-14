@@ -75,15 +75,10 @@ nonisolated enum SceneCaption {
         if let identite = mediaIdentity(sceneIndex: sceneIndex, in: document, post: post),
            let propre = SocialMediaCaption.map(for: post.media, carrierText: porteur)[identite] {
             // `map` remplit le seul visuel d'un post avec le texte du porteur :
-            // c'est la légende PROPRE du média qui décide de l'origine. Une
-            // légende propre qui répète mot pour mot le texte du post EST ce
-            // texte — celui que `post.translations` traduit (recette porteur
-            // 2026-09-14).
+            // c'est la légende PROPRE du média qui décide de l'origine.
             let ownCaption = post.media.first { $0.id == identite }?.caption?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let texteDuPost = post.content.trimmingCharacters(in: .whitespacesAndNewlines)
-            let estLeTexteDuPost = ownCaption.isEmpty || ownCaption == texteDuPost
-            return (propre, estLeTexteDuPost ? .carrierText : .mediaCaption)
+            return (propre, ownCaption.isEmpty ? .carrierText : .mediaCaption)
         }
         guard let texte = SocialMediaCaption.resolve(own: nil, carrierText: porteur) else { return nil }
         return (texte, .carrierText)
