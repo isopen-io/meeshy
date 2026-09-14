@@ -85,13 +85,48 @@ const BetaPlayground = dynamic(
   }
 );
 
-const SecuritySettings = dynamic(
+const EncryptionSettings = dynamic(
   () => import('@/components/settings/encryption-settings').then(mod => ({ default: mod.EncryptionSettings })),
   {
     loading: () => <SettingsLoadingSkeleton />,
     ssr: false
   }
 );
+
+const PasswordSettings = dynamic(
+  () => import('@/components/settings/password-settings').then(mod => ({ default: mod.PasswordSettings })),
+  {
+    loading: () => <SettingsLoadingSkeleton />,
+    ssr: false
+  }
+);
+
+/**
+ * L'onglet SÉCURITÉ porte le MOT DE PASSE, et il ne le portait pas (#6424).
+ *
+ * `PasswordSettings` existait, avec ses tests, et n'était monté NULLE PART :
+ * mesuré à zéro consommateur dans tout `apps/web`. L'onglet « Security »
+ * rendait `EncryptionSettings` seul — un composant qui, lui, héberge déjà
+ * `TwoFactorSettings`. Conséquence : **aucune personne ne pouvait changer son
+ * mot de passe depuis l'application**, seulement le réinitialiser par e-mail
+ * depuis `/forgot-password`.
+ *
+ * Ce lot en avait besoin pour une raison qui rend le défaut visible : l'e-mail
+ * de validation d'une inscription par e-mail seul renvoie vers
+ * `/settings#security` pour y POSER un premier mot de passe. Le lien serait
+ * arrivé sur une page qui n'en parle pas.
+ *
+ * Le mot de passe passe AVANT le chiffrement : c'est la clé du compte, et
+ * c'est ce que le lien de l'e-mail vient chercher.
+ */
+function SecuritySettings() {
+  return (
+    <div className="space-y-6">
+      <PasswordSettings />
+      <EncryptionSettings />
+    </div>
+  );
+}
 
 function SettingsLoadingSkeleton() {
   return (

@@ -37536,43 +37536,90 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كلمة المرور"
+            "value": "كلمة المرور (اختياري)"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Passwort"
+            "value": "Passwort (optional)"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Password"
+            "value": "Password (optional)"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Contraseña"
+            "value": "Contraseña (opcional)"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mot de passe"
+            "value": "Mot de passe (facultatif)"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Password"
+            "value": "Password (facoltativa)"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Senha"
+            "value": "Senha (opcional)"
+          }
+        }
+      }
+    },
+    "auth.signup.password.magicLinkNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بدون كلمة مرور، ستسجّل الدخول عبر رابط يُرسل إلى عنوانك. يمكنك تعيين واحدة لاحقًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ohne Passwort meldest du dich über einen Link an, der an deine Adresse geht. Du kannst später eines festlegen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Without a password, you will sign in with a link sent to your address. You can set one later."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin contraseña, iniciarás sesión con un enlace enviado a tu dirección. Podrás definir una más tarde."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un plus tard."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Senza password, accederai con un link inviato al tuo indirizzo. Potrai impostarne una in seguito."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem senha, você entrará com um link enviado para o seu endereço. Você poderá definir uma depois."
           }
         }
       }

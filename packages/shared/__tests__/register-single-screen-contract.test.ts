@@ -66,32 +66,68 @@ describe('Zod accepte le formulaire à TROIS champs comme la charge héritée', 
   });
 });
 
-describe('une identité est EXIGÉE — mais laquelle est au choix', () => {
-  const sansIdentite = { email: 'lena@example.com', password: 'Xk9$mQ2vLp8#nR4wZ' };
+describe("L'ADRESSE SEULE SUFFIT — la disjonction d'identité est TOMBÉE (#6424)", () => {
+  /**
+   * Ce bloc gardait l'inverse, et il avait raison de le faire tant que le
+   * serveur ne savait pas nommer un compte sans qu'on le lui dise. Il le sait
+   * depuis `displayNameDepuisEmail` / `pseudoRacine` : la disjonction refusait
+   * donc une inscription au motif d'une donnée que le handler juste en dessous
+   * fabrique.
+   *
+   * Ce que le témoin garde MAINTENANT est plus fort que la disjonction : que
+   * les DEUX couches soient tombées ENSEMBLE. Une seule des deux, et le refus
+   * serait rendu par la couche que l'autre n'explique pas — la panne exacte
+   * que ce fichier existe pour empêcher.
+   */
+  const adresseSeule = { email: 'lena@example.com' };
 
-  it("Ajv n'exige que l'e-mail et le mot de passe au premier niveau", () => {
-    expect([...registerRequestSchema.required]).toEqual(['email', 'password']);
+  it("Ajv n'exige plus que l'e-mail", () => {
+    expect([...registerRequestSchema.required]).toEqual(['email']);
   });
 
-  it("Ajv porte la disjonction d'identité dans un anyOf", () => {
-    const branches = registerRequestSchema.anyOf.map((b) => [...b.required]);
-
-    expect(branches).toEqual([['displayName'], ['firstName', 'lastName']]);
+  it("Ajv ne porte plus d'anyOf d'identité", () => {
+    expect(registerRequestSchema).not.toHaveProperty('anyOf');
   });
 
-  it('Zod refuse une charge sans displayName NI firstName/lastName', () => {
-    expect(zodOk({ ...sansIdentite })).toBe(false);
+  it("Zod accepte une charge qui ne porte QUE l'adresse", () => {
+    expect(zodOk({ ...adresseSeule })).toBe(true);
   });
 
-  it('Zod refuse un firstName SEUL — la moitié du couple ne vaut pas identité', () => {
-    expect(zodOk({ ...sansIdentite, firstName: 'Lena' })).toBe(false);
+  it('Zod accepte un firstName SEUL — le serveur complète le reste', () => {
+    expect(zodOk({ ...adresseSeule, firstName: 'Lena' })).toBe(true);
   });
 
-  it('le refus de Zod DÉSIGNE un champ — sans quoi le 400 ne dit rien', () => {
-    const result = AuthSchemas.register.safeParse({ ...sansIdentite });
+  it("Zod exige toujours l'ADRESSE — c'est la seule source qui nomme le compte", () => {
+    expect(zodOk({ displayName: 'Lena Vogel', password: 'Xk9$mQ2vLp8#nR4wZ' })).toBe(false);
+  });
 
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.map((i) => i.path.join('.'))).toContain('displayName');
+  it('Zod refuse toujours une adresse MAL FORMÉE', () => {
+    expect(zodOk({ email: 'pas-une-adresse' })).toBe(false);
+  });
+});
+
+describe('le MOT DE PASSE est facultatif — le lien magique est la porte (#6424)', () => {
+  it("Ajv ne l'exige plus", () => {
+    expect([...registerRequestSchema.required]).not.toContain('password');
+  });
+
+  it("Zod accepte une inscription qui n'en porte aucun", () => {
+    expect(zodOk({ email: 'lena@example.com' })).toBe(true);
+  });
+
+  it('Zod laisse le mot de passe ABSENT plutôt que de poser une chaîne vide', () => {
+    // Un `''` persisté serait haché : un secret que personne ne connaît, et
+    // surtout indistinguable d'un vrai à la lecture. L'absence doit rester
+    // l'absence jusqu'à `User.password = null`.
+    expect(AuthSchemas.register.parse({ email: 'lena@example.com' }).password).toBeUndefined();
+  });
+
+  it('la borne de longueur s’applique encore à un mot de passe FOURNI', () => {
+    expect(zodOk({ email: 'lena@example.com', password: 'aX1' })).toBe(false);
+  });
+
+  it('Ajv garde la même borne sur la valeur fournie', () => {
+    expect(registerRequestSchema.properties.password.minLength).toBe(6);
   });
 });
 

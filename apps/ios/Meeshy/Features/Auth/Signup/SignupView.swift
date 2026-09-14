@@ -230,20 +230,46 @@ struct SignupView: View {
     // du dépôt n'emploie cette API et la cible est iOS 16. La règle vit dans
     // `SignupForm.passwordMinLength`, seule source du minimum.
 
+    //
+    // FACULTATIF depuis #6424. Le libellé le DIT, et la note en dessous dit ce
+    // qui se passe sans lui — sans quoi laisser le champ vide serait un geste
+    // qu'on ose seulement par accident. La note n'apparaît QUE tant que le
+    // champ est vide : une fois un mot de passe tapé, elle décrit un état qui
+    // n'est plus celui du formulaire.
+
     private var passwordField: some View {
         fieldBlock(
             field: .password,
-            label: String(localized: "auth.signup.password.label", defaultValue: "Mot de passe", bundle: .main)
-        ) {
-            SecureField(
-                String(localized: "auth.signup.password.placeholder", defaultValue: "6 caractères minimum", bundle: .main),
-                text: $viewModel.form.password
+            label: String(
+                localized: "auth.signup.password.label",
+                defaultValue: "Mot de passe (facultatif)",
+                bundle: .main
             )
-            .textContentType(.newPassword)
-            .submitLabel(.go)
-            .focused($focusedField, equals: .password)
-            .onSubmit { attemptSubmit() }
-            .foregroundColor(theme.textPrimary)
+        ) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                SecureField(
+                    String(localized: "auth.signup.password.placeholder", defaultValue: "6 caractères minimum", bundle: .main),
+                    text: $viewModel.form.password
+                )
+                .textContentType(.newPassword)
+                .submitLabel(.go)
+                .focused($focusedField, equals: .password)
+                .onSubmit { attemptSubmit() }
+                .foregroundColor(theme.textPrimary)
+
+                if !viewModel.form.hasPassword {
+                    Text(
+                        String(
+                            localized: "auth.signup.password.magicLinkNote",
+                            defaultValue: "Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un plus tard.",
+                            bundle: .main
+                        )
+                    )
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
+                    .foregroundColor(theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
     }
 

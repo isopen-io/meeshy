@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
+import { ADMIN_PERMISSIONS_QUERY_KEY, loadAdminIdentity } from '@/lib/api/admin';
 import { performPreferenceEdit, type PreferenceActionDeps } from '@/lib/api/app-preferences-actions';
 import { appPreferencesQueryOptions, type PreferencesPatch, type ThemeMode } from '@/lib/api/app-preferences';
 import { logout } from '@/lib/api/auth';
@@ -133,6 +134,28 @@ const notices = {
 
 export default function SettingsScreen() {
   const language = currentInterfaceLanguage();
+
+  /**
+   * L'ENTRÉE de l'administration (#6432) — visible seulement pour qui y a
+   * droit. Le droit vient du SERVEUR : `SessionUser` ne projette pas `role`.
+   *
+   * `retry: false` et aucune remontée d'erreur : un refus (403) ou une panne
+   * laisse simplement la rangée absente. C'est le bon défaut — la rangée n'est
+   * qu'un chemin de DÉCOUVERTE, la garde étant refaite par l'écran `/admin`
+   * lui-même. Une erreur affichée ici apprendrait à un visiteur ordinaire
+   * qu'il existe un espace qu'on lui refuse.
+   */
+  const droits = useQuery({
+    queryKey: ADMIN_PERMISSIONS_QUERY_KEY,
+    queryFn: async ({ signal }) => {
+      const resultat = await loadAdminIdentity({ ...apiDeps, signal });
+      if (!resultat.ok) throw new Error(resultat.error);
+      return resultat.data;
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const peutAdministrer = droits.data?.permissions.canAccessAdmin === true;
   const online = useOnline();
   const sessionUser = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   const enabled = apiDeps.source === 'fixtures' || sessionUser !== null;
@@ -206,7 +229,7 @@ export default function SettingsScreen() {
           />
           <NotificationsSection language={language} view={view} disabled={!online} onToggle={toggle} onRetry={() => void query.refetch()} />
           <DataSection language={language} />
-          <ToolsSection language={language} />
+          <ToolsSection language={language} showAdmin={peutAdministrer} />
           <AboutSection language={language} version={__APP_VERSION__} />
           <LogoutButton language={language} busy={loggingOut} onPress={() => setConfirming(true)} />
         </SettingsContent>
