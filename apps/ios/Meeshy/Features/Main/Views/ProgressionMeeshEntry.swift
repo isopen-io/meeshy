@@ -19,46 +19,62 @@ import MeeshyUI
 struct ProgressionMeeshEntry: View {
     let meesh: EngagementMeeshProgress
     let isMinting: Bool
+    var mintError: String? = nil
     let onMint: () -> Void
 
     @State private var ouvert = false
     private let tint = MeeshyColors.warning
+
+    /// Une bulle du groupe : plus RECTANGLE qu'une capsule (directive porteur 2026-09-14, #6466).
+    private static let bulle = RoundedRectangle(cornerRadius: 12, style: .continuous)
+    /// Le côté d'une bulle — 40 pt, et le groupe garde une cible de 44 pt.
+    private static let cote: CGFloat = 40
+    /// L'ÉCART entre les deux bulles : assez pour qu'elles se lisent séparées.
+    private static let ecart: CGFloat = 5
 
     var body: some View {
         Button {
             HapticFeedback.light()
             ouvert.toggle()
         } label: {
-            // `(N pièce)` — le NOMBRE puis la MONNAIE, dans une capsule allongée
-            // (directive porteur 2026-09-09).
+            // `N` puis la PIÈCE — deux bulles de verre, UN contrôle (#6466).
+            //
+            // Directive porteur 2026-09-14 : « plus rectangle, et le nombre de
+            // meesh comme s'il était dans sa bulle, bien que les deux dans le
+            // même composant — en Liquid Glass il existe un composant de bouton
+            // dans le même espace, mais visuellement avec une certaine
+            // distance ». C'est le motif des boutons GROUPÉS d'iOS 26 : deux
+            // formes de verre dans un même conteneur, séparées par un écart.
+            // Le conteneur reçoit un espacement NUL, inférieur à l'écart : deux
+            // formes plus proches que cet espacement fusionneraient en une seule.
             //
             // Le glyphe a changé deux fois, et pour la même raison. `medal.fill`
             // disait « récompense » en général ; le logo Meeshy (2026-09-09)
             // disait « marque ». Une Meesh est une MONNAIE : la pièce d'argent
-            // (directive porteur 2026-09-14, #6427) est le premier glyphe qui
-            // dit ce qu'est la chose.
-            //
-            // Et la capsule était serrée à 10 pt : le nombre y touchait ses
-            // bords, ce qui la faisait lire comme un badge de compteur plutôt
-            // que comme un contrôle qu'on touche.
-            HStack(spacing: 6) {
-                Text("\(meesh.balance)")
-                    .font(MeeshyFont.relative(17, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                MeeshCoinGlyph(size: 20)
+            // (#6427) est le premier glyphe qui dit ce qu'est la chose.
+            AdaptiveGlassContainer(spacing: 0) {
+                HStack(spacing: Self.ecart) {
+                    Text("\(meesh.balance)")
+                        .font(MeeshyFont.relative(17, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(tint)
+                        .padding(.horizontal, 12)
+                        .frame(minWidth: Self.cote, minHeight: Self.cote)
+                        .adaptiveGlass(in: Self.bulle, tint: tint.opacity(0.14))
+                    MeeshCoinGlyph(size: 20)
+                        .frame(width: Self.cote, height: Self.cote)
+                        .adaptiveGlass(in: Self.bulle, tint: MeeshyColors.meeshSilver.opacity(0.14))
+                }
             }
-            .foregroundColor(tint)
-            .padding(.horizontal, 14)
             .frame(minHeight: 44)
-            .background(Capsule().fill(tint.opacity(0.16)))
-            .overlay(Capsule().stroke(tint.opacity(0.28), lineWidth: 1))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("progression.meesh.entry")
         .accessibilityLabel(ProgressionCopy.meeshEntryA11y(meesh.balance))
         .accessibilityAddTraits(.isButton)
         .popover(isPresented: $ouvert) {
-            ProgressionMeeshDetail(meesh: meesh, isMinting: isMinting, onMint: onMint)
+            ProgressionMeeshDetail(meesh: meesh, isMinting: isMinting, mintError: mintError, onMint: onMint)
                 .frame(idealWidth: 300)
                 .padding(MeeshySpacing.lg)
                 // **Verre NEUTRE, jamais teinté** (directive porteur
@@ -116,6 +132,7 @@ struct MeeshCoinGlyph: View {
 struct ProgressionMeeshDetail: View {
     let meesh: EngagementMeeshProgress
     let isMinting: Bool
+    var mintError: String? = nil
     let onMint: () -> Void
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -168,25 +185,52 @@ struct ProgressionMeeshDetail: View {
                 // Le bouton RESTE pendant la frappe, avec son état dit : le
                 // faire disparaître au moment du tap donnerait l'impression que
                 // l'action a échoué, alors qu'elle est en cours.
+                //
+                // **Et il MONTRE qu'il travaille** (#6467, retour porteur
+                // 2026-09-14) : une opacité seule, sur un aller-retour court, ne
+                // se voyait pas. L'indicateur d'activité tourne à côté du mot, et
+                // l'identifiant change avec l'état pour que le témoin le lise.
                 Button {
                     HapticFeedback.light()
                     onMint()
                 } label: {
-                    Text(
-                        isMinting
-                            ? String(localized: "progression.meesh.minting", defaultValue: "Frappe en cours…", bundle: .main)
-                            : ProgressionCopy.meeshMintAction(meesh.mintCost)
-                    )
+                    HStack(spacing: MeeshySpacing.sm) {
+                        if isMinting {
+                            ProgressView()
+                                .tint(theme.backgroundPrimary)
+                        }
+                        Text(
+                            isMinting
+                                ? String(localized: "progression.meesh.minting", defaultValue: "Frappe en cours…", bundle: .main)
+                                : ProgressionCopy.meeshMintAction(meesh.mintCost)
+                        )
+                        .multilineTextAlignment(.center)
+                    }
                     .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(theme.backgroundPrimary)
-                    .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(tint))
                 }
                 .buttonStyle(.plain)
                 .disabled(isMinting)
-                .opacity(isMinting ? 0.6 : 1)
+                .opacity(isMinting ? 0.8 : 1)
+                .accessibilityIdentifier(isMinting ? "progression.meesh.minting" : "progression.meesh.mint")
                 .padding(.top, MeeshySpacing.xs)
+
+                // L'ÉCHEC se lit ICI, sous l'action qu'on peut retenter — et non
+                // en haut de l'écran, sous le détail qui le cache.
+                if let mintError, !isMinting {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .accessibilityHidden(true)
+                        Text(mintError)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .foregroundColor(MeeshyColors.error)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("progression.meesh.mint.error")
+                }
             } else {
                 Text(ProgressionCopy.meeshMissing(missing: meesh.missingPoints, floor: meesh.floorPoints))
                     .font(MeeshyFont.relative(11, weight: .medium))

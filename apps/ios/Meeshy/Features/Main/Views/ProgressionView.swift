@@ -117,6 +117,7 @@ struct ProgressionView: View {
                 ProgressionMeeshEntry(
                     meesh: meesh,
                     isMinting: viewModel.isMinting,
+                    mintError: viewModel.mintError,
                     onMint: { Task { await viewModel.mint() } }
                 )
             } else {
