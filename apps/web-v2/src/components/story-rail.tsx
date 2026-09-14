@@ -12,6 +12,7 @@ import {
   railRingBox,
   railStroke,
 } from '@/components/rail-tile';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
 import { storyAuthorLabel, type StoryTrayGroup } from '@/lib/view/story-tray';
 import { Link } from '@/routes/route-table';
@@ -113,8 +114,18 @@ const RAIL = {
  * grand plateau. Y remettre un libellé ferait déborder la barre ; y remettre
  * les disques d'action doublerait deux contrôles déjà atteignables.
  */
-function StoryTile({ group, size, showsLabel }: { readonly group: StoryTrayGroup; readonly size: number; readonly showsLabel: boolean }) {
-  const label = storyAuthorLabel(group);
+function StoryTile({
+  group,
+  size,
+  showsLabel,
+  language,
+}: {
+  readonly group: StoryTrayGroup;
+  readonly size: number;
+  readonly showsLabel: boolean;
+  readonly language: InterfaceLanguage;
+}) {
+  const label = storyAuthorLabel(group, language);
   const combien = group.stories.length;
   const anneau = railRingBox(size);
   const cellule = railCellWidth(size, showsLabel);
@@ -315,6 +326,11 @@ export type StoryRailProps = {
    * cours » : c'est `railTientLaPlace` (`lib/view/story-tray.ts`) qui l'arbitre,
    * chez l'écran, avec ses témoins. */
   readonly loading: boolean;
+  /** La langue d'interface, calculée UNE FOIS par écran avec le reste de
+   * `StoryRailProps` (`lib/view/use-story-rail.ts`, #6550) — jamais relue ici,
+   * pour la même raison que `groups` : les deux géographies du rail doivent
+   * voir la MÊME valeur. */
+  readonly language: InterfaceLanguage;
 };
 
 export const StoryRail = forwardRef<
@@ -325,7 +341,7 @@ export const StoryRail = forwardRef<
      * — voir la garde d'accessibilité ci-dessous. */
     readonly inert?: boolean;
   }
->(function StoryRail({ groups, loading, variant, inert = false }, ref) {
+>(function StoryRail({ groups, loading, language, variant, inert = false }, ref) {
   const grande = variant === 'grande';
   const size = grande ? RAIL_TILE_GRANDE : RAIL_TILE_COMPACT;
 
@@ -397,7 +413,7 @@ export const StoryRail = forwardRef<
               }}
             />
           ))
-        : visibles.map((g) => <StoryTile key={g.authorId} group={g} size={size} showsLabel={grande} />)}
+        : visibles.map((g) => <StoryTile key={g.authorId} group={g} size={size} showsLabel={grande} language={language} />)}
     </ul>
   );
 

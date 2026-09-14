@@ -13,25 +13,6 @@ import MeeshyUI
 /// source qui suivent.
 final class ComposerAtelierHeaderTests: XCTestCase {
 
-    // MARK: - La place du chip de type
-
-    /// Le résultat attendu, dit par la règle : le chip descend dans la rangée
-    /// de l'atelier, contre la fermeture.
-    func test_lAtelier_porteLeChipDansSaRangee() {
-        XCTAssertEqual(ComposerFormatFanPlacement.place(for: .scene), .atelierHeader)
-    }
-
-    /// **Et la rangée du plateau disparaît sous l'atelier** — c'est la seconde
-    /// barre que le header d'un seul tenant interdit. Le mood la garde : il n'a
-    /// aucune barre haute à lui.
-    func test_lesTroisPlaces_sontExclusives() {
-        let places = [ComposerSurfaceKind.scene, .document, .mood]
-            .map(ComposerFormatFanPlacement.place(for:))
-        XCTAssertEqual(Set(places).count, 3,
-                       "Une place par surface : c'est l'exhaustivité du `switch` qui interdit deux sélecteurs.")
-        XCTAssertEqual(ComposerFormatFanPlacement.place(for: .mood), .plateauRow)
-    }
-
     // MARK: - Le cadrage
 
     /// La directive, dite par la règle du SDK : **au repos, la scène est une
@@ -262,12 +243,13 @@ final class ComposerAtelierHeaderTests: XCTestCase {
         return brut
     }
 
-    /// L'atelier reçoit son accessoire de rangée haute — sans ce câblage, le
-    /// chip n'aurait PLUS aucun site de montage : la règle l'a retiré du
-    /// plateau, et rien ne le peindrait.
-    func test_lAtelier_recoitSonAccessoireDeRangee() throws {
-        let compacte = compact(try host())
-        XCTAssertTrue(compacte.contains(".storyComposerHeaderLeadingAccessory{"))
+    /// **Garde RETOURNÉE au #6502.** L'atelier recevait le chip de type dans son
+    /// accessoire de rangée haute ; le choix du format a quitté le haut de
+    /// l'écran pour la flèche Publier. L'accessoire d'OUTILS, lui, reste câblé.
+    func test_lAtelier_neRecoitPlusLeChipDeType() throws {
+        let compacte = compact(AppSourceGuard.stripComments(try host()))
+        XCTAssertFalse(compacte.contains(".storyComposerHeaderLeadingAccessory{"),
+                       "Le chip de type est revenu dans la rangée haute de l'atelier.")
         XCTAssertTrue(compacte.contains("atelierDescriptionButton"))
     }
 

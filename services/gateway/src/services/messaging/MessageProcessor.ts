@@ -34,6 +34,7 @@ import { clientDeclaredMetadata } from './clientDeclaredMetadata';
 import { LIVE_MESSAGE_MARK } from './liveMessage';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { mapWithConcurrency } from '@meeshy/shared/utils/concurrency';
+import { withOrphanedSenderRepair } from './withOrphanedSenderRepair';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
@@ -505,7 +506,7 @@ export class MessageProcessor {
       // schema still backs this query for performance.
       const existing = await performanceLogger.withTiming(
         'messaging.dedupFindFirst',
-        () => this.prisma.message.findFirst({
+        () => withOrphanedSenderRepair({ prisma: this.prisma, conversationIds: [data.conversationId] }, () => this.prisma.message.findFirst({
           where: {
             conversationId: data.conversationId,
             clientMessageId: data.clientMessageId
@@ -544,7 +545,7 @@ export class MessageProcessor {
               }
             }
           }
-        }),
+        })),
         corr
       );
       if (!existing) {

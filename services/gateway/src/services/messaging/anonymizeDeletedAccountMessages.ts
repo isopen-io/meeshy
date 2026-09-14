@@ -6,6 +6,7 @@ import {
   type RetractedNotificationAnnouncer,
 } from './messageRemovalEffects';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
+import { DELETED_ACCOUNT_DISPLAY_NAME } from './deletedAccountDisplayName';
 
 const log = enhancedLogger.child({ module: 'anonymizeDeletedAccountMessages' });
 
@@ -67,7 +68,7 @@ export interface AnonymizeDeletedAccountMessagesOptions {
   attachmentRemover?: DeletedAccountMessageAttachmentRemover;
 }
 
-export const DELETED_ACCOUNT_DISPLAY_NAME = 'Compte supprimé';
+export { DELETED_ACCOUNT_DISPLAY_NAME };
 
 interface DeletedAccountMessageRow {
   id: string;

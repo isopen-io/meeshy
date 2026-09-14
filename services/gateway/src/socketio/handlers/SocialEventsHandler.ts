@@ -29,6 +29,7 @@ import type {
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
   CommentMediaUpdatedEventData,
+  MediaCaptionTranslationUpdatedEventData,
 } from '@meeshy/shared/types/post';
 
 // enhancedLogger (Pino) sort en prod ; le `logger` Winston de server.ts est
@@ -629,6 +630,29 @@ export class SocialEventsHandler {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
     const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
     this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, data);
+  }
+
+  /**
+   * Diffuse `media:caption-translation-updated` (traduction de légende de
+   * média prête, #6280) à la même audience filtrée par visibilité que les
+   * autres traductions du post porteur. Un média de COMMENTAIRE utilise les
+   * mêmes rooms que `comment:translation-updated`/`comment:media-updated`
+   * (post room comprise, join-gated) ; un média de POST direct utilise
+   * `emitToFeedsAndPostRoom` (même déduplication que `broadcastPostUpdated`).
+   */
+  async broadcastMediaCaptionTranslationUpdated(
+    data: MediaCaptionTranslationUpdatedEventData,
+    postAuthorId: string,
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    if (data.commentId) {
+      const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
+      this.io.to(rooms).emit(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
+      return;
+    }
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
   }
 
   // ==============================================

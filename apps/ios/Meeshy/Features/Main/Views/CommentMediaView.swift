@@ -353,7 +353,10 @@ struct CommentMediaView: View {
     /// `comment:media-updated` après le dernier rafraîchissement).
     private var soloSnapshot: CommentMediaGallerySnapshot {
         let attachment = media.toMessageAttachment()
-        let caption = CommentMediaGallery.caption(of: media, carrierText: carrierText)
+        let caption = CommentMediaGallery.caption(
+            of: media, carrierText: carrierText,
+            preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
+        )
         return CommentMediaGallerySnapshot(
             attachments: [attachment],
             captions: caption.map { [attachment.id: $0] } ?? [:],

@@ -195,6 +195,29 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertEqual(notification.notificationType, .system)
     }
 
+    /// #6508 P3 — la passerelle émet `report_resolved` (art. 16 DSA : le
+    /// déclarant apprend l'issue de son signalement). Absent du catalogue, il
+    /// décodait en `.system` : titre « Notification systeme », destination
+    /// par repli. Il porte désormais son type, donc sa destination explicite.
+    func test_reportResolved_decodeEnSonPropreType_avecLeTitreServi() throws {
+        let json = """
+        {
+            "id": "notif-report",
+            "userId": "user1",
+            "type": "report_resolved",
+            "title": "Votre signalement a été traité",
+            "content": "Merci : nous avons pris des mesures.",
+            "state": {"isRead":false,"createdAt":"2026-09-14T10:30:00.000Z"}
+        }
+        """.data(using: .utf8)!
+
+        let notification = try JSONDecoder().decode(APINotification.self, from: json)
+
+        XCTAssertEqual(notification.notificationType, .reportResolved)
+        XCTAssertEqual(notification.formattedTitle, "Votre signalement a été traité")
+        XCTAssertEqual(notification.formattedBody, "Merci : nous avons pris des mesures.")
+    }
+
     // MARK: - RegisterDeviceTokenRequest
 
     func testRegisterDeviceTokenRequestEncoding() throws {

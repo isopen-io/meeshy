@@ -75,6 +75,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
@@ -752,18 +753,47 @@ private fun PostImageGrid(images: List<FeedPostImage>, onImageTap: (Int) -> Unit
     if (layout.isEmpty) return
     if (layout.isSingle) {
         val image = images.first()
-        AsyncImage(
-            model = image.url,
-            contentDescription = stringResource(R.string.feed_image_description),
-            contentScale = ContentScale.Crop,
-            placeholder = rememberThumbHashPainter(image.thumbHash),
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(imageAspectRatio(image))
                 .clip(shape)
                 .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
                 .clickable(onClickLabel = openLabel) { onImageTap(0) },
-        )
+        ) {
+            AsyncImage(
+                model = image.url,
+                contentDescription = stringResource(R.string.feed_image_description),
+                contentScale = ContentScale.Crop,
+                placeholder = rememberThumbHashPainter(image.thumbHash),
+                modifier = Modifier.fillMaxSize(),
+            )
+            // Légende Prisme-résolue du média (#6280) — DISTINCTE du texte du post
+            // (FeedPostPresentation.content) et de tout texte alternatif : un scrim
+            // discret sous l'image, jamais de bannière ni de popup intrusive.
+            val caption = image.caption?.takeIf { it.isNotBlank() }
+            if (caption != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)),
+                            ),
+                        )
+                        .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+                ) {
+                    Text(
+                        text = caption,
+                        color = MeeshyPalette.White,
+                        fontSize = 13.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
         return
     }
     Column(

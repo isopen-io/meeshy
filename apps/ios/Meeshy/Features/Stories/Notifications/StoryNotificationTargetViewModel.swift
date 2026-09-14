@@ -25,12 +25,15 @@ import MeeshySDK
 //                      24h post-expiration window has closed. Distinct from
 //                      `.expired` so a future screen can tell "never had a
 //                      right" apart from "had one, it ran out".
-//   .offline         — the network call failed for any OTHER reason (no
-//               connectivity, timeout, 5xx). The story may still exist — we
-//               just couldn't confirm it. Retryable via `load()`, never
-//               conflated with a genuine 404 (P2 — a tap while offline used to
-//               show the same "Story expired, create a new one" empty state
-//               as a real 404).
+//   .offline         — the request never arrived (no connectivity, timeout,
+//               unreachable host). The story may still exist. Retryable via
+//               `load()`, never conflated with a genuine 404 (P2).
+//   .serverFailed    — the server answered and FAILED (5xx, unreadable body).
+//               Retryable too, and never worded as a connection problem: a
+//               500 used to land in `.offline` and told connected users to
+//               check their network (#6503, #6508). A 403 or 404 is an answer
+//               and lands in `.expired`. The cause is
+//               `ContentFetchFailure.classify(_:)`.
 
 @MainActor
 public final class StoryNotificationTargetViewModel: ObservableObject {
@@ -46,6 +49,7 @@ public final class StoryNotificationTargetViewModel: ObservableObject {
         case expired
         case expiredConsumed
         case offline
+        case serverFailed
     }
 
     @Published public private(set) var state: LoadState = .loading
@@ -86,14 +90,29 @@ public final class StoryNotificationTargetViewModel: ObservableObject {
             let fresh = try await storyService.fetchPost(id: storyId)
             state = state(for: fresh)
         } catch {
-            // Only replace .loading — if the cache already gave us .active or
-            // .expired, keep that result rather than overwriting with a
-            // network-error guess. Only a CONFIRMED 404 may claim .expired;
-            // anything else (offline, timeout, 5xx) is .offline — the story
-            // may well still exist, we just couldn't confirm it.
-            if case .loading = state {
-                state = Self.isNotFound(error) ? .expired : .offline
+            // An ANSWER already held (cache or earlier fetch: active, expired)
+            // is kept rather than overwritten by a failed revalidation. A
+            // previous FAILURE is not an answer: a retry replaces it, so a
+            // network failure followed by a server failure says "server".
+            if !holdsAnAnswer {
+                state = Self.failureState(for: ContentFetchFailure.classify(error))
             }
+        }
+    }
+
+    private var holdsAnAnswer: Bool {
+        switch state {
+        case .active, .expired, .expiredConsumed: return true
+        case .loading, .offline, .serverFailed: return false
+        }
+    }
+
+    /// 404 and 403 are answers — the story is not there for this reader.
+    private static func failureState(for failure: ContentFetchFailure) -> LoadState {
+        switch failure {
+        case .notFound, .forbidden: return .expired
+        case .network: return .offline
+        case .server: return .serverFailed
         }
     }
 
@@ -120,10 +139,5 @@ public final class StoryNotificationTargetViewModel: ObservableObject {
         case .consumed: return .expiredConsumed
         case .none:     return isExpired(post) ? .expired : .active(post)
         }
-    }
-
-    private static func isNotFound(_ error: Error) -> Bool {
-        if case APIError.serverError(let statusCode, _) = error { return statusCode == 404 }
-        return false
     }
 }

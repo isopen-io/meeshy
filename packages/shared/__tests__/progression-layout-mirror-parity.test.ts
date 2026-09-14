@@ -33,6 +33,16 @@ const SWIFT = readFileSync(
   'utf8',
 );
 
+/** Un compte qui porte TOUT — le seul état où les deux côtés énumèrent la même
+ * chose, depuis que `meesh` est conditionnel (#6497). */
+const COMPLET = {
+  counters: [],
+  milestones: [],
+  streak: { currentStreakDays: 0, longestStreakDays: 0 },
+  level: { engagementScore: 0 },
+  meesh: { balance: 1, mintedLifetime: 1, debitablePoints: 0, floorPoints: 0, missingPoints: 0, mintCost: 1200 },
+} as const;
+
 const VIDE = {
   counters: [],
   milestones: [],
@@ -54,7 +64,11 @@ function sectionsFromSwift(): string[] {
 
 /** Les trois heros, dans l'ordre où le Swift les compose. */
 function herosFromSwift(): string[] {
-  const ligne = SWIFT.match(/return \[([^\]]+)\]/);
+  // La parenthèse est TOLÉRÉE, pas ignorée : le Swift annote le littéral
+  // (`as [ProgressionBlock]`) pour que ses membres s'écrivent `.cas` — la même
+  // forme que le TypeScript. Sans elle, le premier portait le nom du type et le
+  // miroir semblait divergent sur un détail de syntaxe.
+  const ligne = SWIFT.match(/return \(?\[([^\]]+)\]/);
   return ligne === null ? [] : ligne[1]!.split(',').map((s) => s.trim().replace(/^\./, ''));
 }
 
@@ -63,13 +77,39 @@ describe('la composition Swift est le miroir EXACT de la composition TypeScript'
     expect(sectionsFromSwift()).toEqual([...PROGRESSION_SECTIONS]);
   });
 
-  it('compose les mêmes trois heros, dans le même ordre', () => {
-    const ts = progressionLayout(resolveEngagementProgress(VIDE))
+  /**
+   * LA COMPARAISON SE FAIT SUR UN COMPTE COMPLET, jamais sur un compte vide.
+   *
+   * Elle lisait la sortie TS d'un compte VIDE et la comparait au littéral
+   * Swift. La prémisse tenait tant que les quatre heros étaient
+   * INCONDITIONNELS ; elle a cassé à la minute où `meesh` est devenu
+   * conditionnel (#6497) — le littéral en listait cinq, la sortie d'un compte
+   * vide en rendait quatre, et le miroir semblait divergent alors qu'il était
+   * exact.
+   *
+   * Un compte qui porte TOUT est le seul état où les deux côtés doivent
+   * énumérer la même chose. L'absence, elle, se mesure au témoin suivant.
+   */
+  it('compose les mêmes heros, dans le même ordre, sur un compte complet', () => {
+    const ts = progressionLayout(resolveEngagementProgress(COMPLET))
       .filter((b) => b.kind !== 'section-link')
       .map((b) => b.kind);
     // `last-achievement` ↔ `lastAchievement` : même mot, deux conventions.
     const camel = ts.map((k) => k.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()));
     expect(herosFromSwift()).toEqual(camel);
+    expect(camel).toContain('meesh');
+  });
+
+  /**
+   * **Le hero des Meeshes est CONDITIONNEL des deux côtés, et par la même
+   * phrase.** Sans cette assertion, un client pourrait le rendre toujours et
+   * annoncer « 0 Meesh » sur un compte dont le serveur ne dit rien.
+   */
+  it('gouverne le hero des Meeshes par la PRÉSENCE du solde, des deux côtés', () => {
+    expect(progressionLayout(resolveEngagementProgress(VIDE)).map((b) => b.kind)).not.toContain('meesh');
+    expect(SWIFT).toContain('$0 != .meesh || progress.meesh != nil');
+    const source = readFileSync(join(import.meta.dirname, '../utils/progression-layout.ts'), 'utf8');
+    expect(source).toContain("bloc.kind !== 'meesh' || (progress.meesh !== undefined && progress.meesh !== null)");
   });
 
   /**

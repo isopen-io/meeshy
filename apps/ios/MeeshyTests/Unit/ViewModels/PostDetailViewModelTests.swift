@@ -78,13 +78,25 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertEqual(mock.getPostCallCount, 1)
     }
 
-    func test_loadPost_error_setsError() async {
+    /// #6508 — le ViewModel retient la CAUSE, pas une phrase : c'est elle qui
+    /// décide si l'écran parle de connexion, du serveur ou d'indisponibilité.
+    func test_loadPost_serverError_recordsTheServerCause() async {
         let (sut, mock) = makeSUT()
-        mock.getPostResult = .failure(NSError(domain: "test", code: 404, userInfo: [NSLocalizedDescriptionKey: "Not found"]))
+        mock.getPostResult = .failure(MeeshyError.server(statusCode: 500, message: "Erreur serveur"))
 
         await sut.loadPost("p1")
 
-        XCTAssertNotNil(sut.error)
+        XCTAssertEqual(sut.loadFailure, .server)
+        XCTAssertNil(sut.post)
+    }
+
+    func test_loadPost_notFound_recordsTheAbsence() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .failure(MeeshyError.server(statusCode: 404, message: "Post not found"))
+
+        await sut.loadPost("p1")
+
+        XCTAssertEqual(sut.loadFailure, .notFound)
         XCTAssertNil(sut.post)
     }
 

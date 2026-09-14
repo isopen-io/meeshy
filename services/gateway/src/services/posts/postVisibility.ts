@@ -6,6 +6,7 @@
  */
 
 import { PrismaClient, PostType, PostVisibility } from '@meeshy/shared/prisma/client';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { doUsersShareCommunity } from './communityVisibility';
 import { doUsersShareDirectConversation } from './directContactVisibility';
 import { verdictFor } from './referenceAccess';
@@ -449,6 +450,16 @@ async function resolveRedirectTarget(
   userId: string | undefined,
   verdict: (prisma: PostAclPrisma, post: PostVisibilityRecord, userId?: string) => Promise<boolean>,
 ): Promise<PostRedirectRecord | null> {
+  // #6557 — un `postId` MALFORMÉ (jeton de mutation optimiste `cmid_<uuid>`,
+  // id local `tmp_…`) est le même refus indistinct que « absent » ou « hors
+  // audience », jamais une exception : Mongo ne l'ignore pas, il LÈVE
+  // (`P2023 Malformed ObjectID`) avant qu'aucune règle d'audience ne se
+  // prononce, et la route rendait un 500 là où GET/POST /posts/:postId/comments
+  // et interactions.ts attendent un 404 `POST_NOT_FOUND`. Même garde que
+  // `mayConsumePost` (postConsumptionGate.ts, #4044) — court-circuite AVANT
+  // la requête, sans coûter d'aller-retour.
+  if (!isValidObjectId(postId)) return null;
+
   const post = await loadPostRedirectRecord(prisma, postId);
   if (!post || !(await verdict(prisma, post, userId))) return null;
 

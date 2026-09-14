@@ -32372,5 +32372,24 @@ appartenait pas**, et tombait dès que le compositeur ne servait plus cet élan.
   valeur est juste, il dit que la marge l'a couverte. Quand la marge disparaît,
   le rouge semble venir de nulle part.
 
+### Et le geste lui-même n'arrivait pas
+
+Le correctif de distance a suffi en local, pas en CI : la seconde exécution a
+rendu `déplace le défileur (0 → 0)` sur les quatre peaux. Le témoin de
+déplacement — ajouté au tour précédent — a donné la réponse sans ambiguïté :
+`Input.synthesizeScrollGesture` passe par le pipeline de GESTES du navigateur,
+que ce runner headless ne sert pas. Deux fautes indépendantes se masquaient
+l'une l'autre, et seule la première était visible en local.
+
+`Input.dispatchTouchEvent` entre par la voie ordinaire : `touchStart`, douze
+`touchMove`, `touchEnd`. Ce que reçoit la page est indiscernable d'un vrai
+doigt. La cascade essaie le geste, puis les événements bruts, **et la sortie dit
+laquelle a porté** (`par geste` / `par événements tactiles`).
+
+**Un repli SILENCIEUX aurait été pire que le rouge** : le gate serait devenu
+vert sur un hôte incapable de livrer un geste, sans que personne ne le sache.
+Et la voie de repli s'ÉPROUVE avant d'être poussée — en neutralisant la
+première localement, jamais en espérant qu'elle marche le jour où elle servira.
+
 Voisine de [[reference_a_red_on_both_sides_of_the_diff_also_measures_the_machine]]
 et du piège inverse : ici, VERT d'un seul côté mesurait la machine.

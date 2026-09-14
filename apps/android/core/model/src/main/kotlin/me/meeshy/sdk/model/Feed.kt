@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model
 
 import kotlinx.serialization.Serializable
+import me.meeshy.sdk.lang.resolveLastMessagePreview
 
 /** Type of a feed media item — port of FeedMediaType (FeedModels.swift). */
 @Serializable
@@ -38,8 +39,34 @@ data class FeedMedia(
     val locationName: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    /** The media's caption text, in its original language (`PostMedia.caption`, #6280). */
+    val caption: String? = null,
+    /** Langue SOURCE de [caption] (`PostMedia.captionLanguage`, #6280). */
+    val captionLanguage: String? = null,
+    /**
+     * Traductions de [caption], aplaties `langue → texte` — même dialecte que
+     * `StoryTranslation`/`lastMessageTranslations`. DISTINCTE de toute traduction
+     * de piste audio, qui ne traduit jamais le texte de la légende (#6280).
+     */
+    val captionTranslations: Map<String, String>? = null,
     val transcription: MessageTranscription? = null,
 )
+
+/**
+ * La descente du Prisme sur LA LÉGENDE de ce média (#6280) — projette
+ * [resolveLastMessagePreview] (même règle que `resolveLastMessagePreview` pour
+ * l'aperçu de conversation, la RÈGLE #3 du Prisme : la langue d'origine concourt
+ * à SON rang, jamais comme court-circuit). `null` quand [caption] est absent ;
+ * sinon [caption] TEL QUEL si aucune traduction ne cible une langue préférée
+ * (règle #1 du Prisme : jamais `translations.values.first()`).
+ */
+fun FeedMedia.resolvedCaption(preferredLanguages: List<String>): String? =
+    resolveLastMessagePreview(
+        preview = caption,
+        translations = captionTranslations,
+        originalLanguage = captionLanguage,
+        preferredLanguages = preferredLanguages,
+    )
 
 /** Embedded reposted content in a feed post — port of RepostContent (FeedModels.swift). */
 @Serializable

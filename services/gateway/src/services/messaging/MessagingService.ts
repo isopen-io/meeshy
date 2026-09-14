@@ -33,6 +33,7 @@ import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { withOrphanedSenderRepair } from './withOrphanedSenderRepair';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
@@ -156,7 +157,7 @@ export class MessagingService {
       if (request.clientMessageId) {
         const earlyHit = await performanceLogger.withTiming(
           'messaging.earlyDedupCheck',
-          () => this.prisma.message.findFirst({
+          () => withOrphanedSenderRepair({ prisma: this.prisma, conversationIds: [conversationId] }, () => this.prisma.message.findFirst({
             where: { conversationId, clientMessageId: request.clientMessageId },
             // Fetch the sender relation so `createSuccessResponse` resolves
             // `senderId` to the User.id (clients compare it to their own
@@ -177,7 +178,7 @@ export class MessagingService {
                 }
               }
             }
-          }),
+          })),
           corr
         );
         if (earlyHit) {

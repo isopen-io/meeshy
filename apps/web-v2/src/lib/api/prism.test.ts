@@ -12,7 +12,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 
-import { prismFor, resolveAudioTrack, served, servedTranscript } from './prism';
+import { prismFor, resolveAudioTrack, resolveMediaCaption, served, servedTranscript } from './prism';
 
 /** La forme que rend un message : un tableau de lignes `MessageTranslation`. */
 const rows = (targetLanguage: string, translatedContent: string) => [
@@ -91,6 +91,46 @@ test('une carte absente sert l’original sans lever', () => {
     original: 'Hello',
   });
   expect(r).toEqual({ text: 'Hello', language: 'en', translated: false });
+});
+
+/**
+ * `resolveMediaCaption` (#6280) — LA LÉGENDE D'UN MÉDIA, dépouillée par le
+ * dialecte CARTE (`captionTranslations`, même forme que `Post.translations`),
+ * JAMAIS le dialecte tableau (`Message.translations`). TÉMOIN DE RANG ≠ 1
+ * (leçon 261) : la langue primaire gagne même quand la langue SOURCE de la
+ * légende occupe un rang inférieur du prisme — sinon le court-circuit
+ * interdit et la règle juste rendraient le même verdict.
+ */
+describe('resolveMediaCaption — la légende descend son PROPRE couple langue/traductions', () => {
+  test('la langue primaire gagne même quand `captionLanguage` est dans le prisme à un rang inférieur', () => {
+    const r = resolveMediaCaption({
+      preferredLanguages: ['fr', 'en'],
+      captionLanguage: 'en',
+      captionTranslations: { fr: { text: 'Le marché du matin', translationModel: 'nllb-200', createdAt: '2026-09-14T00:00:00.000Z' } },
+      caption: 'The morning market',
+    });
+    expect(r).toEqual({ text: 'Le marché du matin', language: 'fr', translated: true });
+  });
+
+  test('aucune traduction vers une langue du lecteur : la légende ORIGINALE, jamais `translations[0]`', () => {
+    const r = resolveMediaCaption({
+      preferredLanguages: ['de'],
+      captionLanguage: 'en',
+      captionTranslations: { fr: { text: 'Le marché du matin', translationModel: 'nllb-200', createdAt: '2026-09-14T00:00:00.000Z' } },
+      caption: 'The morning market',
+    });
+    expect(r).toEqual({ text: 'The morning market', language: 'en', translated: false });
+  });
+
+  test('`captionLanguage` absent : la carte descend quand même le prisme', () => {
+    const r = resolveMediaCaption({
+      preferredLanguages: ['fr'],
+      captionLanguage: undefined,
+      captionTranslations: { fr: { text: 'Le marché', translationModel: 'nllb-200', createdAt: '2026-09-14T00:00:00.000Z' } },
+      caption: 'The market',
+    });
+    expect(r).toEqual({ text: 'Le marché', language: 'fr', translated: true });
+  });
 });
 
 /**
