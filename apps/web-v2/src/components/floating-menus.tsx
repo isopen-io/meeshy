@@ -238,8 +238,11 @@ export function FloatingMenus({ routeKey }: { readonly routeKey: string }) {
 
       {/* L'INDICE DU GESTE INVISIBLE — `leftA11yHint` d'iOS : un appui long que
           rien ne signale à l'écran doit au moins être ANNONCÉ. Hors du lien,
-          pour ne pas entrer dans son nom. */}
-      <span id={indiceDisque} className="sr-only">
+          pour ne pas entrer dans son nom ; `hidden`, pour n'être lu QUE comme
+          sa description (#6499) — un `sr-only` restait un texte que le
+          balayage de VoiceOver et TalkBack lisait seul. `aria-describedby`
+          lit un élément masqué qu'il référence directement. */}
+      <span id={indiceDisque} hidden>
         {translate(langue, 'a11y.floating.feed.hint')}
       </span>
 

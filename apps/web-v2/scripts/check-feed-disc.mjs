@@ -9,7 +9,8 @@
  * 320 × 568) :
  *
  *  1. sur la liste, le disque est un lien vers /feed nommé « Flux », décrit par
- *     l'indice de l'appui long, avec son raccourci clavier ;
+ *     l'indice de l'appui long, avec son raccourci clavier ; dans l'arbre
+ *     d'accessibilité réel, l'indice n'est lu QUE comme cette description (#6499) ;
  *  2. un tap TREMBLÉ de 2 px ouvre le Flux ; le disque n'a jamais quitté le
  *     document et n'a pas bougé d'un pixel ; il se nomme alors
  *     « Conversations », mène à /, et porte la marque ;
@@ -154,6 +155,20 @@ const stored = (page) => page.evaluate(() => localStorage.getItem('feedButtonPos
 const samePlace = (a, b) => a !== null && b !== null && Math.abs(a.left - b.left) < 0.5 && Math.abs(a.top - b.top) < 0.5;
 const frame = (page) => page.evaluate(() => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(() => ok()))));
 
+/**
+ * L'INDICE DANS L'ARBRE D'ACCESSIBILITÉ RÉEL (#6499) — la DESCRIPTION du lien
+ * nommé `name`, et le nombre de nœuds lisibles qui portent l'indice À PART.
+ * Un `sr-only` passait le premier contrôle et échouait au second : VoiceOver et
+ * TalkBack le lisaient seul au balayage.
+ */
+const axHint = async (cdp, name) => {
+  const { nodes } = await cdp.send('Accessibility.getFullAXTree');
+  return {
+    description: nodes.find((n) => n.role?.value === 'link' && n.name?.value === name)?.description?.value ?? null,
+    seul: nodes.filter((n) => !n.ignored && n.role?.value !== 'link' && (n.name?.value ?? '').includes(HINT)).length,
+  };
+};
+
 /** Le disque au repos : ni enfoncement `:active`, ni échelle de déplacement en cours. */
 const settled = async (page) => {
   await page.waitForSelector(DISC);
@@ -211,6 +226,8 @@ for (const scheme of ['light', 'dark']) {
     check(repos.keys === 'Shift+F10', `${g} : le raccourci clavier de l'appui long n'est pas déclaré — ${repos.keys}`);
     check(repos.glyphe > 0 && repos.marque === 0, `${g} : la face « Flux » ne porte pas le glyphe du Flux`);
     check(repos.atteint && repos.width >= 44, `${g} : le disque n'est pas atteignable à son centre, ou fait moins de 44`);
+    const axListe = await axHint(cdp, 'Flux');
+    check(axListe.description === HINT && axListe.seul === 0, `${g} : sur la liste, l'indice n'est pas la seule description du disque dans l'arbre d'accessibilité — ${JSON.stringify(axListe)}`);
     await capture(page, `disc-list.${scheme}.${viewport.width}x${viewport.height}`);
 
     // ------------------------------------ 2. tap tremblé ⇒ Flux, sans saut
@@ -229,6 +246,8 @@ for (const scheme of ['light', 'dark']) {
       `${g} : sur le Flux, le disque ne se dit pas « Conversations » vers / avec la marque — ${JSON.stringify(surFlux)}`,
     );
     check(surFlux?.hint === HINT, `${g} : sur le Flux, l'indice de l'appui long a disparu`);
+    const axFlux = await axHint(cdp, 'Conversations');
+    check(axFlux.description === HINT && axFlux.seul === 0, `${g} : sur le Flux, l'indice n'est pas la seule description du disque dans l'arbre d'accessibilité — ${JSON.stringify(axFlux)}`);
     await capture(page, `disc-feed.${scheme}.${viewport.width}x${viewport.height}`);
 
     // -------------------------------------------- 8. le bouton de l'en-tête
