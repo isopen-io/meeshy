@@ -71,9 +71,19 @@ public struct SignupForm: Equatable {
     /// combinantes incluses — `CharacterSet.letters` couvre L* et M*), espaces,
     /// apostrophes droite ET typographiques (le clavier iOS insère `’`), points
     /// et tirets ; au moins une lettre ; `displayNameMaxLength` caractères au plus.
+    ///
+    /// Un nom FOURNI tient le pattern et la borne ; un champ VIDE est valide,
+    /// parce qu'il est LÉGITIME (#6441, suite de #6424) — la passerelle le
+    /// DÉRIVE alors de la partie locale de l'adresse (`displayNameDepuisEmail`,
+    /// `services/gateway/src/services/auth/registration-identity.ts`). C'est le
+    /// même arbitrage que `isPasswordValid` ci-dessous, et le doc-comment de
+    /// `displayNameMaxLength` nomme déjà le défaut qu'il écarte : un refus
+    /// local pour une charge que la passerelle ACCEPTE, et rien ne rougit
+    /// nulle part.
     public static func isDisplayNameValid(_ value: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed.count <= displayNameMaxLength else { return false }
+        if trimmed.isEmpty { return true }
+        guard trimmed.count <= displayNameMaxLength else { return false }
         guard trimmed.unicodeScalars.contains(where: { CharacterSet.letters.contains($0) }) else { return false }
         let allowed = CharacterSet.letters
             .union(.whitespaces)
@@ -107,19 +117,40 @@ public struct SignupForm: Equatable {
     /// décide si la clé part dans la charge.
     public static func hasPassword(_ value: String) -> Bool { !value.isEmpty }
 
+    /// `true` quand l'utilisateur a réellement TAPÉ un nom affiché.
+    ///
+    /// Jumelle de `hasPassword` : `isDisplayNameValid` répond « cette saisie
+    /// est-elle acceptable », celle-ci « y a-t-il une saisie » — et c'est elle
+    /// qui décide si la clé part dans la charge.
+    public static func hasDisplayName(_ value: String) -> Bool {
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     public var isDisplayNameValid: Bool { Self.isDisplayNameValid(displayName) }
     public var isEmailValid: Bool { Self.isEmailValid(email) }
     public var isPasswordValid: Bool { Self.isPasswordValid(password) }
     public var hasPassword: Bool { Self.hasPassword(password) }
+    public var hasDisplayName: Bool { Self.hasDisplayName(displayName) }
 
-    /// Le bouton s'active dès que le nom et l'adresse sont valides — et que le
-    /// mot de passe, s'il a été tapé, atteint sa borne (#6424).
+    /// Un numéro FOURNI doit être plausible (#6479) ; un champ VIDE reste
+    /// valide — il n'est pas requis. Troisième champ à porter cette forme,
+    /// après le mot de passe et le nom affiché.
+    public var isPhoneValid: Bool { PhonePlausibility.isPlausible(phoneDigits) }
+
+    /// Le MOTIF du refus, pour que l'écran dise quoi corriger — « numéro
+    /// invalide » n'apprend rien à qui a tapé le sien de travers.
+    public var phoneRefusal: PhonePlausibility.Refusal? { PhonePlausibility.refusal(phoneDigits) }
+
+    /// Le bouton s'active dès que l'ADRESSE est valide — et que le nom affiché,
+    /// le mot de passe et le NUMÉRO, s'ils ont été tapés, tiennent leurs bornes
+    /// (#6441, #6479).
     ///
-    /// Ni le téléphone ni le mot de passe n'y figurent comme EXIGENCES : aucun
-    /// des deux n'est requis par la passerelle. Rien ici ne dépend du réseau —
-    /// aucun appel de disponibilité ne précède l'envoi.
+    /// L'adresse est le SEUL champ requis, exactement comme le
+    /// `required: ['email']` du schéma partagé : ni le nom, ni le téléphone, ni
+    /// le mot de passe ne sont exigés par la passerelle. Rien ici ne dépend du
+    /// réseau — aucun appel de disponibilité ne précède l'envoi.
     public var canSubmit: Bool {
-        isDisplayNameValid && isEmailValid && isPasswordValid
+        isDisplayNameValid && isEmailValid && isPasswordValid && isPhoneValid
     }
 
     // MARK: - Téléphone
@@ -152,7 +183,11 @@ public struct SignupForm: Equatable {
     public func registerRequest() -> RegisterRequest {
         let phone = hasPhone ? normalizedPhoneDigits : nil
         return RegisterRequest(
-            displayName: displayName.trimmingCharacters(in: .whitespacesAndNewlines),
+            // `nil`, jamais `""` (#6441) : même loi que `password` ci-dessous.
+            // La passerelle DÉRIVE le nom affiché de l'adresse quand la clé est
+            // absente ; une chaîne vide serait une valeur, refusée par
+            // `minLength: 1`.
+            displayName: hasDisplayName ? displayName.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
             email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
             // `nil`, jamais `""` (#6424) : la passerelle lit l'ABSENCE de la
             // clé pour créer un compte sans mot de passe. Une chaîne vide
