@@ -6,6 +6,11 @@ import MeeshyUI
 struct VoiceProfileManageView: View {
     let accentColor: String
 
+    /// La teinte d'accent, convertie UNE fois : chaque site la répétait en
+    /// `Color(hex:)`, et le cliquet des couleurs en dur le comptait autant de fois
+    /// (+3 introduits par #6481, 2026-09-14).
+    private var accent: Color { Color(hex: accentColor) }
+
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -61,7 +66,7 @@ struct VoiceProfileManageView: View {
             scrollOffset: 0,
             onBack: { dismiss() },
             titleColor: theme.textPrimary,
-            backArrowColor: Color(hex: accentColor),
+            backArrowColor: accent,
             backgroundColor: theme.backgroundPrimary,
             trailing: { EmptyView() }
         )
@@ -74,7 +79,7 @@ struct VoiceProfileManageView: View {
             Spacer()
             ProgressView()
                 .scaleEffect(1.2)
-                .tint(Color(hex: accentColor))
+                .tint(accent)
             Spacer()
         }
     }
@@ -152,7 +157,7 @@ struct VoiceProfileManageView: View {
                 VStack(spacing: 2) {
                     Text("\(Int(quality * 100))%")
                         .font(MeeshyFont.relative(18, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundColor(accent)
                     Text(String(localized: "voice.profile.quality", defaultValue: "Qualité", bundle: .main))
                         .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundColor(theme.textMuted)
@@ -219,7 +224,7 @@ struct VoiceProfileManageView: View {
                 }
             ))
             .labelsHidden()
-            .tint(Color(hex: accentColor))
+            .tint(accent)
         }
         .padding(16)
         .background(
@@ -250,7 +255,7 @@ struct VoiceProfileManageView: View {
                 }
             ))
             .labelsHidden()
-            .tint(Color(hex: accentColor))
+            .tint(accent)
         }
         .padding(16)
         .background(
@@ -293,8 +298,8 @@ struct VoiceProfileManageView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .adaptiveGlass(in: Capsule(), tint: Color(hex: accentColor).opacity(0.14), interactive: true)
-                .foregroundColor(Color(hex: accentColor))
+                .adaptiveGlass(in: Capsule(), tint: accent.opacity(0.14), interactive: true)
+                .foregroundColor(accent)
             }
             .accessibilityLabel(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
         }
