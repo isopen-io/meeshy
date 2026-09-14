@@ -78,12 +78,25 @@ extension MeeshyComposerHost {
         documentTranscriptions = retrait.porteurs.transcriptions
         railPosedMediaURLs = retrait.porteurs.railPosedURLs
 
-        if let slideId, let index = viewModel.slides.firstIndex(where: { $0.id == slideId }) {
+        if let slideId, let index = viewModel.slides.firstIndex(where: { $0.id == slideId }),
+           viewModel.slides.count > 1 {
             // `removeSlide` emporte déjà tous les objets de la scène : rejouer
             // `deleteElement` derrière lui frapperait des identifiants que le
             // modèle ne connaît plus.
             viewModel.removeSlide(at: index)
         } else {
+            // **`removeSlide` REFUSE de descendre sous une scène** (SDK) — et un
+            // refus SILENCIEUX, ici, retournerait le défaut qu'on vient de
+            // fermer : le fichier aurait quitté la charge pendant que ses objets
+            // resteraient à l'écran. La condition ci-dessus REPRODUIT donc celle
+            // du SDK plutôt que de lui faire confiance, et le repli supprime les
+            // objets un à un. Ce qui reste est une scène vierge — exactement
+            // l'état d'un post sans média.
+            //
+            // Aucune porte n'atteint ce cas aujourd'hui (le rail de scènes ne se
+            // peint pas sous deux scènes, et `ComposerHeaderTiles.showsDelete`
+            // l'exige une seconde fois) ; c'est une QUATRIÈME porte à venir qui
+            // le rencontrerait, comme la troisième a hérité du défaut d'origine.
             retrait.retiredObjectIds.forEach { viewModel.deleteElement(id: $0) }
         }
     }

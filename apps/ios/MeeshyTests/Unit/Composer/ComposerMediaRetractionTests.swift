@@ -197,6 +197,27 @@ final class ComposerMediaRetractionTests: XCTestCase {
             + "`documentLocalMedia` courrait alors sur un modèle déjà amputé.")
     }
 
+    /// **Le refus SILENCIEUX du SDK ne doit pas retourner le défaut.**
+    /// `StoryComposerViewModel.removeSlide(at:)` refuse de descendre sous une
+    /// scène et ne le dit pas. Sans la même condition côté meuble, retirer la
+    /// DERNIÈRE scène sortirait son fichier de la charge en laissant ses objets
+    /// à l'écran — l'inverse exact de #6577, et tout aussi invisible.
+    func test_leRetrait_replieSurLesObjets_quandLaSceneNePeutPasPartir() throws {
+        guard let corps = try corpsDuRetrait().map(compact) else {
+            return XCTFail("`retractMedia(` absent — voir le témoin précédent")
+        }
+        XCTAssertTrue(corps.contains("viewModel.slides.count>1"),
+            "Le meuble doit REPRODUIRE la condition du SDK plutôt que lui faire confiance : "
+            + "`removeSlide` refuse en silence sous une scène, et un repli manquant laisse "
+            + "des objets dont le fichier a quitté la charge.")
+        guard let repli = corps.range(of: "}else{") else {
+            return XCTFail("Le retrait n'offre aucun repli quand la scène ne peut pas partir")
+        }
+        XCTAssertTrue(String(corps[repli.upperBound...]).hasPrefix("retrait.retiredObjectIds.forEach"),
+            "Le repli doit supprimer les objets un à un — sinon la scène garde ce que la "
+            + "publication ne porte plus.")
+    }
+
     // MARK: - Les DEUX gestes y passent
 
     func test_leRailTrailing_passeParLePointUnique() throws {
