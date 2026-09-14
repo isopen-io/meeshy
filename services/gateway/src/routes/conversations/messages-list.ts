@@ -48,6 +48,7 @@ import { sendWithETag } from '../../utils/etag';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { logger } from './messages-shared';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import {
   MESSAGES_VIEW_QUERY_PROPERTIES,
   resolveCollectionView,
@@ -500,8 +501,10 @@ export function registerMessagesListRoute(
                 personalHiding
               )
             }),
-        // 2. Récupérer les messages avec toutes les relations
-        prisma.message.findMany({
+        // 2. Récupérer les messages avec toutes les relations. Un expéditeur
+        // disparu faisait rejeter la page ENTIÈRE en 500 (#6501) : la lecture
+        // répare la conversation, puis se rejoue UNE fois.
+        withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () => prisma.message.findMany({
           where: personalWhereClause,
           select: messageSelect,
           // Forward watermark backfill returns oldest-after-watermark first so
@@ -518,7 +521,7 @@ export function registerMessagesListRoute(
           // boundary claimed more and cost the client a round trip to disprove.
           take: (before || isAroundMode || afterMode || searchMode) ? limit + 1 : limit,
           skip: (before || isAroundMode || afterMode) ? 0 : offset
-        }),
+        })),
         // 3. Récupérer les préférences linguistiques (si authentifié)
         shouldFetchUserPrefs
           ? prisma.user.findFirst({

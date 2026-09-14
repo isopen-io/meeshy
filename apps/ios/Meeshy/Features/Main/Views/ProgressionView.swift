@@ -179,6 +179,26 @@ struct ProgressionView: View {
                             )
                         case .level:
                             ProgressionLevelHero(progress: progress, isDark: isDark)
+                        case .meesh:
+                            // LE SOLDE, SOUS LE NIVEAU (#6497). Le même bloc que
+                            // la feuille de l'entrée d'en-tête — pas une jumelle :
+                            // deux rendus du solde auraient divergé au premier
+                            // changement. L'action passe par le MÊME `viewModel.mint()`,
+                            // donc la même clé d'idempotence : deux portes, une
+                            // seule frappe.
+                            if let meesh = progress.meesh {
+                                ProgressionMeeshDetail(
+                                    meesh: meesh,
+                                    isMinting: viewModel.isMinting,
+                                    mintError: viewModel.mintError,
+                                    onMint: { Task { await viewModel.mint() } }
+                                )
+                                .padding(MeeshySpacing.lg)
+                                .background(
+                                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
+                                        .fill(ThemeManager.shared.backgroundSecondary)
+                                )
+                            }
                         case .elans:
                             ProgressionElansHero(progress: progress, isDark: isDark)
                         case .flamme:

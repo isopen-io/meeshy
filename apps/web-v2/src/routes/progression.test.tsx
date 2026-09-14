@@ -28,7 +28,7 @@ import {
  */
 
 const fixture = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
-const html = renderToStaticMarkup(<ProgressionBody progress={fixture} />);
+const html = renderToStaticMarkup(<ProgressionBody onMint={() => {}} isMinting={false} progress={fixture} />);
 
 /**
  * Le MÊME écran, servi par une passerelle qui ne connaît AUCUN des trois blocs
@@ -41,7 +41,7 @@ const sansBlocsOptionnels = (() => {
   // `exactOptionalPropertyTypes`, « absent » et « présent et undefined » sont
   // deux types distincts, et c'est bien l'ABSENCE que ce rendu doit servir.
   const { meesh: _m, elan: _e, achievementReach: _r, ...sansOptions } = ENGAGEMENT_PROGRESS_FIXTURE;
-  return renderToStaticMarkup(<ProgressionBody progress={resolveEngagementProgress(sansOptions)} />);
+  return renderToStaticMarkup(<ProgressionBody onMint={() => {}} isMinting={false} progress={resolveEngagementProgress(sansOptions)} />);
 })();
 
 /**
@@ -188,6 +188,8 @@ describe('la page des succès', () => {
 describe('le hub — un compte VIDE parle quand même', () => {
   const empty = renderToStaticMarkup(
     <ProgressionBody
+      onMint={() => {}}
+      isMinting={false}
       progress={resolveEngagementProgress({
         counters: [],
         milestones: [],
@@ -656,5 +658,58 @@ describe('MeeshEntry — la forme suit iOS (#6466, repris #6470)', () => {
     const rendu = renderToStaticMarkup(<MeeshEntry meesh={meeshDeLaFixture} onMint={() => {}} isMinting={false} />);
     expect(rendu.match(/<button/g)).toHaveLength(1);
     expect(rendu.match(/aria-label="/g)).toHaveLength(1);
+  });
+});
+
+describe('MeeshHero est MONTÉ, et sous le niveau (#6497)', () => {
+  /**
+   * Le défaut de #6497 n'était pas un rendu fautif : le composant était
+   * exporté, testé, et monté NULLE PART. Ses deux témoins le rendaient
+   * directement — un fichier de test n'est pas un consommateur, et la
+   * couverture le comptait vivant.
+   *
+   * Ce témoin-ci part donc de l'ÉCRAN, jamais du composant : c'est la seule
+   * façon de mesurer qu'il atteint un pixel.
+   */
+  const avecMeesh = renderToStaticMarkup(
+    <ProgressionBody
+      onMint={() => {}}
+      isMinting={false}
+      progress={resolveEngagementProgress({
+        ...ENGAGEMENT_PROGRESS_FIXTURE,
+        meesh: { balance: 2, mintedLifetime: 2, debitablePoints: 2400, floorPoints: 0, missingPoints: 0, mintCost: 1200 },
+      })}
+    />,
+  );
+
+  test('le hero des Meeshes est rendu par le CORPS de l’écran', () =>
+    expect(avecMeesh).toContain('progression-meesh'));
+
+  /**
+   * L'ordre se mesure par la POSITION, jamais par la présence : « les deux
+   * blocs existent » resterait vrai après n'importe quelle permutation, et
+   * c'est la permutation que la directive demande.
+   */
+  test('il vient APRÈS le niveau', () => {
+    const niveau = avecMeesh.indexOf('progression-niveau');
+    const meesh = avecMeesh.indexOf('progression-meesh');
+    expect(niveau).toBeGreaterThan(-1);
+    expect(meesh).toBeGreaterThan(niveau);
+  });
+
+  test('et AVANT les élans — la séquence partagée le place là', () => {
+    const meesh = avecMeesh.indexOf('progression-meesh');
+    const elans = avecMeesh.indexOf('progression-elans');
+    expect(elans).toBeGreaterThan(meesh);
+  });
+
+  /** Sans solde servi, aucun hero : on ne parle pas à la place du serveur. */
+  test('aucun hero quand la passerelle ne sert pas le solde', () => {
+    const sansMeesh = { ...ENGAGEMENT_PROGRESS_FIXTURE };
+    delete (sansMeesh as { meesh?: unknown }).meesh;
+    const rendu = renderToStaticMarkup(
+      <ProgressionBody onMint={() => {}} isMinting={false} progress={resolveEngagementProgress(sansMeesh)} />,
+    );
+    expect(rendu).not.toContain('progression-meesh');
   });
 });
