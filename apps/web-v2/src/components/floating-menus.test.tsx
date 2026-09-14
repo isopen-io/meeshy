@@ -1,9 +1,10 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { NOTIFICATIONS_QUERY_KEY } from '@/lib/api/notifications';
+import { FRIENDS_QUERY_PREFIX } from '@/lib/api/friend-requests';
 import { appQueryClient } from '@/lib/api/query-client';
 import { FloatingMenus } from './floating-menus';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
@@ -32,15 +33,25 @@ afterAll(async () => {
 let container: HTMLDivElement;
 let root: Root;
 
-/* Le compte de notifications (#6288) vit dans le client PARTAGÉ : résolu
-   pendant un témoin, il changerait le NOM du bouton dans le suivant. Ces
-   témoins-ci parlent du menu, pas du compte (`floating-menus-unread.test.tsx`). */
+/* Les comptes de notifications (#6288) ET de demandes d'amitié (#6321) vivent
+   dans le client PARTAGÉ : résolus pendant un témoin, ils changeraient le NOM
+   du bouton ou du barreau « Découvrir » dans le suivant. Ces témoins-ci
+   parlent du menu, pas des comptes (`floating-menus-unread.test.tsx`) — d'où
+   le nettoyage AVANT ET APRÈS, pour ne dépendre ni d'un fichier qui aurait
+   déjà peuplé le client avant celui-ci, ni d'un mount qui le peuplerait pour
+   le suivant. */
+beforeEach(() => {
+  appQueryClient.removeQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+  appQueryClient.removeQueries({ queryKey: FRIENDS_QUERY_PREFIX });
+});
+
 afterEach(() => {
   act(() => {
     root.unmount();
   });
   container.remove();
   appQueryClient.removeQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+  appQueryClient.removeQueries({ queryKey: FRIENDS_QUERY_PREFIX });
 });
 
 function monter(): HTMLDivElement {

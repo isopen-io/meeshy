@@ -1,7 +1,6 @@
 import { useState } from 'react';
 
 import { Sheet, SheetEmpty } from '@/components/sheet';
-import { createShareLink, shareLinkUrl } from '@/lib/api/links';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { Conversation } from '@/lib/api/types';
 import { eligibleForShareLink } from '@/lib/view/share-link-eligibility';
@@ -15,6 +14,12 @@ import { partagerInvitation, type PortailPartage } from '@/lib/view/invitation';
  * crée le lien IMMÉDIATEMENT (`POST /api/v1/links`, § 3.3) et le PARTAGE — un
  * geste, un effet, jamais un second écran de réglages (ceux-ci restent un
  * écran de plus, hors lot § 1.4).
+ *
+ * **Le port se charge au GESTE, pas avec l'écran d'accueil** (#6361). Cette
+ * feuille vit dans l'en-tête de la liste des conversations ; le port des liens
+ * de partage porte aussi la lecture de « Mes liens » (décodeurs, résumé,
+ * brouillon validé). Importé en statique, il pesait 2,6 Ko gzip sur chaque
+ * ouverture de l'app pour un geste rare.
  */
 
 export type ShareLinkSheetProps = {
@@ -37,6 +42,7 @@ export function ShareLinkSheet({ conversations, viewerId, deps, origin, onClose,
   const onSelect = async (conversationId: string): Promise<void> => {
     setBusyId(conversationId);
     try {
+      const { createShareLink, shareLinkUrl } = await import('@/lib/api/links');
       const result = await createShareLink(deps, conversationId);
       if (!result.ok) {
         onFeedback?.('Impossible de créer le lien — réessayez dans un instant.');

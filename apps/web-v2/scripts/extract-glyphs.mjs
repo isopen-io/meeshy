@@ -585,3 +585,131 @@ emit({
   type: 'SettingsGlyphName',
   role: "LE JEU D'ECRAN des reglages (#5563) : sections, bascules, theme, liens vers le legacy, charge avec la route /settings, jamais dans le socle.",
 });
+
+/**
+ * LE JEU D'ECRAN DES COMMUNAUTES (#6364) — miroir des symboles de
+ * `CommunityListView.swift`, `CommunityDetailView.swift` et
+ * `CommunityCreateView.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `bubble.left.fill` (conversations d'une carte) | `chat-circle` |
+ * | `bubble.left.and.bubble.right.fill` (canaux du detail) | `chats-circle` |
+ * | `globe` (publique) | `globe` |
+ * | `plus.circle.fill` (creer) | `plus-circle` |
+ * | `person.3.fill` (etat vide) | `users-three` |
+ * | `xmark.circle.fill` (effacer la recherche) | `x-circle` |
+ * | `lock.shield.fill` / `eye.fill` (confidentialite a la creation) | `shield-check` / `eye` |
+ * | `chevron.forward` | `caret-right` |
+ *
+ * `lock`, `users`, `magnifyingGlass`, `caretLeft` et `warningCircle` restent au SOCLE.
+ */
+const COMMUNITIES = ['chat-circle', 'chats-circle', 'globe', 'plus-circle', 'users-three', 'x-circle', 'shield-check', 'eye', 'caret-right'];
+
+emit({
+  ids: COMMUNITIES,
+  output: join(HERE, '../src/components/glyphs-communities.ts'),
+  constant: 'COMMUNITIES_GLYPHS',
+  type: 'CommunitiesGlyphName',
+  role: "LE JEU D'ECRAN des communautes (#6364) : cartes, detail, recherche et creation, charge avec les routes /communities, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DU JOURNAL D'APPELS (#6362) — miroir des symboles de
+ * `CallsTab.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `arrow.up.right` (appel emis) | `arrow-up-right` |
+ * | `arrow.down.left` (appel recu) | `arrow-down-left` |
+ * | `arrow.down.left` en rouge (appel manque) | `phone-x` — divergence assumee (D-61) : la direction ne se dit jamais par la couleur seule |
+ * | `video.fill` (appel video) | `video-camera` |
+ * | `phone.arrow.up.right` (etat vide) | `phone-outgoing` |
+ *
+ * `phone`, `caretLeft` et `warningCircle` restent au SOCLE.
+ */
+/**
+ * LA DÉCOUVERTE DE PERSONNES (#6363) — `PeopleDiscoveryView` et ses trois
+ * onglets : `person.badge.plus` (Demandes, Ajouter), `hand.raised.fill`
+ * (Bloqués), `envelope.fill` (inviter par e-mail), `paperplane` (état vide des
+ * envoyées), `person.2.slash` (état vide des reçues, rendu `user-check` barré
+ * par le sens plutôt que par un trait). Chargé avec la route /discover.
+ */
+const DISCOVER = ['user-plus', 'hand-palm', 'envelope-simple', 'paper-plane-tilt', 'user-check'];
+
+emit({
+  ids: DISCOVER,
+  output: join(HERE, '../src/components/glyphs-discover.ts'),
+  constant: 'DISCOVER_GLYPHS',
+  type: 'DiscoverGlyphName',
+  role: "LE JEU D'ECRAN de la decouverte de personnes (#6363) : onglets, ajout, blocage, invitation et etats vides, charge avec la route /discover, jamais dans le socle.",
+});
+
+const CALLS = ['arrow-up-right', 'arrow-down-left', 'phone-x', 'video-camera', 'phone-outgoing'];
+
+emit({
+  ids: CALLS,
+  output: join(HERE, '../src/components/glyphs-calls.ts'),
+  constant: 'CALLS_GLYPHS',
+  type: 'CallsGlyphName',
+  role: "LE JEU D'ECRAN du journal d'appels (#6362) : directions, type video et etat vide, charge avec la route /calls, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DE « MES LIENS » (#6361) — miroir des symboles de
+ * `LinksHubView.swift`, `ShareLinksView.swift`, `ShareLinkDetailView.swift` et
+ * `CreateShareLinkView.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `link.badge.plus` (banniere, etat vide) | `link` |
+ * | `link` / `link.badge.minus` (lien actif / inactif) | `link-simple` (socle) / `link-break` |
+ * | `plus.circle.fill` (creer) | `plus-circle` |
+ * | `checkmark.circle.fill` (actifs) | `check-circle` |
+ * | `person.fill.badge.plus` (rejoints, utilisations) | `user-plus` |
+ * | `doc.on.doc` (copier) | `copy` |
+ * | `square.and.arrow.up` (partager) | `export` |
+ * | `pause.circle` / `play.circle` (desactiver / activer) | `pause-circle` / `play-circle` |
+ * | `infinity` (maximum) | `infinity` |
+ * | `bubble.left.and.bubble.right.fill` (section conversation) | `chats-circle` |
+ * | `tag.fill` (identite) | `tag` |
+ * | `person.badge.key.fill` (acces invites) | `key` (socle) |
+ * | `slider.horizontal.3` (permissions) | `sliders-horizontal` |
+ * | `gauge.with.dots.needle.bottom.50percent` (limites) | `gauge` |
+ * | `person.fill.checkmark` / `person.fill` / `envelope.fill` / `calendar` | `user-check` / `user` (socle) / `envelope-simple` / `calendar-blank` |
+ * | `bubble.left.fill` / `photo.fill` / `paperclip` / `clock.fill` | `chat-circle` / `image` (socle) / `paperclip` / `clock-counter-clockwise` |
+ * | `person.2.fill` / `clock.badge.xmark` (limites) | `users` (socle) / `hourglass` |
+ * | `chevron.forward` | `caret-right` |
+ */
+const LINKS = [
+  'link',
+  'link-break',
+  'plus-circle',
+  'check-circle',
+  'user-plus',
+  'copy',
+  'export',
+  'pause-circle',
+  'play-circle',
+  'infinity',
+  'chats-circle',
+  'tag',
+  'sliders-horizontal',
+  'gauge',
+  'user-check',
+  'envelope-simple',
+  'calendar-blank',
+  'chat-circle',
+  'paperclip',
+  'clock-counter-clockwise',
+  'hourglass',
+  'caret-right',
+];
+
+emit({
+  ids: LINKS,
+  output: join(HERE, '../src/components/glyphs-links.ts'),
+  constant: 'LINKS_GLYPHS',
+  type: 'LinksGlyphName',
+  role: "LE JEU D'ECRAN de Mes liens (#6361) : hub, liens de partage, detail et creation, charge avec les routes /links, jamais dans le socle.",
+});

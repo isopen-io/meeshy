@@ -112,7 +112,9 @@ const rungState = async (page) => {
       discBadge: document.querySelector('[data-badge-pose="corner"]') !== null,
       count: badge?.getAttribute('data-unread') ?? null,
       text: badge?.textContent ?? null,
-      badges: document.querySelectorAll('[role="menuitem"] [data-unread]').length,
+      /* Les barreaux qui portent un compte, par adresse : « Découvrir » porte
+         le SIEN depuis #6321 (les demandes reçues), jamais celui de la cloche. */
+      badges: [...document.querySelectorAll('[role="menuitem"] [data-unread]')].map((el) => el.closest('[role="menuitem"]')?.getAttribute('href') ?? null),
       label: rung?.getAttribute('aria-label') ?? null,
       dx: r && b ? b.left + b.width / 2 - (r.left + r.width / 2) : null,
       dy: r && b ? b.top + b.height / 2 - (r.top + r.height / 2) : null,
@@ -219,8 +221,8 @@ try {
       await capture(page, `echelle-pastille-${scheme}-${width}x${height}`);
       check(!opened.discBadge, `${label} : menu ouvert, la pastille QUITTE le disque (RootView.swift:1666)`);
       check(
-        opened.count === '3' && opened.text === '3' && opened.badges === 1,
-        `${label} : le barreau « Notifications » porte « 3 », et lui seul (${JSON.stringify({ count: opened.count, badges: opened.badges })})`,
+        opened.count === '3' && opened.text === '3' && JSON.stringify(opened.badges) === JSON.stringify(['/notifications', '/discover']),
+        `${label} : le barreau « Notifications » porte « 3 » ; seul « Découvrir » porte aussi un compte, le sien (${JSON.stringify({ count: opened.count, badges: opened.badges })})`,
       );
       check(opened.label === 'Notifications, 3 non lues', `${label} : le barreau annonce son compte (« ${opened.label} »)`);
       check(
@@ -402,8 +404,8 @@ try {
       check((await page.getAttribute('[data-floating-menu]', 'aria-label')) === 'Menu', `${label} : le bouton redevient « Menu »`);
       const allRead = await rungState(page);
       check(
-        allRead.badges === 0 && allRead.label === 'Notifications',
-        `${label} : à zéro, aucun barreau ne porte de pastille et « Notifications » ne dit plus de compte (${JSON.stringify({ badges: allRead.badges, label: allRead.label })})`,
+        !allRead.badges.includes('/notifications') && allRead.label === 'Notifications',
+        `${label} : à zéro, « Notifications » ne porte plus de pastille ni ne dit de compte (${JSON.stringify({ badges: allRead.badges, label: allRead.label })})`,
       );
       await closeLadder(page);
 

@@ -38,7 +38,6 @@ function baseForm(overrides: Partial<SignupFormState> = {}): SignupFormState {
 describe('PASSWORD_MIN — LUE depuis le schéma serveur, jamais un littéral local', () => {
   test('vaut exactement registerRequestSchema.properties.password.minLength', () => {
     expect(PASSWORD_MIN).toBe(registerRequestSchema.properties.password.minLength);
-    expect(PASSWORD_MIN).toBe(12);
   });
 });
 
@@ -63,7 +62,8 @@ describe('validation locale — password (borne LUE, pas un littéral)', () => {
 
 describe('canSubmit — les TROIS champs requis, jamais le téléphone', () => {
   test('nom + e-mail + mot de passe valides ⇒ actif', () => expect(canSubmit(baseForm())).toBe(true));
-  test('mot de passe trop court ⇒ inactif', () => expect(canSubmit(baseForm({ password: 'trop-court' }))).toBe(false));
+  test('mot de passe trop court ⇒ inactif', () =>
+    expect(canSubmit(baseForm({ password: 'a'.repeat(PASSWORD_MIN - 1) }))).toBe(false));
   test('téléphone vide ⇒ n’empêche rien', () => expect(canSubmit(baseForm({ phoneDigits: '' }))).toBe(true));
 });
 

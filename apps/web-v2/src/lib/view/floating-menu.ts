@@ -12,13 +12,12 @@ import type { ROUTES } from '@/routes/route-table';
  * tableau gelé, gardé par le même témoin : **l'ordre est un fait de produit**,
  * pas une conséquence de l'écriture.
  *
- * **Pourquoi une table plutôt que du JSX dans le composant.** Trois
+ * **Pourquoi une table plutôt que du JSX dans le composant.** Deux
  * consommateurs en ont besoin et ils ne se chargent pas ensemble : l'échelle
- * (le chunk des menus), les huit écrans d'attente (chacun dans le chunk de sa
- * route), et le témoin qui prouve qu'aucune destination ne ment. Écrite dans
- * le composant, la liste aurait été recopiée dans les écrans — et ce dépôt sait
- * où cela mène : trois pastilles de non-lus, trois ronds de chrome, trois
- * dessins pour un rôle.
+ * (le chunk des menus) et le témoin qui prouve qu'aucune destination ne ment.
+ * Écrite dans le composant, la liste aurait été recopiée ailleurs — et ce
+ * dépôt sait où cela mène : trois pastilles de non-lus, trois ronds de
+ * chrome, trois dessins pour un rôle.
  *
  * **Le Flux et le profil ne sont PAS des barreaux**, et les distinguer est la
  * moitié du relevé d'iOS. Le Flux est le bouton de GAUCHE en entier ; le profil
@@ -48,35 +47,30 @@ export type FloatingDestination = {
    * type n'admet que la famille `root.menu.*`, celle d'iOS.
    */
   readonly labelKey: Extract<InterfaceCatalogKey, `root.menu.${string}`>;
-  /** Ce que l'écran d'attente promet. Une phrase qui manque fait passer « pas encore » pour « cassé ». */
-  readonly promiseKey: Extract<InterfaceCatalogKey, `pending.${string}.promise`>;
   /** La teinte du barreau, reprise d'iOS à l'hexadécimal près. */
   readonly tint: string;
   readonly glyph: MenuGlyph;
   /**
    * Le compteur VIVANT que le barreau porte en pastille — miroir de
-   * `RootMenuLadderEntry.badge`. La table reste pure : c'est l'échelle qui
-   * résout la valeur au rendu. iOS en déclare un second (`pendingFriendRequests`,
-   * sur « Découvrir ») ; il n'est pas écrit ici tant que le web n'a aucune
-   * source de demandes d'amitié — un nombre sans source serait inventé.
+   * `RootMenuLadderEntry.badge` (`RootMenuLadderEntry.swift:78-84`), et comme
+   * lui DEUX : `unreadNotifications` sur « Notifications » (#6219), et
+   * `pendingFriendRequests` sur « Découvrir » (#6321), arrivé avec sa source —
+   * le panier des demandes reçues de `friend-requests.ts` (#6363). La table
+   * reste pure : c'est l'échelle qui résout la valeur au rendu.
    */
-  readonly badge?: 'unreadNotifications';
+  readonly badge?: 'unreadNotifications' | 'pendingFriendRequests';
 };
 
 /**
- * Chaque destination est une constante NOMMÉE, jamais une case de tableau.
- *
- * L'écran d'attente de chaque adresse en importe exactement une : par son
- * index, il aurait fallu écrire `MENU_LADDER[3]!` — un couplage à l'ordre, que
- * le témoin d'ordre a justement pour rôle de pouvoir changer, et un `!` que
- * `noUncheckedIndexedAccess` réclame sans rien garantir. Nommées, les huit se
- * découpent aussi : le chunk de `/calls` n'emporte pas les sept autres.
+ * Chaque destination est une constante NOMMÉE, jamais une case de tableau —
+ * un accès par index aurait fallu écrire `MENU_LADDER[3]!` : un couplage à
+ * l'ordre, que le témoin d'ordre a justement pour rôle de pouvoir changer, et
+ * un `!` que `noUncheckedIndexedAccess` réclame sans rien garantir.
  */
 export const LINKS_DESTINATION: FloatingDestination = {
   key: 'links',
   route: 'links',
   labelKey: 'root.menu.links',
-  promiseKey: 'pending.links.promise',
   tint: '#F8B500',
   glyph: { set: 'socle', name: 'linkSimple' },
 };
@@ -85,7 +79,6 @@ export const NOTIFICATIONS_DESTINATION: FloatingDestination = {
   key: 'notifications',
   route: 'notifications',
   labelKey: 'root.menu.notifications',
-  promiseKey: 'pending.notifications.promise',
   tint: '#FF6B6B',
   glyph: { set: 'socle', name: 'bell' },
   badge: 'unreadNotifications',
@@ -95,7 +88,6 @@ export const CALLS_DESTINATION: FloatingDestination = {
   key: 'calls',
   route: 'calls',
   labelKey: 'root.menu.calls',
-  promiseKey: 'pending.calls.promise',
   tint: '#6366F1',
   glyph: { set: 'socle', name: 'phone' },
 };
@@ -104,16 +96,15 @@ export const DISCOVER_DESTINATION: FloatingDestination = {
   key: 'discover',
   route: 'discover',
   labelKey: 'root.menu.discover',
-  promiseKey: 'pending.discover.promise',
   tint: '#8B5CF6',
   glyph: { set: 'flottant', name: 'binoculars' },
+  badge: 'pendingFriendRequests',
 };
 
 export const COMMUNITIES_DESTINATION: FloatingDestination = {
   key: 'communities',
   route: 'communities',
   labelKey: 'root.menu.communities',
-  promiseKey: 'pending.communities.promise',
   tint: '#2ECC71',
   glyph: { set: 'flottant', name: 'usersThree' },
 };
@@ -122,7 +113,6 @@ export const SETTINGS_DESTINATION: FloatingDestination = {
   key: 'settings',
   route: 'settings',
   labelKey: 'root.menu.settings',
-  promiseKey: 'pending.settings.promise',
   tint: '#64748B',
   glyph: { set: 'flottant', name: 'gear' },
 };
@@ -142,7 +132,6 @@ export const FEED_DESTINATION: FloatingDestination = {
   key: 'feed',
   route: 'feed',
   labelKey: 'root.menu.feed',
-  promiseKey: 'pending.feed.promise',
   tint: '#F87171',
   glyph: { set: 'flottant', name: 'stack' },
 };
@@ -152,7 +141,6 @@ export const PROFILE_DESTINATION: FloatingDestination = {
   key: 'profile',
   route: 'profile',
   labelKey: 'root.menu.profile',
-  promiseKey: 'pending.profile.promise',
   tint: '#4F46E5',
   glyph: { set: 'socle', name: 'user' },
 };

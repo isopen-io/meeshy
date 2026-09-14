@@ -17,6 +17,7 @@ import { decodeNotification } from '@/lib/notifications/record';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData } from './feed-pages';
+import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { NOTIFICATIONS_QUERY_KEY } from './notifications';
 import {
   applyNotificationCounts,
@@ -334,6 +335,19 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onNotificationDeletedBulk = (payload: unknown): void => applyNotificationDeletedBulk(deps.queryClient, payload);
   const onNotificationCounts = (payload: unknown): void => applyNotificationCounts(deps.queryClient, payload);
 
+  /**
+   * `friend-request:*` (#6321) — LES DEMANDES D'AMITIÉ SUIVENT LA PASSERELLE :
+   * une demande reçue, annulée par son auteur, acceptée ou refusée par l'autre
+   * partie invalide la famille `['friends']` — le panier des reçues que la
+   * pastille du barreau « Découvrir » compte, les envoyées, les contacts, les
+   * bloqués. Une invalidation plutôt qu'une écriture locale : la charge ne
+   * porte que des identifiants (`FriendRequestNewEventData`), jamais la ligne
+   * à peindre ni le nom de la personne.
+   */
+  const onFriendshipChanged = (): void => {
+    void deps.queryClient.invalidateQueries({ queryKey: FRIENDS_QUERY_PREFIX });
+  };
+
   /** Le MÊME geste qu'un 401 HTTP (§ doc-comment de `RealtimeDeps`) — les
    * DEUX motifs ferment la session, aucun ne tente de rafraîchir (D-26). */
   const onTokenExpired = (_payload: AuthTokenExpiredEventData): void => deps.onClearSession();
@@ -370,6 +384,10 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     /* LA CLOCHE AUSSI (#6288) : une notification émise pendant la coupure n'a
        jamais atteint ce socket, et `notification:counts` ne se rejoue pas. */
     void deps.queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+    /* LES DEMANDES D'AMITIÉ AUSSI (#6321) : une demande reçue pendant la
+       coupure n'a jamais atteint ce socket, et la pastille du barreau
+       « Découvrir » la compterait trop tard. */
+    void deps.queryClient.invalidateQueries({ queryKey: FRIENDS_QUERY_PREFIX });
   };
 
   socket.on<unknown>(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
@@ -392,6 +410,10 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, onNotificationDeleted);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, onNotificationDeletedBulk);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_COUNTS, onNotificationCounts);
+  socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_NEW, onFriendshipChanged);
+  socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
+  socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);
+  socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, onFriendshipChanged);
   socket.on<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
   socket.on<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
 
@@ -437,6 +459,10 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, onNotificationDeleted);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, onNotificationDeletedBulk);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_COUNTS, onNotificationCounts);
+      socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_NEW, onFriendshipChanged);
+      socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
+      socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);
+      socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, onFriendshipChanged);
       socket.off<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
       socket.off<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
       socket.disconnect();

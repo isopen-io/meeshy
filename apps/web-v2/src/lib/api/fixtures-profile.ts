@@ -1,5 +1,5 @@
 import { VIEWER_HANDLE, VIEWER_ID } from './fixtures-base';
-import type { MyProfile, MyStats, PendingRequests, ProfilePatch } from './profile';
+import type { MyProfile, MyStats, ProfilePatch } from './profile';
 
 /**
  * **LE LECTEUR DE RECETTE, SON PROFIL** (#6289) — servi par le MÊME chemin que
@@ -68,8 +68,4 @@ export function fixtureMyStats(): MyStats {
     memberDays: 183,
     friendRequestsReceived: 3,
   };
-}
-
-export function fixturePendingRequests(): PendingRequests {
-  return { count: 3, more: false };
 }
