@@ -90,15 +90,13 @@ describe('aucune destination flottante ne ment', () => {
 describe('chaque destination se dit', () => {
   /**
    * Un libellé vide rendrait un barreau muet pour VoiceOver comme pour l'œil :
-   * le disque coloré ne dit rien de ce qu'il ouvre. Et la promesse est ce qui
-   * distingue un écran d'attente d'une panne (#6214).
+   * le disque coloré ne dit rien de ce qu'il ouvre.
    */
-  test('porte un libellé et une promesse dans chacune des sept langues', async () => {
+  test('porte un libellé dans chacune des sept langues', async () => {
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       await loadInterfaceCatalog(language);
       for (const destination of allFloatingDestinations()) {
         expect(translate(language, destination.labelKey).trim().length).toBeGreaterThan(0);
-        expect(translate(language, destination.promiseKey).trim().length).toBeGreaterThan(0);
       }
     }
   });

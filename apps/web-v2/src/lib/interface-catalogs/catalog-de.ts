@@ -66,15 +66,6 @@ const de = {
   'notFound.title': 'Diese Adresse gibt es nicht.',
 
   'pending.back': 'Zurück zu den Unterhaltungen',
-  'pending.comingSoon': 'Dieser Bildschirm kommt bald.',
-  'pending.feed.promise': 'Die Beiträge der Menschen, denen du folgst.',
-  'pending.links.promise': 'Die in deinen Unterhaltungen geteilten Links werden hier gesammelt.',
-  'pending.notifications.promise': 'Was auf dich wartet — Erwähnungen, Antworten, Einladungen — liest du hier.',
-  'pending.calls.promise': 'Dein Anrufverlauf und die Möglichkeit, jemanden anzurufen.',
-  'pending.discover.promise': 'Menschen zum Kennenlernen, ausgewählt nach euren Gemeinsamkeiten.',
-  'pending.communities.promise': 'Die Communitys, zu denen du gehörst, und die, die zu dir passen.',
-  'pending.settings.promise': 'Deine Sprachen, deine Privatsphäre, deine Mitteilungen.',
-  'pending.profile.promise': 'Deine Meeshy-Identität — Name, Foto, Sprachen und was andere davon sehen.',
 
   'profile.title': 'Profil',
   'profile.edit': 'Bearbeiten',

@@ -75,15 +75,6 @@ const fr = {
   'notFound.title': "Cette adresse n'existe pas.",
 
   'pending.back': 'Revenir aux conversations',
-  'pending.comingSoon': 'Cet écran arrive bientôt.',
-  'pending.feed.promise': 'Les publications de celles et ceux que vous suivez.',
-  'pending.links.promise': 'Les liens partagés dans vos conversations se rassembleront ici.',
-  'pending.notifications.promise': 'Ce qui vous attend — mentions, réponses, invitations — se lira ici.',
-  'pending.calls.promise': 'Le journal de vos appels, et de quoi en passer un.',
-  'pending.discover.promise': 'Des personnes à rencontrer, choisies par ce que vous avez en commun.',
-  'pending.communities.promise': 'Les communautés dont vous faites partie, et celles qui vous ressemblent.',
-  'pending.settings.promise': 'Vos langues, votre confidentialité, vos notifications.',
-  'pending.profile.promise': 'Votre identité Meeshy — nom, photo, langues, et ce que les autres en voient.',
 
   'profile.title': 'Profil',
   'profile.edit': 'Modifier',
