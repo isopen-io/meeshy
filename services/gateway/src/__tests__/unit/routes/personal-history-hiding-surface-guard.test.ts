@@ -367,6 +367,18 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       'ferait survivre indéfiniment à la préférence d\'affichage d\'un seul ' +
       'utilisateur — même raisonnement, même exemption.',
   },
+
+  // #6501 — même famille encore : une passe d'INTÉGRITÉ, sans lecteur, qui
+  // cherche les messages dont l'expéditeur a disparu pour les réparer.
+  'messaging/repairOrphanedMessageSenders.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Réparation d'intégrité, jamais une surface servie : elle cherche, dans " +
+      "une conversation entière, les messages dont le Participant expéditeur a " +
+      "disparu — un seul fait rejeter la lecture de TOUS les membres. Masquer " +
+      "une ligne pour un lecteur la laisserait casser la conversation des autres.",
+  },
 };
 
 /**
