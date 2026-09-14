@@ -47,6 +47,8 @@ const ar = {
   'root.menu.communities': 'المجتمعات',
   'root.menu.settings': 'الإعدادات',
   'root.menu.profile': 'الملف الشخصي',
+  'root.menu.conversations': 'المحادثات',
+  'a11y.floating.feed.hint': 'اضغط مطولًا لتشغيل الريلز',
   'a11y.floating.menu': 'القائمة',
   'a11y.floating.menu.ladder': 'التنقل في Meeshy',
   'a11y.floating.menu.unread.one': 'القائمة، {count} إشعار غير مقروء',

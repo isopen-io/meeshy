@@ -47,6 +47,8 @@ const it = {
   'root.menu.communities': 'Community',
   'root.menu.settings': 'Impostazioni',
   'root.menu.profile': 'Profilo',
+  'root.menu.conversations': 'Conversazioni',
+  'a11y.floating.feed.hint': 'Tieni premuto per avviare i Reel',
   'a11y.floating.menu': 'Menu',
   'a11y.floating.menu.ladder': 'Navigazione Meeshy',
   'a11y.floating.menu.unread.one': 'Menu, {count} notifica non letta',

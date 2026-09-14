@@ -51,6 +51,8 @@ const pt = {
   'root.menu.communities': 'Comunidades',
   'root.menu.settings': 'Ajustes',
   'root.menu.profile': 'Perfil',
+  'root.menu.conversations': 'Conversas',
+  'a11y.floating.feed.hint': 'Toque longo para abrir os Reels',
   'a11y.floating.menu': 'Menu',
   'a11y.floating.menu.ladder': 'Navegação do Meeshy',
   'a11y.floating.menu.unread.one': 'Menu, {count} notificação não lida',

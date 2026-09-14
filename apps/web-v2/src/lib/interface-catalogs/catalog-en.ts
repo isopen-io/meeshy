@@ -47,6 +47,8 @@ const en = {
   'root.menu.communities': 'Communities',
   'root.menu.settings': 'Settings',
   'root.menu.profile': 'Profile',
+  'root.menu.conversations': 'Conversations',
+  'a11y.floating.feed.hint': 'Long press to start Reels',
   'a11y.floating.menu': 'Menu',
   'a11y.floating.menu.ladder': 'Meeshy navigation',
   'a11y.floating.menu.unread.one': 'Menu, {count} unread notification',

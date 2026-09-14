@@ -34,7 +34,9 @@ import type { ROUTES } from '@/routes/route-table';
  */
 export type MenuGlyph =
   | { readonly set: 'socle'; readonly name: GlyphName }
-  | { readonly set: 'flottant'; readonly name: FloatingGlyphName };
+  | { readonly set: 'flottant'; readonly name: FloatingGlyphName }
+  /** Les trois traits de Meeshy (`BrandMark`) — le glyphe du disque de gauche posé sur le Flux (#6456). */
+  | { readonly set: 'marque' };
 
 export type FloatingDestination = {
   /** L'identité de l'entrée — miroir du `case` iOS. */
@@ -163,7 +165,7 @@ export function menuLadderFor({ canAccessAdmin }: { readonly canAccessAdmin: boo
   return canAccessAdmin ? [...MENU_LADDER, ADMIN_DESTINATION] : MENU_LADDER;
 }
 
-/** Le bouton de GAUCHE, en entier. */
+/** Le bouton de GAUCHE, hors du Flux. */
 export const FEED_DESTINATION: FloatingDestination = {
   key: 'feed',
   route: 'feed',
@@ -171,6 +173,30 @@ export const FEED_DESTINATION: FloatingDestination = {
   tint: '#F87171',
   glyph: { set: 'flottant', name: 'stack' },
 };
+
+/**
+ * **Le bouton de GAUCHE, sur le Flux** (#6456) — il ramène aux conversations.
+ * Le glyphe est la marque : iOS peint `AnimatedLogoView` dans ce disque quand
+ * `showFeed` est vrai (`RootView.swift:1620-1625`) ; le nom reprend les
+ * valeurs de `tab.conversations` d'iOS dans les sept langues.
+ */
+export const CONVERSATIONS_DESTINATION: FloatingDestination = {
+  key: 'conversations',
+  route: 'list',
+  labelKey: 'root.menu.conversations',
+  tint: '#F87171',
+  glyph: { set: 'marque' },
+};
+
+/**
+ * **OÙ LE TAP DU DISQUE DE GAUCHE MÈNE** — `showFeed.toggle()`
+ * (`RootView.swift:1557-1565`). Sur le Flux, aux conversations ; partout
+ * ailleurs où les disques paraissent, au Flux. Le nom et le glyphe se lisent
+ * sur la destination rendue : ils disent où l'on va, jamais où l'on est.
+ */
+export function feedDiscDestination(routeKey: string): FloatingDestination {
+  return routeKey === FEED_DESTINATION.route ? CONVERSATIONS_DESTINATION : FEED_DESTINATION;
+}
 
 /** Ce que le second tap sur l'avatar ouvre. */
 export const PROFILE_DESTINATION: FloatingDestination = {
@@ -182,11 +208,11 @@ export const PROFILE_DESTINATION: FloatingDestination = {
 };
 
 /**
- * Les NEUF. C'est cette fonction que le témoin de la loi 4 interroge — et elle
+ * Les DIX. C'est cette fonction que le témoin de la loi 4 interroge — et elle
  * existe précisément parce qu'une énumération centrée sur l'échelle oublie les
- * destinations qui n'en font pas partie : les deux plus fréquentées, et celle
- * qui n'y paraît que pour qui administre.
+ * destinations qui n'en font pas partie : les deux faces du disque de gauche,
+ * le profil, et celle qui n'y paraît que pour qui administre.
  */
 export function allFloatingDestinations(): readonly FloatingDestination[] {
-  return [FEED_DESTINATION, ...MENU_LADDER, ADMIN_DESTINATION, PROFILE_DESTINATION];
+  return [FEED_DESTINATION, CONVERSATIONS_DESTINATION, ...MENU_LADDER, ADMIN_DESTINATION, PROFILE_DESTINATION];
 }

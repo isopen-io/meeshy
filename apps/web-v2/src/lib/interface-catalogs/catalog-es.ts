@@ -47,6 +47,8 @@ const es = {
   'root.menu.communities': 'Comunidades',
   'root.menu.settings': 'Ajustes',
   'root.menu.profile': 'Perfil',
+  'root.menu.conversations': 'Conversaciones',
+  'a11y.floating.feed.hint': 'Mantén pulsado para abrir los Reels',
   'a11y.floating.menu': 'Menú',
   'a11y.floating.menu.ladder': 'Navegación de Meeshy',
   'a11y.floating.menu.unread.one': 'Menú, {count} notificación no leída',
