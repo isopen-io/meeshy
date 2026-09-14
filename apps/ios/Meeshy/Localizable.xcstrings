@@ -39510,43 +39510,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المفضلة"
+            "value": "المنشورات المحفوظة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Favoriten"
+            "value": "Gespeicherte Beiträge"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Favorites"
+            "value": "Saved posts"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Favoritos"
+            "value": "Publicaciones guardadas"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Favoris"
+            "value": "Publications enregistrées"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Preferiti"
+            "value": "Post salvati"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Favoritos"
+            "value": "Publicações salvas"
           }
         }
       }
@@ -110770,43 +110770,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الخصوصية"
+            "value": "سياسة الخصوصية"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Datenschutz"
+            "value": "Datenschutzerklärung"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Privacy"
+            "value": "Privacy Policy"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Privacidad"
+            "value": "Política de privacidad"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Confidentialité"
+            "value": "Politique de confidentialité"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Privacy"
+            "value": "Informativa sulla privacy"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Privacidade"
+            "value": "Política de privacidade"
           }
         }
       }
@@ -111099,43 +111099,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الشروط"
+            "value": "شروط الاستخدام"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bedingungen"
+            "value": "Nutzungsbedingungen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Terms"
+            "value": "Terms of Service"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Términos"
+            "value": "Términos de servicio"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conditions"
+            "value": "Conditions d'utilisation"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Termini"
+            "value": "Termini di servizio"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Termos"
+            "value": "Termos de uso"
           }
         }
       }
@@ -140081,53 +140081,6 @@
         }
       }
     },
-    "sessions_back": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "رجوع"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zurück"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Back"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Atrás"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Retour"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Indietro"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Voltar"
-          }
-        }
-      }
-    },
     "sessions_current_badge": {
       "extractionState": "manual",
       "localizations": {
@@ -155874,7 +155827,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Press and hold a message and choose \\\"Add to favourites\\\" to find it here."
+            "value": "Press and hold a message and choose “Add to favourites” to find it here."
           }
         },
         "es": {
@@ -155886,7 +155839,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Appuyez longuement sur un message et choisissez \\\"Ajouter aux favoris\\\" pour le retrouver ici."
+            "value": "Appuyez longuement sur un message et choisissez « Ajouter aux favoris » pour le retrouver ici."
           }
         },
         "it": {

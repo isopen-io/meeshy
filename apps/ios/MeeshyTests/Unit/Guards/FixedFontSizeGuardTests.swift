@@ -290,7 +290,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/SupportView.swift",
         "Features/Main/Views/TrackingLinksView.swift",
         "Features/Main/Views/UserStatsView.swift",
-        "Features/Main/Views/VoiceProfileManageView.swift",
         "Features/Main/Views/VoiceProfileWizardView.swift",
         "Features/Main/Views/WebRTCVideoView.swift",
         "Features/Stories/Notifications/StoryExpiredContent.swift",
@@ -375,7 +374,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// sa barre haute, trois dans ses étapes) et le carrousel d'accueil un — et
     /// les vingt sont partis avec leurs fichiers. `SignupView` et `WelcomeView`
     /// n'en introduisent aucun.
-    private static let totalCeiling = 226
+    // 226 → 214 (#6481, 2026-09-14) : les pages ouvertes depuis Réglages montent
+    // l'en-tête partagé, et leurs chevrons, croix et (+) faits main à taille figée
+    // sont partis avec lui. `VoiceProfileManageView` sort de `bearingFiles`.
+    private static let totalCeiling = 214
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

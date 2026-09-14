@@ -312,6 +312,10 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                                 .foregroundColor(titleColor)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
+                                // Un EN-TÊTE pour le rotor de VoiceOver (#6481) : les pages
+                                // de Réglages le posaient sur leur titre fait main, et le
+                                // perdaient en montant ce composant.
+                                .accessibilityAddTraits(.isHeader)
                         }
 
                         if showExpandedSubtitle {
