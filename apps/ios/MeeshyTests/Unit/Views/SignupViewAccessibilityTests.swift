@@ -102,19 +102,20 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Le COMPTE, pas la seule présence : c'est ce qui rend « j'ai supprimé
     /// l'haptique au lieu de la faire converger » rouge.
     ///
-    /// `SignupView` en porte huit — fermer, « Se connecter » sous l'e-mail,
+    /// `SignupView` en porte dix — fermer, « Se connecter » sous l'e-mail,
     /// ouvrir le sélecteur de pays, ouvrir la feuille de langue, le pied
-    /// « Déjà un compte ? », **déplier un (i)** (#6441), puis le succès et
-    /// l'échec de l'envoi. Les deux derniers sont d'INTENSITÉS distinctes : un
+    /// « Déjà un compte ? », **déplier un (i)** (#6441), **ouvrir le bloc
+    /// d'identité** et **retenir un pseudo de rechange** (#6479), puis le
+    /// succès et l'échec de l'envoi. Les deux derniers sont d'INTENSITÉS distinctes : un
     /// compte créé et un refus ne se sentent pas pareil, et c'est la seule
     /// information tactile de l'écran.
     ///
     /// Le (i) en a une parce que ses deux voisins d'usage en ont une : ouvrir
     /// le sélecteur de pays et ouvrir la feuille de langue. Un contrôle qui
     /// RÉVÈLE quelque chose se sent, sur cet écran, depuis #5555.
-    func test_signupView_keepsItsEightHaptics() throws {
+    func test_signupView_keepsItsTenHaptics() throws {
         let body = try code(Self.signupView)
-        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 8)
+        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 10)
         XCTAssertTrue(body.contains("HapticFeedback.success()"),
                       "la création du compte se SENT — c'est le seul retour immédiat avant la bascule")
         XCTAssertTrue(body.contains("HapticFeedback.error()"),
@@ -331,16 +332,45 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Comme lui, il est un CHOIX : vide, la passerelle dérive le nom de
     /// l'adresse. Donc les deux mêmes exigences, et la seconde compte plus —
     /// « facultatif » sans sa conséquence est une case qu'on saute.
-    func test_displayNameField_announcesItsOptionalityAndItsConsequence() throws {
+    /// LE CHAMP A DISPARU, la règle non (#6479).
+    ///
+    /// #6441 exigeait que le nom affiché se dise « facultatif » et dise sa
+    /// conséquence. La refonte va plus loin : il n'y a plus de champ « nom
+    /// affiché » à annoncer — l'écran MONTRE le nom dérivé, et n'ouvre la
+    /// saisie que si on la demande. Une promesse RENDUE vaut mieux qu'une
+    /// promesse ANNONCÉE.
+    ///
+    /// Ce témoin garde donc ce qui reste vrai : le bloc existe, il rend les
+    /// deux valeurs, et il tient la saisie derrière un geste explicite.
+    func test_derivedIdentity_showsWhatWillBeCreated() throws {
         let body = try code(Self.signupView)
-        let name = try fieldBody("displayNameField", in: body)
+        let bloc = try fieldBody("derivedIdentityBlock", in: body)
 
-        XCTAssertTrue(name.lowercased().contains("facultatif"),
-                      "le nom affiché DOIT se dire facultatif — la passerelle ne l'exige pas")
-        XCTAssertTrue(name.contains("derivedNote"),
-                      "et la conséquence DOIT être dite : il se DÉRIVE de l'adresse")
-        XCTAssertTrue(name.contains("FieldHint("),
-                      "la conséquence passe par le (i) (#6441) — c'est ce qui la garde REJOIGNABLE une fois repliée")
+        XCTAssertTrue(bloc.contains("effectiveUsername"),
+                      "le PSEUDO qui partira doit être rendu, pas un champ vide")
+        XCTAssertTrue(bloc.contains("effectiveDisplayName"),
+                      "le NOM AFFICHÉ qui partira aussi")
+        XCTAssertTrue(bloc.contains("isEditingIdentity"),
+                      "la saisie reste derrière un geste — le chemin nominal ne demande AUCUN geste")
+        XCTAssertTrue(bloc.contains("usernameSuggestions"),
+                      "et les pseudos libres d'un refus doivent atteindre un pixel, sinon le refus est un mur")
+    }
+
+    /// Un refus qui vise l'identité OUVRE la saisie : laisser replié montrerait
+    /// un message sous un champ que rien ne permet d'atteindre.
+    func test_derivedIdentity_opensOnRefusal() throws {
+        let bloc = try fieldBody("derivedIdentityBlock", in: try code(Self.signupView))
+        XCTAssertTrue(bloc.contains("error(for: .username)"))
+        XCTAssertTrue(bloc.contains("isEditingIdentity || refus != nil"))
+    }
+
+    /// L'AVERTISSEMENT DE VALIDATION est en clair, jamais derrière un (i) : ce
+    /// n'est pas un détail qu'on consulte, c'est une condition du compte.
+    func test_emailField_warnsThatTheAccountMustBeVerified() throws {
+        let email = try fieldBody("emailField", in: try code(Self.signupView))
+        XCTAssertTrue(email.contains("auth.signup.email.verificationNotice"))
+        XCTAssertFalse(email.contains("FieldHint("),
+                       "l'avertissement ne se replie pas derrière un (i)")
     }
 
     /// Les `defaultValue:` du fichier — la copie que l'utilisateur lit.

@@ -52,6 +52,9 @@ final class AuthManagerSignupRegistrar: SignupRegistering {
 /// Les quatre saisies de l'écran, et rien d'autre : un refus qui ne vise aucune
 /// d'elles va au bandeau, jamais sous un champ arbitraire.
 enum SignupField: String, CaseIterable, Hashable {
+    /// Le pseudo a sa PROPRE saisie depuis #6479 — l'écran le montre et
+    /// l'envoie, donc un refus qui le vise doit se poser sous lui.
+    case username
     case displayName
     case email
     case phoneNumber
@@ -89,6 +92,9 @@ final class SignupViewModel: ObservableObject {
     /// Vrai quand le serveur a répondu `EMAIL_TAKEN` : l'écran offre alors
     /// « Se connecter » sous le champ, au lieu de laisser l'utilisateur deviner.
     @Published private(set) var emailAlreadyRegistered = false
+    /// Les pseudos LIBRES à proposer quand celui qu'on envoyait est pris
+    /// (#6479). Vide partout ailleurs.
+    @Published private(set) var usernameSuggestions: [String] = []
 
     private let registrar: any SignupRegistering
 
@@ -119,6 +125,10 @@ final class SignupViewModel: ObservableObject {
         isSubmitting = true
         fieldErrors = [:]
         bannerError = nil
+        // Les suggestions décrivent un refus RÉVOLU : les laisser survivre à
+        // un nouvel envoi proposerait des pseudos pour un conflit qui n'est
+        // peut-être plus.
+        usernameSuggestions = []
         emailAlreadyRegistered = false
         defer { isSubmitting = false }
 
@@ -177,6 +187,12 @@ final class SignupViewModel: ObservableObject {
         }
 
         fieldErrors = placed
+        // Les pseudos LIBRES servis avec `USERNAME_TAKEN` (#6479). Le SDK les
+        // décode déjà (`APIRejection.suggestions`) ; personne ne les lisait.
+        // Depuis que l'écran ENVOIE son pseudo, une collision est un REFUS et
+        // non plus un renommage silencieux — sans ces trois valeurs, ce refus
+        // serait un mur.
+        usernameSuggestions = rejection.suggestions
         // Un refus qu'aucun champ ne porte doit rester VISIBLE : sans ce
         // repli, un code inconnu effacerait le formulaire de toute trace de
         // l'échec et le bouton redeviendrait actif sans explication.
@@ -209,19 +225,22 @@ final class SignupViewModel: ObservableObject {
 
     /// Le champ SERVEUR → la saisie qui le porte à l'écran.
     ///
-    /// `username`, `firstName` et `lastName` atterrissent tous sous le NOM
-    /// AFFICHÉ : depuis #5218 le client ne les envoie plus, la passerelle les
-    /// DÉRIVE de `displayName` — donc la seule saisie que l'utilisateur peut
-    /// corriger pour les changer est celle-là. Les renvoyer au bandeau
-    /// laisserait « ce pseudo est déjà pris » flotter au-dessus d'un formulaire
-    /// qui n'a pas de champ pseudo.
+    /// LA TABLE A CHANGÉ (#6479). `username` se repliait sur le nom affiché
+    /// parce qu'aucune saisie ne le portait — « ce pseudo est déjà pris »
+    /// aurait flotté au-dessus d'un formulaire sans champ pseudo. L'écran en a
+    /// un désormais, et il ENVOIE sa valeur : le refus se pose sous lui, sinon
+    /// le message accuse un champ que l'utilisateur n'a pas touché.
+    ///
+    /// `firstName`/`lastName` restent sous le nom affiché : la passerelle les
+    /// dérive de lui, et c'est la seule saisie qui permet de les changer.
     ///
     /// `systemLanguage` / `regionalLanguage` ne sont volontairement PAS mappés :
     /// la langue régionale ne se montre pas, et un refus sur elle est un défaut
     /// serveur, pas une faute de saisie — il appartient au bandeau.
     static func field(forServerName name: String) -> SignupField? {
         switch name {
-        case "displayName", "username", "firstName", "lastName": return .displayName
+        case "username": return .username
+        case "displayName", "firstName", "lastName": return .displayName
         case "email": return .email
         case "phoneNumber", "phoneCountryCode": return .phoneNumber
         case "password": return .password
