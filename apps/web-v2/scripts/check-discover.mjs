@@ -18,6 +18,9 @@
  *  2. AU REPOS, chaque contrôle et chaque texte visible retombe sur lui-même à
  *     son centre (`elementFromPoint`) — aucun disque flottant n'en vole un — et
  *     chaque contrôle fait au moins 44 de haut ;
+ *  2 bis. le tablist des onglets répond aux flèches, Début et Fin (#6422) —
+ *     ArrowRight/ArrowLeft déplacent le focus ET la sélection, et un seul
+ *     onglet reste dans l'ordre de tabulation ;
  *  3. la recherche rend chaque relation par SON geste (Accepter/Refuser, En
  *     attente, Contact, Bloqué, Ajouter), et « Ajouter » passe « En attente » au
  *     geste, en moins de 300 ms ;
@@ -230,6 +233,21 @@ try {
         await reachAtRest(page, 'header a, [data-discover-tab], [data-discover-invite-email], [data-discover-invite-send], [data-discover-search]', 'header h1, [data-discover-tab-title], [data-discover-invite] label'),
         6,
       );
+
+      // ------------------------------------------------ 2 bis. les flèches du tablist (#6422)
+      await page.focus('[data-discover-tab="discover"]');
+      await page.keyboard.press('ArrowRight');
+      const afterRight = await page.evaluate(() => document.activeElement?.getAttribute('data-discover-tab') ?? null);
+      check(afterRight === 'requests', `${label} : ArrowRight avance le focus sur « Demandes » (${afterRight})`);
+      check((await attrOf(page, '[data-discover-tab="requests"]', 'aria-selected')) === 'true', `${label} : ArrowRight sélectionne l'onglet, pas seulement son focus`);
+      await page.keyboard.press('End');
+      const afterEnd = await page.evaluate(() => document.activeElement?.getAttribute('data-discover-tab') ?? null);
+      check(afterEnd === 'blocked', `${label} : End va au dernier onglet (${afterEnd})`);
+      await page.keyboard.press('Home');
+      const afterHome = await page.evaluate(() => document.activeElement?.getAttribute('data-discover-tab') ?? null);
+      check(afterHome === 'discover', `${label} : Home revient au premier onglet (${afterHome})`);
+      const tabIndices = await page.$$eval('[data-discover-tab]', (els) => els.map((el) => el.tabIndex));
+      check(JSON.stringify(tabIndices) === JSON.stringify([0, -1, -1]), `${label} : un seul onglet — le sélectionné — reste dans l'ordre de tabulation (${JSON.stringify(tabIndices)})`);
 
       // ------------------------------------------------ 3. la recherche rend chaque relation par son geste
       const relations = {};
