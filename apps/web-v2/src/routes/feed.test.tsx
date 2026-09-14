@@ -67,7 +67,7 @@ describe('les quatre états du fil sont DESSINÉS, jamais un écran blanc', () =
   test('l’en-tête porte le titre d’iOS et un retour NOMMÉ vers la liste, cible 44', () => {
     const html = renderToStaticMarkup(<FeedHeader pinned={false} railProps={RAIL_PLEIN} />);
     expect(html).toContain('Meeshy Feed');
-    expect(html).toContain('aria-label="Retour aux conversations"');
+    expect(html).toContain('aria-label="Revenir aux conversations"');
     expect(html).toContain('size-11');
     expect(html).toContain('href="/"');
   });
