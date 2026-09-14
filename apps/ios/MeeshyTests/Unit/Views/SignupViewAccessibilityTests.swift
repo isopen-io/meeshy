@@ -245,6 +245,24 @@ final class SignupViewAccessibilityTests: XCTestCase {
         )
     }
 
+    /// Le REVERS de la garde ci-dessus (#6441, retour porteur « récolter le
+    /// téléphone serait bon »).
+    ///
+    /// Ne pas le dire facultatif empêche de le faire paraître sautable ; cela
+    /// ne donne encore aucune RAISON de le remplir. Le seul levier honnête est
+    /// de dire ce qu'il OUVRE — et les deux usages énoncés sont MESURÉS, pas
+    /// promis : identifiant de connexion (`AuthService.ts:158`) et découverte
+    /// par un contact qui l'a au carnet (`contacts-match.ts`).
+    ///
+    /// Sans ce témoin, la note disparaîtrait au premier remaniement d'écran
+    /// sans que rien ne rougisse — un champ muet n'échoue jamais.
+    func test_phoneField_statesWhatTheNumberUnlocks() throws {
+        let body = try code(Self.signupView)
+        let phone = try fieldBody("phoneField", in: body)
+        XCTAssertTrue(phone.contains("auth.signup.phone.benefit"),
+                      "le champ téléphone DOIT dire ce que le numéro ouvre")
+    }
+
     // MARK: - Le mot de passe, LUI, est annoncé facultatif — et sa conséquence dite
 
     /// Un compte peut naître sans mot de passe (#6424) : sa seule porte est

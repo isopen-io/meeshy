@@ -263,7 +263,19 @@ export default function SignupScreen() {
               <p role="alert" className="text-caption" style={{ color: 'var(--ios-error)' }}>
                 {feedback.fieldErrors.phoneNumber}
               </p>
-            ) : null}
+            ) : (
+              /* CE QU'IL OUVRE, jamais « facultatif » (#6441). Les deux usages
+                 sont MESURÉS, pas promis : le numéro est un identifiant de
+                 connexion (`AuthService.ts:158`, la disjonction
+                 username/email/phoneNumber) et il rend trouvable par un
+                 contact qui l'a au carnet (`contacts-match.ts`,
+                 `matchedBy: 'phone'`). Dire l'usage est le seul levier
+                 honnête pour qu'il soit donné — le NOMMER facultatif ferait
+                 l'inverse. */
+              <p data-signup-phone-benefit className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+                Il vous permettra de vous connecter, et à vos proches de vous retrouver.
+              </p>
+            )}
           </div>
 
           {/* LE MOT DE PASSE EST FACULTATIF (#6424). Le libellé le DIT, et la

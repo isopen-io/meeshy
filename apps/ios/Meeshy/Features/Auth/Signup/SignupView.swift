@@ -239,6 +239,27 @@ struct SignupView: View {
             }
 
             errorRow(for: .phoneNumber)
+
+            // CE QU'IL OUVRE — et rien d'autre (#6441). Les deux usages
+            // sont MESURÉS, pas promis : le numéro est un identifiant de
+            // connexion (`AuthService.ts:158`, la disjonction
+            // username/email/phoneNumber) et il rend trouvable par un contact
+            // qui l'a au carnet (`contacts-match.ts`, `matchedBy: "phone"`).
+            // Dire l'USAGE est le seul levier honnête pour qu'il soit donné —
+            // le présenter comme un choix à prendre ferait l'inverse, et c'est
+            // ce que le témoin voisin interdit depuis #5555.
+            if viewModel.error(for: .phoneNumber) == nil {
+                Text(
+                    String(
+                        localized: "auth.signup.phone.benefit",
+                        defaultValue: "Il vous permettra de vous connecter, et à vos proches de vous retrouver.",
+                        bundle: .main
+                    )
+                )
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
+                .foregroundColor(theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .sheet(isPresented: $isShowingCountryPicker) {
             SignupCountrySheet(selection: $viewModel.form.country)

@@ -37718,6 +37718,53 @@
         }
       }
     },
+    "auth.signup.phone.benefit": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سيتيح لك تسجيل الدخول، ويسمح لمن تعرفهم بالعثور عليك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Damit meldest du dich an, und deine Kontakte können dich finden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It lets you sign in, and lets people you know find you."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te permitirá iniciar sesión, y que tus contactos te encuentren."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il vous permettra de vous connecter, et à vos proches de vous retrouver."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ti permetterà di accedere e ai tuoi contatti di trovarti."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ele permite que você entre e que seus contatos te encontrem."
+          }
+        }
+      }
+    },
     "auth.signup.phone.country.hint": {
       "extractionState": "manual",
       "localizations": {
