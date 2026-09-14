@@ -140,8 +140,25 @@ const selfTest = () => {
   const drifted = betaMarkersDriftedFromTrigger();
   drifted.forEach((failure) => console.error(failure));
 
-  const failing = blind.length + overzealous.length + drifted.length;
-  const total = MUTATIONS.length + TOLERATED.length + 1;
+  const conflicting = MUTATIONS[0][1];
+  const unknownSha = 'f'.repeat(40);
+  const remediedSha = [...REMEDIED.keys()][0];
+  const survivors = unremediedConflicts([
+    { sha: remediedSha, message: conflicting },
+    { sha: unknownSha, message: conflicting },
+  ]).map(({ sha }) => sha);
+  const remediation = survivors.length === 1 && survivors[0] === unknownSha
+    ? []
+    : [`ACQUITTEMENT : attendu [${unknownSha}] seul, obtenu [${survivors.join(', ')}]`];
+  remediation.forEach((failure) => console.error(failure));
+
+  const firstParent = rangeLogArgs('a..b').includes('--first-parent')
+    ? []
+    : ['PLAGE : le balayage lit des commits arrivés par fusion, qui ne sont la tête d\'aucun push'];
+  firstParent.forEach((failure) => console.error(failure));
+
+  const failing = blind.length + overzealous.length + drifted.length + remediation.length + firstParent.length;
+  const total = MUTATIONS.length + TOLERATED.length + 3;
   if (failing > 0) {
     console.error(`\n${failing}/${total} sondes échouent.`);
     return 1;
