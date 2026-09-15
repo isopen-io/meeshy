@@ -32489,7 +32489,7 @@ du § Prisme « qui AFFICHE ce qu'il décide ? » : une loi de dépliage juste m
 appliquée au mauvais découpage atteint bien des pixels — les mauvais.
 ---
 
-## Leçon 612 — Une confirmation `y/N` non automatisée est un no-op SILENCIEUX : la purge « posée » ne retire rien, et on croit avoir purgé (2026-09-15)
+## Leçon 613 — Une confirmation `y/N` non automatisée est un no-op SILENCIEUX : la purge « posée » ne retire rien, et on croit avoir purgé (2026-09-15)
 
 **Directive porteur, deux moitiés :** dans le code de release des images sur le serveur final, la purge
 (`docker image prune`) est obligatoire **et son `y` s'envoie tout seul** ; et le déploiement automatique
