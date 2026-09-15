@@ -1,6 +1,6 @@
 package me.meeshy.app.feed
 
-import androidx.compose.ui.test.assertExists
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import me.meeshy.ui.theme.MeeshyTheme
@@ -43,20 +43,20 @@ class FeedMediaImageAltTextTest {
     fun `an author-authored description becomes the rendered contentDescription`() {
         show(alt = "A red bicycle leaning on a brick wall")
 
-        compose.onNodeWithContentDescription("A red bicycle leaning on a brick wall").assertExists()
+        compose.onNodeWithContentDescription("A red bicycle leaning on a brick wall").assertIsDisplayed()
     }
 
     @Test
     fun `a blank alt falls back to the generic localized label, never an empty announcement`() {
         show(alt = "   ")
 
-        compose.onNodeWithContentDescription("Post image").assertExists()
+        compose.onNodeWithContentDescription("Post image").assertIsDisplayed()
     }
 
     @Test
     fun `no alt at all falls back to the generic localized label`() {
         show(alt = null)
 
-        compose.onNodeWithContentDescription("Post image").assertExists()
+        compose.onNodeWithContentDescription("Post image").assertIsDisplayed()
     }
 }
