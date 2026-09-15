@@ -2,6 +2,7 @@ import { transformTranslationsToArray } from '../../../utils/translation-transfo
 import { resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
 import { mapMessageProtectionFields } from '../../conversations/messages-list-query';
 import { servedQuotedMessage } from '../../../services/messaging/servedQuotedMessage';
+import { attachmentReplyToFromMetadata } from '../../../services/messaging/attachmentReplySnapshot';
 
 /**
  * Extracts sender info from unified Participant model
@@ -116,7 +117,7 @@ export function formatLinkMessageWithDetails(message: any) {
     ...(message.metadata ? { metadata: message.metadata } : {}),
     sender: extractSenderInfo(message.sender),
     attachments: message.attachments || [],
-    replyTo: message.replyTo ? formatReplyToMessage(message.replyTo) : null,
+    replyTo: message.replyTo ? formatReplyToMessage(message.replyTo, message.metadata) : null,
     reactions: message.reactions || [],
     translations: transformTranslationsToArray(
       message.id,
@@ -145,9 +146,19 @@ export function formatLinkMessageWithDetails(message: any) {
  * autres routes du dépôt les affichent déjà pour le message RACINE
  * (`mapMessageProtectionFields`, `#4885`), la citation n'a aucune raison d'en
  * savoir moins.
+ *
+ * #6164 — `citingMetadata` est le `metadata` du message QUI CITE, jamais celui
+ * du message cité : l'instantané de la PIÈCE NOMMÉE y est gravé, et c'est le
+ * seul fait de la citation que ce formateur peut servir sans recopier les
+ * pièces jointes. La NATURE figée suffit à dire « une photo » ; l'ancre suffit
+ * à sauter. Clé ABSENTE quand la réponse vise le message entier — c'est le cas
+ * de toutes les citations d'avant ce lot, et rien n'y change.
  */
-function formatReplyToMessage(replyTo: any) {
-  const guarded = servedQuotedMessage(replyTo, { includeTranslations: false });
+function formatReplyToMessage(replyTo: any, citingMetadata?: unknown) {
+  const guarded = servedQuotedMessage(replyTo, {
+    includeTranslations: false,
+    attachmentReplyTo: attachmentReplyToFromMetadata(citingMetadata),
+  });
   return {
     id: replyTo.id,
     content: guarded['content'] !== undefined ? guarded['content'] : replyTo.content,
@@ -158,6 +169,7 @@ function formatReplyToMessage(replyTo: any) {
     isViewOnce: Boolean(replyTo.isViewOnce),
     isBlurred: Boolean(replyTo.isBlurred),
     isEncrypted: Boolean(replyTo.isEncrypted),
-    effectFlags: replyTo.effectFlags ?? 0
+    effectFlags: replyTo.effectFlags ?? 0,
+    ...(guarded['attachmentReplyTo'] ? { attachmentReplyTo: guarded['attachmentReplyTo'] } : {})
   };
 }

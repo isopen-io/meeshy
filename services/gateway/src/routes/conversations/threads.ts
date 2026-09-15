@@ -19,6 +19,7 @@ import { hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { MESSAGE_PROTECTION_SELECT } from './messages-list-query';
 import { servedQuotedMessage, type QuotedMessageRow } from '../../services/messaging/servedQuotedMessage';
+import { attachmentReplyToFromMetadata } from '../../services/messaging/attachmentReplySnapshot';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
@@ -193,6 +194,13 @@ function serializeThreadMessage<T extends Record<string, unknown>>(message: T): 
  * que le message RACINE porte déjà ses drapeaux depuis #4885 et que le schéma
  * de réponse (`additionalProperties: true`) ne tronque rien qui les
  * accompagnerait.
+ *
+ * #6164 — l'instantané de la PIÈCE NOMMÉE passe par la même unité, et il se lit
+ * sur `message.metadata` : il est gravé sur le message QUI CITE, jamais sur le
+ * message CITÉ (dont le `metadata`, chargé ici pour le hoist de position,
+ * porterait la pièce que LUI visait un cran plus haut dans le fil). Sans ce
+ * relais, l'aperçu du parent d'un fil désigne le média représentatif quand la
+ * liste du même fil désigne la pièce nommée.
  */
 function maskThreadMessageQuote<T extends Record<string, unknown>>(message: T): T {
   const replyTo = (message as { replyTo?: unknown }).replyTo;
@@ -204,7 +212,10 @@ function maskThreadMessageQuote<T extends Record<string, unknown>>(message: T): 
     ...message,
     replyTo: {
       ...quotedRow,
-      ...servedQuotedMessage(quotedRow, { includeTranslations: false }),
+      ...servedQuotedMessage(quotedRow, {
+        includeTranslations: false,
+        attachmentReplyTo: attachmentReplyToFromMetadata(message['metadata']),
+      }),
     },
   };
 }

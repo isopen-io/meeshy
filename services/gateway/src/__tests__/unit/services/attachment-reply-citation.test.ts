@@ -17,7 +17,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, jest } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import {
@@ -30,6 +30,7 @@ import {
 } from '../../../services/messaging/attachmentReplySnapshot';
 import { servedQuotedMessage } from '../../../services/messaging/servedQuotedMessage';
 import { clientDeclaredMetadata } from '../../../services/messaging/clientDeclaredMetadata';
+import { backfillCitedAttachments } from '../../../services/messaging/citedAttachmentBackfill';
 
 const piece = (rang: number, extra: Record<string, unknown> = {}) => ({
   id: `507f1f77bcf86cd79943900${rang}`,
@@ -231,18 +232,7 @@ describe('#6164 — la pièce NOMMÉE d’une citation', () => {
       expect(source).not.toMatch(/attachmentReplyToFromMetadata\(message\.replyTo/);
     });
 
-    it('rattrape la pièce citée hors du take, en UNE requête par page — et la route l’APPELLE', () => {
-      const backfill = readFileSync(
-        join(__dirname, '../../../services/messaging/citedAttachmentBackfill.ts'),
-        'utf-8'
-      );
-      // Une SEULE requête pour toute la page, jamais une par message.
-      expect(backfill.match(/prisma\.messageAttachment\.findMany/g)).toHaveLength(1);
-      // FAIL-CLOSED : la pièce rattrapée doit appartenir au message CITÉ.
-      expect(backfill).toMatch(/piece\.messageId !== m\.replyTo\?\.id/);
-      // Le masquage passe par le site UNIQUE, jamais une seconde boucle locale.
-      expect(backfill).toMatch(/servedQuotedAttachments\(/);
-
+    it('la route l’APPELLE — un rattrapage jamais branché ne rattraperait rien', () => {
       const route = readFileSync(
         join(__dirname, '../../../routes/conversations/messages-list.ts'),
         'utf-8'
@@ -252,13 +242,160 @@ describe('#6164 — la pièce NOMMÉE d’une citation', () => {
   });
 
   /**
-   * L'ENVOI. Citer la pièce d'un message qu'on ne cite pas, c'est citer la
-   * pièce d'une conversation qu'on ne lit peut-être pas : ce n'est pas une
-   * faute de frappe qu'on tolère en retombant sur le représentatif, c'est une
-   * FUITE — l'identifiant sert d'ancre à un saut, et le service qui le relit
-   * chargerait la ligne. La garde est donc FERMÉE : au moindre doute, refus.
+   * LE RATTRAPAGE, ÉPROUVÉ PAR SON COMPORTEMENT.
+   *
+   * Ce module a DEUX propriétés de sûreté, et aucune ne se lit dans une chaîne
+   * de source : la pièce rattrapée traverse le masquage du site UNIQUE en
+   * recevant LE MESSAGE CITÉ (donc les deux niveaux de protection — celui du
+   * MESSAGE et celui de la PIÈCE), et elle n'est recollée que sur le message
+   * dont elle est la pièce. Une passe de contrôle a neutralisé les deux EN
+   * LAISSANT INTACTES les expressions qu'un grep épingle — un
+   * `servedQuotedAttachments({}, [piece])` et un `&& false` dans la garde — et
+   * les 27 témoins d'alors sont restés VERTS sur un correctif annulé. Ceux-ci
+   * INSTANCIENT, APPELLENT et OBSERVENT : ils tombent sur les deux mutations.
    */
-  describe('la garde d’envoi est FERMÉE — un attachmentId étranger au message cité est REFUSÉ', () => {
+  describe('le rattrapage hors fenêtre — ce qu’il FAIT, jamais ce qu’il ÉCRIT', () => {
+    const MESSAGE_CITE = '507f1f77bcf86cd799439000';
+    const AUTRE_MESSAGE = '507f1f77bcf86cd799439999';
+    const CINQUIEME = CINQ_PIECES[4].id;
+
+    /** Les quatre premières : ce que le `take: 4` du `select` a servi. */
+    const QUATRE_SERVIES = [piece(1), piece(2), piece(3), piece(4)];
+
+    const fauxPrisma = (lignes: Record<string, unknown>[]) => {
+      const findMany = jest.fn(async () => lignes);
+      return { prisma: { messageAttachment: { findMany } } as never, findMany };
+    };
+
+    /**
+     * Un message de la PAGE qui cite `citee`, son `replyTo` tel que
+     * `servedQuotedMessage` vient de le servir — l'instantané posé, et les
+     * quatre pièces de la fenêtre.
+     */
+    const messagePage = (options: {
+      readonly citee: string;
+      readonly citeEstProtege?: boolean;
+      readonly servies?: unknown[];
+    }) => ({
+      id: 'm-citant',
+      replyTo: {
+        id: MESSAGE_CITE,
+        content: 'regarde ces cinq photos',
+        messageType: 'image',
+        isViewOnce: options.citeEstProtege === true,
+        attachments: options.servies ?? QUATRE_SERVIES,
+        attachmentReplyTo: { attachmentId: options.citee, kind: 'image' },
+      },
+    });
+
+    const rattrapee = (m: { replyTo: { attachments: unknown[] } }, id: string) =>
+      (m.replyTo.attachments as Record<string, unknown>[]).find((a) => a?.['id'] === id);
+
+    it('rattrape la CINQUIÈME pièce, celle que le take de la fenêtre a laissée dehors', async () => {
+      const page = [messagePage({ citee: CINQUIEME })];
+      const { prisma } = fauxPrisma([piece(5)]);
+
+      await backfillCitedAttachments(prisma, page);
+
+      expect(rattrapee(page[0], CINQUIEME)?.['thumbnailUrl']).toBe('https://cdn/piece-5-thumb.jpg');
+      expect(page[0].replyTo.attachments).toHaveLength(5);
+    });
+
+    /**
+     * PREMIÈRE PROPRIÉTÉ DE SÛRETÉ. Le message cité est à VUE UNIQUE et la pièce
+     * rattrapée ne déclare RIEN : seul le niveau MESSAGE la masque. Un masquage
+     * qui ne recevrait pas le message cité la rendrait EN CLAIR — pendant que
+     * ses quatre voisines, servies par le même `select`, sont masquées.
+     */
+    it('une pièce rattrapée sur un message cité à VUE UNIQUE repart MASQUÉE', async () => {
+      const page = [messagePage({ citee: CINQUIEME, citeEstProtege: true })];
+      const { prisma } = fauxPrisma([piece(5)]);
+
+      await backfillCitedAttachments(prisma, page);
+
+      const elue = rattrapee(page[0], CINQUIEME)!;
+      for (const champ of ['fileUrl', 'thumbnailUrl', 'thumbHash', 'fileName', 'originalName', 'fileSize', 'duration', 'transcription']) {
+        expect(elue[champ]).toBeUndefined();
+      }
+      expect(elue['mimeType']).toBe('image/jpeg');
+    });
+
+    it('et la protection posée sur la PIÈCE SEULE la masque aussi, message ordinaire compris', async () => {
+      const page = [messagePage({ citee: CINQUIEME })];
+      const { prisma } = fauxPrisma([piece(5, { isViewOnce: true })]);
+
+      await backfillCitedAttachments(prisma, page);
+
+      const elue = rattrapee(page[0], CINQUIEME)!;
+      expect(elue['fileUrl']).toBeUndefined();
+      expect(elue['thumbHash']).toBeUndefined();
+    });
+
+    /**
+     * SECONDE PROPRIÉTÉ DE SÛRETÉ. La ligne relue porte un `messageId` qui n'est
+     * pas celui du message CITÉ — une garde d'écriture ne dit rien des lignes
+     * écrites AVANT elle. Sans la revérification, n'importe quelle pièce relue
+     * se recolle sur n'importe quel message de la page.
+     */
+    it('une pièce dont le porteur n’est PAS le message cité n’est jamais recollée', async () => {
+      const page = [messagePage({ citee: CINQUIEME })];
+      const { prisma } = fauxPrisma([piece(5, { messageId: AUTRE_MESSAGE })]);
+
+      await backfillCitedAttachments(prisma, page);
+
+      expect(rattrapee(page[0], CINQUIEME)).toBeUndefined();
+      expect(page[0].replyTo.attachments).toHaveLength(4);
+    });
+
+    it('UNE seule requête pour toute la page, jamais une par message', async () => {
+      const page = [
+        messagePage({ citee: CINQUIEME }),
+        messagePage({ citee: CINQUIEME }),
+        messagePage({ citee: CINQ_PIECES[3].id, servies: [piece(1)] }),
+      ];
+      const { prisma, findMany } = fauxPrisma([piece(5), piece(4)]);
+
+      await backfillCitedAttachments(prisma, page);
+
+      expect(findMany).toHaveBeenCalledTimes(1);
+      expect(rattrapee(page[1], CINQUIEME)?.['thumbnailUrl']).toBe('https://cdn/piece-5-thumb.jpg');
+      expect(rattrapee(page[2], CINQ_PIECES[3].id)?.['thumbnailUrl']).toBe('https://cdn/piece-4-thumb.jpg');
+    });
+
+    it('aucune requête quand la pièce citée est DÉJÀ dans la fenêtre, ni quand rien n’est cité', async () => {
+      const { prisma, findMany } = fauxPrisma([]);
+
+      await backfillCitedAttachments(prisma, [messagePage({ citee: CINQ_PIECES[2].id })]);
+      expect(findMany).not.toHaveBeenCalled();
+
+      await backfillCitedAttachments(prisma, [{ id: 'm', replyTo: { id: MESSAGE_CITE, attachments: [] } }]);
+      expect(findMany).not.toHaveBeenCalled();
+    });
+
+    it('une pièce SUPPRIMÉE laisse la citation intacte — elle garde son ancre et sa nature', async () => {
+      const page = [messagePage({ citee: CINQUIEME })];
+      const { prisma } = fauxPrisma([]);
+
+      await backfillCitedAttachments(prisma, page);
+
+      expect(page[0].replyTo.attachments).toHaveLength(4);
+      expect(page[0].replyTo.attachmentReplyTo).toEqual({ attachmentId: CINQUIEME, kind: 'image' });
+    });
+  });
+
+  /**
+   * L'ENVOI. Citer la pièce d'un message qu'on ne cite pas n'est pas une faute
+   * de frappe qu'on tolère en retombant sur le représentatif : l'identifiant
+   * sert d'ancre à un saut, et le service qui le relit chargerait la ligne. La
+   * garde refuse donc au moindre doute sur CE lien.
+   *
+   * Elle lie la pièce au MESSAGE CITÉ, et rien d'autre. La phrase qu'elle
+   * portait — « citer la pièce d'une conversation qu'on ne lit peut-être pas »
+   * — nommait le cas qu'elle NE BLOQUE PAS : `replyToId` n'est validé contre
+   * aucune conversation dans le chemin d'écriture. C'est #6601 ; ces témoins
+   * n'attestent que la borne qui existe.
+   */
+  describe('la garde d’envoi refuse un attachmentId étranger au message cité', () => {
     const MESSAGE_CITE = '507f1f77bcf86cd799439000';
     const AUTRE_MESSAGE = '507f1f77bcf86cd799439999';
 

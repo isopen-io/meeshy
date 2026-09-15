@@ -152,7 +152,7 @@ export function registerSendMessageRoute(
           attachmentReplyTo: {
             type: 'object',
             properties: { attachmentId: { type: 'string' } },
-            description: 'Pièce jointe NOMMÉE du message cité (#6164). REFUSÉ si elle n’appartient pas à replyToId — citer la pièce d’un autre message est une fuite, pas une faute de frappe.',
+            description: 'Pièce jointe NOMMÉE du message cité (#6164). REFUSÉ si elle n’appartient pas à replyToId. Cette borne lie la pièce au message cité seulement : replyToId lui-même n’est pas encore validé contre la conversation de l’envoi (#6601).',
           },
           storyReplyToId: { type: 'string', description: 'ID of story being replied to' },
           forwardedFromId: { type: 'string', description: 'ID of original forwarded message' },
@@ -319,12 +319,17 @@ export function registerSendMessageRoute(
       // MessagingService unifié — instance partagée construite une seule fois
       const messagingService = getMessagingService();
 
-      // #6164 — CITER UNE PIÈCE NOMMÉE, garde FERMÉE. Une pièce qui
-      // n'appartient pas au message cité est REFUSÉE : ce n'est pas une faute
-      // de frappe qu'on tolérerait en retombant sur le représentatif, c'est
-      // citer la pièce d'une conversation qu'on ne lit peut-être pas. La règle
-      // vit au site unique `admitAttachmentReply` — tout transport qui portera
-      // ce champ passera par elle, jamais par une transcription locale.
+      // #6164 — CITER UNE PIÈCE NOMMÉE. Une pièce qui n'appartient pas au
+      // message cité est REFUSÉE : ce n'est pas une faute de frappe qu'on
+      // tolérerait en retombant sur le représentatif, l'identifiant gravé sert
+      // d'ancre à un saut. La règle vit au site unique `admitAttachmentReply` —
+      // tout transport qui portera ce champ passera par elle, jamais par une
+      // transcription locale.
+      //
+      // Elle ne dit RIEN de la conversation : `replyToId` n'est validé contre
+      // aucune ici ni ailleurs dans le chemin d'écriture — c'est #6601, et la
+      // formulation « citer la pièce d'une conversation qu'on ne lit pas » ne
+      // revient dans ce commentaire que le jour où cette borne existe.
       const citation = await admitAttachmentReply(prisma, { replyToId, attachmentReplyTo });
       if (!citation.ok) {
         return sendBadRequest(reply, citation.reason ?? 'Pièce jointe citée invalide');

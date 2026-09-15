@@ -138,14 +138,24 @@ type AttachmentOwnerReader = {
 };
 
 /**
- * LA GARDE D'ENVOI, FERMÉE — site UNIQUE de la règle, wiré par transport.
+ * LA GARDE D'ENVOI — site UNIQUE de la règle, wiré par transport.
  *
- * Citer la pièce d'un message qu'on ne cite pas, c'est citer la pièce d'une
- * conversation qu'on ne lit peut-être pas. Ce n'est PAS une faute de frappe
- * qu'on tolérerait en retombant sur le représentatif : l'identifiant gravé sert
- * d'ancre à un saut, et chaque service qui le relit ira chercher la ligne. Au
- * moindre doute — pièce introuvable, porteur différent, message cité absent,
- * forme illisible — on REFUSE l'envoi.
+ * Elle lie la PIÈCE au MESSAGE CITÉ, et rien de plus. Ce n'est PAS une faute de
+ * frappe qu'on tolérerait en retombant sur le représentatif : l'identifiant
+ * gravé sert d'ancre à un saut, et chaque service qui le relit ira chercher la
+ * ligne. Au moindre doute sur CE lien — pièce introuvable, porteur différent,
+ * message cité absent, forme illisible — on REFUSE l'envoi.
+ *
+ * **CE QU'ELLE NE FAIT PAS, et il faut le lire avant de s'y fier (#6601).**
+ * Elle a longtemps porté la phrase « citer la pièce d'un message qu'on ne cite
+ * pas, c'est citer la pièce d'une conversation qu'on ne lit peut-être pas » —
+ * qui nomme exactement le cas qu'elle NE BLOQUE PAS. `replyToId` n'est validé
+ * contre la conversation de l'envoi NULLE PART dans le chemin d'écriture
+ * (mesuré : `messages-send.ts`, `MessageHandler`, `MessageProcessor` le font
+ * transiter sans contrôle ; aucune lecture d'appartenance du message cité dans
+ * tout le gateway). La borne « une conversation qu'on lit » est donc à
+ * construire, et c'est #6601 — cette garde-ci ne peut pas la porter seule, elle
+ * ne reçoit que le couple (message cité, pièce).
  *
  * La NATURE est DÉRIVÉE du MIME relu, jamais de ce que le client déclare :
  * `kind` est le seul fait descriptif qui survit à une protection posée plus

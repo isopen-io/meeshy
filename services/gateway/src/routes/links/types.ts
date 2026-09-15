@@ -352,7 +352,22 @@ const replyToMessageSchema = {
     isViewOnce: { type: 'boolean', description: 'Quoted message is view-once' },
     isBlurred: { type: 'boolean', description: 'Quoted message content is blurred until tap to reveal' },
     isEncrypted: { type: 'boolean', description: 'Quoted message is end-to-end encrypted' },
-    effectFlags: { type: 'number', description: 'Bitfield for the quoted message effects (blurred / ephemeral / view-once)' }
+    effectFlags: { type: 'number', description: 'Bitfield for the quoted message effects (blurred / ephemeral / view-once)' },
+    // #6164 — la PIÈCE NOMMÉE que la réponse vise. DEUX champs, et deux
+    // seulement : l'ancre du saut et la NATURE du média. Tout ce qui DÉCRIT la
+    // pièce se relit à chaque service et n'a donc pas le droit d'être figé
+    // (liste dans `services/messaging/attachmentReplySnapshot.ts`). Sans cette
+    // déclaration, fast-json-stringify strippe le champ EN SILENCE — la forme
+    // exacte du défaut que `replyTo.translations` a portée (#4945).
+    attachmentReplyTo: {
+      type: 'object',
+      nullable: true,
+      description: 'Attachment NAMED by the reply (frozen snapshot) — jump anchor and media nature. Absent ⇒ the reply targets the whole message.',
+      properties: {
+        attachmentId: { type: 'string' },
+        kind: { type: 'string', enum: ['image', 'video', 'audio', 'location', 'file'] }
+      }
+    }
   }
 } as const;
 
