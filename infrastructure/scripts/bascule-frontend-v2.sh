@@ -111,6 +111,9 @@ recette_publique() {
   local base=https://meeshy.me echec=0 obtenu
   verifier_ligne() {
     obtenu=$(curl -s -o /dev/null -w "$2" "$base$1" || true)
+    # Le motif attendu est un GLOB voulu (`200 text/html*` : nginx ajoute
+    # `; charset=…` selon le type), d'où l'expansion non quotée.
+    # shellcheck disable=SC2254
     case "$obtenu" in
       $3) echo "ok    $1 -> $obtenu" ;;
       *) echo "FAUX  $1 -> $obtenu (attendu $3)"; echec=1 ;;
