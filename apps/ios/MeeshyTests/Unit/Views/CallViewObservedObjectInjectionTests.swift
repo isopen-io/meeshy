@@ -38,12 +38,19 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
         )
     }
 
-    func test_rootView_injectsOwnCallManagerIntoCallView() throws {
-        let source = try source(of: "Views/RootView.swift")
+    // 2026-09-15 (#6579) — L'ADRESSE A CHANGÉ, L'EXIGENCE NON. La présentation
+    // d'appel a été EXTRAITE de `RootView.swift` (hors budget, plafond dur 1200)
+    // vers `RootLayers/CallPresentationLayer.swift`. Ces deux gardes lisaient
+    // encore l'ancien fichier et étaient donc ROUGES depuis l'extraction, sans
+    // que rien ne le dise : un déplacement de code n'emporte pas les témoins qui
+    // le désignent par son CHEMIN.
+    func test_callPresentationLayer_injectsOwnCallManagerIntoCallView() throws {
+        let source = try source(of: "Views/RootLayers/CallPresentationLayer.swift")
         XCTAssertTrue(
             source.contains("CallView(callManager: callManager)"),
-            "RootView must pass its own `callManager` into CallView instead of " +
-            "letting CallView default to CallManager.shared on every reconstruction."
+            "`CallPresentationLayer` must pass its own `callManager` into CallView " +
+            "instead of letting CallView default to CallManager.shared on every " +
+            "reconstruction."
         )
     }
 
@@ -114,15 +121,15 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
         )
     }
 
-    func test_rootView_injectsOwnCallManagerIntoPillAndBubble() throws {
-        let source = try source(of: "Views/RootView.swift")
+    func test_callPresentationLayer_injectsOwnCallManagerIntoPillAndBubble() throws {
+        let source = try source(of: "Views/RootLayers/CallPresentationLayer.swift")
         XCTAssertTrue(
             source.contains("FloatingCallPillView(callManager: callManager)"),
-            "RootView must pass its own `callManager` into FloatingCallPillView."
+            "`CallPresentationLayer` must pass its own `callManager` into FloatingCallPillView."
         )
         XCTAssertTrue(
             source.contains("CallBubbleView(callManager: callManager)"),
-            "RootView must pass its own `callManager` into CallBubbleView."
+            "`CallPresentationLayer` must pass its own `callManager` into CallBubbleView."
         )
     }
 
