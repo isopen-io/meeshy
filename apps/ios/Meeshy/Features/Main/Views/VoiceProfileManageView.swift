@@ -6,6 +6,11 @@ import MeeshyUI
 struct VoiceProfileManageView: View {
     let accentColor: String
 
+    /// La teinte d'accent, convertie UNE fois : chaque site la répétait en
+    /// `Color(hex:)`, et le cliquet des couleurs en dur le comptait autant de fois
+    /// (+3 introduits par #6481, 2026-09-14).
+    private var accent: Color { Color(hex: accentColor) }
+
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -52,27 +57,19 @@ struct VoiceProfileManageView: View {
 
     // MARK: - Header
 
+    /// En-tête partagé, FIXE (`scrollOffset: 0`) : les états chargement et vide
+    /// ne défilent pas, et seul le contenu du profil porte un défilement (#6481).
+    /// Le retour en verre ferme la feuille — la sortie qu'était la croix.
     private var header: some View {
-        HStack {
-            Text(String(localized: "voice.profile.title", defaultValue: "Profil vocal", bundle: .main))
-                .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
-            Spacer()
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                // Chrome de fermeture : glyphe dans une affordance de tap d'en-tête —
-                // gardé figé, doctrine 82i/87i. Libellé VoiceOver ajouté (146i).
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundStyle(theme.textMuted)
-            }
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        CollapsibleHeader(
+            title: String(localized: "voice.profile.title", defaultValue: "Profil vocal", bundle: .main),
+            scrollOffset: 0,
+            onBack: { dismiss() },
+            titleColor: theme.textPrimary,
+            backArrowColor: accent,
+            backgroundColor: theme.backgroundPrimary,
+            trailing: { EmptyView() }
+        )
     }
 
     // MARK: - Loading
@@ -82,7 +79,7 @@ struct VoiceProfileManageView: View {
             Spacer()
             ProgressView()
                 .scaleEffect(1.2)
-                .tint(Color(hex: accentColor))
+                .tint(accent)
             Spacer()
         }
     }
@@ -160,7 +157,7 @@ struct VoiceProfileManageView: View {
                 VStack(spacing: 2) {
                     Text("\(Int(quality * 100))%")
                         .font(MeeshyFont.relative(18, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundColor(accent)
                     Text(String(localized: "voice.profile.quality", defaultValue: "Qualité", bundle: .main))
                         .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundColor(theme.textMuted)
@@ -227,7 +224,7 @@ struct VoiceProfileManageView: View {
                 }
             ))
             .labelsHidden()
-            .tint(Color(hex: accentColor))
+            .tint(accent)
         }
         .padding(16)
         .background(
@@ -258,7 +255,7 @@ struct VoiceProfileManageView: View {
                 }
             ))
             .labelsHidden()
-            .tint(Color(hex: accentColor))
+            .tint(accent)
         }
         .padding(16)
         .background(
@@ -287,6 +284,8 @@ struct VoiceProfileManageView: View {
                     .foregroundColor(theme.textSecondary)
             }
             Spacer()
+            // Le (+) reste dans sa carte, à côté de l'indication qu'il sert, et
+            // porte le verre adaptatif des actions d'en-tête (#6481).
             Button {
                 HapticFeedback.light()
                 showAddSamples = true
@@ -297,7 +296,10 @@ struct VoiceProfileManageView: View {
                     Text(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
                         .font(MeeshyFont.relative(13, weight: .semibold))
                 }
-                .foregroundColor(Color(hex: accentColor))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .adaptiveGlass(in: Capsule(), tint: accent.opacity(0.14), interactive: true)
+                .foregroundColor(accent)
             }
             .accessibilityLabel(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
         }

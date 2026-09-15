@@ -76,7 +76,11 @@ public struct StoryNotificationTargetScreen: View {
             case .expired, .expiredConsumed:
                 StoryExpiredContent(storyId: vm.storyId, context: vm.context)
             case .offline:
-                StoryNotificationOfflineContent {
+                StoryNotificationOfflineContent(cause: .network) {
+                    Task { await vm.load() }
+                }
+            case .serverFailed:
+                StoryNotificationOfflineContent(cause: .server) {
                     Task { await vm.load() }
                 }
             }

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
 import type { GlyphName } from './glyphs';
+import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from './info-hint';
 
 /**
  * LE BLOC DE CHAMP (#5555, E7) — que les 40+ écrans restants copieront.
@@ -25,6 +26,7 @@ export function Field({
   tint,
   focused,
   error,
+  hint,
   children,
 }: {
   id: string;
@@ -45,12 +47,28 @@ export function Field({
   tint: string;
   focused: boolean;
   error?: string | undefined;
+  /**
+   * LE DÉTAIL DERRIÈRE UN (i) (#6441, retour porteur « la page est trop
+   * surchargée »).
+   *
+   * Trois notes posées SOUS trois champs remplissaient l'écran d'un texte que
+   * personne ne relit après la première fois. Le bouton vit DANS le cadre du
+   * champ, à droite : la rangée fait déjà 48 px, donc le détail ne coûte plus
+   * aucune hauteur tant qu'on ne le demande pas.
+   *
+   * Le bouton et la note sont ceux de `info-hint.tsx` (#6626), que les écrans
+   * posent aussi HORS d'un champ ; le texte reste porté par `aria-describedby`
+   * du champ même REPLIÉ — un lecteur d'écran l'entend donc sans avoir à
+   * trouver le bouton.
+   */
+  hint?: InfoHint | undefined;
   /** L'`<input>`/`<select>` lui-même — reçoit `id` et `aria-describedby` pour
    * que le refus SOUS le champ soit lu par un lecteur d'écran comme le champ
    * lui-même, jamais un texte à part. */
   children: (ids: { id: string; describedBy: string | undefined }) => ReactNode;
 }) {
   const errorId = `${id}-error`;
+  const hintState = useInfoHint();
   const iconStyle = { color: `color-mix(in srgb, ${tint} 70%, transparent)`, flexShrink: 0 };
   return (
     <div className="grid gap-1">
@@ -77,8 +95,15 @@ export function Field({
       >
         {icon !== undefined ? <Glyph name={icon} size={20} style={iconStyle} /> : null}
         {icon === undefined && glyph !== undefined ? <GlyphSvg glyph={glyph} size={20} style={iconStyle} /> : null}
-        {children({ id, describedBy: error !== undefined ? errorId : undefined })}
+        {children({
+          id,
+          describedBy: [error !== undefined ? errorId : undefined, hint !== undefined ? hintState.id : undefined]
+            .filter((part): part is string => part !== undefined)
+            .join(' ') || undefined,
+        })}
+        {hint !== undefined ? <InfoHintButton hint={hint} state={hintState} style={{ marginRight: -10 }} /> : null}
       </div>
+      {hint !== undefined ? <InfoHintText hint={hint} state={hintState} /> : null}
       {error !== undefined ? (
         <p id={errorId} role="alert" className="text-caption" style={{ color: 'var(--ios-error)' }}>
           {error}

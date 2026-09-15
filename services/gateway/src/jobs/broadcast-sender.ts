@@ -1,7 +1,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { EmailService } from '../services/EmailService';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { buildBroadcastRecipientFilter, localizedBroadcastText, type BroadcastTargeting } from './broadcast-recipients';
+import { buildBroadcastRecipientFilter, emailChannelRecipientConstraint, localizedBroadcastText, type BroadcastTargeting } from './broadcast-recipients';
 import { RECIPIENT_LANG_SELECT, recipientLanguage, recipientLanguages } from '../utils/recipient-language';
 
 const logger = enhancedLogger.child({ module: 'BroadcastSenderJob' });
@@ -171,8 +171,16 @@ export class BroadcastSenderJob {
     }
   }
 
-  /** Ciblage commun (`buildBroadcastRecipientFilter`) + contrainte du canal : une adresse vérifiée. */
+  /**
+   * Ciblage commun (`buildBroadcastRecipientFilter`) + contrainte du CANAL
+   * (`emailChannelRecipientConstraint`) : une adresse vérifiée, et jamais une
+   * adresse de bootstrap — vérifiée d'office précisément parce qu'elle ne
+   * reçoit rien (#6581).
+   */
   private async buildRecipientFilter(targeting: BroadcastTargeting): Promise<any> {
-    return { ...(await buildBroadcastRecipientFilter(this.prisma, targeting)), emailVerifiedAt: { not: null } };
+    return {
+      ...(await buildBroadcastRecipientFilter(this.prisma, targeting)),
+      ...emailChannelRecipientConstraint(),
+    };
   }
 }

@@ -133,7 +133,7 @@ jobs:
 
       # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -296,12 +296,17 @@ jobs:
       # #3679 — jumeau des deux cliquets ci-dessus, appliqué à l'usage
       # explicite de `any` plutôt qu'aux erreurs de compilation ou de lint.
       # `services/gateway/src` et `packages/shared` n'ont pas de config
-      # ESLint (rien à demander à `@typescript-eslint/no-explicit-any`), donc
-      # ce script mesure par motif plutôt que par AST — cf. son en-tête pour
-      # ce que ça couvre et ce que ça ne couvre pas. `packages/shared` est
-      # tenu à zéro (CLAUDE.md l'exige déjà pour ce paquet) ; `gateway` porte
-      # une baseline qui ne peut que descendre.
-      - name: any debt ratchet (gateway + shared)
+      # ESLint (rien à demander à `@typescript-eslint/no-explicit-any`), et
+      # `apps/web` en a une mais règle cette directive en `warn` — jamais
+      # comptée par le cliquet ESLint jumeau (`check-lint-debt.sh`), qui ne
+      # garde que les erreurs. Ce script mesure donc par motif plutôt que par
+      # AST sur les trois paquets, pour une seule définition de « ce qui
+      # compte comme `any` » — cf. son en-tête pour le détail et pour
+      # pourquoi il tourne APRÈS le build web ci-dessus (`.next/` exclu).
+      # `packages/shared` est tenu à zéro (CLAUDE.md l'exige déjà pour ce
+      # paquet) ; `gateway` et `web` portent chacun une baseline qui ne peut
+      # que descendre.
+      - name: any debt ratchet (gateway + shared + web)
         run: bash scripts/check-any-debt.sh --self-test && bash scripts/check-any-debt.sh
 
       # #5372, suite de #4889 — une entrée de catalogue d'endpoints CLIENT
@@ -343,6 +348,17 @@ jobs:
       # sans l'arbre qu'il décrit.
       - name: Lockfile alignment guard
         run: node scripts/check-lockfile-alignment.mjs --self-test && node scripts/check-lockfile-alignment.mjs
+
+      # #6351 — filet de sécurité pour la CI ordinaire : un commit qui porte à
+      # la fois un marqueur (beta) et un marqueur de saut CI fait supprimer
+      # TOUS les workflows du push par GitHub, ios-beta-trigger.yml compris.
+      # Cette étape ne verra donc jamais ce cas précis (un push affecté par le
+      # piège ne fait justement tourner aucune CI) ; elle attrape le même
+      # défaut sur un commit de PR normal, avant qu'il n'atteigne `main`. Le
+      # témoin qui couvre le cas que GitHub supprime est périodique, sur
+      # schedule — .github/workflows/beta-marker-audit.yml.
+      - name: Beta/skip commit-message conflict guard
+        run: node scripts/check-beta-skip-conflict.mjs --self-test && node scripts/check-beta-skip-conflict.mjs
 
       # Même raison de placement que le garde ci-dessus : l'invariant porte sur
       # le `Makefile` de la RACINE, donc il est appelé ici et non depuis les
@@ -411,6 +427,16 @@ jobs:
       - name: CI summary coverage guard
         run: node scripts/check-ci-summary-coverage.mjs --self-test && node scripts/check-ci-summary-coverage.mjs
 
+      # Pas de mode « balayage du dépôt » ici : `resolve-docker-detect-base.mjs`
+      # est une fonction de décision PURE (docker.yml § job `detect`, #6551),
+      # invoquée à l'exécution avec le SHA du dernier run réussi et
+      # `github.event.before` en entrée — rien à confronter au repos qu'elle
+      # pourrait scanner. Son `--self-test` EST le témoin : sept scénarios,
+      # dont celui qui a ouvert #6551 (un push annulé par le suivant ne doit
+      # plus faire perdre le diff des commits qu'il portait).
+      - name: Docker detect-base resolver guard
+        run: node scripts/resolve-docker-detect-base.mjs --self-test
+
       # Même placement, même raison : la surface est le DÉPÔT — les workflows qui
       # publient `isopen/meeshy-<image>:latest` sur `main`. Il ferme #6442 :
       # `docker.yml` construisait `linux/amd64`, `release.yml`
@@ -456,6 +482,19 @@ jobs:
       # absolue, ou une cible relative qui ne résout pas depuis la racine.
       - name: Tracked symlinks guard
         run: node scripts/check-tracked-symlinks.mjs --self-test && node scripts/check-tracked-symlinks.mjs
+
+      # #6545 — le run iOS déclenché sur `promote/main-39224d5fc9` est tombé
+      # avant toute compilation : `xcodebuild -resolvePackageDependencies`
+      # échouait quatre fois avec la MÊME erreur (« already exists in file
+      # system », une entrée du cache d'artefacts SwiftPM DU RUNNER), et la
+      # boucle de reprise — qui n'attendait et rejouait que pour une panne
+      # réseau — ne pouvait pas en sortir. La logique a quitté `ios.yml` pour
+      # `scripts/ci/resolve-spm-packages.sh`, rejouable ici (faux
+      # `xcodebuild`/`sleep` sur PATH) sans macOS : collision purgée sans
+      # dormir, panne réseau toujours retentée avec attente, échec réel
+      # toujours définitif après 4 essais.
+      - name: iOS SPM resolve retry guard
+        run: node scripts/check-ios-spm-resolve-retry.mjs --self-test && node scripts/check-ios-spm-resolve-retry.mjs
 
       # #4544 — le validateur de déploiement ne tient plus de liste : il DÉRIVE
       # ses variables exigées de la garde ci-dessus. Un témoin qui comparerait
@@ -509,7 +548,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -593,6 +632,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-floating-clearance.mjs
 
+      # #6456 — le disque du Flux bascule Flux ↔ conversations sans saut (nom,
+      # adresse et marque suivent la destination), son appui long (souris,
+      # doigt, Maj+F10) ouvre les Réels sans navigation ni clic au relâché, un
+      # glisser tenu n'ouvre rien et suit le pointeur sans retard, la place
+      # survit au rechargement, un réel de carte ramène au même défilement.
+      - name: Gate disque du Flux (bascule, appui long, glisser)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-feed-disc.mjs
+
       # #6288 — la cloche : la pastille du bouton flottant porte le compte servi
       # et disparaît à zéro ; une catégorie filtre ; ouvrir une ligne la marque
       # lue et mène à sa cible ; « Tout lire » a un effet ; aucun texte ni
@@ -670,6 +720,18 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-links.mjs
+
+      # #6457 — les Réels : le bouton de l'en-tête du Flux, un réel touché ouvre
+      # le lecteur SUR lui depuis le cache (sans squelette, sans disque), un seul
+      # réel joue, un balayage tactile accroche le suivant puis le précédent, le
+      # clavier aussi, « J'aime » se voit au retour dans le Flux, le texte blanc
+      # tient AA au pixel, le retour ne laisse aucun lecteur ; hors ligne chaud
+      # et froid, lien profond, mouvement réduit (deux schémas, deux gabarits).
+      - name: Gate Réels (lecteur plein écran, balayage, lecture unique, retour)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-reels.mjs
 
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
@@ -763,6 +825,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-gateway-build.mjs
 
+      # #6458 — le barreau « Administration » du menu flottant, sur un dist
+      # gateway (l'administration n'a pas de fixtures) : sept barreaux dans
+      # l'écran aux deux poses (deux schémas, 390×844 et 320×568), parcours
+      # clavier et navigation vers /admin sur UNE lecture de la matrice ; six
+      # barreaux sans le droit, sur 403 et en vol ; aucune lecture sans session.
+      - name: Gate barreau Administration du menu flottant (#6458)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-admin-rung.mjs
+
       # #6151 — un seul site résout `apiConfig.source` en dépendances d'appel
       # (`src/lib/api/deps.ts`). Un huitième site qui reconstruirait
       # `{ source: apiConfig.source, … }` divergerait en silence sans ce gate.
@@ -823,7 +896,7 @@ jobs:
 
       # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -938,7 +1011,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1078,7 +1151,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1230,7 +1303,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1393,7 +1466,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1550,7 +1623,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1622,7 +1695,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload results
-        uses: github/codeql-action/upload-sarif@v4.37.9
+        uses: github/codeql-action/upload-sarif@v4.38.0
         if: always()
         continue-on-error: true
         with:
@@ -1647,7 +1720,7 @@ jobs:
 
       # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -1726,7 +1799,7 @@ jobs:
 
       # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'

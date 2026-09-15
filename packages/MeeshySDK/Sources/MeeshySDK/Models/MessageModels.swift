@@ -386,13 +386,6 @@ public struct APIPostReplyTarget: Decodable, Sendable {
         case id, type, reactionCount, commentCount, shareCount, createdAt, thumbnailUrl, previewText, moodEmoji, authorName
     }
 
-    nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    nonisolated(unsafe) private static let isoPlain = ISO8601DateFormatter()
-
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
@@ -409,7 +402,7 @@ public struct APIPostReplyTarget: Decodable, Sendable {
         // une stratégie `.custom`, les tests `.iso8601`). Tolère les
         // millisecondes (`.000Z`) que le gateway émet via `Date.toISOString()`.
         let raw = try c.decode(String.self, forKey: .createdAt)
-        guard let date = Self.isoFractional.date(from: raw) ?? Self.isoPlain.date(from: raw) else {
+        guard let date = WireDate.date(from: raw) else {
             throw DecodingError.dataCorruptedError(forKey: .createdAt, in: c,
                 debugDescription: "Date ISO8601 invalide: \(raw)")
         }
@@ -716,12 +709,6 @@ public struct ConsumeViewOnceResponse: Decodable, Sendable {
 // MARK: - APIMessage -> MeeshyMessage Conversion
 
 extension APIMessage {
-    nonisolated(unsafe) private static let pinnedAtFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
     /// `preferredLanguages` — le prisme ORDONNÉ du lecteur
     /// (`MeeshyUser.preferredContentLanguages`), par lequel la CITATION descend
     /// le Prisme au moment où elle est gravée. Vide ⇒ l'original, comme pour
@@ -940,7 +927,7 @@ extension APIMessage {
             storyReplyToId: storyReplyToId,
             forwardedFromId: forwardedFromId, forwardedFromConversationId: forwardedFromConversationId,
             expiresAt: expiresAt, effects: effects,
-            pinnedAt: pinnedAt.flatMap { Self.pinnedAtFormatter.date(from: $0) },
+            pinnedAt: pinnedAt.flatMap(WireDate.date(from:)),
             pinnedBy: pinnedBy,
             isEncrypted: isEncrypted ?? false, encryptionMode: encryptionMode,
             createdAt: createdAt, updatedAt: updatedAt ?? createdAt,

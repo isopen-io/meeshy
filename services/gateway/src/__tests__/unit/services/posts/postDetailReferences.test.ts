@@ -80,8 +80,8 @@ describe('PostService.getPostById — références', () => {
     const prisma = makePrisma(makePost());
     await new PostService(prisma).getPostById('p-1', AUTHOR);
 
-    const include = prisma.post.findFirst.mock.calls[0][0].include;
-    expect(include.postMentions.where).toBeUndefined();
+    const select = prisma.post.findFirst.mock.calls[0][0].select;
+    expect(select.postMentions.where).toBeUndefined();
   });
 
   it('rend TOUTES les références à l\'auteur, silencieuse comprise', async () => {

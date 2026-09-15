@@ -5,7 +5,10 @@ import type { FeedPost } from '@/lib/api/feed-pages';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
 
+import { resolveMediaCaption } from '@/lib/api/prism';
+
 import { feedMediaKindOf, postMediaRatio, reelCardRatio, type FeedMediaKind } from './layout';
+import { resolveMosaicLayout, type MosaicLayoutMode } from './mosaic-layout';
 import { resolveFeedText } from './text';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 
@@ -26,7 +29,19 @@ export type FeedCardMedia = {
   /** MILLISECONDES, comme la passerelle et iOS les servent — voir
    * `FeedMedia.duration` (`api/feed-pages.ts`). */
   readonly durationMs?: number;
+  /** LE TEXTE SERVI PAR LE PRISME (#6280, `resolveMediaCaption` — jamais
+   * `PostMedia.caption` brut) : la langue résolue peut différer de la
+   * langue source dès qu'une traduction du lecteur existe. */
   readonly caption?: string;
+  /** La langue DANS LAQUELLE `caption` ci-dessus est servie — porte
+   * l'attribut `lang` de la légende affichée (§ Prisme cycle 122 : un
+   * résolveur qui élit la bonne traduction n'a corrigé personne tant qu'on
+   * ne sait pas QUI l'affiche, dans quelle langue). Absente seulement quand
+   * ni `captionLanguage` ni le Prisme n'ont pu la dire. */
+  readonly captionLanguage?: string;
+  /** Vrai quand `caption` est une TRADUCTION de `PostMedia.caption`, jamais
+   * la légende source. */
+  readonly captionTranslated?: boolean;
   /** LE TEXTE D'ACCESSIBILITÉ SERVI PAR LA PASSERELLE — `PostMedia.alt`
    * (`schema.prisma:3618`, « Accessibilité »). Il était DÉCLARÉ sur le wire
    * (`FeedMedia.alt`) et jeté par le modèle : chaque image du fil partait en
@@ -67,6 +82,9 @@ export type FeedCardModel = {
   readonly repostOfHandle?: string;
   readonly text?: FeedCardText;
   readonly media: readonly FeedCardMedia[];
+  /** L'agencement CHOISI par l'auteur (#6514, `resolveMosaicLayout`) —
+   * `carousel` quand le document n'en dit rien. */
+  readonly layout: MosaicLayoutMode;
   readonly stats: FeedCardStats;
 };
 
@@ -90,7 +108,11 @@ function resolveAuthorSrc(avatar: string | null | undefined): string | undefined
   return url === undefined ? undefined : attachmentSrc(url);
 }
 
-function resolveMedia(post: FeedPost, isReel: boolean): readonly FeedCardMedia[] {
+function resolveMedia(
+  post: FeedPost,
+  isReel: boolean,
+  preferredLanguages: readonly string[],
+): readonly FeedCardMedia[] {
   const media = post.media ?? [];
   const ordered = [...media].sort((a, b) => (numberOrUndefined(a.order) ?? 0) - (numberOrUndefined(b.order) ?? 0));
   return ordered.map((m) => {
@@ -100,7 +122,21 @@ function resolveMedia(post: FeedPost, isReel: boolean): readonly FeedCardMedia[]
     // resteraient chacun `string | undefined` aux yeux du compilateur.
     const placeholder = thumbHashPlaceholder(textOrUndefined(m.thumbHash));
     const thumbnail = textOrUndefined(m.thumbnailUrl);
-    const caption = textOrUndefined(m.caption);
+    const rawCaption = textOrUndefined(m.caption);
+    // Le Prisme (#6280) : `PostMedia.caption` n'est traduit QUE quand il
+    // existe — une pièce sans légende n'a rien à résoudre, et
+    // `resolveMediaCaption` sur une chaîne vide rendrait un `language`
+    // trompeur (l'original vide « servi » dans la langue du lecteur).
+    const resolvedCaption =
+      rawCaption === undefined
+        ? undefined
+        : resolveMediaCaption({
+            preferredLanguages,
+            captionLanguage: m.captionLanguage,
+            captionTranslations: m.captionTranslations,
+            caption: rawCaption,
+          });
+    const captionLanguage = resolvedCaption === undefined ? undefined : textOrUndefined(resolvedCaption.language);
     const altText = textOrUndefined(m.alt);
     const durationMs = numberOrUndefined(m.duration);
     const width = numberOrUndefined(m.width);
@@ -113,7 +149,8 @@ function resolveMedia(post: FeedPost, isReel: boolean): readonly FeedCardMedia[]
       ...(placeholder !== undefined ? { placeholder } : {}),
       ratio: isReel ? reelCardRatio(width, height) : postMediaRatio(width, height),
       ...(durationMs !== undefined ? { durationMs } : {}),
-      ...(caption !== undefined ? { caption } : {}),
+      ...(resolvedCaption !== undefined ? { caption: resolvedCaption.text, captionTranslated: resolvedCaption.translated } : {}),
+      ...(captionLanguage !== undefined ? { captionLanguage } : {}),
       ...(altText !== undefined ? { altText } : {}),
     };
   });
@@ -163,7 +200,8 @@ export function resolveFeedCardModel(
     relativeTime: shortRelativeTime(new Date(post.createdAt), params.now),
     ...(repostOfHandle !== undefined ? { repostOfHandle } : {}),
     ...(text !== undefined ? { text } : {}),
-    media: resolveMedia(post, isReel),
+    media: resolveMedia(post, isReel, params.preferredLanguages),
+    layout: resolveMosaicLayout(post.storyEffects),
     stats: {
       likeCount: numberOrUndefined(post.likeCount) ?? 0,
       commentCount: numberOrUndefined(post.commentCount) ?? 0,

@@ -158,7 +158,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // C'est le pendant de la leçon 347 pour un cliquet : une liste qui
         // nomme des FICHIERS se périme au premier découpage.
         "Features/Main/Components/UniversalComposerBar+Send.swift",
-        "Features/Main/Composer/ComposerFormatFan.swift",
         "Features/Main/Composer/ComposerMoodSurface.swift",
         "Features/Main/Composer/ComposerTopBar.swift",
         // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés
@@ -290,7 +289,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/SupportView.swift",
         "Features/Main/Views/TrackingLinksView.swift",
         "Features/Main/Views/UserStatsView.swift",
-        "Features/Main/Views/VoiceProfileManageView.swift",
         "Features/Main/Views/VoiceProfileWizardView.swift",
         "Features/Main/Views/WebRTCVideoView.swift",
         "Features/Stories/Notifications/StoryExpiredContent.swift",
@@ -375,7 +373,15 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// sa barre haute, trois dans ses étapes) et le carrousel d'accueil un — et
     /// les vingt sont partis avec leurs fichiers. `SignupView` et `WelcomeView`
     /// n'en introduisent aucun.
-    private static let totalCeiling = 226
+    // 226 → 214 (#6481, 2026-09-14) : les pages ouvertes depuis Réglages montent
+    // l'en-tête partagé, et leurs chevrons, croix et (+) faits main à taille figée
+    // sont partis avec lui. `VoiceProfileManageView` sort de `bearingFiles`.
+    // 214 → 213 (#6502) : l'éventail du haut est retiré, et avec lui le chevron
+    // `.font(.system(size: 9, weight: .bold))` de son chip, un GLYPHE (le texte
+    // figé ne bouge donc pas). `ComposerFormatFan.swift` sort de `bearingFiles`
+    // dans le même commit (règle 4) ; `ComposerPublishMenu.swift`, qui le
+    // remplace, n'emploie que des polices relatives.
+    private static let totalCeiling = 213
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

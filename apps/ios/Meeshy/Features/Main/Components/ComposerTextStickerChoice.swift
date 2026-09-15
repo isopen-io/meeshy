@@ -45,6 +45,27 @@ nonisolated enum ComposerTextStickerChoice {
             ?? catalog.first
     }
 
+    /// **L'ORDRE dans lequel la pastille fait défiler les cadres** (directive
+    /// porteur 2026-09-14, #6537 : « il faut que le sticker tourne et change
+    /// régulièrement »).
+    ///
+    /// Elle COMMENCE par `resolve` — le cadre que l'auteur emploie — puis
+    /// parcourt le reste du catalogue. La première pastille qu'on voit reste
+    /// donc celle d'avant la rotation : on ne change pas ce que quelqu'un
+    /// reconnaît, on ajoute ce qu'il ne connaît pas encore.
+    ///
+    /// Sans doublon : le cadre de tête ne revient pas au milieu du tour, ce qui
+    /// ferait « bégayer » la pastille sur un catalogue court.
+    ///
+    /// - Returns: vide seulement si le catalogue l'est — la pastille est alors
+    ///   ABSENTE, jamais figée (loi 4).
+    static func rotation(recents: [StickerUsageEntry],
+                         favorites: [StickerUsageEntry],
+                         catalog: [StickerTemplate]) -> [StickerTemplate] {
+        guard let tete = resolve(recents: recents, favorites: favorites, catalog: catalog) else { return [] }
+        return [tete] + catalog.filter { $0.id != tete.id }
+    }
+
     private static func firstEligible(in entries: [StickerUsageEntry],
                                       catalog: [StickerTemplate]) -> StickerTemplate? {
         for entree in entries where entree.kind == .template {

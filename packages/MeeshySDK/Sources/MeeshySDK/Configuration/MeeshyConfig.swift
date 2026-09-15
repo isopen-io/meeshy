@@ -50,7 +50,13 @@ public final class MeeshyConfig: @unchecked Sendable {
     public var apiBaseURL: String = "\(remoteOrigin)\(defaultApiPath)"
 
     /// Server origin without path (e.g. "https://gate.meeshy.me")
-    public var serverOrigin: String {
+    public var serverOrigin: String { Self.origin(ofAPIBaseURL: apiBaseURL) }
+
+    /// L'origine d'une base d'API — schéma, hôte et port, sans le préfixe
+    /// `/api/v1`. Statique et pure pour qu'un client qui reçoit sa base
+    /// INJECTÉE (`SyncDeltaClient`) la dérive exactement comme `serverOrigin`,
+    /// au lieu de recoller un chemin complet sur la base (#6539).
+    public static func origin(ofAPIBaseURL apiBaseURL: String) -> String {
         guard let url = URL(string: apiBaseURL),
               let scheme = url.scheme,
               let host = url.host else { return apiBaseURL }

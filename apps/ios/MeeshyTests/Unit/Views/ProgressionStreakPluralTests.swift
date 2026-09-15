@@ -156,4 +156,49 @@ final class ProgressionStreakPluralTests: XCTestCase {
         XCTAssertTrue(cleUn.contains("jour") && !cleUn.contains("jours"),
                       "« \(cleUn) » doit être au singulier")
     }
+    // MARK: - Les points de conversation du détail Meesh (#6478)
+
+    /// « Vos 1 points de conversation » — relevé à la recette de #6474.
+    ///
+    /// `progression.meesh.floor` et `progression.meesh.missing` interpolaient un
+    /// nombre dans une phrase au pluriel FIXE. Le correctif ne pose aucun `if`
+    /// en Swift : il passe les deux clés en VARIANTES DE PLURIEL du catalogue,
+    /// sept langues, six catégories pour l'arabe. Une branche `== 1` en français
+    /// aurait laissé les six autres langues fausses, et l'arabe le reste de
+    /// toute façon — il distingue zéro, un, deux, peu, beaucoup.
+    ///
+    /// Même méthode que les témoins de série ci-dessus : on affirme que
+    /// l'ACCORD A LIEU, jamais un texte — la langue de l'hôte varie entre le
+    /// poste de développement et la CI.
+    func test_lePointConvertible_saccordeAuSingulier() {
+        assertAccorde(
+            ProgressionCopy.meeshMissing(missing: 1, floor: 0),
+            ProgressionCopy.meeshMissing(missing: 2, floor: 0)
+        )
+    }
+
+    /// Le plancher se mesure à `missing` CONSTANT : les deux rendus partagent
+    /// alors leur première phrase, et ne peuvent différer que par la seconde.
+    /// Sans cette précaution, l'accord de `missing` suffirait à faire passer le
+    /// témoin — il verdirait pour un motif étranger à ce qu'il affirme.
+    func test_lePointDeConversation_saccordeAuSingulier() {
+        assertAccorde(
+            ProgressionCopy.meeshMissing(missing: 5, floor: 1),
+            ProgressionCopy.meeshMissing(missing: 5, floor: 2)
+        )
+    }
+
+    /// À UN, le plancher ne montre plus le chiffre du tout — « votre point »,
+    /// jamais « votre 1 point ». C'est la forme que la directive demande, et
+    /// elle ne s'observe pas par l'accord seul.
+    func test_lePlancherAUn_neMontreAucunChiffre() {
+        let avecPlancher = ProgressionCopy.meeshMissing(missing: 5, floor: 1)
+        let sansPlancher = ProgressionCopy.meeshMissing(missing: 5, floor: 0)
+        let secondePhrase = avecPlancher.replacingOccurrences(of: sansPlancher, with: "")
+        XCTAssertFalse(
+            secondePhrase.contains("1"),
+            "le plancher à un ne doit porter aucun chiffre : « \(secondePhrase.trimmingCharacters(in: .whitespaces)) »"
+        )
+    }
+
 }

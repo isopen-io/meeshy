@@ -16,7 +16,7 @@ class PostDetailViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isLoadingComments = false
     @Published var hasMoreComments: Bool?  // nil = pas encore chargé ≠ « il y en a plus » (#4868)
-    @Published var error: String?
+    @Published var loadFailure: ContentFetchFailure?
     @Published var replyingTo: FeedComment? = nil
 
     @Published var repliesMap: [String: [FeedComment]] = [:]
@@ -43,7 +43,7 @@ class PostDetailViewModel: ObservableObject {
     @Published var commentHeartInFlightIds: Set<String> = []
 
     private var commentCursor: String?
-    private let postService: PostServiceProviding
+    let postService: PostServiceProviding
     private let socialSocket: any SocialSocketProviding
     private let languageProvider: LanguageProviding
     private let offlineQueue: OfflineQueueing
@@ -160,9 +160,9 @@ class PostDetailViewModel: ObservableObject {
                 }
             }
         } catch {
-            // 404 ⇒ absence, pas échec : `post == nil` le dit déjà, et
-            // signaler un échec inviterait à réessayer pour rien (#4903).
-            self.error = PostDetailAbsenceReason.isNotFound(error) ? nil : error.localizedDescription
+            // La CAUSE, pas une phrase : l'écran en tire connexion, serveur ou
+            // indisponibilité (`PostDetailAbsenceReason`, #4903, #6508).
+            self.loadFailure = ContentFetchFailure.classify(error)
         }
     }
 
@@ -726,7 +726,7 @@ class PostDetailViewModel: ObservableObject {
     /// while it's pending the optimistic id (`cmid`) is shown in the
     /// list — when the server response arrives, the socket
     /// `comment:added` broadcast reconciles via the normal path.
-    func sendComment(_ content: String, effectFlags: Int? = nil, location: SharedPlace? = nil) async {
+    func sendComment(_ content: String, originalLanguage: String?, effectFlags: Int? = nil, location: SharedPlace? = nil) async {
         guard let post else { return }
         let cmid = ClientMutationId.generate()
         let snapshot = comments
@@ -743,17 +743,15 @@ class PostDetailViewModel: ObservableObject {
             likes: 0,
             replies: 0,
             effectFlags: effectFlags ?? 0,
-            location: location
+            originalLanguage: originalLanguage, location: location
         )
         comments.insert(optimistic, at: 0)
         self.post?.commentCount = snapshotCount + 1
         let payload = CreateCommentPayload(
-            clientMutationId: cmid,
-            postId: post.id,
-            parentCommentId: nil,
-            content: content,
-            location: location,
-            effectFlags: effectFlags
+            clientMutationId: cmid, postId: post.id,
+            parentCommentId: nil, content: content,
+            originalLanguage: originalLanguage,
+            location: location, effectFlags: effectFlags
         )
         do {
             try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: post.id)
@@ -780,7 +778,7 @@ class PostDetailViewModel: ObservableObject {
     /// immédiat keyé cmid, survit au kill de l'app, réconciliée par l'écho
     /// socket `comment:added`. Rollback multi-champs (repliesMap, compteur du
     /// parent, commentCount, dépliage) sur refus d'enfilement ou .exhausted.
-    func sendReply(_ content: String, effectFlags: Int? = nil, location: SharedPlace? = nil) async {
+    func sendReply(_ content: String, originalLanguage: String?, effectFlags: Int? = nil, location: SharedPlace? = nil) async {
         guard let post, let parent = replyingTo else { return }
         // Réponse plate à 2 niveaux : répondre à une réponse rattache au MÊME
         // parent racine pour rester au niveau 2 ; l'auteur ciblé est notifié via
@@ -805,7 +803,7 @@ class PostDetailViewModel: ObservableObject {
             replies: 0,
             parentId: parentId,
             effectFlags: effectFlags ?? 0,
-            location: location
+            originalLanguage: originalLanguage, location: location
         )
         var existing = repliesMap[parentId] ?? []
         existing.insert(optimistic, at: 0)
@@ -816,12 +814,10 @@ class PostDetailViewModel: ObservableObject {
         }
         self.post?.commentCount = snapshotCount + 1
         let payload = CreateCommentPayload(
-            clientMutationId: cmid,
-            postId: post.id,
-            parentCommentId: parentId,
-            content: content,
-            location: location,
-            effectFlags: effectFlags
+            clientMutationId: cmid, postId: post.id,
+            parentCommentId: parentId, content: content,
+            originalLanguage: originalLanguage,
+            location: location, effectFlags: effectFlags
         )
         do {
             try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: post.id)
@@ -854,62 +850,32 @@ class PostDetailViewModel: ObservableObject {
         replyingTo = nil
     }
 
-    // MARK: - Édition de commentaire (auteur)
-
-    /// PATCH du commentaire : remplacement optimiste EN PLACE (jamais
-    /// d'insertion — même id), rollback complet si le serveur refuse.
-    /// L'écho `comment:updated` reconfirme ensuite la ligne (idempotent).
-    func updateComment(_ target: FeedComment, content: String, effectFlags: Int) async {
-        guard let post else { return }
-        let edited = target.withEditedContent(content, effectFlags: effectFlags)
-        let snapshotComments = comments
-        let snapshotReplies = repliesMap
-        applyCommentUpdated(edited)
-        do {
-            _ = try await postService.updateComment(
-                postId: post.id, commentId: target.id, content: content, effectFlags: effectFlags
-            )
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
-            if let parentId = edited.parentId, let replies = repliesMap[parentId] {
-                try? await CacheCoordinator.shared.comments.savePreservingFreshness(replies, for: "replies-\(parentId)")
-            }
-        } catch {
-            comments = snapshotComments
-            repliesMap = snapshotReplies
-            FeedbackToastManager.shared.showError(
-                String(localized: "feed.comments.edit_error", defaultValue: "Erreur lors de la modification du commentaire", bundle: .main))
-        }
-    }
-
     /// Pose une traduction de commentaire fraîchement arrivée (racine ou
-    /// réponse) — uniquement si la langue est préférée et que la ligne n'a pas
-    /// déjà une traduction plus prioritaire affichée.
+    /// réponse) — uniquement si la langue est préférée, qu'aucune traduction
+    /// n'est déjà affichée, ET que la langue d'origine du commentaire n'occupe
+    /// pas déjà un rang au moins aussi prioritaire dans le Prisme (#6531,
+    /// jumelle de `FeedViewModel.applyCommentTranslation` — même garde).
     func applyCommentTranslationUpdate(commentId: String, language: String, text: String) {
-        guard preferredLanguages.contains(where: { $0.caseInsensitiveCompare(language) == .orderedSame }) else { return }
-        if let idx = comments.firstIndex(where: { $0.id == commentId }), comments[idx].translatedContent == nil {
+        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
+        guard let incomingRank = preferred.firstIndex(where: { $0 == language.lowercased() }) else { return }
+        func shouldApply(_ comment: FeedComment) -> Bool {
+            guard comment.translatedContent == nil else { return false }
+            let originalRank = comment.originalLanguage
+                .map { $0.lowercased() }
+                .flatMap { orig in preferred.firstIndex(where: { $0 == orig }) }
+            if let originalRank, originalRank <= incomingRank { return false }
+            return true
+        }
+        if let idx = comments.firstIndex(where: { $0.id == commentId }), shouldApply(comments[idx]) {
             comments[idx].translatedContent = text
             return
         }
         for (key, var replies) in repliesMap {
-            if let idx = replies.firstIndex(where: { $0.id == commentId }), replies[idx].translatedContent == nil {
+            if let idx = replies.firstIndex(where: { $0.id == commentId }), shouldApply(replies[idx]) {
                 replies[idx].translatedContent = text
                 repliesMap[key] = replies
                 return
             }
-        }
-    }
-
-    /// Remplace la ligne éditée EN PLACE (racine ou réponse) — idempotent,
-    /// partagé par l'optimiste local et l'écho socket `comment:updated`.
-    func applyCommentUpdated(_ edited: FeedComment) {
-        if let parentId = edited.parentId, var existing = repliesMap[parentId],
-           let idx = existing.firstIndex(where: { $0.id == edited.id }) {
-            existing[idx] = edited
-            repliesMap[parentId] = existing
-            return
-        }
-        if let idx = comments.firstIndex(where: { $0.id == edited.id }) {
-            comments[idx] = edited
         }
     }
 
@@ -918,7 +884,7 @@ class PostDetailViewModel: ObservableObject {
     /// l'OfflineQueue, un commentaire média DOIT passer en direct (l'upload du fichier
     /// exige le réseau). Optimistic-first avec le média local, puis upload TUS
     /// (`uploadContext=comment`) → `addComment(attachmentIds:)`, réconcilie/rollback.
-    func submitCommentWithMedia(_ content: String, effectFlags: Int?, parentId: String?, pendingMedia: PendingCommentMedia, location: SharedPlace? = nil) async {
+    func submitCommentWithMedia(_ content: String, originalLanguage: String?, effectFlags: Int?, parentId: String?, pendingMedia: PendingCommentMedia, location: SharedPlace? = nil) async {
         guard let post else { return }
         if parentId != nil { replyingTo = nil }
         // La ligne optimiste est keyée par le cmid envoyé au gateway : l'écho
@@ -935,7 +901,7 @@ class PostDetailViewModel: ObservableObject {
             content: content, timestamp: Date(),
             likes: 0, replies: 0, parentId: parentId,
             effectFlags: effectFlags ?? 0,
-            media: [pendingMedia.optimistic]
+            originalLanguage: originalLanguage, media: [pendingMedia.optimistic]
         )
         let snapshotComments = comments
         let snapshotReplies = parentId.flatMap { repliesMap[$0] }
@@ -956,7 +922,7 @@ class PostDetailViewModel: ObservableObject {
             let apiComment = try await postService.addComment(
                 postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags,
                 attachmentIds: [attachmentId], mobileTranscription: pendingMedia.mobileTranscription,
-                originalLanguage: nil, location: location, clientMutationId: tempId
+                originalLanguage: originalLanguage, location: location, clientMutationId: tempId
             )
             let server = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
@@ -965,7 +931,7 @@ class PostDetailViewModel: ObservableObject {
                 content: apiComment.content, timestamp: apiComment.createdAt,
                 likes: 0, replies: 0, parentId: parentId,
                 effectFlags: apiComment.effectFlags ?? effectFlags ?? 0,
-                media: (apiComment.media ?? []).map { $0.toFeedMedia() }
+                originalLanguage: apiComment.originalLanguage, media: (apiComment.media ?? []).map { $0.toFeedMedia() }
             )
             if let parentId {
                 var existing = repliesMap[parentId] ?? []
@@ -1364,11 +1330,13 @@ class PostDetailViewModel: ObservableObject {
                 var translations = self.post?.translations ?? [:]
                 translations[data.language] = translation
                 self.post?.translations = translations
-                let langs = self.preferredLanguages
-                if langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) {
-                    if self.post?.translatedContent == nil {
-                        self.post?.translatedContent = data.translation.text
-                    }
+                // #6531 — re-résout le texte AFFICHÉ par la descente unique du
+                // Prisme après fusion (`FeedPost.resolved`), au lieu de figer la
+                // première traduction arrivée dont la langue figurait n'importe
+                // où dans le Prisme. C'est CE chemin (l'écran de détail, pas le
+                // feed) que la seconde reproduction de l'issue démontre.
+                if let post = self.post {
+                    self.post = post.resolved(preferredLanguages: self.preferredLanguages)
                 }
             }
             .store(in: &socketCancellables)

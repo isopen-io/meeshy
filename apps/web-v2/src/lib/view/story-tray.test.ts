@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { groupStoriesByAuthor, storyAuthorLabel, withMoods } from './story-tray';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { StatusMoodPost, StoryTrayPost } from '@/lib/api/stories';
 
 const story = (
@@ -149,12 +150,25 @@ describe('l\'entrée suit l\'AVANCE OPTIMISTE, pas seulement le verdict serveur 
 });
 
 describe('storyAuthorLabel', () => {
+  beforeAll(async () => {
+    await loadInterfaceCatalog('fr');
+    await loadInterfaceCatalog('en');
+  });
+
   test('la mienne se nomme, elle ne s\'identifie pas', () => {
     const [g] = groupStoriesByAuthor([story('s', 'moi', '2026-09-11T10:00:00Z')], {
       viewerId: 'moi',
       viewedIds: new Set(),
     });
-    expect(storyAuthorLabel(g!)).toBe('Votre story');
+    expect(storyAuthorLabel(g!, 'fr')).toBe('Votre story');
+  });
+
+  test('« la mienne » suit la langue d\'interface — jamais figée en français (#6550)', () => {
+    const [g] = groupStoriesByAuthor([story('s', 'moi', '2026-09-11T10:00:00Z')], {
+      viewerId: 'moi',
+      viewedIds: new Set(),
+    });
+    expect(storyAuthorLabel(g!, 'en')).toBe('Your story');
   });
 
   test('le repli descend displayName → prénom nom → username, jamais l\'id', () => {
@@ -165,6 +179,7 @@ describe('storyAuthorLabel', () => {
           viewerId: 'moi',
           viewedIds: new Set(),
         })[0]!,
+        'fr',
       );
     expect(avec({ displayName: 'Ada', username: 'ada42' })).toBe('Ada');
     expect(avec({ firstName: 'Ada', lastName: 'Lovelace', username: 'ada42' })).toBe('Ada Lovelace');

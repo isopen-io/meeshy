@@ -270,6 +270,100 @@ final class ProgressionMeeshEntryTests: XCTestCase {
         )
     }
 
+    // MARK: - La frappe en vol, et son échec (#6467)
+
+    private var frappeEnCours: String {
+        String(localized: "progression.meesh.minting", defaultValue: "Frappe en cours…", bundle: .main)
+    }
+    private var echecDeFrappe: String {
+        String(localized: "progression.meesh.mint_error", defaultValue: "La frappe n'a pas abouti — réessayez", bundle: .main)
+    }
+
+    /// Pendant la frappe, le détail MONTRE qu'il travaille : un indicateur
+    /// d'activité, le mot, et plus d'offre. Une opacité de 0,6 sur un aller-retour
+    /// court ne se voyait pas (retour porteur, 2026-09-14).
+    func test_duringAMint_theDetailShowsActivity_andNoLongerOffersTheAction() {
+        let meesh = EngagementProgressResolver.resolve(payload(debitablePoints: 1300)).meesh!
+        let ecran = monter(
+            ProgressionMeeshDetail(meesh: meesh, isMinting: true, onMint: {})
+                .frame(width: 300),
+            size: CGSize(width: 320, height: 420)
+        )
+
+        XCTAssertNotNil(
+            ecran.node("progression.meesh.minting"),
+            "Aucun indicateur d'activité pendant la frappe. Identifiants vus : \(ecran.identifiers)"
+        )
+        let dit = ecran.labels.joined(separator: " | ")
+        XCTAssertTrue(dit.contains(frappeEnCours), "La frappe en cours n'est pas dite : « \(dit) »")
+        XCTAssertFalse(dit.contains(ProgressionCopy.meeshMintAction(meesh.mintCost)),
+                       "La conversion reste offerte pendant la frappe : « \(dit) »")
+    }
+
+    /// Un échec se lit DANS le détail, sous l'action qu'on peut retenter.
+    func test_afterAFailedMint_theDetailTellsIt_andStillOffersTheAction() {
+        let meesh = EngagementProgressResolver.resolve(payload(debitablePoints: 1300)).meesh!
+        let ecran = monter(
+            ProgressionMeeshDetail(meesh: meesh, isMinting: false, mintError: echecDeFrappe, onMint: {})
+                .frame(width: 300),
+            size: CGSize(width: 320, height: 460)
+        )
+
+        let dit = ecran.labels.joined(separator: " | ")
+        XCTAssertTrue(dit.contains(echecDeFrappe), "L'échec de la frappe n'est pas dit dans le détail : « \(dit) »")
+        XCTAssertTrue(dit.contains(ProgressionCopy.meeshMintAction(meesh.mintCost)),
+                      "La conversion n'est plus offerte après un échec : « \(dit) »")
+    }
+
+    // MARK: - Une seule pièce de verre (#6466)
+
+    /// **Garde de SOURCE, et pourquoi.** Le verre ne laisse aucune trace dans
+    /// l'arbre d'accessibilité : l'entrée reste UN élément, un libellé (ce que
+    /// `test_theEntryAnnouncesTheBalance` garde). La preuve visuelle est la
+    /// capture au simulateur ; ce témoin empêche le retour à la capsule ET à
+    /// deux bulles séparées — le porteur les a vues le 2026-09-14 et a tranché :
+    /// « les deux éléments associés en un seul, pas de séparation visuelle ».
+    func test_theEntry_isOneGlassPiece_withoutSeparation() throws {
+        let source = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()   // Views
+                .deletingLastPathComponent()   // Unit
+                .deletingLastPathComponent()   // MeeshyTests
+                .deletingLastPathComponent()   // ios
+                .appendingPathComponent("Meeshy/Features/Main/Views/ProgressionMeeshEntry.swift"),
+            encoding: .utf8
+        )
+        let apresEntree = source.components(separatedBy: "struct ProgressionMeeshEntry").dropFirst().first ?? ""
+        let etiquette = apresEntree.components(separatedBy: ".popover(").first ?? ""
+        XCTAssertEqual(etiquette.components(separatedBy: ".adaptiveGlass(").count - 1, 1,
+                       "L'entrée doit porter UNE seule pièce de verre, pour le nombre et la pièce ensemble.")
+        XCTAssertFalse(etiquette.contains("AdaptiveGlassContainer("), "L'entrée est encore un groupe de bulles séparées.")
+        XCTAssertFalse(etiquette.contains("Capsule()"), "L'entrée est encore une capsule.")
+    }
+
+    // MARK: - L'en-tête qui se réduit (#6480)
+
+    /// Directive porteur 2026-09-14 : Progression « adopte le header qui se
+    /// réduit au défilement », avec le retour en verre. L'en-tête était fait
+    /// main : chevron nu, titre fixe. Le composant partagé porte les deux —
+    /// l'écran n'a qu'à le MONTER, et c'est ce que ce témoin garde.
+    func test_progression_mountsTheCollapsibleHeader_notAHandmadeBar() throws {
+        let source = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()   // Views
+                .deletingLastPathComponent()   // Unit
+                .deletingLastPathComponent()   // MeeshyTests
+                .deletingLastPathComponent()   // ios
+                .appendingPathComponent("Meeshy/Features/Main/Views/ProgressionView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(source.contains("CollapsibleHeader("), "Progression ne monte pas l'en-tête partagé.")
+        XCTAssertTrue(source.contains("ScrollOffsetReader(relay: scrollRelay)"),
+                      "L'en-tête de Progression ne lit pas le défilement : il ne se réduira pas.")
+        XCTAssertFalse(source.contains("Image(systemName: \"chevron.backward\")"),
+                       "Progression garde un chevron fait main à côté de l'en-tête partagé.")
+    }
+
     // MARK: - La pièce d'argent (#6427)
 
     /// **Une Meesh est une MONNAIE** : son glyphe dit « pièce », pas « marque ».

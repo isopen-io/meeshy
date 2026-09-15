@@ -3,9 +3,13 @@ import { useStore } from 'zustand/react';
 
 import { AuthAmbient, AuthBrandFooter, AuthSubmitButton, AuthTitle } from '@/components/auth-chrome';
 import { Field } from '@/components/field';
+import { GlyphSvg } from '@/components/glyph';
+import { AUTH_GLYPHS } from '@/components/glyphs-auth';
+import { MagicLinkPanel, type MagicLinkPanelDeps } from '@/components/magic-link-panel';
 import { auth } from '@/lib/api/auth';
 import { sessionStore } from '@/lib/api/session';
 import { useOnline } from '@/lib/net/online';
+import { useSearch } from '@/lib/router';
 import { placeLoginFailure } from '@/lib/view/auth-feedback';
 import { Link, href, navigate } from '@/routes/route-table';
 
@@ -20,6 +24,29 @@ import { Link, href, navigate } from '@/routes/route-table';
  * consulte pour décider si cet écran doit même rester affiché.
  */
 
+/**
+ * LES DEUX PORTES, ET CELLE QUI S'OUVRE PAR DÉFAUT (#6404).
+ *
+ * Directive porteur 2026-09-13 : « Avec connexion par magic link comme
+ * connexion par défaut pour le moment ! […] Proposer l'option se connecter
+ * avec identifiant (e-mail, téléphone, pseudo) et mot de passe ». Le mot de
+ * passe n'est donc pas retiré — il DESCEND d'un rang, derrière un contrôle
+ * nommé.
+ *
+ * **Le choix vit dans l'ADRESSE**, jamais dans un état local : le retour
+ * arrière le rend, un lien le partage, et une recette ouvre directement l'une
+ * des deux portes (même règle que la catégorie de la cloche, `notifications.tsx`).
+ * `lien` est l'ABSENCE du paramètre — l'adresse par défaut reste `/login` nu,
+ * et une valeur inconnue y retombe plutôt que de rendre un écran vide.
+ */
+const METHOD_PARAM = 'methode';
+
+type LoginMethod = 'lien' | 'motdepasse';
+
+export function loginMethodFromSearch(raw: string | null): LoginMethod {
+  return raw === 'motdepasse' ? 'motdepasse' : 'lien';
+}
+
 /** Le violet de marque du titre — `purple700 → purple600 → purple500`
  * (`LoginView.swift:109`), dérivé de Swift (D-4). C'est la SEULE surface de
  * l'application qui emploie cette rampe : la marque partout ailleurs est
@@ -27,7 +54,31 @@ import { Link, href, navigate } from '@/routes/route-table';
 const TITLE_GRADIENT = 'linear-gradient(90deg, var(--ios-purple-700), var(--ios-purple-600), var(--ios-purple-500))';
 const FOCUS_TINT = 'var(--ios-purple-600)';
 
-export default function LoginScreen() {
+/** L'ENCRE DES ACTIONS EN TEXTE — un pas de rampe par schéma, comme
+ * `signup.tsx` : `indigo500` nu tombe sous 4,5:1 pour du petit texte dans les
+ * DEUX schémas. */
+const INDIGO_LINK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--ios-indigo-600)]';
+
+/**
+ * L'ÉCRAN, tel que le routeur le monte : il LIT l'adresse, et délègue tout le
+ * reste à `LoginDoors`. Ce découpage n'est pas cosmétique — `useSearch()` exige
+ * le contexte du routeur, donc un témoin qui monterait l'écran entier devrait
+ * monter le routeur, ses chunks paresseux et son préalable de catalogue pour
+ * prouver deux `<input>`. La PORTE est une donnée ; l'adresse qui la choisit
+ * est une autre question, et `loginMethodFromSearch` la tient, seule et pure.
+ */
+export default function LoginScreen({ magicLinkDeps }: { readonly magicLinkDeps?: MagicLinkPanelDeps } = {}) {
+  const [search] = useSearch();
+  return <LoginDoors method={loginMethodFromSearch(search.get(METHOD_PARAM))} {...(magicLinkDeps === undefined ? {} : { magicLinkDeps })} />;
+}
+
+export function LoginDoors({
+  method,
+  magicLinkDeps,
+}: {
+  readonly method: LoginMethod;
+  readonly magicLinkDeps?: MagicLinkPanelDeps;
+}) {
   const session = useStore(sessionStore, (s) => s.session);
   const online = useOnline();
 
@@ -145,9 +196,39 @@ export default function LoginScreen() {
               Annuler
             </button>
           </form>
+        ) : method === 'lien' ? (
+          /* LA PORTE PAR DÉFAUT — le MÊME panneau que l'écran plein
+             `/auth/magic-link` (`MagicLinkPanel`), jamais une seconde machine :
+             saisie, envoi, compte à rebours, renvoi et la note sur les
+             indésirables y vivent une seule fois. `autoFocus` est FAUX ici :
+             le panneau partage l'écran avec le titre et les deux liens du bas,
+             et voler le focus au montage déplacerait le défilement sans que
+             personne ne l'ait demandé. */
+          <MagicLinkPanel
+            {...(magicLinkDeps === undefined ? {} : { deps: magicLinkDeps })}
+            footer={
+              <div className="mt-1 grid justify-items-center gap-2">
+                <Link
+                  to="login"
+                  search={{ [METHOD_PARAM]: 'motdepasse' }}
+                  replace
+                  className={`inline-flex items-center text-title font-semibold ${INDIGO_LINK}`}
+                  style={{ minHeight: 44 }}
+                >
+                  Se connecter avec un identifiant et un mot de passe
+                </Link>
+              </div>
+            }
+          />
         ) : (
           <form onSubmit={handleLoginSubmit} className="grid w-full gap-4" noValidate>
-            <Field id="login-username" label="Identifiant" icon="user" tint={FOCUS_TINT} focused={focused === 'username'}>
+            <Field
+              id="login-username"
+              label="E-mail, téléphone ou pseudo"
+              icon="user"
+              tint={FOCUS_TINT}
+              focused={focused === 'username'}
+            >
               {({ id }) => (
                 <input
                   id={id}
@@ -196,24 +277,30 @@ export default function LoginScreen() {
               busyLabel="Connexion…"
             />
 
-            {/* LES DEUX PORTES (#5816) — `LoginView.swift:478-503` : « Connexion
-                sans mot de passe » EN PREMIER (action mise en avant, l.481-493),
-                « Mot de passe oublié ? » EN DESSOUS (l.495-501) — empilées,
-                jamais côte à côte (doc-comment l.479-480). Ancres, pas des
-                boutons qui naviguent : pas d'`history`, un vrai `href`. */}
+            {/* LES DEUX PORTES (#5816) — `LoginView.swift:478-503` : la
+                connexion par e-mail EN PREMIER (action mise en avant,
+                l.481-493), « Mot de passe oublié ? » EN DESSOUS (l.495-501) —
+                empilées, jamais côte à côte (doc-comment l.479-480). Ancres,
+                pas des boutons qui naviguent : pas d'`history`, un vrai `href`.
+
+                « Se connecter par e-mail », baguette en tête (#6626) : le mot
+                dit CE QUE l'on fait, la baguette garde l'identité de la porte.
+                Le glyphe porte sa propre teinte — le dégradé du libellé est
+                découpé dans le TEXTE (`background-clip: text`), et un tracé en
+                `currentColor` y serait transparent. */}
             <div className="mt-1 grid justify-items-center gap-2">
-              <Link
-                to="magicLink"
-                className="inline-flex items-center font-semibold text-title"
-                style={{
-                  minHeight: 44,
-                  background: 'linear-gradient(90deg, var(--ios-purple-500), var(--ios-indigo-400))',
-                  WebkitBackgroundClip: 'text',
-                  backgroundClip: 'text',
-                  color: 'transparent',
-                }}
-              >
-                Connexion sans mot de passe
+              <Link to="login" replace className="inline-flex items-center gap-2 font-semibold text-title" style={{ minHeight: 44 }}>
+                <GlyphSvg glyph={AUTH_GLYPHS.magicWand} size={18} style={{ color: 'var(--ios-purple-500)' }} />
+                <span
+                  style={{
+                    background: 'linear-gradient(90deg, var(--ios-purple-500), var(--ios-indigo-400))',
+                    WebkitBackgroundClip: 'text',
+                    backgroundClip: 'text',
+                    color: 'transparent',
+                  }}
+                >
+                  Se connecter par e-mail
+                </span>
               </Link>
               <Link
                 to="forgotPassword"

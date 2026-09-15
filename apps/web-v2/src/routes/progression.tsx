@@ -7,6 +7,7 @@ import { GLYPHS } from '@/components/glyphs';
 import { GlassSurface, GlassBack } from '@/components/glass-surface';
 import { ProgressBar } from '@/components/progress-bar';
 import { httpTransport, unwrap } from '@/lib/api/client';
+import { meeshMissing } from '@/lib/view/meesh-copy';
 import { apiDeps } from '@/lib/api/deps';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress, mintMeesh } from '@/lib/api/engagement';
 import { useOnline } from '@/lib/net/online';
@@ -29,6 +30,7 @@ import {
   MEESH_TINT,
   STREAK_TINT,
   UNLOCKED_TINT,
+  MeeshHero,
   ProgressionError,
   ProgressionSkeleton,
 } from '@/routes/progression-parts';
@@ -359,6 +361,32 @@ export function SectionLink({ section, progress }: { section: ProgressionSection
 }
 
 /**
+ * CE QUE L'ÉCHEC DIT (#6470) — un texte, pas un code.
+ *
+ * La passerelle rejoue désormais les conflits d'écriture (#6467) : ce qui reste
+ * est un échec RÉSEAU, et il se retente. Le message le dit, plutôt que de
+ * rendre une cause que personne ne peut corriger.
+ */
+const MINT_FAILED_MESSAGE = 'La frappe n’a pas abouti — vérifiez votre connexion et réessayez.';
+
+/**
+ * LE ROUET de la frappe — le pendant CSS du `ProgressView` d'iOS.
+ *
+ * `aria-hidden` : l'état est déjà porté par `aria-busy` sur le bouton. Deux
+ * annonces pour un même état n'en font pas un plus clair, elles le répètent.
+ * `prefers-reduced-motion` est respecté par `animate-spin` (§ app.css).
+ */
+function MintSpinner() {
+  return (
+    <span
+      aria-hidden="true"
+      data-meesh-mint-spinner
+      className="inline-block size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
+    />
+  );
+}
+
+/**
  * L'ENTRÉE MEESH — le solde en haut à droite, le détail en verre (#5839).
  *
  * Elle remplace une coupe qui ne disait rien. Le solde se lit SANS ouvrir : un
@@ -373,10 +401,12 @@ export function MeeshEntry({
   meesh,
   onMint,
   isMinting,
+  mintError,
 }: {
   meesh: EngagementMeeshProgress;
   onMint: () => void;
   isMinting: boolean;
+  mintError?: string | undefined;
 }) {
   const [ouvert, setOuvert] = useState(false);
 
@@ -387,8 +417,16 @@ export function MeeshEntry({
         onClick={() => setOuvert((o) => !o)}
         aria-expanded={ouvert}
         aria-label={`${meesh.balance} Meesh — voir le détail`}
-        className="flex items-center gap-1.5 rounded-chip px-2.5"
+        className="flex items-center gap-1.5 px-2.5"
         style={{
+          /* PLUS RECTANGLE QU'UNE CAPSULE (#6466, repris #6470) — `rounded-chip`
+             donnait une gélule là où iOS pose `RoundedRectangle(cornerRadius: 12)`.
+             Et UNE seule surface, pas deux bulles : la directive du 2026-09-14
+             demandait d'abord un groupe séparé, le porteur l'a vu au simulateur
+             et a tranché l'inverse — « les deux éléments associés en un seul,
+             pas de séparation visuelle ». Reproduire l'énoncé de l'issue aurait
+             ressuscité une forme déjà refusée. */
+          borderRadius: 12,
           minHeight: 44,
           backgroundColor: `color-mix(in srgb, ${MEESH_TINT} 16%, transparent)`,
           color: MEESH_TINT,
@@ -400,7 +438,7 @@ export function MeeshEntry({
 
       {ouvert ? (
         <GlassSurface prominent role="dialog" aria-label="Détail des Meeshes" className="absolute right-0 top-12 z-20 w-64 p-4">
-          <MeeshDetail meesh={meesh} onMint={onMint} isMinting={isMinting} />
+          <MeeshDetail meesh={meesh} onMint={onMint} isMinting={isMinting} mintError={mintError} />
         </GlassSurface>
       ) : null}
     </div>
@@ -419,10 +457,15 @@ export function MeeshDetail({
   meesh,
   onMint,
   isMinting,
+  mintError,
 }: {
   meesh: EngagementMeeshProgress;
   onMint: () => void;
   isMinting: boolean;
+  /** L'ÉCHEC de la frappe (#6470). Sans lui, le geste échouait en SILENCE et
+   * l'on retouchait — la passerelle rejoue les conflits d'écriture (#6467),
+   * mais un échec réseau reste possible. */
+  mintError?: string | undefined;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -465,25 +508,42 @@ export function MeeshDetail({
             )}
 
             {meesh.canMint ? (
-              <button
-                type="button"
-                onClick={onMint}
-                disabled={isMinting}
-                className="mt-1 rounded-chip px-4 text-body font-bold"
-                style={{ minHeight: 44, backgroundColor: MEESH_TINT, color: 'var(--color-ios-surface)' }}
-              >
-                {isMinting ? 'Frappe en cours…' : `Convertir ${meesh.mintCost} points en une Meesh`}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={onMint}
+                  disabled={isMinting}
+                  aria-busy={isMinting}
+                  data-meesh-mint
+                  className="mt-1 flex items-center justify-center gap-2 rounded-chip px-4 text-body font-bold disabled:opacity-80"
+                  style={{ minHeight: 44, backgroundColor: MEESH_TINT, color: 'var(--color-ios-surface)' }}
+                >
+                  {/* L'ACTIVITÉ SE VOIT, pas seulement se lit (#6470) : le
+                      jumeau iOS pose un `ProgressView` à gauche du libellé, et
+                      un libellé seul ne distingue pas « en cours » de « figé ».
+                      `aria-hidden` parce que `aria-busy` le dit déjà — deux
+                      annonces pour un état n'en font pas un plus clair. */}
+                  {isMinting ? <MintSpinner /> : null}
+                  {isMinting ? 'Frappe en cours…' : `Convertir ${meesh.mintCost} points en une Meesh`}
+                </button>
+
+                {/* L'ÉCHEC se lit ICI, sous l'action qu'on peut retenter — et
+                    non en haut de l'écran, sous le détail qui le cache. Masqué
+                    pendant la frappe : il décrirait alors un état révolu. */}
+                {mintError !== undefined && !isMinting ? (
+                  <p role="alert" data-meesh-mint-error className="text-caption" style={{ color: 'var(--ios-error)' }}>
+                    {mintError}
+                  </p>
+                ) : null}
+              </>
             ) : (
               <p className="text-caption" style={{ color: INK_2 }}>
-                Encore {meesh.missingPoints} points convertibles avant une Meesh.
                 {/* Le PLANCHER inaliénable se dit ici, pas ailleurs : sans lui,
                     l'utilisateur compte ses points de conversation dans ce qui
                     manque et ne comprend pas pourquoi le compte ne tombe pas
-                    juste. */}
-                {meesh.floorPoints > 0
-                  ? ` Vos ${meesh.floorPoints} points de conversation seront repris en dernier, sans éteindre aucun badge.`
-                  : ''}
+                    juste. La phrase vient du SITE UNIQUE depuis #6478 — elle
+                    vivait en double, donc fausse deux fois. */}
+                {meeshMissing(meesh.missingPoints, meesh.floorPoints)}
               </p>
             )}
     </div>
@@ -493,18 +553,49 @@ export function MeeshDetail({
 /**
  * Le CORPS du hub — il parcourt la séquence partagée, il ne la compose pas.
  *
- * La frappe a quitté ce composant : elle vit dans l'entrée Meesh de l'en-tête
- * (#5839), où le solde se lit sans défiler. Le corps n'a donc plus besoin ni
- * de `onMint` ni de `isMinting` — les garder « au cas où » aurait laissé deux
- * chemins vers la même action, dont un mort.
+ * ## La frappe REVIENT dans le corps (directive porteur 2026-09-14, #6497)
+ *
+ * #5839 l'en avait sortie, avec une raison qui tenait : « les garder au cas où
+ * aurait laissé deux chemins vers la même action, dont un MORT ». Le mot qui
+ * compte est le dernier. Le solde vit désormais SOUS le niveau, en hero, et ce
+ * chemin-là est bien vivant — c'est même celui qu'on voit sans toucher la
+ * pièce de l'en-tête.
+ *
+ * Deux portes, UNE seule frappe : le même `mint.mutate()`, donc la même clé
+ * d'idempotence (`requestIdRef`), qui n'est renouvelée qu'après un succès. Ce
+ * que #5839 interdisait — un second chemin mort — n'est pas ce qui se passe
+ * ici ; ce qu'il protégeait — une seule action — reste vrai.
  */
-export function ProgressionBody({ progress }: { progress: EngagementProgress }) {
+export function ProgressionBody({
+  progress,
+  onMint,
+  isMinting,
+  mintError,
+}: {
+  progress: EngagementProgress;
+  onMint: () => void;
+  isMinting: boolean;
+  mintError?: string | undefined;
+}) {
   return (
     <div className="flex flex-col gap-4 px-4 py-3">
       {progressionLayout(progress).map((bloc) => {
         if (bloc.kind === 'last-achievement') return <LastAchievementHero key="dernier" progress={progress} />;
         if (bloc.kind === 'level') {
           return <LevelHero key="niveau" progress={progress} mintCost={progress.meesh?.mintCost ?? null} />;
+        }
+        if (bloc.kind === 'meesh') {
+          // La loi partagée ne pose ce bloc QUE si la passerelle sert le solde ;
+          // le garde ici est la ceinture du typage, pas une seconde règle.
+          return progress.meesh === undefined || progress.meesh === null ? null : (
+            <MeeshHero
+              key="meesh"
+              meesh={progress.meesh}
+              onMint={onMint}
+              isMinting={isMinting}
+              mintError={mintError}
+            />
+          );
         }
         if (bloc.kind === 'elans') return <ElansHero key="elans" progress={progress} />;
         if (bloc.kind === 'flamme') return <FlammeHero key="flamme" progress={progress} />;
@@ -554,7 +645,12 @@ export default function ProgressionScreen() {
             Progression
           </h1>
           {meesh === undefined ? null : (
-            <MeeshEntry meesh={meesh} onMint={() => mint.mutate()} isMinting={mint.isPending} />
+            <MeeshEntry
+              meesh={meesh}
+              onMint={() => mint.mutate()}
+              isMinting={mint.isPending}
+              mintError={mint.isError ? MINT_FAILED_MESSAGE : undefined}
+            />
           )}
         </div>
         {online ? null : (
@@ -571,7 +667,12 @@ export default function ProgressionScreen() {
 
       <main id="contenu" className="flex-1 overflow-y-auto pb-safe">
         {query.data !== undefined ? (
-          <ProgressionBody progress={query.data} />
+          <ProgressionBody
+            progress={query.data}
+            onMint={() => mint.mutate()}
+            isMinting={mint.isPending}
+            mintError={mint.isError ? MINT_FAILED_MESSAGE : undefined}
+          />
         ) : query.isError ? (
           <ProgressionError message={query.error.message} online={online} onRetry={() => void query.refetch()} />
         ) : (

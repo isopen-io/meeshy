@@ -16,62 +16,33 @@ struct NotificationSettingsView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                scrollContent
-            }
+            CollapsibleHeaderPage(
+                title: String(localized: "settings.notifications.title", defaultValue: "Notifications", bundle: .main),
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: Color(hex: accentColor),
+                backgroundColor: theme.backgroundPrimary,
+                content: { pageContent }
+            )
         }
     }
 
-    // MARK: - Header
+    // MARK: - Content
 
-    private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.backward")
-                        .font(MeeshyFont.relative(14, weight: .semibold))
-                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(MeeshyFont.relative(15, weight: .medium))
-                }
-                .foregroundColor(Color(hex: accentColor))
-            }
+    private var pageContent: some View {
+        VStack(spacing: 20) {
+            generalSection
+            messagesSection
+            conversationsSection
+            contactsSection
+            feedSection
+            displaySection
+            dndSection
 
-            Spacer()
-
-            Text(String(localized: "settings.notifications.title", defaultValue: "Notifications", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-
-            Spacer()
-
-            Color.clear.frame(width: 60, height: 24)
+            Spacer().frame(height: 40)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - Scroll Content
-
-    private var scrollContent: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
-                generalSection
-                messagesSection
-                conversationsSection
-                contactsSection
-                feedSection
-                displaySection
-                dndSection
-
-                Spacer().frame(height: 40)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-        }
+        .padding(.top, 8)
     }
 
     // MARK: - General

@@ -32216,3 +32216,228 @@ le réinitialiser par e-mail depuis `/forgot-password`.
    table vers une autre application. Porter une liste de destinations est une
    occasion de les VÉRIFIER — recopiée sans mesure, elle importe ses 404 dans
    l'application neuve.
+
+## Leçon 608 — Un script de PREUVE qui lit mal rend des verts VIDES, et ce sont les plus rassurants (2026-09-14)
+
+**Cas.** Pour prouver le flux #6424 sur staging, un script en six étapes lisait
+la base par `ssh root@… "docker exec … mongosh --eval '<js>'"`. Le `<js>`
+contenait des guillemets simples ; les couches shell les ont mangés ; `mongosh`
+a rendu une chaîne VIDE. Le script assérait alors :
+
+```bash
+printf '%s' "$LIGNE" | grep -q '"password"' && verdict "…" ko || verdict "la colonne password est ABSENTE" ok
+```
+
+`grep -q` sur du vide est faux, donc la branche `ok` s'exécutait : **« la
+colonne password est ABSENTE » passait au vert sans qu'aucune ligne n'ait été
+lue.** Même chose pour « le compteur n'a jamais été écrit ». Deux preuves
+inexistantes, et ce sont précisément les deux qui rassuraient le plus.
+
+Ce que la base disait vraiment, une fois le passage par base64 mis en place :
+`{"password":null,"failedLoginAttempts":{"low":0,…}}` — les faits étaient bons.
+**Le produit était juste ; l'instrument mentait.**
+
+1. **Une assertion d'ABSENCE doit d'abord prouver la PRÉSENCE de la lecture.**
+   La forme opérante est en deux temps : une garde `lu()` qui échoue si la
+   réponse est vide, PUIS l'assertion. Sans elle, « absent » et « pas
+   interrogé » rendent le même verdict — et c'est le vert.
+2. **Assérer sur la VALEUR, jamais sur l'absence d'une sous-chaîne.**
+   `grep -q '"password":null'` (ce que la base DIT) plutôt que
+   `! grep -q '"password"'` (ce qu'elle ne dit pas) : la première ne peut pas
+   passer sur du vide.
+3. **Un `<js>` qui traverse ssh + docker + sh se transporte en base64.** Trois
+   couches de shell, trois occasions de perdre un guillemet ; l'encodage retire
+   la question au lieu de la compter.
+4. **La leçon générale, et c'est elle qui pique** : ce dépôt passe ses journées
+   à traquer « la garde qui ne garde rien » chez les autres. Un outil de
+   VÉRIFICATION est du code comme un autre — il mérite la question qu'on pose à
+   toute garde : *que rend-il quand ce qu'il mesure n'existe pas ?* Ici,
+   « vert ». Le premier réflexe devant un script de preuve tout vert est de le
+   faire échouer exprès (interroger un compte inexistant) et de vérifier qu'il
+   rougit.
+
+**La même faute est revenue TROIS fois de plus dans le même fichier, chaque
+fois d'un cran plus fin** — et c'est la vraie leçon, parce que corriger
+l'instance ne l'a jamais empêchée de revenir :
+
+| l'assertion verdit… | parce que |
+|---|---|
+| sans avoir **lu** | `grep -q` sur une chaîne vide est faux |
+| sans que l'action ait **eu lieu** | six connexions refusées en 429 |
+| sans que l'action ait eu lieu **assez** | quatre essais sous un seuil de cinq |
+| sans que la mesure soit **possible** | zéro essai, conclusion rendue quand même |
+
+Une seule question les attrape toutes : **cette assertion peut-elle verdir pour
+un motif étranger à ce qu'elle affirme ?** Elle se pose à l'écriture, pas au
+débogage. Et un harnais a besoin de TROIS verdicts, pas deux : *prouvé*,
+*réfuté*, et **non mesurable** — confondre le troisième avec le premier est ce
+qui produit les verts vides, le confondre avec le second accuse le produit
+d'une limite d'environnement.
+
+**Corollaire, mesuré le même jour : un harnais peut s'étrangler lui-même.** La
+clé du limiteur de connexion est `ip:<ip>:<3 premiers caractères de
+l'identifiant>` (`utils/rate-limiter.ts`, 5 essais / 15 min). Toutes les
+adresses de test commençant par `pre`, tous les passages partageaient un seul
+seau : le deuxième était étranglé par le premier, et l'échec ressemblait à un
+défaut du produit. Avant d'accuser le serveur d'un 429, lire la CLÉ du
+limiteur — ce qu'elle agrège dit si deux exécutions du test sont, pour lui, la
+même personne.
+## Leçon 609 — Un résolveur « site unique » ne l'est que pour les appelants qui l'APPELLENT : la question n'est pas « la règle existe-t-elle ? » mais « quelles surfaces la contournent ? » (2026-09-13)
+
+**Cas.** Retour porteur : sur `staging.meeshy.me/notifications`,
+`GET https://gate.meeshy.me/2026/09/<id>/harbor_<uuid>.png net::ERR_FAILED`,
+puis `workbox … no-response`. `apps/web-v2` avait pourtant DEUX lots consacrés
+à cette règle (#5668, #5805), un site unique déclaré (`attachmentSrc`,
+`media-url.ts`) et un doc-comment de quarante lignes qui l'énonce.
+
+1. **Le site unique servait les PIÈCES JOINTES, et l'identité lui échappait.**
+   `attachmentSrc` était appelé par les huit surfaces qui rendent un média de
+   message ou de post. L'AVATAR (`Avatar src`, dix appelants), la VIGNETTE
+   d'une notification, la BANNIÈRE d'une communauté et celle d'un profil
+   posaient la valeur brute. Rien ne les distinguait à la relecture : ce sont
+   des `<img src={…}>` comme les autres, et le champ s'appelle `avatar`, pas
+   `fileUrl` — **le nom du champ avait masqué la nature de la donnée.** La
+   requête qui les trouve n'interroge pas le résolveur mais son COMPLÉMENT :
+   `grep "src={"` moins les appels à `attachmentSrc`.
+2. **La règle vit DANS le composant partagé, pas chez ses dix appelants.** Le
+   legacy avait déjà tranché ainsi (`AvatarImage`,
+   `apps/web/components/ui/avatar.tsx`, « point de passage unique ») ; le
+   chantier avait recopié le composant sans recopier la règle. Demander à
+   chaque appelant de se souvenir, c'est la voir oubliée au onzième.
+3. **Le résolveur lui-même testait la FORME au lieu de la CIBLE.** Une chaîne
+   `https://…` y valait « déjà résolue » — vrai pour un CDN, faux pour
+   `https://gate.meeshy.me/2026/09/…`, qui porte un hôte et une clé mais
+   AUCUNE route (la racine de la passerelle ne sert rien). Idem pour
+   `/2026/09/…` : une barre initiale n'est pas une route. La question juste
+   n'est pas « cette chaîne a-t-elle la forme d'une adresse ? » mais **« la
+   route qu'elle désigne existe-t-elle ? »**
+4. **Une migration qui reconnaît un SEGMENT laisse tout ce qui ne le porte
+   pas.** La 013 réécrit les valeurs contenant `/attachments/file/` ; l'adresse
+   héritée sans segment de service lui a échappé — non comptée, non
+   sauvegardée, toujours servie. Un inventaire de migration énonce deux
+   affirmations, et la seconde (« ce sont là toutes les formes ») n'est presque
+   jamais vérifiée (leçon 261, rejouée sur des données au lieu de résolveurs).
+5. **L'hôte que porte une donnée héritée est à JETER, pas à honorer.** Sur
+   staging, la valeur en base nommait la passerelle de PRODUCTION (un dump
+   restauré — le risque que le doc-comment de la 013 énonce mot pour mot). La
+   réparation vise la base CONFIGURÉE : la clé identifie le fichier, l'hôte est
+   une décision de déploiement (#4324).
+6. **Et l'échec était MUET.** `onError` masque l'`<img>`, le dégradé
+   d'initiales réapparaît : « photo introuvable » se lit exactement comme
+   « compte sans photo ». Seule la console le disait, et seulement sur le web —
+   iOS et Android portent les deux mêmes trous (#6389) sans même une console
+   pour les dire.
+
+Correctif : #6388 (web). Suivis ouverts : #6389 (iOS/Android), #6390 (les
+lignes héritées en base), #6391 (le magasin `static:`, que le chantier ne
+connaît pas du tout).
+
+## Leçon 610 — Un témoin qui s'en remet à l'ÉLAN mesure la machine autant que le produit : rendre le geste décisif, pas emporté (2026-09-14)
+
+`check-reels.mjs` synthétisait son balayage avec `preventFling: false` et une
+distance de **35 %** de la hauteur. En local, le fling portait le défileur
+au-delà du point de bascule de `scroll-snap` — la moitié — et la page
+s'accrochait. **En CI, le défileur ne bougeait pas d'un pixel** : douze
+invariants tombaient, et leurs messages accusaient l'application.
+
+Le gate était arrivé AVEC sa feature (#6457), dans un push dont la CI a été
+annulée par le suivant. **Il n'a donc jamais été vert sur `dev`** — et personne
+ne pouvait le savoir : un verdict annulé ressemble à un verdict absent.
+
+### Les deux fautes, et laquelle comptait
+
+Retirer le fling a d'abord rendu le rouge REPRODUCTIBLE en local :
+
+    le balayage tactile déplace le défileur (0 → 299)     ← sur 844
+    balayer vers le haut accroche le réel SUIVANT (0)      ← revenu en arrière
+
+Le fling n'était donc pas la cause : c'était le MASQUE. La cause est la
+distance — 35 % est sous le point de bascule, et le défileur revient. L'élan
+franchissait la moitié, donc le témoin passait **pour une raison qui ne lui
+appartenait pas**, et tombait dès que le compositeur ne servait plus cet élan.
+
+60 %, sans fling, dépasse la bascule de façon déterministe.
+
+### Ce qu'il faut en retenir
+
+- **Un geste de test ne doit rien devoir à la physique.** Le fling dépend du fil
+  compositeur, que tous les hôtes ne servent pas pareil — un runner sans GPU,
+  une machine chargée. L'invariant mesuré ici n'était pas « le doigt lance
+  bien », c'était « un arrêt par réel ».
+- **Un harnais muet accuse le produit.** Tant que le témoin ne disait pas si le
+  GESTE était parti, son message désignait l'application. Un `check` de plus —
+  « le balayage déplace le défileur (avant → après) » — sépare les deux, et
+  c'est lui qui a donné la réponse en une exécution.
+- **Un vert obtenu par l'élan est un vert emprunté.** Il ne dit pas que la
+  valeur est juste, il dit que la marge l'a couverte. Quand la marge disparaît,
+  le rouge semble venir de nulle part.
+
+### Et le geste lui-même n'arrivait pas
+
+Le correctif de distance a suffi en local, pas en CI : la seconde exécution a
+rendu `déplace le défileur (0 → 0)` sur les quatre peaux. Le témoin de
+déplacement — ajouté au tour précédent — a donné la réponse sans ambiguïté :
+`Input.synthesizeScrollGesture` passe par le pipeline de GESTES du navigateur,
+que ce runner headless ne sert pas. Deux fautes indépendantes se masquaient
+l'une l'autre, et seule la première était visible en local.
+
+`Input.dispatchTouchEvent` entre par la voie ordinaire : `touchStart`, douze
+`touchMove`, `touchEnd`. Ce que reçoit la page est indiscernable d'un vrai
+doigt. La cascade essaie le geste, puis les événements bruts, **et la sortie dit
+laquelle a porté** (`par geste` / `par événements tactiles`).
+
+**Un repli SILENCIEUX aurait été pire que le rouge** : le gate serait devenu
+vert sur un hôte incapable de livrer un geste, sans que personne ne le sache.
+Et la voie de repli s'ÉPROUVE avant d'être poussée — en neutralisant la
+première localement, jamais en espérant qu'elle marche le jour où elle servira.
+
+Voisine de [[reference_a_red_on_both_sides_of_the_diff_also_measures_the_machine]]
+et du piège inverse : ici, VERT d'un seul côté mesurait la machine.
+
+## Leçon 611 — Un témoin qui lit le TEXTE SOURCE verdit sur un correctif ANNULÉ
+
+**Mesuré le 2026-09-15 sur trois lots indépendants** de la chaîne de publication (#6577, #6579, #6164).
+Trois relecteurs adverses, trois fois le même résultat : le correctif neutralisé **en conservant les chaînes
+que les greps cherchent**, et les témoins restent verts.
+
+| lot | mutation | verdict |
+|---|---|---|
+| #6577 | les 8 affectations de `retractMedia` rendues no-op (`documentLocalMedia = mediaPorters.localMedia`) | **241/241 verts** |
+| #6579 | `.opacity(0)` sur la bande ; puis `onDisplayedContextChange: { _ in }` | **13/13** puis **33/33 verts** |
+| #6164 | garde fail-closed annulée par `&& false` ; protection perdue par `servedQuotedAttachments({}, …)` | **27/27 verts** |
+
+Les trois correctifs étaient **plausiblement justes**. Aucun n'était **prouvé**.
+
+### La cause structurelle, qui rendait le défaut inévitable sur iOS
+
+Sur #6577, la raison n'était pas « le testeur a été paresseux » : **un `@State` a un setter `nonmutating` qui
+n'écrit nulle part tant que SwiftUI n'a pas installé la vue.** Aucun témoin ne *pouvait* distinguer
+« appliqué » de « calculé puis jeté » — la struct pure était testable, son application ne l'était pas.
+Le remède a été de sortir les huit porteurs du `@State` vers un store observable, puis de tester l'aller-retour
+porteurs → charge.
+
+> **Quand un correctif passe par un `@State`, poser la question AVANT d'écrire son témoin :
+> qu'est-ce qui, dans ce test, installe la vue ?** Sans réponse, le témoin mesurera le calcul, jamais l'écriture.
+
+### Le geste qui l'attrape
+
+**Neutraliser sa propre règle en conservant les chaînes que les greps cherchent, puis rejouer.**
+Si rien ne rougit, le témoin ne vaut rien. Un source-guard garde un *câblage* — il empêche un futur lot de
+re-poser un motif interdit — mais il ne peut jamais être la seule preuve qu'une feature marche.
+
+### Trois pièges de la neutralisation elle-même, payés dans la même vague
+
+1. `git checkout -- <fichier>` restaure **HEAD**, pas l'état de travail non commité : il a annulé un correctif
+   voisin pas encore commité. **Copier en `.bak` hors du dépôt** avant de muter, restaurer depuis la copie.
+2. Une assertion **non scopée** (`src.contains("originalLanguage: language,")` sur le fichier entier) est
+   satisfaite par n'importe quelle occurrence — y compris par la chaîne **citée dans un commentaire**.
+   Une fenêtre `body(from:to:)` ne distingue pas le code du commentaire.
+3. Un oracle peut rougir sur une mutation **et** sur un arbre intact. Le harnais de #6579 gardait
+   `window.safeAreaInsets.top` (sa fenêtre, toujours 62) au lieu de `DeviceLayout.safeAreaTop`, la seule
+   grandeur que la production lise : il accusait la bande quand la scène n'était pas `.foregroundActive`.
+   **C'est la présente leçon retournée contre son propre outil** — un témoin qui ne mesure pas la quantité
+   qui gouverne ce qu'il observe ne mesure rien. Et le défaut d'environnement rendait *le même verdict*
+   que la mutation `.opacity(0)` : 6 témoins, 27 assertions. D'où la nécessité de diagnostiquer l'environnement
+   à part, avec un message qui l'accuse **lui** et jamais la feature.
+
+Voir aussi la leçon sur le disque saturé : un rouge qui ne parle pas du code parle de la **machine**.

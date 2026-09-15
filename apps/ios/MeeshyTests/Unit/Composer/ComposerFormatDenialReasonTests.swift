@@ -96,7 +96,7 @@ final class ComposerFormatDenialReasonTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerFormatFan.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerFormatAvailability.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
         guard let debut = code.range(of: "composer.format.denied.reel"),
               let fin = code.range(of: "case .status", range: debut.upperBound..<code.endIndex) else {

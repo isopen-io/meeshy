@@ -1,5 +1,6 @@
 import { PRESENCE_HEX, presenceTone } from '@meeshy/shared/utils/user-presence';
 
+import { attachmentSrc } from '@/lib/api/media-url';
 import type { UserPresenceStatus } from '@/lib/api/types';
 
 /**
@@ -48,8 +49,24 @@ export function Avatar({
   opacity?: number;
   /**
    * UN VRAI PORTRAIT (#5893) — `PostMedia.author.avatar`/`Viewer.avatar` :
-   * une URL, jamais posée pour un groupe (D-1 étend `MeeshyAvatar.swift`,
-   * qui peint la photo AU-DESSUS du dégradé d'initiales quand elle existe).
+   * une RÉFÉRENCE DE MÉDIA telle que la passerelle la sert, jamais posée pour
+   * un groupe (D-1 étend `MeeshyAvatar.swift`, qui peint la photo AU-DESSUS du
+   * dégradé d'initiales quand elle existe).
+   *
+   * RÉSOLUE ICI, POINT DE PASSAGE UNIQUE (#6388) — `User.avatar`,
+   * `Participant.avatar` et `Community.avatar` portent la CLÉ de stockage
+   * (`2026/09/<id>/photo.png`, #4324), et quelques lignes gardent encore
+   * l'adresse héritée d'avant la migration 013
+   * (`https://gate.meeshy.me/2026/09/…`, sans route de flux). Aucune des deux
+   * ne charge posée telle quelle : la première se résout contre le CHEMIN du
+   * document, la seconde contre la RACINE de la passerelle
+   * (`net::ERR_FAILED`, puis `workbox … no-response` — mesuré sur
+   * `staging.meeshy.me/notifications` le 2026-09-13). Dix appelants passent un
+   * `src` venu de la passerelle ; leur demander de se souvenir de la règle,
+   * c'est la voir oubliée au onzième — le legacy a tranché pareil
+   * (`AvatarImage`, `apps/web/components/ui/avatar.tsx`). `attachmentSrc` est
+   * IDEMPOTENTE : un appelant qui résout déjà (`card-model.ts`) ne double
+   * rien, et un aperçu local (`blob:`) traverse intact.
    *
    * SANS ÉTAT LOCAL, DÉLIBÉRÉMENT (revue-correction #5893) — `Avatar` est
    * appelé comme une fonction PURE par au moins un témoin du dépôt
@@ -64,6 +81,7 @@ export function Avatar({
   src?: string;
 }) {
   const showsImage = src !== undefined && src !== '';
+  const resolvedSrc = showsImage ? attachmentSrc(src) : undefined;
   const dot = size * 0.26;
   // 0.8536 = (1 + cos(pi/4)) / 2 — le point a 45 deg sur le cercle, en fraction
   // du diametre. On retranche la moitie de la pastille pour la CENTRER dessus.
@@ -97,7 +115,7 @@ export function Avatar({
       </span>
       {showsImage ? (
         <img
-          src={src}
+          src={resolvedSrc}
           alt={name ?? ''}
           loading="lazy"
           className="absolute inset-0 size-full rounded-chip object-cover"

@@ -28,8 +28,10 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
 import { normalizeLanguageForDedup, makeLanguageFilter } from '@meeshy/shared/utils/language-normalize';
 import { servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
+import { attachmentReplyToFromMetadata } from '../../services/messaging/attachmentReplySnapshot';
 import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
+import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 /// Un message cité PROTÉGÉ (vue unique, flouté, chiffré) ne fait voyager que
 /// son placeholder — ni texte, ni traduction, ni vignette, ni ThumbHash, ni
@@ -397,7 +399,23 @@ export function buildMessageListSelect(options: {
                 }
               }
             },
-            attachments: { select: attachmentFullSelect, take: 4 },
+            // #6164 — l'ordre était ABSENT : « la première pièce » que toute
+            // citation rendait était donc ARBITRAIRE d'un appel à l'autre,
+            // MongoDB ne promettant aucun ordre sans `orderBy`. Un défaut pire
+            // que « la 1re au lieu de la 3e » : le même message ne se citait
+            // pas deux fois pareil. Les deux champs existent sur
+            // `MessageAttachment` ; `id` départage deux pièces jointes
+            // enregistrées dans la même milliseconde.
+            //
+            // Le `take` NE MONTE PAS à 10 : chaque message du fil le paierait,
+            // pour une citation qui n'en rend qu'une. La pièce NOMMÉE qui
+            // tombe hors de la fenêtre est rattrapée par son ID, en UNE requête
+            // par page (`backfillCitedAttachments`).
+            attachments: {
+              select: attachmentFullSelect,
+              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              take: 4,
+            },
             _count: {
               select: {
                 reactions: true
@@ -732,6 +750,11 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
             ...servedQuotedMessage(message.replyTo, {
               includeTranslations,
               languages: hasLanguageFilter ? languageFilter : undefined,
+              // #6164 — l'instantané est gravé sur le message QUI CITE, pas sur
+              // le message cité : c'est `message.metadata`, jamais
+              // `message.replyTo.metadata` (qui porterait la pièce que le
+              // message CITÉ visait lui-même, un cran plus haut dans le fil).
+              attachmentReplyTo: attachmentReplyToFromMetadata(message.metadata),
             }),
             sender: replySender ? {
               ...replySender,
@@ -799,25 +822,33 @@ export async function enrichForwardedMessagesForList(
             .map((m: any) => m.sender?.userId ?? null)
         );
 
-        const forwardedMessages = await prisma.message.findMany({
-          where: { id: { in: uniqueForwardedIds } },
-          select: {
-            id: true,
-            content: true,
-            senderId: true,
-            conversationId: true,
-            messageType: true,
-            createdAt: true,
-            // Lot 2 : le message d'ORIGINE transféré est un objet imbriqué —
-            // sans `metadata`, un message géolocalisé transféré n'affiche
-            // jamais sa position dans l'aperçu de transfert.
-            metadata: true,
-            sender: {
-              select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
-            },
-            attachments: { select: attachmentForwardPreviewSelect, take: 1 }
-          }
-        });
+        // Les sources d'une même page peuvent vivre dans PLUSIEURS
+        // conversations différentes (#6516) : la portée de la réparation ne
+        // peut donc pas être connue avant la lecture — elle se DÉCOUVRE, sur
+        // les mêmes ids, sans jamais sélectionner `sender`.
+        const forwardedMessages = await withOrphanedSenderRepair(
+          { prisma, conversationIds: discoverConversationIdsByMessageIds(prisma, uniqueForwardedIds) },
+          () =>
+            prisma.message.findMany({
+              where: { id: { in: uniqueForwardedIds } },
+              select: {
+                id: true,
+                content: true,
+                senderId: true,
+                conversationId: true,
+                messageType: true,
+                createdAt: true,
+                // Lot 2 : le message d'ORIGINE transféré est un objet imbriqué —
+                // sans `metadata`, un message géolocalisé transféré n'affiche
+                // jamais sa position dans l'aperçu de transfert.
+                metadata: true,
+                sender: {
+                  select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
+                },
+                attachments: { select: attachmentForwardPreviewSelect, take: 1 }
+              }
+            })
+        );
 
         // Masquage personnel du LECTEUR sur le message SOURCE (#3616) — voir
         // le doc-comment de la fonction. Une lecture groupée par conversation
@@ -946,3 +977,4 @@ export async function enrichPostReplyMessagesForList(
         }
       }
 }
+

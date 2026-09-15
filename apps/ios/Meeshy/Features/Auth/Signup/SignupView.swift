@@ -33,6 +33,12 @@ struct SignupView: View {
     @FocusState private var focusedField: SignupField?
     @State private var isShowingLanguageSheet = false
     @State private var isShowingCountryPicker = false
+    /// Le champ dont le (i) est DÉPLIÉ — un seul à la fois (#6441) : deux
+    /// détails ouverts reproduiraient la surcharge qu'on vient de retirer.
+    @State private var expandedHint: SignupField?
+    /// Le bloc d'identité est-il ouvert à la saisie (#6479) ? Fermé par défaut :
+    /// le chemin nominal ne demande AUCUN geste.
+    @State private var isEditingIdentity = false
     @State private var isShowingTerms = false
     @State private var isShowingPrivacy = false
 
@@ -44,9 +50,12 @@ struct SignupView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                     header
-                    displayNameField
-                    emailField
+                    // L'ORDRE SUIT LA DIRECTIVE (#6479) : le téléphone d'abord,
+                    // puis l'adresse, puis l'identité — qui DÉCOULE de
+                    // l'adresse et n'a rien à montrer avant elle.
                     phoneField
+                    emailField
+                    derivedIdentityBlock
                     passwordField
                     languageChip
                     submitSection
@@ -104,32 +113,174 @@ struct SignupView: View {
 
     // MARK: - Nom affiché
 
-    private var displayNameField: some View {
-        fieldBlock(
-            field: .displayName,
-            label: String(localized: "auth.signup.name.label", defaultValue: "Nom affiché", bundle: .main)
-        ) {
-            TextField(
-                String(localized: "auth.signup.name.placeholder", defaultValue: "Comment vous appeler ?", bundle: .main),
-                text: $viewModel.form.displayName
-            )
-            .textContentType(.name)
-            .textInputAutocapitalization(.words)
-            .autocorrectionDisabled()
-            .submitLabel(.next)
-            .focused($focusedField, equals: .displayName)
-            .onSubmit { focusedField = .email }
-            .foregroundColor(theme.textPrimary)
+    /// CE QUE L'INSCRIPTION VA CRÉER — montré, modifiable, et ENVOYÉ (#6479).
+    ///
+    /// Directive porteur, en deux temps. D'abord « montre comment le display
+    /// name sera dérivé et comment le pseudo sera dérivé et laisse le soin à
+    /// l'utilisateur de modifier ou non ». Puis, sur relecture : « dès qu'un
+    /// champ username est rempli la passerelle n'a plus rien à créer ».
+    ///
+    /// Les deux valeurs viennent de `RegistrationIdentity`, miroir de la loi
+    /// que la passerelle applique. Un champ « nom affiché » vide ne disait rien
+    /// de ce qui arriverait ; ce bloc REND le résultat et n'ouvre la saisie que
+    /// si on la demande — le chemin nominal est ZÉRO geste.
+    private var derivedIdentityBlock: some View {
+        let pseudo = viewModel.form.effectiveUsername
+        let nom = viewModel.form.effectiveDisplayName
+        let refus = viewModel.error(for: .username) ?? viewModel.error(for: .displayName)
+        // Un refus qui vise l'identité OUVRE la saisie : laisser replié
+        // montrerait un message sous un champ que rien ne permet d'atteindre.
+        let ouvert = isEditingIdentity || refus != nil
+
+        return VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            Text(String(localized: "auth.signup.identity.title", defaultValue: "Votre identité", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                .foregroundColor(theme.textMuted)
+
+            HStack(spacing: MeeshySpacing.md) {
+                VStack(alignment: .leading, spacing: 2) {
+                    // Le repli est le PSEUDO, jamais du blanc : une adresse dont
+                    // rien n'est slugifiable ne donne aucun nom affiché, et
+                    // laisser vide ferait croire que rien ne sera créé.
+                    Text(nom.isEmpty ? pseudo : nom)
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(1)
+                    Text(pseudo.isEmpty ? "@…" : "@\(pseudo)")
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Button {
+                    HapticFeedback.light()
+                    // LE RESSORT DU COMPOSER — `UniversalComposerBar+Attachments.swift:228`.
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                        isEditingIdentity.toggle()
+                    }
+                } label: {
+                    HStack(spacing: MeeshySpacing.xs) {
+                        Image(systemName: ouvert ? "xmark" : "pencil")
+                        Text(ouvert
+                             ? String(localized: "auth.signup.identity.close", defaultValue: "Fermer", bundle: .main)
+                             : String(localized: "auth.signup.identity.edit", defaultValue: "Modifier", bundle: .main))
+                    }
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                    .foregroundColor(MeeshyColors.indigo500)
+                }
+                .buttonStyle(.plain)
+                .frame(minHeight: 44)
+                .accessibilityLabel(String(
+                    localized: "auth.signup.identity.editLabel",
+                    defaultValue: "Modifier le pseudo et le nom affiché",
+                    bundle: .main
+                ))
+            }
+
+            if ouvert {
+                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                    identityInput(
+                        field: .username,
+                        label: String(localized: "auth.signup.identity.username", defaultValue: "Pseudo", bundle: .main),
+                        prefix: "@",
+                        text: Binding(
+                            get: { viewModel.form.username.isEmpty ? pseudo : viewModel.form.username },
+                            set: { viewModel.form.username = $0 }
+                        )
+                    )
+
+                    if !viewModel.usernameSuggestions.isEmpty {
+                        // Les trois pseudos LIBRES servis avec le refus. Sans
+                        // eux, refuser un pseudo montré serait un mur.
+                        HStack(spacing: MeeshySpacing.xs) {
+                            ForEach(viewModel.usernameSuggestions, id: \.self) { candidat in
+                                Button {
+                                    HapticFeedback.light()
+                                    viewModel.form.username = candidat
+                                } label: {
+                                    Text("@\(candidat)")
+                                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                                        .foregroundColor(MeeshyColors.indigo500)
+                                        .padding(.horizontal, MeeshySpacing.md)
+                                        .frame(minHeight: 44)
+                                        .background(inputSurface(isFocused: false))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+
+                    identityInput(
+                        field: .displayName,
+                        label: String(localized: "auth.signup.identity.displayName", defaultValue: "Nom affiché", bundle: .main),
+                        prefix: nil,
+                        text: Binding(
+                            get: { viewModel.form.displayName.isEmpty ? nom : viewModel.form.displayName },
+                            set: { viewModel.form.displayName = $0 }
+                        )
+                    )
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(MeeshySpacing.md)
+        .background(inputSurface(isFocused: false))
+    }
+
+    private func identityInput(field: SignupField, label: String, prefix: String?, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            HStack(spacing: MeeshySpacing.xs) {
+                if let prefix {
+                    Text(prefix)
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
+                        .foregroundColor(theme.textMuted)
+                        .accessibilityHidden(true)
+                }
+                TextField(label, text: text)
+                    .textInputAutocapitalization(prefix == nil ? .words : .never)
+                    .autocorrectionDisabled()
+                    .focused($focusedField, equals: field)
+                    .foregroundColor(theme.textPrimary)
+                    .accessibilityLabel(label)
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .frame(minHeight: 48)
+            .background(inputSurface(isFocused: focusedField == field))
+
+            errorRow(for: field)
         }
     }
 
     // MARK: - E-mail
 
+    /// L'AVERTISSEMENT DE VALIDATION, derrière un (i) (#6626).
+    ///
+    /// #6479 le posait en clair — « une condition du compte ». La directive
+    /// porteur du 2026-09-15 tranche : « moins de détails sur la page
+    /// d'enregistrement ; des (i) pour informer sur le mode de fonctionnement ».
+    /// Replié n'est pas perdu : le champ le porte en `accessibilityHint`, et le
+    /// (i) le déplie à la demande.
+    private var emailHint: AuthInfoHint {
+        AuthInfoHint(
+            text: String(
+                localized: "auth.signup.email.verificationNotice",
+                defaultValue: "Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte.",
+                bundle: .main
+            ),
+            buttonLabel: String(
+                localized: "auth.signup.email.hintLabel",
+                defaultValue: "Pourquoi un lien",
+                bundle: .main
+            )
+        )
+    }
+
     private var emailField: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             fieldBlock(
                 field: .email,
-                label: String(localized: "auth.signup.email.label", defaultValue: "Adresse e-mail", bundle: .main)
+                label: String(localized: "auth.signup.email.label", defaultValue: "Adresse e-mail", bundle: .main),
+                hint: emailHint
             ) {
                 // `.emailAddress` fait aussi office d'IDENTIFIANT pour le
                 // trousseau : Apple accepte `.username` OU `.emailAddress` comme
@@ -170,6 +321,28 @@ struct SignupView: View {
     // le chemin nominal, et le NOMMER facultatif fait croire qu'il y a une
     // décision à prendre. Vide ⇒ absent de la charge (`SignupForm`).
 
+    /// CE QUE LE NUMÉRO OUVRE — et rien d'autre (#6441). Les deux usages sont
+    /// MESURÉS, pas promis : identifiant de connexion (`AuthService.ts:158`,
+    /// la disjonction username/email/phoneNumber) et découverte par un contact
+    /// qui l'a au carnet (`contacts-match.ts`, `matchedBy: "phone"`). Dire
+    /// l'USAGE est le seul levier honnête pour qu'il soit donné ; le présenter
+    /// comme un choix à prendre ferait l'inverse, et c'est ce que le témoin
+    /// voisin interdit depuis #5555.
+    private var phoneHint: AuthInfoHint {
+        AuthInfoHint(
+            text: String(
+                localized: "auth.signup.phone.benefit",
+                defaultValue: "Il vous permettra de vous connecter, et à vos proches de vous retrouver.",
+                bundle: .main
+            ),
+            buttonLabel: String(
+                localized: "auth.signup.phone.hintLabel",
+                defaultValue: "À quoi sert le numéro",
+                bundle: .main
+            )
+        )
+    }
+
     private var phoneField: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(String(localized: "auth.signup.phone.label", defaultValue: "Téléphone", bundle: .main))
@@ -200,6 +373,7 @@ struct SignupView: View {
                 .accessibilityLabel(CountryPicker.accessibilityLabel(for: viewModel.form.country))
                 .accessibilityHint(String(localized: "auth.signup.phone.country.hint", defaultValue: "Changer de pays", bundle: .main))
 
+                HStack(spacing: 0) {
                 TextField(
                     String(localized: "auth.signup.phone.placeholder", defaultValue: "Numéro de téléphone", bundle: .main),
                     text: $viewModel.form.phoneDigits
@@ -208,13 +382,18 @@ struct SignupView: View {
                 .keyboardType(.phonePad)
                 .focused($focusedField, equals: .phoneNumber)
                 .foregroundColor(theme.textPrimary)
+                .accessibilityLabel(String(localized: "auth.signup.phone.label", defaultValue: "Téléphone", bundle: .main))
+                .accessibilityHint(phoneHint.text)
+
+                AuthInfoHintButton(hint: phoneHint, isExpanded: hintExpansion(for: .phoneNumber), tint: theme.textMuted)
+                }
                 .padding(.horizontal, MeeshySpacing.lg)
                 .frame(minHeight: 48)
                 .background(inputSurface(isFocused: focusedField == .phoneNumber))
-                .accessibilityLabel(String(localized: "auth.signup.phone.label", defaultValue: "Téléphone", bundle: .main))
             }
 
             errorRow(for: .phoneNumber)
+            AuthInfoHintText(hint: phoneHint, isExpanded: expandedHint == .phoneNumber, color: theme.textSecondary)
         }
         .sheet(isPresented: $isShowingCountryPicker) {
             SignupCountrySheet(selection: $viewModel.form.country)
@@ -244,32 +423,29 @@ struct SignupView: View {
                 localized: "auth.signup.password.label",
                 defaultValue: "Mot de passe (facultatif)",
                 bundle: .main
+            ),
+            hint: AuthInfoHint(
+                text: String(
+                    localized: "auth.signup.password.magicLinkNote",
+                    defaultValue: "Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un plus tard.",
+                    bundle: .main
+                ),
+                buttonLabel: String(
+                    localized: "auth.signup.password.hintLabel",
+                    defaultValue: "Que se passe-t-il sans mot de passe",
+                    bundle: .main
+                )
             )
         ) {
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                SecureField(
-                    String(localized: "auth.signup.password.placeholder", defaultValue: "6 caractères minimum", bundle: .main),
-                    text: $viewModel.form.password
-                )
-                .textContentType(.newPassword)
-                .submitLabel(.go)
-                .focused($focusedField, equals: .password)
-                .onSubmit { attemptSubmit() }
-                .foregroundColor(theme.textPrimary)
-
-                if !viewModel.form.hasPassword {
-                    Text(
-                        String(
-                            localized: "auth.signup.password.magicLinkNote",
-                            defaultValue: "Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un plus tard.",
-                            bundle: .main
-                        )
-                    )
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                    .foregroundColor(theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            SecureField(
+                String(localized: "auth.signup.password.placeholder", defaultValue: "6 caractères minimum", bundle: .main),
+                text: $viewModel.form.password
+            )
+            .textContentType(.newPassword)
+            .submitLabel(.go)
+            .focused($focusedField, equals: .password)
+            .onSubmit { attemptSubmit() }
+            .foregroundColor(theme.textPrimary)
         }
     }
 
@@ -459,6 +635,7 @@ struct SignupView: View {
     private func fieldBlock<Content: View>(
         field: SignupField,
         label: String,
+        hint: AuthInfoHint? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
@@ -466,14 +643,40 @@ struct SignupView: View {
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
-            content()
-                .padding(.horizontal, MeeshySpacing.lg)
-                .frame(minHeight: 48)
-                .background(inputSurface(isFocused: focusedField == field))
-                .accessibilityLabel(label)
+            HStack(spacing: 0) {
+                content()
+                    .accessibilityLabel(label)
+                    .accessibilityHint(hint?.text ?? "")
+                if let hint {
+                    AuthInfoHintButton(hint: hint, isExpanded: hintExpansion(for: field), tint: theme.textMuted)
+                }
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .frame(minHeight: 48)
+            .background(inputSurface(isFocused: focusedField == field))
 
             errorRow(for: field)
+            if let hint {
+                AuthInfoHintText(hint: hint, isExpanded: expandedHint == field, color: theme.textSecondary)
+            }
         }
+    }
+
+    /// LE DÉTAIL DERRIÈRE UN (i) (#6441, retour porteur « la page est trop
+    /// surchargée ») — le composant vit dans `AuthInfoHint`, partagé avec la
+    /// connexion par e-mail (#6626).
+    ///
+    /// Le bouton vit DANS le cadre du champ : la rangée fait déjà 48 pt, donc
+    /// sa cible de 44 pt n'ajoute pas UNE unité de hauteur. Et REPLIÉ ne veut
+    /// pas dire ABSENT : `fieldBlock` pose le même texte en `accessibilityHint`
+    /// sur le champ lui-même.
+    ///
+    /// Un seul (i) déplié à la fois : ouvrir celui d'un champ referme l'autre.
+    private func hintExpansion(for field: SignupField) -> Binding<Bool> {
+        Binding(
+            get: { expandedHint == field },
+            set: { expandedHint = $0 ? field : nil }
+        )
     }
 
     /// Le refus se pose SOUS son champ, en `.footnote`, et VoiceOver le lit

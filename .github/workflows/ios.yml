@@ -453,21 +453,20 @@ jobs:
       # the same fixed trees the cache restores and the test step reuses — lets
       # us retry the transient network failure, and a warm cache makes it
       # near-instant; a real resolution error still fails after the attempts.
+      #
+      # A SECOND, DISTINCT failure mode lives on the runner's own SwiftPM
+      # artifact cache, not the network: a stale entry under
+      # `~/Library/Caches/org.swift.swiftpm/artifacts/` makes SwiftPM refuse to
+      # write it again ("already exists in file system"), and every retry then
+      # replays the same command against the same corrupted cache, forever
+      # (#6545). The retry logic lives in its own script — rather than inline
+      # here — so `check-ios-spm-resolve-retry.mjs` can exercise it (fake
+      # `xcodebuild`/`sleep` on PATH) without a macOS runner.
       - name: Resolve SPM packages (retry on transient network)
         run: |
-          for attempt in 1 2 3 4; do
-            if xcodebuild -resolvePackageDependencies \
-                 -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
-                 -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-                 -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm"; then
-              echo "SPM resolve OK (attempt $attempt)"
-              exit 0
-            fi
-            echo "::warning::SPM resolve attempt $attempt failed (transient network?), retrying in $((attempt * 15))s"
-            sleep $((attempt * 15))
-          done
-          echo "::error::SPM resolve failed after 4 attempts"
-          exit 1
+          scripts/ci/resolve-spm-packages.sh \
+            apps/ios/Meeshy.xcodeproj Meeshy \
+            "$RUNNER_TEMP/DerivedData" "$RUNNER_TEMP/spm"
 
       # Seed the SPM cache the INSTANT it resolves — before the compile that may
       # blow the timeout. actions/cache's post-job save is skipped when the job

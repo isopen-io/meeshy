@@ -71,6 +71,10 @@ import { anonymizeMessagesOfDeletedAccount } from '../../../services/messaging/a
 import { purgeMediaOfDeletedAccount } from '../../../services/purgeDeletedAccountMedia';
 import { deactivateCommunityMembershipsOfDeletedAccount } from '../../../services/deactivateDeletedAccountCommunityMemberships';
 import { cleanupExpiredSessions } from '../../../services/SessionService';
+// La réparation de #6501 tourne en VRAI, sur la base en mémoire : sous
+// `bun test`, un `jest.mock` de son module l'aurait éteinte pour les fichiers
+// suivants du même processus, dont son propre témoin exhaustif.
+import { makeOrphanedSenderDb } from '../../helpers/orphaned-sender-db';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -111,6 +115,7 @@ function makePrisma(overrides: {
     },
     message: {
       findRaw: jest.fn<any>().mockResolvedValue([]),
+      aggregateRaw: jest.fn<any>().mockResolvedValue([]),
     },
     messageAttachmentForEmptyMessage: {
       findMany: jest.fn<any>().mockResolvedValue([]),
@@ -494,6 +499,83 @@ describe('cleanupExpiredData', () => {
     const sut = new MaintenanceService(prisma as any, attachmentService as any);
 
     await expect(sut.cleanupExpiredData()).resolves.toBeUndefined();
+  });
+
+  // #6501 — `Message.sender` est une relation REQUISE. Purger un anonyme qui a
+  // écrit rendait chacun de ses messages orphelin, et UN orphelin suffit à faire
+  // rejeter par Prisma toute lecture de la conversation.
+  it('spares anonymous participants who wrote — their messages would lose their sender (#6501)', async () => {
+    const prisma = makePrisma();
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await sut.cleanupExpiredData();
+
+    expect(prisma.participant.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ type: 'anonymous', sentMessages: { none: {} } }),
+      })
+    );
+  });
+
+  // Épargner ne doit pas PROLONGER : la purge était la seule échéance d'une
+  // session anonyme (aucune n'est lue à l'authentification). Un anonyme expiré
+  // qui a écrit garde sa ligne — ses messages gardent leur auteur — mais sa
+  // session se termine, exactement comme `endGuestSession` la termine.
+  it('ends the session of the expired anonymous writers it spares (#6501)', async () => {
+    const prisma = makePrisma();
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await sut.cleanupExpiredData();
+
+    expect(prisma.participant.updateMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        type: 'anonymous',
+        isActive: true,
+        lastActiveAt: expect.objectContaining({ lt: expect.any(Date) }),
+        sentMessages: { some: {} },
+      }),
+      data: expect.objectContaining({ isActive: false, isOnline: false, leftAt: expect.any(Date) }),
+    });
+  });
+
+  it('repairs orphaned message senders across EVERY conversation (#6501)', async () => {
+    const conversationA = 'aaaaaaaaaaaaaaaaaaaaaaa1';
+    const conversationB = 'aaaaaaaaaaaaaaaaaaaaaaa2';
+    const ghostA = 'bbbbbbbbbbbbbbbbbbbbbbb1';
+    const ghostB = 'bbbbbbbbbbbbbbbbbbbbbbb2';
+    const db = makeOrphanedSenderDb({
+      conversations: [conversationA, conversationB].map((id) => ({
+        id,
+        lastMessageAt: new Date('2026-09-01T00:00:00.000Z'),
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      })),
+      messages: [
+        { id: 'a1', conversationId: conversationA, senderId: ghostA, messageSource: 'user', createdAt: new Date('2026-08-01') },
+        { id: 'b1', conversationId: conversationB, senderId: ghostB, messageSource: 'agent', createdAt: new Date('2026-08-02') },
+      ],
+    });
+    const base = makePrisma();
+    const prisma = {
+      ...base,
+      ...db.prisma,
+      participant: { ...base.participant, ...db.prisma.participant },
+      message: { ...base.message, ...db.prisma.message },
+    };
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await sut.cleanupExpiredData();
+
+    expect(db.state.participants.map((participant) => participant.id).sort()).toEqual([ghostA, ghostB]);
+  });
+
+  it('keeps sweeping when the orphan repair fails — best-effort, like its neighbors (#6501)', async () => {
+    const prisma = makePrisma();
+    prisma.message.aggregateRaw.mockRejectedValueOnce(new Error('aggregate refused'));
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await expect(sut.cleanupExpiredData()).resolves.toBeUndefined();
+    expect(prisma.message.aggregateRaw).toHaveBeenCalledTimes(1);
+    expect(cleanupExpiredSessions).toHaveBeenCalledTimes(1);
   });
 });
 

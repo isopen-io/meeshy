@@ -40,6 +40,7 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 /**
  * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
@@ -226,32 +227,36 @@ export function registerMessageSearchRoute(
       });
 
       // Search content AND translations in parallel
-      const [contentMatches, translationCandidates] = await Promise.all([
-        prisma.message.findMany({
-          where: applyPersonalHistoryHiding(applyHistoryFloor(whereClause, searchFloor), searchHiding),
-          select: messageSelect,
-          orderBy: { createdAt: 'desc' },
-          take: searchLimit + 1
-        }),
-        prisma.message.findMany({
-          where: applyPersonalHistoryHiding(
-            applyHistoryFloor(
-              {
-                conversationId,
-                deletedAt: null,
-                NOT: { content: { contains: queryLower, mode: 'insensitive' } },
-                translations: { not: { equals: null } },
-                ...(cursor ? { createdAt: whereClause.createdAt } : {})
-              },
-              searchFloor
-            ),
-            searchHiding
-          ),
-          select: messageSelect,
-          orderBy: { createdAt: 'desc' },
-          take: 200
-        })
-      ]);
+      const [contentMatches, translationCandidates] = await withOrphanedSenderRepair(
+        { prisma, conversationIds: [conversationId] },
+        () =>
+          Promise.all([
+            prisma.message.findMany({
+              where: applyPersonalHistoryHiding(applyHistoryFloor(whereClause, searchFloor), searchHiding),
+              select: messageSelect,
+              orderBy: { createdAt: 'desc' },
+              take: searchLimit + 1
+            }),
+            prisma.message.findMany({
+              where: applyPersonalHistoryHiding(
+                applyHistoryFloor(
+                  {
+                    conversationId,
+                    deletedAt: null,
+                    NOT: { content: { contains: queryLower, mode: 'insensitive' } },
+                    translations: { not: { equals: null } },
+                    ...(cursor ? { createdAt: whereClause.createdAt } : {})
+                  },
+                  searchFloor
+                ),
+                searchHiding
+              ),
+              select: messageSelect,
+              orderBy: { createdAt: 'desc' },
+              take: 200
+            })
+          ])
+      );
 
       const translationMatches = translationCandidates.filter((msg: any) => {
         if (!msg.translations || typeof msg.translations !== 'object') return false;

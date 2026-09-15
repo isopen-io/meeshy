@@ -38,6 +38,17 @@ public enum CollapsibleHeaderMetrics {
         roundChromeEdgeGutter - barHorizontalPadding
     }
 
+    /// Diamètre des chromes RONDS du header — le retour à gauche, les actions à
+    /// droite (#6480). Un seul chiffre pour les deux bords d'une même barre.
+    nonisolated public static var roundChromeDiameter: CGFloat { 40 }
+
+    /// Marge SUPPLÉMENTAIRE du retour, à gauche : le MIROIR de
+    /// `trailingActionsInset` (#6480, directive porteur 2026-09-14 : « (<) en
+    /// Liquid Glass, bien aligné »). Devenu un disque de verre, le retour a les
+    /// mêmes raisons que les actions de ne pas affleurer le bord ; une gouttière
+    /// posée d'un seul côté se voit.
+    nonisolated public static var leadingBackInset: CGFloat { trailingActionsInset }
+
     /// Écart entre la fente du titre (ou la trail qui l'occupe) et la grappe
     /// d'actions. Porté par les ACTIONS, JAMAIS par un `Spacer` frère : la
     /// fente réclame `maxWidth: .infinity` avec `layoutPriority(1)` et se sert
@@ -248,7 +259,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     }
 
     private var backArrowSize: CGFloat {
-        lerp(20, 16, progress)
+        lerp(18, 16, progress)
     }
 
     private var showExpandedSubtitle: Bool {
@@ -301,6 +312,10 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                                 .foregroundColor(titleColor)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
+                                // Un EN-TÊTE pour le rotor de VoiceOver (#6481) : les pages
+                                // de Réglages le posaient sur leur titre fait main, et le
+                                // perdaient en montant ce composant.
+                                .accessibilityAddTraits(.isHeader)
                         }
 
                         if showExpandedSubtitle {
@@ -457,6 +472,9 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
             .allowsHitTesting(false)
     }
 
+    /// Le retour est un DISQUE DE VERRE (#6480), du diamètre des actions de
+    /// droite et sur leur gouttière miroir. Il était un chevron nu : les deux
+    /// bords d'une même barre ne se ressemblaient pas. La cible reste de 44 pt.
     private var backButton: some View {
         Button {
             HapticFeedback.light()
@@ -465,9 +483,14 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
             Image(systemName: "chevron.backward")
                 .font(.system(size: backArrowSize, weight: .semibold))
                 .foregroundColor(backArrowColor)
+                .frame(width: CollapsibleHeaderMetrics.roundChromeDiameter, height: CollapsibleHeaderMetrics.roundChromeDiameter)
+                .adaptiveGlass(in: Circle(), interactive: true)
                 .frame(minWidth: 44, minHeight: 44)
-                .contentShape(Rectangle())
+                .contentShape(Circle())
         }
+        .buttonStyle(.plain)
+        .padding(.leading, CollapsibleHeaderMetrics.leadingBackInset)
+        .padding(.trailing, CollapsibleHeaderMetrics.titleActionsGap)
         .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .module))
     }
 }

@@ -118,10 +118,20 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
  * par une section isolée.
  */
 export function visibleAdminSections(permissions: AdminPermissions | null): readonly AdminSection[] {
-  if (permissions === null) return [];
-  if (!permissions.canAccessAdmin) return [];
+  if (!canEnterAdmin(permissions)) return [];
 
-  return ADMIN_SECTIONS.filter((section) => permissions[section.permission]);
+  return ADMIN_SECTIONS.filter((section) => permissions?.[section.permission] === true);
+}
+
+/**
+ * **LA PORTE DE L'ESPACE, et elle seule** — ce que l'écran `/admin`, la rangée
+ * des Réglages et le barreau du menu flottant (#6458) consultent pour savoir
+ * s'ils MÈNENT à l'administration. Un seul prédicat : trois sites qui
+ * réécriraient `?.canAccessAdmin === true` finiraient par ne plus s'accorder
+ * sur le cas `null`.
+ */
+export function canEnterAdmin(permissions: AdminPermissions | null): boolean {
+  return permissions?.canAccessAdmin === true;
 }
 
 /** La destination d'une tuile : la v2 quand elle l'a, le legacy sinon. */

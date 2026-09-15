@@ -2,9 +2,13 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { CountrySheet } from '@/components/country-sheet';
+import { DerivedIdentity } from '@/components/derived-identity';
 import { Field } from '@/components/field';
 import { Glyph } from '@/components/glyph';
+import { AUTH_GLYPHS } from '@/components/glyphs-auth';
+import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
 import { LanguageSheet } from '@/components/language-sheet';
+import { RungReveal } from '@/components/rung-reveal';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
 import { auth, isPhoneConflict } from '@/lib/api/auth';
@@ -14,11 +18,21 @@ import { useOnline } from '@/lib/net/online';
 import {
   PASSWORD_MIN,
   canSubmit,
+  effectiveDisplayName,
+  effectiveUsername,
   composeRegisterBody,
   emptySignupForm,
-  hasPassword,
+  isEmailValid,
   type SignupFormState,
 } from '@/lib/signup-form';
+import {
+  INITIAL_SIGNUP_REVEAL,
+  SIGNUP_RUNGS,
+  nextSignupReveal,
+  showsSignupRung,
+  visibleSignupRungs,
+  type SignupReveal,
+} from '@/lib/view/signup-rungs';
 import { placeSignupFailure, type SignupFeedback, type SignupField } from '@/lib/view/auth-feedback';
 import { Link, href, navigate } from '@/routes/route-table';
 
@@ -59,7 +73,42 @@ const INDIGO_TINT = 'var(--ios-indigo-500)';
  * copieront.
  */
 const INDIGO_LINK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--ios-indigo-600)]';
-const EMPTY_FEEDBACK: SignupFeedback = { fieldErrors: {}, bannerError: null, showSignIn: false };
+/**
+ * L'AVERTISSEMENT DE VALIDATION (#6479) — derrière un (i) depuis #6626.
+ *
+ * #6479 le posait en clair, au motif que c'est une CONDITION du compte et non un
+ * détail qu'on consulte. La directive porteur postérieure (2026-09-15 : « moins
+ * de détails sur la page de connexion et d'enregistrement ; utiliser des (i)
+ * pour pouvoir informer sur le mode de fonctionnement si naturellement ce n'est
+ * pas clair ») le supplante : l'écran ne dit plus en toutes lettres qu'un lien
+ * partira, il le dit à qui demande « Pourquoi un lien ». La condition, elle,
+ * n'est pas cachée à qui ne voit pas l'écran — la note reste citée par
+ * `aria-describedby` de l'adresse.
+ */
+const EMAIL_VERIFICATION: InfoHint = {
+  label: 'Pourquoi un lien',
+  text: 'Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte.',
+  glyph: AUTH_GLYPHS.info,
+};
+
+/**
+ * CE QUE LE NUMÉRO OUVRE — derrière le (i) depuis le retour porteur « la page
+ * est trop surchargée » (#6441). Les deux usages sont MESURÉS, pas promis :
+ * identifiant de connexion (`AuthService.ts:158`) et découverte par un contact
+ * qui l'a au carnet (`contacts-match.ts`, `matchedBy: 'phone'`).
+ */
+const PHONE_BENEFIT: InfoHint = {
+  label: 'À quoi sert le numéro',
+  text: 'Il vous permettra de vous connecter, et à vos proches de vous retrouver.',
+  glyph: AUTH_GLYPHS.info,
+};
+
+const EMPTY_FEEDBACK: SignupFeedback = {
+  fieldErrors: {},
+  bannerError: null,
+  showSignIn: false,
+  usernameSuggestions: [],
+};
 
 type FocusedField = SignupField | null;
 
@@ -77,11 +126,37 @@ export default function SignupScreen() {
   const [isSubmitting, setSubmitting] = useState(false);
   const [isShowingCountrySheet, setShowingCountrySheet] = useState(false);
   const [isShowingLanguageSheet, setShowingLanguageSheet] = useState(false);
+  // Le téléphone ne passe pas par `Field` (il porte le sélecteur de pays) : il
+  // pose le MÊME (i), dont la note garde l'identifiant que sa saisie cite.
+  const phoneHint = useInfoHint('signup-phone-hint');
   // Une inscription réussie AUTHENTIFIE déjà (`auth.register` établit la
   // session, #4264) — sans ce drapeau, l'effet ci-dessous mènerait à `list`
   // avant que `handleSubmit` n'ait pu router vers la vérification d'e-mail
   // (D-53, #5672, raccordement).
   const [justRegistered, setJustRegistered] = useState(false);
+
+  /**
+   * CE QUI EST PARU (#6405) — la loi est dans `signup-rungs.ts` ; ici, sa
+   * mémoire et ses trois observations.
+   *
+   * `phoneAnswered` n'est PAS « le numéro est rempli » : le numéro est
+   * facultatif, et exiger des chiffres pour ouvrir la suite en ferait une
+   * obligation déguisée. Y répondre, c'est taper, quitter le champ, ou le dire
+   * — les trois gestes posent ce drapeau, qui ne se lève qu'une fois.
+   *
+   * L'avancée se DÉRIVE pendant le rendu plutôt que dans un effet : l'effet
+   * aurait peint une image de plus avec l'ancien état, et le barreau aurait
+   * paru un battement APRÈS la frappe qui l'ouvre. `nextSignupReveal` rend
+   * l'objet précédent à l'identique quand rien ne change, ce qui referme la
+   * boucle.
+   */
+  const [reveal, setReveal] = useState<SignupReveal>(INITIAL_SIGNUP_REVEAL);
+  const [isPhoneAnswered, setPhoneAnswered] = useState(false);
+  const nextReveal = nextSignupReveal(reveal, {
+    emailValid: isEmailValid(form.email),
+    phoneAnswered: isPhoneAnswered || form.phoneDigits.trim() !== '',
+  });
+  if (nextReveal !== reveal) setReveal(nextReveal);
 
   // Même doctrine que login.tsx : `auth.register` parle TOUJOURS à la
   // passerelle réelle, indépendamment de `apiConfig.source`.
@@ -152,36 +227,47 @@ export default function SignupScreen() {
           <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
             Vous lirez tout le monde dans votre langue.
           </p>
+
+          {/* OÙ L'ON EN EST (#6405). Trois segments, un par barreau : un
+              formulaire qui se déplie SANS dire combien il reste laisse croire
+              qu'il est sans fin — c'est le prix qu'on paie pour ne pas tout
+              montrer d'un coup, et une jauge de 3 pixels le rembourse.
+              `aria-hidden` : le compte est DIT juste à côté, en toutes lettres,
+              plutôt que d'être déduit de trois traits colorés. */}
+          <div className="mt-1 flex items-center gap-2">
+            <div aria-hidden="true" className="flex flex-1 gap-1">
+              {SIGNUP_RUNGS.map((rung) => (
+                <span
+                  key={rung}
+                  data-signup-step={showsSignupRung(reveal, rung) ? 'atteint' : 'a-venir'}
+                  className="h-1 flex-1 rounded-full transition-colors"
+                  style={{
+                    backgroundColor: showsSignupRung(reveal, rung)
+                      ? 'var(--ios-indigo-500)'
+                      : 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)',
+                  }}
+                />
+              ))}
+            </div>
+            <span className="text-caption tabular-nums" style={{ color: 'var(--color-ios-ink-3)' }}>
+              Étape {visibleSignupRungs(reveal).length} sur {SIGNUP_RUNGS.length}
+            </span>
+          </div>
         </div>
 
         <div className="grid gap-5 pb-8">
-          <Field
-            id="signup-display-name"
-            label="Nom affiché"
-            tint={INDIGO_TINT}
-            focused={focused === 'displayName'}
-            error={feedback.fieldErrors.displayName}
-          >
-            {({ id, describedBy }) => (
-              <input
-                id={id}
-                type="text"
-                autoComplete="name"
-                value={form.displayName}
-                onChange={(e) => patch({ displayName: e.currentTarget.value })}
-                onFocus={() => setFocused('displayName')}
-                onBlur={() => setFocused(null)}
-                placeholder="Comment vous appeler ?"
-                className="w-full bg-transparent py-3 text-input outline-none"
-                style={{ color: 'var(--color-ios-ink)' }}
-                aria-describedby={describedBy}
-                aria-invalid={describedBy !== undefined}
-              />
-            )}
-          </Field>
-
           <div className="grid gap-1">
-            <Field id="signup-email" label="Adresse e-mail" tint={INDIGO_TINT} focused={focused === 'email'} error={emailError}>
+            {/* `aria-invalid` suit le REFUS, jamais `describedBy` : le champ
+                cite aussi la note de son (i), et s'annoncerait « invalide »
+                avant la première lettre. */}
+            <Field
+              id="signup-email"
+              label="Adresse e-mail"
+              tint={INDIGO_TINT}
+              focused={focused === 'email'}
+              error={emailError}
+              hint={EMAIL_VERIFICATION}
+            >
               {({ id, describedBy }) => (
                 <input
                   id={id}
@@ -190,14 +276,14 @@ export default function SignupScreen() {
                   autoCapitalize="none"
                   autoCorrect="off"
                   value={form.email}
-                  onChange={(e) => patch({ email: e.currentTarget.value })}
+                  onInput={(e) => patch({ email: e.currentTarget.value })}
                   onFocus={() => setFocused('email')}
                   onBlur={() => setFocused(null)}
                   placeholder="vous@exemple.com"
                   className="w-full bg-transparent py-3 text-input outline-none"
                   style={{ color: 'var(--color-ios-ink)' }}
                   aria-describedby={describedBy}
-                  aria-invalid={describedBy !== undefined}
+                  aria-invalid={emailError !== undefined}
                 />
               )}
             </Field>
@@ -213,8 +299,12 @@ export default function SignupScreen() {
             ) : null}
           </div>
 
-          {/* Téléphone — jamais annoncé « facultatif » (SignupView.swift:169-171) :
-              le laisser vide est le chemin nominal. */}
+          {/* LE NUMÉRO — DEUXIÈME BARREAU (#6405) : il ne paraît qu'une fois
+              l'adresse valide. Jamais annoncé « facultatif »
+              (`SignupView.swift:169-171`) : le laisser vide est le chemin
+              nominal, et « Je continue sans numéro » le dit mieux qu'une
+              étiquette, parce que c'est un GESTE, pas une mention. */}
+          <RungReveal shown={showsSignupRung(reveal, 'phone')}>
           <div className="grid gap-1">
             <label className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
               Téléphone
@@ -238,14 +328,19 @@ export default function SignupScreen() {
                   type="tel"
                   autoComplete="tel-national"
                   value={form.phoneDigits}
-                  onChange={(e) => patch({ phoneDigits: e.currentTarget.value })}
+                  onInput={(e) => patch({ phoneDigits: e.currentTarget.value })}
                   onFocus={() => setFocused('phoneNumber')}
-                  onBlur={() => setFocused(null)}
+                  onBlur={() => {
+                    setFocused(null);
+                    setPhoneAnswered(true);
+                  }}
                   placeholder="Numéro de téléphone"
                   className="w-full bg-transparent py-3 text-input outline-none"
                   style={{ color: 'var(--color-ios-ink)' }}
                   aria-label="Téléphone"
+                  aria-describedby="signup-phone-hint"
                 />
+                <InfoHintButton hint={PHONE_BENEFIT} state={phoneHint} style={{ marginRight: -10 }} />
               </div>
             </div>
             {feedback.fieldErrors.phoneNumber !== undefined ? (
@@ -253,7 +348,44 @@ export default function SignupScreen() {
                 {feedback.fieldErrors.phoneNumber}
               </p>
             ) : null}
+            {/* CE QU'IL OUVRE — voir `PHONE_BENEFIT`. Replié, jamais démonté :
+                `aria-describedby` de la saisie le porte toujours. */}
+            <InfoHintText hint={PHONE_BENEFIT} state={phoneHint} />
           </div>
+
+            {showsSignupRung(reveal, 'identity') ? null : (
+              <button
+                type="button"
+                data-signup-skip-phone
+                onClick={() => setPhoneAnswered(true)}
+                className={`inline-flex items-center justify-self-start text-caption font-semibold ${INDIGO_LINK}`}
+                style={{ minHeight: 44 }}
+              >
+                Je continue sans numéro
+              </button>
+            )}
+          </RungReveal>
+
+          {/* LE RESTE — TROISIÈME BARREAU (#6405) : identité dérivée, mot de
+              passe facultatif, langue, bouton et mentions. Il ne paraît
+              qu'une fois le numéro RÉPONDU — tapé, quitté, ou passé. */}
+          <RungReveal shown={showsSignupRung(reveal, 'identity')}>
+          {/* CE QUE L'INSCRIPTION VA CRÉER — montré, modifiable, et ENVOYÉ
+              (#6479). Placé APRÈS l'adresse parce qu'il en DÉCOULE : tant
+              qu'elle n'est pas tapée, il n'y a rien à montrer. */}
+          <DerivedIdentity
+            username={effectiveUsername(form)}
+            displayName={effectiveDisplayName(form)}
+            onUsernameChange={(username) => patch({ username })}
+            onDisplayNameChange={(displayName) => patch({ displayName })}
+            tint={INDIGO_TINT}
+            focusedField={focused === 'username' || focused === 'displayName' ? focused : null}
+            onFocus={(field) => setFocused(field)}
+            onBlur={() => setFocused(null)}
+            usernameError={feedback.fieldErrors.username}
+            displayNameError={feedback.fieldErrors.displayName}
+            suggestions={feedback.usernameSuggestions}
+          />
 
           {/* LE MOT DE PASSE EST FACULTATIF (#6424). Le libellé le DIT, et la
               note en dessous dit ce qui se passe sans lui — sans quoi laisser
@@ -271,6 +403,11 @@ export default function SignupScreen() {
             tint={INDIGO_TINT}
             focused={focused === 'password'}
             error={feedback.fieldErrors.password}
+            hint={{
+              text: 'Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un plus tard.',
+              glyph: AUTH_GLYPHS.info,
+              label: 'Que se passe-t-il sans mot de passe',
+            }}
           >
             {({ id, describedBy }) => (
               <input
@@ -278,24 +415,17 @@ export default function SignupScreen() {
                 type="password"
                 autoComplete="new-password"
                 value={form.password}
-                onChange={(e) => patch({ password: e.currentTarget.value })}
+                onInput={(e) => patch({ password: e.currentTarget.value })}
                 onFocus={() => setFocused('password')}
                 onBlur={() => setFocused(null)}
                 placeholder={`${PASSWORD_MIN} caractères minimum`}
                 className="w-full bg-transparent py-3 text-input outline-none"
                 aria-describedby={describedBy}
-                aria-invalid={describedBy !== undefined}
+                aria-invalid={feedback.fieldErrors.password !== undefined}
                 style={{ color: 'var(--color-ios-ink)' }}
               />
             )}
           </Field>
-
-          {!hasPassword(form.password) ? (
-            <p data-signup-magic-link-note className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un
-              plus tard.
-            </p>
-          ) : null}
 
           {/* LA PASTILLE LIT LE MÊME CATALOGUE QUE LA FEUILLE (correction de
               revue, défaut 2) : `getLanguageInfo` (`@meeshy/shared`), les 83
@@ -373,6 +503,12 @@ export default function SignupScreen() {
             </div>
           </div>
 
+          </RungReveal>
+
+          {/* HORS DES BARREAUX, DÉLIBÉRÉMENT (#6405) : ce n'est pas un champ,
+              c'est une SORTIE. Quelqu'un qui a déjà un compte doit pouvoir le
+              dire à la première seconde, sans avoir à remplir une adresse pour
+              faire paraître le lien qui l'emmène ailleurs. */}
           <Link
             to="login"
             replace

@@ -179,7 +179,7 @@ nonisolated public enum LentilleMetrics {
         /// pas dépasser ce que la marge lui offre. Au-delà, elle ne déplace
         /// plus les rangées, elle les fait se chevaucher.
         ///
-        /// Ce n'était PAS l'échelle : `listScaleDecay = 0.04` donne un
+        /// Ce n'était PAS l'échelle : `listScaleDecay` donne un
         /// `scale ≤ 1` ancré, donc une rangée qui rétrécit ÉLOIGNE ses bords de
         /// ses voisins — elle ne peut mécaniquement pas mordre un header.
         public static let breathing: CGFloat = Row.marginVertical
@@ -187,6 +187,13 @@ nonisolated public enum LentilleMetrics {
         /// pas), pleine une rangée plus loin — jamais de saut au passage.
         public static let breathingRampStart: CGFloat = 36
         public static let breathingRampLength: CGFloat = 40
+        /// LOUPE (directive porteur 2026-09-15, #6586 : « agrandir l'effet
+        /// Lentille, loupe plus prononcée ») : gain d'échelle de la rangée qui
+        /// traverse la bande — plein dans la demi-rangée de l'élue, nul une
+        /// rangée plus loin, sur la rampe de la respiration. Compositor seul,
+        /// zéro relayout. `LentilleFocusBreathing.loupe` l'écrête à la marge
+        /// horizontale : au-delà, la rangée serait rognée au bord de l'écran.
+        public static let loupeGain: CGFloat = 0.04
     }
 
     // MARK: - Magnification EN PLACE (2026-08-23)

@@ -2,7 +2,8 @@ import { useMemo, useRef } from 'react';
 import { useStore } from 'zustand/react';
 
 import { FeedPostCard } from '@/components/feed-post-card';
-import { Glyph } from '@/components/glyph';
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
 import { PullIndicator } from '@/components/pull-indicator';
 import { RailTitleSlot } from '@/components/rail-title-slot';
@@ -14,6 +15,8 @@ import { refreshFeedAction, useFeed } from '@/lib/api/query';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { useOnline } from '@/lib/net/online';
@@ -47,8 +50,8 @@ import { Link } from '@/routes/route-table';
  * cote (#6133) — jamais une seconde tuile ni une seconde bascule.
  *
  * CE QUI N'EST PAS REPRIS, ASSUMÉ (§ 1.5 de la spécification) : le placeholder
- * de composeur, les deux boutons ronds de l'en-tête (Réels / à proximité), le
- * menu « Plus d'options », le panneau de traduction secondaire et la bannière
+ * de composeur, le bouton rond « À proximité » de l'en-tête (celui des Réels
+ * l'a rejoint avec son lecteur, #6457), le menu « Plus d'options », le panneau de traduction secondaire et la bannière
  * temps réel « N nouveaux posts » — chacun un contrôle qui ouvrirait une route
  * ou un geste absent (loi 4), ou un compagnon de temps réel hors périmètre
  * lecture seule. Le bouton retour, lui, reste : iOS ferme le fil par le disque
@@ -90,17 +93,32 @@ export const FEED_HEADER_HEIGHT = 64;
 export const FEED_TOP_RESERVE = FLOATING_CORRIDOR_BOTTOM - FEED_HEADER_HEIGHT;
 
 export function FeedHeader({ pinned, railProps }: { readonly pinned: boolean; readonly railProps: StoryRailProps }) {
+  const language = currentInterfaceLanguage();
   return (
     <header className="flex shrink-0 items-center gap-2 px-3" style={{ height: FEED_HEADER_HEIGHT }}>
       <Link
         to="list"
-        aria-label="Retour aux conversations"
+        aria-label={translate(language, 'pending.back')}
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
         <Glyph name="caretLeft" size={20} />
       </Link>
       <RailTitleSlot title="Meeshy Feed" pinned={pinned} railProps={railProps} />
+      {/* LANCER LES RÉELS (#6457) — la première action de l'en-tête d'iOS
+          (`FeedView.swift`, `reelsButton` ⇒ `ReelsPresenter.presentFresh()`),
+          en haut à droite, sans graine. Le disque flottant de droite se pose
+          SOUS l'en-tête (`FLOATING_TOP`) : il ne couvre pas ce bouton. */}
+      <Link
+        to="reels"
+        aria-label={translate(language, 'feed.header.reels')}
+        draggable={false}
+        data-feed-reels
+        className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+      >
+        <GlyphSvg glyph={FEED_GLYPHS.monitorPlay} size={22} />
+      </Link>
     </header>
   );
 }
@@ -135,16 +153,17 @@ export function FeedTopChrome({
 
 /** `status === 'error'`, à CACHE VIDE — miroir `ListError` (`conversations.tsx`). */
 export function FeedError({ online, onRetry }: { readonly online: boolean; readonly onRetry: () => void }) {
+  const language = currentInterfaceLanguage();
   return (
     <li role="alert" className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center">
       <span style={{ color: 'var(--color-error)' }}>
         <Glyph name="warningCircle" size={28} />
       </span>
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        {online ? 'Impossible de charger le fil' : 'Hors ligne'}
+        {translate(language, online ? 'feed.error.title' : 'feed.offline.title')}
       </p>
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {online ? 'Réessayez dans un instant.' : 'Le fil s’affichera à la reconnexion.'}
+        {translate(language, online ? 'feed.error.body' : 'feed.offline.body')}
       </p>
       <button
         type="button"
@@ -152,21 +171,22 @@ export function FeedError({ online, onRetry }: { readonly online: boolean; reado
         className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
-        Réessayer
+        {translate(language, 'feed.retry')}
       </button>
     </li>
   );
 }
 
 export function FeedEmpty() {
+  const language = currentInterfaceLanguage();
   return (
     <li className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center">
       <Glyph name="image" size={40} style={{ color: 'var(--color-ios-ink-3)' }} />
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        Aucune publication
+        {translate(language, 'feed.empty.title')}
       </p>
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        Les publications de vos contacts apparaîtront ici.
+        {translate(language, 'feed.empty.subtitle')}
       </p>
     </li>
   );
@@ -249,6 +269,8 @@ export default function FeedScreen() {
     onReach: () => void feed.fetchNextPage(),
   });
 
+  const language = currentInterfaceLanguage();
+
   return (
     <div className="relative flex h-dvh flex-col overflow-hidden pt-safe">
       <FeedHeader pinned={pinned} railProps={railProps} />
@@ -261,7 +283,7 @@ export default function FeedScreen() {
         id="contenu"
         className="scrollbar-none overscroll-contain flex flex-1 flex-col gap-3 overflow-y-auto px-3 pb-safe"
         style={pullTransform(pull.phase, pull.offsetPx)}
-        {...(loading ? { 'aria-busy': true, 'aria-label': 'Chargement du fil' } : {})}
+        {...(loading ? { 'aria-busy': true, 'aria-label': translate(language, 'feed.loading') } : {})}
       >
         <FeedTopChrome railProps={railProps} inert={pinned} observe={observeGrandRail} />
         {feed.data === undefined && feed.isError ? (
@@ -282,7 +304,7 @@ export default function FeedScreen() {
             <LensPaginationFooter
               state={paginationState}
               showsAllLoadedHint={showsAllLoadedHint(posts.length, FEED_PAGE_SIZE)}
-              exhaustedLabel="Toutes les publications sont chargées"
+              exhaustedLabel={translate(language, 'feed.allLoaded')}
               onRetry={() => void feed.fetchNextPage()}
               sentinelRef={observeTail}
             />

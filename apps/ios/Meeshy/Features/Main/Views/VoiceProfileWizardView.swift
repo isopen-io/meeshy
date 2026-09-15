@@ -6,6 +6,11 @@ import MeeshyUI
 struct VoiceProfileWizardView: View {
     let accentColor: String
 
+    /// La teinte d'accent, convertie UNE fois : chaque site la répétait en
+    /// `Color(hex:)`, et le cliquet des couleurs en dur le comptait autant de fois
+    /// (+3 introduits par #6481, 2026-09-14).
+    private var accent: Color { Color(hex: accentColor) }
+
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -68,23 +73,28 @@ struct VoiceProfileWizardView: View {
 
     // MARK: - Header
 
+    /// En-tête partagé, FIXE (`scrollOffset: 0`), la progression juste dessous
+    /// (#6481). Il nomme la PAGE, pas l'étape : chaque étape affiche déjà son
+    /// propre titre dans son contenu, le répéter ici l'écrirait deux fois. Le
+    /// retour en verre ferme le parcours, comme la croix qu'il remplace ; la
+    /// navigation entre étapes reste portée par les boutons de chaque étape.
     private var header: some View {
-        HStack {
+        VStack(spacing: 0) {
+            CollapsibleHeader(
+                title: String(localized: "voice.profile.wizard.title", defaultValue: "Profil vocal", bundle: .main),
+                scrollOffset: 0,
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: accent,
+                backgroundColor: theme.backgroundPrimary,
+                trailing: { EmptyView() }
+            )
+
             stepIndicator
-            Spacer()
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 28)) // chrome control (cadre de tap fixe) — figé comme les xmark/transport (82i)
-                    .foregroundStyle(theme.textMuted)
-            }
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+                .padding(.horizontal, 16)
+                .padding(.top, 4)
+                .padding(.bottom, 8)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
     }
 
     private var stepIndicator: some View {
@@ -92,7 +102,7 @@ struct VoiceProfileWizardView: View {
             ForEach(VoiceProfileWizardStep.allCases, id: \.rawValue) { step in
                 Capsule()
                     .fill(step.rawValue <= viewModel.currentStep.rawValue
-                          ? Color(hex: accentColor)
+                          ? accent
                           : theme.textMuted.opacity(0.3))
                     .frame(height: 3)
             }
@@ -112,7 +122,7 @@ struct VoiceProfileWizardView: View {
                     .font(.system(size: 64)) // icône héros décorative — figée (≥40pt)
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.7)],
+                            colors: [accent, accent.opacity(0.7)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -166,7 +176,7 @@ struct VoiceProfileWizardView: View {
                     .padding(.vertical, 16)
                     .background(
                         RoundedRectangle(cornerRadius: 14)
-                            .fill(Color(hex: accentColor))
+                            .fill(accent)
                     )
                 }
                 .disabled(viewModel.isLoading)
@@ -181,7 +191,7 @@ struct VoiceProfileWizardView: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(14))
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundColor(accent)
                 .frame(width: 24)
                 .accessibilityHidden(true) // glyphe décoratif — le texte porte l'information
             Text(text)
@@ -198,7 +208,7 @@ struct VoiceProfileWizardView: View {
 
             Image(systemName: "person.badge.shield.checkmark.fill")
                 .font(.system(size: 64)) // icône héros décorative — figée (≥40pt)
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundColor(accent)
                 .accessibilityHidden(true)
 
             Text(String(localized: "voice.profile.wizard.ageVerification", defaultValue: "Vérification de l'âge", bundle: .main))
@@ -232,7 +242,7 @@ struct VoiceProfileWizardView: View {
                 .padding(.vertical, 16)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color(hex: accentColor))
+                        .fill(accent)
                 )
             }
             .disabled(viewModel.isLoading)
@@ -297,7 +307,7 @@ struct VoiceProfileWizardView: View {
 
             ProgressView()
                 .scaleEffect(1.5)
-                .tint(Color(hex: accentColor))
+                .tint(accent)
 
             Text(String(localized: "voice.profile.wizard.analyzing", defaultValue: "Analyse en cours…", bundle: .main))
                 .font(MeeshyFont.relative(22, weight: .bold, design: .rounded))
@@ -309,7 +319,7 @@ struct VoiceProfileWizardView: View {
                     .foregroundColor(theme.textSecondary)
 
                 ProgressView(value: Double(viewModel.uploadedCount), total: Double(viewModel.totalToUpload))
-                    .tint(Color(hex: accentColor))
+                    .tint(accent)
                     .padding(.horizontal, 60)
             }
 
@@ -378,7 +388,7 @@ struct VoiceProfileWizardView: View {
                     .padding(.vertical, 16)
                     .background(
                         RoundedRectangle(cornerRadius: 14)
-                            .fill(Color(hex: accentColor))
+                            .fill(accent)
                     )
             }
             .padding(.horizontal, 20)

@@ -100,8 +100,6 @@ struct FeedView: View {
     /// hides and `defaultType` ignores this flag.
     @State var composerForcePlainPost = false
     @State private var showAudioComposer = false
-    @State var composerLanguage: String = DefaultComposerLanguage.resolve()
-    @State var showComposerLanguagePicker = false
     @State private var headerScrollOffset: CGFloat = 0
     /// Holds the freshly-minted `meeshy.me/l/<token>` URL when the user taps
     /// the share button on a post — the `.sheet` further down presents the
@@ -537,11 +535,6 @@ struct FeedView: View {
                 shareableLink = raw
             }
         }
-    }
-
-    private var composerLanguageDisplayName: String {
-        let name = Locale.current.localizedString(forLanguageCode: composerLanguage) ?? composerLanguage
-        return name.prefix(1).uppercased() + name.dropFirst()
     }
 
     private var posts: [FeedPost] { viewModel.posts }
@@ -1387,17 +1380,6 @@ struct FeedView: View {
         // niveau root (`.fullScreenCover(item:)`). L'ancien cover local
         // `(isPresented:)` + `selectedStoryUserId` séparé provoquait une capture
         // périmée de l'uid (écran noir « story introuvable »). Supprimé.
-        .sheet(isPresented: $showComposerLanguagePicker) {
-            AudioLanguagePickerView(
-                selectedLocale: Binding(
-                    get: { Locale(identifier: composerLanguage) },
-                    set: { newLocale in
-                        let langCode = newLocale.language.languageCode?.identifier ?? newLocale.identifier
-                        composerLanguage = langCode
-                    }
-                )
-            )
-        }
     }
 
 
