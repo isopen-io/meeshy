@@ -22,17 +22,6 @@ const BRAND = 'var(--color-ios-brand)';
 const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
 
-/**
- * L'ORIGINE DU LEGACY — là où vivent les neuf sections que la v2 ne sert pas
- * encore.
- *
- * Une CONSTANTE, pas une variable de construction : le legacy sert
- * `meeshy.me` et c'est un fait d'exploitation, pas un réglage. Même doctrine
- * que `PRODUCTION_ORIGIN` dans `lib/api/config.ts` — un défaut qui marche
- * TOUJOURS plutôt qu'une valeur qu'un déploiement peut oublier de poser.
- */
-export const LEGACY_ADMIN_ORIGIN = 'https://meeshy.me';
-
 export function AdminHeader({
   language,
   title,

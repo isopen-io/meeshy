@@ -82,6 +82,25 @@ export const ROUTES = {
      après un rafraîchissement, jamais une navigation en mémoire seule. */
   verifyEmail: { pattern: '/auth/verify-email', screen: () => import('@/routes/verify-email') },
   resetPassword: { pattern: '/reset-password', screen: () => import('@/routes/reset-password') },
+  /* LES LIENS REÇUS (#6714, #6715) — des adresses que la PASSERELLE compose
+     et qui circulent déjà : e-mails, messages, publications, Android. Chacune
+     garde l'adresse exacte que le legacy servait (D-5) : sinon chaque lien
+     déjà envoyé mènerait à la page introuvable.
+     - `/l/:token` (`TrackingLinkService.buildTrackingUrl`) compte le clic et
+       ouvre la cible ; `/l/:token/expired` est l'état clos d'un lien mort, à
+       sa propre adresse pour qu'un rafraîchissement ne recompte pas le clic ;
+     - `/account/deletion` (`buildDeletionPageUrl`, `routes/me/delete-account.ts`),
+       obligation réglementaire, que la rangée « Supprimer le compte » des
+       réglages ouvre aussi ;
+     - `/settings/verify-email-change` (`contact-change.ts`, `contact-changes.ts`) ;
+     - `/settings/notifications`, le désabonnement des diffusions
+       (`jobs/broadcast-sender.ts`).
+     Aucune n'entre dans un ensemble de la garde (`lib/session-guard.ts`). */
+  trackingLink: { pattern: '/l/$token', screen: () => import('@/routes/tracking-link') },
+  trackingLinkExpired: { pattern: '/l/$token/expired', screen: () => import('@/routes/tracking-link-expired') },
+  accountDeletion: { pattern: '/account/deletion', screen: () => import('@/routes/account-deletion') },
+  verifyEmailChange: { pattern: '/settings/verify-email-change', screen: () => import('@/routes/verify-email-change') },
+  settingsNotifications: { pattern: '/settings/notifications', screen: () => import('@/routes/settings-notifications') },
   /* LES HUIT DESTINATIONS DES MENUS FLOTTANTS (#6214) — le Flux pour le bouton
      de gauche, les six barreaux de l'échelle de droite, et le profil qu'ouvre
      l'avatar. Leurs libellés, teintes et glyphes vivent dans UNE table

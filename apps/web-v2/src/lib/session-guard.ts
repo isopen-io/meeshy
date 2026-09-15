@@ -63,7 +63,23 @@ export type RouteKey =
    * membre vers `/` avant qu'il ait pu rejoindre. L'écran lit la session
    * lui-même pour choisir entre « Rejoindre » et ses deux sorties.
    */
-  | 'chatJoin';
+  | 'chatJoin'
+  /**
+   * LES LIENS REÇUS (#6714, #6715) — dans AUCUN ensemble, comme
+   * `magicLinkValidate` et `chatJoin` : un lien reçu s'ouvre quel que soit le
+   * statut. `/l/:token` et `/account/deletion?token=` sont PUBLICS par nature
+   * — la passerelle ne les authentifie pas, et annuler sa suppression ne doit
+   * pas exiger l'accès au compte. `/settings/verify-email-change` et
+   * `/settings/notifications` agissent sur le compte CONNECTÉ, mais une
+   * redirection d'ici vers `/login` PERDRAIT le jeton de l'e-mail, faute de
+   * chemin de retour : leurs écrans lisent la session eux-mêmes, ne dépensent
+   * rien sans elle, et disent qu'il faut se connecter.
+   */
+  | 'trackingLink'
+  | 'trackingLinkExpired'
+  | 'accountDeletion'
+  | 'verifyEmailChange'
+  | 'settingsNotifications';
 
 export type RouteAccessDecision = 'allow' | 'redirect-login' | 'redirect-home' | 'redirect-welcome';
 
