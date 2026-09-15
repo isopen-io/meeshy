@@ -888,35 +888,21 @@ extension View {
     }
 }
 
-/// **Une vignette du média choisi, retirable (B, #3883).**
-///
-/// Pour une IMAGE, la vraie miniature — chargée HORS du main thread
-/// (`ComposerThumbnailDecoder`, tâche détachée) puis posée. Pour une vidéo ou un
-/// document, un badge : « voir qu'un média est joint » sans générer de frame
-/// (une image d'AVAsset est asynchrone et lourde — « un début », cf. décision
-/// produit). La croix ôte l'élément, ce qui re-juge le format côté meuble.
-/// **Quand un chip du rail porte sa croix (#4052).**
-///
-/// Le ✕ ne se peignait que sur le chip SÉLECTIONNÉ — correctif de pixel du
-/// #4047 : à 40 pt il mange le quart du chip, et viser une vignette pour
-/// NAVIGUER la supprimait.
-///
-/// Cette règle était TOTALE tant que tout média était une slide. Le #4052 a
-/// rompu cette équivalence : un audio devient la bande-son de la scène, pas une
-/// page du carrousel — il n'a donc aucune slide à sélectionner, son chip ne peut
-/// jamais porter l'anneau, et **son ✕ ne s'affichait plus jamais**. Le vocal
-/// devenait IRRETIRABLE : mesuré au simulateur le 2026-08-28.
-///
-/// Un chip qu'aucune slide ne peut sélectionner porte donc toujours sa croix —
-/// c'est sa seule action, et un contrôle sans effet est ce que la loi 4
-/// interdit. L'ordre « deux gestes pour supprimer » reste tenu partout où un
-/// premier geste EXISTE.
-nonisolated enum ComposerMediaChipAffordance {
-    static func showsRemove(isSelected: Bool, isSelectable: Bool) -> Bool {
-        isSelected || !isSelectable
-    }
-}
-
+// **La vignette et sa règle de croix sont PARTIES au #6577.**
+//
+// `ComposerMediaThumbnail` (avec son décodeur) et `ComposerMediaChipAffordance`
+// décrivaient la BANDE de médias, remplacée par le rail de SCÈNES au #5599 :
+// depuis, plus aucun site de production ne les montait. Seuls trois témoins les
+// interrogeaient encore, et ils passaient au vert — sur un contrôle démonté,
+// donc pour un motif étranger à ce qu'ils affirmaient (« le média est
+// retirable »). C'est ce vert-là qui a laissé passer la régression que #6577
+// ferme : la croix de la rangée de scènes ne retirait, elle, que la moitié qui
+// se voit.
+//
+// > Une garde de câblage ne voit que ce que sa surface DÉCLARE
+// > (`ComposerCallbackWiringGuardTests` lit les rappels de cette surface-ci).
+// > Un contrôle mort dans un FICHIER VOISIN n'apparaît dans aucune des deux
+// > moitiés — ni chez celui qui déclare, ni chez celui qui monte.
 
 /// **Le menu de suppression d'une carte de son** (#4696).
 ///

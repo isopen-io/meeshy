@@ -43,7 +43,7 @@ class PostDetailViewModel: ObservableObject {
     @Published var commentHeartInFlightIds: Set<String> = []
 
     private var commentCursor: String?
-    private let postService: PostServiceProviding
+    let postService: PostServiceProviding
     private let socialSocket: any SocialSocketProviding
     private let languageProvider: LanguageProviding
     private let offlineQueue: OfflineQueueing
@@ -726,7 +726,7 @@ class PostDetailViewModel: ObservableObject {
     /// while it's pending the optimistic id (`cmid`) is shown in the
     /// list — when the server response arrives, the socket
     /// `comment:added` broadcast reconciles via the normal path.
-    func sendComment(_ content: String, effectFlags: Int? = nil, location: SharedPlace? = nil) async {
+    func sendComment(_ content: String, originalLanguage: String?, effectFlags: Int? = nil, location: SharedPlace? = nil) async {
         guard let post else { return }
         let cmid = ClientMutationId.generate()
         let snapshot = comments
@@ -743,17 +743,15 @@ class PostDetailViewModel: ObservableObject {
             likes: 0,
             replies: 0,
             effectFlags: effectFlags ?? 0,
-            location: location
+            originalLanguage: originalLanguage, location: location
         )
         comments.insert(optimistic, at: 0)
         self.post?.commentCount = snapshotCount + 1
         let payload = CreateCommentPayload(
-            clientMutationId: cmid,
-            postId: post.id,
-            parentCommentId: nil,
-            content: content,
-            location: location,
-            effectFlags: effectFlags
+            clientMutationId: cmid, postId: post.id,
+            parentCommentId: nil, content: content,
+            originalLanguage: originalLanguage,
+            location: location, effectFlags: effectFlags
         )
         do {
             try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: post.id)
@@ -780,7 +778,7 @@ class PostDetailViewModel: ObservableObject {
     /// immédiat keyé cmid, survit au kill de l'app, réconciliée par l'écho
     /// socket `comment:added`. Rollback multi-champs (repliesMap, compteur du
     /// parent, commentCount, dépliage) sur refus d'enfilement ou .exhausted.
-    func sendReply(_ content: String, effectFlags: Int? = nil, location: SharedPlace? = nil) async {
+    func sendReply(_ content: String, originalLanguage: String?, effectFlags: Int? = nil, location: SharedPlace? = nil) async {
         guard let post, let parent = replyingTo else { return }
         // Réponse plate à 2 niveaux : répondre à une réponse rattache au MÊME
         // parent racine pour rester au niveau 2 ; l'auteur ciblé est notifié via
@@ -805,7 +803,7 @@ class PostDetailViewModel: ObservableObject {
             replies: 0,
             parentId: parentId,
             effectFlags: effectFlags ?? 0,
-            location: location
+            originalLanguage: originalLanguage, location: location
         )
         var existing = repliesMap[parentId] ?? []
         existing.insert(optimistic, at: 0)
@@ -816,12 +814,10 @@ class PostDetailViewModel: ObservableObject {
         }
         self.post?.commentCount = snapshotCount + 1
         let payload = CreateCommentPayload(
-            clientMutationId: cmid,
-            postId: post.id,
-            parentCommentId: parentId,
-            content: content,
-            location: location,
-            effectFlags: effectFlags
+            clientMutationId: cmid, postId: post.id,
+            parentCommentId: parentId, content: content,
+            originalLanguage: originalLanguage,
+            location: location, effectFlags: effectFlags
         )
         do {
             try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: post.id)
@@ -854,33 +850,6 @@ class PostDetailViewModel: ObservableObject {
         replyingTo = nil
     }
 
-    // MARK: - Édition de commentaire (auteur)
-
-    /// PATCH du commentaire : remplacement optimiste EN PLACE (jamais
-    /// d'insertion — même id), rollback complet si le serveur refuse.
-    /// L'écho `comment:updated` reconfirme ensuite la ligne (idempotent).
-    func updateComment(_ target: FeedComment, content: String, effectFlags: Int) async {
-        guard let post else { return }
-        let edited = target.withEditedContent(content, effectFlags: effectFlags)
-        let snapshotComments = comments
-        let snapshotReplies = repliesMap
-        applyCommentUpdated(edited)
-        do {
-            _ = try await postService.updateComment(
-                postId: post.id, commentId: target.id, content: content, effectFlags: effectFlags
-            )
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
-            if let parentId = edited.parentId, let replies = repliesMap[parentId] {
-                try? await CacheCoordinator.shared.comments.savePreservingFreshness(replies, for: "replies-\(parentId)")
-            }
-        } catch {
-            comments = snapshotComments
-            repliesMap = snapshotReplies
-            FeedbackToastManager.shared.showError(
-                String(localized: "feed.comments.edit_error", defaultValue: "Erreur lors de la modification du commentaire", bundle: .main))
-        }
-    }
-
     /// Pose une traduction de commentaire fraîchement arrivée (racine ou
     /// réponse) — uniquement si la langue est préférée, qu'aucune traduction
     /// n'est déjà affichée, ET que la langue d'origine du commentaire n'occupe
@@ -910,26 +879,12 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
-    /// Remplace la ligne éditée EN PLACE (racine ou réponse) — idempotent,
-    /// partagé par l'optimiste local et l'écho socket `comment:updated`.
-    func applyCommentUpdated(_ edited: FeedComment) {
-        if let parentId = edited.parentId, var existing = repliesMap[parentId],
-           let idx = existing.firstIndex(where: { $0.id == edited.id }) {
-            existing[idx] = edited
-            repliesMap[parentId] = existing
-            return
-        }
-        if let idx = comments.firstIndex(where: { $0.id == edited.id }) {
-            comments[idx] = edited
-        }
-    }
-
     /// Envoi d'un commentaire (top-level OU réponse) portant UN média
     /// (image/vidéo/audio). Contrairement au chemin texte top-level qui transite par
     /// l'OfflineQueue, un commentaire média DOIT passer en direct (l'upload du fichier
     /// exige le réseau). Optimistic-first avec le média local, puis upload TUS
     /// (`uploadContext=comment`) → `addComment(attachmentIds:)`, réconcilie/rollback.
-    func submitCommentWithMedia(_ content: String, effectFlags: Int?, parentId: String?, pendingMedia: PendingCommentMedia, location: SharedPlace? = nil) async {
+    func submitCommentWithMedia(_ content: String, originalLanguage: String?, effectFlags: Int?, parentId: String?, pendingMedia: PendingCommentMedia, location: SharedPlace? = nil) async {
         guard let post else { return }
         if parentId != nil { replyingTo = nil }
         // La ligne optimiste est keyée par le cmid envoyé au gateway : l'écho
@@ -946,7 +901,7 @@ class PostDetailViewModel: ObservableObject {
             content: content, timestamp: Date(),
             likes: 0, replies: 0, parentId: parentId,
             effectFlags: effectFlags ?? 0,
-            media: [pendingMedia.optimistic]
+            originalLanguage: originalLanguage, media: [pendingMedia.optimistic]
         )
         let snapshotComments = comments
         let snapshotReplies = parentId.flatMap { repliesMap[$0] }
@@ -967,7 +922,7 @@ class PostDetailViewModel: ObservableObject {
             let apiComment = try await postService.addComment(
                 postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags,
                 attachmentIds: [attachmentId], mobileTranscription: pendingMedia.mobileTranscription,
-                originalLanguage: nil, location: location, clientMutationId: tempId
+                originalLanguage: originalLanguage, location: location, clientMutationId: tempId
             )
             let server = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
@@ -976,7 +931,7 @@ class PostDetailViewModel: ObservableObject {
                 content: apiComment.content, timestamp: apiComment.createdAt,
                 likes: 0, replies: 0, parentId: parentId,
                 effectFlags: apiComment.effectFlags ?? effectFlags ?? 0,
-                media: (apiComment.media ?? []).map { $0.toFeedMedia() }
+                originalLanguage: apiComment.originalLanguage, media: (apiComment.media ?? []).map { $0.toFeedMedia() }
             )
             if let parentId {
                 var existing = repliesMap[parentId] ?? []

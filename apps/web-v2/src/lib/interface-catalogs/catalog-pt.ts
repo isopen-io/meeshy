@@ -62,6 +62,7 @@ const pt = {
   'feed.post.media.audio': 'Áudio',
   'feed.post.media.previous': 'Mídia anterior',
   'feed.post.media.next': 'Próxima mídia',
+  'feed.post.media.mosaic': 'Mosaico de {count} mídias',
   'feed.post.see_more': 'ver mais',
   'feed.post.see_less': 'ver menos',
   'feed.post.reel.chip': 'Reel',
@@ -184,6 +185,12 @@ const pt = {
   'profile.language.choose': 'Escolher',
   'profile.language.clear.regional': 'Remover o idioma regional',
   'profile.language.clear.custom': 'Remover o idioma personalizado',
+
+  'languageSheet.title.read': 'Idioma de leitura',
+  'languageSheet.title.write': 'Idioma de escrita',
+  'languageSheet.search': 'Pesquisar um idioma',
+  'languageSheet.empty': 'Nenhum idioma corresponde a “{search}”.',
+
   'profile.stats.messages': 'Mensagens',
   'profile.stats.translations': 'Traduções',
   'profile.stats.languages': 'Idiomas',

@@ -15,6 +15,16 @@ const AUDIO_MIME_PREFIX = 'audio/';
 const VIDEO_MIME_PREFIX = 'video/';
 
 /**
+ * Le feature-flag qui active la bibliothèque de sons — LECTURE UNIQUE, partagée
+ * avec `soundCaptureVerdict` (#6603) : sans elle, le verdict synchrone dirait
+ * une piste « soumise » alors que `captureSounds` ci-dessous l'aurait ignorée
+ * au tout premier `if`.
+ */
+export function soundLibraryEnabled(): boolean {
+  return process.env.SOUND_LIBRARY_ENABLED === 'true';
+}
+
+/**
  * Démuxe la piste audio d'une vidéo vers un `.m4a` AAC.
  *
  * Injectable (tests) ; l'implémentation par défaut spawn le ffmpeg du
@@ -175,7 +185,7 @@ export class SoundCaptureService {
 
   async captureSounds(ctx: CaptureContext): Promise<void> {
     try {
-      if (process.env.SOUND_LIBRARY_ENABLED !== 'true') return;
+      if (!soundLibraryEnabled()) return;
       // Repasser un contenu public en privé doit LIBÉRER ses usages, pas les
       // figer : sinon publier puis restreindre laisse le compteur gonflé pour
       // toujours, et c'est lui qui trie la découverte.

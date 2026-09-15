@@ -58,6 +58,7 @@ const en = {
   'feed.post.media.audio': 'Audio',
   'feed.post.media.previous': 'Previous media',
   'feed.post.media.next': 'Next media',
+  'feed.post.media.mosaic': 'Mosaic of {count} media',
   'feed.post.see_more': 'see more',
   'feed.post.see_less': 'show less',
   'feed.post.reel.chip': 'Reel',
@@ -180,6 +181,12 @@ const en = {
   'profile.language.choose': 'Choose',
   'profile.language.clear.regional': 'Remove regional language',
   'profile.language.clear.custom': 'Remove custom language',
+
+  'languageSheet.title.read': 'Reading language',
+  'languageSheet.title.write': 'Writing language',
+  'languageSheet.search': 'Search for a language',
+  'languageSheet.empty': 'No language matches “{search}”.',
+
   'profile.stats.messages': 'Messages',
   'profile.stats.translations': 'Translations',
   'profile.stats.languages': 'Languages',

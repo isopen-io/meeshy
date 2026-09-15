@@ -81,6 +81,24 @@ extension ConversationViewModel {
     /// seule (vue unique posée sur la photo, message en clair) masque sa
     /// vignette sans masquer le texte — la même lecture à deux niveaux que
     /// `mediaMayTravel` côté passerelle.
+    ///
+    /// **L'ANCRE est GRAVÉE (#6164).** Cette fabrique décrivait la pièce
+    /// (vignette, faits, protection) sans jamais NOMMER celle qu'elle décrit,
+    /// pendant que le constructeur serveur (`APIMessageReplyTo
+    /// .toReplyReference`) pose `attachmentId` depuis l'instantané du fil. Les
+    /// deux références décrivaient donc la même pièce par deux dérivations
+    /// INDÉPENDANTES, et contre deux sources différentes : le tableau tenu en
+    /// mémoire à la composition d'un côté, celui du magasin au moment du tap de
+    /// l'autre. `citedAttachment(among:)` — le site UNIQUE que `openQuotedMedia`
+    /// interroge — retombait sur `quotedRepresentative` de la liste COURANTE :
+    /// la pièce décrite ayant disparu, la citation ouvrait sa VOISINE, c'est-à-dire
+    /// une photo que cette réponse ne cite pas. Avec l'ancre, les deux ne font
+    /// qu'une résolution, et le troisième cas de `citedAttachment` s'applique
+    /// enfin ici aussi : pièce nommée INTROUVABLE ⇒ `nil`, jamais un emprunt.
+    ///
+    /// L'ancre est posée MÊME sur un média protégé : elle n'est pas un secret —
+    /// le verrou vit dans `openQuotedMedia`, qui refuse d'ouvrir une pièce à vue
+    /// unique après relecture du message RÉEL dans le magasin.
     func optimisticReplyReference(quoting quoted: Message) -> ReplyReference {
         let representative = quoted.attachments.quotedRepresentative
         let messageIsProtected = quoted.isViewOnce || quoted.isBlurred || quoted.isEncrypted
@@ -99,6 +117,7 @@ extension ConversationViewModel {
             // la photo au premier refresh serveur.
             authorAvatarUrl: quoted.senderAvatarURL,
             attachmentType: representative?.type.rawValue,
+            attachmentId: representative?.id,
             attachmentThumbnailUrl: mediaMayTravel ? Self.quotedThumbnailUrl(of: representative) : nil,
             // Le message cité est en mémoire : sa protection est CONNUE, pas
             // déclarée par le fil. Sans ce report, la bulle optimiste d'une

@@ -3,6 +3,8 @@ import { useStore } from 'zustand/react';
 
 import { AuthAmbient, AuthBrandFooter, AuthSubmitButton, AuthTitle } from '@/components/auth-chrome';
 import { Field } from '@/components/field';
+import { GlyphSvg } from '@/components/glyph';
+import { AUTH_GLYPHS } from '@/components/glyphs-auth';
 import { MagicLinkPanel, type MagicLinkPanelDeps } from '@/components/magic-link-panel';
 import { auth } from '@/lib/api/auth';
 import { sessionStore } from '@/lib/api/session';
@@ -36,13 +38,32 @@ import { Link, href, navigate } from '@/routes/route-table';
  * des deux portes (même règle que la catégorie de la cloche, `notifications.tsx`).
  * `lien` est l'ABSENCE du paramètre — l'adresse par défaut reste `/login` nu,
  * et une valeur inconnue y retombe plutôt que de rendre un écran vide.
+ *
+ * ## `password`, et `motdepasse` qu'on LIT encore (#6583)
+ *
+ * Directive porteur 2026-09-14 : « `/login?methode=motdepasse` doit être
+ * `/login?methode=password` ». La valeur ÉMISE change donc ; la valeur LUE,
+ * elle, s'élargit. `motdepasse` a été l'adresse de cette porte pendant toute
+ * la vie de #6404 — elle est dans des signets, des liens partagés et la
+ * recette. La retirer du vocabulaire de lecture renverrait ces adresses sur le
+ * lien magique, c'est-à-dire sur un écran que personne n'a demandé : une
+ * valeur qu'on cesse d'écrire n'est pas une valeur qu'on peut cesser de
+ * comprendre.
  */
 const METHOD_PARAM = 'methode';
 
-type LoginMethod = 'lien' | 'motdepasse';
+/** La valeur ÉCRITE dans l'adresse de la porte du mot de passe. Un seul site,
+ * pour que le lien qui l'émet et la lecture qui l'accepte ne puissent pas
+ * diverger. */
+const PASSWORD_METHOD = 'password';
+
+/** L'ancienne écriture, LUE mais jamais émise (§ doc-comment ci-dessus). */
+const LEGACY_PASSWORD_METHOD = 'motdepasse';
+
+type LoginMethod = 'lien' | 'password';
 
 export function loginMethodFromSearch(raw: string | null): LoginMethod {
-  return raw === 'motdepasse' ? 'motdepasse' : 'lien';
+  return raw === PASSWORD_METHOD || raw === LEGACY_PASSWORD_METHOD ? 'password' : 'lien';
 }
 
 /** Le violet de marque du titre — `purple700 → purple600 → purple500`
@@ -134,7 +155,22 @@ export function LoginDoors({
       <AuthAmbient />
 
       <div className="relative flex w-full max-w-sm flex-1 flex-col items-center justify-center gap-8 px-6 py-10">
-        <AuthTitle gradient="login" />
+        {/* LE BLASON NE PARAÎT QUE LÀ OÙ IL NOMME QUELQUE CHOSE (#6583).
+            Directive porteur 2026-09-14 : « à la connexion la page doit être
+            sans titre sauf la baguette magique ». La porte par défaut a la
+            baguette, un titre de champ et un bouton — le blason y disait une
+            seconde fois ce que la page est, à quelqu'un qui vient de cliquer
+            « Se connecter ». Les DEUX autres sections le gardent : la porte du
+            mot de passe n'a pas de baguette, et le second facteur est un écran
+            d'arrêt au milieu d'un parcours, où savoir de QUI vient la demande
+            de code n'est pas un ornement.
+
+            Ce que cette directive retirait AUSSI — le titre de section du
+            panneau — est revenu par celle du 2026-09-15 (#6626) : « Votre
+            adresse e-mail » y ancre le (i) « Comment ça marche », donc annonce
+            quelque chose au lieu de répéter le champ. `MagicLinkPanel` n'a
+            plus de prop `heading` : plus personne ne le taisait. */}
+        {method === 'password' || requires2FA ? <AuthTitle gradient="login" /> : null}
 
         {!online ? (
           <p className="w-full rounded-[14px] px-4 py-2 text-center text-caption" style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink-2)' }}>
@@ -208,7 +244,7 @@ export function LoginDoors({
               <div className="mt-1 grid justify-items-center gap-2">
                 <Link
                   to="login"
-                  search={{ [METHOD_PARAM]: 'motdepasse' }}
+                  search={{ [METHOD_PARAM]: PASSWORD_METHOD }}
                   replace
                   className={`inline-flex items-center text-title font-semibold ${INDIGO_LINK}`}
                   style={{ minHeight: 44 }}
@@ -275,25 +311,30 @@ export function LoginDoors({
               busyLabel="Connexion…"
             />
 
-            {/* LES DEUX PORTES (#5816) — `LoginView.swift:478-503` : « Connexion
-                sans mot de passe » EN PREMIER (action mise en avant, l.481-493),
-                « Mot de passe oublié ? » EN DESSOUS (l.495-501) — empilées,
-                jamais côte à côte (doc-comment l.479-480). Ancres, pas des
-                boutons qui naviguent : pas d'`history`, un vrai `href`. */}
+            {/* LES DEUX PORTES (#5816) — `LoginView.swift:478-503` : la
+                connexion par e-mail EN PREMIER (action mise en avant,
+                l.481-493), « Mot de passe oublié ? » EN DESSOUS (l.495-501) —
+                empilées, jamais côte à côte (doc-comment l.479-480). Ancres,
+                pas des boutons qui naviguent : pas d'`history`, un vrai `href`.
+
+                « Se connecter par e-mail », baguette en tête (#6626) : le mot
+                dit CE QUE l'on fait, la baguette garde l'identité de la porte.
+                Le glyphe porte sa propre teinte — le dégradé du libellé est
+                découpé dans le TEXTE (`background-clip: text`), et un tracé en
+                `currentColor` y serait transparent. */}
             <div className="mt-1 grid justify-items-center gap-2">
-              <Link
-                to="login"
-                replace
-                className="inline-flex items-center font-semibold text-title"
-                style={{
-                  minHeight: 44,
-                  background: 'linear-gradient(90deg, var(--ios-purple-500), var(--ios-indigo-400))',
-                  WebkitBackgroundClip: 'text',
-                  backgroundClip: 'text',
-                  color: 'transparent',
-                }}
-              >
-                Recevoir un lien de connexion par e-mail
+              <Link to="login" replace className="inline-flex items-center gap-2 font-semibold text-title" style={{ minHeight: 44 }}>
+                <GlyphSvg glyph={AUTH_GLYPHS.magicWand} size={18} style={{ color: 'var(--ios-purple-500)' }} />
+                <span
+                  style={{
+                    background: 'linear-gradient(90deg, var(--ios-purple-500), var(--ios-indigo-400))',
+                    WebkitBackgroundClip: 'text',
+                    backgroundClip: 'text',
+                    color: 'transparent',
+                  }}
+                >
+                  Se connecter par e-mail
+                </span>
               </Link>
               <Link
                 to="forgotPassword"

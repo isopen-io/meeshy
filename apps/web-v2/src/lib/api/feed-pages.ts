@@ -79,6 +79,21 @@ export type FeedMedia = {
 
 export type FeedRepostOf = { readonly author?: { readonly username?: string | null } | null };
 
+/**
+ * `X-Canvas-Caps: 3` (#6514) — sans cet en-tête, la passerelle traite le
+ * lecteur en client ancien (table O17, `negotiateWireStoryEffects`,
+ * `services/gateway/src/services/posts/storyEffectsV3.ts`) : elle OMET
+ * `storyEffects` d'un post à média et remplace celui d'un post sans média par
+ * une sentinelle v1. L'agencement choisi par l'auteur, qui vit dans ce
+ * document, n'arriverait jamais. Le niveau est celui qu'annoncent iOS
+ * (`ClientInfoProvider.swift`) et Android (`ClientCapabilitiesInterceptor.kt`).
+ *
+ * Il ne se pose QUE sur les routes dont les cartes lisent l'agencement (le fil
+ * et le détail d'une publication) : le lecteur de stories lit encore la forme
+ * v1 (`storyEffects.background`), et l'annoncer là lui retirerait ses fonds.
+ */
+export const CANVAS_CAPS_HEADERS: Readonly<Record<string, string>> = { 'X-Canvas-Caps': '3' };
+
 export type FeedPost = {
   readonly id: string;
   /** `'POST' | 'REEL' | …` — l'union complète vit côté serveur
@@ -93,6 +108,13 @@ export type FeedPost = {
   readonly translations?: unknown;
   readonly author?: FeedAuthor | null;
   readonly media?: readonly FeedMedia[] | null;
+  /**
+   * LE DOCUMENT CANVAS de la publication (#6514) — laissé `unknown` : ce
+   * client n'en lit QU'UN champ, l'agencement choisi par l'auteur, par
+   * `resolveMosaicLayout` (`lib/feed/mosaic-layout.ts`), jamais ailleurs. Il
+   * n'est servi que si la requête annonce `CANVAS_CAPS_HEADERS` (ci-dessous).
+   */
+  readonly storyEffects?: unknown;
   readonly repostOf?: FeedRepostOf | null;
   readonly likeCount?: number | null;
   readonly commentCount?: number | null;

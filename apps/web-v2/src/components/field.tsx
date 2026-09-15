@@ -1,7 +1,8 @@
-import { useId, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
 import type { GlyphName } from './glyphs';
+import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from './info-hint';
 
 /**
  * LE BLOC DE CHAMP (#5555, E7) — que les 40+ écrans restants copieront.
@@ -24,6 +25,7 @@ export function Field({
   glyph,
   tint,
   focused,
+  valid = false,
   error,
   hint,
   children,
@@ -45,6 +47,27 @@ export function Field({
    * jamais une troisième source de vérité pour le focus. */
   tint: string;
   focused: boolean;
+  /**
+   * LE CHAMP EST BON, ET ÇA SE VOIT (#6582, directive porteur 2026-09-14 :
+   * « si le mot de passe est entré et est OK, entourer le champ en vert
+   * directement »).
+   *
+   * La teinte est `var(--color-success)` — le jeton de la table PARTAGÉE, qui
+   * porte déjà une valeur par schéma (`#10b981` en sombre, `#047857` en clair,
+   * `packages/design-tokens/{dark,light}.css`). Aucune couleur n'est
+   * fabriquée ici, et aucune variante `light:` n'est nécessaire : c'est
+   * exactement le mécanisme qu'`app.css` décrit en tête (« une couleur juste
+   * l'est dans les deux schémas, par construction »). Mesuré sur la carte :
+   * 7,3:1 en sombre, 5,3:1 en clair.
+   *
+   * Le signal ne tient PAS à la seule couleur (règle 17) : le bord épaissit
+   * aussi (1px → 2px, comme au focus), et l'appelant dit en toutes lettres ce
+   * que le vert lui a appris. `data-field-state` le rend mesurable sans
+   * interroger une chaîne de style.
+   *
+   * Un refus GAGNE toujours : un champ ne peut pas être bon et refusé.
+   */
+  valid?: boolean | undefined;
   error?: string | undefined;
   /**
    * LE DÉTAIL DERRIÈRE UN (i) (#6441, retour porteur « la page est trop
@@ -55,24 +78,22 @@ export function Field({
    * champ, à droite : la rangée fait déjà 48 px, donc le détail ne coûte plus
    * aucune hauteur tant qu'on ne le demande pas.
    *
-   * Le tracé vient de l'APPELANT, jamais d'un import ici — `Field` est au
-   * socle, et le jeu d'écran qui porte `info` ne doit pas y entrer (§ le
-   * doc-comment de `glyph` ci-dessus, et `extract-glyphs.mjs`).
-   *
-   * `aria-expanded` + `aria-controls` disent l'état ; le texte reste porté par
-   * `aria-describedby` du champ même REPLIÉ — un lecteur d'écran l'entend donc
-   * sans avoir à trouver le bouton.
+   * Le bouton et la note sont ceux de `info-hint.tsx` (#6626), que les écrans
+   * posent aussi HORS d'un champ ; le texte reste porté par `aria-describedby`
+   * du champ même REPLIÉ — un lecteur d'écran l'entend donc sans avoir à
+   * trouver le bouton.
    */
-  hint?: { text: string; glyph: GlyphShape; label: string } | undefined;
+  hint?: InfoHint | undefined;
   /** L'`<input>`/`<select>` lui-même — reçoit `id` et `aria-describedby` pour
    * que le refus SOUS le champ soit lu par un lecteur d'écran comme le champ
    * lui-même, jamais un texte à part. */
   children: (ids: { id: string; describedBy: string | undefined }) => ReactNode;
 }) {
   const errorId = `${id}-error`;
-  const hintId = useId();
-  const [isHintOpen, setHintOpen] = useState(false);
+  const hintState = useInfoHint();
   const iconStyle = { color: `color-mix(in srgb, ${tint} 70%, transparent)`, flexShrink: 0 };
+  const isValid = valid && error === undefined;
+  const isEmphasized = focused || isValid;
   return (
     <div className="grid gap-1">
       {label !== undefined ? (
@@ -82,6 +103,7 @@ export function Field({
       ) : null}
       <div
         className="field-box flex items-center gap-3 rounded-[14px] px-4 transition-colors"
+        data-field-state={isValid ? 'valid' : undefined}
         style={{
           minHeight: 48,
           backgroundColor: 'var(--color-ios-card)',
@@ -91,8 +113,12 @@ export function Field({
              tient pas sur un fond dont le contraste de couleur est faible.
              `box-sizing: border-box` (préflight Tailwind) absorbe le pixel
              de plus DANS la boîte : ni ses voisins ni sa hauteur ne bougent. */
-          border: `${focused ? '2px' : '1px'} solid ${
-            focused ? `color-mix(in srgb, ${tint} 60%, transparent)` : 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)'
+          border: `${isEmphasized ? '2px' : '1px'} solid ${
+            isValid
+              ? 'var(--color-success)'
+              : focused
+                ? `color-mix(in srgb, ${tint} 60%, transparent)`
+                : 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)'
           }`,
         }}
       >
@@ -100,33 +126,13 @@ export function Field({
         {icon === undefined && glyph !== undefined ? <GlyphSvg glyph={glyph} size={20} style={iconStyle} /> : null}
         {children({
           id,
-          describedBy: [error !== undefined ? errorId : undefined, hint !== undefined ? hintId : undefined]
+          describedBy: [error !== undefined ? errorId : undefined, hint !== undefined ? hintState.id : undefined]
             .filter((part): part is string => part !== undefined)
             .join(' ') || undefined,
         })}
-        {hint !== undefined ? (
-          <button
-            type="button"
-            onClick={() => setHintOpen((open) => !open)}
-            aria-expanded={isHintOpen}
-            aria-controls={hintId}
-            aria-label={hint.label}
-            className="grid shrink-0 place-items-center rounded-full"
-            style={{ minWidth: 44, minHeight: 44, marginRight: -10, color: 'var(--color-ios-ink-3)' }}
-          >
-            <GlyphSvg glyph={hint.glyph} size={18} />
-          </button>
-        ) : null}
+        {hint !== undefined ? <InfoHintButton hint={hint} state={hintState} style={{ marginRight: -10 }} /> : null}
       </div>
-      {hint !== undefined ? (
-        <p
-          id={hintId}
-          className={`text-caption ${isHintOpen ? '' : 'sr-only'}`}
-          style={{ color: 'var(--color-ios-ink-2)' }}
-        >
-          {hint.text}
-        </p>
-      ) : null}
+      {hint !== undefined ? <InfoHintText hint={hint} state={hintState} /> : null}
       {error !== undefined ? (
         <p id={errorId} role="alert" className="text-caption" style={{ color: 'var(--ios-error)' }}>
           {error}

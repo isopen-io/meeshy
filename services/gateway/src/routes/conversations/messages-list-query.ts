@@ -28,6 +28,7 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
 import { normalizeLanguageForDedup, makeLanguageFilter } from '@meeshy/shared/utils/language-normalize';
 import { servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
+import { attachmentReplyToFromMetadata } from '../../services/messaging/attachmentReplySnapshot';
 import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
@@ -398,7 +399,23 @@ export function buildMessageListSelect(options: {
                 }
               }
             },
-            attachments: { select: attachmentFullSelect, take: 4 },
+            // #6164 — l'ordre était ABSENT : « la première pièce » que toute
+            // citation rendait était donc ARBITRAIRE d'un appel à l'autre,
+            // MongoDB ne promettant aucun ordre sans `orderBy`. Un défaut pire
+            // que « la 1re au lieu de la 3e » : le même message ne se citait
+            // pas deux fois pareil. Les deux champs existent sur
+            // `MessageAttachment` ; `id` départage deux pièces jointes
+            // enregistrées dans la même milliseconde.
+            //
+            // Le `take` NE MONTE PAS à 10 : chaque message du fil le paierait,
+            // pour une citation qui n'en rend qu'une. La pièce NOMMÉE qui
+            // tombe hors de la fenêtre est rattrapée par son ID, en UNE requête
+            // par page (`backfillCitedAttachments`).
+            attachments: {
+              select: attachmentFullSelect,
+              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              take: 4,
+            },
             _count: {
               select: {
                 reactions: true
@@ -733,6 +750,11 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
             ...servedQuotedMessage(message.replyTo, {
               includeTranslations,
               languages: hasLanguageFilter ? languageFilter : undefined,
+              // #6164 — l'instantané est gravé sur le message QUI CITE, pas sur
+              // le message cité : c'est `message.metadata`, jamais
+              // `message.replyTo.metadata` (qui porterait la pièce que le
+              // message CITÉ visait lui-même, un cran plus haut dans le fil).
+              attachmentReplyTo: attachmentReplyToFromMetadata(message.metadata),
             }),
             sender: replySender ? {
               ...replySender,
@@ -955,3 +977,4 @@ export async function enrichPostReplyMessagesForList(
         }
       }
 }
+

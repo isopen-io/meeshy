@@ -26,6 +26,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     private static let signupView = "Meeshy/Features/Auth/Signup/SignupView.swift"
     private static let signupViewModel = "Meeshy/Features/Auth/Signup/SignupViewModel.swift"
     private static let welcomeView = "Meeshy/Features/Main/Views/WelcomeView.swift"
+    private static let infoHint = "Meeshy/Features/Auth/AuthInfoHint.swift"
 
     private func source(_ relativePath: String) throws -> String {
         try String(contentsOf: Self.appRoot.appendingPathComponent(relativePath), encoding: .utf8)
@@ -102,20 +103,24 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Le COMPTE, pas la seule présence : c'est ce qui rend « j'ai supprimé
     /// l'haptique au lieu de la faire converger » rouge.
     ///
-    /// `SignupView` en porte dix — fermer, « Se connecter » sous l'e-mail,
+    /// `SignupView` en porte neuf — fermer, « Se connecter » sous l'e-mail,
     /// ouvrir le sélecteur de pays, ouvrir la feuille de langue, le pied
-    /// « Déjà un compte ? », **déplier un (i)** (#6441), **ouvrir le bloc
-    /// d'identité** et **retenir un pseudo de rechange** (#6479), puis le
-    /// succès et l'échec de l'envoi. Les deux derniers sont d'INTENSITÉS distinctes : un
-    /// compte créé et un refus ne se sentent pas pareil, et c'est la seule
-    /// information tactile de l'écran.
+    /// « Déjà un compte ? », **ouvrir le bloc d'identité** et **retenir un
+    /// pseudo de rechange** (#6479), puis le succès et l'échec de l'envoi. Les
+    /// deux derniers sont d'INTENSITÉS distinctes : un compte créé et un refus
+    /// ne se sentent pas pareil, et c'est la seule information tactile de l'écran.
     ///
-    /// Le (i) en a une parce que ses deux voisins d'usage en ont une : ouvrir
-    /// le sélecteur de pays et ouvrir la feuille de langue. Un contrôle qui
-    /// RÉVÈLE quelque chose se sent, sur cet écran, depuis #5555.
-    func test_signupView_keepsItsTenHaptics() throws {
+    /// La dixième — **déplier un (i)** (#6441) — vit dans `AuthInfoHint` depuis
+    /// que la connexion par e-mail monte le même (i) (#6626). Elle se compte
+    /// là-bas : un (i) qui la perdrait la perdrait sur les DEUX écrans. Il en a
+    /// une parce que ses deux voisins d'usage en ont une : ouvrir le sélecteur
+    /// de pays et ouvrir la feuille de langue. Un contrôle qui RÉVÈLE quelque
+    /// chose se sent, sur cet écran, depuis #5555.
+    func test_signupView_keepsItsNineHaptics_andTheInfoHintCarriesTheTenth() throws {
         let body = try code(Self.signupView)
-        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 10)
+        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 9)
+        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: try code(Self.infoHint)), 1,
+                       "déplier un (i) se sent — et UNE fois, dans le composant partagé")
         XCTAssertTrue(body.contains("HapticFeedback.success()"),
                       "la création du compte se SENT — c'est le seul retour immédiat avant la bascule")
         XCTAssertTrue(body.contains("HapticFeedback.error()"),
@@ -287,14 +292,15 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// la moindre hauteur, ce qui est exactement la raison de l'avoir mis là.
     func test_fieldHints_areReachableWithoutUnfolding() throws {
         let body = try code(Self.signupView)
+        let hint = try code(Self.infoHint)
 
         XCTAssertTrue(body.contains("accessibilityHint(hint?.text ?? \"\")"),
                       "le CHAMP porte le détail : VoiceOver l'énonce sans que le bouton soit trouvé")
-        XCTAssertTrue(body.contains("accessibilityValue(hint.text)"),
+        XCTAssertTrue(hint.contains("accessibilityValue(hint.text)"),
                       "et le BOUTON le porte aussi — « en savoir plus » seul n'apprend rien")
-        XCTAssertTrue(body.contains("meeshyTapTarget()"),
+        XCTAssertTrue(hint.contains("meeshyTapTarget()"),
                       "le (i) est un glyphe : sans cadre déclaré, sa cible EST son dessin")
-        XCTAssertTrue(body.contains("accessibilityLabel(hint.buttonLabel)"),
+        XCTAssertTrue(hint.contains("accessibilityLabel(hint.buttonLabel)"),
                       "trois (i) sur un écran ne se distinguent que par ce qu'ils ANNONCENT")
     }
 
@@ -315,7 +321,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
                       "le mot de passe DOIT se dire facultatif — il l'est")
         XCTAssertTrue(password.contains("magicLinkNote"),
                       "et la conséquence de son absence DOIT être dite : la porte devient le lien magique")
-        XCTAssertTrue(password.contains("FieldHint("),
+        XCTAssertTrue(password.contains("AuthInfoHint("),
                       "la conséquence passe par le (i) (#6441) — c'est ce qui la garde REJOIGNABLE une fois repliée")
     }
 
@@ -364,13 +370,32 @@ final class SignupViewAccessibilityTests: XCTestCase {
         XCTAssertTrue(bloc.contains("isEditingIdentity || refus != nil"))
     }
 
-    /// L'AVERTISSEMENT DE VALIDATION est en clair, jamais derrière un (i) : ce
-    /// n'est pas un détail qu'on consulte, c'est une condition du compte.
-    func test_emailField_warnsThatTheAccountMustBeVerified() throws {
-        let email = try fieldBody("emailField", in: try code(Self.signupView))
-        XCTAssertTrue(email.contains("auth.signup.email.verificationNotice"))
-        XCTAssertFalse(email.contains("FieldHint("),
-                       "l'avertissement ne se replie pas derrière un (i)")
+    /// L'AVERTISSEMENT DE VALIDATION passe derrière un (i) (#6626).
+    ///
+    /// #6479 le posait en clair — « une condition du compte, pas un détail
+    /// qu'on consulte ». La directive porteur du 2026-09-15 tranche l'inverse :
+    /// « moins de détails sur la page d'enregistrement, des (i) pour informer
+    /// sur le mode de fonctionnement ». La condition n'est pas perdue pour
+    /// autant : le champ la porte en `accessibilityHint`, et le (i) la déplie.
+    ///
+    /// Ce qui ne doit pas se perdre, c'est son TEXTE — d'où la seconde moitié :
+    /// le (i) du champ e-mail déplie toujours la note de validation.
+    func test_emailField_foldsTheVerificationNoticeBehindAnInfoHint() throws {
+        let body = try code(Self.signupView)
+        let email = try fieldBody("emailField", in: body)
+        XCTAssertTrue(email.contains("hint: emailHint"),
+                      "le champ e-mail monte son (i)")
+        XCTAssertFalse(email.contains("auth.signup.email.verificationNotice"),
+                       "la note ne se pose plus en clair sous le champ")
+
+        let start = try XCTUnwrap(body.range(of: "private var emailHint: AuthInfoHint {"),
+                                  "le (i) du champ e-mail est introuvable")
+        let rest = body[start.upperBound...]
+        let hint = rest[..<(rest.range(of: "\n    private var ")?.lowerBound ?? rest.endIndex)]
+        XCTAssertTrue(hint.contains("auth.signup.email.verificationNotice"),
+                      "le (i) déplie la note de validation — son texte ne change pas")
+        XCTAssertTrue(hint.contains("auth.signup.email.hintLabel"),
+                      "et VoiceOver l'annonce « Pourquoi un lien »")
     }
 
     /// Les `defaultValue:` du fichier — la copie que l'utilisateur lit.

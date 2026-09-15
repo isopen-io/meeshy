@@ -11,12 +11,19 @@ import {
   type MagicLinkDeadline,
   type MagicLinkRequestOutcome,
 } from '@/lib/view/magic-link';
+import {
+  HOW_IT_WORKS_LABEL,
+  HOW_IT_WORKS_TEXT,
+  NOTHING_RECEIVED_LABEL,
+  NOTHING_RECEIVED_TEXT,
+} from '@/lib/view/auth-copy';
 import { useCountdown } from '@/lib/view/use-countdown';
 
 import { AuthSubmitButton } from './auth-chrome';
 import { Field } from './field';
 import { Glyph, GlyphSvg } from './glyph';
 import { AUTH_GLYPHS } from './glyphs-auth';
+import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from './info-hint';
 
 /**
  * LE PANNEAU DU LIEN MAGIQUE — la saisie, l'envoi, l'attente et le renvoi,
@@ -53,17 +60,33 @@ const MAGIC_LINK_SUBMIT_GRADIENT = 'linear-gradient(90deg, var(--ios-indigo-600)
 const OUTCOME_FIELD_ERROR = 'Adresse e-mail invalide';
 
 /**
+ * UNE LIGNE VISIBLE PAR ÉTAPE, LE « COMMENT » DERRIÈRE UN (i) (#6626).
+ *
+ * Directive porteur 2026-09-15 : « L'utilisateur a besoin de savoir qu'il va se
+ * connecter par email et non de savoir que c'est magic-mail… Garder la baguette
+ * magic mais être clair et simple ». Le mot « magique » ne paraît donc nulle
+ * part à l'écran — la BAGUETTE reste l'icône de la connexion par e-mail — et le
+ * vocabulaire est celui que les trois clients partagent.
+ */
+const HOW_IT_WORKS: InfoHint = { label: HOW_IT_WORKS_LABEL, text: HOW_IT_WORKS_TEXT, glyph: AUTH_GLYPHS.info };
+
+/**
  * CE QUE LA PASSERELLE NE DIT PAS, ET QUE L'ÉCRAN DOIT DIRE (#6404).
  *
  * `POST /auth/magic-link/request` rend 200 même pour une adresse inconnue
  * (`MagicLinkService.ts:133-137`, anti-énumération) : l'écran ne peut donc ni
  * promettre que l'e-mail part, ni démentir. Ce qu'il PEUT faire, c'est nommer
- * la première cause d'un e-mail « jamais reçu » — le dossier indésirables — et
- * dire au bout de combien de temps s'inquiéter. La directive porteur le
- * demande mot pour mot : « préciser dans l'interface de regarder les spams si
- * aucun e-mail ne parvient dans la minute ».
+ * la première cause d'un e-mail « jamais reçu » — le dossier indésirables.
+ * #6404 l'écrivait en clair ; #6626 le replie derrière un (i) dont le libellé
+ * est la question qu'on se pose à cet instant, et qui reste LU à côté du
+ * glyphe : posé seul sous le compte à rebours, un (i) muet ne dirait pas de
+ * quoi il parle.
  */
-const SPAM_HINT = 'Rien reçu après une minute ? Regardez vos indésirables (spam) — le message peut y être tombé.';
+/** Le TEXTE et le LIBELLÉ viennent de `lib/view/auth-copy.ts` : `/forgot-password`
+ * attend le même e-mail et pose la même question (#6583). Deux phrases pour une
+ * même attente auraient dérivé au premier correctif — et elles avaient déjà
+ * commencé, l'une disant « après une minute » que l'autre venait d'abandonner. */
+const NOTHING_RECEIVED: InfoHint = { label: NOTHING_RECEIVED_LABEL, text: NOTHING_RECEIVED_TEXT, glyph: AUTH_GLYPHS.info };
 
 function bannerFor(outcome: MagicLinkRequestOutcome | null): string | null {
   if (outcome === null) return null;
@@ -95,6 +118,8 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
   const [outcome, setOutcome] = useState<MagicLinkRequestOutcome | null>(null);
   const [deadline, setDeadline] = useState<MagicLinkDeadline | null>(null);
   const [focused, setFocused] = useState(false);
+  const howItWorks = useInfoHint();
+  const nothingReceived = useInfoHint();
 
   const remaining = useCountdown(deadline, deps.clock, deps.now);
   const locale = typeof document === 'object' ? document.documentElement.lang || 'fr' : 'fr';
@@ -136,10 +161,10 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
         </div>
 
         <h2 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-          Lien envoyé !
+          E-mail envoyé
         </h2>
         <p style={{ color: 'var(--color-ios-ink-2)' }}>
-          Un lien de connexion a été envoyé à <strong style={{ color: 'var(--ios-indigo-400)' }}>{email}</strong>
+          Ouvrez le lien reçu à <strong style={{ color: 'var(--ios-indigo-400)' }}>{email}</strong>
         </p>
 
         {expired ? (
@@ -147,31 +172,28 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
             Lien expiré, renvoyez-en un nouveau
           </p>
         ) : (
-          <>
-            <p style={{ color: 'var(--color-ios-ink-2)' }}>Ouvrez votre email et cliquez sur le lien</p>
-            <p
-              role="timer"
-              aria-live="off"
-              aria-label={`Le lien expire dans ${spokenCountdown(remaining, locale)}`}
-              className="font-bold tabular-nums text-screen"
-              style={{ color: 'var(--ios-indigo-600)' }}
-            >
-              {formatCountdown(remaining, locale)}
-            </p>
-          </>
+          <p
+            role="timer"
+            aria-live="off"
+            aria-label={`Le lien expire dans ${spokenCountdown(remaining, locale)}`}
+            className="font-bold tabular-nums text-screen"
+            style={{ color: 'var(--ios-indigo-600)' }}
+          >
+            {formatCountdown(remaining, locale)}
+          </p>
         )}
 
-        {/* LES INDÉSIRABLES — voir `SPAM_HINT`. Toujours présent pendant
-            l'attente, jamais derrière un (i) : c'est le seul endroit où
-            l'utilisateur attend quelque chose qui peut ne jamais paraître. */}
-        <p data-magic-link-spam-hint className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-          {SPAM_HINT}
-        </p>
+        {/* LES INDÉSIRABLES — voir `NOTHING_RECEIVED`. Présent pendant toute
+            l'attente, replié derrière sa question (#6626). */}
+        <div className="grid justify-items-center">
+          <InfoHintButton hint={NOTHING_RECEIVED} state={nothingReceived} showsLabel />
+          <InfoHintText hint={NOTHING_RECEIVED} state={nothingReceived} />
+        </div>
 
         <button
           type="button"
           disabled={(!expired && remaining > 0) || submitting || !online}
-          aria-label="Renvoyer le lien magique"
+          aria-label="Renvoyer le lien"
           onClick={send}
           className="inline-flex items-center gap-2 font-semibold text-title"
           style={{ minHeight: 44, color: expired ? 'var(--ios-indigo-400)' : 'var(--color-ios-ink-2)' }}
@@ -205,12 +227,22 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
         <GlyphSvg glyph={AUTH_GLYPHS.magicWand} size={56} />
       </span>
 
-      <h2 className="text-center text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-        Entrez votre adresse email
-      </h2>
-      <p className="text-center text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
-        Nous vous enverrons un lien de connexion sécurisé
-      </p>
+      {/* LE (i) SUIT LE DERNIER MOT DU TITRE. Titre et bouton dans une rangée
+          flexible : à 390 px, « Votre adresse e-mail » passe sur deux lignes, sa
+          boîte prend TOUTE la largeur, et le (i) partait flotter au bord de
+          l'écran, loin du texte qu'il explique (mesuré en capture). En ligne,
+          le bouton se range derrière « e-mail », quelle que soit la césure.
+          « e-mail » ne se coupe pas : le navigateur cassait au trait d'union
+          (« e- » / « mail »), mesuré à la capture suivante. */}
+      <div className="grid gap-1 text-center">
+        <div>
+          <h2 className="inline text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+            Votre adresse <span className="whitespace-nowrap">e-mail</span>
+          </h2>
+          <InfoHintButton hint={HOW_IT_WORKS} state={howItWorks} style={{ display: 'inline-grid', verticalAlign: 'middle' }} />
+        </div>
+        <InfoHintText hint={HOW_IT_WORKS} state={howItWorks} />
+      </div>
 
       <Field id="magic-link-email" glyph={AUTH_GLYPHS.envelope} tint="var(--ios-indigo-400)" focused={focused} error={fieldError}>
         {({ id, describedBy }) => (
@@ -244,7 +276,7 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
       <AuthSubmitButton
         disabled={!isEmailValid(email) || !online}
         isSubmitting={submitting}
-        label="Envoyer le lien magique"
+        label="Recevoir le lien"
         busyLabel="Envoi…"
         background={MAGIC_LINK_SUBMIT_GRADIENT}
       />

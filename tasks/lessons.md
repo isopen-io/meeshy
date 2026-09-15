@@ -32393,3 +32393,97 @@ première localement, jamais en espérant qu'elle marche le jour où elle servir
 
 Voisine de [[reference_a_red_on_both_sides_of_the_diff_also_measures_the_machine]]
 et du piège inverse : ici, VERT d'un seul côté mesurait la machine.
+
+---
+
+## Leçon 611 — Un témoin qui lit le TEXTE SOURCE verdit sur un correctif ANNULÉ
+
+**Mesuré le 2026-09-15 sur trois lots indépendants** de la chaîne de publication (#6577, #6579, #6164).
+Trois relecteurs adverses, trois fois le même résultat : le correctif neutralisé **en conservant les chaînes
+que les greps cherchent**, et les témoins restent verts.
+
+| lot | mutation | verdict |
+|---|---|---|
+| #6577 | les 8 affectations de `retractMedia` rendues no-op (`documentLocalMedia = mediaPorters.localMedia`) | **241/241 verts** |
+| #6579 | `.opacity(0)` sur la bande ; puis `onDisplayedContextChange: { _ in }` | **13/13** puis **33/33 verts** |
+| #6164 | garde fail-closed annulée par `&& false` ; protection perdue par `servedQuotedAttachments({}, …)` | **27/27 verts** |
+
+Les trois correctifs étaient **plausiblement justes**. Aucun n'était **prouvé**.
+
+### La cause structurelle, qui rendait le défaut inévitable sur iOS
+
+Sur #6577, la raison n'était pas « le testeur a été paresseux » : **un `@State` a un setter `nonmutating` qui
+n'écrit nulle part tant que SwiftUI n'a pas installé la vue.** Aucun témoin ne *pouvait* distinguer
+« appliqué » de « calculé puis jeté » — la struct pure était testable, son application ne l'était pas.
+Le remède a été de sortir les huit porteurs du `@State` vers un store observable, puis de tester l'aller-retour
+porteurs → charge.
+
+> **Quand un correctif passe par un `@State`, poser la question AVANT d'écrire son témoin :
+> qu'est-ce qui, dans ce test, installe la vue ?** Sans réponse, le témoin mesurera le calcul, jamais l'écriture.
+
+### Le geste qui l'attrape
+
+**Neutraliser sa propre règle en conservant les chaînes que les greps cherchent, puis rejouer.**
+Si rien ne rougit, le témoin ne vaut rien. Un source-guard garde un *câblage* — il empêche un futur lot de
+re-poser un motif interdit — mais il ne peut jamais être la seule preuve qu'une feature marche.
+
+### Trois pièges de la neutralisation elle-même, payés dans la même vague
+
+1. `git checkout -- <fichier>` restaure **HEAD**, pas l'état de travail non commité : il a annulé un correctif
+   voisin pas encore commité. **Copier en `.bak` hors du dépôt** avant de muter, restaurer depuis la copie.
+2. Une assertion **non scopée** (`src.contains("originalLanguage: language,")` sur le fichier entier) est
+   satisfaite par n'importe quelle occurrence — y compris par la chaîne **citée dans un commentaire**.
+   Une fenêtre `body(from:to:)` ne distingue pas le code du commentaire.
+3. Un oracle peut rougir sur une mutation **et** sur un arbre intact. Le harnais de #6579 gardait
+   `window.safeAreaInsets.top` (sa fenêtre, toujours 62) au lieu de `DeviceLayout.safeAreaTop`, la seule
+   grandeur que la production lise : il accusait la bande quand la scène n'était pas `.foregroundActive`.
+   **C'est la présente leçon retournée contre son propre outil** — un témoin qui ne mesure pas la quantité
+   qui gouverne ce qu'il observe ne mesure rien. Et le défaut d'environnement rendait *le même verdict*
+   que la mutation `.opacity(0)` : 6 témoins, 27 assertions. D'où la nécessité de diagnostiquer l'environnement
+   à part, avec un message qui l'accuse **lui** et jamais la feature.
+
+Voir aussi la leçon sur le disque saturé : un rouge qui ne parle pas du code parle de la **machine**.
+
+## Leçon 612 — Un dépliage progressif n'est pas une vertu : ce qui se déplie doit être ce qu'on ne SAIT PAS ENCORE, jamais ce qu'on va sûrement donner (2026-09-14)
+
+**Ce qui s'est passé.** La directive du 2026-09-13 disait « les champs
+apparaissent uniquement au fur et à mesure » ; #6405 a livré TROIS barreaux —
+l'adresse, puis le numéro, puis le reste — avec une jauge « Étape N sur 3 ».
+Vingt-quatre heures plus tard, le porteur en retire deux tiers : « il faut
+mettre dès le départ le numéro et l'e-mail à montrer […] pas d'étape 1 sur N à
+afficher : tout se fait intuitivement dans la page de création de compte ».
+
+**Pourquoi la première lecture était fausse.** La règle avait été appliquée à
+la lettre — *un champ à la fois* — au lieu de sa raison : *ne pas mettre devant
+quelqu'un un formulaire dont il ne voit pas le bout*. Or l'adresse et le numéro
+forment UNE question (« comment vous joint-on ? »), et celui qui s'inscrit sait
+déjà ce qu'il va y répondre. Les replier n'a rien épargné : ça a transformé une
+donnée qu'on allait donner en une ÉTAPE à franchir — avec, en prime, un bouton
+« Je continue sans numéro » pour sortir d'une porte qu'on venait soi-même de
+fermer.
+
+**Le signe qu'on est dans ce piège : la compensation.** La jauge de trois
+segments et « Étape N sur 3 » avaient été ajoutées, en toute conscience, pour
+« rembourser » l'impression de formulaire sans fin que le dépliage créait. Un
+dispositif dont il faut compenser l'effet est un dispositif qui coûte plus
+qu'il ne rapporte. **Quand un lot ajoute un indicateur pour rassurer sur ce
+qu'un autre choix du même lot vient de rendre inquiétant, c'est l'autre choix
+qu'il faut relire** — pas l'indicateur qu'il faut peaufiner.
+
+**La règle qui reste.** Ce qui se déplie doit être ce que l'écran APPREND :
+l'identité dérivée n'existe pas avant l'adresse, donc elle paraît après elle.
+Ce qui est déjà connu de l'utilisateur se montre. Et la MONOTONIE, elle,
+survit intacte aux deux découpages : un champ paru ne se referme jamais, sans
+quoi corriger une faute de frappe ferait s'effondrer le formulaire sous les
+doigts.
+
+**Corollaire sur les étiquettes.** « (facultatif) » a disparu du mot de passe
+par la même directive, et pour la même raison : *le fait que le bouton créer
+mon compte fonctionne est suffisant pour le dire*. Une mention qui DÉCRIT ce
+qu'un contrôle MONTRE déjà est du bruit ; ce qu'elle doit dire à la place, si
+elle doit dire quelque chose, c'est la CONSÉQUENCE que l'utilisateur ne peut
+pas deviner — ici, qu'un compte sans mot de passe reste à configurer.
+
+Voisine de la leçon 603 (`onInput` sous happy-dom), payée dans le même écran, et
+du § Prisme « qui AFFICHE ce qu'il décide ? » : une loi de dépliage juste mais
+appliquée au mauvais découpage atteint bien des pixels — les mauvais.
