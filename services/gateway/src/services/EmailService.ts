@@ -29,6 +29,7 @@ import {
   accountIdentityBlockText,
   type IdentiteDuCompte,
 } from './email/account-identity-block';
+import { composePasswordResetEmail, type PasswordResetEmailData } from './email/password-reset-email';
 
 // Logger dédié pour EmailService
 const logger = enhancedLogger.child({ module: 'EmailService' });
@@ -67,13 +68,7 @@ export interface EmailResult {
   messageId?: string;
 }
 
-export interface PasswordResetEmailData {
-  to: string;
-  name: string;
-  resetLink: string;
-  expiryMinutes: number;
-  language?: string;
-}
+export type { PasswordEmailIntent, PasswordResetEmailData } from './email/password-reset-email';
 
 export interface EmailVerificationData {
   to: string;
@@ -493,13 +488,13 @@ export class EmailService {
   }
 
   async sendPasswordResetEmail(data: PasswordResetEmailData): Promise<EmailResult> {
-    const t = this.getTranslations(data.language);
-    const expiry = t.passwordReset.expiry.replace('{minutes}', data.expiryMinutes.toString());
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>${this.getBaseStyles()}</style></head><body><div class="container"><div class="header"><h1>🔐 ${t.passwordReset.title}</h1></div><div class="content"><p>${t.common.greeting} <strong>${data.name}</strong>,</p><p>${t.passwordReset.intro}</p><div style="text-align:center"><a href="${data.resetLink}" class="button">${t.passwordReset.buttonText}</a></div><div class="warning"><strong>⚠️</strong><ul style="margin:10px 0;padding-left:20px"><li>${expiry}</li><li>${t.passwordReset.ignoreNote}</li></ul></div><p>${t.common.footer}</p></div><div class="footer">${this.getFooterContentHtml(data.language)}</div></div></body></html>`;
-    const text = `${t.passwordReset.title}\n\n${t.common.greeting} ${data.name},\n\n${t.passwordReset.intro}\n\n${data.resetLink}\n\n${expiry}\n\n${t.passwordReset.ignoreNote}\n\n${t.common.footer}\n\n${this.getFooterContentText(data.language)}`;
-
-    return this.sendEmail({ to: data.to, subject: t.passwordReset.subject, html, text, trackingType: 'password_reset', trackingLang: data.language });
+    const { subject, html, text } = composePasswordResetEmail(data, {
+      translations: this.getTranslations(data.language),
+      baseStyles: this.getBaseStyles(),
+      footerHtml: this.getFooterContentHtml(data.language),
+      footerText: this.getFooterContentText(data.language),
+    });
+    return this.sendEmail({ to: data.to, subject, html, text, trackingType: 'password_reset', trackingLang: data.language });
   }
 
   async sendPasswordChangedEmail(data: PasswordChangedEmailData): Promise<EmailResult> {
