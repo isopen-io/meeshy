@@ -45,6 +45,16 @@ enum ReelWatchAttachmentPolicy {
     }
 }
 
+// MARK: - Reel Scene Routing (pure)
+
+enum ReelSceneRouting {
+    static func sceneDocument(for reel: FeedPost) -> CanvasV3? { nil }
+
+    static func borrowedSoundTrack(for reel: FeedPost) -> StoryAudioPlayerObject? { nil }
+
+    static func attachesSharedVideoWatch(for reel: FeedPost, loadedAttachmentId: String?) -> Bool { false }
+}
+
 // MARK: - Reel Media Layout
 
 /// Pure classification of a reel's media into the surface that should render it.

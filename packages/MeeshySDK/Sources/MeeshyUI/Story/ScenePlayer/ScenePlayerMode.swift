@@ -1,10 +1,12 @@
 import Foundation
 
-/// Les trois surfaces de lecture d'un document `CanvasV3`.
+/// Les quatre surfaces de lecture d'un document `CanvasV3`.
 public nonisolated enum ScenePlayerMode: Equatable, Sendable {
     case reader
     case preview
     case card
+    /// Le réel plein écran (#6745) : il rejoue sa scène en boucle, AVEC le son.
+    case reel
 }
 
 /// La règle de chaque mode — la seule chose que le player décide de lui-même.
