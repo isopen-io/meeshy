@@ -15,7 +15,12 @@ import MeeshyUI
 /// noir en thème clair. Les deux tokens ci-dessous sont donc la seule source de
 /// couleur de texte et d'icône de la barre.
 enum MiniAudioPlayerBarStyle {
-    static var background: Color { MeeshyColors.indigo600 }
+    /// Lu depuis `TopChromeTint` (#6579) : la bande du haut et cette barre se
+    /// TOUCHENT, et un joint continu se prouve par un producteur unique, pas par
+    /// deux constantes qu'on jure égales. `TopChromeTint.audio.bandColor` reste
+    /// `MeeshyColors.indigo600`, ce que `test_barStyle_paintsAnOpaqueIndigo`
+    /// continue de tenir.
+    static var background: Color { TopChromeTint.audio.bandColor }
     static var primaryForeground: Color { .white }
     static var secondaryForeground: Color { Color.white.opacity(0.72) }
 }
@@ -265,7 +270,15 @@ struct MiniAudioPlayerBar: View {
         // `content(for:)`, jamais sur le composant entier au point de montage,
         // pour ne créer aucune empreinte quand `displayedContext == nil`
         // (cf. doc du VStack dans CallPresentationLayer.swift).
-        .background(MiniAudioPlayerBarStyle.background)
+        // `ignoresSafeAreaEdges: []` — EXPLICITE, parce que le défaut de
+        // `.background(_:)` est `.all` (#6579). Une barre adjacente à l'encart
+        // système y étend donc son fond SANS que rien ne le dise, ce qui redonne
+        // à CHAQUE barre une seconde propriété de la bande — exactement le
+        // défaut que ce lot ferme. Mesuré au pixel : avec le défaut implicite,
+        // la bande neutralisée à `.opacity(0)` laissait l'encart peint quand
+        // même, et le témoin de rendu restait vert. La barre ne peint QUE sa
+        // propre hauteur ; l'encart appartient à `TopChromeBand`, et à lui seul.
+        .background(MiniAudioPlayerBarStyle.background, ignoresSafeAreaEdges: [])
         .contentShape(Rectangle())
         .onTapGesture { openConversation(for: context) }
     }

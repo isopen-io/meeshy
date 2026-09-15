@@ -19,6 +19,14 @@ import MeeshyUI
 /// Un témoin qui interrogerait la COULEUR de la barre serait donc vert
 /// aujourd'hui, pour un motif étranger au défaut. Celui-ci interroge la
 /// PROPRIÉTÉ : un site unique peint la bande, aucune barre ne la peint plus.
+///
+/// **CE FICHIER NE PROUVE PAS QUE LA BANDE SE PEINT — il empêche seulement un
+/// lot futur de reposer un motif interdit.** Le contrôleur du lot l'a établi en
+/// mettant la bande à `.opacity(0)` : elle ne rendait plus un pixel, et treize
+/// témoins d'ici restaient VERTS, les chaînes cherchées étant toujours écrites.
+/// La preuve que la feature MARCHE est ailleurs, et elle lit les pixels :
+/// `TopChromeBandRenderTests`. Les deux fichiers répondent à deux questions
+/// distinctes, et aucun ne remplace l'autre.
 @MainActor
 final class TopChromeBandGuardTests: XCTestCase {
 
@@ -63,19 +71,30 @@ final class TopChromeBandGuardTests: XCTestCase {
 
     /// LE témoin de ce lot. Rouge aujourd'hui parce que la pilule d'appel peint
     /// sa propre bande et que rien ne la peint pour le mini-lecteur.
+    /// **Deux formes, deux sens opposés — ne jamais les confondre.**
+    /// `.ignoresSafeArea(…)` RÉCLAME l'encart ; `ignoresSafeAreaEdges: []`
+    /// y RENONCE explicitement. La seconde est requise sur les deux barres,
+    /// parce que le défaut de `.background(_:)` est `.all` : sans elle, chaque
+    /// barre reprend la propriété de la bande en silence (#6579, mesuré au pixel
+    /// — `TopChromeBandRenderTests` restait vert avec la bande neutralisée).
     func test_laBandeAUnSeulProprietaire() throws {
-        XCTAssertEqual(
-            count("ignoresSafeArea", in: try code(pillPath)), 0,
-            "`FloatingCallPillView` ne peut plus posséder la bande status-bar : " +
-            "une barre qui peint son propre débord rend la peinture PROPRIÉTÉ " +
-            "de chaque barre, donc présente chez l'une et absente chez l'autre. " +
-            "C'est exactement le défaut que le porteur photographie."
-        )
-        XCTAssertEqual(
-            count("ignoresSafeArea", in: try code(miniBarPath)), 0,
-            "`MiniAudioPlayerBar` ne doit pas non plus la peindre : la symétrie " +
-            "par duplication laisserait DEUX propriétaires, donc deux dérives."
-        )
+        for (chemin, nom) in [(pillPath, "FloatingCallPillView"), (miniBarPath, "MiniAudioPlayerBar")] {
+            let source = try code(chemin)
+            XCTAssertEqual(
+                count("ignoresSafeArea(", in: source), 0,
+                "`\(nom)` ne peut pas posséder la bande status-bar : une barre qui " +
+                "peint son propre débord rend la peinture PROPRIÉTÉ de chaque barre, " +
+                "donc présente chez l'une et absente chez l'autre. C'est exactement " +
+                "le défaut que le porteur photographie."
+            )
+            XCTAssertEqual(
+                count("ignoresSafeAreaEdges: []", in: source), 1,
+                "…et `\(nom)` doit y RENONCER explicitement sur son fond : le défaut " +
+                "de `.background(_:)` est `.all`, donc une barre adjacente à l'encart " +
+                "y étend sa couleur sans que rien ne le déclare. Le laisser implicite " +
+                "rouvre le défaut par omission, et sans qu'aucune ligne ne change."
+            )
+        }
 
         let tint = try code(tintPath)
         XCTAssertEqual(
@@ -172,43 +191,19 @@ final class TopChromeBandGuardTests: XCTestCase {
             displayMode: .pip, callState: .idle, isSystemPiPActive: false))
     }
 
-    /// …et la bande d'écoute suit ce que la BARRE AFFICHE, pas ce que le
-    /// coordinateur joue : le mini-lecteur se masque dans la conversation qui
-    /// joue. Sans cette remontée, un ruban indigo surplomberait cette
-    /// conversation, sans barre en dessous.
-    func test_leMiniLecteurRemonteCeQuIlAFFICHE_pasCeQueLeCoordinateurJoue() throws {
-        let bar = try code(miniBarPath)
-        XCTAssertTrue(
-            bar.contains("adaptiveOnChange(of: displayedContext)"),
-            "La remontée doit observer `displayedContext` (masquage + fenêtre " +
-            "de grâce comprises), jamais `coordinator.activeContext`."
-        )
-        XCTAssertTrue(
-            try code(layerPath).contains("onDisplayedContextChange:"),
-            "…et l'hôte doit la brancher plutôt que d'observer lui-même un " +
-            "coordinateur qui publie `progress` à ~20 Hz."
-        )
-    }
-
-    /// Aucune couture entre la bande et la barre : les 6 pt de respiration du
-    /// mini-lecteur étaient posés APRÈS son `.background`, donc NON teintés —
-    /// une ligne claire de 6 pt exactement là où la bande rejoint la barre.
-    func test_lesSixPointsDeRespirationSontPeintsParLeBandeau() throws {
-        let bar = try code(miniBarPath)
-        let padding = try XCTUnwrap(
-            bar.range(of: ".padding(.top, 6)"),
-            "Le mini-lecteur garde sa respiration de 6 pt."
-        )
-        let background = try XCTUnwrap(
-            bar.range(of: ".background(MiniAudioPlayerBarStyle.background)"),
-            "…et son aplat de marque."
-        )
-        XCTAssertTrue(
-            padding.lowerBound < background.lowerBound,
-            "La respiration doit être ABSORBÉE par l'aplat : posée après lui, " +
-            "elle laisse 6 pt non teintés entre la bande du haut et la barre."
-        )
-    }
+    // Les deux témoins de SOURCE qui vivaient ici — « la barre observe bien
+    // `displayedContext` », « les 6 pt de respiration sont posés AVANT le
+    // `.background` » — ont été RETIRÉS le 2026-09-15 (#6579), et rien n'a été
+    // perdu : ils lisaient des chaînes que la mutation du contrôleur laissait
+    // intactes. Ce qu'ils visaient se mesure maintenant, dans
+    // `TopChromeBandRenderTests` :
+    //   • la remontée, par l'observation de ce que la barre REMET à son hôte
+    //     (`test_laBarreRemonteSonContexte_…`, `…_dansLaConversationQuiJoue`,
+    //     `…_pendantLaFenetreDeGrace`) ;
+    //   • la couture des 6 pt, par la lecture des pixels de part et d'autre du
+    //     joint avec une barre RÉELLEMENT rendue
+    //     (`test_laCoutureEstContinue_avecLaBarreDEcouteREELLEMENTRendue` — ce
+    //     pixel-là est précisément dans la respiration).
 
     /// L'extraction est la CONDITION du correctif, pas un à-côté : `RootView
     /// .swift` est hors budget (plafond dur 1200), donc y ajouter une ligne est
@@ -282,37 +277,25 @@ final class TopChromeBandGuardTests: XCTestCase {
         )
     }
 
-    /// La bande porte les arrêts CALIBRÉS WCAG de la bannière d'appel, pour les
-    /// deux barres. Un accent de conversation (palette de 20 couleurs mélangée)
-    /// n'a aucune suite de contraste : le livrer serait une régression d'accès.
-    func test_laBandePorteLesArretsCalibresDeLaBanniere() {
-        XCTAssertEqual(TopChromeTint.call.top, CallBannerContrast.bannerTop)
-        XCTAssertEqual(TopChromeTint.call.bottom, CallBannerContrast.bannerBottom)
-        XCTAssertEqual(
-            TopChromeTint.audio.top, MiniAudioPlayerBarStyle.background,
-            "La bande d'écoute doit être EXACTEMENT l'aplat du mini-lecteur : " +
-            "toute autre valeur dessine une couture au-dessus de la barre."
-        )
-        XCTAssertEqual(TopChromeTint.audio.top, CallBannerContrast.bannerTop)
-        XCTAssertEqual(TopChromeTint.audio.bottom, CallBannerContrast.bannerBottom)
-    }
-
-    /// La couleur de la BANDE est l'arrêt HAUT : c'est lui qui touche la barre
-    /// système, et c'est lui qui a été calibré contre le blanc (6.3:1).
-    func test_laCouleurDeBandeEstLArretHaut_etLEncreTientLeContrasteWCAG() {
-        XCTAssertEqual(TopChromeTint.call.bandColor, TopChromeTint.call.top)
+    /// L'unique couleur du chrome haut tient le contraste WCAG du texte courant
+    /// contre le blanc — le seul ratio qui reste une PROPRIÉTÉ une fois la bande
+    /// et les DEUX barres ramenées à un producteur unique.
+    ///
+    /// Les deux témoins qui vivaient ici comparaient `TopChromeTint.call.top` à
+    /// `CallBannerContrast.bannerTop` et `TopChromeTint.audio.top` à
+    /// `MiniAudioPlayerBarStyle.background` : quatre constantes écrites côte à
+    /// côte dans le même lot, donc une égalité qui ne pouvait pas tomber. Elles
+    /// n'ont plus d'objet — `MiniAudioPlayerBarStyle.background` LIT
+    /// `TopChromeTint.audio.bandColor` (#6579), et la continuité qu'elles
+    /// prétendaient garder se MESURE désormais en pixels de part et d'autre du
+    /// joint (`TopChromeBandRenderTests.test_laCoutureEstContinue_…`).
+    func test_laCouleurDuChromeHaut_tientLeContrasteWCAGContreSonEncre() {
         XCTAssertGreaterThanOrEqual(
-            CallBannerContrast.contrastRatio(
-                TopChromeTint.call.foreground, TopChromeTint.call.bandColor
-            ), 4.5,
-            "L'encre de la bande doit tenir 4.5:1 (WCAG 1.4.3) contre l'aplat " +
-            "qu'elle surmonte. Elle se RÉSOUT par la luminance (`readableInk`), " +
-            "jamais posée à la main — une encre posée à l'œil passe ce seuil " +
-            "par chance, pas par construction."
-        )
-        XCTAssertEqual(
-            TopChromeTint.audio.foreground, MiniAudioPlayerBarStyle.primaryForeground,
-            "…et elle doit retomber sur le blanc que le mini-lecteur prouve déjà."
+            CallBannerContrast.contrastRatio(.white, TopChromeTint.call.bandColor), 4.5,
+            "L'encre blanche des deux barres doit tenir 4.5:1 (WCAG 1.4.3) contre " +
+            "l'aplat qu'elles portent. L'aplat retenu est l'arrêt le MOINS " +
+            "contrasté des deux que portait le dégradé — c'est donc lui, et lui " +
+            "seul, qu'il faut mesurer."
         )
     }
 }

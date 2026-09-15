@@ -284,11 +284,21 @@ final class FloatingCallPillViewTests: XCTestCase {
     // barre est présente chez l'une et absente chez l'autre : elle appartient
     // désormais à `TopChromeBand`, monté UNE fois sur le conteneur qui les
     // empile. Le détail de la bande est gardé par `TopChromeBandGuardTests`.
+    //
+    // 2026-09-15 — deux formes, deux sens OPPOSÉS : `.ignoresSafeArea(…)`
+    // RÉCLAME l'encart, `ignoresSafeAreaEdges: []` y RENONCE. La seconde est
+    // exigée parce que le défaut de `.background(_:)` est `.all` — sans elle,
+    // la bannière reprend la bande en silence, sans qu'une ligne ne change.
     func test_banner_noLongerOwnsTheStatusBarBleed_theTopChromeBandDoes() throws {
         XCTAssertFalse(
-            try pillSource().contains("ignoresSafeArea"),
+            try pillSource().contains("ignoresSafeArea("),
             "La bannière ne peint plus que sa propre hauteur — sinon la bande " +
             "a deux propriétaires, donc deux comportements."
+        )
+        XCTAssertTrue(
+            try pillSource().contains("ignoresSafeAreaEdges: []"),
+            "…et elle doit y renoncer EXPLICITEMENT : `.background(_:)` étend " +
+            "son fond dans l'encart par défaut (`.all`)."
         )
         let band = try String(
             contentsOf: URL(fileURLWithPath: #filePath)
@@ -309,9 +319,17 @@ final class FloatingCallPillViewTests: XCTestCase {
     // 2026-08-12 — retour user (second passage, remplace le fondu demandé le
     // matin même) : la bannière est PLEINEMENT indigo. Pas de voile noir
     // (l'ancien scrim 40 % la faisait lire comme une « barre noire » sur la
-    // status bar), pas de fondu transparent en bas — un aplat indigo net dont
-    // les arrêts (CallBannerContrast.bannerTop/bannerBottom) portent seuls le
-    // contraste WCAG (CallBannerContrastTests).
+    // status bar), pas de fondu transparent en bas.
+    //
+    // 2026-09-15 (#6579) — APLAT, plus un dégradé. La bannière TOUCHE la bande
+    // du haut : leur joint est un pixel, et un dégradé DIAGONAL n'offre pas UNE
+    // couleur à ce joint mais une rampe (`#4F45E4` à gauche → `#3831A5` à
+    // droite) qu'aucun aplat ne raccorde ailleurs qu'en un point. Le producteur
+    // unique de la couleur du chrome haut est `TopChromeTint` — la bande et les
+    // DEUX barres lisent la même valeur, donc la couture est continue par
+    // construction. Mesure de pixels de part et d'autre du joint :
+    // `TopChromeBandRenderTests`. Cette garde-ci empêche seulement qu'un lot
+    // futur repose un dégradé ou un voile : elle ne prouve rien à elle seule.
     func test_banner_isFullIndigo_noScrimNoFade() throws {
         let source = try pillSource()
         guard let backgroundRange = source.range(of: ".background("),
@@ -329,20 +347,20 @@ final class FloatingCallPillViewTests: XCTestCase {
         XCTAssertFalse(
             backgroundBlock.contains("Color.black.opacity"),
             "No black scrim over the banner — the status-bar strip must read " +
-            "as plain indigo, never as a dark band (user feedback 2026-08-12). " +
-            "Contrast comes from the gradient stops, calibrated in " +
-            "CallBannerContrastTests."
+            "as plain indigo, never as a dark band (user feedback 2026-08-12)."
+        )
+        XCTAssertFalse(
+            backgroundBlock.contains("LinearGradient"),
+            "Plus de dégradé sous la bannière (#6579) : son bord HAUT porterait " +
+            "une couleur différente à chaque abscisse, et la bande du haut — un " +
+            "aplat — ne pourrait raccorder qu'en un point de l'écran."
         )
         XCTAssertTrue(
-            backgroundBlock.contains("CallBannerContrast.bannerTop") &&
-            backgroundBlock.contains("CallBannerContrast.bannerBottom"),
-            "The banner decor must use the calibrated CallBannerContrast " +
-            "stops so the WCAG tests and the shipped gradient can never drift " +
-            "apart."
+            backgroundBlock.contains("TopChromeTint.call.bandColor"),
+            "Le fond de la bannière vient du producteur UNIQUE du chrome haut. " +
+            "Une constante recopiée ici se prouverait par une égalité de " +
+            "littéraux ; lue là-bas, la continuité de la couture est structurelle."
         )
-        // Le débord sous la status bar / Dynamic Island a changé de
-        // propriétaire le 2026-09-14 (#6579) : il appartient à `TopChromeBand`.
-        // Voir `test_banner_noLongerOwnsTheStatusBarBleed_theTopChromeBandDoes`.
     }
 
     // 2026-08-12 — retrait des chevrons gauche/droite (retour user : inutiles ;

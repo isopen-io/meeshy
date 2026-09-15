@@ -23,47 +23,63 @@ import MeeshyUI
 /// `RootViewLayers`, iPad `iPadRootViewLayers`) — un correctif posé dans une
 /// seule racine aurait manqué l'autre.
 ///
+/// # UN APLAT, pas un dégradé — et pourquoi la COUTURE l'impose
+///
+/// La bande et la barre se touchent : leur joint est un PIXEL, pas une intention.
+/// Tant que la barre d'appel portait un dégradé DIAGONAL (`topLeading` →
+/// `bottomTrailing`), le bord haut de la barre n'était pas UNE couleur mais une
+/// rampe — mesurée à `#4F45E4` à gauche, `#423CC5` au milieu, `#3831A5` à droite.
+/// Une bande d'aplat `#4F46E5` posée dessus ne pouvait donc raccorder qu'en UN
+/// point de l'écran, et laissait jusqu'à 23 unités d'écart à l'autre bord.
+///
+/// Deux issues existaient. Faire porter à la bande le dégradé ÉTENDU de la barre
+/// (ce que faisait `dev`, la barre débordant elle-même sous la status bar) la
+/// forcerait à connaître la HAUTEUR de la barre qu'elle prolonge — hauteur qui
+/// varie avec le Dynamic Type pour la pilule, qui diffère entre les deux barres,
+/// et que la bande ne peut pas mesurer depuis son point de montage. C'est
+/// re-fabriquer le couplage « une peinture par barre » que ce lot vient de
+/// retirer. L'autre issue est celle retenue : **la barre d'appel passe à l'APLAT,
+/// comme le mini-lecteur** — un SEUL producteur de couleur pour les deux barres
+/// ET pour la bande, donc une couture continue par CONSTRUCTION, à toute largeur,
+/// à toute hauteur de barre, sans qu'aucune vue n'ait à mesurer l'autre. C'est
+/// aussi ce que la demande porteur dit littéralement : « de la MÊME couleur ».
+///
+/// Contraste : l'aplat retenu est `bannerTop` (`indigo600`), soit l'arrêt le
+/// MOINS contrasté des deux que portait le dégradé. Toutes les teintes de la
+/// bannière sont déjà calibrées et testées CONTRE lui (`CallBannerContrastTests` :
+/// blanc 6.3:1, `errorSoft` 3.3:1, `indigo200` 4.2:1) — passer à l'aplat ne peut
+/// donc abaisser aucun ratio sous ce que la suite prouve déjà.
+///
 /// COULEUR — indigo FIXE pour les deux barres, jamais l'accent de la
 /// conversation. Le chrome haut est GLOBAL : il se pose au-dessus de tous les
 /// écrans, en un seul site, pas dans le contexte d'une conversation. Les arrêts
-/// de `CallBannerContrast` sont calibrés WCAG et testés
-/// (`CallBannerContrastTests`) ; `MiniAudioPlayerBarStyle.primaryForeground`
-/// n'est prouvé que contre `indigo600`. Un accent tiré d'une palette de vingt
-/// couleurs mélangée n'a aucune suite de contraste — le livrer serait une
-/// régression d'accessibilité, et `ActiveAudioContext` ne porte de toute façon
-/// ni accent ni type/langue/thème. L'accent reste une question de dimension 6
-/// (cohérence de positionnement), à ouvrir en issue.
+/// de `CallBannerContrast` sont calibrés WCAG et testés ; un accent tiré d'une
+/// palette de vingt couleurs mélangée n'a aucune suite de contraste — le livrer
+/// serait une régression d'accessibilité, et `ActiveAudioContext` ne porte de
+/// toute façon ni accent ni type/langue/thème. L'accent reste une question de
+/// dimension 6 (cohérence de positionnement), à ouvrir en issue.
 struct TopChromeTint: Equatable, Sendable {
-    let top: Color
-    let bottom: Color
+    /// L'UNIQUE couleur du chrome haut pour cette barre : la bande la porte, et
+    /// la barre qu'elle prolonge la porte AUSSI — `MiniAudioPlayerBarStyle
+    /// .background` et le `.background` de `FloatingCallPillView` lisent tous
+    /// deux ce membre. Un seul producteur : la couture ne peut pas dériver.
+    ///
+    /// Ce type n'expose QUE cette valeur. Il a porté un moment un `gradient`,
+    /// un `bottom` et un `foreground` qu'aucun code de production ne lisait —
+    /// et le doc-comment du premier affirmait « le dégradé que la barre
+    /// elle-même rend », ce qui était faux : la barre construisait le sien en
+    /// ligne. Un membre mort documenté à tort est pire qu'un membre absent, il
+    /// fait croire qu'une question est réglée.
+    let bandColor: Color
 
-    /// Le dégradé que la barre elle-même rend : même paire d'arrêts, même sens
-    /// que la bannière d'appel, pour qu'aucune couture ne se voie.
-    var gradient: LinearGradient {
-        LinearGradient(colors: [top, bottom], startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
+    /// L'arrêt HAUT du dégradé historique, seul calibré contre le blanc (6.3:1).
+    static let call = TopChromeTint(bandColor: CallBannerContrast.bannerTop)
 
-    /// La bande touche la barre SYSTÈME : elle prend l'arrêt HAUT, le seul
-    /// calibré contre le blanc (6.3:1). Un dégradé étalé sur les ~59 pt de
-    /// l'encart se lirait comme un second aplat posé au-dessus du premier.
-    var bandColor: Color { top }
-
-    /// Encre résolue par la LUMINANCE. `readableInk` est le point unique du
-    /// dépôt (#5950) : un seuil arrondi en dur élit la mauvaise encre sur toute
-    /// la plage `0,179 → seuil`.
-    var foreground: Color { bandColor.readableInk }
-
-    static let call = TopChromeTint(
-        top: CallBannerContrast.bannerTop,
-        bottom: CallBannerContrast.bannerBottom
-    )
-
-    /// LES MÊMES arrêts : le mini-lecteur est un aplat `indigo600`
-    /// (`MiniAudioPlayerBarStyle.background`), soit exactement `bannerTop`.
-    static let audio = TopChromeTint(
-        top: CallBannerContrast.bannerTop,
-        bottom: CallBannerContrast.bannerBottom
-    )
+    /// LA MÊME valeur : le mini-lecteur est un aplat `indigo600`, soit exactement
+    /// `bannerTop`. Les deux cas restent distincts parce qu'ils nomment deux
+    /// BARRES, pas deux couleurs — et parce que c'est ce qui permettra d'en
+    /// différencier une sans toucher l'autre.
+    static let audio = TopChromeTint(bandColor: CallBannerContrast.bannerTop)
 
     /// `nil` ⇒ AUCUNE barre active ⇒ AUCUNE bande. Sans ce cas, le haut de
     /// l'app resterait teinté en permanence, par-dessus le fond thématique.
@@ -102,7 +118,8 @@ struct TopChromeTint: Equatable, Sendable {
 /// couvrirait la pilule et le mini-lecteur » — est réelle, et c'est l'OFFSET
 /// qui y répond : l'overlay est aligné sur le haut du `VStack`, donc sur la
 /// limite BASSE de l'encart, puis remonté de toute sa hauteur. Il n'occupe que
-/// la bande système, et pas un point de la barre qu'il prolonge.
+/// la bande système, et pas un point de la barre qu'il prolonge. Mesuré au
+/// pixel par `TopChromeBandRenderTests` — pas déduit de la géométrie.
 ///
 /// Les deux autres propriétés, chacune pour sa raison :
 /// • hauteur = `DeviceLayout.safeAreaTop`, lue sur la FENÊTRE — un

@@ -171,28 +171,34 @@ struct FloatingCallPillView: View {
         // Pleine largeur (façon barre d'appel WhatsApp) : la bannière s'étire
         // d'un bord à l'autre au sommet de l'app au lieu de flotter en capsule.
         .frame(maxWidth: .infinity)
-        .background(
-            // Retour user 2026-08-12 (second passage) : PLEINEMENT indigo.
-            // Plus de voile noir (l'ancien scrim 40 % faisait lire la zone
-            // status bar comme une « barre noire ») ni de fondu transparent
-            // en bas — un aplat indigo net, arrêts 600→800 calibrés WCAG
-            // sans scrim (CallBannerContrastTests : blanc ≥ 6.3:1, glyphes
-            // d'état ≥ 3:1 aux deux arrêts).
-            LinearGradient(
-                colors: [CallBannerContrast.bannerTop, CallBannerContrast.bannerBottom],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            // La bannière ne peint QUE sa propre hauteur (#6579). Le débord
-            // jusqu'au bord haut du viewport — l'indigo qui recouvre la zone
-            // status bar / Dynamic Island — appartient désormais à
-            // `TopChromeBand`, monté sur le VStack de `CallPresentationLayer`.
-            //
-            // Cette barre le possédait, le mini-lecteur ne le possédait pas :
-            // une écoute audio sans appel laissait donc le haut au fond
-            // thématique. Une peinture portée par chaque barre est présente
-            // chez l'une et absente chez l'autre — la bande a UN propriétaire.
-        )
+        // Retour user 2026-08-12 (second passage) : PLEINEMENT indigo. Plus de
+        // voile noir (l'ancien scrim 40 % faisait lire la zone status bar comme
+        // une « barre noire ») ni de fondu transparent en bas.
+        //
+        // APLAT, et plus un dégradé 600→800 (#6579). La bannière TOUCHE la bande
+        // du haut : leur joint est un pixel. Un dégradé DIAGONAL n'offre pas UNE
+        // couleur à ce joint mais une rampe — `#4F45E4` à gauche, `#423CC5` au
+        // milieu, `#3831A5` à droite — qu'aucun aplat ne peut raccorder ailleurs
+        // qu'en un point. Le SEUL producteur de la couleur du chrome haut est
+        // désormais `TopChromeTint` : la bande et la barre lisent la MÊME valeur,
+        // donc la couture est continue par construction, à toute largeur.
+        // Raisonnement complet et bilan de contraste : en-tête de
+        // `TopChromeTint.swift` ; mesure de pixels : `TopChromeBandRenderTests`.
+        //
+        // La bannière ne peint QUE sa propre hauteur (#6579). Le débord jusqu'au
+        // bord haut du viewport — l'indigo qui recouvre la zone status bar /
+        // Dynamic Island — appartient à `TopChromeBand`, monté sur le VStack de
+        // `CallPresentationLayer`. Cette barre le possédait, le mini-lecteur ne
+        // le possédait pas : une écoute audio sans appel laissait donc le haut
+        // au fond thématique. Une peinture portée par chaque barre est présente
+        // chez l'une et absente chez l'autre — la bande a UN propriétaire.
+        //
+        // `ignoresSafeAreaEdges: []` est EXPLICITE : le défaut de
+        // `.background(_:)` est `.all`, donc une barre adjacente à l'encart
+        // système y étend son fond sans que rien ne le déclare — une seconde
+        // propriété de la bande, muette, chez chaque barre. C'est le défaut que
+        // ce lot ferme ; le laisser implicite le rouvrirait par omission.
+        .background(TopChromeTint.call.bandColor, ignoresSafeAreaEdges: [])
         .offset(x: pillDragOffset)
         .opacity(pillDragOpacity)
         .simultaneousGesture(collapseDragGesture)

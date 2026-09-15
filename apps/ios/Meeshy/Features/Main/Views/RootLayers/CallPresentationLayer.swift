@@ -38,6 +38,15 @@ struct CallPresentationLayer: ViewModifier {
     let miniPlayerOnTapBody: () -> Void
     let miniPlayerCurrentConversationId: () -> String?
 
+    /// `nil` en production ⇒ `MiniAudioPlayerBar` prend `.shared`.
+    ///
+    /// Existe pour que le TÉMOIN DE RENDU puisse monter cet écran — celui que le
+    /// porteur a photographié — avec une écoute en cours, et LIRE LES PIXELS de
+    /// la bande. Sans cette couture, le seul moyen d'exercer le chemin complet
+    /// (barre → `onDisplayedContextChange` → `audioBarContext` → bande) serait de
+    /// muter le singleton du processus, ce qui fuit d'un témoin à l'autre.
+    var miniPlayerCoordinator: ConversationAudioCoordinator? = nil
+
     /// Ce que le mini-lecteur AFFICHE — pas ce que le coordinateur joue (#6579).
     ///
     /// La bande du haut doit se peindre exactement quand une barre occupe le
@@ -76,6 +85,7 @@ struct CallPresentationLayer: ViewModifier {
         VStack(spacing: 0) {
             FloatingCallPillView(callManager: callManager)
             MiniAudioPlayerBar(
+                coordinatorForTesting: miniPlayerCoordinator,
                 onTapBody: miniPlayerOnTapBody,
                 currentConversationId: miniPlayerCurrentConversationId,
                 onDisplayedContextChange: { audioBarContext = $0 }
