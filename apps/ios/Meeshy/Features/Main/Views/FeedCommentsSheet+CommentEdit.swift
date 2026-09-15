@@ -14,9 +14,12 @@ extension CommentsSheetView {
     /// Charge le commentaire dans le composer avec TOUT ce que l'édition
     /// permet : texte + effets visuels (lueur/pulse/…) + flou — mêmes
     /// capacités que la création (le média existant est conservé tel quel).
+    /// La pastille s'ouvre sur la LANGUE du commentaire : c'est elle que
+    /// l'envoi déclare, et le défaut « fr » la réécrirait sinon (#6600).
     func beginEditComment(_ target: FeedComment) {
         replyingTo = nil
         editingComment = target
+        composerLanguage = DefaultComposerLanguage.resolve(editing: target.originalLanguage, current: composerLanguage)
         composerText = target.content
         let flags = MessageEffectFlags(rawValue: UInt32(clamping: target.effectFlags))
         commentBlurEnabled = flags.contains(.blurred)
@@ -34,9 +37,12 @@ extension CommentsSheetView {
     /// PATCH du commentaire : remplacement optimiste EN PLACE (jamais
     /// d'insertion — même id), rollback complet si le serveur refuse.
     /// L'écho `comment:updated` reconfirme ensuite la ligne (idempotent).
+    /// La langue de la pastille est DÉCLARÉE au serveur (#6600), lue avant que
+    /// le champ vidé ne ramène la pastille au défaut.
     func submitCommentEdit(_ target: FeedComment, text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !target.media.isEmpty else { return }
+        let language = composerLanguage
         let effects = commentEffects
         let blur = commentBlurEnabled
         let flags = Int(effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0))
@@ -54,7 +60,8 @@ extension CommentsSheetView {
         Task {
             do {
                 _ = try await PostService.shared.updateComment(
-                    postId: post.id, commentId: target.id, content: trimmed, effectFlags: flags
+                    postId: post.id, commentId: target.id, content: trimmed, effectFlags: flags,
+                    originalLanguage: language
                 )
                 // Invalidation locale par réécriture : la version éditée
                 // remplace la version cachée — les autres vues (détail,

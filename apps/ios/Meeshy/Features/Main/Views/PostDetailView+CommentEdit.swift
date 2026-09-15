@@ -14,9 +14,12 @@ extension PostDetailView {
     /// Charge le commentaire dans le composer avec TOUT ce que l'édition
     /// permet : texte + effets visuels (lueur/pulse/…) + flou — mêmes
     /// capacités que la création (le média existant est conservé tel quel).
+    /// La pastille s'ouvre sur la LANGUE du commentaire : c'est elle que
+    /// l'envoi déclare, et le défaut « fr » la réécrirait sinon (#6600).
     func beginEditComment(_ target: FeedComment) {
         viewModel.clearReply()
         viewModel.editingComment = target
+        composerLanguage = DefaultComposerLanguage.resolve(editing: target.originalLanguage, current: composerLanguage)
         composerText = target.content
         let flags = MessageEffectFlags(rawValue: UInt32(clamping: target.effectFlags))
         commentBlurEnabled = flags.contains(.blurred)
@@ -32,10 +35,12 @@ extension PostDetailView {
     }
 
     /// Remplacement optimiste en place, rollback si le serveur refuse — porté
-    /// par `PostDetailViewModel.updateComment`.
+    /// par `PostDetailViewModel.updateComment`. La langue est lue AVANT de vider
+    /// le champ : un champ vidé ramène la pastille au défaut.
     func submitCommentEdit(_ editing: FeedComment, text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !editing.media.isEmpty else { return }
+        let language = composerLanguage
         let flags = commentEffects.flags.rawValue
             | (commentBlurEnabled ? MessageEffectFlags.blurred.rawValue : 0)
         viewModel.editingComment = nil
@@ -43,6 +48,6 @@ extension PostDetailView {
         commentEffects = .none
         commentBlurEnabled = false
         commentAttachments.removeAll()
-        Task { await viewModel.updateComment(editing, content: trimmed, effectFlags: Int(flags)) }
+        Task { await viewModel.updateComment(editing, content: trimmed, effectFlags: Int(flags), originalLanguage: language) }
     }
 }

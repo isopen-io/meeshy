@@ -110,7 +110,7 @@ struct PostDetailView: View {
     /// play permet d'arrêter tout ou de poursuivre tout ». Distinct du muet,
     /// qui laisse la scène courir en silence.
     @State var isCanvasPaused = false
-    @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
+    @State var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State var commentBlurEnabled: Bool = false
     @State var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false

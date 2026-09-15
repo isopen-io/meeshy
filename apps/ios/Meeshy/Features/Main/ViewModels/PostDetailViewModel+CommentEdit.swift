@@ -15,7 +15,9 @@ extension PostDetailViewModel {
     /// PATCH du commentaire : remplacement optimiste EN PLACE (jamais
     /// d'insertion — même id), rollback complet si le serveur refuse.
     /// L'écho `comment:updated` reconfirme ensuite la ligne (idempotent).
-    func updateComment(_ target: FeedComment, content: String, effectFlags: Int) async {
+    /// `originalLanguage` est la langue de la pastille du composer, DÉCLARÉE au
+    /// serveur : sans elle, la passerelle la remet à null et la redétecte (#6600).
+    func updateComment(_ target: FeedComment, content: String, effectFlags: Int, originalLanguage: String?) async {
         guard let post else { return }
         let edited = target.withEditedContent(content, effectFlags: effectFlags)
         let snapshotComments = comments
@@ -23,7 +25,8 @@ extension PostDetailViewModel {
         applyCommentUpdated(edited)
         do {
             _ = try await postService.updateComment(
-                postId: post.id, commentId: target.id, content: content, effectFlags: effectFlags
+                postId: post.id, commentId: target.id, content: content, effectFlags: effectFlags,
+                originalLanguage: originalLanguage
             )
             try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
             if let parentId = edited.parentId, let replies = repliesMap[parentId] {

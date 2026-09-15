@@ -159,13 +159,18 @@ public struct CreatePostRequest: Encodable {
 
 /// Corps de `PATCH /posts/:postId/comments/:commentId` — édition par l'auteur.
 /// `nil` = champ inchangé ; `effectFlags: 0` retire tous les effets.
+/// `originalLanguage` DÉCLARE la langue du texte corrigé (#6600) : absent, la
+/// passerelle la remet à null et la redétecte (#6598). Un `nil` n'est jamais
+/// encodé — l'`Encodable` synthétisé omet la clé, il n'écrit pas `null`.
 public struct UpdateCommentRequest: Encodable {
     public let content: String?
     public let effectFlags: Int?
+    public let originalLanguage: String?
 
-    public init(content: String? = nil, effectFlags: Int? = nil) {
+    public init(content: String? = nil, effectFlags: Int? = nil, originalLanguage: String? = nil) {
         self.content = content
         self.effectFlags = effectFlags
+        self.originalLanguage = originalLanguage
     }
 }
 

@@ -241,7 +241,7 @@ struct CommentsSheetView: View {
     @State private var commentsNextCursor: String?
     @State private var commentsHasMore: Bool = false
     @State private var isHuntingTargetComment: Bool = false
-    @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
+    @State var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State var commentBlurEnabled: Bool = false
     @State var commentEffects: MessageEffects = .none
     /// Commentaire en cours d'ÉDITION (auteur uniquement). Non-nil ⇒ le
