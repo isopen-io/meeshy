@@ -175,35 +175,23 @@ export function resolveRouteAccess(input: {
   return 'allow';
 }
 
-/** Les caractères que le parseur d'URL EFFACE — blancs, contrôles C0, DEL.
- * Aucun ne sort de `href()`, qui encode tout. Une fonction plutôt qu'une classe
- * d'expression régulière : la source n'a ainsi aucun caractère de contrôle à
- * écrire, pas même échappé. */
-const isWhitespaceOrControl = (character: string): boolean => {
-  const code = character.charCodeAt(0);
-  return character.trim() === '' || code < 0x20 || code === 0x7f;
-};
-
 /**
  * `next` — OÙ REVENIR APRÈS S'ÊTRE CONNECTÉ (#5561), ou `null`.
  *
- * La valeur vient de l'ADRESSE, donc de quiconque a fabriqué le lien. La règle
- * de même origine est celle de `safeReturnPath` (`view/magic-link.ts`, le
- * retour d'un lien magique) — réemployée, jamais recopiée : deux clampages
- * d'une même valeur hostile divergeraient au premier correctif.
- *
- * Elle y ajoute ce que `safeReturnPath` laisse passer et qu'une redirection de
- * SESSION ne peut pas se permettre : le parseur d'URL retire tabulations et
- * retours à la ligne, si bien que `/\t/evil.com` devient `//evil.com`. Ce
- * n'est pas une redirection ouverte — `history.replaceState` refuse une autre
- * origine — mais il LÈVE, et dans l'effet de `SessionGate` (`main.tsx`) c'est
- * l'application entière qui tomberait pour un lien forgé.
+ * La valeur vient de l'ADRESSE, donc de quiconque a fabriqué le lien. La garde
+ * de même origine — y compris le refus des blancs et caractères de contrôle
+ * que le parseur d'URL efface (#6743 : `/\t/evil.com` devient `//evil.com`,
+ * et `history.replaceState` LÈVE sur une autre origine, faisant tomber
+ * `SessionGate`, `main.tsx`) — est celle de `safeReturnPath`
+ * (`view/magic-link.ts`, le retour d'un lien magique) : UNE SEULE garde,
+ * réemployée, jamais recopiée. Deux clampages d'une même valeur hostile
+ * divergeraient au premier correctif.
  *
  * `null` plutôt que `'/'` : un appelant doit pouvoir savoir qu'il n'y a RIEN à
  * transmettre (le lien « Créer un compte » ne porte pas un `next=/` inventé).
  */
 export function safeNextPath(raw: string | null): string | null {
-  if (raw === null || raw === '' || [...raw].some(isWhitespaceOrControl)) return null;
+  if (raw === null || raw === '') return null;
   return safeReturnPath(raw) === raw ? raw : null;
 }
 
