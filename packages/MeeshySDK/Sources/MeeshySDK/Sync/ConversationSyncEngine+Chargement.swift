@@ -506,7 +506,7 @@ extension ConversationSyncEngine {
         await SearchIndex.shared.indexConversations(servies.filter(\.isActive))
         _conversationsDidChange.send()
         if let checkpoint,
-           let date = (try? Date(checkpoint, strategy: .iso8601.time(includingFractionalSeconds: true))) ?? (try? Date(checkpoint, strategy: .iso8601)) {
+           let date = WireDate.date(from: checkpoint) {
             lastSyncTimestamp = max(lastSyncTimestamp, date)
         } else if let plusRecente = servies.map(\.updatedAt).max() {
             lastSyncTimestamp = SyncWatermark.fromFullSync(receivedUpdatedAt: [plusRecente], fallback: lastSyncTimestamp)
@@ -557,7 +557,7 @@ extension ConversationSyncEngine {
 
         do {
             let since = lastSyncTimestamp
-            let sinceStr = since.formatted(.iso8601.time(includingFractionalSeconds: true))
+            let sinceStr = WireDate.string(from: since)
             let queryItems = [
                 URLQueryItem(name: "limit", value: String(Self.deltaPageLimit)),
                 URLQueryItem(name: "offset", value: "0"),
@@ -672,17 +672,6 @@ extension ConversationSyncEngine {
         case repli(RaisonDuRepliDeSync)
     }
 
-    /// Le `checkpoint` servi porte des MILLISECONDES (`.000Z`) — le formateur
-    /// nu les refuse ; le repli sans fractions couvre un serveur qui n'en
-    /// servirait pas.
-    // `ISO8601DateFormatter` est thread-safe (documenté) ; le marqueur dit
-    // au compilateur ce que la doc garantit.
-    nonisolated(unsafe) private static let formatterDuCheckpoint: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
     private func clientDeSync() -> SyncDeltaClientProviding {
         syncDeltaOverride ?? SyncDeltaClient(baseURL: api.baseURL)
     }
@@ -707,7 +696,7 @@ extension ConversationSyncEngine {
         guard let creance = creanceDeSync() else { return .repli(.creanceAbsente) }
 
         let demande = SyncDeltaRequest(
-            since: lastSyncTimestamp.formatted(.iso8601.time(includingFractionalSeconds: true)),
+            since: WireDate.string(from: lastSyncTimestamp),
             collections: ["conversations"],
             seq: await SyncSeqTracker.shared.lastSeq.flatMap { Int(exactly: $0) }
         )
@@ -761,7 +750,7 @@ extension ConversationSyncEngine {
             // escaladent vers `fullSync` par le chemin existant de l'appelant.
             let incomplet = delta.hasMore || delta.hasGap
             if !incomplet, let checkpoint = delta.checkpoint,
-               let date = (try? Date(checkpoint, strategy: .iso8601.time(includingFractionalSeconds: true))) ?? (try? Date(checkpoint, strategy: .iso8601)) {
+               let date = WireDate.date(from: checkpoint) {
                 lastSyncTimestamp = max(lastSyncTimestamp, date)
             }
             return .traite(DeltaOutcome(succeeded: true, mayHaveMore: incomplet))
