@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { LoginDoors, loginMethodFromSearch } from '@/routes/login';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { controlledBy, perceivableText as perceivable } from '@/test-support/perceivable-text';
 
 /**
  * LES DEUX PORTES DE `/login` (#6404) — directive porteur 2026-09-13 :
@@ -58,12 +59,35 @@ function mountAt(url: string): HTMLDivElement {
 
 const text = (el: HTMLElement) => (el.textContent ?? '').replace(/\s+/gu, ' ');
 
-describe('/login — la porte PAR DÉFAUT est le lien magique', () => {
-  test('sans paramètre : le champ e-mail et le bouton, jamais un champ mot de passe', () => {
+describe('/login — la porte PAR DÉFAUT est la connexion par e-mail (#6626)', () => {
+  test('sans paramètre : le champ e-mail et « Recevoir le lien », jamais un champ mot de passe', () => {
     const el = mountAt('/login');
     expect(el.querySelector('#magic-link-email')).not.toBeNull();
+    expect(text(el)).toContain('Votre adresse e-mail');
     expect(text(el)).toContain('Recevoir le lien');
     expect(el.querySelector('#login-password')).toBeNull();
+  });
+
+  test('le mode de fonctionnement est derrière un (i) « Comment ça marche », replié par défaut', () => {
+    const el = mountAt('/login');
+    const info = el.querySelector('button[aria-label="Comment ça marche"]') as HTMLButtonElement | null;
+    expect(info).not.toBeNull();
+    expect(info?.getAttribute('aria-expanded')).toBe('false');
+    const note = controlledBy(info);
+    expect(note?.textContent).toBe('Pas de mot de passe à retenir : nous vous envoyons un lien par e-mail. Ouvrez-le et vous êtes connecté.');
+    expect(note?.classList.contains('sr-only')).toBe(true);
+
+    act(() => {
+      info?.click();
+    });
+    expect(info?.getAttribute('aria-expanded')).toBe('true');
+    expect(note?.classList.contains('sr-only')).toBe(false);
+  });
+
+  test('aucun libellé perçu ne dit « magique » — la baguette reste, le mot part', () => {
+    const el = mountAt('/login');
+    expect(perceivable(el)).not.toMatch(/magi(que|c)/iu);
+    expect(el.querySelector('form svg')).not.toBeNull();
   });
 
   test('l’autre porte est NOMMÉE, et mène à l’adresse qui la porte', () => {
@@ -76,29 +100,37 @@ describe('/login — la porte PAR DÉFAUT est le lien magique', () => {
 
 /**
  * « LA PAGE DOIT ÊTRE SANS TITRE SAUF LA BAGUETTE MAGIQUE » (#6583, directive
- * porteur 2026-09-14) — il reste la baguette, la phrase, le champ, le bouton.
+ * porteur 2026-09-14), RÉDUITE AU BLASON par celle du 2026-09-15 (#6626).
  *
- * Le blason « Meeshy » et le titre « Entrez votre adresse email » disaient
- * deux fois ce que la page EST, à quelqu'un qui vient de cliquer « Se
- * connecter ». La porte du MOT DE PASSE, elle, garde son blason : elle n'a pas
- * de baguette, et un écran sans en-tête d'aucune sorte n'aurait plus rien pour
- * se nommer.
+ * #6583 retirait DEUX choses de la porte par défaut : le blason « Meeshy » et
+ * le titre de section « Entrez votre adresse email », qui disaient deux fois
+ * ce que la page EST à quelqu'un qui vient de cliquer « Se connecter ».
+ *
+ * Le BLASON reste retiré : rien depuis ne l'a redemandé, et c'est lui qui
+ * redisait le nom du produit. Le TITRE de section, lui, revient — #6626 en a
+ * fait « Votre adresse e-mail », l'ancre du (i) « Comment ça marche » qui
+ * porte désormais TOUT le mode de fonctionnement (premier `describe`). Un
+ * titre qui héberge la mécanique ne répète plus le champ ; et la directive
+ * postérieure a été relue deux fois sur ce titre même (la place du (i), la
+ * césure de « e-mail »), donc vue plutôt que subie.
+ *
+ * La porte du MOT DE PASSE garde son blason : elle n'a pas de baguette, et un
+ * écran sans en-tête d'aucune sorte n'aurait plus rien pour se nommer.
  */
-describe('/login — la porte par défaut n’a pas de titre', () => {
-  test('ni le blason « Meeshy », ni un titre de section', () => {
+describe('/login — la porte par défaut n’a plus de blason', () => {
+  test('ni le blason « Meeshy », ni l’ancien titre de #6404', () => {
     const el = mountAt('/login');
     expect(el.querySelector('h1')).toBeNull();
-    expect(el.querySelector('h2')).toBeNull();
     expect(text(el)).not.toContain('Entrez votre adresse');
   });
 
-  test('la baguette, la phrase, le champ et le bouton — dans cet ordre', () => {
+  test('la baguette, le titre qui porte le (i), le champ et le bouton', () => {
     const el = mountAt('/login');
     // La baguette est le SEUL tracé d'en-tête restant : le blason de marque
     // rendait trois `<line>`, elle n'en rend aucune.
     expect(el.querySelector('svg')).not.toBeNull();
     expect(el.querySelectorAll('line')).toHaveLength(0);
-    expect(text(el)).toContain('Nous vous enverrons un lien de connexion sécurisé par mail');
+    expect(text(el)).toContain('Votre adresse e-mail');
     expect(el.querySelector('#magic-link-email')).not.toBeNull();
     expect(text(el)).toContain('Recevoir le lien');
   });
@@ -123,10 +155,16 @@ describe('/login?methode=password — l’identifiant et le mot de passe', () =>
     expect(identifiant?.getAttribute('autocomplete')).toBe('username');
   });
 
-  test('le retour vers le lien magique est un LIEN vers l’adresse par défaut', () => {
-    const el = mountAt('/login?methode=password');
-    const retour = [...el.querySelectorAll('a')].find((a) => (a.textContent ?? '').includes('lien'));
+  test('le retour vers la porte par défaut dit « Se connecter par e-mail », baguette en tête, et mène à /login', () => {
+    const el = mountAt('/login?methode=motdepasse');
+    const retour = [...el.querySelectorAll('a')].find((a) => text(a).trim() === 'Se connecter par e-mail');
     expect(retour?.getAttribute('href')).toBe('/login');
+    expect(retour?.firstElementChild?.tagName.toLowerCase()).toBe('svg');
+  });
+
+  test('aucun libellé perçu ne dit « magique »', () => {
+    const el = mountAt('/login?methode=motdepasse');
+    expect(perceivable(el)).not.toMatch(/magi(que|c)/iu);
   });
 
   test('un paramètre inconnu retombe sur la porte par défaut — jamais un écran vide', () => {

@@ -39,6 +39,14 @@ const de = {
   'reels.media.error': 'Wiedergabe nicht möglich — Erneut versuchen',
   'reels.image': 'Bild {index} von {count}',
 
+  'stories.title': 'Storys',
+  'stories.loading': 'Storys werden geladen…',
+  'stories.error': 'Storys konnten nicht geladen werden.',
+  'stories.empty.title': 'Noch keine Storys',
+  'stories.empty.subtitle': 'Storys deiner Kontakte werden hier vierundzwanzig Stunden lang angezeigt.',
+  'stories.create': 'Story erstellen',
+  'stories.count.one': '{count} Story',
+  'stories.count.other': '{count} Storys',
   'stories.mine': 'Deine Story',
 
   'feed.post.action.like': 'Gefällt mir',
@@ -50,6 +58,7 @@ const de = {
   'feed.post.media.audio': 'Audio',
   'feed.post.media.previous': 'Vorheriges Medium',
   'feed.post.media.next': 'Nächstes Medium',
+  'feed.post.media.mosaic': 'Mosaik aus {count} Medien',
   'feed.post.see_more': 'mehr anzeigen',
   'feed.post.see_less': 'weniger anzeigen',
   'feed.post.reel.chip': 'Reel',
@@ -172,6 +181,12 @@ const de = {
   'profile.language.choose': 'Auswählen',
   'profile.language.clear.regional': 'Regionalsprache entfernen',
   'profile.language.clear.custom': 'Benutzerdefinierte Sprache entfernen',
+
+  'languageSheet.title.read': 'Lesesprache',
+  'languageSheet.title.write': 'Schreibsprache',
+  'languageSheet.search': 'Sprache suchen',
+  'languageSheet.empty': 'Keine Sprache passt zu „{search}“.',
+
   'profile.stats.messages': 'Nachrichten',
   'profile.stats.translations': 'Übersetzungen',
   'profile.stats.languages': 'Sprachen',

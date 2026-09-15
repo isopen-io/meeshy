@@ -125,7 +125,9 @@ public protocol PostServiceProviding: Sendable {
     /// Édition d'un commentaire par son auteur : contenu et/ou effets visuels
     /// (`effectFlags`, même bitfield que la création — lueur/pulse/…). Une
     /// requirement séparée avec défaut ci-dessous pour garder les mocks valides.
-    func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?) async throws -> APIPostComment
+    /// `originalLanguage` déclare la langue du texte corrigé — `nil` laisse la
+    /// passerelle la redétecter (#6598, #6600).
+    func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?, originalLanguage: String?) async throws -> APIPostComment
     func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String?) async throws -> APIPost
     /// Variante IDEMPOTENTE — envoie `clientMutationId` en header
     /// `X-Client-Mutation-Id`, ce que le gateway attend depuis que
@@ -383,7 +385,7 @@ public extension PostServiceProviding {
     /// Défaut : les conformeurs existants (mocks) restent valides — un mock qui
     /// n'observe pas l'édition n'a pas à l'implémenter, et un test qui
     /// l'exercerait sans surcharge échoue explicitement.
-    func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?) async throws -> APIPostComment {
+    func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?, originalLanguage: String?) async throws -> APIPostComment {
         throw NSError(domain: "PostServiceProviding", code: -1,
                       userInfo: [NSLocalizedDescriptionKey: "updateComment not implemented by this conformer"])
     }
@@ -589,8 +591,8 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         return response.data
     }
 
-    public func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?) async throws -> APIPostComment {
-        let body = UpdateCommentRequest(content: content, effectFlags: effectFlags)
+    public func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?, originalLanguage: String?) async throws -> APIPostComment {
+        let body = UpdateCommentRequest(content: content, effectFlags: effectFlags, originalLanguage: originalLanguage)
         let response: APIResponse<APIPostComment> = try await api.patch(
             PostsEndpoint.byPostIdCommentsByCommentId(postId: postId, commentId: commentId), body: body
         )

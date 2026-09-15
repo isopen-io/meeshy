@@ -114,6 +114,23 @@ describe('loadFeedPage — la branche RÉSEAU parle à la route réelle', () => 
     expect(result.data.pagination).toEqual({ limit: FEED_PAGE_SIZE, hasMore: false, nextCursor: null });
   });
 
+  /**
+   * #6514 — l'agencement choisi par l'auteur voyage dans le document canvas v3
+   * (`storyEffects.layout`). Sans cet en-tête, la passerelle traite le client en
+   * lecteur ancien (table O17, `negotiateWireStoryEffects`) : elle OMET
+   * `storyEffects` d'un post à média, et la carte retombe sur le carrousel pour
+   * toute publication composée en vague ou en hero.
+   */
+  test('annonce `X-Canvas-Caps: 3` — sinon la passerelle omet le document qui porte l’agencement', async () => {
+    const entetes: (Readonly<Record<string, string>> | undefined)[] = [];
+    const request = async <T,>(req: { headers?: Readonly<Record<string, string>> }): Promise<ApiResult<T>> => {
+      entetes.push(req.headers);
+      return enveloppeReelle as unknown as ApiResult<T>;
+    };
+    await loadFeedPage({ source: 'gateway', transport: { request } as unknown as HttpTransport });
+    expect(entetes).toEqual([{ 'X-Canvas-Caps': '3' }]);
+  });
+
   test('un échec de la passerelle (401 sans session) remonte INCHANGÉ à l’appelant', async () => {
     const echec = { ok: false as const, error: 'Authentication required', status: 401 };
     const { transport } = transportEnregistreur(echec as unknown as ApiResult<unknown>);

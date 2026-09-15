@@ -141,13 +141,27 @@ public final class AudioMixer: AudioMixerProviding {
         } else {
             // Already past startTime — schedule immediate playback from a
             // file offset so the audio is positionally correct.
+            //
+            // La fenêtre vient du site PARTAGÉ : c'est la même loi que celle
+            // que `ReaderAudioMixer.segment` projette côté lecture. Elle vivait
+            // ici seule, et c'est exactement ce qui laissait le lecteur
+            // incapable d'entrer en cours de piste (#6580) — même forme que la
+            // divergence de `hostTime(forDelaySeconds:)`, centralisée depuis.
+            // `nil` ⇒ l'ouverture est au-delà de la fin : on ne planifie rien.
             let offset = Double(timelineTime - startTime)
-            let startFrame = AVAudioFramePosition(offset * sampleRate)
-            guard startFrame < totalFrames else { return }
-            let remaining = AVAudioFrameCount(totalFrames - startFrame)
+            guard offset > 0 else {
+                // Pile sur `startTime` : rien à fenêtrer, la source entière
+                // part immédiatement — le chemin d'aujourd'hui, bit à bit.
+                node.scheduleFile(file, at: nil, completionHandler: nil)
+                return
+            }
+            guard let segment = TimelineAudioWindow.segment(bounds: nil,
+                                                            elapsedInClip: offset,
+                                                            sampleRate: sampleRate,
+                                                            fileLength: totalFrames) else { return }
             node.scheduleSegment(file,
-                                 startingFrame: startFrame,
-                                 frameCount: remaining,
+                                 startingFrame: segment.startingFrame,
+                                 frameCount: segment.frameCount,
                                  at: nil,
                                  completionHandler: nil)
         }

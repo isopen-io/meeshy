@@ -2149,6 +2149,12 @@ n'affirme rien qu'il ne tienne pas.
 
 **Suivi #6308 — la mesure ci-dessus est désormais un GATE, pas seulement une prose.** `scripts/lib/glass-contrast.mjs` REJOUE la formule depuis les fichiers réels (`packages/design-tokens/ios.css` pour les tons/encres, `styles/glass.css` pour les densités) — aucune valeur recopiée, un jeton régénéré ou une densité modifiée change le résultat au prochain `bun test`. `glass-contrast.test.ts` reproduit d'abord le tableau ci-dessus à 70/78/80/92 % sur des valeurs fabriquées (la formule, falsifiée indépendamment du dépôt : baisser à 78 % fait tomber la pilule sous AA en clair), puis audite l'INVENTAIRE NOMMÉ des couples (ton, encre) réellement servis par une surface `glass*` (`GLASS_CONTRAST_INVENTORY` — pilule de jour, en-tête, l'annonce du presse-papiers, la loupe de la recherche flottante ; `--glass-accent` en est exclu, sa valeur variant par conversation). **L'audit a trouvé un défaut réel en cours d'écriture** : le sous-titre de l'en-tête (`thread-header.tsx`, « N participants » / « Chiffré de bout en bout ») peignait `--color-ios-ink-2` — semi-transparente, `color-mix(in srgb, #4338ca 80%, transparent)` en clair — sur la bande de verre à 80 %, pire cas : 3,58:1, sous la barre AA. Corrigé par `--color-ios-ink` (la hiérarchie visuelle reste par la taille, `text-mini`, pas par l'opacité) — la mesure de D-51 ne portait que sur DEUX encres (day-ink, l'encre primaire de l'en-tête) ; ce sous-titre n'y avait jamais figuré.
 
+**Suivi #6367 — l'inventaire était NOMMÉ à la main, jamais DÉRIVÉ des usages : sa clôture reconnaissait déjà « pas d'issue de suivi ouverte », rendant tout futur couple `glass*`/`ink*` invisible tant que personne ne se souvenait d'ajouter son entrée.** `glassInkUsages(text)` rejoue désormais, DEPUIS le JSX réel, la même relation d'héritage que `--glass-tone` en CSS : un tag qui porte `glass`/`glass-prominent` (+ `glass-card` pour le ton, `glass-accent` exclu comme au site) ouvre un CADRE hérité par ses descendants jusqu'à sa fermeture ; toute encre peinte dans ce cadre — sur le tag lui-même ou n'importe quel descendant — forme un couple avec lui. L'alias `--color-*` employé dans le JSX se résout vers le jeton `--ios-*` mesuré via `loadColorAliasMap()`, qui LIT `src/styles/ios.css` (son bloc `@theme inline`) au lieu de recopier la table : un alias absent de ce bloc (`--accent`, `--color-ok/warn/error`) n'est pas un jeton iOS fixe, il sort de la dérivation sans liste d'exclusion à la main. `derivedGlassInkPairs()` balaie tout `apps/web-v2/src/**/*.tsx` et `glassContrastCoverage()` est le GATE : tout couple dérivé absent de `GLASS_CONTRAST_INVENTORY` fait tomber `bun test` — c'est lui qui rougit sur un couple neuf, là où l'inventaire seul ne pouvait que garder ce qu'on y avait déjà écrit.
+
+**Comment un couple NEUF entre sous la garde** — poser une classe `glass`/`glass-prominent` avec une encre `--color-ios-*` fait ROUGIR `glassContrastCoverage` au prochain `bun test`, le message nommant le ton/l'encre/la densité et le(s) fichier(s) : (1) mesurer le ratio au pire cas (`glassWorstCaseContrast`, ou en composant depuis `loadIosSchemes()`/`loadGlassDensities()`) dans les DEUX schémas ; (2) s'il tient AA (texte ≥ 4,5, non-texte ≥ 3), ajouter l'entrée à `GLASS_CONTRAST_INVENTORY` avec son `site`, sa `kind` et, en commentaire, la mesure qui la justifie ; (3) sinon, changer l'encre pour une qui tient (voir le sous-titre de l'en-tête ci-dessus) — jamais assouplir le seuil ni exclure le couple par son nom. **L'audit dérivé a trouvé un second défaut réel en écrivant ce gate** : `thread-states.tsx` (`MinimalHeader`, l'en-tête minimal des écrans refusé/erreur, D-6) peignait le chevron de retour en `--color-ios-brand` nu sur la bande de verre par défaut — 2,78:1 en clair / 2,53:1 en sombre au pire cas, sous la barre AA non-texte (3:1) ; `--color-ios-brand` était déjà connu insuffisant pour du texte lisible ailleurs (`routes/notifications.tsx`, commentaire `BRAND_INK`), jamais mesuré ici parce que cette surface n'avait jamais figuré dans l'audit manuel du 2026-09-13. Corrigé par `--color-ios-ink`, même ton/densité que `thread-header.tsx` (mesuré ≥ 9,9:1 dans les deux schémas à 80 %).
+
+**Portée assumée** : la dérivation lit le JSX (`.tsx`), pas les feuilles CSS — les trois sites de `GLASS_INVENTORY` (`glass-site.mjs`) n'y peignent aucune encre `--ios-ink*`, donc ce n'est pas encore un usage réel à couvrir ; un couple posé un jour depuis une règle CSS (`.foo.glass { color: var(--ios-…) }`) échapperait à `glassInkUsages`, à rouvrir si ce cas apparaît.
+
 ## D-52 · L'interface a UN catalogue, sept langues, un chunk par langue — et aucun repli — 2026-09-13 (#6206)
 
 **Le constat.** web-v2 n'avait qu'un embryon de catalogue (`fr`/`en`, trois annonces). Tout le reste de l'interface était en français en dur, y compris le roster de frappe. Ce dernier était déjà rendu injectable par un formateur, mais aucun catalogue ne savait l'alimenter : `translate()` ne rendait que des chaînes plates, et une forme « un nom » ou « deux noms » ne pouvait pas s'y exprimer.
@@ -2543,7 +2549,7 @@ La route dépréciée `/friend-requests` n'est jamais appelée.
 
 **UNE machine pour deux hôtes.** `MagicLinkPanel` (`components/magic-link-panel.tsx`) porte la saisie, l'envoi, le compte à rebours, le renvoi et les erreurs ; `magic-link-flow.tsx` n'est plus que le chrome de l'écran plein `/auth/magic-link` — l'adresse que l'e-mail vise (`MagicLinkService.ts:548`) et que les liens déjà envoyés ouvrent, donc jamais retirée. Recopier la machine dans l'écran de connexion en aurait fait deux, divergentes au premier correctif.
 
-**Les indésirables sont NOMMÉS pendant l'attente.** `POST /auth/magic-link/request` rend 200 même pour une adresse inconnue (`MagicLinkService.ts:133-137`, anti-énumération) : l'écran ne peut ni promettre l'envoi ni le démentir. Ce qu'il peut, et ce que la directive demande mot pour mot, c'est nommer la première cause d'un e-mail jamais reçu et dire au bout de combien de temps s'en inquiéter. La note est à l'étape d'ATTENTE, jamais derrière un (i) : c'est le seul moment où l'on attend quelque chose qui peut ne jamais paraître.
+**Les indésirables sont NOMMÉS pendant l'attente.** `POST /auth/magic-link/request` rend 200 même pour une adresse inconnue (`MagicLinkService.ts:133-137`, anti-énumération) : l'écran ne peut ni promettre l'envoi ni le démentir. Ce qu'il peut, et ce que la directive demande mot pour mot, c'est nommer la première cause d'un e-mail jamais reçu et dire au bout de combien de temps s'en inquiéter. La note est à l'étape d'ATTENTE, jamais derrière un (i) : c'est le seul moment où l'on attend quelque chose qui peut ne jamais paraître. *(Supplanté le 2026-09-15 par D-71 : la note reste à l'étape d'attente, repliée derrière un (i) « Rien reçu ? ».)*
 
 **L'identifiant DIT ce qu'il accepte** — « E-mail, téléphone ou pseudo ». `AuthService.authenticate` cherchait déjà par les trois (`AuthService.ts:155-158`) ; seul le libellé, qui disait « Identifiant », empêchait de le savoir. Rien n'est ajouté côté passerelle : une capacité existante devient visible.
 
@@ -2559,9 +2565,39 @@ La route dépréciée `/friend-requests` n'est jamais appelée.
 
 **Ce que ce lot ne fait pas.** L'inscription SANS mot de passe à partir de l'e-mail et du numéro seuls (la « simplifiée » de la directive) demande une route que la passerelle n'a pas : `registerRequestSchema` exige `email` + `password` et un nom, et le lien magique ne crée aucun compte. La décision de produit et son implémentation sont portées par #6405.
 
+## D-70 · Une publication s'affiche dans l'agencement choisi par son auteur ; le fil et le détail annoncent `X-Canvas-Caps: 3` pour le recevoir — 2026-09-15 (#6514)
+
+**Le choix est à l'AUTEUR, et il voyage.** iOS (#6502) laisse choisir, au moment de publier, entre carrousel, défilement continu (`reel`), hero, vague (`wave`) et sinusoïde (`sine`). La valeur vit dans le document canvas v3 (`storyEffects.layout`, `MosaicLayoutModeSchema`), sans champ serveur. La calculer chez le lecteur, d'après le nombre de médias ou la largeur, donnerait deux mises en page pour un même post.
+
+**La loi est DÉRIVÉE, et un gate la tient.** `lib/feed/mosaic-layout.ts` reprend `MosaicLayoutMode` (`CanvasV3.swift`) et la géométrie `MosaicLayout` (`MosaicLayout.swift`) en fractions de la boîte : plafond de quatre tuiles, « +N » sur la dernière seule, rapports de boîte déclarés par mode, légende là où la place le permet (grande tuile du hero, tuiles du défilement), bornée en MOTS. `scripts/lib/curve-mosaic-layout.mjs` (PARTIE 12 de `check-curve`) confronte 19 cotes aux trois sources Swift et au schéma partagé. Une mutation de quatre cotes dérivées produit 5 défauts et une sortie 1.
+
+**Le repli est le carrousel, qui était le rendu d'avant.** `layout` absent (tout le corpus antérieur au 2026-09-06), inconnu (écrit par un client plus récent), ou blob non marqué `v >= 3` : carrousel. Un média seul reste un carrousel, même en hero, parce qu'une mosaïque d'un élément n'en est pas une.
+
+**Une tuile montre un MÉDIA, pas une scène.** iOS monte le player de la scène dans chaque tuile ; ce client ne rend pas encore les scènes. Le média de la publication, dans l'ordre servi, est ce qu'il sait peindre. `FeedMediaSurface` sort de la carte : la page d'un carrousel, l'affiche d'un réel et la tuile d'une mosaïque sont trois hôtes pour une seule surface. Le défilement continu déborde volontairement à droite ; son conteneur défile, reçoit le focus clavier et porte un nom (`feed.post.media.mosaic`).
+
+**Pourquoi l'en-tête.** Sans `X-Canvas-Caps`, la passerelle traite le lecteur en client ancien (table O17, `negotiateWireStoryEffects`). Elle omet `storyEffects` d'un post à média et remplace celui d'un post sans média par une sentinelle v1. L'agencement n'arriverait donc jamais. Le fil (`loadFeedPage`) et le détail (`loadPost`) annoncent le niveau 3, comme iOS et Android. Le lecteur de stories ne l'annonce PAS : il lit encore la forme v1 (`storyEffects.background`), et l'annoncer lui retirerait ses fonds. CORS n'a rien à ouvrir, puisque `@fastify/cors` reflète les en-têtes demandés quand `allowedHeaders` n'est pas posé.
+
+**Mesuré.** `bun test` : 3849 verts (294 fichiers). `type-check`, `build`, `check-curve`, `measure-weight`, `check-utilities`, `check-git-tracking`, `check-feed-disc` (220 invariants), `check-floating-clearance` et `check-reels` sont verts. Poids : première peinture 43,78 Ko ; catalogues 45,6 Ko pour un plafond de 46 ; chunk `feed` 4,48 Ko. En navigateur réel sur `dist` (390 et 320 px de large), `POST_HERO` pose une grande tuile de 0,62 et deux satellites de 0,366 × 0,493, soit exactement les cotes Swift. La boîte mesure 0,82, aucun défilement horizontal, zéro erreur de page.
+
+**Ce que ce lot ne fait pas.** Android. Son décodeur (`CanvasV3.kt`) ne déclare pas `layout`, et le pont v3 → v1 (`StoryEffectsWireSerializer` → `StoryEffects.rendering`) le perd. Le fil pose donc toujours `MediaCollage.solve(images.size)`. Le suivi est tenu par #6514, qui reste ouverte.
+
+## D-71 · La connexion et l'inscription disent « par e-mail » : la baguette reste, le mot « magique » part, le « comment » passe derrière un (i) — 2026-09-15 (#6626)
+
+**Directive porteur.** « Moins de détails sur la page de connexion et d'enregistrement ; utiliser des (i) pour pouvoir informer sur le mode de fonctionnement si naturellement ce n'est pas clair. L'utilisateur a besoin de savoir qu'il va se connecter par email et non de savoir que c'est magic-mail… Garder la baguette magic mais être clair et simple. » Elle supplante deux choix antérieurs, écrits pour de bonnes raisons : la note des indésirables en clair pendant l'attente (D-69, #6404) et l'avertissement de validation en clair sous l'adresse de l'inscription (#6479).
+
+**Le vocabulaire est celui des trois clients, pas une improvisation web.** Porte mot de passe : « Se connecter par e-mail », baguette en tête. En-tête de l'écran plein : « Connexion par e-mail ». Panneau : « Votre adresse e-mail », bouton « Recevoir le lien », renvoi « Renvoyer le lien ». Attente : « E-mail envoyé », « Ouvrez le lien reçu à » + l'adresse. Les (i) : « Comment ça marche », « Rien reçu ? », « Pourquoi un lien ». L'écran d'un lien invalide dit « Un lien de connexion expire après 10 minutes ». Les routes (`/auth/magic-link`), les fichiers et les identifiants ne changent pas : le mot disparaît de ce que l'utilisateur LIT ou ENTEND, pas du code.
+
+**Un (i), un seul composant.** `components/info-hint.tsx` : `useInfoHint` (l'identifiant qui relie le bouton à sa note, et l'état ouvert), `InfoHintButton`, `InfoHintText`. Le (i) vivait dans `Field` et, recopié à la main, sous le téléphone de l'inscription. La connexion en demandait deux de plus HORS de tout champ : à côté du titre, et sous le compte à rebours. Une troisième et une quatrième copie auraient dérivé au premier correctif. `Field` et le téléphone passent donc par lui. Replié ne veut pas dire absent : la note reste dans le DOM en `sr-only`, et un champ la cite par `aria-describedby`.
+
+**« Rien reçu ? » garde son libellé LU à côté du glyphe** (`showsLabel`). Posé seul sous le compte à rebours, loin de tout champ ou titre, un (i) muet ne dirait pas de quoi il parle. Les deux autres (i) sont collés à ce qu'ils expliquent (un titre, un champ), et restent muets. Le texte de la note abandonne « après une minute » : c'est le texte imposé, identique sur les trois clients.
+
+**Défaut trouvé en posant le (i) de l'adresse : `aria-invalid` se déduisait de `aria-describedby`.** L'adresse et le mot de passe de l'inscription posaient `aria-invalid={describedBy !== undefined}`. Tant que seul le refus était cité, c'était juste. Dès qu'un champ cite aussi la note de son (i), il s'annonce « invalide » avant la première lettre. Le mot de passe, qui a son (i) depuis #6441, le faisait déjà. `aria-invalid` suit désormais le REFUS du champ. Deux témoins le tiennent (`signup-identity.test.tsx`, `signup-rungs.test.tsx`).
+
+**Le témoin lit ce qui est PERÇU, pas seulement le texte.** `test-support/perceivable-text.ts` joint le `textContent` et les `aria-label`/`title` : un « magique » retiré du texte mais resté dans un nom accessible serait encore dit à voix haute. Il court sur les deux portes de `/login`, l'écran plein, l'attente, le lien invalide et l'inscription.
+
 ---
 
-## D-70 · L'inscription montre le contact d'emblée et n'a plus d'étapes ; `/login` se réduit à la baguette ; `?methode=password` ; `/forgot-password` prend la forme de `/login` ; un code de parrainage s'entre et un lien le pose — 2026-09-14 (#6582, #6583, #6584)
+## D-72 · L'inscription montre le contact d'emblée et n'a plus d'étapes ; `/login` se réduit à la baguette ; `?methode=password` ; `/forgot-password` prend la forme de `/login` ; un code de parrainage s'entre et un lien le pose — 2026-09-14 (#6582, #6583, #6584)
 
 **Cette décision REDÉCOUPE D-69, elle ne l'annule pas.** La porte par défaut
 reste le lien magique, la machine reste unique (`MagicLinkPanel`), la note sur
@@ -2585,7 +2621,7 @@ sortir d'une porte qu'on venait soi-même de fermer. Il disparaît avec lui.
 La jauge de trois segments et « Étape N sur N » tombent aussi, et c'est
 cohérent : elles avaient été ajoutées pour RACHETER l'impression de formulaire
 sans fin que le dépliage créait. Un dispositif dont il faut compenser l'effet
-coûte plus qu'il ne rapporte (leçon 611).
+coûte plus qu'il ne rapporte (leçon 612).
 
 `SignupAnswers` n'a plus qu'une observation (`emailValid`) : le numéro ne
 conditionne plus rien, donc `phoneAnswered` — et les trois gestes qui le
@@ -2622,11 +2658,21 @@ mail", le champ e-mail et le bouton. » Le blason « Meeshy » et le titre
 quelqu'un qui vient de cliquer « Se connecter ». Ils tombent — sur cette porte
 seulement : la porte du MOT DE PASSE garde son blason (elle n'a pas de
 baguette) et le second facteur aussi (savoir de QUI vient une demande de code
-n'est pas un ornement). `MagicLinkPanel` gagne `heading`, vrai par défaut :
-l'écran plein `/auth/magic-link`, ouvert sans contexte depuis un e-mail, garde
-son titre.
+n'est pas un ornement).
 
 Le bouton dit « Recevoir le lien » sur les deux hôtes.
+
+*(À LA FUSION avec `dev`, le 2026-09-15 : ce paragraphe est tenu à MOITIÉ. Le
+BLASON tombe, comme écrit ci-dessus — D-71 ne le redemande pas. Le TITRE DE
+SECTION revient : D-71, d'une directive POSTÉRIEURE d'un jour, en a fait
+« Votre adresse e-mail » et lui a accroché le (i) « Comment ça marche », qui
+porte désormais tout le mode de fonctionnement — y compris la phrase « nous
+vous enverrons un lien… » que ce lot voulait garder en clair. Un titre qui
+HÉBERGE la mécanique ne redit plus le champ, et cette directive-là a été relue
+deux fois sur ce titre même (la place du (i), la césure de « e-mail ») : elle
+a été vue, pas subie. `MagicLinkPanel` avait gagné une prop `heading` pour
+taire ce titre sur `/login` ; plus personne ne la posait à faux, donc elle est
+retirée plutôt que laissée morte.)*
 
 ### `?methode=password` — ce qu'on cesse d'écrire, on ne cesse pas de le lire
 
@@ -2649,6 +2695,16 @@ promesse. Il gagne la note sur les indésirables — même attente qu'un lien
 magique — et la constante devient PARTAGÉE (`lib/view/auth-copy.ts`) plutôt que
 recopiée. Sa demande est INJECTABLE (`ForgotPasswordDeps`), comme celle du
 panneau du lien magique.
+
+*(À LA FUSION avec `dev`, le 2026-09-15 : `SPAM_HINT` n'a plus qu'UN hôte. D-71
+a replié la note du panneau du lien magique derrière le (i) « Rien reçu ? », et
+son texte y abandonne « après une minute » au profit de la formulation imposée
+aux trois clients. `/forgot-password` dit donc encore la note EN CLAIR, avec
+l'ancienne phrase, pendant que l'autre écran de la même attente la replie. Le
+module partagé est gardé tel quel — l'aligner demande de trancher si la
+directive « moins de détails » s'étend à cet écran, et un merge n'est pas le
+lieu où l'on tranche une question de produit. C'est un SUIVI, à porter par une
+issue.)*
 
 ### Le parrainage — entrer un code, et un lien qui le pose
 

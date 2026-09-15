@@ -110,6 +110,27 @@ describe('l’adresse valide ouvre l’identité, DIRECTEMENT', () => {
     expect(text(el)).toContain('Créer mon compte');
   });
 
+  /**
+   * LE TÉMOIN DU MOT DE PASSE A PERDU SON SUJET, ET C'EST VOLONTAIRE (fusion
+   * 2026-09-15).
+   *
+   * #6626 tenait sa règle — `aria-invalid` suit le REFUS, jamais la seule
+   * présence d'un `aria-describedby` — par DEUX témoins : l'adresse
+   * (`signup-identity.test.tsx`) et le mot de passe, ici. Le second exigeait
+   * que le mot de passe CITE une note, ce qu'il faisait par son (i) de #6441.
+   *
+   * #6583 a remplacé ce (i) par une CONSÉQUENCE visible
+   * (`[data-signup-password-effect]`, témoin plus bas) : le champ ne cite plus
+   * rien tant qu'on ne le refuse pas. Réécrit sur ce champ, le témoin serait
+   * VIDE — sans note citée, `describedBy` est indéfini, donc la déduction
+   * fautive rendrait « false » elle aussi, et le témoin resterait vert sur la
+   * régression même qu'il surveille (leçon 611).
+   *
+   * La règle reste donc tenue par le témoin de l'ADRESSE, qui garde son (i) et
+   * où la déduction fautive rougirait. La règle elle-même est intacte dans
+   * `signup.tsx` : `aria-invalid={feedback.fieldErrors.password !== undefined}`.
+   */
+
   test('l’identité dérivée montre ce qui PARTIRA, dès qu’elle paraît', () => {
     const el = mount();
     type(el, '#signup-email', 'ada.lovelace@meeshy.example');

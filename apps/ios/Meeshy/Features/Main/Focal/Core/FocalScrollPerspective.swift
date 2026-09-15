@@ -267,6 +267,41 @@ nonisolated enum FocalScrollPerspective {
         focusCard(in: contentView)?.removeFromSuperview()
     }
 
+    /// Échelle de LOUPE du message élu (directive porteur 2026-09-15, #6586).
+    /// L'élu seul grandit, autour de son centre ; ses voisins restent à plat
+    /// (directive 2026-08-24). Le gain est écrêté pour qu'un long message ne
+    /// déborde jamais de la marge verticale de sa carte, ni de la gouttière
+    /// horizontale de la rangée.
+    static func loupeScale(isFocused: Bool, reduceMotion: Bool, size: CGSize) -> CGFloat {
+        guard isFocused, !reduceMotion, size.width > 0, size.height > 0 else { return 1 }
+        let gain = min(
+            FocalMetrics.Focus.loupeGain,
+            2 * FocalMetrics.FocusCard.marginVertical / size.height,
+            2 * FocalMetrics.Row.paddingHorizontal / size.width
+        )
+        return 1 + gain
+    }
+
+    /// Pose la loupe sur le layer de l'élu, la retire des autres — animée au
+    /// changement d'élu, sèche entre deux frames d'un même élu.
+    @MainActor
+    static func magnify(_ layer: CALayer, isFocused: Bool, animated: Bool) {
+        let scale = loupeScale(isFocused: isFocused, reduceMotion: UIAccessibility.isReduceMotionEnabled, size: layer.bounds.size)
+        let target = CATransform3DMakeScale(scale, scale, 1)
+        guard !CATransform3DEqualToTransform(layer.transform, target) || layer.opacity != 1 else { return }
+        let pose = {
+            layer.transform = target
+            layer.opacity = 1
+        }
+        guard animated else { return pose() }
+        UIView.animate(
+            withDuration: FocalMetrics.Scene.enterDuration,
+            delay: 0,
+            options: [.curveEaseOut, .beginFromCurrentState, .allowUserInteraction],
+            animations: pose
+        )
+    }
+
     @MainActor
     static func reset(_ layer: CALayer) {
         guard !CATransform3DIsIdentity(layer.transform) || layer.opacity != 1 else { return }
