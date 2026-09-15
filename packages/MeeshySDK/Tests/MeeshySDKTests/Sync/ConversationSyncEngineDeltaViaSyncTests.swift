@@ -74,10 +74,14 @@ final class ConversationSyncEngineDeltaViaSyncTests: XCTestCase {
         return riche
     }
 
-    private func deltaJSON(hasGap: Bool = false, hasMore: Bool = false) -> String {
+    private func deltaJSON(
+        hasGap: Bool = false,
+        hasMore: Bool = false,
+        checkpoint: String = "2026-09-04T12:00:00.000Z"
+    ) -> String {
         """
         {
-          "checkpoint": "2026-09-04T12:00:00.000Z",
+          "checkpoint": "\(checkpoint)",
           "checkpointSeq": 42,
           "hasGap": \(hasGap),
           "hasMore": \(hasMore),
@@ -134,6 +138,54 @@ final class ConversationSyncEngineDeltaViaSyncTests: XCTestCase {
         let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
         XCTAssertEqual(cached.first(where: { $0.id == "c1" })?.title, riche.title)
         XCTAssertEqual(mockAPI.requestCount, 0)
+    }
+
+    // MARK: - Les dates du fil (#6609)
+
+    /// L'oracle est le CONTRAT de la passerelle — `z.string().datetime({ offset: true })` :
+    /// une date-heure ISO 8601 complète, avec ou sans fractions. Il ne passe
+    /// volontairement pas par le helper du SDK qu'il juge.
+    private static func dateHeureDeLaPasserelle(_ chaine: String) -> Date? {
+        let avecFractions = ISO8601DateFormatter()
+        avecFractions.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let sansFractions = ISO8601DateFormatter()
+        sansFractions.formatOptions = [.withInternetDateTime]
+        return avecFractions.date(from: chaine) ?? sansFractions.date(from: chaine)
+    }
+
+    private static func millisecondes(_ date: Date) -> Int64 {
+        Int64((date.timeIntervalSince1970 * 1_000).rounded())
+    }
+
+    func test_deltaViaSync_since_estUneDateHeureCompleteEgaleAuWatermark() async throws {
+        _ = await semeLeCache()
+        let avant = engine.lastSyncTimestamp
+        defer { engine.lastSyncTimestamp = avant }
+        let watermark = Date(timeIntervalSince1970: 1_789_464_863.563)
+        engine.lastSyncTimestamp = watermark
+        mockSync.scripte = .inchange
+
+        _ = await engine.syncSinceLastCheckpoint()
+
+        let since = try XCTUnwrap(mockSync.demandes.first?.since)
+        let relue = try XCTUnwrap(Self.dateHeureDeLaPasserelle(since),
+            "since=\(since) n'est pas une date-heure ISO 8601 : la passerelle rend 400 et le delta retombe sur le plein")
+        XCTAssertEqual(Self.millisecondes(relue), Self.millisecondes(watermark),
+            "since=\(since) doit porter le watermark à la milliseconde")
+    }
+
+    func test_deltaViaSync_checkpointAMillisecondes_avanceLeWatermark() async {
+        _ = await semeLeCache()
+        let avant = engine.lastSyncTimestamp
+        defer { engine.lastSyncTimestamp = avant }
+        engine.lastSyncTimestamp = Date(timeIntervalSince1970: 1_788_000_000)
+        mockSync.scripte = .delta(json: deltaJSON(checkpoint: "2026-09-04T12:00:00.563Z"), validateur: nil)
+
+        _ = await engine.syncSinceLastCheckpoint()
+
+        XCTAssertEqual(Self.millisecondes(engine.lastSyncTimestamp),
+                       Self.millisecondes(Date(timeIntervalSince1970: 1_788_523_200.563)),
+            "le checkpoint servi à millisecondes doit se relire et devenir le watermark")
     }
 
     // MARK: - Le repli NOMMÉ

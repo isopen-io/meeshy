@@ -3201,7 +3201,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 rtt = hint * 2 // hint is one-way; double for round-trip
             } else {
                 // No server-computed hint: approximate from current wall time vs serverTime.
-                if let serverDate = (try? Date(serverTimeStr, strategy: .iso8601.time(includingFractionalSeconds: true))) ?? (try? Date(serverTimeStr, strategy: .iso8601)) {
+                if let serverDate = WireDate.date(from: serverTimeStr) {
                     rtt = abs(Date().timeIntervalSince(serverDate)) * 1000 // ms
                 } else {
                     return
