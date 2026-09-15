@@ -2115,20 +2115,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     private var heartbeatTimer: Timer?
     private var lifecycleCancellables = Set<AnyCancellable>()
 
-    // Cached formatters — ISO8601DateFormatter is expensive to allocate.
-    // Safe to share: options are set once during init and never mutated after.
-    // Internes (plus `private`) : lus par `MessageSocketManager+Send.swift`.
-    nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    nonisolated(unsafe) static let isoFormatterBasic: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
     deinit {
         heartbeatTimer?.invalidate()
         heartbeatTimer = nil
@@ -3954,8 +3940,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let dateStr = try container.decode(String.self)
-            if let date = MessageSocketManager.isoFormatterWithFractional.date(from: dateStr) { return date }
-            if let date = MessageSocketManager.isoFormatterBasic.date(from: dateStr) { return date }
+            if let date = WireDate.date(from: dateStr) { return date }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
         }
         return decoder

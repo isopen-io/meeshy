@@ -181,6 +181,12 @@ const de = {
   'profile.language.choose': 'Auswählen',
   'profile.language.clear.regional': 'Regionalsprache entfernen',
   'profile.language.clear.custom': 'Benutzerdefinierte Sprache entfernen',
+
+  'languageSheet.title.read': 'Lesesprache',
+  'languageSheet.title.write': 'Schreibsprache',
+  'languageSheet.search': 'Sprache suchen',
+  'languageSheet.empty': 'Keine Sprache passt zu „{search}“.',
+
   'profile.stats.messages': 'Nachrichten',
   'profile.stats.translations': 'Übersetzungen',
   'profile.stats.languages': 'Sprachen',
