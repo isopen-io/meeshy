@@ -31,6 +31,10 @@ import MeeshyUI
 /// 330 pt se DÉRIVE : trois fois la hauteur de l'overlay posé sur le cadre, pour
 /// qu'il n'en couvre jamais plus du tiers. Si l'overlay grandit, le plancher
 /// suit ; il n'y a pas deux constantes à tenir d'accord.
+///
+/// Son jumeau sur l'autre axe (#6692) se dérive de la même façon : la colonne
+/// d'actions et ses deux gouttières tiennent dans le tiers latéral du cadre.
+/// Voir `minimumFrameWidth`.
 enum MediaGalleryStage {
 
     /// Couloir haut : la porte de sortie et le menu, cible 44 pt plus la marge
@@ -51,6 +55,35 @@ enum MediaGalleryStage {
 
     /// Le cadre ne descend jamais sous trois fois son overlay.
     static var minimumFrameHeight: CGFloat { overlayHeight * 3 }
+
+    /// **Ni sous la LARGEUR que sa colonne d'actions exige** (#6692) — le
+    /// jumeau du plancher de hauteur, sur l'autre axe.
+    ///
+    /// Ce qui se pose sur le cadre a une largeur autant qu'une hauteur. Sans ce
+    /// plancher, une image très haute (900 × 3 600) ne gardait que la largeur de
+    /// son média ajusté, environ 128 pt à la recette : le nom, la date et la
+    /// ligne de format passaient chacun sur deux lignes, la dernière débordait
+    /// sous le coin arrondi, et la colonne réagir · répondre · composer se
+    /// posait au MILIEU de l'image.
+    ///
+    /// La valeur se DÉRIVE de la colonne : sa cible, décollée du bord par une
+    /// gouttière et du milieu par une autre, tient dans le TIERS latéral du
+    /// cadre — les tiers que la loi du double tap découpe déjà sur ce même cadre
+    /// (`MediaStageSeek.lateralFraction`), si bien que la colonne ne franchit
+    /// jamais le tiers central. `(12 + 44 + 12) × 3 = 204` pt : la
+    /// colonne reste au bord, et le bloc auteur garde de quoi poser son nom, sa
+    /// date et sa ligne de format sur une ligne chacun. Si la cible, la
+    /// gouttière ou le tiers changent, le plancher suit.
+    ///
+    /// Il reste sous le cadre le plus étroit d'un ratio courant — la 9:16 d'un
+    /// lot qui réserve à la fois le rail et la progression, environ 312 pt —
+    /// donc aucun cadre existant ne bouge. Seul un média bien plus étroit
+    /// qu'une scène le rencontre, et c'est alors le MÉDIA qui flotte dans le
+    /// cadre sur son hors-champ habillé : le cadre ne s'étire pas, le média
+    /// n'est ni rogné ni agrandi.
+    static var minimumFrameWidth: CGFloat {
+        (gutter + MediaStageActionColumn.width + gutter) / MediaStageSeek.lateralFraction
+    }
 
     /// **La bande de progression, elle non plus, n'est pas un nombre** (#6162).
     ///
@@ -149,7 +182,8 @@ enum MediaGalleryStage {
                 corridors: corridors,
                 presentation: presentation,
                 cardedCornerRadius: cornerRadius,
-                minimumFrameHeight: minimumFrameHeight
+                minimumFrameHeight: minimumFrameHeight,
+                minimumFrameWidth: minimumFrameWidth
             )
         )
     }

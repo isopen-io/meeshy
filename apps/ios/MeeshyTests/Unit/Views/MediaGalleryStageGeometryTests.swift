@@ -135,8 +135,8 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
     /// **Le jumeau du plancher de hauteur n'est pas un nombre non plus.** Ce qui
     /// se pose sur le cadre a une LARGEUR : la colonne réagir · répondre ·
     /// composer, décollée du bord par une gouttière et du milieu par une autre,
-    /// tient dans le TIERS latéral du cadre — la zone où le double tap avance
-    /// déjà (`MediaStageSeek.lateralFraction`). Le témoin porte sur les
+    /// tient dans le TIERS latéral du cadre — les tiers que la loi du double tap
+    /// découpe déjà (`MediaStageSeek.lateralFraction`). Le témoin porte sur les
     /// IDENTITÉS : si la cible, la gouttière ou le tiers changent, le plancher
     /// suit sans qu'on y touche.
     func test_theWidthFloor_isTheActionColumnBandInTheLateralThird_neverAChosenNumber() {
