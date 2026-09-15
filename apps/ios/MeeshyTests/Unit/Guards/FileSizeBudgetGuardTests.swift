@@ -64,7 +64,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         // plafond. Le nom sort ENTIER, plafond compris — voir ci-dessous.
         "FeedView.swift",
         "FeedViewModel.swift",
-        "MeeshyApp.swift",
         "MessageListViewController.swift",
         "MessageOverlayMenu.swift",
         "P2PWebRTCClient.swift",
@@ -356,7 +355,13 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // plafond dur : il QUITTE la liste, pour toujours. Le plafond baisse de ce
     // que le lot retire aux deux qui restent (166 + 392) et du poids de celui
     // qui sort (1 150) — jamais du mou préexistant.
-    private static let legacyLineCeiling = 56_430
+    // #6744 — 56 430 → 55 102 (−1 328). Le splash devait cesser de tomber à la
+    // dernière ligne de la chaîne de démarrage, dans `MeeshyApp.swift`, hôte en
+    // dette. `SplashScreen` en est d'abord sorti, tel quel, vers
+    // `SplashScreen.swift` : l'hôte repasse SOUS le plafond dur (1 328 → 1 178)
+    // et QUITTE la liste, pour toujours. Le plafond baisse du poids entier du nom
+    // qui sort — jamais du mou préexistant.
+    private static let legacyLineCeiling = 55_102
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
