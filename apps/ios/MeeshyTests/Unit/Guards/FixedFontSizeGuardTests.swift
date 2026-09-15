@@ -274,6 +274,12 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/StoryReactionFlightView.swift",
         "Features/Main/Views/StoryTrayView.swift",
         "Features/Main/Views/StoryViewerContainer.swift",
+        // #6704 — RELOCALISATION pure : `StoryActionButton` quitte
+        // `StoryViewerView+Content.swift` et emporte ses trois sites figés — le
+        // glyphe de 20 pt (deux passes) et le libellé de 10 pt d'une colonne fixe
+        // de 56, doctrine 82i. La POPULATION ne bouge pas ; l'hôte en garde deux
+        // autres et reste dans la liste.
+        "Features/Main/Views/StoryViewerView+ActionButton.swift",
         // 2026-09-02 — RELOCALISATION pure, même forme qu'au #4084 : le SEUL site
         // figé de `StoryViewerView+Canvas.swift` (la croix 22×22 de la bannière
         // « Réponse à ») vit dans `StoryComposerBarView`, qui a quitté le canvas

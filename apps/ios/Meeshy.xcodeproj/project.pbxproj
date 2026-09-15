@@ -740,6 +740,7 @@
 		63E3D0A6D65A72EC11D6B5D5 /* ConnectionBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6251A7CBF37DB34FE8ABE38 /* ConnectionBanner.swift */; };
 		6401139E8D55D3F9E012A07C /* StoryDraftsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E470A0D54611473B94DFC6F8 /* StoryDraftsViewModelTests.swift */; };
 		6413F2CCD076780598D472A5 /* MeeshyComposerHost+Retract.swift in Sources */ = {isa = PBXBuildFile; fileRef = A006A20522E88DD495657C03 /* MeeshyComposerHost+Retract.swift */; };
+		64D318E569BB129F8FBF1B38 /* StoryViewerView+ActionButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 829A27516C24EFDB14E0056D /* StoryViewerView+ActionButton.swift */; };
 		64D39AADC2C2567D6C8D86AE /* NullAgentAssistProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D432D3279CF0926F35133D2 /* NullAgentAssistProvider.swift */; };
 		64D741012E3B076C325857E3 /* ReelFeedSoundIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBE6DDEA24B136582CEDD2F5 /* ReelFeedSoundIntent.swift */; };
 		64D8715282D267A52D248B67 /* StoryLanguageDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A74E91D296BB496A84E713C /* StoryLanguageDetailView.swift */; };
@@ -3011,6 +3012,7 @@
 		82016BAE6D592339E7A489FB /* CanvasMediaAdoptionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasMediaAdoptionTests.swift; sourceTree = "<group>"; };
 		822B0FD02B8796D40F0B2146 /* ComposerToolLabelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerToolLabelTests.swift; sourceTree = "<group>"; };
 		8249F94F7C278CDF9072DA20 /* StoryViewerScope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerScope.swift; sourceTree = "<group>"; };
+		829A27516C24EFDB14E0056D /* StoryViewerView+ActionButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+ActionButton.swift"; sourceTree = "<group>"; };
 		82F26C76EC880BA7FB423780 /* ZZEndStateConnectedSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZZEndStateConnectedSessionTests.swift; sourceTree = "<group>"; };
 		8329C1EB586BE99254257A09 /* StoryViewerScenePhasePauseGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerScenePhasePauseGuardTests.swift; sourceTree = "<group>"; };
 		83399389F8C1F7841BF32544 /* ComposerReusedComponentTitleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerReusedComponentTitleTests.swift; sourceTree = "<group>"; };
@@ -5772,6 +5774,7 @@
 				0F4B5E6DFB24FD1669A1FD5B /* StoryViewerRequestOrigin.swift */,
 				8249F94F7C278CDF9072DA20 /* StoryViewerScope.swift */,
 				DEB6305C59E95CA944ED3620 /* StoryViewerView.swift */,
+				829A27516C24EFDB14E0056D /* StoryViewerView+ActionButton.swift */,
 				360AC776A1248173B0DB82C0 /* StoryViewerView+Canvas.swift */,
 				635687FA46870CA09617B169 /* StoryViewerView+CanvasCaption.swift */,
 				FC84C288E18B20BFA0575E7E /* StoryViewerView+CanvasComposerBar.swift */,
@@ -7671,6 +7674,7 @@
 				700F464A077365AA056A891E /* StoryViewerInitialAction.swift in Sources */,
 				B14A15631196D8F25B99A407 /* StoryViewerRequestOrigin.swift in Sources */,
 				E4F2E89A0E8339DBC3E74482 /* StoryViewerScope.swift in Sources */,
+				64D318E569BB129F8FBF1B38 /* StoryViewerView+ActionButton.swift in Sources */,
 				F798FC604DFAD0D2FFA7116C /* StoryViewerView+Canvas.swift in Sources */,
 				A550FA08AFB2CE63267F58B2 /* StoryViewerView+CanvasCaption.swift in Sources */,
 				9F57D3D1695EB9D0C0693E2E /* StoryViewerView+CanvasComposerBar.swift in Sources */,
