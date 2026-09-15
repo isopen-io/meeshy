@@ -29,6 +29,7 @@ import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.formColumnWidth
 
 /**
  * Atterrissage du deep link magic link (`meeshy://auth/magic-link?token=` /
@@ -58,6 +59,7 @@ fun MagicLinkValidateScreen(
                 // seul le CONTENU est retreci — c'est exactement la geometrie
                 // d'avant, le degrade en plus.
                 .systemBarsPadding()
+                .formColumnWidth()
                 .padding(horizontal = MeeshySpacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,

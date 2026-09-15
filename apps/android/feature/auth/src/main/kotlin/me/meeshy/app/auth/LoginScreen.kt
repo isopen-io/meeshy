@@ -49,6 +49,7 @@ import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.formColumnWidth
 
 @Composable
 fun LoginScreen(
@@ -75,6 +76,7 @@ fun LoginScreen(
                 // d'avant, le degrade en plus.
                 .systemBarsPadding()
                 .imePadding()
+                .formColumnWidth()
                 .padding(horizontal = MeeshySpacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,

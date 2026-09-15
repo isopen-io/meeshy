@@ -16,6 +16,10 @@ import org.junit.Test
  * Android) : les valeurs FR et EN sont donc vérifiées mot pour mot, et chaque clé
  * de base doit exister dans chaque langue livrée pour qu'un (i) ne tombe jamais
  * sur l'anglais par défaut.
+ *
+ * « Mot de passe oublié » sert aussi à créer un PREMIER mot de passe (#6645) : aucun
+ * écran ne dit plus « réinitialiser » / « reset » / « restablecer » / « redefinir »,
+ * qui supposent un mot de passe déjà existant.
  */
 class AuthEmailSignInVocabularyTest {
 
@@ -53,6 +57,44 @@ class AuthEmailSignInVocabularyTest {
         }
 
         assertThat(offenders).isEmpty()
+    }
+
+    @Test
+    fun `no visible auth string says reset in any shipped language`() {
+        val resetWords = Regex("reset|r[ée]initialis|restablec|redefini", RegexOption.IGNORE_CASE)
+        val offenders = (listOf<String?>(null) + shippedLocales).flatMap { locale ->
+            strings(locale)
+                .filterValues { resetWords.containsMatchIn(it) }
+                .map { (key, value) -> "${locale ?: "base"}:$key=$value" }
+        }
+
+        assertThat(offenders).isEmpty()
+    }
+
+    @Test
+    fun `english forgot-password vocabulary matches the other clients`() {
+        assertThat(strings(null)).containsAtLeastEntriesIn(
+            mapOf(
+                "login_forgot_password" to "Forgot password?",
+                "auth_forgot_title" to "Forgot password",
+                "auth_forgot_subtitle" to "Get a link by email to choose a new password.",
+                "auth_forgot_never_had_label" to "Never had a password?",
+                "auth_forgot_never_had_text" to "The same link lets you create one.",
+            ),
+        )
+    }
+
+    @Test
+    fun `french forgot-password vocabulary matches the other clients`() {
+        assertThat(strings("fr")).containsAtLeastEntriesIn(
+            mapOf(
+                "login_forgot_password" to "Mot de passe oublié ?",
+                "auth_forgot_title" to "Mot de passe oublié",
+                "auth_forgot_subtitle" to "Recevez par e-mail un lien pour choisir un nouveau mot de passe.",
+                "auth_forgot_never_had_label" to "Jamais eu de mot de passe ?",
+                "auth_forgot_never_had_text" to "Ce même lien vous permet d'en créer un.",
+            ),
+        )
     }
 
     @Test
