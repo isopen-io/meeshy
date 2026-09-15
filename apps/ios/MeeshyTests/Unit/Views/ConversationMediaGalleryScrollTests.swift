@@ -211,15 +211,61 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
     /// Une page qui n'est pas comparable est re-rendue à chaque réévaluation de
     /// la racine, fenêtre ou pas. `.equatable()` est ce qui transforme la
     /// comparaison en économie réelle.
-    func test_bothPageKinds_areEquatable_andMountedAsSuch() throws {
+    ///
+    /// **Les natures de page sont NOMMÉES, pas comptées** (#6709). La scène de
+    /// post est devenue une troisième page de la galerie ; un compte passé de 2 à
+    /// 3 laisserait une quatrième page non comparable, ou un quatrième montage
+    /// hors page, passer au vert dès qu'un autre site disparaîtrait. Toute
+    /// `struct Gallery…Page: View` de l'unité doit donc figurer ici, être
+    /// `Equatable` et être montée en `.equatable()` — et les montages
+    /// `.equatable()` sont ceux des pages nommées, pas un de plus.
+    private static let pageKinds = ["GalleryImagePage", "GalleryVideoPage", "GalleryScenePage"]
+
+    func test_everyPageKind_isEquatable_andMountedAsSuch() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
 
-        XCTAssertTrue(code.contains("struct GalleryImagePage: View, Equatable"))
-        XCTAssertTrue(code.contains("struct GalleryVideoPage: View, Equatable"))
+        XCTAssertEqual(try Self.declaredPageKinds(in: code), Set(Self.pageKinds),
+                       "une nature de page de la galerie n'est pas nommée ici : l'inscrire, Equatable et montée en .equatable()")
+        for kind in Self.pageKinds {
+            XCTAssertTrue(code.contains("struct \(kind): View, Equatable"),
+                          "\(kind) doit être Equatable : sans quoi la racine la re-rend à chaque réévaluation")
+            XCTAssertTrue(Self.isMountedEquatable(kind, in: code),
+                          "\(kind) doit être montée en .equatable() : la comparaison seule n'économise rien")
+        }
         XCTAssertEqual(
-            code.components(separatedBy: ".equatable()").count - 1, 2,
-            "les deux types de page doivent être montés en .equatable() — et eux seuls."
+            code.components(separatedBy: ".equatable()").count - 1, Self.pageKinds.count,
+            "les pages nommées — image, vidéo, scène — sont montées en .equatable(), et elles seules."
         )
+    }
+
+    /// Les `struct Gallery…Page: View` que l'unité de la galerie déclare.
+    private static func declaredPageKinds(in code: String) throws -> Set<String> {
+        let motif = try NSRegularExpression(pattern: "struct (Gallery[A-Za-z]*Page): View")
+        let plage = NSRange(code.startIndex..., in: code)
+        return Set(motif.matches(in: code, range: plage).compactMap { trouve in
+            Range(trouve.range(at: 1), in: code).map { String(code[$0]) }
+        })
+    }
+
+    /// Le montage `Kind(…)` — parenthèses équilibrées — est-il suivi de
+    /// `.equatable()` ?
+    private static func isMountedEquatable(_ kind: String, in code: String) -> Bool {
+        guard let appel = code.range(of: "\(kind)(") else { return false }
+        var profondeur = 0
+        var index = code.index(before: appel.upperBound)
+        while index < code.endIndex {
+            if code[index] == "(" { profondeur += 1 }
+            if code[index] == ")" {
+                profondeur -= 1
+                if profondeur == 0 {
+                    return code[code.index(after: index)...]
+                        .drop(while: { $0.isWhitespace })
+                        .hasPrefix(".equatable()")
+                }
+            }
+            index = code.index(after: index)
+        }
+        return false
     }
 
     /// Hors fenêtre, une page vidéo ne doit RIEN entreprendre : ni résolution
