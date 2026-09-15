@@ -15,29 +15,10 @@ final class APIResponseTests: XCTestCase {
 
     private let decoder = JSONDecoder()
 
-    /// Mirrors the date decoding strategy used by APIClient (static cached formatters).
-    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    private nonisolated(unsafe) static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
+    /// Le décodeur de PRODUCTION, jamais une copie de sa stratégie : une copie
+    /// resterait verte le jour où l'original change (#6611).
     private func makeDateDecoder() -> JSONDecoder {
-        let d = JSONDecoder()
-        d.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let dateStr = try container.decode(String.self)
-            if let date = APIResponseTests.isoFormatterWithFractional.date(from: dateStr) { return date }
-            if let date = APIResponseTests.isoFormatter.date(from: dateStr) { return date }
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
-        }
-        return d
+        APIClient.makeAPIPayloadDecoder()
     }
 
     // MARK: - APIResponse<T>
