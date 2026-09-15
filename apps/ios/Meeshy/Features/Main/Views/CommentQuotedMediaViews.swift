@@ -145,8 +145,15 @@ private struct CommentQuotedMediaThumbnail: View {
             } else {
                 Color(hex: accentColor).opacity(0.12)
                     .overlay(
+                        // Le glyphe de repli est dimensionné par le CADRE de
+                        // la vignette (`side`), jamais par une police : une
+                        // taille figée y déborderait du carré au premier cran
+                        // de Dynamic Type, et une taille relative ferait
+                        // l'inverse — grossir sans que le carré suive.
                         Image(systemName: citation.kind.symbolName)
-                            .font(.system(size: side * 0.42))
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: side * 0.42, height: side * 0.42)
                             .foregroundColor(Color(hex: accentColor))
                     )
             }

@@ -176,7 +176,7 @@ struct CommentRowView: View, Equatable {
                             HapticFeedback.light()
                         } label: {
                             Image(systemName: translationRequested ? "hourglass" : "translate")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(MeeshyFont.relative(10, weight: .medium))
                                 .foregroundColor(MeeshyColors.indigo400.opacity(translationRequested ? 0.5 : 1))
                         }
                         .accessibilityLabel(String(localized: "feed.comments.translate", defaultValue: "Traduire", bundle: .main))

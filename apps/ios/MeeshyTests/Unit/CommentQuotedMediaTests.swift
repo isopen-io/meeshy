@@ -1,6 +1,6 @@
 import XCTest
 @testable import Meeshy
-import MeeshySDK
+@testable import MeeshySDK
 
 /// #6578 — **UN COMMENTAIRE CITE LE MÉDIA DU POST DONT IL PARLE.**
 ///
@@ -37,10 +37,18 @@ final class CommentQuotedMediaTests: XCTestCase {
         return Data(("{" + morceaux.joined(separator: ",") + "}").utf8)
     }
 
+    /// **Le décodeur de la PRODUCTION, jamais un plus strict.** La passerelle
+    /// émet ses dates AVEC fractions de seconde (`Date.toISOString()` →
+    /// `2026-09-15T10:00:00.000Z`), que la stratégie `.iso8601` de Foundation
+    /// REFUSE sur les runtimes livrés — `APIClient.makeAPIPayloadDecoder()` est
+    /// `internal` exactement pour cette raison, et son doc-comment le dit.
+    ///
+    /// Un décodeur fabriqué ici passait sur iOS 26.1 et tombait sur iOS 18.2,
+    /// c'est-à-dire sur la moitié basse de la fourchette que le dépôt supporte
+    /// (iOS 16→26) : le témoin mesurait alors la tolérance du RUNTIME, pas la
+    /// citation.
     private func decode(_ data: Data) throws -> APIPostComment {
-        let decodeur = JSONDecoder()
-        decodeur.dateDecodingStrategy = .iso8601
-        return try decodeur.decode(APIPostComment.self, from: data)
+        try APIClient.makeAPIPayloadDecoder().decode(APIPostComment.self, from: data)
     }
 
     // MARK: - Le fil porte DEUX moitiés, et un seul site les recolle
