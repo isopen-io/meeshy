@@ -66,12 +66,12 @@ export async function serveCitedPostMedia<T extends Record<string, unknown>>(
     where: { id: { in: [...attendus] } },
     select: { ...mediaSelect, postId: true },
   });
-  const parId = new Map(lignes.map((m: any) => [m.id, m]));
+  const parId = new Map(lignes.map((m) => [m.id, m]));
 
   return hisses.map((c) => {
     const fige = c['quotedPostMedia'] as { postMediaId?: string } | undefined;
     if (!fige?.postMediaId) return c;
-    const ligne: any = parId.get(fige.postMediaId);
+    const ligne = parId.get(fige.postMediaId);
     // Le média n'existe plus, ou il a quitté le post commenté : la citation
     // reste, sans rien de descriptif. C'est le comportement voulu — pas une
     // erreur à signaler.
