@@ -30,6 +30,7 @@ import type {
   CommentTranslationUpdatedEventData,
   CommentMediaUpdatedEventData,
   MediaCaptionTranslationUpdatedEventData,
+  MediaAltTranslationUpdatedEventData,
 } from '@meeshy/shared/types/post';
 
 // enhancedLogger (Pino) sort en prod ; le `logger` Winston de server.ts est
@@ -653,6 +654,26 @@ export class SocialEventsHandler {
       return;
     }
     this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
+  }
+
+  /**
+   * Diffuse `media:alt-translation-updated` (traduction de texte alternatif
+   * d'accessibilité prête, #6737) — jumelle exacte de
+   * `broadcastMediaCaptionTranslationUpdated`, même audience.
+   */
+  async broadcastMediaAltTranslationUpdated(
+    data: MediaAltTranslationUpdatedEventData,
+    postAuthorId: string,
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    if (data.commentId) {
+      const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
+      this.io.to(rooms).emit(SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);
+      return;
+    }
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED, data);
   }
 
   // ==============================================

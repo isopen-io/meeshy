@@ -376,10 +376,15 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     /// elle vit dans `PostDetailView+RepostEmbed.swift` depuis `598ba11f`, et la
     /// garde n'a pas à savoir où elle vivra demain — seulement qu'elle passe par
     /// le point de décision, et que celui-ci n'a que DEUX appelants.
+    ///
+    /// L'appel se reconnaît à son PRÉFIXE (2026-09-15, #6696) : le chemin natif
+    /// passe désormais aussi le geste d'ouverture (`onOpen:`), et une garde qui
+    /// comptait la liste d'arguments entière aurait vu disparaître un appelant
+    /// qui n'a pas bougé. Ce qui se compte, ce sont les appels.
     func test_bothCanvasPaths_goThroughTheSingleDecisionPoint() throws {
         let canvas = try source("Meeshy/Features/Main/Views/PostDetailView+Canvas.swift")
         let unit = try postDetailUnit()
-        let decisionPoint = "storyCanvasOrPlaceholder(renderedItem: renderedItem)"
+        let decisionPoint = "storyCanvasOrPlaceholder(renderedItem: renderedItem"
 
         XCTAssertTrue(
             canvas.contains("BackgroundSoundBadge.canvasHasContent(renderedItem)"),

@@ -118,11 +118,17 @@ public nonisolated enum SceneFraming {
             // objet `media` de plan `bg` pour une simple couleur, et cet objet
             // n'a alors ni adresse ni forme.
             guard isBackground(objet) else { return true }
-            if case .string(let url)? = objet.payload["mediaURL"], !url.isEmpty { return true }
-            if case .string(let identity)? = objet.payload["postMediaId"],
-               !identity.isEmpty { return true }
-            return declaredAspect(of: objet) != nil
+            return carriesPicture(objet)
         }
+    }
+
+    /// Un objet porte-t-il des PIXELS à lui — une adresse, une identité de
+    /// média, ou une forme déclarée ? Le porteur `bg` d'une couleur ou d'un
+    /// cadrage n'en porte aucun.
+    static func carriesPicture(_ object: ObjectV3) -> Bool {
+        if case .string(let url)? = object.payload["mediaURL"], !url.isEmpty { return true }
+        if case .string(let identity)? = object.payload["postMediaId"], !identity.isEmpty { return true }
+        return declaredAspect(of: object) != nil
     }
 
     /// **Le rapport DÉCLARÉ par l'objet lui-même.**
@@ -245,6 +251,108 @@ public nonisolated enum SceneFraming {
               cadre.height > 0
         else { return nil }
         return (cadre.width * sceneAspect) / cadre.height
+    }
+
+    // MARK: - La scène qui n'est qu'une image (#6697)
+
+    /// **Le rapport de l'IMAGE, quand la scène n'est qu'une image plus large
+    /// qu'elle** (#6697, recette staging du 2026-09-15).
+    ///
+    /// Mesuré sur le post « PAYSAGE 16:9 » : un seul objet, un fond au
+    /// `aspectRatio` 1,7778, sans cadrage déclaré. Le renderer REMPLIT un tel
+    /// fond (`StoryBackgroundFraming.rendersFilled(nil)`) : posé dans un cadre
+    /// 9:16, il y est dessiné 3,16 fois plus large que le cadre. La carte du fil
+    /// et le détail le dessinaient donc à la MÊME échelle, et n'en montraient
+    /// pareillement que le tiers central ; le lecteur de Réels, qui lit le média
+    /// et non la scène, le montrait entier.
+    ///
+    /// > Ce n'était pas une échelle recopiée qui divergeait, c'était le CADRE
+    /// > donné au player : 9:16 partout, alors que la scène ne montre qu'une
+    /// > image d'une autre forme. Un fond rempli couvre exactement un cadre de
+    /// > sa forme ; un fond ajusté n'y laisse aucune bande. Dans les deux cas
+    /// > l'image se voit entière, et il n'y a rien d'autre à montrer.
+    ///
+    /// Le renderer ne change pas (#6125 garde son défaut pour ce qui est
+    /// publié) : c'est la PRÉSENTATION qui suit la forme du contenu, comme le
+    /// lecteur le fait déjà pour une story qui n'est qu'une image (#6636).
+    ///
+    /// **Elle échoue FERMÉE.** Un objet visible posé sur l'image, un fond que
+    /// l'auteur a zoomé, tourné, déplacé, recadré ou animé, une forme non
+    /// déclarée, une image pas plus large que la scène, ou une scène qui porte
+    /// déjà son cadre (`carrierAspect`) : `nil`, et la scène se présente comme
+    /// avant. Montrer la scène à tort coûte un rognage qui existait déjà ;
+    /// montrer l'image à tort déferait un cadrage que l'auteur a posé.
+    public static func imageAspect(scene: SceneV3) -> CGFloat? {
+        guard scene.carrierAspect == nil,
+              let fond = scene.objects.first(where: { isBackground($0) && carriesPicture($0) }),
+              let rapport = declaredAspect(of: fond), rapport > sceneAspect,
+              isUntouched(fond),
+              scene.objects.allSatisfy({ $0.id == fond.id || !showsPixels($0) })
+        else { return nil }
+        return rapport
+    }
+
+    /// **Le rapport auquel une scène ENTIÈRE se présente** — la loi d'échelle
+    /// que les surfaces partagent (#6697).
+    ///
+    /// - Parameter canvasAspect: le rapport du CANVAS, que l'appelant tient de
+    ///   la loi du porteur (`carrierAspect`, côté app) ; le 9:16 par défaut.
+    ///   Il n'est pas recalculé ici : une scène qui porte son cadre n'est
+    ///   jamais réinterprétée comme une image (`imageAspect` rend `nil`).
+    public static func presentationAspect(scene: SceneV3,
+                                          canvasAspect: CGFloat = sceneAspect) -> CGFloat {
+        imageAspect(scene: scene) ?? canvasAspect
+    }
+
+    /// **La taille du player dans un cadre** : la scène présentée, AJUSTÉE.
+    /// Largeur rendue et échelle du contenu vont ensemble
+    /// (`CanvasGeometry.scaleFactor = largeur / 1080`) — deux surfaces qui
+    /// passent par ici dessinent la scène à la même échelle relative.
+    public static func presentedSize(scene: SceneV3,
+                                     in box: CGSize,
+                                     canvasAspect: CGFloat = sceneAspect) -> CGSize {
+        CanvasGeometry.aspectFitSize(in: box,
+                                     ratio: presentationAspect(scene: scene, canvasAspect: canvasAspect))
+    }
+
+    /// **La fenêtre d'une carte de fil** : `focus(scene:)`, sauf pour une scène
+    /// qui n'est qu'une image. Celle-là se présente à son propre rapport — que
+    /// `cardAspect` rend déjà —, et une fenêtre posée sur un canvas 9:16 rempli
+    /// en montrait le milieu, jamais l'image.
+    public static func cardFocus(scene: SceneV3) -> CGRect? {
+        imageAspect(scene: scene) == nil ? focus(scene: scene) : nil
+    }
+
+    /// Un objet qui PEINT quelque chose par-dessus le fond : visible, et pas un
+    /// simple porteur de couleur ou de cadrage.
+    static func showsPixels(_ object: ObjectV3) -> Bool {
+        guard isVisible(object) else { return false }
+        return !isBackground(object) || carriesPicture(object)
+    }
+
+    static let untouchedTolerance: Double = 0.001
+
+    /// Le fond tel qu'il ENTRE : échelle 1, sans rotation, centré, sans images
+    /// clés, sans recadrage.
+    static func isUntouched(_ fond: ObjectV3) -> Bool {
+        guard abs(fond.transform.scale - 1) < untouchedTolerance,
+              abs(fond.transform.rotation) < untouchedTolerance,
+              (fond.timing?.keyframes ?? []).isEmpty,
+              case .free(let x, let y) = fond.anchor,
+              abs(x - 0.5) < untouchedTolerance, abs(y - 0.5) < untouchedTolerance
+        else { return false }
+        return declaredCrop(of: fond)?.isFull ?? true
+    }
+
+    /// Le recadrage que le payload déclare. Les quatre fractions ne se lisent
+    /// qu'ENSEMBLE, comme à la relecture v3 : trois sur quatre ne décrivent
+    /// aucun rectangle, et leur absence vaut le cadre entier.
+    static func declaredCrop(of object: ObjectV3) -> MediaCropRect? {
+        guard case .number(let x)? = object.payload["cropX"],
+              case .number(let y)? = object.payload["cropY"],
+              case .number(let w)? = object.payload["cropW"],
+              case .number(let h)? = object.payload["cropH"] else { return nil }
+        return MediaCropRule.clamped(MediaCropRect(x: x, y: y, width: w, height: h))
     }
 
     // MARK: - Les pièces
