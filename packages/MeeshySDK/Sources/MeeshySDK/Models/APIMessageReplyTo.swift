@@ -34,10 +34,20 @@ public struct APIMessageReplyTo: Decodable, Sendable {
     public let isEncrypted: Bool?
     public let encryptionMode: String?
 
+    /// L'instantané FIGÉ de la PIÈCE NOMMÉE par cette réponse (#6164) : l'ancre
+    /// du saut et la NATURE, et rien d'autre. La passerelle le grave dans
+    /// `metadata.attachmentReplyTo` du message CITANT et le ressert ici.
+    ///
+    /// `nil` sur toute citation d'avant le lot, et sur toute réponse qui vise
+    /// le message entier — le repli est alors le média REPRÉSENTATIF, comme
+    /// avant.
+    public let attachmentReplyTo: APIQuotedAttachmentReference?
+
     private enum CodingKeys: String, CodingKey {
         case id, content, senderId, sender, attachments
         case originalLanguage, translations
         case isViewOnce, isBlurred, expiresAt, effectFlags, isEncrypted, encryptionMode
+        case attachmentReplyTo
     }
 
     public init(from decoder: Decoder) throws {
@@ -62,6 +72,11 @@ public struct APIMessageReplyTo: Decodable, Sendable {
         effectFlags = try c.decodeIfPresent(UInt32.self, forKey: .effectFlags)
         isEncrypted = try c.decodeIfPresent(Bool.self, forKey: .isEncrypted)
         encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
+        // `try?` : un instantané malformé ne fait pas tomber la citation
+        // ENTIÈRE — elle retombe alors sur son média représentatif, ce que
+        // toutes les citations faisaient avant ce lot.
+        attachmentReplyTo = (try? c.decodeIfPresent(APIQuotedAttachmentReference.self,
+                                                    forKey: .attachmentReplyTo)) ?? nil
     }
 
     /// Le message cité ne doit pas republier son texte : vue unique, flouté ou
@@ -75,6 +90,47 @@ public struct APIMessageReplyTo: Decodable, Sendable {
         let flags = MessageEffectFlags(rawValue: effectFlags ?? 0)
         return isViewOnce == true || isBlurred == true || isEncrypted == true
             || flags.contains(.viewOnce) || flags.contains(.blurred)
+    }
+}
+
+// MARK: - L'instantané FIGÉ de la pièce citée
+
+/// Ce que `replyTo.attachmentReplyTo` porte, et RIEN d'autre (#6164, #6123
+/// voie C) : l'ancre du saut et la NATURE du média.
+///
+/// La frontière n'est pas un détail d'encodage, c'est la décision du lot : un
+/// instantané ne se relit pas, donc il ne peut porter que des faits qui ne
+/// peuvent JAMAIS devenir un secret. La vignette, le nom de fichier, la taille
+/// et la **DURÉE** en sont exclus — le cycle 125 les nomme dans ce qu'une
+/// protection doit garder — et ils voyagent sur `attachments`, où ils sont
+/// retenus pièce par pièce. Le dépôt divulgue en revanche déjà l'icône de TYPE
+/// d'un contenu protégé (`protectedPreview` → `contentTypeIcon`) : la nature
+/// est donc le seul fait descriptif qu'on a le droit de figer.
+///
+/// Site de vérité de la forme : `services/gateway/src/services/messaging/
+/// attachmentReplySnapshot.ts`, qui tient la liste des champs RÉVOCABLES à
+/// côté d'elle.
+public struct APIQuotedAttachmentReference: Decodable, Sendable, Equatable {
+    public let attachmentId: String
+    /// `image` · `video` · `audio` · `location` · `file` — le vocabulaire du
+    /// SERVEUR, plus grossier que celui d'`AttachmentKind`, qui n'a ni
+    /// `location` ni `file`.
+    public let kind: String?
+
+    /// La nature figée, projetée dans le vocabulaire d'`AttachmentKind` — ce
+    /// que `ReplyReference.attachmentType` déclare porter.
+    ///
+    /// Sert UNIQUEMENT quand la pièce nommée n'est plus servie (supprimée,
+    /// retenue, hors fenêtre) : la citation dit alors « une photo » sans rien
+    /// montrer. Une localisation rend `nil` — il n'y a pas de média à décrire.
+    public var declaredKind: String? {
+        switch kind {
+        case "image": return AttachmentKind.image.rawValue
+        case "video": return AttachmentKind.video.rawValue
+        case "audio": return AttachmentKind.audio.rawValue
+        case "file": return AttachmentKind.other.rawValue
+        default: return nil
+        }
     }
 }
 
@@ -114,7 +170,14 @@ public extension APIMessageReplyTo {
     /// jamais sur l'identifiant de participant seul : `replyTo.senderId` est
     /// l'appartenance à la conversation, pas la personne.
     func toReplyReference(currentUserId: String?, preferredLanguages: [String]) -> ReplyReference {
-        let representative = attachments?.quotedRepresentative
+        // La pièce NOMMÉE l'emporte sur le représentatif (#6164) — et quand
+        // elle est nommée mais ABSENTE (supprimée, hors fenêtre), on ne
+        // retombe sur RIEN : emprunter la vignette de la première montrerait
+        // une photo que cette réponse ne cite pas. Il reste alors la NATURE
+        // figée, qui suffit à dire « une photo ».
+        let representative: APIMessageAttachment? = attachmentReplyTo == nil
+            ? attachments?.quotedRepresentative
+            : attachments?.first { $0.id == attachmentReplyTo?.attachmentId }
         let placeholder = isProtected ? protectedPlaceholder(for: representative) : nil
         return ReplyReference(
             messageId: id,
@@ -122,7 +185,9 @@ public extension APIMessageReplyTo {
             previewText: placeholder ?? prismPreviewText(preferredLanguages: preferredLanguages),
             isMe: currentUserId.map { (sender?.resolvedUserId ?? senderId) == $0 } ?? false,
             authorAvatarUrl: sender?.resolvedAvatar,
-            attachmentType: representative?.mimeType.map { AttachmentKind(mimeType: $0).rawValue },
+            attachmentType: representative?.mimeType.map { AttachmentKind(mimeType: $0).rawValue }
+                ?? attachmentReplyTo?.declaredKind,
+            attachmentId: attachmentReplyTo?.attachmentId,
             attachmentThumbnailUrl: representative?.thumbnailUrl,
             attachmentIsProtected: isProtected ? true : representative?.declaredProtection,
             attachmentFacts: representative.map { ReplyReference.QuotedAttachmentFacts($0) }
