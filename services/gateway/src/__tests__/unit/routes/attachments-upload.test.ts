@@ -16,16 +16,33 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
   messageAttachmentSchema: { type: 'object', properties: { id: { type: 'string' } } },
-  errorResponseSchema: { type: 'object', properties: { success: { type: 'boolean' } } },
+  // `error`/`message`/`code` déclarés (comme le vrai `errorResponseSchema`,
+  // #4884) — un schéma sans `properties` EFFACE via fast-json-stringify
+  // (`additionalProperties: false` par défaut) : sans eux, un témoin de
+  // comportement qui inspecte le CORPS d'une erreur (#6604) passerait sur un
+  // faux vide plutôt que sur ce que la route sert réellement.
+  errorResponseSchema: {
+    type: 'object',
+    properties: {
+      success: { type: 'boolean' },
+      error: { type: 'string' },
+      message: { type: 'string' },
+      code: { type: 'string' },
+    },
+  },
 }));
 
 const mockUploadMultiple = jest.fn<any>();
 const mockCreateTextAttachment = jest.fn<any>();
+// #6604 — la route valide chaque fichier AVANT l'upload ; le défaut « valide »
+// laisse tous les témoins existants (qui n'exercent pas ce refus) inchangés.
+const mockValidateFile = jest.fn<any>().mockReturnValue({ valid: true });
 
 jest.mock('../../../services/attachments', () => ({
   AttachmentService: jest.fn().mockImplementation(() => ({
     uploadMultiple: (...a: any[]) => mockUploadMultiple(...a),
     createTextAttachment: (...a: any[]) => mockCreateTextAttachment(...a),
+    validateFile: (...a: any[]) => mockValidateFile(...a),
   })),
 }));
 

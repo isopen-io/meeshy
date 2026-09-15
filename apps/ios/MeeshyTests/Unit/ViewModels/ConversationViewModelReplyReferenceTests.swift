@@ -114,12 +114,12 @@ final class ConversationViewModelReplyReferenceTests: XCTestCase {
         )
     }
 
-    private func makePhoto(isViewOnce: Bool = false, isBlurred: Bool = false) -> MessageAttachment {
+    private func makePhoto(id: String = "a-photo", isViewOnce: Bool = false, isBlurred: Bool = false) -> MessageAttachment {
         MessageAttachment(
-            id: "a-photo",
+            id: id,
             mimeType: "image/jpeg",
             fileSize: 204_800,
-            fileUrl: "https://cdn.meeshy.me/a-photo.jpg",
+            fileUrl: "https://cdn.meeshy.me/\(id).jpg",
             isViewOnce: isViewOnce,
             isBlurred: isBlurred,
             width: 1024,
@@ -379,6 +379,92 @@ final class ConversationViewModelReplyReferenceTests: XCTestCase {
         sut.messages = []
 
         XCTAssertNil(sut.makeReplyReference(storyReplyReference: nil, replyToId: "absent"))
+    }
+
+    // MARK: - L'ANCRE de la pièce citée (#6164)
+
+    /// `CoreModels.quotedRepresentative` EXIGE que les trois constructeurs de
+    /// `ReplyReference` et `openQuotedMedia` résolvent la MÊME pièce. Le
+    /// constructeur SERVEUR pose `attachmentId` depuis l'instantané du fil ;
+    /// cette fabrique-ci décrivait la pièce sans jamais la NOMMER, si bien que
+    /// `citedAttachment(among:)` — le site unique que l'ouverture interroge —
+    /// la re-dérivait depuis la liste COURANTE du magasin. Deux dérivations
+    /// indépendantes, deux sources, et un emprunt dès qu'elles divergent.
+    ///
+    /// Le RANG est load-bearing : la pièce visée est la DEUXIÈME du tableau (une
+    /// localisation la précède). Écrit sur la première, le témoin ne pourrait
+    /// pas tomber — `attachments.first` et la règle juste y rendraient le même
+    /// verdict.
+
+    func test_optimisticReplyReference_gravesTheIdOfTheAttachmentItDescribes() {
+        let sut = makeSUT()
+        let place = MessageAttachment(id: "a-place", mimeType: "application/x-location", latitude: 48.85, longitude: 2.35)
+        let citee = makePhoto(id: "a-photo-2")
+        let voisine = makePhoto(id: "a-photo-3")
+        let quoted = makeQuoted(content: "", attachments: [place, citee, voisine])
+        sut.messages = [quoted]
+
+        let reference = sut.optimisticReplyReference(quoting: quoted)
+
+        XCTAssertEqual(reference.attachmentId, "a-photo-2",
+                       "la citation NOMME la pièce qu'elle décrit — sans l'ancre, l'écho serveur en nommera une et la bulle optimiste une autre")
+        XCTAssertNotEqual(reference.attachmentId, "a-place")
+        XCTAssertEqual(reference.citedAttachment(among: quoted.attachments)?.id, "a-photo-2",
+                       "le site UNIQUE de résolution rend la pièce que la citation décrit, pas un représentatif recalculé")
+    }
+
+    func test_optimisticReplyReference_citedAttachmentGone_resolvesNothingRatherThanTheNeighbour() {
+        let sut = makeSUT()
+        let citee = makePhoto(id: "a-photo-2")
+        let voisine = makePhoto(id: "a-photo-3")
+        let quoted = makeQuoted(content: "", attachments: [citee, voisine])
+        sut.messages = [quoted]
+
+        let reference = sut.optimisticReplyReference(quoting: quoted)
+
+        // La pièce décrite a quitté le message depuis la composition (suppression,
+        // purge, fenêtre de chargement) : la citation ne doit PAS ouvrir la
+        // voisine — ce serait montrer une photo que cette réponse ne cite pas.
+        XCTAssertNil(reference.citedAttachment(among: [voisine]),
+                     "pièce nommée INTROUVABLE ⇒ nil, jamais un emprunt au représentatif")
+        XCTAssertEqual(reference.citedAttachment(among: quoted.attachments)?.id, "a-photo-2")
+    }
+
+    func test_optimisticReplyReference_protectedMedia_stillCarriesTheAnchor() {
+        let sut = makeSUT()
+        let quoted = makeQuoted(
+            content: "secret", attachments: [makePhoto(id: "a-photo-2", isViewOnce: true)],
+            effects: MessageEffects(flags: [.viewOnce])
+        )
+        sut.messages = [quoted]
+
+        let reference = sut.optimisticReplyReference(quoting: quoted)
+
+        XCTAssertEqual(reference.attachmentId, "a-photo-2",
+                       "l'ancre n'est pas un secret — le verrou vit dans `openQuotedMedia`, qui relit le message RÉEL")
+        XCTAssertNil(reference.attachmentThumbnailUrl)
+        XCTAssertNil(reference.attachmentThumbHash)
+    }
+
+    func test_optimisticReplyReference_textOnlyQuote_posesNoAnchor() {
+        let sut = makeSUT()
+        let quoted = makeQuoted(content: "juste du texte", attachments: [])
+        sut.messages = [quoted]
+
+        XCTAssertNil(sut.optimisticReplyReference(quoting: quoted).attachmentId,
+                     "aucune pièce à nommer : la citation reste ce qu'elle était")
+    }
+
+    func test_makeReplyReference_withReplyToId_carriesTheSameAnchorAsTheFactory() {
+        let sut = makeSUT()
+        let place = MessageAttachment(id: "a-place", mimeType: "application/x-location", latitude: 48.85, longitude: 2.35)
+        let quoted = makeQuoted(content: "", attachments: [place, makePhoto(id: "a-photo-2")])
+        sut.messages = [quoted]
+
+        let viaSend = sut.makeReplyReference(storyReplyReference: nil, replyToId: quoted.id)
+
+        XCTAssertEqual(viaSend?.attachmentId, "a-photo-2")
+        XCTAssertEqual(viaSend?.attachmentId, sut.optimisticReplyReference(quoting: quoted).attachmentId)
     }
 
     // MARK: - Garde de source : la bannière du composeur passe par la fabrique

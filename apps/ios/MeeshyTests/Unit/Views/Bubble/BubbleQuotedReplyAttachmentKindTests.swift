@@ -107,10 +107,10 @@ final class BubbleQuotedReplyAttachmentKindTests: XCTestCase {
 ///    ÉCRAN (`onQuotedMediaTap`) ;
 /// 3. TOUT LE RESTE, LE NOM COMPRIS → retour au message cité.
 ///
-/// Cette peau est celle que voit TOUT LE MONDE : le programme bêta naît éteint
-/// (`BetaFeaturesPreference`, défaut OFF) ⇒ `readingModes` OFF ⇒
-/// `ReadingModeOrchestrator` rend `.bubbles` dès sa première branche. La
-/// rangée plate, où le défaut a été signalé, est derrière le drapeau.
+/// Cette peau était, lors de ce lot, celle que voyait TOUT LE MONDE (le
+/// programme bêta naissait éteint, donc les modes de lecture aussi) ; depuis
+/// la sortie de bêta (2026-09-14, #6482), Bulles est un choix parmi les modes
+/// de lecture.
 ///
 /// **Répartition des zones, et pourquoi la garde regarde DEUX niveaux.** Le
 /// composant porte les zones 1 et 2 ; la zone 3 vit chez ses TROIS hôtes, qui

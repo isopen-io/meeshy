@@ -51,6 +51,15 @@ const fr = {
   'reels.media.error': 'Lecture impossible — Réessayer',
   'reels.image': 'Image {index} sur {count}',
 
+  /* TOUTES LES STORIES (#6547) — `routes/stories.tsx`, même patron que le Flux. */
+  'stories.title': 'Stories',
+  'stories.loading': 'Chargement des stories…',
+  'stories.error': "Les stories n'ont pas pu être chargées.",
+  'stories.empty.title': "Aucune story pour l'instant",
+  'stories.empty.subtitle': 'Les stories de vos contacts apparaîtront ici pendant vingt-quatre heures.',
+  'stories.create': 'Créer une story',
+  'stories.count.one': '{count} story',
+  'stories.count.other': '{count} stories',
   /* LE LIBELLÉ DU GROUPE DU LECTEUR (#6550) — partagé par le rail
      (`components/story-rail.tsx`) et la liste « Toutes les stories »
      (`routes/stories.tsx`), via `storyAuthorLabel()`. */
@@ -70,6 +79,7 @@ const fr = {
   'feed.post.media.audio': 'Audio',
   'feed.post.media.previous': 'Média précédent',
   'feed.post.media.next': 'Média suivant',
+  'feed.post.media.mosaic': 'Mosaïque de {count} médias',
   'feed.post.see_more': 'voir plus',
   'feed.post.see_less': 'voir moins',
   'feed.post.reel.chip': 'Réel',
@@ -192,6 +202,17 @@ const fr = {
   'profile.language.choose': 'Choisir',
   'profile.language.clear.regional': 'Retirer la langue régionale',
   'profile.language.clear.custom': 'Retirer la langue personnalisée',
+
+  /* LA FEUILLE DE CHOIX DE LANGUE, PARLÉE DANS LA LANGUE D'INTERFACE (#6328)
+     — titre par défaut (inscription), titre du composeur, recherche et état
+     vide de `language-sheet.tsx`. `title`/`selected` restent des props
+     explicites (#5828) : ces clés ne servent qu'à défaut d'un `title` fourni
+     par l'appelant, et toujours pour la recherche/l'état vide. */
+  'languageSheet.title.read': 'Langue de lecture',
+  'languageSheet.title.write': 'Langue d’écriture',
+  'languageSheet.search': 'Rechercher une langue',
+  'languageSheet.empty': 'Aucune langue ne correspond à « {search} ».',
+
   'profile.stats.messages': 'Messages',
   'profile.stats.translations': 'Traductions',
   'profile.stats.languages': 'Langues',

@@ -894,22 +894,8 @@ extension APINotification {
         return nil
     }
 
-    // `nonisolated(unsafe)` : ISO8601DateFormatter est thread-safe pour le
-    // parsing une fois configuré ; ces statics sont partagés depuis un struct
-    // Sendable nonisolated (même pattern que les CIContext/NSCache du SDK).
-    private nonisolated(unsafe) static let isoFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    private nonisolated(unsafe) static let isoPlain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
     static func parseISODate(_ string: String) -> Date? {
-        isoFractional.date(from: string) ?? isoPlain.date(from: string)
+        WireDate.date(from: string)
     }
 }
 

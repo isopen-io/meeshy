@@ -67,7 +67,7 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
         if let updatedSince {
             queryItems.append(URLQueryItem(
                 name: "updatedSince",
-                value: updatedSince.formatted(.iso8601)
+                value: WireDate.string(from: updatedSince)
             ))
         }
         let response: PaginatedAPIResponse<[APIPost]> = try await api.request(

@@ -159,16 +159,21 @@ final class RiverActivationLockTests: XCTestCase {
     /// Ce test ne PEUT pas échouer indépendamment du précédent (même calcul)
     /// — il existe pour que la sortie d'échec du verrou, lue seule, n'oblige
     /// personne à deviner LEQUEL des deux faits a bougé.
+    ///
+    /// Le défaut est passé à ON le 2026-09-14 (sortie de bêta, #6482) : c'est
+    /// la combinaison SÛRE ON+monté que ce verrou attendait. Si l'unique hôte
+    /// disparaissait, le témoin précédent rougirait.
     func test_currentState_bothFactsNamed() throws {
-        XCTAssertFalse(
+        XCTAssertTrue(
             riverModeFlagDefaultIsOn(),
-            "défaut du drapeau — une installation qui n'a RIEN demandé n'ouvre pas la Rivière"
+            "défaut du drapeau — la Rivière a quitté la bêta le 2026-09-14 (#6482) : active par " +
+            "défaut, sous réserve de la loi (≥ 5 participants actifs, jamais en `direct`) et des " +
+            "modes de lecture"
         )
         XCTAssertTrue(
             try riverScreenHasMountSite(),
             "site de montage — depuis le lot 1 (2026-08-21), `ConversationView` monte " +
-            "`RiverConversationHost` : c'est la combinaison SÛRE OFF+monté, celle qui laisse " +
-            "un futur défaut ON passer sans que ce verrou n'ait rien à objecter."
+            "`RiverConversationHost` : c'est ce qui rend le défaut ON sûr."
         )
     }
 }

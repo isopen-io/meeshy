@@ -446,7 +446,7 @@ extension MeeshyComposerHost {
         switch action {
         case .duplicate: viewModel.duplicateElement(id: id)
         case .delete:
-            viewModel.deleteElement(id: id)
+            retractMedia(objectIds: [id])
             selectedSceneItemId = nil
             selectedSceneItemKind = nil
         case .bringForward: viewModel.bringForward(id: id)

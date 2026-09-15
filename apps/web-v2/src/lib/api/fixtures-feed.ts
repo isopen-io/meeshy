@@ -171,6 +171,54 @@ export const POST_CAROUSEL: FeedPost = {
   commentCount: 4,
 };
 
+/**
+ * `POST_HERO` (#6514) — trois photos composées sur iOS « en hero » : l'agencement
+ * voyage dans le document canvas v3 (`storyEffects.layout`), sans champ serveur.
+ * La carte doit les poser en une grande tuile et deux satellites, jamais en
+ * carrousel. La grande tuile porte sa légende, les satellites n'en ont pas la place.
+ */
+export const POST_HERO: FeedPost = {
+  ...feedPostDefaults,
+  id: 'post-hero',
+  type: 'POST',
+  createdAt: minutesAgo(34),
+  author: MEI,
+  content: 'Le marché flottant, vu du pont puis de la barque.',
+  originalLanguage: 'fr',
+  storyEffects: { v: 3, layout: 'hero' },
+  media: [
+    {
+      id: 'media-hero-1',
+      mimeType: 'image/svg+xml',
+      fileUrl: feedPhotoStandIn('#f59e0b', '#be123c', 'portrait'),
+      thumbHash: THUMB_HASH_AMBER,
+      width: 1080,
+      height: 1920,
+      caption: 'Depuis le pont, à l’aube.',
+      order: 0,
+    },
+    {
+      id: 'media-hero-2',
+      mimeType: 'image/svg+xml',
+      fileUrl: feedPhotoStandIn('#0ea5e9', '#14b8a6', 'square'),
+      thumbHash: THUMB_HASH_BLUE,
+      width: 1080,
+      height: 1080,
+      order: 1,
+    },
+    {
+      id: 'media-hero-3',
+      mimeType: 'image/svg+xml',
+      fileUrl: feedPhotoStandIn('#6366f1', '#a855f7', 'square'),
+      width: 1080,
+      height: 1080,
+      order: 2,
+    },
+  ],
+  likeCount: 17,
+  commentCount: 2,
+};
+
 /** `POST_LONG_TEXT` — 24 mots, exerce le seuil de troncature à 20. */
 export const POST_LONG_TEXT: FeedPost = {
   ...feedPostDefaults,
@@ -293,6 +341,7 @@ const NAMED_POSTS: readonly FeedPost[] = [
   POST_IMAGE_EN_TRANSLATED,
   POST_TEXT_RANK2,
   POST_CAROUSEL,
+  POST_HERO,
   POST_LONG_TEXT,
   POST_REPOST,
   REEL_PORTRAIT,
