@@ -178,24 +178,65 @@ final class PostDetailSceneFramingTests: XCTestCase {
         ])
     }
 
-    /// **La troisième mesure de #6708 (22:40)** : dans le détail, la page 1 du
-    /// post n°1 était rendue en 370 × 276 pt, HAUT et BAS hors cadre. Le détail
-    /// borne la boîte de la mosaïque par la loi de cette page, au rapport de
-    /// `PostSceneMosaic.boxAspect` — la même règle que la carte du fil.
+    /// **Le détail RENDU d'un carrousel de scènes portrait** (#6708, recette du
+    /// 2026-09-15 à 22:40 puis sur la tête de la PR #6764).
     ///
-    /// La boîte d'un carrousel de scènes portrait garde le 9:16 et s'AJUSTE dans
-    /// la hauteur disponible : plus étroite que le détail, entre deux bandes
-    /// latérales, et jamais plus haute que ce qui tient au-dessus du composer.
+    /// Un premier témoin interrogeait la LOI (`sceneSize` au rapport de
+    /// `boxAspect`) et passait au vert, pendant que le simulateur rendait la
+    /// scène en 370 × 657 pt, son bas sous le composer, « J'aime » hors champ.
+    /// Une loi juste que la vue ne lit pas ne protège rien : ce témoin monte donc
+    /// la VRAIE vue du détail et mesure ce qu'elle POSE.
+    ///
+    /// Aucun appel ne quitte le processus : l'API et les sockets pointent vers
+    /// un hôte fermé le temps du montage, et `viewPost` / `registerDetailOpen`
+    /// échouent sans rien écrire.
     @MainActor
-    func test_unCarrouselDeScenesPortrait_seLitEntierAuDessusDuComposer() throws {
-        let document = CanvasV3(scenes: [scenePortraitDeRecette(), scenePortraitDeRecette(),
-                                         scenePortraitDeRecette()])
-        let boite = try taille(PostSceneMosaic.boxAspect(document: document), page())
-        XCTAssertEqual(boite.width / boite.height, portrait, accuracy: 0.001,
-                       "boîte \(boite) : la recette mesurait 370 × 276, une fenêtre de 42 % de la scène")
-        XCTAssertLessThan(boite.width, 370, "une scène 9:16 entière tient par des bandes latérales")
-        XCTAssertLessThanOrEqual(156 + boite.height + PostDetailSceneFraming.actionsRowReserve, 684.001,
-                                 "le bas de la scène ou la rangée d'actions passe sous le composer")
+    func test_leDetailRenduDUnCarrouselPortrait_tientEntierAuDessusDuComposer() throws {
+        let origine = MeeshyConfig.shared.apiBaseURL
+        MeeshyConfig.shared.apiBaseURL = "http://127.0.0.1:9/api/v1"
+        defer { MeeshyConfig.shared.apiBaseURL = origine }
+
+        var effets = StoryEffects()
+        effets.canvasV3 = CanvasV3(scenes: [scenePortraitDeRecette(), scenePortraitDeRecette(),
+                                            scenePortraitDeRecette()])
+        var post = FeedPost(id: "6a0000000000000000006708", author: "Demo", authorId: "a1",
+                            content: "", timestamp: Date())
+        post.storyEffects = effets
+
+        let ecran = RenderedScreen(
+            PostDetailView(postId: post.id, initialPost: post)
+                .environmentObject(StatusViewModel())
+                .environmentObject(StoryViewModel())
+                .environmentObject(Router())
+        )
+        defer { ecran.dismount() }
+
+        let libelleScene = String(localized: "feed.scene.mosaic.tile", defaultValue: "Scène \(1)", bundle: .main)
+        let libelleComposer = String(localized: "composer.a11y.openAttachMenu",
+                                     defaultValue: "Ouvrir le menu des pièces jointes", bundle: .main)
+        let libelleJaime = String(localized: "a11y.post.like", defaultValue: "J'aime", bundle: .main)
+
+        var scene: CGRect?
+        var composer: CGRect?
+        var jaime: CGRect?
+        let echeance = Date().addingTimeInterval(6)
+        repeat {
+            scene = ecran.frame(labeledPrefix: libelleScene)
+            composer = ecran.frame(labeledPrefix: libelleComposer)
+            jaime = ecran.frame(labeledPrefix: libelleJaime)
+            if let s = scene, let c = composer, let j = jaime,
+               s.maxY <= c.minY + 0.5, j.maxY <= c.minY + 0.5 { break }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < echeance
+
+        let c = try XCTUnwrap(composer, "le composer du détail n'est pas rendu")
+        let s = try XCTUnwrap(scene, "la scène 1 n'est pas rendue")
+        XCTAssertEqual(s.width / s.height, portrait, accuracy: 0.01, "scène \(s) : déformée ou rognée")
+        XCTAssertLessThan(s.width, 370, "scène \(s) : une 9:16 entière tient par des bandes latérales")
+        XCTAssertLessThanOrEqual(s.maxY, c.minY + 0.5,
+                                 "scène \(s) : son bas passe sous le composer \(c)")
+        let j = try XCTUnwrap(jaime, "« J'aime » n'est pas rendu — la rangée d'actions est hors champ")
+        XCTAssertLessThanOrEqual(j.maxY, c.minY + 0.5, "« J'aime » \(j) passe sous le composer \(c)")
     }
 
     func test_uneScene9x16_nechangePasDeRapport() {

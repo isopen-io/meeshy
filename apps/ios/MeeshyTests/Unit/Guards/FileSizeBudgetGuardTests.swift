@@ -364,7 +364,12 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // d'exactement ce que le lot retire. Le cumul mesuré avant le lot était
     // 56 061 : ses 369 lignes de mou préexistant ne sont pas reprises ici, pour
     // la raison de coordination de #6016.
-    private static let legacyLineCeiling = 56_077
+    // #6708 — 56 077 → 56 061 (−16). La mesure du détail passe par
+    // `onGeometryChange` : dans `PostDetailView.swift`, le couple
+    // `GeometryReader` + préférence de la zone de défilement devient une ligne, et
+    // les deux clés de préférence orphelines partent (1 810 → 1 794). Rien n'y est
+    // ajouté ; le plafond baisse d'exactement ce que le lot retire.
+    private static let legacyLineCeiling = 56_061
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

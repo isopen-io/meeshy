@@ -786,12 +786,8 @@ struct PostDetailView: View {
                         // negated to match the `minY` sign the preference path produced.
                         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { headerScrollRelay.offset = $0 }
                         .trackScrollContentOffset { headerScrollRelay.offset = -$0 }
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear.preference(key: ScrollViewportSizeKey.self, value: geo.size)
-                            }
-                        )
-                        .onPreferenceChange(ScrollViewportSizeKey.self) { sceneMeasures.viewport = $0 }
+                        // Par `onGeometryChange` : une préférence ne délivrait ici que `.zero` (#6708).
+                        .onGeometryChange(for: CGSize.self) { $0.size } action: { sceneMeasures.viewport = $0 }
                         .onAppear {
                             if showComments {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -1795,16 +1791,4 @@ EngagementGlyph(
         )
     }
 
-}
-
-// MARK: - Story canvas visibility preference keys
-
-struct StoryCanvasFrameKey: PreferenceKey {
-    static var defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
-}
-
-private struct ScrollViewportSizeKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
 }
