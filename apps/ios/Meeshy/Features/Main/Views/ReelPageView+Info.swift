@@ -115,6 +115,10 @@ extension ReelPageView {
                             .foregroundColor(.white)
                         authorMetaLine
                     }
+                    // #6693 — sur un réel clair, le nom blanc passait sans voile sur les
+                    // bandes jaune et verte : il reçoit l'ombre de la légende quand la loi
+                    // dit le fond clair.
+                    .mediaChromeLegible()
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "reels.author.profile", defaultValue: "Profil de l'auteur", bundle: .main))
