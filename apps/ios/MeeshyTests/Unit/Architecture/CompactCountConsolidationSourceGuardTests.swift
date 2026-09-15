@@ -60,7 +60,9 @@ final class CompactCountConsolidationSourceGuardTests: XCTestCase {
     /// ci-dessus, lui, n'a pas bougé et couvre toujours tout le dépôt.
     private static let consolidatedHosts = [
         "ReachMetricLabel.swift",
-        "ReelsPlayerView.swift",
+        // #6693 — le rail d'actions, et le badge de compteur qu'il appelle, a quitté
+        // `ReelsPlayerView.swift` pour son fichier : l'appel direct l'a suivi.
+        "ReelsPlayerView+ActionRail.swift",
         "ConversationDashboardView.swift",
         "ConversationListHelpers.swift",
         "CommunityListView.swift",

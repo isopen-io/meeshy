@@ -520,7 +520,8 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// existait, il était sans effet. Les trois doivent recevoir la valeur
     /// capturée — jamais `nil`, qui rendrait la pastille décorative.
     func test_postDetailView_submitComment_declaresTheComposerLanguageOnItsThreeDoors() throws {
-        let src = try source("Meeshy/Features/Main/Views/PostDetailView.swift")
+        // #6578 — `submitComment` a quitté `PostDetailView.swift` pour l'extension du composer.
+        let src = try source("Meeshy/Features/Main/Views/PostDetailView+CommentComposer.swift")
         let fn = try body(from: "let effectFlags = flags > 0 ? Int(flags) : nil",
                           to: "private func startCommentRecording", in: src)
 
@@ -568,7 +569,8 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// optimiste n'est pas observable (`CommentMediaUploader.upload` précède la
     /// première frontière testable, et son échec annule l'insert).
     func test_postDetailViewModel_mediaDoor_carriesTheAuthoredLanguage() throws {
-        let src = try source("Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift")
+        // #6578 — la porte média a quitté `PostDetailViewModel.swift` pour l'extension d'envoi.
+        let src = try source("Meeshy/Features/Main/ViewModels/PostDetailViewModel+CommentSend.swift")
 
         let optimistic = try body(from: "func submitCommentWithMedia(",
                                   to: "let snapshotComments = comments", in: src)

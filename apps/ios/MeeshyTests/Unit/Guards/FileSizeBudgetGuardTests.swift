@@ -64,7 +64,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         // plafond. Le nom sort ENTIER, plafond compris — voir ci-dessous.
         "FeedView.swift",
         "FeedViewModel.swift",
-        "MeeshyApp.swift",
         "MessageListViewController.swift",
         "MessageOverlayMenu.swift",
         "P2PWebRTCClient.swift",
@@ -356,6 +355,15 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // plafond dur : il QUITTE la liste, pour toujours. Le plafond baisse de ce
     // que le lot retire aux deux qui restent (166 + 392) et du poids de celui
     // qui sort (1 150) — jamais du mou préexistant.
+    //
+    // #6693 — 56 430 → 56 214 (−216). Le rail d'actions du lecteur de réels devait
+    // prendre la teinte que la luminance du média commande, dans
+    // `ReelsPlayerView.swift`, hôte en dette. Il en est d'abord sorti —
+    // `ReelsPlayerView+ActionRail.swift`, 244 lignes — et la teinte s'y ajoute
+    // ensuite. L'hôte RESTE en dette (1 367) ; le plafond baisse d'exactement ce
+    // que le lot retire. Cumul MESURÉ après le lot sur les 27 noms : 55 845 — les
+    // 369 lignes de mou préexistantes ne sont pas reprises, pour la raison de
+    // coordination de #6016.
     // #6696 — 56 430 → 56 077 (−353). La scène du détail devait changer de
     // cadre dans `PostDetailView.swift` (2 164 lignes), hôte en dette. La
     // section MÉDIAS en est d'abord sortie, entière, dans
@@ -364,7 +372,34 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // d'exactement ce que le lot retire. Le cumul mesuré avant le lot était
     // 56 061 : ses 369 lignes de mou préexistant ne sont pas reprises ici, pour
     // la raison de coordination de #6016.
-    private static let legacyLineCeiling = 56_077
+    //
+    // Les deux lots se cumulent : 56 430 − 216 − 353 = 55 861. Cumul MESURÉ sur
+    // les 27 noms une fois les deux fusionnés : 55 492, soit 56 061 − 216 − 353 ;
+    // les 369 lignes de mou préexistantes restent hors du compte (#6016).
+    // #6744 — 56 430 → 55 102 (−1 328). Le splash devait cesser de tomber à la
+    // dernière ligne de la chaîne de démarrage, dans `MeeshyApp.swift`, hôte en
+    // dette. `SplashScreen` en est d'abord sorti, tel quel, vers
+    // `SplashScreen.swift` : l'hôte repasse SOUS le plafond dur (1 328 → 1 178)
+    // et QUITTE la liste, pour toujours. Le plafond baisse du poids entier du nom
+    // qui sort — jamais du mou préexistant.
+    //
+    // Les trois lots se cumulent : 56 430 − 216 − 353 − 1 328 = 54 533. Aucun ne
+    // touche le fichier d'un autre (`ReelsPlayerView.swift`, `PostDetailView.swift`,
+    // `MeeshyApp.swift`) : leurs retraits s'additionnent sans recouvrement.
+    // #6745 — 56 430 → 56 347 (−83). Un réel composé devait se rejouer comme
+    // sa scène, et la page qui le lit vit dans `ReelsPlayerView.swift`, hôte en
+    // dette. Les règles pures qu'il fallait étendre — la porte d'autoplay, la
+    // politique de télémétrie, la classification des médias — en sont d'abord
+    // sorties, telles quelles, vers `ReelPlaybackRules.swift` (−89) ; la vue de
+    // scène vit dans `ReelsPlayerView+Scene.swift`, et l'hôte ne garde que son
+    // aiguillage (+6). Il RESTE en dette ; le plafond baisse d'exactement ce que
+    // le lot retire.
+    //
+    // Les quatre lots se cumulent : 56 430 − 216 − 353 − 1 328 − 83 = 54 450.
+    // #6693 et #6745 retirent tous deux de `ReelsPlayerView.swift`, par des parties
+    // que la fusion applique sans conflit ; l'hôte reste en dette, donc les deux
+    // retraits s'additionnent.
+    private static let legacyLineCeiling = 54_450
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

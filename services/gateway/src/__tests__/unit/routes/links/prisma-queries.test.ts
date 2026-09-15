@@ -508,6 +508,18 @@ describe('shareLinkSelectStructure — la relation participants EN BLOC a dispar
 
     expect(conversationSelect.participants).toBeUndefined();
   });
+
+  // #6740 — `canPreview` (retrieval.ts) refuse l'aperçu public d'un lien
+  // expiré ou d'une conversation fermée via `isConversationClosed`, qui
+  // exige `isActive`/`closedAt` sur la ligne conversation déjà chargée. Sans
+  // ces deux colonnes dans le `select`, la garde serait silencieusement
+  // permissive (`undefined` ⇒ non fermée).
+  it('charge `isActive` et `closedAt` sur la conversation — requis par `isConversationClosed`', () => {
+    const conversationSelect = shareLinkSelectStructure.conversation.select as Record<string, any>;
+
+    expect(conversationSelect.isActive).toBe(true);
+    expect(conversationSelect.closedAt).toBe(true);
+  });
 });
 
 describe('findActiveUserParticipant — reconnaît LE lecteur (remplace isActive/userId sur la relation en bloc)', () => {

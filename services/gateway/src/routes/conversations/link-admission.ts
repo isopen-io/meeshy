@@ -71,10 +71,19 @@ export interface LinkJoinParams {
   readonly requestIp: string;
   readonly profile: LinkJoinProfileInput;
   readonly broadcast?: LinkJoinBroadcast;
+  /**
+   * Un `Authorization: Bearer` a été PRÉSENTÉ et n'a pas authentifié (#6741) —
+   * la porte `optionalAuth` retombe alors sur un `authContext` anonyme,
+   * INDISCERNABLE d'une requête sans aucune créance. Sans ce signal,
+   * `performLinkJoin` admettrait en invité un appelant dont le jeton a été
+   * refusé, consommant une place du lien sur un compte qu'il croyait utiliser.
+   */
+  readonly rejectedCredential?: boolean;
 }
 
 export type LinkJoinOutcome =
   | { readonly kind: 'not-found' }
+  | { readonly kind: 'invalid-credential' }
   | { readonly kind: 'refused'; readonly refusal: LinkAdmissionRefusal }
   | { readonly kind: 'validation'; readonly message: string }
   /**
@@ -418,7 +427,11 @@ async function joinAsRegistered(
  * rapport de livraison de #4167).
  */
 export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinOutcome> {
-  const { prisma, key, authContext, requestIp, profile, broadcast } = params;
+  const { prisma, key, authContext, requestIp, profile, broadcast, rejectedCredential } = params;
+
+  // Refusé AVANT toute lecture du lien : une créance rejetée ne crée rien,
+  // qu'importe si le lien lui-même existe ou est ouvert (#6741).
+  if (rejectedCredential) return { kind: 'invalid-credential' };
 
   const shareLink = await findShareLinkByKey(prisma, key);
   if (!shareLink) return { kind: 'not-found' };
@@ -660,6 +673,11 @@ function respondToJoinOutcome(reply: FastifyReply, result: LinkJoinOutcome): voi
     case 'not-found':
       sendNotFound(reply, 'Lien de conversation introuvable');
       return;
+    case 'invalid-credential':
+      sendUnauthorized(reply, "Le jeton d'authentification fourni est invalide ou expiré", {
+        code: AUTH_ERROR_CODES.TOKEN_INVALID,
+      });
+      return;
     case 'validation':
       sendBadRequest(reply, result.message);
       return;
@@ -747,6 +765,7 @@ export function registerLinkAdmissionRoutes(
           200: linkMembersResponseSchema,
           201: linkMembersResponseSchema,
           400: { description: 'Validation error', ...validationErrorResponseSchema },
+          401: errorResponseSchema,
           403: errorResponseSchema,
           404: errorResponseSchema,
           // #4487 — `fast-json-stringify` RETIRE en silence toute propriété que
@@ -778,11 +797,20 @@ export function registerLinkAdmissionRoutes(
         const body = linkMembersBodySchema.parse(request.body ?? {});
         const authContext = (request as UnifiedAuthRequest).authContext;
 
+        // #6741 — un Bearer PRÉSENTÉ dont `optionalAuth` n'a pas pu établir
+        // l'identité (expiré, signature invalide, compte inconnu/inactif)
+        // retombe sur un `authContext` anonyme indiscernable d'une requête
+        // SANS créance. Seule l'ABSENCE de Bearer autorise l'entrée invité.
+        const presentedBearer = request.headers.authorization?.startsWith('Bearer ') ?? false;
+        const rejectedCredential =
+          presentedBearer && !(authContext?.type === 'user' && authContext.isAuthenticated);
+
         const result = await performLinkJoin({
           prisma,
           key,
           authContext,
           requestIp: resolveClientIp(request),
+          rejectedCredential,
           profile: {
             firstName: body.nickname ?? '',
             lastName: '',

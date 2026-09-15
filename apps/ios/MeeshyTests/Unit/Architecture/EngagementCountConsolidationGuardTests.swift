@@ -81,7 +81,9 @@ final class EngagementCountConsolidationGuardTests: XCTestCase {
     private static let consolidatedHosts = [
         "FeedPostCard.swift",
         "ReelFeedCard.swift",
-        "FeedCommentsSheet.swift",
+        // #6578 — `CommentRowView` et son compteur de réponses ont quitté
+        // `FeedCommentsSheet.swift` : l'hôte consolidé est désormais leur fichier.
+        "CommentRowView.swift",
         "TextPostCell.swift",
         "MediaPostCell.swift",
     ]
