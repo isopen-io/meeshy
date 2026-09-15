@@ -78,6 +78,7 @@ struct MediaReplyComposerBar: View {
             // écran et ne monterait donc jamais. Un « + » inerte serait un
             // contrôle qui ment (loi 4) ; les flags explicites disent la
             // vérité. Suivi : pièces jointes et vocal depuis le plein écran.
+            onIngest: { ingests in ingest(ingests) },
             placeholder: String(localized: "media.reply.placeholder",
                                 defaultValue: "Répondre à cette pièce…",
                                 bundle: .main),
@@ -150,7 +151,7 @@ struct MediaReplyComposerBar: View {
                 .overlay(alignment: .center) {
                     if citation.attachmentType == AttachmentKind.video.rawValue {
                         Image(systemName: "play.circle.fill")
-                            .font(.system(size: 16))
+                            .font(MeeshyFont.relative(16))
                             .foregroundStyle(.white, .black.opacity(0.4))
                             .accessibilityHidden(true)
                     }
@@ -178,7 +179,7 @@ struct MediaReplyComposerBar: View {
 
             Button(action: onCancel) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(MeeshyFont.relative(9, weight: .bold))
                     .foregroundColor(.white.opacity(0.6))
                     .frame(width: 22, height: 22)
                     .background(Circle().fill(Color.white.opacity(0.12)))
@@ -201,6 +202,26 @@ struct MediaReplyComposerBar: View {
                    defaultValue: "Réponse à la pièce de \(bannerAuthor)",
                    bundle: .main)
         )
+    }
+
+    // MARK: - Le dépôt et le collage : ce que ce plein écran sait servir
+
+    /// **Toute racine de `UniversalComposerBar` câble `onIngest`** — sans lui,
+    /// le dépôt et le collage y sont muets (`ComposerIngestWiringParityTests`).
+    /// Le TEXTE rejoint la saisie, au curseur quand le champ a le focus. Un
+    /// FICHIER, que ce plein écran ne sait pas encore envoyer
+    /// (`showAttachment: false`, suivi #6653), est refusé à voix haute et son
+    /// temporaire supprimé : un dépôt qui ne produirait rien serait un contrôle
+    /// qui ment (loi 4).
+    private func ingest(_ ingests: [ComposerIngest]) {
+        if let block = CommentComposerIngestion.mergedText(from: ingests),
+           !CommentComposerIngestion.insertAtCursor(block) {
+            emojiToInject = block
+        }
+        let refused = CommentComposerIngestion.files(from: ingests)
+        guard !refused.isEmpty else { return }
+        refused.forEach { try? FileManager.default.removeItem(at: $0.url) }
+        ComposerIngestFeedback.showFailure(names: refused.map(\.name))
     }
 
     private var bannerAuthor: String {
