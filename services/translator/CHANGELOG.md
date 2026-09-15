@@ -1,5 +1,42 @@
 # @meeshy/translator
 
+## 1.52.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - un type de média refusé rend 415, jamais 500 (#6604)
+  - un son capturé à la publication calcule sa forme d'onde
+  - déplacer le témoin de langue dans un fichier séparé (budget de taille)
+  - make the Redis cross-instance test self-sufficient, not CI-excluded
+  - corriger le texte d'un commentaire ne remet plus sa langue à null (#6598)
+  - attach Socket.IO Redis adapter for cross-instance broadcast (#3723)
+  - une traduction de post reçue en direct ne détrône plus la langue d'origine (#6531) (#6596)
+  - le gate de contraste du verre dérive ses couples des usages réels (#6367)
+  - la loupe de la Lentille et du fil Focal est servie par le web (#6588)
+  - un déploiement annulé ne perd plus son diff, et le frontend expose sa révision (#6551) (#6593)
+  - un refus CORS rend 403, plus jamais 500 ni une ligne ERROR (#6591) (#6592)
+  - la loupe de la Lentille et du fil Focal est nettement plus prononcée — run test (#6586) (#6590)
+  - NotificationFormatter type ses champs Json plutôt que `any` (#3679)
+  - retire MeeshHero, LevelCard, StreakCard et ElanBanner — exportés, testés, montés nulle part (#6497) (#6515)
+  - l'écran « Toutes les stories » parle la langue d'interface (#6547) (#6549)
+  - le cliquet des couleurs d'accent redevient vert — le profil vocal convertit sa teinte une fois (#6481) (#6509)
+  - un postId malformé rend 404, jamais 500 (#6557) (#6562)
+  - chaque lecteur de sender orphelin est réparé ou exempté (#6516) (#6544)
+  - un repost réussi ne s'annonce plus comme un échec (#6524) (#6525)
+  - une collision du cache SwiftPM du runner ne fait plus tomber le run iOS (#6545)
+  - la légende d'un attachement de conversation ne se traduit jamais sous protection (#6533) (#6572)
+  - ouvrir un contenu depuis une notification dit la vraie cause d'un échec (#6508)
+  - la synchronisation delta atteint /api/v1/sync — le préfixe n'est plus doublé (#6539)
+  - l'audit du marqueur beta lit main en premier parent et acquitte le conflit déjà remédié (#6573)
+  - Publier propose le format et l'agencement quand la publication porte plusieurs médias — l'éventail du haut disparaît (#6502)
+  - storyAuthorLabel() traduit « Votre story » (#6550)
+  - une traduction arrivée pendant que le plein écran de scène est ouvert s'y affiche sans le fermer (#6560)
+  - la réception d'une légende traduite quitte le store hérité — le cliquet de taille redevient vert (#6560)
+  - une traduction de légende reçue en direct redessine la carte et son plein écran (#6560)
+  - une traduction de légende de média est réellement enregistrée — plus de $set pointé sur un null (#6558)
+
 ## 1.51.0
 
 ### Minor Changes
