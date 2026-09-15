@@ -40,6 +40,8 @@ final class ComposerMediaPorterStore: ObservableObject {
 
     private var stock = ComposerMediaPorters.empty
 
+    nonisolated deinit {}
+
     /// **Les huit, vus comme UNE valeur** — le seul site du dépôt qui les écrive
     /// ensemble, et donc le seul qu'une mutation puisse neutraliser.
     var porters: ComposerMediaPorters {
