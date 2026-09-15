@@ -37,8 +37,7 @@ extension MessageSocketManager {
     /// so the caller can fall back to the local send time.
     private static func parseAckDate(_ value: Any?) -> Date? {
         guard let string = value as? String, !string.isEmpty else { return nil }
-        return isoFormatterWithFractional.date(from: string)
-            ?? isoFormatterBasic.date(from: string)
+        return WireDate.date(from: string)
     }
 
     /// Interne (plus `private`) pour que le témoin de #4823 mesure la charge
@@ -210,7 +209,7 @@ extension MessageSocketManager {
         if let forwardedFromId { payload["forwardedFromId"] = forwardedFromId }
         if let forwardedFromConversationId { payload["forwardedFromConversationId"] = forwardedFromConversationId }
         if let isBlurred { payload["isBlurred"] = isBlurred }
-        if let expiresAt { payload["expiresAt"] = MessageSocketManager.isoFormatterWithFractional.string(from: expiresAt) }
+        if let expiresAt { payload["expiresAt"] = WireDate.string(from: expiresAt) }
         if let effectFlags { payload["effectFlags"] = Int(effectFlags) }
         if let isViewOnce { payload["isViewOnce"] = isViewOnce }
         if let maxViewOnceCount { payload["maxViewOnceCount"] = maxViewOnceCount }

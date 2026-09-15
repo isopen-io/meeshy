@@ -181,6 +181,12 @@ const it = {
   'profile.language.choose': 'Scegli',
   'profile.language.clear.regional': 'Rimuovi la lingua regionale',
   'profile.language.clear.custom': 'Rimuovi la lingua personalizzata',
+
+  'languageSheet.title.read': 'Lingua di lettura',
+  'languageSheet.title.write': 'Lingua di scrittura',
+  'languageSheet.search': 'Cerca una lingua',
+  'languageSheet.empty': 'Nessuna lingua corrisponde a «{search}».',
+
   'profile.stats.messages': 'Messaggi',
   'profile.stats.translations': 'Traduzioni',
   'profile.stats.languages': 'Lingue',
