@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
 import me.meeshy.sdk.model.resolvedCaption
@@ -67,6 +68,7 @@ data class FeedPostPresentation(
     val location: FeedLocationPresentation? = null,
     /** Distance in meters from the viewer — only present on the Nearby feed. */
     val distanceMeters: Double? = null,
+    val layout: MosaicLayoutMode = MosaicLayoutMode.FALLBACK,
 )
 
 object FeedPostBuilder {

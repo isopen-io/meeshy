@@ -8,7 +8,11 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.ApiRepostOf
+import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.ui.component.media.MosaicArrangement
+import me.meeshy.ui.component.media.MosaicLayout
 import org.junit.Test
 
 class FeedPostBuilderTest {
@@ -401,5 +405,52 @@ class FeedPostBuilderTest {
     fun build_distanceMetersDefaultsToNullWhenThePostCarriesNone() {
         val result = FeedPostBuilder.build(post(), Prefs(), null)
         assertThat(result.distanceMeters).isNull()
+    }
+
+    // --- The author's layout (#6514) ---
+
+    private fun photos(count: Int): List<ApiPostMedia> = (1..count).map { n ->
+        ApiPostMedia(id = "m$n", fileUrl = "https://cdn.example/m$n.jpg", mimeType = "image/jpeg", order = n)
+    }
+
+    private fun round3(value: Float): Float = Math.round(value * 1000f) / 1000f
+
+    @Test
+    fun build_aThreePhotoPostInHeroIsLaidOutAsHeroWithTheSwiftDimensions() {
+        val p = post(media = photos(3)).copy(storyEffects = StoryEffects(layout = MosaicLayoutMode.HERO))
+
+        val result = FeedPostBuilder.build(p, Prefs(), mediaBaseUrl = null)
+        val arrangement = MosaicLayout.arrange(result.images.size, result.layout)
+
+        assertThat(result.layout).isEqualTo(MosaicLayoutMode.HERO)
+        assertThat(arrangement).isInstanceOf(MosaicArrangement.Tiled::class.java)
+        val tiled = arrangement as MosaicArrangement.Tiled
+        assertThat(tiled.aspectRatio).isEqualTo(0.82f)
+        assertThat(tiled.tiles.map { listOf(it.index.toFloat(), round3(it.x), round3(it.y), round3(it.width), round3(it.height)) })
+            .containsExactly(
+                listOf(0f, 0f, 0f, 0.62f, 1f),
+                listOf(1f, 0.634f, 0f, 0.366f, 0.493f),
+                listOf(2f, 0.634f, 0.507f, 0.366f, 0.493f),
+            ).inOrder()
+    }
+
+    @Test
+    fun build_theLayoutTravelsFromTheServedCanvasDocument() {
+        val served = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.decodeFromString(
+            ApiPost.serializer(),
+            """{ "id": "p1", "storyEffects": { "v": 3, "layout": "sine", "scenes": [] } }""",
+        )
+
+        assertThat(FeedPostBuilder.build(served, Prefs(), mediaBaseUrl = null).layout)
+            .isEqualTo(MosaicLayoutMode.SINE)
+    }
+
+    @Test
+    fun build_aPostWithoutAnAuthorLayoutFallsBackToTheCarousel() {
+        val result = FeedPostBuilder.build(post(media = photos(3)), Prefs(), mediaBaseUrl = null)
+
+        assertThat(result.layout).isEqualTo(MosaicLayoutMode.CAROUSEL)
+        assertThat(MosaicLayout.arrange(result.images.size, result.layout))
+            .isEqualTo(MosaicArrangement.Paged(pageCount = 3))
     }
 }

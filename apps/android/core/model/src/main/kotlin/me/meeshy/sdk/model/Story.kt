@@ -358,6 +358,7 @@ data class StoryEffects(
     val musicTrackId: String? = null,
     val musicStartTime: Double? = null,
     val musicEndTime: Double? = null,
+    val layout: MosaicLayoutMode? = null,
 )
 
 /** A single story slide — port of StorySlide (StoryModels.swift). */
