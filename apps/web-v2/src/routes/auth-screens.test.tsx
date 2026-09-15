@@ -25,7 +25,7 @@ import WelcomeScreen from './welcome';
 
 describe('LoginScreen — la marque et la version', () => {
   // La porte du MOT DE PASSE (#6404) : c'est elle qui porte les deux champs
-  // que ce bloc mesure. La porte par défaut (lien magique) a ses propres
+  // que ce bloc mesure. La porte par défaut (connexion par e-mail) a ses propres
   // témoins dans `login-doors.test.tsx`.
   const html = renderToStaticMarkup(<LoginDoors method="motdepasse" />);
 
@@ -69,7 +69,7 @@ describe('LoginScreen — les deux portes', () => {
   const html = renderToStaticMarkup(<LoginDoors method="motdepasse" />);
 
   test('le retour vers le lien (/login) précède « Mot de passe oublié ? » (/forgot-password)', () => {
-    const lienIndex = html.indexOf('Recevoir un lien de connexion par e-mail');
+    const lienIndex = html.indexOf('Se connecter par e-mail');
     const forgotPasswordIndex = html.indexOf('href="/forgot-password"');
     expect(lienIndex).toBeGreaterThan(-1);
     expect(forgotPasswordIndex).toBeGreaterThan(-1);

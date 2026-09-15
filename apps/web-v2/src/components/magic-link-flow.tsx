@@ -43,7 +43,7 @@ function FlowHeader() {
         <Glyph name="x" size={20} />
       </Link>
       <h1 className="flex-1 text-center text-title font-semibold" style={{ color: 'var(--color-ios-ink)', marginRight: 44 }}>
-        Connexion par lien magique
+        Connexion par e-mail
       </h1>
     </div>
   );

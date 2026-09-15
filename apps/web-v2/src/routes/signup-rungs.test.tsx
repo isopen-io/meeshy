@@ -126,6 +126,18 @@ describe('l’inscription se déplie', () => {
    * témoins venaient de `auth-screens.test.tsx`, où l'état initial les rendait
    * ; ils les suivent ici plutôt que de disparaître avec la refonte.
    */
+  /** Le (i) du mot de passe fait citer sa note par `aria-describedby` : en
+   * déduire `aria-invalid` annonçait « invalide » un champ facultatif que
+   * personne n'avait touché (#6626, relevé en posant le (i) de l'adresse). */
+  test('le mot de passe paru, vide, ne s’annonce pas invalide', () => {
+    const el = mount();
+    type(el, '#signup-email', 'ada@meeshy.example');
+    type(el, 'input[type="tel"]', '612345678');
+    const motDePasse = el.querySelector('#signup-password');
+    expect(motDePasse?.getAttribute('aria-describedby')).not.toBeNull();
+    expect(motDePasse?.getAttribute('aria-invalid')).toBe('false');
+  });
+
   test('le troisième barreau porte la langue, les pages légales et le retour vers la connexion', () => {
     const el = mount();
     type(el, '#signup-email', 'ada@meeshy.example');
