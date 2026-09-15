@@ -31,6 +31,14 @@ describe('loadPost — le port du DÉTAIL d’une publication (#6278)', () => {
   /** `getPostById` applique l'ACL : « n'existe pas » et « hors audience »
    * rendent le MÊME 404 (D-6) — le port le remonte tel quel, il n'invente
    * aucune distinction que la passerelle refuse de faire. */
+  /** #6514 — le détail monte la MÊME carte que le fil : il lit l'agencement de
+   * l'auteur au même document canvas v3, donc il l'annonce aussi. */
+  test('passerelle : annonce `X-Canvas-Caps: 3`, comme le fil', async () => {
+    const { requests, transport } = recording({ ok: true, data: { id: 'p1', type: 'POST', createdAt: '2026-09-13T10:00:00.000Z' } });
+    await loadPost({ source: 'gateway', transport, postId: 'p1' });
+    expect(requests[0]?.headers).toEqual({ 'X-Canvas-Caps': '3' });
+  });
+
   test('passerelle : un 404 remonte TEL QUEL', async () => {
     const refusal: ApiResult<unknown> = { ok: false, status: 404, error: 'Post not found', code: 'POST_NOT_FOUND' };
     const { transport } = recording(refusal);
