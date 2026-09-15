@@ -156,4 +156,22 @@ final class ComposerLanguageResolverTests: XCTestCase {
         // intentionally ignored (it's the UI language, not the content one).
         XCTAssertEqual(DefaultComposerLanguage.resolve(), "fr")
     }
+
+    // MARK: - Édition d'un commentaire (#6600)
+
+    /// L'édition DÉCLARE la langue de la pastille au serveur. Ouverte sur le
+    /// défaut « fr », elle réécrirait la langue d'un commentaire espagnol à la
+    /// première faute corrigée : elle s'ouvre donc sur la langue du commentaire.
+    func test_resolveEditing_storedLanguage_opensThePillOnIt() {
+        XCTAssertEqual(DefaultComposerLanguage.resolve(editing: "es", current: "fr"), "es")
+    }
+
+    func test_resolveEditing_regionalCode_opensThePillOnItsPrimaryLanguage() {
+        XCTAssertEqual(DefaultComposerLanguage.resolve(editing: "pt-BR", current: "fr"), "pt")
+    }
+
+    func test_resolveEditing_noUsableLanguage_keepsThePill() {
+        XCTAssertEqual(DefaultComposerLanguage.resolve(editing: nil, current: "en"), "en")
+        XCTAssertEqual(DefaultComposerLanguage.resolve(editing: "", current: "en"), "en")
+    }
 }
