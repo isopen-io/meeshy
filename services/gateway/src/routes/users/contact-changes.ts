@@ -23,6 +23,7 @@ import {
   oublierEssais,
   verifierPlafondValeurCible,
 } from './contact-change';
+import { revokePasswordResetTokensForEmailChange } from '../../utils/password-reset-revocation';
 
 /**
  * `POST /users/me/contact-changes` et ses deux gestes satellites (#4341).
@@ -344,15 +345,21 @@ export async function verifyContactChange(fastify: FastifyInstance) {
         if (existing) {
           return sendBadRequest(reply, 'This email address is no longer available');
         }
-        updatedUser = await fastify.prisma.user.update({
-          where: { id: userId },
-          data: {
-            email: user.pendingEmail,
-            emailVerifiedAt: new Date(),
-            pendingEmail: null,
-            pendingEmailVerificationToken: null,
-            pendingEmailVerificationExpiry: null,
-          }
+        // Dans la MÊME écriture, révoquer les liens de réinitialisation encore
+        // valides de l'ancienne adresse (#6661).
+        updatedUser = await fastify.prisma.$transaction(async (tx) => {
+          const u = await tx.user.update({
+            where: { id: userId },
+            data: {
+              email: user.pendingEmail,
+              emailVerifiedAt: new Date(),
+              pendingEmail: null,
+              pendingEmailVerificationToken: null,
+              pendingEmailVerificationExpiry: null,
+            }
+          });
+          await revokePasswordResetTokensForEmailChange(tx, userId);
+          return u;
         });
         logger.info(`[CONTACT_CHANGE] Email changed successfully for user ${userId}`);
       } else {
