@@ -45,6 +45,8 @@ struct ConversationMediaGalleryLayer: ViewModifier {
                 senderInfoMap: viewModel.mediaSenderInfoMap,
                 onComposeWithMedia: armCompose,
                 onReplyToMedia: replyToCarrier,
+                onSendReplyToMedia: sendReplyToMedia,
+                replyCitation: { viewModel.fullscreenReplyCitation(for: $0.id) },
                 onReactToMedia: reactToMedia
             )
         }
@@ -84,6 +86,34 @@ struct ConversationMediaGalleryLayer: ViewModifier {
         }) else { return }
         onReply(porteur)
         scrollState.galleryStartAttachment = nil
+    }
+
+    /// **Répondre à la pièce SANS quitter son plein écran** (#6165, directive
+    /// porteur 2026-09-12).
+    ///
+    /// Ce chemin remplace `replyToCarrier` dès qu'il est câblé — la bascule vit
+    /// dans `FullscreenReplyRoute`, côté galerie. Deux différences, et la
+    /// seconde n'était pas possible avant #6164 :
+    ///
+    /// 1. **rien ne se referme.** `scrollState.galleryStartAttachment` n'est
+    ///    PAS remis à `nil` : on parle de la pièce en la regardant. C'est
+    ///    l'inverse exact de `replyToCarrier`, et c'est tout l'objet du lot ;
+    /// 2. **la citation NOMME la pièce regardée.** `sendReplyToAttachment`
+    ///    résout le porteur, applique la garde de protection et grave l'ancre
+    ///    (`metadata.attachmentReplyTo`) — répondre à la troisième photo d'un
+    ///    carrousel de cinq cite la troisième.
+    ///
+    /// Le composer du FIL n'est pas armé au passage : ce serait poser une
+    /// citation que l'utilisateur n'a pas demandée sous une galerie qu'il n'a
+    /// pas quittée, et qu'il retrouverait armée en sortant.
+    private func sendReplyToMedia(_ attachment: MessageAttachment,
+                                  _ text: String,
+                                  _ language: String) {
+        Task {
+            await viewModel.sendReplyToAttachment(
+                attachmentId: attachment.id, text: text, language: language
+            )
+        }
     }
 
     /// **Réagir au MÉDIA, c'est réagir à la PIÈCE — jamais à son porteur**
