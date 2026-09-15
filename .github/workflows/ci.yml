@@ -427,6 +427,16 @@ jobs:
       - name: CI summary coverage guard
         run: node scripts/check-ci-summary-coverage.mjs --self-test && node scripts/check-ci-summary-coverage.mjs
 
+      # Pas de mode « balayage du dépôt » ici : `resolve-docker-detect-base.mjs`
+      # est une fonction de décision PURE (docker.yml § job `detect`, #6551),
+      # invoquée à l'exécution avec le SHA du dernier run réussi et
+      # `github.event.before` en entrée — rien à confronter au repos qu'elle
+      # pourrait scanner. Son `--self-test` EST le témoin : sept scénarios,
+      # dont celui qui a ouvert #6551 (un push annulé par le suivant ne doit
+      # plus faire perdre le diff des commits qu'il portait).
+      - name: Docker detect-base resolver guard
+        run: node scripts/resolve-docker-detect-base.mjs --self-test
+
       # Même placement, même raison : la surface est le DÉPÔT — les workflows qui
       # publient `isopen/meeshy-<image>:latest` sur `main`. Il ferme #6442 :
       # `docker.yml` construisait `linux/amd64`, `release.yml`
