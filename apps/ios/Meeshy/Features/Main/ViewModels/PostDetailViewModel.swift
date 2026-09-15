@@ -43,7 +43,7 @@ class PostDetailViewModel: ObservableObject {
     @Published var commentHeartInFlightIds: Set<String> = []
 
     private var commentCursor: String?
-    private let postService: PostServiceProviding
+    let postService: PostServiceProviding
     private let socialSocket: any SocialSocketProviding
     private let languageProvider: LanguageProviding
     private let offlineQueue: OfflineQueueing
@@ -854,33 +854,6 @@ class PostDetailViewModel: ObservableObject {
         replyingTo = nil
     }
 
-    // MARK: - Édition de commentaire (auteur)
-
-    /// PATCH du commentaire : remplacement optimiste EN PLACE (jamais
-    /// d'insertion — même id), rollback complet si le serveur refuse.
-    /// L'écho `comment:updated` reconfirme ensuite la ligne (idempotent).
-    func updateComment(_ target: FeedComment, content: String, effectFlags: Int) async {
-        guard let post else { return }
-        let edited = target.withEditedContent(content, effectFlags: effectFlags)
-        let snapshotComments = comments
-        let snapshotReplies = repliesMap
-        applyCommentUpdated(edited)
-        do {
-            _ = try await postService.updateComment(
-                postId: post.id, commentId: target.id, content: content, effectFlags: effectFlags
-            )
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
-            if let parentId = edited.parentId, let replies = repliesMap[parentId] {
-                try? await CacheCoordinator.shared.comments.savePreservingFreshness(replies, for: "replies-\(parentId)")
-            }
-        } catch {
-            comments = snapshotComments
-            repliesMap = snapshotReplies
-            FeedbackToastManager.shared.showError(
-                String(localized: "feed.comments.edit_error", defaultValue: "Erreur lors de la modification du commentaire", bundle: .main))
-        }
-    }
-
     /// Pose une traduction de commentaire fraîchement arrivée (racine ou
     /// réponse) — uniquement si la langue est préférée, qu'aucune traduction
     /// n'est déjà affichée, ET que la langue d'origine du commentaire n'occupe
@@ -907,20 +880,6 @@ class PostDetailViewModel: ObservableObject {
                 repliesMap[key] = replies
                 return
             }
-        }
-    }
-
-    /// Remplace la ligne éditée EN PLACE (racine ou réponse) — idempotent,
-    /// partagé par l'optimiste local et l'écho socket `comment:updated`.
-    func applyCommentUpdated(_ edited: FeedComment) {
-        if let parentId = edited.parentId, var existing = repliesMap[parentId],
-           let idx = existing.firstIndex(where: { $0.id == edited.id }) {
-            existing[idx] = edited
-            repliesMap[parentId] = existing
-            return
-        }
-        if let idx = comments.firstIndex(where: { $0.id == edited.id }) {
-            comments[idx] = edited
         }
     }
 
