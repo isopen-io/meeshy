@@ -90,12 +90,10 @@ extension ConversationViewModel {
     }
 
     private func loadVoiceConsentStatus() {
-        // Source primaire : l'espace de préférences — la même API que celle
-        // par laquelle le popup accorde le consentement (PATCH
-        // /me/preferences/application). Repli legacy : un consentement
-        // accordé via le wizard voice-profile n'écrit que les champs User —
-        // le statut REST voice-profile couvre ce cas tant que les
-        // préférences sont muettes.
+        // Source primaire : les consentements que la passerelle a CONFIRMÉS
+        // (`PUT /me/consents` à l'octroi, `GET /me/consents` à chaque relecture
+        // des préférences — #6624). Repli : le statut REST voice-profile, pour
+        // un compte dont la relecture n'a pas encore eu lieu sur cet appareil.
         if UserPreferencesManager.shared.voiceConsentGranted {
             voiceConsentMissing = false
             return
@@ -109,15 +107,39 @@ extension ConversationViewModel {
     }
 
     /// Validation du popup de traduction automatique à l'envoi d'un audio
-    /// sans consentement : accorde via l'espace de préférences — la MÊME API
-    /// que la lecture — le consentement de définition du profil vocal ET la
-    /// traduction utilisant ce profil, plus les features audio associées
-    /// (transcription, traduction audio, TTS, profil vocal). L'écriture est
-    /// locale-first et synchronisée au backend par l'outbox des préférences
-    /// (PATCH /me/preferences/application + /audio) — jamais bloquant.
-    func grantVoiceAutoTranslationConsent() {
-        UserPreferencesManager.shared.grantVoiceAutoTranslationConsent()
+    /// sans consentement : accorde le clonage vocal par
+    /// `PUT /me/consents/voice-cloning` — la passerelle horodate et pose les
+    /// ancêtres manquants — puis active les features audio associées.
+    ///
+    /// OPTIMISTE, jamais bloquant : le drapeau tombe avant la réponse, pour que
+    /// l'envoi relancé par la vue parte aussitôt. Un octroi refusé RESTAURE le
+    /// drapeau et le dit (#6624) : l'écran ne croit pas enregistré un
+    /// consentement que la passerelle n'a pas posé.
+    ///
+    /// `grant` / `toast` : coutures de test, `nil` en production.
+    @discardableResult
+    func grantVoiceAutoTranslationConsent(
+        grant: (@MainActor () async throws -> Void)? = nil,
+        toast: FeedbackToastSurfacing? = nil
+    ) -> Task<Void, Never> {
+        let grant: @MainActor () async throws -> Void = grant ?? {
+            try await UserPreferencesManager.shared.grantVoiceAutoTranslationConsent()
+        }
+        let toast: FeedbackToastSurfacing = toast ?? FeedbackToastManager.shared
+        let consentMissingBeforeGrant = voiceConsentMissing
         voiceConsentMissing = false
+        return Task { [weak self] in
+            do {
+                try await grant()
+            } catch {
+                self?.voiceConsentMissing = consentMissingBeforeGrant
+                toast.showError(
+                    String(localized: "conversation.voiceConsent.failed",
+                           defaultValue: "Impossible d'activer la traduction automatique des vocaux. Réessayez plus tard.",
+                           bundle: .main)
+                )
+            }
+        }
     }
 
     // MARK: - Activation (start)
