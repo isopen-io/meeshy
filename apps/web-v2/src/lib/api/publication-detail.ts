@@ -1,6 +1,6 @@
 import { unwrap } from './client';
 import type { DataSource } from './config';
-import type { FeedPost } from './feed-pages';
+import { CANVAS_CAPS_HEADERS, type FeedPost } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
@@ -37,6 +37,7 @@ export async function loadPost(
   return params.transport.request<FeedPost>({
     method: 'GET',
     path: `/api/v1/posts/${encodeURIComponent(params.postId)}`,
+    headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
 }

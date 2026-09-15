@@ -79,6 +79,7 @@ const fr = {
   'feed.post.media.audio': 'Audio',
   'feed.post.media.previous': 'Média précédent',
   'feed.post.media.next': 'Média suivant',
+  'feed.post.media.mosaic': 'Mosaïque de {count} médias',
   'feed.post.see_more': 'voir plus',
   'feed.post.see_less': 'voir moins',
   'feed.post.reel.chip': 'Réel',

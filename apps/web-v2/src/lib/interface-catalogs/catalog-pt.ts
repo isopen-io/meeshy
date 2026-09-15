@@ -62,6 +62,7 @@ const pt = {
   'feed.post.media.audio': 'Áudio',
   'feed.post.media.previous': 'Mídia anterior',
   'feed.post.media.next': 'Próxima mídia',
+  'feed.post.media.mosaic': 'Mosaico de {count} mídias',
   'feed.post.see_more': 'ver mais',
   'feed.post.see_less': 'ver menos',
   'feed.post.reel.chip': 'Reel',

@@ -27,6 +27,7 @@
 import { readFileSync } from 'node:fs';
 
 import { mediaGridCurveFailures } from './lib/curve-media-grid.mjs';
+import { MOSAIC_LAYOUT_COTES, mosaicLayoutCurveFailures } from './lib/curve-mosaic-layout.mjs';
 
 const ROOT = new URL('../../..', import.meta.url).pathname;
 const UPSTREAM = `${ROOT}packages/shared/utils/focus-curve.ts`;
@@ -801,6 +802,7 @@ for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
 }
 
 failures.push(...mediaGridCurveFailures({ root: ROOT, count }));
+failures.push(...mosaicLayoutCurveFailures({ root: ROOT, count }));
 
 if (failures.length > 0) {
   console.error('\n  La loi de la Lentille a DÉRIVÉ de packages/shared/utils/focus-curve.ts :\n');
@@ -832,5 +834,7 @@ console.log(
     ` (3 tailles d'emoji seul + 2 cotes de sticker en bulle).` +
     `\n  Le seuil du tirer-pour-rafraîchir est conforme à MeeshyRefreshableScroll.swift (1 cote).` +
     `\n  La grille de médias du Fil est conforme à FocalAttachmentBlock.swift/BubbleStandardLayout+Media.swift/` +
-    `ConversationMediaFilmstrip.swift/+Geometry.swift/+Pages.swift (21 cotes).`,
+    `ConversationMediaFilmstrip.swift/+Geometry.swift/+Pages.swift (21 cotes).` +
+    `\n  L'agencement d'une publication est conforme à CanvasV3.swift/MosaicLayout.swift/PostSceneMosaic.swift` +
+    ` et à canvas-v3.ts (${MOSAIC_LAYOUT_COTES} cotes ; les valeurs sont gardées par mosaic-layout.test.ts).`,
 );
