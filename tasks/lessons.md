@@ -32394,6 +32394,8 @@ première localement, jamais en espérant qu'elle marche le jour où elle servir
 Voisine de [[reference_a_red_on_both_sides_of_the_diff_also_measures_the_machine]]
 et du piège inverse : ici, VERT d'un seul côté mesurait la machine.
 
+---
+
 ## Leçon 611 — Un témoin qui lit le TEXTE SOURCE verdit sur un correctif ANNULÉ
 
 **Mesuré le 2026-09-15 sur trois lots indépendants** de la chaîne de publication (#6577, #6579, #6164).
@@ -32441,8 +32443,6 @@ re-poser un motif interdit — mais il ne peut jamais être la seule preuve qu'u
    à part, avec un message qui l'accuse **lui** et jamais la feature.
 
 Voir aussi la leçon sur le disque saturé : un rouge qui ne parle pas du code parle de la **machine**.
-
----
 
 ## Leçon 612 — Un dépliage progressif n'est pas une vertu : ce qui se déplie doit être ce qu'on ne SAIT PAS ENCORE, jamais ce qu'on va sûrement donner (2026-09-14)
 

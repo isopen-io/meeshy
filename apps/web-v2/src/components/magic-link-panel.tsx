@@ -82,9 +82,10 @@ const HOW_IT_WORKS: InfoHint = { label: HOW_IT_WORKS_LABEL, text: HOW_IT_WORKS_T
  * glyphe : posé seul sous le compte à rebours, un (i) muet ne dirait pas de
  * quoi il parle.
  */
-/** Le TEXTE vient de `lib/view/auth-copy.ts` depuis #6583 : `/forgot-password`
- * attend le même e-mail et pose la même question — deux phrases pour une même
- * attente auraient dérivé au premier correctif. */
+/** Le TEXTE et le LIBELLÉ viennent de `lib/view/auth-copy.ts` : `/forgot-password`
+ * attend le même e-mail et pose la même question (#6583). Deux phrases pour une
+ * même attente auraient dérivé au premier correctif — et elles avaient déjà
+ * commencé, l'une disant « après une minute » que l'autre venait d'abandonner. */
 const NOTHING_RECEIVED: InfoHint = { label: NOTHING_RECEIVED_LABEL, text: NOTHING_RECEIVED_TEXT, glyph: AUTH_GLYPHS.info };
 
 function bannerFor(outcome: MagicLinkRequestOutcome | null): string | null {

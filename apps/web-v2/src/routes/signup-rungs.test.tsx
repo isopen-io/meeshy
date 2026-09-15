@@ -102,20 +102,6 @@ describe('l’adresse valide ouvre l’identité, DIRECTEMENT', () => {
     expect(has(el, '[data-derived-identity]')).toBe(false);
   });
 
-  /**
-   * VENU DE #6626, ET IL SURVIT AU REDÉCOUPAGE (#6582). Le (i) du mot de passe
-   * fait citer sa note par `aria-describedby` : en déduire `aria-invalid`
-   * annonçait « invalide » un champ facultatif que personne n'avait touché. Le
-   * geste d'ouverture a changé — l'adresse seule suffit désormais — mais la
-   * propriété mesurée, elle, n'a pas bougé d'un pixel.
-   */
-  test('le mot de passe paru, vide, ne s’annonce pas invalide', () => {
-    const el = mount();
-    type(el, '#signup-email', 'ada@meeshy.example');
-    const motDePasse = el.querySelector('#signup-password');
-    expect(motDePasse?.getAttribute('aria-invalid')).toBe('false');
-  });
-
   test('une adresse valide suffit — aucun geste sur le numéro n’est demandé', () => {
     const el = mount();
     type(el, '#signup-email', 'ada@meeshy.example');
@@ -123,6 +109,27 @@ describe('l’adresse valide ouvre l’identité, DIRECTEMENT', () => {
     expect(has(el, '#signup-password')).toBe(true);
     expect(text(el)).toContain('Créer mon compte');
   });
+
+  /**
+   * LE TÉMOIN DU MOT DE PASSE A PERDU SON SUJET, ET C'EST VOLONTAIRE (fusion
+   * 2026-09-15).
+   *
+   * #6626 tenait sa règle — `aria-invalid` suit le REFUS, jamais la seule
+   * présence d'un `aria-describedby` — par DEUX témoins : l'adresse
+   * (`signup-identity.test.tsx`) et le mot de passe, ici. Le second exigeait
+   * que le mot de passe CITE une note, ce qu'il faisait par son (i) de #6441.
+   *
+   * #6583 a remplacé ce (i) par une CONSÉQUENCE visible
+   * (`[data-signup-password-effect]`, témoin plus bas) : le champ ne cite plus
+   * rien tant qu'on ne le refuse pas. Réécrit sur ce champ, le témoin serait
+   * VIDE — sans note citée, `describedBy` est indéfini, donc la déduction
+   * fautive rendrait « false » elle aussi, et le témoin resterait vert sur la
+   * régression même qu'il surveille (leçon 611).
+   *
+   * La règle reste donc tenue par le témoin de l'ADRESSE, qui garde son (i) et
+   * où la déduction fautive rougirait. La règle elle-même est intacte dans
+   * `signup.tsx` : `aria-invalid={feedback.fieldErrors.password !== undefined}`.
+   */
 
   test('l’identité dérivée montre ce qui PARTIRA, dès qu’elle paraît', () => {
     const el = mount();

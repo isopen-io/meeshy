@@ -157,18 +157,19 @@ export function LoginDoors({
       <div className="relative flex w-full max-w-sm flex-1 flex-col items-center justify-center gap-8 px-6 py-10">
         {/* LE BLASON NE PARAÎT QUE LÀ OÙ IL NOMME QUELQUE CHOSE (#6583).
             Directive porteur 2026-09-14 : « à la connexion la page doit être
-            sans titre sauf la baguette magique ». C'est le BLASON qui part —
-            la marque et son mot, répétés à quelqu'un qui vient de cliquer
-            « Se connecter » sur la page précédente. Ce qui reste en tête de la
-            porte par défaut est la baguette, puis « Votre adresse e-mail » et
-            son (i) : un titre de CHAMP, que #6626 a raccourci le lendemain au
-            nom de la même exigence (« moins de détails sur la page de
-            connexion »), pas un titre de page.
-
-            Les DEUX autres sections gardent le blason : la porte du mot de
-            passe n'a pas de baguette, et le second facteur est un écran
+            sans titre sauf la baguette magique ». La porte par défaut a la
+            baguette, un titre de champ et un bouton — le blason y disait une
+            seconde fois ce que la page est, à quelqu'un qui vient de cliquer
+            « Se connecter ». Les DEUX autres sections le gardent : la porte du
+            mot de passe n'a pas de baguette, et le second facteur est un écran
             d'arrêt au milieu d'un parcours, où savoir de QUI vient la demande
-            de code n'est pas un ornement. */}
+            de code n'est pas un ornement.
+
+            Ce que cette directive retirait AUSSI — le titre de section du
+            panneau — est revenu par celle du 2026-09-15 (#6626) : « Votre
+            adresse e-mail » y ancre le (i) « Comment ça marche », donc annonce
+            quelque chose au lieu de répéter le champ. `MagicLinkPanel` n'a
+            plus de prop `heading` : plus personne ne le taisait. */}
         {method === 'password' || requires2FA ? <AuthTitle gradient="login" /> : null}
 
         {!online ? (

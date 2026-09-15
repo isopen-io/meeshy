@@ -2597,7 +2597,7 @@ La route dépréciée `/friend-requests` n'est jamais appelée.
 
 ---
 
-## D-72 · L'inscription montre le contact d'emblée et n'a plus d'étapes ; `/login` perd son blason ; `?methode=password` ; `/forgot-password` prend la forme de `/login` ; un code de parrainage s'entre et un lien le pose — 2026-09-15 (#6582, #6583, #6584)
+## D-72 · L'inscription montre le contact d'emblée et n'a plus d'étapes ; `/login` se réduit à la baguette ; `?methode=password` ; `/forgot-password` prend la forme de `/login` ; un code de parrainage s'entre et un lien le pose — 2026-09-14 (#6582, #6583, #6584)
 
 **Cette décision REDÉCOUPE D-69, elle ne l'annule pas.** La porte par défaut
 reste le lien magique, la machine reste unique (`MagicLinkPanel`), la note sur
@@ -2621,7 +2621,7 @@ sortir d'une porte qu'on venait soi-même de fermer. Il disparaît avec lui.
 La jauge de trois segments et « Étape N sur N » tombent aussi, et c'est
 cohérent : elles avaient été ajoutées pour RACHETER l'impression de formulaire
 sans fin que le dépliage créait. Un dispositif dont il faut compenser l'effet
-coûte plus qu'il ne rapporte (leçon 611).
+coûte plus qu'il ne rapporte (leçon 612).
 
 `SignupAnswers` n'a plus qu'une observation (`emailValid`) : le numéro ne
 conditionne plus rien, donc `phoneAnswered` — et les trois gestes qui le
@@ -2649,27 +2649,30 @@ avec lui. `Field` porte la nouvelle prop `valid` et l'expose en
 `data-field-state`, mesurable sans lire une chaîne de style ; un refus gagne
 toujours sur elle.
 
-### `/login` — le blason part, le titre de champ reste
+### `/login` — la baguette, une phrase, un champ, un bouton
 
-Directive porteur 2026-09-14 : « à la connexion la page doit être sans titre
-sauf la baguette magique. » **C'est le BLASON qui part** — la marque et son
-mot, répétés à quelqu'un qui vient de cliquer « Se connecter » sur la page
-précédente. Ce qui reste en tête de la porte par défaut est la baguette, puis
-« Votre adresse e-mail » et son (i) : un titre de CHAMP, que D-71 (#6626) a
-raccourci le lendemain au nom de la même exigence de sobriété — pas un titre de
-page.
+Directive : « à la connexion la page doit être sans titre sauf la baguette
+magique ; laisser juste "nous vous enverrons un lien de connexion sécurisé par
+mail", le champ e-mail et le bouton. » Le blason « Meeshy » et le titre
+« Entrez votre adresse email » disaient deux fois ce que la page EST, à
+quelqu'un qui vient de cliquer « Se connecter ». Ils tombent — sur cette porte
+seulement : la porte du MOT DE PASSE garde son blason (elle n'a pas de
+baguette) et le second facteur aussi (savoir de QUI vient une demande de code
+n'est pas un ornement).
 
-**Ce lot a d'abord retiré ce titre-là aussi, puis l'a rendu** : D-71 est arrivée
-par `dev` entre l'écriture et la fusion, et elle vient précisément de
-retravailler cette ligne avec le porteur (« clair et simple », le mot
-« magique » retiré partout, le « comment » derrière un (i)). Deux directives à
-un jour d'écart sur le même pixel : la plus récente tient le VOCABULAIRE et la
-mise en scène, celle-ci tient ce qui reste vrai des deux — le blason n'a rien à
-faire là. Rien de D-71 n'est défait.
+Le bouton dit « Recevoir le lien » sur les deux hôtes.
 
-Les DEUX autres sections gardent le blason : la porte du mot de passe n'a pas de
-baguette, et le second facteur est un écran d'arrêt au milieu d'un parcours, où
-savoir de QUI vient une demande de code n'est pas un ornement.
+*(À LA FUSION avec `dev`, le 2026-09-15 : ce paragraphe est tenu à MOITIÉ. Le
+BLASON tombe, comme écrit ci-dessus — D-71 ne le redemande pas. Le TITRE DE
+SECTION revient : D-71, d'une directive POSTÉRIEURE d'un jour, en a fait
+« Votre adresse e-mail » et lui a accroché le (i) « Comment ça marche », qui
+porte désormais tout le mode de fonctionnement — y compris la phrase « nous
+vous enverrons un lien… » que ce lot voulait garder en clair. Un titre qui
+HÉBERGE la mécanique ne redit plus le champ, et cette directive-là a été relue
+deux fois sur ce titre même (la place du (i), la césure de « e-mail ») : elle
+a été vue, pas subie. `MagicLinkPanel` avait gagné une prop `heading` pour
+taire ce titre sur `/login` ; plus personne ne la posait à faux, donc elle est
+retirée plutôt que laissée morte.)*
 
 ### `?methode=password` — ce qu'on cesse d'écrire, on ne cesse pas de le lire
 
@@ -2688,15 +2691,21 @@ ramène déjà : la barre disait son nom à qui venait de cliquer son nom. Il pr
 le halo, la colonne centrée, une enveloppe pour toute en-tête, la phrase, le
 champ, le bouton, puis le retour en pied. Sa TEINTE reste `--color-ios-brand`
 (`MeeshyForgotPasswordView.swift:309`) : les deux écrans ne font pas la même
-promesse. Sa demande est INJECTABLE (`ForgotPasswordDeps`), comme celle du
-panneau de la connexion par e-mail.
+promesse. Il gagne la note sur les indésirables — même attente qu'un lien
+magique — et la constante devient PARTAGÉE (`lib/view/auth-copy.ts`) plutôt que
+recopiée. Sa demande est INJECTABLE (`ForgotPasswordDeps`), comme celle du
+panneau du lien magique.
 
-**Il attend le même e-mail, il pose donc la même question, avec le même
-dispositif** : « Rien reçu ? » derrière le (i) de D-71 (`components/info-hint.tsx`),
-dont le TEXTE et le LIBELLÉ viennent de `lib/view/auth-copy.ts`. Ce module ne
-tient que des CHAÎNES, jamais des `InfoHint` : un `InfoHint` porte un tracé,
-donc un import de composant, et le loger dans `lib/view` ferait descendre la
-couche dans `components`. Chaque hôte compose son (i) ; le MOT est commun.
+*(À LA FUSION avec `dev`, le 2026-09-15, puis SOLDÉ dans le même mouvement :
+D-71 a replié la note du panneau derrière le (i) « Rien reçu ? » et en a changé
+le texte — deux phrases pour une même attente avaient donc commencé à diverger,
+l'une disant « après une minute » que l'autre venait d'abandonner. La question
+de produit n'en était pas une : les deux écrans attendent le MÊME e-mail, et
+« moins de détails » ne peut pas vouloir dire replié ici et en clair là.
+`/forgot-password` porte donc le même (i), et `lib/view/auth-copy.ts` ne tient
+plus une phrase mais des CHAÎNES (`HOW_IT_WORKS_*`, `NOTHING_RECEIVED_*`) que
+les deux hôtes composent — jamais un `InfoHint`, qui porte un tracé et ferait
+descendre `lib/view` dans `components`.)*
 
 ### Le parrainage — entrer un code, et un lien qui le pose
 
@@ -2735,8 +2744,7 @@ attendue.
 
 **Ce que le LEGACY avait déjà, et qui est repris** (retour porteur 2026-09-15 :
 « la version legacy avait déjà des développements dans ce sens, il faut veiller
-à réutiliser ou simplement ne rien perdre »). Trois choses, relevées dans
-`apps/web` :
+à réutiliser ou simplement ne rien perdre »). Trois trouvailles dans `apps/web` :
 
 1. **Le jeton SURVIT à la navigation.** `app/signup/affiliate/[token]/page.tsx`
    l'écrit en `localStorage` et en cookie 30 jours ;
@@ -2744,29 +2752,34 @@ attendue.
    cette moitié, seul le cas RARE comptait — s'inscrire sans jamais quitter la
    page d'arrivée — et le cas NOMINAL d'un lien partagé (cliquer, regarder,
    s'inscrire le lendemain) perdait le parrainage. `lib/view/referral-memory.ts`
-   le reprend, sous LA MÊME CLÉ (`meeshy_affiliate_token`) : le jour où
+   le reprend sous LA MÊME CLÉ (`meeshy_affiliate_token`) : le jour où
    `apps/web-v2` prend la place d'`apps/web`, les jetons déjà posés dans les
    navigateurs sont relus plutôt que jetés, et une ligne écrite par le legacy —
    le jeton NU, sans objet ni date — est comprise telle quelle. L'ÉCHÉANCE, en
    revanche, est corrigée : le legacy borne son cookie à 30 jours et laisse la
    copie locale sans date, donc un jeton y survit indéfiniment ; ici la date est
-   portée par la valeur, il n'y a qu'un support.
+   portée par la valeur, il n'y a qu'un support à faire périr. L'adresse gagne
+   toujours sur la mémoire — un nouveau lien remplace un ancien.
 2. **`?affiliate=` est la clé du legacy** (`middleware.ts:63` la capte sur
    n'importe quelle adresse). Des liens la portant sont déjà dans la nature :
    elle rejoint `ref` et `parrain` dans `REFERRAL_SEARCH_KEYS`.
-3. **Ce que le legacy fait pour RIEN, et qu'on ne recopie pas** :
+3. **Ce que le legacy fait pour RIEN n'est pas recopié** :
    `use-registration-submit.ts` pose `body.affiliateToken` sur
    `POST /auth/register`. Mesuré — ni la route, ni `registration.service.ts`, ni
-   `registerRequestSchema` ne lisent ce champ. Seul `POST /affiliate/register`,
+   `registerRequestSchema` ne lisent ce champ ; seul `POST /affiliate/register`,
    après le compte, noue quoi que ce soit. Reprendre la ligne aurait recopié une
    croyance, pas un comportement.
+
+**Deux parcours du legacy restent SANS équivalent**, inventoriés plutôt que
+perdus : la récupération de compte par TÉLÉPHONE (six étapes, `components/auth/recovery/`)
+et la reprise d'un numéro déjà rattaché (`phoneTransferToken`, que la passerelle
+sert déjà par `routes/auth/phone-transfer.ts`, et devant quoi le chantier
+s'arrête sur une phrase). #6650 les porte — bloquants pour la bascule.
 
 **Ce que ce lot ne fait pas** : la page depuis laquelle on INVITE (son code,
 ses jetons de campagne, ses filleuls, ses statistiques) n'existe toujours pas
 dans `apps/web-v2` — c'est un écran avec ses quatre états et ses trois lectures
-de passerelle, porté par #6585, qui hérite du legacy
-`components/affiliate/share-affiliate-modal.tsx` et
-`components/contacts/tabs/AffiliatesTab.tsx` comme point de départ.
+de passerelle, porté par #6585.
 
 ### Ce que D-69 disait et qui n'est plus vrai
 
@@ -2778,5 +2791,5 @@ directive du 2026-09-13 est donc livrée ; #6405 se ferme avec ce lot.
 
 ### Mesuré
 
-`bun test` vert ; `type-check` et `build` verts ; gate composite vert ;
-navigateur réel 390×844 sur `dist` — sept captures, zéro erreur de page.
+`bun test` 3815 verts (294 fichiers) ; `type-check` et `build` verts ; gate
+composite vert.
