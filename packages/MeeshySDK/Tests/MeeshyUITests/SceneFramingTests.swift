@@ -367,4 +367,125 @@ final class SceneFramingTests: XCTestCase {
         let declare = try XCTUnwrap(SceneFraming.focus(scene: s))
         XCTAssertNotEqual(impose.height, declare.height, accuracy: 0.001)
     }
+
+    // MARK: - Le porteur de cadrage PRÉCÈDE le fond (#6708, mesuré le 2026-09-15)
+
+    /// Le porteur du cadrage, tel que la publication de recette
+    /// `6aa98002e361c424e6f58409` le sert : `plane: bg`, ni adresse ni forme,
+    /// seulement le `transform` que #6125 pose sur chaque fond neuf.
+    /// `CanvasV3.migratedScene` l'émet AVANT les médias de la scène.
+    private func porteurDeCadrage() -> ObjectV3 {
+        ObjectV3(id: "bg", kind: .media, anchor: .free(x: 0.5, y: 0.5),
+                 plane: .bg, z: 0,
+                 transform: TransformV3(scale: 1, rotation: 0, opacity: 1),
+                 timing: nil, locale: nil,
+                 payload: ["transform": .object(["videoFitMode": .string("fit")])])
+    }
+
+    /// Le fond publié derrière ce porteur : son identité est celle du média,
+    /// jamais `bg`.
+    private func fondPublie(aspect: Double, mediaType: String) -> ObjectV3 {
+        ObjectV3(id: "fond-publie", kind: .media, anchor: .free(x: 0.5, y: 0.5),
+                 plane: .content, z: 1,
+                 transform: TransformV3(scale: 1, rotation: 0, opacity: 1),
+                 timing: nil, locale: nil,
+                 payload: ["isBackground": .bool(true),
+                           "aspectRatio": .number(aspect),
+                           "loop": .bool(true),
+                           "postMediaId": .string("m1"),
+                           "mediaURL": .string("https://example.test/m1"),
+                           "mediaType": .string(mediaType)])
+    }
+
+    /// Une scène de la recette, objet pour objet et dans l'ordre servi.
+    private func sceneDeRecette(fond aspect: Double, mediaType: String = "image") -> SceneV3 {
+        scene([porteurDeCadrage(), fondPublie(aspect: aspect, mediaType: mediaType)])
+    }
+
+    /// **LE témoin de #6708.** Trois scènes dont le fond 1080 × 1920 remplit le
+    /// cadre rendaient dans le fil une carte de **338 × 252 pt** : le HAUT et le
+    /// BAS de chaque scène sortaient de la carte.
+    ///
+    /// Le porteur vient en tête et passe `isBackground` par son plan. Élu comme
+    /// fond, il n'a aucune forme, donc aucune bande ; le vrai fond entrait alors
+    /// parmi les objets ordinaires, où sa boîte d'ancre montait au plancher
+    /// `minimumSide`. 0,5625 / 0,42 = 1,339, et 338 / 1,339 = 252.
+    func test_unFondPortraitPleinCadre_derriereSonPorteur_neResserreRien() {
+        let s = sceneDeRecette(fond: 9.0 / 16.0)
+        XCTAssertEqual(SceneFraming.backgroundMedia(in: s)?.id, "fond-publie",
+                       "le fond est l'objet qui porte l'IMAGE, pas le porteur de son cadrage")
+        XCTAssertNil(SceneFraming.focus(scene: s),
+                     "un fond portrait remplit la scène : aucune fenêtre ne doit en couper le haut et le bas")
+        XCTAssertNil(SceneFraming.cardFocus(scene: s))
+        XCTAssertNil(SceneFraming.cardAspect(scene: s))
+    }
+
+    /// …et la carte de cette publication garde le gabarit de la scène : 601 pt
+    /// de haut sur les 338 pt de la carte, la scène entière.
+    func test_leCarrouselDeLaRecette_gardeLeGabaritDeLaScene() {
+        let document = CanvasV3(scenes: (0..<3).map { _ in sceneDeRecette(fond: 9.0 / 16.0) })
+        let rapport = SceneCarouselLayout.cardAspect(document: document)
+        XCTAssertEqual(rapport, SceneFraming.sceneAspect, accuracy: 0.0001)
+        XCTAssertEqual(338 / rapport, 601, accuracy: 1,
+                       "la recette mesurait 252 pt : une fenêtre de 42 % de la scène")
+    }
+
+    /// **La publication de recette n°3 (capture de 22:17)** : quatre scènes
+    /// « Image par image » aux rapports MÉLANGÉS — panorama 4:1, image haute
+    /// 1:4, image 16:9, vidéo 16:9. Sa carte mesurait, elle aussi, 338 × 252 pt.
+    ///
+    /// **Une seule hauteur pour toutes les pages : celle de la page la plus
+    /// HAUTE.** Chaque page vote le rapport que `SceneFraming` lui donne, et la
+    /// boîte prend le plus vertical (`SceneCarouselLayout`). Une hauteur par
+    /// page ferait sauter le texte et la rangée d'actions pendant le glissement.
+    /// Aucune page n'exige alors plus de hauteur que la boîte, donc aucune n'est
+    /// rognée : les pages plus courtes s'y centrent, entières.
+    func test_unCarrouselAuxRapportsMelanges_prendLaHauteurDeSaPageLaPlusHaute() throws {
+        let pages = [sceneDeRecette(fond: 4),
+                     sceneDeRecette(fond: 0.25),
+                     sceneDeRecette(fond: 16.0 / 9.0),
+                     sceneDeRecette(fond: 16.0 / 9.0, mediaType: "video")]
+        XCTAssertEqual(try XCTUnwrap(SceneFraming.cardAspect(scene: pages[0])), 4, accuracy: 0.001,
+                       "le panorama tient dans une bande")
+        XCTAssertNil(SceneFraming.cardAspect(scene: pages[1]),
+                     "l'image haute remplit la scène : rien à resserrer")
+        XCTAssertEqual(try XCTUnwrap(SceneFraming.cardAspect(scene: pages[2])), 16.0 / 9.0, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(SceneFraming.cardAspect(scene: pages[3])), 16.0 / 9.0, accuracy: 0.001)
+
+        let boite = SceneCarouselLayout.cardAspect(document: CanvasV3(scenes: pages))
+        XCTAssertEqual(boite, SceneFraming.sceneAspect, accuracy: 0.0001,
+                       "la page 1:4 est la plus haute : la carte prend 338 × 601 pt")
+        let panorama = try XCTUnwrap(SceneFraming.imageAspect(scene: pages[0]))
+        XCTAssertEqual(338 / panorama, 84.5, accuracy: 0.5,
+                       "le panorama se montre entier, en bande de 338 × 85 pt centrée dans sa page")
+    }
+
+    /// **La moitié qui empêche le correctif de devenir un gabarit plein.** Un
+    /// fond PAYSAGE derrière le même porteur reste une bande, et sa carte reste
+    /// courte (directive porteur 2026-09-06 ; #6697 mesurait 338 × 190).
+    ///
+    /// Le porteur ne peint aucun pixel : compté parmi les objets, sa boîte
+    /// d'ancre montée au plancher élargirait la bande de 0,32 à 0,42.
+    func test_unFondPaysage_derriereSonPorteur_gardeSaCarteCourte() throws {
+        let s = sceneDeRecette(fond: 16.0 / 9.0)
+        let cadre = try XCTUnwrap(SceneFraming.focus(scene: s))
+        XCTAssertEqual(cadre.height, SceneFraming.backgroundBand(aspect: 16.0 / 9.0).height,
+                       accuracy: 0.001, "le cadre est la bande, pas la bande unie au porteur")
+        XCTAssertEqual(try XCTUnwrap(SceneFraming.cardAspect(scene: s)), 16.0 / 9.0, accuracy: 0.001)
+        let carrousel = CanvasV3(scenes: [s, sceneDeRecette(fond: 16.0 / 9.0)])
+        XCTAssertEqual(338 / SceneCarouselLayout.cardAspect(document: carrousel), 190, accuracy: 1)
+    }
+
+    /// Une scène de TEXTE seul sur son porteur de couleur garde, elle aussi, sa
+    /// carte courte : c'est la forme des publications du 2026-09-06.
+    func test_uneSceneDeTexteSeul_surSonPorteurDeCouleur_gardeSaCarteCourte() throws {
+        let couleur = ObjectV3(id: "bg", kind: .media, anchor: .free(x: 0.5, y: 0.5),
+                               plane: .bg, z: 0,
+                               transform: TransformV3(scale: 1, rotation: 0, opacity: 1),
+                               timing: nil, locale: nil,
+                               payload: ["background": .string("#101010")])
+        let s = scene([couleur, objet(.text, x: 0.5, y: 0.45)])
+        XCTAssertGreaterThan(try XCTUnwrap(SceneFraming.cardAspect(scene: s)), 1,
+                             "rien ne remplit la scène : la carte se resserre sur le texte")
+    }
 }
