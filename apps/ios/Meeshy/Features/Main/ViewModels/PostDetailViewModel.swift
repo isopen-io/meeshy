@@ -882,16 +882,27 @@ class PostDetailViewModel: ObservableObject {
     }
 
     /// Pose une traduction de commentaire fraîchement arrivée (racine ou
-    /// réponse) — uniquement si la langue est préférée et que la ligne n'a pas
-    /// déjà une traduction plus prioritaire affichée.
+    /// réponse) — uniquement si la langue est préférée, qu'aucune traduction
+    /// n'est déjà affichée, ET que la langue d'origine du commentaire n'occupe
+    /// pas déjà un rang au moins aussi prioritaire dans le Prisme (#6531,
+    /// jumelle de `FeedViewModel.applyCommentTranslation` — même garde).
     func applyCommentTranslationUpdate(commentId: String, language: String, text: String) {
-        guard preferredLanguages.contains(where: { $0.caseInsensitiveCompare(language) == .orderedSame }) else { return }
-        if let idx = comments.firstIndex(where: { $0.id == commentId }), comments[idx].translatedContent == nil {
+        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
+        guard let incomingRank = preferred.firstIndex(where: { $0 == language.lowercased() }) else { return }
+        func shouldApply(_ comment: FeedComment) -> Bool {
+            guard comment.translatedContent == nil else { return false }
+            let originalRank = comment.originalLanguage
+                .map { $0.lowercased() }
+                .flatMap { orig in preferred.firstIndex(where: { $0 == orig }) }
+            if let originalRank, originalRank <= incomingRank { return false }
+            return true
+        }
+        if let idx = comments.firstIndex(where: { $0.id == commentId }), shouldApply(comments[idx]) {
             comments[idx].translatedContent = text
             return
         }
         for (key, var replies) in repliesMap {
-            if let idx = replies.firstIndex(where: { $0.id == commentId }), replies[idx].translatedContent == nil {
+            if let idx = replies.firstIndex(where: { $0.id == commentId }), shouldApply(replies[idx]) {
                 replies[idx].translatedContent = text
                 repliesMap[key] = replies
                 return
@@ -1364,11 +1375,13 @@ class PostDetailViewModel: ObservableObject {
                 var translations = self.post?.translations ?? [:]
                 translations[data.language] = translation
                 self.post?.translations = translations
-                let langs = self.preferredLanguages
-                if langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) {
-                    if self.post?.translatedContent == nil {
-                        self.post?.translatedContent = data.translation.text
-                    }
+                // #6531 — re-résout le texte AFFICHÉ par la descente unique du
+                // Prisme après fusion (`FeedPost.resolved`), au lieu de figer la
+                // première traduction arrivée dont la langue figurait n'importe
+                // où dans le Prisme. C'est CE chemin (l'écran de détail, pas le
+                // feed) que la seconde reproduction de l'issue démontre.
+                if let post = self.post {
+                    self.post = post.resolved(preferredLanguages: self.preferredLanguages)
                 }
             }
             .store(in: &socketCancellables)

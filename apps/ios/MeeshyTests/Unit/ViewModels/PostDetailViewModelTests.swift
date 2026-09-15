@@ -1357,4 +1357,65 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertEqual(writes.first?.comments.map(\.id), ["c1"],
                        "une ligne optimiste persistée resterait en cache pour toujours : le serveur ne la renverra jamais")
     }
+
+    // MARK: - applyCommentTranslationUpdate (#6531 — jumelle de FeedViewModel.applyCommentTranslation)
+
+    func test_applyCommentTranslationUpdate_originalLanguageAtHigherRank_isNotOverwritten() {
+        let (sut, _) = makeSUT(preferredLanguages: ["fr", "en"])
+        sut.comments = [FeedComment(id: "c1", author: "bob", content: "Salut", originalLanguage: "fr")]
+
+        sut.applyCommentTranslationUpdate(commentId: "c1", language: "en", text: "Hi")
+
+        XCTAssertNil(sut.comments.first?.translatedContent,
+                      "le français (rang 1, langue d'origine) doit primer sur l'anglais reçu")
+    }
+
+    func test_applyCommentTranslationUpdate_translationRankedAboveOriginal_isApplied() {
+        let (sut, _) = makeSUT(preferredLanguages: ["en", "fr"])
+        sut.comments = [FeedComment(id: "c1", author: "bob", content: "Salut", originalLanguage: "fr")]
+
+        sut.applyCommentTranslationUpdate(commentId: "c1", language: "en", text: "Hi")
+
+        XCTAssertEqual(sut.comments.first?.translatedContent, "Hi")
+    }
+
+    func test_applyCommentTranslationUpdate_appliesToAReply_whenOriginalDoesNotOutrankIt() {
+        let (sut, _) = makeSUT(preferredLanguages: ["en", "fr"])
+        sut.comments = [FeedComment(id: "root", author: "alice", content: "Top")]
+        sut.repliesMap = ["root": [FeedComment(id: "r1", author: "bob", content: "Salut", parentId: "root", originalLanguage: "fr")]]
+
+        sut.applyCommentTranslationUpdate(commentId: "r1", language: "en", text: "Hi")
+
+        XCTAssertEqual(sut.repliesMap["root"]?.first?.translatedContent, "Hi")
+    }
+
+    // MARK: - subscribeToSocket → post:translation-updated (#6531)
+
+    /// Deuxième reproduction de l'issue : l'écran de DÉTAIL a son propre sink
+    /// `post:translation-updated` dans `subscribeToSocket`, indépendant de
+    /// `FeedViewModel`. Même défaut (la première traduction dont la langue
+    /// figure dans le Prisme devenait le texte affiché, sans tenir compte du
+    /// rang), même correctif : re-résoudre via `FeedPost.resolved`.
+    func test_subscribeToSocket_postTranslationUpdated_originalLanguageAtItsRank_winsOverLowerRankTranslation() async {
+        let mock = MockPostService()
+        let apiPost: APIPost = JSONStub.decode("""
+        {"id":"p1","type":"POST","content":"Bonjour","originalLanguage":"fr","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a1","username":"alice"}}
+        """)
+        mock.getPostResult = .success(apiPost)
+        let socket = MockSocialSocket()
+        let (sut, _) = makeSUT(postService: mock, preferredLanguages: ["fr", "pt"], socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+
+        let translationData: SocketPostTranslationUpdatedData = JSONStub.decode("""
+        {"postId":"p1","language":"pt","translation":{"text":"Olá","translationModel":"nllb-200","confidenceScore":0.9,"createdAt":"2026-01-15T12:00:00.000Z"}}
+        """)
+        socket.postTranslationUpdated.send(translationData)
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertNil(sut.post?.translatedContent,
+                      "le français (rang 1, langue d'origine) doit primer sur le portugais reçu")
+        XCTAssertEqual(sut.post?.translations?["pt"]?.text, "Olá")
+    }
 }
