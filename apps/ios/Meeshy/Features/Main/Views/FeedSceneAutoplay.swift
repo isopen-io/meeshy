@@ -131,10 +131,12 @@ struct PostSceneCard: View {
     /// `PostSceneMosaic`, pas ici.
     private var sceneJouee: SceneV3? { document.scenes.first }
 
-    /// La zone à montrer, et le rapport que la carte adopte. `nil` ⇒ le
-    /// gabarit 9:16 d'origine, inchangé.
+    /// La zone à montrer. `nil` ⇒ la scène entière dans la boîte de
+    /// `cardAspect` : le gabarit 9:16, ou le rapport de l'image quand la scène
+    /// n'est qu'une image (#6697) — une fenêtre posée sur un canvas 9:16 rempli
+    /// n'en montrait que le milieu.
     private var cadre: CGRect? {
-        sceneJouee.flatMap { SceneFraming.focus(scene: $0) }
+        sceneJouee.flatMap { SceneFraming.cardFocus(scene: $0) }
     }
 
     var body: some View {
