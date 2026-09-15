@@ -2274,21 +2274,21 @@ EngagementGlyph(
         let place = pendingPlace
         pendingPlace = nil
         guard !trimmed.isEmpty || media != nil || place != nil else { return }
-        let effects = commentEffects
-        let blur = commentBlurEnabled
+        let flags = commentEffects.flags.rawValue | (commentBlurEnabled ? MessageEffectFlags.blurred.rawValue : 0)
         commentEffects = .none
         commentBlurEnabled = false
         // Réponse plate à 2 niveaux (cf. sendReply) : reparente à la racine.
         let parentId = viewModel.replyingTo?.parentId ?? viewModel.replyingTo?.id
-        let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
         let effectFlags = flags > 0 ? Int(flags) : nil
+        // #6587 — la pastille DÉCLARE la langue ; sans ce relais, le serveur la devine.
+        let lang = composerLanguage
         Task {
             if let media {
-                await viewModel.submitCommentWithMedia(trimmed, effectFlags: effectFlags, parentId: parentId, pendingMedia: media, location: place)
+                await viewModel.submitCommentWithMedia(trimmed, originalLanguage: lang, effectFlags: effectFlags, parentId: parentId, pendingMedia: media, location: place)
             } else if parentId != nil {
-                await viewModel.sendReply(trimmed, effectFlags: effectFlags, location: place)
+                await viewModel.sendReply(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place)
             } else {
-                await viewModel.sendComment(trimmed, effectFlags: effectFlags, location: place)
+                await viewModel.sendComment(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place)
             }
         }
     }

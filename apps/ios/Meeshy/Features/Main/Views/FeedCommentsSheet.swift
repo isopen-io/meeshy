@@ -1867,6 +1867,7 @@ struct CommentsSheetView: View {
         // exacte — le twin-match par contenu ne tenait pas quand le serveur
         // normalise le texte (sanitize).
         let tempId = ClientMutationId.generate()
+        let lang = composerLanguage
         let me = AuthManager.shared.currentUser
         let optimistic = FeedComment(
             id: tempId,
@@ -1877,7 +1878,7 @@ struct CommentsSheetView: View {
             content: trimmed, timestamp: Date(),
             likes: 0, replies: 0, parentId: parentId,
             effectFlags: effectFlags ?? 0,
-            media: media.map { [$0.optimistic] } ?? []
+            originalLanguage: lang, media: media.map { [$0.optimistic] } ?? []
         )
         if let parentId {
             var existing = repliesMap[parentId] ?? []
@@ -1895,8 +1896,6 @@ struct CommentsSheetView: View {
             liveComments = current
         }
         liveCommentCount = (liveCommentCount ?? post.commentCount) + 1
-
-        let lang = composerLanguage
 
         Task {
             do {
@@ -1918,7 +1917,7 @@ struct CommentsSheetView: View {
                     likes: 0, replies: 0,
                     parentId: parentId,
                     effectFlags: apiComment.effectFlags ?? effectFlags ?? 0,
-                    media: (apiComment.media ?? []).map { $0.toFeedMedia() }
+                    originalLanguage: apiComment.originalLanguage, media: (apiComment.media ?? []).map { $0.toFeedMedia() }
                 )
                 // Swap the optimistic temp for the server row (no count
                 // change). Idempotent if the socket event already did it.
@@ -1947,10 +1946,11 @@ struct CommentsSheetView: View {
                 // already use) instead of unconditionally losing the comment.
                 // The optimistic `tempId` row is reconciled by the already-wired
                 // `comment:added` socket handler once the outbox replay lands.
-                // NOTE: `CreateCommentPayload` carries `effectFlags` but not
+                // NOTE: `CreateCommentPayload` carries `effectFlags`, the
+                // authored language (#6587) and the shared place, but not
                 // `attachmentIds` (SDK schema gap) — attached media on a comment
-                // sent while offline is dropped on replay; the comment text and
-                // its visual effects survive.
+                // sent while offline is dropped on replay; the comment text, its
+                // declared language and its visual effects survive.
                 do {
                     // MÊME cmid que la tentative REST : si le POST a abouti côté
                     // serveur mais que sa réponse s'est perdue, le rejeu outbox
@@ -1958,12 +1958,10 @@ struct CommentsSheetView: View {
                     // second commentaire.
                     let cmid = tempId
                     let payload = CreateCommentPayload(
-                        clientMutationId: cmid,
-                        postId: post.id,
-                        parentCommentId: parentId,
-                        content: trimmed,
-                        location: place,
-                        effectFlags: effectFlags
+                        clientMutationId: cmid, postId: post.id,
+                        parentCommentId: parentId, content: trimmed,
+                        originalLanguage: lang,
+                        location: place, effectFlags: effectFlags
                     )
                     try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: post.id)
                     onCommentSent?(post.id)

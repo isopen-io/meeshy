@@ -516,7 +516,14 @@ final class NotificationActionHandler: NotificationActionHandling {
                     clientMutationId: clientMutationId,
                     postId: postId,
                     parentCommentId: parentId,
-                    content: text
+                    content: text,
+                    // #6587 — une réponse rapide depuis l'écran verrouillé n'a
+                    // PAS de pastille : il n'y a aucune langue déclarée à
+                    // porter. `nil` laisse le repli serveur s'appliquer, EXACTEMENT
+                    // comme sur la tentative REST jumelle ci-dessous — les deux
+                    // chemins partagent le même cmid et doivent donner le même
+                    // commentaire, quel que soit celui qui atterrit le premier.
+                    originalLanguage: nil
                 ),
                 conversationId: nil
             )

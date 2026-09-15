@@ -575,7 +575,7 @@ final class FeedViewModelTests: XCTestCase {
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
         await sut.loadFeed(forceRefresh: true)
 
-        await sut.sendComment(postId: "p1", content: "Nice post!")
+        await sut.sendComment(postId: "p1", content: "Nice post!", originalLanguage: "en")
 
         XCTAssertEqual(sut.posts[0].commentCount, 4)
         XCTAssertEqual(sut.posts[0].comments.first?.content, "Nice post!", "optimistic comment inserted")
@@ -593,7 +593,7 @@ final class FeedViewModelTests: XCTestCase {
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1")]))
         await sut.loadFeed(forceRefresh: true)
 
-        await sut.sendComment(postId: "p1", content: "reply", parentId: "c1")
+        await sut.sendComment(postId: "p1", content: "reply", originalLanguage: "en", parentId: "c1")
 
         let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
         XCTAssertEqual(payload?.parentCommentId, "c1")
@@ -606,10 +606,31 @@ final class FeedViewModelTests: XCTestCase {
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
         await sut.loadFeed(forceRefresh: true)
 
-        await sut.sendComment(postId: "p1", content: "failing comment")
+        await sut.sendComment(postId: "p1", content: "failing comment", originalLanguage: "en")
 
         XCTAssertEqual(sut.posts[0].commentCount, 3, "comment count must roll back on enqueue failure")
         XCTAssertTrue(sut.posts[0].comments.isEmpty, "optimistic comment must be removed on rollback")
+    }
+
+    /// #6587 — la ligne optimiste doit porter la langue DÉCLARÉE à la pastille.
+    /// `FeedComment.originalLanguage` alimente la descente du prisme et la
+    /// pastille `LanguageFlagChip` : sans elle, l'auteur lit son propre
+    /// commentaire frais sans indication de langue, et la ligne est persistée
+    /// ainsi. La langue déclarée diffère de celle que le contenu suggère —
+    /// sinon le témoin ne distinguerait pas une déclaration d'une devinette.
+    func test_sendComment_stampsTheAuthoredLanguageOnTheOptimisticRow() async {
+        let queue = MockOfflineQueue()
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1")]))
+        await sut.loadFeed(forceRefresh: true)
+
+        await sut.sendComment(postId: "p1", content: "Ceci a tout l'air d'être du français", originalLanguage: "de")
+
+        XCTAssertEqual(sut.posts[0].comments.first?.originalLanguage, "de",
+                       "la ligne optimiste du fil doit porter la langue de la pastille, pas nil")
+        let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
+        XCTAssertEqual(payload?.originalLanguage, sut.posts[0].comments.first?.originalLanguage,
+                       "la ligne AFFICHÉE et la ligne ENVOYÉE déclarent la même langue")
     }
 
     // MARK: - Outbox terminal outcome (R7) — rollback on .exhausted
@@ -668,7 +689,7 @@ final class FeedViewModelTests: XCTestCase {
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
         await sut.loadFeed(forceRefresh: true)
 
-        await sut.sendComment(postId: "p1", content: "doomed comment")
+        await sut.sendComment(postId: "p1", content: "doomed comment", originalLanguage: "en")
         XCTAssertEqual(sut.posts[0].commentCount, 4, "optimistic comment inserted")
         XCTAssertEqual(sut.posts[0].comments.first?.content, "doomed comment")
 
@@ -1757,7 +1778,7 @@ final class FeedViewModelTests: XCTestCase {
         await sut.loadFeed(forceRefresh: true)
         sut.subscribeToSocketEvents()
 
-        await sut.sendComment(postId: "p1", content: "Hello")
+        await sut.sendComment(postId: "p1", content: "Hello", originalLanguage: "en")
         guard let cmid = (queue.enqueueCalls.first?.payload as? CreateCommentPayload)?.clientMutationId else {
             return XCTFail("no createComment enqueue")
         }

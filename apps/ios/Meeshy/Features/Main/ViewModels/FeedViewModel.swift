@@ -1154,7 +1154,7 @@ class FeedViewModel: ObservableObject {
         return FeedMedia(type: type, url: url.absoluteString)
     }
 
-    func sendComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async {
+    func sendComment(postId: String, content: String, originalLanguage: String?, parentId: String? = nil, effectFlags: Int? = nil, location: SharedPlace? = nil) async {
         guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
         // T10c — optimistic insert + durable outbox enqueue (survives offline +
         // app kill, flushes on reconnect via T10) instead of the direct
@@ -1174,16 +1174,16 @@ class FeedViewModel: ObservableObject {
             timestamp: Date(),
             likes: 0, replies: 0,
             parentId: parentId,
-            effectFlags: effectFlags ?? 0
+            effectFlags: effectFlags ?? 0, originalLanguage: originalLanguage, location: location
         )
         posts[index].comments.insert(optimistic, at: 0)
         posts[index].commentCount += 1
 
         let payload = CreateCommentPayload(
-            clientMutationId: cmid,
-            postId: postId,
-            parentCommentId: parentId,
-            content: content
+            clientMutationId: cmid, postId: postId,
+            parentCommentId: parentId, content: content,
+            originalLanguage: originalLanguage,
+            location: location, effectFlags: effectFlags
         )
         do {
             try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: postId)

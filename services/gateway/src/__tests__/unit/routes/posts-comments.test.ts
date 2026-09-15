@@ -315,6 +315,86 @@ describe('POST /posts/:postId/comments — success', () => {
   });
 });
 
+/**
+ * #6587 — la langue DÉCLARÉE par l'auteur doit atteindre le service, à la place
+ * que le service lit.
+ *
+ * La suite de service (`PostCommentService.authoredLanguage.test.ts`) prouve que
+ * `addComment` PRÉFÈRE une langue déclarée à son heuristique de mots. Elle
+ * n'atteste rien de la ROUTE, qui passe NEUF arguments POSITIONNELS : une
+ * insertion de paramètre en amont décalerait `originalLanguage` d'un cran sans
+ * qu'un seul témoin rougisse, et le service recevrait un `attachmentId` comme
+ * langue source — donc un `originalLanguage` absurde persisté sur le commentaire,
+ * depuis lequel TOUS les lecteurs descendent leur prisme.
+ *
+ * On épingle donc le TUPLE ENTIER, pas seulement la position 5 : c'est la seule
+ * forme qui rougisse quel que soit le rang de l'insertion. Et on passe par
+ * `app.inject`, donc par le vrai schéma de route et le vrai handler — un témoin
+ * qui appellerait le service directement mesurerait le service, pas le relais.
+ *
+ * Trancher entre ce témoin et un OBJET D'OPTIONS à la place des neuf
+ * positionnels : les deux, mais pas dans ce lot. L'objet d'options supprime la
+ * DÉRIVE de position ; il ne dit rien du cas où la route OMET simplement la clé,
+ * le champ étant optionnel des deux côtés — seul un témoin de route voit les
+ * deux. Et `PostCommentService.ts` est hors du périmètre de ce lot : refactorer
+ * sa signature toucherait cinq suites qu'aucun de ses défauts ne concerne.
+ */
+describe('POST /posts/:postId/comments — la langue déclarée atteint le service', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp();
+    // `resolveInteractionTarget` rend la ligne du double : sans `id`, le
+    // `targetPostId` transmis au service serait `undefined` et le tuple
+    // n'épinglerait pas la cible réelle.
+    ((app as any).prisma.post.findFirst as jest.Mock<any>).mockResolvedValue({
+      id: POST_ID, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [],
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  // Français reconnaissable, langue déclarée ALLEMANDE : si la route perdait la
+  // déclaration, `detectLanguage` rendrait « fr » et le témoin ne pourrait pas
+  // verdir pour un motif étranger à ce qu'il mesure.
+  const FRENCH_LOOKING = 'Bonjour, je suis très heureux de vous lire aujourd’hui';
+
+  it('hands the authored language to addComment, at the position the service reads it', async () => {
+    mockAddComment.mockClear();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments`,
+      payload: { content: FRENCH_LOOKING, originalLanguage: 'de' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(mockAddComment).toHaveBeenCalledTimes(1);
+    expect(mockAddComment).toHaveBeenCalledWith(
+      POST_ID,          // targetPostId
+      USER_ID,          // authorId
+      FRENCH_LOOKING,   // content (sanitisé — le double est l'identité)
+      undefined,        // parentId
+      undefined,        // effectFlags
+      'de',             // originalLanguage  ← la déclaration de l'auteur
+      undefined,        // mediaId
+      undefined,        // mobileTranscription
+      undefined,        // location
+    );
+  });
+
+  it('hands undefined when the author declared nothing, so the server fallback applies', async () => {
+    mockAddComment.mockClear();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments`,
+      payload: { content: FRENCH_LOOKING },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(mockAddComment.mock.calls[0][5]).toBeUndefined();
+  });
+});
+
 describe('POST /posts/:postId/comments — broadcast carries clientMutationId', () => {
   let app: FastifyInstance;
   beforeAll(async () => {

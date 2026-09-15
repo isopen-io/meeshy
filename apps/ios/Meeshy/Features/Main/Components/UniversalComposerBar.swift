@@ -285,9 +285,6 @@ struct UniversalComposerBar: View {
     /// Caller must reset to false after triggering.
     var focusTrigger: Binding<Bool> = .constant(false)
 
-    /// Called when recording state changes (true = started, false = stopped)
-    var onRecordingChange: ((Bool) -> Void)? = nil
-
     /// Called when composer content changes (text, attachments, or recording).
     /// True = has pending content that should block story timer.
     var onHasContentChange: ((Bool) -> Void)? = nil
