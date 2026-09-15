@@ -14,8 +14,9 @@ import {
 import { useCountdown } from '@/lib/view/use-countdown';
 
 import { AuthSubmitButton } from './auth-chrome';
+import { EmailSentNotice } from './email-sent-notice';
 import { Field } from './field';
-import { Glyph, GlyphSvg } from './glyph';
+import { GlyphSvg } from './glyph';
 import { AUTH_GLYPHS } from './glyphs-auth';
 import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from './info-hint';
 
@@ -68,24 +69,6 @@ const HOW_IT_WORKS: InfoHint = {
   glyph: AUTH_GLYPHS.info,
 };
 
-/**
- * CE QUE LA PASSERELLE NE DIT PAS, ET QUE L'ÉCRAN DOIT DIRE (#6404).
- *
- * `POST /auth/magic-link/request` rend 200 même pour une adresse inconnue
- * (`MagicLinkService.ts:133-137`, anti-énumération) : l'écran ne peut donc ni
- * promettre que l'e-mail part, ni démentir. Ce qu'il PEUT faire, c'est nommer
- * la première cause d'un e-mail « jamais reçu » — le dossier indésirables.
- * #6404 l'écrivait en clair ; #6626 le replie derrière un (i) dont le libellé
- * est la question qu'on se pose à cet instant, et qui reste LU à côté du
- * glyphe : posé seul sous le compte à rebours, un (i) muet ne dirait pas de
- * quoi il parle.
- */
-const NOTHING_RECEIVED: InfoHint = {
-  label: 'Rien reçu ?',
-  text: 'Regardez vos indésirables (spam) : le message peut y être tombé.',
-  glyph: AUTH_GLYPHS.info,
-};
-
 function bannerFor(outcome: MagicLinkRequestOutcome | null): string | null {
   if (outcome === null) return null;
   if (outcome.kind === 'rate-limited') return 'Trop de demandes — réessayez dans une heure.';
@@ -117,7 +100,6 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
   const [deadline, setDeadline] = useState<MagicLinkDeadline | null>(null);
   const [focused, setFocused] = useState(false);
   const howItWorks = useInfoHint();
-  const nothingReceived = useInfoHint();
 
   const remaining = useCountdown(deadline, deps.clock, deps.now);
   const locale = typeof document === 'object' ? document.documentElement.lang || 'fr' : 'fr';
@@ -148,46 +130,31 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
 
   if (step === 'waiting') {
     const expired = deadline !== null && remaining <= 0;
+    /* L'ÉCRAN « E-MAIL ENVOYÉ » est celui du mot de passe oublié aussi
+       (`EmailSentNotice`, #6643) : l'adresse et « Rien reçu ? » y vivent une
+       fois. Ce qui n'appartient qu'à la connexion — le compte à rebours, le
+       renvoi, l'annulation — entre par ses deux emplacements. */
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 text-center">
-        <div
-          aria-hidden="true"
-          className="grid place-items-center rounded-full"
-          style={{ width: 120, height: 120, backgroundColor: 'color-mix(in srgb, var(--ios-indigo-600) 10%, transparent)' }}
-        >
-          <Glyph name="envelopeOpen" size={48} style={{ color: 'var(--ios-indigo-500)' }} />
-        </div>
-
-        <h2 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-          E-mail envoyé
-        </h2>
-        <p style={{ color: 'var(--color-ios-ink-2)' }}>
-          Ouvrez le lien reçu à <strong style={{ color: 'var(--ios-indigo-400)' }}>{email}</strong>
-        </p>
-
-        {expired ? (
-          <p role="alert" style={{ color: 'var(--ios-error)' }}>
-            Lien expiré, renvoyez-en un nouveau
-          </p>
-        ) : (
-          <p
-            role="timer"
-            aria-live="off"
-            aria-label={`Le lien expire dans ${spokenCountdown(remaining, locale)}`}
-            className="font-bold tabular-nums text-screen"
-            style={{ color: 'var(--ios-indigo-600)' }}
-          >
-            {formatCountdown(remaining, locale)}
-          </p>
-        )}
-
-        {/* LES INDÉSIRABLES — voir `NOTHING_RECEIVED`. Présent pendant toute
-            l'attente, replié derrière sa question (#6626). */}
-        <div className="grid justify-items-center">
-          <InfoHintButton hint={NOTHING_RECEIVED} state={nothingReceived} showsLabel />
-          <InfoHintText hint={NOTHING_RECEIVED} state={nothingReceived} />
-        </div>
-
+      <EmailSentNotice
+        email={email}
+        status={
+          expired ? (
+            <p role="alert" style={{ color: 'var(--ios-error)' }}>
+              Lien expiré, renvoyez-en un nouveau
+            </p>
+          ) : (
+            <p
+              role="timer"
+              aria-live="off"
+              aria-label={`Le lien expire dans ${spokenCountdown(remaining, locale)}`}
+              className="font-bold tabular-nums text-screen"
+              style={{ color: 'var(--ios-indigo-600)' }}
+            >
+              {formatCountdown(remaining, locale)}
+            </p>
+          )
+        }
+      >
         <button
           type="button"
           disabled={(!expired && remaining > 0) || submitting || !online}
@@ -208,7 +175,7 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
         >
           Annuler
         </button>
-      </div>
+      </EmailSentNotice>
     );
   }
 

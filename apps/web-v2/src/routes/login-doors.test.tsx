@@ -2,7 +2,9 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { sessionStore } from '@/lib/api/session';
 import { LoginDoors, loginMethodFromSearch } from '@/routes/login';
+import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { controlledBy, perceivableText as perceivable } from '@/test-support/perceivable-text';
 
@@ -126,6 +128,41 @@ describe('/login?methode=motdepasse — l’identifiant et le mot de passe', () 
   test('un paramètre inconnu retombe sur la porte par défaut — jamais un écran vide', () => {
     const el = mountAt('/login?methode=nimportequoi');
     expect(el.querySelector('#magic-link-email')).not.toBeNull();
+  });
+});
+
+/**
+ * LA CONNEXION EST LA RÉFÉRENCE DE LA GÉOMÉTRIE (#6643) — sa colonne centrée
+ * devient celle de toutes les pages d'accès. Elle y migre SANS changement
+ * visuel ; ce qui se prouve ici, c'est qu'elle monte la colonne PARTAGÉE, et
+ * que ses trois sections — les deux portes et le second facteur — y tiennent.
+ */
+describe('/login — les deux portes et le second facteur tiennent dans LA colonne d’accès (#6643)', () => {
+  test('la porte par défaut', () => {
+    const el = mountAt('/login');
+    expect(authColumnIn(el)?.querySelector('#magic-link-email')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+
+  test('la porte du mot de passe', () => {
+    const el = mountAt('/login?methode=motdepasse');
+    expect(authColumnIn(el)?.querySelector('#login-password')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+
+  test('le second facteur — l’étape de code', () => {
+    act(() => {
+      sessionStore.getState().beginTwoFactor({
+        twoFactorToken: 'jeton-du-temoin',
+        user: { id: '0'.repeat(24), username: 'ada', email: 'ada@meeshy.example', firstName: 'Ada', lastName: 'Lovelace', displayName: 'Ada', avatar: '' },
+      });
+    });
+    const el = mountAt('/login?methode=motdepasse');
+    expect(authColumnIn(el)?.querySelector('#login-2fa-code')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
+    act(() => {
+      sessionStore.getState().clearSession();
+    });
   });
 });
 

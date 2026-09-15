@@ -1,12 +1,17 @@
+import { act, type ReactNode } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { CountrySheet } from '@/components/country-sheet';
 import { Field } from '@/components/field';
 import { LanguageSheet } from '@/components/language-sheet';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { controlledBy, perceivableText } from '@/test-support/perceivable-text';
 
+import ForgotPasswordScreen, { type ForgotPasswordDeps } from './forgot-password';
 import { LoginDoors } from './login';
 import SignupScreen from './signup';
 import WelcomeScreen from './welcome';
@@ -249,5 +254,142 @@ describe('Field — le refus est DESSINÉ sous son champ, et le champ le DÉSIGN
     );
     expect(clean).not.toContain('role="alert"');
     expect(clean).toContain('aria-invalid="false"');
+  });
+});
+
+/**
+ * LES ÉCRANS MONTÉS DANS UN VRAI DOM (#6643) — la colonne et le mot de passe
+ * oublié ont besoin d'un clic, d'une saisie et d'une réponse, qu'un rendu
+ * statique ne sait pas jouer.
+ */
+const actGlobals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+const unmounts: Array<() => void> = [];
+
+function mount(node: ReactNode): HTMLDivElement {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  act(() => {
+    root.render(node);
+  });
+  unmounts.push(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+  return container;
+}
+
+function withMountedDom() {
+  beforeAll(() => {
+    ensureHappyDomRegistered({ url: 'http://localhost/' });
+    actGlobals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+  afterEach(() => {
+    unmounts.splice(0).forEach((unmount) => unmount());
+  });
+  afterAll(async () => {
+    delete actGlobals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+}
+
+const flat = (el: Element) => (el.textContent ?? '').replace(/\s+/gu, ' ');
+
+describe('Les pages d’accès tiennent dans UNE colonne, la puce « Fermer » comprise (#6643)', () => {
+  withMountedDom();
+
+  test('l’accueil : ses deux portes vivent dans la colonne', () => {
+    const el = mount(<WelcomeScreen />);
+    expect(authColumnIn(el)?.querySelector('a[href="/signup"]')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+
+  test('l’inscription : la puce « Fermer » vit DANS la colonne, jamais au bord de l’écran', () => {
+    const el = mount(<SignupScreen />);
+    const column = authColumnIn(el);
+    expect(column?.querySelector('a[aria-label="Fermer"]')?.getAttribute('href')).toBe('/login');
+    expect(column?.querySelector('#signup-email')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+});
+
+/**
+ * « MOT DE PASSE OUBLIÉ » SERT AUSSI À CRÉER UN MOT DE PASSE (#6643).
+ *
+ * Directive porteur 2026-09-15 : « la page de récupération de mot de passe doit
+ * permettre de setter le mot de passe même si on a jamais eu de mot de passe ».
+ * Le lien part aussi vers un compte qui n'en a jamais eu (#6642, passerelle) ;
+ * l'écran le dit sans détail technique — une phrase qui parle de CHOISIR, et le
+ * cas du premier mot de passe derrière un (i) qui NOMME la question (D-71).
+ */
+describe('Mot de passe oublié — le même lien sert à créer un premier mot de passe (#6643)', () => {
+  withMountedDom();
+
+  const EMAIL = 'ada@meeshy.example';
+
+  function forgotStub() {
+    const calls: string[] = [];
+    const deps: ForgotPasswordDeps = {
+      forgotPassword: async (email: string) => {
+        calls.push(email);
+        return { ok: true, data: { message: 'ok' }, status: 200 };
+      },
+    };
+    return { calls, deps };
+  }
+
+  test('la phrase dit « par e-mail » et « choisir », le bouton « Recevoir le lien » — dans la colonne', () => {
+    const el = mount(<ForgotPasswordScreen deps={forgotStub().deps} />);
+    expect(el.querySelector('h1')?.textContent).toBe('Mot de passe oublié');
+    expect(flat(el)).toContain('Recevez par e-mail un lien pour choisir un nouveau mot de passe.');
+    expect(el.querySelector('button[type="submit"]')?.textContent).toBe('Recevoir le lien');
+    expect(authColumnIn(el)?.querySelector('#forgot-email')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+
+  test('« Jamais eu de mot de passe ? » est un (i) dont la question se LIT, replié, qui s’ouvre sur la réponse', () => {
+    const el = mount(<ForgotPasswordScreen deps={forgotStub().deps} />);
+    const info = el.querySelector('button[aria-label="Jamais eu de mot de passe ?"]') as HTMLButtonElement | null;
+    expect(info?.textContent).toContain('Jamais eu de mot de passe ?');
+    expect(info?.getAttribute('aria-expanded')).toBe('false');
+    const note = controlledBy(info);
+    expect(note?.textContent).toBe('Ce même lien vous permet d’en créer un.');
+    expect(note?.classList.contains('sr-only')).toBe(true);
+
+    act(() => {
+      info?.click();
+    });
+    expect(info?.getAttribute('aria-expanded')).toBe('true');
+    expect(note?.classList.contains('sr-only')).toBe(false);
+  });
+
+  test('aucun libellé perçu ne dit « réinitialisation » ni « magique »', () => {
+    const el = mount(<ForgotPasswordScreen deps={forgotStub().deps} />);
+    expect(perceivableText(el)).not.toMatch(/r[ée]initialis|magi(que|c)/iu);
+  });
+
+  test('envoyé : « E-mail envoyé », l’adresse, un (i) « Rien reçu ? » et le retour à la connexion — dans la colonne', async () => {
+    const stub = forgotStub();
+    const el = mount(<ForgotPasswordScreen deps={stub.deps} />);
+    const input = el.querySelector('#forgot-email') as HTMLInputElement;
+    act(() => {
+      input.value = EMAIL;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      el.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(stub.calls).toEqual([EMAIL]);
+    expect(el.querySelector('h2')?.textContent).toBe('E-mail envoyé');
+    expect(flat(el)).toContain(`Ouvrez le lien reçu à ${EMAIL}`);
+    expect(el.querySelector('button[aria-label="Rien reçu ?"]')).not.toBeNull();
+    const retour = [...el.querySelectorAll('a')].find((a) => flat(a).trim() === 'Retour à la connexion');
+    expect(retour?.getAttribute('href')).toBe('/login');
+    expect(perceivableText(el)).not.toMatch(/r[ée]initialis|magi(que|c)/iu);
+    expect(strayFromAuthColumn(el)).toEqual([]);
   });
 });

@@ -11,6 +11,7 @@ import { resolveVerifyEmailOutcome } from '@/lib/view/auth-feedback';
 import { Link } from '@/routes/route-table';
 
 import { AuthBrandFooter, AuthSubmitButton } from './auth-chrome';
+import { AuthColumn, AuthColumnBar } from './auth-column';
 import { Field } from './field';
 import { Glyph } from './glyph';
 
@@ -102,21 +103,8 @@ export function VerifyEmailFlow({ email, deps = defaultDeps }: { email: string |
   }
 
   return (
-    <div className="flex h-dvh flex-col pt-safe pb-safe">
-      <div className="flex shrink-0 items-center px-2 pt-1">
-        <Link
-          to={closeTarget}
-          replace
-          className="grid place-items-center rounded-chip"
-          style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
-          aria-label="Fermer"
-        >
-          <Glyph name="x" size={20} />
-        </Link>
-        <h1 className="flex-1 text-center text-title font-semibold" style={{ color: 'var(--color-ios-ink)', marginRight: 44 }}>
-          Vérification de l’email
-        </h1>
-      </div>
+    <AuthColumn>
+      <AuthColumnBar to={closeTarget} title="Vérification de l’email" />
 
       {email === null ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
@@ -223,6 +211,6 @@ export function VerifyEmailFlow({ email, deps = defaultDeps }: { email: string |
       )}
 
       <AuthBrandFooter />
-    </div>
+    </AuthColumn>
   );
 }

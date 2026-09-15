@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
+import { AuthColumn, AuthColumnBar } from '@/components/auth-column';
 import { CountrySheet } from '@/components/country-sheet';
 import { DerivedIdentity } from '@/components/derived-identity';
 import { Field } from '@/components/field';
@@ -199,27 +200,15 @@ export default function SignupScreen() {
   const language = getLanguageInfo(form.systemLanguage);
 
   return (
-    <div className="relative flex h-dvh flex-col pt-safe">
-      <div className="flex shrink-0 items-center px-2 pt-1">
-        {/* FERMER MÈNE À LA CONNEXION, TOUJOURS (correction de revue, défaut 3).
-            `window.history.back()` supposait qu'on venait de `/login` : sur un
-            lien profond, un démarrage de PWA ou un lancement de coque, il n'y
-            a AUCUNE entrée d'historique de l'application — le geste sortait de
-            l'app, ou ne faisait rien. iOS referme la feuille et rend toujours
-            à `LoginView` (`SignupView.swift:73-89`). `replace` parce qu'on
-            REFERME : l'inscription ne doit pas rester derrière la connexion. */}
-        <Link
-          to="login"
-          replace
-          className="grid place-items-center rounded-chip"
-          style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
-          aria-label="Fermer"
-        >
-          <Glyph name="x" size={20} />
-        </Link>
-      </div>
+    /* LA COLONNE DE LA CONNEXION (#6643), HAUTEUR BORNÉE (`min-h-0`) : la seule
+       page d'accès qui dépasse un écran fait défiler son FORMULAIRE sous la
+       barre de fermeture, qui reste en place comme sur iOS
+       (`SignupView.swift:74`, `safeAreaInset(edge: .top)`). Fermer mène
+       toujours à la connexion — iOS referme la feuille et rend `LoginView`. */
+    <AuthColumn className="min-h-0">
+      <AuthColumnBar to="login" />
 
-      <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 pb-safe" noValidate>
+      <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto px-6" noValidate>
         <div className="grid gap-2 pt-2 pb-6">
           <h1 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
             Créer votre compte
@@ -539,6 +528,6 @@ export default function SignupScreen() {
           onClose={() => setShowingLanguageSheet(false)}
         />
       ) : null}
-    </div>
+    </AuthColumn>
   );
 }

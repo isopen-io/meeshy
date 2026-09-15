@@ -9,6 +9,7 @@ import type { MagicLinkRequestData } from '@/lib/view/magic-link';
 
 import { MagicLinkFlow, type MagicLinkFlowDeps } from '@/components/magic-link-flow';
 import { MagicLinkValidation } from '@/components/magic-link-validation';
+import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
 import { controlledBy, perceivableText } from '@/test-support/perceivable-text';
 
 /**
@@ -305,6 +306,48 @@ describe('MagicLinkFlow — (f) erreurs', () => {
       await Promise.resolve();
     });
     expect(el.querySelector('#magic-link-email-error')?.textContent).toBe('Adresse e-mail invalide');
+  });
+});
+
+/**
+ * LA COLONNE DE LA CONNEXION (#6643) — l'écran plein du lien par e-mail portait
+ * sa propre géométrie, pleine largeur : sur ordinateur, le champ s'étalait sur
+ * tout l'écran pendant que `/login`, qui monte LE MÊME panneau, le rangeait au
+ * centre. La largeur se mesure en navigateur (`check-access-column.mjs`) ; ici,
+ * que tout vive dans UNE colonne.
+ */
+describe('MagicLinkFlow — tout tient dans UNE colonne, la puce « Fermer » comprise (#6643)', () => {
+  test('saisie : l’en-tête « Connexion par e-mail » et sa puce « Fermer » vivent dans la colonne', () => {
+    const { clock, now } = fakeClock();
+    const el = mount({ request: requestStub([]).request, clock, now });
+    const column = authColumnIn(el);
+    expect(column?.querySelector('a[aria-label="Fermer"]')).not.toBeNull();
+    expect(column?.querySelector('#magic-link-email')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+
+  test('attente : le compte à rebours et « Rien reçu ? » aussi', async () => {
+    const { clock, now } = fakeClock();
+    const stub = requestStub([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
+    const el = mount({ request: stub.request, clock, now });
+    fill(el, 'ada@meeshy.example');
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+    expect(authColumnIn(el)?.querySelector('[role="timer"]')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+
+  test('validation : l’écran d’un lien invalide aussi', () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<MagicLinkValidation token={null} returnUrl={null} />);
+    });
+    expect(authColumnIn(container)?.querySelector('a[href="/auth/magic-link"]')).not.toBeNull();
+    expect(strayFromAuthColumn(container)).toEqual([]);
   });
 });
 
