@@ -51,6 +51,16 @@ final class CommentQuotedMediaTests: XCTestCase {
         try APIClient.makeAPIPayloadDecoder().decode(APIPostComment.self, from: data)
     }
 
+    /// La NATURE se résout par `String(localized:)`, donc depuis la langue du
+    /// simulateur : un témoin qui juge un TEXTE fixe la table française, sinon il
+    /// est vert en local `fr` et rouge sur une CI `en` (#6749, même précaution que
+    /// `MediaKindLabelTests`).
+    private func frenchTable() throws -> (bundle: Bundle, locale: Locale) {
+        let path = try XCTUnwrap(Bundle.main.path(forResource: "fr", ofType: "lproj"),
+                                 "localisation « fr » absente du bundle — régression de packaging")
+        return (try XCTUnwrap(Bundle(path: path)), Locale(identifier: "fr"))
+    }
+
     // MARK: - Le fil porte DEUX moitiés, et un seul site les recolle
 
     func test_quotedCitation_recolleLAncreEtLeMediaRelu() throws {
@@ -72,6 +82,7 @@ final class CommentQuotedMediaTests: XCTestCase {
     /// Le cas NOMINAL d'un média supprimé ou détaché : le serveur ne rattrape
     /// que ce qui appartient encore au post commenté.
     func test_mediaDisparu_laCitationResteEtDitSaNATURE() throws {
+        let (bundle, locale) = try frenchTable()
         let json = jsonCommentaire(
             quotedPostMedia: "{\"postMediaId\":\"\(Self.deuxieme)\",\"kind\":\"video\"}",
             quotedMedia: nil
@@ -81,7 +92,10 @@ final class CommentQuotedMediaTests: XCTestCase {
         XCTAssertEqual(citation.postMediaId, Self.deuxieme, "l'ancre du saut survit")
         XCTAssertEqual(citation.kind, .video)
         XCTAssertNil(citation.thumbnailURL, "rien de descriptif ne doit fuir")
-        XCTAssertEqual(citation.legende, "Une vidéo", "la nature, et rien de plus")
+        XCTAssertEqual(citation.legende(bundle: bundle, locale: locale), "Une vidéo",
+                       "la nature, et rien de plus")
+        XCTAssertEqual(citation.legende, citation.legende(bundle: .main, locale: .current),
+                       "la propriété que les vues lisent sert la même règle")
     }
 
     /// Une nature INCONNUE d'une version ultérieure ne doit pas faire échouer le
@@ -104,7 +118,8 @@ final class CommentQuotedMediaTests: XCTestCase {
 
     // MARK: - La légende sert le RELU, jamais le figé
 
-    func test_legende_preferLaLegendeRELUE_puisRetombeSurLaNature() {
+    func test_legende_preferLaLegendeRELUE_puisRetombeSurLaNature() throws {
+        let (bundle, locale) = try frenchTable()
         let avecLegende = CommentQuotedMedia(
             postMediaId: Self.deuxieme, kind: .image,
             media: FeedMedia(id: Self.deuxieme, type: .image, url: "https://cdn/2.jpg",
@@ -117,8 +132,10 @@ final class CommentQuotedMediaTests: XCTestCase {
             media: FeedMedia(id: Self.deuxieme, type: .image, url: "https://cdn/2.jpg",
                              thumbnailUrl: nil, thumbnailColor: "#000000", caption: "   ")
         )
-        XCTAssertEqual(sansLegende.legende, "Une photo",
+        XCTAssertEqual(sansLegende.legende(bundle: bundle, locale: locale), "Une photo",
                        "une légende blanche n'est pas une légende")
+        XCTAssertEqual(sansLegende.legende, sansLegende.legende(bundle: .main, locale: .current),
+                       "la propriété que les vues lisent sert la même règle")
     }
 
     /// `thumbnailURL` retombe sur l'URL pleine quand la vignette manque — un
