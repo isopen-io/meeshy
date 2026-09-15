@@ -251,6 +251,7 @@ enum MediaGalleryStage {
     /// média plutôt que de basculer le temps d'une passe.
     static func columnBackdrop(for attachment: MessageAttachment,
                                stage: MediaStageFraming.Result,
+                               region: CGSize,
                                columnFrame: CGRect) -> MediaChromeBackdrop? {
         guard !columnFrame.isEmpty else { return .attachment(attachment) }
         let media = CGRect(x: (stage.frame.width - stage.media.width) / 2,
@@ -446,8 +447,14 @@ extension ConversationMediaGalleryView {
             .frame(width: stageChromeWidth)
         }
         // L'espace où la colonne mesure sa place (#6709) : la région du plateau, qui
-        // porte à la fois le cadre et le chrome — `MediaGalleryStage.columnBackdrop`
-        // y lit ce qui est sous elle.
+        // porte à la fois le cadre et le chrome. Sa taille suffit à dire où le cadre
+        // et son média sont peints — tous deux posés au milieu — et
+        // `MediaGalleryStage.columnBackdrop` y lit ce qui est sous la colonne.
+        .onGeometryChange(for: CGSize.self) { proxy in
+            proxy.size
+        } action: { taille in
+            cadreRegionSize = taille
+        }
         .coordinateSpace(name: MediaGalleryStage.cadreSpace)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

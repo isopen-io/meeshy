@@ -162,11 +162,16 @@ struct ConversationMediaGalleryView: View {
     /// un média de commentaire : sans cible, pas de bouton (loi 4).
     var composableMedia: ((MessageAttachment) -> Bool)?
 
-    /// **Où la colonne d'actions est posée dans le cadre** (#6709) — mesurée, parce
+    /// **Où la colonne d'actions est posée sur le plateau** (#6709) — mesurée, parce
     /// que la hauteur du bloc auteur et légende qui la porte change avec la page.
     /// Elle décide du fond que la colonne a sous elle
     /// (`MediaGalleryStage.columnBackdrop`). `internal` : `+Geometry.swift` la lit.
     @State var actionColumnFrame: CGRect = .zero
+
+    /// **La région du plateau où elle se mesure** (#6709, #6760) — celle qui porte le
+    /// cadre et le chrome. Le cadre et son média y sont posés au milieu : sa taille
+    /// dit où ils sont peints. `internal` : `+Geometry.swift` l'écrit.
+    @State var cadreRegionSize: CGSize = .zero
 
     /// `id → position`, construite une fois à la présentation. Remplace les
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
@@ -858,7 +863,7 @@ struct ConversationMediaGalleryView: View {
                 mediaActions(allAttachments[currentIndex])
             }
         }
-        // #6709 — la colonne MESURE sa place dans le cadre : c'est elle, et non le
+        // #6709 — la colonne MESURE sa place sur le plateau : c'est elle, et non le
         // média de la page, qui dit ce qui est peint sous ses boutons.
         .onGeometryChange(for: CGRect.self) { proxy in
             proxy.frame(in: .named(MediaGalleryStage.cadreSpace))
@@ -867,14 +872,15 @@ struct ConversationMediaGalleryView: View {
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.trailing, MediaGalleryStage.gutter)
-        // #6693 — la colonne est POSÉE sur le cadre (#6161) : sa teinte suit la
-        // luminance de ce qu'elle a SOUS elle (#6709) — le média, ou la bande du
-        // hors-champ quand le cadre est plus haut que lui —, jamais le blanc
+        // #6693 — la colonne est POSÉE sur le plateau (#6161, #6760) : sa teinte suit
+        // la luminance de ce qu'elle a SOUS elle (#6709) — le média, la bande du
+        // hors-champ, ou le sol noir sous un cadre plus court —, jamais le blanc
         // d'office (1,83:1 sur une vidéo violette).
         .mediaChromeTinted()
         .mediaChromeScheme(for: currentIndex < allAttachments.count
                            ? MediaGalleryStage.columnBackdrop(for: allAttachments[currentIndex],
                                                               stage: currentStage,
+                                                              region: cadreRegionSize,
                                                               columnFrame: actionColumnFrame)
                            : nil)
     }
