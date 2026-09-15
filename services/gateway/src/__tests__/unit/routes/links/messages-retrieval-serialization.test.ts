@@ -421,4 +421,59 @@ describe('GET /links/:identifier/messages — ce que le schéma laisse passer', 
       expect(served.expiresAt).toBeNull();
     });
   });
+
+  // #6164 — la PIÈCE NOMMÉE de la citation, sur le transport le plus exposé.
+  //
+  // `formatReplyToMessage` appelait `servedQuotedMessage(replyTo, { … })` sans
+  // l'instantané, alors que `formatLinkMessageWithDetails` tient le `metadata`
+  // du message QUI CITE (il le recopie deux lignes plus haut). Un visiteur de
+  // lien voyait donc une citation qui ne dit pas quelle pièce elle vise, et le
+  // même fil ouvert dans l'application en désignait une autre.
+  //
+  // Le témoin traverse le VRAI `messageSchema` : sans la déclaration ajoutée à
+  // `replyToMessageSchema`, fast-json-stringify strippe le champ EN SILENCE —
+  // la forme exacte du défaut qu'a portée `replyTo.translations` (#4945).
+  describe('pièce NOMMÉE de la citation (#6164)', () => {
+    const CITEE = '507f1f77bcf86cd799439003';
+
+    const withQuote = (metadata: unknown) => ({
+      ...makeRawMessage(anonymousParticipant),
+      metadata,
+    });
+
+    it('sert l’ancre et la NATURE de la pièce citée, à travers le schéma réel', async () => {
+      const [served] = await serveMessages([
+        formatLinkMessageWithDetails(
+          withQuote({ attachmentReplyTo: { attachmentId: CITEE, kind: 'image' } })
+        ),
+      ]);
+
+      expect(served.replyTo.attachmentReplyTo).toEqual({ attachmentId: CITEE, kind: 'image' });
+    });
+
+    it('ne fige RIEN de ce qui DÉCRIT la pièce — la vignette, le nom et la taille se relisent', async () => {
+      const [served] = await serveMessages([
+        formatLinkMessageWithDetails(
+          withQuote({
+            attachmentReplyTo: {
+              attachmentId: CITEE,
+              kind: 'image',
+              thumbnailUrl: 'https://cdn/secret-thumb.jpg',
+              fileSize: 2048,
+              duration: 126,
+            },
+          })
+        ),
+      ]);
+
+      expect(Object.keys(served.replyTo.attachmentReplyTo).sort()).toEqual(['attachmentId', 'kind']);
+    });
+
+    it('sans instantané, la clé est ABSENTE — aucune citation existante ne change de rendu', async () => {
+      const [served] = await serveMessages([formatLinkMessageWithDetails(withQuote(null))]);
+
+      expect(served.replyTo).not.toBeNull();
+      expect(served.replyTo).not.toHaveProperty('attachmentReplyTo');
+    });
+  });
 });

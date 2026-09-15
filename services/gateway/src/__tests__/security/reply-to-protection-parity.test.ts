@@ -65,6 +65,26 @@ describe('#4952 — les quatre sites qui construisent un replyTo avec un corps a
     expect(source).toMatch(/\bservedQuotedMessage\(/);
   });
 
+  /**
+   * #6164 — LA MÊME PARITÉ, SUR L'AUTRE MOITIÉ DE CE QUE `servedQuotedMessage`
+   * SERT : la PIÈCE NOMMÉE. Le lot l'a d'abord câblée sur (a) seulement, et les
+   * trois autres sites ont servi un mois de citations qui ne disent pas quelle
+   * pièce elles visent — donc une citation qui SAUTE d'une vignette à l'autre
+   * selon le transport qui l'a servie.
+   *
+   * Cette garde est STRUCTURELLE, et elle ne se suffit pas : le COMPORTEMENT de
+   * chaque site a son témoin (respectivement `attachment-reply-citation`,
+   * `message-new-cited-attachment`, `messages-retrieval-serialization` et
+   * `threads`). Elle existe pour le CINQUIÈME site — celui qui appellerait
+   * `servedQuotedMessage` sans l'instantané et ne ferait tomber aucun d'eux,
+   * chacun ne regardant que le sien.
+   */
+  it.each(REPLY_TO_BODY_SITES)('$name passe l’instantané de la pièce NOMMÉE (#6164)', ({ file }) => {
+    const source = readFileSync(file, 'utf-8');
+    expect(source).toMatch(/\bimport\s*\{[^}]*\battachmentReplyToFromMetadata\b[^}]*\}\s*from\s*['"][^'"]*attachmentReplySnapshot['"]/);
+    expect(source).toMatch(/attachmentReplyTo:\s*attachmentReplyToFromMetadata\(/);
+  });
+
   it("n'existe qu'un seul module qui décide si une citation est protégée", () => {
     // `quotedMessageIsProtected` — le prédicat que `servedQuotedMessage`
     // encapsule — ne doit pas être réimplémenté site par site : un second
