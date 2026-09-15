@@ -2247,21 +2247,31 @@ extension StoryViewerView {
     }
 
     /// Traduction de commentaire arrivée pendant la lecture : pose
-    /// `translatedContent` (racine ou réponse) si la langue est préférée et
-    /// que la ligne n'affiche pas déjà une traduction plus prioritaire —
-    /// règle unique du Prisme (`FeedViewModel.applyCommentTranslation`).
+    /// `translatedContent` (racine ou réponse) si la langue est préférée,
+    /// qu'aucune traduction n'est déjà affichée, ET que la langue d'origine
+    /// du commentaire n'occupe pas déjà un rang au moins aussi prioritaire
+    /// dans le Prisme (#6531, règle unique —
+    /// `FeedViewModel.applyCommentTranslation`).
     func applyStoryCommentTranslationUpdated(_ data: SocketCommentTranslationUpdatedData) {
         guard data.postId == currentStory?.id else { return }
-        let langs = resolvedViewerLanguageChain
-        guard langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) else { return }
+        let langs = resolvedViewerLanguageChain.filter { !$0.isEmpty }.map { $0.lowercased() }
+        guard let incomingRank = langs.firstIndex(where: { $0 == data.language.lowercased() }) else { return }
+        func shouldApply(_ comment: FeedComment) -> Bool {
+            guard comment.translatedContent == nil else { return false }
+            let originalRank = comment.originalLanguage
+                .map { $0.lowercased() }
+                .flatMap { orig in langs.firstIndex(where: { $0 == orig }) }
+            if let originalRank, originalRank <= incomingRank { return false }
+            return true
+        }
         let text = data.translation.text
         if let idx = storyComments.firstIndex(where: { $0.id == data.commentId }),
-           storyComments[idx].translatedContent == nil {
+           shouldApply(storyComments[idx]) {
             storyComments[idx].translatedContent = text
             return
         }
         for (key, var replies) in storyCommentRepliesMap {
-            if let idx = replies.firstIndex(where: { $0.id == data.commentId }), replies[idx].translatedContent == nil {
+            if let idx = replies.firstIndex(where: { $0.id == data.commentId }), shouldApply(replies[idx]) {
                 replies[idx].translatedContent = text
                 storyCommentRepliesMap[key] = replies
                 return

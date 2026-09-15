@@ -925,27 +925,38 @@ struct CommentsSheetView: View {
             )
         }
         // Traduction de commentaire arrivée (pipeline async ou demande à la
-        // demande) : pose `translatedContent` si la langue est préférée et
-        // qu'aucune traduction n'est déjà affichée (règle unique du Prisme —
-        // miroir de `FeedViewModel.applyCommentTranslation`).
+        // demande) : pose `translatedContent` si la langue est préférée,
+        // qu'aucune traduction n'est déjà affichée, ET que la langue d'origine
+        // du commentaire n'occupe pas déjà un rang au moins aussi prioritaire
+        // dans le Prisme (#6531, règle unique — miroir de
+        // `FeedViewModel.applyCommentTranslation`).
         .onReceive(
             SocialSocketManager.shared.commentTranslationUpdated
                 .receive(on: DispatchQueue.main)
                 .filter { [postId = post.id] in $0.postId == postId }
         ) { data in
-            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            guard langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) else { return }
+            let langs = (AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+                .filter { !$0.isEmpty }.map { $0.lowercased() }
+            guard let incomingRank = langs.firstIndex(where: { $0 == data.language.lowercased() }) else { return }
+            func shouldApply(_ comment: FeedComment) -> Bool {
+                guard comment.translatedContent == nil else { return false }
+                let originalRank = comment.originalLanguage
+                    .map { $0.lowercased() }
+                    .flatMap { orig in langs.firstIndex(where: { $0 == orig }) }
+                if let originalRank, originalRank <= incomingRank { return false }
+                return true
+            }
             let text = data.translation.text
             let topLevelWasLoaded = liveComments != nil
             var current = liveComments ?? post.comments
-            if let idx = current.firstIndex(where: { $0.id == data.commentId }), current[idx].translatedContent == nil {
+            if let idx = current.firstIndex(where: { $0.id == data.commentId }), shouldApply(current[idx]) {
                 current[idx].translatedContent = text
                 liveComments = current
                 persistCommentCache(touchedThreadIds: [], topLevelWasLoaded: topLevelWasLoaded)
                 return
             }
             for (key, var replies) in repliesMap {
-                if let idx = replies.firstIndex(where: { $0.id == data.commentId }), replies[idx].translatedContent == nil {
+                if let idx = replies.firstIndex(where: { $0.id == data.commentId }), shouldApply(replies[idx]) {
                     replies[idx].translatedContent = text
                     repliesMap[key] = replies
                     persistCommentCache(touchedThreadIds: [key], topLevelWasLoaded: topLevelWasLoaded)

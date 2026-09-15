@@ -1838,6 +1838,32 @@ final class FeedViewModelTests: XCTestCase {
         sut.unsubscribeFromSocketEvents()
     }
 
+    /// #6531 — un choix MANUEL du lecteur (`setTranslationOverride`, tap d'un
+    /// drapeau) n'est pas écrasé par une traduction qui arrive ensuite par
+    /// socket : elle est mémorisée dans `translations`, l'affichage reste
+    /// celui que le lecteur a choisi.
+    func test_socketPostTranslationUpdated_afterManualOverride_doesNotOverwriteDisplayedTranslation() async {
+        let (sut, _, socket, _) = makeSUT(preferredLanguages: ["en", "pt"])
+        sut.posts = [Self.makeFeedPost(id: "trans-post", content: "Bonjour",
+                                        translations: ["pt": PostTranslation(text: "Olá")])]
+        sut.setTranslationOverride(postId: "trans-post", language: "pt")
+
+        sut.subscribeToSocketEvents()
+
+        let translationData: SocketPostTranslationUpdatedData = JSONStub.decode("""
+        {"postId":"trans-post","language":"en","translation":{"text":"Hello","translationModel":"nllb-200","confidenceScore":0.95,"createdAt":"2026-01-15T12:00:00.000Z"}}
+        """)
+        socket.postTranslationUpdated.send(translationData)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.posts[0].translatedContent, "Olá",
+                       "un choix manuel du lecteur n'est pas écrasé par une traduction qui arrive ensuite")
+        XCTAssertEqual(sut.posts[0].translations?["en"]?.text, "Hello", "la traduction reçue est quand même mémorisée")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
     // MARK: - Socket.IO: post:reposted
 
     func test_socketPostReposted_insertsRepostAndIncrementsNewPostsCount() async {
