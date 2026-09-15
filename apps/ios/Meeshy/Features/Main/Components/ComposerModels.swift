@@ -96,6 +96,15 @@ enum DefaultComposerLanguage {
     /// The keyboard layout intentionally does NOT drive this — see the
     /// Prisme Linguistique section in the root `CLAUDE.md`.
     static func resolve() -> String { "fr" }
+
+    /// La langue sur laquelle la pastille s'OUVRE quand on corrige un
+    /// commentaire (#6600) : celle du texte corrigé, normalisée. L'édition la
+    /// DÉCLARE au serveur — ouverte sur le défaut « fr », elle réécrirait la
+    /// langue d'un commentaire espagnol à la première faute corrigée. Sans
+    /// langue exploitable, la pastille garde ce qu'elle montre.
+    static func resolve(editing originalLanguage: String?, current: String) -> String {
+        MeeshyUser.normalizeLanguageCode(originalLanguage) ?? current
+    }
 }
 
 /// Rendu compact du bouton langue du composer de post : le bouton replié ne

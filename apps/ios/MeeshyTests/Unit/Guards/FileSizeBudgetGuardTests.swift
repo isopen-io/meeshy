@@ -327,7 +327,16 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // règle. Le prix de cette asymétrie reste entier : une baisse non suivie
     // d'un abaissement du plafond DANS LE MÊME COMMIT redevient du mou
     // silencieux jusqu'au prochain remesurage.
-    private static let legacyLineCeiling = 58_302
+    //
+    // #6600 — 58 302 → 58 160 (−142). La langue de la pastille devait traverser
+    // l'édition d'un commentaire dans TROIS hôtes en dette : `PostDetailView`,
+    // `PostDetailViewModel` et `FeedCommentsSheet`. L'édition en est sortie
+    // d'abord, une extension `+CommentEdit` par hôte (−20, −41, −81), et la
+    // langue s'ajoute ensuite chez elles. Les trois hôtes RESTENT en dette ;
+    // seul le plafond baisse, d'exactement ce que le lot retire — le cumul
+    // mesuré ce jour est 58 154, et les 6 lignes de mou préexistantes ne sont
+    // pas reprises ici, pour la raison de coordination de #6016.
+    private static let legacyLineCeiling = 58_160
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

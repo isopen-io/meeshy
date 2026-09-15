@@ -858,7 +858,7 @@ final class PostDetailViewModelTests: XCTestCase {
                                    translatedContent: "Before", currentUserReactions: nil)
         sut.comments = [original]
 
-        await sut.updateComment(original, content: "Après", effectFlags: 65536)
+        await sut.updateComment(original, content: "Après", effectFlags: 65536, originalLanguage: nil)
 
         XCTAssertEqual(sut.comments.count, 1, "édition = remplacement, jamais d'insertion")
         XCTAssertEqual(sut.comments.first?.content, "Après")
@@ -879,9 +879,42 @@ final class PostDetailViewModelTests: XCTestCase {
         let original = FeedComment(id: "c1", author: "moi", authorId: "me", content: "Avant")
         sut.comments = [original]
 
-        await sut.updateComment(original, content: "Après", effectFlags: 0)
+        await sut.updateComment(original, content: "Après", effectFlags: 0, originalLanguage: nil)
 
         XCTAssertEqual(sut.comments.first?.content, "Avant", "refus serveur → rollback complet")
+    }
+
+    /// #6600 — la langue de la pastille traverse le ViewModel jusqu'au service :
+    /// corriger un commentaire la DÉCLARE, la passerelle ne la remet plus à null.
+    func test_updateComment_withDeclaredLanguage_forwardsItToTheService() async {
+        let mock = MockPostService()
+        mock.updateCommentResult = .success(Self.stubComment)
+        let (sut, _) = makeSUT(postService: mock)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let original = FeedComment(id: "c1", author: "moi", authorId: "me", content: "Hola", originalLanguage: "es")
+        sut.comments = [original]
+
+        await sut.updateComment(original, content: "Hola a todos", effectFlags: 0, originalLanguage: "es")
+
+        XCTAssertEqual(mock.updateCommentCallCount, 1)
+        XCTAssertEqual(mock.lastUpdateCommentOriginalLanguage, "es")
+    }
+
+    /// Repli : une édition sans langue déclarée n'en invente aucune.
+    func test_updateComment_withoutDeclaredLanguage_sendsNone() async {
+        let mock = MockPostService()
+        mock.updateCommentResult = .success(Self.stubComment)
+        let (sut, _) = makeSUT(postService: mock)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let original = FeedComment(id: "c1", author: "moi", authorId: "me", content: "Avant")
+        sut.comments = [original]
+
+        await sut.updateComment(original, content: "Après", effectFlags: 0, originalLanguage: nil)
+
+        XCTAssertEqual(mock.updateCommentCallCount, 1)
+        XCTAssertNil(mock.lastUpdateCommentOriginalLanguage)
     }
 
     /// L'écho `comment:updated` d'un AUTRE appareil remplace la ligne en place.

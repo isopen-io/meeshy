@@ -384,7 +384,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel.swift",  // 17
         "apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift",  // 17
         "apps/ios/Meeshy/Features/Main/Components/CameraView.swift",  // 16
-        "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift",  // 16
+        "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift",  // 15
+        // #6600 — l'édition de commentaire a quitté l'hôte avec sa clé.
+        "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel+CommentEdit.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/FloatingCallPillView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/ReportUserView.swift",  // 16

@@ -154,6 +154,37 @@ final class PostServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
+    // MARK: - updateComment
+
+    /// #6600 — la langue de la pastille voyage avec la correction. Sans elle,
+    /// la passerelle remet `originalLanguage` à null et la devinette reprend la
+    /// main à la première faute de frappe corrigée (#6598).
+    func testUpdateCommentSendsTheDeclaredOriginalLanguage() async throws {
+        mock.stub("/posts/\(postId)/comments/comment1", result: APIResponse(success: true, data: makeComment(), error: nil))
+
+        _ = try await service.updateComment(
+            postId: postId, commentId: "comment1", content: "Gran post", effectFlags: nil, originalLanguage: "es"
+        )
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/\(postId)/comments/comment1")
+        XCTAssertEqual(mock.lastRequest?.method, "PATCH")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["originalLanguage"] as? String, "es")
+    }
+
+    /// Repli : sans déclaration, le champ n'existe pas dans le corps — la
+    /// passerelle garde sa redétection, comme avant #6600.
+    func testUpdateCommentOmitsOriginalLanguageWhenNoneIsDeclared() async throws {
+        mock.stub("/posts/\(postId)/comments/comment1", result: APIResponse(success: true, data: makeComment(), error: nil))
+
+        _ = try await service.updateComment(
+            postId: postId, commentId: "comment1", content: "Great post!", effectFlags: nil, originalLanguage: nil
+        )
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["content"] as? String, "Great post!")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?.keys.contains("originalLanguage"), false,
+                       "une langue non déclarée ne part pas, même à null")
+    }
+
     // MARK: - likeComment
 
     func testLikeCommentCallsCorrectEndpoint() async throws {
