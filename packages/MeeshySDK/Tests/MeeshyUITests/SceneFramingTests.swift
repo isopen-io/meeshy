@@ -476,16 +476,69 @@ final class SceneFramingTests: XCTestCase {
         XCTAssertEqual(338 / SceneCarouselLayout.cardAspect(document: carrousel), 190, accuracy: 1)
     }
 
-    /// Une scène de TEXTE seul sur son porteur de couleur garde, elle aussi, sa
-    /// carte courte : c'est la forme des publications du 2026-09-06.
-    func test_uneSceneDeTexteSeul_surSonPorteurDeCouleur_gardeSaCarteCourte() throws {
+    /// Une scène de TEXTE seul sur son porteur de couleur, comme les
+    /// publications du 2026-09-06.
+    private func sceneDeTexte() -> SceneV3 {
         let couleur = ObjectV3(id: "bg", kind: .media, anchor: .free(x: 0.5, y: 0.5),
                                plane: .bg, z: 0,
                                transform: TransformV3(scale: 1, rotation: 0, opacity: 1),
                                timing: nil, locale: nil,
                                payload: ["background": .string("#101010")])
-        let s = scene([couleur, objet(.text, x: 0.5, y: 0.45)])
-        XCTAssertGreaterThan(try XCTUnwrap(SceneFraming.cardAspect(scene: s)), 1,
+        return scene([couleur, objet(.text, x: 0.5, y: 0.45)])
+    }
+
+    /// …et elle garde, elle aussi, sa carte courte.
+    func test_uneSceneDeTexteSeul_surSonPorteurDeCouleur_gardeSaCarteCourte() throws {
+        XCTAssertGreaterThan(try XCTUnwrap(SceneFraming.cardAspect(scene: sceneDeTexte())), 1,
                              "rien ne remplit la scène : la carte se resserre sur le texte")
+    }
+
+    // MARK: - Chaque page du carrousel montre son contenu ENTIER (#6708)
+
+    /// **Une page plus courte que la boîte s'y AJUSTE, elle ne la couvre pas.**
+    ///
+    /// Mesuré à 22:18 : la carte n'était pas une scène ajustée dans la carte,
+    /// mais une FENÊTRE sur une scène dessinée à la largeur de la carte.
+    /// `SceneFocusFrame` fait COUVRIR sa boîte par la zone : dans une boîte plus
+    /// haute qu'elle, une page à fenêtre est agrandie jusqu'à la hauteur de la
+    /// boîte, puis rognée sur les côtés.
+    ///
+    /// Le témoin rejoue la géométrie de chaque page, comme la vue la pose : son
+    /// cadre ajusté au rapport qu'elle vote (la boîte si elle n'en vote aucun),
+    /// puis la scène posée par `SceneFraming.placement`. La zone à montrer doit
+    /// tenir dans le cadre, et la scène ne jamais être plus large que la carte.
+    func test_chaquePageDuCarrousel_montreSonContenuEntier_sansAgrandir() {
+        let publications: [(String, [SceneV3])] = [
+            ("recette n°1", (0..<3).map { _ in sceneDeRecette(fond: 9.0 / 16.0) }),
+            ("recette n°3", [sceneDeRecette(fond: 4),
+                             sceneDeRecette(fond: 0.25),
+                             sceneDeRecette(fond: 16.0 / 9.0),
+                             sceneDeRecette(fond: 16.0 / 9.0, mediaType: "video")]),
+            ("texte et portrait", [sceneDeTexte(), sceneDeRecette(fond: 9.0 / 16.0)])
+        ]
+        for (nom, pages) in publications {
+            let rapportDeBoite = SceneCarouselLayout.cardAspect(document: CanvasV3(scenes: pages))
+            let boite = CGSize(width: 338, height: 338 / rapportDeBoite)
+            for (index, page) in pages.enumerated() {
+                let quoi = "\(nom), page \(index + 1)"
+                let rapport = SceneCarouselLayout.pageAspect(scene: page) ?? rapportDeBoite
+                let cadre = CanvasGeometry.aspectFitSize(in: boite, ratio: rapport)
+                XCTAssertLessThanOrEqual(cadre.height, boite.height + 0.5, quoi)
+                guard let zone = SceneFraming.cardFocus(scene: page) else {
+                    XCTAssertEqual(rapport, SceneFraming.presentationAspect(scene: page), accuracy: 0.001,
+                                   "\(quoi) : la scène présentée occupe son cadre entier, à son rapport")
+                    continue
+                }
+                let pose = SceneFraming.placement(of: zone, covering: cadre)
+                let visible = CGRect(x: pose.minX + zone.minX * pose.width,
+                                     y: pose.minY + zone.minY * pose.height,
+                                     width: zone.width * pose.width,
+                                     height: zone.height * pose.height)
+                XCTAssertTrue(CGRect(origin: .zero, size: cadre).insetBy(dx: -0.5, dy: -0.5).contains(visible),
+                              "\(quoi) : la zone \(visible) sort du cadre \(cadre)")
+                XCTAssertLessThanOrEqual(pose.width, boite.width + 0.5,
+                                         "\(quoi) : scène dessinée sur \(pose.width) pt dans une carte de 338 — agrandie")
+            }
+        }
     }
 }

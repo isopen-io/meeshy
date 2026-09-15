@@ -162,6 +162,42 @@ final class PostDetailSceneFramingTests: XCTestCase {
         XCTAssertEqual(PostDetailSceneFraming.ratio(of: effets(porteuse)), paysage, accuracy: 0.0001)
     }
 
+    // MARK: - Une publication à plusieurs scènes (#6708)
+
+    /// Une scène de la publication de recette n°1 : le porteur du cadrage, puis
+    /// le fond portrait 1080 × 1920 qui remplit la scène.
+    private func scenePortraitDeRecette() -> SceneV3 {
+        SceneV3(id: "s1", objects: [
+            ObjectV3(id: "bg", kind: .media, anchor: .free(x: 0.5, y: 0.5), plane: .bg, z: 0,
+                     transform: TransformV3(),
+                     payload: ["transform": .object(["videoFitMode": .string("fit")])]),
+            ObjectV3(id: "fond", kind: .media, anchor: .free(x: 0.5, y: 0.5), plane: .content, z: 1,
+                     transform: TransformV3(),
+                     payload: ["isBackground": .bool(true), "aspectRatio": .number(9.0 / 16.0),
+                               "postMediaId": .string("m1"), "mediaType": .string("video")])
+        ])
+    }
+
+    /// **La troisième mesure de #6708 (22:40)** : dans le détail, la page 1 du
+    /// post n°1 était rendue en 370 × 276 pt, HAUT et BAS hors cadre. Le détail
+    /// borne la boîte de la mosaïque par la loi de cette page, au rapport de
+    /// `PostSceneMosaic.boxAspect` — la même règle que la carte du fil.
+    ///
+    /// La boîte d'un carrousel de scènes portrait garde le 9:16 et s'AJUSTE dans
+    /// la hauteur disponible : plus étroite que le détail, entre deux bandes
+    /// latérales, et jamais plus haute que ce qui tient au-dessus du composer.
+    @MainActor
+    func test_unCarrouselDeScenesPortrait_seLitEntierAuDessusDuComposer() throws {
+        let document = CanvasV3(scenes: [scenePortraitDeRecette(), scenePortraitDeRecette(),
+                                         scenePortraitDeRecette()])
+        let boite = try taille(PostSceneMosaic.boxAspect(document: document), page())
+        XCTAssertEqual(boite.width / boite.height, portrait, accuracy: 0.001,
+                       "boîte \(boite) : la recette mesurait 370 × 276, une fenêtre de 42 % de la scène")
+        XCTAssertLessThan(boite.width, 370, "une scène 9:16 entière tient par des bandes latérales")
+        XCTAssertLessThanOrEqual(156 + boite.height + PostDetailSceneFraming.actionsRowReserve, 684.001,
+                                 "le bas de la scène ou la rangée d'actions passe sous le composer")
+    }
+
     func test_uneScene9x16_nechangePasDeRapport() {
         let texte = ObjectV3(id: "t", kind: .text, anchor: .free(x: 0.5, y: 0.5), plane: .content,
                              z: 1, transform: TransformV3(), payload: ["text": .string("Bonjour")])
