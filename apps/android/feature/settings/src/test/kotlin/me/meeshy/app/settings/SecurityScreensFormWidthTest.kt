@@ -56,7 +56,8 @@ class SecurityScreensFormWidthTest {
     @Test
     @Config(qualifiers = TABLET)
     fun `change password fields sit in the centered form column on a tablet`() {
-        show { ChangePasswordScreen(onBack = {}, viewModel = ChangePasswordViewModel(mockk(relaxed = true))) }
+        val viewModel = ChangePasswordViewModel(mockk(relaxed = true))
+        show { ChangePasswordScreen(onBack = {}, viewModel = viewModel) }
 
         compose.assertInCenteredFormColumn(hasSetTextAction())
     }
@@ -64,7 +65,8 @@ class SecurityScreensFormWidthTest {
     @Test
     @Config(qualifiers = PHONE)
     fun `change password fields keep their phone geometry`() {
-        show { ChangePasswordScreen(onBack = {}, viewModel = ChangePasswordViewModel(mockk(relaxed = true))) }
+        val viewModel = ChangePasswordViewModel(mockk(relaxed = true))
+        show { ChangePasswordScreen(onBack = {}, viewModel = viewModel) }
 
         compose.assertSpansPhoneWidth(hasSetTextAction(), horizontalPadding = MeeshySpacing.lg)
     }
@@ -72,7 +74,8 @@ class SecurityScreensFormWidthTest {
     @Test
     @Config(qualifiers = TABLET)
     fun `two-factor action sits in the centered form column on a tablet`() {
-        show { TwoFactorScreen(onBack = {}, viewModel = twoFactorViewModel()) }
+        val viewModel = twoFactorViewModel()
+        show { TwoFactorScreen(onBack = {}, viewModel = viewModel) }
 
         compose.assertInCenteredFormColumn(hasText(ENABLE_TWO_FACTOR))
     }
@@ -80,7 +83,8 @@ class SecurityScreensFormWidthTest {
     @Test
     @Config(qualifiers = PHONE)
     fun `two-factor action keeps its phone geometry`() {
-        show { TwoFactorScreen(onBack = {}, viewModel = twoFactorViewModel()) }
+        val viewModel = twoFactorViewModel()
+        show { TwoFactorScreen(onBack = {}, viewModel = viewModel) }
 
         compose.assertSpansPhoneWidth(hasText(ENABLE_TWO_FACTOR), horizontalPadding = MeeshySpacing.lg)
     }
@@ -88,7 +92,8 @@ class SecurityScreensFormWidthTest {
     @Test
     @Config(qualifiers = TABLET)
     fun `two-factor code step sits in the centered form column on a tablet`() {
-        show { TwoFactorScreen(onBack = {}, viewModel = twoFactorViewModel()) }
+        val viewModel = twoFactorViewModel()
+        show { TwoFactorScreen(onBack = {}, viewModel = viewModel) }
 
         compose.onNodeWithText(ENABLE_TWO_FACTOR).performClick()
         compose.waitUntil { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }

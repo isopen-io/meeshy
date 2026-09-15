@@ -64,8 +64,9 @@ class ForgotPasswordScreenTest {
     }
 
     private fun show(repository: AuthRepository) {
+        val viewModel = ForgotPasswordViewModel(repository)
         compose.setContent {
-            MeeshyTheme { ForgotPasswordScreen(onBack = {}, viewModel = ForgotPasswordViewModel(repository)) }
+            MeeshyTheme { ForgotPasswordScreen(onBack = {}, viewModel = viewModel) }
         }
         compose.waitForIdle()
     }

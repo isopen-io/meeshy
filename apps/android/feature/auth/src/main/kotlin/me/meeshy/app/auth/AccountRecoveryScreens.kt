@@ -39,8 +39,17 @@ import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.formColumnWidth
 
-/** Mot de passe oublie (volet email) — le lien de reinitialisation part par email. */
+/**
+ * Mot de passe oublié (volet e-mail) — et PREMIER mot de passe (#6645).
+ *
+ * Le lien reçu permet de choisir un mot de passe, qu'on en ait déjà eu un ou
+ * jamais : l'écran le dit en une ligne, et le cas du compte ouvert sans mot de
+ * passe se déplie sous son (i) ([AuthInfoDisclosure]). Une fois le lien parti,
+ * l'écran se lit comme celui de la connexion par e-mail : mêmes mots, même aide
+ * aux indésirables.
+ */
 @Composable
 fun ForgotPasswordScreen(
     onBack: () -> Unit,
@@ -55,6 +64,10 @@ fun ForgotPasswordScreen(
                     text = stringResource(R.string.auth_forgot_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MeeshyTheme.tokens.textSecondary,
+                )
+                AuthInfoDisclosure(
+                    label = stringResource(R.string.auth_forgot_never_had_label),
+                    text = stringResource(R.string.auth_forgot_never_had_text),
                 )
                 OutlinedTextField(
                     value = state.email,
@@ -75,17 +88,23 @@ fun ForgotPasswordScreen(
                     if (state.isSubmitting) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     } else {
-                        Text(stringResource(R.string.auth_forgot_send))
+                        Text(stringResource(R.string.auth_magic_send))
                     }
                 }
             }
-            EmailRecoveryStep.SENT -> SentConfirmation(
-                message = stringResource(
-                    R.string.auth_forgot_sent,
-                    state.recovery.submittedEmail.orEmpty(),
-                ),
-                onBack = onBack,
-            )
+            EmailRecoveryStep.SENT -> {
+                SentConfirmation(
+                    title = stringResource(R.string.auth_magic_sent_title),
+                    message = stringResource(R.string.auth_magic_sent, state.recovery.submittedEmail.orEmpty()),
+                )
+                AuthInfoDisclosure(
+                    label = stringResource(R.string.auth_magic_nothing_label),
+                    text = stringResource(R.string.auth_magic_nothing_text),
+                )
+                TextButton(onClick = onBack) {
+                    Text(stringResource(R.string.auth_back_to_login))
+                }
+            }
         }
     }
 }
@@ -137,7 +156,6 @@ fun MagicLinkScreen(
             SentConfirmation(
                 title = stringResource(R.string.auth_magic_sent_title),
                 message = stringResource(R.string.auth_magic_sent, state.sentTo.orEmpty()),
-                onBack = null,
             )
             AuthInfoDisclosure(
                 label = stringResource(R.string.auth_magic_nothing_label),
@@ -188,6 +206,7 @@ private fun RecoveryScaffold(
                 // d'avant, le degrade en plus.
                 .systemBarsPadding()
                 .verticalScroll(rememberScrollState())
+                .formColumnWidth()
                 .padding(horizontal = MeeshySpacing.xl),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
         ) {
@@ -215,7 +234,7 @@ private fun RecoveryScaffold(
 }
 
 @Composable
-private fun SentConfirmation(message: String, onBack: (() -> Unit)?, title: String? = null) {
+private fun SentConfirmation(title: String, message: String) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
@@ -227,25 +246,18 @@ private fun SentConfirmation(message: String, onBack: (() -> Unit)?, title: Stri
             tint = MeeshyPalette.Success,
             modifier = Modifier.size(56.dp),
         )
-        if (title != null) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                color = MeeshyTheme.tokens.textPrimary,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center,
-            )
-        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            color = MeeshyTheme.tokens.textPrimary,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+        )
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
             color = MeeshyTheme.tokens.textPrimary,
-            textAlign = if (title != null) TextAlign.Center else null,
+            textAlign = TextAlign.Center,
         )
-        if (onBack != null) {
-            TextButton(onClick = onBack) {
-                Text(stringResource(R.string.auth_back_to_login))
-            }
-        }
     }
 }

@@ -46,10 +46,10 @@
     <string name="auth_back">Voltar</string>
     <string name="auth_back_to_login">Voltar ao login</string>
     <string name="auth_email_label">E-mail</string>
-    <string name="auth_forgot_title">Redefinir senha</string>
-    <string name="auth_forgot_subtitle">Digite seu e-mail e enviaremos um link de redefinição.</string>
-    <string name="auth_forgot_send">Enviar link</string>
-    <string name="auth_forgot_sent">Se existir uma conta para %1$s, um link foi enviado. Verifique sua caixa de entrada.</string>
+    <string name="auth_forgot_title">Esqueci a senha</string>
+    <string name="auth_forgot_subtitle">Receba por e-mail um link para escolher uma nova senha.</string>
+    <string name="auth_forgot_never_had_label">Nunca teve uma senha?</string>
+    <string name="auth_forgot_never_had_text">Esse mesmo link permite criar uma.</string>
     <string name="auth_magic_title">Login por e-mail</string>
     <string name="auth_magic_header">Seu endereço de e-mail</string>
     <string name="auth_magic_how_label">Como funciona</string>

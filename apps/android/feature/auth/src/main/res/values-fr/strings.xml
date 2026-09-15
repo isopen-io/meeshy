@@ -46,10 +46,10 @@
     <string name="auth_back">Retour</string>
     <string name="auth_back_to_login">Retour à la connexion</string>
     <string name="auth_email_label">Email</string>
-    <string name="auth_forgot_title">Réinitialiser le mot de passe</string>
-    <string name="auth_forgot_subtitle">Saisissez votre adresse email et nous vous enverrons un lien de réinitialisation.</string>
-    <string name="auth_forgot_send">Envoyer le lien</string>
-    <string name="auth_forgot_sent">Si un compte existe pour %1$s, un lien de réinitialisation a été envoyé. Vérifiez votre boîte mail.</string>
+    <string name="auth_forgot_title">Mot de passe oublié</string>
+    <string name="auth_forgot_subtitle">Recevez par e-mail un lien pour choisir un nouveau mot de passe.</string>
+    <string name="auth_forgot_never_had_label">Jamais eu de mot de passe ?</string>
+    <string name="auth_forgot_never_had_text">Ce même lien vous permet d\'en créer un.</string>
     <string name="auth_magic_title">Connexion par e-mail</string>
     <string name="auth_magic_header">Votre adresse e-mail</string>
     <string name="auth_magic_how_label">Comment ça marche</string>

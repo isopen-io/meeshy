@@ -68,6 +68,7 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.formColumnWidth
 
 /**
  * La création de compte : UN écran, aucun délai, aucune vérification préalable.
@@ -129,6 +130,7 @@ fun SignupScreen(
                     .padding(padding)
                     .imePadding()
                     .verticalScroll(rememberScrollState())
+                    .formColumnWidth()
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {

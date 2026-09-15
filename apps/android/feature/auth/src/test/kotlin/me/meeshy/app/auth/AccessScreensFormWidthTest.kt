@@ -20,12 +20,14 @@ import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.auth.InMemorySavedAccountsStore
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.locale.DeviceLocaleProvider
+import me.meeshy.sdk.model.ShareLinkConversation
 import me.meeshy.sdk.model.ShareLinkInfo
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.InMemoryServerEnvironmentStore
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.AnonymousSessionRepository
+import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -42,9 +44,16 @@ private val FORM_MAX_WIDTH = 600.dp
 private val TABLET_MIN_WIDTH = 840.dp
 private const val TOLERANCE_DP = 0.5f
 
-private const val EXPIRED_LINK_MESSAGE =
-    "This sign-in link has expired or was already used. Ask for a new one from the sign-in " +
-        "screen and open it on this device within fifteen minutes of receiving it."
+private const val SIGN_IN = "Sign in"
+/**
+ * A refusal explanation wider than any tablet: its OWN width is what the bound must hold.
+ * Robolectric measures one dp per character, so a sentence shorter than the window would
+ * sit centered with or without the bound and prove nothing.
+ */
+private val EXPIRED_LINK_MESSAGE =
+    "This sign-in link has expired or was already used; ask for a new one from the sign-in screen. "
+        .repeat(20)
+        .trim()
 
 /**
  * Les écrans d'accès tiennent dans la colonne centrée de la connexion, sur tablette
@@ -68,7 +77,8 @@ class AccessScreensFormWidthTest {
     @Test
     @Config(qualifiers = TABLET)
     fun `login fields sit in the centered form column on a tablet`() {
-        show { LoginScreen(viewModel = authViewModel(), onAuthenticated = {}) }
+        val viewModel = authViewModel()
+        show { LoginScreen(viewModel = viewModel, onAuthenticated = {}) }
 
         compose.assertInCenteredFormColumn(hasSetTextAction())
     }
@@ -76,7 +86,8 @@ class AccessScreensFormWidthTest {
     @Test
     @Config(qualifiers = PHONE)
     fun `login fields keep their phone geometry`() {
-        show { LoginScreen(viewModel = authViewModel(), onAuthenticated = {}) }
+        val viewModel = authViewModel()
+        show { LoginScreen(viewModel = viewModel, onAuthenticated = {}) }
 
         compose.assertSpansPhoneWidth(hasSetTextAction(), horizontalPadding = MeeshySpacing.xl)
     }
@@ -84,7 +95,8 @@ class AccessScreensFormWidthTest {
     @Test
     @Config(qualifiers = TABLET)
     fun `signup fields sit in the centered form column on a tablet`() {
-        show { SignupScreen(onClose = {}, onRegistered = {}, viewModel = signupViewModel()) }
+        val viewModel = signupViewModel()
+        show { SignupScreen(onClose = {}, onRegistered = {}, viewModel = viewModel) }
 
         compose.assertInCenteredFormColumn(hasSetTextAction())
     }
@@ -92,7 +104,8 @@ class AccessScreensFormWidthTest {
     @Test
     @Config(qualifiers = PHONE)
     fun `signup fields keep their phone geometry`() {
-        show { SignupScreen(onClose = {}, onRegistered = {}, viewModel = signupViewModel()) }
+        val viewModel = signupViewModel()
+        show { SignupScreen(onClose = {}, onRegistered = {}, viewModel = viewModel) }
 
         compose.assertSpansPhoneWidth(hasSetTextAction(), horizontalPadding = MeeshySpacing.lg)
     }
@@ -100,7 +113,8 @@ class AccessScreensFormWidthTest {
     @Test
     @Config(qualifiers = TABLET)
     fun `forgot password field sits in the centered form column on a tablet`() {
-        show { ForgotPasswordScreen(onBack = {}, viewModel = ForgotPasswordViewModel(authRepository())) }
+        val viewModel = ForgotPasswordViewModel(authRepository())
+        show { ForgotPasswordScreen(onBack = {}, viewModel = viewModel) }
 
         compose.assertInCenteredFormColumn(hasSetTextAction())
     }
@@ -108,7 +122,8 @@ class AccessScreensFormWidthTest {
     @Test
     @Config(qualifiers = PHONE)
     fun `forgot password field keeps its phone geometry`() {
-        show { ForgotPasswordScreen(onBack = {}, viewModel = ForgotPasswordViewModel(authRepository())) }
+        val viewModel = ForgotPasswordViewModel(authRepository())
+        show { ForgotPasswordScreen(onBack = {}, viewModel = viewModel) }
 
         compose.assertSpansPhoneWidth(hasSetTextAction(), horizontalPadding = MeeshySpacing.xl)
     }
@@ -116,7 +131,8 @@ class AccessScreensFormWidthTest {
     @Test
     @Config(qualifiers = TABLET)
     fun `email sign-in field sits in the centered form column on a tablet`() {
-        show { MagicLinkScreen(onBack = {}, viewModel = MagicLinkViewModel(authRepository())) }
+        val viewModel = MagicLinkViewModel(authRepository())
+        show { MagicLinkScreen(onBack = {}, viewModel = viewModel) }
 
         compose.assertInCenteredFormColumn(hasSetTextAction())
     }
@@ -124,7 +140,8 @@ class AccessScreensFormWidthTest {
     @Test
     @Config(qualifiers = PHONE)
     fun `email sign-in field keeps its phone geometry`() {
-        show { MagicLinkScreen(onBack = {}, viewModel = MagicLinkViewModel(authRepository())) }
+        val viewModel = MagicLinkViewModel(authRepository())
+        show { MagicLinkScreen(onBack = {}, viewModel = viewModel) }
 
         compose.assertSpansPhoneWidth(hasSetTextAction(), horizontalPadding = MeeshySpacing.xl)
     }
@@ -132,7 +149,8 @@ class AccessScreensFormWidthTest {
     @Test
     @Config(qualifiers = TABLET)
     fun `a refused email link explains itself inside the centered form column on a tablet`() {
-        show { MagicLinkValidateScreen(onAuthenticated = {}, onBackToLogin = {}, viewModel = refusedLinkViewModel()) }
+        val viewModel = refusedLinkViewModel()
+        show { MagicLinkValidateScreen(onAuthenticated = {}, onBackToLogin = {}, viewModel = viewModel) }
 
         compose.assertInCenteredFormColumn(hasText(EXPIRED_LINK_MESSAGE))
     }
@@ -140,7 +158,8 @@ class AccessScreensFormWidthTest {
     @Test
     @Config(qualifiers = PHONE)
     fun `a refused email link explanation keeps its phone geometry`() {
-        show { MagicLinkValidateScreen(onAuthenticated = {}, onBackToLogin = {}, viewModel = refusedLinkViewModel()) }
+        val viewModel = refusedLinkViewModel()
+        show { MagicLinkValidateScreen(onAuthenticated = {}, onBackToLogin = {}, viewModel = viewModel) }
 
         compose.assertSpansPhoneWidth(hasText(EXPIRED_LINK_MESSAGE), horizontalPadding = MeeshySpacing.xl)
     }
@@ -148,7 +167,8 @@ class AccessScreensFormWidthTest {
     @Test
     @Config(qualifiers = TABLET)
     fun `guest join fields sit in the centered form column on a tablet`() {
-        show { GuestJoinScreen(onJoined = {}, onBack = {}, onSignIn = {}, viewModel = guestJoinViewModel()) }
+        val viewModel = guestJoinViewModel()
+        show { GuestJoinScreen(onJoined = {}, onBack = {}, onSignIn = {}, viewModel = viewModel) }
 
         compose.assertInCenteredFormColumn(hasSetTextAction())
     }
@@ -156,9 +176,28 @@ class AccessScreensFormWidthTest {
     @Test
     @Config(qualifiers = PHONE)
     fun `guest join fields keep their phone geometry`() {
-        show { GuestJoinScreen(onJoined = {}, onBack = {}, onSignIn = {}, viewModel = guestJoinViewModel()) }
+        val viewModel = guestJoinViewModel()
+        show { GuestJoinScreen(onJoined = {}, onBack = {}, onSignIn = {}, viewModel = viewModel) }
 
         compose.assertSpansPhoneWidth(hasSetTextAction(), horizontalPadding = MeeshySpacing.lg)
+    }
+
+    @Test
+    @Config(qualifiers = TABLET)
+    fun `an account-only share link steers to sign-in inside the centered form column on a tablet`() {
+        val viewModel = accountOnlyShareLinkViewModel()
+        show { ShareLinkEntryScreen(onOpenConversation = {}, onJoined = {}, onBack = {}, onSignIn = {}, viewModel = viewModel) }
+
+        compose.assertInCenteredFormColumn(hasText(SIGN_IN))
+    }
+
+    @Test
+    @Config(qualifiers = PHONE)
+    fun `an account-only share link sign-in keeps its phone geometry`() {
+        val viewModel = accountOnlyShareLinkViewModel()
+        show { ShareLinkEntryScreen(onOpenConversation = {}, onJoined = {}, onBack = {}, onSignIn = {}, viewModel = viewModel) }
+
+        compose.assertSpansPhoneWidth(hasText(SIGN_IN), horizontalPadding = MeeshySpacing.lg)
     }
 
     private fun show(screen: @Composable () -> Unit) {
@@ -204,6 +243,33 @@ class AccessScreensFormWidthTest {
         return GuestJoinViewModel(
             repository,
             SavedStateHandle(mapOf(GuestJoinViewModel.IDENTIFIER_ARG to "link-1")),
+        )
+    }
+
+    private fun accountOnlyShareLinkViewModel(): ShareLinkEntryViewModel {
+        val store = InMemoryAnonymousSessionStore()
+        val preview = object : ShareLinkPreviewProviding {
+            override suspend fun preview(identifier: String): NetworkResult<ShareLinkInfo> =
+                NetworkResult.Success(
+                    ShareLinkInfo(
+                        id = "link-1",
+                        linkId = "link-1",
+                        requireAccount = true,
+                        conversation = ShareLinkConversation(id = "conv-1", title = "Design"),
+                    ),
+                )
+        }
+        return ShareLinkEntryViewModel(
+            resolver = ShareLinkEntryResolver(preview, store),
+            join = object : AuthenticatedShareLinkJoining {
+                override suspend fun join(linkId: String): NetworkResult<String> = NetworkResult.Success("conv-1")
+            },
+            authState = { false },
+            knownConversationIds = object : KnownConversationIdsProviding {
+                override suspend fun current(): Set<String> = emptySet()
+            },
+            sessionStore = store,
+            savedStateHandle = SavedStateHandle(mapOf(GuestJoinViewModel.IDENTIFIER_ARG to "link-1")),
         )
     }
 }
