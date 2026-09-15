@@ -253,11 +253,34 @@ struct SignupView: View {
 
     // MARK: - E-mail
 
+    /// L'AVERTISSEMENT DE VALIDATION, derrière un (i) (#6626).
+    ///
+    /// #6479 le posait en clair — « une condition du compte ». La directive
+    /// porteur du 2026-09-15 tranche : « moins de détails sur la page
+    /// d'enregistrement ; des (i) pour informer sur le mode de fonctionnement ».
+    /// Replié n'est pas perdu : le champ le porte en `accessibilityHint`, et le
+    /// (i) le déplie à la demande.
+    private var emailHint: AuthInfoHint {
+        AuthInfoHint(
+            text: String(
+                localized: "auth.signup.email.verificationNotice",
+                defaultValue: "Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte.",
+                bundle: .main
+            ),
+            buttonLabel: String(
+                localized: "auth.signup.email.hintLabel",
+                defaultValue: "Pourquoi un lien",
+                bundle: .main
+            )
+        )
+    }
+
     private var emailField: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             fieldBlock(
                 field: .email,
-                label: String(localized: "auth.signup.email.label", defaultValue: "Adresse e-mail", bundle: .main)
+                label: String(localized: "auth.signup.email.label", defaultValue: "Adresse e-mail", bundle: .main),
+                hint: emailHint
             ) {
                 // `.emailAddress` fait aussi office d'IDENTIFIANT pour le
                 // trousseau : Apple accepte `.username` OU `.emailAddress` comme
@@ -289,21 +312,6 @@ struct SignupView: View {
                 }
                 .accessibilityHint(String(localized: "auth.signup.email.signIn.hint", defaultValue: "Ouvre l'écran de connexion", bundle: .main))
             }
-
-            // L'AVERTISSEMENT DE VALIDATION (#6479, directive porteur).
-            //
-            // Il n'est PAS derrière un (i) : ce n'est pas un détail qu'on
-            // consulte, c'est une CONDITION du compte. Le savoir avant
-            // d'envoyer évite de taper une adresse jetable puis de découvrir
-            // qu'on ne peut pas entrer.
-            Text(String(
-                localized: "auth.signup.email.verificationNotice",
-                defaultValue: "Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte.",
-                bundle: .main
-            ))
-            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-            .foregroundColor(theme.textSecondary)
-            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -320,8 +328,8 @@ struct SignupView: View {
     /// l'USAGE est le seul levier honnête pour qu'il soit donné ; le présenter
     /// comme un choix à prendre ferait l'inverse, et c'est ce que le témoin
     /// voisin interdit depuis #5555.
-    private var phoneHint: FieldHint {
-        FieldHint(
+    private var phoneHint: AuthInfoHint {
+        AuthInfoHint(
             text: String(
                 localized: "auth.signup.phone.benefit",
                 defaultValue: "Il vous permettra de vous connecter, et à vos proches de vous retrouver.",
@@ -377,7 +385,7 @@ struct SignupView: View {
                 .accessibilityLabel(String(localized: "auth.signup.phone.label", defaultValue: "Téléphone", bundle: .main))
                 .accessibilityHint(phoneHint.text)
 
-                hintButton(for: .phoneNumber, hint: phoneHint)
+                AuthInfoHintButton(hint: phoneHint, isExpanded: hintExpansion(for: .phoneNumber), tint: theme.textMuted)
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
                 .frame(minHeight: 48)
@@ -385,7 +393,7 @@ struct SignupView: View {
             }
 
             errorRow(for: .phoneNumber)
-            hintRow(for: .phoneNumber, hint: phoneHint)
+            AuthInfoHintText(hint: phoneHint, isExpanded: expandedHint == .phoneNumber, color: theme.textSecondary)
         }
         .sheet(isPresented: $isShowingCountryPicker) {
             SignupCountrySheet(selection: $viewModel.form.country)
@@ -416,7 +424,7 @@ struct SignupView: View {
                 defaultValue: "Mot de passe (facultatif)",
                 bundle: .main
             ),
-            hint: FieldHint(
+            hint: AuthInfoHint(
                 text: String(
                     localized: "auth.signup.password.magicLinkNote",
                     defaultValue: "Sans mot de passe, vous vous connecterez par un lien envoyé à votre adresse. Vous pourrez en définir un plus tard.",
@@ -627,7 +635,7 @@ struct SignupView: View {
     private func fieldBlock<Content: View>(
         field: SignupField,
         label: String,
-        hint: FieldHint? = nil,
+        hint: AuthInfoHint? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
@@ -640,7 +648,7 @@ struct SignupView: View {
                     .accessibilityLabel(label)
                     .accessibilityHint(hint?.text ?? "")
                 if let hint {
-                    hintButton(for: field, hint: hint)
+                    AuthInfoHintButton(hint: hint, isExpanded: hintExpansion(for: field), tint: theme.textMuted)
                 }
             }
             .padding(.horizontal, MeeshySpacing.lg)
@@ -648,54 +656,27 @@ struct SignupView: View {
             .background(inputSurface(isFocused: focusedField == field))
 
             errorRow(for: field)
-            hintRow(for: field, hint: hint)
+            if let hint {
+                AuthInfoHintText(hint: hint, isExpanded: expandedHint == field, color: theme.textSecondary)
+            }
         }
     }
 
     /// LE DÉTAIL DERRIÈRE UN (i) (#6441, retour porteur « la page est trop
-    /// surchargée »).
+    /// surchargée ») — le composant vit dans `AuthInfoHint`, partagé avec la
+    /// connexion par e-mail (#6626).
     ///
-    /// Trois notes posées sous trois champs remplissaient l'écran d'un texte
-    /// que personne ne relit après la première fois. Le bouton vit DANS le
-    /// cadre du champ : la rangée fait déjà 48 pt, donc `meeshyTapTarget()`
-    /// y tient ses 44 pt sans ajouter UNE seule unité de hauteur.
+    /// Le bouton vit DANS le cadre du champ : la rangée fait déjà 48 pt, donc
+    /// sa cible de 44 pt n'ajoute pas UNE unité de hauteur. Et REPLIÉ ne veut
+    /// pas dire ABSENT : `fieldBlock` pose le même texte en `accessibilityHint`
+    /// sur le champ lui-même.
     ///
-    /// Et REPLIÉ ne veut pas dire ABSENT : `accessibilityHint` porte le même
-    /// texte sur le champ lui-même, donc VoiceOver l'énonce sans avoir à
-    /// trouver le bouton. La note précédente était lue parce qu'elle était
-    /// visible ; celle-ci l'est parce qu'elle est attachée.
-    struct FieldHint {
-        let text: String
-        /// Ce que VoiceOver annonce pour le bouton — « en savoir plus » seul ne
-        /// dit pas SUR QUOI, et trois boutons identiques sur un écran ne se
-        /// distinguent alors plus.
-        let buttonLabel: String
-    }
-
-    private func hintButton(for field: SignupField, hint: FieldHint) -> some View {
-        Button {
-            HapticFeedback.light()
-            expandedHint = expandedHint == field ? nil : field
-        } label: {
-            Image(systemName: "info.circle")
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                .foregroundColor(theme.textMuted)
-        }
-        .buttonStyle(.plain)
-        .meeshyTapTarget()
-        .accessibilityLabel(hint.buttonLabel)
-        .accessibilityValue(hint.text)
-    }
-
-    @ViewBuilder
-    private func hintRow(for field: SignupField, hint: FieldHint?) -> some View {
-        if let hint, expandedHint == field {
-            Text(hint.text)
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                .foregroundColor(theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityHidden(true)
-        }
+    /// Un seul (i) déplié à la fois : ouvrir celui d'un champ referme l'autre.
+    private func hintExpansion(for field: SignupField) -> Binding<Bool> {
+        Binding(
+            get: { expandedHint == field },
+            set: { expandedHint = $0 ? field : nil }
+        )
     }
 
     /// Le refus se pose SOUS son champ, en `.footnote`, et VoiceOver le lit

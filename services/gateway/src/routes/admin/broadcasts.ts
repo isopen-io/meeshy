@@ -7,7 +7,7 @@ import { broadcastTargetLanguages } from '../../jobs/broadcast-recipients';
 import { BroadcastSenderJob } from '../../jobs/broadcast-sender';
 import { BroadcastInAppSenderJob } from '../../jobs/broadcast-inapp-sender';
 import { EmailService } from '../../services/EmailService';
-import { resolveSystemLanguageVariants } from '../../jobs/broadcast-recipients';
+import { emailChannelRecipientConstraint, resolveSystemLanguageVariants } from '../../jobs/broadcast-recipients';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -270,8 +270,12 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       // Build recipient filter (same logic as BroadcastSenderJob)
       const targeting = (broadcast.targeting || {}) as any;
 
+      // La contrainte du CANAL e-mail vient du MÊME site que le job d'envoi
+      // (#6581) : l'aperçu ne doit pas annoncer un destinataire que l'envoi
+      // écarte — ni compter les trois adresses de bootstrap, vérifiées d'office
+      // justement parce qu'elles ne reçoivent aucun courrier.
       const where: any = {
-        emailVerifiedAt: { not: null },
+        ...emailChannelRecipientConstraint(),
         isActive: true,
         deletedAt: null,
       };

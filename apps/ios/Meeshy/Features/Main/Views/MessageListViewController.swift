@@ -2666,15 +2666,15 @@ final class MessageListViewController: UIViewController {
         )
     }
 
-    /// Tap sur la zone MÉDIA d'une citation — résout la pièce jointe citée :
-    /// image/vidéo → plein écran (`onMediaTap`, la même galerie que la
-    /// rangée), audio → lecture (`playAudio`, même file que la rangée) ;
-    /// document et cité hors fenêtre locale → saut à l'original (la carte
-    /// document y offre téléchargement/partage).
+    /// Tap sur la zone MÉDIA d'une citation — la pièce est élue par
+    /// `ReplyReference.citedAttachment(among:)`, site UNIQUE partagé avec son
+    /// ICÔNE (#6164) : image/vidéo → plein écran (`onMediaTap`), audio →
+    /// lecture (`playAudio`, même file) ; document et cité hors fenêtre locale
+    /// → saut à l'original (la carte document y offre téléchargement/partage).
     private func openQuotedMedia(_ reference: ReplyReference) {
         let localId = resolveLocalId(reference.messageId)
         guard let quoted = store.domainMessage(for: localId, currentUserId: currentUserId),
-              let attachment = quoted.attachments.first(where: { $0.type != .location })
+              let attachment = reference.citedAttachment(among: quoted.attachments)
         else {
             scrollToMessage(localId: localId)
             return
