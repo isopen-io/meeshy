@@ -212,7 +212,21 @@ extension ConversationViewModel {
     }
 
     @discardableResult
-    func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil, location: SharedPlace? = nil, sticker: MessageSticker? = nil) async -> Bool {
+    /// `attachmentReplyTo` — l'ANCRE de la pièce citée (#6164, moitié ÉCRITURE).
+    ///
+    /// Elle n'a de sens qu'avec `replyToId` : la garde serveur
+    /// (`admitAttachmentReply`) refuse une pièce sans son message, et relit la
+    /// ligne pour vérifier l'appartenance.
+    ///
+    /// **Sa présence CHANGE DE TRANSPORT.** Le canal socket ne la porte pas —
+    /// `MessageHandler.ts` ne lit `attachmentReplyTo` nulle part et
+    /// `admitAttachmentReply` n'y est pas wiré. Un envoi qui la porte est donc
+    /// inéligible au socket-first ET au repli socket, exactement comme le
+    /// chiffrement, l'éphémère, la vue unique, le flou et les effets : pas
+    /// parce qu'il est « spécial », mais parce que ce canal PERDRAIT une part
+    /// de ce qu'on lui confie — et que la perte serait invisible (le message
+    /// part, l'accusé revient, seule la citation ment).
+    func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil, location: SharedPlace? = nil, sticker: MessageSticker? = nil, attachmentReplyTo: QuotedAttachmentSend? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         Logger.messages.info("SendFlow enter convId=\(self.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) attachmentIds=\((attachmentIds ?? []).count, privacy: .public) existingTempId=\(existingTempId ?? "nil", privacy: .public) isSending=\(self.isSending, privacy: .public)")
         // Garde partagé avec le composer (`SendEligibility`) : un message
@@ -306,7 +320,8 @@ extension ConversationViewModel {
                 attachmentIds: attachmentIds,
                 attachmentKinds: offlineKinds,
                 location: location,
-                sticker: sticker
+                sticker: sticker,
+                attachmentReplyTo: attachmentReplyTo?.attachmentId
             )
             // Lieu partagé encodé pour la colonne `locationJson` du record
             // optimiste : une écriture GRDB concurrente déclenche
@@ -442,7 +457,8 @@ extension ConversationViewModel {
         // soit le chemin d'envoi (texte-seul vs media).
         let replyRef = makeReplyReference(
             storyReplyReference: storyReplyReference,
-            replyToId: replyToId
+            replyToId: replyToId,
+            citingAttachmentId: attachmentReplyTo?.attachmentId
         )
 
         // Optimistic insert.
@@ -599,7 +615,8 @@ extension ConversationViewModel {
                 encryptionMode: encryptionMode,
                 clientMessageId: tempId,
                 location: location,
-                sticker: sticker
+                sticker: sticker,
+                attachmentReplyTo: attachmentReplyTo
             )
 
             // WebSocket-first send (re-enabled 2026-06-11). On a persistent
@@ -619,6 +636,14 @@ extension ConversationViewModel {
                 && !resolvedIsViewOnce
                 && resolvedBlur != true
                 && !pendingEffects.hasAnyEffect
+                // #6164 — l'ancre de la pièce citée n'existe que sur le corps
+                // REST : le handler socket ne la lit pas, et la garde qui
+                // l'ADMET (`admitAttachmentReply`) n'y est pas wirée. Sans ce
+                // terme, répondre à la troisième photo d'un carrousel partirait
+                // par le socket, arriverait sans ancre, et la citation
+                // montrerait la première — un contrôle qui ment, sur le cas
+                // NOMINAL du plein écran (#6165).
+                && attachmentReplyTo == nil
             if socketFirstEligible {
                 Logger.messages.info("SendFlow socket-first START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — message:send before REST")
                 let socketFirstStartedAt = Date()
@@ -713,6 +738,10 @@ extension ConversationViewModel {
                 || resolvedIsViewOnce
                 || resolvedBlur == true
                 || pendingEffects.hasAnyEffect
+                // Même raison que le socket-first ci-dessus : le repli socket
+                // perdrait l'ancre en silence. Ces envois restent sur le retry
+                // REST de l'outbox, qui la préserve.
+                || attachmentReplyTo != nil
             if !hasSpecialProps {
                 Logger.messages.warning("SendFlow socket-fallback START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — REST failed, awaiting socket ack up to ~10s (isSending held)")
                 let socketFallbackStartedAt = Date()
@@ -771,7 +800,8 @@ extension ConversationViewModel {
                 attachmentIds: attachmentIds,
                 attachmentKinds: retryKinds,
                 location: location,
-                sticker: sticker
+                sticker: sticker,
+                attachmentReplyTo: attachmentReplyTo?.attachmentId
             )
 
             // AWAITED enqueue (Bug 1 fix — online retry path, B2 2026-05-27).

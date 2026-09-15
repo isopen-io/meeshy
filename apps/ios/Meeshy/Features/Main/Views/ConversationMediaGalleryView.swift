@@ -109,6 +109,28 @@ struct ConversationMediaGalleryView: View {
     /// pas le porteur. `nil` ⇒ aucun bouton.
     var onReplyToMedia: ((MessageAttachment) -> Void)?
 
+    /// **Répondre à la pièce SANS quitter son plein écran** (#6165, directive
+    /// porteur 2026-09-12).
+    ///
+    /// `(pièce, texte, langue)` — la galerie ne connaît que des pièces jointes ;
+    /// résoudre le porteur, composer l'ancre et envoyer sont l'affaire de
+    /// l'hôte, comme pour `onReplyToMedia`.
+    ///
+    /// Câblée ⇒ le bouton « répondre » monte la barre universelle AU-DESSUS du
+    /// média et **ne referme rien**. `nil` ⇒ l'ancien chemin
+    /// (`onReplyToMedia`) reste seul offert, ce que font les hôtes SOCIAUX dont
+    /// le porteur est un commentaire. La bascule vit dans
+    /// `FullscreenReplyRoute`, jamais dans deux `if` d'appelants.
+    var onSendReplyToMedia: ((MessageAttachment, String, String) -> Void)?
+
+    /// La CITATION à peindre au-dessus de la rangée de saisie — composée par
+    /// l'hôte via la fabrique unique, parce qu'elle a besoin du MESSAGE porteur
+    /// que la galerie ne connaît pas.
+    ///
+    /// `nil` rendu ⇒ la barre ne monte pas : une bannière qui ne sait pas dire
+    /// ce qu'elle cite vaut moins que pas de bannière du tout.
+    var replyCitation: ((MessageAttachment) -> ReplyReference?)?
+
     /// **Réagir à la PIÈCE, depuis le plein écran** (#6084).
     ///
     /// La pièce voyage AVEC l'émoji : la galerie sait quelle page est ouverte,
@@ -163,6 +185,30 @@ struct ConversationMediaGalleryView: View {
     /// contrairement au `currentTime` qui interdit d'observer le manager en bloc.
     @State var videoManagerIsPlaying: Bool = SharedAVPlayerManager.shared.isPlaying
 
+    /// **La pièce à laquelle la barre RÉPOND** (#6165) — `nil` au repos, ce qui
+    /// est l'état nominal : le visualiseur est NU tant qu'on n'a pas demandé à
+    /// parler.
+    ///
+    /// La PIÈCE et non un booléen : la barre doit citer ce qu'on regardait au
+    /// moment du tap. Feuilleter pendant qu'elle est ouverte ne change pas ce
+    /// qu'on cite — sinon le brouillon en cours changerait de destinataire sous
+    /// les doigts, et la bannière mentirait sur ce que l'envoi gravera.
+    @State private var replyTarget: MessageAttachment?
+
+    /// La langue de composition de la barre, tenue ICI pour survivre au
+    /// montage / démontage de la barre : la refermer et la rouvrir ne doit pas
+    /// ramener la langue au défaut.
+    @State private var replyLanguage: String = DefaultComposerLanguage.resolve()
+
+    /// **Le brouillon de réponse, PAR PIÈCE** — « en sortir rend le média
+    /// intact, brouillon compris » (#6165).
+    ///
+    /// Par pièce et non global : deux photos d'un même lot se commentent
+    /// séparément, et un texte écrit sous l'une n'a rien à faire sous l'autre.
+    /// C'est la même raison que `captionLanguage` quelques lignes plus haut —
+    /// ce qui appartient à un média se range par média.
+    @State private var replyDrafts: [String: String] = [:]
+
     init(
         allAttachments: [MessageAttachment],
         startAttachmentId: String,
@@ -172,6 +218,8 @@ struct ConversationMediaGalleryView: View {
         senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:],
         onComposeWithMedia: ((MessageAttachment) -> Void)? = nil,
         onReplyToMedia: ((MessageAttachment) -> Void)? = nil,
+        onSendReplyToMedia: ((MessageAttachment, String, String) -> Void)? = nil,
+        replyCitation: ((MessageAttachment) -> ReplyReference?)? = nil,
         onReactToMedia: ((MessageAttachment, String) -> Void)? = nil
     ) {
         self.allAttachments = allAttachments
@@ -182,6 +230,8 @@ struct ConversationMediaGalleryView: View {
         self.senderInfoMap = senderInfoMap
         self.onComposeWithMedia = onComposeWithMedia
         self.onReplyToMedia = onReplyToMedia
+        self.onSendReplyToMedia = onSendReplyToMedia
+        self.replyCitation = replyCitation
         self.onReactToMedia = onReactToMedia
         let positions = Dictionary(
             allAttachments.enumerated().map { ($0.element.id, $0.offset) },
@@ -269,14 +319,22 @@ struct ConversationMediaGalleryView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
+            // **Le clavier ne pousse pas le cadre hors de l'écran** (#6165) :
+            // la scène et tout le plateau IGNORENT la zone sûre du clavier,
+            // seule la couche de saisie la respecte. Sans cette asymétrie,
+            // SwiftUI remonte la pile entière et le média sort par le haut au
+            // moment précis où l'on veut en parler.
             galleryPager
+                .ignoresSafeArea(.keyboard, edges: .bottom)
 
             overlayLayer
+                .ignoresSafeArea(.keyboard, edges: .bottom)
 
             // **Ce que l'appui long a promis** (#6142) : la pastille est la
             // seule chose qui distingue ses deux portes à l'écran. Elle vit
             // au-dessus du plateau, qui n'existe pas là où elle s'affiche.
             pausedBadgeLayer
+                .ignoresSafeArea(.keyboard, edges: .bottom)
 
             // **La traînée d'émojis est la couche la PLUS HAUTE du visualiseur**
             // (précision porteur 2026-09-11 : « les réactions doivent apparaître
@@ -289,6 +347,12 @@ struct ConversationMediaGalleryView: View {
             // sortie de cette pile, et rien n'aurait empêché le bloc bas de la
             // comprimer. Le rang se gagne par la COUCHE.
             reactionLayer
+                .ignoresSafeArea(.keyboard, edges: .bottom)
+
+            // **La barre de réponse est la couche du DIALOGUE** (#6165) — au
+            // même rang que la traînée d'émojis, et pour la même raison : elle
+            // doit passer par-dessus tous les contrôleurs du plateau.
+            replyComposerLayer
         }
         .statusBar(hidden: true)
         .onAppear {
@@ -315,6 +379,50 @@ struct ConversationMediaGalleryView: View {
     /// atteignable — pendant toute la transition : sans cette ligne, un tap posé
     /// pendant ces deux dixièmes fermerait la galerie par un bouton que
     /// l'utilisateur voit déjà disparaître.
+    /// **La barre monte, le média RESTE** (#6165).
+    ///
+    /// `ignoresSafeArea(.keyboard)` est posé sur la SCÈNE (le pager et les
+    /// couches du plateau, chacun chez lui), jamais ici : sans cette asymétrie,
+    /// SwiftUI remonterait la pile ENTIÈRE à l'ouverture du clavier et le média
+    /// sortirait par le haut — exactement ce que l'exigence interdit. Cette
+    /// couche-ci, elle, doit suivre le clavier : c'est elle qu'on tape.
+    @ViewBuilder
+    private var replyComposerLayer: some View {
+        if let target = replyTarget, let citation = replyCitation?(target) {
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                MediaReplyComposerBar(
+                    citation: citation,
+                    accentColor: accentColor,
+                    pieceId: target.id,
+                    draft: Binding(
+                        get: { replyDrafts[target.id] ?? "" },
+                        set: { replyDrafts[target.id] = $0 }
+                    ),
+                    composerLanguage: $replyLanguage,
+                    onSend: { text, language in
+                        onSendReplyToMedia?(target, text, language)
+                        // **La galerie NE SE REFERME PAS** — ni ici, ni au
+                        // retrait de la barre. C'est tout l'objet du lot : on
+                        // parle de la pièce en la regardant. La barre redescend
+                        // pour rendre le média entier, et un second tap sur
+                        // « répondre » la remonte.
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            replyTarget = nil
+                        }
+                        HapticFeedback.light()
+                    },
+                    onCancel: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            replyTarget = nil
+                        }
+                    }
+                )
+            }
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
     private var overlayLayer: some View {
         ZStack {
             if stagePresentation.showsPlateau {
@@ -716,16 +824,34 @@ struct ConversationMediaGalleryView: View {
                                       bundle: .main))
             .accessibilityAddTraits(reactionBarOpen ? [.isSelected] : [])
         }
-        if let onReplyToMedia, !ComposableAttachment.isProtected(att) {
-            // **Un média PROTÉGÉ ne se cite pas** (#4013) : la bannière de
-            // citation porte la vignette du média, ce qui ferait sortir de la
-            // conversation ce qu'une vue unique, un flou ou un chiffrement y
-            // retiennent. Le prédicat est celui que le menu d'appui long lit
-            // déjà — `ComposableAttachment.isProtected` — plutôt qu'une seconde
-            // écriture des trois mêmes drapeaux.
+        // **Un média PROTÉGÉ ne se cite pas** (#4013) : la bannière de citation
+        // porte la vignette du média, ce qui ferait sortir de la conversation
+        // ce qu'une vue unique, un flou ou un chiffrement y retiennent. Le
+        // prédicat est celui que le menu d'appui long lit déjà —
+        // `ComposableAttachment.isProtected` — plutôt qu'une seconde écriture
+        // des trois mêmes drapeaux.
+        //
+        // **La ROUTE décide, pas deux `if` côte à côte** (#6165) : sans elle,
+        // un hôte qui câble les deux rappels monterait la barre PENDANT que la
+        // galerie se referme sous elle.
+        let route = FullscreenReplyRoute.route(
+            isProtected: ComposableAttachment.isProtected(att),
+            hasInPlaceComposer: onSendReplyToMedia != nil && replyCitation != nil,
+            hasThreadHandOff: onReplyToMedia != nil
+        )
+        if route != .none {
             Button {
                 HapticFeedback.light()
-                onReplyToMedia(att)
+                switch route {
+                case .composeInPlace:
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        replyTarget = att
+                    }
+                case .handOffToThread:
+                    onReplyToMedia?(att)
+                case .none:
+                    break
+                }
             } label: {
                 Image(systemName: "arrowshape.turn.up.left.fill")
                     .font(.system(size: 16, weight: .semibold))
@@ -737,9 +863,13 @@ struct ConversationMediaGalleryView: View {
             }
             .accessibilityLabel(String(localized: "media.reply.title",
                                        defaultValue: "Répondre", bundle: .main))
-            .accessibilityHint(String(localized: "media.reply.hint",
-                                      defaultValue: "Cite le message qui porte ce média et revient au composer.",
-                                      bundle: .main))
+            .accessibilityHint(route == .composeInPlace
+                ? String(localized: "media.reply.hint.inPlace",
+                         defaultValue: "Ouvre la zone de saisie au-dessus de ce média, en le citant.",
+                         bundle: .main)
+                : String(localized: "media.reply.hint",
+                         defaultValue: "Cite le message qui porte ce média et revient au composer.",
+                         bundle: .main))
         }
         if let onComposeWithMedia {
             Button {
