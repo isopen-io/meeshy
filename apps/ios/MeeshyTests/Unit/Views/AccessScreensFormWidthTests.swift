@@ -121,6 +121,37 @@ final class AccessScreensFormWidthTests: XCTestCase {
         }
     }
 
+    // MARK: - L'accueil : bornée en largeur, et ses boutons gardent leur hauteur
+
+    /// Mesuré au simulateur iPad le 2026-09-15 : l'accueil tenait bien sa
+    /// colonne de 600 pt, mais « Créer un compte » et « Se connecter » y
+    /// faisaient chacun près de 500 pt de HAUT. Leur forme était posée dans le
+    /// bouton avec un `minHeight` sans plafond — une forme prend toute la
+    /// hauteur qu'on lui propose, et la pile lui proposait l'écran. Une page
+    /// « responsive » ne se juge pas qu'à sa largeur.
+    func test_welcome_holdsItsColumn_andItsButtonsKeepAnActionHeight() {
+        assertCentredColumn(identifier: "welcome.createAccount") {
+            WelcomeView(hasCompletedOnboarding: .constant(false))
+        }
+
+        for size in [Self.iPadPortrait, Self.iPadLandscape, Self.iPhone] {
+            let screen = RenderedScreen(WelcomeView(hasCompletedOnboarding: .constant(false)), size: size)
+            defer { screen.dismount() }
+            for identifier in ["welcome.createAccount", "welcome.signIn"] {
+                guard let frame = screen.frame(of: identifier) else {
+                    XCTFail("« \(identifier) » n'est pas rendu dans une fenêtre \(Int(size.width)) × \(Int(size.height))")
+                    continue
+                }
+                XCTAssertLessThan(
+                    frame.height,
+                    120,
+                    "« \(identifier) » fait \(Int(frame.height)) pt de haut dans une fenêtre \(Int(size.width)) × \(Int(size.height)) : "
+                    + "un bouton d'action n'occupe pas l'écran"
+                )
+            }
+        }
+    }
+
     // MARK: - La mesure
 
     /// Monte l'écran trois fois — iPad portrait, iPad paysage, iPhone — et

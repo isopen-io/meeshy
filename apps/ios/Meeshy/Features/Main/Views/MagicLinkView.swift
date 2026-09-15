@@ -88,6 +88,11 @@ struct MagicLinkView: View {
                     }
                 }
                 .padding(.horizontal, MeeshySpacing.xxxl)
+                // La colonne se borne comme celle de la connexion (#6644).
+                // Présentée en feuille-formulaire sur iPad (579 pt mesurés),
+                // elle y tenait déjà ; la borne est portée par l'écran pour ne
+                // plus dépendre de la façon dont on le présente.
+                .iPadFormWidth()
             }
             .onDisappear {
                 countdownTask?.cancel()
@@ -225,6 +230,7 @@ struct MagicLinkView: View {
             }
             .disabled(isLoading || !isValidEmail)
             .opacity(!isValidEmail ? 0.6 : 1)
+            .accessibilityIdentifier("auth.magiclink.submit")
 
             Spacer()
             Spacer()

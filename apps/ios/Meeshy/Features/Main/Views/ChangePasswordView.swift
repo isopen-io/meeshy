@@ -68,6 +68,7 @@ struct ChangePasswordView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 16)
+        .iPadFormWidth()
     }
 
     // MARK: - Current Password
@@ -218,6 +219,7 @@ struct ChangePasswordView: View {
                 )
             }
             .disabled(!isValid || isSaving)
+            .accessibilityIdentifier("auth.password.change.submit")
         }
     }
 

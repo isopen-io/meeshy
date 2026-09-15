@@ -164,6 +164,11 @@ struct LoginView: View {
                 // la page et décolle la signature du bord bas.
                 Spacer()
             }
+            // La colonne se borne ICI, pas chez l'hôte (#6644) : posée par
+            // `MeeshyApp` autour de l'écran entier, la borne rétrécissait aussi
+            // le fond et les halos à 600 pt, et `LoginView` montée seule — la
+            // seule façon de mesurer son étape 2FA — s'étirait sur l'iPad.
+            .iPadFormWidth()
         }
         .sheet(isPresented: $showForgotPassword) {
             MeeshyForgotPasswordView()
@@ -555,6 +560,7 @@ struct LoginView: View {
         .bounceOnTap()
         .padding(.top, MeeshySpacing.sm)
         .accessibilityLabel(String(localized: "auth.login.submit", bundle: .main))
+        .accessibilityIdentifier("auth.login.submit")
     }
 
     private func accountAvatar(_ account: SavedAccount, size: CGFloat) -> some View {

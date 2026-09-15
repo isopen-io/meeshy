@@ -120,7 +120,7 @@ final class ForgotPasswordWordingTests: XCTestCase {
     /// trois entrées qu'elle remplace portaient encore « Envoyer », « Email
     /// envoye ! » et « un lien de réinitialisation ».
     func test_sentState_speaksTheEmailSignInKeys_notTwins() throws {
-        let keys = Set(localizedCalls(in: try code(Self.forgotPasswordView)).map(\.key))
+        let keys = Set(localizedCalls(in: try code(Self.forgotPasswordView)).map { $0.key })
         for borrowed in ["auth.magiclink.send", "auth.magiclink.sent.title", "auth.magiclink.sent.subtitle",
                          "auth.magiclink.sent.hintLabel", "auth.magiclink.sent.spamHint"] {
             XCTAssertTrue(keys.contains(borrowed), "« Mot de passe oublié » doit rendre \(borrowed)")
@@ -162,7 +162,7 @@ final class ForgotPasswordWordingTests: XCTestCase {
     /// que #6632 a déjà retiré de la connexion.
     static func saysResetOrMagic(_ text: String) -> Bool {
         text.range(
-            of: #"r[ée]initialis|reset|zurücksetz|restablec|reimpost|redefini|إعادة تعيين|m[aá]gi[cq]|سحر"#,
+            of: #"r[ée]initialis|reset|zurück(ge)?setz|restablec|reimpost|redefini|إعادة (ال)?تعيين|m[aá]gi[cq]|سحر"#,
             options: [.regularExpression, .caseInsensitive]
         ) != nil
     }
