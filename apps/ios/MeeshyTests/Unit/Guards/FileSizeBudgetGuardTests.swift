@@ -356,7 +356,13 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // plafond dur : il QUITTE la liste, pour toujours. Le plafond baisse de ce
     // que le lot retire aux deux qui restent (166 + 392) et du poids de celui
     // qui sort (1 150) — jamais du mou préexistant.
-    private static let legacyLineCeiling = 56_430
+    // #6745 — 56 430 → 56 341 (−89). Un réel composé devait se rejouer comme
+    // sa scène, et la page qui le lit vit dans `ReelsPlayerView.swift`, hôte en
+    // dette. Les règles pures qu'il fallait étendre — la porte d'autoplay, la
+    // politique de télémétrie, la classification des médias — en sont d'abord
+    // sorties, telles quelles, vers `ReelPlaybackRules.swift`. L'hôte RESTE en
+    // dette ; le plafond baisse d'exactement ce que le lot retire.
+    private static let legacyLineCeiling = 56_341
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
