@@ -32571,3 +32571,70 @@ puis compter ses appels, lui garde le pouvoir d'accuser un RETRAIT sans punir un
 extraction. Épreuve par neutralisation faite dans les deux sens (un appel
 court-circuité en gardant le nom visible ⇒ rouge ; restauré ⇒ vert) — et il reste
 ce qu'il est : un INVENTAIRE, jamais une preuve de comportement (leçon 611).
+
+## Leçon 615 — Un témoin de DÉCODAGE qui fabrique son décodeur mesure la tolérance du RUNTIME
+
+**Payée le 2026-09-15**, à l'intégration de #6578. Le lot rendait « Executed 16
+tests, with 0 failures » dans son worktree ; sur `dev`, six de ces seize
+tombaient — `dataCorrupted("Expected date string to be ISO8601-formatted")`.
+
+Rien n'avait changé : les fichiers du lot et ceux de `dev` étaient **identiques**
+(vérifié par `git diff` entre la branche et la fusion). Ce qui changeait était le
+SIMULATEUR — le lot avait mesuré sur **iOS 26.1**, l'intégration sur **iOS 18.2**.
+
+La cause : le témoin fabriquait son propre décodeur,
+
+```swift
+let decodeur = JSONDecoder()
+decodeur.dateDecodingStrategy = .iso8601   // PLUS STRICT que la production
+```
+
+alors que la passerelle émet ses dates **avec fractions de seconde**
+(`Date.toISOString()` → `…T10:00:00.000Z`), que `.iso8601` refuse. Le décodeur de
+PRODUCTION (`APIClient.makeAPIPayloadDecoder()`) porte une stratégie `.custom`
+qui les tolère — et il est `internal` plutôt que `private` **exactement pour que
+les tests l'utilisent** : son doc-comment le dit en toutes lettres, comme celui
+d'`APIMessage.init(from:)` (« la prod utilise une stratégie `.custom`, les tests
+`.iso8601` »).
+
+> **Un témoin qui reconstruit une pièce d'infrastructure ne teste plus le
+> produit : il teste sa propre reconstruction.** Et quand cette pièce est plus
+> STRICTE que la vraie, il ne rougit que là où le runtime est strict — donc il
+> est vert sur la machine de son auteur et rouge chez le suivant.
+
+Le geste : chercher si le dépôt EXPOSE déjà la pièce (un `internal` au lieu d'un
+`private` est un aveu — quelqu'un l'a ouverte pour les tests), et l'appeler.
+
+Corollaire de portée : le dépôt supporte **iOS 16→26**. Un témoin joué sur un
+seul runtime ne dit rien des quinze autres — et le runtime le plus récent est le
+plus permissif, donc le moins susceptible d'accuser. Voir
+[[reference_a_green_on_both_sides_of_the_diff_measures_the_machine]].
+
+## Leçon 616 — Après une EXTRACTION, les gardes qui NOMMENT le fichier d'origine tombent
+
+Même journée, même intégration. L'extraction de `CommentRowView` hors de
+`FeedCommentsSheet.swift` (2 519 → 2 127 lignes, pour respecter le budget) a fait
+rougir **deux** gardes qu'aucun témoin du lot ne jouait :
+
+| garde | ce qu'elle exigeait | pourquoi elle tombe |
+|---|---|---|
+| `CommentMediaGalleryWiringGuardTests` | `carrierText: comment.displayContent` dans `FeedCommentsSheet.swift` | la ligne est partie avec la vue |
+| `SheetEnvironmentObjectGuardTests` | le type `CommentRowView` DÉCLARÉ dans `FeedCommentsSheet.swift` | le type est parti avec la vue |
+
+Aucune des deux ne mesure un comportement de l'extraction : elles tiennent un
+INVENTAIRE indexé par **fichier**, quand le risque qu'elles gardent voyage avec
+le **type**.
+
+> **Une extraction ne change rien au comportement et fait pourtant rougir tout ce
+> qui indexe par fichier.** Avant d'extraire, `grep` le nom du fichier d'origine
+> ET le nom du type déplacé dans les témoins : ce que la recherche rend est la
+> liste exacte des gardes à faire suivre, et elle se fait DANS le commit
+> d'extraction.
+
+Le correctif juste n'est pas de rapatrier le code : c'est d'apprendre à la garde
+que la règle a deux étages (l'hôte déclare la galerie, la ligne passe la
+légende), ou de la faire suivre le TYPE. Une garde qui force à re-fusionner ce
+qu'un budget vient de séparer travaille contre la directive qu'elle sert.
+
+Prolonge [[reference_inventory_guards_are_the_ones_parallel_lots_never_play]] :
+la leçon 614 disait QUI ne les joue pas ; celle-ci dit QUAND elles tombent.
