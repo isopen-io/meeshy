@@ -9,47 +9,6 @@ import os
 /// résolution cache vs streaming distant, attach du player.
 let storyMediaLog = os.Logger(subsystem: "me.meeshy.app", category: "story-media")
 
-/// Affine transform applied to the background layer (zoom + pan + rotation).
-/// Mirrors `StoryBackgroundTransform` from the SDK schema, in render-space.
-///
-/// All members are `nonisolated` so the struct can be used freely from both
-/// the MeeshyUI (defaultIsolation MainActor) and nonisolated contexts.
-public struct BackgroundTransform: Sendable, Equatable {
-    public nonisolated var scale: Double
-    public nonisolated var offsetX: Double
-    public nonisolated var offsetY: Double
-    public nonisolated var rotation: Double  // degrees
-    /// Background fit mode override. `nil` = auto-by-orientation (landscape
-    /// videos/images → letterbox, portrait → aspectFill). `"fit"` = forced
-    /// letterbox. `"fill"` = forced aspectFill. Despite its `videoFitMode`
-    /// name (legacy from the original spec), this override applies to BOTH
-    /// `.video` and `.image` backgrounds — the resolver helpers
-    /// `resolveVideoGravity` and `resolveImageGravity` share identical
-    /// orientation logic and both consume this same field.
-    public nonisolated var videoFitMode: String?
-
-    public nonisolated init(scale: Double = 1.0, offsetX: Double = 0,
-                            offsetY: Double = 0, rotation: Double = 0,
-                            videoFitMode: String? = nil) {
-        self.scale = scale
-        self.offsetX = offsetX
-        self.offsetY = offsetY
-        self.rotation = rotation
-        self.videoFitMode = videoFitMode
-    }
-
-    public nonisolated static let identity = BackgroundTransform()
-
-    public nonisolated func caTransform() -> CATransform3D {
-        let r = CGFloat(rotation * .pi / 180)
-        var t = CATransform3DIdentity
-        t = CATransform3DTranslate(t, CGFloat(offsetX), CGFloat(offsetY), 0)
-        t = CATransform3DRotate(t, r, 0, 0, 1)
-        t = CATransform3DScale(t, CGFloat(scale), CGFloat(scale), 1)
-        return t
-    }
-}
-
 /// Visual background of the story canvas (color/gradient/image+thumbHash/video).
 /// Lives below `itemsContainer` in `StoryCanvasUIView.rootLayer`.
 /// Lifecycle aware: pause/resume video on app background/foreground.
@@ -154,6 +113,9 @@ public final class StoryBackgroundLayer: CALayer {
     /// la seule dont dispose l'atelier : `StoryThumbHashEnricher` ne calcule les
     /// hachages qu'à la PUBLICATION.
     nonisolated(unsafe) var letterboxSourceImage: UIImage?
+    /// Le lecteur présente l'image SEULE (#6636) : la bande sort du cadre visible
+    /// et ne se peint plus — voir `setLetterboxFillSuppressed(_:)`.
+    nonisolated(unsafe) var isLetterboxFillSuppressed = false
     /// Fournisseur du player du média porteur (O16), posé par `configure` depuis
     /// le contexte de LECTURE. `nil` en composition : la couche ouvre le sien.
     private nonisolated(unsafe) var playerProvider: (any StoryCarrierPlayerProviding)?

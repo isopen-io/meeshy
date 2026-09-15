@@ -119,4 +119,7 @@ extension StoryBackgroundLayer {
     func refreshLetterboxFillAfterFitChange() {
         refreshLetterboxFill(hashes: letterboxFillHashes)
     }
+
+    @MainActor
+    func setLetterboxFillSuppressed(_ suppressed: Bool) {}
 }

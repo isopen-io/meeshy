@@ -438,6 +438,8 @@ public final class StoryCanvasUIView: UIView {
     /// `StoryBackgroundLayer` (no overlay) since the 2026-06-03 pivot.
     var composerImageRevision: UInt64 = 0
 
+    public var servesLetterboxFill: Bool = true
+
     /// Two-pass backdrop snapshot helper. Drives the MPS path on
     /// `StoryGlassBackdropLayer` by capturing the canvas-minus-glass tree
     /// once per `rebuildLayers()` tick and serving cropped regions to each

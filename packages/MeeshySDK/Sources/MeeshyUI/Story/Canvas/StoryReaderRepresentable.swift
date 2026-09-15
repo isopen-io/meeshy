@@ -23,6 +23,11 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// `ScenePlayerConfig.locksMute` jusqu'au canvas, qui seul peut refuser une
     /// notification diffusée.
     public internal(set) var locksMute: Bool = false
+    /// **L'hôte présente-t-il le canvas ENTIER ?** (#6636) — `false` quand le
+    /// lecteur rogne la carte au seul rectangle de l'image : les bandes sortent
+    /// alors du cadre visible, et leur remplissage ne se peint plus. `true` par
+    /// défaut : toute autre surface garde ses bandes.
+    public internal(set) var servesLetterboxFill: Bool = true
     /// Drives `StoryCanvasUIView.setPaused(_:)` — gels la timeline canvas
     /// (displayLink + AVPlayer + audioMixer) en phase avec la progress bar
     /// du viewer parent. Sans ça, ouvrir un sheet pendant la lecture laissait
@@ -173,6 +178,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 isPaused: Bool = false,
                 isOutgoing: Bool = false,
                 startAt: Double = 0,
+                servesLetterboxFill: Bool = true,
                 positionKey: String? = nil,
                 onCompletion: (@Sendable () -> Void)? = nil,
                 onContentReady: (() -> Void)? = nil,
