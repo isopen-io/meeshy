@@ -4,6 +4,7 @@ import {
   transformTranslationsToArray,
   type MessageTranslationJSON,
 } from '../../utils/translation-transformer';
+import type { AttachmentReplyTo } from './attachmentReplySnapshot';
 
 /**
  * Ce qu'une CITATION a le droit de transporter — site UNIQUE des trois
@@ -91,14 +92,42 @@ const maskedQuotedAttachment = (att: Record<string, unknown>): Record<string, un
  *     du MESSAGE et celui de la PIÈCE JOINTE (`maskedAttachment`), miroir de
  *     `QuotedReplyPresentation.thumbHash` qui refuse déjà le flou ThumbHash
  *     d'un média protégé.
+ *
+ * QUATRIÈME décision depuis #6164 : la PIÈCE NOMMÉE. Une réponse peut viser la
+ * troisième photo d'un carrousel de cinq ; l'instantané FIGÉ que le message
+ * CITANT porte (`metadata.attachmentReplyTo`) arrive ici en option et repart
+ * tel quel — l'ancre du saut et la NATURE, rien d'autre. Tout ce qui DÉCRIT la
+ * pièce (vignette, nom, taille, durée, transcription) reste sur `attachments`,
+ * donc reste soumis au masquage pièce par pièce ci-dessous : une citation dont
+ * la pièce est devenue secrète ou a été supprimée dit encore « une photo », et
+ * rien de plus. Elle ne se vide pas, et elle ne fuit pas.
+ *
+ * Sans l'instantané, RIEN ne change : le champ n'est pas posé et chaque client
+ * retombe sur son média représentatif, exactement comme avant.
  */
 export function servedQuotedMessage(
   quoted: QuotedMessageRow | null | undefined,
-  options?: { readonly includeTranslations?: boolean; readonly languages?: readonly string[] }
+  options?: {
+    readonly includeTranslations?: boolean;
+    readonly languages?: readonly string[];
+    readonly attachmentReplyTo?: AttachmentReplyTo | null;
+  }
 ): Record<string, unknown> {
   if (!quoted) return {};
   const isProtected = quotedMessageIsProtected(quoted);
   const served: Record<string, unknown> = {};
+
+  // L'ancre et la NATURE, les DEUX seuls faits figés (#6164). Servies même
+  // quand le message cité est protégé et même quand la pièce a disparu : elles
+  // ne peuvent pas devenir un secret — le dépôt divulgue déjà l'icône de TYPE
+  // d'un contenu protégé (`protectedPreview` → `contentTypeIcon`). Ce qui
+  // DÉCRIT la pièce voyage sur `attachments`, et y est masqué pièce par pièce.
+  if (options?.attachmentReplyTo) {
+    served['attachmentReplyTo'] = {
+      attachmentId: options.attachmentReplyTo.attachmentId,
+      kind: options.attachmentReplyTo.kind,
+    };
+  }
 
   if (isProtected) {
     // La protection VOYAGE AVEC le placeholder. Un texte masqué sans la
@@ -139,16 +168,36 @@ export function servedQuotedMessage(
       : undefined;
 
   if (Array.isArray(quoted.attachments)) {
-    served['attachments'] = quoted.attachments.map((att) => {
-      const row = (att ?? {}) as Record<string, unknown>;
-      const protection = {
-        isViewOnce: row['isViewOnce'] as boolean | null | undefined,
-        isBlurred: row['isBlurred'] as boolean | null | undefined,
-        effectFlags: row['effectFlags'] as number | null | undefined,
-      };
-      return isProtected || maskedAttachment(protection) ? maskedQuotedAttachment(row) : att;
-    });
+    served['attachments'] = servedQuotedAttachments(quoted, quoted.attachments);
   }
 
   return served;
+}
+
+/**
+ * Le masquage PIÈCE PAR PIÈCE, isolé pour que le rattrapage d'une pièce NOMMÉE
+ * tombée hors de la fenêtre `take` de la citation (`citedAttachmentBackfill.ts`,
+ * #6164) passe par le MÊME site. Une seconde boucle chez l'appelant aurait
+ * divergé au premier champ ajouté à `maskedQuotedAttachment` — et elle aurait
+ * divergé dans le sens qui expose.
+ *
+ * Les DEUX niveaux déclarent : celui du MESSAGE (`quotedMessageIsProtected`) et
+ * celui de la PIÈCE (`maskedAttachment`). Un message parfaitement ordinaire
+ * peut porter une pièce à vue unique — c'est précisément le cas qu'une lecture
+ * au niveau message seul laisserait sortir.
+ */
+export function servedQuotedAttachments(
+  quoted: QuotedMessageRow | null | undefined,
+  attachments: readonly unknown[]
+): unknown[] {
+  const isProtected = quotedMessageIsProtected(quoted);
+  return attachments.map((att) => {
+    const row = (att ?? {}) as Record<string, unknown>;
+    const protection = {
+      isViewOnce: row['isViewOnce'] as boolean | null | undefined,
+      isBlurred: row['isBlurred'] as boolean | null | undefined,
+      effectFlags: row['effectFlags'] as number | null | undefined,
+    };
+    return isProtected || maskedAttachment(protection) ? maskedQuotedAttachment(row) : att;
+  });
 }

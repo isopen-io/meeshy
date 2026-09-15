@@ -110,6 +110,11 @@ export const mediaSelect = Prisma.validator<Prisma.PostMediaSelect>()({
   order: true,
   caption: true,
   alt: true,
+  // Traduction de la LÉGENDE (#6280) — DISTINCTE de `language`/`translations`
+  // ci-dessous, qui décrivent le média (variantes TTS) et ses pistes audio
+  // traduites, jamais sa légende. Voir `packages/shared/decisions.md` § 2026-09-14.
+  captionLanguage: true,
+  captionTranslations: true,
   language: true,
   variantOf: true,
   transcription: true,

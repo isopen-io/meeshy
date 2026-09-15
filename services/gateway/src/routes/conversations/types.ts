@@ -33,6 +33,12 @@ export interface SendMessageBody {
   originalLanguage?: string;
   messageType?: 'text' | 'image' | 'file' | 'system';
   replyToId?: string;
+  /**
+   * #6164 — la PIÈCE NOMMÉE du message cité. Seul l'identifiant voyage : la
+   * NATURE est dérivée serveur du MIME relu, et l'appartenance au message cité
+   * est vérifiée avant toute écriture (`admitAttachmentReply`).
+   */
+  attachmentReplyTo?: { attachmentId: string };
   storyReplyToId?: string;
   // Forwarding fields
   forwardedFromId?: string;

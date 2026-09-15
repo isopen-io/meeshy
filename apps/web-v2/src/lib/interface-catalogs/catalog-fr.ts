@@ -51,6 +51,55 @@ const fr = {
   'reels.media.error': 'Lecture impossible — Réessayer',
   'reels.image': 'Image {index} sur {count}',
 
+  /* TOUTES LES STORIES (#6547) — `routes/stories.tsx`, même patron que le Flux. */
+  'stories.title': 'Stories',
+  'stories.loading': 'Chargement des stories…',
+  'stories.error': "Les stories n'ont pas pu être chargées.",
+  'stories.empty.title': "Aucune story pour l'instant",
+  'stories.empty.subtitle': 'Les stories de vos contacts apparaîtront ici pendant vingt-quatre heures.',
+  'stories.create': 'Créer une story',
+  'stories.count.one': '{count} story',
+  'stories.count.other': '{count} stories',
+  /* LE LIBELLÉ DU GROUPE DU LECTEUR (#6550) — partagé par le rail
+     (`components/story-rail.tsx`) et la liste « Toutes les stories »
+     (`routes/stories.tsx`), via `storyAuthorLabel()`. */
+  'stories.mine': 'Votre story',
+
+  /* LA CARTE DU FIL ET SES GESTES (#6488) — `FeedPostCard`, l'en-tête et les
+     quatre états du Flux (`routes/feed.tsx`), et les échecs d'un geste
+     (`lib/api/feed-gestures.ts`, `lib/feed/share-url.ts`) : tous écrits en
+     dur en français jusqu'ici, alors qu'une coque branchée en anglais servait
+     déjà `reels.open` sur la même carte. */
+  'feed.post.action.like': 'Aimer',
+  'feed.post.action.comment': 'Commenter',
+  'feed.post.action.repost': 'Repartager',
+  'feed.post.action.bookmark': 'Enregistrer',
+  'feed.post.action.share': 'Partager',
+  'feed.post.media.video': 'Vidéo',
+  'feed.post.media.audio': 'Audio',
+  'feed.post.media.previous': 'Média précédent',
+  'feed.post.media.next': 'Média suivant',
+  'feed.post.media.mosaic': 'Mosaïque de {count} médias',
+  'feed.post.see_more': 'voir plus',
+  'feed.post.see_less': 'voir moins',
+  'feed.post.reel.chip': 'Réel',
+  'feed.post.reel.of': 'Réel de {author}',
+  'feed.error.title': 'Impossible de charger le fil',
+  'feed.error.body': 'Réessayez dans un instant.',
+  'feed.offline.title': 'Hors ligne',
+  'feed.offline.body': 'Le fil s’affichera à la reconnexion.',
+  'feed.retry': 'Réessayer',
+  'feed.empty.title': 'Aucune publication',
+  'feed.empty.subtitle': 'Les publications de vos contacts apparaîtront ici.',
+  'feed.loading': 'Chargement du fil',
+  'feed.allLoaded': 'Toutes les publications sont chargées',
+  'feed.like.error': 'Impossible d’aimer la publication',
+  'post.bookmark.error': 'Erreur lors de l’enregistrement',
+  'feed.gesture.pending': 'Geste non confirmé — hors ligne',
+  'feed.share.error': 'Impossible de partager la publication',
+  'feed.share.copied': 'Lien copié — il ne reste qu’à le coller.',
+  'feed.share.text': 'Une publication sur Meeshy',
+
   'root.menu.feed': 'Flux',
   'root.menu.links': 'Mes liens',
   'root.menu.notifications': 'Notifications',
@@ -153,6 +202,17 @@ const fr = {
   'profile.language.choose': 'Choisir',
   'profile.language.clear.regional': 'Retirer la langue régionale',
   'profile.language.clear.custom': 'Retirer la langue personnalisée',
+
+  /* LA FEUILLE DE CHOIX DE LANGUE, PARLÉE DANS LA LANGUE D'INTERFACE (#6328)
+     — titre par défaut (inscription), titre du composeur, recherche et état
+     vide de `language-sheet.tsx`. `title`/`selected` restent des props
+     explicites (#5828) : ces clés ne servent qu'à défaut d'un `title` fourni
+     par l'appelant, et toujours pour la recherche/l'état vide. */
+  'languageSheet.title.read': 'Langue de lecture',
+  'languageSheet.title.write': 'Langue d’écriture',
+  'languageSheet.search': 'Rechercher une langue',
+  'languageSheet.empty': 'Aucune langue ne correspond à « {search} ».',
+
   'profile.stats.messages': 'Messages',
   'profile.stats.translations': 'Traductions',
   'profile.stats.languages': 'Langues',

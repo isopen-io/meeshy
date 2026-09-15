@@ -261,7 +261,7 @@ const rendreAvecMeesh = (meesh: {
     />,
   );
 
-describe('MeeshHero', () => {
+describe('MeeshDetail — le héros des Meeshes (#5743)', () => {
   /**
    * L'absence se CONSTRUIT, elle ne s'hérite pas de la fixture.
    *
@@ -367,7 +367,7 @@ const rendreAvecElan = (elan: {
     <ElansHero progress={resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, elan })} />,
   );
 
-describe('ElanBanner', () => {
+describe('ElansHero — le bandeau d’élan (#5749)', () => {
   test('n’affiche RIEN au neutre — un badge « ×1 » n’apprend rien', () => {
     const rendu = rendreAvecElan({
       factor: 1,

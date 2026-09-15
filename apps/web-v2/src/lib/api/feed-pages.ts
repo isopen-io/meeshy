@@ -54,11 +54,45 @@ export type FeedMedia = {
    * milliseconde donne une pastille « 0:28 » sur un clip de 28 ms. */
   readonly duration?: number | null;
   readonly caption?: string | null;
+  /**
+   * LA LANGUE SOURCE DE LA LÉGENDE (#6280, `PostMedia.captionLanguage`,
+   * `schema.prisma:3638`) — DISTINCTE de `Post.originalLanguage` : une
+   * légende de média n'est pas le corps du post (CLAUDE.md § Prisme, trois
+   * contenus jamais confondus même à chaînes égales, directive porteur
+   * #6280). `null`/absente ⇒ la langue de la légende n'a pas encore été
+   * détectée par le pipeline.
+   */
+  readonly captionLanguage?: string | null;
+  /**
+   * `{ [langue]: { text, translationModel, confidenceScore?, createdAt,
+   * updatedAt? } }` (#6280, `PostMedia.captionTranslations`,
+   * `schema.prisma:3645`) — MÊME forme que `Post.translations`, dépouillée
+   * par `buildPostTranslationRecord` (`@meeshy/shared`), jamais par
+   * `buildTranslationRecord` (dialecte TABLEAU de `Message.translations`).
+   * DISTINCTE de `PostMedia.translations` (déjà prise par les pistes
+   * audio/transcriptions traduites — jamais une légende dedans).
+   */
+  readonly captionTranslations?: unknown;
   readonly alt?: string | null;
   readonly order?: number | null;
 };
 
 export type FeedRepostOf = { readonly author?: { readonly username?: string | null } | null };
+
+/**
+ * `X-Canvas-Caps: 3` (#6514) — sans cet en-tête, la passerelle traite le
+ * lecteur en client ancien (table O17, `negotiateWireStoryEffects`,
+ * `services/gateway/src/services/posts/storyEffectsV3.ts`) : elle OMET
+ * `storyEffects` d'un post à média et remplace celui d'un post sans média par
+ * une sentinelle v1. L'agencement choisi par l'auteur, qui vit dans ce
+ * document, n'arriverait jamais. Le niveau est celui qu'annoncent iOS
+ * (`ClientInfoProvider.swift`) et Android (`ClientCapabilitiesInterceptor.kt`).
+ *
+ * Il ne se pose QUE sur les routes dont les cartes lisent l'agencement (le fil
+ * et le détail d'une publication) : le lecteur de stories lit encore la forme
+ * v1 (`storyEffects.background`), et l'annoncer là lui retirerait ses fonds.
+ */
+export const CANVAS_CAPS_HEADERS: Readonly<Record<string, string>> = { 'X-Canvas-Caps': '3' };
 
 export type FeedPost = {
   readonly id: string;
@@ -74,6 +108,13 @@ export type FeedPost = {
   readonly translations?: unknown;
   readonly author?: FeedAuthor | null;
   readonly media?: readonly FeedMedia[] | null;
+  /**
+   * LE DOCUMENT CANVAS de la publication (#6514) — laissé `unknown` : ce
+   * client n'en lit QU'UN champ, l'agencement choisi par l'auteur, par
+   * `resolveMosaicLayout` (`lib/feed/mosaic-layout.ts`), jamais ailleurs. Il
+   * n'est servi que si la requête annonce `CANVAS_CAPS_HEADERS` (ci-dessous).
+   */
+  readonly storyEffects?: unknown;
   readonly repostOf?: FeedRepostOf | null;
   readonly likeCount?: number | null;
   readonly commentCount?: number | null;

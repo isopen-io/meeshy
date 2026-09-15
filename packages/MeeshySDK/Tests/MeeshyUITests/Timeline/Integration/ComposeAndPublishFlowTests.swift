@@ -102,6 +102,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         throw NSError(domain: "mock", code: -1)
     }
     func requestTranslation(postId: String, targetLanguage: String) async throws {}
+    func requestMediaCaptionTranslation(mediaId: String, targetLanguage: String) async throws {}
     func pinPost(postId: String) async throws {}
     func unpinPost(postId: String) async throws {}
     func viewPost(postId: String, duration: Int?) async throws {}

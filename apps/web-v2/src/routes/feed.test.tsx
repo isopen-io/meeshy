@@ -27,8 +27,8 @@ const groupe = (authorId: string, displayName: string): StoryTrayGroup => ({
   entryStoryId: `st-${authorId}`,
 });
 
-const RAIL_VIDE = { groups: [], loading: false } as const;
-const RAIL_PLEIN = { groups: [groupe('u-amina', 'Amina Diallo')], loading: false } as const;
+const RAIL_VIDE = { groups: [], loading: false, language: 'fr' } as const;
+const RAIL_PLEIN = { groups: [groupe('u-amina', 'Amina Diallo')], loading: false, language: 'fr' } as const;
 
 describe('les quatre états du fil sont DESSINÉS, jamais un écran blanc', () => {
   test('erreur EN LIGNE : le motif, la conduite à tenir, et « Réessayer » à 44 px', () => {
@@ -67,7 +67,7 @@ describe('les quatre états du fil sont DESSINÉS, jamais un écran blanc', () =
   test('l’en-tête porte le titre d’iOS et un retour NOMMÉ vers la liste, cible 44', () => {
     const html = renderToStaticMarkup(<FeedHeader pinned={false} railProps={RAIL_PLEIN} />);
     expect(html).toContain('Meeshy Feed');
-    expect(html).toContain('aria-label="Retour aux conversations"');
+    expect(html).toContain('aria-label="Revenir aux conversations"');
     expect(html).toContain('size-11');
     expect(html).toContain('href="/"');
   });

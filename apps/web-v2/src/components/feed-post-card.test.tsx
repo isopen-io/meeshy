@@ -112,6 +112,36 @@ describe('FeedPostCard — le POST', () => {
     expect(html).not.toContain('alt="Le marché"');
   });
 
+  /** La légende porte l'attribut `lang` DE LA LANGUE SERVIE (#6280) — un
+   * lecteur d'écran qui prononce une traduction française avec une voix
+   * anglaise est le défaut du cycle 122 (CLAUDE.md § Prisme), rendu
+   * audible sur une légende de média. */
+  test('la légende traduite porte `lang` dans la langue SERVIE, pas la langue source', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard
+        model={modelOf(
+          basePost({
+            media: [
+              {
+                id: 'm1',
+                mimeType: 'image/jpeg',
+                fileUrl: 'a.jpg',
+                caption: 'The morning market',
+                captionLanguage: 'en',
+                captionTranslations: {
+                  fr: { text: 'Le marché du matin', translationModel: 'nllb-200', createdAt: '2026-09-14T00:00:00.000Z' },
+                },
+              },
+            ],
+          }),
+          ['fr'],
+        )}
+      />,
+    );
+    expect(html).toContain('lang="fr"');
+    expect(html).toContain('Le marché du matin');
+  });
+
   test('une image SANS texte d’accessibilité servi est décorative (`alt=""`), jamais nommée par son URL', () => {
     const html = renderToStaticMarkup(
       <FeedPostCard model={modelOf(basePost({ media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }] }))} />,
@@ -148,6 +178,97 @@ describe('FeedPostCard — le POST', () => {
     expect(html).not.toContain('Média précédent');
   });
 
+});
+
+/**
+ * L'AGENCEMENT CHOISI PAR L'AUTEUR (#6514) — iOS (#6502) laisse choisir, au
+ * moment de publier, entre carrousel, défilement continu, hero, vague et
+ * sinusoïde ; le choix voyage dans `storyEffects.layout` (document canvas v3).
+ * Les cotes attendues sont celles de `MosaicLayout.swift`, en pourcentage de
+ * la boîte.
+ */
+describe('FeedPostCard — l’agencement choisi par l’auteur (#6514)', () => {
+  const photos = (count: number) =>
+    Array.from({ length: count }, (_, i) => ({ id: `m${i + 1}`, mimeType: 'image/jpeg', fileUrl: `${i + 1}.jpg`, order: i }));
+
+  test('trois photos en `hero` ⇒ la disposition hero : une grande tuile de 62 %, deux satellites en colonne', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard model={modelOf(basePost({ media: photos(3), storyEffects: { v: 3, scenes: [], layout: 'hero' } }))} />,
+    );
+    expect(html).toContain('data-feed-layout="hero"');
+    expect(html.match(/data-feed-mosaic-tile=/g)).toHaveLength(3);
+    expect(html).toContain('style="left:0%;top:0%;width:62%;height:100%"');
+    expect(html).toContain('style="left:63.4%;top:0%;width:36.6%;height:49.3%"');
+    expect(html).toContain('style="left:63.4%;top:50.7%;width:36.6%;height:49.3%"');
+    expect(html).not.toContain('data-feed-media-counter');
+  });
+
+  test('`layout` ABSENT ⇒ le carrousel, le rendu d’avant', () => {
+    const html = renderToStaticMarkup(<FeedPostCard model={modelOf(basePost({ media: photos(3), storyEffects: { v: 3, scenes: [] } }))} />);
+    expect(html).toContain('data-feed-layout="carousel"');
+    expect(html).toContain('1 / 3');
+    expect(html).not.toContain('data-feed-mosaic-tile');
+  });
+
+  test('aucun `storyEffects` servi ⇒ le carrousel', () => {
+    const html = renderToStaticMarkup(<FeedPostCard model={modelOf(basePost({ media: photos(2) }))} />);
+    expect(html).toContain('data-feed-layout="carousel"');
+  });
+
+  test('`layout` INCONNU ⇒ le carrousel, jamais une carte vide', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard model={modelOf(basePost({ media: photos(3), storyEffects: { v: 3, layout: 'spiral' } }))} />,
+    );
+    expect(html).toContain('data-feed-layout="carousel"');
+    expect(html).toContain('1 / 3');
+  });
+
+  test('six photos en `wave` ⇒ quatre tuiles, et « +2 » sur la dernière seule', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard model={modelOf(basePost({ media: photos(6), storyEffects: { v: 3, layout: 'wave' } }))} />,
+    );
+    expect(html).toContain('data-feed-layout="wave"');
+    expect(html.match(/data-feed-mosaic-tile=/g)).toHaveLength(4);
+    expect(html.match(/data-feed-mosaic-overflow/g)).toHaveLength(1);
+    expect(html).toContain('>+2<');
+  });
+
+  test('`sine` ⇒ une tuile en haut, une en bas', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard model={modelOf(basePost({ media: photos(2), storyEffects: { v: 3, layout: 'sine' } }))} />,
+    );
+    expect(html).toContain('data-feed-layout="sine"');
+    expect(html).toContain('style="left:0%;top:0%;width:49.3%;height:62%"');
+    expect(html).toContain('style="left:50.7%;top:38%;width:49.3%;height:62%"');
+  });
+
+  /** Le défilement continu DÉFILE : un conteneur qu'on ne peut pas atteindre au
+   * clavier cacherait ses tuiles 2 et 3 à qui n'a pas de doigt. */
+  test('`reel` ⇒ un défilement horizontal, focalisable et nommé, dont le contenu déborde la boîte', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard model={modelOf(basePost({ media: photos(3), storyEffects: { v: 3, layout: 'reel' } }))} />,
+    );
+    expect(html).toContain('data-feed-layout="reel"');
+    expect(html).toMatch(/data-feed-layout="reel"[^>]*tabindex="0"/);
+    expect(html).toContain('aria-label="Mosaïque de 3 médias"');
+    expect(html).toContain('width:185.6%');
+  });
+
+  test('la grande tuile d’un `hero` porte sa légende ; ses satellites, non', () => {
+    const media = photos(3).map((m, i) => ({ ...m, caption: `Légende ${i + 1}` }));
+    const html = renderToStaticMarkup(<FeedPostCard model={modelOf(basePost({ media, storyEffects: { v: 3, layout: 'hero' } }))} />);
+    expect(html).toContain('Légende 1');
+    expect(html).not.toContain('Légende 2');
+    expect(html).not.toContain('Légende 3');
+  });
+
+  test('une seule photo, même en `hero`, n’est pas une mosaïque', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard model={modelOf(basePost({ media: photos(1), storyEffects: { v: 3, layout: 'hero' } }))} />,
+    );
+    expect(html).not.toContain('data-feed-mosaic-tile');
+    expect(html).toContain('data-feed-media');
+  });
 });
 
 describe('FeedPostCard — le RÉEL, affiche immobile plein cadre', () => {

@@ -3,6 +3,8 @@ import { useCallback } from 'react';
 import { postGestureAction, recordShareAction } from '@/lib/api/query';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { publicationShareUrl, RETOUR_PARTAGE_PUBLICATION } from '@/lib/feed/share-url';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { partagerLien } from './invitation';
 import { useLiveAnnouncer } from './use-live-announcer';
@@ -31,8 +33,8 @@ export function usePostGesture(): {
   const onGesture = useCallback(
     (postId: string, kind: PostToggleKind) => {
       void postGestureAction(postId, kind).then((result) => {
-        if (!result.ok) announce(result.message);
-        else if (result.notice !== undefined) announce(result.notice);
+        if (!result.ok) announce(translate(currentInterfaceLanguage(), result.message));
+        else if (result.notice !== undefined) announce(translate(currentInterfaceLanguage(), result.notice));
       });
     },
     [announce],
@@ -40,11 +42,12 @@ export function usePostGesture(): {
 
   const onShare = useCallback(
     (postId: string) => {
-      void partagerLien({ title: 'Meeshy', text: 'Une publication sur Meeshy', url: publicationShareUrl(postId) }).then(
+      const language = currentInterfaceLanguage();
+      void partagerLien({ title: 'Meeshy', text: translate(language, 'feed.share.text'), url: publicationShareUrl(postId) }).then(
         (result) => {
           if (result === 'partage' || result === 'copie') void recordShareAction(postId);
-          const retour = RETOUR_PARTAGE_PUBLICATION[result];
-          if (retour !== null) announce(retour);
+          const retourKey = RETOUR_PARTAGE_PUBLICATION[result];
+          if (retourKey !== null) announce(translate(currentInterfaceLanguage(), retourKey));
         },
       );
     },

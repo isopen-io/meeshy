@@ -134,7 +134,17 @@ readonly SHARED_BASELINE=0
 # indépendante sur ce MÊME commit — avant tout autre changement gateway —
 # rend 651. Le self-test du script passe ; c'est la valeur enregistrée qui
 # était fausse dès l'introduction, pas une dérive de dette réelle depuis.
-readonly GATEWAY_BASELINE=651
+#
+# 639, pas 651 (#3679, premier lot de RÉDUCTION plutôt que de simple gel) :
+# `services/notifications/NotificationFormatter.ts` (182 lignes, dans le
+# budget de taille) typait ses douze usages sur des `any` nus — les quatre
+# champs `Json` Prisma (`actor`/`context`/`metadata`/`delivery`) castés en
+# `unknown` puis vers leur type de domaine (`NotificationActor` etc.), les
+# entrées de méthode contre la forme réellement servie par les appelants
+# (`RawNotificationInput`/`RawNotificationRow`). Aucun `unknown` nu laissé :
+# chaque champ a désormais le type que son producteur (Prisma) ou son
+# consommateur (`@meeshy/shared/types/notification`) déclare.
+readonly GATEWAY_BASELINE=639
 
 # `apps/web` — dette réelle, jamais gardée avant ce lot (cf. en-tête « WHY
 # `apps/web` IS MEASURED… »). Mesurée sur un checkout NON construit (pas de

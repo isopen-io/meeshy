@@ -154,7 +154,7 @@ export default function SettingsScreen() {
   const sessionUser = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   const enabled = apiDeps.source === 'fixtures' || sessionUser !== null;
   const query = useQuery({ ...appPreferencesQueryOptions(apiDeps), enabled }, appQueryClient);
-  /* Le legacy ne sert QUE la production (#6354, D-62) : hors production, les
+  /* Le legacy ne sert QUE la production (#6354, D-67) : hors production, les
      rangées non portées deviennent inertes plutôt que de mener quiconque, sur
      staging ou dans une coque, vers la production réelle. */
   const legacyOk = legacyReachable(apiConfig.base);

@@ -48,16 +48,46 @@ nonisolated enum ComposerActionSlot: Equatable {
     ///     pastille là aurait retiré le seul moyen d'envoyer ce texte — on
     ///     aurait échangé un doublon contre un cul-de-sac.
     ///   - offersQuickEmoji: le mode autorise les emojis rapides.
+    ///   - exceedsWordLimit: la saisie dépasse `textStickerWordLimit` (#6537).
+    ///     **Passé la borne, le bouton ordinaire gagne sur tout**, y compris sur
+    ///     un clavier ouvert : c'est la seule condition qui ne regarde pas l'état
+    ///     du chrome mais le CONTENU.
     ///   - offersTextSticker: **l'hôte sait envoyer un sticker de texte.** Sans
     ///     lui la pastille ne partirait nulle part, et un contrôle qui ne fait
     ///     rien ne se monte pas (loi 4).
+    /// **Au-delà de sept mots, un cadre à mots n'a plus de sens** (directive
+    /// porteur 2026-09-14, #6537).
+    ///
+    /// La pastille rend le texte DANS une image : elle sert une phrase, pas un
+    /// paragraphe. Passé cette borne, le bouton d'envoi ordinaire reprend la
+    /// place — et la touche Retour du clavier redevient un saut de ligne, pour
+    /// qu'un texte long se mette en forme.
+    ///
+    /// Sept, et non « une longueur en caractères » : c'est la borne que la
+    /// directive donne, et le mot est l'unité que l'auteur voit.
+    static let textStickerWordLimit = 7
+
+    /// Les mots d'une saisie — une loi PURE, insensible aux espaces multiples
+    /// et aux retours à la ligne. `split(whereSeparator:)` écarte les
+    /// séparations vides, donc « a   b\n\nc » vaut trois mots, pas six.
+    static func wordCount(_ text: String) -> Int {
+        text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
+    }
+
+    /// `true` quand la saisie dépasse la borne — le seul prédicat que l'hôte
+    /// consulte, pour que la borne ne se recopie nulle part.
+    static func exceedsTextStickerLimit(_ text: String) -> Bool {
+        wordCount(text) > textStickerWordLimit
+    }
+
     static func resolve(hasText: Bool,
                         hasOtherContent: Bool,
                         isEditMode: Bool,
                         isSending: Bool,
                         keyboardIsUp: Bool,
                         offersQuickEmoji: Bool,
-                        offersTextSticker: Bool) -> ComposerActionSlot {
+                        offersTextSticker: Bool,
+                        exceedsWordLimit: Bool) -> ComposerActionSlot {
         // Une édition se valide, elle ne se décore pas : la coche gagne sur
         // tout le reste, y compris sur un champ vidé.
         if isEditMode { return .send }
@@ -65,6 +95,10 @@ nonisolated enum ComposerActionSlot: Equatable {
         // le bouton reste alors la seule sortie.
         if hasOtherContent { return .send }
         if hasText {
+            // AU-DELÀ DE SEPT MOTS, le bouton ordinaire (#6537) — quel que soit
+            // l'état du clavier. Un cadre à mots sert une phrase ; un paragraphe
+            // veut un envoi et des sauts de ligne.
+            if exceedsWordLimit { return .send }
             let laToucheEstUneSortie = keyboardIsUp && !isSending
             return (offersTextSticker && laToucheEstUneSortie) ? .textSticker : .send
         }

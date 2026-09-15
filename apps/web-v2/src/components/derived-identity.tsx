@@ -202,7 +202,7 @@ function IdentityInput({
           autoCapitalize={prefix === undefined ? 'words' : 'none'}
           autoCorrect="off"
           value={value}
-          onChange={(event) => onChange(event.currentTarget.value)}
+          onInput={(event) => onChange(event.currentTarget.value)}
           onFocus={onFocus}
           onBlur={onBlur}
           className="w-full bg-transparent py-3 text-input outline-none"

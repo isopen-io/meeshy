@@ -785,7 +785,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// écran ne le dise. C'est la moitié qui manquait au sélecteur ci-dessus —
     /// un contrôle existe s'il a un EFFET (loi 4).
     func test_leBrouillonDuDocument_litLAudienceCourante_jamaisCelleDeLaPorte() throws {
-        guard let bloc = declarationBody(startingAt: "var documentDraft", in: try hostCode()) else {
+        guard let bloc = declarationBody(startingAt: "func documentDraft(", in: try hostCode()) else {
             return XCTFail("Le brouillon doit être une propriété nommée `documentDraft` — la garde s'ancre dessus")
         }
         let corps = compact(bloc)
@@ -1165,7 +1165,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 + "ce qu'elle mesure."
         )
         XCTAssertTrue(
-            compacte.contains("performSoclePublish()"),
+            compacte.contains("performSoclePublish("),
             "… et un bouton qui ne déclenche rien est l'affordance sans effet que ce chantier retire partout."
         )
         // **Le GATE a déménagé dans l'habillage partagé le 2026-09-03**
@@ -1195,14 +1195,14 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         // l'aiguillage est une DÉCLARATION VOISINE : la garde va l'y lire plutôt
         // que d'élargir sa lecture au fichier entier, ce qui lui ferait accepter
         // n'importe quel `requestPublish` écrit ailleurs.
-        guard let aiguillage = declarationBody(startingAt: "func performSoclePublish()", in: try hostCode()) else {
+        guard let aiguillage = declarationBody(startingAt: "func performSoclePublish(", in: try hostCode()) else {
             return XCTFail("L'aiguillage de la flèche est introuvable — la garde ne mesurerait RIEN")
         }
         let branche = compact(aiguillage)
 
         XCTAssertTrue(
-            branche.contains("case.scene:publishTrigger.requestPublish("),
-            "Sous la scène, la flèche du socle presse la TÉLÉCOMMANDE : c'est l'atelier qui publie, et "
+            branche.contains("case.atelier:publishTrigger.requestPublish("),
+            "Sous l'atelier, la flèche du socle presse la TÉLÉCOMMANDE : c'est l'atelier qui publie, et "
                 + "fabriquer un brouillon ici serait le second chemin d'envoi que la doctrine interdit."
         )
         XCTAssertTrue(
@@ -1224,7 +1224,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         // est exigée, pas ses deux appels séparément : un `else` qui
         // disparaîtrait, ou une condition qui glisserait sur `.reel`, rougirait.
         XCTAssertTrue(
-            branche.contains("case.document,.mood:switchComposerPublishChannel.channel(for:selectedFormat)"),
+            branche.contains("switchComposerPublishMenuRule.route(surface:mountedSurface,choice:choice)"),
             "… et sous les deux autres surfaces, le routage est une RÈGLE (#4869), plus une liste "
                 + "de formats écrite dans le corps du publieur."
         )
@@ -1678,7 +1678,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 + "ici échapperait au cliquet de complétude et ne serait jamais traduit."
         )
         XCTAssertTrue(
-            compacte.contains(compact(".accessibilityHint(publishBlockedHint)")),
+            compacte.contains(compact(".accessibilityHint(publishArrowHint)")),
             "La flèche doit dire POURQUOI elle refuse : sans indice, un mood sans emoji laisse un bouton grisé "
                 + "sans raison énoncée — le défaut que l'écran historique avait corrigé."
         )
@@ -1776,48 +1776,6 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         XCTAssertTrue(
             compacte.contains(compact("allowsCapture: profile.allowsCapture")),
             "La rangée d'outils doit tenir sa capacité de capture DU PROFIL — sinon la politique la déciderait seule, et la table de C1 ne gouvernerait plus la capture."
-        )
-    }
-
-    /// **Loi 4 sur le plateau.** Remplace `test_host_gatesSlidesAndTimelineOnTheProfile`,
-    /// dont l'objet a disparu le 2026-08-24.
-    ///
-    /// Le plateau peignait trois `Image(systemName:)` — caméra, diapositives,
-    /// timeline — gardées par `allowsCapture` / `showsSlides` / `showsTimeline`.
-    /// Aucune n'était un `Button` : le tap ne faisait rien. L'ancienne garde
-    /// vérifiait que ces trois pictogrammes suivaient le profil ; elle ne
-    /// pouvait pas dire qu'ils MENAIENT quelque part, et elle est restée verte
-    /// pendant que la porte de création montait le meuble en production.
-    ///
-    /// Les brancher aurait demandé une API neuve : `addSlide()`,
-    /// `isTimelineVisible` et l'écriture de `currentEffects` sont `internal` à
-    /// `MeeshyUI`, hors d'atteinte du meuble — et l'atelier offre déjà les
-    /// trois (bande de diapositives, menu ⋯ → Timeline, fournisseur de
-    /// capture). Elles sont donc ABSENTES, pas grisées.
-    ///
-    /// Ce que la garde mesure, et rien de plus : le plateau ne peint pas plus
-    /// d'icônes ni de libellés d'accessibilité qu'il n'a de boutons pour les
-    /// actionner. Elle rougirait si l'on recollait l'un des trois pictogrammes.
-    func test_host_lePlateau_neMonteAucuneAffordanceInerte() throws {
-        guard let corps = declarationBody(startingAt: "var plateauTools", in: try hostCode()) else {
-            return XCTFail("Le plateau doit être une propriété nommée `plateauTools` — la garde s'ancre dessus")
-        }
-        let compacte = compact(corps)
-
-        // `formatChip`, pas `ComposerFormatFan(` : la CONSTRUCTION de l'éventail
-        // a été extraite au 2026-08-27 (#4047) pour qu'UNE seule serve ses deux
-        // places — la rangée du plateau et la barre haute du document. Le
-        // plateau monte donc le chip, il ne le construit plus.
-        XCTAssertTrue(compacte.contains(compact("formatChip")), "Le bloc lu n'est pas celui du plateau.")
-
-        let boutons = occurrences(of: "Button", in: compacte)
-        XCTAssertLessThanOrEqual(
-            occurrences(of: compact("Image("), in: compacte), boutons,
-            "Une icône du plateau sans bouton pour l'actionner est une affordance INERTE : loi 4 la veut absente, jamais peinte à vide."
-        )
-        XCTAssertLessThanOrEqual(
-            occurrences(of: compact(".accessibilityLabel("), in: compacte), boutons,
-            "Un libellé d'accessibilité hors bouton annonce à VoiceOver une commande que personne ne peut déclencher."
         )
     }
 
@@ -2281,63 +2239,25 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
 
     // MARK: - L'éventail (loi 4)
 
-    /// **Garde RETOURNÉE le 2026-08-24 (V3-3).** Elle était négative — « le host
-    /// ne monte PAS l'éventail » — et nommait deux conditions de levée. V1 a
-    /// levé la première (l'offre VARIE, `ComposerReelGate` lisant la composition
-    /// réelle), V2 la moitié de la seconde (changer de format change la surface
-    /// montée), V3-3 l'autre moitié : le format commande désormais le `type`
-    /// envoyé à `POST /posts`. L'ordre n'était pas négociable — monter
-    /// l'éventail avant que l'envoi ne suive aurait offert un choix que la
-    /// publication ignore, le pire des deux mondes puisqu'il aurait eu l'air de
-    /// marcher.
+    /// **Garde RETOURNÉE au #6502 — l'éventail du haut n'est plus monté.**
     ///
-    /// Elle n'a pas été supprimée : une garde retirée ne protège plus rien. Elle
-    /// affirme maintenant l'invariant NEUF — le sélecteur est monté, et il est
-    /// monté SOUS la règle de repli, la seule chose qui l'empêche de peindre un
-    /// éventail dont aucun chip n'est marqué quand l'offre se referme.
-    func test_host_mountsTheFan_underTheSelectionPolicy() throws {
+    /// Elle exigeait un montage, et c'était juste tant que le format se
+    /// choisissait AVANT la composition. La directive porteur du 2026-09-14 le
+    /// déplace sur la flèche Publier, au seul instant où l'auteur sait ce qu'il
+    /// publie. La règle de repli reste lue une fois : le format d'OUVERTURE ne
+    /// sort jamais de l'offre quand celle-ci se referme.
+    func test_host_neMontePlusLEventail_etGardeLaRegleDeRepli() throws {
         let code = try hostCompact()
 
         XCTAssertEqual(
-            occurrences(of: compact("ComposerFormatFan("), in: code), 1,
-            "Le host doit monter l'éventail, une fois — sans lui `offeredFormats` n'a toujours aucun lecteur."
+            occurrences(of: compact("ComposerFormatFan("), in: code), 0,
+            "L'éventail du haut est revenu : deux sélecteurs pour un même choix, dont un avant que l'auteur "
+                + "sache ce qu'il publie."
         )
         XCTAssertEqual(
             occurrences(of: compact("ComposerFormatFanPolicy.resolvedSelection("), in: code), 1,
-            "…et lire la règle de repli : une sélection restée sur un format retiré ne marquerait plus aucun chip."
+            "…et le format d'ouverture est toujours ramené dans l'offre par la règle de repli."
         )
-    }
-
-    /// L'éventail est un outil du PLATEAU, pas du socle — et le plateau coiffe
-    /// les TROIS surfaces depuis le lot 4.7, sous
-    /// `ComposerFormatFanPlacement.mounts`. La phrase précédente disait « le
-    /// plateau ne coiffe que la scène » : c'était l'état d'avant la descente de
-    /// l'éventail, et la laisser aurait fait de ce fichier la source qui nie le
-    /// produit qu'il garde.
-    ///
-    /// Garde ancrée sur le BLOC : `ComposerFormatFan` apparaît aussi dans les
-    /// doc-comments de la source, et le socle est verrouillé par ailleurs sur
-    /// ses trois zones.
-    func test_host_lEventail_vitDansLePlateau_pasDansLeSocle() throws {
-        guard let corps = declarationBody(startingAt: "var plateauTools", in: try hostCode()) else {
-            return XCTFail("Le plateau doit être une propriété nommée `plateauTools` — la garde s'ancre dessus")
-        }
-        let compacte = compact(corps)
-
-        // Même raison qu'au-dessus (#4047) : le plateau MONTE le chip
-        // (`formatChip`, site unique de construction), il ne le construit plus.
-        // Ce que la garde protège — « l'éventail vit dans le plateau, pas dans
-        // le socle » — est inchangé : le socle reste verrouillé sur ses zones.
-        XCTAssertTrue(
-            compacte.contains(compact("formatChip")),
-            "L'éventail se peint dans le plateau, sur le flanc opposé aux outils de composition."
-        )
-        for interdit in [".disabled(", ".opacity("] {
-            XCTAssertEqual(
-                occurrences(of: compact(interdit), in: compacte), 0,
-                "Loi 4 : un format non offert est ABSENT du plateau, jamais grisé ni rendu transparent."
-            )
-        }
     }
 
     // MARK: - B3 (#3926) — un seul sélecteur de mode : l'éventail
@@ -2406,20 +2326,22 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         )
     }
 
-    /// **UN seul sélecteur de mode, et c'est l'éventail (B3).** Le plateau porte
-    /// l'éventail de FORMAT (`ComposerFormatFan`, gardé une fois ailleurs) ; il
-    /// est désormais le SEUL contrôle de choix de mode — le sélecteur de
-    /// destination contextuel a disparu de tout le meuble. Garde NÉGATIVE sur
-    /// tout le fichier : deux surfaces de choix ne doivent pas renaître.
-    func test_host_unSeulSelecteurDeMode_lEventail() throws {
+    /// **UN seul sélecteur de mode, et c'est la flèche Publier (#6502).** Le
+    /// sélecteur de destination contextuel est retiré depuis B3, l'éventail du
+    /// haut depuis #6502 : le choix vit dans le menu de la flèche, monté une
+    /// fois. Garde NÉGATIVE sur toute l'unité : deux surfaces de choix ne
+    /// doivent pas renaître.
+    func test_host_unSeulSelecteurDeMode_leMenuDeLaFleche() throws {
         let code = try hostCompact()
         XCTAssertFalse(
             code.contains(compact("documentDestinationSelector")),
-            "Le sélecteur de destination est retiré partout : l'éventail est le seul sélecteur de mode (B3)."
+            "Le sélecteur de destination est retiré partout (B3)."
         )
+        XCTAssertEqual(occurrences(of: compact("ComposerFormatFan("), in: code), 0,
+                       "L'éventail du haut est retiré (#6502).")
         XCTAssertEqual(
-            occurrences(of: compact("ComposerFormatFan("), in: code), 1,
-            "L'éventail est monté à UN seul endroit — deux montages seraient deux sélecteurs pour un même format."
+            occurrences(of: compact("ComposerPublishMenu("), in: code), 1,
+            "Le menu de publication est monté à UN seul endroit — la flèche du socle."
         )
     }
 
@@ -2512,7 +2434,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         // > Compter un NOM ne distingue pas celui qui ENVOIE de celui qui
         // > TRANSMET. La règle — « la fermeture de la scène se presse à un
         // > site » — se vérifie en nommant ce site, pas en comptant.
-        guard let scene = declarationBody(startingAt: "func publishStoryScene()", in: code) else {
+        guard let scene = declarationBody(startingAt: "func publishStoryScene(", in: code) else {
             return XCTFail("`publishStoryScene` est introuvable — le seul site d'envoi de la scène a disparu.")
         }
         XCTAssertTrue(
@@ -2525,7 +2447,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 + "Un TROISIÈME serait un second chemin d'envoi, quel que soit le nom qu'il porte — et "
                 + "un seul dirait que le relais a cessé de greffer, donc que les légendes se perdent."
         )
-        guard let relais = declarationBody(startingAt: "func publishStoryScene()", in: code) else {
+        guard let relais = declarationBody(startingAt: "func publishStoryScene(", in: code) else {
             return XCTFail("`publishStoryScene` est introuvable dans le meuble — la garde ne mesurerait RIEN")
         }
         let corps = compact(relais)
@@ -2736,26 +2658,15 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         return nil
     }
 
-    /// Elle fut une garde NÉGATIVE : « rien ne réaffecte `currentFormat` », née
-    /// de ce que `ComposerIntent` avait promis pendant deux révisions — « le
-    /// host rebascule au format du document une fois celui-ci chargé » — sans
-    /// qu'aucun écrivain n'existe. Un commentaire qui énonce un invariant que le
-    /// code ne tient pas devient la loi que lira la session suivante, celle qui
-    /// aurait monté `.draft` en confiance.
+    /// **Garde RETOURNÉE au #6502 — le format d'ouverture n'a plus AUCUN
+    /// écrivain.**
     ///
-    /// **Garde RETOURNÉE le 2026-08-24 (V3-3)**, à la condition de levée qu'elle
-    /// nommait elle-même : « le jour où le host sait réaffecter `currentFormat`
-    /// — par l'éventail ». Cet écrivain est l'éventail, et lui seul.
-    ///
-    /// Elle affirme désormais qu'il y a EXACTEMENT UN écrivain. Deux seraient
-    /// deux sources pour le même champ ; zéro ramènerait l'éventail à un décor.
-    ///
-    /// Ce qu'elle ne dit TOUJOURS PAS : le host ne rebascule pas au format d'un
-    /// brouillon chargé. Cet écrivain-là n'existe pas davantage qu'hier, et la
-    /// rév. 5 de `ComposerIntent` reste écrite au futur — la conséquence est
-    /// tenue par `ComposerSurfaceRouting`, qui fait de `.resume` une SCÈNE quel
-    /// que soit le format.
-    func test_host_neReaffecteLeFormatCourant_queParLEventail() throws {
+    /// Elle en exigeait exactement un : la liaison que le host donnait à
+    /// l'éventail. L'éventail est parti ; le format PUBLIÉ se choisit au geste et
+    /// voyage en paramètre (`ComposerPublishChoice`) jusqu'au brouillon. Un
+    /// écrivain qui renaîtrait referait bouger la SURFACE sous les doigts de
+    /// l'auteur — ce que la directive retire.
+    func test_host_neReaffectePlusLeFormatDOuverture() throws {
         let code = try hostCompact()
 
         let affectations = occurrences(of: "currentFormat=", in: code)
@@ -2763,18 +2674,12 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
 
         XCTAssertTrue(
             code.contains("_currentFormat=State(initialValue:"),
-            "Le format courant doit être initialisé une fois, à la construction — la garde ne mesurerait rien sinon."
+            "Le format d'ouverture doit être initialisé une fois, à la construction — la garde ne mesurerait rien sinon."
         )
-        XCTAssertEqual(
-            affectations, 1,
-            "Le champ doit avoir EXACTEMENT un écrivain : la liaison que le host donne à l'éventail. "
-                + "Zéro le rendrait décoratif, deux en feraient deux sources."
-        )
-        XCTAssertTrue(
-            code.contains(compact("Binding(get: { self.selectedFormat }, set: { self.currentFormat = $0 })")),
-            "L'écriture va au champ brut, la LECTURE passe par la règle de repli — l'inverse peindrait "
-                + "un éventail sans chip marqué dès que l'offre se referme."
-        )
+        XCTAssertEqual(affectations, 0,
+                       "Le format d'ouverture a retrouvé un écrivain : la surface bougerait avec le choix de publication.")
+        XCTAssertFalse(code.contains(compact("set: { self.currentFormat = $0 }")),
+                       "Plus aucune liaison n'écrit le format d'ouverture.")
     }
 
     // MARK: - V1 — ce que le gate lit vraiment de la composition
@@ -3118,7 +3023,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// remplace le porte aussi) : une garde qui ne chercherait que la présence
     /// du mot serait passée au vert avant comme après ce lot.
     func test_leBrouillonDuDocument_porteLaLangueDeclareeParLaCapsule_pasUnLitteral() throws {
-        guard let bloc = declarationBody(startingAt: "var documentDraft", in: try hostCode()) else {
+        guard let bloc = declarationBody(startingAt: "func documentDraft(", in: try hostCode()) else {
             return XCTFail("`documentDraft` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
         }
         let corps = compact(bloc)
@@ -3195,7 +3100,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// une conséquence nulle — exactement ce que la loi 4 interdit, une couche
     /// plus bas que le bouton.
     func test_lesPersonnesNommees_atteignentLeBrouillonDuDocument() throws {
-        guard let bloc = declarationBody(startingAt: "var documentDraft", in: try hostCode()) else {
+        guard let bloc = declarationBody(startingAt: "func documentDraft(", in: try hostCode()) else {
             return XCTFail("`documentDraft` est introuvable — la garde ne mesurerait RIEN")
         }
         XCTAssertTrue(

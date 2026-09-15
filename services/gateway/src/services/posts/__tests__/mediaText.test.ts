@@ -165,6 +165,40 @@ describe('applyMediaText — les deux gardes', () => {
   });
 });
 
+describe('applyMediaText — entrées rendues (#6280)', () => {
+  // `PostService.applyMediaCaption` relit ce retour pour déclencher
+  // `MediaCaptionTranslationService.triggerMediaCaptionTranslation` — il doit
+  // porter le texte ASSAINI et FILTRÉ, jamais la carte brute de la requête.
+  it("rend les entrées effectivement écrites, texte assaini", async () => {
+    const { client } = recordingClient();
+
+    const written = await applyMediaText(
+      'caption',
+      'post-1',
+      ['media-1', 'media-2'],
+      { 'media-1': 'Coucher de soleil <script>alert(1)</script>', 'media-foreign': 'ignoré' },
+      client,
+    );
+
+    expect(written).toEqual([{ id: 'media-1', text: 'Coucher de soleil' }]);
+  });
+
+  it('rend un texte à null quand la colonne est effacée', async () => {
+    const { client } = recordingClient();
+
+    const written = await applyMediaText('caption', 'post-1', ['media-1'], { 'media-1': '   ' }, client);
+
+    expect(written).toEqual([{ id: 'media-1', text: null }]);
+  });
+
+  it('rend un tableau vide quand rien n\'est écrit', async () => {
+    const { client } = recordingClient();
+
+    expect(await applyMediaText('caption', 'post-1', ['media-1'], undefined, client)).toEqual([]);
+    expect(await applyMediaText('caption', 'post-1', [], { 'media-1': 'x' }, client)).toEqual([]);
+  });
+});
+
 describe('applyMediaText — le silence', () => {
   // La clé absente veut dire « je ne dis rien des légendes ». Fabriquer une
   // écriture dirait « aucune », ce qui n'est pas la même phrase.

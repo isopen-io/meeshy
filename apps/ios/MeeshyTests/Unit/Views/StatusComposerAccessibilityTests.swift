@@ -104,8 +104,14 @@ final class StatusComposerAccessibilityTests: XCTestCase {
 
     func test_publishButton_explainsWhyItIsDisabled() throws {
         XCTAssertTrue(
-            try publishCapsuleBody().contains(".accessibilityHint(publishBlockedHint)"),
+            try publishCapsuleBody().contains(".accessibilityHint(publishArrowHint)"),
             "La flèche doit dire POURQUOI elle refuse : le dégradé éteint ne le porte que visuellement."
+        )
+        let arrow = try declarationBody(startingAt: "var publishArrowHint: String", in: try hostSource())
+        XCTAssertTrue(
+            arrow.contains("return publishBlockedHint"),
+            "L'indice de la flèche (#6502) rend l'indice de REFUS dès qu'il y en a un : l'annonce du menu ne "
+                + "doit jamais couvrir la raison d'un blocage."
         )
         let hint = try declarationBody(startingAt: "var publishBlockedHint: String", in: try hostSource())
         XCTAssertTrue(

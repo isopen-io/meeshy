@@ -450,6 +450,9 @@ export const SERVER_EVENTS = {
   // --- Comment media (audio transcription/translation ready) ---
   COMMENT_MEDIA_UPDATED: 'comment:media-updated',
 
+  // --- Media caption translation (#6280) ---
+  MEDIA_CAPTION_TRANSLATION_UPDATED: 'media:caption-translation-updated',
+
   // --- User Preferences ---
   USER_PREFERENCES_UPDATED: 'user:preferences-updated',
   USER_PREFERENCES_REORDERED: 'user:preferences-reordered',

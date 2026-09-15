@@ -16,50 +16,76 @@ import SignupScreen from './signup';
 
 const html = renderToStaticMarkup(<SignupScreen />);
 
-describe('l’ordre des champs suit la directive : téléphone, puis adresse', () => {
-  /**
-   * L'ordre se mesure par la POSITION des marqueurs dans le HTML, jamais par
-   * leur simple présence : « les trois champs existent » resterait vrai après
-   * n'importe quelle permutation, et c'est la permutation qui est demandée.
-   */
+/**
+ * LES BARREAUX (#6405, directive porteur 2026-09-14 : « les champs
+ * apparaissent uniquement au fur et à mesure »).
+ *
+ * L'ordre a changé avec eux : l'ADRESSE ouvre le formulaire, parce que tout en
+ * découle — l'identité dérivée (#6479) n'a rien à montrer avant elle, et le
+ * lien de validation part vers elle. Le téléphone la suit, le reste suit le
+ * téléphone.
+ *
+ * `renderToStaticMarkup` mesure l'état INITIAL : c'est exactement ce qu'il faut
+ * pour prouver ce qui ne paraît PAS encore. L'ordre COMPLET, lui, se mesure sur
+ * un formulaire qu'on remplit — `signup-rungs.test.ts` prouve la loi, ce témoin
+ * prouve qu'elle atteint des pixels.
+ */
+describe('à l’ouverture, un seul champ', () => {
   const positions = {
-    telephone: html.indexOf('signup-phone-hint'),
     email: html.indexOf('signup-email'),
+    telephone: html.indexOf('signup-phone-hint'),
     identite: html.indexOf('data-derived-identity'),
     motDePasse: html.indexOf('signup-password'),
   };
 
-  test('les quatre blocs sont rendus', () => {
-    for (const [nom, index] of Object.entries(positions)) {
-      expect(nom.length > 0 && index).toBeGreaterThan(-1);
-    }
+  test('l’adresse est là', () => expect(positions.email).toBeGreaterThan(-1));
+
+  test('ni le téléphone, ni l’identité, ni le mot de passe ne sont rendus — pas même repliés', () => {
+    expect(positions.telephone).toBe(-1);
+    expect(positions.identite).toBe(-1);
+    expect(positions.motDePasse).toBe(-1);
   });
 
-  test('le téléphone vient AVANT l’adresse', () =>
-    expect(positions.telephone).toBeLessThan(positions.email));
-
-  test('l’identité vient APRÈS l’adresse — elle en découle', () =>
-    expect(positions.email).toBeLessThan(positions.identite));
-
-  test('le mot de passe ferme la marche', () =>
-    expect(positions.identite).toBeLessThan(positions.motDePasse));
+  test('le bouton « Créer mon compte » ne paraît pas non plus : il n’y a rien à créer', () =>
+    expect(html).not.toContain('Créer mon compte'));
 });
 
 describe('l’avertissement de validation d’adresse', () => {
   /**
-   * Il n'est PAS derrière un (i) : ce n'est pas un détail qu'on consulte, c'est
-   * une CONDITION du compte. Un témoin sur sa présence VISIBLE, pas sur son
-   * existence dans le DOM.
+   * DERRIÈRE UN (i) « Pourquoi un lien » depuis #6626 (directive porteur
+   * 2026-09-15 : « moins de détails sur la page de connexion et
+   * d'enregistrement ; utiliser des (i) »). #6479 l'avait posé en clair ; la
+   * directive postérieure le supplante. Replié ne veut pas dire absent : le
+   * texte reste porté par `aria-describedby` du champ, donc un lecteur d'écran
+   * l'entend en entrant dans l'adresse.
    */
-  test('il est rendu, en clair, sous le champ', () => {
-    expect(html).toContain('data-signup-email-verification');
-    expect(html).toContain('valider votre compte');
+  const note = /<p id="([^"]+)" class="([^"]*)"[^>]*>Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte\.<\/p>/u.exec(html);
+
+  test('le champ e-mail porte un (i) « Pourquoi un lien », replié', () => {
+    const bouton = /<button[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)"[^>]*aria-label="Pourquoi un lien"/u.exec(html);
+    expect(bouton).not.toBeNull();
+    expect(note?.[1]).toBe(bouton?.[1]);
   });
 
-  test('et il n’est pas replié — aucune classe sr-only ne le masque', () => {
-    const bloc = html.slice(html.indexOf('data-signup-email-verification'));
-    expect(bloc.slice(0, 120)).not.toContain('sr-only');
+  test('la note est rendue, mais repliée — `sr-only`, jamais en clair', () => {
+    expect(note).not.toBeNull();
+    expect(note?.[2]).toContain('sr-only');
   });
+
+  test('et le champ la cite dans `aria-describedby`', () => {
+    const champ = /<input id="signup-email"[^>]*aria-describedby="([^"]+)"/u.exec(html);
+    expect(champ).not.toBeNull();
+    expect(champ?.[1]).toBe(note?.[1]);
+  });
+
+  /** Citer une note n'est pas un refus : un champ qui déduirait `aria-invalid`
+   * de la seule présence d'un `aria-describedby` s'annoncerait « invalide »
+   * dès l'ouverture, sur une adresse que personne n'a encore tapée. */
+  test('le champ vide ne s’annonce pas invalide pour autant', () => {
+    expect(html).toMatch(/<input id="signup-email"[^>]*aria-invalid="false"/u);
+  });
+
+  test('aucun libellé ne dit « magique »', () => expect(html).not.toMatch(/magi(que|c)/iu));
 });
 
 describe('DerivedIdentity — ce que la passerelle recevra, affiché', () => {
