@@ -166,7 +166,7 @@ struct ReelsPlayerView: View {
             // recorded the (deduplicated) share + minted the caller's TrackingLink.
             ShareSheet(activityItems: [link.url])
         }
-        .sheet(item: $editingReel) { reel in
+        .postEditCover(item: $editingReel) { reel in
             EditPostSheet(
                 originalContent: reel.content,
                 originalLanguage: reel.originalLanguage,

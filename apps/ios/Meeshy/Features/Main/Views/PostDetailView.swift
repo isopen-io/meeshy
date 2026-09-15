@@ -1019,7 +1019,7 @@ struct PostDetailView: View {
             // TrackingLink owned by the current user.
             ShareSheet(activityItems: [link.url])
         }
-        .sheet(isPresented: $isEditing) {
+        .postEditCover(post: displayPost, isPresented: $isEditing) {
             if let post = displayPost {
                 EditPostSheet(
                     originalContent: post.content,
