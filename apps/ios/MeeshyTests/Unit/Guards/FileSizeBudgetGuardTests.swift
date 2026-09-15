@@ -356,6 +356,15 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // plafond dur : il QUITTE la liste, pour toujours. Le plafond baisse de ce
     // que le lot retire aux deux qui restent (166 + 392) et du poids de celui
     // qui sort (1 150) — jamais du mou préexistant.
+    //
+    // #6693 — 56 430 → 56 214 (−216). Le rail d'actions du lecteur de réels devait
+    // prendre la teinte que la luminance du média commande, dans
+    // `ReelsPlayerView.swift`, hôte en dette. Il en est d'abord sorti —
+    // `ReelsPlayerView+ActionRail.swift`, 244 lignes — et la teinte s'y ajoute
+    // ensuite. L'hôte RESTE en dette (1 367) ; le plafond baisse d'exactement ce
+    // que le lot retire. Cumul MESURÉ après le lot sur les 27 noms : 55 845 — les
+    // 369 lignes de mou préexistantes ne sont pas reprises, pour la raison de
+    // coordination de #6016.
     // #6696 — 56 430 → 56 077 (−353). La scène du détail devait changer de
     // cadre dans `PostDetailView.swift` (2 164 lignes), hôte en dette. La
     // section MÉDIAS en est d'abord sortie, entière, dans
@@ -364,7 +373,11 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // d'exactement ce que le lot retire. Le cumul mesuré avant le lot était
     // 56 061 : ses 369 lignes de mou préexistant ne sont pas reprises ici, pour
     // la raison de coordination de #6016.
-    private static let legacyLineCeiling = 56_077
+    //
+    // Les deux lots se cumulent : 56 430 − 216 − 353 = 55 861. Cumul MESURÉ sur
+    // les 27 noms une fois les deux fusionnés : 55 492, soit 56 061 − 216 − 353 ;
+    // les 369 lignes de mou préexistantes restent hors du compte (#6016).
+    private static let legacyLineCeiling = 55_861
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
