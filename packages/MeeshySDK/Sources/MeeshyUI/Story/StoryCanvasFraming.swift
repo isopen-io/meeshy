@@ -158,11 +158,12 @@ public nonisolated enum StoryCanvasFraming {
         // Trois choses qu'il faut dire ici, parce qu'elles expliquent pourquoi la
         // projection ne prend PAS tout :
         //
-        // - **le plancher est NUL.** Le plateau de lecture ne descend jamais sous
-        //   trois fois son overlay ; une carte de story, elle, se laisse rétrécir
-        //   par le sheet — c'est même toute sa géométrie. Le plancher est une
-        //   entrée de l'hôte précisément pour que les deux puissent différer sur
-        //   ce point sans différer sur la loi.
+        // - **les deux planchers sont NULS.** Le plateau de lecture ne descend
+        //   jamais sous trois fois son overlay en hauteur, ni sous la bande de sa
+        //   colonne d'actions en largeur (#6692) ; une carte de story, elle, se
+        //   laisse rétrécir par le sheet — c'est même toute sa géométrie. Les
+        //   planchers sont des entrées de l'hôte précisément pour que les deux
+        //   puissent différer sur ce point sans différer sur la loi.
         // - **la gouttière est nulle aussi** : les marges latérales sont déjà
         //   retirées par `sideInset` au-dessus, et les compter deux fois
         //   rétrécirait la carte.
@@ -177,7 +178,8 @@ public nonisolated enum StoryCanvasFraming {
                                                        transport: 0, safeBottom: 0, gutter: 0),
                 presentation: .carded,
                 cardedCornerRadius: input.cardedCornerRadius,
-                minimumFrameHeight: 0
+                minimumFrameHeight: 0,
+                minimumFrameWidth: 0
             )
         )
         let scale = min(1, max(0, cadre.media.height / intrinsic.height))
