@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// **Un écran qui recouvre tout et qui doit DISPARAÎTRE sans se retirer**
-/// (#4363).
+/// **Un écran qui recouvre tout, et qui ne quitte l'arbre qu'une fois effacé**
+/// (#4363, #6744).
 ///
 /// ## Le défaut qu'il ferme
 ///
@@ -22,8 +22,12 @@ import SwiftUI
 /// raisons qu'on ne contrôle pas — changement de `scenePhase`, seconde animation
 /// dans la même transaction, réévaluation en vol. Tant que la disparition PASSE
 /// PAR un retrait, l'écran peut rester accroché. Ce qui ferme la classe est de
-/// ne jamais le retirer : monté en permanence, il n'a plus de transition à
-/// interrompre.
+/// ne jamais le retirer PENDANT qu'il recouvre : il s'efface d'abord, par
+/// l'opacité, et ne quitte l'arbre qu'ensuite, SANS transition — il n'y a rien
+/// à interrompre, et la dernière version évaluée est déjà celle qui ne teste
+/// plus les touches (#6744). Le laisser monté en permanence fermait aussi la
+/// classe, mais faisait tourner ses orbes animées derrière l'app pendant toute
+/// la session.
 ///
 /// ## Et pourquoi `allowsHitTesting` seul n'aurait rien fait
 ///
