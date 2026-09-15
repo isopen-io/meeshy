@@ -74,7 +74,15 @@ describe('l’avertissement de validation d’adresse', () => {
 
   test('et le champ la cite dans `aria-describedby`', () => {
     const champ = /<input id="signup-email"[^>]*aria-describedby="([^"]+)"/u.exec(html);
+    expect(champ).not.toBeNull();
     expect(champ?.[1]).toBe(note?.[1]);
+  });
+
+  /** Citer une note n'est pas un refus : un champ qui déduirait `aria-invalid`
+   * de la seule présence d'un `aria-describedby` s'annoncerait « invalide »
+   * dès l'ouverture, sur une adresse que personne n'a encore tapée. */
+  test('le champ vide ne s’annonce pas invalide pour autant', () => {
+    expect(html).toMatch(/<input id="signup-email"[^>]*aria-invalid="false"/u);
   });
 
   test('aucun libellé ne dit « magique »', () => expect(html).not.toMatch(/magi(que|c)/iu));

@@ -3,6 +3,8 @@ import { useStore } from 'zustand/react';
 
 import { AuthAmbient, AuthBrandFooter, AuthSubmitButton, AuthTitle } from '@/components/auth-chrome';
 import { Field } from '@/components/field';
+import { GlyphSvg } from '@/components/glyph';
+import { AUTH_GLYPHS } from '@/components/glyphs-auth';
 import { MagicLinkPanel, type MagicLinkPanelDeps } from '@/components/magic-link-panel';
 import { auth } from '@/lib/api/auth';
 import { sessionStore } from '@/lib/api/session';
@@ -275,25 +277,30 @@ export function LoginDoors({
               busyLabel="Connexion…"
             />
 
-            {/* LES DEUX PORTES (#5816) — `LoginView.swift:478-503` : « Connexion
-                sans mot de passe » EN PREMIER (action mise en avant, l.481-493),
-                « Mot de passe oublié ? » EN DESSOUS (l.495-501) — empilées,
-                jamais côte à côte (doc-comment l.479-480). Ancres, pas des
-                boutons qui naviguent : pas d'`history`, un vrai `href`. */}
+            {/* LES DEUX PORTES (#5816) — `LoginView.swift:478-503` : la
+                connexion par e-mail EN PREMIER (action mise en avant,
+                l.481-493), « Mot de passe oublié ? » EN DESSOUS (l.495-501) —
+                empilées, jamais côte à côte (doc-comment l.479-480). Ancres,
+                pas des boutons qui naviguent : pas d'`history`, un vrai `href`.
+
+                « Se connecter par e-mail », baguette en tête (#6626) : le mot
+                dit CE QUE l'on fait, la baguette garde l'identité de la porte.
+                Le glyphe porte sa propre teinte — le dégradé du libellé est
+                découpé dans le TEXTE (`background-clip: text`), et un tracé en
+                `currentColor` y serait transparent. */}
             <div className="mt-1 grid justify-items-center gap-2">
-              <Link
-                to="login"
-                replace
-                className="inline-flex items-center font-semibold text-title"
-                style={{
-                  minHeight: 44,
-                  background: 'linear-gradient(90deg, var(--ios-purple-500), var(--ios-indigo-400))',
-                  WebkitBackgroundClip: 'text',
-                  backgroundClip: 'text',
-                  color: 'transparent',
-                }}
-              >
-                Recevoir un lien de connexion par e-mail
+              <Link to="login" replace className="inline-flex items-center gap-2 font-semibold text-title" style={{ minHeight: 44 }}>
+                <GlyphSvg glyph={AUTH_GLYPHS.magicWand} size={18} style={{ color: 'var(--ios-purple-500)' }} />
+                <span
+                  style={{
+                    background: 'linear-gradient(90deg, var(--ios-purple-500), var(--ios-indigo-400))',
+                    WebkitBackgroundClip: 'text',
+                    backgroundClip: 'text',
+                    color: 'transparent',
+                  }}
+                >
+                  Se connecter par e-mail
+                </span>
               </Link>
               <Link
                 to="forgotPassword"
